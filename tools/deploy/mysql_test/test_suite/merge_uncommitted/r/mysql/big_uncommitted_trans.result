@@ -1,0 +1,28 @@
+set SESSION ob_query_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_idle_timeout = 600 * 1000 * 1000;
+set SESSION ob_query_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_idle_timeout = 600 * 1000 * 1000;
+alter system set minor_compact_trigger = 10;
+drop table if exists test_big_uncommitted_trans_t;
+create table test_big_uncommitted_trans_t(i int primary key, c1 char(30), c256 char(255), dt datetime(6), d  datetime(6));
+select * from test_big_uncommitted_trans_t where i = 999;
+i	c1	c256	dt	d
+commit;
+select * from test_big_uncommitted_trans_t where i = 1999;
+i	c1	c256	dt	d
+1999	update_1999	1999	2012-10-10 12:00:00.000000	2012-10-10 00:00:00.000000
+select count(*) from test_big_uncommitted_trans_t;
+count(*)
+6000
+select * from test_big_uncommitted_trans_t where i = 999;
+i	c1	c256	dt	d
+999	update_999	999	2012-10-10 12:00:00.000000	2012-10-10 00:00:00.000000
+begin;
+alter system set minor_compact_trigger = 1;
+commit;
+select * from test_big_uncommitted_trans_t where i = 999;
+i	c1	c256	dt	d
+drop table test_big_uncommitted_trans_t;
+alter system set minor_compact_trigger = 2;

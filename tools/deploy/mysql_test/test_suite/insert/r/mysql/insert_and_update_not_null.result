@@ -1,0 +1,44 @@
+create database if not exists db1;
+use db1;
+drop table if exists test;
+create table test (c1 int primary key, c2 int not null, c3 int default 1, c4 char,c5 int);
+insert into test (c1, c2) values (1,2);
+insert into test (c1, c2) values (2,2.3);
+insert into test (c1, c2) values (3.3,3.4);
+insert into test (c1, c3) values (4,5);
+ERROR HY000: Field 'c2' doesn't have a default value
+insert into test (c1, c2) values (5, NULL);
+ERROR 23000: Column 'c2' cannot be null
+insert into test (c1, c2) values (5, NULL + 1);
+ERROR 23000: Column 'c2' cannot be null
+select * from test;
+c1	c2	c3	c4	c5
+1	2	1	NULL	NULL
+2	2	1	NULL	NULL
+3	3	1	NULL	NULL
+update test set c2 = c5+1 where c1 = 1;
+ERROR 23000: Column 'c2' cannot be null
+update test set c2 = c2 + 2.8 where c1 = 1;
+select * from test;
+c1	c2	c3	c4	c5
+1	5	1	NULL	NULL
+2	2	1	NULL	NULL
+3	3	1	NULL	NULL
+update test set c4 = c2 + 3 where c1 = 1;
+select * from test;
+c1	c2	c3	c4	c5
+1	5	1	8	NULL
+2	2	1	NULL	NULL
+3	3	1	NULL	NULL
+update test set c2 = 2, c5 = 4, c1 = c1+5 where c1 = 1;
+select * from test;
+c1	c2	c3	c4	c5
+2	2	1	NULL	NULL
+3	3	1	NULL	NULL
+6	2	1	8	4
+drop table if exists ta;
+create table ta (a integer primary key, b integer);
+insert into ta values(1,1),(0,0);
+update ta set a = a -1;
+update ta set a = a -1;
+drop database db1;

@@ -1,0 +1,18 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: yuchen.wyc
+# owner group: SQL1
+# Test of functions get
+--disable_warnings
+drop table if exists t2;
+--enable_warnings
+create table t2 (i int primary key, j int);
+insert into t2 values (1,1),(2,2),(5,null),(4,4),(3,3);
+select * from t2 where (i) in ((1),(null)) and i = 2;
+select * from t2 where (i) in ((1),(null)) and i = 1;
+select * from t2 where (i) in ((1),(null));
+select * from t2 where (i) in ((1),(null)) and i = 1 and i = 2;
+update t2 set j=i+1 where i=2;
+select * from t2;
+drop table t2;

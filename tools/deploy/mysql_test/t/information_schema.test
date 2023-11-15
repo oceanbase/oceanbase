@@ -1,0 +1,109 @@
+--result_format 4
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: peihan.dph
+# owner group: SQL3
+# description:
+#
+
+# tags: inner_table, schema
+
+let $cpu = 1;
+let $memory = 1073741824;
+let $min_memory = 1073741824;
+let $disk = 536870912;
+let $iops = 100000;
+let $session = 64;
+
+use information_schema;
+desc information_schema.columns;
+desc information_schema.tables;
+desc information_schema.session_variables;
+desc information_schema.table_constraints;
+desc information_schema.character_sets;
+desc information_schema.global_variables;
+desc information_schema.statistics;
+desc information_schema.schemata;
+desc information_schema.views;
+desc information_schema.files;
+
+#select * from information_schema.columns;
+--sorted_result
+--replace_column 8 NULL 9 NULL 10 NULL 15 NULL 16 NULL
+select * from information_schema.tables where table_schema in ('oceanbase', 'mysql', 'information_schema') order by TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME;
+--echo test
+#--sorted_result
+#select * from information_schema.session_variables where variable_name != 'version_comment' and variable_name != 'version' order by VARIABLE_NAME;
+#--sorted_result
+#select * from information_schema.global_variables where variable_name != 'version_comment' and variable_name != 'version' order by VARIABLE_NAME;
+--sorted_result
+select * from information_schema.table_constraints where table_schema in ('oceanbase', 'mysql', 'information_schema') order by CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME;
+--sorted_result
+select * from information_schema.character_sets;
+--sorted_result
+select * from information_schema.statistics where table_schema in ('oceanbase', 'mysql', 'information_schema') and TABLE_NAME not like "ob_all_proxy%" order by TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME;
+--sorted_result
+select * from information_schema.schemata where schema_name in ('oceanbase', 'mysql', 'information_schema') order by CATALOG_NAME, SCHEMA_NAME;
+--sorted_result
+select * from information_schema.views where table_schema in ('oceanbase', 'mysql', 'information_schema') order by TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME;
+# should be empty
+--sorted_result
+select * from information_schema.files;
+
+create database test1;
+use test1;
+create table t1tenant1(c1 bigint primary key, c2 bigint);
+connection default;
+--replace_column 8 NULL 9 NULL 10 NULL 15 NULL 16 NULL
+select * from information_schema.tables where table_schema in ('oceanbase', 'mysql', 'information_schema', 'test1') order by TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME;
+
+create index t1tenant1_idx1 on t1tenant1(c2, c1);
+create unique index t1tenant1_uidx on t1tenant1(c2);
+create view vt1tenant1 as select c1,c2 from t1tenant1;
+
+use information_schema;
+#select * from information_schema.columns;
+#select * from information_schema.tables;
+--sorted_result
+select * from information_schema.table_constraints where table_schema in ('oceanbase', 'mysql', 'information_schema', 'test1') order by CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME;
+
+--sorted_result
+select * from information_schema.schemata where schema_name in ('oceanbase', 'mysql', 'information_schema', 'test1') order by CATALOG_NAME, SCHEMA_NAME;
+--sorted_result
+select * from information_schema.views where table_schema in ('oceanbase', 'mysql', 'information_schema', 'test1') order by TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME;
+
+
+# login using sys tenant
+connect (conn_sys,$OBMYSQL_MS0,root@sys,,*NO-ONE*,$OBMYSQL_PORT);
+set @@session.ob_query_timeout = 60000000;
+use information_schema;
+--disable_warnings
+drop table if exists t1, t2, t3;
+--enable_warnings
+#select * from information_schema.schemata;
+#select * from information_schema.columns;
+#select * from information_schema.session_variables where variable_name != 'version_comment' and variable_name != 'version' order by VARIABLE_NAME;
+#select * from information_schema.global_variables where variable_name != 'version_comment' and variable_name != 'version' order by VARIABLE_NAME;
+--sorted_result
+select * from information_schema.table_constraints where table_schema in ('oceanbase', 'mysql', 'information_schema', 'SYS', 'LBACSYS', 'ORAAUDITOR') order by CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME;
+--sorted_result
+select * from information_schema.statistics where table_schema in ('oceanbase', 'mysql', 'information_schema', 'SYS', 'LBACSYS', 'ORAAUDITOR') and TABLE_NAME not like "ob_all_proxy%" order by TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME;
+--sorted_result
+select * from information_schema.views where table_schema in ('oceanbase', 'mysql', 'information_schema', 'SYS', 'LBACSYS', 'ORAAUDITOR') order by TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME;
+
+
+--error 1049
+use test1;
+connection default;
+use information_schema;
+#select * from information_schema.columns;
+#select * from information_schema.schemata;
+--sorted_result
+select * from information_schema.table_constraints where table_schema in ('oceanbase', 'mysql', 'information_schema', 'test1') order by CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME;
+--sorted_result
+select * from information_schema.statistics where table_schema in ('oceanbase', 'mysql', 'information_schema', 'test1') and TABLE_NAME not like "ob_all_proxy%" order by TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME;
+--sorted_result
+select * from information_schema.views where table_schema in ('oceanbase', 'mysql', 'information_schema', 'test1') order by TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME;
+
+drop database test1;

@@ -1,0 +1,222 @@
+# ----------------------------------------------------------------------
+# Base test of GEOMETRY spatial index.
+# ----------------------------------------------------------------------
+DROP TABLE IF EXISTS spatial_index_syntax;
+CREATE TABLE spatial_index_syntax (g GEOMETRY NOT NULL SRID 4326, INDEX(g) LOCAL);
+SHOW FIELDS FROM spatial_index_syntax;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO	MUL	NULL	
+DROP TABLE IF EXISTS spatial_index_syntax;
+CREATE TABLE spatial_index_syntax (g GEOMETRY NOT NULL SRID 4326, INDEX(g) GLOBAL);
+SHOW FIELDS FROM spatial_index_syntax;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO	MUL	NULL	
+DROP TABLE IF EXISTS spatial_index_syntax;
+CREATE TABLE spatial_index_syntax (g GEOMETRY NOT NULL SRID 4326, INDEX(g));
+SHOW FIELDS FROM spatial_index_syntax;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO	MUL	NULL	
+DROP TABLE IF EXISTS spatial_index_syntax;
+CREATE TABLE spatial_index_syntax (g GEOMETRY NOT NULL SRID 4326, SPATIAL INDEX(g) LOCAL);
+SHOW FIELDS FROM spatial_index_syntax;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO	MUL	NULL	
+DROP TABLE IF EXISTS spatial_index_syntax;
+CREATE TABLE spatial_index_syntax (g GEOMETRY NOT NULL SRID 4326, SPATIAL INDEX(g) GLOBAL);
+SHOW FIELDS FROM spatial_index_syntax;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO	MUL	NULL	
+DROP TABLE IF EXISTS spatial_index_syntax;
+CREATE TABLE spatial_index_syntax (g GEOMETRY NOT NULL SRID 4326, SPATIAL INDEX(g));
+SHOW FIELDS FROM spatial_index_syntax;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO	MUL	NULL	
+DROP TABLE IF EXISTS spatial_index_syntax;
+DROP TABLE IF EXISTS spatial_index_syntax;
+Warnings:
+Note	1051	Unknown table 'test.spatial_index_syntax'
+CREATE TABLE spatial_index_syntax (g GEOMETRY NOT NULL SRID 4326);
+ALTER TABLE spatial_index_syntax ADD INDEX idx(g) LOCAL;
+SHOW FIELDS FROM spatial_index_syntax;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO	MUL	NULL	
+DROP INDEX idx ON spatial_index_syntax;
+ALTER TABLE spatial_index_syntax ADD INDEX idx(g) GLOBAL;
+SHOW FIELDS FROM spatial_index_syntax;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO	MUL	NULL	
+DROP INDEX idx ON spatial_index_syntax;
+ALTER TABLE spatial_index_syntax ADD INDEX idx(g);
+SHOW FIELDS FROM spatial_index_syntax;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO	MUL	NULL	
+DROP INDEX idx ON spatial_index_syntax;
+DROP TABLE IF EXISTS spatial_index_syntax;
+CREATE TABLE spatial_index_syntax (g GEOMETRY NOT NULL SRID 4326);
+ALTER TABLE spatial_index_syntax ADD SPATIAL INDEX idx(g) LOCAL;
+SHOW FIELDS FROM spatial_index_syntax;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO	MUL	NULL	
+DROP INDEX idx ON spatial_index_syntax;
+ALTER TABLE spatial_index_syntax ADD SPATIAL INDEX idx(g) GLOBAL;
+SHOW FIELDS FROM spatial_index_syntax;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO	MUL	NULL	
+DROP INDEX idx ON spatial_index_syntax;
+ALTER TABLE spatial_index_syntax ADD SPATIAL INDEX idx(g);
+SHOW FIELDS FROM spatial_index_syntax;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO	MUL	NULL	
+DROP INDEX idx ON spatial_index_syntax;
+DROP TABLE IF EXISTS spatial_index_syntax;
+CREATE TABLE spatial_index_syntax (g GEOMETRY NOT NULL SRID 4326);
+CREATE INDEX idx ON spatial_index_syntax (g) LOCAL;
+SHOW FIELDS FROM spatial_index_syntax;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO	MUL	NULL	
+DROP INDEX idx ON spatial_index_syntax;
+CREATE INDEX idx ON spatial_index_syntax (g) GLOBAL;
+SHOW FIELDS FROM spatial_index_syntax;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO	MUL	NULL	
+DROP INDEX idx ON spatial_index_syntax;
+CREATE INDEX idx ON spatial_index_syntax (g);
+SHOW FIELDS FROM spatial_index_syntax;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO	MUL	NULL	
+DROP INDEX idx ON spatial_index_syntax;
+DROP TABLE IF EXISTS spatial_index_syntax;
+CREATE TABLE spatial_index_syntax (g GEOMETRY NOT NULL SRID 4326);
+CREATE SPATIAL INDEX idx ON spatial_index_syntax (g) LOCAL;
+SHOW FIELDS FROM spatial_index_syntax;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO	MUL	NULL	
+DROP INDEX idx ON spatial_index_syntax;
+CREATE SPATIAL INDEX idx ON spatial_index_syntax (g) GLOBAL;
+SHOW FIELDS FROM spatial_index_syntax;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO	MUL	NULL	
+DROP INDEX idx ON spatial_index_syntax;
+CREATE SPATIAL INDEX idx ON spatial_index_syntax (g);
+SHOW FIELDS FROM spatial_index_syntax;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO	MUL	NULL	
+DROP INDEX idx ON spatial_index_syntax;
+DROP TABLE IF EXISTS spatial_index_constraint;
+CREATE TABLE spatial_index_constraint (g1 GEOMETRY NOT NULL SRID 4326, g2 GEOMETRY NOT NULL SRID 4326);
+CREATE INDEX idx ON spatial_index_constraint (g1, g2);
+ERROR 42000: Too many key parts specified; max 64 parts allowed
+DROP TABLE IF EXISTS spatial_index_constraint;
+CREATE TABLE spatial_index_constraint (i int, g GEOMETRY NOT NULL SRID 4326);
+CREATE INDEX idx ON spatial_index_constraint (i, g);
+ERROR 42000: Too many key parts specified; max 64 parts allowed
+DROP TABLE IF EXISTS spatial_index_constraint;
+CREATE TABLE spatial_index_constraint (i int, g GEOMETRY NOT NULL SRID 4326);
+CREATE SPATIAL INDEX idx ON spatial_index_constraint (i);
+ERROR 42000: A SPATIAL index may only contain a geometrical type column.
+DROP TABLE IF EXISTS spatial_index_constraint;
+CREATE TABLE spatial_index_constraint (i int, g GEOMETRY NOT NULL SRID 4326);
+CREATE UNIQUE INDEX idx ON spatial_index_constraint (g);
+ERROR HY000: Spatial indexes can't be primary or unique indexes.
+DROP TABLE IF EXISTS spatial_index_constraint;
+CREATE TABLE spatial_index_constraint (i int, g GEOMETRY);
+CREATE INDEX idx ON spatial_index_constraint (g);
+ERROR 42000: All parts of a SPATIAL index must be NOT NULL.
+DROP TABLE IF EXISTS spatial_index_constraint;
+CREATE TABLE spatial_index_constraint (g GEOMETRY NOT NULL SRID 4326);
+CREATE INDEX idx ON spatial_index_constraint (g);
+INSERT INTO spatial_index_constraint values (ST_GEOMFROMTEXT('POINT(1 1)', 0));
+ERROR HY000: The SRID of the geometry does not match the SRID of the column. The SRID of the geometry is 0, but the SRID of the column is 4326. Consider changing the SRID of the geometry or the SRID property of the column.
+DROP TABLE IF EXISTS spatial_index_constraint;
+DROP TABLE IF EXISTS spatial_index_dml;
+SET @v=ST_GEOMFROMTEXT('POINT(0 0)', 4326);
+SET @v0=ST_GEOMFROMTEXT('POINT(0 0)', 4326);
+SET @v1=ST_GEOMFROMTEXT('POINT(1 1)', 4326);
+CREATE TABLE spatial_index_dml (i int, g GEOMETRY NOT NULL SRID 4326, PRIMARY KEY (i));
+CREATE INDEX idx ON spatial_index_dml (g);
+INSERT INTO spatial_index_dml VALUES (1, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
+SELECT /*+INDEX(spatial_index_dml idx)*/ st_astext(g) FROM spatial_index_dml WHERE ST_INTERSECTS(g, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
+st_astext(g)
+POINT(0 0)
+DROP TABLE spatial_index_dml;
+CREATE TABLE spatial_index_dml (i int, g GEOMETRY NOT NULL SRID 4326, PRIMARY KEY (i));
+CREATE INDEX idx ON spatial_index_dml (g);
+INSERT INTO spatial_index_dml VALUES (1, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
+SELECT /*+INDEX(spatial_index_dml idx)*/ st_astext(g) FROM spatial_index_dml WHERE ST_INTERSECTS(g, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
+st_astext(g)
+POINT(0 0)
+DROP TABLE spatial_index_dml;
+CREATE TABLE spatial_index_dml (i1 int, i2 int, g GEOMETRY NOT NULL SRID 4326, PRIMARY KEY (i1, i2));
+CREATE INDEX idx ON spatial_index_dml (g);
+INSERT INTO spatial_index_dml VALUES (1, 2, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
+SELECT /*+INDEX(spatial_index_dml idx)*/ st_astext(g) FROM spatial_index_dml WHERE ST_INTERSECTS(g, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
+st_astext(g)
+POINT(0 0)
+DROP TABLE spatial_index_dml;
+DROP TABLE IF EXISTS spatial_index_dml;
+Warnings:
+Note	1051	Unknown table 'test.spatial_index_dml'
+CREATE TABLE spatial_index_dml (i int, g GEOMETRY NOT NULL SRID 4326, PRIMARY KEY (i));
+CREATE INDEX idx ON spatial_index_dml (g);
+INSERT INTO spatial_index_dml VALUES (1, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
+UPDATE spatial_index_dml SET g=ST_GEOMFROMTEXT('POINT(1 2)', 4326) WHERE ST_INTERSECTS(g, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
+SELECT /*+INDEX(spatial_index_dml idx)*/ g FROM spatial_index_dml WHERE ST_INTERSECTS(g, ST_GEOMFROMTEXT('POINT(1 1)', 4326));
+g
+DROP TABLE IF EXISTS spatial_index_dml;
+CREATE TABLE spatial_index_dml (i1 int, i2 int, g GEOMETRY NOT NULL SRID 4326, PRIMARY KEY (i1, i2));
+CREATE INDEX idx ON spatial_index_dml (g);
+SET @v0=ST_GEOMFROMTEXT('POINT(0 0)', 4326);
+SET @v1=ST_GEOMFROMTEXT('POINT(1 1)', 4326);
+INSERT INTO spatial_index_dml VALUES (1, 2, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
+UPDATE spatial_index_dml SET g=ST_GEOMFROMTEXT('POINT(1 2)', 4326) WHERE ST_INTERSECTS(g, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
+SELECT /*+INDEX(spatial_index_dml idx)*/ g FROM spatial_index_dml WHERE ST_INTERSECTS(g, ST_GEOMFROMTEXT('POINT(1 1)', 4326));
+g
+DROP TABLE IF EXISTS spatial_index_dml;
+CREATE TABLE spatial_index_dml (i int, g GEOMETRY NOT NULL SRID 4326, PRIMARY KEY (i));
+CREATE INDEX idx ON spatial_index_dml (g);
+SET @v0=ST_GEOMFROMTEXT('POINT(0 0)', 4326);
+INSERT INTO spatial_index_dml VALUES (1, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
+DELETE FROM spatial_index_dml WHERE ST_INTERSECTS(g, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
+SELECT /*+INDEX(spatial_index_dml idx)*/ g FROM spatial_index_dml WHERE ST_INTERSECTS(g, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
+g
+DROP TABLE IF EXISTS spatial_index_dml;
+CREATE TABLE spatial_index_dml (i1 int, i2 int, g GEOMETRY NOT NULL SRID 4326, PRIMARY KEY (i1, i2));
+CREATE INDEX idx ON spatial_index_dml (g);
+SET @v0=ST_GEOMFROMTEXT('POINT(0 0)', 4326);
+INSERT INTO spatial_index_dml VALUES (1, 2, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
+DELETE FROM spatial_index_dml WHERE ST_INTERSECTS(g, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
+SELECT /*+INDEX(spatial_index_dml idx)*/ g FROM spatial_index_dml WHERE ST_INTERSECTS(g, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
+g
+DROP TABLE IF EXISTS spatial_index_query;
+SET @v=ST_GEOMFROMTEXT('POINT(0 0)', 4326);
+CREATE TABLE spatial_index_query (i int, g GEOMETRY NOT NULL SRID 4326, PRIMARY KEY(i));
+CREATE INDEX idx ON spatial_index_query (g);
+INSERT INTO spatial_index_query VALUES (0, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
+INSERT INTO spatial_index_query VALUES (1, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
+INSERT INTO spatial_index_query VALUES (2, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
+SELECT /*+INDEX(spatial_index_query idx)*/ st_astext(g) FROM spatial_index_query WHERE ST_INTERSECTS(g, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
+st_astext(g)
+POINT(0 0)
+POINT(0 0)
+POINT(0 0)
+DROP TABLE IF EXISTS spatial_index_query;
+CREATE TABLE spatial_index_query (i int, g GEOMETRY NOT NULL SRID 4326);
+CREATE INDEX idx ON spatial_index_query (g);
+SET @v=ST_GEOMFROMTEXT('POINT(1 1)', 4326);
+INSERT INTO spatial_index_query VALUES (1, ST_GEOMFROMTEXT('POINT(1 1)', 4326));
+SET @cart_py = ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))', 4326);
+SELECT /*+INDEX(spatial_index_query idx)*/ st_astext(g) from spatial_index_query where st_intersects(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))', 4326));
+st_astext(g)
+POINT(1 1)
+DROP TABLE IF EXISTS spatial_index_rebuild;
+CREATE TABLE spatial_index_rebuild (i int, g GEOMETRY NOT NULL SRID 4326, PRIMARY KEY(i));
+SET @v=ST_GEOMFROMTEXT('POINT(0 0)', 4326);
+INSERT INTO spatial_index_rebuild VALUES (0, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
+INSERT INTO spatial_index_rebuild VALUES (1, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
+INSERT INTO spatial_index_rebuild VALUES (2, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
+CREATE INDEX idx ON spatial_index_rebuild (g);
+SELECT /*+INDEX(spatial_index_rebuild idx)*/ st_astext(g) FROM spatial_index_rebuild WHERE ST_INTERSECTS(g, ST_GEOMFROMTEXT('POINT(0 0)', 4326));
+st_astext(g)
+POINT(0 0)
+POINT(0 0)
+POINT(0 0)

@@ -1,0 +1,156 @@
+# owner: kaizhan.dkz
+# owner group: SQL1
+# description: 
+
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int, c2 varchar(1024), c3 int, primary key (c1));
+
+--echo basic case
+replace into t1 values (1, 'a', 1), (2, 'b', NULL);
+select * from t1;
+delete from t1 where c1=1;
+replace into t1 values (1, 'a', 2);
+select * from t1;
+replace into t1 values (1, 'a', 3), (1, 'a', 4);
+select * from t1;
+
+--echo only rowkey
+replace into t1(c1,c2) values (3, 'c');
+select * from t1;
+
+--echo type conversion
+replace into t1 values ('4', 4, '4'), (5, 'd', '5');
+select * from t1;
+
+--echo cons rowkey
+replace into t1 (c3, c2, c1) values (9, 'a', 8), (7, 'b', 6);
+select * from t1;
+
+--echo null rowkey
+#-- affect_rows 3
+replace into t1 values (10, 1, NULL), (11, NULL, 2), (12, 'ULL', 3);
+select * from t1;
+
+--echo ps
+#prepare stmt1 from replace into t1 values (?, ?, ?), (?, ?, ?);
+#set @v1 = 11;
+#set @v2 = 'a';
+#set @v3 = NULL;
+#set @v4 = 12;
+#set @v5 = 'b';
+#execute stmt1 using @v1, @v2, @v3, @v4, @v5, @v4;
+#select * from t1;
+
+--echo transaction
+start transaction;
+replace into t1 values (31, 'x', 13);
+select * from t1 where c1 = 31 and c2 = 'x' for update;
+rollback;
+select * from t1;
+
+start transaction;
+replace into t1 values (31, 'x', 13);
+select * from t1 where c1 = 31 and c2 = 'x' for update;
+commit;
+select * from t1;
+
+set autocommit = 0;
+replace into t1 values (32, 'y', 23);
+replace into t1 values (32, 'y', 32);
+commit;
+select * from t1;
+set autocommit = 1;
+
+--echo NOP
+--echo +1 support
+--echo CreateTime/ModifyTime columns
+--disable_warnings
+drop table if exists t2;
+--enable_warnings
+create table t2 (c1 int primary key, ct datetime default now(), mt datetime default now());
+replace into t2 values (1, '2013-05-29 10:10:10', '2013-05-29 10:10:10');
+replace into t2 (c1) values (2);
+select c1 from t2;
+
+--echo clean up
+drop table t1, t2;
+
+--echo not query static data
+create table t1(c1 int primary key, c2 int, c3 varchar(10) not null, c4 timestamp not null default '2014-02-20 00:00:00.000');
+replace into t1 values(1, 1, 'aaa', '2014-02-21'), (2, 2, 'bbb', '2014-02-22'), (3, 3, 'ccc', '2014-02-23'), (4, 4, 'bbb', '2014-02-24');
+select * from t1;
+#c4 include not null and default value, not need to query static data
+replace into t1(c1, c2, c3) values(5, 5, 'aaa');
+select * from t1;
+#c3 include not null but don't include default value, if replace specify c3, also not need to query static data
+replace into t1(c1, c3) values(1, 'abc'), (2, 'bac'), (3, 'cba');
+select * from t1;
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(
+  c1 int primary key,
+  c2 float not null,
+  c3 varchar(20) not null default 'aaa',
+  c4 timestamp not null default '2014-02-20');
+create index t1_c3 on t1(c3);
+
+#if include index, whether index column specified, always query static data
+--echo query static data
+replace into t1(c1, c2) values(1, 2.0), (2, 3.0), (3, 4.0);
+select * from t1;
+#query static data, and c2 not allow to be inserted with NULL
+#--error 4152
+#replace into t1(c1, c3) values(2, 'bbb'), (5, 'ccc');
+#select * from t1;
+#table include 1, 2.0, so replace use semantic 'UPDATE'
+replace into t1(c1, c2) values(1, 3.0);
+select * from t1;
+#not specify c2, but table has static data (2, 3.0, 'aaa', '2014-02-20'), so replace will succeed
+#replace into t1(c1, c3) values(2, 'ccc');
+#replace into t1 values(1, 4.0, 'ddd', '2014-02-21');
+#select * from t1;
+#--echo test replace ps
+#prepare stmt1 from replace into t1(c1, c2, c3) values(3, ?, ?);
+#set @c2=3.0;
+#set @c3='abc';
+#execute stmt1 using @c2, @c3;
+#select * from t1;
+#set @c2=4.0;
+#set @c3='ddd';
+#execute stmt1 using @c2, @c3;
+#select * from t1;
+#drop table t1;
+--echo test replace default now()
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(
+  c1 int primary key,
+  c2 int,
+  c3 varchar(20),
+  c4 timestamp default now());
+#if replace not specify timestamp default now() column, will query static data
+replace into t1 values(1, 1, 'aa', now());
+--replace_column 4 time
+select * from t1;
+replace into t1(c1, c2) values(1, 2), (2, 3), (3, 4);
+--replace_column 4 time
+select * from t1;
+#if replace specify timestamp default now() column, will not query static data
+replace into t1(c1, c4) values(2, date_add(now(), interval 1 minute)), (4, date_add(now(), interval 2 minute));
+--replace_column 4 time
+select * from t1;
+drop table t1;
+
+create table t1 (c1 int primary key, c2 int, unique key i2 (c2));
+replace into t1 values (1, 1);
+replace into t1 values (2, 1);
+select * from t1;
+drop table t1;

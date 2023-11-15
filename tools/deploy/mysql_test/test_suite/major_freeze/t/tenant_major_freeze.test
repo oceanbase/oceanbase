@@ -1,0 +1,61 @@
+#owner: donglou.zl 
+#owner group: rootserver
+#tags: tenant major freeze 
+
+connect (sys_conn,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection sys_conn;
+alter system set enable_major_freeze = true;
+# Note: there may be unfinished major_merge, which are launched according to major_freeze_duty_time.
+# Therefore, we need to disable daily_merge and wait the launched major_merge to finish here.
+alter system set major_freeze_duty_time = 'Disable' tenant sys;
+alter system set major_freeze_duty_time = 'Disable' tenant all_user;
+alter system set major_freeze_duty_time = 'Disable' tenant all_meta;
+--source mysql_test/include/wait_daily_merge.inc
+connection sys_conn;
+--disable_warnings
+drop table if exists test;
+--enable_warnings
+create table test(c1 int primary key, c2 int);
+insert into test values(0, 2);
+insert into test values(1, 2);
+insert into test values(2, 2);
+
+let $sys_tenant_id = query_get_value(select tenant_id from __all_tenant where tenant_name = 'sys', tenant_id, 1);
+let $start_frozen_scn = query_get_value(select frozen_scn from __all_freeze_info order by frozen_scn desc limit 1, frozen_scn, 1);
+let $frozen_scn_ori = query_get_value(select frozen_scn from __all_zone_merge_info where tenant_id = $sys_tenant_id, frozen_scn, 1);
+let $broadcast_scn_ori = query_get_value(select broadcast_scn from __all_zone_merge_info where tenant_id = $sys_tenant_id, broadcast_scn, 1);
+let $merge_status_idle = query_get_value(select merge_status from __all_zone_merge_info where tenant_id = $sys_tenant_id, merge_status, 1);
+let $is_merging_none = query_get_value(select is_merging from __all_zone_merge_info where tenant_id = $sys_tenant_id, is_merging, 1);
+let $test_table_id = query_get_value(select table_id from __all_table where table_name = 'test', table_id, 1);
+let $minor_freeze_count_ori = query_get_value(select count(1) as val from __all_rootservice_event_history where event = 'root_minor_freeze', val, 1);
+## merge_stage: 0(idle), 1(merging), 2(checksum)
+let $merge_stage = 0;
+
+############################################################
+connection sys_conn;
+## sys tenant normal merge
+alter system major freeze tenant = sys;
+let $merge_stage = 1;
+--source mysql_test/include/check_merge_status.inc
+--source mysql_test/include/wait_daily_merge.inc
+let $merge_stage = 0;
+--source mysql_test/include/check_merge_status.inc
+
+############################################################
+connection sys_conn;
+## invalid tenant name
+--error 5160
+alter system major freeze tenant = xxx;
+## invalid tenant name
+--error 5160
+alter system major freeze tenant = xxx, mysql;
+## invalid argument
+--error 1210
+alter system major freeze tenant = '';
+--source mysql_test/include/check_merge_status.inc
+
+############################################################
+connection sys_conn;
+--disable_warnings
+drop table if exists test;
+--enable_warnings

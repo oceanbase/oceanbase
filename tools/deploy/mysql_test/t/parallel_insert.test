@@ -1,0 +1,102 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+set transaction_isolation='READ-COMMITTED';
+set tx_isolation='READ-COMMITTED';
+--enable_query_log
+#owner: yuchen.wyc
+#owner group: sql1
+
+####test:two trx on one rows,one trx rollback
+connect (conn0,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn2,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+--enable_sorted_result
+--source mysql_test/include/index_quick_major.inc
+--enable_sorted_result
+
+connection conn0;
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(pk int primary key, c1 int);
+create index idx on t1(c1);
+insert into t1 values(6,6),(7,7),(8,8);
+--source mysql_test/include/check_all_idx_ok.inc
+
+connection conn1;
+set autocommit=0;
+
+connection conn2;
+set autocommit=0;
+
+####insert +insert
+connection conn1;
+insert into t1 values(1,1);
+
+connection conn2;
+sleep 1;
+send insert into t1 values(1,11);
+
+connection conn1;
+sleep 1;
+commit;
+
+connection conn2;
+--error 1062
+reap;
+commit;
+select * from t1;
+
+####insert +replace
+connection conn1;
+insert into t1 values(2,2);
+
+connection conn2;
+sleep 1;
+send replace into t1 values(2,12);
+
+connection conn1;
+sleep 1;
+commit;
+
+connection conn2;
+reap;
+commit;
+select * from t1;
+
+####replace +insert
+connection conn1;
+replace into t1 values(3,3);
+
+connection conn2;
+sleep 1;
+send insert into t1 values(3,13);
+
+connection conn1;
+sleep 1;
+commit;
+
+connection conn2;
+--error 1062
+reap;
+commit;
+select * from t1;
+
+####replace +replace
+connection conn1;
+replace into t1 values(4,4);
+
+connection conn2;
+sleep 1;
+send replace into t1 values(4,14);
+
+connection conn1;
+sleep 1;
+commit;
+
+connection conn2;
+reap;
+commit;
+select * from t1;
+
+drop table t1;

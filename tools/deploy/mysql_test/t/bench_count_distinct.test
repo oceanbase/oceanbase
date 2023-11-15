@@ -1,0 +1,36 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: zhanyue.zzy
+#owner group: sql1
+#tags: optimizer, create_table, insert
+#description:
+
+#
+# Test of count(distinct ..)
+#
+
+--disable_warnings
+drop table if exists a1;
+--enable_warnings
+create table a1(rowkey_suffix int primary key, price int) ;
+let $1=100;
+let $2=200;
+disable_query_log;
+while ($1)
+{
+ eval insert into a1(rowkey_suffix, price) values($2, $1);
+ dec $2;
+ eval insert into a1(rowkey_suffix, price) values($2, $1);
+ dec $1;
+ dec $2;
+}
+enable_query_log;
+select count(distinct price) from a1;
+--replace_regex /Plan signature: [0-9]*/Plan signature/
+--disable_result_log
+#explain extended select count(distinct n) from t1;
+--enable_result_log
+#drop table t1;
+drop table a1;
+# End of 4.1 tests

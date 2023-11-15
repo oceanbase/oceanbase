@@ -1,0 +1,59 @@
+drop table if exists t1;
+create table t1(c1 char(100), c2 char(100));
+insert into t1(c1, c2) values('123', null);
+alter table t1 add primary key(c1, c2);
+ERROR 22004: Invalid use of NULL value
+drop table t1;
+create table t1(c1 char(100) primary key, c2 char(100));
+insert into t1(c1, c2) values('111', null);
+alter table t1 drop primary key, add primary key(c2);
+ERROR 22004: Invalid use of NULL value
+drop table t1;
+create table t1(c1 int, c2 int) partition by hash(c2);
+insert into t1(c1, c2) values(1, null);
+alter table t1 modify column c1 char(10);
+drop table t1;
+create table t1(c1 char(100) primary key, c2 char(100));
+insert into t1(c1, c2) values('111', '1');
+insert into t1(c1, c2) values('112', '1');
+alter table t1 drop primary key, add primary key(c2);
+ERROR 23000: Duplicated primary key
+drop table t1;
+create table t1(c1 int, c2 int);
+insert into t1(c1, c2) values(111, NULL);
+insert into t1(c1, c2) values(112, NULL);
+create index idx on t1(c2);
+drop table t1;
+DROP TABLE IF EXISTS Z0CASE;
+CREATE TABLE ZOCASE(C1 CHAR(10), C2 INT, C3 INT GENERATED ALWAYS AS (C2+1) VIRTUAL, PRIMARY KEY(C3));
+ERROR HY000: 'Defining a generated column as primary key' is not supported for generated columns.
+CREATE TABLE Z0CASE(C1 CHAR(10), C2 INT, C3 INT GENERATED ALWAYS AS (C2+1) VIRTUAL, PRIMARY KEY(C2, C3));
+ERROR HY000: 'Defining a generated column as primary key' is not supported for generated columns.
+CREATE TABLE Z0CASE(C1 CHAR(10), C2 INT, C3 INT GENERATED ALWAYS AS (C2+1) VIRTUAL);
+ALTER TABLE Z0CASE ADD PRIMARY KEY(C3);
+ERROR HY000: 'Defining a generated column as primary key' is not supported for generated columns.
+ALTER TABLE Z0CASE ADD PRIMARY KEY(C2, C3);
+ERROR HY000: 'Defining a generated column as primary key' is not supported for generated columns.
+ALTER TABLE Z0CASE ADD PRIMARY KEY(C2);
+DROP TABLE Z0CASE;
+CREATE TABLE Z0CASE(C1 CHAR(10), C2 INT, C3 INT GENERATED ALWAYS AS (C2+1) VIRTUAL, PRIMARY KEY(C2));
+ALTER TABLE Z0CASE DROP PRIMARY KEY, ADD PRIMARY KEY(C2, C3);
+ERROR HY000: 'Defining a generated column as primary key' is not supported for generated columns.
+ALTER TABLE Z0CASE DROP PRIMARY KEY, ADD PRIMARY KEY(C2, C1);
+DROP TABLE Z0CASE;
+CREATE TABLE ZOCASE(C1 CHAR(10), C2 INT, C3 INT GENERATED ALWAYS AS (C2+1) STORED, PRIMARY KEY(C3));
+ERROR HY000: 'Defining a generated column as primary key' is not supported for generated columns.
+CREATE TABLE Z0CASE(C1 CHAR(10), C2 INT, C3 INT GENERATED ALWAYS AS (C2+1) STORED, PRIMARY KEY(C2, C3));
+ERROR HY000: 'Defining a generated column as primary key' is not supported for generated columns.
+CREATE TABLE Z0CASE(C1 CHAR(10), C2 INT, C3 INT GENERATED ALWAYS AS (C2+1) STORED);
+ALTER TABLE Z0CASE ADD PRIMARY KEY(C3);
+ERROR HY000: 'Defining a generated column as primary key' is not supported for generated columns.
+ALTER TABLE Z0CASE ADD PRIMARY KEY(C2, C3);
+ERROR HY000: 'Defining a generated column as primary key' is not supported for generated columns.
+ALTER TABLE Z0CASE ADD PRIMARY KEY(C2);
+DROP TABLE Z0CASE;
+CREATE TABLE Z0CASE(C1 CHAR(10), C2 INT, C3 INT GENERATED ALWAYS AS (C2+1) STORED, PRIMARY KEY(C2));
+ALTER TABLE Z0CASE DROP PRIMARY KEY, ADD PRIMARY KEY(C2, C3);
+ERROR HY000: 'Defining a generated column as primary key' is not supported for generated columns.
+ALTER TABLE Z0CASE DROP PRIMARY KEY, ADD PRIMARY KEY(C2, C1);
+DROP TABLE Z0CASE;

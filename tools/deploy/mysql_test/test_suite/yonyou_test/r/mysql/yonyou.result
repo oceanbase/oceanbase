@@ -1,0 +1,621 @@
+# yongyou test
+drop table if exists t1;
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!50503 SET NAMES utf8mb4 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+drop table if exists `pb_filter_solution_common`;
+CREATE TABLE IF NOT EXISTS `pb_filter_solution_common` (
+`id` int(11) NOT NULL AUTO_INCREMENT,
+`solutionId` int(11) DEFAULT NULL,
+`itemName` varchar(255)   DEFAULT NULL,
+`itemId` bigint(20) DEFAULT NULL,
+`itemTitle` varchar(50)   DEFAULT NULL,
+`refType` int(11) DEFAULT NULL,
+`isCommon` int(11) DEFAULT NULL,
+`rangeInput` int(11) DEFAULT NULL,
+`multSelect` int(11) DEFAULT NULL,
+`compareLogic` enum('is_not_null','is_null','between','like','rightlike','leftlike','egt','elt','gt','lt','neq','nin','in','eq')   DEFAULT NULL,
+`defaultVal1` varchar(5000)   DEFAULT NULL,
+`defaultVal2` varchar(5000)   DEFAULT NULL,
+`orderId` float(255,0) DEFAULT NULL,
+`saveHistory` int(11) DEFAULT NULL,
+`checkRefer` int(11) DEFAULT NULL,
+`pb_filter_solution_commoncol` varchar(45)   DEFAULT NULL,
+`tenant_id` bigint(20) NOT NULL DEFAULT '0',
+`defineId` varchar(100)   DEFAULT NULL COMMENT '自定义项对应字段',
+`itemType` varchar(100)   DEFAULT NULL,
+`refercode` varchar(255)   DEFAULT NULL,
+`bhidden` bit(1) DEFAULT b'0',
+`isshoprelated` tinyint(1) NOT NULL DEFAULT '0' COMMENT '是否门店相关',
+`cEnumType` varchar(40)   DEFAULT NULL,
+`bEnum` tinyint(4) DEFAULT NULL,
+`bAutoflt` tinyint(4) DEFAULT NULL,
+`cDataRule` varchar(200)   DEFAULT NULL,
+`itemTitle_resid` varchar(200)   DEFAULT NULL,
+`iType` smallint(1) DEFAULT '0' COMMENT '字段类
+型(为null或0搜索；1排序；2搜索和排序)',
+`defaultOrder` varchar(50)   DEFAULT NULL COMMENT '默认顺序 asc/desc',
+`cExtProps` text,
+`cDesignProps` text,
+`ytenant_id` varchar(36) DEFAULT '~',
+PRIMARY KEY (`id`),
+KEY `pb_filter_solution_common_tenant_id_idx` (`tenant_id`),
+KEY `i_solutionId_tenant_id` (`solutionId`,`tenant_id`),
+KEY `userdefineid_tenant_id_idx` (`tenant_id`,`defineId`),
+KEY `idx_filter_solution_common_id` (`solutionId`,`tenant_id`),
+KEY `idx_multlang_itemtitle` (`tenant_id`,`itemTitle`),
+KEY `idx_ytenant_id` (`ytenant_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=0   ROW_FORMAT=DYNAMIC;
+drop procedure if exists p_aa_updatecolumn;
+create procedure p_aa_updatecolumn(IN tablename varchar(50), IN columnname varchar(50),
+IN executeStr varchar(1000), IN executeType varchar(50))
+BEGIN
+DECLARE CurrentDatabase VARCHAR(100);
+SELECT DATABASE() INTO CurrentDatabase;
+SET @tablename = tablename;
+SET @columnname = columnname;
+SET @executeType = executeType;
+SET @executeStr = executeStr;
+SET @count = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE table_schema=CurrentDatabase AND TABLE_NAME=@tablename AND
+COLUMN_NAME=@columnname);
+IF @executeType = 'add' AND @count = 0 THEN
+PREPARE stmt1 FROM @executeStr;
+EXECUTE stmt1;
+ELSEIF @executeType = 'alter' AND @count >0 THEN
+PREPARE stmt1 FROM @executeStr;
+EXECUTE stmt1;
+END IF;
+end //
+call p_aa_updatecolumn('pb_filter_solution_common', 'cDesignProps', 'alter table `pb_filter_solution_common` modify column `cDesignProps` text   ;', 'alter');
+call p_aa_updatecolumn('pb_filter_solution_common', 'cExtProps', 'alter table `pb_filter_solution_common` modify column `cExtProps` text   ;', 'alter');
+call p_aa_updatecolumn('pb_filter_solution_common', 'cExtProps', 'alter table `pb_filter_solution_common` modify column `bAutoflt` smallint ;', 'alter');
+call p_aa_updatecolumn('pb_filter_solution_common', 'cExtProps', 'alter table `pb_filter_solution_common` modify column `bAutoflt` int ;', 'alter');
+call p_aa_updatecolumn('pb_filter_solution_common', 'cExtProps', 'alter table `pb_filter_solution_common` modify column `bAutoflt` bigint ;', 'alter');
+call p_aa_updatecolumn('pb_filter_solution_common', 'cExtProps', 'alter table `pb_filter_solution_common` modify column `bAutoflt` varchar(20);', 'alter');
+call p_aa_updatecolumn('pb_filter_solution_common', 'cExtProps', 'alter table `pb_filter_solution_common` modify column `bAutoflt` int;', 'alter');
+call p_aa_updatecolumn('pb_filter_solution_common', 'cExtProps', 'alter table `pb_filter_solution_common` modify column `bAutoflt` bigint;', 'alter');
+call p_aa_updatecolumn('pb_filter_solution_common', 'cExtProps', 'alter table `pb_filter_solution_common` modify column `bAutoflt` bigint(100);', 'alter');
+call p_aa_updatecolumn('pb_filter_solution_common', 'cExtProps', 'alter table `pb_filter_solution_common` modify column `bAutoflt` int(8);', 'alter');
+alter table `pb_filter_solution_common` modify column `bAutoflt` varchar(2);
+alter table `pb_filter_solution_common` modify column `bAutoflt` bigint;
+alter table `pb_filter_solution_common` modify column `bAutoflt` bigint(100);
+desc pb_filter_solution_common;
+Field	Type	Null	Key	Default	Extra
+id	int(11)	NO	PRI	NULL	auto_increment
+solutionId	int(11)	YES	MUL	NULL	
+itemName	varchar(255)	YES		NULL	
+itemId	bigint(20)	YES		NULL	
+itemTitle	varchar(50)	YES		NULL	
+refType	int(11)	YES		NULL	
+isCommon	int(11)	YES		NULL	
+rangeInput	int(11)	YES		NULL	
+multSelect	int(11)	YES		NULL	
+compareLogic	enum('is_not_null','is_null','between','like','rightlike','leftlike','egt','elt','gt','lt','neq','nin','in','eq')	YES		NULL	
+defaultVal1	varchar(5000)	YES		NULL	
+defaultVal2	varchar(5000)	YES		NULL	
+orderId	float(255,0)	YES		NULL	
+saveHistory	int(11)	YES		NULL	
+checkRefer	int(11)	YES		NULL	
+pb_filter_solution_commoncol	varchar(45)	YES		NULL	
+tenant_id	bigint(20)	NO	MUL	0	
+defineId	varchar(100)	YES		NULL	
+itemType	varchar(100)	YES		NULL	
+refercode	varchar(255)	YES		NULL	
+bhidden	bit(1)	YES		b'0'	
+isshoprelated	tinyint(1)	NO		0	
+cEnumType	varchar(40)	YES		NULL	
+bEnum	tinyint(4)	YES		NULL	
+bAutoflt	bigint(100)	YES		NULL	
+cDataRule	varchar(200)	YES		NULL	
+itemTitle_resid	varchar(200)	YES		NULL	
+iType	smallint(1)	YES		0	
+defaultOrder	varchar(50)	YES		NULL	
+cExtProps	text	YES		NULL	
+cDesignProps	text	YES		NULL	
+ytenant_id	varchar(36)	YES	MUL	~	
+select count(*) from pb_filter_solution_common;
+count(*)
+0
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+drop table if exists `aa_vendor`;
+CREATE TABLE `aa_vendor` (
+`iOrgId` varchar(100) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT '创建组织id',
+`iCustID` bigint DEFAULT NULL COMMENT '创建商家id',
+`iclass_id` bigint DEFAULT NULL COMMENT '供应商分类',
+`cCreditCode` varchar(100) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT '统一社会信用代码',
+`iTaxItems` varchar(100) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT '税目',
+`cVendorPhone` varchar(20) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT '固定电话',
+`cVendorAddress` varchar(255) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT '通信地址',
+`cVendorZipCode` varchar(10) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT '邮政编码',
+`cVendorEmail` varchar(100) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT '电子邮箱',
+`cContact` varchar(100) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT '联系人',
+`cContactPhone` varchar(20) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT '联系人电话',
+`cContactMobile` varchar(20) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT '移动电话',
+`cErpCode` varchar(255) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT 'ERP编码',
+`cRemark` varchar(255) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT '备注',
+`cDataSource` varchar(20) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT '档案来源',
+`bInternalUnit` bit(1) DEFAULT b'0' COMMENT '内部单位',
+`iCorrespondingOrgId` varchar(36) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT '对应组织',
+`cWechatPublicAccount` varchar(255) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT '微信公众号',
+`cRegion` varchar(255) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT '注册地区',
+`cRegionCode` varchar(255) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT '注册地区代码',
+`cVendorRegisterAddress` varchar(255) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT '注册地址',
+`iCreatorType` smallint DEFAULT NULL COMMENT '创建者类型',
+`code` varchar(255) CHARACTER SET utf8 COLLATE utf8_bin NOT NULL COMMENT '编码',
+`name` varchar(255) CHARACTER SET utf8 COLLATE utf8_bin NOT NULL COMMENT '名称',
+`id` bigint NOT NULL AUTO_INCREMENT COMMENT 'ID',
+`pubts` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '时间戳',
+`tenant_id` bigint NOT NULL COMMENT '租户',
+`iCorrespondingCustId` bigint DEFAULT NULL COMMENT '对应客户',
+`iCountryId` varchar(36) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT '国家',
+`bFreezeStatus` bit(1) DEFAULT b'0' COMMENT '冻结状态',
+`cAccessStatus` varchar(100) CHARACTER SET utf8 COLLATE utf8_bin NOT NULL DEFAULT '1' COMMENT '准入状态',
+`cYhtTenant` varchar(100) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT '对应租户',
+`cCompanyType` varchar(100) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT '企业类型',
+`cTransactions` varchar(100) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT '交易方式',
+`cCooperationDate` date DEFAULT NULL COMMENT '首次合作日期',
+`iParentVendor` bigint DEFAULT NULL COMMENT '上级供应商',
+`retailInvestors` bit(1) DEFAULT b'0' COMMENT '散户',
+PRIMARY KEY (`id`) USING BTREE,
+KEY `IX_AA_aa_vendor_code_tenant_id` (`tenant_id`,`code`) USING BTREE,
+KEY `IX_AA_tenant_id` (`tenant_id`) USING BTREE
+) ENGINE=InnoDB AUTO_INCREMENT=7032889024343724033 DEFAULT CHARSET=utf8 COLLATE=utf8_bin ROW_FORMAT=DYNAMIC;
+LOCK TABLES `aa_vendor` WRITE;
+/*!40000 ALTER TABLE `aa_vendor` DISABLE KEYS */;
+INSERT INTO `aa_vendor` VALUES ('1344056157196544',NULL,1344520768557312,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2',0x00,NULL,NULL,NULL,NULL,NULL,1,'wn-10001','供应商1',1344521067270400,'2019-08-08 11:17:33',1344032402460928,NULL,NULL,0x00,'1',NULL,NULL,NULL,NULL,NULL,0x00),('1345387535765760',NULL,1344520768557312,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2',0x00,NULL,NULL,NULL,NULL,NULL,1,'wn-10002','lcy供货',1345391824097536,'2019-08-09 02:03:20',1344032402460928,NULL,NULL,0x00,'1',NULL,NULL,NULL,NULL,NULL,0x00),('1344339088544000',NULL,1344520768557312,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2',0x00,NULL,NULL,NULL,NULL,NULL,1,'wn-10003','ymh>供应>商01',1345607710986496,'2019-08-09 05:42:57',1344032402460928,NULL,NULL,0x00,'1',NULL,NULL,NULL,NULL,NULL,0x00),('1344339088544000',NULL,1344520768557312,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2',0x00,NULL,NULL,NULL,NULL,NULL,1,'wn-10004','ymh供应商02',1345608140198144,'2019-08-09 05:43:23',1344032402460928,NULL,NULL,0x00,'1',NULL,NULL,NULL,NULL,NULL,0x00),('1345332891865344',NULL,1344520768557312,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2',0x00,NULL,NULL,NULL,NULL,NULL,1,'wn-10005','S1',1345617766371584,'2019-08-09 05:53:10',1344032402460928,NULL,NULL,0x00,'1',NULL,NULL,NULL,NULL,NULL,0x00),('1345332891865344',NULL,1344520768557312,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2',0x00,NULL,NULL,NULL,NULL,NULL,1,'wn-10006','S2',1345618127589632,'2019-08-09 05:53:32',1344032402460928,NULL,NULL,0x00,'1',NULL,NULL,NULL,NULL,NULL,0x00),('1345646495420672',NULL,1344520768557312,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2',0x00,NULL,NULL,NULL,NULL,NULL,1,'008','喵喵供应商',1345688473342208,'2019-08-09 07:05:06',1344032402460928,NULL,NULL,0x00,'1',NULL,NULL,NULL,NULL,NULL,0x00),('1345647449903360',NULL,1344520768557312,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'2',0x00,NULL,NULL,NULL,NULL,NULL,1,'cg01','一级采购供应商',1345689859477760,'2019-08-09 07:06:45',1344032402460928,NULL,NULL,0x00,'1',NULL,NULL,NULL,NULL,NULL,0x00);
+commit;
+select distinctrow * from aa_vendor;
+iOrgId	iCustID	iclass_id	cCreditCode	iTaxItems	cVendorPhone	cVendorAddress	cVendorZipCode	cVendorEmail	cContact	cContactPhone	cContactMobile	cErpCode	cRemark	cDataSource	bInternalUnit	iCorrespondingOrgId	cWechatPublicAccount	cRegion	cRegionCode	cVendorRegisterAddress	iCreatorType	code	name	id	pubts	tenant_id	iCorrespondingCustId	iCountryId	bFreezeStatus	cAccessStatus	cYhtTenant	cCompanyType	cTransactions	cCooperationDate	iParentVendor	retailInvestors
+1344056157196544	NULL	1344520768557312	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	2	 	NULL	NULL	NULL	NULL	NULL	1	wn-10001	供应商1	1344521067270400	2019-08-08 11:17:33	1344032402460928	NULL	NULL	 	1	NULL	NULL	NULL	NULL	NULL	 
+1345387535765760	NULL	1344520768557312	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	2	 	NULL	NULL	NULL	NULL	NULL	1	wn-10002	lcy供货	1345391824097536	2019-08-09 02:03:20	1344032402460928	NULL	NULL	 	1	NULL	NULL	NULL	NULL	NULL	 
+1344339088544000	NULL	1344520768557312	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	2	 	NULL	NULL	NULL	NULL	NULL	1	wn-10003	ymh>供应>商01	1345607710986496	2019-08-09 05:42:57	1344032402460928	NULL	NULL	 	1	NULL	NULL	NULL	NULL	NULL	 
+1344339088544000	NULL	1344520768557312	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	2	 	NULL	NULL	NULL	NULL	NULL	1	wn-10004	ymh供应商02	1345608140198144	2019-08-09 05:43:23	1344032402460928	NULL	NULL	 	1	NULL	NULL	NULL	NULL	NULL	 
+1345332891865344	NULL	1344520768557312	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	2	 	NULL	NULL	NULL	NULL	NULL	1	wn-10005	S1	1345617766371584	2019-08-09 05:53:10	1344032402460928	NULL	NULL	 	1	NULL	NULL	NULL	NULL	NULL	 
+1345332891865344	NULL	1344520768557312	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	2	 	NULL	NULL	NULL	NULL	NULL	1	wn-10006	S2	1345618127589632	2019-08-09 05:53:32	1344032402460928	NULL	NULL	 	1	NULL	NULL	NULL	NULL	NULL	 
+1345646495420672	NULL	1344520768557312	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	2	 	NULL	NULL	NULL	NULL	NULL	1	008	喵喵供应商	1345688473342208	2019-08-09 07:05:06	1344032402460928	NULL	NULL	 	1	NULL	NULL	NULL	NULL	NULL	 
+1345647449903360	NULL	1344520768557312	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	2	 	NULL	NULL	NULL	NULL	NULL	1	cg01	一级采购供应商	1345689859477760	2019-08-09 07:06:45	1344032402460928	NULL	NULL	 	1	NULL	NULL	NULL	NULL	NULL	 
+select count(*) from aa_vendor;
+count(*)
+8
+LOCK TABLES `aa_vendor` WRITE;
+/*!40000 ALTER TABLE `aa_vendor` ENABLE KEYS */;
+UNLOCK TABLES;
+select count(*) from aa_vendor;
+count(*)
+8
+call p_aa_updatecolumn('aa_vendor', 'cExtProps', 'alter table `aa_vendor` modify column `tenant_id` bigint(100);', 'alter');
+call p_aa_updatecolumn('aa_vendor', 'cExtProps', 'alter table `aa_vendor` modify column `tenant_id` varchar(100);', 'alter');
+call p_aa_updatecolumn('aa_vendor', 'cExtProps', 'alter table `aa_vendor` modify column `tenant_id` bigint(100);', 'alter');
+call p_aa_updatecolumn('aa_vendor', 'cExtProps', 'alter table `aa_vendor` modify column `tenant_id` int(8);', 'alter');
+call p_aa_updatecolumn('aa_vendor', 'cExtProps', 'alter table `aa_vendor` modify column `tenant_id` varchar(8);', 'alter');
+call p_aa_updatecolumn('aa_vendor', 'cExtProps', 'alter table `aa_vendor` modify column `tenant_id` int;', 'alter');
+call p_aa_updatecolumn('aa_vendor', 'cExtProps', 'alter table `aa_vendor` modify column `iParentVendor` varchar(255);', 'alter');
+alter table `aa_vendor` modify column `iParentVendor` varchar(255);
+desc aa_vendor;
+Field	Type	Null	Key	Default	Extra
+iOrgId	varchar(100)	YES		NULL	
+iCustID	bigint(20)	YES		NULL	
+iclass_id	bigint(20)	YES		NULL	
+cCreditCode	varchar(100)	YES		NULL	
+iTaxItems	varchar(100)	YES		NULL	
+cVendorPhone	varchar(20)	YES		NULL	
+cVendorAddress	varchar(255)	YES		NULL	
+cVendorZipCode	varchar(10)	YES		NULL	
+cVendorEmail	varchar(100)	YES		NULL	
+cContact	varchar(100)	YES		NULL	
+cContactPhone	varchar(20)	YES		NULL	
+cContactMobile	varchar(20)	YES		NULL	
+cErpCode	varchar(255)	YES		NULL	
+cRemark	varchar(255)	YES		NULL	
+cDataSource	varchar(20)	YES		NULL	
+bInternalUnit	bit(1)	YES		b'0'	
+iCorrespondingOrgId	varchar(36)	YES		NULL	
+cWechatPublicAccount	varchar(255)	YES		NULL	
+cRegion	varchar(255)	YES		NULL	
+cRegionCode	varchar(255)	YES		NULL	
+cVendorRegisterAddress	varchar(255)	YES		NULL	
+iCreatorType	smallint(6)	YES		NULL	
+code	varchar(255)	NO		NULL	
+name	varchar(255)	NO		NULL	
+id	bigint(20)	NO	PRI	NULL	auto_increment
+pubts	timestamp	NO		CURRENT_TIMESTAMP	ON UPDATE CURRENT_TIMESTAMP
+tenant_id	bigint(20)	NO	MUL	NULL	
+iCorrespondingCustId	bigint(20)	YES		NULL	
+iCountryId	varchar(36)	YES		NULL	
+bFreezeStatus	bit(1)	YES		b'0'	
+cAccessStatus	varchar(100)	NO		1	
+cYhtTenant	varchar(100)	YES		NULL	
+cCompanyType	varchar(100)	YES		NULL	
+cTransactions	varchar(100)	YES		NULL	
+cCooperationDate	date	YES		NULL	
+iParentVendor	varchar(255)	YES		NULL	
+retailInvestors	bit(1)	YES		b'0'	
+select count(*) from aa_vendor;
+count(*)
+8
+CREATE TABLE IF NOT EXISTS  `ucg_baseapi_api_log`  (
+`id` varchar(36)   NOT NULL COMMENT '主键',
+`trace_id` varchar(255)   NULL DEFAULT NULL COMMENT '中间件自动生成，或服务自动生成',
+`generate_token_time` bigint(255) NULL DEFAULT NULL COMMENT '安全认证中生成token花费的时间',
+`token_time` bigint(255) NULL DEFAULT NULL COMMENT '安全认证花费的时间',
+`api_url` varchar(255)   NULL DEFAULT NULL COMMENT '网关请求url',
+`token_name` varchar(255)   NULL DEFAULT NULL COMMENT '安全认证插件的全名称',
+`sign_time` bigint(255) NULL DEFAULT NULL COMMENT '鉴权耗时',
+`gateway_time` bigint(255) NULL DEFAULT NULL COMMENT '网关实际消耗的时间',
+`dr` bit(1) NULL DEFAULT NULL COMMENT '是否删除标记',
+`gmt_create` varchar(28)   NULL DEFAULT NULL COMMENT '创建时间',
+`gmt_update` varchar(28)   NULL DEFAULT NULL COMMENT '更新时间',
+`real_url` varchar(255)   NULL DEFAULT NULL COMMENT '后端转发url',
+`prod_code` varchar(60)   NULL DEFAULT NULL COMMENT '产品编码',
+`app_key` varchar(60)   NULL DEFAULT NULL COMMENT '应用appKey',
+`method` varchar(10)   NULL DEFAULT NULL COMMENT '网关对外请求类型',
+`cost` bigint(255) NULL DEFAULT NULL COMMENT '请求总耗时',
+`response_code` varchar(60)   NULL DEFAULT NULL COMMENT '设置的一些特殊的响应码',
+`http_status_code` int(255) NULL DEFAULT NULL COMMENT '网关http状态码',
+`status` varchar(255)   NULL DEFAULT NULL COMMENT '后端服务返回状态',
+`message` mediumtext   NULL COMMENT '网关返回message',
+`b_method` varchar(255)   NULL DEFAULT NULL COMMENT '后端请求method',
+`b_req_body` mediumtext   NULL COMMENT '后端服务请求体',
+`b_req_byte` double(255, 0) NULL DEFAULT NULL COMMENT '后端服务请求字节数',
+`b_res_data` mediumtext   NULL COMMENT '后端服务响应体',
+`b_res_byte` double(255, 0) NULL DEFAULT NULL COMMENT '后端服务响应字节数',
+`b_start_time` datetime NULL DEFAULT NULL COMMENT '发起后端服务请求时间',
+`b_end_time` datetime NULL DEFAULT NULL COMMENT '后端服务返回时间',
+`b_cost` bigint(255) NULL DEFAULT NULL COMMENT '后端服务耗时',
+`p_time` bigint(255) NULL DEFAULT NULL COMMENT '执行协议插件的总耗时',
+`p_in_time` bigint(255) NULL DEFAULT NULL COMMENT '进入协议插件花费的排队时间',
+`p_real_time` bigint(255) NULL DEFAULT NULL COMMENT '实际协议插件的花费时间',
+`p_out_time` bigint(255) NULL DEFAULT NULL COMMENT '出来协议插件花费的排队时间',
+`p_name` varchar(255)   NULL DEFAULT NULL COMMENT '协议插件的全名称',
+`b_status` varchar(255)   NULL DEFAULT NULL COMMENT '后端服务返回状态',
+`param_parse_in_time` bigint(255) NULL DEFAULT NULL COMMENT '进入参数解析插件花费的排队时间',
+`param_parse_out_time` bigint(255) NULL DEFAULT NULL COMMENT '出来参数解析插件花费的排队时间',
+`param_parse_real_time` bigint(255) NULL DEFAULT NULL COMMENT '实际参数解析插件花费的时间',
+`param_parse_time` bigint(255) NULL DEFAULT NULL COMMENT '执行参数解析插件的总耗时',
+`param_parse_name` varchar(255)   NULL DEFAULT NULL COMMENT '参数解析插件的全名称',
+`result_parse_in_time` bigint(255) NULL DEFAULT NULL COMMENT '进入返回值解析插件花费的排队时间',
+`result_parse_out_time` bigint(255) NULL DEFAULT NULL COMMENT '出来返回值解析插件花费的排队时间',
+`result_parse_real_time` bigint(255) NULL DEFAULT NULL COMMENT '实际返回值解析插件花费的时间',
+`result_parse_time` bigint(255) NULL DEFAULT NULL COMMENT '执行返回值解析插件的总耗时',
+`result_parse_name` varchar(255)   NULL DEFAULT NULL COMMENT '返回值解析插件的全名称',
+`do_auth_time` bigint(255) NULL DEFAULT NULL COMMENT '执行业务扩展插件的总耗时',
+`do_auth_in_time` bigint(255) NULL DEFAULT NULL COMMENT '业务扩展插件耗时',
+`do_auth_real_time` bigint(255) NULL DEFAULT NULL COMMENT '实际业务扩展插件的花费时间',
+`do_auth_out_time` bigint(255) NULL DEFAULT NULL COMMENT '出来业务扩展插件花费的排队时间',
+`after_auth_time` bigint(255) NULL DEFAULT NULL COMMENT '执行业务扩展插件回调操作的总耗时',
+`after_auth_in_time` bigint(255) NULL DEFAULT NULL COMMENT '执行业务扩展插件回调耗时',
+`after_auth_out_time` bigint(255) NULL DEFAULT NULL COMMENT '实际执行业务扩展插件回调的花费时间',
+`after_auth_real_time` bigint(255) NULL DEFAULT NULL COMMENT '出来执行业务扩展插件回调花费的排队时间',
+`auth_name` varchar(255)   NULL DEFAULT NULL COMMENT '业务扩展插件的全名称',
+`init_time` bigint(255) NULL DEFAULT NULL COMMENT '初始化耗时',
+`filter_time` bigint(255) NULL DEFAULT NULL COMMENT '系统和产品的访问控制花费的时间',
+`req_body` mediumtext   NULL COMMENT '网关请求体',
+`req_byte` double(255, 0) NULL DEFAULT NULL COMMENT '网关请求字节数',
+`res_data` mediumtext   NULL COMMENT '网关响应体',
+`res_byte` double(255, 0) NULL DEFAULT NULL COMMENT '网关响应字节数',
+`start_time` datetime NULL DEFAULT NULL COMMENT '开始时间',
+`end_time` datetime NULL DEFAULT NULL COMMENT '结束时间',
+`tenant_id` varchar(36)   NULL DEFAULT NULL COMMENT '租户Id',
+`span_id` varchar(255)   NULL DEFAULT NULL COMMENT '调用请求处理的父spanId',
+`p_span_id` varchar(255)   NULL DEFAULT NULL COMMENT '调用请求处理的父pSpanI',
+`user_id` varchar(255)   NULL DEFAULT NULL COMMENT '当前上下文中的登录用户id',
+`ip_addr` varchar(255)   NULL DEFAULT NULL COMMENT '访问IP',
+`api_id` varchar(36)   NULL DEFAULT NULL COMMENT 'API的id',
+`api_name` varchar(60)   NULL DEFAULT NULL COMMENT 'API名称',
+`prod_id` varchar(36)   NULL DEFAULT NULL COMMENT '产品id',
+PRIMARY KEY (`id`) USING BTREE
+) ENGINE = InnoDB  ROW_FORMAT = DYNAMIC;
+ALTER TABLE `ucg_baseapi_api_log`  ROW_FORMAT = DYNAMIC;
+drop table if exists wb_approval_process;
+CREATE TABLE IF NOT EXISTS `wb_approval_process`  (
+`id` varchar(36)  NOT NULL,
+`process_name` varchar(150)  NOT NULL,
+`node_sum` decimal(65, 30) NOT NULL,
+`tenant_id` varchar(36)  NOT NULL,
+`sys_tenant_id` varchar(36)  NOT NULL,
+`ts` datetime(6) NOT NULL,
+`user_id` varchar(36)  NULL DEFAULT NULL,
+`show_assert` text  NULL,
+`modify_assert` text  NULL,
+`process_type` varchar(10)  NOT NULL,
+`ytenant_id` varchar(36)  NULL DEFAULT NULL COMMENT '云平台友互通租户
+ID',
+`has_offline` int2 COMMENT '是否下线 0或者null 代表未下线；1-代表已下
+线',
+PRIMARY KEY (`id`) USING BTREE
+) ENGINE = InnoDB  ROW_FORMAT = Dynamic;
+call p_aa_updatecolumn('wb_approval_process','has_offline','ALTER TABLE wb_approval_process ADD COLUMN `has_offline` int2 COMMENT "是否下线 0或者null 代表未下线；1-代表已下线";','add');
+call p_aa_updatecolumn('wb_approval_process','ytenant_id',  'ALTER TABLE wb_approval_process ADD COLUMN ytenant_id varchar(36)  NULL DEFAULT NULL COMMENT "云平台友互通租户ID" AFTER process_type;' , 'add');
+update wb_approval_process set ytenant_id=tenant_id;
+call p_aa_updatecolumn('wb_approval_process','has_offline','ALTER TABLE wb_approval_process ADD COLUMN `has_offline` int2 COMMENT "是否下线 0或者null 代表未下线；1-代表已下线";','add');
+call p_aa_updatecolumn('wb_approval_process','ytenant_id',  'ALTER TABLE wb_approval_process ADD COLUMN ytenant_id varchar(36)  NULL DEFAULT NULL COMMENT "云平台友互通租户ID" AFTER process_type;' , 'add');
+desc wb_approval_process;
+Field	Type	Null	Key	Default	Extra
+id	varchar(36)	NO	PRI	NULL	
+process_name	varchar(150)	NO		NULL	
+node_sum	decimal(65,30)	NO		NULL	
+tenant_id	varchar(36)	NO		NULL	
+sys_tenant_id	varchar(36)	NO		NULL	
+ts	datetime(6)	NO		NULL	
+user_id	varchar(36)	YES		NULL	
+show_assert	text	YES		NULL	
+modify_assert	text	YES		NULL	
+process_type	varchar(10)	NO		NULL	
+ytenant_id	varchar(36)	YES		NULL	
+has_offline	smallint(6)	YES		NULL	
+call p_aa_updatecolumn('wb_approval_process','alert_case','ALTER TABLE wb_approval_process ADD COLUMN `alert_case` int4 COMMENT "是否是预警任务生成的方案";','add');
+call p_aa_updatecolumn('wb_approval_process','alert_case','ALTER TABLE wb_approval_process ADD COLUMN `long_alert_case` long COMMENT "是否是预警任务生成的方案";','add');
+call p_aa_updatecolumn('wb_approval_process','alert_case','ALTER TABLE wb_approval_process ADD COLUMN `long_alert_case` long COMMENT "是否是预警任务生成的方案";','add');
+CREATE TABLE IF NOT EXISTS `ru_action_meta_variable` (
+`id` int(10) NOT NULL AUTO_INCREMENT,
+`name` varchar(100) DEFAULT NULL,
+`identify` varchar(100) DEFAULT NULL,
+`action_meta_id` int(10) DEFAULT NULL,
+`ytenant_id` varchar(36) DEFAULT '~',
+PRIMARY KEY (`id`),
+KEY `idx_ytenant_id` (`ytenant_id`)
+) ENGINE=InnoDB CHECKSUM=1 DELAY_KEY_WRITE=1 ROW_FORMAT=DYNAMIC;
+CREATE TABLE IF NOT EXISTS `aa_billcode_candidateprop`
+(
+`autoid`              int(11) NOT NULL AUTO_INCREMENT COMMENT '主>键',
+`pk_bcr_obj`          varchar(200)       DEFAULT NULL COMMENT '编>码对象主键',
+`en_prop_name`        varchar(200)       DEFAULT NULL COMMENT '实>体属性名',
+`display_name`        varchar(200)       DEFAULT NULL COMMENT '显>示名称',
+`elem_type`           varchar(200)       DEFAULT NULL COMMENT '类>型（时间，字符，参照）',
+`mapping_entity`      varchar(200)       DEFAULT NULL COMMENT '所>属编码映射实体',
+`pubts`               timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '创建时间',
+`mapping_entity_name` varchar(200)       DEFAULT NULL COMMENT '引>用实体名称',
+`display_name2`       varchar(200)       DEFAULT NULL COMMENT '显>示名称',
+`display_name3`       varchar(200)       DEFAULT NULL COMMENT '显>示名称',
+`display_name4`       varchar(200)       DEFAULT NULL COMMENT '显>示名称',
+`display_name5`       varchar(200)       DEFAULT NULL COMMENT '显>示名称',
+`display_name6`       varchar(200)       DEFAULT NULL COMMENT '显>示名称',
+`display_name_ext`    varchar(200)       DEFAULT NULL COMMENT '显>示名称',
+PRIMARY KEY (`autoid`) USING BTREE
+) ENGINE=InnoDB  AVG_ROW_LENGTH=1260 ROW_FORMAT=DYNAMIC COMMENT='>候选属性表';
+DROP TABLE IF EXISTS `mp_img`;
+CREATE TABLE `mp_img` (
+`id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+`iCorpID` int(11) DEFAULT NULL,
+`cAppID` varchar(20) DEFAULT NULL,
+`iMultiID` bigint(20) DEFAULT NULL COMMENT '多图文id',
+`cWXAccountID` varchar(20) NOT NULL,
+`cKeyword` varchar(255) DEFAULT NULL,
+`iMatchMode` int(11) unsigned DEFAULT NULL,
+`cText` text,
+`iClassID` int(11) unsigned DEFAULT NULL,
+`cClassName` varchar(50) DEFAULT NULL,
+`cPicUrl` varchar(255) DEFAULT NULL,
+`bShowPic` tinyint(1) DEFAULT NULL,
+`cSummary` varchar(255) DEFAULT NULL,
+`cLinkUrl` varchar(255) DEFAULT NULL,
+`cRealLinkUrl` varchar(255) DEFAULT NULL,
+`cOriginArticleUrl` varchar(255) DEFAULT NULL,
+`cModule` varchar(20) DEFAULT NULL,
+`cModuleContent` varchar(20) DEFAULT NULL,
+`cModuleTarget` varchar(20) DEFAULT NULL,
+`iOption` int(11) unsigned DEFAULT NULL,
+`dCreateTime` int(11) unsigned DEFAULT NULL,
+`dUpdateTime` int(11) unsigned DEFAULT NULL,
+`cTitle` varchar(60) DEFAULT NULL,
+`iOrder` int(4) unsigned DEFAULT NULL,
+`cMediaId` varchar(100) DEFAULT NULL,
+`dMediaIdExpire` int(11) unsigned DEFAULT NULL,
+`iSetFirstReply` int(11) unsigned DEFAULT '0',
+`cFilePath` varchar(255) DEFAULT NULL,
+`cAgentID` varchar(20) DEFAULT NULL,
+`ts` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+`iTopOrgID` int(10) unsigned DEFAULT NULL,
+`iSourceID` int(10) unsigned DEFAULT NULL,
+`iAccessScope` int(11) DEFAULT NULL,
+`iPurpose` int(11) DEFAULT '1' COMMENT '用途类型',
+`bOriLink` tinyint(1) DEFAULT NULL,
+`bFullPageShow` tinyint(1) DEFAULT NULL,
+`cWXText` text,
+`cAuthor` varchar(20) DEFAULT NULL COMMENT '作者',
+`cArticleLink` varchar(1000) DEFAULT NULL,
+`bReprint` tinyint(1) DEFAULT NULL COMMENT '图文消息转载提示（0：否 1：是）',
+`bOpenComment` tinyint(1) NOT NULL DEFAULT '0' COMMENT '是否开启评论(0不打开, 1打开)',
+`bOnlyFansCanComment` tinyint(1) NOT NULL DEFAULT '0' COMMENT '是否只有粉丝可评论(0所有人, 1粉丝)',
+`bPermanentMaterial` tinyint(1) NOT NULL DEFAULT '0' COMMENT '是否永久素材(0否, 1是)',
+`cThumbMediaId` varchar(100) DEFAULT NULL,
+PRIMARY KEY (`id`),
+KEY `IX_cWXAccountID` (`cWXAccountID`) USING BTREE
+) ENGINE=InnoDB ;
+DROP TABLE IF EXISTS `mp_wxaccount`;
+CREATE TABLE `mp_wxaccount` (
+`id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+`iCorpID` int(11) DEFAULT NULL,
+`cAppID` varchar(20) DEFAULT NULL,
+`iOrgID` bigint(20) DEFAULT NULL COMMENT '组织id',
+`iEPUserID` int(11) unsigned DEFAULT NULL,
+`cWXAccountID` varchar(20) NOT NULL,
+`cWXAccountName` varchar(60) DEFAULT NULL,
+`bAuthentic` tinyint(1) DEFAULT NULL,
+`cBindWXAccount` varchar(50) DEFAULT NULL,
+`cWXHeadPic` varchar(255) DEFAULT NULL,
+`cDescription` varchar(255) DEFAULT NULL,
+`cQRCode` varchar(255) DEFAULT NULL,
+`cAddress` varchar(255) DEFAULT NULL,
+`cRealName` varchar(50) DEFAULT NULL,
+`cEmail` varchar(100) DEFAULT NULL,
+`cPhone` varchar(20) DEFAULT NULL,
+`cCompany` varchar(50) DEFAULT NULL,
+`cProvince` varchar(50) DEFAULT NULL,
+`cCity` varchar(50) DEFAULT NULL,
+`cArea` varchar(50) DEFAULT NULL,
+`cIndustry` varchar(50) DEFAULT NULL,
+`iCategory` int(11) unsigned DEFAULT NULL,
+`iStatus` int(4) DEFAULT '1',
+`dCreateTime` int(11) unsigned DEFAULT NULL,
+`dUpdateTime` int(11) unsigned DEFAULT NULL,
+`cWXLoginName` varchar(50) DEFAULT NULL,
+`cWXAppID` varchar(20) DEFAULT NULL,
+`cAppSecret` varchar(128) DEFAULT NULL,
+`cToken` varchar(30) DEFAULT NULL,
+`cTel` varchar(20) DEFAULT NULL,
+`cEncodingAESKey` varchar(50) DEFAULT NULL,
+`ts` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+`iServiceTypeInfo` int(11) DEFAULT NULL,
+`iVerifyTypeInfo` int(11) DEFAULT NULL,
+`cFuncInfo` varchar(255) DEFAULT NULL,
+`iOpenPlatFormAccess` int(11) DEFAULT NULL,
+PRIMARY KEY (`id`),
+KEY `IX_cWXAccountID_cAppID_iCorpID` (`cWXAccountID`,`cAppID`,`iCorpID`) USING BTREE
+) ENGINE=InnoDB AUTO_INCREMENT=7 ;
+DROP TABLE IF EXISTS `mp_multiimg`;
+CREATE TABLE `mp_multiimg` (
+`id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+`iCorpID` int(11) DEFAULT NULL,
+`cAppID` varchar(20) DEFAULT NULL,
+`cWXAccountID` varchar(20) NOT NULL,
+`cKeyword` varchar(255) NOT NULL,
+`iMatchMode` int(4) unsigned DEFAULT NULL,
+`dCreateTime` int(11) unsigned DEFAULT NULL,
+`dUpdateTime` int(11) unsigned DEFAULT NULL,
+`cMediaId` varchar(100) DEFAULT NULL,
+`dMediaIdExpire` int(11) unsigned DEFAULT NULL,
+`iStatus` int(4) DEFAULT '0',
+`iSetFirstReply` int(11) unsigned DEFAULT '0',
+`cAgentID` varchar(20) DEFAULT NULL,
+`ts` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+`iTopOrgID` int(10) unsigned DEFAULT NULL,
+`iSourceID` int(10) unsigned DEFAULT NULL,
+`iAccessScope` int(11) DEFAULT NULL,
+`iPurpose` int(11) DEFAULT '1' COMMENT '用途类型',
+`cUtitle` varchar(60) DEFAULT NULL,
+`bReprint` tinyint(1) DEFAULT NULL COMMENT '图文消息转载提示（0：否 1：是）',
+`bPermanentMaterial` tinyint(1) DEFAULT '0' COMMENT '是否永久素材(0否, 1是)',
+PRIMARY KEY (`id`),
+KEY `IX_cWxAccountID` (`cWXAccountID`) USING BTREE
+) ENGINE=InnoDB ;
+drop VIEW if exists mp_v_masssendmaterials;
+CREATE ALGORITHM=UNDEFINED  SQL SECURITY INVOKER VIEW `mp_v_masssendmaterials` AS select `mp_wxaccount`.`cWXAccountName` AS `cWXAccountName`,`mp_wxaccount`.`iCorpID` AS `iCorpID`,`mp_wxaccount`.`cAppID` AS `cAppID`,`mp_img`.`cWXAccountID` AS `cWXAccountID`,1 AS `iType`,`mp_img`.`id` AS `id`,`mp_img`.`cTitle` AS `cTitle`,`mp_img`.`dCreateTime` AS `dCreateTime`,`mp_img`.`iPurpose` AS `iPurpose` from (`mp_img` join `mp_wxaccount` on((`mp_img`.`cWXAccountID` = `mp_wxaccount`.`cWXAccountID`))) where (ifnull(`mp_img`.`iMultiID`,0) = 0) union select `mp_wxaccount`.`cWXAccountName` AS `cWXAccountName`,`mp_wxaccount`.`iCorpID` AS `iCorpID`,`mp_wxaccount`.`cAppID` AS `cAppID`,`mp_multiimg`.`cWXAccountID` AS `cWXAccountID`,2 AS `iType`,`mp_multiimg`.`id` AS `id`,`mp_multiimg`.`cUtitle` AS `cTitle`,`mp_multiimg`.`dCreateTime` AS `dCreateTime`,`mp_multiimg`.`iPurpose` AS `iPurpose` from (`mp_multiimg` join `mp_wxaccount` on((`mp_multiimg`.`cWXAccountID` = `mp_wxaccount`.`cWXAccountID`))) ;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+SET FOREIGN_KEY_CHECKS = 0;
+CREATE TABLE IF NOT EXISTS `order` (
+`id` varchar(64) NOT NULL COMMENT '订单 id',
+`source_order_id` varchar(64) NOT NULL COMMENT '来源订单 id',
+`dimension_code` varchar(64) NOT NULL COMMENT '该订单对应的计量维度编码',
+`amount` int(11) NOT NULL COMMENT '本次购买的量',
+`status` int(11) NOT NULL COMMENT '状态',
+`start_date` datetime NOT NULL COMMENT '订单开始时间',
+`end_date` datetime NOT NULL COMMENT '订单结束时间',
+`create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+`modified_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+`ts` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+`creator` varchar(64) DEFAULT NULL,
+`modifier` varchar(64) DEFAULT NULL,
+`tenant_id` varchar(64) DEFAULT NULL,
+`ytenant_id` varchar(36) DEFAULT '~',
+PRIMARY KEY (`id`),
+KEY `tenant` (`tenant_id`),
+KEY `idx_ytenant_id` (`ytenant_id`)
+) ENGINE=InnoDB  ROW_FORMAT=DYNAMIC COMMENT='新订单表';
+select 1 where 1=1;
+1
+1
+set innodb_strict_mode = false;
+set @a = (select 1 from dual);
+set @agentEntity = 'voucher.rebatepolicy.RebatePolicyAgent';
+set @authid = 'mm0812';
+set @agentEntity = 'voucher.rebatepolicy.RebatePolicyAgent';
+CREATE TABLE IF NOT EXISTS `billtplgroup_base` (
+`id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+`cCode` varchar(200)   NOT NULL,
+`cSubId` varchar(45)   DEFAULT NULL COMMENT '子产品号',
+`cName` varchar(100)   DEFAULT NULL COMMENT 'Group名称',
+`pubts` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '时间戳',
+`iOrder` int(11) DEFAULT NULL COMMENT '排序号，从高到低排',
+`isDeleted` tinyint(1) NOT NULL DEFAULT '0' COMMENT '逻辑删除标记',
+`cPrimaryKey` varchar(100)   DEFAULT NULL COMMENT 'cDsName主键名称',
+`cDataSourceName` varchar(100)   DEFAULT NULL COMMENT '数据源名称，>可能是一个表或者一个试图',
+`iBillId` bigint(20) NOT NULL COMMENT '所属bill',
+`iBillEntityId` bigint(20) NOT NULL COMMENT '所属billentity',
+`iSystem` tinyint(1) DEFAULT '0' COMMENT 'bit型，0代表系统定义，其他
+再细分客户／行业等',
+`bMain` tinyint(1) DEFAULT NULL COMMENT ' 是否主表',
+`cForeignKey` varchar(100)   DEFAULT NULL COMMENT '如果是子表，则该>字段代表该子表中存的主表主键',
+`cParentDataSource` varchar(45)   DEFAULT NULL COMMENT '主表数据源名
+称，如果是子表填此项，否则为null',
+`iTplId` bigint(20) NOT NULL COMMENT '模版id',
+`cImage` varchar(100)   DEFAULT NULL COMMENT '图标',
+`cType` varchar(45)   DEFAULT NULL COMMENT 'group标识类型，比如TabControl,Grid,Tree,Table等',
+`iParentId` bigint(20) DEFAULT NULL COMMENT '父级billtplgroupid',
+`cAlign` varchar(45)   DEFAULT NULL COMMENT 'group的排列方式',
+`iCols` int(11) DEFAULT NULL,
+`cStyle` varchar(1000)   DEFAULT NULL,
+`sysid` bigint(20) DEFAULT NULL,
+`tenant_id` bigint(20) NOT NULL DEFAULT '0',
+`dataRule` varchar(200)   DEFAULT NULL,
+`cName_resid` varchar(200)   DEFAULT NULL,
+`cExtProps` text  ,
+`cDesignProps` text  ,
+`ytenant_id` varchar(36) DEFAULT '~',
+PRIMARY KEY (`id`),
+UNIQUE KEY `id_UNIQUE` (`id`),
+KEY `is_deleted_Index` (`isDeleted`),
+KEY `i_tenant_id` (`tenant_id`),
+KEY `IX_billtplgroup_base_cSubId` (`cSubId`,`id`,`bMain`),
+KEY `iBillId_Index` (`iBillId`,`tenant_id`),
+KEY `iBillEntityId_Index` (`iBillEntityId`,`tenant_id`),
+KEY `iTplId_Index` (`iTplId`,`tenant_id`),
+KEY `iParentId_Index` (`iParentId`,`tenant_id`),
+KEY `i_sys_id` (`sysid`,`tenant_id`),
+KEY `idx_multlang_text` (`tenant_id`,`cName`),
+KEY `idx_ytenant_id` (`ytenant_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=0   ROW_FORMAT=DYNAMIC;
+set @attId = (SELECT ifnull(max(id),0)+1  from billtplgroup_base);
+set @auth_level = NULL;
+set @attId = @linetabId+1;
+set @id45=@id44+1;
+CREATE TABLE IF NOT EXISTS `rpa_language` (
+`id` int(11) NOT NULL AUTO_INCREMENT,
+`langid` varchar(36) NOT NULL COMMENT '唯一id',
+`displayName` varchar(255) DEFAULT NULL COMMENT '显示名称',
+`langCode` varchar(255) DEFAULT NULL COMMENT '多语编码',
+`langSequence` int(11) DEFAULT NULL COMMENT '多语顺序',
+`isEnabled` bit(1) DEFAULT b'1' COMMENT '是否启用',
+`isDefault` bit(1) DEFAULT b'0' COMMENT '是否启用',
+`createTime` datetime DEFAULT NULL COMMENT '创建时间',
+`modifiedTime` datetime DEFAULT NULL COMMENT '修改时间',
+`ts` datetime DEFAULT NULL,
+`creator` varchar(255) DEFAULT NULL COMMENT '创建人',
+`modifier` varchar(255) DEFAULT NULL COMMENT '修改人',
+`corpid` varchar(36) DEFAULT NULL COMMENT '企业id',
+PRIMARY KEY (`id`) USING BTREE,
+UNIQUE KEY `rpa_language_corpid_langsequence` (`corpid`,`langSequence`) USING BTREE,
+UNIQUE KEY `rpa_language_corpid_langcode` (`corpid`,`langCode`) USING BTREE
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8 ROW_FORMAT=DYNAMIC COMMENT='多语';

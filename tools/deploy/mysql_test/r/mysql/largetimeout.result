@@ -1,0 +1,29 @@
+set @@ob_query_timeout=3599999999999999963;
+Warnings:
+Warning	1265	Timeout value truncated to 102 years
+select @@ob_query_timeout;
+@@ob_query_timeout
+3216672000000000
+set @@ob_query_timeout=3216672000000000;
+select @@ob_query_timeout;
+@@ob_query_timeout
+3216672000000000
+set @@ob_query_timeout=3216672000000001;
+Warnings:
+Warning	1265	Timeout value truncated to 102 years
+select @@ob_query_timeout;
+@@ob_query_timeout
+3216672000000000
+set @@ob_query_timeout=3216671999999999;
+select @@ob_query_timeout;
+@@ob_query_timeout
+3216671999999999
+drop table if exists t1;
+create table t1(a int primary key ,b int);
+desc t1;
+Field	Type	Null	Key	Default	Extra
+a	int(11)	NO	PRI	NULL
+b	int(11)	YES		NULL
+select * from t1;
+a	b
+drop table t1;

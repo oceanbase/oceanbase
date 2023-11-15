@@ -1,0 +1,7 @@
+drop table if exists t1;
+create table t1(pk int primary key, i1 int, v1 varchar(20));
+set autocommit=0;
+set session ob_trx_timeout=10000000;
+delete from t1 where pk<4;
+commit;
+ERROR 40000: Transaction rollbacked

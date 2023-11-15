@@ -1,0 +1,168 @@
+SELECT SUBSTRING_INDEX(NULL, NULL, NULL);
+SUBSTRING_INDEX(NULL, NULL, NULL)
+NULL
+SELECT SUBSTRING_INDEX(NULL, NULL, 0);
+SUBSTRING_INDEX(NULL, NULL, 0)
+NULL
+SELECT SUBSTRING_INDEX(NULL, NULL, 3);
+SUBSTRING_INDEX(NULL, NULL, 3)
+NULL
+SELECT SUBSTRING_INDEX(NULL, NULL, -3);
+SUBSTRING_INDEX(NULL, NULL, -3)
+NULL
+SELECT SUBSTRING_INDEX('abcdabcdabc', NULL, NULL);
+SUBSTRING_INDEX('abcdabcdabc', NULL, NULL)
+NULL
+SELECT SUBSTRING_INDEX('abcdabcdabc', NULL, 0);
+SUBSTRING_INDEX('abcdabcdabc', NULL, 0)
+NULL
+SELECT SUBSTRING_INDEX('abcdabcdabc', NULL, 3);
+SUBSTRING_INDEX('abcdabcdabc', NULL, 3)
+NULL
+SELECT SUBSTRING_INDEX('abcdabcdabc', NULL, -3);
+SUBSTRING_INDEX('abcdabcdabc', NULL, -3)
+NULL
+SELECT SUBSTRING_INDEX(NULL, 'abc', NULL);
+SUBSTRING_INDEX(NULL, 'abc', NULL)
+NULL
+SELECT SUBSTRING_INDEX(NULL, 'abc', 0);
+SUBSTRING_INDEX(NULL, 'abc', 0)
+NULL
+SELECT SUBSTRING_INDEX(NULL, 'abc', 3);
+SUBSTRING_INDEX(NULL, 'abc', 3)
+NULL
+SELECT SUBSTRING_INDEX(NULL, 'abc', -3);
+SUBSTRING_INDEX(NULL, 'abc', -3)
+NULL
+SELECT SUBSTRING_INDEX('', '', 0);
+SUBSTRING_INDEX('', '', 0)
+
+SELECT SUBSTRING_INDEX('', '', 3);
+SUBSTRING_INDEX('', '', 3)
+
+SELECT SUBSTRING_INDEX('', '', -3);
+SUBSTRING_INDEX('', '', -3)
+
+SELECT SUBSTRING_INDEX('abcdabcdabc', '', 0);
+SUBSTRING_INDEX('abcdabcdabc', '', 0)
+
+SELECT SUBSTRING_INDEX('abcdabcdabc', '', 3);
+SUBSTRING_INDEX('abcdabcdabc', '', 3)
+
+SELECT SUBSTRING_INDEX('abcdabcdabc', '', -3);
+SUBSTRING_INDEX('abcdabcdabc', '', -3)
+
+SELECT SUBSTRING_INDEX('', 'abc', 0);
+SUBSTRING_INDEX('', 'abc', 0)
+
+SELECT SUBSTRING_INDEX('', 'abc', 3);
+SUBSTRING_INDEX('', 'abc', 3)
+
+SELECT SUBSTRING_INDEX('', 'abc', -3);
+SUBSTRING_INDEX('', 'abc', -3)
+
+SELECT SUBSTRING_INDEX('abcdabcdabc', 'abc', 0);
+SUBSTRING_INDEX('abcdabcdabc', 'abc', 0)
+
+SELECT SUBSTRING_INDEX('abcdabcdabc', 'abc', 3);
+SUBSTRING_INDEX('abcdabcdabc', 'abc', 3)
+abcdabcd
+SELECT SUBSTRING_INDEX('abcdabcdabc', 'abc', -3);
+SUBSTRING_INDEX('abcdabcdabc', 'abc', -3)
+dabcdabc
+SELECT SUBSTRING_INDEX('abcdabcdabc', 'abc', '0');
+SUBSTRING_INDEX('abcdabcdabc', 'abc', '0')
+
+SELECT SUBSTRING_INDEX('abcdabcdabc', 'abc', '3');
+SUBSTRING_INDEX('abcdabcdabc', 'abc', '3')
+abcdabcd
+SELECT SUBSTRING_INDEX('abcdabcdabc', 'abc', '-3');
+SUBSTRING_INDEX('abcdabcdabc', 'abc', '-3')
+dabcdabc
+SELECT SUBSTRING_INDEX(1.414, 1, '-1');
+SUBSTRING_INDEX(1.414, 1, '-1')
+4
+select SUBSTRING_INDEX( 'www.mysql.com','.', 9223372036854775806);
+SUBSTRING_INDEX( 'www.mysql.com','.', 9223372036854775806)
+www.mysql.com
+select SUBSTRING_INDEX( 'www.mysql.com','.', 9223372036854775807);
+SUBSTRING_INDEX( 'www.mysql.com','.', 9223372036854775807)
+www.mysql.com
+select SUBSTRING_INDEX( 'www.mysql.com','.', 9223372036854775808);
+SUBSTRING_INDEX( 'www.mysql.com','.', 9223372036854775808)
+www.mysql.com
+select SUBSTRING_INDEX( 'www.mysql.com','.', 9223372036854775809);
+SUBSTRING_INDEX( 'www.mysql.com','.', 9223372036854775809)
+www.mysql.com
+select SUBSTRING_INDEX( 'www.mysql.com','.', 9223372036854775810);
+SUBSTRING_INDEX( 'www.mysql.com','.', 9223372036854775810)
+www.mysql.com
+select SUBSTRING_INDEX( 'www.mysql.com','.', 9223372036854775811);
+SUBSTRING_INDEX( 'www.mysql.com','.', 9223372036854775811)
+www.mysql.com
+select SUBSTRING_INDEX( 'www.mysql.com','.', -9223372036854775806);
+SUBSTRING_INDEX( 'www.mysql.com','.', -9223372036854775806)
+www.mysql.com
+select SUBSTRING_INDEX( 'www.mysql.com','.', -9223372036854775807);
+SUBSTRING_INDEX( 'www.mysql.com','.', -9223372036854775807)
+www.mysql.com
+select SUBSTRING_INDEX( 'www.mysql.com','.', -9223372036854775808);
+SUBSTRING_INDEX( 'www.mysql.com','.', -9223372036854775808)
+www.mysql.com
+select SUBSTRING_INDEX( 'www.mysql.com','.', -9223372036854775809);
+SUBSTRING_INDEX( 'www.mysql.com','.', -9223372036854775809)
+www.mysql.com
+select substring_index('aaaaaaaaa1','aa',5);
+substring_index('aaaaaaaaa1','aa',5)
+aaaaaaaaa1
+select substring_index('aaaaaaaaa1','aa',4);
+substring_index('aaaaaaaaa1','aa',4)
+aaaaaa
+select substring_index('aaaaaaaaa1','aa',3);
+substring_index('aaaaaaaaa1','aa',3)
+aaaa
+select substring_index('aaaaaaaaa1','aa',2);
+substring_index('aaaaaaaaa1','aa',2)
+aa
+select substring_index('aaaaaaaaa1','aa',1);
+substring_index('aaaaaaaaa1','aa',1)
+
+select substring_index('aaaaaaaaa1','aa',0);
+substring_index('aaaaaaaaa1','aa',0)
+
+select substring_index('aaaaaaaaa1','aa',-1);
+substring_index('aaaaaaaaa1','aa',-1)
+1
+select substring_index('aaaaaaaaa1','aa',-2);
+substring_index('aaaaaaaaa1','aa',-2)
+aa1
+select substring_index('aaaaaaaaa1','aa',-3);
+substring_index('aaaaaaaaa1','aa',-3)
+aaaa1
+select substring_index('aaaaaaaaa1','aa',-4);
+substring_index('aaaaaaaaa1','aa',-4)
+aaaaaa1
+select substring_index('aaaaaaaaa1','aa',-5);
+substring_index('aaaaaaaaa1','aa',-5)
+aaaaaaaaa1
+select substring_index('aaaaaaaaa1','aaaa',3);
+substring_index('aaaaaaaaa1','aaaa',3)
+aaaaaaaaa1
+select substring_index('aaaaaaaaa1','aaaa',2);
+substring_index('aaaaaaaaa1','aaaa',2)
+aaaa
+select substring_index('aaaaaaaaa1','aaaa',-1);
+substring_index('aaaaaaaaa1','aaaa',-1)
+1
+select substring_index('aaaaaaaaa1','aaaa',0);
+substring_index('aaaaaaaaa1','aaaa',0)
+
+select substring_index('aaaaaaaaa1','aaaa',-1);
+substring_index('aaaaaaaaa1','aaaa',-1)
+1
+select substring_index('aaaaaaaaa1','aaaa',-2);
+substring_index('aaaaaaaaa1','aaaa',-2)
+aaaa1
+select substring_index('aaaaaaaaa1','aaaa',-3);
+substring_index('aaaaaaaaa1','aaaa',-3)
+aaaaaaaaa1

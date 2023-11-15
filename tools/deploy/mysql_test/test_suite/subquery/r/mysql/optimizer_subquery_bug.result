@@ -1,0 +1,1460 @@
+drop table if exists t1, t2, t3, table10_key_pk_parts_1_bigint, table0_hash_pk_parts_1_bigint, table2_bigint, table10_bigint, table100_bigint, tt, `table300_bigint`, t, m;
+create table t1(a int primary key, b int, c int);
+create table t2(a int primary key, b int, c int);
+create table t3(a int primary key, b int, c int);
+CREATE TABLE `table10_key_pk_parts_1_bigint` (
+`col_varchar_16_key` varchar(16) DEFAULT NULL,
+`col_char_5_index` char(5) DEFAULT NULL,
+`col_varchar_8` varchar(8) DEFAULT NULL,
+`col_char_5` char(5) DEFAULT NULL,
+`col_bigint` bigint(20) DEFAULT NULL,
+`col_timestamp_6_key` timestamp(6) NULL DEFAULT NULL,
+`pk` bigint(20) NOT NULL,
+`col_char_20_index` char(20) DEFAULT NULL,
+`col_bigint_key` bigint(20) DEFAULT NULL,
+`col_char_20` char(20) DEFAULT NULL,
+`col_timestamp_6_index` timestamp(6) NULL DEFAULT NULL,
+`col_varchar_8_key` varchar(8) DEFAULT NULL,
+`col_char_20_key` char(20) DEFAULT NULL,
+`col_varchar_16_index` varchar(16) DEFAULT NULL,
+`col_varchar_16` varchar(16) DEFAULT NULL,
+`col_char_5_key` char(5) DEFAULT NULL,
+`col_bigint_index` bigint(20) DEFAULT NULL,
+`col_timestamp_6` timestamp(6) NULL DEFAULT NULL,
+`col_varchar_8_index` varchar(8) DEFAULT NULL,
+PRIMARY KEY (`pk`),
+KEY `idx13` (`pk`,`col_varchar_16_key`),
+KEY `idx5` (`pk`,`col_char_5_index`),
+KEY `idx16` (`pk`,`col_timestamp_6_key`),
+KEY `idx11` (`pk`,`col_char_20_index`),
+KEY `idx1` (`pk`,`col_bigint_key`),
+KEY `idx17` (`pk`,`col_timestamp_6_index`),
+KEY `idx7` (`pk`,`col_varchar_8_key`),
+KEY `idx10` (`pk`,`col_char_20_key`),
+KEY `idx14` (`pk`,`col_varchar_16_index`),
+KEY `idx4` (`pk`,`col_char_5_key`),
+KEY `idx2` (`pk`,`col_bigint_index`),
+KEY `idx8` (`pk`,`col_varchar_8_index`)
+);
+CREATE TABLE `table0_hash_pk_parts_1_bigint` (
+`col_char_20_key` char(20) DEFAULT NULL,
+`col_timestamp_6_key` timestamp(6) NULL DEFAULT NULL,
+`col_varchar_8` varchar(8) DEFAULT NULL,
+`col_varchar_16_index` varchar(16) DEFAULT NULL,
+`col_char_5` char(5) DEFAULT NULL,
+`col_char_5_key` char(5) DEFAULT NULL,
+`pk` bigint(20) NOT NULL,
+`col_varchar_8_index` varchar(8) DEFAULT NULL,
+`col_varchar_8_key` varchar(8) DEFAULT NULL,
+`col_char_20` char(20) DEFAULT NULL,
+`col_char_20_index` char(20) DEFAULT NULL,
+`col_varchar_16_key` varchar(16) DEFAULT NULL,
+`col_timestamp_6` timestamp(6) NULL DEFAULT NULL,
+`col_bigint_key` bigint(20) DEFAULT NULL,
+`col_bigint` bigint(20) DEFAULT NULL,
+`col_varchar_16` varchar(16) DEFAULT NULL,
+`col_timestamp_6_index` timestamp(6) NULL DEFAULT NULL,
+`col_bigint_index` bigint(20) DEFAULT NULL,
+`col_char_5_index` char(5) DEFAULT NULL,
+PRIMARY KEY (`pk`),
+KEY `idx10` (`pk`,`col_char_20_key`),
+KEY `idx16` (`pk`,`col_timestamp_6_key`),
+KEY `idx14` (`pk`,`col_varchar_16_index`),
+KEY `idx4` (`pk`,`col_char_5_key`),
+KEY `idx8` (`pk`,`col_varchar_8_index`),
+KEY `idx7` (`pk`,`col_varchar_8_key`),
+KEY `idx11` (`pk`,`col_char_20_index`),
+KEY `idx13` (`pk`,`col_varchar_16_key`),
+KEY `idx1` (`pk`,`col_bigint_key`),
+KEY `idx17` (`pk`,`col_timestamp_6_index`),
+KEY `idx2` (`pk`,`col_bigint_index`),
+KEY `idx5` (`pk`,`col_char_5_index`)
+);
+CREATE TABLE table2_bigint (
+col_char_20 char(20),
+col_timestamp_6 timestamp(6) NULL DEFAULT NULL,
+pk bigint,
+col_bigint bigint,
+col_decimal_20_0 decimal(20,0),
+/*Indices*/
+primary key (pk) ) ;
+CREATE TABLE table10_bigint (
+col_decimal_20_0 decimal(20,0),
+col_bigint bigint,
+col_timestamp_6 timestamp(6) NULL DEFAULT NULL,
+pk bigint,
+col_char_20 char(20),
+/*Indices*/
+primary key (pk) ) ;
+CREATE TABLE table100_bigint (
+col_decimal_20_0 decimal(20,0),
+col_bigint bigint,
+col_timestamp_6 timestamp(6) NULL DEFAULT NULL,
+col_char_20 char(20),
+pk bigint,
+/*Indices*/
+primary key (pk) ) ;
+CREATE TABLE `tt` (
+`pk` bigint(20) NOT NULL
+);
+CREATE TABLE `table300_bigint` (
+`col_datetime_index` datetime DEFAULT NULL,
+`pk` bigint(20) NOT NULL,
+`col_bigint_key` bigint(20) DEFAULT NULL,
+`col_bigint_index` bigint(20) DEFAULT NULL,
+`col_datetime_3_index` datetime(3) DEFAULT NULL,
+`col_decimal_20_0_key` decimal(20,0) DEFAULT NULL,
+`col_decimal_20_0_index` decimal(20,0) DEFAULT NULL,
+`col_timestamp_2_key` timestamp(2) NULL DEFAULT NULL,
+`col_timestamp_6` timestamp(6) NULL DEFAULT NULL,
+`col_char_20` char(20) DEFAULT NULL,
+`col_double_key` double DEFAULT NULL,
+`col_float_index` float DEFAULT NULL,
+`col_timestamp` timestamp NULL DEFAULT NULL,
+`col_bigint` bigint(20) DEFAULT NULL,
+`col_decimal_20_0` decimal(20,0) DEFAULT NULL,
+`col_timestamp_2` timestamp(2) NULL DEFAULT NULL,
+`col_datetime` datetime DEFAULT NULL,
+`col_timestamp_6_index` timestamp(6) NULL DEFAULT NULL,
+`col_float` float DEFAULT NULL,
+`col_double_index` double DEFAULT NULL,
+`col_char_20_index` char(20) DEFAULT NULL,
+`col_datetime_key` datetime DEFAULT NULL,
+`col_timestamp_key` timestamp NULL DEFAULT NULL,
+`col_timestamp_index` timestamp NULL DEFAULT NULL,
+`col_timestamp_6_key` timestamp(6) NULL DEFAULT NULL,
+`col_char_20_key` char(20) DEFAULT NULL,
+`col_float_key` float DEFAULT NULL,
+`col_timestamp_2_index` timestamp(2) NULL DEFAULT NULL,
+`col_datetime_3` datetime(3) DEFAULT NULL,
+`col_datetime_3_key` datetime(3) DEFAULT NULL,
+`col_double` double DEFAULT NULL,
+PRIMARY KEY (`pk`),
+KEY `idx20` (`pk`, `col_datetime_index`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx1` (`pk`, `col_bigint_key`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx2` (`pk`, `col_bigint_index`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx26` (`pk`, `col_datetime_3_index`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx4` (`pk`, `col_decimal_20_0_key`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx5` (`pk`, `col_decimal_20_0_index`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx28` (`pk`, `col_timestamp_2_key`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx7` (`pk`, `col_double_key`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx11` (`pk`, `col_float_index`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx17` (`pk`, `col_timestamp_6_index`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx8` (`pk`, `col_double_index`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx14` (`pk`, `col_char_20_index`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx19` (`pk`, `col_datetime_key`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx22` (`pk`, `col_timestamp_key`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx23` (`pk`, `col_timestamp_index`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx16` (`pk`, `col_timestamp_6_key`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx13` (`pk`, `col_char_20_key`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx10` (`pk`, `col_float_key`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx29` (`pk`, `col_timestamp_2_index`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx25` (`pk`, `col_datetime_3_key`) BLOCK_SIZE 16384 GLOBAL
+) ;
+CREATE TABLE `m` (
+`col_varchar_10` varchar(10) DEFAULT NULL,
+`col_varchar_20_key` varchar(20) DEFAULT NULL,
+`col_datetime_key` datetime DEFAULT NULL,
+`col_varchar_20` varchar(20) DEFAULT NULL,
+`col_int_key` int(11) DEFAULT NULL,
+`pk` int(11) NOT NULL,
+`col_int` int(11) DEFAULT NULL,
+`col_date` date DEFAULT NULL,
+`col_datetime` datetime DEFAULT NULL,
+`col_varchar_10_key` varchar(10) DEFAULT NULL,
+`col_date_key` date DEFAULT NULL,
+PRIMARY KEY (`pk`),
+KEY `idx5` (`pk`, `col_varchar_20_key`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx9` (`pk`, `col_datetime_key`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx1` (`pk`, `col_int_key`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx3` (`pk`, `col_varchar_10_key`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx7` (`pk`, `col_date_key`) BLOCK_SIZE 16384 GLOBAL
+) ;
+CREATE TABLE `t` (
+`col_varchar_20_key` varchar(20) DEFAULT NULL,
+`col_date_key` date DEFAULT NULL,
+`col_varchar_10_key` varchar(10) DEFAULT NULL,
+`col_datetime_key` datetime DEFAULT NULL,
+`col_int` int(11) DEFAULT NULL,
+`col_varchar_20` varchar(20) DEFAULT NULL,
+`col_varchar_10` varchar(10) DEFAULT NULL,
+`col_date` date DEFAULT NULL,
+`col_datetime` datetime DEFAULT NULL,
+`pk` int(11) NOT NULL,
+`col_int_key` int(11) DEFAULT NULL,
+PRIMARY KEY (`pk`),
+KEY `idx5` (`pk`, `col_varchar_20_key`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx7` (`pk`, `col_date_key`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx3` (`pk`, `col_varchar_10_key`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx9` (`pk`, `col_datetime_key`) BLOCK_SIZE 16384 GLOBAL,
+KEY `idx1` (`pk`, `col_int_key`) BLOCK_SIZE 16384 GLOBAL
+) ;
+result_format: 4
+explain_protocol: 2
+## bug 
+## 
+## test non-correlated subquery
+EXPLAIN select /*+no_rewrite*/ sum((select sum(a) from t1)) from t1;
+Query Plan
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SCALAR GROUP BY      |    |1       |5           |
+|1 |└─SUBPLAN FILTER     |    |3       |5           |
+|2 |  ├─TABLE FULL SCAN  |t1  |3       |3           |
+|3 |  └─SCALAR GROUP BY  |    |1       |3           |
+|4 |    └─TABLE FULL SCAN|t1  |3       |3           |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_SUM(:0)]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(:0)])
+  1 - output([:0]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([subquery(1)(:0)]), init_plan_idxs_(nil), use_batch=false
+  2 - output(nil), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(MIN ; MAX)always true
+  3 - output([T_FUN_SUM(T_FUN_SUM(t1.a))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(t1.a))])
+  4 - output([T_FUN_SUM(t1.a)]), filter(nil), rowset=16
+      access([t1.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_SUM(t1.a)])
+select /*+no_rewrite*/ sum((select sum(a) from t1)) from t1;
++------------------------------+
+| sum((select sum(a) from t1)) |
++------------------------------+
+|                           18 |
++------------------------------+
+EXPLAIN select /*+no_rewrite*/ sum((select sum(a) from t1)) from t1 group by b;
+Query Plan
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |HASH GROUP BY        |    |3       |6           |
+|1 |└─SUBPLAN FILTER     |    |3       |5           |
+|2 |  ├─TABLE FULL SCAN  |t1  |3       |3           |
+|3 |  └─SCALAR GROUP BY  |    |1       |3           |
+|4 |    └─TABLE FULL SCAN|t1  |3       |3           |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_SUM(:0)]), filter(nil), rowset=16
+      group([t1.b]), agg_func([T_FUN_SUM(:0)])
+  1 - output([t1.b], [:0]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([subquery(1)(:0)]), init_plan_idxs_(nil), use_batch=false
+  2 - output([t1.b]), filter(nil), rowset=16
+      access([t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(MIN ; MAX)always true
+  3 - output([T_FUN_SUM(T_FUN_SUM(t1.a))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(t1.a))])
+  4 - output([T_FUN_SUM(t1.a)]), filter(nil), rowset=16
+      access([t1.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_SUM(t1.a)])
+select /*+no_rewrite*/ sum((select sum(a) from t1)) from t1 group by b;
++------------------------------+
+| sum((select sum(a) from t1)) |
++------------------------------+
+|                            6 |
+|                            6 |
+|                            6 |
++------------------------------+
+
+## test correlated subquery
+EXPLAIN select /*+no_rewrite*/ sum((select sum(a) from t1 as t2 where t2.a = t1.a)) from t1;
+Query Plan
+===========================================================
+|ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |SCALAR GROUP BY            |    |1       |57          |
+|1 |└─SUBPLAN FILTER           |    |3       |57          |
+|2 |  ├─TABLE FULL SCAN        |t1  |3       |3           |
+|3 |  └─SCALAR GROUP BY        |    |1       |18          |
+|4 |    └─DISTRIBUTED TABLE GET|t2  |1       |18          |
+===========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_SUM(subquery(1))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(subquery(1))])
+  1 - output([subquery(1)]), filter(nil), rowset=16
+      exec_params_([t1.a(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  2 - output([t1.a]), filter(nil), rowset=16
+      access([t1.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(MIN ; MAX)always true
+  3 - output([T_FUN_SUM(t2.a)]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(t2.a)])
+  4 - output([t2.a]), filter(nil), rowset=16
+      access([t2.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.a]), range(MIN ; MAX)always true, 
+      range_cond([t2.a = :0])
+select /*+no_rewrite*/ sum((select sum(a) from t1 as t2 where t2.a = t1.a)) from t1;
++------------------------------------------------------+
+| sum((select sum(a) from t1 as t2 where t2.a = t1.a)) |
++------------------------------------------------------+
+|                                                    6 |
++------------------------------------------------------+
+EXPLAIN select /*+no_rewrite*/ sum((select sum(a) from t1 as t2 where t2.a = t1.a)) from t1 group by b;
+Query Plan
+===========================================================
+|ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |HASH GROUP BY              |    |3       |57          |
+|1 |└─SUBPLAN FILTER           |    |3       |57          |
+|2 |  ├─TABLE FULL SCAN        |t1  |3       |3           |
+|3 |  └─SCALAR GROUP BY        |    |1       |18          |
+|4 |    └─DISTRIBUTED TABLE GET|t2  |1       |18          |
+===========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_SUM(subquery(1))]), filter(nil), rowset=16
+      group([t1.b]), agg_func([T_FUN_SUM(subquery(1))])
+  1 - output([t1.b], [subquery(1)]), filter(nil), rowset=16
+      exec_params_([t1.a(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  2 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      access([t1.a], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(MIN ; MAX)always true
+  3 - output([T_FUN_SUM(t2.a)]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(t2.a)])
+  4 - output([t2.a]), filter(nil), rowset=16
+      access([t2.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.a]), range(MIN ; MAX)always true, 
+      range_cond([t2.a = :0])
+select /*+no_rewrite*/ sum((select sum(a) from t1 as t2 where t2.a = t1.a)) from t1 group by b;
++------------------------------------------------------+
+| sum((select sum(a) from t1 as t2 where t2.a = t1.a)) |
++------------------------------------------------------+
+|                                                    1 |
+|                                                    2 |
+|                                                    3 |
++------------------------------------------------------+
+
+## bug 
+## 
+## 
+EXPLAIN select * from t1, t2 where t1.a + (select sum(b) from t3) = t2.b;
+Query Plan
+==============================================================
+|ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |NESTED-LOOP JOIN             |     |3       |3           |
+|1 |├─NESTED-LOOP JOIN CARTESIAN |     |3       |3           |
+|2 |│ ├─TABLE FULL SCAN          |t2   |3       |3           |
+|3 |│ └─MATERIAL                 |     |1       |3           |
+|4 |│   └─SUBPLAN SCAN           |VIEW1|1       |3           |
+|5 |│     └─SCALAR GROUP BY      |     |1       |3           |
+|6 |│       └─TABLE FULL SCAN    |t3   |1       |3           |
+|7 |└─MATERIAL                   |     |3       |3           |
+|8 |  └─TABLE FULL SCAN          |t1   |3       |3           |
+==============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c], [t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
+      conds([cast(t1.a, DECIMAL_INT(34, 0)) + VIEW1.sum(b) = cast(t2.b, DECIMAL_INT(34, 0))]), nl_params_(nil), use_batch=false
+  1 - output([t2.a], [t2.b], [t2.c], [VIEW1.sum(b)]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  2 - output([t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
+      access([t2.a], [t2.b], [t2.c]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.a]), range(MIN ; MAX)always true
+  3 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+  4 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+      access([VIEW1.sum(b)])
+  5 - output([T_FUN_SUM(T_FUN_SUM(t3.b))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(t3.b))])
+  6 - output([T_FUN_SUM(t3.b)]), filter(nil), rowset=16
+      access([t3.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.a]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_SUM(t3.b)])
+  7 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
+  8 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
+      access([t1.a], [t1.b], [t1.c]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(MIN ; MAX)always true
+select * from t1, t2 where t1.a + (select sum(b) from t3) = t2.b;
++---+------+------+---+------+------+
+| a | b    | c    | a | b    | c    |
++---+------+------+---+------+------+
+| 1 |    1 |    1 | 2 |    2 |    2 |
+| 2 |    2 |    2 | 3 |    3 |    3 |
++---+------+------+---+------+------+
+EXPLAIN select * from t1, t2 where t1.a + (select sum(b) from t3 where t1.a = t3.a) = t2.b;
+Query Plan
+===================================================
+|ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |HASH JOIN          |    |1       |8           |
+|1 |├─MERGE JOIN       |    |1       |5           |
+|2 |│ ├─TABLE FULL SCAN|t3  |1       |3           |
+|3 |│ └─TABLE FULL SCAN|t1  |3       |3           |
+|4 |└─TABLE FULL SCAN  |t2  |3       |3           |
+===================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c], [t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
+      equal_conds([cast(t1.a, DECIMAL_INT(34, 0)) + cast(t3.b, DECIMAL_INT(33, 0)) = cast(t2.b, DECIMAL_INT(34, 0))]), other_conds(nil)
+  1 - output([t1.a], [t1.b], [t1.c], [t3.b]), filter(nil), rowset=16
+      equal_conds([t1.a = t3.a]), other_conds(nil)
+      merge_directions([ASC])
+  2 - output([t3.a], [t3.b]), filter(nil), rowset=16
+      access([t3.a], [t3.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.a]), range(MIN ; MAX)always true
+  3 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
+      access([t1.a], [t1.b], [t1.c]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(MIN ; MAX)always true
+  4 - output([t2.a], [t2.b], [t2.c]), filter(nil), rowset=16
+      access([t2.a], [t2.b], [t2.c]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.a]), range(MIN ; MAX)always true
+select * from t1, t2 where t1.a + (select sum(b) from t3 where t1.a = t3.a) = t2.b;
++---+------+------+---+------+------+
+| a | b    | c    | a | b    | c    |
++---+------+------+---+------+------+
+| 1 |    1 |    1 | 2 |    2 |    2 |
++---+------+------+---+------+------+
+
+EXPLAIN select (select sum(b) from t2) as temp, sum(a) from t1 group by temp;
+Query Plan
+==============================================================
+|ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |HASH GROUP BY                |     |1       |3           |
+|1 |└─NESTED-LOOP JOIN CARTESIAN |     |3       |3           |
+|2 |  ├─TABLE FULL SCAN          |t1   |3       |3           |
+|3 |  └─MATERIAL                 |     |1       |3           |
+|4 |    └─SUBPLAN SCAN           |VIEW1|1       |3           |
+|5 |      └─SCALAR GROUP BY      |     |1       |3           |
+|6 |        └─TABLE FULL SCAN    |t2   |3       |3           |
+==============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.sum(b)], [T_FUN_SUM(t1.a)]), filter(nil), rowset=16
+      group([VIEW1.sum(b)]), agg_func([T_FUN_SUM(t1.a)])
+  1 - output([VIEW1.sum(b)], [t1.a]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  2 - output([t1.a]), filter(nil), rowset=16
+      access([t1.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(MIN ; MAX)always true
+  3 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+  4 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+      access([VIEW1.sum(b)])
+  5 - output([T_FUN_SUM(T_FUN_SUM(t2.b))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(t2.b))])
+  6 - output([T_FUN_SUM(t2.b)]), filter(nil), rowset=16
+      access([t2.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.a]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_SUM(t2.b)])
+select (select sum(b) from t2) as temp, sum(a) from t1 group by temp;
++------+--------+
+| temp | sum(a) |
++------+--------+
+|    6 |      6 |
++------+--------+
+EXPLAIN select (select sum(b) from t2) as temp from t1 group by temp having temp > 4;
+Query Plan
+==============================================================
+|ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |HASH DISTINCT                |     |1       |3           |
+|1 |└─NESTED-LOOP JOIN CARTESIAN |     |1       |3           |
+|2 |  ├─SUBPLAN SCAN             |VIEW1|1       |3           |
+|3 |  │ └─SCALAR GROUP BY        |     |1       |3           |
+|4 |  │   └─TABLE FULL SCAN      |t2   |3       |3           |
+|5 |  └─TABLE FULL SCAN          |t1   |3       |3           |
+==============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+      distinct([VIEW1.sum(b)])
+  1 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  2 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+      access([VIEW1.sum(b)])
+  3 - output([T_FUN_SUM(T_FUN_SUM(t2.b))]), filter([T_FUN_SUM(T_FUN_SUM(t2.b)) > cast(4, DECIMAL_INT(33, 0))]), rowset=16
+      group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(t2.b))])
+  4 - output([T_FUN_SUM(t2.b)]), filter(nil), rowset=16
+      access([t2.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.a]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_SUM(t2.b)])
+  5 - output(nil), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(MIN ; MAX)always true
+select (select sum(b) from t2) as temp from t1 group by temp having temp > 4;
++------+
+| temp |
++------+
+|    6 |
++------+
+EXPLAIN select (select sum(b) from t2) as temp from t1 group by temp having temp < 4;
+Query Plan
+==============================================================
+|ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |HASH DISTINCT                |     |1       |3           |
+|1 |└─NESTED-LOOP JOIN CARTESIAN |     |1       |3           |
+|2 |  ├─SUBPLAN SCAN             |VIEW1|1       |3           |
+|3 |  │ └─SCALAR GROUP BY        |     |1       |3           |
+|4 |  │   └─TABLE FULL SCAN      |t2   |3       |3           |
+|5 |  └─TABLE FULL SCAN          |t1   |3       |3           |
+==============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+      distinct([VIEW1.sum(b)])
+  1 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  2 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+      access([VIEW1.sum(b)])
+  3 - output([T_FUN_SUM(T_FUN_SUM(t2.b))]), filter([T_FUN_SUM(T_FUN_SUM(t2.b)) < cast(4, DECIMAL_INT(33, 0))]), rowset=16
+      group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(t2.b))])
+  4 - output([T_FUN_SUM(t2.b)]), filter(nil), rowset=16
+      access([t2.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.a]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_SUM(t2.b)])
+  5 - output(nil), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(MIN ; MAX)always true
+select (select sum(b) from t2) as temp from t1 group by temp having temp < 4;
++------+
+| temp |
++------+
++------+
+EXPLAIN select (select sum(b) from t2) as temp from t1 group by temp having temp > 4 and temp > (select sum(b) from t3);
+Query Plan
+==================================================================
+|ID|OPERATOR                         |NAME |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |NESTED-LOOP JOIN                 |     |1       |3           |
+|1 |├─SUBPLAN SCAN                   |VIEW2|1       |3           |
+|2 |│ └─HASH DISTINCT                |     |1       |3           |
+|3 |│   └─NESTED-LOOP JOIN CARTESIAN |     |1       |3           |
+|4 |│     ├─SUBPLAN SCAN             |VIEW1|1       |3           |
+|5 |│     │ └─SCALAR GROUP BY        |     |1       |3           |
+|6 |│     │   └─TABLE FULL SCAN      |t2   |3       |3           |
+|7 |│     └─TABLE FULL SCAN          |t1   |3       |3           |
+|8 |└─MATERIAL                       |     |1       |3           |
+|9 |  └─SUBPLAN SCAN                 |VIEW3|1       |3           |
+|10|    └─SCALAR GROUP BY            |     |1       |3           |
+|11|      └─TABLE FULL SCAN          |t3   |1       |3           |
+==================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW2.VIEW1.sum(b)]), filter(nil), rowset=16
+      conds([VIEW2.VIEW1.sum(b) > VIEW3.sum(b)]), nl_params_(nil), use_batch=false
+  1 - output([VIEW2.VIEW1.sum(b)]), filter(nil), rowset=16
+      access([VIEW2.VIEW1.sum(b)])
+  2 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+      distinct([VIEW1.sum(b)])
+  3 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  4 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+      access([VIEW1.sum(b)])
+  5 - output([T_FUN_SUM(T_FUN_SUM(t2.b))]), filter([T_FUN_SUM(T_FUN_SUM(t2.b)) > cast(4, DECIMAL_INT(33, 0))]), rowset=16
+      group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(t2.b))])
+  6 - output([T_FUN_SUM(t2.b)]), filter(nil), rowset=16
+      access([t2.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.a]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_SUM(t2.b)])
+  7 - output(nil), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(MIN ; MAX)always true
+  8 - output([VIEW3.sum(b)]), filter(nil), rowset=16
+  9 - output([VIEW3.sum(b)]), filter(nil), rowset=16
+      access([VIEW3.sum(b)])
+ 10 - output([T_FUN_SUM(T_FUN_SUM(t3.b))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(t3.b))])
+ 11 - output([T_FUN_SUM(t3.b)]), filter(nil), rowset=16
+      access([t3.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.a]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_SUM(t3.b)])
+select (select sum(b) from t2) as temp from t1 group by temp having temp > 4 and temp > (select sum(b) from t3);
++------+
+| temp |
++------+
+|    6 |
++------+
+EXPLAIN select (select sum(b) from t2) as temp from t1 group by temp having temp > 4 and temp > (select sum(b) from t2);
+Query Plan
+==============================================================
+|ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |HASH DISTINCT                |     |1       |3           |
+|1 |└─NESTED-LOOP JOIN CARTESIAN |     |1       |3           |
+|2 |  ├─SUBPLAN SCAN             |VIEW1|1       |3           |
+|3 |  │ └─SCALAR GROUP BY        |     |1       |3           |
+|4 |  │   └─TABLE FULL SCAN      |t2   |3       |3           |
+|5 |  └─TABLE FULL SCAN          |t1   |3       |3           |
+==============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+      distinct([VIEW1.sum(b)])
+  1 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  2 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+      access([VIEW1.sum(b)])
+  3 - output([T_FUN_SUM(T_FUN_SUM(t2.b))]), filter([T_FUN_SUM(T_FUN_SUM(t2.b)) > cast(4, DECIMAL_INT(33, 0))], [T_FUN_SUM(T_FUN_SUM(t2.b)) > T_FUN_SUM(T_FUN_SUM(t2.b))]), rowset=16
+      group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(t2.b))])
+  4 - output([T_FUN_SUM(t2.b)]), filter(nil), rowset=16
+      access([t2.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.a]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_SUM(t2.b)])
+  5 - output(nil), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(MIN ; MAX)always true
+select (select sum(b) from t2) as temp from t1 group by temp having temp > 4 and temp > (select sum(b) from t2);
++------+
+| temp |
++------+
++------+
+
+## bug 
+EXPLAIN select (select sum(b) from t2) as temp, a from t1 group by a having temp > 4;
+Query Plan
+============================================================
+|ID|OPERATOR                   |NAME |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN |     |1       |3           |
+|1 |├─SUBPLAN SCAN             |VIEW1|1       |3           |
+|2 |│ └─SCALAR GROUP BY        |     |1       |3           |
+|3 |│   └─TABLE FULL SCAN      |t2   |3       |3           |
+|4 |└─TABLE FULL SCAN          |t1   |3       |3           |
+============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.sum(b)], [t1.a]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  1 - output([VIEW1.sum(b)]), filter(nil), rowset=16
+      access([VIEW1.sum(b)])
+  2 - output([T_FUN_SUM(T_FUN_SUM(t2.b))]), filter([T_FUN_SUM(T_FUN_SUM(t2.b)) > cast(4, DECIMAL_INT(33, 0))]), rowset=16
+      group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(t2.b))])
+  3 - output([T_FUN_SUM(t2.b)]), filter(nil), rowset=16
+      access([t2.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.a]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_SUM(t2.b)])
+  4 - output([t1.a]), filter(nil), rowset=16
+      access([t1.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(MIN ; MAX)always true
+select (select sum(b) from t2) as temp, a from t1 group by a having temp > 4;
++------+---+
+| temp | a |
++------+---+
+|    6 | 1 |
+|    6 | 2 |
+|    6 | 3 |
++------+---+
+
+## bug 
+explain select t1.a from t1 right outer join t2 using(a) where t1.a <=> (select 4 from t1 limit 1);
+Query Plan
+===================================================
+|ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |SUBPLAN FILTER     |    |1       |7           |
+|1 |├─MERGE OUTER JOIN |    |1       |5           |
+|2 |│ ├─TABLE FULL SCAN|t2  |3       |3           |
+|3 |│ └─TABLE FULL SCAN|t1  |3       |3           |
+|4 |└─TABLE FULL SCAN  |t1  |1       |3           |
+===================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([subquery(1)(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.a]), filter([t1.a <=> :0]), rowset=16
+      equal_conds([t1.a = t2.a]), other_conds(nil)
+      merge_directions([ASC])
+  2 - output([t2.a]), filter(nil), rowset=16
+      access([t2.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.a]), range(MIN ; MAX)always true
+  3 - output([t1.a]), filter(nil), rowset=16
+      access([t1.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(MIN ; MAX)always true
+  4 - output([4]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(MIN ; MAX)always true
+
+## bug 
+EXPLAIN SELECT a IN (SELECT a FROM t1 ) FROM t1  LIMIT 1;
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SUBPLAN FILTER   |    |1       |5           |
+|1 |├─TABLE FULL SCAN|t1  |1       |3           |
+|2 |└─TABLE FULL SCAN|t1  |3       |3           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a = ANY(subquery(1))]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1]), use_batch=false
+  1 - output([t1.a]), filter(nil), rowset=16
+      access([t1.a]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(MIN ; MAX)always true
+  2 - output([t1.a]), filter(nil), rowset=16
+      access([t1.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(MIN ; MAX)always true
+SELECT a IN (SELECT a FROM t1 ) FROM t1  LIMIT 1;
++--------------------------+
+| a IN (SELECT a FROM t1 ) |
++--------------------------+
+|                        1 |
++--------------------------+
+
+## bug 
+EXPLAIN select /*+no_rewrite*/ a, (select sum(b) from t2 where t1.a = t2.a) as agg from t1 having agg > 1 and agg < 3;
+Query Plan
+=========================================================
+|ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SUBPLAN FILTER           |    |1       |57          |
+|1 |├─TABLE FULL SCAN        |t1  |3       |3           |
+|2 |└─SCALAR GROUP BY        |    |1       |18          |
+|3 |  └─DISTRIBUTED TABLE GET|t2  |1       |18          |
+=========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [subquery(1)]), filter([subquery(1) > cast(1, DECIMAL_INT(33, 0))], [subquery(1) < cast(3, DECIMAL_INT(33, 0))]), rowset=16
+      exec_params_([t1.a(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.a]), filter(nil), rowset=16
+      access([t1.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.a]), range(MIN ; MAX)always true
+  2 - output([T_FUN_SUM(t2.b)]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(t2.b)])
+  3 - output([t2.b]), filter(nil), rowset=16
+      access([t2.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.a]), range(MIN ; MAX)always true, 
+      range_cond([:0 = t2.a])
+select /*+no_rewrite*/ a, (select sum(b) from t2 where t1.a = t2.a) as agg from t1 having agg > 1 and agg < 3;
++---+------+
+| a | agg  |
++---+------+
+| 2 |    2 |
++---+------+
+
+## bug 
+EXPLAIN select (SELECT coalesce( (SELECT/*+no_rewrite*/ * FROM ( SELECT MAX( pk ) FROM table10_key_pk_parts_1_bigint WHERE CAST( CONCAT( SUBSTR( 'q' , 1, 20) , col_char_20_index ) AS CHAR) >= CAST( CONCAT( SUBSTR( 'kqqdwykxz' , 1, 20) , col_char_20_index ) AS CHAR) ORDER BY col_timestamp_6_index  , col_char_5_key ASC , col_bigint_index ASC , pk  ) TC1), (SELECT * FROM ( SELECT col_bigint FROM table0_hash_pk_parts_1_bigint WHERE ( col_char_20 NOT IN ('a' , 'b' , 'a') ) OR NOT ( col_char_20_index IN ( 'a' , 'b' , 'a' ) ) ORDER BY col_bigint DESC , col_char_20_index  , pk ASC LIMIT 1 ) TC2), 2 ));
+Query Plan
+=========================================================================================
+|ID|OPERATOR               |NAME                                  |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------------------------
+|0 |SUBPLAN FILTER         |                                      |1       |9           |
+|1 |├─EXPRESSION           |                                      |1       |1           |
+|2 |├─SUBPLAN SCAN         |TC1                                   |1       |3           |
+|3 |│ └─SCALAR GROUP BY    |                                      |1       |3           |
+|4 |│   └─SUBPLAN SCAN     |VIEW1                                 |1       |3           |
+|5 |│     └─TABLE FULL SCAN|table10_key_pk_parts_1_bigint(Reverse)|1       |3           |
+|6 |└─TOP-N SORT           |                                      |1       |7           |
+|7 |  └─TABLE FULL SCAN    |table0_hash_pk_parts_1_bigint         |48      |6           |
+=========================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([coalesce(:0, :1, 2)]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_([subquery(1)(:0)], [subquery(2)(:1)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([1]), filter(nil)
+      values({1})
+  2 - output([TC1.MAX( pk )]), filter(nil), rowset=256
+      access([TC1.MAX( pk )])
+  3 - output([T_FUN_MAX(VIEW1.table10_key_pk_parts_1_bigint.pk)]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_MAX(VIEW1.table10_key_pk_parts_1_bigint.pk)])
+  4 - output([VIEW1.table10_key_pk_parts_1_bigint.pk]), filter(nil), rowset=256
+      access([VIEW1.table10_key_pk_parts_1_bigint.pk])
+  5 - output([table10_key_pk_parts_1_bigint.col_timestamp_6_index], [table10_key_pk_parts_1_bigint.col_char_5_key], [table10_key_pk_parts_1_bigint.col_bigint_index],
+       [table10_key_pk_parts_1_bigint.pk]), filter([cast(CONCAT(substr('q', 1, 20), cast(table10_key_pk_parts_1_bigint.col_char_20_index, VARCHAR(1048576))), 
+      CHAR(1048576)) >= cast(CONCAT(substr('kqqdwykxz', 1, 20), cast(table10_key_pk_parts_1_bigint.col_char_20_index, VARCHAR(1048576))), CHAR(1048576))]), rowset=256
+      access([table10_key_pk_parts_1_bigint.pk], [table10_key_pk_parts_1_bigint.col_char_20_index], [table10_key_pk_parts_1_bigint.col_timestamp_6_index],
+       [table10_key_pk_parts_1_bigint.col_char_5_key], [table10_key_pk_parts_1_bigint.col_bigint_index]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([table10_key_pk_parts_1_bigint.pk]), range(MIN ; MAX)always true
+  6 - output([table0_hash_pk_parts_1_bigint.col_bigint]), filter(nil), rowset=256
+      sort_keys([table0_hash_pk_parts_1_bigint.col_bigint, DESC], [table0_hash_pk_parts_1_bigint.col_char_20_index, ASC], [table0_hash_pk_parts_1_bigint.pk,
+       ASC]), topn(1)
+  7 - output([table0_hash_pk_parts_1_bigint.pk], [table0_hash_pk_parts_1_bigint.col_char_20_index], [table0_hash_pk_parts_1_bigint.col_bigint]), filter([(T_OP_NOT_IN,
+       table0_hash_pk_parts_1_bigint.col_char_20, ('a', 'b', 'a')) OR (T_OP_NOT_IN, table0_hash_pk_parts_1_bigint.col_char_20_index, ('a', 'b', 'a'))]), rowset=256
+      access([table0_hash_pk_parts_1_bigint.pk], [table0_hash_pk_parts_1_bigint.col_char_20], [table0_hash_pk_parts_1_bigint.col_char_20_index], [table0_hash_pk_parts_1_bigint.col_bigint]), partitions(
+      p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([table0_hash_pk_parts_1_bigint.pk]), range(MIN ; MAX)always true
+select (SELECT coalesce( (SELECT/*+no_rewrite*/ * FROM ( SELECT MAX( pk ) FROM table10_key_pk_parts_1_bigint WHERE CAST( CONCAT( SUBSTR( 'q' , 1, 20) , col_char_20_index ) AS CHAR) >= CAST( CONCAT( SUBSTR( 'kqqdwykxz' , 1, 20) , col_char_20_index ) AS CHAR) ORDER BY col_timestamp_6_index  , col_char_5_key ASC , col_bigint_index ASC , pk  ) TC1), (SELECT * FROM ( SELECT col_bigint FROM table0_hash_pk_parts_1_bigint WHERE ( col_char_20 NOT IN ('a' , 'b' , 'a') ) OR NOT ( col_char_20_index IN ( 'a' , 'b' , 'a' ) ) ORDER BY col_bigint DESC , col_char_20_index  , pk ASC LIMIT 1 ) TC2), 2 ));
++-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| (SELECT coalesce( (SELECT/*+no_rewrite*/ * FROM ( SELECT MAX( pk ) FROM table10_key_pk_parts_1_bigint WHERE CAST( CONCAT( SUBSTR( 'q' , 1, 20) , col_char_20_index ) AS CHAR) >= CAST( CONCAT( SUBSTR( 'kqqdwykxz' , 1, 20) , col_char_20_index ) AS CHAR) ORDE |
++-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|                                                                                                                                                                                                                                                               5 |
++-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+EXPLAIN select (SELECT coalesce( (SELECT * FROM ( SELECT MAX( pk ) FROM table10_key_pk_parts_1_bigint WHERE CAST( CONCAT( SUBSTR( 'q' , 1, 20) , col_char_20_index ) AS CHAR) >= CAST( CONCAT( SUBSTR( 'kqqdwykxz' , 1, 20) , col_char_20_index ) AS CHAR) ORDER BY col_timestamp_6_index  , col_char_5_key ASC , col_bigint_index ASC , pk  ) TC1), (SELECT * FROM ( SELECT col_bigint FROM table0_hash_pk_parts_1_bigint WHERE ( col_char_20 NOT IN ('a' , 'b' , 'a') ) OR NOT ( col_char_20_index IN ( 'a' , 'b' , 'a' ) ) ORDER BY col_bigint DESC , col_char_20_index  , pk ASC LIMIT 1 ) TC2), 2 ));
+Query Plan
+=========================================================================================
+|ID|OPERATOR               |NAME                                  |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------------------------
+|0 |SUBPLAN FILTER         |                                      |1       |9           |
+|1 |├─SUBPLAN SCAN         |VIEW1                                 |1       |3           |
+|2 |│ └─SCALAR GROUP BY    |                                      |1       |3           |
+|3 |│   └─SUBPLAN SCAN     |VIEW2                                 |1       |3           |
+|4 |│     └─TABLE FULL SCAN|table10_key_pk_parts_1_bigint(Reverse)|1       |3           |
+|5 |└─TOP-N SORT           |                                      |1       |7           |
+|6 |  └─TABLE FULL SCAN    |table0_hash_pk_parts_1_bigint         |48      |6           |
+=========================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([coalesce(VIEW1.MAX( pk ), :0, 2)]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_([subquery(1)(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([VIEW1.MAX( pk )]), filter(nil), rowset=256
+      access([VIEW1.MAX( pk )])
+  2 - output([T_FUN_MAX(VIEW2.table10_key_pk_parts_1_bigint.pk)]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_MAX(VIEW2.table10_key_pk_parts_1_bigint.pk)])
+  3 - output([VIEW2.table10_key_pk_parts_1_bigint.pk]), filter(nil), rowset=256
+      access([VIEW2.table10_key_pk_parts_1_bigint.pk])
+  4 - output([table10_key_pk_parts_1_bigint.col_timestamp_6_index], [table10_key_pk_parts_1_bigint.col_char_5_key], [table10_key_pk_parts_1_bigint.col_bigint_index],
+       [table10_key_pk_parts_1_bigint.pk]), filter([cast(CONCAT(substr('q', 1, 20), cast(table10_key_pk_parts_1_bigint.col_char_20_index, VARCHAR(1048576))), 
+      CHAR(1048576)) >= cast(CONCAT(substr('kqqdwykxz', 1, 20), cast(table10_key_pk_parts_1_bigint.col_char_20_index, VARCHAR(1048576))), CHAR(1048576))]), rowset=256
+      access([table10_key_pk_parts_1_bigint.pk], [table10_key_pk_parts_1_bigint.col_char_20_index], [table10_key_pk_parts_1_bigint.col_timestamp_6_index],
+       [table10_key_pk_parts_1_bigint.col_char_5_key], [table10_key_pk_parts_1_bigint.col_bigint_index]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([table10_key_pk_parts_1_bigint.pk]), range(MIN ; MAX)always true
+  5 - output([table0_hash_pk_parts_1_bigint.col_bigint]), filter(nil), rowset=256
+      sort_keys([table0_hash_pk_parts_1_bigint.col_bigint, DESC], [table0_hash_pk_parts_1_bigint.col_char_20_index, ASC], [table0_hash_pk_parts_1_bigint.pk,
+       ASC]), topn(1)
+  6 - output([table0_hash_pk_parts_1_bigint.pk], [table0_hash_pk_parts_1_bigint.col_char_20_index], [table0_hash_pk_parts_1_bigint.col_bigint]), filter([(T_OP_NOT_IN,
+       table0_hash_pk_parts_1_bigint.col_char_20, ('a', 'b', 'a')) OR (T_OP_NOT_IN, table0_hash_pk_parts_1_bigint.col_char_20_index, ('a', 'b', 'a'))]), rowset=256
+      access([table0_hash_pk_parts_1_bigint.pk], [table0_hash_pk_parts_1_bigint.col_char_20], [table0_hash_pk_parts_1_bigint.col_char_20_index], [table0_hash_pk_parts_1_bigint.col_bigint]), partitions(
+      p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([table0_hash_pk_parts_1_bigint.pk]), range(MIN ; MAX)always true
+select (SELECT coalesce( (SELECT * FROM ( SELECT MAX( pk ) FROM table10_key_pk_parts_1_bigint WHERE CAST( CONCAT( SUBSTR( 'q' , 1, 20) , col_char_20_index ) AS CHAR) >= CAST( CONCAT( SUBSTR( 'kqqdwykxz' , 1, 20) , col_char_20_index ) AS CHAR) ORDER BY col_timestamp_6_index  , col_char_5_key ASC , col_bigint_index ASC , pk  ) TC1), (SELECT * FROM ( SELECT col_bigint FROM table0_hash_pk_parts_1_bigint WHERE ( col_char_20 NOT IN ('a' , 'b' , 'a') ) OR NOT ( col_char_20_index IN ( 'a' , 'b' , 'a' ) ) ORDER BY col_bigint DESC , col_char_20_index  , pk ASC LIMIT 1 ) TC2), 2 ));
++-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| (SELECT coalesce( (SELECT * FROM ( SELECT MAX( pk ) FROM table10_key_pk_parts_1_bigint WHERE CAST( CONCAT( SUBSTR( 'q' , 1, 20) , col_char_20_index ) AS CHAR) >= CAST( CONCAT( SUBSTR( 'kqqdwykxz' , 1, 20) , col_char_20_index ) AS CHAR) ORDER BY col_timest |
++-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|                                                                                                                                                                                                                                                               5 |
++-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+## bug 
+EXPLAIN SELECT Sum(1) FROM table10_bigint WHERE pk NOT IN (SELECT pk FROM table2_bigint WHERE pk NOT IN (SELECT col_decimal_20_0 FROM table100_bigint WHERE (SELECT (SELECT Min(10) FROM table100_bigint WHERE col_char_20 > 0)) = col_decimal_20_0));
+Query Plan
+==============================================================================
+|ID|OPERATOR                           |NAME           |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------------
+|0 |SCALAR GROUP BY                    |               |1       |15          |
+|1 |└─MERGE ANTI JOIN                  |               |9       |15          |
+|2 |  ├─TABLE FULL SCAN                |table10_bigint |10      |3           |
+|3 |  └─SUBPLAN SCAN                   |VIEW3          |1       |12          |
+|4 |    └─MERGE ANTI JOIN              |               |1       |12          |
+|5 |      ├─TABLE FULL SCAN            |table2_bigint  |2       |3           |
+|6 |      └─SORT                       |               |2       |9           |
+|7 |        └─SUBPLAN SCAN             |VIEW2          |2       |9           |
+|8 |          └─NESTED-LOOP JOIN       |               |2       |9           |
+|9 |            ├─SUBPLAN SCAN         |VIEW4          |1       |3           |
+|10|            │ └─SCALAR GROUP BY    |               |1       |3           |
+|11|            │   └─SUBPLAN SCAN     |VIEW1          |1       |3           |
+|12|            │     └─TABLE FULL SCAN|table100_bigint|1       |3           |
+|13|            └─TABLE FULL SCAN      |table100_bigint|100     |4           |
+==============================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_SUM(1)]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_SUM(1)])
+  1 - output(nil), filter(nil), rowset=256
+      equal_conds([table10_bigint.pk = VIEW3.pk]), other_conds(nil)
+      merge_directions([ASC])
+  2 - output([table10_bigint.pk]), filter(nil), rowset=256
+      access([table10_bigint.pk]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([table10_bigint.pk]), range(MIN ; MAX)always true
+  3 - output([VIEW3.pk]), filter(nil), rowset=256
+      access([VIEW3.pk])
+  4 - output([table2_bigint.pk]), filter(nil), rowset=256
+      equal_conds([cast(table2_bigint.pk, DECIMAL_INT(20, 0)) = VIEW2.col_decimal_20_0]), other_conds(nil)
+      merge_directions([ASC])
+  5 - output([table2_bigint.pk]), filter(nil), rowset=256
+      access([table2_bigint.pk]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([table2_bigint.pk]), range(MIN ; MAX)always true
+  6 - output([VIEW2.col_decimal_20_0]), filter(nil), rowset=256
+      sort_keys([VIEW2.col_decimal_20_0, ASC])
+  7 - output([VIEW2.col_decimal_20_0]), filter(nil), rowset=256
+      access([VIEW2.col_decimal_20_0])
+  8 - output([table100_bigint.col_decimal_20_0]), filter(nil), rowset=256
+      conds([cast(VIEW4.Min(10), DECIMAL_INT(20, 0)) = table100_bigint.col_decimal_20_0]), nl_params_(nil), use_batch=false
+  9 - output([VIEW4.Min(10)]), filter(nil), rowset=256
+      access([VIEW4.Min(10)])
+ 10 - output([T_FUN_MIN(10)]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_MIN(10)])
+ 11 - output(nil), filter(nil), rowset=256
+      access(nil)
+ 12 - output([1]), filter([cast(table100_bigint.col_char_20, DECIMAL(-1, -1)) > cast(0, DECIMAL(1, 0))]), rowset=256
+      access([table100_bigint.col_char_20]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([table100_bigint.pk]), range(MIN ; MAX)always true
+ 13 - output([table100_bigint.col_decimal_20_0]), filter(nil), rowset=256
+      access([table100_bigint.col_decimal_20_0]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([table100_bigint.pk]), range(MIN ; MAX)always true
+SELECT Sum(1) FROM table10_bigint WHERE pk NOT IN (SELECT pk FROM table2_bigint WHERE pk NOT IN (SELECT col_decimal_20_0 FROM table100_bigint WHERE (SELECT (SELECT Min(10) FROM table100_bigint WHERE col_char_20 > 0)) = col_decimal_20_0));
++--------+
+| Sum(1) |
++--------+
+|      8 |
++--------+
+EXPLAIN SELECT coalesce( (SELECT SUM(LENGTH(TRIM(SUBSTR(SUBSTR('hizctdn', 1, 20), 1, 20)))) FROM table10_bigint WHERE pk NOT IN (SELECT pk FROM table2_bigint WHERE pk NOT IN (SELECT col_decimal_20_0 FROM table100_bigint WHERE (SELECT coalesce( (SELECT MIN(10) FROM table100_bigint WHERE col_char_20 > CAST(CONCAT(col_char_20, SUBSTR('nhizctdn', 1, 20)) AS CHAR(100)) ORDER BY pk , pk), (SELECT ROUND(FLOOR(62))), 1)) = ROUND(ABS(ROUND(FLOOR(col_decimal_20_0)))) ORDER BY pk , col_bigint , col_char_20 DESC , pk DESC) ORDER BY col_decimal_20_0 , pk DESC) ORDER BY col_bigint, col_char_20, col_decimal_20_0, col_timestamp_6, pk , pk DESC), (SELECT col_decimal_20_0 FROM table10_bigint WHERE pk < -10 ORDER BY col_bigint , pk DESC LIMIT 1), 99);
+Query Plan
+==================================================================================
+|ID|OPERATOR                               |NAME           |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------------------
+|0 |SUBPLAN FILTER                         |               |1       |17          |
+|1 |├─SUBPLAN SCAN                         |VIEW5          |1       |15          |
+|2 |│ └─SCALAR GROUP BY                    |               |1       |15          |
+|3 |│   └─MERGE ANTI JOIN                  |               |9       |15          |
+|4 |│     ├─TABLE FULL SCAN                |table10_bigint |10      |3           |
+|5 |│     └─SORT                           |               |1       |12          |
+|6 |│       └─SUBPLAN SCAN                 |VIEW3          |1       |12          |
+|7 |│         └─HASH RIGHT ANTI JOIN NA    |               |1       |12          |
+|8 |│           ├─SUBPLAN SCAN             |VIEW2          |1       |9           |
+|9 |│           │ └─NESTED-LOOP JOIN       |               |1       |9           |
+|10|│           │   ├─SUBPLAN SCAN         |VIEW4          |1       |3           |
+|11|│           │   │ └─SCALAR GROUP BY    |               |1       |3           |
+|12|│           │   │   └─SUBPLAN SCAN     |VIEW1          |1       |3           |
+|13|│           │   │     └─TABLE FULL SCAN|table100_bigint|1       |3           |
+|14|│           │   └─TABLE FULL SCAN      |table100_bigint|100     |4           |
+|15|│           └─TABLE FULL SCAN          |table2_bigint  |2       |3           |
+|16|└─TOP-N SORT                           |               |1       |3           |
+|17|  └─TABLE RANGE SCAN                   |table10_bigint |1       |3           |
+==================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([coalesce(VIEW5.SUM(LENGTH(TRIM(SUBSTR(SUBSTR('hizctdn', 1, 20), 1, 20)))), cast(:0, DECIMAL_INT(42, 0)), cast(99, DECIMAL_INT(42, 0)))]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_([subquery(1)(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([VIEW5.SUM(LENGTH(TRIM(SUBSTR(SUBSTR('hizctdn', 1, 20), 1, 20))))]), filter(nil), rowset=256
+      access([VIEW5.SUM(LENGTH(TRIM(SUBSTR(SUBSTR('hizctdn', 1, 20), 1, 20))))])
+  2 - output([T_FUN_SUM(LENGTH(trim(substr(substr('hizctdn', 1, 20), 1, 20))))]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_SUM(LENGTH(trim(substr(substr('hizctdn', 1, 20), 1, 20))))])
+  3 - output(nil), filter(nil), rowset=256
+      equal_conds([table10_bigint.pk = VIEW3.pk]), other_conds(nil)
+      merge_directions([ASC])
+  4 - output([table10_bigint.pk]), filter(nil), rowset=256
+      access([table10_bigint.pk]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([table10_bigint.pk]), range(MIN ; MAX)always true
+  5 - output([VIEW3.pk]), filter(nil), rowset=256
+      sort_keys([VIEW3.pk, ASC])
+  6 - output([VIEW3.pk]), filter(nil), rowset=256
+      access([VIEW3.pk])
+  7 - output([table2_bigint.pk]), filter(nil), rowset=256
+      equal_conds([cast(table2_bigint.pk, DECIMAL_INT(20, 0)) = VIEW2.col_decimal_20_0]), other_conds(nil)
+  8 - output([VIEW2.col_decimal_20_0]), filter(nil), rowset=256
+      access([VIEW2.col_decimal_20_0])
+  9 - output([table100_bigint.col_decimal_20_0]), filter(nil), rowset=256
+      conds([cast(coalesce(VIEW4.MIN(10), ROUND(FLOOR(62)), 1), DECIMAL_INT(22, 0)) = ROUND(ABS(ROUND(FLOOR(table100_bigint.col_decimal_20_0))))]), nl_params_(nil),
+       use_batch=false
+ 10 - output([VIEW4.MIN(10)]), filter(nil), rowset=256
+      access([VIEW4.MIN(10)])
+ 11 - output([T_FUN_MIN(10)]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_MIN(10)])
+ 12 - output(nil), filter(nil), rowset=256
+      access(nil)
+ 13 - output([1]), filter([table100_bigint.col_char_20 > cast(CONCAT(cast(table100_bigint.col_char_20, VARCHAR(1048576)), substr('nhizctdn', 1, 20)), CHAR(100))]), rowset=256
+      access([table100_bigint.col_char_20]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([table100_bigint.pk]), range(MIN ; MAX)always true
+ 14 - output([table100_bigint.col_decimal_20_0]), filter(nil), rowset=256
+      access([table100_bigint.col_decimal_20_0]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([table100_bigint.pk]), range(MIN ; MAX)always true
+ 15 - output([table2_bigint.pk]), filter(nil), rowset=256
+      access([table2_bigint.pk]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([table2_bigint.pk]), range(MIN ; MAX)always true
+ 16 - output([table10_bigint.col_decimal_20_0]), filter(nil), rowset=256
+      sort_keys([table10_bigint.col_bigint, ASC], [table10_bigint.pk, DESC]), topn(1)
+ 17 - output([table10_bigint.pk], [table10_bigint.col_decimal_20_0], [table10_bigint.col_bigint]), filter(nil), rowset=256
+      access([table10_bigint.pk], [table10_bigint.col_decimal_20_0], [table10_bigint.col_bigint]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([table10_bigint.pk]), range(NULL ; -10), 
+      range_cond([table10_bigint.pk < -10])
+SELECT coalesce( (SELECT SUM(LENGTH(TRIM(SUBSTR(SUBSTR('hizctdn', 1, 20), 1, 20)))) FROM table10_bigint WHERE pk NOT IN (SELECT pk FROM table2_bigint WHERE pk NOT IN (SELECT col_decimal_20_0 FROM table100_bigint WHERE (SELECT coalesce( (SELECT MIN(10) FROM table100_bigint WHERE col_char_20 > CAST(CONCAT(col_char_20, SUBSTR('nhizctdn', 1, 20)) AS CHAR(100)) ORDER BY pk , pk), (SELECT ROUND(FLOOR(62))), 1)) = ROUND(ABS(ROUND(FLOOR(col_decimal_20_0)))) ORDER BY pk , col_bigint , col_char_20 DESC , pk DESC) ORDER BY col_decimal_20_0 , pk DESC) ORDER BY col_bigint, col_char_20, col_decimal_20_0, col_timestamp_6, pk , pk DESC), (SELECT col_decimal_20_0 FROM table10_bigint WHERE pk < -10 ORDER BY col_bigint , pk DESC LIMIT 1), 99);
++-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| coalesce( (SELECT SUM(LENGTH(TRIM(SUBSTR(SUBSTR('hizctdn', 1, 20), 1, 20)))) FROM table10_bigint WHERE pk NOT IN (SELECT pk FROM table2_bigint WHERE pk NOT IN (SELECT col_decimal_20_0 FROM table100_bigint WHERE (SELECT coalesce( (SELECT MIN(10) FROM table |
++-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|                                                                                                                                                                                                                                                              56 |
++-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+## bug 
+EXPLAIN SELECT pk FROM table300_bigint WHERE col_char_20 <> (SELECT ( SELECT MIN((SELECT pk FROM m WHERE  col_bigint <=> 13624)) FROM t));
+Query Plan
+==================================================================
+|ID|OPERATOR               |NAME           |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |SUBPLAN FILTER         |               |1       |7           |
+|1 |├─TABLE FULL SCAN      |table300_bigint|1       |3           |
+|2 |└─SUBPLAN FILTER       |               |1       |5           |
+|3 |  ├─SCALAR GROUP BY    |               |1       |3           |
+|4 |  │ └─SUBPLAN FILTER   |               |1       |3           |
+|5 |  │   ├─EXPRESSION     |               |1       |1           |
+|6 |  │   └─TABLE FULL SCAN|m(idx5)        |1       |3           |
+|7 |  └─TABLE FULL SCAN    |t(idx5)        |1       |3           |
+==================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([table300_bigint.pk]), filter([cast(table300_bigint.col_char_20, DECIMAL(-1, -1)) != cast(subquery(1), DECIMAL(11, 0))]), rowset=16
+      exec_params_([table300_bigint.col_bigint(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([table300_bigint.pk], [table300_bigint.col_bigint], [table300_bigint.col_char_20]), filter(nil), rowset=16
+      access([table300_bigint.pk], [table300_bigint.col_bigint], [table300_bigint.col_char_20]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([table300_bigint.pk]), range(MIN ; MAX)always true
+  2 - output([subquery(1)]), filter(nil), rowset=16
+      exec_params_([T_FUN_MIN(:2)(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  3 - output([T_FUN_MIN(:2)]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_MIN(:2)])
+  4 - output([:2]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([subquery(1)(:2)]), init_plan_idxs_(nil), use_batch=false
+  5 - output([1]), filter(nil)
+      values({1})
+  6 - output([m.pk]), filter(nil), startup_filter([:0 <=> 13624]), rowset=16
+      access([m.pk]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([m.pk], [m.col_varchar_20_key]), range(MIN,MIN ; MAX,MAX)always true
+  7 - output([:1]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.pk], [t.col_varchar_20_key]), range(MIN,MIN ; MAX,MAX)always true
+SELECT pk FROM table300_bigint WHERE col_char_20 <> (SELECT ( SELECT MIN((SELECT pk FROM m WHERE  col_bigint <=> 13624)) FROM t));
++----+
+| pk |
++----+
++----+
+
+## bug 
+EXPLAIN SELECT * FROM tt AS table1 WHERE table1 . pk <> (SELECT coalesce((SELECT MAX((SELECT SUM(-100) FROM tt WHERE NOT EXISTS (SELECT * FROM tt AS table3 LEFT OUTER JOIN tt AS table4 USING (pk) WHERE table1 . pk <> 99 LIMIT 8) )) FROM tt ), 99)) ;
+Query Plan
+=============================================================
+|ID|OPERATOR                   |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |SUBPLAN FILTER             |      |0       |9           |
+|1 |├─TABLE FULL SCAN          |table1|1       |3           |
+|2 |└─SUBPLAN FILTER           |      |1       |7           |
+|3 |  ├─SCALAR GROUP BY        |      |1       |5           |
+|4 |  │ └─SUBPLAN SCAN         |VIEW1 |1       |5           |
+|5 |  │   └─SCALAR GROUP BY    |      |1       |5           |
+|6 |  │     └─SUBPLAN FILTER   |      |1       |5           |
+|7 |  │       ├─TABLE FULL SCAN|tt    |1       |3           |
+|8 |  │       └─TABLE FULL SCAN|table3|1       |3           |
+|9 |  └─TABLE FULL SCAN        |tt    |1       |3           |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([table1.pk]), filter([cast(table1.pk, DECIMAL_INT(42, 0)) != subquery(1)]), rowset=16
+      exec_params_([table1.pk(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([table1.pk]), filter(nil), rowset=16
+      access([table1.pk]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([table1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([coalesce(subquery(1), cast(99, DECIMAL_INT(42, 0)))]), filter(nil), rowset=16
+      exec_params_([T_FUN_MAX(VIEW1.SUM(-100))(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  3 - output([T_FUN_MAX(VIEW1.SUM(-100))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_MAX(VIEW1.SUM(-100))])
+  4 - output([VIEW1.SUM(-100)]), filter(nil), rowset=16
+      access([VIEW1.SUM(-100)])
+  5 - output([T_FUN_SUM(-100)]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(-100)])
+  6 - output(nil), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([(T_OP_NOT_EXISTS, subquery(1))(:2)]), init_plan_idxs_(nil), use_batch=false
+  7 - output(nil), filter(nil), startup_filter([:2]), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([tt.__pk_increment]), range(MIN ; MAX)always true
+  8 - output([1]), filter(nil), startup_filter([:0 != 99]), rowset=16
+      access(nil), partitions(p0)
+      limit(8), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([table3.__pk_increment]), range(MIN ; MAX)always true
+  9 - output([:1]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([tt.__pk_increment]), range(MIN ; MAX)always true
+SELECT * FROM tt AS table1 WHERE table1 . pk <> (SELECT coalesce((SELECT MAX((SELECT SUM(-100) FROM tt WHERE NOT EXISTS (SELECT * FROM tt AS table3 LEFT OUTER JOIN tt AS table4 USING (pk) WHERE table1 . pk <> 99 LIMIT 8) )) FROM tt ), 99)) ;
++----+
+| pk |
++----+
++----+
+
+## bug 
+drop table if exists t1, t2;
+create table t1 (pk int);
+create table t2 (pk int, c1 char(20));
+EXPLAIN select (select SUM(     (select SUM(c1)      from t1)     )      from t1      ) from t2;
+Query Plan
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN FILTER       |    |1       |7           |
+|1 |├─SCALAR GROUP BY    |    |1       |3           |
+|2 |│ └─TABLE FULL SCAN  |t2  |2       |3           |
+|3 |└─SCALAR GROUP BY    |    |1       |5           |
+|4 |  └─SUBPLAN FILTER   |    |1       |5           |
+|5 |    ├─TABLE FULL SCAN|t1  |1       |3           |
+|6 |    └─TABLE FULL SCAN|t1  |1       |3           |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([subquery(1)]), filter(nil), rowset=16
+      exec_params_([T_FUN_SUM(cast(t2.c1, DOUBLE(-1, -1)))(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([T_FUN_SUM(cast(t2.c1, DOUBLE(-1, -1)))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(cast(t2.c1, DOUBLE(-1, -1)))])
+  2 - output([t2.c1]), filter(nil), rowset=16
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([T_FUN_SUM(:1)]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(:1)])
+  4 - output([:1]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([subquery(1)(:1)]), init_plan_idxs_(nil), use_batch=false
+  5 - output(nil), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([:0]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select (select SUM(     (select SUM(c1)      from t1)     )      from t1      ) from t2;
++--------------------------------------------------------------------------+
+| (select SUM(     (select SUM(c1)      from t1)     )      from t1      ) |
++--------------------------------------------------------------------------+
+|                                                                        3 |
++--------------------------------------------------------------------------+
+select (select SUM( c1 + (select SUM(c1)      from t1)     )      from t1      ) from t2;
+ERROR HY000: Invalid use of group function
+select (select SUM(     (select SUM(c1)      from t1)     )      from t1      ) from t2;
+ERROR 21000: Subquery returns more than 1 row
+select (select SUM( c1 + (select SUM(c1)      from t1)     )      from t1      ) from t2;
+ERROR HY000: Invalid use of group function
+## bug 
+drop table if exists t0;
+CREATE TABLE t0(c0 FLOAT  COMMENT 'asdf' , c1 DECIMAL ZEROFILL  NULL COMMENT 'asdf'  ) ;
+EXPLAIN SELECT /*+ USE_HASH_AGGREGATION  */ ALL t0.c0 AS ref0 FROM t0 WHERE (CAST( EXISTS (SELECT 1 from dual wHERE FALSE) AS SIGNED)) IN (( EXISTS (SELECT 1)) XOR ( EXISTS (SELECT 1)), t0.c0, CAST("" AS SIGNED)) UNION ALL SELECT /*+ USE_HASH_AGGREGATION  */ t0.c0 AS ref0 FROM t0 WHERE (NOT ((CAST( EXISTS (SELECT 1 from dual wHERE FALSE) AS SIGNED)) IN (( EXISTS (SELECT 1)) XOR ( EXISTS (SELECT 1)), t0.c0, CAST("" AS SIGNED)))) UNION ALL SELECT /*+ USE_HASH_AGGREGATION  */ ALL t0.c0 AS ref0 FROM t0 WHERE ((CAST( EXISTS (SELECT 1 from dual wHERE FALSE) AS SIGNED)) IN (( EXISTS (SELECT 1)) XOR ( EXISTS (SELECT 1)), t0.c0, CAST("" AS SIGNED))) IS NULL;
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |UNION ALL        |    |2       |5           |
+|1 |├─TABLE FULL SCAN|t0  |1       |3           |
+|2 |└─TABLE FULL SCAN|t0  |1       |3           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([UNION([1])]), filter(nil), rowset=16
+  1 - output([t0.c0]), filter(nil), rowset=16
+      access([t0.c0]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t0.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t0.c0]), filter([cast(0, INT(0, 0)) = 1 XOR 1 OR cast(cast(0, INT(0, 0)), DOUBLE(-1, -1)) = cast(t0.c0, DOUBLE(-1, -1)) OR cast(0, INT(0, 
+      0)) = cast('', BIGINT(0, 0)) IS NULL]), rowset=16
+      access([t0.c0]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t0.__pk_increment]), range(MIN ; MAX)always true
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: ''
+Warning	1292	Truncated incorrect INTEGER value: ''
+Warning	1292	Truncated incorrect INTEGER value: ''
+Warning	1292	Truncated incorrect INTEGER value: ''
+Warning	1292	Truncated incorrect INTEGER value: ''
+SELECT /*+ USE_HASH_AGGREGATION  */ ALL t0.c0 AS ref0 FROM t0 WHERE (CAST( EXISTS (SELECT 1 from dual wHERE FALSE) AS SIGNED)) IN (( EXISTS (SELECT 1)) XOR ( EXISTS (SELECT 1)), t0.c0, CAST("" AS SIGNED)) UNION ALL SELECT /*+ USE_HASH_AGGREGATION  */ t0.c0 AS ref0 FROM t0 WHERE (NOT ((CAST( EXISTS (SELECT 1 from dual wHERE FALSE) AS SIGNED)) IN (( EXISTS (SELECT 1)) XOR ( EXISTS (SELECT 1)), t0.c0, CAST("" AS SIGNED)))) UNION ALL SELECT /*+ USE_HASH_AGGREGATION  */ ALL t0.c0 AS ref0 FROM t0 WHERE ((CAST( EXISTS (SELECT 1 from dual wHERE FALSE) AS SIGNED)) IN (( EXISTS (SELECT 1)) XOR ( EXISTS (SELECT 1)), t0.c0, CAST("" AS SIGNED))) IS NULL;
++------+
+| ref0 |
++------+
++------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: ''
+Warning	1292	Truncated incorrect INTEGER value: ''
+Warning	1292	Truncated incorrect INTEGER value: ''
+Warning	1292	Truncated incorrect INTEGER value: ''
+Warning	1292	Truncated incorrect INTEGER value: ''
+Warning	1292	Truncated incorrect INTEGER value: ''
+
+DROP TABLE IF EXISTS T1;
+CREATE TABLE T1 (
+col_int_key int,
+col_varchar_20 varchar(20),
+col_int int,
+col_varchar_20_key varchar(20),
+col_char_20 char(20),
+col_char_20_key char(20),
+pk int,
+/*Indices*/
+primary key (pk) ) ;
+INSERT/**/ INTO T1 VALUES (4, 'ofmpdxvhqvfnyxowgqq', 7, 'jofmpdxvh', 'ojofmpdxvhqvfn', 'b', 1) ;
+
+DROP TABLE IF EXISTS T2;
+CREATE TABLE T2 (
+col_char_20_key char(20),
+col_int_key int,
+pk int,
+col_int int,
+col_varchar_20 varchar(20),
+col_varchar_20_key varchar(20),
+col_char_20 char(20),
+/*Indices*/
+primary key (pk) )  PARTITION BY hash (pk) partitions 5 ;
+INSERT/**/ INTO T2 VALUES  ('kbojofmpdxvhqvf', 4, 1, 2, 'bkbojofmpdxvhqvfnyxo', 'tbkboj', 'ttbkbo') ;
+
+DROP TABLE IF EXISTS T3;
+CREATE TABLE T3 (
+col_int int,
+col_char_20 char(20),
+col_char_20_key char(20),
+col_int_key int,
+col_varchar_20 varchar(20),
+col_varchar_20_key varchar(20),
+pk int,
+/*Indices*/
+primary key (pk) )  ;
+INSERT/**/ INTO T3 VALUES  (5, 'attbkbojofmpd', 'da', 6, 'ydatt', 'myd', 1) ;
+INSERT/**/ INTO T3 VALUES  (6, 'qmydat', 'xqmydattbkbojofmp', 5, 'qx', 'rqxqmydattb', 2) ;
+INSERT/**/ INTO T3 VALUES  (5, 'urqxqmydatt', 'ru', 2, 'trurqxqmydattbk', 'ftrurqxq', 3) ;
+
+DROP TABLE IF EXISTS T4;
+CREATE TABLE T4 (
+col_varchar_20 varchar(20),
+col_char_20_key char(20),
+col_int int,
+pk int,
+col_int_key int,
+col_varchar_20_key varchar(20),
+col_char_20 char(20),
+/*Indices*/
+primary key (pk) )  PARTITION BY hash (pk) partitions 5 ;
+INSERT/**/ INTO T4 VALUES  ('hftrurqxqmyda', 'ohftrurqx', 8, 1, 7, 'zoh', 'y') ;
+INSERT/**/ INTO T4 VALUES  ('iyzohftr', 'diyzohftrurqx', 7, 2, 9, 'ldiyzohftrurqxqmydat', 'nldiyzohftru') ;
+INSERT/**/ INTO T4 VALUES  ('vn', 'svnldiyzohftrur', 1, 3, 8, 'fsvnldiyzohf', 's') ;
+
+DROP TABLE IF EXISTS T5;
+CREATE TABLE T5 (
+col_varchar_20_key varchar(20),
+col_varchar_20 varchar(20),
+col_int_key int,
+col_char_20_key char(20),
+col_int int,
+pk int,
+col_char_20 char(20),
+/*Indices*/
+primary key (pk) )  ;
+INSERT/**/ INTO T5 VALUES  ('tsfsvnldiyzoh', 'xtsfsvnldiyzohft', 7, 'axtsfsvnldiyzoh', 7, 1, 'iaxtsfsvnldiyzohftru') ;
+INSERT/**/ INTO T5 VALUES  ('diaxtsfsv', 'bdiaxts', 3, 'lbdiax', 0, 2, 'ilbdiaxtsfsvnl') ;
+INSERT/**/ INTO T5 VALUES  ('uilbdiaxtsfsvnldiyz', 'wuilbdia', 4, 'jwuilbdiaxtsf', 1, 3, 'qj') ;
+INSERT/**/ INTO T5 VALUES  ('hq', 'shqjwuilbdiaxtsf', 5, 'q', 9, 4, 'kq') ;
+INSERT/**/ INTO T5 VALUES  ('akqshqjw', 'hakqshqjwuil', 8, 'jhakqshqjwuilbdia', 1, 5, 'sjhakqshq') ;
+
+DROP TABLE IF EXISTS T6;
+CREATE TABLE T6 (
+col_int_key int,
+pk int,
+col_varchar_20_key varchar(20),
+col_int int,
+col_char_20_key char(20),
+col_char_20 char(20),
+col_varchar_20 varchar(20),
+/*Indices*/
+primary key (pk) )  PARTITION BY hash (pk) partitions 5 ;
+INSERT/**/ INTO T6 VALUES  (4, 1, 'xsj', 8, 'ixsjhakqshqj', 'jixsjhakqshqj', 'njixsjhakqsh') ;
+INSERT/**/ INTO T6 VALUES  (2, 2, 'rnjixsjhakqshqj', 0, 'zrnjixsjhak', 'tzrnjixsjha', 'stzrnjixsjhak') ;
+INSERT/**/ INTO T6 VALUES  (8, 3, 'b', 5, 'zbstzrnjixsjhakqshq', 'bzbstzrnjixs', 'kbz') ;
+INSERT/**/ INTO T6 VALUES  (6, 4, 'ikbzbst', 1, 'jikbzbstzrnjixsjhakq', 'tjikbzbstzrnjixsj', 'ctjikbzbstzrnj') ;
+INSERT/**/ INTO T6 VALUES  (1, 5, 'lctjikbzbstzrn', 6, 'f', 'tflctjikbzbstzrn', 'ftflctjikb') ;
+
+EXPLAIN SELECT 1 AS ref0
+FROM   t5 T11 left join t1 T12 ON T11.col_char_20 < T11.col_varchar_20_key
+WHERE  T11.pk IN (SELECT Avg(T12.col_int + 1) FROM  t6 T14);
+Query Plan
+===================================================================
+|ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------
+|0 |SUBPLAN FILTER                 |        |1       |2056        |
+|1 |├─NESTED-LOOP OUTER JOIN       |        |5       |3           |
+|2 |│ ├─TABLE FULL SCAN            |T11     |5       |3           |
+|3 |│ └─MATERIAL                   |        |1       |3           |
+|4 |│   └─TABLE FULL SCAN          |T12     |1       |3           |
+|5 |└─SCALAR GROUP BY              |        |1       |13          |
+|6 |  └─PX COORDINATOR             |        |1       |13          |
+|7 |    └─EXCHANGE OUT DISTR       |:EX10000|1       |12          |
+|8 |      └─MERGE GROUP BY         |        |1       |11          |
+|9 |        └─PX PARTITION ITERATOR|        |5       |11          |
+|10|          └─TABLE FULL SCAN    |T14     |5       |11          |
+===================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter([cast(T11.pk, DECIMAL(11, 0)) = subquery(1)]), rowset=16
+      exec_params_([T12.col_int(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([T12.col_int], [T11.pk]), filter(nil), rowset=16
+      conds([T11.col_char_20 < T11.col_varchar_20_key]), nl_params_(nil), use_batch=false
+  2 - output([T11.pk], [T11.col_char_20], [T11.col_varchar_20_key]), filter(nil), rowset=16
+      access([T11.pk], [T11.col_char_20], [T11.col_varchar_20_key]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([T11.pk]), range(MIN ; MAX)always true
+  3 - output([T12.col_int]), filter(nil), rowset=16
+  4 - output([T12.col_int]), filter(nil), rowset=16
+      access([T12.col_int]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([T12.pk]), range(MIN ; MAX)always true
+  5 - output([cast(cast(T_FUN_SUM(T_FUN_SUM(:0 + 1)), DECIMAL(43, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(:0 + 1)), DECIMAL(20, 0)), DECIMAL(25, 4))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(:0 + 1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(:0 + 1))])
+  6 - output([T_FUN_SUM(:0 + 1)], [T_FUN_COUNT(:0 + 1)]), filter(nil), rowset=16
+  7 - output([T_FUN_SUM(:0 + 1)], [T_FUN_COUNT(:0 + 1)]), filter(nil), rowset=16
+      dop=1
+  8 - output([T_FUN_SUM(:0 + 1)], [T_FUN_COUNT(:0 + 1)]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(:0 + 1)], [T_FUN_COUNT(:0 + 1)])
+  9 - output(nil), filter(nil), rowset=16
+      force partition granule
+ 10 - output(nil), filter(nil), rowset=16
+      access(nil), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, 
+      range_key([T14.pk]), range(MIN ; MAX)always true
+SELECT 1 AS ref0
+FROM   t5 T11 left join t1 T12 ON T11.col_char_20 < T11.col_varchar_20_key
+WHERE  T11.pk IN (SELECT Avg(T12.col_int + 1) FROM  t6 T14);
++------+
+| ref0 |
++------+
++------+
+
+drop table t1;
+drop table t2;
+create table t1 (c1 int, c2 int);
+create table t2 (c1 int, c2 int);
+insert/**/ into t1 values (1, 1), (2, 2);
+insert/**/ into t2 values (1, 1), (2, 2);
+EXPLAIN select * from t1 where not exists (select /*+no_unnest*/ 1 from (select 1 + t1.c1 as c1, t2.c2 as s2 from t2) v where c1 = s2 and c1 + 1 <= s2);
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SUBPLAN FILTER   |    |1       |7           |
+|1 |├─TABLE FULL SCAN|t1  |2       |3           |
+|2 |└─TABLE FULL SCAN|t2  |1       |3           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([(T_OP_NOT_EXISTS, subquery(1))]), rowset=16
+      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([1 + :0 + 1 <= t2.c2], [1 + :0 = t2.c2]), rowset=16
+      access([t2.c2]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select * from t1 where not exists (select /*+no_unnest*/ 1 from (select 1 + t1.c1 as c1, t2.c2 as s2 from t2) v where c1 = s2 and c1 + 1 <= s2);
++------+------+
+| c1   | c2   |
++------+------+
+|    1 |    1 |
+|    2 |    2 |
++------+------+
+
+drop table t1;
+drop table t2;
+drop table t3;
+
+create table t1 (c1 int, c2 int);
+create table t2 (c1 int, c2 int);
+create table t3 (c1 int, c2 int);
+create index idx_c2 on t2(c2);
+create index idx_c1 on t2(c1);
+create index idx_t1_c1 on t1 (c1);
+
+insert/**/ into t1 values (1, 1);
+insert/**/ into t2 values (1, 1);
+insert/**/ into t3 values (1, 2);
+
+EXPLAIN SELECT /*+use_nl(t2 v1)*/ *
+FROM
+  (SELECT /*+no_merge*, no_rewrite, full(t1)*/
+   c1,
+   (SELECT c1 FROM t3 limit 1) as s_c1,
+   (SELECT c2 FROM t3 limit 1) as s_c2
+   FROM t1) v1,
+  t2
+WHERE v1.s_c2 >= t2.c2 and v1.c1 = t2.c1;
+Query Plan
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |NESTED-LOOP JOIN       |    |1       |3           |
+|1 |├─TABLE FULL SCAN      |t2  |1       |3           |
+|2 |└─MATERIAL             |    |1       |7           |
+|3 |  └─SUBPLAN SCAN       |v1  |1       |7           |
+|4 |    └─SUBPLAN FILTER   |    |1       |7           |
+|5 |      ├─TABLE FULL SCAN|t1  |1       |3           |
+|6 |      ├─TABLE FULL SCAN|t3  |1       |3           |
+|7 |      └─TABLE FULL SCAN|t3  |1       |3           |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([v1.c1], [v1.s_c1], [v1.s_c2], [t2.c1], [t2.c2]), filter(nil), rowset=16
+      conds([v1.s_c2 >= t2.c2], [v1.c1 = t2.c1]), nl_params_(nil), use_batch=false
+  1 - output([t2.c2], [t2.c1]), filter(nil), rowset=16
+      access([t2.c2], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([v1.c1], [v1.s_c1], [v1.s_c2]), filter(nil), rowset=16
+  3 - output([v1.s_c2], [v1.c1], [v1.s_c1]), filter(nil), rowset=16
+      access([v1.s_c2], [v1.c1], [v1.s_c1])
+  4 - output([t1.c1], [:0], [:1]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([subquery(1)(:0)], [subquery(2)(:1)]), init_plan_idxs_(nil), use_batch=false
+  5 - output([t1.c1]), filter(nil), rowset=16
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([t3.c1]), filter(nil), rowset=16
+      access([t3.c1]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  7 - output([t3.c2]), filter(nil), rowset=16
+      access([t3.c2]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+SELECT /*+use_nl(t2 v1)*/ *
+FROM
+  (SELECT /*+no_merge*, no_rewrite, full(t1)*/
+   c1,
+   (SELECT c1 FROM t3 limit 1) as s_c1,
+   (SELECT c2 FROM t3 limit 1) as s_c2
+   FROM t1) v1,
+  t2
+WHERE v1.s_c2 >= t2.c2 and v1.c1 = t2.c1;
++------+------+------+------+------+
+| c1   | s_c1 | s_c2 | c1   | c2   |
++------+------+------+------+------+
+|    1 |    1 |    2 |    1 |    1 |
++------+------+------+------+------+
+
+drop table t1;
+drop table t2;
+drop table t3;

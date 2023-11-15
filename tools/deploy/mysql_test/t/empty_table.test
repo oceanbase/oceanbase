@@ -1,0 +1,21 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: link.zt
+#owner group: sql1
+
+#
+# Some special cases with empty tables
+#
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+create table t1 (nr int ,b char(30),str char(10), primary key (nr));
+select count(*) from t1;
+select * from t1;
+select * from t1 limit 0;
+drop table t1;
+
+# End of 4.1 tests

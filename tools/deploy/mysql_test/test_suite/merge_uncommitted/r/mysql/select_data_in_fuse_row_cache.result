@@ -1,0 +1,52 @@
+set GLOBAL ob_query_timeout = 1000000000000;
+set GLOBAL ob_trx_timeout = 10000000000000;
+set GLOBAL ob_trx_idle_timeout = 10000000000;
+drop table if exists t1_fuse;
+create table t1_fuse(a int primary key, b int, c int);
+insert into t1_fuse values(5, 1, 1);
+insert into t1_fuse values(4, 1, 1);
+insert into t1_fuse values(3, 1, 1);
+insert into t1_fuse values(2, 1, 1);
+insert into t1_fuse values(1, 1, 1);
+update t1_fuse set b = 2 where a = 2;
+update t1_fuse set b = 3 where a = 2;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+select * from t1_fuse where a = 2;
+a	b	c
+2	3	1
+set autocommit=0;
+begin;
+update t1_fuse set c = 2 where a = 2;
+select * from t1_fuse where a = 2;
+a	b	c
+2	3	2
+select * from t1_fuse where a = 2;
+a	b	c
+2	3	2
+update t1_fuse set c = 3 where a = 2;
+select * from t1_fuse where a = 2;
+a	b	c
+2	3	3
+select * from t1_fuse where a = 2;
+a	b	c
+2	3	3
+select * from t1_fuse where a = 2;
+a	b	c
+2	3	1
+rollback;
+select * from t1_fuse where a = 2;
+a	b	c
+2	3	1
+select * from t1_fuse where a = 2;
+a	b	c
+2	3	1
+select * from t1_fuse order by a asc;
+a	b	c
+1	1	1
+2	3	1
+3	1	1
+4	1	1
+5	1	1
+drop table t1_fuse;

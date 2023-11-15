@@ -1,0 +1,381 @@
+# owner: yibo.tyf
+# owner group: sql1
+# tags: optimizer
+# description:
+#
+
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+--disable_warnings
+drop database if exists hualong;
+--enable_warnings
+create database hualong;
+use hualong;
+
+
+CREATE TABLE `astc_asset_price_daily_fa_77` (
+`id` varchar(28) NOT NULL COMMENT '主键',
+`user_id` varchar(16) NOT NULL COMMENT '用户ID',
+`account_no` varchar(20) NOT NULL COMMENT '资产账号',
+`product_channel` varchar(32) NOT NULL COMMENT '渠道',
+`accounting_id` varchar(28) NOT NULL COMMENT '记账ID',
+`account_date` varchar(8) NOT NULL COMMENT '会计日',
+`currency` varchar(3) NOT NULL COMMENT '币种',
+`gmt_create` datetime NOT NULL COMMENT '创建时间',
+`gmt_modified` datetime NOT NULL COMMENT '修改时间',
+`prices` varchar(4096) NOT NULL COMMENT '价格',
+`asset_value` bigint(20) NOT NULL COMMENT '资产价值',
+`daily_profit` bigint(20) NOT NULL COMMENT '每日收益',
+`accumulated_profit` bigint(20) NOT NULL COMMENT '历史累计收益',
+PRIMARY KEY (`id`),
+UNIQUE KEY `uk_aid_ad` (`accounting_id`, `account_date`) BLOCK_SIZE 16384,
+KEY `idx_uid_aid_ad` (`user_id`, `accounting_id`, `account_date`) BLOCK_SIZE 16384,
+KEY `idx_uid_pc_ad` (`user_id`, `product_channel`, `account_date`) BLOCK_SIZE 16384,
+KEY `idx_ad_aid` (`account_date`, `accounting_id`) BLOCK_SIZE 16384);
+
+--real_sleep 5
+
+explain select user_id, product_channel, account_date,
+sum(asset_value) as asset_value,
+sum(daily_profit) as daily_profit,
+sum(accumulated_profit) as accumulated_profit
+from astc_asset_price_daily_FA_77
+where user_id = '2088202548001770'
+and product_channel in('GOLDBAO','SFUND')
+and account_date >= '20170418' and account_date <= '20170517'
+group by user_id,product_channel,account_date;
+
+CREATE TABLE `trade_dispute` (
+`dispute_id` bigint(20) NOT NULL COMMENT '交易纠纷id',
+`buyer_id` bigint(20) NOT NULL COMMENT '买家id',
+`seller_id` bigint(20) NOT NULL COMMENT '卖家id',
+`buyer_nick` varchar(32) NOT NULL COMMENT '买家昵称',
+`seller_nick` varchar(32) NOT NULL COMMENT '卖家昵称',
+`biz_order_id` bigint(20) NOT NULL COMMENT '对应子订单号',
+`pay_order_id` bigint(20) DEFAULT NULL COMMENT '关联的支付订单号',
+`biz_type` int(11) DEFAULT NULL COMMENT '交易类型',
+`out_biz_id` varchar(32) DEFAULT NULL COMMENT '关联的外部业务处理编号',
+`auction_id` bigint(20) DEFAULT NULL COMMENT '商品id',
+`auction_title` varchar(256) DEFAULT NULL COMMENT '商品名称',
+`auction_url` varchar(256) DEFAULT NULL COMMENT '商品链接',
+`refund_fee` bigint(20) NOT NULL COMMENT '退款金额',
+`refund_type` smallint(6) DEFAULT NULL COMMENT '退款类型',
+`dispute_type` tinyint(4) NOT NULL COMMENT '交易纠纷类型：1售中退款，2售后退款，3售中维权，4售后维权',
+`dispute_reason_id` int(11) DEFAULT NULL COMMENT '交易纠纷原因id',
+`dispute_reason_text` varchar(100) DEFAULT NULL COMMENT '交易纠纷原因',
+`dispute_sub_reason_id` int(11) DEFAULT NULL COMMENT '交易纠纷二级原因id',
+`dispute_sub_reason_text` varchar(100) DEFAULT NULL COMMENT '交易纠纷二级原因',
+`multiple` tinyint(4) DEFAULT NULL COMMENT '是否合并退款',
+`dispute_end_time` datetime DEFAULT NULL COMMENT '交易纠纷完结时间',
+`gmt_timeout` datetime DEFAULT NULL COMMENT '交易纠纷超时时间',
+`timeout_type` varchar(40) DEFAULT NULL COMMENT '交易纠纷超时类型',
+`dispute_desc` varchar(400) DEFAULT NULL COMMENT '交易纠纷说明',
+`attributes` varchar(4000) DEFAULT NULL COMMENT '交易纠纷属性',
+`attribute_cc` int(11) DEFAULT NULL COMMENT '乐观锁',
+`dispute_status` tinyint(4) DEFAULT NULL COMMENT '交易纠纷退款状态',
+`goods_status` tinyint(4) DEFAULT NULL COMMENT '交易纠纷货物状态',
+`goods_needs` tinyint(4) DEFAULT NULL COMMENT '交易纠纷货物需求：0不退货，1退货，2换货',
+`goods_count` bigint(20) DEFAULT NULL COMMENT '交易纠纷退换货数量',
+`advance_status` tinyint(4) DEFAULT NULL COMMENT '交易纠纷垫付状态',
+`cs_status` tinyint(4) DEFAULT NULL COMMENT '交易纠纷小二介入状态',
+`proof_status` tinyint(4) DEFAULT NULL COMMENT '交易纠纷举证状态',
+`from_group` tinyint(4) DEFAULT NULL COMMENT '交易纠纷业务来源',
+`step_id` smallint(6) DEFAULT NULL COMMENT '交易纠纷流程节点',
+`gmt_create` datetime NOT NULL COMMENT '交易纠纷创建时间',
+`gmt_modified` datetime NOT NULL COMMENT '交易纠纷修改时间',
+`gmt_agreement_modified` bigint(20) DEFAULT NULL COMMENT '交易纠纷协议修改时间戳',
+`dispute_request` tinyint(4) NOT NULL DEFAULT '0' COMMENT '交易纠纷退款要求',
+PRIMARY KEY (`dispute_id`),
+KEY `idx_boid` (`biz_order_id`) BLOCK_SIZE 16384,
+KEY `idx_poid` (`pay_order_id`) BLOCK_SIZE 16384,
+KEY `idx_bid_gc` (`buyer_id`, `gmt_create`, `dispute_status`, `biz_type`, `seller_id`)); 
+
+--real_sleep 5
+
+explain select dispute_id, buyer_id, seller_id, buyer_nick, seller_nick , biz_order_id, pay_order_id, 
+biz_type, out_biz_id, auction_id , auction_title, auction_url, refund_fee, refund_type, dispute_type 
+, dispute_reason_id, dispute_reason_text, dispute_sub_reason_id, dispute_sub_reason_text, multiple , 
+gmt_agreement_modified, dispute_end_time, gmt_timeout, timeout_type, dispute_desc , attributes, attribute_cc, 
+dispute_status, goods_status, goods_needs , goods_count, advance_status, cs_status, proof_status, from_group 
+, step_id, gmt_create, gmt_modified, dispute_request from `trade_dispute` `trade_dispute` where `buyer_id` 
+= 100 and `seller_id` = 100 and `dispute_type` = 100 and `from_group` != 101 and `gmt_create` > str_to_date('1969-12-31 
+16:01:41.0', '%Y-%m-%d %H:%i:%s') and `gmt_create` < str_to_date('1969-12-31 16:01:41.0', '%Y-%m-%d 
+%H:%i:%s') order by `gmt_create` desc limit 0, 100;
+
+CREATE TABLE `luna_core_bidword_diagnose` (
+      `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+      `gmt_create` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+      `gmt_modified` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '修改时间',
+      `custid` bigint(20) unsigned NOT NULL COMMENT '分表字段',
+      `platform` bigint(20) unsigned DEFAULT NULL COMMENT '0表示pc，1表示无线',
+      `type` bigint(20) unsigned DEFAULT NULL COMMENT '诊断类型。包括1：排名下跌。2，冲排名。15，流量下跌重点词，16点击下降重点词',
+      `updatepricetag` bigint(20) unsigned DEFAULT NULL COMMENT '是否改价。1表示调低出价，2表示调高出价，0表示未修改出价，相对昨天价格',
+      `realtimefilter` bigint(20) unsigned DEFAULT NULL COMMENT '是否已经被实时过滤：0表示未过滤，1表示质量分过滤，2表示价格过滤，3表示已被删除，4表示已添加',
+      `offlineprice` bigint(20) unsigned DEFAULT NULL COMMENT '离线建议价格',
+      `impression_p_7d` bigint(20) unsigned DEFAULT NULL COMMENT '7天平均展现量',
+      `impression_1d` bigint(20) unsigned DEFAULT NULL COMMENT '昨天展现量',
+      `click_p_7d` bigint(20) unsigned DEFAULT NULL COMMENT '7天平均点击量',
+      `click_1d` bigint(20) unsigned DEFAULT NULL COMMENT '昨天点击量',
+      `rankdown_type` bigint(20) unsigned DEFAULT NULL COMMENT '下跌类型：1是同比，2表示环比',
+      `rankdown_rate` bigint(20) unsigned DEFAULT NULL COMMENT '下跌比率',
+      `imp_add_cnt` bigint(20) unsigned DEFAULT NULL COMMENT '展现提升比例',
+      `click_add_cnt` bigint(20) unsigned DEFAULT NULL COMMENT '点击提升比例',
+      `memberid` bigint(20) unsigned DEFAULT NULL COMMENT 'memberid',
+      `campaignid` bigint(20) unsigned DEFAULT NULL COMMENT 'campaignid',
+      `adgroupid` bigint(20) unsigned DEFAULT NULL COMMENT 'adgroupid',
+      `bidwordid` bigint(20) unsigned DEFAULT NULL COMMENT 'bidwordid',
+      `originalword` varchar(256) NOT NULL COMMENT '原词',
+      `normalword` varchar(256) NOT NULL COMMENT '归一化词',
+      `target` bigint(20) unsigned DEFAULT NULL COMMENT '目标排名。排名下跌和冲排名使用',
+      `preprice` bigint(20) unsigned DEFAULT NULL COMMENT '昨天价格。为了对比价格调高调低使用',
+      `preprerank` bigint(20) unsigned DEFAULT NULL COMMENT '前天排名',
+      `prerank` bigint(20) unsigned DEFAULT NULL COMMENT '昨天排名',
+      `impression_p_1d` bigint(20) unsigned DEFAULT NULL COMMENT '前天展现量',
+      `click_p_1d` bigint(20) unsigned DEFAULT NULL COMMENT '前天点击量',
+      `rankdown_cnt` bigint(20) DEFAULT NULL COMMENT '下跌量',
+      `subtype` bigint(20) unsigned DEFAULT NULL COMMENT '子类型',
+      `imp_factor` decimal(10,2) DEFAULT NULL COMMENT '展现系数',
+      `click_factor` decimal(10,2) DEFAULT NULL COMMENT '点击系数',
+      PRIMARY KEY (`id`, `custid`),
+      KEY `idx_cu_ca_re` (`custid`, `campaignid`, `realtimefilter`) LOCAL  BLOCK_SIZE 16384,
+      KEY `idx_cu_ca_ad` (`custid`, `campaignid`, `adgroupid`) LOCAL  BLOCK_SIZE 16384,
+      KEY `idx_cu_ca_update` (`custid`, `platform`, `type`, `campaignid`, `adgroupid`, `bidwordid`, `originalword`) LOCAL  BLOCK_SIZE 16384,
+      KEY `idx_bid_cid` (`bidwordid`, `custid`) LOCAL  BLOCK_SIZE 16384
+  );  
+#) partition by hash(custid);
+
+--real_sleep 5
+
+explain UPDATE LUNA_CORE_BIDWORD_DIAGNOSE SET GMT_MODIFIED = NOW(), UPDATEPRICETAG = 8 WHERE CUSTID = 1 AND CAMPAIGNID = 2 AND ADGROUPID = 3 AND BIDWORDID = 5 AND ORIGINALWORD = 5 AND TYPE = 6 AND PLATFORM = 7;
+
+explain UPDATE /*+index(luna_core_bidword_diagnose idx_cu_ca_update)*/ LUNA_CORE_BIDWORD_DIAGNOSE SET GMT_MODIFIED = NOW(), UPDATEPRICETAG = 8 WHERE CUSTID = 1 AND CAMPAIGNID = 2 AND ADGROUPID = 3 AND BIDWORDID = 5 AND ORIGINALWORD = 5 AND TYPE = 6 AND PLATFORM = 7;
+
+explain UPDATE /*+index(luna_core_bidword_diagnose primary)*/ LUNA_CORE_BIDWORD_DIAGNOSE SET GMT_MODIFIED = NOW(), UPDATEPRICETAG = 8 WHERE CUSTID = 1 AND CAMPAIGNID = 2 AND ADGROUPID = 3 AND BIDWORDID = 5 AND ORIGINALWORD = 5 AND TYPE = 6 AND PLATFORM = 7;
+
+create table `app_content` ( `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+`gmt_create` datetime not nULL COMMENT '创建时间',
+`gmt_modified` datetime not NULL COMMENT '修改时间',
+`user_id` bigint(20) unsigned NOT NULL COMMENT '用户id',
+`class_id` int(11) not null COMMENT '行业id1:家居',
+`group_id` bigint(20) unsigned DEFAULT NULL COMMENT '专辑id',
+`biz_type` int(11) not null COMMENT '1：日记2：样板3：攻略',
+`cover_image_url` varchar(512) DEFAULT NULL COMMENT '封面地址',
+`properties` varchar(1024) DEFAULT NULL COMMENT '属性对',
+`input_properties` varchar(1024) DEFAULT NULL COMMENT '属性的可输入属性值',
+`content_id` bigint(20) unsigned DEFAULT NULL COMMENT '内容平台id',
+`nick` varchar(128) not nulL COMMENT '用户nick',
+`title` varchar(512) not nuLL COMMENT '标题',
+`summary` varchar(2048) defAULT NULL COMMENT '摘要',
+`features` varchar(4096) deFAULT NULL COMMENT '扩展字段',
+`status` int(11) not null dEFAULT '0' COMMENT '0：正常-1：删除-2：屏蔽',
+`user_modified` datetime noT NULL COMMENT '用户修改时间',
+`tfs_path` varchar(256) defAULT NULL COMMENT '内容tfs路径',
+`tags` bigint(20) unsigned DEFAULT NULL COMMENT 'Int标签',
+`content_items` varchar(1024) DEFAULT NULL COMMENT '对应套餐的商品列表ex:     11111,22222',
+`extend_info` varchar(255) DEFAULT NULL COMMENT '扩展信息',
+`extend_imginfo` varchar(255) DEFAULT NULL COMMENT '扩展图片信息',
+`app_key` varchar(128) defaULT NULL COMMENT '应用key',
+`biz_key` varchar(128) defaULT NULL COMMENT '接入业务的key',
+`app_type` int(11) default NULL COMMENT '接入业务的类型',
+primary key (`id`),
+key `ind_gr_st` (`group_id`, `status`) BLOCK_SIZE 16384,
+key `k_uid_btype` (`user_id`, `biz_type`) BLOCK_SIZE 16384,
+key `ind_user` (`user_id`) BLOCK_SIZE 16384,
+key `by_status` (`class_id`, `biz_type`, `status`) BLOCK_SIZE 16384,
+key `ind_group` (`group_id`, `gmt_modified`) BLOCK_SIZE 16384
+);
+
+--real_sleep 5
+
+explain select id, user_id, class_id, group_id, biz_type , cover_image_url, properties, input_properties,
+content_id, nick , title, summary, features, content_items, status , tfs_path, tags, gmt_create, gmt_modified, user_modified from app_content
+where status = 100 and class_id = 100 and biz_type = 100 and id = 100
+order by gmt_create desc limit 0, 100;
+explain select id, user_id, class_id, group_id, biz_type , cover_image_url, properties, input_properties,
+content_id, nick , title, summary, features, content_items, status , tfs_path, tags, gmt_create, gmt_modified, user_modified from app_content
+where status = 100 and class_id = 100 and biz_type = 100 and id = 200
+order by gmt_create desc limit 0, 100;
+
+explain select id, user_id, class_id, group_id, biz_type , cover_image_url, properties, input_properties,
+content_id, nick , title, summary, features, content_items, status , tfs_path, tags, gmt_create, gmt_modified, user_modified from app_content
+where status = 100 and class_id = 100 and biz_type = 100 and id = 100
+order by class_id desc limit 0, 100;
+explain select id, user_id, class_id, group_id, biz_type , cover_image_url, properties, input_properties,
+content_id, nick , title, summary, features, content_items, status , tfs_path, tags, gmt_create, gmt_modified, user_modified from app_content
+where status = 100 and class_id = 100 and biz_type = 100 and id = 200
+order by class_id desc limit 0, 100;
+
+explain select id, user_id, class_id, group_id, biz_type , cover_image_url, properties, input_properties,
+content_id, nick , title, summary, features, content_items, status , tfs_path, tags, gmt_create, gmt_modified, user_modified from app_content
+where status = 100 and class_id = 100 and biz_type = 100 and id = 100
+order by id desc limit 0, 100;
+explain select id, user_id, class_id, group_id, biz_type , cover_image_url, properties, input_properties,
+content_id, nick , title, summary, features, content_items, status , tfs_path, tags, gmt_create, gmt_modified, user_modified from app_content
+where status = 100 and class_id = 100 and biz_type = 100 and id = 200
+order by id desc limit 0, 100;
+
+CREATE TABLE `pcb_common_bill_01` (
+  `BILL_NO` varchar(28) NOT NULL,
+  `CARD_NO` varchar(28) NOT NULL,
+  `ATTRIBUTE_INST` varchar(32) NOT NULL,
+  `PRIN_IN` decimal(15,0) NOT NULL,
+  `PRIN_OUT` decimal(15,0) NOT NULL,
+  `OVD_PRIN_IN` decimal(15,0) NOT NULL,
+  `OVD_PRIN_OUT` decimal(15,0) NOT NULL,
+  `PRIN_PENALTY_IN` decimal(15,0) NOT NULL,
+  `PRIN_PENALTY_OUT` decimal(15,0) NOT NULL,
+  `INT_IN` decimal(15,0) NOT NULL,
+  `INT_OUT` decimal(15,0) NOT NULL,
+  `OVD_INT_IN` decimal(15,0) NOT NULL,
+  `OVD_INT_OUT` decimal(15,0) NOT NULL,
+  `START_DATE` varchar(8) NOT NULL,
+  `DUE_DATE` varchar(8) NOT NULL,
+  `STATUS` varchar(32) NOT NULL,
+  `OUT_BILL_NO` varchar(128) DEFAULT NULL,
+  `RATE_ID` decimal(15,0) NOT NULL,
+  `OVD_DAYS` decimal(5,0) DEFAULT NULL,
+  `OVD_INSTALLMENTS` decimal(5,0) DEFAULT NULL,
+  `RECENT_SETTLE_DATE` varchar(8) DEFAULT NULL,
+  `GMT_CREATED` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `GMT_MODIFIED` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `PRODUCT_ID` varchar(32) DEFAULT NULL,
+  `ACCOUNT_NO` varchar(28) DEFAULT NULL,
+  `END_DATE` varchar(8) DEFAULT NULL,
+  `BEGIN_DATE` varchar(8) DEFAULT NULL,
+  `FEE_IN` decimal(15,0) DEFAULT NULL,
+  `FEE_OUT` decimal(15,0) DEFAULT NULL,
+  `OVD_FEE_IN` decimal(15,0) DEFAULT NULL,
+  `OVD_FEE_OUT` decimal(15,0) DEFAULT NULL,
+  `FEE_PENALTY_IN` decimal(15,0) DEFAULT NULL,
+  `FEE_PENALTY_OUT` decimal(15,0) DEFAULT NULL,
+  PRIMARY KEY (`BILL_NO`),
+  UNIQUE KEY `UK_CARDNO_ATTR_PRODID_OUTNO` (`CARD_NO`, `ATTRIBUTE_INST`, `PRODUCT_ID`, `OUT_BILL_NO`) BLOCK_SIZE 16384,
+  KEY `IDX_CARDNO_BILLNO_STATUS` (`CARD_NO`, `BILL_NO`, `STATUS`) BLOCK_SIZE 16384,
+  KEY `IDX_CARDNO_STATUS` (`CARD_NO`, `STATUS`) BLOCK_SIZE 16384,
+  KEY `IDX_PCB_COMMON_BILL_PSBC` (`PRODUCT_ID`, `STATUS`, `BILL_NO`, `CARD_NO`) BLOCK_SIZE 16384,
+  KEY `idx_s_cno_pid` (`STATUS`, `CARD_NO`, `PRODUCT_ID`) BLOCK_SIZE 16384
+);
+
+CREATE TABLE `pcb_account_balance_01` (
+  `card_no` varchar(16) NOT NULL COMMENT ' ',
+  `user_id` varchar(16) NOT NULL COMMENT ' ',
+  `mast_prod_id` varchar(6) NOT NULL COMMENT ' ',
+  `trans_dt` timestamp(6) NOT NULL COMMENT ' ',
+  `status` varchar(32) NOT NULL COMMENT ' ',
+  `history_cycle_prin` decimal(15,0) NOT NULL COMMENT ' ',
+  `history_uncycle_prin` decimal(15,0) NOT NULL COMMENT ' ',
+  `history_fee` decimal(15,0) NOT NULL COMMENT ' ',
+  `history_int` decimal(15,0) NOT NULL COMMENT ' ',
+  `history_prin_penalty` decimal(15,0) NOT NULL COMMENT ' ',
+  `history_fee_penalty` decimal(15,0) NOT NULL COMMENT ' ',
+  `cur_month_cycle_prin` decimal(15,0) NOT NULL COMMENT ' ',
+  `cur_month_uncycle_prin` decimal(15,0) NOT NULL COMMENT ' ',
+  `cur_month_fee` decimal(15,0) NOT NULL COMMENT ' ',
+  `cur_month_int` decimal(15,0) NOT NULL COMMENT ' ',
+  `next_month_uncycle_prin` decimal(15,0) NOT NULL COMMENT ' ',
+  `next_month_cycle_prin` decimal(15,0) NOT NULL COMMENT ' ',
+  `next_month_fee` decimal(15,0) NOT NULL COMMENT ' ',
+  `next_month_int` decimal(15,0) NOT NULL COMMENT ' ',
+  `future_prin` decimal(15,0) NOT NULL COMMENT ' ',
+  `future_fee` decimal(15,0) NOT NULL COMMENT ' ',
+  `future_int` decimal(15,0) NOT NULL COMMENT ' ',
+  `mini_amount` decimal(15,0) DEFAULT NULL COMMENT ' ',
+  `remain_mini_amount` decimal(15,0) DEFAULT NULL COMMENT ' ',
+  `bill_date` varchar(2) NOT NULL COMMENT ' ',
+  `due_date` varchar(2) NOT NULL COMMENT ' ',
+  `id` varchar(28) NOT NULL COMMENT ' ',
+  `gmt_create` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT ' ',
+  `gmt_modified` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT ' ',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_cardno` (`card_no`) BLOCK_SIZE 16384,
+  KEY `idx_billdate_status` (`bill_date`, `status`, `trans_dt`) BLOCK_SIZE 16384,
+  KEY `idx_mastprodid_cardno` (`mast_prod_id`, `card_no`) BLOCK_SIZE 16384
+);
+
+--real_sleep 5
+
+explain select a.card_no
+        from (select distinct card_no
+              from pcb_common_bill_01
+              WHERE PRODUCT_ID != '9302' and card_no like '5001____________' ) a
+        left outer join pcb_account_balance_01 b on a.card_no=b.card_no
+        where b.card_no is null
+        order by a.card_no
+        limit 0,2000;
+        
+CREATE TABLE `pcb_installment_00` (
+  `BILL_NO` varchar(28) NOT NULL,
+  `INSTALL_NUM` decimal(5,0) NOT NULL,
+  `PRIN` decimal(15,0) NOT NULL,
+  `PRIN_INT` decimal(15,0) NOT NULL,
+  `PRIN_PENALTY` decimal(15,0) NOT NULL,
+  `REPAY_PRIN` decimal(15,0) NOT NULL,
+  `REPAY_INT` decimal(15,0) NOT NULL,
+  `REPAY_PRIN_PENALTY` decimal(15,0) NOT NULL,
+  `STATUS` varchar(32) NOT NULL,
+  `START_DATE` varchar(8) NOT NULL,
+  `DUE_DATE` varchar(8) NOT NULL,
+  `OVD_DATE` varchar(8) NOT NULL,
+  `INT_START_DATE` varchar(8) NOT NULL,
+  `OVD_DAYS` decimal(5,0) DEFAULT NULL,
+  `GMT_CREATED` timestamp(6) NOT NULL,
+  `GMT_MODIFIED` timestamp(6) NOT NULL,
+  `CARD_NO` varchar(28) DEFAULT NULL,
+  `OVD_PRIN` decimal(15,0) DEFAULT NULL,
+  `OVD_INT` decimal(15,0) DEFAULT NULL,
+  `REPAY_OVD_PRIN` decimal(15,0) DEFAULT NULL,
+  `REPAY_OVD_INT` decimal(15,0) DEFAULT NULL,
+  `BILL_DATE` varchar(8) DEFAULT NULL,
+  `OUT_BILL_NO` varchar(128) DEFAULT NULL,
+  `FEE` decimal(15,0) DEFAULT NULL,
+  `OVD_FEE` decimal(15,0) DEFAULT NULL,
+  `FEE_PENALTY` decimal(15,0) DEFAULT NULL,
+  `REPAY_FEE` decimal(15,0) DEFAULT NULL,
+  `REPAY_OVD_FEE` decimal(15,0) DEFAULT NULL,
+  `REPAY_FEE_PENALTY` decimal(15,0) DEFAULT NULL,
+  `TYPE` char(1) DEFAULT NULL,
+  `PRODUCT_ID` varchar(32) DEFAULT NULL,
+  PRIMARY KEY (`BILL_NO`, `INSTALL_NUM`),
+  KEY `IDX_CARDNO_BILLDATE_BILLNO_STATUS` (`CARD_NO`, `BILL_DATE`, `BILL_NO`, `STATUS`) BLOCK_SIZE 16384,
+  KEY `IDX_BILLNO_STATUS_OVDDATE` (`BILL_NO`, `STATUS`, `OVD_DATE`) BLOCK_SIZE 16384,
+  KEY `IDX_OVDDATE_STATUS` (`OVD_DATE`, `STATUS`) BLOCK_SIZE 16384,
+  KEY `IDX_BILLDATE_CARDNO` (`BILL_DATE`, `CARD_NO`) BLOCK_SIZE 16384,
+  KEY `IDX_STATUS_CARDNO` (`STATUS`, `CARD_NO`, `DUE_DATE`, `OVD_DATE`) BLOCK_SIZE 16384,
+  KEY `IDX_STATUS_BILLDATE` (`STATUS`, `BILL_DATE`) BLOCK_SIZE 16384,
+  KEY `IDX_INSTALL_STATUS_PROD_OVD` (`STATUS`, `PRODUCT_ID`, `OVD_DATE`) BLOCK_SIZE 16384,
+  KEY `idx_s_cno_ddate_odate_pid` (`STATUS`, `CARD_NO`, `DUE_DATE`, `OVD_DATE`, `PRODUCT_ID`) BLOCK_SIZE 16384,
+  KEY `IDX_S_CNO_DDATE_ODATE_PID_TYPE` (`STATUS`, `CARD_NO`, `DUE_DATE`, `OVD_DATE`, `PRODUCT_ID`, `TYPE`) BLOCK_SIZE 16384,
+  KEY IDX_STATUS_BILLDATE_CARDNO (`STATUS`, `BILL_DATE`, `CARD_NO`) BLOCK_SIZE 16384
+);
+
+--real_sleep 5
+
+explain select         BILL_NO,         INSTALL_NUM,         CARD_NO,         PRIN,         PRIN_INT,         PRIN_PENALTY,         REPAY_PRIN,         REPAY_INT,         REPAY_PRIN_PENALTY,         OVD_PRIN,         OVD_INT,         REPAY_OVD_PRIN,         REPAY_OVD_INT,         FEE,         OVD_FEE,         FEE_PENALTY,         REPAY_FEE,         REPAY_OVD_FEE,         REPAY_FEE_PENALTY,         STATUS,         START_DATE,         DUE_DATE,         OVD_DATE,         INT_START_DATE,         OVD_DAYS,         BILL_DATE,         OUT_BILL_NO,         type,         PRODUCT_ID,         GMT_CREATED,         GMT_MODIFIED         from PCB_INSTALLMENT_00 WHERE                     BILL_DATE = '20171201' and STATUS='nor'                    and card_no > '5001001940150766'                      order by CARD_NO asc                 limit 0,1000;
+
+--disable_warnings
+drop table if exists wfsydp;
+--enable_warnings
+CREATE TABLE `wfsydp` (
+    `WSJJZH` char(12) NOT NULL COMMENT '基金账号',
+    `WSJYZH` char(17) NOT NULL COMMENT '交易账号',
+    `WSJJDM` char(6) NOT NULL COMMENT '基金代码',
+    `WSDRDM` char(3) NOT NULL COMMENT '代理人代码',
+    `WSWFSY` decimal(16,2) DEFAULT NULL COMMENT '未付收益',
+    `WSDRSY` decimal(16,2) DEFAULT NULL COMMENT '当日收益',
+    `WSJWSY` decimal(9,8) DEFAULT NULL COMMENT '截位收益',
+    `WSZHXG` date DEFAULT NULL COMMENT '最后修改日期',
+    `WSCYFE` decimal(16,2) DEFAULT NULL COMMENT '持有份额',
+    PRIMARY KEY (`WSJJDM`, `WSJJZH`, `WSDRDM`, `WSJYZH`),
+    KEY `WSJJDM` (`WSJJDM`, `WSJWSY`) GLOBAL,
+    KEY `WSJJDM_LOCAL` (`WSJJDM`, `WSJWSY`) LOCAL
+    ) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.0' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
+partition by key(`wsjjdm`, `wsjjzh`) partitions 31;
+
+explain select `WSJJDM`, `WSJWSY` from wfsydp where wsjjdm = '666888' order by `WSJJDM`, `WSJWSY` limit 0 , 181819;
+
+explain select /*+index(wfsydp wsjjdm_local)  */ SQL_CALC_FOUND_ROWS wsjjdm, wsjjzh, wsdrdm, wsjyzh, wsdrsy, wswfsy from wfsydp where wsjjdm = '666888' order by wsjjdm, wsjwsy desc limit 1;
+
+set @@recyclebin = 'off';
+drop database hualong;

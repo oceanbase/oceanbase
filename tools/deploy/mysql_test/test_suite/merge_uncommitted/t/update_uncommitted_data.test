@@ -1,0 +1,114 @@
+# owner: gengli.wzy
+# owner group: transaction
+# description: 本case是为了测试在含未提交事务的状态下，在执行update的操作下，多次minor merge的正确性
+
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+set GLOBAL ob_query_timeout = 1000000000000;
+set GLOBAL ob_trx_timeout = 1000000000000;
+
+connect (conn2,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn0,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+
+connection conn1;
+alter system set minor_compact_trigger = 10;
+
+connection conn1;
+--disable_warnings
+drop table if exists test_update_uncommitted_data;
+--enable_warnings
+
+#建表
+create table test_update_uncommitted_data(num int, str varchar(50), tag int);
+
+connection conn0;
+let $__tenant_id__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ tenant_id from oceanbase.__all_virtual_table where table_name= 'test_update_uncommitted_data', tenant_id, 1);
+let $__table_id__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ table_id from oceanbase.__all_virtual_table where table_name= 'test_update_uncommitted_data', table_id, 1);
+let $__svr_cnt__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ count(*) as c from oceanbase.__all_server, c, 1);
+
+connection conn1;
+#事务开始 插入数据
+begin;
+insert into test_update_uncommitted_data value(100, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(99, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(98, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(97, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(96, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(95, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(94, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(93, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(92, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(91, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(90, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(89, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(88, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(87, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(86, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(85, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(84, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(83, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(82, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(81, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(80, 'Hello OceanBase & Happy New Year', 1);
+
+connection conn1;
+alter system minor freeze;
+--source mysql_test/include/wait_minor_merge.inc
+
+connection conn1;
+#执行update操作
+update test_update_uncommitted_data set tag = num + tag where tag = 1;
+
+alter system minor freeze;
+--source mysql_test/include/wait_minor_merge.inc
+
+connection conn1;
+#再插入数据
+insert into test_update_uncommitted_data value(50, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(49, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(48, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(47, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(46, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(45, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(44, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(43, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(42, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(41, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(40, 'Hello OceanBase & Happy New Year', 1);
+
+alter system minor freeze;
+--source mysql_test/include/wait_minor_merge.inc
+
+# test mini minor merge
+let $__now_time__ = query_get_value(select now() as c, c, 1);
+alter system set minor_compact_trigger = 1;
+--source mysql_test/include/wait_mini_minor_merge_for_table.inc
+
+connection conn2;
+# 不同事务查询sstable未提交数据
+select * from test_update_uncommitted_data;
+
+connection conn1;
+#同一事务查询sstable未提交数据
+select * from test_update_uncommitted_data;
+
+connection conn1;
+update test_update_uncommitted_data set tag = num + tag where tag = 1;
+
+alter system minor freeze;
+--source mysql_test/include/wait_minor_merge.inc
+
+connection conn1;
+commit;
+#同一事务查sstable未提交数据(COMMIT)
+select * from test_update_uncommitted_data;
+
+#不同事务查询sstable未提交事务(COMMIT)
+connection conn2;
+select count(*) from test_update_uncommitted_data;
+
+drop table test_update_uncommitted_data;
+alter system set minor_compact_trigger = 2;

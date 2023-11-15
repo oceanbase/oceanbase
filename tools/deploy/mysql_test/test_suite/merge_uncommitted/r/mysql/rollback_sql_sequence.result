@@ -1,0 +1,172 @@
+set SESSION ob_query_timeout = 60 * 1000 * 1000;
+set SESSION ob_trx_timeout = 60 * 1000 * 1000;
+set SESSION ob_trx_idle_timeout = 60 * 1000 * 1000;
+set SESSION ob_query_timeout = 60 * 1000 * 1000;
+set SESSION ob_trx_timeout = 60 * 1000 * 1000;
+set SESSION ob_trx_idle_timeout = 60 * 1000 * 1000;
+alter system set minor_compact_trigger = 10;
+drop table if exists test_rollback_sql_sequence_t;
+create table test_rollback_sql_sequence_t(num int, str varchar(50), tag int);
+begin;
+insert into test_rollback_sql_sequence_t value(100, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_sql_sequence_t value(99, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_sql_sequence_t value(98, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_sql_sequence_t value(97, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_sql_sequence_t value(96, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_sql_sequence_t value(95, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_sql_sequence_t value(94, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_sql_sequence_t value(93, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_sql_sequence_t value(92, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_sql_sequence_t value(91, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_sql_sequence_t value(90, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_sql_sequence_t value(89, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_sql_sequence_t value(88, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_sql_sequence_t value(87, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_sql_sequence_t value(86, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_sql_sequence_t value(85, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_sql_sequence_t value(84, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_sql_sequence_t value(83, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_sql_sequence_t value(82, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_sql_sequence_t value(81, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_sql_sequence_t value(80, 'Hello OceanBase & Happy New Year', 1);
+SAVEPOINT p1;
+insert into test_rollback_sql_sequence_t value(5, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_sql_sequence_t value(4, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_sql_sequence_t value(3, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_sql_sequence_t value(2, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_sql_sequence_t value(1, 'Hello OceanBase & Happy New Year', 2);
+SAVEPOINT p2;
+update test_rollback_sql_sequence_t set tag = (num + tag) * 10;
+alter system set minor_compact_trigger = 1;
+select * from test_rollback_sql_sequence_t;
+num	str	tag
+100	Hello OceanBase & Happy New Year	1010
+99	Hello OceanBase & Happy New Year	1000
+98	Hello OceanBase & Happy New Year	990
+97	Hello OceanBase & Happy New Year	980
+96	Hello OceanBase & Happy New Year	970
+95	Hello OceanBase & Happy New Year	960
+94	Hello OceanBase & Happy New Year	950
+93	Hello OceanBase & Happy New Year	940
+92	Hello OceanBase & Happy New Year	930
+91	Hello OceanBase & Happy New Year	920
+90	Hello OceanBase & Happy New Year	910
+89	Hello OceanBase & Happy New Year	900
+88	Hello OceanBase & Happy New Year	890
+87	Hello OceanBase & Happy New Year	880
+86	Hello OceanBase & Happy New Year	870
+85	Hello OceanBase & Happy New Year	860
+84	Hello OceanBase & Happy New Year	850
+83	Hello OceanBase & Happy New Year	840
+82	Hello OceanBase & Happy New Year	830
+81	Hello OceanBase & Happy New Year	820
+80	Hello OceanBase & Happy New Year	810
+5	Hello OceanBase & Happy New Year	70
+4	Hello OceanBase & Happy New Year	60
+3	Hello OceanBase & Happy New Year	50
+2	Hello OceanBase & Happy New Year	40
+1	Hello OceanBase & Happy New Year	30
+ROLLBACK TO SAVEPOINT p2;
+select * from test_rollback_sql_sequence_t;
+num	str	tag
+100	Hello OceanBase & Happy New Year	1
+99	Hello OceanBase & Happy New Year	1
+98	Hello OceanBase & Happy New Year	1
+97	Hello OceanBase & Happy New Year	1
+96	Hello OceanBase & Happy New Year	1
+95	Hello OceanBase & Happy New Year	1
+94	Hello OceanBase & Happy New Year	1
+93	Hello OceanBase & Happy New Year	1
+92	Hello OceanBase & Happy New Year	1
+91	Hello OceanBase & Happy New Year	1
+90	Hello OceanBase & Happy New Year	1
+89	Hello OceanBase & Happy New Year	1
+88	Hello OceanBase & Happy New Year	1
+87	Hello OceanBase & Happy New Year	1
+86	Hello OceanBase & Happy New Year	1
+85	Hello OceanBase & Happy New Year	1
+84	Hello OceanBase & Happy New Year	1
+83	Hello OceanBase & Happy New Year	1
+82	Hello OceanBase & Happy New Year	1
+81	Hello OceanBase & Happy New Year	1
+80	Hello OceanBase & Happy New Year	1
+5	Hello OceanBase & Happy New Year	2
+4	Hello OceanBase & Happy New Year	2
+3	Hello OceanBase & Happy New Year	2
+2	Hello OceanBase & Happy New Year	2
+1	Hello OceanBase & Happy New Year	2
+ROLLBACK TO SAVEPOINT p1;
+select * from test_rollback_sql_sequence_t;
+num	str	tag
+100	Hello OceanBase & Happy New Year	1
+99	Hello OceanBase & Happy New Year	1
+98	Hello OceanBase & Happy New Year	1
+97	Hello OceanBase & Happy New Year	1
+96	Hello OceanBase & Happy New Year	1
+95	Hello OceanBase & Happy New Year	1
+94	Hello OceanBase & Happy New Year	1
+93	Hello OceanBase & Happy New Year	1
+92	Hello OceanBase & Happy New Year	1
+91	Hello OceanBase & Happy New Year	1
+90	Hello OceanBase & Happy New Year	1
+89	Hello OceanBase & Happy New Year	1
+88	Hello OceanBase & Happy New Year	1
+87	Hello OceanBase & Happy New Year	1
+86	Hello OceanBase & Happy New Year	1
+85	Hello OceanBase & Happy New Year	1
+84	Hello OceanBase & Happy New Year	1
+83	Hello OceanBase & Happy New Year	1
+82	Hello OceanBase & Happy New Year	1
+81	Hello OceanBase & Happy New Year	1
+80	Hello OceanBase & Happy New Year	1
+select * from test_rollback_sql_sequence_t;
+num	str	tag
+commit;
+select * from test_rollback_sql_sequence_t;
+num	str	tag
+100	Hello OceanBase & Happy New Year	1
+99	Hello OceanBase & Happy New Year	1
+98	Hello OceanBase & Happy New Year	1
+97	Hello OceanBase & Happy New Year	1
+96	Hello OceanBase & Happy New Year	1
+95	Hello OceanBase & Happy New Year	1
+94	Hello OceanBase & Happy New Year	1
+93	Hello OceanBase & Happy New Year	1
+92	Hello OceanBase & Happy New Year	1
+91	Hello OceanBase & Happy New Year	1
+90	Hello OceanBase & Happy New Year	1
+89	Hello OceanBase & Happy New Year	1
+88	Hello OceanBase & Happy New Year	1
+87	Hello OceanBase & Happy New Year	1
+86	Hello OceanBase & Happy New Year	1
+85	Hello OceanBase & Happy New Year	1
+84	Hello OceanBase & Happy New Year	1
+83	Hello OceanBase & Happy New Year	1
+82	Hello OceanBase & Happy New Year	1
+81	Hello OceanBase & Happy New Year	1
+80	Hello OceanBase & Happy New Year	1
+select * from test_rollback_sql_sequence_t;
+num	str	tag
+100	Hello OceanBase & Happy New Year	1
+99	Hello OceanBase & Happy New Year	1
+98	Hello OceanBase & Happy New Year	1
+97	Hello OceanBase & Happy New Year	1
+96	Hello OceanBase & Happy New Year	1
+95	Hello OceanBase & Happy New Year	1
+94	Hello OceanBase & Happy New Year	1
+93	Hello OceanBase & Happy New Year	1
+92	Hello OceanBase & Happy New Year	1
+91	Hello OceanBase & Happy New Year	1
+90	Hello OceanBase & Happy New Year	1
+89	Hello OceanBase & Happy New Year	1
+88	Hello OceanBase & Happy New Year	1
+87	Hello OceanBase & Happy New Year	1
+86	Hello OceanBase & Happy New Year	1
+85	Hello OceanBase & Happy New Year	1
+84	Hello OceanBase & Happy New Year	1
+83	Hello OceanBase & Happy New Year	1
+82	Hello OceanBase & Happy New Year	1
+81	Hello OceanBase & Happy New Year	1
+80	Hello OceanBase & Happy New Year	1
+drop table test_rollback_sql_sequence_t;
+alter system set minor_compact_trigger = 2;

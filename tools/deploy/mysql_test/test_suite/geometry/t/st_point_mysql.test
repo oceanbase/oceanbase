@@ -1,0 +1,51 @@
+#owner: ht353245
+#owner group: shenzhen
+--echo # ----------------------------------------------------------------------
+--echo # Base test of _ST_POINT.
+--echo # ----------------------------------------------------------------------
+--source mysql_test/test_suite/geometry/t/import_default_srs_data_mysql.inc
+
+  SELECT HEX(_ST_POINT(0, 0));
+  SELECT HEX(_ST_POINT('0', '0'));
+  SELECT HEX(_ST_POINT(NULL, NULL));
+  --error 1292
+  SELECT HEX(_ST_POINT('NULL', 'NULL'));
+  SELECT HEX(_ST_POINT(0, 0, 0));
+  SELECT HEX(_ST_POINT('0', '0', '0'));
+  SELECT HEX(_ST_POINT(NULL, NULL, NULL));
+  --error 1292
+  SELECT HEX(_ST_POINT('NULL', 'NULL', 'NULL'));
+  --error 1292
+  SELECT HEX(_ST_POINT(1, 1, 'NULL'));
+  SELECT HEX(_ST_POINT(1, 2, 4326));
+  SELECT HEX(_ST_POINT(1, 2, '4326'));
+  --error 3548
+  SELECT HEX(_ST_POINT(1, 2, 43267));
+
+  # bugfix: 
+  --error 1292
+  SELECT _ST_POINT('','');
+
+  # bugfix: 
+  --error 1292
+  SELECT HEX(_ST_POINT('ABC','CBA'));
+  --error 5083
+  SELECT HEX(_ST_POINT(true,false));
+  --error 5083
+  SELECT HEX(_ST_POINT(DATE('2000-11-11'),DATE('2000-11-11')));
+  # 超出数据范围是ob框架处理的，没办法兼容pg，pg会报错“超过双精度范围”
+  SELECT HEX(_ST_POINT(1E-324,1E-324));
+
+  # bugfix: 
+  --error 1292
+  SELECT HEX(_ST_POINT(11,22,'4326.123'));
+  --error 1292
+  SELECT HEX(_ST_POINT(11,22,'4326ABCD'));
+  --error 1292
+  SELECT HEX(_ST_POINT(11,22,'CBA4326ABCD'));
+  --error 1292
+  SELECT HEX(_ST_POINT(11,22,'false'));
+  --error 1292
+  SELECT HEX(_ST_POINT(11,22,''));
+  --error 5083
+  SELECT HEX(_ST_POINT(11,22,false));

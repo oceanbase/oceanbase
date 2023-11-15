@@ -1,0 +1,60 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#### owner: zuojiao.hzj
+#### owner group: sql3
+#### description: 测试NULL参与运算的一些case
+--disable_warnings
+drop table if exists t1,t2,t3,t4;
+--enable_warnings
+
+create table t1(pk1 int, pk2 int, pk3 int, extra int, primary key(pk1));
+
+insert into t1(pk1,pk2,pk3) values(1,1,1),(2,2,2);
+select * from t1;
+
+insert into t1 values(3,null,null,NULL);
+select * from t1;
+
+
+select * from t1 where extra = NULL;
+select * from t1 where extra != NULL;
+select * from t1 where extra is NULL;
+select * from t1 where extra is not NULL;
+select * from t1 where pk1 is NULL and pk2 is NULL and pk3 is NULL;
+select * from t1 where pk1 = NULL and pk3 = NULL and pk3 = NULL;
+select * from t1 where pk1 != NULL and pk2 != NULL and pk3 != NULL;
+select * from t1 where pk1 is not NULL and pk2 is not NULL and pk3 is not NULL;
+select * from t1 where pk1 in (NULL) and pk2 in (NULL) and pk3 in (NULL);
+select * from t1 where pk1 in (NULL,1) and pk2 in (NULL, 1);
+
+update t1 set extra=4 where pk1 = NULL and pk2 = NULL and pk3 = NULL;
+select * from t1;
+update t1 set extra=1 where pk1 is NULL;
+select * from t1;
+update t1 set extra=2 where pk1 is NULL and pk2 is NULL and pk3 is NULL;
+select * from t1;
+update t1 set extra=3 where pk1 is not NULL;
+select * from t1;
+update t1 set extra=4 where pk1 is not NULL and pk2 is not NULL and pk3 is not NULL;
+select * from t1;
+update t1 set extra=5 where pk1 != NULL;
+select * from t1;
+update t1 set extra=6 where pk1 != NULL and pk2 != NULL and pk3 != NULL;
+select * from t1;
+
+delete from t1 where pk1 != NULL;
+select * from t1;
+delete from t1 where pk1 != NULL and pk2 != NULL and pk3 != NULL;
+select * from t1;
+delete from t1 where pk1 = NULL and pk2 = NULL and pk3 = NULL;
+select * from t1;
+delete from t1 where pk1 is NULL;
+select * from t1;
+delete from t1 where pk1 is NULL and pk2 is NULL and pk3 is NULL;
+select * from t1;
+delete from t1 where pk1 is not NULL and pk2 is not NULL and pk3 is not NULL;
+select * from t1;
+delete from t1 where pk1 is not NULL;
+select * from t1;
+drop table t1;

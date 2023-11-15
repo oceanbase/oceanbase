@@ -1,0 +1,67 @@
+# owner: gengli.wzy
+# owner group: transaction
+# description: 本case是为了测试在Mini Merge时出现连续两行的sql_sequence相等
+
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+set GLOBAL ob_query_timeout = 1000000000000;
+set GLOBAL ob_trx_timeout = 10000000000000;
+set GLOBAL ob_trx_idle_timeout = 10000000000;
+
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn0,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+
+connection conn1;
+alter system set minor_compact_trigger = 10;
+sleep 2;
+
+connection conn1;
+--disable_warnings
+drop table if exists same_sql_sequence;
+--enable_warnings
+
+#建表
+create table same_sql_sequence(num int primary key, str varchar(50), tag int);
+create index index_num_tag on same_sql_sequence(tag);
+
+connection conn0;
+let $__table_id__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ table_id from oceanbase.__all_virtual_table where table_name= 't1', table_id, 1);
+
+connection conn1;
+#事务开始 插入数据
+begin;
+--disable_query_log
+
+let $i=0;
+while($i < 3) 
+{
+    eval insert into same_sql_sequence values($i + 1000, 'Hello OceanBase & Happy New Year', 0);
+    inc $i;
+}
+--enable_query_log
+
+connection conn0;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+--source mysql_test/include/wait_minor_merge.inc
+
+connection conn1;
+update same_sql_sequence set tag = 0, str = 'Hello OceanBase';
+sleep 10;
+
+# test minor merge
+connection conn0;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+--source mysql_test/include/wait_minor_merge.inc
+
+connection conn1;
+select /*+ index(same_sql_sequence index_num_tag) */ *from same_sql_sequence where tag = 0;
+commit;
+
+drop table same_sql_sequence;
+alter system set minor_compact_trigger = 2;

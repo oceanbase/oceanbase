@@ -1,0 +1,146 @@
+# owner: peihan.dph
+# owner group: sql2
+# tags: optimizer
+
+--disable_abort_on_error
+--result_format 4
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int, c2 int unsigned,
+    c3 tinyint, c4 tinyint unsigned,
+    c5 smallint, c6 smallint unsigned,
+    c7 mediumint, c8 mediumint unsigned,
+    c9 integer, c10 integer unsigned,
+    c11 bigint, c12 bigint unsigned,
+    c13 float, c14 float unsigned,
+    c15 double, c16 double unsigned,
+    c17 decimal, c18 decimal unsigned,
+    c19 datetime, c20 timestamp,
+    c21 varchar(30), c22 char(30));
+insert into t1 values(1, 2,
+    1, 2,
+    1, 2,
+    1, 2,
+    1, 2,
+    1, 2,
+    3.5, 4.5,
+    5.5, 6.5,
+    7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00',
+    '9.5', '10.5');
+
+--echo // Case1: normal test.测试各种类型组合, 跟不开新引擎开关进行对比
+alter system flush plan cache global;
+--explain_protocol 0
+set @@ob_enable_plan_cache = 0;
+let $cnt=22;
+let $left=1;
+while ($left <= $cnt)
+{
+  eval select coalesce(c$left, null) from t1;
+
+  let $right=1;
+  while ($right <= $cnt)
+  {
+    eval select coalesce(c$left, c$right, null) from t1;
+
+    eval select coalesce(c$right, c$left) from t1;
+
+    inc $right;
+  }
+  inc $left;
+}
+
+--echo // Case2: 带有0的测试
+--explain_protocol 0
+delete from t1;
+insert into t1 values(1, 0,
+    1, 0,
+    1, 0,
+    1, 0,
+    1, 0,
+    1, 0,
+    3.5, 0.0,
+    5.5, 0.0,
+    7.5, 0.0,
+    '2019-12-01 12:00:00', '0000-00-00 00:00:00'
+    '9.5', '000000000');
+alter system flush plan cache global;
+--explain_protocol 0
+set @@ob_enable_plan_cache = 0;
+let $cnt=22;
+let $left=1;
+while ($left <= $cnt)
+{
+  eval select coalesce(c$left, null) from t1;
+
+  let $right=1;
+  while ($right <= $cnt)
+  {
+    eval select coalesce(c$left, c$right, null) from t1;
+
+
+    inc $right;
+  }
+  inc $left;
+}
+
+--sleep 2
+
+--echo #for 
+--error 1051
+drop table t1_enum;
+create table t1_enum (a enum ('2015-09-11','2015-09-21'));
+SELECT * FROM t1_enum  WHERE COALESCE(a)=DATE('2015-09-11') AND COALESCE(a)='00:00:00';
+drop table t1_enum;
+
+--explain_protocol 0
+--echo ##bugfix: 
+--disable_warnings
+DROP TABLE IF EXISTS `table1_hash_abs_pk_parts_8_bigint`;
+--enable_warnings
+CREATE TABLE `table1_hash_abs_pk_parts_8_bigint` (
+  `col_bigint` bigint(20) DEFAULT NULL,
+  `col_char_20` char(20) DEFAULT NULL,
+  `col_timestamp_6` timestamp(6) NULL DEFAULT NULL,
+  `col_decimal_20_0` decimal(20,0) DEFAULT NULL,
+  `pk` bigint(20) NOT NULL,
+  PRIMARY KEY (`pk`)
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+ partition by hash(abs(pk))
+(partition p0,
+partition p1,
+partition p2,
+partition p3,
+partition p4,
+partition p5,
+partition p6,
+partition p7);
+INSERT INTO `table1_hash_abs_pk_parts_8_bigint` VALUES (NULL,NULL,NULL,NULL,0),(-24595,NULL,NULL,NULL,-29386),(NULL,NULL,NULL,8,-10),(NULL,NULL,NULL,7,2),(NULL,'0000',NULL,888888888,204),(NULL,'2',NULL,3,-30937),(-68,'ybhowb','2000-04-25 15:22:58.055028',22008,1),(0,'0000',NULL,NULL,10577),(NULL,NULL,'2017-06-14 17:00:00.000003',NULL,99),(NULL,NULL,'2021-06-14 11:55:00.000003',NULL,125),(-100,NULL,NULL,NULL,-99999);
+SELECT * FROM table1_hash_abs_pk_parts_8_bigint WHERE NOT col_timestamp_6 != CONCAT( CAST( 2015 + 3 + 3 AS CHAR(20) ) , '-06-19 01:00:00.000003') AND ( ( col_decimal_20_0 <> -10622 AND (  ( col_bigint NOT IN (ROUND( SIGN( LENGTH( TRIM( SUBSTR( HEX( TRIM( SUBSTR( CONCAT( CONCAT( SUBSTR( SUBSTR( 'lvmzy' , 1, 20) , 5 ) , SUBSTR( 'hlv' , 1, 20) ) , REPEAT( TRIM( SUBSTR( CONCAT(SUBSTR( 'chl' , 1, 20) , SUBSTR( 'jchlvm' , 1, 20) ) , 1 , 20 ) ) , 6 + 1 ) ) , 1 , 20 ) ) ) , 1 , 20 ) ) ) ) ) , -10293 , 0) ) )  ) OR ( col_decimal_20_0 <> -10622 OR ( col_bigint != -10622 AND  COALESCE( 10 , 99999 , 99999 ) <=> col_bigint ) AND ( col_bigint != -10622 OR ( COALESCE( col_timestamp_6 , col_timestamp_6 , col_timestamp_6 ) IS NULL ) IS NOT TRUE ) ) ) ORDER BY col_char_20 ASC , pk ASC LIMIT 5 , 1 /* RESULTSET_HAS_ZERO_OR_ONE_ROWS */;
+SELECT * FROM table1_hash_abs_pk_parts_8_bigint WHERE (COALESCE( col_timestamp_6 , col_timestamp_6 ))  AND  col_timestamp_6 = '2020-06-19 01:00:00.000003';
+drop table `table1_hash_abs_pk_parts_8_bigint`;
+
+##bugfix: 
+--disable_warnings
+DROP TABLE IF EXISTS `tbl_108`;
+--enable_warnings
+CREATE TABLE `tbl_108` (                                                                
+  `col_1623` text NOT NULL,                                                            
+  `col_1629` text DEFAULT NULL,                                                       
+  `col_1631` set('Alice','Bob','Charlie','David') NOT NULL DEFAULT 'Bob'          
+);
+UPDATE tbl_108 SET    col_1623 = Coalesce(col_1631, col_1629) ;
+UPDATE tbl_108 SET    col_1623 = Coalesce(col_1629, col_1631) ;
+drop table tbl_108;
+
+--disable_warnings
+DROP TABLE IF EXISTS t, tt;
+--enable_warnings
+create table t(c1 tinytext, c2 varchar(1000));
+insert into t values(null, '01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789');
+create table tt as select coalesce(c1, c2), coalesce(c2, c1) from t;
+select * from tt;
+drop table t, tt;

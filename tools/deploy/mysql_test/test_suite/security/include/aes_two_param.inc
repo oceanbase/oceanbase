@@ -1,0 +1,25 @@
+select 1 as flag from dual where aes_encrypt('abc', '&*!') = aes_encrypt('abc', '&*!'); 
+select hex(aes_encrypt('abcd', 'asd')) from dual; 
+select hex(aes_encrypt('asdiajsldkjasldjaljaskldjalskdjalskj', '123123jasldkjlkj1')) from dual; 
+select hex(aes_encrypt('lalalla', 'daskldalsdkaldk')) from dual; 
+select hex(aes_encrypt(12564765764343423423473,5754343243243243123)) from dual; 
+select hex(aes_encrypt('asdasd', '!%@#$')) from dual; 
+select hex(aes_encrypt('hahahaa', 'aklsjdlkajsdklajsdkllkjalsjdlakjsl')) from dual; 
+select hex(aes_encrypt('aklsdjalkjsdlkajsdklajsdlajsdlkajsdljkasldjkalsdjalskdjalksdjaklsjdlaksjdlaksjdlalskdjalsjkdalsjkdaklsdj', 'asdl;ajksdlaksdlasdlasdkl;asd;aklsd;alskd;aksd;aks;alsdkas;ldka;lksda;kls;')) from dual; 
+select aes_decrypt(aes_encrypt('abcd', 'asd'), 'asd') from dual; 
+select aes_decrypt(aes_encrypt('asdiajsldkjasldjaljaskldjalskdjalskj', '123123jasldkjlkj1'), '123123jasldkjlkj1') from dual; 
+select aes_decrypt(aes_encrypt('lalalla', 'daskldalsdkaldk'),'daskldalsdkaldk') from dual; 
+select aes_decrypt(aes_encrypt(12564765764343423423473,5754343243243243123), 5754343243243243123) from dual; 
+select aes_decrypt(aes_encrypt('asdasd', '!%@#$'), '!%@#$') from dual; 
+select aes_decrypt(aes_encrypt('hahahaa', 'aklsjdlkajsdklajsdkllkjalsjdlakjsl'), 'aklsjdlkajsdklajsdkllkjalsjdlakjsl') from dual; 
+select hex(aes_decrypt(aes_encrypt('aklsdjalkjsdlkajsdklajsdlajsdlkajsdljkasldjkalsdjalskdjalksdjaklsjdlaksjdlaksjdlalskdjalsjkdalsjkdaklsdj', 'asdl;ajksdlaksdl'), 'asdl;ajksdlaksdl')) from dual; 
+select hex(aes_decrypt(1, 2)) from dual; 
+select hex(aes_decrypt(1.2, 3.6)) from dual; 
+select hex(aes_decrypt('abc', 'dbc')) from dual;
+
+select hex(aes_encrypt('断剑重铸之时，英雄归来之日', 'asd')) from dual; 
+select hex(aes_encrypt('我用双手成就你的梦想', 'asd')) from dual; 
+select hex(aes_encrypt('没有什么好恐惧的，除了恐惧本身', 'asd')) from dual; 
+select aes_decrypt(aes_encrypt('断剑重铸之时，英雄归来之日', 'asd'), 'asd') from dual; 
+select aes_decrypt(aes_encrypt('我用双手成就你的梦想', 'asd'), 'asd') from dual; 
+select aes_decrypt(aes_encrypt('没有什么好恐惧的, 除了恐惧本身', 'asd'), 'asd') from dual;

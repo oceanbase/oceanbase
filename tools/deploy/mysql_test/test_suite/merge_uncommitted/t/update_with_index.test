@@ -1,0 +1,92 @@
+# owner: lixia.yq
+# owner group: storage
+# description:This case is to test the correctness of the savepoint rollback in a table with index 
+
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+set GLOBAL ob_query_timeout = 1000000000000;
+set GLOBAL ob_trx_timeout = 10000000000000;
+set GLOBAL ob_trx_idle_timeout = 10000000000;
+
+connect (conn2,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn0,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+
+connection conn1;
+alter system set minor_compact_trigger = 1;
+sleep 2;
+
+connection conn1;
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+connection conn1;
+create table t1(c1 int, c2 int, c3 varchar(100), v1 varchar(1000), v2 varchar(1000), r1 int, r2 int, primary key(c1, c2, c3));
+create index idx1 on t1(c1,c2,c3,r2,r1) storing(v1) LOCAL;
+
+connection conn0;
+let $__table_id__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ table_id from oceanbase.__all_virtual_table where table_name= 't1', table_id, 1);
+let $__svr_cnt__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ count(*) as c from oceanbase.__all_server, c, 1);
+connection conn1;
+#insert
+--disable_query_log
+
+begin;
+insert into t1 values(1, 1, "c300000000000001", "v100000000000000000001", "v200000000000000000001", 1, 1);
+insert into t1 values(2, 2, "c300000000000002", "v100000000000000000002", "v200000000000000000002", 2, 2);
+
+connection conn0;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+--source mysql_test/include/wait_minor_merge.inc
+
+
+connection conn1;
+select /*+ INDEX(t1 idx1)*/c1, c2, c3, r1, r2, v1 from t1;
+
+update t1 set v1 = "11111111111" where c1 = 1 and c2 = 1;
+
+select /*+ INDEX(t1 idx1)*/c1, c2, c3, r1, r2, v1 from t1;
+
+connection conn0;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+--source mysql_test/include/wait_minor_merge.inc
+
+connection conn1;
+SAVEPOINT p1;
+
+delete from t1 where c2 = 1;
+select /*+ INDEX(t1 idx1)*/c1, c2, c3, r1, r2, v1 from t1;
+
+insert into t1(c1, c2, c3, v1) values(1, 1, "c300000000000001", "v19999999");
+
+connection conn0;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+--source mysql_test/include/wait_minor_merge.inc
+
+connection conn1;
+ROLLBACK TO SAVEPOINT p1;
+update t1 set r2 = 77 where c1 = 1 and c2 = 1;
+
+connection conn0;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+--source mysql_test/include/wait_minor_merge.inc
+
+connection conn1;
+commit;
+
+select /*+ INDEX(t1 idx1)*/c1, c2, c3, r1, r2, v1 from t1;
+select * from t1;
+
+drop table t1;
+alter system set minor_compact_trigger = 2;

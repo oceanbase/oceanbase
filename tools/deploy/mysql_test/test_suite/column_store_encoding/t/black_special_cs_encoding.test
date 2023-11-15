@@ -1,0 +1,68 @@
+# owner: fenggu.yh
+# description: test for black filter pushdown correctness in column_store encoding
+
+--disable_query_log
+set global ob_sql_work_area_percentage=80;
+disconnect default;
+sleep 1;
+connect (default,$OBMYSQL_MS0,admin@mysql,admin,test,$OBMYSQL_PORT);
+set @@recyclebin = off;
+set ob_query_timeout=1000000000;
+set ob_trx_timeout=1000000000;
+
+--disable_warnings
+drop table if exists t_black;
+--enable_warnings
+
+create table t_black(a int primary key, b int, c date, d text, e text, f text) row_format = compressed block_size = 2048 with column group for all columns, each column;
+--let $count = 1
+while($count < 101)
+{
+  --let $stmt=insert into t_black(a,b,c,d,e,f) values ($count,$count,'2022-03-10','AAAAAAAAAAAAA', '', 'http://ck.compressed?filmId=REVENGERS');
+  eval $stmt;
+  inc $count;
+}
+while($count < 151)
+{
+  --let $stmt=insert into t_black(a,b,c,d,e,f) values ($count,NULL,'2022-03-11',NULL, 'A1', 'http://ck.compressed?filmId=TTKKYY');
+  eval $stmt;
+  inc $count;
+}
+while($count < 201)
+{
+  --let $stmt=insert into t_black(a,b,c,d,e,f) values ($count,NULL,'2022-03-11',NULL, 'B1', 'http://ck.compressed?filmId=PPCCII');
+  eval $stmt;
+  inc $count;
+}
+while($count < 251)
+{
+  --let $stmt=insert into t_black(a,b,c,d,e,f) values ($count,NULL,'2022-03-11',NULL, 'C1', 'http://ck.compressed?filmId=LLPPRR');
+  eval $stmt;
+  inc $count;
+}
+while($count < 301)
+{
+  --let $stmt=insert into t_black(a,b,c,d,e,f) values ($count,NULL,'2022-03-11',NULL, 'Mill', 'http://ck.compressed?filmId=TOMORROW');
+  eval $stmt;
+  inc $count;
+}
+select count(1) from t_black;
+select count(*) from t_black where d like '%AAA%';
+select count(*) from t_black where b/2 > 5;
+select count(*) from t_black where b/2 > 5 and b/3 < 7;
+select a, e, f, count(*) as cnt from t_black where f like '%REVENGE%' and e <> '' group by e order by cnt;
+
+--disable_query_log
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection obsys;
+--enable_query_log
+
+alter system major freeze tenant all;
+--source mysql_test/include/wait_daily_merge.inc
+
+drop table t_black;
+
+--disable_query_log
+set global ob_sql_work_area_percentage=5;
+set @@recyclebin = on;
+--enable_query_log

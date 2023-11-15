@@ -1,0 +1,17 @@
+drop table if exists test;
+create table test(a int primary key,b int,c int);
+insert into test values(1,4,null);
+insert into test values(3,3,null);
+insert into test values(4,3,null);
+select avg(distinct(a)),avg(a),avg(b) from test;
+avg(distinct(a))	avg(a)	avg(b)
+2.6667	2.6667	3.3333
+select avg(distinct(b)),avg(b),avg(c) from test;
+avg(distinct(b))	avg(b)	avg(c)
+3.5000	3.3333	NULL
+select avg(c),avg(b),avg(distinct(b)) from test;
+avg(c)	avg(b)	avg(distinct(b))
+NULL	3.3333	3.5000
+select avg(c),avg(b),avg(b) from test;
+avg(c)	avg(b)	avg(b)
+NULL	3.3333	3.3333

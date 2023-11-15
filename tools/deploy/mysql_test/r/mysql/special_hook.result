@@ -1,0 +1,38 @@
+select @@version_comment limit 1;
+@@version_comment
+ob_version_info
+SELECT @@session.auto_increment_increment;
+@@session.auto_increment_increment
+1
+SHOW COLLATION;
+Collation	Charset	Id	Default	Compiled	Sortlen
+utf8mb4_general_ci	utf8mb4	45	Yes	Yes	1
+utf8mb4_bin	utf8mb4	46		Yes	1
+binary	binary	63	Yes	Yes	1
+gbk_chinese_ci	gbk	28	Yes	Yes	1
+gbk_bin	gbk	87		Yes	1
+utf16_general_ci	utf16	54	Yes	Yes	1
+utf16_bin	utf16	55		Yes	1
+utf8mb4_unicode_ci	utf8mb4	224		Yes	1
+utf16_unicode_ci	utf16	101		Yes	1
+gb18030_chinese_ci	gb18030	248	Yes	Yes	1
+gb18030_bin	gb18030	249		Yes	1
+latin1_swedish_ci	latin1	8	Yes	Yes	1
+latin1_bin	latin1	47		Yes	1
+gb18030_2022_bin	gb18030_2022	216		Yes	1
+gb18030_2022_chinese_ci	gb18030_2022	217	Yes	Yes	1
+gb18030_2022_chinese_cs	gb18030_2022	218		Yes	1
+gb18030_2022_radical_ci	gb18030_2022	219		Yes	1
+gb18030_2022_radical_cs	gb18030_2022	220		Yes	1
+gb18030_2022_stroke_ci	gb18030_2022	221		Yes	1
+gb18030_2022_stroke_cs	gb18030_2022	222		Yes	1
+SHOW CHARACTER SET;
+Charset	Description	Default collation	Maxlen
+binary	Binary pseudo charset	binary	1
+utf8mb4	UTF-8 Unicode	utf8mb4_general_ci	4
+gbk	GBK charset	gbk_chinese_ci	2
+utf16	UTF-16 Unicode	utf16_general_ci	2
+gb18030	GB18030 charset	gb18030_chinese_ci	4
+latin1	cp1252 West European	latin1_swedish_ci	1
+gb18030_2022	GB18030-2022 charset	gb18030_2022_chinese_ci	4
+SET NAMES latin1;

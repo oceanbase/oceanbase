@@ -1,0 +1,59 @@
+set ob_enable_index_direct_select=1;
+alter system set merger_check_interval = '10s' tenant sys;
+alter system set merger_check_interval = '10s' tenant all_user;
+alter system set merger_check_interval = '10s' tenant all_meta;
+drop table if exists t1;
+create table t1(pk int primary key, c1 int);
+create index idx on t1(c1);
+insert into t1 values(6,6),(7,7),(8,8);
+set autocommit=0;
+set autocommit=0;
+insert into t1 values(1,1);
+insert into t1 values(1,11);
+commit;
+ERROR 23000: Duplicate entry '1' for key 'PRIMARY'
+commit;
+select * from t1;
+pk	c1
+1	1
+6	6
+7	7
+8	8
+insert into t1 values(2,2);
+replace into t1 values(2,12);
+commit;
+commit;
+select * from t1;
+pk	c1
+1	1
+2	12
+6	6
+7	7
+8	8
+replace into t1 values(3,3);
+insert into t1 values(3,13);
+commit;
+ERROR 23000: Duplicate entry '3' for key 'PRIMARY'
+commit;
+select * from t1;
+pk	c1
+1	1
+2	12
+3	3
+6	6
+7	7
+8	8
+replace into t1 values(4,4);
+replace into t1 values(4,14);
+commit;
+commit;
+select * from t1;
+pk	c1
+1	1
+2	12
+3	3
+4	14
+6	6
+7	7
+8	8
+drop table t1;

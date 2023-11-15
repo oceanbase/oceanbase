@@ -1,0 +1,80 @@
+#owner: luofan.zp
+#owner group: sql2
+#tags: optimizer
+
+--disable_abort_on_error
+--result_format 4
+--explain_protocol 0
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection conn_admin;
+--sleep 2
+
+set @@ob_enable_plan_cache = 0;
+#set @@ob_log_level='debug';
+
+--disable_warnings
+drop table if exists t1, t2;
+--enable_warnings
+
+create table t1 (c1 int, c2 int unsigned, 
+    c3 tinyint, c4 tinyint unsigned,
+    c5 smallint, c6 smallint unsigned,
+    c7 mediumint, c8 mediumint unsigned,
+    c9 integer, c10 integer unsigned,
+    c11 bigint, c12 bigint unsigned,
+    c13 float, c14 float unsigned, 
+    c15 double, c16 double unsigned, 
+    c17 decimal, c18 decimal unsigned, 
+    c19 datetime, c20 timestamp, 
+    c21 varchar(30), c22 char(30), c_null int);
+    
+insert into t1 values(1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    3.5, 4.5, 
+    5.5, 6.5,
+    7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+    '9.5', '10.5', null);
+insert into t1 values(-1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -3.5, 4.5, 
+    -5.5, 6.5,
+    -7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+    '-9.5', '10.5', null);
+create table t2(col_int int, col_utf8 varchar(100) charset utf8, 
+                col_utf16 varchar(100) charset utf16,
+                col_gbk varchar(100) charset gbk);
+insert into t2 values(1, 'a', 'a', 'a');
+insert into t2 values(-1, '中国', '中文', '中文');
+insert into t2 values(256, ' 中国', ' 中文', '中文');
+
+--sleep 2
+
+#--explain_protocol 2
+select ascii(c_null) from t1;
+select ord(c_null) from t1;
+
+let $cnt=22;
+let $left=1;
+while ($left <= $cnt)
+{
+  eval select c$left, ascii(c$left), ord(c$left) from t1;
+  inc $left;
+}
+
+select col_int, ascii(col_int), ord(col_int) from t2;
+select col_utf8, ascii(col_utf8), ord(col_utf8) from t2;
+select col_utf16, ascii(col_utf16), ord(col_utf16) from t2;
+select col_gbk, ascii(col_gbk), ord(col_gbk) from t2;
+
+--sleep 2

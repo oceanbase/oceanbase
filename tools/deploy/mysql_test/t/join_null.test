@@ -1,0 +1,37 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: peihan.dph
+# owner group: SQL1
+# description
+#
+--disable_warnings
+drop table if exists t1,t2,t5,t6;
+--enable_warnings
+#
+##
+## bug http://bugfree.corp.taobao.com/bug/199785
+## join with null values
+##
+CREATE TABLE t1 (
+  pk int primary key,
+  id int,
+  gender varchar(1)
+);
+CREATE TABLE t2 (
+  user_id int primary key,
+  birthday datetime
+);
+
+insert into t1 values (1, NULL, 'M'), (2, 1, 'M'), (3, 2, 'F'),(4, 3, 'F'),(5, 4, 'F'),(6, 5, 'M');
+insert into t2 values (1, '2002-06-09 00:00:00'),(2, '2002-06-09 00:00:00'),(100, '2002-06-09 00:00:00'),
+(3, '2002-06-09 00:00:00'),(4, '2002-06-09 00:00:00');
+
+select  id,gender,user_id from  t1,t2  where t2.user_id=t1.id;
+####test for null safe equal with join....
+create table t5(a int);
+create table t6(a int);
+insert into t5 values (null), (null);
+insert into t6 values (null), (null);
+select * from t5, t6 where t5.a <=> t6.a;
+drop table t1,t2,t5,t6;

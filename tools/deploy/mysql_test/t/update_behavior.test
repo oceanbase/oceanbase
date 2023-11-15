@@ -1,0 +1,56 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: kaizhan.dkz
+#owner group: sql1
+#tags: update
+#description:
+
+--disable_abort_on_error
+--disable_warnings
+sleep 2;
+drop database if exists db1;
+create database if not exists db1;
+use db1;
+--disable_warnings
+drop table if exists test;
+--enable_warnings
+create table test(c1 int primary key, c2 int, c3 int);
+insert into test values(1,1,1);
+insert into test values(2,2,2);
+
+set @@global.ob_enable_plan_cache= 0;
+connect (conn,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+use db1;
+update test set c2=c1+c2, c3=c2+c1;
+let $value = query_get_value(select c2 from test where c1 = 1, c2, 1);
+if ($value == 2)
+{
+  --echo succeed
+}
+let $value = query_get_value(select c3 from test where c1 = 1, c3, 1);
+if ($value == 3)
+{
+  --echo succeed
+}
+select * from test;
+#set @@global.sql_mode = "STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION, STANDARD_ASSIGNMENT";
+#
+#connect (conn2,$OBMYSQL_MS0,root@sys,,*NO-ONE*,$OBMYSQL_PORT);
+#use db1;
+#update test set c2=c1+c2, c3=c2+c1;
+#let $value = query_get_value(select c2 from test where c1 = 1, c2, 1);
+#if ($value == 3)
+#{
+#  --echo succeed
+#}
+#let $value = query_get_value(select c3 from test where c1 = 1, c3, 1);
+#if ($value == 3)
+#{
+#  --echo succeed
+#}
+#select * from test;
+#set @@global.sql_mode = "STRICT_TRANS_TABLES";
+set @@global.ob_enable_plan_cache= 1;
+drop table test;
+drop database db1;

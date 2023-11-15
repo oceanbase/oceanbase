@@ -1,0 +1,16 @@
+case 1: commit
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+drop table if exists t1;
+create table t1 (c1 int primary key, c2 varchar(1024));
+set autocommit=0;
+insert into t1 values (1, '中国');
+select * from t1 where c1 = 1 for update;
+c1	c2
+1	中国
+commit;
+set autocommit=1;
+select * from t1;
+c1	c2
+1	中国

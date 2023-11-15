@@ -1,0 +1,126 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: bin.lb
+#owner group: sql1
+#tags: optimizer
+#description:
+
+##
+# test index union
+##
+--disable_query_log
+--disable_abort_on_error
+--disable_warnings
+--source mysql_test/include/index_quick_major.inc
+--real_sleep 1
+--disable_warnings
+drop table if exists t1,t2;
+--enable_warnings
+
+create table t1 (pk1 int,pk2 varchar(124),pk3  timestamp(6) default "2012-01-01 12:00:00", c1 int,c2 varchar(1024),c3  timestamp(6) default "2012-01-01 12:00:00",c4 int,c5 int,c6 int,primary key(pk1,pk2,pk3));
+--disable_query_log
+create index i1 on t1(c1);
+create index i2 on t1(c1,c2);
+create index i3 on t1(c1,c2,c3);
+create index i4 on t1(c4,c5,c6);
+
+create table t2 (pk1 int primary key, c1 int not null,c2 varchar(1024) not null,c3  timestamp(6) default "2012-01-01 12:00:00",c4 int,c5 int,c6 int);
+--disable_query_log
+create index i11 on t2(c1) storing(c2);
+create index i12 on t2(c4,c5) storing(c3);
+
+--source mysql_test/include/check_all_idx_ok.inc
+
+--disable_query_log
+insert into t1 values
+(1, 'primarykey1', '2013-12-11 01:01:01',44,'column11','2013-12-11 11:11:11',4,2,3),
+(2, 'primarykey2', '2013-12-11 01:01:02',33,'column21','2013-12-11 11:11:12',3,1,3),
+(3, 'primarykey3', '2013-12-11 01:01:03',22,'column32','2013-12-11 11:11:13',2,1,2),
+(4, 'primarykey4', '2013-12-11 01:01:04',11,'column42','2013-12-11 11:11:14',1,3,2);
+
+insert into t2 values
+(1,44,'column11','2013-12-11 11:11:11',4,2,3),
+(2,10,'column21','2013-12-11 11:11:12',3,1,2),
+(3,22,'column32','2013-12-11 11:11:13',2,0,1),
+(4,11,'column43','2013-12-11 11:11:14',1,-1,0),
+(5,33,'column54','2013-12-11 11:11:15',0,-2,-1),
+(6,33,'column65','2013-12-11 11:11:16',3,0,3);
+
+--enable_query_log
+
+##############one table union #############
+#all use index
+--sorted_result
+(select /*+index(t1 i1) */ pk1,c1 from t1 where c1<30 order by c1) union all (select /*+index(t1 i1) */ pk1,c1 from t1 where c1 > 10 order by c1);
+select * from ((select /*+index(t1 i1) */ pk1,c1 from t1 where c1<30 order by c1) union all (select /*+index(t1 i1) */ pk1,c1 from t2 where c1 > 10 order by c1) ) a order by pk1, a.c1;
+--sorted_result
+(select /*+index(t1 i1) */ pk1,c1 from t1 where c1<30 order by c1) union  (select /*+index(t1 i1) */ pk1,c1 from t1 where c1 > 10 order by c1);
+--sorted_result
+(select /*+index(t1 i1) */ pk1,c1 from t1 where c1<30 order by c1) except (select /*+index(t1 i1) */ pk1,c1 from t1 where c1 > 10 order by c1);
+--sorted_result
+(select /*+index(t1 i1) */ pk1,c1 from t1 where c1<30 order by c1) intersect (select /*+index(t1 i1) */ pk1,c1 from t1 where c1 > 10 order by c1);
+
+--sorted_result
+(select c1,c2,c3 from t1 where c1=11 order by c2) union (select c1,c2,c3 from t1 where c1=22 and c2 like 'column3_' order by c1) union distinct select c1,c2,c3 from t1 where c1>22 and c2 is not null and c3>='2013-12-11 11:11:11' union all (select c1,c2,c3 from t1 where c4<2 and c5>1 and c6=3 order by c4) except  (select c1,c2,c3 from t1 where c3 <= '2013-12-11 11:11:11' order by c3);
+
+--sorted_result
+select * from ((select * from t1 where c1=44) union (select * from t1 where c1=33 and c2 like 'column%') union all (select * from t1 where c4>2 and c5<3 and c6 != 2)) as a;
+--sorted_result
+select * from ((select * from t1 where c1=44) union all (select * from t1 where c1=33 and c2 like 'column%') except (select * from t1 where c4>2 and c5<3 and c6 != 2)) as a;
+--sorted_result
+select * from ((select * from t1 where c1=44) intersect (select * from t1 where c1=33 and c2 like 'column%') union all (select * from t1 where c4>2 and c5<3 and c6 != 2)) as a;
+
+--sorted_result
+(select c1,c4 from t1 where c1 in (33,11) order by c1) union all select c1,c4 from t1 where c1=44;
+--sorted_result
+(select c1,c4 from t1 where c1 in (1,44) order by c1)  union all (select c1,c4 from t1 where c1 in (33,11) order by c1);
+--sorted_result
+(select c1,c4 from t1 where c1 in (1,44) order by c1)  union all (select c1,c4 from t1 where c1 =33 order by c4);
+# TODO(@linsheng): BUG
+# (select c1,c4 from t1 where c1 in (1,44) order by c1)  union (select c1,c4 from t1 where c1 =33 order by c4);
+# (select c1,c4 from t1 where c1 in (1,44) order by c4)  union (select c1,c4 from t1 where c1 =33 order by c4);
+# (select c1,c4 from t1 where c1 in (1,44) order by c1)  except (select c1,c4 from t1 where c1 =33 order by c4);
+# (select c1,c4 from t1 where c1 in (1,44) order by c4)   intersect  (select c1,c4 from t1 where c1 =33 order by c4);
+--sorted_result
+select c1,c4 from t1 where c1=44 union (select c1,c4 from t1 where c1 not in (33,11) order by c1);
+--sorted_result
+(select c1,c4 from t1 where c1 not in (33,11) order by c1) except select c1,c4 from t1 where c1=44;
+--sorted_result
+(select c1,c4 from t1 where c1 not in (33,11) order by c1) intersect select c1,c4 from t1 where c1=44;
+
+
+(select c4,c5,c6 from t1 order by c1 limit 2)  union all (select c4,c5,c6 from t1 order by c4 limit 1) order by c4 desc;
+(select c4,c5,c6 from t1 order by c4 limit 2)  union (select c4,c5,c6 from t1 order by c4 limit 1) order by c4 desc;
+(select c4,c5,c6 from t1 order by c2 limit 2)  except (select c4,c5,c6 from t1 order by c4 limit 1) order by c4 desc;
+(select c4,c5,c6 from t1  order by c4 limit 2)  intersect (select c4,c5,c6 from t1 order by c4 limit 1) order by c4 desc;
+
+################ multi table union #############
+#all use index
+--sorted_result
+select /*+index(t1 i1)*/ pk1,c1 from t1 union select /*+index(t2 i11)*/ pk1,c1 from t2;
+--sorted_result
+select /*+index(t1 i1)*/ pk1,c1 from t1 union all select /*+index(t2 i11)*/ pk1,c1 from t2;
+--sorted_result
+select /*+index(t1 i1)*/ pk1,c1 from t1 except select /*+index(t2 i11)*/ pk1,c1 from t2;
+--sorted_result
+select /*+index(t1 i1)*/ pk1,c1 from t1 intersect select /*+index(t2 i11)*/ pk1,c1 from t2;
+
+--sorted_result
+(select t1.c1,t2.c4 from t1,t2 where t1.c1=t2.c1 order by t1.c1) union (select c1,c4 from t2 where c1=44 order by c1);
+--sorted_result
+(select c1,c4 from t2 where c1=44 order by c1) union (select t1.c1,t2.c4 from t1,t2 where t1.c1=t2.c1 order by t1.c1);
+--sorted_result
+(select t1.c1,t2.c4 from t1,t2 where t1.c1=t2.c1 order by t2.c1) union all (select c1,c4 from t2 where c1=44 order by c1);
+--sorted_result
+(select t1.c1,t2.c4 from t1,t2 where t1.c1=t2.c1 order by t1.c1) except (select c1,c4 from t2 where c1=44 order by c2);
+--sorted_result
+(select t1.c1,t2.c4 from t1,t2 where t1.c1=t2.c1 order by t2.c1) intersect (select c1,c4 from t2 where c1=44 order by c1);
+
+###use two order by in from sql
+select * from (select * from t1 where pk1 in(1,2,3,4,5,6)) a order by pk2;
+select * from (select * from t1 where pk1 in(1,2,3,4,5,6) order by pk1) a order by pk2;
+select * from (select * from t1 where pk1 in(1,2,3,4,5,6) order by pk1) a order by pk1;
+select * from (select * from t1 where pk1 in(1,2,3,4,5,6) order by pk1) a  where a.c2>='abc' order by pk1;
+select * from (select * from t1 where pk1 in(1,2,3,4,5,6) order by pk1) a  where a.c2>='abc' order by pk2;
+--enable_abort_on_error

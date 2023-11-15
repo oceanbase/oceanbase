@@ -1,0 +1,73 @@
+drop table if exists t1;
+CREATE TABLE t1
+(
+pk1 INT primary key,
+key1 INT,
+key2 VARCHAR(20),
+key3 VARCHAR(20)
+);
+insert into t1 values(1,12,'a','a1'),(2,11,'a','b1'),(3,10,'b','b1'),(4,9,'c','c1'),
+(5,8,NULL,'d1'),(6,7,NULL,'b1'),(7,6,NULL,'b1'),
+(8,5,'a',NULL),(9,4,'a',NULL),(10,3,NULL,NULL),
+(11,2,'',NULL),(12,1,NULL,'');
+create index i1 on t1(key2,key3);
+select * from t1 where key2='a' and key3=NULL;
+pk1	key1	key2	key3
+select pk1 from t1 where key2='a' and key3=NULL;
+pk1
+select * from t1 where key2='a' and key3>NULL;
+pk1	key1	key2	key3
+select pk1 from t1 where key2='a' and key3>NULL;
+pk1
+select * from t1 where key2='a' and key3<NULL;
+pk1	key1	key2	key3
+select pk1 from t1 where key2='a' and key3<NULL;
+pk1
+select * from t1 where key2='a' and key3>=NULL;
+pk1	key1	key2	key3
+select pk1 from t1 where key2='a' and key3>=NULL;
+pk1
+select * from t1 where key2='a' and key3<=NULL;
+pk1	key1	key2	key3
+select pk1 from t1 where key2='a' and key3<=NULL;
+pk1
+select * from t1 where key2=NULL and key3='b1';
+pk1	key1	key2	key3
+select pk1 from t1 where key2=NULL and key3='b1';
+pk1
+select * from t1 where key2>NULL and key3='b1';
+pk1	key1	key2	key3
+select pk1 from t1 where key2>NULL and key3='b1';
+pk1
+select * from t1 where key2<NULL and key3='b1';
+pk1	key1	key2	key3
+select pk1 from t1 where key2<NULL and key3='b1';
+pk1
+select * from t1 where key2>=NULL and key3='b1';
+pk1	key1	key2	key3
+select pk1 from t1 where key2>=NULL and key3='b1';
+pk1
+select * from t1 where key2<=NULL and key3='b1';
+pk1	key1	key2	key3
+select pk1 from t1 where key2<=NULL and key3='b1';
+pk1
+select * from t1 where key2=NULL and key3=NULL;
+pk1	key1	key2	key3
+select pk1 from t1 where key2=NULL and key3=NULL;
+pk1
+select * from t1 where key2=NULL and key3<NULL;
+pk1	key1	key2	key3
+select pk1 from t1 where key2=NULL and key3<NULL;
+pk1
+select * from t1 where key2=NULL and key3>NULL;
+pk1	key1	key2	key3
+select pk1 from t1 where key2=NULL and key3>NULL;
+pk1
+select * from t1 where key2=NULL and key3<=NULL;
+pk1	key1	key2	key3
+select pk1 from t1 where key2=NULL and key3<=NULL;
+pk1
+select * from t1 where key2=NULL and key3>=NULL;
+pk1	key1	key2	key3
+select pk1 from t1 where key2=NULL and key3>=NULL;
+pk1

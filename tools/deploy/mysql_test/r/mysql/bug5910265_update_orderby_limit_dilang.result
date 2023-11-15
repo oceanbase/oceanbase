@@ -1,0 +1,29 @@
+drop table if exists t1;
+create table t1(a bigint primary key , b bigint);
+insert into t1 values(1,1),(2,2);
+update t1 set b=100  WHERE ( a = 1 ) OR  (( b = 3 ) AND  ( a = 2 )) order by a desc limit 1;
+select * from t1;
+a	b
+1	100
+2	2
+update t1 set b=200  WHERE ( a = 1 ) OR  (( b = 3 ) AND  ( a = 2 )) order by a desc;
+select * from t1;
+a	b
+1	200
+2	2
+update t1 set b=300  WHERE ( a = 1 ) OR  (( b = 3 ) AND  ( a = 2 )) order by a limit 1;
+select * from t1;
+a	b
+1	300
+2	2
+drop table if exists t1;
+create table t1(a bigint primary key , b bigint);
+insert into t1 values(1,1),(2,2);
+delete from t1 WHERE ( a = 1 ) OR (( b = 3 ) AND ( a = 2 )) order by a desc limit 1;
+select * from t1;
+a	b
+2	2
+delete from t1 WHERE ( a = 1 ) OR (( b = 3 ) AND ( a = 2 )) order by a desc;
+select * from t1;
+a	b
+2	2

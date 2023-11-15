@@ -1,0 +1,76 @@
+drop table if exists persons,orders, t1, t2, t3;
+create table persons (id_p int primary key, lastname varchar(20), firstname varchar(20), address varchar(20), city varchar(20));
+insert into persons values(1,'a','a1','a2', 'a3');
+insert into persons values(2,'b','b1','b2', 'b3');
+insert into persons values(3,'c','c1','c2', 'c3');
+create table orders(id_o int primary key, orderno int, id_p int);
+insert into orders values(1,1111,3);
+insert into orders values(2,2222,3);
+insert into orders values(3,3333,1);
+insert into orders values(4,4444,1);
+insert into orders values(5,5555,65);
+select persons.lastname, persons.firstname, orders.orderno from persons left join orders on persons.id_p=orders.id_p order by persons.lastname, persons.firstname, orders.orderno;
+lastname	firstname	orderno
+a	a1	3333
+a	a1	4444
+b	b1	NULL
+c	c1	1111
+c	c1	2222
+select persons.lastname, persons.firstname, orders.orderno from persons right join orders on persons.id_p=orders.id_p order by persons.lastname, persons.firstname, orders.orderno;
+lastname	firstname	orderno
+NULL	NULL	5555
+a	a1	3333
+a	a1	4444
+c	c1	1111
+c	c1	2222
+select persons.lastname, persons.firstname, orders.orderno
+from persons
+inner join orders
+on persons.id_p=orders.id_p
+order by persons.lastname, persons.firstname, orders.orderno;
+lastname	firstname	orderno
+a	a1	3333
+a	a1	4444
+c	c1	1111
+c	c1	2222
+select persons.lastname, persons.firstname, orders.orderno from persons full join orders on persons.id_p=orders.id_p order by persons.lastname, persons.firstname, orders.orderno;
+lastname	firstname	orderno
+NULL	NULL	5555
+a	a1	3333
+a	a1	4444
+b	b1	NULL
+c	c1	1111
+c	c1	2222
+create table t1(c1 date);
+create table t2(c1 int primary key);
+insert into t1 values('2078-10-10'), ('1970-11-01');
+insert into t2 values(320);
+select * from t1, t2 where t1.c1<=t2.c1;
+c1	c1
+1970-11-01	320
+drop table if exists t1;
+create table t1(a bigint);
+insert into t1 values (32);
+drop table if exists t2;
+create table t2(b year(4), key key_b (b));
+insert into t2 values (1901);
+create table t3(c year(4));
+insert into t3 values (1901);
+select a, b from t1, t2 where a > b;
+a	b
+select a, c from t1, t3 where a > c;
+a	c
+drop table if exists t1, t2;
+create table t1(c1 bigint(92));
+create table t2(c1 year(4) primary key);
+insert into t1 values(32);
+insert into t2 values(1901);
+select * from t1;
+c1
+32
+select * from t2;
+c1
+1901
+select * from t1, t2 where t1.c1>=t2.c1;
+c1	c1
+drop table orders,persons, t1, t2, t3;

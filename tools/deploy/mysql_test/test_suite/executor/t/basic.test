@@ -1,0 +1,211 @@
+# owner: yibo.tyf
+# owner group: SQL3
+# tags: optimizer
+
+--source mysql_test/test_suite/executor/include/cleanup.inc
+--source mysql_test/test_suite/executor/include/load_data.inc
+
+--result_format 4
+--explain_protocol 2
+--disable_abort_on_error
+
+################################
+# basic
+# all kinds of receive.
+
+# fifo receive
+select b, sum(a) from t_h3_01_20 group by b having sum(a) between 5 and 16 order by b;
+select b, sum(a) from t_h5_09_28 group by b having sum(a) between 13 and 24 order by b desc;
+select b, sum(a) from t_r4_01_20 group by b having sum(a) between 5 and 16 order by b;
+select b, sum(a) from t_r5_09_28 group by b having sum(a) between 13 and 24 order by b desc;
+select b, sum(a) from t_h3_r4_01_20 group by b having sum(a) between 5 and 16 order by b;
+select b, sum(a) from t_h3_r5_09_28 group by b having sum(a) between 13 and 24 order by b desc;
+select b, sum(a) from t_h5_r4_01_20 group by b having sum(a) between 5 and 16 order by b;
+select b, sum(a) from t_h5_r5_09_28 group by b having sum(a) between 13 and 24 order by b desc;
+# task order receive
+select a, b from t_r4_01_20 where a between 5 and 16 order by a;
+select a, b from t_r4_09_28 where a between 13 and 24 order by a desc;
+select a, b from t_r5_01_20 where a between 5 and 16 order by a;
+select a, b from t_r5_09_28 where a between 13 and 24 order by a desc;
+select a, b from t_h3_r4_01_20 where a = 12 order by b;
+select a, b from t_h3_r5_09_28 where a = 12 order by b desc;
+select a, b from t_h5_r4_01_20 where a = 12 order by b;
+select a, b from t_h5_r5_09_28 where a = 12 order by b desc;
+# merge sort receive
+select a, b from t_h3_01_20 where a between 5 and 16 order by b;
+select a, b from t_h5_09_28 where a between 13 and 24 order by b desc;
+select a, b from t_r4_01_20 where a between 5 and 16 order by b;
+select a, b from t_r4_09_28 where a between 13 and 24 order by b desc;
+select a, b from t_h3_r4_01_20 where a between 5 and 16 order by b;
+select a, b from t_h3_r5_09_28 where a between 13 and 24 order by b desc;
+select a, b from t_h5_r4_01_20 where a between 5 and 16 order by b;
+select a, b from t_h5_r5_09_28 where a between 13 and 24 order by b desc;
+
+## check if result_type_classes of join_keys are the same when repart
+select * from t_h5_int t1, t_refered as t2 where t1.a = t2.aa;
+select * from t_h5_int t1, t_refered as t2 where t1.a = t2.a;
+select * from t_h5_int t1, t_refered as t2 where t1.a = t2.b;
+select * from t_h5_int t1, t_refered as t2 where t1.a = t2.c;
+select * from t_h5_int t1, t_refered as t2 where t1.a = t2.d;
+select * from t_h5_int t1, t_refered as t2 where t1.a = t2.e;
+
+
+select * from t_r4_int t1, t_refered as t2 where t1.a = t2.aa;
+select * from t_r4_int t1, t_refered as t2 where t1.a = t2.a;
+select * from t_r4_int t1, t_refered as t2 where t1.a = t2.b;
+select * from t_r4_int t1, t_refered as t2 where t1.a = t2.c;
+select * from t_r4_int t1, t_refered as t2 where t1.a = t2.d;
+select * from t_r4_int t1, t_refered as t2 where t1.a = t2.e;
+
+select * from t_r4_date t1, t_refered as t2 where t1.c = t2.a;
+select * from t_r4_date t1, t_refered as t2 where t1.c = t2.b;
+--sorted_result
+select * from t_r4_date t1, t_refered as t2 where t1.c = t2.c;
+--sorted_result
+select * from t_r4_date t1, t_refered as t2 where t1.c = t2.d;
+select * from t_r4_date t1, t_refered as t2 where t1.c = t2.e;
+
+select * from t_r4_datetime t1, t_refered as t2 where t1.c = t2.a;
+select * from t_r4_datetime t1, t_refered as t2 where t1.c = t2.b;
+--sorted_result
+select * from t_r4_datetime t1, t_refered as t2 where t1.c = t2.c;
+--sorted_result
+select * from t_r4_datetime t1, t_refered as t2 where t1.c = t2.d;
+select * from t_r4_datetime t1, t_refered as t2 where t1.c = t2.e;
+
+#bug:
+select * from t_h5_r4_int_int_datetime t1, t_refered as t2 where t1.a = t2.a and t1.b=t2.a and t1.c = t2.a;
+select * from t_h5_r4_int_int_datetime t1, t_refered as t2 where t1.a = t2.a and t1.b=t2.a and t1.c = t2.aa;
+select * from t_h5_r4_int_int_datetime t1, t_refered as t2 where t1.a = t2.a and t1.b=t2.a and t1.c = t2.b;
+select * from t_h5_r4_int_int_datetime t1, t_refered as t2 where t1.a = t2.a and t1.b=t2.a and t1.c = t2.bb;
+select * from t_h5_r4_int_int_datetime t1, t_refered as t2 where t1.a = t2.a and t1.b=t2.a and t1.c = t2.c;
+select * from t_h5_r4_int_int_datetime t1, t_refered as t2 where t1.a = t2.a and t1.b=t2.a and t1.c = t2.d;
+select * from t_h5_r4_int_int_datetime t1, t_refered as t2 where t1.a = t2.a and t1.b=t2.a and t1.c = t2.e;
+
+
+select * from t_r4_int t1, t_r4_int as t2 where t1.a = t2.a;
+select * from t_r4_int t1, t_r4_date as t2 where t1.a = t2.c;
+select * from t_r4_int t1, t_r4_datetime as t2 where t1.a = t2.c;
+select * from t_r4_int t1, t_r4_timestamp as t2 where t1.a = t2.c;
+
+
+select * from t_r4_date t1, t_r4_int as t2 where t1.c = t2.a;
+select * from t_r4_date t1, t_r4_date as t2 where t1.c = t2.c;
+select * from t_r4_date t1, t_r4_datetime as t2 where t1.c = t2.c;
+select * from t_r4_date t1, t_r4_timestamp as t2 where t1.c = t2.c;
+
+select * from t_r4_datetime t1, t_r4_int as t2 where t1.c = t2.a;
+select * from t_r4_datetime t1, t_r4_date as t2 where t1.c = t2.c;
+select * from t_r4_datetime t1, t_r4_datetime as t2 where t1.c = t2.c;
+select * from t_r4_datetime t1, t_r4_timestamp as t2 where t1.c = t2.c;
+
+select * from t_h5_int t1, t_refered as t2 where t1.a = t2.aa;
+select * from t_h5_int t1, t_refered as t2 where t1.a = t2.a;
+select * from t_h5_int t1, t_refered as t2 where t1.a = t2.b;
+select * from t_h5_int t1, t_refered as t2 where t1.a = t2.c;
+select * from t_h5_int t1, t_refered as t2 where t1.a = t2.d;
+select * from t_h5_int t1, t_refered as t2 where t1.a = t2.e;
+
+select * from t_r4_int t1, t_refered as t2 where t1.a = t2.aa;
+select * from t_r4_int t1, t_refered as t2 where t1.a = t2.a;
+select * from t_r4_int t1, t_refered as t2 where t1.a = t2.b;
+select * from t_r4_int t1, t_refered as t2 where t1.a = t2.c;
+select * from t_r4_int t1, t_refered as t2 where t1.a = t2.d;
+select * from t_r4_int t1, t_refered as t2 where t1.a = t2.e;
+
+select * from t_r4_date t1, t_refered as t2 where t1.c = t2.a;
+select * from t_r4_date t1, t_refered as t2 where t1.c = t2.b;
+--sorted_result
+select * from t_r4_date t1, t_refered as t2 where t1.c = t2.c;
+--sorted_result
+select * from t_r4_date t1, t_refered as t2 where t1.c = t2.d;
+select * from t_r4_date t1, t_refered as t2 where t1.c = t2.e;
+
+select * from t_r4_datetime t1, t_refered as t2 where t1.c = t2.a;
+select * from t_r4_datetime t1, t_refered as t2 where t1.c = t2.b;
+--sorted_result
+select * from t_r4_datetime t1, t_refered as t2 where t1.c = t2.c;
+--sorted_result
+select * from t_r4_datetime t1, t_refered as t2 where t1.c = t2.d;
+select * from t_r4_datetime t1, t_refered as t2 where t1.c = t2.e;
+
+select * from t_h5_r4_int_int t1, t_refered as t2 where t1.a = t2.a and t1.b=t2.a;
+select * from t_h5_r4_int_int t1, t_refered as t2 where t1.a = t2.a and t1.b=t2.aa;
+select * from t_h5_r4_int_int t1, t_refered as t2 where t1.a = t2.a and t1.b=t2.b;
+select * from t_h5_r4_int_int t1, t_refered as t2 where t1.a = t2.a and t1.b=t2.c;
+select * from t_h5_r4_int_int t1, t_refered as t2 where t1.a = t2.a and t1.b=t2.d;
+select * from t_h5_r4_int_int t1, t_refered as t2 where t1.a = t2.a and t1.b=t2.e;
+
+select * from t_h5_r4_int_int_datetime t1, t_refered as t2 where t1.a = t2.a and t1.b=t2.a and t1.c = t2.a;
+select * from t_h5_r4_int_int_datetime t1, t_refered as t2 where t1.a = t2.a and t1.b=t2.a and t1.c = t2.aa;
+select * from t_h5_r4_int_int_datetime t1, t_refered as t2 where t1.a = t2.a and t1.b=t2.a and t1.c = t2.b;
+select * from t_h5_r4_int_int_datetime t1, t_refered as t2 where t1.a = t2.a and t1.b=t2.a and t1.c = t2.bb;
+select * from t_h5_r4_int_int_datetime t1, t_refered as t2 where t1.a = t2.a and t1.b=t2.a and t1.c = t2.c;
+select * from t_h5_r4_int_int_datetime t1, t_refered as t2 where t1.a = t2.a and t1.b=t2.a and t1.c = t2.d;
+select * from t_h5_r4_int_int_datetime t1, t_refered as t2 where t1.a = t2.a and t1.b=t2.a and t1.c = t2.e;
+
+select * from t_r4_int t1, t_r4_int  as t2 where t1.a = t2.a;
+select * from t_r4_int t1, t_r4_date  as t2 where t1.a = t2.c;
+select * from t_r4_int t1, t_r4_datetime  as t2 where t1.a = t2.c;
+select * from t_r4_int t1, t_r4_timestamp  as t2 where t1.a = t2.c;
+
+
+select * from t_r4_date t1, t_r4_int  as t2 where t1.c = t2.a;
+select * from t_r4_date t1, t_r4_date  as t2 where t1.c = t2.c;
+select * from t_r4_date t1, t_r4_datetime  as t2 where t1.c = t2.c;
+select * from t_r4_date t1, t_r4_timestamp  as t2 where t1.c = t2.c;
+
+select * from t_r4_datetime t1, t_r4_int  as t2 where t1.c = t2.a;
+select * from t_r4_datetime t1, t_r4_date  as t2 where t1.c = t2.c;
+select * from t_r4_datetime t1, t_r4_datetime  as t2 where t1.c = t2.c;
+select * from t_r4_datetime t1, t_r4_timestamp  as t2 where t1.c = t2.c;
+
+
+# additional case for task order with many range part.
+
+select min(a) from t_many_range_part where a >=  1;
+select min(a) from t_many_range_part where a >=  6;
+select min(a) from t_many_range_part where a >= 11;
+select min(a) from t_many_range_part where a >= 16;
+select min(a) from t_many_range_part where a >= 21;
+select min(a) from t_many_range_part where a >= 26;
+select min(a) from t_many_range_part where a >= 31;
+select min(a) from t_many_range_part where a >= 36;
+select min(a) from t_many_range_part where a >= 41;
+select min(a) from t_many_range_part where a >= 46;
+
+select max(a) from t_many_range_part where a >=  1;
+select max(a) from t_many_range_part where a >=  6;
+select max(a) from t_many_range_part where a >= 11;
+select max(a) from t_many_range_part where a >= 16;
+select max(a) from t_many_range_part where a >= 21;
+select max(a) from t_many_range_part where a >= 26;
+select max(a) from t_many_range_part where a >= 31;
+select max(a) from t_many_range_part where a >= 36;
+select max(a) from t_many_range_part where a >= 41;
+select max(a) from t_many_range_part where a >= 46;
+
+select a from t_many_range_part where a >=  1 order by a asc limit 10;
+select a from t_many_range_part where a >=  6 order by a asc limit 10;
+select a from t_many_range_part where a >= 11 order by a asc limit 10;
+select a from t_many_range_part where a >= 16 order by a asc limit 10;
+select a from t_many_range_part where a >= 21 order by a asc limit 10;
+select a from t_many_range_part where a >= 26 order by a asc limit 10;
+select a from t_many_range_part where a >= 31 order by a asc limit 10;
+select a from t_many_range_part where a >= 36 order by a asc limit 10;
+select a from t_many_range_part where a >= 41 order by a asc limit 10;
+select a from t_many_range_part where a >= 46 order by a asc limit 10;
+
+select a from t_many_range_part where a >=  1 order by a desc limit 10;
+select a from t_many_range_part where a >=  6 order by a desc limit 10;
+select a from t_many_range_part where a >= 11 order by a desc limit 10;
+select a from t_many_range_part where a >= 16 order by a desc limit 10;
+select a from t_many_range_part where a >= 21 order by a desc limit 10;
+select a from t_many_range_part where a >= 26 order by a desc limit 10;
+select a from t_many_range_part where a >= 31 order by a desc limit 10;
+select a from t_many_range_part where a >= 36 order by a desc limit 10;
+select a from t_many_range_part where a >= 41 order by a desc limit 10;
+select a from t_many_range_part where a >= 46 order by a desc limit 10;
+
+
+--source mysql_test/test_suite/executor/include/cleanup.inc

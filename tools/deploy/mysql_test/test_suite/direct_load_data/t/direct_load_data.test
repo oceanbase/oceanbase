@@ -1,0 +1,77 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: yuya.yu
+# owner group: Cloud Storage
+# description: direct load data
+
+--source mysql_test/test_suite/direct_load_data/include/copy_data_for_direct_load.inc
+
+connect (conn_query,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+--disable_warnings
+
+connection default;
+--enable_query_log
+use test;
+
+# Create table
+--disable_warnings
+drop table if exists lineitem;
+--enable_warnings
+create table lineitem(
+    l_orderkey           bigint NOT NULL ,
+    l_partkey            bigint NOT NULL ,
+    l_suppkey            bigint NOT NULL ,
+    l_linenumber         bigint NOT NULL ,
+    l_quantity           bigint NOT NULL ,
+    l_extendedprice      decimal(10,2) NOT NULL ,
+    l_discount           decimal(10,2) NOT NULL ,
+    l_tax                decimal(10,2) NOT NULL ,
+    l_returnflag         char(1) ,
+    l_linestatus         char(1) ,
+    l_shipdate           date ,
+    l_commitdate         date ,
+    l_receiptdate        date ,
+    l_shipinstruct       char(25) ,
+    l_shipmode           char(10) ,
+    l_comment            varchar(44),
+    primary key(L_ORDERKEY, L_LINENUMBER)
+) partition by hash(l_orderkey) partitions 10;
+
+set @@ob_query_timeout = 1000000*60*60*10, @@ob_trx_timeout=1000000*60*60*10;
+
+# Start load data
+
+--disable_query_log
+eval load data /*+ direct(true,0) parallel(2) load_batch_size(100) */ infile "$OBSERVER_DIR/$DATA_FOLDER_NAME/lineitem/lineitem-100k.tbl" into table lineitem fields terminated by '|' enclosed by '' lines starting by '' terminated by '\n';
+--enable_query_log
+
+# Query table
+select count(*) from lineitem;
+
+# Parallel dml and load data
+truncate table lineitem;
+connection conn1;
+set autocommit = off;
+insert into lineitem values (1,1,1,1,1,0,0,0,'a','b',0,0,0,1,1,'c');
+connection default;
+set @@ob_query_timeout = 1000000*30, @@ob_trx_timeout=1000000*30;
+--disable_query_log
+--error 4012
+eval load data /*+ direct(true,0) parallel(2) load_batch_size(100) */ infile "$OBSERVER_DIR/$DATA_FOLDER_NAME/lineitem/lineitem-100k.tbl" into table lineitem fields terminated by '|' enclosed by '' lines starting by '' terminated by '\n';
+--enable_query_log
+connection conn1;
+rollback;
+connection default;
+--disable_query_log
+eval load data /*+ direct(true,0) parallel(2) load_batch_size(100) */ infile "$OBSERVER_DIR/$DATA_FOLDER_NAME/lineitem/lineitem-100k.tbl" into table lineitem fields terminated by '|' enclosed by '' lines starting by '' terminated by '\n';
+--enable_query_log
+set @@ob_query_timeout = 1000000*60*60*10, @@ob_trx_timeout=1000000*60*60*10;
+select count(*) from lineitem;
+
+disconnect conn_query;
+
+# Clean Up
+drop table lineitem;

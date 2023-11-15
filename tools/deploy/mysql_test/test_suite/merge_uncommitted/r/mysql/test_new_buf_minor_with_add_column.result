@@ -1,0 +1,38 @@
+drop table if exists t1;
+create table t1(
+obschema_c_0_68XcHo tinyint(255) NOT NULL,
+obschema_c_1_lTMGZYJ varchar(200) NULL default NULL,
+obschema_c_2_ENEd tinyint(255) NULL,
+obschema_c_3_OpRK varbinary(255) NULL default NULL,
+obschema_c_4_fpdB float NOT NULL,
+obschema_c_5_Gq varbinary(255) NULL default NULL,
+obschema_c_6_u6dri varchar(150) NOT NULL default 'CDEFGHI01',
+obschema_c_7_XB decimal(20,12) NOT NULL default 0.20329070,
+obschema_c_8_7cq4kl double NULL default NULL,
+obschema_c_9_ywrfyF decimal(10,5) NOT NULL default 0.01001) table_mode='queuing';
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+alter system major freeze tenant = sys;
+alter system major freeze tenant = all_user;
+alter system major freeze tenant = all_meta;
+alter table t1 add column obschema_c_10_Y decimal(25,10) NOT NULL default 0.20349070 FIRST , 
+add column obschema_c_11_z float NOT NULL default 0.123470 AFTER obschema_c_0_68XcHo, 
+add column obschema_c_12_PzG varchar(20) NULL default 'aEFGHI01' BEFORE obschema_c_1_lTMGZYJ;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+alter table t1 drop column obschema_c_3_OpRK;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+select * from t1 limit 1;
+obschema_c_10_Y	obschema_c_0_68XcHo	obschema_c_11_z	obschema_c_12_PzG	obschema_c_1_lTMGZYJ	obschema_c_2_ENEd	obschema_c_4_fpdB	obschema_c_5_Gq	obschema_c_6_u6dri	obschema_c_7_XB	obschema_c_8_7cq4kl	obschema_c_9_ywrfyF
+0.2034907000	0	0.12347	aEFGHI01	Hello OceanBase & Happy New Year1	0	0	9153608021209109295703075050360401	Hello OceanBase & Happy New Year3	0.000000000000	0	0.00000
+select count(*) from t1;
+count(*)
+150
+drop table t1;

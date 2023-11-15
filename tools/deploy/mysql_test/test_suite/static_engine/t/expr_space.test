@@ -1,0 +1,66 @@
+# owner: bin.lb
+# owner group: sql2
+
+--disable_abort_on_error
+--result_format 4
+
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+connection syscon;
+
+sleep 2;
+
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+--disable_warnings
+
+select space(NULL);
+select space(-1);
+select space(0);
+select space(1);
+select space(2);
+select length(space("2.1"));
+select length(space("2.9"));
+select length(space("200000000"));
+
+--error 0,1051
+drop table t2;
+create table t2 as select space(512),space(513),space(32767),space(32768),space(65535),space(65536) from dual;
+desc t2;
+drop table t2;
+
+--enable_warnings
+
+connection syscon;
+--sleep 2
+
+--echo #bugfix 
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn_admin;
+connection default;
+
+--disable_warnings
+--error 0, 942
+drop database if exists luofan;
+--error 0, 942
+drop table if exists t1;
+--enable_warnings
+
+create database luofan;
+create table t1 (c1 varchar(64));
+insert into t1 values(-1);
+insert into t1 values(-2);
+insert into t1 values(-3);
+insert into t1 values(-4);
+
+select * from t1 where space(c1) = '';
+
+--disable_warnings
+--error 0, 942
+drop table if exists t1;
+--error 0, 942
+drop database if exists luofan;
+--enable_warnings
+
+

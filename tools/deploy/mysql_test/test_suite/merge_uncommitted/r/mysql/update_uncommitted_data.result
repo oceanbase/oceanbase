@@ -1,0 +1,121 @@
+set GLOBAL ob_query_timeout = 1000000000000;
+set GLOBAL ob_trx_timeout = 1000000000000;
+alter system set minor_compact_trigger = 10;
+drop table if exists test_update_uncommitted_data;
+create table test_update_uncommitted_data(num int, str varchar(50), tag int);
+begin;
+insert into test_update_uncommitted_data value(100, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(99, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(98, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(97, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(96, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(95, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(94, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(93, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(92, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(91, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(90, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(89, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(88, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(87, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(86, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(85, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(84, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(83, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(82, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(81, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(80, 'Hello OceanBase & Happy New Year', 1);
+alter system minor freeze;
+update test_update_uncommitted_data set tag = num + tag where tag = 1;
+alter system minor freeze;
+insert into test_update_uncommitted_data value(50, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(49, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(48, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(47, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(46, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(45, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(44, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(43, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(42, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(41, 'Hello OceanBase & Happy New Year', 1);
+insert into test_update_uncommitted_data value(40, 'Hello OceanBase & Happy New Year', 1);
+alter system minor freeze;
+alter system set minor_compact_trigger = 1;
+select * from test_update_uncommitted_data;
+num	str	tag
+select * from test_update_uncommitted_data;
+num	str	tag
+100	Hello OceanBase & Happy New Year	101
+99	Hello OceanBase & Happy New Year	100
+98	Hello OceanBase & Happy New Year	99
+97	Hello OceanBase & Happy New Year	98
+96	Hello OceanBase & Happy New Year	97
+95	Hello OceanBase & Happy New Year	96
+94	Hello OceanBase & Happy New Year	95
+93	Hello OceanBase & Happy New Year	94
+92	Hello OceanBase & Happy New Year	93
+91	Hello OceanBase & Happy New Year	92
+90	Hello OceanBase & Happy New Year	91
+89	Hello OceanBase & Happy New Year	90
+88	Hello OceanBase & Happy New Year	89
+87	Hello OceanBase & Happy New Year	88
+86	Hello OceanBase & Happy New Year	87
+85	Hello OceanBase & Happy New Year	86
+84	Hello OceanBase & Happy New Year	85
+83	Hello OceanBase & Happy New Year	84
+82	Hello OceanBase & Happy New Year	83
+81	Hello OceanBase & Happy New Year	82
+80	Hello OceanBase & Happy New Year	81
+50	Hello OceanBase & Happy New Year	1
+49	Hello OceanBase & Happy New Year	1
+48	Hello OceanBase & Happy New Year	1
+47	Hello OceanBase & Happy New Year	1
+46	Hello OceanBase & Happy New Year	1
+45	Hello OceanBase & Happy New Year	1
+44	Hello OceanBase & Happy New Year	1
+43	Hello OceanBase & Happy New Year	1
+42	Hello OceanBase & Happy New Year	1
+41	Hello OceanBase & Happy New Year	1
+40	Hello OceanBase & Happy New Year	1
+update test_update_uncommitted_data set tag = num + tag where tag = 1;
+alter system minor freeze;
+commit;
+select * from test_update_uncommitted_data;
+num	str	tag
+100	Hello OceanBase & Happy New Year	101
+99	Hello OceanBase & Happy New Year	100
+98	Hello OceanBase & Happy New Year	99
+97	Hello OceanBase & Happy New Year	98
+96	Hello OceanBase & Happy New Year	97
+95	Hello OceanBase & Happy New Year	96
+94	Hello OceanBase & Happy New Year	95
+93	Hello OceanBase & Happy New Year	94
+92	Hello OceanBase & Happy New Year	93
+91	Hello OceanBase & Happy New Year	92
+90	Hello OceanBase & Happy New Year	91
+89	Hello OceanBase & Happy New Year	90
+88	Hello OceanBase & Happy New Year	89
+87	Hello OceanBase & Happy New Year	88
+86	Hello OceanBase & Happy New Year	87
+85	Hello OceanBase & Happy New Year	86
+84	Hello OceanBase & Happy New Year	85
+83	Hello OceanBase & Happy New Year	84
+82	Hello OceanBase & Happy New Year	83
+81	Hello OceanBase & Happy New Year	82
+80	Hello OceanBase & Happy New Year	81
+50	Hello OceanBase & Happy New Year	51
+49	Hello OceanBase & Happy New Year	50
+48	Hello OceanBase & Happy New Year	49
+47	Hello OceanBase & Happy New Year	48
+46	Hello OceanBase & Happy New Year	47
+45	Hello OceanBase & Happy New Year	46
+44	Hello OceanBase & Happy New Year	45
+43	Hello OceanBase & Happy New Year	44
+42	Hello OceanBase & Happy New Year	43
+41	Hello OceanBase & Happy New Year	42
+40	Hello OceanBase & Happy New Year	41
+select count(*) from test_update_uncommitted_data;
+count(*)
+32
+drop table test_update_uncommitted_data;
+alter system set minor_compact_trigger = 2;

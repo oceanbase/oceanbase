@@ -1,0 +1,16 @@
+drop table if exists test_table;
+create table test_table(id int, name varchar(64), age int,  birth datetime(6), school_date  timestamp(6) default "2012-01-01 12:00:00", primary key(id,age));
+insert into test_table values(1,'abc', 38, '1988-01-29 12:00:00.000', '1993-09-01 11:00:00.1234');
+select * from test_table;
+id	name	age	birth	school_date
+1	abc	38	1988-01-29 12:00:00.000000	1993-09-01 11:00:00.123400
+update test_table set birth='1988-01-29 12:00:00.456';
+select * from test_table;
+id	name	age	birth	school_date
+1	abc	38	1988-01-29 12:00:00.456000	1993-09-01 11:00:00.123400
+select date_sub(now(), INTERVAL NULL  MINUTE_SECOND);
+date_sub(now(), INTERVAL NULL  MINUTE_SECOND)
+NULL
+select date_add(now(), INTERVAL NULL  MINUTE_SECOND);
+date_add(now(), INTERVAL NULL  MINUTE_SECOND)
+NULL

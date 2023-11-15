@@ -1,0 +1,34 @@
+result_format: 4
+drop function if exists bug23333;
+drop table if exists t1,t2;
+CREATE TABLE t1 (a int  NOT NULL auto_increment primary key);
+CREATE TABLE t2 (a int  NOT NULL auto_increment, b int, PRIMARY KEY (a));
+insert into t2 values (1,1);
+
+create function bug23333() 
+  RETURNS int(11)
+  DETERMINISTIC
+begin
+  declare x int;
+  insert into t1 values (null);
+  select count(*) from t1 into x;
+  set @a = x;
+  return @a;
+end|
+
+## reset master;
+select bug23333();
++------------+
+| bug23333() |
++------------+
+|          1 |
++------------+
+select count(*),@a from t1 /* must be 1,1 */;
++----------+------+
+| count(*) | @a   |
++----------+------+
+|        1 |    1 |
++----------+------+
+
+drop table t1,t2;
+drop function if exists bug23333;

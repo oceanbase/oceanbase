@@ -1,0 +1,23 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: dachuan.sdc
+#owner group: sql1
+#tags: create_table, insert
+#description:
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+create table t1(c1 int primary key, c2 int);
+insert into t1 values(1,1),(2,2),(3,3);
+
+let $cnt=30;
+while($cnt)
+{
+select * from t1 as t2 where c1=1;
+dec $cnt;
+}
+
+drop table t1;

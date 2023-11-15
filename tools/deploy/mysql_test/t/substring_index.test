@@ -1,0 +1,79 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: yibo.tyf
+#owner group: sql1
+
+#null
+SELECT SUBSTRING_INDEX(NULL, NULL, NULL);
+
+
+SELECT SUBSTRING_INDEX(NULL, NULL, 0);
+SELECT SUBSTRING_INDEX(NULL, NULL, 3);
+SELECT SUBSTRING_INDEX(NULL, NULL, -3);
+
+SELECT SUBSTRING_INDEX('abcdabcdabc', NULL, NULL);
+SELECT SUBSTRING_INDEX('abcdabcdabc', NULL, 0);
+SELECT SUBSTRING_INDEX('abcdabcdabc', NULL, 3);
+SELECT SUBSTRING_INDEX('abcdabcdabc', NULL, -3);
+
+SELECT SUBSTRING_INDEX(NULL, 'abc', NULL);
+SELECT SUBSTRING_INDEX(NULL, 'abc', 0);
+SELECT SUBSTRING_INDEX(NULL, 'abc', 3);
+SELECT SUBSTRING_INDEX(NULL, 'abc', -3);
+
+#empty
+SELECT SUBSTRING_INDEX('', '', 0);
+SELECT SUBSTRING_INDEX('', '', 3);
+SELECT SUBSTRING_INDEX('', '', -3);
+
+SELECT SUBSTRING_INDEX('abcdabcdabc', '', 0);
+SELECT SUBSTRING_INDEX('abcdabcdabc', '', 3);
+SELECT SUBSTRING_INDEX('abcdabcdabc', '', -3);
+
+SELECT SUBSTRING_INDEX('', 'abc', 0);
+SELECT SUBSTRING_INDEX('', 'abc', 3);
+SELECT SUBSTRING_INDEX('', 'abc', -3);
+
+#normal
+SELECT SUBSTRING_INDEX('abcdabcdabc', 'abc', 0);
+SELECT SUBSTRING_INDEX('abcdabcdabc', 'abc', 3);
+SELECT SUBSTRING_INDEX('abcdabcdabc', 'abc', -3);
+
+#convert
+SELECT SUBSTRING_INDEX('abcdabcdabc', 'abc', '0');
+SELECT SUBSTRING_INDEX('abcdabcdabc', 'abc', '3');
+SELECT SUBSTRING_INDEX('abcdabcdabc', 'abc', '-3');
+SELECT SUBSTRING_INDEX(1.414, 1, '-1');
+
+#special
+select SUBSTRING_INDEX( 'www.mysql.com','.', 9223372036854775806);
+select SUBSTRING_INDEX( 'www.mysql.com','.', 9223372036854775807);
+select SUBSTRING_INDEX( 'www.mysql.com','.', 9223372036854775808);
+select SUBSTRING_INDEX( 'www.mysql.com','.', 9223372036854775809);
+select SUBSTRING_INDEX( 'www.mysql.com','.', 9223372036854775810);
+select SUBSTRING_INDEX( 'www.mysql.com','.', 9223372036854775811);
+select SUBSTRING_INDEX( 'www.mysql.com','.', -9223372036854775806);
+select SUBSTRING_INDEX( 'www.mysql.com','.', -9223372036854775807);
+select SUBSTRING_INDEX( 'www.mysql.com','.', -9223372036854775808);
+select SUBSTRING_INDEX( 'www.mysql.com','.', -9223372036854775809);
+
+select substring_index('aaaaaaaaa1','aa',5);
+select substring_index('aaaaaaaaa1','aa',4);
+select substring_index('aaaaaaaaa1','aa',3);
+select substring_index('aaaaaaaaa1','aa',2);
+select substring_index('aaaaaaaaa1','aa',1);
+select substring_index('aaaaaaaaa1','aa',0);
+select substring_index('aaaaaaaaa1','aa',-1);
+select substring_index('aaaaaaaaa1','aa',-2);
+select substring_index('aaaaaaaaa1','aa',-3);
+select substring_index('aaaaaaaaa1','aa',-4);
+select substring_index('aaaaaaaaa1','aa',-5);
+
+select substring_index('aaaaaaaaa1','aaaa',3);
+select substring_index('aaaaaaaaa1','aaaa',2);
+select substring_index('aaaaaaaaa1','aaaa',-1);
+select substring_index('aaaaaaaaa1','aaaa',0);
+select substring_index('aaaaaaaaa1','aaaa',-1);
+select substring_index('aaaaaaaaa1','aaaa',-2);
+select substring_index('aaaaaaaaa1','aaaa',-3);

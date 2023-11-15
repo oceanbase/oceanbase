@@ -1,0 +1,6 @@
+select 1 from dual;
+1
+1
+select 1 from dual;
+1
+1

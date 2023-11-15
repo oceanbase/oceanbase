@@ -1,0 +1,180 @@
+#owner: ht353245
+#owner group: shenzhen
+--echo # ----------------------------------------------------------------------
+--echo # Test of _st_dwithin.
+--echo # ----------------------------------------------------------------------
+--source mysql_test/test_suite/geometry/t/import_default_srs_data_mysql.inc
+##
+## Basic test for _st_dwithin
+##
+
+select 'dwithin_pt_pt_1', _st_dwithin(ST_GeomFromText('POINT(0 0)', 4326), ST_GeomFromText('POINT(1 1)', 4326), 300000);
+select 'dwithin_pt_pt_2', _st_dwithin(ST_GeomFromText('POINT(0 0)', 4326), ST_GeomFromText('POINT(1 1)', 4326), 10);
+select 'dwithin_pt_line_1', _st_dwithin(ST_GeomFromText('POINT(0 0)', 4326), ST_GeomFromText('LINESTRING(1 1, 2 2)', 4326), 300000);
+select 'dwithin_line_pt_1', _st_dwithin(ST_GeomFromText('LINESTRING(1 1, 2 2)', 4326), ST_GeomFromText('POINT(0 0)', 4326), 300000);
+select 'dwithin_pt_poly_1', _st_dwithin(ST_GeomFromText('POINT(0 0)', 4326), ST_GeomFromText('POLYGON((1 1, 2 2, 3 0, 1 1))', 4326), 300000);
+select 'dwithin_poly_pt_1', _st_dwithin(ST_GeomFromText('POLYGON((1 1, 2 2, 3 0, 1 1))', 4326), ST_GeomFromText('POINT(0 0)', 4326), 300000);
+select 'dwithin_poly_pt_2', _st_dwithin(ST_GeomFromText('POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))', 4326), ST_GeomFromText('POINT(5 10.01)', 4326), 1000);
+select 'dwithin_poly_pt_3', _st_dwithin(ST_GeomFromText('POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))', 4326), ST_GeomFromText('POINT(5 10.01)', 4326), 3000);
+select 'dwithin_line_poly_1', _st_dwithin(ST_GeomFromText('LINESTRING(-1 -1, 0 0)', 4326), ST_GeomFromText('POLYGON((1 1, 2 2, 3 0, 1 1))', 4326), 300000);
+select 'dwithin_poly_line_1', _st_dwithin(ST_GeomFromText('POLYGON((1 1, 2 2, 3 0, 1 1))', 4326), ST_GeomFromText('LINESTRING(-1 -1, 0 0)', 4326), 300000);
+select 'dwithin_poly_poly_1', _st_dwithin(ST_GeomFromText('POLYGON((0 0, -2 -2, -3 0, 0 0))', 4326), ST_GeomFromText('POLYGON((1 1, 2 2, 3 0, 1 1))', 4326), 10);
+select 'dwithin_poly_poly_2', _st_dwithin(ST_GeomFromText('POLYGON((0 0, -2 -2, -3 0, 0 0))', 4326), ST_GeomFromText('POLYGON((1 1, 2 2, 3 0, 1 1))', 4326), 300000);
+select 'dwithin_poly_poly_2', _st_dwithin(ST_GeomFromText('POLYGON((1 1, -2 -2, -3 0, 1 1))', 4326), ST_GeomFromText('POLYGON((1 1, 2 2, 3 0, 1 1))', 4326), 300000);
+
+--error ER_GIS_DIFFERENT_SRIDS
+select _st_dwithin(ST_GeomFromText('POLYGON((1 1, -2 -2, -3 0, 1 1))', 4326), ST_GeomFromText('POLYGON((1 1, 2 2, 3 0, 1 1))', 2000), 300000);
+--error ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT
+select _st_dwithin(ST_GeomFromText('POLYGON((1 1, -2 -2, -3 0, 1 1))', 4326));
+--error ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT
+select _st_dwithin(ST_GeomFromText('POLYGON((1 1, -2 -2, -3 0, 1 1))', 4326), ST_GeomFromText('POLYGON((1 1, 2 2, 3 0, 1 1))', 2000));
+
+select _st_dwithin(null, ST_GeomFromText('POLYGON((1 1, 2 2, 3 0, 1 1))', 2000), 10);
+select _st_dwithin(ST_GeomFromText('POLYGON((1 1, 2 2, 3 0, 1 1))', 2000), null, 10);
+select _st_dwithin(null, null, null);
+select _st_dwithin(ST_GeomFromText('POLYGON((1 1, -2 -2, -3 0, 1 1))', 4326), ST_GeomFromText('POLYGON((1 1, 2 2, 3 0, 1 1))', 4326), null);
+
+--disable_warnings
+drop table if exists t, t1, shape;
+--enable_warnings
+
+##
+## Basic test for _st_dwithin index
+##
+
+
+  SET @star_point= 'POINT(1 1)';
+  SET @star_linestring= 'LINESTRING(1 1, 2 2)';
+  SET @star_polygon= 'POLYGON((1 1, 2 2, 3 0, 1 1))';
+  SET @star_multipoint= 'MULTIPOINT(5 0,2 3,8 7,15 25)';
+  SET @star_multiline= 'MULTILINESTRING((2.5 0,0 1.5,1.5 3.0,0 5))';
+  SET @star_multipolygon= 'MULTIPOLYGON(((5 0,1.5 2.5,2.5 0,1.5 5,5 0)),((2.5 0,0 1.5,3.0 1.5,2.2 1.0,2.5 0)))';
+  SET @star_gc= 'GEOMETRYCOLLECTION(MULTIPOLYGON(((5 0,1.5 2.5,2.5 0,1.5 5,5 0)),((2.5 0,0 1.5,3.0 1.5,2.2 1.0,2.5 0))),POLYGON((5 0,7 1.0,0 1.5,1.0 1.5,1.5 2.5,2.0 1.5,3.0 1.5,2.2 1.0,2.5 0,1.5 5,5 0)),LINESTRING(1.5 2.5,1.5 1.0),MULTIPOINT(5 0,2.5 0),POINT(1.5 2.5))';
+
+
+create table t(g geometry  NOT NULL SRID 4326);
+create index idx on t (g);
+
+INSERT INTO t (g) VALUES
+  (ST_GeomFromText('POINT(0 0)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('POINT(1 1)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('POINT(1.5 1.5)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('POINT(2 2)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('POINT(2.5 2.5)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('POINT(3 3)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('POINT(3.5 3.5)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('POINT(4 4)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('POINT(5 5.5)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('POINT(6 6)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('POINT(7 7)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('MULTIPOINT(1 1,1 4,4 4,4 0.00009)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('LINESTRING(2 2,5 0,8 2)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('MULTILINESTRING((2 2,2 10,10 10),(10 10,10 2,2 2))', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('POLYGON((0 0,0 10,10 10,10 0, 0 0),(4 4,4 6,6 6,6 4,4 4))', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('MULTIPOLYGON(((0 0,0 10,10 10,10 0,0 0),(4 4,4 6,6 6,6 4,4 4)),((3 3,3 7,7 7,7 3,3 3),(4 4,4 6,6 6,6 4,4 4)))', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('GEOMETRYCOLLECTION(POLYGON((0 0,0 10,10 10,10 0,0 0),(4 4,4 6,6 6,6 4,4 4)),POLYGON((3 3,3 7,7 7,7 3,3 3),(4 4,4 6,6 6,6 4,4 4)))', 4326, 'axis-order=long-lat'));
+
+
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('POINT(1 1)', 4326, 'axis-order=long-lat'), 5);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('LINESTRING(1 1, 2 2)', 4326, 'axis-order=long-lat'), 5);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('POLYGON((1 1, 2 2, 3 0, 1 1))', 4326, 'axis-order=long-lat'), 5);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('MULTIPOINT(5 0,2 3,8 7,15 25)', 4326, 'axis-order=long-lat'), 5);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('MULTILINESTRING((2.5 0,0 1.5,1.5 3.0,0 5))', 4326, 'axis-order=long-lat'), 5);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('MULTIPOLYGON(((5 0,1.5 2.5,2.5 0,1.5 5,5 0)),((2.5 0,0 1.5,3.0 1.5,2.2 1.0,2.5 0)))', 4326, 'axis-order=long-lat'), 5);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('GEOMETRYCOLLECTION(MULTIPOLYGON(((5 0,1.5 2.5,2.5 0,1.5 5,5 0)),((2.5 0,0 1.5,3.0 1.5,2.2 1.0,2.5 0))),POLYGON((5 0,7 1.0,0 1.5,1.0 1.5,1.5 2.5,2.0 1.5,3.0 1.5,2.2 1.0,2.5 0,1.5 5,5 0)),LINESTRING(1.5 2.5,1.5 1.0),MULTIPOINT(5 0,2.5 0),POINT(1.5 2.5))', 4326, 'axis-order=long-lat'), 5);
+
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('POINT(1 1)', 4326, 'axis-order=long-lat'), 100);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('LINESTRING(1 1, 2 2)', 4326, 'axis-order=long-lat'), 100);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('POLYGON((1 1, 2 2, 3 0, 1 1))', 4326, 'axis-order=long-lat'), 100);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('MULTIPOINT(5 0,2 3,8 7,15 25)', 4326, 'axis-order=long-lat'), 100);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('MULTILINESTRING((2.5 0,0 1.5,1.5 3.0,0 5))', 4326, 'axis-order=long-lat'), 100);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('MULTIPOLYGON(((5 0,1.5 2.5,2.5 0,1.5 5,5 0)),((2.5 0,0 1.5,3.0 1.5,2.2 1.0,2.5 0)))', 4326, 'axis-order=long-lat'), 100);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('GEOMETRYCOLLECTION(MULTIPOLYGON(((5 0,1.5 2.5,2.5 0,1.5 5,5 0)),((2.5 0,0 1.5,3.0 1.5,2.2 1.0,2.5 0))),POLYGON((5 0,7 1.0,0 1.5,1.0 1.5,1.5 2.5,2.0 1.5,3.0 1.5,2.2 1.0,2.5 0,1.5 5,5 0)),LINESTRING(1.5 2.5,1.5 1.0),MULTIPOINT(5 0,2.5 0),POINT(1.5 2.5))', 4326, 'axis-order=long-lat'), 100);
+
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('POINT(1 1)', 4326, 'axis-order=long-lat'), 100000);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('LINESTRING(1 1, 2 2)', 4326, 'axis-order=long-lat'), 100000);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('POLYGON((1 1, 2 2, 3 0, 1 1))', 4326, 'axis-order=long-lat'), 100000);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('MULTIPOINT(5 0,2 3,8 7,15 25)', 4326, 'axis-order=long-lat'), 100000);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('MULTILINESTRING((2.5 0,0 1.5,1.5 3.0,0 5))', 4326, 'axis-order=long-lat'), 100000);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('MULTIPOLYGON(((5 0,1.5 2.5,2.5 0,1.5 5,5 0)),((2.5 0,0 1.5,3.0 1.5,2.2 1.0,2.5 0)))', 4326, 'axis-order=long-lat'), 100000);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('GEOMETRYCOLLECTION(MULTIPOLYGON(((5 0,1.5 2.5,2.5 0,1.5 5,5 0)),((2.5 0,0 1.5,3.0 1.5,2.2 1.0,2.5 0))),POLYGON((5 0,7 1.0,0 1.5,1.0 1.5,1.5 2.5,2.0 1.5,3.0 1.5,2.2 1.0,2.5 0,1.5 5,5 0)),LINESTRING(1.5 2.5,1.5 1.0),MULTIPOINT(5 0,2.5 0),POINT(1.5 2.5))', 4326, 'axis-order=long-lat'), 100000);
+
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('POINT(1 1)', 4326, 'axis-order=long-lat'), 500000);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('LINESTRING(1 1, 2 2)', 4326, 'axis-order=long-lat'), 500000);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('POLYGON((1 1, 2 2, 3 0, 1 1))', 4326, 'axis-order=long-lat'), 500000);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('MULTIPOINT(5 0,2 3,8 7,15 25)', 4326, 'axis-order=long-lat'), 500000);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('MULTILINESTRING((2.5 0,0 1.5,1.5 3.0,0 5))', 4326, 'axis-order=long-lat'), 500000);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('MULTIPOLYGON(((5 0,1.5 2.5,2.5 0,1.5 5,5 0)),((2.5 0,0 1.5,3.0 1.5,2.2 1.0,2.5 0)))', 4326, 'axis-order=long-lat'), 500000);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('GEOMETRYCOLLECTION(MULTIPOLYGON(((5 0,1.5 2.5,2.5 0,1.5 5,5 0)),((2.5 0,0 1.5,3.0 1.5,2.2 1.0,2.5 0))),POLYGON((5 0,7 1.0,0 1.5,1.0 1.5,1.5 2.5,2.0 1.5,3.0 1.5,2.2 1.0,2.5 0,1.5 5,5 0)),LINESTRING(1.5 2.5,1.5 1.0),MULTIPOINT(5 0,2.5 0),POINT(1.5 2.5))', 4326, 'axis-order=long-lat'), 500000);
+
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('POINT(1 1)', 4326, 'axis-order=long-lat'), 1000000);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('LINESTRING(1 1, 2 2)', 4326, 'axis-order=long-lat'), 1000000);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('POLYGON((1 1, 2 2, 3 0, 1 1))', 4326, 'axis-order=long-lat'), 1000000);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('MULTIPOINT(5 0,2 3,8 7,15 25)', 4326, 'axis-order=long-lat'), 1000000);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('MULTILINESTRING((2.5 0,0 1.5,1.5 3.0,0 5))', 4326, 'axis-order=long-lat'), 1000000);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('MULTIPOLYGON(((5 0,1.5 2.5,2.5 0,1.5 5,5 0)),((2.5 0,0 1.5,3.0 1.5,2.2 1.0,2.5 0)))', 4326, 'axis-order=long-lat'), 1000000);
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('GEOMETRYCOLLECTION(MULTIPOLYGON(((5 0,1.5 2.5,2.5 0,1.5 5,5 0)),((2.5 0,0 1.5,3.0 1.5,2.2 1.0,2.5 0))),POLYGON((5 0,7 1.0,0 1.5,1.0 1.5,1.5 2.5,2.0 1.5,3.0 1.5,2.2 1.0,2.5 0,1.5 5,5 0)),LINESTRING(1.5 2.5,1.5 1.0),MULTIPOINT(5 0,2.5 0),POINT(1.5 2.5))', 4326, 'axis-order=long-lat'), 1000000);
+
+drop table t;
+
+create table t(g geometry  NOT NULL SRID 3740);
+create index idx on t (g);
+
+INSERT INTO t (g) VALUES
+  (ST_GeomFromText('POINT(540000 4800000)', 3740)),
+  (ST_GeomFromText('POINT(540001 4800001)', 3740)),
+  (ST_GeomFromText('POINT(540001.5 4800001.5)', 3740)),
+  (ST_GeomFromText('POINT(540002 4800002)', 3740)),
+  (ST_GeomFromText('POINT(540002.5 4800002.5)', 3740)),
+  (ST_GeomFromText('POINT(540003 4800003)', 3740)),
+  (ST_GeomFromText('POINT(540003.5 4800003.5)', 3740)),
+  (ST_GeomFromText('POINT(540004 4800004)', 3740)),
+  (ST_GeomFromText('POINT(540005 4800005.5)', 3740)),
+  (ST_GeomFromText('POINT(540006 4800006)', 3740)),
+  (ST_GeomFromText('POINT(540007 4800007)', 3740)),
+  (ST_GeomFromText('MULTIPOINT(540001 4800001,540001 4800004,540004 4800004,540004 4800000.00009)', 3740)),
+  (ST_GeomFromText('LINESTRING(540002 4800002,540005 4800000,540008 4800002)', 3740)),
+  (ST_GeomFromText('MULTILINESTRING((540002 4800002,540002 4800010,540010 4800010),(540010 4800010,540010 4800002,540002 4800002))', 3740)),
+  (ST_GeomFromText('POLYGON((540000 4800000,540000 4800010,540010 4800010,540010 4800000, 540000 4800000),(540004 4800004,540004 4800006,540006 4800006,540006 4800004,540004 4800004))', 3740)),
+  (ST_GeomFromText('MULTIPOLYGON(((540000 4800000,540000 4800010,540010 4800010,540010 4800000,540000 4800000),(540004 4800004,540004 4800006,540006 4800006,540006 4800004,540004 4800004)),((540003 4800003,540003 4800007,540007 4800007,540007 4800003,540003 4800003),(540004 4800004,540004 4800006,540006 4800006,540006 4800004,540004 4800004)))', 3740)),
+  (ST_GeomFromText('GEOMETRYCOLLECTION(POLYGON((540000 4800000,540000 4800010,540010 4800010,540010 4800000,540000 4800000),(540004 4800004,540004 4800006,540006 4800006,540006 4800004,540004 4800004)),POLYGON((540003 4800003,540003 4800007,540007 4800007,540007 4800003,540003 4800003),(540004 4800004,540004 4800006,540006 4800006,540006 4800004,540004 4800004)))', 3740));
+
+  SET @star_point= 'POINT(540001 4800001)';
+  SET @star_linestring= 'LINESTRING(540001 4800001, 540002 4800002)';
+  SET @star_polygon= 'POLYGON((540001 4800001, 540002 4800002, 540003 4800000, 540001 4800001))';
+  SET @star_multipoint= 'MULTIPOINT(540005 4800000,540002 4800003,540008 4800007,540015 4800025)';
+  SET @star_multiline= 'MULTILINESTRING((540002.5 4800000,540000 4800001.5,540001.5 4800003.0,540000 4800005))';
+  SET @star_multipolygon= 'MULTIPOLYGON(((540005 4800000,540001.5 4800002.5,540002.5480000 0,540001.5 4800005,540005 4800000)),((540002.5 4800000,540000 4800001.5,540003.0 4800001.5,540002.2 4800001.0,540002.5 4800000)))';
+  SET @star_gc= 'GEOMETRYCOLLECTION(MULTIPOLYGON(((540005 4800000,540001.5 4800002.5,540002.5 4800000,540001.5 4800005,540005 4800000)),((540002.5 4800000,540000 4800001.5,540003.0 4800001.5,540002.2 4800001.0,540002.5 4800000))),POLYGON((540005 4800000,540007 4800001.0,540000 4800001.5,540001.0 4800001.5,540001.5 4800002.5,540002.0 4800001.5,540003.0 4800001.5,540002.2 4800001.0,540002.5 4800000,540001.5 4800005,540005 4800000)),LINESTRING(540001.5 4800002.5,540001.5 4800001.0),MULTIPOINT(540005 4800000,540002.5 4800000),POINT(540001.5 4800002.5))';
+
+  select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('POINT(540001 4800001)', 3740), 0.5);
+
+let $dis=1;
+while ($dis < 9)
+{
+  --eval select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('POINT(540001 4800001)', 3740), $dis);
+  --eval select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('LINESTRING(540001 4800001, 540002 4800002)', 3740), $dis);
+  --eval select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('POLYGON((540001 4800001, 540002 4800002, 540003 4800000, 540001 4800001))', 3740), $dis);
+  --eval select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('MULTIPOINT(540005 4800000,540002 4800003,540008 4800007,540015 4800025)', 3740), $dis);
+  --eval select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('MULTILINESTRING((540002.5 4800000,540000 4800001.5,540001.5 4800003.0,540000 4800005))', 3740), $dis);
+  --eval select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('MULTIPOLYGON(((540005 4800000,540001.5 4800002.5,540002.5480000 0,540001.5 4800005,540005 4800000)),((540002.5 4800000,540000 4800001.5,540003.0 4800001.5,540002.2 4800001.0,540002.5 4800000)))', 3740), $dis);
+  --eval select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('GEOMETRYCOLLECTION(MULTIPOLYGON(((540005 4800000,540001.5 4800002.5,540002.5 4800000,540001.5 4800005,540005 4800000)),((540002.5 4800000,540000 4800001.5,540003.0 4800001.5,540002.2 4800001.0,540002.5 4800000))),POLYGON((540005 4800000,540007 4800001.0,540000 4800001.5,540001.0 4800001.5,540001.5 4800002.5,540002.0 4800001.5,540003.0 4800001.5,540002.2 4800001.0,540002.5 4800000,540001.5 4800005,540005 4800000)),LINESTRING(540001.5 4800002.5,540001.5 4800001.0),MULTIPOINT(540005 4800000,540002.5 4800000),POINT(540001.5 4800002.5))', 3740), $dis);
+  inc $dis;
+}
+
+drop table t;
+
+--disable_warnings
+drop table if exists t2;
+--enable_warnings
+create table t2(k int, g geometry  NOT NULL SRID 0);
+create index idx on t2 (g);
+INSERT INTO t2 VALUES
+  (1, ST_GeomFromText('POINT(1.0 1.0)')),
+  (2, ST_GeomFromText('LINESTRING(1.0 1.0, 2.0 2.0)')),
+  (3, ST_GeomFromText('POINT(3.0 3.0)')),
+  (4, ST_GeomFromText('LINESTRING(4.0 4.0, 5.0 5.0)')),
+  (5, ST_GeomFromText('LINESTRING(40.0 40.0, 41.0 41.0)')),
+  (6, ST_GeomFromText('POLYGON((1.0 1.0, 5.0 1.0, 5.0 5.0, 1.0 5.0, 1.0 1.0))'));
+SELECT k FROM t2 WHERE _st_dwithin(ST_GeomFromText('POINT(2.5 2.5)'), g, 1) ORDER BY k;
+drop table t2;

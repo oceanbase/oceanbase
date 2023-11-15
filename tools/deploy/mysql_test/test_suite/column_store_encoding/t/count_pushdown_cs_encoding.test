@@ -1,0 +1,176 @@
+# owner: fenggu.yh
+# tags: optimizer
+# description: pushdown aggregation(count) to storage layer
+
+--disable_query_log
+set global ob_sql_work_area_percentage=80;
+sleep 1;
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection default;
+set @@recyclebin = off;
+set ob_query_timeout=1000000000;
+set ob_trx_timeout=1000000000;
+
+--disable_warnings
+drop table if exists t1,t2,t3,t4,nn1,nn2,t_default_value,t_empty,pt1,pt2,pt3;
+--enable_warnings
+--enable_query_log
+
+# bugs in 
+create table nn1(c1 int, c2 int, c3 varchar(10));
+create table nn2 (c1 int primary key, c2 int unique, c3 int);
+explain select (select count(x.c2) from nn1 a) as x from nn1 x;
+explain select count(distinct c1,c3) from nn2;
+
+# count(*),count(column),count(1),count(null)
+create table t1 (libname varchar(21), city varchar(256), primary key (libname));
+insert into t1 values ('test1','city1'),('test2','city2');
+insert into t1 values ('l', null);
+replace into t1 values ('2', null);
+replace into t1 values ('test3','city3'),('test4','city4');
+create table t2(a int, b varchar(26), c date);
+insert into t2 values(0, 'a', '2021-04-08');
+insert into t2 values(null, null, null);
+insert into t2 values(1, null, null);
+
+explain select count(*);
+select count(*);
+explain select count(*) from dual;
+select count(*) from dual;
+
+explain select count(*) from t1;
+select count(*) from t1;
+explain select count(city) from t1;
+select count(city) from t1;
+select count(null) from t1;
+select count(1) from t1;
+
+select count(a),count(b),count(c),count(*) from t2;
+select count(1),count(a),count(b),count(c),count(*) from t2 where a > 0;
+
+# count(distinct),count(a+b),groupby,for update
+create table t3(a int, b int);
+explain select count(distinct a) from t3;
+explain select count(distinct a,b) from t3;
+explain select count(a + b) from t3;
+explain select a,count(b) from t3 group by a;
+explain select count(*) from t3 for update;
+
+# minor&major freeze
+create table t4 (a bigint auto_increment primary key, b bigint, c char(100), d varchar(100), e bigint not null) row_format = compressed block_size = 2048 with column group for all columns, each column;
+insert into t4 (a, b, c, d, e) values(1, 9, "a", repeat('a', 10),1);
+insert into t4 (a, b, c, d, e) values(2, 2, "ab", repeat("ab", 10),1);
+insert into t4 (a, b, c, d, e) values(3, 5, "abcd", repeat("ab", 10),1);
+insert into t4 (a, b, c, d, e) values(4, 7, NULL, repeat("abcd", 10),1);
+insert into t4 (a, b, c, d, e) values(5, NULL, "ab c ", repeat("a", 10),1);
+insert into t4 (a, b, c, d, e) values(6, 9, NULL, repeat("abbb", 10),1);
+insert into t4 (a, b, c, d, e) values(7, 1, "abc ", repeat("abcd", 10),1);
+insert into t4 (a, b, c, d, e) values(8, 3, "abcde", NULL,1);
+insert into t4 (a, b, c, d, e) values(9, 100, "abd", repeat("abc", 10),1);
+--let $loop=6
+while($loop > 0)
+{
+  eval insert into t4 (a, b, c, d, e) select a * 10 + $loop, b + 1, c, d, e from t4;
+  dec $loop;
+}
+insert into t4 (a, b, c, d, e) values(123456, 100, "abd", repeat("abc", 10),1);
+insert into t4 (a, b, c, d, e) values(10000, 0, "ab c", repeat('ab ', 10),1);
+
+## minor freeze
+connection obsys;
+alter system minor freeze tenant = all;
+--source mysql_test/include/wait_minor_merge.inc
+
+connection default;
+select count(1),count(*) from t4;
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4;
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a > 5 and b is not null;
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a < 1;
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a = 123456;
+
+create table t_default_value(pk int primary key, a char(5));
+insert into t_default_value values(1,'a');
+
+## major freeze
+connection obsys;
+alter system major freeze tenant = all;
+--source mysql_test/include/wait_daily_merge.inc
+
+connection default;
+select count(1),count(*) from t4;
+select count(*) from t4 where b < 1;
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4;
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a > 5 and b is not null;
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a < 1;
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a = 123456;
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a > 46912;
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a/2 > 23456;
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a > b;
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a - b > 0;
+
+## memtable
+insert into t4 (a, b, c, d, e) values(10001, 0, "ab c", repeat('ab ', 10),1);
+insert into t4 (a, b, c, d, e) values(null, null, null, null,1);
+
+connection default;
+select count(1),count(*) from t4;
+select count(*),count(1),count(a),count(b),count(c),count(d) from t4;
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a > 5 and b is not null;
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a < 1;
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a = 123456;
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a is null;
+select count(1),count(*),count(e) from t4;
+
+# mysql compatibility
+explain select a,b,c,d,count(a),count(b),count(c),count(d) from t4;
+select a,b,c,d,count(a),count(b),count(c),count(d) from t4;
+create table t_empty(a int);
+select a,count(*) from t_empty;
+select a,b,c,d,count(*),count(a),count(b),count(c),count(d) from t4 where b > 1000000;
+create table pt1(a int);
+create table pt2(a int, b int, c int) partition by hash(a) partitions 4;
+create table pt3(a int, b int, c int) partition by hash(a) partitions 4;
+insert into pt1 values(1),(2),(3);
+insert into pt2 values(1,1,1),(2,2,2),(3,3,3);
+insert into pt3 values (null,null,null),(1,1,1),(2,2,2),(3,3,3);
+select a,count(*) from pt2;
+select a,count(*) from pt3;
+select/*+ leading(pt1,tt) use_nl(pt1,tt) NO_USE_NL_MATERIALIZATION(tt) */ * from pt1,(select a,count(*) from pt2) as tt where pt1.a=tt.a;
+select/*+ leading(pt1,tt) use_nl(pt1,tt) NO_USE_NL_MATERIALIZATION(tt) */ * from pt1,(select a,count(*) from pt3) as tt where pt1.a=tt.a;
+
+# default values & padding
+alter table t_default_value add column b char(10) default 'b';
+alter table t_default_value add column c char(10) default null;
+select b,count(b) from t_default_value;
+select c,count(c) from t_default_value;
+
+insert into t_default_value values(2, 'aa', 'bb', 'cc');
+select b,count(b) from t_default_value;
+select c,count(c) from t_default_value;
+
+SET sql_mode = 'STRICT_ALL_TABLES,PAD_CHAR_TO_FULL_LENGTH';
+select char_length(a) from t_default_value;
+select char_length(a),count(a) from t_default_value;
+
+# clean
+drop table if exists t1,t2,t3,t4,nn1,nn2,t_default_value,t_empty,pt1,pt2,pt3;
+
+## bug: 
+--disable_warnings
+drop table if exists t;
+--enable_warnings
+create table t(pk int primary key, a char(5));
+insert into t values(1,'a');
+insert into t values(2,'b');
+alter table t add column b char(10) as(concat(a, '1'));
+
+explain select b,count(b) from t;
+select b,count(b) from t;
+select a,count(b) from t;
+select b,count(a) from t;
+
+drop table t;
+
+--disable_query_log
+set @@recyclebin = on;
+--enable_query_log

@@ -1,0 +1,26 @@
+drop table if exists t1,t2;
+CREATE TABLE t1 (pk int primary key,col1 double , col2 double);
+INSERT INTO t1(pk,col1) VALUES (1,-5.00000000001),(2,-5.00000000002),(3,-5.00000000003),(4,-5.00000000000);
+select col1,count(col1),sum(col1),avg(col1) from t1 group by col1 order by col1;
+col1	count(col1)	sum(col1)	avg(col1)
+-5.00000000003	1	-5.00000000003	-5.00000000003
+-5.00000000002	1	-5.00000000002	-5.00000000002
+-5.00000000001	1	-5.00000000001	-5.00000000001
+-5	1	-5	-5
+DROP TABLE t1;
+create table t1 (pk int primary key,col1 double , col2 double);
+insert into t1(pk,col1) values (1,-5.00000000001);
+insert into t1(pk,col1) values (2,-5.00000000002);
+select col1,sum(col1),max(col1),min(col1) from t1 group by col1 order by col1;
+col1	sum(col1)	max(col1)	min(col1)
+-5.00000000002	-5.00000000002	-5.00000000002	-5.00000000002
+-5.00000000001	-5.00000000001	-5.00000000001	-5.00000000001
+insert into t1(pk,col1) values (3,5.00000000003);
+insert into t1(pk,col1) values (4,5.00000000004);
+select col1,sum(col1),max(col1),min(col1) from t1 group by col1 order by col1;
+col1	sum(col1)	max(col1)	min(col1)
+-5.00000000002	-5.00000000002	-5.00000000002	-5.00000000002
+-5.00000000001	-5.00000000001	-5.00000000001	-5.00000000001
+5.00000000003	5.00000000003	5.00000000003	5.00000000003
+5.00000000004	5.00000000004	5.00000000004	5.00000000004
+DROP TABLE t1;

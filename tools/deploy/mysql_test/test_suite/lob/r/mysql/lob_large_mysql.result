@@ -1,0 +1,181 @@
+drop table if exists t1, t2, t3;
+create table t1(pk int, a longtext, b longblob);
+create table t2(pk int, a mediumtext, b blob, c tinytext);
+create table t3(pk int, a longtext);
+insert into t1 values(1, repeat('a', 5000000), repeat('b', 10000000));
+insert into t1 values(2, repeat('A', 5000000), repeat('B', 10000000));
+insert into t2 values(1, repeat('a', 5000000), repeat('b', 60000), repeat('c', 255));
+insert into t2 values(2, repeat('A', 5000000), repeat('B', 60000), repeat('C', 255));
+insert into t3 values(1, repeat('a', 5000000));
+insert into t3 values(1, repeat('A', 5000000));
+insert into t1 values(1, repeat('a', 200000), repeat('b', 200000));
+insert into t1 values(2, repeat('A', 200000), repeat('B', 200000));
+insert into t2 values(1, repeat('a', 100000), repeat('b', 60000), repeat('c', 255));
+insert into t2 values(2, repeat('A', 100000), repeat('B', 60000), repeat('C', 255));
+insert into t3 values(1, repeat('a', 50000));
+insert into t3 values(1, repeat('A', 50000));
+select pk, length(a), length(b) from t1 order by 1 asc, 2;
+pk	length(a)	length(b)
+1	200000	200000
+1	5000000	10000000
+2	200000	200000
+2	5000000	10000000
+select pk, length(a), length(b), length(c) from t2 order by 1 asc, 2;
+pk	length(a)	length(b)	length(c)
+1	100000	60000	255
+1	5000000	60000	255
+2	100000	60000	255
+2	5000000	60000	255
+select pk, length(a) from t3 order by 1 asc, 2;
+pk	length(a)
+1	50000
+1	50000
+1	5000000
+1	5000000
+explain basic select * from t1 where t1.a in( select /*+ use_nl(x, y) */ x.a from t1 x, t1 y where x.pk = y.pk limit 1) order by pk asc;
+Query Plan
+======================================
+|ID|OPERATOR                   |NAME |
+--------------------------------------
+|0 |SORT                       |     |
+|1 |└─HASH JOIN                |     |
+|2 |  ├─SUBPLAN SCAN           |VIEW1|
+|3 |  │ └─LIMIT                |     |
+|4 |  │   └─NESTED-LOOP JOIN   |     |
+|5 |  │     ├─TABLE FULL SCAN  |y    |
+|6 |  │     └─MATERIAL         |     |
+|7 |  │       └─TABLE FULL SCAN|x    |
+|8 |  └─TABLE FULL SCAN        |t1   |
+======================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.pk], [t1.a], [t1.b]), filter(nil)
+      sort_keys([t1.pk, ASC])
+  1 - output([t1.pk], [t1.a], [t1.b]), filter(nil)
+      equal_conds([t1.a = VIEW1.a]), other_conds(nil)
+  2 - output([VIEW1.a]), filter(nil)
+      access([VIEW1.a])
+  3 - output([x.a]), filter(nil)
+      limit(1), offset(nil)
+  4 - output([x.a]), filter(nil)
+      conds([x.pk = y.pk]), nl_params_(nil), use_batch=false
+  5 - output([y.pk]), filter(nil)
+      access([y.pk]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([y.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([x.a], [x.pk]), filter(nil)
+  7 - output([x.pk], [x.a]), filter(nil)
+      access([x.pk], [x.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([x.__pk_increment]), range(MIN ; MAX)always true
+  8 - output([t1.a], [t1.pk], [t1.b]), filter(nil)
+      access([t1.a], [t1.pk], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select pk, length(a), substr(a, 1, 5), length(b), substr(b, 1, 5) from t1 where (t1.a, t1.b) in( select /*+ use_nl(x, y) */ x.a, x.b from t1 x, t1 y where x.pk = y.pk limit 1) order by pk asc;
+pk	length(a)	substr(a, 1, 5)	length(b)	substr(b, 1, 5)
+1	5000000	aaaaa	10000000	bbbbb
+select pk, length(a), substr(a, 1, 5), length(b), substr(b, 1, 5), length(c), substr(c, 1, 5) from t2 where (t2.a, t2.b) in( select /*+ use_nl(x, y) */ x.a, x.b from t2 x, t2 y where x.pk = y.pk limit 1) order by pk asc;
+pk	length(a)	substr(a, 1, 5)	length(b)	substr(b, 1, 5)	length(c)	substr(c, 1, 5)
+1	5000000	aaaaa	60000	bbbbb	255	ccccc
+select pk, length(a), substr(a, 1, 5) from t3 where t3.a in( select /*+ use_nl(x, y) */ x.a from t3 x, t3 y where x.pk = y.pk limit 1) order by pk asc;
+pk	length(a)	substr(a, 1, 5)
+1	5000000	aaaaa
+1	5000000	AAAAA
+explain basic select * from t1 where t1.a in( select /*+ use_hash(x, y) */ x.a from t1 x, t1 y where x.pk = y.pk limit 1) order by pk asc;
+Query Plan
+====================================
+|ID|OPERATOR                 |NAME |
+------------------------------------
+|0 |SORT                     |     |
+|1 |└─HASH JOIN              |     |
+|2 |  ├─SUBPLAN SCAN         |VIEW1|
+|3 |  │ └─LIMIT              |     |
+|4 |  │   └─HASH JOIN        |     |
+|5 |  │     ├─TABLE FULL SCAN|y    |
+|6 |  │     └─TABLE FULL SCAN|x    |
+|7 |  └─TABLE FULL SCAN      |t1   |
+====================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.pk], [t1.a], [t1.b]), filter(nil)
+      sort_keys([t1.pk, ASC])
+  1 - output([t1.pk], [t1.a], [t1.b]), filter(nil)
+      equal_conds([t1.a = VIEW1.a]), other_conds(nil)
+  2 - output([VIEW1.a]), filter(nil)
+      access([VIEW1.a])
+  3 - output([x.a]), filter(nil)
+      limit(1), offset(nil)
+  4 - output([x.a]), filter(nil)
+      equal_conds([x.pk = y.pk]), other_conds(nil)
+  5 - output([y.pk]), filter(nil)
+      access([y.pk]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([y.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([x.pk], [x.a]), filter(nil)
+      access([x.pk], [x.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([x.__pk_increment]), range(MIN ; MAX)always true
+  7 - output([t1.a], [t1.pk], [t1.b]), filter(nil)
+      access([t1.a], [t1.pk], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select pk, length(a), substr(a, 1, 5), length(b), substr(b, 1, 5) from t1 where (t1.a, t1.b) in( select /*+ use_hash(x, y) */ x.a, x.b from t1 x, t1 y where x.pk = y.pk limit 1) order by pk asc;
+pk	length(a)	substr(a, 1, 5)	length(b)	substr(b, 1, 5)
+1	5000000	aaaaa	10000000	bbbbb
+select pk, length(a), substr(a, 1, 5), length(b), substr(b, 1, 5), length(c), substr(c, 1, 5) from t2 where (t2.a, t2.b) in( select /*+ use_hash(x, y) */ x.a, x.b from t2 x, t2 y where x.pk = y.pk limit 1) order by pk asc;
+pk	length(a)	substr(a, 1, 5)	length(b)	substr(b, 1, 5)	length(c)	substr(c, 1, 5)
+1	5000000	aaaaa	60000	bbbbb	255	ccccc
+select pk, length(a), substr(a, 1, 5) from t3 where t3.a in( select /*+ use_hash(x, y) */ x.a from t3 x, t3 y where x.pk = y.pk limit 1);
+pk	length(a)	substr(a, 1, 5)
+1	5000000	aaaaa
+1	5000000	AAAAA
+explain basic select pk, length(a), substr(a, 1, 5) from t1 where t1.a in( select a from t1 union select a from t2) order by pk asc;
+Query Plan
+====================================
+|ID|OPERATOR                 |NAME |
+------------------------------------
+|0 |SORT                     |     |
+|1 |└─HASH JOIN              |     |
+|2 |  ├─TABLE FULL SCAN      |t1   |
+|3 |  └─SUBPLAN SCAN         |VIEW1|
+|4 |    └─HASH UNION DISTINCT|     |
+|5 |      ├─TABLE FULL SCAN  |t1   |
+|6 |      └─TABLE FULL SCAN  |t2   |
+====================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.pk], [length(t1.a)], [substr(t1.a, 1, 5)]), filter(nil)
+      sort_keys([t1.pk, ASC])
+  1 - output([t1.pk], [t1.a]), filter(nil)
+      equal_conds([t1.a = VIEW1.a]), other_conds(nil)
+  2 - output([t1.a], [t1.pk]), filter(nil)
+      access([t1.a], [t1.pk]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([VIEW1.a]), filter(nil)
+      access([VIEW1.a])
+  4 - output([UNION([1])]), filter(nil)
+  5 - output([t1.a]), filter(nil)
+      access([t1.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([cast(t2.a, LONGTEXT(536870911))]), filter(nil)
+      access([t2.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select pk, length(a), substr(a, 1, 5) from t1 where t1.a in( select a from t1 union select a from t2) order by 1 asc,2;
+pk	length(a)	substr(a, 1, 5)
+1	200000	aaaaa
+1	5000000	aaaaa
+2	200000	AAAAA
+2	5000000	AAAAA
+select pk, length(a), substr(a, 1, 5) from t1 where t1.a in( select a from t1 except select a from t2) order by 1 asc,2;
+pk	length(a)	substr(a, 1, 5)
+1	200000	aaaaa
+2	200000	AAAAA
+select pk, length(a), substr(a, 1, 5) from t1 where t1.a in( select a from t1 intersect select a from t2) order by 1 asc,2;
+pk	length(a)	substr(a, 1, 5)
+1	5000000	aaaaa
+2	5000000	AAAAA
+drop table if exists t1, t2, t3;

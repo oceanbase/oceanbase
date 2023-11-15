@@ -1,0 +1,217 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: xiaoyi.xy
+# owner group: SQL3
+# description: 测试update语句中使用cast 函数？ 
+--disable_warnings
+drop table if exists test;
+--enable_warnings
+create table test(pk1 int, pk2 varchar(64), c1 int , c2 varchar(64), primary key(pk1, pk2)); 
+insert into test(pk1,pk2,c1,c2) values(0,'0',0,'0'); 
+insert into test(pk1,pk2,c1,c2) values(1,'1',1,'1');
+select * from test;
+insert into test(pk1,pk2,c1,c2) values(1,2,1,'1'); 
+select * from test;
+--error 1062 
+update test set pk2=1 where pk1=1 and pk2='2';
+select * from test;
+update test set pk1='3' where c1=1 and c2=1 or c1=0;  
+update test set pk1=cast('3'as decimal) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('3'as decimal) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('4'as decimal) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('4'as decimal) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('5' as decimal) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('5' as decimal) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('6'as signed) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('6'as signed) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('7'as char(10)) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('7'as char(10)) where c1=1 and c2=1 or c1=0; 
+select * from test;
+--disable_warnings
+drop table if exists test;
+--enable_warnings
+create table test(pk1 varchar(10), pk2 int, c1 int , c2 varchar(64), primary key(pk1, pk2)); 
+insert into test(pk1,pk2,c1,c2) values(0,'0',0,'0'); 
+insert into test(pk1,pk2,c1,c2) values(1,'1',1,'1');
+select * from test;
+insert into test(pk1,pk2,c1,c2) values(1,2,1,'1'); 
+select * from test;
+--error 1062
+update test set pk2=1 where pk1=1 and pk2='2';
+select * from test;
+update test set pk1='3' where c1=1 and c2=1 or c1=0;  
+update test set pk1=cast('3'as decimal) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('3'as decimal) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('4'as decimal) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('4'as decimal) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('5' as decimal) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('5' as decimal) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('6'as signed) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('6'as signed) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('7'as char(1024)) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('7'as char(1024)) where c1=1 and c2=1 or c1=0; 
+select * from test;
+--disable_warnings
+drop table if exists test;
+--enable_warnings
+create table test(pk1 int, pk2 int, c1 int , c2 varchar(64), primary key(pk1, pk2)); 
+insert into test(pk1,pk2,c1,c2) values(0,'0',0,'0'); 
+insert into test(pk1,pk2,c1,c2) values(1,'1',1,'1');
+select * from test;
+insert into test(pk1,pk2,c1,c2) values(1,2,1,'1'); 
+select * from test;
+--error 1062
+update test set pk2=1 where pk1=1 and pk2='2';
+select * from test;
+update test set pk1='3' where c1=1 and c2=1 or c1=0;  
+update test set pk1=cast('3'as decimal) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('3'as decimal) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('4'as decimal) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('4'as decimal) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('5' as decimal) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('5' as decimal) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('6'as signed) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('6'as signed) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('7'as char(1024)) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('7'as char(1024)) where c1=1 and c2=1 or c1=0; 
+select * from test;
+drop table test;
+create table test(pk1 varchar(64), pk2 varchar(64), c1 int , c2 varchar(64), primary key(pk1, pk2)); 
+insert into test(pk1,pk2,c1,c2) values(0,'0',0,'0'); 
+insert into test(pk1,pk2,c1,c2) values(1,'1',1,'1');
+select * from test;
+insert into test(pk1,pk2,c1,c2) values(1,2,1,'1'); 
+select * from test;
+--error 1062
+update test set pk2=1 where pk1=1 and pk2='2';
+select * from test;
+update test set pk1='3' where c1=1 and c2=1 or c1=0;  
+update test set pk1=cast('3'as decimal) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('3'as decimal) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('4'as decimal) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('4'as decimal) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('5' as decimal) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('5' as decimal) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('6'as signed) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('6'as signed) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('7'as char(1024)) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('7'as char(1024)) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('8'as char(1024)) where pk1='7'; 
+--error 1062
+update test set pk2=cast('9'as char(1024)) where pk1='8'; 
+drop table test;
+create table test(pk1 varchar(64), pk2 varchar(64), c1 int , c2 varchar(64), primary key(pk1, pk2,c1)); 
+insert into test(pk1,pk2,c1,c2) values(0,'0',0,'0'); 
+insert into test(pk1,pk2,c1,c2) values(1,'1',1,'1');
+select * from test;
+insert into test(pk1,pk2,c1,c2) values(1,2,1,'1'); 
+select * from test;
+--error 1062
+update test set pk2=1 where pk1=1 and pk2='2';
+select * from test;
+update test set pk1='3' where c1=1 and c2=1 or c1=0;  
+update test set pk1=cast('3'as decimal) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('3'as decimal) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('4'as decimal) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('4'as decimal) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('5' as decimal) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('5' as decimal) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('6'as signed) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('6'as signed) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('7'as char(1024)) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('7'as char(1024)) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('8'as char(1024)) where pk1='7'; 
+--error 1062
+update test set pk2=cast('9'as char(1024)) where pk1='8'; 
+select * from test;
+update test set c1=cast('8'as char(1024)) where pk1='7'; 
+update test set c1=cast('9'as char(1024)) where pk1='8'; 
+select * from test;
+update test set c1=cast('10'as signed) where pk1='7'; 
+update test set c1=cast('11'as signed) where pk1='10'; 
+select * from test;
+drop table test;
+create table test(pk1 varchar(64), pk2 varchar(64), c1 int , c2 varchar(64), primary key(c1, pk2,pk1)); 
+insert into test(pk1,pk2,c1,c2) values(0,'0',0,'0'); 
+insert into test(pk1,pk2,c1,c2) values(1,'1',1,'1');
+select * from test;
+insert into test(pk1,pk2,c1,c2) values(1,2,1,'1'); 
+select * from test;
+--error 1062
+update test set pk2=1 where pk1=1 and pk2='2';
+select * from test;
+update test set pk1='3' where c1=1 and c2=1 or c1=0;  
+update test set pk1=cast('3'as decimal) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('3'as decimal) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('4'as decimal) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('4'as decimal) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('5' as decimal) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('5' as decimal) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('6'as signed) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('6'as signed) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('7'as char(1024)) where c1=1 and c2=1 or c1=0; 
+--error 1062
+update test set pk2=cast('7'as char(1024)) where c1=1 and c2=1 or c1=0; 
+select * from test;
+update test set pk1=cast('8'as char(1024)) where pk1='7'; 
+--error 1062
+update test set pk2=cast('9'as char(1024)) where pk1='8'; 
+select * from test;
+delete from test where pk1='1000';
+delete from test where pk2=1000;

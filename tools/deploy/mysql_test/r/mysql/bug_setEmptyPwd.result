@@ -1,0 +1,9 @@
+drop table if exists t1,t2,t3,t4;
+set password for  = password('pass11');
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near '= password('pass11')' at line 1
+set password '' for  = password('pass11');
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near ''' for  = password('pass11')' at line 1
+set password for  '' = password('pass11');
+ERROR 42000: Can not find any matching row in the user table
+create user '' identified by 'pass11';
+ERROR HY000: Operation CREATE USER failed for %

@@ -1,0 +1,3 @@
+drop table if exists t1;
+create table t1(a int primary key, b int primary key);
+ERROR 42000: Multiple primary key defined

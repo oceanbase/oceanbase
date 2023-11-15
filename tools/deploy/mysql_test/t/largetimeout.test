@@ -1,0 +1,21 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: link.zt
+#owner group: sql1
+
+set @@ob_query_timeout=3599999999999999963;
+select @@ob_query_timeout;
+set @@ob_query_timeout=3216672000000000;
+select @@ob_query_timeout;
+set @@ob_query_timeout=3216672000000001;
+select @@ob_query_timeout;
+set @@ob_query_timeout=3216671999999999;
+select @@ob_query_timeout;
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(a int primary key ,b int);
+desc t1;
+select * from t1;
+drop table t1;

@@ -1,0 +1,37 @@
+drop table if exists t1;
+create table t1(pk int primary key, c1 int);
+insert into t1 values(1,2), (2, 3),(3,4),(4,5);
+select * from t1;
+pk	c1
+1	2
+2	3
+3	4
+4	5
+update t1 set c1=pk ;
+select * from t1;
+pk	c1
+1	1
+2	2
+3	3
+4	4
+update t1 set c1=pk where pk=1 ;
+select * from t1;
+pk	c1
+1	1
+2	2
+3	3
+4	4
+update t1 set c1=pk where pk in (1,2,3,4) ;
+select * from t1;
+pk	c1
+1	1
+2	2
+3	3
+4	4
+update t1 set c1=pk-0 ;
+select * from t1;
+pk	c1
+1	1
+2	2
+3	3
+4	4

@@ -1,0 +1,13 @@
+drop table if exists msdt1;
+drop table if exists msdt2;
+create table msdt1(a int, b int);
+insert into msdt1 values(1, 1), (2, 2);
+alter table msdt1 add x varchar(10) after a;
+insert into msdt1 values(3, 'hehe', 3);
+create table msdt2(a int, b int);
+result
+1
+result
+1
+drop table msdt1;
+drop table msdt2;

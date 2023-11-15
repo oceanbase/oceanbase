@@ -1,0 +1,897 @@
+drop table if exists ct1;
+set session ob_trx_timeout=100000000000;
+create table ct1(c1 int primary key, c2 int, c3 number, c4 varchar(60000), c5 varchar(60000)) ROW_FORMAT = redundant COMPRESSION = 'none' with column group for all columns, each column;
+alter system minor freeze;
+alter system major freeze;
+update ct1 set c3 = 0 where c1 = 0;
+update ct1 set c3 = 0 where c1 = 200;
+update ct1 set c3 = 0 where c1 = 1200;
+update ct1 set c3 = 0 where c1 = 5200;
+update ct1 set c3 = 0 where c1 = 8803;
+update ct1 set c3 = 0 where c1 = 9907;
+insert into ct1 values(10001, 0, 0, '', '');
+insert into ct1 values(20000, 0, 0, '', '');
+select c1,c2 from ct1 where c2 <= 9;
+c1	c2
+0	0
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+8	8
+9	9
+10001	0
+20000	0
+select c1,c2 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000));
+c1	c2
+0	0
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+8	8
+9	9
+select c1,c2 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000));
+c1	c2
+0	0
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+8	8
+9	9
+10001	0
+20000	0
+select c1,c2,c3 from ct1 where c2 <= 9 order by c1 desc;
+c1	c2	c3
+20000	0	0
+10001	0	0
+9	9	9
+8	8	8
+7	7	7
+6	6	6
+5	5	5
+4	4	4
+3	3	3
+2	2	2
+1	1	1
+0	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000)) order by c1 desc;
+c1	c2	c3
+9	9	9
+8	8	8
+7	7	7
+6	6	6
+5	5	5
+4	4	4
+3	3	3
+2	2	2
+1	1	1
+0	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000)) order by c1 desc;
+c1	c2	c3
+20000	0	0
+10001	0	0
+9	9	9
+8	8	8
+7	7	7
+6	6	6
+5	5	5
+4	4	4
+3	3	3
+2	2	2
+1	1	1
+0	0	0
+update ct1 set c3 = 0 where c1 < 1000;
+update ct1 set c3 = 0 where c1 < 2000 and c1 >= 1000;
+update ct1 set c3 = 0 where c1 < 3000 and c1 >= 2000;
+update ct1 set c3 = 0 where c1 < 4000 and c1 >= 3000;
+update ct1 set c3 = 0 where c1 < 5000 and c1 >= 4000;
+update ct1 set c3 = 0 where c1 < 6000 and c1 >= 5000;
+update ct1 set c3 = 0 where c1 < 7000 and c1 >= 6000;
+update ct1 set c3 = 0 where c1 < 8000 and c1 >= 7000;
+update ct1 set c3 = 0 where c1 < 9000 and c1 >= 8000;
+update ct1 set c3 = 0 where c1 < 10000 and c1 >= 9000;
+alter system set _rowsets_enabled = false;
+alter system set _pushdown_storage_level = 0;
+alter system flush plan cache;
+select c1,c2,c3 from ct1 where c2 <= 9;
+c1	c2	c3
+0	0	0
+1	1	0
+2	2	0
+3	3	0
+4	4	0
+5	5	0
+6	6	0
+7	7	0
+8	8	0
+9	9	0
+10001	0	0
+20000	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000));
+c1	c2	c3
+0	0	0
+1	1	0
+2	2	0
+3	3	0
+4	4	0
+5	5	0
+6	6	0
+7	7	0
+8	8	0
+9	9	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000));
+c1	c2	c3
+0	0	0
+1	1	0
+2	2	0
+3	3	0
+4	4	0
+5	5	0
+6	6	0
+7	7	0
+8	8	0
+9	9	0
+10001	0	0
+20000	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 order by c1 desc;
+c1	c2	c3
+20000	0	0
+10001	0	0
+9	9	0
+8	8	0
+7	7	0
+6	6	0
+5	5	0
+4	4	0
+3	3	0
+2	2	0
+1	1	0
+0	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000)) order by c1 desc;
+c1	c2	c3
+9	9	0
+8	8	0
+7	7	0
+6	6	0
+5	5	0
+4	4	0
+3	3	0
+2	2	0
+1	1	0
+0	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000)) order by c1 desc;
+c1	c2	c3
+20000	0	0
+10001	0	0
+9	9	0
+8	8	0
+7	7	0
+6	6	0
+5	5	0
+4	4	0
+3	3	0
+2	2	0
+1	1	0
+0	0	0
+select count(*) from ct1;
+count(*)
+10002
+alter system set _rowsets_enabled = false;
+alter system set _pushdown_storage_level = 4;
+alter system flush plan cache;
+select c1,c2,c3 from ct1 where c2 <= 9;
+c1	c2	c3
+0	0	0
+1	1	0
+2	2	0
+3	3	0
+4	4	0
+5	5	0
+6	6	0
+7	7	0
+8	8	0
+9	9	0
+10001	0	0
+20000	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000));
+c1	c2	c3
+0	0	0
+1	1	0
+2	2	0
+3	3	0
+4	4	0
+5	5	0
+6	6	0
+7	7	0
+8	8	0
+9	9	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000));
+c1	c2	c3
+0	0	0
+1	1	0
+2	2	0
+3	3	0
+4	4	0
+5	5	0
+6	6	0
+7	7	0
+8	8	0
+9	9	0
+10001	0	0
+20000	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 order by c1 desc;
+c1	c2	c3
+20000	0	0
+10001	0	0
+9	9	0
+8	8	0
+7	7	0
+6	6	0
+5	5	0
+4	4	0
+3	3	0
+2	2	0
+1	1	0
+0	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000)) order by c1 desc;
+c1	c2	c3
+9	9	0
+8	8	0
+7	7	0
+6	6	0
+5	5	0
+4	4	0
+3	3	0
+2	2	0
+1	1	0
+0	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000)) order by c1 desc;
+c1	c2	c3
+20000	0	0
+10001	0	0
+9	9	0
+8	8	0
+7	7	0
+6	6	0
+5	5	0
+4	4	0
+3	3	0
+2	2	0
+1	1	0
+0	0	0
+select count(*) from ct1;
+count(*)
+10002
+alter system set _rowsets_enabled = true;
+alter system set _pushdown_storage_level = 0;
+alter system flush plan cache;
+select c1,c2,c3 from ct1 where c2 <= 9;
+c1	c2	c3
+0	0	0
+1	1	0
+2	2	0
+3	3	0
+4	4	0
+5	5	0
+6	6	0
+7	7	0
+8	8	0
+9	9	0
+10001	0	0
+20000	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000));
+c1	c2	c3
+0	0	0
+1	1	0
+2	2	0
+3	3	0
+4	4	0
+5	5	0
+6	6	0
+7	7	0
+8	8	0
+9	9	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000));
+c1	c2	c3
+0	0	0
+1	1	0
+2	2	0
+3	3	0
+4	4	0
+5	5	0
+6	6	0
+7	7	0
+8	8	0
+9	9	0
+10001	0	0
+20000	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 order by c1 desc;
+c1	c2	c3
+20000	0	0
+10001	0	0
+9	9	0
+8	8	0
+7	7	0
+6	6	0
+5	5	0
+4	4	0
+3	3	0
+2	2	0
+1	1	0
+0	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000)) order by c1 desc;
+c1	c2	c3
+9	9	0
+8	8	0
+7	7	0
+6	6	0
+5	5	0
+4	4	0
+3	3	0
+2	2	0
+1	1	0
+0	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000)) order by c1 desc;
+c1	c2	c3
+20000	0	0
+10001	0	0
+9	9	0
+8	8	0
+7	7	0
+6	6	0
+5	5	0
+4	4	0
+3	3	0
+2	2	0
+1	1	0
+0	0	0
+select count(*) from ct1;
+count(*)
+10002
+alter system set _rowsets_enabled = true;
+alter system set _pushdown_storage_level = 4;
+alter system flush plan cache;
+select c1,c2,c3 from ct1 where c2 <= 9;
+c1	c2	c3
+0	0	0
+1	1	0
+2	2	0
+3	3	0
+4	4	0
+5	5	0
+6	6	0
+7	7	0
+8	8	0
+9	9	0
+10001	0	0
+20000	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000));
+c1	c2	c3
+0	0	0
+1	1	0
+2	2	0
+3	3	0
+4	4	0
+5	5	0
+6	6	0
+7	7	0
+8	8	0
+9	9	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000));
+c1	c2	c3
+0	0	0
+1	1	0
+2	2	0
+3	3	0
+4	4	0
+5	5	0
+6	6	0
+7	7	0
+8	8	0
+9	9	0
+10001	0	0
+20000	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 order by c1 desc;
+c1	c2	c3
+20000	0	0
+10001	0	0
+9	9	0
+8	8	0
+7	7	0
+6	6	0
+5	5	0
+4	4	0
+3	3	0
+2	2	0
+1	1	0
+0	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000)) order by c1 desc;
+c1	c2	c3
+9	9	0
+8	8	0
+7	7	0
+6	6	0
+5	5	0
+4	4	0
+3	3	0
+2	2	0
+1	1	0
+0	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000)) order by c1 desc;
+c1	c2	c3
+20000	0	0
+10001	0	0
+9	9	0
+8	8	0
+7	7	0
+6	6	0
+5	5	0
+4	4	0
+3	3	0
+2	2	0
+1	1	0
+0	0	0
+select count(*) from ct1;
+count(*)
+10002
+drop table ct1;
+alter system enable_table_without_all_cg = false;
+alter system set _rowsets_enabled = true;
+alter system flush plan cache;
+create table ct1(c1 int primary key, c2 int, c3 number, c4 varchar(60000), c5 varchar(60000)) ROW_FORMAT = redundant COMPRESSION = 'none' with column group for all columns, each column;
+alter system minor freeze;
+alter system major freeze;
+update ct1 set c3 = 0 where c1 = 0;
+update ct1 set c3 = 0 where c1 = 200;
+update ct1 set c3 = 0 where c1 = 1200;
+update ct1 set c3 = 0 where c1 = 5200;
+update ct1 set c3 = 0 where c1 = 8803;
+update ct1 set c3 = 0 where c1 = 9907;
+insert into ct1 values(10001, 0, 0, '', '');
+insert into ct1 values(20000, 0, 0, '', '');
+select c1,c2 from ct1 where c2 <= 9;
+c1	c2
+0	0
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+8	8
+9	9
+10001	0
+20000	0
+select c1,c2 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000));
+c1	c2
+0	0
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+8	8
+9	9
+select c1,c2 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000));
+c1	c2
+0	0
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+8	8
+9	9
+10001	0
+20000	0
+select c1,c2,c3 from ct1 where c2 <= 9 order by c1 desc;
+c1	c2	c3
+20000	0	0
+10001	0	0
+9	9	9
+8	8	8
+7	7	7
+6	6	6
+5	5	5
+4	4	4
+3	3	3
+2	2	2
+1	1	1
+0	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000)) order by c1 desc;
+c1	c2	c3
+9	9	9
+8	8	8
+7	7	7
+6	6	6
+5	5	5
+4	4	4
+3	3	3
+2	2	2
+1	1	1
+0	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000)) order by c1 desc;
+c1	c2	c3
+20000	0	0
+10001	0	0
+9	9	9
+8	8	8
+7	7	7
+6	6	6
+5	5	5
+4	4	4
+3	3	3
+2	2	2
+1	1	1
+0	0	0
+update ct1 set c3 = 0 where c1 < 1000;
+update ct1 set c3 = 0 where c1 < 2000 and c1 >= 1000;
+update ct1 set c3 = 0 where c1 < 3000 and c1 >= 2000;
+update ct1 set c3 = 0 where c1 < 4000 and c1 >= 3000;
+update ct1 set c3 = 0 where c1 < 5000 and c1 >= 4000;
+update ct1 set c3 = 0 where c1 < 6000 and c1 >= 5000;
+update ct1 set c3 = 0 where c1 < 7000 and c1 >= 6000;
+update ct1 set c3 = 0 where c1 < 8000 and c1 >= 7000;
+update ct1 set c3 = 0 where c1 < 9000 and c1 >= 8000;
+update ct1 set c3 = 0 where c1 < 10000 and c1 >= 9000;
+alter system set _rowsets_enabled = false;
+alter system set _pushdown_storage_level = 0;
+alter system flush plan cache;
+select c1,c2,c3 from ct1 where c2 <= 9;
+c1	c2	c3
+0	0	0
+1	1	0
+2	2	0
+3	3	0
+4	4	0
+5	5	0
+6	6	0
+7	7	0
+8	8	0
+9	9	0
+10001	0	0
+20000	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000));
+c1	c2	c3
+0	0	0
+1	1	0
+2	2	0
+3	3	0
+4	4	0
+5	5	0
+6	6	0
+7	7	0
+8	8	0
+9	9	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000));
+c1	c2	c3
+0	0	0
+1	1	0
+2	2	0
+3	3	0
+4	4	0
+5	5	0
+6	6	0
+7	7	0
+8	8	0
+9	9	0
+10001	0	0
+20000	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 order by c1 desc;
+c1	c2	c3
+20000	0	0
+10001	0	0
+9	9	0
+8	8	0
+7	7	0
+6	6	0
+5	5	0
+4	4	0
+3	3	0
+2	2	0
+1	1	0
+0	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000)) order by c1 desc;
+c1	c2	c3
+9	9	0
+8	8	0
+7	7	0
+6	6	0
+5	5	0
+4	4	0
+3	3	0
+2	2	0
+1	1	0
+0	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000)) order by c1 desc;
+c1	c2	c3
+20000	0	0
+10001	0	0
+9	9	0
+8	8	0
+7	7	0
+6	6	0
+5	5	0
+4	4	0
+3	3	0
+2	2	0
+1	1	0
+0	0	0
+select count(*) from ct1;
+count(*)
+10002
+alter system set _rowsets_enabled = false;
+alter system set _pushdown_storage_level = 4;
+alter system flush plan cache;
+select c1,c2,c3 from ct1 where c2 <= 9;
+c1	c2	c3
+0	0	0
+1	1	0
+2	2	0
+3	3	0
+4	4	0
+5	5	0
+6	6	0
+7	7	0
+8	8	0
+9	9	0
+10001	0	0
+20000	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000));
+c1	c2	c3
+0	0	0
+1	1	0
+2	2	0
+3	3	0
+4	4	0
+5	5	0
+6	6	0
+7	7	0
+8	8	0
+9	9	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000));
+c1	c2	c3
+0	0	0
+1	1	0
+2	2	0
+3	3	0
+4	4	0
+5	5	0
+6	6	0
+7	7	0
+8	8	0
+9	9	0
+10001	0	0
+20000	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 order by c1 desc;
+c1	c2	c3
+20000	0	0
+10001	0	0
+9	9	0
+8	8	0
+7	7	0
+6	6	0
+5	5	0
+4	4	0
+3	3	0
+2	2	0
+1	1	0
+0	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000)) order by c1 desc;
+c1	c2	c3
+9	9	0
+8	8	0
+7	7	0
+6	6	0
+5	5	0
+4	4	0
+3	3	0
+2	2	0
+1	1	0
+0	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000)) order by c1 desc;
+c1	c2	c3
+20000	0	0
+10001	0	0
+9	9	0
+8	8	0
+7	7	0
+6	6	0
+5	5	0
+4	4	0
+3	3	0
+2	2	0
+1	1	0
+0	0	0
+select count(*) from ct1;
+count(*)
+10002
+alter system set _rowsets_enabled = true;
+alter system set _pushdown_storage_level = 0;
+alter system flush plan cache;
+select c1,c2,c3 from ct1 where c2 <= 9;
+c1	c2	c3
+0	0	0
+1	1	0
+2	2	0
+3	3	0
+4	4	0
+5	5	0
+6	6	0
+7	7	0
+8	8	0
+9	9	0
+10001	0	0
+20000	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000));
+c1	c2	c3
+0	0	0
+1	1	0
+2	2	0
+3	3	0
+4	4	0
+5	5	0
+6	6	0
+7	7	0
+8	8	0
+9	9	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000));
+c1	c2	c3
+0	0	0
+1	1	0
+2	2	0
+3	3	0
+4	4	0
+5	5	0
+6	6	0
+7	7	0
+8	8	0
+9	9	0
+10001	0	0
+20000	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 order by c1 desc;
+c1	c2	c3
+20000	0	0
+10001	0	0
+9	9	0
+8	8	0
+7	7	0
+6	6	0
+5	5	0
+4	4	0
+3	3	0
+2	2	0
+1	1	0
+0	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000)) order by c1 desc;
+c1	c2	c3
+9	9	0
+8	8	0
+7	7	0
+6	6	0
+5	5	0
+4	4	0
+3	3	0
+2	2	0
+1	1	0
+0	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000)) order by c1 desc;
+c1	c2	c3
+20000	0	0
+10001	0	0
+9	9	0
+8	8	0
+7	7	0
+6	6	0
+5	5	0
+4	4	0
+3	3	0
+2	2	0
+1	1	0
+0	0	0
+select count(*) from ct1;
+count(*)
+10002
+alter system set _rowsets_enabled = true;
+alter system set _pushdown_storage_level = 4;
+alter system flush plan cache;
+select c1,c2,c3 from ct1 where c2 <= 9;
+c1	c2	c3
+0	0	0
+1	1	0
+2	2	0
+3	3	0
+4	4	0
+5	5	0
+6	6	0
+7	7	0
+8	8	0
+9	9	0
+10001	0	0
+20000	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000));
+c1	c2	c3
+0	0	0
+1	1	0
+2	2	0
+3	3	0
+4	4	0
+5	5	0
+6	6	0
+7	7	0
+8	8	0
+9	9	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000));
+c1	c2	c3
+0	0	0
+1	1	0
+2	2	0
+3	3	0
+4	4	0
+5	5	0
+6	6	0
+7	7	0
+8	8	0
+9	9	0
+10001	0	0
+20000	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 order by c1 desc;
+c1	c2	c3
+20000	0	0
+10001	0	0
+9	9	0
+8	8	0
+7	7	0
+6	6	0
+5	5	0
+4	4	0
+3	3	0
+2	2	0
+1	1	0
+0	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000)) order by c1 desc;
+c1	c2	c3
+9	9	0
+8	8	0
+7	7	0
+6	6	0
+5	5	0
+4	4	0
+3	3	0
+2	2	0
+1	1	0
+0	0	0
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000)) order by c1 desc;
+c1	c2	c3
+20000	0	0
+10001	0	0
+9	9	0
+8	8	0
+7	7	0
+6	6	0
+5	5	0
+4	4	0
+3	3	0
+2	2	0
+1	1	0
+0	0	0
+select count(*) from ct1;
+count(*)
+10002
+drop table ct1;

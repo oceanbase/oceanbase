@@ -1,0 +1,749 @@
+drop database if exists hualong;
+create database hualong;
+use hualong;
+CREATE TABLE `astc_asset_price_daily_fa_77` (
+`id` varchar(28) NOT NULL COMMENT '主键',
+`user_id` varchar(16) NOT NULL COMMENT '用户ID',
+`account_no` varchar(20) NOT NULL COMMENT '资产账号',
+`product_channel` varchar(32) NOT NULL COMMENT '渠道',
+`accounting_id` varchar(28) NOT NULL COMMENT '记账ID',
+`account_date` varchar(8) NOT NULL COMMENT '会计日',
+`currency` varchar(3) NOT NULL COMMENT '币种',
+`gmt_create` datetime NOT NULL COMMENT '创建时间',
+`gmt_modified` datetime NOT NULL COMMENT '修改时间',
+`prices` varchar(4096) NOT NULL COMMENT '价格',
+`asset_value` bigint(20) NOT NULL COMMENT '资产价值',
+`daily_profit` bigint(20) NOT NULL COMMENT '每日收益',
+`accumulated_profit` bigint(20) NOT NULL COMMENT '历史累计收益',
+PRIMARY KEY (`id`),
+UNIQUE KEY `uk_aid_ad` (`accounting_id`, `account_date`) BLOCK_SIZE 16384,
+KEY `idx_uid_aid_ad` (`user_id`, `accounting_id`, `account_date`) BLOCK_SIZE 16384,
+KEY `idx_uid_pc_ad` (`user_id`, `product_channel`, `account_date`) BLOCK_SIZE 16384,
+KEY `idx_ad_aid` (`account_date`, `accounting_id`) BLOCK_SIZE 16384);
+explain select user_id, product_channel, account_date,
+sum(asset_value) as asset_value,
+sum(daily_profit) as daily_profit,
+sum(accumulated_profit) as accumulated_profit
+from astc_asset_price_daily_FA_77
+where user_id = '2088202548001770'
+and product_channel in('GOLDBAO','SFUND')
+and account_date >= '20170418' and account_date <= '20170517'
+group by user_id,product_channel,account_date;
+Query Plan
+======================================================================================
+|ID|OPERATOR          |NAME                                    |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------------------
+|0 |HASH GROUP BY     |                                        |1       |8           |
+|1 |└─TABLE RANGE SCAN|astc_asset_price_daily_fa_77(idx_ad_aid)|1       |8           |
+======================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([astc_asset_price_daily_fa_77.user_id], [astc_asset_price_daily_fa_77.product_channel], [astc_asset_price_daily_fa_77.account_date], [T_FUN_SUM(astc_asset_price_daily_fa_77.asset_value)],
+       [T_FUN_SUM(astc_asset_price_daily_fa_77.daily_profit)], [T_FUN_SUM(astc_asset_price_daily_fa_77.accumulated_profit)]), filter(nil), rowset=16
+      group([astc_asset_price_daily_fa_77.product_channel], [astc_asset_price_daily_fa_77.account_date]), agg_func([T_FUN_SUM(astc_asset_price_daily_fa_77.asset_value)],
+       [T_FUN_SUM(astc_asset_price_daily_fa_77.daily_profit)], [T_FUN_SUM(astc_asset_price_daily_fa_77.accumulated_profit)])
+  1 - output([astc_asset_price_daily_fa_77.user_id], [astc_asset_price_daily_fa_77.product_channel], [astc_asset_price_daily_fa_77.account_date], [astc_asset_price_daily_fa_77.asset_value],
+       [astc_asset_price_daily_fa_77.daily_profit], [astc_asset_price_daily_fa_77.accumulated_profit]), filter([astc_asset_price_daily_fa_77.user_id = '2088202548001770'],
+       [astc_asset_price_daily_fa_77.product_channel IN ('GOLDBAO', 'SFUND')]), rowset=16
+      access([astc_asset_price_daily_fa_77.id], [astc_asset_price_daily_fa_77.user_id], [astc_asset_price_daily_fa_77.product_channel], [astc_asset_price_daily_fa_77.account_date],
+       [astc_asset_price_daily_fa_77.asset_value], [astc_asset_price_daily_fa_77.daily_profit], [astc_asset_price_daily_fa_77.accumulated_profit]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([astc_asset_price_daily_fa_77.account_date], [astc_asset_price_daily_fa_77.accounting_id], [astc_asset_price_daily_fa_77.id]), range(20170418,
+      MIN,MIN ; 20170517,MAX,MAX), 
+      range_cond([astc_asset_price_daily_fa_77.account_date >= '20170418'], [astc_asset_price_daily_fa_77.account_date <= '20170517'])
+CREATE TABLE `trade_dispute` (
+`dispute_id` bigint(20) NOT NULL COMMENT '交易纠纷id',
+`buyer_id` bigint(20) NOT NULL COMMENT '买家id',
+`seller_id` bigint(20) NOT NULL COMMENT '卖家id',
+`buyer_nick` varchar(32) NOT NULL COMMENT '买家昵称',
+`seller_nick` varchar(32) NOT NULL COMMENT '卖家昵称',
+`biz_order_id` bigint(20) NOT NULL COMMENT '对应子订单号',
+`pay_order_id` bigint(20) DEFAULT NULL COMMENT '关联的支付订单号',
+`biz_type` int(11) DEFAULT NULL COMMENT '交易类型',
+`out_biz_id` varchar(32) DEFAULT NULL COMMENT '关联的外部业务处理编号',
+`auction_id` bigint(20) DEFAULT NULL COMMENT '商品id',
+`auction_title` varchar(256) DEFAULT NULL COMMENT '商品名称',
+`auction_url` varchar(256) DEFAULT NULL COMMENT '商品链接',
+`refund_fee` bigint(20) NOT NULL COMMENT '退款金额',
+`refund_type` smallint(6) DEFAULT NULL COMMENT '退款类型',
+`dispute_type` tinyint(4) NOT NULL COMMENT '交易纠纷类型：1售中退款，2售后退款，3售中维权，4售后维权',
+`dispute_reason_id` int(11) DEFAULT NULL COMMENT '交易纠纷原因id',
+`dispute_reason_text` varchar(100) DEFAULT NULL COMMENT '交易纠纷原因',
+`dispute_sub_reason_id` int(11) DEFAULT NULL COMMENT '交易纠纷二级原因id',
+`dispute_sub_reason_text` varchar(100) DEFAULT NULL COMMENT '交易纠纷二级原因',
+`multiple` tinyint(4) DEFAULT NULL COMMENT '是否合并退款',
+`dispute_end_time` datetime DEFAULT NULL COMMENT '交易纠纷完结时间',
+`gmt_timeout` datetime DEFAULT NULL COMMENT '交易纠纷超时时间',
+`timeout_type` varchar(40) DEFAULT NULL COMMENT '交易纠纷超时类型',
+`dispute_desc` varchar(400) DEFAULT NULL COMMENT '交易纠纷说明',
+`attributes` varchar(4000) DEFAULT NULL COMMENT '交易纠纷属性',
+`attribute_cc` int(11) DEFAULT NULL COMMENT '乐观锁',
+`dispute_status` tinyint(4) DEFAULT NULL COMMENT '交易纠纷退款状态',
+`goods_status` tinyint(4) DEFAULT NULL COMMENT '交易纠纷货物状态',
+`goods_needs` tinyint(4) DEFAULT NULL COMMENT '交易纠纷货物需求：0不退货，1退货，2换货',
+`goods_count` bigint(20) DEFAULT NULL COMMENT '交易纠纷退换货数量',
+`advance_status` tinyint(4) DEFAULT NULL COMMENT '交易纠纷垫付状态',
+`cs_status` tinyint(4) DEFAULT NULL COMMENT '交易纠纷小二介入状态',
+`proof_status` tinyint(4) DEFAULT NULL COMMENT '交易纠纷举证状态',
+`from_group` tinyint(4) DEFAULT NULL COMMENT '交易纠纷业务来源',
+`step_id` smallint(6) DEFAULT NULL COMMENT '交易纠纷流程节点',
+`gmt_create` datetime NOT NULL COMMENT '交易纠纷创建时间',
+`gmt_modified` datetime NOT NULL COMMENT '交易纠纷修改时间',
+`gmt_agreement_modified` bigint(20) DEFAULT NULL COMMENT '交易纠纷协议修改时间戳',
+`dispute_request` tinyint(4) NOT NULL DEFAULT '0' COMMENT '交易纠纷退款要求',
+PRIMARY KEY (`dispute_id`),
+KEY `idx_boid` (`biz_order_id`) BLOCK_SIZE 16384,
+KEY `idx_poid` (`pay_order_id`) BLOCK_SIZE 16384,
+KEY `idx_bid_gc` (`buyer_id`, `gmt_create`, `dispute_status`, `biz_type`, `seller_id`));
+explain select dispute_id, buyer_id, seller_id, buyer_nick, seller_nick , biz_order_id, pay_order_id, 
+biz_type, out_biz_id, auction_id , auction_title, auction_url, refund_fee, refund_type, dispute_type 
+, dispute_reason_id, dispute_reason_text, dispute_sub_reason_id, dispute_sub_reason_text, multiple , 
+gmt_agreement_modified, dispute_end_time, gmt_timeout, timeout_type, dispute_desc , attributes, attribute_cc, 
+dispute_status, goods_status, goods_needs , goods_count, advance_status, cs_status, proof_status, from_group 
+, step_id, gmt_create, gmt_modified, dispute_request from `trade_dispute` `trade_dispute` where `buyer_id` 
+= 100 and `seller_id` = 100 and `dispute_type` = 100 and `from_group` != 101 and `gmt_create` > str_to_date('1969-12-31 
+16:01:41.0', '%Y-%m-%d %H:%i:%s') and `gmt_create` < str_to_date('1969-12-31 16:01:41.0', '%Y-%m-%d 
+%H:%i:%s') order by `gmt_create` desc limit 0, 100;
+Query Plan
+============================================================
+|ID|OPERATOR           |NAME         |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------
+|0 |LIMIT              |             |0       |3           |
+|1 |└─TOP-N SORT       |             |0       |3           |
+|2 |  └─TABLE FULL SCAN|trade_dispute|0       |3           |
+============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([trade_dispute.dispute_id], [trade_dispute.buyer_id], [trade_dispute.seller_id], [trade_dispute.buyer_nick], [trade_dispute.seller_nick], [trade_dispute.biz_order_id],
+       [trade_dispute.pay_order_id], [trade_dispute.biz_type], [trade_dispute.out_biz_id], [trade_dispute.auction_id], [trade_dispute.auction_title], [trade_dispute.auction_url],
+       [trade_dispute.refund_fee], [trade_dispute.refund_type], [trade_dispute.dispute_type], [trade_dispute.dispute_reason_id], [trade_dispute.dispute_reason_text],
+       [trade_dispute.dispute_sub_reason_id], [trade_dispute.dispute_sub_reason_text], [trade_dispute.multiple], [trade_dispute.gmt_agreement_modified], [trade_dispute.dispute_end_time],
+       [trade_dispute.gmt_timeout], [trade_dispute.timeout_type], [trade_dispute.dispute_desc], [trade_dispute.attributes], [trade_dispute.attribute_cc], [trade_dispute.dispute_status],
+       [trade_dispute.goods_status], [trade_dispute.goods_needs], [trade_dispute.goods_count], [trade_dispute.advance_status], [trade_dispute.cs_status], [trade_dispute.proof_status],
+       [trade_dispute.from_group], [trade_dispute.step_id], [trade_dispute.gmt_create], [trade_dispute.gmt_modified], [trade_dispute.dispute_request]), filter(nil), rowset=16
+      limit(100), offset(0)
+  1 - output([trade_dispute.dispute_id], [trade_dispute.buyer_id], [trade_dispute.seller_id], [trade_dispute.buyer_nick], [trade_dispute.seller_nick], [trade_dispute.biz_order_id],
+       [trade_dispute.pay_order_id], [trade_dispute.biz_type], [trade_dispute.out_biz_id], [trade_dispute.auction_id], [trade_dispute.auction_title], [trade_dispute.auction_url],
+       [trade_dispute.refund_fee], [trade_dispute.refund_type], [trade_dispute.dispute_type], [trade_dispute.dispute_reason_id], [trade_dispute.dispute_reason_text],
+       [trade_dispute.dispute_sub_reason_id], [trade_dispute.dispute_sub_reason_text], [trade_dispute.multiple], [trade_dispute.gmt_agreement_modified], [trade_dispute.dispute_end_time],
+       [trade_dispute.gmt_timeout], [trade_dispute.timeout_type], [trade_dispute.dispute_desc], [trade_dispute.attributes], [trade_dispute.attribute_cc], [trade_dispute.dispute_status],
+       [trade_dispute.goods_status], [trade_dispute.goods_needs], [trade_dispute.goods_count], [trade_dispute.advance_status], [trade_dispute.cs_status], [trade_dispute.proof_status],
+       [trade_dispute.from_group], [trade_dispute.step_id], [trade_dispute.gmt_create], [trade_dispute.gmt_modified], [trade_dispute.dispute_request]), filter(nil), rowset=16
+      sort_keys([trade_dispute.gmt_create, DESC]), topn(100 + 0)
+  2 - output([trade_dispute.dispute_id], [trade_dispute.buyer_id], [trade_dispute.seller_id], [trade_dispute.dispute_type], [trade_dispute.from_group], 
+      [trade_dispute.gmt_create], [trade_dispute.buyer_nick], [trade_dispute.seller_nick], [trade_dispute.biz_order_id], [trade_dispute.pay_order_id], [trade_dispute.biz_type],
+       [trade_dispute.out_biz_id], [trade_dispute.auction_id], [trade_dispute.auction_title], [trade_dispute.auction_url], [trade_dispute.refund_fee], [trade_dispute.refund_type],
+       [trade_dispute.dispute_reason_id], [trade_dispute.dispute_reason_text], [trade_dispute.dispute_sub_reason_id], [trade_dispute.dispute_sub_reason_text],
+       [trade_dispute.multiple], [trade_dispute.gmt_agreement_modified], [trade_dispute.dispute_end_time], [trade_dispute.gmt_timeout], [trade_dispute.timeout_type],
+       [trade_dispute.dispute_desc], [trade_dispute.attributes], [trade_dispute.attribute_cc], [trade_dispute.dispute_status], [trade_dispute.goods_status], [trade_dispute.goods_needs],
+       [trade_dispute.goods_count], [trade_dispute.advance_status], [trade_dispute.cs_status], [trade_dispute.proof_status], [trade_dispute.step_id], [trade_dispute.gmt_modified],
+       [trade_dispute.dispute_request]), filter([trade_dispute.gmt_create > str_to_date('1969-12-31 \n16:01:41.0', '%Y-%m-%d %H:%i:%s')], [trade_dispute.gmt_create 
+      < str_to_date('1969-12-31 16:01:41.0', '%Y-%m-%d \n%H:%i:%s')], [trade_dispute.from_group != 101], [trade_dispute.buyer_id = 100], [trade_dispute.seller_id 
+      = 100], [trade_dispute.dispute_type = 100]), rowset=16
+      access([trade_dispute.dispute_id], [trade_dispute.buyer_id], [trade_dispute.seller_id], [trade_dispute.dispute_type], [trade_dispute.from_group], 
+      [trade_dispute.gmt_create], [trade_dispute.buyer_nick], [trade_dispute.seller_nick], [trade_dispute.biz_order_id], [trade_dispute.pay_order_id], [trade_dispute.biz_type],
+       [trade_dispute.out_biz_id], [trade_dispute.auction_id], [trade_dispute.auction_title], [trade_dispute.auction_url], [trade_dispute.refund_fee], [trade_dispute.refund_type],
+       [trade_dispute.dispute_reason_id], [trade_dispute.dispute_reason_text], [trade_dispute.dispute_sub_reason_id], [trade_dispute.dispute_sub_reason_text],
+       [trade_dispute.multiple], [trade_dispute.gmt_agreement_modified], [trade_dispute.dispute_end_time], [trade_dispute.gmt_timeout], [trade_dispute.timeout_type],
+       [trade_dispute.dispute_desc], [trade_dispute.attributes], [trade_dispute.attribute_cc], [trade_dispute.dispute_status], [trade_dispute.goods_status], [trade_dispute.goods_needs],
+       [trade_dispute.goods_count], [trade_dispute.advance_status], [trade_dispute.cs_status], [trade_dispute.proof_status], [trade_dispute.step_id], [trade_dispute.gmt_modified],
+       [trade_dispute.dispute_request]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false,false,false,false], 
+      range_key([trade_dispute.dispute_id]), range(MIN ; MAX)always true
+CREATE TABLE `luna_core_bidword_diagnose` (
+`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+`gmt_create` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+`gmt_modified` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '修改时间',
+`custid` bigint(20) unsigned NOT NULL COMMENT '分表字段',
+`platform` bigint(20) unsigned DEFAULT NULL COMMENT '0表示pc，1表示无线',
+`type` bigint(20) unsigned DEFAULT NULL COMMENT '诊断类型。包括1：排名下跌。2，冲排名。15，流量下跌重点词，16点击下降重点词',
+`updatepricetag` bigint(20) unsigned DEFAULT NULL COMMENT '是否改价。1表示调低出价，2表示调高出价，0表示未修改出价，相对昨天价格',
+`realtimefilter` bigint(20) unsigned DEFAULT NULL COMMENT '是否已经被实时过滤：0表示未过滤，1表示质量分过滤，2表示价格过滤，3表示已被删除，4表示已添加',
+`offlineprice` bigint(20) unsigned DEFAULT NULL COMMENT '离线建议价格',
+`impression_p_7d` bigint(20) unsigned DEFAULT NULL COMMENT '7天平均展现量',
+`impression_1d` bigint(20) unsigned DEFAULT NULL COMMENT '昨天展现量',
+`click_p_7d` bigint(20) unsigned DEFAULT NULL COMMENT '7天平均点击量',
+`click_1d` bigint(20) unsigned DEFAULT NULL COMMENT '昨天点击量',
+`rankdown_type` bigint(20) unsigned DEFAULT NULL COMMENT '下跌类型：1是同比，2表示环比',
+`rankdown_rate` bigint(20) unsigned DEFAULT NULL COMMENT '下跌比率',
+`imp_add_cnt` bigint(20) unsigned DEFAULT NULL COMMENT '展现提升比例',
+`click_add_cnt` bigint(20) unsigned DEFAULT NULL COMMENT '点击提升比例',
+`memberid` bigint(20) unsigned DEFAULT NULL COMMENT 'memberid',
+`campaignid` bigint(20) unsigned DEFAULT NULL COMMENT 'campaignid',
+`adgroupid` bigint(20) unsigned DEFAULT NULL COMMENT 'adgroupid',
+`bidwordid` bigint(20) unsigned DEFAULT NULL COMMENT 'bidwordid',
+`originalword` varchar(256) NOT NULL COMMENT '原词',
+`normalword` varchar(256) NOT NULL COMMENT '归一化词',
+`target` bigint(20) unsigned DEFAULT NULL COMMENT '目标排名。排名下跌和冲排名使用',
+`preprice` bigint(20) unsigned DEFAULT NULL COMMENT '昨天价格。为了对比价格调高调低使用',
+`preprerank` bigint(20) unsigned DEFAULT NULL COMMENT '前天排名',
+`prerank` bigint(20) unsigned DEFAULT NULL COMMENT '昨天排名',
+`impression_p_1d` bigint(20) unsigned DEFAULT NULL COMMENT '前天展现量',
+`click_p_1d` bigint(20) unsigned DEFAULT NULL COMMENT '前天点击量',
+`rankdown_cnt` bigint(20) DEFAULT NULL COMMENT '下跌量',
+`subtype` bigint(20) unsigned DEFAULT NULL COMMENT '子类型',
+`imp_factor` decimal(10,2) DEFAULT NULL COMMENT '展现系数',
+`click_factor` decimal(10,2) DEFAULT NULL COMMENT '点击系数',
+PRIMARY KEY (`id`, `custid`),
+KEY `idx_cu_ca_re` (`custid`, `campaignid`, `realtimefilter`) LOCAL  BLOCK_SIZE 16384,
+KEY `idx_cu_ca_ad` (`custid`, `campaignid`, `adgroupid`) LOCAL  BLOCK_SIZE 16384,
+KEY `idx_cu_ca_update` (`custid`, `platform`, `type`, `campaignid`, `adgroupid`, `bidwordid`, `originalword`) LOCAL  BLOCK_SIZE 16384,
+KEY `idx_bid_cid` (`bidwordid`, `custid`) LOCAL  BLOCK_SIZE 16384
+);
+explain UPDATE LUNA_CORE_BIDWORD_DIAGNOSE SET GMT_MODIFIED = NOW(), UPDATEPRICETAG = 8 WHERE CUSTID = 1 AND CAMPAIGNID = 2 AND ADGROUPID = 3 AND BIDWORDID = 5 AND ORIGINALWORD = 5 AND TYPE = 6 AND PLATFORM = 7;
+Query Plan
+==========================================================================================
+|ID|OPERATOR          |NAME                                        |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------------------------
+|0 |UPDATE            |                                            |1       |42          |
+|1 |└─TABLE RANGE SCAN|luna_core_bidword_diagnose(idx_cu_ca_update)|1       |10          |
+==========================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      table_columns([{luna_core_bidword_diagnose: ({luna_core_bidword_diagnose: (luna_core_bidword_diagnose.id, luna_core_bidword_diagnose.custid, luna_core_bidword_diagnose.gmt_create,
+       luna_core_bidword_diagnose.gmt_modified, luna_core_bidword_diagnose.platform, luna_core_bidword_diagnose.type, luna_core_bidword_diagnose.updatepricetag,
+       luna_core_bidword_diagnose.realtimefilter, luna_core_bidword_diagnose.offlineprice, luna_core_bidword_diagnose.impression_p_7d, luna_core_bidword_diagnose.impression_1d,
+       luna_core_bidword_diagnose.click_p_7d, luna_core_bidword_diagnose.click_1d, luna_core_bidword_diagnose.rankdown_type, luna_core_bidword_diagnose.rankdown_rate,
+       luna_core_bidword_diagnose.imp_add_cnt, luna_core_bidword_diagnose.click_add_cnt, luna_core_bidword_diagnose.memberid, luna_core_bidword_diagnose.campaignid,
+       luna_core_bidword_diagnose.adgroupid, luna_core_bidword_diagnose.bidwordid, luna_core_bidword_diagnose.originalword, luna_core_bidword_diagnose.normalword,
+       luna_core_bidword_diagnose.target, luna_core_bidword_diagnose.preprice, luna_core_bidword_diagnose.preprerank, luna_core_bidword_diagnose.prerank, luna_core_bidword_diagnose.impression_p_1d,
+       luna_core_bidword_diagnose.click_p_1d, luna_core_bidword_diagnose.rankdown_cnt, luna_core_bidword_diagnose.subtype, luna_core_bidword_diagnose.imp_factor,
+       luna_core_bidword_diagnose.click_factor)})}]),
+      update([luna_core_bidword_diagnose.gmt_modified=column_conv(TIMESTAMP,PS:(19,0),NOT NULL,timestamp_nvl(cast(current_timestamp(), TIMESTAMP(-1, 0)),
+       cast(current_timestamp(), TIMESTAMP(19, 0))))], [luna_core_bidword_diagnose.updatepricetag=column_conv(BIGINT UNSIGNED,PS:(20,0),NULL,cast(8, BIGINT UNSIGNED(-1,
+       0)))])
+  1 - output([luna_core_bidword_diagnose.id], [luna_core_bidword_diagnose.custid], [luna_core_bidword_diagnose.gmt_modified], [luna_core_bidword_diagnose.updatepricetag],
+       [luna_core_bidword_diagnose.gmt_create], [luna_core_bidword_diagnose.platform], [luna_core_bidword_diagnose.type], [luna_core_bidword_diagnose.realtimefilter],
+       [luna_core_bidword_diagnose.offlineprice], [luna_core_bidword_diagnose.impression_p_7d], [luna_core_bidword_diagnose.impression_1d], [luna_core_bidword_diagnose.click_p_7d],
+       [luna_core_bidword_diagnose.click_1d], [luna_core_bidword_diagnose.rankdown_type], [luna_core_bidword_diagnose.rankdown_rate], [luna_core_bidword_diagnose.imp_add_cnt],
+       [luna_core_bidword_diagnose.click_add_cnt], [luna_core_bidword_diagnose.memberid], [luna_core_bidword_diagnose.campaignid], [luna_core_bidword_diagnose.adgroupid],
+       [luna_core_bidword_diagnose.bidwordid], [luna_core_bidword_diagnose.originalword], [luna_core_bidword_diagnose.normalword], [luna_core_bidword_diagnose.target],
+       [luna_core_bidword_diagnose.preprice], [luna_core_bidword_diagnose.preprerank], [luna_core_bidword_diagnose.prerank], [luna_core_bidword_diagnose.impression_p_1d],
+       [luna_core_bidword_diagnose.click_p_1d], [luna_core_bidword_diagnose.rankdown_cnt], [luna_core_bidword_diagnose.subtype], [luna_core_bidword_diagnose.imp_factor],
+       [luna_core_bidword_diagnose.click_factor]), filter([cast(luna_core_bidword_diagnose.originalword, DECIMAL(-1, -1)) = cast(5, DECIMAL(1, 0))]), rowset=16
+      access([luna_core_bidword_diagnose.id], [luna_core_bidword_diagnose.custid], [luna_core_bidword_diagnose.gmt_modified], [luna_core_bidword_diagnose.updatepricetag],
+       [luna_core_bidword_diagnose.gmt_create], [luna_core_bidword_diagnose.platform], [luna_core_bidword_diagnose.type], [luna_core_bidword_diagnose.realtimefilter],
+       [luna_core_bidword_diagnose.offlineprice], [luna_core_bidword_diagnose.impression_p_7d], [luna_core_bidword_diagnose.impression_1d], [luna_core_bidword_diagnose.click_p_7d],
+       [luna_core_bidword_diagnose.click_1d], [luna_core_bidword_diagnose.rankdown_type], [luna_core_bidword_diagnose.rankdown_rate], [luna_core_bidword_diagnose.imp_add_cnt],
+       [luna_core_bidword_diagnose.click_add_cnt], [luna_core_bidword_diagnose.memberid], [luna_core_bidword_diagnose.campaignid], [luna_core_bidword_diagnose.adgroupid],
+       [luna_core_bidword_diagnose.bidwordid], [luna_core_bidword_diagnose.originalword], [luna_core_bidword_diagnose.normalword], [luna_core_bidword_diagnose.target],
+       [luna_core_bidword_diagnose.preprice], [luna_core_bidword_diagnose.preprerank], [luna_core_bidword_diagnose.prerank], [luna_core_bidword_diagnose.impression_p_1d],
+       [luna_core_bidword_diagnose.click_p_1d], [luna_core_bidword_diagnose.rankdown_cnt], [luna_core_bidword_diagnose.subtype], [luna_core_bidword_diagnose.imp_factor],
+       [luna_core_bidword_diagnose.click_factor]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true], 
+      range_key([luna_core_bidword_diagnose.custid], [luna_core_bidword_diagnose.platform], [luna_core_bidword_diagnose.type], [luna_core_bidword_diagnose.campaignid],
+       [luna_core_bidword_diagnose.adgroupid], [luna_core_bidword_diagnose.bidwordid], [luna_core_bidword_diagnose.originalword], [luna_core_bidword_diagnose.id]),
+       range(1,7,6,2,3,5,MIN,MIN ; 1,7,6,2,3,5,MAX,MAX), 
+      range_cond([luna_core_bidword_diagnose.custid = 1], [luna_core_bidword_diagnose.campaignid = 2], [luna_core_bidword_diagnose.adgroupid = 3], [luna_core_bidword_diagnose.bidwordid 
+      = 5], [luna_core_bidword_diagnose.type = 6], [luna_core_bidword_diagnose.platform = 7])
+explain UPDATE /*+index(luna_core_bidword_diagnose idx_cu_ca_update)*/ LUNA_CORE_BIDWORD_DIAGNOSE SET GMT_MODIFIED = NOW(), UPDATEPRICETAG = 8 WHERE CUSTID = 1 AND CAMPAIGNID = 2 AND ADGROUPID = 3 AND BIDWORDID = 5 AND ORIGINALWORD = 5 AND TYPE = 6 AND PLATFORM = 7;
+Query Plan
+==========================================================================================
+|ID|OPERATOR          |NAME                                        |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------------------------
+|0 |UPDATE            |                                            |1       |42          |
+|1 |└─TABLE RANGE SCAN|luna_core_bidword_diagnose(idx_cu_ca_update)|1       |10          |
+==========================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      table_columns([{luna_core_bidword_diagnose: ({luna_core_bidword_diagnose: (luna_core_bidword_diagnose.id, luna_core_bidword_diagnose.custid, luna_core_bidword_diagnose.gmt_create,
+       luna_core_bidword_diagnose.gmt_modified, luna_core_bidword_diagnose.platform, luna_core_bidword_diagnose.type, luna_core_bidword_diagnose.updatepricetag,
+       luna_core_bidword_diagnose.realtimefilter, luna_core_bidword_diagnose.offlineprice, luna_core_bidword_diagnose.impression_p_7d, luna_core_bidword_diagnose.impression_1d,
+       luna_core_bidword_diagnose.click_p_7d, luna_core_bidword_diagnose.click_1d, luna_core_bidword_diagnose.rankdown_type, luna_core_bidword_diagnose.rankdown_rate,
+       luna_core_bidword_diagnose.imp_add_cnt, luna_core_bidword_diagnose.click_add_cnt, luna_core_bidword_diagnose.memberid, luna_core_bidword_diagnose.campaignid,
+       luna_core_bidword_diagnose.adgroupid, luna_core_bidword_diagnose.bidwordid, luna_core_bidword_diagnose.originalword, luna_core_bidword_diagnose.normalword,
+       luna_core_bidword_diagnose.target, luna_core_bidword_diagnose.preprice, luna_core_bidword_diagnose.preprerank, luna_core_bidword_diagnose.prerank, luna_core_bidword_diagnose.impression_p_1d,
+       luna_core_bidword_diagnose.click_p_1d, luna_core_bidword_diagnose.rankdown_cnt, luna_core_bidword_diagnose.subtype, luna_core_bidword_diagnose.imp_factor,
+       luna_core_bidword_diagnose.click_factor)})}]),
+      update([luna_core_bidword_diagnose.gmt_modified=column_conv(TIMESTAMP,PS:(19,0),NOT NULL,timestamp_nvl(cast(current_timestamp(), TIMESTAMP(-1, 0)),
+       cast(current_timestamp(), TIMESTAMP(19, 0))))], [luna_core_bidword_diagnose.updatepricetag=column_conv(BIGINT UNSIGNED,PS:(20,0),NULL,cast(8, BIGINT UNSIGNED(-1,
+       0)))])
+  1 - output([luna_core_bidword_diagnose.id], [luna_core_bidword_diagnose.custid], [luna_core_bidword_diagnose.gmt_modified], [luna_core_bidword_diagnose.updatepricetag],
+       [luna_core_bidword_diagnose.gmt_create], [luna_core_bidword_diagnose.platform], [luna_core_bidword_diagnose.type], [luna_core_bidword_diagnose.realtimefilter],
+       [luna_core_bidword_diagnose.offlineprice], [luna_core_bidword_diagnose.impression_p_7d], [luna_core_bidword_diagnose.impression_1d], [luna_core_bidword_diagnose.click_p_7d],
+       [luna_core_bidword_diagnose.click_1d], [luna_core_bidword_diagnose.rankdown_type], [luna_core_bidword_diagnose.rankdown_rate], [luna_core_bidword_diagnose.imp_add_cnt],
+       [luna_core_bidword_diagnose.click_add_cnt], [luna_core_bidword_diagnose.memberid], [luna_core_bidword_diagnose.campaignid], [luna_core_bidword_diagnose.adgroupid],
+       [luna_core_bidword_diagnose.bidwordid], [luna_core_bidword_diagnose.originalword], [luna_core_bidword_diagnose.normalword], [luna_core_bidword_diagnose.target],
+       [luna_core_bidword_diagnose.preprice], [luna_core_bidword_diagnose.preprerank], [luna_core_bidword_diagnose.prerank], [luna_core_bidword_diagnose.impression_p_1d],
+       [luna_core_bidword_diagnose.click_p_1d], [luna_core_bidword_diagnose.rankdown_cnt], [luna_core_bidword_diagnose.subtype], [luna_core_bidword_diagnose.imp_factor],
+       [luna_core_bidword_diagnose.click_factor]), filter([cast(luna_core_bidword_diagnose.originalword, DECIMAL(-1, -1)) = cast(5, DECIMAL(1, 0))]), rowset=16
+      access([luna_core_bidword_diagnose.id], [luna_core_bidword_diagnose.custid], [luna_core_bidword_diagnose.gmt_modified], [luna_core_bidword_diagnose.updatepricetag],
+       [luna_core_bidword_diagnose.gmt_create], [luna_core_bidword_diagnose.platform], [luna_core_bidword_diagnose.type], [luna_core_bidword_diagnose.realtimefilter],
+       [luna_core_bidword_diagnose.offlineprice], [luna_core_bidword_diagnose.impression_p_7d], [luna_core_bidword_diagnose.impression_1d], [luna_core_bidword_diagnose.click_p_7d],
+       [luna_core_bidword_diagnose.click_1d], [luna_core_bidword_diagnose.rankdown_type], [luna_core_bidword_diagnose.rankdown_rate], [luna_core_bidword_diagnose.imp_add_cnt],
+       [luna_core_bidword_diagnose.click_add_cnt], [luna_core_bidword_diagnose.memberid], [luna_core_bidword_diagnose.campaignid], [luna_core_bidword_diagnose.adgroupid],
+       [luna_core_bidword_diagnose.bidwordid], [luna_core_bidword_diagnose.originalword], [luna_core_bidword_diagnose.normalword], [luna_core_bidword_diagnose.target],
+       [luna_core_bidword_diagnose.preprice], [luna_core_bidword_diagnose.preprerank], [luna_core_bidword_diagnose.prerank], [luna_core_bidword_diagnose.impression_p_1d],
+       [luna_core_bidword_diagnose.click_p_1d], [luna_core_bidword_diagnose.rankdown_cnt], [luna_core_bidword_diagnose.subtype], [luna_core_bidword_diagnose.imp_factor],
+       [luna_core_bidword_diagnose.click_factor]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true], 
+      range_key([luna_core_bidword_diagnose.custid], [luna_core_bidword_diagnose.platform], [luna_core_bidword_diagnose.type], [luna_core_bidword_diagnose.campaignid],
+       [luna_core_bidword_diagnose.adgroupid], [luna_core_bidword_diagnose.bidwordid], [luna_core_bidword_diagnose.originalword], [luna_core_bidword_diagnose.id]),
+       range(1,7,6,2,3,5,MIN,MIN ; 1,7,6,2,3,5,MAX,MAX), 
+      range_cond([luna_core_bidword_diagnose.custid = 1], [luna_core_bidword_diagnose.campaignid = 2], [luna_core_bidword_diagnose.adgroupid = 3], [luna_core_bidword_diagnose.bidwordid 
+      = 5], [luna_core_bidword_diagnose.type = 6], [luna_core_bidword_diagnose.platform = 7])
+explain UPDATE /*+index(luna_core_bidword_diagnose primary)*/ LUNA_CORE_BIDWORD_DIAGNOSE SET GMT_MODIFIED = NOW(), UPDATEPRICETAG = 8 WHERE CUSTID = 1 AND CAMPAIGNID = 2 AND ADGROUPID = 3 AND BIDWORDID = 5 AND ORIGINALWORD = 5 AND TYPE = 6 AND PLATFORM = 7;
+Query Plan
+=======================================================================
+|ID|OPERATOR         |NAME                      |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------
+|0 |UPDATE           |                          |1       |35          |
+|1 |└─TABLE FULL SCAN|luna_core_bidword_diagnose|1       |4           |
+=======================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      table_columns([{luna_core_bidword_diagnose: ({luna_core_bidword_diagnose: (luna_core_bidword_diagnose.id, luna_core_bidword_diagnose.custid, luna_core_bidword_diagnose.gmt_create,
+       luna_core_bidword_diagnose.gmt_modified, luna_core_bidword_diagnose.platform, luna_core_bidword_diagnose.type, luna_core_bidword_diagnose.updatepricetag,
+       luna_core_bidword_diagnose.realtimefilter, luna_core_bidword_diagnose.offlineprice, luna_core_bidword_diagnose.impression_p_7d, luna_core_bidword_diagnose.impression_1d,
+       luna_core_bidword_diagnose.click_p_7d, luna_core_bidword_diagnose.click_1d, luna_core_bidword_diagnose.rankdown_type, luna_core_bidword_diagnose.rankdown_rate,
+       luna_core_bidword_diagnose.imp_add_cnt, luna_core_bidword_diagnose.click_add_cnt, luna_core_bidword_diagnose.memberid, luna_core_bidword_diagnose.campaignid,
+       luna_core_bidword_diagnose.adgroupid, luna_core_bidword_diagnose.bidwordid, luna_core_bidword_diagnose.originalword, luna_core_bidword_diagnose.normalword,
+       luna_core_bidword_diagnose.target, luna_core_bidword_diagnose.preprice, luna_core_bidword_diagnose.preprerank, luna_core_bidword_diagnose.prerank, luna_core_bidword_diagnose.impression_p_1d,
+       luna_core_bidword_diagnose.click_p_1d, luna_core_bidword_diagnose.rankdown_cnt, luna_core_bidword_diagnose.subtype, luna_core_bidword_diagnose.imp_factor,
+       luna_core_bidword_diagnose.click_factor)})}]),
+      update([luna_core_bidword_diagnose.gmt_modified=column_conv(TIMESTAMP,PS:(19,0),NOT NULL,timestamp_nvl(cast(current_timestamp(), TIMESTAMP(-1, 0)),
+       cast(current_timestamp(), TIMESTAMP(19, 0))))], [luna_core_bidword_diagnose.updatepricetag=column_conv(BIGINT UNSIGNED,PS:(20,0),NULL,cast(8, BIGINT UNSIGNED(-1,
+       0)))])
+  1 - output([luna_core_bidword_diagnose.id], [luna_core_bidword_diagnose.custid], [luna_core_bidword_diagnose.gmt_modified], [luna_core_bidword_diagnose.updatepricetag],
+       [luna_core_bidword_diagnose.gmt_create], [luna_core_bidword_diagnose.platform], [luna_core_bidword_diagnose.type], [luna_core_bidword_diagnose.realtimefilter],
+       [luna_core_bidword_diagnose.offlineprice], [luna_core_bidword_diagnose.impression_p_7d], [luna_core_bidword_diagnose.impression_1d], [luna_core_bidword_diagnose.click_p_7d],
+       [luna_core_bidword_diagnose.click_1d], [luna_core_bidword_diagnose.rankdown_type], [luna_core_bidword_diagnose.rankdown_rate], [luna_core_bidword_diagnose.imp_add_cnt],
+       [luna_core_bidword_diagnose.click_add_cnt], [luna_core_bidword_diagnose.memberid], [luna_core_bidword_diagnose.campaignid], [luna_core_bidword_diagnose.adgroupid],
+       [luna_core_bidword_diagnose.bidwordid], [luna_core_bidword_diagnose.originalword], [luna_core_bidword_diagnose.normalword], [luna_core_bidword_diagnose.target],
+       [luna_core_bidword_diagnose.preprice], [luna_core_bidword_diagnose.preprerank], [luna_core_bidword_diagnose.prerank], [luna_core_bidword_diagnose.impression_p_1d],
+       [luna_core_bidword_diagnose.click_p_1d], [luna_core_bidword_diagnose.rankdown_cnt], [luna_core_bidword_diagnose.subtype], [luna_core_bidword_diagnose.imp_factor],
+       [luna_core_bidword_diagnose.click_factor]), filter([luna_core_bidword_diagnose.custid = 1], [luna_core_bidword_diagnose.campaignid = 2], [luna_core_bidword_diagnose.adgroupid 
+      = 3], [luna_core_bidword_diagnose.bidwordid = 5], [cast(luna_core_bidword_diagnose.originalword, DECIMAL(-1, -1)) = cast(5, DECIMAL(1, 0))], [luna_core_bidword_diagnose.type 
+      = 6], [luna_core_bidword_diagnose.platform = 7]), rowset=16
+      access([luna_core_bidword_diagnose.id], [luna_core_bidword_diagnose.custid], [luna_core_bidword_diagnose.gmt_modified], [luna_core_bidword_diagnose.updatepricetag],
+       [luna_core_bidword_diagnose.gmt_create], [luna_core_bidword_diagnose.platform], [luna_core_bidword_diagnose.type], [luna_core_bidword_diagnose.realtimefilter],
+       [luna_core_bidword_diagnose.offlineprice], [luna_core_bidword_diagnose.impression_p_7d], [luna_core_bidword_diagnose.impression_1d], [luna_core_bidword_diagnose.click_p_7d],
+       [luna_core_bidword_diagnose.click_1d], [luna_core_bidword_diagnose.rankdown_type], [luna_core_bidword_diagnose.rankdown_rate], [luna_core_bidword_diagnose.imp_add_cnt],
+       [luna_core_bidword_diagnose.click_add_cnt], [luna_core_bidword_diagnose.memberid], [luna_core_bidword_diagnose.campaignid], [luna_core_bidword_diagnose.adgroupid],
+       [luna_core_bidword_diagnose.bidwordid], [luna_core_bidword_diagnose.originalword], [luna_core_bidword_diagnose.normalword], [luna_core_bidword_diagnose.target],
+       [luna_core_bidword_diagnose.preprice], [luna_core_bidword_diagnose.preprerank], [luna_core_bidword_diagnose.prerank], [luna_core_bidword_diagnose.impression_p_1d],
+       [luna_core_bidword_diagnose.click_p_1d], [luna_core_bidword_diagnose.rankdown_cnt], [luna_core_bidword_diagnose.subtype], [luna_core_bidword_diagnose.imp_factor],
+       [luna_core_bidword_diagnose.click_factor]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false,false,false,false,false], 
+      range_key([luna_core_bidword_diagnose.id], [luna_core_bidword_diagnose.custid]), range(MIN,MIN ; MAX,MAX)always true
+create table `app_content` ( `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+`gmt_create` datetime not nULL COMMENT '创建时间',
+`gmt_modified` datetime not NULL COMMENT '修改时间',
+`user_id` bigint(20) unsigned NOT NULL COMMENT '用户id',
+`class_id` int(11) not null COMMENT '行业id1:家居',
+`group_id` bigint(20) unsigned DEFAULT NULL COMMENT '专辑id',
+`biz_type` int(11) not null COMMENT '1：日记2：样板3：攻略',
+`cover_image_url` varchar(512) DEFAULT NULL COMMENT '封面地址',
+`properties` varchar(1024) DEFAULT NULL COMMENT '属性对',
+`input_properties` varchar(1024) DEFAULT NULL COMMENT '属性的可输入属性值',
+`content_id` bigint(20) unsigned DEFAULT NULL COMMENT '内容平台id',
+`nick` varchar(128) not nulL COMMENT '用户nick',
+`title` varchar(512) not nuLL COMMENT '标题',
+`summary` varchar(2048) defAULT NULL COMMENT '摘要',
+`features` varchar(4096) deFAULT NULL COMMENT '扩展字段',
+`status` int(11) not null dEFAULT '0' COMMENT '0：正常-1：删除-2：屏蔽',
+`user_modified` datetime noT NULL COMMENT '用户修改时间',
+`tfs_path` varchar(256) defAULT NULL COMMENT '内容tfs路径',
+`tags` bigint(20) unsigned DEFAULT NULL COMMENT 'Int标签',
+`content_items` varchar(1024) DEFAULT NULL COMMENT '对应套餐的商品列表ex:     11111,22222',
+`extend_info` varchar(255) DEFAULT NULL COMMENT '扩展信息',
+`extend_imginfo` varchar(255) DEFAULT NULL COMMENT '扩展图片信息',
+`app_key` varchar(128) defaULT NULL COMMENT '应用key',
+`biz_key` varchar(128) defaULT NULL COMMENT '接入业务的key',
+`app_type` int(11) default NULL COMMENT '接入业务的类型',
+primary key (`id`),
+key `ind_gr_st` (`group_id`, `status`) BLOCK_SIZE 16384,
+key `k_uid_btype` (`user_id`, `biz_type`) BLOCK_SIZE 16384,
+key `ind_user` (`user_id`) BLOCK_SIZE 16384,
+key `by_status` (`class_id`, `biz_type`, `status`) BLOCK_SIZE 16384,
+key `ind_group` (`group_id`, `gmt_modified`) BLOCK_SIZE 16384
+);
+explain select id, user_id, class_id, group_id, biz_type , cover_image_url, properties, input_properties,
+content_id, nick , title, summary, features, content_items, status , tfs_path, tags, gmt_create, gmt_modified, user_modified from app_content
+where status = 100 and class_id = 100 and biz_type = 100 and id = 100
+order by gmt_create desc limit 0, 100;
+Query Plan
+================================================
+|ID|OPERATOR |NAME       |EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE GET|app_content|1       |8           |
+================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([app_content.id], [app_content.user_id], [app_content.class_id], [app_content.group_id], [app_content.biz_type], [app_content.cover_image_url],
+       [app_content.properties], [app_content.input_properties], [app_content.content_id], [app_content.nick], [app_content.title], [app_content.summary], [app_content.features],
+       [app_content.content_items], [app_content.status], [app_content.tfs_path], [app_content.tags], [app_content.gmt_create], [app_content.gmt_modified], [app_content.user_modified]), filter([app_content.s
+      tatus = 100], [app_content.class_id = 100], [app_content.biz_type = 100]), rowset=16
+      access([app_content.id], [app_content.status], [app_content.class_id], [app_content.biz_type], [app_content.user_id], [app_content.group_id], [app_content.cover_image_url],
+       [app_content.properties], [app_content.input_properties], [app_content.content_id], [app_content.nick], [app_content.title], [app_content.summary], [app_content.features],
+       [app_content.content_items], [app_content.tfs_path], [app_content.tags], [app_content.gmt_create], [app_content.gmt_modified], [app_content.user_modified]), partitions(p0)
+      limit(100), offset(0), is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
+      range_key([app_content.id]), range[100 ; 100], 
+      range_cond([app_content.id = 100])
+explain select id, user_id, class_id, group_id, biz_type , cover_image_url, properties, input_properties,
+content_id, nick , title, summary, features, content_items, status , tfs_path, tags, gmt_create, gmt_modified, user_modified from app_content
+where status = 100 and class_id = 100 and biz_type = 100 and id = 200
+order by gmt_create desc limit 0, 100;
+Query Plan
+================================================
+|ID|OPERATOR |NAME       |EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE GET|app_content|1       |8           |
+================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([app_content.id], [app_content.user_id], [app_content.class_id], [app_content.group_id], [app_content.biz_type], [app_content.cover_image_url],
+       [app_content.properties], [app_content.input_properties], [app_content.content_id], [app_content.nick], [app_content.title], [app_content.summary], [app_content.features],
+       [app_content.content_items], [app_content.status], [app_content.tfs_path], [app_content.tags], [app_content.gmt_create], [app_content.gmt_modified], [app_content.user_modified]), filter([app_content.s
+      tatus = 100], [app_content.class_id = 100], [app_content.biz_type = 100]), rowset=16
+      access([app_content.id], [app_content.status], [app_content.class_id], [app_content.biz_type], [app_content.user_id], [app_content.group_id], [app_content.cover_image_url],
+       [app_content.properties], [app_content.input_properties], [app_content.content_id], [app_content.nick], [app_content.title], [app_content.summary], [app_content.features],
+       [app_content.content_items], [app_content.tfs_path], [app_content.tags], [app_content.gmt_create], [app_content.gmt_modified], [app_content.user_modified]), partitions(p0)
+      limit(100), offset(0), is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
+      range_key([app_content.id]), range[200 ; 200], 
+      range_cond([app_content.id = 200])
+explain select id, user_id, class_id, group_id, biz_type , cover_image_url, properties, input_properties,
+content_id, nick , title, summary, features, content_items, status , tfs_path, tags, gmt_create, gmt_modified, user_modified from app_content
+where status = 100 and class_id = 100 and biz_type = 100 and id = 100
+order by class_id desc limit 0, 100;
+Query Plan
+================================================
+|ID|OPERATOR |NAME       |EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE GET|app_content|1       |8           |
+================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([app_content.id], [app_content.user_id], [app_content.class_id], [app_content.group_id], [app_content.biz_type], [app_content.cover_image_url],
+       [app_content.properties], [app_content.input_properties], [app_content.content_id], [app_content.nick], [app_content.title], [app_content.summary], [app_content.features],
+       [app_content.content_items], [app_content.status], [app_content.tfs_path], [app_content.tags], [app_content.gmt_create], [app_content.gmt_modified], [app_content.user_modified]), filter([app_content.s
+      tatus = 100], [app_content.class_id = 100], [app_content.biz_type = 100]), rowset=16
+      access([app_content.id], [app_content.status], [app_content.class_id], [app_content.biz_type], [app_content.user_id], [app_content.group_id], [app_content.cover_image_url],
+       [app_content.properties], [app_content.input_properties], [app_content.content_id], [app_content.nick], [app_content.title], [app_content.summary], [app_content.features],
+       [app_content.content_items], [app_content.tfs_path], [app_content.tags], [app_content.gmt_create], [app_content.gmt_modified], [app_content.user_modified]), partitions(p0)
+      limit(100), offset(0), is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
+      range_key([app_content.id]), range[100 ; 100], 
+      range_cond([app_content.id = 100])
+explain select id, user_id, class_id, group_id, biz_type , cover_image_url, properties, input_properties,
+content_id, nick , title, summary, features, content_items, status , tfs_path, tags, gmt_create, gmt_modified, user_modified from app_content
+where status = 100 and class_id = 100 and biz_type = 100 and id = 200
+order by class_id desc limit 0, 100;
+Query Plan
+================================================
+|ID|OPERATOR |NAME       |EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE GET|app_content|1       |8           |
+================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([app_content.id], [app_content.user_id], [app_content.class_id], [app_content.group_id], [app_content.biz_type], [app_content.cover_image_url],
+       [app_content.properties], [app_content.input_properties], [app_content.content_id], [app_content.nick], [app_content.title], [app_content.summary], [app_content.features],
+       [app_content.content_items], [app_content.status], [app_content.tfs_path], [app_content.tags], [app_content.gmt_create], [app_content.gmt_modified], [app_content.user_modified]), filter([app_content.s
+      tatus = 100], [app_content.class_id = 100], [app_content.biz_type = 100]), rowset=16
+      access([app_content.id], [app_content.status], [app_content.class_id], [app_content.biz_type], [app_content.user_id], [app_content.group_id], [app_content.cover_image_url],
+       [app_content.properties], [app_content.input_properties], [app_content.content_id], [app_content.nick], [app_content.title], [app_content.summary], [app_content.features],
+       [app_content.content_items], [app_content.tfs_path], [app_content.tags], [app_content.gmt_create], [app_content.gmt_modified], [app_content.user_modified]), partitions(p0)
+      limit(100), offset(0), is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
+      range_key([app_content.id]), range[200 ; 200], 
+      range_cond([app_content.id = 200])
+explain select id, user_id, class_id, group_id, biz_type , cover_image_url, properties, input_properties,
+content_id, nick , title, summary, features, content_items, status , tfs_path, tags, gmt_create, gmt_modified, user_modified from app_content
+where status = 100 and class_id = 100 and biz_type = 100 and id = 100
+order by id desc limit 0, 100;
+Query Plan
+================================================
+|ID|OPERATOR |NAME       |EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE GET|app_content|1       |8           |
+================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([app_content.id], [app_content.user_id], [app_content.class_id], [app_content.group_id], [app_content.biz_type], [app_content.cover_image_url],
+       [app_content.properties], [app_content.input_properties], [app_content.content_id], [app_content.nick], [app_content.title], [app_content.summary], [app_content.features],
+       [app_content.content_items], [app_content.status], [app_content.tfs_path], [app_content.tags], [app_content.gmt_create], [app_content.gmt_modified], [app_content.user_modified]), filter([app_content.s
+      tatus = 100], [app_content.class_id = 100], [app_content.biz_type = 100]), rowset=16
+      access([app_content.id], [app_content.status], [app_content.class_id], [app_content.biz_type], [app_content.user_id], [app_content.group_id], [app_content.cover_image_url],
+       [app_content.properties], [app_content.input_properties], [app_content.content_id], [app_content.nick], [app_content.title], [app_content.summary], [app_content.features],
+       [app_content.content_items], [app_content.tfs_path], [app_content.tags], [app_content.gmt_create], [app_content.gmt_modified], [app_content.user_modified]), partitions(p0)
+      limit(100), offset(0), is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
+      range_key([app_content.id]), range[100 ; 100], 
+      range_cond([app_content.id = 100])
+explain select id, user_id, class_id, group_id, biz_type , cover_image_url, properties, input_properties,
+content_id, nick , title, summary, features, content_items, status , tfs_path, tags, gmt_create, gmt_modified, user_modified from app_content
+where status = 100 and class_id = 100 and biz_type = 100 and id = 200
+order by id desc limit 0, 100;
+Query Plan
+================================================
+|ID|OPERATOR |NAME       |EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE GET|app_content|1       |8           |
+================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([app_content.id], [app_content.user_id], [app_content.class_id], [app_content.group_id], [app_content.biz_type], [app_content.cover_image_url],
+       [app_content.properties], [app_content.input_properties], [app_content.content_id], [app_content.nick], [app_content.title], [app_content.summary], [app_content.features],
+       [app_content.content_items], [app_content.status], [app_content.tfs_path], [app_content.tags], [app_content.gmt_create], [app_content.gmt_modified], [app_content.user_modified]), filter([app_content.s
+      tatus = 100], [app_content.class_id = 100], [app_content.biz_type = 100]), rowset=16
+      access([app_content.id], [app_content.status], [app_content.class_id], [app_content.biz_type], [app_content.user_id], [app_content.group_id], [app_content.cover_image_url],
+       [app_content.properties], [app_content.input_properties], [app_content.content_id], [app_content.nick], [app_content.title], [app_content.summary], [app_content.features],
+       [app_content.content_items], [app_content.tfs_path], [app_content.tags], [app_content.gmt_create], [app_content.gmt_modified], [app_content.user_modified]), partitions(p0)
+      limit(100), offset(0), is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
+      range_key([app_content.id]), range[200 ; 200], 
+      range_cond([app_content.id = 200])
+CREATE TABLE `pcb_common_bill_01` (
+`BILL_NO` varchar(28) NOT NULL,
+`CARD_NO` varchar(28) NOT NULL,
+`ATTRIBUTE_INST` varchar(32) NOT NULL,
+`PRIN_IN` decimal(15,0) NOT NULL,
+`PRIN_OUT` decimal(15,0) NOT NULL,
+`OVD_PRIN_IN` decimal(15,0) NOT NULL,
+`OVD_PRIN_OUT` decimal(15,0) NOT NULL,
+`PRIN_PENALTY_IN` decimal(15,0) NOT NULL,
+`PRIN_PENALTY_OUT` decimal(15,0) NOT NULL,
+`INT_IN` decimal(15,0) NOT NULL,
+`INT_OUT` decimal(15,0) NOT NULL,
+`OVD_INT_IN` decimal(15,0) NOT NULL,
+`OVD_INT_OUT` decimal(15,0) NOT NULL,
+`START_DATE` varchar(8) NOT NULL,
+`DUE_DATE` varchar(8) NOT NULL,
+`STATUS` varchar(32) NOT NULL,
+`OUT_BILL_NO` varchar(128) DEFAULT NULL,
+`RATE_ID` decimal(15,0) NOT NULL,
+`OVD_DAYS` decimal(5,0) DEFAULT NULL,
+`OVD_INSTALLMENTS` decimal(5,0) DEFAULT NULL,
+`RECENT_SETTLE_DATE` varchar(8) DEFAULT NULL,
+`GMT_CREATED` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+`GMT_MODIFIED` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+`PRODUCT_ID` varchar(32) DEFAULT NULL,
+`ACCOUNT_NO` varchar(28) DEFAULT NULL,
+`END_DATE` varchar(8) DEFAULT NULL,
+`BEGIN_DATE` varchar(8) DEFAULT NULL,
+`FEE_IN` decimal(15,0) DEFAULT NULL,
+`FEE_OUT` decimal(15,0) DEFAULT NULL,
+`OVD_FEE_IN` decimal(15,0) DEFAULT NULL,
+`OVD_FEE_OUT` decimal(15,0) DEFAULT NULL,
+`FEE_PENALTY_IN` decimal(15,0) DEFAULT NULL,
+`FEE_PENALTY_OUT` decimal(15,0) DEFAULT NULL,
+PRIMARY KEY (`BILL_NO`),
+UNIQUE KEY `UK_CARDNO_ATTR_PRODID_OUTNO` (`CARD_NO`, `ATTRIBUTE_INST`, `PRODUCT_ID`, `OUT_BILL_NO`) BLOCK_SIZE 16384,
+KEY `IDX_CARDNO_BILLNO_STATUS` (`CARD_NO`, `BILL_NO`, `STATUS`) BLOCK_SIZE 16384,
+KEY `IDX_CARDNO_STATUS` (`CARD_NO`, `STATUS`) BLOCK_SIZE 16384,
+KEY `IDX_PCB_COMMON_BILL_PSBC` (`PRODUCT_ID`, `STATUS`, `BILL_NO`, `CARD_NO`) BLOCK_SIZE 16384,
+KEY `idx_s_cno_pid` (`STATUS`, `CARD_NO`, `PRODUCT_ID`) BLOCK_SIZE 16384
+);
+CREATE TABLE `pcb_account_balance_01` (
+`card_no` varchar(16) NOT NULL COMMENT ' ',
+`user_id` varchar(16) NOT NULL COMMENT ' ',
+`mast_prod_id` varchar(6) NOT NULL COMMENT ' ',
+`trans_dt` timestamp(6) NOT NULL COMMENT ' ',
+`status` varchar(32) NOT NULL COMMENT ' ',
+`history_cycle_prin` decimal(15,0) NOT NULL COMMENT ' ',
+`history_uncycle_prin` decimal(15,0) NOT NULL COMMENT ' ',
+`history_fee` decimal(15,0) NOT NULL COMMENT ' ',
+`history_int` decimal(15,0) NOT NULL COMMENT ' ',
+`history_prin_penalty` decimal(15,0) NOT NULL COMMENT ' ',
+`history_fee_penalty` decimal(15,0) NOT NULL COMMENT ' ',
+`cur_month_cycle_prin` decimal(15,0) NOT NULL COMMENT ' ',
+`cur_month_uncycle_prin` decimal(15,0) NOT NULL COMMENT ' ',
+`cur_month_fee` decimal(15,0) NOT NULL COMMENT ' ',
+`cur_month_int` decimal(15,0) NOT NULL COMMENT ' ',
+`next_month_uncycle_prin` decimal(15,0) NOT NULL COMMENT ' ',
+`next_month_cycle_prin` decimal(15,0) NOT NULL COMMENT ' ',
+`next_month_fee` decimal(15,0) NOT NULL COMMENT ' ',
+`next_month_int` decimal(15,0) NOT NULL COMMENT ' ',
+`future_prin` decimal(15,0) NOT NULL COMMENT ' ',
+`future_fee` decimal(15,0) NOT NULL COMMENT ' ',
+`future_int` decimal(15,0) NOT NULL COMMENT ' ',
+`mini_amount` decimal(15,0) DEFAULT NULL COMMENT ' ',
+`remain_mini_amount` decimal(15,0) DEFAULT NULL COMMENT ' ',
+`bill_date` varchar(2) NOT NULL COMMENT ' ',
+`due_date` varchar(2) NOT NULL COMMENT ' ',
+`id` varchar(28) NOT NULL COMMENT ' ',
+`gmt_create` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT ' ',
+`gmt_modified` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT ' ',
+PRIMARY KEY (`id`),
+UNIQUE KEY `uk_cardno` (`card_no`) BLOCK_SIZE 16384,
+KEY `idx_billdate_status` (`bill_date`, `status`, `trans_dt`) BLOCK_SIZE 16384,
+KEY `idx_mastprodid_cardno` (`mast_prod_id`, `card_no`) BLOCK_SIZE 16384
+);
+explain select a.card_no
+from (select distinct card_no
+from pcb_common_bill_01
+WHERE PRODUCT_ID != '9302' and card_no like '5001____________' ) a
+left outer join pcb_account_balance_01 b on a.card_no=b.card_no
+where b.card_no is null
+order by a.card_no
+limit 0,2000;
+Query Plan
+=============================================================================================================
+|ID|OPERATOR                          |NAME                                           |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------------------------------------------
+|0 |LIMIT                             |                                               |1       |3           |
+|1 |└─NESTED-LOOP ANTI JOIN           |                                               |1       |3           |
+|2 |  ├─SUBPLAN SCAN                  |a                                              |1       |3           |
+|3 |  │ └─MERGE DISTINCT              |                                               |1       |3           |
+|4 |  │   └─TABLE FULL SCAN           |pcb_common_bill_01(UK_CARDNO_ATTR_PRODID_OUTNO)|1       |3           |
+|5 |  └─SUBPLAN SCAN                  |VIEW1                                          |1       |18          |
+|6 |    └─DISTRIBUTED TABLE RANGE SCAN|b(uk_cardno)                                   |1       |18          |
+=============================================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([a.card_no]), filter(nil), rowset=16
+      limit(2000), offset(0)
+  1 - output([a.card_no]), filter(nil), rowset=16
+      conds(nil), nl_params_([a.card_no(:0)]), use_batch=false
+  2 - output([a.card_no]), filter(nil), rowset=16
+      access([a.card_no])
+  3 - output([pcb_common_bill_01.CARD_NO]), filter(nil), rowset=16
+      distinct([pcb_common_bill_01.CARD_NO])
+  4 - output([pcb_common_bill_01.CARD_NO]), filter([(T_OP_LIKE, pcb_common_bill_01.CARD_NO, '5001____________', '\\')], [pcb_common_bill_01.PRODUCT_ID != 
+      '9302']), rowset=16
+      access([pcb_common_bill_01.PRODUCT_ID], [pcb_common_bill_01.CARD_NO]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([pcb_common_bill_01.CARD_NO], [pcb_common_bill_01.ATTRIBUTE_INST], [pcb_common_bill_01.PRODUCT_ID], [pcb_common_bill_01.OUT_BILL_NO], [pcb_common_bill_01.shadow_pk_0]),
+       range(5001,MIN,MIN,MIN,MIN ; 5001￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿,MAX,MAX,MAX,
+      MAX)
+  5 - output(nil), filter(nil), rowset=16
+      access(nil)
+  6 - output([b.card_no]), filter([(T_OP_LIKE, b.card_no, '5001____________', '\\')]), rowset=16
+      access([b.card_no]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([b.card_no], [b.shadow_pk_0]), range(5001,MIN ; 5001￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿￿,MAX), 
+      range_cond([:0 = b.card_no])
+CREATE TABLE `pcb_installment_00` (
+`BILL_NO` varchar(28) NOT NULL,
+`INSTALL_NUM` decimal(5,0) NOT NULL,
+`PRIN` decimal(15,0) NOT NULL,
+`PRIN_INT` decimal(15,0) NOT NULL,
+`PRIN_PENALTY` decimal(15,0) NOT NULL,
+`REPAY_PRIN` decimal(15,0) NOT NULL,
+`REPAY_INT` decimal(15,0) NOT NULL,
+`REPAY_PRIN_PENALTY` decimal(15,0) NOT NULL,
+`STATUS` varchar(32) NOT NULL,
+`START_DATE` varchar(8) NOT NULL,
+`DUE_DATE` varchar(8) NOT NULL,
+`OVD_DATE` varchar(8) NOT NULL,
+`INT_START_DATE` varchar(8) NOT NULL,
+`OVD_DAYS` decimal(5,0) DEFAULT NULL,
+`GMT_CREATED` timestamp(6) NOT NULL,
+`GMT_MODIFIED` timestamp(6) NOT NULL,
+`CARD_NO` varchar(28) DEFAULT NULL,
+`OVD_PRIN` decimal(15,0) DEFAULT NULL,
+`OVD_INT` decimal(15,0) DEFAULT NULL,
+`REPAY_OVD_PRIN` decimal(15,0) DEFAULT NULL,
+`REPAY_OVD_INT` decimal(15,0) DEFAULT NULL,
+`BILL_DATE` varchar(8) DEFAULT NULL,
+`OUT_BILL_NO` varchar(128) DEFAULT NULL,
+`FEE` decimal(15,0) DEFAULT NULL,
+`OVD_FEE` decimal(15,0) DEFAULT NULL,
+`FEE_PENALTY` decimal(15,0) DEFAULT NULL,
+`REPAY_FEE` decimal(15,0) DEFAULT NULL,
+`REPAY_OVD_FEE` decimal(15,0) DEFAULT NULL,
+`REPAY_FEE_PENALTY` decimal(15,0) DEFAULT NULL,
+`TYPE` char(1) DEFAULT NULL,
+`PRODUCT_ID` varchar(32) DEFAULT NULL,
+PRIMARY KEY (`BILL_NO`, `INSTALL_NUM`),
+KEY `IDX_CARDNO_BILLDATE_BILLNO_STATUS` (`CARD_NO`, `BILL_DATE`, `BILL_NO`, `STATUS`) BLOCK_SIZE 16384,
+KEY `IDX_BILLNO_STATUS_OVDDATE` (`BILL_NO`, `STATUS`, `OVD_DATE`) BLOCK_SIZE 16384,
+KEY `IDX_OVDDATE_STATUS` (`OVD_DATE`, `STATUS`) BLOCK_SIZE 16384,
+KEY `IDX_BILLDATE_CARDNO` (`BILL_DATE`, `CARD_NO`) BLOCK_SIZE 16384,
+KEY `IDX_STATUS_CARDNO` (`STATUS`, `CARD_NO`, `DUE_DATE`, `OVD_DATE`) BLOCK_SIZE 16384,
+KEY `IDX_STATUS_BILLDATE` (`STATUS`, `BILL_DATE`) BLOCK_SIZE 16384,
+KEY `IDX_INSTALL_STATUS_PROD_OVD` (`STATUS`, `PRODUCT_ID`, `OVD_DATE`) BLOCK_SIZE 16384,
+KEY `idx_s_cno_ddate_odate_pid` (`STATUS`, `CARD_NO`, `DUE_DATE`, `OVD_DATE`, `PRODUCT_ID`) BLOCK_SIZE 16384,
+KEY `IDX_S_CNO_DDATE_ODATE_PID_TYPE` (`STATUS`, `CARD_NO`, `DUE_DATE`, `OVD_DATE`, `PRODUCT_ID`, `TYPE`) BLOCK_SIZE 16384,
+KEY IDX_STATUS_BILLDATE_CARDNO (`STATUS`, `BILL_DATE`, `CARD_NO`) BLOCK_SIZE 16384
+);
+explain select         BILL_NO,         INSTALL_NUM,         CARD_NO,         PRIN,         PRIN_INT,         PRIN_PENALTY,         REPAY_PRIN,         REPAY_INT,         REPAY_PRIN_PENALTY,         OVD_PRIN,         OVD_INT,         REPAY_OVD_PRIN,         REPAY_OVD_INT,         FEE,         OVD_FEE,         FEE_PENALTY,         REPAY_FEE,         REPAY_OVD_FEE,         REPAY_FEE_PENALTY,         STATUS,         START_DATE,         DUE_DATE,         OVD_DATE,         INT_START_DATE,         OVD_DAYS,         BILL_DATE,         OUT_BILL_NO,         type,         PRODUCT_ID,         GMT_CREATED,         GMT_MODIFIED         from PCB_INSTALLMENT_00 WHERE                     BILL_DATE = '20171201' and STATUS='nor'                    and card_no > '5001001940150766'                      order by CARD_NO asc                 limit 0,1000;
+Query Plan
+==========================================================================================
+|ID|OPERATOR        |NAME                                          |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------------------------
+|0 |TABLE RANGE SCAN|pcb_installment_00(IDX_STATUS_BILLDATE_CARDNO)|1       |9           |
+==========================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([pcb_installment_00.BILL_NO], [pcb_installment_00.INSTALL_NUM], [pcb_installment_00.CARD_NO], [pcb_installment_00.PRIN], [pcb_installment_00.PRIN_INT],
+       [pcb_installment_00.PRIN_PENALTY], [pcb_installment_00.REPAY_PRIN], [pcb_installment_00.REPAY_INT], [pcb_installment_00.REPAY_PRIN_PENALTY], [pcb_installment_00.OVD_PRIN],
+       [pcb_installment_00.OVD_INT], [pcb_installment_00.REPAY_OVD_PRIN], [pcb_installment_00.REPAY_OVD_INT], [pcb_installment_00.FEE], [pcb_installment_00.OVD_FEE],
+       [pcb_installment_00.FEE_PENALTY], [pcb_installment_00.REPAY_FEE], [pcb_installment_00.REPAY_OVD_FEE], [pcb_installment_00.REPAY_FEE_PENALTY], [pcb_installment_00.STATUS],
+       [pcb_installment_00.START_DATE], [pcb_installment_00.DUE_DATE], [pcb_installment_00.OVD_DATE], [pcb_installment_00.INT_START_DATE], [pcb_installment_00.OVD_DAYS],
+       [pcb_installment_00.BILL_DATE], [pcb_installment_00.OUT_BILL_NO], [pcb_installment_00.TYPE], [pcb_installment_00.PRODUCT_ID], [pcb_installment_00.GMT_CREATED],
+       [pcb_installment_00.GMT_MODIFIED]), filter(nil), rowset=16
+      access([pcb_installment_00.BILL_NO], [pcb_installment_00.INSTALL_NUM], [pcb_installment_00.BILL_DATE], [pcb_installment_00.STATUS], [pcb_installment_00.CARD_NO],
+       [pcb_installment_00.PRIN], [pcb_installment_00.PRIN_INT], [pcb_installment_00.PRIN_PENALTY], [pcb_installment_00.REPAY_PRIN], [pcb_installment_00.REPAY_INT],
+       [pcb_installment_00.REPAY_PRIN_PENALTY], [pcb_installment_00.OVD_PRIN], [pcb_installment_00.OVD_INT], [pcb_installment_00.REPAY_OVD_PRIN], [pcb_installment_00.REPAY_OVD_INT],
+       [pcb_installment_00.FEE], [pcb_installment_00.OVD_FEE], [pcb_installment_00.FEE_PENALTY], [pcb_installment_00.REPAY_FEE], [pcb_installment_00.REPAY_OVD_FEE],
+       [pcb_installment_00.REPAY_FEE_PENALTY], [pcb_installment_00.START_DATE], [pcb_installment_00.DUE_DATE], [pcb_installment_00.OVD_DATE], [pcb_installment_00.INT_START_DATE],
+       [pcb_installment_00.OVD_DAYS], [pcb_installment_00.OUT_BILL_NO], [pcb_installment_00.TYPE], [pcb_installment_00.PRODUCT_ID], [pcb_installment_00.GMT_CREATED],
+       [pcb_installment_00.GMT_MODIFIED]), partitions(p0)
+      limit(1000), offset(0), is_index_back=true, is_global_index=false, 
+      range_key([pcb_installment_00.STATUS], [pcb_installment_00.BILL_DATE], [pcb_installment_00.CARD_NO], [pcb_installment_00.BILL_NO], [pcb_installment_00.INSTALL_NUM]),
+       range(nor,20171201,5001001940150766,MAX,MAX ; nor,20171201,MAX,MAX,MAX), 
+      range_cond([pcb_installment_00.BILL_DATE = '20171201'], [pcb_installment_00.STATUS = 'nor'], [pcb_installment_00.CARD_NO > '5001001940150766'])
+drop table if exists wfsydp;
+CREATE TABLE `wfsydp` (
+`WSJJZH` char(12) NOT NULL COMMENT '基金账号',
+`WSJYZH` char(17) NOT NULL COMMENT '交易账号',
+`WSJJDM` char(6) NOT NULL COMMENT '基金代码',
+`WSDRDM` char(3) NOT NULL COMMENT '代理人代码',
+`WSWFSY` decimal(16,2) DEFAULT NULL COMMENT '未付收益',
+`WSDRSY` decimal(16,2) DEFAULT NULL COMMENT '当日收益',
+`WSJWSY` decimal(9,8) DEFAULT NULL COMMENT '截位收益',
+`WSZHXG` date DEFAULT NULL COMMENT '最后修改日期',
+`WSCYFE` decimal(16,2) DEFAULT NULL COMMENT '持有份额',
+PRIMARY KEY (`WSJJDM`, `WSJJZH`, `WSDRDM`, `WSJYZH`),
+KEY `WSJJDM` (`WSJJDM`, `WSJWSY`) GLOBAL,
+KEY `WSJJDM_LOCAL` (`WSJJDM`, `WSJWSY`) LOCAL
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.0' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
+partition by key(`wsjjdm`, `wsjjzh`) partitions 31;
+explain select `WSJJDM`, `WSJWSY` from wfsydp where wsjjdm = '666888' order by `WSJJDM`, `WSJWSY` limit 0 , 181819;
+Query Plan
+======================================================================
+|ID|OPERATOR                    |NAME          |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------
+|0 |DISTRIBUTED TABLE RANGE SCAN|wfsydp(WSJJDM)|1       |3           |
+======================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([wfsydp.WSJJDM], [wfsydp.WSJWSY]), filter(nil), rowset=16
+      access([wfsydp.WSJJDM], [wfsydp.WSJWSY]), partitions(p0)
+      limit(181819), offset(0), is_index_back=false, is_global_index=true, 
+      range_key([wfsydp.WSJJDM], [wfsydp.WSJWSY], [wfsydp.WSJJZH], [wfsydp.WSDRDM], [wfsydp.WSJYZH]), range(666888,MIN,MIN,MIN,MIN ; 666888,MAX,MAX,MAX,
+      MAX), 
+      range_cond([wfsydp.WSJJDM = '666888'])
+explain select /*+index(wfsydp wsjjdm_local)  */ SQL_CALC_FOUND_ROWS wsjjdm, wsjjzh, wsdrdm, wsjyzh, wsdrsy, wswfsy from wfsydp where wsjjdm = '666888' order by wsjjdm, wsjwsy desc limit 1;
+Query Plan
+=====================================================================================
+|ID|OPERATOR                     |NAME                        |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------------------
+|0 |LIMIT                        |                            |1       |137         |
+|1 |└─PX COORDINATOR MERGE SORT  |                            |1       |137         |
+|2 |  └─EXCHANGE OUT DISTR       |:EX10000                    |1       |136         |
+|3 |    └─SORT                   |                            |1       |134         |
+|4 |      └─PX PARTITION ITERATOR|                            |1       |133         |
+|5 |        └─TABLE RANGE SCAN   |wfsydp(WSJJDM_LOCAL,Reverse)|1       |133         |
+=====================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([wfsydp.WSJJDM], [wfsydp.WSJJZH], [wfsydp.WSDRDM], [wfsydp.WSJYZH], [wfsydp.WSDRSY], [wfsydp.WSWFSY]), filter(nil), rowset=16
+      limit(1), offset(nil)
+  1 - output([wfsydp.WSJJDM], [wfsydp.WSJJZH], [wfsydp.WSDRDM], [wfsydp.WSJYZH], [wfsydp.WSDRSY], [wfsydp.WSWFSY]), filter(nil), rowset=16
+      sort_keys([wfsydp.WSJWSY, DESC])
+  2 - output([wfsydp.WSJJDM], [wfsydp.WSJJZH], [wfsydp.WSDRDM], [wfsydp.WSJYZH], [wfsydp.WSDRSY], [wfsydp.WSWFSY], [wfsydp.WSJWSY]), filter(nil), rowset=16
+      dop=1
+  3 - output([wfsydp.WSJJDM], [wfsydp.WSJJZH], [wfsydp.WSDRDM], [wfsydp.WSJYZH], [wfsydp.WSDRSY], [wfsydp.WSWFSY], [wfsydp.WSJWSY]), filter(nil), rowset=16
+      sort_keys([wfsydp.WSJWSY, DESC]), local merge sort
+  4 - output([wfsydp.WSJJDM], [wfsydp.WSJJZH], [wfsydp.WSDRDM], [wfsydp.WSJYZH], [wfsydp.WSDRSY], [wfsydp.WSWFSY], [wfsydp.WSJWSY]), filter(nil), rowset=16
+      force partition granule
+  5 - output([wfsydp.WSJJDM], [wfsydp.WSJJZH], [wfsydp.WSDRDM], [wfsydp.WSJYZH], [wfsydp.WSDRSY], [wfsydp.WSWFSY], [wfsydp.WSJWSY]), filter(nil), rowset=16
+      access([wfsydp.WSJJDM], [wfsydp.WSJJZH], [wfsydp.WSDRDM], [wfsydp.WSJYZH], [wfsydp.WSDRSY], [wfsydp.WSWFSY], [wfsydp.WSJWSY]), partitions(p[0-30])
+      is_index_back=true, is_global_index=false, 
+      range_key([wfsydp.WSJJDM], [wfsydp.WSJWSY], [wfsydp.WSJJZH], [wfsydp.WSDRDM], [wfsydp.WSJYZH]), range(666888,MIN,MIN,MIN,MIN ; 666888,MAX,MAX,MAX,
+      MAX), 
+      range_cond([wfsydp.WSJJDM = '666888'])
+set @@recyclebin = 'off';
+drop database hualong;

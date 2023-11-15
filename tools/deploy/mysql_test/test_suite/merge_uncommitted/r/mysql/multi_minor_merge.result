@@ -1,0 +1,244 @@
+set SESSION ob_query_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_idle_timeout = 600 * 1000 * 1000;
+set SESSION ob_query_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_idle_timeout = 600 * 1000 * 1000;
+alter system set minor_compact_trigger = 10;
+drop table if exists test_multi_minor_merge_t;
+create table test_multi_minor_merge_t(num int, str varchar(50), tag int);
+begin;
+insert into test_multi_minor_merge_t values(200, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(199, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(198, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(197, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(196, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(195, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(194, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(193, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(192, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(191, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(190, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(189, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(188, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(187, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(186, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(185, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(184, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(183, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(182, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(181, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(180, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(179, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(178, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(177, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(176, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(175, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(174, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(173, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(172, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(171, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(170, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(169, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(168, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(167, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(166, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(165, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(164, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(163, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(162, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(161, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(160, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(159, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(158, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(157, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(156, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(155, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(154, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(153, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(152, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(151, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(150, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(149, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(148, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(147, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(146, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(145, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(144, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(143, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(142, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(141, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(140, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(139, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(138, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(137, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(136, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(135, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(134, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(133, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(132, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(131, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(130, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(129, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(128, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(127, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(126, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(125, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(124, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(123, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(122, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(121, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(120, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(119, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(118, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(117, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(116, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(115, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(114, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(113, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(112, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(111, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(110, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(109, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(108, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(107, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(106, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(105, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(104, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(103, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(102, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(101, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(100, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(99, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(98, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(97, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(96, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(95, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(94, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(93, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(92, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(91, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(90, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(89, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(88, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(87, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(86, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(85, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(84, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(83, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(82, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(81, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(80, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(79, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(78, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(77, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(76, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(75, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(74, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(73, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(72, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(71, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(70, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(69, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(68, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(67, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(66, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(65, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(64, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(63, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(62, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(61, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(60, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(59, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(58, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(57, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(56, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(55, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(54, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(53, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(52, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(51, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(50, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(49, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(48, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(47, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(46, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(45, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(44, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(43, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(42, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(41, 'Hello OceanBase & Happy New Year', 1);
+alter system set minor_compact_trigger = 1;
+select * from test_multi_minor_merge_t;
+num	str	tag
+select * from test_multi_minor_merge_t where num > 190;
+num	str	tag
+200	Hello OceanBase & Happy New Year	1
+199	Hello OceanBase & Happy New Year	1
+198	Hello OceanBase & Happy New Year	1
+197	Hello OceanBase & Happy New Year	1
+196	Hello OceanBase & Happy New Year	1
+195	Hello OceanBase & Happy New Year	1
+194	Hello OceanBase & Happy New Year	1
+193	Hello OceanBase & Happy New Year	1
+192	Hello OceanBase & Happy New Year	1
+191	Hello OceanBase & Happy New Year	1
+insert into test_multi_minor_merge_t values(40, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(39, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(38, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(37, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(36, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(35, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(34, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(33, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(32, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(31, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(30, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(29, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(28, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(27, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(26, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(25, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(24, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(23, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(22, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(21, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(20, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(19, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(18, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(17, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(16, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(15, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(14, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(13, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(12, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(11, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(10, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(9, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(8, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(7, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(6, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(5, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(4, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(3, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(2, 'Hello OceanBase & Happy New Year', 1);
+insert into test_multi_minor_merge_t values(1, 'Hello OceanBase & Happy New Year', 1);
+alter system minor freeze;
+commit;
+select * from test_multi_minor_merge_t where num > 190;
+num	str	tag
+200	Hello OceanBase & Happy New Year	1
+199	Hello OceanBase & Happy New Year	1
+198	Hello OceanBase & Happy New Year	1
+197	Hello OceanBase & Happy New Year	1
+196	Hello OceanBase & Happy New Year	1
+195	Hello OceanBase & Happy New Year	1
+194	Hello OceanBase & Happy New Year	1
+193	Hello OceanBase & Happy New Year	1
+192	Hello OceanBase & Happy New Year	1
+191	Hello OceanBase & Happy New Year	1
+select count(*) from test_multi_minor_merge_t;
+count(*)
+200
+drop table test_multi_minor_merge_t;
+alter system set minor_compact_trigger = 2;

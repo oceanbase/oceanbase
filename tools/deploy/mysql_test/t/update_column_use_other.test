@@ -1,0 +1,22 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: kaizhan.dkz
+#owner group: sql1
+#tags: update
+#description:
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(pk int primary key, c1 int);
+insert into t1 values(1,2), (2, 3),(3,4),(4,5);
+select * from t1;
+update t1 set c1=pk ;
+select * from t1;
+update t1 set c1=pk where pk=1 ;
+select * from t1;
+update t1 set c1=pk where pk in (1,2,3,4) ;
+select * from t1;
+update t1 set c1=pk-0 ;
+select * from t1;

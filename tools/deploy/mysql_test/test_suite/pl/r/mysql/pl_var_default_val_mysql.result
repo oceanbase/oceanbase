@@ -1,0 +1,344 @@
+result_format: 4
+
+drop table if exists result;/
+drop procedure if exists my_proc;/
+#### Case 1: int
+create table result(col1 int, col2 int, col3 int);/
+
+create procedure my_proc()
+begin
+  declare col1, col2, col3 int default 10;
+  insert into result values(col1, col2, col3);
+end;
+/
+
+call my_proc()/
+select * from result;/
++------+------+------+
+| col1 | col2 | col3 |
++------+------+------+
+|   10 |   10 |   10 |
++------+------+------+
+
+#### Case 2: bigint
+drop procedure my_proc;/
+drop table result;/
+
+create table result(col1 bigint, col2 bigint, col3 bigint);/
+
+create procedure my_proc()
+begin
+  declare col1, col2, col3 bigint default 10;
+  insert into result values(col1, col2, col3);
+end;
+/
+
+call my_proc()/
+select * from result;/
++------+------+------+
+| col1 | col2 | col3 |
++------+------+------+
+|   10 |   10 |   10 |
++------+------+------+
+
+#### Case 3: tinyint
+drop procedure my_proc;/
+drop table result;/
+
+create table result(col1 tinyint, col2 tinyint, col3 tinyint);/
+
+create procedure my_proc()
+begin
+  declare col1, col2, col3 tinyint default 10;
+  insert into result values(col1, col2, col3);
+end;
+/
+
+call my_proc()/
+select * from result;/
++------+------+------+
+| col1 | col2 | col3 |
++------+------+------+
+|   10 |   10 |   10 |
++------+------+------+
+
+#### Case 4: decimal
+drop procedure my_proc;/
+drop table result;/
+
+create table result(col1 decimal(64,2), col2 decimal(64,2), col3 decimal(64,2));/
+
+create procedure my_proc()
+begin
+  declare col1, col2, col3 decimal(64,2) default 12.123;
+  insert into result values(col1, col2, col3);
+end;
+/
+
+call my_proc()/
+select * from result;/
++-------+-------+-------+
+| col1  | col2  | col3  |
++-------+-------+-------+
+| 12.12 | 12.12 | 12.12 |
++-------+-------+-------+
+
+#### Case 5: bit
+drop procedure my_proc;/
+drop table result;/
+
+create table result(col1 bit(3), col2 bit(3), col3 bit(3));/
+
+create procedure my_proc()
+begin
+  declare col1, col2, col3 bit(3) default b'101';
+  insert into result values(col1, col2, col3);
+end;
+/
+
+call my_proc()/
+select hex(col1), hex(col2), hex(col3) from result;/
++-----------+-----------+-----------+
+| hex(col1) | hex(col2) | hex(col3) |
++-----------+-----------+-----------+
+| 5         | 5         | 5         |
++-----------+-----------+-----------+
+
+#### Case 6: bit angin
+drop procedure my_proc;/
+drop table result;/
+
+create table result(col1 bit(8), col2 bit(8), col3 bit(8));/
+
+create procedure my_proc()
+begin
+  declare col1, col2, col3 bit(8) default 128;
+  insert into result values(col1, col2, col3);
+end;
+/
+
+call my_proc()/
+select hex(col1), hex(col2), hex(col3) from result;/
++-----------+-----------+-----------+
+| hex(col1) | hex(col2) | hex(col3) |
++-----------+-----------+-----------+
+| 80        | 80        | 80        |
++-----------+-----------+-----------+
+
+#### Case 7: char
+drop procedure my_proc;/
+drop table result;/
+
+create table result(col1 char(10), col2 char(10), col3 char(10));/
+
+create procedure my_proc()
+begin
+  declare col1, col2, col3 char(10) default 'abcdef';
+  insert into result values(col1, col2, col3);
+end;
+/
+
+call my_proc()/
+select * from result;/
++--------+--------+--------+
+| col1   | col2   | col3   |
++--------+--------+--------+
+| abcdef | abcdef | abcdef |
++--------+--------+--------+
+
+#### Case 8: binary
+drop procedure my_proc;/
+drop table result;/
+
+create table result(col1 binary(2), col2 binary(2), col3 binary(2));/
+
+create procedure my_proc()
+begin
+  declare col1, col2, col3 binary(2) default 0x41;
+  insert into result values(col1, col2, col3);
+end;
+/
+
+call my_proc()/
+select * from result;/
++------+------+------+
+| col1 | col2 | col3 |
++------+------+------+
+| A    | A    | A    |
++------+------+------+
+
+#### Case 9: varbinary
+drop procedure my_proc;/
+drop table result;/
+
+create table result(col1 varbinary(2), col2 varbinary(2), col3 varbinary(2));/
+
+create procedure my_proc()
+begin
+  declare col1, col2, col3 varbinary(2) default 0x42;
+  insert into result values(col1, col2, col3);
+end;
+/
+
+call my_proc()/
+select * from result;/
++------+------+------+
+| col1 | col2 | col3 |
++------+------+------+
+| B    | B    | B    |
++------+------+------+
+
+#### Case 10: varchar
+drop procedure my_proc;/
+drop table result;/
+
+create table result(col1 varchar(20), col2 varchar(20), col3 varchar(20));/
+
+create procedure my_proc()
+begin
+  declare col1, col2, col3 varchar(20) default 'x1234567';
+  insert into result values(col1, col2, col3);
+end;
+/
+
+call my_proc()/
+select * from result;/
++----------+----------+----------+
+| col1     | col2     | col3     |
++----------+----------+----------+
+| x1234567 | x1234567 | x1234567 |
++----------+----------+----------+
+
+#### Case 11: no default value
+drop procedure my_proc;/
+drop table result;/
+
+create table result(col1 varchar(20), col2 varchar(20), col3 varchar(20));/
+
+create procedure my_proc()
+begin
+  declare col1, col2, col3 varchar(20);
+  insert into result values(col1, col2, col3);
+  set col1 = 'col1';
+  set col2 = 'col2';
+  set col3 = 'col3';
+  insert into result values(col1, col2, col3);
+  set col1 = concat(col2, col3);
+  set col2 = concat(col3, 'col1');
+  set col3 = concat('col2', 'col2');
+  insert into result values(col1, col2, col3);
+end;
+/
+call my_proc()/
+
+select * from result; /
++----------+----------+----------+
+| col1     | col2     | col3     |
++----------+----------+----------+
+| NULL     | NULL     | NULL     |
+| col1     | col2     | col3     |
+| col2col3 | col3col1 | col2col2 |
++----------+----------+----------+
+
+#### Case 11: no default value
+drop procedure my_proc;/
+drop table result;/
+
+create table result(col1 bit(3), col2 bit(3), col3 bit(3));/
+
+create procedure my_proc()
+begin
+  declare col1, col2, col3 bit(3);
+  insert into result values(col1, col2, col3);
+  set col1 = b'101';
+  set col2 = b'101';
+  set col3 = b'101';
+  insert into result values(col1, col2, col3);
+  set col1 = col2;
+  set col2 = col3;
+  set col3 = col1;
+  insert into result values(col1, col2, col3);
+end;
+/
+call my_proc()/
+
+select hex(col1), hex(col2), hex(col3) from result; /
++-----------+-----------+-----------+
+| hex(col1) | hex(col2) | hex(col3) |
++-----------+-----------+-----------+
+| 5         | 5         | 5         |
+| 5         | 5         | 5         |
+| NULL      | NULL      | NULL      |
++-----------+-----------+-----------+
+
+#### Case 12: out parameter
+drop procedure my_proc;/
+create procedure my_proc(OUT a int) begin end/
+set @a=1;
+call my_proc(@a)/
+select @a/
++------+
+| @a   |
++------+
+| NULL |
++------+
+
+#### Case 13: enum set
+drop procedure my_proc;/
+drop table result; /
+create table result(x1 enum('x', 'y', 'z'),
+                    y1 enum('x', 'y', 'z'),
+                    z1 enum('x', 'y', 'z'),
+                    x2 set('x', 'y', 'z'),
+                    y2 set('x', 'y', 'z'),
+                    z2 set('x', 'y', 'z')); /
+
+create procedure my_proc()
+begin
+  declare x1, y1, z1 enum('x', 'y', 'z') default 'x';
+  declare x2, y2, z2 set('x', 'y', 'z') default 'z';
+  insert into result values(x1, y1, z1, x2, y2, z2);
+  set y1 = 'y';
+  set z1 = 'z';
+  set x2 = 'x';
+  set y2 = 'y';
+  insert into result values(x1, y1, z1, x2, y2, z2);
+  set x1 = y2;
+  set z2 = y1;
+  insert into result values(x1, y1, z1, x2, y2, z2);
+end;
+/
+
+call my_proc()/
+
+select * from result;
+/
++------+------+------+------+------+------+
+| x1   | y1   | z1   | x2   | y2   | z2   |
++------+------+------+------+------+------+
+| x    | x    | x    | z    | z    | z    |
+| x    | y    | z    | x    | y    | z    |
+| y    | y    | z    | x    | y    | y    |
++------+------+------+------+------+------+
+
+#### Case 14: enum set
+drop procedure my_proc/
+create procedure my_proc(out z varchar(20))
+begin
+  declare x enum('1', '2') default '1';
+  declare y enum('2', '3') default '2';
+  set x = y;
+  set z = x;
+end;
+/
+call my_proc(@z)/
+select @z;/
++------+
+| @z   |
++------+
+| 2    |
++------+
+
+#### clean
+drop procedure my_proc/
+drop table result;/

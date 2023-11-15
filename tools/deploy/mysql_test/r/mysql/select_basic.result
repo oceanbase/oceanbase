@@ -1,0 +1,319 @@
+drop database if exists db1;
+drop database if exists db2;
+create database db1;
+create database db2;
+use db1;
+drop table if exists t1;
+create table t1(c1 int key) partition by key() partitions 2;
+use db2;
+drop table if exists t1;
+create table t1(c1 int key) partition by key() partitions 2;
+select * from db1.t1,db2.t1;
+c1	c1
+use db1;
+drop table if exists t1;
+create table t1(c1 int key) partition by key(c1) partitions 2;
+create database if not exists db2;
+use db2;
+drop table if exists t1;
+create table t1(c1 int key) partition by key(c1) partitions 2;
+select * from db1.t1,db2.t1;
+c1	c1
+use db1;
+drop table if exists t1;
+create table t1(c1 int key) partition by hash(c1) partitions 2;
+create database if not exists db2;
+use db2;
+drop table if exists t1;
+create table t1(c1 int key) partition by hash(c1) partitions 2;
+select * from db1.t1,db2.t1;
+c1	c1
+drop table if exists t1;
+create table t1 (c1 int primary key, c2 int);
+insert into t1 values(1,8), (2,7), (3,6), (4,5);
+select c1 from t1 group by t2.c1;
+ERROR 42S22: Unknown column 't2.c1' in 'group statement'
+select c1, c2 as c1 from t1 group by c1;
+ERROR 23000: Column 'c1' in group statement is ambiguous
+select c1, c2 as c1 from t1 group by t1.c1;
+c1	c1
+1	8
+2	7
+3	6
+4	5
+select c1 as c1, c2 as c1 from t1 group by c1;
+ERROR 23000: Column 'c1' in group statement is ambiguous
+select c1 as c1, c2 as c1 from t1 group by t1.c1;
+c1	c1
+1	8
+2	7
+3	6
+4	5
+select t1.c1 as cc from t1 group by t1.c1;
+cc
+1
+2
+3
+4
+select c1, c1 from t1 group by c1;
+c1	c1
+1	1
+2	2
+3	3
+4	4
+select 1 as c1, 2 as c2 from t1 group by c1;
+c1	c2
+1	2
+1	2
+1	2
+1	2
+Warnings:
+Warning	1052	Column 'c1' in group statement is ambiguous
+select 1 as c1, c1 from t1 group by c1;
+ERROR 23000: Column 'c1' in group statement is ambiguous
+select c1 as c2, c2 as c1 from t1 group by c1;
+c2	c1
+1	8
+2	7
+3	6
+4	5
+select c2+1 as c1, c1 from t1 group by c1;
+ERROR 23000: Column 'c1' in group statement is ambiguous
+select c1, c2 as c1 from t1 having t1.c1 > 2;
+c1	c1
+3	6
+4	5
+select c1, c2 + 1 as c1 from t1 having t1.c1 > 2;
+c1	c1
+3	7
+4	6
+select c1, c2 + 1 as c1 from t1 having c1 > 2;
+ERROR 23000: Column 'c1' in having clause is ambiguous
+select c1, c2 + 1 as c1 from t1 order by c1;
+ERROR 23000: Column 'c1' in order clause is ambiguous
+select c1, c2 + 1 as c1 from t1 order by t1.c1;
+c1	c1
+1	9
+2	8
+3	7
+4	6
+select c1, c2 + 1 as c1 from t1 group by c1;
+ERROR 23000: Column 'c1' in group statement is ambiguous
+select c1, c2 + 1 as c1 from t1 group by t1.c1;
+c1	c1
+1	9
+2	8
+3	7
+4	6
+select t1.c1 as c1 from t1 order by t1.c1;
+c1
+1
+2
+3
+4
+select t1.c1 as c2 from t1 order by t1.c1;
+c2
+1
+2
+3
+4
+drop table t1;
+drop table if exists t1, t2;
+create table t1 (a int(11), b char(10), key (a));
+insert into t1 (a) values (1),(2),(3),(4);
+create table t2 (a int);
+select * from t1 left join t2 on t1.a=t2.a order by t1.a;
+a	b	a
+1	NULL	NULL
+2	NULL	NULL
+3	NULL	NULL
+4	NULL	NULL
+select * from t1 left join t2 on t1.a=t2.a having not (t2.a <=> t1.a) order by t1.a;
+a	b	a
+1	NULL	NULL
+2	NULL	NULL
+3	NULL	NULL
+4	NULL	NULL
+select exists(( select 1));
+exists(( select 1))
+1
+select exists( select 1);
+exists( select 1)
+1
+drop table t1,t2;
+create table t1(c1 int, c2 int);
+insert into t1 values(1, 1), (2, 2);
+select * from t1 where c1<'2';
+c1	c2
+1	1
+select * from t1 where c1>'1';
+c1	c2
+2	2
+select * from t1 where c1='2';
+c1	c2
+2	2
+select * from t1 where c1!='2';
+c1	c2
+1	1
+select * from t1 where c1<='2';
+c1	c2
+1	1
+2	2
+select * from t1 where c1>='2';
+c1	c2
+2	2
+select * from t1 where c1+'1'<=3;
+c1	c2
+1	1
+2	2
+select * from t1 where c1+'1'>=2;
+c1	c2
+1	1
+2	2
+drop table t1;
+create table t1(c1 int primary key, c2 int);
+insert into t1 values(1, 1), (2, 2);
+select * from t1 where c1<'2';
+c1	c2
+1	1
+select * from t1 where c1>'1';
+c1	c2
+2	2
+select * from t1 where c1='2';
+c1	c2
+2	2
+select * from t1 where c1!='2';
+c1	c2
+1	1
+select * from t1 where c1<='2';
+c1	c2
+1	1
+2	2
+select * from t1 where c1>='2';
+c1	c2
+2	2
+select * from t1 where c1+'1'<=3;
+c1	c2
+1	1
+2	2
+select * from t1 where c1+'1'>=2;
+c1	c2
+1	1
+2	2
+drop table t1;
+SELECT 'a' = 'a ', 'a' LIKE 'a ';
+'a' = 'a '	'a' LIKE 'a '
+1	0
+SELECT 'David!' LIKE 'David_';
+'David!' LIKE 'David_'
+1
+SELECT 'David!' LIKE '%D%v%';
+'David!' LIKE '%D%v%'
+1
+SELECT 'David!' LIKE 'David\_';
+'David!' LIKE 'David\_'
+0
+SELECT 'David_' LIKE 'David\_';
+'David_' LIKE 'David\_'
+1
+SELECT 'David_' LIKE 'David|_' ESCAPE '|';
+'David_' LIKE 'David|_' ESCAPE '|'
+1
+SELECT 'abc' LIKE 'ABC';
+'abc' LIKE 'ABC'
+1
+SELECT 'abc' LIKE BINARY 'ABC';
+'abc' LIKE BINARY 'ABC'
+0
+SELECT 10 LIKE '1%';
+10 LIKE '1%'
+1
+SELECT 'David_' LIKE 'David|_' ESCAPE null;
+'David_' LIKE 'David|_' ESCAPE null
+0
+SELECT 'David_' LIKE 'David|_' ESCAPE 1;
+'David_' LIKE 'David|_' ESCAPE 1
+0
+SELECT 'David_' LIKE 'David|_' ESCAPE 12;
+ERROR HY000: Incorrect arguments to ESCAPE
+SELECT 'David_' LIKE 'David|_' ESCAPE '12';
+ERROR HY000: Incorrect arguments to ESCAPE
+drop table if exists a1,a2;
+create table a2(rowkey_suffix2 int primary key, price2 int);
+create table a1(rowkey_suffix int primary key, price int);
+select (select price from a2 where 1000 > price) as 'x', a1.* as 'with_alias' from a1;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'as 'with_alias' from a1' at line 1
+select (select price from a2 where 1000 > price) as 'x', a1.* as with_alias from a1;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'as with_alias from a1' at line 1
+select 1 from dual where @a:=1 and (1, 2);
+ERROR 21000: Operand should contain 1 column(s)
+select 1 from dual where @a:=1 and (1, (select 2));
+ERROR 21000: Operand should contain 1 column(s)
+select 1 from dual where @a:=1 and (1, exists(select 2));
+ERROR 21000: Operand should contain 1 column(s)
+create table t1(c1 int);
+select 1 from t1 where c1 in (select c1 from t1 where exists( (select 1) union (select 1)));
+1
+select (1 and 100) or 100;
+(1 and 100) or 100
+1
+drop table t1;
+create table t1(c1 bigint, c2 varchar(64), c3 datetime);
+insert into t1 values(20101010000000, '020101010000000', '2010-10-10 00:00:00');
+select * from t1 where c1=c2 and c1=cast('2010-10-10 00:00:00' as datetime);
+c1	c2	c3
+20101010000000	020101010000000	2010-10-10 00:00:00
+drop table if exists bug;
+create table bug (col_float float);
+insert into bug values(100);
+select ((col_float and 100) or col_float) from bug;
+((col_float and 100) or col_float)
+1
+drop table t1;
+create table test1 (id int,dt datetime(6), primary key(id, dt));
+insert into test1 values (0, '2017-01-01'), (0, '2017-01-02'), (0, '2017-01-03'), (1, '2017-01-01'), (1, '2017-01-02'), (1, '2017-01-03');
+select * from test1 where (id, dt) > (0, '2017-01-02') and (id, dt) <= (1, '2017-01-03');
+id	dt
+0	2017-01-03 00:00:00.000000
+1	2017-01-01 00:00:00.000000
+1	2017-01-02 00:00:00.000000
+1	2017-01-03 00:00:00.000000
+select * from test1 where (id, dt) > (0, '2017-01-02') and (id, dt) <= (1, '2017-01-03') and dt < '2017-01-02';
+id	dt
+1	2017-01-01 00:00:00.000000
+result_format: 4
+select cast '';
+ERROR 42S22: Unknown column 'cast' in 'field list'
+select length '';
+ERROR 42S22: Unknown column 'length' in 'field list'
+select yearweek '';
+ERROR 42S22: Unknown column 'yearweek' in 'field list'
+select lala '';
+ERROR 42S22: Unknown column 'lala' in 'field list'
+select 1 '';
++---+
+|   |
++---+
+| 1 |
++---+
+select 2 '';
++---+
+|   |
++---+
+| 2 |
++---+
+select 2 as '';
++---+
+|   |
++---+
+| 2 |
++---+
+select 1 as '';
++---+
+|   |
++---+
+| 1 |
++---+
+
+drop database if exists db1;
+drop database if exists db2;

@@ -1,0 +1,102 @@
+# owner: xuwang.txw
+# owner group: transaction
+# description: this case is used for testing basic transactional deadlock detector case
+
+set GLOBAL ob_query_timeout = 1000000000000;
+set GLOBAL ob_trx_timeout = 10000000000000;
+set GLOBAL ob_trx_idle_timeout = 10000000000;
+
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn2,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn0,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+
+connection conn0;
+alter system set _lcl_op_interval = '10ms';
+
+connection conn1;
+--disable_warnings
+drop table if exists t1;
+drop table if exists t2;
+--enable_warnings
+
+connection conn1;
+set ob_query_timeout = 1000000000;
+set ob_trx_timeout = 1000000000;
+set ob_trx_idle_timeout = 1000000000;
+
+connection conn2;
+set ob_query_timeout = 1000000000;
+set ob_trx_timeout = 1000000000;
+set ob_trx_idle_timeout = 1000000000;
+
+# single-partition table
+create table t1(a int primary key);
+# multi-partition table
+create table t2(a int primary key) partition by hash(a) partitions 4;
+insert into t1 values(1);
+insert into t1 values(2);
+insert into t2 values(1);
+insert into t2 values(2);
+insert into t2 values(3);
+insert into t2 values(4);
+commit;
+
+# ================= CASE 1: local/remote execution deadlock =================
+connection conn1;
+begin;
+select * from t1 where a = 1 order by a for update;
+
+connection conn2;
+sleep 1;
+# used for priority reason
+begin;
+select * from t1 where a = 2 order by a for update;
+send select * from t1 where a = 1 order by a for update;
+
+connection conn1;
+sleep 1;
+send select * from t1 where a = 2 order by a for update;
+
+connection conn2;
+--error 1213
+reap;
+rollback;
+
+connection conn1;
+reap;
+commit;
+
+select * from t1 order by a;
+# ================= CASE 1: distributed execution deadlock =================
+connection conn1;
+begin;
+select * from t2 where a in (1,2) order by a for update;
+
+connection conn2;
+# used for priority reason
+sleep 1;
+begin;
+select * from t2 where a in (3,4) for update;
+send select * from t2 where a in (1,2) order by a for update;
+
+connection conn1;
+send select * from t2 where a in (3,4) order by a for update;
+
+connection conn2;
+--error 1213
+reap;
+rollback;
+
+connection conn1;
+reap;
+commit;
+
+select * from t2 order by a;
+
+--disable_warnings
+connection conn1;
+--error 0,942
+drop table t1;
+--error 0,942
+drop table t2;
+--enable_warnings

@@ -1,0 +1,142 @@
+result_format: 4
+alter system flush plan cache global;
+alter system flush pl cache global;
+
+use test;
+
+drop table if exists my_bit_1;
+drop table if exists my_bit_32;
+drop table if exists my_bit_64;
+drop procedure if exists my_bit_1;
+drop procedure if exists my_bit_32;
+drop procedure if exists my_bit_64;
+drop function if exists my_bit_1;
+drop function if exists my_bit_32;
+drop function if exists my_bit_64;
+create table my_bit_1(col bit(1));
+create table my_bit_32(col bit(32));
+create table my_bit_64(col bit(64));
+
+insert into my_bit_1 values(1);
+insert into my_bit_32 values(32);
+insert into my_bit_64 values(64);
+
+create procedure my_bit_1(OUT v bit(1))
+begin
+  select col from my_bit_1 into v;
+end |
+
+create procedure my_bit_32(OUT v bit(32))
+begin
+  select col from my_bit_32 into v;
+end |
+
+create procedure my_bit_64(OUT v bit(64))
+begin
+  select col from my_bit_64 into v;
+end |
+
+create function my_bit_1() returns bit(1)
+begin
+  declare v bit(1);
+  call my_bit_1(v);
+  return v;
+end |
+
+create function my_bit_32() returns bit(32)
+begin
+  declare v bit(32);
+  call my_bit_32(v);
+  return v;
+end |
+
+create function my_bit_64() returns bit(64)
+begin
+  declare v bit(64);
+  call my_bit_64(v);
+  return v;
+end |
+
+
+select cast(my_bit_1() as signed);
++----------------------------+
+| cast(my_bit_1() as signed) |
++----------------------------+
+|                          1 |
++----------------------------+
+select cast(my_bit_32() as signed);
++-----------------------------+
+| cast(my_bit_32() as signed) |
++-----------------------------+
+|                          32 |
++-----------------------------+
+select cast(my_bit_64() as signed);
++-----------------------------+
+| cast(my_bit_64() as signed) |
++-----------------------------+
+|                          64 |
++-----------------------------+
+
+drop table my_bit_1;
+drop table my_bit_32;
+drop table my_bit_64;
+drop procedure my_bit_1;
+drop procedure my_bit_32;
+drop procedure my_bit_64;
+drop function my_bit_1;
+drop function my_bit_32;
+drop function my_bit_64;
+
+drop function if exists my_bit_bit;
+drop function if exists my_bit_char;
+drop function if exists my_bit_int;
+drop function if exists my_bit_double;
+create function my_bit_bit(v bit(32)) returns bit(32)
+begin
+  set v := v + 1;
+  return v;
+end |
+
+create function my_bit_char(v bit(1)) returns char(1)
+begin
+  set v := v + 1;
+  return v;
+end |
+
+create function my_bit_int(v bit(1)) returns int
+begin
+  set v := v + 1;
+  return v;
+end |
+
+create function my_bit_double(v bit(32)) returns double
+begin
+  set v := v + 1;
+  return v;
+end |
+
+select cast(my_bit_bit(1) as signed);
++-------------------------------+
+| cast(my_bit_bit(1) as signed) |
++-------------------------------+
+|                             2 |
++-------------------------------+
+select my_bit_char(1);
+ERROR 22001: Data too long for column
+select my_bit_int(1);
+ERROR 22001: Data too long for column
+select my_bit_double(1);
++------------------+
+| my_bit_double(1) |
++------------------+
+|                2 |
++------------------+
+
+drop function my_bit_bit;
+drop function my_bit_char;
+drop function my_bit_int;
+drop function my_bit_double;
+
+
+
+

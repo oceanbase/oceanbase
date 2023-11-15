@@ -1,0 +1,1364 @@
+# ----------------------------------------------------------------------
+# Base test of geometry cast.
+# ----------------------------------------------------------------------
+########################################
+# Requirement F-7a:                    #
+# CAST(point AS POINT)                 #
+########################################
+#
+# Casting from POINT to POINT is always allowed.
+# Must return Point.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS POINT));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS POINT))
+POINT(1 1)
+# Must return 1.
+SELECT ST_ASTEXT(ST_GEOMFROMTEXT('POINT(1 1)')), ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS POINT));
+ST_ASTEXT(ST_GEOMFROMTEXT('POINT(1 1)'))	ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS POINT))
+POINT(1 1)	POINT(1 1)
+#
+########################################
+# Requirement F-7b:                    #
+# CAST(multipoint AS POINT)            #
+########################################
+#
+# Casting from MULTIPOINT with only one point to POINT is allowed.
+# Must return Point.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOINT((1 1))') AS POINT));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOINT((1 1))') AS POINT))
+POINT(1 1)
+#
+# Casting from MULTIPOINT with multiple points to POINT is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOINT((1 1), (2 2))') AS POINT));
+ERROR 22S01: Invalid cast from MULTIPOINT to POINT.
+#
+########################################
+# Requirement F-7c:                    #
+# CAST(geometrycollection AS POINT)    #
+########################################
+#
+# Casting from GEOMETRYCOLLECTION with only one point to POINT is allowed.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(1 1))') AS POINT));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(1 1))') AS POINT))
+POINT(1 1)
+#
+# Casting from empty GEOMETRYCOLLECTION to POINT is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()') AS POINT));
+ERROR 22S01: Invalid cast from GEOMETRYCOLLECTION to POINT.
+#
+# Casting from GEOMETRYCOLLECTION with multiple points to POINT is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(1 1), POINT(2 2))') AS POINT));
+ERROR 22S01: Invalid cast from GEOMETRYCOLLECTION to POINT.
+#
+# Casting from GEOMETRYCOLLECTION with not only points to POINT is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(1 1), GEOMETRYCOLLECTION())') AS POINT));
+ERROR 22S01: Invalid cast from GEOMETRYCOLLECTION to POINT.
+#
+########################################
+# Requirement F-7d:                    #
+# Disallowed casts to POINT            #
+########################################
+#
+# Casting from LINESTRING to POINT is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('LINESTRING(1 1, 2 2)') AS POINT));
+ERROR 22S01: Invalid cast from LINESTRING to POINT.
+#
+# Casting from POLYGON to POINT is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POLYGON((1 1, 2 2, 3 3, 1 1))') AS POINT));
+ERROR 22S01: Invalid cast from POLYGON to POINT.
+#
+# Casting from MULTILINESTRING to POINT is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((1 1, 2 2), (1 1, 2 2))') AS POINT));
+ERROR 22S01: Invalid cast from MULTILINESTRING to POINT.
+#
+# Casting from MULTIPOLYGON to POINT is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOLYGON(((1 1, 2 2, 3 3, 1 1)), ((1 1, 2 2, 3 3, 1 1)))') AS POINT));
+ERROR 22S01: Invalid cast from MULTIPOLYGON to POINT.
+#
+#############################################
+# Testing result of WKT input               #
+#############################################
+#
+# Casting from ST_GEOMFROMTEXT(<wkt>) to POINT must return expected point.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS POINT));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS POINT))
+POINT(1 1)
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOINT((2 2))') AS POINT));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOINT((2 2))') AS POINT))
+POINT(2 2)
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(3 3))') AS POINT));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(3 3))') AS POINT))
+POINT(3 3)
+#
+#############################################
+# Testing result of user variable input     #
+#############################################
+#
+SET @point = ST_GEOMFROMTEXT('POINT(1 1)');
+SET @multipoint = ST_GEOMFROMTEXT('MULTIPOINT((2 2))');
+SET @geomcollection = ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(3 3))');
+#
+# Casting from geometry in user variable to POINT must return expected point.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS POINT));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS POINT))
+POINT(1 1)
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOINT((2 2))') AS POINT));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOINT((2 2))') AS POINT))
+POINT(2 2)
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(3 3))') AS POINT));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(3 3))') AS POINT))
+POINT(3 3)
+#
+#############################################
+# Testing result of table column input      #
+#############################################
+#
+drop table if exists gis_point_castable;
+CREATE TABLE gis_point_castable (fid INTEGER NOT NULL PRIMARY KEY, g GEOMETRY);
+INSERT INTO gis_point_castable values
+(101, ST_GEOMFROMTEXT('POINT(1 1)')),
+(102, ST_GEOMFROMTEXT('MULTIPOINT((2 2))')),
+(103, ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(3 3))'));
+#
+# Casting from geometry column to POINT must return expected point.
+SELECT ST_ASTEXT(CAST(g AS POINT)) FROM gis_point_castable;
+ST_ASTEXT(CAST(g AS POINT))
+POINT(1 1)
+POINT(2 2)
+POINT(3 3)
+#
+# Cleanup.
+DROP TABLE gis_point_castable;
+############################################
+# Requirement F-8a:                        #
+# CAST(linestring AS LINESTRING)           #
+############################################
+#
+# Casting from LINESTRING to LINESTRING is always allowed.
+# Must return Linestring.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('LINESTRING(1 1, 2 2)') AS LINESTRING));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('LINESTRING(1 1, 2 2)') AS LINESTRING))
+LINESTRING(1 1,2 2)
+#
+#
+############################################
+# Requirement F-8b:                        #
+# CAST(polygon AS LINESTRING)              #
+############################################
+#
+# Casting from POLYGON with only exterior ring to LINESTRING is allowed.
+# Must return Linestring.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POLYGON((1 1, 2 2, 3 3, 1 1))') AS LINESTRING));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POLYGON((1 1, 2 2, 3 3, 1 1))') AS LINESTRING))
+LINESTRING(1 1,2 2,3 3,1 1)
+#
+# Casting from POLYGON with multiple rings to LINESTRING is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POLYGON((1 1, 2 2, 3 3, 1 1), (4 4, 5 5, 6 6, 4 4))') AS LINESTRING));
+ERROR 22S01: Invalid cast from POLYGON to LINESTRING.
+#
+############################################
+# Requirement F-8c:                        #
+# CAST(multipoint AS LINESTRING)           #
+############################################
+#
+# Casting from MULTIPOINT with two or more points to LINESTRING is allowed.
+# Must return Linestring.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOINT((1 1), (2 2))') AS LINESTRING));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOINT((1 1), (2 2))') AS LINESTRING))
+LINESTRING(1 1,2 2)
+#
+# Casting from MULTIPOINT with only one point to LINESTRING is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOINT((1 1))') AS LINESTRING));
+ERROR 22S01: Invalid cast from MULTIPOINT to LINESTRING.
+#
+############################################
+# Requirement F-8d:                        #
+# CAST(multilinestring AS LINESTRING)      #
+############################################
+#
+# Casting from MULTILINESTRING with only one Linestring to LINESTRING is allowed.
+# Must return Linestring.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((1 1, 2 2))') AS LINESTRING));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((1 1, 2 2))') AS LINESTRING))
+LINESTRING(1 1,2 2)
+#
+# Casting from MULTILINESTRING with multiple Linestrings to LINESTRING is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((1 1, 2 2), (3 3, 4 4))') AS LINESTRING));
+ERROR 22S01: Invalid cast from MULTILINESTRING to LINESTRING.
+#
+############################################
+# Requirement F-8e:                        #
+# CAST(geometrycollection AS LINESTRING)   #
+############################################
+#
+# Casting from GEOMETRYCOLLECTION with only one Linestring to LINESTRING is allowed.
+# Must return Linestring.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(LINESTRING(1 1, 2 2))') AS LINESTRING));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(LINESTRING(1 1, 2 2))') AS LINESTRING))
+LINESTRING(1 1,2 2)
+#
+# Casting from empty GEOMETRYCOLLECTION to LINESTRING is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()') AS LINESTRING));
+ERROR 22S01: Invalid cast from GEOMETRYCOLLECTION to LINESTRING.
+#
+# Casting from GEOMETRYCOLLECTION with multiple Linestrings to LINESTRING is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(LINESTRING(1 1, 2 2), LINESTRING(3 3, 4 4))') AS LINESTRING));
+ERROR 22S01: Invalid cast from GEOMETRYCOLLECTION to LINESTRING.
+#
+# Casting from GEOMETRYCOLLECTION with other geometries than Linestrings to LINESTRING is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(LINESTRING(1 1, 2 2), GEOMETRYCOLLECTION())') AS LINESTRING));
+ERROR 22S01: Invalid cast from GEOMETRYCOLLECTION to LINESTRING.
+#
+############################################
+# Requirement F-8d:                        #
+# Disallowed casts to LINESTRING           #
+############################################
+#
+# Casting from POINT to LINESTRING is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS LINESTRING));
+ERROR 22S01: Invalid cast from POINT to LINESTRING.
+#
+# Casting from MULTIPOLYGON to LINESTRING is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOLYGON(((1 1, 2 2, 3 3, 1 1)))') AS LINESTRING));
+ERROR 22S01: Invalid cast from MULTIPOLYGON to LINESTRING.
+#
+#############################################
+# Testing result of WKT input               #
+#############################################
+#
+# Casting from ST_GEOMFROMTEXT(<wkt>) to LINESTRING must return expected linestring.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('LINESTRING(1 1, 2 2)') AS LINESTRING));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('LINESTRING(1 1, 2 2)') AS LINESTRING))
+LINESTRING(1 1,2 2)
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))') AS LINESTRING));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))') AS LINESTRING))
+LINESTRING(3 3,4 3,4 4,3 4,3 3)
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOINT((5 5), (6 6))') AS LINESTRING));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOINT((5 5), (6 6))') AS LINESTRING))
+LINESTRING(5 5,6 6)
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((7 7, 8 8))') AS LINESTRING));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((7 7, 8 8))') AS LINESTRING))
+LINESTRING(7 7,8 8)
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(LINESTRING(9 9, 10 10))') AS LINESTRING));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(LINESTRING(9 9, 10 10))') AS LINESTRING))
+LINESTRING(9 9,10 10)
+#
+#############################################
+# Testing result of user variable input     #
+#############################################
+#
+SET @linestring = ST_GEOMFROMTEXT('LINESTRING(1 1, 2 2)');
+SET @polygon = ST_GEOMFROMTEXT('POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))');
+SET @multipoint = ST_GEOMFROMTEXT('MULTIPOINT((5 5), (6 6))');
+SET @multilinestring = ST_GEOMFROMTEXT('MULTILINESTRING((7 7, 8 8))');
+SET @geomcollection = ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(LINESTRING(9 9, 10 10))');
+#
+# Casting from geometry in user variable to LINESTRING must return expected linestring.
+SELECT ST_ASTEXT(CAST(@linestring AS LINESTRING));
+ST_ASTEXT(CAST(@linestring AS LINESTRING))
+LINESTRING(1 1,2 2)
+SELECT ST_ASTEXT(CAST(@multipoint AS LINESTRING));
+ST_ASTEXT(CAST(@multipoint AS LINESTRING))
+LINESTRING(5 5,6 6)
+SELECT ST_ASTEXT(CAST(@multilinestring AS LINESTRING));
+ST_ASTEXT(CAST(@multilinestring AS LINESTRING))
+LINESTRING(7 7,8 8)
+SELECT ST_ASTEXT(CAST(@geomcollection AS LINESTRING));
+ST_ASTEXT(CAST(@geomcollection AS LINESTRING))
+LINESTRING(9 9,10 10)
+#
+#############################################
+# Testing result of table column input      #
+#############################################
+#
+CREATE TABLE gis_linestring_castable (fid INTEGER NOT NULL PRIMARY KEY, g GEOMETRY);
+INSERT INTO gis_linestring_castable VALUES
+(101, ST_GEOMFROMTEXT('LINESTRING(1 1, 2 2)')),
+(102, ST_GEOMFROMTEXT('POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))')),
+(103, ST_GEOMFROMTEXT('MULTIPOINT((5 5), (6 6))')),
+(104, ST_GEOMFROMTEXT('MULTILINESTRING((7 7, 8 8))')),
+(105, ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(LINESTRING(9 9, 10 10))'));
+#
+# Casting from geometry column to LINESTRING must return expected linestring.
+SELECT ST_ASTEXT(CAST(g AS LINESTRING)) FROM gis_linestring_castable;
+ST_ASTEXT(CAST(g AS LINESTRING))
+LINESTRING(1 1,2 2)
+LINESTRING(3 3,4 3,4 4,3 4,3 3)
+LINESTRING(5 5,6 6)
+LINESTRING(7 7,8 8)
+LINESTRING(9 9,10 10)
+#
+# Cleanup.
+DROP TABLE gis_linestring_castable;
+########################################
+# Requirement F-9a:                    #
+# CAST(linestring AS POLYGON)          #
+########################################
+#
+# Casting from LINESTRING that is a correctly oriented linearring (counter clockwise) to POLYGON is allowed.
+# Must return POLYGON.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('LINESTRING(1 1, 4 1, 4 4, 1 4, 1 1)') AS POLYGON));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('LINESTRING(1 1, 4 1, 4 4, 1 4, 1 1)') AS POLYGON))
+POLYGON((1 1,4 1,4 4,1 4,1 1))
+#
+# Casting from LINESTRING that is not a linearring to POLYGON is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('LINESTRING(1 1, 4 1, 4 4, 1 4)') AS POLYGON));
+ERROR 22S01: Invalid cast from LINESTRING to POLYGON.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('LINESTRING(1 1, 4 4, 1 1)') AS POLYGON));
+ERROR 22S01: Invalid cast from LINESTRING to POLYGON.
+#
+# Casting from LINESTRING that is not a counter clockwise oriented linearring to POLYGON is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('LINESTRING(1 1, 1 4, 4 4, 4 1, 1 1)') AS POLYGON));
+ERROR 22S04: Invalid cast from LINESTRING to POLYGON. A polygon ring is in the wrong direction.
+#
+########################################
+# Requirement F-9b:                    #
+# CAST(polygon AS POLYGON)             #
+########################################
+#
+# Casting from POLYGON to POLYGON is always allowed.
+# Must return POLYGON. 
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POLYGON((1 1, 4 1, 4 4, 1 4, 1 1), (2 2, 2 3, 3 3, 3 2, 2 2))') AS POLYGON));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POLYGON((1 1, 4 1, 4 4, 1 4, 1 1), (2 2, 2 3, 3 3, 3 2, 2 2))') AS POLYGON))
+POLYGON((1 1,4 1,4 4,1 4,1 1),(2 2,2 3,3 3,3 2,2 2))
+#
+# Cast may reverse direction of some rings in polygon if
+# one or more rings are oriented the wrong way. This is still the same polygon.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POLYGON((1 1, 1 4, 4 4, 4 1, 1 1), (2 2, 3 2, 3 3, 2 3, 2 2))') AS POLYGON));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POLYGON((1 1, 1 4, 4 4, 4 1, 1 1), (2 2, 3 2, 3 3, 2 3, 2 2))') AS POLYGON))
+POLYGON((1 1,4 1,4 4,1 4,1 1),(2 2,2 3,3 3,3 2,2 2))
+#
+#
+########################################
+# Requirement F-9c:                    #
+# CAST(multilinestring AS POLYGON)     #
+########################################
+#
+# Casting from MULTILINESTRING with only correctly oriented linearrings (first ring counter clockwise, remaining rings clockwise) to POLYGON is allowed.
+# Must return POLYGON.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((1 1, 4 1, 4 4, 1 4, 1 1), (5 5, 5 6, 6 6, 6 5, 5 5))') AS POLYGON));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((1 1, 4 1, 4 4, 1 4, 1 1), (5 5, 5 6, 6 6, 6 5, 5 5))') AS POLYGON))
+POLYGON((1 1,4 1,4 4,1 4,1 1),(5 5,5 6,6 6,6 5,5 5))
+#
+# Casting from MULTILINESTRING with not only linearrings to POLYGON is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((1 1, 4 1, 4 4, 1 4, 1 1), (5 5, 5 6, 6 6, 6 5))') AS POLYGON));
+ERROR 22S01: Invalid cast from MULTILINESTRING to POLYGON.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((1 1, 4 4, 1 1), (5 5, 5 6, 6 6, 6 5, 5 5))') AS POLYGON));
+ERROR 22S01: Invalid cast from MULTILINESTRING to POLYGON.
+#
+# Casting from MULTILINESTRING with not only correctly oriented linearrings to POLYGON is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((1 1, 4 1, 4 4, 1 4, 1 1), (5 5, 6 5, 6 6, 5 6, 5 5))') AS POLYGON));
+ERROR 22S04: Invalid cast from MULTILINESTRING to POLYGON. A polygon ring is in the wrong direction.
+#
+########################################
+# Requirement F-9d:                    #
+# CAST(multipolygon AS POLYGON)        #
+########################################
+#
+# Casting from MULTIPOLYGON with only one polygon to POLYGON is allowed.
+# Must return POLYGON.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOLYGON(((1 1, 4 1, 4 4, 1 4, 1 1)))') AS POLYGON));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOLYGON(((1 1, 4 1, 4 4, 1 4, 1 1)))') AS POLYGON))
+POLYGON((1 1,4 1,4 4,1 4,1 1))
+#
+# Casting from MULTIPOLYGON with multiple polygons to POLYGON is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOLYGON(((1 1, 4 1, 4 4, 1 4, 1 1)), ((5 5, 5 6, 6 6, 6 5, 5 5)))') AS POLYGON));
+ERROR 22S01: Invalid cast from MULTIPOLYGON to POLYGON.
+#
+########################################
+# Requirement F-9e:                    #
+# CAST(geometrycollection AS POLYGON)  #
+########################################
+#
+# Casting from GEOMETRYCOLLECTION with only one polygon to POLYGON is allowed.
+# Must return POLYGON.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POLYGON((1 1, 4 1, 4 4, 1 4, 1 1)))') AS POLYGON));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POLYGON((1 1, 4 1, 4 4, 1 4, 1 1)))') AS POLYGON))
+POLYGON((1 1,4 1,4 4,1 4,1 1))
+#
+# Casting from empty GEOMETRYCOLLECTION to POLYGON is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()') AS POLYGON));
+ERROR 22S01: Invalid cast from GEOMETRYCOLLECTION to POLYGON.
+#
+# Casting from GEOMETRYCOLLECTION with multiple polygons to POLYGON is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POLYGON((1 1, 4 1, 4 4, 1 4, 1 1)), POLYGON((5 5, 5 6, 6 6, 6 5, 5 5)))') AS POLYGON));
+ERROR 22S01: Invalid cast from GEOMETRYCOLLECTION to POLYGON.
+#
+# Casting from GEOMETRYCOLLECTION with not only polygons to POLYGON is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POLYGON((1 1, 4 1, 4 4, 1 4, 1 1)), GEOMETRYCOLLECTION())') AS POLYGON));
+ERROR 22S01: Invalid cast from GEOMETRYCOLLECTION to POLYGON.
+#
+########################################
+# Requirement F-9f:                    #
+# Disallowed casts to POLYGON          #
+########################################
+#
+# Casting from POINT to POLYGON is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS POLYGON));
+ERROR 22S01: Invalid cast from POINT to POLYGON.
+#
+# Casting from MULTIPOINT to POLYGON is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOINT((1 1), (2 2))') AS POLYGON));
+ERROR 22S01: Invalid cast from MULTIPOINT to POLYGON.
+#
+#############################################
+# Testing result of WKT input               #
+#############################################
+#
+# Casting from ST_GEOMFROMTEXT(<WKT>) to POLYGON must return expected polygon.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('LINESTRING(1 1, 2 1, 2 2, 1 2, 1 1)') AS POLYGON));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('LINESTRING(1 1, 2 1, 2 2, 1 2, 1 1)') AS POLYGON))
+POLYGON((1 1,2 1,2 2,1 2,1 1))
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POLYGON((3 3, 4 3, 4 4, 3 4, 3 3), (5 5, 5 6, 6 6, 6 5, 5 5))') AS POLYGON));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POLYGON((3 3, 4 3, 4 4, 3 4, 3 3), (5 5, 5 6, 6 6, 6 5, 5 5))') AS POLYGON))
+POLYGON((3 3,4 3,4 4,3 4,3 3),(5 5,5 6,6 6,6 5,5 5))
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((7 7, 8 7, 8 8, 7 8, 7 7), (9 9, 9 10, 10 10, 10 9, 9 9))') AS POLYGON));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((7 7, 8 7, 8 8, 7 8, 7 7), (9 9, 9 10, 10 10, 10 9, 9 9))') AS POLYGON))
+POLYGON((7 7,8 7,8 8,7 8,7 7),(9 9,9 10,10 10,10 9,9 9))
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOLYGON(((11 11, 12 11, 12 12, 11 12, 11 11)))') AS POLYGON));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOLYGON(((11 11, 12 11, 12 12, 11 12, 11 11)))') AS POLYGON))
+POLYGON((11 11,12 11,12 12,11 12,11 11))
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POLYGON((13 13, 14 13, 14 14, 13 14, 13 13)))') AS POLYGON));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POLYGON((13 13, 14 13, 14 14, 13 14, 13 13)))') AS POLYGON))
+POLYGON((13 13,14 13,14 14,13 14,13 13))
+#
+#############################################
+# Testing result of user variable input     #
+#############################################
+#
+SET @linestring = ST_GEOMFROMTEXT('LINESTRING(1 1, 2 1, 2 2, 1 2, 1 1)');
+SET @polygon = ST_GEOMFROMTEXT('POLYGON((3 3, 4 3, 4 4, 3 4, 3 3), (5 5, 5 6, 6 6, 6 5, 5 5))');
+SET @multilinestring = ST_GEOMFROMTEXT('MULTILINESTRING((7 7, 8 7, 8 8, 7 8, 7 7), (9 9, 9 10, 10 10, 10 9, 9 9))');
+SET @multipolygon = ST_GEOMFROMTEXT('MULTIPOLYGON(((11 11, 12 11, 12 12, 11 12, 11 11)))');
+SET @geomcollection = ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POLYGON((13 13, 14 13, 14 14, 13 14, 13 13)))');
+#
+# Casting from geometry in user variable to POLYGON must return expected polygon.
+SELECT ST_ASTEXT(CAST(@linestring AS POLYGON));
+ST_ASTEXT(CAST(@linestring AS POLYGON))
+POLYGON((1 1,2 1,2 2,1 2,1 1))
+SELECT ST_ASTEXT(CAST(@polygon AS POLYGON));
+ST_ASTEXT(CAST(@polygon AS POLYGON))
+POLYGON((3 3,4 3,4 4,3 4,3 3),(5 5,5 6,6 6,6 5,5 5))
+SELECT ST_ASTEXT(CAST(@multilinestring AS POLYGON));
+ST_ASTEXT(CAST(@multilinestring AS POLYGON))
+POLYGON((7 7,8 7,8 8,7 8,7 7),(9 9,9 10,10 10,10 9,9 9))
+SELECT ST_ASTEXT(CAST(@multipolygon AS POLYGON));
+ST_ASTEXT(CAST(@multipolygon AS POLYGON))
+POLYGON((11 11,12 11,12 12,11 12,11 11))
+SELECT ST_ASTEXT(CAST(@geomcollection AS POLYGON));
+ST_ASTEXT(CAST(@geomcollection AS POLYGON))
+POLYGON((13 13,14 13,14 14,13 14,13 13))
+#
+#############################################
+# Testing result of table column input      #
+#############################################
+#
+drop table if exists gis_polygon_castable;
+CREATE TABLE gis_polygon_castable (fid INTEGER NOT NULL PRIMARY KEY, g GEOMETRY);
+INSERT INTO gis_polygon_castable VALUES
+(101, ST_GEOMFROMTEXT('LINESTRING(1 1, 2 1, 2 2, 1 2, 1 1)')),
+(102, ST_GEOMFROMTEXT('POLYGON((3 3, 4 3, 4 4, 3 4, 3 3), (5 5, 5 6, 6 6, 6 5, 5 5))')),
+(103, ST_GEOMFROMTEXT('MULTILINESTRING((7 7, 8 7, 8 8, 7 8, 7 7), (9 9, 9 10, 10 10, 10 9, 9 9))')),
+(104, ST_GEOMFROMTEXT('MULTIPOLYGON(((11 11, 12 11, 12 12, 11 12, 11 11)))')),
+(105, ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POLYGON((13 13, 14 13, 14 14, 13 14, 13 13)))'));
+#
+# Casting from geometry column to POLYGON must return expected polygon.
+SELECT ST_ASTEXT(CAST(g AS POLYGON)) FROM gis_polygon_castable;
+ST_ASTEXT(CAST(g AS POLYGON))
+POLYGON((1 1,2 1,2 2,1 2,1 1))
+POLYGON((3 3,4 3,4 4,3 4,3 3),(5 5,5 6,6 6,6 5,5 5))
+POLYGON((7 7,8 7,8 8,7 8,7 7),(9 9,9 10,10 10,10 9,9 9))
+POLYGON((11 11,12 11,12 12,11 12,11 11))
+POLYGON((13 13,14 13,14 14,13 14,13 13))
+#
+# Cleanup.
+DROP TABLE gis_polygon_castable;
+###########################################
+# Requirement F-10a:                      #
+# CAST(point AS MULTIPOINT)               #
+###########################################
+#
+# Casting from POINT to MULTIPOINT is always allowed.
+# Must return MULTIPOINT.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS MULTIPOINT));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS MULTIPOINT))
+MULTIPOINT((1 1))
+#
+###########################################
+# Requirement F-10b:                      #
+# CAST(linestring AS MULTIPOINT)          #
+###########################################
+#
+# Casting from LINESTRING to MULTIPOINT is always allowed.
+# Must return MULTIPOINT.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('LINESTRING(1 1, 2 2)') AS MULTIPOINT));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('LINESTRING(1 1, 2 2)') AS MULTIPOINT))
+MULTIPOINT((1 1),(2 2))
+#
+###########################################
+# Requirement F-10c:                      #
+# CAST(multipoint AS MULTIPOINT)          #
+###########################################
+#
+# Casting from MULTIPOINT to MULTIPOINT is always allowed.
+# Must return MULTIPOINT.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOINT((1 1), (2 2))') AS MULTIPOINT));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOINT((1 1), (2 2))') AS MULTIPOINT))
+MULTIPOINT((1 1),(2 2))
+#
+###########################################
+# Requirement F-10d:                      #
+# CAST(geometrycollection AS MULTIPOINT)  #
+###########################################
+#
+# Casting from GEOMETRYCOLLECTION with only points to MULTIPOINT is allowed.
+# Must return MULTIPOINT.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(1 1), POINT(2 2))') AS MULTIPOINT));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(1 1), POINT(2 2))') AS MULTIPOINT))
+MULTIPOINT((1 1),(2 2))
+#
+# Casting from empty GEOMETRYCOLLECTION to MULTIPOINT is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()') AS MULTIPOINT));
+ERROR 22S01: Invalid cast from GEOMETRYCOLLECTION to MULTIPOINT.
+#
+# Casting from GEOMETRYCOLLECTION with not only points to MULTIPOINT is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(1 1), POINT(2 2), GEOMETRYCOLLECTION())') AS MULTIPOINT));
+ERROR 22S01: Invalid cast from GEOMETRYCOLLECTION to MULTIPOINT.
+#
+###########################################
+# Requirement F-10e:                      #
+# Disallowed casts to MULTIPOINT          #
+###########################################
+#
+# Casting from POLYGON to MULTIPOINT is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POLYGON((1 1, 4 1, 4 4, 1 4, 1 1), (2 2, 2 3, 3 3, 3 2, 2 2))') AS MULTIPOINT));
+ERROR 22S01: Invalid cast from POLYGON to MULTIPOINT.
+#
+# Casting from MULTILINESTRING to MULTIPOINT is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((1 1, 2 2), (3 3, 4 4))') AS MULTIPOINT));
+ERROR 22S01: Invalid cast from MULTILINESTRING to MULTIPOINT.
+#
+# Casting from MULTIPOLYGON to MULTIPOINT is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOLYGON(((1 1, 4 1, 4 4, 1 4, 1 1)), ((5 5, 5 6, 6 6, 6 5, 5 5)))') AS MULTIPOINT));
+ERROR 22S01: Invalid cast from MULTIPOLYGON to MULTIPOINT.
+#
+#############################################
+# Testing result of WKT input               #
+#############################################
+#
+# Casting from ST_GEOMFROMTEXT(<WKT>) to MULTIPOINT must return expected multipoint.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS MULTIPOINT));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS MULTIPOINT))
+MULTIPOINT((1 1))
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('LINESTRING(2 2, 3 3)') AS MULTIPOINT));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('LINESTRING(2 2, 3 3)') AS MULTIPOINT))
+MULTIPOINT((2 2),(3 3))
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOINT((4 4), (5 5))') AS MULTIPOINT));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOINT((4 4), (5 5))') AS MULTIPOINT))
+MULTIPOINT((4 4),(5 5))
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(6 6), POINT(7 7))') AS MULTIPOINT));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(6 6), POINT(7 7))') AS MULTIPOINT))
+MULTIPOINT((6 6),(7 7))
+#
+#############################################
+# Testing result of user variable input     #
+#############################################
+#
+SET @point = ST_GEOMFROMTEXT('POINT(1 1)');
+SET @linestring = ST_GEOMFROMTEXT('LINESTRING(2 2, 3 3)');
+SET @multipoint = ST_GEOMFROMTEXT('MULTIPOINT((4 4), (5 5))');
+SET @geomcollection = ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(6 6), POINT(7 7))');
+#
+# Casting from geometry in user variable to MULTIPOINT must return expected multipoint.
+SELECT ST_ASTEXT(CAST(@point AS MULTIPOINT));
+ST_ASTEXT(CAST(@point AS MULTIPOINT))
+MULTIPOINT((1 1))
+SELECT ST_ASTEXT(CAST(@linestring AS MULTIPOINT));
+ST_ASTEXT(CAST(@linestring AS MULTIPOINT))
+MULTIPOINT((2 2),(3 3))
+SELECT ST_ASTEXT(CAST(@multipoint AS MULTIPOINT));
+ST_ASTEXT(CAST(@multipoint AS MULTIPOINT))
+MULTIPOINT((4 4),(5 5))
+SELECT ST_ASTEXT(CAST(@geomcollection AS MULTIPOINT));
+ST_ASTEXT(CAST(@geomcollection AS MULTIPOINT))
+MULTIPOINT((6 6),(7 7))
+#
+#############################################
+# Testing result of table column input      #
+#############################################
+#
+CREATE TABLE gis_multipoint_castable (fid INTEGER NOT NULL PRIMARY KEY, g GEOMETRY);
+INSERT INTO gis_multipoint_castable VALUES
+(101, ST_GEOMFROMTEXT('POINT(1 1)')),
+(102, ST_GEOMFROMTEXT('LINESTRING(2 2, 3 3)')),
+(103, ST_GEOMFROMTEXT('MULTIPOINT((4 4), (5 5))')),
+(104, ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(6 6), POINT(7 7))'));
+#
+# Casting from geometry column to MULTIPOINT must return expected multipoint.
+SELECT ST_ASTEXT(CAST(g AS MULTIPOINT)) FROM gis_multipoint_castable;
+ST_ASTEXT(CAST(g AS MULTIPOINT))
+MULTIPOINT((1 1))
+MULTIPOINT((2 2),(3 3))
+MULTIPOINT((4 4),(5 5))
+MULTIPOINT((6 6),(7 7))
+#
+# Cleanup.
+DROP TABLE gis_multipoint_castable;
+#################################################
+# Requirement F-11a:                            #
+# CAST(linestring AS MULTILINESTRING)           #
+#################################################
+#
+# Casting from LINESTRING to MULTILINESTRING is always allowed.
+# Must return Multilinestring.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('LINESTRING(1 1, 2 2)') AS MULTILINESTRING));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('LINESTRING(1 1, 2 2)') AS MULTILINESTRING))
+MULTILINESTRING((1 1,2 2))
+#
+#################################################
+# Requirement F-11b:                            #
+# CAST(polygon AS MULTILINESTRING)              #
+#################################################
+#
+# Casting from POLYGON to MULTILINESTRING is always allowed.
+# Must return multilinestring.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POLYGON((1 1, 4 1, 4 4, 1 4, 1 1), (2 2, 2 3, 3 3, 3 2, 2 2))') AS MULTILINESTRING));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POLYGON((1 1, 4 1, 4 4, 1 4, 1 1), (2 2, 2 3, 3 3, 3 2, 2 2))') AS MULTILINESTRING))
+MULTILINESTRING((1 1,4 1,4 4,1 4,1 1),(2 2,2 3,3 3,3 2,2 2))
+#
+#################################################
+# Requirement F-11c:                            #
+# CAST(multilinestring AS MULTILINESTRING)      #
+#################################################
+#
+# Casting from MULTILINESTRING to MULTILINESTRING is always allowed.
+# Must return Multilinestring.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((1 1, 2 2), (3 3, 4 4))') AS MULTILINESTRING));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((1 1, 2 2), (3 3, 4 4))') AS MULTILINESTRING))
+MULTILINESTRING((1 1,2 2),(3 3,4 4))
+#
+#
+#################################################
+# Requirement F-11d:                            #
+# CAST(multipolygon AS MULTILINESTRING)         #
+#################################################
+#
+# Casting from MULTIPOLYGON with only exterior ring polygons to MULTILINESTRING is allowed.
+# Must return Multilinestring.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOLYGON(((1 1, 2 1, 2 2, 1 2, 1 1)), ((3 3, 4 3, 4 4, 3 4, 3 3)))') AS MULTILINESTRING));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOLYGON(((1 1, 2 1, 2 2, 1 2, 1 1)), ((3 3, 4 3, 4 4, 3 4, 3 3)))') AS MULTILINESTRING))
+MULTILINESTRING((1 1,2 1,2 2,1 2,1 1),(3 3,4 3,4 4,3 4,3 3))
+#
+# Casting from MULTIPOLYGON with interior-ring polygons to MULTILINESTRING is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOLYGON(((1 1, 4 1, 4 4, 1 4, 1 1), (2 2, 2 3, 3 3, 3 2, 2 2)), ((1 1, 2 1, 2 2, 1 2, 1 1)))') AS MULTILINESTRING));
+ERROR 22S01: Invalid cast from MULTIPOLYGON to MULTILINESTRING.
+#
+#################################################
+# Requirement F-11e:                            #
+# CAST(geometrycollection AS MULTILINESTRING)   #
+#################################################
+#
+# Casting from GEOMETRYCOLLECTION with only linestrings to MULTILINESTRING is allowed.
+# Must return MULTILINESTRING.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(LINESTRING(1 1, 2 2), LINESTRING(3 3, 4 4))') AS MULTILINESTRING));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(LINESTRING(1 1, 2 2), LINESTRING(3 3, 4 4))') AS MULTILINESTRING))
+MULTILINESTRING((1 1,2 2),(3 3,4 4))
+#
+# Casting from empty GEOMETRYCOLLECTION to MULTILINESTRING is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()') AS MULTILINESTRING));
+ERROR 22S01: Invalid cast from GEOMETRYCOLLECTION to MULTILINESTRING.
+#
+# Casting from GEOMETRYCOLLECTION with not only linestrings to MULTILINESTRING is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(LINESTRING(1 1, 2 2), LINESTRING(3 3, 4 4), GEOMETRYCOLLECTION())') AS MULTILINESTRING));
+ERROR 22S01: Invalid cast from GEOMETRYCOLLECTION to MULTILINESTRING.
+#
+############################################
+# Requirement F-11f:                       #
+# Disallowed casts to MULTILINESTRING      #
+############################################
+#
+# Casting from POINT to MULTILINESTRING is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS MULTILINESTRING));
+ERROR 22S01: Invalid cast from POINT to MULTILINESTRING.
+#
+# Casting from MULTIPOINT to MULTILINESTRING is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOINT((1 1), (2 2))') AS MULTILINESTRING));
+ERROR 22S01: Invalid cast from MULTIPOINT to MULTILINESTRING.
+#
+#############################################
+# Testing result of WKT input               #
+#############################################
+#
+# Casting from ST_GEOMFROMTEXT(<WKT>) to MULTILINESTRING must return expected linestring.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('LINESTRING(1 1, 2 2)') AS MULTILINESTRING));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('LINESTRING(1 1, 2 2)') AS MULTILINESTRING))
+MULTILINESTRING((1 1,2 2))
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))') AS MULTILINESTRING));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))') AS MULTILINESTRING))
+MULTILINESTRING((3 3,4 3,4 4,3 4,3 3))
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((5 5, 6 6), (7 7, 8 8))') AS MULTILINESTRING));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((5 5, 6 6), (7 7, 8 8))') AS MULTILINESTRING))
+MULTILINESTRING((5 5,6 6),(7 7,8 8))
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOLYGON(((9 9, 10 9, 10 10, 9 10, 9 9)), ((11 11, 12 11, 12 12, 12 12, 11 11)))') AS MULTILINESTRING));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOLYGON(((9 9, 10 9, 10 10, 9 10, 9 9)), ((11 11, 12 11, 12 12, 12 12, 11 11)))') AS MULTILINESTRING))
+MULTILINESTRING((9 9,10 9,10 10,9 10,9 9),(11 11,12 11,12 12,12 12,11 11))
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(LINESTRING(13 13, 14 14), LINESTRING(15 15, 16 16))') AS MULTILINESTRING));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(LINESTRING(13 13, 14 14), LINESTRING(15 15, 16 16))') AS MULTILINESTRING))
+MULTILINESTRING((13 13,14 14),(15 15,16 16))
+#
+#############################################
+# Testing result of user variable input     #
+#############################################
+#
+SET @linestring = ST_GEOMFROMTEXT('LINESTRING(1 1, 2 2)');
+SET @polygon = ST_GEOMFROMTEXT('POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))');
+SET @multilinestring = ST_GEOMFROMTEXT('MULTILINESTRING((5 5, 6 6), (7 7, 8 8))');
+SET @multipolygon = ST_GEOMFROMTEXT('MULTIPOLYGON(((9 9, 10 9, 10 10, 9 10, 9 9)), ((11 11, 12 11, 12 12, 12 12, 11 11)))');
+SET @geomcollection = ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(LINESTRING(13 13, 14 14), LINESTRING(15 15, 16 16))');
+#
+# Casting from geometry in user variable to MULTILINESTRING must return expected multilinestring.
+SELECT ST_ASTEXT(CAST(@linestring AS MULTILINESTRING));
+ST_ASTEXT(CAST(@linestring AS MULTILINESTRING))
+MULTILINESTRING((1 1,2 2))
+SELECT ST_ASTEXT(CAST(@polygon AS MULTILINESTRING));
+ST_ASTEXT(CAST(@polygon AS MULTILINESTRING))
+MULTILINESTRING((3 3,4 3,4 4,3 4,3 3))
+SELECT ST_ASTEXT(CAST(@multilinestring AS MULTILINESTRING));
+ST_ASTEXT(CAST(@multilinestring AS MULTILINESTRING))
+MULTILINESTRING((5 5,6 6),(7 7,8 8))
+SELECT ST_ASTEXT(CAST(@multipolygon AS MULTILINESTRING));
+ST_ASTEXT(CAST(@multipolygon AS MULTILINESTRING))
+MULTILINESTRING((9 9,10 9,10 10,9 10,9 9),(11 11,12 11,12 12,12 12,11 11))
+SELECT ST_ASTEXT(CAST(@geomcollection AS MULTILINESTRING));
+ST_ASTEXT(CAST(@geomcollection AS MULTILINESTRING))
+MULTILINESTRING((13 13,14 14),(15 15,16 16))
+#
+#############################################
+# Testing result of table column input      #
+#############################################
+#
+CREATE TABLE gis_multilinestring_castable (fid INTEGER NOT NULL PRIMARY KEY, g GEOMETRY);
+INSERT INTO gis_multilinestring_castable VALUES
+(101, ST_GEOMFROMTEXT('LINESTRING(1 1, 2 2)')),
+(102, ST_GEOMFROMTEXT('POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))')),
+(103, ST_GEOMFROMTEXT('MULTILINESTRING((5 5, 6 6), (7 7, 8 8))')),
+(104, ST_GEOMFROMTEXT('MULTIPOLYGON(((9 9, 10 9, 10 10, 9 10, 9 9)), ((11 11, 12 11, 12 12, 12 12, 11 11)))')),
+(105, ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(LINESTRING(13 13, 14 14), LINESTRING(15 15, 16 16))'));
+#
+# Casting from geometry column to MULTILINESTRING must return expected multilinestring.
+SELECT ST_ASTEXT(CAST(g AS MULTILINESTRING)) FROM gis_multilinestring_castable;
+ST_ASTEXT(CAST(g AS MULTILINESTRING))
+MULTILINESTRING((1 1,2 2))
+MULTILINESTRING((3 3,4 3,4 4,3 4,3 3))
+MULTILINESTRING((5 5,6 6),(7 7,8 8))
+MULTILINESTRING((9 9,10 9,10 10,9 10,9 9),(11 11,12 11,12 12,12 12,11 11))
+MULTILINESTRING((13 13,14 14),(15 15,16 16))
+#
+# Cleanup.
+DROP TABLE gis_multilinestring_castable;
+#################################################
+# Requirement F-12a:                            #
+# CAST(polygon AS MULTIPOLYGON)                 #
+#################################################
+#
+# Casting from POLYGON to MULTIPOLYGON is always allowed.
+# Must return multipolygon.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POLYGON((1 1, 4 1, 4 4, 1 4, 1 1), (2 2, 2 3, 3 3, 3 2, 2 2))') AS MULTIPOLYGON));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POLYGON((1 1, 4 1, 4 4, 1 4, 1 1), (2 2, 2 3, 3 3, 3 2, 2 2))') AS MULTIPOLYGON))
+MULTIPOLYGON(((1 1,4 1,4 4,1 4,1 1),(2 2,2 3,3 3,3 2,2 2)))
+#
+#################################################
+# Requirement F-12b:                            #
+# CAST(multilinestring AS MULTIPOLYGON)         #
+#################################################
+#
+# Casting from MULTILINESTRING with only correctly oriented linearrings (counter clockwise) to MULTIPOLYGON is allowed.
+# Must return multipolygon.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((1 1, 4 1, 4 4, 1 4, 1 1), (5 5, 6 5, 6 6, 5 6, 5 5))') AS MULTIPOLYGON));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((1 1, 4 1, 4 4, 1 4, 1 1), (5 5, 6 5, 6 6, 5 6, 5 5))') AS MULTIPOLYGON))
+MULTIPOLYGON(((1 1,4 1,4 4,1 4,1 1)),((5 5,6 5,6 6,5 6,5 5)))
+#
+# Casting from MULTILINESTRING with not only linearrings to MULTIPOLYGON is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((1 1, 4 1, 4 4, 1 4, 1 1), (5 5, 5 6, 6 6, 6 5))') AS MULTIPOLYGON));
+ERROR 22S01: Invalid cast from MULTILINESTRING to MULTIPOLYGON.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((1 1, 4 4, 1 1), (5 5, 5 6, 6 6, 6 5, 5 5))') AS MULTIPOLYGON));
+ERROR 22S01: Invalid cast from MULTILINESTRING to MULTIPOLYGON.
+#
+# Casting from MULTILINESTRING with not only correctly oriented linearrings to MULTIPOLYGON is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((1 1, 4 1, 4 4, 1 4, 1 1), (5 5, 5 6, 6 6, 6 5, 5 5))') AS MULTIPOLYGON));
+ERROR 22S04: Invalid cast from MULTILINESTRING to MULTIPOLYGON. A polygon ring is in the wrong direction.
+#
+##############################################
+# Requirement F-12c:                         #
+# CAST(multipolygon AS MULTIPOLYGON)         #
+##############################################
+#
+# Casting from MULTIPOLYGON to MULTIPOLYGON is always allowed.
+# Must return Multipolygon.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOLYGON(((1 1, 4 1, 4 4, 1 4, 1 1)), ((5 5, 5 6, 6 6, 6 5, 5 5)))') AS MULTIPOLYGON));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOLYGON(((1 1, 4 1, 4 4, 1 4, 1 1)), ((5 5, 5 6, 6 6, 6 5, 5 5)))') AS MULTIPOLYGON))
+MULTIPOLYGON(((1 1,4 1,4 4,1 4,1 1)),((5 5,6 5,6 6,5 6,5 5)))
+#
+##############################################
+# Requirement F-12d:                         #
+# CAST(geometrycollection AS MULTIPOLYGON)   #
+##############################################
+#
+# Casting from GEOMETRYCOLLECTION with only polygons to MULTIPOLYGON is allowed.
+# Must return Multipolygon.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POLYGON((1 1, 4 1, 4 4, 1 4, 1 1)), POLYGON((5 5, 6 5, 6 6, 5 6, 5 5)))') AS MULTIPOLYGON));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POLYGON((1 1, 4 1, 4 4, 1 4, 1 1)), POLYGON((5 5, 6 5, 6 6, 5 6, 5 5)))') AS MULTIPOLYGON))
+MULTIPOLYGON(((1 1,4 1,4 4,1 4,1 1)),((5 5,6 5,6 6,5 6,5 5)))
+#
+# Casting from empty GEOMETRYCOLLECTION to MULTIPOLYGON is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()') AS MULTIPOLYGON));
+ERROR 22S01: Invalid cast from GEOMETRYCOLLECTION to MULTIPOLYGON.
+#
+# Casting from GEOMETRYCOLLECTION with not only polygons to MULTIPOLYGON is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POLYGON((1 1, 4 1, 4 4, 1 4, 1 1)), POLYGON((5 5, 6 5, 6 6, 5 6, 5 5)), GEOMETRYCOLLECTION())') AS MULTIPOLYGON));
+ERROR 22S01: Invalid cast from GEOMETRYCOLLECTION to MULTIPOLYGON.
+#
+############################################
+# Requirement F-12e:                       #
+# Disallowed casts to MULTIPOLYGON         #
+############################################
+#
+# Casting from POINT to MULTIPOLYGON is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS MULTIPOLYGON));
+ERROR 22S01: Invalid cast from POINT to MULTIPOLYGON.
+#
+# Casting from LINESTRING to MULTIPOLYGON is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('LINESTRING(1 1, 2 2)') AS MULTIPOLYGON));
+ERROR 22S01: Invalid cast from LINESTRING to MULTIPOLYGON.
+#
+# Casting from MULTIPOINT to MULTIPOLYGON is not allowed.
+# Must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOINT((1 1), (2 2))') AS MULTIPOLYGON));
+ERROR 22S01: Invalid cast from MULTIPOINT to MULTIPOLYGON.
+#
+#############################################
+# Testing result of WKT input               #
+#############################################
+#
+# Casting from ST_GEOMFROMTEXT(<WKT>) to MULTIPOLYGON must return expected linestring.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))') AS MULTIPOLYGON));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))') AS MULTIPOLYGON))
+MULTIPOLYGON(((3 3,4 3,4 4,3 4,3 3)))
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((5 5, 6 5, 6 6, 5 6, 5 5), (7 7, 8 7, 8 8, 7 8, 7 7))') AS MULTIPOLYGON));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((5 5, 6 5, 6 6, 5 6, 5 5), (7 7, 8 7, 8 8, 7 8, 7 7))') AS MULTIPOLYGON))
+MULTIPOLYGON(((5 5,6 5,6 6,5 6,5 5)),((7 7,8 7,8 8,7 8,7 7)))
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOLYGON(((9 9, 10 9, 10 10, 9 10, 9 9)), ((11 11, 12 11, 12 12, 12 12, 11 11)))') AS MULTIPOLYGON));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOLYGON(((9 9, 10 9, 10 10, 9 10, 9 9)), ((11 11, 12 11, 12 12, 12 12, 11 11)))') AS MULTIPOLYGON))
+MULTIPOLYGON(((9 9,10 9,10 10,9 10,9 9)),((11 11,12 11,12 12,12 12,11 11)))
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POLYGON((13 13, 14 13, 14 14, 13 14, 13 13)), POLYGON((15 15, 16 15, 16 16, 15 16, 15 15)))') AS MULTIPOLYGON));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POLYGON((13 13, 14 13, 14 14, 13 14, 13 13)), POLYGON((15 15, 16 15, 16 16, 15 16, 15 15)))') AS MULTIPOLYGON))
+MULTIPOLYGON(((13 13,14 13,14 14,13 14,13 13)),((15 15,16 15,16 16,15 16,15 15)))
+#
+#############################################
+# Testing result of user variable input     #
+#############################################
+#
+SET @polygon = ST_GEOMFROMTEXT('POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))');
+SET @multilinestring = ST_GEOMFROMTEXT('MULTILINESTRING((5 5, 6 5, 6 6, 5 6, 5 5), (7 7, 8 7, 8 8, 7 8, 7 7))');
+SET @multipolygon = ST_GEOMFROMTEXT('MULTIPOLYGON(((9 9, 10 9, 10 10, 9 10, 9 9)), ((11 11, 12 11, 12 12, 12 12, 11 11)))');
+SET @geomcollection = ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POLYGON((13 13, 14 13, 14 14, 13 14, 13 13)), POLYGON((15 15, 16 15, 16 16, 15 16, 15 15)))');
+#
+# Casting from geometry in user variable to MULTIPOLYGON must return expected multipolygon.
+SELECT ST_ASTEXT(CAST(@polygon AS MULTIPOLYGON));
+ST_ASTEXT(CAST(@polygon AS MULTIPOLYGON))
+MULTIPOLYGON(((3 3,4 3,4 4,3 4,3 3)))
+SELECT ST_ASTEXT(CAST(@multilinestring AS MULTIPOLYGON));
+ST_ASTEXT(CAST(@multilinestring AS MULTIPOLYGON))
+MULTIPOLYGON(((5 5,6 5,6 6,5 6,5 5)),((7 7,8 7,8 8,7 8,7 7)))
+SELECT ST_ASTEXT(CAST(@multipolygon AS MULTIPOLYGON));
+ST_ASTEXT(CAST(@multipolygon AS MULTIPOLYGON))
+MULTIPOLYGON(((9 9,10 9,10 10,9 10,9 9)),((11 11,12 11,12 12,12 12,11 11)))
+SELECT ST_ASTEXT(CAST(@geomcollection AS MULTIPOLYGON));
+ST_ASTEXT(CAST(@geomcollection AS MULTIPOLYGON))
+MULTIPOLYGON(((13 13,14 13,14 14,13 14,13 13)),((15 15,16 15,16 16,15 16,15 15)))
+#
+#############################################
+# Testing result of table column input      #
+#############################################
+#
+CREATE TABLE gis_multipolygon_castable (fid INTEGER NOT NULL PRIMARY KEY, g GEOMETRY);
+INSERT INTO gis_multipolygon_castable VALUES
+(101, ST_GEOMFROMTEXT('POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))')),
+(102, ST_GEOMFROMTEXT('MULTILINESTRING((5 5, 6 5, 6 6, 5 6, 5 5), (7 7, 8 7, 8 8, 7 8, 7 7))')),
+(103, ST_GEOMFROMTEXT('MULTIPOLYGON(((9 9, 10 9, 10 10, 9 10, 9 9)), ((11 11, 12 11, 12 12, 12 12, 11 11)))')),
+(104, ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POLYGON((13 13, 14 13, 14 14, 13 14, 13 13)), POLYGON((15 15, 16 15, 16 16, 15 16, 15 15)))'));
+#
+# Casting from geometry column to MULTIPOLYGON must return expected multipolygon.
+SELECT ST_ASTEXT(CAST(g AS MULTIPOLYGON)) FROM gis_multipolygon_castable;
+ST_ASTEXT(CAST(g AS MULTIPOLYGON))
+MULTIPOLYGON(((3 3,4 3,4 4,3 4,3 3)))
+MULTIPOLYGON(((5 5,6 5,6 6,5 6,5 5)),((7 7,8 7,8 8,7 8,7 7)))
+MULTIPOLYGON(((9 9,10 9,10 10,9 10,9 9)),((11 11,12 11,12 12,12 12,11 11)))
+MULTIPOLYGON(((13 13,14 13,14 14,13 14,13 13)),((15 15,16 15,16 16,15 16,15 15)))
+#
+# Cleanup.
+DROP TABLE gis_multipolygon_castable;
+####################################################
+# Requirement F-13a:                               #
+# CAST(... AS GEOMCOLLECTION) must give the same   #
+# same result as CAST(... AS GEOMETRYCOLLECTION)   #
+####################################################
+#
+# Casting using CAST(... AS GEOMETRYCOLLECTION) must be allowed.
+# Must return geometrycollection.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS GEOMETRYCOLLECTION));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS GEOMETRYCOLLECTION))
+GEOMETRYCOLLECTION(POINT(1 1))
+#
+# Casting using CAST(... AS GEOMCOLLECTION) must be allowed.
+# Must return geometrycollection.
+#
+####################################################
+# Requirement F-13b:                               #
+# CAST(point AS GEOMETRYCOLLECTION)                #
+####################################################
+#
+# Casting from POINT to GEOMETRYCOLLECTION is always allowed.
+# Must return geometrycollection.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS GEOMETRYCOLLECTION));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS GEOMETRYCOLLECTION))
+GEOMETRYCOLLECTION(POINT(1 1))
+#
+####################################################
+# Requirement F-13c:                               #
+# CAST(linestring AS GEOMETRYCOLLECTION)           #
+####################################################
+#
+# Casting from LINESTRING to GEOMETRYCOLLECTION is always allowed.
+# Must return geometrycollection.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('LINESTRING(1 1, 2 2)') AS GEOMETRYCOLLECTION));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('LINESTRING(1 1, 2 2)') AS GEOMETRYCOLLECTION))
+GEOMETRYCOLLECTION(LINESTRING(1 1,2 2))
+#
+####################################################
+# Requirement F-13d:                               #
+# CAST(polygon AS GEOMETRYCOLLECTION)              #
+####################################################
+#
+# Casting from POLYGON to GEOMETRYCOLLECTION is always allowed.
+# Must return geometrycollection.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POLYGON((1 1, 4 1, 4 4, 1 4, 1 1), (2 2, 3 2, 3 3, 2 3, 2 2))') AS GEOMETRYCOLLECTION));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POLYGON((1 1, 4 1, 4 4, 1 4, 1 1), (2 2, 3 2, 3 3, 2 3, 2 2))') AS GEOMETRYCOLLECTION))
+GEOMETRYCOLLECTION(POLYGON((1 1,4 1,4 4,1 4,1 1),(2 2,2 3,3 3,3 2,2 2)))
+#
+####################################################
+# Requirement F-13e:                               #
+# CAST(multipoint AS GEOMETRYCOLLECTION)           #
+####################################################
+#
+# Casting from MULTIPOINT to GEOMETRYCOLLECTION is always allowed.
+# Must return geometrycollection.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOINT((1 1), (2 2))') AS GEOMETRYCOLLECTION));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOINT((1 1), (2 2))') AS GEOMETRYCOLLECTION))
+GEOMETRYCOLLECTION(POINT(1 1),POINT(2 2))
+#
+####################################################
+# Requirement F-13f:                               #
+# CAST(multilinestring AS GEOMETRYCOLLECTION)      #
+####################################################
+#
+# Casting from MULTILINESTRING to GEOMETRYCOLLECTION is always allowed.
+# Must return geometrycollection.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((1 1, 2 2), (3 3, 4 4))') AS GEOMETRYCOLLECTION));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((1 1, 2 2), (3 3, 4 4))') AS GEOMETRYCOLLECTION))
+GEOMETRYCOLLECTION(LINESTRING(1 1,2 2),LINESTRING(3 3,4 4))
+#
+####################################################
+# Requirement F-13g:                               #
+# CAST(multipolygon AS GEOMETRYCOLLECTION)         #
+####################################################
+#
+# Casting from MULTIPOLYGON to GEOMETRYCOLLECTION is always allowed.
+# Must return geometrycollection.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOLYGON(((1 1, 4 1, 4 4, 1 4, 1 1)), ((5 5, 6 5, 6 6, 5 6, 5 5)))') AS GEOMETRYCOLLECTION));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOLYGON(((1 1, 4 1, 4 4, 1 4, 1 1)), ((5 5, 6 5, 6 6, 5 6, 5 5)))') AS GEOMETRYCOLLECTION))
+GEOMETRYCOLLECTION(POLYGON((1 1,4 1,4 4,1 4,1 1)),POLYGON((5 5,6 5,6 6,5 6,5 5)))
+#
+####################################################
+# Requirement F-13h:                               #
+# CAST(geometrycollection AS GEOMETRYCOLLECTION)   #
+####################################################
+#
+# Casting from GEOMETRYCOLLECTION to GEOMETRYCOLLECTION is always allowed.
+# Must return geometrycollection.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(1 1), LINESTRING(2 2, 3 3))') AS GEOMETRYCOLLECTION));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(1 1), LINESTRING(2 2, 3 3))') AS GEOMETRYCOLLECTION))
+GEOMETRYCOLLECTION(POINT(1 1),LINESTRING(2 2,3 3))
+#
+#############################################
+# Testing result of WKT input               #
+#############################################
+#
+# Casting from ST_GEOMFROMTEXT(<WKT>) to GEOMETRYCOLLECTION must return expected linestring.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS GEOMETRYCOLLECTION));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS GEOMETRYCOLLECTION))
+GEOMETRYCOLLECTION(POINT(1 1))
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('LINESTRING(2 2, 3 3)') AS GEOMETRYCOLLECTION));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('LINESTRING(2 2, 3 3)') AS GEOMETRYCOLLECTION))
+GEOMETRYCOLLECTION(LINESTRING(2 2,3 3))
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POLYGON((4 4, 5 4, 5 5, 4 5, 4 4))') AS GEOMETRYCOLLECTION));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POLYGON((4 4, 5 4, 5 5, 4 5, 4 4))') AS GEOMETRYCOLLECTION))
+GEOMETRYCOLLECTION(POLYGON((4 4,5 4,5 5,4 5,4 4)))
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOINT((6 6), (7 7))') AS GEOMETRYCOLLECTION));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOINT((6 6), (7 7))') AS GEOMETRYCOLLECTION))
+GEOMETRYCOLLECTION(POINT(6 6),POINT(7 7))
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((8 8, 9 9), (10 10, 11 11))') AS GEOMETRYCOLLECTION));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTILINESTRING((8 8, 9 9), (10 10, 11 11))') AS GEOMETRYCOLLECTION))
+GEOMETRYCOLLECTION(LINESTRING(8 8,9 9),LINESTRING(10 10,11 11))
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOLYGON(((12 12, 13 12, 13 13, 12 13, 12 12)), ((14 14, 15 14, 15 15, 14 15, 14 14)))') AS GEOMETRYCOLLECTION));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('MULTIPOLYGON(((12 12, 13 12, 13 13, 12 13, 12 12)), ((14 14, 15 14, 15 15, 14 15, 14 14)))') AS GEOMETRYCOLLECTION))
+GEOMETRYCOLLECTION(POLYGON((12 12,13 12,13 13,12 13,12 12)),POLYGON((14 14,15 14,15 15,14 15,14 14)))
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(16 16), LINESTRING(17 17, 18 18))') AS GEOMETRYCOLLECTION));
+ST_ASTEXT(CAST(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(16 16), LINESTRING(17 17, 18 18))') AS GEOMETRYCOLLECTION))
+GEOMETRYCOLLECTION(POINT(16 16),LINESTRING(17 17,18 18))
+#
+#############################################
+# Testing result of user variable input     #
+#############################################
+#
+SET @point = ST_GEOMFROMTEXT('POINT(1 1)');
+SET @linestring = ST_GEOMFROMTEXT('LINESTRING(2 2, 3 3)');
+SET @polygon = ST_GEOMFROMTEXT('POLYGON((4 4, 5 4, 5 5, 4 5, 4 4))');
+SET @multipoint = ST_GEOMFROMTEXT('MULTIPOINT((6 6), (7 7))');
+SET @multilinestring = ST_GEOMFROMTEXT('MULTILINESTRING((8 8, 9 9), (10 10, 11 11))');
+SET @multipolygon = ST_GEOMFROMTEXT('MULTIPOLYGON(((12 12, 13 12, 13 13, 12 13, 12 12)), ((14 14, 15 14, 15 15, 14 15, 14 14)))');
+SET @geomcollection = ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(16 16), LINESTRING(17 17, 18 18))');
+#
+# Casting from geometry in user variable to GEOMETRYCOLLECTION must return expected geometrycollection.
+SELECT ST_ASTEXT(CAST(@point AS GEOMETRYCOLLECTION));
+ST_ASTEXT(CAST(@point AS GEOMETRYCOLLECTION))
+GEOMETRYCOLLECTION(POINT(1 1))
+SELECT ST_ASTEXT(CAST(@linestring AS GEOMETRYCOLLECTION));
+ST_ASTEXT(CAST(@linestring AS GEOMETRYCOLLECTION))
+GEOMETRYCOLLECTION(LINESTRING(2 2,3 3))
+SELECT ST_ASTEXT(CAST(@polygon AS GEOMETRYCOLLECTION));
+ST_ASTEXT(CAST(@polygon AS GEOMETRYCOLLECTION))
+GEOMETRYCOLLECTION(POLYGON((4 4,5 4,5 5,4 5,4 4)))
+SELECT ST_ASTEXT(CAST(@multipoint AS GEOMETRYCOLLECTION));
+ST_ASTEXT(CAST(@multipoint AS GEOMETRYCOLLECTION))
+GEOMETRYCOLLECTION(POINT(6 6),POINT(7 7))
+SELECT ST_ASTEXT(CAST(@multilinestring AS GEOMETRYCOLLECTION));
+ST_ASTEXT(CAST(@multilinestring AS GEOMETRYCOLLECTION))
+GEOMETRYCOLLECTION(LINESTRING(8 8,9 9),LINESTRING(10 10,11 11))
+SELECT ST_ASTEXT(CAST(@multipolygon AS GEOMETRYCOLLECTION));
+ST_ASTEXT(CAST(@multipolygon AS GEOMETRYCOLLECTION))
+GEOMETRYCOLLECTION(POLYGON((12 12,13 12,13 13,12 13,12 12)),POLYGON((14 14,15 14,15 15,14 15,14 14)))
+SELECT ST_ASTEXT(CAST(@geomcollection AS GEOMETRYCOLLECTION));
+ST_ASTEXT(CAST(@geomcollection AS GEOMETRYCOLLECTION))
+GEOMETRYCOLLECTION(POINT(16 16),LINESTRING(17 17,18 18))
+#
+#############################################
+# Testing result of table column input      #
+#############################################
+#
+CREATE TABLE gis_geometrycollection_castable (fid INTEGER NOT NULL PRIMARY KEY, g GEOMETRY);
+INSERT INTO gis_geometrycollection_castable VALUES
+(101, ST_GEOMFROMTEXT('POINT(1 1)')),
+(102, ST_GEOMFROMTEXT('LINESTRING(2 2, 3 3)')),
+(103, ST_GEOMFROMTEXT('POLYGON((4 4, 5 4, 5 5, 4 5, 4 4))')),
+(104, ST_GEOMFROMTEXT('MULTIPOINT((6 6), (7 7))')),
+(105, ST_GEOMFROMTEXT('MULTILINESTRING((8 8, 9 9), (10 10, 11 11))')),
+(106, ST_GEOMFROMTEXT('MULTIPOLYGON(((12 12, 13 12, 13 13, 12 13, 12 12)), ((14 14, 15 14, 15 15, 14 15, 14 14)))')),
+(107, ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(16 16), LINESTRING(17 17, 18 18))'));
+#
+# Casting from geometry column to GEOMETRYCOLLECTION must return expected geometrycollection.
+SELECT ST_ASTEXT(CAST(g AS GEOMETRYCOLLECTION)) FROM gis_geometrycollection_castable;
+ST_ASTEXT(CAST(g AS GEOMETRYCOLLECTION))
+GEOMETRYCOLLECTION(POINT(1 1))
+GEOMETRYCOLLECTION(LINESTRING(2 2,3 3))
+GEOMETRYCOLLECTION(POLYGON((4 4,5 4,5 5,4 5,4 4)))
+GEOMETRYCOLLECTION(POINT(6 6),POINT(7 7))
+GEOMETRYCOLLECTION(LINESTRING(8 8,9 9),LINESTRING(10 10,11 11))
+GEOMETRYCOLLECTION(POLYGON((12 12,13 12,13 13,12 13,12 12)),POLYGON((14 14,15 14,15 15,14 15,14 14)))
+GEOMETRYCOLLECTION(POINT(16 16),LINESTRING(17 17,18 18))
+#
+# Cleanup.
+DROP TABLE gis_geometrycollection_castable;
+####################################################################
+# Requirement F-1d:                                                #
+# Non-instantiable target types must not be allowed.               #
+####################################################################
+#
+# Casting to GEOMETRY must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS GEOMETRY));
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'GEOMETRY))' at line 1
+#
+# Casting to CURVE must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS CURVE));
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'CURVE))' at line 1
+#
+# Casting to SURFACE must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS SURFACE));
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'SURFACE))' at line 1
+#
+# Casting to MULTICURVE must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS MULTICURVE));
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'MULTICURVE))' at line 1
+#
+# Casting to MULTISURFACE must raise error.
+SELECT ST_ASTEXT(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS MULTISURFACE));
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'MULTISURFACE))' at line 1
+#
+####################################################################
+# Requirement F-1e:                                                #
+# Casting to non-geometry types must give same result as before.   #
+####################################################################
+#
+# Casting geometry to SIGNED must raise error.
+SELECT CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS SIGNED);
+ERROR HY000: Incorrect arguments to cast_as_signed
+#
+# Casting geometry to UNSIGNED must raise error.
+SELECT CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS UNSIGNED);
+ERROR HY000: Incorrect arguments to cast_as_unsigned
+#
+# Casting geometry to YEAR must raise error.
+SELECT CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS YEAR);
+ERROR HY000: Incorrect arguments to cast_as_year
+#
+# Casting geometry to DATE must return NULL.
+SELECT CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS DATE);
+CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS DATE)
+NULL
+#
+# Casting geometry to TIME must return NULL.
+SELECT CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS TIME);
+CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS TIME)
+NULL
+#
+# Casting geometry to DATETIME must return NULL.
+SELECT CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS DATETIME);
+CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS DATETIME)
+NULL
+#
+# Casting geometry to CHAR must return SWKB.
+SELECT HEX(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS CHAR));
+HEX(CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS CHAR))
+000000000101000000000000000000F03F000000000000F03F
+#
+# Casting geometry to DECIMAL must return 0.
+SELECT CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS DECIMAL);
+CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS DECIMAL)
+0
+#
+# Casting geometry to FLOAT must return 0.
+SELECT CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS FLOAT);
+CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS FLOAT)
+0
+#
+# Casting geometry to DOUBLE must return 0.
+SELECT CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS DOUBLE);
+CAST(ST_GEOMFROMTEXT('POINT(1 1)') AS DOUBLE)
+0
+#
+# Casting geometry to JSON must return JSON-string. （not support now）
+#
+####################################################################
+# Requirement F-2:                                                 #
+# Casting NULL to geometry types must return NULL.               #
+####################################################################
+#
+SELECT CAST(NULL AS POINT);
+CAST(NULL AS POINT)
+NULL
+#
+####################################################################
+# Requirement F-3:                                                 #
+# Casting geometries that are not syntactically well-formed        #
+# must not be allowed.                                             #
+####################################################################
+#
+# Casting 'POINT(1)' to POINT must raise error.
+SELECT CAST(0x000000000101000000000000000000F03F AS POINT);
+ERROR 22023: Invalid GIS data provided to function cast_as_point.
+#
+####################################################################
+# Requirement F-6b:                                                #
+# Casting geographic geometry with longitude outside of            #
+# (-180, 180] must not be allowed.                                 #
+####################################################################
+#
+# Casting POINT(0 180.000000001) with SRID=4326 to POINT must raise error.
+SELECT CAST(0xE6100000010100000070890000008066400000000000000000 AS POINT);
+ERROR 22S02: A parameter of function cast_as_point contains a geometry with longitude 180.000000, which is out of range. It must be within (-180.000000, 180.000000].
+#
+# Casting POINT(0 -180.000000001) with SRID=4326 to POINT must raise error.
+SELECT CAST(0xE6100000010100000070890000008066C00000000000000000 AS POINT);
+ERROR 22S02: A parameter of function cast_as_point contains a geometry with longitude -180.000000, which is out of range. It must be within (-180.000000, 180.000000].
+#
+####################################################################
+# Requirement F-6c:                                                #
+# Casting geographic geometry with latitude outside of             #
+# [-90, 90] must not be allowed.                                   #
+####################################################################
+#
+# Casting POINT(90.000000001 0) with SRID=4326 to POINT must raise error.
+SELECT CAST(0xE610000001010000000000000000000000E112010000805640 AS POINT);
+ERROR 22S03: A parameter of function cast_as_point contains a geometry with latitude 90.000000, which is out of range. It must be within [-90.000000, 90.000000].
+#
+# Casting POINT(-90.000000001 0) with SRID=4326 to POINT must raise error.
+SELECT CAST(0xE610000001010000000000000000000000E1120100008056C0 AS POINT);
+ERROR 22S03: A parameter of function cast_as_point contains a geometry with latitude -90.000000, which is out of range. It must be within [-90.000000, 90.000000].
+#
+create table tt2(a year);
+insert into tt2 values(2010-10-10);
+select * from tt2;
+a
+1990
+select cast(a as point) from tt2;
+ERROR SR001: There's no spatial reference system with SRID 809056561.
+drop table tt2;
+select cast(cast("1.23" as decimal) as point);
+ERROR 22023: Invalid GIS data provided to function cast_as_point.
+select cast(cast("1.23" as decimal) as linestring);
+ERROR 22023: Invalid GIS data provided to function cast_as_linestring.
+select cast(cast("1.23" as decimal) as polygon);
+ERROR 22023: Invalid GIS data provided to function cast_as_polygon.
+select cast(cast("1.23" as decimal) as multipoint);
+ERROR 22023: Invalid GIS data provided to function cast_as_multipoint.
+select cast(cast("1.23" as decimal) as multilinestring);
+ERROR 22023: Invalid GIS data provided to function cast_as_multilinestring.
+select cast(cast("1.23" as decimal) as multipolygon);
+ERROR 22023: Invalid GIS data provided to function cast_as_multipolygon.
+select cast(cast("1.23" as decimal) as Geometrycollection);
+ERROR 22023: Invalid GIS data provided to function cast_as_geometrycollection.
+select cast(123 as point);
+ERROR 22023: Invalid GIS data provided to function cast_as_point.
+select cast(121111111111111111111111113 as point);
+ERROR SR001: There's no spatial reference system with SRID 825307697.
+select cast(123.123 as point);
+ERROR SR001: There's no spatial reference system with SRID 775107121.
+select cast(121111111111111111111111113.123 as point);
+ERROR SR001: There's no spatial reference system with SRID 825307697.
+select cast(cast(23 as year) as point);
+ERROR SR001: There's no spatial reference system with SRID 858927154.
+SELECT st_astext(CAST(ST_GEOMFROMTEXT('POINT(1 1)', 4326) AS POINT));
+st_astext(CAST(ST_GEOMFROMTEXT('POINT(1 1)', 4326) AS POINT))
+POINT(1 1)
+select st_astext(cast(ST_GeomFromText('point(10 20)',4326) as MULTIPOINT));
+st_astext(cast(ST_GeomFromText('point(10 20)',4326) as MULTIPOINT))
+MULTIPOINT((10 20))
+select st_astext(cast(ST_GeomFromText('MULTIPOLYGON(((1 0,10 0,7 7,0 10,1 0)),((5 6,7 5,7 7,5 7, 5 6)))') as MULTILINESTRING));
+st_astext(cast(ST_GeomFromText('MULTIPOLYGON(((1 0,10 0,7 7,0 10,1 0)),((5 6,7 5,7 7,5 7, 5 6)))') as MULTILINESTRING))
+MULTILINESTRING((1 0,10 0,7 7,0 10,1 0),(5 6,7 5,7 7,5 7,5 6))
+select st_astext(cast(x'E6100000010100000066666666668656400000000000806640' as MULTIPOINT));
+ERROR 22S03: A parameter of function cast_as_multipoint contains a geometry with latitude 180.000000, which is out of range. It must be within [-90.000000, 90.000000].
+select st_astext(cast(x'E6100000010100000066666666668656400000000000806640' as GEOMETRYCOLLECTION));
+ERROR 22S03: A parameter of function cast_as_geometrycollection contains a geometry with latitude 180.000000, which is out of range. It must be within [-90.000000, 90.000000].
+select st_astext(cast(x'0000000001030000000100000004000000000000000080514000000000008051400000000000002440000000000000000000000000000024400000000000002440000000000080514000000000008051E0' as MULTIPOLYGON));
+st_astext(cast(x'0000000001030000000100000004000000000000000080514000000000008051400000000000002440000000000000000000000000000024400000000000002440000000000080514000000000008051E0' as MULTIPOLYGON))
+MULTIPOLYGON(((70 70,10 0,10 10,70 -9.385465550959818e155,70 70)))
+DROP TABLE IF EXISTS tt1;
+create table tt1(id int);
+insert into tt1 values(ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)',0));
+ERROR HY000: Incorrect integer value for column 'id' at row 1
+drop table tt1;
+drop table if exists t;
+create table t (c1 int, c2 bigint, c3 double, c4 float, c5 decimal, c6 datetime,
+c7 date, c8 time, c9 year, c10 bit, c11 varchar(100), c12 json);
+insert into t(c1) value (point(0,0));
+ERROR HY000: Incorrect integer value for column 'c1' at row 1
+insert into t(c2) value (point(0,0));
+ERROR HY000: Incorrect integer value for column 'c2' at row 1
+insert into t(c3) value (point(0,0));
+ERROR 22003: Out of range value for column 'c3' at row 1
+insert into t(c4) value (point(0,0));
+ERROR 22003: Out of range value for column 'c4' at row 1
+insert into t(c5) value (point(0,0));
+ERROR HY000: Incorrect integer value for column 'c5' at row 1
+insert into t(c6) value (point(0,0));
+ERROR 22007: Incorrect datetime value for column 'c6' at row 1
+insert into t(c7) value (point(0,0));
+ERROR 22007: Incorrect datetime value for column 'c7' at row 1
+insert into t(c8) value (point(0,0));
+ERROR 22007: Incorrect value
+insert into t(c9) value (point(0,0));
+ERROR HY000: Incorrect integer value for column 'c9' at row 1
+insert into t(c10) value (point(0,0));
+ERROR 22001: Data too long for column 'c10' at row 1
+insert into t(c11) value (point(0,0));
+insert into t(c12) value (point(0,0));
+ERROR 0A000: geomerty, json not supported
+drop table t;
+select cast(x'010100000000000000008056403333333333836640' as MULTIPOINT);
+ERROR SR001: There's no spatial reference system with SRID 257.
+SELECT TIME(ST_GEOMETRYFROMTEXT('polygon((1 1,1 1,1 1,1 1))'));
+TIME(ST_GEOMETRYFROMTEXT('polygon((1 1,1 1,1 1,1 1))'))
+NULL
+create table t(id int, t time);
+insert into t values(1, st_geomfromtext('POINT(1 1)'));
+ERROR 22007: Incorrect value
+drop table t;
+drop table if exists t;
+create table t (e enum('a','b'));
+insert into t values(Point(0,0));
+ERROR 0A000: cast to enum or set type not supported
+drop table t;
+create or replace view v as select cast(st_geomfromwkb(x'00000000010100000000000000008056400000000000805640') as Multipoint);
+desc v;
+Field	Type	Null	Key	Default	Extra
+Name_exp_1	multipoint	YES		NULL	
+create or replace view v as select cast(Point(0,0) as Multipoint) a;
+desc v;
+Field	Type	Null	Key	Default	Extra
+a	multipoint	YES		NULL	
+drop table if exists t;
+create table t (p point);
+insert into t values(point(0,1));
+create or replace view v as select cast(t.p as Multipoint) a from t;
+select st_astext(v.a) from v;
+st_astext(v.a)
+MULTIPOINT((0 1))
+insert into t values(point(0.1,0.1));
+select st_astext(v.a) from v;
+st_astext(v.a)
+MULTIPOINT((0 1))
+MULTIPOINT((0.1 0.1))
+drop table t;
+drop view v;

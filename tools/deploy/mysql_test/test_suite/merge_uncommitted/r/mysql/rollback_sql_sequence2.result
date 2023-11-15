@@ -1,0 +1,62 @@
+set GLOBAL ob_query_timeout = 1000000000000;
+set GLOBAL ob_trx_timeout = 10000000000000;
+set GLOBAL ob_trx_idle_timeout = 10000000000;
+alter system set minor_compact_trigger = 10;
+drop table if exists t1;
+create table t1(c1 int primary key, c2 varchar(50), c3 int, c4 datetime(6), c5 datetime(6)) table_mode = 'queuing';
+begin;
+SAVEPOINT p0;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+SAVEPOINT p1;
+insert into t1 value(5, 'Hello OceanBase & Happy New Year', 2, '2012-10-10 12:00:00','2012-10-10');
+insert into t1 value(4, 'Hello OceanBase & Happy New Year', 2, '2012-10-10 12:00:00','2012-10-10');
+insert into t1 value(3, 'Hello OceanBase & Happy New Year', 2, '2012-10-10 12:00:00','2012-10-10');
+insert into t1 value(2, 'Hello OceanBase & Happy New Year', 2, '2012-10-10 12:00:00','2012-10-10');
+insert into t1 value(1, 'Hello OceanBase & Happy New Year', 2, '2012-10-10 12:00:00','2012-10-10');
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+SAVEPOINT p2;
+update t1 set c3 = c1;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+SAVEPOINT p3;
+update t1 set c2 = 'rollback rooooooooll';
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+select count(*) from t1 where c2 like '%oceanbase%';
+count(*)
+0
+ROLLBACK TO SAVEPOINT p3;
+select count(*) from t1 where c2 like '%oceanbase%';
+count(*)
+35
+select count(*) from t1 where c3 = c1;
+count(*)
+35
+ROLLBACK TO SAVEPOINT p2;
+select count(*) from t1 where c3 = c1;
+count(*)
+1
+ROLLBACK TO SAVEPOINT p1;
+select count(*) from t1;
+count(*)
+30
+ROLLBACK TO SAVEPOINT p0;
+select count(*) from t1;
+count(*)
+0
+select * from t1;
+c1	c2	c3	c4	c5
+commit;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+select * from t1;
+c1	c2	c3	c4	c5
+drop table t1;
+alter system set minor_compact_trigger = 2;

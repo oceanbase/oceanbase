@@ -1,0 +1,409 @@
+# owner      : gengfu.zpc
+# owner group: VOS
+# description: test data_type
+# tags       : parameter
+ 
+#####################################################################################
+# If someone adds a new parameter type, then he/she may forget to update the        #
+# data_type related code. The purpose of this case is to prevent this.              #
+# If you fail on this case, then you may need to modify ObConfigItem::data_type().  #
+# Also, the correctness of data_type will be verified.                              #
+# The parameters selected for testing are as follows:                               #
+# +-----------+--------------------------+------------------------------+           #
+# | data_type | cluster-level            | tenant-level                 |           #
+# +-----------+--------------------------+------------------------------+           #
+# | BOOL      | enable_sql_audit         | plsql_debug                  |           #
+# | INT       | max_string_print_length  | open_cursors                 |           #
+# | DOUBLE    | location_cache_cpu_quota | cpu_quota_concurrency        |           #
+# | STRING    | default_row_format       | plsql_ccflags                |           #
+# | CAPACITY  | log_disk_size            | range_optimizer_max_mem_size |           #
+# | TIME      | rpc_timeout              | merger_check_interval        |           #
+# | STR_LIST  | config_additional_dir    | --                           |           #
+# | MOMENT    | --                       | major_freeze_duty_time       |           #
+# | VERSION   | --                       | compatible                   |           #
+# | MODE      | _obkv_feature_mode       | --                           |           #
+# +-----------+--------------------------+------------------------------+           #
+#####################################################################################
+
+#==============================  case1: under sys tenant  ==============================
+--echo ===========================  case1: under sys tenant  ===========================
+connect (my_sys,$OBMYSQL_MS0,root,,oceanbase,$OBMYSQL_PORT);
+connection my_sys;
+
+# [step 0] set some parameters, and __all_sys_parameter/__tenant_parameter will save the changes
+# [step 0.1] set cluster-level parameters
+let $para_name = enable_sql_audit;                                         # BOOL
+--source mysql_test/include/parameter_data_type/set_cluster_parameter.inc
+let $para_name = max_string_print_length;                                  # INT
+--source mysql_test/include/parameter_data_type/set_cluster_parameter.inc
+let $para_name = location_cache_cpu_quota;                                 # DOUBLE
+--source mysql_test/include/parameter_data_type/set_cluster_parameter.inc
+let $para_name = default_row_format;                                       # STRING
+--source mysql_test/include/parameter_data_type/set_cluster_parameter.inc
+let $para_name = log_disk_size;                                            # CAPACITY
+--source mysql_test/include/parameter_data_type/set_cluster_parameter.inc
+let $para_name = rpc_timeout;                                              # TIME
+--source mysql_test/include/parameter_data_type/set_cluster_parameter.inc
+let $para_name = config_additional_dir;                                    # STR_LIST
+--source mysql_test/include/parameter_data_type/set_cluster_parameter.inc
+let $para_name = _obkv_feature_mode;                                       # MODE
+--source mysql_test/include/parameter_data_type/set_cluster_parameter.inc
+# [step 0.2] set tenant-level parameters
+let $mysql_tenant_id = query_get_value(select tenant_id from oceanbase.__all_tenant where tenant_name='mysql', tenant_id, 1);
+let $para_name = plsql_debug;                                             # BOOL
+--source mysql_test/include/parameter_data_type/set_tenant_parameter.inc
+let $para_name = open_cursors;                                            # INT
+--source mysql_test/include/parameter_data_type/set_tenant_parameter.inc
+let $para_name = cpu_quota_concurrency;                                   # DOUBLE
+--source mysql_test/include/parameter_data_type/set_tenant_parameter.inc
+let $para_name = plsql_ccflags;                                           # STRING
+--source mysql_test/include/parameter_data_type/set_tenant_parameter.inc
+let $para_name = range_optimizer_max_mem_size;                            # CAPACITY
+--source mysql_test/include/parameter_data_type/set_tenant_parameter.inc
+let $para_name = merger_check_interval;                                   # TIME
+--source mysql_test/include/parameter_data_type/set_tenant_parameter.inc
+let $para_name = major_freeze_duty_time;                                  # MOMENT
+--source mysql_test/include/parameter_data_type/set_tenant_parameter.inc
+# There's no need to set compatible (its data_type is VERSION),           # VERSION
+# because the internal logic is already set.
+# [step 0.3] make sure parameters have been set
+# [setp 0.3.1] check cluster-level parameters
+let $para_name = enable_sql_audit;
+--source mysql_test/include/parameter_data_type/check_cluster_parameter_has_set.inc
+let $para_name = max_string_print_length;
+--source mysql_test/include/parameter_data_type/check_cluster_parameter_has_set.inc
+let $para_name = location_cache_cpu_quota;
+--source mysql_test/include/parameter_data_type/check_cluster_parameter_has_set.inc
+let $para_name = default_row_format;
+--source mysql_test/include/parameter_data_type/check_cluster_parameter_has_set.inc
+let $para_name = log_disk_size;
+--source mysql_test/include/parameter_data_type/check_cluster_parameter_has_set.inc
+let $para_name = rpc_timeout;
+--source mysql_test/include/parameter_data_type/check_cluster_parameter_has_set.inc
+let $para_name = config_additional_dir;
+--source mysql_test/include/parameter_data_type/check_cluster_parameter_has_set.inc
+let $para_name = _obkv_feature_mode;
+--source mysql_test/include/parameter_data_type/check_cluster_parameter_has_set.inc
+# [setp 0.3.2] check tenant-level parameters
+let $para_name = plsql_debug;
+--source mysql_test/include/parameter_data_type/check_tenant_parameter_has_set.inc
+let $para_name = open_cursors;
+--source mysql_test/include/parameter_data_type/check_tenant_parameter_has_set.inc
+let $para_name = cpu_quota_concurrency;
+--source mysql_test/include/parameter_data_type/check_tenant_parameter_has_set.inc
+let $para_name = plsql_ccflags;
+--source mysql_test/include/parameter_data_type/check_tenant_parameter_has_set.inc
+let $para_name = range_optimizer_max_mem_size;
+--source mysql_test/include/parameter_data_type/check_tenant_parameter_has_set.inc
+let $para_name = merger_check_interval;
+--source mysql_test/include/parameter_data_type/check_tenant_parameter_has_set.inc
+let $para_name = major_freeze_duty_time;
+--source mysql_test/include/parameter_data_type/check_tenant_parameter_has_set.inc
+let $para_name = compatible;
+--source mysql_test/include/parameter_data_type/check_tenant_parameter_has_set.inc
+
+# [step 1] prevent data_type UNKNOWN
+--echo =====================  [1] prevent data_type UNKNOWN  ======================
+show parameters where data_type = 'UNKNOWN';
+select * from __all_sys_parameter where data_type = 'UNKNOWN';
+select * from __tenant_parameter where data_type = 'UNKNOWN';
+select * from __all_virtual_sys_parameter_stat where data_type = 'UNKNOWN';
+select * from __all_virtual_tenant_parameter_stat where data_type = 'UNKNOWN';
+select * from __all_virtual_tenant_parameter_info where data_type = 'UNKNOWN';
+select * from __all_virtual_tenant_parameter where data_type = 'UNKNOWN';
+select * from GV$OB_PARAMETERS where data_type = 'UNKNOWN';
+select * from V$OB_PARAMETERS where data_type = 'UNKNOWN';
+
+# [step 2] check data_tpye for __all_sys_parameter
+--echo ===============  [2] check data_tpye for __all_sys_parameter  ===============
+select name, data_type from __all_sys_parameter where name = 'enable_sql_audit';          # BOOL       
+select name, data_type from __all_sys_parameter where name = 'max_string_print_length';   # INT
+select name, data_type from __all_sys_parameter where name = 'location_cache_cpu_quota';  # DOUBLE
+select name, data_type from __all_sys_parameter where name = 'default_row_format';        # STRING
+select name, data_type from __all_sys_parameter where name = 'log_disk_size';             # CAPACITY
+select name, data_type from __all_sys_parameter where name = 'rpc_timeout';               # TIME
+select name, data_type from __all_sys_parameter where name = 'config_additional_dir';     # STR_LIST
+select name, data_type from __all_sys_parameter where name = '_obkv_feature_mode';        # MODE
+
+# [step 3] check data_type for __tenant_parameter
+--echo ===============  [3] check data_tpye for __tenant_parameter  ================
+select name, data_type from __tenant_parameter where name = 'plsql_debug';                   # BOOL
+select name, data_type from __tenant_parameter where name = 'open_cursors';                  # INT
+select name, data_type from __tenant_parameter where name = 'cpu_quota_concurrency';         # DOUBLE
+select name, data_type from __tenant_parameter where name = 'plsql_ccflags';                 # STRING
+select name, data_type from __tenant_parameter where name = 'range_optimizer_max_mem_size';  # CAPACITY
+select name, data_type from __tenant_parameter where name = 'merger_check_interval';         # TIME
+select name, data_type from __tenant_parameter where name = 'major_freeze_duty_time';        # MOMENT
+select name, data_type from __tenant_parameter where name = 'compatible';                    # VERSION
+
+# [step 4] check data_tpye for __all_virtual_sys_parameter_stat
+--echo ========  [4] check data_tpye for __all_virtual_sys_parameter_stat  =========
+# [step 4.1] check cluster-level parameters
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'enable_sql_audit';          # BOOL
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'max_string_print_length';   # INT
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'location_cache_cpu_quota';  # DOUBLE
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'default_row_format';        # STRING
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'log_disk_size';             # CAPACITY
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'rpc_timeout';               # TIME
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'config_additional_dir';     # STR_LIST
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = '_obkv_feature_mode';        # MODE
+# [step 4.2] check tenant-level parameters
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_debug';                   # BOOL
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'open_cursors';                  # INT
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'cpu_quota_concurrency';         # DOUBLE
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_ccflags';                 # STRING
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'range_optimizer_max_mem_size';  # CAPACITY
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'merger_check_interval';         # TIME
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'major_freeze_duty_time';        # MOMENT
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'compatible';                    # VERSION
+
+# [step 5] check data_tpye for __all_virtual_tenant_parameter_stat
+--echo =======  [5] check data_tpye for __all_virtual_tenant_parameter_stat  =======
+# [step 5.1] check cluster-level parameters
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'enable_sql_audit';          # BOOL
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'max_string_print_length';   # INT
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'location_cache_cpu_quota';  # DOUBLE
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'default_row_format';        # STRING
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'log_disk_size';             # CAPACITY
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'rpc_timeout';               # TIME
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'config_additional_dir';     # STR_LIST
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = '_obkv_feature_mode';        # MODE
+# [step 5.2] check tenant-level parameters
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_debug';                   # BOOL
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'open_cursors';                  # INT
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'cpu_quota_concurrency';         # DOUBLE
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_ccflags';                 # STRING
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'range_optimizer_max_mem_size';  # CAPACITY
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'merger_check_interval';         # TIME
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'major_freeze_duty_time';        # MOMENT
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'compatible';                    # VERSION
+
+# [step 6] check data_tpye for __all_virtual_tenant_parameter_info
+--echo =======  [6] check data_tpye for __all_virtual_tenant_parameter_info  =======
+select name, data_type from __all_virtual_tenant_parameter_info where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_debug';                   # BOOL
+select name, data_type from __all_virtual_tenant_parameter_info where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'open_cursors';                  # INT
+select name, data_type from __all_virtual_tenant_parameter_info where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'cpu_quota_concurrency';         # DOUBLE
+select name, data_type from __all_virtual_tenant_parameter_info where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_ccflags';                 # STRING
+select name, data_type from __all_virtual_tenant_parameter_info where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'range_optimizer_max_mem_size';  # CAPACITY
+select name, data_type from __all_virtual_tenant_parameter_info where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'merger_check_interval';         # TIME
+select name, data_type from __all_virtual_tenant_parameter_info where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'major_freeze_duty_time';        # MOMENT
+select name, data_type from __all_virtual_tenant_parameter_info where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'compatible';                    # VERSION
+
+# [step 7] check data_tpye for __all_virtual_tenant_parameter
+--echo =========  [7] check data_tpye for __all_virtual_tenant_parameter  ==========
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_debug';                   # BOOL
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'open_cursors';                  # INT
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'cpu_quota_concurrency';         # DOUBLE
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_ccflags';                 # STRING
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'range_optimizer_max_mem_size';  # CAPACITY
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'merger_check_interval';         # TIME
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'major_freeze_duty_time';        # MOMENT
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'compatible';                    # VERSION
+
+# [step 8] check data_tpye for GV$OB_PARAMETERS
+--echo ================  [8] check data_tpye for GV\$OB_PARAMETERS  ================
+# [step 8.1] check cluster-level parameters
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'enable_sql_audit';          # BOOL
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'max_string_print_length';   # INT
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'location_cache_cpu_quota';  # DOUBLE
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'default_row_format';        # STRING
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'log_disk_size';             # CAPACITY
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'rpc_timeout';               # TIME
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'config_additional_dir';     # STR_LIST
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = '_obkv_feature_mode';        # MODE
+# [step 8.2] check tenant-level parameters
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_debug';                   # BOOL
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'open_cursors';                  # INT
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'cpu_quota_concurrency';         # DOUBLE
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_ccflags';                 # STRING
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'range_optimizer_max_mem_size';  # CAPACITY
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'merger_check_interval';         # TIME
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'major_freeze_duty_time';        # MOMENT
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'compatible';                    # VERSION
+
+# [step 9] check data_tpye for V$OB_PARAMETERS
+--echo ================  [9] check data_tpye for V\$OB_PARAMETERS  =================
+# [step 9.1] check cluster-level parameters
+select name, data_type from V$OB_PARAMETERS where name = 'enable_sql_audit';          # BOOL
+select name, data_type from V$OB_PARAMETERS where name = 'max_string_print_length';   # INT
+select name, data_type from V$OB_PARAMETERS where name = 'location_cache_cpu_quota';  # DOUBLE
+select name, data_type from V$OB_PARAMETERS where name = 'default_row_format';        # STRING
+select name, data_type from V$OB_PARAMETERS where name = 'log_disk_size';             # CAPACITY
+select name, data_type from V$OB_PARAMETERS where name = 'rpc_timeout';               # TIME
+select name, data_type from V$OB_PARAMETERS where name = 'config_additional_dir';     # STR_LIST
+select name, data_type from V$OB_PARAMETERS where name = '_obkv_feature_mode';        # MODE
+# [step 9.2] check tenant-level parameters
+select name, data_type from V$OB_PARAMETERS where tenant_id = 1 and name = 'plsql_debug';                   # BOOL
+select name, data_type from V$OB_PARAMETERS where tenant_id = 1 and name = 'open_cursors';                  # INT
+select name, data_type from V$OB_PARAMETERS where tenant_id = 1 and name = 'cpu_quota_concurrency';         # DOUBLE
+select name, data_type from V$OB_PARAMETERS where tenant_id = 1 and name = 'plsql_ccflags';                 # STRING
+select name, data_type from V$OB_PARAMETERS where tenant_id = 1 and name = 'range_optimizer_max_mem_size';  # CAPACITY
+select name, data_type from V$OB_PARAMETERS where tenant_id = 1 and name = 'merger_check_interval';         # TIME
+select name, data_type from V$OB_PARAMETERS where tenant_id = 1 and name = 'major_freeze_duty_time';        # MOMENT
+select name, data_type from V$OB_PARAMETERS where tenant_id = 1 and name = 'compatible';                    # VERSION
+
+# [step 10] check data_tpye for show parameters
+--echo ================  [10] check data_tpye for show parameters  =================
+# [step 10.1] check cluster-level parameters
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'enable_sql_audit';          # BOOL
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'max_string_print_length';   # INT
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'location_cache_cpu_quota';  # DOUBLE
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'default_row_format';        # STRING
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'log_disk_size';             # CAPACITY
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'rpc_timeout';               # TIME
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'config_additional_dir';     # STR_LIST
+# cannot query hidden parameters by show parameters                                                        # MODE
+# [step 10.2] check tenant-level parameters
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_debug' tenant = sys;                   # BOOL
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'open_cursors' tenant = sys;                  # INT
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'cpu_quota_concurrency' tenant = sys;         # DOUBLE
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_ccflags' tenant = sys;                 # STRING
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'range_optimizer_max_mem_size' tenant = sys;  # CAPACITY
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'merger_check_interval' tenant = sys;         # TIME
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'major_freeze_duty_time' tenant = sys;        # MOMENT
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'compatible' tenant = sys;                    # VERSION
+
+disconnect my_sys;
+
+
+#=============================  case2: under mysql tenant  =============================
+--echo ==========================  case2: under mysql tenant  ==========================
+connect (my_mysql,$OBMYSQL_MS0,root@mysql,,oceanbase,$OBMYSQL_PORT);
+connection my_mysql;
+
+# [step 1] prevent data_type UNKNOWN
+--echo =====================  [1] prevent data_type UNKNOWN  ======================
+show parameters where data_type = 'UNKNOWN';
+select * from __all_virtual_tenant_parameter_stat where data_type = 'UNKNOWN';
+select * from __all_virtual_tenant_parameter where data_type = 'UNKNOWN';
+select * from GV$OB_PARAMETERS where data_type = 'UNKNOWN';
+select * from V$OB_PARAMETERS where data_type = 'UNKNOWN';
+
+# [step 2] check data_tpye for __all_virtual_tenant_parameter_stat
+--echo =======  [2] check data_tpye for __all_virtual_tenant_parameter_stat  =======
+# [step 2.1] check cluster-level parameters
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'enable_sql_audit';          # BOOL
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'max_string_print_length';   # INT
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'location_cache_cpu_quota';  # DOUBLE
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'default_row_format';        # STRING
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'log_disk_size';             # CAPACITY
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'rpc_timeout';               # TIME
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'config_additional_dir';     # STR_LIST
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = '_obkv_feature_mode';        # MODE
+# [step 2.2] check tenant-level parameters
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_debug';                   # BOOL
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'open_cursors';                  # INT
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'cpu_quota_concurrency';         # DOUBLE
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_ccflags';                 # STRING
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'range_optimizer_max_mem_size';  # CAPACITY
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'merger_check_interval';         # TIME
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'major_freeze_duty_time';        # MOMENT
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'compatible';                    # VERSION
+
+# [step 3] check data_tpye for __all_virtual_tenant_parameter
+--echo =========  [3] check data_tpye for __all_virtual_tenant_parameter  ==========
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_debug';                   # BOOL
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and name = 'open_cursors';                  # INT
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and name = 'cpu_quota_concurrency';         # DOUBLE
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_ccflags';                 # STRING
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and name = 'range_optimizer_max_mem_size';  # CAPACITY
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and name = 'merger_check_interval';         # TIME
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and name = 'major_freeze_duty_time';        # MOMENT
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and name = 'compatible';                    # VERSION
+
+# [step 4] check data_tpye for GV$OB_PARAMETERS
+--echo ================  [4] check data_tpye for GV\$OB_PARAMETERS  ================
+# [step 4.1] check cluster-level parameters
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'enable_sql_audit';          # BOOL
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'max_string_print_length';   # INT
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'location_cache_cpu_quota';  # DOUBLE
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'default_row_format';        # STRING
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'log_disk_size';             # CAPACITY
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'rpc_timeout';               # TIME
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'config_additional_dir';     # STR_LIST
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = '_obkv_feature_mode';        # MODE
+# [step 4.2] check tenant-level parameters
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_debug';                   # BOOL
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'open_cursors';                  # INT
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'cpu_quota_concurrency';         # DOUBLE
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_ccflags';                 # STRING
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'range_optimizer_max_mem_size';  # CAPACITY
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'merger_check_interval';         # TIME
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'major_freeze_duty_time';        # MOMENT
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'compatible';                    # VERSION
+
+# [step 5] check data_tpye for V$OB_PARAMETERS
+--echo ================  [5] check data_tpye for V\$OB_PARAMETERS  =================
+# [step 5.1] check cluster-level parameters
+select name, data_type from V$OB_PARAMETERS where name = 'enable_sql_audit';          # BOOL
+select name, data_type from V$OB_PARAMETERS where name = 'max_string_print_length';   # INT
+select name, data_type from V$OB_PARAMETERS where name = 'location_cache_cpu_quota';  # DOUBLE
+select name, data_type from V$OB_PARAMETERS where name = 'default_row_format';        # STRING
+select name, data_type from V$OB_PARAMETERS where name = 'log_disk_size';             # CAPACITY
+select name, data_type from V$OB_PARAMETERS where name = 'rpc_timeout';               # TIME
+select name, data_type from V$OB_PARAMETERS where name = 'config_additional_dir';     # STR_LIST
+select name, data_type from V$OB_PARAMETERS where name = '_obkv_feature_mode';        # MODE
+# [step 5.2] check tenant-level parameters
+select name, data_type from V$OB_PARAMETERS where name = 'plsql_debug';                   # BOOL
+select name, data_type from V$OB_PARAMETERS where name = 'open_cursors';                  # INT
+select name, data_type from V$OB_PARAMETERS where name = 'cpu_quota_concurrency';         # DOUBLE
+select name, data_type from V$OB_PARAMETERS where name = 'plsql_ccflags';                 # STRING
+select name, data_type from V$OB_PARAMETERS where name = 'range_optimizer_max_mem_size';  # CAPACITY
+select name, data_type from V$OB_PARAMETERS where name = 'merger_check_interval';         # TIME
+select name, data_type from V$OB_PARAMETERS where name = 'major_freeze_duty_time';        # MOMENT
+select name, data_type from V$OB_PARAMETERS where name = 'compatible';                    # VERSION
+
+# [step 6] check data_tpye for show parameters
+--echo =================  [6] check data_tpye for show parameters  =================
+# [step 6.1] check cluster-level parameters
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'enable_sql_audit';          # BOOL
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'max_string_print_length';   # INT
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'location_cache_cpu_quota';  # DOUBLE
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'default_row_format';        # STRING
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'log_disk_size';             # CAPACITY
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'rpc_timeout';               # TIME
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'config_additional_dir';     # STR_LIST
+# cannot query hidden parameters by show parameters                                                        # MODE
+# [step 6.2] check tenant-level parameters
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_debug';                   # BOOL
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'open_cursors';                  # INT
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'cpu_quota_concurrency';         # DOUBLE
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_ccflags';                 # STRING
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'range_optimizer_max_mem_size';  # CAPACITY
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'merger_check_interval';         # TIME
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'major_freeze_duty_time';        # MOMENT
+--replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'compatible';                    # VERSION
+
+disconnect my_mysql;
+
+connection default;

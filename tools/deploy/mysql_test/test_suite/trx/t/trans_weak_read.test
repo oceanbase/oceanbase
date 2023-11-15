@@ -1,0 +1,85 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: liangjinrong.ljr
+#owner group: transaction 
+#description: 测试弱读配置项的检查能力，通过错误注入测试弱读功能的防御能力
+
+connect (conn1,$OBMYSQL_MS0,root@sys,,test,$OBMYSQL_PORT);
+connection conn1;
+
+# 0. 禁用ob_max_read_stale_time
+set global ob_max_read_stale_time = -1;
+show global variables like '%stale_time%';
+set @@session.ob_max_read_stale_time = -1;
+select @@session.ob_max_read_stale_time;
+
+connect (conn2,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn2;
+set global ob_max_read_stale_time = -1;
+show global variables like '%stale_time%';
+
+connection conn1;
+alter system set weak_read_version_refresh_interval="6s";
+alter system set weak_read_version_refresh_interval="3s";
+--sleep 2
+
+# 0. 禁用ob_max_read_stale_time
+set global ob_max_read_stale_time = -1;
+show global variables like '%stale_time%';
+set @@session.ob_max_read_stale_time = -1;
+select @@session.ob_max_read_stale_time;
+alter system set weak_read_version_refresh_interval="6s";
+alter system set weak_read_version_refresh_interval="3s";
+--sleep 2
+
+# 1. refresh_interval 不能大于当前租户的 ob_max_read_stale_time
+set global ob_max_read_stale_time = 5000000;
+set @@session.ob_max_read_stale_time = 5000000;
+--error 1210
+alter system set weak_read_version_refresh_interval="8s";
+alter system set weak_read_version_refresh_interval="1s";
+--sleep 2
+set global ob_max_read_stale_time = 2000000;
+show global variables like '%stale_time%';
+--error 1210
+alter system set weak_read_version_refresh_interval="3s";
+set global ob_max_read_stale_time = 5000000;
+show global variables like '%stale_time%';
+alter system set weak_read_version_refresh_interval="3s";
+
+# 2. refresh_interval 不能大于其他租户的 ob_max_read_stale_time
+connection conn2;
+set global ob_max_read_stale_time = 3000000;
+show global variables like '%stale_time%';
+
+connection conn1;
+--error 1210
+alter system set weak_read_version_refresh_interval="4s";
+--error 1210
+alter system set weak_read_version_refresh_interval="3001ms";
+alter system set weak_read_version_refresh_interval="3000ms";
+
+connection conn2;
+set global ob_max_read_stale_time = -1;
+show global variables like '%stale_time%';
+disconnect conn2;
+
+connection conn1;
+alter system set weak_read_version_refresh_interval="4999ms";
+alter system set weak_read_version_refresh_interval="100ms";
+--sleep 2
+
+# 3. ob_max_read_stale_time 不能小于 weak_read_version_refresh_interval
+# 全局变量
+set global ob_max_read_stale_time = 100000;
+--error 1210
+set global ob_max_read_stale_time = 99999;
+# session级别变量
+set @@session.ob_max_read_stale_time = 100000;
+--error 1210
+set @@session.ob_max_read_stale_time = 99999;
+
+set global ob_max_read_stale_time = 5000000;
+set @@session.ob_max_read_stale_time = 5000000;
+show global variables like '%stale_time%';

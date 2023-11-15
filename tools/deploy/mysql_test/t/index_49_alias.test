@@ -1,0 +1,30 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: yuchen.wyc
+# owner group: SQL1
+# description: 测试带别名的并且走索引的语句
+
+--disable_query_log
+--source mysql_test/include/index_quick_major.inc
+--real_sleep 1
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+--enable_query_log
+
+
+create table t1 (c1 int primary key, c2 int, c3 int, c4 int);
+create index i1 on t1(c2);
+
+let $index_name = __idx_3003_i1;
+--source mysql_test/include/check_all_idx_ok.inc
+
+insert into t1 values(10, 1, 1, 1), (9, 2, 2, 2), (8, 3, 3, 3), (7, 4, 4, 4);
+
+select * from t1 where c2 > 0 and c2 < 5;
+select * from t1 b where b.c2 > 0 and b.c2 < 5;
+select /*+index(t1 i1) */ * from t1 b where b.c2 > 0 and b.c2 < 5;
+select /*+index(b i1) */ * from t1 b where b.c2 > 0 and b.c2 < 5;
+
+drop table t1;

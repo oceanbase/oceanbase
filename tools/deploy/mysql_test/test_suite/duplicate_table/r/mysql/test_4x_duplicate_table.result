@@ -1,0 +1,300 @@
+drop database if exists duptable_database;
+create database duptable_database;
+use duptable_database;
+drop table if exists t1;
+drop table if exists t2;
+drop table if exists dup_t1;
+drop table if exists dup_t2;
+create table dup_t1 (c1 int, c2 int, c3 int, primary key(c1, c2)) duplicate_scope='cluster';
+create table dup_t2 (d1 int, d2 int, d3 int, primary key(d1, d2)) duplicate_scope='cluster';
+create table t1 (c1 int, c2 int, c3 int, primary key(c1, c2));
+create table t2 (d1 int, d2 int, d3 int, primary key(d1, d2));
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` int(11) NOT NULL,
+  `c2` int(11) NOT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`c1`, `c2`)
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+show create table t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `d1` int(11) NOT NULL,
+  `d2` int(11) NOT NULL,
+  `d3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`d1`, `d2`)
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+show create table dup_t1;
+Table	Create Table
+dup_t1	CREATE TABLE `dup_t1` (
+  `c1` int(11) NOT NULL,
+  `c2` int(11) NOT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`c1`, `c2`)
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10 DUPLICATE_SCOPE = 'CLUSTER'
+show create table dup_t2;
+Table	Create Table
+dup_t2	CREATE TABLE `dup_t2` (
+  `d1` int(11) NOT NULL,
+  `d2` int(11) NOT NULL,
+  `d3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`d1`, `d2`)
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10 DUPLICATE_SCOPE = 'CLUSTER'
+insert into t1 values(1, 1, 1);
+insert into t1 values(2, 2, 2);
+insert into t1 values(3, 3, 3);
+insert into t2 values(1, 1, 1);
+insert into t2 values(2, 2, 2);
+insert into t2 values(4, 4, 4);
+insert into dup_t1 select * from t1;
+insert into dup_t2 select * from t2;
+select * from t1;
+c1	c2	c3
+1	1	1
+2	2	2
+3	3	3
+select * from dup_t1;
+c1	c2	c3
+1	1	1
+2	2	2
+3	3	3
+select * from t2;
+d1	d2	d3
+1	1	1
+2	2	2
+4	4	4
+select * from dup_t2;
+d1	d2	d3
+1	1	1
+2	2	2
+4	4	4
+duplicate_scope
+1
+duplicate_scope
+1
+duplicate_scope
+0
+duplicate_scope
+0
+准备: 将复制表的leader和普通表的leader分开
+ls_state
+LEADER
+ls_state
+LEADER
+t1 语句查询普通表和复制表的场景
+select * from t1, dup_t1 where t1.c1 = dup_t1.c1;
+c1	c2	c3	c1	c2	c3
+1	1	1	1	1	1
+2	2	2	2	2	2
+3	3	3	3	3	3
+select * from t2, dup_t2 where t2.d1 = dup_t2.d1;
+d1	d2	d3	d1	d2	d3
+1	1	1	1	1	1
+2	2	2	2	2	2
+4	4	4	4	4	4
+t2 复制表插入然后再做多表查询
+begin;
+insert into dup_t1 values (11, 11, 11);
+insert into dup_t2 values (11, 11, 11);
+select * from dup_t1, dup_t2 where dup_t1.c1 = dup_t2.d1;
+c1	c2	c3	d1	d2	d3
+1	1	1	1	1	1
+2	2	2	2	2	2
+11	11	11	11	11	11
+select * from dup_t1, t1 where dup_t1.c1 = t1.c1;
+c1	c2	c3	c1	c2	c3
+1	1	1	1	1	1
+2	2	2	2	2	2
+3	3	3	3	3	3
+select * from dup_t2, t2 where dup_t2.d1 = t2.d1;
+d1	d2	d3	d1	d2	d3
+1	1	1	1	1	1
+2	2	2	2	2	2
+4	4	4	4	4	4
+commit;
+t3 复制表先查询，在做插入
+begin;
+select * from dup_t1, dup_t2 where dup_t1.c1 = dup_t2.d1;
+c1	c2	c3	d1	d2	d3
+1	1	1	1	1	1
+2	2	2	2	2	2
+11	11	11	11	11	11
+select * from dup_t1, t1 where dup_t1.c1 = t1.c1;
+c1	c2	c3	c1	c2	c3
+1	1	1	1	1	1
+2	2	2	2	2	2
+3	3	3	3	3	3
+select * from dup_t2, t2 where dup_t2.d1 = t2.d1;
+d1	d2	d3	d1	d2	d3
+1	1	1	1	1	1
+2	2	2	2	2	2
+4	4	4	4	4	4
+insert into dup_t1 values (22, 22, 22);
+insert into dup_t2 values (22, 22, 22);
+commit;
+t4 复制表先查询，后插入，再查询
+begin;
+select * from dup_t1, dup_t2 where dup_t1.c1 = dup_t2.d1;
+c1	c2	c3	d1	d2	d3
+1	1	1	1	1	1
+2	2	2	2	2	2
+11	11	11	11	11	11
+22	22	22	22	22	22
+select * from dup_t1, t1 where dup_t1.c1 = t1.c1;
+c1	c2	c3	c1	c2	c3
+1	1	1	1	1	1
+2	2	2	2	2	2
+3	3	3	3	3	3
+select * from dup_t2, t2 where dup_t2.d1 = t2.d1;
+d1	d2	d3	d1	d2	d3
+1	1	1	1	1	1
+2	2	2	2	2	2
+4	4	4	4	4	4
+insert into dup_t1 values (33, 33, 33);
+insert into dup_t2 values (33, 33, 33);
+insert into t1 values (33, 33, 33);
+insert into t2 values (33, 33, 33);
+select * from dup_t1, dup_t2 where dup_t1.c1 = dup_t2.d1;
+c1	c2	c3	d1	d2	d3
+1	1	1	1	1	1
+2	2	2	2	2	2
+11	11	11	11	11	11
+22	22	22	22	22	22
+33	33	33	33	33	33
+select * from dup_t1, t1 where dup_t1.c1 = t1.c1;
+c1	c2	c3	c1	c2	c3
+1	1	1	1	1	1
+2	2	2	2	2	2
+3	3	3	3	3	3
+33	33	33	33	33	33
+select * from dup_t2, t2 where dup_t2.d1 = t2.d1;
+d1	d2	d3	d1	d2	d3
+1	1	1	1	1	1
+2	2	2	2	2	2
+4	4	4	4	4	4
+33	33	33	33	33	33
+commit;
+t5 单表查询
+begin;
+select * from t1;
+c1	c2	c3
+1	1	1
+2	2	2
+3	3	3
+33	33	33
+select * from dup_t1;
+c1	c2	c3
+1	1	1
+2	2	2
+3	3	3
+11	11	11
+22	22	22
+33	33	33
+select * from t2;
+d1	d2	d3
+1	1	1
+2	2	2
+4	4	4
+33	33	33
+select * from dup_t2;
+d1	d2	d3
+1	1	1
+2	2	2
+4	4	4
+11	11	11
+22	22	22
+33	33	33
+commit;
+t6 测试单分区事务在执行的过程中，查询复制表的场景
+begin;
+insert into t1 values(44, 44, 44);
+select * from t1;
+c1	c2	c3
+1	1	1
+2	2	2
+3	3	3
+33	33	33
+44	44	44
+select * from dup_t1;
+c1	c2	c3
+1	1	1
+2	2	2
+3	3	3
+11	11	11
+22	22	22
+33	33	33
+commit;
+t7 测试单分区事务在执行过程中，和复制表做join的场景
+begin;
+insert into t1 values(55, 55, 55);
+select * from t1, dup_t1 where t1.c1 = dup_t1.c1;
+c1	c2	c3	c1	c2	c3
+1	1	1	1	1	1
+2	2	2	2	2	2
+3	3	3	3	3	3
+33	33	33	33	33	33
+commit;
+将普通表leader切回来
+ls_state
+LEADER
+ls_state
+LEADER
+use duptable_database;
+t6 测试一阶段提交
+begin;
+insert into t1 values(66, 66, 66);
+insert into dup_t1 values(66, 66, 66);
+insert into t2 values(66, 66, 66);
+commit;
+select * from t1, dup_t1 where t1.c1 = dup_t1.c1;
+c1	c2	c3	c1	c2	c3
+1	1	1	1	1	1
+2	2	2	2	2	2
+3	3	3	3	3	3
+33	33	33	33	33	33
+66	66	66	66	66	66
+begin;
+insert into t1 values(77, 77, 77);
+select * from dup_t2;
+d1	d2	d3
+1	1	1
+2	2	2
+4	4	4
+11	11	11
+22	22	22
+33	33	33
+select * from t1, dup_t1 where t1.c1 = dup_t1.c1;
+c1	c2	c3	c1	c2	c3
+1	1	1	1	1	1
+2	2	2	2	2	2
+3	3	3	3	3	3
+33	33	33	33	33	33
+66	66	66	66	66	66
+insert into t2 values(77, 77, 77);
+select * from t2, dup_t2 where dup_t2.d1 = t2.d1;
+d1	d2	d3	d1	d2	d3
+1	1	1	1	1	1
+2	2	2	2	2	2
+4	4	4	4	4	4
+33	33	33	33	33	33
+commit;
+use duptable_database;
+drop table if exists tt2;
+drop table if exists dup2;
+CREATE TABLE `tt2` (
+`x` int(11) DEFAULT NULL,
+`y` int(11) DEFAULT NULL
+) partition by hash(x) partitions 2;
+CREATE TABLE `dup2` (
+`x` int(11) DEFAULT NULL,
+`y` int(11) DEFAULT NULL
+) duplicate_scope='cluster';
+insert into tt2 values(1,2),(3,4);
+insert into dup2 select * from tt2;
+select * from dup2 order by 1;
+x	y
+1	2
+3	4
+drop table if exists tt2;
+drop table if exists dup2;

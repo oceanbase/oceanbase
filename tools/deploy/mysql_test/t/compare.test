@@ -1,0 +1,121 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: zhanyue.zzy
+#owner group: sql1
+#tags: optimizer, datatype, dml
+#description:
+
+--disable_abort_on_error
+##
+## Bug when using comparions of strings and integers.
+##
+#
+--disable_warnings
+drop table if exists ob_new_sql_test;
+--enable_warnings
+--disable_warnings
+drop table if exists a1;
+--enable_warnings
+#
+#CREATE TABLE t1 (id CHAR(12) not null, PRIMARY KEY (id));
+#--real_sleep 1
+create table ob_new_sql_test(c0 varchar(10) primary key, c1 int, c2 int);
+#--real_sleep 1
+insert into ob_new_sql_test(c0, c1) values ('0001',1);
+--replace_regex /Plan signature: [0-9]*/Plan signature/
+--disable_result_log
+#explain select * from t1 where id=000000000001;
+--enable_result_log
+select * from ob_new_sql_test where c0='0001';
+#delete from t1 where id=000000000002;
+select * from ob_new_sql_test;
+#--error 4002013
+select length(c0) from ob_new_sql_test;
+
+#not support functions
+#--error 1128
+select hex(c0) from ob_new_sql_test;
+
+drop table ob_new_sql_test;
+#
+##
+## Check the following:
+## 'a'  == 'a '
+## 'a\0' < 'a'
+## 'a\0' < 'a '
+#
+SELECT 'a' = 'a ';
+SELECT 'a\0' < 'a';
+SELECT 'a\0' < 'a ';
+SELECT 'a\t' < 'a';
+SELECT 'a\t' < 'a ';
+#
+#CREATE TABLE t1 (a char(10) not null);
+#INSERT INTO t1 VALUES ('a'),('a\0'),('a\t'),('a ');
+#SELECT hex(a),STRCMP(a,'a'), STRCMP(a,'a ') FROM t1;
+#DROP TABLE t1;
+#
+## Bug #8134: Comparison against CHAR(31) at end of string
+#SELECT CHAR(31) = '', '' = CHAR(31);
+## Extra test
+#SELECT CHAR(30) = '', '' = CHAR(30);
+#
+## End of 4.1 tests
+#
+##
+##Bug #21159: Optimizer: wrong result after AND with different data types
+##
+#--real_sleep 1
+create table a1 (rowkey_suffix int primary key,price int);
+#--real_sleep 1
+insert into a1 (rowkey_suffix, price) values(10,10);
+insert into a1 (rowkey_suffix, price) values(20,20);
+select * from a1 where rowkey_suffix=price;
+select * from a1 where rowkey_suffix=price and price=10;
+drop table a1;
+#drop table if exists t1;
+#
+##
+## Bug #31887: DML Select statement not returning same results when executed
+## in version 5
+##
+#
+#CREATE TABLE  t1 (b int(2) zerofill, c int(2) zerofill);
+#INSERT INTO t1 (b,c) VALUES (1,2), (1,1), (2,2);
+#
+#SELECT CONCAT(b,c), CONCAT(b,c) = '0101' FROM t1;
+#
+--disable_result_log
+#EXPLAIN EXTENDED SELECT b,c FROM t1 WHERE b = 1 AND CONCAT(b,c) = '0101';
+--enable_result_log
+#SELECT b,c FROM t1 WHERE b = 1 AND CONCAT(b,c) = '0101';
+#
+#CREATE TABLE t2 (a int);
+#INSERT INTO t2 VALUES (1),(2);
+#
+#SELECT a,
+#  (SELECT COUNT(*) FROM t1
+#   WHERE b = t2.a AND CONCAT(b,c) = CONCAT('0',t2.a,'01')) x
+#FROM t2 ORDER BY a;
+#
+--disable_result_log
+#EXPLAIN EXTENDED
+--enable_result_log
+#SELECT a,
+#  (SELECT COUNT(*) FROM t1
+#   WHERE b = t2.a AND CONCAT(b,c) = CONCAT('0',t2.a,'01')) x
+#FROM t2 ORDER BY a;
+#
+#DROP TABLE t1,t2;
+#
+##
+## Bug #39353: Multiple conditions on timestamp column crashes server
+##
+#
+#CREATE TABLE t1 (a TIMESTAMP);
+#INSERT INTO t1 VALUES (NOW()),(NOW()),(NOW());
+#SELECT * FROM t1 WHERE a > '2008-01-01' AND a = '0000-00-00';
+#DROP TABLE t1;
+#
+#--echo End of 5.0 tests

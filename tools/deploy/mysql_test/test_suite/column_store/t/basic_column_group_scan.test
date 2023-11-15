@@ -1,0 +1,71 @@
+# owner: yuxiaozhe.yxz 
+# owner group: storage
+# description: execute query which filter by scanning columnar store  
+
+--disable_query_log
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+set @@session.explicit_defaults_for_timestamp=off;
+set session ob_trx_timeout=100000000000;
+set @@recyclebin = off;
+--enable_query_log
+
+
+connection conn1;
+--disable_warnings
+drop table if exists ct1;
+--enable_warnings
+create table ct1(c1 int, c2 int) with column group for all columns, each column;
+
+--disable_query_log
+--let $count = 0
+while($count < 500)
+{
+   eval insert into ct1 values
+                             ($count * 20+ 1 , $count * 20 + 1 ),
+                             ($count * 20+ 2 , $count * 20 + 2 ),
+                             ($count * 20+ 3 , $count * 20 + 3 ),
+                             ($count * 20+ 4 , $count * 20 + 4 ),
+                             ($count * 20+ 5 , $count * 20 + 5 ),
+                             ($count * 20+ 6 , $count * 20 + 6 ),
+                             ($count * 20+ 7 , $count * 20 + 7 ),
+                             ($count * 20+ 8 , $count * 20 + 8 ),
+                             ($count * 20+ 9 , $count * 20 + 9 ),
+                             ($count * 20+ 10, $count * 20 + 10),
+                             ($count * 20+ 11, $count * 20 + 11),
+                             ($count * 20+ 12, $count * 20 + 12),
+                             ($count * 20+ 13, $count * 20 + 13),
+                             ($count * 20+ 14, $count * 20 + 14),
+                             ($count * 20+ 15, $count * 20 + 15),
+                             ($count * 20+ 16, $count * 20 + 16),
+                             ($count * 20+ 17, $count * 20 + 17),
+                             ($count * 20+ 18, $count * 20 + 18),
+                             ($count * 20+ 19, $count * 20 + 19),
+                             ($count * 20+ 20, $count * 20 + 20);
+   inc $count;
+}
+--enable_query_log
+
+connection default;
+alter system major freeze;
+--source mysql_test/include/wait_daily_merge.inc
+
+connection conn1;
+select * from ct1 where c1 < 1;
+select * from ct1 where c1 < 10;
+select * from ct1 where c1 > 10000;
+select * from ct1 where c2 < 1;
+select * from ct1 where c2 < 10;
+select * from ct1 where c2 > 10000;
+select * from ct1 where c1 > 400 and c1 < 500;
+select * from ct1 where c1 > 9000 and c1 < 9300;
+select * from ct1 where c1 < 10 or c2 > 9900;
+select * from ct1 where c1 < 10 or c2 < 20;
+select * from ct1 where c1 < 10 and c2 > 9900;
+select * from ct1 where c1 > 10 and c2 < 20;
+select * from ct1 where c1 * 2 > 500 and c2 * 2 < 600;
+select * from ct1 where c1 * 2 < 500 or (c2 * 2 > 19000 and c2 * 2 < 20000) ;
+
+drop table ct1;
+--disable_query_log
+set @@recyclebin = on;
+--enable_query_log

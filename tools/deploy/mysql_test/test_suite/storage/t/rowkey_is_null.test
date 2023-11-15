@@ -1,0 +1,100 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: xiaoyi.xy
+# owner group: SQL3
+# description: foobar
+--disable_warnings
+drop table if exists t1,t2,t3;
+--enable_warnings
+
+#
+## junyue
+## Fix bug: http://bugfree.corp.taobao.com/bug/201170
+## There shouldon't be NULL values within primary keys   
+#
+
+# single int
+create table t1(a int primary key, c int);
+insert into t1(a) values(-1);
+insert into t1(a) values(1);
+insert into t1(a) values(0);
+#--error 1062
+#insert into t1(a) values(NULL);
+select * from t1;
+drop table t1;
+
+# combo int
+create table t1(a int, b int, c int primary key);
+insert into t1 values(NULL,NULL,1);
+insert into t1 values(NULL,1,2);
+insert into t1 values(1,NULL,3);
+insert into t1 values(1,1,4);
+insert into t1 values(NULL,NULL,5);
+insert into t1 values(NULL,1,6);
+insert into t1 values(1,NULL,7);
+select * from t1;
+drop table t1;
+
+# single char
+create table t1(a varchar(20) ,b varchar(128) primary key);
+insert into t1 values(NULL,'abc');
+insert into t1 values('1','cde');
+insert into t1 values(NULL,'egf');
+select * from t1;
+drop table t1;
+
+# combo char
+--disable_parsing
+create table t1(a varchar(20), b varchar(20), primary key(a,b),c varchar(128));
+insert into t1(a,b) values(NULL,NULL);
+insert into t1(a,b) values(NULL,'1');
+
+insert into t1(a,b) values('1',NULL);
+insert into t1(a,b) values('1','1');
+
+--error 1062
+insert into t1(a,b) values(NULL,NULL);
+
+--error 1062
+insert into t1(a,b) values(NULL,'1');
+
+--error 1062
+insert into t1(a,b) values('1',NULL);
+select * from t1;
+drop table t1;
+
+# single dt
+create table t1(a datetime primary key,b datetime(6));
+
+insert into t1(a) values(NULL);
+insert into t1(a) values('2010-01-01 12:00:00');
+
+--error 1062
+insert into t1(a) values(NULL);
+select * from t1;
+drop table t1;
+
+# combo dt
+create table t1(a datetime(6), b datetime(6), primary key(a,b), c datetime(6));
+
+insert into t1(a,b) values(NULL,NULL);
+
+insert into t1(a,b) values(NULL,'2010-01-01 12:00:00');
+
+insert into t1(a,b) values('2010-01-01 12:00:00',NULL);
+insert into t1(a,b) values('2010-01-01 12:00:00','2010-01-01 12:00:00');
+
+--error 1062
+insert into t1(a,b) values(NULL,NULL);
+
+--error 1062
+insert into t1(a,b) values(NULL,'2010-01-01 12:00:00');
+
+--error 1062
+insert into t1(a,b) values('2010-01-01 12:00:00',NULL);
+select * from t1;
+drop table t1;
+
+--enable_parsing
+

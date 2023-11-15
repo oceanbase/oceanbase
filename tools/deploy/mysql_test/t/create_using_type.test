@@ -1,0 +1,31 @@
+# owner: dachuan.sdc
+# owner group: sql2
+# description
+# tags: ddl
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+
+--disable_warnings
+drop database if exists hualong;
+create database hualong;
+use hualong;
+--enable_warnings
+
+create table using_hash_t1 (c1 int, c2 int, primary key using hash (c1));
+create table using_btree_t1 (c1 int, c2 int, primary key using btree (c1));
+
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection obsys;
+select t.table_name, t.index_using_type from oceanbase.__all_virtual_table t join oceanbase.__all_virtual_database d on t.database_id = d.database_id where t.table_name = 'using_hash_t1' and d.database_name = 'hualong';
+select t.table_name, t.index_using_type from oceanbase.__all_virtual_table t join oceanbase.__all_virtual_database d on t.database_id = d.database_id where t.table_name = 'using_btree_t1' and d.database_name = 'hualong';
+
+#show index with hash index
+select index_table.table_name as index_name, data_table.table_name as data_table_name, index_table.index_using_type
+  from oceanbase.__all_virtual_table index_table join oceanbase.__all_virtual_table data_table
+  on index_table.data_table_id = data_table.table_id
+  where index_table.index_using_type = 1 and index_table.tenant_id = 1 and index_table.tenant_id = data_table.tenant_id
+  order by 1;
+connection default;
+drop database hualong;

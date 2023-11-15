@@ -1,0 +1,19 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: bin.lb
+#owner group: sql1
+#tags: group_by
+#description:
+
+--disable_warnings
+drop table if exists test;
+--enable_warnings
+create table test(a int primary key,b int,c int);
+insert into test values(1,4,null);
+insert into test values(3,3,null);
+insert into test values(4,3,null);
+select avg(distinct(a)),avg(a),avg(b) from test;
+select avg(distinct(b)),avg(b),avg(c) from test;
+select avg(c),avg(b),avg(distinct(b)) from test;
+select avg(c),avg(b),avg(b) from test;

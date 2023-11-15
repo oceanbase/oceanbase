@@ -1,0 +1,304 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: luofan.zp
+# owner group: SQL3
+# description: OUR GOAL: Make all this simple and effective!
+# init status (autocommit=1, not_trx)
+show variables like 'autocommit';
+
+--echo case 1: (autocommit=1, not_trx) // start transaction
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn1;
+show variables like 'autocommit';
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int primary key, c2 int);
+start transaction;
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+commit;
+select * from t1;
+disconnect conn1;
+
+--echo case 2: (autocommit=1, not_trx) // commit
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn1;
+show variables like 'autocommit';
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int primary key, c2 int);
+commit;
+select * from t1;
+disconnect conn1;
+
+--echo case 3: (autocommit=1, not_trx) // autocommit=1
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn1;
+show variables like 'autocommit';
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int primary key, c2 int);
+set autocommit=1;
+show variables like 'autocommit';
+start transaction;
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+commit;
+select * from t1;
+disconnect conn1;
+
+--echo case 4: (autocommit=1, not_trx) // autocommit=0
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn1;
+show variables like 'autocommit';
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int primary key, c2 int);
+set autocommit=0;
+show variables like 'autocommit';
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+commit;
+select * from t1;
+show variables like 'autocommit';
+disconnect conn1;
+
+--echo case 5: (autocommit=1, in_trx) // start transaction
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn1;
+show variables like 'autocommit';
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int primary key, c2 int);
+start transaction;
+# (autocommit=1, in_trx)
+start transaction;
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+commit;
+select * from t1;
+disconnect conn1;
+
+--echo case 6: (autocommit=1, in_trx) // commit
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn1;
+show variables like 'autocommit';
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int primary key, c2 int);
+start transaction;
+# (autocommit=1, in_trx)
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+commit;
+select * from t1;
+start transaction;
+show variables like 'autocommit';
+disconnect conn1;
+
+--echo case 7: (autocommit=1, in_trx) // set autocommit=1
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn1;
+show variables like 'autocommit';
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int primary key, c2 int);
+start transaction;
+# (autocommit=1, in_trx)
+set autocommit=1;
+show variables like 'autocommit';
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+commit;
+select * from t1;
+disconnect conn1;
+
+--echo case 8: (autocommit=1, in_trx) // set autocommit=0
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn1;
+show variables like 'autocommit';
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int primary key, c2 int);
+start transaction;
+# (autocommit=1, in_trx)
+set autocommit=0;
+show variables like 'autocommit';
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+commit;
+select * from t1;
+show variables like 'autocommit';
+disconnect conn1;
+
+--echo case 9: (autocommit=0, not_trx) // start transaction
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn1;
+show variables like 'autocommit';
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int primary key, c2 int);
+set autocommit=0;
+show variables like 'autocommit';
+# (autocommit=0, not_trx)
+start transaction;
+start transaction;
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+commit;
+select * from t1;
+show variables like 'autocommit';
+disconnect conn1;
+
+
+--echo case 10: (autocommit=0, not_trx) // commit
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn1;
+show variables like 'autocommit';
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int primary key, c2 int);
+set autocommit=0;
+show variables like 'autocommit';
+# (autocommit=0, not_trx)
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+commit;
+insert into t1 values (2, 3);
+select * from t1 where c1 = 2 for update;
+rollback;
+select * from t1;
+show variables like 'autocommit';
+disconnect conn1;
+
+--echo case 11: (autocommit=0, not_trx) // set autocommit=1
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn1;
+show variables like 'autocommit';
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int primary key, c2 int);
+set autocommit=0;
+show variables like 'autocommit';
+# (autocommit=0, not_trx)
+set autocommit=1;
+show variables like 'autocommit';
+commit;
+rollback;
+select * from t1;
+show variables like 'autocommit';
+disconnect conn1;
+
+--echo case 12: (autocommit=0, not_trx) // commit
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn1;
+show variables like 'autocommit';
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int primary key, c2 int);
+set autocommit=0;
+show variables like 'autocommit';
+# (autocommit=0, not_trx)
+set autocommit=0;
+show variables like 'autocommit';
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+commit;
+insert into t1 values (2, 3);
+select * from t1 where c1 = 2 for update;
+commit;
+select * from t1;
+show variables like 'autocommit';
+disconnect conn1;
+
+--echo case 13: (autocommit=0, in_trx) // start transaction
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn1;
+show variables like 'autocommit';
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int primary key, c2 int);
+set autocommit=0;
+start transaction;
+show variables like 'autocommit';
+# (autocommit=0, in_trx)
+start transaction;
+commit;
+show variables like 'autocommit';
+disconnect conn1;
+
+--echo case 14: (autocommit=0, in_trx) // commit
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn1;
+show variables like 'autocommit';
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int primary key, c2 int);
+set autocommit=0;
+start transaction;
+show variables like 'autocommit';
+# (autocommit=0, in_trx)
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+commit;
+select * from t1;
+show variables like 'autocommit';
+disconnect conn1;
+
+--echo case 15: (autocommit=0, in_trx) // set autocommit=1
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn1;
+show variables like 'autocommit';
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int primary key, c2 int);
+set autocommit=0;
+start transaction;
+show variables like 'autocommit';
+# (autocommit=0, in_trx)
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+set autocommit=1;
+select * from t1;
+show variables like 'autocommit';
+# are we in (autocommit=1, not_trx) ?
+commit;
+disconnect conn1;
+
+--echo case 16: (autocommit=0, in_trx) // set autocommit=0
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn1;
+show variables like 'autocommit';
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int primary key, c2 int);
+set autocommit=0;
+start transaction;
+show variables like 'autocommit';
+# (autocommit=0, in_trx)
+set autocommit=0;
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+commit;
+select * from t1;
+show variables like 'autocommit';
+commit;
+disconnect conn1;
+

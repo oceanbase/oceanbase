@@ -1,0 +1,40 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: link.zt
+#owner group: sql1
+
+--disable_abort_on_error
+#
+# Test of update and delete with limit
+#
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+create table t1(a int primary key,b int);
+
+insert into t1(a) values(1),(2),(3);
+select * from t1 limit 0;
+select * from t1 limit 1;
+select * from t1 limit 3;
+select * from t1 limit 4;
+
+# netsed limit，用来测试limit算子自身的re_est_cost(...)函数
+select /*+no_rewrite*/ * from (select * from t1 order by b limit 4) AS t2 limit 2;
+
+#--error 1146
+select * from t1 limit -1;
+
+drop table t1;
+
+
+create table t1 (a int primary key,b int);
+insert into t1(a) values (1),(2),(3),(4),(5),(6),(7);
+select * FROM t1  ORDER BY a desc LIMIT 3;
+select * FROM t1  ORDER BY a desc LIMIT 0;
+select * FROM t1  ORDER BY a desc LIMIT 8;
+select count(*) c FROM t1 WHERE a > 0 ORDER BY c LIMIT 3;
+select sum(a) c FROM t1 WHERE a > 0 ORDER BY c LIMIT 3;
+drop table t1;

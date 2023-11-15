@@ -1,0 +1,657 @@
+#owner: ht353245
+#owner group: shenzhen
+--echo # ----------------------------------------------------------------------
+--echo # Base test of geometry ddl.
+--echo # ----------------------------------------------------------------------
+--source mysql_test/test_suite/geometry/t/import_default_srs_data_mysql.inc
+
+--echo # Create a table with three columns:
+--echo # 1) Normal POINT column without SRID specification
+--echo # 2) Normal POINT column with SRID 0
+--echo # 3) Normal POINT column with SRID 4326
+--disable_warnings
+drop table if exists t1,tt1;
+--enable_warnings
+CREATE TABLE t1 (no_srid POINT DEFAULT NULL,
+                 srid_0 POINT SRID 0 DEFAULT NULL,
+                 srid_4326 POINT SRID 4326 DEFAULT NULL);
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table t1;
+
+--echo # Insert some data with correct SRID into these columns
+INSERT INTO t1 (no_srid, srid_0, srid_4326)
+  VALUES (ST_GeomFromText('POINT(0 0)', 0),
+          ST_GeomFromText('POINT(0 0)', 0),
+          ST_GeomFromText('POINT(0 0)', 4326));
+
+
+INSERT INTO t1 (no_srid, srid_0, srid_4326)
+  VALUES (ST_GeomFromText('POINT(1 1)', 4326),
+          ST_GeomFromText('POINT(1 1)', 0),
+          ST_GeomFromText('POINT(1 1)', 4326));
+
+--echo # Insert data with wrong SRID, which should fail.
+--error 3643
+INSERT INTO t1 (srid_0) VALUES (ST_GeomFromText('POINT(1 1)', 4326));
+
+--error 3643
+INSERT INTO t1 (srid_4326) VALUES (ST_GeomFromText('POINT(1 1)', 0));
+
+--error 3643
+INSERT INTO t1 (srid_4326) VALUES (POINT(0, 0));
+
+--echo # Try to alter the SRID of the columns, which should fail for all columns
+--echo # now since they already contain data.
+#目前不支持升级srid
+--error 1235
+ALTER TABLE t1 CHANGE COLUMN no_srid no_srid POINT SRID 0 DEFAULT NULL;
+
+#目前不支持升级srid
+--error 1235
+ALTER TABLE t1 CHANGE COLUMN srid_0 srid_0 POINT SRID 4326 DEFAULT NULL;
+
+#目前不支持升级srid
+--error 1235
+ALTER TABLE t1 CHANGE COLUMN srid_4326 srid_4326 POINT SRID 0 DEFAULT NULL;
+
+--echo # Removing the SRID specification from a column should work just fine.
+#ALTER TABLE t1 CHANGE COLUMN srid_0 no_srid_2 POINT DEFAULT NULL;
+
+--echo # Setting the SRID to a non-existing SRID should not work.
+--error 3548
+ALTER TABLE t1 CHANGE COLUMN srid_4326 srid_1 POINT SRID 1 DEFAULT NULL;
+
+DROP TABLE t1;
+
+--echo # Creating a geometry column with a non-existing SRID should not work
+--error 3548
+CREATE TABLE t1 (col1 POINT SRID 1);
+
+--echo # Try to create a table without the SRID property, insert data with
+--echo # different SRIDs and then add the SRID property (which should not work).
+CREATE TABLE t1 (col1 POINT);
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table t1;
+
+INSERT INTO t1 VALUES (ST_GeomFromText('POINT(1 1)', 4326)),
+                      (ST_GeomFromText('POINT(2 2)', 0)),
+                      (ST_GeomFromText('POINT(3 3)', 4326)),
+                      (ST_GeomFromText('POINT(4 4)', 0)),
+                      (ST_GeomFromText('POINT(5 5)', 4326)),
+                      (ST_GeomFromText('POINT(6 6)', 0));
+
+#目前不支持升级srid
+--error 1235
+ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT SRID 4326;
+
+#DELETE FROM t1 WHERE ST_SRID(col1) = 0;
+
+#目前不支持升级srid
+--error 1235
+ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT SRID 4326;
+DROP TABLE t1;
+
+if (0) { #ST_SRID 未支持
+  --echo # The SRID property on a generated column should work
+  CREATE TABLE t1 (col1 POINT SRID 4326,
+                  col2 POINT AS (ST_SRID(col1, 0)) SRID 0);
+  --source mysql_test/include/show_create_table_old_version_replica2.inc
+  show create table t1;
+  INSERT INTO t1 (col1) VALUES (ST_GeomFromText('POINT(1 1)', 4326));
+  DROP TABLE t1;
+
+  --echo # However, if the SRID property on the generated column doesn't match
+  --echo # the SRID of the data, it should fail.
+  CREATE TABLE t1 (col1 POINT SRID 4326,
+                  col2 POINT AS (ST_SRID(col1, 0)) SRID 2000);
+  --source mysql_test/include/show_create_table_old_version_replica2.inc
+  show create table t1;
+  --error 3643
+  INSERT INTO t1 (col1) VALUES (ST_GeomFromText('POINT(1 1)', 4326));
+  DROP TABLE t1;
+}
+--echo # Creating a column with SRID property on a MyISAM table should only
+--echo # be supported if the SRID represents a cartesian coordinate system.
+--disable_warnings
+drop table if exists t1, t2;
+--enable_warnings
+CREATE TABLE t1 (col1 POINT SRID 0) ENGINE = MyISAM;
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table t1;
+CREATE TABLE t2 (col1 POINT SRID 2000) ENGINE = MyISAM;
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table t1;
+
+#--error ER_CHECK_NOT_IMPLEMENTED
+#CREATE TABLE t3 (col1 POINT SRID 4326) ENGINE = MyISAM;
+
+DROP TABLE t1, t2;
+
+--echo # It should not be possible to use the SRID property with any other types
+--echo # than geometric types.
+
+--error 1221
+CREATE TABLE t1 (col1 DOUBLE SRID 0);
+
+--error 1221
+CREATE TABLE t1 (col1 BLOB SRID 0);
+
+--error 1221
+CREATE TABLE t1 (col1 VARCHAR(255) SRID 0);
+
+
+--echo # Check that any indexes on SRID-less columns are ignored by the
+--echo # optimizer
+CREATE TABLE t1 (col1 POINT NOT NULL, SPATIAL INDEX (col1));
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table t1;
+INSERT INTO t1 VALUES (POINT(0, 0)), (POINT(0.5, 0.5)), (POINT(1, 1));
+
+--echo # The following query plan should NOT use the index on "col1", since
+--echo # the column does not have the SRID property defined.
+SELECT ST_ASTEXT(col1) FROM t1;
+
+DROP TABLE t1;
+
+--echo # Check that we print error message for misuse of SRID with non-geometric
+--echo # data type instead of "SRID not found"
+--error 1221
+CREATE TABLE t1 (a INTEGER SRID 1);
+
+CREATE TABLE t1 (a INTEGER);
+--error 1221
+ALTER TABLE t1 MODIFY COLUMN a INTEGER SRID 1;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#26594499 WL#8592:ALTER TABLE ADD SPATIAL INDEX RETURNS CANNOT GET
+--echo #              GEOMETRY OBJECT ERROR
+--echo #
+
+CREATE TABLE t1 (
+  g1 geometry NOT NULL,
+  g3 geometry SRID 2000 NOT NULL,
+  g4 geometry SRID 4326 NOT NULL
+);
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table t1;
+
+INSERT INTO t1 VALUES (ST_GeomFromText('POINT(0 0)'),
+  ST_GeomFromText('POINT(0 0)', 2000), ST_GeomFromText('POINT(0 0)', 4326));
+
+ALTER TABLE t1 add spatial index idx1(g4);
+ALTER TABLE t1 add spatial index idx3(g3);
+DROP TABLE t1;
+
+--error 1690
+CREATE TABLE t1 (col1 POINT SRID 4294967296);
+
+--echo #
+--echo # Check that adding, modifying and removing spatial indexes works well
+--echo # with SRID columns
+--echo #
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+CREATE TABLE t1 (col_no_srid POINT NOT NULL,
+                 col_srid_0 POINT SRID 0 NOT NULL,
+                 col_srid_4326 POINT SRID 4326 NOT NULL);
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table t1;
+
+INSERT INTO t1 VALUES (
+  ST_GeomFromText("POINT(0 0)", 0),
+  ST_GeomFromText("POINT(0 0)", 0),
+  ST_GeomFromText("POINT(0 0)", 4326));
+
+
+INSERT INTO t1 VALUES (
+  ST_GeomFromText("POINT(1 1)", 4326),
+  ST_GeomFromText("POINT(1 1)", 0),
+  ST_GeomFromText("POINT(1 1)", 4326));
+
+
+ALTER TABLE t1 ADD SPATIAL INDEX idx1 (col_no_srid);
+ALTER TABLE t1 ADD SPATIAL INDEX idx2 (col_srid_0);
+ALTER TABLE t1 ADD SPATIAL INDEX idx3 (col_srid_4326);
+
+ALTER TABLE t1 DROP INDEX idx2;
+ALTER TABLE t1 DROP INDEX idx3;
+ALTER TABLE t1 DROP INDEX idx1;
+
+CREATE SPATIAL INDEX idx1 ON t1 (col_srid_4326);
+CREATE SPATIAL INDEX idx2 ON t1 (col_no_srid);
+CREATE SPATIAL INDEX idx3 ON t1 (col_srid_0);
+
+DROP INDEX idx1 ON t1;
+DROP INDEX idx2 ON t1;
+DROP INDEX idx3 ON t1;
+
+DROP TABLE t1;
+
+CREATE TABLE t1 (col_no_srid POINT NOT NULL,
+                 col_srid_0 POINT SRID 0 NOT NULL,
+                 col_srid_4326 POINT SRID 4326 NOT NULL,
+                 SPATIAL INDEX idx1 (col_no_srid),
+                 SPATIAL INDEX idx2 (col_srid_0),
+                 SPATIAL INDEX idx3 (col_srid_4326));
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table t1;
+
+INSERT INTO t1 VALUES (
+  ST_GeomFromText("POINT(0 0)", 0),
+  ST_GeomFromText("POINT(0 0)", 0),
+  ST_GeomFromText("POINT(0 0)", 4326));
+
+
+INSERT INTO t1 VALUES (
+  ST_GeomFromText("POINT(1 1)", 4326),
+  ST_GeomFromText("POINT(1 1)", 0),
+  ST_GeomFromText("POINT(1 1)", 4326));
+
+DROP INDEX idx3 ON t1;
+DROP INDEX idx2 ON t1;
+DROP INDEX idx1 ON t1;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Altering the SRID specification should not be allowed if there is a
+--echo # spatial index on the column.
+--echo #
+CREATE TABLE t1 (col1 POINT NOT NULL SRID 4326,
+                SPATIAL INDEX idx1 (col1));
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table t1;
+
+# OB不支持升级srid
+--error 1235
+ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT NOT NULL SRID 0;
+# OB不支持升级srid
+--error 1235
+ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT NOT NULL;
+# OB不支持升级srid
+--error 1235
+ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT NOT NULL SRID 0;
+# OB不支持升级srid
+--error 1235
+ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT NOT NULL;
+# OB不支持升级srid
+--error 1235
+ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT NOT NULL SRID 0;
+# OB不支持升级srid
+--error 1235
+ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT NOT NULL;
+# OB不支持升级srid
+--error 1235
+ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT NOT NULL SRID 0;
+# OB不支持升级srid
+--error 1235
+ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT NOT NULL;
+# OB不支持升级srid
+--error 1235
+ALTER TABLE t1 CHANGE COLUMN col1 col2 POINT NOT NULL SRID 0;
+# OB不支持升级srid
+--error 1235
+ALTER TABLE t1 CHANGE COLUMN col1 col2 POINT NOT NULL;
+
+DROP TABLE t1;
+
+if (0) { # 不支持升级srid
+  --echo # Test SRID specification in combination with generated columns and
+  --echo # spatial indexes.
+  CREATE TABLE t1 (
+    col_no_srid POINT NOT NULL,
+    col_srid_0 POINT NOT NULL SRID 0,
+    col_srid_4326 POINT NOT NULL SRID 4326);
+  --source mysql_test/include/show_create_table_old_version_replica2.inc
+  show create table t1;
+
+  INSERT INTO t1 (col_no_srid, col_srid_0, col_srid_4326) VALUES (
+    ST_GeomFromText('POINT(0 0)'),
+    ST_GeomFromText('POINT(0 0)', 0),
+    ST_GeomFromText('POINT(0 0)', 4326));
+
+
+  INSERT INTO t1 (col_no_srid, col_srid_0, col_srid_4326) VALUES (
+    ST_GeomFromText('POINT(0 0)', 4326),
+    ST_GeomFromText('POINT(0 0)', 0),
+    ST_GeomFromText('POINT(0 0)', 4326));
+
+  --echo # This should not be allowed since the column contains data with a
+  --echo # different SRID
+  #目前不支持升级srid
+  #ALTER TABLE t1 CHANGE COLUMN col_srid_4326 col_srid_2000 POINT NOT NULL SRID 2000;
+
+  DELETE FROM t1;
+  --echo # Now it should be allowed since there is no data in the table,
+  #目前不支持升级srid
+  #ALTER TABLE t1 CHANGE COLUMN col_srid_4326 col_srid_2000 POINT NOT NULL SRID 2000;
+
+
+  INSERT INTO t1 (col_no_srid, col_srid_0, col_srid_2000) VALUES (
+    ST_GeomFromText('POINT(0 0)'),
+    ST_GeomFromText('POINT(0 0)', 0),
+    ST_GeomFromText('POINT(0 0)', 2000));
+
+
+  INSERT INTO t1 (col_no_srid, col_srid_0, col_srid_2000) VALUES (
+    ST_GeomFromText('POINT(0 0)', 4326),
+    ST_GeomFromText('POINT(0 0)', 0),
+    ST_GeomFromText('POINT(0 0)', 2000));
+
+  --echo # Add an index on "col_srid_2000"
+  CREATE SPATIAL INDEX idx_2000 ON t1 (col_srid_2000);
+
+
+  INSERT INTO t1 (col_no_srid, col_srid_0, col_srid_2000) VALUES (
+    ST_GeomFromText('POINT(0 0)', 4326),
+    ST_GeomFromText('POINT(0 0)', 0),
+    ST_GeomFromText('POINT(0 0)', 2000));
+
+
+  INSERT INTO t1 (col_no_srid, col_srid_0, col_srid_2000) VALUES (
+    ST_GeomFromText('POINT(1 1)', 4326),
+    ST_GeomFromText('POINT(1 1)', 0),
+    ST_GeomFromText('POINT(1 1)', 2000));
+
+  --echo # This should give an error since there is an index on the column.
+  --error 1235
+  ALTER TABLE t1 CHANGE COLUMN col_srid_2000 col_srid_2000 POINT NOT NULL SRID 4326;
+
+  --echo # Remove the index from col_srid_2000
+  DROP INDEX idx_2000 ON t1;
+
+  --echo # This should not be allowed since the column contains data with a
+  --echo # different SRID
+  #目前不支持升级srid
+  #ALTER TABLE t1 CHANGE COLUMN col_srid_2000 col_srid_2000 POINT NOT NULL SRID 4326;
+
+  DELETE FROM t1;
+
+  --echo # Now it should be allowed since there is no data in the table,
+  ALTER TABLE t1 CHANGE COLUMN col_srid_2000 col_srid_2000 POINT NOT NULL SRID 4326;
+
+  --echo # Wrong SRID for col_srid_2000, so should not work
+  --error 3643
+  INSERT INTO t1 (col_no_srid, col_srid_0, col_srid_2000) VALUES (
+    ST_GeomFromText('POINT(1 1)'),
+    ST_GeomFromText('POINT(1 1)', 0),
+    ST_GeomFromText('POINT(1 1)', 2000));
+
+  INSERT INTO t1 (col_no_srid, col_srid_0, col_srid_2000) VALUES (
+    ST_GeomFromText('POINT(1 1)'),
+    ST_GeomFromText('POINT(1 1)', 0),
+    ST_GeomFromText('POINT(1 1)', 4326));
+
+  #目前不支持升级srid
+  #ALTER TABLE t1 CHANGE COLUMN col_srid_2000 col_srid_2000 POINT NOT NULL;
+
+  --echo # This should work just fine, since we have removed the SRID specification
+  --echo # for col_srid_2000
+
+  INSERT INTO t1 (col_no_srid, col_srid_0, col_srid_2000) VALUES (
+    ST_GeomFromText('POINT(1 1)'),
+    ST_GeomFromText('POINT(1 1)', 0),
+    ST_GeomFromText('POINT(1 1)', 2000));
+
+  SELECT * FROM t1;
+
+  CREATE SPATIAL INDEX idx_0 ON t1 (col_srid_0);
+
+  DROP TABLE t1;
+}
+--echo #
+--echo # Bug#26594499  WL#8592: CANNOT GET GEOMETRY OBJECT ERROR
+--echo #
+CREATE TABLE t1 (
+  g1 geometry NOT NULL,
+  g3 geometry SRID 2000 NOT NULL,
+  g4 geometry SRID 4326 NOT NULL
+);
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table t1;
+
+INSERT INTO t1 VALUES (ST_GeomFromText('POINT(0 0)'),
+  ST_GeomFromText('POINT(0 0)', 2000), ST_GeomFromText('POINT(0 0)', 4326));
+
+ALTER TABLE t1 add spatial index idx1(g4);
+ALTER TABLE t1 add spatial index idx3(g3);
+DROP TABLE t1;
+
+
+--echo #
+--echo # Bug#27015964 USELESS SPATIAL INDEX CAN BE CREATED WITHOUT WARNING
+--echo #
+--echo # Creating a table with a spatial index on a SRID-less column should
+--echo # raise a warning.
+CREATE TABLE t1 (
+    g1 POINT NOT NULL
+  , g2 POINT NOT NULL
+  , g3 POINT NOT NULL SRID 0
+  , SPATIAL INDEX idx1 (g1)
+  , SPATIAL INDEX idx2 (g2)
+  , SPATIAL INDEX idx3 (g3));
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table t1;
+
+DROP INDEX idx1 ON t1;
+DROP INDEX idx2 ON t1;
+DROP INDEX idx3 ON t1;
+
+--echo # Verify that we get the same warning when using CREATE INDEX syntax.
+CREATE SPATIAL INDEX idx1 ON t1 (g1);
+CREATE SPATIAL INDEX idx2 ON t1 (g2);
+CREATE SPATIAL INDEX idx3 ON t1 (g3);
+
+DROP INDEX idx1 ON t1;
+DROP INDEX idx2 ON t1;
+DROP INDEX idx3 ON t1;
+
+--echo # Verify that we get the same warning when using ALTER TABLE syntax.
+ALTER TABLE t1 ADD SPATIAL INDEX idx1 (g1);
+ALTER TABLE t1 ADD SPATIAL INDEX idx2 (g2);
+ALTER TABLE t1 ADD SPATIAL INDEX idx3 (g3);
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#27220467 SERVER HANGS WHILE CREATING A NEW SRS WHICH IS USED IN
+--echo #              ANOTHER CLIENT
+--echo #
+--echo # Try to create a point column using a SRID that doesn't exist
+--error 3548
+CREATE TABLE t1 (col1 POINT SRID 4326, col2 POINT SRID 1000000000);
+
+--echo # Force the error to happen after all the columns are contextualized.
+
+--echo # Verify the same behavior for ALTER TABLE as well.
+CREATE TABLE t1 (col1 INT);
+
+--error 3548
+ALTER TABLE t1 ADD COLUMN col2 POINT SRID 1000000000;
+
+DROP TABLE t1;
+
+# bugfix: 
+CREATE TABLE t1 (col_no_srid POINT NOT NULL,
+                 col_srid_0 POINT SRID 0 NOT NULL,
+                 col_srid_4326 POINT SRID 4326 NOT NULL,
+                 SPATIAL INDEX idx1 (col_no_srid),
+                 SPATIAL INDEX idx2 (col_srid_0),
+                 SPATIAL INDEX idx3 (col_srid_4326));
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table t1;
+DROP TABLE t1;
+
+# bugfix: 
+--error 1064
+create table tt1(p POINT SRID -1);
+--error 1064
+create table tt1(p POINT SRID 'test');
+--error 1064
+create table tt1(p POINT SRID 0.7);
+--error 1064
+create table tt1(p POINT SRID null);
+--error 1064
+create table tt1(p POINT SRID '');
+create table tt1(p POINT SRID 4294967295);
+DROP TABLE tt1;
+
+# bugfix: 
+--error 3728
+create table tt1(g GEOMETRY primary key);
+--error 3728
+create table tt1(g geometry, primary key (g));
+--error 3728
+create table tt2(p point unique key);
+--error 3728
+create table tt2(p point, unique key (p));
+create table child(i int primary key, g geometry not null srid 4326);
+--error 1215
+create table parent(i int primary key, g geometry not null srid 4326, constraint g1_fk foreign key(g) references child(g));
+drop table child;
+
+# bugfix: 
+--disable_warnings
+drop table if exists T_GEO;
+drop view if exists V_T_GEO;
+--enable_warnings
+create table T_GEO (gid int auto_increment primary key, geometry geometry not null srid 4326);
+create view V_T_GEO AS SELECT * FROM T_GEO;
+desc V_T_GEO;
+drop view V_T_GEO;
+drop table T_GEO;
+create table T_GEO (gid int auto_increment primary key, geo geometry ,geo_c GEOMETRYCOLLECTION,poi point,lin linestring ,pol polygon,M_POI MULTIPOINT,M_LIN MULTILINESTRING ,M_POL MULTIPOLYGON );
+create view V_T_GEO AS SELECT * FROM T_GEO;
+--error 1416
+insert into V_T_GEO(POI) VALUES (ST_GEOMFROMTEXT('POLYGON((0 0,1 1,1 0,0 1,0 0)) '));
+SELECT ST_ASTEXT(poi) FROM V_T_GEO;
+SELECT ST_ASTEXT(poi) FROM T_GEO;
+drop view V_T_GEO;
+DROP TABLE T_GEO;
+
+# bugfix: 
+# 这个问题单没法兼容在空表的情况下add一个not null的空间列。
+create table tt4(id int, g GEOMETRY);
+--error 1138
+alter table tt4 add g1 GEOMETRY not null;
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table tt4;
+alter table tt4 add g2 GEOMETRY null;
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table tt4;
+insert into tt4(id, g2) values (1, point(1,1));
+select id,st_astext(g2) from tt4 order by id;
+drop table tt4;
+
+# bugfix: 
+--disable_warnings
+drop table if exists test;
+--enable_warnings
+create table test(p point srid 4326);
+--error 1235
+alter table test modify p MULTIPOINT;
+--error 1235
+alter table test change p p1 MULTIPOINT;
+--error 1235
+alter table test modify p POINT SRID 0;
+--error 1235
+alter table test change p p1 point srid 0;
+--error 1235
+alter table test change p p1 point;
+alter table test change p p1 point srid 4326;
+desc test;
+drop table test;
+
+# bugfix: 
+create table tt1(id int);
+insert into tt1 values(1);
+--error 1138
+alter table tt1 add g GEOMETRY not null;
+drop table tt1;
+create table tt1(id int);
+--error 1138 #这里不兼容mysql
+alter table tt1 add g GEOMETRY not null;
+drop table tt1;
+create table tt1(id int);
+alter table tt1 add g GEOMETRY;
+drop table tt1;
+create table tt1(id int);
+insert into tt1 values(1);
+alter table tt1 add g GEOMETRY;
+drop table tt1;
+## 如果需要添加一个not null的geometry列,只能在建表的时候添加
+create table tt1(id int);
+# 1. 先添加一个nullable的geometry列
+alter table tt1 add g GEOMETRY;
+# 2. 往g列插入一行
+insert into tt1 values (1, point(0,0));
+# 3. modify为not null
+alter table tt1 modify column g geometry not null;
+drop table tt1;
+create table tt1(g geometry);
+alter table tt1 modify column g geometry not null;
+drop table tt1;
+create table tt1(g geometry);
+insert into tt1(g) value (null);
+--error 1138
+alter table tt1 modify column g geometry not null;
+drop table tt1;
+
+# bugfix: 
+--disable_warnings
+drop table if exists T_GEO;
+drop table if exists t;
+drop view if exists V_T_GEO;
+--enable_warnings
+create table T_GEO (poi point);
+insert into T_GEO values (ST_GEOMFROMTEXT('POINT(0 0)', 4267));
+create view V_T_GEO AS SELECT * FROM T_GEO;
+--error 1416
+REPLACE INTO V_T_GEO(poi) VALUES (ST_GEOMFROMTEXT('POLYGON((0 0,1 1,1 0,0 1,0 0))'));
+
+# test accuracy
+insert into T_GEO values (ST_GEOMFROMTEXT('point(0 0)'));
+create table t as select st_buffer(T_GEO.poi, 1) from T_GEO;
+drop table t;
+--disable_warnings
+drop table if exists T_GEO;
+drop table if exists t;
+--enable_warnings
+create table T_GEO (poly polygon);
+insert into T_GEO values (ST_GEOMFROMTEXT('polygon((0 0, 0 1, 1 1,0 0))', 4267));
+create table t as select st_area(T_GEO.poly) from T_GEO;
+select * from t;
+drop table T_GEO;
+drop table t;
+drop view if exists V_T_GEO;
+
+# bugfix: 
+create or replace view vv as select st_aswkb(x'00000000010100000000000000000034C00000000000004940') a;
+desc vv;
+
+# bugfix: 
+create or replace view vv as select st_geomfromwkb(x'0106000000010000000103000000010000000500000000000000008056400000000000C0564000000000000024400000000000A066C0000000000000244000000000000024400000000000000000000000000000244000000000008056400000000000C05640');
+desc vv;
+create or replace view vv as select Point(0,0);
+desc vv;
+
+# bugfix : 
+--disable_warnings
+drop table if exists geometries;
+drop table if exists t1;
+--enable_warnings
+CREATE TABLE geometries ( g GEOMETRY, pt POINT, ls LINESTRING, py POLYGON, mpt MULTIPOINT, mls MULTILINESTRING, mpy MULTIPOLYGON, gc GEOMETRYCOLLECTION);
+SET @c1 = ST_GEOMFROMTEXT('POINT(10 10)');
+SET @c2 = ST_GEOMFROMTEXT('LINESTRING(10 10,20 20,30 30)');
+SET @c3 = ST_GEOMFROMTEXT('POLYGON((0 0,0 10,10 10,10 0,0 0),(4 4,4 6,6 6,6 4,4 4))');
+SET @c4 = ST_GEOMFROMTEXT('MULTIPOINT(0 0,5 5,10 10,20 20)');
+SET @c5 = ST_GEOMFROMTEXT('MULTILINESTRING((1 1,2 2,3 3),(10 10,20 20,30 30))');
+SET @c6 = ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0,0 5,5 5,5 0,0 0)),((5 5,5 10,10 10,10 5,5 5)))');
+SET @c7 = ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(0 0,10 10))');
+INSERT INTO geometries VALUES (@c1, @c1, @c2, @c3, @c4, @c5, @c6, @c7);
+CREATE TABLE t1 SELECT a FROM (SELECT pt AS a FROM geometries UNION SELECT mls FROM geometries) t;
+select st_astext(a) from t1;
+drop table geometries;
+drop table t1;

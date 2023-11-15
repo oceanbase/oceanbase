@@ -1,0 +1,151 @@
+# owner: peihan.dph
+# owner group: sql2
+# tags: optimizer
+
+--disable_abort_on_error
+--result_format 4
+--explain_protocol 0
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection conn_admin;
+--sleep 2
+
+set @@ob_enable_plan_cache = 0;
+
+--disable_warnings
+drop table if exists t1, t2;
+--enable_warnings
+
+create table t1 (c1 int, c2 int unsigned, 
+    c3 tinyint, c4 tinyint unsigned,
+    c5 smallint, c6 smallint unsigned,
+    c7 mediumint, c8 mediumint unsigned,
+    c9 integer, c10 integer unsigned,
+    c11 bigint, c12 bigint unsigned,
+    c13 float, c14 float unsigned, 
+    c15 double, c16 double unsigned, 
+    c17 decimal, c18 decimal unsigned, 
+    c19 datetime, c20 timestamp, 
+    c21 varchar(30), c22 char(30), c_null int);
+    
+insert into t1 values(1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    3.5, 4.5, 
+    5.5, 6.5,
+    7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+    '9.5', '10.5', null);
+insert into t1 values(-1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -3.5, 4.5, 
+    -5.5, 6.5,
+    -7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+    '-9.5', '10.5', null);
+
+create table t2 (c1 varchar(100), c2 int,
+                 c3 int, c4 varchar(100));
+insert into t2(c1, c2) values ('12345abcde', -1),
+('12345abcde', 0),
+('12345abcde', 1),
+('12345abcde', 2),
+('12345abcde', 3),
+('12345abcde', 4),
+('12345abcde', 5),
+('12345abcde', 6),
+('12345abcde', 7),
+('12345abcde', 8),
+('12345abcde', 9),
+('12345abcde', 10),
+('12345abcde', 11),
+('蚂蚁金服天天向上', -1),
+('蚂蚁金服天天向上', 0),
+('蚂蚁金服天天向上', 1),
+('蚂蚁金服天天向上', 2),
+('蚂蚁金服天天向上', 3),
+('蚂蚁金服天天向上', 4),
+('蚂蚁金服天天向上', 5),
+('蚂蚁金服天天向上', 6),
+('蚂蚁金服天天向上', 7),
+('蚂蚁金服天天向上', 8),
+('蚂蚁金服天天向上', 9),
+('蚂蚁1金服2天天3向上4', -1),
+('蚂蚁1金服2天天3向上4', 0),
+('蚂蚁1金服2天天3向上4', 1),
+('蚂蚁1金服2天天3向上4', 2),
+('蚂蚁1金服2天天3向上4', 3),
+('蚂蚁1金服2天天3向上4', 4),
+('蚂蚁1金服2天天3向上4', 5),
+('蚂蚁1金服2天天3向上4', 6),
+('蚂蚁1金服2天天3向上4', 7),
+('蚂蚁1金服2天天3向上4', 8),
+('蚂蚁1金服2天天3向上4', 9),
+('蚂蚁1金服2天天3向上4', 10),
+('蚂蚁1金服2天天3向上4', 11),
+('蚂蚁1金服2天天3向上4', 12),
+('蚂蚁1金服2天天3向上4', 13),
+('12345abcde', '1'),
+('12345abcde', '111');
+
+insert into t2 (c3, c4) values
+(100, '12'),
+(100, '1'),
+(100, 2),
+(100, -2),
+(100, '-1'),
+(01, '1'),
+(b'01', '2'),
+(x'01', '1'),
+('01''12', 3);
+
+--sleep 2
+
+--explain_protocol 2
+select left(null, null) from dual;
+select left(123, null) from dual;
+select left(null, 1) from dual;
+select right(null, null) from dual;
+select right(123, null) from dual;
+select right(null, 1) from dual;
+
+select left('', '') from dual;
+select left(123, '') from dual;
+select left('', 1) from dual;
+select right('', '') from dual;
+select right(123, '') from dual;
+select right('', 1) from dual;
+
+let $cnt=22;
+let $left=1;
+while ($left <= $cnt)
+{
+  let $right=1;
+  while ($right <= $cnt)
+  {
+    eval select c$left, c$right, left(c$left, c$right), right(c$left, c$right) from t1;
+    inc $right;
+  }
+  inc $left;
+}
+
+select c1, c2, left(c1, c2), right(c1, c2) from t2;
+select c3, c4, left(c3, c4), right(c3, c4) from t2;
+
+select left('abc', '1.9');
+select left('abc', '-1.9');
+select left('abc', '1.1');
+select left('abc', '-1.1');
+select right('abc', '1.9');
+select right('abc', '-1.9');
+select right('abc', '1.1');
+select right('abc', '-1.1');
+
+--sleep 2

@@ -1,0 +1,150 @@
+# ----------------------------------------------------------------------
+# Base test of GEOMETRY spatial index.
+# ----------------------------------------------------------------------
+drop table if exists t1;
+CREATE TABLE t1 (x INTEGER,
+y INTEGER,
+g POINT GENERATED ALWAYS AS (POINT(x, y)) NOT NULL SRID 0);
+SHOW COLUMNS FROM t1;
+Field	Type	Null	Key	Default	Extra
+x	int(11)	YES		NULL	
+y	int(11)	YES		NULL	
+g	point	NO		point(`x`,`y`)	VIRTUAL GENERATED
+INSERT INTO t1(x,y) VALUES (0, 0);
+INSERT INTO t1(x,y) VALUES (0.1, 0.1);
+SELECT x,y,st_astext(g) FROM t1 ORDER BY x;
+x	y	st_astext(g)
+0	0	POINT(0 0)
+0	0	POINT(0 0)
+DROP TABLE t1;
+CREATE TABLE t1 (x INTEGER,
+y INTEGER,
+g POINT GENERATED ALWAYS AS (POINT(x, y)) NOT NULL SRID 4326);
+SHOW COLUMNS FROM t1;
+Field	Type	Null	Key	Default	Extra
+x	int(11)	YES		NULL	
+y	int(11)	YES		NULL	
+g	point	NO		point(`x`,`y`)	VIRTUAL GENERATED
+INSERT INTO t1(x,y) VALUES (0, 0);
+ERROR HY000: The SRID of the geometry does not match the SRID of the column. The SRID of the geometry is 0, but the SRID of the column is 4326. Consider changing the SRID of the geometry or the SRID property of the column.
+INSERT INTO t1(x,y) VALUES (0.1, 0.1);
+ERROR HY000: The SRID of the geometry does not match the SRID of the column. The SRID of the geometry is 0, but the SRID of the column is 4326. Consider changing the SRID of the geometry or the SRID property of the column.
+SELECT x,y,st_astext(g) FROM t1 ORDER BY x;
+x	y	st_astext(g)
+DROP TABLE t1;
+CREATE TABLE t1 (x INTEGER,
+y INTEGER,
+g POINT GENERATED ALWAYS AS (ST_GEOMFROMTEXT('POINT(1 1)', 4326)) STORED NOT NULL SRID 4326);
+SHOW COLUMNS FROM t1;
+Field	Type	Null	Key	Default	Extra
+x	int(11)	YES		NULL	
+y	int(11)	YES		NULL	
+g	point	NO		ST_GEOMFROMTEXT('POINT(1 1)',4326)	STORED GENERATED
+INSERT INTO t1(x,y) VALUES (0, 0);
+INSERT INTO t1(x,y) VALUES (0.1, 0.1);
+DROP TABLE t1;
+CREATE TABLE t1 (x INTEGER,
+y INTEGER,
+g POINT GENERATED ALWAYS AS (ST_GEOMFROMTEXT('POINT(1 1)', 0)) STORED NOT NULL SRID 4326);
+SHOW COLUMNS FROM t1;
+Field	Type	Null	Key	Default	Extra
+x	int(11)	YES		NULL	
+y	int(11)	YES		NULL	
+g	point	NO		ST_GEOMFROMTEXT('POINT(1 1)',0)	STORED GENERATED
+INSERT INTO t1(x,y) VALUES (0, 0);
+ERROR HY000: The SRID of the geometry does not match the SRID of the column. The SRID of the geometry is 0, but the SRID of the column is 4326. Consider changing the SRID of the geometry or the SRID property of the column.
+INSERT INTO t1(x,y) VALUES (0.1, 0.1);
+ERROR HY000: The SRID of the geometry does not match the SRID of the column. The SRID of the geometry is 0, but the SRID of the column is 4326. Consider changing the SRID of the geometry or the SRID property of the column.
+DROP TABLE t1;
+CREATE TABLE t1 (g GEOMETRY NOT NULL SRID 4326,
+i INT GENERATED ALWAYS AS (ST_INTERSECTS(ST_GEOMFROMTEXT('POINT(0 0)', 4326), g)));
+SHOW COLUMNS FROM t1;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO		NULL	
+i	int(11)	YES		ST_INTERSECTS(ST_GEOMFROMTEXT('POINT(0 0)',4326),`g`)	VIRTUAL GENERATED
+INSERT INTO t1(g) VALUES (ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0,10 0,10 10,0 10,0 0)))', 4326));
+SELECT i,st_astext(g) FROM t1 ORDER BY i;
+i	st_astext(g)
+1	MULTIPOLYGON(((0 0,10 0,10 10,0 10,0 0)))
+DROP TABLE t1;
+CREATE TABLE t1 (g GEOMETRY NOT NULL SRID 4326,
+i INT GENERATED ALWAYS AS (ST_INTERSECTS(ST_GEOMFROMTEXT('POINT(0 0)', 4326), g)));
+SHOW COLUMNS FROM t1;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO		NULL	
+i	int(11)	YES		ST_INTERSECTS(ST_GEOMFROMTEXT('POINT(0 0)',4326),`g`)	VIRTUAL GENERATED
+INSERT INTO t1(g) VALUES (ST_GEOMFROMTEXT('MULTIPOLYGON(((1 1,10 0,10 10,0 10,1 1)))', 4326));
+SELECT i,st_astext(g) FROM t1 ORDER BY i;
+i	st_astext(g)
+0	MULTIPOLYGON(((1 1,10 0,10 10,0 10,1 1)))
+DROP TABLE t1;
+CREATE TABLE t1 (g GEOMETRY NOT NULL SRID 4326,
+i INT GENERATED ALWAYS AS (ST_INTERSECTS(g, ST_GEOMFROMTEXT('POINT(0 0)', 4326))));
+SHOW COLUMNS FROM t1;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO		NULL	
+i	int(11)	YES		ST_INTERSECTS(`g`,ST_GEOMFROMTEXT('POINT(0 0)',4326))	VIRTUAL GENERATED
+INSERT INTO t1(g) VALUES (ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0,10 0,10 10,0 10,0 0)))', 4326));
+SELECT i,st_astext(g) FROM t1 ORDER BY i;
+i	st_astext(g)
+1	MULTIPOLYGON(((0 0,10 0,10 10,0 10,0 0)))
+DROP TABLE t1;
+CREATE TABLE t1 (g GEOMETRY NOT NULL SRID 4326,
+i INT GENERATED ALWAYS AS (ST_INTERSECTS(g, ST_GEOMFROMTEXT('POINT(0 0)', 4326))));
+SHOW COLUMNS FROM t1;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO		NULL	
+i	int(11)	YES		ST_INTERSECTS(`g`,ST_GEOMFROMTEXT('POINT(0 0)',4326))	VIRTUAL GENERATED
+INSERT INTO t1(g) VALUES (ST_GEOMFROMTEXT('MULTIPOLYGON(((1 1,10 0,10 10,0 10,1 1)))', 4326));
+SELECT i,st_astext(g) FROM t1 ORDER BY i;
+i	st_astext(g)
+0	MULTIPOLYGON(((1 1,10 0,10 10,0 10,1 1)))
+DROP TABLE t1;
+CREATE TABLE t1 (g GEOMETRY NOT NULL SRID 4326,
+i INT GENERATED ALWAYS AS (ST_INTERSECTS(ST_GEOMFROMTEXT('POINT(0 0)', 4326), g)) STORED);
+SHOW COLUMNS FROM t1;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO		NULL	
+i	int(11)	YES		ST_INTERSECTS(ST_GEOMFROMTEXT('POINT(0 0)',4326),`g`)	STORED GENERATED
+INSERT INTO t1(g) VALUES (ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0,10 0,10 10,0 10,0 0)))', 4326));
+SELECT i,st_astext(g) FROM t1 ORDER BY i;
+i	st_astext(g)
+1	MULTIPOLYGON(((0 0,10 0,10 10,0 10,0 0)))
+DROP TABLE t1;
+CREATE TABLE t1 (g GEOMETRY NOT NULL SRID 4326,
+i INT GENERATED ALWAYS AS (ST_INTERSECTS(ST_GEOMFROMTEXT('POINT(0 0)', 4326), g)) STORED);
+SHOW COLUMNS FROM t1;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO		NULL	
+i	int(11)	YES		ST_INTERSECTS(ST_GEOMFROMTEXT('POINT(0 0)',4326),`g`)	STORED GENERATED
+INSERT INTO t1(g) VALUES (ST_GEOMFROMTEXT('MULTIPOLYGON(((1 1,10 0,10 10,0 10,1 1)))', 4326));
+SELECT i,st_astext(g) FROM t1 ORDER BY i;
+i	st_astext(g)
+0	MULTIPOLYGON(((1 1,10 0,10 10,0 10,1 1)))
+DROP TABLE t1;
+CREATE TABLE t1 (g GEOMETRY NOT NULL SRID 4326,
+i INT GENERATED ALWAYS AS (ST_INTERSECTS(g, ST_GEOMFROMTEXT('POINT(0 0)', 4326))) STORED);
+SHOW COLUMNS FROM t1;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO		NULL	
+i	int(11)	YES		ST_INTERSECTS(`g`,ST_GEOMFROMTEXT('POINT(0 0)',4326))	STORED GENERATED
+INSERT INTO t1(g) VALUES (ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0,10 0,10 10,0 10,0 0)))', 4326));
+SELECT i,st_astext(g) FROM t1 ORDER BY i;
+i	st_astext(g)
+1	MULTIPOLYGON(((0 0,10 0,10 10,0 10,0 0)))
+DROP TABLE t1;
+CREATE TABLE t1 (g GEOMETRY NOT NULL SRID 4326,
+i INT GENERATED ALWAYS AS (ST_INTERSECTS(g, ST_GEOMFROMTEXT('POINT(0 0)', 4326))) STORED);
+SHOW COLUMNS FROM t1;
+Field	Type	Null	Key	Default	Extra
+g	geometry	NO		NULL	
+i	int(11)	YES		ST_INTERSECTS(`g`,ST_GEOMFROMTEXT('POINT(0 0)',4326))	STORED GENERATED
+INSERT INTO t1(g) VALUES (ST_GEOMFROMTEXT('MULTIPOLYGON(((1 1,10 0,10 10,0 10,1 1)))', 4326));
+SELECT i,st_astext(g) FROM t1 ORDER BY i;
+i	st_astext(g)
+0	MULTIPOLYGON(((1 1,10 0,10 10,0 10,1 1)))
+DROP TABLE t1;
+CREATE TABLE t1(id INT, p POLYGON GENERATED ALWAYS AS (ST_GeomFromText('POINT(15 20)',0)) STORED);
+INSERT INTO t1(id) VALUES (1);
+ERROR 22003: Cannot get geometry object from data you send to the GEOMETRY field.
+DROP TABLE t1;

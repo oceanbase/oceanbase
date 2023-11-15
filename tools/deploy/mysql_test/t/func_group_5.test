@@ -1,0 +1,46 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: jiangxiu.wt
+#owner group: sql1
+
+## simple test of all group functions
+##
+#
+--disable_warnings
+drop table if exists t1,t2;
+--enable_warnings
+
+#
+##
+## BUG#3190, WL#1639: Standard Deviation STDDEV - 2 different calculations
+##
+#
+#CREATE TABLE t1 (id int(11),value1 float(10,2));
+#INSERT INTO t1 VALUES (1,0.00),(1,1.00), (1,2.00), (2,10.00), (2,11.00), (2,12.00), (2,13.00);
+#select id, stddev_pop(value1), var_pop(value1), stddev_samp(value1), var_samp(value1) from t1 group by id;
+#DROP TABLE t1;
+#
+##
+## BUG#8464 decimal AVG returns incorrect result
+##
+
+CREATE TABLE t1 (pk int primary key,col1 double , col2 double);
+INSERT INTO t1(pk,col1) VALUES (1,-5.00000000001),(2,-5.00000000002),(3,-5.00000000003),(4,-5.00000000000);
+#insert into t1 select * from t1;
+select col1,count(col1),sum(col1),avg(col1) from t1 group by col1 order by col1;
+DROP TABLE t1;
+#
+##
+## BUG#8465 decimal MIN and MAX return incorrect result
+##
+#
+create table t1 (pk int primary key,col1 double , col2 double);
+insert into t1(pk,col1) values (1,-5.00000000001);
+insert into t1(pk,col1) values (2,-5.00000000002);
+select col1,sum(col1),max(col1),min(col1) from t1 group by col1 order by col1;
+#delete from t1;
+insert into t1(pk,col1) values (3,5.00000000003);
+insert into t1(pk,col1) values (4,5.00000000004);
+select col1,sum(col1),max(col1),min(col1) from t1 group by col1 order by col1;
+DROP TABLE t1;

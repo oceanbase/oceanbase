@@ -1,0 +1,68 @@
+# owner: dachuan.sdc
+# owner group: SQL2
+--result_format 4
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection conn_admin;
+--sleep 2
+connection default;
+--disable_warnings
+drop table if exists t1;
+drop table if exists t2;
+--enable_warnings
+create table t1 (c1 int, c2 int unsigned,
+    c3 tinyint, c4 tinyint unsigned,
+    c5 bigint, c6 bigint unsigned,
+    c7 float, c8 float unsigned,
+    c9 double, c10 double unsigned,
+    c11 decimal, c12 decimal unsigned,
+    c13 date, c14 datetime, c15 timestamp);
+create table t2 (c1 varchar(100), c2 char(100));
+select * from t1;
+select * from t2;
+insert into t1 values(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+insert into t1 values(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '0000-00-00', '0000-00-00 00:00:00', '0000-00-00 00:00:00');
+insert into t1 values(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, '0013-01-01', '0014-01-01', '0015-01-01');
+insert into t1 values(-1, 2, -3, 4, -5, 6, -7, 8, -9, 10, -11, 12, '0013-01-01', '0014-01-01 00:00:00', '0015-01-01 00:00:00');
+insert into t1 values(1234567, 7654321, -33, 44, 555555555, 666666666, 777.777, 8888.888, 99999.999999, 10000.00000, 1111, 121212121, '0013-01-01', '0014-01-01 00:00:11', '0015-01-01 00:00:11');
+insert into t2 values(null, null);
+insert into t2 values('', '');
+insert into t2 values('a', 'a');
+insert into t2 values('A', 'A');
+insert into t2 values('0', '0');
+insert into t2 values('1', '1');
+insert into t2 values('@', '@');
+insert into t2 values('#', '#');
+insert into t2 values(' ', ' ');
+insert into t2 values('abcdefg', 'abcdefg');
+insert into t2 values('abcdefg ', 'abcdefg ');
+insert into t2 values('Good morning', 'Good morning');
+insert into t2 values('Good evening', 'Good evening');
+insert into t2 values('255.255.255.255', '255.255.255.255');
+insert into t2 values('192.168.1.100', '192.168.1.100');
+insert into t2 values('30.32.204.180', '30.32.204.180');
+insert into t2 values('emily@163.com', 'emily@163.com');
+insert into t2 values('mike@sohu.com', 'mike@sohu.com');
+insert into t2 values('joey@sina.com', 'joey@sina.com');
+insert into t2 values('阿里巴巴', '阿里巴巴');
+insert into t2 values('阿里巴巴 ', '阿里巴巴 ');
+insert into t2 values('淘宝', '淘宝');
+insert into t2 values('淘宝 ', '淘宝 ');
+
+connection conn_admin;
+--sleep 2
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+let $cnt=15;
+let $left=1;
+while ($left <= $cnt)
+{
+  eval select c$left, md5(c$left) from t1;
+  inc $left;
+}
+select c1, md5(c1), c2, md5(c2) from t2;
+drop table t1;
+drop table t2;
+
+connection conn_admin;
+--sleep 2

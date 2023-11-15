@@ -1,0 +1,1987 @@
+create database if not exists test;
+use test;
+drop table if exists t1, t2, t3;
+create table t1(c1 int primary key, c2 int);
+create table t2(c1 int primary key, c2 int);
+create table t3(c1 int primary key, c2 int);
+insert into t1 values(1, 1), (2, 2), (3, 3), (4, 3), (5, 2);
+insert into t2 values(1, 1), (2, 2);
+insert into t3 values(5, 5), (6, 6);
+select * from t1 where c1>ANY(select c1 from t2);
+c1	c2
+2	2
+3	3
+4	3
+5	2
+select * from t1 where c1<ALL(select c1 from t2);
+c1	c2
+select * from t1 where c1=(select c1 from t2);
+ERROR 21000: Subquery returns more than 1 row
+select * from t1 where c1=(select c1 from t2 limit 1);
+c1	c2
+1	1
+select * from t1 where c1=ANY(select c1 from t2 where t1.c2>t2.c2);
+c1	c2
+select * from t1 where exists(select c1 from t2 where t1.c2>t2.c2);
+c1	c2
+2	2
+3	3
+4	3
+5	2
+select * from t1 where 1<ANY(select c1 from t2);
+c1	c2
+1	1
+2	2
+3	3
+4	3
+5	2
+select c2 from t1 where exists(select c2 from t2 where t1.c1>t2.c1);
+c2
+2
+3
+3
+2
+select * from t1 where c1>(select c1 from t2 where t2.c1=1);
+c1	c2
+2	2
+3	3
+4	3
+5	2
+select * from t1 where exists(select * from t2 where t1.c1=t2.c2);
+c1	c2
+1	1
+2	2
+select * from t1 where c1 in (select c1 from t1);
+c1	c2
+1	1
+2	2
+3	3
+4	3
+5	2
+select * from t1 where c1 not in (select c1 from t1);
+c1	c2
+select c1 from t1 where c1 not in (select c1 from t2 where c2 not in (select c2 from t2));
+c1
+1
+2
+3
+4
+5
+select * from (select * from t1 limit 1) t;
+c1	c2
+1	1
+select c from (select c1 as c from t1) tt;
+c
+1
+2
+3
+4
+5
+select c1 from t1 where c1 in (select c1 from t2 where c2 >= some(select max(c1) from (select c1 from t3 where t1.c2=t3.c1 order by c1 limit 1) as tt));
+c1
+select (select c1, c2 from t1) from t1;
+ERROR 21000: Operand should contain 1 column(s)
+select (select c1 from t1) from t1;
+ERROR 21000: Subquery returns more than 1 row
+select (select c1 from t1 where c1=1) from t1;
+(select c1 from t1 where c1=1)
+1
+1
+1
+1
+1
+select (select 1)=ANY(select 1);
+(select 1)=ANY(select 1)
+1
+SELECT (SELECT 1)>ALL(SELECT 1);
+(SELECT 1)>ALL(SELECT 1)
+0
+SELECT (SELECT 1,2,3) = ROW(1,2,3);
+(SELECT 1,2,3) = ROW(1,2,3)
+1
+SELECT (SELECT 1,2,3) = ROW(1,2,1);
+(SELECT 1,2,3) = ROW(1,2,1)
+0
+SELECT (SELECT 1,2,3) < ROW(1,2,1);
+(SELECT 1,2,3) < ROW(1,2,1)
+0
+SELECT (SELECT 1,2,3) > ROW(1,2,1);
+(SELECT 1,2,3) > ROW(1,2,1)
+1
+SELECT (SELECT 1,2,3) = ROW(1,2,NULL);
+(SELECT 1,2,3) = ROW(1,2,NULL)
+NULL
+SELECT ROW(1,2,3) = (SELECT 1,2,3);
+ROW(1,2,3) = (SELECT 1,2,3)
+1
+SELECT ROW(1,2,3) = (SELECT 1,2,1);
+ROW(1,2,3) = (SELECT 1,2,1)
+0
+SELECT ROW(1,2,3) < (SELECT 1,2,1);
+ROW(1,2,3) < (SELECT 1,2,1)
+0
+SELECT ROW(1,2,3) > (SELECT 1,2,1);
+ROW(1,2,3) > (SELECT 1,2,1)
+1
+SELECT ROW(1,2,3) = (SELECT 1,2,NULL);
+ROW(1,2,3) = (SELECT 1,2,NULL)
+NULL
+SELECT (SELECT 1.5,2,'a') = ROW(1.5,2,'a');
+(SELECT 1.5,2,'a') = ROW(1.5,2,'a')
+1
+SELECT (SELECT 1.5,2,'a') = ROW(1.5,2,'b');
+(SELECT 1.5,2,'a') = ROW(1.5,2,'b')
+0
+SELECT (SELECT 1.5,2,'a') = ROW(1.5,'2','a');
+(SELECT 1.5,2,'a') = ROW(1.5,'2','a')
+1
+SELECT (SELECT 1.5,'c','a') = ROW(1.5,2,'a');
+(SELECT 1.5,'c','a') = ROW(1.5,2,'a')
+0
+select (select 3, 2, 1)>row(1, 2, 1);
+(select 3, 2, 1)>row(1, 2, 1)
+1
+select (select 1, 2, 3)>row(1, 2, 1);
+(select 1, 2, 3)>row(1, 2, 1)
+1
+select (select 1, 2, 3)>row(1, 2, 3);
+(select 1, 2, 3)>row(1, 2, 3)
+0
+select (select 1, 3, 2)>row(1, 2, 3);
+(select 1, 3, 2)>row(1, 2, 3)
+1
+select (select 1, 2, 3)>row(1, 3, 2);
+(select 1, 2, 3)>row(1, 3, 2)
+0
+select (select 1, null, 2)>row(1, 2, 2);
+(select 1, null, 2)>row(1, 2, 2)
+NULL
+select (select 1, 2, null)>row(1, 1, 2);
+(select 1, 2, null)>row(1, 1, 2)
+1
+select (select 3, 2, 1)>=row(1, 2, 1);
+(select 3, 2, 1)>=row(1, 2, 1)
+1
+select (select 1, 2, 3)>=row(1, 2, 1);
+(select 1, 2, 3)>=row(1, 2, 1)
+1
+select (select 1, 2, 3)>=row(1, 2, 3);
+(select 1, 2, 3)>=row(1, 2, 3)
+1
+select (select 1, 3, 2)>=row(1, 2, 3);
+(select 1, 3, 2)>=row(1, 2, 3)
+1
+select (select 1, 2, 3)>=row(1, 3, 2);
+(select 1, 2, 3)>=row(1, 3, 2)
+0
+select (select 1, null, 2)>=row(1, 2, 2);
+(select 1, null, 2)>=row(1, 2, 2)
+NULL
+select (select 1, 2, null)>=row(1, 1, 2);
+(select 1, 2, null)>=row(1, 1, 2)
+1
+select (select 1, 2, 3)<row(3, 2, 1);
+(select 1, 2, 3)<row(3, 2, 1)
+1
+select (select 1, 2, 3)<row(1, 3, 2);
+(select 1, 2, 3)<row(1, 3, 2)
+1
+select (select 1, 2, 1)<row(1, 2, 3);
+(select 1, 2, 1)<row(1, 2, 3)
+1
+select (select 1, 2, 3)<row(1, 2, 3);
+(select 1, 2, 3)<row(1, 2, 3)
+0
+select (select 1, 3, 2)<row(1, 2, 3);
+(select 1, 3, 2)<row(1, 2, 3)
+0
+select (select 1, null, 2)<row(1, 2, 2);
+(select 1, null, 2)<row(1, 2, 2)
+NULL
+select (select 1, 2, null)<row(1, 1, 2);
+(select 1, 2, null)<row(1, 1, 2)
+0
+select (select 1, 2, 3)<=row(3, 2, 1);
+(select 1, 2, 3)<=row(3, 2, 1)
+1
+select (select 1, 2, 3)<=row(1, 3, 2);
+(select 1, 2, 3)<=row(1, 3, 2)
+1
+select (select 1, 2, 1)<=row(1, 2, 3);
+(select 1, 2, 1)<=row(1, 2, 3)
+1
+select (select 1, 2, 3)<=row(1, 2, 3);
+(select 1, 2, 3)<=row(1, 2, 3)
+1
+select (select 1, 3, 2)<=row(1, 2, 3);
+(select 1, 3, 2)<=row(1, 2, 3)
+0
+select (select 1, null, 2)<=row(1, 2, 2);
+(select 1, null, 2)<=row(1, 2, 2)
+NULL
+select (select 1, 2, null)<=row(1, 1, 2);
+(select 1, 2, null)<=row(1, 1, 2)
+0
+select (select 1, 2, 3)=row(1, 2, 3);
+(select 1, 2, 3)=row(1, 2, 3)
+1
+select (select 1, 2, 3)=row(1, 2, 1);
+(select 1, 2, 3)=row(1, 2, 1)
+0
+select (select 1, 2, 1)=row(3, 2, 1);
+(select 1, 2, 1)=row(3, 2, 1)
+0
+select (select 1, null, 1)=row(1, 2, 1);
+(select 1, null, 1)=row(1, 2, 1)
+NULL
+select (select 1, 2, 3)<=>row(1, 2, 3);
+(select 1, 2, 3)<=>row(1, 2, 3)
+1
+select (select 1, 2, 3)<=>row(1, 2, 1);
+(select 1, 2, 3)<=>row(1, 2, 1)
+0
+select (select 1, null, 1)<=>row(1, 2, 1);
+(select 1, null, 1)<=>row(1, 2, 1)
+0
+select (select 1, null, 3)<=>row(1, null, 3);
+(select 1, null, 3)<=>row(1, null, 3)
+1
+select (select 1, 2, 3)!=row(1, 2, 3);
+(select 1, 2, 3)!=row(1, 2, 3)
+0
+select (select 1, 2, 3)!=row(1, 2, 1);
+(select 1, 2, 3)!=row(1, 2, 1)
+1
+select (select 1, null, 1)!=row(1, 2, 1);
+(select 1, null, 1)!=row(1, 2, 1)
+NULL
+select (select 1, null, 3)!=row(1, null, 3);
+(select 1, null, 3)!=row(1, null, 3)
+NULL
+select * from t1 group by (select c1 from t1 limit 1);
+c1	c2
+1	1
+select * from t1 group by (select c1, c2 from t1);
+ERROR 21000: Operand should contain 1 column(s)
+delete from t1;
+insert into t1 values(1, NULL), (2, NULL), (3, NULL), (4, NULL);
+select NULL=ANY(select c1 from t1);
+NULL=ANY(select c1 from t1)
+NULL
+select NULL=ALL(select c1 from t1);
+NULL=ALL(select c1 from t1)
+NULL
+delete from t1;
+insert into t1 values(1, NULL), (2, 2), (3, 3), (4, 4);
+select 2=ANY(select c2 from t1);
+2=ANY(select c2 from t1)
+1
+select 2=ALL(select c2 from t1);
+2=ALL(select c2 from t1)
+0
+select 5=ANY(select c2 from t1);
+5=ANY(select c2 from t1)
+NULL
+select 5!=ANY(select c2 from t1);
+5!=ANY(select c2 from t1)
+1
+delete from t1;
+insert into t1 values(1, 1), (2, NULL), (3, 3), (4, 4);
+select 1=ANY(select c1 from t1);
+1=ANY(select c1 from t1)
+1
+select 1!=ANY(select c1 from t1);
+1!=ANY(select c1 from t1)
+1
+select 1=ALL(select c1 from t1);
+1=ALL(select c1 from t1)
+0
+select 1!=ALL(select c1 from t1);
+1!=ALL(select c1 from t1)
+0
+select 5=ANY(select c1 from t1);
+5=ANY(select c1 from t1)
+0
+select 5!=ANY(select c1 from t1);
+5!=ANY(select c1 from t1)
+1
+select 5=ALL(select c1 from t1);
+5=ALL(select c1 from t1)
+0
+select 5!=ALL(select c1 from t1);
+5!=ALL(select c1 from t1)
+1
+delete from t1;
+insert into t1 values(1, 1), (2, 2), (3, 3), (4, NULL);
+select 1!=ANY(select c1 from t1);
+1!=ANY(select c1 from t1)
+1
+select 1=ANY(select c1 from t1);
+1=ANY(select c1 from t1)
+1
+select 1!=ALL(select c1 from t1);
+1!=ALL(select c1 from t1)
+0
+select 1=ALL(select c1 from t1);
+1=ALL(select c1 from t1)
+0
+select 5!=ANY(select c1 from t1);
+5!=ANY(select c1 from t1)
+1
+select 5=ANY(select c1 from t1);
+5=ANY(select c1 from t1)
+0
+select 5!=ALL(select c1 from t1);
+5!=ALL(select c1 from t1)
+1
+select 5=ALL(select c1 from t1);
+5=ALL(select c1 from t1)
+0
+select * from t1 where c1 > (select t2.c1 from t2 where t1.c1  limit 1);
+c1	c2
+2	2
+3	3
+4	NULL
+select t1.c1 from t1 left join t3 on t1.c1 = t3.c1 where t3.c1 < (select t2.c1 from t2 where t3.c1  limit 1);
+c1
+select * from t1 where c1 > (select t2.c1 from t2 where t1.c1 > 1 limit 1);
+c1	c2
+2	2
+3	3
+4	NULL
+drop table if exists t1, t2;
+create table t1 (a int not null, b int not null, index it1a(a), index iab(a, b));
+create table t2 (c int not null, d int not null);
+insert into t1 values (1,10);
+insert into t1 values (1,20);
+insert into t1 values (2,10);
+insert into t1 values (2,20);
+insert into t1 values (2,30);
+insert into t1 values (3,20);
+insert into t1 values (4,40);
+insert into t2 values (2,10);
+insert into t2 values (2,20);
+insert into t2 values (2,40);
+insert into t2 values (3,20);
+insert into t2 values (4,10);
+insert into t2 values (5,10);
+select a from t1 group by a having a in (select c from t2 where d >= 20);
+a
+2
+3
+drop table if exists t1;
+create table t1(c1 int);
+select count(1) from t1 where false;
+count(1)
+0
+select count(1) from t1 having false;
+count(1)
+select count(1) from t1 group by c1 having false;
+count(1)
+select count(1) from t1 where false group by c1;
+count(1)
+insert into t1 values(1);
+select * from t1 where c1 in (trim((select 1)), 2);
+c1
+1
+select * from t1 where c1 in ((select c1 from t1), 2);
+c1
+1
+select * from t1 where c1 in ((select t1.c1 from t1 t), 2);
+c1
+1
+drop table if exists t1, t2;
+drop table if exists DD,AA,J,CC,GG;
+CREATE TABLE DD ( col_int int, pk int, col_varchar_20 varchar(20), col_int_key int, primary key (pk));
+CREATE TABLE AA ( pk int, col_int_key int, col_varchar_20 varchar(20), col_int int, primary key (pk));
+CREATE TABLE J (  col_varchar_20 varchar(20), pk int primary key);
+CREATE TABLE CC ( col_int_key int, pk int, col_int int, col_varchar_20 varchar(20), primary key (pk));
+CREATE TABLE GG (col_varchar_20 varchar(20), pk int primary key);
+insert into DD (pk, col_varchar_20, col_int, col_int_key) value(1, "YYY", 5,3);
+insert into AA (pk, col_varchar_20, col_int, col_int_key) value(2, 'me', 4, 3);
+insert into CC (pk, col_varchar_20, col_int) value(3, 'you', 4);
+SELECT  GRANDPARENT1 . col_varchar_20 AS G1 FROM DD AS GRANDPARENT1 WHERE GRANDPARENT1 . `col_int_key` IN ( SELECT DISTINCT PARENT1 . `col_int_key` AS P1 FROM AA AS PARENT1 LEFT JOIN J AS PARENT2 USING ( col_varchar_20 ) WHERE PARENT1 . `col_int` IN ( SELECT  CHILD1 . `col_int` AS C1 FROM CC AS CHILD1 LEFT JOIN GG AS CHILD2 USING ( col_varchar_20 )  )  AND ( GRANDPARENT1 . `col_int` >= 1 ));
+G1
+YYY
+drop table if exists DD,AA,J,CC,GG;
+drop table if exists t1, t2, t3;
+create table t1(c1 int primary key, c2 int, c3 int);
+create table t2(c1 int primary key, c2 int, c3 int);
+create table t3(c1 int primary key, c2 int, c3 int);
+insert into t1 values(1, 2, 3);
+insert into t1 values(2, 2, 3);
+insert into t2 values(1, 2, 3);
+insert into t2 values(2, 2, 3);
+insert into t3 values(1, 2, 3);
+insert into t3 values(2, 2, 3);
+explain select * from t1 where t1.c2 = 5 or exists (select 1 from t2 where t1.c1 = t2.c1);
+Query Plan
+===================================================
+|ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |UNION ALL          |    |2       |7           |
+|1 |├─TABLE FULL SCAN  |t1  |1       |3           |
+|2 |└─MERGE JOIN       |    |1       |5           |
+|3 |  ├─TABLE FULL SCAN|t2  |2       |3           |
+|4 |  └─TABLE FULL SCAN|t1  |1       |3           |
+===================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  1 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 = 5]), rowset=16
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+      merge_directions([ASC])
+  3 - output([t2.c1]), filter(nil), rowset=16
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.c1]), range(MIN ; MAX)always true
+  4 - output([t1.c1], [t1.c2], [t1.c3]), filter([lnnvl(cast(t1.c2 = 5, TINYINT(-1, 0)))]), rowset=16
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.c1]), range(MIN ; MAX)always true
+explain select * from t1 where t1.c2 = 5 or exists (select 1 from t2 where t1.c1 > t2.c1);
+Query Plan
+================================================================
+|ID|OPERATOR                        |NAME|EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------
+|0 |UNION ALL                       |    |2       |24          |
+|1 |├─TABLE FULL SCAN               |t1  |1       |3           |
+|2 |└─NESTED-LOOP SEMI JOIN         |    |1       |21          |
+|3 |  ├─TABLE FULL SCAN             |t1  |1       |3           |
+|4 |  └─DISTRIBUTED TABLE RANGE SCAN|t2  |1       |18          |
+================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  1 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 = 5]), rowset=16
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.c1(:0)]), use_batch=false
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter([lnnvl(cast(t1.c2 = 5, TINYINT(-1, 0)))]), rowset=16
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  4 - output(nil), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.c1]), range(MIN ; MAX), 
+      range_cond([:0 > t2.c1])
+explain select * from t1 where t1.c2 = 5 or exists (select 1 from t2 where t1.c1 < t2.c1);
+Query Plan
+================================================================
+|ID|OPERATOR                        |NAME|EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------
+|0 |UNION ALL                       |    |2       |24          |
+|1 |├─TABLE FULL SCAN               |t1  |1       |3           |
+|2 |└─NESTED-LOOP SEMI JOIN         |    |1       |21          |
+|3 |  ├─TABLE FULL SCAN             |t1  |1       |3           |
+|4 |  └─DISTRIBUTED TABLE RANGE SCAN|t2  |1       |18          |
+================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  1 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 = 5]), rowset=16
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.c1(:0)]), use_batch=false
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter([lnnvl(cast(t1.c2 = 5, TINYINT(-1, 0)))]), rowset=16
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  4 - output(nil), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.c1]), range(MIN ; MAX), 
+      range_cond([:0 < t2.c1])
+explain select * from t1, t2 where t1.c1 > exists(select c1 from t2 where t2.c1 = t1.c1);
+Query Plan
+=============================================================
+|ID|OPERATOR                     |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |SUBPLAN FILTER               |    |2       |75          |
+|1 |├─NESTED-LOOP JOIN CARTESIAN |    |4       |3           |
+|2 |│ ├─TABLE FULL SCAN          |t1  |2       |3           |
+|3 |│ └─MATERIAL                 |    |2       |3           |
+|4 |│   └─TABLE FULL SCAN        |t2  |2       |3           |
+|5 |└─DISTRIBUTED TABLE GET      |t2  |1       |18          |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t2.c1], [t2.c2], [t2.c3]), filter([t1.c1 > (T_OP_EXISTS, subquery(1))]), rowset=16
+      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
+  1 - output([t1.c1], [t1.c2], [t1.c3], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  3 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
+  4 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.c1]), range(MIN ; MAX)always true
+  5 - output([1]), filter(nil), rowset=16
+      access([GROUP_ID]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([t2.c1]), range(MIN ; MAX)always true, 
+      range_cond([t2.c1 = :0])
+explain select * from t1 where (select c1 from t2 limit 1)+1 in (select 2 from t3 where t1.c1=t3.c1);
+Query Plan
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |SUBPLAN FILTER         |    |1       |41          |
+|1 |├─TABLE FULL SCAN      |t1  |2       |3           |
+|2 |├─DISTRIBUTED TABLE GET|t3  |1       |18          |
+|3 |└─TABLE FULL SCAN      |t2  |1       |3           |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter([:1 + 1 = ANY(subquery(1))]), rowset=16
+      exec_params_([t1.c1(:0)]), onetime_exprs_([subquery(2)(:1)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  2 - output([2]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.c1]), range(MIN ; MAX)always true, 
+      range_cond([:0 = t3.c1])
+  3 - output([t2.c1]), filter(nil), rowset=16
+      access([t2.c1]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([t2.c1]), range(MIN ; MAX)always true
+explain select * from t1 having count(*) > (select c1 from t2 where t1.c1=t2.c1);
+Query Plan
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |SUBPLAN FILTER         |    |1       |21          |
+|1 |├─SCALAR GROUP BY      |    |1       |3           |
+|2 |│ └─TABLE FULL SCAN    |t1  |2       |3           |
+|3 |└─DISTRIBUTED TABLE GET|t2  |1       |18          |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter([T_FUN_COUNT(*) > subquery(1)]), rowset=16
+      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
+  1 - output([t1.c1], [t1.c2], [t1.c3], [T_FUN_COUNT(*)]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  3 - output([t2.c1]), filter(nil), rowset=16
+      access([GROUP_ID], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.c1]), range(MIN ; MAX)always true, 
+      range_cond([:0 = t2.c1])
+explain select * from t1, t2 where t2.c1 = t1.c1 and t2.c1 = (select c1 from t3 where t3.c1 = t1.c1);
+Query Plan
+===================================================
+|ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |MERGE JOIN         |    |2       |8           |
+|1 |├─TABLE FULL SCAN  |t3  |2       |3           |
+|2 |└─MERGE JOIN       |    |2       |5           |
+|3 |  ├─TABLE FULL SCAN|t1  |2       |3           |
+|4 |  └─TABLE FULL SCAN|t2  |2       |3           |
+===================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 = t3.c1]), other_conds(nil)
+      merge_directions([ASC])
+  1 - output([t3.c1]), filter(nil), rowset=16
+      access([t3.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.c1]), range(MIN ; MAX)always true
+  2 - output([t1.c1], [t1.c2], [t1.c3], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
+      equal_conds([t2.c1 = t1.c1]), other_conds(nil)
+      merge_directions([ASC])
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  4 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.c1]), range(MIN ; MAX)always true
+explain select * from (select c1+1 as a1 from t1 where t1.c2 = 2) a, t2 where a.a1 = t2.c2 or t2.c1 = ANY(select c3 from t3 where t3.c1 > a.a1);
+Query Plan
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |UNION ALL              |    |5       |11          |
+|1 |├─HASH JOIN            |    |4       |6           |
+|2 |│ ├─TABLE FULL SCAN    |t1  |2       |3           |
+|3 |│ └─TABLE FULL SCAN    |t2  |2       |3           |
+|4 |└─MERGE SEMI JOIN      |    |1       |5           |
+|5 |  ├─NESTED-LOOP JOIN   |    |2       |3           |
+|6 |  │ ├─TABLE FULL SCAN  |t2  |2       |3           |
+|7 |  │ └─MATERIAL         |    |2       |3           |
+|8 |  │   └─TABLE FULL SCAN|t1  |2       |3           |
+|9 |  └─SORT               |    |2       |3           |
+|10|    └─TABLE FULL SCAN  |t3  |2       |3           |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+  1 - output([t1.c1 + 1], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
+      equal_conds([t1.c1 + 1 = t2.c2]), other_conds(nil)
+  2 - output([t1.c1]), filter([t1.c2 = 2]), rowset=16
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  3 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.c1]), range(MIN ; MAX)always true
+  4 - output([t1.c1 + 1], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
+      equal_conds([t2.c1 = t3.c3]), other_conds([t3.c1 > t1.c1 + 1])
+      merge_directions([ASC])
+  5 - output([t1.c1 + 1], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
+      conds([lnnvl(cast(t1.c1 + 1 = t2.c2, TINYINT(-1, 0)))]), nl_params_(nil), use_batch=false
+  6 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.c1]), range(MIN ; MAX)always true
+  7 - output([t1.c1]), filter(nil), rowset=16
+  8 - output([t1.c1]), filter([t1.c2 = 2]), rowset=16
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  9 - output([t3.c3], [t3.c1]), filter(nil), rowset=16
+      sort_keys([t3.c3, ASC])
+ 10 - output([t3.c1], [t3.c3]), filter(nil), rowset=16
+      access([t3.c1], [t3.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.c1]), range(MIN ; MAX)always true
+select * from t1 where t1.c2 = 5 or exists (select 1 from t2 where t1.c1 = t2.c1);
+c1	c2	c3
+1	2	3
+2	2	3
+select * from t1 where t1.c2 = 5 or exists (select 1 from t2 where t1.c1 > t2.c1);
+c1	c2	c3
+2	2	3
+select * from t1 where t1.c2 = 5 or exists (select 1 from t2 where t1.c1 < t2.c1);
+c1	c2	c3
+1	2	3
+select * from t1, t2 where t1.c1 > exists(select c1 from t2 where t2.c1 = t1.c1);
+c1	c2	c3	c1	c2	c3
+2	2	3	1	2	3
+2	2	3	2	2	3
+select * from t1 where (select c1 from t2 limit 1)+1 in (select 2 from t3 where t1.c1=t3.c1);
+c1	c2	c3
+1	2	3
+2	2	3
+select * from t1 having count(*) > (select c1 from t2 where t1.c1=t2.c1);
+c1	c2	c3
+1	2	3
+select * from t1, t2 where t2.c1 = t1.c1 and t2.c1 = (select c1 from t3 where t3.c1 = t1.c1);
+c1	c2	c3	c1	c2	c3
+1	2	3	1	2	3
+2	2	3	2	2	3
+select * from (select c1+1 as a1 from t1 where t1.c2 = 2) a, t2 where a.a1 = t2.c2 or t2.c1 = ANY(select c3 from t3 where t3.c1 > a.a1);
+a1	c1	c2	c3
+2	1	2	3
+2	2	2	3
+explain select * from t1 where t1.c1 > (select sum(c1) from t2 where t2.c1 = t1.c1);
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |MERGE JOIN       |    |1       |5           |
+|1 |├─TABLE FULL SCAN|t2  |2       |3           |
+|2 |└─TABLE FULL SCAN|t1  |2       |3           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t2.c1 = t1.c1]), other_conds([cast(t1.c1, DECIMAL_INT(33, 0)) > cast(t2.c1, DECIMAL_INT(33, 0))])
+      merge_directions([ASC])
+  1 - output([t2.c1]), filter(nil), rowset=16
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.c1]), range(MIN ; MAX)always true
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.c1]), range(MIN ; MAX)always true
+explain select * from t1 where t1.c1 > (select sum(c1) from t2 where t2.c1 = t1.c1 and t2.c2 > (select max(c2) from t3 where t3.c1 = t2.c1));
+Query Plan
+===================================================
+|ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |MERGE JOIN         |    |1       |7           |
+|1 |├─MERGE JOIN       |    |1       |5           |
+|2 |│ ├─TABLE FULL SCAN|t2  |2       |3           |
+|3 |│ └─TABLE FULL SCAN|t3  |2       |3           |
+|4 |└─TABLE FULL SCAN  |t1  |2       |3           |
+===================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      equal_conds([t2.c1 = t1.c1]), other_conds([cast(t1.c1, DECIMAL_INT(33, 0)) > cast(t2.c1, DECIMAL_INT(33, 0))])
+      merge_directions([ASC])
+  1 - output([t2.c1]), filter(nil), rowset=16
+      equal_conds([t3.c1 = t2.c1]), other_conds([t2.c2 > t3.c2])
+      merge_directions([ASC])
+  2 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.c1]), range(MIN ; MAX)always true
+  3 - output([t3.c1], [t3.c2]), filter(nil), rowset=16
+      access([t3.c1], [t3.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.c1]), range(MIN ; MAX)always true
+  4 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.c1]), range(MIN ; MAX)always true
+explain select * from t1 where t1.c2 in (select avg(c1) from t2 where t2.c1 = t1.c1 union select count(1) from t3 where t3.c1 = t1.c1);
+Query Plan
+===========================================================
+|ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |SUBPLAN FILTER             |    |1       |75          |
+|1 |├─TABLE FULL SCAN          |t1  |2       |3           |
+|2 |└─MERGE UNION DISTINCT     |    |2       |36          |
+|3 |  ├─SCALAR GROUP BY        |    |1       |18          |
+|4 |  │ └─DISTRIBUTED TABLE GET|t2  |1       |18          |
+|5 |  └─SCALAR GROUP BY        |    |1       |18          |
+|6 |    └─DISTRIBUTED TABLE GET|t3  |1       |18          |
+===========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter([cast(t1.c2, DECIMAL(11, 0)) = ANY(subquery(1))]), rowset=16
+      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  2 - output([UNION([1])]), filter(nil), rowset=16
+  3 - output([cast(cast(T_FUN_SUM(t2.c1), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t2.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(t2.c1)], [T_FUN_COUNT(t2.c1)])
+  4 - output([t2.c1]), filter(nil), rowset=16
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.c1]), range(MIN ; MAX)always true, 
+      range_cond([t2.c1 = :0])
+  5 - output([cast(T_FUN_COUNT(*), DECIMAL(24, 4))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  6 - output(nil), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.c1]), range(MIN ; MAX)always true, 
+      range_cond([t3.c1 = :0])
+explain select * from t1 where t1.c1 != (select c2 from t2 where t2.c1 = (select max(c2) from t3 where t3.c1 = t1.c1) order by t2.c2 limit 1);
+Query Plan
+================================================================
+|ID|OPERATOR                       |NAME |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------
+|0 |SUBPLAN FILTER                 |     |1       |43          |
+|1 |├─TABLE FULL SCAN              |t1   |2       |3           |
+|2 |└─LIMIT                        |     |1       |21          |
+|3 |  └─MERGE JOIN                 |     |1       |21          |
+|4 |    ├─SUBPLAN SCAN             |VIEW1|1       |18          |
+|5 |    │ └─SCALAR GROUP BY        |     |1       |18          |
+|6 |    │   └─DISTRIBUTED TABLE GET|t3   |1       |18          |
+|7 |    └─TABLE FULL SCAN          |t2   |2       |3           |
+================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c1 != subquery(1)]), rowset=16
+      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  2 - output([t2.c2]), filter(nil), rowset=16
+      limit(1), offset(nil)
+  3 - output([t2.c2]), filter(nil), rowset=16
+      equal_conds([t2.c1 = VIEW1.max(c2)]), other_conds(nil)
+      merge_directions([ASC])
+  4 - output([VIEW1.max(c2)]), filter(nil), rowset=16
+      access([VIEW1.max(c2)])
+  5 - output([T_FUN_MAX(t3.c2)]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_MAX(t3.c2)])
+  6 - output([t3.c2]), filter(nil), rowset=16
+      access([t3.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.c1]), range(MIN ; MAX)always true, 
+      range_cond([t3.c1 = :0])
+  7 - output([t2.c1], [t2.c2]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.c1]), range(MIN ; MAX)always true
+select * from t1 where t1.c1 > (select sum(c1) from t2 where t2.c1 = t1.c1);
+c1	c2	c3
+select * from t1 where t1.c1 > (select sum(c1) from t2 where t2.c1 = t1.c1 and t2.c2 > (select max(c2) from t3 where t3.c1 = t2.c1));
+c1	c2	c3
+select * from t1 where t1.c2 in (select avg(c1) from t2 where t2.c1 = t1.c1 union select count(1) from t3 where t3.c1 = t1.c1);
+c1	c2	c3
+2	2	3
+select * from t1 where t1.c1 != (select c2 from t2 where t2.c1 = (select max(c2) from t3 where t3.c1 = t1.c1) order by t2.c2 limit 1);
+c1	c2	c3
+1	2	3
+drop table if exists t1, t2, t3;
+drop table if exists t1,t2,t3;
+create table t1(a int, b int);
+create table t2(a int, b int);
+create table t3(a int, b int);
+explain select * from t1 where exists (select 1, round(1.1) from dual);
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |1       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      access([t1.a], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+explain select * from t1 where exists (select max(a) from t2);
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |1       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      access([t1.a], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+explain select * from t1 where exists (select group_concat(a, b) from t2 group by a);
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SUBPLAN FILTER   |    |1       |5           |
+|1 |├─TABLE FULL SCAN|t1  |1       |3           |
+|2 |└─TABLE FULL SCAN|t2  |1       |3           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.a], [t1.b]), filter(nil), startup_filter([:0]), rowset=16
+      access([t1.a], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+explain select * from t1 where exists (select max(a), sum(a), count(a) from t2);
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |1       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      access([t1.a], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+explain select * from t1 where exists (select max(a), sum(a), count(a) from t2 group by a);
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SUBPLAN FILTER   |    |1       |5           |
+|1 |├─TABLE FULL SCAN|t1  |1       |3           |
+|2 |└─TABLE FULL SCAN|t2  |1       |3           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.a], [t1.b]), filter(nil), startup_filter([:0]), rowset=16
+      access([t1.a], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+explain select * from t1 where exists (select max(a), sum(a), count(a) from t2 group by a having a > 1);
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SUBPLAN FILTER   |    |1       |5           |
+|1 |├─TABLE FULL SCAN|t1  |1       |3           |
+|2 |└─TABLE FULL SCAN|t2  |1       |3           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.a], [t1.b]), filter(nil), startup_filter([:0]), rowset=16
+      access([t1.a], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([t2.a > 1]), rowset=16
+      access([t2.a]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+explain select * from t1 where exists (select max(a), sum(a), count(a) from t2 group by a having sum(a) > 1);
+Query Plan
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN FILTER       |    |1       |5           |
+|1 |├─TABLE FULL SCAN    |t1  |1       |3           |
+|2 |└─LIMIT              |    |1       |3           |
+|3 |  └─HASH GROUP BY    |    |1       |3           |
+|4 |    └─TABLE FULL SCAN|t2  |1       |3           |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.a], [t1.b]), filter(nil), startup_filter([:0]), rowset=16
+      access([t1.a], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter(nil), rowset=16
+      limit(1), offset(nil)
+  3 - output(nil), filter([T_FUN_SUM(t2.a) > cast(1, DECIMAL_INT(33, 0))]), rowset=16
+      group([t2.a]), agg_func([T_FUN_SUM(t2.a)])
+  4 - output([t2.a]), filter(nil), rowset=16
+      access([t2.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+explain select * from t1 where exists (select max(a), sum(a), count(a) from t2 group by a having sum(a) > 1 and count(a) > 0);
+Query Plan
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN FILTER       |    |1       |5           |
+|1 |├─TABLE FULL SCAN    |t1  |1       |3           |
+|2 |└─LIMIT              |    |1       |3           |
+|3 |  └─HASH GROUP BY    |    |1       |3           |
+|4 |    └─TABLE FULL SCAN|t2  |1       |3           |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.a], [t1.b]), filter(nil), startup_filter([:0]), rowset=16
+      access([t1.a], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter(nil), rowset=16
+      limit(1), offset(nil)
+  3 - output(nil), filter([T_FUN_SUM(t2.a) > cast(1, DECIMAL_INT(33, 0))], [T_FUN_COUNT(t2.a) > 0]), rowset=16
+      group([t2.a]), agg_func([T_FUN_SUM(t2.a)], [T_FUN_COUNT(t2.a)])
+  4 - output([t2.a]), filter(nil), rowset=16
+      access([t2.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+explain select * from t1 where not exists (select 1, round(1.1) from dual);
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |1       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b]), filter(nil), startup_filter([0]), rowset=16
+      access([t1.a], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+explain select * from t1 where not exists (select max(a) from t2);
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |1       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b]), filter(nil), startup_filter([0]), rowset=16
+      access([t1.a], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+explain select * from t1 where not exists (select group_concat(a, b) from t2 group by a);
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SUBPLAN FILTER   |    |1       |5           |
+|1 |├─TABLE FULL SCAN|t1  |1       |3           |
+|2 |└─TABLE FULL SCAN|t2  |1       |3           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([(T_OP_NOT_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.a], [t1.b]), filter(nil), startup_filter([:0]), rowset=16
+      access([t1.a], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+explain select * from t1 where not exists (select max(a), sum(a), count(a) from t2);
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |1       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b]), filter(nil), startup_filter([0]), rowset=16
+      access([t1.a], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+explain select * from t1 where not exists (select max(a), sum(a), count(a) from t2 group by a);
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SUBPLAN FILTER   |    |1       |5           |
+|1 |├─TABLE FULL SCAN|t1  |1       |3           |
+|2 |└─TABLE FULL SCAN|t2  |1       |3           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([(T_OP_NOT_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.a], [t1.b]), filter(nil), startup_filter([:0]), rowset=16
+      access([t1.a], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+explain select * from t1 where not exists (select max(a), sum(a), count(a) from t2 group by a having a > 1);
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SUBPLAN FILTER   |    |1       |5           |
+|1 |├─TABLE FULL SCAN|t1  |1       |3           |
+|2 |└─TABLE FULL SCAN|t2  |1       |3           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([(T_OP_NOT_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.a], [t1.b]), filter(nil), startup_filter([:0]), rowset=16
+      access([t1.a], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([t2.a > 1]), rowset=16
+      access([t2.a]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+explain select * from t1 where not exists (select max(a), sum(a), count(a) from t2 group by a having sum(a) > 1);
+Query Plan
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN FILTER       |    |1       |5           |
+|1 |├─TABLE FULL SCAN    |t1  |1       |3           |
+|2 |└─LIMIT              |    |1       |3           |
+|3 |  └─HASH GROUP BY    |    |1       |3           |
+|4 |    └─TABLE FULL SCAN|t2  |1       |3           |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([(T_OP_NOT_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.a], [t1.b]), filter(nil), startup_filter([:0]), rowset=16
+      access([t1.a], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter(nil), rowset=16
+      limit(1), offset(nil)
+  3 - output(nil), filter([T_FUN_SUM(t2.a) > cast(1, DECIMAL_INT(33, 0))]), rowset=16
+      group([t2.a]), agg_func([T_FUN_SUM(t2.a)])
+  4 - output([t2.a]), filter(nil), rowset=16
+      access([t2.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+explain select * from t1 where not exists (select max(a), sum(a), count(a) from t2 group by a having sum(a) > 1 and count(a) > 0);
+Query Plan
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN FILTER       |    |1       |5           |
+|1 |├─TABLE FULL SCAN    |t1  |1       |3           |
+|2 |└─LIMIT              |    |1       |3           |
+|3 |  └─HASH GROUP BY    |    |1       |3           |
+|4 |    └─TABLE FULL SCAN|t2  |1       |3           |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([(T_OP_NOT_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.a], [t1.b]), filter(nil), startup_filter([:0]), rowset=16
+      access([t1.a], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter(nil), rowset=16
+      limit(1), offset(nil)
+  3 - output(nil), filter([T_FUN_SUM(t2.a) > cast(1, DECIMAL_INT(33, 0))], [T_FUN_COUNT(t2.a) > 0]), rowset=16
+      group([t2.a]), agg_func([T_FUN_SUM(t2.a)], [T_FUN_COUNT(t2.a)])
+  4 - output([t2.a]), filter(nil), rowset=16
+      access([t2.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+explain select * from t1, (select * from t2 where exists(select sum(a) from t3)) t4 where t1.a = t4.a;
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |HASH JOIN        |    |1       |5           |
+|1 |├─TABLE FULL SCAN|t1  |1       |3           |
+|2 |└─TABLE FULL SCAN|t2  |1       |3           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t2.a], [t2.b]), filter(nil), rowset=16
+      equal_conds([t1.a = t2.a]), other_conds(nil)
+  1 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      access([t1.a], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.a], [t2.b]), filter(nil), rowset=16
+      access([t2.a], [t2.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+explain select * from t1 where t1.a in (select a from t2 where exists(select count(a) from t3));
+Query Plan
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |HASH RIGHT SEMI JOIN |    |1       |5           |
+|1 |├─TABLE FULL SCAN    |t2  |1       |3           |
+|2 |└─TABLE FULL SCAN    |t1  |1       |3           |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      equal_conds([t1.a = t2.a]), other_conds(nil)
+  1 - output([t2.a]), filter(nil), rowset=16
+      access([t2.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      access([t1.a], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+explain select * from t1 where exists(select max(a) from t2 group by a having max(a) > 1);
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SUBPLAN FILTER   |    |1       |5           |
+|1 |├─TABLE FULL SCAN|t1  |1       |3           |
+|2 |└─TABLE FULL SCAN|t2  |1       |3           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.a], [t1.b]), filter(nil), startup_filter([:0]), rowset=16
+      access([t1.a], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([t2.a > 1]), rowset=16
+      access([t2.a]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+explain select * from t1, (select * from t2 having a > 1) t4 where t1.a = t4.a;
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |HASH JOIN        |    |1       |5           |
+|1 |├─TABLE FULL SCAN|t1  |1       |3           |
+|2 |└─TABLE FULL SCAN|t2  |1       |3           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t2.a], [t2.b]), filter(nil), rowset=16
+      equal_conds([t1.a = t2.a]), other_conds(nil)
+  1 - output([t1.a], [t1.b]), filter([t1.a > 1]), rowset=16
+      access([t1.a], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.a], [t2.b]), filter([t2.a > 1]), rowset=16
+      access([t2.a], [t2.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+explain select * from t1, (select * from t2 where exists(select sum(a) from t3 group by a having a > 1)) t4 where t1.a = t4.a;
+Query Plan
+===================================================
+|ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |SUBPLAN FILTER     |    |1       |7           |
+|1 |├─HASH JOIN        |    |1       |5           |
+|2 |│ ├─TABLE FULL SCAN|t1  |1       |3           |
+|3 |│ └─TABLE FULL SCAN|t2  |1       |3           |
+|4 |└─TABLE FULL SCAN  |t3  |1       |3           |
+===================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t2.a], [t2.b]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.a], [t1.b], [t2.a], [t2.b]), filter(nil), startup_filter([:0]), rowset=16
+      equal_conds([t1.a = t2.a]), other_conds(nil)
+  2 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      access([t1.a], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([t2.a], [t2.b]), filter(nil), rowset=16
+      access([t2.a], [t2.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([1]), filter([t3.a > 1]), rowset=16
+      access([t3.a]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+explain select * from t1 where exists ( select max(a) from t2 group by a having exists (select * from t3 where t3.a > max(t2.a)));
+Query Plan
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |SUBPLAN FILTER         |    |1       |7           |
+|1 |├─TABLE FULL SCAN      |t1  |1       |3           |
+|2 |└─LIMIT                |    |1       |5           |
+|3 |  └─SUBPLAN FILTER     |    |1       |5           |
+|4 |    ├─HASH GROUP BY    |    |1       |3           |
+|5 |    │ └─TABLE FULL SCAN|t2  |1       |3           |
+|6 |    └─TABLE FULL SCAN  |t3  |1       |3           |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:1)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.a], [t1.b]), filter(nil), startup_filter([:1]), rowset=16
+      access([t1.a], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter(nil), rowset=16
+      limit(1), offset(nil)
+  3 - output(nil), filter([(T_OP_EXISTS, subquery(1))]), rowset=16
+      exec_params_([T_FUN_MAX(t2.a)(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  4 - output([T_FUN_MAX(t2.a)]), filter(nil), rowset=16
+      group([t2.a]), agg_func([T_FUN_MAX(t2.a)])
+  5 - output([t2.a]), filter(nil), rowset=16
+      access([t2.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([1]), filter([t3.a > :0]), rowset=16
+      access([t3.a]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+explain select * from t1 where exists ( select sum(a) from t2 group by a having exists (select * from t3 where t3.a > sum(t2.a)));
+Query Plan
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |SUBPLAN FILTER         |    |1       |7           |
+|1 |├─TABLE FULL SCAN      |t1  |1       |3           |
+|2 |└─LIMIT                |    |1       |5           |
+|3 |  └─SUBPLAN FILTER     |    |1       |5           |
+|4 |    ├─HASH GROUP BY    |    |1       |3           |
+|5 |    │ └─TABLE FULL SCAN|t2  |1       |3           |
+|6 |    └─TABLE FULL SCAN  |t3  |1       |3           |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:1)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.a], [t1.b]), filter(nil), startup_filter([:1]), rowset=16
+      access([t1.a], [t1.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter(nil), rowset=16
+      limit(1), offset(nil)
+  3 - output(nil), filter([(T_OP_EXISTS, subquery(1))]), rowset=16
+      exec_params_([T_FUN_SUM(t2.a)(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  4 - output([T_FUN_SUM(t2.a)]), filter(nil), rowset=16
+      group([t2.a]), agg_func([T_FUN_SUM(t2.a)])
+  5 - output([t2.a]), filter(nil), rowset=16
+      access([t2.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([1]), filter([cast(t3.a, DECIMAL_INT(33, 0)) > :0]), rowset=16
+      access([t3.a]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+explain select * from t1 where b > exists(select b from t2 where b > exists(select b from t3));
+Query Plan
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SUBPLAN FILTER       |    |1       |7           |
+|1 |├─TABLE FULL SCAN    |t1  |1       |3           |
+|2 |└─LIMIT              |    |1       |5           |
+|3 |  └─SUBPLAN FILTER   |    |1       |5           |
+|4 |    ├─TABLE FULL SCAN|t2  |1       |3           |
+|5 |    └─TABLE FULL SCAN|t3  |1       |3           |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.b], [t1.a]), filter([t1.b > :0]), rowset=16
+      access([t1.b], [t1.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter(nil), rowset=16
+      limit(1), offset(nil)
+  3 - output(nil), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:1)]), init_plan_idxs_(nil), use_batch=false
+  4 - output(nil), filter([t2.b > :1]), rowset=16
+      access([t2.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([1]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+explain select * from t1 where b > exists(select a from t2 where b > exists(select sum(a) from t3));
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SUBPLAN FILTER   |    |1       |5           |
+|1 |├─TABLE FULL SCAN|t1  |1       |3           |
+|2 |└─TABLE FULL SCAN|t2  |1       |3           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.b], [t1.a]), filter([t1.b > :0]), rowset=16
+      access([t1.b], [t1.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([t2.b > 1]), rowset=16
+      access([t2.b]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+explain select * from t1 where b > exists(select sum(a) from t2 where t2.b > exists(select sum(a) from t3));
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |1       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b]), filter([t1.b > 1]), rowset=16
+      access([t1.b], [t1.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+drop table if exists T;
+create table T (pk int);
+explain select pk from t table1 where (table1.pk >= (select 1 from T limit 1)) AND ((1,9) in (select 1,9));
+Query Plan
+===================================================
+|ID|OPERATOR         |NAME  |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |SUBPLAN FILTER   |      |1       |5           |
+|1 |├─TABLE FULL SCAN|table1|1       |3           |
+|2 |└─TABLE FULL SCAN|t     |1       |3           |
+===================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([table1.pk]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([subquery(1)(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([table1.pk]), filter([table1.pk >= :0]), rowset=16
+      access([table1.pk]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([table1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+explain select (select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk)
+from t;
+Query Plan
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |SUBPLAN FILTER         |    |1       |3           |
+|1 |├─TABLE FULL SCAN      |t   |1       |3           |
+|2 |├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|3 |│ ├─EXPRESSION         |    |1       |1           |
+|4 |│ └─EXPRESSION         |    |1       |1           |
+|5 |├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|6 |│ ├─EXPRESSION         |    |1       |1           |
+|7 |│ └─EXPRESSION         |    |1       |1           |
+|8 |├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|9 |│ ├─EXPRESSION         |    |1       |1           |
+|10|│ └─EXPRESSION         |    |1       |1           |
+|11|├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|12|│ ├─EXPRESSION         |    |1       |1           |
+|13|│ └─EXPRESSION         |    |1       |1           |
+|14|├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|15|│ ├─EXPRESSION         |    |1       |1           |
+|16|│ └─EXPRESSION         |    |1       |1           |
+|17|├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|18|│ ├─EXPRESSION         |    |1       |1           |
+|19|│ └─EXPRESSION         |    |1       |1           |
+|20|├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|21|│ ├─EXPRESSION         |    |1       |1           |
+|22|│ └─EXPRESSION         |    |1       |1           |
+|23|├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|24|│ ├─EXPRESSION         |    |1       |1           |
+|25|│ └─EXPRESSION         |    |1       |1           |
+|26|├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|27|│ ├─EXPRESSION         |    |1       |1           |
+|28|│ └─EXPRESSION         |    |1       |1           |
+|29|├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|30|│ ├─EXPRESSION         |    |1       |1           |
+|31|│ └─EXPRESSION         |    |1       |1           |
+|32|├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|33|│ ├─EXPRESSION         |    |1       |1           |
+|34|│ └─EXPRESSION         |    |1       |1           |
+|35|├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|36|│ ├─EXPRESSION         |    |1       |1           |
+|37|│ └─EXPRESSION         |    |1       |1           |
+|38|├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|39|│ ├─EXPRESSION         |    |1       |1           |
+|40|│ └─EXPRESSION         |    |1       |1           |
+|41|├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|42|│ ├─EXPRESSION         |    |1       |1           |
+|43|│ └─EXPRESSION         |    |1       |1           |
+|44|├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|45|│ ├─EXPRESSION         |    |1       |1           |
+|46|│ └─EXPRESSION         |    |1       |1           |
+|47|├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|48|│ ├─EXPRESSION         |    |1       |1           |
+|49|│ └─EXPRESSION         |    |1       |1           |
+|50|├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|51|│ ├─EXPRESSION         |    |1       |1           |
+|52|│ └─EXPRESSION         |    |1       |1           |
+|53|├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|54|│ ├─EXPRESSION         |    |1       |1           |
+|55|│ └─EXPRESSION         |    |1       |1           |
+|56|├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|57|│ ├─EXPRESSION         |    |1       |1           |
+|58|│ └─EXPRESSION         |    |1       |1           |
+|59|├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|60|│ ├─EXPRESSION         |    |1       |1           |
+|61|│ └─EXPRESSION         |    |1       |1           |
+|62|├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|63|│ ├─EXPRESSION         |    |1       |1           |
+|64|│ └─EXPRESSION         |    |1       |1           |
+|65|├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|66|│ ├─EXPRESSION         |    |1       |1           |
+|67|│ └─EXPRESSION         |    |1       |1           |
+|68|├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|69|│ ├─EXPRESSION         |    |1       |1           |
+|70|│ └─EXPRESSION         |    |1       |1           |
+|71|├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|72|│ ├─EXPRESSION         |    |1       |1           |
+|73|│ └─EXPRESSION         |    |1       |1           |
+|74|├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|75|│ ├─EXPRESSION         |    |1       |1           |
+|76|│ └─EXPRESSION         |    |1       |1           |
+|77|├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|78|│ ├─EXPRESSION         |    |1       |1           |
+|79|│ └─EXPRESSION         |    |1       |1           |
+|80|├─MERGE EXCEPT DISTINCT|    |1       |1           |
+|81|│ ├─EXPRESSION         |    |1       |1           |
+|82|│ └─EXPRESSION         |    |1       |1           |
+|83|└─MERGE EXCEPT DISTINCT|    |1       |1           |
+|84|  ├─EXPRESSION         |    |1       |1           |
+|85|  └─EXPRESSION         |    |1       |1           |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([subquery(1)], [subquery(2)], [subquery(3)], [subquery(4)], [subquery(5)], [subquery(6)], [subquery(7)], [subquery(8)], [subquery(9)], [subquery(10)],
+       [subquery(11)], [subquery(12)], [subquery(13)], [subquery(14)], [subquery(15)], [subquery(16)], [subquery(17)], [subquery(18)], [subquery(19)], [subquery(20)],
+       [subquery(21)], [subquery(22)], [subquery(23)], [subquery(24)], [subquery(25)], [subquery(26)], [subquery(27)], [subquery(28)]), filter(nil), rowset=16
+      exec_params_([t.pk(:0)], [t.pk(:1)], [t.pk(:2)], [t.pk(:3)], [t.pk(:4)], [t.pk(:5)], [t.pk(:6)], [t.pk(:7)], [t.pk(:8)], [t.pk(:9)], [t.pk(:10)], 
+      [t.pk(:11)], [t.pk(:12)], [t.pk(:13)], [t.pk(:14)], [t.pk(:15)], [t.pk(:16)], [t.pk(:17)], [t.pk(:18)], [t.pk(:19)], [t.pk(:20)], [t.pk(:21)], [t.pk(:22)],
+       [t.pk(:23)], [t.pk(:24)], [t.pk(:25)], [t.pk(:26)], [t.pk(:27)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([t.pk]), filter(nil), rowset=16
+      access([t.pk]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([EXCEPT([1])]), filter(nil), rowset=16
+  3 - output([1]), filter(nil)
+      values({1})
+  4 - output([cast(:0, BIGINT(20, 0))]), filter([cast(:0, BIGINT(20, 0)) = 1])
+      values({cast(:0, BIGINT(20, 0))})
+  5 - output([EXCEPT([1])]), filter(nil), rowset=16
+  6 - output([1]), filter(nil)
+      values({1})
+  7 - output([cast(:1, BIGINT(20, 0))]), filter([cast(:1, BIGINT(20, 0)) = 1])
+      values({cast(:1, BIGINT(20, 0))})
+  8 - output([EXCEPT([1])]), filter(nil), rowset=16
+  9 - output([1]), filter(nil)
+      values({1})
+ 10 - output([cast(:2, BIGINT(20, 0))]), filter([cast(:2, BIGINT(20, 0)) = 1])
+      values({cast(:2, BIGINT(20, 0))})
+ 11 - output([EXCEPT([1])]), filter(nil), rowset=16
+ 12 - output([1]), filter(nil)
+      values({1})
+ 13 - output([cast(:3, BIGINT(20, 0))]), filter([cast(:3, BIGINT(20, 0)) = 1])
+      values({cast(:3, BIGINT(20, 0))})
+ 14 - output([EXCEPT([1])]), filter(nil), rowset=16
+ 15 - output([1]), filter(nil)
+      values({1})
+ 16 - output([cast(:4, BIGINT(20, 0))]), filter([cast(:4, BIGINT(20, 0)) = 1])
+      values({cast(:4, BIGINT(20, 0))})
+ 17 - output([EXCEPT([1])]), filter(nil), rowset=16
+ 18 - output([1]), filter(nil)
+      values({1})
+ 19 - output([cast(:5, BIGINT(20, 0))]), filter([cast(:5, BIGINT(20, 0)) = 1])
+      values({cast(:5, BIGINT(20, 0))})
+ 20 - output([EXCEPT([1])]), filter(nil), rowset=16
+ 21 - output([1]), filter(nil)
+      values({1})
+ 22 - output([cast(:6, BIGINT(20, 0))]), filter([cast(:6, BIGINT(20, 0)) = 1])
+      values({cast(:6, BIGINT(20, 0))})
+ 23 - output([EXCEPT([1])]), filter(nil), rowset=16
+ 24 - output([1]), filter(nil)
+      values({1})
+ 25 - output([cast(:7, BIGINT(20, 0))]), filter([cast(:7, BIGINT(20, 0)) = 1])
+      values({cast(:7, BIGINT(20, 0))})
+ 26 - output([EXCEPT([1])]), filter(nil), rowset=16
+ 27 - output([1]), filter(nil)
+      values({1})
+ 28 - output([cast(:8, BIGINT(20, 0))]), filter([cast(:8, BIGINT(20, 0)) = 1])
+      values({cast(:8, BIGINT(20, 0))})
+ 29 - output([EXCEPT([1])]), filter(nil), rowset=16
+ 30 - output([1]), filter(nil)
+      values({1})
+ 31 - output([cast(:9, BIGINT(20, 0))]), filter([cast(:9, BIGINT(20, 0)) = 1])
+      values({cast(:9, BIGINT(20, 0))})
+ 32 - output([EXCEPT([1])]), filter(nil), rowset=16
+ 33 - output([1]), filter(nil)
+      values({1})
+ 34 - output([cast(:10, BIGINT(20, 0))]), filter([cast(:10, BIGINT(20, 0)) = 1])
+      values({cast(:10, BIGINT(20, 0))})
+ 35 - output([EXCEPT([1])]), filter(nil), rowset=16
+ 36 - output([1]), filter(nil)
+      values({1})
+ 37 - output([cast(:11, BIGINT(20, 0))]), filter([cast(:11, BIGINT(20, 0)) = 1])
+      values({cast(:11, BIGINT(20, 0))})
+ 38 - output([EXCEPT([1])]), filter(nil), rowset=16
+ 39 - output([1]), filter(nil)
+      values({1})
+ 40 - output([cast(:12, BIGINT(20, 0))]), filter([cast(:12, BIGINT(20, 0)) = 1])
+      values({cast(:12, BIGINT(20, 0))})
+ 41 - output([EXCEPT([1])]), filter(nil), rowset=16
+ 42 - output([1]), filter(nil)
+      values({1})
+ 43 - output([cast(:13, BIGINT(20, 0))]), filter([cast(:13, BIGINT(20, 0)) = 1])
+      values({cast(:13, BIGINT(20, 0))})
+ 44 - output([EXCEPT([1])]), filter(nil), rowset=16
+ 45 - output([1]), filter(nil)
+      values({1})
+ 46 - output([cast(:14, BIGINT(20, 0))]), filter([cast(:14, BIGINT(20, 0)) = 1])
+      values({cast(:14, BIGINT(20, 0))})
+ 47 - output([EXCEPT([1])]), filter(nil), rowset=16
+ 48 - output([1]), filter(nil)
+      values({1})
+ 49 - output([cast(:15, BIGINT(20, 0))]), filter([cast(:15, BIGINT(20, 0)) = 1])
+      values({cast(:15, BIGINT(20, 0))})
+ 50 - output([EXCEPT([1])]), filter(nil), rowset=16
+ 51 - output([1]), filter(nil)
+      values({1})
+ 52 - output([cast(:16, BIGINT(20, 0))]), filter([cast(:16, BIGINT(20, 0)) = 1])
+      values({cast(:16, BIGINT(20, 0))})
+ 53 - output([EXCEPT([1])]), filter(nil), rowset=16
+ 54 - output([1]), filter(nil)
+      values({1})
+ 55 - output([cast(:17, BIGINT(20, 0))]), filter([cast(:17, BIGINT(20, 0)) = 1])
+      values({cast(:17, BIGINT(20, 0))})
+ 56 - output([EXCEPT([1])]), filter(nil), rowset=16
+ 57 - output([1]), filter(nil)
+      values({1})
+ 58 - output([cast(:18, BIGINT(20, 0))]), filter([cast(:18, BIGINT(20, 0)) = 1])
+      values({cast(:18, BIGINT(20, 0))})
+ 59 - output([EXCEPT([1])]), filter(nil), rowset=16
+ 60 - output([1]), filter(nil)
+      values({1})
+ 61 - output([cast(:19, BIGINT(20, 0))]), filter([cast(:19, BIGINT(20, 0)) = 1])
+      values({cast(:19, BIGINT(20, 0))})
+ 62 - output([EXCEPT([1])]), filter(nil), rowset=16
+ 63 - output([1]), filter(nil)
+      values({1})
+ 64 - output([cast(:20, BIGINT(20, 0))]), filter([cast(:20, BIGINT(20, 0)) = 1])
+      values({cast(:20, BIGINT(20, 0))})
+ 65 - output([EXCEPT([1])]), filter(nil), rowset=16
+ 66 - output([1]), filter(nil)
+      values({1})
+ 67 - output([cast(:21, BIGINT(20, 0))]), filter([cast(:21, BIGINT(20, 0)) = 1])
+      values({cast(:21, BIGINT(20, 0))})
+ 68 - output([EXCEPT([1])]), filter(nil), rowset=16
+ 69 - output([1]), filter(nil)
+      values({1})
+ 70 - output([cast(:22, BIGINT(20, 0))]), filter([cast(:22, BIGINT(20, 0)) = 1])
+      values({cast(:22, BIGINT(20, 0))})
+ 71 - output([EXCEPT([1])]), filter(nil), rowset=16
+ 72 - output([1]), filter(nil)
+      values({1})
+ 73 - output([cast(:23, BIGINT(20, 0))]), filter([cast(:23, BIGINT(20, 0)) = 1])
+      values({cast(:23, BIGINT(20, 0))})
+ 74 - output([EXCEPT([1])]), filter(nil), rowset=16
+ 75 - output([1]), filter(nil)
+      values({1})
+ 76 - output([cast(:24, BIGINT(20, 0))]), filter([cast(:24, BIGINT(20, 0)) = 1])
+      values({cast(:24, BIGINT(20, 0))})
+ 77 - output([EXCEPT([1])]), filter(nil), rowset=16
+ 78 - output([1]), filter(nil)
+      values({1})
+ 79 - output([cast(:25, BIGINT(20, 0))]), filter([cast(:25, BIGINT(20, 0)) = 1])
+      values({cast(:25, BIGINT(20, 0))})
+ 80 - output([EXCEPT([1])]), filter(nil), rowset=16
+ 81 - output([1]), filter(nil)
+      values({1})
+ 82 - output([cast(:26, BIGINT(20, 0))]), filter([cast(:26, BIGINT(20, 0)) = 1])
+      values({cast(:26, BIGINT(20, 0))})
+ 83 - output([EXCEPT([1])]), filter(nil), rowset=16
+ 84 - output([1]), filter(nil)
+      values({1})
+ 85 - output([cast(:27, BIGINT(20, 0))]), filter([cast(:27, BIGINT(20, 0)) = 1])
+      values({cast(:27, BIGINT(20, 0))})
+select (select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk),
+(select 1 except select pk)
+from t;
+(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)	(select 1 except select pk)
+drop table if exists t1,t2,t3;
+#
+CREATE TABLE `t1` (
+`c1` varbinary(20) DEFAULT NULL
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0;
+CREATE TABLE `t2` (
+`a` int(11) NOT NULL,
+`b` varchar(20) DEFAULT NULL,
+`c` decimal(20,10) DEFAULT NULL,
+PRIMARY KEY (`a`)
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+partition by hash(a) partitions 2;
+insert into t1 values(1), (2);
+insert into t2 values(1,2,1);
+select /*+no_rewrite*/(select sum(b) from t2) as temp from t1 group by temp having temp > 4 and temp > (select sum(b) from t2);
+temp
+drop table t1;
+drop table t2;
+#
+CREATE TABLE `t1` (
+`pk1` int(11) NOT NULL,
+`pk2` varchar(10) NOT NULL,
+`c1` int(11) DEFAULT NULL,
+`c2` int(11) DEFAULT NULL,
+`c3` varchar(20) DEFAULT NULL,
+`c4` timestamp(6) NULL DEFAULT '2012-01-01 04:00:00.000000',
+`c5` int(11) DEFAULT NULL,
+PRIMARY KEY (`pk1`, `pk2`)
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0;
+insert into t1 values(1, '2', 3, 3, null, null, null);
+select /*+no_rewrite*/ c1, (select max(c2) FROM t1 ) a FROM t1  order by (select c1 FROM t1  where c2 in (select c1 FROM t1  where c2 = a)) + 1;
+c1	a
+3	3
+drop table t1 ;
+drop table if exists table0_hash_pk_parts_1_bigint;
+drop table if exists s;
+drop table if exists ff;
+CREATE TABLE table0_hash_pk_parts_1_bigint (
+col_timestamp_6_index timestamp(6) NULL DEFAULT NULL,
+col_varchar_20 varchar(20),
+col_char_20 char(20),
+col_decimal_20_0_key decimal(20,0),
+pk bigint,
+col_char_20_index char(20),
+col_bigint_key bigint,
+col_bigint bigint,
+col_timestamp_6 timestamp(6) NULL DEFAULT NULL,
+col_varchar_20_key varchar(20),
+col_bigint_index bigint,
+col_decimal_20_0_index decimal(20,0),
+col_decimal_20_0 decimal(20,0),
+col_char_20_key char(20),
+col_varchar_20_index varchar(20),
+col_timestamp_6_key timestamp(6) NULL DEFAULT NULL,
+/*Indices*/
+index idx14(pk, col_timestamp_6_index ),
+key idx1(pk, col_decimal_20_0_key ),
+primary key (pk) ,
+index idx8(pk, col_char_20_index ),
+key idx4(pk, col_bigint_key ),
+key idx10(pk, col_varchar_20_key ),
+index idx5(pk, col_bigint_index ),
+index idx2(pk, col_decimal_20_0_index ),
+key idx7(pk, col_char_20_key ),
+index idx11(pk, col_varchar_20_index ),
+key idx13(pk, col_timestamp_6_key ))  PARTITION BY hash (pk) partitions 1;
+CREATE TABLE S (
+col_varchar_20_key varchar(20),
+col_varchar_10 varchar(10),
+col_varchar_20 varchar(20),
+col_date date,
+col_datetime datetime,
+col_int int,
+col_date_key date,
+col_int_key int,
+pk int,
+col_datetime_key datetime,
+col_varchar_10_key varchar(10),
+/*Indices*/
+key idx5(pk, col_varchar_20_key ),
+key idx7(pk, col_date_key ),
+key idx1(pk, col_int_key ),
+primary key (pk) ,
+key idx9(pk, col_datetime_key ),
+key idx3(pk, col_varchar_10_key ));
+CREATE TABLE FF (
+col_varchar_20 varchar(20),
+col_varchar_10_key varchar(10),
+col_int int,
+col_datetime datetime,
+col_date_key date,
+col_varchar_20_key varchar(20),
+col_varchar_10 varchar(10),
+col_datetime_key datetime,
+pk int,
+col_int_key int,
+col_date date,
+/*Indices*/
+key idx3(pk, col_varchar_10_key ),
+key idx7(pk, col_date_key ),
+key idx5(pk, col_varchar_20_key ),
+key idx9(pk, col_datetime_key ),
+primary key (pk) ,
+key idx1(pk, col_int_key ));
+explain
+SELECT 1
+FROM table0_hash_pk_parts_1_bigint
+WHERE
+(SELECT
+(SELECT MIN(
+(SELECT MAX(-100)
+FROM ff
+WHERE (col_timestamp_6 >= '2015-01-01')))
+FROM s
+WHERE pk IN
+(SELECT col_bigint
+FROM table0_hash_pk_parts_1_bigint))) < 1;
+Query Plan
+====================================================================================
+|ID|OPERATOR                   |NAME                         |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------------------
+|0 |SUBPLAN FILTER             |                             |1       |9           |
+|1 |├─TABLE FULL SCAN          |table0_hash_pk_parts_1_bigint|1       |3           |
+|2 |└─SUBPLAN FILTER           |                             |1       |7           |
+|3 |  ├─SCALAR GROUP BY        |                             |1       |3           |
+|4 |  │ └─SUBPLAN SCAN         |VIEW3                        |1       |3           |
+|5 |  │   └─SCALAR GROUP BY    |                             |1       |3           |
+|6 |  │     └─SUBPLAN SCAN     |VIEW1                        |1       |3           |
+|7 |  │       └─TABLE FULL SCAN|ff                           |1       |3           |
+|8 |  └─MERGE SEMI JOIN        |                             |1       |5           |
+|9 |    ├─TABLE FULL SCAN      |s(idx5)                      |1       |3           |
+|10|    └─SORT                 |                             |1       |3           |
+|11|      └─TABLE FULL SCAN    |table0_hash_pk_parts_1_bigint|1       |3           |
+====================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter([subquery(1) < 1]), rowset=16
+      exec_params_([table0_hash_pk_parts_1_bigint.col_timestamp_6(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([table0_hash_pk_parts_1_bigint.col_timestamp_6]), filter(nil), rowset=16
+      access([table0_hash_pk_parts_1_bigint.col_timestamp_6]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([table0_hash_pk_parts_1_bigint.pk]), range(MIN ; MAX)always true
+  2 - output([subquery(1)]), filter(nil), rowset=16
+      exec_params_([T_FUN_MIN(VIEW3.MAX(-100))(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  3 - output([T_FUN_MIN(VIEW3.MAX(-100))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_MIN(VIEW3.MAX(-100))])
+  4 - output([VIEW3.MAX(-100)]), filter(nil), rowset=16
+      access([VIEW3.MAX(-100)])
+  5 - output([T_FUN_MAX(-100)]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_MAX(-100)])
+  6 - output(nil), filter(nil), startup_filter([:0 >= cast('2015-01-01', TIMESTAMP(-1, -1))]), rowset=16
+      access(nil)
+  7 - output([1]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([ff.pk]), range(MIN ; MAX)always true
+  8 - output([:1]), filter(nil), rowset=16
+      equal_conds([s.pk = table0_hash_pk_parts_1_bigint.col_bigint]), other_conds(nil)
+      merge_directions([ASC])
+  9 - output([s.pk]), filter(nil), rowset=16
+      access([s.pk]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([s.pk], [s.col_varchar_20_key]), range(MIN,MIN ; MAX,MAX)always true
+ 10 - output([table0_hash_pk_parts_1_bigint.col_bigint]), filter(nil), rowset=16
+      sort_keys([table0_hash_pk_parts_1_bigint.col_bigint, ASC])
+ 11 - output([table0_hash_pk_parts_1_bigint.col_bigint]), filter(nil), rowset=16
+      access([table0_hash_pk_parts_1_bigint.col_bigint]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([table0_hash_pk_parts_1_bigint.pk]), range(MIN ; MAX)always true
+SELECT 1
+FROM table0_hash_pk_parts_1_bigint
+WHERE
+(SELECT
+(SELECT MIN(
+(SELECT MAX(-100)
+FROM ff
+WHERE (col_timestamp_6 >= '2015-01-01')))
+FROM s
+WHERE pk IN
+(SELECT col_bigint
+FROM table0_hash_pk_parts_1_bigint))) < 1;
+1
+explain
+SELECT 1
+FROM table0_hash_pk_parts_1_bigint
+WHERE
+(SELECT
+(SELECT MIN(
+(SELECT 1
+FROM ff
+WHERE (col_timestamp_6 >= '2015-01-01'))) + 1 AS tmp
+FROM s
+WHERE pk IN
+(SELECT col_bigint
+FROM table0_hash_pk_parts_1_bigint)));
+Query Plan
+================================================================================
+|ID|OPERATOR               |NAME                         |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------------
+|0 |SUBPLAN FILTER         |                             |1       |9           |
+|1 |├─TABLE FULL SCAN      |table0_hash_pk_parts_1_bigint|1       |3           |
+|2 |└─SUBPLAN FILTER       |                             |1       |7           |
+|3 |  ├─SCALAR GROUP BY    |                             |1       |3           |
+|4 |  │ └─SUBPLAN FILTER   |                             |1       |3           |
+|5 |  │   ├─EXPRESSION     |                             |1       |1           |
+|6 |  │   └─TABLE FULL SCAN|ff(idx3)                     |1       |3           |
+|7 |  └─MERGE SEMI JOIN    |                             |1       |5           |
+|8 |    ├─TABLE FULL SCAN  |s(idx5)                      |1       |3           |
+|9 |    └─SORT             |                             |1       |3           |
+|10|      └─TABLE FULL SCAN|table0_hash_pk_parts_1_bigint|1       |3           |
+================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter([subquery(1)]), rowset=16
+      exec_params_([table0_hash_pk_parts_1_bigint.col_timestamp_6(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([table0_hash_pk_parts_1_bigint.col_timestamp_6]), filter(nil), rowset=16
+      access([table0_hash_pk_parts_1_bigint.col_timestamp_6]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([table0_hash_pk_parts_1_bigint.pk]), range(MIN ; MAX)always true
+  2 - output([subquery(1)]), filter(nil), rowset=16
+      exec_params_([T_FUN_MIN(:2)(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  3 - output([T_FUN_MIN(:2)]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_MIN(:2)])
+  4 - output([:2]), filter(nil), rowset=16
+      exec_params_(nil), onetime_exprs_([subquery(1)(:2)]), init_plan_idxs_(nil), use_batch=false
+  5 - output([1]), filter(nil)
+      values({1})
+  6 - output([1]), filter(nil), startup_filter([:0 >= cast('2015-01-01', TIMESTAMP(-1, -1))]), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([ff.pk], [ff.col_varchar_10_key]), range(MIN,MIN ; MAX,MAX)always true
+  7 - output([:1 + 1]), filter(nil), rowset=16
+      equal_conds([s.pk = table0_hash_pk_parts_1_bigint.col_bigint]), other_conds(nil)
+      merge_directions([ASC])
+  8 - output([s.pk]), filter(nil), rowset=16
+      access([s.pk]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([s.pk], [s.col_varchar_20_key]), range(MIN,MIN ; MAX,MAX)always true
+  9 - output([table0_hash_pk_parts_1_bigint.col_bigint]), filter(nil), rowset=16
+      sort_keys([table0_hash_pk_parts_1_bigint.col_bigint, ASC])
+ 10 - output([table0_hash_pk_parts_1_bigint.col_bigint]), filter(nil), rowset=16
+      access([table0_hash_pk_parts_1_bigint.col_bigint]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([table0_hash_pk_parts_1_bigint.pk]), range(MIN ; MAX)always true
+SELECT 1
+FROM table0_hash_pk_parts_1_bigint
+WHERE
+(SELECT
+(SELECT MIN(
+(SELECT 1
+FROM ff
+WHERE (col_timestamp_6 >= '2015-01-01'))) + 1 AS tmp
+FROM s
+WHERE pk IN
+(SELECT col_bigint
+FROM table0_hash_pk_parts_1_bigint)));
+1
+drop table s;
+drop table table0_hash_pk_parts_1_bigint;
+drop table ff;

@@ -1,0 +1,407 @@
+drop table if exists test;
+create table test(pk1 int, pk2 varchar(64), c1 int , c2 varchar(64), primary key(pk1, pk2));
+insert into test(pk1,pk2,c1,c2) values(0,'0',0,'0');
+insert into test(pk1,pk2,c1,c2) values(1,'1',1,'1');
+select * from test;
+pk1	pk2	c1	c2
+0	0	0	0
+1	1	1	1
+insert into test(pk1,pk2,c1,c2) values(1,2,1,'1');
+select * from test;
+pk1	pk2	c1	c2
+0	0	0	0
+1	1	1	1
+1	2	1	1
+update test set pk2=1 where pk1=1 and pk2='2';
+ERROR 23000: Duplicate entry '1-1' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+0	0	0	0
+1	1	1	1
+1	2	1	1
+update test set pk1='3' where c1=1 and c2=1 or c1=0;
+update test set pk1=cast('3'as decimal) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('3'as decimal) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '3-3' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+3	0	0	0
+3	1	1	1
+3	2	1	1
+update test set pk1=cast('4'as decimal) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('4'as decimal) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '4-4' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+4	0	0	0
+4	1	1	1
+4	2	1	1
+update test set pk1=cast('5' as decimal) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('5' as decimal) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '5-5' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+5	0	0	0
+5	1	1	1
+5	2	1	1
+update test set pk1=cast('6'as signed) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('6'as signed) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '6-6' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+6	0	0	0
+6	1	1	1
+6	2	1	1
+update test set pk1=cast('7'as char(10)) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('7'as char(10)) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '7-7' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+7	0	0	0
+7	1	1	1
+7	2	1	1
+drop table if exists test;
+create table test(pk1 varchar(10), pk2 int, c1 int , c2 varchar(64), primary key(pk1, pk2));
+insert into test(pk1,pk2,c1,c2) values(0,'0',0,'0');
+insert into test(pk1,pk2,c1,c2) values(1,'1',1,'1');
+select * from test;
+pk1	pk2	c1	c2
+0	0	0	0
+1	1	1	1
+insert into test(pk1,pk2,c1,c2) values(1,2,1,'1');
+select * from test;
+pk1	pk2	c1	c2
+0	0	0	0
+1	1	1	1
+1	2	1	1
+update test set pk2=1 where pk1=1 and pk2='2';
+ERROR 23000: Duplicate entry '1-1' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+0	0	0	0
+1	1	1	1
+1	2	1	1
+update test set pk1='3' where c1=1 and c2=1 or c1=0;
+update test set pk1=cast('3'as decimal) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('3'as decimal) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '3-3' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+3	0	0	0
+3	1	1	1
+3	2	1	1
+update test set pk1=cast('4'as decimal) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('4'as decimal) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '4-4' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+4	0	0	0
+4	1	1	1
+4	2	1	1
+update test set pk1=cast('5' as decimal) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('5' as decimal) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '5-5' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+5	0	0	0
+5	1	1	1
+5	2	1	1
+update test set pk1=cast('6'as signed) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('6'as signed) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '6-6' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+6	0	0	0
+6	1	1	1
+6	2	1	1
+update test set pk1=cast('7'as char(1024)) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('7'as char(1024)) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '7-7' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+7	0	0	0
+7	1	1	1
+7	2	1	1
+drop table if exists test;
+create table test(pk1 int, pk2 int, c1 int , c2 varchar(64), primary key(pk1, pk2));
+insert into test(pk1,pk2,c1,c2) values(0,'0',0,'0');
+insert into test(pk1,pk2,c1,c2) values(1,'1',1,'1');
+select * from test;
+pk1	pk2	c1	c2
+0	0	0	0
+1	1	1	1
+insert into test(pk1,pk2,c1,c2) values(1,2,1,'1');
+select * from test;
+pk1	pk2	c1	c2
+0	0	0	0
+1	1	1	1
+1	2	1	1
+update test set pk2=1 where pk1=1 and pk2='2';
+ERROR 23000: Duplicate entry '1-1' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+0	0	0	0
+1	1	1	1
+1	2	1	1
+update test set pk1='3' where c1=1 and c2=1 or c1=0;
+update test set pk1=cast('3'as decimal) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('3'as decimal) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '3-3' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+3	0	0	0
+3	1	1	1
+3	2	1	1
+update test set pk1=cast('4'as decimal) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('4'as decimal) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '4-4' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+4	0	0	0
+4	1	1	1
+4	2	1	1
+update test set pk1=cast('5' as decimal) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('5' as decimal) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '5-5' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+5	0	0	0
+5	1	1	1
+5	2	1	1
+update test set pk1=cast('6'as signed) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('6'as signed) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '6-6' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+6	0	0	0
+6	1	1	1
+6	2	1	1
+update test set pk1=cast('7'as char(1024)) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('7'as char(1024)) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '7-7' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+7	0	0	0
+7	1	1	1
+7	2	1	1
+drop table test;
+create table test(pk1 varchar(64), pk2 varchar(64), c1 int , c2 varchar(64), primary key(pk1, pk2));
+insert into test(pk1,pk2,c1,c2) values(0,'0',0,'0');
+insert into test(pk1,pk2,c1,c2) values(1,'1',1,'1');
+select * from test;
+pk1	pk2	c1	c2
+0	0	0	0
+1	1	1	1
+insert into test(pk1,pk2,c1,c2) values(1,2,1,'1');
+select * from test;
+pk1	pk2	c1	c2
+0	0	0	0
+1	1	1	1
+1	2	1	1
+update test set pk2=1 where pk1=1 and pk2='2';
+ERROR 23000: Duplicate entry '1-1' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+0	0	0	0
+1	1	1	1
+1	2	1	1
+update test set pk1='3' where c1=1 and c2=1 or c1=0;
+update test set pk1=cast('3'as decimal) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('3'as decimal) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '3-3' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+3	0	0	0
+3	1	1	1
+3	2	1	1
+update test set pk1=cast('4'as decimal) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('4'as decimal) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '4-4' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+4	0	0	0
+4	1	1	1
+4	2	1	1
+update test set pk1=cast('5' as decimal) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('5' as decimal) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '5-5' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+5	0	0	0
+5	1	1	1
+5	2	1	1
+update test set pk1=cast('6'as signed) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('6'as signed) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '6-6' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+6	0	0	0
+6	1	1	1
+6	2	1	1
+update test set pk1=cast('7'as char(1024)) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('7'as char(1024)) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '7-7' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+7	0	0	0
+7	1	1	1
+7	2	1	1
+update test set pk1=cast('8'as char(1024)) where pk1='7';
+update test set pk2=cast('9'as char(1024)) where pk1='8';
+ERROR 23000: Duplicate entry '8-9' for key 'PRIMARY'
+drop table test;
+create table test(pk1 varchar(64), pk2 varchar(64), c1 int , c2 varchar(64), primary key(pk1, pk2,c1));
+insert into test(pk1,pk2,c1,c2) values(0,'0',0,'0');
+insert into test(pk1,pk2,c1,c2) values(1,'1',1,'1');
+select * from test;
+pk1	pk2	c1	c2
+0	0	0	0
+1	1	1	1
+insert into test(pk1,pk2,c1,c2) values(1,2,1,'1');
+select * from test;
+pk1	pk2	c1	c2
+0	0	0	0
+1	1	1	1
+1	2	1	1
+update test set pk2=1 where pk1=1 and pk2='2';
+ERROR 23000: Duplicate entry '1-1-1' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+0	0	0	0
+1	1	1	1
+1	2	1	1
+update test set pk1='3' where c1=1 and c2=1 or c1=0;
+update test set pk1=cast('3'as decimal) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('3'as decimal) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '3-3-1' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+3	0	0	0
+3	1	1	1
+3	2	1	1
+update test set pk1=cast('4'as decimal) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('4'as decimal) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '4-4-1' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+4	0	0	0
+4	1	1	1
+4	2	1	1
+update test set pk1=cast('5' as decimal) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('5' as decimal) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '5-5-1' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+5	0	0	0
+5	1	1	1
+5	2	1	1
+update test set pk1=cast('6'as signed) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('6'as signed) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '6-6-1' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+6	0	0	0
+6	1	1	1
+6	2	1	1
+update test set pk1=cast('7'as char(1024)) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('7'as char(1024)) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '7-7-1' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+7	0	0	0
+7	1	1	1
+7	2	1	1
+update test set pk1=cast('8'as char(1024)) where pk1='7';
+update test set pk2=cast('9'as char(1024)) where pk1='8';
+ERROR 23000: Duplicate entry '8-9-1' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+8	0	0	0
+8	1	1	1
+8	2	1	1
+update test set c1=cast('8'as char(1024)) where pk1='7';
+update test set c1=cast('9'as char(1024)) where pk1='8';
+select * from test;
+pk1	pk2	c1	c2
+8	0	9	0
+8	1	9	1
+8	2	9	1
+update test set c1=cast('10'as signed) where pk1='7';
+update test set c1=cast('11'as signed) where pk1='10';
+select * from test;
+pk1	pk2	c1	c2
+8	0	9	0
+8	1	9	1
+8	2	9	1
+drop table test;
+create table test(pk1 varchar(64), pk2 varchar(64), c1 int , c2 varchar(64), primary key(c1, pk2,pk1));
+insert into test(pk1,pk2,c1,c2) values(0,'0',0,'0');
+insert into test(pk1,pk2,c1,c2) values(1,'1',1,'1');
+select * from test;
+pk1	pk2	c1	c2
+0	0	0	0
+1	1	1	1
+insert into test(pk1,pk2,c1,c2) values(1,2,1,'1');
+select * from test;
+pk1	pk2	c1	c2
+0	0	0	0
+1	1	1	1
+1	2	1	1
+update test set pk2=1 where pk1=1 and pk2='2';
+ERROR 23000: Duplicate entry '1-1-1' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+0	0	0	0
+1	1	1	1
+1	2	1	1
+update test set pk1='3' where c1=1 and c2=1 or c1=0;
+update test set pk1=cast('3'as decimal) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('3'as decimal) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '1-3-3' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+3	0	0	0
+3	1	1	1
+3	2	1	1
+update test set pk1=cast('4'as decimal) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('4'as decimal) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '1-4-4' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+4	0	0	0
+4	1	1	1
+4	2	1	1
+update test set pk1=cast('5' as decimal) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('5' as decimal) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '1-5-5' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+5	0	0	0
+5	1	1	1
+5	2	1	1
+update test set pk1=cast('6'as signed) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('6'as signed) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '1-6-6' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+6	0	0	0
+6	1	1	1
+6	2	1	1
+update test set pk1=cast('7'as char(1024)) where c1=1 and c2=1 or c1=0;
+update test set pk2=cast('7'as char(1024)) where c1=1 and c2=1 or c1=0;
+ERROR 23000: Duplicate entry '1-7-7' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+7	0	0	0
+7	1	1	1
+7	2	1	1
+update test set pk1=cast('8'as char(1024)) where pk1='7';
+update test set pk2=cast('9'as char(1024)) where pk1='8';
+ERROR 23000: Duplicate entry '1-9-8' for key 'PRIMARY'
+select * from test;
+pk1	pk2	c1	c2
+8	0	0	0
+8	1	1	1
+8	2	1	1
+delete from test where pk1='1000';
+delete from test where pk2=1000;

@@ -1,0 +1,207 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: link.zt
+#owner group: sql1
+
+#
+## Bug
+#
+# partition by key()
+--disable_warnings
+drop database if exists db1;
+drop database if exists db2;
+create database db1;
+create database db2;
+use db1;
+drop table if exists t1;
+create table t1(c1 int key) partition by key() partitions 2;
+--enable_warnings
+use db2;
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(c1 int key) partition by key() partitions 2;
+select * from db1.t1,db2.t1;
+# partition by key(expr)
+use db1;
+--disable_warnings
+drop table if exists t1;
+create table t1(c1 int key) partition by key(c1) partitions 2;
+create database if not exists db2;
+use db2;
+--enable_warnings
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(c1 int key) partition by key(c1) partitions 2;
+select * from db1.t1,db2.t1;
+# partition by hash(expr)
+use db1;
+--disable_warnings
+drop table if exists t1;
+create table t1(c1 int key) partition by hash(c1) partitions 2;
+create database if not exists db2;
+--enable_warnings
+use db2;
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(c1 int key) partition by hash(c1) partitions 2;
+select * from db1.t1,db2.t1;
+
+#
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int primary key, c2 int);
+insert into t1 values(1,8), (2,7), (3,6), (4,5);
+--error 1054
+select c1 from t1 group by t2.c1;
+--error 1052
+select c1, c2 as c1 from t1 group by c1;
+--sorted_result
+select c1, c2 as c1 from t1 group by t1.c1;
+--error 1052
+select c1 as c1, c2 as c1 from t1 group by c1;
+--sorted_result
+select c1 as c1, c2 as c1 from t1 group by t1.c1;
+--sorted_result
+select t1.c1 as cc from t1 group by t1.c1;
+--sorted_result
+select c1, c1 from t1 group by c1;
+select 1 as c1, 2 as c2 from t1 group by c1;
+--error 1052
+select 1 as c1, c1 from t1 group by c1;
+--disable_warnings
+select c1 as c2, c2 as c1 from t1 group by c1;
+--error 1052
+select c2+1 as c1, c1 from t1 group by c1;
+--enable_warnings
+select c1, c2 as c1 from t1 having t1.c1 > 2;
+select c1, c2 + 1 as c1 from t1 having t1.c1 > 2;
+--error 1052
+select c1, c2 + 1 as c1 from t1 having c1 > 2;
+--error 1052
+select c1, c2 + 1 as c1 from t1 order by c1;
+select c1, c2 + 1 as c1 from t1 order by t1.c1;
+--disable_warnings
+--error 1052
+select c1, c2 + 1 as c1 from t1 group by c1;
+--sorted_result
+select c1, c2 + 1 as c1 from t1 group by t1.c1;
+--enable_warnings
+select t1.c1 as c1 from t1 order by t1.c1;
+select t1.c1 as c2 from t1 order by t1.c1;
+drop table t1;
+
+#
+--disable_warnings
+drop table if exists t1, t2;
+--enable_warnings
+create table t1 (a int(11), b char(10), key (a));
+insert into t1 (a) values (1),(2),(3),(4);
+create table t2 (a int);
+select * from t1 left join t2 on t1.a=t2.a order by t1.a;
+select * from t1 left join t2 on t1.a=t2.a having not (t2.a <=> t1.a) order by t1.a;
+select exists(( select 1));
+select exists( select 1);
+drop table t1,t2;
+
+create table t1(c1 int, c2 int);
+insert into t1 values(1, 1), (2, 2);
+select * from t1 where c1<'2';
+select * from t1 where c1>'1';
+select * from t1 where c1='2';
+select * from t1 where c1!='2';
+select * from t1 where c1<='2';
+select * from t1 where c1>='2';
+select * from t1 where c1+'1'<=3;
+select * from t1 where c1+'1'>=2;
+drop table t1;
+
+create table t1(c1 int primary key, c2 int);
+insert into t1 values(1, 1), (2, 2);
+select * from t1 where c1<'2';
+select * from t1 where c1>'1';
+select * from t1 where c1='2';
+select * from t1 where c1!='2';
+select * from t1 where c1<='2';
+select * from t1 where c1>='2';
+select * from t1 where c1+'1'<=3;
+select * from t1 where c1+'1'>=2;
+drop table t1;
+
+##like syntax
+SELECT 'a' = 'a ', 'a' LIKE 'a ';
+SELECT 'David!' LIKE 'David_';
+SELECT 'David!' LIKE '%D%v%';
+SELECT 'David!' LIKE 'David\_';
+SELECT 'David_' LIKE 'David\_';
+SELECT 'David_' LIKE 'David|_' ESCAPE '|';
+SELECT 'abc' LIKE 'ABC';
+SELECT 'abc' LIKE BINARY 'ABC';
+SELECT 10 LIKE '1%';
+SELECT 'David_' LIKE 'David|_' ESCAPE null;
+SELECT 'David_' LIKE 'David|_' ESCAPE 1;
+--error 1210
+SELECT 'David_' LIKE 'David|_' ESCAPE 12;
+--error 1210
+SELECT 'David_' LIKE 'David|_' ESCAPE '12';
+## alias
+--disable_warnings
+drop table if exists a1,a2;
+--enable_warnings
+create table a2(rowkey_suffix2 int primary key, price2 int);
+create table a1(rowkey_suffix int primary key, price int);
+--error 1064
+select (select price from a2 where 1000 > price) as 'x', a1.* as 'with_alias' from a1;
+--error 1064
+select (select price from a2 where 1000 > price) as 'x', a1.* as with_alias from a1;
+--error 1241
+select 1 from dual where @a:=1 and (1, 2);
+--error 1241
+select 1 from dual where @a:=1 and (1, (select 2));
+--error 1241
+select 1 from dual where @a:=1 and (1, exists(select 2));
+
+create table t1(c1 int);
+select 1 from t1 where c1 in (select c1 from t1 where exists( (select 1) union (select 1)));
+select (1 and 100) or 100;
+
+drop table t1;
+create table t1(c1 bigint, c2 varchar(64), c3 datetime);
+insert into t1 values(20101010000000, '020101010000000', '2010-10-10 00:00:00');
+select * from t1 where c1=c2 and c1=cast('2010-10-10 00:00:00' as datetime);
+
+--disable_warnings
+drop table if exists bug;
+--enable_warnings
+create table bug (col_float float);
+insert into bug values(100);
+select ((col_float and 100) or col_float) from bug;
+
+drop table t1;
+create table test1 (id int,dt datetime(6), primary key(id, dt));
+insert into test1 values (0, '2017-01-01'), (0, '2017-01-02'), (0, '2017-01-03'), (1, '2017-01-01'), (1, '2017-01-02'), (1, '2017-01-03');
+select * from test1 where (id, dt) > (0, '2017-01-02') and (id, dt) <= (1, '2017-01-03');
+select * from test1 where (id, dt) > (0, '2017-01-02') and (id, dt) <= (1, '2017-01-03') and dt < '2017-01-02';
+
+
+#fix a bug :
+--result_format 4
+--error 1054
+select cast '';
+--error 1054
+select length '';
+--error 1054
+select yearweek '';
+--error 1054
+select lala '';
+select 1 '';
+select 2 '';
+select 2 as '';
+select 1 as '';
+
+drop database if exists db1;
+drop database if exists db2;

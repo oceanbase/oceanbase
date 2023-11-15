@@ -1,0 +1,18 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: yuchen.wyc
+# owner group: sql4
+# description: group by count测试
+# bug http://bugfree.corp.taobao.com/bug/200109
+# multiple count(distinct)
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (id int primary key, n1 int, n2 int, s varchar(20), vs varchar(20), t varchar(256));
+insert into t1 values (0, NULL, NULL, 'zero', 'zero', 'zero'), (1,1,11, 'one','eleven', 'eleven'),  (2,1,11, 'one','eleven', 'eleven'),  (3,2,11, 'two','eleven', 'eleven'),  (4,2,12, 'two','twevle', 'twelve'),  (5,2,13, 'two','thirteen', 'foo'),  (6,2,13, 'two','thirteen', 'foo'),  (7,2,13, 'two','thirteen', 'bar'),  (8,NULL,13, 'two','thirteen', 'bar'),  (9,2,NULL, 'two','thirteen', 'bar'),  (10,2,13, NULL,'thirteen', 'bar'),  (11,2,13, 'two',NULL, 'bar'),  (12,2,13, 'two','thirteen', NULL);
+select n1, n2 from t1;
+select count(distinct n1), count(distinct n2) from t1;
+select count(n1), count(distinct n1), count(n2), count(distinct n2) from t1;
+select count(distinct n1), count(distinct n2), count(n1), count(n2) from t1;
+#drop table t1;

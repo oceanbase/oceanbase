@@ -1,0 +1,40 @@
+set SESSION ob_query_timeout = 60 * 1000 * 1000;
+set SESSION ob_trx_timeout = 60 * 1000 * 1000;
+set SESSION ob_trx_idle_timeout = 60 * 1000 * 1000;
+set SESSION ob_query_timeout = 1 * 1000 * 1000;
+set SESSION ob_trx_timeout = 1 * 1000 * 1000;
+set SESSION ob_trx_idle_timeout = 1 * 1000 * 1000;
+drop table if exists test_lock_row_in_minor_t;
+create table test_lock_row_in_minor_t(a int primary key, b int);
+insert into test_lock_row_in_minor_t value(1, 1);
+alter system set minor_compact_trigger = 10;
+begin;
+select * from test_lock_row_in_minor_t where a = 1 for update;
+a	b
+1	1
+insert into test_lock_row_in_minor_t value(2, 2);
+alter system set minor_compact_trigger = 1;
+update test_lock_row_in_minor_t set b = 10 where a = 1;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+select * from test_lock_row_in_minor_t;
+a	b
+1	1
+update test_lock_row_in_minor_t set b = 10 where a = 1;
+select * from test_lock_row_in_minor_t;
+a	b
+1	10
+2	2
+commit;
+update test_lock_row_in_minor_t set b = 100 where a = 1;
+select * from test_lock_row_in_minor_t;
+a	b
+1	100
+2	2
+begin;
+update test_lock_row_in_minor_t set b = 200 where a = 1;
+select * from test_lock_row_in_minor_t;
+a	b
+1	200
+2	2
+drop table test_lock_row_in_minor_t;
+alter system set minor_compact_trigger = 2;

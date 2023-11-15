@@ -1,0 +1,80 @@
+# owner: xiaoyi.xy
+# owner group: SQL3
+# tags: optimizer
+# description: 
+# 
+
+--disable_warnings
+drop table if exists GG;
+drop table if exists F;
+drop table if exists Q;
+--enable_warnings
+
+CREATE TABLE `GG` (
+    `col_varchar_20` varchar(20) DEFAULT NULL,
+    `col_varchar_10_key` varchar(10) DEFAULT NULL,
+    `col_date` date DEFAULT NULL,
+    `pk` int(11) NOT NULL,
+    `col_datetime` datetime DEFAULT NULL,
+    `col_int` int(11) DEFAULT NULL,
+    `col_varchar_20_key` varchar(20) DEFAULT NULL,
+    `col_datetime_key` datetime DEFAULT NULL,
+    `col_date_key` date DEFAULT NULL,
+    `col_int_key` int(11) DEFAULT NULL,
+    `col_varchar_10` varchar(10) DEFAULT NULL,
+    PRIMARY KEY (`pk`),
+    KEY `idx3` (`col_varchar_10_key`) BLOCK_SIZE 16384,
+    KEY `idx5` (`col_varchar_20_key`) BLOCK_SIZE 16384,
+    KEY `idx9` (`col_datetime_key`) BLOCK_SIZE 16384,
+    KEY `idx7` (`col_date_key`) BLOCK_SIZE 16384,
+    KEY `idx1` (`col_int_key`) BLOCK_SIZE 16384
+    ) DEFAULT CHARSET = utf8mb4 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE;
+
+CREATE TABLE `F` (
+    `col_date` date DEFAULT NULL,
+    `col_datetime` datetime DEFAULT NULL,
+    `col_date_key` date DEFAULT NULL,
+    `pk` int(11) NOT NULL,
+    `col_int` int(11) DEFAULT NULL,
+    `col_varchar_10_key` varchar(10) DEFAULT NULL,
+    `col_varchar_20` varchar(20) DEFAULT NULL,
+    `col_int_key` int(11) DEFAULT NULL,
+    `col_varchar_20_key` varchar(20) DEFAULT NULL,
+    `col_varchar_10` varchar(10) DEFAULT NULL,
+    `col_datetime_key` datetime DEFAULT NULL,
+    PRIMARY KEY (`pk`),
+    KEY `idx7` (`col_date_key`) BLOCK_SIZE 16384,
+    KEY `idx3` (`col_varchar_10_key`) BLOCK_SIZE 16384,
+    KEY `idx1` (`col_int_key`) BLOCK_SIZE 16384,
+    KEY `idx5` (`col_varchar_20_key`) BLOCK_SIZE 16384,
+    KEY `idx9` (`col_datetime_key`) BLOCK_SIZE 16384
+    ) DEFAULT CHARSET = utf8mb4 BLOCK_SIZE = 16384
+USE_BLOOM_FILTER = FALSE;
+
+CREATE TABLE `Q` (
+    `col_int_key` int(11) DEFAULT NULL,
+    `col_varchar_20` varchar(20) DEFAULT NULL,
+    `pk` int(11) NOT NULL,
+    `col_varchar_20_key` varchar(20) DEFAULT NULL,
+    `col_date_key` date DEFAULT NULL,
+    `col_date` date DEFAULT NULL,
+    `col_varchar_10_key` varchar(10) DEFAULT NULL,
+    `col_varchar_10` varchar(10) DEFAULT NULL,
+    `col_datetime_key` datetime DEFAULT NULL,
+    `col_int` int(11) DEFAULT NULL,
+    `col_datetime` datetime DEFAULT NULL,
+    PRIMARY KEY (`pk`),
+    KEY `idx1` (`col_int_key`) BLOCK_SIZE 16384,
+    KEY `idx5` (`col_varchar_20_key`) BLOCK_SIZE 16384,
+    KEY `idx7` (`col_date_key`) BLOCK_SIZE 16384,
+    KEY `idx3` (`col_varchar_10_key`) BLOCK_SIZE 16384,
+    KEY `idx9` (`col_datetime_key`) BLOCK_SIZE 16384
+    ) DEFAULT CHARSET = utf8mb4 BLOCK_SIZE = 16384
+USE_BLOOM_FILTER = FALSE;
+
+
+
+SELECT  GRANDPARENT1 . pk AS G1 FROM GG AS GRANDPARENT1 WHERE GRANDPARENT1 . `col_varchar_10` IN ( SELECT  PARENT1 . `col_varchar_10_key` AS P1 FROM F AS PARENT1 LEFT JOIN Q AS PARENT2 USING ( pk ) WHERE ( ( PARENT1 . `pk` > GRANDPARENT1 . `col_int` ) OR GRANDPARENT1 . `col_varchar_10` >= 'i' )  ) AND ( ( ( ( ( ( ( GRANDPARENT1 . `col_varchar_20` < 'x' OR GRANDPARENT1 . `col_datetime` BETWEEN '2002-05-19' AND '2000-10-13' ) OR GRANDPARENT1 . pk IS NULL ) OR GRANDPARENT1 . `col_varchar_20` >= 'd' ) OR GRANDPARENT1 . `pk` <> 8 ) AND GRANDPARENT1 . `pk` >= 5 ) AND GRANDPARENT1 . `col_date` >= '2004-07-28' ) OR NOT GRANDPARENT1 . pk IS UNKNOWN ) GROUP BY GRANDPARENT1 . pk  ORDER BY GRANDPARENT1 . pk LIMIT 9;
+
+
+

@@ -1,0 +1,156 @@
+# owner: yuchen.wyc
+# owner group: SQL1
+# description: foobar
+# tags:dml,dml_ignore
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS z0case;
+--enable_warnings
+CREATE TABLE t1(c1 TINYINT NOT NULL);
+INSERT INTO t1 (c1) VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
+UPDATE   t1 SET c1 = -1 WHERE c1 >= 5;
+SELECT * FROM t1 ORDER BY c1;
+UPDATE   t1 SET c1 = -10;
+SELECT * FROM t1 ORDER BY c1;
+DROP TABLE t1;
+CREATE TABLE t1(c1 SMALLINT NOT NULL);
+INSERT INTO t1 (c1) VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
+UPDATE   t1 SET c1 = -1 WHERE c1 >= 5;
+SELECT * FROM t1 ORDER BY c1;
+UPDATE   t1 SET c1 = -10;
+SELECT * FROM t1 ORDER BY c1;
+DROP TABLE t1;
+CREATE TABLE t1(c1 MEDIUMINT NOT NULL);
+INSERT INTO t1 (c1) VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
+UPDATE   t1 SET c1 = -1 WHERE c1 >= 5;
+SELECT * FROM t1 ORDER BY c1;
+UPDATE   t1 SET c1 = -10;
+SELECT * FROM t1 ORDER BY c1;
+DROP TABLE t1;
+CREATE TABLE t1(c1 INT NOT NULL);
+INSERT INTO t1 (c1) VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
+UPDATE   t1 SET c1 = -1 WHERE c1 >= 5;
+SELECT * FROM t1 ORDER BY c1;
+UPDATE   t1 SET c1 = -10;
+SELECT * FROM t1 ORDER BY c1;
+DROP TABLE t1;
+CREATE TABLE t1(c1 INTEGER NOT NULL);
+INSERT INTO t1 (c1) VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
+UPDATE   t1 SET c1 = -1 WHERE c1 >= 5;
+SELECT * FROM t1 ORDER BY c1;
+UPDATE   t1 SET c1 = -10;
+SELECT * FROM t1 ORDER BY c1;
+DROP TABLE t1;
+CREATE TABLE t1(c1 BIGINT NOT NULL);
+INSERT INTO t1 (c1) VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
+UPDATE   t1 SET c1 = -1 WHERE c1 >= 5;
+SELECT * FROM t1 ORDER BY c1;
+UPDATE   t1 SET c1 = -10;
+SELECT * FROM t1 ORDER BY c1;
+
+drop table t1;
+create table t1(a bigint not null);
+##插入非法字符串，预期插入0
+insert into t1 values(1);
+update ignore t1 set a='a' where a=1;
+select * from t1;
+##更新多行非法字符串，预期都更新成0
+insert into t1 values(2), (3), (4);
+update ignore t1 set a='a' where a>0;
+select * from t1;
+delete from t1;
+##更新为null,预期插入0
+update ignore t1 set a=null where a>0;
+select * from t1;
+
+##测试字符串类型
+drop table t1;
+create table t1(a varchar(2) primary key);
+##超长截断
+insert into t1 values('aa');
+update ignore t1 set a='aaaaa' where a='aa';
+select * from t1;
+##更新为null,预期插入空串
+update ignore t1 set a=null where a='aa';
+select * from t1;
+DROP TABLE t1;
+CREATE TABLE t1(c1 TINYINT NOT NULL);
+INSERT INTO t1 (c1) VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
+UPDATE IGNORE t1 SET c1 = -1 WHERE c1 >= 5;
+SELECT * FROM t1 ORDER BY c1;
+UPDATE IGNORE t1 SET c1 = -10;
+SELECT * FROM t1 ORDER BY c1;
+DROP TABLE t1;
+CREATE TABLE t1(c1 SMALLINT NOT NULL);
+INSERT INTO t1 (c1) VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
+UPDATE IGNORE t1 SET c1 = -1 WHERE c1 >= 5;
+SELECT * FROM t1 ORDER BY c1;
+UPDATE IGNORE t1 SET c1 = -10;
+SELECT * FROM t1 ORDER BY c1;
+DROP TABLE t1;
+CREATE TABLE t1(c1 MEDIUMINT NOT NULL);
+INSERT INTO t1 (c1) VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
+UPDATE IGNORE t1 SET c1 = -1 WHERE c1 >= 5;
+SELECT * FROM t1 ORDER BY c1;
+UPDATE IGNORE t1 SET c1 = -10;
+SELECT * FROM t1 ORDER BY c1;
+DROP TABLE t1;
+CREATE TABLE t1(c1 INT NOT NULL);
+INSERT INTO t1 (c1) VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
+UPDATE IGNORE t1 SET c1 = -1 WHERE c1 >= 5;
+SELECT * FROM t1 ORDER BY c1;
+UPDATE IGNORE t1 SET c1 = -10;
+SELECT * FROM t1 ORDER BY c1;
+DROP TABLE t1;
+CREATE TABLE t1(c1 INTEGER NOT NULL);
+INSERT INTO t1 (c1) VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
+UPDATE IGNORE t1 SET c1 = -1 WHERE c1 >= 5;
+SELECT * FROM t1 ORDER BY c1;
+UPDATE IGNORE t1 SET c1 = -10;
+SELECT * FROM t1 ORDER BY c1;
+DROP TABLE t1;
+CREATE TABLE t1(c1 BIGINT NOT NULL);
+INSERT INTO t1 (c1) VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
+UPDATE IGNORE t1 SET c1 = -1 WHERE c1 >= 5;
+SELECT * FROM t1 ORDER BY c1;
+UPDATE IGNORE t1 SET c1 = -10;
+SELECT * FROM t1 ORDER BY c1;
+DROP TABLE t1;
+
+create table t1 (c1 int primary key, c2 int) partition by key(c1) partitions 4;
+insert into t1 values (0,0);
+insert into t1 values (1,1);
+select * from t1;
+--error ER_NOT_SUPPORTED_YET
+update ignore t1 set c1 = 0 where c2 = 1;
+select * from t1;
+--error ER_NOT_SUPPORTED_YET
+update ignore t1 set c1 = null where c2 = 1;
+select * from t1;
+drop table t1;
+
+CREATE TABLE Z0CASE (T1 CHAR(10) PRIMARY KEY,T2 VARCHAR(10)) DEFAULT charset= 'binary' DEFAULT collate = 'binary'
+PARTITION BY KEY(T1) PARTITIONS 3 ;
+INSERT INTO  Z0CASE VALUES(11,11);
+INSERT INTO  Z0CASE VALUES('','');
+select * from z0case;
+
+UPDATE  ignore Z0CASE SET T1=NULL WHERE T2='11';
+select * from z0case;
+
+UPDATE Z0CASE SET T1='AbC' WHERE T2='11';
+select * from z0case;
+drop table z0case;
+
+CREATE TABLE Z0CASE (T1 VARCHAR(10) PRIMARY KEY,T2 VARCHAR(10)) DEFAULT charset= 'binary' DEFAULT collate = 'binary'
+PARTITION BY KEY(T1) PARTITIONS 3 ;
+INSERT INTO  Z0CASE VALUES(11,11);
+INSERT INTO  Z0CASE VALUES('','');
+select * from z0case;
+
+UPDATE ignore Z0CASE SET T1=NULL WHERE T2='11';
+select * from z0case;
+
+UPDATE Z0CASE SET T1='AbC' WHERE T2='11';
+select * from z0case;
+drop table z0case;

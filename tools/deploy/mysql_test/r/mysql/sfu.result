@@ -1,0 +1,18 @@
+drop table if exists t1;
+create table t1(pk int primary key, c1 int);
+insert into t1 values(1,1);
+begin;
+select *  from t1   where pk=1 for update;
+pk	c1
+1	1
+update t1 set c1=c1+1 where pk=1;
+begin;
+select *  from t1  where t1.pk=1 for update;
+commit;
+pk	c1
+1	2
+update t1 set c1=c1+1 where pk=1;
+commit;
+select * from t1;
+pk	c1
+1	3

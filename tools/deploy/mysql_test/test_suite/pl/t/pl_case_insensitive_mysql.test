@@ -1,0 +1,71 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: linlin.xll
+#owner group: sql1
+#tags: pl
+#description: test pl procedure or function name insensitive
+
+--result_format 4
+
+--disable_query_log
+--disable_result_log
+--source mysql_test/include/index_quick_major.inc
+--enable_query_log
+--enable_result_log
+
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+select "routine_name" as column_name, collation
+  from oceanbase.__all_collation
+    where id = 
+      (select collation_type 
+        from oceanbase.__all_column 
+          where table_id =
+                  (select table_id from oceanbase.__all_virtual_table where table_name = '__all_virtual_routine')
+                and column_name = 'routine_name');
+
+drop procedure if exists my_proc;
+create procedure my_proc() begin end;
+--error 1304
+create procedure My_proc() begin end;
+--error 1304
+create procedure MY_proc() begin end;
+--error 1304
+create procedure MY_PROC() begin end;
+
+select routine_name from oceanbase.__all_virtual_routine where routine_name = 'my_proc' and tenant_id = effective_tenant_id();
+select routine_name from oceanbase.__all_virtual_routine where routine_name = 'My_proc' and tenant_id = effective_tenant_id();
+select routine_name from oceanbase.__all_virtual_routine where routine_name = 'MY_proc' and tenant_id = effective_tenant_id();
+select routine_name from oceanbase.__all_virtual_routine where routine_name = 'MY_PROC' and tenant_id = effective_tenant_id();
+
+call my_proc();
+call My_proc();
+call MY_proc();
+call MY_PROC();
+
+drop procedure my_proc;
+
+drop function if exists my_func;
+create function my_func() returns int return 1;
+--error 1304
+create function My_func() returns int return 1;
+--error 1304
+create function MY_func() returns int return 1;
+--error 1304
+create function MY_FUNC() returns int return 1;
+
+select routine_name from oceanbase.__all_virtual_routine where routine_name = 'my_func' and tenant_id = effective_tenant_id();
+select routine_name from oceanbase.__all_virtual_routine where routine_name = 'My_func' and tenant_id = effective_tenant_id();
+select routine_name from oceanbase.__all_virtual_routine where routine_name = 'MY_func' and tenant_id = effective_tenant_id();
+select routine_name from oceanbase.__all_virtual_routine where routine_name = 'MY_FUNC' and tenant_id = effective_tenant_id();
+
+select my_func();
+select My_func();
+select MY_func();
+select MY_FUNC();
+
+drop function my_func;
+
+
+

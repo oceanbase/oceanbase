@@ -1,0 +1,284 @@
+# ----------------------------------------------------------------------
+# Test of GEOMETRY filter.
+# ----------------------------------------------------------------------
+drop table if exists matrix;
+create table  matrix (TinyIntType tinyint(1),SmallIntType smallint(2),MediumIntType mediumint(3),Int32Type int(4),IntType bigint(5),UTinyIntType tinyint(1) unsigned,USmallIntType smallint(2) unsigned,UMediumIntType mediumint(3) unsigned,UInt32Type int(4) unsigned,UInt64Type bigint(5)  unsigned,FloatType float,DoubleType double,UFloatType float unsigned,UDoubleType double unsigned,NumberType decimal(8,2),UNumberType decimal(8,2) unsigned,DateTimeType datetime,TimestampType timestamp,DateType date,TimeType time,YearType year,VarcharType varchar(9),CharType char(10),VarbinaryType varbinary(11),BinaryType binary(12),ExtendType int(13),TinyTextType TINYTEXT, TextType TEXT,MediumTextType MEDIUMTEXT, LongTextType LONGTEXT CHARSET utf8, BitType BIT(63),EnumType ENUM('a', 'b', 'c') default 'a',SetType SET('a', 'b', 'c') default 'b',JsonType json, GeometryType geometry);
+insert into matrix values (-1, -2, -3, -4, -5, 1, 2, 3, 4, 5, -1.1, -1.2, 1.1, 1.2, -1.3, 1.3, '2014-01-01 12:12:12', '2014-01-01 12:12:12', '2014-01-01', '12:12:12', 2014, 'varchar', 'char', 'varbinary', 'binary', 0,'tinytext','text','mediumtext','longtext',b'01010101010101','a','c','"jsonstring"', ST_GeomFromText('POINT(1 1)'));
+select * from matrix where ST_GeomFromText('POINT(1 1)') = TinyIntType;
+TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
+select * from matrix where ST_GeomFromText('POINT(1 1)') = SmallIntType;
+TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
+select * from matrix where ST_GeomFromText('POINT(1 1)') = MediumIntType;
+TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
+select * from matrix where ST_GeomFromText('POINT(1 1)') = Int32Type;
+TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
+select * from matrix where ST_GeomFromText('POINT(1 1)') = IntType;
+TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
+select * from matrix where ST_GeomFromText('POINT(1 1)') = UTinyIntType;
+TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
+select * from matrix where ST_GeomFromText('POINT(1 1)') = USmallIntType;
+TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
+select * from matrix where ST_GeomFromText('POINT(1 1)') = UMediumIntType;
+TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
+select * from matrix where ST_GeomFromText('POINT(1 1)') = UInt32Type;
+TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
+select * from matrix where ST_GeomFromText('POINT(1 1)') = UInt64Type;
+TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
+select * from matrix where ST_GeomFromText('POINT(1 1)') = FloatType;
+TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
+select * from matrix where ST_GeomFromText('POINT(1 1)') = DoubleType;
+TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
+select * from matrix where ST_GeomFromText('POINT(1 1)') = UFloatType;
+TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
+select * from matrix where ST_GeomFromText('POINT(1 1)') = UDoubleType;
+TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
+select * from matrix where ST_GeomFromText('POINT(1 1)') = NumberType;
+TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
+select * from matrix where ST_GeomFromText('POINT(1 1)') = UNumberType;
+TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
+select * from matrix where ST_GeomFromText('POINT(1 1)') = DateTimeType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') = TimestampType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') = DateType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') = TimeType;
+TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
+select * from matrix where ST_GeomFromText('POINT(1 1)') = YearType;
+TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
+select * from matrix where ST_GeomFromText('POINT(1 1)') = VarcharType;
+TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
+select * from matrix where ST_GeomFromText('POINT(1 1)') = CharType;
+TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
+select * from matrix where ST_GeomFromText('POINT(1 1)') = VarbinaryType;
+TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
+select * from matrix where ST_GeomFromText('POINT(1 1)') = BinaryType;
+TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
+select st_astext(GeometryType) from matrix where ST_GeomFromText('POINT(1 1)') = ExtendType;
+st_astext(GeometryType)
+POINT(1 1)
+select * from matrix where ST_GeomFromText('POINT(1 1)') = TinyTextType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') = TextType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') = MediumTextType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') = LongTextType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') = BitType;
+TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
+select * from matrix where ST_GeomFromText('POINT(1 1)') = EnumType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') = SetType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') = JsonType;
+ERROR 0A000: geomerty, json not supported
+select st_astext(GeometryType) from matrix where ST_GeomFromText('POINT(1 1)') = GeometryType;
+st_astext(GeometryType)
+POINT(1 1)
+select * from matrix where ST_GeomFromText('POINT(1 1)') > TinyIntType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') < SmallIntType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') > MediumIntType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') < Int32Type;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') > IntType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') < UTinyIntType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') > USmallIntType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') <= UMediumIntType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') >= UInt32Type;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') <= UInt64Type;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') >= FloatType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') <= DoubleType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') >= UFloatType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') <= UDoubleType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') >= NumberType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') <= UNumberType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') > DateTimeType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') < TimestampType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') > DateType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') < TimeType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') >= YearType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') < VarcharType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') >= CharType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') < VarbinaryType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') >= BinaryType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') <= ExtendType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') > TinyTextType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') <= TextType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') > MediumTextType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') <= LongTextType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') > BitType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') <= EnumType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') > SetType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') < JsonType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') > GeometryType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') | IntType;
+ERROR HY000: Invalid argument
+select * from matrix where ST_GeomFromText('POINT(1 1)') | GeometryType;
+ERROR HY000: Invalid argument
+select * from matrix where  ~GeometryType;
+ERROR HY000: Invalid argument
+select * from matrix where  GeometryType^IntType;
+ERROR HY000: Invalid argument
+select * from matrix where  GeometryType&IntType;
+ERROR HY000: Invalid argument
+select * from matrix where  GeometryType>>1;
+ERROR HY000: Invalid argument
+select * from matrix where  GeometryType<<1;
+ERROR HY000: Invalid argument
+select * from matrix where  GeometryType like 'a';
+ERROR HY000: Invalid argument
+select * from matrix where  GeometryType between ST_GeomFromText('POINT(1 1)') and ST_GeomFromText('POINT(2 2)');
+ERROR HY000: Invalid argument
+select MIN(GeometryType) from matrix;
+ERROR HY000: Invalid argument
+select MAX(GeometryType) from matrix;
+ERROR HY000: Invalid argument
+select LEAST(st_geomfromtext('POINT(0 0)'), st_geomfromtext('POINT(1 1)'));
+ERROR HY000: Invalid argument
+select GREATEST(st_geomfromtext('POINT(0 0)'), st_geomfromtext('POINT(1 1)'));
+ERROR HY000: Invalid argument
+select st_geomfromtext('POINT(0 0)') + st_geomfromtext('POINT(1 1)');
+ERROR 22000: Invalid data type for the operation
+select st_geomfromtext('POINT(0 0)') - st_geomfromtext('POINT(1 1)');
+ERROR 22000: Invalid data type for the operation
+select st_geomfromtext('POINT(0 0)') * st_geomfromtext('POINT(1 1)');
+ERROR 22000: Invalid data type for the operation
+select st_geomfromtext('POINT(0 0)') / st_geomfromtext('POINT(1 1)');
+ERROR 22000: Invalid data type for the operation
+select st_geomfromtext('POINT(0 0)') DIV st_geomfromtext('POINT(1 1)');
+ERROR 22000: Invalid data type for the operation
+select st_geomfromtext('POINT(0 0)') % st_geomfromtext('POINT(1 1)');
+ERROR 22000: Invalid data type for the operation
+SELECT EXP(st_geomfromtext('POINT(1 1)'));
+ERROR HY000: Invalid argument
+SELECT lOG2(st_geomfromtext('POINT(1 1)'));
+ERROR HY000: Invalid argument
+SELECT lOG10(st_geomfromtext('POINT(1 1)'));
+ERROR HY000: Invalid argument
+SELECT LN(st_geomfromtext('POINT(1 1)'));
+ERROR HY000: Invalid argument
+SELECT lOG(3, st_geomfromtext('POINT(1 1)'));
+ERROR HY000: Invalid argument
+SELECT POW(3, st_geomfromtext('POINT(1 1)'));
+ERROR HY000: Invalid argument
+SELECT POW(3, GeometryType) from matrix;
+ERROR HY000: Invalid argument
+SELECT sqrt(st_geomfromtext('POINT(1 1)'));
+ERROR HY000: Invalid argument
+SELECT acos(st_geomfromtext('POINT(1 1)'));
+ERROR HY000: Invalid argument
+SELECT asin(st_geomfromtext('POINT(1 1)'));
+ERROR HY000: Invalid argument
+SELECT atan(st_geomfromtext('POINT(1 1)'));
+ERROR HY000: Invalid argument
+SELECT cos(st_geomfromtext('POINT(1 1)'));
+ERROR HY000: Invalid argument
+SELECT sin(st_geomfromtext('POINT(1 1)'));
+ERROR HY000: Invalid argument
+SELECT tan(st_geomfromtext('POINT(1 1)'));
+ERROR HY000: Invalid argument
+SELECT cot(st_geomfromtext('POINT(1 1)'));
+ERROR HY000: Invalid argument
+SELECT round(st_geomfromtext('POINT(1 1)'));
+ERROR HY000: Invalid argument
+SELECT round(st_geomfromtext('POINT(1 1)'), 1);
+ERROR HY000: Invalid argument
+SELECT round(st_geomfromtext('POINT(1 1)'), -1);
+ERROR HY000: Invalid argument
+SELECT truncate(st_geomfromtext('POINT(1 1)'),1);
+ERROR HY000: Invalid argument
+SELECT truncate(GeometryType ,1) from matrix;
+ERROR HY000: Invalid argument
+SELECT ceiling(st_geomfromtext('POINT(1 1)'));
+ERROR HY000: Invalid argument
+SELECT ceiling(GeometryType) from matrix;
+ERROR HY000: Invalid argument
+SELECT abs(GeometryType) from matrix;
+ERROR HY000: Invalid argument
+SELECT abs(st_geomfromtext('POINT(1 1)')) from matrix;
+ERROR HY000: Invalid argument
+SELECT -GeometryType from matrix;
+ERROR HY000: Invalid argument
+SELECT -st_geomfromtext('POINT(1 1)') from matrix;
+ERROR HY000: Invalid argument
+SELECT rand(GeometryType) from matrix;
+ERROR HY000: Invalid argument
+SELECT rand(st_geomfromtext('POINT(1 1)')) from matrix;
+ERROR HY000: Invalid argument
+SELECT sign(GeometryType) from matrix;
+ERROR HY000: Invalid argument
+SELECT sign(st_geomfromtext('POINT(1 1)')) from matrix;
+ERROR HY000: Invalid argument
+SELECT degrees(GeometryType) from matrix;
+ERROR HY000: Invalid argument
+SELECT degrees(st_geomfromtext('POINT(1 1)')) from matrix;
+ERROR HY000: Invalid argument
+SELECT radians(GeometryType) from matrix;
+ERROR HY000: Invalid argument
+SELECT radians(st_geomfromtext('POINT(1 1)')) from matrix;
+ERROR HY000: Invalid argument
+SELECT format(GeometryType, 2) from matrix;
+ERROR HY000: Invalid argument
+SELECT format(st_geomfromtext('POINT(1 1)'), 2) from matrix;
+ERROR HY000: Invalid argument
+SELECT conv(st_geomfromtext('POINT(1 1)'), 1, 2) from dual;
+ERROR HY000: Invalid argument
+SELECT conv(-1, st_geomfromtext('POINT(1 1)'), 2) from dual;
+ERROR HY000: Invalid argument
+SELECT conv(-1, 1, st_geomfromtext('POINT(1 1)')) from dual;
+ERROR HY000: Invalid argument
+SELECT conv(GeometryType, 1, 1) from matrix;
+ERROR HY000: Invalid argument
+drop table if exists FF01;
+CREATE TABLE FF01(A INT, B GEOMETRY);
+INSERT INTO FF01 VALUES (1, NULL);
+INSERT INTO FF01 VALUES (1, ST_GeomFromText('POINT(0 0)'));
+SELECT A FROM FF01 WHERE B <=> NULL;
+A
+1
+SELECT A FROM FF01 GROUP BY B HAVING AVG(B) IS NULL;
+ERROR HY000: Invalid argument
+SELECT A FROM FF01 GROUP BY B HAVING SUM(B) IS NULL;
+ERROR HY000: Invalid argument
+SELECT A FROM FF01 GROUP BY B HAVING STD(B) IS NULL;
+ERROR HY000: Invalid argument
+SELECT A FROM FF01 GROUP BY B HAVING STDDEV_POP(B) IS NULL;
+ERROR HY000: Invalid argument
+SELECT A FROM FF01 GROUP BY B HAVING VARIANCE(B) IS NULL;
+ERROR HY000: Invalid argument
+DROP TABLE FF01;

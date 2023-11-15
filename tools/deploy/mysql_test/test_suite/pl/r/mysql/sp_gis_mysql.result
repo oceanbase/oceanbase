@@ -1,0 +1,42 @@
+result_format: 4
+use test;
+
+drop function if exists a;
+drop function if exists add;
+drop function if exists sub;
+create function a() returns int
+return 1;
+
+create function upper() returns int
+return 2;
+
+create function lower() returns int
+return 3;
+
+select a();
++------+
+| a()  |
++------+
+|    1 |
++------+
+select upper();
+ERROR 42000: Incorrect parameter count in the call to native function 'upper'
+select lower();
+ERROR 42000: Incorrect parameter count in the call to native function 'lower'
+select upper('a'), lower('B');
++------------+------------+
+| upper('a') | lower('B') |
++------------+------------+
+| A          | b          |
++------------+------------+
+
+select test.a(), test.upper(), test.lower();
++----------+--------------+--------------+
+| test.a() | test.upper() | test.lower() |
++----------+--------------+--------------+
+|        1 |            2 |            3 |
++----------+--------------+--------------+
+drop function a;
+drop function upper;
+drop function lower;
+

@@ -1,0 +1,21 @@
+DROP TABLE IF EXISTS t1,t2;
+CREATE TABLE t1 (
+id smallint NOT NULL,
+name varchar(60) DEFAULT '' NOT NULL,
+PRIMARY KEY (id)
+);
+INSERT INTO t1 VALUES (1,'Antonio Paz');
+INSERT INTO t1 VALUES (2,'Lilliana Angelovska');
+INSERT INTO t1 VALUES (3,'Thimble Smith');
+CREATE TABLE t2 (
+id smallint NOT NULL,
+owner smallint DEFAULT '0' NOT NULL,
+name varchar(60),
+PRIMARY KEY (id)
+);
+INSERT INTO t2 VALUES (1,1,'El Gato');
+INSERT INTO t2 VALUES (2,1,'Perrito');
+INSERT INTO t2 VALUES (3,3,'Happy');
+select t1.name, t2.name, t2.id from t1 left join t2 on (t1.id = t2.owner) where t2.id is null;
+name	name	id
+Lilliana Angelovska	NULL	NULL

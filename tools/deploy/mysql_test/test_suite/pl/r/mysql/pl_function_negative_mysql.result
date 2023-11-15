@@ -1,0 +1,229 @@
+result_format: 4
+use test;
+
+drop function if exists my_func;
+drop function if exists my_proc;
+
+create function my_func() returns int
+begin
+  prepare stmt from "select 1";
+end |
+ERROR 0A000: Dynamic SQL is not allowed in stored function or trigger
+
+create function my_func() returns int
+begin
+  execute stmt;
+end |
+ERROR 0A000: Dynamic SQL is not allowed in stored function or trigger
+
+create function my_func() returns int
+begin
+  deallocate prepare stmt;
+end |
+ERROR 0A000: Dynamic SQL is not allowed in stored function or trigger
+
+create function my_func() returns int
+begin
+  select 1;
+end |
+ERROR 0A000: Not allowed to return a result set from a function
+
+create function my_func() returns int
+begin
+  create table my_tab(col int);
+end |
+ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
+
+create function my_func() returns int
+begin
+  call my_proc();
+  return 1;
+end |
+
+create procedure my_proc()
+begin
+  prepare stmt from 'select 1';
+end |
+
+select my_func() |
+ERROR 0A000: Dynamic SQL is not allowed in stored function or trigger
+
+drop procedure my_proc |
+create procedure my_proc()
+begin
+  execute stmt;
+end |
+
+select my_func() |
+ERROR 0A000: Dynamic SQL is not allowed in stored function or trigger
+
+drop procedure my_proc |
+create procedure my_proc()
+begin
+  deallocate prepare stmt;
+end |
+
+select my_func()|
+ERROR 0A000: Dynamic SQL is not allowed in stored function or trigger
+
+drop procedure my_proc |
+create procedure my_proc()
+begin
+  select 1;
+end |
+
+select my_func() |
+ERROR 0A000: Not allowed to return a result set from a function
+
+drop procedure my_proc |
+create procedure my_proc()
+begin
+  create table my_tab(col int);
+end |
+
+select my_func() |
+ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
+
+drop function my_func|
+drop procedure my_proc|
+
+drop procedure if exists my_proc1 |
+drop procedure if exists my_proc2 |
+drop function if exists my_func1 |
+drop function if exists my_func2 |
+create function my_func1() returns int
+begin
+  call my_proc1();
+  return 1;
+end |
+
+create procedure my_proc1()
+begin
+  call my_proc2();
+end |
+
+create procedure my_proc2()
+begin
+  prepare stmt from 'select 1';
+end |
+
+select my_func1() |
+ERROR 0A000: Dynamic SQL is not allowed in stored function or trigger
+
+drop procedure my_proc2 |
+create procedure my_proc2()
+begin
+  select 1;
+end |
+
+select my_func1() |
+ERROR 0A000: Not allowed to return a result set from a function
+
+drop procedure my_proc2 |
+create procedure my_proc2()
+begin
+  create table my_tab(col int);
+end |
+
+select my_func1() |
+ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
+
+drop function my_func1 |
+drop procedure my_proc1 |
+drop procedure my_proc2 |
+
+create procedure my_proc1()
+begin
+  select my_func1();
+end |
+
+create function my_func1() returns int
+begin
+  call my_proc2();
+  return 1;
+end |
+
+create procedure my_proc2()
+begin
+  create table my_tab(col int);
+end |
+
+call my_proc1() |
+ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
+
+drop procedure my_proc1|
+drop procedure my_proc2|
+drop function my_func1|
+
+create function my_func1() returns int
+begin
+  call my_proc1();
+  return 1;
+end |
+
+create procedure my_proc1()
+begin
+  call my_proc2();
+end |
+
+create procedure my_proc2()
+begin
+  create table my_tab(col int);
+end |
+
+select my_func1() |
+ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
+
+drop procedure my_proc1 |
+drop procedure my_proc2 |
+drop function my_func1 |
+
+create function my_func1() returns int
+begin
+  call my_proc1();
+  return 1;
+end |
+
+create procedure my_proc1()
+begin
+  select my_func2();
+end |
+
+select my_func1() |
+ERROR 0A000: Not allowed to return a result set from a function
+
+drop function my_func1 |
+drop procedure my_proc1 |
+
+create function my_func1() returns int
+begin
+  call my_proc1();
+  return 1;
+end |
+
+create procedure my_proc1()
+begin
+  declare v int;
+  select my_func2() into v;
+end |
+
+create function my_func2() returns int
+begin
+  call my_proc2();
+  return 1;
+end |
+
+create procedure my_proc2()
+begin
+  create table my_tab(col int);
+end |
+
+select my_func1() |
+ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
+
+drop procedure my_proc1 |
+drop procedure my_proc2 |
+drop function my_func1 |
+drop function my_func2 |
+
+

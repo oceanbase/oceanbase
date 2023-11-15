@@ -1,0 +1,18 @@
+#owner: dachuan.sdc
+#owner group: SQL3
+# tags: optimizer
+
+# test aggregation
+
+--source mysql_test/test_suite/px/include/exam_data.inc
+
+# 计算全年级平均分，最高分，最低分
+explain select /*+ USE_PX parallel(2) */ subject, avg(score), max(score), min(score) from score group by subject;
+--sorted_result
+select /*+ USE_PX parallel(2) */ subject, avg(score), max(score), min(score) from score group by subject;
+
+# 计算各个班级平均分，最高分，最低分
+explain select /*+ USE_PX parallel(2) */ cls, subject, avg(score), max(score), min(score) from score join stu using (sid) group by cls, subject;
+--sorted_result
+select /*+ USE_PX parallel(2) */ cls, subject, avg(score), max(score), min(score) from score join stu using (sid) group by cls, subject;
+

@@ -1,0 +1,490 @@
+#owner: ht353245
+#owner group: shenzhen
+--echo # ----------------------------------------------------------------------
+--echo # Test of GEOMETRY filter.
+--echo # ----------------------------------------------------------------------
+
+##
+## Basic test for st_intersects
+##
+
+--source mysql_test/test_suite/geometry/t/import_default_srs_data_mysql.inc
+
+SET @point_0_0 = ST_GeomFromText('POINT(0 0)');
+SET @point_1_1 = ST_GeomFromText('POINT(1 1)');
+SET @point_2_2 = ST_GeomFromText('POINT(2 2)');
+SET @point_3_3 = ST_GeomFromText('POINT(3 3)');
+SET @point_4_4 = ST_GeomFromText('POINT(4 4)');
+SET @point_5_5 = ST_GeomFromText('POINT(5 5)');
+SET @line = ST_GeomFromText('LINESTRING(0 0,1 1)');
+SET @polygon = ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))');
+SET @multi_point = ST_GeomFromText('MULTIPOINT((0 0), (1 1))');
+SET @multi_line = ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))');
+SET @multi_polygon = ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))');
+SET @colloction = ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))');
+
+--disable_warnings
+drop table if exists t;
+--enable_warnings
+
+#--real_sleep 1
+create table t(g geometry  NOT NULL srid 0);
+#--real_sleep 1
+
+create index idx on t (g);
+INSERT INTO t (g) VALUES
+  (ST_GeomFromText('POINT(0 0)')),
+  (ST_GeomFromText('POINT(1 1)')),
+  (ST_GeomFromText('POINT(2 2)')),
+  (ST_GeomFromText('POINT(3 3)')),
+  (ST_GeomFromText('POINT(4 4)')),
+  (ST_GeomFromText('POINT(5 5.5)')),
+  (ST_GeomFromText('POINT(6 6)')),
+  (ST_GeomFromText('POINT(7 7)'));
+
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(0 0)'), g);
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(1 1)'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(2 2)'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(3 3)'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(4 4)'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(5 5)'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
+
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(1 1)'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
+
+SET @line = ST_GeomFromText('LINESTRING(3 3,5 5)');
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('LINESTRING(3 3,5 5)'));
+SET @line = ST_GeomFromText('LINESTRING(0 0,1 1)');
+
+##
+## Combination test
+##
+
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)')) or st_intersects(g, ST_GeomFromText('POINT(1 1)'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)')) and st_intersects(g, ST_GeomFromText('POINT(1 1)'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)')) or st_intersects(g, ST_GeomFromText('POINT(1 1)')) or st_intersects(g, ST_GeomFromText('POINT(2 2)')) or st_intersects(g, ST_GeomFromText('POINT(3 3)')) or st_intersects(g, ST_GeomFromText('POINT(4 4)'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)')) and st_intersects(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(1 1)')) or st_intersects(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))')) and st_intersects(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))')) or st_intersects(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+#select /*+index(t idx)*/ st_astext(g) from t where 1=1;
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)')) or st_intersects(g, ST_GeomFromText('POINT(1 1)')) or 1=1;
+set @@ob_enable_plan_cache = 0;
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)')) or st_intersects(g, ST_GeomFromText('POINT(1 1)')) or 1=1;
+set @@ob_enable_plan_cache = 1;
+
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)')) or st_intersects(g, ST_GeomFromText('POINT(1 1)'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)')) and st_intersects(g, ST_GeomFromText('POINT(1 1)'));
+
+##
+## Test Srid = 3825
+##
+--disable_warnings
+drop table if exists t;
+--enable_warnings
+create table t(g geometry  NOT NULL SRID 3825);
+create index idx on t (g);
+INSERT INTO t (g) VALUES
+  (ST_GeomFromText('POINT(150000 2100000)', 3825)),
+  (ST_GeomFromText('POINT(150001 2100001)', 3825)),
+  (ST_GeomFromText('POINT(150002 2100002)', 3825)),
+  (ST_GeomFromText('POINT(150003 2100003)', 3825)),
+  (ST_GeomFromText('POINT(150004 2100004)', 3825)),
+  (ST_GeomFromText('POINT(150005 2100005.5)', 3825)),
+  (ST_GeomFromText('POINT(150006 2100006)', 3825)),
+  (ST_GeomFromText('POINT(150007 2100007)', 3825));
+
+SET @point_0_0_3825 = ST_GeomFromText('POINT(150000 2100000)', 3825);
+SET @point_1_1_3825 = ST_GeomFromText('POINT(150001 2100001)', 3825);
+SET @point_2_2_3825 = ST_GeomFromText('POINT(150002 2100002)', 3825);
+SET @point_3_3_3825 = ST_GeomFromText('POINT(150003 2100003)', 3825);
+SET @point_4_4_3825 = ST_GeomFromText('POINT(150004 2100004)', 3825);
+SET @point_5_5_3825 = ST_GeomFromText('POINT(150005 2100005)', 3825);
+SET @line_3825 = ST_GeomFromText('LINESTRING(150000 2100000,150001 2100001)', 3825);
+SET @polygon_3825 = ST_GeomFromText('POLYGON((150000 2100000, 150010 2100000, 150010 2100005, 150000 2100005, 150000 2100000))', 3825);
+SET @multi_point_3825 = ST_GeomFromText('MULTIPOINT((150000 2100000), (150001 2100001))', 3825);
+SET @multi_line_3825 = ST_GeomFromText('MULTILINESTRING((150000 2100000, 150001 2100001), (150004 2100004, 150005 2100005))', 3825);
+SET @multi_polygon_3825 = ST_GeomFromText('MULTIPOLYGON (((150000 2100000, 150002 2100000, 150002 2100002, 150000 2100002, 150000 2100000)), ((150002.5 2100002.5, 150006 2100002.5, 150006 2100006, 150002.5 2100006, 150002.5 2100002.5), (150003.5 2100003, 150004.5 2100003, 150004.5 2100004.5, 150003.5 2100004.5, 150003.5 2100003)))', 3825);
+
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(150000 2100000)', 3825));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(150001 2100001)', 3825));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(150002 2100002)', 3825));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(150003 2100003)', 3825));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(150004 2100004)', 3825));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(150005 2100005)', 3825));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('LINESTRING(150000 2100000,150001 2100001)', 3825));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POLYGON((150000 2100000, 150010 2100000, 150010 2100005, 150000 2100005, 150000 2100000))', 3825));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTIPOINT((150000 2100000), (150001 2100001))', 3825));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTILINESTRING((150000 2100000, 150001 2100001), (150004 2100004, 150005 2100005))', 3825));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTIPOLYGON (((150000 2100000, 150002 2100000, 150002 2100002, 150000 2100002, 150000 2100000)), ((150002.5 2100002.5, 150006 2100002.5, 150006 2100006, 150002.5 2100006, 150002.5 2100002.5), (150003.5 2100003, 150004.5 2100003, 150004.5 2100004.5, 150003.5 2100004.5, 150003.5 2100003)))', 3825));
+
+# illegal point
+# {minX_ = 144483.7169890964, maxX_ = 355516.28301090357, minY_ = 2060800.9721256399, maxY_ = 2727380.2976675923}
+INSERT INTO t (g) VALUES
+  (ST_GeomFromText('POINT(355517 2727381)', 3825));
+SET @exceed_point = ST_GeomFromText('POINT(355517 2727381)', 3825);
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(355517 2727381)', 3825));
+
+##
+## Test Srid = 4326
+##
+--disable_warnings
+drop table if exists t;
+--enable_warnings
+create table t(g geometry  NOT NULL SRID 4326);
+create index idx on t (g);
+INSERT INTO t (g) VALUES
+  (ST_GeomFromText('POINT(0 0)', 4326)),
+  (ST_GeomFromText('POINT(1 1)', 4326)),
+  (ST_GeomFromText('POINT(2 2)', 4326)),
+  (ST_GeomFromText('POINT(3 3)', 4326)),
+  (ST_GeomFromText('POINT(4 4)', 4326)),
+  (ST_GeomFromText('POINT(5 5.5)', 4326)),
+  (ST_GeomFromText('POINT(6 6)', 4326)),
+  (ST_GeomFromText('POINT(7 7)', 4326));
+
+SET @point_0_0_4326 = ST_GeomFromText('POINT(0 0)', 4326);
+SET @point_1_1_4326 = ST_GeomFromText('POINT(1 1)', 4326);
+SET @point_2_2_4326 = ST_GeomFromText('POINT(2 2)', 4326);
+SET @point_3_3_4326 = ST_GeomFromText('POINT(3 3)', 4326);
+SET @point_4_4_4326 = ST_GeomFromText('POINT(4 4)', 4326);
+SET @point_5_5_4326 = ST_GeomFromText('POINT(5 5)', 4326);
+SET @line_4326 = ST_GeomFromText('LINESTRING(0 0,1 1)', 4326);
+SET @polygon_4326 = ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))', 4326);
+SET @multi_point_4326 = ST_GeomFromText('MULTIPOINT((0 0), (1 1))', 4326);
+SET @multi_line_4326 = ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))', 4326);
+SET @multi_polygon_4326 = ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))', 4326);
+SET @colloction_4326 = ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))', 4326);
+
+
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)', 4326));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(1 1)', 4326));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(2 2)', 4326));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(3 3)', 4326));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(4 4)', 4326));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(5 5)', 4326));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('LINESTRING(0 0,1 1)', 4326));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))', 4326));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))', 4326));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))', 4326));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))', 4326));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))', 4326));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))', 4326), g);
+
+
+##
+## Srid constrain test
+##
+SET @point_0_0 = ST_GeomFromText('POINT(0 0)');
+--error 3643
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)'));
+
+--disable_warnings
+drop table if exists t;
+--enable_warnings
+#--real_sleep 1
+create table t(g geometry  NOT NULL);
+#--real_sleep 1
+create index idx on t (g);
+
+INSERT INTO t(g) VALUES (ST_GeomFromText('POINT(0 0)'));
+
+--error ER_GIS_DIFFERENT_SRIDS
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)', 4326));
+
+drop table t;
+
+##
+## inverted_filter_geospatial from cockroachdb
+##
+
+--disable_warnings
+drop table if exists geo_table;
+--enable_warnings
+
+CREATE TABLE geo_table(
+  k int primary key,
+  geom geometry SRID 0 NOT NULL,
+  SPATIAL INDEX (geom)
+);
+
+INSERT INTO geo_table VALUES
+  (1, ST_GeomFromText('POINT(1.0 1.0)')),
+  (2, ST_GeomFromText('LINESTRING(1.0 1.0, 2.0 2.0)')),
+  (3, ST_GeomFromText('POINT(3.0 3.0)')),
+  (4, ST_GeomFromText('LINESTRING(4.0 4.0, 5.0 5.0)')),
+  (5, ST_GeomFromText('LINESTRING(40.0 40.0, 41.0 41.0)')),
+  (6, ST_GeomFromText('POLYGON((1.0 1.0, 5.0 1.0, 5.0 5.0, 1.0 5.0, 1.0 1.0))'));
+
+SELECT k FROM geo_table WHERE ST_Intersects(ST_GeomFromText('POINT(3.0 3.0)'), geom) ORDER BY k;
+SELECT k FROM geo_table WHERE ST_Intersects(ST_GeomFromText('POINT(4.5 4.5)'), geom) ORDER BY k;
+SELECT k FROM geo_table WHERE ST_Intersects(ST_GeomFromText('POINT(2.5 2.5)'), geom) ORDER BY k;
+SELECT /*+index(geo_table geom)*/ k FROM geo_table WHERE ST_Intersects(ST_GeomFromText('POINT(2.5 2.5)'), geom) ORDER BY k;
+
+--disable_warnings
+drop table if exists geo_table2;
+--enable_warnings
+
+CREATE TABLE geo_table2(
+  k int,
+  geom geometry SRID 0 NOT NULL,
+  k_plus_one int,
+  PRIMARY KEY (k, k_plus_one),
+  SPATIAL INDEX (geom)
+);
+
+INSERT INTO geo_table2 VALUES
+  (1, ST_GeomFromText('LINESTRING(1.0 1.0, 2.0 2.0)'), 2),
+  (2, ST_GeomFromText('POLYGON((1.0 1.0, 5.0 1.0, 5.0 5.0, 1.0 5.0, 1.0 1.0))'), 3);
+SELECT k FROM geo_table2 WHERE ST_Intersects(ST_GeomFromText('POINT(3.0 3.0)'), geom);
+SELECT /*+index(geo_table2 geom)*/ k FROM geo_table2 WHERE ST_Intersects(ST_GeomFromText('POINT(3.0 3.0)'), geom);
+explain EXTENDED_NOADDR SELECT /*+index(geo_table2 geom)*/ k FROM geo_table2 WHERE ST_Intersects(ST_GeomFromText('POINT(3.0 3.0)'), geom);
+SELECT k, k_plus_one FROM geo_table2 WHERE ST_Intersects(ST_GeomFromText('POINT(3.0 3.0)'), geom);
+SELECT /*+index(geo_table2 geom)*/ k, k_plus_one FROM geo_table2 WHERE ST_Intersects(ST_GeomFromText('POINT(3.0 3.0)'), geom);
+explain EXTENDED_NOADDR SELECT /*+index(geo_table2 geom)*/ k, k_plus_one FROM geo_table2 WHERE ST_Intersects(ST_GeomFromText('POINT(3.0 3.0)'), geom);
+
+
+##
+## inverted_index_geospatial from cockroachdb
+##
+
+--disable_warnings
+drop table if exists geo_table;
+--enable_warnings
+
+CREATE TABLE geo_table(
+  k int primary key,
+  geom geometry SRID 26918 NOT NULL,
+  SPATIAL INDEX (geom)
+);
+
+INSERT INTO geo_table VALUES
+  (1, ST_GeomFromText('POINT(400001 4000001)', 26918)),
+  (2, ST_GeomFromText('LINESTRING(400001 4000001, 400002 4000002)', 26918)),
+  (3, ST_GeomFromText('POINT(400003 4000003)', 26918)),
+  (4, ST_GeomFromText('LINESTRING(400004 4000004, 400005 4000005)', 26918)),
+  (5, ST_GeomFromText('LINESTRING(400040 4000040, 400041 4000041)', 26918)),
+  (6, ST_GeomFromText('POLYGON((400001 4000001, 400005 4000001, 400005 4000005, 400001 4000005, 400001 4000001))', 26918));
+
+SELECT k FROM geo_table WHERE ST_Intersects(ST_GeomFromText('POINT(400003 4000003)', 26918), geom) ORDER BY k;
+SELECT /*+index(geo_table geom)*/ k FROM geo_table WHERE ST_Intersects(ST_GeomFromText('POINT(400003 4000003)', 26918), geom) ORDER BY k;
+explain EXTENDED_NOADDR SELECT /*+index(geo_table geom)*/ k FROM geo_table WHERE ST_Intersects(ST_GeomFromText('POINT(400003 4000003)', 26918), geom) ORDER BY k;
+
+##
+## Test for covered_by
+##
+
+--disable_warnings
+drop table if exists t;
+--enable_warnings
+
+#--real_sleep 1
+create table t(g geometry  NOT NULL srid 0);
+#--real_sleep 1
+
+create index idx on t (g);
+INSERT INTO t (g) VALUES
+  (ST_GeomFromText('POINT(0 0)')),
+  (ST_GeomFromText('POINT(1 1)')),
+  (ST_GeomFromText('POINT(2 2)')),
+  (ST_GeomFromText('POINT(3 3)')),
+  (ST_GeomFromText('POINT(4 4)')),
+  (ST_GeomFromText('POINT(5 5.5)')),
+  (ST_GeomFromText('POINT(6 6)')),
+  (ST_GeomFromText('POINT(7 7)')),
+  (ST_GeomFromText('LINESTRING(0 0,1 1)')),
+  (ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))')),
+  (ST_GeomFromText('MULTIPOINT((0 0), (1 1))')),
+  (ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))')),
+  (ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))')),
+  (ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
+
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(0 0)'));
+select st_astext(g) from t where _st_covers(ST_GeomFromText('POINT(0 0)'), g);
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(1 1)'));
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(2 2)'));
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(3 3)'));
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(4 4)'));
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(5 5)'));
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))'));
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))'));
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))'));
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))'));
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
+
+
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(0 0)'));
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(ST_GeomFromText('POINT(0 0)'), g);
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(1 1)'));
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(2 2)'));
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(3 3)'));
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(4 4)'));
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(5 5)'));
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))'));
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))'));
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))'));
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))'));
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
+
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(0 0)'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(1 1)'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
+
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('POINT(0 0)'));
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(ST_GeomFromText('POINT(0 0)'), g);
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('POINT(1 1)'));
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('POINT(2 2)'));
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('POINT(3 3)'));
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('POINT(4 4)'));
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('POINT(5 5)'));
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))'));
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))'));
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))'));
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))'));
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
+
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('POINT(0 0)'));
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(ST_GeomFromText('POINT(0 0)'), g);
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('POINT(1 1)'));
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('POINT(2 2)'));
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('POINT(3 3)'));
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('POINT(4 4)'));
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('POINT(5 5)'));
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))'));
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))'));
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))'));
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))'));
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
+
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('POINT(0 0)'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('POINT(1 1)'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
+
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('POINT(0 0)'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('POINT(1 1)'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))'));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
+
+drop table geo_table;
+
+--disable_warnings
+drop table if exists tt1;
+--enable_warnings
+CREATE TABLE tt1 (id int ,g GEOMETRY not null srid 4236);
+ALTER TABLE tt1 ADD spatial INDEX idx(g) local;
+insert into tt1 values(2,ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)',4236));
+select id ,st_astext(g) from tt1 where ST_Intersects(g,g);
+
+drop table tt1;
+
+##
+## Test for invalid data
+##
+--disable_warnings
+drop table if exists t;
+--enable_warnings
+create table t(g geometry  NOT NULL SRID 3825);
+create index idx on t (g);
+SET @illegal_point = ST_GeomFromText('POINT(600000 3000000)', 3825);
+SET @illegal_line = ST_GeomFromText('LINESTRING(550000 2600000,600000 3000000)', 3825);
+SET @legal_polygon = ST_GeomFromText('POLYGON((500000 2500000, 550000 2500000, 550000 2600000, 500000 2600000, 500000 2500000))', 3825);
+SET @illegal_polygon = ST_GeomFromText('POLYGON((500000 2500000, 590000 2500000, 590000 2800000, 500000 2800000, 500000 2500000))', 3825);
+SET @illegal_mtp = ST_GeomFromText('MULTIPOINT((550000 2600000),(600000 3100000))', 3825);
+SET @illegal_mtl = ST_GeomFromText('MULTILINESTRING((550000 2600000,600000 3000000), (530000 2500000,560000 2500000))', 3825);
+SET @illegal_multi_mpy = ST_GeomFromText('MULTIPOLYGON(((500000 2500000, 550000 2500000, 550000 2600000, 500000 2600000, 500000 2500000)), ((500000 2500000, 590000 2500000, 590000 2800000, 500000 2800000, 500000 2500000)))', 3825);
+SET @illegal_colloction = ST_GeomFromText('GEOMETRYCOLLECTION(POINT(600000 3000000), LINESTRING(530000 2500000,560000 2500000))', 3825);
+
+INSERT INTO t (g) VALUES (ST_GeomFromText('POINT(600000 3000000)', 3825));
+INSERT INTO t (g) VALUES (ST_GeomFromText('LINESTRING(550000 2600000,600000 3000000)', 3825));
+INSERT INTO t (g) VALUES (ST_GeomFromText('POLYGON((500000 2500000, 600000 2500000, 600000 3000000, 500000 3000000, 500000 2500000))', 3825));
+INSERT INTO t (g) VALUES (ST_GeomFromText('MULTIPOINT((550000 2600000),(600000 3100000))', 3825));
+INSERT INTO t (g) VALUES (ST_GeomFromText('MULTILINESTRING((550000 2600000,600000 3000000), (530000 2500000,560000 2500000))', 3825));
+INSERT INTO t (g) VALUES (ST_GeomFromText('MULTIPOLYGON(((500000 2500000, 550000 2500000, 550000 2600000, 500000 2600000, 500000 2500000)), ((500000 2500000, 590000 2500000, 590000 2800000, 500000 2800000, 500000 2500000)))', 3825));
+INSERT INTO t (g) VALUES (ST_GeomFromText('GEOMETRYCOLLECTION(POINT(600000 3000000), LINESTRING(530000 2500000,560000 2500000))', 3825));
+
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(600000 3000000)', 3825));
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(600000 3000000)', 3825));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('LINESTRING(550000 2600000,600000 3000000)', 3825));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POLYGON((500000 2500000, 550000 2500000, 550000 2600000, 500000 2600000, 500000 2500000))', 3825));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POLYGON((500000 2500000, 590000 2500000, 590000 2800000, 500000 2800000, 500000 2500000))', 3825));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTIPOINT((550000 2600000),(600000 3100000))', 3825));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTIPOLYGON(((500000 2500000, 550000 2500000, 550000 2600000, 500000 2600000, 500000 2500000)), ((500000 2500000, 590000 2500000, 590000 2800000, 500000 2800000, 500000 2500000)))', 3825));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTILINESTRING((550000 2600000,600000 3000000), (530000 2500000,560000 2500000))', 3825));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(600000 3000000), LINESTRING(530000 2500000,560000 2500000))', 3825));
+drop table t;
+
+# bugfix: 
+--disable_warnings
+drop table if exists geo_t1;
+--enable_warnings
+CREATE TABLE geo_t1 (
+  id INT,
+  g GEOMETRY NOT NULL SRID 4326,
+  SPATIAL INDEX g_idx (g)
+);
+INSERT INTO geo_t1 (id, g) VALUES
+  (1, ST_GeomFromText('LINESTRING(0 10.00001, 10 10.00001)', 4326, 'axis-order=long-lat')),
+  (2, ST_GeomFromText('LINESTRING(0 9.99999, 10 9.99999)', 4326, 'axis-order=long-lat')),
+  (3, ST_GeomFromText('POLYGON((5 5.00001, 6 5.00001, 6 10, 5 10, 5 5.00001))', 4326, 'axis-order=long-lat')),
+  (4, ST_GeomFromText('POINT(5 5.00001)', 4326, 'axis-order=long-lat')),
+  (5, ST_GeomFromText('MULTILINESTRING((0 9.99999, 10 9.99999))', 4326, 'axis-order=long-lat')),
+  (6, ST_GeomFromText('MULTIPOLYGON(((5 5.00001, 6 5.00001, 6 10, 5 10, 5 5.00001)))', 4326, 'axis-order=long-lat')),
+  (7, ST_GeomFromText('MULTIPOINT((5 5.00001))', 4326, 'axis-order=long-lat')),
+  (8, ST_GeomFromText('GEOMETRYCOLLECTION(MULTIPOLYGON(((5 5.00001, 6 5.00001, 6 10, 5 10, 5 5.00001))))', 4326, 'axis-order=long-lat'));
+
+select id, st_astext(g) from geo_t1 IGNORE INDEX(g_idx) where st_intersects(g, ST_GeomFromText('LINESTRING(-5 10, 5 10)', 4326, 'axis-order=long-lat'));
+select id, st_astext(g) from geo_t1 FORCE INDEX(g_idx) where st_intersects(g, ST_GeomFromText('LINESTRING(-5 10, 5 10)', 4326, 'axis-order=long-lat'));
+
+select id, st_astext(g) from geo_t1 IGNORE INDEX(g_idx) where st_contains(g, ST_GeomFromText('LINESTRING(-5 10, 5 10)', 4326, 'axis-order=long-lat'));
+select id, st_astext(g) from geo_t1 FORCE INDEX(g_idx) where st_contains(g, ST_GeomFromText('LINESTRING(-5 10, 5 10)', 4326, 'axis-order=long-lat'));
+
+select id, st_astext(g) from geo_t1 IGNORE INDEX(g_idx) where st_within(g, ST_GeomFromText('LINESTRING(-5 10, 5 10)', 4326, 'axis-order=long-lat'));
+select id, st_astext(g) from geo_t1 FORCE INDEX(g_idx) where st_within(g, ST_GeomFromText('LINESTRING(-5 10, 5 10)', 4326, 'axis-order=long-lat'));
+
+select id, st_astext(g) from geo_t1 IGNORE INDEX(g_idx) where _st_covers(g, ST_GeomFromText('LINESTRING(-5 10, 5 10)', 4326, 'axis-order=long-lat'));
+select id, st_astext(g) from geo_t1 FORCE INDEX(g_idx) where _st_covers(g, ST_GeomFromText('LINESTRING(-5 10, 5 10)', 4326, 'axis-order=long-lat'));
+
+select id, st_astext(g) from geo_t1 IGNORE INDEX(g_idx) where st_intersects(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))', 4326, 'axis-order=long-lat'));
+select id, st_astext(g) from geo_t1 FORCE INDEX(g_idx) where st_intersects(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))', 4326, 'axis-order=long-lat'));
+
+select id, st_astext(g) from geo_t1 IGNORE INDEX(g_idx) where st_contains(ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))', 4326, 'axis-order=long-lat'), g);
+select id, st_astext(g) from geo_t1 FORCE INDEX(g_idx) where st_contains(ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))', 4326, 'axis-order=long-lat'), g);
+
+select id, st_astext(g) from geo_t1 IGNORE INDEX(g_idx) where st_within(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))', 4326, 'axis-order=long-lat'));
+select id, st_astext(g) from geo_t1 FORCE INDEX(g_idx) where st_within(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))', 4326, 'axis-order=long-lat'));
+
+select id, st_astext(g) from geo_t1 IGNORE INDEX(g_idx) where _st_covers(ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))', 4326, 'axis-order=long-lat'), g);
+select id, st_astext(g) from geo_t1 FORCE INDEX(g_idx) where _st_covers(ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))', 4326, 'axis-order=long-lat'), g);
+
+drop table geo_t1;

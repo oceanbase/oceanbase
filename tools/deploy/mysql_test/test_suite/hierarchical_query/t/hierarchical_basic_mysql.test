@@ -1,5 +1,0 @@
-#owner: huangweixiang.hwx
-#owner group: SQL2
---error 1305
-select SYS_CONNECT_BY_PATH(2,1) from dual;
-

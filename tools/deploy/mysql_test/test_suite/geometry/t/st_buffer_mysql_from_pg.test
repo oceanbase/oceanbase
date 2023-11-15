@@ -1,0 +1,151 @@
+#owner: ht353245
+#owner group: shenzhen
+--echo # ----------------------------------------------------------------------
+--echo # Test of GEOMETRY _ST_Buffer.
+--echo # ----------------------------------------------------------------------
+--source mysql_test/test_suite/geometry/t/import_default_srs_data_mysql.inc
+
+  --disable_warnings
+  drop table if exists buffer_transform, geom_operators_test;
+  --enable_warnings
+
+  # mysql only support empty collection
+  #SELECT 'T2.1', ST_AsText(_ST_Buffer(ST_GeomFromText('POINT EMPTY', 4326), 0));
+  #SELECT 'T2.2', ST_AsText(_ST_Buffer(ST_GeomFromText('LINESTRING EMPTY', 4326), 0));
+  #SELECT 'T2.3', ST_AsText(_ST_Buffer(ST_GeomFromText('MULTIPOLYGON EMPTY', 4326), 0));
+  #SELECT 'T2.4', ST_AsText(_ST_Buffer(ST_GeomFromText('MULTIPOINT EMPTY', 4326), 1));
+  #fix: not support empty geometry
+  SELECT 'T2.5', ST_AsText(_ST_Buffer(ST_GeomFromText('GEOMETRYCOLLECTION EMPTY', 4326), 1));
+  #Notice: mysql result inconsist with postgis, pg result is 'POLYGON EMPTY'
+  SELECT 'T2.6', ST_AsText(_ST_Buffer(ST_GeomFromText('GEOMETRYCOLLECTION EMPTY'), 1));
+
+  SELECT '1', ST_AsText(_ST_Buffer(ST_GeomFromText('POINT(4 0)'), 2, 1));
+
+  SELECT 'point quadsegs=2', ST_AsText(_ST_Buffer(ST_GeomFromText('POINT(0 0)'), 1, 'quad_segs=2'));
+  SELECT 'point quadsegs=2', ST_AsText(_ST_Buffer(ST_GeomFromText('POINT(0 0)'), 1, ST_Buffer_Strategy('point_circle', 8)));
+  
+  # Notice, 有些组合mysql会报非法，但是postgis仅仅是不生效, e.g. end flat for point or polygon
+  # SELECT 'line quadsegs=2', ST_AsText(_ST_Buffer(ST_GeomFromText('LINESTRING(0 0, 10 0)'), 2, 'quad_segs=2'));
+  # ERROR 1210 (HY000): Incorrect arguments to _ST_Buffer ST_Buffer_Strategy('point_circle', 8), 
+  SELECT 'line quadsegs=2', ST_AsText(_ST_Buffer(ST_GeomFromText('LINESTRING(0 0, 10 0)'), 2));
+
+  --echo # Test for distance = 0
+  SELECT ST_ASTEXT(_ST_BUFFER(ST_GEOMFROMTEXT('POLYGON((0 0,10 0,10 10,0 10,0 0))'), 0));
+  SELECT ST_ASTEXT(_ST_BUFFER(ST_GEOMFROMTEXT('POLYGON((0 0,0 10,10 10,10 0,0 0))'), 0));
+  
+  SELECT 'line quadsegs=2 endcap=flat', ST_AsText(_ST_Buffer(ST_GeomFromText('LINESTRING(0 0, 10 0)'), 2, 'quad_segs=2 endcap=flat'));
+  SELECT 'line quadsegs=2 endcap=butt', ST_AsText(_ST_Buffer(ST_GeomFromText('LINESTRING(0 0, 10 0)'), 2, 'quad_segs=2 endcap=butt'));
+  SELECT 'line quadsegs=2 endcap=flat', ST_AsText(_ST_Buffer(ST_GeomFromText('LINESTRING(0 0, 10 0)'), 2, ST_Buffer_Strategy('end_flat')));
+
+  #SELECT 'line join=mitre mitre_limit=1.0 side=both', ST_AsText(_ST_Buffer(ST_GeomFromText('LINESTRING(50 50,150 150,150 50)'),10,'join=mitre mitre_limit=1.0 side=both'));
+  SELECT 'line join=mitre mitre_limit=1.0 side=both', ST_AsText(_ST_Buffer(ST_GeomFromText('LINESTRING(50 50,150 150,150 50)'),10,'join=mitre mitre_limit=1.0'));
+  SELECT 'line join=mitre mitre_limit=1.0 side=both', ST_AsText(_ST_Buffer(ST_GeomFromText('LINESTRING(50 50,150 150,150 50)'),10, ST_Buffer_Strategy('join_miter', 1.0)));
+  # not supported
+  #SELECT 'line side=left',ST_AsText(_ST_Buffer(ST_GeomFromText('LINESTRING(50 50,150 150,150 50)'),10,'side=left'));
+  #SELECT 'line side=right',ST_AsText(_ST_Buffer(ST_GeomFromText('LINESTRING(50 50,150 150,150 50)'),10,'side=right'));
+  #SELECT 'line side=left join=mitre',ST_AsText(_ST_Buffer(ST_GeomFromText('LINESTRING(50 50,150 150,150 50)'),10,'side=left join=mitre'));
+
+  SELECT 'poly quadsegs=2 join=round', ST_AsText(_ST_Buffer(ST_GeomFromText('POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))'), 2, 'quad_segs=2 join=round'));
+  SELECT 'poly quadsegs=2 join=round', ST_AsText(_ST_Buffer(ST_GeomFromText('POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))'), 2, ST_Buffer_Strategy('join_round', 8)));
+
+  SELECT 'poly quadsegs=2 join=mitre', ST_AsText(_ST_Buffer(ST_GeomFromText('POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))'), 2, 'quad_segs=2 join=mitre'));
+  SELECT 'poly quadsegs=2 join=mitre', ST_AsText(_ST_Buffer(ST_GeomFromText('POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))'), 2, ST_Buffer_Strategy('join_miter', 5.0)));
+
+  SELECT 'poly quadsegs=2 join=mitre mitre_limit=1', ST_AsText(_ST_Buffer(ST_GeomFromText('POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))'), 2, 'quad_segs=2 join=mitre mitre_limit=1'));
+  SELECT 'poly quadsegs=2 join=mitre mitre_limit=1', ST_AsText(_ST_Buffer(ST_GeomFromText('POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))'), 2, ST_Buffer_Strategy('join_miter', 1.0)));
+
+  SELECT 'poly quadsegs=2 join=miter miter_limit=1', ST_AsText(_ST_Buffer(ST_GeomFromText('POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))'), 2, 'quad_segs=2 join=miter miter_limit=1'));
+  SELECT 'poly quadsegs=2 join=miter miter_limit=1', ST_AsText(_ST_Buffer(ST_GeomFromText('POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))'), 2, ST_Buffer_Strategy('join_miter', 1.0)));
+
+  # not support ndr/xdr
+  SELECT '#145a', ST_AsText(_ST_Buffer(ST_GeomFromText('LINESTRING(-116.93414544665981 34.16033385105459,-116.87777514700957 34.10831080544884,-116.86972224705954 34.086748622072776,-116.9327074288116 34.08458099517253,-117.00216369088065 34.130329331330216,-117.00216369088065 34.130329331330216)', 4326, 'axis-order=long-lat'), 0));
+  #fix error result
+  SELECT '#145b', ST_Area(_ST_Buffer(ST_GeomFromText('LINESTRING(-116.93414544665981 34.16033385105459,-116.87777514700957 34.10831080544884,-116.86972224705954 34.086748622072776,-116.9327074288116 34.08458099517253,-117.00216369088065 34.130329331330216,-117.00216369088065 34.130329331330216)', 4326, 'axis-order=long-lat'), 0.1));
+  --disable_warnings
+  SELECT '#145c', ST_Area(_ST_Buffer(ST_GeomFromText('LINESTRING(-116.93414544665981 34.16033385105459,-116.87777514700957 34.10831080544884,-116.86972224705954 34.086748622072776,-116.9327074288116 34.08458099517253,-117.00216369088065 34.130329331330216,-117.00216369088065 34.130329331330216)', 'axis-order=long-lat'), 0.1));
+  --enable_warnings
+
+  create table buffer_transform(the_pt geometry, utm_srid int);
+  insert into buffer_transform values
+  (ST_GeomFromText('POINT(-170 -80)', 4326, 'axis-order=long-lat'), 32702),
+  (ST_GeomFromText('POINT(-160 -80)', 4326, 'axis-order=long-lat'), 32704),
+  (ST_GeomFromText('POINT(-150 -80)', 4326, 'axis-order=long-lat'), 32706),
+  (ST_GeomFromText('POINT(-140 -80)', 4326, 'axis-order=long-lat'), 32707),
+  (ST_GeomFromText('POINT(-130 -80)', 4326, 'axis-order=long-lat'), 32709),
+  (ST_GeomFromText('POINT(-120 -80)', 4326, 'axis-order=long-lat'), 32711),
+  (ST_GeomFromText('POINT(-110 -80)', 4326, 'axis-order=long-lat'), 32712),
+  (ST_GeomFromText('POINT(-100 -80)', 4326, 'axis-order=long-lat'), 32714),
+  (ST_GeomFromText('POINT(-90 -80)', 4326, 'axis-order=long-lat'), 32716),
+  (ST_GeomFromText('POINT(-80 -80)', 4326, 'axis-order=long-lat'), 32717);
+
+  # mysql does not support, but we need to support it
+  select st_astext(the_pt), utm_srid, st_area(_ST_Buffer(the_pt, 10)) as the_area, 
+  st_area(_st_transform(_ST_Buffer(_st_transform(the_pt, utm_srid), 10), 4326)) as utm_area 
+  from buffer_transform;
+
+  #fix st_setsrid, st_point not supported
+  #select st_asText(_ST_Buffer(st_setsrid(st_point(-10, 40), 4326), 40));
+  #similar with select st_asText(ST_ForcePolygonCCW(_ST_Buffer(ST_GeogFromText('srid=4326;point(-10 40)'), 40)::geometry));
+  select st_asText(_ST_Buffer(ST_GeomFromText('point(-10 40)', 4326, 'axis-order=long-lat'), 40), 'axis-order=long-lat');
+
+  CREATE TABLE geom_operators_test (
+    description varchar(64) PRIMARY KEY,
+    geom GEOMETRY
+  );
+
+  #fix mysql only support empty geometry 
+  #fix error for geometry null
+  INSERT INTO geom_operators_test VALUES
+    ('NULL', NULL),
+    ('Square (left)', ST_GeomFromText('POLYGON((-1.0 0.0, 0.0 0.0, 0.0 1.0, -1.0 1.0, -1.0 0.0))')),
+    ('Point middle of Left Square', ST_GeomFromText('POINT(-0.5 0.5)')),
+    ('Square (right)', ST_GeomFromText('POLYGON((0.0 0.0, 1.0 0.0, 1.0 1.0, 0.0 1.0, 0.0 0.0))')),
+    ('Point middle of Right Square', ST_GeomFromText('POINT(0.5 0.5)')),
+    ('Square overlapping left and right square', ST_GeomFromText('POLYGON((-0.1 0.0, 1.0 0.0, 1.0 1.0, -0.1 1.0, -0.1 0.0))')),
+    ('Line going through left and right square', ST_GeomFromText('LINESTRING(-0.5 0.5, 0.5 0.5)')),
+    ('Faraway point', ST_GeomFromText('POINT(5.0 5.0)')),
+    ('Empty LineString', ST_GeomFromText('GEOMETRYCOLLECTION EMPTY')),
+    ('Empty Point', ST_GeomFromText('GEOMETRYCOLLECTION EMPTY')),
+    ('Empty GeometryCollection', ST_GeomFromText('GEOMETRYCOLLECTION EMPTY')),
+    ('Nested Geometry Collection', ST_GeomFromText('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(POINT(0 0)))'));
+
+  SELECT
+    a.description,
+    ST_AsText(_ST_Buffer(a.geom, 10)),
+    ST_AsText(_ST_Buffer(a.geom, 10, 'endcap=flat'))
+  FROM geom_operators_test a
+  ORDER BY a.description;
+
+  SELECT ST_AsText(_ST_Buffer(ST_GeomFromText('POINT(0 0)', 4326, 'axis-order=long-lat'), 10.0));
+
+  drop table buffer_transform, geom_operators_test;
+
+  select st_astext(_st_buffer(ST_GeomFromText('POINT(15 20)'),1,-1));
+  # bug fix : 
+  select st_astext(_st_buffer(ST_GeomFromText('POINT(15 20)'),1,0));
+  select _st_asewkt(_st_buffer(ST_GeomFromText('POINT(15 20)',26918),1,'quad_segs=0'));
+  select _st_asewkt(_st_buffer(ST_GeomFromText('POINT(15 20)',26918),1,'quad_segs=null'));
+  # bug fix : 
+  --error 3037
+  select _st_buffer(ST_GeomFromText('POINT(15 20)'),'');
+  # bugfix : 
+  --error 1210
+  select _st_buffer(ST_GeomFromText('POINT(15 20)'),1,'test');
+  # bugfix : 
+  --error 3037
+  select st_buffer(ST_GeomFromText('POINT'),null);
+  --error 3037
+  select _st_buffer(ST_GeomFromText('POINT'),null);
+  # bugfix : 
+  --error 3134
+  select _st_asewkt(_st_buffer(ST_GeomFromText('POINT(15 20)',26918),2,9999999));
+  --error 3037
+  select _st_buffer(x'0000000001060000000200000001030000000100000005000000000000000000000000000000000000000000000000002440000000000000000000000000000024400000000000002440000000000000000000000000000024400000000000000000000000000000000001030000000100000005000000000000000000144000000000000014400000000000001C4000000000000014400000000000001C400000000000001C4000000000000014400000000000001C4000000000000014400000000000001441',1);
+
+  # 
+  select _st_asewkt(_st_buffer(ST_GeomFromText('MULTIPOLYGON(((0 1,10 0,10 10,0 10,0 1)))',4326),1));
+
+  # 
+  select _st_asewkt(_st_buffer(ST_GeomFromText('POINT(15 20)',4236),1,1));
+  select _st_asewkt(_st_buffer(ST_GeomFromText('POINT(15 20)',4267),1,1));
+

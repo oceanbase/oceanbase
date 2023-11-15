@@ -1,0 +1,69 @@
+#owner : chaser.ch
+#owner group : storage
+
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+set GLOBAL ob_query_timeout = 1000000000000;
+set GLOBAL ob_trx_timeout = 10000000000000;
+set GLOBAL ob_trx_idle_timeout = 10000000000;
+
+connect (conn0,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+let $__table_id__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ table_id from oceanbase.__all_virtual_table where table_name= 't1', table_id, 1);
+let $__svr_cnt__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ count(*) as c from oceanbase.__all_server, c, 1);
+
+connect (conn2,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+--disable_warnings
+drop table if exists t1_fuse;
+--enable_warnings
+
+create table t1_fuse(a int primary key, b int, c int);
+
+let $cnt = 5;
+while ($cnt)
+{
+  eval insert into t1_fuse values($cnt, 1, 1);
+  dec $cnt;
+}
+
+update t1_fuse set b = 2 where a = 2;
+update t1_fuse set b = 3 where a = 2;
+
+connection conn0;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+--source mysql_test/include/wait_minor_merge.inc
+sleep 3;
+
+connection conn1;
+select * from t1_fuse where a = 2;
+
+set autocommit=0;
+begin;
+update t1_fuse set c = 2 where a = 2;
+sleep 1;
+select * from t1_fuse where a = 2;
+select * from t1_fuse where a = 2;
+update t1_fuse set c = 3 where a = 2;
+sleep 1;
+select * from t1_fuse where a = 2;
+select * from t1_fuse where a = 2;
+sleep 1;
+
+connection conn2;
+select * from t1_fuse where a = 2;
+
+connection conn1;
+rollback;
+select * from t1_fuse where a = 2;
+
+connection conn2;
+select * from t1_fuse where a = 2;
+
+select * from t1_fuse order by a asc;
+
+drop table t1_fuse;

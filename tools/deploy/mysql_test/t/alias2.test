@@ -1,0 +1,35 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: peihan.dph
+#owner group:sql2
+#description:this case is use for test online use of ob1.0
+
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+select 1+2 c1;
+select 1+2 as c1;
+select 1 c1;
+select 1 as c1;
+
+select 1+2 c1 from dual where 1=1;
+select 1+2 as c1 from dual where 1=1;
+select 1 c1 from dual where 1=1;
+select 1 as c1 from dual where NULL is NULL;
+
+create table t1(c1 int primary key, c2 int);
+
+insert into t1 values(1,1),(2,1);
+select c2 +100 c3 from t1 where c1=1;
+select c2 -100 c3 from t1 where c1 in (1,2);
+drop table t1;
+
+create table t1(c1 int,c2 varchar(1024),c3 float,c4 datetime(6),c5 int,c6 varchar(1024),c7 float, primary key(c1,c2));
+insert into t1 (c1,c2,c3,c5,c6,c7) values(1,'s',1.5,1,'t',2.5);
+select c5+1 c51,c6 c61,c7+1 c71 from t1 where c1=1 and c2='s' and c3=1.5;
+select c5+1 c51,c6 c61,c7+1 c71 from t1 where c1=1 and c2='s' and c3=1.5 and c5 in (1,2,3);
+
+drop table t1;

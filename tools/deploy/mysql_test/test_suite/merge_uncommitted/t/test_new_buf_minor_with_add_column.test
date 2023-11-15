@@ -1,0 +1,138 @@
+# owner: chaser.ch
+# owner group: transaction
+# description: 本case是为了测试在含未提交事务的BufMerge，含增/减列操作
+
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+connect (conn2,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn0,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+
+connection conn1;
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+#建表
+create table t1(
+obschema_c_0_68XcHo tinyint(255) NOT NULL,
+obschema_c_1_lTMGZYJ varchar(200) NULL default NULL,
+obschema_c_2_ENEd tinyint(255) NULL,
+obschema_c_3_OpRK varbinary(255) NULL default NULL,
+obschema_c_4_fpdB float NOT NULL,
+obschema_c_5_Gq varbinary(255) NULL default NULL,
+obschema_c_6_u6dri varchar(150) NOT NULL default 'CDEFGHI01',
+obschema_c_7_XB decimal(20,12) NOT NULL default 0.20329070,
+obschema_c_8_7cq4kl double NULL default NULL,
+obschema_c_9_ywrfyF decimal(10,5) NOT NULL default 0.01001) table_mode='queuing';
+
+
+connection conn0;
+let $__table_id__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ table_id from oceanbase.__all_virtual_table where table_name= 't1', table_id, 1);
+
+connection conn1;
+--disable_query_log
+let $i=0;
+while($i < 30) 
+{
+    eval insert into t1 values($i, 'Hello OceanBase & Happy New Year1', $i, 9153608021209109295703075050360401, $i * 0.2, 
+    9153608021209109295703075050360401, 'Hello OceanBase & Happy New Year3', $i * 0.2, $i * 0.2, $i * 0.2);
+    inc $i;
+}
+--enable_query_log
+
+connection conn0;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+--source mysql_test/include/wait_minor_merge.inc
+
+connection conn1;
+--disable_query_log
+let $i=30;
+while($i < 60) 
+{
+     eval insert into t1 values($i, 'Hello OceanBase & Happy New Year1', $i, 9153608021209109295703075050360401, $i * 0.2, 
+    9153608021209109295703075050360401, 'Hello OceanBase & Happy New Year3', $i * 0.2, $i * 0.2, $i * 0.2);
+    inc $i;
+}
+--enable_query_log
+
+
+connection conn0;
+alter system major freeze tenant = sys;
+alter system major freeze tenant = all_user;
+alter system major freeze tenant = all_meta;
+--source mysql_test/include/wait_daily_merge.inc
+
+connection conn1;
+alter table t1 add column obschema_c_10_Y decimal(25,10) NOT NULL default 0.20349070 FIRST , 
+add column obschema_c_11_z float NOT NULL default 0.123470 AFTER obschema_c_0_68XcHo, 
+add column obschema_c_12_PzG varchar(20) NULL default 'aEFGHI01' BEFORE obschema_c_1_lTMGZYJ;
+
+connection conn1;
+--disable_query_log
+
+let $i=60;
+while($i < 90) 
+{
+     eval insert into t1 values($i * 0.2, $i, $i * 0.2, 'Hello OceanBase', 'Hello OceanBase & Happy New Year1', 
+    $i, 9153608021209109295703075050360401, $i * 0.2, 
+    9153608021209109295703075050360401, 'Hello OceanBase & Happy New Year3', $i * 0.2, $i * 0.2, $i * 0.2);
+    inc $i;
+}
+--enable_query_log
+
+connection conn0;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+--source mysql_test/include/wait_minor_merge.inc
+
+connection conn1;
+alter table t1 drop column obschema_c_3_OpRK;
+
+connection conn1;
+--disable_query_log
+let $i=90;
+while($i < 120) 
+{
+    eval insert into t1 values($i * 0.2, $i % 10, $i * 0.2, 'Hello OceanBase', 'Hello OceanBase & Happy New Year1', 
+    $i % 10, $i * 0.2, 
+    9153608021209109295703075050360401, 'Hello OceanBase & Happy New Year3', $i * 0.2, $i * 0.2, $i * 0.2);
+    inc $i;
+}
+--enable_query_log
+
+connection conn0;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+--source mysql_test/include/wait_minor_merge.inc
+
+connection conn1;
+--disable_query_log
+let $i=120;
+while($i < 150) 
+{
+    eval insert into t1 values($i * 0.2, $i % 10, $i * 0.2, 'Hello OceanBase', 'Hello OceanBase & Happy New Year1', 
+    $i % 10, $i * 0.2, 
+    9153608021209109295703075050360401, 'Hello OceanBase & Happy New Year3', $i * 0.2, $i * 0.2, $i * 0.2);
+    inc $i;
+}
+--enable_query_log
+
+connection conn0;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+--source mysql_test/include/wait_minor_merge.inc
+
+connection conn1;
+select * from t1 limit 1;
+select count(*) from t1;
+
+drop table t1;
+

@@ -1,0 +1,27 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: zhanyue.zzy
+#owner group: sql1
+#tags: group_by
+#description: 本case用于测试count聚合函数
+##
+--disable_warnings
+drop table if exists t1,t2,t3;
+--enable_warnings
+
+select count(*);
+select count(*) from dual;
+
+create table t1 (libname varchar(21), city varchar(256), primary key (libname));
+select count(*) from t1;
+
+insert into t1 values ('test1','city1'),('test2','city2');
+insert into t1 values ('l', null);
+replace into t1 values ('2', null);
+replace into t1 values ('test3','city3'),('test4','city4');
+select count(*) from t1;
+select count(city) from t1;
+
+--error 1149
+select count(t1.*) from t1;

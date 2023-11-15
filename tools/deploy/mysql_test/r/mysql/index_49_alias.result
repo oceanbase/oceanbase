@@ -1,0 +1,28 @@
+create table t1 (c1 int primary key, c2 int, c3 int, c4 int);
+create index i1 on t1(c2);
+insert into t1 values(10, 1, 1, 1), (9, 2, 2, 2), (8, 3, 3, 3), (7, 4, 4, 4);
+select * from t1 where c2 > 0 and c2 < 5;
+c1	c2	c3	c4
+10	1	1	1
+9	2	2	2
+8	3	3	3
+7	4	4	4
+select * from t1 b where b.c2 > 0 and b.c2 < 5;
+c1	c2	c3	c4
+10	1	1	1
+9	2	2	2
+8	3	3	3
+7	4	4	4
+select /*+index(t1 i1) */ * from t1 b where b.c2 > 0 and b.c2 < 5;
+c1	c2	c3	c4
+10	1	1	1
+9	2	2	2
+8	3	3	3
+7	4	4	4
+select /*+index(b i1) */ * from t1 b where b.c2 > 0 and b.c2 < 5;
+c1	c2	c3	c4
+10	1	1	1
+9	2	2	2
+8	3	3	3
+7	4	4	4
+drop table t1;

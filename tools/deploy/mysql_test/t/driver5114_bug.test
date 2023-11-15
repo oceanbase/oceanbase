@@ -1,0 +1,27 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: link.zt
+#owner group: sql1
+
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+create table t1(pk varchar(16000) , t  timestamp(6) default "2012-01-01 12:00:00");
+
+
+let $a=abcdefghij;
+let $p=abcdefghij;
+let $cnt=1000;
+while($cnt)
+{
+   let $a=$a$p;
+   dec $cnt;
+}
+eval insert into t1 values('$a',timestamp'2012-12-12 12:12:12.123456');
+
+select length(pk) from t1;
+select * from t1;
+drop table t1;

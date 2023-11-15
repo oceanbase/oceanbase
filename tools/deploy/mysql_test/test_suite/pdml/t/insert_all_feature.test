@@ -1,0 +1,178 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: jim.wjh
+# owner group: sql2
+# tags: optimizer
+# desc: insert via parallel execution
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn_admin;
+# 注入错误，打开PDML 不稳定feature；任意错误类型即可
+alter system set_tp tp_no = 217, error_code = 1234, frequency = 1;
+connection default;
+--echo =>> init env
+--disable_query_log
+set @@ob_query_timeout = 1000000*60*5, @@ob_trx_timeout=1000000*60*5;
+--enable_query_log
+--source mysql_test/include/ignore_drop_table_err.inc
+drop table t_target;
+create table t_target(c1 int primary key, c2 int) partition by hash(c1) partitions 5;
+
+--source mysql_test/include/ignore_drop_table_err.inc
+drop table t_data;
+
+--echo =>> 1. 无全局索引情况
+
+--echo =>> 1a. 相同分区形式
+
+create table t_data(c1 int primary key, c2 int) partition by hash(c1) partitions 5;
+insert into t_data values(1, 1), (2, 2), (3, 3), (4, 4), (5, 5);
+explain basic insert /*+enable_parallel_dml parallel(2) */ into t_target select * from t_data;
+insert /*+enable_parallel_dml parallel(2) */ into t_target select * from t_data;
+--sorted_result
+select * from t_target;
+delete from t_target;
+drop table t_data;
+
+--echo =>> 1b. 分区数量不同
+
+create table t_data(c1 int primary key, c2 int) partition by hash(c1) partitions 3;
+insert into t_data values(1, 1), (2, 2), (3, 3), (4, 4), (5, 5);
+explain basic insert /*+enable_parallel_dml parallel(2) */ into t_target select * from t_data;
+insert /*+enable_parallel_dml parallel(2) */ into t_target select * from t_data;
+--sorted_result
+select * from t_target;
+delete from t_target;
+drop table t_data;
+
+--echo =>> 1c. 分区列不同
+
+create table t_data(c1 int, c2 int primary key) partition by hash(c2) partitions 5;
+insert into t_data values(1, 1), (2, 2), (3, 3), (4, 4), (5, 5);
+explain basic insert /*+enable_parallel_dml parallel(2) */ into t_target select * from t_data;
+insert /*+enable_parallel_dml parallel(2) */ into t_target select * from t_data;
+--sorted_result
+select * from t_target;
+delete from t_target;
+drop table t_data;
+
+--echo =>> 1d. 源数据表是非分区表
+
+create table t_data(c1 int, c2 int);
+insert into t_data values(1, 1), (2, 2), (3, 3), (4, 4), (5, 5);
+explain basic insert /*+enable_parallel_dml parallel(2) */ into t_target select * from t_data;
+insert /*+enable_parallel_dml parallel(2) */ into t_target select * from t_data;
+--sorted_result
+select * from t_target;
+delete from t_target;
+drop table t_data;
+
+drop table t_target;
+
+--echo =>> 1e. 目标表是非分区表
+
+create table t_target(c1 int primary key, c2 int);
+create table t_data(c1 int, c2 int);
+insert into t_data values(1, 1), (2, 2), (3, 3), (4, 4), (5, 5);
+explain basic insert /*+enable_parallel_dml parallel(2) */ into t_target select * from t_data;
+insert /*+enable_parallel_dml parallel(2) */ into t_target select * from t_data;
+
+drop table t_data;
+drop table t_target;
+
+--echo =>> 1f. 有生成列的情况
+
+create table t_target(c1 int primary key, c2 int, c3 int generated always as (c1 + 1));
+create table t_data(c1 int, c2 int);
+insert into t_data values(1, 1), (2, 2), (3, 3), (4, 4), (5, 5);
+explain basic insert /*+enable_parallel_dml parallel(2) */ into t_target(c1, c2) select * from t_data;
+insert /*+enable_parallel_dml parallel(2) */ into t_target(c1, c2) select * from t_data;
+
+drop table t_data;
+drop table t_target;
+
+
+# 包含全局索引
+
+--echo =>> 2. 包含全局索引情况
+
+--echo =>> 2a. 普通全局索引
+
+create table t_data(c1 int primary key, c2 int, c3 int) partition by hash(c1) partitions 5;
+insert into t_data values(1, 1, 1), (2, 2, 2), (3, 3, 3), (4, 4, 4), (5, 5, 5);
+create table t_target(c1 int primary key, c2 int, c3 int) partition by hash(c1) partitions 5;
+create index gindex1 on t_target(c2, c3) partition by hash(c2) partitions 5;
+create index gindex2 on t_target(c1, c3) partition by hash(c3) partitions 2; 
+explain basic insert /*+enable_parallel_dml parallel(2) */ into t_target select * from t_data;
+insert /*+enable_parallel_dml parallel(2) */ into t_target select * from t_data;
+--sorted_result
+select /*+index(t_target primary)*/ * from t_target;
+--sorted_result
+select /*+index(t_target gindex1)*/ c2, c3 from t_target;
+--sorted_result
+select /*+index(t_target gindex2)*/ c1, c3 from t_target;
+drop table t_target;
+drop table t_data;
+
+
+--echo =>> 2b. 普通全局索引含有生成列的情况
+
+create table t_data(c1 int primary key, c2 int, c3 int) partition by hash(c1) partitions 5;
+insert into t_data values(1, 1, 1), (2, 2, 2), (3, 3, 3), (4, 4, 4), (5, 5, 5);
+create table t_target(c1 int primary key, c2 int, c3 int, c4 int generated always as (c1 + 1)) partition by hash(c1) partitions 5;
+create index gindex1 on t_target(c2, c4) partition by hash(c2) partitions 5;
+create index gindex2 on t_target(c1, c4) partition by hash(c4) partitions 2; 
+explain basic insert /*+enable_parallel_dml parallel(2) */ into t_target(c1, c2, c3) select * from t_data;
+insert /*+enable_parallel_dml parallel(2) */ into t_target(c1, c2, c3) select * from t_data;
+--sorted_result
+select /*+index(t_target primary)*/ * from t_target;
+--sorted_result
+select /*+index(t_target gindex1)*/ c2, c4 from t_target;
+--sorted_result
+select /*+index(t_target gindex2)*/ c1, c4 from t_target;
+drop table t_target;
+drop table t_data;
+
+--echo =>> 2c. unique全局索引以及含有生成列情况
+
+create table t_data(c1 int primary key, c2 int, c3 int) partition by hash(c1) partitions 5;
+insert into t_data values(1, 1, 1), (2, 2, 2), (3, 3, 3), (4, 4, 4), (5, 5, 5);
+
+create table t_target(c1 int primary key, c2 int, c3 int, c4 int generated always as (c1 + 1)) partition by hash(c1) partitions 5;
+create unique index ugindex1 on t_target(c2) global;
+explain basic insert /*+enable_parallel_dml parallel(2) */ into t_target(c1, c2, c3) select * from t_data;
+create unique index ugindex2 on t_target(c3) global partition by hash(c3) partitions 3;
+explain basic insert /*+enable_parallel_dml parallel(2) */ into t_target(c1, c2, c3) select * from t_data;
+create unique index ugindex3 on t_target(c2, c3, c4) global partition by hash(c4) partitions 3;
+explain basic insert /*+enable_parallel_dml parallel(2) */ into t_target(c1, c2, c3) select * from t_data;
+
+insert /*+enable_parallel_dml parallel(2) */ into t_target(c1, c2, c3) select * from t_data;
+
+--sorted_result
+select /*+index(t_target primary)*/ *  from t_target;
+--sorted_result
+select /*+index(t_target ugindex1)*/ c2 from t_target;
+--sorted_result
+select /*+index(t_target ugindex2)*/ c3 from t_target;
+--sorted_result
+select /*+index(t_target ugindex3)*/ c2, c3, c4 from t_target;
+drop table t_target;
+drop table t_data;
+
+--echo =>> 2d. unique全局索引包含null的情况
+
+create table t_data(c1 int primary key, c2 int, c3 int) partition by hash(c1) partitions 5;
+create table t_target(c1 int primary key, c2 int, c3 int, c4 int generated always as (c1 + 1)) partition by hash(c1) partitions 5;
+insert into t_data values(1, null, 1), (2, 2, null), (3, null, null), (4, 4, null), (5, null, 5);
+explain basic insert /*+enable_parallel_dml parallel(2) */ into t_target(c1, c2, c3) select * from t_data;
+insert /*+enable_parallel_dml parallel(2) */ into t_target(c1, c2, c3) select * from t_data;
+select * from t_target order by c1;
+select /*+index (t_target ugindex1)*/ c2, c1 from t_target order by c2, c1;
+select /*+index (t_target ugindex2)*/ c3, c1 from t_target order by c3, c1;
+select /*+index (t_target ugindex3)*/ c2, c3, c4 from t_target order by c2, c1;
+drop table t_target;
+drop table t_data;
+
+connection conn_admin;
+alter system set_tp tp_no = 217, error_code = 1234, frequency = 0;

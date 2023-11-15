@@ -1,0 +1,93 @@
+#owner: dachuan.sdc
+#owner group: SQL3
+# tags: optimizer
+
+--disable_query_log
+connect (obsys, $OBMYSQL_MS0, admin, $OBMYSQL_PWD, test, $OBMYSQL_PORT);
+connection obsys;
+
+set global ob_sql_work_area_percentage = 100;
+sleep 10;
+--enable_query_log
+--source mysql_test/test_suite/px/include/exam_data.inc
+
+## 测试不同并行度下的全表扫描
+--sorted_result
+select * from stu;
+--sorted_result
+select /*+ USE_PX parallel(2) */ * from stu;
+--sorted_result
+select /*+ USE_PX parallel(6) */ * from stu;
+--sorted_result
+select /*+ USE_PX parallel(18) */ * from stu;
+--sorted_result
+select /*+ USE_PX parallel(28) */ name, cls from stu;
+
+--sorted_result
+select * from teacher;
+--sorted_result
+select /*+ USE_PX parallel(2) */ * from teacher;
+--sorted_result
+select /*+ USE_PX parallel(6) */ * from teacher;
+--sorted_result
+select /*+ USE_PX parallel(8) */ * from teacher;
+--sorted_result
+select /*+ USE_PX parallel(18) */ name from teacher;
+
+--sorted_result
+select * from score;
+--sorted_result
+select /*+ USE_PX parallel(2) */ * from score;
+--sorted_result
+select /*+ USE_PX parallel(6) */ * from score;
+--sorted_result
+select /*+ USE_PX parallel(8) */ * from score;
+--sorted_result
+select /*+ USE_PX parallel(18) */ score, sid from score;
+
+
+
+# 测试全表扫，范围扫，分区裁剪扫
+--sorted_result
+select /*+ USE_PX parallel(3) */ * from score where score > 60 and score < 90;
+--sorted_result
+select /*+ USE_PX parallel(3) */ * from score where score > 60 and score < 90 and subject = 'MA';
+--sorted_result
+select /*+ USE_PX parallel(3) */ * from score where score > 60 and score < 90 and subject IN ('MA', 'EN', 'HIS');
+--sorted_result
+select /*+ USE_PX parallel(3) */ * from score where sid >=20 and sid <= 40 and score > 60 and score < 90 and subject IN ('MA', 'EN', 'HIS');
+--sorted_result
+select /*+ USE_PX parallel(3) */ * from score where sid IN (41, 51) and score > 60 and score < 90 and subject IN ('MA', 'EN', 'HIS');
+
+
+
+# 测试 merge sort receive
+explain select /*+ USE_PX parallel(2) */ * from stu order by name desc;
+select /*+ USE_PX parallel(2) */ * from stu order by name desc;
+select /*+ USE_PX parallel(2) */ * from stu order by name;
+
+# 测试 limit push down
+explain select /*+ USE_PX parallel(2) */ * from stu order by name limit 3;
+select /*+ USE_PX parallel(2) */ * from stu order by name limit 3;
+
+
+## 
+## SEArray自动扩容失败
+create table t11 (c1 int, c2 int, c3 int, c4 int) partition by hash(c1);
+
+select /*+use_px parallel(2) read_consistency(weak) */ t0.c1 from (select c1,c2 from t11 where t11.c1 BETWEEN 1000000000000001 and 1000000000000500) t0 join (select c1,c2 from t11 where t11.c1 BETWEEN 1000000000000001 and 1000000000000500) t1 on t0.c1=t1.c1 join (select c1,c2 from t11 where t11.c1 BETWEEN 1000000000000001 and 1000000000000500) t2 on t0.c1=t2.c1 join (select c1,c2 from t11 where t11.c1 BETWEEN 1000000000000001 and 1000000000000500) t3 on t0.c1=t3.c1 join (select c1,c2 from t11 where t11.c1 BETWEEN 1000000000000001 and 1000000000000500) t4 on t0.c1=t4.c1 join (select c1,c2 from t11 where t11.c1 BETWEEN 1000000000000001 and 1000000000000500) t5 on t0.c1=t5.c1 join (select c1,c2 from t11 where t11.c1 BETWEEN 1000000000000001 and 1000000000000500) t6 on t0.c1=t6.c1 join (select c1,c2 from t11 where t11.c1 BETWEEN 1000000000000001 and 1000000000000500) t7 on t0.c1=t7.c1 join (select c1,c2 from t11 where t11.c1 BETWEEN 1000000000000001 and 1000000000000500) t8 on t0.c1=t8.c1 join (select c1,c2 from t11 where t11.c1 BETWEEN 1000000000000001 and 1000000000000500) t9 on t0.c1=t9.c1 join (select c1,c2 from t11 where t11.c1 BETWEEN 1000000000000001 and 1000000000000500) t10 on t0.c1=t10.c1 join (select c1,c2 from t11 where t11.c1 BETWEEN 1000000000000001 and 1000000000000500) t11 on t0.c1=t11.c1 join (select c1,c2 from t11 where t11.c1 BETWEEN 1000000000000001 and 1000000000000500) t12 on t0.c1=t12.c1 join (select c1,c2 from t11 where t11.c1 BETWEEN 1000000000000001 and 1000000000000500) t13 on t0.c1=t13.c1 join (select c1,c2 from t11 where t11.c1 BETWEEN 1000000000000001 and 1000000000000500) t14 on t0.c1=t14.c1 join (select c1,c2 from t11 where t11.c1 BETWEEN 1000000000000001 and 1000000000000500) t15 on t0.c1=t15.c1 join (select c1,c2 from t11 where t11.c1 BETWEEN 1000000000000001 and 1000000000000500) t16 on t0.c1=t16.c1 join (select c1,c2 from t11 where t11.c1 BETWEEN 1000000000000001 and 1000000000000500) t17 on t0.c1=t17.c1 join (select c1,c2 from t11 where t11.c1 BETWEEN 1000000000000001 and 1000000000000500) t18 on t0.c1=t18.c1 join (select c1,c2 from t11 where t11.c1 BETWEEN 1000000000000001 and 1000000000000500) t19 on t0.c1=t19.c1;
+
+--echo
+# bug:
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(c1 int primary key, c2 varchar(10)) partition by hash(c1) partitions 2;
+insert into t1 values(1, 'aaa'),(2,'bbb');
+explain basic select * from t1 where c2 not in('', 'xxx');
+select * from t1 where c2 not in('', 'xxx');
+
+--disable_query_log
+set global ob_sql_work_area_percentage = 5;
+
+disconnect obsys;

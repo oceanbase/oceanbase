@@ -1,0 +1,359 @@
+# owner: huronghui.hrh 
+# owner group: STORAGE
+# description:
+
+--disable_query_log
+--disable_warnings
+set @@recyclebin = off;
+drop table if exists t1,t2;
+--enable_warnings
+--enable_query_log
+
+alter system enable_table_without_all_cg = false;
+create table t1(a int, b varchar(3048), primary key (a), c int) with column group for all columns, each column;
+create table t2(pk int, c1 int, c2 int unsigned, c3 varchar(100)) block_size=2048 with column group for all columns, each column;
+
+sleep 10;
+
+--disable_query_log
+--disable_warnings
+--let $count=1
+while ($count < 300)
+{
+  eval INSERT INTO t1 VALUES($count, repeat($count * 10, 512), $count * 10);
+  eval insert into t2(pk, c1,c2,c3) values 
+                                  ($count * 10 + 1,$count * 10 + 1, $count * 10 + 1 + 1, concat("abcdefg", $count)),
+                                  ($count * 10 + 2,$count * 10 + 2, $count * 10 + 2 + 1, concat("abcdefg", $count)),
+                                  ($count * 10 + 3,$count * 10 + 3, $count * 10 + 3 + 1, concat("abcdefg", $count)),
+                                  ($count * 10 + 4,$count * 10 + 4, $count * 10 + 4 + 1, concat("abcdefg", $count)),
+                                  ($count * 10 + 5,$count * 10 + 5, $count * 10 + 5 + 1, concat("abcdefg", $count)),
+                                  ($count * 10 + 6,$count * 10 + 6, $count * 10 + 6 + 1, concat("abcdefg", $count)),
+                                  ($count * 10 + 7,$count * 10 + 7, $count * 10 + 7 + 1, concat("abcdefg", $count)),
+                                  ($count * 10 + 8,$count * 10 + 8, $count * 10 + 8 + 1, concat("abcdefg", $count)),
+                                  ($count * 10 + 9,$count * 10 + 9, $count * 10 + 9 + 1, concat("abcdefg", $count)),
+                                  ($count * 10 + 10,$count * 10 + 10, $count * 10 + 10+ 1, concat("abcdefg", $count));
+  inc $count;
+  inc $count;
+}
+--enable_warnings
+--enable_query_log
+select count(*) from t1;
+select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
+select count(*),count(pk),min(pk),max(pk),sum(pk),min(c1),max(c1),sum(c1),min(c2),max(c2),sum(c2),min(c3),max(c3) from t2;
+
+alter system major freeze;
+--source mysql_test/include/wait_daily_merge.inc
+
+alter table t1 add column c1 int default 0, add column c2 varchar(100);
+
+--disable_query_log
+--disable_warnings
+--let $count=300
+while ($count < 500)
+{
+  eval INSERT INTO t1 VALUES($count, repeat($count * 10, 512), $count * 10, $count, repeat($count, 5));
+  inc $count;
+  inc $count;
+}
+--enable_warnings
+--enable_query_log
+
+alter system set _pushdown_storage_level = 0;
+alter system set _rowsets_enabled = false;
+alter system flush plan cache;
+select count(*) from t1;
+select count(c1) from t1;
+select count(c2) from t1;
+select count(c1) from t1 where c1 > 300;
+select count(c1) from t1 where c1 < 30;
+select a, c2, count(c1) from t1 where c1 > 480;
+select c1, c2 from t1 where c1 > 480 and a < 495;
+select b, c2, count(c1) from t1 where c1 > 490 and a < 495;
+select a, c1, count(c1) from t1 where a <20 and c1 != 80 and c1 != 6 and c1 < 30;
+select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
+select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
+
+alter system set _pushdown_storage_level = 0;
+alter system set _rowsets_enabled = true;
+alter system flush plan cache;
+select count(*) from t1;
+select count(c1) from t1;
+select count(c2) from t1;
+select count(c1) from t1 where c1 > 300;
+select count(c1) from t1 where c1 < 30;
+select a, c2, count(c1) from t1 where c1 > 480;
+select c1, c2 from t1 where c1 > 480 and a < 495;
+select b, c2, count(c1) from t1 where c1 > 490 and a < 495;
+select a, c1, count(c1) from t1 where a <20 and c1 != 80 and c1 != 6 and c1 < 30;
+select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
+select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
+
+alter system set _pushdown_storage_level = 4;
+alter system set _rowsets_enabled = false;
+alter system flush plan cache;
+select count(*) from t1;
+select count(c1) from t1;
+select count(c2) from t1;
+select count(c1) from t1 where c1 > 300;
+select count(c1) from t1 where c1 < 30;
+select a, c2, count(c1) from t1 where c1 > 480;
+select c1, c2 from t1 where c1 > 480 and a < 495;
+select b, c2, count(c1) from t1 where c1 > 490 and a < 495;
+select a, c1, count(c1) from t1 where a <20 and c1 != 80 and c1 != 6 and c1 < 30;
+select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
+select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
+
+alter system set _pushdown_storage_level = 4;
+alter system set _rowsets_enabled = true;
+alter system flush plan cache;
+select count(*) from t1;
+select count(c1) from t1;
+select count(c2) from t1;
+select count(c1) from t1 where c1 > 300;
+select count(c1) from t1 where c1 < 30;
+select a, c2, count(c1) from t1 where c1 > 480;
+select c1, c2 from t1 where c1 > 480 and a < 495;
+select b, c2, count(c1) from t1 where c1 > 490 and a < 495;
+select a, c1, count(c1) from t1 where a <20 and c1 != 80 and c1 != 6 and c1 < 30;
+select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
+select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
+
+alter system major freeze;
+--source mysql_test/include/wait_daily_merge.inc
+
+alter table t2 add column c4 bigint default 10, add column c5 bigint unsigned default 20;
+alter table t2 add column c6 bigint default null;
+
+alter system set _pushdown_storage_level = 0;
+alter system set _rowsets_enabled = false;
+alter system flush plan cache;
+select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
+select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
+select count(*),count(pk),min(pk),max(pk),sum(pk),min(c1),max(c1),sum(c1),min(c2),max(c2),sum(c2),min(c3),max(c3) from t2;
+select count(*),count(c4),count(c5),count(c6) from t2;
+select min(c4),min(c5),min(c6) from t2;
+select max(c4),max(c5),max(c6) from t2;
+select sum(c4),sum(c5),sum(c6) from t2;
+select count(*),min(pk),max(c1),sum(c2),min(c3),max(c4),sum(c5),count(c6) from t2;
+select count(*) from t1;
+select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
+select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
+
+alter system set _pushdown_storage_level = 0;
+alter system set _rowsets_enabled = true;
+alter system flush plan cache;
+select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
+select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
+select count(*),count(pk),min(pk),max(pk),sum(pk),min(c1),max(c1),sum(c1),min(c2),max(c2),sum(c2),min(c3),max(c3) from t2;
+select count(*),count(c4),count(c5),count(c6) from t2;
+select min(c4),min(c5),min(c6) from t2;
+select max(c4),max(c5),max(c6) from t2;
+select sum(c4),sum(c5),sum(c6) from t2;
+select count(*),min(pk),max(c1),sum(c2),min(c3),max(c4),sum(c5),count(c6) from t2;
+select count(*) from t1;
+select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
+select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
+
+alter system set _pushdown_storage_level = 4;
+alter system set _rowsets_enabled = false;
+alter system flush plan cache;
+select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
+select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
+select count(*),count(pk),min(pk),max(pk),sum(pk),min(c1),max(c1),sum(c1),min(c2),max(c2),sum(c2),min(c3),max(c3) from t2;
+select count(*),count(c4),count(c5),count(c6) from t2;
+select min(c4),min(c5),min(c6) from t2;
+select max(c4),max(c5),max(c6) from t2;
+select sum(c4),sum(c5),sum(c6) from t2;
+select count(*),min(pk),max(c1),sum(c2),min(c3),max(c4),sum(c5),count(c6) from t2;
+select count(*) from t1;
+select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
+select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
+
+alter system set _pushdown_storage_level = 4;
+alter system set _rowsets_enabled = true;
+alter system flush plan cache;
+select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
+select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
+select count(*),count(pk),min(pk),max(pk),sum(pk),min(c1),max(c1),sum(c1),min(c2),max(c2),sum(c2),min(c3),max(c3) from t2;
+select count(*),count(c4),count(c5),count(c6) from t2;
+select min(c4),min(c5),min(c6) from t2;
+select max(c4),max(c5),max(c6) from t2;
+select sum(c4),sum(c5),sum(c6) from t2;
+select count(*),min(pk),max(c1),sum(c2),min(c3),max(c4),sum(c5),count(c6) from t2;
+select count(*) from t1;
+select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
+select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
+
+drop table t1,t2;
+
+alter system enable_table_without_all_cg = true;
+alter system flush plan cache;
+
+create table t1(a int, b varchar(3048), primary key (a), c int) with column group for all columns, each column;
+create table t2(pk int, c1 int, c2 int unsigned, c3 varchar(100)) block_size=2048 with column group for all columns, each column;
+
+sleep 10;
+
+--disable_query_log
+--disable_warnings
+--let $count=1
+while ($count < 300)
+{
+  eval INSERT INTO t1 VALUES($count, repeat($count * 10, 512), $count * 10);
+  eval insert into t2(pk, c1,c2,c3) values 
+                                  ($count * 10 + 1,$count * 10 + 1, $count * 10 + 1 + 1, concat("abcdefg", $count)),
+                                  ($count * 10 + 2,$count * 10 + 2, $count * 10 + 2 + 1, concat("abcdefg", $count)),
+                                  ($count * 10 + 3,$count * 10 + 3, $count * 10 + 3 + 1, concat("abcdefg", $count)),
+                                  ($count * 10 + 4,$count * 10 + 4, $count * 10 + 4 + 1, concat("abcdefg", $count)),
+                                  ($count * 10 + 5,$count * 10 + 5, $count * 10 + 5 + 1, concat("abcdefg", $count)),
+                                  ($count * 10 + 6,$count * 10 + 6, $count * 10 + 6 + 1, concat("abcdefg", $count)),
+                                  ($count * 10 + 7,$count * 10 + 7, $count * 10 + 7 + 1, concat("abcdefg", $count)),
+                                  ($count * 10 + 8,$count * 10 + 8, $count * 10 + 8 + 1, concat("abcdefg", $count)),
+                                  ($count * 10 + 9,$count * 10 + 9, $count * 10 + 9 + 1, concat("abcdefg", $count)),
+                                  ($count * 10 + 10,$count * 10 + 10, $count * 10 + 10+ 1, concat("abcdefg", $count));
+  inc $count;
+  inc $count;
+}
+--enable_warnings
+--enable_query_log
+select count(*) from t1;
+select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
+select count(*),count(pk),min(pk),max(pk),sum(pk),min(c1),max(c1),sum(c1),min(c2),max(c2),sum(c2),min(c3),max(c3) from t2;
+
+alter system major freeze;
+--source mysql_test/include/wait_daily_merge.inc
+
+alter table t1 add column c1 int default 0, add column c2 varchar(100);
+
+--disable_query_log
+--disable_warnings
+--let $count=300
+while ($count < 500)
+{
+  eval INSERT INTO t1 VALUES($count, repeat($count * 10, 512), $count * 10, $count, repeat($count, 5));
+  inc $count;
+  inc $count;
+}
+--enable_warnings
+--enable_query_log
+
+alter system set _pushdown_storage_level = 0;
+alter system set _rowsets_enabled = false;
+alter system flush plan cache;
+select count(*) from t1;
+select count(c1) from t1;
+select count(c2) from t1;
+select count(c1) from t1 where c1 > 300;
+select count(c1) from t1 where c1 < 30;
+select a, c2, count(c1) from t1 where c1 > 480;
+select c1, c2 from t1 where c1 > 480 and a < 495;
+select b, c2, count(c1) from t1 where c1 > 490 and a < 495;
+select a, c1, count(c1) from t1 where a <20 and c1 != 80 and c1 != 6 and c1 < 30;
+select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
+select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
+
+alter system set _pushdown_storage_level = 0;
+alter system set _rowsets_enabled = true;
+alter system flush plan cache;
+select count(*) from t1;
+select count(c1) from t1;
+select count(c2) from t1;
+select count(c1) from t1 where c1 > 300;
+select count(c1) from t1 where c1 < 30;
+select a, c2, count(c1) from t1 where c1 > 480;
+select c1, c2 from t1 where c1 > 480 and a < 495;
+select b, c2, count(c1) from t1 where c1 > 490 and a < 495;
+select a, c1, count(c1) from t1 where a <20 and c1 != 80 and c1 != 6 and c1 < 30;
+select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
+select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
+
+alter system set _pushdown_storage_level = 4;
+alter system set _rowsets_enabled = false;
+alter system flush plan cache;
+select count(*) from t1;
+select count(c1) from t1;
+select count(c2) from t1;
+select count(c1) from t1 where c1 > 300;
+select count(c1) from t1 where c1 < 30;
+select a, c2, count(c1) from t1 where c1 > 480;
+select c1, c2 from t1 where c1 > 480 and a < 495;
+select b, c2, count(c1) from t1 where c1 > 490 and a < 495;
+select a, c1, count(c1) from t1 where a <20 and c1 != 80 and c1 != 6 and c1 < 30;
+select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
+select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
+
+alter system major freeze;
+--source mysql_test/include/wait_daily_merge.inc
+
+alter table t2 add column c4 bigint default 10, add column c5 bigint unsigned default 20;
+alter table t2 add column c6 bigint default null;
+
+alter system set _pushdown_storage_level = 0;
+alter system set _rowsets_enabled = false;
+alter system flush plan cache;
+select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
+select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
+select count(*),count(pk),min(pk),max(pk),sum(pk),min(c1),max(c1),sum(c1),min(c2),max(c2),sum(c2),min(c3),max(c3) from t2;
+select count(*),count(c4),count(c5),count(c6) from t2;
+select min(c4),min(c5),min(c6) from t2;
+select max(c4),max(c5),max(c6) from t2;
+select sum(c4),sum(c5),sum(c6) from t2;
+select count(*),min(pk),max(c1),sum(c2),min(c3),max(c4),sum(c5),count(c6) from t2;
+select count(*) from t1;
+select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
+select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
+
+alter system set _pushdown_storage_level = 0;
+alter system set _rowsets_enabled = true;
+alter system flush plan cache;
+select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
+select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
+select count(*),count(pk),min(pk),max(pk),sum(pk),min(c1),max(c1),sum(c1),min(c2),max(c2),sum(c2),min(c3),max(c3) from t2;
+select count(*),count(c4),count(c5),count(c6) from t2;
+select min(c4),min(c5),min(c6) from t2;
+select max(c4),max(c5),max(c6) from t2;
+select sum(c4),sum(c5),sum(c6) from t2;
+select count(*),min(pk),max(c1),sum(c2),min(c3),max(c4),sum(c5),count(c6) from t2;
+select count(*) from t1;
+select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
+select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
+
+alter system set _pushdown_storage_level = 4;
+alter system set _rowsets_enabled = false;
+alter system flush plan cache;
+select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
+select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
+select count(*),count(pk),min(pk),max(pk),sum(pk),min(c1),max(c1),sum(c1),min(c2),max(c2),sum(c2),min(c3),max(c3) from t2;
+select count(*),count(c4),count(c5),count(c6) from t2;
+select min(c4),min(c5),min(c6) from t2;
+select max(c4),max(c5),max(c6) from t2;
+select sum(c4),sum(c5),sum(c6) from t2;
+select count(*),min(pk),max(c1),sum(c2),min(c3),max(c4),sum(c5),count(c6) from t2;
+select count(*) from t1;
+select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
+select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
+
+alter system set _pushdown_storage_level = 4;
+alter system set _rowsets_enabled = true;
+alter system flush plan cache;
+select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
+select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
+select count(*),count(pk),min(pk),max(pk),sum(pk),min(c1),max(c1),sum(c1),min(c2),max(c2),sum(c2),min(c3),max(c3) from t2;
+select count(*),count(c4),count(c5),count(c6) from t2;
+select min(c4),min(c5),min(c6) from t2;
+select max(c4),max(c5),max(c6) from t2;
+select sum(c4),sum(c5),sum(c6) from t2;
+select count(*),min(pk),max(c1),sum(c2),min(c3),max(c4),sum(c5),count(c6) from t2;
+select count(*) from t1;
+select count(*),count(a),min(a),max(a),sum(a),count(b),min(b),max(b),count(c),min(c),max(c),sum(c) from t1;
+select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from t1;
+
+drop table t1,t2;
+
+--disable_query_log
+set @@recyclebin = on;
+alter system enable_table_without_all_cg = false;
+alter system set _pushdown_storage_level = 4;
+alter system set _rowsets_enabled = true;
+alter system flush plan cache;
+--enable_query_log

@@ -1,0 +1,402 @@
+# ----------------------------------------------------------------------
+# Test of GEOMETRY ST_Intersects (cases from postgis).
+# ----------------------------------------------------------------------
+drop table if exists gis_geometrycollection, gis_geometrycollection_2, tbl_polygon;
+SELECT ST_INTERSECTS(st_geomfromtext('LINESTRING(0 10, 0 -10)'), st_geomfromtext('LINESTRING(0 0, 1 1)'));
+ST_INTERSECTS(st_geomfromtext('LINESTRING(0 10, 0 -10)'), st_geomfromtext('LINESTRING(0 0, 1 1)'))
+1
+SELECT ST_INTERSECTS(st_geomfromtext('POINT(5 5)'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'));
+ST_INTERSECTS(st_geomfromtext('POINT(5 5)'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))
+1
+SELECT ST_INTERSECTS(st_geomfromtext('POINT(0 0)'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'));
+ST_INTERSECTS(st_geomfromtext('POINT(0 0)'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))
+1
+SELECT ST_INTERSECTS(st_geomfromtext('POINT(-1 0)'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'));
+ST_INTERSECTS(st_geomfromtext('POINT(-1 0)'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))
+0
+SELECT ST_INTERSECTS(st_geomfromtext('POINT(0 5)'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'));
+ST_INTERSECTS(st_geomfromtext('POINT(0 5)'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))
+1
+SELECT ST_INTERSECTS(st_geomfromtext('POINT(0 12)'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'));
+ST_INTERSECTS(st_geomfromtext('POINT(0 12)'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))
+0
+SELECT ST_INTERSECTS(st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), st_geomfromtext('POINT(5 5)'));
+ST_INTERSECTS(st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), st_geomfromtext('POINT(5 5)'))
+1
+SELECT ST_INTERSECTS(st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), st_geomfromtext('POINT(5 5)'));
+ST_INTERSECTS(st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), st_geomfromtext('POINT(5 5)'))
+1
+SELECT ST_INTERSECTS(st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), st_geomfromtext('POINT(0 0)'));
+ST_INTERSECTS(st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), st_geomfromtext('POINT(0 0)'))
+1
+SELECT ST_INTERSECTS(st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), st_geomfromtext('POINT(-1 0)'));
+ST_INTERSECTS(st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), st_geomfromtext('POINT(-1 0)'))
+0
+SELECT ST_INTERSECTS(st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), st_geomfromtext('POINT(0 5)'));
+ST_INTERSECTS(st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), st_geomfromtext('POINT(0 5)'))
+1
+SELECT ST_INTERSECTS(st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), st_geomfromtext('POINT(0 12)'));
+ST_INTERSECTS(st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), st_geomfromtext('POINT(0 12)'))
+0
+# intersects105
+SELECT ST_INTERSECTS(ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631), ST_GeomFromText('POINT(521513 5377804)', 32631));
+ST_INTERSECTS(ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631), ST_GeomFromText('POINT(521513 5377804)', 32631))
+1
+SELECT ST_INTERSECTS(ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631), ST_GeomFromText('POINT(521513 5377804)', 32631));
+ST_INTERSECTS(ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631), ST_GeomFromText('POINT(521513 5377804)', 32631))
+1
+SELECT ST_INTERSECTS(ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631), ST_GeomFromText('POINT(521513 5377804)', 32631));
+ST_INTERSECTS(ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631), ST_GeomFromText('POINT(521513 5377804)', 32631))
+1
+# intersects106
+SELECT ST_INTERSECTS(ST_GeomFromText('POINT(521513 5377804)', 32631), ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631));
+ST_INTERSECTS(ST_GeomFromText('POINT(521513 5377804)', 32631), ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631))
+1
+SELECT ST_INTERSECTS(ST_GeomFromText('POINT(521513 5377804)', 32631), ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631));
+ST_INTERSECTS(ST_GeomFromText('POINT(521513 5377804)', 32631), ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631))
+1
+SELECT ST_INTERSECTS(ST_GeomFromText('POINT(521513 5377804)', 32631), ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631));
+ST_INTERSECTS(ST_GeomFromText('POINT(521513 5377804)', 32631), ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631))
+1
+# intersects107
+SELECT ST_INTERSECTS(ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631), ST_GeomFromText('POINT(521513 5377804)', 32631));
+ST_INTERSECTS(ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631), ST_GeomFromText('POINT(521513 5377804)', 32631))
+1
+SELECT ST_INTERSECTS(ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631), ST_GeomFromText('POINT(521513 5377804)', 32631));
+ST_INTERSECTS(ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631), ST_GeomFromText('POINT(521513 5377804)', 32631))
+1
+SELECT ST_INTERSECTS(ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631), ST_GeomFromText('POINT(521513 5377804)', 32631));
+ST_INTERSECTS(ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631), ST_GeomFromText('POINT(521513 5377804)', 32631))
+1
+# intersects108
+SELECT ST_INTERSECTS(ST_GeomFromText('POINT(521513 5377804)', 32631), ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631));
+ST_INTERSECTS(ST_GeomFromText('POINT(521513 5377804)', 32631), ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631))
+1
+SELECT ST_INTERSECTS(ST_GeomFromText('POINT(521513 5377804)', 32631), ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631));
+ST_INTERSECTS(ST_GeomFromText('POINT(521513 5377804)', 32631), ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631))
+1
+SELECT ST_INTERSECTS(ST_GeomFromText('POINT(521513 5377804)', 32631), ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631));
+ST_INTERSECTS(ST_GeomFromText('POINT(521513 5377804)', 32631), ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631))
+1
+drop table if exists t1, t2;
+# intersects20x types100 types114
+create table t1 (p1 geometry, p2 geometry);
+insert into t1(p1, p2) values
+(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('POLYGON((2 2, 2 3, 3 3, 3 2, 2 2))')),
+(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('POLYGON((2 2, 2 3, 3 3, 3 2, 2 2))')),
+(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))')),
+(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('POLYGON((-5 -5, 5 -5, 5 5, -5 5, -5 -5))')),
+(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('POLYGON((-2 -2, -2 -3, -3 -3, -3 -2, -2 -2))')),
+(ST_GeomFromText('POLYGON((0 0, 0 10, 10 11, 10 0, 0 0))'), ST_GeomFromText('POLYGON((2 2, 2 3, 3 3, 3 2, 2 2))')),
+(ST_GeomFromText('POLYGON((0 0, 0 10, 10 11, 10 0, 0 0))'), ST_GeomFromText('POLYGON((2 2, 2 3, 3 3, 3 2, 2 2))')),
+(ST_GeomFromText('POLYGON((0 0, 0 10, 10 11, 10 0, 0 0))'), ST_GeomFromText('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))')),
+(ST_GeomFromText('POLYGON((0 0, 0 10, 10 11, 10 0, 0 0))'), ST_GeomFromText('POLYGON((-5 -5, 5 -5, 5 5, -5 5, -5 -5))')),
+(ST_GeomFromText('POLYGON((0 0, 0 10, 10 11, 10 0, 0 0))'), ST_GeomFromText('POLYGON((-2 -2, -2 -3, -3 -3, -3 -2, -2 -2))')),
+(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('POINT(5 5)')),
+(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('POINT(5 5)')),
+(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('POINT(5 5)')),
+(ST_GeomFromText('LINESTRING(0 0, 0 10, 10 10, 10 0)'), ST_GeomFromText('POINT(5 5)')),
+(ST_GeomFromText('LINESTRING(0 0, 0 10, 10 10, 10 0)'), ST_GeomFromText('POINT(5 5)')),
+(ST_GeomFromText('LINESTRING(0 0, 0 10, 10 10, 10 0)'), ST_GeomFromText('POINT(5 5)')),
+(ST_GeomFromText('POINT(5 5)'), ST_GeomFromText('POINT(5 5)')),
+(ST_GeomFromText('POINT(5 5)'), ST_GeomFromText('POINT(5 5)')),
+(ST_GeomFromText('POINT(5 5)'), ST_GeomFromText('POINT(5 5)')),
+(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))')),
+(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))')),
+(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))')),
+(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('LINESTRING(0 0, 0 10, 10 10, 10 0)')),
+(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('LINESTRING(0 0, 0 10, 10 10, 10 0)')),
+(ST_GeomFromText('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), ST_GeomFromText('LINESTRING(0 0, 0 10, 10 10, 10 0)'));
+select ST_Intersects(p1, p2) AS intersects_p1p2, ST_Intersects(p2, p1) AS intersects_p2p1 from t1;
+intersects_p1p2	intersects_p2p1
+1	1
+1	1
+1	1
+1	1
+0	0
+1	1
+1	1
+1	1
+1	1
+0	0
+1	1
+1	1
+1	1
+0	0
+0	0
+0	0
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+drop table t1;
+# intersects310
+SELECT ST_INTERSECTS(st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), st_geomfromtext('LINESTRING(1 10, 9 10, 9 8)'));
+ST_INTERSECTS(st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), st_geomfromtext('LINESTRING(1 10, 9 10, 9 8)'))
+1
+SELECT ST_INTERSECTS(st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), st_geomfromtext('LINESTRING(1 10, 9 10, 9 8)'));
+ST_INTERSECTS(st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), st_geomfromtext('LINESTRING(1 10, 9 10, 9 8)'))
+1
+SELECT ST_INTERSECTS(st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), st_geomfromtext('LINESTRING(1 10, 9 10, 9 8)'));
+ST_INTERSECTS(st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), st_geomfromtext('LINESTRING(1 10, 9 10, 9 8)'))
+1
+# intersects311
+SELECT ST_INTERSECTS(st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), st_geomfromtext('LINESTRING(1 10, 10 10, 10 8)'));
+ST_INTERSECTS(st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), st_geomfromtext('LINESTRING(1 10, 10 10, 10 8)'))
+1
+SELECT ST_INTERSECTS(st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), st_geomfromtext('LINESTRING(1 10, 10 10, 10 8)'));
+ST_INTERSECTS(st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), st_geomfromtext('LINESTRING(1 10, 10 10, 10 8)'))
+1
+SELECT ST_INTERSECTS(st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), st_geomfromtext('LINESTRING(1 10, 10 10, 10 8)'));
+ST_INTERSECTS(st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'), st_geomfromtext('LINESTRING(1 10, 10 10, 10 8)'))
+1
+# multipoint on polygon vertex
+SELECT 'intersects111', ST_Intersects(st_geomfromtext('MULTIPOINT ((0 0))'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'));
+intersects111	ST_Intersects(st_geomfromtext('MULTIPOINT ((0 0))'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))
+intersects111	1
+# multipoint outside polygon
+SELECT 'intersects112', ST_intersects(st_geomfromtext('MULTIPOINT ((-1 0))'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'));
+intersects112	ST_intersects(st_geomfromtext('MULTIPOINT ((-1 0))'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))
+intersects112	0
+# multipoint on polygon edge
+SELECT 'intersects113', ST_intersects(st_geomfromtext('MULTIPOINT ((0 5))'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'));
+intersects113	ST_intersects(st_geomfromtext('MULTIPOINT ((0 5))'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))
+intersects113	1
+SELECT 'intersects114', ST_intersects(st_geomfromtext('MULTIPOINT ((0 5), (0 8))'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'));
+intersects114	ST_intersects(st_geomfromtext('MULTIPOINT ((0 5), (0 8))'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))
+intersects114	1
+# multipoint in line with polygon edge
+SELECT 'intersects115', ST_intersects(st_geomfromtext('MULTIPOINT ((0 12))'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'));
+intersects115	ST_intersects(st_geomfromtext('MULTIPOINT ((0 12))'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))
+intersects115	0
+# multipoint vertically aligned with polygon vertex
+SELECT 'intersects116', ST_intersects(ST_GeomFromText('MULTIPOINT ((521513 5377804))', 32631), ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631));
+intersects116	ST_intersects(ST_GeomFromText('MULTIPOINT ((521513 5377804))', 32631), ST_GeomFromText('POLYGON((521526 5377783, 521481 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631))
+intersects116	1
+# repeated vertex
+SELECT 'intersects117', ST_intersects(ST_GeomFromText('MULTIPOINT ((521543 5377804))', 32631), ST_GeomFromText('POLYGON((521526 5377783, 521482 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631));
+intersects117	ST_intersects(ST_GeomFromText('MULTIPOINT ((521543 5377804))', 32631), ST_GeomFromText('POLYGON((521526 5377783, 521482 5377811, 521494 5377832, 521539 5377804, 521526 5377783))', 32631))
+intersects117	0
+# multipoint within polygon
+SELECT 'intersects118', ST_intersects(st_geomfromtext('MULTIPOINT ((5 5))'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'));
+intersects118	ST_intersects(st_geomfromtext('MULTIPOINT ((5 5))'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))
+intersects118	1
+SELECT 'intersects119', ST_intersects(st_geomfromtext('MULTIPOINT ((5 5), (7 7))'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'));
+intersects119	ST_intersects(st_geomfromtext('MULTIPOINT ((5 5), (7 7))'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))
+intersects119	1
+# multipoint partially within polygon
+SELECT 'intersects120', ST_intersects(st_geomfromtext('MULTIPOINT ((5 5),  (15 5))'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'));
+intersects120	ST_intersects(st_geomfromtext('MULTIPOINT ((5 5),  (15 5))'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))
+intersects120	1
+SELECT 'intersects121', ST_intersects(st_geomfromtext('MULTIPOINT ((15 5), (5 5))'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'));
+intersects121	ST_intersects(st_geomfromtext('MULTIPOINT ((15 5), (5 5))'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))
+intersects121	1
+# point within polygon
+SELECT 'intersects150', ST_intersects(st_geomfromtext('POINT(5 5)'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'));
+intersects150	ST_intersects(st_geomfromtext('POINT(5 5)'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))
+intersects150	1
+# point on polygon vertex
+SELECT 'intersects151', ST_intersects(st_geomfromtext('POINT(0 0)'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'));
+intersects151	ST_intersects(st_geomfromtext('POINT(0 0)'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))
+intersects151	1
+# point outside polygon
+SELECT 'intersects152', ST_intersects(st_geomfromtext('POINT(-1 0)'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'));
+intersects152	ST_intersects(st_geomfromtext('POINT(-1 0)'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))
+intersects152	0
+# point on polygon edge
+SELECT 'intersects153', ST_intersects(st_geomfromtext('POINT(0 5)'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'));
+intersects153	ST_intersects(st_geomfromtext('POINT(0 5)'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))
+intersects153	1
+# point in line with polygon edge
+SELECT 'intersects154', ST_intersects(st_geomfromtext('POINT(0 12)'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'));
+intersects154	ST_intersects(st_geomfromtext('POINT(0 12)'), st_geomfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))
+intersects154	0
+select 'intersects', ST_intersects(
+st_geomfromtext('POLYGON((0.0 0.0,1.0 0.0,1.0 1.0,1.0 0.0,0.0 0.0))'),
+st_geomfromtext('POLYGON((0.0 2.0,1.0 2.0,1.0 3.0,0.0 3.0,0.0 2.0))'));
+intersects	ST_intersects(
+st_geomfromtext('POLYGON((0.0 0.0,1.0 0.0,1.0 1.0,1.0 0.0,0.0 0.0))'),
+st_geomfromtext('POLYGON((0.0 2.0,1.0 2.0,1.0 3.0,0.0 3.0,0.0 2.0))'))
+intersects	0
+select 'intersects', ST_intersects(
+st_geomfromtext('POLYGON((0.0 0.0,1.0 0.0,1.0 1.0,1.0 0.0,0.0 0.0))', 4326),
+st_geomfromtext('POLYGON((0.0 2.0,1.0 2.0,1.0 3.0,0.0 3.0,0.0 2.0))', 4326));
+intersects	ST_intersects(
+st_geomfromtext('POLYGON((0.0 0.0,1.0 0.0,1.0 1.0,1.0 0.0,0.0 0.0))', 4326),
+st_geomfromtext('POLYGON((0.0 2.0,1.0 2.0,1.0 3.0,0.0 3.0,0.0 2.0))', 4326))
+intersects	0
+select 'intersects', ST_intersects(
+st_geomfromtext('POLYGON((0.0 0.0,1.0 0.0,1.0 1.0,1.0 0.0,0.0 0.0))', 32631),
+st_geomfromtext('POLYGON((0.0 2.0,1.0 2.0,1.0 3.0,0.0 3.0,0.0 2.0))', 32631));
+intersects	ST_intersects(
+st_geomfromtext('POLYGON((0.0 0.0,1.0 0.0,1.0 1.0,1.0 0.0,0.0 0.0))', 32631),
+st_geomfromtext('POLYGON((0.0 2.0,1.0 2.0,1.0 3.0,0.0 3.0,0.0 2.0))', 32631))
+intersects	0
+select 'intersects', ST_intersects(
+st_geomfromtext('POLYGON((0.0 0.0,1.0 0.0,1.0 1.0,1.0 0.0,0.0 0.0))', 4326),
+st_geomfromtext('POLYGON((0.0 2.0,1.0 2.0,1.0 3.0,0.0 3.0,0.0 2.0))', 32631));
+ERROR HY000: Binary geometry function given two geometries of different srids.
+SELECT '#845', ST_Intersects(st_geomfromtext('POINT(169.69960846592 -46.5061209281002)'), st_geomfromtext('POLYGON((169.699607857174 -46.5061218662,169.699607857174 -46.5061195965597,169.699608806526 -46.5061195965597,169.699608806526 -46.5061218662,169.699607857174 -46.5061218662))'));
+#845	ST_Intersects(st_geomfromtext('POINT(169.69960846592 -46.5061209281002)'), st_geomfromtext('POLYGON((169.699607857174 -46.5061218662,169.699607857174 -46.5061195965597,169.699608806526 -46.5061195965597,169.699608806526 -46.5061218662,169.699607857174 -46
+#845	1
+CREATE TABLE t2 (id int, g geometry);
+insert into t2(id, g) values
+(1, st_geomfromtext('POINT(0.5 0.5000000000001)')),
+(2, st_geomfromtext('POINT(0.5 0.5000000000001)'));
+select id,st_astext(g) from t2;
+id	st_astext(g)
+1	POINT(0.5 0.5000000000001)
+2	POINT(0.5 0.5000000000001)
+select '#852.1', id,
+st_intersects(g, st_geomfromtext('POLYGON((0 0, 10 10, 1 0, 0 0))')),
+st_intersects(g, st_geomfromtext('POLYGON((0 0, 1 1, 1 0, 0 0))')) from t2;
+#852.1	id	st_intersects(g, st_geomfromtext('POLYGON((0 0, 10 10, 1 0, 0 0))'))	st_intersects(g, st_geomfromtext('POLYGON((0 0, 1 1, 1 0, 0 0))'))
+#852.1	1	0	0
+#852.1	2	0	0
+UPDATE t2 SET g = st_geomfromtext('POINT(0.5 0.5)');
+select id,st_astext(g) from t2;
+id	st_astext(g)
+1	POINT(0.5 0.5)
+2	POINT(0.5 0.5)
+drop table t2;
+SELECT '#4176', ST_Intersects(st_geomfromtext('POLYGON((0 0, 10 10, 3 5, 0 0))'), st_geomfromtext('GEOMETRYCOLLECTION(POINT(10 10), LINESTRING(0 0, 3 3))'));
+#4176	ST_Intersects(st_geomfromtext('POLYGON((0 0, 10 10, 3 5, 0 0))'), st_geomfromtext('GEOMETRYCOLLECTION(POINT(10 10), LINESTRING(0 0, 3 3))'))
+#4176	1
+drop table if exists geo_table, geo_table2, geo_table3, geo_table4, ltable, rtable, rtable2;
+create table geo_table( k int primary key, geom geometry not null);
+create index geom_index on geo_table(geom);
+INSERT INTO geo_table VALUES
+(1, ST_GeomFromText('POINT(1.0 1.0)')),
+(2, ST_GeomFromText('LINESTRING(1.0 1.0, 2.0 2.0)')),
+(3, ST_GeomFromText('POINT(3.0 3.0)')),
+(4, ST_GeomFromText('LINESTRING(4.0 4.0, 5.0 5.0)')),
+(5, ST_GeomFromText('LINESTRING(40.0 40.0, 41.0 41.0)')),
+(6, ST_GeomFromText('POLYGON((1.0 1.0, 5.0 1.0, 5.0 5.0, 1.0 5.0, 1.0 1.0))'));
+SELECT k FROM geo_table WHERE ST_Intersects(ST_GeomFromText('POINT(3.0 3.0)'), geom) ORDER BY k;
+k
+3
+6
+SELECT k FROM geo_table WHERE ST_Intersects(ST_GeomFromText('POINT(4.5 4.5)'), geom) ORDER BY k;
+k
+4
+6
+SELECT k FROM geo_table WHERE ST_Intersects(ST_GeomFromText('POINT(2.5 2.5)'), geom) ORDER BY k;
+k
+6
+CREATE TABLE geo_table2(k int, geom geometry not null, k_plus_one int, PRIMARY KEY (k, k_plus_one));
+create index geom_index2 on geo_table2(geom);
+INSERT INTO geo_table2 VALUES
+(1, ST_GeomFromText('LINESTRING(1.0 1.0, 2.0 2.0)'), 2),
+(2, ST_GeomFromText('POLYGON((1.0 1.0, 5.0 1.0, 5.0 5.0, 1.0 5.0, 1.0 1.0))'), 3);
+SELECT k FROM geo_table2 WHERE ST_Intersects(ST_GeomFromText('POINT(3.0 3.0)'), geom);
+k
+2
+SELECT k, k_plus_one FROM geo_table2 WHERE ST_Intersects(ST_GeomFromText('POINT(3.0 3.0)'), geom);
+k	k_plus_one
+2	3
+SELECT k, k_plus_one, st_astext(geom) FROM geo_table2 WHERE ST_Intersects(ST_GeomFromText('POINT(3.0 3.0)'), geom);
+k	k_plus_one	st_astext(geom)
+2	3	POLYGON((1 1,5 1,5 5,1 5,1 1))
+create table geo_table3( k int primary key, geom geometry not null);
+create index geom_index3 on geo_table3(geom);
+INSERT INTO geo_table3 VALUES
+(1, ST_GeomFromText('POINT(1 1)')),
+(2, ST_GeomFromText('LINESTRING(1 1, 2 2)')),
+(3, ST_GeomFromText('POINT(3 3)')),
+(4, ST_GeomFromText('LINESTRING(4 4, 5 5)')),
+(5, ST_GeomFromText('LINESTRING(40 40, 41 41)')),
+(6, ST_GeomFromText('POLYGON((1 1, 5 1, 5 5, 1 5, 1 1))')),
+(7, ST_GeomFromText('LINESTRING(1 1, 3 3)'));
+SELECT k FROM geo_table3 WHERE ST_Intersects(ST_GeomFromText('MULTIPOINT((2.2 2.2), (3.0 3.0))'), geom) ORDER BY k;
+k
+3
+6
+7
+create table geo_table4( k int primary key, geom geometry not null);
+create index geom_index4 on geo_table4(geom);
+INSERT INTO geo_table4 VALUES
+(1, ST_GeomFromText('POINT(400001 4000001)')),
+(2, ST_GeomFromText('LINESTRING(400001 4000001, 400002 4000002)')),
+(3, ST_GeomFromText('POINT(400003 4000003)')),
+(4, ST_GeomFromText('LINESTRING(400004 4000004, 400005 4000005)')),
+(5, ST_GeomFromText('LINESTRING(400040 4000040, 400041 4000041)')),
+(6, ST_GeomFromText('POLYGON((400001 4000001, 400005 4000001, 400005 4000005, 400001 4000005, 400001 4000001))'));
+SELECT k FROM geo_table4 WHERE ST_Intersects(ST_GeomFromText('POINT(400003 4000003)'), geom) ORDER BY k;
+k
+3
+6
+DROP TABLE geo_table4;
+create table geo_table4( k int primary key, geom geometry not null);
+create index geom_index4 on geo_table4(geom);
+INSERT INTO geo_table4 VALUES
+(1, ST_GeomFromText('POINT(400001 4000001)')),
+(2, ST_GeomFromText('LINESTRING(400001 4000001, 400002 4000002)')),
+(3, ST_GeomFromText('POINT(400003 4000003)')),
+(4, ST_GeomFromText('LINESTRING(400004 4000004, 400005 4000005)')),
+(5, ST_GeomFromText('LINESTRING(400040 4000040, 400041 4000041)')),
+(6, ST_GeomFromText('POLYGON((400001 4000001, 400005 4000001, 400005 4000005, 400001 4000005, 400001 4000001))'));
+SELECT k FROM geo_table4 WHERE ST_Intersects(ST_GeomFromText('POINT(400003 4000003)'), geom) ORDER BY k;
+k
+3
+6
+create table ltable( lk int primary key, geom1 geometry, geom2 geometry);
+INSERT INTO ltable VALUES
+(1, ST_GeomFromText('POINT(3.0 3.0)'), ST_GeomFromText('POINT(3.0 3.0)')),
+(2, ST_GeomFromText('POINT(4.5 4.5)'), ST_GeomFromText('POINT(3.0 3.0)')),
+(3, ST_GeomFromText('POINT(1.5 1.5)'), ST_GeomFromText('POINT(3.0 3.0)')),
+(4, NULL, ST_GeomFromText('POINT(3.0 3.0)')),
+(5, ST_GeomFromText('POINT(1.5 1.5)'), NULL),
+(6, NULL, NULL);
+create table rtable( rk int primary key, i int, geom geometry not null);
+create index igeom_idx on rtable(geom);
+INSERT INTO rtable VALUES
+(11, 10, ST_GeomFromText('POINT(1.0 1.0)')),
+(12, 10, ST_GeomFromText('LINESTRING(1.0 1.0, 2.0 2.0)')),
+(13, 10, ST_GeomFromText('POINT(3.0 3.0)')),
+(14, 10, ST_GeomFromText('LINESTRING(4.0 4.0, 5.0 5.0)')),
+(15, 10, ST_GeomFromText('LINESTRING(40.0 40.0, 41.0 41.0)')),
+(16, 10, ST_GeomFromText('POLYGON((1.0 1.0, 5.0 1.0, 5.0 5.0, 1.0 5.0, 1.0 1.0))')),
+(17, 20, ST_GeomFromText('POINT(1.0 1.0)')),
+(18, 20, ST_GeomFromText('LINESTRING(1.0 1.0, 2.0 2.0)')),
+(19, 20, ST_GeomFromText('POINT(3.0 3.0)')),
+(20, 20, ST_GeomFromText('LINESTRING(4.0 4.0, 5.0 5.0)')),
+(21, 20, ST_GeomFromText('LINESTRING(40.0 40.0, 41.0 41.0)')),
+(22, 20, ST_GeomFromText('POLYGON((1.0 1.0, 5.0 1.0, 5.0 5.0, 1.0 5.0, 1.0 1.0))'));
+create table rtable2( rk int primary key, geom geometry not null);
+create index igeom_idx2 on rtable2(geom);
+INSERT INTO rtable2 VALUES
+(11, ST_GeomFromText('POINT(1.0 1.0)')),
+(12, ST_GeomFromText('LINESTRING(1.0 1.0, 2.0 2.0)')),
+(13, ST_GeomFromText('POINT(3.0 3.0)')),
+(14, ST_GeomFromText('LINESTRING(4.0 4.0, 5.0 5.0)')),
+(15, ST_GeomFromText('LINESTRING(40.0 40.0, 41.0 41.0)')),
+(16, ST_GeomFromText('POLYGON((1.0 1.0, 5.0 1.0, 5.0 5.0, 1.0 5.0, 1.0 1.0))'));
+SELECT lk FROM ltable WHERE EXISTS (SELECT * FROM rtable2 WHERE ST_Intersects(ltable.geom2, rtable2.geom));
+lk
+1
+2
+3
+4
+SELECT rk FROM rtable2 WHERE EXISTS (SELECT * FROM ltable WHERE ST_Intersects(ltable.geom2, rtable2.geom))
+ORDER BY rk;
+rk
+13
+16
+SELECT lk FROM ltable WHERE NOT EXISTS (SELECT * FROM rtable2 WHERE ST_Intersects(ltable.geom2, rtable2.geom))
+ORDER BY lk;
+lk
+5
+6
+SELECT rk FROM rtable2 WHERE NOT EXISTS (SELECT * FROM ltable WHERE ST_Intersects(ltable.geom2, rtable2.geom))
+ORDER BY rk;
+rk
+11
+12
+14
+15
+drop table if exists geo_table, geo_table2, geo_table3, geo_table4, ltable, rtable, rtable2;

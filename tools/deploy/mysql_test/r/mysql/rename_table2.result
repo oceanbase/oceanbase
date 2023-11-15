@@ -1,0 +1,63 @@
+drop database if exists hualong;
+create database hualong;
+use hualong;
+drop table if exists r1;
+drop table if exists r2;
+create table hualong.r1(c1 int not null primary key, c2 int);
+create table hualong.r2(a int not null primary key , b int);
+rename table r1 to r2;
+ERROR 42S01: Table 'r2' already exists
+alter table r1 rename to r2;
+ERROR 42S01: Table 'r2' already exists
+rename table r1 to r3, r2 to r3;
+ERROR 42S01: Table 'r3' already exists
+rename table r1 to r3, r1 to r3;
+ERROR 42S01: Table 'r3' already exists
+rename table r1 to r3, r1 to r4;
+ERROR HY000: File not exist
+rename table xx to r1;
+ERROR 42S01: Table 'r1' already exists
+rename table xx to a.xxx;
+ERROR 42000: Unknown database 'a'
+rename table r1 to table1, table1 to r1;
+rename table r1 to r3, r2 to r1;
+rename table r3 to r3;
+ERROR 42S01: Table 'r3' already exists
+drop database if exists hualong2;
+create database hualong2;
+rename table hualong.r1 to hualong2.r1;
+show tables from hualong;
+Tables_in_hualong
+r3
+show tables from hualong2;
+Tables_in_hualong2
+r1
+create index idx1 on hualong.r3(c1);
+rename table hualong.r3 to hualong2.r2;
+show tables from hualong;
+Tables_in_hualong
+show tables from hualong2;
+Tables_in_hualong2
+r1
+r2
+show index from hualong2.r2;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+r2	0	PRIMARY	1	c1	A	NULL	NULL	NULL		BTREE	available		YES	NULL
+r2	1	idx1	1	c1	A	NULL	NULL	NULL		BTREE	available		YES	NULL
+rename table hualong2.r2 to hualong.r2;
+show index from hualong.r2;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+r2	0	PRIMARY	1	c1	A	NULL	NULL	NULL		BTREE	available		YES	NULL
+r2	1	idx1	1	c1	A	NULL	NULL	NULL		BTREE	available		YES	NULL
+show tables from hualong;
+Tables_in_hualong
+r2
+rename table hualong2.r1 to hualong.r1;
+rename table r1 to tmp, tmp to r1, r2 to tmp;
+show tables from hualong;
+Tables_in_hualong
+r1
+tmp
+drop table hualong.r1, hualong.tmp;
+drop database hualong;
+drop database hualong2;

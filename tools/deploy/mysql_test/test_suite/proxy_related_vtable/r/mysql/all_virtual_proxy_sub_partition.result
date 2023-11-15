@@ -1,0 +1,63 @@
+part_name	low_bound_val	high_bound_val	sub_part_position
+p0smp0		1,3	NULL
+p0smp1		4,6	NULL
+p0smp2		7	NULL
+p1smp0		1,3	NULL
+p1smp1		4,6	NULL
+p1smp2		7	NULL
+p2smp0		1,3	NULL
+p2smp1		4,6	NULL
+p2smp2		7	NULL
+part_name	low_bound_val	high_bound_val	sub_part_position
+p0sp0		NULL	0
+p0sp1		NULL	1
+p0sp2		NULL	2
+p0sp3		NULL	3
+p0sp4		NULL	4
+p1sp0		NULL	0
+p1sp1		NULL	1
+p1sp2		NULL	2
+p1sp3		NULL	3
+p1sp4		NULL	4
+p2sp0		NULL	0
+p2sp1		NULL	1
+p2sp2		NULL	2
+p2sp3		NULL	3
+p2sp4		NULL	4
+part_name	low_bound_val	high_bound_val	sub_part_position
+p0ssp0		100	NULL
+p0ssp1		200	NULL
+p0ssp2		300	NULL
+p1ssp0		100	NULL
+p1ssp1		200	NULL
+p1ssp2		300	NULL
+p2ssp0		100	NULL
+p2ssp1		200	NULL
+p2ssp2		300	NULL
+part_name	low_bound_val	high_bound_val	sub_part_position
+sp0		2020	NULL
+sp1		2021	NULL
+sp2		2022	NULL
+sp3		2023	NULL
+sp4		2020	NULL
+sp5		2021	NULL
+sp6		2022	NULL
+sp7		2023	NULL
+part_name	low_bound_val	high_bound_val	sub_part_position
+sp0		1,3	NULL
+sp1		4,6	NULL
+sp2		7,9	NULL
+sp3		1,3	NULL
+sp4		4,6	NULL
+sp5		7,9	NULL
+ERROR HY000: Incorrect arguments to tenant_name and table_id (must all be specified)
+ERROR HY000: Incorrect arguments to tenant_name and table_id (must all be specified)
+ERROR 0A000: batch query not supported
+part_name	low_bound_val	high_bound_val	sub_part_position
+part_name	low_bound_val	high_bound_val	sub_part_position
+sp0		1,3	NULL
+sp1		4,6	NULL
+sp2		7,9	NULL
+sp3		1,3	NULL
+sp4		4,6	NULL
+sp5		7,9	NULL

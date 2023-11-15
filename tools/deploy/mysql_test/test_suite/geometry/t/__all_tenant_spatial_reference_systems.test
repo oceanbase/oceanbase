@@ -1,0 +1,10 @@
+#owner: ht353245
+#owner group: shenzhen
+--echo # ----------------------------------------------------------------------
+--echo # Test of GEOMETRY __ALL_TENANT_SPATIAL_REFERENCE_SYSTEMS.
+--echo # ----------------------------------------------------------------------
+--source mysql_test/test_suite/geometry/t/import_default_srs_data_mysql.inc
+
+
+  
+  SELECT SRS_NAME, SRS_ID, ORGANIZATION, ORGANIZATION_COORDSYS_ID, DEFINITION, DESCRIPTION FROM oceanbase.__all_spatial_reference_systems ORDER BY SRS_ID;

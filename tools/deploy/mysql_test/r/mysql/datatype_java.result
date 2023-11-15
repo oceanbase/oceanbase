@@ -1,0 +1,32 @@
+set sql_mode='';
+drop table if exists t;
+create table t(id int primary key auto_increment,
+int_val smallint,
+uint_val smallint unsigned,
+flt_val float(5, 3),
+dbl_val double(7, 4),
+dec_val decimal(5, 3),
+vc_val varchar(2));
+insert into t(int_val, uint_val, flt_val, dbl_val, dec_val, vc_val) values
+( 184467440737095516150,  184467440737095516150, 12345.67890, 12345.67890,  '12345.67890', '123456789'),
+(-184467440737095516150, -184467440737095516150,     0.444444,    0.444444, '98.76abc',    '987654321'),
+(NULL,                   NULL,                      -0.555555,   -0.555555, 'abc',         '阿里巴巴');
+Warnings:
+Warning	1265	Data truncated for column '"test"."t"."vc_val"' at row 1
+Warning	1265	Data truncated for column '"test"."t"."vc_val"' at row 2
+Warning	1265	Data truncated for column '"test"."t"."vc_val"' at row 3
+select * from t order by id;
+id	int_val	uint_val	flt_val	dbl_val	dec_val	vc_val
+auto_increment_id	32767	65535	99.999	999.9999	99.999	12
+auto_increment_id	-32768	0	0.444	0.4444	98.760	98
+auto_increment_id	NULL	NULL	-0.556	-0.5556	0.000	阿里
+update t set int_val = 123456789, uint_val = -123456789, flt_val = 98765.43210, dbl_val = 98765.43210, dec_val = 98765.43210, vc_val = '支付宝';
+Warnings:
+Warning	1265	Data truncated for column '"test"."t"."vc_val"' at row 1
+select * from t order by id limit 1;
+id	int_val	uint_val	flt_val	dbl_val	dec_val	vc_val
+auto_increment_id	32767	0	99.999	999.9999	99.999	支付
+select 4/3, 4/3*1000000 + 1, 4.00000/3*1000000000 + 1, 4.000000/3*1000000000 + 1, 4/3 = 1.3333, 4/3 = 1.333333333, length(4/3);
+4/3	4/3*1000000 + 1	4.00000/3*1000000000 + 1	4.000000/3*1000000000 + 1	4/3 = 1.3333	4/3 = 1.333333333	length(4/3)
+1.3333	1333334.3330	1333333334.000000000	1333333334.3333333330	0	1	6
+drop table t;

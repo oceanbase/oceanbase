@@ -1,0 +1,43 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+#owner: linlin.xll
+#owner group: SQL1
+#description:
+#tags: dml, trx
+
+#show variables like 'ob_query_timeout';
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+create table t1(pk int primary key, c1 int);
+insert into t1 values(1,1);
+
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn2,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+
+connection conn1;
+begin;
+select *  from t1   where pk=1 for update;
+update t1 set c1=c1+1 where pk=1;
+
+
+connection conn2;
+begin;
+send select *  from t1  where t1.pk=1 for update;
+--real_sleep 2
+
+connection conn1;
+commit;
+
+connection conn2;
+reap;
+update t1 set c1=c1+1 where pk=1;
+commit;
+
+
+select * from t1;

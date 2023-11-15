@@ -1,0 +1,232 @@
+# owner: weixiaoxian.wxx
+# owner group: transaction
+# test_no: 04005
+# tags: 4.x dup table
+# description: test duplicate join, insert form select
+
+## build connect
+connect (obsys, $OBMYSQL_MS0, root@sys, "", oceanbase, $OBMYSQL_PORT);
+
+connection obsys;
+--disable_warnings
+--disable_query_log
+--source mysql_test/include/check_tenant_sync.inc
+--enable_query_log
+--enable_warnings
+
+####### begin test dup table
+connect (conn0,$OBMYSQL_MS0,root@mysql,,test,$OBMYSQL_PORT);
+connect (conn1,$OBMYSQL_MS0,root@mysql,,test,$OBMYSQL_PORT);
+
+connection conn0;
+--disable_warnings
+drop database if exists duptable_database; 
+create database duptable_database;
+use duptable_database;
+
+--error 0,942
+drop table if exists t1;
+--error 0,942
+drop table if exists t2;
+--error 0,942
+drop table if exists dup_t1;
+--error 0,942
+drop table if exists dup_t2;
+--error 0,942
+drop table if exists dup_t3;
+--enable_warnings
+
+## create table
+create table t1 (c1 int, c2 int, c3 int, primary key(c1));
+create table t2 (c1 int, c2 int, c3 int, primary key(c1));
+
+## create dup table
+create table dup_t1 (c1 int, c2 int, c3 int, primary key(c1)) duplicate_scope='cluster';
+create table dup_t2 (c1 int, c2 int, c3 int, primary key(c1)) duplicate_scope='cluster';
+create table dup_t3 (c1 int, c2 int, c3 int) duplicate_scope='cluster';
+
+insert into t1 values(1, 1, 1);
+insert into t1 values(2, 2, 2);
+insert into t1 values(3, 3, 3);
+
+insert into t2 values(1, 1, 1);
+insert into t2 values(2, 2, 2);
+insert into t2 values(4, 4, 4);
+
+insert into dup_t1 select * from t1;
+insert into dup_t2 select * from t2;
+
+let $test_count = 20;
+let $v_c1 = 5;
+
+while ($test_count > 0)
+{
+  connection conn0;
+  eval insert into t1 values($v_c1, $v_c1, $v_c1);
+  eval insert into t2 values($v_c1, $v_c1, $v_c1);
+  eval insert into dup_t1 values($v_c1, $v_c1, $v_c1);
+  eval insert into dup_t2 values($v_c1, $v_c1, $v_c1);
+  inc $v_c1;
+  dec $test_count;
+  commit;
+}
+
+## ensure normal table and dup table in one leader
+connection obsys;
+sleep 6;
+
+let $tenant_id = query_get_value(select tenant_id from __all_tenant where tenant_name = 'mysql', tenant_id, 1);
+let $database_id = query_get_value(select database_id from __all_virtual_database where database_name = 'duptable_database' and tenant_id = $tenant_id, database_id, 1);
+
+## get table id
+let $t1_table_id = query_get_value(select table_id from __all_virtual_table where table_name = 't1' and tenant_id = $tenant_id and database_id = $database_id, table_id, 1);
+let $t2_table_id = query_get_value(select table_id from __all_virtual_table where table_name = 't2' and tenant_id = $tenant_id and database_id = $database_id, table_id, 1);
+let $dup_t1_table_id = query_get_value(select table_id from __all_virtual_table where table_name = 'dup_t1' and tenant_id = $tenant_id and database_id = $database_id, table_id, 1);
+let $dup_t2_table_id = query_get_value(select table_id from __all_virtual_table where table_name = 'dup_t2' and tenant_id = $tenant_id and database_id = $database_id, table_id, 1);
+
+## get ls id
+let $dup_t1_ls_id = query_get_value(select LS_ID from __all_virtual_tablet_to_ls  where table_id = $dup_t1_table_id and tenant_id = $tenant_id, LS_ID, 1);
+let $dup_t2_ls_id = query_get_value(select LS_ID from __all_virtual_tablet_to_ls  where table_id = $dup_t2_table_id and tenant_id = $tenant_id, LS_ID, 1);
+let $t1_ls_id = query_get_value(select LS_ID from __all_virtual_tablet_to_ls  where table_id = $t1_table_id and tenant_id = $tenant_id, LS_ID, 1);
+let $t2_ls_id = query_get_value(select LS_ID from __all_virtual_tablet_to_ls  where table_id = $t2_table_id and tenant_id = $tenant_id, LS_ID, 1);
+
+##########################################
+## get the ip:port of dup table follower 
+let $dup_t1_follow_ip = query_get_value(select SVR_IP from __all_virtual_ls_info where tenant_id = $tenant_id and ls_id = $dup_t1_ls_id and ls_state = 'FOLLOWER' ORDER BY SVR_PORT, SVR_IP, 1);
+let $dup_t1_follow_port = query_get_value(select SVR_PORT from __all_virtual_ls_info where tenant_id = $tenant_id and ls_id = $dup_t1_ls_id and ls_state = 'FOLLOWER' ORDER BY SVR_PORT, SVR_PORT, 1);
+
+let $dup_t2_follow_ip = query_get_value(select SVR_IP from  __all_virtual_ls_info where tenant_id = $tenant_id and ls_state = 'FOLLOWER' and ls_id = $dup_t2_ls_id ORDER BY SVR_PORT, SVR_IP, 1);
+let $dup_t2_follow_port = query_get_value(select SVR_PORT from  __all_virtual_ls_info where tenant_id = $tenant_id and ls_state = 'FOLLOWER' and ls_id = $dup_t2_ls_id ORDER BY SVR_PORT, SVR_PORT, 1);
+
+## get the ip:port of dup table leader
+let $dup_t1_leader_ip = query_get_value(select SVR_IP from  __all_virtual_ls_info where tenant_id = $tenant_id and ls_state = 'LEADER' and ls_id = $dup_t1_ls_id, SVR_IP, 1);
+let $dup_t1_leader_port = query_get_value(select SVR_PORT from __all_virtual_ls_info where tenant_id = $tenant_id and ls_state = 'LEADER' and ls_id = $dup_t1_ls_id, SVR_PORT, 1);
+
+let $dup_t2_leader_ip = query_get_value(select SVR_IP from __all_virtual_ls_info where tenant_id = $tenant_id and ls_state = 'LEADER' and ls_id = $dup_t2_ls_id, SVR_IP, 1);
+let $dup_t2_leader_port = query_get_value(select SVR_PORT from __all_virtual_ls_info where tenant_id = $tenant_id and ls_state = 'LEADER' and ls_id = $dup_t2_ls_id, SVR_PORT, 1);
+
+###########################################
+## get the ip:port of normal table follower 
+let $t1_follow_ip = query_get_value(select SVR_IP from __all_virtual_ls_info where tenant_id = $tenant_id and ls_id = $t1_ls_id and ls_state = 'FOLLOWER' ORDER BY SVR_PORT, SVR_IP, 1);
+let $t1_follow_port = query_get_value(select SVR_PORT from __all_virtual_ls_info where tenant_id = $tenant_id and ls_id = $t1_ls_id and ls_state = 'FOLLOWER' ORDER BY SVR_PORT, SVR_PORT, 1);
+
+let $t2_follow_ip = query_get_value(select SVR_IP from  __all_virtual_ls_info where tenant_id = $tenant_id and ls_state = 'FOLLOWER' and ls_id = $t2_ls_id ORDER BY SVR_PORT, SVR_IP, 1);
+let $t2_follow_port = query_get_value(select SVR_PORT from  __all_virtual_ls_info where tenant_id = $tenant_id and ls_state = 'FOLLOWER' and ls_id = $t2_ls_id ORDER BY SVR_PORT, SVR_PORT, 1);
+
+## get the ip:port of normal table leader
+let $t1_leader_ip = query_get_value(select SVR_IP from  __all_virtual_ls_info where tenant_id = $tenant_id and ls_state = 'LEADER' and ls_id = $t1_ls_id, SVR_IP, 1);
+let $t1_leader_port = query_get_value(select SVR_PORT from __all_virtual_ls_info where tenant_id = $tenant_id and ls_state = 'LEADER' and ls_id = $t1_ls_id, SVR_PORT, 1);
+
+let $t2_leader_ip = query_get_value(select SVR_IP from __all_virtual_ls_info where tenant_id = $tenant_id and ls_state = 'LEADER' and ls_id = $t2_ls_id, SVR_IP, 1);
+let $t2_leader_port = query_get_value(select SVR_PORT from __all_virtual_ls_info where tenant_id = $tenant_id and ls_state = 'LEADER' and ls_id = $t2_ls_id, SVR_PORT, 1);
+
+##### switch all table leader to t1 leader
+--disable_query_log
+eval alter system switch replica leader ls=$t1_ls_id server='$t1_leader_ip:$t1_leader_port' tenant='mysql';
+eval alter system switch replica leader ls=$t2_ls_id server='$t1_leader_ip:$t1_leader_port' tenant='mysql';
+eval alter system switch replica leader ls=$dup_t1_ls_id server='$t1_leader_ip:$t1_leader_port' tenant='mysql';
+eval alter system switch replica leader ls=$dup_t2_ls_id server='$t1_leader_ip:$t1_leader_port' tenant='mysql';
+--enable_query_log
+
+sleep 20;
+
+##### check all table leader to t1 leader
+--disable_query_log
+eval select ls_state from __all_virtual_ls_info where ls_id = $t1_ls_id and SVR_IP = '$t1_leader_ip' and SVR_PORT = '$t1_leader_port' and tenant_id = $tenant_id;
+eval select ls_state from __all_virtual_ls_info where ls_id = $t2_ls_id and SVR_IP = '$t1_leader_ip' and SVR_PORT = '$t1_leader_port' and tenant_id = $tenant_id;
+eval select ls_state from __all_virtual_ls_info where ls_id = $dup_t1_ls_id and SVR_IP = '$t1_leader_ip' and SVR_PORT = '$t1_leader_port' and tenant_id = $tenant_id;
+eval select ls_state from __all_virtual_ls_info where ls_id = $dup_t2_ls_id and SVR_IP = '$t1_leader_ip' and SVR_PORT = '$t1_leader_port' and tenant_id = $tenant_id;
+--disable_query_log
+
+### join test
+############################ nature join
+############################ inner join
+############################ left join
+############################ right join
+
+connection conn1;
+use duptable_database;
+--disable_query_log
+select * from t1 join t2 on t1.c1 = t2.c1 where not exists (select * from t1 join dup_t2 on t1.c1 = dup_t2.c1);
+select * from t1 inner join t2 on t1.c1 = t2.c1 where not exists (select * from t1 inner join dup_t2 on t1.c1 = dup_t2.c1);
+select * from t1 left join t2 on t1.c1 = t2.c1 where not exists (select * from t1 left join dup_t2 on t1.c1 = dup_t2.c1);
+select * from t1 right join t2 on t1.c1 = t2.c1 where not exists (select * from t1 right join dup_t2 on t1.c1 = dup_t2.c1);
+--enable_query_log
+
+connection obsys;
+##### switch dup table leader to t1 follower
+--disable_query_log
+eval alter system switch replica leader ls=$t1_ls_id server='$t1_leader_ip:$t1_leader_port' tenant='mysql';
+eval alter system switch replica leader ls=$t2_ls_id server='$t1_leader_ip:$t1_leader_port' tenant='mysql';
+eval alter system switch replica leader ls=$dup_t1_ls_id server='$t1_follow_ip:$t1_follow_port' tenant='mysql';
+eval alter system switch replica leader ls=$dup_t2_ls_id server='$t1_follow_ip:$t1_follow_port' tenant='mysql';
+--enable_query_log
+
+sleep 20;
+
+##### check dup table leader to t1 follower
+--disable_query_log
+eval select ls_state from __all_virtual_ls_info where ls_id = $t1_ls_id and SVR_IP = '$t1_leader_ip' and SVR_PORT = '$t1_leader_port' and tenant_id = $tenant_id;
+eval select ls_state from __all_virtual_ls_info where ls_id = $t2_ls_id and SVR_IP = '$t1_leader_ip' and SVR_PORT = '$t1_leader_port' and tenant_id = $tenant_id;
+
+eval select ls_state from __all_virtual_ls_info where ls_id = $dup_t1_ls_id and SVR_IP = '$t1_follow_ip' and SVR_PORT = '$t1_follow_port' and tenant_id = $tenant_id;
+eval select ls_state from __all_virtual_ls_info where ls_id = $dup_t2_ls_id and SVR_IP = '$t1_follow_ip' and SVR_PORT = '$t1_follow_port' and tenant_id = $tenant_id;
+--disable_query_log
+
+connection conn1;
+use duptable_database;
+insert into dup_t3 select * from dup_t1;
+select count(*) from dup_t3;
+--disable_query_log
+select * from t1 join t2 on t1.c1 = t2.c1 where not exists (select * from t1 join dup_t2 on t1.c1 = dup_t2.c1);
+select * from t1 inner join t2 on t1.c1 = t2.c1 where not exists (select * from t1 inner join dup_t2 on t1.c1 = dup_t2.c1);
+select * from t1 left join t2 on t1.c1 = t2.c1 where not exists (select * from t1 left join dup_t2 on t1.c1 = dup_t2.c1);
+select * from t1 right join t2 on t1.c1 = t2.c1 where not exists (select * from t1 right join dup_t2 on t1.c1 = dup_t2.c1);
+--enable_query_log
+
+connection conn0;
+use duptable_database;
+insert into dup_t3 select * from dup_t2;
+select count(*) from dup_t3;
+--disable_query_log
+#### normal join dup
+select * from t1 join t2 on t1.c1 = t2.c1 where not exists (select * from t1 join dup_t2 on t1.c1 = dup_t2.c1);
+select * from t1 inner join t2 on t1.c1 = t2.c1 where not exists (select * from t1 inner join dup_t2 on t1.c1 = dup_t2.c1);
+select * from t1 left join t2 on t1.c1 = t2.c1 where not exists (select * from t1 left join dup_t2 on t1.c1 = dup_t2.c1);
+select * from t1 right join t2 on t1.c1 = t2.c1 where not exists (select * from t1 right join dup_t2 on t1.c1 = dup_t2.c1);
+--enable_query_log
+
+--disable_query_log
+####  dup join normal
+select * from t1 join t2 on t1.c1 = t2.c1 where not exists (select * from  dup_t2 join t1 on t1.c1 = dup_t2.c1);
+select * from t1 inner join t2 on t1.c1 = t2.c1 where not exists (select * from dup_t2 inner join t1 on t1.c1 = dup_t2.c1);
+select * from t1 left join t2 on t1.c1 = t2.c1 where not exists (select * from dup_t2 left join t1 on t1.c1 = dup_t2.c1);
+select * from t1 right join t2 on t1.c1 = t2.c1 where not exists (select * from dup_t2 right join t1 on t1.c1 = dup_t2.c1);
+#### dup join dup
+select * from t1 join t2 on t1.c1 = t2.c1 where not exists (select * from  dup_t2 join dup_t1 on t1.c1 = dup_t2.c1);
+select * from t1 inner join t2 on t1.c1 = t2.c1 where not exists (select * from dup_t2 inner join dup_t1 on t1.c1 = dup_t2.c1);
+select * from t1 left join t2 on t1.c1 = t2.c1 where not exists (select * from dup_t2 left join dup_t1 on t1.c1 = dup_t2.c1);
+select * from t1 right join t2 on t1.c1 = t2.c1 where not exists (select * from dup_t2 right join dup_t1 on t1.c1 = dup_t2.c1);
+--enable_query_log
+
+connection conn0;
+--disable_query_log
+
+--disable_warnings
+--error 0,942
+drop table if exists t1;
+--error 0,942
+drop table if exists t2;
+--error 0,942
+drop table if exists dup_t1;
+--error 0,942
+drop table if exists dup_t2;
+--error 0,942
+drop table if exists dup_t3;
+--enable_warnings
+drop database duptable_database;
+--enable_query_log
+
+disconnect conn0;
+disconnect conn1;
+disconnect obsys;

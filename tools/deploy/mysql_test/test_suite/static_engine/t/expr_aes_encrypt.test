@@ -1,0 +1,65 @@
+# owner: peihan.dph
+# owner group: sql2
+
+--disable_abort_on_error
+--result_format 4
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection conn_admin;
+alter system flush plan cache global;
+sleep 2;
+
+set ob_enable_plan_cache = 0;
+#basic test
+set block_encryption_mode = 0;
+show variables like '%encrypt%mode';
+--source mysql_test/test_suite/security/include/aes_three_param.inc
+--source mysql_test/test_suite/security/include/aes_two_param.inc
+set block_encryption_mode = 1;
+show variables like '%encrypt%mode';
+--source mysql_test/test_suite/security/include/aes_three_param.inc
+--source mysql_test/test_suite/security/include/aes_two_param.inc
+set block_encryption_mode = 2;
+show variables like '%encrypt%mode';
+--source mysql_test/test_suite/security/include/aes_three_param.inc
+--source mysql_test/test_suite/security/include/aes_two_param.inc
+set block_encryption_mode = 3;
+show variables like '%encrypt%mode';
+--source mysql_test/test_suite/security/include/aes_three_param.inc
+set block_encryption_mode = 4;
+show variables like '%encrypt%mode';
+--source mysql_test/test_suite/security/include/aes_three_param.inc
+set block_encryption_mode = 5;
+show variables like '%encrypt%mode';
+--source mysql_test/test_suite/security/include/aes_three_param.inc
+set block_encryption_mode = 6;
+show variables like '%encrypt%mode';
+--source mysql_test/test_suite/security/include/aes_three_param.inc
+set block_encryption_mode = 7;
+show variables like '%encrypt%mode';
+--source mysql_test/test_suite/security/include/aes_three_param.inc
+set block_encryption_mode = 8;
+show variables like '%encrypt%mode';
+--source mysql_test/test_suite/security/include/aes_three_param.inc
+set block_encryption_mode = 9;
+show variables like '%encrypt%mode';
+--source mysql_test/test_suite/security/include/aes_three_param.inc
+set block_encryption_mode = 10;
+show variables like '%encrypt%mode';
+--source mysql_test/test_suite/security/include/aes_three_param.inc
+set block_encryption_mode = 11;
+show variables like '%encrypt%mode';
+--source mysql_test/test_suite/security/include/aes_three_param.inc
+set block_encryption_mode = 12;
+show variables like '%encrypt%mode';
+--source mysql_test/test_suite/security/include/aes_three_param.inc
+set block_encryption_mode = 13;
+show variables like '%encrypt%mode';
+--source mysql_test/test_suite/security/include/aes_three_param.inc
+set block_encryption_mode = 14;
+show variables like '%encrypt%mode';
+--source mysql_test/test_suite/security/include/aes_three_param.inc
+set block_encryption_mode = 15;
+show variables like '%encrypt%mode';
+--source mysql_test/test_suite/security/include/aes_three_param.inc
+
+sleep 2;

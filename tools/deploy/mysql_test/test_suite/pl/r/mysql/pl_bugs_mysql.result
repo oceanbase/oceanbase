@@ -1,0 +1,954 @@
+result_format: 4
+use test;
+
+
+## 
+create procedure foo()
+foo: loop
+  leave bar;
+end loop|
+ERROR 42000: no matching label: bar
+
+create procedure foo()
+foo: loop
+  iterate bar;
+end loop|
+ERROR 42000: no matching label: bar
+
+create procedure foo()
+foo: begin
+  iterate foo;
+end|
+ERROR 42000: no matching label: foo
+
+create function bug8408() returns int
+begin
+  select * from t1;
+  return 0;
+end|
+ERROR 0A000: Not allowed to return a result set from a function
+
+create procedure p(in x int, x char(10))
+begin
+end|
+ERROR 42000: Duplicate parameter: x
+
+create function p(x int, x char(10)) returns int
+begin
+end|
+ERROR 42000: Duplicate parameter: x
+
+create procedure p()
+begin
+  declare x float;
+  declare x int;
+end|
+ERROR 42000: Duplicate variable: x
+
+create procedure p()
+begin
+  declare c condition for 1064;
+  declare c condition for 1065;
+end|
+ERROR 42000: Duplicate condition: c
+
+create procedure p()
+begin
+  declare c cursor for select * from t1;
+  declare c cursor for select field from t1;
+end|
+ERROR 42000: Duplicate cursor: c
+
+create procedure p()
+begin
+  declare c cursor for select * from test.t;
+  open cc;
+  close cc;
+end|
+ERROR 42000: Undefined CURSOR: cc
+
+create procedure p(val int, out res int)
+begin
+  declare x int default 0;
+  declare continue handler for foo set x = 1;
+  insert into test.t1 values (val);
+  if (x) then
+    set res = 0;
+  else
+    set res = 1;
+  end if;
+end |
+ERROR 42000: Undefined CONDITION: foo
+
+## 
+create procedure foo()
+  create procedure bar() set @x=3|
+ERROR 2F003: Can't create a routine from within another routine
+
+create procedure foo()
+  create function bar() returns double return 2.3|
+ERROR 2F003: Can't create a routine from within another routine
+
+## 
+create procedure bug9073()
+begin
+  declare continue handler for sqlexception select 1;
+  declare continue handler for sqlexception select 2;
+end|
+ERROR 42000: Duplicate handler declared in the same block
+
+## 
+create procedure p()
+begin
+  declare c cursor for select * from t1;
+  declare x int;
+end |
+ERROR 42000: Variable or condition declaration after cursor or handler declaration
+
+create procedure p()
+begin
+  declare x int;
+  declare continue handler for sqlstate '42S99' set x = 1;
+  declare foo condition for sqlstate '42S99';
+end |
+ERROR 42000: Variable or condition declaration after cursor or handler declaration
+
+create procedure p()
+begin
+  declare x int;
+  declare continue handler for sqlstate '42S99' set x = 1;
+  declare c cursor for select * from t1;
+end |
+ERROR 42000: Cursor declaration after handler declaration
+
+## 
+create database mysqltest1|
+use mysqltest1|
+drop database mysqltest1|
+create function f1() returns int return 1|
+ERROR 3D000: No database selected
+use test|
+
+drop procedure if exists bug15091|
+create procedure bug15091()
+begin
+  declare selectstr varchar(6000) default ' ';
+  declare conditionstr varchar(5000)  default '';
+  set selectstr = concat(selectstr, ' and ', c.operatorid, 'in (',conditionstr, ')');
+end|
+ERROR 42S02: Unknown table 'c' in 
+
+create procedure ` `() select 1|
+ERROR 42000: Incorrect routine name ' '
+
+create procedure ``() select 1|
+ERROR 42000: Incorrect routine name ''
+
+## 
+drop procedure if exists p|
+drop table if exists t1|
+create table t1(col int)|
+create procedure p()
+begin
+  declare c cursor for select * from t1;
+  open c;
+  open c;
+  close c;
+end|
+
+call p()|
+ERROR 24000: Cursor is already open
+drop procedure p|
+
+create procedure p()
+begin
+  declare c cursor for select * from t1;
+  open c;
+  close c;
+  close c;
+end |
+drop procedure p|
+
+create procedure bug2259()
+begin
+  declare v1 int;
+  declare c1 cursor for select col from t1;
+  fetch c1 into v1;
+end|
+call bug2259()|
+ERROR 24000: Cursor is not open
+drop procedure bug2259|
+drop table t1|
+
+## 
+create procedure bug8776_1()
+begin
+  declare continue handler for sqlstate '42S0200test' begin end;
+  begin end;
+end |
+ERROR 42000: Bad SQLSTATE: '42S0200test'
+
+## 
+drop procedure if exists p|
+create procedure p(in x int, inout y int, out z int)
+begin
+  set y = x+y;
+  set z = x+y;
+end|
+
+set @tmp_x = 42|
+set @tmp_y = 3|
+set @tmp_z = 0|
+call p(@tmp_x, @tmp_y, @tmp_z)|
+select @tmp_x, @tmp_y, @tmp_z |
++--------+--------+--------+
+| @tmp_x | @tmp_y | @tmp_z |
++--------+--------+--------+
+|     42 |     45 |     87 |
++--------+--------+--------+
+
+call p(42, 43, @tmp_z)|
+ERROR 42000: OUT or INOUT argument 1 for routine p is not a variable
+
+drop procedure p|
+
+## 
+create procedure foo() return 42|
+ERROR 42000: RETURN is only allowed in a FUNCTION
+
+## 
+create procedure p()
+begin
+  declare x int;
+  declare c cursor for select * from t limit 1 into x;
+  open c;
+  close c;
+end |
+ERROR 42000: Cursor SELECT must not have INTO
+
+## 
+drop procedure if exists bug12712|
+create procedure bug12712()
+  set session autocommit = 0|
+
+select @@autocommit|
++--------------+
+| @@autocommit |
++--------------+
+|            1 |
++--------------+
+set @au = @@autocommit|
+call bug12712()|
+select @@autocommit|
++--------------+
+| @@autocommit |
++--------------+
+|            0 |
++--------------+
+set session autocommit = @au|
+
+drop function if exists bug12712|
+create function bug12712()
+  returns int
+begin
+  call bug12712();
+  return 0;
+end|
+
+set @x = bug12712()|
+ERROR HY000: Not allowed to set autocommit from a stored function or trigger
+drop function bug12712|
+drop procedure bug12712|
+
+create function bug12712()
+    returns int
+begin
+  set session autocommit = 0;
+  return 0;
+end|
+ERROR HY000: Not allowed to set autocommit from a stored function or trigger
+
+create function bug12712()
+    returns int
+begin
+  set @@autocommit = 0;
+  return 0;
+end|
+ERROR HY000: Not allowed to set autocommit from a stored function or trigger
+
+
+DROP FUNCTION my_func;
+DROP PROCEDURE my_proc;
+
+CREATE FUNCTION my_func(x INT, y INT, z INT) RETURNS INT BEGIN RETURN 0; END; /
+CREATE PROCEDURE my_proc(IN x INT, OUT y INT, INOUT z INT) BEGIN END;
+SELECT * FROM INFORMATION_SCHEMA.PARAMETERS WHERE SPECIFIC_NAME='my_func';
++------------------+-----------------+---------------+------------------+----------------+----------------+-----------+--------------------------+------------------------+-------------------+---------------+--------------------+--------------------+----------------+----------------+--------------+
+| SPECIFIC_CATALOG | SPECIFIC_SCHEMA | SPECIFIC_NAME | ORDINAL_POSITION | PARAMETER_MODE | PARAMETER_NAME | DATA_TYPE | CHARACTER_MAXIMUM_LENGTH | CHARACTER_OCTET_LENGTH | NUMERIC_PRECISION | NUMERIC_SCALE | DATETIME_PRECISION | CHARACTER_SET_NAME | COLLATION_NAME | DTD_IDENTIFIER | ROUTINE_TYPE |
++------------------+-----------------+---------------+------------------+----------------+----------------+-----------+--------------------------+------------------------+-------------------+---------------+--------------------+--------------------+----------------+----------------+--------------+
+| def              | test            | my_func       |                0 | NULL           | NULL           | int       |                     NULL |                   NULL |                11 |             0 |               NULL | binary             | binary         | int(11)        | FUNCTION     |
+| def              | test            | my_func       |                1 | IN             | x              | int       |                     NULL |                   NULL |                11 |             0 |               NULL | binary             | binary         | int(11)        | FUNCTION     |
+| def              | test            | my_func       |                2 | IN             | y              | int       |                     NULL |                   NULL |                11 |             0 |               NULL | binary             | binary         | int(11)        | FUNCTION     |
+| def              | test            | my_func       |                3 | IN             | z              | int       |                     NULL |                   NULL |                11 |             0 |               NULL | binary             | binary         | int(11)        | FUNCTION     |
++------------------+-----------------+---------------+------------------+----------------+----------------+-----------+--------------------------+------------------------+-------------------+---------------+--------------------+--------------------+----------------+----------------+--------------+
+SELECT * FROM INFORMATION_SCHEMA.PARAMETERS WHERE SPECIFIC_NAME='my_proc';
++------------------+-----------------+---------------+------------------+----------------+----------------+-----------+--------------------------+------------------------+-------------------+---------------+--------------------+--------------------+----------------+----------------+--------------+
+| SPECIFIC_CATALOG | SPECIFIC_SCHEMA | SPECIFIC_NAME | ORDINAL_POSITION | PARAMETER_MODE | PARAMETER_NAME | DATA_TYPE | CHARACTER_MAXIMUM_LENGTH | CHARACTER_OCTET_LENGTH | NUMERIC_PRECISION | NUMERIC_SCALE | DATETIME_PRECISION | CHARACTER_SET_NAME | COLLATION_NAME | DTD_IDENTIFIER | ROUTINE_TYPE |
++------------------+-----------------+---------------+------------------+----------------+----------------+-----------+--------------------------+------------------------+-------------------+---------------+--------------------+--------------------+----------------+----------------+--------------+
+| def              | test            | my_proc       |                1 | IN             | x              | int       |                     NULL |                   NULL |                11 |             0 |               NULL | binary             | binary         | int(11)        | PROCEDURE    |
+| def              | test            | my_proc       |                2 | OUT            | y              | int       |                     NULL |                   NULL |                11 |             0 |               NULL | binary             | binary         | int(11)        | PROCEDURE    |
+| def              | test            | my_proc       |                3 | INOUT          | z              | int       |                     NULL |                   NULL |                11 |             0 |               NULL | binary             | binary         | int(11)        | PROCEDURE    |
++------------------+-----------------+---------------+------------------+----------------+----------------+-----------+--------------------------+------------------------+-------------------+---------------+--------------------+--------------------+----------------+----------------+--------------+
+DROP PROCEDURE my_proc;
+DROP FUNCTION my_func;
+
+## AONE: 
+select time_zone=@@time_zone;
+ERROR 42S22: Unknown column 'time_zone' in 'field list'
+select time_zone;
+ERROR 42S22: Unknown column 'time_zone' in 'field list'
+select @@time_zone;
++-------------+
+| @@time_zone |
++-------------+
+| +08:00      |
++-------------+
+select connect_timeout = @@session.connect_timeout;
+ERROR 42S22: Unknown column 'connect_timeout' in 'field list'
+select connect_timeout;
+ERROR 42S22: Unknown column 'connect_timeout' in 'field list'
+select @@session.connect_timeout;
+ERROR HY000: Variable 'connect_timeout' is a GLOBAL variable
+
+## 
+create procedure proc_ret()
+begin
+  return ;
+end;
+/
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near '' at line 0
+
+create procedure proc_ret()
+begin
+  return null;
+end;
+/
+ERROR 42000: RETURN is only allowed in a FUNCTION
+
+create function func_ret()
+returns int
+begin
+  return ;
+end;
+/
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near '' at line 0
+
+#### 
+DROP TABLE t1;
+CREATE TABLE t1(a INT, b INT);
+INSERT INTO t1 values (1,1),(2,2);
+
+DROP FUNCTION fn;/
+CREATE FUNCTION fn(a INT) RETURNS INT
+BEGIN
+  RETURN a;
+END;
+/
+SELECT fn(MIN(b)) FROM t1;
+/
++------------+
+| fn(MIN(b)) |
++------------+
+|          1 |
++------------+
+DROP TABLE t1;
+/
+DROP FUNCTION fn;
+/
+
+DROP PROCEDURE proc;
+/
+CREATE PROCEDURE proc(OUT x enum('1', '2'), OUT y set('3', '4'))
+BEGIN
+  SET x = '2';
+  SET y = '4';
+END;
+/
+CALL proc(@a, @b);
+/
+DROP PROCEDURE proc;
+/
+
+drop function f1;
+
+CREATE FUNCTION f1() RETURNS VARCHAR(65525) RETURN 'Hello';
+
+SET collation_connection='gbk_bin';
+
+drop table if exists t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+create table t1(c1 int);
+insert into t1 values(0);
+
+drop view v1;
+create view v1 as select f1() from dual;
+select * from t1 union select * from v1;
++-------+
+| c1    |
++-------+
+| 0     |
+| Hello |
++-------+
+drop view v1;
+
+drop function f1;
+
+### ctas support questionmark
+### 
+drop table if exists t;
+drop table if exists t1;
+drop table if exists t2;
+drop table if exists t3;
+create table t (a1 int, b1 int);
+insert into t values(1,1),(2,2),(3,3);
+
+create procedure p(arg1 int) 
+begin 
+  create table t1 as select * from t where a1<arg1; 
+end;
+/
+
+### 
+call p(1)/
+
+
+select * from t1;/
++------+------+
+| a1   | b1   |
++------+------+
++------+------+
+
+PREPARE pr1 FROM 'create table  t2 as select * from t where a1<?';/
+SET @var = 10;/
+
+### 
+EXECUTE pr1 USING @var;/
+
+
+select * from t2;/
++------+------+
+| a1   | b1   |
++------+------+
+|    1 |    1 |
+|    2 |    2 |
+|    3 |    3 |
++------+------+
+
+create table  t3 as select * from t where a1<?;/
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use
+
+
+select * from t3;/
+ERROR 42S02: Table 'test.t3' doesn't exist
+
+
+drop table if exists t;
+drop table if exists t1;
+drop table if exists t2;
+drop table if exists t3;
+Warnings:
+Note	1051	Unknown table 'test.t3'
+
+
+### 
+drop table if exists t4/
+create table t4 (id int)/
+insert into t4 values (1),(2),(3)/
+drop procedure if exists pro_hr/
+create procedure pro_hr()
+begin
+  create or replace view v2 as select * from t4 where id > 2;
+end;
+/
+call pro_hr()/
+select * from v2/
++------+
+| id   |
++------+
+|    3 |
++------+
+
+
+drop table t4;
+drop procedure pro_hr;
+drop view v2;
+
+#### 
+### 
+drop table if exists t1;
+drop procedure if exists bug36052430;
+create table t1(type int, salary double);
+
+insert into t1 values(1,1000);
+
+
+create procedure bug36052430() 
+begin
+  start transaction;
+  savepoint s1;
+  insert into t1 values(3,3000);
+  savepoint s2;
+  insert into t1 values(4,4000);
+  select * from t1;
+  rollback to savepoint s2;
+  select * from t1; 
+end/
+
+call bug36052430()/
++------+--------+
+| type | salary |
++------+--------+
++------+--------+
+| type | salary |
++------+--------+
+|    1 |   1000 |
+|    3 |   3000 |
+|    4 |   4000 |
+|    1 |   1000 |
+|    3 |   3000 |
++------+--------+
++------+--------+
+
+
+release savepoint s1;
+drop table t1;
+drop procedure bug36052430;
+
+### 
+### 
+drop table if exists t1;
+drop procedure if exists desc_proc;
+create table t1(id int, name varchar(10));
+
+insert into t1 values(351303, 'hr');
+
+
+create procedure desc_proc()
+begin
+  describe t1;
+  desc t1;
+  explain t1;
+end/
+
+call desc_proc()/
++-------+-------------+------+-----+---------+-------+
+| Field | Type        | Null | Key | Default | Extra |
++-------+-------------+------+-----+---------+-------+
++-------+-------------+------+-----+---------+-------+
+| Field | Type        | Null | Key | Default | Extra |
++-------+-------------+------+-----+---------+-------+
++-------+-------------+------+-----+---------+-------+
+| Field | Type        | Null | Key | Default | Extra |
++-------+-------------+------+-----+---------+-------+
+| id    | int(11)     | YES  |     | NULL    |       |
+| name  | varchar(10) | YES  |     | NULL    |       |
+| id    | int(11)     | YES  |     | NULL    |       |
+| name  | varchar(10) | YES  |     | NULL    |       |
+| id    | int(11)     | YES  |     | NULL    |       |
+| name  | varchar(10) | YES  |     | NULL    |       |
++-------+-------------+------+-----+---------+-------+
++-------+-------------+------+-----+---------+-------+
++-------+-------------+------+-----+---------+-------+
+
+drop table t1;
+drop procedure desc_proc;
+
+### 
+drop table if exists t_hr;
+drop function if exists f_hr;
+drop procedure if exists p_hr;
+create table t_hr(id int auto_increment not null primary key, name varchar(10) not null);
+
+insert into t_hr values(null, 'hr');
+
+select last_insert_id();
++------------------+
+| last_insert_id() |
++------------------+
+|                1 |
++------------------+
+
+
+create function f_hr(s int)
+returns int deterministic
+begin
+  insert into t_hr values(null, 'f');
+  return s;
+end/
+
+select f_hr(2)/
++---------+
+| f_hr(2) |
++---------+
+|       2 |
++---------+
+
+select last_insert_id()/
++------------------+
+| last_insert_id() |
++------------------+
+|                1 |
++------------------+
+
+create procedure p_hr()
+begin
+  insert into t_hr values(null, 'f');
+end/
+
+call p_hr()/
+
+select * from t_hr/
++----+------+
+| id | name |
++----+------+
+|  1 | hr   |
+|  2 | f    |
+|  3 | f    |
++----+------+
+select last_insert_id()/
++------------------+
+| last_insert_id() |
++------------------+
+|                3 |
++------------------+
+
+drop table t_hr;
+drop function f_hr;
+drop procedure p_hr;
+
+### 
+drop table if exists t;
+drop function if exists func_hr;
+drop function if exists func1_hr;
+create table t(id int);
+insert into t values(1),(2),(3),(4);
+select * from t;
++------+
+| id   |
++------+
+|    1 |
+|    2 |
+|    3 |
+|    4 |
++------+
+create function func_hr()
+returns int
+begin
+  declare offset int;
+  declare nums int;
+  declare s_id int;
+  set offset = 2;
+  set nums = 1;
+  select id into s_id from t limit offset,nums;
+  set offset = 1;
+  select id into s_id from t limit offset,nums;
+  return s_id;
+end/
+select func_hr()/
++-----------+
+| func_hr() |
++-----------+
+|         2 |
++-----------+
+create function func1_hr()
+returns int
+begin
+  declare nums int;
+  declare s_id int;
+  set nums = 1;
+  select id into s_id from t limit nums;
+  return s_id;
+end/
+select func1_hr()/
++------------+
+| func1_hr() |
++------------+
+|          1 |
++------------+
+drop table if exists t;
+drop function func_hr;
+drop function func1_hr;
+
+### 
+drop procedure if exists bugs1;
+drop procedure if exists bugs4;
+create procedure bugs1()
+begin
+  select 2 union select 2 into @v1;
+end/
+
+call bugs1()/
+select @v1/
++------+
+| @v1  |
++------+
+|    2 |
++------+
+
+create procedure bugs2()
+begin
+  select 2 union select 2 into @v2 union select 2;
+end/
+ERROR HY000: Incorrect usage of UNION and INTO
+
+create procedure bugs3()
+begin
+  select 2 into @v3 union select 2;
+end/
+ERROR HY000: Incorrect usage of UNION and INTO
+
+create procedure bugs4()
+begin
+  select 1 union select 2 into @v4;
+end/
+
+call bugs4()/
+ERROR 42000: Result consisted of more than one row
+
+### mysql inner_call support number to bool
+### 
+DROP PROCEDURE IF EXISTS `pro_1`/
+DROP FUNCTION IF EXISTS `fun_2`/
+CREATE PROCEDURE pro_1(IN a1 INT ,IN a2 INT)
+BEGIN
+  SELECT a1 + a2 INTO @p;
+END/
+CALL pro_1(TRUE,TRUE);/
+SELECT @p/
++------+
+| @p   |
++------+
+|    2 |
++------+
+
+CREATE FUNCTION fun_2() RETURNS INT
+BEGIN
+  DECLARE d1,d2 BOOLEAN;
+  SET d1=1,d2=1;
+  CALL pro_1(d1,d2);
+  RETURN 1;
+END/
+SELECT fun_2()/
++---------+
+| fun_2() |
++---------+
+|       1 |
++---------+
+SELECT @p/
++------+
+| @p   |
++------+
+|    2 |
++------+
+
+DROP PROCEDURE IF EXISTS `pro_1`/
+DROP FUNCTION IF EXISTS `fun_2`/
+
+drop procedure bugs1;
+drop procedure bugs4;
+
+### 
+drop procedure if exists alias_1;
+drop procedure if exists alias_2;
+
+create procedure alias_1()
+begin
+  select "hr\"fix\"issue" + 3 + "a";
+end/
+
+call alias_1()/
++--------------------------+
+| "hr"fix"issue" + 3 + "a" |
++--------------------------+
+|                        3 |
++--------------------------+
+create procedure alias_2(in a int, inout b int, out c int)
+begin
+  select a;
+  select b+5;
+  select a+b into c;
+  select c;
+end/
+
+set @b=5;/
+set @c=0;/
+
+call alias_2(3, @b, @c)/
++------+
+| a    |
++------+
++------+
+| b+5  |
++------+
++------+
+| c    |
++------+
+|    3 |
+|   10 |
+|    8 |
++------+
++------+
++------+
+
+
+drop procedure alias_1;
+drop procedure alias_2;
+
+drop procedure if exists p2;
+drop procedure if exists p3;
+drop function if exists f2;
+drop table if exists t1;
+
+drop procedure if exists p1;
+create procedure p1()
+begin
+  select 1;
+end;
+
+select "succ"//
++------+
+| succ |
++------+
+| succ |
++------+
+
+call p1()//
++---+
+| 1 |
++---+
+| 1 |
++---+
+
+select "===begin===";
+create procedure p2()
+begin
+  select 2;
+end;
+
+create procedure p3()
+begin
+  select 3;
+end//
++-------------+
+| ===begin=== |
++-------------+
+| ===begin=== |
++-------------+
+
+call p2()//
++---+
+| 2 |
++---+
+| 2 |
++---+
+call p3()//
++---+
+| 3 |
++---+
+| 3 |
++---+
+
+drop procedure p1;
+drop procedure p2;
+drop procedure p3;
+
+select "===end==="//
++-----------+
+| ===end=== |
++-----------+
+| ===end=== |
++-----------+
+
+/*start with comment case;*/
+create procedure p1()
+begin
+  select "first stmt";
+  select "second stmt";
+end;
+/*insert a comment;*/
+create procedure p2()
+begin
+  -- pl contain comment;
+  select "pl contain comment";
+end;
+
+call p1();
+call p2();
+drop procedure p1;
+drop procedure p2//
++------------+
+| first stmt |
++------------+
++-------------+
+| second stmt |
++-------------+
++--------------------+
+| pl contain comment |
++--------------------+
+| first stmt |
+| second stmt |
+| pl contain comment |
++------------+
++-------------+
++--------------------+
+
+create table t1(id int)//
+create procedure p1() insert into t1 values(1); insert into t1 values(2);//
+
+call p1();
+select * from t1//
++------+
+| id   |
++------+
+|    2 |
+|    1 |
++------+
+
+drop procedure p1;
+create procedure p1()
+begin
+  insert into t1 values(1);
+  /*insert value of 2;*/
+  insert into t1 values(2);
+end;
+call p1();
+select * from t1;
+drop table t1;
+drop procedure p1//
++------+
+| id   |
++------+
+|    2 |
+|    1 |
+|    1 |
+|    2 |
++------+
+
+create table t1(id int);
+drop table if exists t1;
+create function f2() returns int
+begin
+  declare a int;
+  return 1;
+end;//
+
+select f2//
++------+
+| f2   |
++------+
+|    1 |
++------+
+
+drop function f2//
+

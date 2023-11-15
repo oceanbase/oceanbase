@@ -1,0 +1,72 @@
+#owner: shenyunlong.syl
+#owner group: shenzhen
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection default;
+alter system minor freeze;
+alter system set enable_kv_ttl = true;
+alter system set ttl_thread_score = 4;
+
+--disable_warnings
+drop table if exists ttl_table_ts;
+create table ttl_table_ts(a varchar(1024) primary key, b varchar(1024), c timestamp) TTL(c + INTERVAL 0 SECOND) partition by key(a) partitions 7;
+
+# insert 4*7*500 rows, save one rows per cell
+--let $count = 0
+while($count < 500)
+{
+  --let $stmt=insert into ttl_table_ts(a, b, c) values (concat('row', cast($count as char)), 'hello world', now());
+  
+  eval $stmt;
+  inc $count;
+}
+while($count < 600)
+{
+  --let $stmt=insert into ttl_table_ts(a, b, c) values (concat('row', cast($count as char)), 'hello world', date_add(now(), interval + 2 MINUTE));
+  
+  eval $stmt;
+  inc $count;
+}
+
+sleep 3;
+alter system trigger ttl;
+
+sleep 60;
+select count(*) from ttl_table_ts;
+select TABLE_NAME, TRIGGER_TYPE, STATUS, TTL_DEL_CNT, MAX_VERSION_DEL_CNT, SCAN_CNT, RET_CODE from oceanbase.DBA_OB_KV_TTL_TASK_HISTORY where table_name = 'ttl_table_ts' order by tablet_id;
+
+drop table ttl_table_ts;
+
+--disable_warnings
+drop table if exists ttl_table_ts_column_order;
+--enable_warnings
+create table ttl_table_ts_column_order(a varchar(1024), b int primary key, c timestamp) TTL(c + INTERVAL 0 SECOND) partition by key(b) partitions 7;
+# insert 4*7*500 rows, save one rows per cell
+
+drop procedure if exists insert_data;
+
+delimiter |;
+create PROCEDURE insert_data(del int, no_del int)
+BEGIN
+  DECLARE i INT DEFAULT 0;
+	WHILE i < del do
+    insert into ttl_table_ts_column_order(a, b, c) values (concat('row', cast(i as char)), i, now());
+		set i = i + 1;
+	end while;
+  while i < del + no_del do
+    insert into ttl_table_ts_column_order(a, b, c) values (concat('row', cast(i as char)), i, date_add(now(), interval + 2 MINUTE));
+		set i = i + 1;
+  end while;
+END |
+delimiter ;|
+
+call insert_data(500, 100);
+
+sleep 3;
+alter system trigger ttl;
+
+sleep 70; 
+select count(*) from ttl_table_ts_column_order;
+select TABLE_NAME, TRIGGER_TYPE, STATUS, TTL_DEL_CNT, MAX_VERSION_DEL_CNT, SCAN_CNT, RET_CODE from oceanbase.DBA_OB_KV_TTL_TASK_HISTORY where table_name = 'ttl_table_ts_column_order' order by tablet_id;
+
+drop table ttl_table_ts_column_order;

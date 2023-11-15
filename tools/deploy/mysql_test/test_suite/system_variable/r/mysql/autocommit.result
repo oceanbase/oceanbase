@@ -1,0 +1,329 @@
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+case 1: (autocommit=1, not_trx) // start transaction
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+drop table if exists t1;
+create table t1 (c1 int primary key, c2 int);
+start transaction;
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+c1	c2
+1	2
+commit;
+select * from t1;
+c1	c2
+1	2
+case 2: (autocommit=1, not_trx) // commit
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+drop table if exists t1;
+create table t1 (c1 int primary key, c2 int);
+commit;
+select * from t1;
+c1	c2
+case 3: (autocommit=1, not_trx) // autocommit=1
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+drop table if exists t1;
+create table t1 (c1 int primary key, c2 int);
+set autocommit=1;
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+start transaction;
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+c1	c2
+1	2
+commit;
+select * from t1;
+c1	c2
+1	2
+case 4: (autocommit=1, not_trx) // autocommit=0
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+drop table if exists t1;
+create table t1 (c1 int primary key, c2 int);
+set autocommit=0;
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+c1	c2
+1	2
+commit;
+select * from t1;
+c1	c2
+1	2
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+case 5: (autocommit=1, in_trx) // start transaction
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+drop table if exists t1;
+create table t1 (c1 int primary key, c2 int);
+start transaction;
+start transaction;
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+c1	c2
+1	2
+commit;
+select * from t1;
+c1	c2
+1	2
+case 6: (autocommit=1, in_trx) // commit
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+drop table if exists t1;
+create table t1 (c1 int primary key, c2 int);
+start transaction;
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+c1	c2
+1	2
+commit;
+select * from t1;
+c1	c2
+1	2
+start transaction;
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+case 7: (autocommit=1, in_trx) // set autocommit=1
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+drop table if exists t1;
+create table t1 (c1 int primary key, c2 int);
+start transaction;
+set autocommit=1;
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+c1	c2
+1	2
+commit;
+select * from t1;
+c1	c2
+1	2
+case 8: (autocommit=1, in_trx) // set autocommit=0
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+drop table if exists t1;
+create table t1 (c1 int primary key, c2 int);
+start transaction;
+set autocommit=0;
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+c1	c2
+1	2
+commit;
+select * from t1;
+c1	c2
+1	2
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+case 9: (autocommit=0, not_trx) // start transaction
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+drop table if exists t1;
+create table t1 (c1 int primary key, c2 int);
+set autocommit=0;
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+start transaction;
+start transaction;
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+c1	c2
+1	2
+commit;
+select * from t1;
+c1	c2
+1	2
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+case 10: (autocommit=0, not_trx) // commit
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+drop table if exists t1;
+create table t1 (c1 int primary key, c2 int);
+set autocommit=0;
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+c1	c2
+1	2
+commit;
+insert into t1 values (2, 3);
+select * from t1 where c1 = 2 for update;
+c1	c2
+2	3
+rollback;
+select * from t1;
+c1	c2
+1	2
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+case 11: (autocommit=0, not_trx) // set autocommit=1
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+drop table if exists t1;
+create table t1 (c1 int primary key, c2 int);
+set autocommit=0;
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+set autocommit=1;
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+commit;
+rollback;
+select * from t1;
+c1	c2
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+case 12: (autocommit=0, not_trx) // commit
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+drop table if exists t1;
+create table t1 (c1 int primary key, c2 int);
+set autocommit=0;
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+set autocommit=0;
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+c1	c2
+1	2
+commit;
+insert into t1 values (2, 3);
+select * from t1 where c1 = 2 for update;
+c1	c2
+2	3
+commit;
+select * from t1;
+c1	c2
+1	2
+2	3
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+case 13: (autocommit=0, in_trx) // start transaction
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+drop table if exists t1;
+create table t1 (c1 int primary key, c2 int);
+set autocommit=0;
+start transaction;
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+start transaction;
+commit;
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+case 14: (autocommit=0, in_trx) // commit
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+drop table if exists t1;
+create table t1 (c1 int primary key, c2 int);
+set autocommit=0;
+start transaction;
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+c1	c2
+1	2
+commit;
+select * from t1;
+c1	c2
+1	2
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+case 15: (autocommit=0, in_trx) // set autocommit=1
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+drop table if exists t1;
+create table t1 (c1 int primary key, c2 int);
+set autocommit=0;
+start transaction;
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+c1	c2
+1	2
+set autocommit=1;
+select * from t1;
+c1	c2
+1	2
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+commit;
+case 16: (autocommit=0, in_trx) // set autocommit=0
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+drop table if exists t1;
+create table t1 (c1 int primary key, c2 int);
+set autocommit=0;
+start transaction;
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+set autocommit=0;
+insert into t1 values (1, 2);
+select * from t1 where c1 = 1 for update;
+c1	c2
+1	2
+commit;
+select * from t1;
+c1	c2
+1	2
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+commit;

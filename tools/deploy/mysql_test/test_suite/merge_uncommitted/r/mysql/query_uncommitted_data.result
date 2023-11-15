@@ -1,0 +1,41 @@
+drop table if exists t1;
+create table t1(a int);
+begin;
+insert into t1 value(1);
+insert into t1 value(2);
+insert into t1 value(3);
+insert into t1 value(4);
+insert into t1 value(5);
+insert into t1 value(6);
+set ob_query_timeout=100000000;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+select * from t1;
+a
+select * from t1;
+a
+1
+2
+3
+4
+5
+6
+commit;
+select * from t1;
+a
+1
+2
+3
+4
+5
+6
+select * from t1;
+a
+1
+2
+3
+4
+5
+6
+drop table t1;

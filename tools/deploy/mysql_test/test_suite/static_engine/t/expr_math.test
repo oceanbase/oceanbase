@@ -1,0 +1,115 @@
+# owner: peihan.dph
+# owner group: sql2
+# description: log2/log10/log/ln exp/pow/power sqrt
+
+--disable_abort_on_error
+--result_format 4
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+connection conn_admin;
+--sleep 2
+alter system set enable_async_syslog = false;
+set @@ob_enable_plan_cache = 0;
+#set @@ob_log_level='debug';
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+create table t1 (c1 int, c2 int unsigned, 
+    c3 tinyint, c4 tinyint unsigned,
+    c5 smallint, c6 smallint unsigned,
+    c7 mediumint, c8 mediumint unsigned,
+    c9 integer, c10 integer unsigned,
+    c11 bigint, c12 bigint unsigned,
+    c13 float, c14 float unsigned, 
+    c15 double, c16 double unsigned, 
+    c17 decimal, c18 decimal unsigned, 
+    c19 datetime, c20 timestamp, 
+    c21 varchar(30), c22 char(30));
+    
+insert into t1 values(1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    1, 2, 
+    3.5, 4.5, 
+    5.5, 6.5,
+    7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+    '9.5', '10.5');
+insert into t1 values(-1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -1, 2, 
+    -3.5, 4.5, 
+    -5.5, 6.5,
+    -7.5, 8.5,
+    '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
+    '-9.5', '10.5');
+insert into t1(c17) values(1), (-1), (10000000000000), (-10000000000000), (0.000001), (-0.000001);
+
+--sleep 2
+
+let $cnt=22;
+let $left=1;
+while ($left <= $cnt)
+{
+  eval select log2(c$left), log10(c$left), exp(c$left), sqrt(c$left) from t1;
+  let $right=1;
+  while ($right <= $cnt)
+  {
+    eval select pow(c$left, c$right), power(c$left, c$right) from t1;
+
+    inc $right;
+  }
+  inc $left;
+}
+
+--echo // 'a' casted to zero
+--echo // expect 0
+select pow('a', 2);
+--echo // expect 1
+select pow(2, 'a');
+--echo // expect 1
+select pow('a', 'a');
+--echo // expect 0
+select power('a', 2);
+--echo // expect 1
+select power(2, 'a');
+--echo // expect 1
+select power('a', 'a');
+
+--echo // use pow in insert stmt
+--disable_warnings
+drop table t1;
+--enable_warnings
+create table t1(c1 double);
+insert into t1 select pow('a', 2);
+insert into t1 select pow(2, 'a');
+insert into t1 select pow('a', 'a');
+--echo // expect 0, 1, 1
+--sorted_result
+select * from t1;
+
+connection conn_admin;
+sleep 3;
+
+--echo // use pow in insert stmt(old engine)
+--disable_warnings
+drop table t1;
+--enable_warnings
+create table t1(c1 double);
+insert into t1 select pow('a', 2);
+insert into t1 select pow(2, 'a');
+insert into t1 select pow('a', 'a');
+--echo // expect 0, 1, 1
+--sorted_result
+select * from t1;
+
+connection conn_admin;
+sleep 3;

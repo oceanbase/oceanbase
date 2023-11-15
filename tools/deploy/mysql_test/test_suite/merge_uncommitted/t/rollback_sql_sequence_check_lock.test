@@ -1,0 +1,128 @@
+# owner: lixia.yq
+# owner group: transaction
+# description: 本case是为了测试在含未提交事务的状态下，with savepoint
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+set GLOBAL ob_query_timeout = 1000000000000;
+set GLOBAL ob_trx_timeout = 10000000000000;
+set GLOBAL ob_trx_idle_timeout = 10000000000;
+connect (conn2,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn0,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+
+connection conn0;
+alter system set syslog_io_bandwidth_limit = '100G';
+
+connection conn1;
+alter system set minor_compact_trigger = 10;
+sleep 2;
+
+connection conn1;
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+#建表
+create table t1(num int, str varchar(2000), tag int);
+connection conn0;
+let $__table_id__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ table_id from oceanbase.__all_virtual_table where table_name= 't1', table_id, 1);
+let $__svr_cnt__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ count(*) as c from oceanbase.__all_server, c, 1);
+connection conn1;
+insert into t1 values(1, repeat('Hello OceanBase', 50), 1);
+#事务开始 插入数据
+begin;
+connection conn1;
+#create Savepoint
+SAVEPOINT p1;
+--disable_query_log
+let $i=0;
+while($i < 3000) 
+{
+    eval update t1 set str = repeat('Hello OceanBase$i', 50) where num = 1;
+    inc $i;
+}
+--enable_query_log
+connection conn0;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+--source mysql_test/include/wait_minor_merge.inc
+connection conn2;
+--error 1205
+select * from t1 where num = 1 for update nowait;
+connection conn1;
+ROLLBACK TO SAVEPOINT p1;
+connection conn2;
+select * from t1 where num = 1 for update nowait;
+connection conn1;
+update t1 set str = repeat('Hello OceanBase9', 50) where num = 1;
+#create Savepoint
+SAVEPOINT p2;
+--disable_query_log
+let $i=0;
+while($i < 3000) 
+{
+    eval update t1 set str = repeat('Hello OceanBase$i', 50) where num = 1;
+    inc $i;
+}
+--enable_query_log
+connection conn0;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+--source mysql_test/include/wait_minor_merge.inc
+connection conn2;
+--error 1205
+select * from t1 where num = 1 for update nowait;
+connection conn1;
+ROLLBACK TO SAVEPOINT p2;
+connection conn2;
+--error 1205
+select * from t1 where num = 1 for update nowait;
+connection conn1;
+commit;
+connection conn2;
+select * from t1 where num = 1 for update nowait;
+connection conn1;
+begin;
+--disable_query_log
+let $i=0;
+while($i < 3000) 
+{
+    eval update t1 set str = repeat('Hello OceanBase$i', 50) where num = 1;
+    inc $i;
+}
+--enable_query_log
+connection conn0;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+--source mysql_test/include/wait_minor_merge.inc
+connection conn2;
+--error 1205
+select * from t1 where num = 1 for update nowait;
+connection conn1;
+rollback;
+connection conn2;
+select * from t1 where num = 1 for update nowait;
+connection conn1;
+begin;
+update t1 set str = repeat('Hello OceanBase0.', 50) where num = 1;
+connection conn2;
+--error 1205
+select * from t1 where num = 1 for update nowait;
+connection conn0;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+--source mysql_test/include/wait_minor_merge.inc
+connection conn2;
+--error 1205
+select * from t1 where num = 1 for update nowait;
+connection conn1;
+commit;
+connection conn2;
+select * from t1 where num = 1 for update nowait;
+drop table t1;
+alter system set minor_compact_trigger = 2;

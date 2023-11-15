@@ -1,0 +1,25 @@
+drop database if exists hualong;
+create database hualong;
+use hualong;
+create table using_hash_t1 (c1 int, c2 int, primary key using hash (c1));
+create table using_btree_t1 (c1 int, c2 int, primary key using btree (c1));
+select t.table_name, t.index_using_type from oceanbase.__all_virtual_table t join oceanbase.__all_virtual_database d on t.database_id = d.database_id where t.table_name = 'using_hash_t1' and d.database_name = 'hualong';
+table_name	index_using_type
+using_hash_t1	1
+select t.table_name, t.index_using_type from oceanbase.__all_virtual_table t join oceanbase.__all_virtual_database d on t.database_id = d.database_id where t.table_name = 'using_btree_t1' and d.database_name = 'hualong';
+table_name	index_using_type
+using_btree_t1	0
+select index_table.table_name as index_name, data_table.table_name as data_table_name, index_table.index_using_type
+from oceanbase.__all_virtual_table index_table join oceanbase.__all_virtual_table data_table
+on index_table.data_table_id = data_table.table_id
+where index_table.index_using_type = 1 and index_table.tenant_id = 1 and index_table.tenant_id = data_table.tenant_id
+order by 1;
+index_name	data_table_name	index_using_type
+__idx_11003_all_virtual_plan_cache_stat_i1	__all_virtual_plan_cache_stat	1
+__idx_11013_all_virtual_session_event_i1	__all_virtual_session_event	1
+__idx_11014_all_virtual_session_wait_i1	__all_virtual_session_wait	1
+__idx_11015_all_virtual_session_wait_history_i1	__all_virtual_session_wait_history	1
+__idx_11017_all_virtual_system_event_i1	__all_virtual_system_event	1
+__idx_11020_all_virtual_sesstat_i1	__all_virtual_sesstat	1
+__idx_11021_all_virtual_sysstat_i1	__all_virtual_sysstat	1
+drop database hualong;

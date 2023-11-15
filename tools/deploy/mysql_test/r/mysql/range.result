@@ -1,0 +1,547 @@
+drop table if exists t1, t2, t3;
+CREATE TABLE t1 (
+event_date datetime DEFAULT '2014-02-22' NOT NULL,
+obtype int DEFAULT '0' NOT NULL,
+event_id int DEFAULT '0' NOT NULL,
+extra int,
+PRIMARY KEY (event_date,obtype,event_id)
+);
+INSERT INTO t1(event_date,obtype,event_id) VALUES ('1999-07-10',100100,24), ('1999-07-11',100100,25),
+('1999-07-13',100600,0), ('1999-07-13',100600,4), ('1999-07-13',100600,26),
+('1999-07-14',100600,10), ('1999-07-15',100600,16), ('1999-07-15',100800,45),
+('1999-07-15',101000,47), ('1999-07-16',100800,46), ('1999-07-20',100600,5),
+('1999-07-20',100600,27), ('1999-07-21',100600,11), ('1999-07-22',100600,17),
+('1999-07-23',100100,39), ('1999-07-24',100100,39), ('1999-07-24',100500,40),
+('1999-07-25',100100,39), ('1999-07-27',100600,1), ('1999-07-27',100600,6),
+('1999-07-27',100600,28), ('1999-07-28',100600,12), ('1999-07-29',100500,41),
+('1999-07-29',100600,18), ('1999-07-30',100500,41), ('1999-07-31',100500,41),
+('1999-08-01',100700,34), ('1999-08-03',100600,7), ('1999-08-03',100600,29),
+('1999-08-04',100600,13), ('1999-08-05',100500,42), ('1999-08-05',100600,19),
+('1999-08-06',100500,42), ('1999-08-07',100500,42), ('1999-08-08',100500,42),
+('1999-08-10',100600,2), ('1999-08-10',100600,9), ('1999-08-10',100600,30),
+('1999-08-11',100600,14), ('1999-08-12',100600,20), ('1999-08-17',100500,8),
+('1999-08-17',100600,31), ('1999-08-18',100600,15), ('1999-08-19',100600,22),
+('1999-08-24',100600,3), ('1999-08-24',100600,32), ('1999-08-27',100500,43),
+('1999-08-31',100600,33), ('1999-09-17',100100,37), ('1999-09-18',100100,37),
+('1999-09-19',100100,37), ('2000-12-18',100700,38);
+select event_date,obtype,event_id from t1 WHERE event_date >= '1999-07-01' AND event_date < '1999-07-15' AND (obtype=100600 OR obtype=100100) ORDER BY event_date;
+event_date	obtype	event_id
+1999-07-10 00:00:00	100100	24
+1999-07-11 00:00:00	100100	25
+1999-07-13 00:00:00	100600	0
+1999-07-13 00:00:00	100600	4
+1999-07-13 00:00:00	100600	26
+1999-07-14 00:00:00	100600	10
+select event_date,obtype,event_id from t1 WHERE event_date >= '1999-07-01' AND event_date <= '1999-07-15' AND (obtype=100600 OR obtype=100100) or event_date >= '1999-07-01' AND event_date <= '1999-07-15' AND obtype=100099;
+event_date	obtype	event_id
+1999-07-10 00:00:00	100100	24
+1999-07-11 00:00:00	100100	25
+1999-07-13 00:00:00	100600	0
+1999-07-13 00:00:00	100600	4
+1999-07-13 00:00:00	100600	26
+1999-07-14 00:00:00	100600	10
+1999-07-15 00:00:00	100600	16
+drop table t1;
+CREATE TABLE t1 (
+PAPER_ID smallint DEFAULT '0' NOT NULL,
+YEAR smallint DEFAULT '0' NOT NULL,
+ISSUE smallint DEFAULT '0' NOT NULL,
+CLOSED tinyint DEFAULT '0' NOT NULL,
+ISS_DATE datetime DEFAULT '2014-02-22' NOT NULL,
+PRIMARY KEY (PAPER_ID,YEAR,ISSUE)
+);
+INSERT INTO t1 VALUES (3,1999,34,0,'1999-07-12'), (1,1999,111,0,'1999-03-23'),
+(1,1999,222,0,'1999-03-23'), (3,1999,33,0,'1999-07-12'),
+(3,1999,32,0,'1999-07-12'), (3,1999,31,0,'1999-07-12'),
+(3,1999,30,0,'1999-07-12'), (3,1999,29,0,'1999-07-12'),
+(3,1999,28,0,'1999-07-12'), (1,1999,40,1,'1999-05-01'),
+(1,1999,41,1,'1999-05-01'), (1,1999,42,1,'1999-05-01'),
+(1,1999,46,1,'1999-05-01'), (1,1999,47,1,'1999-05-01'),
+(1,1999,48,1,'1999-05-01'), (1,1999,49,1,'1999-05-01'),
+(1,1999,50,0,'1999-05-01'), (1,1999,51,0,'1999-05-01'),
+(1,1999,200,0,'1999-06-28'), (1,1999,52,0,'1999-06-28'),
+(1,1999,53,0,'1999-06-28'), (1,1999,54,0,'1999-06-28'),
+(1,1999,55,0,'1999-06-28'), (1,1999,56,0,'1999-07-01'),
+(1,1999,57,0,'1999-07-01'), (1,1999,58,0,'1999-07-01'),
+(1,1999,59,0,'1999-07-01'), (1,1999,60,0,'1999-07-01'),
+(3,1999,35,0,'1999-07-12');
+select YEAR,ISSUE from t1 where PAPER_ID=3 and (YEAR>1999 or (YEAR=1999 and ISSUE>28))  order by YEAR,ISSUE;
+YEAR	ISSUE
+1999	29
+1999	30
+1999	31
+1999	32
+1999	33
+1999	34
+1999	35
+drop table t1;
+CREATE TABLE t1 (
+id int NOT NULL auto_increment,
+parent_id int DEFAULT '0' NOT NULL,
+`level` tinyint DEFAULT '0' NOT NULL,
+PRIMARY KEY (id)
+);
+INSERT INTO t1 VALUES (1,0,0), (3,1,1), (4,1,1), (8,2,2), (9,2,2), (17,3,2),
+(22,4,2), (24,4,2), (28,5,2), (29,5,2), (30,5,2), (31,6,2), (32,6,2), (33,6,2),
+(203,7,2), (202,7,2), (20,3,2), (157,0,0), (193,5,2), (40,7,2), (2,1,1),
+(15,2,2), (6,1,1), (34,6,2), (35,6,2), (16,3,2), (7,1,1), (36,7,2), (18,3,2),
+(26,5,2), (27,5,2), (183,4,2), (38,7,2), (25,5,2), (37,7,2), (21,4,2),
+(19,3,2), (5,1,1), (179,5,2);
+SELECT * FROM t1 WHERE `level` = 1 AND parent_id = 1;
+id	parent_id	level
+2	1	1
+3	1	1
+4	1	1
+5	1	1
+6	1	1
+7	1	1
+SELECT * FROM t1 WHERE `level` = 1 AND parent_id = 1 order by id;
+id	parent_id	level
+2	1	1
+3	1	1
+4	1	1
+5	1	1
+6	1	1
+7	1	1
+drop table t1;
+create table t1(
+Satellite		varchar(25)	not null,
+SensorMode		varchar(25)	not null,
+FullImageCornersUpperLeftLongitude	double	not null,
+FullImageCornersUpperRightLongitude	double	not null,
+FullImageCornersUpperRightLatitude	double	not null,
+FullImageCornersLowerRightLatitude	double	not null,
+primary key(Satellite,SensorMode));
+insert into t1 values('OV-3','PAN1',91,-92,40,50);
+insert into t1 values('OV-4','PAN1',91,-92,40,50);
+select * from t1 where t1.Satellite = 'OV-3' and t1.SensorMode = 'PAN1' and t1.FullImageCornersUpperLeftLongitude > -90.000000 and t1.FullImageCornersUpperRightLongitude < -82.000000;
+Satellite	SensorMode	FullImageCornersUpperLeftLongitude	FullImageCornersUpperRightLongitude	FullImageCornersUpperRightLatitude	FullImageCornersLowerRightLatitude
+OV-3	PAN1	91	-92	40	50
+drop table t1;
+create table t1 ( aString char(100) not null default '', primary key (aString) , extra char(100));
+insert into t1 (aString) values ( 'believe in myself' ), ( 'believe' ), ('baaa' ), ( 'believe in love');
+select * from t1 where aString < 'believe in myself' order by aString;
+aString	extra
+baaa	NULL
+believe	NULL
+believe in love	NULL
+select * from t1 where aString > 'believe in love' order by aString;
+aString	extra
+believe in myself	NULL
+drop table t1;
+CREATE TABLE t1 (
+t1ID int NOT NULL ,
+art binary(1) NOT NULL default '',
+KNR char(5) NOT NULL default '',
+RECHNR char(6) NOT NULL default '',
+POSNR char(2) NOT NULL default '',
+ARTNR char(10) NOT NULL default '',
+TEX char(70) NOT NULL default '',
+PRIMARY KEY  (t1ID)
+);
+INSERT INTO t1 (t1ID,art) VALUES
+(0,'j'),
+(1,'J'),
+(2,'J'),
+(3,'j'),
+(4,'J'),
+(5,'J'),
+(6,'j'),
+(7,'J'),
+(8,'J'),
+(9,'j'),
+(10,'J'),
+(11,'J'),
+(12,'j'),
+(13,'J'),
+(14,'J'),
+(15,'j'),
+(16,'J'),
+(17,'J'),
+(18,'j'),
+(19,'J'),
+(20,'J'),
+(21,'j'),
+(22,'J'),
+(23,'J'),
+(24,'j'),
+(25,'J'),
+(26,'J'),
+(27,'j'),
+(28,'J'),
+(29,'J'),
+(30,'j'),
+(31,'J'),
+(32,'J'),
+(33,'j'),
+(34,'J'),
+(35,'J'),
+(36,'j'),
+(37,'J'),
+(38,'J'),
+(39,'j'),
+(40,'J'),
+(41,'J'),
+(42,'j'),
+(43,'J'),
+(44,'J'),
+(45,'j'),
+(46,'J'),
+(47,'J'),
+(48,'j'),
+(49,'J'),
+(50,'J'),
+(51,'j'),
+(52,'J'),
+(53,'J'),
+(54,'j'),
+(55,'J'),
+(56,'J'),
+(57,'j'),
+(58,'J'),
+(59,'J'),
+(60,'j'),
+(61,'J'),
+(62,'J'),
+(63,'j'),
+(64,'J'),
+(65,'J'),
+(66,'j'),
+(67,'J'),
+(68,'J'),
+(69,'j'),
+(70,'J'),
+(71,'J'),
+(72,'j'),
+(73,'J'),
+(74,'J'),
+(75,'j'),
+(76,'J'),
+(77,'J'),
+(78,'j'),
+(79,'J'),
+(80,'J'),
+(81,'j'),
+(82,'J'),
+(83,'J'),
+(84,'j'),
+(85,'J'),
+(86,'J'),
+(87,'j'),
+(88,'J'),
+(89,'J'),
+(90,'j'),
+(91,'J'),
+(92,'J'),
+(93,'j'),
+(94,'J'),
+(95,'J'),
+(96,'j'),
+(97,'J'),
+(98,'J'),
+(99,'j'),
+(100,'J'),
+(101,'J'),
+(102,'j'),
+(103,'J'),
+(104,'J'),
+(105,'j'),
+(106,'J'),
+(107,'J'),
+(108,'j'),
+(109,'J'),
+(110,'J'),
+(111,'j'),
+(112,'J'),
+(113,'J'),
+(114,'j'),
+(115,'J'),
+(116,'J'),
+(117,'j'),
+(118,'J'),
+(119,'J'),
+(120,'j'),
+(121,'J'),
+(122,'J'),
+(123,'j'),
+(124,'J'),
+(125,'J'),
+(126,'j'),
+(127,'J'),
+(128,'J'),
+(129,'j'),
+(130,'J'),
+(131,'J'),
+(132,'j'),
+(133,'J'),
+(134,'J'),
+(135,'j'),
+(136,'J'),
+(137,'J'),
+(138,'j'),
+(139,'J'),
+(140,'J'),
+(141,'j'),
+(142,'J'),
+(143,'J'),
+(144,'j'),
+(145,'J'),
+(146,'J'),
+(147,'j'),
+(148,'J'),
+(149,'J'),
+(150,'j'),
+(151,'J'),
+(152,'J'),
+(153,'j'),
+(154,'J'),
+(155,'J'),
+(156,'j'),
+(157,'J'),
+(158,'J'),
+(159,'j'),
+(160,'J'),
+(161,'J'),
+(162,'j'),
+(163,'J'),
+(164,'J'),
+(165,'j'),
+(166,'J'),
+(167,'J'),
+(168,'j'),
+(169,'J'),
+(170,'J'),
+(171,'j'),
+(172,'J'),
+(173,'J'),
+(174,'j'),
+(175,'J'),
+(176,'J'),
+(177,'j'),
+(178,'J'),
+(179,'J'),
+(180,'j'),
+(181,'J'),
+(182,'J'),
+(183,'j'),
+(184,'J'),
+(185,'J'),
+(186,'j'),
+(187,'J'),
+(188,'J'),
+(189,'j'),
+(190,'J'),
+(191,'J'),
+(192,'j'),
+(193,'J'),
+(194,'J'),
+(195,'j'),
+(196,'J'),
+(197,'J'),
+(198,'j'),
+(199,'J');
+select count(*) from t1 where upper(art) = 'J';
+count(*)
+133
+select count(*) from t1 where art = 'J' or art = 'j';
+count(*)
+200
+select count(*) from t1 where art = 'j' or art = 'J';
+count(*)
+200
+select count(*) from t1 where art = 'j';
+count(*)
+67
+select count(*) from t1 where art = 'J';
+count(*)
+133
+drop table t1;
+CREATE TABLE t1 (
+a int,
+b int,
+c int,
+primary key(a,b)
+);
+INSERT INTO t1(a,b) VALUES
+(1,1),(2,1),(3,1),(4,1),(5,1),(6,1),(7,1),(8,1),(9,1),(10,2),
+(13,2),(14,2),(15,2),(16,2),(17,3),(16,3),(19,3),(20,3),
+(21,4),(22,5),(23,5),(24,5),(25,5),(26,5),(30,5),(31,5),(32,5),
+(33,5),(34,5),(35,5);
+SELECT * FROM t1 WHERE a IN(1,2) AND b=5;
+a	b	c
+DROP TABLE t1;
+create table t1(c1 varchar(1024),c2 varchar(1024), c3 varchar(1024), primary key(c1,c2,c3), extra varchar(1024));
+insert into t1(c1,c2,c3) values ('s1_1','s1_2','s1_3'),('s2_1','s2_2','s2_3');
+select * from t1 where c1 in ('s1_1','s2_1') and c2 in ('s2_1','s1_2');
+c1	c2	c3	extra
+s1_1	s1_2	s1_3	NULL
+drop table t1;
+create table t2 (x bigint not null primary key, y bigint);
+insert into t2(x) values (-16);
+insert into t2(x) values (-15);
+select * from t2;
+x	y
+-16	NULL
+-15	NULL
+select count(*) from t2 where x>0;
+count(*)
+0
+select count(*) from t2 where x=0;
+count(*)
+0
+select count(*) from t2 where x<0;
+count(*)
+2
+select count(*) from t2 where x < -16;
+count(*)
+0
+select count(*) from t2 where x = -16;
+count(*)
+1
+select count(*) from t2 where x > -16;
+count(*)
+1
+select count(*) from t2 where x = 1844674407370955160;
+count(*)
+0
+drop table t2;
+create table t1 (
+c1  char(10) primary key, c2  char(10), c3  char(10), c4  char(10),
+c5  char(10), c6  char(10), c7  char(10), c8  char(10),
+c9  char(10), c10 char(10), c11 char(10), c12 char(10),
+c13 char(10), c14 char(10), c15 char(10), c16 char(10)
+);
+insert into t1 (c1) values ('1');
+select * from t1 where
+c1 in ('abcdefgh', '123456789', 'qwertyuio', 'asddfgh',
+'abcdefg1', '123456781', 'qwertyui1', 'asddfg1',
+'abcdefg2', '123456782', 'qwertyui2', 'asddfg2',
+'abcdefg3', '123456783', 'qwertyui3', 'asddfg3',
+'abcdefg4', '123456784', 'qwertyui4', 'asddfg4',
+'abcdefg5', '123456785', 'qwertyui5', 'asddfg5',
+'abcdefg6', '123456786', 'qwertyui6', 'asddfg6',
+'abcdefg7', '123456787', 'qwertyui7', 'asddfg7',
+'abcdefg8', '123456788', 'qwertyui8', 'asddfg8',
+'abcdefg9', '123456789', 'qwertyui9', 'asddfg9',
+'abcdefgA', '12345678A', 'qwertyuiA', 'asddfgA',
+'abcdefgB', '12345678B', 'qwertyuiB', 'asddfgB',
+'abcdefgC', '12345678C', 'qwertyuiC', 'asddfgC')
+and c2 in ('abcdefgh', '123456789', 'qwertyuio', 'asddfgh',
+'abcdefg1', '123456781', 'qwertyui1', 'asddfg1',
+'abcdefg2', '123456782', 'qwertyui2', 'asddfg2',
+'abcdefg3', '123456783', 'qwertyui3', 'asddfg3',
+'abcdefg4', '123456784', 'qwertyui4', 'asddfg4',
+'abcdefg5', '123456785', 'qwertyui5', 'asddfg5',
+'abcdefg6', '123456786', 'qwertyui6', 'asddfg6',
+'abcdefg7', '123456787', 'qwertyui7', 'asddfg7',
+'abcdefg8', '123456788', 'qwertyui8', 'asddfg8',
+'abcdefg9', '123456789', 'qwertyui9', 'asddfg9',
+'abcdefgA', '12345678A', 'qwertyuiA', 'asddfgA',
+'abcdefgB', '12345678B', 'qwertyuiB', 'asddfgB',
+'abcdefgC', '12345678C', 'qwertyuiC', 'asddfgC')
+and c3 in ('abcdefgh', '123456789', 'qwertyuio', 'asddfgh',
+'abcdefg1', '123456781', 'qwertyui1', 'asddfg1',
+'abcdefg2', '123456782', 'qwertyui2', 'asddfg2',
+'abcdefg3', '123456783', 'qwertyui3', 'asddfg3',
+'abcdefg4', '123456784', 'qwertyui4', 'asddfg4',
+'abcdefg5', '123456785', 'qwertyui5', 'asddfg5',
+'abcdefg6', '123456786', 'qwertyui6', 'asddfg6',
+'abcdefg7', '123456787', 'qwertyui7', 'asddfg7',
+'abcdefg8', '123456788', 'qwertyui8', 'asddfg8',
+'abcdefg9', '123456789', 'qwertyui9', 'asddfg9',
+'abcdefgA', '12345678A', 'qwertyuiA', 'asddfgA',
+'abcdefgB', '12345678B', 'qwertyuiB', 'asddfgB',
+'abcdefgC', '12345678C', 'qwertyuiC', 'asddfgC')
+and c4 in ('abcdefgh', '123456789', 'qwertyuio', 'asddfgh',
+'abcdefg1', '123456781', 'qwertyui1', 'asddfg1',
+'abcdefg2', '123456782', 'qwertyui2', 'asddfg2',
+'abcdefg3', '123456783', 'qwertyui3', 'asddfg3',
+'abcdefg4', '123456784', 'qwertyui4', 'asddfg4',
+'abcdefg5', '123456785', 'qwertyui5', 'asddfg5',
+'abcdefg6', '123456786', 'qwertyui6', 'asddfg6',
+'abcdefg7', '123456787', 'qwertyui7', 'asddfg7',
+'abcdefg8', '123456788', 'qwertyui8', 'asddfg8',
+'abcdefg9', '123456789', 'qwertyui9', 'asddfg9',
+'abcdefgA', '12345678A', 'qwertyuiA', 'asddfgA',
+'abcdefgB', '12345678B', 'qwertyuiB', 'asddfgB',
+'abcdefgC', '12345678C', 'qwertyuiC', 'asddfgC')
+and c5 in ('abcdefgh', '123456789', 'qwertyuio', 'asddfgh',
+'abcdefg1', '123456781', 'qwertyui1', 'asddfg1',
+'abcdefg2', '123456782', 'qwertyui2', 'asddfg2',
+'abcdefg3', '123456783', 'qwertyui3', 'asddfg3',
+'abcdefg4', '123456784', 'qwertyui4', 'asddfg4',
+'abcdefg5', '123456785', 'qwertyui5', 'asddfg5',
+'abcdefg6', '123456786', 'qwertyui6', 'asddfg6',
+'abcdefg7', '123456787', 'qwertyui7', 'asddfg7',
+'abcdefg8', '123456788', 'qwertyui8', 'asddfg8',
+'abcdefg9', '123456789', 'qwertyui9', 'asddfg9',
+'abcdefgA', '12345678A', 'qwertyuiA', 'asddfgA',
+'abcdefgB', '12345678B', 'qwertyuiB', 'asddfgB',
+'abcdefgC', '12345678C', 'qwertyuiC', 'asddfgC')
+and c6 in ('abcdefgh', '123456789', 'qwertyuio', 'asddfgh',
+'abcdefg1', '123456781', 'qwertyui1', 'asddfg1',
+'abcdefg2', '123456782', 'qwertyui2', 'asddfg2',
+'abcdefg3', '123456783', 'qwertyui3', 'asddfg3',
+'abcdefg4', '123456784', 'qwertyui4', 'asddfg4',
+'abcdefg5', '123456785', 'qwertyui5', 'asddfg5',
+'abcdefg6', '123456786', 'qwertyui6', 'asddfg6',
+'abcdefg7', '123456787', 'qwertyui7', 'asddfg7',
+'abcdefg8', '123456788', 'qwertyui8', 'asddfg8',
+'abcdefg9', '123456789', 'qwertyui9', 'asddfg9',
+'abcdefgA', '12345678A', 'qwertyuiA', 'asddfgA',
+'abcdefgB', '12345678B', 'qwertyuiB', 'asddfgB',
+'abcdefgC', '12345678C', 'qwertyuiC', 'asddfgC')
+and c7 in ('abcdefgh', '123456789', 'qwertyuio', 'asddfgh',
+'abcdefg1', '123456781', 'qwertyui1', 'asddfg1',
+'abcdefg2', '123456782', 'qwertyui2', 'asddfg2',
+'abcdefg3', '123456783', 'qwertyui3', 'asddfg3',
+'abcdefg4', '123456784', 'qwertyui4', 'asddfg4',
+'abcdefg5', '123456785', 'qwertyui5', 'asddfg5',
+'abcdefg6', '123456786', 'qwertyui6', 'asddfg6',
+'abcdefg7', '123456787', 'qwertyui7', 'asddfg7',
+'abcdefg8', '123456788', 'qwertyui8', 'asddfg8',
+'abcdefg9', '123456789', 'qwertyui9', 'asddfg9',
+'abcdefgA', '12345678A', 'qwertyuiA', 'asddfgA',
+'abcdefgB', '12345678B', 'qwertyuiB', 'asddfgB',
+'abcdefgC', '12345678C', 'qwertyuiC', 'asddfgC')
+and c8 in ('abcdefgh', '123456789', 'qwertyuio', 'asddfgh',
+'abcdefg1', '123456781', 'qwertyui1', 'asddfg1',
+'abcdefg2', '123456782', 'qwertyui2', 'asddfg2',
+'abcdefg3', '123456783', 'qwertyui3', 'asddfg3',
+'abcdefg4', '123456784', 'qwertyui4', 'asddfg4',
+'abcdefg5', '123456785', 'qwertyui5', 'asddfg5',
+'abcdefg6', '123456786', 'qwertyui6', 'asddfg6',
+'abcdefg7', '123456787', 'qwertyui7', 'asddfg7',
+'abcdefg8', '123456788', 'qwertyui8', 'asddfg8',
+'abcdefg9', '123456789', 'qwertyui9', 'asddfg9',
+'abcdefgA', '12345678A', 'qwertyuiA', 'asddfgA',
+'abcdefgB', '12345678B', 'qwertyuiB', 'asddfgB',
+'abcdefgC', '12345678C', 'qwertyuiC', 'asddfgC')
+and c9 in ('abcdefgh', '123456789', 'qwertyuio', 'asddfgh',
+'abcdefg1', '123456781', 'qwertyui1', 'asddfg1',
+'abcdefg2', '123456782', 'qwertyui2', 'asddfg2',
+'abcdefg3', '123456783', 'qwertyui3', 'asddfg3',
+'abcdefg4', '123456784', 'qwertyui4', 'asddfg4',
+'abcdefg5', '123456785', 'qwertyui5', 'asddfg5',
+'abcdefg6', '123456786', 'qwertyui6', 'asddfg6',
+'abcdefg7', '123456787', 'qwertyui7', 'asddfg7',
+'abcdefg8', '123456788', 'qwertyui8', 'asddfg8',
+'abcdefg9', '123456789', 'qwertyui9', 'asddfg9',
+'abcdefgA', '12345678A', 'qwertyuiA', 'asddfgA',
+'abcdefgB', '12345678B', 'qwertyuiB', 'asddfgB',
+'abcdefgC', '12345678C', 'qwertyuiC', 'asddfgC')
+and c10 in ('abcdefgh', '123456789', 'qwertyuio', 'asddfgh',
+'abcdefg1', '123456781', 'qwertyui1', 'asddfg1',
+'abcdefg2', '123456782', 'qwertyui2', 'asddfg2',
+'abcdefg3', '123456783', 'qwertyui3', 'asddfg3',
+'abcdefg4', '123456784', 'qwertyui4', 'asddfg4',
+'abcdefg5', '123456785', 'qwertyui5', 'asddfg5',
+'abcdefg6', '123456786', 'qwertyui6', 'asddfg6',
+'abcdefg7', '123456787', 'qwertyui7', 'asddfg7',
+'abcdefg8', '123456788', 'qwertyui8', 'asddfg8',
+'abcdefg9', '123456789', 'qwertyui9', 'asddfg9',
+'abcdefgA', '12345678A', 'qwertyuiA', 'asddfgA',
+'abcdefgB', '12345678B', 'qwertyuiB', 'asddfgB',
+'abcdefgC', '12345678C', 'qwertyuiC', 'asddfgC');
+c1	c2	c3	c4	c5	c6	c7	c8	c9	c10	c11	c12	c13	c14	c15	c16
+drop table t1;

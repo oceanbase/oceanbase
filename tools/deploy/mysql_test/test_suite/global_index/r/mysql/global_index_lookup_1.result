@@ -1,0 +1,655 @@
+result_format: 4
+explain_protocol: 2
+drop database if exists muhangtest;
+create database muhangtest;
+use muhangtest;
+set ob_enable_plan_cache = off;
+set ob_enable_transformation = false;
+
+drop table if exists t1;
+create table t1(a int, b int, c int, d int, e int, primary key(a,b,c,d)) partition by hash(b) partitions 2;
+create index gkey on t1(b,c,d) global partition by hash(b) partitions 5;
+drop table if exists t2;
+create table t2(a int, b int, c int, d int, e int, primary key(a,b,c,d)) partition by hash(c+1) partitions 3;
+create index gkey on t2(b,c,d) global partition by hash(b) partitions 5;
+drop table if exists t3;
+create table t3(a int, b int, c int, d int, e int, primary key(a,b,c,d)) partition by hash(b+c) partitions 4;
+create index gkey on t3(b,c,d) global partition by hash(b) partitions 5;
+drop table if exists t4;
+create table t4(a int, b int, c int, d int, e int, primary key(a,b,c,d)) partition by hash(b+c+d) partitions 5;
+create index gkey on t4(b,c,d) global partition by hash(b) partitions 5;
+##     1.2 test key partition
+drop table if exists t5;
+create table t5(a int, b int, c int, d int, e int, primary key(a,b,c,d)) partition by key(b) partitions 2;
+create index gkey on t5(b,c,d) global partition by hash(b) partitions 5;
+use muhangtest;
+
+## build tables
+##     part one 测试各种分区方式下，能否正确的将index rowkey发送到正确的主表分区。
+##     注意，目前list column分区相关的case插入可能会出现ERROR 6002 (40000): Transaction rollbacked， 这里需要被修复.
+##     part tow 测试多轮的读取是否会出错
+##     part three 生成列
+##     part one 
+##     1.1 test hash partition
+EXPLAIN select /*+index(t1 gkey)*/ * from t1 where a in (1,2,3,4,5) order by a,b,c,d;
+Query Plan
+=================================================================
+|ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |SORT                         |        |5       |349         |
+|1 |└─DISTRIBUTED TABLE FULL SCAN|t1(gkey)|5       |348         |
+=================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c], [t1.d], [t1.e]), filter(nil), rowset=16
+      sort_keys([t1.a, ASC], [t1.b, ASC], [t1.c, ASC], [t1.d, ASC])
+  1 - output([t1.a], [t1.b], [t1.c], [t1.d], [t1.e]), filter([t1.a IN (1, 2, 3, 4, 5)]), rowset=16
+      access([t1.a], [t1.b], [t1.c], [t1.d], [t1.e]), partitions(p[0-4])
+      is_index_back=true, is_global_index=true, filter_before_indexback[true], 
+      range_key([t1.b], [t1.c], [t1.d], [t1.a]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+select /*+index(t1 gkey)*/ * from t1 where a in (1,2,3,4,5) order by a,b,c,d;
++---+---+---+---+------+
+| a | b | c | d | e    |
++---+---+---+---+------+
+| 1 | 1 | 1 | 1 |    1 |
+| 2 | 2 | 2 | 2 |    2 |
+| 3 | 3 | 3 | 3 |    3 |
+| 4 | 4 | 4 | 4 |    4 |
+| 5 | 5 | 5 | 5 |    5 |
++---+---+---+---+------+
+EXPLAIN select /*+index(t1 gkey)*/ * from t1 where b in (1,2,3,4,5) order by a,b,c,d;
+Query Plan
+==================================================================
+|ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |SORT                          |        |5       |433         |
+|1 |└─DISTRIBUTED TABLE RANGE SCAN|t1(gkey)|5       |432         |
+==================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c], [t1.d], [t1.e]), filter(nil), rowset=16
+      sort_keys([t1.a, ASC], [t1.b, ASC], [t1.c, ASC], [t1.d, ASC])
+  1 - output([t1.a], [t1.b], [t1.c], [t1.d], [t1.e]), filter(nil), rowset=16
+      access([t1.a], [t1.b], [t1.c], [t1.d], [t1.e]), partitions(p[0-4])
+      is_index_back=true, is_global_index=true, 
+      range_key([t1.b], [t1.c], [t1.d], [t1.a]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), (2,MIN,MIN,MIN ; 2,MAX,MAX,MAX), (3,MIN,MIN,MIN ; 3,MAX,MAX,MAX),
+       (4,MIN,MIN,MIN ; 4,MAX,MAX,MAX), (5,MIN,MIN,MIN ; 5,MAX,MAX,MAX), 
+      range_cond([t1.b IN (1, 2, 3, 4, 5)])
+select /*+index(t1 gkey)*/ * from t1 where b in (1,2,3,4,5) order by a,b,c,d;
++---+---+---+---+------+
+| a | b | c | d | e    |
++---+---+---+---+------+
+| 1 | 1 | 1 | 1 |    1 |
+| 2 | 2 | 2 | 2 |    2 |
+| 3 | 3 | 3 | 3 |    3 |
+| 4 | 4 | 4 | 4 |    4 |
+| 5 | 5 | 5 | 5 |    5 |
++---+---+---+---+------+
+EXPLAIN select /*+index(t1 gkey)*/ * from t1 where (c,b) in ((1,1),(2,2),(3,3),(4,4),(5,5)) order by a,b,c,d;
+Query Plan
+==================================================================
+|ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |SORT                          |        |5       |433         |
+|1 |└─DISTRIBUTED TABLE RANGE SCAN|t1(gkey)|5       |432         |
+==================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c], [t1.d], [t1.e]), filter(nil), rowset=16
+      sort_keys([t1.a, ASC], [t1.b, ASC], [t1.c, ASC], [t1.d, ASC])
+  1 - output([t1.a], [t1.b], [t1.c], [t1.d], [t1.e]), filter(nil), rowset=16
+      access([t1.a], [t1.b], [t1.c], [t1.d], [t1.e]), partitions(p[0-4])
+      is_index_back=true, is_global_index=true, 
+      range_key([t1.b], [t1.c], [t1.d], [t1.a]), range(1,1,MIN,MIN ; 1,1,MAX,MAX), (2,2,MIN,MIN ; 2,2,MAX,MAX), (3,3,MIN,MIN ; 3,3,MAX,MAX), (4,4,MIN,MIN 
+      ; 4,4,MAX,MAX), (5,5,MIN,MIN ; 5,5,MAX,MAX), 
+      range_cond([(t1.c, t1.b) IN ((1, 1), (2, 2), (3, 3), (4, 4), (5, 5))])
+select /*+index(t1 gkey)*/ * from t1 where (c,b) in ((1,1),(2,2),(3,3),(4,4),(5,5)) order by a,b,c,d;
++---+---+---+---+------+
+| a | b | c | d | e    |
++---+---+---+---+------+
+| 1 | 1 | 1 | 1 |    1 |
+| 2 | 2 | 2 | 2 |    2 |
+| 3 | 3 | 3 | 3 |    3 |
+| 4 | 4 | 4 | 4 |    4 |
+| 5 | 5 | 5 | 5 |    5 |
++---+---+---+---+------+
+EXPLAIN select /*+index(t1 gkey)*/ * from t1 where (c,d,b) in ((1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5)) order by a,b,c,d;
+Query Plan
+==================================================================
+|ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |SORT                          |        |5       |433         |
+|1 |└─DISTRIBUTED TABLE RANGE SCAN|t1(gkey)|5       |432         |
+==================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b], [t1.c], [t1.d], [t1.e]), filter(nil), rowset=16
+      sort_keys([t1.a, ASC], [t1.b, ASC], [t1.c, ASC], [t1.d, ASC])
+  1 - output([t1.a], [t1.b], [t1.c], [t1.d], [t1.e]), filter(nil), rowset=16
+      access([t1.a], [t1.b], [t1.c], [t1.d], [t1.e]), partitions(p[0-4])
+      is_index_back=true, is_global_index=true, 
+      range_key([t1.b], [t1.c], [t1.d], [t1.a]), range(1,1,1,MIN ; 1,1,1,MAX), (2,2,2,MIN ; 2,2,2,MAX), (3,3,3,MIN ; 3,3,3,MAX), (4,4,4,MIN ; 4,4,4,MAX),
+       (5,5,5,MIN ; 5,5,5,MAX), 
+      range_cond([(t1.c, t1.d, t1.b) IN ((1, 1, 1), (2, 2, 2), (3, 3, 3), (4, 4, 4), (5, 5, 5))])
+select /*+index(t1 gkey)*/ * from t1 where (c,d,b) in ((1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5)) order by a,b,c,d;
++---+---+---+---+------+
+| a | b | c | d | e    |
++---+---+---+---+------+
+| 1 | 1 | 1 | 1 |    1 |
+| 2 | 2 | 2 | 2 |    2 |
+| 3 | 3 | 3 | 3 |    3 |
+| 4 | 4 | 4 | 4 |    4 |
+| 5 | 5 | 5 | 5 |    5 |
++---+---+---+---+------+
+
+EXPLAIN select /*+index(t2 gkey)*/ * from t2 where a in (1,2,3,4,5) order by a,b,c,d;
+Query Plan
+=================================================================
+|ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |SORT                         |        |5       |240         |
+|1 |└─DISTRIBUTED TABLE FULL SCAN|t2(gkey)|5       |239         |
+=================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t2.a], [t2.b], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
+      sort_keys([t2.a, ASC], [t2.b, ASC], [t2.c, ASC], [t2.d, ASC])
+  1 - output([t2.a], [t2.b], [t2.c], [t2.d], [t2.e]), filter([t2.a IN (1, 2, 3, 4, 5)]), rowset=16
+      access([t2.a], [t2.b], [t2.c], [t2.d], [t2.e]), partitions(p[0-4])
+      is_index_back=true, is_global_index=true, filter_before_indexback[true], 
+      range_key([t2.b], [t2.c], [t2.d], [t2.a]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+select /*+index(t2 gkey)*/ * from t2 where a in (1,2,3,4,5) order by a,b,c,d;
++---+---+---+---+------+
+| a | b | c | d | e    |
++---+---+---+---+------+
+| 1 | 1 | 1 | 1 |    1 |
+| 2 | 2 | 2 | 2 |    2 |
+| 3 | 3 | 3 | 3 |    3 |
+| 4 | 4 | 4 | 4 |    4 |
+| 5 | 5 | 5 | 5 |    5 |
++---+---+---+---+------+
+EXPLAIN select /*+index(t2 gkey)*/ * from t2 where b in (1,2,3,4,5) order by a,b,c,d;
+Query Plan
+==================================================================
+|ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |SORT                          |        |5       |324         |
+|1 |└─DISTRIBUTED TABLE RANGE SCAN|t2(gkey)|5       |323         |
+==================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t2.a], [t2.b], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
+      sort_keys([t2.a, ASC], [t2.b, ASC], [t2.c, ASC], [t2.d, ASC])
+  1 - output([t2.a], [t2.b], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
+      access([t2.a], [t2.b], [t2.c], [t2.d], [t2.e]), partitions(p[0-4])
+      is_index_back=true, is_global_index=true, 
+      range_key([t2.b], [t2.c], [t2.d], [t2.a]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), (2,MIN,MIN,MIN ; 2,MAX,MAX,MAX), (3,MIN,MIN,MIN ; 3,MAX,MAX,MAX),
+       (4,MIN,MIN,MIN ; 4,MAX,MAX,MAX), (5,MIN,MIN,MIN ; 5,MAX,MAX,MAX), 
+      range_cond([t2.b IN (1, 2, 3, 4, 5)])
+select /*+index(t2 gkey)*/ * from t2 where b in (1,2,3,4,5) order by a,b,c,d;
++---+---+---+---+------+
+| a | b | c | d | e    |
++---+---+---+---+------+
+| 1 | 1 | 1 | 1 |    1 |
+| 2 | 2 | 2 | 2 |    2 |
+| 3 | 3 | 3 | 3 |    3 |
+| 4 | 4 | 4 | 4 |    4 |
+| 5 | 5 | 5 | 5 |    5 |
++---+---+---+---+------+
+EXPLAIN select /*+index(t2 gkey)*/ * from t2 where (c,b) in ((1,1),(2,2),(3,3),(4,4),(5,5)) order by a,b,c,d;
+Query Plan
+==================================================================
+|ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |SORT                          |        |5       |324         |
+|1 |└─DISTRIBUTED TABLE RANGE SCAN|t2(gkey)|5       |323         |
+==================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t2.a], [t2.b], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
+      sort_keys([t2.a, ASC], [t2.b, ASC], [t2.c, ASC], [t2.d, ASC])
+  1 - output([t2.a], [t2.b], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
+      access([t2.a], [t2.b], [t2.c], [t2.d], [t2.e]), partitions(p[0-4])
+      is_index_back=true, is_global_index=true, 
+      range_key([t2.b], [t2.c], [t2.d], [t2.a]), range(1,1,MIN,MIN ; 1,1,MAX,MAX), (2,2,MIN,MIN ; 2,2,MAX,MAX), (3,3,MIN,MIN ; 3,3,MAX,MAX), (4,4,MIN,MIN 
+      ; 4,4,MAX,MAX), (5,5,MIN,MIN ; 5,5,MAX,MAX), 
+      range_cond([(t2.c, t2.b) IN ((1, 1), (2, 2), (3, 3), (4, 4), (5, 5))])
+select /*+index(t2 gkey)*/ * from t2 where (c,b) in ((1,1),(2,2),(3,3),(4,4),(5,5)) order by a,b,c,d;
++---+---+---+---+------+
+| a | b | c | d | e    |
++---+---+---+---+------+
+| 1 | 1 | 1 | 1 |    1 |
+| 2 | 2 | 2 | 2 |    2 |
+| 3 | 3 | 3 | 3 |    3 |
+| 4 | 4 | 4 | 4 |    4 |
+| 5 | 5 | 5 | 5 |    5 |
++---+---+---+---+------+
+EXPLAIN select /*+index(t2 gkey)*/ * from t2 where (c,d,b) in ((1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5)) order by a,b,c,d;
+Query Plan
+==================================================================
+|ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |SORT                          |        |5       |324         |
+|1 |└─DISTRIBUTED TABLE RANGE SCAN|t2(gkey)|5       |323         |
+==================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t2.a], [t2.b], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
+      sort_keys([t2.a, ASC], [t2.b, ASC], [t2.c, ASC], [t2.d, ASC])
+  1 - output([t2.a], [t2.b], [t2.c], [t2.d], [t2.e]), filter(nil), rowset=16
+      access([t2.a], [t2.b], [t2.c], [t2.d], [t2.e]), partitions(p[0-4])
+      is_index_back=true, is_global_index=true, 
+      range_key([t2.b], [t2.c], [t2.d], [t2.a]), range(1,1,1,MIN ; 1,1,1,MAX), (2,2,2,MIN ; 2,2,2,MAX), (3,3,3,MIN ; 3,3,3,MAX), (4,4,4,MIN ; 4,4,4,MAX),
+       (5,5,5,MIN ; 5,5,5,MAX), 
+      range_cond([(t2.c, t2.d, t2.b) IN ((1, 1, 1), (2, 2, 2), (3, 3, 3), (4, 4, 4), (5, 5, 5))])
+select /*+index(t2 gkey)*/ * from t2 where (c,d,b) in ((1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5)) order by a,b,c,d;
++---+---+---+---+------+
+| a | b | c | d | e    |
++---+---+---+---+------+
+| 1 | 1 | 1 | 1 |    1 |
+| 2 | 2 | 2 | 2 |    2 |
+| 3 | 3 | 3 | 3 |    3 |
+| 4 | 4 | 4 | 4 |    4 |
+| 5 | 5 | 5 | 5 |    5 |
++---+---+---+---+------+
+
+EXPLAIN select /*+index(t3 gkey)*/ * from t3 where a in (1,2,3,4,5) order by a,b,c,d;
+Query Plan
+=================================================================
+|ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |SORT                         |        |5       |186         |
+|1 |└─DISTRIBUTED TABLE FULL SCAN|t3(gkey)|5       |185         |
+=================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t3.a], [t3.b], [t3.c], [t3.d], [t3.e]), filter(nil), rowset=16
+      sort_keys([t3.a, ASC], [t3.b, ASC], [t3.c, ASC], [t3.d, ASC])
+  1 - output([t3.a], [t3.b], [t3.c], [t3.d], [t3.e]), filter([t3.a IN (1, 2, 3, 4, 5)]), rowset=16
+      access([t3.a], [t3.b], [t3.c], [t3.d], [t3.e]), partitions(p[0-4])
+      is_index_back=true, is_global_index=true, filter_before_indexback[true], 
+      range_key([t3.b], [t3.c], [t3.d], [t3.a]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+select /*+index(t3 gkey)*/ * from t3 where a in (1,2,3,4,5) order by a,b,c,d;
++---+---+---+---+------+
+| a | b | c | d | e    |
++---+---+---+---+------+
+| 1 | 1 | 1 | 1 |    1 |
+| 2 | 2 | 2 | 2 |    2 |
+| 3 | 3 | 3 | 3 |    3 |
+| 4 | 4 | 4 | 4 |    4 |
+| 5 | 5 | 5 | 5 |    5 |
++---+---+---+---+------+
+EXPLAIN select /*+index(t3 gkey)*/ * from t3 where b in (1,2,3,4,5) order by a,b,c,d;
+Query Plan
+==================================================================
+|ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |SORT                          |        |5       |270         |
+|1 |└─DISTRIBUTED TABLE RANGE SCAN|t3(gkey)|5       |269         |
+==================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t3.a], [t3.b], [t3.c], [t3.d], [t3.e]), filter(nil), rowset=16
+      sort_keys([t3.a, ASC], [t3.b, ASC], [t3.c, ASC], [t3.d, ASC])
+  1 - output([t3.a], [t3.b], [t3.c], [t3.d], [t3.e]), filter(nil), rowset=16
+      access([t3.a], [t3.b], [t3.c], [t3.d], [t3.e]), partitions(p[0-4])
+      is_index_back=true, is_global_index=true, 
+      range_key([t3.b], [t3.c], [t3.d], [t3.a]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), (2,MIN,MIN,MIN ; 2,MAX,MAX,MAX), (3,MIN,MIN,MIN ; 3,MAX,MAX,MAX),
+       (4,MIN,MIN,MIN ; 4,MAX,MAX,MAX), (5,MIN,MIN,MIN ; 5,MAX,MAX,MAX), 
+      range_cond([t3.b IN (1, 2, 3, 4, 5)])
+select /*+index(t3 gkey)*/ * from t3 where b in (1,2,3,4,5) order by a,b,c,d;
++---+---+---+---+------+
+| a | b | c | d | e    |
++---+---+---+---+------+
+| 1 | 1 | 1 | 1 |    1 |
+| 2 | 2 | 2 | 2 |    2 |
+| 3 | 3 | 3 | 3 |    3 |
+| 4 | 4 | 4 | 4 |    4 |
+| 5 | 5 | 5 | 5 |    5 |
++---+---+---+---+------+
+EXPLAIN select /*+index(t3 gkey)*/ * from t3 where (c,b) in ((1,1),(2,2),(3,3),(4,4),(5,5)) order by a,b,c,d;
+Query Plan
+==================================================================
+|ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |SORT                          |        |5       |433         |
+|1 |└─DISTRIBUTED TABLE RANGE SCAN|t3(gkey)|5       |432         |
+==================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t3.a], [t3.b], [t3.c], [t3.d], [t3.e]), filter(nil), rowset=16
+      sort_keys([t3.a, ASC], [t3.b, ASC], [t3.c, ASC], [t3.d, ASC])
+  1 - output([t3.a], [t3.b], [t3.c], [t3.d], [t3.e]), filter(nil), rowset=16
+      access([t3.a], [t3.b], [t3.c], [t3.d], [t3.e]), partitions(p[0-4])
+      is_index_back=true, is_global_index=true, 
+      range_key([t3.b], [t3.c], [t3.d], [t3.a]), range(1,1,MIN,MIN ; 1,1,MAX,MAX), (2,2,MIN,MIN ; 2,2,MAX,MAX), (3,3,MIN,MIN ; 3,3,MAX,MAX), (4,4,MIN,MIN 
+      ; 4,4,MAX,MAX), (5,5,MIN,MIN ; 5,5,MAX,MAX), 
+      range_cond([(t3.c, t3.b) IN ((1, 1), (2, 2), (3, 3), (4, 4), (5, 5))])
+select /*+index(t3 gkey)*/ * from t3 where (c,b) in ((1,1),(2,2),(3,3),(4,4),(5,5)) order by a,b,c,d;
++---+---+---+---+------+
+| a | b | c | d | e    |
++---+---+---+---+------+
+| 1 | 1 | 1 | 1 |    1 |
+| 2 | 2 | 2 | 2 |    2 |
+| 3 | 3 | 3 | 3 |    3 |
+| 4 | 4 | 4 | 4 |    4 |
+| 5 | 5 | 5 | 5 |    5 |
++---+---+---+---+------+
+EXPLAIN select /*+index(t3 gkey)*/ * from t3 where (c,d,b) in ((1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5)) order by a,b,c,d;
+Query Plan
+==================================================================
+|ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |SORT                          |        |5       |433         |
+|1 |└─DISTRIBUTED TABLE RANGE SCAN|t3(gkey)|5       |432         |
+==================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t3.a], [t3.b], [t3.c], [t3.d], [t3.e]), filter(nil), rowset=16
+      sort_keys([t3.a, ASC], [t3.b, ASC], [t3.c, ASC], [t3.d, ASC])
+  1 - output([t3.a], [t3.b], [t3.c], [t3.d], [t3.e]), filter(nil), rowset=16
+      access([t3.a], [t3.b], [t3.c], [t3.d], [t3.e]), partitions(p[0-4])
+      is_index_back=true, is_global_index=true, 
+      range_key([t3.b], [t3.c], [t3.d], [t3.a]), range(1,1,1,MIN ; 1,1,1,MAX), (2,2,2,MIN ; 2,2,2,MAX), (3,3,3,MIN ; 3,3,3,MAX), (4,4,4,MIN ; 4,4,4,MAX),
+       (5,5,5,MIN ; 5,5,5,MAX), 
+      range_cond([(t3.c, t3.d, t3.b) IN ((1, 1, 1), (2, 2, 2), (3, 3, 3), (4, 4, 4), (5, 5, 5))])
+select /*+index(t3 gkey)*/ * from t3 where (c,d,b) in ((1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5)) order by a,b,c,d;
++---+---+---+---+------+
+| a | b | c | d | e    |
++---+---+---+---+------+
+| 1 | 1 | 1 | 1 |    1 |
+| 2 | 2 | 2 | 2 |    2 |
+| 3 | 3 | 3 | 3 |    3 |
+| 4 | 4 | 4 | 4 |    4 |
+| 5 | 5 | 5 | 5 |    5 |
++---+---+---+---+------+
+
+EXPLAIN select /*+index(t4 gkey)*/ * from t4 where a in (1,2,3,4,5) order by a,b,c,d;
+Query Plan
+=================================================================
+|ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |SORT                         |        |5       |153         |
+|1 |└─DISTRIBUTED TABLE FULL SCAN|t4(gkey)|5       |152         |
+=================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t4.a], [t4.b], [t4.c], [t4.d], [t4.e]), filter(nil), rowset=16
+      sort_keys([t4.a, ASC], [t4.b, ASC], [t4.c, ASC], [t4.d, ASC])
+  1 - output([t4.a], [t4.b], [t4.c], [t4.d], [t4.e]), filter([t4.a IN (1, 2, 3, 4, 5)]), rowset=16
+      access([t4.a], [t4.b], [t4.c], [t4.d], [t4.e]), partitions(p[0-4])
+      is_index_back=true, is_global_index=true, filter_before_indexback[true], 
+      range_key([t4.b], [t4.c], [t4.d], [t4.a]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+select /*+index(t4 gkey)*/ * from t4 where a in (1,2,3,4,5) order by a,b,c,d;
++---+---+---+---+------+
+| a | b | c | d | e    |
++---+---+---+---+------+
+| 1 | 1 | 1 | 1 |    1 |
+| 2 | 2 | 2 | 2 |    2 |
+| 3 | 3 | 3 | 3 |    3 |
+| 4 | 4 | 4 | 4 |    4 |
+| 5 | 5 | 5 | 5 |    5 |
++---+---+---+---+------+
+EXPLAIN select /*+index(t4 gkey)*/ * from t4 where b in (1,2,3,4,5) order by a,b,c,d;
+Query Plan
+==================================================================
+|ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |SORT                          |        |5       |237         |
+|1 |└─DISTRIBUTED TABLE RANGE SCAN|t4(gkey)|5       |236         |
+==================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t4.a], [t4.b], [t4.c], [t4.d], [t4.e]), filter(nil), rowset=16
+      sort_keys([t4.a, ASC], [t4.b, ASC], [t4.c, ASC], [t4.d, ASC])
+  1 - output([t4.a], [t4.b], [t4.c], [t4.d], [t4.e]), filter(nil), rowset=16
+      access([t4.a], [t4.b], [t4.c], [t4.d], [t4.e]), partitions(p[0-4])
+      is_index_back=true, is_global_index=true, 
+      range_key([t4.b], [t4.c], [t4.d], [t4.a]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), (2,MIN,MIN,MIN ; 2,MAX,MAX,MAX), (3,MIN,MIN,MIN ; 3,MAX,MAX,MAX),
+       (4,MIN,MIN,MIN ; 4,MAX,MAX,MAX), (5,MIN,MIN,MIN ; 5,MAX,MAX,MAX), 
+      range_cond([t4.b IN (1, 2, 3, 4, 5)])
+select /*+index(t4 gkey)*/ * from t4 where b in (1,2,3,4,5) order by a,b,c,d;
++---+---+---+---+------+
+| a | b | c | d | e    |
++---+---+---+---+------+
+| 1 | 1 | 1 | 1 |    1 |
+| 2 | 2 | 2 | 2 |    2 |
+| 3 | 3 | 3 | 3 |    3 |
+| 4 | 4 | 4 | 4 |    4 |
+| 5 | 5 | 5 | 5 |    5 |
++---+---+---+---+------+
+EXPLAIN select /*+index(t4 gkey)*/ * from t4 where (c,b) in ((1,1),(2,2),(3,3),(4,4),(5,5)) order by a,b,c,d;
+Query Plan
+==================================================================
+|ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |SORT                          |        |5       |237         |
+|1 |└─DISTRIBUTED TABLE RANGE SCAN|t4(gkey)|5       |236         |
+==================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t4.a], [t4.b], [t4.c], [t4.d], [t4.e]), filter(nil), rowset=16
+      sort_keys([t4.a, ASC], [t4.b, ASC], [t4.c, ASC], [t4.d, ASC])
+  1 - output([t4.a], [t4.b], [t4.c], [t4.d], [t4.e]), filter(nil), rowset=16
+      access([t4.a], [t4.b], [t4.c], [t4.d], [t4.e]), partitions(p[0-4])
+      is_index_back=true, is_global_index=true, 
+      range_key([t4.b], [t4.c], [t4.d], [t4.a]), range(1,1,MIN,MIN ; 1,1,MAX,MAX), (2,2,MIN,MIN ; 2,2,MAX,MAX), (3,3,MIN,MIN ; 3,3,MAX,MAX), (4,4,MIN,MIN 
+      ; 4,4,MAX,MAX), (5,5,MIN,MIN ; 5,5,MAX,MAX), 
+      range_cond([(t4.c, t4.b) IN ((1, 1), (2, 2), (3, 3), (4, 4), (5, 5))])
+select /*+index(t4 gkey)*/ * from t4 where (c,b) in ((1,1),(2,2),(3,3),(4,4),(5,5)) order by a,b,c,d;
++---+---+---+---+------+
+| a | b | c | d | e    |
++---+---+---+---+------+
+| 1 | 1 | 1 | 1 |    1 |
+| 2 | 2 | 2 | 2 |    2 |
+| 3 | 3 | 3 | 3 |    3 |
+| 4 | 4 | 4 | 4 |    4 |
+| 5 | 5 | 5 | 5 |    5 |
++---+---+---+---+------+
+EXPLAIN select /*+index(t4 gkey)*/ * from t4 where (c,d,b) in ((1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5)) order by a,b,c,d;
+Query Plan
+==================================================================
+|ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |SORT                          |        |5       |237         |
+|1 |└─DISTRIBUTED TABLE RANGE SCAN|t4(gkey)|5       |236         |
+==================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t4.a], [t4.b], [t4.c], [t4.d], [t4.e]), filter(nil), rowset=16
+      sort_keys([t4.a, ASC], [t4.b, ASC], [t4.c, ASC], [t4.d, ASC])
+  1 - output([t4.a], [t4.b], [t4.c], [t4.d], [t4.e]), filter(nil), rowset=16
+      access([t4.a], [t4.b], [t4.c], [t4.d], [t4.e]), partitions(p[0-4])
+      is_index_back=true, is_global_index=true, 
+      range_key([t4.b], [t4.c], [t4.d], [t4.a]), range(1,1,1,MIN ; 1,1,1,MAX), (2,2,2,MIN ; 2,2,2,MAX), (3,3,3,MIN ; 3,3,3,MAX), (4,4,4,MIN ; 4,4,4,MAX),
+       (5,5,5,MIN ; 5,5,5,MAX), 
+      range_cond([(t4.c, t4.d, t4.b) IN ((1, 1, 1), (2, 2, 2), (3, 3, 3), (4, 4, 4), (5, 5, 5))])
+select /*+index(t4 gkey)*/ * from t4 where (c,d,b) in ((1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5)) order by a,b,c,d;
++---+---+---+---+------+
+| a | b | c | d | e    |
++---+---+---+---+------+
+| 1 | 1 | 1 | 1 |    1 |
+| 2 | 2 | 2 | 2 |    2 |
+| 3 | 3 | 3 | 3 |    3 |
+| 4 | 4 | 4 | 4 |    4 |
+| 5 | 5 | 5 | 5 |    5 |
++---+---+---+---+------+
+
+EXPLAIN select /*+index(t5 gkey)*/ * from t5 where a in (1,2,3,4,5) order by a,b,c,d;
+Query Plan
+=================================================================
+|ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |SORT                         |        |5       |349         |
+|1 |└─DISTRIBUTED TABLE FULL SCAN|t5(gkey)|5       |348         |
+=================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t5.a], [t5.b], [t5.c], [t5.d], [t5.e]), filter(nil), rowset=16
+      sort_keys([t5.a, ASC], [t5.b, ASC], [t5.c, ASC], [t5.d, ASC])
+  1 - output([t5.a], [t5.b], [t5.c], [t5.d], [t5.e]), filter([t5.a IN (1, 2, 3, 4, 5)]), rowset=16
+      access([t5.a], [t5.b], [t5.c], [t5.d], [t5.e]), partitions(p[0-4])
+      is_index_back=true, is_global_index=true, filter_before_indexback[true], 
+      range_key([t5.b], [t5.c], [t5.d], [t5.a]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+select /*+index(t5 gkey)*/ * from t5 where a in (1,2,3,4,5) order by a,b,c,d;
++---+---+---+---+------+
+| a | b | c | d | e    |
++---+---+---+---+------+
+| 1 | 1 | 1 | 1 |    1 |
+| 2 | 2 | 2 | 2 |    2 |
+| 3 | 3 | 3 | 3 |    3 |
+| 4 | 4 | 4 | 4 |    4 |
+| 5 | 5 | 5 | 5 |    5 |
++---+---+---+---+------+
+EXPLAIN select /*+index(t5 gkey)*/ * from t5 where b in (1,2,3,4,5) order by a,b,c,d;
+Query Plan
+==================================================================
+|ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |SORT                          |        |5       |759         |
+|1 |└─DISTRIBUTED TABLE RANGE SCAN|t5(gkey)|5       |759         |
+==================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t5.a], [t5.b], [t5.c], [t5.d], [t5.e]), filter(nil), rowset=16
+      sort_keys([t5.a, ASC], [t5.b, ASC], [t5.c, ASC], [t5.d, ASC])
+  1 - output([t5.a], [t5.b], [t5.c], [t5.d], [t5.e]), filter(nil), rowset=16
+      access([t5.a], [t5.b], [t5.c], [t5.d], [t5.e]), partitions(p[0-4])
+      is_index_back=true, is_global_index=true, 
+      range_key([t5.b], [t5.c], [t5.d], [t5.a]), range(1,MIN,MIN,MIN ; 1,MAX,MAX,MAX), (2,MIN,MIN,MIN ; 2,MAX,MAX,MAX), (3,MIN,MIN,MIN ; 3,MAX,MAX,MAX),
+       (4,MIN,MIN,MIN ; 4,MAX,MAX,MAX), (5,MIN,MIN,MIN ; 5,MAX,MAX,MAX), 
+      range_cond([t5.b IN (1, 2, 3, 4, 5)])
+select /*+index(t5 gkey)*/ * from t5 where b in (1,2,3,4,5) order by a,b,c,d;
++---+---+---+---+------+
+| a | b | c | d | e    |
++---+---+---+---+------+
+| 1 | 1 | 1 | 1 |    1 |
+| 2 | 2 | 2 | 2 |    2 |
+| 3 | 3 | 3 | 3 |    3 |
+| 4 | 4 | 4 | 4 |    4 |
+| 5 | 5 | 5 | 5 |    5 |
++---+---+---+---+------+
+EXPLAIN select /*+index(t5 gkey)*/ * from t5 where (c,b) in ((1,1),(2,2),(3,3),(4,4),(5,5)) order by a,b,c,d;
+Query Plan
+==================================================================
+|ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |SORT                          |        |5       |759         |
+|1 |└─DISTRIBUTED TABLE RANGE SCAN|t5(gkey)|5       |759         |
+==================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t5.a], [t5.b], [t5.c], [t5.d], [t5.e]), filter(nil), rowset=16
+      sort_keys([t5.a, ASC], [t5.b, ASC], [t5.c, ASC], [t5.d, ASC])
+  1 - output([t5.a], [t5.b], [t5.c], [t5.d], [t5.e]), filter(nil), rowset=16
+      access([t5.a], [t5.b], [t5.c], [t5.d], [t5.e]), partitions(p[0-4])
+      is_index_back=true, is_global_index=true, 
+      range_key([t5.b], [t5.c], [t5.d], [t5.a]), range(1,1,MIN,MIN ; 1,1,MAX,MAX), (2,2,MIN,MIN ; 2,2,MAX,MAX), (3,3,MIN,MIN ; 3,3,MAX,MAX), (4,4,MIN,MIN 
+      ; 4,4,MAX,MAX), (5,5,MIN,MIN ; 5,5,MAX,MAX), 
+      range_cond([(t5.c, t5.b) IN ((1, 1), (2, 2), (3, 3), (4, 4), (5, 5))])
+select /*+index(t5 gkey)*/ * from t5 where (c,b) in ((1,1),(2,2),(3,3),(4,4),(5,5)) order by a,b,c,d;
++---+---+---+---+------+
+| a | b | c | d | e    |
++---+---+---+---+------+
+| 1 | 1 | 1 | 1 |    1 |
+| 2 | 2 | 2 | 2 |    2 |
+| 3 | 3 | 3 | 3 |    3 |
+| 4 | 4 | 4 | 4 |    4 |
+| 5 | 5 | 5 | 5 |    5 |
++---+---+---+---+------+
+EXPLAIN select /*+index(t5 gkey)*/ * from t5 where (c,d,b) in ((1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5)) order by a,b,c,d;
+Query Plan
+==================================================================
+|ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |SORT                          |        |5       |759         |
+|1 |└─DISTRIBUTED TABLE RANGE SCAN|t5(gkey)|5       |759         |
+==================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t5.a], [t5.b], [t5.c], [t5.d], [t5.e]), filter(nil), rowset=16
+      sort_keys([t5.a, ASC], [t5.b, ASC], [t5.c, ASC], [t5.d, ASC])
+  1 - output([t5.a], [t5.b], [t5.c], [t5.d], [t5.e]), filter(nil), rowset=16
+      access([t5.a], [t5.b], [t5.c], [t5.d], [t5.e]), partitions(p[0-4])
+      is_index_back=true, is_global_index=true, 
+      range_key([t5.b], [t5.c], [t5.d], [t5.a]), range(1,1,1,MIN ; 1,1,1,MAX), (2,2,2,MIN ; 2,2,2,MAX), (3,3,3,MIN ; 3,3,3,MAX), (4,4,4,MIN ; 4,4,4,MAX),
+       (5,5,5,MIN ; 5,5,5,MAX), 
+      range_cond([(t5.c, t5.d, t5.b) IN ((1, 1, 1), (2, 2, 2), (3, 3, 3), (4, 4, 4), (5, 5, 5))])
+select /*+index(t5 gkey)*/ * from t5 where (c,d,b) in ((1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5)) order by a,b,c,d;
++---+---+---+---+------+
+| a | b | c | d | e    |
++---+---+---+---+------+
+| 1 | 1 | 1 | 1 |    1 |
+| 2 | 2 | 2 | 2 |    2 |
+| 3 | 3 | 3 | 3 |    3 |
+| 4 | 4 | 4 | 4 |    4 |
+| 5 | 5 | 5 | 5 |    5 |
++---+---+---+---+------+
+
+drop table t1;
+drop table t2;
+create table t1(a int, b int);
+create table t2(a int primary key, b int, c int, d int) partition by hash(a) partitions 2;
+create index i1 on t2(b) global;
+EXPLAIN insert into t1 values(1, 1), (2, 2);
+Query Plan
+==================================================
+|ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |DISTRIBUTED INSERT|    |2       |20          |
+|1 |└─EXPRESSION      |    |2       |1           |
+==================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      columns([{t1: ({t1: (t1.__pk_increment, t1.a, t1.b)})}]), 
+      column_values([T_HIDDEN_PK], [column_conv(INT,PS:(11,0),NULL,__values.a)], [column_conv(INT,PS:(11,0),NULL,__values.b)])
+  1 - output([__values.a], [__values.b]), filter(nil)
+      values({1, 1}, {2, 2})
+insert into t1 values(1, 1), (2, 2);
+EXPLAIN insert into t2 values(1, 1, 1, 1), (3, 3, 3, 3);
+Query Plan
+==================================================
+|ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |DISTRIBUTED INSERT|    |2       |26          |
+|1 |└─EXPRESSION      |    |2       |1           |
+==================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      columns([{t2: ({t2: (t2.a, t2.b, t2.c, t2.d)}, {i1: (t2.b, t2.a)})}]), 
+      column_values([column_conv(INT,PS:(11,0),NOT NULL,__values.a)], [column_conv(INT,PS:(11,0),NULL,__values.b)], [column_conv(INT,PS:(11,0),NULL,__values.c)],
+       [column_conv(INT,PS:(11,0),NULL,__values.d)])
+  1 - output([__values.a], [__values.b], [__values.c], [__values.d]), filter(nil)
+      values({1, 1, 1, 1}, {3, 3, 3, 3})
+insert into t2 values(1, 1, 1, 1), (3, 3, 3, 3);
+EXPLAIN select /*+no_rewrite, leading(t1)*/ * from t1 where exists (select /*+index(t2 i1)*/ 1 from t2 where t1.b=t2.b and t2.c>0);
+Query Plan
+================================================================
+|ID|OPERATOR                      |NAME  |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------
+|0 |SUBPLAN FILTER                |      |1       |68          |
+|1 |├─TABLE FULL SCAN             |t1    |2       |3           |
+|2 |└─DISTRIBUTED TABLE RANGE SCAN|t2(i1)|1       |33          |
+================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.a], [t1.b]), filter([(T_OP_EXISTS, subquery(1))]), rowset=16
+      exec_params_([t1.b(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.b], [t1.a]), filter(nil), rowset=16
+      access([t1.b], [t1.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([t2.c > 0]), rowset=16
+      access([t2.a], [t2.c]), partitions(p0)
+      is_index_back=true, is_global_index=true, filter_before_indexback[false], 
+      range_key([t2.b], [t2.a]), range(MIN,MIN ; MAX,MAX)always true, 
+      range_cond([:0 = t2.b])
+select /*+no_rewrite, leading(t1)*/ * from t1 where exists (select /*+index(t2 i1)*/ 1 from t2 where t1.b=t2.b and t2.c>0);
++------+------+
+| a    | b    |
++------+------+
+|    1 |    1 |
++------+------+
+drop database muhangtest;

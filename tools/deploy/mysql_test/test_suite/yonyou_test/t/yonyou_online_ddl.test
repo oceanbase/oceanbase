@@ -1,0 +1,371 @@
+#owner: xiaoma.mwh
+#owner group: shenzhen
+--echo # yongyou test
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+connection conn_admin;
+connection default;
+
+# case -- enum
+
+--disable_warnings
+drop procedure if exists p_aa_updatecolumn;
+DELIMITER //;
+DROP PROCEDURE IF EXISTS p_aa_updatecolumn;
+CREATE PROCEDURE p_aa_updatecolumn(tablename VARCHAR(50),columnname VARCHAR(50),executeStr VARCHAR(1000),executeType VARCHAR(50))
+BEGIN
+  DECLARE  CurrentDatabase VARCHAR(100);
+SELECT DATABASE() INTO CurrentDatabase;
+SET @tablename = tablename;
+  SET @columnname = columnname;
+  SET @executeType = executeType;
+  SET @executeStr = executeStr;
+  SET @count = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE table_schema=CurrentDatabase AND TABLE_NAME=@tablename AND COLUMN_NAME=@columnname);
+  IF @executeType = 'add' AND @count = 0 THEN
+   PREPARE stmt1 FROM @executeStr;
+EXECUTE stmt1;
+ELSEIF @executeType = 'alter' AND @count >0 THEN
+   PREPARE stmt1 FROM @executeStr;
+EXECUTE stmt1;
+END IF;
+END
+//
+delimiter ;//
+
+#case -- change default
+--disable_warnings
+DROP TABLE IF EXISTS pb_meta_filter_item_ext;
+CREATE TABLE IF NOT EXISTS `pb_meta_filter_item_ext` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `filtersId` int(11) DEFAULT NULL,
+  `itemName` varchar(255) NOT NULL,
+  `itemTitle` varchar(50) DEFAULT NULL,
+  `itemType` varchar(100) DEFAULT NULL,
+  `referId` int(11) DEFAULT NULL,
+  `referCode` varchar(255) DEFAULT NULL,
+  `refType` int(11) DEFAULT NULL,
+  `refReturn` varchar(64) DEFAULT NULL,
+  `compareLogic` enum('is_not_null','is_null','between','like','rightlike','leftlike','egt','elt','gt','lt','neq','in','nin','eq') DEFAULT NULL,
+  `iprecision` int(11) DEFAULT NULL,
+  `dataSource` varchar(500) DEFAULT NULL,
+  `descValue` int(11) DEFAULT NULL,
+  `isCommon` int(11) DEFAULT NULL,
+  `mustInput` int(11) DEFAULT NULL,
+  `rangeInput` int(11) DEFAULT NULL,
+  `multSelect` int(11) DEFAULT NULL,
+  `allowUpdateCompare` int(11) DEFAULT NULL,
+  `orLogic` int(11) DEFAULT NULL,
+  `defaultVal1` varchar(50) DEFAULT NULL,
+  `defaultVal2` varchar(50) DEFAULT NULL,
+  `groupName` varchar(50) DEFAULT NULL,
+  `isSys` int(11) DEFAULT NULL,
+  `createTime` varchar(25) DEFAULT NULL,
+  `updateTime` varchar(25) DEFAULT NULL,
+  `dr` int(11) DEFAULT NULL,
+  `cEnumType` varchar(45) DEFAULT NULL,
+  `bEnum` tinyint(4) DEFAULT NULL,
+  `bAutoflt` tinyint(4) DEFAULT NULL,
+  `displayname` varchar(64) DEFAULT NULL,
+  `cFormatData` varchar(45) DEFAULT NULL,
+  `extendField` varchar(100) DEFAULT NULL,
+  `auth_level` smallint(6) DEFAULT '3',
+  `pubts` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '时间戳',
+  `tenant_id` varchar(50) DEFAULT NULL,
+  `itemNameDesc` varchar(500) DEFAULT NULL,
+  `isMasterOrg` tinyint(1) DEFAULT NULL,
+  `itemtitle_resid` varchar(200) DEFAULT NULL,
+  `iType` smallint(1) DEFAULT '0',
+  `defaultOrder` varchar(50) DEFAULT NULL,
+  `cselfdefinetype` varchar(50) DEFAULT NULL,
+  `cExtProps` mediumtext,
+  `cDesignProps` mediumtext,
+  PRIMARY KEY (`id`) USING BTREE,
+  KEY `idx_filter_item_filtersid` (`filtersId`) USING BTREE,
+  KEY `idx_filter_item_tenantid` (`tenant_id`) USING BTREE,
+  KEY `idx_multlang_itemtitle` (`tenant_id`,`itemTitle`)
+) ENGINE=InnoDB ROW_FORMAT=COMPACT;
+
+ALTER TABLE  pb_meta_filter_item_ext  ADD COLUMN ytenant_id varchar(36) DEFAULT "～" NOT NULL;
+alter table pb_meta_filter_item_ext alter  column cselfdefinetype set DEFAULT 'aa';
+alter table pb_meta_filter_item_ext modify column itemNameDesc varchar(500)  DEFAULT 'aa' not NULL;
+
+#case -- enum
+DROP TABLE IF EXISTS pb_filter_solution_common;
+CREATE TABLE IF NOT EXISTS `pb_filter_solution_common` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `solutionid` int(11) DEFAULT NULL,
+  `itemname` varchar(255) DEFAULT NULL,
+  `itemid` bigint(20) DEFAULT NULL,
+  `itemtitle` varchar(50) DEFAULT NULL,
+  `reftype` int(11) DEFAULT NULL,
+  `iscommon` int(11) DEFAULT NULL,
+  `rangeinput` int(11) DEFAULT NULL,
+  `multselect` int(11) DEFAULT NULL,
+  `comparelogic` enum('is_not_null','is_null','between','like','rightlike','leftlike','egt','elt','gt','lt','neq','nin','in','eq') DEFAULT NULL,
+  `defaultval1` varchar(50) DEFAULT NULL,
+  `defaultval2` varchar(50) DEFAULT NULL,
+  `orderid` float(10,0) DEFAULT NULL,
+  `savehistory` int(11) DEFAULT NULL,
+  `checkrefer` int(11) DEFAULT NULL,
+  `pb_filter_solution_commoncol` varchar(45) DEFAULT NULL,
+  `tenant_id` varchar(50) DEFAULT NULL,
+  `defineid` varchar(100) DEFAULT NULL COMMENT '自定义项对应字段',
+  `itemtype` varchar(100) DEFAULT NULL,
+  `refercode` varchar(255) DEFAULT NULL,
+  `bhidden` bit(1) DEFAULT b'0',
+  `isshoprelated` tinyint(1) NOT NULL DEFAULT '0' COMMENT '是否门店相关',
+  `cenumtype` varchar(40) DEFAULT NULL,
+  `benum` tinyint(4) DEFAULT NULL,
+  `bautoflt` tinyint(4) DEFAULT NULL,
+  `cdatarule` varchar(200) DEFAULT NULL,
+  `itemtitle_resid` varchar(200) DEFAULT NULL,
+  `cExtProps` mediumtext,
+    `cDesignProps` mediumtext,
+  `iType` smallint(1) DEFAULT '0',
+  `defaultOrder` varchar(50) DEFAULT NULL,
+  `ytenant_id` varchar(36) NOT NULL DEFAULT '～',
+  PRIMARY KEY (`id`),
+  KEY `pb_filter_solution_common_tenant_id_idx` (`tenant_id`),
+  KEY `idx_filter_solution_common_id` (`solutionid`),
+  KEY `idx_multlang_itemtitle` (`tenant_id`,`itemtitle`)
+) ENGINE=InnoDB ;
+
+DROP TABLE IF EXISTS pb_meta_filter_item_ext;
+CREATE TABLE IF NOT EXISTS `pb_meta_filter_item_ext` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `filtersId` int(11) DEFAULT NULL,
+  `itemName` varchar(255) NOT NULL,
+  `itemTitle` varchar(50) DEFAULT NULL,
+  `itemType` varchar(100) DEFAULT NULL,
+  `referId` int(11) DEFAULT NULL,
+  `referCode` varchar(255) DEFAULT NULL,
+  `refType` int(11) DEFAULT NULL,
+  `refReturn` varchar(64) DEFAULT NULL,
+  `compareLogic` enum('is_not_null','is_null','between','like','rightlike','leftlike','egt','elt','gt','lt','neq','in','nin','eq') DEFAULT NULL,
+  `iprecision` int(11) DEFAULT NULL,
+  `dataSource` varchar(500) DEFAULT NULL,
+  `descValue` int(11) DEFAULT NULL,
+  `isCommon` int(11) DEFAULT NULL,
+  `mustInput` int(11) DEFAULT NULL,
+  `rangeInput` int(11) DEFAULT NULL,
+  `multSelect` int(11) DEFAULT NULL,
+  `allowUpdateCompare` int(11) DEFAULT NULL,
+  `orLogic` int(11) DEFAULT NULL,
+  `defaultVal1` varchar(50) DEFAULT NULL,
+  `defaultVal2` varchar(50) DEFAULT NULL,
+  `groupName` varchar(50) DEFAULT NULL,
+  `isSys` int(11) DEFAULT NULL,
+  `createTime` varchar(25) DEFAULT NULL,
+  `updateTime` varchar(25) DEFAULT NULL,
+  `dr` int(11) DEFAULT NULL,
+  `cEnumType` varchar(45) DEFAULT NULL,
+  `bEnum` tinyint(4) DEFAULT NULL,
+  `bAutoflt` tinyint(4) DEFAULT NULL,
+    `displayname` varchar(64) DEFAULT NULL,
+  `cFormatData` varchar(45) DEFAULT NULL,
+  `extendField` varchar(100) DEFAULT NULL,
+  `auth_level` smallint(6) DEFAULT '3',
+  `pubts` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '时间戳',
+  `tenant_id` varchar(50) DEFAULT NULL,
+  `itemNameDesc` varchar(500) DEFAULT NULL,
+  `isMasterOrg` tinyint(1) DEFAULT NULL,
+  `itemtitle_resid` varchar(200) DEFAULT NULL,
+  `iType` smallint(1) DEFAULT '0',
+  `defaultOrder` varchar(50) DEFAULT NULL,
+  `cselfdefinetype` varchar(50) DEFAULT NULL,
+  `cExtProps` mediumtext,
+  `cDesignProps` mediumtext,
+  `ytenant_id` varchar(36) NOT NULL DEFAULT '～',
+  PRIMARY KEY (`id`) USING BTREE,
+  KEY `idx_filter_item_filtersid` (`filtersId`) USING BTREE,
+  KEY `idx_filter_item_tenantid` (`tenant_id`) USING BTREE,
+  KEY `idx_multlang_itemtitle` (`tenant_id`,`itemTitle`)
+) ENGINE=InnoDB ROW_FORMAT=COMPACT;
+
+DROP TABLE IF EXISTS pb_meta_filter_item;
+CREATE TABLE IF NOT EXISTS `pb_meta_filter_item` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `filtersid` int(11) DEFAULT NULL,
+  `itemname` varchar(1000) DEFAULT NULL,
+  `itemtitle` varchar(50) DEFAULT NULL,
+  `itemtype` varchar(100) DEFAULT NULL,
+  `referid` int(11) DEFAULT NULL,
+  `refercode` varchar(255) DEFAULT NULL,
+  `reftype` int(11) DEFAULT NULL,
+  `refreturn` varchar(64) DEFAULT NULL,
+  `comparelogic` enum('is_not_null','is_null','between','like','rightlike','leftlike','egt','elt','gt','lt','neq','in','nin','eq') DEFAULT NULL,
+  `iprecision` int(11) DEFAULT NULL,
+  `datasource` varchar(300) DEFAULT NULL,
+  `descvalue` int(11) DEFAULT NULL,
+  `iscommon` int(11) DEFAULT NULL,
+  `mustinput` int(11) DEFAULT NULL,
+  `rangeinput` int(11) DEFAULT NULL,
+  `multselect` int(11) DEFAULT NULL,
+  `allowupdatecompare` int(11) DEFAULT NULL,
+  `orlogic` int(11) DEFAULT NULL,
+  `defaultval1` varchar(50) DEFAULT NULL,
+  `defaultval2` varchar(50) DEFAULT NULL,
+  `groupname` varchar(50) DEFAULT NULL,
+  `issys` int(11) DEFAULT NULL,
+  `createtime` varchar(25) DEFAULT NULL,
+  `updatetime` varchar(25) DEFAULT NULL,
+  `dr` int(11) DEFAULT NULL,
+  `cenumtype` varchar(45) DEFAULT NULL,
+  `benum` tinyint(4) DEFAULT NULL,
+    `bautoflt` tinyint(4) DEFAULT NULL,
+  `displayname` varchar(64) DEFAULT NULL,
+  `cformatdata` varchar(45) DEFAULT NULL,
+  `extendfield` varchar(100) DEFAULT NULL,
+  `auth_level` smallint(6) DEFAULT '3',
+  `isMasterOrg` tinyint(1) DEFAULT NULL,
+  `cDataRule` varchar(200) DEFAULT NULL,
+  `itemtitle_resid` varchar(200) DEFAULT NULL,
+  `attribute` varchar(60) DEFAULT NULL,
+  `cDesignProps` mediumtext,
+  `cExtProps` mediumtext,
+  `iType` smallint(1) DEFAULT '0',
+  `defaultOrder` varchar(50) DEFAULT NULL,
+  `cselfdefinetype` varchar(50) DEFAULT NULL,
+  `tenant_id` varchar(36) DEFAULT NULL,
+  `ytenant_id` varchar(36) NOT NULL DEFAULT '～',
+  PRIMARY KEY (`id`),
+  KEY `idx_filter_item_filtersid` (`filtersid`),
+  KEY `idx_multlang_itemtitle` (`itemtitle`)
+) ENGINE=InnoDB ;
+
+call p_aa_updatecolumn('pb_filter_solution_common','compareLogic','ALTER TABLE pb_filter_solution_common modify `compareLogic` enum(\'is_not_null\',\'is_null\',\'between\',\'like\',\'rightlike\',\'leftlike\',\'egt\',\'elt\',\'gt\',\'lt\',\'neq\',\'nin\',\'in\',\'eq\',\'multlike\')','alter');
+
+desc pb_filter_solution_common;
+call p_aa_updatecolumn('pb_meta_filter_item','compareLogic','ALTER TABLE pb_meta_filter_item modify `compareLogic` enum(\'is_not_null\',\'is_null\',\'between\',\'like\',\'rightlike\',\'leftlike\',\'egt\',\'elt\',\'gt\',\'lt\',\'neq\',\'nin\',\'in\',\'eq\',\'multlike\')','alter');
+desc pb_meta_filter_item;
+call p_aa_updatecolumn('pb_meta_filter_item_ext','compareLogic','ALTER TABLE pb_meta_filter_item_ext modify `compareLogic` enum(\'is_not_null\',\'is_null\',\'between\',\'like\',\'rightlike\',\'leftlike\',\'egt\',\'elt\',\'gt\',\'lt\',\'neq\',\'nin\',\'in\',\'eq\',\'multlike\')','alter');
+
+ALTER TABLE pb_meta_filter_item_ext modify `compareLogic` enum('is_not_null','is_null','between','like','rightlike','leftlike','egt','elt','gt','lt','neq','nin','in','eq','multlike');
+ALTER TABLE pb_meta_filter_item_ext modify `compareLogic` enum('is_not_null','is_null','between','like','rightlike','leftlike','egt','elt','gt','lt','neq','nin','in','eq');
+ALTER TABLE pb_meta_filter_item_ext modify `compareLogic` enum('is_not_null','is_null');
+ALTER TABLE pb_meta_filter_item_ext modify `compareLogic` enum('is_not_null','is_null','');
+ALTER TABLE pb_meta_filter_item_ext modify `compareLogic` enum('');
+ALTER TABLE pb_meta_filter_item_ext modify `compareLogic` enum('null');
+ALTER TABLE pb_meta_filter_item_ext modify `compareLogic` enum(',');
+ALTER TABLE pb_meta_filter_item_ext modify `compareLogic` enum('1');
+
+desc pb_meta_filter_item_ext;
+
+# case -- primary_key
+--disable_warnings
+drop procedure if exists p_aa_updatecolumn;
+DELIMITER //;
+DROP PROCEDURE if exists addIndex;;
+CREATE PROCEDURE `addIndex`(IN tablename VARCHAR(200), IN indexname VARCHAR(200), IN executeStr VARCHAR(1000),
+                            IN executeType VARCHAR(50))
+BEGIN
+    DECLARE CurrentDatabase VARCHAR(100);
+    SELECT DATABASE() INTO CurrentDatabase;
+    SET @tablename = tablename;
+    SET @indexname = indexname;
+    SET @executeType = executeType;
+    SET @executeStr = executeStr;
+    SET @count = (SELECT COUNT(*)
+                  FROM information_schema.statistics
+                  WHERE table_schema = CurrentDatabase
+                    AND TABLE_NAME = @tablename
+                    AND index_name = @indexname);
+    IF @executeType = 'add' AND @count = 0 THEN
+        PREPARE stmt1 FROM @executeStr;
+        EXECUTE stmt1;
+    ELSEIF @executeType = 'alter' AND @count > 0 THEN
+        PREPARE stmt1 FROM @executeStr;
+        EXECUTE stmt1;
+    END IF;
+END //
+delimiter ;//
+
+--disable_warnings
+drop table if exists `org_admin_define`;
+CREATE TABLE IF NOT EXISTS `org_admin_define`  (
+  `id` varchar(36) NOT NULL COMMENT '行政组织',
+  `define1` varchar(128) DEFAULT NULL COMMENT '自定义项1',
+  `define2` varchar(128) DEFAULT NULL COMMENT '自定义项2',
+  `define3` varchar(128) DEFAULT NULL COMMENT '自定义项3',
+  `define4` varchar(128) DEFAULT NULL COMMENT '自定义项4',
+  `define5` varchar(128) DEFAULT NULL COMMENT '自定义项5',
+  `define6` varchar(128) DEFAULT NULL COMMENT '自定义项6',
+  `define7` varchar(128) DEFAULT NULL COMMENT '自定义项7',
+  `define8` varchar(128) DEFAULT NULL COMMENT '自定义项8',
+  `define9` varchar(128) DEFAULT NULL COMMENT '自定义项9',
+  `define10` varchar(128) DEFAULT NULL COMMENT '自定义项10',
+  `define11` varchar(128) DEFAULT NULL COMMENT '自定义项11',
+  `define12` varchar(128) DEFAULT NULL COMMENT '自定义项12',
+  `define13` varchar(128) DEFAULT NULL COMMENT '自定义项13',
+  `define14` varchar(128) DEFAULT NULL COMMENT '自定义项14',
+  `define15` varchar(128) DEFAULT NULL COMMENT '自定义项15',
+  `define16` varchar(128) DEFAULT NULL COMMENT '自定义项16',
+  `define17` varchar(128) DEFAULT NULL COMMENT '自定义项17',
+  `define18` varchar(128) DEFAULT NULL COMMENT '自定义项18',
+  `define19` varchar(128) DEFAULT NULL COMMENT '自定义项19',
+  `define20` varchar(128) DEFAULT NULL COMMENT '自定义项20',
+  `define21` varchar(128) DEFAULT NULL COMMENT '自定义项21',
+  `define22` varchar(128) DEFAULT NULL COMMENT '自定义项22',
+  `define23` varchar(128) DEFAULT NULL COMMENT '自定义项23',
+  `define24` varchar(128) DEFAULT NULL COMMENT '自定义项24',
+  `define25` varchar(128) DEFAULT NULL COMMENT '自定义项25',
+  `define26` varchar(128) DEFAULT NULL COMMENT '自定义项26',
+  `define27` varchar(128) DEFAULT NULL COMMENT '自定义项27',
+`define28` varchar(128) DEFAULT NULL COMMENT '自定义项28',
+  `define29` varchar(128) DEFAULT NULL COMMENT '自定义项29',
+  `define30` varchar(128) DEFAULT NULL COMMENT '自定义项30',
+  `define31` varchar(128) DEFAULT NULL COMMENT '自定义项31',
+  `define32` varchar(128) DEFAULT NULL COMMENT '自定义项32',
+  `define33` varchar(128) DEFAULT NULL COMMENT '自定义项33',
+  `define34` varchar(128) DEFAULT NULL COMMENT '自定义项34',
+  `define35` varchar(128) DEFAULT NULL COMMENT '自定义项35',
+  `define36` varchar(128) DEFAULT NULL COMMENT '自定义项36',
+  `define37` varchar(128) DEFAULT NULL COMMENT '自定义项37',
+  `define38` varchar(128) DEFAULT NULL COMMENT '自定义项38',
+  `define39` varchar(128) DEFAULT NULL COMMENT '自定义项39',
+  `define40` varchar(128) DEFAULT NULL COMMENT '自定义项40',
+  `define41` varchar(128) DEFAULT NULL COMMENT '自定义项41',
+  `define42` varchar(128) DEFAULT NULL COMMENT '自定义项42',
+  `define43` varchar(128) DEFAULT NULL COMMENT '自定义项43',
+  `define44` varchar(128) DEFAULT NULL COMMENT '自定义项44',
+  `define45` varchar(128) DEFAULT NULL COMMENT '自定义项45',
+  `define46` varchar(128) DEFAULT NULL COMMENT '自定义项46',
+  `define47` varchar(128) DEFAULT NULL COMMENT '自定义项47',
+  `define48` varchar(128) DEFAULT NULL COMMENT '自定义项48',
+  `define49` varchar(128) DEFAULT NULL COMMENT '自定义项49',
+  `define50` varchar(128) DEFAULT NULL COMMENT '自定义项50',
+  `define51` varchar(128) DEFAULT NULL COMMENT '自定义项51',
+  `define52` varchar(128) DEFAULT NULL COMMENT '自定义项52',
+  `define53` varchar(128) DEFAULT NULL COMMENT '自定义项53',
+  `define54` varchar(128) DEFAULT NULL COMMENT '自定义项54',
+  `define55` varchar(128) DEFAULT NULL COMMENT '自定义项55',
+  `define56` varchar(128) DEFAULT NULL COMMENT '自定义项56',
+  `define57` varchar(128) DEFAULT NULL COMMENT '自定义项57',
+  `define58` varchar(128) DEFAULT NULL COMMENT '自定义项58',
+  `define59` varchar(128) DEFAULT NULL COMMENT '自定义项59',
+  `define60` varchar(128) DEFAULT NULL COMMENT '自定义项60',
+    `ytenant_id` varchar(36) DEFAULT '~',
+  INDEX `IX_id`(`id`) USING BTREE,
+  INDEX `idx_ytenant_id`(`ytenant_id`) USING BTREE
+) ENGINE = InnoDB ROW_FORMAT = DYNAMIC;
+
+call addIndex('org_admin_define', 'PRIMARY', 'alter table org_admin_define add primary key (id, ytenant_id)', 'add');
+alter table org_admin_define drop primary key,add primary key (id, ytenant_id);
+alter table org_admin_define drop primary key,add primary key (id,define50);
+
+alter table org_admin_define drop primary key,add primary key (id,define51);
+
+alter table org_admin_define drop primary key,add primary key (id,define53);
+alter table org_admin_define drop primary key,add primary key (define50,define53);
+alter table org_admin_define drop primary key,add primary key (define50,define5);
+alter table org_admin_define drop primary key,add primary key (define50,define1);
+alter table org_admin_define drop primary key,add primary key (define50,define10);
+alter table org_admin_define drop primary key,add primary key (define50,define11);
+alter table org_admin_define drop primary key,add primary key (define50,define12);
+alter table org_admin_define drop primary key,add primary key (define50,define13);
+alter table org_admin_define drop primary key,add primary key (define50,define14);
+alter table org_admin_define drop primary key,add primary key (define50,define15);
+alter table org_admin_define drop primary key,add primary key (define50,define16);
+alter table org_admin_define drop primary key,add primary key (define50,define17);
+alter table org_admin_define drop primary key,add primary key (define50,define18);
+

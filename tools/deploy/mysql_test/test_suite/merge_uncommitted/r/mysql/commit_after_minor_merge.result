@@ -1,0 +1,86 @@
+set SESSION ob_query_timeout = 60 * 1000 * 1000;
+set SESSION ob_trx_timeout = 60 * 1000 * 1000;
+set SESSION ob_trx_idle_timeout = 60 * 1000 * 1000;
+set SESSION ob_query_timeout = 60 * 1000 * 1000;
+set SESSION ob_trx_timeout = 60 * 1000 * 1000;
+set SESSION ob_trx_idle_timeout = 60 * 1000 * 1000;
+alter system set minor_compact_trigger = 10;
+drop table if exists test_commit_after_minor_merge_t;
+create table test_commit_after_minor_merge_t(c1 int primary key, c2 int);
+insert into test_commit_after_minor_merge_t values (0,0);
+begin;
+update test_commit_after_minor_merge_t set c2 = 10 where c1 = 0;
+insert into test_commit_after_minor_merge_t values (3,3);
+commit;
+select * from test_commit_after_minor_merge_t;
+c1	c2
+0	10
+3	3
+1
+insert into test_commit_after_minor_merge_t values (4,4);
+begin;
+insert into test_commit_after_minor_merge_t values (1,1);
+insert into test_commit_after_minor_merge_t values (2,2);
+commit;
+2
+select * from test_commit_after_minor_merge_t;
+c1	c2
+0	10
+1	1
+2	2
+3	3
+4	4
+alter system major freeze tenant = sys;
+alter system major freeze tenant = all_user;
+alter system major freeze tenant = all_meta;
+select * from test_commit_after_minor_merge_t;
+c1	c2
+0	10
+1	1
+2	2
+3	3
+4	4
+insert into test_commit_after_minor_merge_t values (5,5);
+insert into test_commit_after_minor_merge_t values (6,6);
+delete from test_commit_after_minor_merge_t where c1 <= 2;
+alter system major freeze tenant = sys;
+alter system major freeze tenant = all_user;
+alter system major freeze tenant = all_meta;
+select * from test_commit_after_minor_merge_t;
+c1	c2
+3	3
+4	4
+5	5
+6	6
+begin;
+insert into test_commit_after_minor_merge_t values (7,7);
+update test_commit_after_minor_merge_t set c2 = 60 where c1 = 6;
+delete from test_commit_after_minor_merge_t where c1 = 5;
+alter system set minor_compact_trigger = 1;
+select * from test_commit_after_minor_merge_t;
+c1	c2
+3	3
+4	4
+6	60
+7	7
+rollback;
+select * from test_commit_after_minor_merge_t;
+c1	c2
+3	3
+4	4
+5	5
+6	6
+select * from test_commit_after_minor_merge_t;
+c1	c2
+3	3
+4	4
+5	5
+6	6
+select * from test_commit_after_minor_merge_t;
+c1	c2
+3	3
+4	4
+5	5
+6	6
+drop table test_commit_after_minor_merge_t;
+alter system set minor_compact_trigger = 2;

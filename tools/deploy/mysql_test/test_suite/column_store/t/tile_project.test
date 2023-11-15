@@ -1,0 +1,109 @@
+# owner: yht146439 
+# owner group: storage
+# description: project with tile scanner  
+
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+set @@recyclebin = off;
+
+--disable_warnings
+set session ob_query_timeout=10000000000;
+drop table if exists ct1,ct2,ct3;
+--enable_warnings
+
+--disable_query_log
+create table ct1 (c1 int, c2 int) with column group for all columns, each column;
+create table ct2(c1 int, c2 varchar(100), c3 varchar(1000)) block_size=2048 with column group for all columns, each column;
+create table ct3(c1 int primary key, c2 int, c3 int, c4 int) partition by hash(c1) partitions 2 with column group for all columns, each column;
+--let $count = 0
+while($count < 1000)
+{
+  eval insert into ct1(c1,c2) values 
+                                  ($count * 10 + 1 ,$count * 10 + 1 + 1),
+                                  ($count * 10 + 2 ,$count * 10 + 2 + 1),
+                                  ($count * 10 + 3 ,$count * 10 + 3 + 1),
+                                  ($count * 10 + 4 ,$count * 10 + 4 + 1),
+                                  ($count * 10 + 5 ,$count * 10 + 5 + 1),
+                                  ($count * 10 + 6 ,$count * 10 + 6 + 1),
+                                  ($count * 10 + 7 ,$count * 10 + 7 + 1),
+                                  ($count * 10 + 8 ,$count * 10 + 8 + 1),
+                                  ($count * 10 + 9 ,$count * 10 + 9 + 1),
+                                  ($count * 10 + 10,$count * 10 + 10+ 1);
+  eval insert into ct2(c1,c2,c3) values
+                                  ($count * 10 + 1 ,repeat('a',($count * 10 + 1 ) % 100),repeat('a',($count * 10 + 1 ) % 1000)),
+                                  ($count * 10 + 2 ,repeat('a',($count * 10 + 2 ) % 100),repeat('a',($count * 10 + 2 ) % 1000)),
+                                  ($count * 10 + 3 ,repeat('a',($count * 10 + 3 ) % 100),repeat('a',($count * 10 + 3 ) % 1000)),
+                                  ($count * 10 + 4 ,repeat('a',($count * 10 + 4 ) % 100),repeat('a',($count * 10 + 4 ) % 1000)),
+                                  ($count * 10 + 5 ,repeat('a',($count * 10 + 5 ) % 100),repeat('a',($count * 10 + 5 ) % 1000)),
+                                  ($count * 10 + 6 ,repeat('a',($count * 10 + 6 ) % 100),repeat('a',($count * 10 + 6 ) % 1000)),
+                                  ($count * 10 + 7 ,repeat('a',($count * 10 + 7 ) % 100),repeat('a',($count * 10 + 7 ) % 1000)),
+                                  ($count * 10 + 8 ,repeat('a',($count * 10 + 8 ) % 100),repeat('a',($count * 10 + 8 ) % 1000)),
+                                  ($count * 10 + 9 ,repeat('a',($count * 10 + 9 ) % 100),repeat('a',($count * 10 + 9 ) % 1000)),
+                                  ($count * 10 + 10,repeat('a',($count * 10 + 10) % 100),repeat('a',($count * 10 + 10) % 1000));
+  --inc $count
+}
+insert into ct3 select c1,c1,c1,c1 from ct1 limit 1000;
+
+alter system minor freeze;
+--source mysql_test/include/wait_minor_merge.inc
+alter system major freeze;
+--source mysql_test/include/wait_daily_merge.inc
+
+select * from ct1 where c1 > c2;
+select * from ct1 where c1 < c2 limit 100;
+select * from ct1 where c1 = c2;
+select * from ct1 where c1 - c2 > 1;
+select * from ct1 where c1 - c2 = -1 limit 100;
+select * from ct1 where c1 - c2 = -1 order by c1 desc limit 100;
+select * from ct1 where c1 + c2 < 20;
+select * from ct1 where c1 + c2 > 19980;
+select c1,c2 from ct1 where c1 + c2 < 1000;
+select c1,char_length(c2) from ct2 where c1 > 9900;
+select c1,char_length(c3) from ct2 where c1 > 9900;
+select c1,char_length(c2),char_length(c3) from ct2 where c1 > 9000;
+select max(c1) from ct2 where c2 < c3;
+select min(c1),char_length(c2),char_length(c3) from ct2;
+
+select * from ct1 limit 1 offset 1000;
+select * from ct1 limit 100 offset 1000;
+select * from ct1 limit 255 offset 1000;
+select * from ct1 limit 256 offset 1000;
+select * from ct1 limit 257 offset 1000;
+select * from ct1 limit 100 offset 8190;
+select * from ct1 limit 100 offset 8191;
+select * from ct1 limit 100 offset 8192;
+select * from ct1 limit 100 offset 8193;
+select * from ct1 where c1 % 2 = 0 limit 100 offset 1000;
+select * from ct1 where c1 - c2 = -1 limit 1 offset 10;
+select * from ct1 where c1 - c2 = -1 limit 1 offset 100;
+select * from ct1 where c1 - c2 = -1 limit 1 offset 1000;
+select * from ct1 where c1 - c2 = -1 limit 1 offset 10000;
+
+select * from ct1 where c1 - c2 = -1 limit 255 offset 1000;
+select * from ct1 where c1 - c2 = -1 limit 256 offset 1000;
+select * from ct1 where c1 - c2 = -1 limit 257 offset 1000;
+select * from ct1 where c1 - c2 = -1 limit 1000 offset 1000;
+
+select * from ct1 where c1 + c2 > 19980 and rand() < 2;
+select * from ct1 where c1 + c2 > 19980 and rand() > 2;
+select * from ct1 where c1 > 9990 and rand() + rand() > 2;
+select * from ct1 where c1 > 9990 and rand() + rand() < 2;
+select c1,char_length(c2),char_length(c3) from ct2 where c1 > 9000 and rand() < 2;
+select c1,char_length(c2),char_length(c3) from ct2 where c1 > 9000 and rand() > 2;
+select c1 from ct2 where rand() > 2 or c1 < 10;
+select c1 from ct2 where rand() > 2 and c1 < 10;
+select c1 from ct2 where rand() > 2 or rand() > 10;
+
+select count(*) from ct1,ct2 where ct2.c1 < ct1.c1 and ct1.c1 < 100;
+select sum(c1),sum(char_length(c2)),sum(char_length(c3)) from ct2;
+select/*+ parallel(2)*/ sum(c1),sum(char_length(c2)),sum(char_length(c3)) from ct2;
+
+select c2 from ct3 order by c1 desc limit 2;
+select c2 from ct3 order by c1 desc limit 20;
+select c2 from ct3 order by c1 asc limit 2;
+select c2 from ct3 order by c1 asc limit 20;
+
+drop table if exists ct1,ct2,ct3;
+--disable_query_log
+set @@recyclebin = on;
+--enable_query_log

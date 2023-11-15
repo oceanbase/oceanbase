@@ -1,0 +1,185 @@
+drop table if exists t1,t2;
+set ob_enable_index_direct_select=1;
+alter system set merger_check_interval = '10s' tenant sys;
+alter system set merger_check_interval = '10s' tenant all_user;
+alter system set merger_check_interval = '10s' tenant all_meta;
+create table t1(
+a1 char(3) primary key,
+a2 int,
+a3 char(3),
+a4 float,
+a5 datetime
+);
+create table t2(
+a1 char(3) primary key,
+a2 char(17),
+a3 char(2),
+a4 char(3)
+);
+insert into t1 values('AME',0,'SEA',0.100,date'1942-02-19');
+insert into t1 values('HBR',1,'SEA',0.085,date'1948-03-05');
+insert into t1 values('BOT',2,'SEA',0.085,date'1951-11-29');
+insert into t1 values('BMC',3,'SEA',0.085,date'1958-09-08');
+insert into t1 values('TWU',0,'LAX',0.080,date'1969-10-05');
+insert into t1 values('BDL',0,'DEN',0.080,date'1960-11-27');
+insert into t1 values('DTX',1,'NYC',0.080,date'1961-05-04');
+insert into t1 values('PLS',1,'WDC',0.075,date'1949-01-02');
+insert into t1 values('ZAJ',2,'CHI',0.075,date'1960-06-15');
+insert into t1 values('VVV',2,'MON',0.075,date'1959-06-28');
+insert into t1 values('GTM',3,'DAL',0.070,date'1977-09-23');
+insert into t1 values('SSJ',null,'CHI',null,date'1974-03-19');
+insert into t1 values('KKK',3,'ATL',null,null);
+insert into t1 values('XXX',null,'MIN',null,null);
+insert into t1 values('WWW',1,'LED',null,null);
+insert into t1 values('GG3',3,'DD3',0.051,now());
+insert into t1 values('GG2',3,'DD2',0.052,now());
+insert into t1 values('GG1',3,'DD1',0.053,now());
+insert into t2 values('TKF','Seattle','WA','AME');
+insert into t2 values('LCC','Los Angeles','CA','TWU');
+insert into t2 values('DEN','Denver','CO','BDL');
+insert into t2 values('SDC','San Diego','CA','TWU');
+insert into t2 values('NOL','New Orleans','LA','GTM');
+insert into t2 values('LAK','Los Angeles','CA','TWU');
+insert into t2 values('AAA','AAA','AA','AME');
+create index i2 on t1(a2);
+create index i3 on t1(a3);
+create index i5 on t1(a5);
+select * from (select a1, a2*2+1 as b2 from t1 where a2>=1-1 and a2<=round(9.0/2.0)*2) as t;
+a1	b2
+AME	1
+BDL	1
+BMC	7
+BOT	5
+DTX	3
+GG1	7
+GG2	7
+GG3	7
+GTM	7
+HBR	3
+KKK	7
+PLS	3
+TWU	1
+VVV	5
+WWW	3
+ZAJ	5
+select * from (select a1, a2*2+1 as b2, a3 from t1 where a2>=1-1 and a2<=round(9.0/2.0)*2) as t;
+a1	b2	a3
+AME	1	SEA
+BDL	1	DEN
+BMC	7	SEA
+BOT	5	SEA
+DTX	3	NYC
+GG1	7	DD1
+GG2	7	DD2
+GG3	7	DD3
+GTM	7	DAL
+HBR	3	SEA
+KKK	7	ATL
+PLS	3	WDC
+TWU	1	LAX
+VVV	5	MON
+WWW	3	LED
+ZAJ	5	CHI
+select * from (select a1, a2*2+1 as b2 from t1 where a2>=1-(9-8)+(3*5)-45/3 and a2<=100%55-35) as t;
+a1	b2
+AME	1
+BDL	1
+BMC	7
+BOT	5
+DTX	3
+GG1	7
+GG2	7
+GG3	7
+GTM	7
+HBR	3
+KKK	7
+PLS	3
+TWU	1
+VVV	5
+WWW	3
+ZAJ	5
+select * from (select a1, a2*2+1 as b2, a3 from t1 where a2>=1-(9-8)+(3*5)-45/3 and a2<=100%55-35) as t;
+a1	b2	a3
+AME	1	SEA
+BDL	1	DEN
+BMC	7	SEA
+BOT	5	SEA
+DTX	3	NYC
+GG1	7	DD1
+GG2	7	DD2
+GG3	7	DD3
+GTM	7	DAL
+HBR	3	SEA
+KKK	7	ATL
+PLS	3	WDC
+TWU	1	LAX
+VVV	5	MON
+WWW	3	LED
+ZAJ	5	CHI
+select * from (select a1,a2*2+1 as b2,a3,a4,a5 from t1 where a3>=concat('D', 'EE') and a3<=concat('M', 'PP')) as t;
+a1	b2	a3	a4	a5
+BDL	1	DEN	0.08	timestamp
+TWU	1	LAX	0.08	timestamp
+VVV	5	MON	0.075	timestamp
+WWW	3	LED	NULL	timestamp
+XXX	NULL	MIN	NULL	timestamp
+select * from (select a1,a2*2+1 as b2,a3,a4,a5 from t1 where a3>=concat(upper(substr('abcde',4,1)), upper(substr('ccddee',5,2))) and a3<=concat(upper(substr('lmnop',2,1)), upper(substr('ooppqq',3,2)))) as t;
+a1	b2	a3	a4	a5
+BDL	1	DEN	0.08	timestamp
+TWU	1	LAX	0.08	timestamp
+VVV	5	MON	0.075	timestamp
+WWW	3	LED	NULL	timestamp
+XXX	NULL	MIN	NULL	timestamp
+select * from (select a1,a2*2+1 as b2,a3,a4,a5 from t1 where a4>=0.75/10+1-1 and a4<=0.2*0.4+4%2) as t;
+a1	b2	a3	a4	a5
+BDL	1	DEN	0.08	timestamp
+DTX	3	NYC	0.08	timestamp
+PLS	3	WDC	0.075	timestamp
+TWU	1	LAX	0.08	timestamp
+VVV	5	MON	0.075	timestamp
+ZAJ	5	CHI	0.075	timestamp
+select * from (select a1,a2*2+1 as b2,a3,a4 from t1 where a5>=date_add(now(), interval -60 minute) and a5<=date_add(current_timestamp(), interval -1 microsecond)) as t;
+a1	b2	a3	a4
+GG1	7	DD1	0.053
+GG2	7	DD2	0.052
+GG3	7	DD3	0.051
+select * from (select a1,a2*2+1 as b2,a3,a4 from t1 where a5>=date_add(current_timestamp(), interval -60 minute) and a5<=date_add(current_timestamp(), interval -1 microsecond)) as t;
+a1	b2	a3	a4
+GG1	7	DD1	0.053
+GG2	7	DD2	0.052
+GG3	7	DD3	0.051
+select * from (select a1,a2*2+1 as b2,a3,a4 from t1 where a5>=date_add(current_timestamp(), interval -60 minute) and a5<=date_add(now(), interval -1 microsecond)) as t;
+a1	b2	a3	a4
+GG1	7	DD1	0.053
+GG2	7	DD2	0.052
+GG3	7	DD3	0.051
+select * from (select a1,a2*2+1 as b2,a3,a4 from t1 where a5>=date_sub(now(), interval 60 minute) and a5<=date_sub(current_timestamp(), interval 1 microsecond)) as t;
+a1	b2	a3	a4
+GG1	7	DD1	0.053
+GG2	7	DD2	0.052
+GG3	7	DD3	0.051
+select * from (select a1,a2*2+1 as b2,a3,a4 from t1 where a5>=date_sub(current_timestamp(), interval 60 minute) and a5<=date_sub(current_timestamp(), interval 1 microsecond)) as t;
+a1	b2	a3	a4
+GG1	7	DD1	0.053
+GG2	7	DD2	0.052
+GG3	7	DD3	0.051
+select * from (select a1,a2*2+1 as b2,a3,a4 from t1 where a5>=date_sub(current_timestamp(), interval 60 minute) and a5<=date_sub(now(), interval 1 microsecond)) as t;
+a1	b2	a3	a4
+GG1	7	DD1	0.053
+GG2	7	DD2	0.052
+GG3	7	DD3	0.051
+select * from (select a1,a2*2+1 as b2,a3,a4 from t1 where a5>=date_add(now(), interval -60 minute) and a5<=date_sub(current_timestamp(), interval 1 microsecond)) as t;
+a1	b2	a3	a4
+GG1	7	DD1	0.053
+GG2	7	DD2	0.052
+GG3	7	DD3	0.051
+select * from (select a1,a2*2+1 as b2,a3,a4 from t1 where a5>=date_add(current_timestamp(), interval -60 minute) and a5<=date_sub(current_timestamp(), interval 1 microsecond)) as t;
+a1	b2	a3	a4
+GG1	7	DD1	0.053
+GG2	7	DD2	0.052
+GG3	7	DD3	0.051
+select * from (select a1,a2*2+1 as b2,a3,a4 from t1 where a5>=date_add(current_timestamp(), interval -60 minute) and a5<=date_sub(now(), interval 1 microsecond)) as t;
+a1	b2	a3	a4
+GG1	7	DD1	0.053
+GG2	7	DD2	0.052
+GG3	7	DD3	0.051

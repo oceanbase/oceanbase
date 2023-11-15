@@ -1,0 +1,57 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: linlin.xll
+#owner group: sql1
+#tags: pl
+#description: test pl procedure or function execute at other database
+
+--result_format 4
+
+--disable_query_log
+--disable_result_log
+--source mysql_test/include/index_quick_major.inc
+--enable_query_log
+--enable_result_log
+
+--disable_warnings
+drop table if exists my_tab;
+drop procedure if exists my_proc;
+drop function if exists my_func;
+drop database if exists my_db;
+--enable_warnings
+
+create table my_tab(col varchar(50));
+
+delimiter |;
+
+create procedure my_proc()
+begin
+  insert into my_tab values(concat("my_proc exec with db = ", database()));
+end|
+
+create function my_func() returns int
+begin
+  insert into my_tab values(concat("my_func exec with db = ", database()));
+  return 1;
+end|
+
+delimiter ;|
+
+call my_proc();
+select my_func();
+select * from my_tab;
+
+create database my_db;
+use my_db;
+call test.my_proc();
+select test.my_func();
+--sorted_result
+select * from test.my_tab;
+
+use test;
+drop procedure my_proc;
+drop function my_func;
+drop table my_tab;
+drop database my_db;
+

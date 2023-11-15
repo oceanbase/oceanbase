@@ -1,0 +1,208 @@
+drop table if exists t1;
+create table t1 (c1 int, c2 varchar(1024), c3 int, primary key (c1));
+basic case
+replace into t1 values (1, 'a', 1), (2, 'b', NULL);
+select * from t1;
+c1	c2	c3
+1	a	1
+2	b	NULL
+delete from t1 where c1=1;
+replace into t1 values (1, 'a', 2);
+select * from t1;
+c1	c2	c3
+1	a	2
+2	b	NULL
+replace into t1 values (1, 'a', 3), (1, 'a', 4);
+select * from t1;
+c1	c2	c3
+1	a	4
+2	b	NULL
+only rowkey
+replace into t1(c1,c2) values (3, 'c');
+select * from t1;
+c1	c2	c3
+1	a	4
+2	b	NULL
+3	c	NULL
+type conversion
+replace into t1 values ('4', 4, '4'), (5, 'd', '5');
+select * from t1;
+c1	c2	c3
+1	a	4
+2	b	NULL
+3	c	NULL
+4	4	4
+5	d	5
+cons rowkey
+replace into t1 (c3, c2, c1) values (9, 'a', 8), (7, 'b', 6);
+select * from t1;
+c1	c2	c3
+1	a	4
+2	b	NULL
+3	c	NULL
+4	4	4
+5	d	5
+6	b	7
+8	a	9
+null rowkey
+replace into t1 values (10, 1, NULL), (11, NULL, 2), (12, 'ULL', 3);
+select * from t1;
+c1	c2	c3
+1	a	4
+2	b	NULL
+3	c	NULL
+4	4	4
+5	d	5
+6	b	7
+8	a	9
+10	1	NULL
+11	NULL	2
+12	ULL	3
+ps
+transaction
+start transaction;
+replace into t1 values (31, 'x', 13);
+select * from t1 where c1 = 31 and c2 = 'x' for update;
+c1	c2	c3
+31	x	13
+rollback;
+select * from t1;
+c1	c2	c3
+1	a	4
+2	b	NULL
+3	c	NULL
+4	4	4
+5	d	5
+6	b	7
+8	a	9
+10	1	NULL
+11	NULL	2
+12	ULL	3
+start transaction;
+replace into t1 values (31, 'x', 13);
+select * from t1 where c1 = 31 and c2 = 'x' for update;
+c1	c2	c3
+31	x	13
+commit;
+select * from t1;
+c1	c2	c3
+1	a	4
+2	b	NULL
+3	c	NULL
+4	4	4
+5	d	5
+6	b	7
+8	a	9
+10	1	NULL
+11	NULL	2
+12	ULL	3
+31	x	13
+set autocommit = 0;
+replace into t1 values (32, 'y', 23);
+replace into t1 values (32, 'y', 32);
+commit;
+select * from t1;
+c1	c2	c3
+1	a	4
+2	b	NULL
+3	c	NULL
+4	4	4
+5	d	5
+6	b	7
+8	a	9
+10	1	NULL
+11	NULL	2
+12	ULL	3
+31	x	13
+32	y	32
+set autocommit = 1;
+NOP
++1 support
+CreateTime/ModifyTime columns
+drop table if exists t2;
+create table t2 (c1 int primary key, ct datetime default now(), mt datetime default now());
+replace into t2 values (1, '2013-05-29 10:10:10', '2013-05-29 10:10:10');
+replace into t2 (c1) values (2);
+select c1 from t2;
+c1
+1
+2
+clean up
+drop table t1, t2;
+not query static data
+create table t1(c1 int primary key, c2 int, c3 varchar(10) not null, c4 timestamp not null default '2014-02-20 00:00:00.000');
+replace into t1 values(1, 1, 'aaa', '2014-02-21'), (2, 2, 'bbb', '2014-02-22'), (3, 3, 'ccc', '2014-02-23'), (4, 4, 'bbb', '2014-02-24');
+select * from t1;
+c1	c2	c3	c4
+1	1	aaa	2014-02-21 00:00:00
+2	2	bbb	2014-02-22 00:00:00
+3	3	ccc	2014-02-23 00:00:00
+4	4	bbb	2014-02-24 00:00:00
+replace into t1(c1, c2, c3) values(5, 5, 'aaa');
+select * from t1;
+c1	c2	c3	c4
+1	1	aaa	2014-02-21 00:00:00
+2	2	bbb	2014-02-22 00:00:00
+3	3	ccc	2014-02-23 00:00:00
+4	4	bbb	2014-02-24 00:00:00
+5	5	aaa	2014-02-20 00:00:00
+replace into t1(c1, c3) values(1, 'abc'), (2, 'bac'), (3, 'cba');
+select * from t1;
+c1	c2	c3	c4
+1	NULL	abc	2014-02-20 00:00:00
+2	NULL	bac	2014-02-20 00:00:00
+3	NULL	cba	2014-02-20 00:00:00
+4	4	bbb	2014-02-24 00:00:00
+5	5	aaa	2014-02-20 00:00:00
+drop table if exists t1;
+create table t1(
+c1 int primary key,
+c2 float not null,
+c3 varchar(20) not null default 'aaa',
+c4 timestamp not null default '2014-02-20');
+create index t1_c3 on t1(c3);
+query static data
+replace into t1(c1, c2) values(1, 2.0), (2, 3.0), (3, 4.0);
+select * from t1;
+c1	c2	c3	c4
+1	2	aaa	2014-02-20 00:00:00
+2	3	aaa	2014-02-20 00:00:00
+3	4	aaa	2014-02-20 00:00:00
+replace into t1(c1, c2) values(1, 3.0);
+select * from t1;
+c1	c2	c3	c4
+1	3	aaa	2014-02-20 00:00:00
+2	3	aaa	2014-02-20 00:00:00
+3	4	aaa	2014-02-20 00:00:00
+test replace default now()
+drop table if exists t1;
+create table t1(
+c1 int primary key,
+c2 int,
+c3 varchar(20),
+c4 timestamp default now());
+replace into t1 values(1, 1, 'aa', now());
+select * from t1;
+c1	c2	c3	c4
+1	1	aa	time
+replace into t1(c1, c2) values(1, 2), (2, 3), (3, 4);
+select * from t1;
+c1	c2	c3	c4
+1	2	NULL	time
+2	3	NULL	time
+3	4	NULL	time
+replace into t1(c1, c4) values(2, date_add(now(), interval 1 minute)), (4, date_add(now(), interval 2 minute));
+select * from t1;
+c1	c2	c3	c4
+1	2	NULL	time
+2	NULL	NULL	time
+3	4	NULL	time
+4	NULL	NULL	time
+drop table t1;
+create table t1 (c1 int primary key, c2 int, unique key i2 (c2));
+replace into t1 values (1, 1);
+replace into t1 values (2, 1);
+select * from t1;
+c1	c2
+2	1
+drop table t1;

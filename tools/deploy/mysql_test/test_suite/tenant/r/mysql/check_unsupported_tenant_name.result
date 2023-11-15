@@ -1,0 +1,200 @@
+CREATE TENANT IF NOT EXISTS all RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'all RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_t' at line 1
+CREATE TENANT IF NOT EXISTS ALL RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'ALL RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_t' at line 1
+CREATE TENANT IF NOT EXISTS AlL RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'AlL RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_t' at line 1
+CREATE TENANT IF NOT EXISTS all_user RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+CREATE TENANT IF NOT EXISTS ALL_USER RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+CREATE TENANT IF NOT EXISTS AlL_uSeR RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+CREATE TENANT IF NOT EXISTS all_meta RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+CREATE TENANT IF NOT EXISTS ALL_META RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+CREATE TENANT IF NOT EXISTS AlL_mEtA RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+CREATE TENANT IF NOT EXISTS test$123 RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+ERROR 0A000: since 4.2.1, manually creating a tenant name containing '$' is not supported
+CREATE TENANT IF NOT EXISTS `all` RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+ERROR 0A000: since 4.2.1, using "all" (case insensitive) as a tenant name is not supported
+CREATE TENANT IF NOT EXISTS `ALL` RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+ERROR 0A000: since 4.2.1, using "all" (case insensitive) as a tenant name is not supported
+CREATE TENANT IF NOT EXISTS `AlL` RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+ERROR 0A000: since 4.2.1, using "all" (case insensitive) as a tenant name is not supported
+CREATE TENANT IF NOT EXISTS `all_user` RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+CREATE TENANT IF NOT EXISTS `ALL_USER` RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+CREATE TENANT IF NOT EXISTS `AlL_uSeR` RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+CREATE TENANT IF NOT EXISTS `all_meta` RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+CREATE TENANT IF NOT EXISTS `ALL_META` RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+CREATE TENANT IF NOT EXISTS `AlL_mEtA` RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+CREATE TENANT IF NOT EXISTS `test$123` RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+ERROR 0A000: since 4.2.1, manually creating a tenant name containing '$' is not supported
+CREATE STANDBY TENANT IF NOT EXISTS all LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'all LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test"' at line 1
+CREATE STANDBY TENANT IF NOT EXISTS ALL LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'ALL LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test"' at line 1
+CREATE STANDBY TENANT IF NOT EXISTS AlL LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'AlL LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test"' at line 1
+CREATE STANDBY TENANT IF NOT EXISTS all_user LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+CREATE STANDBY TENANT IF NOT EXISTS ALL_USER LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+CREATE STANDBY TENANT IF NOT EXISTS AlL_uSeR LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+CREATE STANDBY TENANT IF NOT EXISTS all_meta LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+CREATE STANDBY TENANT IF NOT EXISTS ALL_META LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+CREATE STANDBY TENANT IF NOT EXISTS AlL_mEtA LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+CREATE STANDBY TENANT IF NOT EXISTS test$123 LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+ERROR 0A000: since 4.2.1, manually creating a tenant name containing '$' is not supported
+CREATE STANDBY TENANT IF NOT EXISTS `all` LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+ERROR 0A000: since 4.2.1, using "all" (case insensitive) as a tenant name is not supported
+CREATE STANDBY TENANT IF NOT EXISTS `ALL` LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+ERROR 0A000: since 4.2.1, using "all" (case insensitive) as a tenant name is not supported
+CREATE STANDBY TENANT IF NOT EXISTS `AlL` LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+ERROR 0A000: since 4.2.1, using "all" (case insensitive) as a tenant name is not supported
+CREATE STANDBY TENANT IF NOT EXISTS `all_user` LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+CREATE STANDBY TENANT IF NOT EXISTS `ALL_USER` LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+CREATE STANDBY TENANT IF NOT EXISTS `AlL_uSeR` LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+CREATE STANDBY TENANT IF NOT EXISTS `all_meta` LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+CREATE STANDBY TENANT IF NOT EXISTS `ALL_META` LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+CREATE STANDBY TENANT IF NOT EXISTS `AlL_mEtA` LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+CREATE STANDBY TENANT IF NOT EXISTS `test$123` LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+ERROR 0A000: since 4.2.1, manually creating a tenant name containing '$' is not supported
+ALTER SYSTEM RESTORE all FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'all FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with' at line 1
+ALTER SYSTEM RESTORE ALL FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'ALL FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with' at line 1
+ALTER SYSTEM RESTORE AlL FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'AlL FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with' at line 1
+ALTER SYSTEM RESTORE all_user FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+ALTER SYSTEM RESTORE ALL_USER FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+ALTER SYSTEM RESTORE AlL_uSeR FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+ALTER SYSTEM RESTORE all_meta FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+ALTER SYSTEM RESTORE ALL_META FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+ALTER SYSTEM RESTORE AlL_mEtA FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+ALTER SYSTEM RESTORE test$123 FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+ERROR 0A000: since 4.2.1, manually creating a tenant name containing '$' is not supported
+ALTER SYSTEM RESTORE `all` FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+ERROR 0A000: since 4.2.1, using "all" (case insensitive) as a tenant name is not supported
+ALTER SYSTEM RESTORE `ALL` FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+ERROR 0A000: since 4.2.1, using "all" (case insensitive) as a tenant name is not supported
+ALTER SYSTEM RESTORE `AlL` FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+ERROR 0A000: since 4.2.1, using "all" (case insensitive) as a tenant name is not supported
+ALTER SYSTEM RESTORE `all_user` FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+ALTER SYSTEM RESTORE `ALL_USER` FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+ALTER SYSTEM RESTORE `AlL_uSeR` FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+ALTER SYSTEM RESTORE `all_meta` FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+ALTER SYSTEM RESTORE `ALL_META` FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+ALTER SYSTEM RESTORE `AlL_mEtA` FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+ALTER SYSTEM RESTORE `test$123` FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+ERROR 0A000: since 4.2.1, manually creating a tenant name containing '$' is not supported
+ALTER TENANT mysql RENAME GLOBAL_NAME TO all;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'all' at line 1
+ALTER TENANT mysql RENAME GLOBAL_NAME TO ALL;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'ALL' at line 1
+ALTER TENANT mysql RENAME GLOBAL_NAME TO AlL;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'AlL' at line 1
+ALTER TENANT mysql RENAME GLOBAL_NAME TO all_user;
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+ALTER TENANT mysql RENAME GLOBAL_NAME TO ALL_USER;
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+ALTER TENANT mysql RENAME GLOBAL_NAME TO AlL_uSeR;
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+ALTER TENANT mysql RENAME GLOBAL_NAME TO all_meta;
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+ALTER TENANT mysql RENAME GLOBAL_NAME TO ALL_META;
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+ALTER TENANT mysql RENAME GLOBAL_NAME TO AlL_mEtA;
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+ALTER TENANT mysql RENAME GLOBAL_NAME TO test$123;
+ERROR 0A000: since 4.2.1, manually creating a tenant name containing '$' is not supported
+ALTER TENANT mysql RENAME GLOBAL_NAME TO `all`;
+ERROR 0A000: since 4.2.1, using "all" (case insensitive) as a tenant name is not supported
+ALTER TENANT mysql RENAME GLOBAL_NAME TO `ALL`;
+ERROR 0A000: since 4.2.1, using "all" (case insensitive) as a tenant name is not supported
+ALTER TENANT mysql RENAME GLOBAL_NAME TO `AlL`;
+ERROR 0A000: since 4.2.1, using "all" (case insensitive) as a tenant name is not supported
+ALTER TENANT mysql RENAME GLOBAL_NAME TO `all_user`;
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+ALTER TENANT mysql RENAME GLOBAL_NAME TO `ALL_USER`;
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+ALTER TENANT mysql RENAME GLOBAL_NAME TO `AlL_uSeR`;
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+ALTER TENANT mysql RENAME GLOBAL_NAME TO `all_meta`;
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+ALTER TENANT mysql RENAME GLOBAL_NAME TO `ALL_META`;
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+ALTER TENANT mysql RENAME GLOBAL_NAME TO `AlL_mEtA`;
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+ALTER TENANT mysql RENAME GLOBAL_NAME TO `test$123`;
+ERROR 0A000: since 4.2.1, manually creating a tenant name containing '$' is not supported
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO all;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'all' at line 1
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO ALL;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'ALL' at line 1
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO AlL;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'AlL' at line 1
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO all_user;
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO ALL_USER;
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO AlL_uSeR;
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO all_meta;
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO ALL_META;
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO AlL_mEtA;
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO test$123;
+ERROR 0A000: since 4.2.1, manually creating a tenant name containing '$' is not supported
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO `all`;
+ERROR 0A000: since 4.2.1, using "all" (case insensitive) as a tenant name is not supported
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO `ALL`;
+ERROR 0A000: since 4.2.1, using "all" (case insensitive) as a tenant name is not supported
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO `AlL`;
+ERROR 0A000: since 4.2.1, using "all" (case insensitive) as a tenant name is not supported
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO `all_user`;
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO `ALL_USER`;
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO `AlL_uSeR`;
+ERROR 0A000: since 4.2.1, using "all_user" (case insensitive) as a tenant name is not supported
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO `all_meta`;
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO `ALL_META`;
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO `AlL_mEtA`;
+ERROR 0A000: since 4.2.1, using "all_meta" (case insensitive) as a tenant name is not supported
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO `test$123`;
+ERROR 0A000: since 4.2.1, manually creating a tenant name containing '$' is not supported

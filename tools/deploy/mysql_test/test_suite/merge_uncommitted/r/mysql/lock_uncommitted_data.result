@@ -1,0 +1,32 @@
+set SESSION ob_query_timeout = 60 * 1000 * 1000;
+set SESSION ob_trx_timeout = 60 * 1000 * 1000;
+set SESSION ob_trx_idle_timeout = 60 * 1000 * 1000;
+set SESSION ob_query_timeout = 60 * 1000 * 1000;
+set SESSION ob_trx_timeout = 60 * 1000 * 1000;
+set SESSION ob_trx_idle_timeout = 60 * 1000 * 1000;
+drop table if exists test_lock_uncommitted_data_t;
+create table test_lock_uncommitted_data_t(a int primary key, b int);
+begin;
+insert into test_lock_uncommitted_data_t value(1, 1);
+insert into test_lock_uncommitted_data_t value(2, 2);
+insert into test_lock_uncommitted_data_t value(3, 3);
+insert into test_lock_uncommitted_data_t value(4, 4);
+insert into test_lock_uncommitted_data_t value(5, 5);
+insert into test_lock_uncommitted_data_t value(6, 6);
+update test_lock_uncommitted_data_t set b = 10 where a = 3;
+select * from test_lock_uncommitted_data_t;
+a	b
+update test_lock_uncommitted_data_t set b = 10 where a = 3;
+select * from test_lock_uncommitted_data_t;
+a	b
+1	1
+2	2
+3	10
+4	4
+5	5
+6	6
+commit;
+update test_lock_uncommitted_data_t set b = 100 where a = 3;
+begin;
+update test_lock_uncommitted_data_t set b = 200 where a = 3;
+drop table test_lock_uncommitted_data_t;

@@ -1,0 +1,119 @@
+# owner: gengli.wzy
+# owner group: transaction
+# description: 本case是为了测试在含未提交事务的状态下，含多次dml操作下，多次minor merge的正确性
+
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+connect (conn0,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+
+let $__timeout_def__ = 600 * 1000 * 1000;
+
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn1;
+eval set SESSION ob_query_timeout = $__timeout_def__;
+eval set SESSION ob_trx_timeout = $__timeout_def__;
+eval set SESSION ob_trx_idle_timeout = $__timeout_def__;
+
+connect (conn2,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+eval set SESSION ob_query_timeout = $__timeout_def__;
+eval set SESSION ob_trx_timeout = $__timeout_def__;
+eval set SESSION ob_trx_idle_timeout = $__timeout_def__;
+sleep 2;
+
+connection conn1;
+alter system set minor_compact_trigger = 10;
+
+connection conn1;
+--disable_warnings
+drop table if exists test_big_uncommitted_trans_t;
+--enable_warnings
+
+connection conn1;
+create table test_big_uncommitted_trans_t(i int primary key, c1 char(30), c256 char(255), dt datetime(6), d  datetime(6));
+let $__freeze_table_name__ = 'test_big_uncommitted_trans_t';
+
+connection conn0;
+let $__tenant_id__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ tenant_id from oceanbase.__all_virtual_table where table_name= $__freeze_table_name__, tenant_id, 1);
+let $__table_id__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ table_id from oceanbase.__all_virtual_table where table_name= $__freeze_table_name__, table_id, 1);
+let $__svr_cnt__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ count(*) as c from oceanbase.__all_server, c, 1);
+
+
+connection conn1;
+#insert
+--disable_query_log
+begin;
+let $i=0;
+while($i < 3000)
+{
+    eval insert into test_big_uncommitted_trans_t(i,c1,c256,dt,d) values($i,'1','$i','2012-10-10 12:00:00','2012-10-10');
+    inc $i;
+}
+  
+#replace
+let $i=3000;
+while($i < 6000)
+{
+    eval replace into test_big_uncommitted_trans_t(i,c1,c256,dt,d) values($i,'1','$i+3000','2012-10-10 12:00:00','2012-10-10');
+    inc $i;
+}
+--enable_query_log
+
+connection conn1;
+--source mysql_test/include/minor_freeze_tablet_and_wait_done.inc
+
+#select in other connection(EMPTY)
+connection conn2;
+select * from test_big_uncommitted_trans_t where i = 999;
+
+connection conn1;
+--disable_query_log
+#update
+let $i=0;
+while($i < 3000)
+{
+    eval update test_big_uncommitted_trans_t set c1='update_$i' where i=$i;
+    inc $i;
+}
+--enable_query_log
+commit;
+
+connection conn2;
+select * from test_big_uncommitted_trans_t where i = 1999;
+
+connection conn1;
+select count(*) from test_big_uncommitted_trans_t;
+
+connection conn2;
+select * from test_big_uncommitted_trans_t where i = 999;
+
+connection conn1;
+#delete
+begin;
+--disable_query_log
+let $i=0;
+while($i < 3000)
+{
+    eval delete from test_big_uncommitted_trans_t where i=$i;
+    inc $i;
+}
+--enable_query_log
+
+# test mini minor merge
+--source mysql_test/include/minor_freeze_tablet_and_wait_done.inc
+
+connection conn1;
+let $__now_time__ = query_get_value(select now() as c, c, 1);
+alter system set minor_compact_trigger = 1;
+
+--source mysql_test/include/wait_mini_minor_merge_for_table.inc
+
+connection conn1;
+commit;
+
+connection conn2;
+select * from test_big_uncommitted_trans_t where i = 999;
+
+drop table test_big_uncommitted_trans_t;
+alter system set minor_compact_trigger = 2;

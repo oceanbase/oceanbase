@@ -1,0 +1,187 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: yuchen.wyc
+# owner group: SQL3
+# description: 本case是为了测试insert ignore的语法
+# tags: dml,dml_ignore
+
+##增加新的语法，支持ignore
+--disable_warnings
+drop table if exists t1,t2, test, t_ignore;
+--enable_warnings
+CREATE TABLE t1(a BIGINT primary key);
+
+insert into t1 values(100);
+--error 1062 
+insert into t1 values(100);
+insert ignore into t1 values(100);
+insert ignore into t1 values(100) on duplicate key update a = a + 1;
+#replace不支持ignore语法
+--error 1235
+replace ignore into t1 values(100);
+select * from t1;
+
+delete from t1;
+##插入非法字符串，预期插入0
+insert ignore into t1 values('a');
+select * from t1;
+##插入多行非法字符串，预期插入一个0
+insert ignore into t1 values('a'), ('b'), ('c');
+select * from t1;
+delete from t1;
+##插入null,预期插入0
+insert ignore into t1 values(null);
+select * from t1;
+
+##测试字符串类型
+drop table t1;
+create table t1(a varchar(2) primary key);
+##超长截断
+insert ignore into t1 values('aaaaa');
+select * from t1;
+##插入空,预期插入空串
+insert ignore into t1 values(null);
+select * from t1;
+
+####单行操作
+drop table t1;
+create table test(c1 int primary key, c2 int unique key, c3 int);
+insert into test values(1,2,3);
+--error 1062
+insert into test values(1,5,4);
+insert ignore into test values(1,5,4);
+insert ignore into test values(2,4,5) on duplicate key update c2 = c2 -1 ;
+#更新后产生索引列冲突
+--error 1062
+insert into test values(2,3,4) on duplicate key update c2 = 2;
+insert ignore into test values(2,3,4) on duplicate key update c2 = 2;
+--error 1062
+insert into test values(2,2,4);
+insert ignore into test values(2,2,4);
+#更新后产生主键冲突；
+insert into test values(10,12,14);
+insert into test values(11,14,15);
+--error 1062
+insert into test values(19,14,22) on duplicate key update c1 = c1 - 1;
+select * from test;
+insert ignore test values(19,14,22) on duplicate key update c1 = c1 - 1;
+select * from test;
+
+####多行操作
+delete from test;
+insert into test values(100,101,102), (101, 102, 103), (102,103,105);
+#表内数据主键冲突
+--error 1062
+insert into test values(103, 104, 105), (102, 105, 104);
+#表内数据索引冲突
+--error 1062
+insert into test values(103, 104, 105), (104, 103, 105), (105,106, 107);
+#本语句内主键冲突
+--error 1062
+insert into test values(103, 104, 106),(104,105,106),(103, 106, 108);
+#本语句内索引冲突
+--error 1062
+insert into test values(103, 104, 105), (104,105,106), (105, 104, 107);
+insert ignore test values (103, 104, 105), (102, 105, 104);
+select * from test;
+insert ignore into test values(103, 104, 105), (104, 103, 105), (105,106,107);
+select * from test;
+insert ignore into test values(110, 111,112), (111, 112,113),(110,113, 114);
+select * from test;
+insert ignore into test values(120, 121, 123), (121, 122, 123), (123, 121, 134);
+select * from test;
+
+####insert up多行操作(表内主键冲突，表内索引冲突，语句内主键冲突，语句内索引冲突)
+####区分带ignore和不带ignore的语句
+delete from test;
+insert into test values(1, 2, 3), (2,3,4), (3,4,5);
+insert into test values(4,5,6), (5,6,7),(2,7,8) on duplicate key update c3 = c3 + 1;
+select * from test;
+insert into test values(7,8,9), (8,9, 10), (9,3, 10)  on duplicate key update c3 = c3 + 1;
+select * from test;
+insert into test values(10,11,12), (11, 12, 13), (10,13,14) on duplicate key update c3 = c3 + 1;
+select * from test;
+insert into test values(12,13,14), (15,16,17), (16,13,14) on duplicate key update c3 = c3 + 1;
+select * from test;
+delete from test;
+echo "compare with insert up and insert ignore up. up and down";
+insert ignore into test values(1, 2, 3), (2,3,4), (3,4,5);
+insert ignore into test values(4,5,6), (5,6,7),(2,7,8) on duplicate key update c3 = c3 + 1;
+select * from test;
+insert ignore into test values(7,8,9), (8,9, 10), (9,3, 10)  on duplicate key update c3 = c3 + 1;
+select * from test;
+insert ignore into test values(10,11,12), (11, 12, 13), (10,13,14) on duplicate key update c3 = c3 + 1;
+select * from test;
+insert ignore into test values(12,13,14), (15,16,17), (16,13,14) on duplicate key update c3 = c3 + 1;
+select * from test;
+####前面冲突是插入时产生冲突，现在是更新后产生冲突
+#(表内主键冲突，表内索引冲突，语句内主键冲突，语句内索引冲突)
+delete from test;
+insert into test values(1, 2, 3), (2,3,4), (3,4,5);
+#插入主键冲突，更新后索引冲突
+--error 1062 
+insert into test values(4,5,6),(5,6,7),(3,0,0),(2,0,0) on duplicate key update c2 = c2 - 1;
+insert ignore into test values(4,5,6),(5,6,7),(3,0,0),(2,0,0) on duplicate key update c2 = c2 - 1;
+select * from test;
+delete from test;
+insert into test values(1, 2, 3), (2,3,4), (3,4,5);
+#插入主键冲突，更新后主键冲突
+--error 1062 
+insert into test values(4,5,6),(5,6,7),(2,0,0),(1,0,0) on duplicate key update c1 = c1 + 1;
+insert ignore into test values(4,5,6),(5,6,7),(2,0,0),(1,0,0) on duplicate key update c1 = c1 + 1;
+select * from test;
+#插入索引冲突，更新后主键冲突
+delete from test;
+insert into test values(1, 2, 3), (2,3,4), (3,4,5);
+--error 1062 
+insert into test values(4,5,6),(5,6,7), (6,2,3),(7,3,5) on duplicate key update c1 = c1 + 1;
+insert ignore into test values(4,5,6),(5,6,7), (6,2,3),(7,3,5) on duplicate key update c1 = c1 + 1;
+select * from test;
+#插入索引冲突，更新后索引冲突
+delete from test;
+insert into test values(1, 2, 3), (2,3,4), (3,4,5);
+--error 1062 
+insert into test values(4,5,6),(5,6,7), (6,3,3),(7,4,5) on duplicate key update c2 = c2 - 1;
+insert ignore into test values(4,5,6),(5,6,7), (6,3,3),(7,4,5) on duplicate key update c2 = c2 - 1;
+select * from test;
+
+#语句内主键冲突，更新后主键冲突
+delete from test;
+insert into test values(1, 2, 3), (2,3,4), (3,4,5);
+--error 1062 
+insert into test values(4,5,6),(5,6,7), (6,7,3),(7,10, 0),(4,8,5), (5,9,0) on duplicate key update c1 = c1 + 1;
+insert ignore into test values(4,5,6),(5,6,7), (6,7,3),(7,10, 0),(4,8,5), (5,9,0) on duplicate key update c1 = c1 + 1;
+select * from test;
+
+#语句内主键冲突，更新后索引冲突
+delete from test;
+insert into test values(1, 2, 3), (2,3,4), (3,4,5);
+--error 1062 
+insert into test values(4,5,6),(5,6,7), (6,7,3),(7,8, 0),(4,10,5), (5,9,0) on duplicate key update c2 = c2 + 1;
+insert ignore into test values(4,5,6),(5,6,7), (6,7,3),(7,8, 0),(4,10,5), (5,9,0) on duplicate key update c2 = c2 + 1;
+select * from test;
+
+#语句内索引冲突，更新后索引冲突
+delete from test;
+insert into test values(1, 2, 3), (2,3,4), (3,4,5);
+--error 1062 
+insert into test values(4,5,6),(5,6,7), (6,7,3),(7,8,1),(9,5,5),(8, 6,9)on duplicate key update c2 = c2 + 1;
+insert ignore into test values(4,5,6),(5,6,7), (6,7,3),(7,8,1),(9,5,5),(8, 6,9)on duplicate key update c2 = c2 + 1;
+select * from test;
+
+#语句内索引冲突，更新后主键冲突
+delete from test;
+insert into test values(1, 2, 3), (2,3,4), (3,4,5);
+--error 1062 
+insert into test values(4,5,6),(5,6,7), (6,7,3),(7,8,1),(9,5,5),(8, 6,9) on duplicate key update c1=c1+1;
+insert ignore into test values(4,5,6),(5,6,7), (6,7,3),(7,8,1),(9,5,5),(8, 6,9) on duplicate key update c1=c1+1;
+select * from test;
+
+drop table test;
+
+# value not provided for not null column without default
+CREATE TABLE t_ignore (`c1` bigint(20) NOT NULL AUTO_INCREMENT, `c2` varchar(50)  NOT NULL, PRIMARY KEY (`c1`));
+INSERT IGNORE INTO t_ignore (c1) value (1);
+SELECT * FROM t_ignore;
+DROP TABLE t_ignore;

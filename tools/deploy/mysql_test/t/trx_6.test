@@ -1,0 +1,81 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: yuchen.wyc
+# owner group: SQL1
+# description: OUR GOAL: Make all this simple and effective!
+--disable_warnings
+drop table if exists t1,t2,t3,t4;
+--enable_warnings
+
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn2,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn3,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn4,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+###
+# bad case
+##
+create table t1(id int primary key, money1 int);
+
+insert into t1 values(1,100);
+
+## setup session timeout parameters
+--disable_query_log
+connection conn1;
+set session ob_query_timeout = 2000000; #-- 2s
+set session ob_trx_timeout = 20000000; #-- 20s
+set session ob_trx_idle_timeout = 10000000; #-- 10s
+connection conn2;
+set session ob_query_timeout = 2000000; #-- 2s
+set session ob_trx_timeout = 20000000; #-- 20s
+set session ob_trx_idle_timeout = 10000000; #-- 10s
+connection conn3;
+set session ob_query_timeout = 2000000; #-- 2s
+set session ob_trx_timeout = 20000000; #-- 20s
+set session ob_trx_idle_timeout = 10000000; #-- 10s
+connection conn4;
+set session ob_query_timeout = 2000000; #-- 2s
+set session ob_trx_timeout = 20000000; #-- 20s
+set session ob_trx_idle_timeout = 10000000; #-- 10s
+--enable_query_log
+
+connection conn1;
+begin;
+update t1 set money1 = money1+100 where id=2;
+
+connection conn2;
+begin;
+insert into t1 values(2,100);
+
+connection conn1;
+commit;
+connection conn2;
+ROLLBACK;
+
+select * from t1;
+
+
+connection conn1;
+begin;
+insert into t1 values(3,100);
+commit;
+
+connection conn2;
+begin;
+update t1 set money1 = money1+100 where id=3;
+
+connection conn3;
+set @@ob_trx_timeout=100000000;
+begin;
+set @@ob_query_timeout = 10000000;
+--error 1205, 4012
+delete from t1 where id = 3;
+
+connection conn2;
+commit;
+connection conn3;
+ROLLBACK;
+
+select * from t1;
+drop table t1;

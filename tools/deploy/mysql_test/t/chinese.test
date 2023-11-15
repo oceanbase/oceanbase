@@ -1,0 +1,21 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: jim.wjh
+# owner group: SQL3
+# description: foobar
+--echo case 1: commit
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn1;
+show variables like 'autocommit';
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int primary key, c2 varchar(1024));
+set autocommit=0;
+insert into t1 values (1, '中国');
+select * from t1 where c1 = 1 for update;
+commit;
+set autocommit=1;
+select * from t1;
+disconnect conn1;

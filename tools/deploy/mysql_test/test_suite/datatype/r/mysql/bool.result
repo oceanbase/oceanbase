@@ -1,0 +1,48 @@
+DROP TABLE IF EXISTS a1;
+SELECT NULL AND 1, 1 AND NULL, 0 AND NULL, NULL and 0;
+NULL AND 1	1 AND NULL	0 AND NULL	NULL and 0
+NULL	NULL	0	0
+create table a1 (rowkey_suffix int primary key, price int);
+insert into a1(rowkey_suffix, price) values (0,0),(1,1),(2,2);
+SELECT * FROM a1 where NOT(price AND 1);
+rowkey_suffix	price
+0	0
+SELECT * FROM a1 where NOT(1 AND price);
+rowkey_suffix	price
+0	0
+SELECT * FROM a1 where (price AND 1)=false;
+rowkey_suffix	price
+0	0
+SELECT * FROM a1 where (1 AND price)=false;
+rowkey_suffix	price
+0	0
+SELECT * FROM a1 where (1 AND price)=true;
+rowkey_suffix	price
+1	1
+2	2
+SELECT * FROM a1 where (1 AND price) IS NULL;
+rowkey_suffix	price
+select * from a1 where not price between 2 and 3;
+rowkey_suffix	price
+0	0
+1	1
+select * from a1 where not price between 2 and 3;
+rowkey_suffix	price
+0	0
+1	1
+select rowkey_suffix, price is false, price is true, price is unknown from a1;
+rowkey_suffix	price is false	price is true	price is unknown
+0	1	0	0
+1	0	1	0
+2	0	1	0
+select rowkey_suffix, price is not false, price is not true, price is not unknown from a1;
+rowkey_suffix	price is not false	price is not true	price is not unknown
+0	0	1	1
+1	1	0	1
+2	1	0	1
+DROP TABLE a1;
+DROP TABLE IF EXISTS ob_new_sql_test;
+create  table  ob_new_sql_test ( c0 varchar(20), c1 int primary key);
+insert into ob_new_sql_test (c0, c1) values ('hello', 0);
+insert into ob_new_sql_test (c0, c1) values ('hello', 1);
+drop table ob_new_sql_test;

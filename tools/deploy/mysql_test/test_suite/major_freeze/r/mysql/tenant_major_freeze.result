@@ -1,0 +1,17 @@
+alter system set enable_major_freeze = true;
+alter system set major_freeze_duty_time = 'Disable' tenant sys;
+alter system set major_freeze_duty_time = 'Disable' tenant all_user;
+alter system set major_freeze_duty_time = 'Disable' tenant all_meta;
+drop table if exists test;
+create table test(c1 int primary key, c2 int);
+insert into test values(0, 2);
+insert into test values(1, 2);
+insert into test values(2, 2);
+alter system major freeze tenant = sys;
+alter system major freeze tenant = xxx;
+ERROR HY000: invalid tenant name specified in connection string
+alter system major freeze tenant = xxx, mysql;
+ERROR HY000: invalid tenant name specified in connection string
+alter system major freeze tenant = '';
+ERROR HY000: Invalid argument
+drop table if exists test;

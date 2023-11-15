@@ -1,0 +1,78 @@
+drop database if exists jx_db;
+create database jx_db;
+use jx_db;
+drop table if exists t1, t2,t3;
+create table t1 (c1 int primary key, c2 int);
+set  autocommit=0;
+insert into t1 values(1,1);
+create table t2 (c1 int primary key, c2 int);
+rollback;
+select * from t1;
+c1	c2
+1	1
+desc t2;
+Field	Type	Null	Key	Default	Extra
+c1	int(11)	NO	PRI	NULL
+c2	int(11)	YES		NULL
+set  autocommit=1;
+begin;
+insert into t1 values(2,2);
+create table t3 (c1 int primary key, c2 int);
+rollback;
+select * from t1;
+c1	c2
+1	1
+2	2
+desc t3;
+Field	Type	Null	Key	Default	Extra
+c1	int(11)	NO	PRI	NULL
+c2	int(11)	YES		NULL
+create table ddl_t(c int);
+set autocommit = off;
+insert into ddl_t values(3);
+alter table ddl_t add column c2 int;
+select * from ddl_t;
+c	c2
+3	NULL
+rollback;
+select * from ddl_t;
+c	c2
+3	NULL
+create table jx_t1(c int);
+set autocommit = off;
+insert into jx_t1 values(4);
+create table jx_t1(c int);
+ERROR 42S01: Table 'jx_t1' already exists
+select * from jx_t1;
+c
+4
+rollback;
+select * from jx_t1;
+c
+4
+create table jx_t2(c int);
+set autocommit = off;
+insert into jx_t2 values(5);
+create user if not exists jx_user;
+select * from jx_t2;
+c
+5
+rollback;
+select * from jx_t2;
+c
+5
+create table jx_t3(c int);
+set autocommit = off;
+insert into jx_t3 values(6);
+create user jx_user;
+ERROR HY000: Operation CREATE USER failed for 'jx_user'@'%'
+select * from jx_t3;
+c
+6
+rollback;
+select * from jx_t3;
+c
+6
+set autocommit = on;
+drop user jx_user;
+drop database jx_db;

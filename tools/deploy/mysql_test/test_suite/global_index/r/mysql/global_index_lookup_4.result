@@ -1,0 +1,114 @@
+result_format: 4
+explain_protocol: 2
+drop database if exists muhangtest;
+create database muhangtest;
+use muhangtest;
+set ob_enable_plan_cache = off;
+set ob_enable_transformation = false;
+
+drop table if exists t16;
+create table t16(a int, b int, c int, d int, e int, primary key(a,b,c,d), key k1(b) local, key k2(c,b) local, key k3(c,d,b) local) partition by list(b+c) ( 
+  partition p0 values in (1,2,3),
+  partition p1 values in (5,9),
+  partition p2 values in (default));
+create index gkey on t16(b,c,d) global partition by hash(b) partitions 5;
+EXPLAIN insert into t16 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+Query Plan
+==================================================
+|ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |DISTRIBUTED INSERT|    |10      |77          |
+|1 |└─EXPRESSION      |    |10      |1           |
+==================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      columns([{t16: ({t16: (t16.a, t16.b, t16.c, t16.d, t16.e)}, {gkey: (t16.b, t16.c, t16.d, t16.a)})}]), 
+      column_values([column_conv(INT,PS:(11,0),NOT NULL,__values.a)], [column_conv(INT,PS:(11,0),NOT NULL,__values.b)], [column_conv(INT,PS:(11,0),NOT NULL,
+      __values.c)], [column_conv(INT,PS:(11,0),NOT NULL,__values.d)], [column_conv(INT,PS:(11,0),NULL,__values.e)])
+  1 - output([__values.a], [__values.b], [__values.c], [__values.d], [__values.e]), filter(nil)
+      values({1, 1, 1, 1, 1}, {2, 2, 2, 2, 2}, {3, 3, 3, 3, 3}, {4, 4, 4, 4, 4}, {5, 5, 5, 5, 5}, {6, 6, 6, 6, 6}, {7, 7, 7, 7, 7}, {8, 8, 8, 8, 8}, {9,
+       9, 9, 9, 9}, {10, 10, 10, 10, 10})
+insert into t16 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+drop table if exists t17;
+create table t17(a int, b int, c int, d int, e int, primary key(a,b,c,d), key k1(b) local, key k2(c,b) local, key k3(c,d,b) local) partition by list columns(b) ( 
+  partition p0 values in (1,2,3),
+  partition p1 values in (5,9),
+  partition p2 values in (default));
+create index gkey on t17(b,c,d) global partition by hash(b) partitions 5;
+EXPLAIN insert into t17 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+Query Plan
+==================================================
+|ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |DISTRIBUTED INSERT|    |10      |77          |
+|1 |└─EXPRESSION      |    |10      |1           |
+==================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      columns([{t17: ({t17: (t17.a, t17.b, t17.c, t17.d, t17.e)}, {gkey: (t17.b, t17.c, t17.d, t17.a)})}]), 
+      column_values([column_conv(INT,PS:(11,0),NOT NULL,__values.a)], [column_conv(INT,PS:(11,0),NOT NULL,__values.b)], [column_conv(INT,PS:(11,0),NOT NULL,
+      __values.c)], [column_conv(INT,PS:(11,0),NOT NULL,__values.d)], [column_conv(INT,PS:(11,0),NULL,__values.e)])
+  1 - output([__values.a], [__values.b], [__values.c], [__values.d], [__values.e]), filter(nil)
+      values({1, 1, 1, 1, 1}, {2, 2, 2, 2, 2}, {3, 3, 3, 3, 3}, {4, 4, 4, 4, 4}, {5, 5, 5, 5, 5}, {6, 6, 6, 6, 6}, {7, 7, 7, 7, 7}, {8, 8, 8, 8, 8}, {9,
+       9, 9, 9, 9}, {10, 10, 10, 10, 10})
+insert into t17 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+drop table if exists t18;
+create table t18(a int, b int, c int, d int, e int, primary key(a,b,c,d), key k1(b) local, key k2(c,b) local, key k3(c,d,b) local) partition by list columns(b,c) ( 
+  partition p0 values in ((1,1),(2,2),(3,3)),
+  partition p1 values in ((5,5),(9,9)),
+  partition p2 values in (default));
+create index gkey on t18(b,c,d) global partition by hash(b) partitions 5;
+EXPLAIN insert into t18 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+Query Plan
+==================================================
+|ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |DISTRIBUTED INSERT|    |10      |77          |
+|1 |└─EXPRESSION      |    |10      |1           |
+==================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      columns([{t18: ({t18: (t18.a, t18.b, t18.c, t18.d, t18.e)}, {gkey: (t18.b, t18.c, t18.d, t18.a)})}]), 
+      column_values([column_conv(INT,PS:(11,0),NOT NULL,__values.a)], [column_conv(INT,PS:(11,0),NOT NULL,__values.b)], [column_conv(INT,PS:(11,0),NOT NULL,
+      __values.c)], [column_conv(INT,PS:(11,0),NOT NULL,__values.d)], [column_conv(INT,PS:(11,0),NULL,__values.e)])
+  1 - output([__values.a], [__values.b], [__values.c], [__values.d], [__values.e]), filter(nil)
+      values({1, 1, 1, 1, 1}, {2, 2, 2, 2, 2}, {3, 3, 3, 3, 3}, {4, 4, 4, 4, 4}, {5, 5, 5, 5, 5}, {6, 6, 6, 6, 6}, {7, 7, 7, 7, 7}, {8, 8, 8, 8, 8}, {9,
+       9, 9, 9, 9}, {10, 10, 10, 10, 10})
+insert into t18 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+drop table if exists t19;
+create table t19(a int, b int, c int, d int, e int, primary key(a,b,c,d), key k1(b) local, key k2(c,b) local, key k3(c,d,b) local) partition by list columns(b,c,d) ( 
+  partition p0 values in ((1,1,1)),
+  partition p1 values in ((5,5,5)),
+  partition p2 values in (default));
+create index gkey on t19(b,c,d) global partition by hash(b) partitions 5;
+EXPLAIN insert into t19 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+Query Plan
+==================================================
+|ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |DISTRIBUTED INSERT|    |10      |77          |
+|1 |└─EXPRESSION      |    |10      |1           |
+==================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      columns([{t19: ({t19: (t19.a, t19.b, t19.c, t19.d, t19.e)}, {gkey: (t19.b, t19.c, t19.d, t19.a)})}]), 
+      column_values([column_conv(INT,PS:(11,0),NOT NULL,__values.a)], [column_conv(INT,PS:(11,0),NOT NULL,__values.b)], [column_conv(INT,PS:(11,0),NOT NULL,
+      __values.c)], [column_conv(INT,PS:(11,0),NOT NULL,__values.d)], [column_conv(INT,PS:(11,0),NULL,__values.e)])
+  1 - output([__values.a], [__values.b], [__values.c], [__values.d], [__values.e]), filter(nil)
+      values({1, 1, 1, 1, 1}, {2, 2, 2, 2, 2}, {3, 3, 3, 3, 3}, {4, 4, 4, 4, 4}, {5, 5, 5, 5, 5}, {6, 6, 6, 6, 6}, {7, 7, 7, 7, 7}, {8, 8, 8, 8, 8}, {9,
+       9, 9, 9, 9}, {10, 10, 10, 10, 10})
+insert into t19 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+drop database if exists muhangtest1;
+create database muhangtest1;
+use muhangtest1;
+drop table if exists t20;
+create table t20(a int, b int, c int, d int, e int, primary key(a,b,c,d)) partition by hash(b) 
+subpartition by range columns(c) 
+subpartition template (
+subpartition p0 values less than (5),  
+subpartition p1 values less than (100)) partitions 2;
+create index gkey on t20(b,c,d) global partition by hash(b) partitions 5;

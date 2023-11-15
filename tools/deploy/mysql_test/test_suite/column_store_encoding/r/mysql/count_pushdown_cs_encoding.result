@@ -1,0 +1,414 @@
+create table nn1(c1 int, c2 int, c3 varchar(10));
+create table nn2 (c1 int primary key, c2 int unique, c3 int);
+explain select (select count(x.c2) from nn1 a) as x from nn1 x;
+Query Plan
+===================================================
+|ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |SUBPLAN FILTER     |    |1       |5           |
+|1 |├─SCALAR GROUP BY  |    |1       |3           |
+|2 |│ └─TABLE FULL SCAN|x   |1       |3           |
+|3 |└─TABLE FULL SCAN  |a   |1       |3           |
+===================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([subquery(1)]), filter(nil), rowset=16
+      exec_params_([T_FUN_COUNT_SUM(T_FUN_COUNT(x.c2))(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(x.c2))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(x.c2))])
+  2 - output([T_FUN_COUNT(x.c2)]), filter(nil), rowset=16
+      access([x.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([x.__pk_increment]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_COUNT(x.c2)])
+  3 - output([:0]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([a.__pk_increment]), range(MIN ; MAX)always true
+explain select count(distinct c1,c3) from nn2;
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SCALAR GROUP BY  |    |1       |3           |
+|1 |└─TABLE FULL SCAN|nn2 |1       |3           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_COUNT(nn2.c1, nn2.c3)]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_COUNT(nn2.c1, nn2.c3)])
+  1 - output([nn2.c1], [nn2.c3]), filter(nil), rowset=16
+      access([nn2.c1], [nn2.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([nn2.c1]), range(MIN ; MAX)always true
+create table t1 (libname varchar(21), city varchar(256), primary key (libname));
+insert into t1 values ('test1','city1'),('test2','city2');
+insert into t1 values ('l', null);
+replace into t1 values ('2', null);
+replace into t1 values ('test3','city3'),('test4','city4');
+create table t2(a int, b varchar(26), c date);
+insert into t2 values(0, 'a', '2021-04-08');
+insert into t2 values(null, null, null);
+insert into t2 values(1, null, null);
+explain select count(*);
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |SCALAR GROUP BY|    |1       |1           |
+|1 |└─EXPRESSION   |    |1       |1           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  1 - output([1]), filter(nil)
+      values({1})
+select count(*);
+count(*)
+1
+explain select count(*) from dual;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |SCALAR GROUP BY|    |1       |1           |
+|1 |└─EXPRESSION   |    |1       |1           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  1 - output([1]), filter(nil)
+      values({1})
+select count(*) from dual;
+count(*)
+1
+explain select count(*) from t1;
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SCALAR GROUP BY  |    |1       |3           |
+|1 |└─TABLE FULL SCAN|t1  |6       |3           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+  1 - output([T_FUN_COUNT(*)]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.libname]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_COUNT(*)])
+select count(*) from t1;
+count(*)
+6
+explain select count(city) from t1;
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SCALAR GROUP BY  |    |1       |3           |
+|1 |└─TABLE FULL SCAN|t1  |6       |3           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(t1.city))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(t1.city))])
+  1 - output([T_FUN_COUNT(t1.city)]), filter(nil), rowset=16
+      access([t1.city]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.libname]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_COUNT(t1.city)])
+select count(city) from t1;
+count(city)
+4
+select count(null) from t1;
+count(null)
+0
+select count(1) from t1;
+count(1)
+6
+select count(a),count(b),count(c),count(*) from t2;
+count(a)	count(b)	count(c)	count(*)
+2	1	1	3
+select count(1),count(a),count(b),count(c),count(*) from t2 where a > 0;
+count(1)	count(a)	count(b)	count(c)	count(*)
+1	1	0	0	1
+create table t3(a int, b int);
+explain select count(distinct a) from t3;
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SCALAR GROUP BY  |    |1       |3           |
+|1 |└─TABLE FULL SCAN|t3  |1       |3           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_COUNT(distinct t3.a)]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_COUNT(distinct t3.a)])
+  1 - output([t3.a]), filter(nil), rowset=16
+      access([t3.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+explain select count(distinct a,b) from t3;
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SCALAR GROUP BY  |    |1       |3           |
+|1 |└─TABLE FULL SCAN|t3  |1       |3           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_COUNT(distinct t3.a, t3.b)]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_COUNT(distinct t3.a, t3.b)])
+  1 - output([t3.a], [t3.b]), filter(nil), rowset=16
+      access([t3.a], [t3.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+explain select count(a + b) from t3;
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SCALAR GROUP BY  |    |1       |3           |
+|1 |└─TABLE FULL SCAN|t3  |1       |3           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_COUNT(t3.a + t3.b)]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_COUNT(t3.a + t3.b)])
+  1 - output([t3.a], [t3.b]), filter(nil), rowset=16
+      access([t3.a], [t3.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+explain select a,count(b) from t3 group by a;
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |HASH GROUP BY    |    |1       |3           |
+|1 |└─TABLE FULL SCAN|t3  |1       |3           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t3.a], [T_FUN_COUNT(t3.b)]), filter(nil), rowset=16
+      group([t3.a]), agg_func([T_FUN_COUNT(t3.b)])
+  1 - output([t3.a], [t3.b]), filter(nil), rowset=16
+      access([t3.a], [t3.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+explain select count(*) from t3 for update;
+Query Plan
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |MATERIAL             |    |1       |3           |
+|1 |└─SCALAR GROUP BY    |    |1       |3           |
+|2 |  └─FOR UPDATE       |    |1       |3           |
+|3 |    └─TABLE FULL SCAN|t3  |1       |3           |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)]), filter(nil), rowset=16
+  1 - output([T_FUN_COUNT(*)]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  2 - output(nil), filter(nil), rowset=16
+      lock tables(t3)
+  3 - output([t3.__pk_increment]), filter(nil), rowset=16
+      access([t3.__pk_increment]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+create table t4 (a bigint auto_increment primary key, b bigint, c char(100), d varchar(100), e bigint not null) row_format = compressed block_size = 2048 with column group for all columns, each column;
+insert into t4 (a, b, c, d, e) values(1, 9, "a", repeat('a', 10),1);
+insert into t4 (a, b, c, d, e) values(2, 2, "ab", repeat("ab", 10),1);
+insert into t4 (a, b, c, d, e) values(3, 5, "abcd", repeat("ab", 10),1);
+insert into t4 (a, b, c, d, e) values(4, 7, NULL, repeat("abcd", 10),1);
+insert into t4 (a, b, c, d, e) values(5, NULL, "ab c ", repeat("a", 10),1);
+insert into t4 (a, b, c, d, e) values(6, 9, NULL, repeat("abbb", 10),1);
+insert into t4 (a, b, c, d, e) values(7, 1, "abc ", repeat("abcd", 10),1);
+insert into t4 (a, b, c, d, e) values(8, 3, "abcde", NULL,1);
+insert into t4 (a, b, c, d, e) values(9, 100, "abd", repeat("abc", 10),1);
+insert into t4 (a, b, c, d, e) select a * 10 + 6, b + 1, c, d, e from t4;
+insert into t4 (a, b, c, d, e) select a * 10 + 5, b + 1, c, d, e from t4;
+insert into t4 (a, b, c, d, e) select a * 10 + 4, b + 1, c, d, e from t4;
+insert into t4 (a, b, c, d, e) select a * 10 + 3, b + 1, c, d, e from t4;
+insert into t4 (a, b, c, d, e) select a * 10 + 2, b + 1, c, d, e from t4;
+insert into t4 (a, b, c, d, e) select a * 10 + 1, b + 1, c, d, e from t4;
+insert into t4 (a, b, c, d, e) values(123456, 100, "abd", repeat("abc", 10),1);
+insert into t4 (a, b, c, d, e) values(10000, 0, "ab c", repeat('ab ', 10),1);
+alter system minor freeze tenant = all;
+select count(1),count(*) from t4;
+count(1)	count(*)
+578	578
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4;
+count(1)	count(*)	count(a)	count(b)	count(c)	count(d)
+578	578	578	514	450	514
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a > 5 and b is not null;
+count(1)	count(*)	count(a)	count(b)	count(c)	count(d)
+510	510	510	510	383	446
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a < 1;
+count(1)	count(*)	count(a)	count(b)	count(c)	count(d)
+0	0	0	0	0	0
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a = 123456;
+count(1)	count(*)	count(a)	count(b)	count(c)	count(d)
+1	1	1	1	1	1
+create table t_default_value(pk int primary key, a char(5));
+insert into t_default_value values(1,'a');
+alter system major freeze tenant = all;
+select count(1),count(*) from t4;
+count(1)	count(*)
+578	578
+select count(*) from t4 where b < 1;
+count(*)
+1
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4;
+count(1)	count(*)	count(a)	count(b)	count(c)	count(d)
+578	578	578	514	450	514
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a > 5 and b is not null;
+count(1)	count(*)	count(a)	count(b)	count(c)	count(d)
+510	510	510	510	383	446
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a < 1;
+count(1)	count(*)	count(a)	count(b)	count(c)	count(d)
+0	0	0	0	0	0
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a = 123456;
+count(1)	count(*)	count(a)	count(b)	count(c)	count(d)
+1	1	1	1	1	1
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a > 46912;
+count(1)	count(*)	count(a)	count(b)	count(c)	count(d)
+139	139	139	117	110	117
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a/2 > 23456;
+count(1)	count(*)	count(a)	count(b)	count(c)	count(d)
+139	139	139	117	110	117
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a > b;
+count(1)	count(*)	count(a)	count(b)	count(c)	count(d)
+502	502	502	502	376	438
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a - b > 0;
+count(1)	count(*)	count(a)	count(b)	count(c)	count(d)
+502	502	502	502	376	438
+insert into t4 (a, b, c, d, e) values(10001, 0, "ab c", repeat('ab ', 10),1);
+insert into t4 (a, b, c, d, e) values(null, null, null, null,1);
+select count(1),count(*) from t4;
+count(1)	count(*)
+580	580
+select count(*),count(1),count(a),count(b),count(c),count(d) from t4;
+count(*)	count(1)	count(a)	count(b)	count(c)	count(d)
+580	580	580	515	451	515
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a > 5 and b is not null;
+count(1)	count(*)	count(a)	count(b)	count(c)	count(d)
+511	511	511	511	384	447
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a < 1;
+count(1)	count(*)	count(a)	count(b)	count(c)	count(d)
+0	0	0	0	0	0
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a = 123456;
+count(1)	count(*)	count(a)	count(b)	count(c)	count(d)
+1	1	1	1	1	1
+select count(1),count(*),count(a),count(b),count(c),count(d) from t4 where a is null;
+count(1)	count(*)	count(a)	count(b)	count(c)	count(d)
+0	0	0	0	0	0
+select count(1),count(*),count(e) from t4;
+count(1)	count(*)	count(e)
+580	580	580
+explain select a,b,c,d,count(a),count(b),count(c),count(d) from t4;
+Query Plan
+========================================================
+|ID|OPERATOR                |NAME|EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------
+|0 |SCALAR GROUP BY         |    |1       |65          |
+|1 |└─COLUMN TABLE FULL SCAN|t4  |580     |27          |
+========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t4.a], [t4.b], [t4.c], [t4.d], [T_FUN_COUNT(t4.a)], [T_FUN_COUNT(t4.b)], [T_FUN_COUNT(t4.c)], [T_FUN_COUNT(t4.d)]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_COUNT(t4.a)], [T_FUN_COUNT(t4.b)], [T_FUN_COUNT(t4.c)], [T_FUN_COUNT(t4.d)])
+  1 - output([t4.a], [t4.b], [t4.c], [t4.d]), filter(nil), rowset=256
+      access([t4.a], [t4.b], [t4.c], [t4.d]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t4.a]), range(MIN ; MAX)always true
+select a,b,c,d,count(a),count(b),count(c),count(d) from t4;
+a	b	c	d	count(a)	count(b)	count(c)	count(d)
+1	9	a	aaaaaaaaaa	580	515	451	515
+create table t_empty(a int);
+select a,count(*) from t_empty;
+a	count(*)
+NULL	0
+select a,b,c,d,count(*),count(a),count(b),count(c),count(d) from t4 where b > 1000000;
+a	b	c	d	count(*)	count(a)	count(b)	count(c)	count(d)
+NULL	NULL	NULL	NULL	0	0	0	0	0
+create table pt1(a int);
+create table pt2(a int, b int, c int) partition by hash(a) partitions 4;
+create table pt3(a int, b int, c int) partition by hash(a) partitions 4;
+insert into pt1 values(1),(2),(3);
+insert into pt2 values(1,1,1),(2,2,2),(3,3,3);
+insert into pt3 values (null,null,null),(1,1,1),(2,2,2),(3,3,3);
+select a,count(*) from pt2;
+a	count(*)
+1	3
+select a,count(*) from pt3;
+a	count(*)
+NULL	4
+select/*+ leading(pt1,tt) use_nl(pt1,tt) NO_USE_NL_MATERIALIZATION(tt) */ * from pt1,(select a,count(*) from pt2) as tt where pt1.a=tt.a;
+a	a	count(*)
+1	1	3
+select/*+ leading(pt1,tt) use_nl(pt1,tt) NO_USE_NL_MATERIALIZATION(tt) */ * from pt1,(select a,count(*) from pt3) as tt where pt1.a=tt.a;
+a	a	count(*)
+alter table t_default_value add column b char(10) default 'b';
+alter table t_default_value add column c char(10) default null;
+select b,count(b) from t_default_value;
+b	count(b)
+b	1
+select c,count(c) from t_default_value;
+c	count(c)
+NULL	0
+insert into t_default_value values(2, 'aa', 'bb', 'cc');
+select b,count(b) from t_default_value;
+b	count(b)
+b	2
+select c,count(c) from t_default_value;
+c	count(c)
+NULL	1
+SET sql_mode = 'STRICT_ALL_TABLES,PAD_CHAR_TO_FULL_LENGTH';
+select char_length(a) from t_default_value;
+char_length(a)
+5
+5
+select char_length(a),count(a) from t_default_value;
+char_length(a)	count(a)
+5	2
+drop table if exists t1,t2,t3,t4,nn1,nn2,t_default_value,t_empty,pt1,pt2,pt3;
+drop table if exists t;
+create table t(pk int primary key, a char(5));
+insert into t values(1,'a');
+insert into t values(2,'b');
+alter table t add column b char(10) as(concat(a, '1'));
+explain select b,count(b) from t;
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SCALAR GROUP BY  |    |1       |3           |
+|1 |└─TABLE FULL SCAN|t   |2       |3           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([column_conv(CHAR,utf8mb4_general_ci,length:10,NULL,cast(pad(concat(pad(cast(t.a, VARCHAR(1048576)), ' ', 5), '1'), ' ', 10), CHAR(1048576)))],
+       [T_FUN_COUNT(column_conv(CHAR,utf8mb4_general_ci,length:10,NULL,cast(pad(concat(pad(cast(t.a, VARCHAR(1048576)), ' ', 5), '1'), ' ', 10), CHAR(1048576))))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_COUNT(column_conv(CHAR,utf8mb4_general_ci,length:10,NULL,cast(pad(concat(pad(cast(t.a, VARCHAR(1048576)), ' ', 5), '1'),
+       ' ', 10), CHAR(1048576))))])
+  1 - output([column_conv(CHAR,utf8mb4_general_ci,length:10,NULL,cast(pad(concat(pad(cast(t.a, VARCHAR(1048576)), ' ', 5), '1'), ' ', 10), CHAR(1048576)))]), filter(nil), rowset=16
+      access([t.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.pk]), range(MIN ; MAX)always true
+select b,count(b) from t;
+b	count(b)
+a    1    	2
+select a,count(b) from t;
+a	count(b)
+a    	2
+select b,count(a) from t;
+b	count(a)
+a    1    	2
+drop table t;

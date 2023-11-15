@@ -1,0 +1,26 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: yuchen.wyc
+# owner group: SQL1
+# description: trade notify
+
+--source mysql_test/include/index_quick_major.inc
+--real_sleep 5
+--enable_query_log
+--source  mysql_test/include/a_trade_schema_drop.inc
+--source  mysql_test/include/a_trade_schema_create.inc
+--echo merge happens
+insert into notify_history_000(id,plugin,parameter,group_no,status,gmt_create,gmt_modify) values('1111','1','1bdc',-2,'1','2014-09-19 12:00:00','2014-09-19 11:11:11');
+insert into notify_history_000(id,plugin,parameter,group_no,status,gmt_create,gmt_modify) values('2111','1','1bdc',-2,'1','2014-09-19 12:00:00','2014-09-19 11:11:11');
+insert into notify_history_000(id,plugin,parameter,group_no,status,gmt_create,gmt_modify) values('3111','1','1bdc',-2,'1','2014-09-19 12:00:00','2014-09-19 11:11:11');
+update  notify_history_000 set group_no=-1 , iw_user_id = '1111' , status ='N';
+select id from notify_history_000 where group_no = -1 and iw_user_id = '1111';
+select id, plugin, plugin_host, parameter, group_no, status, gmt_create, gmt_local_create, gmt_modify, iw_user_id, channel_endpoint, business_order, business_type from notify_000 where (id = '1111') for update;
+select id, plugin, plugin_host, parameter, group_no, status, gmt_create, gmt_local_create, gmt_modify, iw_user_id, channel_endpoint, business_order, business_type from notify_000 where ((id = '1111') AND (status IN ('N', 'C')));
+select id, plugin, plugin_host, parameter, group_no, status, gmt_create, gmt_local_create, gmt_modify, iw_user_id, channel_endpoint, business_order, business_type from notify_000 where ((id = '1111') AND (status IN ('N', 'C'))) for update;
+select /* QUERY_TIMEOUT(15000000) */ id from notify_000 where  gmt_create <= current_timestamp() and gmt_create >= date_sub(current_timestamp(), INTERVAL 6 MINUTE) and gmt_modify < now() and status in ('N', 'C') and group_no != -1;
+select /* QUERY_TIMEOUT(15000000) */ id from notify_000 where  gmt_create <= current_timestamp() and gmt_create >= date_sub(current_timestamp(), INTERVAL 6 MINUTE) and gmt_modify < now() and status in ('N', 'C') and group_no = -1;
+select /* QUERY_TIMEOUT(15000000) */ id, business_order, business_type from notify_000 where gmt_create <= current_timestamp() AND gmt_create >= date_sub(current_timestamp(), INTERVAL 6 MINUTE) AND ((status = 'N') AND (gmt_modify < current_timestamp())) limit 1;
+select id, plugin, plugin_host, parameter, group_no, status, gmt_create, gmt_local_create, gmt_modify, iw_user_id, channel_endpoint, business_order, business_type from notify_000 where (iw_user_id ='1111') and (gmt_create < current_timestamp()) and (gmt_create >= current_timestamp());
+delete from notify_history_000 where ((group_no = (- 1)) AND (iw_user_id = '1111'));

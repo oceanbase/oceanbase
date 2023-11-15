@@ -1,0 +1,31 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+#owner: linlin.xll
+#owner group: SQL1
+#description:
+#tags: sys_vars
+
+show collation;
+show collation;
+--error 1064
+show collation test;
+SHOW CHARACTER SET;
+SHOW CHARACTER SET;
+--error 1064
+SHOW CHARACTER SET test;
+set names utf8;
+set names utf8;
+--error 1064
+set names;
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+--error 1064
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED test;
+--error 1064
+show girls;
+--error 1064
+show   girls;
+--error 1064
+show girls test;

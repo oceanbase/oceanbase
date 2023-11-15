@@ -1,0 +1,534 @@
+alter system set_tp tp_no = 217, error_code = 1234, frequency = 1;
+drop table if exists t1;
+create table t1 (c1 int primary key, c2 int, c3 int) partition by hash(c1) partitions 3;
+create index t1_idx1 on t1 (c2) partition by hash(c2) partitions 4;
+insert into t1 values (1,1,1), (2,2,2), (3,3,3), (4,4,4), (5,5,5), (6,6,6);
+select * from t1;
+c1	c2	c3
+1	1	1
+2	2	2
+3	3	3
+4	4	4
+5	5	5
+6	6	6
+explain update /*+ parallel(3) enable_parallel_dml */ t1 set c2 = 3;
+Query Plan
+=====================================================================================
+|ID|OPERATOR                                      |NAME       |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------------------
+|0 |PX COORDINATOR                                |           |1       |60          |
+|1 |└─EXCHANGE OUT DISTR                          |:EX10002   |1       |60          |
+|2 |  └─INDEX INSERT                              |t1(t1_idx1)|1       |60          |
+|3 |    └─EXCHANGE IN DISTR                       |           |1       |47          |
+|4 |      └─EXCHANGE OUT DISTR (PKEY HASH)        |:EX10001   |1       |47          |
+|5 |        └─MATERIAL                            |           |1       |46          |
+|6 |          └─INDEX DELETE                      |t1(t1_idx1)|1       |46          |
+|7 |            └─EXCHANGE IN DISTR               |           |1       |35          |
+|8 |              └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000   |1       |35          |
+|9 |                └─UPDATE                      |           |1       |34          |
+|10|                  └─PX BLOCK ITERATOR         |           |1       |3           |
+|11|                    └─TABLE FULL SCAN         |t1         |1       |3           |
+=====================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil), rowset=16
+  1 - output(nil), filter(nil), rowset=16
+      dop=3
+  2 - output(nil), filter(nil)
+      columns([{t1: ({t1_idx1: (t1.c2, t1.c1)})}]), partitions(p[0-3]), 
+      column_values([column_conv(INT,PS:(11,0),NULL,cast(3, INT(-1, 0)))], [t1.c1])
+  3 - output([PARTITION_ID], [t1.c1]), filter(nil), rowset=16
+  4 - output([PARTITION_ID], [t1.c1]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NULL,cast(3, INT(-1, 0)))]), dop=3
+  5 - output([t1.c1]), filter(nil), rowset=16
+  6 - output([t1.c1]), filter(nil)
+      table_columns([{t1: ({t1_idx1: (t1.c2, t1.c1)})}]), with_barrier
+  7 - output([t1.c1], [PARTITION_ID], [t1.c2]), filter(nil), rowset=16
+  8 - output([t1.c1], [PARTITION_ID], [t1.c2]), filter(nil), rowset=16
+      (#keys=1, [t1.c2]), dop=3
+  9 - output([t1.c1], [t1.c2]), filter(nil)
+      table_columns([{t1: ({t1: (t1.c1, t1.c2, t1.c3)})}]),
+      update([t1.c2=column_conv(INT,PS:(11,0),NULL,cast(3, INT(-1, 0)))])
+ 10 - output([t1.c1], [t1.c2], [t1.c3], [PARTITION_ID]), filter(nil), rowset=16
+ 11 - output([t1.c1], [t1.c2], [t1.c3], [PARTITION_ID]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-2])
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.c1]), range(MIN ; MAX)always true
+update /*+ parallel(3) enable_parallel_dml */ t1 set c2 = 3;
+select * from t1;
+c1	c2	c3
+1	3	1
+2	3	2
+3	3	3
+4	3	4
+5	3	5
+6	3	6
+drop table t1;
+drop table if exists pindex;
+create table pindex (c1 int primary key, c2 int, c3 int) partition by hash(c1) partitions 3;
+create unique index pindex_i2 on pindex(c2) global;
+insert into pindex values (1,2,3),(2,4,5),(3,6,7);
+select * from pindex order by c1;
+c1	c2	c3
+1	2	3
+2	4	5
+3	6	7
+select /*+index (pindex pindex_i2)*/ c2, c1 from pindex order by c2;
+c2	c1
+2	1
+4	2
+6	3
+explain update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+Query Plan
+======================================================================================
+|ID|OPERATOR                                 |NAME             |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------------------
+|0 |PX COORDINATOR                           |                 |1       |60          |
+|1 |└─EXCHANGE OUT DISTR                     |:EX10002         |1       |60          |
+|2 |  └─INDEX INSERT                         |pindex(pindex_i2)|1       |60          |
+|3 |    └─EXCHANGE IN DISTR                  |                 |1       |47          |
+|4 |      └─EXCHANGE OUT DISTR (HASH)        |:EX10001         |1       |47          |
+|5 |        └─MATERIAL                       |                 |1       |46          |
+|6 |          └─INDEX DELETE                 |pindex(pindex_i2)|1       |46          |
+|7 |            └─EXCHANGE IN DISTR          |                 |1       |35          |
+|8 |              └─EXCHANGE OUT DISTR (HASH)|:EX10000         |1       |35          |
+|9 |                └─UPDATE                 |                 |1       |34          |
+|10|                  └─PX BLOCK ITERATOR    |                 |1       |3           |
+|11|                    └─TABLE FULL SCAN    |pindex           |1       |3           |
+======================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil), rowset=16
+  1 - output(nil), filter(nil), rowset=16
+      dop=3
+  2 - output(nil), filter(nil)
+      columns([{pindex: ({pindex_i2: (pindex.c2, pindex.c1)})}]), partitions(p0), 
+      column_values([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1])
+  3 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1]), filter(nil), rowset=16
+  4 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NULL,pindex.c3)]), dop=3
+  5 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1]), filter(nil), rowset=16
+  6 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1]), filter(nil)
+      table_columns([{pindex: ({pindex_i2: (pindex.c2, pindex.c1)})}]), with_barrier
+  7 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1], [pindex.c2]), filter(nil), rowset=16
+  8 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1], [pindex.c2]), filter(nil), rowset=16
+      (#keys=1, [pindex.c2]), dop=3
+  9 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1], [pindex.c2]), filter(nil)
+      table_columns([{pindex: ({pindex: (pindex.c1, pindex.c2, pindex.c3)})}]),
+      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,cast(5, INT(-1, 0)))])
+ 10 - output([pindex.c1], [pindex.c2], [pindex.c3], [PARTITION_ID]), filter(nil), rowset=16
+ 11 - output([pindex.c1], [pindex.c2], [pindex.c3], [PARTITION_ID]), filter(nil), rowset=16
+      access([pindex.c1], [pindex.c2], [pindex.c3]), partitions(p[0-2])
+      is_index_back=false, is_global_index=false, 
+      range_key([pindex.c1]), range(MIN ; MAX)always true
+update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+select * from pindex order by c1;
+c1	c2	c3
+1	3	5
+2	5	5
+3	7	5
+select /*+index (pindex pindex_i2)*/ c2, c1 from pindex order by c2;
+c2	c1
+3	1
+5	2
+7	3
+delete /*+ parallel(3) enable_parallel_dml */ from pindex;
+select * from pindex order by c1;
+c1	c2	c3
+select /*+index (pindex pindex_i2)*/ c2, c1 from pindex order by c2;
+c2	c1
+insert into pindex values (1,null,3),(2,null,4),(3,null,5);
+select * from pindex order by c1;
+c1	c2	c3
+1	NULL	3
+2	NULL	4
+3	NULL	5
+select /*+index (pindex pindex_i2)*/ c2, c1 from pindex order by c2;
+c2	c1
+NULL	1
+NULL	2
+NULL	3
+explain update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+Query Plan
+======================================================================================
+|ID|OPERATOR                                 |NAME             |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------------------
+|0 |PX COORDINATOR                           |                 |1       |60          |
+|1 |└─EXCHANGE OUT DISTR                     |:EX10002         |1       |60          |
+|2 |  └─INDEX INSERT                         |pindex(pindex_i2)|1       |60          |
+|3 |    └─EXCHANGE IN DISTR                  |                 |1       |47          |
+|4 |      └─EXCHANGE OUT DISTR (HASH)        |:EX10001         |1       |47          |
+|5 |        └─MATERIAL                       |                 |1       |46          |
+|6 |          └─INDEX DELETE                 |pindex(pindex_i2)|1       |46          |
+|7 |            └─EXCHANGE IN DISTR          |                 |1       |35          |
+|8 |              └─EXCHANGE OUT DISTR (HASH)|:EX10000         |1       |35          |
+|9 |                └─UPDATE                 |                 |1       |34          |
+|10|                  └─PX BLOCK ITERATOR    |                 |1       |3           |
+|11|                    └─TABLE FULL SCAN    |pindex           |1       |3           |
+======================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil), rowset=16
+  1 - output(nil), filter(nil), rowset=16
+      dop=3
+  2 - output(nil), filter(nil)
+      columns([{pindex: ({pindex_i2: (pindex.c2, pindex.c1)})}]), partitions(p0), 
+      column_values([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1])
+  3 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1]), filter(nil), rowset=16
+  4 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NULL,pindex.c3)]), dop=3
+  5 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1]), filter(nil), rowset=16
+  6 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1]), filter(nil)
+      table_columns([{pindex: ({pindex_i2: (pindex.c2, pindex.c1)})}]), with_barrier
+  7 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1], [pindex.c2]), filter(nil), rowset=16
+  8 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1], [pindex.c2]), filter(nil), rowset=16
+      (#keys=1, [pindex.c2]), dop=3
+  9 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1], [pindex.c2]), filter(nil)
+      table_columns([{pindex: ({pindex: (pindex.c1, pindex.c2, pindex.c3)})}]),
+      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,cast(5, INT(-1, 0)))])
+ 10 - output([pindex.c1], [pindex.c2], [pindex.c3], [PARTITION_ID]), filter(nil), rowset=16
+ 11 - output([pindex.c1], [pindex.c2], [pindex.c3], [PARTITION_ID]), filter(nil), rowset=16
+      access([pindex.c1], [pindex.c2], [pindex.c3]), partitions(p[0-2])
+      is_index_back=false, is_global_index=false, 
+      range_key([pindex.c1]), range(MIN ; MAX)always true
+update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+select * from pindex order by c1;
+c1	c2	c3
+1	3	5
+2	4	5
+3	5	5
+select /*+index (pindex pindex_i2)*/ c2, c1 from pindex order by c2;
+c2	c1
+3	1
+4	2
+5	3
+delete from pindex;
+drop index pindex_i2 on pindex;
+create unique index pindex_i2 on pindex(c2) partition by hash(c2) partitions 2;
+insert into pindex values (1,2,3),(2,4,5),(3,6,7);
+select * from pindex order by c1;
+c1	c2	c3
+1	2	3
+2	4	5
+3	6	7
+select /*+index (pindex pindex_i2)*/ c2, c1 from pindex order by c2;
+c2	c1
+2	1
+4	2
+6	3
+explain update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+Query Plan
+===========================================================================================
+|ID|OPERATOR                                      |NAME             |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------------------------
+|0 |PX COORDINATOR                                |                 |1       |60          |
+|1 |└─EXCHANGE OUT DISTR                          |:EX10002         |1       |60          |
+|2 |  └─INDEX INSERT                              |pindex(pindex_i2)|1       |60          |
+|3 |    └─EXCHANGE IN DISTR                       |                 |1       |47          |
+|4 |      └─EXCHANGE OUT DISTR (PKEY HASH)        |:EX10001         |1       |47          |
+|5 |        └─MATERIAL                            |                 |1       |46          |
+|6 |          └─INDEX DELETE                      |pindex(pindex_i2)|1       |46          |
+|7 |            └─EXCHANGE IN DISTR               |                 |1       |35          |
+|8 |              └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000         |1       |35          |
+|9 |                └─UPDATE                      |                 |1       |34          |
+|10|                  └─PX BLOCK ITERATOR         |                 |1       |3           |
+|11|                    └─TABLE FULL SCAN         |pindex           |1       |3           |
+===========================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil), rowset=16
+  1 - output(nil), filter(nil), rowset=16
+      dop=3
+  2 - output(nil), filter(nil)
+      columns([{pindex: ({pindex_i2: (pindex.c2, pindex.c1)})}]), partitions(p[0-1]), 
+      column_values([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1])
+  3 - output([PARTITION_ID], [column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1]), filter(nil), rowset=16
+  4 - output([PARTITION_ID], [column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NULL,pindex.c3)]), dop=3
+  5 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1]), filter(nil), rowset=16
+  6 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1]), filter(nil)
+      table_columns([{pindex: ({pindex_i2: (pindex.c2, pindex.c1)})}]), with_barrier
+  7 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1], [PARTITION_ID], [pindex.c2]), filter(nil), rowset=16
+  8 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1], [PARTITION_ID], [pindex.c2]), filter(nil), rowset=16
+      (#keys=1, [pindex.c2]), dop=3
+  9 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c1], [pindex.c2]), filter(nil)
+      table_columns([{pindex: ({pindex: (pindex.c1, pindex.c2, pindex.c3)})}]),
+      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,cast(5, INT(-1, 0)))])
+ 10 - output([pindex.c1], [pindex.c2], [pindex.c3], [PARTITION_ID]), filter(nil), rowset=16
+ 11 - output([pindex.c1], [pindex.c2], [pindex.c3], [PARTITION_ID]), filter(nil), rowset=16
+      access([pindex.c1], [pindex.c2], [pindex.c3]), partitions(p[0-2])
+      is_index_back=false, is_global_index=false, 
+      range_key([pindex.c1]), range(MIN ; MAX)always true
+drop table pindex;
+create table pindex (c1 int, c2 int, c3 int) partition by hash(c1) partitions 3;
+create unique index pindex_i2 on pindex(c2) global;
+insert into pindex values (1,2,3),(2,4,5),(3,6,7);
+select * from pindex order by c1;
+c1	c2	c3
+1	2	3
+2	4	5
+3	6	7
+select /*+index (pindex pindex_i2)*/ c2, c1 from pindex order by c2;
+c2	c1
+2	1
+4	2
+6	3
+explain update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+Query Plan
+======================================================================================
+|ID|OPERATOR                                 |NAME             |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------------------
+|0 |PX COORDINATOR                           |                 |1       |60          |
+|1 |└─EXCHANGE OUT DISTR                     |:EX10002         |1       |60          |
+|2 |  └─INDEX INSERT                         |pindex(pindex_i2)|1       |60          |
+|3 |    └─EXCHANGE IN DISTR                  |                 |1       |47          |
+|4 |      └─EXCHANGE OUT DISTR (HASH)        |:EX10001         |1       |47          |
+|5 |        └─MATERIAL                       |                 |1       |46          |
+|6 |          └─INDEX DELETE                 |pindex(pindex_i2)|1       |46          |
+|7 |            └─EXCHANGE IN DISTR          |                 |1       |35          |
+|8 |              └─EXCHANGE OUT DISTR (HASH)|:EX10000         |1       |35          |
+|9 |                └─UPDATE                 |                 |1       |34          |
+|10|                  └─PX BLOCK ITERATOR    |                 |1       |3           |
+|11|                    └─TABLE FULL SCAN    |pindex           |1       |3           |
+======================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil), rowset=16
+  1 - output(nil), filter(nil), rowset=16
+      dop=3
+  2 - output(nil), filter(nil)
+      columns([{pindex: ({pindex_i2: (pindex.c2, pindex.__pk_increment, pindex.c1)})}]), partitions(p0), 
+      column_values([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1])
+  3 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1]), filter(nil), rowset=16
+  4 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NULL,pindex.c3)]), dop=3
+  5 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1]), filter(nil), rowset=16
+  6 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1]), filter(nil)
+      table_columns([{pindex: ({pindex_i2: (pindex.c2, pindex.__pk_increment, pindex.c1)})}]), with_barrier
+  7 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1], [pindex.c2]), filter(nil), rowset=16
+  8 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1], [pindex.c2]), filter(nil), rowset=16
+      (#keys=1, [pindex.c2]), dop=3
+  9 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1], [pindex.c2]), filter(nil)
+      table_columns([{pindex: ({pindex: (pindex.__pk_increment, pindex.c1, pindex.c2, pindex.c3)})}]),
+      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,cast(5, INT(-1, 0)))])
+ 10 - output([pindex.__pk_increment], [pindex.c1], [pindex.c2], [pindex.c3], [PARTITION_ID]), filter(nil), rowset=16
+ 11 - output([pindex.__pk_increment], [pindex.c1], [pindex.c2], [pindex.c3], [PARTITION_ID]), filter(nil), rowset=16
+      access([pindex.__pk_increment], [pindex.c1], [pindex.c2], [pindex.c3]), partitions(p[0-2])
+      is_index_back=false, is_global_index=false, 
+      range_key([pindex.__pk_increment]), range(MIN ; MAX)always true
+update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+select * from pindex order by c1;
+c1	c2	c3
+1	3	5
+2	5	5
+3	7	5
+select /*+index (pindex pindex_i2)*/ c2, c1 from pindex order by c2;
+c2	c1
+3	1
+5	2
+7	3
+delete /*+ parallel(3) enable_parallel_dml */ from pindex;
+select * from pindex order by c1;
+c1	c2	c3
+select /*+index (pindex pindex_i2)*/ c2, c1 from pindex order by c2;
+c2	c1
+insert into pindex values (1,null,3),(2,null,4),(3,null,5);
+select * from pindex order by c1;
+c1	c2	c3
+1	NULL	3
+2	NULL	4
+3	NULL	5
+select /*+index (pindex pindex_i2)*/ c2, c1 from pindex order by c2;
+c2	c1
+NULL	1
+NULL	2
+NULL	3
+explain update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+Query Plan
+======================================================================================
+|ID|OPERATOR                                 |NAME             |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------------------
+|0 |PX COORDINATOR                           |                 |1       |60          |
+|1 |└─EXCHANGE OUT DISTR                     |:EX10002         |1       |60          |
+|2 |  └─INDEX INSERT                         |pindex(pindex_i2)|1       |60          |
+|3 |    └─EXCHANGE IN DISTR                  |                 |1       |47          |
+|4 |      └─EXCHANGE OUT DISTR (HASH)        |:EX10001         |1       |47          |
+|5 |        └─MATERIAL                       |                 |1       |46          |
+|6 |          └─INDEX DELETE                 |pindex(pindex_i2)|1       |46          |
+|7 |            └─EXCHANGE IN DISTR          |                 |1       |35          |
+|8 |              └─EXCHANGE OUT DISTR (HASH)|:EX10000         |1       |35          |
+|9 |                └─UPDATE                 |                 |1       |34          |
+|10|                  └─PX BLOCK ITERATOR    |                 |1       |3           |
+|11|                    └─TABLE FULL SCAN    |pindex           |1       |3           |
+======================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil), rowset=16
+  1 - output(nil), filter(nil), rowset=16
+      dop=3
+  2 - output(nil), filter(nil)
+      columns([{pindex: ({pindex_i2: (pindex.c2, pindex.__pk_increment, pindex.c1)})}]), partitions(p0), 
+      column_values([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1])
+  3 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1]), filter(nil), rowset=16
+  4 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NULL,pindex.c3)]), dop=3
+  5 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1]), filter(nil), rowset=16
+  6 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1]), filter(nil)
+      table_columns([{pindex: ({pindex_i2: (pindex.c2, pindex.__pk_increment, pindex.c1)})}]), with_barrier
+  7 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1], [pindex.c2]), filter(nil), rowset=16
+  8 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1], [pindex.c2]), filter(nil), rowset=16
+      (#keys=1, [pindex.c2]), dop=3
+  9 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1], [pindex.c2]), filter(nil)
+      table_columns([{pindex: ({pindex: (pindex.__pk_increment, pindex.c1, pindex.c2, pindex.c3)})}]),
+      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,cast(5, INT(-1, 0)))])
+ 10 - output([pindex.__pk_increment], [pindex.c1], [pindex.c2], [pindex.c3], [PARTITION_ID]), filter(nil), rowset=16
+ 11 - output([pindex.__pk_increment], [pindex.c1], [pindex.c2], [pindex.c3], [PARTITION_ID]), filter(nil), rowset=16
+      access([pindex.__pk_increment], [pindex.c1], [pindex.c2], [pindex.c3]), partitions(p[0-2])
+      is_index_back=false, is_global_index=false, 
+      range_key([pindex.__pk_increment]), range(MIN ; MAX)always true
+update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+select * from pindex order by c1;
+c1	c2	c3
+1	3	5
+2	4	5
+3	5	5
+select /*+index (pindex pindex_i2)*/ c2, c1 from pindex order by c2;
+c2	c1
+3	1
+4	2
+5	3
+delete from pindex;
+drop index pindex_i2 on pindex;
+create unique index pindex_i2 on pindex(c2) partition by hash(c2) partitions 2;
+insert into pindex values (1,2,3),(2,4,5),(3,6,7);
+select * from pindex order by c1;
+c1	c2	c3
+1	2	3
+2	4	5
+3	6	7
+select /*+index (pindex pindex_i2)*/ c2, c1 from pindex order by c2;
+c2	c1
+2	1
+4	2
+6	3
+explain update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+Query Plan
+===========================================================================================
+|ID|OPERATOR                                      |NAME             |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------------------------
+|0 |PX COORDINATOR                                |                 |1       |60          |
+|1 |└─EXCHANGE OUT DISTR                          |:EX10002         |1       |60          |
+|2 |  └─INDEX INSERT                              |pindex(pindex_i2)|1       |60          |
+|3 |    └─EXCHANGE IN DISTR                       |                 |1       |47          |
+|4 |      └─EXCHANGE OUT DISTR (PKEY HASH)        |:EX10001         |1       |47          |
+|5 |        └─MATERIAL                            |                 |1       |46          |
+|6 |          └─INDEX DELETE                      |pindex(pindex_i2)|1       |46          |
+|7 |            └─EXCHANGE IN DISTR               |                 |1       |35          |
+|8 |              └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000         |1       |35          |
+|9 |                └─UPDATE                      |                 |1       |34          |
+|10|                  └─PX BLOCK ITERATOR         |                 |1       |3           |
+|11|                    └─TABLE FULL SCAN         |pindex           |1       |3           |
+===========================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil), rowset=16
+  1 - output(nil), filter(nil), rowset=16
+      dop=3
+  2 - output(nil), filter(nil)
+      columns([{pindex: ({pindex_i2: (pindex.c2, pindex.__pk_increment, pindex.c1)})}]), partitions(p[0-1]), 
+      column_values([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1])
+  3 - output([PARTITION_ID], [column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1]), filter(nil), rowset=16
+  4 - output([PARTITION_ID], [column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NULL,pindex.c3)]), dop=3
+  5 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1]), filter(nil), rowset=16
+  6 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1]), filter(nil)
+      table_columns([{pindex: ({pindex_i2: (pindex.c2, pindex.__pk_increment, pindex.c1)})}]), with_barrier
+  7 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1], [PARTITION_ID], [pindex.c2]), filter(nil), rowset=16
+  8 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1], [PARTITION_ID], [pindex.c2]), filter(nil), rowset=16
+      (#keys=1, [pindex.c2]), dop=3
+  9 - output([column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.__pk_increment], [pindex.c1], [pindex.c2]), filter(nil)
+      table_columns([{pindex: ({pindex: (pindex.__pk_increment, pindex.c1, pindex.c2, pindex.c3)})}]),
+      update([pindex.c2=column_conv(INT,PS:(11,0),NULL,pindex.c3)], [pindex.c3=column_conv(INT,PS:(11,0),NULL,cast(5, INT(-1, 0)))])
+ 10 - output([pindex.__pk_increment], [pindex.c1], [pindex.c2], [pindex.c3], [PARTITION_ID]), filter(nil), rowset=16
+ 11 - output([pindex.__pk_increment], [pindex.c1], [pindex.c2], [pindex.c3], [PARTITION_ID]), filter(nil), rowset=16
+      access([pindex.__pk_increment], [pindex.c1], [pindex.c2], [pindex.c3]), partitions(p[0-2])
+      is_index_back=false, is_global_index=false, 
+      range_key([pindex.__pk_increment]), range(MIN ; MAX)always true
+drop table pindex;
+create table pindex(a int primary key, b int) partition by hash(a) partitions 2;
+create unique index idx_b on pindex(b) global;
+insert into pindex values(1, NULL);
+explain update /*+parallel(2), enable_parallel_dml*/ pindex set b=2;
+Query Plan
+===============================================================================================
+|ID|OPERATOR                                              |NAME         |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------------------------------
+|0 |PX COORDINATOR                                        |             |1       |60          |
+|1 |└─EXCHANGE OUT DISTR                                  |:EX10003     |1       |59          |
+|2 |  └─INDEX INSERT                                      |pindex(idx_b)|1       |59          |
+|3 |    └─EXCHANGE IN DISTR                               |             |1       |46          |
+|4 |      └─EXCHANGE OUT DISTR (HASH)                     |:EX10002     |1       |46          |
+|5 |        └─MATERIAL                                    |             |1       |46          |
+|6 |          └─INDEX DELETE                              |pindex(idx_b)|1       |46          |
+|7 |            └─EXCHANGE IN DISTR                       |             |1       |34          |
+|8 |              └─EXCHANGE OUT DISTR (HASH)             |:EX10001     |1       |34          |
+|9 |                └─MATERIAL                            |             |1       |34          |
+|10|                  └─UPDATE                            |             |1       |34          |
+|11|                    └─EXCHANGE IN DISTR               |             |1       |2           |
+|12|                      └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000     |1       |2           |
+|13|                        └─PX BLOCK ITERATOR           |             |1       |2           |
+|14|                          └─TABLE FULL SCAN           |pindex(idx_b)|1       |2           |
+===============================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil), rowset=16
+  1 - output(nil), filter(nil), rowset=16
+      dop=2
+  2 - output(nil), filter(nil)
+      columns([{pindex: ({idx_b: (pindex.b, pindex.a)})}]), partitions(p0), 
+      column_values([column_conv(INT,PS:(11,0),NULL,cast(2, INT(-1, 0)))], [pindex.a])
+  3 - output([pindex.a]), filter(nil), rowset=16
+  4 - output([pindex.a]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NULL,cast(2, INT(-1, 0)))]), dop=2
+  5 - output([pindex.a]), filter(nil), rowset=16
+  6 - output([pindex.a]), filter(nil)
+      table_columns([{pindex: ({idx_b: (pindex.b, pindex.a)})}]), with_barrier
+  7 - output([pindex.a], [pindex.b]), filter(nil), rowset=16
+  8 - output([pindex.a], [pindex.b]), filter(nil), rowset=16
+      (#keys=1, [pindex.b]), dop=2
+  9 - output([pindex.a], [pindex.b]), filter(nil), rowset=16
+ 10 - output([pindex.a], [pindex.b]), filter(nil)
+      table_columns([{pindex: ({pindex: (pindex.a, pindex.b)})}]),
+      update([pindex.b=column_conv(INT,PS:(11,0),NULL,cast(2, INT(-1, 0)))])
+ 11 - output([pindex.a], [pindex.b], [PARTITION_ID]), filter(nil), rowset=16
+ 12 - output([pindex.a], [pindex.b], [PARTITION_ID]), filter(nil), rowset=16
+      (#keys=1, [pindex.a]), dop=2
+ 13 - output([pindex.a], [pindex.b]), filter(nil), rowset=16
+ 14 - output([pindex.a], [pindex.b]), filter(nil), rowset=16
+      access([pindex.a], [pindex.b]), partitions(p0)
+      is_index_back=false, is_global_index=true, 
+      range_key([pindex.b], [pindex.shadow_pk_0]), range(MIN,MIN ; MAX,MAX)always true
+update /*+parallel(2), enable_parallel_dml*/ pindex set b=2;
+select /*+index(pindex primary)*/ * from pindex;
+a	b
+1	2
+select /*+index(pindex b)*/ * from pindex;
+a	b
+1	2
+insert into pindex values(2, 2);
+ERROR 23000: Duplicate entry '2' for key 'idx_b'
+drop table pindex;
+create table t1 (c1 int primary key, c2 int);
+create index ind_global on t1(c2) global partition by hash(c2) partitions 4;
+insert into t1 values (1,1),(2,2),(3,3),(4,4);
+set binlog_row_image=MINIMAL;
+update /*+enable_parallel_dml parallel(2)*/ t1 set c2 = 10;
+select * from t1;
+c1	c2
+1	10
+2	10
+3	10
+4	10
+set binlog_row_image=FULL;
+drop table t1;
+alter system set_tp tp_no = 217, error_code = 1234, frequency = 0;

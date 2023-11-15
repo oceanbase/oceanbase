@@ -1,0 +1,151 @@
+# owner: yibo.tyf
+# owner group: sql1
+# tags: optimizer
+# description:
+#
+
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+--disable_warnings
+drop database if exists hualong;
+--enable_warnings
+create database hualong;
+use hualong;
+
+create table skyline(
+  pk int primary key, a int, b int, c int, d int, e int,
+  v1 varchar(1000), v2 varchar(1000), v3 varchar(1000), v4 varchar(1000),
+  v5 varchar(1000), v6 varchar(1000), v7 varchar(1000), v8 varchar(1000),
+  v9 varchar(1000), v10 varchar(1000), v11 varchar(1000), v12 varchar(1000),
+  v13 varchar(1000), v14 varchar(1000), v15 varchar(1000), v16 varchar(1000),
+  v17 varchar(1000), v18 varchar(1000), v19 varchar(1000), v20 varchar(1000),
+  v23 varchar(1000), v24 varchar(1000), v25 varchar(1000), v26 varchar(1000),
+  v27 varchar(1000), v28 varchar(1000), v29 varchar(1000), v30 varchar(1000),
+  v31 varchar(1000), v32 varchar(1000), v33 varchar(1000), v34 varchar(1000),
+  key idx_a_c_v1(a, c, v1),
+  key idx_a_v2_v3_v4_v5_c(a, v2, v3, v4, v5, c),
+  key idx_a_e_v2_v3_v4_v5(a, e, v2, v3, v4, v5),
+  key idx_a_e_v1(a, e, v1), 
+  key idx_a_b(a, b),
+  key idx_a_b_d(a, b, d),
+  key idx_a_b_e(a, b, e));
+
+CREATE TABLE `cdj_enroll` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `gmt_create` datetime NOT NULL COMMENT '创建时间',
+  `gmt_modified` datetime NOT NULL COMMENT '修改时间',
+  `content_id` bigint(20) unsigned NOT NULL DEFAULT '0' COMMENT '关联app_content的主键',
+  `title` varchar(1024) DEFAULT NULL COMMENT '报名的title',
+  `item_url` varchar(1024) DEFAULT NULL COMMENT '报名商品的url',
+  `brand` varchar(128) DEFAULT NULL COMMENT '报名时填写的品牌',
+  `model` varchar(128) DEFAULT NULL COMMENT '报名时填写的型号',
+  `enroll_time` datetime NOT NULL COMMENT '报名时间',
+  `enroll_user_id` bigint(20) unsigned NOT NULL COMMENT '报名者的userId',
+  `enroll_user_role` int(11) NOT NULL COMMENT '报名者的身份类别',
+  `enroll_user_role_name` varchar(128) DEFAULT NULL COMMENT '如果是品牌商, 则存储品牌商的名称',
+  `seller_id` bigint(20) unsigned NOT NULL DEFAULT '0' COMMENT 'item_url对应的卖家id',
+  `seller_nick` varchar(128) DEFAULT NULL COMMENT 'sell_id对应的nick',
+  `tags` bigint(20) unsigned DEFAULT NULL COMMENT '预留字段',
+  `status` int(11) DEFAULT NULL COMMENT '状态位，应该和关联的app_content中的记录一致',
+  `properties` varchar(255) DEFAULT NULL COMMENT '预留字段',
+  `feature` varchar(255) DEFAULT NULL COMMENT '预留字段',
+  `reserve` varchar(255) DEFAULT NULL COMMENT '预留字段',
+  `enroll_user_nick` varchar(128) DEFAULT NULL COMMENT '报名用户昵称',
+  `reject_reason` varchar(1024) DEFAULT NULL COMMENT '拒绝理由',
+  `judge_user_nick` varchar(128) DEFAULT NULL COMMENT '审核者nick',
+  `rec_reason` varchar(255) DEFAULT NULL COMMENT '报名者的推荐理由',
+  `description` varchar(255) DEFAULT NULL COMMENT '报名描述(富文本)',
+  `crowdfund` varchar(512) DEFAULT NULL COMMENT '是否参加过众筹0表示没参加',
+  `pictures` varchar(1024) DEFAULT NULL COMMENT '图片url, 英文逗号分割',
+  `price` varchar(128) DEFAULT NULL COMMENT '用户填写市场价',
+  `company` varchar(1024) DEFAULT NULL COMMENT '用户填写的生产厂商',
+  `market_time` varchar(128) DEFAULT NULL COMMENT '用户填写的上市时间',
+  `keyword` varchar(1024) DEFAULT NULL COMMENT '用户填写的关键词,英文逗号分割',
+  `item_id` bigint(20) unsigned DEFAULT NULL COMMENT '从item_url中分离的itemId',
+  `enroll_modified` datetime DEFAULT NULL COMMENT '卖家操作这条记录的时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `item_id` (`item_id`) BLOCK_SIZE 16384,
+  KEY `n1` (`enroll_user_id`, `status`) BLOCK_SIZE 16384,
+  KEY `user` (`enroll_user_id`) BLOCK_SIZE 16384,
+  KEY `properties` (`properties`) BLOCK_SIZE 16384
+);
+
+CREATE TABLE `quality_item_info` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `gmt_create` datetime NOT NULL COMMENT '创建时间',
+  `gmt_modified` datetime NOT NULL COMMENT '修改时间',
+  `item_id` bigint(20) NOT NULL COMMENT '商品ID',
+  `seller_id` bigint(20) NOT NULL COMMENT '卖家ID',
+  `seller_nick` varchar(128) DEFAULT NULL COMMENT '卖家NICK',
+  `status` int(11) NOT NULL COMMENT '0:正常,  -1：已去标, 1:映射关系, 2:映射删除',
+  `gmt_released` datetime DEFAULT NULL COMMENT '打标，去标时间',
+  `attribute` varchar(1000) DEFAULT NULL COMMENT '属性',
+  `memo` varchar(1000) DEFAULT NULL COMMENT '备注',
+  `block_id` bigint(20) unsigned NOT NULL COMMENT '子活动ID',
+  `band_id` bigint(20) unsigned DEFAULT NULL COMMENT '所属产业带ID',
+  `brand_id` bigint(20) unsigned DEFAULT NULL COMMENT '所属品类ID',
+  `pass_status` int(11) DEFAULT '0' COMMENT '人工审核状态，0：待审；1 已通过，-1未通过',
+  `pass_operator` varchar(64) DEFAULT NULL COMMENT '人工审核员nick',
+  `gmt_pass` datetime DEFAULT NULL COMMENT '人工审核时间（通过/不通过）',
+  `cat_id` bigint(20) unsigned DEFAULT NULL COMMENT '类目ID',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_itemid_sellerid_blockid` (`seller_id`, `item_id`, `block_id`) BLOCK_SIZE 16384,
+  KEY `index_block_id` (`block_id`) BLOCK_SIZE 16384
+);
+
+--real_sleep 5
+
+## index1_filter = index2_filter but index column is less 
+#idx_a_c_v1 dominate idx_a_v2_v3_v4_v5_c
+explain select a, c, v1 from skyline where c = 100;
+explain select /*+index(skyline idx_a_c_v1)*/ a, c, v1 from skyline where c = 100;
+explain select /*+index(skyline idx_a_v2_v3_v4_v5_c)*/ a, c, v1 from skyline where c = 100;
+
+explain select a, c, v1 from skyline where c > 200 and c < 400;
+explain select /*+index(skyline idx_a_c_v1)*/ a, c, v1 from skyline where c > 200 and c < 400;
+explain select /*+index(skyline idx_a_v2_v3_v4_v5_c)*/ a, c, v1 from skyline where c > 200 and c < 400;
+
+## index1_filter = index2_filter but index column is more
+#idx_a_e_v2_v3_v4_v5 idx_a_e_v1 not comparable
+explain select a, e, v1 from skyline where e = 100;
+explain select /*+index(skyline idx_a_e_v2_v3_v4_v5)*/ a, e, v1 from skyline where e = 100;
+explain select /*+index(skyline idx_a_e_v1)*/ a, e, v1 from skyline where e = 100;
+
+explain select a, e, v1 from skyline where e >  100 and e < 300;
+explain select /*+index(skyline idx_a_e_v2_v3_v4_v5)*/ a, e, v1 from skyline where e >  100 and e < 300;
+explain select /*+index(skyline idx_a_e_v1)*/ a, e, v1 from skyline where e >  100 and e < 300;
+
+## index1_filter > index2_filter but index1_column_size >  index2_column_size
+## primary idx_a_b_d idx_a_b
+explain select a, b, c from skyline where b = 100 and d = 100; 
+explain select /*+index(skyline idx_a_b_d)*/ a, b, c from skyline where b = 100 and d = 100; 
+explain select /*+index(skyline idx_a_b)*/a, b, c from skyline where b = 100 and d = 100; 
+explain select /*+index(skyline primary)*/a, b, c from skyline where b = 100 and d = 100; 
+
+##need index back, but index size is small
+explain select a, b, c from skyline where b = 100;
+explain select /*+index(skyline idx_a_b)*/ a, b, c from skyline where b = 100;
+explain select /*+index(skyline primary)*/ a, b, c from skyline where b = 100;
+
+##index1_fitler = index2_filter but column is less
+explain select a, b, c from skyline where b = 100 and e > 100 and e < 200;
+explain select /*+index(skyline idx_a_b_e)*/ a, b, c from skyline where b = 100 and e > 100 and e < 200;
+explain select /*+index(skyline primary)*/ a, b, c from skyline where b = 100 and e > 100 and e < 200;
+
+##index1_filter != inidex2_filter
+explain select a, b, e from skyline where e = 100 and d = 100;
+explain select /*+index(skyline idx_a_b_d)*/ a, b, e from skyline where e = 100 and d = 100;
+explain select /*+index(skyline idx_a_b_e)*/ a, b, e from skyline where e = 100 and d = 100;
+
+explain select * from cdj_enroll where status = 141 order by enroll_time desc limit 0, 100;
+explain select /*+index(cdj_enroll n1) */ * from cdj_enroll where status = 141 order by enroll_time desc limit 0, 100;
+explain select /*+index(cdj_enroll PRIMARY) */ * from cdj_enroll where status = 141 order by enroll_time desc limit 0, 100;
+
+explain update /*+index(quality_item_info unique_itemid_sellerid_blockid) */  quality_item_info set gmt_modified = now(), pass_status = 100, gmt_pass = now(), pass_operator = '1' where item_id = 100 and status = 100;
+explain update /*+index(quality_item_info primary) */  quality_item_info set gmt_modified = now(), pass_status = 100, gmt_pass = now(), pass_operator = '1' where item_id = 100 and status = 100;
+explain update quality_item_info set gmt_modified = now(), pass_status = 100, gmt_pass = now(), pass_operator = '1' where item_id = 100 and status = 100;
+
+set @@recyclebin = 'off';
+drop database hualong;

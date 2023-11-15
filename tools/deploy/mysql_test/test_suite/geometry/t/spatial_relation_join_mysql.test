@@ -1,0 +1,92 @@
+#owner: ht353245
+#owner group: shenzhen
+--echo # ----------------------------------------------------------------------
+--echo # Test of GEOMETRY NLJ JOIN.
+--echo # ----------------------------------------------------------------------
+#fix srs only support sys tenant currently
+#connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+--source mysql_test/test_suite/geometry/t/import_default_srs_data_mysql.inc
+
+
+  --disable_warnings
+  drop table if exists tgnoindex1, tgnoindex2, tgeom1, tgeom2, ptgeom1, ptgeom2;
+  --enable_warnings
+
+  create table tgnoindex1(g1 geometry not null srid 4326);
+  create table tgnoindex2(g2 geometry not null srid 4326);
+
+  insert into tgnoindex1 values(ST_GeomFromText('POLYGON((0 0, 5 0, 5 5, 0 5, 0 0))', 4326));
+  insert into tgnoindex1 values(ST_GeomFromText('POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))', 4326));
+  insert into tgnoindex1 values(ST_GeomFromText('POLYGON((0 0, 15 0, 15 15, 0 15, 0 0))', 4326));
+
+  insert into tgnoindex2 values(ST_GEOMFROMTEXT('POINT(6 6)', 4326));
+  insert into tgnoindex2 values(ST_GEOMFROMTEXT('POINT(6 6)', 4326));
+  insert into tgnoindex2 values(ST_GEOMFROMTEXT('POINT(6 6)', 4326));
+  insert into tgnoindex2 values(ST_GEOMFROMTEXT('POINT(6 6)', 4326));
+  insert into tgnoindex2 values(ST_GEOMFROMTEXT('POINT(6 6)', 4326));
+  insert into tgnoindex2 values(ST_GEOMFROMTEXT('POINT(12 12)', 4326));
+  insert into tgnoindex2 values(ST_GEOMFROMTEXT('POINT(12 12)', 4326));
+  insert into tgnoindex2 values(ST_GEOMFROMTEXT('POINT(12 12)', 4326));
+  insert into tgnoindex2 values(ST_GEOMFROMTEXT('POINT(12 12)', 4326));
+  insert into tgnoindex2 values(ST_GEOMFROMTEXT('POINT(12 12)', 4326));
+
+  select st_astext(tgnoindex1.g1),st_astext(tgnoindex2.g2) from tgnoindex1, tgnoindex2 where st_intersects(tgnoindex1.g1, tgnoindex2.g2);
+
+  explain extended_noaddr select * from tgnoindex1, tgnoindex2 where st_intersects(tgnoindex1.g1, tgnoindex2.g2);
+  --enable_result_log
+  --replace_regex /Plan signature: [0-9]*/Plan signature/
+
+
+  create table tgeom1(g1 geometry not null srid 4326);
+  create index gidx1 on tgeom1(g1);
+  create table tgeom2(g2 geometry not null srid 4326);
+  create index gidx2 on tgeom2(g2);
+
+  insert into tgeom1 values(ST_GeomFromText('POLYGON((0 0, 5 0, 5 5, 0 5, 0 0))', 4326));
+  insert into tgeom1 values(ST_GeomFromText('POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))', 4326));
+  insert into tgeom1 values(ST_GeomFromText('POLYGON((0 0, 15 0, 15 15, 0 15, 0 0))', 4326));
+
+  insert into tgeom2 values(ST_GEOMFROMTEXT('POINT(6 6)', 4326));
+  insert into tgeom2 values(ST_GEOMFROMTEXT('POINT(6 6)', 4326));
+  insert into tgeom2 values(ST_GEOMFROMTEXT('POINT(6 6)', 4326));
+  insert into tgeom2 values(ST_GEOMFROMTEXT('POINT(6 6)', 4326));
+  insert into tgeom2 values(ST_GEOMFROMTEXT('POINT(6 6)', 4326));
+  insert into tgeom2 values(ST_GEOMFROMTEXT('POINT(12 12)', 4326));
+  insert into tgeom2 values(ST_GEOMFROMTEXT('POINT(12 12)', 4326));
+  insert into tgeom2 values(ST_GEOMFROMTEXT('POINT(12 12)', 4326));
+  insert into tgeom2 values(ST_GEOMFROMTEXT('POINT(12 12)', 4326));
+  insert into tgeom2 values(ST_GEOMFROMTEXT('POINT(12 12)', 4326));
+
+  select st_astext(tgeom1.g1),st_astext(tgeom2.g2) from tgeom1, tgeom2 where st_intersects(tgeom1.g1, tgeom2.g2);
+
+  explain extended_noaddr select * from tgeom1, tgeom2 where st_intersects(tgeom1.g1, tgeom2.g2);
+  --replace_regex /Plan signature: [0-9]*/Plan signature/
+
+
+  create table ptgeom1(c1 int, g1 geometry not null srid 4326) partition by hash(c1) partitions 3;
+  create index pgidx1 on ptgeom1(g1) local;
+  create table ptgeom2(c2 int, g2 geometry not null srid 4326) partition by hash(c2) partitions 3;
+  create index pgidx2 on ptgeom2(g2) local;
+
+  insert into ptgeom1 values(1, ST_GeomFromText('POLYGON((0 0, 5 0, 5 5, 0 5, 0 0))', 4326));
+  insert into ptgeom1 values(2, ST_GeomFromText('POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))', 4326));
+  insert into ptgeom1 values(3, ST_GeomFromText('POLYGON((0 0, 15 0, 15 15, 0 15, 0 0))', 4326));
+
+  insert into ptgeom2 values(1, ST_GEOMFROMTEXT('POINT(6 6)', 4326));
+  insert into ptgeom2 values(2, ST_GEOMFROMTEXT('POINT(6 6)', 4326));
+  insert into ptgeom2 values(3, ST_GEOMFROMTEXT('POINT(6 6)', 4326));
+  insert into ptgeom2 values(4, ST_GEOMFROMTEXT('POINT(6 6)', 4326));
+  insert into ptgeom2 values(5, ST_GEOMFROMTEXT('POINT(6 6)', 4326));
+  insert into ptgeom2 values(6, ST_GEOMFROMTEXT('POINT(12 12)', 4326));
+  insert into ptgeom2 values(7, ST_GEOMFROMTEXT('POINT(12 12)', 4326));
+  insert into ptgeom2 values(8, ST_GEOMFROMTEXT('POINT(12 12)', 4326));
+  insert into ptgeom2 values(9, ST_GEOMFROMTEXT('POINT(12 12)', 4326));
+  insert into ptgeom2 values(10, ST_GEOMFROMTEXT('POINT(12 12)', 4326));
+
+  select st_astext(ptgeom1.g1),st_astext(ptgeom2.g2) from ptgeom1, ptgeom2 where st_intersects(ptgeom1.g1, ptgeom2.g2) order by c1,c2;
+
+  explain extended_noaddr select * from ptgeom1, ptgeom2 where st_intersects(ptgeom1.g1, ptgeom2.g2);
+  --replace_regex /Plan signature: [0-9]*/Plan signature/
+
+  drop table tgnoindex1, tgnoindex2, tgeom1, tgeom2, ptgeom1, ptgeom2;
+

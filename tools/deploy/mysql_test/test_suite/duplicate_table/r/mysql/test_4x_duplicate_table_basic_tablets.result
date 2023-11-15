@@ -1,0 +1,177 @@
+set @@recyclebin=off;
+drop table if exists t1;
+drop table if exists t2;
+drop table if exists dup_t1;
+drop table if exists dup_t2;
+drop table if exists dup_t3;
+drop table if exists dup_t4;
+create table dup_t1 (c1 int, c2 int, c3 int, primary key(c1, c2)) duplicate_scope='cluster';
+create table dup_t2 (d1 int, d2 int, d3 int, primary key(d1, d2)) duplicate_scope='cluster';
+create table dup_t3 (d1 int, d2 int, d3 int, primary key(d1)) duplicate_scope='cluster' PARTITION BY HASH(d1) PARTITIONS 5;
+create table dup_t4 (d1 int, d2 int, d3 int, primary key(d1)) duplicate_scope='cluster' PARTITION BY HASH(d1) PARTITIONS 30;
+create table t1 (c1 int, c2 int, c3 int, primary key(c1, c2));
+create table t2 (d1 int, d2 int, d3 int, primary key(d1, d2));
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` int(11) NOT NULL,
+  `c2` int(11) NOT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`c1`, `c2`)
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+show create table t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `d1` int(11) NOT NULL,
+  `d2` int(11) NOT NULL,
+  `d3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`d1`, `d2`)
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+show create table dup_t1;
+Table	Create Table
+dup_t1	CREATE TABLE `dup_t1` (
+  `c1` int(11) NOT NULL,
+  `c2` int(11) NOT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`c1`, `c2`)
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10 DUPLICATE_SCOPE = 'CLUSTER'
+show create table dup_t2;
+Table	Create Table
+dup_t2	CREATE TABLE `dup_t2` (
+  `d1` int(11) NOT NULL,
+  `d2` int(11) NOT NULL,
+  `d3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`d1`, `d2`)
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10 DUPLICATE_SCOPE = 'CLUSTER'
+show create table dup_t3;
+Table	Create Table
+dup_t3	CREATE TABLE `dup_t3` (
+  `d1` int(11) NOT NULL,
+  `d2` int(11) DEFAULT NULL,
+  `d3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`d1`)
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10 DUPLICATE_SCOPE = 'CLUSTER'
+ partition by hash(d1)
+(partition `p0`,
+partition `p1`,
+partition `p2`,
+partition `p3`,
+partition `p4`)
+show create table dup_t4;
+Table	Create Table
+dup_t4	CREATE TABLE `dup_t4` (
+  `d1` int(11) NOT NULL,
+  `d2` int(11) DEFAULT NULL,
+  `d3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`d1`)
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10 DUPLICATE_SCOPE = 'CLUSTER'
+ partition by hash(d1)
+(partition `p0`,
+partition `p1`,
+partition `p2`,
+partition `p3`,
+partition `p4`,
+partition `p5`,
+partition `p6`,
+partition `p7`,
+partition `p8`,
+partition `p9`,
+partition `p10`,
+partition `p11`,
+partition `p12`,
+partition `p13`,
+partition `p14`,
+partition `p15`,
+partition `p16`,
+partition `p17`,
+partition `p18`,
+partition `p19`,
+partition `p20`,
+partition `p21`,
+partition `p22`,
+partition `p23`,
+partition `p24`,
+partition `p25`,
+partition `p26`,
+partition `p27`,
+partition `p28`,
+partition `p29`)
+insert into t1 values(1, 1, 1);
+insert into t1 values(2, 2, 2);
+insert into t1 values(3, 3, 3);
+insert into t2 values(1, 1, 1);
+insert into t2 values(2, 2, 2);
+insert into t2 values(4, 4, 4);
+insert into dup_t1 select * from t1;
+insert into dup_t2 select * from t2;
+insert into dup_t3 select * from t1;
+insert into dup_t4 select * from t2;
+select * from t1;
+c1	c2	c3
+1	1	1
+2	2	2
+3	3	3
+select * from dup_t1;
+c1	c2	c3
+1	1	1
+2	2	2
+3	3	3
+select * from t2;
+d1	d2	d3
+1	1	1
+2	2	2
+4	4	4
+select * from dup_t2;
+d1	d2	d3
+1	1	1
+2	2	2
+4	4	4
+select * from dup_t3;
+d1	d2	d3
+1	1	1
+2	2	2
+3	3	3
+select * from dup_t4;
+d1	d2	d3
+1	1	1
+2	2	2
+4	4	4
+count(*)
+37
+duplicate_scope
+1
+duplicate_scope
+1
+duplicate_scope
+1
+duplicate_scope
+1
+duplicate_scope
+0
+duplicate_scope
+0
+count(*)
+1
+count(*)
+1
+count(*)
+5
+count(*)
+30
+ls_state
+LEADER
+ls_state
+LEADER
+count(*)
+1
+count(*)
+1
+count(*)
+5
+count(*)
+30
+count(*)
+37
+count(*)
+37
+drop tenant duptable_tenant1 force;

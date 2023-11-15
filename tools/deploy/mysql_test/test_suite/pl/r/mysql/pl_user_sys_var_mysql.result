@@ -1,0 +1,251 @@
+result_format: 4
+#### Case 1:
+drop procedure if exists test_proc;
+drop table if exists result;
+create table result(col varchar(20));
+
+
+create procedure test_proc()
+begin
+  set @id = @id + 1;
+  insert into result values(@id);
+end;
+/
+
+
+call test_proc();
+select col from result;
++------+
+| col  |
++------+
+| NULL |
++------+
+
+drop procedure test_proc;
+drop table result;
+
+#### Case 1:
+drop procedure if exists test_proc;
+drop table if exists result;
+set @id = 2.00000;
+create table result(col varchar(20));
+
+
+create procedure test_proc()
+begin
+  set @id = @id + 1;
+  insert into result values(@id);
+end;
+/
+
+
+call test_proc();
+select col from result;
++---------+
+| col     |
++---------+
+| 3.00000 |
++---------+
+
+drop procedure test_proc;
+drop table result;
+
+#### Case 2:
+drop procedure if exists test_proc;
+drop table if exists result;
+create table result (x varchar(20), y int, z double);
+
+create procedure test_proc()
+begin
+  declare x varchar(20);
+  declare y int default 0;
+  declare z double;
+  set @a = 'ON';
+  set x = @a;
+  set @a = 1;
+  set y = @a;
+  set @a = 1.23456;
+  set z = @a;
+  -- select x, y, z;
+  insert into result values(x, y, z);
+end;
+/
+
+call test_proc();
+select * from result;
++------+------+---------+
+| x    | y    | z       |
++------+------+---------+
+| ON   |    1 | 1.23456 |
++------+------+---------+
+call test_proc();
+drop table result;
+drop procedure test_proc;
+
+#### Case 3:
+drop procedure if exists test_proc;
+drop table if exists result;
+create table result(x varchar(20), y int, z double);
+create procedure test_proc()
+begin
+  declare y int;
+  declare z double default null;
+  set y = @n;
+  set @n = 'on';
+  insert into result values('0', y, z);
+end;
+/
+
+call test_proc();
+select * from result;
++------+------+------+
+| x    | y    | z    |
++------+------+------+
+| 0    | NULL | NULL |
++------+------+------+
+call test_proc();
+ERROR HY000: Incorrect integer value
+
+drop table result;
+drop procedure test_proc;
+
+
+#### Case 4:
+drop procedure if exists test_proc;
+set @save_autocommit = @@autocommit;
+
+set global autocommit=on;
+set @@autocommit=on;
+
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+show global variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+show session variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+
+create procedure test_proc()
+begin
+  set autocommit = off;
+end;
+/
+call test_proc();
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+show global variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+show session variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+
+drop procedure test_proc;
+
+#### Case 5:
+drop procedure if exists test_proc;
+set global autocommit=on;
+set @@autocommit=on;
+
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+show global variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+show session variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+
+create procedure test_proc()
+begin
+  set @@autocommit = off;
+end;
+/
+
+call test_proc();
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+show global variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+show session variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+
+drop procedure test_proc;
+
+#### Case 6:
+drop procedure if exists test_proc;
+set global autocommit=on;
+set @@autocommit=on;
+
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+show global variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+show session variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+
+create procedure test_proc()
+begin
+  set session autocommit = off;
+end;
+/
+call test_proc();
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+show global variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+show session variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+
+drop procedure test_proc;
+
+#### Case 7:
+drop procedure if exists test_proc;
+set global autocommit=on;
+set @@autocommit=on;
+
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+show global variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+show session variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+
+create procedure test_proc()
+begin
+  set global autocommit = off;
+end;
+/
+call test_proc();
+show variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+show global variables like 'autocommit';
+Variable_name	Value
+autocommit	OFF
+show session variables like 'autocommit';
+Variable_name	Value
+autocommit	ON
+
+set session autocommit = @save_autocommit;
+set global autocommit = @save_autocommit;
+
+drop procedure test_proc;
+
+

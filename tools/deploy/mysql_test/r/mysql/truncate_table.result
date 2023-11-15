@@ -1,0 +1,29 @@
+use test;
+drop table if exists tc1;
+create table tc1(c1 int not null primary key, c2 varchar(11));
+insert into tc1 values (1, 'aaa');
+insert into tc1 values (2, 'bbbb');
+insert into tc1 values (3, 'ccccc');
+create index idxc2 on tc1(c2);
+alter table tc1 add index idxc3(c1,c2);
+select * from tc1;
+c1	c2
+1	aaa
+2	bbbb
+3	ccccc
+show index from tc1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+tc1	0	PRIMARY	1	c1	A	NULL	NULL	NULL		BTREE	available		YES	NULL
+tc1	1	idxc2	1	c2	A	NULL	NULL	NULL	YES	BTREE	available		YES	NULL
+tc1	1	idxc3	1	c1	A	NULL	NULL	NULL		BTREE	available		YES	NULL
+tc1	1	idxc3	2	c2	A	NULL	NULL	NULL	YES	BTREE	available		YES	NULL
+truncate table tc1;
+select * from tc1;
+c1	c2
+show index from tc1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+tc1	0	PRIMARY	1	c1	A	NULL	NULL	NULL		BTREE	available		YES	NULL
+tc1	1	idxc2	1	c2	A	NULL	NULL	NULL	YES	BTREE	available		YES	NULL
+tc1	1	idxc3	1	c1	A	NULL	NULL	NULL		BTREE	available		YES	NULL
+tc1	1	idxc3	2	c2	A	NULL	NULL	NULL	YES	BTREE	available		YES	NULL
+drop table tc1;

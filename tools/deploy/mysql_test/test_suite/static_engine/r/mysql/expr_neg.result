@@ -1,0 +1,787 @@
+result_format: 4
+
+alter system flush plan cache global;
+set @@ob_enable_plan_cache = 0;
+
+select neg(1) from dual;
++--------+
+| neg(1) |
++--------+
+|     -1 |
++--------+
+select neg(-1) from dual;
++---------+
+| neg(-1) |
++---------+
+|       1 |
++---------+
+select neg(1.2324) from dual;
++-------------+
+| neg(1.2324) |
++-------------+
+|     -1.2324 |
++-------------+
+select neg(-1.2324) from dual;
++--------------+
+| neg(-1.2324) |
++--------------+
+|       1.2324 |
++--------------+
+select neg('-1') from dual;
++-----------+
+| neg('-1') |
++-----------+
+|         1 |
++-----------+
+explain select neg('-1') from dual;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast('-1', DOUBLE(-1, -1)))]), filter(nil)
+      values({neg(cast('-1', DOUBLE(-1, -1)))})
+select neg('1.234') from dual;
++--------------+
+| neg('1.234') |
++--------------+
+|       -1.234 |
++--------------+
+
+select neg(null) from dual;
++-----------+
+| neg(null) |
++-----------+
+|      NULL |
++-----------+
+select neg('-abcd');
++--------------+
+| neg('-abcd') |
++--------------+
+|           -0 |
++--------------+
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: '-abcd'
+select neg('2014-10-09 10:00:00');
++----------------------------+
+| neg('2014-10-09 10:00:00') |
++----------------------------+
+|                      -2014 |
++----------------------------+
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: '2014-10-09 10:00:00'
+
+select neg(-9223372036854775808);
++---------------------------+
+| neg(-9223372036854775808) |
++---------------------------+
+|       9223372036854775808 |
++---------------------------+
+select neg(-9999999999999999999999);
++------------------------------+
+| neg(-9999999999999999999999) |
++------------------------------+
+|       9999999999999999999999 |
++------------------------------+
+select neg(10/0);
++-----------+
+| neg(10/0) |
++-----------+
+|      NULL |
++-----------+
+select neg(9999999999999999999999);
++-----------------------------+
+| neg(9999999999999999999999) |
++-----------------------------+
+|     -9999999999999999999999 |
++-----------------------------+
+select neg(true);
++-----------+
+| neg(true) |
++-----------+
+|        -1 |
++-----------+
+select neg(false);
++------------+
+| neg(false) |
++------------+
+|          0 |
++------------+
+
+
+set @@ob_enable_plan_cache = 0;
+
+drop table if exists t;
+create table t (t1 tinyint,
+                t2 smallint,
+                t3 mediumint,
+                t4 integer,
+                t5 bigint,
+                t6 tinyint unsigned,
+                t7 smallint unsigned,
+                t8 mediumint unsigned,
+                t9 integer unsigned,
+                t10 bigint unsigned,
+                t11 float,
+                t12 float unsigned,
+                t13 double,
+                t14 double unsigned,
+                t15 number,
+                t16 number unsigned,
+                t17 datetime,
+                t18 timestamp,
+                t19 date,
+                t20 time,
+                t21 year,
+                t22 varchar(255),
+                t23 char(255),
+                t24 tinytext,
+                t25 mediumtext,
+                t26 longtext,
+                t27 bit,
+                t28 enum('a', 'b', 'c'),
+                t29 set('a', 'b', 'c'));
+
+insert into t values (1, -1, 1, -1, 1, 1, 1, 1, 1, 1, -0.2, 0.3, 0.4, 0.5, -0.6, 0.7,
+                     '1993-03-20', '1993-03-20', '1993-03-20', '10:10:10', '1993', '0.8', '0.9', '1.0', '1.1',
+                     '1.2', 1, 'b', 'b');
+insert into t(t1) values (null);
+
+
+set @@ob_enable_plan_cache = 0;
+
+select neg(t1) from t;
++---------+
+| neg(t1) |
++---------+
+|      -1 |
+|    NULL |
++---------+
+explain select neg(t1) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast(t.t1, BIGINT(-1, 0)))]), filter(nil), rowset=16
+      access([t.t1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t2) from t;
++---------+
+| neg(t2) |
++---------+
+|       1 |
+|    NULL |
++---------+
+explain select neg(t2) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast(t.t2, BIGINT(-1, 0)))]), filter(nil), rowset=16
+      access([t.t2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t3) from t;
++---------+
+| neg(t3) |
++---------+
+|      -1 |
+|    NULL |
++---------+
+explain select neg(t3) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast(t.t3, BIGINT(-1, 0)))]), filter(nil), rowset=16
+      access([t.t3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t4) from t;
++---------+
+| neg(t4) |
++---------+
+|       1 |
+|    NULL |
++---------+
+explain select neg(t4) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast(t.t4, BIGINT(-1, 0)))]), filter(nil), rowset=16
+      access([t.t4]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t5) from t;
++---------+
+| neg(t5) |
++---------+
+|      -1 |
+|    NULL |
++---------+
+explain select neg(t5) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(t.t5)]), filter(nil), rowset=16
+      access([t.t5]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t6) from t;
++---------+
+| neg(t6) |
++---------+
+|      -1 |
+|    NULL |
++---------+
+explain select neg(t6) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast(t.t6, BIGINT UNSIGNED(-1, 0)))]), filter(nil), rowset=16
+      access([t.t6]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t7) from t;
++---------+
+| neg(t7) |
++---------+
+|      -1 |
+|    NULL |
++---------+
+explain select neg(t7) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast(t.t7, BIGINT UNSIGNED(-1, 0)))]), filter(nil), rowset=16
+      access([t.t7]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t8) from t;
++---------+
+| neg(t8) |
++---------+
+|      -1 |
+|    NULL |
++---------+
+explain select neg(t8) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast(t.t8, BIGINT UNSIGNED(-1, 0)))]), filter(nil), rowset=16
+      access([t.t8]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t9) from t;
++---------+
+| neg(t9) |
++---------+
+|      -1 |
+|    NULL |
++---------+
+explain select neg(t9) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast(t.t9, BIGINT UNSIGNED(-1, 0)))]), filter(nil), rowset=16
+      access([t.t9]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t10) from t;
++----------+
+| neg(t10) |
++----------+
+|       -1 |
+|     NULL |
++----------+
+explain select neg(t10) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(t.t10)]), filter(nil), rowset=16
+      access([t.t10]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t11) from t;
++---------------------+
+| neg(t11)            |
++---------------------+
+|                NULL |
+| 0.20000000298023224 |
++---------------------+
+explain select neg(t11) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast(t.t11, DOUBLE(-1, -1)))]), filter(nil), rowset=16
+      access([t.t11]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t12) from t;
++----------------------+
+| neg(t12)             |
++----------------------+
+|                 NULL |
+| -0.30000001192092896 |
++----------------------+
+explain select neg(t12) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast(t.t12, DOUBLE(-1, -1)))]), filter(nil), rowset=16
+      access([t.t12]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t13) from t;
++----------+
+| neg(t13) |
++----------+
+|     -0.4 |
+|     NULL |
++----------+
+explain select neg(t13) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(t.t13)]), filter(nil), rowset=16
+      access([t.t13]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t14) from t;
++----------+
+| neg(t14) |
++----------+
+|     -0.5 |
+|     NULL |
++----------+
+explain select neg(t14) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast(t.t14, DOUBLE(-1, -1)))]), filter(nil), rowset=16
+      access([t.t14]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t15) from t;
++----------+
+| neg(t15) |
++----------+
+|        1 |
+|     NULL |
++----------+
+explain select neg(t15) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(t.t15)]), filter(nil), rowset=16
+      access([t.t15]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t16) from t;
++----------+
+| neg(t16) |
++----------+
+|       -1 |
+|     NULL |
++----------+
+explain select neg(t16) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast(t.t16, DECIMAL(10, 0)))]), filter(nil), rowset=16
+      access([t.t16]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t17) from t;
++-----------------+
+| neg(t17)        |
++-----------------+
+|            NULL |
+| -19930320000000 |
++-----------------+
+explain select neg(t17) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast(t.t17, DOUBLE(-1, -1)))]), filter(nil), rowset=16
+      access([t.t17]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t18) from t;
++-----------------+
+| neg(t18)        |
++-----------------+
+|            NULL |
+| -19930320000000 |
++-----------------+
+explain select neg(t18) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast(t.t18, DOUBLE(-1, -1)))]), filter(nil), rowset=16
+      access([t.t18]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t19) from t;
++-----------+
+| neg(t19)  |
++-----------+
+|      NULL |
+| -19930320 |
++-----------+
+explain select neg(t19) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast(t.t19, DOUBLE(-1, -1)))]), filter(nil), rowset=16
+      access([t.t19]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t20) from t;
++----------+
+| neg(t20) |
++----------+
+|     NULL |
+|  -101010 |
++----------+
+explain select neg(t20) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast(t.t20, DOUBLE(-1, -1)))]), filter(nil), rowset=16
+      access([t.t20]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t21) from t;
++----------+
+| neg(t21) |
++----------+
+|     NULL |
+|    -1993 |
++----------+
+explain select neg(t21) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast(t.t21, BIGINT(-1, 0)))]), filter(nil), rowset=16
+      access([t.t21]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t22) from t;
++----------+
+| neg(t22) |
++----------+
+|     -0.8 |
+|     NULL |
++----------+
+explain select neg(t22) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast(t.t22, DOUBLE(-1, -1)))]), filter(nil), rowset=16
+      access([t.t22]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t23) from t;
++----------+
+| neg(t23) |
++----------+
+|     -0.9 |
+|     NULL |
++----------+
+explain select neg(t23) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast(t.t23, DOUBLE(-1, -1)))]), filter(nil), rowset=16
+      access([t.t23]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t24) from t;
++----------+
+| neg(t24) |
++----------+
+|       -1 |
+|     NULL |
++----------+
+explain select neg(t24) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast(t.t24, DOUBLE(-1, -1)))]), filter(nil), rowset=16
+      access([t.t24]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t25) from t;
++----------+
+| neg(t25) |
++----------+
+|     -1.1 |
+|     NULL |
++----------+
+explain select neg(t25) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast(t.t25, DOUBLE(-1, -1)))]), filter(nil)
+      access([t.t25]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t26) from t;
++----------+
+| neg(t26) |
++----------+
+|     -1.2 |
+|     NULL |
++----------+
+explain select neg(t26) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast(t.t26, DOUBLE(-1, -1)))]), filter(nil)
+      access([t.t26]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t27) from t;
++----------+
+| neg(t27) |
++----------+
+|       -1 |
+|     NULL |
++----------+
+explain select neg(t27) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast(t.t27, BIGINT UNSIGNED(-1, 0)))]), filter(nil), rowset=16
+      access([t.t27]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t28) from t;
++----------+
+| neg(t28) |
++----------+
+|       -2 |
+|     NULL |
++----------+
+explain select neg(t28) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast(t.t28, BIGINT UNSIGNED(-1, 0)))]), filter(nil), rowset=16
+      access([t.t28]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select neg(t29) from t;
++----------+
+| neg(t29) |
++----------+
+|       -2 |
+|     NULL |
++----------+
+explain select neg(t29) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([neg(cast(t.t29, BIGINT UNSIGNED(-1, 0)))]), filter(nil), rowset=16
+      access([t.t29]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+set ob_enable_plan_cache = 0;
+select --9223372036854775808, ---9223372036854775808, ----9223372036854775808;
++-----------------------+------------------------+-------------------------+
+| --9223372036854775808 | ---9223372036854775808 | ----9223372036854775808 |
++-----------------------+------------------------+-------------------------+
+|   9223372036854775808 |   -9223372036854775808 |     9223372036854775808 |
++-----------------------+------------------------+-------------------------+
+
+alter system flush plan cache global;
+set ob_enable_plan_cache = 1;
+select --9223372036854775808, ---9223372036854775808, ----9223372036854775808;
++-----------------------+------------------------+-------------------------+
+| --9223372036854775808 | ---9223372036854775808 | ----9223372036854775808 |
++-----------------------+------------------------+-------------------------+
+|   9223372036854775808 |   -9223372036854775808 |     9223372036854775808 |
++-----------------------+------------------------+-------------------------+
+
+drop view if exists v1;
+create view v1 as select --9223372036854775808 c1, ---9223372036854775808 c2, ----9223372036854775808 c3;
+// bug here: 视图的列的类型应该是decimal，应该是因为create view as路径上没有开新引擎开关
+desc v1;
++-------+---------------+------+-----+---------+-------+
+| Field | Type          | Null | Key | Default | Extra |
++-------+---------------+------+-----+---------+-------+
+| c1    | decimal(21,0) | NO   |     |         |       |
+| c2    | decimal(22,0) | NO   |     |         |       |
+| c3    | decimal(23,0) | NO   |     |         |       |
++-------+---------------+------+-----+---------+-------+
+drop view v1;
+create view v1 as select -neg(-9223372036854775808) c1, --neg(-9223372036854775808) c2, ---neg(-9223372036854775808) c3;
+desc v1;
++-------+---------------+------+-----+---------+-------+
+| Field | Type          | Null | Key | Default | Extra |
++-------+---------------+------+-----+---------+-------+
+| c1    | decimal(22,0) | NO   |     |         |       |
+| c2    | decimal(23,0) | NO   |     |         |       |
+| c3    | decimal(24,0) | NO   |     |         |       |
++-------+---------------+------+-----+---------+-------+
+drop view v1;
+
+drop table if exists tt;
+create table tt(c1 bigint);
+insert into tt values(-9223372036854775808);
+select c1, -c1 from tt;
+ERROR 22003: value is out of range
+// MySQL will give error, OB return c1. two neg will be removed when resolve neg node
+select c1, --c1 from tt;
+ERROR 22003: value is out of range
+select c1, ---c1 from tt;
+ERROR 22003: value is out of range
+

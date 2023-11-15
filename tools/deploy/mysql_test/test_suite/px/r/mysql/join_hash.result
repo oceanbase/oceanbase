@@ -1,0 +1,204 @@
+set ob_query_timeout=1000000000;
+drop database if exists px_test;
+create database px_test;
+use px_test;
+create table stu (
+sid     int,
+name    varchar(32),
+cls     int,
+primary key (cls, sid)
+) partition by hash(sid) partitions 6;
+create table teacher (
+tid        int,
+name       varchar(32),
+subject    varchar(4),
+primary key (tid)
+) partition by hash(tid) partitions 8;
+create table score (
+sid     int,
+subject varchar(4),
+score   int,
+primary key (sid, subject)
+) partition by hash(sid) partitions 6;
+insert into stu values
+(11, 'a1', 1),
+(12, 'b1', 1),
+(13, 'c1', 1),
+(21, 'a2', 2),
+(22, 'b2', 2),
+(31, 'a3', 3),
+(41, 'a4', 4),
+(42, 'b4', 4),
+(51, 'a5', 5),
+(52, 'b5', 5),
+(61, 'a6', 6),
+(62, 'b6', 6),
+(63, 'c6', 6),
+(64, 'd6', 6);
+insert into teacher values
+(1, 'Miss Zhang', 'EN'),
+(2, 'Mr Wang', 'MA');
+insert into score values
+(11, 'EN', 60),
+(12, 'EN', 70),
+(13, 'EN', 80),
+(21, 'EN', 58),
+(22, 'EN', 90),
+(31, 'EN', 80),
+(41, 'EN', 80),
+(42, 'EN', 90),
+(51, 'EN', 89),
+(52, 'EN', 99),
+(61, 'EN', 100),
+(62, 'EN', 90),
+(63, 'EN', 99),
+(64, 'EN', 87);
+insert into score values
+(11, 'MA', 60),
+(12, 'MA', 70),
+(13, 'MA', 80),
+(21, 'MA', 58),
+(22, 'MA', 90),
+(31, 'MA', 80),
+(41, 'MA', 80),
+(42, 'MA', 90),
+(51, 'MA', 89),
+(52, 'MA', 99),
+(61, 'MA', 100),
+(62, 'MA', 90),
+(63, 'MA', 99),
+(64, 'MA', 87);
+explain select /*+ USE_PX parallel(2) */ * from score, teacher where teacher.subject = score.subject;
+Query Plan
+========================================================================
+|ID|OPERATOR                            |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------
+|0 |PX COORDINATOR                      |        |28      |81          |
+|1 |└─EXCHANGE OUT DISTR                |:EX10001|28      |53          |
+|2 |  └─SHARED HASH JOIN                |        |28      |22          |
+|3 |    ├─EXCHANGE IN DISTR             |        |2       |11          |
+|4 |    │ └─EXCHANGE OUT DISTR (BC2HOST)|:EX10000|2       |10          |
+|5 |    │   └─PX BLOCK ITERATOR         |        |2       |9           |
+|6 |    │     └─TABLE FULL SCAN         |teacher |2       |9           |
+|7 |    └─PX BLOCK ITERATOR             |        |28      |8           |
+|8 |      └─TABLE FULL SCAN             |score   |28      |8           |
+========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(score.sid, score.subject, score.score, teacher.tid, teacher.name, teacher.subject)]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(score.sid, score.subject, score.score, teacher.tid, teacher.name, teacher.subject)]), filter(nil), rowset=256
+      dop=2
+  2 - output([teacher.subject], [score.subject], [teacher.tid], [teacher.name], [score.sid], [score.score]), filter(nil), rowset=256
+      equal_conds([teacher.subject = score.subject]), other_conds(nil)
+  3 - output([teacher.subject], [teacher.tid], [teacher.name]), filter(nil), rowset=256
+  4 - output([teacher.subject], [teacher.tid], [teacher.name]), filter(nil), rowset=256
+      dop=2
+  5 - output([teacher.tid], [teacher.subject], [teacher.name]), filter(nil), rowset=256
+  6 - output([teacher.tid], [teacher.subject], [teacher.name]), filter(nil), rowset=256
+      access([teacher.tid], [teacher.subject], [teacher.name]), partitions(p[0-7])
+      is_index_back=false, is_global_index=false, 
+      range_key([teacher.tid]), range(MIN ; MAX)always true
+  7 - output([score.sid], [score.subject], [score.score]), filter(nil), rowset=256
+  8 - output([score.sid], [score.subject], [score.score]), filter(nil), rowset=256
+      access([score.sid], [score.subject], [score.score]), partitions(p[0-5])
+      is_index_back=false, is_global_index=false, 
+      range_key([score.sid], [score.subject]), range(MIN,MIN ; MAX,MAX)always true
+select /*+ USE_PX parallel(2) */ * from score, teacher where teacher.subject = score.subject;
+sid	subject	score	tid	name	subject
+11	EN	60	1	Miss Zhang	EN
+11	MA	60	2	Mr Wang	MA
+12	EN	70	1	Miss Zhang	EN
+12	MA	70	2	Mr Wang	MA
+13	EN	80	1	Miss Zhang	EN
+13	MA	80	2	Mr Wang	MA
+21	EN	58	1	Miss Zhang	EN
+21	MA	58	2	Mr Wang	MA
+22	EN	90	1	Miss Zhang	EN
+22	MA	90	2	Mr Wang	MA
+31	EN	80	1	Miss Zhang	EN
+31	MA	80	2	Mr Wang	MA
+41	EN	80	1	Miss Zhang	EN
+41	MA	80	2	Mr Wang	MA
+42	EN	90	1	Miss Zhang	EN
+42	MA	90	2	Mr Wang	MA
+51	EN	89	1	Miss Zhang	EN
+51	MA	89	2	Mr Wang	MA
+52	EN	99	1	Miss Zhang	EN
+52	MA	99	2	Mr Wang	MA
+61	EN	100	1	Miss Zhang	EN
+61	MA	100	2	Mr Wang	MA
+62	EN	90	1	Miss Zhang	EN
+62	MA	90	2	Mr Wang	MA
+63	EN	99	1	Miss Zhang	EN
+63	MA	99	2	Mr Wang	MA
+64	EN	87	1	Miss Zhang	EN
+64	MA	87	2	Mr Wang	MA
+explain select /*+ USE_PX parallel(2) */ teacher.name, teacher.subject, avg(score) from score, teacher where teacher.subject = score.subject group by teacher.name, teacher.subject;
+Query Plan
+=============================================================================
+|ID|OPERATOR                                 |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------------
+|0 |PX COORDINATOR                           |        |2       |31          |
+|1 |└─EXCHANGE OUT DISTR                     |:EX10003|2       |29          |
+|2 |  └─HASH JOIN                            |        |2       |27          |
+|3 |    ├─SUBPLAN SCAN                       |VIEW1   |2       |14          |
+|4 |    │ └─HASH GROUP BY                    |        |2       |14          |
+|5 |    │   └─EXCHANGE IN DISTR              |        |4       |13          |
+|6 |    │     └─EXCHANGE OUT DISTR (HASH)    |:EX10000|4       |12          |
+|7 |    │       └─HASH GROUP BY              |        |4       |9           |
+|8 |    │         └─PX BLOCK ITERATOR        |        |28      |8           |
+|9 |    │           └─TABLE FULL SCAN        |score   |28      |8           |
+|10|    └─EXCHANGE IN DISTR                  |        |2       |13          |
+|11|      └─EXCHANGE OUT DISTR (HASH)        |:EX10002|2       |13          |
+|12|        └─SUBPLAN SCAN                   |VIEW2   |2       |11          |
+|13|          └─HASH GROUP BY                |        |2       |11          |
+|14|            └─EXCHANGE IN DISTR          |        |2       |11          |
+|15|              └─EXCHANGE OUT DISTR (HASH)|:EX10001|2       |10          |
+|16|                └─HASH GROUP BY          |        |2       |9           |
+|17|                  └─PX BLOCK ITERATOR    |        |2       |9           |
+|18|                    └─TABLE FULL SCAN    |teacher |2       |9           |
+=============================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(VIEW2.teacher.name, VIEW2.teacher.subject, cast(cast(cast(VIEW1.T_FUN_SUM(score.score) * cast(VIEW2.T_FUN_COUNT(*), DECIMAL_INT(20,
+       0)), DECIMAL_INT(33, 0)), DECIMAL(33, 0)) / cast(VIEW1.T_FUN_COUNT(score.score) * VIEW2.T_FUN_COUNT(*), DECIMAL(20, 0)), DECIMAL(15, 4)))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(VIEW2.teacher.name, VIEW2.teacher.subject, cast(cast(cast(VIEW1.T_FUN_SUM(score.score) * cast(VIEW2.T_FUN_COUNT(*), DECIMAL_INT(20,
+       0)), DECIMAL_INT(33, 0)), DECIMAL(33, 0)) / cast(VIEW1.T_FUN_COUNT(score.score) * VIEW2.T_FUN_COUNT(*), DECIMAL(20, 0)), DECIMAL(15, 4)))]), filter(nil), rowset=256
+      dop=2
+  2 - output([VIEW2.T_FUN_COUNT(*)], [VIEW2.teacher.subject], [VIEW1.T_FUN_SUM(score.score)], [VIEW1.T_FUN_COUNT(score.score)], [VIEW2.teacher.name]), filter(nil), rowset=256
+      equal_conds([VIEW2.teacher.subject = VIEW1.score.subject]), other_conds(nil)
+  3 - output([VIEW1.score.subject], [VIEW1.T_FUN_SUM(score.score)], [VIEW1.T_FUN_COUNT(score.score)]), filter(nil), rowset=256
+      access([VIEW1.score.subject], [VIEW1.T_FUN_SUM(score.score)], [VIEW1.T_FUN_COUNT(score.score)])
+  4 - output([score.subject], [T_FUN_SUM(T_FUN_SUM(score.score))], [T_FUN_COUNT_SUM(T_FUN_COUNT(score.score))]), filter(nil), rowset=256
+      group([score.subject]), agg_func([T_FUN_SUM(T_FUN_SUM(score.score))], [T_FUN_COUNT_SUM(T_FUN_COUNT(score.score))])
+  5 - output([score.subject], [T_FUN_SUM(score.score)], [T_FUN_COUNT(score.score)]), filter(nil), rowset=256
+  6 - output([score.subject], [T_FUN_SUM(score.score)], [T_FUN_COUNT(score.score)]), filter(nil), rowset=256
+      (#keys=1, [score.subject]), dop=2
+  7 - output([score.subject], [T_FUN_SUM(score.score)], [T_FUN_COUNT(score.score)]), filter(nil), rowset=256
+      group([score.subject]), agg_func([T_FUN_SUM(score.score)], [T_FUN_COUNT(score.score)])
+  8 - output([score.subject], [score.score]), filter(nil), rowset=256
+  9 - output([score.subject], [score.score]), filter(nil), rowset=256
+      access([score.subject], [score.score]), partitions(p[0-5])
+      is_index_back=false, is_global_index=false, 
+      range_key([score.sid], [score.subject]), range(MIN,MIN ; MAX,MAX)always true
+ 10 - output([VIEW2.T_FUN_COUNT(*)], [VIEW2.teacher.subject], [VIEW2.teacher.name]), filter(nil), rowset=256
+ 11 - output([VIEW2.T_FUN_COUNT(*)], [VIEW2.teacher.subject], [VIEW2.teacher.name]), filter(nil), rowset=256
+      (#keys=1, [VIEW2.teacher.subject]), dop=2
+ 12 - output([VIEW2.teacher.subject], [VIEW2.teacher.name], [VIEW2.T_FUN_COUNT(*)]), filter(nil), rowset=256
+      access([VIEW2.teacher.subject], [VIEW2.teacher.name], [VIEW2.T_FUN_COUNT(*)])
+ 13 - output([teacher.subject], [teacher.name], [T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=256
+      group([teacher.subject], [teacher.name]), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+ 14 - output([teacher.subject], [teacher.name], [T_FUN_COUNT(*)]), filter(nil), rowset=256
+ 15 - output([teacher.subject], [teacher.name], [T_FUN_COUNT(*)]), filter(nil), rowset=256
+      (#keys=2, [teacher.subject], [teacher.name]), dop=2
+ 16 - output([teacher.subject], [teacher.name], [T_FUN_COUNT(*)]), filter(nil), rowset=256
+      group([teacher.subject], [teacher.name]), agg_func([T_FUN_COUNT(*)])
+ 17 - output([teacher.subject], [teacher.name]), filter(nil), rowset=256
+ 18 - output([teacher.subject], [teacher.name]), filter(nil), rowset=256
+      access([teacher.subject], [teacher.name]), partitions(p[0-7])
+      is_index_back=false, is_global_index=false, 
+      range_key([teacher.tid]), range(MIN ; MAX)always true
+select /*+ USE_PX parallel(2) */ teacher.name, teacher.subject, avg(score) from score, teacher where teacher.subject = score.subject group by teacher.name, teacher.subject;
+name	subject	avg(score)
+Miss Zhang	EN	83.7143
+Mr Wang	MA	83.7143

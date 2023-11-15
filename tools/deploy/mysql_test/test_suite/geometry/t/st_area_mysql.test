@@ -1,0 +1,360 @@
+#owner: ht353245
+#owner group: shenzhen
+--echo # ----------------------------------------------------------------------
+--echo # Test of GEOMETRY ST_Area.
+--echo # ----------------------------------------------------------------------
+#fix srs only support sys tenant currently
+#connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+--source mysql_test/test_suite/geometry/t/import_default_srs_data_mysql.inc
+
+
+ # Test errors
+  --error ER_GIS_INVALID_DATA
+  SELECT ST_AREA('');
+
+  --error 3516
+  SELECT ST_AREA(ST_GEOMFROMTEXT('POINT(0 0)'));
+  --error 3516
+  SELECT ST_AREA(ST_GEOMFROMTEXT('MULTIPOINT(0 0)'));
+  --error 3516
+  SELECT ST_AREA(ST_GEOMFROMTEXT('LINESTRING(0 0, 1 0)'));
+  --error 3516
+  SELECT ST_AREA(ST_GEOMFROMTEXT('MULTILINESTRING((0 0, 1 0))'));
+  --error 3516
+  SELECT ST_AREA(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()'));
+
+  # Test error due to numeric overflow.
+  --error ER_DATA_OUT_OF_RANGE
+  SELECT ST_AREA(ST_GEOMFROMTEXT('POLYGON((0 0, 0 1e308, 1e308 1e308, 0 0))'));
+
+  # Cartesian
+  SELECT
+    ROUND(
+      ST_AREA(ST_GEOMFROMTEXT('POLYGON((0 0, 1 0, 1 1, 0 0))', 0)),
+      2
+    ) AS area;
+  SELECT
+    ROUND(
+      ST_AREA(ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0, 1 0, 1 1, 0 0)))', 0)),
+      2
+    ) AS area;
+
+  # mysql is 6154785747.34
+  # Geographic
+  SELECT
+    ROUND(
+      ST_AREA(ST_GEOMFROMTEXT('POLYGON((0 0, 0 1, 1 1, 0 0))', 4326)),
+      2
+    ) AS area;
+  SELECT
+    ROUND(
+      ST_AREA(ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0, 0 1, 1 1, 0 0)))', 4326)),
+      2
+    ) AS area;
+
+  --disable_warnings
+  drop table if exists gis_geometrycollection;
+  --enable_warnings
+
+  CREATE TABLE gis_geometrycollection (fid INTEGER NOT NULL PRIMARY KEY, g GEOMETRY);
+
+  SET @star_elem_vertical= 'POLYGON((5 0,15 25,25 0,15 5,5 0))';
+  SET @star_elem_horizontal= 'POLYGON((25 0,0 15,30 15,22 10,25 0))';
+  SET @star_center= 'POINT(15 10)';
+  SET @star_top= 'POINT(15 25)';
+  SET @star_bottom_left= 'POINT(5 0)';
+  SET @star_bottom_right= 'POINT(25 0)';
+  SET @star_bottom_points= 'MULTIPOINT(5 0,25 0)';
+  SET @star_all_points= 'MULTIPOINT(5 0,25 0,15 10,15 25)';
+  SET @star_line_horizontal= 'LINESTRING(10 15,20 15)';
+  SET @star_line_vertical= 'LINESTRING(15 5,15 25)';
+  SET @star_top_to_center= 'LINESTRING(15 25,15 10)';
+  SET @star_lines_near_horizontal= 'MULTILINESTRING((25 0,0 15,15 30,0 5))';
+  SET @star_lines_near_vertical= 'MULTILINESTRING((0 5,15 25,0 25))';
+  SET @star= 'POLYGON((5 0,7 10,0 15,10 15,15 25,20 15,30 15,22 10,25 0,15 5,5 0))';
+  SET @star_elem_vertical_val= '((5 0,15 25,25 0,15 5,5 0))';
+  SET @star_elem_horizontal_val= '((25 0,0 15,30 15,22 10,25 0))';
+  SET @star_of_elems='MULTIPOLYGON(((5 0,15 25,25 0,15 5,5 0)),((25 0,0 15,30 15,22 10,25 0)))';
+  SET @star_collection_elems='GEOMETRYCOLLECTION(MULTIPOLYGON(((5 0,15 25,25 0,15 5,5 0)),((25 0,0 15,30 15,22 10,25 0))),POLYGON((5 0,7 10,0 15,10 15,15 25,20 15,30 15,22 10,25 0,15 5,5 0)),LINESTRING(15 25,15 10),MULTIPOINT(5 0,25 0),POINT(15 25))';
+  SET @star_collection_multilinestr='GEOMETRYCOLLECTION(MULTIPOLYGON(((5 0,15 25,25 0,15 5,5 0)),((25 0,0 15,30 15,22 10,25 0))),POLYGON((5 0,7 10,0 15,10 15,15 25,20 15,30 15,22 10,25 0,15 5,5 0)),MULTILINESTRING((25 0,0 15,15 30,0 5)),LINESTRING(15 25,15 10),MULTIPOINT(5 0,25 0),POINT(15 25))';
+
+  --disable_warnings
+  INSERT INTO gis_geometrycollection VALUES
+  (100,ST_GEOMFROMTEXT(@star)),
+  (101,ST_GEOMFROMTEXT(@star_elem_vertical)),
+  (102,ST_GEOMFROMTEXT(@star_elem_horizontal)),
+  (103,ST_GEOMFROMTEXT(@star_of_elems)),
+  (104,ST_GEOMFROMTEXT(@star_top)),
+  (105,ST_GEOMFROMTEXT(@star_center)),
+  (106,ST_GEOMFROMTEXT(@star_bottom_left)),
+  (107,ST_GEOMFROMTEXT(@star_bottom_right)),
+  (108,ST_GEOMFROMTEXT(@star_bottom_points)),
+  (109,ST_GEOMFROMTEXT(@star_all_points)),
+  (110,ST_GEOMFROMTEXT(@star_line_horizontal)),
+  (111,ST_GEOMFROMTEXT(@star_line_vertical)),
+  (112,ST_GEOMFROMTEXT(@star_top_to_center)),
+  (113,ST_GEOMFROMTEXT(@star_lines_near_horizontal)),
+  (114,ST_GEOMFROMTEXT(@star_lines_near_vertical)),
+  (115,ST_GEOMFROMTEXT(@star_collection_elems)),
+  (116,ST_GEOMFROMTEXT(@star_collection_multilinestr)),
+  (200,ST_GEOMFROMTEXT('POLYGON((0 0,6 7,8 8,3 9,0 0),(3 6,4 6,4 7,3 6))')),
+  (201,ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0,0 5,5 5,5 0,0 0)), ((2 2,4 5,6 2,2 2)))'));
+  --enable_warnings
+
+  --echo #test ST_AREA POLYGON
+  #SELECT count(ST_ASTEXT(g) != 'NULL') FROM gis_geometrycollection;
+
+  SELECT ST_AREA(ST_GEOMFROMTEXT(@star));
+
+  SELECT ST_AREA(ST_GEOMFROMTEXT(@star_elem_vertical));
+
+  SELECT ST_AREA(ST_GEOMFROMTEXT('POLYGON((0 0,0 5,5 5, 0 0))'));
+
+  SELECT ST_AREA(ST_GEOMFROMTEXT('POLYGON((0 0,0 10,10 10,10 0,0 0))'));
+
+  SELECT ST_AREA(ST_GEOMFROMTEXT('POLYGON((0 0,0 10,10 10,10 0,0 0,-10 0,-10 -10,0 -10, 0 0))'));
+
+  SELECT ST_AREA(ST_GEOMFROMTEXT('POLYGON((0 0,0 10,10 10,10 0,0 0),(4 4,4 6,6 6,6 4,4 4))'));
+
+  SELECT ST_AREA(ST_GEOMFROMTEXT('POLYGON((0 0,0 10,10 10,10 0,0 0),(0 0,0 10,10 10,10 0,0 0))'));
+
+  SELECT ST_AREA(ST_GEOMFROMTEXT('POLYGON((4 4,4 6,6 6,6 4,4 4),(0 0,0 10,10 10,10 0,0 0))'));
+
+  SELECT ST_AREA(ST_GEOMFROMTEXT('POLYGON((4 4,4 6,6 6,6 4,4 4),(8 8,8 10,10 10,10 8,8 8))'));
+
+  SELECT ST_AREA(g) FROM gis_geometrycollection WHERE fid=100;
+
+# from func_math.test
+  SELECT CRC32(ST_Area(g)) FROM gis_geometrycollection WHERE fid=200;
+  SELECT CRC32(ST_Area(g)) FROM gis_geometrycollection WHERE fid=201;
+
+  --echo #test ST_AREA MULTIPOLYGON
+
+  SELECT ST_AREA(ST_GEOMFROMTEXT(@star_of_elems));
+
+  SELECT ST_AREA(ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0,0 5,5 5, 0 0)))'));
+
+  SELECT ST_AREA(ST_GEOMFROMTEXT('MULTIPOLYGON(((0 10,10 0,0 0, 0 10)),((0 0,10 10,10 0, 0 0)))'));
+
+  SELECT ST_AREA(ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0,0 10,10 10, 0 0)),((10 10,10 15,15 15,10 10)))'));
+
+  SELECT ST_AREA(ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0,0 10,10 10,10 0,0 0)),((4 4,4 6,6 6,6 4, 4 4)))'));
+
+  SELECT ST_AREA(ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0,0 10,10 10,10 0, 0 0),(4 4,4 6,6 6,6 4, 4 4)))'));
+
+  SELECT ST_AREA(ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0,0 10,10 10,10 0,0 0),(0 0,0 10,10 10,10 0,0 0)))'));
+
+  SELECT ST_AREA(ST_GEOMFROMTEXT('MULTIPOLYGON(((4 4,4 6,6 6,6 4,4 4),(0 0,0 10,10 10,10 0,0 0)))'));
+
+  SELECT ST_AREA(ST_GEOMFROMTEXT('MULTIPOLYGON(((4 4,4 6,6 6,6 4,4 4),(8 8,8 10,10 10,10 8,8 8)))'));
+
+  SELECT ST_AREA(ST_GEOMFROMTEXT('MULTIPOLYGON(((10 10,10 0,5 10,10 10)),((0 10,0 20,5 10,0 10)))'));
+
+  SELECT ST_AREA(ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0,0 10,10 10,10 0,0 0),(0 0,0 10,10 10,10 0,0 0)),((0 0,0 10,10 10,10 0,0 0)))'));
+
+  SELECT ST_AREA(ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0,0 10,10 10,10 0,0 0),(0 0,0 10,10 10,10 0,0 0)),((0 0,0 10,10 10,10 0,0 0),(4 4,4 6,6 6, 4 4)))'));
+
+  SELECT ST_AREA(g) FROM gis_geometrycollection WHERE fid=103;
+
+  --echo #test with invalid srid
+  --error ER_DATA_OUT_OF_RANGE
+  SELECT ST_AREA(ST_GEOMFROMTEXT(@star_center,-1024));
+
+  --error ER_DATA_OUT_OF_RANGE
+  SELECT ST_AREA(ST_GEOMFROMTEXT(@star_all_points,-1));
+
+  --error ER_DATA_OUT_OF_RANGE
+  SELECT ST_AREA(ST_GEOMFROMTEXT(@star_of_elems,4294967296));
+
+  --error ER_DATA_OUT_OF_RANGE
+  SELECT ST_AREA(ST_GEOMFROMTEXT(@star_collection_elems,4294967295000));
+
+  #wrong error code from st_geomfromtext
+  --echo #test ST_AREA with invalid input
+
+  --error ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT
+  SELECT ST_AREA();
+  SELECT ST_AREA(NULL);
+
+  --error ER_GIS_INVALID_DATA
+  SELECT ST_AREA(ST_GEOMFROMTEXT('POINT()'));
+  --error ER_GIS_INVALID_DATA
+  SELECT ST_AREA(ST_GEOMFROMTEXT('LINESTRING()'));
+  --error ER_GIS_INVALID_DATA
+  SELECT ST_AREA(ST_GEOMFROMTEXT('POLYGON(())'));
+  --error ER_GIS_INVALID_DATA
+  SELECT ST_AREA(ST_GEOMFROMTEXT('MULTIPOINT()'));
+  --error ER_GIS_INVALID_DATA
+  SELECT ST_AREA(ST_GEOMFROMTEXT('MULTILINESTRING(())'));
+  --error ER_GIS_INVALID_DATA
+  SELECT ST_AREA(ST_GEOMFROMTEXT('MULTIPOLYGON((()))'));
+  --error ER_GIS_INVALID_DATA
+  SELECT ST_AREA(ST_GEOMFROMTEXT('POINT(a 0)'));
+  --error ER_GIS_INVALID_DATA
+  SELECT ST_AREA(ST_GEOMFROMTEXT('POINT(! 0)'));
+  --error ER_PARSE_ERROR
+  SELECT ST_AREA(ST_GEOMFROMTEXT('POINT('!' 0)'));
+  --error ER_GIS_INVALID_DATA
+  SELECT ST_AREA(ST_GEOMFROMTEXT('POINT(12,34 0)'));
+  --error ER_GIS_INVALID_DATA
+  SELECT ST_AREA(ST_GEOMFROMTEXT('LINESTRING(a 0,10 10)'));
+  --error ER_GIS_INVALID_DATA
+  SELECT ST_AREA(ST_GEOMFROMTEXT('LINESTRING(0 0,! 10)'));
+  --error ER_PARSE_ERROR
+  SELECT ST_AREA(ST_GEOMFROMTEXT('LINESTRING('!' 0,10 10)'));
+  --error ER_GIS_INVALID_DATA
+  SELECT ST_AREA(ST_GEOMFROMTEXT('LINESTRING(12,34 0,10 10)'));
+  --error ER_GIS_INVALID_DATA
+  SELECT ST_AREA(ST_GEOMFROMTEXT('POLYGON((a 0,10 10,10 0,0 0))'));
+  --error ER_GIS_INVALID_DATA
+  SELECT ST_AREA(ST_GEOMFROMTEXT('POLYGON((0 0,! 10,10 0,0 0))'));
+  --error ER_PARSE_ERROR
+  SELECT ST_AREA(ST_GEOMFROMTEXT('POLYGON(('!' 0,10 10,10 0,0 0))'));
+  --error ER_GIS_INVALID_DATA
+  SELECT ST_AREA(ST_GEOMFROMTEXT('POLYGON((12,34 0,10 10,10 0,0 0))'));
+  --error ER_GIS_INVALID_DATA
+  SELECT ST_AREA(ST_GEOMFROMTEXT('POLYGON((0 0))'));
+  
+  --error ER_GIS_INVALID_DATA
+  SELECT ST_AREA(ST_GEOMFROMTEXT('POLYGON((0 0,5 5))'));
+  
+  --error ER_GIS_INVALID_DATA
+  SELECT ST_AREA(ST_GEOMFROMTEXT('POLYGON((0 0,5 5,10 10))'));
+  
+  --error ER_GIS_INVALID_DATA
+  SELECT ST_AREA(ST_GEOMFROMTEXT('POLYGON((0 0,0 5,10 10),(0 0))'));
+  
+  --error ER_GIS_INVALID_DATA
+  SELECT ST_AREA(ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0,5 5,10 10)),((10 10)))'));
+  
+  --error ER_GIS_INVALID_DATA
+  SELECT ST_AREA(ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0,5 5,10 10)),((10 10))'));
+
+  --echo #test ST_AREA out of range
+  --echo # Assume SRID 10 is not defined.
+  # need varchar to wkb cast?
+  --error 3548
+  SELECT ST_AREA(x'0A000000010100000000000000000000000000000000000000');
+
+  --echo # MYSQL Bug#28301552 ASSERTION FAILED: STD::ISFINITE(*RESULT)
+  --error ER_DATA_OUT_OF_RANGE
+  SELECT ST_Area(
+    POLYGON(
+    LINESTRING(
+      POINT(4.271317e+307,-18656),
+      POINT(-29177,-15475),
+      POINT(8554,3430),
+      POINT(4.271317e+307,-18656)
+    )
+    )
+  );
+
+  --error ER_DATA_OUT_OF_RANGE
+  SELECT ST_Area(POLYGON(
+      LINESTRING(
+      POINT(3006,-15963),
+      POINT(-17919,-15105),
+      POINT(9.466488e+307,1.280303e+308),
+      POINT(3006,-15963)
+      )
+    )
+  );
+  truncate table gis_geometrycollection;
+  drop table gis_geometrycollection;
+
+  --echo #other tests
+
+  # need subtypes
+  #--disable_warnings
+  #drop table if exists gis_polygon, gis_multi_polygon;
+  #--enable_warnings
+
+  #CREATE TABLE gis_polygon   (fid INTEGER PRIMARY KEY AUTO_INCREMENT, g POLYGON);
+  #CREATE TABLE gis_multi_polygon  (fid INTEGER PRIMARY KEY AUTO_INCREMENT, g MULTIPOLYGON);
+  #INSERT INTO gis_polygon VALUES
+  #  (108, ST_PolygonFromText('POLYGON((10 10,20 10,20 20,10 20,10 10))')),
+  #  (109, ST_PolyFromText('POLYGON((0 0,50 0,50 50,0 50,0 0), (10 10,20 10,20 20,10 20,10 10))')),
+  #  (110, ST_PolyFromWKB(St_AsWKB(Polygon(LineString(Point(0, 0), Point(30, 0), Point(30, 30), Point(0, 0))))));
+  
+  #INSERT INTO gis_multi_polygon VALUES
+  #  (117, ST_MultiPolygonFromText('MULTIPOLYGON(((28 26,28 0,84 0,84 42,28 26),(52 18,66 23,73 9,48 6,52 18)),((59 18,67 18,67 13,59 13,59 18)))')),
+  #  (118, ST_MPolyFromText('MULTIPOLYGON(((28 26,28 0,84 0,84 42,28 26),(52 18,66 23,73 9,48 6,52 18)),((59 18,67 18,67 13,59 13,59 18)))')),
+  #  (119, ST_MPolyFromWKB(St_AsWKB(MultiPolygon(Polygon(LineString(Point(0, 3), Point(3, 3), Point(3, 0), Point(0, 3)))))));
+
+  #SELECT fid, ST_Area(g) FROM gis_polygon ORDER by fid;
+  #SELECT fid, ST_Area(g) FROM gis_multi_polygon ORDER by fid;
+
+  #drop table gis_polygon, gis_multi_polygon;
+
+  --echo #error codes
+  --error ER_GIS_INVALID_DATA
+  SELECT ST_AREA(ST_GEOMFROMTEXT('POLYGON((0 0,5 5, 0 0))'));
+
+  SET @star_of_elems='MULTIPOLYGON(((5 0,15 25,25 0,15 5,5 0)),((25 0,0 15,30 15,22 10,25 0)))';
+  SELECT ST_AREA(ST_GEOMFROMTEXT(@star_of_elems));
+
+  #tests with st_buffer
+  #fix need st_buffer!
+  #SET @buf = ST_BUFFER(ST_GEOMFROMTEXT(@star_of_elems), 1);
+  #--replace_numeric_round 12
+  #SELECT ST_AREA(@buf);
+
+  #SELECT ST_AREA(ST_BUFFER(ST_GEOMFROMTEXT('LINESTRING(0 0,0 1)'), 1)) > 0;
+  #SELECT ST_AREA(ST_BUFFER(ST_GEOMFROMTEXT('LINESTRING(1 1,1 1)'), 1)) > 0;
+
+  #--error ER_GIS_INVALID_DATA
+  #SELECT ST_AREA(ST_BUFFER(ST_GEOMFROMTEXT('POLYGON(1 1,1 1,1 1,1 1)'), 1)) > 0;
+
+  #SELECT ST_AREA(ST_BUFFER(ST_GEOMFROMTEXT('POLYGON((0 0, 0 8, 8 8, 8 10, -10 10, -10 0, 0 0))'), 1)) > 0;
+  #SELECT ST_AREA(ST_BUFFER(ST_GEOMFROMTEXT('POLYGON((0 0,10 10,0 8,0 0))'), 1)) > 0;
+  #SELECT ST_AREA(ST_BUFFER(ST_GEOMFROMTEXT('POLYGON((1 1,10 10,0 8,1 1))'), 1)) > 0;
+  #SELECT ST_AREA(ST_BUFFER(ST_GEOMFROMTEXT('POLYGON((2 2,2 8,8 8,8 2,2 2))'), 1)) > 0;
+  #SELECT ST_AREA(ST_BUFFER(ST_GEOMFROMTEXT('POLYGON((2 2,8 2,8 8,2 8,2 2))'), 1)) > 0;
+
+  #from gis-precise.test
+  #self intersection polygons
+  #Result 450
+  Select ST_Area(ST_GEOMFROMTEXT('POLYGON((0 0, 30 30, 30 0, 0 5, 0 0, 30 5, 30 0, 0 10, 0 0, 30 10, 30 0, 0 0))')) as Result;
+  #Result 0
+  Select ST_Area(ST_GEOMFROMTEXT('POLYGON((1 1, 10 1, 1 0, 10 0, 1 -1, 10 -1, 7 2, 7 -2, 4 2, 4 -2, 1 1))')) as Result;
+
+  --disable_warnings
+  drop table if exists tbl_polygon;
+  --enable_warnings
+  create table tbl_polygon(id varchar(32), geom GEOMETRY);
+  insert into tbl_polygon (id, geom) values ('POLY1',ST_GeomFromText('POLYGON((0 0,0 10,10 10,10 0,0 0))'));
+  insert into tbl_polygon (id, geom) values ('POLY2',ST_GeomFromText('POLYGON((0 0,0 -10,10 -10,10 0,0 0))'));
+
+  select 100, st_area(t.geom) from tbl_polygon t where t.id like 'POLY%'; 
+  drop table tbl_polygon;
+
+  #from gis.test
+  --disable_warnings
+  drop table if exists ponds, named_places;
+  --enable_warnings
+
+  CREATE TABLE ponds ( 
+  fid INTEGER NOT NULL PRIMARY KEY, 
+  name VARCHAR(64), 
+  type VARCHAR(64), 
+  shores GEOMETRY); 
+
+  INSERT INTO ponds VALUES(120, NULL, 'Stock Pond', ST_GEOMFROMTEXT(
+    'MULTIPOLYGON( ( ( 24 44, 22 42, 24 40, 24 44) ),  ( ( 26 44, 26 40, 28 42, 26 44) ) )', 0));
+
+  SELECT ST_Area(shores) 
+  FROM ponds 
+  WHERE fid = 120; 
+  
+  CREATE TABLE named_places ( 
+  fid INTEGER NOT NULL PRIMARY KEY, 
+  name VARCHAR(64), 
+  boundary GEOMETRY); 
+
+  INSERT INTO named_places VALUES(117, 'Ashton', ST_GEOMFROMTEXT('POLYGON( ( 62 48, 84 48, 84 30, 56 30, 56 34, 62 48) )', 0)); 
+
+  INSERT INTO named_places VALUES(118, 'Goose Island', ST_GEOMFROMTEXT('POLYGON( ( 67 13, 67 18, 59 18, 59 13, 67 13) )', 0)); 
+
+  SELECT ST_Area(boundary) FROM named_places WHERE name = 'Goose Island'; 
+
+  drop table ponds, named_places;

@@ -1,0 +1,94 @@
+# owner: lixia.yq 
+# owner group: STORAGE
+# description:
+
+
+--disable_query_log
+--disable_warnings
+set @@recyclebin = off;
+drop table if exists t1;
+drop table if exists t2;
+drop table if exists t3;
+--enable_warnings
+--enable_query_log
+
+create table t1(a int, b varchar(3048), primary key (a)) with column group for all columns, each column;
+create table t2(c0 int, c1 int, c2 int, c3 int, c4 int, c5 int, c6 int, c7 int, c8 int, c9 int, c10 int, c11 int, c12 int) with column group for all columns, each column;
+create table t3(a int, b varchar(3048), primary key (a)) with column group for all columns, each column;
+sleep 10;
+insert into t1 values(1, 1);
+insert into t2 values(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
+insert into t3 values(1, 1);
+
+--disable_query_log
+--disable_warnings
+--let $count=1
+while ($count < 100)
+{
+  eval INSERT INTO t1 VALUES($count * 10    , repeat($count * 10    ,512));
+  eval INSERT INTO t1 VALUES($count * 10 + 2, repeat($count * 10 + 2,512));
+  eval INSERT INTO t1 VALUES($count * 10 + 4, repeat($count * 10 + 4,512));
+  eval INSERT INTO t1 VALUES($count * 10 + 6, repeat($count * 10 + 6,512));
+  eval INSERT INTO t1 VALUES($count * 10 + 8, repeat($count * 10 + 8,512));
+  eval INSERT INTO t1 VALUES($count * 20    , repeat($count * 20    ,512));
+  eval INSERT INTO t1 VALUES($count * 20 + 2, repeat($count * 20 + 2,512));
+  eval INSERT INTO t1 VALUES($count * 20 + 4, repeat($count * 20 + 3,512));
+  eval INSERT INTO t1 VALUES($count * 20 + 6, repeat($count * 20 + 6,512));
+  eval INSERT INTO t1 VALUES($count * 20 + 8, repeat($count * 20 + 8,512));
+  inc $count;
+  inc $count;
+}
+--enable_warnings
+--enable_query_log
+select count(*) from t1;
+
+alter system major freeze;
+--source mysql_test/include/wait_daily_merge.inc
+
+--disable_query_log
+--disable_warnings
+--let $count=1
+while ($count < 100)
+{
+  eval INSERT INTO t1 VALUES($count * 10 + 1, repeat($count * 10    ,512));
+  eval INSERT INTO t1 VALUES($count * 10 + 3, repeat($count * 10 + 2,512));
+  eval INSERT INTO t1 VALUES($count * 10 + 5, repeat($count * 10 + 4,512));
+  eval INSERT INTO t1 VALUES($count * 10 + 7, repeat($count * 10 + 6,512));
+  eval INSERT INTO t1 VALUES($count * 10 + 9, repeat($count * 10 + 8,512));
+  eval INSERT INTO t1 VALUES($count * 20 + 1, repeat($count * 20    ,512));
+  eval INSERT INTO t1 VALUES($count * 20 + 3, repeat($count * 20 + 2,512));
+  eval INSERT INTO t1 VALUES($count * 20 + 5, repeat($count * 20 + 3,512));
+  eval INSERT INTO t1 VALUES($count * 20 + 7, repeat($count * 20 + 6,512));
+  eval INSERT INTO t1 VALUES($count * 20 + 9, repeat($count * 20 + 8,512));
+  inc $count;
+  inc $count;
+}
+
+alter table t3 add column c int;
+insert into t3 values(2, 1, 1);
+
+--enable_warnings
+--enable_query_log
+
+select count(*) from t1;
+select * from t3;
+select c from t3;
+select count(c) from t3;
+
+--let $count=8000
+eval INSERT INTO t1 VALUES($count, repeat($count,512));
+
+alter system major freeze;
+--source mysql_test/include/wait_daily_merge.inc
+
+select count(*) from t1;
+select * from t3;
+select c from t3;
+
+drop table t1;
+drop table t2;
+drop table t3;
+
+--disable_query_log
+set @@recyclebin = on;
+--enable_query_log

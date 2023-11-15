@@ -1,0 +1,14 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: bin.lb
+# owner group: SQL2
+# tags: ddl
+# description:
+#
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+--error 1068
+create table t1(a int primary key, b int primary key);

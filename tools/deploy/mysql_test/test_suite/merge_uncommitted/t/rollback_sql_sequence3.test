@@ -1,0 +1,136 @@
+# owner: lixia.yq
+# owner group: transaction
+# description: 本case是为了测试在含未提交事务的状态下的savepoint回滚测试（多次rollback到同一个savepoint）
+
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+set GLOBAL ob_query_timeout = 1000000000000;
+set GLOBAL ob_trx_timeout = 10000000000000;
+set GLOBAL ob_trx_idle_timeout = 10000000000;
+
+connect (conn2,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn0,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+
+connection conn1;
+alter system set minor_compact_trigger = 10;
+sleep 2;
+
+connection conn1;
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+#建表
+create table t1(c1 int primary key, c2 varchar(50), c3 int, c4 datetime(6), c5 datetime(6)) table_mode = 'queuing';
+
+connection conn0;
+let $__table_id__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ table_id from oceanbase.__all_virtual_table where table_name= 't1', table_id, 1);
+
+connection conn1;
+#事务开始 插入数据
+begin;
+
+#insert 30 rows
+--disable_query_log
+
+let $i=0;
+while($i < 30) 
+{
+    eval insert into t1 values($i + 1000, 'Hello OceanBase & Happy New Year', $i, '2012-10-10 12:00:00','2012-10-10');
+    inc $i;
+}
+--enable_query_log
+
+connection conn0;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+--source mysql_test/include/wait_minor_merge.inc
+
+connection conn1;
+#create Savepoint
+SAVEPOINT p1;
+
+insert into t1 value(5, 'Hello OceanBase & Happy New Year', 2, '2012-10-10 12:00:00','2012-10-10');
+insert into t1 value(4, 'Hello OceanBase & Happy New Year', 2, '2012-10-10 12:00:00','2012-10-10');
+insert into t1 value(3, 'Hello OceanBase & Happy New Year', 2, '2012-10-10 12:00:00','2012-10-10');
+insert into t1 value(2, 'Hello OceanBase & Happy New Year', 2, '2012-10-10 12:00:00','2012-10-10');
+insert into t1 value(1, 'Hello OceanBase & Happy New Year', 2, '2012-10-10 12:00:00','2012-10-10');
+
+connection conn0;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+--source mysql_test/include/wait_minor_merge.inc
+
+connection conn1;
+#should be 35
+select count(*) from t1;
+
+ROLLBACK TO SAVEPOINT p1;
+
+connection conn1;
+#should be 0
+select count(*) from t1 where c1 < 1000;
+
+connection conn1;
+#insert 10 rows
+--disable_query_log
+
+let $i=0;
+while($i < 10) 
+{
+    eval insert into t1 values($i + 2000, 'Hello OceanBase & Happy New Year', $i, '2012-10-10 12:00:00','2012-10-10');
+    inc $i;
+}
+--enable_query_log
+
+connection conn0;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+--source mysql_test/include/wait_minor_merge.inc
+
+connection conn1;
+#should be 40
+select count(*) from t1;
+
+ROLLBACK TO SAVEPOINT p1;
+#should be 30
+select count(*) from t1;
+
+connection conn1;
+#insert 10 rows
+--disable_query_log
+
+let $i=0;
+while($i < 10) 
+{
+    eval insert into t1 values($i + 3000, 'Hello OceanBase & Happy New Year', $i, '2012-10-10 12:00:00','2012-10-10');
+    inc $i;
+}
+--enable_query_log
+
+update t1 set c3 = c1 * c3;
+
+connection conn0;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+--source mysql_test/include/wait_minor_merge.inc
+
+connection conn1;
+#should be 40
+select count(*) from t1 where c3 % c1 = 0;
+
+ROLLBACK TO SAVEPOINT p1;
+
+#should be 1(1000, 0)
+select count(*) from t1 where c3 % c1 = 0;
+
+connection conn1;
+drop table t1;
+alter system set minor_compact_trigger = 2;

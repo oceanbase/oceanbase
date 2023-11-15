@@ -1,0 +1,23 @@
+set GLOBAL ob_query_timeout = 1000000000000;
+set GLOBAL ob_trx_timeout = 10000000000000;
+set GLOBAL ob_trx_idle_timeout = 10000000000;
+alter system set minor_compact_trigger = 10;
+drop table if exists same_sql_sequence;
+create table same_sql_sequence(num int primary key, str varchar(50), tag int);
+create index index_num_tag on same_sql_sequence(tag);
+begin;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+update same_sql_sequence set tag = 0, str = 'Hello OceanBase';
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+select /*+ index(same_sql_sequence index_num_tag) */ *from same_sql_sequence where tag = 0;
+num	str	tag
+1000	Hello OceanBase	0
+1001	Hello OceanBase	0
+1002	Hello OceanBase	0
+commit;
+drop table same_sql_sequence;
+alter system set minor_compact_trigger = 2;

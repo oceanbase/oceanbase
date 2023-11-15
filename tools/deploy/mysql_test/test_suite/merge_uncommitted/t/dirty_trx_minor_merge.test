@@ -1,0 +1,113 @@
+# owner: gengli.wzy
+# owner group: transaction
+# description: for minor merge with uncommitted trx
+
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+connect (conn0,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+
+let $__timeout_def__ = 60 * 1000 * 1000;
+
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn1;
+eval set SESSION ob_query_timeout = $__timeout_def__;
+eval set SESSION ob_trx_timeout = $__timeout_def__;
+eval set SESSION ob_trx_idle_timeout = $__timeout_def__;
+
+connect (conn2,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+eval set SESSION ob_query_timeout = $__timeout_def__;
+eval set SESSION ob_trx_timeout = $__timeout_def__;
+eval set SESSION ob_trx_idle_timeout = $__timeout_def__;
+sleep 2;
+
+connection conn0;
+let $__tenant_id__ = query_get_value(select tenant_id from oceanbase.__all_tenant where tenant_name = 'mysql', tenant_id, 1);
+
+connection conn1;
+--disable_warnings
+drop table if exists test_uncommitted_trx_minor_merge;
+--enable_warnings
+
+create table test_uncommitted_trx_minor_merge(c1 int primary key, c2 int);
+let $__freeze_table_name__ = 'test_uncommitted_trx_minor_merge';
+
+insert into test_uncommitted_trx_minor_merge values (1,1);
+
+connection conn0;
+let $__table_id__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ table_id from oceanbase.__all_virtual_table where table_name= 'test_uncommitted_trx_minor_merge', table_id, 1);
+
+
+connection conn1;
+let $__tablet_id__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ tablet_id from oceanbase.__all_tablet_to_ls where table_id = $__table_id__, tablet_id, 1);
+
+--source mysql_test/include/minor_freeze_tablet_and_wait_done.inc
+
+#connection conn1;
+#let $count = query_get_value(select count(1) as c from oceanbase.__all_virtual_table_mgr where tablet_id = $__tablet_id__ and tenant_id = $__tenant_id__ and table_type = 12 group by svr_port, c, 1);
+#echo $count;
+
+connection conn1;
+select * from test_uncommitted_trx_minor_merge;
+
+insert into test_uncommitted_trx_minor_merge values (2,2);
+# dirty trans, but committed when minor merge
+begin;
+insert into test_uncommitted_trx_minor_merge values (3,3);
+update test_uncommitted_trx_minor_merge set c2 = 10 where c1 = 1;
+
+--source mysql_test/include/minor_freeze_tablet_and_wait_done.inc
+
+connection conn1;
+commit;
+select * from test_uncommitted_trx_minor_merge;
+
+let $count = query_get_value(select count(1) as c from oceanbase.__all_virtual_table_mgr where tablet_id = $__tablet_id__ and tenant_id = $__tenant_id__ and table_type = 12 and size > 0 group by svr_port, c, 1);
+echo $count;
+
+connection conn1;
+
+begin;
+insert into test_uncommitted_trx_minor_merge values (4,4);
+
+# this minor sstable should be removed after major merge
+--source mysql_test/include/minor_freeze_tablet_and_wait_done.inc
+
+connection conn1;
+commit;
+
+let $__now_time__ = query_get_value(select now() as c, c, 1);
+let $__freeze_tenant_name__ = 'mysql'
+--source mysql_test/include/major_freeze_tenant_and_wait_done.inc
+
+connection conn1;
+select * from test_uncommitted_trx_minor_merge;
+
+# first minor freeze with dirty trans
+# then minor freeze an empty memtable, but the corresponding minor sstable should contain data from last complement minor sstable
+connection conn1;
+begin;
+insert into test_uncommitted_trx_minor_merge values (5,5);
+update test_uncommitted_trx_minor_merge set c2 = 100 where c1 = 2;
+alter system set undo_retention = 0;
+sleep 5;
+
+--source mysql_test/include/minor_freeze_tablet_and_wait_done.inc
+
+connection conn1;
+commit;
+select * from test_uncommitted_trx_minor_merge;
+
+connection conn0;
+#let $count = query_get_value(select count(1) as c from oceanbase.__all_virtual_table_mgr where tablet_id = $__tablet_id__ and tenant_id = $__tenant_id__ and table_type = 12 and size > 0 group by svr_port order by c desc limit 1, c, 1);
+# should be 1
+#echo $count;
+#eval select * from oceanbase.__all_virtual_table_mgr where tablet_id = $__tablet_id__ and tenant_id = $__tenant_id__;
+
+--source mysql_test/include/minor_freeze_tablet_and_wait_done.inc
+
+connection conn1;
+select * from test_uncommitted_trx_minor_merge;
+alter system set undo_retention = 1800;
+drop table test_uncommitted_trx_minor_merge;

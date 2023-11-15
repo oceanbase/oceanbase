@@ -1,0 +1,64 @@
+set @@session.recyclebin=off;
+create database duptable_database;
+use duptable_database;
+drop table if exists t1;
+drop table if exists t2;
+drop table if exists dup_t1;
+drop table if exists dup_t2;
+create table dup_t1 (c1 int, c2 int, c3 int, primary key(c1, c2)) duplicate_scope='cluster';
+create table dup_t2 (d1 int, d2 int, d3 int, primary key(d1, d2)) duplicate_scope='cluster';
+create table t1 (c1 int, c2 int, c3 int, primary key(c1, c2));
+create table t2 (d1 int, d2 int, d3 int, primary key(d1, d2));
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` int(11) NOT NULL,
+  `c2` int(11) NOT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`c1`, `c2`)
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+show create table t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `d1` int(11) NOT NULL,
+  `d2` int(11) NOT NULL,
+  `d3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`d1`, `d2`)
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+show create table dup_t1;
+Table	Create Table
+dup_t1	CREATE TABLE `dup_t1` (
+  `c1` int(11) NOT NULL,
+  `c2` int(11) NOT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`c1`, `c2`)
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10 DUPLICATE_SCOPE = 'CLUSTER'
+show create table dup_t2;
+Table	Create Table
+dup_t2	CREATE TABLE `dup_t2` (
+  `d1` int(11) NOT NULL,
+  `d2` int(11) NOT NULL,
+  `d3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`d1`, `d2`)
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10 DUPLICATE_SCOPE = 'CLUSTER'
+duplicate_scope
+1
+duplicate_scope
+1
+duplicate_scope
+0
+duplicate_scope
+0
+准备: 将复制表的leader和普通表的leader分开
+count(*)
+1
+count(*)
+1
+ls_state
+LEADER
+ls_state
+LEADER
+count(*)
+1
+count(*)
+1

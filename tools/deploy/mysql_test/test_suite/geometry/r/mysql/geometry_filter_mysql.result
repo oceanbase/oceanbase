@@ -1,0 +1,3140 @@
+# ----------------------------------------------------------------------
+# Test of GEOMETRY filter.
+# ----------------------------------------------------------------------
+SET @point_0_0 = ST_GeomFromText('POINT(0 0)');
+SET @point_1_1 = ST_GeomFromText('POINT(1 1)');
+SET @point_2_2 = ST_GeomFromText('POINT(2 2)');
+SET @point_3_3 = ST_GeomFromText('POINT(3 3)');
+SET @point_4_4 = ST_GeomFromText('POINT(4 4)');
+SET @point_5_5 = ST_GeomFromText('POINT(5 5)');
+SET @line = ST_GeomFromText('LINESTRING(0 0,1 1)');
+SET @polygon = ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))');
+SET @multi_point = ST_GeomFromText('MULTIPOINT((0 0), (1 1))');
+SET @multi_line = ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))');
+SET @multi_polygon = ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))');
+SET @colloction = ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))');
+drop table if exists t;
+create table t(g geometry  NOT NULL srid 0);
+create index idx on t (g);
+INSERT INTO t (g) VALUES
+(ST_GeomFromText('POINT(0 0)')),
+(ST_GeomFromText('POINT(1 1)')),
+(ST_GeomFromText('POINT(2 2)')),
+(ST_GeomFromText('POINT(3 3)')),
+(ST_GeomFromText('POINT(4 4)')),
+(ST_GeomFromText('POINT(5 5.5)')),
+(ST_GeomFromText('POINT(6 6)')),
+(ST_GeomFromText('POINT(7 7)'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)'));
+st_astext(g)
+POINT(0 0)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(0 0)'), g);
+st_astext(g)
+POINT(0 0)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(1 1)'));
+st_astext(g)
+POINT(1 1)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(2 2)'));
+st_astext(g)
+POINT(2 2)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(3 3)'));
+st_astext(g)
+POINT(3 3)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(4 4)'));
+st_astext(g)
+POINT(4 4)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(5 5)'));
+st_astext(g)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+st_astext(g)
+POINT(0 0)
+POINT(1 1)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))'));
+st_astext(g)
+POINT(0 0)
+POINT(1 1)
+POINT(2 2)
+POINT(3 3)
+POINT(4 4)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))'));
+st_astext(g)
+POINT(0 0)
+POINT(1 1)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))'));
+st_astext(g)
+POINT(0 0)
+POINT(1 1)
+POINT(4 4)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))'));
+st_astext(g)
+POINT(0 0)
+POINT(1 1)
+POINT(2 2)
+POINT(3 3)
+POINT(5 5.5)
+POINT(6 6)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
+st_astext(g)
+POINT(0 0)
+POINT(2 2)
+POINT(3 3)
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|1       |355         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(st_intersects(t.g, ST_GeomFromText('POINT(0 0)')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
+      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
+      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
+      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
+      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
+      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
+      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
+      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
+      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
+      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
+      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
+      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
+      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:8
+      physical_range_rows:8
+      logical_range_rows:8
+      index_back_rows:8
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(1 1)'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|1       |355         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(st_intersects(t.g, ST_GeomFromText('POINT(1 1)')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
+      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
+      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
+      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
+      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
+      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
+      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
+      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
+      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
+      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
+      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
+      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
+      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:8
+      physical_range_rows:8
+      logical_range_rows:8
+      index_back_rows:8
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|2       |355         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(st_intersects(t.g, ST_GeomFromText('LINESTRING(0 0,1 1)')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
+      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
+      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
+      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
+      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
+      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
+      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
+      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
+      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
+      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
+      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
+      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
+      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:8
+      physical_range_rows:8
+      logical_range_rows:8
+      index_back_rows:8
+      output_rows:2
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|5       |363         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(st_intersects(t.g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846983,MAX,MAX), (1152921504606846992,
+      MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,
+      MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,
+      MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,
+      MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,
+      MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,
+      MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,
+      MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,
+      MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,
+      MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,
+      MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,
+      MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,
+      MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846985,MIN,MIN ; 1152921504606846985,MAX,MAX), (1152921504606846988,
+      MIN,MIN ; 1152921504606846988,MAX,MAX), (1152921504606846991,MIN,MIN ; 1152921504606846991,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:8
+      physical_range_rows:8
+      logical_range_rows:8
+      index_back_rows:8
+      output_rows:5
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|2       |355         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(st_intersects(t.g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
+      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
+      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
+      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
+      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
+      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
+      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
+      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
+      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
+      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
+      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
+      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
+      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:8
+      physical_range_rows:8
+      logical_range_rows:8
+      index_back_rows:8
+      output_rows:2
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|3       |359         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(st_intersects(t.g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
+      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
+      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
+      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
+      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
+      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
+      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
+      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
+      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
+      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
+      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
+      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
+      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846981,
+      MIN,MIN ; 1152921504606846981,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:8
+      physical_range_rows:8
+      logical_range_rows:8
+      index_back_rows:8
+      output_rows:3
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|6       |351         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(st_intersects(t.g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6,
+       2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846983,MAX,MAX), (1152921504606846992,
+      MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,
+      MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,
+      MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,
+      MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,
+      MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,
+      MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,
+      MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,
+      MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,
+      MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,
+      MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,
+      MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,
+      MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:8
+      physical_range_rows:8
+      logical_range_rows:8
+      index_back_rows:8
+      output_rows:6
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|3       |355         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(st_intersects(t.g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
+      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
+      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
+      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
+      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
+      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
+      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
+      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
+      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
+      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
+      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
+      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
+      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:8
+      physical_range_rows:8
+      logical_range_rows:8
+      index_back_rows:8
+      output_rows:3
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+SET @line = ST_GeomFromText('LINESTRING(3 3,5 5)');
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('LINESTRING(3 3,5 5)'));
+st_astext(g)
+POINT(3 3)
+POINT(4 4)
+SET @line = ST_GeomFromText('LINESTRING(0 0,1 1)');
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)')) or st_intersects(g, ST_GeomFromText('POINT(1 1)'));
+st_astext(g)
+POINT(0 0)
+POINT(1 1)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)')) and st_intersects(g, ST_GeomFromText('POINT(1 1)'));
+st_astext(g)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)')) or st_intersects(g, ST_GeomFromText('POINT(1 1)')) or st_intersects(g, ST_GeomFromText('POINT(2 2)')) or st_intersects(g, ST_GeomFromText('POINT(3 3)')) or st_intersects(g, ST_GeomFromText('POINT(4 4)'));
+st_astext(g)
+POINT(0 0)
+POINT(1 1)
+POINT(2 2)
+POINT(3 3)
+POINT(4 4)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)')) and st_intersects(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+st_astext(g)
+POINT(0 0)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(1 1)')) or st_intersects(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+st_astext(g)
+POINT(0 0)
+POINT(1 1)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))')) and st_intersects(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+st_astext(g)
+POINT(0 0)
+POINT(1 1)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))')) or st_intersects(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+st_astext(g)
+POINT(0 0)
+POINT(1 1)
+POINT(2 2)
+POINT(3 3)
+POINT(4 4)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)')) or st_intersects(g, ST_GeomFromText('POINT(1 1)')) or 1=1;
+st_astext(g)
+POINT(0 0)
+POINT(1 1)
+POINT(2 2)
+POINT(3 3)
+POINT(4 4)
+POINT(5 5.5)
+POINT(6 6)
+POINT(7 7)
+set @@ob_enable_plan_cache = 0;
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)')) or st_intersects(g, ST_GeomFromText('POINT(1 1)')) or 1=1;
+st_astext(g)
+POINT(0 0)
+POINT(1 1)
+POINT(2 2)
+POINT(3 3)
+POINT(4 4)
+POINT(5 5.5)
+POINT(6 6)
+POINT(7 7)
+set @@ob_enable_plan_cache = 1;
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)')) or st_intersects(g, ST_GeomFromText('POINT(1 1)'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|2       |166         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(st_intersects(t.g, ST_GeomFromText('POINT(0 0)'))) OR BOOL(st_intersects(t.g, ST_GeomFromText('POINT(1 1)')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
+      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
+      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
+      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
+      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
+      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
+      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
+      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
+      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
+      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
+      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
+      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
+      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:8
+      physical_range_rows:8
+      logical_range_rows:8
+      index_back_rows:8
+      output_rows:2
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)')) and st_intersects(g, ST_GeomFromText('POINT(1 1)'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|1       |338         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(st_intersects(t.g, ST_GeomFromText('POINT(0 0)')))], [BOOL(st_intersects(t.g, ST_GeomFromText('POINT(1 1)')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
+      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
+      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
+      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
+      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
+      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
+      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
+      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
+      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
+      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
+      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
+      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
+      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:8
+      physical_range_rows:8
+      logical_range_rows:8
+      index_back_rows:8
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+drop table if exists t;
+create table t(g geometry  NOT NULL SRID 3825);
+create index idx on t (g);
+INSERT INTO t (g) VALUES
+(ST_GeomFromText('POINT(150000 2100000)', 3825)),
+(ST_GeomFromText('POINT(150001 2100001)', 3825)),
+(ST_GeomFromText('POINT(150002 2100002)', 3825)),
+(ST_GeomFromText('POINT(150003 2100003)', 3825)),
+(ST_GeomFromText('POINT(150004 2100004)', 3825)),
+(ST_GeomFromText('POINT(150005 2100005.5)', 3825)),
+(ST_GeomFromText('POINT(150006 2100006)', 3825)),
+(ST_GeomFromText('POINT(150007 2100007)', 3825));
+SET @point_0_0_3825 = ST_GeomFromText('POINT(150000 2100000)', 3825);
+SET @point_1_1_3825 = ST_GeomFromText('POINT(150001 2100001)', 3825);
+SET @point_2_2_3825 = ST_GeomFromText('POINT(150002 2100002)', 3825);
+SET @point_3_3_3825 = ST_GeomFromText('POINT(150003 2100003)', 3825);
+SET @point_4_4_3825 = ST_GeomFromText('POINT(150004 2100004)', 3825);
+SET @point_5_5_3825 = ST_GeomFromText('POINT(150005 2100005)', 3825);
+SET @line_3825 = ST_GeomFromText('LINESTRING(150000 2100000,150001 2100001)', 3825);
+SET @polygon_3825 = ST_GeomFromText('POLYGON((150000 2100000, 150010 2100000, 150010 2100005, 150000 2100005, 150000 2100000))', 3825);
+SET @multi_point_3825 = ST_GeomFromText('MULTIPOINT((150000 2100000), (150001 2100001))', 3825);
+SET @multi_line_3825 = ST_GeomFromText('MULTILINESTRING((150000 2100000, 150001 2100001), (150004 2100004, 150005 2100005))', 3825);
+SET @multi_polygon_3825 = ST_GeomFromText('MULTIPOLYGON (((150000 2100000, 150002 2100000, 150002 2100002, 150000 2100002, 150000 2100000)), ((150002.5 2100002.5, 150006 2100002.5, 150006 2100006, 150002.5 2100006, 150002.5 2100002.5), (150003.5 2100003, 150004.5 2100003, 150004.5 2100004.5, 150003.5 2100004.5, 150003.5 2100003)))', 3825);
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(150000 2100000)', 3825));
+st_astext(g)
+POINT(150000 2100000)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(150001 2100001)', 3825));
+st_astext(g)
+POINT(150001 2100001)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(150002 2100002)', 3825));
+st_astext(g)
+POINT(150002 2100002)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(150003 2100003)', 3825));
+st_astext(g)
+POINT(150003 2100003)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(150004 2100004)', 3825));
+st_astext(g)
+POINT(150004 2100004)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(150005 2100005)', 3825));
+st_astext(g)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('LINESTRING(150000 2100000,150001 2100001)', 3825));
+st_astext(g)
+POINT(150000 2100000)
+POINT(150001 2100001)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POLYGON((150000 2100000, 150010 2100000, 150010 2100005, 150000 2100005, 150000 2100000))', 3825));
+st_astext(g)
+POINT(150000 2100000)
+POINT(150001 2100001)
+POINT(150002 2100002)
+POINT(150003 2100003)
+POINT(150004 2100004)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTIPOINT((150000 2100000), (150001 2100001))', 3825));
+st_astext(g)
+POINT(150000 2100000)
+POINT(150001 2100001)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTILINESTRING((150000 2100000, 150001 2100001), (150004 2100004, 150005 2100005))', 3825));
+st_astext(g)
+POINT(150000 2100000)
+POINT(150001 2100001)
+POINT(150004 2100004)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTIPOLYGON (((150000 2100000, 150002 2100000, 150002 2100002, 150000 2100002, 150000 2100000)), ((150002.5 2100002.5, 150006 2100002.5, 150006 2100006, 150002.5 2100006, 150002.5 2100002.5), (150003.5 2100003, 150004.5 2100003, 150004.5 2100004.5, 150003.5 2100004.5, 150003.5 2100003)))', 3825));
+st_astext(g)
+POINT(150000 2100000)
+POINT(150001 2100001)
+POINT(150002 2100002)
+POINT(150003 2100003)
+POINT(150005 2100005.5)
+POINT(150006 2100006)
+INSERT INTO t (g) VALUES
+(ST_GeomFromText('POINT(355517 2727381)', 3825));
+SET @exceed_point = ST_GeomFromText('POINT(355517 2727381)', 3825);
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(355517 2727381)', 3825));
+st_astext(g)
+POINT(355517 2727381)
+drop table if exists t;
+create table t(g geometry  NOT NULL SRID 4326);
+create index idx on t (g);
+INSERT INTO t (g) VALUES
+(ST_GeomFromText('POINT(0 0)', 4326)),
+(ST_GeomFromText('POINT(1 1)', 4326)),
+(ST_GeomFromText('POINT(2 2)', 4326)),
+(ST_GeomFromText('POINT(3 3)', 4326)),
+(ST_GeomFromText('POINT(4 4)', 4326)),
+(ST_GeomFromText('POINT(5 5.5)', 4326)),
+(ST_GeomFromText('POINT(6 6)', 4326)),
+(ST_GeomFromText('POINT(7 7)', 4326));
+SET @point_0_0_4326 = ST_GeomFromText('POINT(0 0)', 4326);
+SET @point_1_1_4326 = ST_GeomFromText('POINT(1 1)', 4326);
+SET @point_2_2_4326 = ST_GeomFromText('POINT(2 2)', 4326);
+SET @point_3_3_4326 = ST_GeomFromText('POINT(3 3)', 4326);
+SET @point_4_4_4326 = ST_GeomFromText('POINT(4 4)', 4326);
+SET @point_5_5_4326 = ST_GeomFromText('POINT(5 5)', 4326);
+SET @line_4326 = ST_GeomFromText('LINESTRING(0 0,1 1)', 4326);
+SET @polygon_4326 = ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))', 4326);
+SET @multi_point_4326 = ST_GeomFromText('MULTIPOINT((0 0), (1 1))', 4326);
+SET @multi_line_4326 = ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))', 4326);
+SET @multi_polygon_4326 = ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))', 4326);
+SET @colloction_4326 = ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))', 4326);
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)', 4326));
+st_astext(g)
+POINT(0 0)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(1 1)', 4326));
+st_astext(g)
+POINT(1 1)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(2 2)', 4326));
+st_astext(g)
+POINT(2 2)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(3 3)', 4326));
+st_astext(g)
+POINT(3 3)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(4 4)', 4326));
+st_astext(g)
+POINT(4 4)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(5 5)', 4326));
+st_astext(g)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('LINESTRING(0 0,1 1)', 4326));
+st_astext(g)
+POINT(0 0)
+POINT(1 1)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))', 4326));
+st_astext(g)
+POINT(0 0)
+POINT(1 1)
+POINT(2 2)
+POINT(3 3)
+POINT(4 4)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))', 4326));
+st_astext(g)
+POINT(0 0)
+POINT(1 1)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))', 4326));
+st_astext(g)
+POINT(0 0)
+POINT(1 1)
+POINT(4 4)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))', 4326));
+st_astext(g)
+POINT(0 0)
+POINT(1 1)
+POINT(2 2)
+POINT(3 3)
+POINT(5 5.5)
+POINT(6 6)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))', 4326));
+st_astext(g)
+POINT(0 0)
+POINT(2 2)
+POINT(3 3)
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))', 4326), g);
+st_astext(g)
+POINT(0 0)
+POINT(2 2)
+POINT(3 3)
+SET @point_0_0 = ST_GeomFromText('POINT(0 0)');
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)'));
+ERROR HY000: The SRID of the geometry does not match the SRID of the column. The SRID of the geometry is 0, but the SRID of the column is 4326. Consider changing the SRID of the geometry or the SRID property of the column.
+drop table if exists t;
+create table t(g geometry  NOT NULL);
+create index idx on t (g);
+INSERT INTO t(g) VALUES (ST_GeomFromText('POINT(0 0)'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)', 4326));
+ERROR HY000: Binary geometry function given two geometries of different srids.
+drop table t;
+drop table if exists geo_table;
+CREATE TABLE geo_table(
+k int primary key,
+geom geometry SRID 0 NOT NULL,
+SPATIAL INDEX (geom)
+);
+INSERT INTO geo_table VALUES
+(1, ST_GeomFromText('POINT(1.0 1.0)')),
+(2, ST_GeomFromText('LINESTRING(1.0 1.0, 2.0 2.0)')),
+(3, ST_GeomFromText('POINT(3.0 3.0)')),
+(4, ST_GeomFromText('LINESTRING(4.0 4.0, 5.0 5.0)')),
+(5, ST_GeomFromText('LINESTRING(40.0 40.0, 41.0 41.0)')),
+(6, ST_GeomFromText('POLYGON((1.0 1.0, 5.0 1.0, 5.0 5.0, 1.0 5.0, 1.0 1.0))'));
+SELECT k FROM geo_table WHERE ST_Intersects(ST_GeomFromText('POINT(3.0 3.0)'), geom) ORDER BY k;
+k
+3
+6
+SELECT k FROM geo_table WHERE ST_Intersects(ST_GeomFromText('POINT(4.5 4.5)'), geom) ORDER BY k;
+k
+4
+6
+SELECT k FROM geo_table WHERE ST_Intersects(ST_GeomFromText('POINT(2.5 2.5)'), geom) ORDER BY k;
+k
+6
+SELECT /*+index(geo_table geom)*/ k FROM geo_table WHERE ST_Intersects(ST_GeomFromText('POINT(2.5 2.5)'), geom) ORDER BY k;
+k
+6
+drop table if exists geo_table2;
+CREATE TABLE geo_table2(
+k int,
+geom geometry SRID 0 NOT NULL,
+k_plus_one int,
+PRIMARY KEY (k, k_plus_one),
+SPATIAL INDEX (geom)
+);
+INSERT INTO geo_table2 VALUES
+(1, ST_GeomFromText('LINESTRING(1.0 1.0, 2.0 2.0)'), 2),
+(2, ST_GeomFromText('POLYGON((1.0 1.0, 5.0 1.0, 5.0 5.0, 1.0 5.0, 1.0 1.0))'), 3);
+SELECT k FROM geo_table2 WHERE ST_Intersects(ST_GeomFromText('POINT(3.0 3.0)'), geom);
+k
+2
+SELECT /*+index(geo_table2 geom)*/ k FROM geo_table2 WHERE ST_Intersects(ST_GeomFromText('POINT(3.0 3.0)'), geom);
+k
+2
+explain EXTENDED_NOADDR SELECT /*+index(geo_table2 geom)*/ k FROM geo_table2 WHERE ST_Intersects(ST_GeomFromText('POINT(3.0 3.0)'), geom);
+Query Plan
+===========================================================
+|ID|OPERATOR       |NAME            |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |TABLE FULL SCAN|geo_table2(geom)|1       |187         |
+===========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([geo_table2.k]), filter([BOOL(ST_Intersects(ST_GeomFromText('POINT(3.0 3.0)'), geo_table2.geom))])
+      access([geo_table2.k], [geo_table2.k_plus_one], [geo_table2.geom]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([geo_table2.__cellid_17], [geo_table2.__mbr_17], [geo_table2.k], [geo_table2.k_plus_one]), range(1152921504606846977,MIN,MIN,MIN ; 1152921504606846977,
+      MAX,MAX,MAX), (1152921504606846980,MIN,MIN,MIN ; 1152921504606846980,MAX,MAX,MAX), (1152921504606846992,MIN,MIN,MIN ; 1152921504606846992,MAX,MAX,MAX), 
+      (1152921504606847040,MIN,MIN,MIN ; 1152921504606847040,MAX,MAX,MAX), (1152921504606847232,MIN,MIN,MIN ; 1152921504606847232,MAX,MAX,MAX), (1152921504606848000,
+      MIN,MIN,MIN ; 1152921504606848000,MAX,MAX,MAX), (1152921504606851072,MIN,MIN,MIN ; 1152921504606851072,MAX,MAX,MAX), (1152921504606863360,MIN,MIN,MIN ; 
+      1152921504606863360,MAX,MAX,MAX), (1152921504606912512,MIN,MIN,MIN ; 1152921504606912512,MAX,MAX,MAX), (1152921504607109120,MIN,MIN,MIN ; 1152921504607109120,
+      MAX,MAX,MAX), (1152921504607895552,MIN,MIN,MIN ; 1152921504607895552,MAX,MAX,MAX), (1152921504611041280,MIN,MIN,MIN ; 1152921504611041280,MAX,MAX,MAX), 
+      (1152921504623624192,MIN,MIN,MIN ; 1152921504623624192,MAX,MAX,MAX), (1152921504673955840,MIN,MIN,MIN ; 1152921504673955840,MAX,MAX,MAX), (1152921504875282432,
+      MIN,MIN,MIN ; 1152921504875282432,MAX,MAX,MAX), (1152921505680588800,MIN,MIN,MIN ; 1152921505680588800,MAX,MAX,MAX), (1152921508901814272,MIN,MIN,MIN ; 
+      1152921508901814272,MAX,MAX,MAX), (1152921521786716160,MIN,MIN,MIN ; 1152921521786716160,MAX,MAX,MAX), (1152921573326323712,MIN,MIN,MIN ; 1152921573326323712,
+      MAX,MAX,MAX), (1152921779484753920,MIN,MIN,MIN ; 1152921779484753920,MAX,MAX,MAX), (1152922604118474752,MIN,MIN,MIN ; 1152922604118474752,MAX,MAX,MAX), 
+      (1152925902653358080,MIN,MIN,MIN ; 1152925902653358080,MAX,MAX,MAX), (1152939096792891392,MIN,MIN,MIN ; 1152939096792891392,MAX,MAX,MAX), (1152991873351024640,
+      MIN,MIN,MIN ; 1152991873351024640,MAX,MAX,MAX), (1153202979583557632,MIN,MIN,MIN ; 1153202979583557632,MAX,MAX,MAX), (1154047404513689600,MIN,MIN,MIN ; 
+      1154047404513689600,MAX,MAX,MAX), (1157425104234217472,MIN,MIN,MIN ; 1157425104234217472,MAX,MAX,MAX), (1170935903116328960,MIN,MIN,MIN ; 1170935903116328960,
+      MAX,MAX,MAX), (1224979098644774912,MIN,MIN,MIN ; 1224979098644774912,MAX,MAX,MAX), (1441151880758558720,MIN,MIN,MIN ; 1441151880758558720,MAX,MAX,MAX), 
+      (1152921504606846976,MIN,MIN,MIN ; 1152921504606846976,MAX,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("geo_table2" "geom")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."geo_table2"@"SEL$1" "geom")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  geo_table2:
+      table_rows:2
+      physical_range_rows:2
+      logical_range_rows:2
+      index_back_rows:2
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[geom, geo_table2]
+      pruned_index_name:[geo_table2]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+SELECT k, k_plus_one FROM geo_table2 WHERE ST_Intersects(ST_GeomFromText('POINT(3.0 3.0)'), geom);
+k	k_plus_one
+2	3
+SELECT /*+index(geo_table2 geom)*/ k, k_plus_one FROM geo_table2 WHERE ST_Intersects(ST_GeomFromText('POINT(3.0 3.0)'), geom);
+k	k_plus_one
+2	3
+explain EXTENDED_NOADDR SELECT /*+index(geo_table2 geom)*/ k, k_plus_one FROM geo_table2 WHERE ST_Intersects(ST_GeomFromText('POINT(3.0 3.0)'), geom);
+Query Plan
+===========================================================
+|ID|OPERATOR       |NAME            |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |TABLE FULL SCAN|geo_table2(geom)|1       |187         |
+===========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([geo_table2.k], [geo_table2.k_plus_one]), filter([BOOL(ST_Intersects(ST_GeomFromText('POINT(3.0 3.0)'), geo_table2.geom))])
+      access([geo_table2.k], [geo_table2.k_plus_one], [geo_table2.geom]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([geo_table2.__cellid_17], [geo_table2.__mbr_17], [geo_table2.k], [geo_table2.k_plus_one]), range(1152921504606846977,MIN,MIN,MIN ; 1152921504606846977,
+      MAX,MAX,MAX), (1152921504606846980,MIN,MIN,MIN ; 1152921504606846980,MAX,MAX,MAX), (1152921504606846992,MIN,MIN,MIN ; 1152921504606846992,MAX,MAX,MAX), 
+      (1152921504606847040,MIN,MIN,MIN ; 1152921504606847040,MAX,MAX,MAX), (1152921504606847232,MIN,MIN,MIN ; 1152921504606847232,MAX,MAX,MAX), (1152921504606848000,
+      MIN,MIN,MIN ; 1152921504606848000,MAX,MAX,MAX), (1152921504606851072,MIN,MIN,MIN ; 1152921504606851072,MAX,MAX,MAX), (1152921504606863360,MIN,MIN,MIN ; 
+      1152921504606863360,MAX,MAX,MAX), (1152921504606912512,MIN,MIN,MIN ; 1152921504606912512,MAX,MAX,MAX), (1152921504607109120,MIN,MIN,MIN ; 1152921504607109120,
+      MAX,MAX,MAX), (1152921504607895552,MIN,MIN,MIN ; 1152921504607895552,MAX,MAX,MAX), (1152921504611041280,MIN,MIN,MIN ; 1152921504611041280,MAX,MAX,MAX), 
+      (1152921504623624192,MIN,MIN,MIN ; 1152921504623624192,MAX,MAX,MAX), (1152921504673955840,MIN,MIN,MIN ; 1152921504673955840,MAX,MAX,MAX), (1152921504875282432,
+      MIN,MIN,MIN ; 1152921504875282432,MAX,MAX,MAX), (1152921505680588800,MIN,MIN,MIN ; 1152921505680588800,MAX,MAX,MAX), (1152921508901814272,MIN,MIN,MIN ; 
+      1152921508901814272,MAX,MAX,MAX), (1152921521786716160,MIN,MIN,MIN ; 1152921521786716160,MAX,MAX,MAX), (1152921573326323712,MIN,MIN,MIN ; 1152921573326323712,
+      MAX,MAX,MAX), (1152921779484753920,MIN,MIN,MIN ; 1152921779484753920,MAX,MAX,MAX), (1152922604118474752,MIN,MIN,MIN ; 1152922604118474752,MAX,MAX,MAX), 
+      (1152925902653358080,MIN,MIN,MIN ; 1152925902653358080,MAX,MAX,MAX), (1152939096792891392,MIN,MIN,MIN ; 1152939096792891392,MAX,MAX,MAX), (1152991873351024640,
+      MIN,MIN,MIN ; 1152991873351024640,MAX,MAX,MAX), (1153202979583557632,MIN,MIN,MIN ; 1153202979583557632,MAX,MAX,MAX), (1154047404513689600,MIN,MIN,MIN ; 
+      1154047404513689600,MAX,MAX,MAX), (1157425104234217472,MIN,MIN,MIN ; 1157425104234217472,MAX,MAX,MAX), (1170935903116328960,MIN,MIN,MIN ; 1170935903116328960,
+      MAX,MAX,MAX), (1224979098644774912,MIN,MIN,MIN ; 1224979098644774912,MAX,MAX,MAX), (1441151880758558720,MIN,MIN,MIN ; 1441151880758558720,MAX,MAX,MAX), 
+      (1152921504606846976,MIN,MIN,MIN ; 1152921504606846976,MAX,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("geo_table2" "geom")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."geo_table2"@"SEL$1" "geom")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  geo_table2:
+      table_rows:2
+      physical_range_rows:2
+      logical_range_rows:2
+      index_back_rows:2
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[geom, geo_table2]
+      pruned_index_name:[geo_table2]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+drop table if exists geo_table;
+CREATE TABLE geo_table(
+k int primary key,
+geom geometry SRID 26918 NOT NULL,
+SPATIAL INDEX (geom)
+);
+INSERT INTO geo_table VALUES
+(1, ST_GeomFromText('POINT(400001 4000001)', 26918)),
+(2, ST_GeomFromText('LINESTRING(400001 4000001, 400002 4000002)', 26918)),
+(3, ST_GeomFromText('POINT(400003 4000003)', 26918)),
+(4, ST_GeomFromText('LINESTRING(400004 4000004, 400005 4000005)', 26918)),
+(5, ST_GeomFromText('LINESTRING(400040 4000040, 400041 4000041)', 26918)),
+(6, ST_GeomFromText('POLYGON((400001 4000001, 400005 4000001, 400005 4000005, 400001 4000005, 400001 4000001))', 26918));
+SELECT k FROM geo_table WHERE ST_Intersects(ST_GeomFromText('POINT(400003 4000003)', 26918), geom) ORDER BY k;
+k
+3
+6
+SELECT /*+index(geo_table geom)*/ k FROM geo_table WHERE ST_Intersects(ST_GeomFromText('POINT(400003 4000003)', 26918), geom) ORDER BY k;
+k
+3
+6
+explain EXTENDED_NOADDR SELECT /*+index(geo_table geom)*/ k FROM geo_table WHERE ST_Intersects(ST_GeomFromText('POINT(400003 4000003)', 26918), geom) ORDER BY k;
+Query Plan
+============================================================
+|ID|OPERATOR         |NAME           |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------
+|0 |SORT             |               |2       |299         |
+|1 |└─TABLE FULL SCAN|geo_table(geom)|2       |299         |
+============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([geo_table.k]), filter(nil)
+      sort_keys([geo_table.k, ASC])
+  1 - output([geo_table.k]), filter([BOOL(ST_Intersects(ST_GeomFromText('POINT(400003 4000003)', 26918), geo_table.geom))])
+      access([geo_table.k], [geo_table.geom]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([geo_table.__cellid_17], [geo_table.__mbr_17], [geo_table.k]), range(229088218193095929,MIN,MIN ; 229088218193095929,MAX,MAX), (229088218193095932,
+      MIN,MIN ; 229088218193095932,MAX,MAX), (229088218193095920,MIN,MIN ; 229088218193095920,MAX,MAX), (229088218193095872,MIN,MIN ; 229088218193095872,MAX,MAX),
+       (229088218193095936,MIN,MIN ; 229088218193095936,MAX,MAX), (229088218193095680,MIN,MIN ; 229088218193095680,MAX,MAX), (229088218193096704,MIN,MIN ; 229088218193096704,
+      MAX,MAX), (229088218193084416,MIN,MIN ; 229088218193084416,MAX,MAX), (229088218193133568,MIN,MIN ; 229088218193133568,MAX,MAX), (229088218193330176,MIN,
+      MIN ; 229088218193330176,MAX,MAX), (229088218194116608,MIN,MIN ; 229088218194116608,MAX,MAX), (229088218195165184,MIN,MIN ; 229088218195165184,MAX,MAX),
+       (229088218182582272,MIN,MIN ; 229088218182582272,MAX,MAX), (229088218199359488,MIN,MIN ; 229088218199359488,MAX,MAX), (229088218266468352,MIN,MIN ; 229088218266468352,
+      MAX,MAX), (229088217998032896,MIN,MIN ; 229088217998032896,MAX,MAX), (229088216924291072,MIN,MIN ; 229088216924291072,MAX,MAX), (229088212629323776,MIN,
+      MIN ; 229088212629323776,MAX,MAX), (229088264168931328,MIN,MIN ; 229088264168931328,MAX,MAX), (229088470327361536,MIN,MIN ; 229088470327361536,MAX,MAX),
+       (229088745205268480,MIN,MIN ; 229088745205268480,MAX,MAX), (229089844716896256,MIN,MIN ; 229089844716896256,MAX,MAX), (229103038856429568,MIN,MIN ; 229103038856429568,
+      MAX,MAX), (229050262298296320,MIN,MIN ; 229050262298296320,MAX,MAX), (228839156065763328,MIN,MIN ; 228839156065763328,MAX,MAX), (228557681089052672,MIN,
+      MIN ; 228557681089052672,MAX,MAX), (229683580995895296,MIN,MIN ; 229683580995895296,MAX,MAX), (234187180623265792,MIN,MIN ; 234187180623265792,MAX,MAX),
+       (216172782113783808,MIN,MIN ; 216172782113783808,MAX,MAX), (288230376151711744,MIN,MIN ; 288230376151711744,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,
+      MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("geo_table" "geom")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."geo_table"@"SEL$1" "geom")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  geo_table:
+      table_rows:6
+      physical_range_rows:6
+      logical_range_rows:6
+      index_back_rows:6
+      output_rows:2
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[geom, geo_table]
+      pruned_index_name:[geo_table]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+drop table if exists t;
+create table t(g geometry  NOT NULL srid 0);
+create index idx on t (g);
+INSERT INTO t (g) VALUES
+(ST_GeomFromText('POINT(0 0)')),
+(ST_GeomFromText('POINT(1 1)')),
+(ST_GeomFromText('POINT(2 2)')),
+(ST_GeomFromText('POINT(3 3)')),
+(ST_GeomFromText('POINT(4 4)')),
+(ST_GeomFromText('POINT(5 5.5)')),
+(ST_GeomFromText('POINT(6 6)')),
+(ST_GeomFromText('POINT(7 7)')),
+(ST_GeomFromText('LINESTRING(0 0,1 1)')),
+(ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))')),
+(ST_GeomFromText('MULTIPOINT((0 0), (1 1))')),
+(ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))')),
+(ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))')),
+(ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(0 0)'));
+st_astext(g)
+POINT(0 0)
+LINESTRING(0 0,1 1)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+MULTIPOINT((0 0),(1 1))
+MULTILINESTRING((0 0,1 1),(4 4,5 5))
+MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
+GEOMETRYCOLLECTION(POINT(0 0),LINESTRING(2 2,3 3))
+select st_astext(g) from t where _st_covers(ST_GeomFromText('POINT(0 0)'), g);
+st_astext(g)
+POINT(0 0)
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(1 1)'));
+st_astext(g)
+POINT(1 1)
+LINESTRING(0 0,1 1)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+MULTIPOINT((0 0),(1 1))
+MULTILINESTRING((0 0,1 1),(4 4,5 5))
+MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(2 2)'));
+st_astext(g)
+POINT(2 2)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
+GEOMETRYCOLLECTION(POINT(0 0),LINESTRING(2 2,3 3))
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(3 3)'));
+st_astext(g)
+POINT(3 3)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
+GEOMETRYCOLLECTION(POINT(0 0),LINESTRING(2 2,3 3))
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(4 4)'));
+st_astext(g)
+POINT(4 4)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+MULTILINESTRING((0 0,1 1),(4 4,5 5))
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(5 5)'));
+st_astext(g)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+MULTILINESTRING((0 0,1 1),(4 4,5 5))
+MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+st_astext(g)
+LINESTRING(0 0,1 1)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+MULTILINESTRING((0 0,1 1),(4 4,5 5))
+MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))'));
+st_astext(g)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))'));
+st_astext(g)
+LINESTRING(0 0,1 1)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+MULTIPOINT((0 0),(1 1))
+MULTILINESTRING((0 0,1 1),(4 4,5 5))
+MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))'));
+st_astext(g)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+MULTILINESTRING((0 0,1 1),(4 4,5 5))
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))'));
+st_astext(g)
+MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
+st_astext(g)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+GEOMETRYCOLLECTION(POINT(0 0),LINESTRING(2 2,3 3))
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(0 0)'));
+st_astext(g)
+POINT(0 0)
+LINESTRING(0 0,1 1)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+MULTIPOINT((0 0),(1 1))
+MULTILINESTRING((0 0,1 1),(4 4,5 5))
+MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
+GEOMETRYCOLLECTION(POINT(0 0),LINESTRING(2 2,3 3))
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(ST_GeomFromText('POINT(0 0)'), g);
+st_astext(g)
+POINT(0 0)
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(1 1)'));
+st_astext(g)
+POINT(1 1)
+LINESTRING(0 0,1 1)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+MULTIPOINT((0 0),(1 1))
+MULTILINESTRING((0 0,1 1),(4 4,5 5))
+MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(2 2)'));
+st_astext(g)
+POINT(2 2)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
+GEOMETRYCOLLECTION(POINT(0 0),LINESTRING(2 2,3 3))
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(3 3)'));
+st_astext(g)
+POINT(3 3)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
+GEOMETRYCOLLECTION(POINT(0 0),LINESTRING(2 2,3 3))
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(4 4)'));
+st_astext(g)
+POINT(4 4)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+MULTILINESTRING((0 0,1 1),(4 4,5 5))
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(5 5)'));
+st_astext(g)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+MULTILINESTRING((0 0,1 1),(4 4,5 5))
+MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+st_astext(g)
+LINESTRING(0 0,1 1)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+MULTILINESTRING((0 0,1 1),(4 4,5 5))
+MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))'));
+st_astext(g)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))'));
+st_astext(g)
+LINESTRING(0 0,1 1)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+MULTIPOINT((0 0),(1 1))
+MULTILINESTRING((0 0,1 1),(4 4,5 5))
+MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))'));
+st_astext(g)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+MULTILINESTRING((0 0,1 1),(4 4,5 5))
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))'));
+st_astext(g)
+MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
+select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
+st_astext(g)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+GEOMETRYCOLLECTION(POINT(0 0),LINESTRING(2 2,3 3))
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(0 0)'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|7       |523         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(_st_covers(t.g, ST_GeomFromText('POINT(0 0)')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
+      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
+      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
+      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
+      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
+      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
+      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
+      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
+      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
+      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
+      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
+      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
+      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:14
+      physical_range_rows:14
+      logical_range_rows:14
+      index_back_rows:14
+      output_rows:7
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(1 1)'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|6       |523         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(_st_covers(t.g, ST_GeomFromText('POINT(1 1)')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
+      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
+      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
+      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
+      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
+      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
+      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
+      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
+      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
+      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
+      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
+      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
+      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:14
+      physical_range_rows:14
+      logical_range_rows:14
+      index_back_rows:14
+      output_rows:6
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|4       |523         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(_st_covers(t.g, ST_GeomFromText('LINESTRING(0 0,1 1)')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
+      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
+      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
+      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
+      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
+      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
+      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
+      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
+      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
+      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
+      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
+      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
+      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:14
+      physical_range_rows:14
+      logical_range_rows:14
+      index_back_rows:14
+      output_rows:4
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|1       |527         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(_st_covers(t.g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,
+      MIN,MIN ; 1152921504606847040,MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,
+      MAX,MAX), (1152921504606851072,MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,
+      MIN,MIN ; 1152921504606912512,MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,
+      MAX,MAX), (1152921504611041280,MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,
+      MIN,MIN ; 1152921504673955840,MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,
+      MAX,MAX), (1152921508901814272,MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,
+      MIN,MIN ; 1152921573326323712,MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,
+      MAX,MAX), (1152925902653358080,MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,
+      MIN,MIN ; 1152991873351024640,MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,
+      MAX,MAX), (1157425104234217472,MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,
+      MIN,MIN ; 1224979098644774912,MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,
+      MAX,MAX), (1152921504606846980,MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846985,MIN,MIN ; 1152921504606846985,MAX,MAX), (1152921504606846991,
+      MIN,MIN ; 1152921504606846991,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:14
+      physical_range_rows:14
+      logical_range_rows:14
+      index_back_rows:14
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|5       |523         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(_st_covers(t.g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
+      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
+      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
+      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
+      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
+      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
+      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
+      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
+      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
+      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
+      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
+      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
+      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:14
+      physical_range_rows:14
+      logical_range_rows:14
+      index_back_rows:14
+      output_rows:5
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|2       |527         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(_st_covers(t.g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846980,MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,
+      MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,
+      MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,
+      MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,
+      MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,
+      MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,
+      MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,
+      MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,
+      MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,
+      MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,
+      MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,
+      MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,
+      MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846981,
+      MIN,MIN ; 1152921504606846981,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:14
+      physical_range_rows:14
+      logical_range_rows:14
+      index_back_rows:14
+      output_rows:2
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|1       |519         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(_st_covers(t.g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 
+      2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846980,MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,
+      MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,
+      MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,
+      MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,
+      MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,
+      MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,
+      MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,
+      MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,
+      MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,
+      MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,
+      MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,
+      MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,
+      MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:14
+      physical_range_rows:14
+      logical_range_rows:14
+      index_back_rows:14
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|2       |523         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(_st_covers(t.g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
+      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
+      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
+      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
+      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
+      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
+      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
+      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
+      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
+      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
+      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
+      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
+      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:14
+      physical_range_rows:14
+      logical_range_rows:14
+      index_back_rows:14
+      output_rows:2
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('POINT(0 0)'));
+st_astext(g)
+POINT(0 0)
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(ST_GeomFromText('POINT(0 0)'), g);
+st_astext(g)
+POINT(0 0)
+MULTIPOINT((0 0),(1 1))
+GEOMETRYCOLLECTION(POINT(0 0),LINESTRING(2 2,3 3))
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('POINT(1 1)'));
+st_astext(g)
+POINT(1 1)
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('POINT(2 2)'));
+st_astext(g)
+POINT(2 2)
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('POINT(3 3)'));
+st_astext(g)
+POINT(3 3)
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('POINT(4 4)'));
+st_astext(g)
+POINT(4 4)
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('POINT(5 5)'));
+st_astext(g)
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+st_astext(g)
+LINESTRING(0 0,1 1)
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))'));
+st_astext(g)
+POINT(1 1)
+POINT(2 2)
+POINT(3 3)
+POINT(4 4)
+LINESTRING(0 0,1 1)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+MULTIPOINT((0 0),(1 1))
+MULTILINESTRING((0 0,1 1),(4 4,5 5))
+GEOMETRYCOLLECTION(POINT(0 0),LINESTRING(2 2,3 3))
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))'));
+st_astext(g)
+POINT(0 0)
+POINT(1 1)
+MULTIPOINT((0 0),(1 1))
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))'));
+st_astext(g)
+LINESTRING(0 0,1 1)
+MULTILINESTRING((0 0,1 1),(4 4,5 5))
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))'));
+st_astext(g)
+POINT(1 1)
+POINT(3 3)
+POINT(5 5.5)
+LINESTRING(0 0,1 1)
+MULTIPOINT((0 0),(1 1))
+MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
+select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
+st_astext(g)
+POINT(0 0)
+GEOMETRYCOLLECTION(POINT(0 0),LINESTRING(2 2,3 3))
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('POINT(0 0)'));
+st_astext(g)
+POINT(0 0)
+MULTIPOINT((0 0),(1 1))
+GEOMETRYCOLLECTION(POINT(0 0),LINESTRING(2 2,3 3))
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(ST_GeomFromText('POINT(0 0)'), g);
+st_astext(g)
+POINT(0 0)
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('POINT(1 1)'));
+st_astext(g)
+POINT(1 1)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+MULTIPOINT((0 0),(1 1))
+MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('POINT(2 2)'));
+st_astext(g)
+POINT(2 2)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('POINT(3 3)'));
+st_astext(g)
+POINT(3 3)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('POINT(4 4)'));
+st_astext(g)
+POINT(4 4)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('POINT(5 5)'));
+st_astext(g)
+MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+st_astext(g)
+LINESTRING(0 0,1 1)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+MULTILINESTRING((0 0,1 1),(4 4,5 5))
+MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))'));
+st_astext(g)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))'));
+st_astext(g)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+MULTIPOINT((0 0),(1 1))
+MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))'));
+st_astext(g)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+MULTILINESTRING((0 0,1 1),(4 4,5 5))
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))'));
+st_astext(g)
+MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
+select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
+st_astext(g)
+POLYGON((0 0,10 0,10 5,0 5,0 0))
+GEOMETRYCOLLECTION(POINT(0 0),LINESTRING(2 2,3 3))
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('POINT(0 0)'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(ST_Within(t.g, ST_GeomFromText('POINT(0 0)')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
+      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
+      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
+      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
+      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
+      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
+      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
+      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
+      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
+      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
+      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
+      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
+      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:14
+      physical_range_rows:14
+      logical_range_rows:14
+      index_back_rows:14
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('POINT(1 1)'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(ST_Within(t.g, ST_GeomFromText('POINT(1 1)')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
+      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
+      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
+      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
+      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
+      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
+      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
+      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
+      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
+      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
+      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
+      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
+      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:14
+      physical_range_rows:14
+      logical_range_rows:14
+      index_back_rows:14
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(ST_Within(t.g, ST_GeomFromText('LINESTRING(0 0,1 1)')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
+      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
+      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
+      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
+      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
+      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
+      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
+      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
+      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
+      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
+      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
+      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
+      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:14
+      physical_range_rows:14
+      logical_range_rows:14
+      index_back_rows:14
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|9       |531         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(ST_Within(t.g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846983,MAX,MAX), (1152921504606846992,
+      MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,
+      MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,
+      MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,
+      MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,
+      MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,
+      MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,
+      MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,
+      MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,
+      MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,
+      MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,
+      MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,
+      MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846985,MIN,MIN ; 1152921504606846985,MAX,MAX), (1152921504606846988,
+      MIN,MIN ; 1152921504606846988,MAX,MAX), (1152921504606846991,MIN,MIN ; 1152921504606846991,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:14
+      physical_range_rows:14
+      logical_range_rows:14
+      index_back_rows:14
+      output_rows:9
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|3       |523         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(ST_Within(t.g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
+      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
+      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
+      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
+      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
+      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
+      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
+      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
+      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
+      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
+      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
+      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
+      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:14
+      physical_range_rows:14
+      logical_range_rows:14
+      index_back_rows:14
+      output_rows:3
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|2       |527         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(ST_Within(t.g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
+      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
+      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
+      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
+      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
+      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
+      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
+      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
+      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
+      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
+      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
+      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
+      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846981,
+      MIN,MIN ; 1152921504606846981,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:14
+      physical_range_rows:14
+      logical_range_rows:14
+      index_back_rows:14
+      output_rows:2
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|6       |519         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(ST_Within(t.g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 
+      2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846983,MAX,MAX), (1152921504606846992,
+      MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,
+      MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,
+      MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,
+      MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,
+      MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,
+      MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,
+      MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,
+      MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,
+      MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,
+      MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,
+      MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,
+      MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:14
+      physical_range_rows:14
+      logical_range_rows:14
+      index_back_rows:14
+      output_rows:6
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Within(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|2       |523         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(ST_Within(t.g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
+      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
+      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
+      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
+      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
+      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
+      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
+      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
+      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
+      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
+      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
+      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
+      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:14
+      physical_range_rows:14
+      logical_range_rows:14
+      index_back_rows:14
+      output_rows:2
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('POINT(0 0)'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|3       |523         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(ST_Contains(t.g, ST_GeomFromText('POINT(0 0)')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
+      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
+      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
+      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
+      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
+      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
+      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
+      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
+      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
+      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
+      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
+      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
+      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:14
+      physical_range_rows:14
+      logical_range_rows:14
+      index_back_rows:14
+      output_rows:3
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('POINT(1 1)'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|4       |523         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(ST_Contains(t.g, ST_GeomFromText('POINT(1 1)')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
+      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
+      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
+      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
+      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
+      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
+      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
+      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
+      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
+      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
+      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
+      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
+      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:14
+      physical_range_rows:14
+      logical_range_rows:14
+      index_back_rows:14
+      output_rows:4
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|4       |523         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(ST_Contains(t.g, ST_GeomFromText('LINESTRING(0 0,1 1)')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
+      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
+      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
+      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
+      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
+      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
+      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
+      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
+      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
+      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
+      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
+      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
+      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:14
+      physical_range_rows:14
+      logical_range_rows:14
+      index_back_rows:14
+      output_rows:4
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|1       |527         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(ST_Contains(t.g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,
+      MIN,MIN ; 1152921504606847040,MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,
+      MAX,MAX), (1152921504606851072,MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,
+      MIN,MIN ; 1152921504606912512,MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,
+      MAX,MAX), (1152921504611041280,MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,
+      MIN,MIN ; 1152921504673955840,MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,
+      MAX,MAX), (1152921508901814272,MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,
+      MIN,MIN ; 1152921573326323712,MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,
+      MAX,MAX), (1152925902653358080,MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,
+      MIN,MIN ; 1152991873351024640,MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,
+      MAX,MAX), (1157425104234217472,MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,
+      MIN,MIN ; 1224979098644774912,MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,
+      MAX,MAX), (1152921504606846980,MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846985,MIN,MIN ; 1152921504606846985,MAX,MAX), (1152921504606846991,
+      MIN,MIN ; 1152921504606846991,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:14
+      physical_range_rows:14
+      logical_range_rows:14
+      index_back_rows:14
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|3       |523         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(ST_Contains(t.g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
+      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
+      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
+      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
+      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
+      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
+      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
+      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
+      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
+      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
+      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
+      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
+      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:14
+      physical_range_rows:14
+      logical_range_rows:14
+      index_back_rows:14
+      output_rows:3
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|2       |527         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(ST_Contains(t.g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846980,MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,
+      MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,
+      MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,
+      MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,
+      MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,
+      MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,
+      MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,
+      MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,
+      MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,
+      MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,
+      MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,
+      MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,
+      MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846981,
+      MIN,MIN ; 1152921504606846981,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:14
+      physical_range_rows:14
+      logical_range_rows:14
+      index_back_rows:14
+      output_rows:2
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|1       |519         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(ST_Contains(t.g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 
+      2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846980,MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,
+      MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,
+      MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,
+      MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,
+      MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,
+      MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,
+      MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,
+      MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,
+      MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,
+      MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,
+      MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,
+      MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,
+      MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:14
+      physical_range_rows:14
+      logical_range_rows:14
+      index_back_rows:14
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where ST_Contains(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|2       |523         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(ST_Contains(t.g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))')))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
+      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
+      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
+      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
+      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
+      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
+      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
+      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
+      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
+      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
+      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
+      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
+      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:14
+      physical_range_rows:14
+      logical_range_rows:14
+      index_back_rows:14
+      output_rows:2
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:1
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+drop table geo_table;
+drop table if exists tt1;
+CREATE TABLE tt1 (id int ,g GEOMETRY not null srid 4236);
+ALTER TABLE tt1 ADD spatial INDEX idx(g) local;
+insert into tt1 values(2,ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)',4236));
+select id ,st_astext(g) from tt1 where ST_Intersects(g,g);
+id	st_astext(g)
+2	LINESTRING(0 0,10 10,20 25,50 60)
+drop table tt1;
+drop table if exists t;
+create table t(g geometry  NOT NULL SRID 3825);
+create index idx on t (g);
+SET @illegal_point = ST_GeomFromText('POINT(600000 3000000)', 3825);
+SET @illegal_line = ST_GeomFromText('LINESTRING(550000 2600000,600000 3000000)', 3825);
+SET @legal_polygon = ST_GeomFromText('POLYGON((500000 2500000, 550000 2500000, 550000 2600000, 500000 2600000, 500000 2500000))', 3825);
+SET @illegal_polygon = ST_GeomFromText('POLYGON((500000 2500000, 590000 2500000, 590000 2800000, 500000 2800000, 500000 2500000))', 3825);
+SET @illegal_mtp = ST_GeomFromText('MULTIPOINT((550000 2600000),(600000 3100000))', 3825);
+SET @illegal_mtl = ST_GeomFromText('MULTILINESTRING((550000 2600000,600000 3000000), (530000 2500000,560000 2500000))', 3825);
+SET @illegal_multi_mpy = ST_GeomFromText('MULTIPOLYGON(((500000 2500000, 550000 2500000, 550000 2600000, 500000 2600000, 500000 2500000)), ((500000 2500000, 590000 2500000, 590000 2800000, 500000 2800000, 500000 2500000)))', 3825);
+SET @illegal_colloction = ST_GeomFromText('GEOMETRYCOLLECTION(POINT(600000 3000000), LINESTRING(530000 2500000,560000 2500000))', 3825);
+INSERT INTO t (g) VALUES (ST_GeomFromText('POINT(600000 3000000)', 3825));
+INSERT INTO t (g) VALUES (ST_GeomFromText('LINESTRING(550000 2600000,600000 3000000)', 3825));
+INSERT INTO t (g) VALUES (ST_GeomFromText('POLYGON((500000 2500000, 600000 2500000, 600000 3000000, 500000 3000000, 500000 2500000))', 3825));
+INSERT INTO t (g) VALUES (ST_GeomFromText('MULTIPOINT((550000 2600000),(600000 3100000))', 3825));
+INSERT INTO t (g) VALUES (ST_GeomFromText('MULTILINESTRING((550000 2600000,600000 3000000), (530000 2500000,560000 2500000))', 3825));
+INSERT INTO t (g) VALUES (ST_GeomFromText('MULTIPOLYGON(((500000 2500000, 550000 2500000, 550000 2600000, 500000 2600000, 500000 2500000)), ((500000 2500000, 590000 2500000, 590000 2800000, 500000 2800000, 500000 2500000)))', 3825));
+INSERT INTO t (g) VALUES (ST_GeomFromText('GEOMETRYCOLLECTION(POINT(600000 3000000), LINESTRING(530000 2500000,560000 2500000))', 3825));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(600000 3000000)', 3825));
+st_astext(g)
+POINT(600000 3000000)
+LINESTRING(550000 2600000,600000 3000000)
+POLYGON((500000 2500000,600000 2500000,600000 3000000,500000 3000000,500000 2500000))
+MULTILINESTRING((550000 2600000,600000 3000000),(530000 2500000,560000 2500000))
+GEOMETRYCOLLECTION(POINT(600000 3000000),LINESTRING(530000 2500000,560000 2500000))
+explain EXTENDED_NOADDR select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(600000 3000000)', 3825));
+Query Plan
+=================================================
+|ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TABLE FULL SCAN|t(idx)|1       |201         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(t.g)]), filter([BOOL(st_intersects(t.g, ST_GeomFromText('POINT(600000 3000000)', 3825)))])
+      access([t.__pk_increment], [t.g]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(18446744073709551615,MIN,MIN ; 18446744073709551615,MAX,MAX)
+Used Hint:
+-------------------------------------
+  /*+
+      
+      INDEX("t" "idx")
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t:
+      table_rows:7
+      physical_range_rows:7
+      logical_range_rows:7
+      index_back_rows:1
+      output_rows:0
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[idx, t]
+      pruned_index_name:[t]
+      stats version:0
+      dynamic sampling level:0
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('LINESTRING(550000 2600000,600000 3000000)', 3825));
+st_astext(g)
+POINT(600000 3000000)
+LINESTRING(550000 2600000,600000 3000000)
+POLYGON((500000 2500000,600000 2500000,600000 3000000,500000 3000000,500000 2500000))
+MULTIPOINT((550000 2600000),(600000 3100000))
+MULTILINESTRING((550000 2600000,600000 3000000),(530000 2500000,560000 2500000))
+MULTIPOLYGON(((500000 2500000,550000 2500000,550000 2600000,500000 2600000,500000 2500000)),((500000 2500000,590000 2500000,590000 2800000,500000 2800000,500000 2500000)))
+GEOMETRYCOLLECTION(POINT(600000 3000000),LINESTRING(530000 2500000,560000 2500000))
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POLYGON((500000 2500000, 550000 2500000, 550000 2600000, 500000 2600000, 500000 2500000))', 3825));
+st_astext(g)
+LINESTRING(550000 2600000,600000 3000000)
+POLYGON((500000 2500000,600000 2500000,600000 3000000,500000 3000000,500000 2500000))
+MULTIPOINT((550000 2600000),(600000 3100000))
+MULTILINESTRING((550000 2600000,600000 3000000),(530000 2500000,560000 2500000))
+MULTIPOLYGON(((500000 2500000,550000 2500000,550000 2600000,500000 2600000,500000 2500000)),((500000 2500000,590000 2500000,590000 2800000,500000 2800000,500000 2500000)))
+GEOMETRYCOLLECTION(POINT(600000 3000000),LINESTRING(530000 2500000,560000 2500000))
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POLYGON((500000 2500000, 590000 2500000, 590000 2800000, 500000 2800000, 500000 2500000))', 3825));
+st_astext(g)
+LINESTRING(550000 2600000,600000 3000000)
+POLYGON((500000 2500000,600000 2500000,600000 3000000,500000 3000000,500000 2500000))
+MULTIPOINT((550000 2600000),(600000 3100000))
+MULTILINESTRING((550000 2600000,600000 3000000),(530000 2500000,560000 2500000))
+MULTIPOLYGON(((500000 2500000,550000 2500000,550000 2600000,500000 2600000,500000 2500000)),((500000 2500000,590000 2500000,590000 2800000,500000 2800000,500000 2500000)))
+GEOMETRYCOLLECTION(POINT(600000 3000000),LINESTRING(530000 2500000,560000 2500000))
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTIPOINT((550000 2600000),(600000 3100000))', 3825));
+st_astext(g)
+LINESTRING(550000 2600000,600000 3000000)
+POLYGON((500000 2500000,600000 2500000,600000 3000000,500000 3000000,500000 2500000))
+MULTIPOINT((550000 2600000),(600000 3100000))
+MULTILINESTRING((550000 2600000,600000 3000000),(530000 2500000,560000 2500000))
+MULTIPOLYGON(((500000 2500000,550000 2500000,550000 2600000,500000 2600000,500000 2500000)),((500000 2500000,590000 2500000,590000 2800000,500000 2800000,500000 2500000)))
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTIPOLYGON(((500000 2500000, 550000 2500000, 550000 2600000, 500000 2600000, 500000 2500000)), ((500000 2500000, 590000 2500000, 590000 2800000, 500000 2800000, 500000 2500000)))', 3825));
+st_astext(g)
+LINESTRING(550000 2600000,600000 3000000)
+POLYGON((500000 2500000,600000 2500000,600000 3000000,500000 3000000,500000 2500000))
+MULTIPOINT((550000 2600000),(600000 3100000))
+MULTILINESTRING((550000 2600000,600000 3000000),(530000 2500000,560000 2500000))
+MULTIPOLYGON(((500000 2500000,550000 2500000,550000 2600000,500000 2600000,500000 2500000)),((500000 2500000,590000 2500000,590000 2800000,500000 2800000,500000 2500000)))
+GEOMETRYCOLLECTION(POINT(600000 3000000),LINESTRING(530000 2500000,560000 2500000))
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('MULTILINESTRING((550000 2600000,600000 3000000), (530000 2500000,560000 2500000))', 3825));
+st_astext(g)
+POINT(600000 3000000)
+LINESTRING(550000 2600000,600000 3000000)
+POLYGON((500000 2500000,600000 2500000,600000 3000000,500000 3000000,500000 2500000))
+MULTIPOINT((550000 2600000),(600000 3100000))
+MULTILINESTRING((550000 2600000,600000 3000000),(530000 2500000,560000 2500000))
+MULTIPOLYGON(((500000 2500000,550000 2500000,550000 2600000,500000 2600000,500000 2500000)),((500000 2500000,590000 2500000,590000 2800000,500000 2800000,500000 2500000)))
+GEOMETRYCOLLECTION(POINT(600000 3000000),LINESTRING(530000 2500000,560000 2500000))
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(600000 3000000), LINESTRING(530000 2500000,560000 2500000))', 3825));
+st_astext(g)
+POINT(600000 3000000)
+LINESTRING(550000 2600000,600000 3000000)
+POLYGON((500000 2500000,600000 2500000,600000 3000000,500000 3000000,500000 2500000))
+MULTILINESTRING((550000 2600000,600000 3000000),(530000 2500000,560000 2500000))
+MULTIPOLYGON(((500000 2500000,550000 2500000,550000 2600000,500000 2600000,500000 2500000)),((500000 2500000,590000 2500000,590000 2800000,500000 2800000,500000 2500000)))
+GEOMETRYCOLLECTION(POINT(600000 3000000),LINESTRING(530000 2500000,560000 2500000))
+drop table t;
+drop table if exists geo_t1;
+CREATE TABLE geo_t1 (
+id INT,
+g GEOMETRY NOT NULL SRID 4326,
+SPATIAL INDEX g_idx (g)
+);
+INSERT INTO geo_t1 (id, g) VALUES
+(1, ST_GeomFromText('LINESTRING(0 10.00001, 10 10.00001)', 4326, 'axis-order=long-lat')),
+(2, ST_GeomFromText('LINESTRING(0 9.99999, 10 9.99999)', 4326, 'axis-order=long-lat')),
+(3, ST_GeomFromText('POLYGON((5 5.00001, 6 5.00001, 6 10, 5 10, 5 5.00001))', 4326, 'axis-order=long-lat')),
+(4, ST_GeomFromText('POINT(5 5.00001)', 4326, 'axis-order=long-lat')),
+(5, ST_GeomFromText('MULTILINESTRING((0 9.99999, 10 9.99999))', 4326, 'axis-order=long-lat')),
+(6, ST_GeomFromText('MULTIPOLYGON(((5 5.00001, 6 5.00001, 6 10, 5 10, 5 5.00001)))', 4326, 'axis-order=long-lat')),
+(7, ST_GeomFromText('MULTIPOINT((5 5.00001))', 4326, 'axis-order=long-lat')),
+(8, ST_GeomFromText('GEOMETRYCOLLECTION(MULTIPOLYGON(((5 5.00001, 6 5.00001, 6 10, 5 10, 5 5.00001))))', 4326, 'axis-order=long-lat'));
+select id, st_astext(g) from geo_t1 IGNORE INDEX(g_idx) where st_intersects(g, ST_GeomFromText('LINESTRING(-5 10, 5 10)', 4326, 'axis-order=long-lat'));
+id	st_astext(g)
+1	LINESTRING(10.00001 0,10.00001 10)
+2	LINESTRING(9.99999 0,9.99999 10)
+3	POLYGON((5.00001 5,5.00001 6,10 6,10 5,5.00001 5))
+5	MULTILINESTRING((9.99999 0,9.99999 10))
+6	MULTIPOLYGON(((5.00001 5,5.00001 6,10 6,10 5,5.00001 5)))
+8	GEOMETRYCOLLECTION(MULTIPOLYGON(((5.00001 5,5.00001 6,10 6,10 5,5.00001 5))))
+select id, st_astext(g) from geo_t1 FORCE INDEX(g_idx) where st_intersects(g, ST_GeomFromText('LINESTRING(-5 10, 5 10)', 4326, 'axis-order=long-lat'));
+id	st_astext(g)
+1	LINESTRING(10.00001 0,10.00001 10)
+2	LINESTRING(9.99999 0,9.99999 10)
+3	POLYGON((5.00001 5,5.00001 6,10 6,10 5,5.00001 5))
+5	MULTILINESTRING((9.99999 0,9.99999 10))
+6	MULTIPOLYGON(((5.00001 5,5.00001 6,10 6,10 5,5.00001 5)))
+8	GEOMETRYCOLLECTION(MULTIPOLYGON(((5.00001 5,5.00001 6,10 6,10 5,5.00001 5))))
+select id, st_astext(g) from geo_t1 IGNORE INDEX(g_idx) where st_contains(g, ST_GeomFromText('LINESTRING(-5 10, 5 10)', 4326, 'axis-order=long-lat'));
+id	st_astext(g)
+select id, st_astext(g) from geo_t1 FORCE INDEX(g_idx) where st_contains(g, ST_GeomFromText('LINESTRING(-5 10, 5 10)', 4326, 'axis-order=long-lat'));
+id	st_astext(g)
+select id, st_astext(g) from geo_t1 IGNORE INDEX(g_idx) where st_within(g, ST_GeomFromText('LINESTRING(-5 10, 5 10)', 4326, 'axis-order=long-lat'));
+id	st_astext(g)
+select id, st_astext(g) from geo_t1 FORCE INDEX(g_idx) where st_within(g, ST_GeomFromText('LINESTRING(-5 10, 5 10)', 4326, 'axis-order=long-lat'));
+id	st_astext(g)
+select id, st_astext(g) from geo_t1 IGNORE INDEX(g_idx) where _st_covers(g, ST_GeomFromText('LINESTRING(-5 10, 5 10)', 4326, 'axis-order=long-lat'));
+id	st_astext(g)
+select id, st_astext(g) from geo_t1 FORCE INDEX(g_idx) where _st_covers(g, ST_GeomFromText('LINESTRING(-5 10, 5 10)', 4326, 'axis-order=long-lat'));
+id	st_astext(g)
+select id, st_astext(g) from geo_t1 IGNORE INDEX(g_idx) where st_intersects(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))', 4326, 'axis-order=long-lat'));
+id	st_astext(g)
+3	POLYGON((5.00001 5,5.00001 6,10 6,10 5,5.00001 5))
+4	POINT(5.00001 5)
+6	MULTIPOLYGON(((5.00001 5,5.00001 6,10 6,10 5,5.00001 5)))
+7	MULTIPOINT((5.00001 5))
+8	GEOMETRYCOLLECTION(MULTIPOLYGON(((5.00001 5,5.00001 6,10 6,10 5,5.00001 5))))
+select id, st_astext(g) from geo_t1 FORCE INDEX(g_idx) where st_intersects(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))', 4326, 'axis-order=long-lat'));
+id	st_astext(g)
+3	POLYGON((5.00001 5,5.00001 6,10 6,10 5,5.00001 5))
+4	POINT(5.00001 5)
+6	MULTIPOLYGON(((5.00001 5,5.00001 6,10 6,10 5,5.00001 5)))
+7	MULTIPOINT((5.00001 5))
+8	GEOMETRYCOLLECTION(MULTIPOLYGON(((5.00001 5,5.00001 6,10 6,10 5,5.00001 5))))
+select id, st_astext(g) from geo_t1 IGNORE INDEX(g_idx) where st_contains(ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))', 4326, 'axis-order=long-lat'), g);
+id	st_astext(g)
+4	POINT(5.00001 5)
+7	MULTIPOINT((5.00001 5))
+select id, st_astext(g) from geo_t1 FORCE INDEX(g_idx) where st_contains(ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))', 4326, 'axis-order=long-lat'), g);
+id	st_astext(g)
+4	POINT(5.00001 5)
+7	MULTIPOINT((5.00001 5))
+select id, st_astext(g) from geo_t1 IGNORE INDEX(g_idx) where st_within(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))', 4326, 'axis-order=long-lat'));
+id	st_astext(g)
+4	POINT(5.00001 5)
+7	MULTIPOINT((5.00001 5))
+select id, st_astext(g) from geo_t1 FORCE INDEX(g_idx) where st_within(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))', 4326, 'axis-order=long-lat'));
+id	st_astext(g)
+4	POINT(5.00001 5)
+7	MULTIPOINT((5.00001 5))
+select id, st_astext(g) from geo_t1 IGNORE INDEX(g_idx) where _st_covers(ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))', 4326, 'axis-order=long-lat'), g);
+id	st_astext(g)
+4	POINT(5.00001 5)
+7	MULTIPOINT((5.00001 5))
+select id, st_astext(g) from geo_t1 FORCE INDEX(g_idx) where _st_covers(ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))', 4326, 'axis-order=long-lat'), g);
+id	st_astext(g)
+4	POINT(5.00001 5)
+7	MULTIPOINT((5.00001 5))
+drop table geo_t1;

@@ -1,0 +1,79 @@
+#owner: luohongdi.lhd
+#owner group: sql2
+# tags: optimizer
+
+--disable_query_log
+set global max_allowed_packet=60000000;
+set global ob_sql_work_area_percentage=90;
+disconnect default;
+sleep 1;
+connect (default,$OBMYSQL_MS0,admin@mysql,admin,test,$OBMYSQL_PORT);
+set @@session.explicit_defaults_for_timestamp=off;
+set @@recyclebin = off;
+set ob_query_timeout=1000000000;
+set ob_trx_timeout=1000000000;
+--enable_query_log
+
+--disable_warnings
+drop table if exists t1, t2, t3;
+--enable_warnings
+create table t1(pk int, a longtext, b longblob);
+create table t2(pk int, a mediumtext, b blob, c tinytext);
+create table t3(pk int, a longtext);
+
+insert into t1 values(1, repeat('a', 5000000), repeat('b', 10000000));
+insert into t1 values(2, repeat('A', 5000000), repeat('B', 10000000));
+insert into t2 values(1, repeat('a', 5000000), repeat('b', 60000), repeat('c', 255));
+insert into t2 values(2, repeat('A', 5000000), repeat('B', 60000), repeat('C', 255));
+insert into t3 values(1, repeat('a', 5000000));
+insert into t3 values(1, repeat('A', 5000000));
+insert into t1 values(1, repeat('a', 200000), repeat('b', 200000));
+insert into t1 values(2, repeat('A', 200000), repeat('B', 200000));
+insert into t2 values(1, repeat('a', 100000), repeat('b', 60000), repeat('c', 255));
+insert into t2 values(2, repeat('A', 100000), repeat('B', 60000), repeat('C', 255));
+insert into t3 values(1, repeat('a', 50000));
+insert into t3 values(1, repeat('A', 50000));
+select pk, length(a), length(b) from t1 order by 1 asc, 2;
+select pk, length(a), length(b), length(c) from t2 order by 1 asc, 2;
+select pk, length(a) from t3 order by 1 asc, 2;
+
+#intermediate from order by
+#explain basic select pk, length(a), substr(a, 1, 5), length(b), substr(b, 1, 5) from t1 where (t1.a, t1.b) in( select a,b from t1 order by pk desc limit 1) order by pk asc;
+#select pk, length(a), substr(a, 1, 5), length(b), substr(b, 1, 5) from t1 where (t1.a, t1.b) in( select a,b from t1 order by pk desc limit 1) order by pk asc;
+#select pk, length(a), substr(a, 1, 5), length(b), substr(b, 1, 5), length(c), substr(c, 1, 5) from t2 where (t2.a, t2.b, t2.c) in( select a,b,c from t2 order by pk desc limit 1) order by pk asc;
+#select pk, length(a), substr(a, 1, 5) from t3 where t3.a in( select a from t3 order by pk desc limit 1) order by pk asc;
+
+#intermediate from nestloop join
+explain basic select * from t1 where t1.a in( select /*+ use_nl(x, y) */ x.a from t1 x, t1 y where x.pk = y.pk limit 1) order by pk asc;
+select pk, length(a), substr(a, 1, 5), length(b), substr(b, 1, 5) from t1 where (t1.a, t1.b) in( select /*+ use_nl(x, y) */ x.a, x.b from t1 x, t1 y where x.pk = y.pk limit 1) order by pk asc;
+select pk, length(a), substr(a, 1, 5), length(b), substr(b, 1, 5), length(c), substr(c, 1, 5) from t2 where (t2.a, t2.b) in( select /*+ use_nl(x, y) */ x.a, x.b from t2 x, t2 y where x.pk = y.pk limit 1) order by pk asc;
+select pk, length(a), substr(a, 1, 5) from t3 where t3.a in( select /*+ use_nl(x, y) */ x.a from t3 x, t3 y where x.pk = y.pk limit 1) order by pk asc;
+
+
+#intermediate from merge join
+#explain basic select * from t1 where t1.a in( select /*+ use_merge(x, y) */ x.a from t1 x, t1 y where x.pk = y.pk limit 1) order by pk asc;
+#select pk, length(a), substr(a, 1, 5), length(b), substr(b, 1, 5) from t1 where (t1.a, t1.b) in( select /*+ use_merge(x, y) */ x.a, x.b from t1 x, t1 y where x.pk = y.pk limit 1) order by pk asc;
+#select pk, length(a), substr(a, 1, 5), length(b), substr(b, 1, 5), length(c), substr(c, 1, 5) from t2 where (t2.a, t2.b) in( select /*+ use_merge(x, y) */ x.a, x.b from t2 x, t2 y where x.pk = y.pk limit 1) order by pk asc;
+#select pk, length(a), substr(a, 1, 5) from t3 where t3.a in( select /*+ use_merge(x, y) */ x.a from t3 x, t3 y where x.pk = y.pk limit 1) order by pk asc;
+
+#intermediate from hash join
+explain basic select * from t1 where t1.a in( select /*+ use_hash(x, y) */ x.a from t1 x, t1 y where x.pk = y.pk limit 1) order by pk asc;
+select pk, length(a), substr(a, 1, 5), length(b), substr(b, 1, 5) from t1 where (t1.a, t1.b) in( select /*+ use_hash(x, y) */ x.a, x.b from t1 x, t1 y where x.pk = y.pk limit 1) order by pk asc;
+select pk, length(a), substr(a, 1, 5), length(b), substr(b, 1, 5), length(c), substr(c, 1, 5) from t2 where (t2.a, t2.b) in( select /*+ use_hash(x, y) */ x.a, x.b from t2 x, t2 y where x.pk = y.pk limit 1) order by pk asc;
+select pk, length(a), substr(a, 1, 5) from t3 where t3.a in( select /*+ use_hash(x, y) */ x.a from t3 x, t3 y where x.pk = y.pk limit 1);
+
+#intermediate from set
+explain basic select pk, length(a), substr(a, 1, 5) from t1 where t1.a in( select a from t1 union select a from t2) order by pk asc;
+select pk, length(a), substr(a, 1, 5) from t1 where t1.a in( select a from t1 union select a from t2) order by 1 asc,2;
+select pk, length(a), substr(a, 1, 5) from t1 where t1.a in( select a from t1 except select a from t2) order by 1 asc,2;
+select pk, length(a), substr(a, 1, 5) from t1 where t1.a in( select a from t1 intersect select a from t2) order by 1 asc,2;
+
+#cleanup
+--disable_warnings
+drop table if exists t1, t2, t3;
+--enable_warnings
+
+--disable_query_log
+set global max_allowed_packet=16777216;
+set global ob_sql_work_area_percentage=5;
+--enable_query_log

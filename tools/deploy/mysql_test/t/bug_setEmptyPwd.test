@@ -1,0 +1,26 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: link.zt
+#owner group: sql1
+
+--disable_warnings
+drop table if exists t1,t2,t3,t4;
+--enable_warnings
+
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+--error 1064
+set password for  = password('pass11');
+--error 1064
+set password '' for  = password('pass11');
+
+--real_sleep 5
+
+connect (conn2,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+--error 1133
+set password for  '' = password('pass11');
+--error 1396
+create user '' identified by 'pass11';
+--real_sleep 5
+
+connect (conn3,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);

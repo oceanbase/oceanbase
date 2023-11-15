@@ -1,0 +1,238 @@
+# ----------------------------------------------------------------------
+# Test of GEOMETRY ST_X Function.
+# ----------------------------------------------------------------------
+SELECT ST_X(ST_GEOMFROMTEXT('POINT(0 0)'));
+ST_X(ST_GEOMFROMTEXT('POINT(0 0)'))
+0
+SELECT ST_X(ST_GEOMFROMTEXT('POINT(1.1111 -1.1111)'));
+ST_X(ST_GEOMFROMTEXT('POINT(1.1111 -1.1111)'))
+1.1111
+SELECT ST_X(ST_GEOMFROMTEXT('POINT(1e308 -1e308)'));
+ST_X(ST_GEOMFROMTEXT('POINT(1e308 -1e308)'))
+1e308
+SELECT ST_Y(ST_GEOMFROMTEXT('POINT(0 0)'));
+ST_Y(ST_GEOMFROMTEXT('POINT(0 0)'))
+0
+SELECT ST_Y(ST_GEOMFROMTEXT('POINT(1.1111 -1.1111)'));
+ST_Y(ST_GEOMFROMTEXT('POINT(1.1111 -1.1111)'))
+-1.1111
+SELECT ST_Y(ST_GEOMFROMTEXT('POINT(1e308 -1e308)'));
+ST_Y(ST_GEOMFROMTEXT('POINT(1e308 -1e308)'))
+-1e308
+drop table if exists geo;
+CREATE TABLE geo (
+id INT PRIMARY KEY AUTO_INCREMENT,
+type_name TEXT,
+geo_value GEOMETRY
+);
+INSERT INTO geo (type_name,geo_value) VALUES
+('P1', ST_GeomFromText("POINT(1 3)")),
+('P2', ST_GeomFromText("POINT(-100 +2e6)")),
+('P3', ST_GeomFromText("POINT(23.45 67.910)")),
+('P4', ST_GeomFromText("POINT(1111 2222)"));
+SELECT ST_X(geo_value) FROM geo ORDER BY id;
+ST_X(geo_value)
+1
+-100
+23.45
+1111
+SELECT ST_ASTEXT(ST_X(geo_value, 2012.2102)) FROM geo ORDER BY id;
+ST_ASTEXT(ST_X(geo_value, 2012.2102))
+POINT(2012.2102 3)
+POINT(2012.2102 2000000)
+POINT(2012.2102 67.91)
+POINT(2012.2102 2222)
+SELECT ST_Y(geo_value) FROM geo ORDER BY id;
+ST_Y(geo_value)
+3
+2000000
+67.91
+2222
+SELECT ST_ASTEXT(ST_Y(geo_value, 2102.2012)) FROM geo ORDER BY id;
+ST_ASTEXT(ST_Y(geo_value, 2102.2012))
+POINT(1 2102.2012)
+POINT(-100 2102.2012)
+POINT(23.45 2102.2012)
+POINT(1111 2102.2012)
+truncate table geo;
+drop table geo;
+SELECT ST_X(POINT(pow(2, 2048), 4), 5);
+ERROR 22003: value is out of range
+SELECT ST_X(ST_GEOMFROMTEXT('LINESTRING(0 0, 1 1)'), 5);
+ERROR 22S01: POINT value is a geometry of unexpected type LINESTRING in st_x.
+SELECT ST_Y(ST_GEOMFROMTEXT('MULTIPOINT(10 40, 40 30, 20 20, 30 10)'), 1024);
+ERROR 22S01: POINT value is a geometry of unexpected type MULTIPOINT in st_y.
+SELECT ST_X(ST_GEOMFROMTEXT("MULTILINESTRING((10 10, 20 20, 10 40), (40 40, 30 30, 40 20, 30 10))"), 1024);
+ERROR 22S01: POINT value is a geometry of unexpected type MULTILINESTRING in st_x.
+SELECT ST_X(ST_GEOMFROMTEXT('POLYGON((0 0,2 2,0 2,0 0))'), -1024);
+ERROR 22S01: POINT value is a geometry of unexpected type POLYGON in st_x.
+SELECT ST_X(ST_GEOMFROMTEXT("MULTIPOLYGON(((40 40, 20 45, 45 30, 40 40)), ((20 35, 10 30, 10 10, 30 5, 45 20, 20 35)))"), -1024);
+ERROR 22S01: POINT value is a geometry of unexpected type MULTIPOLYGON in st_x.
+SELECT ST_X(ST_GEOMFROMTEXT("GEOMETRYCOLLECTION(
+                         POINT(4 6),
+                         LINESTRING(4 6,7 10),
+                         POLYGON ((30 10, 40 40, 20 40, 10 20, 30 10)),
+                         MULTIPOINT (10 40, 40 30, 20 20, 30 10),
+                         MULTILINESTRING ((10 10, 20 20, 10 40), (40 40, 30 30, 40 20, 30 10)),
+                         MULTIPOLYGON (((30 20, 45 40, 10 40, 30 20)),
+                           ((15 5, 40 10, 10 20, 5 10, 15 5))))"), 
+1024);
+ERROR 22S01: POINT value is a geometry of unexpected type GEOMETRYCOLLECTION in st_x.
+# NULL as one of the parameters must result in NULL return value.
+SELECT ST_X(NULL);
+ST_X(NULL)
+NULL
+SELECT ST_X(NULL, NULL);
+ST_X(NULL, NULL)
+NULL
+SELECT ST_X(NULL, 1);
+ST_X(NULL, 1)
+NULL
+SELECT ST_X(ST_GEOMFROMTEXT('POINT(0 0)', 4326), NULL);
+ST_X(ST_GEOMFROMTEXT('POINT(0 0)', 4326), NULL)
+NULL
+# Invalid data is not allowed.
+#todo@dazhi: string -> geometry
+# New value must be within the allowed range.
+SELECT ST_X(ST_GEOMFROMTEXT('POINT(0 0)', 4326), -90.000000001);
+ERROR 22S03: Latitude -90.000000 is out of range in function st_x. It must be within [-90.000000, 90.000000].
+SELECT ST_X(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 90.000000001);
+ERROR 22S03: Latitude 90.000000 is out of range in function st_x. It must be within [-90.000000, 90.000000].
+SELECT ST_X(ST_GEOMFROMTEXT('POINT(0 0)', 7035), -180.000000001);
+ERROR 22S02: Longitude -180.000000 is out of range in function st_x. It must be within (-180.000000, 180.000000].
+SELECT ST_X(ST_GEOMFROMTEXT('POINT(0 0)', 7035), 180.000000001);
+ERROR 22S02: Longitude 180.000000 is out of range in function st_x. It must be within (-180.000000, 180.000000].
+# First parameter must be a point.
+# Cartesian SRID 0
+SELECT ST_X(ST_GEOMFROMTEXT('LINESTRING(0 0, 1 1)', 0));
+ERROR 22S01: POINT value is a geometry of unexpected type LINESTRING in st_x.
+SELECT ST_X(ST_GEOMFROMTEXT('POLYGON((0 0, 0 1, 1 1, 0 0))', 0));
+ERROR 22S01: POINT value is a geometry of unexpected type POLYGON in st_x.
+SELECT ST_X(ST_GEOMFROMTEXT('MULTIPOINT((0 0))', 0));
+ERROR 22S01: POINT value is a geometry of unexpected type MULTIPOINT in st_x.
+SELECT ST_X(ST_GEOMFROMTEXT('MULTIPOINT((0 0), (1 1))', 0));
+ERROR 22S01: POINT value is a geometry of unexpected type MULTIPOINT in st_x.
+SELECT ST_X(ST_GEOMFROMTEXT('MULTILINESTRING((0 0, 1 1))', 0));
+ERROR 22S01: POINT value is a geometry of unexpected type MULTILINESTRING in st_x.
+SELECT ST_X(ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0, 0 1, 1 1, 0 0)))', 0));
+ERROR 22S01: POINT value is a geometry of unexpected type MULTIPOLYGON in st_x.
+SELECT ST_X(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0))', 0));
+ERROR 22S01: POINT value is a geometry of unexpected type GEOMETRYCOLLECTION in st_x.
+# Projected
+SELECT ST_X(ST_GEOMFROMTEXT('LINESTRING(0 0, 1 1)', 3857));
+ERROR 22S01: POINT value is a geometry of unexpected type LINESTRING in st_x.
+SELECT ST_X(ST_GEOMFROMTEXT('POLYGON((0 0, 0 1, 1 1, 0 0))', 3857));
+ERROR 22S01: POINT value is a geometry of unexpected type POLYGON in st_x.
+SELECT ST_X(ST_GEOMFROMTEXT('MULTIPOINT((0 0))', 3857));
+ERROR 22S01: POINT value is a geometry of unexpected type MULTIPOINT in st_x.
+SELECT ST_X(ST_GEOMFROMTEXT('MULTIPOINT((0 0), (1 1))', 3857));
+ERROR 22S01: POINT value is a geometry of unexpected type MULTIPOINT in st_x.
+SELECT ST_X(ST_GEOMFROMTEXT('MULTILINESTRING((0 0, 1 1))', 3857));
+ERROR 22S01: POINT value is a geometry of unexpected type MULTILINESTRING in st_x.
+SELECT ST_X(ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0, 0 1, 1 1, 0 0)))', 3857));
+ERROR 22S01: POINT value is a geometry of unexpected type MULTIPOLYGON in st_x.
+SELECT ST_X(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0))', 3857));
+ERROR 22S01: POINT value is a geometry of unexpected type GEOMETRYCOLLECTION in st_x.
+# Geographic
+SELECT ST_X(ST_GEOMFROMTEXT('LINESTRING(0 0, 1 1)', 4326));
+ERROR 22S01: POINT value is a geometry of unexpected type LINESTRING in st_x.
+SELECT ST_X(ST_GEOMFROMTEXT('POLYGON((0 0, 0 1, 1 1, 0 0))', 4326));
+ERROR 22S01: POINT value is a geometry of unexpected type POLYGON in st_x.
+SELECT ST_X(ST_GEOMFROMTEXT('MULTIPOINT((0 0))', 4326));
+ERROR 22S01: POINT value is a geometry of unexpected type MULTIPOINT in st_x.
+SELECT ST_X(ST_GEOMFROMTEXT('MULTIPOINT((0 0), (1 1))', 4326));
+ERROR 22S01: POINT value is a geometry of unexpected type MULTIPOINT in st_x.
+SELECT ST_X(ST_GEOMFROMTEXT('MULTILINESTRING((0 0, 1 1))', 4326));
+ERROR 22S01: POINT value is a geometry of unexpected type MULTILINESTRING in st_x.
+SELECT ST_X(ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0, 0 1, 1 1, 0 0)))', 4326));
+ERROR 22S01: POINT value is a geometry of unexpected type MULTIPOLYGON in st_x.
+SELECT ST_X(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0))', 4326));
+ERROR 22S01: POINT value is a geometry of unexpected type GEOMETRYCOLLECTION in st_x.
+# Invalied geometry
+SELECT ST_X(ST_GeomFromText('LINESTRING(0 0, 1 1)'), 5);
+ERROR 22S01: POINT value is a geometry of unexpected type LINESTRING in st_x.
+SELECT ST_Y(ST_GeomFromText('LINESTRING(0 0, 1 1)'), 5);
+ERROR 22S01: POINT value is a geometry of unexpected type LINESTRING in st_y.
+SELECT ST_X(ST_GEOMFROMTEXT('POLYGON((0 0,2 2,0 2,0 0))'), -1024);
+ERROR 22S01: POINT value is a geometry of unexpected type POLYGON in st_x.
+SELECT ST_Y(ST_GEOMFROMTEXT('POLYGON((0 0,2 2,0 2,0 0))'), -1024);
+ERROR 22S01: POINT value is a geometry of unexpected type POLYGON in st_y.
+SELECT ST_X(ST_GEOMFROMTEXT('MULTIPOINT(10 40, 40 30, 20 20, 30 10)'), 1024);
+ERROR 22S01: POINT value is a geometry of unexpected type MULTIPOINT in st_x.
+SELECT ST_Y(ST_GEOMFROMTEXT('MULTIPOINT(10 40, 40 30, 20 20, 30 10)'), 1024);
+ERROR 22S01: POINT value is a geometry of unexpected type MULTIPOINT in st_y.
+SELECT ST_X(ST_GEOMFROMTEXT("MULTILINESTRING((10 10, 20 20, 10 40)," 
+"(40 40, 30 30, 40 20, 30 10))"), 1024);
+ERROR 22S01: POINT value is a geometry of unexpected type MULTILINESTRING in st_x.
+# Get or set the X coordinate of SRID 0.
+SELECT ST_X(ST_GEOMFROMTEXT('POINT(1 0)', 0));
+ST_X(ST_GEOMFROMTEXT('POINT(1 0)', 0))
+1
+# Get or set the X coordinate of a projected SRS.
+SELECT ST_X(ST_GEOMFROMTEXT('POINT(1 0)', 3857));
+ST_X(ST_GEOMFROMTEXT('POINT(1 0)', 3857))
+1
+# Get or set the X coordinate (latitude) of a point in a lat-long SRS.
+SELECT ST_X(ST_GEOMFROMTEXT('POINT(1 0)', 4326));
+ST_X(ST_GEOMFROMTEXT('POINT(1 0)', 4326))
+1
+# Get or set the X coordinate (longitude) of a point in a long-lat SRS.
+SELECT ST_X(ST_GEOMFROMTEXT('POINT(1 0)', 7035));
+ST_X(ST_GEOMFROMTEXT('POINT(1 0)', 7035))
+1
+SELECT 'X1', ST_X(ST_GEOMFROMTEXT('POINT (0 0)'));
+X1	ST_X(ST_GEOMFROMTEXT('POINT (0 0)'))
+X1	0
+SELECT 'X2', ST_X(ST_GEOMFROMTEXT('POINT (1 2)'));
+X2	ST_X(ST_GEOMFROMTEXT('POINT (1 2)'))
+X2	1
+SELECT 'X3', ST_X(ST_GEOMFROMTEXT('POINT (6 7)'));
+X3	ST_X(ST_GEOMFROMTEXT('POINT (6 7)'))
+X3	6
+SELECT 'X4', ST_X(ST_GEOMFROMTEXT('POINT (10 11)'));
+X4	ST_X(ST_GEOMFROMTEXT('POINT (10 11)'))
+X4	10
+SELECT 'X5', ST_X(ST_GEOMFROMTEXT('MULTIPOINT ((0 0), (1 1))'));
+ERROR 22S01: POINT value is a geometry of unexpected type MULTIPOINT in st_x.
+SELECT 'X6', ST_X(ST_GEOMFROMTEXT('LINESTRING (0 0, 1 1)'));
+ERROR 22S01: POINT value is a geometry of unexpected type LINESTRING in st_x.
+SELECT 'X7', ST_X(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION (POINT(0 0))'));
+ERROR 22S01: POINT value is a geometry of unexpected type GEOMETRYCOLLECTION in st_x.
+SELECT 'X8', ST_X(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION (POINT(0 1), LINESTRING(0 0, 1 1))'));
+ERROR 22S01: POINT value is a geometry of unexpected type GEOMETRYCOLLECTION in st_x.
+# Test unusual input
+SET @A = NULL;
+SELECT ST_ASTEXT(ST_LATITUDE(ST_GEOMFROMTEXT('POINT(90 -90)',4326), @A));
+ST_ASTEXT(ST_LATITUDE(ST_GEOMFROMTEXT('POINT(90 -90)',4326), @A))
+NULL
+SELECT ST_LONGITUDE(ST_GEOMFROMTEXT('POINT(180 -180)',4269,'axis-order=long-lat'),NULL);
+ERROR 22S03: Latitude -180.000000 is out of range in function st_geomfromtext. It must be within [-90.000000, 90.000000].
+SELECT ST_ASTEXT(ST_LONGITUDE(ST_GEOMFROMTEXT('POINT(90 -90)',4120), ' '));
+ST_ASTEXT(ST_LONGITUDE(ST_GEOMFROMTEXT('POINT(90 -90)',4120), ' '))
+POINT(90 0)
+SELECT ST_ASTEXT(ST_LONGITUDE(ST_GEOMFROMTEXT('POINT(90 -90)',4120), 'invalid input'));
+ST_ASTEXT(ST_LONGITUDE(ST_GEOMFROMTEXT('POINT(90 -90)',4120), 'invalid input'))
+POINT(90 0)
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'invalid input'
+#
+# Test precision
+select st_latitude(st_geomfromtext('point(1e-16 1e-16)', 4326));
+st_latitude(st_geomfromtext('point(1e-16 1e-16)', 4326))
+1e-16
+#
+# Test wkb type
+select st_x(x'E6100000010000000041CF2402F51C54C0845661A4703A4940');
+ERROR 22023: Invalid GIS data provided to function st_x.
+select st_y(x'E6100000010800000041CF2402F51C54C0845661A4703A4940');
+ERROR 22023: Invalid GIS data provided to function st_y.
+# 
+# Test unusual input
+select st_x(1.1);
+ERROR 22023: Invalid GIS data provided to function st_x.
+select st_y(10.2);
+ERROR SR001: There's no spatial reference system with SRID 841887793.
+select st_x(102342);
+ERROR SR001: There's no spatial reference system with SRID 858927153.
+select st_y('sdfwefqwe');
+ERROR SR001: There's no spatial reference system with SRID 2003199091.

@@ -1,0 +1,24 @@
+result_format: 4
+use test;
+
+CREATE FUNCTION my_func() returns int BEGIN create database my_db; return 1; END |
+ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
+CREATE FUNCTION my_func() returns int BEGIN alter database my_db read only; return 1; END |
+ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
+CREATE FUNCTION my_func() returns int BEGIN drop database my_db; return 1; END |
+ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
+CREATE FUNCTION my_func() returns int BEGIN create table my_tab(col int); return 1; END |
+ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
+CREATE FUNCTION my_func() returns int BEGIN drop table my_tab; return 1; END |
+ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
+CREATE FUNCTION my_func() returns int BEGIN rename table my_tab to t2; return 1; END |
+ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
+CREATE FUNCTION my_func() returns int BEGIN truncate table my_tab; return 1; END |
+ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
+CREATE FUNCTION my_func() returns int BEGIN create view my_view as select 1; return 1; END |
+ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
+CREATE FUNCTION my_func() returns int BEGIN drop view my_view; return 1; END |
+ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
+CREATE FUNCTION my_func() returns int BEGIN create index my_idx on my_tab(col); return 1; END |
+ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
+

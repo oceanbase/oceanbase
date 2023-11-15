@@ -1,0 +1,494 @@
+# ----------------------------------------------------------------------
+# Base test of geometry ddl.
+# ----------------------------------------------------------------------
+# Create a table with three columns:
+# 1) Normal POINT column without SRID specification
+# 2) Normal POINT column with SRID 0
+# 3) Normal POINT column with SRID 4326
+drop table if exists t1,tt1;
+CREATE TABLE t1 (no_srid POINT DEFAULT NULL,
+srid_0 POINT SRID 0 DEFAULT NULL,
+srid_4326 POINT SRID 4326 DEFAULT NULL);
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `no_srid` point DEFAULT NULL,
+  `srid_0` point /*!80003 SRID 0 */ DEFAULT NULL,
+  `srid_4326` point /*!80003 SRID 4326 */ DEFAULT NULL
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+# Insert some data with correct SRID into these columns
+INSERT INTO t1 (no_srid, srid_0, srid_4326)
+VALUES (ST_GeomFromText('POINT(0 0)', 0),
+ST_GeomFromText('POINT(0 0)', 0),
+ST_GeomFromText('POINT(0 0)', 4326));
+INSERT INTO t1 (no_srid, srid_0, srid_4326)
+VALUES (ST_GeomFromText('POINT(1 1)', 4326),
+ST_GeomFromText('POINT(1 1)', 0),
+ST_GeomFromText('POINT(1 1)', 4326));
+# Insert data with wrong SRID, which should fail.
+INSERT INTO t1 (srid_0) VALUES (ST_GeomFromText('POINT(1 1)', 4326));
+ERROR HY000: The SRID of the geometry does not match the SRID of the column. The SRID of the geometry is 4326, but the SRID of the column is 0. Consider changing the SRID of the geometry or the SRID property of the column.
+INSERT INTO t1 (srid_4326) VALUES (ST_GeomFromText('POINT(1 1)', 0));
+ERROR HY000: The SRID of the geometry does not match the SRID of the column. The SRID of the geometry is 0, but the SRID of the column is 4326. Consider changing the SRID of the geometry or the SRID property of the column.
+INSERT INTO t1 (srid_4326) VALUES (POINT(0, 0));
+ERROR HY000: The SRID of the geometry does not match the SRID of the column. The SRID of the geometry is 0, but the SRID of the column is 4326. Consider changing the SRID of the geometry or the SRID property of the column.
+# Try to alter the SRID of the columns, which should fail for all columns
+# now since they already contain data.
+ALTER TABLE t1 CHANGE COLUMN no_srid no_srid POINT SRID 0 DEFAULT NULL;
+ERROR 0A000: not support alter srid not supported
+ALTER TABLE t1 CHANGE COLUMN srid_0 srid_0 POINT SRID 4326 DEFAULT NULL;
+ERROR 0A000: not support alter srid not supported
+ALTER TABLE t1 CHANGE COLUMN srid_4326 srid_4326 POINT SRID 0 DEFAULT NULL;
+ERROR 0A000: not support alter srid not supported
+# Removing the SRID specification from a column should work just fine.
+# Setting the SRID to a non-existing SRID should not work.
+ALTER TABLE t1 CHANGE COLUMN srid_4326 srid_1 POINT SRID 1 DEFAULT NULL;
+ERROR SR001: There's no spatial reference system with SRID 1.
+DROP TABLE t1;
+# Creating a geometry column with a non-existing SRID should not work
+CREATE TABLE t1 (col1 POINT SRID 1);
+ERROR SR001: There's no spatial reference system with SRID 1.
+# Try to create a table without the SRID property, insert data with
+# different SRIDs and then add the SRID property (which should not work).
+CREATE TABLE t1 (col1 POINT);
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `col1` point DEFAULT NULL
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+INSERT INTO t1 VALUES (ST_GeomFromText('POINT(1 1)', 4326)),
+(ST_GeomFromText('POINT(2 2)', 0)),
+(ST_GeomFromText('POINT(3 3)', 4326)),
+(ST_GeomFromText('POINT(4 4)', 0)),
+(ST_GeomFromText('POINT(5 5)', 4326)),
+(ST_GeomFromText('POINT(6 6)', 0));
+ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT SRID 4326;
+ERROR 0A000: not support alter srid not supported
+ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT SRID 4326;
+ERROR 0A000: not support alter srid not supported
+DROP TABLE t1;
+# Creating a column with SRID property on a MyISAM table should only
+# be supported if the SRID represents a cartesian coordinate system.
+drop table if exists t1, t2;
+CREATE TABLE t1 (col1 POINT SRID 0) ENGINE = MyISAM;
+Warnings:
+Warning	1286	Unknown storage engine 'MyISAM'
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `col1` point /*!80003 SRID 0 */ DEFAULT NULL
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+CREATE TABLE t2 (col1 POINT SRID 2000) ENGINE = MyISAM;
+Warnings:
+Warning	1286	Unknown storage engine 'MyISAM'
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `col1` point /*!80003 SRID 0 */ DEFAULT NULL
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+DROP TABLE t1, t2;
+# It should not be possible to use the SRID property with any other types
+# than geometric types.
+CREATE TABLE t1 (col1 DOUBLE SRID 0);
+ERROR HY000: Incorrect usage of srid.
+CREATE TABLE t1 (col1 BLOB SRID 0);
+ERROR HY000: Incorrect usage of srid.
+CREATE TABLE t1 (col1 VARCHAR(255) SRID 0);
+ERROR HY000: Incorrect usage of srid.
+# Check that any indexes on SRID-less columns are ignored by the
+# optimizer
+CREATE TABLE t1 (col1 POINT NOT NULL, SPATIAL INDEX (col1));
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `col1` point NOT NULL,
+  SPATIAL KEY `col1` (`col1`) BLOCK_SIZE 16384 LOCAL
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+INSERT INTO t1 VALUES (POINT(0, 0)), (POINT(0.5, 0.5)), (POINT(1, 1));
+# The following query plan should NOT use the index on "col1", since
+# the column does not have the SRID property defined.
+SELECT ST_ASTEXT(col1) FROM t1;
+ST_ASTEXT(col1)
+POINT(0 0)
+POINT(0.5 0.5)
+POINT(1 1)
+DROP TABLE t1;
+# Check that we print error message for misuse of SRID with non-geometric
+# data type instead of "SRID not found"
+CREATE TABLE t1 (a INTEGER SRID 1);
+ERROR HY000: Incorrect usage of srid.
+CREATE TABLE t1 (a INTEGER);
+ALTER TABLE t1 MODIFY COLUMN a INTEGER SRID 1;
+ERROR HY000: Incorrect usage of srid.
+DROP TABLE t1;
+#
+# Bug#26594499 WL#8592:ALTER TABLE ADD SPATIAL INDEX RETURNS CANNOT GET
+#              GEOMETRY OBJECT ERROR
+#
+CREATE TABLE t1 (
+g1 geometry NOT NULL,
+g3 geometry SRID 2000 NOT NULL,
+g4 geometry SRID 4326 NOT NULL
+);
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `g1` geometry NOT NULL,
+  `g3` geometry NOT NULL /*!80003 SRID 2000 */,
+  `g4` geometry NOT NULL /*!80003 SRID 4326 */
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+INSERT INTO t1 VALUES (ST_GeomFromText('POINT(0 0)'),
+ST_GeomFromText('POINT(0 0)', 2000), ST_GeomFromText('POINT(0 0)', 4326));
+ALTER TABLE t1 add spatial index idx1(g4);
+ALTER TABLE t1 add spatial index idx3(g3);
+DROP TABLE t1;
+CREATE TABLE t1 (col1 POINT SRID 4294967296);
+ERROR 22003: srid value is out of range in 'UINT32_MAX'
+#
+# Check that adding, modifying and removing spatial indexes works well
+# with SRID columns
+#
+drop table if exists t1;
+CREATE TABLE t1 (col_no_srid POINT NOT NULL,
+col_srid_0 POINT SRID 0 NOT NULL,
+col_srid_4326 POINT SRID 4326 NOT NULL);
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `col_no_srid` point NOT NULL,
+  `col_srid_0` point NOT NULL /*!80003 SRID 0 */,
+  `col_srid_4326` point NOT NULL /*!80003 SRID 4326 */
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+INSERT INTO t1 VALUES (
+ST_GeomFromText("POINT(0 0)", 0),
+ST_GeomFromText("POINT(0 0)", 0),
+ST_GeomFromText("POINT(0 0)", 4326));
+INSERT INTO t1 VALUES (
+ST_GeomFromText("POINT(1 1)", 4326),
+ST_GeomFromText("POINT(1 1)", 0),
+ST_GeomFromText("POINT(1 1)", 4326));
+ALTER TABLE t1 ADD SPATIAL INDEX idx1 (col_no_srid);
+ALTER TABLE t1 ADD SPATIAL INDEX idx2 (col_srid_0);
+ALTER TABLE t1 ADD SPATIAL INDEX idx3 (col_srid_4326);
+ALTER TABLE t1 DROP INDEX idx2;
+ALTER TABLE t1 DROP INDEX idx3;
+ALTER TABLE t1 DROP INDEX idx1;
+CREATE SPATIAL INDEX idx1 ON t1 (col_srid_4326);
+CREATE SPATIAL INDEX idx2 ON t1 (col_no_srid);
+CREATE SPATIAL INDEX idx3 ON t1 (col_srid_0);
+DROP INDEX idx1 ON t1;
+DROP INDEX idx2 ON t1;
+DROP INDEX idx3 ON t1;
+DROP TABLE t1;
+CREATE TABLE t1 (col_no_srid POINT NOT NULL,
+col_srid_0 POINT SRID 0 NOT NULL,
+col_srid_4326 POINT SRID 4326 NOT NULL,
+SPATIAL INDEX idx1 (col_no_srid),
+SPATIAL INDEX idx2 (col_srid_0),
+SPATIAL INDEX idx3 (col_srid_4326));
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `col_no_srid` point NOT NULL,
+  `col_srid_0` point NOT NULL /*!80003 SRID 0 */,
+  `col_srid_4326` point NOT NULL /*!80003 SRID 4326 */,
+  SPATIAL KEY `idx1` (`col_no_srid`) BLOCK_SIZE 16384 LOCAL,
+  SPATIAL KEY `idx2` (`col_srid_0`) BLOCK_SIZE 16384 LOCAL,
+  SPATIAL KEY `idx3` (`col_srid_4326`) BLOCK_SIZE 16384 LOCAL
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+INSERT INTO t1 VALUES (
+ST_GeomFromText("POINT(0 0)", 0),
+ST_GeomFromText("POINT(0 0)", 0),
+ST_GeomFromText("POINT(0 0)", 4326));
+INSERT INTO t1 VALUES (
+ST_GeomFromText("POINT(1 1)", 4326),
+ST_GeomFromText("POINT(1 1)", 0),
+ST_GeomFromText("POINT(1 1)", 4326));
+DROP INDEX idx3 ON t1;
+DROP INDEX idx2 ON t1;
+DROP INDEX idx1 ON t1;
+DROP TABLE t1;
+#
+# Altering the SRID specification should not be allowed if there is a
+# spatial index on the column.
+#
+CREATE TABLE t1 (col1 POINT NOT NULL SRID 4326,
+SPATIAL INDEX idx1 (col1));
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `col1` point NOT NULL /*!80003 SRID 4326 */,
+  SPATIAL KEY `idx1` (`col1`) BLOCK_SIZE 16384 LOCAL
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT NOT NULL SRID 0;
+ERROR 0A000: not support alter srid not supported
+ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT NOT NULL;
+ERROR 0A000: not support alter srid not supported
+ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT NOT NULL SRID 0;
+ERROR 0A000: not support alter srid not supported
+ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT NOT NULL;
+ERROR 0A000: not support alter srid not supported
+ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT NOT NULL SRID 0;
+ERROR 0A000: not support alter srid not supported
+ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT NOT NULL;
+ERROR 0A000: not support alter srid not supported
+ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT NOT NULL SRID 0;
+ERROR 0A000: not support alter srid not supported
+ALTER TABLE t1 CHANGE COLUMN col1 col1 POINT NOT NULL;
+ERROR 0A000: not support alter srid not supported
+ALTER TABLE t1 CHANGE COLUMN col1 col2 POINT NOT NULL SRID 0;
+ERROR 0A000: not support alter srid not supported
+ALTER TABLE t1 CHANGE COLUMN col1 col2 POINT NOT NULL;
+ERROR 0A000: not support alter srid not supported
+DROP TABLE t1;
+#
+# Bug#26594499  WL#8592: CANNOT GET GEOMETRY OBJECT ERROR
+#
+CREATE TABLE t1 (
+g1 geometry NOT NULL,
+g3 geometry SRID 2000 NOT NULL,
+g4 geometry SRID 4326 NOT NULL
+);
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `g1` geometry NOT NULL,
+  `g3` geometry NOT NULL /*!80003 SRID 2000 */,
+  `g4` geometry NOT NULL /*!80003 SRID 4326 */
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+INSERT INTO t1 VALUES (ST_GeomFromText('POINT(0 0)'),
+ST_GeomFromText('POINT(0 0)', 2000), ST_GeomFromText('POINT(0 0)', 4326));
+ALTER TABLE t1 add spatial index idx1(g4);
+ALTER TABLE t1 add spatial index idx3(g3);
+DROP TABLE t1;
+#
+# Bug#27015964 USELESS SPATIAL INDEX CAN BE CREATED WITHOUT WARNING
+#
+# Creating a table with a spatial index on a SRID-less column should
+# raise a warning.
+CREATE TABLE t1 (
+g1 POINT NOT NULL
+, g2 POINT NOT NULL
+, g3 POINT NOT NULL SRID 0
+, SPATIAL INDEX idx1 (g1)
+, SPATIAL INDEX idx2 (g2)
+, SPATIAL INDEX idx3 (g3));
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `g1` point NOT NULL,
+  `g2` point NOT NULL,
+  `g3` point NOT NULL /*!80003 SRID 0 */,
+  SPATIAL KEY `idx1` (`g1`) BLOCK_SIZE 16384 LOCAL,
+  SPATIAL KEY `idx2` (`g2`) BLOCK_SIZE 16384 LOCAL,
+  SPATIAL KEY `idx3` (`g3`) BLOCK_SIZE 16384 LOCAL
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+DROP INDEX idx1 ON t1;
+DROP INDEX idx2 ON t1;
+DROP INDEX idx3 ON t1;
+# Verify that we get the same warning when using CREATE INDEX syntax.
+CREATE SPATIAL INDEX idx1 ON t1 (g1);
+CREATE SPATIAL INDEX idx2 ON t1 (g2);
+CREATE SPATIAL INDEX idx3 ON t1 (g3);
+DROP INDEX idx1 ON t1;
+DROP INDEX idx2 ON t1;
+DROP INDEX idx3 ON t1;
+# Verify that we get the same warning when using ALTER TABLE syntax.
+ALTER TABLE t1 ADD SPATIAL INDEX idx1 (g1);
+ALTER TABLE t1 ADD SPATIAL INDEX idx2 (g2);
+ALTER TABLE t1 ADD SPATIAL INDEX idx3 (g3);
+DROP TABLE t1;
+#
+# Bug#27220467 SERVER HANGS WHILE CREATING A NEW SRS WHICH IS USED IN
+#              ANOTHER CLIENT
+#
+# Try to create a point column using a SRID that doesn't exist
+CREATE TABLE t1 (col1 POINT SRID 4326, col2 POINT SRID 1000000000);
+ERROR SR001: There's no spatial reference system with SRID 1000000000.
+# Force the error to happen after all the columns are contextualized.
+# Verify the same behavior for ALTER TABLE as well.
+CREATE TABLE t1 (col1 INT);
+ALTER TABLE t1 ADD COLUMN col2 POINT SRID 1000000000;
+ERROR SR001: There's no spatial reference system with SRID 1000000000.
+DROP TABLE t1;
+CREATE TABLE t1 (col_no_srid POINT NOT NULL,
+col_srid_0 POINT SRID 0 NOT NULL,
+col_srid_4326 POINT SRID 4326 NOT NULL,
+SPATIAL INDEX idx1 (col_no_srid),
+SPATIAL INDEX idx2 (col_srid_0),
+SPATIAL INDEX idx3 (col_srid_4326));
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `col_no_srid` point NOT NULL,
+  `col_srid_0` point NOT NULL /*!80003 SRID 0 */,
+  `col_srid_4326` point NOT NULL /*!80003 SRID 4326 */,
+  SPATIAL KEY `idx1` (`col_no_srid`) BLOCK_SIZE 16384 LOCAL,
+  SPATIAL KEY `idx2` (`col_srid_0`) BLOCK_SIZE 16384 LOCAL,
+  SPATIAL KEY `idx3` (`col_srid_4326`) BLOCK_SIZE 16384 LOCAL
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+DROP TABLE t1;
+create table tt1(p POINT SRID -1);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near '-1)' at line 1
+create table tt1(p POINT SRID 'test');
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near ''test')' at line 1
+create table tt1(p POINT SRID 0.7);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near '0.7)' at line 1
+create table tt1(p POINT SRID null);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'null)' at line 1
+create table tt1(p POINT SRID '');
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near ''')' at line 1
+create table tt1(p POINT SRID 4294967295);
+DROP TABLE tt1;
+create table tt1(g GEOMETRY primary key);
+ERROR HY000: Spatial indexes can't be primary or unique indexes.
+create table tt1(g geometry, primary key (g));
+ERROR HY000: Spatial indexes can't be primary or unique indexes.
+create table tt2(p point unique key);
+ERROR HY000: Spatial indexes can't be primary or unique indexes.
+create table tt2(p point, unique key (p));
+ERROR HY000: Spatial indexes can't be primary or unique indexes.
+create table child(i int primary key, g geometry not null srid 4326);
+create table parent(i int primary key, g geometry not null srid 4326, constraint g1_fk foreign key(g) references child(g));
+ERROR HY000: Cannot add foreign key constraint
+drop table child;
+drop table if exists T_GEO;
+drop view if exists V_T_GEO;
+create table T_GEO (gid int auto_increment primary key, geometry geometry not null srid 4326);
+create view V_T_GEO AS SELECT * FROM T_GEO;
+desc V_T_GEO;
+Field	Type	Null	Key	Default	Extra
+gid	int(11)	NO		NULL	
+geometry	geometry	NO		NULL	
+drop view V_T_GEO;
+drop table T_GEO;
+create table T_GEO (gid int auto_increment primary key, geo geometry ,geo_c GEOMETRYCOLLECTION,poi point,lin linestring ,pol polygon,M_POI MULTIPOINT,M_LIN MULTILINESTRING ,M_POL MULTIPOLYGON );
+create view V_T_GEO AS SELECT * FROM T_GEO;
+insert into V_T_GEO(POI) VALUES (ST_GEOMFROMTEXT('POLYGON((0 0,1 1,1 0,0 1,0 0)) '));
+ERROR 22003: Cannot get geometry object from data you send to the GEOMETRY field.
+SELECT ST_ASTEXT(poi) FROM V_T_GEO;
+ST_ASTEXT(poi)
+SELECT ST_ASTEXT(poi) FROM T_GEO;
+ST_ASTEXT(poi)
+drop view V_T_GEO;
+DROP TABLE T_GEO;
+create table tt4(id int, g GEOMETRY);
+alter table tt4 add g1 GEOMETRY not null;
+ERROR 22004: Invalid use of NULL value
+show create table tt4;
+Table	Create Table
+tt4	CREATE TABLE `tt4` (
+  `id` int(11) DEFAULT NULL,
+  `g` geometry DEFAULT NULL
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+alter table tt4 add g2 GEOMETRY null;
+show create table tt4;
+Table	Create Table
+tt4	CREATE TABLE `tt4` (
+  `id` int(11) DEFAULT NULL,
+  `g` geometry DEFAULT NULL,
+  `g2` geometry DEFAULT NULL
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+insert into tt4(id, g2) values (1, point(1,1));
+select id,st_astext(g2) from tt4 order by id;
+id	st_astext(g2)
+1	POINT(1 1)
+drop table tt4;
+drop table if exists test;
+create table test(p point srid 4326);
+alter table test modify p MULTIPOINT;
+ERROR 0A000: Modify geometry type not supported
+alter table test change p p1 MULTIPOINT;
+ERROR 0A000: Change geometry type not supported
+alter table test modify p POINT SRID 0;
+ERROR 0A000: Modify geometry srid not supported
+alter table test change p p1 point srid 0;
+ERROR 0A000: not support alter srid not supported
+alter table test change p p1 point;
+ERROR 0A000: not support alter srid not supported
+alter table test change p p1 point srid 4326;
+desc test;
+Field	Type	Null	Key	Default	Extra
+p1	point	YES		NULL	
+drop table test;
+create table tt1(id int);
+insert into tt1 values(1);
+alter table tt1 add g GEOMETRY not null;
+ERROR 22004: Invalid use of NULL value
+drop table tt1;
+create table tt1(id int);
+alter table tt1 add g GEOMETRY not null;
+ERROR 22004: Invalid use of NULL value
+drop table tt1;
+create table tt1(id int);
+alter table tt1 add g GEOMETRY;
+drop table tt1;
+create table tt1(id int);
+insert into tt1 values(1);
+alter table tt1 add g GEOMETRY;
+drop table tt1;
+create table tt1(id int);
+alter table tt1 add g GEOMETRY;
+insert into tt1 values (1, point(0,0));
+alter table tt1 modify column g geometry not null;
+drop table tt1;
+create table tt1(g geometry);
+alter table tt1 modify column g geometry not null;
+drop table tt1;
+create table tt1(g geometry);
+insert into tt1(g) value (null);
+alter table tt1 modify column g geometry not null;
+ERROR 22004: Invalid use of NULL value
+drop table tt1;
+drop table if exists T_GEO;
+drop table if exists t;
+drop view if exists V_T_GEO;
+create table T_GEO (poi point);
+insert into T_GEO values (ST_GEOMFROMTEXT('POINT(0 0)', 4267));
+create view V_T_GEO AS SELECT * FROM T_GEO;
+REPLACE INTO V_T_GEO(poi) VALUES (ST_GEOMFROMTEXT('POLYGON((0 0,1 1,1 0,0 1,0 0))'));
+ERROR 22003: Cannot get geometry object from data you send to the GEOMETRY field.
+insert into T_GEO values (ST_GEOMFROMTEXT('point(0 0)'));
+create table t as select st_buffer(T_GEO.poi, 1) from T_GEO;
+drop table t;
+drop table if exists T_GEO;
+drop table if exists t;
+create table T_GEO (poly polygon);
+insert into T_GEO values (ST_GEOMFROMTEXT('polygon((0 0, 0 1, 1 1,0 0))', 4267));
+create table t as select st_area(T_GEO.poly) from T_GEO;
+select * from t;
+st_area(T_GEO.poly)
+6154457959.759597
+drop table T_GEO;
+drop table t;
+drop view if exists V_T_GEO;
+create or replace view vv as select st_aswkb(x'00000000010100000000000000000034C00000000000004940') a;
+desc vv;
+Field	Type	Null	Key	Default	Extra
+a	longblob	YES		NULL	
+create or replace view vv as select st_geomfromwkb(x'0106000000010000000103000000010000000500000000000000008056400000000000C0564000000000000024400000000000A066C0000000000000244000000000000024400000000000000000000000000000244000000000008056400000000000C05640');
+desc vv;
+Field	Type	Null	Key	Default	Extra
+Name_exp_1	geometry	YES		NULL	
+create or replace view vv as select Point(0,0);
+desc vv;
+Field	Type	Null	Key	Default	Extra
+Point(0,0)	point	YES		NULL	
+drop table if exists geometries;
+drop table if exists t1;
+CREATE TABLE geometries ( g GEOMETRY, pt POINT, ls LINESTRING, py POLYGON, mpt MULTIPOINT, mls MULTILINESTRING, mpy MULTIPOLYGON, gc GEOMETRYCOLLECTION);
+SET @c1 = ST_GEOMFROMTEXT('POINT(10 10)');
+SET @c2 = ST_GEOMFROMTEXT('LINESTRING(10 10,20 20,30 30)');
+SET @c3 = ST_GEOMFROMTEXT('POLYGON((0 0,0 10,10 10,10 0,0 0),(4 4,4 6,6 6,6 4,4 4))');
+SET @c4 = ST_GEOMFROMTEXT('MULTIPOINT(0 0,5 5,10 10,20 20)');
+SET @c5 = ST_GEOMFROMTEXT('MULTILINESTRING((1 1,2 2,3 3),(10 10,20 20,30 30))');
+SET @c6 = ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0,0 5,5 5,5 0,0 0)),((5 5,5 10,10 10,10 5,5 5)))');
+SET @c7 = ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(0 0,10 10))');
+INSERT INTO geometries VALUES (@c1, @c1, @c2, @c3, @c4, @c5, @c6, @c7);
+CREATE TABLE t1 SELECT a FROM (SELECT pt AS a FROM geometries UNION SELECT mls FROM geometries) t;
+select st_astext(a) from t1;
+st_astext(a)
+POINT(10 10)
+MULTILINESTRING((1 1,2 2,3 3),(10 10,20 20,30 30))
+drop table geometries;
+drop table t1;

@@ -1,0 +1,42 @@
+# owner      : gengfu.zpc
+# owner group: VOS
+# description: check for naming conflicts of parameters and system variables
+# tags       : parameter
+ 
+################################################################################
+# The purpose of this case is to prevent naming conflicts for parameters and   #
+# system variables. Due to historical reasons, existing conflicting names are  #
+# temporarily allowed. In the future, existing conflicts will be resolved and  # 
+# new conflicts will be prevented.                                             #
+################################################################################
+ 
+ 
+######  print note info  ######
+--echo Note: In this file, existing entries can be deleted, but no new entries are allowed.
+--echo
+ 
+--echo ######  case1: under sys tenant  ######
+connect (my_sys,$OBMYSQL_MS0,root,,oceanbase,$OBMYSQL_PORT);
+connection my_sys;
+# sql start
+SELECT a.name as para_name, b.name as var_name 
+FROM __all_sys_variable a, __all_virtual_sys_parameter_stat b 
+WHERE a.name = b.name 
+GROUP BY a.name;
+# sql end
+disconnect my_sys;
+ 
+ 
+--echo
+--echo ######  case2: under mysql tenant  ######
+connect (my_mysql,$OBMYSQL_MS0,root@mysql,,oceanbase,$OBMYSQL_PORT);
+connection my_mysql;
+# sql start
+SELECT a.name as para_name, b.name as var_name 
+FROM V$OB_PARAMETERS a, __all_sys_variable b 
+WHERE a.name = b.name;
+# sql end
+disconnect my_mysql;
+ 
+ 
+connection default;

@@ -1,0 +1,119 @@
+#owner: wangzhennan.wzn
+#owner group: RS
+#description: Test __all_virtual_proxy_partition;
+
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+connection default;
+--disable_query_log
+--disable_warnings
+drop table if exists tbl1_r;
+drop table if exists tbl1_log_rc;
+drop table if exists tbl1_l;
+drop table if exists tbl1_lc;
+drop table if exists tbl1_h;
+drop table if exists tbl1_k;
+# range
+CREATE TABLE tbl1_r (log_id BIGINT NOT NULL,log_value VARCHAR(50),log_date TIMESTAMP NOT NULL)
+       PARTITION BY RANGE(UNIX_TIMESTAMP(log_date)) 
+        (PARTITION M202003 VALUES LESS THAN(UNIX_TIMESTAMP('2020/04/01'))
+       , PARTITION M202004 VALUES LESS THAN(UNIX_TIMESTAMP('2020/08/01'))
+       , PARTITION M202011 VALUES LESS THAN(UNIX_TIMESTAMP('2020/12/01'))
+       );
+# range columns
+CREATE TABLE tbl1_log_rc (log_id BIGINT NOT NULL,log_value VARCHAR(50),log_date DATE NOT NULL)
+       PARTITION BY RANGE COLUMNS(log_date) 
+        (PARTITION M202003 VALUES LESS THAN('2020/04/01')
+       , PARTITION M202007 VALUES LESS THAN('2020/08/01')
+       , PARTITION M202011 VALUES LESS THAN('2020/12/01')
+       , PARTITION MMAX VALUES LESS THAN MAXVALUE
+       );
+# list
+CREATE TABLE tbl1_l (col1 BIGINT PRIMARY KEY,col2 VARCHAR(50))
+       PARTITION BY LIST(col1) 
+        (PARTITION p0 VALUES IN (1, 2, 3),
+         PARTITION p1 VALUES IN (5, 6),
+         PARTITION p2 VALUES IN (DEFAULT)
+        );
+# list columns
+CREATE TABLE tbl1_lc (id INT,partition_id VARCHAR(2))
+       PARTITION BY LIST COLUMNS(partition_id)
+        (PARTITION p0 VALUES IN ('00','01'),
+         PARTITION p1 VALUES IN ('02','03'),
+         PARTITION p2 VALUES IN (DEFAULT)
+        );
+# hash
+CREATE TABLE tbl1_h(col1 INT,col2 VARCHAR(50))
+       PARTITION BY HASH(col1) PARTITIONS 60;
+# key
+CREATE TABLE tbl1_k(id INT,gmt_create DATETIME,info VARCHAR(20))
+       PARTITION BY KEY(id,gmt_create) PARTITIONS 10;
+
+# Non-template sub partition
+# Hash + Range
+CREATE TABLE t2_f_hr (col1 INT,col2 INT) 
+       PARTITION BY KEY(col1) 
+       SUBPARTITION BY RANGE(col2)
+         (PARTITION p1
+          (SUBPARTITION sp0 VALUES LESS THAN (2020)
+          ,SUBPARTITION sp1 VALUES LESS THAN (2021)
+          ,SUBPARTITION sp2 VALUES LESS THAN (2022)
+          ,SUBPARTITION sp3 VALUES LESS THAN (2023)
+          ),
+          PARTITION p2
+          (SUBPARTITION sp4 VALUES LESS THAN (2020)
+          ,SUBPARTITION sp5 VALUES LESS THAN (2021)
+          ,SUBPARTITION sp6 VALUES LESS THAN (2022)
+          ,SUBPARTITION sp7 VALUES LESS THAN (2023)
+          )
+         );
+
+connection obsys;
+drop table if exists sys_tbl1_h;
+CREATE TABLE sys_tbl1_h(col1 INT,col2 VARCHAR(50))
+       PARTITION BY HASH(col1) PARTITIONS 60;
+
+let $table_id_tbl1_r = query_get_value(select table_id from oceanbase.__all_virtual_table where table_name='tbl1_r' order by schema_version desc limit 1, table_id, 1);
+eval select part_name, low_bound_val, high_bound_val, part_position, sub_part_num from oceanbase.__all_virtual_proxy_partition where tenant_name = 'mysql' and table_id = $table_id_tbl1_r;
+
+let $table_id_tbl1_log_rc = query_get_value(select table_id from oceanbase.__all_virtual_table where table_name='tbl1_log_rc' order by schema_version desc limit 1, table_id, 1);
+eval select part_name, low_bound_val, high_bound_val, part_position, sub_part_num from oceanbase.__all_virtual_proxy_partition where tenant_name = 'mysql' and table_id = $table_id_tbl1_log_rc;
+
+let $table_id_tbl1_l = query_get_value(select table_id from oceanbase.__all_virtual_table where table_name='tbl1_l' order by schema_version desc limit 1, table_id, 1);
+eval select part_name, low_bound_val, high_bound_val, part_position, sub_part_num from oceanbase.__all_virtual_proxy_partition where tenant_name = 'mysql' and table_id = $table_id_tbl1_l;
+
+let $table_id_tbl1_lc = query_get_value(select table_id from oceanbase.__all_virtual_table where table_name='tbl1_lc' order by schema_version desc limit 1, table_id, 1);
+eval select part_name, low_bound_val, high_bound_val, part_position, sub_part_num from oceanbase.__all_virtual_proxy_partition where tenant_name = 'mysql' and table_id = $table_id_tbl1_lc;
+
+let $table_id_tbl1_h = query_get_value(select table_id from oceanbase.__all_virtual_table where table_name='tbl1_h' order by schema_version desc limit 1, table_id, 1);
+eval select part_name, low_bound_val, high_bound_val, part_position, sub_part_num from oceanbase.__all_virtual_proxy_partition where tenant_name = 'mysql' and table_id = $table_id_tbl1_h;
+
+let $table_id_tbl1_k = query_get_value(select table_id from oceanbase.__all_virtual_table where table_name='tbl1_k' order by schema_version desc limit 1, table_id, 1);
+eval select part_name, low_bound_val, high_bound_val, part_position, sub_part_num from oceanbase.__all_virtual_proxy_partition where tenant_name = 'mysql' and table_id = $table_id_tbl1_k;
+
+let $table_id_t2_f_hr = query_get_value(select table_id from oceanbase.__all_virtual_table where table_name='t2_f_hr' order by schema_version desc limit 1, table_id, 1);
+eval select part_name, low_bound_val, high_bound_val, part_position, sub_part_num from oceanbase.__all_virtual_proxy_partition where tenant_name = 'mysql' and table_id = $table_id_t2_f_hr;
+
+--error ER_WRONG_ARGUMENTS
+eval select part_name, low_bound_val, high_bound_val, part_position, sub_part_num from oceanbase.__all_virtual_proxy_partition where tenant_name = 'mysql';
+--error ER_WRONG_ARGUMENTS
+eval select part_name, low_bound_val, high_bound_val, part_position, sub_part_num from oceanbase.__all_virtual_proxy_partition where table_id = $table_id_tbl1_k;
+--error ER_NOT_SUPPORTED_YET
+eval select part_name, low_bound_val, high_bound_val, part_position, sub_part_num from oceanbase.__all_virtual_proxy_partition where (tenant_name, table_id) in (('mysql', $table_id_tbl1_h),('mysql', $table_id_tbl1_k));
+
+# mysql tenant can only get tables belong to itself
+let $table_id_sys_tbl1_h = query_get_value(select table_id from oceanbase.__all_virtual_table where table_name='sys_tbl1_h' order by schema_version desc limit 1, table_id, 1);
+connection default;
+eval select part_name, low_bound_val, high_bound_val, part_position, sub_part_num from oceanbase.__all_virtual_proxy_partition where tenant_name = 'sys' and table_id = $table_id_sys_tbl1_h;
+eval select part_name, low_bound_val, high_bound_val, part_position, sub_part_num from oceanbase.__all_virtual_proxy_partition where tenant_name = 'mysql' and table_id = $table_id_tbl1_h;
+
+drop table tbl1_r;
+drop table tbl1_log_rc;
+drop table tbl1_l;
+drop table tbl1_lc;
+drop table tbl1_h;
+drop table tbl1_k;
+drop table t2_f_hr;
+
+connection obsys;
+drop table sys_tbl1_h;

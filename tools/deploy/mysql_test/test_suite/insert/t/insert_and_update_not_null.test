@@ -1,0 +1,47 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: xiaoyi.xy
+# owner group: SQL3
+# description: foobar
+# tags: dml
+--disable_abort_on_error
+--disable_warnings
+sleep 5;
+
+create database if not exists db1;
+use db1;
+--disable_warnings
+drop table if exists test;
+--enable_warnings
+
+create table test (c1 int primary key, c2 int not null, c3 int default 1, c4 char,c5 int);
+insert into test (c1, c2) values (1,2);
+insert into test (c1, c2) values (2,2.3);
+insert into test (c1, c2) values (3.3,3.4);
+
+# error insert: column is nullable
+insert into test (c1, c3) values (4,5);
+insert into test (c1, c2) values (5, NULL);
+insert into test (c1, c2) values (5, NULL + 1);
+
+select * from test;
+#error update:column is nullable
+update test set c2 = c5+1 where c1 = 1;
+
+#update type promote
+update test set c2 = c2 + 2.8 where c1 = 1;
+select * from test;
+update test set c4 = c2 + 3 where c1 = 1;
+select * from test;
+update test set c2 = 2, c5 = 4, c1 = c1+5 where c1 = 1;
+select * from test;
+
+--disable_warnings
+drop table if exists ta;
+--enable_warnings
+create table ta (a integer primary key, b integer);
+insert into ta values(1,1),(0,0);
+update ta set a = a -1;
+update ta set a = a -1;
+drop database db1;

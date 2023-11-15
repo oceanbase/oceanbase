@@ -1,0 +1,6 @@
+drop table if exists a1;
+create table a1(rowkey_suffix int primary key, price int) ;
+select count(distinct price) from a1;
+count(distinct price)
+100
+drop table a1;

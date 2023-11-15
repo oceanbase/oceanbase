@@ -1,0 +1,30 @@
+set SESSION ob_query_timeout = 60 * 1000 * 1000;
+set SESSION ob_trx_timeout = 60 * 1000 * 1000;
+set SESSION ob_trx_idle_timeout = 60 * 1000 * 1000;
+set SESSION ob_query_timeout = 60 * 1000 * 1000;
+set SESSION ob_trx_timeout = 60 * 1000 * 1000;
+set SESSION ob_trx_idle_timeout = 60 * 1000 * 1000;
+drop table if exists test_multi_get_uncommitted_row_t;
+create table test_multi_get_uncommitted_row_t(a int primary key, b int, key ib(b));
+begin;
+insert into test_multi_get_uncommitted_row_t value(1, 1);
+insert into test_multi_get_uncommitted_row_t value(2, 2);
+select * from test_multi_get_uncommitted_row_t where a in (1,2);
+a	b
+select * from test_multi_get_uncommitted_row_t where a in (1, 2);
+a	b
+1	1
+2	2
+select * from test_multi_get_uncommitted_row_t where a in (1,2);
+a	b
+update test_multi_get_uncommitted_row_t set b = 10 where a = 1;
+commit;
+select * from test_multi_get_uncommitted_row_t where a in (1,2);
+a	b
+1	10
+2	2
+select * from test_multi_get_uncommitted_row_t where a in (1,2);
+a	b
+1	10
+2	2
+drop table test_multi_get_uncommitted_row_t;

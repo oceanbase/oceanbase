@@ -1,0 +1,849 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: linlin.xll
+#owner group: sql1
+#tags: pl,optimizer
+#description: test pl bugs [Aone]
+
+--result_format 4
+
+--disable_query_log
+--disable_result_log
+--source mysql_test/include/index_quick_major.inc
+--enable_query_log
+--enable_result_log
+
+use test;
+
+delimiter |;
+
+## 
+--error 1308
+create procedure foo()
+foo: loop
+  leave bar;
+end loop|
+
+--error 1308
+create procedure foo()
+foo: loop
+  iterate bar;
+end loop|
+
+--error 1308
+create procedure foo()
+foo: begin
+  iterate foo;
+end|
+
+--error 1415
+create function bug8408() returns int
+begin
+  select * from t1;
+  return 0;
+end|
+
+--error 1330
+create procedure p(in x int, x char(10))
+begin
+end|
+
+--error 1330
+create function p(x int, x char(10)) returns int
+begin
+end|
+
+--error 1331
+create procedure p()
+begin
+  declare x float;
+  declare x int;
+end|
+
+--error 1332
+create procedure p()
+begin
+  declare c condition for 1064;
+  declare c condition for 1065;
+end|
+
+--error 1333
+create procedure p()
+begin
+  declare c cursor for select * from t1;
+  declare c cursor for select field from t1;
+end|
+
+--error 1324
+create procedure p()
+begin
+  declare c cursor for select * from test.t;
+  open cc;
+  close cc;
+end|
+
+--error 1319
+create procedure p(val int, out res int)
+begin
+  declare x int default 0;
+  declare continue handler for foo set x = 1;
+  insert into test.t1 values (val);
+  if (x) then
+    set res = 0;
+  else
+    set res = 1;
+  end if;
+end |
+
+## 
+--error 1303
+create procedure foo()
+  create procedure bar() set @x=3|
+
+--error 1303
+create procedure foo()
+  create function bar() returns double return 2.3|
+
+## 
+--error 1413
+create procedure bug9073()
+begin
+  declare continue handler for sqlexception select 1;
+  declare continue handler for sqlexception select 2;
+end|
+
+## 
+--error 1337
+create procedure p()
+begin
+  declare c cursor for select * from t1;
+  declare x int;
+end |
+
+--error 1337
+create procedure p()
+begin
+  declare x int;
+  declare continue handler for sqlstate '42S99' set x = 1;
+  declare foo condition for sqlstate '42S99';
+end |
+
+--error 1338
+create procedure p()
+begin
+  declare x int;
+  declare continue handler for sqlstate '42S99' set x = 1;
+  declare c cursor for select * from t1;
+end |
+
+## 
+create database mysqltest1|
+use mysqltest1|
+drop database mysqltest1|
+--error ER_NO_DB_ERROR
+create function f1() returns int return 1|
+use test|
+
+--disable_warnings
+drop procedure if exists bug15091|
+--enable_warnings
+
+--error 1109
+create procedure bug15091()
+begin
+  declare selectstr varchar(6000) default ' ';
+  declare conditionstr varchar(5000)  default '';
+  set selectstr = concat(selectstr, ' and ', c.operatorid, 'in (',conditionstr, ')');
+end|
+
+--error 1458
+create procedure ` `() select 1|
+
+--error 1458
+create procedure ``() select 1|
+
+## 
+--disable_warnings
+drop procedure if exists p|
+drop table if exists t1|
+--enable_warnings
+create table t1(col int)|
+create procedure p()
+begin
+  declare c cursor for select * from t1;
+  open c;
+  open c;
+  close c;
+end|
+
+--error 1325
+call p()|
+drop procedure p|
+
+create procedure p()
+begin
+  declare c cursor for select * from t1;
+  open c;
+  close c;
+  close c;
+end |
+#--error 1326
+#call p()|
+drop procedure p|
+
+create procedure bug2259()
+begin
+  declare v1 int;
+  declare c1 cursor for select col from t1;
+  fetch c1 into v1;
+end|
+--error 1326
+call bug2259()|
+drop procedure bug2259|
+drop table t1|
+
+## 
+--error ER_SP_BAD_SQLSTATE
+create procedure bug8776_1()
+begin
+  declare continue handler for sqlstate '42S0200test' begin end;
+  begin end;
+end |
+
+
+## 
+--disable_warnings
+drop procedure if exists p|
+--enable_warnings
+create procedure p(in x int, inout y int, out z int)
+begin
+  set y = x+y;
+  set z = x+y;
+end|
+
+set @tmp_x = 42|
+set @tmp_y = 3|
+set @tmp_z = 0|
+call p(@tmp_x, @tmp_y, @tmp_z)|
+select @tmp_x, @tmp_y, @tmp_z |
+
+--error ER_SP_NOT_VAR_ARG
+call p(42, 43, @tmp_z)|
+
+drop procedure p|
+
+## 
+--error 1313
+create procedure foo() return 42|
+
+## 
+--error 1323
+create procedure p()
+begin
+  declare x int;
+  declare c cursor for select * from t limit 1 into x;
+  open c;
+  close c;
+end |
+
+## 
+--disable_warnings
+drop procedure if exists bug12712|
+--enable_warnings
+create procedure bug12712()
+  set session autocommit = 0|
+
+select @@autocommit|
+set @au = @@autocommit|
+call bug12712()|
+select @@autocommit|
+set session autocommit = @au|
+
+--disable_warnings
+drop function if exists bug12712|
+--enable_warnings
+create function bug12712()
+  returns int
+begin
+  call bug12712();
+  return 0;
+end|
+
+--error ER_SP_CANT_SET_AUTOCOMMIT
+set @x = bug12712()|
+drop function bug12712|
+drop procedure bug12712|
+
+--error ER_SP_CANT_SET_AUTOCOMMIT
+create function bug12712()
+    returns int
+begin
+  set session autocommit = 0;
+  return 0;
+end|
+
+--error ER_SP_CANT_SET_AUTOCOMMIT
+create function bug12712()
+    returns int
+begin
+  set @@autocommit = 0;
+  return 0;
+end|
+
+delimiter ;|
+
+--error 0,1305
+DROP FUNCTION my_func;
+--error 0,1305
+DROP PROCEDURE my_proc;
+
+delimiter /;
+CREATE FUNCTION my_func(x INT, y INT, z INT) RETURNS INT BEGIN RETURN 0; END; /
+delimiter ;/
+CREATE PROCEDURE my_proc(IN x INT, OUT y INT, INOUT z INT) BEGIN END;
+SELECT * FROM INFORMATION_SCHEMA.PARAMETERS WHERE SPECIFIC_NAME='my_func';
+SELECT * FROM INFORMATION_SCHEMA.PARAMETERS WHERE SPECIFIC_NAME='my_proc';
+DROP PROCEDURE my_proc;
+DROP FUNCTION my_func;
+
+## AONE: 
+--error 1054
+select time_zone=@@time_zone;
+--error 1054
+select time_zone;
+select @@time_zone;
+--error 1054
+select connect_timeout = @@session.connect_timeout;
+--error 1054
+select connect_timeout;
+--error 1238
+select @@session.connect_timeout;
+
+## 
+delimiter /;
+--error 1064
+create procedure proc_ret()
+begin
+  return ;
+end;
+/
+
+--error 1313
+create procedure proc_ret()
+begin
+  return null;
+end;
+/
+
+--error 1064
+create function func_ret()
+returns int
+begin
+  return ;
+end;
+/
+
+#### 
+DELIMITER ;/
+--error 0,1051
+DROP TABLE t1;
+CREATE TABLE t1(a INT, b INT);
+INSERT INTO t1 values (1,1),(2,2);
+
+DELIMITER /;
+--error 0,1305
+DROP FUNCTION fn;/
+CREATE FUNCTION fn(a INT) RETURNS INT
+BEGIN
+  RETURN a;
+END;
+/
+SELECT fn(MIN(b)) FROM t1;
+/
+DROP TABLE t1;
+/
+DROP FUNCTION fn;
+/
+
+# 
+--error 0,1305
+DROP PROCEDURE proc;
+/
+CREATE PROCEDURE proc(OUT x enum('1', '2'), OUT y set('3', '4'))
+BEGIN
+  SET x = '2';
+  SET y = '4';
+END;
+/
+CALL proc(@a, @b);
+/
+DROP PROCEDURE proc;
+/
+delimiter ;/
+
+# 
+--error 0,1305
+drop function f1;
+
+CREATE FUNCTION f1() RETURNS VARCHAR(65525) RETURN 'Hello';
+
+SET collation_connection='gbk_bin';
+
+--error 0,1051
+drop table if exists t1;
+create table t1(c1 int);
+insert into t1 values(0);
+
+--error 0,1051
+drop view v1;
+create view v1 as select f1() from dual;
+select * from t1 union select * from v1;
+drop view v1;
+
+
+drop function f1;
+
+
+### ctas support questionmark
+### 
+--disable_warnings
+drop table if exists t; 
+drop table if exists t1;
+drop table if exists t2;
+drop table if exists t3;
+--enable_warnings
+create table t (a1 int, b1 int);
+insert into t values(1,1),(2,2),(3,3);
+
+delimiter /;
+create procedure p(arg1 int) 
+begin 
+  create table t1 as select * from t where a1<arg1; 
+end;
+/
+
+### 
+#--error 1064  
+call p(1)/
+
+sleep 5/
+
+#--error 1146
+select * from t1;/
+
+
+PREPARE pr1 FROM 'create table  t2 as select * from t where a1<?';/
+SET @var = 10;/
+
+### 
+#--error 1064
+EXECUTE pr1 USING @var;/
+
+sleep 5/
+
+#--error 1146
+select * from t2;/
+
+--error 1149
+create table  t3 as select * from t where a1<?;/
+
+sleep 5/
+
+--error 1146
+select * from t3;/
+
+delimiter ;/
+
+drop table if exists t; 
+drop table if exists t1;
+drop table if exists t2;
+drop table if exists t3;
+
+delimiter /;
+
+### 
+--error 0,1305
+--disable_warnings
+drop table if exists t4/
+--enable_warnings
+create table t4 (id int)/
+insert into t4 values (1),(2),(3)/
+--error 0,1305
+drop procedure if exists pro_hr/
+create procedure pro_hr()
+begin
+  create or replace view v2 as select * from t4 where id > 2;
+end;
+/
+--error 0,1305
+call pro_hr()/
+select * from v2/
+
+delimiter ;/
+
+drop table t4;
+drop procedure pro_hr;
+drop view v2;
+
+#### 
+#delimiter /;
+#--disable_warnings
+#drop temporary table if exists temp_t/
+#drop procedure if exists bug36021834/
+#--enable_warnings
+#
+#--error 0,1064
+#create procedure bug36021834()
+#begin
+#  create temporary table temp_t ( c1 VARCHAR(50));
+#  insert into temp_t values('create temp table in pl');
+#end/
+#
+#call bug36021834()/
+#select * from temp_t/
+#
+#delimiter ;/
+#
+#drop temporary table temp_t;
+#drop procedure bug36021834;
+
+### 
+--disable_warnings
+drop table if exists t1;
+drop procedure if exists bug36052430;
+--enable_warnings
+
+create table t1(type int, salary double);
+
+insert into t1 values(1,1000);
+
+delimiter /;
+
+create procedure bug36052430() 
+begin
+  start transaction;
+  savepoint s1;
+  insert into t1 values(3,3000);
+  savepoint s2;
+  insert into t1 values(4,4000);
+  select * from t1;
+  rollback to savepoint s2;
+  select * from t1; 
+end/
+
+call bug36052430()/
+
+delimiter ;/
+
+release savepoint s1;
+drop table t1;
+drop procedure bug36052430;
+
+### 
+### 
+--disable_warnings
+drop table if exists t1;
+drop procedure if exists desc_proc;
+--enable_warnings
+
+create table t1(id int, name varchar(10));
+
+insert into t1 values(351303, 'hr');
+
+delimiter /;
+
+create procedure desc_proc()
+begin
+  describe t1;
+  desc t1;
+  explain t1;
+end/
+
+call desc_proc()/
+
+delimiter ;/
+drop table t1;
+drop procedure desc_proc;
+
+### 
+--disable_warnings
+drop table if exists t_hr;
+drop function if exists f_hr;
+drop procedure if exists p_hr;
+--enable_warnings
+
+create table t_hr(id int auto_increment not null primary key, name varchar(10) not null);
+
+insert into t_hr values(null, 'hr');
+
+select last_insert_id();
+
+delimiter /;
+
+create function f_hr(s int)
+returns int deterministic
+begin
+  insert into t_hr values(null, 'f');
+  return s;
+end/
+
+select f_hr(2)/
+
+select last_insert_id()/
+
+create procedure p_hr()
+begin
+  insert into t_hr values(null, 'f');
+end/
+
+call p_hr()/
+
+select * from t_hr/
+select last_insert_id()/
+
+delimiter ;/
+drop table t_hr;
+drop function f_hr;
+drop procedure p_hr;
+
+### 
+--error 0,1051
+--disable_warnings
+drop table if exists t;
+drop function if exists func_hr;
+drop function if exists func1_hr;
+--enable_warnings
+create table t(id int);
+insert into t values(1),(2),(3),(4);
+select * from t;
+delimiter /;
+--error 0,1064
+create function func_hr()
+returns int
+begin
+  declare offset int;
+  declare nums int;
+  declare s_id int;
+  set offset = 2;
+  set nums = 1;
+  select id into s_id from t limit offset,nums;
+  set offset = 1;
+  select id into s_id from t limit offset,nums;
+  return s_id;
+end/
+select func_hr()/
+--error 0,1064
+create function func1_hr()
+returns int
+begin
+  declare nums int;
+  declare s_id int;
+  set nums = 1;
+  select id into s_id from t limit nums;
+  return s_id;
+end/
+select func1_hr()/
+delimiter ;/
+drop table if exists t;
+drop function func_hr;
+drop function func1_hr;
+
+### 
+--disable_warnings
+drop procedure if exists bugs1;
+drop procedure if exists bugs4;
+--enable_warnings
+delimiter /;
+create procedure bugs1()
+begin
+  select 2 union select 2 into @v1;
+end/
+
+call bugs1()/
+select @v1/
+
+--error 1221
+create procedure bugs2()
+begin
+  select 2 union select 2 into @v2 union select 2;
+end/
+
+--error 1221
+create procedure bugs3()
+begin
+  select 2 into @v3 union select 2;
+end/
+
+create procedure bugs4()
+begin
+  select 1 union select 2 into @v4;
+end/
+
+--error 1172
+call bugs4()/
+
+### mysql inner_call support number to bool
+### 
+
+--disable_warnings
+DROP PROCEDURE IF EXISTS `pro_1`/
+DROP FUNCTION IF EXISTS `fun_2`/
+--enable_warnings
+
+CREATE PROCEDURE pro_1(IN a1 INT ,IN a2 INT)
+BEGIN
+  SELECT a1 + a2 INTO @p;
+END/
+CALL pro_1(TRUE,TRUE);/
+SELECT @p/
+
+CREATE FUNCTION fun_2() RETURNS INT
+BEGIN
+  DECLARE d1,d2 BOOLEAN;
+  SET d1=1,d2=1;
+  CALL pro_1(d1,d2);
+  RETURN 1;
+END/
+SELECT fun_2()/
+SELECT @p/
+
+DROP PROCEDURE IF EXISTS `pro_1`/
+DROP FUNCTION IF EXISTS `fun_2`/
+
+
+delimiter ;/
+drop procedure bugs1;
+drop procedure bugs4;
+
+
+### 
+--disable_warnings
+drop procedure if exists alias_1;
+drop procedure if exists alias_2;
+--enable_warnings
+
+delimiter /;
+
+create procedure alias_1()
+begin
+  select "hr\"fix\"issue" + 3 + "a";
+end/
+
+--disable_warnings
+call alias_1()/
+--enable_warnings
+
+create procedure alias_2(in a int, inout b int, out c int)
+begin
+  select a;
+  select b+5;
+  select a+b into c;
+  select c;
+end/
+
+set @b=5;/
+set @c=0;/
+
+call alias_2(3, @b, @c)/
+
+delimiter ;/
+
+drop procedure alias_1;
+drop procedure alias_2;
+
+#
+
+--disable_warnings
+drop procedure if exists p2;
+drop procedure if exists p3;
+drop function if exists f2;
+drop table if exists t1;
+--enable_warnings
+
+delimiter //;
+
+#case1 pl stmt start
+drop procedure if exists p1;
+create procedure p1()
+begin
+  select 1;
+end;
+
+select "succ"//
+
+call p1()//
+
+#case2 sql stmt start
+select "===begin===";
+create procedure p2()
+begin
+  select 2;
+end;
+
+create procedure p3()
+begin
+  select 3;
+end//
+
+call p2()//
+call p3()//
+
+drop procedure p1;
+drop procedure p2;
+drop procedure p3;
+
+select "===end==="//
+
+#case3
+/*start with comment case;*/
+create procedure p1()
+begin
+  select "first stmt";
+  select "second stmt";
+end;
+/*insert a comment;*/
+create procedure p2()
+begin
+  -- pl contain comment;
+  select "pl contain comment";
+end;
+
+call p1();
+call p2();
+drop procedure p1;
+drop procedure p2//
+
+#case4 single sql stmt in pl;
+create table t1(id int)//
+create procedure p1() insert into t1 values(1); insert into t1 values(2);//
+
+call p1();
+select * from t1//
+
+#case5 multi sql stmt in pl;
+drop procedure p1;
+create procedure p1()
+begin
+  insert into t1 values(1);
+  /*insert value of 2;*/
+  insert into t1 values(2);
+end;
+call p1();
+select * from t1;
+drop table t1;
+drop procedure p1//
+
+create table t1(id int);
+drop table if exists t1;
+create function f2() returns int
+begin
+  declare a int;
+  return 1;
+end;//
+
+select f2//
+
+drop function f2//
+
+delimiter ;//

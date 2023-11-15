@@ -1,0 +1,546 @@
+#owner: ht353245
+#owner group: shenzhen
+--echo # ----------------------------------------------------------------------
+--echo # Base test of GEOMETRY spatial index.
+--echo # ----------------------------------------------------------------------
+--source mysql_test/test_suite/geometry/t/import_default_srs_data_mysql.inc
+
+### 6. Test for alter spatial index.
+if (1) {
+  --disable_warnings
+  DROP TABLE IF EXISTS tab;
+  --enable_warnings
+  CREATE TABLE tab(c1 int NOT NULL,c2 GEOMETRY NOT NULL SRID 0,
+  c3 GEOMETRY NOT NULL SRID 0,c4 GEOMETRY NOT NULL SRID 0,c5 GEOMETRY NOT NULL SRID 0);
+
+  --disable_warnings
+  DROP TABLE IF EXISTS tab1;
+  --enable_warnings
+  CREATE TABLE tab1(c1 int NOT NULL PRIMARY KEY,c2 GEOMETRY NOT NULL SRID 0,
+  c3 GEOMETRY NOT NULL SRID 0,c4 GEOMETRY NOT NULL SRID 0,c5 GEOMETRY NOT NULL SRID 0);
+
+  INSERT INTO tab1 SELECT * FROM tab;
+
+  INSERT INTO tab(c1,c2,c3,c4,c5)
+  VALUES(1,ST_GeomFromText('POINT(10 10)'),ST_GeomFromText('LINESTRING(5 5,20 20,30 30)'),
+  ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))'),
+  ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))'));
+
+  INSERT INTO tab(c1,c2,c3,c4,c5)
+  VALUES(2,ST_GeomFromText('POINT(20 20)'),ST_GeomFromText('LINESTRING(20 20,30 30,40 40)'),
+  ST_GeomFromText('POLYGON((40 50,40 70,50 89,70 89,80 80,70 50,40 50))'),
+  ST_GeomFromText('POLYGON((40 50,40 70,50 89,70 89,80 80,70 50,40 50))'));
+
+  INSERT INTO tab(c1,c2,c3,c4,c5)
+  VALUES(3,ST_GeomFromText('POINT(4 4)'),ST_GeomFromText('LINESTRING(13 13,14 14,15 15)'),
+  ST_GeomFromText('POLYGON((7 1,6 2,6 3,10 3,10 1,7 1))'),
+  ST_GeomFromText('POLYGON((4 -2,5 -4,6 -5,7 -4,7 2,4 -2))'));
+
+  ALTER TABLE tab ADD SPATIAL INDEX idx2(c2);
+
+  --error 1221
+  ALTER TABLE tab ADD SPATIAL KEY idx3(c3 DESC);
+
+  --error 1221
+  ALTER TABLE tab ADD SPATIAL KEY idx3(c3 ASC);
+
+  ALTER TABLE tab ADD SPATIAL INDEX idx4(c4) COMMENT 'testing spatial index on Polygon';
+
+  ALTER TABLE tab ADD SPATIAL KEY idx5(c5) COMMENT 'testing spatial index on Geometry';
+
+  drop index idx4 on tab;
+
+  ALTER TABLE tab ADD INDEX idx6(c4) USING BTREE;
+}
+
+--echo #
+--echo # Bug #21087676 FORBID BUILDING NON-SPATIAL INDEX ON GEOMETRY COLUMNS
+--echo #
+
+if (0) {#TODO: @linjing adapt
+--echo # Primary key on geometry column is not allowed.
+--error 3728
+CREATE TABLE t1 (g GEOMETRY SRID 0 PRIMARY KEY);
+--error 3728
+CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL PRIMARY KEY);
+CREATE TABLE t1 (g GEOMETRY SRID 0);
+--error 3728
+ALTER TABLE t1 ADD PRIMARY KEY (g);
+DROP TABLE t1;
+
+--echo # Unique index on geometry column is not allowed.
+--error 3728
+CREATE TABLE t1 (g GEOMETRY SRID 0 UNIQUE);
+--error 3728
+CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL UNIQUE);
+CREATE TABLE t1 (g GEOMETRY SRID 0);
+--error 3728
+CREATE UNIQUE INDEX g_idx ON t1(g);
+--error 3728
+ALTER TABLE t1 ADD UNIQUE INDEX (g);
+DROP TABLE t1;
+CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL);
+--error 3728
+CREATE UNIQUE INDEX g_idx ON t1(g);
+--error 3728
+ALTER TABLE t1 ADD UNIQUE INDEX (g);
+DROP TABLE t1;
+}
+
+if (0) { #TODO: @linjing adapt
+--echo # Prefix index on geometry column is not allowed.
+--error ER_WRONG_SUB_KEY
+CREATE TABLE t1 (g GEOMETRY SRID 0, INDEX (g(10)));
+--error ER_WRONG_SUB_KEY
+CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL, INDEX (g(10)));
+CREATE TABLE t1 (g GEOMETRY SRID 0);
+--error ER_WRONG_SUB_KEY
+CREATE INDEX g_idx ON t1(g(10));
+--error ER_WRONG_SUB_KEY
+ALTER TABLE t1 ADD INDEX (g(10));
+DROP TABLE t1;
+CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL);
+--error ER_WRONG_SUB_KEY
+CREATE INDEX g_idx ON t1(g(10));
+--error ER_WRONG_SUB_KEY
+ALTER TABLE t1 ADD INDEX (g(10));
+DROP TABLE t1;
+}
+
+--echo # Multi-column index on geometry column is not allowed.
+--error ER_TOO_MANY_KEY_PARTS
+CREATE TABLE t1 (
+  g1 GEOMETRY SRID 0 NOT NULL,
+  g2 GEOMETRY SRID 0 NOT NULL,
+  INDEX (g1, g2)
+);
+--error ER_TOO_MANY_KEY_PARTS
+CREATE TABLE t1 (
+  g1 GEOMETRY SRID 0,
+  g2 GEOMETRY SRID 0,
+  INDEX (g1, g2)
+);
+--error ER_TOO_MANY_KEY_PARTS
+CREATE TABLE t1 (g GEOMETRY SRID 0, a INT, INDEX (g, a));
+--error ER_TOO_MANY_KEY_PARTS
+CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL, a INT, INDEX (g, a));
+--disable_warnings
+  DROP TABLE IF EXISTS t1;
+--enable_warnings
+CREATE TABLE t1 (g1 GEOMETRY SRID 0, g2 GEOMETRY SRID 0, a INT);
+--error ER_TOO_MANY_KEY_PARTS
+CREATE INDEX g_idx ON t1(g1, g2);
+--error ER_TOO_MANY_KEY_PARTS
+CREATE INDEX g_idx ON t1(g1, a);
+--error ER_TOO_MANY_KEY_PARTS
+ALTER TABLE t1 ADD INDEX (g1, g2);
+--error ER_TOO_MANY_KEY_PARTS
+ALTER TABLE t1 ADD INDEX (g1, a);
+DROP TABLE t1;
+CREATE TABLE t1 (
+  g1 GEOMETRY SRID 0 NOT NULL,
+  g2 GEOMETRY SRID 0 NOT NULL,
+  a INT
+);
+--error ER_TOO_MANY_KEY_PARTS
+CREATE INDEX g_idx ON t1(g1, g2);
+--error ER_TOO_MANY_KEY_PARTS
+CREATE INDEX g_idx ON t1(g1, a);
+--error ER_TOO_MANY_KEY_PARTS
+ALTER TABLE t1 ADD INDEX (g1, g2);
+--error ER_TOO_MANY_KEY_PARTS
+ALTER TABLE t1 ADD INDEX (g1, a);
+DROP TABLE t1;
+
+if (0) {
+  --echo # Explicit B-tree index on geometry column is not allowed.
+  --error 1252
+  CREATE TABLE t1 (g GEOMETRY SRID 0, INDEX (g) USING BTREE);
+  --error 3729
+  CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL, INDEX (g) USING BTREE);
+  CREATE TABLE t1 (g GEOMETRY SRID 0);
+  --error 3729
+  CREATE INDEX g_idx ON t1(g) USING BTREE;
+  --error 3729
+  ALTER TABLE t1 ADD INDEX (g) USING BTREE;
+  DROP TABLE t1;
+  CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL);
+  --error 3729
+  CREATE INDEX g_idx ON t1(g) USING BTREE;
+  --error 3729
+  ALTER TABLE t1 ADD INDEX (g) USING BTREE;
+  DROP TABLE t1;
+
+  --echo # Explicit hash index on geometry column is not allowed.
+  --error 3729
+  CREATE TABLE t1 (g GEOMETRY SRID 0, INDEX (g) USING HASH);
+  --error 3729
+  CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL, INDEX (g) USING HASH);
+  CREATE TABLE t1 (g GEOMETRY SRID 0);
+  --error 3729
+  CREATE INDEX g_idx ON t1(g) USING HASH;
+  --error 3729
+  ALTER TABLE t1 ADD INDEX (g) USING HASH;
+  DROP TABLE t1;
+  CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL);
+  --error 3729
+  CREATE INDEX g_idx ON t1(g) USING HASH;
+  --error 3729
+  ALTER TABLE t1 ADD INDEX (g) USING HASH;
+  DROP TABLE t1;
+}
+
+--echo # Explicit ASC index on geometry column is not allowed.
+# Without SPATIAL keyword.
+--error 1221
+CREATE TABLE t1 (g GEOMETRY SRID 0, INDEX (g ASC));
+--error 1221
+CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL, INDEX (g ASC));
+CREATE TABLE t1 (g GEOMETRY SRID 0);
+--error 1221
+CREATE INDEX g_idx ON t1(g ASC);
+--error 1221
+ALTER TABLE t1 ADD INDEX (g ASC);
+DROP TABLE t1;
+CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL);
+--error 1221
+CREATE INDEX g_idx ON t1(g ASC);
+--error 1221
+ALTER TABLE t1 ADD INDEX (g ASC);
+DROP TABLE t1;
+# With SPATIAL keyword.
+--error 1221
+CREATE TABLE t1 (g GEOMETRY SRID 0, SPATIAL INDEX (g ASC));
+--error 1221
+CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL, SPATIAL INDEX (g ASC));
+CREATE TABLE t1 (g GEOMETRY SRID 0);
+--error 1221
+CREATE SPATIAL INDEX g_idx ON t1(g ASC);
+--error 1221
+ALTER TABLE t1 ADD SPATIAL INDEX (g ASC);
+DROP TABLE t1;
+CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL);
+--error 1221
+CREATE SPATIAL INDEX g_idx ON t1(g ASC);
+--error 1221
+ALTER TABLE t1 ADD SPATIAL INDEX (g ASC);
+DROP TABLE t1;
+
+--echo # Explicit DESC index on geometry column is not allowed.
+# Without SPATIAL keyword.
+--error 1221
+CREATE TABLE t1 (g GEOMETRY SRID 0, INDEX (g DESC));
+--error 1221
+CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL, INDEX (g DESC));
+CREATE TABLE t1 (g GEOMETRY SRID 0);
+--error 1221
+CREATE INDEX g_idx ON t1(g DESC);
+--error 1221
+ALTER TABLE t1 ADD INDEX (g DESC);
+DROP TABLE t1;
+CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL);
+--error 1221
+CREATE INDEX g_idx ON t1(g DESC);
+--error 1221
+ALTER TABLE t1 ADD INDEX (g DESC);
+DROP TABLE t1;
+# With SPATIAL keyword.
+--error 1221
+CREATE TABLE t1 (g GEOMETRY SRID 0, SPATIAL INDEX (g DESC));
+--error 1221
+CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL, SPATIAL INDEX (g DESC));
+CREATE TABLE t1 (g GEOMETRY SRID 0);
+--error 1221
+CREATE SPATIAL INDEX g_idx ON t1(g DESC);
+--error 1221
+ALTER TABLE t1 ADD SPATIAL INDEX (g DESC);
+DROP TABLE t1;
+CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL);
+--error 1221
+CREATE SPATIAL INDEX g_idx ON t1(g DESC);
+--error 1221
+ALTER TABLE t1 ADD SPATIAL INDEX (g DESC);
+DROP TABLE t1;
+
+if (0) {
+  --echo # Fulltext index on geometry column is not allowed.
+  --error ER_BAD_FT_COLUMN
+  CREATE TABLE t1 (g GEOMETRY SRID 0, FULLTEXT INDEX (g));
+  --error ER_BAD_FT_COLUMN
+  CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL, FULLTEXT INDEX (g));
+  CREATE TABLE t1 (g GEOMETRY SRID 0);
+  --error ER_BAD_FT_COLUMN
+  CREATE FULLTEXT INDEX g_idx ON t1(g);
+  --error ER_BAD_FT_COLUMN
+  ALTER TABLE t1 ADD FULLTEXT INDEX (g);
+  DROP TABLE t1;
+  CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL);
+  --error ER_BAD_FT_COLUMN
+  CREATE FULLTEXT INDEX g_idx ON t1(g);
+  --error ER_BAD_FT_COLUMN
+  ALTER TABLE t1 ADD FULLTEXT INDEX (g);
+  DROP TABLE t1;
+}
+
+--echo # Index on nullable geometry column is not allowed.
+--error 1252
+CREATE TABLE t1 (g GEOMETRY SRID 0, INDEX (g));
+CREATE TABLE t1 (g GEOMETRY SRID 0);
+--error 1252
+CREATE INDEX g_idx ON t1(g);
+--error 1252
+ALTER TABLE t1 ADD INDEX (g);
+DROP TABLE t1;
+--error 1252
+CREATE TABLE t1 (g GEOMETRY SRID 0, SPATIAL INDEX (g));
+CREATE TABLE t1 (g GEOMETRY SRID 0);
+--error 1252
+CREATE SPATIAL INDEX g_idx ON t1(g);
+--error 1252
+ALTER TABLE t1 ADD SPATIAL INDEX (g);
+DROP TABLE t1;
+
+--echo # Index on non-nullable geometry column is allowed.
+CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL, INDEX (g));
+#SHOW CREATE TABLE t1;@linjing 需要适配schema printer
+DROP TABLE t1;
+CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL);
+CREATE INDEX g_idx ON t1(g);
+#SHOW CREATE TABLE t1;
+DROP TABLE t1;
+CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL, SPATIAL INDEX (g));
+#SHOW CREATE TABLE t1;
+DROP TABLE t1;
+CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL);
+CREATE SPATIAL INDEX g_idx ON t1(g);
+#SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo # Virtual generated geometry columns don't support spatial indexes.
+CREATE TABLE t1 (x INTEGER,
+                 y INTEGER,
+                 g POINT GENERATED ALWAYS AS (POINT(x, y)) NOT NULL SRID 0);                
+#--error ER_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN OB目前不支持通过alter来追加PRIMARY KEY(ObAlterTableResolver::resolve_add_primary)
+#ALTER TABLE t1 ADD PRIMARY KEY (g);
+--error 3106
+CREATE INDEX g_idx ON t1(g);
+--error 3106
+CREATE INDEX g_idx ON t1(g(25));
+--error 3106
+CREATE INDEX g_idx ON t1(g) USING BTREE;
+DROP TABLE t1;
+
+--echo # Stored generated geometry columns follow the same rules as
+--echo # non-generated columns.
+CREATE TABLE t1 (x INTEGER,
+                y INTEGER,
+                g POINT AS (POINT(x, y)) STORED SRID 0 NOT NULL);
+#--error ER_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN OB目前不支持通过alter来追加PRIMARY KEY(ObAlterTableResolver::resolve_add_primary)
+#ALTER TABLE t1 ADD PRIMARY KEY (g);
+--error 3106
+CREATE INDEX g_idx ON t1(g(25));
+--error 3106
+CREATE INDEX g_idx ON t1(g) USING BTREE;
+DROP TABLE t1;
+
+--echo # Check error code order
+CREATE TABLE t1 (g GEOMETRY SRID 0, g1 point srid 0, x int, y int,g2 POINT GENERATED ALWAYS AS (POINT(x, y)) SRID 0);
+##### 1. column num eror code is first order
+# column num vs generate, num first
+--error 1070
+CREATE INDEX g_idx ON t1(g, g2);
+# column num vs specific order, num first
+--error 1070
+CREATE INDEX g_idx ON t1(g asc, g2);
+# column num vs not null, num first
+--error 1070
+CREATE INDEX g_idx ON t1(g, g2);
+
+##### 2. generate column eror code is the second order
+# generate vs specific order, generate first
+--error 3106
+CREATE INDEX g_idx ON t1(g2 asc);
+# generate vs not null, generate first
+--error 3106
+CREATE INDEX g_idx ON t1(g2);
+
+##### 3. specific order eror code is the third order
+# specific order vs not null, specific order first
+--error 1221
+CREATE INDEX g_idx ON t1(g asc);
+
+# bugfix: 
+# 记录一下复现的case，合并后日志中出现'merge error''fail to merge index'证明问题复现
+#create table if not exists gis (
+#        x decimal(19,16),
+#        y decimal(19,16),
+#        poi geometry not null srid 4326,
+#        index `xy_index` (x, y) local,
+#        index `poi_index` (poi) local
+#        );
+#insert into gis values (x,y,ST_srid(linestring(point(1,1),point(10,10),point(40,80)),4326));
+#insert into gis values (x,y,ST_srid(linestring(point(1,1),point(5,5),point(75,75)),4326));
+#alter system major freeze;
+#drop table gis;
+
+# bugfix: 
+# 空间列未指定srid，不走空间索引
+--disable_warnings
+DROP TABLE IF EXISTS tt2,t;
+--enable_warnings
+CREATE TABLE tt2 (id int, g GEOMETRY not null, spatial INDEX idx (g));
+explain extended_noaddr select st_astext(g) from tt2 where ST_Intersects(g,ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)'));
+explain extended_noaddr select /*+index(tt2 idx)*/ st_astext(g) from tt2 where ST_Intersects(g,ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)'));
+drop table tt2;
+CREATE TABLE tt2 (id int, g GEOMETRY not null srid 4326, spatial INDEX idx (g));
+--error 3643
+explain extended_noaddr select st_astext(g) from tt2 where ST_Intersects(g,ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)'));
+explain extended_noaddr select st_astext(g) from tt2 where ST_Intersects(g,ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)', 4326));
+explain extended_noaddr select /*+index(tt2 idx)*/ st_astext(g) from tt2 where ST_Intersects(g,ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)', 4326));
+insert into tt2 values (1, ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)', 4326));
+explain extended_noaddr select st_astext(g) from tt2 where ST_Intersects(g,ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)', 4326));
+explain extended_noaddr select /*+index(tt2 idx)*/ st_astext(g) from tt2 where ST_Intersects(g,ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)', 4326));
+drop table tt2;
+
+# bugfix: 
+# 原场景无法在mysql test中测试，这里仅测试相关修改点
+# 1. 平面坐标系
+SET @point_0_0 = ST_GeomFromText('POINT(0 0)');
+SET @point_1_1 = ST_GeomFromText('POINT(1 1)');
+SET @point_2_2 = ST_GeomFromText('POINT(2 2)');
+SET @point_3_3 = ST_GeomFromText('POINT(3 3)');
+SET @point_4_4 = ST_GeomFromText('POINT(4 4)');
+SET @point_5_5 = ST_GeomFromText('POINT(5 5)');
+SET @point_314_314 = ST_GeomFromText('POINT(3.1415926 3.1415926)');
+create table t (g geometry not null srid 0);
+create index idx on t(g);
+insert into t (g) values
+  (ST_GeomFromText('POINT(0 0)')),
+  (ST_GeomFromText('POINT(1 1)')),
+  (ST_GeomFromText('POINT(2 2)')),
+  (ST_GeomFromText('POINT(3 3)')),
+  (ST_GeomFromText('POINT(4 4)')),
+  (ST_GeomFromText('POINT(5 5)'));
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)'));
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(0 0)'), g);
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(1 1)'));
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(1 1)'), g);
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(2 2)'));
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(2 2)'), g);
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(3 3)'));
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(3 3)'), g);
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(4 4)'));
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(4 4)'), g);
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(5 5)'));
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(5 5)'), g);
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(3.1415926 3.1415926)'));
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(3.1415926 3.1415926)'), g);
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(0 0)'), g);
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(1 1)'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(1 1)'), g);
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(2 2)'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(2 2)'), g);
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(3 3)'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(3 3)'), g);
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(4 4)'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(4 4)'), g);
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(5 5)'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(5 5)'), g);
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(3.1415926 3.1415926)'));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(3.1415926 3.1415926)'), g);
+drop table t;
+# 2. 球面坐标系
+SET @point_0_0 = ST_GeomFromText('POINT(0 0)', 4326);
+SET @point_1_1 = ST_GeomFromText('POINT(1 1)', 4326);
+SET @point_2_2 = ST_GeomFromText('POINT(2 2)', 4326);
+SET @point_3_3 = ST_GeomFromText('POINT(3 3)', 4326);
+SET @point_4_4 = ST_GeomFromText('POINT(4 4)', 4326);
+SET @point_5_5 = ST_GeomFromText('POINT(5 5)', 4326);
+SET @point_314_314 = ST_GeomFromText('POINT(3.1415926 3.1415926)', 4326);
+create table t (g geometry not null srid 4326);
+create index idx on t(g);
+insert into t (g) values
+  (ST_GeomFromText('POINT(0 0)', 4326)),
+  (ST_GeomFromText('POINT(1 1)', 4326)),
+  (ST_GeomFromText('POINT(2 2)', 4326)),
+  (ST_GeomFromText('POINT(3 3)', 4326)),
+  (ST_GeomFromText('POINT(4 4)', 4326)),
+  (ST_GeomFromText('POINT(5 5)', 4326));
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)',4326));
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(0 0)', 4326), g);
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(1 1)', 4326));
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(1 1)', 4326), g);
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(2 2)', 4326));
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(2 2)', 4326), g);
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(3 3)', 4326));
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(3 3)', 4326), g);
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(4 4)', 4326));
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(4 4)', 4326), g);
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(5 5)', 4326));
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(5 5)', 4326), g);
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(3.1415926 3.1415926)', 4326));
+explain select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(3.1415926 3.1415926)', 4326), g);
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(0 0)',4326), g);
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(0 0)',4326));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(1 1)', 4326));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(1 1)', 4326), g);
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(2 2)', 4326));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(2 2)', 4326), g);
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(3 3)', 4326));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(3 3)', 4326), g);
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(4 4)', 4326));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(4 4)', 4326), g);
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(5 5)', 4326));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(5 5)', 4326), g);
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(g, ST_GeomFromText('POINT(3.1415926 3.1415926)', 4326));
+select /*+index(t idx)*/ st_astext(g) from t where st_intersects(ST_GeomFromText('POINT(3.1415926 3.1415926)', 4326), g);
+drop table t;
+
+if (1) 
+{
+  create table t (id int auto_increment primary key, g geometry not null srid 4326);
+  --disable_warnings
+  drop procedure if exists insert_test;
+  --enable_warnings
+  delimiter //;
+  create procedure insert_test()
+  begin
+    set @i=0;
+    w:while @i<2000 do
+      INSERT INTO t (g) VALUES (ST_GeomFromText('POINT(5 6)', 4326));
+      set @i=@i+1;
+    end while w;
+  end; //
+  delimiter ;//
+  call insert_test();
+  create index idx on t(g);
+  SELECT /*+index(t idx)*/ count(*) FROM t where st_intersects(g, st_geomfromtext('point(5 6)', 4326));
+  drop table t;
+}
+
+alter system set _enable_defensive_check = '2';
+create table t(g geometry  NOT NULL SRID 4326);
+create index idx on t (g);
+
+INSERT INTO t (g) VALUES
+  (ST_GeomFromText('POINT(0 0)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('POINT(1 1)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('POINT(1.5 1.5)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('POINT(2 2)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('POINT(2.5 2.5)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('POINT(3 3)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('POINT(3.5 3.5)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('POINT(4 4)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('POINT(5 5.5)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('POINT(6 6)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('POINT(7 7)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('MULTIPOINT(1 1,1 4,4 4,4 0.00009)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('LINESTRING(2 2,5 0,8 2)', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('MULTILINESTRING((2 2,2 10,10 10),(10 10,10 2,2 2))', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('POLYGON((0 0,0 10,10 10,10 0, 0 0),(4 4,4 6,6 6,6 4,4 4))', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('MULTIPOLYGON(((0 0,0 10,10 10,10 0,0 0),(4 4,4 6,6 6,6 4,4 4)),((3 3,3 7,7 7,7 3,3 3),(4 4,4 6,6 6,6 4,4 4)))', 4326, 'axis-order=long-lat')),
+  (ST_GeomFromText('GEOMETRYCOLLECTION(POLYGON((0 0,0 10,10 10,10 0,0 0),(4 4,4 6,6 6,6 4,4 4)),POLYGON((3 3,3 7,7 7,7 3,3 3),(4 4,4 6,6 6,6 4,4 4)))', 4326, 'axis-order=long-lat'));
+select /*+index(t idx)*/ st_astext(g) from t where _st_dwithin(g, st_geomfromtext('POINT(1 1)', 4326, 'axis-order=long-lat'), 5);
+drop table t;
+alter system set _enable_defensive_check = '1';

@@ -1,0 +1,85 @@
+# owner: chaser.ch
+# owner group: storage
+# description: test if dirty macro block will be rewrited when no trx is terminated
+
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+set GLOBAL ob_query_timeout = 1000000000000;
+set GLOBAL ob_trx_timeout = 1000000000000;
+
+connect (conn2,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn0,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+
+connection conn1;
+alter system set minor_compact_trigger = 10;
+
+connection conn1;
+--disable_warnings
+drop table if exists test_uncommitted_trx_minor_merge;
+--enable_warnings
+
+create table test_uncommitted_trx_minor_merge(c1 int primary key, c2 int, c3 varchar(2048)) compression "none";
+
+connection conn0;
+let $__tenant_id__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ tenant_id from oceanbase.__all_virtual_table where table_name= 'test_uncommitted_trx_minor_merge', tenant_id, 1);
+let $__table_id__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ table_id from oceanbase.__all_virtual_table where table_name= 'test_uncommitted_trx_minor_merge', table_id, 1);
+
+# prepare data, insert rows more than one macro
+--disable_query_log
+--disable_result_log
+connection conn1;
+let $i=3000;
+begin;
+while ($i > 0)
+{
+  eval insert into test_uncommitted_trx_minor_merge values ($i,$i,repeat('a', 2047));
+  dec $i;
+}
+
+connection conn1;
+alter system minor freeze;
+--source mysql_test/include/wait_minor_merge.inc
+
+connection conn1;
+insert into test_uncommitted_trx_minor_merge values (3001, 3001, "aaaa");
+
+connection conn1;
+alter system minor freeze;
+--source mysql_test/include/wait_minor_merge.inc
+
+--enable_query_log
+--enable_result_log
+
+connection conn1;
+insert into test_uncommitted_trx_minor_merge values (3002, 3002, "aaaa");
+
+
+connection conn1;
+insert into test_uncommitted_trx_minor_merge values (4000,4000,"a");
+
+connection conn1;
+alter system minor freeze;
+--source mysql_test/include/wait_minor_merge.inc
+
+let $__now_time__ = query_get_value(select now() as c, c, 1);
+alter system set minor_compact_trigger = 1;
+--source mysql_test/include/wait_mini_minor_merge_for_table.inc
+
+connection conn1;
+select count(1) from test_uncommitted_trx_minor_merge;
+
+connection conn0;
+let $use_old=query_get_value(select multiplexed_macro_block_count from oceanbase.__all_virtual_tablet_compaction_history where tablet_id in (select tablet_id from __all_virtual_tablet_to_ls where table_id = $__table_id__ and tenant_id=$__tenant_id__) order by finish_time desc limit 1, multiplexed_macro_block_count, 1);
+if ($use_old > 0)
+{
+  --echo should not reuse macro
+}
+
+connection conn1;
+select count(1) from test_uncommitted_trx_minor_merge;
+
+drop table test_uncommitted_trx_minor_merge;
+alter system set minor_compact_trigger = 2;

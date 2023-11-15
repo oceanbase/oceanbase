@@ -1,0 +1,19 @@
+drop database if exists db1;
+create database if not exists db1;
+use db1;
+drop table if exists test;
+create table test(c1 int primary key, c2 int, c3 int);
+insert into test values(1,1,1);
+insert into test values(2,2,2);
+set @@global.ob_enable_plan_cache= 0;
+use db1;
+update test set c2=c1+c2, c3=c2+c1;
+succeed
+succeed
+select * from test;
+c1	c2	c3
+1	2	3
+2	4	6
+set @@global.ob_enable_plan_cache= 1;
+drop table test;
+drop database db1;

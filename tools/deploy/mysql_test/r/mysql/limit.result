@@ -1,0 +1,50 @@
+drop table if exists t1;
+create table t1(a int primary key,b int);
+insert into t1(a) values(1),(2),(3);
+select * from t1 limit 0;
+a	b
+select * from t1 limit 1;
+a	b
+1	NULL
+select * from t1 limit 3;
+a	b
+1	NULL
+2	NULL
+3	NULL
+select * from t1 limit 4;
+a	b
+1	NULL
+2	NULL
+3	NULL
+select /*+no_rewrite*/ * from (select * from t1 order by b limit 4) AS t2 limit 2;
+a	b
+1	NULL
+2	NULL
+select * from t1 limit -1;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near '-1' at line 1
+drop table t1;
+create table t1 (a int primary key,b int);
+insert into t1(a) values (1),(2),(3),(4),(5),(6),(7);
+select * FROM t1  ORDER BY a desc LIMIT 3;
+a	b
+7	NULL
+6	NULL
+5	NULL
+select * FROM t1  ORDER BY a desc LIMIT 0;
+a	b
+select * FROM t1  ORDER BY a desc LIMIT 8;
+a	b
+7	NULL
+6	NULL
+5	NULL
+4	NULL
+3	NULL
+2	NULL
+1	NULL
+select count(*) c FROM t1 WHERE a > 0 ORDER BY c LIMIT 3;
+c
+7
+select sum(a) c FROM t1 WHERE a > 0 ORDER BY c LIMIT 3;
+c
+28
+drop table t1;

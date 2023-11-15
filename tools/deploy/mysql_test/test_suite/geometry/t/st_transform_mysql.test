@@ -1,0 +1,1025 @@
+#owner: ht353245
+#owner group: shenzhen
+--echo # ----------------------------------------------------------------------
+--echo # Test of GEOMETRY ST_Transform.
+--echo # ----------------------------------------------------------------------
+--source mysql_test/test_suite/geometry/t/import_default_srs_data_mysql.inc
+
+  # This test test the ST_Transform function
+
+  --echo # Test for st_transform
+  --echo #
+  --echo # NULL values.
+  --echo #
+
+  --echo # At least one NULL parameter. Should return NULL.
+  SELECT ST_TRANSFORM(NULL, NULL);
+  SELECT ST_TRANSFORM(NULL, 4326);
+  SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), NULL);
+  SELECT ST_ASTEXT(ST_TRANSFORM(ST_GEOMFROMTEXT('LINESTRING(0 0,1 1,1 0,0 1)',4326,NULL),4269));
+
+  --echo #
+  --echo # Invalid parameters.
+  --echo #
+
+  --echo # Invalid geometry. Should raise error.
+  --error 3037
+  SELECT ST_TRANSFORM(x'00000000DEADBEEF', 4326);
+
+  --echo # Non-existing SRID. Should raise error.
+  # Assume SRID 1000000000 is undefined.
+  --error 3548
+  SELECT ST_TRANSFORM(
+    x'94007735010100000000000000000000000000000000000000',
+    4326
+  );
+  --error 3548
+  SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000000000);
+
+  --echo #
+  --echo # Transformation to/from SRID 0.
+  --echo #
+
+  # --echo # Transformation from SRID 0 to SRID 0 is a no-op. Should return true.
+  # SELECT
+  #  ST_EQUALS(
+  #     ST_GEOMFROMTEXT('POINT(0 0)'),
+  #     ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)'), 0)
+  #   ) AS is_noop;
+
+  --echo # Transformation between SRID 0 and geographic SRS. Should raise error.
+  # Ellipsoidal:
+  --error 3741
+  SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)'), 4326);
+  --error 3742
+  SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 0);
+  # Spherical:
+  --error 3741
+  SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)'), 4047);
+  --error 3742
+  SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4047), 0);
+
+  --echo # Transformation between SRID 0 and projected SRS. Should raise error.
+  --error 3741
+  SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)'), 3857);
+  --error 3742
+  SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 3857), 0);
+
+  --echo #
+  --echo # Transformation between geographic SRSs.
+  --echo #
+
+  --echo # Transformation of every geometry type. Should succeed.
+  SELECT ST_ASTEXT(ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 3819));
+  SELECT ST_ASTEXT(ST_TRANSFORM(ST_GEOMFROMTEXT('LINESTRING(0 0, 1 1)', 4326), 3819));
+  SELECT ST_ASTEXT(ST_TRANSFORM(ST_GEOMFROMTEXT('POLYGON((0 0, 0 1, 1 1, 0 0))', 4326), 3819));
+  SELECT ST_ASTEXT(ST_TRANSFORM(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0))', 4326), 3819));
+  SELECT ST_ASTEXT(ST_TRANSFORM(ST_GEOMFROMTEXT('MULTIPOINT((0 0))', 4326), 3819));
+  SELECT ST_ASTEXT(ST_TRANSFORM(ST_GEOMFROMTEXT('MULTILINESTRING((0 0, 1 1))', 4326), 3819));
+  SELECT ST_ASTEXT(ST_TRANSFORM(
+    ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0, 0 1, 1 1, 0 0)))', 4326),
+    3819
+  ));
+
+  # --echo # Beginning of tests to verify that WGS 84 is recognized.
+
+  # --echo # WGS 84 with no authority codes. Should raise error.
+  # CREATE SPATIAL REFERENCE SYSTEM 1000004326
+  #   NAME 'foo'
+  #   DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST]]';
+  # --error ER_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  # --error ER_TRANSFORM_TARGET_SRS_MISSING_TOWGS84
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  # DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  # --echo # WGS 84 with no authority codes exept EPSG 4326 for the entire SRS.
+  # --echo # Should succeed.
+  # CREATE SPATIAL REFERENCE SYSTEM 1000004326
+  #   NAME 'foo'
+  #   DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  # DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  # --echo # WGS 84 with incorrect authority code. Should raise error.
+  # CREATE SPATIAL REFERENCE SYSTEM 1000004326
+  #   NAME 'foo'
+  #   DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","0"]]';
+  # --error ER_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  # --error ER_TRANSFORM_TARGET_SRS_MISSING_TOWGS84
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  # DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  # --echo # WGS 84 with authority code for the spheroid. Should succeed.
+  # CREATE SPATIAL REFERENCE SYSTEM 1000004326
+  #   NAME 'foo'
+  #   DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  # DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  # --echo # WGS 84 with incorrect authority code for the spheroid. Should raise
+  # --echo # error.
+  # CREATE SPATIAL REFERENCE SYSTEM 1000004326
+  #   NAME 'foo'
+  #   DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","0"]]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  # --error ER_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  # --error ER_TRANSFORM_TARGET_SRS_MISSING_TOWGS84
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  # DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  # --echo # WGS 84 with incorrect semi-major axis. Should raise error.
+  # CREATE SPATIAL REFERENCE SYSTEM 1000004326
+  #   NAME 'foo'
+  #   DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",1378137,298.257223563,AUTHORITY["EPSG","7030"]]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  # --error ER_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  # --error ER_TRANSFORM_TARGET_SRS_MISSING_TOWGS84
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  # DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  # --echo # WGS 84 with incorrect inverse flattening. Should raise error.
+  # CREATE SPATIAL REFERENCE SYSTEM 1000004326
+  #   NAME 'foo'
+  #   DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,198.257223563,AUTHORITY["EPSG","7030"]]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  # --error ER_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  # --error ER_TRANSFORM_TARGET_SRS_MISSING_TOWGS84
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  # DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  # --echo # WGS 84 with authority code for the datum. Should succeed.
+  # CREATE SPATIAL REFERENCE SYSTEM 1000004326
+  #   NAME 'foo'
+  #   DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  # DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  # --echo # WGS 84 with incorrect authority code for the datum. Should raise error.
+  # CREATE SPATIAL REFERENCE SYSTEM 1000004326
+  #   NAME 'foo'
+  #   DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563],AUTHORITY["EPSG","0"]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  # --error ER_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  # --error ER_TRANSFORM_TARGET_SRS_MISSING_TOWGS84
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  # DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  # --echo # WGS 84 with authority code for the prime meridian. Should succeed.
+  # CREATE SPATIAL REFERENCE SYSTEM 1000004326
+  #   NAME 'foo'
+  #   DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  # DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  # --echo # WGS 84 with incorrect authority code for the prime meridian. Should
+  # --echo # raise error.
+  # CREATE SPATIAL REFERENCE SYSTEM 1000004326
+  #   NAME 'foo'
+  #   DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","0"]],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  # --error ER_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  # --error ER_TRANSFORM_TARGET_SRS_MISSING_TOWGS84
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  # DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  # --echo # WGS 84 with incorrect prime meridian. Should raise error.
+  # CREATE SPATIAL REFERENCE SYSTEM 1000004326
+  #   NAME 'foo'
+  #   DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",1,AUTHORITY["EPSG","8901"]],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  # --error ER_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  # --error ER_TRANSFORM_TARGET_SRS_MISSING_TOWGS84
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  # DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  # --echo # WGS 84 with authority code for the unit. Should succeed.
+  # CREATE SPATIAL REFERENCE SYSTEM 1000004326
+  #   NAME 'foo'
+  #   DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278,AUTHORITY["EPSG","9122"]],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  # DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  # --echo # WGS 84 with incorrect authority code for the unit. Should raise error.
+  # CREATE SPATIAL REFERENCE SYSTEM 1000004326
+  #   NAME 'foo'
+  #   DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278,AUTHORITY["EPSG","0"]],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  # --error ER_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  # --error ER_TRANSFORM_TARGET_SRS_MISSING_TOWGS84
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  # DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  # --echo # WGS 84 with incorrect unit. Should raise error.
+  # CREATE SPATIAL REFERENCE SYSTEM 1000004326
+  #   NAME 'foo'
+  #   DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.01,AUTHORITY["EPSG","9122"]],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  # --error ER_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  # --error ER_TRANSFORM_TARGET_SRS_MISSING_TOWGS84
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  # DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  # --echo # WGS 84 with incorrect axes. Should raise error.
+  # CREATE SPATIAL REFERENCE SYSTEM 1000004326
+  #   NAME 'foo'
+  #   DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278],AXIS["Lon",EAST],AXIS["Lat",NORTH],AUTHORITY["EPSG","4326"]]';
+  # --error ER_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  # -error ER_TRANSFORM_TARGET_SRS_MISSING_TOWGS84
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  # DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  # --echo # End of tests to verify that WGS 84 is recognized.
+
+  # --echo # Geographic SRS with TOWGS84 clause. Should succeed.
+  # CREATE SPATIAL REFERENCE SYSTEM 1000004326
+  #   NAME 'foo'
+  #   DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563],TOWGS84[0,0,0,0,0,0,0]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST]]';
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  # DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  # --echo # Spherical SRS with TOWGS84 clause. Should succeed.
+  # CREATE SPATIAL REFERENCE SYSTEM 1000004326
+  #   NAME 'foo'
+  #   DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,0],TOWGS84[0,0,0,0,0,0,0]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST]]';
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  # SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  # DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  # --echo # Prime meridian 1 degree East of Greenwich.
+  # CREATE SPATIAL REFERENCE SYSTEM 1000004326
+  #   NAME 'foo'
+  #   DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,0],TOWGS84[0,0,0,0,0,0,0]],PRIMEM["foo",1],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST]]';
+  # --replace_numeric_round 15
+  # SELECT
+  #   ST_ASTEXT(
+  #     ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326)
+  #   ) AS lon_should_be_plus_one;
+  # SELECT
+  #   ST_ASTEXT(
+  #     ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326)
+  #   ) AS lon_should_be_minus_one;
+  # DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  # --echo # Prime meridian 1 degree West of Greenwich.
+  # CREATE SPATIAL REFERENCE SYSTEM 1000004326
+  #   NAME 'foo'
+  #   DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,0],TOWGS84[0,0,0,0,0,0,0]],PRIMEM["foo",-1],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST]]';
+  # --replace_numeric_round 15
+  # SELECT
+  #   ST_ASTEXT(
+  #     ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326)
+  #   ) AS lon_should_be_minus_one;
+  # SELECT
+  #   ST_ASTEXT(
+  #     ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326)
+  #   ) AS lon_should_be_plus_one;
+  # DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  # --echo # Prime meridian 180 degrees East of Greenwich.
+  # CREATE SPATIAL REFERENCE SYSTEM 1000004326
+  #   NAME 'foo'
+  #   DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,0],TOWGS84[0,0,0,0,0,0,0]],PRIMEM["foo",180],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST]]';
+  # SELECT
+  #   ST_ASTEXT(
+  #     ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326)
+  #   ) AS lon_should_be_180;
+  # # Because of floating point computations, -180 is not converted to 180, even
+  # # though the range is (-180, 180].
+  # SELECT
+  #   ST_ASTEXT(
+  #     ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326)
+  #   ) AS lon_should_be_minus_180;
+  # DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  # --echo # Prime meridian 180 degrees West of Greenwich.
+  # CREATE SPATIAL REFERENCE SYSTEM 1000004326
+  #   NAME 'foo'
+  #   DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,0],TOWGS84[0,0,0,0,0,0,0]],PRIMEM["foo",-180],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST]]';
+  # # Because of floating point computations, -180 is not converted to 180, even
+  # # though the range is (-180, 180].
+  # # SELECT
+  #   ST_ASTEXT(
+  #     ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326)
+  #   ) AS lon_should_be_minus_180;
+  # SELECT
+  #   ST_ASTEXT(
+  #     ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326)
+  #   ) AS lon_should_be_180;
+  # DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  # --echo # Transformation between degrees and gradians.
+  # CREATE SPATIAL REFERENCE SYSTEM 1000004326
+  #   NAME 'foo'
+  #   DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563],TOWGS84[0,0,0,0,0,0,0]],PRIMEM["Greenwich",0],UNIT["grad",0.01570796326794895],AXIS["Lat",NORTH],AXIS["Lon",EAST]]';
+  # SELECT
+  #   ST_ASTEXT(
+  #     ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326)
+  #   ) AS should_be_0_0;
+  # SELECT
+  #   ST_ASTEXT(
+  #     ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326)
+  #   ) AS should_be_0_0;
+  # SELECT
+  #   ST_ASTEXT(
+  #     ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(100 100)', 1000004326), 4326)
+  #   ) AS should_be_90_90;
+  # SELECT
+  #   ST_ASTEXT(
+  #     ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(90 90)', 4326), 1000004326)
+  #   ) AS should_be_100_100;
+  # SELECT
+  #   ST_ASTEXT(
+  #     ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(-100 -100)', 1000004326), 4326)
+  #   ) AS should_be_minus_90_minus_90;
+  # SELECT
+  #   ST_ASTEXT(
+  #     ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(-90 -90)', 4326), 1000004326)
+  #   ) AS should_be_minus_100_minus_100;
+  # DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  # --echo # Transformations between European Datum 1950 (ED50) and WGS  84.
+  # --echo # Positions in Western Europe will be further North and East in ED50 than
+  # --echo # in WGS 84.
+
+  # TODO:@zeli precision
+  # --echo # Trondheim.
+  # --replace_numeric_round 6
+  # SELECT
+  #   ST_ASTEXT(
+  #     ST_TRANSFORM(
+  #       ST_GEOMFROMTEXT('POINT(63.4269121428687 10.3969184885902)', 4326),
+  #       4230
+  #     )
+  #   ) AS ED50;
+  # --replace_numeric_round 6
+  # SELECT
+  #   ST_ASTEXT(
+  #     ST_TRANSFORM(
+  #       ST_GEOMFROMTEXT('POINT(63.42724046084803 10.398501870897267)', 4230),
+  #       4326
+  #     )
+  #   ) AS WGS84;
+
+  # --echo # Telegrafenberg, Potsdam (origin of ED50).
+  # --replace_numeric_round 6
+  # SELECT
+  #   ST_ASTEXT(
+  #     ST_TRANSFORM(
+  #       ST_GEOMFROMTEXT('POINT(52.381389 13.064444)', 4326),
+  #       4230
+  #     )
+  #   ) AS ED50;
+  # --replace_numeric_round 6
+  # SELECT
+  #   ST_ASTEXT(
+  #     ST_TRANSFORM(
+  #       ST_GEOMFROMTEXT('POINT(52.38208611407426 13.065520672345304)', 4230),
+  #       4326
+  #     )
+  #   ) AS WGS84;
+
+  # --echo #
+  # --echo # Transformation to/from projected SRSs.
+  # --echo #
+
+  # # No projections are supported yet.
+
+  --echo # Verify that it isn't possible to transform to/from a projection.
+  --echo # Transformation between SRID 0 and geographic SRSs should fail.
+  --error 3742
+  SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 3857);
+  --error 3741
+  SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 3857), 4326);
+
+  --echo # Test for st_transform end
+  --echo #
+  --echo #
+
+  --echo # Test for _st_transform
+  --echo #
+  --echo # NULL values.
+  --echo #
+
+  --echo # At least one NULL parameter. Should return NULL.
+  SELECT _ST_Transform(NULL, NULL);
+  SELECT _ST_Transform(NULL, 4326);
+  SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), NULL);
+
+  --echo #
+  --echo # Invalid parameters.
+  --echo #
+
+  --echo # Invalid geometry. Should raise error. toSELECT@dazhi
+  --error 3037
+  SELECT _ST_Transform(x'00000000DEADBEEF', 4326);
+
+  --echo # Non-existing SRID. Should raise error.
+  # Assume SRID 1000000000 is undefined.
+  --error 3548
+  SELECT _ST_Transform(
+    x'94007735010100000000000000000000000000000000000000',
+    4326
+  );
+  --error 3548
+  SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000000000);
+
+  --echo #
+  --echo # Transformation to/from SRID 0.
+  --echo #
+
+  #--echo # Transformation from SRID 0 to SRID 0 is a no-op. Should return true.
+  #SELECT
+    #ST_EQUALS(
+      #ST_GEOMFROMTEXT('POINT(0 0)'),
+      #_ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)'), 0)
+    #) AS is_noop;
+
+  --echo # Transformation between SRID 0 and geographic SRS. Should raise error.
+  # Ellipsoidal:
+  --error 3741
+  SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)'), 4326);
+  --error 3742
+  SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 0);
+  # Spherical:
+  --error 3741
+  SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)'), 4047);
+  --error 3742
+  SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4047), 0);
+
+  --echo # Transformation between SRID 0 and projected SRS. Should raise error.
+  --error 3741
+  SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)'), 3857);
+  --error 3742
+  SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 3857), 0);
+
+  --echo #
+  --echo # Transformation between geographic SRSs.
+  --echo #
+
+  --echo # Transformation of every geometry type. Should succeed.
+  SELECT ST_ASTEXT(_ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 3819));
+  SELECT ST_ASTEXT(_ST_Transform(ST_GEOMFROMTEXT('LINESTRING(0 0, 1 1)', 4326), 3819));
+  SELECT ST_ASTEXT(_ST_Transform(ST_GEOMFROMTEXT('POLYGON((0 0, 0 1, 1 1, 0 0))', 4326), 3819));
+  SELECT ST_ASTEXT(_ST_Transform(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0))', 4326), 3819));
+  SELECT ST_ASTEXT(_ST_Transform(ST_GEOMFROMTEXT('MULTIPOINT((0 0))', 4326), 3819));
+  SELECT ST_ASTEXT(_ST_Transform(ST_GEOMFROMTEXT('MULTILINESTRING((0 0, 1 1))', 4326), 3819));
+  SELECT ST_ASTEXT(_ST_Transform(
+    ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0, 0 1, 1 1, 0 0)))', 4326),
+    3819
+  ));
+
+  #--echo # Beginning of tests to verify that WGS 84 is recognized.
+
+  #--echo # WGS 84 with no authority codes. Should raise error.
+  #CREATE SPATIAL REFERENCE SYSTEM 1000004326
+    #NAME 'foo'
+    #DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST]]';
+  #--error ER_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  #--error ER_TRANSFORM_TARGET_SRS_MISSING_TOWGS84
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  #DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  #--echo # WGS 84 with no authority codes exept EPSG 4326 for the entire SRS.
+  #--echo # Should succeed.
+  #CREATE SPATIAL REFERENCE SYSTEM 1000004326
+    #NAME 'foo'
+    #DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  #DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  #--echo # WGS 84 with incorrect authority code. Should raise error.
+  #CREATE SPATIAL REFERENCE SYSTEM 1000004326
+    #NAME 'foo'
+    #DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","0"]]';
+  #--error ER_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  #--error ER_TRANSFORM_TARGET_SRS_MISSING_TOWGS84
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  #DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  #--echo # WGS 84 with authority code for the spheroid. Should succeed.
+  #CREATE SPATIAL REFERENCE SYSTEM 1000004326
+    #NAME 'foo'
+    #DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  #DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  #--echo # WGS 84 with incorrect authority code for the spheroid. Should raise
+  #--echo # error.
+  #CREATE SPATIAL REFERENCE SYSTEM 1000004326
+    #NAME 'foo'
+    #DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","0"]]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  #--error ER_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  #--error ER_TRANSFORM_TARGET_SRS_MISSING_TOWGS84
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  #DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  #--echo # WGS 84 with incorrect semi-major axis. Should raise error.
+  #CREATE SPATIAL REFERENCE SYSTEM 1000004326
+    #NAME 'foo'
+    #DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",1378137,298.257223563,AUTHORITY["EPSG","7030"]]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  #--error ER_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  #--error ER_TRANSFORM_TARGET_SRS_MISSING_TOWGS84
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  #DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  #--echo # WGS 84 with incorrect inverse flattening. Should raise error.
+  #CREATE SPATIAL REFERENCE SYSTEM 1000004326
+    #NAME 'foo'
+    #DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,198.257223563,AUTHORITY["EPSG","7030"]]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  #--error ER_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  #--error ER_TRANSFORM_TARGET_SRS_MISSING_TOWGS84
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  #DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  #--echo # WGS 84 with authority code for the datum. Should succeed.
+  #CREATE SPATIAL REFERENCE SYSTEM 1000004326
+    #NAME 'foo'
+    #DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  #DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  #--echo # WGS 84 with incorrect authority code for the datum. Should raise error.
+  #CREATE SPATIAL REFERENCE SYSTEM 1000004326
+    #NAME 'foo'
+    #DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563],AUTHORITY["EPSG","0"]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  #--error ER_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  #--error ER_TRANSFORM_TARGET_SRS_MISSING_TOWGS84
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  #DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  #--echo # WGS 84 with authority code for the prime meridian. Should succeed.
+  #CREATE SPATIAL REFERENCE SYSTEM 1000004326
+    #NAME 'foo'
+    #DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  #DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  #--echo # WGS 84 with incorrect authority code for the prime meridian. Should
+  #--echo # raise error.
+  #CREATE SPATIAL REFERENCE SYSTEM 1000004326
+    #NAME 'foo'
+    #DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","0"]],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  #--error ER_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  #--error ER_TRANSFORM_TARGET_SRS_MISSING_TOWGS84
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  #DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  #--echo # WGS 84 with incorrect prime meridian. Should raise error.
+  #CREATE SPATIAL REFERENCE SYSTEM 1000004326
+    #NAME 'foo'
+    #DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",1,AUTHORITY["EPSG","8901"]],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  #--error ER_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  #--error ER_TRANSFORM_TARGET_SRS_MISSING_TOWGS84
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  #DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  #--echo # WGS 84 with authority code for the unit. Should succeed.
+  #CREATE SPATIAL REFERENCE SYSTEM 1000004326
+    #NAME 'foo'
+    #DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278,AUTHORITY["EPSG","9122"]],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  #DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  #--echo # WGS 84 with incorrect authority code for the unit. Should raise error.
+  #CREATE SPATIAL REFERENCE SYSTEM 1000004326
+    #NAME 'foo'
+    #DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278,AUTHORITY["EPSG","0"]],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  #--error ER_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  #--error ER_TRANSFORM_TARGET_SRS_MISSING_TOWGS84
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  #DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  #--echo # WGS 84 with incorrect unit. Should raise error.
+  #CREATE SPATIAL REFERENCE SYSTEM 1000004326
+    #NAME 'foo'
+    #DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.01,AUTHORITY["EPSG","9122"]],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4326"]]';
+  #--error ER_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  #--error ER_TRANSFORM_TARGET_SRS_MISSING_TOWGS84
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  #DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  #--echo # WGS 84 with incorrect axes. Should raise error.
+  #CREATE SPATIAL REFERENCE SYSTEM 1000004326
+    #NAME 'foo'
+    #DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278],AXIS["Lon",EAST],AXIS["Lat",NORTH],AUTHORITY["EPSG","4326"]]';
+  #--error ER_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  #--error ER_TRANSFORM_TARGET_SRS_MISSING_TOWGS84
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  #DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  #--echo # End of tests to verify that WGS 84 is recognized.
+
+  #--echo # Geographic SRS with TOWGS84 clause. Should succeed.
+  #CREATE SPATIAL REFERENCE SYSTEM 1000004326
+    #NAME 'foo'
+    #DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563],TOWGS84[0,0,0,0,0,0,0]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST]]';
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  #DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  #--echo # Spherical SRS with TOWGS84 clause. Should succeed.
+  #CREATE SPATIAL REFERENCE SYSTEM 1000004326
+    #NAME 'foo'
+    #DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,0],TOWGS84[0,0,0,0,0,0,0]],PRIMEM["Greenwich",0],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST]]';
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326);
+  #SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326);
+  #DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  #--echo # Prime meridian 1 degree East of Greenwich.
+  #CREATE SPATIAL REFERENCE SYSTEM 1000004326
+    #NAME 'foo'
+    #DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,0],TOWGS84[0,0,0,0,0,0,0]],PRIMEM["foo",1],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST]]';
+  #--replace_numeric_round 15
+  #SELECT
+    #ST_ASTEXT(
+      #_ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326)
+    #) AS lon_should_be_plus_one;
+  #SELECT
+    #ST_ASTEXT(
+      #_ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326)
+    #) AS lon_should_be_minus_one;
+  #DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  #--echo # Prime meridian 1 degree West of Greenwich.
+  #CREATE SPATIAL REFERENCE SYSTEM 1000004326
+    #NAME 'foo'
+    #DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,0],TOWGS84[0,0,0,0,0,0,0]],PRIMEM["foo",-1],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST]]';
+  #--replace_numeric_round 15
+  #SELECT
+    #ST_ASTEXT(
+      #_ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326)
+    #) AS lon_should_be_minus_one;
+  #SELECT
+    #ST_ASTEXT(
+      #_ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326)
+    #) AS lon_should_be_plus_one;
+  #DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  #--echo # Prime meridian 180 degrees East of Greenwich.
+  #CREATE SPATIAL REFERENCE SYSTEM 1000004326
+    #NAME 'foo'
+    #DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,0],TOWGS84[0,0,0,0,0,0,0]],PRIMEM["foo",180],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST]]';
+  #SELECT
+    #ST_ASTEXT(
+      #_ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326)
+    #) AS lon_should_be_180;
+  ## Because of floating point computations, -180 is not converted to 180, even
+  ## though the range is (-180, 180].
+  #SELECT
+    #ST_ASTEXT(
+      #_ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326)
+    #) AS lon_should_be_minus_180;
+  #DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  #--echo # Prime meridian 180 degrees West of Greenwich.
+  #CREATE SPATIAL REFERENCE SYSTEM 1000004326
+    #NAME 'foo'
+    #DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,0],TOWGS84[0,0,0,0,0,0,0]],PRIMEM["foo",-180],UNIT["degree",0.017453292519943278],AXIS["Lat",NORTH],AXIS["Lon",EAST]]';
+  ## Because of floating point computations, -180 is not converted to 180, even
+  ## though the range is (-180, 180].
+  #SELECT
+    #ST_ASTEXT(
+      #_ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326)
+    #) AS lon_should_be_minus_180;
+  #SELECT
+    #ST_ASTEXT(
+      #_ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326)
+    #) AS lon_should_be_180;
+  #DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  #--echo # Transformation between degrees and gradians.
+  #CREATE SPATIAL REFERENCE SYSTEM 1000004326
+    #NAME 'foo'
+    #DEFINITION 'GEOGCS["WGS 84",DATUM["World Geodetic System 1984",SPHEROID["WGS 84",6378137,298.257223563],TOWGS84[0,0,0,0,0,0,0]],PRIMEM["Greenwich",0],UNIT["grad",0.01570796326794895],AXIS["Lat",NORTH],AXIS["Lon",EAST]]';
+  #SELECT
+    #ST_ASTEXT(
+      #_ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 1000004326), 4326)
+    #) AS should_be_0_0;
+  #SELECT
+    #ST_ASTEXT(
+      #_ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000004326)
+    #) AS should_be_0_0;
+  #SELECT
+    #ST_ASTEXT(
+      #_ST_Transform(ST_GEOMFROMTEXT('POINT(100 100)', 1000004326), 4326)
+    #) AS should_be_90_90;
+  #SELECT
+    #ST_ASTEXT(
+      #_ST_Transform(ST_GEOMFROMTEXT('POINT(90 90)', 4326), 1000004326)
+    #) AS should_be_100_100;
+  #SELECT
+    #ST_ASTEXT(
+      #_ST_Transform(ST_GEOMFROMTEXT('POINT(-100 -100)', 1000004326), 4326)
+    #) AS should_be_minus_90_minus_90;
+  #SELECT
+    #ST_ASTEXT(
+      #_ST_Transform(ST_GEOMFROMTEXT('POINT(-90 -90)', 4326), 1000004326)
+    #) AS should_be_minus_100_minus_100;
+  #DROP SPATIAL REFERENCE SYSTEM 1000004326;
+
+  --echo # Transformations between European Datum 1950 (ED50) and WGS  84.
+  --echo # Positions in Western Europe will be further North and East in ED50 than
+  --echo # in WGS 84.
+
+  --echo # Trondheim.
+  --replace_numeric_round 6
+  SELECT
+    ST_ASTEXT(
+      _ST_Transform(
+        ST_GEOMFROMTEXT('POINT(63.4269121428687 10.3969184885902)', 4326),
+        4230
+      )
+    ) AS ED50;
+  --replace_numeric_round 6
+  SELECT
+    ST_ASTEXT(
+      _ST_Transform(
+        ST_GEOMFROMTEXT('POINT(63.42724046084803 10.398501870897267)', 4230),
+        4326
+      )
+    ) AS WGS84;
+
+  --echo # Telegrafenberg, Potsdam (origin of ED50).
+  --replace_numeric_round 6
+  SELECT
+    ST_ASTEXT(
+      _ST_Transform(
+        ST_GEOMFROMTEXT('POINT(52.381389 13.064444)', 4326),
+        4230
+      )
+    ) AS ED50;
+  --replace_numeric_round 6
+  SELECT
+    ST_ASTEXT(
+      _ST_Transform(
+        ST_GEOMFROMTEXT('POINT(52.38208611407426 13.065520672345304)', 4230),
+        4326
+      )
+    ) AS WGS84;
+
+  --echo # the polygon in wrong ring order should be corrected before call bg function 
+  select st_astext(_ST_Transform(st_geomfromtext('Polygon((2 2,2 8,8 8,8 2,2 2))', 4326), 4231));
+  select st_astext(_ST_Transform(st_geomfromtext('Polygon((2 2,8 2,8 8,2 8,2 2))', 4326), 4231));
+
+-- echo #########################################
+-- echo # postgis test 
+
+-- echo #
+-- echo # regress proj adhoc
+-- echo #
+
+-- echo # some transform() regression
+-- echo # prime spatial_ref_sys table with two projections
+
+-- echo # EPSG 100001 : WGS 84 / UTM zone 33N
+#REPLACE INTO oceanbase.__all_spatial_reference_systems (srs_id, srs_name, organization, organization_coordsys_id, definition) VALUES (100001, 'none', 'EPSG',100001,'PROJCS["Grenada 1953 / British West Indies Grid",GEOGCS["Grenada 1953",DATUM["Grenada 1953",SPHEROID["Clarke 1880 (RGS)",6378249.145,293.465,AUTHORITY["EPSG","7012"]],TOWGS84[72,213.7,93,0,0,0,0],AUTHORITY["EPSG","6603"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.017453292519943278,AUTHORITY["EPSG","9122"]],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4603"]],PROJECTION["Transverse Mercator",AUTHORITY["EPSG","9807"]],PARAMETER["Latitude of natural origin",0,AUTHORITY["EPSG","8801"]],PARAMETER["Longitude of natural origin",-62,AUTHORITY["EPSG","8802"]],PARAMETER["Scale factor at natural origin",0.9995,AUTHORITY["EPSG","8805"]],PARAMETER["False easting",400000,AUTHORITY["EPSG","8806"]],PARAMETER["False northing",0,AUTHORITY["EPSG","8807"]],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["E",EAST],AXIS["N",NORTH],AUTHORITY["EPSG","2003"]]');
+#REPLACE INTO oceanbase.__all_tenant_spatial_reference_bounds (srs_id, AuthName, minX, maxX, minY, maxY, proj4text) VALUES (100001,'none', 0, 0, 0, 0, '+proj=utm +zone=33 +ellps=WGS84 +datum=WGS84 +units=m +no_defs ');
+
+-- echo # EPSG 100002 : WGS 84
+#REPLACE INTO oceanbase.__all_spatial_reference_systems (srs_id, srs_name, organization, organization_coordsys_id, definition) VALUES (100002, 'none', 'EPSG',100002,'PROJCS["Grenada 1953 / British West Indies Grid",GEOGCS["Grenada 1953",DATUM["Grenada 1953",SPHEROID["Clarke 1880 (RGS)",6378249.145,293.465,AUTHORITY["EPSG","7012"]],TOWGS84[72,213.7,93,0,0,0,0],AUTHORITY["EPSG","6603"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.017453292519943278,AUTHORITY["EPSG","9122"]],AXIS["Lat",NORTH],AXIS["Lon",EAST],AUTHORITY["EPSG","4603"]],PROJECTION["Transverse Mercator",AUTHORITY["EPSG","9807"]],PARAMETER["Latitude of natural origin",0,AUTHORITY["EPSG","8801"]],PARAMETER["Longitude of natural origin",-62,AUTHORITY["EPSG","8802"]],PARAMETER["Scale factor at natural origin",0.9995,AUTHORITY["EPSG","8805"]],PARAMETER["False easting",400000,AUTHORITY["EPSG","8806"]],PARAMETER["False northing",0,AUTHORITY["EPSG","8807"]],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["E",EAST],AXIS["N",NORTH],AUTHORITY["EPSG","2003"]]');
+#REPLACE INTO oceanbase.__all_tenant_spatial_reference_bounds (srs_id, AuthName, minX, maxX, minY, maxY, proj4text) VALUES (100002,'none', 0, 0, 0, 0, '+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs ');
+
+-- echo # test #0: NULL values
+SELECT 0, ST_AsText(_ST_Transform(NULL, @proj100001));
+
+-- echo test #6: re-projecting a projected value
+# postgis sql: SELECT 6,round(ST_X(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(16 48)', 4236), 3065), 4236))::numeric, 8) as X, round(ST_Y(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(16 48)', 4236), 3065), 4236))::numeric, 8) as Y;
+SELECT 6,round(ST_Longitude(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(16 48)', 4236, 'axis-order=long-lat'), 3065), 4236)), 8) as X, round(ST_Latitude(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(16 48)', 4236, 'axis-order=long-lat'), 3065), 4236)), 8) as Y;
+
+-- echo #7: Should yield an error since input SRID is unknown
+--error 3741
+SELECT 7, _ST_Transform(ST_GeomFromText('POINT(0 0)', 0, 'axis-order=long-lat'), '+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs ') as geometry;
+
+-- echo #8: Transforming to same SRID
+SELECT 8,ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(0 0)', 4326, 'axis-order=long-lat'), 4326), 4326)) as geometry;
+
+--echo #9: Transform to_proj
+SELECT 9, ST_ASTEXT(_ST_Transform(
+                    ST_GeomFromText('POINT(16 48)', 4236, 'axis-order=long-lat'),
+                    '+proj=utm +zone=33 +ellps=WGS84 +datum=WGS84 +units=m +no_defs ')) as geometry;
+
+-- echo test #10: Transform from_proj to_proj
+SELECT 10, ST_AsText(_ST_Transform(
+                     ST_GeomFromText('POINT(16 48)', 4236, 'axis-order=long-lat'),
+                     '+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs ',
+                     '+proj=utm +zone=33 +ellps=WGS84 +datum=WGS84 +units=m +no_defs ')) as geometry;
+
+-- echo test #11: Transform from_proj to_srid
+SELECT 11, ST_AsText(_ST_Transform(
+                     ST_GeomFromText('POINT(16 48)', 0, 'axis-order=long-lat'),
+                     '+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs ', 4236)) as geometry;
+
+-- echo test #12: Transform with bad to_proj
+-- error ER_BOOST_GEOMETRY_UNKNOWN_EXCEPTION
+SELECT 12, _ST_Transform(
+           ST_GeomFromText('POINT(16 48)', 4236),
+           'invalid projection');
+
+
+-- echo #
+-- echo # regress proj basic
+-- echo #
+
+-- echo # some transform() regression
+
+-- echo test #1: a simple projection
+SELECT 1,ST_AsText(_ST_Transform(ST_GeomFromText('POINT(16 48)', 4326, 'axis-order=long-lat'), 3065));
+
+-- echo test #4: LINESTRING projection, 2 points
+SELECT 4,ST_AsText(_ST_Transform(ST_GeomFromText('LINESTRING(16 48, 16 49)', 4326, 'axis-order=long-lat'), 3065)) as geometry;
+SELECT 'M1', ST_AsText(_ST_Transform(ST_GeomFromText('POINT(-20 -20)', 4326, 'axis-order=long-lat'), 3065)) as geometry;
+SELECT 'M2', ST_AsText(_ST_Transform(ST_GeomFromText('POINT(-20 -21.5)', 4326, 'axis-order=long-lat'), 3065)) as geometry;
+SELECT 'M3', ST_AsText(_ST_Transform(ST_GeomFromText('POINT(-30 -21.5)', 4326, 'axis-order=long-lat'), 3065)) as geometry;
+SELECT 'M4', ST_AsText(_ST_Transform(ST_GeomFromText('POINT(-72.345 41.3)', 4326, 'axis-order=long-lat'), 3065)) as geometry;
+SELECT 'M5', ST_AsText(_ST_Transform(ST_GeomFromText('POINT(71.999 -42.5)', 4326, 'axis-order=long-lat'), 3065)) as geometry;
+
+
+-- echo #
+-- echo # regress proj cache overflow
+-- echo #
+
+-- echo # Overflow proj cache
+SELECT 13, count(*) FROM
+(
+    SELECT _ST_Transform(ST_GeomFromText('POINT(0 0)', 4326), srs_id) AS g
+    FROM
+        ( Select srs_id from oceanbase.__all_spatial_reference_systems where srs_id IN (3819,  3821,  3824,  3889,  3906,  4001,  4002,  4003,  4004,  4005,  4006,  4007,  4008,  4009,  4010,  4011,  4012,  4013,  4014,  4015,  4016,  4018,  4019,  4020,  4021,  4022,  4023,  4024,  4025,  4027,  4028,  4029,  4030,  4031,  4032,  4033,  4034,  4035,  4036,  4041,  4042,  4043,  4044,  4045,  4046,  4047,  4052,  4053,  4054,  4055,  4075,  4081,  4120,  4121,  4122,  4123,  4124,  4125,  4126,  4127,  4128,  4129,  4130,  4131,  4132,  4133,  4134,  4135,  4139,  4140,  4141,  4142,  4143,  4144,  4145,  4146,  4147,  4148,  4149,  4150,  4151,  4152,  4153,  4154,  4155,  4156,  4157,  4158,  4159,  4160,  4161,  4162,  4163,  4164,  4165,  4166,  4167,  4168,  4169,  4170,  4171,  4172,  4173,  4174,  4175,  4176,  4178,  4179,  4180,  4181,  4182,  4183,  4184,  4185,  4188,  4189,  4190,  4191,  4192,  4193,  4194,  4195,  4196,  4197,  4198,  4199,  4200,  4201,  4202,  4203,  4204,  4205,  4206,  4207,  4208,  4209,  4210,  4211,  4212,  4213,  4214,  4215,  4216,  4218,  4219,  4220,  4221)) _a
+) _b WHERE g IS NOT NULL;
+
+  -- echo ########################################################
+  -- echo # customized test for bestsrid generated proj4text
+  -- echo ########################################################
+  set @proj1 = '+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs';
+  set @proj2 = '+proj=utm +zone=1 +ellps=WGS84 +datum=WGS84 +units=m +no_defs';
+  set @proj3 = '+proj=laea +lat_0=90 +lon_0=-40 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs';
+  set @proj4 = '+proj=stere +lat_0=90 +lat_ts=71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs';
+  set @proj5 = '+proj=utm +zone=1 +south +ellps=WGS84 +datum=WGS84 +units=m +no_defs';
+  set @proj6 = '+proj=laea +lat_0=-90 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs';
+
+  set @pt = ST_GeomFromText('POINT(123.45 -67.89)', 4326, 'axis-order=long-lat');
+  set @li = ST_GeomFromText('LINESTRING(123.45 -67.89, 10.11 -12.13)', 4326, 'axis-order=long-lat');
+  set @po = ST_GeomFromText('POLYGON((0 0,1 0,1 1,0 1,0 0))', 4326, 'axis-order=long-lat');
+  set @mpt = ST_GeomFromText('MULTIPOINT(9 9,8 1,1 5)', 4326, 'axis-order=long-lat');
+  set @mli = ST_GeomFromText('MULTILINESTRING((0 0,5 5,0 0),(0 0,-5 -5,0 0))', 4326, 'axis-order=long-lat');
+  set @mpo = ST_GeomFromText('MULTIPOLYGON(((0 0, 3 0, 3 3, 0 3, 0 0)))', 4326, 'axis-order=long-lat');
+  set @gc = ST_GeomFromText('GEOMETRYCOLLECTION(Point(9 9),LINESTRING(1 5,0 0),POLYGON((2 2,2 8,8 8,8 2,2 2)))', 4326, 'axis-order=long-lat');
+
+  --replace_numeric_round 6
+  SELECT 11, ST_AsText(_ST_Transform(ST_GeomFromText('POINT(123.45 -67.89)', 4326, 'axis-order=long-lat'), '+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 21, ST_AsText(_ST_Transform(ST_GeomFromText('LINESTRING(123.45 -67.89, 10.11 -12.13)', 4326, 'axis-order=long-lat'), '+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 31, ST_AsText(_ST_Transform(ST_GeomFromText('POLYGON((0 0,1 0,1 1,0 1,0 0))', 4326, 'axis-order=long-lat'), '+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 41, ST_AsText(_ST_Transform(ST_GeomFromText('MULTIPOINT(9 9,8 1,1 5)', 4326, 'axis-order=long-lat'), '+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 51, ST_AsText(_ST_Transform(ST_GeomFromText('MULTILINESTRING((0 0,5 5,0 0),(0 0,-5 -5,0 0))', 4326, 'axis-order=long-lat'), '+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 61, ST_AsText(_ST_Transform(ST_GeomFromText('MULTIPOLYGON(((0 0, 3 0, 3 3, 0 3, 0 0)))', 4326, 'axis-order=long-lat'), '+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 71, ST_AsText(_ST_Transform(ST_GeomFromText('GEOMETRYCOLLECTION(Point(9 9),LINESTRING(1 5,0 0),POLYGON((2 2,2 8,8 8,8 2,2 2)))', 4326, 'axis-order=long-lat'), '+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+
+  --replace_numeric_round 6
+  SELECT 12, ST_AsText(_ST_Transform(ST_GeomFromText('POINT(123.45 -67.89)', 4326, 'axis-order=long-lat'),'+proj=utm +zone=1 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 22, ST_AsText(_ST_Transform(ST_GeomFromText('LINESTRING(123.45 -67.89, 10.11 -12.13)', 4326, 'axis-order=long-lat'),'+proj=utm +zone=1 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 32, ST_AsText(_ST_Transform(ST_GeomFromText('POLYGON((0 0,1 0,1 1,0 1,0 0))', 4326, 'axis-order=long-lat'),'+proj=utm +zone=1 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 42, ST_AsText(_ST_Transform(ST_GeomFromText('MULTIPOINT(9 9,8 1,1 5)', 4326, 'axis-order=long-lat'),'+proj=utm +zone=1 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 52, ST_AsText(_ST_Transform(ST_GeomFromText('MULTILINESTRING((0 0,5 5,0 0),(0 0,-5 -5,0 0))', 4326, 'axis-order=long-lat'),'+proj=utm +zone=1 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 62, ST_AsText(_ST_Transform(ST_GeomFromText('MULTIPOLYGON(((0 0, 3 0, 3 3, 0 3, 0 0)))', 4326, 'axis-order=long-lat'),'+proj=utm +zone=1 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 72, ST_AsText(_ST_Transform(ST_GeomFromText('GEOMETRYCOLLECTION(Point(9 9),LINESTRING(1 5,0 0),POLYGON((2 2,2 8,8 8,8 2,2 2)))', 4326, 'axis-order=long-lat'),'+proj=utm +zone=1 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+
+  --replace_numeric_round 6
+  SELECT 13, ST_AsText(_ST_Transform(ST_GeomFromText('POINT(123.45 -67.89)', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=90 +lon_0=-40 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 23, ST_AsText(_ST_Transform(ST_GeomFromText('LINESTRING(123.45 -67.89, 10.11 -12.13)', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=90 +lon_0=-40 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 33, ST_AsText(_ST_Transform(ST_GeomFromText('POLYGON((0 0,1 0,1 1,0 1,0 0))', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=90 +lon_0=-40 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 43, ST_AsText(_ST_Transform(ST_GeomFromText('MULTIPOINT(9 9,8 1,1 5)', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=90 +lon_0=-40 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 53, ST_AsText(_ST_Transform(ST_GeomFromText('MULTILINESTRING((0 0,5 5,0 0),(0 0,-5 -5,0 0))', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=90 +lon_0=-40 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 63, ST_AsText(_ST_Transform(ST_GeomFromText('MULTIPOLYGON(((0 0, 3 0, 3 3, 0 3, 0 0)))', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=90 +lon_0=-40 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 73, ST_AsText(_ST_Transform(ST_GeomFromText('GEOMETRYCOLLECTION(Point(9 9),LINESTRING(1 5,0 0),POLYGON((2 2,2 8,8 8,8 2,2 2)))', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=90 +lon_0=-40 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+
+  --replace_numeric_round 6
+  SELECT 14, ST_AsText(_ST_Transform(ST_GeomFromText('POINT(123.45 -67.89)', 4326, 'axis-order=long-lat'), '+proj=stere +lat_0=90 +lat_ts=71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 24, ST_AsText(_ST_Transform(ST_GeomFromText('LINESTRING(123.45 -67.89, 10.11 -12.13)', 4326, 'axis-order=long-lat'), '+proj=stere +lat_0=90 +lat_ts=71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 34, ST_AsText(_ST_Transform(ST_GeomFromText('POLYGON((0 0,1 0,1 1,0 1,0 0))', 4326, 'axis-order=long-lat'), '+proj=stere +lat_0=90 +lat_ts=71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 44, ST_AsText(_ST_Transform(ST_GeomFromText('MULTIPOINT(9 9,8 1,1 5)', 4326, 'axis-order=long-lat'), '+proj=stere +lat_0=90 +lat_ts=71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 54, ST_AsText(_ST_Transform(ST_GeomFromText('MULTILINESTRING((0 0,5 5,0 0),(0 0,-5 -5,0 0))', 4326, 'axis-order=long-lat'), '+proj=stere +lat_0=90 +lat_ts=71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 64, ST_AsText(_ST_Transform(ST_GeomFromText('MULTIPOLYGON(((0 0, 3 0, 3 3, 0 3, 0 0)))', 4326, 'axis-order=long-lat'), '+proj=stere +lat_0=90 +lat_ts=71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 74, ST_AsText(_ST_Transform(ST_GeomFromText('GEOMETRYCOLLECTION(Point(9 9),LINESTRING(1 5,0 0),POLYGON((2 2,2 8,8 8,8 2,2 2)))', 4326, 'axis-order=long-lat'), '+proj=stere +lat_0=90 +lat_ts=71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+
+  --replace_numeric_round 6
+  SELECT 15, ST_AsText(_ST_Transform(ST_GeomFromText('POINT(123.45 -67.89)', 4326, 'axis-order=long-lat'), '+proj=utm +zone=1 +south +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 25, ST_AsText(_ST_Transform(ST_GeomFromText('LINESTRING(123.45 -67.89, 10.11 -12.13)', 4326, 'axis-order=long-lat'), '+proj=utm +zone=1 +south +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 35, ST_AsText(_ST_Transform(ST_GeomFromText('POLYGON((0 0,1 0,1 1,0 1,0 0))', 4326, 'axis-order=long-lat'), '+proj=utm +zone=1 +south +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 45, ST_AsText(_ST_Transform(ST_GeomFromText('MULTIPOINT(9 9,8 1,1 5)', 4326, 'axis-order=long-lat'), '+proj=utm +zone=1 +south +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 55, ST_AsText(_ST_Transform(ST_GeomFromText('MULTILINESTRING((0 0,5 5,0 0),(0 0,-5 -5,0 0))', 4326, 'axis-order=long-lat'), '+proj=utm +zone=1 +south +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 65, ST_AsText(_ST_Transform(ST_GeomFromText('MULTIPOLYGON(((0 0, 3 0, 3 3, 0 3, 0 0)))', 4326, 'axis-order=long-lat'), '+proj=utm +zone=1 +south +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 75, ST_AsText(_ST_Transform(ST_GeomFromText('GEOMETRYCOLLECTION(Point(9 9),LINESTRING(1 5,0 0),POLYGON((2 2,2 8,8 8,8 2,2 2)))', 4326, 'axis-order=long-lat'), '+proj=utm +zone=1 +south +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+
+  --replace_numeric_round 6
+  SELECT 16, ST_AsText(_ST_Transform(ST_GeomFromText('POINT(123.45 -67.89)', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=-90 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 26, ST_AsText(_ST_Transform(ST_GeomFromText('LINESTRING(123.45 -67.89, 10.11 -12.13)', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=-90 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 36, ST_AsText(_ST_Transform(ST_GeomFromText('POLYGON((0 0,1 0,1 1,0 1,0 0))', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=-90 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 46, ST_AsText(_ST_Transform(ST_GeomFromText('MULTIPOINT(9 9,8 1,1 5)', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=-90 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 56, ST_AsText(_ST_Transform(ST_GeomFromText('MULTILINESTRING((0 0,5 5,0 0),(0 0,-5 -5,0 0))', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=-90 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 66, ST_AsText(_ST_Transform(ST_GeomFromText('MULTIPOLYGON(((0 0, 3 0, 3 3, 0 3, 0 0)))', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=-90 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+  --replace_numeric_round 6
+  SELECT 76, ST_AsText(_ST_Transform(ST_GeomFromText('GEOMETRYCOLLECTION(Point(9 9),LINESTRING(1 5,0 0),POLYGON((2 2,2 8,8 8,8 2,2 2)))', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=-90 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+
+  -- echo ############################################################################
+  -- echo # customized test for geographical srs -> projected srs -> geographical srs
+  -- echo ############################################################################
+
+  --replace_numeric_round 3
+  SELECT ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3857), 4326));
+  --replace_numeric_round 3
+  SELECT ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3873), 4326));
+  --replace_numeric_round 3
+  SELECT ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3874), 4326));
+  --replace_numeric_round 3
+  SELECT ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3875), 4326));
+  --replace_numeric_round 3
+  SELECT ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3876), 4326));
+  --replace_numeric_round 3
+  SELECT ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3877), 4326));
+  --replace_numeric_round 3
+  SELECT ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3878), 4326));
+  --replace_numeric_round 3
+  SELECT ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3879), 4326));
+  --replace_numeric_round 3
+  SELECT ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3880), 4326));
+
+  SELECT ST_AsText(st_transform(ST_GeomFromText('POINT(15 20)'),0));
+  select ST_AsText(st_transform(ST_GeomFromText('POINT(15 20)',26918),26918));
+  select ST_AsText(st_transform(ST_GeomFromText('POINT(15 20)',4326),4326));
+
+  --echo # bugfix:
+  --error 3742
+  SELECT _ST_ASEWKT(_ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(1 1)'),0));
+
+  --echo # bugfix:
+  --error 4175
+  SELECT _ST_ASEWKT(_ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(-16197654  16197654 )',26918),4326));
+
+  --echo # bugfix:
+  --error 3037
+  SELECT _ST_ASEWKT(_ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(90 180)',26918),'+proj=gnom +ellps=WGS84 +lat_0=80 +lon_0=-150 +no_defs',4326.4326));
+  --error 3037
+  SELECT _ST_ASEWKT(_ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(180 90)',26918),4326.4326));
+  --error 1690
+  select st_transform(ST_GeomFromText('POINT(15 20)',4326),-4326);
+  --error 5083
+  SELECT _ST_ASEWKT(_ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(180 90)',26918),False));

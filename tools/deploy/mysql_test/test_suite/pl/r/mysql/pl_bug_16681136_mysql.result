@@ -1,0 +1,85 @@
+result_format: 4
+drop database if exists my_db;
+create database my_db;
+use my_db;
+
+drop table if exists my_tab;
+drop function if exists my_func;
+create function my_func() returns int return null;
+create table my_tab as select my_func();
+
+select my_func();
++-----------+
+| my_func() |
++-----------+
+|      NULL |
++-----------+
+select * from my_tab;
++-----------+
+| my_func() |
++-----------+
+|      NULL |
++-----------+
+show create table my_tab;
+Table	Create Table
+my_tab	CREATE TABLE `my_tab` (
+  `my_func()` int(11) DEFAULT NULL
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+
+drop table my_tab;
+
+use test;
+
+create table my_tab as select my_func();
+ERROR 42000: FUNCTION my_func does not exist
+create table my_tab as select my_db.my_func();
+
+select my_func();
+ERROR 42000: FUNCTION my_func does not exist
+select my_db.my_func();
++-----------------+
+| my_db.my_func() |
++-----------------+
+|            NULL |
++-----------------+
+select * from my_tab;
++-----------------+
+| my_db.my_func() |
++-----------------+
+|            NULL |
++-----------------+
+show create table my_tab;
+Table	Create Table
+my_tab	CREATE TABLE `my_tab` (
+  `my_db.my_func()` int(11) DEFAULT NULL
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+drop table my_tab;
+
+create function my_func() returns int return 1;
+create table my_tab as select my_func();
+select my_func();
++-----------+
+| my_func() |
++-----------+
+|         1 |
++-----------+
+select * from my_tab;
++-----------+
+| my_func() |
++-----------+
+|         1 |
++-----------+
+show create table my_tab;
+Table	Create Table
+my_tab	CREATE TABLE `my_tab` (
+  `my_func()` int(11) DEFAULT NULL
+) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
+
+drop function my_func;
+drop table my_tab;
+
+use my_db;
+drop function my_func;
+drop database my_db;
+
+use test;

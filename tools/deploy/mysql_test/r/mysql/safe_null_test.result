@@ -1,0 +1,134 @@
+set @@recyclebin = off;
+drop table if exists t1,t2,t3,t4;
+create table t1(pk1 int, pk2 int, pk3 int, extra int, d int primary key);
+insert into t1(pk1,pk2,pk3,d) values(1,1,1,1),(2,2,2,2);
+select * from t1;
+pk1	pk2	pk3	extra	d
+1	1	1	NULL	1
+2	2	2	NULL	2
+insert into t1 values(3,null,null,NULL,3),(null,null,null,null,4);
+select * from t1;
+pk1	pk2	pk3	extra	d
+1	1	1	NULL	1
+2	2	2	NULL	2
+3	NULL	NULL	NULL	3
+NULL	NULL	NULL	NULL	4
+select * from t1 where extra = NULL;
+pk1	pk2	pk3	extra	d
+select * from t1 where extra != NULL;
+pk1	pk2	pk3	extra	d
+select * from t1 where extra <=> null;
+pk1	pk2	pk3	extra	d
+1	1	1	NULL	1
+2	2	2	NULL	2
+3	NULL	NULL	NULL	3
+NULL	NULL	NULL	NULL	4
+select * from t1 where extra is not NULL;
+pk1	pk2	pk3	extra	d
+select * from t1 where pk1 <=> null and pk2 <=> null and pk3 <=> null;
+pk1	pk2	pk3	extra	d
+NULL	NULL	NULL	NULL	4
+select * from t1 where pk1 = NULL and pk3 = NULL and pk3 = NULL;
+pk1	pk2	pk3	extra	d
+select * from t1 where pk1 != NULL and pk2 != NULL and pk3 != NULL;
+pk1	pk2	pk3	extra	d
+select * from t1 where pk1 is not NULL and pk2 is not NULL and pk3 is not NULL;
+pk1	pk2	pk3	extra	d
+1	1	1	NULL	1
+2	2	2	NULL	2
+select * from t1 where pk1 in (NULL) and pk2 in (NULL) and pk3 in (NULL);
+pk1	pk2	pk3	extra	d
+select * from t1 where pk1 in (NULL,1) and pk2 in (NULL, 1);
+pk1	pk2	pk3	extra	d
+1	1	1	NULL	1
+update t1 set extra=4 where pk1 = NULL and pk2 = NULL and pk3 = NULL;
+select * from t1;
+pk1	pk2	pk3	extra	d
+1	1	1	NULL	1
+2	2	2	NULL	2
+3	NULL	NULL	NULL	3
+NULL	NULL	NULL	NULL	4
+update t1 set extra=1 where pk1 <=> null;
+select * from t1;
+pk1	pk2	pk3	extra	d
+1	1	1	NULL	1
+2	2	2	NULL	2
+3	NULL	NULL	NULL	3
+NULL	NULL	NULL	1	4
+update t1 set extra=2 where pk1 <=> null and pk2 <=> null and pk3 <=> null;
+select * from t1;
+pk1	pk2	pk3	extra	d
+1	1	1	NULL	1
+2	2	2	NULL	2
+3	NULL	NULL	NULL	3
+NULL	NULL	NULL	2	4
+update t1 set extra=3 where pk1 is not NULL;
+select * from t1;
+pk1	pk2	pk3	extra	d
+1	1	1	3	1
+2	2	2	3	2
+3	NULL	NULL	3	3
+NULL	NULL	NULL	2	4
+update t1 set extra=4 where pk1 is not NULL and pk2 is not NULL and pk3 is not NULL;
+select * from t1;
+pk1	pk2	pk3	extra	d
+1	1	1	4	1
+2	2	2	4	2
+3	NULL	NULL	3	3
+NULL	NULL	NULL	2	4
+update t1 set extra=5 where pk1 != NULL;
+select * from t1;
+pk1	pk2	pk3	extra	d
+1	1	1	4	1
+2	2	2	4	2
+3	NULL	NULL	3	3
+NULL	NULL	NULL	2	4
+update t1 set extra=6 where pk1 != NULL and pk2 != NULL and pk3 != NULL;
+select * from t1;
+pk1	pk2	pk3	extra	d
+1	1	1	4	1
+2	2	2	4	2
+3	NULL	NULL	3	3
+NULL	NULL	NULL	2	4
+delete from t1 where pk1 != NULL;
+select * from t1;
+pk1	pk2	pk3	extra	d
+1	1	1	4	1
+2	2	2	4	2
+3	NULL	NULL	3	3
+NULL	NULL	NULL	2	4
+delete from t1 where pk1 != NULL and pk2 != NULL and pk3 != NULL;
+select * from t1;
+pk1	pk2	pk3	extra	d
+1	1	1	4	1
+2	2	2	4	2
+3	NULL	NULL	3	3
+NULL	NULL	NULL	2	4
+delete from t1 where pk1 = NULL and pk2 = NULL and pk3 = NULL;
+select * from t1;
+pk1	pk2	pk3	extra	d
+1	1	1	4	1
+2	2	2	4	2
+3	NULL	NULL	3	3
+NULL	NULL	NULL	2	4
+delete from t1 where pk1 <=> null;
+select * from t1;
+pk1	pk2	pk3	extra	d
+1	1	1	4	1
+2	2	2	4	2
+3	NULL	NULL	3	3
+delete from t1 where pk1 <=> null and pk2 <=> null and pk3 <=> null;
+select * from t1;
+pk1	pk2	pk3	extra	d
+1	1	1	4	1
+2	2	2	4	2
+3	NULL	NULL	3	3
+delete from t1 where pk1 is not NULL and pk2 is not NULL and pk3 is not NULL;
+select * from t1;
+pk1	pk2	pk3	extra	d
+3	NULL	NULL	3	3
+delete from t1 where pk1 is not NULL;
+select * from t1;
+pk1	pk2	pk3	extra	d
+set @@recyclebin = off;
+drop table t1;

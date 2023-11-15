@@ -1,0 +1,66 @@
+set global ob_max_read_stale_time = -1;
+show global variables like '%stale_time%';
+Variable_name	Value
+ob_max_read_stale_time	-1
+set @@session.ob_max_read_stale_time = -1;
+select @@session.ob_max_read_stale_time;
+@@session.ob_max_read_stale_time
+-1
+set global ob_max_read_stale_time = -1;
+show global variables like '%stale_time%';
+Variable_name	Value
+ob_max_read_stale_time	-1
+alter system set weak_read_version_refresh_interval="6s";
+alter system set weak_read_version_refresh_interval="3s";
+set global ob_max_read_stale_time = -1;
+show global variables like '%stale_time%';
+Variable_name	Value
+ob_max_read_stale_time	-1
+set @@session.ob_max_read_stale_time = -1;
+select @@session.ob_max_read_stale_time;
+@@session.ob_max_read_stale_time
+-1
+alter system set weak_read_version_refresh_interval="6s";
+alter system set weak_read_version_refresh_interval="3s";
+set global ob_max_read_stale_time = 5000000;
+set @@session.ob_max_read_stale_time = 5000000;
+alter system set weak_read_version_refresh_interval="8s";
+ERROR HY000: Incorrect arguments to weak_read_version_refresh_interval is larger than ob_max_read_stale_time
+alter system set weak_read_version_refresh_interval="1s";
+set global ob_max_read_stale_time = 2000000;
+show global variables like '%stale_time%';
+Variable_name	Value
+ob_max_read_stale_time	2000000
+alter system set weak_read_version_refresh_interval="3s";
+ERROR HY000: Incorrect arguments to weak_read_version_refresh_interval is larger than ob_max_read_stale_time
+set global ob_max_read_stale_time = 5000000;
+show global variables like '%stale_time%';
+Variable_name	Value
+ob_max_read_stale_time	5000000
+alter system set weak_read_version_refresh_interval="3s";
+set global ob_max_read_stale_time = 3000000;
+show global variables like '%stale_time%';
+Variable_name	Value
+ob_max_read_stale_time	3000000
+alter system set weak_read_version_refresh_interval="4s";
+ERROR HY000: Incorrect arguments to weak_read_version_refresh_interval is larger than ob_max_read_stale_time
+alter system set weak_read_version_refresh_interval="3001ms";
+ERROR HY000: Incorrect arguments to weak_read_version_refresh_interval is larger than ob_max_read_stale_time
+alter system set weak_read_version_refresh_interval="3000ms";
+set global ob_max_read_stale_time = -1;
+show global variables like '%stale_time%';
+Variable_name	Value
+ob_max_read_stale_time	-1
+alter system set weak_read_version_refresh_interval="4999ms";
+alter system set weak_read_version_refresh_interval="100ms";
+set global ob_max_read_stale_time = 100000;
+set global ob_max_read_stale_time = 99999;
+ERROR HY000: Incorrect arguments to max_read_stale_time is smaller than weak_read_version_refresh_interval
+set @@session.ob_max_read_stale_time = 100000;
+set @@session.ob_max_read_stale_time = 99999;
+ERROR HY000: Incorrect arguments to max_read_stale_time is smaller than weak_read_version_refresh_interval
+set global ob_max_read_stale_time = 5000000;
+set @@session.ob_max_read_stale_time = 5000000;
+show global variables like '%stale_time%';
+Variable_name	Value
+ob_max_read_stale_time	5000000

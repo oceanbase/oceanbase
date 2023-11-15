@@ -1,0 +1,693 @@
+CREATE TABLE if not exists trade_sequence_000
+(
+ name varchar(256),
+ value int,
+ min_value int,
+ max_value int,
+ step int,
+ gmt_create TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+ gmt_modified TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+ primary key (name)
+) DEFAULT CHARSET = 'utf8';
+
+
+CREATE TABLE if not exists BUSINESS_ACTION_000
+(
+  ACTION_ID     int           NOT NULL,
+  TX_ID         varchar(128)   NOT NULL,
+  NAME          varchar(64)    NOT NULL,
+  STATE         CHAR(1)         NOT NULL,
+  GMT_CREATE    TIMESTAMP(6) default "2012-01-01 12:00:00"        NOT NULL,
+  GMT_MODIFIED  TIMESTAMP(6) default "2012-01-01 12:00:00"        NOT NULL,
+  CONTEXT       varchar(4000),
+  primary key (ACTION_ID)
+) DEFAULT CHARSET = 'utf8';
+
+CREATE TABLE if not exists BUSINESS_ACTIVITY_000
+(
+  TX_ID                varchar(128)   NOT NULL,
+  STATE               	VARCHAR(1)         NOT NULL,
+  ACCOUNT_TRANS_STATE 	VARCHAR(1)         NOT NULL,
+  GMT_CREATE           TIMESTAMP(6) default "2012-01-01 12:00:00"        NOT NULL,
+  GMT_MODIFIED         TIMESTAMP(6) default "2012-01-01 12:00:00"        NOT NULL,
+  PROPAGATION         	VARCHAR(1),
+  CONTEXT              varchar(2048),
+  primary key (TX_ID)
+) DEFAULT CHARSET = 'utf8';
+
+CREATE TABLE if not exists NOTIFY_000
+(
+  ID                varchar(34)    NOT NULL,
+  PLUGIN            varchar(50)    NOT NULL,
+  PARAMETER         varchar(4000)  NOT NULL,
+  GROUP_NO          int            NOT NULL,
+  STATUS           	VARCHAR(1)         NOT NULL,
+  GMT_CREATE        TIMESTAMP(6) default "2012-01-01 12:00:00"        NOT NULL,
+  GMT_MODIFY        TIMESTAMP(6) default "2012-01-01 12:00:00"        NOT NULL,
+  IW_USER_ID        varchar(16),
+  CHANNEL_ENDPOINT  varchar(200),
+  BUSINESS_ORDER    varchar(128),
+  BUSINESS_TYPE     varchar(50),
+  PLUGIN_HOST       varchar(15),
+  GMT_LOCAL_CREATE  TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  primary key (id)
+)DEFAULT CHARSET = 'utf8';
+
+CREATE INDEX NOTIFY_BUSINESS_ORDER1_IND ON NOTIFY_000 (BUSINESS_ORDER);
+CREATE INDEX NOTIFY_PLUGIN_IND ON NOTIFY_000 (PLUGIN, CHANNEL_ENDPOINT);
+
+CREATE TABLE if not exists NOTIFY_HISTORY_000
+(
+  ID                varchar(34)    NOT NULL,
+  PLUGIN            varchar(50)    NOT NULL,
+  PARAMETER         varchar(4000)  NOT NULL,
+  GROUP_NO          int            NOT NULL,
+  STATUS           	VARCHAR(1)         NOT NULL,
+  GMT_CREATE        TIMESTAMP(6) default "2012-01-01 12:00:00"        NOT NULL,
+  GMT_MODIFY        TIMESTAMP(6) default "2012-01-01 12:00:00"        NOT NULL,
+  IW_USER_ID        varchar(16),
+  CHANNEL_ENDPOINT  varchar(200),
+  BUSINESS_ORDER    varchar(128),
+  BUSINESS_TYPE     varchar(50),
+  PLUGIN_HOST       varchar(15),
+  GMT_LOCAL_CREATE  TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  PRIMARY KEY (ID)
+)DEFAULT CHARSET = 'utf8';
+CREATE INDEX NOTIFY_HISTORY_000_BORDER_IND ON NOTIFY_HISTORY_000 (BUSINESS_ORDER);
+CREATE INDEX NOTIFY_HISTORY_IG_IND ON NOTIFY_HISTORY_000 (IW_USER_ID, GROUP_NO);
+
+CREATE TABLE if not exists TIMEOUT_000
+(
+  JOB_ID        varchar(32)   NOT NULL,
+  TRADE_NO      varchar(64),
+  USER_ID       varchar(128),
+  PAYTYPE       varchar(4),
+  END_TIME      TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  ACTION        varchar(30),
+  PARAMETER     varchar(100),
+  STATUS       	VARCHAR(1),
+  ACTION_TYPE  	VARCHAR(1),
+  GMT_CREATE    TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  PRIOR_LEVEL   int default 1,
+  GMT_MODIFIED  TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  GMT_OCCUR     TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  PRIMARY KEY (JOB_ID)
+) DEFAULT CHARSET = 'utf8';
+
+CREATE INDEX IND_BEYOND_TIMEOUT_ETIME ON TIMEOUT_000 (END_TIME);
+CREATE INDEX TIMEOUT_000_PL_IND ON TIMEOUT_000 (PRIOR_LEVEL);
+CREATE INDEX TIMEOUT_TNO_IND ON TIMEOUT_000 (TRADE_NO);
+
+CREATE TABLE if not exists TIMEOUT_HISTORY_000
+(
+  JOB_ID        varchar(32)   NOT NULL,
+  TRADE_NO      varchar(64)   NOT NULL,
+  USER_ID       varchar(128),
+  PAYTYPE       varchar(4),
+  END_TIME      TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  ACTION        varchar(30),
+  PARAMETER     varchar(100),
+  STATUS       	VARCHAR(1),
+  ACTION_TYPE  	VARCHAR(1)        NOT NULL,
+  GMT_CREATE    TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  PRIOR_LEVEL   int,
+  GMT_MODIFIED  TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  GMT_OCCUR     TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  PRIMARY KEY (JOB_ID, TRADE_NO, ACTION_TYPE)
+) DEFAULT CHARSET = 'utf8';
+
+CREATE TABLE if not exists TIMEOUT_LONG_000
+(
+  JOB_ID        varchar(32)   NOT NULL,
+  TRADE_NO      varchar(64),
+  USER_ID       varchar(128),
+  PAYTYPE       varchar(4),
+  END_TIME      TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  ACTION        varchar(30),
+  PARAMETER     varchar(100),
+  STATUS       	VARCHAR(1),
+  ACTION_TYPE  	VARCHAR(1),
+  GMT_CREATE    TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  PRIOR_LEVEL   int          ,
+  GMT_MODIFIED  TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  GMT_OCCUR     TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  PRIMARY KEY (JOB_ID)
+) DEFAULT CHARSET = 'utf8';
+CREATE INDEX BYD_TIMEOUT_LONG_ENDTIME_IND ON TIMEOUT_LONG_000 (END_TIME);
+CREATE INDEX TIMEOUT_LONG_000_PL_IND ON TIMEOUT_LONG_000 (PRIOR_LEVEL);
+CREATE INDEX TIMEOUT_LONG_TNO_IND ON TIMEOUT_LONG_000 (TRADE_NO);
+
+
+CREATE TABLE if not exists TIMEOUT_REMIND_000
+(
+  JOB_ID        varchar(32)   NOT NULL,
+  TRADE_NO      varchar(64),
+  USER_ID       varchar(128),
+  PAYTYPE       varchar(4),
+  END_TIME      TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  ACTION        varchar(30),
+  PARAMETER     varchar(100),
+  STATUS       	VARCHAR(1),
+  ACTION_TYPE  	VARCHAR(1),
+  GMT_CREATE    TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  PRIOR_LEVEL   int          ,
+  GMT_MODIFIED  TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  GMT_OCCUR     TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  PRIMARY KEY (JOB_ID)
+) DEFAULT CHARSET = 'utf8';
+
+
+CREATE INDEX BY_TIMEOUT_REMIND_ETIME_IND ON TIMEOUT_REMIND_000 (END_TIME);
+
+CREATE INDEX TIMEOUT_REMIND_000_PL_IND ON TIMEOUT_REMIND_000 (PRIOR_LEVEL);
+
+CREATE INDEX TIMEOUT_REMIND_TNO_IND ON TIMEOUT_REMIND_000 (TRADE_NO);
+
+CREATE TABLE if not exists TRADE_BASE_000
+(
+ ID                     int           NOT NULL,
+  TRADE_NO               varchar(64)    NOT NULL,
+  OUT_TRADE_NO           varchar(64),
+  SELLER_ACCOUNT         varchar(100)   NOT NULL,
+  SELLER_LOGIN_EMAIL     varchar(100)   NOT NULL,
+  BUYER_ACCOUNT          varchar(100)   NOT NULL,
+  BUYER_LOGIN_EMAIL      varchar(100)   NOT NULL,
+  SELLER_TYPE            int,
+  BUYER_TYPE             int,
+  TRADE_FROM             varchar(100),
+  TRADE_EMAIL            varchar(100),
+  OPERATOR_ROLE          VARCHAR(1)     NOT NULL,
+  TRADE_STATUS           varchar(50)    NOT NULL,
+  TOTAL_FEE              int            default 0 NOT NULL,
+  SERVICE_FEE_RATIO      varchar(64),
+  SERVICE_FEE            int            default 0 NOT NULL,
+  CURRENCY               varchar(3),
+  SELLER_ACTION          varchar(200),
+  BUYER_ACTION           varchar(200),
+  GMT_CREATE             TIMESTAMP(6) default "2012-01-01 12:00:00"                ,
+  SELLER_USER_ID         varchar(16),
+  BUYER_USER_ID          varchar(16),
+  ADDITIONAL_TRD_STATUS  varchar(50),
+  TRADE_TYPE             varchar(4)     NOT NULL,
+  SELLER_FULLNAME        varchar(256)   default '',
+  BUYER_FULLNAME         varchar(256)   default '',
+  SELLER_NICK            varchar(100)   default '' NOT NULL,
+  BUYER_NICK             varchar(100)   default '' NOT NULL,
+  GOODS_TITLE            varchar(256),
+  GMT_LAST_MODIFIED_DT   TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  STOP_TIMEOUT           varchar(4) 	default '0',
+  GATHERING_TYPE         varchar(4),
+  BUYER_MARKER           VARCHAR(1),
+  SELLER_MARKER          VARCHAR(1),
+  BUYER_MARKER_MEMO      varchar(1000),
+  SELLER_MARKER_MEMO     varchar(1000),
+  CHANNEL                varchar(32),
+  PRODUCT                varchar(20),
+  PAY_CHANNEL            varchar(32),
+  OTHER_SERVICE_FEE      int,
+  RELATION_PRO           varchar(64),
+  PLATFORM varchar(100),
+  CHANNEL_PARTNER varchar(100),
+  GOODS_TYPE      VARCHAR(4),
+  GOODS_SUB_TYPE  VARCHAR(4),
+  PRIMARY KEY (TRADE_NO)
+)DEFAULT CHARSET = 'utf8';
+
+CREATE INDEX BYD_TRADE_BASE_TEMAIL_GMTC_IND ON TRADE_BASE_000
+(TRADE_EMAIL, GMT_CREATE);
+
+CREATE INDEX IND_BEYOND_TRADE_BASE_BUYGMT1 ON TRADE_BASE_000
+(BUYER_ACCOUNT, GMT_CREATE);
+
+CREATE INDEX IND_BEYOND_TRADE_BASE_SALGMT1 ON TRADE_BASE_000
+(SELLER_ACCOUNT, GMT_CREATE);
+
+CREATE TABLE if not exists TRADE_CHARGE_000
+(
+  ID                int           NOT NULL,
+  TRADE_NO          varchar(64)   NOT NULL,
+  GMT_CHARGE        TIMESTAMP(6) default "2012-01-01 12:00:00"    NOT NULL,
+  GMT_PAY           TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  CHARGE_OUT_DATE  	VARCHAR(8),
+  GMT_MODIFIED      TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  PLAN_CHARGE       int,
+  ACTUAL_CHARGE     int,
+  RATE_ID           int,
+  RATE              int,
+  RATE_ORIGIN      	VARCHAR(1),
+  PRODUCT_NAME      varchar(32),
+  CHARGE_TYPE       varchar(16),
+  SERVICE_EVENT_ID  int,
+  PAYMENT_BILL_ID   int,
+  SALES_ID          int,
+  PARTNER_ID        varchar(30),
+  DEBIT_ACCOUNT     varchar(20),
+  CREDIT_ACCOUNT    varchar(20),
+  BILL_STATUS      	VARCHAR(1),
+  SERVICE_AMOUNT    int,
+  TRADE_FROM        varchar(100),
+  DEBIT_USER_ID     varchar(16),
+  SERVICT_TYPE      varchar(8),
+  SUB_TRADE_NO      varchar(64),
+  primary key (TRADE_NO, SERVICT_TYPE,	CHARGE_TYPE, SUB_TRADE_NO)
+)DEFAULT CHARSET = 'utf8';
+
+CREATE INDEX TRADE_CHARGE_000_GMT_IND ON TRADE_CHARGE_000
+(GMT_MODIFIED);
+
+CREATE TABLE if not exists TRADE_EXT_000
+(
+  TRADE_NO               varchar(64)    NOT NULL,
+  EXT_INFO               varchar(1000),
+  TRADE_AGENT            varchar(30),
+  GMT_MODIFIED           TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  FP_TIME_OUT_RULE       varchar(1000),
+  FOREX_RATE_ID          int,
+  FOREX_CURRENCY         varchar(8),
+  FOREX_TOTAL_FEE        int,
+  GOODS_INNER_SELL_RATE  int,
+  PREPARE_COUPON_FEE     int,
+  PREPARE_COUPON_LIST    varchar(64),
+  FOREX_CERT_NO          varchar(128),
+  GMT_CREATE             TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  AUTH_DEBIT_TYPE        varchar(1),
+  SUPPORT_CREDIT_CARD    varchar(256),
+  SPECIFIED_PAY_CHANNEL  varchar(128),
+  CHARGE_CHANNEL_INFO    varchar(256),
+  PAY_CHANNELS           varchar(900),
+  PRIMARY KEY (TRADE_NO)
+)DEFAULT CHARSET = 'utf8';
+CREATE INDEX TRADE_EXT_000_GMT_IND ON TRADE_EXT_000 (GMT_MODIFIED);
+
+CREATE TABLE if not exists TRADE_FUND_BILL_000
+(
+  BILL_NO             varchar(128)   NOT NULL,
+  TRADE_NO            varchar(64)    NOT NULL,
+  PAY_ACCOUNT_NO      varchar(20)    NOT NULL,
+  RECEIVE_ACCOUNT_NO  varchar(20)    NOT NULL,
+  CURRENCY            varchar(3)    default '156' NOT NULL,
+  AMOUNT              int           NOT NULL,
+  TYPE               	VARCHAR(2)         NOT NULL,
+  STATUS             	VARCHAR(1)         NOT NULL,
+  CHANNEL            	VARCHAR(2)         NOT NULL,
+  GMT_PAY             TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  IW_TRANS_LOG_ID     int,
+  GMT_TRADE_CREATE    TIMESTAMP(6) default "2012-01-01 12:00:00"        NOT NULL,
+  GMT_CREATE          TIMESTAMP(6) default "2012-01-01 12:00:00"        NOT NULL,
+  GMT_MODIFIED        TIMESTAMP(6) default "2012-01-01 12:00:00"        NOT NULL,
+  MEMO                varchar(1000),
+  BANK_PAY_ONLINE_ID  int,
+  BANK_AMOUNT         int,
+  BANK_TYPE           varchar(32),
+  FREEZE_TYPE         varchar(5),
+  OUT_ORDER_NO        varchar(64),
+  PARTNER_ID          varchar(30),
+  DEPOSIT_ID          varchar(16),
+  BILL_EXT            varchar(200),
+  PAY_ORDER_NO        varchar(64),
+  primary key (TRADE_NO,BILL_NO)
+)DEFAULT CHARSET = 'utf8';
+
+CREATE INDEX BYD_TRADE_FUND_BILL_PF_IND ON TRADE_FUND_BILL_000
+(PAY_ACCOUNT_NO, GMT_TRADE_CREATE);
+
+CREATE INDEX BYD_TRADE_FUND_BILL_RF_IND ON TRADE_FUND_BILL_000
+(RECEIVE_ACCOUNT_NO, GMT_TRADE_CREATE);
+
+CREATE INDEX TRADE_FUND_BILL_PTG_IND ON TRADE_FUND_BILL_000
+(PARTNER_ID, GMT_TRADE_CREATE);
+
+CREATE INDEX TRADE_FUND_BILL_000_GMT_IND ON TRADE_FUND_BILL_000
+(GMT_MODIFIED);
+
+CREATE TABLE if not exists TRADE_GOODS_INFO_000
+(
+  ID              int           NOT NULL,
+  TRADE_NO        varchar(64)    NOT NULL,
+  GOODS_ID        varchar(32)    default ' ' NOT NULL,
+  GOODS_TITLE     varchar(256),
+  GOODS_BID       int         default 0 NOT NULL,
+  GOODS_QUANTITY  int         default 1 NOT NULL,
+  DETAIL_URL      varchar(400),
+  GOODS_MEMO      varchar(1000),
+  REFER_URL       varchar(400),
+  PARTNER         varchar(100),
+  GMT_CREATE      TIMESTAMP(6) default "2012-01-01 12:00:00"        NOT NULL,
+  OTHER_FEE       int,
+  CATEGORY        varchar(24),
+  PROMOTION_DESC  varchar(256),
+  PIC_URL         varchar(400),
+  GOODS_TYPE      VARCHAR(4),
+  GOODS_SUB_TYPE  VARCHAR(4),
+  primary key (TRADE_NO, ID)
+)DEFAULT CHARSET = 'utf8';
+
+CREATE TABLE if not exists TRADE_LOGISTICS_000
+(
+  ID                    int          NOT NULL,
+  TRADE_NO              VARCHAR(64)   NOT NULL,
+  LOGISTICS_ID          VARCHAR(20),
+  LOGISTICS_NAME        VARCHAR(128),
+  INVOICE_NO            VARCHAR(64),
+  SIGN_VOUCHER_NO       VARCHAR(64),
+  TRANSPORT_TYPE        int,
+  TRANSPORT_FEE         int    default 0 NOT NULL,
+  OTHER_FEE             int    default 0,
+  ADDITIONAL_SERVICE    VARCHAR(300),
+  LOGISTICS_STATUS      VARCHAR(100),
+  SEND_FULLNAME         VARCHAR(256),
+  SEND_PHONE            VARCHAR(30),
+  SEND_MOBILE_PHONE     VARCHAR(30),
+  SEND_ADDRESS          VARCHAR(256),
+  SEND_POST             VARCHAR(20),
+  RECEIVE_FULLNAME      VARCHAR(256),
+  RECEIVE_PHONE         VARCHAR(30),
+  RECEIVE_MOBILE_PHONE  VARCHAR(30),
+  RECEIVE_ADDRESS       VARCHAR(256),
+  RECEIVE_POST          VARCHAR(20),
+  LOGISTICS_MEMO        VARCHAR(600),
+  TRADE_OR_REFUND_FLAG  int         default 1 NOT NULL,
+  GMT_CREATE            TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  GMT_APPLY             TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  GMT_FETCH             TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  GMT_TRANSPORT         TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  GMT_SIGN              TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  GMT_MODIFIED          TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  SEND_IM_TYPE          VARCHAR(10),
+  SEND_IM_ID            VARCHAR(100),
+  RECEIVE_IM_TYPE       VARCHAR(10),
+  RECEIVE_IM_ID         VARCHAR(100),
+  TRANSPORT_PAYMENT     int,
+  TRANSPORT_MODIFIABLE  int,
+  RECEIVE_ADDRESS_CODE  VARCHAR(8),
+  SEND_ADDRESS_CODE     VARCHAR(8),
+  TRANSPORT_TYPE_SEND   int,
+  LOGISTICS_NO          VARCHAR(100),
+  TRANS_GOODS_INFO      VARCHAR(400),
+  REC_ADDRESS_NO        VARCHAR(100),
+  FLAG_MAIN             int,
+  primary key (TRADE_NO, TRADE_OR_REFUND_FLAG, ID)
+)DEFAULT CHARSET = 'utf8';
+CREATE INDEX TRADE_LOGISTICS_000_GMT_IND ON TRADE_LOGISTICS_000
+(GMT_MODIFIED);
+
+
+#这个表修改了IS_READ,原来使用的是CHAR（1）
+CREATE TABLE if not exists TRADE_MESSAGE_BOARD_000
+(
+  ID           int           NOT NULL,
+  TRADE_NO     varchar(64)    NOT NULL,
+  MESSAGE      varchar(2000)  NOT NULL,
+  POSTER       varchar(100)  default ' ' NOT NULL,
+  POSTER_ROLE  int,
+  OPERATOR_IP  varchar(15),
+  MSG_TYPE     int    default 0,
+  IS_READ     	int   default 0 NOT NULL,
+  GMT_CREATE   TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  PRIMARY KEY (TRADE_NO, ID)
+) DEFAULT CHARSET = 'utf8';
+
+CREATE TABLE if not exists TRADE_NOTE_000
+(
+  ID              int          NOT NULL,
+  TRADE_NO        varchar(64)   NOT NULL,
+  TRADE_STATUS    varchar(64)   default ' ',
+  BUYER_EMAIL     varchar(100)  default ' ' NOT NULL,
+  SELLER_EMAIL    varchar(100)  default ' ' NOT NULL,
+  OPERATOR_EMAIL  varchar(100)  default ' ' NOT NULL,
+  OPERATOR_IP     varchar(15),
+  GMT_CREATE      TIMESTAMP(6) default "2012-01-01 12:00:00",
+  OPERATOR_MEMO   varchar(256),
+  NOTE_TYPE       varchar(100),
+  REMOTE_MAC      varchar(64),
+  primary key (TRADE_NO, ID, GMT_CREATE)
+)DEFAULT CHARSET = 'utf8';
+
+CREATE TABLE if not exists TRADE_OUTTRADE_000
+(
+  PARTNER_ID    varchar(200)  NOT NULL,
+  OUT_TRADE_NO  varchar(64)   NOT NULL,
+  TRADE_FROM    varchar(100)  NOT NULL,
+  TRADE_NO      varchar(64)   NOT NULL,
+  GMT_CREATE    TIMESTAMP(6) default "2012-01-01 12:00:00"       NOT NULL,
+  primary key (OUT_TRADE_NO, PARTNER_ID, TRADE_FROM)
+) DEFAULT CHARSET = 'utf8';
+
+CREATE TABLE if not exists TRADE_PAYMENT_CLAUSE_000
+(
+  ID                     int           NOT NULL,
+  OUT_RELATION_ID        varchar(64),
+  SERIAL_NO              int,
+  TRADE_NO               varchar(64)    NOT NULL,
+  GMT_CREATE             TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  GMT_MODIFIED           TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  PAYMENT_TYPE           varchar(64)    NOT NULL,
+  STATUS                 varchar(50),
+  PAY_ACCOUNT_NO         varchar(20),
+  PAY_USER_ID            varchar(16),
+  RECEIVE_ACCOUNT_NO     varchar(20),
+  RECEIVE_USER_ID        varchar(16),
+  AMOUNT                 int,
+  CURRENCY               varchar(64),
+  PAYMENT_RESTRICT_RULE  varchar(1000),
+  DESCRIPTION            varchar(1000),
+  MEMO                   varchar(1000),
+  CONTEXT                varchar(1000),
+  primary key (TRADE_NO, OUT_RELATION_ID)
+)DEFAULT CHARSET = 'utf8';
+CREATE INDEX TRADE_PCLAUSE_000_GMT_IND ON TRADE_PAYMENT_CLAUSE_000
+(GMT_MODIFIED);
+
+CREATE TABLE if not exists TRADE_PAYMENT_ORDER_000
+(
+  ORDER_NO            varchar(64)    NOT NULL,
+  TRADE_NO            varchar(64)    NOT NULL,
+  BIZ_TYPE            varchar(20)    NOT NULL,
+  OUT_ORDER_NO        varchar(64),
+  GMT_MODIFIED        TIMESTAMP(6) default "2012-01-01 12:00:00"        NOT NULL,
+  STATUS              varchar(2)     NOT NULL,
+  PAY_ACCOUNT_NO      varchar(20)    NOT NULL,
+  RECEIVE_ACCOUNT_NO  varchar(20)    NOT NULL,
+  AMOUNT              int           NOT NULL,
+  RETURN_AMOUNT       int,
+  CURRENCY            varchar(3)     NOT NULL,
+  FREEZE_TYPE         varchar(5),
+  EXT_INFO            varchar(1000),
+  MEMO                varchar(1000),
+  PAYMENT_ID          varchar(64),
+  PAYMENT_CONTEXT     varchar(1000),
+  GMT_PAY             TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  GMT_CREATE          TIMESTAMP(6) default "2012-01-01 12:00:00"        NOT NULL,
+  FREEZE_AMOUNT       int,
+  SUB_TRANS_CODE      varchar(40)    NOT NULL,
+  primary key (TRADE_NO, ORDER_NO)
+  )DEFAULT CHARSET = 'utf8';
+
+CREATE INDEX TRADE_PAYMENT_ORD_000_GM_IND ON TRADE_PAYMENT_ORDER_000
+(GMT_MODIFIED);
+
+CREATE TABLE if not exists TRADE_PROCESS_000
+(
+  ID                        int           NOT NULL,
+  TRADE_NO                  varchar(64)   default ' ' NOT NULL,
+  OUT_TRADE_NO              varchar(64),
+  RECEIVE_FEE               int           default 0 NOT NULL,
+  SEND_FEE                  int           default 0 NOT NULL,
+  ADJUST_FEE                int           default 0 NOT NULL,
+  MEMO                      varchar(600),
+  OPERATE_TIME              TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  OPERATE_NAME              varchar(256),
+  FLAG_REFUND               varchar(4)    default '0' NOT NULL,
+  FLAG_DEFERPAY             varchar(4)    default '0' NOT NULL,
+  FLAG_PAYMENT              varchar(8)    default '0' NOT NULL,
+  FLAG_TRADE_LOCKED         varchar(4)    default '0' NOT NULL,
+  FLAG_SELLER_MDF           varchar(4)    default '0' NOT NULL,
+  GMT_CREATE                TIMESTAMP(6) default "2012-01-01 12:00:00"                ,
+  GMT_MODIFIED              TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  GMT_RECEIVE_PAY           TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  GMT_SEND_PAY              TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  GMT_SEND_GOODS            TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  TIME_OUT_RULE             varchar(1000),
+  GMT_OUT_TRADE_NO_CREATED  TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  COUPON_CLEAR_FEE          int,
+  COUPON_ADJUST_FEE         int,
+  REFUND_FEE                int,
+  GMT_REFUND_PAY            TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  GMT_FINISH                TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  ACCOUNT_TX_ID             varchar(40),
+  ADJUST_TIMEOUT            int,
+  GMT_PRE_AUTH              TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  PRE_AUTH_FEE              int,
+  ACTUAL_ADJUST_FEE         int,
+  EXPIRE_TIME               TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  SEND_BACK_FEE             int,
+  PRIMARY KEY (TRADE_NO)
+ )DEFAULT CHARSET = 'utf8';
+
+CREATE INDEX IND_BYD_TRD_PROCESS_GRPAY ON TRADE_PROCESS_000
+(GMT_RECEIVE_PAY, RECEIVE_FEE);
+
+CREATE INDEX TRADE_PROCESS_GMT_IND ON TRADE_PROCESS_000
+(GMT_MODIFIED);
+
+CREATE TABLE if not exists TRADE_REFUND_000
+(
+  ID                  int           NOT NULL,
+  TRADE_NO            varchar(64)    NOT NULL,
+  OUT_TRADE_NO        varchar(64),
+  RETURN_STATUS       varchar(100),
+  MEMO                varchar(2000),
+  RETURN_FEE          int,
+  GMT_ADMIN_MODIFIED  TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  ADMIN_STATUS        varchar(100),
+  RETURN_TYPE         varchar(20)    NOT NULL,
+  RETURN_GOODS        int,
+  GOODS_STATUS        int,
+  CLOSE_CAUSE         varchar(600),
+  REQUIRE_VOUCHER     int,
+  GMT_CREATE          TIMESTAMP(6) default "2012-01-01 12:00:00"                NOT NULL,
+  GMT_MODIFIED        TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  SELLER_NOT_RECEIVE  int,
+  REFUND_REASON       varchar(400),
+  APPEAL_NO           varchar(50),
+  GMT_DW_SYNC         TIMESTAMP(6) default "2012-01-01 12:00:00"        ,
+  BUY_USER_ID         varchar(16)    NOT NULL,
+  BUY_ACCOUNT         varchar(20)    NOT NULL,
+  SELL_USER_ID        varchar(16)    NOT NULL,
+  SELL_ACCOUNT        varchar(20)    NOT NULL,
+  TRADE_FROM          varchar(100),
+  TRADE_EMAIL         varchar(100),
+  IS_INPOUR_REFUND   	VARCHAR(1),
+  REFUND_FLOW_TYPE   	VARCHAR(1),
+  GMT_LAST_APPLY      TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  REFUND_FOREX_FEE    int,
+  PRIMARY KEY (TRADE_NO, ID)
+)DEFAULT CHARSET = 'utf8';
+CREATE INDEX TRADE_REFUND_BG_IND ON TRADE_REFUND_000
+(BUY_ACCOUNT, GMT_CREATE);
+
+CREATE INDEX TRADE_REFUND_SG_IND ON TRADE_REFUND_000
+(SELL_ACCOUNT, GMT_CREATE);
+
+CREATE INDEX TRADE_REFUND_TG_IND ON TRADE_REFUND_000
+(TRADE_EMAIL, GMT_CREATE);
+
+CREATE INDEX TRADE_REFUND_000_GMT_IND ON TRADE_REFUND_000 (GMT_MODIFIED);
+
+CREATE TABLE if not exists TRADE_VOUCHER_000
+(
+  ID                     int           NOT NULL,
+  TRADE_NO               varchar(64)   default ' '  NOT NULL,
+  REFUND_ID              int           NOT NULL,
+  SELLER_OR_BUYER        VARCHAR(1)    default 'S' NOT NULL,
+  SELLER_UPLOAD_VOUCHER  varchar(4000),
+  BUYER_UPLOAD_VOUCHER   varchar(4000),
+  UPLOAD_FLAG            int           default 0 NOT NULL,
+  GMT_CREATE             TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  GMT_MODIFIED           TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  GMT_CHECK              TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  LAST_OPERATOR          varchar(32),
+  CHECK_MEMO             varchar(2000),
+  MEMEO                  varchar(4000),
+  GMT_TIMEOUT_START      TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  PRIMARY KEY (TRADE_NO, ID)
+) DEFAULT CHARSET = 'utf8';
+
+CREATE INDEX TRADE_VOUCHER_000_MT_IND ON TRADE_VOUCHER_000
+(GMT_MODIFIED);
+
+CREATE TABLE if not exists TRADE_RECEIVE_ADDRESS_000
+(
+TRADE_NO          VARCHAR(64)   NOT NULL,
+ADDRESS_NO        VARCHAR(100)  NOT NULL,
+RECEIVE_NAME      VARCHAR(256),
+ADDRESS_CODE      VARCHAR(8),
+ADDRESS           VARCHAR(256),
+MOBILE_PHONE      VARCHAR(30),
+PHONE             VARCHAR(30),
+RECEIVE_POST      VARCHAR(20),
+VIRTUAL_REC_INFO  VARCHAR(400),
+GMT_CREATE        DATETIME                NOT NULL,
+GMT_MODIFIED      DATETIME,
+PRIMARY KEY (TRADE_NO, ADDRESS_NO)
+)DEFAULT CHARSET = 'utf8';
+
+
+CREATE TABLE if not exists TRADE_COOPERATE_000
+(
+TRADE_NO         VARCHAR(64),
+COOPERATE_NO     VARCHAR(64),
+COOPERATOR_FROM  VARCHAR(32),
+GMT_CREATE       TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+GMT_MODIFIED     TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+PRIMARY key (TRADE_NO, COOPERATE_NO, COOPERATOR_FROM)
+)DEFAULT CHARSET = 'utf8';
+
+CREATE INDEX TRADE_COOPERATE_000_MT_IND ON TRADE_COOPERATE_000
+(GMT_MODIFIED);
+
+CREATE TABLE if not exists TRADE_SETTLE_ORDER_000
+(
+ORDER_NO            VARCHAR(64)    NOT NULL,
+ORG_ORDER_NO        VARCHAR(64),
+TRADE_NO            VARCHAR(64)    NOT NULL,
+OUT_REQUEST_NO      VARCHAR(64),
+BIZ_PRODUCT         VARCHAR(32),
+SETTLE_ACTION_TYPE  VARCHAR(32),
+AMOUNT              int           NOT NULL,
+STATUS              VARCHAR(50)    NOT NULL,
+EXTINFO             VARCHAR(1024),
+MEMO                VARCHAR(512),
+SETTLE_ID           VARCHAR(64),
+SETTLE_CONTEXT      VARCHAR(1024),
+GMT_CREATE          TIMESTAMP(6)         NOT NULL,
+GMT_MODIFIED        TIMESTAMP(6),
+SETTLE_TYPE         VARCHAR(32),
+PRIMARY KEY (TRADE_NO, ORDER_NO, GMT_CREATE)
+)DEFAULT CHARSET = 'utf8';
+
+
+CREATE TABLE if not exists TRADE_PARTICIPANT_000
+(
+TRADE_NO          VARCHAR(64)   NOT NULL,
+USER_ID           VARCHAR(16)   NOT NULL,
+USER_NAME         VARCHAR(256),
+USER_NICK         VARCHAR(100),
+PARTICIPANT_ROLE  VARCHAR(64)   NOT NULL,
+MEMO              VARCHAR(200),
+GMT_CREATE        TIMESTAMP(6) default "2012-01-01 12:00:00"              NOT NULL,
+GMT_MODIFIED      TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+PRIMARY KEY (TRADE_NO, USER_ID, PARTICIPANT_ROLE)
+)DEFAULT CHARSET = 'utf8';
+
+CREATE TABLE if not exists BUSINESS_ACTIVITY_ASYNC_000
+(
+TX_ID                VARCHAR(128)   NOT NULL,
+STATE                VARCHAR(1)         NOT NULL,
+ACCOUNT_TRANS_STATE  VARCHAR(1)         NOT NULL,
+GMT_CREATE           TIMESTAMP(6) default "2012-01-01 12:00:00"        NOT NULL,
+GMT_MODIFIED         TIMESTAMP(6) default "2012-01-01 12:00:00"        NOT NULL,
+PROPAGATION          VARCHAR(1),
+CONTEXT              VARCHAR(2048),
+PRIMARY KEY (TX_ID)
+)DEFAULT CHARSET = 'utf8';
+
+CREATE TABLE if not exists EXTERFACE_INVOKE_000
+(
+  ID           int         NOT NULL,
+  PARTNER_ID   VARCHAR(32)   NOT NULL,
+  TARGET       VARCHAR(64)   NOT NULL,
+  EXTERFACE    VARCHAR(128)  NOT NULL,
+  NOTIFY_URL   VARCHAR(200),
+  RETURN_URL   VARCHAR(200),
+  SIGN_TYPE    VARCHAR(10),
+  CHARSET      VARCHAR(20),
+  GMT_INVOKE   TIMESTAMP(6) default "2012-01-01 12:00:00"       NOT NULL,
+  GMT_FINISH   TIMESTAMP(6) default "2012-01-01 12:00:00"      NOT NULL,
+  TARGET_TYPE  VARCHAR(20)   NOT NULL,
+  GMT_NOTIFY   TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  GMT_RETURN   TIMESTAMP(6) default "2012-01-01 12:00:00" NULL,
+  PRIMARY KEY(TARGET_TYPE, TARGET, PARTNER_ID)
+)DEFAULT CHARSET = 'utf8';
+
+CREATE INDEX EXTERFACE_INVOKE_000_ID_IND ON EXTERFACE_INVOKE_000(ID);

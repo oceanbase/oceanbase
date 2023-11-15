@@ -1,0 +1,22 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: xuanjinlong.xjl
+# owner group: SQL1
+# tags: datatype
+# Test of timestamp functions
+
+--disable_warnings
+drop table if exists test_table;
+--enable_warnings
+create table test_table(id int, name varchar(64), age int,  birth datetime(6), school_date  timestamp(6) default "2012-01-01 12:00:00", primary key(id,age));
+
+insert into test_table values(1,'abc', 38, '1988-01-29 12:00:00.000', '1993-09-01 11:00:00.1234');
+select * from test_table;
+update test_table set birth='1988-01-29 12:00:00.456';
+select * from test_table;
+#select date_sub(now(), INTERVAL ""  MINUTE_SECOND);
+select date_sub(now(), INTERVAL NULL  MINUTE_SECOND);
+#select date_add(now(), INTERVAL ""  MINUTE_SECOND);
+select date_add(now(), INTERVAL NULL  MINUTE_SECOND);
+

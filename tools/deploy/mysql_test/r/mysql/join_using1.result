@@ -1,0 +1,68 @@
+drop table if exists tjuo1,tjuo2,tjuo3;
+create table tjuo1 (pk int,c1 int, primary key(pk));
+create table tjuo2 (pk int,c1 int, c2 int, primary key(pk));
+create table tjuo3 (pk int,c2 int, primary key(pk));
+insert into tjuo1 values(1, 11), (2, 12), (3, 13);
+insert into tjuo2 values(4, 11, 21), (5, 12, 22), (6, 13, 23);
+insert into tjuo3 values(7, 21), (8, 22), (9, 23);
+select * from tjuo1;
+pk	c1
+1	11
+2	12
+3	13
+select * from tjuo2;
+pk	c1	c2
+4	11	21
+5	12	22
+6	13	23
+select * from tjuo3;
+pk	c2
+7	21
+8	22
+9	23
+SELECT * FROM tjuo1 JOIN  (SELECT * FROM tjuo2) as tjuo2_alias  on tjuo1.c1= tjuo2_alias.c1;
+pk	c1	pk	c1	c2
+1	11	4	11	21
+2	12	5	12	22
+3	13	6	13	23
+SELECT * FROM tjuo1 RIGHT JOIN (SELECT * FROM tjuo2) as tjuo2_alias  USING (c1);
+c1	pk	c2	pk
+11	4	21	1
+12	5	22	2
+13	6	23	3
+SELECT * FROM tjuo1 JOIN tjuo2 on tjuo1.c1=tjuo2.c1 JOIN tjuo3 on tjuo2.c2=tjuo3.c2;
+pk	c1	pk	c1	c2	pk	c2
+1	11	4	11	21	7	21
+2	12	5	12	22	8	22
+3	13	6	13	23	9	23
+SELECT * FROM tjuo1 RIGHT JOIN tjuo2 USING (c1) RIGHT JOIN tjuo3 USING (c2);
+c2	pk	c1	pk	pk
+21	7	11	4	1
+22	8	12	5	2
+23	9	13	6	3
+SELECT * FROM tjuo1 RIGHT JOIN (SELECT * FROM tjuo2) as tjuo2_alias USING (c1) RIGHT JOIN tjuo3 USING (c2);
+c2	pk	c1	pk	pk
+21	7	11	4	1
+22	8	12	5	2
+23	9	13	6	3
+SELECT * FROM  (SELECT * FROM tjuo1) tjuo1_alias RIGHT JOIN (SELECT * FROM tjuo2) as tjuo2_alias USING (c1) RIGHT JOIN (SELECT * FROM tjuo3) as tjuo3_alias USING (c2);
+c2	pk	c1	pk	pk
+21	7	11	4	1
+22	8	12	5	2
+23	9	13	6	3
+SELECT * FROM  (SELECT * FROM tjuo1) tjuo1_alias RIGHT JOIN tjuo2  USING (c1) RIGHT JOIN (SELECT * FROM tjuo3) as tjuo3_alias USING (c2);
+c2	pk	c1	pk	pk
+21	7	11	4	1
+22	8	12	5	2
+23	9	13	6	3
+SELECT * FROM  (SELECT c2 FROM tjuo1 as i1 JOIN (SELECT * FROM tjuo2) as i2 USING (c1) ) as t12 RIGHT JOIN (SELECT * FROM tjuo3) as tjuo3_alias USING (c2);
+c2	pk
+21	7
+22	8
+23	9
+SELECT * FROM  (SELECT c2 FROM tjuo1 as i1 JOIN (SELECT * FROM tjuo2) as i2 USING (c1) ) as t12;
+c2
+21
+22
+23
+drop table tjuo1, tjuo2, tjuo3;

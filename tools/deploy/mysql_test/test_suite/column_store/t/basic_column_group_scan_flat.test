@@ -1,0 +1,145 @@
+# owner: yuxiaozhe.yxz
+# owner group: storage
+# description: execute query whith filter by scanning columnar store
+
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+connection conn1;
+
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+set @@recyclebin = off;
+--enable_query_log
+
+--disable_warnings
+drop table if exists ct1;
+--enable_warnings
+set session ob_trx_timeout=100000000000;
+create table ct1(c1 int primary key, c2 int, c3 number, c4 varchar(60000), c5 varchar(60000)) ROW_FORMAT = redundant COMPRESSION = 'none' with column group for all columns, each column;
+
+--disable_query_log
+--let $count = 0
+while($count < 1000)
+{
+   eval insert into ct1 values($count * 10, $count * 10, $count * 10, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 1, $count * 10 + 1, $count * 10 + 1, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 2, $count * 10 + 2, $count * 10 + 2, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 3, $count * 10 + 3, $count * 10 + 3, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 4, $count * 10 + 4, $count * 10 + 4, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 5, $count * 10 + 5, $count * 10 + 5, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 6, $count * 10 + 6, $count * 10 + 6, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 7, $count * 10 + 7, $count * 10 + 7, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 8, $count * 10 + 8, $count * 10 + 8, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 9, $count * 10 + 9, $count * 10 + 9, repeat(md5(rand()), 100), repeat(md5(rand()), 100));
+
+  --inc $count
+}
+--enable_query_log
+
+connection default;
+alter system minor freeze;
+--source mysql_test/include/wait_minor_merge.inc
+
+alter system major freeze;
+--source mysql_test/include/wait_daily_merge.inc
+
+connection conn1;
+select c1, c2, c3, length(c4) from ct1 where c1 < 1;
+select c1, c2, c3, length(c4) from ct1 where c1 < 10;
+select c1, c2, c3, length(c4) from ct1 where c1 > 10000;
+select c1, c2, c3, length(c4) from ct1 where c2 < 1;
+select c1, c2, c3, length(c4) from ct1 where c2 < 10;
+select c1, c2, c3, length(c4) from ct1 where c2 > 10000;
+select c1, c2, c3, length(c4) from ct1 where c1 + c2 <= 100 and c2 < 20;
+select c1, c2, c3, length(c4) from ct1 where c1 + c2 <= 100 or c2 < 20;
+
+select c1, c2, c3, length(c4) from ct1 where c1 < 1 order by c1 desc;
+select c1, c2, c3, length(c4) from ct1 where c1 < 10 order by c1 desc;
+select c1, c2, c3, length(c4) from ct1 where c1 > 10000 order by c1 desc;
+select c1, c2, c3, length(c4) from ct1 where c2 < 1 order by c1 desc;
+select c1, c2, c3, length(c4) from ct1 where c2 < 10 order by c1 desc;
+select c1, c2, c3, length(c4) from ct1 where c2 > 10000 order by c1 desc;
+select c1, c2, c3, length(c4) from ct1 where c1 + c2 <= 100 and c2 < 20 order by c1 desc;
+select c1, c2, c3, length(c4) from ct1 where c1 + c2 <= 100 or c2 < 20 order by c1 desc;
+
+select c1, c2, c3, length(c4) from ct1 where c5 is null;
+select c1, c2, c3, length(c4), length(c5) from ct1 limit 20;
+select c1, c2, c3, length(c4), length(c5) from ct1 limit 20 offset 5000;
+select c1, c2, c3, length(c4), length(c5) from ct1 order by c1 desc limit 20;
+select c1, c2, c3, length(c4), length(c5) from ct1 order by c1 desc limit 20 offset 5000;
+
+select c1, c2, c3, length(c4) from ct1 where (c1 < 100 and c1 < 20 and c3 < 10) or ((c1 + c2) < 100 and c3 < 10 and (c1 + c2) >= 0);
+
+# insert 1000 rows in minor
+--disable_query_log
+while($count < 1100)
+{
+   eval insert into ct1 values($count * 10, $count * 10, $count * 10, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 1, $count * 10 + 1, $count * 10 + 1, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 2, $count * 10 + 2, $count * 10 + 2, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 3, $count * 10 + 3, $count * 10 + 3, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 4, $count * 10 + 4, $count * 10 + 4, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 5, $count * 10 + 5, $count * 10 + 5, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 6, $count * 10 + 6, $count * 10 + 6, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 7, $count * 10 + 7, $count * 10 + 7, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 8, $count * 10 + 8, $count * 10 + 8, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 9, $count * 10 + 9, $count * 10 + 9, repeat(md5(rand()), 100), repeat(md5(rand()), 100));
+
+  --inc $count
+}
+--enable_query_log
+
+connection default;
+alter system minor freeze;
+--source mysql_test/include/wait_minor_merge.inc
+
+# insert 1000 rows in memtable
+connection conn1;
+--disable_query_log
+while($count < 1200)
+{
+   eval insert into ct1 values($count * 10, $count * 10, $count * 10, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 1, $count * 10 + 1, $count * 10 + 1, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 2, $count * 10 + 2, $count * 10 + 2, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 3, $count * 10 + 3, $count * 10 + 3, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 4, $count * 10 + 4, $count * 10 + 4, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 5, $count * 10 + 5, $count * 10 + 5, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 6, $count * 10 + 6, $count * 10 + 6, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 7, $count * 10 + 7, $count * 10 + 7, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 8, $count * 10 + 8, $count * 10 + 8, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 9, $count * 10 + 9, $count * 10 + 9, repeat(md5(rand()), 100), repeat(md5(rand()), 100));
+
+  --inc $count
+}
+--enable_query_log
+
+select c1, c2, c3, length(c4) from ct1 where c1 < 1;
+select c1, c2, c3, length(c4) from ct1 where c1 < 10;
+select c1, c2, c3, length(c4) from ct1 where c1 > 10000 limit 10;
+select c1, c2, c3, length(c4) from ct1 where c2 < 1;
+select c1, c2, c3, length(c4) from ct1 where c2 < 10;
+select c1, c2, c3, length(c4) from ct1 where c2 > 10000 limit 10;
+select c1, c2, c3, length(c4) from ct1 where c1 + c2 <= 100 and c2 < 20;
+select c1, c2, c3, length(c4) from ct1 where c1 + c2 <= 100 or c2 < 20;
+
+select c1, c2, c3, length(c4) from ct1 where c1 < 1 order by c1 desc;
+select c1, c2, c3, length(c4) from ct1 where c1 < 10 order by c1 desc;
+select c1, c2, c3, length(c4) from ct1 where c1 > 10000 order by c1 desc limit 10;
+select c1, c2, c3, length(c4) from ct1 where c2 < 1 order by c1 desc;
+select c1, c2, c3, length(c4) from ct1 where c2 < 10 order by c1 desc;
+select c1, c2, c3, length(c4) from ct1 where c2 > 10000 order by c1 desc limit 10;
+select c1, c2, c3, length(c4) from ct1 where c1 + c2 <= 100 and c2 < 20 order by c1 desc;
+select c1, c2, c3, length(c4) from ct1 where c1 + c2 <= 100 or c2 < 20 order by c1 desc;
+
+select c1, c2, c3, length(c4) from ct1 where c5 is null;
+select c1, c2, c3, length(c4), length(c5) from ct1 limit 20;
+select c1, c2, c3, length(c4), length(c5) from ct1 limit 20 offset 5000;
+select c1, c2, c3, length(c4), length(c5) from ct1 order by c1 desc limit 20;
+select c1, c2, c3, length(c4), length(c5) from ct1 order by c1 desc limit 20 offset 5000;
+
+
+drop table ct1;
+
+--disable_query_log
+set @@recyclebin = on;
+--enable_query_log

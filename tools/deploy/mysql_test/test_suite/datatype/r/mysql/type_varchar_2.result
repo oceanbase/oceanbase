@@ -1,0 +1,186 @@
+drop table if exists t1, t2;
+create table t1 (pk int primary key, v varchar(254));
+insert into t1 values (1, 'This is a test ');
+insert into t1 values (2, 'Some sample data');
+insert into t1 values (3, ' garbage ');
+insert into t1 values (4, ' This is a test ');
+insert into t1 values (5, 'This is a test');
+insert into t1 values (6, 'Hello world');
+insert into t1 values (7, 'Foo bar');
+insert into t1 values (8, 'This is a test');
+insert into t1 values (9, 'MySQL varchar test');
+insert into t1 values (10, 'test MySQL varchar');
+insert into t1 values (11, 'This is a long string to have some random length data included');
+insert into t1 values (12, 'Short string');
+insert into t1 values (13, 'VSS');
+insert into t1 values (14, 'Some samples');
+insert into t1 values (15, 'Bar foo');
+insert into t1 values (16, 'Bye');
+select * from t1 where v like 'This is a test' order by v;
+pk	v
+5	This is a test
+8	This is a test
+select * from t1 where v='This is a test' order by v;
+pk	v
+1	This is a test 
+5	This is a test
+8	This is a test
+select * from t1 where v like 'S%' order by v;
+pk	v
+12	Short string
+2	Some sample data
+14	Some samples
+select * from t1 where v like 'This is a test' order by v;
+pk	v
+5	This is a test
+8	This is a test
+select * from t1 where v='This is a test' order by v;
+pk	v
+1	This is a test 
+5	This is a test
+8	This is a test
+select * from t1 where v like 'S%' order by v;
+pk	v
+12	Short string
+2	Some sample data
+14	Some samples
+select * from t1 where v like 'This is a test' order by v;
+pk	v
+5	This is a test
+8	This is a test
+select * from t1 where v='This is a test' order by v;
+pk	v
+1	This is a test 
+5	This is a test
+8	This is a test
+select * from t1 where v like 'S%' order by v;
+pk	v
+12	Short string
+2	Some sample data
+14	Some samples
+select * from t1 where v like 'This is a test' order by v;
+pk	v
+5	This is a test
+8	This is a test
+select * from t1 where v='This is a test' order by v;
+pk	v
+1	This is a test 
+5	This is a test
+8	This is a test
+select * from t1 where v like 'S%' order by v;
+pk	v
+12	Short string
+2	Some sample data
+14	Some samples
+select * from t1 where v like 'This is a test' order by v;
+pk	v
+5	This is a test
+8	This is a test
+select * from t1 where v='This is a test' order by v;
+pk	v
+1	This is a test 
+5	This is a test
+8	This is a test
+select * from t1 where v like 'S%' order by v;
+pk	v
+12	Short string
+2	Some sample data
+14	Some samples
+select * from t1 where v like 'This is a test' order by v;
+pk	v
+5	This is a test
+8	This is a test
+select * from t1 where v='This is a test' order by v;
+pk	v
+1	This is a test 
+5	This is a test
+8	This is a test
+select * from t1 where v like 'S%' order by v;
+pk	v
+12	Short string
+2	Some sample data
+14	Some samples
+select * from t1 where v like 'This is a test' order by v;
+pk	v
+5	This is a test
+8	This is a test
+select * from t1 where v='This is a test' order by v;
+pk	v
+1	This is a test 
+5	This is a test
+8	This is a test
+select * from t1 where v like 'S%' order by v;
+pk	v
+12	Short string
+2	Some sample data
+14	Some samples
+select * from t1 where v like 'This is a test' order by v;
+pk	v
+5	This is a test
+8	This is a test
+select * from t1 where v='This is a test' order by v;
+pk	v
+1	This is a test 
+5	This is a test
+8	This is a test
+select * from t1 where v like 'S%' order by v;
+pk	v
+12	Short string
+2	Some sample data
+14	Some samples
+select * from t1 where v like 'This is a test' order by v;
+pk	v
+5	This is a test
+8	This is a test
+select * from t1 where v='This is a test' order by v;
+pk	v
+1	This is a test 
+5	This is a test
+8	This is a test
+select * from t1 where v like 'S%' order by v;
+pk	v
+12	Short string
+2	Some sample data
+14	Some samples
+select * from t1 where v like 'This is a test' order by v;
+pk	v
+5	This is a test
+8	This is a test
+select * from t1 where v='This is a test' order by v;
+pk	v
+1	This is a test 
+5	This is a test
+8	This is a test
+select * from t1 where v like 'S%' order by v;
+pk	v
+12	Short string
+2	Some sample data
+14	Some samples
+select * from t1 where v like 'This is a test' order by v;
+pk	v
+5	This is a test
+8	This is a test
+select * from t1 where v='This is a test' order by v;
+pk	v
+1	This is a test 
+5	This is a test
+8	This is a test
+select * from t1 where v like 'S%' order by v;
+pk	v
+12	Short string
+2	Some sample data
+14	Some samples
+select * from t1 where v like 'This is a test' order by v;
+pk	v
+5	This is a test
+8	This is a test
+select * from t1 where v='This is a test' order by v;
+pk	v
+1	This is a test 
+5	This is a test
+8	This is a test
+select * from t1 where v like 'S%' order by v;
+pk	v
+12	Short string
+2	Some sample data
+14	Some samples

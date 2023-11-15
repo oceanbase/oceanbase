@@ -1,0 +1,212 @@
+#owner: chaser.ch
+#group: storage2
+
+#### bulk insert with space
+--disable_warnings
+drop table if exists t;
+--enable_warnings
+
+create table t (a char(10) not null);
+insert into t values('b'),('b ');
+select hex(a) from t;
+insert into t values('b '),('b');
+select hex(a) from t;
+drop table t;
+
+#
+# prepare basic data for big table
+#
+--disable_warnings
+drop table if exists test_bulk, test_bulk_prefix;
+--enable_warnings
+create table test_bulk(a int, b int, c int, d int, primary key(a, b)) row_format = redundant;
+create table test_bulk_prefix(a int, b int, c int, d int, primary key(a, b, c, d)) row_format = redundant;
+
+--let $insert_sql_prefix=insert into test_bulk values
+--let $value=(0,0,0,0)
+--let $loop=600
+while($loop > 0)
+{
+    --let $value=$value,($loop,11,1,1)
+    dec $loop;
+}
+
+--let $insert_sql_prefix=$insert_sql_prefix$value
+
+
+--let $loop=100
+while($loop > 0)
+{
+  eval insert into test_bulk values ($loop,1,1,1), ($loop,2,1,1), ($loop,3,1,1), ($loop,4,1,1), ($loop,5,1,1), ($loop,6,1,1), ($loop,7,1,1), ($loop,8,1,1), ($loop,9,1,1), ($loop,10,1,1);
+  eval insert into test_bulk_prefix values ($loop,1,1,1), ($loop,2,2,2), ($loop,3,3,3), ($loop,4,4,4), ($loop,5,5,5), ($loop,6,6,6), ($loop,7,7,7), ($loop,8,8,8), ($loop,9,9,9), ($loop,10,10,10);
+  dec $loop;
+}
+
+--let $loop=9
+# memtable values duplicate
+--error 1062
+eval insert into test_bulk values ($loop,$loop,1,1);
+--error 1062
+eval insert into test_bulk values ($loop,11,1,1),($loop,$loop,1,1);
+--error 1062
+eval insert into test_bulk values ($loop,11,1,1), ($loop,12,1,1), ($loop,13,1,1), ($loop,14,1,1), ($loop,15,1,1), ($loop,16,1,1), ($loop,17,1,1), ($loop,18,1,1), ($loop,19,1,1), ($loop,$loop,1,1);
+# prefix exist with memtable duplicate
+--error 1062
+eval insert into test_bulk_prefix values ($loop, $loop, $loop, 1),($loop, $loop, $loop, 2),($loop, $loop, $loop, 3),($loop, $loop, $loop, 4),($loop, $loop, $loop, 5),($loop, $loop, $loop, 6),($loop, $loop, $loop, 7),($loop, $loop, $loop, 8),($loop, $loop, $loop, 9),($loop, $loop, $loop, 10);
+
+# major freeze for baseline data
+alter system major freeze;
+--source mysql_test/include/wait_daily_merge.inc
+
+# bulk insert with error
+--let $loop=5
+while($loop > 0)
+{
+  # values duplicate
+  --error 1062
+  eval insert into test_bulk values ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1);
+  # major values duplicate
+  --error 1062
+  eval insert into test_bulk values ($loop,$loop,1,1);
+  --error 1062
+  eval insert into test_bulk values ($loop,11,1,1),($loop,$loop,1,1);
+  --error 1062
+  eval insert into test_bulk values ($loop,11,1,1), ($loop,12,1,1), ($loop,13,1,1), ($loop,14,1,1), ($loop,15,1,1), ($loop,16,1,1), ($loop,17,1,1), ($loop,18,1,1), ($loop,19,1,1), ($loop,$loop,1,1);
+  # prefix exist with duplicate
+  --error 1062
+  eval insert into test_bulk_prefix values ($loop, $loop, $loop, 1),($loop, $loop, $loop, 2),($loop, $loop, $loop, 3),($loop, $loop, $loop, 4),($loop, $loop, $loop, 5),($loop, $loop, $loop, 6),($loop, $loop, $loop, 7),($loop, $loop, $loop, 8),($loop, $loop, $loop, 9),($loop, $loop, $loop, 10);
+  dec $loop;
+}
+
+--let $insert_sql=$insert_sql_prefix,(50,1,1,1)
+--disable_query_log
+--error 1062
+eval $insert_sql;
+--enable_query_log
+
+# prepare data for minor merge
+--let $loop=150
+while($loop > 130)
+{
+  eval insert into test_bulk values ($loop,1,1,1), ($loop,2,1,1), ($loop,3,1,1), ($loop,4,1,1), ($loop,5,1,1), ($loop,6,1,1), ($loop,7,1,1), ($loop,8,1,1), ($loop,9,1,1), ($loop,10,1,1);
+  # prefix not exist
+  eval insert into test_bulk_prefix values ($loop, $loop, $loop, 1),($loop, $loop, $loop, 2),($loop, $loop, $loop, 3),($loop, $loop, $loop, 4),($loop, $loop, $loop, 5),($loop, $loop, $loop, 6),($loop, $loop, $loop, 7),($loop, $loop, $loop, 8),($loop, $loop, $loop, 9),($loop, $loop, $loop, 10);
+  dec $loop;
+}
+
+set ob_query_timeout=100000000;
+alter system minor freeze;
+--source mysql_test/include/wait_minor_merge.inc
+
+# bulk insert with error
+--let $loop=140
+--let $loop2=10
+while($loop > 135)
+{
+  # values duplicate
+  --error 1062
+  eval insert into test_bulk values ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1);
+  # minor values duplicate
+  --error 1062
+  eval insert into test_bulk values ($loop,11,1,1), ($loop,12,1,1), ($loop,13,1,1), ($loop,14,1,1), ($loop,15,1,1), ($loop,16,1,1), ($loop,17,1,1), ($loop,18,1,1), ($loop,19,1,1), ($loop,$loop2,1,1);
+  # major values duplicate
+  --error 1062
+  eval insert into test_bulk values ($loop2,11,1,1), ($loop2,12,1,1), ($loop2,13,1,1), ($loop2,14,1,1), ($loop2,15,1,1), ($loop2,$loop2,1,1), ($loop2,17,1,1), ($loop2,18,1,1), ($loop2,19,1,1), ($loop2,20,1,1);
+  # prefix exist with duplicate
+  --error 1062
+  eval insert into test_bulk_prefix values ($loop, $loop, $loop, 1),($loop, $loop, $loop, 2),($loop, $loop, $loop, 3),($loop, $loop, $loop, 4),($loop, $loop, $loop, 5),($loop, $loop, $loop, 6),($loop, $loop, $loop, 7),($loop, $loop, $loop, 8),($loop, $loop, $loop, 9),($loop, $loop, $loop, 10);
+  dec $loop;
+  dec $loop2;
+}
+
+--let $insert_sql=$insert_sql_prefix,(140,1,1,1)
+--disable_query_log
+--error 1062
+eval $insert_sql;
+--enable_query_log
+
+# prepare data for minor merge
+--let $loop=200
+while($loop > 180)
+{
+  eval insert into test_bulk values ($loop,1,1,1), ($loop,2,1,1), ($loop,3,1,1), ($loop,4,1,1), ($loop,5,1,1), ($loop,6,1,1), ($loop,7,1,1), ($loop,8,1,1), ($loop,9,1,1), ($loop,10,1,1);
+  # prefix exist without duplicate
+  eval insert into test_bulk_prefix values ($loop, $loop, $loop, 1),($loop, $loop, $loop, 2),($loop, $loop, $loop, 3),($loop, $loop, $loop, 4),($loop, $loop, $loop, 5),($loop, $loop, $loop, 6),($loop, $loop, $loop, 7),($loop, $loop, $loop, 8),($loop, $loop, $loop, 9),($loop, $loop, $loop, 10);
+  dec $loop;
+}
+
+# bulk insert with error
+--let $loop=190
+--let $loop2=140
+--let $loop3=50
+--let $loop4=10
+while($loop > 185)
+{
+  # values duplicate
+  --error 1062
+  eval insert into test_bulk values ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1);
+  # memtable values duplicate
+  --error 1062
+  eval insert into test_bulk values ($loop,11,1,1), ($loop,12,1,1), ($loop,13,1,1), ($loop,14,1,1), ($loop,15,1,1), ($loop,16,1,1), ($loop,17,1,1), ($loop,18,1,1), ($loop,19,1,1), ($loop,$loop4,1,1);
+  # minor values duplicate
+  --error 1062
+  eval insert into test_bulk values ($loop2,11,1,1), ($loop2,12,1,1), ($loop2,13,1,1), ($loop2,$loop4,1,1), ($loop2,15,1,1), ($loop2,16,1,1), ($loop2,17,1,1), ($loop2,18,1,1), ($loop2,19,1,1), ($loop2,20,1,1);
+  # major values duplicate
+  --error 1062
+  eval insert into test_bulk values ($loop3,11,1,1), ($loop3,12,1,1), ($loop3,13,1,1), ($loop3,14,1,1), ($loop3,15,1,1), ($loop3,$loop3,1,1), ($loop3,17,1,1), ($loop3,$loop4,1,1), ($loop3,19,1,1), ($loop3,20,1,1);
+  dec $loop;
+  dec $loop2;
+  dec $loop3;
+  dec $loop4;
+}
+
+--let $insert_sql=$insert_sql_prefix,(190,1,1,1)
+--disable_query_log
+--error 1062
+eval $insert_sql;
+--enable_query_log
+
+# delete some data
+delete from test_bulk where a = 170;
+delete from test_bulk where a = 90;
+
+# bulk insert with error
+--let $loop=185
+--let $loop2=140
+--let $loop3=50
+--let $loop4=10
+while($loop > 180)
+{
+  # values duplicate
+  --error 1062
+  eval insert into test_bulk values ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1), ($loop,$loop,1,1);
+  # memtable values duplicate
+  --error 1062
+  eval insert into test_bulk values (90,1,1,1), (90,2,1,1), (90,3,1,1), (90,4,1,1), (90,5,1,1), (90,6,1,1), (90,7,1,1), (90,8,1,1), (90,9,1,1), (90,10,1,1), ($loop,11,1,1), ($loop,12,1,1), ($loop,13,1,1), ($loop,14,1,1), ($loop,15,1,1), ($loop,16,1,1), ($loop,17,1,1), ($loop,18,1,1), ($loop,19,1,1), ($loop,$loop4,1,1);
+  --error 1062
+  eval insert into test_bulk values (170,1,1,1), (170,2,1,1), (170,3,1,1), (170,4,1,1), (170,5,1,1), (170,6,1,1), (170,7,1,1), (170,8,1,1), (170,9,1,1), (170,10,1,1), ($loop,11,1,1), ($loop,12,1,1), ($loop,13,1,1), ($loop,14,1,1), ($loop,15,1,1), ($loop,16,1,1), ($loop,17,1,1), ($loop,18,1,1), ($loop,19,1,1), ($loop,$loop4,1,1);
+  # minor values duplicate
+  --error 1062
+  eval insert into test_bulk values (90,1,1,1), (90,2,1,1), (90,3,1,1), (90,4,1,1), (90,5,1,1), (90,6,1,1), (90,7,1,1), (90,8,1,1), (90,9,1,1), (90,10,1,1), ($loop2,11,1,1), ($loop2,12,1,1), ($loop2,13,1,1), ($loop2,$loop4,1,1), ($loop2,15,1,1), ($loop2,16,1,1), ($loop2,17,1,1), ($loop2,18,1,1), ($loop2,19,1,1), ($loop2,20,1,1);
+  --error 1062
+  eval insert into test_bulk values (170,1,1,1), (170,2,1,1), (170,3,1,1), (170,4,1,1), (170,5,1,1), (170,6,1,1), (170,7,1,1), (170,8,1,1), (170,9,1,1), (170,10,1,1), ($loop2,11,1,1), ($loop2,12,1,1), ($loop2,13,1,1), ($loop2,$loop4,1,1), ($loop2,15,1,1), ($loop2,16,1,1), ($loop2,17,1,1), ($loop2,18,1,1), ($loop2,19,1,1), ($loop2,20,1,1);
+  # major values duplicate
+  --error 1062
+  eval insert into test_bulk values (90,1,1,1), (90,2,1,1), (90,3,1,1), (90,4,1,1), (90,5,1,1), (90,6,1,1), (90,7,1,1), (90,8,1,1), (90,9,1,1), (90,10,1,1), ($loop3,11,1,1), ($loop3,12,1,1), ($loop3,13,1,1), ($loop3,14,1,1), ($loop3,15,1,1), ($loop3,$loop3,1,1), ($loop3,17,1,1), ($loop3,$loop4,1,1), ($loop3,19,1,1), ($loop3,20,1,1);
+  --error 1062
+  eval insert into test_bulk values (170,1,1,1), (170,2,1,1), (170,3,1,1), (170,4,1,1), (170,5,1,1), (170,6,1,1), (170,7,1,1), (170,8,1,1), (170,9,1,1), (170,10,1,1), ($loop3,11,1,1), ($loop3,12,1,1), ($loop3,13,1,1), ($loop3,14,1,1), ($loop3,15,1,1), ($loop3,$loop3,1,1), ($loop3,17,1,1), ($loop3,$loop4,1,1), ($loop3,19,1,1), ($loop3,20,1,1);
+  dec $loop;
+  dec $loop2;
+  dec $loop3;
+  dec $loop4;
+}
+
+--let $insert_sql=$insert_sql_prefix,(90,1,1,1),(90,2,1,1),(90,3,1,1),(90,4,1,1),(90,5,1,1),(170,6,1,1),(170,7,1,1),(170,8,1,1),(170,9,1,1),(170,10,1,1),(150,1,1,1)
+--disable_query_log
+--error 1062
+eval $insert_sql;
+--enable_query_log
+
+--disable_warnings
+drop table if exists t;
+--enable_warnings

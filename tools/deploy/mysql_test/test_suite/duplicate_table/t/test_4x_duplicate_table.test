@@ -1,0 +1,264 @@
+# owner: weixiaoxian.wxx
+# owner group: transaction
+# test_no: 04001
+# tags: 4.x dup table
+# description: test 4.x basic dup table read write, test case same as "test_duplicate_table.test"
+
+## build connect
+connect (obsys, $OBMYSQL_MS0, root@sys, "", oceanbase, $OBMYSQL_PORT);
+######## create duptable tenant
+connection obsys;
+--disable_warnings
+--disable_query_log
+--source mysql_test/include/check_tenant_sync.inc
+--enable_query_log
+--enable_warnings
+
+####### begin test dup table
+connect (conn0,$OBMYSQL_MS0,root@mysql,,test,$OBMYSQL_PORT);
+connect (conn1,$OBMYSQL_MS0,root@mysql,,test,$OBMYSQL_PORT);
+
+connection conn0;
+--disable_warnings
+drop database if exists duptable_database; 
+create database duptable_database;
+use duptable_database;
+--error 0,942
+drop table if exists t1;
+--error 0,942
+drop table if exists t2;
+--error 0,942
+drop table if exists dup_t1;
+--error 0,942
+drop table if exists dup_t2;
+--enable_warnings
+
+## create dup table
+create table dup_t1 (c1 int, c2 int, c3 int, primary key(c1, c2)) duplicate_scope='cluster';
+create table dup_t2 (d1 int, d2 int, d3 int, primary key(d1, d2)) duplicate_scope='cluster';
+
+## create table
+create table t1 (c1 int, c2 int, c3 int, primary key(c1, c2));
+create table t2 (d1 int, d2 int, d3 int, primary key(d1, d2));
+
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table t1;
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table t2;
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table dup_t1;
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table dup_t2;
+
+insert into t1 values(1, 1, 1);
+insert into t1 values(2, 2, 2);
+insert into t1 values(3, 3, 3);
+insert into t2 values(1, 1, 1);
+insert into t2 values(2, 2, 2);
+insert into t2 values(4, 4, 4);
+
+insert into dup_t1 select * from t1;
+insert into dup_t2 select * from t2;
+
+select * from t1;
+select * from dup_t1;
+select * from t2;
+select * from dup_t2;
+
+sleep 15;
+
+connection obsys;
+let $tenant_id = query_get_value(select tenant_id from __all_tenant where tenant_name = 'mysql', tenant_id, 1);
+let $database_id = query_get_value(select database_id from __all_virtual_database where database_name = 'duptable_database' and tenant_id = $tenant_id, database_id, 1); 
+
+## check duplicate scope
+--disable_query_log
+eval select duplicate_scope from __all_virtual_table  where table_name = 'dup_t1' and tenant_id = $tenant_id and database_id = $database_id;
+eval select duplicate_scope from __all_virtual_table  where table_name = 'dup_t2' and tenant_id = $tenant_id and database_id = $database_id;
+eval select duplicate_scope from __all_virtual_table  where table_name = 't1' and tenant_id = $tenant_id and database_id = $database_id;
+eval select duplicate_scope from __all_virtual_table  where table_name = 't2' and tenant_id = $tenant_id and database_id = $database_id;
+--enable_query_log
+
+--echo 准备: 将复制表的leader和普通表的leader分开
+
+## get table id
+let $t1_table_id = query_get_value(select table_id from __all_virtual_table where table_name = 't1' and tenant_id = $tenant_id and database_id = $database_id, table_id, 1);
+let $t2_table_id = query_get_value(select table_id from __all_virtual_table where table_name = 't2' and tenant_id = $tenant_id and database_id = $database_id, table_id, 1);
+let $dup_t1_table_id = query_get_value(select table_id from __all_virtual_table where table_name = 'dup_t1' and tenant_id = $tenant_id and database_id = $database_id, table_id, 1);
+let $dup_t2_table_id = query_get_value(select table_id from __all_virtual_table where table_name = 'dup_t2' and tenant_id = $tenant_id and database_id = $database_id, table_id, 1);
+
+## get ls id of dup table
+let $dup_t1_ls_id = query_get_value(select LS_ID from __all_virtual_tablet_to_ls  where table_id = $dup_t1_table_id and tenant_id = $tenant_id, LS_ID, 1);
+let $dup_t2_ls_id = query_get_value(select LS_ID from __all_virtual_tablet_to_ls  where table_id = $dup_t2_table_id and tenant_id = $tenant_id, LS_ID, 1);
+
+## get the ip:port of dup table follower 
+let $dup_t1_follow_ip = query_get_value(select SVR_IP from __all_virtual_ls_info where tenant_id = $tenant_id and ls_id = $dup_t1_ls_id and ls_state = 'FOLLOWER' ORDER BY SVR_PORT, SVR_IP, 1);
+let $dup_t1_follow_port = query_get_value(select SVR_PORT from __all_virtual_ls_info where tenant_id = $tenant_id and ls_id = $dup_t1_ls_id and ls_state = 'FOLLOWER' ORDER BY SVR_PORT, SVR_PORT, 1);
+
+let $dup_t2_follow_ip = query_get_value(select SVR_IP from  __all_virtual_ls_info where tenant_id = $tenant_id and ls_state = 'FOLLOWER' and ls_id = $dup_t2_ls_id ORDER BY SVR_PORT, SVR_IP, 1);
+let $dup_t2_follow_port = query_get_value(select SVR_PORT from  __all_virtual_ls_info where tenant_id = $tenant_id and ls_state = 'FOLLOWER' and ls_id = $dup_t2_ls_id ORDER BY SVR_PORT, SVR_PORT, 1);
+
+## get the ip:port of dup table leader
+let $dup_t1_leader_ip = query_get_value(select SVR_IP from  __all_virtual_ls_info where tenant_id = $tenant_id and ls_state = 'LEADER' and ls_id = $dup_t1_ls_id, SVR_IP, 1);
+let $dup_t1_leader_port = query_get_value(select SVR_PORT from __all_virtual_ls_info where tenant_id = $tenant_id and ls_state = 'LEADER' and ls_id = $dup_t1_ls_id, SVR_PORT, 1);
+
+let $dup_t2_leader_ip = query_get_value(select SVR_IP from __all_virtual_ls_info where tenant_id = $tenant_id and ls_state = 'LEADER' and ls_id = $dup_t2_ls_id, SVR_IP, 1);
+let $dup_t2_leader_port = query_get_value(select SVR_PORT from __all_virtual_ls_info where tenant_id = $tenant_id and ls_state = 'LEADER' and ls_id = $dup_t2_ls_id, SVR_PORT, 1);
+
+## switch leader to dup table follower server
+--disable_query_log
+eval alter system switch replica leader ls=$dup_t1_ls_id server='$dup_t1_follow_ip:$dup_t1_follow_port' tenant='mysql';
+eval alter system switch replica leader ls=$dup_t2_ls_id server='$dup_t2_follow_ip:$dup_t2_follow_port' tenant='mysql';
+--enable_query_log
+
+## sleep 20s wait for switch 
+sleep 20;
+
+## check switch leader succ
+--disable_query_log
+eval select ls_state from __all_virtual_ls_info where ls_id = $dup_t1_ls_id and SVR_IP = '$dup_t1_follow_ip' and SVR_PORT = '$dup_t1_follow_port' and tenant_id = $tenant_id;
+eval select ls_state from __all_virtual_ls_info where ls_id = $dup_t2_ls_id and SVR_IP = '$dup_t2_follow_ip' and SVR_PORT = '$dup_t2_follow_port' and tenant_id = $tenant_id;
+--enable_query_log
+
+--echo t1 语句查询普通表和复制表的场景
+connection conn0;
+select * from t1, dup_t1 where t1.c1 = dup_t1.c1;
+select * from t2, dup_t2 where t2.d1 = dup_t2.d1;
+
+--echo t2 复制表插入然后再做多表查询
+begin;
+insert into dup_t1 values (11, 11, 11);
+insert into dup_t2 values (11, 11, 11);
+select * from dup_t1, dup_t2 where dup_t1.c1 = dup_t2.d1;
+select * from dup_t1, t1 where dup_t1.c1 = t1.c1;
+select * from dup_t2, t2 where dup_t2.d1 = t2.d1;
+commit;
+
+--echo t3 复制表先查询，在做插入
+begin;
+select * from dup_t1, dup_t2 where dup_t1.c1 = dup_t2.d1;
+select * from dup_t1, t1 where dup_t1.c1 = t1.c1;
+select * from dup_t2, t2 where dup_t2.d1 = t2.d1;
+insert into dup_t1 values (22, 22, 22);
+insert into dup_t2 values (22, 22, 22);
+commit;
+
+--echo t4 复制表先查询，后插入，再查询
+begin;
+select * from dup_t1, dup_t2 where dup_t1.c1 = dup_t2.d1;
+select * from dup_t1, t1 where dup_t1.c1 = t1.c1;
+select * from dup_t2, t2 where dup_t2.d1 = t2.d1;
+insert into dup_t1 values (33, 33, 33);
+insert into dup_t2 values (33, 33, 33);
+insert into t1 values (33, 33, 33);
+insert into t2 values (33, 33, 33);
+select * from dup_t1, dup_t2 where dup_t1.c1 = dup_t2.d1;
+select * from dup_t1, t1 where dup_t1.c1 = t1.c1;
+select * from dup_t2, t2 where dup_t2.d1 = t2.d1;
+commit;
+
+--echo t5 单表查询
+begin;
+select * from t1;
+select * from dup_t1;
+select * from t2;
+select * from dup_t2;
+commit;
+
+--echo t6 测试单分区事务在执行的过程中，查询复制表的场景
+begin;
+insert into t1 values(44, 44, 44);
+select * from t1;
+select * from dup_t1;
+commit;
+
+--echo t7 测试单分区事务在执行过程中，和复制表做join的场景
+begin;
+insert into t1 values(55, 55, 55);
+select * from t1, dup_t1 where t1.c1 = dup_t1.c1;
+commit;
+
+--echo 将普通表leader切回来
+connection obsys;
+--disable_query_log
+eval alter system switch replica leader ls=$dup_t1_ls_id server='$dup_t1_leader_ip:$dup_t1_leader_port' tenant='mysql';
+eval alter system switch replica leader ls=$dup_t2_ls_id server='$dup_t2_leader_ip:$dup_t2_leader_port' tenant='mysql';
+--enable_query_log
+
+sleep 20;
+
+## check switch leader succ
+--disable_query_log
+eval select ls_state from __all_virtual_ls_info where ls_id = $dup_t1_ls_id and SVR_IP = '$dup_t1_leader_ip' and SVR_PORT = '$dup_t1_leader_port' and tenant_id = $tenant_id;
+eval select ls_state from __all_virtual_ls_info where ls_id = $dup_t2_ls_id and SVR_IP = '$dup_t1_leader_ip' and SVR_PORT = '$dup_t2_leader_port' and tenant_id = $tenant_id;
+--enable_query_log
+
+connection conn1;
+use duptable_database;
+--echo t6 测试一阶段提交
+begin;
+insert into t1 values(66, 66, 66);
+insert into dup_t1 values(66, 66, 66);
+insert into t2 values(66, 66, 66);
+commit;
+select * from t1, dup_t1 where t1.c1 = dup_t1.c1;
+
+begin;
+insert into t1 values(77, 77, 77);
+select * from dup_t2;
+select * from t1, dup_t1 where t1.c1 = dup_t1.c1;
+insert into t2 values(77, 77, 77);
+select * from t2, dup_t2 where dup_t2.d1 = t2.d1;
+commit;
+
+connection conn0;
+use duptable_database;
+--disable_warnings
+--error 0,942
+drop table if exists tt2;
+--error 0,942
+drop table if exists dup2;
+--enable_warnings
+
+#
+#[复制表]使用insert into select 语句插入数据会进入重试死循环
+CREATE TABLE `tt2` (
+  `x` int(11) DEFAULT NULL,
+  `y` int(11) DEFAULT NULL
+) partition by hash(x) partitions 2;
+
+CREATE TABLE `dup2` (
+  `x` int(11) DEFAULT NULL,
+  `y` int(11) DEFAULT NULL
+) duplicate_scope='cluster';
+
+###此处应该连备机
+insert into tt2 values(1,2),(3,4);
+insert into dup2 select * from tt2;
+sleep 10;
+select * from dup2 order by 1;
+drop table if exists tt2;
+drop table if exists dup2;
+
+connection conn0;
+--disable_query_log
+
+--disable_warnings
+--error 0,942
+drop table if exists t1;
+--error 0,942
+drop table if exists t2;
+--error 0,942
+drop table if exists dup_t1;
+--error 0,942
+drop table if exists dup_t2;
+--error 0,942
+drop table if exists dup_t3;
+--enable_warnings
+drop database duptable_database;
+--enable_query_log
+
+disconnect conn0;
+disconnect conn1;
+disconnect obsys;
+

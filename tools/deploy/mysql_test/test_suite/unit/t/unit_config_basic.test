@@ -1,0 +1,322 @@
+#owner: wanhong.wwh
+#owner group: RS
+#tags: unit
+#description:
+# basic test for unit config
+# * create resource unit
+# * alter resource unit
+
+--disable_abort_on_error
+
+connect (sys,$OBMYSQL_MS0,root,,oceanbase,$OBMYSQL_PORT);
+
+connection sys;
+
+--disable_warnings
+drop resource unit if exists box_for_unit_config_test;
+
+###############
+--echo ============================ CREATE RESOURCE UNIT ============================
+# 1. 验证老版本参数不再生效，包括：MIN_MEMORY/MAX_MEMORY/MAX_DISK_SIZE/MAX_SESSION_NUM
+--echo ============================ 1. 验证老版本参数不再生效 ============================
+
+--error 1064
+create resource unit box_for_unit_config_test MIN_MEMORY='1G';
+--error 1064
+create resource unit box_for_unit_config_test MAX_MEMORY='1G';
+--error 1064
+create resource unit box_for_unit_config_test MAX_DISK_SIZE='1G';
+--error 1064
+create resource unit box_for_unit_config_test MAX_SESSION_NUM=64;
+
+# 2. 验证有效的参数: MAX_CPU/MIN_CPU/MEMORY_SIZE/LOG_DISK_SIZE/MIN_IOPS/MAX_IOPS/IOPS_WEIGHT
+# 2.1 必须参数：MAX_CPU/MEMORY_SIZE
+###############
+--echo ============================ 2. 验证有效参数 ============================
+--echo ======== 2.1 验证必须参数 MAX_CPU/MEMORY_SIZE
+--error 1210
+create resource unit box_for_unit_config_test MIN_CPU=1;
+--error 1210
+create resource unit box_for_unit_config_test MAX_CPU=1;
+
+###############
+--echo == 其他参数默认配置
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G';
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+drop resource unit box_for_unit_config_test;
+
+###############
+--echo ======== 2.2 验证可选参数
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MIN_CPU=1, LOG_DISK_SIZE = '2G', MIN_IOPS=1024, MAX_IOPS=1024, IOPS_WEIGHT=0;
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+drop resource unit box_for_unit_config_test;
+
+###############
+--echo ============================ 3. 验证各个参数默认值、最小值、取值范围 ============================
+--echo ======== 3.1 CPU: MAX_CPU >= MIN_CPU
+--error 1210
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MIN_CPU=2;
+
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MIN_CPU=1;
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+drop resource unit box_for_unit_config_test;
+
+###############
+--echo ======== IOPS是基于MIN_CPU来自动计算的，和MAX_CPU无关
+create resource unit box_for_unit_config_test MAX_CPU=10, MEMORY_SIZE='1G', MIN_CPU=1;
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+drop resource unit box_for_unit_config_test;
+
+###############
+--echo ======== 3.2 CPU: 最小值 1c, 支持number类型
+--error 4659
+create resource unit box_for_unit_config_test MAX_CPU=0.9, MEMORY_SIZE='1G';
+--error 4659
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MIN_CPU=0.5;
+--error 1210
+create resource unit box_for_unit_config_test MAX_CPU=0, MEMORY_SIZE='1G';
+--error 1210
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MIN_CPU=0;
+
+create resource unit box_for_unit_config_test MAX_CPU=1.9, MEMORY_SIZE='1G', MIN_CPU=1.1;
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+drop resource unit box_for_unit_config_test;
+
+###############
+--echo ======== 3.3 MEMORY: 最小值 '1G', 1073741824, 容量字符串强制带单位，不支持number类型
+--error 4659
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='999M';
+--error 4659
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE=1073741823;
+--error 1064
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1024';
+--error 1210
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE=1073741824.0;
+--error 1210
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE=0;
+
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1024M';
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+drop resource unit box_for_unit_config_test;
+
+###############
+--echo ======== 3.4 LOG_DISK_SIZE: 最小值 '2G', 2147483648，容量字符串强制带单位，不支持number类型
+--error 4659
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', LOG_DISK_SIZE='1G';
+--error 4659
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', LOG_DISK_SIZE=2147483647;
+--error 1064
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', LOG_DISK_SIZE='2048';
+--error 1210
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', LOG_DISK_SIZE=2147483648.0;
+--error 1210
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', LOG_DISK_SIZE=0;
+
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', LOG_DISK_SIZE='2048M';
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+drop resource unit box_for_unit_config_test;
+
+
+###############
+--echo ======== 3.4 IOPS: 最小值 1024, MAX_IOPS >= MIN_IOPS，不支持number类型
+--echo ========     IOPS_WEIGHT: 最小值 0
+--error 4659
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MAX_IOPS=1023;
+--error 4659
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MIN_IOPS=1023;
+--error 4659
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MAX_IOPS='1023';   # 整型字符串等价于整型
+--error 4659
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MIN_IOPS='1023';   # 整型字符串等价于整型
+--error 1210
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MAX_IOPS=1024.0;
+--error 1210
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MIN_IOPS=1024.0;
+--error 1210
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MIN_IOPS=0;
+--error 1210
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MAX_IOPS=0;
+
+###############
+--echo ======== 如果只指定了MAX_IOPS，那么: MIN_IOPS = MAX_IOPS, IOPS_WEIGHT=0
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MAX_IOPS='1024';   # 整型字符串等价于整型
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+drop resource unit box_for_unit_config_test;
+
+###############
+--echo ======== 如果只指定了MIN_IOPS, 那么：MAX_IOPS = MIN_IOPS, IOPS_WEIGHT=0
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MIN_IOPS=900000;   # 整型字符串等价于整型
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+drop resource unit box_for_unit_config_test;
+
+--error 1210
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MAX_IOPS=1024, MIN_IOPS=1025;   # 整型字符串等价于整型
+
+--error 1210
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', IOPS_WEIGHT=-1;
+
+--error 1210
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', IOPS_WEIGHT=0.0;
+
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', IOPS_WEIGHT='0';   # 整型字符串等价于整型
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+drop resource unit box_for_unit_config_test;
+
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', IOPS_WEIGHT='1000';   # 整型字符串等价于整型
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+drop resource unit box_for_unit_config_test;
+
+###############
+--echo ============================ ALTER RESOURCE UNIT ============================
+--echo ==== 验证各个参数是否可以正确被修改
+
+create resource unit box_for_unit_config_test MAX_CPU=1, MIN_CPU=1, MEMORY_SIZE='1G', LOG_DISK_SIZE='2G', MAX_IOPS=1024, MIN_IOPS=1024, IOPS_WEIGHT=0;
+
+###############
+--echo ====  全部指定
+alter resource unit box_for_unit_config_test MAX_CPU=20, MIN_CPU=10, MEMORY_SIZE='10G', LOG_DISK_SIZE='2G', MAX_IOPS=20480, MIN_IOPS=2048, IOPS_WEIGHT=10;
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+
+###############
+--echo ====  指定部分
+alter resource unit box_for_unit_config_test MAX_CPU=15;
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+
+alter resource unit box_for_unit_config_test MIN_CPU=11;
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+
+alter resource unit box_for_unit_config_test MEMORY_SIZE='15G';
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+
+alter resource unit box_for_unit_config_test MAX_IOPS=10000;
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+
+alter resource unit box_for_unit_config_test MIN_IOPS=5000;
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+
+alter resource unit box_for_unit_config_test IOPS_WEIGHT=0;
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+
+###############
+--echo ====   测试异常场景
+--echo ====   CPU: 最小值，MAX_CPU >= MIN_CPU
+alter resource unit box_for_unit_config_test MAX_CPU=20, MIN_CPU=10;
+
+--error 1210
+alter resource unit box_for_unit_config_test MAX_CPU=0.5;
+--error 1210
+alter resource unit box_for_unit_config_test MAX_CPU=5;
+
+###############
+--echo ====   MAX_CPU和MIN_CPU相等场景
+alter resource unit box_for_unit_config_test MAX_CPU=10;
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+
+--error 4659
+alter resource unit box_for_unit_config_test MIN_CPU=0.5;
+--error 1210
+alter resource unit box_for_unit_config_test MIN_CPU=25;
+
+alter resource unit box_for_unit_config_test MIN_CPU=5;
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+
+alter resource unit box_for_unit_config_test MIN_CPU=10;
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+
+###############
+--echo ====   MEMORY: 最小值
+alter resource unit box_for_unit_config_test MEMORY_SIZE='1G';
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+
+--error 4659
+alter resource unit box_for_unit_config_test MEMORY_SIZE='1023M';
+
+###############
+--echo ====   不能是number类型
+--error 1210
+alter resource unit box_for_unit_config_test MEMORY_SIZE=1073741824.00;
+
+###############
+--echo ====   LOG_DISK: 最小值
+alter resource unit box_for_unit_config_test LOG_DISK_SIZE='2G';
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+
+###############
+--error 4659
+alter resource unit box_for_unit_config_test LOG_DISK_SIZE='1G';
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+
+--echo ====   不能是number类型
+--error 1210
+alter resource unit box_for_unit_config_test LOG_DISK_SIZE=1073741824.00;
+
+alter resource unit box_for_unit_config_test LOG_DISK_SIZE='2049M';
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+
+###############
+--echo ====   IOPS: 最小值，MAX_IOPS >= MIN_IOPS
+alter resource unit box_for_unit_config_test MAX_IOPS=10000, MIN_IOPS=10000;
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+
+--error 1210
+alter resource unit box_for_unit_config_test MAX_IOPS=1023;
+--error 1210
+alter resource unit box_for_unit_config_test MAX_IOPS=9999;
+
+--error 4659
+alter resource unit box_for_unit_config_test MIN_IOPS=1023;
+--error 1210
+alter resource unit box_for_unit_config_test MIN_IOPS=10001;
+
+###############
+--echo ====   不能是number类型
+--error 1210
+alter resource unit box_for_unit_config_test MIN_IOPS=88.67;
+--error 1210
+alter resource unit box_for_unit_config_test MAX_IOPS=0.876;
+
+###############
+--echo ====   IOPS_WEIGHT: 最小值
+alter resource unit box_for_unit_config_test IOPS_WEIGHT=0;
+--replace_column 1 ID 2 NAME 3 CREATE_TIME 4 MODIFY_TIME
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+
+--error 1210
+alter resource unit box_for_unit_config_test IOPS_WEIGHT=-1;
+
+
+###############
+--echo ====   不能是number类型
+--error 1210
+alter resource unit box_for_unit_config_test IOPS_WEIGHT=0.9;
+--error 1210
+alter resource unit box_for_unit_config_test IOPS_WEIGHT=100.90;
+
+drop resource unit if exists box_for_unit_config_test;
+--enable_warnings

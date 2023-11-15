@@ -1,0 +1,144 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: yuchen.wyc
+# owner group: sql4
+# description: ����select for update�������������
+--disable_query_log
+--source mysql_test/include/index_quick_major.inc
+sleep 2;
+--enable_query_log
+--disable_warnings
+drop table if exists tbl1,tbl2;
+--enable_warnings
+create table tbl1 (pk int,i1 int, v2 varchar(80), i3 char(20),i4 float, d4 datetime(6),i5 decimal(5,3),i6 bool, primary key(pk));
+####һ�뾲̬���ݣ�һ�붯̬����
+insert into tbl1 values(1,1,'abc12','1agc',1.25,'2014-01-01 12:00:00',23.23,1),
+                       (2,10,'23abc12','4agc1',-0.25,'2015-11-01 12:00:00',-23.230,0),
+                       (3,201,'xx23abc12','cagc1',-2.25,'2015-11-21 11:20:10',3.231,1),
+                       (4,80,'zx23abc12','zcagc1',2.25,'2013-01-21 11:20:10',-3.231,1),
+                       (5,53,'cx23abc12','rcagc1',109.25,'2016-01-22 11:20:10',-13.131,0);
+#create unique index  idx on tbl1(i1);
+#create unique index  idx on tbl1(i4);
+#create unique index  idx on tbl1(i1,v2);
+--source mysql_test/include/majorfreeze.inc
+--source mysql_test/include/wait_daily_merge.inc
+
+insert into tbl1 values (6,78,'tx23abc12','icagc1',-109.25,'2014-09-16 16:24:00',-13.531,1),(8,50,'vx23abc12','wcagc1',-85.85,'2014-09-10 16:20:21',93.131,1),(9,610,'ukx23abc12','pecagc1',-1.85,'2014-09-19 16:20:21',99.131,0),(10,42,'kx23abc12','ecagc1',-85.86,'2014-09-18 16:20:21',-99.131,1),(11,null,null,null,null,null,null,null);
+
+
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn2,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+--disable_query_log
+connection conn1;
+set session ob_query_timeout = 2000000;
+set session ob_trx_timeout = 10000000;
+set session ob_trx_idle_timeout = 5000000;
+connection conn2;
+set session ob_query_timeout = 2000000;
+set session ob_trx_timeout = 10000000;
+set session ob_trx_idle_timeout = 5000000;
+--enable_query_log
+connection conn1;
+set autocommit=0;
+
+connection conn2;
+set autocommit=0;
+
+####����1 sfuһ������,���ӱ���,����2������У�����1�ٸ��¸��У�
+connection conn1;
+#select * from tbl1 a where a.pk=100 for update;
+#�޸ĸô������ñ���
+select * from tbl1  where pk=100 for update;
+
+
+connection conn2;
+insert into  tbl1 values(100,102,'abdggc12','1agc1d',1.215,'2014-01-01 12:00:10',83.23,1);
+update tbl1 set i1=i1-300 where pk in (100,1,123,8,9);
+
+connection conn1;
+update tbl1 set pk=200 where pk=100;
+select * from tbl1 where pk in (100,200);
+commit;
+connection conn2;
+select * from tbl1 where pk in (100,200);
+commit;
+
+select * from tbl1 where pk in (100,200);
+delete  from tbl1 where pk in (100,200);
+commit;
+
+####����1 sfuһ������,���ӱ���,����2������У�����1�ٲ�����У�
+connection conn1;
+#select * from tbl1 abc where abc.pk=100 for update;
+select * from tbl1  where pk=100 for update;
+
+
+connection conn2;
+insert into  tbl1 values(100,102,'abdggc12','1agc1d',1.215,'2014-01-01 12:00:10',83.23,1);
+update tbl1 set i1=i1-300 where pk in (100,1,123,8,9);
+
+connection conn1;
+--error 1205,4012
+insert into  tbl1 values(100,102,'abdggc12','1agc1d',1.215,'2014-01-01 12:00:10',83.23,1);
+select * from tbl1 where pk in (100,200);
+commit;
+connection conn2;
+select * from tbl1 where pk in (100,200);
+commit;
+
+select * from tbl1 where pk in (100,200);
+delete  from tbl1 where pk in (100,200);
+commit;
+
+####����1 sfuһ������,�ӱ�����,����2 sfu ͬһ��
+connection conn1;
+#select * from tbl1 abc where abc.pk=100 for update;
+select * from tbl1  where pk=100 for update;
+
+
+connection conn2;
+insert into  tbl1 values(100,102,'abdggc12','1agc1d',1.215,'2014-01-01 12:00:10',83.23,1);
+update tbl1 set i1=i1-300 where pk in (100,1,123,8,9);
+select * from tbl1  where pk=100 for update;
+
+connection conn1;
+--error 1205,4012
+replace  into  tbl1 values(100,105,'abdggc12','1agc1d',1.215,'2014-01-01 12:00:10',83.23,1);
+select * from tbl1 where pk in (100,200);
+commit;
+connection conn2;
+select * from tbl1 where pk in (100,200);
+commit;
+
+select * from tbl1 where pk in (100,200);
+delete  from tbl1 where pk in (100,200);
+commit;
+####����1 sfu����������+�ǿ��У�,�ӱ�������,����2������У�����1��replace ���У�sfu ͬһ��
+connection conn1;
+#select * from tbl1 t1 where t1.pk in(100,10,1,200) for update;
+select * from tbl1  where pk in(100,10,1,200) for update;
+
+
+connection conn2;
+insert into  tbl1 values(100,102,'abdggc12','1agc1d',1.215,'2014-01-01 12:00:10',83.23,1);
+--error 1205,4012
+update tbl1 set i1=i1-300 where pk in (100,1,123,8,9);
+update tbl1 set i1=i1-300 where pk in (100,123);
+--error 1205,4012
+update tbl1 set pk=1 where pk=1;
+#--error 1205,4012
+select * from tbl1 t1 where t1.pk in(100,200) for update;
+
+connection conn1;
+--error 1205,4012
+replace  into  tbl1 values(100,105,'abdggc12','1agc1d',1.215,'2014-01-01 12:00:10',83.23,1);
+select * from tbl1 where pk in (100,200);
+update tbl1 set pk=1 where pk=1;
+commit;
+connection conn2;
+select * from tbl1 where pk in (100,200);
+commit;
+
+select * from tbl1 where pk in (100,200);
+delete  from tbl1 where pk in (100,200);

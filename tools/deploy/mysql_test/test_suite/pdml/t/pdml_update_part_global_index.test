@@ -1,0 +1,115 @@
+# owner: xiaochu.yh
+# owner group: sql2
+# 测试 parallel update
+# tags: pdml,optimizer 
+# 测试带分区表的全局索引更新
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection conn_admin;
+# 注入错误，打开PDML 不稳定feature；任意错误类型即可
+alter system set_tp tp_no = 217, error_code = 1234, frequency = 1;
+connection default;
+--disable_warnings
+drop table if exists t1;
+create table t1 (c1 int primary key, c2 int, c3 int) partition by hash(c1) partitions 3;
+create index t1_idx1 on t1 (c2) partition by hash(c2) partitions 4;
+insert into t1 values (1,1,1), (2,2,2), (3,3,3), (4,4,4), (5,5,5), (6,6,6);
+--sorted_result
+select * from t1;
+explain update /*+ parallel(3) enable_parallel_dml */ t1 set c2 = 3;
+update /*+ parallel(3) enable_parallel_dml */ t1 set c2 = 3;
+--sorted_result
+select * from t1;
+drop table t1;
+
+## 添加unique index
+drop table if exists pindex;
+create table pindex (c1 int primary key, c2 int, c3 int) partition by hash(c1) partitions 3;
+create unique index pindex_i2 on pindex(c2) global;
+insert into pindex values (1,2,3),(2,4,5),(3,6,7);
+# 查询主表数据
+select * from pindex order by c1;
+# 查询索引表数据
+select /*+index (pindex pindex_i2)*/ c2, c1 from pindex order by c2;
+explain update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+select * from pindex order by c1;
+select /*+index (pindex pindex_i2)*/ c2, c1 from pindex order by c2;
+delete /*+ parallel(3) enable_parallel_dml */ from pindex;
+select * from pindex order by c1;
+select /*+index (pindex pindex_i2)*/ c2, c1 from pindex order by c2;
+# 增加处理unique为null的情况的case
+insert into pindex values (1,null,3),(2,null,4),(3,null,5);
+select * from pindex order by c1;
+select /*+index (pindex pindex_i2)*/ c2, c1 from pindex order by c2;
+explain update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+select * from pindex order by c1;
+select /*+index (pindex pindex_i2)*/ c2, c1 from pindex order by c2;
+delete from pindex;
+drop index pindex_i2 on pindex;
+create unique index pindex_i2 on pindex(c2) partition by hash(c2) partitions 2;
+insert into pindex values (1,2,3),(2,4,5),(3,6,7);
+select * from pindex order by c1;
+select /*+index (pindex pindex_i2)*/ c2, c1 from pindex order by c2;
+explain update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+# 目前row movement对应对应的CG支持不完整，等后续晓楚支持以后，再进行处理
+# update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+drop table pindex;
+
+
+create table pindex (c1 int, c2 int, c3 int) partition by hash(c1) partitions 3;
+create unique index pindex_i2 on pindex(c2) global;
+insert into pindex values (1,2,3),(2,4,5),(3,6,7);
+# 查询主表数据
+select * from pindex order by c1;
+# 查询索引表数据
+select /*+index (pindex pindex_i2)*/ c2, c1 from pindex order by c2;
+explain update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+select * from pindex order by c1;
+select /*+index (pindex pindex_i2)*/ c2, c1 from pindex order by c2;
+delete /*+ parallel(3) enable_parallel_dml */ from pindex;
+select * from pindex order by c1;
+select /*+index (pindex pindex_i2)*/ c2, c1 from pindex order by c2;
+# 增加处理unique为null的情况的case
+insert into pindex values (1,null,3),(2,null,4),(3,null,5);
+select * from pindex order by c1;
+select /*+index (pindex pindex_i2)*/ c2, c1 from pindex order by c2;
+explain update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+select * from pindex order by c1;
+select /*+index (pindex pindex_i2)*/ c2, c1 from pindex order by c2;
+delete from pindex;
+drop index pindex_i2 on pindex;
+create unique index pindex_i2 on pindex(c2) partition by hash(c2) partitions 2;
+insert into pindex values (1,2,3),(2,4,5),(3,6,7);
+select * from pindex order by c1;
+select /*+index (pindex pindex_i2)*/ c2, c1 from pindex order by c2;
+explain update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+# 目前row movement对应对应的CG支持不完整，等后续晓楚支持以后，再进行处理
+# update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+drop table pindex;
+
+create table pindex(a int primary key, b int) partition by hash(a) partitions 2;
+create unique index idx_b on pindex(b) global;
+insert into pindex values(1, NULL);
+explain update /*+parallel(2), enable_parallel_dml*/ pindex set b=2;
+update /*+parallel(2), enable_parallel_dml*/ pindex set b=2;
+select /*+index(pindex primary)*/ * from pindex;
+select /*+index(pindex b)*/ * from pindex;
+--error 1062
+insert into pindex values(2, 2);
+drop table pindex;
+
+create table t1 (c1 int primary key, c2 int);
+create index ind_global on t1(c2) global partition by hash(c2) partitions 4;
+insert into t1 values (1,1),(2,2),(3,3),(4,4);
+set binlog_row_image=MINIMAL;
+update /*+enable_parallel_dml parallel(2)*/ t1 set c2 = 10;
+select * from t1;
+set binlog_row_image=FULL;
+drop table t1;
+
+connection conn_admin;
+alter system set_tp tp_no = 217, error_code = 1234, frequency = 0;

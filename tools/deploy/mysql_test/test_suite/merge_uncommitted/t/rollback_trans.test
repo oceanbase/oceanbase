@@ -1,0 +1,122 @@
+# owner: gengli.wzy
+# owner group: transaction
+# description: 本case是为了测试在含未提交事务的Rollback
+
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+set GLOBAL ob_query_timeout = 1000000000000;
+set GLOBAL ob_trx_timeout = 10000000000000;
+set GLOBAL ob_trx_idle_timeout = 10000000000;
+
+connect (conn2,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn0,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+
+connection conn2;
+alter system set minor_compact_trigger = 10;
+sleep 2;
+
+connection conn1;
+--disable_warnings
+drop table if exists test_rollback_trans_t;
+--enable_warnings
+
+#建表
+create table test_rollback_trans_t(num int, str varchar(50), tag int);
+let $__freeze_table_name__ = 'test_rollback_trans_t';
+
+connection conn0;
+let $__tenant_id__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ tenant_id from oceanbase.__all_virtual_table where table_name= $__freeze_table_name__, tenant_id, 1);
+let $__table_id__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ table_id from oceanbase.__all_virtual_table where table_name= $__freeze_table_name__, table_id, 1);
+let $__svr_cnt__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ count(*) as c from oceanbase.__all_server, c, 1);
+
+
+connection conn1;
+#事务开始 插入数据
+begin;
+let $_i_ = 1;
+while ($_i_ <= 20)
+{
+  eval insert into test_rollback_trans_t value($_i_, 'Hello OceanBase & Happy New Year', 1);
+  inc $_i_;
+}
+
+connection conn2;
+--source mysql_test/include/minor_freeze_tablet_and_wait_done.inc
+
+connection conn1;
+let $_i_ = 21;
+while ($_i_ <= 40)
+{
+  eval insert into test_rollback_trans_t value($_i_, 'Hello OceanBase & Happy New Year', 2);
+  inc $_i_;
+}
+
+update test_rollback_trans_t set tag = (num + tag) * 10;
+
+#不同事务查询sstable未提交事务
+connection conn2;
+select * from test_rollback_trans_t;
+
+connection conn1;
+select * from test_rollback_trans_t;
+
+# test mini minor merge
+--source mysql_test/include/minor_freeze_tablet_and_wait_done.inc
+
+let $__now_time__ = query_get_value(select now() as c, c, 1);
+alter system set minor_compact_trigger = 1;
+--source mysql_test/include/wait_mini_minor_merge_for_table.inc
+
+connection conn1;
+select * from test_rollback_trans_t;
+
+ROLLBACK;
+
+connection conn2;
+--source mysql_test/include/minor_freeze_tablet_and_wait_done.inc
+
+connection conn1;
+select * from test_rollback_trans_t;
+
+#不同事务查询sstable未提交事务(ROLLBACK)
+connection conn2;
+select * from test_rollback_trans_t;
+
+#插入数据
+connection conn1;
+let $_i_ = 41;
+while ($_i_ <= 50)
+{
+  eval insert into test_rollback_trans_t value($_i_, 'Hello OceanBase & Happy New Year', 2);
+  inc $_i_;
+}
+
+begin;
+update test_rollback_trans_t set tag = (num + tag) * 10;
+
+#不同事务查询sstable
+connection conn2;
+select * from test_rollback_trans_t;
+
+#同一事务查询sstable(update)之后的
+connection conn1;
+select * from test_rollback_trans_t;
+
+--source mysql_test/include/minor_freeze_tablet_and_wait_done.inc
+
+connection conn1;
+ROLLBACK;
+
+--source mysql_test/include/minor_freeze_tablet_and_wait_done.inc
+
+connection conn1;
+select * from test_rollback_trans_t;
+
+connection conn2;
+select * from test_rollback_trans_t;
+
+drop table test_rollback_trans_t;
+alter system set minor_compact_trigger = 2;

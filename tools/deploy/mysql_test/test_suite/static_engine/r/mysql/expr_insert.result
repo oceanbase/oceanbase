@@ -1,0 +1,211 @@
+result_format: 4
+drop table if exists t;
+create table t(start int);
+insert into t values (-5);
+insert into t values (-1);
+insert into t values (0);
+insert into t values (1);
+insert into t values (2);
+insert into t values (3);
+insert into t values (4);
+insert into t values (5);
+insert into t values (6);
+insert into t values (7);
+insert into t values (8);
+insert into t values (9);
+insert into t values (10);
+insert into t values (100);
+select * from t;
++-------+
+| start |
++-------+
+|    -5 |
+|    -1 |
+|     0 |
+|     1 |
+|     2 |
+|     3 |
+|     4 |
+|     5 |
+|     6 |
+|     7 |
+|     8 |
+|     9 |
+|    10 |
+|   100 |
++-------+
+
+set @@ob_enable_plan_cache = 0;
+select insert('Quadratic', start, -1, 'What') from t;
++----------------------------------------+
+| insert('Quadratic', start, -1, 'What') |
++----------------------------------------+
+| Quadratic                              |
+| Quadratic                              |
+| Quadratic                              |
+| What                                   |
+| QWhat                                  |
+| QuWhat                                 |
+| QuaWhat                                |
+| QuadWhat                               |
+| QuadrWhat                              |
+| QuadraWhat                             |
+| QuadratWhat                            |
+| QuadratiWhat                           |
+| Quadratic                              |
+| Quadratic                              |
++----------------------------------------+
+select insert('Quadratic', start, 0, 'What') from t;
++---------------------------------------+
+| insert('Quadratic', start, 0, 'What') |
++---------------------------------------+
+| Quadratic                             |
+| Quadratic                             |
+| Quadratic                             |
+| WhatQuadratic                         |
+| QWhatuadratic                         |
+| QuWhatadratic                         |
+| QuaWhatdratic                         |
+| QuadWhatratic                         |
+| QuadrWhatatic                         |
+| QuadraWhattic                         |
+| QuadratWhatic                         |
+| QuadratiWhatc                         |
+| Quadratic                             |
+| Quadratic                             |
++---------------------------------------+
+select insert('Quadratic', start, 1, 'What') from t;
++---------------------------------------+
+| insert('Quadratic', start, 1, 'What') |
++---------------------------------------+
+| Quadratic                             |
+| Quadratic                             |
+| Quadratic                             |
+| Whatuadratic                          |
+| QWhatadratic                          |
+| QuWhatdratic                          |
+| QuaWhatratic                          |
+| QuadWhatatic                          |
+| QuadrWhattic                          |
+| QuadraWhatic                          |
+| QuadratWhatc                          |
+| QuadratiWhat                          |
+| Quadratic                             |
+| Quadratic                             |
++---------------------------------------+
+select insert('Quadratic', start, 2, 'What') from t;
++---------------------------------------+
+| insert('Quadratic', start, 2, 'What') |
++---------------------------------------+
+| Quadratic                             |
+| Quadratic                             |
+| Quadratic                             |
+| Whatadratic                           |
+| QWhatdratic                           |
+| QuWhatratic                           |
+| QuaWhatatic                           |
+| QuadWhattic                           |
+| QuadrWhatic                           |
+| QuadraWhatc                           |
+| QuadratWhat                           |
+| QuadratiWhat                          |
+| Quadratic                             |
+| Quadratic                             |
++---------------------------------------+
+select insert('Quadratic', start, 3, 'What') from t;
++---------------------------------------+
+| insert('Quadratic', start, 3, 'What') |
++---------------------------------------+
+| Quadratic                             |
+| Quadratic                             |
+| Quadratic                             |
+| Whatdratic                            |
+| QWhatratic                            |
+| QuWhatatic                            |
+| QuaWhattic                            |
+| QuadWhatic                            |
+| QuadrWhatc                            |
+| QuadraWhat                            |
+| QuadratWhat                           |
+| QuadratiWhat                          |
+| Quadratic                             |
+| Quadratic                             |
++---------------------------------------+
+select insert('Quadratic', start, 4, 'What') from t;
++---------------------------------------+
+| insert('Quadratic', start, 4, 'What') |
++---------------------------------------+
+| Quadratic                             |
+| Quadratic                             |
+| Quadratic                             |
+| Whatratic                             |
+| QWhatatic                             |
+| QuWhattic                             |
+| QuaWhatic                             |
+| QuadWhatc                             |
+| QuadrWhat                             |
+| QuadraWhat                            |
+| QuadratWhat                           |
+| QuadratiWhat                          |
+| Quadratic                             |
+| Quadratic                             |
++---------------------------------------+
+select insert('Quadratic', start, 5, 'What') from t;
++---------------------------------------+
+| insert('Quadratic', start, 5, 'What') |
++---------------------------------------+
+| Quadratic                             |
+| Quadratic                             |
+| Quadratic                             |
+| Whatatic                              |
+| QWhattic                              |
+| QuWhatic                              |
+| QuaWhatc                              |
+| QuadWhat                              |
+| QuadrWhat                             |
+| QuadraWhat                            |
+| QuadratWhat                           |
+| QuadratiWhat                          |
+| Quadratic                             |
+| Quadratic                             |
++---------------------------------------+
+select insert('Quadratic', start, 6, 'What') from t;
++---------------------------------------+
+| insert('Quadratic', start, 6, 'What') |
++---------------------------------------+
+| Quadratic                             |
+| Quadratic                             |
+| Quadratic                             |
+| Whattic                               |
+| QWhatic                               |
+| QuWhatc                               |
+| QuaWhat                               |
+| QuadWhat                              |
+| QuadrWhat                             |
+| QuadraWhat                            |
+| QuadratWhat                           |
+| QuadratiWhat                          |
+| Quadratic                             |
+| Quadratic                             |
++---------------------------------------+
+select insert('Quadratic', start, 100, 'What') from t;
++-----------------------------------------+
+| insert('Quadratic', start, 100, 'What') |
++-----------------------------------------+
+| Quadratic                               |
+| Quadratic                               |
+| Quadratic                               |
+| What                                    |
+| QWhat                                   |
+| QuWhat                                  |
+| QuaWhat                                 |
+| QuadWhat                                |
+| QuadrWhat                               |
+| QuadraWhat                              |
+| QuadratWhat                             |
+| QuadratiWhat                            |
+| Quadratic                               |
+| Quadratic                               |
++-----------------------------------------+
+drop table t;
+

@@ -1,0 +1,498 @@
+# ----------------------------------------------------------------------
+# Test of GEOMETRY ST_Transform.
+# ----------------------------------------------------------------------
+# Test for st_transform
+#
+# NULL values.
+#
+# At least one NULL parameter. Should return NULL.
+SELECT ST_TRANSFORM(NULL, NULL);
+ST_TRANSFORM(NULL, NULL)
+NULL
+SELECT ST_TRANSFORM(NULL, 4326);
+ST_TRANSFORM(NULL, 4326)
+NULL
+SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), NULL);
+ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), NULL)
+NULL
+SELECT ST_ASTEXT(ST_TRANSFORM(ST_GEOMFROMTEXT('LINESTRING(0 0,1 1,1 0,0 1)',4326,NULL),4269));
+ST_ASTEXT(ST_TRANSFORM(ST_GEOMFROMTEXT('LINESTRING(0 0,1 1,1 0,0 1)',4326,NULL),4269))
+NULL
+#
+# Invalid parameters.
+#
+# Invalid geometry. Should raise error.
+SELECT ST_TRANSFORM(x'00000000DEADBEEF', 4326);
+ERROR 22023: Invalid GIS data provided to function st_transform.
+# Non-existing SRID. Should raise error.
+SELECT ST_TRANSFORM(
+x'94007735010100000000000000000000000000000000000000',
+4326
+);
+ERROR SR001: There's no spatial reference system with SRID 896991380.
+SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000000000);
+ERROR SR001: There's no spatial reference system with SRID 1000000000.
+#
+# Transformation to/from SRID 0.
+#
+# Transformation between SRID 0 and geographic SRS. Should raise error.
+SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)'), 4326);
+ERROR 22S00: Transformation from SRID 0 is not supported.
+SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 0);
+ERROR 22S00: Transformation to SRID 0 is not supported.
+SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)'), 4047);
+ERROR 22S00: Transformation from SRID 0 is not supported.
+SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4047), 0);
+ERROR 22S00: Transformation to SRID 0 is not supported.
+# Transformation between SRID 0 and projected SRS. Should raise error.
+SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)'), 3857);
+ERROR 22S00: Transformation from SRID 0 is not supported.
+SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 3857), 0);
+ERROR 22S00: Transformation to SRID 0 is not supported.
+#
+# Transformation between geographic SRSs.
+#
+# Transformation of every geometry type. Should succeed.
+SELECT ST_ASTEXT(ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 3819));
+ST_ASTEXT(ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 3819))
+POINT(-0.005482665093475376 -0.0013302987518482513)
+SELECT ST_ASTEXT(ST_TRANSFORM(ST_GEOMFROMTEXT('LINESTRING(0 0, 1 1)', 4326), 3819));
+ST_ASTEXT(ST_TRANSFORM(ST_GEOMFROMTEXT('LINESTRING(0 0, 1 1)', 4326), 3819))
+LINESTRING(-0.005482665093475376 -0.0013302987518482513,0.9945714665851071 0.9987826546610272)
+SELECT ST_ASTEXT(ST_TRANSFORM(ST_GEOMFROMTEXT('POLYGON((0 0, 0 1, 1 1, 0 0))', 4326), 3819));
+ST_ASTEXT(ST_TRANSFORM(ST_GEOMFROMTEXT('POLYGON((0 0, 0 1, 1 1, 0 0))', 4326), 3819))
+POLYGON((-0.005482665093475376 -0.0013302987518482513,-0.005502626686269334 0.9987632352664167,0.9945714665851071 0.9987826546610272,-0.005482665093475376 -0.0013302987518482513))
+SELECT ST_ASTEXT(ST_TRANSFORM(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0))', 4326), 3819));
+ST_ASTEXT(ST_TRANSFORM(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0))', 4326), 3819))
+GEOMETRYCOLLECTION(POINT(-0.005482665093475376 -0.0013302987518482513))
+SELECT ST_ASTEXT(ST_TRANSFORM(ST_GEOMFROMTEXT('MULTIPOINT((0 0))', 4326), 3819));
+ST_ASTEXT(ST_TRANSFORM(ST_GEOMFROMTEXT('MULTIPOINT((0 0))', 4326), 3819))
+MULTIPOINT((-0.005482665093475376 -0.0013302987518482513))
+SELECT ST_ASTEXT(ST_TRANSFORM(ST_GEOMFROMTEXT('MULTILINESTRING((0 0, 1 1))', 4326), 3819));
+ST_ASTEXT(ST_TRANSFORM(ST_GEOMFROMTEXT('MULTILINESTRING((0 0, 1 1))', 4326), 3819))
+MULTILINESTRING((-0.005482665093475376 -0.0013302987518482513,0.9945714665851071 0.9987826546610272))
+SELECT ST_ASTEXT(ST_TRANSFORM(
+ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0, 0 1, 1 1, 0 0)))', 4326),
+3819
+));
+ST_ASTEXT(ST_TRANSFORM(
+ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0, 0 1, 1 1, 0 0)))', 4326),
+3819
+))
+MULTIPOLYGON(((-0.005482665093475376 -0.0013302987518482513,-0.005502626686269334 0.9987632352664167,0.9945714665851071 0.9987826546610272,-0.005482665093475376 -0.0013302987518482513)))
+# Verify that it isn't possible to transform to/from a projection.
+# Transformation between SRID 0 and geographic SRSs should fail.
+SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 3857);
+ERROR 22S00: Transformation to SRID 3857 is not supported.
+SELECT ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(0 0)', 3857), 4326);
+ERROR 22S00: Transformation from SRID 3857 is not supported.
+# Test for st_transform end
+#
+#
+# Test for _st_transform
+#
+# NULL values.
+#
+# At least one NULL parameter. Should return NULL.
+SELECT _ST_Transform(NULL, NULL);
+_ST_Transform(NULL, NULL)
+NULL
+SELECT _ST_Transform(NULL, 4326);
+_ST_Transform(NULL, 4326)
+NULL
+SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), NULL);
+_ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), NULL)
+NULL
+#
+# Invalid parameters.
+#
+# Invalid geometry. Should raise error. toSELECT@dazhi
+SELECT _ST_Transform(x'00000000DEADBEEF', 4326);
+ERROR 22023: Invalid GIS data provided to function _st_transform.
+# Non-existing SRID. Should raise error.
+SELECT _ST_Transform(
+x'94007735010100000000000000000000000000000000000000',
+4326
+);
+ERROR SR001: There's no spatial reference system with SRID 896991380.
+SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1000000000);
+ERROR SR001: There's no spatial reference system with SRID 1000000000.
+#
+# Transformation to/from SRID 0.
+#
+# Transformation between SRID 0 and geographic SRS. Should raise error.
+SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)'), 4326);
+ERROR 22S00: Transformation from SRID 0 is not supported.
+SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 0);
+ERROR 22S00: Transformation to SRID 0 is not supported.
+SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)'), 4047);
+ERROR 22S00: Transformation from SRID 0 is not supported.
+SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4047), 0);
+ERROR 22S00: Transformation to SRID 0 is not supported.
+# Transformation between SRID 0 and projected SRS. Should raise error.
+SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)'), 3857);
+ERROR 22S00: Transformation from SRID 0 is not supported.
+SELECT _ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 3857), 0);
+ERROR 22S00: Transformation to SRID 0 is not supported.
+#
+# Transformation between geographic SRSs.
+#
+# Transformation of every geometry type. Should succeed.
+SELECT ST_ASTEXT(_ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 3819));
+ST_ASTEXT(_ST_Transform(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 3819))
+POINT(-0.005482665093475376 -0.0013302987518482513)
+SELECT ST_ASTEXT(_ST_Transform(ST_GEOMFROMTEXT('LINESTRING(0 0, 1 1)', 4326), 3819));
+ST_ASTEXT(_ST_Transform(ST_GEOMFROMTEXT('LINESTRING(0 0, 1 1)', 4326), 3819))
+LINESTRING(-0.005482665093475376 -0.0013302987518482513,0.9945714665851079 0.9987826546610282)
+SELECT ST_ASTEXT(_ST_Transform(ST_GEOMFROMTEXT('POLYGON((0 0, 0 1, 1 1, 0 0))', 4326), 3819));
+ST_ASTEXT(_ST_Transform(ST_GEOMFROMTEXT('POLYGON((0 0, 0 1, 1 1, 0 0))', 4326), 3819))
+POLYGON((-0.005482665093475376 -0.0013302987518482513,-0.005502626686269334 0.9987632352664177,0.9945714665851079 0.9987826546610282,-0.005482665093475376 -0.0013302987518482513))
+SELECT ST_ASTEXT(_ST_Transform(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0))', 4326), 3819));
+ST_ASTEXT(_ST_Transform(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0))', 4326), 3819))
+GEOMETRYCOLLECTION(POINT(-0.005482665093475376 -0.0013302987518482513))
+SELECT ST_ASTEXT(_ST_Transform(ST_GEOMFROMTEXT('MULTIPOINT((0 0))', 4326), 3819));
+ST_ASTEXT(_ST_Transform(ST_GEOMFROMTEXT('MULTIPOINT((0 0))', 4326), 3819))
+MULTIPOINT((-0.005482665093475376 -0.0013302987518482513))
+SELECT ST_ASTEXT(_ST_Transform(ST_GEOMFROMTEXT('MULTILINESTRING((0 0, 1 1))', 4326), 3819));
+ST_ASTEXT(_ST_Transform(ST_GEOMFROMTEXT('MULTILINESTRING((0 0, 1 1))', 4326), 3819))
+MULTILINESTRING((-0.005482665093475376 -0.0013302987518482513,0.9945714665851079 0.9987826546610282))
+SELECT ST_ASTEXT(_ST_Transform(
+ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0, 0 1, 1 1, 0 0)))', 4326),
+3819
+));
+ST_ASTEXT(_ST_Transform(
+ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0, 0 1, 1 1, 0 0)))', 4326),
+3819
+))
+MULTIPOLYGON(((-0.005482665093475376 -0.0013302987518482513,-0.005502626686269334 0.9987632352664177,0.9945714665851079 0.9987826546610282,-0.005482665093475376 -0.0013302987518482513)))
+# Transformations between European Datum 1950 (ED50) and WGS  84.
+# Positions in Western Europe will be further North and East in ED50 than
+# in WGS 84.
+# Trondheim.
+SELECT
+ST_ASTEXT(
+_ST_Transform(
+ST_GEOMFROMTEXT('POINT(63.426912 10.396918)', 4326),
+4230
+)
+) AS ED50;
+ED50
+POINT(63.42724 10.398502)
+SELECT
+ST_ASTEXT(
+_ST_Transform(
+ST_GEOMFROMTEXT('POINT(63.42724 10.398502)', 4230),
+4326
+)
+) AS WGS84;
+WGS84
+POINT(63.426912 10.396918)
+# Telegrafenberg, Potsdam (origin of ED50).
+SELECT
+ST_ASTEXT(
+_ST_Transform(
+ST_GEOMFROMTEXT('POINT(52.381389 13.064444)', 4326),
+4230
+)
+) AS ED50;
+ED50
+POINT(52.382086 13.065521)
+SELECT
+ST_ASTEXT(
+_ST_Transform(
+ST_GEOMFROMTEXT('POINT(52.382086 13.065521)', 4230),
+4326
+)
+) AS WGS84;
+WGS84
+POINT(52.381389 13.064444)
+# the polygon in wrong ring order should be corrected before call bg function 
+select st_astext(_ST_Transform(st_geomfromtext('Polygon((2 2,2 8,8 8,8 2,2 2))', 4326), 4231));
+st_astext(_ST_Transform(st_geomfromtext('Polygon((2 2,2 8,8 8,8 2,2 2))', 4326), 4231))
+POLYGON((2.001077072074475 2.000836431360278,2.0010740529842637 8.000750503988575,8.001143363806776 8.000757467426062,8.001155241248204 2.0008443180478546,2.001077072074475 2.000836431360278))
+select st_astext(_ST_Transform(st_geomfromtext('Polygon((2 2,8 2,8 8,2 8,2 2))', 4326), 4231));
+st_astext(_ST_Transform(st_geomfromtext('Polygon((2 2,8 2,8 8,2 8,2 2))', 4326), 4231))
+POLYGON((2.001077072074475 2.000836431360278,2.0010740529842637 8.000750503988575,8.001143363806776 8.000757467426062,8.001155241248204 2.0008443180478546,2.001077072074475 2.000836431360278))
+#########################################
+# postgis test 
+#
+# regress proj adhoc
+#
+# some transform() regression
+# prime spatial_ref_sys table with two projections
+# EPSG 100001 : WGS 84 / UTM zone 33N
+# EPSG 100002 : WGS 84
+# test #0: NULL values
+SELECT 0, ST_AsText(_ST_Transform(NULL, @proj100001));
+0	ST_AsText(_ST_Transform(NULL, @proj100001))
+0	NULL
+test #6: re-projecting a projected value
+SELECT 6,round(ST_Longitude(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(16 48)', 4236, 'axis-order=long-lat'), 3065), 4236)), 8) as X, round(ST_Latitude(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(16 48)', 4236, 'axis-order=long-lat'), 3065), 4236)), 8) as Y;
+6	X	Y
+6	15.99999966	48.00000022
+#7: Should yield an error since input SRID is unknown
+SELECT 7, _ST_Transform(ST_GeomFromText('POINT(0 0)', 0, 'axis-order=long-lat'), '+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs ') as geometry;
+ERROR 22S00: Transformation from SRID 0 is not supported.
+#8: Transforming to same SRID
+SELECT 8,ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(0 0)', 4326, 'axis-order=long-lat'), 4326), 4326)) as geometry;
+8	geometry
+8	POINT(0 0)
+#9: Transform to_proj
+SELECT 9, ST_ASTEXT(_ST_Transform(
+ST_GeomFromText('POINT(16 48)', 4236, 'axis-order=long-lat'),
+'+proj=utm +zone=33 +ellps=WGS84 +datum=WGS84 +units=m +no_defs ')) as geometry;
+9	geometry
+9	POINT(574238.6629953053 5317120.094526642)
+test #10: Transform from_proj to_proj
+SELECT 10, ST_AsText(_ST_Transform(
+ST_GeomFromText('POINT(16 48)', 4236, 'axis-order=long-lat'),
+'+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs ',
+'+proj=utm +zone=33 +ellps=WGS84 +datum=WGS84 +units=m +no_defs ')) as geometry;
+10	geometry
+10	POINT(574595.1124860339 5316784.009235403)
+test #11: Transform from_proj to_srid
+SELECT 11, ST_AsText(_ST_Transform(
+ST_GeomFromText('POINT(16 48)', 0, 'axis-order=long-lat'),
+'+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs ', 4236)) as geometry;
+11	geometry
+11	POINT(47.99693549401747 16.004718085400047)
+test #12: Transform with bad to_proj
+SELECT 12, _ST_Transform(
+ST_GeomFromText('POINT(16 48)', 4236),
+'invalid projection');
+ERROR HY000: Unknown exception thrown in function.
+#
+# regress proj basic
+#
+# some transform() regression
+test #1: a simple projection
+SELECT 1,ST_AsText(_ST_Transform(ST_GeomFromText('POINT(16 48)', 4326, 'axis-order=long-lat'), 3065));
+1	ST_AsText(_ST_Transform(ST_GeomFromText('POINT(16 48)', 4326, 'axis-order=long-lat'), 3065))
+1	POINT(574595.1124860339 5316784.009235403)
+test #4: LINESTRING projection, 2 points
+SELECT 4,ST_AsText(_ST_Transform(ST_GeomFromText('LINESTRING(16 48, 16 49)', 4326, 'axis-order=long-lat'), 3065)) as geometry;
+4	geometry
+4	LINESTRING(574595.1124860339 5316784.009235403,573142.0122827202 5427937.523464922)
+SELECT 'M1', ST_AsText(_ST_Transform(ST_GeomFromText('POINT(-20 -20)', 4326, 'axis-order=long-lat'), 3065)) as geometry;
+M1	geometry
+M1	POINT(-3345527.4198776903 -2652698.674177202)
+SELECT 'M2', ST_AsText(_ST_Transform(ST_GeomFromText('POINT(-20 -21.5)', 4326, 'axis-order=long-lat'), 3065)) as geometry;
+M2	geometry
+M2	POINT(-3298015.597990941 -2843775.4055208303)
+SELECT 'M3', ST_AsText(_ST_Transform(ST_GeomFromText('POINT(-30 -21.5)', 4326, 'axis-order=long-lat'), 3065)) as geometry;
+M3	geometry
+M3	POINT(-4535797.865108145 -3228356.4454949675)
+SELECT 'M4', ST_AsText(_ST_Transform(ST_GeomFromText('POINT(-72.345 41.3)', 4326, 'axis-order=long-lat'), 3065)) as geometry;
+M4	geometry
+M4	POINT(-5713160.571357482 9662432.583766244)
+SELECT 'M5', ST_AsText(_ST_Transform(ST_GeomFromText('POINT(71.999 -42.5)', 4326, 'axis-order=long-lat'), 3065)) as geometry;
+M5	geometry
+M5	POINT(5111719.904548044 -6576329.479659087)
+#
+# regress proj cache overflow
+#
+# Overflow proj cache
+SELECT 13, count(*) FROM
+(
+SELECT _ST_Transform(ST_GeomFromText('POINT(0 0)', 4326), srs_id) AS g
+FROM
+( Select srs_id from oceanbase.__all_spatial_reference_systems where srs_id IN (3819,  3821,  3824,  3889,  3906,  4001,  4002,  4003,  4004,  4005,  4006,  4007,  4008,  4009,  4010,  4011,  4012,  4013,  4014,  4015,  4016,  4018,  4019,  4020,  4021,  4022,  4023,  4024,  4025,  4027,  4028,  4029,  4030,  4031,  4032,  4033,  4034,  4035,  4036,  4041,  4042,  4043,  4044,  4045,  4046,  4047,  4052,  4053,  4054,  4055,  4075,  4081,  4120,  4121,  4122,  4123,  4124,  4125,  4126,  4127,  4128,  4129,  4130,  4131,  4132,  4133,  4134,  4135,  4139,  4140,  4141,  4142,  4143,  4144,  4145,  4146,  4147,  4148,  4149,  4150,  4151,  4152,  4153,  4154,  4155,  4156,  4157,  4158,  4159,  4160,  4161,  4162,  4163,  4164,  4165,  4166,  4167,  4168,  4169,  4170,  4171,  4172,  4173,  4174,  4175,  4176,  4178,  4179,  4180,  4181,  4182,  4183,  4184,  4185,  4188,  4189,  4190,  4191,  4192,  4193,  4194,  4195,  4196,  4197,  4198,  4199,  4200,  4201,  4202,  4203,  4204,  4205,  4206,  4207,  4208,  4209,  4210,  4211,  4212,  4213,  4214,  4215,  4216,  4218,  4219,  4220,  4221)) _a
+) _b WHERE g IS NOT NULL;
+13	count(*)
+13	139
+########################################################
+# customized test for bestsrid generated proj4text
+########################################################
+set @proj1 = '+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs';
+set @proj2 = '+proj=utm +zone=1 +ellps=WGS84 +datum=WGS84 +units=m +no_defs';
+set @proj3 = '+proj=laea +lat_0=90 +lon_0=-40 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs';
+set @proj4 = '+proj=stere +lat_0=90 +lat_ts=71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs';
+set @proj5 = '+proj=utm +zone=1 +south +ellps=WGS84 +datum=WGS84 +units=m +no_defs';
+set @proj6 = '+proj=laea +lat_0=-90 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs';
+set @pt = ST_GeomFromText('POINT(123.45 -67.89)', 4326, 'axis-order=long-lat');
+set @li = ST_GeomFromText('LINESTRING(123.45 -67.89, 10.11 -12.13)', 4326, 'axis-order=long-lat');
+set @po = ST_GeomFromText('POLYGON((0 0,1 0,1 1,0 1,0 0))', 4326, 'axis-order=long-lat');
+set @mpt = ST_GeomFromText('MULTIPOINT(9 9,8 1,1 5)', 4326, 'axis-order=long-lat');
+set @mli = ST_GeomFromText('MULTILINESTRING((0 0,5 5,0 0),(0 0,-5 -5,0 0))', 4326, 'axis-order=long-lat');
+set @mpo = ST_GeomFromText('MULTIPOLYGON(((0 0, 3 0, 3 3, 0 3, 0 0)))', 4326, 'axis-order=long-lat');
+set @gc = ST_GeomFromText('GEOMETRYCOLLECTION(Point(9 9),LINESTRING(1 5,0 0),POLYGON((2 2,2 8,8 8,8 2,2 2)))', 4326, 'axis-order=long-lat');
+SELECT 11, ST_AsText(_ST_Transform(ST_GeomFromText('POINT(123.45 -67.89)', 4326, 'axis-order=long-lat'), '+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+11	geometry
+11	POINT(13742391.13843 -10374752.862955)
+SELECT 21, ST_AsText(_ST_Transform(ST_GeomFromText('LINESTRING(123.45 -67.89, 10.11 -12.13)', 4326, 'axis-order=long-lat'), '+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+21	geometry
+21	LINESTRING(13742391.13843 -10374752.862955,1125440.05192 -1351533.85883)
+SELECT 31, ST_AsText(_ST_Transform(ST_GeomFromText('POLYGON((0 0,1 0,1 1,0 1,0 0))', 4326, 'axis-order=long-lat'), '+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+31	geometry
+31	POLYGON((0 0,111319.490793 0,111319.490793 110579.965222,0 110579.965222,0 0))
+SELECT 41, ST_AsText(_ST_Transform(ST_GeomFromText('MULTIPOINT(9 9,8 1,1 5)', 4326, 'axis-order=long-lat'), '+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+41	geometry
+41	MULTIPOINT((1001875.417139 999341.310385),(890555.926346 110579.965222),(111319.490793 553583.846816))
+SELECT 51, ST_AsText(_ST_Transform(ST_GeomFromText('MULTILINESTRING((0 0,5 5,0 0),(0 0,-5 -5,0 0))', 4326, 'axis-order=long-lat'), '+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+51	geometry
+51	MULTILINESTRING((0 0,556597.453966 553583.846816,0 0),(0 0,-556597.453966 -553583.846816,0 0))
+SELECT 61, ST_AsText(_ST_Transform(ST_GeomFromText('MULTIPOLYGON(((0 0, 3 0, 3 3, 0 3, 0 0)))', 4326, 'axis-order=long-lat'), '+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+61	geometry
+61	MULTIPOLYGON(((0 0,333958.47238 0,333958.47238 331876.534213,0 331876.534213,0 0)))
+SELECT 71, ST_AsText(_ST_Transform(ST_GeomFromText('GEOMETRYCOLLECTION(Point(9 9),LINESTRING(1 5,0 0),POLYGON((2 2,2 8,8 8,8 2,2 2)))', 4326, 'axis-order=long-lat'), '+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+71	geometry
+71	GEOMETRYCOLLECTION(POINT(1001875.417139 999341.310385),LINESTRING(111319.490793 553583.846816,0 0),POLYGON((222638.981587 221194.077168,890555.926346 221194.077168,890555.926346 887521.12664,222638.981587 887521.12664,222638.981587 221194.077168)))
+SELECT 12, ST_AsText(_ST_Transform(ST_GeomFromText('POINT(123.45 -67.89)', 4326, 'axis-order=long-lat'),'+proj=utm +zone=1 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+12	geometry
+12	POINT(-1652422.866845 -8699725.08078)
+SELECT 22, ST_AsText(_ST_Transform(ST_GeomFromText('LINESTRING(123.45 -67.89, 10.11 -12.13)', 4326, 'axis-order=long-lat'),'+proj=utm +zone=1 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+22	geometry
+22	LINESTRING(-1652422.866845 -8699725.08078,-275443.590341 -18644852.383437)
+SELECT 32, ST_AsText(_ST_Transform(ST_GeomFromText('POLYGON((0 0,1 0,1 1,0 1,0 0))', 4326, 'axis-order=long-lat'),'+proj=utm +zone=1 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+32	geometry
+32	POLYGON((833978.556919 19995929.886042,722595.439676 19995929.886042,722561.736479 19885331.913518,833927.937096 19885247.048283,833978.556919 19995929.886042))
+SELECT 42, ST_AsText(_ST_Transform(ST_GeomFromText('MULTIPOINT(9 9,8 1,1 5)', 4326, 'axis-order=long-lat'),'+proj=utm +zone=1 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+42	geometry
+42	MULTIPOINT((-160640.923181 18995651.600153),(-57002.405491 19884974.744862),(721753.345935 19442928.16415))
+SELECT 52, ST_AsText(_ST_Transform(ST_GeomFromText('MULTILINESTRING((0 0,5 5,0 0),(0 0,-5 -5,0 0))', 4326, 'axis-order=long-lat'),'+proj=utm +zone=1 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+52	geometry
+52	MULTILINESTRING((833978.556919 19995929.886042,278246.654065 19442928.16415,833978.556919 19995929.886042),(833978.556919 19995929.886042,1389705.452479 -19437825.226475,833978.556919 19995929.886042))
+SELECT 62, ST_AsText(_ST_Transform(ST_GeomFromText('MULTIPOLYGON(((0 0, 3 0, 3 3, 0 3, 0 0)))', 4326, 'axis-order=long-lat'),'+proj=utm +zone=1 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+62	geometry
+62	MULTIPOLYGON(((833978.556919 19995929.886042,500000 19995929.886042,500000 19664336.706494,833523.067008 19663879.411294,833978.556919 19995929.886042)))
+SELECT 72, ST_AsText(_ST_Transform(ST_GeomFromText('GEOMETRYCOLLECTION(Point(9 9),LINESTRING(1 5,0 0),POLYGON((2 2,2 8,8 8,8 2,2 2)))', 4326, 'axis-order=long-lat'),'+proj=utm +zone=1 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+72	geometry
+72	GEOMETRYCOLLECTION(POINT(-160640.923181 18995651.600153),LINESTRING(721753.345935 19442928.16415,833978.556919 19995929.886042),POLYGON((611213.301271 19774835.019203,-56748.287241 19774019.445903,-51673.937369 19108275.54574,610204.602078 19111498.179551,611213.301271 19774835.019203)))
+SELECT 13, ST_AsText(_ST_Transform(ST_GeomFromText('POINT(123.45 -67.89)', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=90 +lon_0=-40 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+13	geometry
+13	POINT(3561690.351406 11985646.433911)
+SELECT 23, ST_AsText(_ST_Transform(ST_GeomFromText('LINESTRING(123.45 -67.89, 10.11 -12.13)', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=90 +lon_0=-40 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+23	geometry
+23	LINESTRING(3561690.351406 11985646.433911,7602041.31784 -6354039.088753)
+SELECT 33, ST_AsText(_ST_Transform(ST_GeomFromText('POLYGON((0 0,1 0,1 1,0 1,0 0))', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=90 +lon_0=-40 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+33	geometry
+33	POLYGON((5791493.712232 -6902033.438039,5911068.732492 -6799906.722771,5859493.032956 -6740575.667444,5740961.337617 -6841811.299049,5791493.712232 -6902033.438039))
+SELECT 43, ST_AsText(_ST_Transform(ST_GeomFromText('MULTIPOINT(9 9,8 1,1 5)', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=90 +lon_0=-40 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+43	geometry
+43	MULTIPOINT((6247955.345263 -5431264.720105),(6637286.791194 -5976239.869956),(5648801.408332 -6498202.67881))
+SELECT 53, ST_AsText(_ST_Transform(ST_GeomFromText('MULTILINESTRING((0 0,5 5,0 0),(0 0,-5 -5,0 0))', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=90 +lon_0=-40 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+53	geometry
+53	MULTILINESTRING((5791493.712232 -6902033.438039,6088332.916557 -6088332.916557,5791493.712232 -6902033.438039),(5791493.712232 -6902033.438039,5387447.310643 -7694072.138123,5791493.712232 -6902033.438039))
+SELECT 63, ST_AsText(_ST_Transform(ST_GeomFromText('MULTIPOLYGON(((0 0, 3 0, 3 3, 0 3, 0 0)))', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=90 +lon_0=-40 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+63	geometry
+63	MULTIPOLYGON(((5791493.712232 -6902033.438039,6144781.191381 -6589471.079585,5982560.179523 -6415510.34236,5638599.420165 -6719821.116181,5791493.712232 -6902033.438039)))
+SELECT 73, ST_AsText(_ST_Transform(ST_GeomFromText('GEOMETRYCOLLECTION(Point(9 9),LINESTRING(1 5,0 0),POLYGON((2 2,2 8,8 8,8 2,2 2)))', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=90 +lon_0=-40 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+73	geometry
+73	GEOMETRYCOLLECTION(POINT(6247955.345263 -5431264.720105),LINESTRING(5648801.408332 -6498202.67881,5791493.712232 -6902033.438039),POLYGON((5923185.211117 -6578363.623117,6578363.623117 -5923185.211117,6214530.365044 -5595588.274098,5595588.274098 -6214530.365044,5923185.211117 -6578363.623117)))
+SELECT 14, ST_AsText(_ST_Transform(ST_GeomFromText('POINT(123.45 -67.89)', 4326, 'axis-order=long-lat'), '+proj=stere +lat_0=90 +lat_ts=71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+14	geometry
+14	POINT(52488480.820413 34675533.995782)
+SELECT 24, ST_AsText(_ST_Transform(ST_GeomFromText('LINESTRING(123.45 -67.89, 10.11 -12.13)', 4326, 'axis-order=long-lat'), '+proj=stere +lat_0=90 +lat_ts=71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+24	geometry
+24	LINESTRING(52488480.820413 34675533.995782,2683355.649025 -15049058.878326)
+SELECT 34, ST_AsText(_ST_Transform(ST_GeomFromText('POLYGON((0 0,1 0,1 1,0 1,0 0))', 4326, 'axis-order=long-lat'), '+proj=stere +lat_0=90 +lat_ts=71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+34	geometry
+34	POLYGON((0 -12367396.21846,215840.825375 -12365512.604113,212130.970841 -12152975.180149,0 -12154826.419086,0 -12367396.21846))
+SELECT 44, ST_AsText(_ST_Transform(ST_GeomFromText('MULTIPOINT(9 9,8 1,1 5)', 4326, 'axis-order=long-lat'), '+proj=stere +lat_0=90 +lat_ts=71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+44	geometry
+44	MULTIPOINT((1654110.233385 -10443640.991474),(1691624.884376 -12036536.483917),(197897.108989 -11337517.780792))
+SELECT 54, ST_AsText(_ST_Transform(ST_GeomFromText('MULTILINESTRING((0 0,5 5,0 0),(0 0,-5 -5,0 0))', 4326, 'axis-order=long-lat'), '+proj=stere +lat_0=90 +lat_ts=71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+54	geometry
+54	MULTILINESTRING((0 -12367396.21846,988280.302977 -11296095.552813,0 -12367396.21846),(0 -12367396.21846,-1175623.953394 -13437443.275675,0 -12367396.21846))
+SELECT 64, ST_AsText(_ST_Transform(ST_GeomFromText('MULTIPOLYGON(((0 0, 3 0, 3 3, 0 3, 0 0)))', 4326, 'axis-order=long-lat'), '+proj=stere +lat_0=90 +lat_ts=71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+64	geometry
+64	MULTIPOLYGON(((0 -12367396.21846,647259.507328 -12350447.131766,614441.575303 -11724243.684983,0 -11740333.403883,0 -12367396.21846)))
+SELECT 74, ST_AsText(_ST_Transform(ST_GeomFromText('GEOMETRYCOLLECTION(Point(9 9),LINESTRING(1 5,0 0),POLYGON((2 2,2 8,8 8,8 2,2 2)))', 4326, 'axis-order=long-lat'), '+proj=stere +lat_0=90 +lat_ts=71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+74	geometry
+74	GEOMETRYCOLLECTION(POINT(1654110.233385 -10443640.991474),LINESTRING(197897.108989 -11337517.780792,0 -12367396.21846),POLYGON((416904.023461 -11938569.2105,1662540.472787 -11829590.142309,1497618.762952 -10656111.201581,375547.722359 -10754279.697304,416904.023461 -11938569.2105)))
+SELECT 15, ST_AsText(_ST_Transform(ST_GeomFromText('POINT(123.45 -67.89)', 4326, 'axis-order=long-lat'), '+proj=utm +zone=1 +south +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+15	geometry
+15	POINT(-1652422.866845 1300274.91922)
+SELECT 25, ST_AsText(_ST_Transform(ST_GeomFromText('LINESTRING(123.45 -67.89, 10.11 -12.13)', 4326, 'axis-order=long-lat'), '+proj=utm +zone=1 +south +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+25	geometry
+25	LINESTRING(-1652422.866845 1300274.91922,-275443.590341 -8644852.383437)
+SELECT 35, ST_AsText(_ST_Transform(ST_GeomFromText('POLYGON((0 0,1 0,1 1,0 1,0 0))', 4326, 'axis-order=long-lat'), '+proj=utm +zone=1 +south +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+35	geometry
+35	POLYGON((833978.556919 29995929.886042,722595.439676 29995929.886042,722561.736479 29885331.913518,833927.937096 29885247.048283,833978.556919 29995929.886042))
+SELECT 45, ST_AsText(_ST_Transform(ST_GeomFromText('MULTIPOINT(9 9,8 1,1 5)', 4326, 'axis-order=long-lat'), '+proj=utm +zone=1 +south +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+45	geometry
+45	MULTIPOINT((-160640.923181 28995651.600153),(-57002.405491 29884974.744862),(721753.345935 29442928.16415))
+SELECT 55, ST_AsText(_ST_Transform(ST_GeomFromText('MULTILINESTRING((0 0,5 5,0 0),(0 0,-5 -5,0 0))', 4326, 'axis-order=long-lat'), '+proj=utm +zone=1 +south +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+55	geometry
+55	MULTILINESTRING((833978.556919 29995929.886042,278246.654065 29442928.16415,833978.556919 29995929.886042),(833978.556919 29995929.886042,1389705.452479 -9437825.226475,833978.556919 29995929.886042))
+SELECT 65, ST_AsText(_ST_Transform(ST_GeomFromText('MULTIPOLYGON(((0 0, 3 0, 3 3, 0 3, 0 0)))', 4326, 'axis-order=long-lat'), '+proj=utm +zone=1 +south +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+65	geometry
+65	MULTIPOLYGON(((833978.556919 29995929.886042,500000 29995929.886042,500000 29664336.706494,833523.067008 29663879.411294,833978.556919 29995929.886042)))
+SELECT 75, ST_AsText(_ST_Transform(ST_GeomFromText('GEOMETRYCOLLECTION(Point(9 9),LINESTRING(1 5,0 0),POLYGON((2 2,2 8,8 8,8 2,2 2)))', 4326, 'axis-order=long-lat'), '+proj=utm +zone=1 +south +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+75	geometry
+75	GEOMETRYCOLLECTION(POINT(-160640.923181 28995651.600153),LINESTRING(721753.345935 29442928.16415,833978.556919 29995929.886042),POLYGON((611213.301271 29774835.019203,-56748.287241 29774019.445903,-51673.937369 29108275.54574,610204.602078 29111498.179551,611213.301271 29774835.019203)))
+SELECT 16, ST_AsText(_ST_Transform(ST_GeomFromText('POINT(123.45 -67.89)', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=-90 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+16	geometry
+16	POINT(2046764.276971 -1352156.571463)
+SELECT 26, ST_AsText(_ST_Transform(ST_GeomFromText('LINESTRING(123.45 -67.89, 10.11 -12.13)', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=-90 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+26	geometry
+26	LINESTRING(2046764.276971 -1352156.571463,1406436.139337 7887713.384986)
+SELECT 36, ST_AsText(_ST_Transform(ST_GeomFromText('POLYGON((0 0,1 0,1 1,0 1,0 0))', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=-90 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+36	geometry
+36	POLYGON((0 9009964.761231,157245.566999 9008592.499957,158605.709728 9086515.024711,0 9087899.155771,0 9009964.761231))
+SELECT 46, ST_AsText(_ST_Transform(ST_GeomFromText('MULTIPOINT(9 9,8 1,1 5)', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=-90 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+46	geometry
+46	MULTIPOINT((1515262.597952 9566991.522953),(1264791.106721 8999456.345903),(163925.702253 9391297.192387))
+SELECT 56, ST_AsText(_ST_Transform(ST_GeomFromText('MULTILINESTRING((0 0,5 5,0 0),(0 0,-5 -5,0 0))', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=-90 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+56	geometry
+56	MULTILINESTRING((0 9009964.761231,818630.163505 9356985.585486,0 9009964.761231),(0 9009964.761231,-750428.636177 8577438.560997,0 9009964.761231))
+SELECT 66, ST_AsText(_ST_Transform(ST_GeomFromText('MULTIPOLYGON(((0 0, 3 0, 3 3, 0 3, 0 0)))', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=-90 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+66	geometry
+66	MULTIPOLYGON(((0 9009964.761231,471545.121494 8997616.917664,483673.523523 9229040.614568,0 9241706.05152,0 9009964.761231)))
+SELECT 76, ST_AsText(_ST_Transform(ST_GeomFromText('GEOMETRYCOLLECTION(Point(9 9),LINESTRING(1 5,0 0),POLYGON((2 2,2 8,8 8,8 2,2 2)))', 4326, 'axis-order=long-lat'), '+proj=laea +lat_0=-90 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')) as geometry;
+76	geometry
+76	GEOMETRYCOLLECTION(POINT(1515262.597952 9566991.522953),LINESTRING(163925.702253 9391297.192387,0 9009964.761231),POLYGON((319859.05456 9159564.901202,1275542.076514 9075953.470857,1338002.507297 9520382.528893,335521.834099 9608088.223202,319859.05456 9159564.901202)))
+############################################################################
+# customized test for geographical srs -> projected srs -> geographical srs
+############################################################################
+SELECT ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3857), 4326));
+ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3857), 4326))
+POINT(2 1)
+SELECT ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3873), 4326));
+ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3873), 4326))
+POINT(2 1)
+SELECT ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3874), 4326));
+ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3874), 4326))
+POINT(2 1)
+SELECT ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3875), 4326));
+ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3875), 4326))
+POINT(2 1)
+SELECT ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3876), 4326));
+ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3876), 4326))
+POINT(2 1)
+SELECT ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3877), 4326));
+ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3877), 4326))
+POINT(2 1)
+SELECT ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3878), 4326));
+ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3878), 4326))
+POINT(2 1)
+SELECT ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3879), 4326));
+ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3879), 4326))
+POINT(2 1)
+SELECT ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3880), 4326));
+ST_AsText(_ST_Transform(_ST_Transform(ST_GeomFromText('POINT(1 2)', 4326, 'axis-order=long-lat'), 3880), 4326))
+POINT(2 1)
+SELECT ST_AsText(st_transform(ST_GeomFromText('POINT(15 20)'),0));
+ST_AsText(st_transform(ST_GeomFromText('POINT(15 20)'),0))
+POINT(15 20)
+select ST_AsText(st_transform(ST_GeomFromText('POINT(15 20)',26918),26918));
+ST_AsText(st_transform(ST_GeomFromText('POINT(15 20)',26918),26918))
+POINT(15 20)
+select ST_AsText(st_transform(ST_GeomFromText('POINT(15 20)',4326),4326));
+ST_AsText(st_transform(ST_GeomFromText('POINT(15 20)',4326),4326))
+POINT(15 20)
+# bugfix:
+SELECT _ST_ASEWKT(_ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(1 1)'),0));
+ERROR 22S00: Transformation to SRID 0 is not supported.
+# bugfix:
+SELECT _ST_ASEWKT(_ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(-16197654  16197654 )',26918),4326));
+ERROR 42000: Out of range
+# bugfix:
+SELECT _ST_ASEWKT(_ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(90 180)',26918),'+proj=gnom +ellps=WGS84 +lat_0=80 +lon_0=-150 +no_defs',4326.4326));
+ERROR 22023: Invalid GIS data provided to function _st_transform.
+SELECT _ST_ASEWKT(_ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(180 90)',26918),4326.4326));
+ERROR 22023: Invalid GIS data provided to function _st_transform.
+select st_transform(ST_GeomFromText('POINT(15 20)',4326),-4326);
+ERROR 22003: SRID value is out of range in 'st_transform'
+SELECT _ST_ASEWKT(_ST_TRANSFORM(ST_GEOMFROMTEXT('POINT(180 90)',26918),False));
+ERROR 22000: Invalid data type for the operation

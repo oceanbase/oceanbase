@@ -1,0 +1,75 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: dachuan.sdc
+# owner group: SQL2
+# tags: ddl
+# description:
+#
+####ddl要自动提交（之前未提交的数据也会一并提交）
+--disable_warnings
+drop database if exists jx_db;
+--enable_warnings
+create database jx_db;
+use jx_db;
+
+--disable_warnings
+drop table if exists t1, t2,t3;
+--enable_warnings
+create table t1 (c1 int primary key, c2 int);
+set  autocommit=0;
+insert into t1 values(1,1);
+create table t2 (c1 int primary key, c2 int);
+rollback;
+select * from t1;
+desc t2;
+set  autocommit=1;
+begin;
+insert into t1 values(2,2);
+create table t3 (c1 int primary key, c2 int);
+rollback;
+select * from t1;
+desc t3;
+
+create table ddl_t(c int);
+set autocommit = off;
+insert into ddl_t values(3);
+alter table ddl_t add column c2 int;
+select * from ddl_t;
+rollback;
+select * from ddl_t;
+
+# ddl执行失败
+create table jx_t1(c int);
+set autocommit = off;
+insert into jx_t1 values(4);
+--error 1050
+create table jx_t1(c int);
+select * from jx_t1;
+rollback;
+select * from jx_t1;
+
+create table jx_t2(c int);
+set autocommit = off;
+insert into jx_t2 values(5);
+--disable_warnings
+create user if not exists jx_user;
+--enable_warnings
+select * from jx_t2;
+rollback;
+select * from jx_t2;
+
+# dcl执行失败
+create table jx_t3(c int);
+set autocommit = off;
+insert into jx_t3 values(6);
+--error 1396
+create user jx_user;
+select * from jx_t3;
+rollback;
+select * from jx_t3;
+
+set autocommit = on;
+drop user jx_user;
+
+drop database jx_db;

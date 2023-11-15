@@ -1,0 +1,16 @@
+drop table if exists t_single, t_part;
+create table t_single (pk int primary key, c1 int);
+create table t_part (pk int primary key, c1 int) partition by hash(pk) partitions 2;
+insert into t_single values (1, 20), (2, 20);
+insert into t_part values (1, 2), (2, 2);
+begin;
+select * from t_single for update;
+pk	c1
+1	20
+2	20
+select /*+INDEX(INFO PRIMARY) READ_CONSISTENCY(WEAK) */ * from t_single t1 join t_part t2 on t1.pk = t2.c1 order by t2.pk;
+pk	c1	pk	c1
+2	20	1	2
+2	20	2	2
+rollback;
+drop table t_single, t_part;

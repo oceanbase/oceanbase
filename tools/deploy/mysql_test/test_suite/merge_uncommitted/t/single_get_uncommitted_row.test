@@ -1,0 +1,94 @@
+# owner: chaser.ch
+# owner group: storage
+# description: 本case是为了测试查询sstable上未提交的数据 single_get
+
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+set GLOBAL ob_query_timeout = 1000000000000;
+set GLOBAL ob_trx_timeout = 1000000000000;
+
+connect (conn2,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn0,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+
+connection conn1;
+--disable_warnings
+drop table if exists test_uncommitted_trx_minor_merge;
+--enable_warnings
+
+create table test_uncommitted_trx_minor_merge(a int primary key, b int, key ib(b));
+
+# 测试普通标记脏事务
+begin;
+insert into test_uncommitted_trx_minor_merge value(1, 1);
+insert into test_uncommitted_trx_minor_merge value(2, 2);
+
+connection conn0;
+let $__table_id__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ table_id from oceanbase.__all_virtual_table where table_name= 'test_uncommitted_trx_minor_merge', table_id, 1);
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+--source mysql_test/include/wait_minor_merge.inc
+
+connection conn2;
+# 不同事务查询sstable未提交数据
+select * from test_uncommitted_trx_minor_merge where a = 1;
+
+
+connection conn1;
+#同一事务查询sstable未提交数据
+select * from test_uncommitted_trx_minor_merge where a = 1;
+
+# 未提交的事务不能进fuse row cache
+connection conn2;
+select * from test_uncommitted_trx_minor_merge where a = 1;
+
+connection conn1;
+update test_uncommitted_trx_minor_merge set b = 10 where a = 1;
+
+commit;
+#查sstable未提交数据，但事务已提交
+select * from test_uncommitted_trx_minor_merge where a = 1;
+select * from test_uncommitted_trx_minor_merge where a = 2;
+
+connection conn2;
+
+select * from test_uncommitted_trx_minor_merge where a = 1;
+select * from test_uncommitted_trx_minor_merge where a = 2;
+
+insert into test_uncommitted_trx_minor_merge values (3,3);
+begin;
+select * from test_uncommitted_trx_minor_merge where a = 3 for update;
+
+connection conn0;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+--source mysql_test/include/wait_minor_merge.inc
+
+connection conn1;
+set ob_query_timeout = 1000000;
+set ob_trx_timeout = 1000000;
+--error 1205
+select * from test_uncommitted_trx_minor_merge where a = 3 for update nowait;
+set ob_query_timeout = 1000000000000;
+set ob_trx_timeout = 1000000000000;
+
+connection conn2;
+select * from test_uncommitted_trx_minor_merge where a = 3;
+update test_uncommitted_trx_minor_merge set b = 30 where a = 3;
+select * from test_uncommitted_trx_minor_merge where a = 3;
+
+connection conn0;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+--source mysql_test/include/wait_minor_merge.inc
+
+connection conn2;
+rollback;
+select * from test_uncommitted_trx_minor_merge where a = 3;
+
+drop table test_uncommitted_trx_minor_merge;

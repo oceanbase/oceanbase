@@ -1,0 +1,44 @@
+set GLOBAL ob_query_timeout = 1000000000000;
+set GLOBAL ob_trx_timeout = 10000000000000;
+set GLOBAL ob_trx_idle_timeout = 10000000000;
+alter system set minor_compact_trigger = 1;
+drop table if exists t1;
+create table t1(c1 int, c2 int, c3 varchar(100), v1 varchar(1000), v2 varchar(1000), r1 int, r2 int, primary key(c1, c2, c3));
+create index idx1 on t1(c1,c2,c3,r2,r1) storing(v1) LOCAL;
+select /*+ INDEX(t1 idx1)*/c1, c2, c3, r1, r2, v1 from t1;
+c1	c2	c3	r1	r2	v1
+1	1	c300000000000001	1	1	v100000000000000000001
+2	2	c300000000000002	2	2	v100000000000000000002
+update t1 set v1 = "11111111111" where c1 = 1 and c2 = 1;
+select /*+ INDEX(t1 idx1)*/c1, c2, c3, r1, r2, v1 from t1;
+c1	c2	c3	r1	r2	v1
+1	1	c300000000000001	1	1	11111111111
+2	2	c300000000000002	2	2	v100000000000000000002
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+SAVEPOINT p1;
+delete from t1 where c2 = 1;
+select /*+ INDEX(t1 idx1)*/c1, c2, c3, r1, r2, v1 from t1;
+c1	c2	c3	r1	r2	v1
+2	2	c300000000000002	2	2	v100000000000000000002
+insert into t1(c1, c2, c3, v1) values(1, 1, "c300000000000001", "v19999999");
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+ROLLBACK TO SAVEPOINT p1;
+update t1 set r2 = 77 where c1 = 1 and c2 = 1;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+commit;
+select /*+ INDEX(t1 idx1)*/c1, c2, c3, r1, r2, v1 from t1;
+c1	c2	c3	r1	r2	v1
+1	1	c300000000000001	1	77	11111111111
+2	2	c300000000000002	2	2	v100000000000000000002
+select * from t1;
+c1	c2	c3	v1	v2	r1	r2
+1	1	c300000000000001	11111111111	v200000000000000000001	1	77
+2	2	c300000000000002	v100000000000000000002	v200000000000000000002	2	2
+drop table t1;
+alter system set minor_compact_trigger = 2;

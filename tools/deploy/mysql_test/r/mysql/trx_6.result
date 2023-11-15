@@ -1,0 +1,29 @@
+drop table if exists t1,t2,t3,t4;
+create table t1(id int primary key, money1 int);
+insert into t1 values(1,100);
+begin;
+update t1 set money1 = money1+100 where id=2;
+begin;
+insert into t1 values(2,100);
+commit;
+ROLLBACK;
+select * from t1;
+id	money1
+1	100
+begin;
+insert into t1 values(3,100);
+commit;
+begin;
+update t1 set money1 = money1+100 where id=3;
+set @@ob_trx_timeout=100000000;
+begin;
+set @@ob_query_timeout = 10000000;
+delete from t1 where id = 3;
+Got one of the listed errors
+commit;
+ROLLBACK;
+select * from t1;
+id	money1
+1	100
+3	200
+drop table t1;

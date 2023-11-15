@@ -1,0 +1,169 @@
+alter system minor freeze;
+alter system set enable_kv_ttl = true;
+drop table if exists ttl_tm;
+CREATE TABLE ttl_tm(
+K varbinary(1024) NOT NULL,
+Q varbinary(256)  NOT NULL,
+T bigint NOT NULL,
+V varbinary(1024) DEFAULT NULL,
+PRIMARY KEY (K, Q, T)
+) kv_attributes ='{"Hbase": {"TimeToLive": 5, "MaxVersions": 2}}' partition by key(K) partitions 3;
+drop table if exists ttl_t;
+CREATE TABLE ttl_t(
+K varbinary(1024) NOT NULL,
+Q varbinary(256)  NOT NULL,
+T bigint NOT NULL,
+V varbinary(1024) DEFAULT NULL,
+PRIMARY KEY (K, Q, T)
+) kv_attributes = '{"Hbase": {"TimeToLive": 5}}' partition by key(K) partitions 3;
+drop table if exists ttl_m;
+CREATE TABLE ttl_m(
+K varbinary(1024) NOT NULL,
+Q varbinary(256)  NOT NULL,
+T bigint NOT NULL,
+V varbinary(1024) DEFAULT NULL,
+PRIMARY KEY (K, Q, T)
+) kv_attributes ='{"Hbase": {"MaxVersions": 2}}' partition by key(K) partitions 3;
+drop table if exists ttl_m_single;
+CREATE TABLE ttl_m_single(
+K varbinary(1024) NOT NULL,
+Q varbinary(256)  NOT NULL,
+T bigint NOT NULL,
+V varbinary(1024) DEFAULT NULL,
+PRIMARY KEY (K, Q, T)
+) kv_attributes ='{"Hbase": {"MaxVersions": 2}}';
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 0, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 0, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 0, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 0, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 1, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 1, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 1, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 1, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 2, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 2, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 2, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 2, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 3, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 3, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 3, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 3, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 4, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 4, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 4, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 4, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 5, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 5, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 5, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 5, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 6, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 6, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 6, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 6, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 7, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 7, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 7, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 7, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 8, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 8, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 8, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 8, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 9, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 9, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 9, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 9, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 10, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 10, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 10, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 10, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 11, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 11, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 11, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 11, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 12, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 12, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 12, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 12, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 13, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 13, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 13, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 13, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 14, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 14, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 14, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 14, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 15, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 15, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 15, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 15, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 16, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 16, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 16, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 16, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 17, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 17, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 17, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 17, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 18, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 18, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 18, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 18, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 19, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 19, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 19, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 19, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 20, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 20, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 20, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 20, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 21, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 21, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 21, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 21, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 22, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 22, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 22, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 22, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 23, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 23, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 23, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 23, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 24, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 24, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 24, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 24, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 25, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 25, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 25, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 25, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 26, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 26, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 26, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 26, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 27, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 27, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 27, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 27, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 28, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 28, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 28, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 28, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 29, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 29, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 29, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 29, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 30, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 30, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 30, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 30, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 31, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 31, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 31, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 31, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 32, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 32, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 32, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 32, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 33, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 33, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 33, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 33, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 34, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 34, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 34, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 34, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 35, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 35, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 35, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 35, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 36, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 36, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 36, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 36, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 37, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 37, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 37, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 37, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 38, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 38, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 38, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 38, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 39, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 39, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 39, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 39, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 40, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 40, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 40, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 40, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 41, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 41, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 41, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 41, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 42, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 42, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 42, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 42, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 43, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 43, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 43, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 43, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 44, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 44, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 44, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 44, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 45, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 45, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 45, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 45, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 46, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 46, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 46, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 46, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 47, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 47, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 47, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 47, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 48, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 48, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 48, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 48, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 49, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 49, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 49, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 49, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 50, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 50, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 50, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 50, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 51, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 51, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 51, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 51, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 52, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 52, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 52, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 52, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 53, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 53, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 53, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 53, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 54, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 54, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 54, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 54, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 55, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 55, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 55, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 55, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 56, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 56, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 56, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 56, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 57, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 57, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 57, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 57, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 58, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 58, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 58, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 58, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 59, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 59, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 59, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 59, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 60, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 60, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 60, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 60, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 61, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 61, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 61, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 61, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 62, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 62, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 62, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 62, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 63, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 63, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 63, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 63, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 64, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 64, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 64, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 64, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 65, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 65, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 65, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 65, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 66, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 66, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 66, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 66, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 67, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 67, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 67, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 67, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 68, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 68, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 68, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 68, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 69, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 69, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 69, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 69, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 70, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 70, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 70, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 70, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 71, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 71, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 71, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 71, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 72, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 72, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 72, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 72, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 73, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 73, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 73, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 73, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 74, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 74, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 74, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 74, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 75, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 75, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 75, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 75, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 76, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 76, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 76, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 76, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 77, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 77, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 77, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 77, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 78, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 78, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 78, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 78, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 79, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 79, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 79, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 79, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 80, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 80, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 80, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 80, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 81, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 81, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 81, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 81, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 82, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 82, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 82, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 82, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 83, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 83, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 83, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 83, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 84, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 84, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 84, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 84, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 85, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 85, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 85, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 85, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 86, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 86, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 86, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 86, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 87, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 87, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 87, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 87, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 88, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 88, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 88, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 88, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 89, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 89, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 89, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 89, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 90, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 90, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 90, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 90, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 91, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 91, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 91, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 91, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 92, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 92, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 92, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 92, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 93, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 93, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 93, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 93, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 94, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 94, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 94, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 94, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 95, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 95, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 95, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 95, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 96, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 96, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 96, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 96, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 97, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 97, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 97, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 97, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 98, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 98, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 98, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 98, 'del');;
+insert into ttl_tm(K, Q, T, V) values ('row1', 'cq1', 99, 'del');insert into ttl_t(K, Q, T, V) values ('row1', 'cq1', 99, 'del');insert into ttl_m(K, Q, T, V) values ('row1', 'cq1', 99, 'del');insert into ttl_m_single(K, Q, T, V) values ('row1', 'cq1', 99, 'del');;
+alter system trigger ttl;
+select count(*) from ttl_tm;
+count(*)
+0
+select TABLE_NAME, TRIGGER_TYPE, STATUS, TTL_DEL_CNT, MAX_VERSION_DEL_CNT, SCAN_CNT, RET_CODE from oceanbase.DBA_OB_KV_TTL_TASK_HISTORY where table_name = 'ttl_tm' order by tablet_id;
+TABLE_NAME	TRIGGER_TYPE	STATUS	TTL_DEL_CNT	MAX_VERSION_DEL_CNT	SCAN_CNT	RET_CODE
+ttl_tm	USER	FINISHED	0	0	0	OB_SUCCESS
+ttl_tm	USER	FINISHED	0	0	0	OB_SUCCESS
+ttl_tm	USER	FINISHED	2	98	100	OB_SUCCESS
+select count(*) from ttl_t;
+count(*)
+0
+select TABLE_NAME, TRIGGER_TYPE, STATUS, TTL_DEL_CNT, MAX_VERSION_DEL_CNT, SCAN_CNT, RET_CODE from oceanbase.DBA_OB_KV_TTL_TASK_HISTORY where table_name = 'ttl_t' order by tablet_id;
+TABLE_NAME	TRIGGER_TYPE	STATUS	TTL_DEL_CNT	MAX_VERSION_DEL_CNT	SCAN_CNT	RET_CODE
+ttl_t	USER	FINISHED	0	0	0	OB_SUCCESS
+ttl_t	USER	FINISHED	0	0	0	OB_SUCCESS
+ttl_t	USER	FINISHED	100	0	100	OB_SUCCESS
+select count(*) from ttl_m;
+count(*)
+2
+select TABLE_NAME, TRIGGER_TYPE, STATUS, TTL_DEL_CNT, MAX_VERSION_DEL_CNT, SCAN_CNT, RET_CODE from oceanbase.DBA_OB_KV_TTL_TASK_HISTORY where table_name = 'ttl_m' order by tablet_id;
+TABLE_NAME	TRIGGER_TYPE	STATUS	TTL_DEL_CNT	MAX_VERSION_DEL_CNT	SCAN_CNT	RET_CODE
+ttl_m	USER	FINISHED	0	0	0	OB_SUCCESS
+ttl_m	USER	FINISHED	0	0	0	OB_SUCCESS
+ttl_m	USER	FINISHED	0	98	100	OB_SUCCESS
+select count(*) from ttl_m_single;
+count(*)
+2
+select TABLE_NAME, TRIGGER_TYPE, STATUS, TTL_DEL_CNT, MAX_VERSION_DEL_CNT, SCAN_CNT, RET_CODE from oceanbase.DBA_OB_KV_TTL_TASK_HISTORY where table_name = 'ttl_m_single' order by tablet_id;
+TABLE_NAME	TRIGGER_TYPE	STATUS	TTL_DEL_CNT	MAX_VERSION_DEL_CNT	SCAN_CNT	RET_CODE
+ttl_m_single	USER	FINISHED	0	98	100	OB_SUCCESS
+drop table ttl_tm;
+drop table ttl_t;
+drop table ttl_m;
+drop table ttl_m_single;

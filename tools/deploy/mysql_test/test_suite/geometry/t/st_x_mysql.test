@@ -1,0 +1,205 @@
+#owner: ht353245
+#owner group: shenzhen
+--echo # ----------------------------------------------------------------------
+--echo # Test of GEOMETRY ST_X Function.
+--echo # ----------------------------------------------------------------------
+--source mysql_test/test_suite/geometry/t/import_default_srs_data_mysql.inc
+
+  SELECT ST_X(ST_GEOMFROMTEXT('POINT(0 0)'));
+  SELECT ST_X(ST_GEOMFROMTEXT('POINT(1.1111 -1.1111)'));
+  SELECT ST_X(ST_GEOMFROMTEXT('POINT(1e308 -1e308)'));
+  SELECT ST_Y(ST_GEOMFROMTEXT('POINT(0 0)'));
+  SELECT ST_Y(ST_GEOMFROMTEXT('POINT(1.1111 -1.1111)'));
+  SELECT ST_Y(ST_GEOMFROMTEXT('POINT(1e308 -1e308)'));
+
+	--disable_warnings
+	drop table if exists geo;
+	--enable_warnings
+
+  CREATE TABLE geo (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    type_name TEXT,
+    geo_value GEOMETRY
+  );
+
+  INSERT INTO geo (type_name,geo_value) VALUES
+    ('P1', ST_GeomFromText("POINT(1 3)")),
+    ('P2', ST_GeomFromText("POINT(-100 +2e6)")),
+    ('P3', ST_GeomFromText("POINT(23.45 67.910)")),
+    ('P4', ST_GeomFromText("POINT(1111 2222)"));
+  SELECT ST_X(geo_value) FROM geo ORDER BY id;
+  SELECT ST_ASTEXT(ST_X(geo_value, 2012.2102)) FROM geo ORDER BY id;
+  SELECT ST_Y(geo_value) FROM geo ORDER BY id;
+  SELECT ST_ASTEXT(ST_Y(geo_value, 2102.2012)) FROM geo ORDER BY id;
+  truncate table geo;
+  drop table geo;
+
+  # TODO: point
+  --error 1690
+  SELECT ST_X(POINT(pow(2, 2048), 4), 5);
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT('LINESTRING(0 0, 1 1)'), 5);
+  --error 3516
+  SELECT ST_Y(ST_GEOMFROMTEXT('MULTIPOINT(10 40, 40 30, 20 20, 30 10)'), 1024);
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT("MULTILINESTRING((10 10, 20 20, 10 40), (40 40, 30 30, 40 20, 30 10))"), 1024);
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT('POLYGON((0 0,2 2,0 2,0 0))'), -1024);
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT("MULTIPOLYGON(((40 40, 20 45, 45 30, 40 40)), ((20 35, 10 30, 10 10, 30 5, 45 20, 20 35)))"), -1024);
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT("GEOMETRYCOLLECTION(
+                         POINT(4 6),
+                         LINESTRING(4 6,7 10),
+                         POLYGON ((30 10, 40 40, 20 40, 10 20, 30 10)),
+                         MULTIPOINT (10 40, 40 30, 20 20, 30 10),
+                         MULTILINESTRING ((10 10, 20 20, 10 40), (40 40, 30 30, 40 20, 30 10)),
+                         MULTIPOLYGON (((30 20, 45 40, 10 40, 30 20)),
+                           ((15 5, 40 10, 10 20, 5 10, 15 5))))"), 
+                         1024);
+
+  --echo # NULL as one of the parameters must result in NULL return value.
+  SELECT ST_X(NULL);
+  SELECT ST_X(NULL, NULL);
+  SELECT ST_X(NULL, 1);
+  SELECT ST_X(ST_GEOMFROMTEXT('POINT(0 0)', 4326), NULL);
+  
+  --echo # Invalid data is not allowed.
+  --echo #todo@dazhi: string -> geometry
+  #--error 3064
+  #SELECT ST_X(x'000000000123456789abcdef');
+
+  --echo # New value must be within the allowed range.
+  --error 3617
+  SELECT ST_X(ST_GEOMFROMTEXT('POINT(0 0)', 4326), -90.000000001);
+  --error 3617
+  SELECT ST_X(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 90.000000001);
+  --error 3616
+  SELECT ST_X(ST_GEOMFROMTEXT('POINT(0 0)', 7035), -180.000000001);
+  --error 3616
+  SELECT ST_X(ST_GEOMFROMTEXT('POINT(0 0)', 7035), 180.000000001);
+
+  --echo # First parameter must be a point.
+  --echo # Cartesian SRID 0
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT('LINESTRING(0 0, 1 1)', 0));
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT('POLYGON((0 0, 0 1, 1 1, 0 0))', 0));
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT('MULTIPOINT((0 0))', 0));
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT('MULTIPOINT((0 0), (1 1))', 0));
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT('MULTILINESTRING((0 0, 1 1))', 0));
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0, 0 1, 1 1, 0 0)))', 0));
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0))', 0));
+
+  --echo # Projected
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT('LINESTRING(0 0, 1 1)', 3857));
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT('POLYGON((0 0, 0 1, 1 1, 0 0))', 3857));
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT('MULTIPOINT((0 0))', 3857));
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT('MULTIPOINT((0 0), (1 1))', 3857));
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT('MULTILINESTRING((0 0, 1 1))', 3857));
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0, 0 1, 1 1, 0 0)))', 3857));
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0))', 3857));
+
+  --echo # Geographic
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT('LINESTRING(0 0, 1 1)', 4326));
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT('POLYGON((0 0, 0 1, 1 1, 0 0))', 4326));
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT('MULTIPOINT((0 0))', 4326));
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT('MULTIPOINT((0 0), (1 1))', 4326));
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT('MULTILINESTRING((0 0, 1 1))', 4326));
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0, 0 1, 1 1, 0 0)))', 4326));
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0))', 4326));
+
+  --echo # Invalied geometry
+  --error 3516
+  SELECT ST_X(ST_GeomFromText('LINESTRING(0 0, 1 1)'), 5);
+  --error 3516
+  SELECT ST_Y(ST_GeomFromText('LINESTRING(0 0, 1 1)'), 5);
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT('POLYGON((0 0,2 2,0 2,0 0))'), -1024);
+  --error 3516
+  SELECT ST_Y(ST_GEOMFROMTEXT('POLYGON((0 0,2 2,0 2,0 0))'), -1024);
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT('MULTIPOINT(10 40, 40 30, 20 20, 30 10)'), 1024);
+  --error 3516
+  SELECT ST_Y(ST_GEOMFROMTEXT('MULTIPOINT(10 40, 40 30, 20 20, 30 10)'), 1024);
+  --error 3516
+  SELECT ST_X(ST_GEOMFROMTEXT("MULTILINESTRING((10 10, 20 20, 10 40)," 
+  "(40 40, 30 30, 40 20, 30 10))"), 1024);
+
+  --echo # Get or set the X coordinate of SRID 0.
+  SELECT ST_X(ST_GEOMFROMTEXT('POINT(1 0)', 0));
+  # SELECT HEX(ST_X(ST_GEOMFROMTEXT('POINT(0 0)', 0), 1));
+
+  --echo # Get or set the X coordinate of a projected SRS.
+  SELECT ST_X(ST_GEOMFROMTEXT('POINT(1 0)', 3857));
+  # SELECT HEX(ST_X(ST_GEOMFROMTEXT('POINT(0 0)', 3857), 1));
+
+  --echo # Get or set the X coordinate (latitude) of a point in a lat-long SRS.
+  SELECT ST_X(ST_GEOMFROMTEXT('POINT(1 0)', 4326));
+  # SELECT HEX(ST_X(ST_GEOMFROMTEXT('POINT(0 0)', 4326), 1));
+
+  --echo # Get or set the X coordinate (longitude) of a point in a long-lat SRS.
+  SELECT ST_X(ST_GEOMFROMTEXT('POINT(1 0)', 7035));
+  # SELECT HEX(ST_X(ST_GEOMFROMTEXT('POINT(0 0)', 7035), 1));
+
+  SELECT 'X1', ST_X(ST_GEOMFROMTEXT('POINT (0 0)'));
+  SELECT 'X2', ST_X(ST_GEOMFROMTEXT('POINT (1 2)'));
+  SELECT 'X3', ST_X(ST_GEOMFROMTEXT('POINT (6 7)'));
+  SELECT 'X4', ST_X(ST_GEOMFROMTEXT('POINT (10 11)'));
+  --error 3516
+  SELECT 'X5', ST_X(ST_GEOMFROMTEXT('MULTIPOINT ((0 0), (1 1))'));
+  --error 3516
+  SELECT 'X6', ST_X(ST_GEOMFROMTEXT('LINESTRING (0 0, 1 1)'));
+  --error 3516
+  SELECT 'X7', ST_X(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION (POINT(0 0))'));
+  --error 3516
+  SELECT 'X8', ST_X(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION (POINT(0 1), LINESTRING(0 0, 1 1))'));
+
+  --echo # Test unusual input
+  SET @A = NULL;
+  SELECT ST_ASTEXT(ST_LATITUDE(ST_GEOMFROMTEXT('POINT(90 -90)',4326), @A));
+  --error 3617
+  SELECT ST_LONGITUDE(ST_GEOMFROMTEXT('POINT(180 -180)',4269,'axis-order=long-lat'),NULL);
+  SELECT ST_ASTEXT(ST_LONGITUDE(ST_GEOMFROMTEXT('POINT(90 -90)',4120), ' '));
+  SELECT ST_ASTEXT(ST_LONGITUDE(ST_GEOMFROMTEXT('POINT(90 -90)',4120), 'invalid input'));
+  --echo #
+
+  --echo # Test precision
+  select st_latitude(st_geomfromtext('point(1e-16 1e-16)', 4326));
+  --echo #
+  
+  --echo # Test wkb type
+  --error 3037
+  select st_x(x'E6100000010000000041CF2402F51C54C0845661A4703A4940');
+  --error 3037
+  select st_y(x'E6100000010800000041CF2402F51C54C0845661A4703A4940');
+  --echo # 
+
+  --echo # Test unusual input
+  --error 3037
+  select st_x(1.1);
+  --error 3548
+  select st_y(10.2);
+  --error 3548
+  select st_x(102342);
+  --error 3548
+  select st_y('sdfwefqwe');

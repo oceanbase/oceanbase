@@ -1,0 +1,128 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: xiaoyi.xy
+# owner group: sql2
+# description: test __all_virtual_proxy_partition_info
+
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+connection default;
+--echo
+--echo #******* 含1个constraint check, 且能用于分区裁减
+--disable_warnings
+drop table if exists proxy_constrain_part_pruning_t;
+--enable_warnings
+create table proxy_constrain_part_pruning_t(c1 varchar(20) primary key, c2 varchar(20), c3 varchar(20),
+                  partition_id varchar(2) GENERATED ALWAYS AS (substr(c1,19,2)) VIRTUAL,
+                  CONSTRAINT cst_proxy_00 CHECK (partition_id = substr(c2,19,2)))
+                  partition by list columns(partition_id)
+                  (partition p0 values in('00'), partition p1 values in('11'));
+
+connection obsys;
+let $table_id = query_get_value(select table_id from oceanbase.__all_virtual_table where table_name='proxy_constrain_part_pruning_t' order by schema_version desc limit 1, table_id, 1);
+--disable_query_log
+eval select part_key_name, part_key_extra, part_key_expr from oceanbase.__all_virtual_proxy_partition_info where tenant_name = 'mysql' and table_id = $table_id;
+--enable_query_log
+
+connection default;
+--echo
+--echo #******* 含3个不同形式constraint check, 且均能用于分区裁减
+--disable_warnings
+drop table if exists proxy_constrain_part_pruning_t;
+--enable_warnings
+create table proxy_constrain_part_pruning_t(c1 varchar(20) primary key, c2 varchar(20), c3 varchar(20), c4 varchar(2),
+                  partition_id varchar(2) GENERATED ALWAYS AS (substr(c1,19,2)) VIRTUAL,
+                  CONSTRAINT cst_proxy_00 CHECK (partition_id = substr(c2,19,2)),
+                  CONSTRAINT cst_proxy_01 CHECK (partition_id = c4),
+                  CONSTRAINT cst_proxy_02 CHECK (substr(c3,19,2) = partition_id))
+                  partition by list columns(partition_id)
+                  (partition p0 values in('00'), partition p1 values in('11'));
+
+connection obsys;
+let $table_id = query_get_value(select table_id from oceanbase.__all_virtual_table where table_name='proxy_constrain_part_pruning_t' order by schema_version desc limit 1, table_id, 1);
+--disable_query_log
+eval select part_key_name, part_key_extra, part_key_expr from oceanbase.__all_virtual_proxy_partition_info where tenant_name = 'mysql' and table_id = $table_id;
+--enable_query_log
+
+connection default;
+--echo
+--echo #******* 含1个constraint, 且不能用于分区裁减
+--disable_warnings
+drop table if exists proxy_constrain_part_pruning_t;
+--enable_warnings
+create table proxy_constrain_part_pruning_t(c1 varchar(20) primary key, c2 varchar(20), c3 varchar(20), c4 varchar(2),
+                  partition_id varchar(2) GENERATED ALWAYS AS (substr(c1,19,2)) VIRTUAL,
+                  CONSTRAINT cst_proxy_00 CHECK (c4 = substr(c2,19,2)))
+                  partition by list columns(partition_id)
+                  (partition p0 values in('00'), partition p1 values in('11'));
+
+connection obsys;
+let $table_id = query_get_value(select table_id from oceanbase.__all_virtual_table where table_name='proxy_constrain_part_pruning_t' order by schema_version desc limit 1, table_id, 1);
+--disable_query_log
+eval select part_key_name, part_key_extra, part_key_expr from oceanbase.__all_virtual_proxy_partition_info where tenant_name = 'mysql' and table_id = $table_id;
+--enable_query_log
+
+connection default;
+--echo
+--echo #******* 含3个constraint, 且有2个constraint不含分区键
+--disable_warnings
+drop table if exists proxy_constrain_part_pruning_t;
+--enable_warnings
+create table proxy_constrain_part_pruning_t(c1 varchar(20) primary key, c2 varchar(20), c3 varchar(20), c4 varchar(2),
+                  partition_id varchar(2) GENERATED ALWAYS AS (substr(c1,19,2)) VIRTUAL,
+                  CONSTRAINT cst_proxy_00 CHECK (c4 = substr(c3,19,2)),
+                  CONSTRAINT cst_proxy_02 CHECK (partition_id = substr(c2,19,2)))
+                  partition by list columns(partition_id)
+                  (partition p0 values in('00'), partition p1 values in('11'));
+
+connection obsys;
+let $table_id = query_get_value(select table_id from oceanbase.__all_virtual_table where table_name='proxy_constrain_part_pruning_t' order by schema_version desc limit 1, table_id, 1);
+--disable_query_log
+eval select part_key_name, part_key_extra, part_key_expr from oceanbase.__all_virtual_proxy_partition_info where tenant_name = 'mysql' and table_id = $table_id;
+--enable_query_log
+
+
+# test part_key_default_value
+connection default;
+--echo
+--echo #******* 测试各数据类型的default_value是否正常输出，其中part_key_default_value是序列化后的二进制值。
+--disable_warnings
+drop table if exists default_value_t, default_value_null_t;
+create table default_value_t(c1 BOOL default true, c2 SMALLINT default 2, c3 MEDIUMINT default 3, c4 INT default 5, 
+    c5 BIGINT default 6, c6 DATE default '2020-10-10', c7 TIME default '15:56:23', c8 DATETIME default '2020-10-12 15:55:55',
+    c9 TIMESTAMP default '2022-10-11 16:56:56', c10 YEAR default '2022', c11 CHAR(10) default 'aaa', c12 VARCHAR(10) default 'bbb')
+    partition by key(c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12);
+create table default_value_null_t(c1 INT default 1, c2 INT, c3 INT GENERATED ALWAYS AS (c1 + 1)) partition by key(c2,c3);
+
+connection obsys;
+let $table_id = query_get_value(select table_id from oceanbase.__all_virtual_table where table_name='default_value_t' order by schema_version desc limit 1, table_id, 1);
+--disable_query_log
+eval select part_key_default_value from oceanbase.__all_virtual_proxy_partition_info where tenant_name = 'mysql' and table_id = $table_id;
+--enable_query_log
+let $table_id = query_get_value(select table_id from oceanbase.__all_virtual_table where table_name='default_value_null_t' order by schema_version desc limit 1, table_id, 1);
+--disable_query_log
+eval select part_key_default_value from oceanbase.__all_virtual_proxy_partition_info where tenant_name = 'mysql' and table_id = $table_id;
+--enable_query_log
+
+# bugfix: issue/48579037
+connection default;
+--disable_warnings
+drop table if exists proxy_list_hash;
+--enable_warnings
+create table proxy_list_hash(c1 int, c2 int, primary key(c1, c2)) partition by list (c1) subpartition by hash(c2) subpartitions 2 (partition p0 values in (null), partition p1 values in (1));
+let $tenant_id = `select effective_tenant_id()`;
+
+connection obsys;
+let $table_id = query_get_value(select table_id from oceanbase.__all_virtual_table where tenant_id = $tenant_id and table_name = 'proxy_list_hash' order by schema_version desc limit 1, table_id, 1);
+--disable_query_log
+eval select part_name, high_bound_val from oceanbase.__all_virtual_proxy_partition where tenant_name = 'mysql' and table_id = $table_id;
+eval select part_name, sub_part_position from oceanbase.__all_virtual_proxy_sub_partition where tenant_name = 'mysql' and table_id = $table_id;
+--enable_query_log
+
+connection default;
+--disable_warnings
+drop table if exists proxy_list_hash;
+--enable_warnings
+
+disconnect obsys;

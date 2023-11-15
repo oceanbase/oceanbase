@@ -1,0 +1,80 @@
+#owner: lihongqin.lhq
+#owner group: storage
+#description: modify primary key to a column that contains null values.
+
+# Cannot add primary key columns with null values.
+--disable_warnings
+--disable_result_log
+drop table if exists t1;
+--enable_result_log
+create table t1(c1 char(100), c2 char(100));
+insert into t1(c1, c2) values('123', null);
+--error 1138
+alter table t1 add primary key(c1, c2);
+drop table t1;
+
+# Cannot change primary key to columns with null values.
+create table t1(c1 char(100) primary key, c2 char(100));
+insert into t1(c1, c2) values('111', null);
+--error 1138
+alter table t1 drop primary key, add primary key(c2);
+drop table t1;
+
+# Heap-organized table with partition key can have rowkey with some null values.
+create table t1(c1 int, c2 int) partition by hash(c2);
+insert into t1(c1, c2) values(1, null);
+alter table t1 modify column c1 char(10);
+drop table t1;
+
+# Check duplicate primary key.
+create table t1(c1 char(100) primary key, c2 char(100));
+insert into t1(c1, c2) values('111', '1');
+insert into t1(c1, c2) values('112', '1');
+--error 1062
+alter table t1 drop primary key, add primary key(c2);
+drop table t1;
+
+# Index table can have rowkey with some null values.
+create table t1(c1 int, c2 int);
+insert into t1(c1, c2) values(111, NULL);
+insert into t1(c1, c2) values(112, NULL);
+create index idx on t1(c2);
+drop table t1;
+
+# test add/alter pk to generated column related.
+--disable_result_log
+DROP TABLE IF EXISTS Z0CASE;
+--enable_result_log
+--error 3106
+CREATE TABLE ZOCASE(C1 CHAR(10), C2 INT, C3 INT GENERATED ALWAYS AS (C2+1) VIRTUAL, PRIMARY KEY(C3));
+--error 3106
+CREATE TABLE Z0CASE(C1 CHAR(10), C2 INT, C3 INT GENERATED ALWAYS AS (C2+1) VIRTUAL, PRIMARY KEY(C2, C3));
+CREATE TABLE Z0CASE(C1 CHAR(10), C2 INT, C3 INT GENERATED ALWAYS AS (C2+1) VIRTUAL);
+--error 3106
+ALTER TABLE Z0CASE ADD PRIMARY KEY(C3);
+--error 3106
+ALTER TABLE Z0CASE ADD PRIMARY KEY(C2, C3);
+ALTER TABLE Z0CASE ADD PRIMARY KEY(C2);
+DROP TABLE Z0CASE;
+CREATE TABLE Z0CASE(C1 CHAR(10), C2 INT, C3 INT GENERATED ALWAYS AS (C2+1) VIRTUAL, PRIMARY KEY(C2));
+--error 3106
+ALTER TABLE Z0CASE DROP PRIMARY KEY, ADD PRIMARY KEY(C2, C3);
+ALTER TABLE Z0CASE DROP PRIMARY KEY, ADD PRIMARY KEY(C2, C1);
+DROP TABLE Z0CASE;
+
+--error 3106
+CREATE TABLE ZOCASE(C1 CHAR(10), C2 INT, C3 INT GENERATED ALWAYS AS (C2+1) STORED, PRIMARY KEY(C3));
+--error 3106
+CREATE TABLE Z0CASE(C1 CHAR(10), C2 INT, C3 INT GENERATED ALWAYS AS (C2+1) STORED, PRIMARY KEY(C2, C3));
+CREATE TABLE Z0CASE(C1 CHAR(10), C2 INT, C3 INT GENERATED ALWAYS AS (C2+1) STORED);
+--error 3106
+ALTER TABLE Z0CASE ADD PRIMARY KEY(C3);
+--error 3106
+ALTER TABLE Z0CASE ADD PRIMARY KEY(C2, C3);
+ALTER TABLE Z0CASE ADD PRIMARY KEY(C2);
+DROP TABLE Z0CASE;
+CREATE TABLE Z0CASE(C1 CHAR(10), C2 INT, C3 INT GENERATED ALWAYS AS (C2+1) STORED, PRIMARY KEY(C2));
+--error 3106
+ALTER TABLE Z0CASE DROP PRIMARY KEY, ADD PRIMARY KEY(C2, C3);
+ALTER TABLE Z0CASE DROP PRIMARY KEY, ADD PRIMARY KEY(C2, C1);
+DROP TABLE Z0CASE;

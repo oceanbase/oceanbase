@@ -1,0 +1,99 @@
+set GLOBAL ob_query_timeout = 1000000000000;
+set GLOBAL ob_trx_timeout = 1000000000000;
+drop table if exists query_uncommitted_data2;
+create table query_uncommitted_data2(id int primary key, k int);
+insert into query_uncommitted_data2 value(1,1);
+insert into query_uncommitted_data2 value(2,2);
+begin;
+insert into query_uncommitted_data2 value(3,3);
+insert into query_uncommitted_data2 value(4,4);
+insert into query_uncommitted_data2 value(5,5);
+select * from query_uncommitted_data2;
+id	k
+1	1
+2	2
+3	3
+4	4
+5	5
+select * from query_uncommitted_data2 where id=3;
+id	k
+3	3
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+select * from query_uncommitted_data2;
+id	k
+1	1
+2	2
+select * from query_uncommitted_data2 where id=1;
+id	k
+1	1
+select * from query_uncommitted_data2 where id=3;
+id	k
+select * from query_uncommitted_data2 where id in (1,3);
+id	k
+1	1
+3	3
+commit;
+select * from query_uncommitted_data2 where id=5;
+id	k
+5	5
+select * from query_uncommitted_data2;
+id	k
+1	1
+2	2
+3	3
+4	4
+5	5
+select * from query_uncommitted_data2 where id=5;
+id	k
+5	5
+select * from query_uncommitted_data2;
+id	k
+1	1
+2	2
+3	3
+4	4
+5	5
+insert into query_uncommitted_data2 values(5,5);
+ERROR 23000: Duplicate entry '5' for key 'PRIMARY'
+begin;
+insert into query_uncommitted_data2 values(6,6);
+update query_uncommitted_data2 set k=10 where id=5;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+set ob_query_timeout = 1000000;
+set ob_trx_timeout = 1000000;
+insert into query_uncommitted_data2 values (6, 60);
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+update query_uncommitted_data2 set k=10 where id=6;
+update query_uncommitted_data2 set k=10 where id=5;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+select * from query_uncommitted_data2;
+id	k
+1	1
+2	2
+3	3
+4	4
+5	5
+insert into query_uncommitted_data2 values(6,6);
+ERROR 23000: Duplicate entry '6' for key 'PRIMARY'
+select * from query_uncommitted_data2;
+id	k
+1	1
+2	2
+3	3
+4	4
+5	10
+6	6
+commit;
+select * from query_uncommitted_data2;
+id	k
+1	1
+2	2
+3	3
+4	4
+5	10
+6	6
+drop table query_uncommitted_data2;

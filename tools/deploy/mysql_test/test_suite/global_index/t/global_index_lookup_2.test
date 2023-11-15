@@ -1,0 +1,118 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: yuchen.wyc
+#owner group: sql3
+# tags: optimizer, global_index
+--result_format 4
+--explain_protocol 2
+
+--disable_warnings
+drop database if exists muhangtest;
+create database muhangtest;
+use muhangtest;
+--enable_warnings
+
+set ob_enable_plan_cache = off;
+set ob_enable_transformation = false;
+
+--disable_warnings
+drop table if exists t6;
+--enable_warnings
+create table t6(a int, b int, c int, d int, e int, primary key(a,b,c,d)) partition by key(b,c) partitions 3;
+create index gkey on t6(b,c,d) global partition by hash(b) partitions 5;
+--source mysql_test/include/check_all_idx_ok.inc
+--disable_query_log
+--disable_result_log
+insert into t6 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+--enable_query_log
+--enable_result_log
+--sleep 1
+
+--disable_warnings
+drop table if exists t7;
+--enable_warnings
+create table t7(a int, b int, c int, d int, e int, primary key(a,b,c,d)) partition by key(b,c,d) partitions 4;
+create index gkey on t7(b,c,d) global partition by hash(b) partitions 5;
+--source mysql_test/include/check_all_idx_ok.inc
+--disable_query_log
+--disable_result_log
+insert into t7 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+--enable_query_log
+--enable_result_log
+--sleep 1
+
+--disable_warnings
+drop table if exists t8;
+--enable_warnings
+create table t8(a int, b int, c int, d int, e int, primary key(a,b,c,d), key k1(b) local, key k2(c,b) local, key k3(c,d,b) local) partition by range(b) ( 
+  partition p0 values less than (3),
+  partition p1 values less than (5),
+  partition p2 values less than (100));  
+create index gkey on t8(b,c,d) global partition by hash(b) partitions 5;
+--source mysql_test/include/check_all_idx_ok.inc
+--disable_query_log
+--disable_result_log
+insert into t8 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+--enable_query_log
+--enable_result_log
+--sleep 1
+
+--disable_warnings
+drop table if exists t9;
+--enable_warnings
+create table t9(a int, b int, c int, d int, e int, primary key(a,b,c,d), key k1(b) local, key k2(c,b) local, key k3(c,d,b) local) partition by range(b+1) ( 
+  partition p0 values less than (3),
+  partition p1 values less than (5),
+  partition p2 values less than (100));  
+create index gkey on t9(b,c,d) global partition by hash(b) partitions 5;
+--source mysql_test/include/check_all_idx_ok.inc
+--disable_query_log
+--disable_result_log
+insert into t9 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+--enable_query_log
+--enable_result_log
+--sleep 1
+
+--disable_warnings
+drop table if exists t10;
+--enable_warnings
+create table t10(a int, b int, c int, d int, e int, primary key(a,b,c,d), key k1(b) local, key k2(c,b) local, key k3(c,d,b) local) partition by range(b+c) ( 
+  partition p0 values less than (3),
+  partition p1 values less than (5),
+  partition p2 values less than (100));  
+create index gkey on t10(b,c,d) global partition by hash(b) partitions 5;
+--source mysql_test/include/check_all_idx_ok.inc
+--disable_query_log
+--disable_result_log
+insert into t10 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+--enable_query_log
+--enable_result_log
+--sleep 1
+
+select /*+index(t6 gkey)*/ * from t6 where a in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t6 gkey)*/ * from t6 where b in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t6 gkey)*/ * from t6 where (c,b) in ((1,1),(2,2),(3,3),(4,4),(5,5)) order by a,b,c,d;
+select /*+index(t6 gkey)*/ * from t6 where (c,d,b) in ((1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5)) order by a,b,c,d;
+
+select /*+index(t7 gkey)*/ * from t7 where a in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t7 gkey)*/ * from t7 where b in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t7 gkey)*/ * from t7 where (c,b) in ((1,1),(2,2),(3,3),(4,4),(5,5)) order by a,b,c,d;
+select /*+index(t7 gkey)*/ * from t7 where (c,d,b) in ((1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5)) order by a,b,c,d;
+
+##     1.3 test range partitioning
+select /*+index(t8 gkey)*/ * from t8 where a in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t8 gkey)*/ * from t8 where b in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t8 gkey)*/ * from t8 where (c,b) in ((1,1),(2,2),(3,3),(4,4),(5,5)) order by a,b,c,d;
+select /*+index(t8 gkey)*/ * from t8 where (c,d,b) in ((1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5)) order by a,b,c,d;
+
+select /*+index(t9 gkey)*/ * from t9 where a in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t9 gkey)*/ * from t9 where b in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t9 gkey)*/ * from t9 where (c,b) in ((1,1),(2,2),(3,3),(4,4),(5,5)) order by a,b,c,d;
+select /*+index(t9 gkey)*/ * from t9 where (c,d,b) in ((1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5)) order by a,b,c,d;
+
+select /*+index(t10 gkey)*/ * from t10 where a in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t10 gkey)*/ * from t10 where b in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t10 gkey)*/ * from t10 where (c,b) in ((1,1),(2,2),(3,3),(4,4),(5,5)) order by a,b,c,d;
+select /*+index(t10 gkey)*/ * from t10 where (c,d,b) in ((1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5)) order by a,b,c,d;
+

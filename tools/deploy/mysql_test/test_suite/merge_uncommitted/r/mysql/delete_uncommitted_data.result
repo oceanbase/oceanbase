@@ -1,0 +1,132 @@
+set SESSION ob_query_timeout = 60 * 1000 * 1000;
+set SESSION ob_trx_timeout = 60 * 1000 * 1000;
+set SESSION ob_trx_idle_timeout = 60 * 1000 * 1000;
+set SESSION ob_query_timeout = 60 * 1000 * 1000;
+set SESSION ob_trx_timeout = 60 * 1000 * 1000;
+set SESSION ob_trx_idle_timeout = 60 * 1000 * 1000;
+alter system set minor_compact_trigger = 10;
+drop table if exists test_delete_uncommitted_data;
+create table test_delete_uncommitted_data(num int, str varchar(50), tag int);
+begin;
+insert into test_delete_uncommitted_data value(100, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(99, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(98, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(97, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(96, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(95, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(94, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(93, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(92, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(91, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(90, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(89, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(88, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(87, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(86, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(85, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(84, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(83, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(82, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(81, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(80, 'Hello OceanBase & Happy New Year', 1);
+delete from test_delete_uncommitted_data where tag = 1;
+select * from test_delete_uncommitted_data;
+num	str	tag
+select * from test_delete_uncommitted_data;
+num	str	tag
+insert into test_delete_uncommitted_data value(100, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(99, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(98, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(97, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(96, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(95, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(94, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(93, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(92, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(91, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(90, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(89, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(88, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(87, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(86, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(85, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(84, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(83, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(82, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(81, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(80, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(50, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(49, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(48, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(47, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(46, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(45, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(44, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(43, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(42, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(41, 'Hello OceanBase & Happy New Year', 1);
+insert into test_delete_uncommitted_data value(40, 'Hello OceanBase & Happy New Year', 1);
+alter system set minor_compact_trigger = 1;
+select * from test_delete_uncommitted_data;
+num	str	tag
+select * from test_delete_uncommitted_data;
+num	str	tag
+100	Hello OceanBase & Happy New Year	1
+99	Hello OceanBase & Happy New Year	1
+98	Hello OceanBase & Happy New Year	1
+97	Hello OceanBase & Happy New Year	1
+96	Hello OceanBase & Happy New Year	1
+95	Hello OceanBase & Happy New Year	1
+94	Hello OceanBase & Happy New Year	1
+93	Hello OceanBase & Happy New Year	1
+92	Hello OceanBase & Happy New Year	1
+91	Hello OceanBase & Happy New Year	1
+90	Hello OceanBase & Happy New Year	1
+89	Hello OceanBase & Happy New Year	1
+88	Hello OceanBase & Happy New Year	1
+87	Hello OceanBase & Happy New Year	1
+86	Hello OceanBase & Happy New Year	1
+85	Hello OceanBase & Happy New Year	1
+84	Hello OceanBase & Happy New Year	1
+83	Hello OceanBase & Happy New Year	1
+82	Hello OceanBase & Happy New Year	1
+81	Hello OceanBase & Happy New Year	1
+80	Hello OceanBase & Happy New Year	1
+50	Hello OceanBase & Happy New Year	1
+49	Hello OceanBase & Happy New Year	1
+48	Hello OceanBase & Happy New Year	1
+47	Hello OceanBase & Happy New Year	1
+46	Hello OceanBase & Happy New Year	1
+45	Hello OceanBase & Happy New Year	1
+44	Hello OceanBase & Happy New Year	1
+43	Hello OceanBase & Happy New Year	1
+42	Hello OceanBase & Happy New Year	1
+41	Hello OceanBase & Happy New Year	1
+40	Hello OceanBase & Happy New Year	1
+update test_delete_uncommitted_data set tag = num + tag where num % 2 = 1;
+delete from test_delete_uncommitted_data where tag != 1;
+commit;
+select * from test_delete_uncommitted_data;
+num	str	tag
+100	Hello OceanBase & Happy New Year	1
+98	Hello OceanBase & Happy New Year	1
+96	Hello OceanBase & Happy New Year	1
+94	Hello OceanBase & Happy New Year	1
+92	Hello OceanBase & Happy New Year	1
+90	Hello OceanBase & Happy New Year	1
+88	Hello OceanBase & Happy New Year	1
+86	Hello OceanBase & Happy New Year	1
+84	Hello OceanBase & Happy New Year	1
+82	Hello OceanBase & Happy New Year	1
+80	Hello OceanBase & Happy New Year	1
+50	Hello OceanBase & Happy New Year	1
+48	Hello OceanBase & Happy New Year	1
+46	Hello OceanBase & Happy New Year	1
+44	Hello OceanBase & Happy New Year	1
+42	Hello OceanBase & Happy New Year	1
+40	Hello OceanBase & Happy New Year	1
+select count(*) from test_delete_uncommitted_data;
+count(*)
+17
+drop table test_delete_uncommitted_data;
+alter system set minor_compact_trigger = 2;

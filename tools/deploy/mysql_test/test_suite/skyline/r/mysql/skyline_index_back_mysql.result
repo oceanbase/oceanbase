@@ -1,0 +1,605 @@
+drop database if exists hualong;
+create database hualong;
+use hualong;
+create table skyline(
+pk int primary key, a int, b int, c int, d int, e int,
+v1 varchar(1000), v2 varchar(1000), v3 varchar(1000), v4 varchar(1000),
+v5 varchar(1000), v6 varchar(1000), v7 varchar(1000), v8 varchar(1000),
+v9 varchar(1000), v10 varchar(1000), v11 varchar(1000), v12 varchar(1000),
+v13 varchar(1000), v14 varchar(1000), v15 varchar(1000), v16 varchar(1000),
+v17 varchar(1000), v18 varchar(1000), v19 varchar(1000), v20 varchar(1000),
+v23 varchar(1000), v24 varchar(1000), v25 varchar(1000), v26 varchar(1000),
+v27 varchar(1000), v28 varchar(1000), v29 varchar(1000), v30 varchar(1000),
+v31 varchar(1000), v32 varchar(1000), v33 varchar(1000), v34 varchar(1000),
+key idx_a_c_v1(a, c, v1),
+key idx_a_v2_v3_v4_v5_c(a, v2, v3, v4, v5, c),
+key idx_a_e_v2_v3_v4_v5(a, e, v2, v3, v4, v5),
+key idx_a_e_v1(a, e, v1), 
+key idx_a_b(a, b),
+key idx_a_b_d(a, b, d),
+key idx_a_b_e(a, b, e));
+CREATE TABLE `cdj_enroll` (
+`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+`gmt_create` datetime NOT NULL COMMENT '创建时间',
+`gmt_modified` datetime NOT NULL COMMENT '修改时间',
+`content_id` bigint(20) unsigned NOT NULL DEFAULT '0' COMMENT '关联app_content的主键',
+`title` varchar(1024) DEFAULT NULL COMMENT '报名的title',
+`item_url` varchar(1024) DEFAULT NULL COMMENT '报名商品的url',
+`brand` varchar(128) DEFAULT NULL COMMENT '报名时填写的品牌',
+`model` varchar(128) DEFAULT NULL COMMENT '报名时填写的型号',
+`enroll_time` datetime NOT NULL COMMENT '报名时间',
+`enroll_user_id` bigint(20) unsigned NOT NULL COMMENT '报名者的userId',
+`enroll_user_role` int(11) NOT NULL COMMENT '报名者的身份类别',
+`enroll_user_role_name` varchar(128) DEFAULT NULL COMMENT '如果是品牌商, 则存储品牌商的名称',
+`seller_id` bigint(20) unsigned NOT NULL DEFAULT '0' COMMENT 'item_url对应的卖家id',
+`seller_nick` varchar(128) DEFAULT NULL COMMENT 'sell_id对应的nick',
+`tags` bigint(20) unsigned DEFAULT NULL COMMENT '预留字段',
+`status` int(11) DEFAULT NULL COMMENT '状态位，应该和关联的app_content中的记录一致',
+`properties` varchar(255) DEFAULT NULL COMMENT '预留字段',
+`feature` varchar(255) DEFAULT NULL COMMENT '预留字段',
+`reserve` varchar(255) DEFAULT NULL COMMENT '预留字段',
+`enroll_user_nick` varchar(128) DEFAULT NULL COMMENT '报名用户昵称',
+`reject_reason` varchar(1024) DEFAULT NULL COMMENT '拒绝理由',
+`judge_user_nick` varchar(128) DEFAULT NULL COMMENT '审核者nick',
+`rec_reason` varchar(255) DEFAULT NULL COMMENT '报名者的推荐理由',
+`description` varchar(255) DEFAULT NULL COMMENT '报名描述(富文本)',
+`crowdfund` varchar(512) DEFAULT NULL COMMENT '是否参加过众筹0表示没参加',
+`pictures` varchar(1024) DEFAULT NULL COMMENT '图片url, 英文逗号分割',
+`price` varchar(128) DEFAULT NULL COMMENT '用户填写市场价',
+`company` varchar(1024) DEFAULT NULL COMMENT '用户填写的生产厂商',
+`market_time` varchar(128) DEFAULT NULL COMMENT '用户填写的上市时间',
+`keyword` varchar(1024) DEFAULT NULL COMMENT '用户填写的关键词,英文逗号分割',
+`item_id` bigint(20) unsigned DEFAULT NULL COMMENT '从item_url中分离的itemId',
+`enroll_modified` datetime DEFAULT NULL COMMENT '卖家操作这条记录的时间',
+PRIMARY KEY (`id`),
+UNIQUE KEY `item_id` (`item_id`) BLOCK_SIZE 16384,
+KEY `n1` (`enroll_user_id`, `status`) BLOCK_SIZE 16384,
+KEY `user` (`enroll_user_id`) BLOCK_SIZE 16384,
+KEY `properties` (`properties`) BLOCK_SIZE 16384
+);
+CREATE TABLE `quality_item_info` (
+`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+`gmt_create` datetime NOT NULL COMMENT '创建时间',
+`gmt_modified` datetime NOT NULL COMMENT '修改时间',
+`item_id` bigint(20) NOT NULL COMMENT '商品ID',
+`seller_id` bigint(20) NOT NULL COMMENT '卖家ID',
+`seller_nick` varchar(128) DEFAULT NULL COMMENT '卖家NICK',
+`status` int(11) NOT NULL COMMENT '0:正常,  -1：已去标, 1:映射关系, 2:映射删除',
+`gmt_released` datetime DEFAULT NULL COMMENT '打标，去标时间',
+`attribute` varchar(1000) DEFAULT NULL COMMENT '属性',
+`memo` varchar(1000) DEFAULT NULL COMMENT '备注',
+`block_id` bigint(20) unsigned NOT NULL COMMENT '子活动ID',
+`band_id` bigint(20) unsigned DEFAULT NULL COMMENT '所属产业带ID',
+`brand_id` bigint(20) unsigned DEFAULT NULL COMMENT '所属品类ID',
+`pass_status` int(11) DEFAULT '0' COMMENT '人工审核状态，0：待审；1 已通过，-1未通过',
+`pass_operator` varchar(64) DEFAULT NULL COMMENT '人工审核员nick',
+`gmt_pass` datetime DEFAULT NULL COMMENT '人工审核时间（通过/不通过）',
+`cat_id` bigint(20) unsigned DEFAULT NULL COMMENT '类目ID',
+PRIMARY KEY (`id`),
+UNIQUE KEY `unique_itemid_sellerid_blockid` (`seller_id`, `item_id`, `block_id`) BLOCK_SIZE 16384,
+KEY `index_block_id` (`block_id`) BLOCK_SIZE 16384
+);
+explain select a, c, v1 from skyline where c = 100;
+Query Plan
+==============================================================
+|ID|OPERATOR       |NAME               |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |TABLE FULL SCAN|skyline(idx_a_c_v1)|1       |3           |
+==============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([skyline.a], [skyline.c], [skyline.v1]), filter([skyline.c = 100]), rowset=16
+      access([skyline.c], [skyline.a], [skyline.v1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([skyline.a], [skyline.c], [skyline.v1], [skyline.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+explain select /*+index(skyline idx_a_c_v1)*/ a, c, v1 from skyline where c = 100;
+Query Plan
+==============================================================
+|ID|OPERATOR       |NAME               |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |TABLE FULL SCAN|skyline(idx_a_c_v1)|1       |3           |
+==============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([skyline.a], [skyline.c], [skyline.v1]), filter([skyline.c = 100]), rowset=16
+      access([skyline.c], [skyline.a], [skyline.v1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([skyline.a], [skyline.c], [skyline.v1], [skyline.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+explain select /*+index(skyline idx_a_v2_v3_v4_v5_c)*/ a, c, v1 from skyline where c = 100;
+Query Plan
+=======================================================================
+|ID|OPERATOR       |NAME                        |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------
+|0 |TABLE FULL SCAN|skyline(idx_a_v2_v3_v4_v5_c)|1       |7           |
+=======================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([skyline.a], [skyline.c], [skyline.v1]), filter([skyline.c = 100]), rowset=16
+      access([skyline.pk], [skyline.c], [skyline.a], [skyline.v1]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true], 
+      range_key([skyline.a], [skyline.v2], [skyline.v3], [skyline.v4], [skyline.v5], [skyline.c], [skyline.pk]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN ; MAX,
+      MAX,MAX,MAX,MAX,MAX,MAX)always true
+explain select a, c, v1 from skyline where c > 200 and c < 400;
+Query Plan
+==================================================
+|ID|OPERATOR       |NAME   |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE FULL SCAN|skyline|1       |3           |
+==================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([skyline.a], [skyline.c], [skyline.v1]), filter([skyline.c > 200], [skyline.c < 400]), rowset=16
+      access([skyline.c], [skyline.a], [skyline.v1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([skyline.pk]), range(MIN ; MAX)always true
+explain select /*+index(skyline idx_a_c_v1)*/ a, c, v1 from skyline where c > 200 and c < 400;
+Query Plan
+==============================================================
+|ID|OPERATOR       |NAME               |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |TABLE FULL SCAN|skyline(idx_a_c_v1)|1       |3           |
+==============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([skyline.a], [skyline.c], [skyline.v1]), filter([skyline.c > 200], [skyline.c < 400]), rowset=16
+      access([skyline.c], [skyline.a], [skyline.v1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([skyline.a], [skyline.c], [skyline.v1], [skyline.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+explain select /*+index(skyline idx_a_v2_v3_v4_v5_c)*/ a, c, v1 from skyline where c > 200 and c < 400;
+Query Plan
+=======================================================================
+|ID|OPERATOR       |NAME                        |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------
+|0 |TABLE FULL SCAN|skyline(idx_a_v2_v3_v4_v5_c)|1       |5           |
+=======================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([skyline.a], [skyline.c], [skyline.v1]), filter([skyline.c > 200], [skyline.c < 400]), rowset=16
+      access([skyline.pk], [skyline.c], [skyline.a], [skyline.v1]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true,true], 
+      range_key([skyline.a], [skyline.v2], [skyline.v3], [skyline.v4], [skyline.v5], [skyline.c], [skyline.pk]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN ; MAX,
+      MAX,MAX,MAX,MAX,MAX,MAX)always true
+explain select a, e, v1 from skyline where e = 100;
+Query Plan
+==============================================================
+|ID|OPERATOR       |NAME               |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |TABLE FULL SCAN|skyline(idx_a_e_v1)|1       |3           |
+==============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([skyline.a], [skyline.e], [skyline.v1]), filter([skyline.e = 100]), rowset=16
+      access([skyline.e], [skyline.a], [skyline.v1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([skyline.a], [skyline.e], [skyline.v1], [skyline.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+explain select /*+index(skyline idx_a_e_v2_v3_v4_v5)*/ a, e, v1 from skyline where e = 100;
+Query Plan
+=======================================================================
+|ID|OPERATOR       |NAME                        |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------
+|0 |TABLE FULL SCAN|skyline(idx_a_e_v2_v3_v4_v5)|1       |7           |
+=======================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([skyline.a], [skyline.e], [skyline.v1]), filter([skyline.e = 100]), rowset=16
+      access([skyline.pk], [skyline.e], [skyline.a], [skyline.v1]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true], 
+      range_key([skyline.a], [skyline.e], [skyline.v2], [skyline.v3], [skyline.v4], [skyline.v5], [skyline.pk]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN ; MAX,
+      MAX,MAX,MAX,MAX,MAX,MAX)always true
+explain select /*+index(skyline idx_a_e_v1)*/ a, e, v1 from skyline where e = 100;
+Query Plan
+==============================================================
+|ID|OPERATOR       |NAME               |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |TABLE FULL SCAN|skyline(idx_a_e_v1)|1       |3           |
+==============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([skyline.a], [skyline.e], [skyline.v1]), filter([skyline.e = 100]), rowset=16
+      access([skyline.e], [skyline.a], [skyline.v1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([skyline.a], [skyline.e], [skyline.v1], [skyline.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+explain select a, e, v1 from skyline where e >  100 and e < 300;
+Query Plan
+==================================================
+|ID|OPERATOR       |NAME   |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE FULL SCAN|skyline|1       |3           |
+==================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([skyline.a], [skyline.e], [skyline.v1]), filter([skyline.e > 100], [skyline.e < 300]), rowset=16
+      access([skyline.e], [skyline.a], [skyline.v1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([skyline.pk]), range(MIN ; MAX)always true
+explain select /*+index(skyline idx_a_e_v2_v3_v4_v5)*/ a, e, v1 from skyline where e >  100 and e < 300;
+Query Plan
+=======================================================================
+|ID|OPERATOR       |NAME                        |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------
+|0 |TABLE FULL SCAN|skyline(idx_a_e_v2_v3_v4_v5)|1       |5           |
+=======================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([skyline.a], [skyline.e], [skyline.v1]), filter([skyline.e > 100], [skyline.e < 300]), rowset=16
+      access([skyline.pk], [skyline.e], [skyline.a], [skyline.v1]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true,true], 
+      range_key([skyline.a], [skyline.e], [skyline.v2], [skyline.v3], [skyline.v4], [skyline.v5], [skyline.pk]), range(MIN,MIN,MIN,MIN,MIN,MIN,MIN ; MAX,
+      MAX,MAX,MAX,MAX,MAX,MAX)always true
+explain select /*+index(skyline idx_a_e_v1)*/ a, e, v1 from skyline where e >  100 and e < 300;
+Query Plan
+==============================================================
+|ID|OPERATOR       |NAME               |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |TABLE FULL SCAN|skyline(idx_a_e_v1)|1       |3           |
+==============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([skyline.a], [skyline.e], [skyline.v1]), filter([skyline.e > 100], [skyline.e < 300]), rowset=16
+      access([skyline.e], [skyline.a], [skyline.v1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([skyline.a], [skyline.e], [skyline.v1], [skyline.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+explain select a, b, c from skyline where b = 100 and d = 100;
+Query Plan
+==================================================
+|ID|OPERATOR       |NAME   |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE FULL SCAN|skyline|1       |3           |
+==================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([skyline.a], [skyline.b], [skyline.c]), filter([skyline.b = 100], [skyline.d = 100]), rowset=16
+      access([skyline.b], [skyline.d], [skyline.a], [skyline.c]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([skyline.pk]), range(MIN ; MAX)always true
+explain select /*+index(skyline idx_a_b_d)*/ a, b, c from skyline where b = 100 and d = 100;
+Query Plan
+=============================================================
+|ID|OPERATOR       |NAME              |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |TABLE FULL SCAN|skyline(idx_a_b_d)|1       |8           |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([skyline.a], [skyline.b], [skyline.c]), filter([skyline.b = 100], [skyline.d = 100]), rowset=16
+      access([skyline.pk], [skyline.b], [skyline.d], [skyline.a], [skyline.c]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true,true], 
+      range_key([skyline.a], [skyline.b], [skyline.d], [skyline.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+explain select /*+index(skyline idx_a_b)*/a, b, c from skyline where b = 100 and d = 100;
+Query Plan
+===========================================================
+|ID|OPERATOR       |NAME            |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |TABLE FULL SCAN|skyline(idx_a_b)|1       |8           |
+===========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([skyline.a], [skyline.b], [skyline.c]), filter([skyline.b = 100], [skyline.d = 100]), rowset=16
+      access([skyline.pk], [skyline.b], [skyline.d], [skyline.a], [skyline.c]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true,false], 
+      range_key([skyline.a], [skyline.b], [skyline.pk]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+explain select /*+index(skyline primary)*/a, b, c from skyline where b = 100 and d = 100;
+Query Plan
+==================================================
+|ID|OPERATOR       |NAME   |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE FULL SCAN|skyline|1       |3           |
+==================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([skyline.a], [skyline.b], [skyline.c]), filter([skyline.b = 100], [skyline.d = 100]), rowset=16
+      access([skyline.b], [skyline.d], [skyline.a], [skyline.c]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([skyline.pk]), range(MIN ; MAX)always true
+explain select a, b, c from skyline where b = 100;
+Query Plan
+==================================================
+|ID|OPERATOR       |NAME   |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE FULL SCAN|skyline|1       |3           |
+==================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([skyline.a], [skyline.b], [skyline.c]), filter([skyline.b = 100]), rowset=16
+      access([skyline.b], [skyline.a], [skyline.c]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([skyline.pk]), range(MIN ; MAX)always true
+explain select /*+index(skyline idx_a_b)*/ a, b, c from skyline where b = 100;
+Query Plan
+===========================================================
+|ID|OPERATOR       |NAME            |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |TABLE FULL SCAN|skyline(idx_a_b)|1       |7           |
+===========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([skyline.a], [skyline.b], [skyline.c]), filter([skyline.b = 100]), rowset=16
+      access([skyline.pk], [skyline.b], [skyline.a], [skyline.c]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true], 
+      range_key([skyline.a], [skyline.b], [skyline.pk]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+explain select /*+index(skyline primary)*/ a, b, c from skyline where b = 100;
+Query Plan
+==================================================
+|ID|OPERATOR       |NAME   |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE FULL SCAN|skyline|1       |3           |
+==================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([skyline.a], [skyline.b], [skyline.c]), filter([skyline.b = 100]), rowset=16
+      access([skyline.b], [skyline.a], [skyline.c]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([skyline.pk]), range(MIN ; MAX)always true
+explain select a, b, c from skyline where b = 100 and e > 100 and e < 200;
+Query Plan
+==================================================
+|ID|OPERATOR       |NAME   |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE FULL SCAN|skyline|1       |3           |
+==================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([skyline.a], [skyline.b], [skyline.c]), filter([skyline.e > 100], [skyline.e < 200], [skyline.b = 100]), rowset=16
+      access([skyline.b], [skyline.e], [skyline.a], [skyline.c]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
+      range_key([skyline.pk]), range(MIN ; MAX)always true
+explain select /*+index(skyline idx_a_b_e)*/ a, b, c from skyline where b = 100 and e > 100 and e < 200;
+Query Plan
+=============================================================
+|ID|OPERATOR       |NAME              |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |TABLE FULL SCAN|skyline(idx_a_b_e)|1       |5           |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([skyline.a], [skyline.b], [skyline.c]), filter([skyline.e > 100], [skyline.e < 200], [skyline.b = 100]), rowset=16
+      access([skyline.pk], [skyline.b], [skyline.e], [skyline.a], [skyline.c]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true,true,true], 
+      range_key([skyline.a], [skyline.b], [skyline.e], [skyline.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+explain select /*+index(skyline primary)*/ a, b, c from skyline where b = 100 and e > 100 and e < 200;
+Query Plan
+==================================================
+|ID|OPERATOR       |NAME   |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE FULL SCAN|skyline|1       |3           |
+==================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([skyline.a], [skyline.b], [skyline.c]), filter([skyline.e > 100], [skyline.e < 200], [skyline.b = 100]), rowset=16
+      access([skyline.b], [skyline.e], [skyline.a], [skyline.c]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
+      range_key([skyline.pk]), range(MIN ; MAX)always true
+explain select a, b, e from skyline where e = 100 and d = 100;
+Query Plan
+==================================================
+|ID|OPERATOR       |NAME   |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE FULL SCAN|skyline|1       |3           |
+==================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([skyline.a], [skyline.b], [skyline.e]), filter([skyline.e = 100], [skyline.d = 100]), rowset=16
+      access([skyline.e], [skyline.d], [skyline.a], [skyline.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([skyline.pk]), range(MIN ; MAX)always true
+explain select /*+index(skyline idx_a_b_d)*/ a, b, e from skyline where e = 100 and d = 100;
+Query Plan
+=============================================================
+|ID|OPERATOR       |NAME              |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |TABLE FULL SCAN|skyline(idx_a_b_d)|1       |8           |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([skyline.a], [skyline.b], [skyline.e]), filter([skyline.e = 100], [skyline.d = 100]), rowset=16
+      access([skyline.pk], [skyline.e], [skyline.d], [skyline.a], [skyline.b]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false,true], 
+      range_key([skyline.a], [skyline.b], [skyline.d], [skyline.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+explain select /*+index(skyline idx_a_b_e)*/ a, b, e from skyline where e = 100 and d = 100;
+Query Plan
+=============================================================
+|ID|OPERATOR       |NAME              |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |TABLE FULL SCAN|skyline(idx_a_b_e)|1       |8           |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([skyline.a], [skyline.b], [skyline.e]), filter([skyline.e = 100], [skyline.d = 100]), rowset=16
+      access([skyline.pk], [skyline.e], [skyline.d], [skyline.a], [skyline.b]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true,false], 
+      range_key([skyline.a], [skyline.b], [skyline.e], [skyline.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+explain select * from cdj_enroll where status = 141 order by enroll_time desc limit 0, 100;
+Query Plan
+=========================================================
+|ID|OPERATOR           |NAME      |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |LIMIT              |          |1       |7           |
+|1 |└─TOP-N SORT       |          |1       |7           |
+|2 |  └─TABLE FULL SCAN|cdj_enroll|1       |3           |
+=========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cdj_enroll.id], [cdj_enroll.gmt_create], [cdj_enroll.gmt_modified], [cdj_enroll.content_id], [cdj_enroll.title], [cdj_enroll.item_url], [cdj_enroll.brand],
+       [cdj_enroll.model], [cdj_enroll.enroll_time], [cdj_enroll.enroll_user_id], [cdj_enroll.enroll_user_role], [cdj_enroll.enroll_user_role_name], [cdj_enroll.seller_id],
+       [cdj_enroll.seller_nick], [cdj_enroll.tags], [cdj_enroll.status], [cdj_enroll.properties], [cdj_enroll.feature], [cdj_enroll.reserve], [cdj_enroll.enroll_user_nick],
+       [cdj_enroll.reject_reason], [cdj_enroll.judge_user_nick], [cdj_enroll.rec_reason], [cdj_enroll.description], [cdj_enroll.crowdfund], [cdj_enroll.pictures],
+       [cdj_enroll.price], [cdj_enroll.company], [cdj_enroll.market_time], [cdj_enroll.keyword], [cdj_enroll.item_id], [cdj_enroll.enroll_modified]), filter(nil), rowset=16
+      limit(100), offset(0)
+  1 - output([cdj_enroll.id], [cdj_enroll.gmt_create], [cdj_enroll.gmt_modified], [cdj_enroll.content_id], [cdj_enroll.title], [cdj_enroll.item_url], [cdj_enroll.brand],
+       [cdj_enroll.model], [cdj_enroll.enroll_time], [cdj_enroll.enroll_user_id], [cdj_enroll.enroll_user_role], [cdj_enroll.enroll_user_role_name], [cdj_enroll.seller_id],
+       [cdj_enroll.seller_nick], [cdj_enroll.tags], [cdj_enroll.status], [cdj_enroll.properties], [cdj_enroll.feature], [cdj_enroll.reserve], [cdj_enroll.enroll_user_nick],
+       [cdj_enroll.reject_reason], [cdj_enroll.judge_user_nick], [cdj_enroll.rec_reason], [cdj_enroll.description], [cdj_enroll.crowdfund], [cdj_enroll.pictures],
+       [cdj_enroll.price], [cdj_enroll.company], [cdj_enroll.market_time], [cdj_enroll.keyword], [cdj_enroll.item_id], [cdj_enroll.enroll_modified]), filter(nil), rowset=16
+      sort_keys([cdj_enroll.enroll_time, DESC]), topn(100 + 0)
+  2 - output([cdj_enroll.id], [cdj_enroll.status], [cdj_enroll.gmt_create], [cdj_enroll.gmt_modified], [cdj_enroll.content_id], [cdj_enroll.title], [cdj_enroll.item_url],
+       [cdj_enroll.brand], [cdj_enroll.model], [cdj_enroll.enroll_time], [cdj_enroll.enroll_user_id], [cdj_enroll.enroll_user_role], [cdj_enroll.enroll_user_role_name],
+       [cdj_enroll.seller_id], [cdj_enroll.seller_nick], [cdj_enroll.tags], [cdj_enroll.properties], [cdj_enroll.feature], [cdj_enroll.reserve], [cdj_enroll.enroll_user_nick],
+       [cdj_enroll.reject_reason], [cdj_enroll.judge_user_nick], [cdj_enroll.rec_reason], [cdj_enroll.description], [cdj_enroll.crowdfund], [cdj_enroll.pictures],
+       [cdj_enroll.price], [cdj_enroll.company], [cdj_enroll.market_time], [cdj_enroll.keyword], [cdj_enroll.item_id], [cdj_enroll.enroll_modified]), filter([cdj_enroll.status 
+      = 141]), rowset=16
+      access([cdj_enroll.id], [cdj_enroll.status], [cdj_enroll.gmt_create], [cdj_enroll.gmt_modified], [cdj_enroll.content_id], [cdj_enroll.title], [cdj_enroll.item_url],
+       [cdj_enroll.brand], [cdj_enroll.model], [cdj_enroll.enroll_time], [cdj_enroll.enroll_user_id], [cdj_enroll.enroll_user_role], [cdj_enroll.enroll_user_role_name],
+       [cdj_enroll.seller_id], [cdj_enroll.seller_nick], [cdj_enroll.tags], [cdj_enroll.properties], [cdj_enroll.feature], [cdj_enroll.reserve], [cdj_enroll.enroll_user_nick],
+       [cdj_enroll.reject_reason], [cdj_enroll.judge_user_nick], [cdj_enroll.rec_reason], [cdj_enroll.description], [cdj_enroll.crowdfund], [cdj_enroll.pictures],
+       [cdj_enroll.price], [cdj_enroll.company], [cdj_enroll.market_time], [cdj_enroll.keyword], [cdj_enroll.item_id], [cdj_enroll.enroll_modified]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([cdj_enroll.id]), range(MIN ; MAX)always true
+explain select /*+index(cdj_enroll n1) */ * from cdj_enroll where status = 141 order by enroll_time desc limit 0, 100;
+Query Plan
+=============================================================
+|ID|OPERATOR           |NAME          |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |LIMIT              |              |1       |15          |
+|1 |└─TOP-N SORT       |              |1       |15          |
+|2 |  └─TABLE FULL SCAN|cdj_enroll(n1)|1       |11          |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cdj_enroll.id], [cdj_enroll.gmt_create], [cdj_enroll.gmt_modified], [cdj_enroll.content_id], [cdj_enroll.title], [cdj_enroll.item_url], [cdj_enroll.brand],
+       [cdj_enroll.model], [cdj_enroll.enroll_time], [cdj_enroll.enroll_user_id], [cdj_enroll.enroll_user_role], [cdj_enroll.enroll_user_role_name], [cdj_enroll.seller_id],
+       [cdj_enroll.seller_nick], [cdj_enroll.tags], [cdj_enroll.status], [cdj_enroll.properties], [cdj_enroll.feature], [cdj_enroll.reserve], [cdj_enroll.enroll_user_nick],
+       [cdj_enroll.reject_reason], [cdj_enroll.judge_user_nick], [cdj_enroll.rec_reason], [cdj_enroll.description], [cdj_enroll.crowdfund], [cdj_enroll.pictures],
+       [cdj_enroll.price], [cdj_enroll.company], [cdj_enroll.market_time], [cdj_enroll.keyword], [cdj_enroll.item_id], [cdj_enroll.enroll_modified]), filter(nil), rowset=16
+      limit(100), offset(0)
+  1 - output([cdj_enroll.id], [cdj_enroll.gmt_create], [cdj_enroll.gmt_modified], [cdj_enroll.content_id], [cdj_enroll.title], [cdj_enroll.item_url], [cdj_enroll.brand],
+       [cdj_enroll.model], [cdj_enroll.enroll_time], [cdj_enroll.enroll_user_id], [cdj_enroll.enroll_user_role], [cdj_enroll.enroll_user_role_name], [cdj_enroll.seller_id],
+       [cdj_enroll.seller_nick], [cdj_enroll.tags], [cdj_enroll.status], [cdj_enroll.properties], [cdj_enroll.feature], [cdj_enroll.reserve], [cdj_enroll.enroll_user_nick],
+       [cdj_enroll.reject_reason], [cdj_enroll.judge_user_nick], [cdj_enroll.rec_reason], [cdj_enroll.description], [cdj_enroll.crowdfund], [cdj_enroll.pictures],
+       [cdj_enroll.price], [cdj_enroll.company], [cdj_enroll.market_time], [cdj_enroll.keyword], [cdj_enroll.item_id], [cdj_enroll.enroll_modified]), filter(nil), rowset=16
+      sort_keys([cdj_enroll.enroll_time, DESC]), topn(100 + 0)
+  2 - output([cdj_enroll.id], [cdj_enroll.status], [cdj_enroll.gmt_create], [cdj_enroll.gmt_modified], [cdj_enroll.content_id], [cdj_enroll.title], [cdj_enroll.item_url],
+       [cdj_enroll.brand], [cdj_enroll.model], [cdj_enroll.enroll_time], [cdj_enroll.enroll_user_id], [cdj_enroll.enroll_user_role], [cdj_enroll.enroll_user_role_name],
+       [cdj_enroll.seller_id], [cdj_enroll.seller_nick], [cdj_enroll.tags], [cdj_enroll.properties], [cdj_enroll.feature], [cdj_enroll.reserve], [cdj_enroll.enroll_user_nick],
+       [cdj_enroll.reject_reason], [cdj_enroll.judge_user_nick], [cdj_enroll.rec_reason], [cdj_enroll.description], [cdj_enroll.crowdfund], [cdj_enroll.pictures],
+       [cdj_enroll.price], [cdj_enroll.company], [cdj_enroll.market_time], [cdj_enroll.keyword], [cdj_enroll.item_id], [cdj_enroll.enroll_modified]), filter([cdj_enroll.status 
+      = 141]), rowset=16
+      access([cdj_enroll.id], [cdj_enroll.status], [cdj_enroll.gmt_create], [cdj_enroll.gmt_modified], [cdj_enroll.content_id], [cdj_enroll.title], [cdj_enroll.item_url],
+       [cdj_enroll.brand], [cdj_enroll.model], [cdj_enroll.enroll_time], [cdj_enroll.enroll_user_id], [cdj_enroll.enroll_user_role], [cdj_enroll.enroll_user_role_name],
+       [cdj_enroll.seller_id], [cdj_enroll.seller_nick], [cdj_enroll.tags], [cdj_enroll.properties], [cdj_enroll.feature], [cdj_enroll.reserve], [cdj_enroll.enroll_user_nick],
+       [cdj_enroll.reject_reason], [cdj_enroll.judge_user_nick], [cdj_enroll.rec_reason], [cdj_enroll.description], [cdj_enroll.crowdfund], [cdj_enroll.pictures],
+       [cdj_enroll.price], [cdj_enroll.company], [cdj_enroll.market_time], [cdj_enroll.keyword], [cdj_enroll.item_id], [cdj_enroll.enroll_modified]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true], 
+      range_key([cdj_enroll.enroll_user_id], [cdj_enroll.status], [cdj_enroll.id]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+explain select /*+index(cdj_enroll PRIMARY) */ * from cdj_enroll where status = 141 order by enroll_time desc limit 0, 100;
+Query Plan
+=========================================================
+|ID|OPERATOR           |NAME      |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |LIMIT              |          |1       |7           |
+|1 |└─TOP-N SORT       |          |1       |7           |
+|2 |  └─TABLE FULL SCAN|cdj_enroll|1       |3           |
+=========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([cdj_enroll.id], [cdj_enroll.gmt_create], [cdj_enroll.gmt_modified], [cdj_enroll.content_id], [cdj_enroll.title], [cdj_enroll.item_url], [cdj_enroll.brand],
+       [cdj_enroll.model], [cdj_enroll.enroll_time], [cdj_enroll.enroll_user_id], [cdj_enroll.enroll_user_role], [cdj_enroll.enroll_user_role_name], [cdj_enroll.seller_id],
+       [cdj_enroll.seller_nick], [cdj_enroll.tags], [cdj_enroll.status], [cdj_enroll.properties], [cdj_enroll.feature], [cdj_enroll.reserve], [cdj_enroll.enroll_user_nick],
+       [cdj_enroll.reject_reason], [cdj_enroll.judge_user_nick], [cdj_enroll.rec_reason], [cdj_enroll.description], [cdj_enroll.crowdfund], [cdj_enroll.pictures],
+       [cdj_enroll.price], [cdj_enroll.company], [cdj_enroll.market_time], [cdj_enroll.keyword], [cdj_enroll.item_id], [cdj_enroll.enroll_modified]), filter(nil), rowset=16
+      limit(100), offset(0)
+  1 - output([cdj_enroll.id], [cdj_enroll.gmt_create], [cdj_enroll.gmt_modified], [cdj_enroll.content_id], [cdj_enroll.title], [cdj_enroll.item_url], [cdj_enroll.brand],
+       [cdj_enroll.model], [cdj_enroll.enroll_time], [cdj_enroll.enroll_user_id], [cdj_enroll.enroll_user_role], [cdj_enroll.enroll_user_role_name], [cdj_enroll.seller_id],
+       [cdj_enroll.seller_nick], [cdj_enroll.tags], [cdj_enroll.status], [cdj_enroll.properties], [cdj_enroll.feature], [cdj_enroll.reserve], [cdj_enroll.enroll_user_nick],
+       [cdj_enroll.reject_reason], [cdj_enroll.judge_user_nick], [cdj_enroll.rec_reason], [cdj_enroll.description], [cdj_enroll.crowdfund], [cdj_enroll.pictures],
+       [cdj_enroll.price], [cdj_enroll.company], [cdj_enroll.market_time], [cdj_enroll.keyword], [cdj_enroll.item_id], [cdj_enroll.enroll_modified]), filter(nil), rowset=16
+      sort_keys([cdj_enroll.enroll_time, DESC]), topn(100 + 0)
+  2 - output([cdj_enroll.id], [cdj_enroll.status], [cdj_enroll.gmt_create], [cdj_enroll.gmt_modified], [cdj_enroll.content_id], [cdj_enroll.title], [cdj_enroll.item_url],
+       [cdj_enroll.brand], [cdj_enroll.model], [cdj_enroll.enroll_time], [cdj_enroll.enroll_user_id], [cdj_enroll.enroll_user_role], [cdj_enroll.enroll_user_role_name],
+       [cdj_enroll.seller_id], [cdj_enroll.seller_nick], [cdj_enroll.tags], [cdj_enroll.properties], [cdj_enroll.feature], [cdj_enroll.reserve], [cdj_enroll.enroll_user_nick],
+       [cdj_enroll.reject_reason], [cdj_enroll.judge_user_nick], [cdj_enroll.rec_reason], [cdj_enroll.description], [cdj_enroll.crowdfund], [cdj_enroll.pictures],
+       [cdj_enroll.price], [cdj_enroll.company], [cdj_enroll.market_time], [cdj_enroll.keyword], [cdj_enroll.item_id], [cdj_enroll.enroll_modified]), filter([cdj_enroll.status 
+      = 141]), rowset=16
+      access([cdj_enroll.id], [cdj_enroll.status], [cdj_enroll.gmt_create], [cdj_enroll.gmt_modified], [cdj_enroll.content_id], [cdj_enroll.title], [cdj_enroll.item_url],
+       [cdj_enroll.brand], [cdj_enroll.model], [cdj_enroll.enroll_time], [cdj_enroll.enroll_user_id], [cdj_enroll.enroll_user_role], [cdj_enroll.enroll_user_role_name],
+       [cdj_enroll.seller_id], [cdj_enroll.seller_nick], [cdj_enroll.tags], [cdj_enroll.properties], [cdj_enroll.feature], [cdj_enroll.reserve], [cdj_enroll.enroll_user_nick],
+       [cdj_enroll.reject_reason], [cdj_enroll.judge_user_nick], [cdj_enroll.rec_reason], [cdj_enroll.description], [cdj_enroll.crowdfund], [cdj_enroll.pictures],
+       [cdj_enroll.price], [cdj_enroll.company], [cdj_enroll.market_time], [cdj_enroll.keyword], [cdj_enroll.item_id], [cdj_enroll.enroll_modified]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([cdj_enroll.id]), range(MIN ; MAX)always true
+explain update /*+index(quality_item_info unique_itemid_sellerid_blockid) */  quality_item_info set gmt_modified = now(), pass_status = 100, gmt_pass = now(), pass_operator = '1' where item_id = 100 and status = 100;
+Query Plan
+==============================================================================================
+|ID|OPERATOR         |NAME                                             |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------------------------------
+|0 |UPDATE           |                                                 |1       |41          |
+|1 |└─TABLE FULL SCAN|quality_item_info(unique_itemid_sellerid_blockid)|1       |9           |
+==============================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      table_columns([{quality_item_info: ({quality_item_info: (quality_item_info.id, quality_item_info.gmt_create, quality_item_info.gmt_modified, quality_item_info.item_id,
+       quality_item_info.seller_id, quality_item_info.seller_nick, quality_item_info.status, quality_item_info.gmt_released, quality_item_info.attribute, quality_item_info.memo,
+       quality_item_info.block_id, quality_item_info.band_id, quality_item_info.brand_id, quality_item_info.pass_status, quality_item_info.pass_operator, quality_item_info.gmt_pass,
+       quality_item_info.cat_id)})}]),
+      update([quality_item_info.gmt_modified=column_conv(DATETIME,PS:(19,0),NOT NULL,current_timestamp())], [quality_item_info.pass_status=column_conv(INT,
+      PS:(11,0),NULL,cast(100, INT(-1, 0)))], [quality_item_info.gmt_pass=column_conv(DATETIME,PS:(19,0),NULL,current_timestamp())], [quality_item_info.pass_operator=column_conv(VARCHAR,
+      utf8mb4_general_ci,length:64,NULL,'1')])
+  1 - output([quality_item_info.id], [quality_item_info.gmt_modified], [quality_item_info.pass_status], [quality_item_info.gmt_pass], [quality_item_info.pass_operator],
+       [quality_item_info.gmt_create], [quality_item_info.item_id], [quality_item_info.seller_id], [quality_item_info.seller_nick], [quality_item_info.status],
+       [quality_item_info.gmt_released], [quality_item_info.attribute], [quality_item_info.memo], [quality_item_info.block_id], [quality_item_info.band_id], [quality_item_info.brand_id],
+       [quality_item_info.cat_id]), filter([quality_item_info.item_id = 100], [quality_item_info.status = 100]), rowset=16
+      access([quality_item_info.id], [quality_item_info.gmt_modified], [quality_item_info.pass_status], [quality_item_info.gmt_pass], [quality_item_info.pass_operator],
+       [quality_item_info.gmt_create], [quality_item_info.item_id], [quality_item_info.seller_id], [quality_item_info.seller_nick], [quality_item_info.status],
+       [quality_item_info.gmt_released], [quality_item_info.attribute], [quality_item_info.memo], [quality_item_info.block_id], [quality_item_info.band_id], [quality_item_info.brand_id],
+       [quality_item_info.cat_id]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true,false], 
+      range_key([quality_item_info.seller_id], [quality_item_info.item_id], [quality_item_info.block_id], [quality_item_info.shadow_pk_0]), range(MIN,MIN,
+      MIN,MIN ; MAX,MAX,MAX,MAX)always true
+explain update /*+index(quality_item_info primary) */  quality_item_info set gmt_modified = now(), pass_status = 100, gmt_pass = now(), pass_operator = '1' where item_id = 100 and status = 100;
+Query Plan
+==============================================================
+|ID|OPERATOR         |NAME             |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |UPDATE           |                 |1       |35          |
+|1 |└─TABLE FULL SCAN|quality_item_info|1       |3           |
+==============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      table_columns([{quality_item_info: ({quality_item_info: (quality_item_info.id, quality_item_info.gmt_create, quality_item_info.gmt_modified, quality_item_info.item_id,
+       quality_item_info.seller_id, quality_item_info.seller_nick, quality_item_info.status, quality_item_info.gmt_released, quality_item_info.attribute, quality_item_info.memo,
+       quality_item_info.block_id, quality_item_info.band_id, quality_item_info.brand_id, quality_item_info.pass_status, quality_item_info.pass_operator, quality_item_info.gmt_pass,
+       quality_item_info.cat_id)})}]),
+      update([quality_item_info.gmt_modified=column_conv(DATETIME,PS:(19,0),NOT NULL,current_timestamp())], [quality_item_info.pass_status=column_conv(INT,
+      PS:(11,0),NULL,cast(100, INT(-1, 0)))], [quality_item_info.gmt_pass=column_conv(DATETIME,PS:(19,0),NULL,current_timestamp())], [quality_item_info.pass_operator=column_conv(VARCHAR,
+      utf8mb4_general_ci,length:64,NULL,'1')])
+  1 - output([quality_item_info.id], [quality_item_info.gmt_modified], [quality_item_info.pass_status], [quality_item_info.gmt_pass], [quality_item_info.pass_operator],
+       [quality_item_info.gmt_create], [quality_item_info.item_id], [quality_item_info.seller_id], [quality_item_info.seller_nick], [quality_item_info.status],
+       [quality_item_info.gmt_released], [quality_item_info.attribute], [quality_item_info.memo], [quality_item_info.block_id], [quality_item_info.band_id], [quality_item_info.brand_id],
+       [quality_item_info.cat_id]), filter([quality_item_info.item_id = 100], [quality_item_info.status = 100]), rowset=16
+      access([quality_item_info.id], [quality_item_info.gmt_modified], [quality_item_info.pass_status], [quality_item_info.gmt_pass], [quality_item_info.pass_operator],
+       [quality_item_info.gmt_create], [quality_item_info.item_id], [quality_item_info.seller_id], [quality_item_info.seller_nick], [quality_item_info.status],
+       [quality_item_info.gmt_released], [quality_item_info.attribute], [quality_item_info.memo], [quality_item_info.block_id], [quality_item_info.band_id], [quality_item_info.brand_id],
+       [quality_item_info.cat_id]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([quality_item_info.id]), range(MIN ; MAX)always true
+explain update quality_item_info set gmt_modified = now(), pass_status = 100, gmt_pass = now(), pass_operator = '1' where item_id = 100 and status = 100;
+Query Plan
+==============================================================
+|ID|OPERATOR         |NAME             |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |UPDATE           |                 |1       |35          |
+|1 |└─TABLE FULL SCAN|quality_item_info|1       |3           |
+==============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      table_columns([{quality_item_info: ({quality_item_info: (quality_item_info.id, quality_item_info.gmt_create, quality_item_info.gmt_modified, quality_item_info.item_id,
+       quality_item_info.seller_id, quality_item_info.seller_nick, quality_item_info.status, quality_item_info.gmt_released, quality_item_info.attribute, quality_item_info.memo,
+       quality_item_info.block_id, quality_item_info.band_id, quality_item_info.brand_id, quality_item_info.pass_status, quality_item_info.pass_operator, quality_item_info.gmt_pass,
+       quality_item_info.cat_id)})}]),
+      update([quality_item_info.gmt_modified=column_conv(DATETIME,PS:(19,0),NOT NULL,current_timestamp())], [quality_item_info.pass_status=column_conv(INT,
+      PS:(11,0),NULL,cast(100, INT(-1, 0)))], [quality_item_info.gmt_pass=column_conv(DATETIME,PS:(19,0),NULL,current_timestamp())], [quality_item_info.pass_operator=column_conv(VARCHAR,
+      utf8mb4_general_ci,length:64,NULL,'1')])
+  1 - output([quality_item_info.id], [quality_item_info.gmt_modified], [quality_item_info.pass_status], [quality_item_info.gmt_pass], [quality_item_info.pass_operator],
+       [quality_item_info.gmt_create], [quality_item_info.item_id], [quality_item_info.seller_id], [quality_item_info.seller_nick], [quality_item_info.status],
+       [quality_item_info.gmt_released], [quality_item_info.attribute], [quality_item_info.memo], [quality_item_info.block_id], [quality_item_info.band_id], [quality_item_info.brand_id],
+       [quality_item_info.cat_id]), filter([quality_item_info.item_id = 100], [quality_item_info.status = 100]), rowset=16
+      access([quality_item_info.id], [quality_item_info.gmt_modified], [quality_item_info.pass_status], [quality_item_info.gmt_pass], [quality_item_info.pass_operator],
+       [quality_item_info.gmt_create], [quality_item_info.item_id], [quality_item_info.seller_id], [quality_item_info.seller_nick], [quality_item_info.status],
+       [quality_item_info.gmt_released], [quality_item_info.attribute], [quality_item_info.memo], [quality_item_info.block_id], [quality_item_info.band_id], [quality_item_info.brand_id],
+       [quality_item_info.cat_id]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([quality_item_info.id]), range(MIN ; MAX)always true
+set @@recyclebin = 'off';
+drop database hualong;

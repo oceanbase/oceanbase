@@ -1,0 +1,42 @@
+#owner: bowen.gbw
+#group: storage
+
+--disable_warnings
+drop table if exists msdt1;
+drop table if exists msdt2;
+--enable_warnings
+
+create table msdt1(a int, b int);
+insert into msdt1 values(1, 1), (2, 2);
+
+alter table msdt1 add x varchar(10) after a;
+insert into msdt1 values(3, 'hehe', 3);
+
+create table msdt2(a int, b int);
+
+# msdt1
+let $tenant_id1 = query_get_value(select tenant_id from oceanbase.__all_virtual_table where table_name = 'msdt1', tenant_id, 1);
+let $tablet_id1 = query_get_value(select tablet_id from oceanbase.__all_virtual_table where table_name = 'msdt1', tablet_id, 1);
+let $ls_id1 = query_get_value(select ls_id from oceanbase.DBA_OB_TABLET_TO_LS where tablet_id = $tablet_id1, ls_id, 1);
+
+let $report_cnt1 = query_get_value(select count(*) as cnt from oceanbase.__all_virtual_tablet_meta_table where tenant_id = $tenant_id1 and ls_id = $ls_id1 and tablet_id = $tablet_id1, cnt, 1);
+let $unit_cnt1 = query_get_value(select count(*) as cnt from oceanbase.__all_virtual_unit where tenant_id = $tenant_id1, cnt, 1);
+
+--disable_query_log
+eval select $report_cnt1 = $unit_cnt1 as result;
+--enable_query_log
+
+# msdt2
+let $tenant_id2 = query_get_value(select tenant_id from oceanbase.__all_virtual_table where table_name = 'msdt2', tenant_id, 1);
+let $tablet_id2 = query_get_value(select tablet_id from oceanbase.__all_virtual_table where table_name = 'msdt2', tablet_id, 1);
+let $ls_id2 = query_get_value(select ls_id from oceanbase.DBA_OB_TABLET_TO_LS where tablet_id = $tablet_id2, ls_id, 1);
+
+let $report_cnt2 = query_get_value(select count(*) as cnt from oceanbase.__all_virtual_tablet_meta_table where tenant_id = $tenant_id2 and ls_id = $ls_id2 and tablet_id = $tablet_id2, cnt, 1);
+let $unit_cnt2 = query_get_value(select count(*) as cnt from oceanbase.__all_virtual_unit where tenant_id = $tenant_id2, cnt, 1);
+
+--disable_query_log
+eval select $report_cnt2 = $unit_cnt2 as result;
+--enable_query_log
+
+drop table msdt1;
+drop table msdt2;

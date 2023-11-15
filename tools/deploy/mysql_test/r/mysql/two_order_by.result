@@ -1,0 +1,176 @@
+(select /*+index(t1 i1) */ pk1,c1 from t1 where c1<30 order by c1) union all (select /*+index(t1 i1) */ pk1,c1 from t1 where c1 > 10 order by c1);
+pk1	c1
+1	44
+2	33
+3	22
+3	22
+4	11
+4	11
+select * from ((select /*+index(t1 i1) */ pk1,c1 from t1 where c1<30 order by c1) union all (select /*+index(t1 i1) */ pk1,c1 from t2 where c1 > 10 order by c1) ) a order by pk1, a.c1;
+pk1	c1
+1	44
+3	22
+3	22
+4	11
+4	11
+5	33
+6	33
+(select /*+index(t1 i1) */ pk1,c1 from t1 where c1<30 order by c1) union  (select /*+index(t1 i1) */ pk1,c1 from t1 where c1 > 10 order by c1);
+pk1	c1
+1	44
+2	33
+3	22
+4	11
+(select /*+index(t1 i1) */ pk1,c1 from t1 where c1<30 order by c1) except (select /*+index(t1 i1) */ pk1,c1 from t1 where c1 > 10 order by c1);
+pk1	c1
+(select /*+index(t1 i1) */ pk1,c1 from t1 where c1<30 order by c1) intersect (select /*+index(t1 i1) */ pk1,c1 from t1 where c1 > 10 order by c1);
+pk1	c1
+3	22
+4	11
+(select c1,c2,c3 from t1 where c1=11 order by c2) union (select c1,c2,c3 from t1 where c1=22 and c2 like 'column3_' order by c1) union distinct select c1,c2,c3 from t1 where c1>22 and c2 is not null and c3>='2013-12-11 11:11:11' union all (select c1,c2,c3 from t1 where c4<2 and c5>1 and c6=3 order by c4) except  (select c1,c2,c3 from t1 where c3 <= '2013-12-11 11:11:11' order by c3);
+c1	c2	c3
+11	column42	2013-12-11 11:11:14.000000
+22	column32	2013-12-11 11:11:13.000000
+33	column21	2013-12-11 11:11:12.000000
+select * from ((select * from t1 where c1=44) union (select * from t1 where c1=33 and c2 like 'column%') union all (select * from t1 where c4>2 and c5<3 and c6 != 2)) as a;
+pk1	pk2	pk3	c1	c2	c3	c4	c5	c6
+1	primarykey1	2013-12-11 01:01:01.000000	44	column11	2013-12-11 11:11:11.000000	4	2	3
+1	primarykey1	2013-12-11 01:01:01.000000	44	column11	2013-12-11 11:11:11.000000	4	2	3
+2	primarykey2	2013-12-11 01:01:02.000000	33	column21	2013-12-11 11:11:12.000000	3	1	3
+2	primarykey2	2013-12-11 01:01:02.000000	33	column21	2013-12-11 11:11:12.000000	3	1	3
+select * from ((select * from t1 where c1=44) union all (select * from t1 where c1=33 and c2 like 'column%') except (select * from t1 where c4>2 and c5<3 and c6 != 2)) as a;
+pk1	pk2	pk3	c1	c2	c3	c4	c5	c6
+select * from ((select * from t1 where c1=44) intersect (select * from t1 where c1=33 and c2 like 'column%') union all (select * from t1 where c4>2 and c5<3 and c6 != 2)) as a;
+pk1	pk2	pk3	c1	c2	c3	c4	c5	c6
+1	primarykey1	2013-12-11 01:01:01.000000	44	column11	2013-12-11 11:11:11.000000	4	2	3
+2	primarykey2	2013-12-11 01:01:02.000000	33	column21	2013-12-11 11:11:12.000000	3	1	3
+(select c1,c4 from t1 where c1 in (33,11) order by c1) union all select c1,c4 from t1 where c1=44;
+c1	c4
+11	1
+33	3
+44	4
+(select c1,c4 from t1 where c1 in (1,44) order by c1)  union all (select c1,c4 from t1 where c1 in (33,11) order by c1);
+c1	c4
+11	1
+33	3
+44	4
+(select c1,c4 from t1 where c1 in (1,44) order by c1)  union all (select c1,c4 from t1 where c1 =33 order by c4);
+c1	c4
+33	3
+44	4
+select c1,c4 from t1 where c1=44 union (select c1,c4 from t1 where c1 not in (33,11) order by c1);
+c1	c4
+22	2
+44	4
+(select c1,c4 from t1 where c1 not in (33,11) order by c1) except select c1,c4 from t1 where c1=44;
+c1	c4
+22	2
+(select c1,c4 from t1 where c1 not in (33,11) order by c1) intersect select c1,c4 from t1 where c1=44;
+c1	c4
+44	4
+(select c4,c5,c6 from t1 order by c1 limit 2)  union all (select c4,c5,c6 from t1 order by c4 limit 1) order by c4 desc;
+c4	c5	c6
+2	1	2
+1	3	2
+1	3	2
+(select c4,c5,c6 from t1 order by c4 limit 2)  union (select c4,c5,c6 from t1 order by c4 limit 1) order by c4 desc;
+c4	c5	c6
+2	1	2
+1	3	2
+(select c4,c5,c6 from t1 order by c2 limit 2)  except (select c4,c5,c6 from t1 order by c4 limit 1) order by c4 desc;
+c4	c5	c6
+4	2	3
+3	1	3
+(select c4,c5,c6 from t1  order by c4 limit 2)  intersect (select c4,c5,c6 from t1 order by c4 limit 1) order by c4 desc;
+c4	c5	c6
+1	3	2
+select /*+index(t1 i1)*/ pk1,c1 from t1 union select /*+index(t2 i11)*/ pk1,c1 from t2;
+pk1	c1
+1	44
+2	10
+2	33
+3	22
+4	11
+5	33
+6	33
+select /*+index(t1 i1)*/ pk1,c1 from t1 union all select /*+index(t2 i11)*/ pk1,c1 from t2;
+pk1	c1
+1	44
+1	44
+2	10
+2	33
+3	22
+3	22
+4	11
+4	11
+5	33
+6	33
+select /*+index(t1 i1)*/ pk1,c1 from t1 except select /*+index(t2 i11)*/ pk1,c1 from t2;
+pk1	c1
+2	33
+select /*+index(t1 i1)*/ pk1,c1 from t1 intersect select /*+index(t2 i11)*/ pk1,c1 from t2;
+pk1	c1
+1	44
+3	22
+4	11
+(select t1.c1,t2.c4 from t1,t2 where t1.c1=t2.c1 order by t1.c1) union (select c1,c4 from t2 where c1=44 order by c1);
+c1	c4
+11	1
+22	2
+33	0
+33	3
+44	4
+(select c1,c4 from t2 where c1=44 order by c1) union (select t1.c1,t2.c4 from t1,t2 where t1.c1=t2.c1 order by t1.c1);
+c1	c4
+11	1
+22	2
+33	0
+33	3
+44	4
+(select t1.c1,t2.c4 from t1,t2 where t1.c1=t2.c1 order by t2.c1) union all (select c1,c4 from t2 where c1=44 order by c1);
+c1	c4
+11	1
+22	2
+33	0
+33	3
+44	4
+44	4
+(select t1.c1,t2.c4 from t1,t2 where t1.c1=t2.c1 order by t1.c1) except (select c1,c4 from t2 where c1=44 order by c2);
+c1	c4
+11	1
+22	2
+33	0
+33	3
+(select t1.c1,t2.c4 from t1,t2 where t1.c1=t2.c1 order by t2.c1) intersect (select c1,c4 from t2 where c1=44 order by c1);
+c1	c4
+44	4
+select * from (select * from t1 where pk1 in(1,2,3,4,5,6)) a order by pk2;
+pk1	pk2	pk3	c1	c2	c3	c4	c5	c6
+1	primarykey1	2013-12-11 01:01:01.000000	44	column11	2013-12-11 11:11:11.000000	4	2	3
+2	primarykey2	2013-12-11 01:01:02.000000	33	column21	2013-12-11 11:11:12.000000	3	1	3
+3	primarykey3	2013-12-11 01:01:03.000000	22	column32	2013-12-11 11:11:13.000000	2	1	2
+4	primarykey4	2013-12-11 01:01:04.000000	11	column42	2013-12-11 11:11:14.000000	1	3	2
+select * from (select * from t1 where pk1 in(1,2,3,4,5,6) order by pk1) a order by pk2;
+pk1	pk2	pk3	c1	c2	c3	c4	c5	c6
+1	primarykey1	2013-12-11 01:01:01.000000	44	column11	2013-12-11 11:11:11.000000	4	2	3
+2	primarykey2	2013-12-11 01:01:02.000000	33	column21	2013-12-11 11:11:12.000000	3	1	3
+3	primarykey3	2013-12-11 01:01:03.000000	22	column32	2013-12-11 11:11:13.000000	2	1	2
+4	primarykey4	2013-12-11 01:01:04.000000	11	column42	2013-12-11 11:11:14.000000	1	3	2
+select * from (select * from t1 where pk1 in(1,2,3,4,5,6) order by pk1) a order by pk1;
+pk1	pk2	pk3	c1	c2	c3	c4	c5	c6
+1	primarykey1	2013-12-11 01:01:01.000000	44	column11	2013-12-11 11:11:11.000000	4	2	3
+2	primarykey2	2013-12-11 01:01:02.000000	33	column21	2013-12-11 11:11:12.000000	3	1	3
+3	primarykey3	2013-12-11 01:01:03.000000	22	column32	2013-12-11 11:11:13.000000	2	1	2
+4	primarykey4	2013-12-11 01:01:04.000000	11	column42	2013-12-11 11:11:14.000000	1	3	2
+select * from (select * from t1 where pk1 in(1,2,3,4,5,6) order by pk1) a  where a.c2>='abc' order by pk1;
+pk1	pk2	pk3	c1	c2	c3	c4	c5	c6
+1	primarykey1	2013-12-11 01:01:01.000000	44	column11	2013-12-11 11:11:11.000000	4	2	3
+2	primarykey2	2013-12-11 01:01:02.000000	33	column21	2013-12-11 11:11:12.000000	3	1	3
+3	primarykey3	2013-12-11 01:01:03.000000	22	column32	2013-12-11 11:11:13.000000	2	1	2
+4	primarykey4	2013-12-11 01:01:04.000000	11	column42	2013-12-11 11:11:14.000000	1	3	2
+select * from (select * from t1 where pk1 in(1,2,3,4,5,6) order by pk1) a  where a.c2>='abc' order by pk2;
+pk1	pk2	pk3	c1	c2	c3	c4	c5	c6
+1	primarykey1	2013-12-11 01:01:01.000000	44	column11	2013-12-11 11:11:11.000000	4	2	3
+2	primarykey2	2013-12-11 01:01:02.000000	33	column21	2013-12-11 11:11:12.000000	3	1	3
+3	primarykey3	2013-12-11 01:01:03.000000	22	column32	2013-12-11 11:11:13.000000	2	1	2
+4	primarykey4	2013-12-11 01:01:04.000000	11	column42	2013-12-11 11:11:14.000000	1	3	2

@@ -1,0 +1,331 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+#owner: yanmu.ztl
+#owner group: rs
+#description: test whether show create tablegroup stmt
+
+#connect (conn_sys,$OBMYSQL_MS0,root@sys,,*NO-ONE*,$OBMYSQL_PORT);
+#connection conn_sys;
+
+# case 1: partition options
+# case 1.1: 非分区tablegroup
+let $index = 0;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index;
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+# case 1.2: 一级分区tablegroup
+
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by hash partitions 2;
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by key 2 partitions 2;
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by range (partition p0 values less than (100), partition p1 values less than (200), partition p2 values less than (MAXVALUE));
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by range columns 2 (partition p0 values less than (1, '100'), partition p1 values less than (2, '200'), partition p2 values less than (MAXVALUE, MAXVALUE));
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by list (partition p0 values in (0, 1), partition p1 values in (2, 3), partition p3 values in (DEFAULT));
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by list columns 2 (partition p0 values in (('00', 0), ('01', 1)), partition p1 values in (('02', 2), ('03', 3)), partition p3 values in (DEFAULT));
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+# case 1.2: 二级分区tablegroup
+
+# 一级hash
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by hash subpartition by range subpartition template (subpartition p0 values less than (100), subpartition p1 values less than (200), subpartition p2 values less than (MAXVALUE)) partitions 2;
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by hash subpartition by range columns 2 subpartition template (subpartition p0 values less than (1, '100'), subpartition p1 values less than (2, '200'), subpartition p2 values less than (MAXVALUE, MAXVALUE)) partitions 2;
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by hash subpartition by list subpartition template (subpartition p0 values in (0, 1), subpartition p1 values in (2, 3), subpartition p3 values in (DEFAULT)) partitions 2;
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by hash subpartition by list columns 2 subpartition template (subpartition p0 values in (('00', 0), ('01', 1)), subpartition p1 values in (('02', 2), ('03', 3)), subpartition p3 values in (DEFAULT)) partitions 2;
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+# 一级key
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by key 2 subpartition by range subpartition template (subpartition p0 values less than (100), subpartition p1 values less than (200), subpartition p2 values less than (MAXVALUE)) partitions 2;
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by key 2 subpartition by range columns 2 subpartition template (subpartition p0 values less than (1, '100'), subpartition p1 values less than (2, '200'), subpartition p2 values less than (MAXVALUE, MAXVALUE)) partitions 2;
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by key 2 subpartition by list subpartition template (subpartition p0 values in (0, 1), subpartition p1 values in (2, 3), subpartition p3 values in (DEFAULT)) partitions 2;
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by key 2 subpartition by list columns 2 subpartition template (subpartition p0 values in (('00', 0), ('01', 1)), subpartition p1 values in (('02', 2), ('03', 3)), subpartition p3 values in (DEFAULT)) partitions 2;
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+# 一级range
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by range subpartition by hash subpartitions 2 (partition p0 values less than (100), partition p1 values less than (200), partition p2 values less than (MAXVALUE));
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by range subpartition by key 2 subpartitions 2 (partition p0 values less than (100), partition p1 values less than (200), partition p2 values less than (MAXVALUE));
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by range subpartition by list subpartition template (subpartition p0 values in (0, 1), subpartition p1 values in (2, 3), subpartition p3 values in (DEFAULT)) (partition p0 values less than (100), partition p1 values less than (200), partition p2 values less than (MAXVALUE));
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by range subpartition by list columns 2 subpartition template (subpartition p0 values in (('00', 0), ('01', 1)), subpartition p1 values in (('02', 2), ('03', 3)), subpartition p3 values in (DEFAULT)) (partition p0 values less than (100), partition p1 values less than (200), partition p2 values less than (MAXVALUE));
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+# 一级range columns
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by range columns 2 subpartition by hash subpartitions 2 (partition p0 values less than (1, '100'), partition p1 values less than (2, '200'), partition p2 values less than (MAXVALUE, MAXVALUE));
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by range columns 2 subpartition by key 2 subpartitions 2 (partition p0 values less than (1, '100'), partition p1 values less than (2, '200'), partition p2 values less than (MAXVALUE, MAXVALUE));
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by range columns 2 subpartition by list subpartition template (subpartition p0 values in (0, 1), subpartition p1 values in (2, 3), subpartition p3 values in (DEFAULT)) (partition p0 values less than (1, '100'), partition p1 values less than (2, '200'), partition p2 values less than (MAXVALUE, MAXVALUE));
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by range columns 2 subpartition by list columns 2 subpartition template (subpartition p0 values in (('00', 0), ('01', 1)), subpartition p1 values in (('02', 2), ('03', 3)), subpartition p3 values in (DEFAULT)) (partition p0 values less than (1, '100'), partition p1 values less than (2, '200'), partition p2 values less than (MAXVALUE, MAXVALUE));
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+# 一级list
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by list subpartition by hash subpartitions 2 (partition p0 values in (0, 1), partition p1 values in (2, 3), partition p3 values in (DEFAULT));
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by list subpartition by key 2 subpartitions 2 (partition p0 values in (0, 1), partition p1 values in (2, 3), partition p3 values in (DEFAULT));
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by list subpartition by range subpartition template (subpartition p0 values less than (100), subpartition p1 values less than (200), subpartition p2 values less than (MAXVALUE)) (partition p0 values in (0, 1), partition p1 values in (2, 3), partition p3 values in (DEFAULT));
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by list subpartition by range columns 2 subpartition template (subpartition p0 values less than (1, '100'), subpartition p1 values less than (2, '200'), subpartition p2 values less than (MAXVALUE, MAXVALUE)) (partition p0 values in (0, 1), partition p1 values in (2, 3), partition p3 values in (DEFAULT));
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+# 一级list columns
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by list columns 2 subpartition by hash subpartitions 2 (partition p0 values in (('00', 0), ('01', 1)), partition p1 values in (('02', 2), ('03', 3)), partition p3 values in (DEFAULT));
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by list columns 2 subpartition by key 2 subpartitions 2 (partition p0 values in (('00', 0), ('01', 1)), partition p1 values in (('02', 2), ('03', 3)), partition p3 values in (DEFAULT));
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by list columns 2 subpartition by range subpartition template (subpartition p0 values less than (100), subpartition p1 values less than (200), subpartition p2 values less than (MAXVALUE)) (partition p0 values in (('00', 0), ('01', 1)), partition p1 values in (('02', 2), ('03', 3)), partition p3 values in (DEFAULT));
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+
+inc $index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings
+eval create tablegroup show_create_tg_$index partition by list columns 2 subpartition by range columns 2 subpartition template (subpartition p0 values less than (1, '100'), subpartition p1 values less than (2, '200'), subpartition p2 values less than (MAXVALUE, MAXVALUE)) (partition p0 values in (('00', 0), ('01', 1)), partition p1 values in (('02', 2), ('03', 3)), partition p3 values in (DEFAULT));
+eval show create tablegroup show_create_tg_$index;
+--disable_warnings
+eval drop tablegroup if exists show_create_tg_$index;
+--enable_warnings

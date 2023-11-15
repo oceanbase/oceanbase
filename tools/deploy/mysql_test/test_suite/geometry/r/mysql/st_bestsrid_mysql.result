@@ -1,0 +1,416 @@
+# ----------------------------------------------------------------------
+# Test of GEOMETRY ST_BESTSRID
+# ----------------------------------------------------------------------
+# st_transform is the same as mysql, use _st_transform instead
+select st_astext(_st_transform(ST_GeomFromText('point(-70 0)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-70 0)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-70 0)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-70 0)', 4326))))
+POINT(0 2221670.8874961706)
+select st_astext(_st_transform(ST_GeomFromText('point(70 0)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(70 0)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(70 0)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(70 0)', 4326))))
+POINT(385526.28525420243 7768690.108775233)
+select st_astext(_st_transform(ST_GeomFromText('point(60 180)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 180)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 180)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 180)', 4326))))
+POINT(667294.8211244522 6655205.483634564)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -180)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -180)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -180)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -180)', 4326))))
+POINT(667294.8211244522 6655205.483634564)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 180)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 180)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 180)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 180)', 4326))))
+POINT(667294.8211244522 3344794.516365436)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -180)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -180)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -180)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -180)', 4326))))
+POINT(667294.8211244522 3344794.516365436)
+select st_astext(_st_transform(ST_GeomFromText('point(40 160)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(40 160)', 4326), ST_GeomFromText('POINT(-40 -160)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(40 160)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(40 160)', 4326), ST_GeomFromText('POINT(-40 -160)', 4326))))
+POINT(17811118.526923772 4838471.398061137)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -177)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -177)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -177)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -177)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -171)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -171)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -171)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -171)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -165)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -165)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -165)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -165)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -159)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -159)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -159)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -159)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -153)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -153)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -153)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -153)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -147)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -147)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -147)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -147)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -141)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -141)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -141)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -141)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -135)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -135)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -135)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -135)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -129)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -129)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -129)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -129)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -123)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -123)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -123)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -123)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -117)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -117)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -117)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -117)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -111)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -111)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -111)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -111)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -105)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -105)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -105)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -105)', 4326))))
+POINT(499999.9999999993 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -99)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -99)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -99)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -99)', 4326))))
+POINT(499999.9999999993 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -93)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -93)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -93)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -93)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -87)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -87)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -87)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -87)', 4326))))
+POINT(500000.0000000007 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -81)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -81)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -81)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -81)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -75)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -75)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -75)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -75)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -69)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -69)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -69)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -69)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -63)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -63)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -63)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -63)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -57)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -57)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -57)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -57)', 4326))))
+POINT(500000.00000000105 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -51)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -51)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -51)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -51)', 4326))))
+POINT(500000.0000000007 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -45)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -45)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -45)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -45)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -39)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -39)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -39)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -39)', 4326))))
+POINT(499999.99999999965 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -33)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -33)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -33)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -33)', 4326))))
+POINT(500000.00000000035 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -27)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -27)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -27)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -27)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -21)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -21)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -21)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -21)', 4326))))
+POINT(499999.9999999995 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -15)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -15)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -15)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -15)', 4326))))
+POINT(499999.9999999991 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -9)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -9)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -9)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -9)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 -3)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -3)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 -3)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 -3)', 4326))))
+POINT(499999.99999999953 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 177)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 177)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 177)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 177)', 4326))))
+POINT(500000.0000000014 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 171)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 171)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 171)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 171)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 165)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 165)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 165)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 165)', 4326))))
+POINT(499999.9999999986 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 159)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 159)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 159)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 159)', 4326))))
+POINT(500000.0000000014 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 153)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 153)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 153)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 153)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 147)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 147)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 147)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 147)', 4326))))
+POINT(500000.00000000285 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 141)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 141)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 141)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 141)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 135)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 135)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 135)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 135)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 129)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 129)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 129)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 129)', 4326))))
+POINT(500000.0000000014 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 123)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 123)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 123)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 123)', 4326))))
+POINT(500000.0000000014 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 117)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 117)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 117)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 117)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 111)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 111)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 111)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 111)', 4326))))
+POINT(500000.00000000215 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 105)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 105)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 105)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 105)', 4326))))
+POINT(499999.9999999986 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 99)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 99)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 99)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 99)', 4326))))
+POINT(500000.0000000007 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 93)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 93)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 93)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 93)', 4326))))
+POINT(499999.9999999986 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 87)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 87)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 87)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 87)', 4326))))
+POINT(499999.99999999785 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 81)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 81)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 81)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 81)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 75)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 75)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 75)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 75)', 4326))))
+POINT(499999.9999999993 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 69)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 69)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 69)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 69)', 4326))))
+POINT(499999.99999999785 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 63)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 63)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 63)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 63)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 57)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 57)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 57)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 57)', 4326))))
+POINT(499999.99999999895 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 51)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 51)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 51)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 51)', 4326))))
+POINT(500000.0000000007 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 45)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 45)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 45)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 45)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 39)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 39)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 39)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 39)', 4326))))
+POINT(500000.00000000035 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 33)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 33)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 33)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 33)', 4326))))
+POINT(499999.99999999965 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 27)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 27)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 27)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 27)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 21)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 21)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 21)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 21)', 4326))))
+POINT(500000.0000000005 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 15)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 15)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 15)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 15)', 4326))))
+POINT(500000.0000000009 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 9)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 9)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 9)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 9)', 4326))))
+POINT(500000 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(60 3)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 3)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(60 3)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(60 3)', 4326))))
+POINT(500000.00000000047 6651411.190362714)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -177)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -177)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -177)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -177)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -171)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -171)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -171)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -171)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -165)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -165)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -165)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -165)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -159)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -159)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -159)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -159)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -153)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -153)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -153)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -153)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -147)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -147)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -147)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -147)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -141)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -141)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -141)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -141)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -135)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -135)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -135)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -135)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -129)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -129)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -129)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -129)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -123)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -123)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -123)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -123)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -117)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -117)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -117)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -117)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -111)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -111)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -111)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -111)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -105)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -105)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -105)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -105)', 4326))))
+POINT(499999.9999999993 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -99)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -99)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -99)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -99)', 4326))))
+POINT(499999.9999999993 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -93)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -93)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -93)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -93)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -87)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -87)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -87)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -87)', 4326))))
+POINT(500000.0000000007 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -81)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -81)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -81)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -81)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -75)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -75)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -75)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -75)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -69)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -69)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -69)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -69)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -63)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -63)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -63)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -63)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -57)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -57)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -57)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -57)', 4326))))
+POINT(500000.00000000105 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -51)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -51)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -51)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -51)', 4326))))
+POINT(500000.0000000007 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -45)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -45)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -45)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -45)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -39)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -39)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -39)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -39)', 4326))))
+POINT(499999.99999999965 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -33)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -33)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -33)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -33)', 4326))))
+POINT(500000.00000000035 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -27)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -27)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -27)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -27)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -21)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -21)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -21)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -21)', 4326))))
+POINT(499999.9999999995 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -15)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -15)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -15)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -15)', 4326))))
+POINT(499999.9999999991 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -9)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -9)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -9)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -9)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 -3)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -3)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 -3)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 -3)', 4326))))
+POINT(499999.99999999953 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 177)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 177)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 177)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 177)', 4326))))
+POINT(500000.0000000014 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 171)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 171)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 171)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 171)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 165)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 165)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 165)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 165)', 4326))))
+POINT(499999.9999999986 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 159)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 159)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 159)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 159)', 4326))))
+POINT(500000.0000000014 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 153)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 153)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 153)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 153)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 147)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 147)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 147)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 147)', 4326))))
+POINT(500000.00000000285 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 141)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 141)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 141)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 141)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 135)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 135)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 135)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 135)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 129)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 129)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 129)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 129)', 4326))))
+POINT(500000.0000000014 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 123)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 123)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 123)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 123)', 4326))))
+POINT(500000.0000000014 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 117)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 117)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 117)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 117)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 111)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 111)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 111)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 111)', 4326))))
+POINT(500000.00000000215 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 105)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 105)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 105)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 105)', 4326))))
+POINT(499999.9999999986 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 99)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 99)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 99)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 99)', 4326))))
+POINT(500000.0000000007 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 93)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 93)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 93)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 93)', 4326))))
+POINT(499999.9999999986 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 87)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 87)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 87)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 87)', 4326))))
+POINT(499999.99999999785 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 81)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 81)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 81)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 81)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 75)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 75)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 75)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 75)', 4326))))
+POINT(499999.9999999993 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 69)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 69)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 69)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 69)', 4326))))
+POINT(499999.99999999785 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 63)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 63)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 63)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 63)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 57)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 57)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 57)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 57)', 4326))))
+POINT(499999.99999999895 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 51)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 51)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 51)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 51)', 4326))))
+POINT(500000.0000000007 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 45)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 45)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 45)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 45)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 39)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 39)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 39)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 39)', 4326))))
+POINT(500000.00000000035 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 33)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 33)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 33)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 33)', 4326))))
+POINT(499999.99999999965 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 27)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 27)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 27)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 27)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 21)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 21)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 21)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 21)', 4326))))
+POINT(500000.0000000005 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 15)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 15)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 15)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 15)', 4326))))
+POINT(500000.0000000009 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 9)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 9)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 9)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 9)', 4326))))
+POINT(500000 3348588.809637286)
+select st_astext(_st_transform(ST_GeomFromText('point(-60 3)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 3)', 4326))));
+st_astext(_st_transform(ST_GeomFromText('point(-60 3)', 4326), _ST_BestSRID(ST_GeomFromText('POINT(-60 3)', 4326))))
+POINT(500000.00000000047 3348588.809637286)
+select _st_bestsrid(st_geomfromtext('MULTILINESTRING((0 0,2 2,2 1,0 1),(0 0,1 1,0 0))',4326),null);
+_st_bestsrid(st_geomfromtext('MULTILINESTRING((0 0,2 2,2 1,0 1),(0 0,1 1,0 0))',4326),null)
+NULL
+select _st_bestsrid(null);
+_st_bestsrid(null)
+NULL
+select _st_bestsrid(st_geomfromtext('point(12.321 -32.123)',26918));
+ERROR 22S00: _st_bestsrid(POINT) has not been implemented for projected spatial reference systems.
+select _st_bestsrid(st_geomfromtext('GEOMETRYCOLLECTION empty',4326,'axis-order=long-lat'));
+_st_bestsrid(st_geomfromtext('GEOMETRYCOLLECTION empty',4326,'axis-order=long-lat'))
+999000
+drop table if exists shape;
+create table shape(id int, geo geometry NOT NULL SRID 4326);
+INSERT INTO shape (id, geo) VALUES
+(1, ST_GeomFromText('POINT(1 1)', 4326, 'axis-order=long-lat')),
+(2, ST_GeomFromText('LINESTRING(1 1, 2 2)', 4326, 'axis-order=long-lat')),
+(3, ST_GeomFromText('POLYGON((1 1, 2 2, 3 0, 1 1))', 4326, 'axis-order=long-lat')),
+(4, ST_GeomFromText('MULTIPOINT(5 0,2 3,8 7,15 25)', 4326, 'axis-order=long-lat')),
+(5, ST_GeomFromText('MULTILINESTRING((2.5 0,0 1.5,1.5 3.0,0 5))', 4326, 'axis-order=long-lat')),
+(6, ST_GeomFromText('MULTIPOLYGON(((5 0,1.5 2.5,2.5 0,1.5 5,5 0)),((2.5 0,0 1.5,3.0 1.5,2.2 1.0,2.5 0)))', 4326, 'axis-order=long-lat')),
+(7, ST_GeomFromText('GEOMETRYCOLLECTION(MULTIPOLYGON(((5 0,1.5 2.5,2.5 0,1.5 5,5 0)),((2.5 0,0 1.5,3.0 1.5,2.2 1.0,2.5 0))),POLYGON((5 0,7 1.0,0 1.5,1.0 1.5,1.5 2.5,2.0 1.5,3.0 1.5,2.2 1.0,2.5 0,1.5 5,5 0)),LINESTRING(1.5 2.5,1.5 1.0),MULTIPOINT(5 0,2.5 0),POINT(1.5 2.5))', 4326, 'axis-order=long-lat'));
+select _st_bestsrid(geo) from shape;
+_st_bestsrid(geo)
+999031
+999031
+999031
+999000
+999031
+999031
+999229
+drop table shape;

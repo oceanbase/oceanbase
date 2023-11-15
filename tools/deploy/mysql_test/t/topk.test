@@ -1,0 +1,183 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: link.zt
+#owner group: sql1
+# tags: optimizer
+
+# Test mutli avg
+--disable_warnings
+drop table if exists t1;
+drop table if exists t2;
+drop table if exists t3;
+--enable_warnings
+create table t1 (c1 int primary key, c2 int, c3 varchar(32)) partition by hash(c1) partitions 2;
+insert into t1 values(1,1,1),(3,3,3),(5,5,5),(7,7,7),(9,9,9),(11,11,11),(13,13,13),(15,15,15),(17,17,17),(19,19,19);
+insert into t1 values(31,1,1),(33,3,3),(35,5,5),(37,7,7),(39,9,9),(41,11,11),(43,13,13),(45,15,15),(47,17,17),(49,19,19);
+insert into t1 values(2,2,2),(4,4,4),(6,6,6),(8,8,8),(10,10,10),(12,12,12),(14,14,14),(16,16,16),(18,18,18),(20,20,20);
+insert into t1 values(32,2,2),(34,4,4),(36,6,6),(38,8,8),(40,10,10),(42,12,12),(44,14,14),(46,16,16),(48,18,18),(50,20,20);
+
+create table t2 (c1 int primary key, c2 int, c3 varchar(32)) partition by hash(c1) partitions 2;
+create table t3 (c1 int primary key, c2 int, c3 varchar(32)) partition by hash(c1) partitions 2;
+insert into t2 values(2,2,2),(4,4,4),(6,6,6),(8,8,8),(10,10,10),(12,12,12),(14,14,14),(16,16,16),(18,18,18),(20,20,20),(22,22,22);
+## ------------------case that not match the rules to use topk---------------------------##
+#without order by
+select /*+topk(20 6)*/ avg(c1), avg(c2), avg(c3) from t1 where c2 <10 group by c2  limit 5;
+select @@is_result_accurate;
+#without limit
+select /*+topk(20 6)*/ avg(c1), avg(c2), avg(c3) from t1  where c2 <10 group by c2 order by avg(c1);
+select @@is_result_accurate;
+#without group by
+select /*+topk(20 6)*/ avg(c1), avg(c2), avg(c3) from t1  where c2 <10 order by avg(c1) limit 5;
+select @@is_result_accurate;
+#is select  for update
+## currently MySQL mode for update temporarily uses Oracle plan,
+## this syntax is prohibited under Oracle,
+## and it needs to be opened for mysql mode later
+select /*+topk(20 6)*/ avg(c1), avg(c2), avg(c3) from t1  where c2 <10 group by c2 order by avg(c1) limit 5 for update nowait;
+select @@is_result_accurate;
+#without topk hint
+select avg(c1), avg(c2), avg(c3) from t1  where c2 <10 group by c2 order by avg(c1) limit 5;
+select @@is_result_accurate;
+#with found_rows
+select /*+topk(20 6)*/ sql_calc_found_rows avg(c2), avg(c3)  from t1 where c2 <10 group by c2 order by avg(c1) limit 5;
+select @@is_result_accurate;
+#with subquery
+select /*+topk(20 6)*/  avg(c1), avg(c2), avg(c3)  from t1 where c2 <10 group by c2 order by (select c1  from t1 where c2 = 1 and c1 !=1)  limit 5;
+select @@is_result_accurate;
+#with distinct
+select /*+topk(20 6)*/ distinct avg(c1), avg(c2), avg(c3)  from t1 where c2 <10 group by c2 order by avg(c1) limit 5;
+select @@is_result_accurate;
+#with group_concat will not use topk
+select /*+topk(20 6)*/ sum(c1), avg(c2), group_concat(c3, c1)  from t1 where c2 <10 group by c2 order by avg(c1) limit 5;
+select @@is_result_accurate;
+#not based table
+select /*+topk(20 6)*/  avg(c1), avg(c2), avg(c3) from (select *  from t1 where c2 <10) as a  group by a.c2 order by avg(a.c1) limit 5;
+select @@is_result_accurate;
+# join table
+select /*+topk(20 6)*/ distinct avg(t1.c1), avg(t1.c2), avg(t1.c3)  from t1 , t2 group by t1.c2 order by avg(t1.c1) limit 5;
+select @@is_result_accurate;
+
+##-----------------case that match rules of topk-----------------------##
+##hash agg + topk_sort
+select /*+topk(1 2) use_hash_aggregation*/ c3, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by c3 limit 1;
+select @@is_result_accurate;
+
+##hash agg + topk_sort
+select /*+topk(1 2) use_hash_aggregation*/ c3, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by "aaa" limit 1;
+select @@is_result_accurate;
+
+select /*+topk(90 2) use_hash_aggregation*/ c3, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <30 group by c2 order by c3 limit 10;
+select @@is_result_accurate;
+
+##merge agg + sort +topk
+select /*+topk(1 1)*/ c3, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by c3 limit 1;
+select @@is_result_accurate;
+## with offset
+select /*+topk(1 1)*/ c3, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <12 group by c2 order by c3 limit 1 offset 4;
+select @@is_result_accurate;
+select /*+topk(1 1)*/ c3, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <12 group by c2 order by c3 limit 1 offset 1000;
+select @@is_result_accurate;
+##merge agg + marterial +topk
+select /*+topk(1 1)*/ c3, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by c2 limit 1;
+select @@is_result_accurate;
+##test limit 0
+select /*+topk(1 1)*/ c3, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by c3 limit 0;
+select @@is_result_accurate;
+##complex  order by item
+select /*+topk(1 1)*/ c2, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by avg(c3), sum(c1)/sum(c2) limit 5;
+select @@is_result_accurate;
+select /*+topk(1 1)*/ c1, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by avg(c3) desc, sum(c1)/sum(c2)  limit 5;
+select @@is_result_accurate;
+select /*+topk(1 1)*/ c2, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by avg(c3) desc, sum(c1)/sum(c2) + avg(c2)  limit 5;
+select @@is_result_accurate;
+select /*+topk(1 1)*/ avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by avg(c3) desc, sum(c1)+sum(c2)  limit 5;
+select @@is_result_accurate;
+##different topk params
+select /*+topk(0 0)*/ c2, sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <12 group by c2 order by avg(c3) desc, sum(c1)+sum(c2)  limit 5;
+select @@is_result_accurate;
+select /*+topk(0 10)*/ c2, sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <12 group by c2 order by avg(c3) desc, sum(c1)+sum(c2)  limit 5;
+select @@is_result_accurate;
+select /*+topk(50 0)*/ c2, sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <12 group by c2 order by avg(c3) desc, sum(c1)+sum(c2)  limit 5;
+select @@is_result_accurate;
+select /*+topk(10000 1)*/ c2, sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <12 group by c2 order by avg(c3) desc, sum(c1)+sum(c2)  limit 5;
+select @@is_result_accurate;
+select /*+topk(1 10000)*/ c2, sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <12 group by c2 order by avg(c3) desc, sum(c1)+sum(c2)  limit 5;
+select @@is_result_accurate;
+
+
+
+##topk is in subquery
+select * from (select /*+topk(0 4)*/ avg(c1)  from t1 where c2 <10 group by c2 order by sum(c2) limit 5) as a;
+select c1  from t1 where c1 < any (select /*+topk(0 4)*/ avg(c1)  from t1 where c2 <10 group by c2 order by sum(c2)  limit 5);
+(select /*+topk(0 4)*/ avg(c1)  from t1 where c2 <10 group by c2 order by sum(c2) limit 5) union (select /*+topk(0 10)*/ sum(c1)  from t1 where c2 <10 group by c2 order by sum(c2) limit 7);
+
+select c1  from t1 where (select /*+topk(0 10)*/ avg(c1)  from t1 where c2 <10 group by c2 order by sum(c2) limit 1) > 1 ;
+
+##TODO:this is not supported
+##select  (select  /*+topk(10 5)*/ avg(c1)  from t1  where c2 =2 group by a.c2 order by sum(c2) limit 5)   from t2 as a;
+#select (select  /*+topk(10 5)*/ avg(c1) from t1  where c2 =2 group by c2 order by sum(a.c2 + c2) limit 5)  from t2 as a ;
+
+select * from (select /*+topk(10 5)*/ c3, c1, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1) from t1 group by c2 order by c3 limit 7) as a left join t2 on a.c1 = t2.c1 left join t3 on t3.c1 = a.c1 order by a.c3;
+
+##check whether plan cache will hit TODO:now plan cache did not support distribute plan
+
+##check plan
+explain basic select /*+topk(20 6)*/ avg(c1), avg(c2), avg(c3)  from t1 where c2 <10 group by c2  limit 5;
+#without limit
+explain basic select /*+topk(20 6)*/ avg(c1), avg(c2), avg(c3)  from t1 where c2 <10 group by c2 order by avg(c1);
+#without group by
+explain basic select /*+topk(20 6)*/ avg(c1), avg(c2), avg(c3)  from t1 where c2 <10 order by avg(c1) limit 5;
+#is select  for update
+explain basic select /*+topk(20 6)*/ avg(c1), avg(c2), avg(c3)  from t1 where c2 <10 group by c2 order by avg(c1) limit 5 for update nowait;
+#without topk hint
+explain basic select avg(c1), avg(c2), avg(c3)  from t1 where c2 <10 group by c2 order by avg(c1) limit 5;
+#with found_rows
+explain basic select /*+topk(20 6)*/ sql_calc_found_rows avg(c2), avg(c3)  from t1 where c2 <10 group by c2 order by avg(c1) limit 5;
+#with subquery
+explain basic select /*+topk(20 6)*/  avg(c1), avg(c2), avg(c3)  from t1 where c2 <10 group by c2 order by (select c1  from t1 where c2 = 1 and c1 != 1) limit 5;
+#with distinct
+explain basic select /*+topk(20 6)*/ distinct avg(c1), avg(c2), avg(c3)  from t1 where c2 <10 group by c2 order by avg(c1) limit 5;
+#with group_concat will not use topk
+explain basic select /*+topk(20 6)*/ sum(c1), avg(c2), group_concat(c3, c1)  from t1 where c2 <10 group by c2 order by avg(c1) limit 5;
+
+##check plan
+#todo  需要看一下这条sql的执行计划
+explain basic select /*+topk(1 2) use_hash_aggregation*/ c3, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by c3 limit 1;
+#explain basic select /*+topk(1 2) use_hash_aggregation*/ c3, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by "aaa" limit 1;
+explain basic select /*+topk(90 2) use_hash_aggregation*/ c3, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <30 group by c2 order by c3 limit 10;
+##merge agg + sort +topk
+explain basic select /*+topk(1 1)*/ c3, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by c3 limit 1;
+##merge agg + marterial +topk
+explain basic select /*+topk(1 1)*/ c3, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <12 group by c2 order by c3 limit 1 offset 4;
+##test limit 0
+explain basic select /*+topk(1 1)*/ c3, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by c3 limit 0;
+##complex  order by item
+explain basic  select /*+topk(1 1)*/ c2, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <12 group by c2 order by avg(c3), sum(c1)/sum(c2) limit 5;
+explain basic  select /*+topk(1 1)*/ c1, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by avg(c3) desc, sum(c1)/sum(c2)  limit 5;
+explain basic select /*+topk(1 1)*/ c2, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by avg(c3) desc, sum(c1)/sum(c2) + avg(c2)  limit 5;
+explain basic select /*+topk(1 1)*/ avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by avg(c3) desc, sum(c1)+sum(c2)  limit 5;
+##different topk params
+explain basic select /*+topk(0 0)*/ c2, sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by avg(c3) desc, sum(c1)+sum(c2)  limit 5;
+explain basic select /*+topk(0 10)*/ c2, sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by avg(c3) desc, sum(c1)+sum(c2)  limit 5;
+explain basic select /*+topk(50 0)*/ c2, sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by avg(c3) desc, sum(c1)+sum(c2)  limit 5;
+explain basic select /*+topk(10000 1)*/ c2, sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by avg(c3) desc, sum(c1)+sum(c2)  limit 5;
+explain basic select /*+topk(1 10000)*/ c2, sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by avg(c3) desc, sum(c1)+sum(c2)  limit 5;
+
+##topk is in subquery
+set @@ob_enable_transformation=default;
+explain basic select * from (select /*+topk(0 4)*/ avg(c1)  from t1 where c2 <10 group by c2 order by sum(c2) limit 5) as a;
+explain basic select c1  from t1 where c1 < any (select /*+topk(0 4)*/ avg(c1)  from t1 where c2 <10 group by c2 order by sum(c2)  limit 5);
+explain basic (select /*+topk(0 4)*/ avg(c1)  from t1 where c2 <10 group by c2 order by sum(c2) limit 5) union (select /*+topk(0 10)*/ sum(c1)  from t1 where c2 <10 group by c2 order by sum(c2) limit 7);
+
+explain basic select c1  from t1 where (select /*+topk(0 10)*/ avg(c1)  from t1 where c2 <10 group by c2 order by sum(c2) limit 1) > 1 ;
+
+##TODO:this is not supported
+##select  (select  /*+topk(10 5)*/ avg(c1)  from t1  where c2 =2 group by a.c2 order by sum(c2) limit 5)   from t2 as a;
+#select (select  /*+topk(10 5)*/ avg(c1) from t1  where c2 =2 group by c2 order by sum(a.c2 + c2) limit 5)  from t2 as a ;
+
+explain basic select * from (select /*+topk(10 5)*/ c3, c1, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1) from t1 group by c2 order by c3 limit 7) as a left join t2 on a.c1 = t2.c1 left join t3 on t3.c1 = a.c1;
+
+drop table t1;
+drop table t2;
+drop table t3;

@@ -1,0 +1,19 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: dachuan.sdc
+# owner group: SQL3
+# description: OUR GOAL: Make all this simple and effective!
+--disable_abort_on_error
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+create table t1(c1 int primary key, c2 int);
+insert into t1 values(1,1);
+set autocommit=0;
+insert into t1 values(1,1);
+rollback;
+insert into t1 values(1,1);
+rollback;

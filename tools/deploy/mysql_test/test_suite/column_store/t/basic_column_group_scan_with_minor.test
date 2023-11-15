@@ -1,0 +1,232 @@
+# owner: yuxiaozhe.yxz
+# owner group: storage
+# description: execute query which scan columnar store and row store
+
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+connection conn1;
+--disable_query_log
+alter system enable_table_without_all_cg = true;
+alter system set _rowsets_enabled = true;
+alter system flush plan cache;
+set @@recyclebin = off;
+--enable_query_log
+
+--disable_warnings
+drop table if exists ct1;
+--enable_warnings
+set session ob_trx_timeout=100000000000;
+# create table without all column group
+create table ct1(c1 int primary key, c2 int, c3 number, c4 varchar(60000), c5 varchar(60000)) ROW_FORMAT = redundant COMPRESSION = 'none' with column group for all columns, each column;
+
+--disable_query_log
+--let $count = 0
+while($count < 1000)
+{
+   eval insert into ct1 values($count * 10, $count * 10, $count * 10, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 1, $count * 10 + 1, $count * 10 + 1, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 2, $count * 10 + 2, $count * 10 + 2, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 3, $count * 10 + 3, $count * 10 + 3, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 4, $count * 10 + 4, $count * 10 + 4, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 5, $count * 10 + 5, $count * 10 + 5, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 6, $count * 10 + 6, $count * 10 + 6, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 7, $count * 10 + 7, $count * 10 + 7, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 8, $count * 10 + 8, $count * 10 + 8, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 9, $count * 10 + 9, $count * 10 + 9, repeat(md5(rand()), 100), repeat(md5(rand()), 100));
+
+  --inc $count
+}
+--enable_query_log
+
+alter system minor freeze;
+--source mysql_test/include/wait_minor_merge.inc
+alter system major freeze;
+--source mysql_test/include/wait_daily_merge.inc
+
+update ct1 set c3 = 0 where c1 = 0;
+update ct1 set c3 = 0 where c1 = 200;
+update ct1 set c3 = 0 where c1 = 1200;
+update ct1 set c3 = 0 where c1 = 5200;
+update ct1 set c3 = 0 where c1 = 8803;
+update ct1 set c3 = 0 where c1 = 9907;
+insert into ct1 values(10001, 0, 0, '', '');
+insert into ct1 values(20000, 0, 0, '', '');
+
+select c1,c2 from ct1 where c2 <= 9;
+select c1,c2 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000));
+select c1,c2 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000));
+select c1,c2,c3 from ct1 where c2 <= 9 order by c1 desc;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000)) order by c1 desc;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000)) order by c1 desc;
+
+update ct1 set c3 = 0 where c1 < 1000;
+update ct1 set c3 = 0 where c1 < 2000 and c1 >= 1000;
+update ct1 set c3 = 0 where c1 < 3000 and c1 >= 2000;
+update ct1 set c3 = 0 where c1 < 4000 and c1 >= 3000;
+update ct1 set c3 = 0 where c1 < 5000 and c1 >= 4000;
+update ct1 set c3 = 0 where c1 < 6000 and c1 >= 5000;
+update ct1 set c3 = 0 where c1 < 7000 and c1 >= 6000;
+update ct1 set c3 = 0 where c1 < 8000 and c1 >= 7000;
+update ct1 set c3 = 0 where c1 < 9000 and c1 >= 8000;
+update ct1 set c3 = 0 where c1 < 10000 and c1 >= 9000;
+
+alter system set _rowsets_enabled = false;
+alter system set _pushdown_storage_level = 0;
+alter system flush plan cache;
+select c1,c2,c3 from ct1 where c2 <= 9;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000));
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000));
+select c1,c2,c3 from ct1 where c2 <= 9 order by c1 desc;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000)) order by c1 desc;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000)) order by c1 desc;
+select count(*) from ct1;
+
+alter system set _rowsets_enabled = false;
+alter system set _pushdown_storage_level = 4;
+alter system flush plan cache;
+select c1,c2,c3 from ct1 where c2 <= 9;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000));
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000));
+select c1,c2,c3 from ct1 where c2 <= 9 order by c1 desc;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000)) order by c1 desc;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000)) order by c1 desc;
+select count(*) from ct1;
+
+alter system set _rowsets_enabled = true;
+alter system set _pushdown_storage_level = 0;
+alter system flush plan cache;
+select c1,c2,c3 from ct1 where c2 <= 9;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000));
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000));
+select c1,c2,c3 from ct1 where c2 <= 9 order by c1 desc;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000)) order by c1 desc;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000)) order by c1 desc;
+select count(*) from ct1;
+
+alter system set _rowsets_enabled = true;
+alter system set _pushdown_storage_level = 4;
+alter system flush plan cache;
+select c1,c2,c3 from ct1 where c2 <= 9;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000));
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000));
+select c1,c2,c3 from ct1 where c2 <= 9 order by c1 desc;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000)) order by c1 desc;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000)) order by c1 desc;
+select count(*) from ct1;
+
+drop table ct1;
+alter system enable_table_without_all_cg = false;
+alter system set _rowsets_enabled = true;
+alter system flush plan cache;
+
+# create table with all column group
+create table ct1(c1 int primary key, c2 int, c3 number, c4 varchar(60000), c5 varchar(60000)) ROW_FORMAT = redundant COMPRESSION = 'none' with column group for all columns, each column;
+
+--disable_query_log
+--let $count = 0
+while($count < 1000)
+{
+   eval insert into ct1 values($count * 10, $count * 10, $count * 10, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 1, $count * 10 + 1, $count * 10 + 1, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 2, $count * 10 + 2, $count * 10 + 2, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 3, $count * 10 + 3, $count * 10 + 3, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 4, $count * 10 + 4, $count * 10 + 4, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 5, $count * 10 + 5, $count * 10 + 5, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 6, $count * 10 + 6, $count * 10 + 6, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 7, $count * 10 + 7, $count * 10 + 7, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 8, $count * 10 + 8, $count * 10 + 8, repeat(md5(rand()), 100), repeat(md5(rand()), 100)),
+                              ($count * 10 + 9, $count * 10 + 9, $count * 10 + 9, repeat(md5(rand()), 100), repeat(md5(rand()), 100));
+
+  --inc $count
+}
+--enable_query_log
+
+alter system minor freeze;
+--source mysql_test/include/wait_minor_merge.inc
+alter system major freeze;
+--source mysql_test/include/wait_daily_merge.inc
+
+update ct1 set c3 = 0 where c1 = 0;
+update ct1 set c3 = 0 where c1 = 200;
+update ct1 set c3 = 0 where c1 = 1200;
+update ct1 set c3 = 0 where c1 = 5200;
+update ct1 set c3 = 0 where c1 = 8803;
+update ct1 set c3 = 0 where c1 = 9907;
+insert into ct1 values(10001, 0, 0, '', '');
+insert into ct1 values(20000, 0, 0, '', '');
+
+select c1,c2 from ct1 where c2 <= 9;
+select c1,c2 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000));
+select c1,c2 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000));
+select c1,c2,c3 from ct1 where c2 <= 9 order by c1 desc;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000)) order by c1 desc;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000)) order by c1 desc;
+
+update ct1 set c3 = 0 where c1 < 1000;
+update ct1 set c3 = 0 where c1 < 2000 and c1 >= 1000;
+update ct1 set c3 = 0 where c1 < 3000 and c1 >= 2000;
+update ct1 set c3 = 0 where c1 < 4000 and c1 >= 3000;
+update ct1 set c3 = 0 where c1 < 5000 and c1 >= 4000;
+update ct1 set c3 = 0 where c1 < 6000 and c1 >= 5000;
+update ct1 set c3 = 0 where c1 < 7000 and c1 >= 6000;
+update ct1 set c3 = 0 where c1 < 8000 and c1 >= 7000;
+update ct1 set c3 = 0 where c1 < 9000 and c1 >= 8000;
+update ct1 set c3 = 0 where c1 < 10000 and c1 >= 9000;
+
+alter system set _rowsets_enabled = false;
+alter system set _pushdown_storage_level = 0;
+alter system flush plan cache;
+select c1,c2,c3 from ct1 where c2 <= 9;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000));
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000));
+select c1,c2,c3 from ct1 where c2 <= 9 order by c1 desc;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000)) order by c1 desc;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000)) order by c1 desc;
+select count(*) from ct1;
+
+alter system set _rowsets_enabled = false;
+alter system set _pushdown_storage_level = 4;
+alter system flush plan cache;
+select c1,c2,c3 from ct1 where c2 <= 9;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000));
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000));
+select c1,c2,c3 from ct1 where c2 <= 9 order by c1 desc;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000)) order by c1 desc;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000)) order by c1 desc;
+select count(*) from ct1;
+
+alter system set _rowsets_enabled = true;
+alter system set _pushdown_storage_level = 0;
+alter system flush plan cache;
+select c1,c2,c3 from ct1 where c2 <= 9;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000));
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000));
+select c1,c2,c3 from ct1 where c2 <= 9 order by c1 desc;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000)) order by c1 desc;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000)) order by c1 desc;
+select count(*) from ct1;
+
+alter system set _rowsets_enabled = true;
+alter system set _pushdown_storage_level = 4;
+alter system flush plan cache;
+select c1,c2,c3 from ct1 where c2 <= 9;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000));
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000));
+select c1,c2,c3 from ct1 where c2 <= 9 order by c1 desc;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000)) order by c1 desc;
+select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4000 and c1 <= 8000) or (c1 >= 9000 and c1 <= 30000)) order by c1 desc;
+select count(*) from ct1; 
+
+drop table ct1;
+
+--disable_query_log
+set @@recyclebin = on;
+alter system enable_table_without_all_cg = false;
+alter system set _rowsets_enabled = true;
+alter system set _pushdown_storage_level = 4;
+alter system flush plan cache;
+--enable_query_log

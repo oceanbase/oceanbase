@@ -1,0 +1,490 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: jiangxiu.wt
+#owner group: sql1
+
+##
+## simple test of all group functions
+##
+#
+--disable_warnings
+drop table if exists t1,t2,t3,t4,t5;
+--enable_warnings
+
+#
+##
+## Bug #10966: Variance functions return wrong data type
+##
+#
+#create table t1 select variance(0);
+#show create table t1;
+#drop table t1;
+#create table t1 select stddev(0);
+#show create table t1;
+#drop table t1;
+#
+#
+##
+## Bug#22555: STDDEV yields positive result for groups with only one row
+##
+#
+#create table bug22555 (i smallint primary key auto_increment, s1 smallint, s2 smallint, e decimal(30,10), o double);
+#insert into bug22555 (s1, s2, e, o) values (53, 78, 11.4276528, 6.828112), (17, 78, 5.916793, 1.8502951), (18, 76, 2.679231, 9.17975591), (31, 62, 6.07831, 0.1), (19, 41, 5.37463, 15.1), (83, 73, 14.567426, 7.959222), (92, 53, 6.10151, 13.1856852), (7, 12, 13.92272, 3.442007), (92, 35, 11.95358909, 6.01376678), (38, 84, 2.572, 7.904571);
+#select std(s1/s2) from bug22555 group by i;
+#select std(e) from bug22555 group by i;
+#select std(o) from bug22555 group by i;
+#drop table bug22555;
+#
+#create table bug22555 (i smallint, s1 smallint, s2 smallint, o1 double, o2 double, e1 decimal, e2 decimal);
+#insert into bug22555 values (1,53,78,53,78,53,78),(2,17,78,17,78,17,78),(3,18,76,18,76,18,76);
+#select i, count(*) from bug22555 group by i;
+#select std(s1/s2) from bug22555 where i=1;
+#select std(s1/s2) from bug22555 where i=2;
+#select std(s1/s2) from bug22555 where i=3;
+#select std(s1/s2) from bug22555 where i=1 group by i;
+#select std(s1/s2) from bug22555 where i=2 group by i;
+#select std(s1/s2) from bug22555 where i=3 group by i;
+#select std(s1/s2) from bug22555 group by i order by i;
+#select i, count(*), std(o1/o2) from bug22555 group by i order by i;
+#select i, count(*), std(e1/e2) from bug22555 group by i order by i;
+#set @saved_div_precision_increment=@@div_precision_increment;
+#set div_precision_increment=19;
+#select i, count(*), variance(s1/s2) from bug22555 group by i order by i;
+#select i, count(*), variance(o1/o2) from bug22555 group by i order by i;
+#select i, count(*), variance(e1/e2) from bug22555 group by i order by i;
+#select i, count(*), std(s1/s2) from bug22555 group by i order by i;
+#select i, count(*), std(o1/o2) from bug22555 group by i order by i;
+#select i, count(*), std(e1/e2) from bug22555 group by i order by i;
+#set div_precision_increment=20;
+#select i, count(*), variance(s1/s2) from bug22555 group by i order by i;
+#select i, count(*), variance(o1/o2) from bug22555 group by i order by i;
+#select i, count(*), variance(e1/e2) from bug22555 group by i order by i;
+#select i, count(*), std(s1/s2) from bug22555 group by i order by i;
+#select i, count(*), std(o1/o2) from bug22555 group by i order by i;
+#select i, count(*), std(e1/e2) from bug22555 group by i order by i;
+#set @@div_precision_increment=@saved_div_precision_increment;
+#insert into bug22555 values (1,53,78,53,78,53,78),(2,17,78,17,78,17,78),(3,18,76,18,76,18,76);
+#insert into bug22555 values (1,53,78,53,78,53,78),(2,17,78,17,78,17,78),(3,18,76,18,76,18,76);
+#insert into bug22555 values (1,53,78,53,78,53,78),(2,17,78,17,78,17,78),(3,18,76,18,76,18,76);
+#
+#select i, count(*), std(s1/s2) from bug22555 group by i order by i;
+#select i, count(*), round(std(o1/o2), 16) from bug22555 group by i order by i;
+#select i, count(*), std(e1/e2) from bug22555 group by i order by i;
+#select std(s1/s2) from bug22555;
+#select std(o1/o2) from bug22555;
+#select std(e1/e2) from bug22555;
+#set @saved_div_precision_increment=@@div_precision_increment;
+#set div_precision_increment=19;
+#select i, count(*), std(s1/s2) from bug22555 group by i order by i;
+#select i, count(*), round(std(o1/o2), 16) from bug22555 group by i order by i;
+#select i, count(*), std(e1/e2) from bug22555 group by i order by i;
+#select round(std(s1/s2), 17) from bug22555;
+#select std(o1/o2) from bug22555;
+#select round(std(e1/e2), 17) from bug22555;
+#set div_precision_increment=20;
+#select i, count(*), std(s1/s2) from bug22555 group by i order by i;
+#select i, count(*), round(std(o1/o2), 16) from bug22555 group by i order by i;
+#select i, count(*), std(e1/e2) from bug22555 group by i order by i;
+#select round(std(s1/s2), 17) from bug22555;
+#select std(o1/o2) from bug22555;
+#select round(std(e1/e2), 17) from bug22555;
+#set @@div_precision_increment=@saved_div_precision_increment;
+#drop table bug22555;
+#
+#create table bug22555 (s smallint, o double, e decimal);
+#insert into bug22555 values (1,1,1),(2,2,2),(3,3,3),(6,6,6),(7,7,7);
+#select var_samp(s), var_pop(s) from bug22555;
+#select var_samp(o), var_pop(o) from bug22555;
+#select var_samp(e), var_pop(e) from bug22555;
+#drop table bug22555;
+#
+#create table bug22555 (s smallint, o double, e decimal);
+#insert into bug22555 values (null,null,null),(null,null,null);
+#select var_samp(s) as 'null', var_pop(s) as 'null' from bug22555;
+#select var_samp(o) as 'null', var_pop(o) as 'null' from bug22555;
+#select var_samp(e) as 'null', var_pop(e) as 'null' from bug22555;
+#insert into bug22555 values (1,1,1);
+#select var_samp(s) as 'null', var_pop(s) as '0' from bug22555;
+#select var_samp(o) as 'null', var_pop(o) as '0' from bug22555;
+#select var_samp(e) as 'null', var_pop(e) as '0' from bug22555;
+#insert into bug22555 values (2,2,2);
+#select var_samp(s) as '0.5', var_pop(s) as '0.25' from bug22555;
+#select var_samp(o) as '0.5', var_pop(o) as '0.25' from bug22555;
+#select var_samp(e) as '0.5', var_pop(e) as '0.25' from bug22555;
+#drop table bug22555;
+#
+#
+##
+## Bug #21976: Unnecessary warning with count(decimal)
+##
+
+create table t1 (pk int primary key,a double ,b double);
+insert into t1(pk,a) values (1,12345678901234567890);
+select count(a) from t1;
+select count(distinct a) from t1;
+drop table t1;
+#
+##
+## Bug #23184: SELECT causes server crash
+##
+CREATE TABLE t1 (a INT, b INT primary key);
+INSERT INTO t1 VALUES (1,1),(1,2),(1,3),(1,4),(1,5),(1,6),(1,7),(1,8);
+#INSERT INTO t1 SELECT a, b+8       FROM t1;
+#INSERT INTO t1 SELECT a, b+16      FROM t1;
+#INSERT INTO t1 SELECT a, b+32      FROM t1;
+#INSERT INTO t1 SELECT a, b+64      FROM t1;
+#INSERT INTO t1 SELECT a, b+128     FROM t1;
+#INSERT INTO t1 SELECT a, b+256     FROM t1;
+#INSERT INTO t1 SELECT a, b+512     FROM t1;
+#INSERT INTO t1 SELECT a, b+1024    FROM t1;
+#INSERT INTO t1 SELECT a, b+2048    FROM t1;
+#INSERT INTO t1 SELECT a, b+4096    FROM t1;
+#INSERT INTO t1 SELECT a, b+8192    FROM t1;
+#INSERT INTO t1 SELECT a, b+16384   FROM t1;
+#INSERT INTO t1 SELECT a, b+32768   FROM t1;
+SELECT a,COUNT(DISTINCT b) AS cnt FROM t1 GROUP BY a HAVING cnt > 50;
+SELECT a,SUM(DISTINCT b) AS sumation FROM t1 GROUP BY a HAVING sumation > 50;
+SELECT a,AVG(DISTINCT b) AS average FROM t1 GROUP BY a HAVING average > 50;
+#
+DROP TABLE t1;
+#
+##
+## Bug #27573: MIN() on an indexed column which is always NULL sets _other_
+## results to NULL
+##
+CREATE TABLE t1 ( a INT, b INT primary key);
+INSERT INTO t1 VALUES (NULL, 1), (NULL, 2);
+--replace_regex /Plan signature: [0-9]*/Plan signature/
+--disable_result_log
+EXPLAIN SELECT MIN(a), MIN(b) FROM t1;
+--enable_result_log
+SELECT MIN(a), MIN(b) FROM t1;
+#
+CREATE TABLE t2( pk int primary key, a INT, b INT, c INT);
+INSERT INTO t2 ( pk,a, b, c ) VALUES ( 1,1, NULL, 2 ), ( 2,1, 3, 4 ), ( 3,1, 4, 4 );
+--replace_regex /Plan signature: [0-9]*/Plan signature/
+--disable_result_log
+EXPLAIN SELECT MIN(b), MIN(c) FROM t2 WHERE a = 1;
+--enable_result_log
+SELECT MIN(b), MIN(c) FROM t2 WHERE a = 1;
+#
+CREATE TABLE t3 (pk int primary key , a INT, b INT, c int);
+INSERT INTO t3 VALUES (1,1, NULL, 1), (2,2, NULL, 2),  (3,3, NULL, 3);
+--replace_regex /Plan signature: [0-9]*/Plan signature/
+--disable_result_log
+EXPLAIN SELECT MIN(a), MIN(b) FROM t3 where a = 2;
+--enable_result_log
+SELECT MIN(a), MIN(b) FROM t3 where a = 2;
+#
+CREATE TABLE t4 (a INT, b INT, c int, primary KEY(a, c));
+INSERT INTO t4 VALUES (1, 1, 1), (2, NULL, 2), (3, 1, 3);
+--replace_regex /Plan signature: [0-9]*/Plan signature/
+--disable_result_log
+EXPLAIN SELECT MIN(a), MIN(b) FROM t4 where a = 2;
+--enable_result_log
+SELECT MIN(a), MIN(b) FROM t4 where a = 2;
+SELECT MIN(b), min(c) FROM t4 where a = 2;
+#
+CREATE TABLE t5( a INT, b INT, primary KEY( a, b),c int);
+INSERT INTO t5(a,b) VALUES( 1, 1 ), ( 1, 2 );
+--replace_regex /Plan signature: [0-9]*/Plan signature/
+--disable_result_log
+EXPLAIN SELECT MIN(a), MIN(b) FROM t5 WHERE a = 1;
+--enable_result_log
+SELECT MIN(a), MIN(b) FROM t5 WHERE a = 1;
+SELECT MIN(a), MIN(b) FROM t5 WHERE a = 1 and b > 1;
+#
+DROP TABLE t1, t2, t3, t4, t5;
+#DROP TABLE t1, t2;
+#DROP TABLE t3;
+#drop table t4, t5;
+#
+##
+## Bug #31156: mysqld: item_sum.cc:918:
+##  virtual bool Item_sum_distinct::setup(THD*): Assertion
+##
+#
+#CREATE TABLE t1 (a INT);
+#INSERT INTO t1 values (),(),();
+#SELECT (SELECT SLEEP(0) FROM t1 ORDER BY AVG(DISTINCT a) ) as x FROM t1
+#  GROUP BY x;
+#SELECT 1 FROM t1 GROUP BY (SELECT SLEEP(0) FROM t1 ORDER BY AVG(DISTINCT a) );
+#
+#DROP TABLE t1;
+#
+##
+## Bug #30715: Assertion failed: item_field->field->real_maybe_null(), file
+## .\opt_sum.cc, line
+##
+#
+CREATE TABLE t1 (a int, b datetime(6), primary key (a,b),c int);
+SELECT MIN(b) FROM t1 WHERE a=1 AND b>'2007-08-01';
+DROP TABLE t1;
+#
+##
+## Bug #31794: no syntax error on SELECT id FROM t HAVING count(*)>2;
+##
+#
+CREATE TABLE t1 (a INT primary key, b int);
+INSERT INTO t1(a) VALUES (1),(2),(3),(4);
+#
+#SET SQL_MODE=ONLY_FULL_GROUP_BY;
+#--error ER_MIX_OF_GROUP_FUNC_AND_FIELDS
+SELECT a FROM t1 HAVING COUNT(*)>2;
+#--error ER_MIX_OF_GROUP_FUNC_AND_FIELDS
+SELECT COUNT(*), a FROM t1;
+#
+#SET SQL_MODE=DEFAULT;
+SELECT a FROM t1 HAVING COUNT(*)>2;
+SELECT COUNT(*), a FROM t1;
+#
+DROP TABLE t1;
+#
+##
+## Bug #33133: Views are not transparent
+##
+#
+#set SQL_MODE=ONLY_FULL_GROUP_BY;
+#
+#CREATE TABLE t1 (a INT);
+#INSERT INTO t1 VALUES (1),(2),(3),(4);
+#CREATE VIEW v1 AS SELECT a,(a + 1) AS y FROM t1;
+--disable_result_log
+#EXPLAIN EXTENDED SELECT y FROM v1 GROUP BY v1.y;
+--enable_result_log
+#
+#DROP VIEW v1;
+#DROP TABLE t1;
+#SET SQL_MODE=DEFAULT;
+#
+##
+## Bug #34512: CAST( AVG( double ) AS DECIMAL ) returns wrong results
+##
+#
+CREATE TABLE t1(pk int primary key,a DOUBLE );
+INSERT INTO t1 VALUES (1,10), (2,20);
+SELECT AVG(a), CAST(AVG(a) AS DECIMAL) FROM t1;
+#
+DROP TABLE t1;
+#
+##
+## Bug #39656: Behaviour different for agg functions with & without where -
+## ONLY_FULL_GROUP_BY
+##
+#
+CREATE TABLE t1 (a INT, b INT primary key);
+INSERT INTO t1 VALUES (1,1), (1,2), (1,3);
+#
+#SET SQL_MODE='ONLY_FULL_GROUP_BY';
+#
+SELECT COUNT(*) FROM t1;
+SELECT COUNT(*) FROM t1 where a=1;
+#
+#--error ER_MIX_OF_GROUP_FUNC_AND_FIELDS
+SELECT COUNT(*),a FROM t1;
+#
+SELECT COUNT(*) FROM t1 a JOIN t1 b ON a.a= b.a;
+#
+#--error ER_MIX_OF_GROUP_FUNC_AND_FIELDS
+#SELECT COUNT(*), (SELECT count(*) FROM t1 inr WHERE inr.a = outr.a)
+ #FROM t1 outr;
+#
+#SELECT COUNT(*) FROM t1 a JOIN t1 outr
+#  ON a.a= (SELECT count(*) FROM t1 inr WHERE inr.a = outr.a);
+#
+#SET SQL_MODE=default;
+DROP TABLE t1;
+#
+#
+####
+#--echo End of 5.0 tests
+#
+#--echo #
+#--echo # BUG#47280 - strange results from count(*) with order by multiple
+#--echo #             columns without where/group
+#--echo #
+#
+#--echo #
+#--echo # Initialize test
+#--echo #
+#
+CREATE TABLE t1 (
+  pk INT NOT NULL,
+  i INT,
+  PRIMARY KEY (pk)
+);
+INSERT INTO t1 VALUES (1,11),(2,12),(3,13);
+#
+#--echo #
+#--echo # Start test
+#--echo # All the following queries shall return 1 record
+#--echo #
+#
+#--echo
+#--echo # Masking all correct values {11...13} for column i in this result.
+#--replace_column 2 #
+SELECT MAX(pk) as max, i
+FROM t1
+ORDER BY max;
+#
+#--echo
+--disable_result_log
+#EXPLAIN
+--enable_result_log
+#SELECT MAX(pk) as max, i
+#FROM t1
+#ORDER BY max;
+#
+#--echo
+#--echo # Only 11 is correct for collumn i in this result
+SELECT MAX(pk) as max, i
+FROM t1
+WHERE pk<2
+ORDER BY max;
+#
+#--echo #
+#--echo # Cleanup
+#--echo #
+DROP TABLE t1;
+#
+#--echo #
+#--echo # Bug#43668: Wrong comparison and MIN/MAX for YEAR(2)
+#--echo #
+#create table t1 (f1 year(2), f2 year(4), f3  datetime(6), f4 datetime(6));
+#insert into t1 values
+#  (98,1998,19980101,'1998-01-01 00:00:00'),
+#  (00,2000,20000101,'2000-01-01 00:00:01'),
+#  (02,2002,20020101,'2002-01-01 23:59:59'),
+#  (60,2060,20600101,'2060-01-01 11:11:11'),
+#  (70,1970,19700101,'1970-11-11 22:22:22'),
+#  (NULL,NULL,NULL,NULL);
+#select min(f1),max(f1) from t1;
+#select min(f2),max(f2) from t1;
+#select min(f3),max(f3) from t1;
+#select min(f4),max(f4) from t1;
+#select a.f1 as a, b.f1 as b, a.f1 > b.f1 as gt,
+#       a.f1 < b.f1 as lt, a.f1<=>b.f1 as eq
+#from t1 a, t1 b;
+#select a.f1 as a, b.f2 as b, a.f1 > b.f2 as gt,
+#       a.f1 < b.f2 as lt, a.f1<=>b.f2 as eq
+#from t1 a, t1 b;
+#select a.f1 as a, b.f3 as b, a.f1 > b.f3 as gt,
+#       a.f1 < b.f3 as lt, a.f1<=>b.f3 as eq
+#from t1 a, t1 b;
+#select a.f1 as a, b.f4 as b, a.f1 > b.f4 as gt,
+#       a.f1 < b.f4 as lt, a.f1<=>b.f4 as eq
+#from t1 a, t1 b;
+#select *, f1 = f2 from t1;
+#drop table t1;
+#
+#--echo #
+#--echo # Bug #54465: assert: field_types == 0 || field_types[field_pos] ==
+#--echo #             MYSQL_TYPE_LONGLONG
+#--echo #
+#
+#CREATE TABLE t1 (a INT);
+#INSERT INTO t1 VALUES (1), (2);
+#
+#SELECT MAX((SELECT 1 FROM t1 ORDER BY @var LIMIT 1)) m FROM t1 t2, t1
+#       ORDER BY t1.a;
+#
+#DROP TABLE t1;
+#
+#--echo #
+#--echo #  Bug#58030 crash in Item_func_geometry_from_text::val_str
+#--echo #
+#
+#--disable_result_log
+#
+#SELECT MAX(TIMESTAMP(RAND(0)));
+#SELECT MIN(TIMESTAMP(RAND(0)));
+#
+#--echo #
+#--echo #  Bug#58177 crash and valgrind warnings in decimal and protocol sending functions...
+#--echo #
+#
+#SELECT MIN(GET_LOCK('aaaaaaaaaaaaaaaaa',0) / '0b1111111111111111111111111111111111111111111111111111111111111111111111111' ^ (RAND()));
+#SELECT MIN(GET_LOCK('aaaaaaaaaaaaaaaaa',0) / '0b1111111111111111111111111111111111111111111111111111111111111111111111111' ^ (RAND()));
+#SELECT MIN(GET_LOCK('aaaaaaaaaaaaaaaaa',0) / '0b1111111111111111111111111111111111111111111111111111111111111111111111111' ^ (RAND()));
+#SELECT MIN(GET_LOCK('aaaaaaaaaaaaaaaaa',0) / '0b1111111111111111111111111111111111111111111111111111111111111111111111111' ^ (RAND()));
+#SELECT RELEASE_LOCK('aaaaaaaaaaaaaaaaa');
+#
+#--enable_result_log
+#
+#
+#--echo #
+#--echo # Bug #11766094 - 59132: MIN() AND MAX() REMOVE UNSIGNEDNESS
+#--echo #
+#
+#CREATE TABLE t1 (a BIGINT UNSIGNED);
+#INSERT INTO t1 VALUES (18446668621106209655);
+#SELECT MAX(LENGTH(a)), LENGTH(MAX(a)), MIN(a), MAX(a), CONCAT(MIN(a)), CONCAT(MAX(a)) FROM t1;
+#DROP TABLE t1;
+#
+#--echo #
+#--echo # Bug #11766270  59343: YEAR(4): INCORRECT RESULT AND VALGRIND WARNINGS WITH MIN/MAX, UNION
+#--echo #
+#
+#CREATE TABLE t1(f1 YEAR(4));
+#INSERT INTO t1 VALUES (0000),(2001);
+#--enable_metadata
+#(SELECT MAX(f1) FROM t1) UNION (SELECT MAX(f1) FROM t1);
+#--disable_metadata
+#DROP TABLE t1;
+#
+#
+#--echo #
+#--echo End of 5.1 tests
+#
+####
+#--echo #
+#--echo # Bug#52123 Assertion failed: aggregator == aggr->Aggrtype(),
+#--echo #           file .\item_sum.cc, line 587
+#--echo #
+#
+CREATE TABLE t1(a int, primary KEY(a), b int);
+INSERT INTO t1(a) VALUES (1), (2);
+SELECT 1 FROM t1 ORDER BY AVG(DISTINCT a);
+DROP TABLE t1;
+#
+#--echo #
+#--echo # Bug#55648: Server crash on MIN/MAX on maximum datetime value
+#--echo #
+#CREATE TABLE t1(c1 TIME NOT NULL);
+#INSERT INTO t1 VALUES('837:59:59');
+#INSERT INTO t1 VALUES('838:59:59');
+#SELECT MAX(c1) FROM t1;
+#DROP TABLE t1;
+#--echo # End of the bug#55648
+#
+#--echo #
+#--echo # Bug#56120: Failed assertion on MIN/MAX on negative datetime value
+#--echo #
+#CREATE TABLE t1(c1 TIME NOT NULL);
+#INSERT INTO t1 VALUES('-00:00:01');
+#SELECT MAX(c1),MIN(c1) FROM t1;
+#DROP TABLE t1;
+#--echo # End of the bug#56120
+#
+#--echo #
+#--echo # Bug#57932 'query with AVG(DISTINCT) returns NULL if last
+#--echo # aggregated value was NULL'
+#--echo #
+CREATE TABLE t1 (pk int primary key,col_int_nokey int);
+INSERT INTO t1 VALUES (1,7),(2,8),(3,NULL);
+SELECT AVG(DISTINCT col_int_nokey) FROM t1;
+# junyue: fix bug http://bugfree.corp.taobao.com/bug/203155
+SELECT AVG(DISTINCT outr.col_int_nokey) FROM t1 AS outr LEFT JOIN t1 AS outr2 ON
+outr.col_int_nokey = outr2.col_int_nokey;
+DROP TABLE t1;
+#--echo # End of the bug#57932
+
+
+# Both AVG  and SUM  has the bug 203155, Add :
+
+create table t1 (pk int primary key, b int);
+insert into t1 values (1, NULL), (2, 2), (3, 4);
+select * from t1;
+select count(b), min(b), max(b), sum(b), avg(b) from t1;
+drop table t1;

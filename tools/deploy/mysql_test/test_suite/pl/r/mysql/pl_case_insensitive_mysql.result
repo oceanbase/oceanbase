@@ -1,0 +1,119 @@
+result_format: 4
+
+select "routine_name" as column_name, collation
+  from oceanbase.__all_collation
+    where id = 
+      (select collation_type 
+        from oceanbase.__all_column 
+          where table_id =
+                  (select table_id from oceanbase.__all_virtual_table where table_name = '__all_virtual_routine')
+                and column_name = 'routine_name');
++--------------+--------------------+
+| column_name  | collation          |
++--------------+--------------------+
+| routine_name | utf8mb4_general_ci |
++--------------+--------------------+
+
+drop procedure if exists my_proc;
+create procedure my_proc() begin end;
+create procedure My_proc() begin end;
+ERROR 42000: PROCEDURE My_proc already exists
+create procedure MY_proc() begin end;
+ERROR 42000: PROCEDURE MY_proc already exists
+create procedure MY_PROC() begin end;
+ERROR 42000: PROCEDURE MY_PROC already exists
+
+select routine_name from oceanbase.__all_virtual_routine where routine_name = 'my_proc' and tenant_id = effective_tenant_id();
++--------------+
+| routine_name |
++--------------+
+| my_proc      |
++--------------+
+select routine_name from oceanbase.__all_virtual_routine where routine_name = 'My_proc' and tenant_id = effective_tenant_id();
++--------------+
+| routine_name |
++--------------+
+| my_proc      |
++--------------+
+select routine_name from oceanbase.__all_virtual_routine where routine_name = 'MY_proc' and tenant_id = effective_tenant_id();
++--------------+
+| routine_name |
++--------------+
+| my_proc      |
++--------------+
+select routine_name from oceanbase.__all_virtual_routine where routine_name = 'MY_PROC' and tenant_id = effective_tenant_id();
++--------------+
+| routine_name |
++--------------+
+| my_proc      |
++--------------+
+
+call my_proc();
+call My_proc();
+call MY_proc();
+call MY_PROC();
+
+drop procedure my_proc;
+
+drop function if exists my_func;
+create function my_func() returns int return 1;
+create function My_func() returns int return 1;
+ERROR 42000: FUNCTION My_func already exists
+create function MY_func() returns int return 1;
+ERROR 42000: FUNCTION MY_func already exists
+create function MY_FUNC() returns int return 1;
+ERROR 42000: FUNCTION MY_FUNC already exists
+
+select routine_name from oceanbase.__all_virtual_routine where routine_name = 'my_func' and tenant_id = effective_tenant_id();
++--------------+
+| routine_name |
++--------------+
+| my_func      |
++--------------+
+select routine_name from oceanbase.__all_virtual_routine where routine_name = 'My_func' and tenant_id = effective_tenant_id();
++--------------+
+| routine_name |
++--------------+
+| my_func      |
++--------------+
+select routine_name from oceanbase.__all_virtual_routine where routine_name = 'MY_func' and tenant_id = effective_tenant_id();
++--------------+
+| routine_name |
++--------------+
+| my_func      |
++--------------+
+select routine_name from oceanbase.__all_virtual_routine where routine_name = 'MY_FUNC' and tenant_id = effective_tenant_id();
++--------------+
+| routine_name |
++--------------+
+| my_func      |
++--------------+
+
+select my_func();
++-----------+
+| my_func() |
++-----------+
+|         1 |
++-----------+
+select My_func();
++-----------+
+| My_func() |
++-----------+
+|         1 |
++-----------+
+select MY_func();
++-----------+
+| MY_func() |
++-----------+
+|         1 |
++-----------+
+select MY_FUNC();
++-----------+
+| MY_FUNC() |
++-----------+
+|         1 |
++-----------+
+
+drop function my_func;
+
+

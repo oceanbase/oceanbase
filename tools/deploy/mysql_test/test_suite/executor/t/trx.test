@@ -1,0 +1,33 @@
+
+# owner: yuchen.wyc
+# owner group: SQL1
+# tags: optimizer
+
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn2,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+###
+# root job need start participant
+###
+connection conn1;
+--disable_warnings
+drop table if exists t_single, t_part;
+--enable_warnings
+create table t_single (pk int primary key, c1 int);
+create table t_part (pk int primary key, c1 int) partition by hash(pk) partitions 2;
+insert into t_single values (1, 20), (2, 20);
+insert into t_part values (1, 2), (2, 2);
+begin;
+select * from t_single for update;
+
+connection conn2;
+sleep 4;
+#本机不一定有副本，所以形状可能会变，所以不能explain，所以这里只有一定的概率拦住不调start_participant的错误
+#explain basic select /*+INDEX(INFO PRIMARY) READ_CONSISTENCY(WEAK) */ * from t_single t1 join t_part t2 on t1.pk = t2.c1;
+select /*+INDEX(INFO PRIMARY) READ_CONSISTENCY(WEAK) */ * from t_single t1 join t_part t2 on t1.pk = t2.c1 order by t2.pk;
+
+connection conn1;
+rollback;
+
+drop table t_single, t_part;
+

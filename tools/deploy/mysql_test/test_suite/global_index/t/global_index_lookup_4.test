@@ -1,0 +1,88 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: yuchen.wyc
+#owner group: sql1
+# tags: optimizer, global_index
+--result_format 4
+--explain_protocol 2
+
+--disable_warnings
+drop database if exists muhangtest;
+create database muhangtest;
+use muhangtest;
+--enable_warnings
+
+set ob_enable_plan_cache = off;
+set ob_enable_transformation = false;
+
+--disable_warnings
+drop table if exists t16;
+--enable_warnings
+create table t16(a int, b int, c int, d int, e int, primary key(a,b,c,d), key k1(b) local, key k2(c,b) local, key k3(c,d,b) local) partition by list(b+c) ( 
+  partition p0 values in (1,2,3),
+  partition p1 values in (5,9),
+  partition p2 values in (default));  
+create index gkey on t16(b,c,d) global partition by hash(b) partitions 5;
+--source mysql_test/include/check_all_idx_ok.inc
+insert into t16 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+--sleep 1
+
+--disable_warnings
+drop table if exists t17;
+--enable_warnings
+create table t17(a int, b int, c int, d int, e int, primary key(a,b,c,d), key k1(b) local, key k2(c,b) local, key k3(c,d,b) local) partition by list columns(b) ( 
+  partition p0 values in (1,2,3),
+  partition p1 values in (5,9),
+  partition p2 values in (default));  
+create index gkey on t17(b,c,d) global partition by hash(b) partitions 5;
+--source mysql_test/include/check_all_idx_ok.inc
+insert into t17 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+--sleep 1
+
+--disable_warnings
+drop table if exists t18;
+--enable_warnings
+create table t18(a int, b int, c int, d int, e int, primary key(a,b,c,d), key k1(b) local, key k2(c,b) local, key k3(c,d,b) local) partition by list columns(b,c) ( 
+  partition p0 values in ((1,1),(2,2),(3,3)),
+  partition p1 values in ((5,5),(9,9)),
+  partition p2 values in (default));  
+create index gkey on t18(b,c,d) global partition by hash(b) partitions 5;
+--source mysql_test/include/check_all_idx_ok.inc
+insert into t18 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+--sleep 1
+
+--disable_warnings
+drop table if exists t19;
+--enable_warnings
+create table t19(a int, b int, c int, d int, e int, primary key(a,b,c,d), key k1(b) local, key k2(c,b) local, key k3(c,d,b) local) partition by list columns(b,c,d) ( 
+  partition p0 values in ((1,1,1)),
+  partition p1 values in ((5,5,5)),
+  partition p2 values in (default));  
+create index gkey on t19(b,c,d) global partition by hash(b) partitions 5;
+--source mysql_test/include/check_all_idx_ok.inc
+insert into t19 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+--sleep 1
+
+--disable_warnings
+drop database if exists muhangtest1;
+create database muhangtest1;
+use muhangtest1;
+--enable_warnings
+
+--disable_warnings
+drop table if exists t20;
+--enable_warnings
+create table t20(a int, b int, c int, d int, e int, primary key(a,b,c,d)) partition by hash(b) 
+subpartition by range columns(c) 
+subpartition template (
+subpartition p0 values less than (5),  
+subpartition p1 values less than (100)) partitions 2; 
+create index gkey on t20(b,c,d) global partition by hash(b) partitions 5;
+--source mysql_test/include/check_all_idx_ok.inc
+--real_sleep 3
+--disable_query_log
+--disable_result_log
+insert into t20 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+--sleep 1
+

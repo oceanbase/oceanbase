@@ -1,0 +1,63 @@
+# owner: fenggu.yh
+# description: create column_store encoding table and add column
+
+--disable_query_log
+--disable_warnings
+set @@recyclebin = off;
+drop table if exists t1;
+--enable_warnings
+--enable_query_log
+
+create table t1(a int, b varchar(3048), primary key (a), c int) row_format = compressed with column group for all columns, each column;
+
+sleep 10;
+
+--disable_query_log
+--disable_warnings
+--let $count=1
+while ($count < 300)
+{
+  eval INSERT INTO t1 VALUES($count, repeat($count * 10, 512), $count * 10);
+  inc $count;
+  inc $count;
+}
+--enable_warnings
+--enable_query_log
+select count(*) from t1;
+
+alter system major freeze;
+--source mysql_test/include/wait_daily_merge.inc
+
+alter table t1 add column c1 int default 0, add column c2 varchar(100);
+
+--disable_query_log
+--disable_warnings
+--let $count=300
+while ($count < 500)
+{
+  eval INSERT INTO t1 VALUES($count, repeat($count * 10, 512), $count * 10, $count, repeat($count, 5));
+  inc $count;
+  inc $count;
+}
+--enable_warnings
+--enable_query_log
+
+select count(*) from t1;
+select count(c1) from t1;
+select count(c2) from t1;
+select count(c1) from t1 where c1 > 300;
+select count(c1) from t1 where c1 < 30;
+select a, c2, count(c1) from t1 where c1 > 480;
+select c1, c2 from t1 where c1 > 480 and a < 495;
+select b, c2, count(c1) from t1 where c1 > 490 and a < 495;
+select a, c1, count(c1) from t1 where a <20 and c1 != 80 and c1 != 6 and c1 < 30;
+
+alter system major freeze;
+--source mysql_test/include/wait_daily_merge.inc
+
+select count(*) from t1;
+
+drop table t1;
+--disable_query_log
+set @@recyclebin = on;
+--enable_query_log

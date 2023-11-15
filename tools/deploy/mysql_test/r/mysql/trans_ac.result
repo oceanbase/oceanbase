@@ -1,0 +1,62 @@
+drop table if exists t2;
+drop table if exists t3;
+create table t2 (i int primary key, j int);
+insert into t2 values (1,1);
+set autocommit = 1;
+insert into t2 values (2,2);
+commit;
+rollback;
+select * from t2;
+i	j
+1	1
+2	2
+set autocommit = 0;
+insert into t2 values (3,3);
+rollback;
+insert into t2 values (3,3);
+commit;
+insert into t2 values (3,3);
+ERROR 23000: Duplicate entry '3' for key 'PRIMARY'
+rollback;
+commit;
+set autocommit = 0;
+insert into t2 values (4,4);
+create table t3 (i int primary key, j int);
+select * from t2;
+i	j
+1	1
+2	2
+3	3
+4	4
+rollback;
+select * from t2;
+i	j
+1	1
+2	2
+3	3
+4	4
+set autocommit = 0;
+insert into t2 values (5,5);
+set autocommit = 1;
+rollback;
+select * from t2;
+i	j
+1	1
+2	2
+3	3
+4	4
+5	5
+set autocommit = 0;
+insert into t2 values (6,6);
+begin;
+rollback;
+select * from t2;
+i	j
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+drop table if exists t2;
+drop table if exists t3;

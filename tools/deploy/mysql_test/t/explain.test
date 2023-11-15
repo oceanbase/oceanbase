@@ -1,0 +1,78 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: link.zt
+#owner group: sql1
+# tags: optimizer, outline
+
+--disable_warnings
+drop table if exists test;
+--enable_warnings
+create table test(a int,b int primary key);
+insert into test values(1,1);
+insert into test values(1,2);
+insert into test values(1,3);
+insert into test values(1,4);
+select * from test;
+--replace_regex /Plan signature: [0-9]*/Plan signature/
+--disable_result_log
+explain select * from test;
+desc select * from test;
+describe select * from test;
+--enable_result_log
+--replace_regex /Plan signature: [0-9]*/Plan signature/
+--disable_result_log
+explain insert into test values(1,5);
+desc insert into test values(1,5);
+describe insert into test values(1,5);
+--enable_result_log
+--replace_regex /Plan signature: [0-9]*/Plan signature/
+--disable_result_log
+explain insert into test values(1,4);
+desc insert into test values(1,4);
+describe insert into test values(1,4);
+--enable_result_log
+--replace_regex /Plan signature: [0-9]*/Plan signature/
+--disable_result_log
+explain update test set a=2 where b=2;
+desc update test set a=2 where b=2;
+describe update test set a=2 where b=2;
+--enable_result_log
+--replace_regex /Plan signature: [0-9]*/Plan signature/
+--disable_result_log
+explain update test set b=2 where a=1;
+desc update test set b=2 where a=1;
+describe update test set b=2 where a=1;
+--enable_result_log
+--replace_regex /Plan signature: [0-9]*/Plan signature/
+--disable_result_log
+explain delete from test where b=5;
+desc delete from test where b=5;
+describe delete from test where b=5;
+--enable_result_log
+--error 1064
+explain create table test(a int,b int primary key);
+--error 1064
+desc create table test(a int,b int primary key);
+--error 1064
+describe create table test(a int,b int primary key);
+--error 1064
+explain drop table test;
+--error 1064
+desc drop table test;
+--error 1064
+describe drop table test;
+--enable_result_log
+
+--disable_warnings
+drop table if exists sd;
+--enable_warnings
+create table sd(a int);
+insert into sd values(5),(4),(4),(3),(2),(2),(2),(1);
+--disable_result_log
+explain select @rownum := @rownum + 1 as row, @rank := IF(@prev_score!=a, @rownum, @rank) as rank, @prev_score := a as score from sd;
+--enable_result_log
+
+## test for cast mod for explain: bug#8454097
+explain outline select 1 < '2009-12-17 06:03:17';
+drop table sd;

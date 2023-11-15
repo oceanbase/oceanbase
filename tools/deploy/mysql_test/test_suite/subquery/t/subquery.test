@@ -1,0 +1,534 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: link.zt
+# owner group: sql4
+# tags: optimizer
+# description: 子查询结果集
+--disable_info
+--disable_metadata
+--disable_warnings
+create database if not exists test;
+use test;
+drop table if exists t1, t2, t3;
+--enable_warnings
+create table t1(c1 int primary key, c2 int);
+create table t2(c1 int primary key, c2 int);
+create table t3(c1 int primary key, c2 int);
+insert into t1 values(1, 1), (2, 2), (3, 3), (4, 3), (5, 2);
+insert into t2 values(1, 1), (2, 2);
+insert into t3 values(5, 5), (6, 6);
+
+###where subquery
+select * from t1 where c1>ANY(select c1 from t2);
+select * from t1 where c1<ALL(select c1 from t2);
+--error 1242
+select * from t1 where c1=(select c1 from t2);
+select * from t1 where c1=(select c1 from t2 limit 1);
+select * from t1 where c1=ANY(select c1 from t2 where t1.c2>t2.c2);
+select * from t1 where exists(select c1 from t2 where t1.c2>t2.c2);
+select * from t1 where 1<ANY(select c1 from t2);
+select c2 from t1 where exists(select c2 from t2 where t1.c1>t2.c1);
+select * from t1 where c1>(select c1 from t2 where t2.c1=1);
+select * from t1 where exists(select * from t2 where t1.c1=t2.c2);
+select * from t1 where c1 in (select c1 from t1);
+select * from t1 where c1 not in (select c1 from t1);
+select c1 from t1 where c1 not in (select c1 from t2 where c2 not in (select c2 from t2));
+
+#from-subquery
+select * from (select * from t1 limit 1) t;
+select c from (select c1 as c from t1) tt;
+select c1 from t1 where c1 in (select c1 from t2 where c2 >= some(select max(c1) from (select c1 from t3 where t1.c2=t3.c1 order by c1 limit 1) as tt));
+
+
+#select subquery
+--error 1241
+select (select c1, c2 from t1) from t1;
+--error 1242
+select (select c1 from t1) from t1;
+select (select c1 from t1 where c1=1) from t1;
+select (select 1)=ANY(select 1);
+SELECT (SELECT 1)>ALL(SELECT 1);
+SELECT (SELECT 1,2,3) = ROW(1,2,3);
+SELECT (SELECT 1,2,3) = ROW(1,2,1);
+SELECT (SELECT 1,2,3) < ROW(1,2,1);
+SELECT (SELECT 1,2,3) > ROW(1,2,1);
+SELECT (SELECT 1,2,3) = ROW(1,2,NULL);
+SELECT ROW(1,2,3) = (SELECT 1,2,3);
+SELECT ROW(1,2,3) = (SELECT 1,2,1);
+SELECT ROW(1,2,3) < (SELECT 1,2,1);
+SELECT ROW(1,2,3) > (SELECT 1,2,1);
+SELECT ROW(1,2,3) = (SELECT 1,2,NULL);
+SELECT (SELECT 1.5,2,'a') = ROW(1.5,2,'a');
+SELECT (SELECT 1.5,2,'a') = ROW(1.5,2,'b');
+SELECT (SELECT 1.5,2,'a') = ROW(1.5,'2','a');
+SELECT (SELECT 1.5,'c','a') = ROW(1.5,2,'a');
+#row compare
+#greater than
+select (select 3, 2, 1)>row(1, 2, 1);
+select (select 1, 2, 3)>row(1, 2, 1);
+select (select 1, 2, 3)>row(1, 2, 3);
+select (select 1, 3, 2)>row(1, 2, 3);
+select (select 1, 2, 3)>row(1, 3, 2);
+select (select 1, null, 2)>row(1, 2, 2);
+select (select 1, 2, null)>row(1, 1, 2);
+#greater equal
+select (select 3, 2, 1)>=row(1, 2, 1);
+select (select 1, 2, 3)>=row(1, 2, 1);
+select (select 1, 2, 3)>=row(1, 2, 3);
+select (select 1, 3, 2)>=row(1, 2, 3);
+select (select 1, 2, 3)>=row(1, 3, 2);
+select (select 1, null, 2)>=row(1, 2, 2);
+select (select 1, 2, null)>=row(1, 1, 2);
+#less than
+select (select 1, 2, 3)<row(3, 2, 1);
+select (select 1, 2, 3)<row(1, 3, 2);
+select (select 1, 2, 1)<row(1, 2, 3);
+select (select 1, 2, 3)<row(1, 2, 3);
+select (select 1, 3, 2)<row(1, 2, 3);
+select (select 1, null, 2)<row(1, 2, 2);
+select (select 1, 2, null)<row(1, 1, 2);
+#less equal
+select (select 1, 2, 3)<=row(3, 2, 1);
+select (select 1, 2, 3)<=row(1, 3, 2);
+select (select 1, 2, 1)<=row(1, 2, 3);
+select (select 1, 2, 3)<=row(1, 2, 3);
+select (select 1, 3, 2)<=row(1, 2, 3);
+select (select 1, null, 2)<=row(1, 2, 2);
+select (select 1, 2, null)<=row(1, 1, 2);
+#equal
+select (select 1, 2, 3)=row(1, 2, 3);
+select (select 1, 2, 3)=row(1, 2, 1);
+select (select 1, 2, 1)=row(3, 2, 1);
+select (select 1, null, 1)=row(1, 2, 1);
+#ns equal
+select (select 1, 2, 3)<=>row(1, 2, 3);
+select (select 1, 2, 3)<=>row(1, 2, 1);
+select (select 1, null, 1)<=>row(1, 2, 1);
+select (select 1, null, 3)<=>row(1, null, 3);
+#not equal
+select (select 1, 2, 3)!=row(1, 2, 3);
+select (select 1, 2, 3)!=row(1, 2, 1);
+select (select 1, null, 1)!=row(1, 2, 1);
+select (select 1, null, 3)!=row(1, null, 3);
+
+#group by subquery
+--sorted_result
+select * from t1 group by (select c1 from t1 limit 1);
+--error 1241
+select * from t1 group by (select c1, c2 from t1);
+
+#test ANY/SOME/ALL keywords
+delete from t1;
+insert into t1 values(1, NULL), (2, NULL), (3, NULL), (4, NULL);
+select NULL=ANY(select c1 from t1);
+select NULL=ALL(select c1 from t1);
+delete from t1;
+insert into t1 values(1, NULL), (2, 2), (3, 3), (4, 4);
+select 2=ANY(select c2 from t1);
+select 2=ALL(select c2 from t1);
+#return NULL
+select 5=ANY(select c2 from t1);
+#return NULL
+select 5!=ANY(select c2 from t1);
+delete from t1;
+insert into t1 values(1, 1), (2, NULL), (3, 3), (4, 4);
+select 1=ANY(select c1 from t1);
+select 1!=ANY(select c1 from t1);
+select 1=ALL(select c1 from t1);
+select 1!=ALL(select c1 from t1);
+select 5=ANY(select c1 from t1);
+select 5!=ANY(select c1 from t1);
+select 5=ALL(select c1 from t1);
+select 5!=ALL(select c1 from t1);
+delete from t1;
+insert into t1 values(1, 1), (2, 2), (3, 3), (4, NULL);
+select 1!=ANY(select c1 from t1);
+select 1=ANY(select c1 from t1);
+select 1!=ALL(select c1 from t1);
+select 1=ALL(select c1 from t1);
+select 5!=ANY(select c1 from t1);
+select 5=ANY(select c1 from t1);
+select 5!=ALL(select c1 from t1);
+select 5=ALL(select c1 from t1);
+
+### test for related subquery with one column expr ###
+select * from t1 where c1 > (select t2.c1 from t2 where t1.c1  limit 1);
+select t1.c1 from t1 left join t3 on t1.c1 = t3.c1 where t3.c1 < (select t2.c1 from t2 where t3.c1  limit 1);
+select * from t1 where c1 > (select t2.c1 from t2 where t1.c1 > 1 limit 1);
+
+#
+drop table if exists t1, t2;
+create table t1 (a int not null, b int not null, index it1a(a), index iab(a, b));
+create table t2 (c int not null, d int not null);
+insert into t1 values (1,10);
+insert into t1 values (1,20);
+insert into t1 values (2,10);
+insert into t1 values (2,20);
+insert into t1 values (2,30);
+insert into t1 values (3,20);
+insert into t1 values (4,40);
+insert into t2 values (2,10);
+insert into t2 values (2,20);
+insert into t2 values (2,40);
+insert into t2 values (3,20);
+insert into t2 values (4,10);
+insert into t2 values (5,10);
+--sorted_result
+select a from t1 group by a having a in (select c from t2 where d >= 20);
+
+drop table if exists t1;
+create table t1(c1 int);
+select count(1) from t1 where false;
+select count(1) from t1 having false;
+--sorted_result
+select count(1) from t1 group by c1 having false;
+--sorted_result
+select count(1) from t1 where false group by c1;
+insert into t1 values(1);
+select * from t1 where c1 in (trim((select 1)), 2);
+select * from t1 where c1 in ((select c1 from t1), 2);
+select * from t1 where c1 in ((select t1.c1 from t1 t), 2);
+
+#clean tables
+--disable_warnings
+drop table if exists t1, t2;
+--enable_warnings
+
+#project/81079/issue/11488676?akProjectId=81079&akProjectId=81079&
+--disable_warnings
+drop table if exists DD,AA,J,CC,GG;
+--enable_warnings
+CREATE TABLE DD ( col_int int, pk int, col_varchar_20 varchar(20), col_int_key int, primary key (pk));
+CREATE TABLE AA ( pk int, col_int_key int, col_varchar_20 varchar(20), col_int int, primary key (pk));
+CREATE TABLE J (  col_varchar_20 varchar(20), pk int primary key);
+CREATE TABLE CC ( col_int_key int, pk int, col_int int, col_varchar_20 varchar(20), primary key (pk));
+CREATE TABLE GG (col_varchar_20 varchar(20), pk int primary key);
+insert into DD (pk, col_varchar_20, col_int, col_int_key) value(1, "YYY", 5,3);
+insert into AA (pk, col_varchar_20, col_int, col_int_key) value(2, 'me', 4, 3);
+insert into CC (pk, col_varchar_20, col_int) value(3, 'you', 4);
+SELECT  GRANDPARENT1 . col_varchar_20 AS G1 FROM DD AS GRANDPARENT1 WHERE GRANDPARENT1 . `col_int_key` IN ( SELECT DISTINCT PARENT1 . `col_int_key` AS P1 FROM AA AS PARENT1 LEFT JOIN J AS PARENT2 USING ( col_varchar_20 ) WHERE PARENT1 . `col_int` IN ( SELECT  CHILD1 . `col_int` AS C1 FROM CC AS CHILD1 LEFT JOIN GG AS CHILD2 USING ( col_varchar_20 )  )  AND ( GRANDPARENT1 . `col_int` >= 1 ));
+--disable_warnings
+drop table if exists DD,AA,J,CC,GG;
+--enable_warnings
+
+#extract query range from push-down filter
+#
+--disable_warnings
+drop table if exists t1, t2, t3;
+--enable_warnings
+create table t1(c1 int primary key, c2 int, c3 int);
+create table t2(c1 int primary key, c2 int, c3 int);
+create table t3(c1 int primary key, c2 int, c3 int);
+insert into t1 values(1, 2, 3);
+insert into t1 values(2, 2, 3);
+insert into t2 values(1, 2, 3);
+insert into t2 values(2, 2, 3);
+insert into t3 values(1, 2, 3);
+insert into t3 values(2, 2, 3);
+explain select * from t1 where t1.c2 = 5 or exists (select 1 from t2 where t1.c1 = t2.c1);
+explain select * from t1 where t1.c2 = 5 or exists (select 1 from t2 where t1.c1 > t2.c1);
+explain select * from t1 where t1.c2 = 5 or exists (select 1 from t2 where t1.c1 < t2.c1);
+explain select * from t1, t2 where t1.c1 > exists(select c1 from t2 where t2.c1 = t1.c1);
+explain select * from t1 where (select c1 from t2 limit 1)+1 in (select 2 from t3 where t1.c1=t3.c1);
+explain select * from t1 having count(*) > (select c1 from t2 where t1.c1=t2.c1);
+explain select * from t1, t2 where t2.c1 = t1.c1 and t2.c1 = (select c1 from t3 where t3.c1 = t1.c1);
+explain select * from (select c1+1 as a1 from t1 where t1.c2 = 2) a, t2 where a.a1 = t2.c2 or t2.c1 = ANY(select c3 from t3 where t3.c1 > a.a1);
+select * from t1 where t1.c2 = 5 or exists (select 1 from t2 where t1.c1 = t2.c1);
+select * from t1 where t1.c2 = 5 or exists (select 1 from t2 where t1.c1 > t2.c1);
+select * from t1 where t1.c2 = 5 or exists (select 1 from t2 where t1.c1 < t2.c1);
+select * from t1, t2 where t1.c1 > exists(select c1 from t2 where t2.c1 = t1.c1);
+select * from t1 where (select c1 from t2 limit 1)+1 in (select 2 from t3 where t1.c1=t3.c1);
+select * from t1 having count(*) > (select c1 from t2 where t1.c1=t2.c1);
+select * from t1, t2 where t2.c1 = t1.c1 and t2.c1 = (select c1 from t3 where t3.c1 = t1.c1);
+select * from (select c1+1 as a1 from t1 where t1.c2 = 2) a, t2 where a.a1 = t2.c2 or t2.c1 = ANY(select c3 from t3 where t3.c1 > a.a1);
+#extract query range for multi plan operators
+explain select * from t1 where t1.c1 > (select sum(c1) from t2 where t2.c1 = t1.c1);
+explain select * from t1 where t1.c1 > (select sum(c1) from t2 where t2.c1 = t1.c1 and t2.c2 > (select max(c2) from t3 where t3.c1 = t2.c1));
+explain select * from t1 where t1.c2 in (select avg(c1) from t2 where t2.c1 = t1.c1 union select count(1) from t3 where t3.c1 = t1.c1);
+explain select * from t1 where t1.c1 != (select c2 from t2 where t2.c1 = (select max(c2) from t3 where t3.c1 = t1.c1) order by t2.c2 limit 1);
+select * from t1 where t1.c1 > (select sum(c1) from t2 where t2.c1 = t1.c1);
+select * from t1 where t1.c1 > (select sum(c1) from t2 where t2.c1 = t1.c1 and t2.c2 > (select max(c2) from t3 where t3.c1 = t2.c1));
+select * from t1 where t1.c2 in (select avg(c1) from t2 where t2.c1 = t1.c1 union select count(1) from t3 where t3.c1 = t1.c1);
+select * from t1 where t1.c1 != (select c2 from t2 where t2.c1 = (select max(c2) from t3 where t3.c1 = t1.c1) order by t2.c2 limit 1);
+--disable_warnings
+drop table if exists t1, t2, t3;
+
+#issue/9168337
+#subquery in [not]exists could be eliminated or refined
+--disable_warnings
+drop table if exists t1,t2,t3;
+--enable_warnings
+create table t1(a int, b int);
+create table t2(a int, b int);
+create table t3(a int, b int);
+#basic exists subquery with aggr, group by, having
+explain select * from t1 where exists (select 1, round(1.1) from dual);
+explain select * from t1 where exists (select max(a) from t2);
+explain select * from t1 where exists (select group_concat(a, b) from t2 group by a);
+explain select * from t1 where exists (select max(a), sum(a), count(a) from t2);
+explain select * from t1 where exists (select max(a), sum(a), count(a) from t2 group by a);
+explain select * from t1 where exists (select max(a), sum(a), count(a) from t2 group by a having a > 1);
+explain select * from t1 where exists (select max(a), sum(a), count(a) from t2 group by a having sum(a) > 1);
+explain select * from t1 where exists (select max(a), sum(a), count(a) from t2 group by a having sum(a) > 1 and count(a) > 0);
+#basic not exists subquery with aggr, group by, having
+explain select * from t1 where not exists (select 1, round(1.1) from dual);
+explain select * from t1 where not exists (select max(a) from t2);
+explain select * from t1 where not exists (select group_concat(a, b) from t2 group by a);
+explain select * from t1 where not exists (select max(a), sum(a), count(a) from t2);
+explain select * from t1 where not exists (select max(a), sum(a), count(a) from t2 group by a);
+explain select * from t1 where not exists (select max(a), sum(a), count(a) from t2 group by a having a > 1);
+explain select * from t1 where not exists (select max(a), sum(a), count(a) from t2 group by a having sum(a) > 1);
+explain select * from t1 where not exists (select max(a), sum(a), count(a) from t2 group by a having sum(a) > 1 and count(a) > 0);
+#mixed situations
+explain select * from t1, (select * from t2 where exists(select sum(a) from t3)) t4 where t1.a = t4.a;
+explain select * from t1 where t1.a in (select a from t2 where exists(select count(a) from t3));
+explain select * from t1 where exists(select max(a) from t2 group by a having max(a) > 1);
+explain select * from t1, (select * from t2 having a > 1) t4 where t1.a = t4.a;
+explain select * from t1, (select * from t2 where exists(select sum(a) from t3 group by a having a > 1)) t4 where t1.a = t4.a;
+explain select * from t1 where exists ( select max(a) from t2 group by a having exists (select * from t3 where t3.a > max(t2.a)));
+explain select * from t1 where exists ( select sum(a) from t2 group by a having exists (select * from t3 where t3.a > sum(t2.a)));
+#eliminate exists subquery in params
+explain select * from t1 where b > exists(select b from t2 where b > exists(select b from t3));
+explain select * from t1 where b > exists(select a from t2 where b > exists(select sum(a) from t3));
+explain select * from t1 where b > exists(select sum(a) from t2 where t2.b > exists(select sum(a) from t3));
+
+## bug: 
+--disable_warnings
+drop table if exists T;
+--enable_warnings
+create table T (pk int);
+explain select pk from t table1 where (table1.pk >= (select 1 from T limit 1)) AND ((1,9) in (select 1,9));
+
+## bug: 
+explain select (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk),
+        (select 1 except select pk)
+  from t;
+select (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk),
+       (select 1 except select pk)
+  from t;
+
+--disable_warnings
+drop table if exists t1,t2,t3;
+--enable_warnings
+
+--echo #
+CREATE TABLE `t1` (
+  `c1` varbinary(20) DEFAULT NULL
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0;
+CREATE TABLE `t2` (
+  `a` int(11) NOT NULL,
+  `b` varchar(20) DEFAULT NULL,
+  `c` decimal(20,10) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+ partition by hash(a) partitions 2;
+
+insert into t1 values(1), (2);
+insert into t2 values(1,2,1);
+
+select /*+no_rewrite*/(select sum(b) from t2) as temp from t1 group by temp having temp > 4 and temp > (select sum(b) from t2);
+
+drop table t1;
+drop table t2;
+--echo #
+CREATE TABLE `t1` (
+  `pk1` int(11) NOT NULL,
+  `pk2` varchar(10) NOT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` int(11) DEFAULT NULL,
+  `c3` varchar(20) DEFAULT NULL,
+  `c4` timestamp(6) NULL DEFAULT '2012-01-01 04:00:00.000000',
+  `c5` int(11) DEFAULT NULL,
+  PRIMARY KEY (`pk1`, `pk2`)
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0;
+insert into t1 values(1, '2', 3, 3, null, null, null);
+select /*+no_rewrite*/ c1, (select max(c2) FROM t1 ) a FROM t1  order by (select c1 FROM t1  where c2 in (select c1 FROM t1  where c2 = a)) + 1;
+drop table t1 ;
+
+# bug: 
+--disable_warnings
+drop table if exists table0_hash_pk_parts_1_bigint;
+drop table if exists s;
+drop table if exists ff;
+--enable_warnings
+
+CREATE TABLE table0_hash_pk_parts_1_bigint (
+col_timestamp_6_index timestamp(6) NULL DEFAULT NULL,
+col_varchar_20 varchar(20),
+col_char_20 char(20),
+col_decimal_20_0_key decimal(20,0),
+pk bigint,
+col_char_20_index char(20),
+col_bigint_key bigint,
+col_bigint bigint,
+col_timestamp_6 timestamp(6) NULL DEFAULT NULL,
+col_varchar_20_key varchar(20),
+col_bigint_index bigint,
+col_decimal_20_0_index decimal(20,0),
+col_decimal_20_0 decimal(20,0),
+col_char_20_key char(20),
+col_varchar_20_index varchar(20),
+col_timestamp_6_key timestamp(6) NULL DEFAULT NULL,
+/*Indices*/
+index idx14(pk, col_timestamp_6_index ),
+key idx1(pk, col_decimal_20_0_key ),
+primary key (pk) ,
+index idx8(pk, col_char_20_index ),
+key idx4(pk, col_bigint_key ),
+key idx10(pk, col_varchar_20_key ),
+index idx5(pk, col_bigint_index ),
+index idx2(pk, col_decimal_20_0_index ),
+key idx7(pk, col_char_20_key ),
+index idx11(pk, col_varchar_20_index ),
+key idx13(pk, col_timestamp_6_key ))  PARTITION BY hash (pk) partitions 1;
+
+CREATE TABLE S (
+col_varchar_20_key varchar(20),
+col_varchar_10 varchar(10),
+col_varchar_20 varchar(20),
+col_date date,
+col_datetime datetime,
+col_int int,
+col_date_key date,
+col_int_key int,
+pk int,
+col_datetime_key datetime,
+col_varchar_10_key varchar(10),
+/*Indices*/
+key idx5(pk, col_varchar_20_key ),
+key idx7(pk, col_date_key ),
+key idx1(pk, col_int_key ),
+primary key (pk) ,
+key idx9(pk, col_datetime_key ),
+key idx3(pk, col_varchar_10_key ));
+
+CREATE TABLE FF (
+col_varchar_20 varchar(20),
+col_varchar_10_key varchar(10),
+col_int int,
+col_datetime datetime,
+col_date_key date,
+col_varchar_20_key varchar(20),
+col_varchar_10 varchar(10),
+col_datetime_key datetime,
+pk int,
+col_int_key int,
+col_date date,
+/*Indices*/
+key idx3(pk, col_varchar_10_key ),
+key idx7(pk, col_date_key ),
+key idx5(pk, col_varchar_20_key ),
+key idx9(pk, col_datetime_key ),
+primary key (pk) ,
+key idx1(pk, col_int_key ));
+
+explain
+SELECT 1
+FROM table0_hash_pk_parts_1_bigint
+WHERE
+(SELECT
+ (SELECT MIN(
+             (SELECT MAX(-100)
+              FROM ff
+              WHERE (col_timestamp_6 >= '2015-01-01')))
+  FROM s
+  WHERE pk IN
+  (SELECT col_bigint
+   FROM table0_hash_pk_parts_1_bigint))) < 1;
+
+SELECT 1
+FROM table0_hash_pk_parts_1_bigint
+WHERE
+(SELECT
+ (SELECT MIN(
+             (SELECT MAX(-100)
+              FROM ff
+              WHERE (col_timestamp_6 >= '2015-01-01')))
+  FROM s
+  WHERE pk IN
+  (SELECT col_bigint
+   FROM table0_hash_pk_parts_1_bigint))) < 1;
+
+explain
+SELECT 1
+FROM table0_hash_pk_parts_1_bigint
+WHERE
+(SELECT
+ (SELECT MIN(
+             (SELECT 1
+              FROM ff
+              WHERE (col_timestamp_6 >= '2015-01-01'))) + 1 AS tmp
+  FROM s
+  WHERE pk IN
+  (SELECT col_bigint
+   FROM table0_hash_pk_parts_1_bigint)));
+
+SELECT 1
+FROM table0_hash_pk_parts_1_bigint
+WHERE
+(SELECT
+ (SELECT MIN(
+             (SELECT 1
+              FROM ff
+              WHERE (col_timestamp_6 >= '2015-01-01'))) + 1 AS tmp
+  FROM s
+  WHERE pk IN
+  (SELECT col_bigint
+   FROM table0_hash_pk_parts_1_bigint)));
+
+drop table s;
+drop table table0_hash_pk_parts_1_bigint;
+drop table ff;

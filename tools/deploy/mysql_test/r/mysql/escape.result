@@ -1,0 +1,7 @@
+drop table if exists t2;
+create table t2 (c1 varchar(1024) primary key, c2 varchar(1024), c3 varchar(1024));
+replace into t2 values ('abc', '\\\\', 'DC');
+select * from t2;
+c1	c2	c3
+abc	\\	DC
+drop table t2;

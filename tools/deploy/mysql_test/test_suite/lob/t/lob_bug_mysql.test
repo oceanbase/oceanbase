@@ -1,0 +1,79 @@
+# owner: luohongdi.lhd
+# owner group: SQL1
+# description: test for blob and text column after daily merge
+# tags: text,blob
+# temporarily disable large row
+
+--disable_query_log
+set global max_allowed_packet=60000000;
+set global ob_sql_work_area_percentage=90;
+disconnect default;
+sleep 1;
+connect (default,$OBMYSQL_MS0,admin@mysql,admin,test,$OBMYSQL_PORT);
+set @@session.explicit_defaults_for_timestamp=off;
+set @@recyclebin = off;
+set ob_query_timeout=1000000000;
+set ob_trx_timeout=1000000000;
+--enable_query_log
+
+#
+# bug 
+#
+
+--disable_warnings
+drop table if exists t1;
+drop table if exists sbtest1;
+--enable_warnings
+
+create table t1(nr int, a longtext, b longblob);
+
+insert into t1 values(10, repeat('a', 5000), repeat('A', 5000));
+insert into t1 values(20, repeat('b', 50000), repeat('B', 50000));
+insert into t1 values(30, repeat('c', 500000), repeat('C', 500000));
+insert into t1 values(40, repeat('d', 3000000), repeat('D', 3000000));
+--let $loop=2
+while($loop > 0)
+{
+  insert into t1 select * from t1;
+  insert into t1 values(1, repeat('e', 2000000), repeat('E', 2000000));
+  dec $loop;
+}
+insert into t1 values(2, repeat('f', 3000000), repeat('F', 3000000));
+select nr, sum(length(a)), sum(length(b)), substr(a, 1000, 10), substr(b, 1000, 10), count(1) from t1 group by nr order by nr asc;
+--source mysql_test/include/majorfreeze.inc
+--source mysql_test/include/wait_daily_merge.inc
+connection default;
+select nr, sum(length(a)), sum(length(b)), substr(a, 1000, 10), substr(b, 1000, 10), count(1) from t1 group by nr order by nr asc;
+delete from t1 where nr = 2;
+update t1 set a = "updated" where nr = 1;
+select nr, sum(length(a)), sum(length(b)), substr(a, 1, 5), substr(b, 1000, 10), count(1) from t1 group by nr order by nr asc;
+--source mysql_test/include/majorfreeze.inc
+--source mysql_test/include/wait_daily_merge.inc
+connection default;
+select nr, sum(length(a)), sum(length(b)), substr(a, 1, 5), substr(b, 1000, 10), count(1) from t1 group by nr order by nr asc;
+drop table t1;
+
+## bugfix#
+CREATE TABLE sbtest1(c1 TINYBLOB NOT NULL);
+ALTER TABLE sbtest1 ADD COLUMN d int;
+--error 1048
+insert INTO sbtest1 values(NULL,10),(NULL,20),(NULL,110),(NULL,120),(NULL,100),(NULL,90);
+insert ignore INTO sbtest1 values(NULL,10),(NULL,20),(NULL,110),(NULL,120),(NULL,100),(NULL,90);
+select * from sbtest1;
+drop table sbtest1;
+
+--disable_query_log
+set global max_allowed_packet=16777216;
+set global ob_sql_work_area_percentage=5;
+--enable_query_log
+
+## bugfix#
+create table t1(a decimal(10,0));
+alter table t1 modify a varbinary(5);
+INSERT INTO t1 VALUES (10);
+ALTER TABLE t1 AUTO_INCREMENT=10;
+ALTER TABLE t1 ADD COLUMN (c INT);
+ALTER TABLE t1 ADD c2 TIME  NOT NULL FIRST;
+ALTER TABLE t1 ADD c4 LONGTEXT  NOT NULL AFTER c2;
+select * from t1;
+drop table t1;

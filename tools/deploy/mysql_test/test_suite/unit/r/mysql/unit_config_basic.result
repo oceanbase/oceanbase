@@ -1,0 +1,251 @@
+drop resource unit if exists box_for_unit_config_test;
+============================ CREATE RESOURCE UNIT ============================
+============================ 1. 验证老版本参数不再生效 ============================
+create resource unit box_for_unit_config_test MIN_MEMORY='1G';
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'MIN_MEMORY='1G'' at line 1
+create resource unit box_for_unit_config_test MAX_MEMORY='1G';
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'MAX_MEMORY='1G'' at line 1
+create resource unit box_for_unit_config_test MAX_DISK_SIZE='1G';
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'MAX_DISK_SIZE='1G'' at line 1
+create resource unit box_for_unit_config_test MAX_SESSION_NUM=64;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'MAX_SESSION_NUM=64' at line 1
+============================ 2. 验证有效参数 ============================
+======== 2.1 验证必须参数 MAX_CPU/MEMORY_SIZE
+create resource unit box_for_unit_config_test MIN_CPU=1;
+ERROR HY000: Miss argument for MAX_CPU
+create resource unit box_for_unit_config_test MAX_CPU=1;
+ERROR HY000: Miss argument for MEMORY_SIZE
+== 其他参数默认配置
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G';
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	1	1	1073741824	3221225472	9223372036854775807	9223372036854775807	1
+drop resource unit box_for_unit_config_test;
+======== 2.2 验证可选参数
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MIN_CPU=1, LOG_DISK_SIZE = '2G', MIN_IOPS=1024, MAX_IOPS=1024, IOPS_WEIGHT=0;
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	1	1	1073741824	2147483648	1024	1024	0
+drop resource unit box_for_unit_config_test;
+============================ 3. 验证各个参数默认值、最小值、取值范围 ============================
+======== 3.1 CPU: MAX_CPU >= MIN_CPU
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MIN_CPU=2;
+ERROR HY000: Incorrect arguments to MIN_CPU, MIN_CPU is greater than MAX_CPU
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MIN_CPU=1;
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	1	1	1073741824	3221225472	9223372036854775807	9223372036854775807	1
+drop resource unit box_for_unit_config_test;
+======== IOPS是基于MIN_CPU来自动计算的，和MAX_CPU无关
+create resource unit box_for_unit_config_test MAX_CPU=10, MEMORY_SIZE='1G', MIN_CPU=1;
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	10	1	1073741824	3221225472	9223372036854775807	9223372036854775807	1
+drop resource unit box_for_unit_config_test;
+======== 3.2 CPU: 最小值 1c, 支持number类型
+create resource unit box_for_unit_config_test MAX_CPU=0.9, MEMORY_SIZE='1G';
+ERROR HY000: invalid MAX_CPU value, min value is 1
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MIN_CPU=0.5;
+ERROR HY000: invalid MIN_CPU value, min value is 1
+create resource unit box_for_unit_config_test MAX_CPU=0, MEMORY_SIZE='1G';
+ERROR HY000: Incorrect arguments to MAX_CPU, value should be positive
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MIN_CPU=0;
+ERROR HY000: Incorrect arguments to MIN_CPU, value should be positive
+create resource unit box_for_unit_config_test MAX_CPU=1.9, MEMORY_SIZE='1G', MIN_CPU=1.1;
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	1.9	1.1	1073741824	3221225472	9223372036854775807	9223372036854775807	1
+drop resource unit box_for_unit_config_test;
+======== 3.3 MEMORY: 最小值 '1G', 1073741824, 容量字符串强制带单位，不支持number类型
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='999M';
+ERROR HY000: invalid MEMORY_SIZE value, min value is 1073741824
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE=1073741823;
+ERROR HY000: invalid MEMORY_SIZE value, min value is 1073741824
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1024';
+ERROR 42000: Parse error
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE=1073741824.0;
+ERROR HY000: Incorrect arguments to MEMORY_SIZE, value can not be 'number' type
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE=0;
+ERROR HY000: Incorrect arguments to MEMORY_SIZE, value should be positive
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1024M';
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	1	1	1073741824	3221225472	9223372036854775807	9223372036854775807	1
+drop resource unit box_for_unit_config_test;
+======== 3.4 LOG_DISK_SIZE: 最小值 '2G', 2147483648，容量字符串强制带单位，不支持number类型
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', LOG_DISK_SIZE='1G';
+ERROR HY000: invalid LOG_DISK_SIZE value, min value is 2147483648
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', LOG_DISK_SIZE=2147483647;
+ERROR HY000: invalid LOG_DISK_SIZE value, min value is 2147483648
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', LOG_DISK_SIZE='2048';
+ERROR 42000: Parse error
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', LOG_DISK_SIZE=2147483648.0;
+ERROR HY000: Incorrect arguments to LOG_DISK_SIZE, value can not be 'number' type
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', LOG_DISK_SIZE=0;
+ERROR HY000: Incorrect arguments to LOG_DISK_SIZE, value should be positive
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', LOG_DISK_SIZE='2048M';
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	1	1	1073741824	2147483648	9223372036854775807	9223372036854775807	1
+drop resource unit box_for_unit_config_test;
+======== 3.4 IOPS: 最小值 1024, MAX_IOPS >= MIN_IOPS，不支持number类型
+========     IOPS_WEIGHT: 最小值 0
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MAX_IOPS=1023;
+ERROR HY000: invalid MAX_IOPS value, min value is 1024
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MIN_IOPS=1023;
+ERROR HY000: invalid MIN_IOPS value, min value is 1024
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MAX_IOPS='1023';
+ERROR HY000: invalid MAX_IOPS value, min value is 1024
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MIN_IOPS='1023';
+ERROR HY000: invalid MIN_IOPS value, min value is 1024
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MAX_IOPS=1024.0;
+ERROR HY000: Incorrect arguments to MAX_IOPS, value can not be 'number' type
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MIN_IOPS=1024.0;
+ERROR HY000: Incorrect arguments to MIN_IOPS, value can not be 'number' type
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MIN_IOPS=0;
+ERROR HY000: Incorrect arguments to MIN_IOPS, value should be positive
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MAX_IOPS=0;
+ERROR HY000: Incorrect arguments to MAX_IOPS, value should be positive
+======== 如果只指定了MAX_IOPS，那么: MIN_IOPS = MAX_IOPS, IOPS_WEIGHT=0
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MAX_IOPS='1024';
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	1	1	1073741824	3221225472	1024	1024	0
+drop resource unit box_for_unit_config_test;
+======== 如果只指定了MIN_IOPS, 那么：MAX_IOPS = MIN_IOPS, IOPS_WEIGHT=0
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MIN_IOPS=900000;
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	1	1	1073741824	3221225472	900000	900000	0
+drop resource unit box_for_unit_config_test;
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', MAX_IOPS=1024, MIN_IOPS=1025;
+ERROR HY000: Incorrect arguments to MAX_IOPS, MAX_IOPS is little than MIN_IOPS
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', IOPS_WEIGHT=-1;
+ERROR HY000: Incorrect arguments to IOPS_WEIGHT, value can not be negative
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', IOPS_WEIGHT=0.0;
+ERROR HY000: Incorrect arguments to IOPS_WEIGHT, value can not be 'number' type
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', IOPS_WEIGHT='0';
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	1	1	1073741824	3221225472	9223372036854775807	9223372036854775807	0
+drop resource unit box_for_unit_config_test;
+create resource unit box_for_unit_config_test MAX_CPU=1, MEMORY_SIZE='1G', IOPS_WEIGHT='1000';
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	1	1	1073741824	3221225472	9223372036854775807	9223372036854775807	1000
+drop resource unit box_for_unit_config_test;
+============================ ALTER RESOURCE UNIT ============================
+==== 验证各个参数是否可以正确被修改
+create resource unit box_for_unit_config_test MAX_CPU=1, MIN_CPU=1, MEMORY_SIZE='1G', LOG_DISK_SIZE='2G', MAX_IOPS=1024, MIN_IOPS=1024, IOPS_WEIGHT=0;
+====  全部指定
+alter resource unit box_for_unit_config_test MAX_CPU=20, MIN_CPU=10, MEMORY_SIZE='10G', LOG_DISK_SIZE='2G', MAX_IOPS=20480, MIN_IOPS=2048, IOPS_WEIGHT=10;
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	20	10	10737418240	2147483648	20480	2048	10
+====  指定部分
+alter resource unit box_for_unit_config_test MAX_CPU=15;
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	15	10	10737418240	2147483648	20480	2048	10
+alter resource unit box_for_unit_config_test MIN_CPU=11;
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	15	11	10737418240	2147483648	20480	2048	10
+alter resource unit box_for_unit_config_test MEMORY_SIZE='15G';
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	15	11	16106127360	2147483648	20480	2048	10
+alter resource unit box_for_unit_config_test MAX_IOPS=10000;
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	15	11	16106127360	2147483648	10000	2048	10
+alter resource unit box_for_unit_config_test MIN_IOPS=5000;
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	15	11	16106127360	2147483648	10000	5000	10
+alter resource unit box_for_unit_config_test IOPS_WEIGHT=0;
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	15	11	16106127360	2147483648	10000	5000	0
+====   测试异常场景
+====   CPU: 最小值，MAX_CPU >= MIN_CPU
+alter resource unit box_for_unit_config_test MAX_CPU=20, MIN_CPU=10;
+alter resource unit box_for_unit_config_test MAX_CPU=0.5;
+ERROR HY000: Incorrect arguments to MAX_CPU, MAX_CPU is little than MIN_CPU
+alter resource unit box_for_unit_config_test MAX_CPU=5;
+ERROR HY000: Incorrect arguments to MAX_CPU, MAX_CPU is little than MIN_CPU
+====   MAX_CPU和MIN_CPU相等场景
+alter resource unit box_for_unit_config_test MAX_CPU=10;
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	10	10	16106127360	2147483648	10000	5000	0
+alter resource unit box_for_unit_config_test MIN_CPU=0.5;
+ERROR HY000: invalid MIN_CPU value, min value is 1
+alter resource unit box_for_unit_config_test MIN_CPU=25;
+ERROR HY000: Incorrect arguments to MIN_CPU, MIN_CPU is greater than MAX_CPU
+alter resource unit box_for_unit_config_test MIN_CPU=5;
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	10	5	16106127360	2147483648	10000	5000	0
+alter resource unit box_for_unit_config_test MIN_CPU=10;
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	10	10	16106127360	2147483648	10000	5000	0
+====   MEMORY: 最小值
+alter resource unit box_for_unit_config_test MEMORY_SIZE='1G';
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	10	10	1073741824	2147483648	10000	5000	0
+alter resource unit box_for_unit_config_test MEMORY_SIZE='1023M';
+ERROR HY000: invalid MEMORY_SIZE value, min value is 1073741824
+====   不能是number类型
+alter resource unit box_for_unit_config_test MEMORY_SIZE=1073741824.00;
+ERROR HY000: Incorrect arguments to MEMORY_SIZE, value can not be 'number' type
+====   LOG_DISK: 最小值
+alter resource unit box_for_unit_config_test LOG_DISK_SIZE='2G';
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	10	10	1073741824	2147483648	10000	5000	0
+alter resource unit box_for_unit_config_test LOG_DISK_SIZE='1G';
+ERROR HY000: invalid LOG_DISK_SIZE value, min value is 2147483648
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	10	10	1073741824	2147483648	10000	5000	0
+====   不能是number类型
+alter resource unit box_for_unit_config_test LOG_DISK_SIZE=1073741824.00;
+ERROR HY000: Incorrect arguments to LOG_DISK_SIZE, value can not be 'number' type
+alter resource unit box_for_unit_config_test LOG_DISK_SIZE='2049M';
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	10	10	1073741824	2148532224	10000	5000	0
+====   IOPS: 最小值，MAX_IOPS >= MIN_IOPS
+alter resource unit box_for_unit_config_test MAX_IOPS=10000, MIN_IOPS=10000;
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	10	10	1073741824	2148532224	10000	10000	0
+alter resource unit box_for_unit_config_test MAX_IOPS=1023;
+ERROR HY000: Incorrect arguments to MAX_IOPS, MAX_IOPS is little than MIN_IOPS
+alter resource unit box_for_unit_config_test MAX_IOPS=9999;
+ERROR HY000: Incorrect arguments to MAX_IOPS, MAX_IOPS is little than MIN_IOPS
+alter resource unit box_for_unit_config_test MIN_IOPS=1023;
+ERROR HY000: invalid MIN_IOPS value, min value is 1024
+alter resource unit box_for_unit_config_test MIN_IOPS=10001;
+ERROR HY000: Incorrect arguments to MIN_IOPS, MIN_IOPS is greater than MAX_IOPS
+====   不能是number类型
+alter resource unit box_for_unit_config_test MIN_IOPS=88.67;
+ERROR HY000: Incorrect arguments to MIN_IOPS, value can not be 'number' type
+alter resource unit box_for_unit_config_test MAX_IOPS=0.876;
+ERROR HY000: Incorrect arguments to MAX_IOPS, value can not be 'number' type
+====   IOPS_WEIGHT: 最小值
+alter resource unit box_for_unit_config_test IOPS_WEIGHT=0;
+select * from DBA_OB_UNIT_CONFIGS where name = 'box_for_unit_config_test';
+UNIT_CONFIG_ID	NAME	CREATE_TIME	MODIFY_TIME	MAX_CPU	MIN_CPU	MEMORY_SIZE	LOG_DISK_SIZE	MAX_IOPS	MIN_IOPS	IOPS_WEIGHT
+ID	NAME	CREATE_TIME	MODIFY_TIME	10	10	1073741824	2148532224	10000	10000	0
+alter resource unit box_for_unit_config_test IOPS_WEIGHT=-1;
+ERROR HY000: Incorrect arguments to IOPS_WEIGHT, value can not be negative
+====   不能是number类型
+alter resource unit box_for_unit_config_test IOPS_WEIGHT=0.9;
+ERROR HY000: Incorrect arguments to IOPS_WEIGHT, value can not be 'number' type
+alter resource unit box_for_unit_config_test IOPS_WEIGHT=100.90;
+ERROR HY000: Incorrect arguments to IOPS_WEIGHT, value can not be 'number' type
+drop resource unit if exists box_for_unit_config_test;

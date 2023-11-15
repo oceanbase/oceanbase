@@ -1,0 +1,11 @@
+# owner: fengshuo.fs
+# owner group: VOS
+# description: 简单测试__all_virtual_thread
+
+connect (conn_sys,$OBMYSQL_MS0,root@sys,,test,$OBMYSQL_PORT);
+connection conn_sys;
+desc oceanbase.__all_virtual_thread;
+desc oceanbase.GV$OB_THREAD;
+## 避免漏设线程名，如果这里有结果，请使用set_thread_name设置线程名
+select count(1) from oceanbase.__all_virtual_thread where tname = "";
+select count(1) from oceanbase.V$OB_THREAD where tname = "observer";

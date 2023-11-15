@@ -1,0 +1,73 @@
+drop table if exists tbl1,tbl2,tbl3,tbl4;
+create table tbl1 (i1 int, v2 varchar(80), i3 char(20),i4 float, d4 datetime(6),i5 decimal(5,3), primary key(i1));
+create table tbl2 (i1 int, v2 varchar(80), i3 char(20),i4 float, d4 datetime(6), i5 decimal(5,3), primary key(i1));
+create table tbl3 (i1 int, v2 varchar(80), i3 char(20),i4 float, d4 datetime(6), i5 decimal(5,3), primary key(i1));
+create table tbl4 (i1 int, v2 varchar(80), i3 char(20),i4 float, d4 datetime(6), i5 decimal(5,3), primary key(i1));
+insert into tbl1 values(1,'now','haha',1.6256,'2014-05-04 12:00:00',-10.235);
+insert into tbl1 values(2,'now','haha',-1.6256,'2014-05-04 12:00:00',1.243);
+insert into tbl1 values(3,'now','haha',1.656,'2014-05-04 12:00:00',-1.45);
+insert into tbl2 values(1,'now','haha',1.6256,'2014-05-04 12:00:00',3.45);
+insert into tbl2 values(2,'now1','haha',1.6256,'2014-05-04 12:00:00',-0.25);
+insert into tbl2 values(3,'now2','haha',1.6256,'2014-05-04 12:00:00',0.253);
+insert into tbl2 values(4,'now3','haha',1.6256,'2014-05-04 12:00:00',1.677);
+insert into tbl3 values(1,'now','haha',1.6256,'2014-05-04 12:00:00',-10.235);
+insert into tbl3 values(2,'now','haha',-1.6256,'2014-05-04 12:00:00',1.243);
+insert into tbl3 values(3,'now','haha',1.656,'2014-05-04 12:00:00',-1.45);
+insert into tbl4 values(1,'now','haha',1.6256,'2014-05-04 12:00:00',3.45);
+insert into tbl4 values(2,'now1','haha',1.6256,'2014-05-04 12:00:00',-0.25);
+insert into tbl4 values(3,'now2','haha',1.6256,'2014-05-04 12:00:00',0.253);
+insert into tbl4 values(4,'now3','haha',1.6256,'2014-05-04 12:00:00',1.677);
+select * from tbl1 join tbl2 on  tbl1.i1=tbl2.i1 join tbl3  on tbl1.i1=tbl3.i1 join tbl4 on tbl1.i1=tbl4.i1;
+i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5
+1	now	haha	1.6256	2014-05-04 12:00:00.000000	-10.235	1	now	haha	1.6256	2014-05-04 12:00:00.000000	3.450	1	now	haha	1.6256	2014-05-04 12:00:00.000000	-10.235	1	now	haha	1.6256	2014-05-04 12:00:00.000000	3.450
+2	now	haha	-1.6256	2014-05-04 12:00:00.000000	1.243	2	now1	haha	1.6256	2014-05-04 12:00:00.000000	-0.250	2	now	haha	-1.6256	2014-05-04 12:00:00.000000	1.243	2	now1	haha	1.6256	2014-05-04 12:00:00.000000	-0.250
+3	now	haha	1.656	2014-05-04 12:00:00.000000	-1.450	3	now2	haha	1.6256	2014-05-04 12:00:00.000000	0.253	3	now	haha	1.656	2014-05-04 12:00:00.000000	-1.450	3	now2	haha	1.6256	2014-05-04 12:00:00.000000	0.253
+select * from tbl1 a join tbl2 b on  a.i1=b.i1 join tbl3 c on a.i1=c.i1 join tbl4 d on a.i1=d.i1;
+i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5
+1	now	haha	1.6256	2014-05-04 12:00:00.000000	-10.235	1	now	haha	1.6256	2014-05-04 12:00:00.000000	3.450	1	now	haha	1.6256	2014-05-04 12:00:00.000000	-10.235	1	now	haha	1.6256	2014-05-04 12:00:00.000000	3.450
+2	now	haha	-1.6256	2014-05-04 12:00:00.000000	1.243	2	now1	haha	1.6256	2014-05-04 12:00:00.000000	-0.250	2	now	haha	-1.6256	2014-05-04 12:00:00.000000	1.243	2	now1	haha	1.6256	2014-05-04 12:00:00.000000	-0.250
+3	now	haha	1.656	2014-05-04 12:00:00.000000	-1.450	3	now2	haha	1.6256	2014-05-04 12:00:00.000000	0.253	3	now	haha	1.656	2014-05-04 12:00:00.000000	-1.450	3	now2	haha	1.6256	2014-05-04 12:00:00.000000	0.253
+select * from tbl1 join tbl2 on  tbl1.i1=tbl2.i1 join tbl3  on tbl1.i1=tbl3.i1 join tbl4 on tbl1.i1=tbl4.i1 where tbl1.i1=1;
+i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5
+1	now	haha	1.6256	2014-05-04 12:00:00.000000	-10.235	1	now	haha	1.6256	2014-05-04 12:00:00.000000	3.450	1	now	haha	1.6256	2014-05-04 12:00:00.000000	-10.235	1	now	haha	1.6256	2014-05-04 12:00:00.000000	3.450
+select * from tbl1 join tbl2 on  tbl1.i1=tbl2.i1 join tbl3  on tbl2.i1=tbl3.i1 join tbl4 on tbl3.i1=tbl4.i1;
+i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5
+1	now	haha	1.6256	2014-05-04 12:00:00.000000	-10.235	1	now	haha	1.6256	2014-05-04 12:00:00.000000	3.450	1	now	haha	1.6256	2014-05-04 12:00:00.000000	-10.235	1	now	haha	1.6256	2014-05-04 12:00:00.000000	3.450
+2	now	haha	-1.6256	2014-05-04 12:00:00.000000	1.243	2	now1	haha	1.6256	2014-05-04 12:00:00.000000	-0.250	2	now	haha	-1.6256	2014-05-04 12:00:00.000000	1.243	2	now1	haha	1.6256	2014-05-04 12:00:00.000000	-0.250
+3	now	haha	1.656	2014-05-04 12:00:00.000000	-1.450	3	now2	haha	1.6256	2014-05-04 12:00:00.000000	0.253	3	now	haha	1.656	2014-05-04 12:00:00.000000	-1.450	3	now2	haha	1.6256	2014-05-04 12:00:00.000000	0.253
+select * from tbl1 a join tbl2 b on a.i1=b.i1 join tbl3 c on b.i1=c.i1 join tbl4 d on c.i1=d.i1;
+i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5
+1	now	haha	1.6256	2014-05-04 12:00:00.000000	-10.235	1	now	haha	1.6256	2014-05-04 12:00:00.000000	3.450	1	now	haha	1.6256	2014-05-04 12:00:00.000000	-10.235	1	now	haha	1.6256	2014-05-04 12:00:00.000000	3.450
+2	now	haha	-1.6256	2014-05-04 12:00:00.000000	1.243	2	now1	haha	1.6256	2014-05-04 12:00:00.000000	-0.250	2	now	haha	-1.6256	2014-05-04 12:00:00.000000	1.243	2	now1	haha	1.6256	2014-05-04 12:00:00.000000	-0.250
+3	now	haha	1.656	2014-05-04 12:00:00.000000	-1.450	3	now2	haha	1.6256	2014-05-04 12:00:00.000000	0.253	3	now	haha	1.656	2014-05-04 12:00:00.000000	-1.450	3	now2	haha	1.6256	2014-05-04 12:00:00.000000	0.253
+explain select * from tbl1 join tbl2 on  tbl1.i1=tbl2.i1 join tbl3  on tbl1.i1=tbl3.i1 join tbl4 on tbl1.i1=tbl4.i1;
+explain select * from tbl1 a join tbl2 b on  a.i1=b.i1 join tbl3 c on a.i1=c.i1 join tbl4 d on a.i1=d.i1;
+explain select * from tbl1 join tbl2 on  tbl1.i1=tbl2.i1 join tbl3  on tbl2.i1=tbl3.i1 join tbl4 on tbl3.i1=tbl4.i1;
+explain select * from tbl1 a join tbl2 b on a.i1=b.i1 join tbl3 c on b.i1=c.i1 join tbl4 d on c.i1=d.i1;
+select * from tbl1  left join tbl2 on  tbl1.i1=tbl2.i1  left join tbl3  on tbl1.i1=tbl3.i1  left join tbl4 on tbl1.i1=tbl4.i1;
+i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5
+1	now	haha	1.6256	2014-05-04 12:00:00.000000	-10.235	1	now	haha	1.6256	2014-05-04 12:00:00.000000	3.450	1	now	haha	1.6256	2014-05-04 12:00:00.000000	-10.235	1	now	haha	1.6256	2014-05-04 12:00:00.000000	3.450
+2	now	haha	-1.6256	2014-05-04 12:00:00.000000	1.243	2	now1	haha	1.6256	2014-05-04 12:00:00.000000	-0.250	2	now	haha	-1.6256	2014-05-04 12:00:00.000000	1.243	2	now1	haha	1.6256	2014-05-04 12:00:00.000000	-0.250
+3	now	haha	1.656	2014-05-04 12:00:00.000000	-1.450	3	now2	haha	1.6256	2014-05-04 12:00:00.000000	0.253	3	now	haha	1.656	2014-05-04 12:00:00.000000	-1.450	3	now2	haha	1.6256	2014-05-04 12:00:00.000000	0.253
+select * from tbl1 a  left join tbl2 b on  a.i1=b.i1  left join tbl3 c on a.i1=c.i1  left join tbl4 d on a.i1=d.i1;
+i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5
+1	now	haha	1.6256	2014-05-04 12:00:00.000000	-10.235	1	now	haha	1.6256	2014-05-04 12:00:00.000000	3.450	1	now	haha	1.6256	2014-05-04 12:00:00.000000	-10.235	1	now	haha	1.6256	2014-05-04 12:00:00.000000	3.450
+2	now	haha	-1.6256	2014-05-04 12:00:00.000000	1.243	2	now1	haha	1.6256	2014-05-04 12:00:00.000000	-0.250	2	now	haha	-1.6256	2014-05-04 12:00:00.000000	1.243	2	now1	haha	1.6256	2014-05-04 12:00:00.000000	-0.250
+3	now	haha	1.656	2014-05-04 12:00:00.000000	-1.450	3	now2	haha	1.6256	2014-05-04 12:00:00.000000	0.253	3	now	haha	1.656	2014-05-04 12:00:00.000000	-1.450	3	now2	haha	1.6256	2014-05-04 12:00:00.000000	0.253
+select * from tbl1  left join tbl2 on  tbl1.i1=tbl2.i1  left join tbl3  on tbl1.i1=tbl3.i1  left join tbl4 on tbl1.i1=tbl4.i1 where tbl1.i1=1;
+i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5
+1	now	haha	1.6256	2014-05-04 12:00:00.000000	-10.235	1	now	haha	1.6256	2014-05-04 12:00:00.000000	3.450	1	now	haha	1.6256	2014-05-04 12:00:00.000000	-10.235	1	now	haha	1.6256	2014-05-04 12:00:00.000000	3.450
+select * from tbl1  left join tbl2 on  tbl1.i1=tbl2.i1  left join tbl3  on tbl2.i1=tbl3.i1  left join tbl4 on tbl3.i1=tbl4.i1;
+i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5
+1	now	haha	1.6256	2014-05-04 12:00:00.000000	-10.235	1	now	haha	1.6256	2014-05-04 12:00:00.000000	3.450	1	now	haha	1.6256	2014-05-04 12:00:00.000000	-10.235	1	now	haha	1.6256	2014-05-04 12:00:00.000000	3.450
+2	now	haha	-1.6256	2014-05-04 12:00:00.000000	1.243	2	now1	haha	1.6256	2014-05-04 12:00:00.000000	-0.250	2	now	haha	-1.6256	2014-05-04 12:00:00.000000	1.243	2	now1	haha	1.6256	2014-05-04 12:00:00.000000	-0.250
+3	now	haha	1.656	2014-05-04 12:00:00.000000	-1.450	3	now2	haha	1.6256	2014-05-04 12:00:00.000000	0.253	3	now	haha	1.656	2014-05-04 12:00:00.000000	-1.450	3	now2	haha	1.6256	2014-05-04 12:00:00.000000	0.253
+select * from tbl1 a  left join tbl2 b on a.i1=b.i1  left join tbl3 c on b.i1=c.i1  left join tbl4 d on c.i1=d.i1;
+i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5	i1	v2	i3	i4	d4	i5
+1	now	haha	1.6256	2014-05-04 12:00:00.000000	-10.235	1	now	haha	1.6256	2014-05-04 12:00:00.000000	3.450	1	now	haha	1.6256	2014-05-04 12:00:00.000000	-10.235	1	now	haha	1.6256	2014-05-04 12:00:00.000000	3.450
+2	now	haha	-1.6256	2014-05-04 12:00:00.000000	1.243	2	now1	haha	1.6256	2014-05-04 12:00:00.000000	-0.250	2	now	haha	-1.6256	2014-05-04 12:00:00.000000	1.243	2	now1	haha	1.6256	2014-05-04 12:00:00.000000	-0.250
+3	now	haha	1.656	2014-05-04 12:00:00.000000	-1.450	3	now2	haha	1.6256	2014-05-04 12:00:00.000000	0.253	3	now	haha	1.656	2014-05-04 12:00:00.000000	-1.450	3	now2	haha	1.6256	2014-05-04 12:00:00.000000	0.253
+explain select* from tbl1  left join tbl2 on  tbl1.i1=tbl2.i1  left join tbl3  on tbl1.i1=tbl3.i1  left join tbl4 on tbl1.i1=tbl4.i1;
+explain select* from tbl1 a  left join tbl2 b on  a.i1=b.i1  left join tbl3 c on a.i1=c.i1  left join tbl4 d on a.i1=d.i1;
+explain select* from tbl1  left join tbl2 on  tbl1.i1=tbl2.i1  left join tbl3  on tbl2.i1=tbl3.i1  left join tbl4 on tbl3.i1=tbl4.i1;
+explain select* from tbl1 a  left join tbl2 b on a.i1=b.i1  left join tbl3 c on b.i1=c.i1  left join tbl4 d on c.i1=d.i1;

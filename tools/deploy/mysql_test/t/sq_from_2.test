@@ -1,0 +1,37 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: link.zt
+# owner group: sql4
+# description: from子查询测试集2
+--disable_warnings
+drop table if exists t1,t2,t3,a,b;
+--enable_warnings
+
+
+CREATE TABLE t1 (pk int primary key, c1 INT, c2 VARCHAR(100),c3 FLOAT);
+INSERT INTO t1 VALUES (1, null,null,0.0);
+INSERT INTO t1 VALUES (2, 1,'',1.0);
+INSERT INTO t1 VALUES (3, 2,'abcde',2.0);
+INSERT INTO t1 VALUES (4, 100,'abcdefghij',3.0);
+CREATE TABLE t2 (pk int primary key, c1 INT, c2 VARCHAR(100));
+INSERT INTO t2 VALUES (1, 1,'abcde');
+INSERT INTO t2 VALUES (2, 2,'abcde');
+SELECT sb1,sb2,sb3 FROM (SELECT c1 AS sb1, c2 AS sb2, c3*2 AS sb3
+FROM t1) AS sb WHERE sb1 > 1;
+SELECT AVG(sum_column1) FROM (SELECT SUM(c1) AS sum_column1 FROM t1
+ GROUP BY c1) AS t1;
+DROP TABLE t1;
+DROP TABLE t2;
+
+create table a(pk2 int primary key, a1 int, a2 int, a3 int) partition by key(pk2) partitions 4;
+create table b(pk1 int primary key, b1 int, b2 int, b3 int) partition by key(pk1) partitions 3;
+select a2 from (select *,case b1 when 1 then 2 else 3 end as c from a left join b on a2=b2) v where c>1;
+drop table a;
+drop table b;
+
+create table t2(c1 int primary key, c2 int, c3 varchar(32)) partition by hash (c1) partitions 3;
+create table t3(c1 int primary key, c2 int, c3 varchar(32)) partition by hash (c1) partitions 2;
+select tb.c2, tb.c3 from (select t.* from (select * from t2 WHERE c2 = 1) t left JOIN t3 b on t.c3=b.c3)tb;
+drop table t2;
+drop table t3;

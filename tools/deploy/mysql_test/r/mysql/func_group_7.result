@@ -1,0 +1,142 @@
+drop table if exists t1,t2,t3,t4,t5;
+create table t1 (pk int primary key,a double ,b double);
+insert into t1(pk,a) values (1,12345678901234567890);
+select count(a) from t1;
+count(a)
+1
+select count(distinct a) from t1;
+count(distinct a)
+1
+drop table t1;
+CREATE TABLE t1 (a INT, b INT primary key);
+INSERT INTO t1 VALUES (1,1),(1,2),(1,3),(1,4),(1,5),(1,6),(1,7),(1,8);
+SELECT a,COUNT(DISTINCT b) AS cnt FROM t1 GROUP BY a HAVING cnt > 50;
+a	cnt
+SELECT a,SUM(DISTINCT b) AS sumation FROM t1 GROUP BY a HAVING sumation > 50;
+a	sumation
+SELECT a,AVG(DISTINCT b) AS average FROM t1 GROUP BY a HAVING average > 50;
+a	average
+DROP TABLE t1;
+CREATE TABLE t1 ( a INT, b INT primary key);
+INSERT INTO t1 VALUES (NULL, 1), (NULL, 2);
+EXPLAIN SELECT MIN(a), MIN(b) FROM t1;
+SELECT MIN(a), MIN(b) FROM t1;
+MIN(a)	MIN(b)
+NULL	1
+CREATE TABLE t2( pk int primary key, a INT, b INT, c INT);
+INSERT INTO t2 ( pk,a, b, c ) VALUES ( 1,1, NULL, 2 ), ( 2,1, 3, 4 ), ( 3,1, 4, 4 );
+EXPLAIN SELECT MIN(b), MIN(c) FROM t2 WHERE a = 1;
+SELECT MIN(b), MIN(c) FROM t2 WHERE a = 1;
+MIN(b)	MIN(c)
+3	2
+CREATE TABLE t3 (pk int primary key , a INT, b INT, c int);
+INSERT INTO t3 VALUES (1,1, NULL, 1), (2,2, NULL, 2),  (3,3, NULL, 3);
+EXPLAIN SELECT MIN(a), MIN(b) FROM t3 where a = 2;
+SELECT MIN(a), MIN(b) FROM t3 where a = 2;
+MIN(a)	MIN(b)
+2	NULL
+CREATE TABLE t4 (a INT, b INT, c int, primary KEY(a, c));
+INSERT INTO t4 VALUES (1, 1, 1), (2, NULL, 2), (3, 1, 3);
+EXPLAIN SELECT MIN(a), MIN(b) FROM t4 where a = 2;
+SELECT MIN(a), MIN(b) FROM t4 where a = 2;
+MIN(a)	MIN(b)
+2	NULL
+SELECT MIN(b), min(c) FROM t4 where a = 2;
+MIN(b)	min(c)
+NULL	2
+CREATE TABLE t5( a INT, b INT, primary KEY( a, b),c int);
+INSERT INTO t5(a,b) VALUES( 1, 1 ), ( 1, 2 );
+EXPLAIN SELECT MIN(a), MIN(b) FROM t5 WHERE a = 1;
+SELECT MIN(a), MIN(b) FROM t5 WHERE a = 1;
+MIN(a)	MIN(b)
+1	1
+SELECT MIN(a), MIN(b) FROM t5 WHERE a = 1 and b > 1;
+MIN(a)	MIN(b)
+1	2
+DROP TABLE t1, t2, t3, t4, t5;
+CREATE TABLE t1 (a int, b datetime(6), primary key (a,b),c int);
+SELECT MIN(b) FROM t1 WHERE a=1 AND b>'2007-08-01';
+MIN(b)
+NULL
+DROP TABLE t1;
+CREATE TABLE t1 (a INT primary key, b int);
+INSERT INTO t1(a) VALUES (1),(2),(3),(4);
+SELECT a FROM t1 HAVING COUNT(*)>2;
+a
+1
+SELECT COUNT(*), a FROM t1;
+COUNT(*)	a
+4	1
+SELECT a FROM t1 HAVING COUNT(*)>2;
+a
+1
+SELECT COUNT(*), a FROM t1;
+COUNT(*)	a
+4	1
+DROP TABLE t1;
+CREATE TABLE t1(pk int primary key,a DOUBLE );
+INSERT INTO t1 VALUES (1,10), (2,20);
+SELECT AVG(a), CAST(AVG(a) AS DECIMAL) FROM t1;
+AVG(a)	CAST(AVG(a) AS DECIMAL)
+15	15
+DROP TABLE t1;
+CREATE TABLE t1 (a INT, b INT primary key);
+INSERT INTO t1 VALUES (1,1), (1,2), (1,3);
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+3
+SELECT COUNT(*) FROM t1 where a=1;
+COUNT(*)
+3
+SELECT COUNT(*),a FROM t1;
+COUNT(*)	a
+3	1
+SELECT COUNT(*) FROM t1 a JOIN t1 b ON a.a= b.a;
+COUNT(*)
+9
+DROP TABLE t1;
+CREATE TABLE t1 (
+pk INT NOT NULL,
+i INT,
+PRIMARY KEY (pk)
+);
+INSERT INTO t1 VALUES (1,11),(2,12),(3,13);
+SELECT MAX(pk) as max, i
+FROM t1
+ORDER BY max;
+max	i
+3	11
+SELECT MAX(pk) as max, i
+FROM t1
+WHERE pk<2
+ORDER BY max;
+max	i
+1	11
+DROP TABLE t1;
+CREATE TABLE t1(a int, primary KEY(a), b int);
+INSERT INTO t1(a) VALUES (1), (2);
+SELECT 1 FROM t1 ORDER BY AVG(DISTINCT a);
+1
+1
+DROP TABLE t1;
+CREATE TABLE t1 (pk int primary key,col_int_nokey int);
+INSERT INTO t1 VALUES (1,7),(2,8),(3,NULL);
+SELECT AVG(DISTINCT col_int_nokey) FROM t1;
+AVG(DISTINCT col_int_nokey)
+7.5000
+SELECT AVG(DISTINCT outr.col_int_nokey) FROM t1 AS outr LEFT JOIN t1 AS outr2 ON
+outr.col_int_nokey = outr2.col_int_nokey;
+AVG(DISTINCT outr.col_int_nokey)
+7.5000
+DROP TABLE t1;
+create table t1 (pk int primary key, b int);
+insert into t1 values (1, NULL), (2, 2), (3, 4);
+select * from t1;
+pk	b
+1	NULL
+2	2
+3	4
+select count(b), min(b), max(b), sum(b), avg(b) from t1;
+count(b)	min(b)	max(b)	sum(b)	avg(b)
+2	2	4	6	3.0000
+drop table t1;

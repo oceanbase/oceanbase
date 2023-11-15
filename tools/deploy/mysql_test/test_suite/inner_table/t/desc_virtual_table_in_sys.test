@@ -1,0 +1,84 @@
+#owner: yanmu.ztl
+#owner group: RS
+#tags: schema
+#description: check virtual table in sys tenant
+--disable_abort_on_error
+connect (sys,$OBMYSQL_MS0,root,,oceanbase,$OBMYSQL_PORT);
+connection sys;
+use test;
+let $tenant_id = 1;
+let $cnt = query_get_value(select count(*) as cnt from oceanbase.__all_virtual_table where tenant_id = $tenant_id and table_type = 2, cnt, 1);
+let $svr_ip = query_get_value(select svr_ip from oceanbase.__all_virtual_unit order by svr_ip limit 1, svr_ip, 1);
+let $svr_port = query_get_value(select svr_port from oceanbase.__all_virtual_unit order by svr_ip limit 1, svr_port, 1);
+
+let $idx = 1;
+while ($idx <= $cnt)
+{
+let $database_name = query_get_value(select d.database_name from oceanbase.__all_virtual_table as t join oceanbase.__all_virtual_database as d on t.tenant_id = d.tenant_id and t.database_id = d.database_id where t.tenant_id = $tenant_id and table_type = 2 order by t.table_id, database_name, $idx);
+let $table_name = query_get_value(select table_name from oceanbase.__all_virtual_table where tenant_id = $tenant_id and table_type = 2 order by table_id, table_name, $idx);
+let $part_level = query_get_value(select part_level from oceanbase.__all_virtual_table where tenant_id = $tenant_id and table_name = "$table_name" and table_type = 2, part_level, 1);
+eval desc $database_name.$table_name;
+
+let $query_type = `
+select (
+case when "$table_name" in (
+"__tenant_virtual_all_table" ,
+"__tenant_virtual_table_column" ,
+"__tenant_virtual_show_create_database" ,
+"__tenant_virtual_show_create_table" ,
+"__tenant_virtual_current_tenant" ,
+"__tenant_virtual_show_tables" ,
+"__tenant_virtual_show_create_procedure" ,
+"__tenant_virtual_show_create_tablegroup" ,
+"__tenant_virtual_object_definition" ,
+"__tenant_virtual_show_create_trigger") then 2
+when "$table_name" in (
+"__all_virtual_proxy_schema" ,
+"__all_virtual_proxy_partition_info" ,
+"__all_virtual_proxy_partition" ,
+"__all_virtual_proxy_sub_partition" ,
+"__all_virtual_proxy_routine") then 3
+when "$table_name" in (
+"__all_virtual_sysstat",
+"__all_virtual_sesstat",
+"__all_virtual_session_event") then 4
+when "$table_name" in (
+"__all_virtual_tx_data") then 5
+else 1 end) as query_type from dual`;
+
+
+if ($query_type == 1)
+{
+eval select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from $database_name.$table_name;
+
+# Check distributed execute table runs in single server. To avoid overwrite ret problem in PX.
+if ($part_level == 1)
+{
+--disable_query_log
+--echo "$database_name.$table_name runs in single server"
+eval select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from $database_name.$table_name where svr_ip = "$svr_ip" and svr_port = "$svr_port";
+--enable_query_log
+}
+}
+
+if ($query_type == 2)
+{
+# show stmt, can't directly access
+}
+if ($query_type == 3)
+{
+# proxy related, need additional query condition
+}
+if ($query_type == 4)
+{
+# error or core, need fix
+}
+if ($query_type == 5)
+{
+# tx data only support point select
+}
+
+
+inc $idx;
+}
+

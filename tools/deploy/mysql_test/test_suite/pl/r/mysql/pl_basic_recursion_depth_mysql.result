@@ -1,0 +1,100 @@
+result_format: 4
+drop table if exists tab_proc;
+create table tab_proc(content varchar(255));
+
+drop procedure if exists my_proc;
+create procedure my_proc()
+begin
+    insert into tab_proc values("normal procedure call");
+end;//
+
+call my_proc();
+
+select * from tab_proc;
++-----------------------+
+| content               |
++-----------------------+
+| normal procedure call |
++-----------------------+
+drop procedure my_proc;
+truncate table tab_proc;
+
+drop procedure if exists my_proc;
+create procedure my_proc(depth int, current int)
+begin
+    if current < depth
+    then
+        set current = current + 1;
+        call my_proc(depth, current);
+    end if;
+    insert into tab_proc values("recursion call");
+end;//
+
+call my_proc(1, 1);
+call my_proc(2, 1);
+ERROR HY000: Recursive limit 0 (as set by the max_sp_recursion_depth variable) was exceeded for routine
+call my_proc(3, 1);
+ERROR HY000: Recursive limit 0 (as set by the max_sp_recursion_depth variable) was exceeded for routine
+set @@max_sp_recursion_depth = 3;
+call my_proc(3, 1);
+
+select * from tab_proc;
++----------------+
+| content        |
++----------------+
+| recursion call |
+| recursion call |
+| recursion call |
+| recursion call |
++----------------+
+
+drop procedure my_proc;
+truncate table tab_proc;
+
+drop procedure if exists my_proc1;
+drop procedure if exists my_proc2;
+create procedure my_proc1(depth int, current int)
+begin
+    if current < depth
+    then
+        set current = current + 1;
+        call my_proc2(depth, current);
+    end if;
+    insert into tab_proc values("my_proc1");
+end;//
+
+create procedure my_proc2(depth int, current int)
+begin
+    if current < depth
+    then
+        set current = current + 1;
+        call my_proc1(depth, current);
+    end if;
+    insert into tab_proc values("my_proc2");
+end;//
+
+set @@max_sp_recursion_depth = 0;
+call my_proc1(2, 1);
+call my_proc1(5, 1);
+ERROR HY000: Recursive limit 0 (as set by the max_sp_recursion_depth variable) was exceeded for routine
+set @@max_sp_recursion_depth = 3;
+call my_proc1(5, 1);
+
+select * from tab_proc;
++----------+
+| content  |
++----------+
+| my_proc2 |
+| my_proc1 |
+| my_proc1 |
+| my_proc2 |
+| my_proc1 |
+| my_proc2 |
+| my_proc1 |
++----------+
+drop procedure my_proc1;
+drop procedure my_proc2;
+drop table tab_proc;
+
+
+

@@ -1,0 +1,53 @@
+drop table if exists t1,t2;
+create table t1(pk int primary key, c1 int, c2 int);
+insert into t1 values(1,1,1),(2,2,2);
+explain select * from t1 where c2=1 and c1=c2 and pk=c1;
+select * from t1 where c2=1 and c1=c2 and pk=c1;
+pk	c1	c2
+1	1	1
+drop table t1;
+create table t1(pk int primary key, c1 int, c2 int, c3 int,c4 int , c5 int, c6 int, c7 int, c8 int, c9 int, c10 int);
+insert into t1 values(1,1,1,1,1,1,1,1,1,1,1),(2,2,2,2,2,2,2,2,2,2,2),(3,2,2,2,3,2,3,2,3,3,3);
+explain select * from t1 where c10=1 and c9=c10 and c8=c9 and c7=c8 and c6=c7 and c5=c6 and c4=c5 and c3=c4 and c2=c3 and c1=c2 and pk=c1;
+select * from t1 where c10=1 and c9=c10 and c8=c9 and c7=c8 and c6=c7 and c5=c6 and c4=c5 and c3=c4 and c2=c3 and c1=c2 and pk=c1;
+pk	c1	c2	c3	c4	c5	c6	c7	c8	c9	c10
+1	1	1	1	1	1	1	1	1	1	1
+select * from t1 where c9=c10 and c8=c9 and c7=c8 and c6=c7 and c5=c6 and c4=c5 and c3=c4 and c2=c3 and c1=c2 and c10=1 and pk=c1;
+pk	c1	c2	c3	c4	c5	c6	c7	c8	c9	c10
+1	1	1	1	1	1	1	1	1	1	1
+select * from t1 where c9=c10 and c8=c9 and c7=c8 and c6=c7 and c5=c6 and c4=c5 and c3=c4 and c2=c3 and c1=c2 and pk=c1;
+pk	c1	c2	c3	c4	c5	c6	c7	c8	c9	c10
+1	1	1	1	1	1	1	1	1	1	1
+2	2	2	2	2	2	2	2	2	2	2
+explain select * from t1 where c10>1 and c9=c10 and c8=c9 and c7=c8 and c6=c7 and c5=c6 and c4=c5 and c3=c4 and c2=c3 and c1=c2 and pk=c1;
+select * from t1 where c10>1 and c9=c10 and c8=c9 and c7=c8 and c6=c7 and c5=c6 and c4=c5 and c3=c4 and c2=c3 and c1=c2 and pk=c1;
+pk	c1	c2	c3	c4	c5	c6	c7	c8	c9	c10
+2	2	2	2	2	2	2	2	2	2	2
+drop table t1;
+create table t1(pk int primary key, c1 int, c2 int);
+insert into t1 values(1,1,1),(2,2,2);
+create table t2(pk int primary key, c1 int, c2 int);
+insert into t2 values(1,1,1),(2,2,2);
+select  t1.pk,t2.c2 from t1,t2 where t1.pk=t2.pk and t1.pk=1;
+pk	c2
+1	1
+select  t1.pk,t2.c2 from t1,t2 where t1.pk=t2.pk and t1.pk>1;
+pk	c2
+2	2
+select  t1.pk,t2.c2 from t1 INNER join t2 on t1.pk=t2.pk and t2.pk=1;
+pk	c2
+1	1
+select  t1.pk,t2.c2 from t1 LEFT join t2 on t1.pk=t2.pk and t2.pk=1;
+pk	c2
+1	1
+2	NULL
+explain select  t1.pk,t2.c2 from t1 LEFT join t2 on t1.pk=t2.pk and t2.pk=1;
+select  t1.pk,t2.c2 from t1 RIGHT join t2 on t1.pk=t2.pk and t2.pk=1;
+pk	c2
+1	1
+NULL	2
+select  t1.pk,t2.c2 from t1 FULL join t2 on t1.pk=t2.pk and t2.pk=1;
+pk	c2
+1	1
+2	NULL
+NULL	2

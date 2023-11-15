@@ -1,0 +1,112 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: yuchen.wyc
+# owner group: SQL1
+# description: OUR GOAL: Make all this simple and effective!
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+
+--echo set timeout to 10s
+connect (conn3,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+set global  ob_trx_timeout = 10000000;
+create table t1(c1 int primary key, c2 int);
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+insert into t1 values(3,3);
+disconnect conn3;
+
+--echo create 2 sessions
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn2,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+
+connection conn1;
+--echo trx timeout
+begin;
+insert into t1 values(4,4);
+--real_sleep 3
+insert into t1 values(5,5);
+--real_sleep 3
+insert into t1 values(6,6);
+--real_sleep 3
+commit;
+
+select * from t1;
+
+begin;
+insert into t1 values(7,7);
+--real_sleep 3
+insert into t1 values(8,8);
+--real_sleep 3
+insert into t1 values(9,9);
+--real_sleep 3
+insert into t1 values(10,10);
+--real_sleep 3
+--error 6002
+commit;
+
+select * from t1;
+
+--echo trx idle timeout
+
+begin;
+insert into t1 values(11,11);
+--real_sleep 12
+--error 4012
+insert into t1 values(12,12);
+--error 6002
+commit;
+
+select * from t1;
+
+--echo test two users
+
+#下面的case，在切主场景下，上面的事务被kill，行锁会释放，下面的事务不会有锁冲突，从而造成case失败
+#connection conn1;
+#begin;
+#select * from t1 where c1=1 for update;
+#sleep 11;
+#connection conn2;
+#begin;
+#--error 1205,4012
+#select * from t1 where c1=1 for update;
+#--error 4012
+#update t1 set c2=1 where c1=1;
+#--error 4012
+#commit;
+#select * from t1;
+#connection conn1;
+#--error 4012
+#commit;
+
+#begin;
+#update t1 set c2=1 where c1=2;
+#--real_sleep 3
+#update t1 set c2=1 where c1=3;
+#--real_sleep 3
+#update t1 set c2=1 where c1=4;
+#--real_sleep 3
+#update t1 set c2=1 where c1=5;
+#--real_sleep 3
+
+#connection conn2;
+#begin;
+#--error 1205,4012
+#update t1 set c2=c2+1 where c1=2;
+#--error 4012
+#update t1 set c2=c2+1 where c1=3;
+#--error 4012
+#update t1 set c2=c2+1 where c1=4;
+#--error 4012
+#update t1 set c2=c2+1 where c1=5;
+#--error 4012
+#commit;
+#select * from t1;
+#connection conn1;
+#--error 4012
+#commit;
+set global  ob_trx_timeout = 100000000;

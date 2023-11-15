@@ -1,0 +1,111 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+#owner: linlin.xll
+#owner group: SQL1
+#description: test system variable max_sp_recursion_depth
+#tags: pl, sys_vars
+
+--result_format 4
+
+--disable_warnings
+drop table if exists tab_proc;
+--enable_warnings
+create table tab_proc(content varchar(255));
+
+# case 1: normal call
+--disable_warnings
+drop procedure if exists my_proc;
+--enable_warnings
+
+delimiter //;
+create procedure my_proc()
+begin
+    insert into tab_proc values("normal procedure call");
+end;//
+delimiter ;//
+
+call my_proc();
+
+select * from tab_proc;
+drop procedure my_proc;
+truncate table tab_proc;
+
+# case 2: self recursion
+--disable_warnings
+drop procedure if exists my_proc;
+--enable_warnings
+
+delimiter //;
+create procedure my_proc(depth int, current int)
+begin
+    if current < depth
+    then
+        set current = current + 1;
+        call my_proc(depth, current);
+    end if;
+    insert into tab_proc values("recursion call");
+end;//
+delimiter ;//
+
+call my_proc(1, 1);
+--error ER_SP_RECURSION_LIMIT
+call my_proc(2, 1);
+--error ER_SP_RECURSION_LIMIT
+call my_proc(3, 1);
+set @@max_sp_recursion_depth = 3;
+call my_proc(3, 1);
+
+select * from tab_proc;
+
+drop procedure my_proc;
+truncate table tab_proc;
+
+# case 3:
+--disable_warnings
+drop procedure if exists my_proc1;
+drop procedure if exists my_proc2;
+--enable_warnings
+
+delimiter //;
+create procedure my_proc1(depth int, current int)
+begin
+    if current < depth
+    then
+        set current = current + 1;
+        call my_proc2(depth, current);
+    end if;
+    insert into tab_proc values("my_proc1");
+end;//
+delimiter ;//
+
+delimiter //;
+create procedure my_proc2(depth int, current int)
+begin
+    if current < depth
+    then
+        set current = current + 1;
+        call my_proc1(depth, current);
+    end if;
+    insert into tab_proc values("my_proc2");
+end;//
+delimiter ;//
+
+set @@max_sp_recursion_depth = 0;
+call my_proc1(2, 1);
+--error ER_SP_RECURSION_LIMIT
+call my_proc1(5, 1);
+set @@max_sp_recursion_depth = 3;
+call my_proc1(5, 1);
+
+select * from tab_proc;
+drop procedure my_proc1;
+drop procedure my_proc2;
+drop table tab_proc;
+
+
+
+
+
+

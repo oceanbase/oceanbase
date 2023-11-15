@@ -1,0 +1,22 @@
+drop table if exists t2;
+create table t2 (i int primary key, j int);
+insert into t2 values (1,1),(2,2),(5,null),(4,4),(3,3);
+select * from t2 where (i) in ((1),(null)) and i = 2;
+i	j
+select * from t2 where (i) in ((1),(null)) and i = 1;
+i	j
+1	1
+select * from t2 where (i) in ((1),(null));
+i	j
+1	1
+select * from t2 where (i) in ((1),(null)) and i = 1 and i = 2;
+i	j
+update t2 set j=i+1 where i=2;
+select * from t2;
+i	j
+1	1
+2	3
+3	3
+4	4
+5	NULL
+drop table t2;

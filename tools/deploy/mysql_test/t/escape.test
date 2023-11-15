@@ -1,0 +1,14 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: peihan.dph
+# owner group: SQL1
+# description: foobar
+--disable_abort_on_error
+--disable_warnings
+drop table if exists t2;
+--enable_warnings
+create table t2 (c1 varchar(1024) primary key, c2 varchar(1024), c3 varchar(1024));
+replace into t2 values ('abc', '\\\\', 'DC');
+select * from t2;
+drop table t2;

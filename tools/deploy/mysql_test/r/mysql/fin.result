@@ -1,0 +1,186 @@
+drop table if exists fin_influx_extension;
+drop table if exists fin_influx_inst;
+drop table if exists fin_settle_serial_map;
+drop table if exists fin_influx_terminal;
+drop table if exists fin_info_transaction;
+drop table if exists fin_influx_terminal_unique;
+drop table if exists fin_request_no_unique;
+drop table if exists fin_settle_serial_unique;
+drop table if exists fin_influx_transaction;
+drop table if exists idx1_fin_influx_transaction;
+drop table if exists fin_influx_payer;
+drop table if exists idx1_fin_influx_payer;
+drop table if exists idx2_fin_influx_payer;
+create table fin_influx_extension(INFLUX_ID varchar(64) primary key, EXTENSION1 varchar(32), EXTENSION2 varchar(32), REQ_EXTENSION varchar(4000), RES_EXTENSION varchar(4000), GMT_CREATE datetime(6), GMT_MODIFIED datetime(6));
+insert into fin_influx_extension(INFLUX_ID, REQ_EXTENSION, RES_EXTENSION, GMT_CREATE, GMT_MODIFIED) values('0001','req_1', 'res_1', '2012-12-20 12:00', '2013-1-20 13:00');
+select INFLUX_ID,EXTENSION1,EXTENSION2,REQ_EXTENSION,RES_EXTENSION,GMT_CREATE,GMT_MODIFIED from fin_influx_extension where INFLUX_ID = '0001';
+INFLUX_ID	EXTENSION1	EXTENSION2	REQ_EXTENSION	RES_EXTENSION	GMT_CREATE	GMT_MODIFIED
+0001	NULL	NULL	req_1	res_1	2012-12-20 12:00:00.000000	2013-01-20 13:00:00.000000
+create table fin_influx_inst(INFLUX_ID varchar(64) primary key, INST_ID varchar(32), INST_SERIAL_NO varchar(32), INST_REF_NO varchar(32), RESP_AMOUNT int, RESP_CURRENCY char(3), INST_RESULT_CODE  varchar(16), INST_RESULT_DESCRIPTION varchar(256), GMT_SETTLE datetime(6), GMT_RESP datetime(6), GMT_CREATE datetime(6), GMT_MODIFIED datetime(6));
+insert into fin_influx_inst values('0001', '00001', 'serial_no', 'ref_no', 100, '123', 'result_code', 'result_des', '2013-1-20 13:00','2013-1-20 13:00','2013-1-20 13:00','2013-1-20 13:00');
+SELECT INFLUX_ID, INST_ID, INST_SERIAL_NO, INST_REF_NO, RESP_AMOUNT, RESP_CURRENCY, INST_RESULT_CODE, INST_RESULT_DESCRIPTION, GMT_SETTLE, GMT_RESP, GMT_CREATE, GMT_MODIFIED FROM fin_influx_inst  WHERE INFLUX_ID = '0001';
+INFLUX_ID	INST_ID	INST_SERIAL_NO	INST_REF_NO	RESP_AMOUNT	RESP_CURRENCY	INST_RESULT_CODE	INST_RESULT_DESCRIPTION	GMT_SETTLE	GMT_RESP	GMT_CREATE	GMT_MODIFIED
+0001	00001	serial_no	ref_no	100	123	result_code	result_des	2013-01-20 13:00:00.000000	2013-01-20 13:00:00.000000	2013-01-20 13:00:00.000000	2013-01-20 13:00:00.000000
+create table fin_settle_serial_map(INFLUX_ID varchar(64) primary key, SETTLE_SERIAL_NO varchar(64), INST_ID varchar(32), FINANCE_EXCHANGE_CODE varchar(32), GMT_CREATE datetime(6), GMT_MODIFIED datetime(6));
+SELECT FINANCE_EXCHANGE_CODE, SETTLE_SERIAL_NO, INST_ID, INFLUX_ID, GMT_CREATE, GMT_MODIFIED FROM fin_settle_serial_map WHERE   SETTLE_SERIAL_NO = '0001' AND FINANCE_EXCHANGE_CODE = '0001';
+FINANCE_EXCHANGE_CODE	SETTLE_SERIAL_NO	INST_ID	INFLUX_ID	GMT_CREATE	GMT_MODIFIED
+SELECT FINANCE_EXCHANGE_CODE, SETTLE_SERIAL_NO, INST_ID, INFLUX_ID, GMT_CREATE, GMT_MODIFIED FROM fin_settle_serial_map WHERE   SETTLE_SERIAL_NO = '0001';
+FINANCE_EXCHANGE_CODE	SETTLE_SERIAL_NO	INST_ID	INFLUX_ID	GMT_CREATE	GMT_MODIFIED
+SELECT INFLUX_ID FROM fin_settle_serial_map  WHERE FINANCE_EXCHANGE_CODE IN ('EXCHANGECODES') AND SETTLE_SERIAL_NO = '0001';
+INFLUX_ID
+create table fin_influx_terminal(influx_id	varchar(64)  primary key, inst_id	varchar(32), inst_merchant_no	varchar(32), inst_terminal_no	varchar(32), term_batch_no	varchar(6), term_trace_no	varchar(6), rrn	varchar(12), auth_code	varchar(6), gmt_create	datetime, gmt_modified	datetime, finance_exchange_code	varchar(32), inst_account_no	varchar(32), exchange_amount	int, exchange_currency	char(3), extension	varchar(4000));
+select influx_id, inst_id, inst_merchant_no, inst_terminal_no, term_batch_no, term_trace_no, rrn, auth_code, gmt_create, gmt_modified, finance_exchange_code, inst_account_no, exchange_amount, exchange_currency, extension from fin_influx_terminal  where influx_id='0001' and term_trace_no = '123';
+influx_id	inst_id	inst_merchant_no	inst_terminal_no	term_batch_no	term_trace_no	rrn	auth_code	gmt_create	gmt_modified	finance_exchange_code	inst_account_no	exchange_amount	exchange_currency	extension
+create table fin_info_transaction(
+info_id	varchar(64) primary key,
+inst_id	varchar(32),
+business_code	varchar(16),
+sub_business_code	varchar(16),
+exchange_type	varchar(32),
+finance_exchange_code	varchar(32),
+exchange_status	varchar(8),
+request_info	varchar(4000),
+response_info	varchar(4000),
+gmt_send	datetime,
+gmt_res	datetime,
+gmt_create	datetime,
+gmt_modified	datetime,
+result_code	varchar(16),
+result_description	varchar(256),
+inst_result_code	varchar(16),
+inst_result_description	varchar(256)
+);
+create table fin_influx_terminal_unique(
+inst_id	varchar(32),
+inst_merchant_no	varchar(32),
+inst_terminal_no	varchar(32),
+term_batch_no	varchar(6),
+term_trace_no	varchar(6),
+gmt_create	datetime,
+gmt_modified	datetime,
+primary key(inst_id, term_batch_no, inst_merchant_no, term_trace_no, inst_terminal_no)
+);
+create table fin_request_no_unique(
+request_identify	varchar(32),
+request_biz_no	varchar(64),
+gmt_create	datetime,
+gmt_modified	datetime,
+influx_id	varchar(64),
+primary key(request_identify, request_biz_no)
+);
+create table fin_settle_serial_unique(
+finance_exchange_code	varchar(32),
+settle_serial_no	varchar(64),
+gmt_create	datetime,
+gmt_modified	datetime,
+primary key(finance_exchange_code, settle_serial_no)
+);
+create table fin_influx_transaction(
+influx_id	varchar(64) primary key,
+org_influx_id	varchar(64),
+inst_id	varchar(32),
+business_code	varchar(16),
+sub_business_code	varchar(16),
+exchange_type	varchar(32),
+finance_exchange_code	varchar(32),
+settle_serial_no	varchar(64),
+payer_account_no	varchar(32),
+exchange_amount	int,
+exchange_currency	char(3),
+account_amount	int,
+account_currency	char(3),
+settle_amount	int,
+settle_currency	char(3),
+settle_status	varchar(8),
+exchange_status	varchar(8),
+result_code	varchar(16),
+result_description	varchar(256),
+recover_flag	char(1),
+recon_flag	char(1),
+negative_flag	char(1),
+negative_exchange_type	varchar(16),
+request_identify	varchar(32),
+request_biz_no	varchar(64),
+pay_unique_no	varchar(64),
+pay_channel_api	varchar(32),
+inst_channel_api	varchar(32),
+clear_channel	varchar(32),
+biz_identity	varchar(32),
+gmt_submit	datetime,
+gmt_resp	datetime,
+gmt_settle	datetime,
+gmt_create	datetime,
+gmt_modified	datetime
+);
+select influx_id, org_influx_id, inst_id, business_code, sub_business_code, exchange_type, finance_exchange_code, settle_serial_no, payer_account_no, exchange_amount, exchange_currency, account_amount, account_currency, settle_amount, settle_currency, settle_status, exchange_status, result_code, result_description, recover_flag, recon_flag, negative_flag, negative_exchange_type, request_identify, request_biz_no, pay_unique_no, pay_channel_api, inst_channel_api, clear_channel, biz_identity, gmt_submit, gmt_resp, gmt_settle, gmt_create, gmt_modified from fin_influx_transaction where influx_id = '0001';
+influx_id	org_influx_id	inst_id	business_code	sub_business_code	exchange_type	finance_exchange_code	settle_serial_no	payer_account_no	exchange_amount	exchange_currency	account_amount	account_currency	settle_amount	settle_currency	settle_status	exchange_status	result_code	result_description	recover_flag	recon_flag	negative_flag	negative_exchange_type	request_identify	request_biz_no	pay_unique_no	pay_channel_api	inst_channel_api	clear_channel	biz_identity	gmt_submit	gmt_resp	gmt_settle	gmt_create	gmt_modified
+select influx_id, org_influx_id, inst_id, business_code, sub_business_code, exchange_type, finance_exchange_code, settle_serial_no, payer_account_no, exchange_amount, exchange_currency, account_amount, account_currency, settle_amount, settle_currency, settle_status, exchange_status, result_code, result_description, recover_flag, recon_flag, negative_flag, negative_exchange_type, request_identify, request_biz_no, pay_unique_no, pay_channel_api, inst_channel_api, clear_channel, biz_identity, gmt_submit, gmt_resp, gmt_settle, gmt_create, gmt_modified from fin_influx_transaction  where finance_exchange_code = 'ss' and settle_serial_no = '00001';
+influx_id	org_influx_id	inst_id	business_code	sub_business_code	exchange_type	finance_exchange_code	settle_serial_no	payer_account_no	exchange_amount	exchange_currency	account_amount	account_currency	settle_amount	settle_currency	settle_status	exchange_status	result_code	result_description	recover_flag	recon_flag	negative_flag	negative_exchange_type	request_identify	request_biz_no	pay_unique_no	pay_channel_api	inst_channel_api	clear_channel	biz_identity	gmt_submit	gmt_resp	gmt_settle	gmt_create	gmt_modified
+select influx_id, org_influx_id, inst_id, business_code, sub_business_code, exchange_type, finance_exchange_code, settle_serial_no, payer_account_no, exchange_amount, exchange_currency, account_amount, account_currency, settle_amount, settle_currency, settle_status, exchange_status, result_code, result_description, recover_flag, recon_flag, negative_flag, negative_exchange_type, request_identify, request_biz_no, pay_unique_no, pay_channel_api, inst_channel_api, clear_channel, biz_identity, gmt_submit, gmt_resp, gmt_settle, gmt_create, gmt_modified from fin_influx_transaction   where inst_channel_api = 'api' and settle_serial_no = '00001';
+influx_id	org_influx_id	inst_id	business_code	sub_business_code	exchange_type	finance_exchange_code	settle_serial_no	payer_account_no	exchange_amount	exchange_currency	account_amount	account_currency	settle_amount	settle_currency	settle_status	exchange_status	result_code	result_description	recover_flag	recon_flag	negative_flag	negative_exchange_type	request_identify	request_biz_no	pay_unique_no	pay_channel_api	inst_channel_api	clear_channel	biz_identity	gmt_submit	gmt_resp	gmt_settle	gmt_create	gmt_modified
+create table idx1_fin_influx_transaction(
+settle_serial_no	varchar(64),
+finance_exchange_code	varchar(32),
+influx_id	varchar(64),
+inst_channel_api	varchar(32),
+primary key(settle_serial_no,finance_exchange_code,influx_id)
+);
+select * from idx1_fin_influx_transaction where finance_exchange_code = 'sss' and settle_serial_no = 'ss';
+settle_serial_no	finance_exchange_code	influx_id	inst_channel_api
+select * from idx1_fin_influx_transaction where inst_channel_api = 'ss' and settle_serial_no = 'ss';
+settle_serial_no	finance_exchange_code	influx_id	inst_channel_api
+create table fin_influx_payer(
+influx_id	varchar(64) ,
+payer_account_no	varchar(32),
+payer_name	varchar(32),
+inst_account_no	varchar(32),
+inst_account_name	varchar(128),
+card_type	varchar(16),
+card_index	varchar(32),
+issuer	varchar(32),
+agreement_no	varchar(100),
+certificate_type	varchar(64),
+certificate_no	varchar(32),
+mobile_phone	varchar(16),
+pay_tool	varchar(16),
+bill_no	varchar(32),
+bill_type	varchar(8),
+gmt_create	datetime,
+gmt_modified	datetime,
+primary key(inst_account_no, gmt_create, influx_id)
+);
+select influx_id, payer_account_no, payer_name, inst_account_no, inst_account_name, card_type, card_index, issuer, agreement_no, certificate_type, certificate_no, mobile_phone, pay_tool, bill_no, bill_type, gmt_create, gmt_modified from fin_influx_payer where influx_id='0001';
+influx_id	payer_account_no	payer_name	inst_account_no	inst_account_name	card_type	card_index	issuer	agreement_no	certificate_type	certificate_no	mobile_phone	pay_tool	bill_no	bill_type	gmt_create	gmt_modified
+select influx_id, payer_account_no, payer_name, inst_account_no, inst_account_name, card_type, card_index, issuer, agreement_no, certificate_type, certificate_no, mobile_phone, pay_tool, bill_no, bill_type, gmt_create, gmt_modified from fin_influx_payer where bill_no='sss';
+influx_id	payer_account_no	payer_name	inst_account_no	inst_account_name	card_type	card_index	issuer	agreement_no	certificate_type	certificate_no	mobile_phone	pay_tool	bill_no	bill_type	gmt_create	gmt_modified
+select influx_id, payer_account_no, payer_name, inst_account_no, inst_account_name, card_type, card_index, issuer, agreement_no, certificate_type, certificate_no, mobile_phone, pay_tool, bill_no, bill_type, gmt_create, gmt_modified from fin_influx_payer where inst_account_no='0001' and gmt_create>='2012-10-1 23:00:00' and gmt_create<='2012-12-23 23:00:00';
+influx_id	payer_account_no	payer_name	inst_account_no	inst_account_name	card_type	card_index	issuer	agreement_no	certificate_type	certificate_no	mobile_phone	pay_tool	bill_no	bill_type	gmt_create	gmt_modified
+create table idx1_fin_influx_payer (
+bill_no	varchar(32),
+inst_account_no	varchar(32),
+gmt_create	datetime,
+influx_id	varchar(64),
+virtual_col1	int,
+primary key(bill_no,inst_account_no,gmt_create,influx_id)
+);
+create table idx2_fin_influx_payer(
+influx_id	varchar(64),
+inst_account_no	varchar(32),
+gmt_create	datetime,
+virtual_col1	int,
+a               int,
+primary key(influx_id,inst_account_no,gmt_create,virtual_col1)
+);
+drop table fin_influx_extension;
+drop table fin_influx_inst;
+drop table fin_settle_serial_map;
+drop table fin_influx_terminal;
+drop table fin_info_transaction;
+drop table fin_influx_terminal_unique;
+drop table fin_request_no_unique;
+drop table fin_settle_serial_unique;
+drop table fin_influx_transaction;
+drop table idx1_fin_influx_transaction;
+drop table fin_influx_payer;
+drop table idx1_fin_influx_payer;
+drop table idx2_fin_influx_payer;

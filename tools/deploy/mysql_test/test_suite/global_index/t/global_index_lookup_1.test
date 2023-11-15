@@ -1,0 +1,129 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: yuchen.wyc
+#owner group: sql1
+# tags: optimizer, global_index
+--result_format 4
+--explain_protocol 2
+
+--disable_warnings
+drop database if exists muhangtest;
+create database muhangtest;
+use muhangtest;
+--enable_warnings
+
+set ob_enable_plan_cache = off;
+set ob_enable_transformation = false;
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(a int, b int, c int, d int, e int, primary key(a,b,c,d)) partition by hash(b) partitions 2;
+create index gkey on t1(b,c,d) global partition by hash(b) partitions 5;
+--source mysql_test/include/check_all_idx_ok.inc
+--disable_query_log
+--disable_result_log
+insert into t1 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+--enable_query_log
+--enable_result_log
+--sleep 1
+
+--disable_warnings
+drop table if exists t2;
+--enable_warnings
+create table t2(a int, b int, c int, d int, e int, primary key(a,b,c,d)) partition by hash(c+1) partitions 3;
+create index gkey on t2(b,c,d) global partition by hash(b) partitions 5;
+--source mysql_test/include/check_all_idx_ok.inc
+--disable_query_log
+--disable_result_log
+insert into t2 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+--enable_query_log
+--enable_result_log
+--sleep 1
+
+--disable_warnings
+drop table if exists t3;
+--enable_warnings
+create table t3(a int, b int, c int, d int, e int, primary key(a,b,c,d)) partition by hash(b+c) partitions 4;
+create index gkey on t3(b,c,d) global partition by hash(b) partitions 5;
+--source mysql_test/include/check_all_idx_ok.inc
+--disable_query_log
+--disable_result_log
+insert into t3 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+--enable_query_log
+--enable_result_log
+--sleep 1
+
+--disable_warnings
+drop table if exists t4;
+--enable_warnings
+create table t4(a int, b int, c int, d int, e int, primary key(a,b,c,d)) partition by hash(b+c+d) partitions 5;
+create index gkey on t4(b,c,d) global partition by hash(b) partitions 5;
+--source mysql_test/include/check_all_idx_ok.inc
+--disable_query_log
+--disable_result_log
+insert into t4 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+--enable_query_log
+--enable_result_log
+--sleep 1
+
+##     1.2 test key partition
+--disable_warnings
+drop table if exists t5;
+--enable_warnings
+create table t5(a int, b int, c int, d int, e int, primary key(a,b,c,d)) partition by key(b) partitions 2;
+create index gkey on t5(b,c,d) global partition by hash(b) partitions 5;
+--source mysql_test/include/check_all_idx_ok.inc
+--disable_query_log
+--disable_result_log
+insert into t5 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+--enable_query_log
+--enable_result_log
+--sleep 1
+
+use muhangtest;
+
+## build tables
+
+##     part one 测试各种分区方式下，能否正确的将index rowkey发送到正确的主表分区。
+##     注意，目前list column分区相关的case插入可能会出现ERROR 6002 (40000): Transaction rollbacked， 这里需要被修复.
+##     part tow 测试多轮的读取是否会出错
+##     part three 生成列
+
+##     part one 
+##     1.1 test hash partition
+select /*+index(t1 gkey)*/ * from t1 where a in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t1 gkey)*/ * from t1 where b in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t1 gkey)*/ * from t1 where (c,b) in ((1,1),(2,2),(3,3),(4,4),(5,5)) order by a,b,c,d;
+select /*+index(t1 gkey)*/ * from t1 where (c,d,b) in ((1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5)) order by a,b,c,d;
+
+select /*+index(t2 gkey)*/ * from t2 where a in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t2 gkey)*/ * from t2 where b in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t2 gkey)*/ * from t2 where (c,b) in ((1,1),(2,2),(3,3),(4,4),(5,5)) order by a,b,c,d;
+select /*+index(t2 gkey)*/ * from t2 where (c,d,b) in ((1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5)) order by a,b,c,d;
+
+select /*+index(t3 gkey)*/ * from t3 where a in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t3 gkey)*/ * from t3 where b in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t3 gkey)*/ * from t3 where (c,b) in ((1,1),(2,2),(3,3),(4,4),(5,5)) order by a,b,c,d;
+select /*+index(t3 gkey)*/ * from t3 where (c,d,b) in ((1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5)) order by a,b,c,d;
+
+select /*+index(t4 gkey)*/ * from t4 where a in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t4 gkey)*/ * from t4 where b in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t4 gkey)*/ * from t4 where (c,b) in ((1,1),(2,2),(3,3),(4,4),(5,5)) order by a,b,c,d;
+select /*+index(t4 gkey)*/ * from t4 where (c,d,b) in ((1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5)) order by a,b,c,d;
+
+select /*+index(t5 gkey)*/ * from t5 where a in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t5 gkey)*/ * from t5 where b in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t5 gkey)*/ * from t5 where (c,b) in ((1,1),(2,2),(3,3),(4,4),(5,5)) order by a,b,c,d;
+select /*+index(t5 gkey)*/ * from t5 where (c,d,b) in ((1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5)) order by a,b,c,d;
+
+drop table t1;
+drop table t2;
+create table t1(a int, b int);
+create table t2(a int primary key, b int, c int, d int) partition by hash(a) partitions 2;
+create index i1 on t2(b) global;
+insert into t1 values(1, 1), (2, 2);
+insert into t2 values(1, 1, 1, 1), (3, 3, 3, 3);
+select /*+no_rewrite, leading(t1)*/ * from t1 where exists (select /*+index(t2 i1)*/ 1 from t2 where t1.b=t2.b and t2.c>0);
+drop database muhangtest;

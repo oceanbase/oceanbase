@@ -1,0 +1,205 @@
+# owner: weixiaoxian.wxx
+# owner group: transaction
+# test_no: 04003
+# tags: 4.x dup table
+# description: test basic add and remove duplicate tablet
+
+## build connect
+connect (obsys, $OBMYSQL_MS0, root@sys, "", oceanbase, $OBMYSQL_PORT);
+
+connection obsys;
+--disable_warnings
+--disable_query_log
+--source mysql_test/include/check_tenant_sync.inc
+--enable_query_log
+--enable_warnings
+
+let $cpu = 1;
+let $memory = '2G';
+
+--disable_query_log
+--disable_warnings
+drop tenant if exists duptable_tenant1 force;
+DROP RESOURCE POOL IF EXISTS duptable_pool1;
+DROP RESOURCE UNIT IF EXISTS duptable_unit1;
+--enable_warnings
+
+sleep 5;
+
+eval CREATE RESOURCE UNIT duptable_unit1 MAX_CPU=$cpu, MEMORY_SIZE=$memory;
+eval CREATE RESOURCE POOL duptable_pool1 UNIT='duptable_unit1', UNIT_NUM=1, ZONE_LIST=('zone1', 'zone2');
+CREATE TENANT duptable_tenant1 REPLICA_NUM = 2, RESOURCE_POOL_LIST = ('duptable_pool1') set ob_tcp_invited_nodes='%', ob_compatibility_mode='mysql', lower_case_table_names = 0;
+alter tenant duptable_tenant1 set variables ob_tcp_invited_nodes='%';
+--enable_query_log
+
+## set errsim to invoke gc
+alter system set_tp tp_name = ERRSIM_DUP_TABLE_GC_RIGHT_NOW, error_code = 4016, frequency = 0;
+sleep 1;
+
+alter system set_tp tp_name = ERRSIM_DUP_TABLE_GC_RIGHT_NOW, error_code = 4016, frequency = 1;
+
+
+
+####### begin test dup table
+connect (conn0,$OBMYSQL_MS0,root@duptable_tenant1,,test,$OBMYSQL_PORT);
+connect (conn1,$OBMYSQL_MS0,root@duptable_tenant1,,test,$OBMYSQL_PORT);
+connection conn0;
+
+## create dup table
+create table dup_t1 (c1 int, c2 int, c3 int, primary key(c1, c2)) duplicate_scope='cluster';
+create table dup_t2 (d1 int, d2 int, d3 int, primary key(d1, d2)) duplicate_scope='cluster';
+
+## create partition dup table
+create table dup_t3 (d1 int, d2 int, d3 int, primary key(d1)) duplicate_scope='cluster' PARTITION BY HASH(d1) PARTITIONS 5;
+create table dup_t4 (d1 int, d2 int, d3 int, primary key(d1)) duplicate_scope='cluster' PARTITION BY HASH(d1) PARTITIONS 30;
+
+## create table
+create table t1 (c1 int, c2 int, c3 int, primary key(c1, c2));
+create table t2 (d1 int, d2 int, d3 int, primary key(d1, d2));
+
+
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table t1;
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table t2;
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table dup_t1;
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table dup_t2;
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table dup_t3;
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table dup_t4;
+
+sleep 15;
+
+insert into t1 values(1, 1, 1);
+insert into t1 values(2, 2, 2);
+insert into t1 values(3, 3, 3);
+insert into t2 values(1, 1, 1);
+insert into t2 values(2, 2, 2);
+insert into t2 values(4, 4, 4);
+
+insert into dup_t1 select * from t1;
+insert into dup_t2 select * from t2;
+insert into dup_t3 select * from t1;
+insert into dup_t4 select * from t2;
+
+select * from t1;
+select * from dup_t1;
+select * from t2;
+select * from dup_t2;
+
+select * from dup_t3;
+select * from dup_t4;
+
+connection obsys;
+let $tenant_id = query_get_value(select tenant_id from __all_tenant where tenant_name = 'duptable_tenant1', tenant_id, 1);
+let $database_id = query_get_value(select database_id from __all_virtual_database where database_name = 'test' and tenant_id = $tenant_id, database_id, 1); 
+
+## check duplicate scope
+--disable_query_log
+eval select duplicate_scope from __all_virtual_table  where table_name = 'dup_t1' and tenant_id = $tenant_id and database_id = $database_id;
+eval select duplicate_scope from __all_virtual_table  where table_name = 'dup_t2' and tenant_id = $tenant_id and database_id = $database_id;
+eval select duplicate_scope from __all_virtual_table  where table_name = 'dup_t3' and tenant_id = $tenant_id and database_id = $database_id;
+eval select duplicate_scope from __all_virtual_table  where table_name = 'dup_t4' and tenant_id = $tenant_id and database_id = $database_id;
+eval select duplicate_scope from __all_virtual_table  where table_name = 't1' and tenant_id = $tenant_id and database_id = $database_id;
+eval select duplicate_scope from __all_virtual_table  where table_name = 't2' and tenant_id = $tenant_id and database_id = $database_id;
+--enable_query_log
+
+# --echo switch leader
+
+## get table id
+#############
+#   /* for debug */ select table_id from oceanbase.__all_virtual_table where table_name = 'dup_t1' or table_name = 'dup_t2' or table_name = 'dup_t3' or table_name = 'dup_t4'and tenant_id = 1004;
+#############
+
+let $t1_table_id = query_get_value(select table_id from __all_virtual_table where table_name = 't1' and tenant_id = $tenant_id and database_id = $database_id, table_id, 1);
+let $t2_table_id = query_get_value(select table_id from __all_virtual_table where table_name = 't2' and tenant_id = $tenant_id and database_id = $database_id, table_id, 1);
+let $dup_t1_table_id = query_get_value(select table_id from __all_virtual_table where table_name = 'dup_t1' and tenant_id = $tenant_id and database_id = $database_id, table_id, 1);
+let $dup_t2_table_id = query_get_value(select table_id from __all_virtual_table where table_name = 'dup_t2' and tenant_id = $tenant_id and database_id = $database_id, table_id, 1);
+let $dup_t3_table_id = query_get_value(select table_id from __all_virtual_table where table_name = 'dup_t3' and tenant_id = $tenant_id and database_id = $database_id, table_id, 1);
+let $dup_t4_table_id = query_get_value(select table_id from __all_virtual_table where table_name = 'dup_t4' and tenant_id = $tenant_id and database_id = $database_id, table_id, 1);
+
+## get ls id of dup table
+let $dup_t1_ls_id = query_get_value(select LS_ID from __all_virtual_tablet_to_ls  where table_id = $dup_t1_table_id and tenant_id = $tenant_id, LS_ID, 1);
+let $dup_t2_ls_id = query_get_value(select LS_ID from __all_virtual_tablet_to_ls  where table_id = $dup_t2_table_id and tenant_id = $tenant_id, LS_ID, 1);
+let $dup_t3_ls_id = query_get_value(select LS_ID from __all_virtual_tablet_to_ls  where table_id = $dup_t3_table_id and tenant_id = $tenant_id, LS_ID, 1);
+let $dup_t4_ls_id = query_get_value(select LS_ID from __all_virtual_tablet_to_ls  where table_id = $dup_t4_table_id and tenant_id = $tenant_id, LS_ID, 1);
+
+## get the ip:port of dup table follower 
+let $dup_t1_follow_ip = query_get_value(select SVR_IP from __all_virtual_ls_info where tenant_id = $tenant_id and ls_id = $dup_t1_ls_id and ls_state = 'FOLLOWER' ORDER BY SVR_PORT, SVR_IP, 1);
+let $dup_t1_follow_port = query_get_value(select SVR_PORT from __all_virtual_ls_info where tenant_id = $tenant_id and ls_id = $dup_t1_ls_id and ls_state = 'FOLLOWER' ORDER BY SVR_PORT, SVR_PORT, 1);
+
+## get the ip:port of dup table leader
+let $dup_t1_leader_ip = query_get_value(select SVR_IP from  __all_virtual_ls_info where tenant_id = $tenant_id and ls_state = 'LEADER' and ls_id = $dup_t1_ls_id, SVR_IP, 1);
+let $dup_t1_leader_port = query_get_value(select SVR_PORT from __all_virtual_ls_info where tenant_id = $tenant_id and ls_state = 'LEADER' and ls_id = $dup_t1_ls_id, SVR_PORT, 1);
+
+connection conn0;
+## check all_tablet_to_ls;
+--disable_query_log
+eval select count(*) from oceanbase.__all_tablet_to_ls where ls_id= $dup_t1_ls_id and table_id = $dup_t1_table_id;
+eval select count(*) from oceanbase.__all_tablet_to_ls where ls_id= $dup_t2_ls_id and table_id = $dup_t2_table_id;
+eval select count(*) from oceanbase.__all_tablet_to_ls where ls_id= $dup_t3_ls_id and table_id = $dup_t3_table_id;
+eval select count(*) from oceanbase.__all_tablet_to_ls where ls_id= $dup_t4_ls_id and table_id = $dup_t4_table_id;
+--enable_query_log
+
+## check tablet_set hold all dup tablets
+--disable_query_log
+# eval select sum(b.count) = count(a.tablet_id) from oceanbase.__all_tablet_to_ls as a, oceanbase.__all_virtual_dup_ls_tablet_set as b where b.ls_state = 'LEADER' and a.table_id = $dup_t1_table_id
+# or a.table_id = $dup_t2_table_id or a.table_id = $dup_t3_table_id or a.table_id = $dup_t4_table_id;
+
+## check tabelt_set count follower equal to leader
+# eval select sum(count) from oceanbase.__all_virtual_dup_ls_tablet_set where attribute = 'READABLE' and  ls_state = 'LEADER';
+# eval select sum(count) from oceanbase.__all_virtual_dup_ls_tablet_set where attribute = 'READABLE' and  ls_state = 'FOLLOWER' limit 1;
+
+## check readable_set, follower uid equal to leader
+eval select count(*) from (select unique_id not in
+(select unique_id from oceanbase.__all_virtual_dup_ls_tablet_set 
+where ls_state='LEADER' and attribute ='READABLE') as res 
+from oceanbase.__all_virtual_dup_ls_tablet_set  
+where ls_state='FOLLOWER' and attribute='READABLE' and
+svr_ip = '$dup_t1_follow_ip' and SVR_PORT = '$dup_t1_follow_port') 
+where res <> FALSE;
+--enable_query_log
+
+connection obsys;
+## switch leader to dup table follower server
+--disable_query_log
+eval alter system switch replica leader ls=$dup_t1_ls_id server='$dup_t1_follow_ip:$dup_t1_follow_port' tenant='duptable_tenant1';
+--enable_query_log
+
+## sleep 10s wait for switch 
+sleep 10;
+
+## check switch leader succ
+--disable_query_log
+eval select ls_state from __all_virtual_ls_info where ls_id = $dup_t1_ls_id and SVR_IP = '$dup_t1_follow_ip' and SVR_PORT = '$dup_t1_follow_port' and tenant_id = $tenant_id;
+--enable_query_log
+
+sleep 10;
+
+connection conn0;
+## check all_tablet_to_ls;
+--disable_query_log
+## check tabelt_set count follower equal to leader in mysql tenant
+eval select sum(count) from oceanbase.__all_virtual_dup_ls_tablet_set where attribute = 'READABLE' and  ls_state = 'LEADER';
+eval select sum(count) from oceanbase.__all_virtual_dup_ls_tablet_set where attribute = 'READABLE' and  svr_ip = '$dup_t1_leader_ip' and svr_port = '$dup_t1_leader_port';
+
+## check follower readable_set uid equal to leader
+eval select count(*) from (select unique_id not in 
+(select unique_id from oceanbase.__all_virtual_dup_ls_tablet_set 
+where ls_state='LEADER' and attribute ='READABLE') as res 
+from oceanbase.__all_virtual_dup_ls_tablet_set  
+where ls_state='FOLLOWER' and attribute='READABLE' and
+svr_ip = '$dup_t1_leader_ip' and SVR_PORT = '$dup_t1_leader_port') 
+where res <> FALSE;
+--enable_query_log
+
+connection obsys;
+## clean tenant
+drop tenant duptable_tenant1 force;
+
+disconnect conn0;
+disconnect conn1;
+disconnect obsys;

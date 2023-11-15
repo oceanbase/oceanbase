@@ -1,0 +1,123 @@
+#owner: dachuan.sdc
+#tags: optimizer
+
+--result_format 4
+--enable_sorted_result
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection conn_admin;
+
+alter system flush plan cache global;
+--sleep 2
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+select neg(1) from dual;
+select neg(-1) from dual;
+select neg(1.2324) from dual;
+select neg(-1.2324) from dual;
+select neg('-1') from dual;
+explain select neg('-1') from dual;
+select neg('1.234') from dual;
+
+select neg(null) from dual;
+select neg('-abcd');
+select neg('2014-10-09 10:00:00');
+
+select neg(-9223372036854775808);
+select neg(-9999999999999999999999);
+select neg(10/0);
+select neg(9999999999999999999999);
+select neg(true);
+select neg(false);
+
+
+connection conn_admin;
+
+--sleep 2
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+--disable_warnings
+drop table if exists t;
+--enable_warnings
+
+create table t (t1 tinyint,
+                t2 smallint,
+                t3 mediumint,
+                t4 integer,
+                t5 bigint,
+                t6 tinyint unsigned,
+                t7 smallint unsigned,
+                t8 mediumint unsigned,
+                t9 integer unsigned,
+                t10 bigint unsigned,
+                t11 float,
+                t12 float unsigned,
+                t13 double,
+                t14 double unsigned,
+                t15 number,
+                t16 number unsigned,
+                t17 datetime,
+                t18 timestamp,
+                t19 date,
+                t20 time,
+                t21 year,
+                t22 varchar(255),
+                t23 char(255),
+                t24 tinytext,
+                t25 mediumtext,
+                t26 longtext,
+                t27 bit,
+                t28 enum('a', 'b', 'c'),
+                t29 set('a', 'b', 'c'));
+
+insert into t values (1, -1, 1, -1, 1, 1, 1, 1, 1, 1, -0.2, 0.3, 0.4, 0.5, -0.6, 0.7,
+                     '1993-03-20', '1993-03-20', '1993-03-20', '10:10:10', '1993', '0.8', '0.9', '1.0', '1.1',
+                     '1.2', 1, 'b', 'b');
+insert into t(t1) values (null);
+
+connection conn_admin;
+
+--sleep 2
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+let $cnt = 1;
+--disable_abort_on_error
+while ($cnt <= 29)
+{
+  eval select neg(t$cnt) from t;
+  eval explain select neg(t$cnt) from t;
+  inc $cnt;
+}
+
+connection conn_admin;
+set ob_enable_plan_cache = 0;
+select --9223372036854775808, ---9223372036854775808, ----9223372036854775808;
+
+alter system flush plan cache global;
+set ob_enable_plan_cache = 1;
+select --9223372036854775808, ---9223372036854775808, ----9223372036854775808;
+
+--disable_warnings
+drop view if exists v1;
+--enable_warnings
+create view v1 as select --9223372036854775808 c1, ---9223372036854775808 c2, ----9223372036854775808 c3;
+--echo // bug here: 视图的列的类型应该是decimal，应该是因为create view as路径上没有开新引擎开关
+desc v1;
+drop view v1;
+create view v1 as select -neg(-9223372036854775808) c1, --neg(-9223372036854775808) c2, ---neg(-9223372036854775808) c3;
+desc v1;
+drop view v1;
+
+--disable_warnings
+drop table if exists tt;
+--enable_warnings
+create table tt(c1 bigint);
+insert into tt values(-9223372036854775808);
+select c1, -c1 from tt; 
+--echo // MySQL will give error, OB return c1. two neg will be removed when resolve neg node
+select c1, --c1 from tt;
+select c1, ---c1 from tt;
+
+--sleep 2

@@ -1,0 +1,56 @@
+# owner: fenggu.yh
+# description: check correctness of cs white filter when executing const dict encoding
+ 
+--disable_query_log
+set global max_allowed_packet=60000000;
+set global ob_sql_work_area_percentage=80;
+disconnect default;
+sleep 1;
+connect (default,$OBMYSQL_MS0,admin@mysql,admin,test,$OBMYSQL_PORT);
+set @@recyclebin = off;
+set ob_query_timeout=1000000000;
+set ob_trx_timeout=1000000000;
+ 
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+ 
+create table t1 (a int auto_increment primary key, b smallint(6), c varchar(10)) row_format = compressed block_size = 2048 with column group for all columns, each column;
+--let $loop=1000
+while($loop > 0)
+{
+  insert into t1 (b, c) values(0, 'a'),(0, 'a'),(0, 'a'),(0, 'a'),(0, 'a'),(0, 'a'),(0, 'a'),(0, 'a'),(0, 'a'),(0, 'a'),
+    (0, 'a'),(0, 'a'),(0, 'a'),(0, 'a'),(0, 'a'),(0, 'a'),(0, 'a'),(0, 'a'),(0, 'a'),(0, 'a'),
+    (0, 'a'),(0, 'a'),(0, 'a'),(0, 'a'),(0, 'a'),(0, 'a'),(0, 'a'),(0, 'a'),(0, 'a'),(0, 'a');
+  dec $loop;
+}
+--let $loop=200
+while($loop > 0)
+{
+  insert into t1 (b, c) values(1, 'x'),(11, 'x'),(21, 'x'),(31, 'x'),(41, 'x'),(51, 'y'),(61, 'y'),(71, 'y'),(81, 'y'),(91, 'y');
+  dec $loop;
+}
+ 
+--disable_query_log
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection obsys;
+--enable_query_log
+ 
+alter system major freeze tenant all;
+--source mysql_test/include/wait_daily_merge.inc
+ 
+select count(1) from t1;
+select count(1) from t1 where b <> 0;
+select count(1) from t1 where b <> 0 and b <> 11;
+select count(1) from t1 where b > 1 and b <> 11;
+select count(1) from t1 where c = 'a';
+select count(1) from t1 where c = 'x';
+select count(1) from t1 where c <> 'a';
+ 
+#drop table t1;
+ 
+--disable_query_log
+set global max_allowed_packet=16777216;
+set global ob_sql_work_area_percentage=5;
+set @@recyclebin = on;
+--enable_query_log

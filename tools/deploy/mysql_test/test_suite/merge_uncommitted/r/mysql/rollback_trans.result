@@ -1,0 +1,203 @@
+set GLOBAL ob_query_timeout = 1000000000000;
+set GLOBAL ob_trx_timeout = 10000000000000;
+set GLOBAL ob_trx_idle_timeout = 10000000000;
+alter system set minor_compact_trigger = 10;
+drop table if exists test_rollback_trans_t;
+create table test_rollback_trans_t(num int, str varchar(50), tag int);
+begin;
+insert into test_rollback_trans_t value(1, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_trans_t value(2, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_trans_t value(3, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_trans_t value(4, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_trans_t value(5, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_trans_t value(6, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_trans_t value(7, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_trans_t value(8, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_trans_t value(9, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_trans_t value(10, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_trans_t value(11, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_trans_t value(12, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_trans_t value(13, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_trans_t value(14, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_trans_t value(15, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_trans_t value(16, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_trans_t value(17, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_trans_t value(18, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_trans_t value(19, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_trans_t value(20, 'Hello OceanBase & Happy New Year', 1);
+insert into test_rollback_trans_t value(21, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(22, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(23, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(24, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(25, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(26, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(27, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(28, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(29, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(30, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(31, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(32, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(33, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(34, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(35, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(36, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(37, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(38, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(39, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(40, 'Hello OceanBase & Happy New Year', 2);
+update test_rollback_trans_t set tag = (num + tag) * 10;
+select * from test_rollback_trans_t;
+num	str	tag
+select * from test_rollback_trans_t;
+num	str	tag
+1	Hello OceanBase & Happy New Year	20
+2	Hello OceanBase & Happy New Year	30
+3	Hello OceanBase & Happy New Year	40
+4	Hello OceanBase & Happy New Year	50
+5	Hello OceanBase & Happy New Year	60
+6	Hello OceanBase & Happy New Year	70
+7	Hello OceanBase & Happy New Year	80
+8	Hello OceanBase & Happy New Year	90
+9	Hello OceanBase & Happy New Year	100
+10	Hello OceanBase & Happy New Year	110
+11	Hello OceanBase & Happy New Year	120
+12	Hello OceanBase & Happy New Year	130
+13	Hello OceanBase & Happy New Year	140
+14	Hello OceanBase & Happy New Year	150
+15	Hello OceanBase & Happy New Year	160
+16	Hello OceanBase & Happy New Year	170
+17	Hello OceanBase & Happy New Year	180
+18	Hello OceanBase & Happy New Year	190
+19	Hello OceanBase & Happy New Year	200
+20	Hello OceanBase & Happy New Year	210
+21	Hello OceanBase & Happy New Year	230
+22	Hello OceanBase & Happy New Year	240
+23	Hello OceanBase & Happy New Year	250
+24	Hello OceanBase & Happy New Year	260
+25	Hello OceanBase & Happy New Year	270
+26	Hello OceanBase & Happy New Year	280
+27	Hello OceanBase & Happy New Year	290
+28	Hello OceanBase & Happy New Year	300
+29	Hello OceanBase & Happy New Year	310
+30	Hello OceanBase & Happy New Year	320
+31	Hello OceanBase & Happy New Year	330
+32	Hello OceanBase & Happy New Year	340
+33	Hello OceanBase & Happy New Year	350
+34	Hello OceanBase & Happy New Year	360
+35	Hello OceanBase & Happy New Year	370
+36	Hello OceanBase & Happy New Year	380
+37	Hello OceanBase & Happy New Year	390
+38	Hello OceanBase & Happy New Year	400
+39	Hello OceanBase & Happy New Year	410
+40	Hello OceanBase & Happy New Year	420
+alter system set minor_compact_trigger = 1;
+select * from test_rollback_trans_t;
+num	str	tag
+1	Hello OceanBase & Happy New Year	20
+2	Hello OceanBase & Happy New Year	30
+3	Hello OceanBase & Happy New Year	40
+4	Hello OceanBase & Happy New Year	50
+5	Hello OceanBase & Happy New Year	60
+6	Hello OceanBase & Happy New Year	70
+7	Hello OceanBase & Happy New Year	80
+8	Hello OceanBase & Happy New Year	90
+9	Hello OceanBase & Happy New Year	100
+10	Hello OceanBase & Happy New Year	110
+11	Hello OceanBase & Happy New Year	120
+12	Hello OceanBase & Happy New Year	130
+13	Hello OceanBase & Happy New Year	140
+14	Hello OceanBase & Happy New Year	150
+15	Hello OceanBase & Happy New Year	160
+16	Hello OceanBase & Happy New Year	170
+17	Hello OceanBase & Happy New Year	180
+18	Hello OceanBase & Happy New Year	190
+19	Hello OceanBase & Happy New Year	200
+20	Hello OceanBase & Happy New Year	210
+21	Hello OceanBase & Happy New Year	230
+22	Hello OceanBase & Happy New Year	240
+23	Hello OceanBase & Happy New Year	250
+24	Hello OceanBase & Happy New Year	260
+25	Hello OceanBase & Happy New Year	270
+26	Hello OceanBase & Happy New Year	280
+27	Hello OceanBase & Happy New Year	290
+28	Hello OceanBase & Happy New Year	300
+29	Hello OceanBase & Happy New Year	310
+30	Hello OceanBase & Happy New Year	320
+31	Hello OceanBase & Happy New Year	330
+32	Hello OceanBase & Happy New Year	340
+33	Hello OceanBase & Happy New Year	350
+34	Hello OceanBase & Happy New Year	360
+35	Hello OceanBase & Happy New Year	370
+36	Hello OceanBase & Happy New Year	380
+37	Hello OceanBase & Happy New Year	390
+38	Hello OceanBase & Happy New Year	400
+39	Hello OceanBase & Happy New Year	410
+40	Hello OceanBase & Happy New Year	420
+ROLLBACK;
+select * from test_rollback_trans_t;
+num	str	tag
+select * from test_rollback_trans_t;
+num	str	tag
+insert into test_rollback_trans_t value(41, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(42, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(43, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(44, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(45, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(46, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(47, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(48, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(49, 'Hello OceanBase & Happy New Year', 2);
+insert into test_rollback_trans_t value(50, 'Hello OceanBase & Happy New Year', 2);
+begin;
+update test_rollback_trans_t set tag = (num + tag) * 10;
+select * from test_rollback_trans_t;
+num	str	tag
+41	Hello OceanBase & Happy New Year	2
+42	Hello OceanBase & Happy New Year	2
+43	Hello OceanBase & Happy New Year	2
+44	Hello OceanBase & Happy New Year	2
+45	Hello OceanBase & Happy New Year	2
+46	Hello OceanBase & Happy New Year	2
+47	Hello OceanBase & Happy New Year	2
+48	Hello OceanBase & Happy New Year	2
+49	Hello OceanBase & Happy New Year	2
+50	Hello OceanBase & Happy New Year	2
+select * from test_rollback_trans_t;
+num	str	tag
+41	Hello OceanBase & Happy New Year	430
+42	Hello OceanBase & Happy New Year	440
+43	Hello OceanBase & Happy New Year	450
+44	Hello OceanBase & Happy New Year	460
+45	Hello OceanBase & Happy New Year	470
+46	Hello OceanBase & Happy New Year	480
+47	Hello OceanBase & Happy New Year	490
+48	Hello OceanBase & Happy New Year	500
+49	Hello OceanBase & Happy New Year	510
+50	Hello OceanBase & Happy New Year	520
+ROLLBACK;
+select * from test_rollback_trans_t;
+num	str	tag
+41	Hello OceanBase & Happy New Year	2
+42	Hello OceanBase & Happy New Year	2
+43	Hello OceanBase & Happy New Year	2
+44	Hello OceanBase & Happy New Year	2
+45	Hello OceanBase & Happy New Year	2
+46	Hello OceanBase & Happy New Year	2
+47	Hello OceanBase & Happy New Year	2
+48	Hello OceanBase & Happy New Year	2
+49	Hello OceanBase & Happy New Year	2
+50	Hello OceanBase & Happy New Year	2
+select * from test_rollback_trans_t;
+num	str	tag
+41	Hello OceanBase & Happy New Year	2
+42	Hello OceanBase & Happy New Year	2
+43	Hello OceanBase & Happy New Year	2
+44	Hello OceanBase & Happy New Year	2
+45	Hello OceanBase & Happy New Year	2
+46	Hello OceanBase & Happy New Year	2
+47	Hello OceanBase & Happy New Year	2
+48	Hello OceanBase & Happy New Year	2
+49	Hello OceanBase & Happy New Year	2
+50	Hello OceanBase & Happy New Year	2
+drop table test_rollback_trans_t;
+alter system set minor_compact_trigger = 2;

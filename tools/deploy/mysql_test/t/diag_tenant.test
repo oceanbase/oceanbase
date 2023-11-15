@@ -1,0 +1,14 @@
+# owner: fengshuo.fs
+# owner group: VOS
+# description: 简单测试diagnose租户mysql模式下可用性
+
+let $__tenant_name__ = 'mysql';
+--source mysql_test/include/get_tenant_server.inc
+
+connect (conn_sys,$TE_SERVER_IP,sys@diag,,test,$TE_SERVER_PORT);
+connection conn_sys;
+select 1 from dual;
+
+connect (conn_mysql,$TE_SERVER_IP,mysql@diag,,test,$TE_SERVER_PORT);
+connection conn_mysql;
+select 1 from dual;

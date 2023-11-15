@@ -1,0 +1,57 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#### owner: kaizhan.dkz
+#### owner group: sql3
+#### description: Test of boolean operations with NULL
+--enable_abort_on_error
+#
+# Test of boolean operations with NULL
+#
+
+--disable_warnings
+DROP TABLE IF EXISTS a1;
+--enable_warnings
+
+#SELECT IF(NULL AND 1, 1, 2), IF(1 AND NULL, 1, 2);
+SELECT NULL AND 1, 1 AND NULL, 0 AND NULL, NULL and 0;
+
+create table a1 (rowkey_suffix int primary key, price int);
+insert into a1(rowkey_suffix, price) values (0,0),(1,1),(2,2);
+#SELECT * FROM a1 WHERE IF(price AND 1, 0, 1);
+#SELECT * FROM a1 WHERE IF(1 AND price, 0, 1);
+SELECT * FROM a1 where NOT(price AND 1);
+SELECT * FROM a1 where NOT(1 AND price);
+SELECT * FROM a1 where (price AND 1)=false;
+SELECT * FROM a1 where (1 AND price)=false;
+SELECT * FROM a1 where (1 AND price)=true;
+SELECT * FROM a1 where (1 AND price) IS NULL;
+
+# WL#638 - Behaviour of NOT does not follow SQL specification
+#set sql_mode='high_not_precedence';
+select * from a1 where not price between 2 and 3;
+#set sql_mode=default;
+select * from a1 where not price between 2 and 3;
+
+# SQL boolean tests
+select rowkey_suffix, price is false, price is true, price is unknown from a1;
+select rowkey_suffix, price is not false, price is not true, price is not unknown from a1;
+
+# Verify that NULL optimisation works in AND clause:
+#SET @a=0, @b=0;
+#SELECT * FROM a1 WHERE NULL AND (@a:=@a+1);
+#SELECT * FROM a1 WHERE NOT(a>=0 AND NULL AND (@b:=@b+1));
+#SELECT * FROM a1 WHERE a=2 OR (NULL AND (@a:=@a+1));
+#SELECT * FROM a1 WHERE NOT(a=2 OR (NULL AND (@b:=@b+1)));
+DROP TABLE a1;
+
+#
+## http://bugfree.corp.taobao.com/bug/200762  
+#
+--disable_warnings
+DROP TABLE IF EXISTS ob_new_sql_test;
+--enable_warnings
+create  table  ob_new_sql_test ( c0 varchar(20), c1 int primary key);
+insert into ob_new_sql_test (c0, c1) values ('hello', 0);
+insert into ob_new_sql_test (c0, c1) values ('hello', 1);
+drop table ob_new_sql_test;

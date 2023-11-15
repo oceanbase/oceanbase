@@ -1,0 +1,60 @@
+set GLOBAL ob_query_timeout = 1000000000000;
+set GLOBAL ob_trx_timeout = 1000000000000;
+drop table if exists test_uncommitted_trx_minor_merge;
+create table test_uncommitted_trx_minor_merge(a int primary key, b int, key ib(b));
+begin;
+insert into test_uncommitted_trx_minor_merge value(1, 1);
+insert into test_uncommitted_trx_minor_merge value(2, 2);
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+select * from test_uncommitted_trx_minor_merge where a = 1;
+a	b
+select * from test_uncommitted_trx_minor_merge where a = 1;
+a	b
+1	1
+select * from test_uncommitted_trx_minor_merge where a = 1;
+a	b
+update test_uncommitted_trx_minor_merge set b = 10 where a = 1;
+commit;
+select * from test_uncommitted_trx_minor_merge where a = 1;
+a	b
+1	10
+select * from test_uncommitted_trx_minor_merge where a = 2;
+a	b
+2	2
+select * from test_uncommitted_trx_minor_merge where a = 1;
+a	b
+1	10
+select * from test_uncommitted_trx_minor_merge where a = 2;
+a	b
+2	2
+insert into test_uncommitted_trx_minor_merge values (3,3);
+begin;
+select * from test_uncommitted_trx_minor_merge where a = 3 for update;
+a	b
+3	3
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+set ob_query_timeout = 1000000;
+set ob_trx_timeout = 1000000;
+select * from test_uncommitted_trx_minor_merge where a = 3 for update nowait;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+set ob_query_timeout = 1000000000000;
+set ob_trx_timeout = 1000000000000;
+select * from test_uncommitted_trx_minor_merge where a = 3;
+a	b
+3	3
+update test_uncommitted_trx_minor_merge set b = 30 where a = 3;
+select * from test_uncommitted_trx_minor_merge where a = 3;
+a	b
+3	30
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+rollback;
+select * from test_uncommitted_trx_minor_merge where a = 3;
+a	b
+3	3
+drop table test_uncommitted_trx_minor_merge;

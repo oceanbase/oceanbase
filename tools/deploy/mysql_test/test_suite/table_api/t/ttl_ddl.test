@@ -1,0 +1,167 @@
+#owner: shenyunlong.syl
+#owner group: shenzhen
+
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+connection default;
+
+### test kv_attributes syntax
+--disable_warnings
+drop table if exists test_kv_attr;
+--error 1235
+CREATE TABLE test_kv_attr(
+    K varbinary(1024) NOT NULL,
+    Q varbinary(256)  NOT NULL,
+    T bigint NOT NULL,
+    V varbinary(1024) DEFAULT NULL,
+    PRIMARY KEY (K, Q, T)
+) kv_attributes ='{"HColumnDescriptor": {"TimeToLive": 5, "MaxVersions": 2}}' partition by key(K) partitions 3;
+
+--error 1210
+CREATE TABLE test_kv_attr(
+    K varbinary(1024) NOT NULL,
+    Q varbinary(256)  NOT NULL,
+    T bigint NOT NULL,
+    V varbinary(1024) DEFAULT NULL,
+    PRIMARY KEY (K, Q, T)
+) kv_attributes ='{}' partition by key(K) partitions 3;
+
+--error 1235
+CREATE TABLE test_kv_attr(
+    K varbinary(1024) NOT NULL,
+    Q varbinary(256)  NOT NULL,
+    T bigint NOT NULL,
+    V varbinary(1024) DEFAULT NULL,
+    PRIMARY KEY (K, Q, T)
+) kv_attributes ='{"Hbase": {"MaxVersion": 2}}' partition by key(K) partitions 3;
+
+--error 1235
+CREATE TABLE test_kv_attr(
+    K varbinary(1024) NOT NULL,
+    Q varbinary(256)  NOT NULL,
+    T bigint NOT NULL,
+    V varbinary(1024) DEFAULT NULL,
+    PRIMARY KEY (K, Q, T)
+) kv_attributes ='{"Hbase": {"TimeToLive": 5, "MaxVersions": 2, "MinVersions": 1}}' partition by key(K) partitions 3;
+
+--error 1210
+CREATE TABLE test_kv_attr(
+    K varbinary(1024) NOT NULL,
+    Q varbinary(256)  NOT NULL,
+    T bigint NOT NULL,
+    V varbinary(1024) DEFAULT NULL,
+    PRIMARY KEY (K, Q, T)
+) kv_attributes ='{"Hbase": {"TimeToLive": 1, "MaxVersions": 0}}' partition by key(K) partitions 3;
+
+--error 1210
+CREATE TABLE test_kv_attr(
+    K varbinary(1024) NOT NULL,
+    Q varbinary(256)  NOT NULL,
+    T bigint NOT NULL,
+    V varbinary(1024) DEFAULT NULL,
+    PRIMARY KEY (K, Q, T)
+) kv_attributes ='{"Hbase": {"TimeToLive": 0, "MaxVersions": 1}}' partition by key(K) partitions 3;
+
+--error 1235
+CREATE TABLE test_kv_attr(
+    K varbinary(1024) NOT NULL,
+    Q varbinary(256)  NOT NULL,
+    T bigint NOT NULL,
+    V varbinary(1024) DEFAULT NULL,
+    PRIMARY KEY (K, Q, T)
+) kv_attributes ='{"TimeSeries": {}}' partition by key(K) partitions 3;
+
+--error 1210
+CREATE TABLE test_kv_attr(
+    K varbinary(1024) NOT NULL,
+    Q varbinary(256)  NOT NULL,
+    T bigint NOT NULL,
+    V varbinary(1024) DEFAULT NULL,
+    PRIMARY KEY (K, Q, T)
+) kv_attributes ='{"Hbase": {"TimeToLive": 0}, "Hbase": {"MaxVersions": 1}}' partition by key(K) partitions 3;
+
+CREATE TABLE test_kv_attr(
+    K varbinary(1024) NOT NULL,
+    Q varbinary(256)  NOT NULL,
+    T bigint NOT NULL,
+    V varbinary(1024) DEFAULT NULL,
+    PRIMARY KEY (K, Q, T)
+) kv_attributes ='{"Hbase": {"TimeToLive": 10, "MaxVersions": 2}}' partition by key(K) partitions 3;
+
+--error 1235
+alter table test_kv_attr kv_attributes '{"HColumnDescriptor": {"TimeToLive": 5, "MaxVersions": 2}}';
+--error 1210
+alter table test_kv_attr kv_attributes '{}';
+--error 1235
+alter table test_kv_attr kv_attributes ='{"Hbase": {"TimeToLive": 5, "MaxVersions": 2, "MinVersions": 1}}';
+--error 1235
+alter table test_kv_attr kv_attributes = '{"Hbase": {"MaxVersion": 2}}';
+--error 1210
+alter table test_kv_attr kv_attributes = '{"Hbase": {"TimeToLive": 1, "MaxVersions": 0}}';
+--error 1210
+alter table test_kv_attr kv_attributes ='{"Hbase": {"TimeToLive": 0, "MaxVersions": 1}}';
+
+alter table test_kv_attr kv_attributes ='{"Hbase": {"MaxVersions": 4}}';
+alter table test_kv_attr kv_attributes ='{"Hbase": {"TimeToLive": 10000000}}';
+alter table test_kv_attr kv_attributes ='{"Hbase": {"MaxVersions": 4, "TimeToLive": 10000000}}';
+alter table test_kv_attr kv_attributes ='{"Hbase": {}}';
+
+
+### test ttl syntax
+--disable_warnings
+drop table if exists test_ttl;
+create table test_ttl(a int primary key, b varchar(1024), c timestamp) TTL(c + INTERVAL 1 hour);
+show create table test_ttl;
+drop table test_ttl;
+create table test_ttl(a int primary key, b varchar(1024), c datetime) TTL(c + INTERVAL 1 hour);
+show create table test_ttl;
+drop table test_ttl;
+
+## not supported data type
+--error 1235
+create table test_ttl(a int primary key, b varchar(1024), c varchar(1024)) TTL(c + INTERVAL 1 hour);
+--error 1235
+create table test_ttl(a int primary key, b varchar(1024), c date) TTL(c + INTERVAL 1 hour);
+--error 1235
+create table test_ttl(a int primary key, b varchar(1024), c time) TTL(c + INTERVAL 1 hour);
+--error 1235
+create table test_ttl(a int primary key, b varchar(1024)) TTL(now() + INTERVAL 1 hour);
+
+## alter table ttl
+create table test_ttl(a int primary key, b varchar(1024), c timestamp, d datetime) TTL(c + INTERVAL 0 hour);
+show create table test_ttl;
+alter table test_ttl TTL(c + INTERVAL 60 DAY);
+show create table test_ttl;
+drop table test_ttl;
+
+## different ttl unit
+create table test_ttl(a int primary key, b varchar(1024), c timestamp) TTL(c + INTERVAL 1 second);
+drop table test_ttl;
+create table test_ttl(a int primary key, b varchar(1024), c timestamp) TTL(c + INTERVAL 1 minute);
+drop table test_ttl;
+create table test_ttl(a int primary key, b varchar(1024), c timestamp) TTL(c + INTERVAL 1 hour);
+drop table test_ttl;
+create table test_ttl(a int primary key, b varchar(1024), c timestamp) TTL(c + INTERVAL 1 day);
+drop table test_ttl;
+create table test_ttl(a int primary key, b varchar(1024), c timestamp) TTL(c + INTERVAL 1 month);
+drop table test_ttl;
+create table test_ttl(a int primary key, b varchar(1024), c timestamp) TTL(c + INTERVAL 1 year);
+
+## drop or modify a ttl column
+--error 1235
+alter table test_ttl drop column c;
+--error 1235
+alter table test_ttl change column c c2 datetime;
+--error 1235
+alter table test_ttl modify column c bigint;
+--error 1235
+alter table test_ttl modify column c datetime;
+--error 1235
+alter table test_ttl add column d datetime, ttl(d + INTERVAL 1 minute);
+
+alter table test_ttl remove ttl;
+show create table test_ttl;
+alter table test_ttl drop column c;
+
+drop table test_kv_attr;
+drop table test_ttl;

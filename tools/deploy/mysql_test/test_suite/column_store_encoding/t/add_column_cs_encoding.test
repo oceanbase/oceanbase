@@ -1,0 +1,81 @@
+# owner: fenggu.yh
+# description: add_column test for filter pushdown correctness in column_store encoding
+
+--disable_query_log
+set global max_allowed_packet=60000000;
+set global ob_sql_work_area_percentage=80;
+disconnect default;
+sleep 1;
+connect (default,$OBMYSQL_MS0,admin@mysql,admin,test,$OBMYSQL_PORT);
+set @@recyclebin = off;
+set ob_query_timeout=1000000000;
+set ob_trx_timeout=1000000000;
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+create table t1 (a int auto_increment primary key, b bigint, c char(100), d varchar(1000)) row_format = compressed block_size = 2048 with column group for all columns, each column;
+insert into t1 (b, c, d) values(1, "a", repeat('a', 1000));
+insert into t1 (b, c, d) values(2, "ab", repeat("ab", 500));
+insert into t1 (b, c, d) values(3, "ab ", repeat("ab", 500));
+insert into t1 (b, c, d) values(4, "abcd", repeat("ab", 500));
+insert into t1 (b, c, d) values(5, "ab c ", repeat("a", 1000));
+insert into t1 (b, c, d) values(6, "abc ", repeat("abcd", 250));
+insert into t1 (b, c, d) values(7, "abcd", repeat("abbb", 250));
+insert into t1 (b, c, d) values(8, "abcde", repeat("accc", 250));
+--let $loop=3
+while($loop > 0)
+{
+  insert into t1 (b, c, d) select b + 1, c, d from t1;
+  dec $loop;
+}
+select count(1) from t1;
+
+alter table t1 add column e int;
+alter table t1 add column def1 int default 10;
+alter table t1 add column def2 int default 20;
+insert into t1 (b, c, d) values(100, "abcde", repeat("accc", 250));
+insert into t1 (b, c, d) values(101, "abcde", repeat("accc", 250));
+insert into t1 (b, c, d) values(102, "abcde", repeat("accc", 250));
+insert into t1 (b, c, d) values(103, "abcde", repeat("accc", 250));
+insert into t1 (b, c, d) values(104, "abcde", repeat("accc", 250));
+insert into t1 (b, c, d) values(105, "abcde", repeat("accc", 250));
+
+--disable_query_log
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection obsys;
+--enable_query_log
+
+alter system minor freeze;
+--source mysql_test/include/wait_minor_merge.inc
+
+select count(1) from t1;
+select a, b, e from t1 where c > 'ab' order by a;
+select a, b, e from t1 where e > 10 order by a;
+select a, b, e, def1, def2 from t1 where def1 > 10 order by a;
+select a, b, e, def1, def2 from t1 where def2 > 10 order by a;
+select a, b, e, def1, def2 from t1 where def2 < def1 order by a;
+select a, b, e, def1, def2 from t1 where def2 > def1 order by a;
+
+alter table t1 add column f int generated always as (b*2) virtual;
+select a, e, f from t1 where c > 'ab' order by a;
+
+--disable_query_log
+connection obsys;
+--enable_query_log
+alter system major freeze tenant all;
+--source mysql_test/include/wait_daily_merge.inc
+
+alter table t1 add column g int;
+select a, b, e from t1 where c > 'ab' order by a;
+select a, b, f from t1 where c > 'ab' order by a;
+select a, b, g from t1 where c > 'ab' order by a;
+
+drop table t1;
+
+--disable_query_log
+set global max_allowed_packet=16777216;
+set global ob_sql_work_area_percentage=5;
+set @@recyclebin = on;
+--enable_query_log

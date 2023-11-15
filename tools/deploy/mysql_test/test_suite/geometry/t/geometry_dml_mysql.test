@@ -1,0 +1,427 @@
+#owner: ht353245
+#owner group: shenzhen
+--echo # ----------------------------------------------------------------------
+--echo # Base test of GEOMETRY dml.
+--echo # ----------------------------------------------------------------------
+--source mysql_test/test_suite/geometry/t/import_default_srs_data_mysql.inc
+alter system set _enable_defensive_check = 1;
+### 1. Test for spatial index base DML constraint.
+if (1) {
+  --disable_warnings
+  DROP TABLE IF EXISTS spatial_index_dml_constraint, tt1;
+  --enable_warnings
+
+  ## 1.1 Insert row
+  ## 1.1.1 GEOMETRY can allow all other type
+  CREATE TABLE spatial_index_dml_constraint (i INT, g GEOMETRY NOT NULL SRID 4326, PRIMARY KEY (i));
+  SET @v1=ST_GEOMFROMTEXT('POINT(0 0)', 4326);
+  SET @v2=ST_GEOMFROMTEXT('LINESTRING(0 0,10 10)', 4326);
+  SET @v3=ST_GEOMFROMTEXT('POLYGON((0 0, 0 8, 8 8, 8 10, -10 10, -10 0, 0 0))', 4326);
+  SET @v4=ST_GEOMFROMTEXT('MULTIPOINT(1 1, 11 11, 11 21, 21 21)', 4326);
+  SET @v5=ST_GEOMFROMTEXT('MULTILINESTRING((10 48,10 21,10 0),(16 0,16 23,16 48))', 4326);
+  SET @v6=ST_GEOMFROMTEXT('MULTIPOLYGON(((28 26,28 0,84 0,84 42,28 26),(52 18,66 23,73 9,48 6,52 18)),((59 18,67 18,67 13,59 13,59 18)))', 4326);
+  SET @v7=ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(9 9),LINESTRING(1 5,0 0),POLYGON((2 2,2 8,8 8,8 2,2 2)))', 4326);
+  INSERT INTO spatial_index_dml_constraint VALUES (1, @v1);
+  INSERT INTO spatial_index_dml_constraint VALUES (2, @v2);
+  INSERT INTO spatial_index_dml_constraint VALUES (3, @v3);
+  INSERT INTO spatial_index_dml_constraint VALUES (4, @v4);
+  INSERT INTO spatial_index_dml_constraint VALUES (5, @v5);
+  INSERT INTO spatial_index_dml_constraint VALUES (6, @v6);
+  INSERT INTO spatial_index_dml_constraint VALUES (7, @v7);
+  DROP TABLE spatial_index_dml_constraint;
+  ## 1.1.2 POINT can only allow POINT
+  CREATE TABLE spatial_index_dml_constraint (i INT, g POINT NOT NULL SRID 4326, PRIMARY KEY (i));
+  INSERT INTO spatial_index_dml_constraint VALUES (1, @v1);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (2, @v2);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (3, @v3);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (4, @v4);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (5, @v5);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (6, @v6);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (7, @v7);
+  DROP TABLE spatial_index_dml_constraint;
+  ## 1.1.3 LINESTRING can only allow LINESTRING
+  CREATE TABLE spatial_index_dml_constraint (i INT, g LINESTRING NOT NULL SRID 4326, PRIMARY KEY (i));
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (1, @v1);
+  INSERT INTO spatial_index_dml_constraint VALUES (2, @v2);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (3, @v3);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (4, @v4);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (5, @v5);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (6, @v6);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (7, @v7);
+  DROP TABLE spatial_index_dml_constraint;
+  ## 1.1.4 POLYGON can only allow POLYGON
+  CREATE TABLE spatial_index_dml_constraint (i INT, g POLYGON NOT NULL SRID 4326, PRIMARY KEY (i));
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (1, @v1);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (2, @v2);
+  INSERT INTO spatial_index_dml_constraint VALUES (3, @v3);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (4, @v4);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (5, @v5);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (6, @v6);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (7, @v7);
+  DROP TABLE spatial_index_dml_constraint;
+  ## 1.1.5 MULTIPOINT can only allow MULTIPOINT
+  CREATE TABLE spatial_index_dml_constraint (i INT, g MULTIPOINT NOT NULL SRID 4326, PRIMARY KEY (i));
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (1, @v1);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (2, @v2);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (3, @v3);
+  INSERT INTO spatial_index_dml_constraint VALUES (4, @v4);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (5, @v5);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (6, @v6);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (7, @v7);
+  DROP TABLE spatial_index_dml_constraint;
+  ## 1.1.6 MULTILINESTRING can only allow MULTILINESTRING
+  CREATE TABLE spatial_index_dml_constraint (i INT, g MULTILINESTRING NOT NULL SRID 4326, PRIMARY KEY (i));
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (1, @v1);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (2, @v2);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (3, @v3);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (4, @v4);
+  INSERT INTO spatial_index_dml_constraint VALUES (5, @v5);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (6, @v6);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (7, @v7);
+  DROP TABLE spatial_index_dml_constraint;
+  ## 1.1.7 MULTIPOLYGON can only allow MULTIPOLYGON
+  CREATE TABLE spatial_index_dml_constraint (i INT, g MULTIPOLYGON NOT NULL SRID 4326, PRIMARY KEY (i));
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (1, @v1);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (2, @v2);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (3, @v3);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (4, @v4);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (5, @v5);
+  INSERT INTO spatial_index_dml_constraint VALUES (6, @v6);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (7, @v7);
+  DROP TABLE spatial_index_dml_constraint;
+  ## 1.1.7 GEOMETRYCOLLECTION can allow MULTIPOINT,MULTILINESTRING,MULTIPOLYGON,GEOMETRYCOLLECTION
+  CREATE TABLE spatial_index_dml_constraint (i INT, g GEOMETRYCOLLECTION NOT NULL SRID 4326, PRIMARY KEY (i));
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (1, @v1);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (2, @v2);
+  --error 1416
+  INSERT INTO spatial_index_dml_constraint VALUES (3, @v3);
+  INSERT INTO spatial_index_dml_constraint VALUES (4, @v4);
+  INSERT INTO spatial_index_dml_constraint VALUES (5, @v5);
+  INSERT INTO spatial_index_dml_constraint VALUES (6, @v6);
+  INSERT INTO spatial_index_dml_constraint VALUES (7, @v7);
+  DROP TABLE spatial_index_dml_constraint;
+
+  ## 1.2 Update row
+  ## 1.2.1 GEOMETRY can allow all other type
+  --disable_warnings
+  DROP TABLE IF EXISTS spatial_index_dml_constraint;
+  --enable_warnings
+  CREATE TABLE spatial_index_dml_constraint (i int, g GEOMETRY NOT NULL SRID 4326, PRIMARY KEY (i));
+  INSERT INTO spatial_index_dml_constraint VALUES (1, @v1);
+  INSERT INTO spatial_index_dml_constraint VALUES (2, @v2);
+  INSERT INTO spatial_index_dml_constraint VALUES (3, @v3);
+  INSERT INTO spatial_index_dml_constraint VALUES (4, @v4);
+  INSERT INTO spatial_index_dml_constraint VALUES (5, @v5);
+  INSERT INTO spatial_index_dml_constraint VALUES (6, @v6);
+  INSERT INTO spatial_index_dml_constraint VALUES (7, @v7);
+  UPDATE spatial_index_dml_constraint SET g=@v1 WHERE i = 1;
+  UPDATE spatial_index_dml_constraint SET g=@v2 WHERE i = 1;
+  UPDATE spatial_index_dml_constraint SET g=@v3 WHERE i = 1;
+  UPDATE spatial_index_dml_constraint SET g=@v4 WHERE i = 1;
+  UPDATE spatial_index_dml_constraint SET g=@v5 WHERE i = 1;
+  UPDATE spatial_index_dml_constraint SET g=@v6 WHERE i = 1;
+  UPDATE spatial_index_dml_constraint SET g=@v7 WHERE i = 1;
+  DROP TABLE spatial_index_dml_constraint;
+  ## 1.2.2 POINT can only allow POINT
+  CREATE TABLE spatial_index_dml_constraint (i int, g POINT NOT NULL SRID 4326, PRIMARY KEY (i));
+  INSERT INTO spatial_index_dml_constraint VALUES (1, @v1);
+  UPDATE spatial_index_dml_constraint SET g=@v1 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v2 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v3 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v4 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v5 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v6 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v7 WHERE i = 1;
+  DROP TABLE spatial_index_dml_constraint;
+  ## 1.2.3 LINESTRING can only allow LINESTRING
+  CREATE TABLE spatial_index_dml_constraint (i int, g LINESTRING NOT NULL SRID 4326, PRIMARY KEY (i));
+  INSERT INTO spatial_index_dml_constraint VALUES (1, @v2);
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v1 WHERE i = 1;
+  UPDATE spatial_index_dml_constraint SET g=@v2 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v3 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v4 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v5 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v6 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v7 WHERE i = 1;
+  DROP TABLE spatial_index_dml_constraint;
+  ## 1.2.4 POLYGON can only allow POLYGON
+  CREATE TABLE spatial_index_dml_constraint (i int, g POLYGON NOT NULL SRID 4326, PRIMARY KEY (i));
+  INSERT INTO spatial_index_dml_constraint VALUES (1, @v3);
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v1 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v2 WHERE i = 1;
+  UPDATE spatial_index_dml_constraint SET g=@v3 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v4 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v5 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v6 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v7 WHERE i = 1;
+  DROP TABLE spatial_index_dml_constraint;
+  ## 1.2.5 MULTIPOINT can only allow MULTIPOINT
+  CREATE TABLE spatial_index_dml_constraint (i int, g MULTIPOINT NOT NULL SRID 4326, PRIMARY KEY (i));
+  INSERT INTO spatial_index_dml_constraint VALUES (1, @v4);
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v1 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v2 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v3 WHERE i = 1;
+  UPDATE spatial_index_dml_constraint SET g=@v4 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v5 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v6 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v7 WHERE i = 1;
+  DROP TABLE spatial_index_dml_constraint;
+  ## 1.2.6 MULTILINESTRING can only allow MULTILINESTRING
+  CREATE TABLE spatial_index_dml_constraint (i int, g MULTILINESTRING NOT NULL SRID 4326, PRIMARY KEY (i));
+  INSERT INTO spatial_index_dml_constraint VALUES (1, @v5);
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v1 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v2 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v3 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v4 WHERE i = 1;
+  UPDATE spatial_index_dml_constraint SET g=@v5 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v6 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v7 WHERE i = 1;
+  DROP TABLE spatial_index_dml_constraint;
+  ## 1.2.7  MULTIPOLYGON can only allow MULTIPOLYGON
+  CREATE TABLE spatial_index_dml_constraint (i int, g MULTIPOLYGON NOT NULL SRID 4326, PRIMARY KEY (i));
+  INSERT INTO spatial_index_dml_constraint VALUES (1, @v6);
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v1 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v2 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v3 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v4 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v5 WHERE i = 1;
+  UPDATE spatial_index_dml_constraint SET g=@v6 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v7 WHERE i = 1;
+  DROP TABLE spatial_index_dml_constraint;
+  ## 1.1.7 GEOMETRYCOLLECTION can allow MULTIPOINT,MULTILINESTRING,MULTIPOLYGON,GEOMETRYCOLLECTION
+  CREATE TABLE spatial_index_dml_constraint (i int, g GEOMETRYCOLLECTION NOT NULL SRID 4326, PRIMARY KEY (i));
+  INSERT INTO spatial_index_dml_constraint VALUES (1, @v7);
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v1 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v2 WHERE i = 1;
+  --error 1416
+  UPDATE spatial_index_dml_constraint SET g=@v3 WHERE i = 1;
+  UPDATE spatial_index_dml_constraint SET g=@v4 WHERE i = 1;
+  UPDATE spatial_index_dml_constraint SET g=@v5 WHERE i = 1;
+  UPDATE spatial_index_dml_constraint SET g=@v6 WHERE i = 1;
+  UPDATE spatial_index_dml_constraint SET g=@v7 WHERE i = 1;
+  DROP TABLE spatial_index_dml_constraint;
+}
+
+# bugfix: 
+CREATE TABLE t(p POINT);
+--error 1416
+INSERT INTO t VALUES(1);
+DROP TABLE t;
+
+# bugfix: 
+create table T_GEO (gid int auto_increment primary key,geo geometry );
+replace into T_GEO VALUES (1,st_geomfromtext('point(90 90)'));
+select st_astext(geo) from T_GEO;
+replace into T_GEO VALUES (1,st_geomfromtext('point(80 80)'));
+select st_astext(geo) from T_GEO;
+replace into T_GEO VALUES (1,st_geomfromtext('point(80 80)'));
+select st_astext(geo) from T_GEO;
+drop table T_GEO;
+
+# bugfix: 
+create table T_GEO (gid int auto_increment primary key,g point srid 4326);
+--error 3643
+replace into T_GEO VALUES (1,st_geomfromtext('point(90 90)', 0));
+--error 1416
+replace into T_GEO VALUES (1,st_geomfromtext('LINESTRING(90 90, 1 1)', 0));
+replace into T_GEO VALUES (1,st_geomfromtext('point(90 90)', 4326));
+select st_astext(g) from T_GEO;
+drop table T_GEO;
+create table T_GEO (gid int auto_increment primary key,g point);
+replace into T_GEO VALUES (1,st_geomfromtext('point(90 90)', 0));
+replace into T_GEO VALUES (2,st_geomfromtext('point(90 90)', 4326));
+--error 1416
+replace into T_GEO VALUES (3,st_geomfromtext('LINESTRING(90 90, 1 1)', 0));
+select st_astext(g) from T_GEO;
+drop table T_GEO;
+
+# budfix: 
+create table T_GEO (gid int auto_increment primary key, geo geometry ,geo_c GEOMETRYCOLLECTION,poi point,lin linestring ,pol polygon,M_POI MULTIPOINT,M_LIN MULTILINESTRING ,M_POL MULTIPOLYGON);
+REPLACE INTO T_GEO(geo) VALUES ( st_geomfromtext('point(90 90)'));
+select st_astext(geo) from T_GEO;
+drop table T_GEO;
+
+# bugfix: 
+create table T_GEO (gid int auto_increment primary key, geo geometry ,geo_c GEOMETRYCOLLECTION,poi point,lin linestring ,pol polygon,M_POI MULTIPOINT,M_LIN MULTILINESTRING ,M_POL MULTIPOLYGON );
+INSERT INTO T_GEO VALUES (1,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);
+--error 1416
+UPDATE T_GEO SET GEO=0;
+drop table T_GEO;
+
+# bugfix : 
+create table tt1(id int , g geometry not null srid 4236 , spatial index(g));
+insert into tt1(g) values(st_geomfromtext('POINT(0 0)', 4236));
+--error 3548
+select id ,st_astext(g) from tt1 where ST_Intersects(ST_GeomFromText('point(10 20)',426),g);
+drop table tt1;
+
+# bugfix : 
+--disable_warnings
+DROP TABLE IF EXISTS gis_line;
+--enable_warnings
+CREATE TABLE `gis_line` (`id` bigint(20) NOT NULL AUTO_INCREMENT,
+                         `num` bigint(18) DEFAULT NULL,
+                         `lin` linestring NOT NULL /*!80003 SRID 4326 */,
+                         PRIMARY KEY (`id`), SPATIAL KEY `lin_index` (`lin`) BLOCK_SIZE 16384 LOCAL );
+insert into gis_line values(1,0, st_geomfromtext('LINESTRING(1 1, 2 2)', 4326));
+--error 3037
+select /*+index (gis_line lin_index)*/ * from gis_line where _st_covers(lin, ST_GeomFromText('point(15.830728278409012 10.534231407596138,,,,)', 4326));
+select /*+index (gis_line lin_index)*/ st_astext(lin) from gis_line where _st_covers(lin, ST_GeomFromText('point(1 1)', 4326));
+drop table gis_line;
+
+# bugfix : 
+--disable_warnings
+DROP TABLE IF EXISTS gis_point;
+--enable_warnings
+CREATE TABLE `gis_point` (   `id` bigint(20) NOT NULL AUTO_INCREMENT,   `x` decimal(19,16) DEFAULT NULL,   `y` decimal(19,16) DEFAULT NULL,   `poi` point NOT NULL /*!80003 SRID 4326 */,   PRIMARY KEY (`id`),   KEY `xy_index` (`x`, `y`) BLOCK_SIZE 16384 LOCAL,   SPATIAL KEY `poi_index` (`poi`) BLOCK_SIZE 16384 LOCAL ) AUTO_INCREMENT = 1196000001 DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0; 
+select concat((select st_astext(poi) from gis_point order by id desc limit 1),(select st_astext(poi) from gis_point order by id desc limit 1)) ;
+drop table gis_point;
+
+
+--disable_warnings
+DROP TABLE IF EXISTS spatial_index;
+--enable_warnings
+CREATE TABLE spatial_index (i INT, g GEOMETRY NOT NULL SRID 4326, PRIMARY KEY (i),  SPATIAL KEY (g));
+INSERT INTO spatial_index VALUES (1, ST_GEOMFROMTEXT('POLYGON((1 1, 1 8, 8 8, 8 10, -10 10, -10 1, 1 1))', 4326));
+INSERT INTO spatial_index VALUES (2, ST_GEOMFROMTEXT('LINESTRING(0 0,1 1)', 4326));
+select i, st_astext(g) from spatial_index where ST_Intersects(g, ST_GEOMFROMTEXT('POINT(1 1)', 4326));
+update spatial_index set g=ST_GEOMFROMTEXT('POINT(2 2)', 4326) where i=1;
+select i, st_astext(g) from spatial_index where ST_Intersects(g, ST_GEOMFROMTEXT('POINT(2 2)', 4326));
+
+# bugfix : 
+--disable_warnings
+DROP TABLE IF EXISTS t3;
+--enable_warnings
+create table t3(id int, g1 geometry not null srid 2284);
+create spatial index spidx3 on t3(g1);
+insert into t3 values(13, ST_GeomFromText('GEOMETRYCOLLECTION EMPTY', 2284));
+#select /*+index(t3 spidx3)*/ st_astext(g1) from t3 where g1=ST_GeomFromText('GEOMETRYCOLLECTION EMPTY', 2284);
+select /*+index(t3 spidx3)*/ st_astext(g1) from t3 where _st_covers(ST_GeomFromText('GEOMETRYCOLLECTION EMPTY', 2284), g1);
+select /*+index(t3 spidx3)*/ st_astext(g1) from t3 where st_intersects(ST_GeomFromText('GEOMETRYCOLLECTION EMPTY', 2284), g1);
+select /*+index(t3 spidx3)*/ st_astext(g1) from t3 where st_within(ST_GeomFromText('GEOMETRYCOLLECTION EMPTY', 2284), g1);
+select /*+index(t3 spidx3)*/ st_astext(g1) from t3 where st_contains(ST_GeomFromText('GEOMETRYCOLLECTION EMPTY', 2284), g1);
+select /*+index(t3 spidx3)*/ st_astext(g1) from t3 where st_intersects(ST_GeomFromText('POINT(1 1)', 2284), g1);
+select /*+index(t3 spidx3)*/ st_astext(g1) from t3 where _st_covers(ST_GeomFromText('POINT(1 1)', 2284), g1);
+select /*+index(t3 spidx3)*/ st_astext(g1) from t3 where st_within(ST_GeomFromText('POINT(1 1)', 2284), g1);
+select /*+index(t3 spidx3)*/ st_astext(g1) from t3 where st_contains(ST_GeomFromText('POINT(1 1)', 2284), g1);
+select /*+index(t3 spidx3)*/ st_astext(g1) from t3 where st_intersects(g1, ST_GeomFromText('POINT(1 1)', 2284));
+select /*+index(t3 spidx3)*/ st_astext(g1) from t3 where _st_covers(g1, ST_GeomFromText('POINT(1 1)', 2284));
+select /*+index(t3 spidx3)*/ st_astext(g1) from t3 where st_within(g1, ST_GeomFromText('POINT(1 1)', 2284));
+select /*+index(t3 spidx3)*/ st_astext(g1) from t3 where st_contains(g1, ST_GeomFromText('POINT(1 1)', 2284));
+select /*+index(t3 spidx3)*/ st_astext(g1) from t3 where _st_dwithin(ST_GeomFromText('GEOMETRYCOLLECTION EMPTY', 2284), g1, 0.1);
+drop table t3;
+
+--disable_warnings
+DROP TABLE IF EXISTS t_geo, cities;
+--enable_warnings
+
+CREATE TABLE `cities` (
+  `CityId` int(11) NOT NULL AUTO_INCREMENT,
+  `Name` longtext DEFAULT NULL,
+  `Location` geometry DEFAULT NULL,
+  PRIMARY KEY (`CityId`)
+);
+
+insert into cities(Name,Location) values("Berlin", 0xE61000000101000000CEC4742156CF2A407558E1968F424A40),
+                                        ("Seattle", 0xE61000000101000000387DE2A540955EC02383DC4598CD4740),
+                                        ("Warsaw", 0xE6100000010100000013109370210335408A56EE05661D4A40),
+                                        ("Shenzhen", 0xE61000000102000000020000000000000000002E400000000000002E4000000000000034400000000000003440),
+                                        ("Guangzhou", 0xE610000001030000000100000007000000000000000000F03F000000000000F03F0000000000002040000000000000F03F0000000000002040000000000000204000000000000024400000000000002040000000000000244000000000000024C0000000000000F03F00000000000024C0000000000000F03F000000000000F03F),
+                                        ("Emptycollection", 0xE6100000010700000000000000);
+select st_astext(cast(0xE61000000101000000CEC4742156CF2A407558E1968F424A40 as point));
+select Location from cities;
+select hex(Location) from cities;
+select st_astext(Location) from cities;
+drop table cities;
+
+# bugfix : 
+CREATE TABLE `t_geo` (
+  `geo` geometry NOT NULL,
+  SPATIAL KEY `SP_GEO` (`geo`) BLOCK_SIZE 16384 LOCAL
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0;
+
+insert into t_geo values(st_geomfromtext('POINT(1.2345678987654322e24 -1.2345678998765433e25)'));
+insert into t_geo values(st_geomfromtext('GEOMETRYCOLLECTION(MULTIPOINT((2 -1),(11831.743318109031 -63273.949623278015),(0 -1)))'));
+insert into t_geo values(st_geomfromtext('GEOMETRYCOLLECTION EMPTY'));
+select st_astext(geo) from t_geo;
+UPDATE T_GEO SET GEO=ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(10 10), POINT(30 30), LINESTRING(15 15, 20 20))');
+select st_astext(geo) from t_geo;
+alter system set _enable_defensive_check = 0;
+
+drop table t_geo;

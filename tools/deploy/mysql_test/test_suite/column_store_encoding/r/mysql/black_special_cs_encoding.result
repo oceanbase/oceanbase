@@ -1,0 +1,11 @@
+count(1)
+300
+count(*)
+100
+count(*)
+90
+count(*)
+10
+a	e	f	cnt
+alter system major freeze tenant all;
+drop table t_black;

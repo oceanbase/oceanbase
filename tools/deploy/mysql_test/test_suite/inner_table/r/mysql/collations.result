@@ -1,0 +1,61 @@
+use information_schema;
+select * from collations;
+COLLATION_NAME	CHARACTER_SET_NAME	ID	IS_DEFAULT	IS_COMPILED	SORTLEN
+utf8mb4_general_ci	utf8mb4	45	Yes	Yes	1
+utf8mb4_bin	utf8mb4	46		Yes	1
+binary	binary	63	Yes	Yes	1
+gbk_chinese_ci	gbk	28	Yes	Yes	1
+gbk_bin	gbk	87		Yes	1
+utf16_general_ci	utf16	54	Yes	Yes	1
+utf16_bin	utf16	55		Yes	1
+utf8mb4_unicode_ci	utf8mb4	224		Yes	1
+utf16_unicode_ci	utf16	101		Yes	1
+gb18030_chinese_ci	gb18030	248	Yes	Yes	1
+gb18030_bin	gb18030	249		Yes	1
+latin1_swedish_ci	latin1	8	Yes	Yes	1
+latin1_bin	latin1	47		Yes	1
+gb18030_2022_bin	gb18030_2022	216		Yes	1
+gb18030_2022_chinese_ci	gb18030_2022	217	Yes	Yes	1
+gb18030_2022_chinese_cs	gb18030_2022	218		Yes	1
+gb18030_2022_radical_ci	gb18030_2022	219		Yes	1
+gb18030_2022_radical_cs	gb18030_2022	220		Yes	1
+gb18030_2022_stroke_ci	gb18030_2022	221		Yes	1
+gb18030_2022_stroke_cs	gb18030_2022	222		Yes	1
+select collation_name, character_set_name, id, is_default, is_compiled, sortlen from collations;
+collation_name	character_set_name	id	is_default	is_compiled	sortlen
+utf8mb4_general_ci	utf8mb4	45	Yes	Yes	1
+utf8mb4_bin	utf8mb4	46		Yes	1
+binary	binary	63	Yes	Yes	1
+gbk_chinese_ci	gbk	28	Yes	Yes	1
+gbk_bin	gbk	87		Yes	1
+utf16_general_ci	utf16	54	Yes	Yes	1
+utf16_bin	utf16	55		Yes	1
+utf8mb4_unicode_ci	utf8mb4	224		Yes	1
+utf16_unicode_ci	utf16	101		Yes	1
+gb18030_chinese_ci	gb18030	248	Yes	Yes	1
+gb18030_bin	gb18030	249		Yes	1
+latin1_swedish_ci	latin1	8	Yes	Yes	1
+latin1_bin	latin1	47		Yes	1
+gb18030_2022_bin	gb18030_2022	216		Yes	1
+gb18030_2022_chinese_ci	gb18030_2022	217	Yes	Yes	1
+gb18030_2022_chinese_cs	gb18030_2022	218		Yes	1
+gb18030_2022_radical_ci	gb18030_2022	219		Yes	1
+gb18030_2022_radical_cs	gb18030_2022	220		Yes	1
+gb18030_2022_stroke_ci	gb18030_2022	221		Yes	1
+gb18030_2022_stroke_cs	gb18030_2022	222		Yes	1
+select * from collations where collation_name like '%utf8%';
+COLLATION_NAME	CHARACTER_SET_NAME	ID	IS_DEFAULT	IS_COMPILED	SORTLEN
+utf8mb4_general_ci	utf8mb4	45	Yes	Yes	1
+utf8mb4_bin	utf8mb4	46		Yes	1
+utf8mb4_unicode_ci	utf8mb4	224		Yes	1
+show create table collations;
+View	Create View	character_set_client	collation_connection
+COLLATIONS	CREATE VIEW `COLLATIONS` AS select collation as COLLATION_NAME, charset as CHARACTER_SET_NAME, id as ID, `is_default` as IS_DEFAULT, is_compiled as IS_COMPILED, sortlen as SORTLEN from oceanbase.__tenant_virtual_collation 	utf8mb4	utf8mb4_general_ci
+desc collations;
+Field	Type	Null	Key	Default	Extra
+COLLATION_NAME	varchar(128)	NO			
+CHARACTER_SET_NAME	varchar(128)	NO			
+ID	bigint(20)	NO			
+IS_DEFAULT	varchar(4)	NO			
+IS_COMPILED	varchar(4)	NO			
+SORTLEN	bigint(20)	NO			

@@ -1,0 +1,264 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: xiaoyi.xy
+# owner group: SQL3
+# description: 本case是为了测试delete 一个range内的数据
+# tags: delete,dml
+
+####TITLE: range delete
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+
+####CASE: single rowkey, using rowkey, >,>=,<,<=
+create table t1 (a int, b int, primary key (a));
+insert into t1(a,b) values(1,1),(2,1),(3,1),(4,1);
+delete from t1 where a=1;
+delete from t1 where a>0;
+select * from t1;
+
+replace into t1(a,b) values(1,1),(2,1),(3,1),(4,1);
+delete from t1 where a<5;
+select * from t1;
+
+replace into t1(a,b) values(1,1),(2,1),(3,1),(4,1);
+delete from t1 where a>1;
+select * from t1;
+
+replace into t1(a,b) values(2,1),(3,1),(4,1);
+delete from t1 where a<4;
+select * from t1;
+
+replace into t1(a,b) values(1,1),(2,1),(3,1);
+delete from t1 where a>=1;
+select * from t1;
+
+replace into t1(a,b) values(1,1),(2,1),(3,1),(4,1);
+delete from t1 where a<=5;
+select * from t1;
+
+replace into t1(a,b) values(1,1),(2,1),(3,1),(4,1);
+delete from t1 where a>0 and a<2;
+delete from t1 where a>=2 and a<3;
+delete from t1 where a>=3 and a<=4;
+select * from t1;
+
+replace into t1(a,b) values(1,1),(2,1),(3,1),(4,1);
+delete from t1 where a=1 or a=2 or a=3 or a=4;
+select * from t1;
+
+####CASE: single rowkey, using non_rowkey, >, >=, <, <=
+replace into t1(a,b) values(1,1),(2,2),(3,3),(4,4);
+delete from t1 where b>0;
+select * from t1;
+
+replace into t1(a,b) values(1,1),(2,2),(3,3),(4,4);
+delete from t1 where b<6;
+select * from t1;
+
+replace into t1(a,b) values(1,1),(2,2),(3,3),(4,4);
+delete from t1 where b>1;
+select * from t1;
+
+replace into t1(a,b) values(2,2),(3,3),(4,4);
+delete from t1 where b<5;
+select * from t1;
+
+replace into t1(a,b) values(1,1),(2,2),(3,3),(4,4);
+delete from t1 where b>=1;
+select * from t1;
+
+replace into t1(a,b) values(1,1),(2,2),(3,3),(4,4);
+delete from t1 where b<=7;
+select * from t1;
+
+replace into t1(a,b) values(1,1),(2,2),(3,3),(4,4);
+delete from t1 where b>0 and b<2;
+delete from t1 where b>=2 and b<3;
+delete from t1 where b>=3 and b<=4;
+select * from t1;
+
+replace into t1(a,b) values(1,1),(2,2),(3,3),(4,4);
+delete from t1 where b=1 or b=2 or b=3 or b=4;
+select * from t1;
+
+####CASE: single rowkey: using rowkey + non_rowkey, >, >=, <,<=, or
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(a int, b int, c int, primary key(a));
+replace into t1(a,b) values(1,1),(2,2),(3,1),(4,2);
+delete from t1 where a>0 and b>1;
+delete from t1 where a<5 and b<2;
+select * from t1;
+
+replace into t1(a,b) values(1,1),(2,2),(3,1),(4,2);
+delete from t1 where a>=0 and b<=1;
+delete from t1 where a<=5 and b>=2;
+select * from t1;
+
+replace into t1(a,b) values(1,1),(2,2),(3,1),(4,2);
+delete from t1 where a=0 or a=1 or a=2 or b=1;
+select * from t1;
+
+replace into t1(a,b) values(1,1),(2,2),(3,1),(4,2);
+delete from t1 where b=2 or a=1 or a=2;
+select * from t1;
+
+replace into t1(a,b,c) values(1,1,NULL),(2,2,NULL),(3,3,NULL),(4,4,NULL);
+delete from t1 where a<=1 or b>=4;
+select * from t1;
+
+replace into t1(a,b,c) values(1,1,NULL),(2,2,NULL),(3,3,NULL),(4,4,NULL);
+delete from t1 where a>1 or b<4;
+select * from t1;
+
+####CASE: two rowkeys, using rowkey, >, >=, <, <=
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(a int, b int, c int, d int, primary key(a,b));
+replace into t1(a,b,c,d) values(1,1,1,1),(2,2,1,1),(3,3,1,1);
+delete from t1 where (a,b) > (0,0);
+select * from t1;
+
+replace into t1(a,b,c,d) values(1,1,1,1),(2,2,1,1),(3,3,1,1);
+delete from t1 where (a,b) < (4,4);
+select * from t1;
+
+replace into t1(a,b,c,d) values(1,1,1,1),(2,2,1,1),(3,3,1,1);
+delete from t1 where (a,b) >= (1,1);
+select * from t1;
+
+
+replace into t1(a,b,c,d) values(1,1,1,1),(2,2,1,1),(3,3,1,1);
+delete from t1 where (a,b) <= (1,1);
+select * from t1;
+
+replace into t1(a,b,c,d) values(1,1,1,1),(2,2,1,1),(3,3,1,1);
+delete from t1 where (a,b) in ((NULL,NULL),(0,0),(1,1),(2,2),(3,3),(4,4));
+select * from t1;
+
+replace into t1(a,b,c,d) values(1,1,1,1),(2,2,1,1),(3,3,1,1);
+delete from t1 where (a,b)=(1,1) or (a,b)=(2,2) or (a,b)=(3,3);
+select * from t1;
+
+replace into t1(a,b,c,d) values(1,1,1,1),(2,2,1,1),(3,3,1,1);
+delete from t1 where (a,b) in ((1,1),(2,2),(3,3));
+select * from t1;
+
+replace into t1(a,b,c,d) values(1,1,1,1),(2,2,1,1),(3,3,1,1);
+delete from t1 where (a,b,c,d) >= (1,1,1,1);
+select * from t1;
+
+replace into t1(a,b,c,d) values(1,1,1,1),(2,2,1,1),(3,3,1,1);
+delete from t1 where (a,b,c,d) <= (3,3,3,3);
+select * from t1;
+
+replace into t1(a,b,c,d) values(1,1,1,1),(2,2,1,1),(3,3,1,1);
+delete from t1 where (a,b,c,d)=(1,1,1,1) or (a,b,c,d)=(2,2,1,1) or (a,b,c,d)=(3,3,3,3);
+select * from t1;
+
+####CASE: two rowkeys, using one of rowkey, =, >, >=, <, <=
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(a int, b int, c int, d int, primary key(a,b));
+replace into t1(a,b,c,d) values(1,1,1,1),(1,2,1,1),(1,3,1,1);
+delete from t1 where a = 1;
+select * from t1;
+
+replace into t1(a,b,c,d) values(1,1,1,1),(1,2,1,1),(1,3,1,1);
+delete from t1 where a > 0;
+select * from t1;
+
+replace into t1(a,b,c,d) values(1,1,1,1),(1,2,1,1),(1,3,1,1);
+delete from t1 where a >=1 ;
+select * from t1;
+
+replace into t1(a,b,c,d) values(1,1,1,1),(1,2,1,1),(1,3,1,1);
+delete from t1 where a < 4;
+select * from t1;
+
+replace into t1(a,b,c,d) values(1,1,1,1),(1,2,1,1),(1,3,1,1);
+delete from t1 where a <= 1;
+select * from t1;
+
+replace into t1(a,b,c,d) values(1,1,1,1),(1,2,1,1),(1,3,1,1);
+delete from t1 where a=1 or a=2 or a=3;
+select * from t1;
+
+replace into t1(a,b,c,d) values(1,1,1,1),(1,2,1,1),(1,3,1,1);
+delete from t1 where (a=1 or a=2 or a=3) and (b=1 or b=2);
+select * from t1;
+
+replace into t1(a,b,c,d) values(1,1,1,1),(1,2,1,1),(1,3,1,1);
+delete from t1 where a>=1 and b>=2;
+select * from t1;
+
+####CASE:two rowkeys, using rowkey + non_rowkey, >, >=, <, <=, =
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(a int, b int, c int, d int, primary key(a,b));
+replace into t1(a,b,c,d) values(1,1,1,1),(2,2,2,1),(3,3,3,1);
+delete from t1 where (a,b)>=(1,1) and c=1;
+select * from t1;
+
+replace into t1(a,b,c,d) values(1,1,1,1),(2,2,2,1),(3,3,3,1);
+delete from t1 where (a,b)>=(1,1) and c=3;
+select * from t1;
+
+replace into t1(a,b,c,d) values(1,1,1,1),(2,2,2,1),(3,3,3,1);
+delete from t1 where (a=1 or a=2 or a=3) and c>=1;
+select * from t1;
+
+replace into t1(a,b,c,d) values(1,1,1,1),(2,2,2,1),(3,3,3,1);
+delete from t1 where (a=1 or a=2 or a=3) and c<1;
+select * from t1;
+
+replace into t1(a,b,c,d) values(1,1,1,1),(2,2,2,1),(3,3,3,1);
+delete from t1 where (a=1 or a=2 or a=3) and (b=2 or b=3);
+select * from t1;
+
+replace into t1(a,b,c,d) values(1,1,1,1),(2,2,2,1),(3,3,3,1);
+delete from t1 where (a=1 or a=2 or a=3) and (b=2 or b=3) and c=3;
+select * from t1;
+
+replace into t1(a,b,c,d) values(1,1,1,1),(2,2,2,1),(3,3,3,1);
+delete from t1 where a>=0 and a<=3 and b>1 and b<3;
+select * from t1;
+
+replace into t1(a,b,c,d) values(1,1,1,1),(2,2,2,1),(3,3,3,1);
+delete from t1 where (c,d)>=(1,1);
+select * from t1;
+
+replace into t1(a,b,c,d) values(1,1,1,1),(2,2,2,1),(3,3,3,1);
+delete from t1 where (b,a) > (1,1);
+select * from t1;
+
+####CASE:multi rowkeys
+--disable_warnings
+drop table if exists t1, t2, t3;
+--enable_warnings
+#int
+create table t1(a int, b int, c int, d int, primary key(a,b,c));
+insert into t1(a,b,c) values (1,1,1),(2,2,2),(3,3,3);
+delete from t1 where (a,b,c)>(0,0,0) and (a,b,c)<=(3,3,3);
+select * from t1;
+#varchar
+create table t2(a varchar(128), b varchar(128), c varchar(128), d varchar(128), primary key(a,b,c));
+insert into t2(a,b,c) values ('a','a','a'),('b','b','b'),('c','c','c');
+delete from t2 where (a,b,c)>=('a','a','b') and (a,b,c)<('b','b','c');
+select * from t2;
+#timestamp
+create table t3(a int, b varchar(128), c  timestamp(6) default "2012-01-01 12:00:00", d int, primary key(a,b,c));
+insert into t3(a,b,c) values (1,'a','2014-02-17'),(2,'b','2014-02-17'),(3,'c','2014-02-18');
+delete from t3 where (a,b,c)>=(1,'a','2014-02-17 00:00:00') and (a,b,c)<=(2,'b','2014-02-18');
+select * from t3;
+
+--disable_warnings
+drop table if exists t1, t2, t3;
+--enable_warnings

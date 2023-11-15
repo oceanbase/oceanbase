@@ -1,0 +1,46 @@
+create table t1 (c1 int, c2 int, c3 int, c4 int, primary key(c1));
+create index i1 on t1 (c2);
+create index i2 on t1 (c3, c4);
+create index i3 on t1 (c3) storing(c4);
+replace into t1 values (1,1,2,1),(2,2,1,null),(3,3,null,null),(4,null,null,null);
+select * from t1;
+c1	c2	c3	c4
+1	1	2	1
+2	2	1	NULL
+3	3	NULL	NULL
+4	NULL	NULL	NULL
+select  /*+ index(t1 i2) */ * from t1 where c3=1;
+c1	c2	c3	c4
+2	2	1	NULL
+select * from t1 where c3=1;
+c1	c2	c3	c4
+2	2	1	NULL
+select  /*+ index(a1 i2) */ * from t1 as a1 where c3 in(1,2);
+c1	c2	c3	c4
+2	2	1	NULL
+1	1	2	1
+select * from t1 as a1 where a1.c3 in (1,2);
+c1	c2	c3	c4
+2	2	1	NULL
+1	1	2	1
+select  /*+ index(t1 primary) */ * from t1 where c3 in(1,2);
+c1	c2	c3	c4
+1	1	2	1
+2	2	1	NULL
+select * from t1 where c3 is null;
+c1	c2	c3	c4
+3	3	NULL	NULL
+4	NULL	NULL	NULL
+select  /*+ index(t1 i2) */ * from t1 where c3 is null;
+c1	c2	c3	c4
+3	3	NULL	NULL
+4	NULL	NULL	NULL
+select  /*+ index(t1 primary) */ * from t1 where c3 is null;
+c1	c2	c3	c4
+3	3	NULL	NULL
+4	NULL	NULL	NULL
+select /*+ index(t1 i4) */ * from t1 where c3 is null;
+c1	c2	c3	c4
+3	3	NULL	NULL
+4	NULL	NULL	NULL
+drop table t1;

@@ -1,0 +1,273 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: gehao.wh
+# description: basic lob cast cases for mysql
+# tags: text,blob
+
+#本用例的前一部分是lob_select_mysql.test的简化，因为没有实现汇聚函数等，
+#  导致无法直接运行此用例，后续补充后可以从此部分中删除
+#后一部分是用有效数据做cast看来回转换是否出错
+#注: mysql没有直接显式cast到lob的方法
+
+#
+# test of basic func with text/blob
+#
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (nr int, a tinyblob, b text, c mediumblob, d longtext);
+insert into t1 values(1, 'a', 'b', 'c', 'd');
+insert into t1 values(2, 'aa', 'bb', 'cc', 'dd');
+insert into t1 values(3, 'aaa', 'bbb', 'ccc', 'ddd');
+insert into t1 values(4, null, null, null, null);
+insert into t1 values(5, '', '', '', '');
+insert into t1 values(6, 'aaa', 'BBB', 'ccc', 'DDD');
+insert into t1 values(7, 'AA', 'bb', 'CC', 'dd');
+
+select a from t1 order by nr asc;
+select b from t1 order by nr asc;
+select d, c from t1;
+select * from t1 order by nr asc;
+select * from t1 order by nr desc;
+drop table t1;
+
+#
+# test of full join with text/blob
+#
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (nr int(5) not null auto_increment, b text, c blob, primary key (nr));
+insert into t1 values (null, "a", "A");
+insert into t1 values (null, "bbb", "BBB");
+insert into t1 values (null, "ccc", "CCC");
+select * from t1, t1 as t2 order by t1.nr,t2.nr;
+drop table t1;
+
+#
+# test of cast func with text/blob common string
+#
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (nr int primary key, a1 tinyblob, a2 text, a3 mediumblob, a4 longtext);
+insert into t1 values(1, 'aa', 'bb', 'cc', 'dd');
+insert into t1 values(2, 'AA', 'BB', 'CC', 'DD');
+insert into t1 values(3, 'aaa', '世界', 'ccc', '和平');
+--let $count=1
+while($count<5)
+{
+	eval select cast(a$count AS datetime) from t1 order by nr asc;
+	eval select cast(a$count as decimal(9,2)) from t1 order by nr asc;
+	eval select cast(a$count as decimal(9)) from t1 order by nr asc;
+	eval select cast(a$count as binary) from t1 order by nr asc;
+	eval select cast(a$count as char) from t1 order by nr asc;
+	eval select cast(a$count as date) from t1 order by nr asc;
+	eval select cast(a$count as char(2)) from t1 order by nr asc;
+	eval select hex(cast(a$count as binary(2))) from t1 order by nr asc;
+	eval select cast(a$count as signed integer) from t1 order by nr asc;
+	eval select cast(a$count as unsigned) from t1 order by nr asc;
+	eval select cast(a$count as time) from t1 order by nr asc;
+	eval select cast(a$count as signed) from t1 order by nr asc;
+	eval select cast(a$count as signed) from t1 order by nr asc;
+	inc $count;
+}
+drop table t1;
+
+create table t1(c1 blob);
+insert into t1 values('123');
+insert into t1 values(null);
+select * from t1 where c1 is null;
+select * from t1 where c1 is not null;
+drop table t1;
+
+#
+# test of cast func with text, source from other types
+#
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int, c2 longtext);
+insert into t1 values(1, cast('2014-11-25 18:00' as datetime));
+insert into t1 values(2, cast('2014-11-25' as date));
+insert into t1 values(3, cast('18:00:59' as time));
+# mysql does not support
+# insert into t1 values(4, cast('2014-11-25 18:00' as timestamp));
+insert into t1 values(4, cast('1999' as year));
+insert into t1 values(5, 127);
+insert into t1 values(6, 255);
+insert into t1 values(7, 255);
+insert into t1 values(8, 65535);
+insert into t1 values(9, 18446744073709551615);
+insert into t1 values(10, true);
+insert into t1 values(11, b'10101');
+insert into t1 values(12, 0);
+insert into t1 values(13, NULL);
+insert into t1 values(14, cast(3.14 as decimal(5,2)));
+insert into t1 values(15, 3.14);
+insert into t1 values(16, 3.14e0);
+# mysql does not support
+# insert into t1 values(17, cast(3.14 as numeral(5,2)));
+insert into t1 values(17, cast(3.14 as double));
+insert into t1 values(18, cast(3.14 as float));
+insert into t1 values(19, cast('10101abcde' as binary));
+insert into t1 values(20, -10000);
+
+select * from t1;
+
+select cast(c2 as datetime) from t1 where c1=1;
+select cast(c2 as date) from t1 where c1=2;
+select cast(c2 as time) from t1 where c1=3;
+select cast(c2 as year) from t1 where c1=4;
+select cast(c2 as signed) from t1 where c1=8;
+# mysql 结果是-1 ob没有截断？
+select cast(c2 as signed) from t1 where c1=9;
+select cast(c2 as decimal) from t1 where c1=9;
+select cast(c2 as double) from t1 where c1=17;
+select cast(c2 as float) from t1 where c1=18;
+select cast(c2 as binary) from t1 where c1=19;
+select cast(c2 as decimal) from t1 where c1=20;
+
+drop table t1;
+
+#
+# test of cast func with blob, source from other types
+#
+--disable_warnings
+drop table if exists t2;
+--enable_warnings
+create table t2 (c1 int, c2 blob);
+insert into t2 values(1, cast('2014-11-25 18:00' as datetime));
+insert into t2 values(2, cast('2014-11-25' as date));
+insert into t2 values(3, cast('18:00:59' as time));
+# mysql does not support
+# insert into t2 values(4, cast('2014-11-25 18:00' as timestamp));
+insert into t2 values(4, cast('1999' as year));
+insert into t2 values(5, 127);
+insert into t2 values(6, 255);
+insert into t2 values(7, 255);
+insert into t2 values(8, 65535);
+insert into t2 values(9, 18446744073709551615);
+insert into t2 values(10, true);
+insert into t2 values(11, b'10101');
+insert into t2 values(12, 0);
+insert into t2 values(13, NULL);
+insert into t2 values(14, cast(3.14 as decimal(5,2)));
+insert into t2 values(15, 3.14);
+insert into t2 values(16, 3.14e0);
+# mysql does not support
+# insert into t2 values(17, cast(3.14 as numeral(5,2)));
+insert into t2 values(17, cast(3.14 as double));
+insert into t2 values(18, cast(3.14 as float));
+insert into t2 values(19, cast('10101abcde' as binary));
+insert into t2 values(20, -10000);
+
+select * from t2;
+
+select cast(c2 as datetime) from t2 where c1=1;
+select cast(c2 as date) from t2 where c1=2;
+select cast(c2 as time) from t2 where c1=3;
+select cast(c2 as year) from t2 where c1=4;
+select cast(c2 as signed) from t2 where c1=8;
+select cast(c2 as signed) from t2 where c1=9;
+select cast(c2 as decimal) from t2 where c1=9;
+select cast(c2 as double) from t2 where c1=17;
+select cast(c2 as float) from t2 where c1=18;
+select cast(c2 as binary) from t2 where c1=19;
+select cast(c2 as decimal) from t2 where c1=20;
+
+drop table t2;
+
+#
+# test of cast func with tinytext, source from other types
+#
+--disable_warnings
+drop table if exists t3;
+--enable_warnings
+create table t3 (c1 int, c2 tinytext);
+insert into t3 values(1, cast('2014-11-25 18:00' as datetime));
+insert into t3 values(2, cast('2014-11-25' as date));
+insert into t3 values(3, cast('18:00:59' as time));
+# mysql does not support
+# insert into t3 values(4, cast('2014-11-25 18:00' as timestamp));
+insert into t3 values(4, cast('1999' as year));
+insert into t3 values(5, 127);
+insert into t3 values(6, 255);
+insert into t3 values(7, 255);
+insert into t3 values(8, 65535);
+insert into t3 values(9, 18446744073709551615);
+insert into t3 values(10, true);
+insert into t3 values(11, b'10101');
+insert into t3 values(12, 0);
+insert into t3 values(13, NULL);
+insert into t3 values(14, cast(3.14 as decimal(5,2)));
+insert into t3 values(15, 3.14);
+insert into t3 values(16, 3.14e0);
+# mysql does not support
+# insert into t3 values(17, cast(3.14 as numeral(5,2)));
+insert into t3 values(17, cast(3.14 as double));
+insert into t3 values(18, cast(3.14 as float));
+insert into t3 values(19, cast('10101abcde' as binary));
+insert into t3 values(20, -10000);
+
+select * from t3;
+
+select cast(c2 as datetime) from t3 where c1=1;
+select cast(c2 as date) from t3 where c1=2;
+select cast(c2 as time) from t3 where c1=3;
+select cast(c2 as year) from t3 where c1=4;
+select cast(c2 as signed) from t3 where c1=8;
+select cast(c2 as signed) from t3 where c1=9;
+select cast(c2 as decimal) from t3 where c1=9;
+select cast(c2 as double) from t3 where c1=17;
+select cast(c2 as float) from t3 where c1=18;
+select cast(c2 as binary) from t3 where c1=19;
+select cast(c2 as decimal) from t3 where c1=20;
+
+drop table t3;
+
+
+# Notice mysql does not support cast(x as text); only cast(x as varchar), cast(x as binary)
+
+# test outrow lobs
+create table t1 (c1 int, c2 longtext);
+insert into t1 values(1, repeat('abcde0123456789', 1000));
+insert into t1 values(2, repeat('vwxyz0123456789', 1000));
+
+select c2 from t1;
+
+select cast(c2 as datetime) from t1 where c1=1;
+select cast(c2 as decimal) from t1 where c1=1;
+select cast(c2 as binary) from t1 where c1=1;
+select cast(c2 as char) from t1 where c1=1;
+select cast(c2 as date) from t1 where c1=1;
+select cast(c2 as char(2)) from t1 where c1=1;
+select cast(c2 as binary(2)) from t1 where c1=1;
+select cast(c2 as signed integer) from t1 where c1=1;
+select cast(c2 as unsigned) from t1 where c1=1;
+select cast(c2 as time) from t1 where c1=1;
+select cast(c2 as signed) from t1 where c1=1;
+
+drop table t1;
+
+# test outrow lobs
+
+create table t1 (c1 int, c2 longtext, c3 longtext);
+insert into t1 values(1, repeat('abcde0123456789', 1000), repeat('vwxyz0123456789', 1000));
+
+insert into t1 values(2, repeat('abcde0123456789', 1000), repeat('abcde0123456789', 1000));
+
+select c2 > c3 from t1 where c1=1;
+select c2 < c3 from t1 where c1=1;
+select c2 = c3 from t1 where c1=1;
+
+select c2 > c3 from t1 where c1=2;
+select c2 < c3 from t1 where c1=2;
+select c2 = c3 from t1 where c1=2;
+
+drop table t1;
+
+CREATE TABLE t1 (c1 tinyblob DEFAULT NULL, c2 varchar(161) DEFAULT 's&7dcwZ3nSn~E(O', c3 text NOT NULL);
+(select nvl( c1 , c2 ) as c from t1) union all (select lower(c3) as c from t1);
+drop table t1;

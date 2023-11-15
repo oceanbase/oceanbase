@@ -1,0 +1,41 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: link.zt
+#owner group: sql1
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+--disable_query_log
+--error 1049
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,database_not_exist,$OBMYSQL_PORT);
+--enable_query_log
+
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn2,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn3,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+connection conn1;
+create table t1(a int primary key,b int);
+let $a=1;
+--disable_query_log
+while($a<1000)
+{
+
+  eval insert into t1(a) values($a);
+  inc $a;
+}
+--enable_query_log
+disconnect conn1;
+
+connection conn2;
+select * from t1;
+drop table t1;
+disconnect conn2;
+
+connection conn3;
+create table t1(a int primary key,b int);
+drop table t1;
+disconnect conn3;

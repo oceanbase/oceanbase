@@ -1,0 +1,293 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner      : gengfu.zpc
+# owner group: VOS
+# description: check for unsupported tenant names
+#--disable_abort_on_error
+
+
+connect(my_sys,$OBMYSQL_MS0,root@sys,,,$OBMYSQL_PORT);
+
+# ====================================================================
+# ========================= 1.create tenant ==========================
+# ====================================================================
+# not really creating the tenant, just verifying that unsupported tenant names can be disabled
+# ============== all ===============
+--error 1064
+CREATE TENANT IF NOT EXISTS all RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+--error 1064
+CREATE TENANT IF NOT EXISTS ALL RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+--error 1064
+CREATE TENANT IF NOT EXISTS AlL RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+# ============ all_user ============
+--error 1235
+CREATE TENANT IF NOT EXISTS all_user RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+--error 1235
+CREATE TENANT IF NOT EXISTS ALL_USER RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+--error 1235
+CREATE TENANT IF NOT EXISTS AlL_uSeR RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+# ============ all_meta ============
+--error 1235
+CREATE TENANT IF NOT EXISTS all_meta RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+--error 1235
+CREATE TENANT IF NOT EXISTS ALL_META RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+--error 1235
+CREATE TENANT IF NOT EXISTS AlL_mEtA RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+# =============== $ ================
+--error 1235
+CREATE TENANT IF NOT EXISTS test$123 RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+
+# '' and "" are string qualifiers, so 'all' and "all" are equal to all, there's no need to redundantly check them, but we must check ``
+# ============== all ===============
+--error 1235
+CREATE TENANT IF NOT EXISTS `all` RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+--error 1235
+CREATE TENANT IF NOT EXISTS `ALL` RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+--error 1235
+CREATE TENANT IF NOT EXISTS `AlL` RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+# ============ all_user ============
+--error 1235
+CREATE TENANT IF NOT EXISTS `all_user` RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+--error 1235
+CREATE TENANT IF NOT EXISTS `ALL_USER` RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+--error 1235
+CREATE TENANT IF NOT EXISTS `AlL_uSeR` RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+# ============ all_meta ============
+--error 1235
+CREATE TENANT IF NOT EXISTS `all_meta` RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+--error 1235
+CREATE TENANT IF NOT EXISTS `ALL_META` RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+--error 1235
+CREATE TENANT IF NOT EXISTS `AlL_mEtA` RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+# =============== $ ================
+--error 1235
+CREATE TENANT IF NOT EXISTS `test$123` RESOURCE_POOL_LIST = ('pool_1'), primary_zone='z1', locality="F@z1" set ob_tcp_invited_nodes='%';
+
+
+# ====================================================================
+# ===================== 2.create standby tenant ======================
+# ====================================================================
+# not really creating the standby tenant, just verifying that unsupported tenant names can be disabled
+# ============== all ===============
+--error 1064
+CREATE STANDBY TENANT IF NOT EXISTS all LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+--error 1064
+CREATE STANDBY TENANT IF NOT EXISTS ALL LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+--error 1064
+CREATE STANDBY TENANT IF NOT EXISTS AlL LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+# ============ all_user ============
+--error 1235
+CREATE STANDBY TENANT IF NOT EXISTS all_user LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+--error 1235
+CREATE STANDBY TENANT IF NOT EXISTS ALL_USER LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+--error 1235
+CREATE STANDBY TENANT IF NOT EXISTS AlL_uSeR LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+# ============ all_meta ============
+--error 1235
+CREATE STANDBY TENANT IF NOT EXISTS all_meta LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+--error 1235
+CREATE STANDBY TENANT IF NOT EXISTS ALL_META LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+--error 1235
+CREATE STANDBY TENANT IF NOT EXISTS AlL_mEtA LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+# =============== $ ================
+--error 1235
+CREATE STANDBY TENANT IF NOT EXISTS test$123 LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+
+# check ``
+# ============== all ===============
+--error 1235
+CREATE STANDBY TENANT IF NOT EXISTS `all` LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+--error 1235
+CREATE STANDBY TENANT IF NOT EXISTS `ALL` LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+--error 1235
+CREATE STANDBY TENANT IF NOT EXISTS `AlL` LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+# ============ all_user ============
+--error 1235
+CREATE STANDBY TENANT IF NOT EXISTS `all_user` LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+--error 1235
+CREATE STANDBY TENANT IF NOT EXISTS `ALL_USER` LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+--error 1235
+CREATE STANDBY TENANT IF NOT EXISTS `AlL_uSeR` LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+# ============ all_meta ============
+--error 1235
+CREATE STANDBY TENANT IF NOT EXISTS `all_meta` LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+--error 1235
+CREATE STANDBY TENANT IF NOT EXISTS `ALL_META` LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+--error 1235
+CREATE STANDBY TENANT IF NOT EXISTS `AlL_mEtA` LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+# =============== $ ================
+--error 1235
+CREATE STANDBY TENANT IF NOT EXISTS `test$123` LOG_RESTORE_SOURCE = "SERVICE=1.2.3.4:17855 USER=test@mysql PASSWORD=test";
+
+
+# ====================================================================
+# ======================== 3.restore tenant ==========================
+# ====================================================================
+# not really restoring the tenant, just verifying that unsupported tenant names can be disabled
+# ============== all ===============
+--error 1064
+ALTER SYSTEM RESTORE all FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+--error 1064
+ALTER SYSTEM RESTORE ALL FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+--error 1064
+ALTER SYSTEM RESTORE AlL FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+# ============ all_user ============
+--error 1235
+ALTER SYSTEM RESTORE all_user FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+--error 1235
+ALTER SYSTEM RESTORE ALL_USER FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+--error 1235
+ALTER SYSTEM RESTORE AlL_uSeR FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+# ============ all_meta ============
+--error 1235
+ALTER SYSTEM RESTORE all_meta FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+--error 1235
+ALTER SYSTEM RESTORE ALL_META FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+--error 1235
+ALTER SYSTEM RESTORE AlL_mEtA FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+# =============== $ ================
+--error 1235
+ALTER SYSTEM RESTORE test$123 FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+
+# check ``
+# ============== all ===============
+--error 1235
+ALTER SYSTEM RESTORE `all` FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+--error 1235
+ALTER SYSTEM RESTORE `ALL` FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+--error 1235
+ALTER SYSTEM RESTORE `AlL` FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+# ============ all_user ============
+--error 1235
+ALTER SYSTEM RESTORE `all_user` FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+--error 1235
+ALTER SYSTEM RESTORE `ALL_USER` FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+--error 1235
+ALTER SYSTEM RESTORE `AlL_uSeR` FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+# ============ all_meta ============
+--error 1235
+ALTER SYSTEM RESTORE `all_meta` FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+--error 1235
+ALTER SYSTEM RESTORE `ALL_META` FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+--error 1235
+ALTER SYSTEM RESTORE `AlL_mEtA` FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+# =============== $ ================
+--error 1235
+ALTER SYSTEM RESTORE `test$123` FROM 'file:///log,file:///data' UNTIL TIME='2023-11-11 15:04:23.825558' with 'pool_list=pool_1&primary_zone=z1';
+
+
+# ====================================================================
+# ======================== 4.rename tenant ===========================
+# ====================================================================
+# not really renaming the tenant, just verifying that unsupported tenant names can be disabled
+# ============== all ===============
+--error 1064
+ALTER TENANT mysql RENAME GLOBAL_NAME TO all;
+--error 1064
+ALTER TENANT mysql RENAME GLOBAL_NAME TO ALL;
+--error 1064
+ALTER TENANT mysql RENAME GLOBAL_NAME TO AlL;
+# ============ all_user ============
+--error 1235
+ALTER TENANT mysql RENAME GLOBAL_NAME TO all_user;
+--error 1235
+ALTER TENANT mysql RENAME GLOBAL_NAME TO ALL_USER;
+--error 1235
+ALTER TENANT mysql RENAME GLOBAL_NAME TO AlL_uSeR;
+# ============ all_meta ============
+--error 1235
+ALTER TENANT mysql RENAME GLOBAL_NAME TO all_meta;
+--error 1235
+ALTER TENANT mysql RENAME GLOBAL_NAME TO ALL_META;
+--error 1235
+ALTER TENANT mysql RENAME GLOBAL_NAME TO AlL_mEtA;
+# =============== $ ================
+--error 1235
+ALTER TENANT mysql RENAME GLOBAL_NAME TO test$123;
+
+# check ``
+# ============== all ===============
+--error 1235
+ALTER TENANT mysql RENAME GLOBAL_NAME TO `all`;
+--error 1235
+ALTER TENANT mysql RENAME GLOBAL_NAME TO `ALL`;
+--error 1235
+ALTER TENANT mysql RENAME GLOBAL_NAME TO `AlL`;
+# ============ all_user ============
+--error 1235
+ALTER TENANT mysql RENAME GLOBAL_NAME TO `all_user`;
+--error 1235
+ALTER TENANT mysql RENAME GLOBAL_NAME TO `ALL_USER`;
+--error 1235
+ALTER TENANT mysql RENAME GLOBAL_NAME TO `AlL_uSeR`;
+# ============ all_meta ============
+--error 1235
+ALTER TENANT mysql RENAME GLOBAL_NAME TO `all_meta`;
+--error 1235
+ALTER TENANT mysql RENAME GLOBAL_NAME TO `ALL_META`;
+--error 1235
+ALTER TENANT mysql RENAME GLOBAL_NAME TO `AlL_mEtA`;
+# =============== $ ================
+--error 1235
+ALTER TENANT mysql RENAME GLOBAL_NAME TO `test$123`;
+
+
+# ====================================================================
+# ======================= 5.flashback tenant =========================
+# ====================================================================
+# not really recovering the tenant, just verifying that unsupported tenant names can be disabled
+# ============== all ===============
+--error 1064
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO all;
+--error 1064
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO ALL;
+--error 1064
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO AlL;
+# ============ all_user ============
+--error 1235
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO all_user;
+--error 1235
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO ALL_USER;
+--error 1235
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO AlL_uSeR;
+# ============ all_meta ============
+--error 1235
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO all_meta;
+--error 1235
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO ALL_META;
+--error 1235
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO AlL_mEtA;
+# =============== $ ================
+--error 1235
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO test$123;
+
+# check ``
+# ============== all ===============
+--error 1235
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO `all`;
+--error 1235
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO `ALL`;
+--error 1235
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO `AlL`;
+# ============ all_user ============
+--error 1235
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO `all_user`;
+--error 1235
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO `ALL_USER`;
+--error 1235
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO `AlL_uSeR`;
+# ============ all_meta ============
+--error 1235
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO `all_meta`;
+--error 1235
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO `ALL_META`;
+--error 1235
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO `AlL_mEtA`;
+# =============== $ ================
+--error 1235
+FLASHBACK TENANT mysql TO BEFORE DROP RENAME TO `test$123`;
+
+
+disconnect my_sys;
+connection default;

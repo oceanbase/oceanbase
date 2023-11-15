@@ -1,0 +1,17 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: link.zt
+#owner group: sql1
+
+--disable_warnings
+drop table if exists ob_new_sql_test;
+--enable_warnings
+
+create table ob_new_sql_test(c0 varchar(20), c1 int primary key, c2 int , c3 int,c4 int,c5 int,c6 int,c7 int,c8 int,c9 int,c10 int,c11 int,c12 int,c13 int,c14 int,c15 int);
+insert into ob_new_sql_test (c0, c1) values ('hello', 0);
+
+select * from ob_new_sql_test where c1 < 1;
+select * from ob_new_sql_test where c1 = 0;
+
+drop table ob_new_sql_test;

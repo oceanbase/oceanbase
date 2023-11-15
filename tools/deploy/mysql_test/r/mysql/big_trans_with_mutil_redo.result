@@ -1,0 +1,7 @@
+drop table if exists t1;
+create table t1(i int primary key, c1 varchar(1024), c256 varchar(1024), dt datetime(6), d  datetime(6));
+set ob_query_timeout=100000000;
+select count(i) from t1;
+count(i)
+2000
+drop table t1;

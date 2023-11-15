@@ -1,0 +1,279 @@
+#owner: ht353245
+#owner group: shenzhen
+--echo # ----------------------------------------------------------------------
+--echo # Test of GEOMETRY filter.
+--echo # ----------------------------------------------------------------------
+--source mysql_test/test_suite/geometry/t/import_default_srs_data_mysql.inc
+
+  ##
+  ## Basic Relational compare test
+  ##
+
+  --disable_warnings
+  drop table if exists matrix;
+  --enable_warnings
+
+  #--real_sleep 1
+  create table  matrix (TinyIntType tinyint(1),SmallIntType smallint(2),MediumIntType mediumint(3),Int32Type int(4),IntType bigint(5),UTinyIntType tinyint(1) unsigned,USmallIntType smallint(2) unsigned,UMediumIntType mediumint(3) unsigned,UInt32Type int(4) unsigned,UInt64Type bigint(5)  unsigned,FloatType float,DoubleType double,UFloatType float unsigned,UDoubleType double unsigned,NumberType decimal(8,2),UNumberType decimal(8,2) unsigned,DateTimeType datetime,TimestampType timestamp,DateType date,TimeType time,YearType year,VarcharType varchar(9),CharType char(10),VarbinaryType varbinary(11),BinaryType binary(12),ExtendType int(13),TinyTextType TINYTEXT, TextType TEXT,MediumTextType MEDIUMTEXT, LongTextType LONGTEXT CHARSET utf8, BitType BIT(63),EnumType ENUM('a', 'b', 'c') default 'a',SetType SET('a', 'b', 'c') default 'b',JsonType json, GeometryType geometry);
+  #--real_sleep 1
+
+  insert into matrix values (-1, -2, -3, -4, -5, 1, 2, 3, 4, 5, -1.1, -1.2, 1.1, 1.2, -1.3, 1.3, '2014-01-01 12:12:12', '2014-01-01 12:12:12', '2014-01-01', '12:12:12', 2014, 'varchar', 'char', 'varbinary', 'binary', 0,'tinytext','text','mediumtext','longtext',b'01010101010101','a','c','"jsonstring"', ST_GeomFromText('POINT(1 1)'));
+
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = TinyIntType;
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = SmallIntType;
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = MediumIntType;
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = Int32Type;
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = IntType;
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = UTinyIntType;
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = USmallIntType;
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = UMediumIntType;
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = UInt32Type;
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = UInt64Type;
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = FloatType;
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = DoubleType;
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = UFloatType;
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = UDoubleType;
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = NumberType;
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = UNumberType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = DateTimeType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = TimestampType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = DateType;
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = TimeType;
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = YearType;
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = VarcharType;
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = CharType;
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = VarbinaryType;
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = BinaryType;
+  select st_astext(GeometryType) from matrix where ST_GeomFromText('POINT(1 1)') = ExtendType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = TinyTextType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = TextType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = MediumTextType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = LongTextType;
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = BitType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = EnumType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = SetType;
+  --error 1235
+  select * from matrix where ST_GeomFromText('POINT(1 1)') = JsonType;
+  select st_astext(GeometryType) from matrix where ST_GeomFromText('POINT(1 1)') = GeometryType;
+
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') > TinyIntType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') < SmallIntType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') > MediumIntType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') < Int32Type;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') > IntType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') < UTinyIntType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') > USmallIntType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') <= UMediumIntType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') >= UInt32Type;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') <= UInt64Type;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') >= FloatType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') <= DoubleType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') >= UFloatType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') <= UDoubleType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') >= NumberType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') <= UNumberType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') > DateTimeType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') < TimestampType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') > DateType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') < TimeType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') >= YearType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') < VarcharType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') >= CharType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') < VarbinaryType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') >= BinaryType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') <= ExtendType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') > TinyTextType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') <= TextType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') > MediumTextType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') <= LongTextType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') > BitType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') <= EnumType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') > SetType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') < JsonType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') > GeometryType;
+
+
+  ##
+  ## Calculation test
+  ##
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') | IntType;
+  --error 1210
+  select * from matrix where ST_GeomFromText('POINT(1 1)') | GeometryType;
+  --error 1210
+  select * from matrix where  ~GeometryType;
+  --error 1210
+  select * from matrix where  GeometryType^IntType;
+  --error 1210
+  select * from matrix where  GeometryType&IntType;
+  --error 1210
+  select * from matrix where  GeometryType>>1;
+  --error 1210
+  select * from matrix where  GeometryType<<1;
+  --error 1210
+  select * from matrix where  GeometryType like 'a';
+  --error 1210
+  select * from matrix where  GeometryType between ST_GeomFromText('POINT(1 1)') and ST_GeomFromText('POINT(2 2)');
+  --error 1210
+  select MIN(GeometryType) from matrix;
+  --error 1210
+  select MAX(GeometryType) from matrix;
+  --error 1210
+  select LEAST(st_geomfromtext('POINT(0 0)'), st_geomfromtext('POINT(1 1)'));
+  --error 1210
+  select GREATEST(st_geomfromtext('POINT(0 0)'), st_geomfromtext('POINT(1 1)'));
+  --error 5083
+  select st_geomfromtext('POINT(0 0)') + st_geomfromtext('POINT(1 1)');
+  --error 5083
+  select st_geomfromtext('POINT(0 0)') - st_geomfromtext('POINT(1 1)');
+  --error 5083
+  select st_geomfromtext('POINT(0 0)') * st_geomfromtext('POINT(1 1)');
+  --error 5083
+  select st_geomfromtext('POINT(0 0)') / st_geomfromtext('POINT(1 1)');
+  --error 5083
+  select st_geomfromtext('POINT(0 0)') DIV st_geomfromtext('POINT(1 1)');
+  --error 5083
+  select st_geomfromtext('POINT(0 0)') % st_geomfromtext('POINT(1 1)');
+  --error 1210
+  SELECT EXP(st_geomfromtext('POINT(1 1)'));
+  --error 1210
+  SELECT lOG2(st_geomfromtext('POINT(1 1)'));
+  --error 1210
+  SELECT lOG10(st_geomfromtext('POINT(1 1)'));
+  --error 1210
+  SELECT LN(st_geomfromtext('POINT(1 1)'));
+  --error 1210
+  SELECT lOG(3, st_geomfromtext('POINT(1 1)'));
+  --error 1210
+  SELECT POW(3, st_geomfromtext('POINT(1 1)'));
+  --error 1210
+  SELECT POW(3, GeometryType) from matrix;
+  --error 1210
+  SELECT sqrt(st_geomfromtext('POINT(1 1)'));
+  --error 1210
+  SELECT acos(st_geomfromtext('POINT(1 1)'));
+  --error 1210
+  SELECT asin(st_geomfromtext('POINT(1 1)'));
+  --error 1210
+  SELECT atan(st_geomfromtext('POINT(1 1)'));
+  --error 1210
+  SELECT cos(st_geomfromtext('POINT(1 1)'));
+  --error 1210
+  SELECT sin(st_geomfromtext('POINT(1 1)'));
+  --error 1210
+  SELECT tan(st_geomfromtext('POINT(1 1)'));
+  --error 1210
+  SELECT cot(st_geomfromtext('POINT(1 1)'));
+  --error 1210
+  SELECT round(st_geomfromtext('POINT(1 1)'));
+  --error 1210
+  SELECT round(st_geomfromtext('POINT(1 1)'), 1);
+  --error 1210
+  SELECT round(st_geomfromtext('POINT(1 1)'), -1);
+  --error 1210
+  SELECT truncate(st_geomfromtext('POINT(1 1)'),1);
+  --error 1210
+  SELECT truncate(GeometryType ,1) from matrix;
+  --error 1210
+  SELECT ceiling(st_geomfromtext('POINT(1 1)'));
+  --error 1210
+  SELECT ceiling(GeometryType) from matrix;
+  --error 1210
+  SELECT abs(GeometryType) from matrix;
+  --error 1210
+  SELECT abs(st_geomfromtext('POINT(1 1)')) from matrix;
+  --error 1210
+  SELECT -GeometryType from matrix;
+  --error 1210
+  SELECT -st_geomfromtext('POINT(1 1)') from matrix;
+  --error 1210
+  SELECT rand(GeometryType) from matrix;
+  --error 1210
+  SELECT rand(st_geomfromtext('POINT(1 1)')) from matrix;
+  --error 1210
+  SELECT sign(GeometryType) from matrix;
+  --error 1210
+  SELECT sign(st_geomfromtext('POINT(1 1)')) from matrix;
+  --error 1210
+  SELECT degrees(GeometryType) from matrix;
+  --error 1210
+  SELECT degrees(st_geomfromtext('POINT(1 1)')) from matrix;
+  --error 1210
+  SELECT radians(GeometryType) from matrix;
+  --error 1210
+  SELECT radians(st_geomfromtext('POINT(1 1)')) from matrix;
+  --error 1210
+  SELECT format(GeometryType, 2) from matrix;
+  --error 1210
+  SELECT format(st_geomfromtext('POINT(1 1)'), 2) from matrix;
+  --error 1210
+  SELECT conv(st_geomfromtext('POINT(1 1)'), 1, 2) from dual;
+  --error 1210
+  SELECT conv(-1, st_geomfromtext('POINT(1 1)'), 2) from dual;
+  --error 1210
+  SELECT conv(-1, 1, st_geomfromtext('POINT(1 1)')) from dual;
+  --error 1210
+  SELECT conv(GeometryType, 1, 1) from matrix;
+
+  --disable_warnings
+  drop table if exists FF01;
+  --enable_warnings
+  CREATE TABLE FF01(A INT, B GEOMETRY);
+  INSERT INTO FF01 VALUES (1, NULL);
+  INSERT INTO FF01 VALUES (1, ST_GeomFromText('POINT(0 0)'));
+  SELECT A FROM FF01 WHERE B <=> NULL;
+  --error 1210
+  SELECT A FROM FF01 GROUP BY B HAVING AVG(B) IS NULL;
+  --error 1210
+  SELECT A FROM FF01 GROUP BY B HAVING SUM(B) IS NULL;
+  --error 1210
+  SELECT A FROM FF01 GROUP BY B HAVING STD(B) IS NULL;
+  --error 1210
+  SELECT A FROM FF01 GROUP BY B HAVING STDDEV_POP(B) IS NULL;
+  --error 1210
+  SELECT A FROM FF01 GROUP BY B HAVING VARIANCE(B) IS NULL;
+  DROP TABLE FF01;

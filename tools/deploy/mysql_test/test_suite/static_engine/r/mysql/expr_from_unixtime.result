@@ -1,0 +1,1361 @@
+result_format: 4
+
+alter system flush plan cache global;
+set ob_enable_plan_cache = false;
+
+select from_unixtime(0);
++---------------------+
+| from_unixtime(0)    |
++---------------------+
+| 1970-01-01 08:00:00 |
++---------------------+
+select from_unixtime(0.0);
++-----------------------+
+| from_unixtime(0.0)    |
++-----------------------+
+| 1970-01-01 08:00:00.0 |
++-----------------------+
+select from_unixtime("0");
++----------------------------+
+| from_unixtime("0")         |
++----------------------------+
+| 1970-01-01 08:00:00.000000 |
++----------------------------+
+select from_unixtime("0.0");
++----------------------------+
+| from_unixtime("0.0")       |
++----------------------------+
+| 1970-01-01 08:00:00.000000 |
++----------------------------+
+select from_unixtime(123456789);
++--------------------------+
+| from_unixtime(123456789) |
++--------------------------+
+| 1973-11-30 05:33:09      |
++--------------------------+
+select from_unixtime(123456789.123);
++------------------------------+
+| from_unixtime(123456789.123) |
++------------------------------+
+| 1973-11-30 05:33:09.123      |
++------------------------------+
+select from_unixtime("123456789.123");
++--------------------------------+
+| from_unixtime("123456789.123") |
++--------------------------------+
+| 1973-11-30 05:33:09.123000     |
++--------------------------------+
+select from_unixtime(-123456789);
++---------------------------+
+| from_unixtime(-123456789) |
++---------------------------+
+| NULL                      |
++---------------------------+
+select from_unixtime(-123456789.123);
++-------------------------------+
+| from_unixtime(-123456789.123) |
++-------------------------------+
+| NULL                          |
++-------------------------------+
+select from_unixtime("-123456789.123");
++---------------------------------+
+| from_unixtime("-123456789.123") |
++---------------------------------+
+| NULL                            |
++---------------------------------+
+select from_unixtime(date"2020-01-15");
++---------------------------------+
+| from_unixtime(date"2020-01-15") |
++---------------------------------+
+| NULL                            |
++---------------------------------+
+select from_unixtime(time"22:10:10");
++-------------------------------+
+| from_unixtime(time"22:10:10") |
++-------------------------------+
+| NULL                          |
++-------------------------------+
+select from_unixtime(null);
++---------------------+
+| from_unixtime(null) |
++---------------------+
+| NULL                |
++---------------------+
+select from_unixtime(null,null);
++--------------------------+
+| from_unixtime(null,null) |
++--------------------------+
+| NULL                     |
++--------------------------+
+select from_unixtime("123456789.123",null);
++-------------------------------------+
+| from_unixtime("123456789.123",null) |
++-------------------------------------+
+| NULL                                |
++-------------------------------------+
+select from_unixtime(null,"123456789.123");
++-------------------------------------+
+| from_unixtime(null,"123456789.123") |
++-------------------------------------+
+| NULL                                |
++-------------------------------------+
+select from_unixtime("123456789.123",1234);
++-------------------------------------+
+| from_unixtime("123456789.123",1234) |
++-------------------------------------+
+| 1234                                |
++-------------------------------------+
+select from_unixtime("123456789.123","1234");
++---------------------------------------+
+| from_unixtime("123456789.123","1234") |
++---------------------------------------+
+| 1234                                  |
++---------------------------------------+
+select from_unixtime("123456789.123","");
++-----------------------------------+
+| from_unixtime("123456789.123","") |
++-----------------------------------+
+| NULL                              |
++-----------------------------------+
+select from_unixtime(1234567890, '%Y-%m-%d %H:%i:%S');
++------------------------------------------------+
+| from_unixtime(1234567890, '%Y-%m-%d %H:%i:%S') |
++------------------------------------------------+
+| 2009-02-14 07:31:30                            |
++------------------------------------------------+
+select from_unixtime(9999999999999999999, '%Y-%m-%d %H:%i:%S');
++---------------------------------------------------------+
+| from_unixtime(9999999999999999999, '%Y-%m-%d %H:%i:%S') |
++---------------------------------------------------------+
+| NULL                                                    |
++---------------------------------------------------------+
+
+
+drop table if exists t;
+create table t (t1 tinyint,
+                t2 smallint,
+                t3 mediumint,
+                t4 integer,
+                t5 bigint,
+                t6 tinyint unsigned,
+                t7 smallint unsigned,
+                t8 mediumint unsigned,
+                t9 integer unsigned,
+                t10 bigint unsigned,
+                t11 float,
+                t12 float unsigned,
+                t13 double,
+                t14 double unsigned,
+                t15 number,
+                t16 number unsigned,
+                t17 datetime,
+                t18 timestamp,
+                t19 date,
+                t20 time,
+                t21 year,
+                t22 varchar(255),
+                t23 char(255),
+                t24 tinytext,
+                t25 mediumtext,
+                t26 longtext,
+                t27 bit,
+                t28 enum('a', 'b', 'c', '123', '%Y-%M-%D %h:%m:%s'),
+                t29 set('a', 'b', 'c'));
+
+insert into t values (1, -1, 1, 1234567, 13445677888, 1, 1, 1, 14455423, 1, 123123123.13, 131231.111,
+                      11113211.22323, 22312312312.322, 123123222.23232, 1231232.22222,
+                     '1993-03-20', '1993-03-20', '1993-03-20', '10:10:10', '1993', '123123.13', '132123.24', '31231231231.222', '31231231231.22',
+                     '1.2', 1, 'b', 'b');
+insert into t(t28) values ('%Y-%M-%D %h:%m:%s');
+
+
+
+select from_unixtime(t1) from t;
++---------------------+
+| from_unixtime(t1)   |
++---------------------+
+| 1970-01-01 08:00:01 |
+| NULL                |
++---------------------+
+explain select from_unixtime(t1) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(t.t1, DECIMAL(4, 0)))]), filter(nil), rowset=16
+      access([t.t1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t1) from t;
++-------------------------------+
+| from_unixtime(1234567890, t1) |
++-------------------------------+
+| 1                             |
+| NULL                          |
++-------------------------------+
+explain select from_unixtime(1234567890, t1) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t1, VARCHAR(1048576)))]), filter(nil), rowset=16
+      access([t.t1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t2) from t;
++-------------------+
+| from_unixtime(t2) |
++-------------------+
+| NULL              |
+| NULL              |
++-------------------+
+explain select from_unixtime(t2) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(t.t2, DECIMAL(6, 0)))]), filter(nil), rowset=16
+      access([t.t2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t2) from t;
++-------------------------------+
+| from_unixtime(1234567890, t2) |
++-------------------------------+
+| -1                            |
+| NULL                          |
++-------------------------------+
+explain select from_unixtime(1234567890, t2) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t2, VARCHAR(1048576)))]), filter(nil), rowset=16
+      access([t.t2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t3) from t;
++---------------------+
+| from_unixtime(t3)   |
++---------------------+
+| 1970-01-01 08:00:01 |
+| NULL                |
++---------------------+
+explain select from_unixtime(t3) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(t.t3, DECIMAL(9, 0)))]), filter(nil), rowset=16
+      access([t.t3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t3) from t;
++-------------------------------+
+| from_unixtime(1234567890, t3) |
++-------------------------------+
+| 1                             |
+| NULL                          |
++-------------------------------+
+explain select from_unixtime(1234567890, t3) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t3, VARCHAR(1048576)))]), filter(nil), rowset=16
+      access([t.t3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t4) from t;
++---------------------+
+| from_unixtime(t4)   |
++---------------------+
+| 1970-01-15 14:56:07 |
+| NULL                |
++---------------------+
+explain select from_unixtime(t4) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(t.t4, DECIMAL(11, 0)))]), filter(nil), rowset=16
+      access([t.t4]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t4) from t;
++-------------------------------+
+| from_unixtime(1234567890, t4) |
++-------------------------------+
+| 1234567                       |
+| NULL                          |
++-------------------------------+
+explain select from_unixtime(1234567890, t4) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t4, VARCHAR(1048576)))]), filter(nil), rowset=16
+      access([t.t4]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t5) from t;
++---------------------+
+| from_unixtime(t5)   |
++---------------------+
+| 2396-01-29 14:31:28 |
+| NULL                |
++---------------------+
+explain select from_unixtime(t5) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(t.t5, DECIMAL(20, 0)))]), filter(nil), rowset=16
+      access([t.t5]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t5) from t;
++-------------------------------+
+| from_unixtime(1234567890, t5) |
++-------------------------------+
+| 13445677888                   |
+| NULL                          |
++-------------------------------+
+explain select from_unixtime(1234567890, t5) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t5, VARCHAR(1048576)))]), filter(nil), rowset=16
+      access([t.t5]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t6) from t;
++---------------------+
+| from_unixtime(t6)   |
++---------------------+
+| 1970-01-01 08:00:01 |
+| NULL                |
++---------------------+
+explain select from_unixtime(t6) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(t.t6, DECIMAL(3, 0)))]), filter(nil), rowset=16
+      access([t.t6]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t6) from t;
++-------------------------------+
+| from_unixtime(1234567890, t6) |
++-------------------------------+
+| 1                             |
+| NULL                          |
++-------------------------------+
+explain select from_unixtime(1234567890, t6) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t6, VARCHAR(1048576)))]), filter(nil), rowset=16
+      access([t.t6]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t7) from t;
++---------------------+
+| from_unixtime(t7)   |
++---------------------+
+| 1970-01-01 08:00:01 |
+| NULL                |
++---------------------+
+explain select from_unixtime(t7) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(t.t7, DECIMAL(5, 0)))]), filter(nil), rowset=16
+      access([t.t7]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t7) from t;
++-------------------------------+
+| from_unixtime(1234567890, t7) |
++-------------------------------+
+| 1                             |
+| NULL                          |
++-------------------------------+
+explain select from_unixtime(1234567890, t7) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t7, VARCHAR(1048576)))]), filter(nil), rowset=16
+      access([t.t7]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t8) from t;
++---------------------+
+| from_unixtime(t8)   |
++---------------------+
+| 1970-01-01 08:00:01 |
+| NULL                |
++---------------------+
+explain select from_unixtime(t8) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(t.t8, DECIMAL(8, 0)))]), filter(nil), rowset=16
+      access([t.t8]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t8) from t;
++-------------------------------+
+| from_unixtime(1234567890, t8) |
++-------------------------------+
+| 1                             |
+| NULL                          |
++-------------------------------+
+explain select from_unixtime(1234567890, t8) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t8, VARCHAR(1048576)))]), filter(nil), rowset=16
+      access([t.t8]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t9) from t;
++---------------------+
+| from_unixtime(t9)   |
++---------------------+
+| 1970-06-17 15:23:43 |
+| NULL                |
++---------------------+
+explain select from_unixtime(t9) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(t.t9, DECIMAL(10, 0)))]), filter(nil), rowset=16
+      access([t.t9]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t9) from t;
++-------------------------------+
+| from_unixtime(1234567890, t9) |
++-------------------------------+
+| 14455423                      |
+| NULL                          |
++-------------------------------+
+explain select from_unixtime(1234567890, t9) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t9, VARCHAR(1048576)))]), filter(nil), rowset=16
+      access([t.t9]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t10) from t;
++---------------------+
+| from_unixtime(t10)  |
++---------------------+
+| 1970-01-01 08:00:01 |
+| NULL                |
++---------------------+
+explain select from_unixtime(t10) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(t.t10, DECIMAL(20, 0)))]), filter(nil), rowset=16
+      access([t.t10]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t10) from t;
++--------------------------------+
+| from_unixtime(1234567890, t10) |
++--------------------------------+
+| 1                              |
+| NULL                           |
++--------------------------------+
+explain select from_unixtime(1234567890, t10) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t10, VARCHAR(1048576)))]), filter(nil), rowset=16
+      access([t.t10]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t11) from t;
++---------------------+
+| from_unixtime(t11)  |
++---------------------+
+| 1973-11-26 08:52:00 |
+| NULL                |
++---------------------+
+explain select from_unixtime(t11) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(t.t11, DECIMAL(-1, -1)))]), filter(nil), rowset=16
+      access([t.t11]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t11) from t;
++--------------------------------+
+| from_unixtime(1234567890, t11) |
++--------------------------------+
+| 123123000                      |
+| NULL                           |
++--------------------------------+
+explain select from_unixtime(1234567890, t11) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t11, VARCHAR(1048576)))]), filter(nil), rowset=16
+      access([t.t11]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t12) from t;
++----------------------------+
+| from_unixtime(t12)         |
++----------------------------+
+| 1970-01-02 20:27:11.109375 |
+| NULL                       |
++----------------------------+
+explain select from_unixtime(t12) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(t.t12, DECIMAL(-1, -1)))]), filter(nil), rowset=16
+      access([t.t12]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t12) from t;
++--------------------------------+
+| from_unixtime(1234567890, t12) |
++--------------------------------+
+| 131231                         |
+| NULL                           |
++--------------------------------+
+explain select from_unixtime(1234567890, t12) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t12, VARCHAR(1048576)))]), filter(nil), rowset=16
+      access([t.t12]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t13) from t;
++----------------------------+
+| from_unixtime(t13)         |
++----------------------------+
+| 1970-05-09 23:00:11.223230 |
+| NULL                       |
++----------------------------+
+explain select from_unixtime(t13) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(t.t13, DECIMAL(-1, -1)))]), filter(nil), rowset=16
+      access([t.t13]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t13) from t;
++--------------------------------+
+| from_unixtime(1234567890, t13) |
++--------------------------------+
+| 11113211.22323                 |
+| NULL                           |
++--------------------------------+
+explain select from_unixtime(1234567890, t13) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t13, VARCHAR(1048576)))]), filter(nil), rowset=16
+      access([t.t13]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t14) from t;
++----------------------------+
+| from_unixtime(t14)         |
++----------------------------+
+| 2677-01-18 16:31:52.322000 |
+| NULL                       |
++----------------------------+
+explain select from_unixtime(t14) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(t.t14, DECIMAL(-1, -1)))]), filter(nil), rowset=16
+      access([t.t14]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t14) from t;
++--------------------------------+
+| from_unixtime(1234567890, t14) |
++--------------------------------+
+| 22312312312.322                |
+| NULL                           |
++--------------------------------+
+explain select from_unixtime(1234567890, t14) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t14, VARCHAR(1048576)))]), filter(nil), rowset=16
+      access([t.t14]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t15) from t;
++---------------------+
+| from_unixtime(t15)  |
++---------------------+
+| 1973-11-26 08:53:42 |
+| NULL                |
++---------------------+
+explain select from_unixtime(t15) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(t.t15, DECIMAL(10, 0)))]), filter(nil), rowset=16
+      access([t.t15]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t15) from t;
++--------------------------------+
+| from_unixtime(1234567890, t15) |
++--------------------------------+
+| 123123222                      |
+| NULL                           |
++--------------------------------+
+explain select from_unixtime(1234567890, t15) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t15, VARCHAR(1048576)))]), filter(nil), rowset=16
+      access([t.t15]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t16) from t;
++---------------------+
+| from_unixtime(t16)  |
++---------------------+
+| 1970-01-15 14:00:32 |
+| NULL                |
++---------------------+
+explain select from_unixtime(t16) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(t.t16, DECIMAL(10, 0)))]), filter(nil), rowset=16
+      access([t.t16]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t16) from t;
++--------------------------------+
+| from_unixtime(1234567890, t16) |
++--------------------------------+
+| 1231232                        |
+| NULL                           |
++--------------------------------+
+explain select from_unixtime(1234567890, t16) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t16, VARCHAR(1048576)))]), filter(nil), rowset=16
+      access([t.t16]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t17) from t;
++--------------------+
+| from_unixtime(t17) |
++--------------------+
+| NULL               |
+| NULL               |
++--------------------+
+explain select from_unixtime(t17) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(t.t17)]), filter(nil), rowset=16
+      access([t.t17]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t17) from t;
++--------------------------------+
+| from_unixtime(1234567890, t17) |
++--------------------------------+
+| 1993-03-20 00:00:00            |
+| NULL                           |
++--------------------------------+
+explain select from_unixtime(1234567890, t17) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t17, VARCHAR(1048576)))]), filter(nil), rowset=16
+      access([t.t17]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t18) from t;
++--------------------+
+| from_unixtime(t18) |
++--------------------+
+| NULL               |
+| NULL               |
++--------------------+
+explain select from_unixtime(t18) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(t.t18)]), filter(nil), rowset=16
+      access([t.t18]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t18) from t;
++--------------------------------+
+| from_unixtime(1234567890, t18) |
++--------------------------------+
+| 1993-03-20 00:00:00            |
+| NULL                           |
++--------------------------------+
+explain select from_unixtime(1234567890, t18) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t18, VARCHAR(1048576)))]), filter(nil), rowset=16
+      access([t.t18]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t19) from t;
++--------------------+
+| from_unixtime(t19) |
++--------------------+
+| NULL               |
+| NULL               |
++--------------------+
+explain select from_unixtime(t19) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(t.t19)]), filter(nil), rowset=16
+      access([t.t19]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t19) from t;
++--------------------------------+
+| from_unixtime(1234567890, t19) |
++--------------------------------+
+| 1993-03-20                     |
+| NULL                           |
++--------------------------------+
+explain select from_unixtime(1234567890, t19) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t19, VARCHAR(1048576)))]), filter(nil), rowset=16
+      access([t.t19]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t20) from t;
++--------------------+
+| from_unixtime(t20) |
++--------------------+
+| NULL               |
+| NULL               |
++--------------------+
+explain select from_unixtime(t20) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(t.t20)]), filter(nil), rowset=16
+      access([t.t20]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t20) from t;
++--------------------------------+
+| from_unixtime(1234567890, t20) |
++--------------------------------+
+| 10:10:10                       |
+| NULL                           |
++--------------------------------+
+explain select from_unixtime(1234567890, t20) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t20, VARCHAR(1048576)))]), filter(nil), rowset=16
+      access([t.t20]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t21) from t;
++--------------------+
+| from_unixtime(t21) |
++--------------------+
+| NULL               |
+| NULL               |
++--------------------+
+explain select from_unixtime(t21) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(t.t21)]), filter(nil), rowset=16
+      access([t.t21]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t21) from t;
++--------------------------------+
+| from_unixtime(1234567890, t21) |
++--------------------------------+
+| 1993                           |
+| NULL                           |
++--------------------------------+
+explain select from_unixtime(1234567890, t21) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t21, VARCHAR(1048576)))]), filter(nil), rowset=16
+      access([t.t21]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t22) from t;
++----------------------------+
+| from_unixtime(t22)         |
++----------------------------+
+| 1970-01-02 18:12:03.130000 |
+| NULL                       |
++----------------------------+
+explain select from_unixtime(t22) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(t.t22, DECIMAL(-1, -1)))]), filter(nil), rowset=16
+      access([t.t22]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t22) from t;
++--------------------------------+
+| from_unixtime(1234567890, t22) |
++--------------------------------+
+| 123123.13                      |
+| NULL                           |
++--------------------------------+
+explain select from_unixtime(1234567890, t22) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), t.t22)]), filter(nil), rowset=16
+      access([t.t22]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t23) from t;
++----------------------------+
+| from_unixtime(t23)         |
++----------------------------+
+| 1970-01-02 20:42:03.240000 |
+| NULL                       |
++----------------------------+
+explain select from_unixtime(t23) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(t.t23, DECIMAL(-1, -1)))]), filter(nil), rowset=16
+      access([t.t23]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t23) from t;
++--------------------------------+
+| from_unixtime(1234567890, t23) |
++--------------------------------+
+| 132123.24                      |
+| NULL                           |
++--------------------------------+
+explain select from_unixtime(1234567890, t23) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t23, VARCHAR(1048576)))]), filter(nil), rowset=16
+      access([t.t23]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t24) from t;
++----------------------------+
+| from_unixtime(t24)         |
++----------------------------+
+| 2959-09-05 22:00:31.222000 |
+| NULL                       |
++----------------------------+
+explain select from_unixtime(t24) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(t.t24, DECIMAL(-1, -1)))]), filter(nil), rowset=16
+      access([t.t24]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t24) from t;
++--------------------------------+
+| from_unixtime(1234567890, t24) |
++--------------------------------+
+| 31231231231.222                |
+| NULL                           |
++--------------------------------+
+explain select from_unixtime(1234567890, t24) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t24, VARCHAR(1048576)))]), filter(nil), rowset=16
+      access([t.t24]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t25) from t;
++----------------------------+
+| from_unixtime(t25)         |
++----------------------------+
+| 2959-09-05 22:00:31.220000 |
+| NULL                       |
++----------------------------+
+explain select from_unixtime(t25) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(t.t25, DECIMAL(-1, -1)))]), filter(nil)
+      access([t.t25]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t25) from t;
++--------------------------------+
+| from_unixtime(1234567890, t25) |
++--------------------------------+
+| 31231231231.22                 |
+| NULL                           |
++--------------------------------+
+explain select from_unixtime(1234567890, t25) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t25, VARCHAR(1048576)))]), filter(nil)
+      access([t.t25]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t26) from t;
++----------------------------+
+| from_unixtime(t26)         |
++----------------------------+
+| 1970-01-01 08:00:01.200000 |
+| NULL                       |
++----------------------------+
+explain select from_unixtime(t26) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(t.t26, DECIMAL(-1, -1)))]), filter(nil)
+      access([t.t26]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t26) from t;
++--------------------------------+
+| from_unixtime(1234567890, t26) |
++--------------------------------+
+| 1.2                            |
+| NULL                           |
++--------------------------------+
+explain select from_unixtime(1234567890, t26) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t26, VARCHAR(1048576)))]), filter(nil)
+      access([t.t26]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t27) from t;
++---------------------+
+| from_unixtime(t27)  |
++---------------------+
+| 1970-01-01 08:00:01 |
+| NULL                |
++---------------------+
+explain select from_unixtime(t27) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(t.t27, DECIMAL(1, 0)))]), filter(nil), rowset=16
+      access([t.t27]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t27) from t;
++--------------------------------+
+| from_unixtime(1234567890, t27) |
++--------------------------------+
+|                               |
+| NULL                           |
++--------------------------------+
+explain select from_unixtime(1234567890, t27) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), cast(t.t27, VARCHAR(1048576)))]), filter(nil), rowset=16
+      access([t.t27]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t28) from t;
++---------------------+
+| from_unixtime(t28)  |
++---------------------+
+| 1970-01-01 08:00:02 |
+| 1970-01-01 08:00:05 |
++---------------------+
+explain select from_unixtime(t28) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(t.t28, DECIMAL(-1, -1)))]), filter(nil), rowset=16
+      access([t.t28]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t28) from t;
++--------------------------------+
+| from_unixtime(1234567890, t28) |
++--------------------------------+
+| b                              |
+| 2009-February-14th 07:02:30    |
++--------------------------------+
+explain select from_unixtime(1234567890, t28) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), enum_to_str('', t.t28))]), filter(nil), rowset=16
+      access([t.t28]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+select from_unixtime(t29) from t;
++---------------------+
+| from_unixtime(t29)  |
++---------------------+
+| 1970-01-01 08:00:02 |
+| NULL                |
++---------------------+
+explain select from_unixtime(t29) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(t.t29, DECIMAL(-1, -1)))]), filter(nil), rowset=16
+      access([t.t29]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+
+select from_unixtime(1234567890, t29) from t;
++--------------------------------+
+| from_unixtime(1234567890, t29) |
++--------------------------------+
+| b                              |
+| NULL                           |
++--------------------------------+
+explain select from_unixtime(1234567890, t29) from t;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t   |2       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([from_unixtime(cast(1234567890, DECIMAL(10, 0)), set_to_str('', t.t29))]), filter(nil), rowset=16
+      access([t.t29]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true

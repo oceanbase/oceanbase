@@ -1,0 +1,63 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+#owner: linlin.xll
+#owner group: SQL1
+#description: OUR GOAL: Make all this simple and effective!
+#tags: trx
+
+--disable_warnings
+drop table if exists t2;
+--enable_warnings
+--disable_warnings
+drop table if exists t3;
+--enable_warnings
+
+create table t2 (i int primary key, j int);
+insert into t2 values (1,1);
+set autocommit = 1;
+insert into t2 values (2,2);
+commit;
+rollback;
+select * from t2;
+
+set autocommit = 0;
+insert into t2 values (3,3);
+rollback;
+insert into t2 values (3,3);
+commit;
+--error 1062
+insert into t2 values (3,3);
+rollback;
+commit;
+
+
+set autocommit = 0;
+insert into t2 values (4,4);
+create table t3 (i int primary key, j int);
+select * from t2;
+rollback;
+select * from t2;
+
+# 测试ac从0变成1时的自动提交
+set autocommit = 0;
+insert into t2 values (5,5);
+set autocommit = 1;
+rollback;
+select * from t2;
+
+# 测试ac=0时调用begin的自动提交
+set autocommit = 0;
+insert into t2 values (6,6);
+begin;
+rollback;
+select * from t2;
+
+
+--disable_warnings
+drop table if exists t2;
+--enable_warnings
+--disable_warnings
+drop table if exists t3;
+--enable_warnings

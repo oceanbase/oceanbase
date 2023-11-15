@@ -1,0 +1,94 @@
+result_format: 4
+
+
+
+set @@ob_enable_plan_cache = 0;
+
+select space(NULL);
++-------------+
+| space(NULL) |
++-------------+
+| NULL        |
++-------------+
+select space(-1);
++-----------+
+| space(-1) |
++-----------+
+|           |
++-----------+
+select space(0);
++----------+
+| space(0) |
++----------+
+|          |
++----------+
+select space(1);
++----------+
+| space(1) |
++----------+
+|          |
++----------+
+select space(2);
++----------+
+| space(2) |
++----------+
+|          |
++----------+
+select length(space("2.1"));
++----------------------+
+| length(space("2.1")) |
++----------------------+
+|                    2 |
++----------------------+
+select length(space("2.9"));
++----------------------+
+| length(space("2.9")) |
++----------------------+
+|                    2 |
++----------------------+
+select length(space("200000000"));
++----------------------------+
+| length(space("200000000")) |
++----------------------------+
+|                       NULL |
++----------------------------+
+
+drop table t2;
+create table t2 as select space(512),space(513),space(32767),space(32768),space(65535),space(65536) from dual;
+desc t2;
++--------------+--------------+------+-----+---------+-------+
+| Field        | Type         | Null | Key | Default | Extra |
++--------------+--------------+------+-----+---------+-------+
+| space(512)   | varchar(512) | YES  |     | NULL    |       |
+| space(513)   | text         | YES  |     | NULL    |       |
+| space(32767) | text         | YES  |     | NULL    |       |
+| space(32768) | text         | YES  |     | NULL    |       |
+| space(65535) | text         | YES  |     | NULL    |       |
+| space(65536) | longtext     | YES  |     | NULL    |       |
++--------------+--------------+------+-----+---------+-------+
+drop table t2;
+
+#bugfix 
+
+drop database if exists luofan;
+drop table if exists t1;
+create database luofan;
+create table t1 (c1 varchar(64));
+insert into t1 values(-1);
+insert into t1 values(-2);
+insert into t1 values(-3);
+insert into t1 values(-4);
+
+select * from t1 where space(c1) = '';
++------+
+| c1   |
++------+
+| -1   |
+| -2   |
+| -3   |
+| -4   |
++------+
+
+drop table if exists t1;
+drop database if exists luofan;
+

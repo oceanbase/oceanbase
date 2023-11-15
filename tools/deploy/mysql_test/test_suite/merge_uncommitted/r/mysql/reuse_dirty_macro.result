@@ -1,0 +1,19 @@
+set GLOBAL ob_query_timeout = 1000000000000;
+set GLOBAL ob_trx_timeout = 1000000000000;
+alter system set minor_compact_trigger = 10;
+drop table if exists test_uncommitted_trx_minor_merge;
+create table test_uncommitted_trx_minor_merge(c1 int primary key, c2 int, c3 varchar(2048)) compression "none";
+insert into test_uncommitted_trx_minor_merge values (3001, 3001, "aaaa");
+alter system minor freeze;
+insert into test_uncommitted_trx_minor_merge values (3002, 3002, "aaaa");
+insert into test_uncommitted_trx_minor_merge values (4000,4000,"a");
+alter system minor freeze;
+alter system set minor_compact_trigger = 1;
+select count(1) from test_uncommitted_trx_minor_merge;
+count(1)
+3003
+select count(1) from test_uncommitted_trx_minor_merge;
+count(1)
+3003
+drop table test_uncommitted_trx_minor_merge;
+alter system set minor_compact_trigger = 2;

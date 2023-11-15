@@ -1,0 +1,24 @@
+set ob_enable_index_direct_select=1;
+alter system set merger_check_interval = '10s' tenant sys;
+alter system set merger_check_interval = '10s' tenant all_user;
+alter system set merger_check_interval = '10s' tenant all_meta;
+drop table if exists tbl1;
+create table tbl1 (pk int,i1 int, v2 varchar(80), i3 char(20),i4 float, d4 datetime(6),i5 decimal(5,3),i6 bool, primary key(pk));
+insert into tbl1 values(1,1,'abc12','1agc',1.25,'2014-01-01 12:00:00',23.23,1),
+(2,10,'23abc12','4agc1',-0.25,'2015-11-01 12:00:00',-23.230,0),
+(3,201,'xx23abc12','cagc1',-2.25,'2015-11-21 11:20:10',3.231,1),
+(4,80,'zx23abc12','zcagc1',2.25,'2013-01-21 11:20:10',-3.231,1),
+(5,53,'cx23abc12','rcagc1',109.25,'2016-01-22 11:20:10',-13.131,0),
+(6,78,'tx23abc12','icagc1',-109.25,'2014-09-16 16:24:00',-13.531,1),
+(7,400,'yx23abc12','ocagc1',85.85,'2014-09-17 16:20:21',-93.131,0),
+(8,50,'vx23abc12','wcagc1',-85.85,'2014-09-10 16:20:21',93.131,1),
+(9,610,'ukx23abc12','pecagc1',-1.85,'2014-09-19 16:20:21',99.131,0),
+(10,610,'kx23abc12','ecagc1',-85.86,'2014-09-18 16:20:21',-99.131,1),
+(11,null,null,null,null,null,null,null);
+create unique index idx_1 on tbl1(i1);
+ERROR 23000: Duplicate entry '610' for key 'idx_1'
+create unique index idx_2 on tbl1(v2);
+create unique index idx_3 on tbl1(i3);
+create unique index idx_5 on tbl1(d4);
+create unique index idx_7 on tbl1(i1,v2,i3,d4,i6);
+drop table tbl1;

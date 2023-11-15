@@ -1,0 +1,68 @@
+#owner: linqiucen.lqc
+#owner group: RS
+#tags: views
+#description:
+# DBA_OB_TENANTS
+
+connect (mysql,$OBMYSQL_MS0,root@mysql,,oceanbase,$OBMYSQL_PORT);
+
+connect (sys,$OBMYSQL_MS0,root,,oceanbase,$OBMYSQL_PORT);
+connection sys;
+DESC DBA_OB_TENANTS;
+
+SELECT count(distinct(tenant_id)) >= 1  FROM DBA_OB_TENANTS;
+
+select TENANT_NAME, TENANT_TYPE, COMPATIBILITY_MODE, STATUS, IN_RECYCLEBIN, LOCKED, TENANT_ROLE, SWITCHOVER_STATUS, LOG_MODE, UNIT_NUM from DBA_OB_TENANTS where TENANT_NAME = 'mysql';
+select TENANT_NAME, TENANT_TYPE, COMPATIBILITY_MODE, STATUS, IN_RECYCLEBIN, LOCKED, TENANT_ROLE, SWITCHOVER_STATUS, LOG_MODE, UNIT_NUM from DBA_OB_TENANTS where TENANT_TYPE = 'SYS';
+eval select TENANT_TYPE, COMPATIBILITY_MODE, STATUS, IN_RECYCLEBIN, LOCKED, TENANT_ROLE, SWITCHOVER_STATUS, LOG_MODE, SYNC_SCN, REPLAYABLE_SCN, READABLE_SCN, RECOVERY_UNTIL_SCN, UNIT_NUM from DBA_OB_TENANTS where TENANT_TYPE = 'META' limit 1;
+select count(*) from DBA_OB_TENANTS where COMPATIBLE != (SELECT MIN(VALUE) FROM GV$OB_PARAMETERS WHERE NAME = 'compatible');
+# 0
+select count(*) from DBA_OB_TENANTS where SYNC_SCN >= REPLAYABLE_SCN and REPLAYABLE_SCN>=READABLE_SCN and RECOVERY_UNTIL_SCN !=0 and TENANT_TYPE = "USER" and TENANT_NAME = 'mysql';
+# 1
+
+select count(*) from DBA_OB_TENANTS where SYNC_SCN is NULL and REPLAYABLE_SCN is NULL and READABLE_SCN is NULL and RECOVERY_UNTIL_SCN  is NULL and TENANT_TYPE = 'SYS';
+# 1
+
+# case 2: other database can access
+USE TEST;
+
+SELECT count(distinct(tenant_id)) >= 1  FROM oceanbase.DBA_OB_TENANTS;
+
+# case 3: mysql tenant can access
+connection mysql;
+DESC DBA_OB_TENANTS;
+
+SELECT TENANT_NAME, count(*) = 1  FROM oceanbase.DBA_OB_TENANTS group by TENANT_ID;
+select TENANT_NAME, TENANT_TYPE, COMPATIBILITY_MODE, STATUS, IN_RECYCLEBIN, LOCKED, TENANT_ROLE, SWITCHOVER_STATUS, LOG_MODE, UNIT_NUM from oceanbase.DBA_OB_TENANTS;
+select count(*) from oceanbase.DBA_OB_TENANTS where COMPATIBLE != (SELECT MIN(VALUE) FROM oceanbase.GV$OB_PARAMETERS WHERE NAME = 'compatible');
+# 0
+select count(*) from oceanbase.DBA_OB_TENANTS where SYNC_SCN >= REPLAYABLE_SCN and REPLAYABLE_SCN>=READABLE_SCN and RECOVERY_UNTIL_SCN !=0 and TENANT_TYPE = "USER";
+# 1
+
+# case 4: test tenant role after switchover on sys connection
+connection sys;
+ALTER SYSTEM SWITCHOVER TO STANDBY TENANT mysql;
+select TENANT_NAME, TENANT_TYPE, COMPATIBILITY_MODE, STATUS, IN_RECYCLEBIN, LOCKED, TENANT_ROLE, SWITCHOVER_STATUS, LOG_MODE, UNIT_NUM from oceanbase.DBA_OB_TENANTS where TENANT_NAME = 'mysql';
+select count(*) from oceanbase.DBA_OB_TENANTS where SYNC_SCN >= REPLAYABLE_SCN and REPLAYABLE_SCN>=READABLE_SCN and RECOVERY_UNTIL_SCN !=0 and TENANT_TYPE = "USER" and TENANT_NAME = 'mysql';
+# 1
+
+# case 5: test tenant role after switchover on mysql connection
+connection mysql;
+select TENANT_NAME, TENANT_TYPE, COMPATIBILITY_MODE, STATUS, IN_RECYCLEBIN, LOCKED, TENANT_ROLE, SWITCHOVER_STATUS, LOG_MODE, UNIT_NUM from oceanbase.DBA_OB_TENANTS where TENANT_NAME = 'mysql';
+select count(*) from oceanbase.DBA_OB_TENANTS where SYNC_SCN >= REPLAYABLE_SCN and REPLAYABLE_SCN>=READABLE_SCN and RECOVERY_UNTIL_SCN !=0 and TENANT_TYPE = "USER" and TENANT_NAME = 'mysql';
+# 1
+
+connection sys;
+ALTER SYSTEM SWITCHOVER TO PRIMARY TENANT mysql;
+let $check_can_write_tenant_id = query_get_value(select TENANT_ID from oceanbase.DBA_OB_TENANTS where TENANT_NAME = 'mysql', TENANT_ID, 1);
+--disable_query_log
+--source mysql_test/include/check_tenant_can_write.inc
+--enable_query_log
+
+# case 6: 验证DBA_OB_TENANTS视图是否可以根据访问的列而做裁剪
+# 6.1 只访问__all_tenant表相关列，期望查询视图的过程中内部只访问__all_tenant表
+use oceanbase;
+EXPLAIN BASIC select tenant_name,status from DBA_OB_TENANTS where tenant_name = 'mysql';
+
+# 6.2 访问了__all_virtual_tenant_info的列，期望查询到__all_tenant_info表
+EXPLAIN BASIC select tenant_role,switchover_status from DBA_OB_TENANTS where tenant_name = 'mysql';

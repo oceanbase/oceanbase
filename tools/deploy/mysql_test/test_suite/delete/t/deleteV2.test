@@ -1,0 +1,126 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: xiaoyi.xy
+# owner group: SQL3
+# description: 测试where比较条件的delete stmt, 单行删除
+# tags: delete,dml
+
+--disable_abort_on_error
+
+--echo can't determine a row
+
+##case1
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(c1 int, c2 int, primary key(c1));
+
+insert into t1 values(1,1),(2,2),(3,3);
+delete from t1 where c1 in(1);
+select * from t1;
+delete from t1 where c1 in(1,2);
+select * from t1;
+delete from t1 where c1>=3;
+select * from t1;
+
+insert into t1 values(1,1),(2,2),(3,3);
+delete from t1 where c1<=1;
+select * from t1;
+delete from t1 where 1>=c1;
+select * from t1;
+delete from t1 where 3<=c1;
+select * from t1;
+delete from t1 where 2<=c1;
+select * from t1;
+
+insert into t1 values(1,1),(2,2),(3,3);
+delete from t1 where c1>1 and c1<3;
+select * from t1;
+delete from t1 where c1=1 or c1=2;
+select * from t1;
+delete from t1 where c1<1 or c1<2;
+select * from t1;
+delete from t1 where c1=1 and c1=2;
+select * from t1;
+delete from t1 where c1>1 and c1=2;
+select * from t1;
+
+##case2
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(c1 int, c2 int, primary key(c1));
+
+insert into t1 values(1,1),(2,2),(3,3);
+delete from t1 where c2 in(1);
+select * from t1;
+delete from t1 where c2 in(1,2);
+select * from t1;
+delete from t1 where c2>=3;
+select * from t1;
+
+insert into t1 values(1,1),(2,2),(3,3);
+delete from t1 where c2<=1;
+select * from t1;
+delete from t1 where 1>=c2;
+select * from t1;
+delete from t1 where 3<=c2;
+select * from t1;
+delete from t1 where c2>1 and c2<3;
+select * from t1;
+delete from t1 where c2=1 or c2=2;
+select * from t1;
+delete from t1 where c2<1 or c2<2;
+select * from t1;
+delete from t1 where c2=1 and c2=2;
+select * from t1;
+delete from t1 where c2>1 and c2=2;
+select * from t1;
+
+##case3
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(c1 int, c2 int, primary key(c1));
+
+insert into t1 values(1,1),(2,2),(3,3);
+delete from t1 where (c1,c2) in((1,1));
+select * from t1;
+delete from t1 where (c1,c2) in((1,1),(2,2));
+select * from t1;
+delete from t1 where (c2,c1) in((1,1));
+select * from t1;
+delete from t1 where (c2,c1) in((1,1),(2,2));
+select * from t1;
+delete from t1 where c1 > 1 and c2 >10 and c1=1;
+select * from t1;
+delete from t1 where c1 > 1 or c2 >10 and c1=1;
+select * from t1;
+
+##case4
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(c1 int, c2 int, primary key(c1));
+insert into t1 values(1,1),(2,2),(3,3);
+delete from t1 where c2<=1;
+select * from t1;
+delete from t1 where 1>=c2;
+select * from t1;
+delete from t1 where 3<=c2;
+select * from t1;
+delete from t1 where c2>1 and c2<3;
+select * from t1;
+insert into t1 values(1,1),(2,2),(3,3);
+delete from t1 where c2=1 or c2=2;
+select * from t1;
+delete from t1 where c2<1 or c2<2;
+select * from t1;
+delete from t1 where c2=1 and c2=2;
+select * from t1;
+delete from t1 where c2>1 and c2=2;
+select * from t1;
+--disable_warnings
+drop table if exists t1;
+--enable_warnings

@@ -1,0 +1,60 @@
+result_format: 4
+drop table if exists my_tab;
+drop procedure if exists my_proc;
+drop function if exists my_func;
+drop database if exists my_db;
+create table my_tab(col varchar(50));
+
+
+create procedure my_proc()
+begin
+  insert into my_tab values(concat("my_proc exec with db = ", database()));
+end|
+
+create function my_func() returns int
+begin
+  insert into my_tab values(concat("my_func exec with db = ", database()));
+  return 1;
+end|
+
+
+call my_proc();
+select my_func();
++-----------+
+| my_func() |
++-----------+
+|         1 |
++-----------+
+select * from my_tab;
++-----------------------------+
+| col                         |
++-----------------------------+
+| my_proc exec with db = test |
+| my_func exec with db = test |
++-----------------------------+
+
+create database my_db;
+use my_db;
+call test.my_proc();
+select test.my_func();
++----------------+
+| test.my_func() |
++----------------+
+|              1 |
++----------------+
+select * from test.my_tab;
++-----------------------------+
+| col                         |
++-----------------------------+
+| my_func exec with db = test |
+| my_func exec with db = test |
+| my_proc exec with db = test |
+| my_proc exec with db = test |
++-----------------------------+
+
+use test;
+drop procedure my_proc;
+drop function my_func;
+drop table my_tab;
+drop database my_db;
+

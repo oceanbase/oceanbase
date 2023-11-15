@@ -1,0 +1,104 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: yuchen.wyc
+# owner group: SQL1
+# Test of functions intersect
+
+--disable_warnings
+drop table if exists t1,t2,t3,t4,t8;
+--enable_warnings
+
+
+create table t1(c1 int primary key, c2 int);
+create table t2(c1 int primary key, c2 int);
+create table t3(c1 int, c2 int primary key);
+create table t4(c1 int primary key, c2 int);
+
+insert into t1 values(1,1),(2,2),(3,3),(4,4),(5,5);
+insert into t2 values(0,0),(2,2),(4,4),(6,6);
+insert into t3 values(1,1),(3,3),(5,5),(7,7);
+insert into t4 values(1,0),(2,0),(3,1),(4,1);
+
+(select * from t1 where false ) intersect (select * from t2 where false);
+--error 1064
+(select * from t1 where false ) intersect all (select * from t2 where false);
+(select * from t1 where false ) intersect select * from t2;
+--error 1064
+(select * from t1 where false ) intersect all select * from t2;
+select * from t1 intersect (select * from t2 where false);
+--error 1064
+select * from t1 intersect all (select * from t2 where false);
+(select * from t1 where false) intersect (select * from t2 where false) intersect (select * from t3 where false);
+--error 1064
+(select * from t1 where false) intersect all (select * from t2 where false) intersect (select * from t3 where false);
+
+
+#
+select c1 from t1 intersect select c1 from t1;
+--error 1064
+select c1 from t1 intersect all select c1 from t1;
+select c1 from t1 intersect select c1 from t4;
+--error 1064
+select c1 from t1 intersect all select c1 from t4;
+select c1 from t4 intersect select c1 from t1;
+--error 1064
+select c1 from t4 intersect all select c1 from t1;
+select c1 from t2 intersect select c1 from t3;
+--error 1064
+select c1 from t2 intersect all select c1 from t3;
+select c1 from t1 intersect select c1 from t2;
+--error 1064
+select c1 from t1 intersect all select c1 from t2;
+
+
+# distinct
+select c2 from t4 intersect select c2 from t1;
+--error 1064
+select c2 from t4 intersect all select c2 from t1;
+select c2 from t1 intersect select c2 from t4;
+--error 1064
+select c2 from t1 intersect all select c2 from t4;
+select * from t1 intersect (select * from t2 union select * from t3) ;
+--error 1064
+select * from t1 intersect all  (select * from t2 union select * from t3) ;
+(select * from t1 intersect select * from t2) union (select * from t1 intersect select * from t3);
+--error 1064
+select * from t1 intersect all (select * from t2 union select * from t3) ;
+select c2 from t1 intersect select c2 from t3 intersect select c2 from t4;
+--error 1064
+select c2 from t1 intersect all select c2 from t3 intersect select c2 from t4;
+select c2 from t1 intersect (select c2 from t3 intersect select c2 from t4);
+--error 1064
+select c2 from t1 intersect all (select c2 from t3 intersect select c2 from t4);
+--disable_warnings
+drop table if exists t5,t6;
+--enable_warnings
+create table t5(c1 int primary key, c2 int);
+create table t6(c1 int primary key, c2 int);
+
+insert into t5 values(1,1),(2,2),(3,3),(4,4),(5,5),(6,2),(7,3),(8,6),(9,6),(10,4),(11,2);
+insert into t6 values(0,0),(2,2),(4,4),(6,6),(1,2),(3,4),(5,6);
+select c2 from t5 intersect select c2 from t6;
+--error 1064
+select c2 from t5 intersect  all select c2 from t6;
+--error 1222
+select c2 from t5 intersect  select c1,c2 from t6;
+
+
+create table t8 (c1 BINARY(99) ,c2 INTEGER(127) ,c3 VARBINARY(71) ,c4 BINARY(65) ,c5 BIGINT(127) ,c6 INTEGER(127) ,c7 INT(127) ,c8 INTEGER(127) ,c9 NUMERIC(64,25) ,c10 VARBINARY(55) ,c11 BIGINT(127) ,c12 VARCHAR(86) ,c13 INTEGER(127) ,c14 INT(127) ,c15 INTEGER(127) ,c16 DECIMAL(64,15) ,c17 INTEGER(127) ,c18 VARBINARY(76) ,c19 INTEGER(127) , primary key(c7,c6), index i_OkcN(c19) global, index i_ahayugXY(c10,c18) global, index i_iA(c16,c2) global)  DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_bin PARTITION BY KEY(c7) PARTITIONS 20;
+
+insert into t8 values('cdxLVdvvJjcoHFBECqXKkRGoMXYgNsTpJRrqYaluQdfEeB00000',0,'RetSgyIigYXIPgBXBsmZHQZQPLWcGoELCf00000','wD00000',0,0,0,0,0.0000000000000000000000000,'ieLhJAFmNCq00000',0,'DcKPncNvJjyYcNJKFmVUVhqvgUlLfINbycifYNHjzqALoLfn00000',0,0,0,0.000000000000000,0,'MojimRsQZuotWXMuvSQVDSdCmOaloSXNLRTxMYYXaxGbtuk00000',0);
+
+explain (select /*+USE_HASH_AGGREGATION*/ c15 from (select c15 from t8) except (select c15 from t8) order by 1 limit 1000) union all (select  t8_alias1.c10 from t8 t8_alias1 limit 1);
+(select /*+USE_HASH_AGGREGATION*/ c15 from (select c15 from t8) except (select c15 from t8) order by 1 limit 1000) union all (select  t8_alias1.c10 from t8 t8_alias1 limit 1);
+explain (select /*+USE_HASH_AGGREGATION*/ c15 from (select c15 from t8) intersect (select c15 from t8) order by 1 limit 1000) union all (select  t8_alias1.c10 from t8 t8_alias1 limit 1);
+(select /*+USE_HASH_AGGREGATION*/ c15 from (select c15 from t8) intersect (select c15 from t8) order by 1 limit 1000) union all (select  t8_alias1.c10 from t8 t8_alias1 limit 1);
+
+drop table t8;
+create table t8 (c1 BINARY(99) ,c2 INTEGER(127) ,c3 VARBINARY(71) ,c4 BINARY(65) ,c5 BIGINT(127) ,c6 INTEGER(127) ,c7 INT(127) ,c8 INTEGER(127) ,c9 NUMERIC(64,25) ,c10 VARBINARY(55) ,c11 BIGINT(127) ,c12 VARCHAR(86) ,c13 INTEGER(127) ,c14 INT(127) ,c15 INTEGER(127) ,c16 DECIMAL(64,15) ,c17 INTEGER(127) ,c18 VARBINARY(76) ,c19 INTEGER(127) , primary key(c7,c6), index i_OkcN(c19), index i_ahayugXY(c10,c18), index i_iA(c16,c2));
+insert into t8 values('cdxLVdvvJjcoHFBECqXKkRGoMXYgNsTpJRrqYaluQdfEeB00000',0,'RetSgyIigYXIPgBXBsmZHQZQPLWcGoELCf00000','wD00000',0,0,0,0,0.0000000000000000000000000,'ieLhJAFmNCq00000',0,'DcKPncNvJjyYcNJKFmVUVhqvgUlLfINbycifYNHjzqALoLfn00000',0,0,0,0.000000000000000,0,'MojimRsQZuotWXMuvSQVDSdCmOaloSXNLRTxMYYXaxGbtuk00000',0);
+
+explain ((select c6 from t8 where c6 < 1000) except (select c6 from t8 where c6 > -1000) order by c6 limit 1000) union all (select  t8_alias1.c10 from t8 t8_alias1 limit 1);
+
+drop table t1,t2,t3,t4,t5,t6, t8;

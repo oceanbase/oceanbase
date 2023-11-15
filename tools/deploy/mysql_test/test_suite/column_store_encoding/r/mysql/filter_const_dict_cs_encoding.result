@@ -1,0 +1,22 @@
+alter system major freeze tenant all;
+select count(1) from t1;
+count(1)
+32000
+select count(1) from t1 where b <> 0;
+count(1)
+2000
+select count(1) from t1 where b <> 0 and b <> 11;
+count(1)
+1800
+select count(1) from t1 where b > 1 and b <> 11;
+count(1)
+1600
+select count(1) from t1 where c = 'a';
+count(1)
+30000
+select count(1) from t1 where c = 'x';
+count(1)
+1000
+select count(1) from t1 where c <> 'a';
+count(1)
+2000

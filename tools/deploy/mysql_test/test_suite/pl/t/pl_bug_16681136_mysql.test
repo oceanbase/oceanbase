@@ -1,0 +1,67 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#tags: pl
+#owner: linlin.xll
+#owner group: sql1
+#description: test create table as select udf in another database
+
+--result_format 4
+
+--disable_query_log
+--disable_result_log
+--source mysql_test/include/index_quick_major.inc
+--enable_query_log
+--enable_result_log
+
+--disable_warnings
+drop database if exists my_db;
+--enable_warnings
+
+create database my_db;
+use my_db;
+
+--disable_warnings
+drop table if exists my_tab;
+drop function if exists my_func;
+--enable_warnings
+
+create function my_func() returns int return null;
+create table my_tab as select my_func();
+
+select my_func();
+select * from my_tab;
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table my_tab;
+
+drop table my_tab;
+
+use test;
+
+--error 1305
+create table my_tab as select my_func();
+create table my_tab as select my_db.my_func();
+
+--error 1305
+select my_func();
+select my_db.my_func();
+select * from my_tab;
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table my_tab;
+drop table my_tab;
+
+create function my_func() returns int return 1;
+create table my_tab as select my_func();
+select my_func();
+select * from my_tab;
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create table my_tab;
+
+drop function my_func;
+drop table my_tab;
+
+use my_db;
+drop function my_func;
+drop database my_db;
+
+use test;

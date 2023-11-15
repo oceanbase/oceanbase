@@ -1,0 +1,94 @@
+drop table if exists t1;
+create table t1(c1 int primary key, c2 int);
+insert into t1 values(1,1),(2,2),(3,3);
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+select * from t1 as t2 where c1=1;
+c1	c2
+1	1
+drop table t1;

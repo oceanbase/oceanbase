@@ -1,0 +1,101 @@
+# owner: fenggu.yh
+#tags: optimizer
+
+--result_format 4
+--explain_protocol 0
+--disable_query_log
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection syscon;
+alter system set ob_compaction_schedule_interval = '3s';
+set @@recyclebin = off;
+--sleep 2
+connection default;
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1 (c1 int auto_increment primary key, c2 bigint, c3 varchar(100)) row_format = compressed block_size = 2048 with column group for all columns, each column;
+
+--let $loop=10
+while($loop > 0)
+{
+  eval insert into t1 (c2, c3) values ($loop, concat("abc", $loop));
+  dec $loop;
+}
+insert into t1 (c2, c3) values(5, NULL);
+--let $loop=9
+while($loop > 0)
+{
+  insert into t1 (c2, c3) select c2 + 1, c3 from t1;
+  dec $loop;
+}
+insert into t1 (c2, c3) values(NULL, NULL);
+select count(1) from t1;
+
+connection syscon;
+alter system major freeze tenant all;
+--source mysql_test/include/wait_daily_merge.inc
+
+connection default;
+--let $loop=5
+while($loop > 0)
+{
+  eval insert into t1 (c2, c3) values ($loop, concat("abc", $loop));
+  dec $loop;
+}
+select count(1) from t1;
+
+delete from t1 where c1 = 20;
+update t1 set c2 = 50 where c1 = 30;
+update t1 set c2 = 90 where c1 = 100;
+insert into t1 (c2, c3) values (1, " abc "), (1, "ccc"), (1000, " abc "), (1000, "ccc");
+
+select count(1) from t1;
+--enable_query_log
+
+# white
+select count(1) from t1 where c2 != 10;
+select count(1) from t1 where c2 > 10;
+select count(1) from t1 where c2 < 10;
+select sum(c2) from t1 where c3 is null;
+select sum(c2) from t1 where c3 is null;
+select sum(c2) from t1 where c3 is not null;
+select sum(c1+c2) from t1 where c3 = "abc5";
+select sum(c2) from t1 where c3 > "abc5";
+select sum(c1+c2) from t1 where c3 < "abc5";
+
+# black
+select c1, c2 from t1 where c3 like "%abc5" order by c1;
+select sum(c2) from t1 where c3 in ("abc2", "ccc");
+select c1, c2 from t1 where (c1 + c2) > 15 order by c1;
+
+# and / or
+select sum(c2) from t1 where c2 > 10 and c3 > "abc5";
+select sum(c2) from t1 where c2 > 10 or c3 > "abc5";
+select sum(c2) from t1 where c2 <= 10 and (c3 > "abc5" or c2 = 50);
+select sum(c2) from t1 where c2 > 10 or c3 like "%abc5" or c2 = 5;
+select c1, c2 from t1 where (c1, c2) > (9, 9) and (c1, c2) < (15, 15) order by c1;
+select c1, c2 from t1 where (c1, c2) > (9, 9) or c3 in ("abc5") order by c1;
+select c1, c2 from t1 where (c1, c2) < (9, 9) or (c1, c2) >= (50, 50) or c3 in ("abc7") order by c1;
+select c1, c2 from t1 where (c1, c2) > (9, 9) and (c1, c2) < (15, 15) and c3 = "abc1" order by c1;
+
+# group by
+select sum(c1) from t1 where c2 > 10 and c3 > "abc5" group by c3 order by c2;
+select sum(c1) from t1 where c2 > 10 or c3 > "abc5" group by c2, c3;
+select sum(c1) from t1 where c2 <= 10 and (c3 > "abc5" or c2 = 50) group by c3;
+select sum(c1) from t1 where c2 > 10 or c3 like "%abc5" or c2 = 5 group by c2;
+select sum(c1) from t1 where (c1, c2) > (9, 9) and (c1, c2) < (15, 15) group by c2;
+select sum(c1) from t1 where (c1, c2) > (9, 9) or c3 in ("abc5") group by c2;
+select sum(c1) from t1 where (c1, c2) < (9, 9) or (c1, c2) >= (50, 50) or c3 in ("abc7") group by c2;
+select sum(c1) from t1 where (c1, c2) > (9, 9) and (c1, c2) < (15, 15) and c3 = "abc1" group by c2;
+
+drop table t1;
+
+--disable_query_log
+set @@recyclebin = on;
+--enable_query_log
+
+--enable_warnings
+--disable_query_log
+connection syscon;
+--enable_query_log

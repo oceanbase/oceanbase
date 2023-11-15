@@ -1,0 +1,520 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: dachuan.sdc
+# owner group: SQL2
+# tags: optimizer
+# description:
+#
+--disable_warnings
+drop database if exists view;
+--enable_warnings
+create database view;
+use view;
+set character_set_client = 45;
+
+#
+## test view schema weak-binding
+#
+
+#simple
+--disable_warnings
+drop table if exists t1;
+drop view if exists v, vv;
+--enable_warnings
+create table t1(c1 int, c2 int);
+create view v as select c1, c2 from t1;
+create view vv as select c1 from v;
+select c1, c2 from v;
+alter table t1 drop column c2;
+--error 1356
+select c1 from v;
+--error 1356
+select c2 from v;
+--error 1356
+select c1, c2 from v;
+drop table t1;
+--error 1356
+select c1 from v;
+--error 1356
+select c2 from v;
+--error 1356
+select c1, c2 from v;
+create table t1(c1 int);
+--error 1356
+select c1 from vv;
+--error 1356
+select c2 from vv;
+--error 1356
+select c1, c2 from vv;
+--error 1356
+select 1 as a from vv;
+
+--disable_warnings
+drop table if exists t1;
+drop view if exists v, vv;
+--enable_warnings
+create table t1(c1 int, c2 int);
+create view v as select c1, c2 from t1;
+create view vv as select c2 from v;
+select c1, c2 from v;
+alter table t1 drop column c2;
+--error 1356
+select c1 from v;
+--error 1356
+select c2 from v;
+--error 1356
+select c1, c2 from v;
+drop table t1;
+--error 1356
+select c1 from v;
+--error 1356
+select c2 from v;
+--error 1356
+select c1, c2 from v;
+create table t1(c1 int);
+--error 1356
+select c1 from vv;
+--error 1356
+select c2 from vv;
+--error 1356
+select c1, c2 from vv;
+--error 1356
+select c2, c1 from vv;
+--error 1356
+select 1 as a from vv;
+
+#select * from view
+--disable_warnings
+drop table if exists t1,t2;
+drop view if exists v,vv;
+--enable_warnings
+create table t1(c1 int ,c2 int);
+create table t2(c1 int ,c2 int);
+create view v as select c1, c2 from t1;
+create view vv as select c1 from v;
+alter table t1 drop column c2;
+--error 1356
+select * from v;
+--error 1356
+select v.* from v;
+--error 1356
+select * from vv;
+--error 1356
+select vv.* from vv;
+
+#join on and using
+--disable_warnings
+drop table if exists t1,t2;
+drop view if exists v;
+--enable_warnings
+create table t1(c1 int,c2 int);
+create table t2(c1 int,c2 int);
+create view v as select c1, c2 from t1;
+alter table t1 drop column c2;
+--error 1356
+select v.c1 from v join t2 on v.c1 = t2.c1;
+--error 1356
+select v.c1 from v join t2 on v.c2 = t2.c2;
+--error 1356
+select v.c1 from v join t2 using(c1);
+--error 1356
+select v.c1 from v join t2 using(c2);
+
+#column in where
+--disable_warnings
+drop table if exists t1,t2;
+drop view if exists v;
+--enable_warnings
+create table t1(c1 int,c2 int);
+create view v as select c1, c2 from t1;
+select c1 from v where c2 = 1;
+select c1 from v where (select c2) = 1;
+alter table t1 drop column c2;
+--error 1356
+select c1 from v where c2 = 1;
+--error 1356
+select c1 from v where (select c2) = 1;
+
+#column in order by
+--disable_warnings
+drop table if exists t1,t2;
+drop view if exists v;
+--enable_warnings
+create table t1(c1 int,c2 int);
+create view v as select c1, c2 from t1;
+select c1 from v order by c2;
+select c1 from v order by (select c2);
+alter table t1 drop column c2;
+--error 1356
+select c1 from v order by c2;
+--error 1356
+select c1 from v order by (select c2);
+
+#column in group by
+--disable_warnings
+drop table if exists t1,t2;
+drop view if exists v;
+--enable_warnings
+create table t1(c1 int,c2 int);
+create view v as select c1, c2 from t1;
+select c1 from v group by c2;
+select c1 from v group by (select c2);
+alter table t1 drop column c2;
+--error 1356
+select c1 from v group by c2;
+--error 1356
+select c1 from v group by (select c2);
+
+#column in having
+#drop table if exists t1,t2;
+#drop view if exists v;
+#create table t1(c1 int,c2 int);
+#create view v as select c1, c2 from t1;
+#select c1 from v having c2 = 1;
+#select c1 from v having (select c2) = 1;
+#alter table t1 drop column c2;
+#--error 1054
+#select c1 from v having c2 = 1;
+#--error 1356
+#select c1 from v having (select c2) = 1;
+
+
+--disable_warnings
+drop table if exists t1;
+drop view if exists v;
+--enable_warnings
+create table t1(c1 int,c2 int);
+insert into t1 values(1,2),(2,3),(3,4);
+create view v as select c1,c2 from t1 order by c2;
+alter table t1 drop column c2;
+#order by 即使是从select里找到了c2(select中的c2不报错是因为view_stmt)，因为select里面的c2也是无效列，因此最终结果也是视图无效
+--error 1356
+select c1 from v;
+
+--disable_warnings
+drop table if exists t1;
+drop view if exists v;
+--enable_warnings
+create table t1(c1 int,c2 int);
+insert into t1 values(1,2),(2,3),(3,4);
+create view v as select c1, -1 as c2 from t1 order by (select c2);
+select c1 from v;
+alter table t1 drop column c2;
+# a select c2提升上来之后从t1基础列里面找不到就直接报错，不会再去select_items找
+--error 1356
+select c1 from v;
+# b (bug)
+#select c1 from (select c1, -1 as c2 from t1 order by (select c2)) v;
+
+--disable_warnings
+drop table if exists t1;
+drop view if exists v;
+--enable_warnings
+create table t1(c1 int,c2 int);
+create view v as select c1,c2 from t1 where c2=1;
+alter table t1 drop column c2;
+--error 1356
+select c1 from v;
+
+--disable_warnings
+drop table if exists t1;
+drop view if exists v;
+--enable_warnings
+create table t1(c1 int,c2 int);
+insert into t1 values(1,2),(2,3),(3,4);
+create view v as select c1, -1 as c2 from t1 order by (select c2);
+alter table t1 drop column c2;
+--error 1356
+select c1 from v;
+
+# agg
+--disable_warnings
+drop table if exists t1;
+drop view if exists v;
+--enable_warnings
+create table t1(c1 int,c2 int);
+create view v as select c1,sum(c2) from t1;
+alter table t1 drop column c2;
+--error 1356
+select c1 from v;
+
+#insert
+--disable_warnings
+drop table if exists t1;
+drop view if exists v;
+--enable_warnings
+create table t1(c1 int,c2 int);
+insert into t1 values(1,2),(2,3),(3,4),(4,5);
+create view v as select c1,c2 from t1;
+select * from v;
+alter table t1 drop column c2;
+--error 1356
+select c1 from v;
+--error 1356
+select c2 from v;
+--error 1356
+select * from v;
+alter table t1 add column c2 int default 100;
+select * from v;
+alter table t1 alter column c2 set default 200;
+insert into t1(c1) values(5);
+select * from v;
+#alter table t1 change column c1 c1 varchar(20) default 'test';
+#insert into t1 values();
+#select * from v;
+
+
+#
+##test desc (show columns from table)
+#
+--disable_warnings
+drop table if exists t1;
+drop view if exists v;
+--enable_warnings
+create table t1(c1 int);
+create view v as select c1 from t1;
+desc v;
+
+--disable_warnings
+drop table if exists t1,t2;
+drop view if exists v;
+--enable_warnings
+create table t1(c1 int);
+create table t2(c1 int);
+create view v as (select c1 from t1) union (select c1 from t2);
+desc v;
+
+--disable_warnings
+drop table if exists t1;
+drop view if exists v;
+--enable_warnings
+create table t1(c1 int,c2 int);
+create view v as select c1,c2 from t1;
+desc v;
+alter table t1 drop column c2;
+--error 1356
+desc v;
+
+--disable_warnings
+drop table if exists t1;
+drop view if exists v,vv;
+--enable_warnings
+create table t1(c1 int,c2 int);
+create view v as select c1,c2 from t1;
+create view vv as select c1,c2 from v;
+alter table t1 drop column c2;
+--error 1356
+desc v;
+--error 1356
+desc vv;
+
+--disable_warnings
+drop table if exists t1;
+drop view if exists v,vv;
+--enable_warnings
+create table t1(c1 int,c2 int);
+create view v as select c1,c2 from t1;
+create view vv as select c1,c2 from v;
+create or replace view v as select c1 from t1;
+desc v;
+--error 1356
+desc vv;
+create or replace view vv as select c1 from v;
+desc vv;
+
+--disable_warnings
+drop table if exists t1,t2,t3,t4;
+drop view if exists v,vv;
+--enable_warnings
+create table t1(c1 int,c2 int);
+create table t2(c1 int,c2 int);
+create table t3(c1 int,c2 int);
+create table t4(c1 int,c2 int);
+create view v as ((select * from t1) union (select c1,c2 from t2)) union (select * from t3);
+desc v;
+create view vv as (select * from v) union (select * from t4);
+desc vv;
+
+--disable_warnings
+drop table if exists t1,t2;
+drop view if exists v;
+--enable_warnings
+create table t1(c1 int,c2 int);
+create table t2(c1 int,c2 int);
+create view v as select c1,c2 from t1;
+select (select c2 from v limit 1) from t2;
+alter table t1 drop column c2;
+--error 1356
+select (select c2 from v limit 1) from t2;
+--error 1356
+select (select c3 from v limit 1) from t2;
+alter table t2 add column c3 int;
+--error 1356
+select (select c3 from v limit 1) from t2;
+
+#
+##Bug
+#
+--disable_warnings
+drop table if exists t1;
+drop view if exists t1;
+drop table if exists v1,v2,v3;
+drop view if exists v1,v2,v3;
+--enable_warnings
+create table t1(c1 int);
+create view v1 as select * from t1;
+create view v2 as select * from v1;
+create view v3 as select * from v2;
+drop table t1;
+rename table v3 to t1;
+--error 1462
+select * from v1;
+--error 1462
+select * from v2;
+--error 1146
+select * from v3;
+
+--disable_warnings
+drop table if exists t1,t2;
+drop view if exists t1,t2;
+drop table if exists v1,v2,v3;
+drop view if exists v1,v2,v3;
+--enable_warnings
+create table t1(c1 int);
+create table t2(c1 int);
+create view v1 as select * from t1;
+create view v2 as select * from t2;
+create view v3 as select v1.c1 as v1c1, v2.c1 as v2c1 from v1,v2;
+drop table t2;
+rename table v3 to t2;
+--error 1462
+select * from t2;
+--error 1462
+select * from v2;
+
+--disable_warnings
+drop table if exists t1,t2;
+drop view if exists t1,t2;
+drop table if exists v1,v2;
+drop view if exists v1,v2;
+--enable_warnings
+create table t1(c1 int);
+create table t2(c1 int);
+create view v1 as select * from t1;
+create view v2 as select (select c1 from v1 limit 1) from t2;
+drop table t1;
+rename table v2 to t1;
+--error 1462
+select * from t1;
+--error 1462
+select * from v1;
+
+--disable_warnings
+drop table if exists t1;
+drop view if exists t1;
+drop table if exists v1,v2,v3,v4;
+drop view if exists v1,v2,v3,v4;
+--enable_warnings
+create table t1(c1 int);
+create view v1 as select * from t1;
+create view v2 as select * from v1;
+create view v3 as select * from v2;
+create view v4 as select * from v2;
+drop view v1;
+rename table v4 to v1;
+--error 1462
+select * from v1;
+--error 1462
+select * from v2;
+--error 1462
+select * from v3;
+
+#
+## Bug :
+## 主要测试在非select语句引用select_stmt(view展开)的问题，select结果作为其它stmt的输入暂时不支持，
+## 这里仅仅针对bug加入回归case
+#
+--error 1235
+SET optimizer_switch = (SELECT variable_value FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES WHERE VARIABLE_NAME = 'optimizer_switch');
+--disable_warnings
+drop table if exists t1,t2;
+drop view if exists v1;
+--enable_warnings
+create table t1(c1 int,c2 int);
+create table t2(c1 int,c2 int);
+insert into t1(c1,c2) values(1,2),(2,3);
+create view v1 as select * from t1;
+insert into t2(c1,c2) select * from v1;
+select * from t2;
+
+#Bug 对于基表schema失效的视图，查询成功后不应该有warning
+--disable_warnings
+drop table if exists t1;
+drop view if exists v;
+--enable_warnings
+create table t1(c1 int,c2 int);
+create view v as select * from t1;
+alter table t1 drop column c2;
+--error 1356
+select c1 from v;
+show warnings;
+
+#Bug 对于基表schema失效的视图，查询成功后不应该有warning
+--disable_warnings
+drop table if exists t1;
+drop view if exists v;
+--enable_warnings
+create table t1(c1 int,c2 int);
+create view v as select * from t1;
+alter table t1 drop column c2;
+--error 1356
+select c1 from v;
+show warnings;
+
+#Bug 创建视图中包含not exists子查询出错
+--disable_warnings
+drop table if exists t1;
+drop view if exists v;
+--enable_warnings
+create table t1(c1 int,c2 int);
+insert into t1 values(1, 1);
+create view v as select * from t1 where not exists(select * from t1 where c1>0);
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create view v;
+select * from v;
+create view xy as select 123 from dual where not exists (select 1 from dual) limit 1;
+select * from xy;
+
+#Bug 创建视图中包含union子句并且类型为char的时候长度出错
+--disable_warnings
+drop table if exists t1;
+drop table if exists t2;
+drop view if exists v;
+--enable_warnings
+create table t1 (k int primary key, v1 int, v2 int);
+create table t2 (k int primary key, v1 char(1), v2 varchar(10));
+create view v as select k, v1, v2 from t1 union select k, v1, v2 from t2;
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create view v;
+select * from v;
+
+--disable_warnings
+drop table if exists t1;
+drop view if exists v;
+--enable_warnings
+create table t1 (k int, v int);
+create view v as (select k, v from t1) union (select 1, 1 from t1);
+--source mysql_test/include/show_create_table_old_version_replica2.inc
+show create view v;
+
+--disable_warnings
+drop table if exists t1;
+drop table if exists t2;
+--enable_warnings
+CREATE TABLE `t11` ( `a` int(11) NOT NULL, `b` int(11) DEFAULT NULL, `c` int(11) DEFAULT NULL, PRIMARY KEY (`a`) );
+CREATE TABLE `t21` ( `a` int(11) NOT NULL, `b` int(11) DEFAULT NULL, `c` int(11) DEFAULT NULL, PRIMARY KEY (`a`) );
+
+--real_sleep 3
+explain extended_noaddr select t3.* from (select t11.a as X, t21.a as Y from t11 left join t21 on t11.a = t21.a) as t3 where t3.y is not null and t3.x > 10;
+drop database if exists view;

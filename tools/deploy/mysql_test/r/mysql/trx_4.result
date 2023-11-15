@@ -1,0 +1,43 @@
+drop table if exists t1,t2,t3,t4;
+create table t1(id int primary key, money1 int, when1 datetime default now());
+insert into t1(id,money1) values(1,100);
+insert into t1(id,money1) values(2,100);
+select id,money1,when1 from t1;
+id	money1	when1
+1	100	searched
+2	100	searched
+id1 - 100  id2 + 100
+begin;
+update t1 set money1 = money1-100 where id = 1;
+update t1 set money1 = money1+100 where id = 2;
+commit;
+select id,money1,when1 from t1;
+id	money1	when1
+1	0	searched
+2	200	searched
+select id,money1,when1 from t1;
+id	money1	when1
+1	0	searched
+2	200	searched
+drop table t1;
+create table t1(id int primary key, money1 int, when1 datetime default now());
+insert into t1(id,money1) values(1,100);
+insert into t1(id,money1) values(2,100);
+select id,money1,when1 from t1;
+id	money1	when1
+1	100	searched
+2	100	searched
+id1 - 100  id2 + 100
+begin;
+update t1 set money1 = money1-100 where id = 1;
+update t1 set money1 = money1+100 where id = 2;
+ERROR HY000: OceanBase server has gone away
+commit;
+ERROR HY000: OceanBase server has gone away
+select id,money1,when1 from t1;
+id	money1	when1
+1	100	searched
+2	100	searched
+send failed
+receive failed
+drop table t1;

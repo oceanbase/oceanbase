@@ -1,0 +1,440 @@
+drop table if exists t1;
+create table t1(pk int primary key, c1 int);
+set autocommit=0;
+set autocommit=0;
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+select * from t1;
+pk	c1
+2	2
+update t1 set c1=c1+1 where pk=1;
+select * from t1;
+pk	c1
+2	2
+insert into t1 values(2,2);
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+update t1 set c1=c1+2 where pk=2;
+commit;
+select * from t1;
+pk	c1
+1	1
+2	4
+commit;
+drop table if exists t1;
+create table t1(pk int primary key, c1 int);
+set autocommit=0;
+set autocommit=0;
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+select * from t1;
+pk	c1
+2	2
+update t1 set c1=c1+1 where pk=1;
+select * from t1;
+pk	c1
+2	2
+insert into t1 values(2,2);
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+update t1 set c1=c1+2 where pk=2;
+commit;
+select * from t1;
+pk	c1
+1	1
+2	4
+commit;
+drop table if exists t1;
+create table t1(pk int primary key, c1 int);
+set autocommit=0;
+set autocommit=0;
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+select * from t1;
+pk	c1
+2	2
+update t1 set c1=c1+1 where pk=1;
+select * from t1;
+pk	c1
+2	2
+insert into t1 values(2,2);
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+update t1 set c1=c1+2 where pk=2;
+commit;
+select * from t1;
+pk	c1
+1	1
+2	4
+commit;
+drop table if exists t1;
+create table t1(pk int primary key, c1 int);
+set autocommit=0;
+set autocommit=0;
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+select * from t1;
+pk	c1
+2	2
+update t1 set c1=c1+1 where pk=1;
+select * from t1;
+pk	c1
+2	2
+insert into t1 values(2,2);
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+update t1 set c1=c1+2 where pk=2;
+commit;
+select * from t1;
+pk	c1
+1	1
+2	4
+commit;
+drop table if exists t1;
+create table t1(pk int primary key, c1 int);
+set autocommit=0;
+set autocommit=0;
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+select * from t1;
+pk	c1
+2	2
+update t1 set c1=c1+1 where pk=1;
+select * from t1;
+pk	c1
+2	2
+insert into t1 values(2,2);
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+update t1 set c1=c1+2 where pk=2;
+commit;
+select * from t1;
+pk	c1
+1	1
+2	4
+commit;
+drop table if exists t1;
+create table t1(pk int primary key, c1 int);
+set autocommit=0;
+set autocommit=0;
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+select * from t1;
+pk	c1
+2	2
+update t1 set c1=c1+1 where pk=1;
+select * from t1;
+pk	c1
+2	2
+insert into t1 values(2,2);
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+update t1 set c1=c1+2 where pk=2;
+commit;
+select * from t1;
+pk	c1
+1	1
+2	4
+commit;
+drop table if exists t1;
+create table t1(pk int primary key, c1 int);
+set autocommit=0;
+set autocommit=0;
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+select * from t1;
+pk	c1
+2	2
+update t1 set c1=c1+1 where pk=1;
+select * from t1;
+pk	c1
+2	2
+insert into t1 values(2,2);
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+update t1 set c1=c1+2 where pk=2;
+commit;
+select * from t1;
+pk	c1
+1	1
+2	4
+commit;
+drop table if exists t1;
+create table t1(pk int primary key, c1 int);
+set autocommit=0;
+set autocommit=0;
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+select * from t1;
+pk	c1
+2	2
+update t1 set c1=c1+1 where pk=1;
+select * from t1;
+pk	c1
+2	2
+insert into t1 values(2,2);
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+update t1 set c1=c1+2 where pk=2;
+commit;
+select * from t1;
+pk	c1
+1	1
+2	4
+commit;
+drop table if exists t1;
+create table t1(pk int primary key, c1 int);
+set autocommit=0;
+set autocommit=0;
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+select * from t1;
+pk	c1
+2	2
+update t1 set c1=c1+1 where pk=1;
+select * from t1;
+pk	c1
+2	2
+insert into t1 values(2,2);
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+update t1 set c1=c1+2 where pk=2;
+commit;
+select * from t1;
+pk	c1
+1	1
+2	4
+commit;
+drop table if exists t1;
+create table t1(pk int primary key, c1 int);
+set autocommit=0;
+set autocommit=0;
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+select * from t1;
+pk	c1
+2	2
+update t1 set c1=c1+1 where pk=1;
+select * from t1;
+pk	c1
+2	2
+insert into t1 values(2,2);
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+update t1 set c1=c1+2 where pk=2;
+commit;
+select * from t1;
+pk	c1
+1	1
+2	4
+commit;
+drop table if exists t1;
+create table t1(pk int primary key, c1 int);
+set autocommit=0;
+set autocommit=0;
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+select * from t1;
+pk	c1
+2	2
+update t1 set c1=c1+1 where pk=1;
+select * from t1;
+pk	c1
+2	2
+insert into t1 values(2,2);
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+update t1 set c1=c1+2 where pk=2;
+commit;
+select * from t1;
+pk	c1
+1	1
+2	4
+commit;
+drop table if exists t1;
+create table t1(pk int primary key, c1 int);
+set autocommit=0;
+set autocommit=0;
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+select * from t1;
+pk	c1
+2	2
+update t1 set c1=c1+1 where pk=1;
+select * from t1;
+pk	c1
+2	2
+insert into t1 values(2,2);
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+update t1 set c1=c1+2 where pk=2;
+commit;
+select * from t1;
+pk	c1
+1	1
+2	4
+commit;
+drop table if exists t1;
+create table t1(pk int primary key, c1 int);
+set autocommit=0;
+set autocommit=0;
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+select * from t1;
+pk	c1
+2	2
+update t1 set c1=c1+1 where pk=1;
+select * from t1;
+pk	c1
+2	2
+insert into t1 values(2,2);
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+update t1 set c1=c1+2 where pk=2;
+commit;
+select * from t1;
+pk	c1
+1	1
+2	4
+commit;
+drop table if exists t1;
+create table t1(pk int primary key, c1 int);
+set autocommit=0;
+set autocommit=0;
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+select * from t1;
+pk	c1
+2	2
+update t1 set c1=c1+1 where pk=1;
+select * from t1;
+pk	c1
+2	2
+insert into t1 values(2,2);
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+update t1 set c1=c1+2 where pk=2;
+commit;
+select * from t1;
+pk	c1
+1	1
+2	4
+commit;
+drop table if exists t1;
+create table t1(pk int primary key, c1 int);
+set autocommit=0;
+set autocommit=0;
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+select * from t1;
+pk	c1
+2	2
+update t1 set c1=c1+1 where pk=1;
+select * from t1;
+pk	c1
+2	2
+insert into t1 values(2,2);
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+update t1 set c1=c1+2 where pk=2;
+commit;
+select * from t1;
+pk	c1
+1	1
+2	4
+commit;
+drop table if exists t1;
+create table t1(pk int primary key, c1 int);
+set autocommit=0;
+set autocommit=0;
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+select * from t1;
+pk	c1
+2	2
+update t1 set c1=c1+1 where pk=1;
+select * from t1;
+pk	c1
+2	2
+insert into t1 values(2,2);
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+update t1 set c1=c1+2 where pk=2;
+commit;
+select * from t1;
+pk	c1
+1	1
+2	4
+commit;
+drop table if exists t1;
+create table t1(pk int primary key, c1 int);
+set autocommit=0;
+set autocommit=0;
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+select * from t1;
+pk	c1
+2	2
+update t1 set c1=c1+1 where pk=1;
+select * from t1;
+pk	c1
+2	2
+insert into t1 values(2,2);
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+update t1 set c1=c1+2 where pk=2;
+commit;
+select * from t1;
+pk	c1
+1	1
+2	4
+commit;
+drop table if exists t1;
+create table t1(pk int primary key, c1 int);
+set autocommit=0;
+set autocommit=0;
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+select * from t1;
+pk	c1
+2	2
+update t1 set c1=c1+1 where pk=1;
+select * from t1;
+pk	c1
+2	2
+insert into t1 values(2,2);
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+update t1 set c1=c1+2 where pk=2;
+commit;
+select * from t1;
+pk	c1
+1	1
+2	4
+commit;
+drop table if exists t1;
+create table t1(pk int primary key, c1 int);
+set autocommit=0;
+set autocommit=0;
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+select * from t1;
+pk	c1
+2	2
+update t1 set c1=c1+1 where pk=1;
+select * from t1;
+pk	c1
+2	2
+insert into t1 values(2,2);
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+update t1 set c1=c1+2 where pk=2;
+commit;
+select * from t1;
+pk	c1
+1	1
+2	4
+commit;
+drop table if exists t1;
+create table t1(pk int primary key, c1 int);
+set autocommit=0;
+set autocommit=0;
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+select * from t1;
+pk	c1
+2	2
+update t1 set c1=c1+1 where pk=1;
+select * from t1;
+pk	c1
+2	2
+insert into t1 values(2,2);
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+update t1 set c1=c1+2 where pk=2;
+commit;
+select * from t1;
+pk	c1
+1	1
+2	4
+commit;

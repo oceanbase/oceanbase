@@ -1,0 +1,30 @@
+# owner: bin.lb
+# owner group: sql2
+
+--disable_abort_on_error
+--result_format 4
+
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+connection syscon;
+
+sleep 2;
+
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+--disable_warnings
+select mid('abcdef', 2);
+select mid('abcdef', 2, 2);
+select mid('abcdef', "2.9", 2);
+select mid('abcdef', NULL, 2);
+select mid('abcdef', -1, 2);
+select mid('abcdef', 2, 100);
+select mid('abcdef', 2, -1);
+select mid('abcdef', 2, NULL);
+select mid('', 1);
+select mid(NULL, 1);
+--enable_warnings
+
+connection syscon;
+--sleep 2

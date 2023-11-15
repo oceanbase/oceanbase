@@ -1,0 +1,79 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: dachuan.sdc
+#owner group: sql3
+# tags: optimizer
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+--result_format 4
+--explain_protocol 2
+
+--disable_warnings
+drop database if exists muhangtest;
+create database muhangtest;
+use muhangtest;
+--enable_warnings
+
+--disable_warnings
+drop table if exists xy_t1, xy_t2;
+--enable_warnings
+
+#create table t1(c1 int(11) not null, c2 int(11) not null, c3 int(11) not null, primary key (c1, c2, c3)) partition by hash(c2)
+#subpartition by range columns(c2) subpartition template( subpartition sp_00 values less than (45), subpartition sp_01 values less than (100), subpartition sp_02 values less than (1000));
+
+create table t2(c1 int(11) not null, c2 int(11) not null, c3 int(11) not null, primary key (c1, c2, c3)) partition by hash(c2)
+subpartition by range columns(c2) subpartition template( subpartition sp_00 values less than (45), subpartition sp_01 values less than (100));
+
+--disable_query_log
+--disable_result_log
+insert into t2 values(1,1,1);
+insert into t2 values(99,99,99);
+--sleep 1
+--enable_result_log
+--enable_query_log
+
+--enable_sorted_result
+
+## left outer join
+## OB bug
+##select * from t1 left join t2 on t1.c2 = t1.c2;
+
+create table t1 (c1 int(11) not null, c2 int(11) not null, c3 int(11) not null, primary key (c1, c2, c3)) ;
+--disable_query_log
+--disable_result_log
+insert into t1 values(1,1,1);
+insert into t1 values(99,99,99);
+insert into t1 values(999,999,999);
+--sleep 1
+--enable_result_log
+--enable_query_log
+
+##原始结果
+select /*+use_px parallel(4) */ * from t1 left join t2 on t1.c2 = t2.c2;
+
+##left outer join
+select /*+use_px parallel(4) pq_distribute(t1 partition none) */ * from t1 left join t2 on t1.c2 = t2.c2;
+select /*+use_px parallel(4) pq_distribute(t1 none partition) */ * from t1 left join t2 on t1.c2 = t2.c2;
+##right outer join
+select /*+use_px parallel(4) pq_distribute(t1 none partition) */ * from t2 right join t1 on t1.c2 = t2.c2;
+select /*+use_px parallel(4) pq_distribute(t1 partition none) */ * from t2 right join t1 on t1.c2 = t2.c2;
+##full outer join
+select /*+use_px parallel(4) pq_distribute(t1 partition none) */ * from t2 full join t1 on t1.c2 = t2.c2;
+select /*+use_px parallel(4) pq_distribute(t1 none partition) */ * from t2 full join t1 on t1.c2 = t2.c2;
+
+## anti
+select * from t1 where not exists (select 1 from t2 where t1.c1 = t2.c1);
+select /*+ use_px parallel(2) LEADING(t1, t2) USE_NL(t1, t2) pq_distribute(t2 partition none)*/ * from t1 where not exists (select 1 from t2 where t1.c2 = t2.c2);
+select /*+ use_px parallel(2) LEADING(t1, t2) USE_NL(t1, t2) pq_distribute(t2 none partition)*/ * from t1 where not exists (select 1 from t2 where t1.c2 = t2.c2);
+## semi
+select * from t1 where exists (select 1 from t2 where t1.c1 = t2.c1);
+select /*+ use_px parallel(2) LEADING(t1, t2) USE_NL(t1, t2) pq_distribute(t2 partition none)*/ * from t1 where exists (select 1 from t2 where t1.c2 = t2.c2);
+select /*+ use_px parallel(2) LEADING(t1, t2) USE_NL(t1, t2) pq_distribute(t2 none partition)*/ * from t1 where exists (select 1 from t2 where t1.c2 = t2.c2);
+
+#--disable_warnings
+#drop database if exists muhangtest;
+#--enable_warnings
+

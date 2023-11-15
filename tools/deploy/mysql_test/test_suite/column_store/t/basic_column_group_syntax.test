@@ -1,0 +1,60 @@
+#owner: fenggu.yh
+#owner group: storage
+#tags: column_group
+
+connect (sys_conn,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection sys_conn;
+
+--disable_query_log
+--disable_warnings
+set @@recyclebin = off;
+drop table if exists tt1;
+drop table if exists tt2;
+--enable_warnings
+--enable_query_log
+
+create table tt1(a int, b int, c int, primary key(a)) with column group for all columns, each column;
+create index idx_tt1 on tt1(b);
+create table tt2(d int, e int);
+--error 1235
+alter table tt1 drop column c;
+--error 1235
+alter table tt1 modify column c varchar(20);
+
+let $tt1_table_id= query_get_value(select table_id from __all_virtual_table where table_name='tt1', table_id, 1);
+let $tt2_table_id= query_get_value(select table_id from __all_virtual_table where table_name='tt2', table_id, 1);
+
+## In tt1 table schema, there exists 5 column_group: __co_default, __co_all, __cg_a, __cg_b, __cg_c
+let $tt1_cg_cnt = query_get_value(select count(*) as cg_cnt from __all_column_group where table_id=$tt1_table_id, cg_cnt, 1);
+if ($tt1_cg_cnt != 5)
+{
+    --echo unexpected column_group count of table tt1, real value is $tt1_cg_cnt
+}
+## tt1 default_type column_group will have none column_id mapping, cuz it has all_type & each_type column_group
+let $tt1_default_cg_id = query_get_value(select column_group_id from __all_column_group where table_id=$tt1_table_id and column_group_name='__co_default', column_group_id, 1);
+let $tt1_column_id_cnt = query_get_value(select count(*) as mapping_cnt from __all_column_group_mapping where table_id=$tt1_table_id and column_group_id=$tt1_default_cg_id, mapping_cnt, 1);
+if ($tt1_column_id_cnt != 0)
+{
+    --echo unexpected column_group mapping count of table tt1, real value is $tt1_column_id_cnt;
+}
+
+## In tt2 table schema, there exists only 1 column_group: __co_default
+let $tt2_cg_cnt = query_get_value(select count(*) as cg_cnt from __all_column_group where table_id=$tt2_table_id, cg_cnt, 1);
+if ($tt2_cg_cnt != 1)
+{
+    --echo unexpected column_group count of table tt2, real value is $tt2_cg_cnt
+}
+## tt2 default_type column_group will have 3 column_id mapping, include d, e, pk_increment
+let $tt2_default_cg_id = query_get_value(select column_group_id from __all_column_group where table_id=$tt2_table_id and column_group_name='__co_default', column_group_id, 1);
+let $tt2_column_id_cnt = query_get_value(select count(*) as mapping_cnt from __all_column_group_mapping where table_id=$tt2_table_id and column_group_id=$tt2_default_cg_id, mapping_cnt, 1);
+if ($tt2_column_id_cnt != 3)
+{
+    --echo unexpected column_group mapping count of table tt2, real value is $tt2_column_id_cnt
+}
+
+drop table tt1;
+drop table tt2;
+
+--disable_query_log
+set @@recyclebin = on;
+--enable_query_log

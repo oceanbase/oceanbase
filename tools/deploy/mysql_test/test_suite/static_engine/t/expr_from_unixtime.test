@@ -1,0 +1,100 @@
+#owner: dachuan.sdc
+#tags: optimizer
+
+--result_format 4
+connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection conn_admin;
+
+alter system flush plan cache global;
+--sleep 2
+
+connection default;
+set ob_enable_plan_cache = false;
+
+select from_unixtime(0);
+select from_unixtime(0.0);
+select from_unixtime("0");
+select from_unixtime("0.0");
+select from_unixtime(123456789);
+select from_unixtime(123456789.123);
+select from_unixtime("123456789.123");
+select from_unixtime(-123456789);
+select from_unixtime(-123456789.123);
+select from_unixtime("-123456789.123");
+select from_unixtime(date"2020-01-15");
+select from_unixtime(time"22:10:10");
+select from_unixtime(null);
+select from_unixtime(null,null);
+select from_unixtime("123456789.123",null);
+select from_unixtime(null,"123456789.123");
+select from_unixtime("123456789.123",1234);
+select from_unixtime("123456789.123","1234");
+select from_unixtime("123456789.123","");
+select from_unixtime(1234567890, '%Y-%m-%d %H:%i:%S');
+select from_unixtime(9999999999999999999, '%Y-%m-%d %H:%i:%S');
+
+connection conn_admin;
+--sleep 2
+connection default;
+
+--disable_warnings
+drop table if exists t;
+--enable_warnings
+
+create table t (t1 tinyint,
+                t2 smallint,
+                t3 mediumint,
+                t4 integer,
+                t5 bigint,
+                t6 tinyint unsigned,
+                t7 smallint unsigned,
+                t8 mediumint unsigned,
+                t9 integer unsigned,
+                t10 bigint unsigned,
+                t11 float,
+                t12 float unsigned,
+                t13 double,
+                t14 double unsigned,
+                t15 number,
+                t16 number unsigned,
+                t17 datetime,
+                t18 timestamp,
+                t19 date,
+                t20 time,
+                t21 year,
+                t22 varchar(255),
+                t23 char(255),
+                t24 tinytext,
+                t25 mediumtext,
+                t26 longtext,
+                t27 bit,
+                t28 enum('a', 'b', 'c', '123', '%Y-%M-%D %h:%m:%s'),
+                t29 set('a', 'b', 'c'));
+
+insert into t values (1, -1, 1, 1234567, 13445677888, 1, 1, 1, 14455423, 1, 123123123.13, 131231.111,
+                      11113211.22323, 22312312312.322, 123123222.23232, 1231232.22222,
+                     '1993-03-20', '1993-03-20', '1993-03-20', '10:10:10', '1993', '123123.13', '132123.24', '31231231231.222', '31231231231.22',
+                     '1.2', 1, 'b', 'b');
+insert into t(t28) values ('%Y-%M-%D %h:%m:%s');
+
+connection conn_admin;
+
+--sleep 2
+
+connection default;
+
+let $cnt = 1;
+while ($cnt <= 29)
+{
+  # enum_set cast to number is not supported for now. @shaoge.gjt
+  --error 0,1235
+  eval select from_unixtime(t$cnt) from t;
+  eval explain select from_unixtime(t$cnt) from t;
+
+  # select from_unixtime(1234567890, t27); error, bit cast to varchar is invalid. @shaoge.gjt
+  --error 0,4016,1235
+  eval select from_unixtime(1234567890, t$cnt) from t;
+  eval explain select from_unixtime(1234567890, t$cnt) from t;
+  inc $cnt;
+}
+--sleep 2

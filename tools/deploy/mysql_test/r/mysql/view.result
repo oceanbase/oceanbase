@@ -1,0 +1,372 @@
+drop database if exists db_view;
+create database db_view;
+use db_view;
+drop view if exists v_mix_tv, v_mix_1, v_mix_2, v_mix_3, vv_mix_1, vv_1, vvv_1;
+drop view if exists view_v1, view_v2, view_v3, view_v4, view_v5, view_v6, view_v7;
+drop table if exists view_t1_not_null, view_t1_null_default, view_t1_not_null_default;
+drop view if exists view_v1_null_default, view_v1_not_null, view_v1_not_null_default;
+drop table if exists view_t1, view_t2, view_t3;
+set character_set_client = 45;
+create table view_t1(c1 int primary key, c2 int);
+create table view_t2(c3 int primary key, c4 int);
+create table view_t3(c1 int primary key, c2 int);
+insert into view_t1 values(1, 11), (2, 12), (3, 13);
+insert into view_t2 values(10, 111), (20, 112), (30, 113);
+insert into view_t3 values(100, 1111), (200, 1112), (300, 1113);
+create table view_t1_not_null(c1 int primary key, c2 int not null);
+create table view_t1_null_default(c1 int primary key, c2 int default 22222);
+create table view_t1_not_null_default(c1 int primary key, c2 int not null default 2222);
+create view view_v1_not_null as select c1,c2 from view_t1_not_null;
+create view view_v1_null_default as select c1,c2 from view_t1_null_default;
+create view view_v1_not_null_default as select c1,c2 from view_t1_not_null_default;
+create table table_t8(c1 int null,c2 int not null);
+create view view_v8 as select c1+c2 from table_t8;
+desc view_v8;
+Field	Type	Null	Key	Default	Extra
+c1+c2	bigint(12)	YES		NULL
+create view view_v9 as select c1+c2 from table_t8 a;
+desc view_v9;
+Field	Type	Null	Key	Default	Extra
+c1+c2	bigint(12)	YES		NULL
+drop table table_t8;
+drop view view_v8;
+drop view view_v9;
+create or replace view view_v1 as select c1,c2 from view_t1;
+select * from view_v1;
+c1	c2
+1	11
+2	12
+3	13
+create or replace view view_v2(c1, c2) as select c1, c2 from view_t1;
+select * from view_v2;
+c1	c2
+1	11
+2	12
+3	13
+create or replace view view_v3(c2) as select c2 from view_t1;
+select * from view_v3;
+c2
+11
+12
+13
+create or replace view view_v4(vc2) as select c2 as vc2 from view_t1;
+select * from view_v4;
+vc2
+11
+12
+13
+create or replace view view_v5(vc2) as select c2 as vc2 from view_t1;
+select * from view_v5;
+vc2
+11
+12
+13
+create or replace view view_v6 as select c1+1 from view_t1;
+select * from view_v6;
+c1+1
+2
+3
+4
+create or replace view view_v7(vc1,vc2) as select c1+1 as vc1, c2+2 as vc2 from view_t1;
+select * from view_v7;
+vc1	vc2
+2	13
+3	14
+4	15
+create or replace view v_2t_1 as select c1,c2,c3,c4 from view_t1, view_t2;
+select * from v_2t_1;
+c1	c2	c3	c4
+1	11	10	111
+1	11	20	112
+1	11	30	113
+2	12	10	111
+2	12	20	112
+2	12	30	113
+3	13	10	111
+3	13	20	112
+3	13	30	113
+create or replace view v_3t_1(vc1, vc2, vc3, vc4, vc5, vc6) as select view_t1.c1 as vc1, view_t1.c2 as vc2, view_t2.c3 as vc3, view_t2.c4 as vc4, view_t3.c1 as vc5, view_t3.c2 as vc6 from view_t1, view_t2, view_t3;
+select * from v_3t_1;
+vc1	vc2	vc3	vc4	vc5	vc6
+1	11	10	111	100	1111
+1	11	10	111	200	1112
+1	11	10	111	300	1113
+1	11	20	112	100	1111
+1	11	20	112	200	1112
+1	11	20	112	300	1113
+1	11	30	113	100	1111
+1	11	30	113	200	1112
+1	11	30	113	300	1113
+2	12	10	111	100	1111
+2	12	10	111	200	1112
+2	12	10	111	300	1113
+2	12	20	112	100	1111
+2	12	20	112	200	1112
+2	12	20	112	300	1113
+2	12	30	113	100	1111
+2	12	30	113	200	1112
+2	12	30	113	300	1113
+3	13	10	111	100	1111
+3	13	10	111	200	1112
+3	13	10	111	300	1113
+3	13	20	112	100	1111
+3	13	20	112	200	1112
+3	13	20	112	300	1113
+3	13	30	113	100	1111
+3	13	30	113	200	1112
+3	13	30	113	300	1113
+create or replace view vv_1 as select c1,c2 from view_v1;
+select * from vv_1;
+c1	c2
+1	11
+2	12
+3	13
+create or replace view vvv_1 as select c1,c2 from vv_1;
+select * from vvv_1;
+c1	c2
+1	11
+2	12
+3	13
+create view v_mix_1 as select c1,c2 from view_t1;
+create view vv_mix_1 as select c1,c2,c3,c4 from v_mix_1, view_t2;
+select * from (select * from (select * from view_t1) as v_test, view_t2) as vv_test;
+c1	c2	c3	c4
+1	11	10	111
+1	11	20	112
+1	11	30	113
+2	12	10	111
+2	12	20	112
+2	12	30	113
+3	13	10	111
+3	13	20	112
+3	13	30	113
+select * from vv_mix_1;
+c1	c2	c3	c4
+1	11	10	111
+1	11	20	112
+1	11	30	113
+2	12	10	111
+2	12	20	112
+2	12	30	113
+3	13	10	111
+3	13	20	112
+3	13	30	113
+create or replace view v_mix_3 as select c1,c2 from view_t1;
+select * from v_mix_3;
+c1	c2
+1	11
+2	12
+3	13
+drop view if exists v_mix_tv, v_mix_1, v_mix_2, v_mix_3, vv_mix_1, vv_mix_2, vv_mix_3, vv_1, vvv_1;
+drop view if exists v_2t_1, v_3t_1;
+drop view if exists view_v1, view_v2, view_v3, view_v4, view_v5, view_v6, view_v7;
+drop table if exists view_t1_not_null, view_t1_null_default, view_t1_not_null_default;
+drop view if exists view_v1_null_default, view_v1_not_null, view_v1_not_null_default;
+drop table if exists view_t1, view_t2, view_t3;
+drop view if exists v1,v2,v3;
+drop table if exists t1;
+create table t1(c1 int primary key);
+insert into t1 values(1),(2);
+create view v1 as select c1 from t1;
+create view v2 as (select c1 from t1);
+create view v3 as ((select c1 from t1));
+insert into t1 values(3),(4);
+select * from v1;
+c1
+1
+2
+3
+4
+select * from v2;
+c1
+1
+2
+3
+4
+select * from v3;
+c1
+1
+2
+3
+4
+drop view if exists v1,v2,v3;
+drop table if exists t1;
+drop table if exists t1;
+drop view if exists v1;
+create table t1(c1 varchar(10));
+insert into t1 value('test1');
+insert into t1 value('test2');
+create view v1 as select  c1 from t1;
+select v1.c1 from v1 join t1 on v1.c1 = t1.c1;
+c1
+test1
+test2
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE VIEW `v1` AS select `db_view`.`t1`.`c1` AS `c1` from `db_view`.`t1`	utf8mb4	utf8mb4_general_ci
+drop table if exists t1;
+drop view if exists v1;
+drop table if exists t1;
+drop view if exists v1;
+create table t1(c1 int, c2 int);
+insert into t1 values(1,1);
+select * from t1;
+c1	c2
+1	1
+create or replace view v1 as select c1 from t1;
+select * from v1;
+c1
+1
+create or replace view v1 as select c1,c2 from t1;
+select * from v1;
+c1	c2
+1	1
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE VIEW `v1` AS select `db_view`.`t1`.`c1` AS `c1`,`db_view`.`t1`.`c2` AS `c2` from `db_view`.`t1`	utf8mb4	utf8mb4_general_ci
+create view v1 as select c2 from t1;
+ERROR 42S01: Table 'v1' already exists
+drop view v1;
+drop table t1;
+drop table if exists t1;
+drop view if exists v1;
+create table t1(c1 int,c2 int);
+create table t2(a int,b int);
+create view v as select c1,c2 from t1;
+create view vv as select c1,c2,a,b from v,t2;
+select * from v;
+c1	c2
+select c1 from v;
+c1
+select * from vv;
+c1	c2	a	b
+select c1 from vv;
+c1
+alter table t1 drop column c2;
+select * from v;
+ERROR 42S22: View 'db_view.v' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+select * from vv;
+ERROR 42S22: View 'db_view.v' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+select c1 from v;
+ERROR 42S22: View 'db_view.v' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+select c1 from vv;
+ERROR 42S22: View 'db_view.v' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+select c2 from v;
+ERROR 42S22: View 'db_view.v' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+select c2 from vv;
+ERROR 42S22: View 'db_view.v' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+alter table t1 add column c2 int;
+select * from v;
+c1	c2
+select * from vv;
+c1	c2	a	b
+drop table t1;
+select * from v;
+ERROR 42S22: View 'db_view.v' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+select * from vv;
+ERROR 42S22: View 'db_view.v' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+create table t1(c1 varchar(10), c2 datetime);
+select * from v;
+c1	c2
+select * from vv;
+c1	c2	a	b
+drop table t1;
+create table t1(c1 varchar(10), c2 datetime, c3 int);
+select * from v;
+c1	c2
+select * from vv;
+c1	c2	a	b
+drop table t1;
+create table t1(c1 int,c2 int);
+insert into t1 values(1,10),(2,11);
+select * from v;
+c1	c2
+1	10
+2	11
+select * from vv;
+c1	c2	a	b
+drop table t1;
+create table t1(c1 varchar(10), c2 double, c3 int);
+insert into t1 values('hello', 100.10, 1),('hello', 100.11,2);
+select * from v;
+c1	c2
+hello	100.1
+hello	100.11
+select * from v;
+c1	c2
+hello	100.1
+hello	100.11
+drop table t1;
+drop view v;
+create table t1(c1 int, c2 int);
+insert into t1 values(1,1), (2,2);
+create view v as select 5 from t1 order by 1;
+select * from v;
+5
+5
+5
+create view v1 as select * from t1 where c1>'1';
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE VIEW `v1` AS select `db_view`.`t1`.`c1` AS `c1`,`db_view`.`t1`.`c2` AS `c2` from `db_view`.`t1` where (`db_view`.`t1`.`c1` > '1')	utf8mb4	utf8mb4_general_ci
+select * from v1;
+c1	c2
+2	2
+drop view v, v1;
+create view v as select 5, 6 from t1 order by 1,2;
+select * from v;
+5	6
+5	6
+5	6
+drop view v;
+create view v as select c1 + 1 from t1 order by 1;
+select * from v;
+c1 + 1
+2
+3
+drop view v;
+create view v as select 7 + 3 from t1 order by 1;
+select * from v;
+7 + 3
+10
+10
+drop view v;
+drop table if exists t1;
+create table t1(a int, b int);
+insert into t1 values (1,1);
+create view v as select group_concat(b) from t1 group by a;
+select * from v;
+group_concat(b)
+1
+drop table if exists t1;
+drop view if exists v;
+create table t1(c1 datetime, c2 int);
+insert into t1 values('1990-03-03 00:00:00', 2), ('2016-05-31 20:00:00', 3);
+create view v as select * from t1 where c1>'1990-04-01 00:00:00';
+show create view v;
+View	Create View	character_set_client	collation_connection
+v	CREATE VIEW `v` AS select `db_view`.`t1`.`c1` AS `c1`,`db_view`.`t1`.`c2` AS `c2` from `db_view`.`t1` where (`db_view`.`t1`.`c1` > '1990-04-01 00:00:00')	utf8mb4	utf8mb4_general_ci
+select * from v;
+c1	c2
+2016-05-31 20:00:00	3
+drop view if exists v;
+drop table if exists t1;
+drop view if exists v1, v2;
+Warnings:
+Note	1051	Unknown table 'db_view.v1'
+Note	1051	Unknown table 'db_view.v2'
+create table t1(col1 varchar(12) character set utf8mb4 collate utf8mb4_general_ci);
+insert into t1 values('t1_val');
+create view v1 as select 'v1_val' collate utf8mb4_general_ci as col1;
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE VIEW `v1` AS select 'v1_val' collate utf8mb4_general_ci AS `col1`	utf8mb4	utf8mb4_general_ci
+create view v2 as select col1 from v1 union select col1 from t1;
+show create view v2;
+View	Create View	character_set_client	collation_connection
+v2	CREATE VIEW `v2` AS (select `db_view`.`v1`.`col1` AS `col1` from `db_view`.`v1`) union (select `db_view`.`t1`.`col1` AS `col1` from `db_view`.`t1`)	utf8mb4	utf8mb4_general_ci
+select coercibility(col1), collation(col1) from v2;
+coercibility(col1)	collation(col1)
+0	utf8mb4_general_ci
+0	utf8mb4_general_ci
+drop database if exists db_view;

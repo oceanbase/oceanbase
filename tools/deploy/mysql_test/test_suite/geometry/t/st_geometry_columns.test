@@ -1,0 +1,59 @@
+#owner: ht353245
+#owner group: shenzhen
+--echo # ----------------------------------------------------------------------
+--echo # Test of ST_GEOMETRY_COLUMNS.
+--echo # ----------------------------------------------------------------------
+--source mysql_test/test_suite/geometry/t/import_default_srs_data_mysql.inc
+
+
+--disable_warnings
+drop table if exists geo;
+--enable_warnings
+
+create table geo(id int primary key auto_increment, g1 geometry not null srid 4326);
+select * from INFORMATION_SCHEMA.ST_GEOMETRY_COLUMNS where TABLE_SCHEMA = 'test' and TABLE_NAME = 'geo' ORDER BY COLUMN_NAME;
+
+alter table geo add column g2 geometry;
+select * from INFORMATION_SCHEMA.ST_GEOMETRY_COLUMNS where TABLE_SCHEMA = 'test' and TABLE_NAME = 'geo' ORDER BY COLUMN_NAME;
+
+alter table geo add column g3 point srid 2000;
+select * from INFORMATION_SCHEMA.ST_GEOMETRY_COLUMNS where TABLE_SCHEMA = 'test' and TABLE_NAME = 'geo' ORDER BY COLUMN_NAME;
+
+alter table geo add column g4 linestring srid 3857;
+select * from INFORMATION_SCHEMA.ST_GEOMETRY_COLUMNS where TABLE_SCHEMA = 'test' and TABLE_NAME = 'geo' ORDER BY COLUMN_NAME;
+
+alter table geo add column g5 polygon srid 32766;
+select * from INFORMATION_SCHEMA.ST_GEOMETRY_COLUMNS where TABLE_SCHEMA = 'test' and TABLE_NAME = 'geo' ORDER BY COLUMN_NAME;
+
+alter table geo add column g6 multipoint srid 32766;
+select * from INFORMATION_SCHEMA.ST_GEOMETRY_COLUMNS where TABLE_SCHEMA = 'test' and TABLE_NAME = 'geo' ORDER BY COLUMN_NAME;
+
+alter table geo add column g7 multilinestring srid 3857;
+select * from INFORMATION_SCHEMA.ST_GEOMETRY_COLUMNS where TABLE_SCHEMA = 'test' and TABLE_NAME = 'geo' ORDER BY COLUMN_NAME;
+
+alter table geo add column g8 multipolygon srid 2000;
+select * from INFORMATION_SCHEMA.ST_GEOMETRY_COLUMNS where TABLE_SCHEMA = 'test' and TABLE_NAME = 'geo' ORDER BY COLUMN_NAME;
+
+alter table geo add column g9 geometrycollection srid 4326;
+select * from INFORMATION_SCHEMA.ST_GEOMETRY_COLUMNS where TABLE_SCHEMA = 'test' and TABLE_NAME = 'geo' ORDER BY COLUMN_NAME;
+
+alter table geo drop column g1;
+select * from INFORMATION_SCHEMA.ST_GEOMETRY_COLUMNS where TABLE_SCHEMA = 'test' and TABLE_NAME = 'geo' ORDER BY COLUMN_NAME;
+
+alter table geo drop column g2;
+select * from INFORMATION_SCHEMA.ST_GEOMETRY_COLUMNS where TABLE_SCHEMA = 'test' and TABLE_NAME = 'geo' ORDER BY COLUMN_NAME;
+
+alter table geo drop column g3;
+select * from INFORMATION_SCHEMA.ST_GEOMETRY_COLUMNS where TABLE_SCHEMA = 'test' and TABLE_NAME = 'geo' ORDER BY COLUMN_NAME;
+
+alter table geo drop column g4;
+select * from INFORMATION_SCHEMA.ST_GEOMETRY_COLUMNS where TABLE_SCHEMA = 'test' and TABLE_NAME = 'geo' ORDER BY COLUMN_NAME;
+
+alter table geo drop column g5;
+select * from INFORMATION_SCHEMA.ST_GEOMETRY_COLUMNS where TABLE_SCHEMA = 'test' and TABLE_NAME = 'geo' ORDER BY COLUMN_NAME;
+
+truncate table geo;
+select * from INFORMATION_SCHEMA.ST_GEOMETRY_COLUMNS where TABLE_SCHEMA = 'test' and TABLE_NAME = 'geo' ORDER BY COLUMN_NAME;
+
+drop table geo;
+select * from INFORMATION_SCHEMA.ST_GEOMETRY_COLUMNS where TABLE_SCHEMA = 'test' and TABLE_NAME = 'geo' ORDER BY COLUMN_NAME;

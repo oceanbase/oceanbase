@@ -1,0 +1,32 @@
+#owner: donglou.zl 
+#owner group: rootserver
+#tags: virtual_freeze_info 
+
+connect (sys_conn,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection sys_conn;
+
+let $sys_tenant_id = query_get_value(select tenant_id from __all_tenant where tenant_name = 'sys', tenant_id, 1);
+let $mysql_tenant_id = query_get_value(select tenant_id from __all_tenant where tenant_name = 'mysql', tenant_id, 1);
+
+############################################################
+connection sys_conn;
+let $sys_frozen_scn = query_get_value(select frozen_scn from __all_freeze_info, frozen_scn, 1);
+let $query_ret = query_get_value(select tenant_id from __all_virtual_freeze_info where tenant_id = '$sys_tenant_id' and frozen_scn = $sys_frozen_scn, tenant_id, 1);
+if ($query_ret == $sys_tenant_id)
+{
+    --echo success to check sys_tenant_id in __all_virtual_freeze_info
+}
+let $query_ret = query_get_value(select tenant_id from __all_virtual_freeze_info where tenant_id = '$mysql_tenant_id', tenant_id, 1);
+if ($query_ret == $mysql_tenant_id)
+{
+    --echo success to check mysql_tenant_id in __all_virtual_freeze_info
+}
+
+## query a not exist tenant_id
+let $query_ret = query_get_value(select tenant_id from __all_virtual_freeze_info where tenant_id = '18446744073709551614', tenant_id, 1);
+--echo $query_ret
+
+## query condition not match
+let $invalid_frozen_scn = 2;
+let $query_ret = query_get_value(select tenant_id from __all_virtual_freeze_info where tenant_id = '$sys_tenant_id' and frozen_scn = $invalid_frozen_scn, tenant_id, 1);
+--echo $query_ret

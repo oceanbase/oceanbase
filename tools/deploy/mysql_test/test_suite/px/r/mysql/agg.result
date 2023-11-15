@@ -1,0 +1,169 @@
+set ob_query_timeout=1000000000;
+drop database if exists px_test;
+create database px_test;
+use px_test;
+create table stu (
+sid     int,
+name    varchar(32),
+cls     int,
+primary key (cls, sid)
+) partition by hash(sid) partitions 6;
+create table teacher (
+tid        int,
+name       varchar(32),
+subject    varchar(4),
+primary key (tid)
+) partition by hash(tid) partitions 8;
+create table score (
+sid     int,
+subject varchar(4),
+score   int,
+primary key (sid, subject)
+) partition by hash(sid) partitions 6;
+insert into stu values
+(11, 'a1', 1),
+(12, 'b1', 1),
+(13, 'c1', 1),
+(21, 'a2', 2),
+(22, 'b2', 2),
+(31, 'a3', 3),
+(41, 'a4', 4),
+(42, 'b4', 4),
+(51, 'a5', 5),
+(52, 'b5', 5),
+(61, 'a6', 6),
+(62, 'b6', 6),
+(63, 'c6', 6),
+(64, 'd6', 6);
+insert into teacher values
+(1, 'Miss Zhang', 'EN'),
+(2, 'Mr Wang', 'MA');
+insert into score values
+(11, 'EN', 60),
+(12, 'EN', 70),
+(13, 'EN', 80),
+(21, 'EN', 58),
+(22, 'EN', 90),
+(31, 'EN', 80),
+(41, 'EN', 80),
+(42, 'EN', 90),
+(51, 'EN', 89),
+(52, 'EN', 99),
+(61, 'EN', 100),
+(62, 'EN', 90),
+(63, 'EN', 99),
+(64, 'EN', 87);
+insert into score values
+(11, 'MA', 60),
+(12, 'MA', 70),
+(13, 'MA', 80),
+(21, 'MA', 58),
+(22, 'MA', 90),
+(31, 'MA', 80),
+(41, 'MA', 80),
+(42, 'MA', 90),
+(51, 'MA', 89),
+(52, 'MA', 99),
+(61, 'MA', 100),
+(62, 'MA', 90),
+(63, 'MA', 99),
+(64, 'MA', 87);
+explain select /*+ USE_PX parallel(2) */ subject, avg(score), max(score), min(score) from score group by subject;
+Query Plan
+=====================================================================
+|ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------
+|0 |PX COORDINATOR                   |        |2       |20          |
+|1 |└─EXCHANGE OUT DISTR             |:EX10001|2       |18          |
+|2 |  └─HASH GROUP BY                |        |2       |16          |
+|3 |    └─EXCHANGE IN DISTR          |        |4       |15          |
+|4 |      └─EXCHANGE OUT DISTR (HASH)|:EX10000|4       |14          |
+|5 |        └─HASH GROUP BY          |        |4       |10          |
+|6 |          └─PX BLOCK ITERATOR    |        |28      |8           |
+|7 |            └─TABLE FULL SCAN    |score   |28      |8           |
+=====================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(score.subject, cast(cast(T_FUN_SUM(T_FUN_SUM(score.score)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(score.score)),
+       DECIMAL(20, 0)), DECIMAL(15, 4)), T_FUN_MAX(T_FUN_MAX(score.score)), T_FUN_MIN(T_FUN_MIN(score.score)))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(score.subject, cast(cast(T_FUN_SUM(T_FUN_SUM(score.score)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(score.score)),
+       DECIMAL(20, 0)), DECIMAL(15, 4)), T_FUN_MAX(T_FUN_MAX(score.score)), T_FUN_MIN(T_FUN_MIN(score.score)))]), filter(nil), rowset=256
+      dop=2
+  2 - output([score.subject], [T_FUN_MAX(T_FUN_MAX(score.score))], [T_FUN_MIN(T_FUN_MIN(score.score))], [T_FUN_SUM(T_FUN_SUM(score.score))], [T_FUN_COUNT_SUM(T_FUN_COUNT(score.score))]), filter(nil), rowset=256
+      group([score.subject]), agg_func([T_FUN_MAX(T_FUN_MAX(score.score))], [T_FUN_MIN(T_FUN_MIN(score.score))], [T_FUN_SUM(T_FUN_SUM(score.score))], [T_FUN_COUNT_SUM(T_FUN_COUNT(score.score))])
+  3 - output([score.subject], [T_FUN_MAX(score.score)], [T_FUN_MIN(score.score)], [T_FUN_SUM(score.score)], [T_FUN_COUNT(score.score)]), filter(nil), rowset=256
+  4 - output([score.subject], [T_FUN_MAX(score.score)], [T_FUN_MIN(score.score)], [T_FUN_SUM(score.score)], [T_FUN_COUNT(score.score)]), filter(nil), rowset=256
+      (#keys=1, [score.subject]), dop=2
+  5 - output([score.subject], [T_FUN_MAX(score.score)], [T_FUN_MIN(score.score)], [T_FUN_SUM(score.score)], [T_FUN_COUNT(score.score)]), filter(nil), rowset=256
+      group([score.subject]), agg_func([T_FUN_MAX(score.score)], [T_FUN_MIN(score.score)], [T_FUN_SUM(score.score)], [T_FUN_COUNT(score.score)])
+  6 - output([score.subject], [score.score]), filter(nil), rowset=256
+  7 - output([score.subject], [score.score]), filter(nil), rowset=256
+      access([score.subject], [score.score]), partitions(p[0-5])
+      is_index_back=false, is_global_index=false, 
+      range_key([score.sid], [score.subject]), range(MIN,MIN ; MAX,MAX)always true
+select /*+ USE_PX parallel(2) */ subject, avg(score), max(score), min(score) from score group by subject;
+subject	avg(score)	max(score)	min(score)
+EN	83.7143	100	58
+MA	83.7143	100	58
+explain select /*+ USE_PX parallel(2) */ cls, subject, avg(score), max(score), min(score) from score join stu using (sid) group by cls, subject;
+Query Plan
+=====================================================================
+|ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------
+|0 |PX COORDINATOR                   |        |9       |66          |
+|1 |└─EXCHANGE OUT DISTR             |:EX10001|9       |57          |
+|2 |  └─HASH GROUP BY                |        |9       |48          |
+|3 |    └─EXCHANGE IN DISTR          |        |16      |45          |
+|4 |      └─EXCHANGE OUT DISTR (HASH)|:EX10000|16      |37          |
+|5 |        └─HASH GROUP BY          |        |16      |20          |
+|6 |          └─PX PARTITION ITERATOR|        |28      |16          |
+|7 |            └─MERGE JOIN         |        |28      |16          |
+|8 |              ├─TABLE FULL SCAN  |score   |28      |8           |
+|9 |              └─SORT             |        |14      |8           |
+|10|                └─TABLE FULL SCAN|stu     |14      |7           |
+=====================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(stu.cls, score.subject, cast(cast(T_FUN_SUM(T_FUN_SUM(score.score)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(score.score)),
+       DECIMAL(20, 0)), DECIMAL(15, 4)), T_FUN_MAX(T_FUN_MAX(score.score)), T_FUN_MIN(T_FUN_MIN(score.score)))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(stu.cls, score.subject, cast(cast(T_FUN_SUM(T_FUN_SUM(score.score)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(score.score)),
+       DECIMAL(20, 0)), DECIMAL(15, 4)), T_FUN_MAX(T_FUN_MAX(score.score)), T_FUN_MIN(T_FUN_MIN(score.score)))]), filter(nil), rowset=256
+      dop=2
+  2 - output([stu.cls], [score.subject], [T_FUN_MAX(T_FUN_MAX(score.score))], [T_FUN_MIN(T_FUN_MIN(score.score))], [T_FUN_SUM(T_FUN_SUM(score.score))], 
+      [T_FUN_COUNT_SUM(T_FUN_COUNT(score.score))]), filter(nil), rowset=256
+      group([stu.cls], [score.subject]), agg_func([T_FUN_MAX(T_FUN_MAX(score.score))], [T_FUN_MIN(T_FUN_MIN(score.score))], [T_FUN_SUM(T_FUN_SUM(score.score))],
+       [T_FUN_COUNT_SUM(T_FUN_COUNT(score.score))])
+  3 - output([stu.cls], [score.subject], [T_FUN_MAX(score.score)], [T_FUN_MIN(score.score)], [T_FUN_SUM(score.score)], [T_FUN_COUNT(score.score)]), filter(nil), rowset=256
+  4 - output([stu.cls], [score.subject], [T_FUN_MAX(score.score)], [T_FUN_MIN(score.score)], [T_FUN_SUM(score.score)], [T_FUN_COUNT(score.score)]), filter(nil), rowset=256
+      (#keys=2, [stu.cls], [score.subject]), dop=2
+  5 - output([stu.cls], [score.subject], [T_FUN_MAX(score.score)], [T_FUN_MIN(score.score)], [T_FUN_SUM(score.score)], [T_FUN_COUNT(score.score)]), filter(nil), rowset=256
+      group([stu.cls], [score.subject]), agg_func([T_FUN_MAX(score.score)], [T_FUN_MIN(score.score)], [T_FUN_SUM(score.score)], [T_FUN_COUNT(score.score)])
+  6 - output([score.score], [stu.cls], [score.subject]), filter(nil), rowset=256
+      partition wise, force partition granule
+  7 - output([score.score], [stu.cls], [score.subject]), filter(nil), rowset=256
+      equal_conds([score.sid = stu.sid]), other_conds(nil)
+      merge_directions([ASC])
+  8 - output([score.sid], [score.subject], [score.score]), filter(nil), rowset=256
+      access([score.sid], [score.subject], [score.score]), partitions(p[0-5])
+      is_index_back=false, is_global_index=false, 
+      range_key([score.sid], [score.subject]), range(MIN,MIN ; MAX,MAX)always true
+  9 - output([stu.cls], [stu.sid]), filter(nil), rowset=256
+      sort_keys([stu.sid, ASC])
+ 10 - output([stu.cls], [stu.sid]), filter(nil), rowset=256
+      access([stu.cls], [stu.sid]), partitions(p[0-5])
+      is_index_back=false, is_global_index=false, 
+      range_key([stu.cls], [stu.sid]), range(MIN,MIN ; MAX,MAX)always true
+select /*+ USE_PX parallel(2) */ cls, subject, avg(score), max(score), min(score) from score join stu using (sid) group by cls, subject;
+cls	subject	avg(score)	max(score)	min(score)
+1	EN	70.0000	80	60
+1	MA	70.0000	80	60
+2	EN	74.0000	90	58
+2	MA	74.0000	90	58
+3	EN	80.0000	80	80
+3	MA	80.0000	80	80
+4	EN	85.0000	90	80
+4	MA	85.0000	90	80
+5	EN	94.0000	99	89
+5	MA	94.0000	99	89
+6	EN	94.0000	100	87
+6	MA	94.0000	100	87

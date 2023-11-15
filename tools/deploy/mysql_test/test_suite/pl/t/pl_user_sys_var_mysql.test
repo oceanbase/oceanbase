@@ -1,0 +1,247 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#tags: pl
+#owner: linlin.xll
+#owner group: sql1
+#description: test pl user/system variables
+
+--result_format 4
+
+--disable_query_log
+--disable_result_log
+--source mysql_test/include/index_quick_major.inc
+--enable_query_log
+--enable_result_log
+
+#### Case 1:
+--disable_warnings
+drop procedure if exists test_proc;
+drop table if exists result;
+--enable_warnings
+
+create table result(col varchar(20));
+
+delimiter /;
+
+create procedure test_proc()
+begin
+  set @id = @id + 1;
+  insert into result values(@id);
+end;
+/
+
+delimiter ;/
+
+call test_proc();
+select col from result;
+
+drop procedure test_proc;
+drop table result;
+
+#### Case 1:
+--disable_warnings
+drop procedure if exists test_proc;
+drop table if exists result;
+--enable_warnings
+
+set @id = 2.00000;
+create table result(col varchar(20));
+
+delimiter /;
+
+create procedure test_proc()
+begin
+  set @id = @id + 1;
+  insert into result values(@id);
+end;
+/
+
+delimiter ;/
+
+call test_proc();
+select col from result;
+
+drop procedure test_proc;
+drop table result;
+
+
+#### Case 2:
+
+--disable_warnings
+drop procedure if exists test_proc;
+drop table if exists result;
+--enable_warnings
+
+create table result (x varchar(20), y int, z double);
+
+delimiter /;
+create procedure test_proc()
+begin
+  declare x varchar(20);
+  declare y int default 0;
+  declare z double;
+  set @a = 'ON';
+  set x = @a;
+  set @a = 1;
+  set y = @a;
+  set @a = 1.23456;
+  set z = @a;
+  -- select x, y, z;
+  insert into result values(x, y, z);
+end;
+/
+
+delimiter ;/
+call test_proc();
+select * from result;
+--error 0,5114
+call test_proc();
+#select * from result;
+
+drop table result;
+drop procedure test_proc;
+
+
+#### Case 3:
+--disable_warnings
+drop procedure if exists test_proc;
+drop table if exists result;
+--enable_warnings
+
+create table result(x varchar(20), y int, z double);
+delimiter /;
+create procedure test_proc()
+begin
+  declare y int;
+  declare z double default null;
+  set y = @n;
+  set @n = 'on';
+  insert into result values('0', y, z);
+end;
+/
+
+delimiter ;/
+call test_proc();
+select * from result;
+--error 1366
+call test_proc();
+
+drop table result;
+drop procedure test_proc;
+
+
+
+#### Case 4:
+--disable_warnings
+drop procedure if exists test_proc;
+--enable_warnings
+
+set @save_autocommit = @@autocommit;
+
+set global autocommit=on;
+set @@autocommit=on;
+
+show variables like 'autocommit';
+show global variables like 'autocommit';
+show session variables like 'autocommit';
+
+delimiter /;
+create procedure test_proc()
+begin
+  set autocommit = off;
+end;
+/
+delimiter ;/
+call test_proc();
+show variables like 'autocommit';
+show global variables like 'autocommit';
+show session variables like 'autocommit';
+
+drop procedure test_proc;
+
+
+#### Case 5:
+--disable_warnings
+drop procedure if exists test_proc;
+--enable_warnings
+
+set global autocommit=on;
+set @@autocommit=on;
+
+show variables like 'autocommit';
+show global variables like 'autocommit';
+show session variables like 'autocommit';
+
+delimiter /;
+create procedure test_proc()
+begin
+  set @@autocommit = off;
+end;
+/
+
+delimiter ;/
+call test_proc();
+show variables like 'autocommit';
+show global variables like 'autocommit';
+show session variables like 'autocommit';
+
+drop procedure test_proc;
+
+#### Case 6:
+--disable_warnings
+drop procedure if exists test_proc;
+--enable_warnings
+
+set global autocommit=on;
+set @@autocommit=on;
+
+show variables like 'autocommit';
+show global variables like 'autocommit';
+show session variables like 'autocommit';
+
+delimiter /;
+create procedure test_proc()
+begin
+  set session autocommit = off;
+end;
+/
+delimiter ;/
+call test_proc();
+show variables like 'autocommit';
+show global variables like 'autocommit';
+show session variables like 'autocommit';
+
+drop procedure test_proc;
+
+#### Case 7:
+--disable_warnings
+drop procedure if exists test_proc;
+--enable_warnings
+
+set global autocommit=on;
+set @@autocommit=on;
+
+show variables like 'autocommit';
+show global variables like 'autocommit';
+show session variables like 'autocommit';
+
+delimiter /;
+create procedure test_proc()
+begin
+  set global autocommit = off;
+end;
+/
+delimiter ;/
+call test_proc();
+show variables like 'autocommit';
+show global variables like 'autocommit';
+show session variables like 'autocommit';
+
+set session autocommit = @save_autocommit;
+set global autocommit = @save_autocommit;
+
+drop procedure test_proc;
+
+
+

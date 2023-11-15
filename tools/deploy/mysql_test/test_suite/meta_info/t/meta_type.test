@@ -1,0 +1,171 @@
+# owner: xiaochu.yh
+# owner group: SQL1
+# Test of functions meta_type
+
+--enable_metadata
+--disable_warnings
+drop table if exists t1, t11, t12, t13, t14, t2, t21, t22, t23, t24, t3, t31, t32, t33,t4, t5, t51, t52, t6, t7, t71, t8;
+--enable_warnings
+set ob_enable_plan_cache = false;
+
+# int
+create table t1(a tinyint, b smallint, c mediumint, d int, f bigint);
+select * from t1;
+insert into t1 value(10, 10, 10, 10, 10),(20, 200, 200, 200, 200), (100, 1000, 1000, 1000, 1000), (-10, -10, -10, -10, -10);
+select * from t1;
+
+create table t11(a tinyint(1), b smallint(1), c mediumint(1), d int(1), f bigint(1));
+select * from t11;
+insert into t11 value(1, 1, 1, 1, 1);
+select * from t11;
+
+create table t12(a tinyint(10), b smallint(10), c mediumint(10), d int(10), f bigint(10));
+select * from t12;
+insert into t12 value(1, 1, 1, 1, 1);
+select * from t12;
+
+create table t13(a tinyint(100), b smallint(100), c mediumint(100), d int(100), f bigint(100));
+select * from t13;
+insert into t13 value(1, 1, 1, 1, 1);
+select * from t13;
+
+create table t14(a tinyint(255), b smallint(255), c mediumint(255), d int(255), f bigint(255));
+select * from t14;
+insert into t14 value(1, 1, 1, 1, 1);
+select * from t14;
+
+# uint
+create table t2(a tinyint unsigned, b smallint unsigned, c mediumint unsigned, d int unsigned, f bigint unsigned);
+select * from t2;
+insert into t2 value(10, 10, 10, 10, 10),(20, 20, 20, 20, 20);
+select * from t2;
+
+create table t21(a tinyint(1) unsigned, b smallint(1) unsigned, c mediumint(1) unsigned, d int(1) unsigned, f bigint(1) unsigned);
+select * from t21;
+insert into t21 value(1, 1, 1, 1, 1);
+select * from t21;
+
+create table t22(a tinyint(10) unsigned, b smallint(10) unsigned, c mediumint(10) unsigned, d int(10) unsigned, f bigint(10) unsigned);
+select * from t22;
+insert into t22 value(1, 1, 1, 1, 1);
+select * from t22;
+
+create table t23(a tinyint(100) unsigned, b smallint(100) unsigned, c mediumint(100) unsigned, d int(100) unsigned, f bigint(100) unsigned);
+select * from t23;
+insert into t23 value(1, 1, 1, 1, 1);
+select * from t23;
+
+create table t24(a tinyint(255) unsigned, b smallint(255) unsigned, c mediumint(255) unsigned, d int(255) unsigned, f bigint(255) unsigned);
+select * from t24;
+insert into t24 value(1, 1, 1, 1, 1);
+select * from t24;
+
+# float
+create table t3(a float, b float unsigned, c double, d double unsigned);
+select * from t3;
+insert into t3 value(0.1, 0.1, 0.1, 0.1),(-0.1, 388.99, -0.1, 388.99);
+select * from t3;
+
+create table t31(a float(1), b float(1) unsigned);
+select * from t31;
+insert into t31 value(1.1, 1.2);
+select * from t31;
+
+#mysql 超过24后自动转换为double类型
+create table t32(a float(24), b float(24) unsigned);
+select * from t32;
+insert into t32 value(1.1, 1.2);
+select * from t32;
+
+create table t33(a float(10,0), b float(11,0), c float(24,0));
+select * from t33;
+
+# number
+#create table t4(a decimal, b decimal unsigned, e number, f number unsigned);
+#select * from t4;
+#insert into t4 value(0.1, 0.1, 0.1, 0.1),(-0.1, 388.99, -0.1, 388.99);
+#select * from t4;
+
+create table t4(a decimal, b decimal unsigned);
+select * from t4;
+insert into t4 value(0.1,0.2);
+select * from t4;
+
+#create table t5(a decimal(10,2), b decimal(10,2) unsigned, e number(10,2), f number(10,2) unsigned);
+#select * from t5;
+#insert into t5 value(0.1, 0.1, 0.1, 0.1),(-0.1, 388.99, -0.1, 388.99);
+#select * from t5;
+
+create table t5(a decimal(10,2), b decimal(10,2) unsigned);
+select * from t5;
+insert into t5 value(0.1, 0.1);
+select * from t5;
+
+#create table t51(a decimal(10,2), b decimal(10,2) unsigned, e number(10,2), f number(10,2) unsigned);
+#select * from t51;
+#insert into t51 value(0.1, 0.1, 0.1, 0.1),(-0.1, 388.99, -0.1, 388.99);
+#select * from t51;
+
+create table t51(a decimal(10,2), b decimal(10,2) unsigned);
+select * from t51;
+insert into t51 value(0.1, 0.1);
+select * from t51;
+
+# mysql  p max 65 s max 30   ob p max 为38
+create table t52(a decimal(38,30), b decimal(38,30) unsigned);
+select * from t52;
+insert into t52 value(0.1, 0.1);
+select * from t52;
+
+# datetime
+create table t6(a date, b time, c year, d datetime, e timestamp);
+select * from t6;
+insert into t6 value('20010303', '10:20:30', '2008', '20010303012030', '20010303012030');
+select * from t6;
+
+create table t7(a date, b time(3), c year, d datetime(3), e timestamp(3));
+select * from t7;
+insert into t7 value('20010303', '10:20:30', '2008', '20010303012030', '20010303012030');
+select * from t7;
+
+create table t71(a date, b time(6), c year, d datetime(6), e timestamp(6));
+select * from t71;
+insert into t71 value('20010303', '10:20:30', '2008', '20010303012030', '20010303012030');
+select * from t71;
+
+
+--disable_warnings
+drop table if exists t1, t11, t12, t13, t14, t2, t21, t22, t23, t24, t3, t31, t32, t33,t4, t5, t51, t52, t6, t7, t71, t8;
+--enable_warnings
+
+# hexadecimal literal
+# extend
+
+# const
+select 3;
+select 3.4;
+select 3.000000000000000000000000001;
+
+select -3;
+select -3.4;
+select -3.000000000000000000000000001;
+
+select 1, 11, 111, 1111, 11111, 111111, 1111111, 11111111, 111111111, 1111111111,11111111111, 111111111111;
+select TIMESTAMP '2012-12-31 11:30:45', TIMESTAMP '2012-12-31 11:30:45.1', TIMESTAMP '2012-12-31 11:30:45.11', TIMESTAMP '2012-12-31 11:30:45.111', TIMESTAMP '2012-12-31 11:30:45.1111', TIMESTAMP '2012-12-31 11:30:45.11111', TIMESTAMP '2012-12-31 11:30:45.111111';
+select TIME '11:30:45', TIME '11:30:45.111111', TIME '11:30:45.11111', TIME '11:30:45.1111', TIME '11:30:45.111', TIME '11:30:45.11', TIME '11:30:45.1';
+select date '1998-09-09';
+select TIMESTAMP '2012-2-1 11:30:45';
+select TIME '11:5:45';
+select date '1998-9-9';
+SELECT X'4D7953514C';
+#SELECT 0x0a+0;
+SELECT 0x5061756c;
+SELECT 0x636174;
+SELECT TRUE, true, FALSE, false;
+
+select 'abcde';
+select '0x10';
+select '0810';
+
+
+--disable_metadata

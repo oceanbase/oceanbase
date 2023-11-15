@@ -1,0 +1,36 @@
+set SESSION ob_query_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_idle_timeout = 600 * 1000 * 1000;
+set SESSION ob_query_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_timeout = 600 * 1000 * 1000;
+set SESSION ob_trx_idle_timeout = 600 * 1000 * 1000;
+alter system set minor_compact_trigger = 10;
+begin;
+update test_mix_dml_table set v2 = 'QQQQQQQQQQQQQQQQQQQQQQQQQQ';
+select count(*) from test_mix_dml_table where v2 = 'QQQQQQQQQQQQQQQQQQQQQQQQQQ';
+count(*)
+2000
+select * from test_mix_dml_table;
+i1	v2	i3	i4	d4	i5
+alter system set minor_compact_trigger = 1;
+select * from test_mix_dml_table;
+i1	v2	i3	i4	d4	i5
+select count(*) from test_mix_dml_table;
+count(*)
+1000
+select count(*) from test_mix_dml_table;
+count(*)
+1000
+select count(*) from test_mix_dml_table;
+count(*)
+1000
+select count(*) from test_mix_dml_table;
+count(*)
+1000
+select count(*) from test_mix_dml_table;
+count(*)
+1000
+commit;
+select count(*) from test_mix_dml_table where i4 = 25 * i1 * power(2, 3) and v2 != 'QQQQQQQQQQQQQQQQQQQQQQQQQQ';
+count(*)
+0

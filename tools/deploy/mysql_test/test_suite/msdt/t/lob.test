@@ -1,0 +1,40 @@
+#owner: bowen.gbw
+#group: storage
+
+--disable_warnings
+drop table if exists msdt_lob;
+drop table if exists msdt_normal;
+--enable_warnings
+
+create table msdt_lob(c1 text, c2 int);
+
+alter table msdt_lob drop c2;
+
+create table msdt_normal(a int, b int);
+
+# msdt_lob
+let $tenant_id1 = query_get_value(select tenant_id from oceanbase.__all_virtual_table where table_name = 'msdt_lob', tenant_id, 1);
+let $tablet_id1 = query_get_value(select tablet_id from oceanbase.__all_virtual_table where table_name = 'msdt_lob', tablet_id, 1);
+let $ls_id1 = query_get_value(select ls_id from oceanbase.DBA_OB_TABLET_TO_LS where tablet_id = $tablet_id1, ls_id, 1);
+
+let $report_cnt1 = query_get_value(select count(*) as cnt from oceanbase.__all_virtual_tablet_meta_table where tenant_id = $tenant_id1 and ls_id = $ls_id1 and tablet_id = $tablet_id1, cnt, 1);
+let $unit_cnt1 = query_get_value(select count(*) as cnt from oceanbase.__all_virtual_unit where tenant_id = $tenant_id1, cnt, 1);
+
+--disable_query_log
+eval select $report_cnt1 = $unit_cnt1 as result;
+--enable_query_log
+
+# msdt_normal
+let $tenant_id2 = query_get_value(select tenant_id from oceanbase.__all_virtual_table where table_name = 'msdt_normal', tenant_id, 1);
+let $tablet_id2 = query_get_value(select tablet_id from oceanbase.__all_virtual_table where table_name = 'msdt_normal', tablet_id, 1);
+let $ls_id2 = query_get_value(select ls_id from oceanbase.DBA_OB_TABLET_TO_LS where tablet_id = $tablet_id2, ls_id, 1);
+
+let $report_cnt2 = query_get_value(select count(*) as cnt from oceanbase.__all_virtual_tablet_meta_table where tenant_id = $tenant_id2 and ls_id = $ls_id2 and tablet_id = $tablet_id2, cnt, 1);
+let $unit_cnt2 = query_get_value(select count(*) as cnt from oceanbase.__all_virtual_unit where tenant_id = $tenant_id2, cnt, 1);
+
+--disable_query_log
+eval select $report_cnt2 = $unit_cnt2 as result;
+--enable_query_log
+
+drop table msdt_lob;
+drop table msdt_normal;

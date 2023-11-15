@@ -1,0 +1,174 @@
+DESC DBA_OB_TENANTS;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+TENANT_NAME	varchar(128)	NO		NULL	
+TENANT_TYPE	varchar(4)	NO			
+CREATE_TIME	timestamp(6)	YES			
+MODIFY_TIME	timestamp(6)	YES			
+PRIMARY_ZONE	varchar(128)	YES		NULL	
+LOCALITY	varchar(4096)	NO			
+PREVIOUS_LOCALITY	varchar(4096)	NO			
+COMPATIBILITY_MODE	varchar(6)	NO			
+STATUS	varchar(64)	NO			
+IN_RECYCLEBIN	varchar(3)	NO			
+LOCKED	varchar(3)	NO		NULL	
+TENANT_ROLE	varchar(100)	NO		NULL	
+SWITCHOVER_STATUS	varchar(100)	NO		NULL	
+SWITCHOVER_EPOCH	bigint(20)	NO		NULL	
+SYNC_SCN	bigint(20) unsigned	NO		NULL	
+REPLAYABLE_SCN	bigint(20) unsigned	NO		NULL	
+READABLE_SCN	bigint(20) unsigned	NO		NULL	
+RECOVERY_UNTIL_SCN	bigint(20) unsigned	NO			
+LOG_MODE	varchar(100)	NO			
+ARBITRATION_SERVICE_STATUS	varchar(64)	NO			
+UNIT_NUM	bigint(20)	NO			
+COMPATIBLE	varchar(65536)	NO			
+MAX_LS_ID	bigint(20)	NO			
+SELECT count(distinct(tenant_id)) >= 1  FROM DBA_OB_TENANTS;
+count(distinct(tenant_id)) >= 1
+1
+select TENANT_NAME, TENANT_TYPE, COMPATIBILITY_MODE, STATUS, IN_RECYCLEBIN, LOCKED, TENANT_ROLE, SWITCHOVER_STATUS, LOG_MODE, UNIT_NUM from DBA_OB_TENANTS where TENANT_NAME = 'mysql';
+TENANT_NAME	TENANT_TYPE	COMPATIBILITY_MODE	STATUS	IN_RECYCLEBIN	LOCKED	TENANT_ROLE	SWITCHOVER_STATUS	LOG_MODE	UNIT_NUM
+mysql	USER	MYSQL	NORMAL	NO	NO	PRIMARY	NORMAL	NOARCHIVELOG	1
+select TENANT_NAME, TENANT_TYPE, COMPATIBILITY_MODE, STATUS, IN_RECYCLEBIN, LOCKED, TENANT_ROLE, SWITCHOVER_STATUS, LOG_MODE, UNIT_NUM from DBA_OB_TENANTS where TENANT_TYPE = 'SYS';
+TENANT_NAME	TENANT_TYPE	COMPATIBILITY_MODE	STATUS	IN_RECYCLEBIN	LOCKED	TENANT_ROLE	SWITCHOVER_STATUS	LOG_MODE	UNIT_NUM
+sys	SYS	MYSQL	NORMAL	NO	NO	PRIMARY	NORMAL	NOARCHIVELOG	1
+select TENANT_TYPE, COMPATIBILITY_MODE, STATUS, IN_RECYCLEBIN, LOCKED, TENANT_ROLE, SWITCHOVER_STATUS, LOG_MODE, SYNC_SCN, REPLAYABLE_SCN, READABLE_SCN, RECOVERY_UNTIL_SCN, UNIT_NUM from DBA_OB_TENANTS where TENANT_TYPE = 'META' limit 1;
+TENANT_TYPE	COMPATIBILITY_MODE	STATUS	IN_RECYCLEBIN	LOCKED	TENANT_ROLE	SWITCHOVER_STATUS	LOG_MODE	SYNC_SCN	REPLAYABLE_SCN	READABLE_SCN	RECOVERY_UNTIL_SCN	UNIT_NUM
+META	MYSQL	NORMAL	NO	NO	PRIMARY	NORMAL	NOARCHIVELOG	NULL	NULL	NULL	NULL	1
+select count(*) from DBA_OB_TENANTS where COMPATIBLE != (SELECT MIN(VALUE) FROM GV$OB_PARAMETERS WHERE NAME = 'compatible');
+count(*)
+0
+select count(*) from DBA_OB_TENANTS where SYNC_SCN >= REPLAYABLE_SCN and REPLAYABLE_SCN>=READABLE_SCN and RECOVERY_UNTIL_SCN !=0 and TENANT_TYPE = "USER" and TENANT_NAME = 'mysql';
+count(*)
+1
+select count(*) from DBA_OB_TENANTS where SYNC_SCN is NULL and REPLAYABLE_SCN is NULL and READABLE_SCN is NULL and RECOVERY_UNTIL_SCN  is NULL and TENANT_TYPE = 'SYS';
+count(*)
+1
+USE TEST;
+SELECT count(distinct(tenant_id)) >= 1  FROM oceanbase.DBA_OB_TENANTS;
+count(distinct(tenant_id)) >= 1
+1
+DESC DBA_OB_TENANTS;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+TENANT_NAME	varchar(128)	NO		NULL	
+TENANT_TYPE	varchar(4)	NO			
+CREATE_TIME	timestamp(6)	YES			
+MODIFY_TIME	timestamp(6)	YES			
+PRIMARY_ZONE	varchar(128)	YES		NULL	
+LOCALITY	varchar(4096)	NO			
+PREVIOUS_LOCALITY	varchar(4096)	NO			
+COMPATIBILITY_MODE	varchar(6)	NO			
+STATUS	varchar(64)	NO			
+IN_RECYCLEBIN	varchar(3)	NO			
+LOCKED	varchar(3)	NO		NULL	
+TENANT_ROLE	varchar(100)	NO		NULL	
+SWITCHOVER_STATUS	varchar(100)	NO		NULL	
+SWITCHOVER_EPOCH	bigint(20)	NO		NULL	
+SYNC_SCN	bigint(20) unsigned	NO		NULL	
+REPLAYABLE_SCN	bigint(20) unsigned	NO		NULL	
+READABLE_SCN	bigint(20) unsigned	NO		NULL	
+RECOVERY_UNTIL_SCN	bigint(20) unsigned	NO			
+LOG_MODE	varchar(100)	NO			
+ARBITRATION_SERVICE_STATUS	varchar(64)	NO			
+UNIT_NUM	bigint(20)	NO			
+COMPATIBLE	varchar(65536)	NO			
+MAX_LS_ID	bigint(20)	NO			
+SELECT TENANT_NAME, count(*) = 1  FROM oceanbase.DBA_OB_TENANTS group by TENANT_ID;
+TENANT_NAME	count(*) = 1
+mysql	1
+select TENANT_NAME, TENANT_TYPE, COMPATIBILITY_MODE, STATUS, IN_RECYCLEBIN, LOCKED, TENANT_ROLE, SWITCHOVER_STATUS, LOG_MODE, UNIT_NUM from oceanbase.DBA_OB_TENANTS;
+TENANT_NAME	TENANT_TYPE	COMPATIBILITY_MODE	STATUS	IN_RECYCLEBIN	LOCKED	TENANT_ROLE	SWITCHOVER_STATUS	LOG_MODE	UNIT_NUM
+mysql	USER	MYSQL	NORMAL	NO	NO	PRIMARY	NORMAL	NOARCHIVELOG	1
+select count(*) from oceanbase.DBA_OB_TENANTS where COMPATIBLE != (SELECT MIN(VALUE) FROM oceanbase.GV$OB_PARAMETERS WHERE NAME = 'compatible');
+count(*)
+0
+select count(*) from oceanbase.DBA_OB_TENANTS where SYNC_SCN >= REPLAYABLE_SCN and REPLAYABLE_SCN>=READABLE_SCN and RECOVERY_UNTIL_SCN !=0 and TENANT_TYPE = "USER";
+count(*)
+1
+ALTER SYSTEM SWITCHOVER TO STANDBY TENANT mysql;
+select TENANT_NAME, TENANT_TYPE, COMPATIBILITY_MODE, STATUS, IN_RECYCLEBIN, LOCKED, TENANT_ROLE, SWITCHOVER_STATUS, LOG_MODE, UNIT_NUM from oceanbase.DBA_OB_TENANTS where TENANT_NAME = 'mysql';
+TENANT_NAME	TENANT_TYPE	COMPATIBILITY_MODE	STATUS	IN_RECYCLEBIN	LOCKED	TENANT_ROLE	SWITCHOVER_STATUS	LOG_MODE	UNIT_NUM
+mysql	USER	MYSQL	NORMAL	NO	NO	STANDBY	NORMAL	NOARCHIVELOG	1
+select count(*) from oceanbase.DBA_OB_TENANTS where SYNC_SCN >= REPLAYABLE_SCN and REPLAYABLE_SCN>=READABLE_SCN and RECOVERY_UNTIL_SCN !=0 and TENANT_TYPE = "USER" and TENANT_NAME = 'mysql';
+count(*)
+1
+select TENANT_NAME, TENANT_TYPE, COMPATIBILITY_MODE, STATUS, IN_RECYCLEBIN, LOCKED, TENANT_ROLE, SWITCHOVER_STATUS, LOG_MODE, UNIT_NUM from oceanbase.DBA_OB_TENANTS where TENANT_NAME = 'mysql';
+TENANT_NAME	TENANT_TYPE	COMPATIBILITY_MODE	STATUS	IN_RECYCLEBIN	LOCKED	TENANT_ROLE	SWITCHOVER_STATUS	LOG_MODE	UNIT_NUM
+mysql	USER	MYSQL	NORMAL	NO	NO	STANDBY	NORMAL	NOARCHIVELOG	1
+select count(*) from oceanbase.DBA_OB_TENANTS where SYNC_SCN >= REPLAYABLE_SCN and REPLAYABLE_SCN>=READABLE_SCN and RECOVERY_UNTIL_SCN !=0 and TENANT_TYPE = "USER" and TENANT_NAME = 'mysql';
+count(*)
+1
+ALTER SYSTEM SWITCHOVER TO PRIMARY TENANT mysql;
+use oceanbase;
+EXPLAIN BASIC select tenant_name,status from DBA_OB_TENANTS where tenant_name = 'mysql';
+Query Plan
+========================================================================
+|ID|OPERATOR               |NAME                                       |
+------------------------------------------------------------------------
+|0 |NESTED-LOOP OUTER JOIN |                                           |
+|1 |├─TABLE FULL SCAN      |A                                          |
+|2 |└─MATERIAL             |                                           |
+|3 |  └─SUBPLAN SCAN       |C                                          |
+|4 |    └─HASH DISTINCT    |                                           |
+|5 |      └─TABLE FULL SCAN|__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT|
+========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([A.tenant_name], [A.status]), filter(nil)
+      conds([A.tenant_id = C.TENANT_ID OR A.tenant_id = C.META_TENANT_ID]), nl_params_(nil), use_batch=false
+  1 - output([A.tenant_id], [A.tenant_name], [A.status]), filter([A.tenant_name = 'mysql'])
+      access([A.tenant_id], [A.tenant_name], [A.status]), partitions(p1)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([A.tenant_id]), range(MIN ; MAX)always true
+  2 - output([C.TENANT_ID], [C.META_TENANT_ID]), filter(nil)
+  3 - output([C.TENANT_ID], [C.META_TENANT_ID]), filter(nil)
+      access([C.TENANT_ID], [C.META_TENANT_ID])
+  4 - output([__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id], [CASE WHEN __ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id < 1 THEN NULL WHEN 
+      __ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id != 1 THEN __ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id - 1 ELSE NULL END]), filter(nil)
+      distinct([__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id])
+  5 - output([__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id]), filter(nil)
+      access([__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id]), partitions(p1)
+      is_index_back=false, is_global_index=false, 
+      range_key([__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.resource_pool_id]), range(MIN ; MAX)always true
+EXPLAIN BASIC select tenant_role,switchover_status from DBA_OB_TENANTS where tenant_name = 'mysql';
+Query Plan
+==========================================================================
+|ID|OPERATOR                 |NAME                                       |
+--------------------------------------------------------------------------
+|0 |MERGE OUTER JOIN         |                                           |
+|1 |├─NESTED-LOOP OUTER JOIN |                                           |
+|2 |│ ├─TABLE FULL SCAN      |A                                          |
+|3 |│ └─MATERIAL             |                                           |
+|4 |│   └─SUBPLAN SCAN       |C                                          |
+|5 |│     └─HASH DISTINCT    |                                           |
+|6 |│       └─TABLE FULL SCAN|__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT|
+|7 |└─TABLE FULL SCAN        |B                                          |
+==========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([CASE WHEN A.tenant_id = 1 THEN 'PRIMARY' WHEN (T_OP_BIT_AND, A.tenant_id, cast(X'01', BIGINT(-1, 0))) = 1 THEN 'PRIMARY' ELSE B.tenant_role 
+      END], [CASE WHEN A.tenant_id = 1 THEN 'NORMAL' WHEN (T_OP_BIT_AND, A.tenant_id, cast(X'01', BIGINT(-1, 0))) = 1 THEN 'NORMAL' ELSE B.switchover_status END]), filter(nil)
+      equal_conds([A.tenant_id = B.tenant_id]), other_conds(nil)
+      merge_directions([ASC])
+  1 - output([A.tenant_id]), filter(nil)
+      conds([A.tenant_id = C.TENANT_ID OR A.tenant_id = C.META_TENANT_ID]), nl_params_(nil), use_batch=false
+  2 - output([A.tenant_id]), filter([A.tenant_name = 'mysql'])
+      access([A.tenant_id], [A.tenant_name]), partitions(p1)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([A.tenant_id]), range(MIN ; MAX)always true
+  3 - output([C.TENANT_ID], [C.META_TENANT_ID]), filter(nil)
+  4 - output([C.TENANT_ID], [C.META_TENANT_ID]), filter(nil)
+      access([C.TENANT_ID], [C.META_TENANT_ID])
+  5 - output([__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id], [CASE WHEN __ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id < 1 THEN NULL WHEN 
+      __ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id != 1 THEN __ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id - 1 ELSE NULL END]), filter(nil)
+      distinct([__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id])
+  6 - output([__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id]), filter(nil)
+      access([__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id]), partitions(p1)
+      is_index_back=false, is_global_index=false, 
+      range_key([__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.resource_pool_id]), range(MIN ; MAX)always true
+  7 - output([B.tenant_id], [B.tenant_role], [B.switchover_status]), filter(nil)
+      access([B.tenant_id], [B.tenant_role], [B.switchover_status]), partitions(p1)
+      is_index_back=false, is_global_index=false, 
+      range_key([B.tenant_id]), range(MIN ; MAX)always true

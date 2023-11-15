@@ -1,0 +1,44 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: bin.lb
+#owner group:sql2
+# tags: dml
+#description:this case is use for test online use of ob1.0
+
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+create table t1(c1 int primary key, c2 int);
+
+insert into t1 values(7,3),(8,3),(1,1),(2,0),(3,1),(4,0),(5,2),(6,2);
+
+# group by test
+select c1 as a1,c2 as a2 from t1 group by a2 order by a1;
+select c1 as a1,c2 as a2 from t1 group by a1 order by a2;
+select c1 as a1,c2 as a2 from t1 group by a2 order by a2;
+select c1 as a1,c2 as a2 from t1 group by a1 order by a1;
+
+# order by test
+select c1 as a1,c2 as a2 from t1 order by a2;
+select c1 as a1,c2 as a2 from t1 order by a1;
+
+# having test
+select c1 as a1,c2 as a2 from t1 group by a2 having a2>0 order by a1;
+select c1 as a1,c2 as a2 from t1 group by a2 having a2>0 order by a2;
+select c1 as a1,c2 as a2 from t1 group by a2 having a1>0 order by a1;
+select c1 as a1,c2 as a2 from t1 group by a2 having a1>0 order by a2;
+
+
+# select expr
+select c1+c2 as total from t1 order by total;
+select c1, c1+c2 as total from t1 group by total order by c1;
+select c1, c1+c2 as total from t1 group by total having c1>2 order by c1 desc;
+
+
+# refer to column alias in where
+select c1 as a1, c2 as a2 from t1 where c1>1;
+select c1 as a1, c2 as a2 from t1 where c2>1;
+select c1,c1+c2 as a1 from t1 where c1+c2>2;

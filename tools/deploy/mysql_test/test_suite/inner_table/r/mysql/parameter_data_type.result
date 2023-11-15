@@ -1,0 +1,576 @@
+===========================  case1: under sys tenant  ===========================
+=====================  [1] prevent data_type UNKNOWN  ======================
+show parameters where data_type = 'UNKNOWN';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+select * from __all_sys_parameter where data_type = 'UNKNOWN';
+gmt_create	gmt_modified	zone	svr_type	svr_ip	svr_port	name	data_type	value	value_strict	info	need_reboot	section	visible_level	config_version	scope	source	edit_level
+select * from __tenant_parameter where data_type = 'UNKNOWN';
+gmt_create	gmt_modified	tenant_id	zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	config_version
+select * from __all_virtual_sys_parameter_stat where data_type = 'UNKNOWN';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	value_strict	info	need_reboot	section	visible_level	scope	source	edit_level	default_value	isdefault
+select * from __all_virtual_tenant_parameter_stat where data_type = 'UNKNOWN';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	tenant_id	default_value	isdefault
+select * from __all_virtual_tenant_parameter_info where data_type = 'UNKNOWN';
+tenant_id	zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+select * from __all_virtual_tenant_parameter where data_type = 'UNKNOWN';
+tenant_id	zone	svr_type	svr_ip	svr_port	name	gmt_create	gmt_modified	data_type	value	info	section	scope	source	edit_level	config_version
+select * from GV$OB_PARAMETERS where data_type = 'UNKNOWN';
+SVR_IP	SVR_PORT	ZONE	SCOPE	TENANT_ID	NAME	DATA_TYPE	VALUE	INFO	SECTION	EDIT_LEVEL
+select * from V$OB_PARAMETERS where data_type = 'UNKNOWN';
+SVR_IP	SVR_PORT	ZONE	SCOPE	TENANT_ID	NAME	DATA_TYPE	VALUE	INFO	SECTION	EDIT_LEVEL
+===============  [2] check data_tpye for __all_sys_parameter  ===============
+select name, data_type from __all_sys_parameter where name = 'enable_sql_audit';
+name	data_type
+enable_sql_audit	BOOL
+select name, data_type from __all_sys_parameter where name = 'max_string_print_length';
+name	data_type
+max_string_print_length	INT
+select name, data_type from __all_sys_parameter where name = 'location_cache_cpu_quota';
+name	data_type
+location_cache_cpu_quota	DOUBLE
+select name, data_type from __all_sys_parameter where name = 'default_row_format';
+name	data_type
+default_row_format	STRING
+select name, data_type from __all_sys_parameter where name = 'log_disk_size';
+name	data_type
+log_disk_size	CAPACITY
+select name, data_type from __all_sys_parameter where name = 'rpc_timeout';
+name	data_type
+rpc_timeout	TIME
+select name, data_type from __all_sys_parameter where name = 'config_additional_dir';
+name	data_type
+config_additional_dir	STR_LIST
+select name, data_type from __all_sys_parameter where name = '_obkv_feature_mode';
+name	data_type
+_obkv_feature_mode	MODE
+===============  [3] check data_tpye for __tenant_parameter  ================
+select name, data_type from __tenant_parameter where name = 'plsql_debug';
+name	data_type
+plsql_debug	BOOL
+select name, data_type from __tenant_parameter where name = 'open_cursors';
+name	data_type
+open_cursors	INT
+select name, data_type from __tenant_parameter where name = 'cpu_quota_concurrency';
+name	data_type
+cpu_quota_concurrency	DOUBLE
+select name, data_type from __tenant_parameter where name = 'plsql_ccflags';
+name	data_type
+plsql_ccflags	STRING
+select name, data_type from __tenant_parameter where name = 'range_optimizer_max_mem_size';
+name	data_type
+range_optimizer_max_mem_size	CAPACITY
+select name, data_type from __tenant_parameter where name = 'merger_check_interval';
+name	data_type
+merger_check_interval	TIME
+select name, data_type from __tenant_parameter where name = 'major_freeze_duty_time';
+name	data_type
+major_freeze_duty_time	MOMENT
+select name, data_type from __tenant_parameter where name = 'compatible';
+name	data_type
+compatible	VERSION
+========  [4] check data_tpye for __all_virtual_sys_parameter_stat  =========
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'enable_sql_audit';
+name	data_type
+enable_sql_audit	BOOL
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'max_string_print_length';
+name	data_type
+max_string_print_length	INT
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'location_cache_cpu_quota';
+name	data_type
+location_cache_cpu_quota	DOUBLE
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'default_row_format';
+name	data_type
+default_row_format	STRING
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'log_disk_size';
+name	data_type
+log_disk_size	CAPACITY
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'rpc_timeout';
+name	data_type
+rpc_timeout	TIME
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'config_additional_dir';
+name	data_type
+config_additional_dir	STR_LIST
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = '_obkv_feature_mode';
+name	data_type
+_obkv_feature_mode	MODE
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_debug';
+name	data_type
+plsql_debug	BOOL
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'open_cursors';
+name	data_type
+open_cursors	INT
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'cpu_quota_concurrency';
+name	data_type
+cpu_quota_concurrency	DOUBLE
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_ccflags';
+name	data_type
+plsql_ccflags	STRING
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'range_optimizer_max_mem_size';
+name	data_type
+range_optimizer_max_mem_size	CAPACITY
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'merger_check_interval';
+name	data_type
+merger_check_interval	TIME
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'major_freeze_duty_time';
+name	data_type
+major_freeze_duty_time	MOMENT
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'compatible';
+name	data_type
+compatible	VERSION
+=======  [5] check data_tpye for __all_virtual_tenant_parameter_stat  =======
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'enable_sql_audit';
+name	data_type
+enable_sql_audit	BOOL
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'max_string_print_length';
+name	data_type
+max_string_print_length	INT
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'location_cache_cpu_quota';
+name	data_type
+location_cache_cpu_quota	DOUBLE
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'default_row_format';
+name	data_type
+default_row_format	STRING
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'log_disk_size';
+name	data_type
+log_disk_size	CAPACITY
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'rpc_timeout';
+name	data_type
+rpc_timeout	TIME
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'config_additional_dir';
+name	data_type
+config_additional_dir	STR_LIST
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = '_obkv_feature_mode';
+name	data_type
+_obkv_feature_mode	MODE
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_debug';
+name	data_type
+plsql_debug	BOOL
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'open_cursors';
+name	data_type
+open_cursors	INT
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'cpu_quota_concurrency';
+name	data_type
+cpu_quota_concurrency	DOUBLE
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_ccflags';
+name	data_type
+plsql_ccflags	STRING
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'range_optimizer_max_mem_size';
+name	data_type
+range_optimizer_max_mem_size	CAPACITY
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'merger_check_interval';
+name	data_type
+merger_check_interval	TIME
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'major_freeze_duty_time';
+name	data_type
+major_freeze_duty_time	MOMENT
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'compatible';
+name	data_type
+compatible	VERSION
+=======  [6] check data_tpye for __all_virtual_tenant_parameter_info  =======
+select name, data_type from __all_virtual_tenant_parameter_info where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_debug';
+name	data_type
+plsql_debug	BOOL
+select name, data_type from __all_virtual_tenant_parameter_info where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'open_cursors';
+name	data_type
+open_cursors	INT
+select name, data_type from __all_virtual_tenant_parameter_info where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'cpu_quota_concurrency';
+name	data_type
+cpu_quota_concurrency	DOUBLE
+select name, data_type from __all_virtual_tenant_parameter_info where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_ccflags';
+name	data_type
+plsql_ccflags	STRING
+select name, data_type from __all_virtual_tenant_parameter_info where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'range_optimizer_max_mem_size';
+name	data_type
+range_optimizer_max_mem_size	CAPACITY
+select name, data_type from __all_virtual_tenant_parameter_info where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'merger_check_interval';
+name	data_type
+merger_check_interval	TIME
+select name, data_type from __all_virtual_tenant_parameter_info where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'major_freeze_duty_time';
+name	data_type
+major_freeze_duty_time	MOMENT
+select name, data_type from __all_virtual_tenant_parameter_info where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'compatible';
+name	data_type
+compatible	VERSION
+=========  [7] check data_tpye for __all_virtual_tenant_parameter  ==========
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_debug';
+name	data_type
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'open_cursors';
+name	data_type
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'cpu_quota_concurrency';
+name	data_type
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_ccflags';
+name	data_type
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'range_optimizer_max_mem_size';
+name	data_type
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'merger_check_interval';
+name	data_type
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'major_freeze_duty_time';
+name	data_type
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'compatible';
+name	data_type
+================  [8] check data_tpye for GV$OB_PARAMETERS  ================
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'enable_sql_audit';
+name	data_type
+enable_sql_audit	BOOL
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'max_string_print_length';
+name	data_type
+max_string_print_length	INT
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'location_cache_cpu_quota';
+name	data_type
+location_cache_cpu_quota	DOUBLE
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'default_row_format';
+name	data_type
+default_row_format	STRING
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'log_disk_size';
+name	data_type
+log_disk_size	CAPACITY
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'rpc_timeout';
+name	data_type
+rpc_timeout	TIME
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'config_additional_dir';
+name	data_type
+config_additional_dir	STR_LIST
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = '_obkv_feature_mode';
+name	data_type
+_obkv_feature_mode	MODE
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_debug';
+name	data_type
+plsql_debug	BOOL
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'open_cursors';
+name	data_type
+open_cursors	INT
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'cpu_quota_concurrency';
+name	data_type
+cpu_quota_concurrency	DOUBLE
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_ccflags';
+name	data_type
+plsql_ccflags	STRING
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'range_optimizer_max_mem_size';
+name	data_type
+range_optimizer_max_mem_size	CAPACITY
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'merger_check_interval';
+name	data_type
+merger_check_interval	TIME
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'major_freeze_duty_time';
+name	data_type
+major_freeze_duty_time	MOMENT
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'compatible';
+name	data_type
+compatible	VERSION
+================  [9] check data_tpye for V$OB_PARAMETERS  =================
+select name, data_type from V$OB_PARAMETERS where name = 'enable_sql_audit';
+name	data_type
+enable_sql_audit	BOOL
+select name, data_type from V$OB_PARAMETERS where name = 'max_string_print_length';
+name	data_type
+max_string_print_length	INT
+select name, data_type from V$OB_PARAMETERS where name = 'location_cache_cpu_quota';
+name	data_type
+location_cache_cpu_quota	DOUBLE
+select name, data_type from V$OB_PARAMETERS where name = 'default_row_format';
+name	data_type
+default_row_format	STRING
+select name, data_type from V$OB_PARAMETERS where name = 'log_disk_size';
+name	data_type
+log_disk_size	CAPACITY
+select name, data_type from V$OB_PARAMETERS where name = 'rpc_timeout';
+name	data_type
+rpc_timeout	TIME
+select name, data_type from V$OB_PARAMETERS where name = 'config_additional_dir';
+name	data_type
+config_additional_dir	STR_LIST
+select name, data_type from V$OB_PARAMETERS where name = '_obkv_feature_mode';
+name	data_type
+_obkv_feature_mode	MODE
+select name, data_type from V$OB_PARAMETERS where tenant_id = 1 and name = 'plsql_debug';
+name	data_type
+plsql_debug	BOOL
+select name, data_type from V$OB_PARAMETERS where tenant_id = 1 and name = 'open_cursors';
+name	data_type
+open_cursors	INT
+select name, data_type from V$OB_PARAMETERS where tenant_id = 1 and name = 'cpu_quota_concurrency';
+name	data_type
+cpu_quota_concurrency	DOUBLE
+select name, data_type from V$OB_PARAMETERS where tenant_id = 1 and name = 'plsql_ccflags';
+name	data_type
+plsql_ccflags	STRING
+select name, data_type from V$OB_PARAMETERS where tenant_id = 1 and name = 'range_optimizer_max_mem_size';
+name	data_type
+range_optimizer_max_mem_size	CAPACITY
+select name, data_type from V$OB_PARAMETERS where tenant_id = 1 and name = 'merger_check_interval';
+name	data_type
+merger_check_interval	TIME
+select name, data_type from V$OB_PARAMETERS where tenant_id = 1 and name = 'major_freeze_duty_time';
+name	data_type
+major_freeze_duty_time	MOMENT
+select name, data_type from V$OB_PARAMETERS where tenant_id = 1 and name = 'compatible';
+name	data_type
+compatible	VERSION
+================  [10] check data_tpye for show parameters  =================
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'enable_sql_audit';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	enable_sql_audit	BOOL	value	info	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'max_string_print_length';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	max_string_print_length	INT	value	info	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'location_cache_cpu_quota';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	location_cache_cpu_quota	DOUBLE	value	info	TENANT	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'default_row_format';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	default_row_format	STRING	value	info	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'log_disk_size';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	log_disk_size	CAPACITY	value	info	LOGSERVICE	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'rpc_timeout';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	rpc_timeout	TIME	value	info	RPC	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'config_additional_dir';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	config_additional_dir	STR_LIST	value	info	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_debug' tenant = sys;
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	plsql_debug	BOOL	value	info	OBSERVER	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'open_cursors' tenant = sys;
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	open_cursors	INT	value	info	OBSERVER	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'cpu_quota_concurrency' tenant = sys;
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	cpu_quota_concurrency	DOUBLE	value	info	TENANT	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_ccflags' tenant = sys;
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	plsql_ccflags	STRING	value	info	OBSERVER	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'range_optimizer_max_mem_size' tenant = sys;
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	range_optimizer_max_mem_size	CAPACITY	value	info	TENANT	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'merger_check_interval' tenant = sys;
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	merger_check_interval	TIME	value	info	DAILY_MERGE	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'major_freeze_duty_time' tenant = sys;
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	major_freeze_duty_time	MOMENT	value	info	DAILY_MERGE	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'compatible' tenant = sys;
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	compatible	VERSION	value	info	ROOT_SERVICE	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+==========================  case2: under mysql tenant  ==========================
+=====================  [1] prevent data_type UNKNOWN  ======================
+show parameters where data_type = 'UNKNOWN';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+select * from __all_virtual_tenant_parameter_stat where data_type = 'UNKNOWN';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	tenant_id	default_value	isdefault
+select * from __all_virtual_tenant_parameter where data_type = 'UNKNOWN';
+tenant_id	zone	svr_type	svr_ip	svr_port	name	gmt_create	gmt_modified	data_type	value	info	section	scope	source	edit_level	config_version
+select * from GV$OB_PARAMETERS where data_type = 'UNKNOWN';
+SVR_IP	SVR_PORT	ZONE	SCOPE	TENANT_ID	NAME	DATA_TYPE	VALUE	INFO	SECTION	EDIT_LEVEL
+select * from V$OB_PARAMETERS where data_type = 'UNKNOWN';
+SVR_IP	SVR_PORT	ZONE	SCOPE	TENANT_ID	NAME	DATA_TYPE	VALUE	INFO	SECTION	EDIT_LEVEL
+=======  [2] check data_tpye for __all_virtual_tenant_parameter_stat  =======
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'enable_sql_audit';
+name	data_type
+enable_sql_audit	BOOL
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'max_string_print_length';
+name	data_type
+max_string_print_length	INT
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'location_cache_cpu_quota';
+name	data_type
+location_cache_cpu_quota	DOUBLE
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'default_row_format';
+name	data_type
+default_row_format	STRING
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'log_disk_size';
+name	data_type
+log_disk_size	CAPACITY
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'rpc_timeout';
+name	data_type
+rpc_timeout	TIME
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'config_additional_dir';
+name	data_type
+config_additional_dir	STR_LIST
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = '_obkv_feature_mode';
+name	data_type
+_obkv_feature_mode	MODE
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_debug';
+name	data_type
+plsql_debug	BOOL
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'open_cursors';
+name	data_type
+open_cursors	INT
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'cpu_quota_concurrency';
+name	data_type
+cpu_quota_concurrency	DOUBLE
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_ccflags';
+name	data_type
+plsql_ccflags	STRING
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'range_optimizer_max_mem_size';
+name	data_type
+range_optimizer_max_mem_size	CAPACITY
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'merger_check_interval';
+name	data_type
+merger_check_interval	TIME
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'major_freeze_duty_time';
+name	data_type
+major_freeze_duty_time	MOMENT
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'compatible';
+name	data_type
+compatible	VERSION
+=========  [3] check data_tpye for __all_virtual_tenant_parameter  ==========
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_debug';
+name	data_type
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and name = 'open_cursors';
+name	data_type
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and name = 'cpu_quota_concurrency';
+name	data_type
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_ccflags';
+name	data_type
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and name = 'range_optimizer_max_mem_size';
+name	data_type
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and name = 'merger_check_interval';
+name	data_type
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and name = 'major_freeze_duty_time';
+name	data_type
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and name = 'compatible';
+name	data_type
+================  [4] check data_tpye for GV$OB_PARAMETERS  ================
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'enable_sql_audit';
+name	data_type
+enable_sql_audit	BOOL
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'max_string_print_length';
+name	data_type
+max_string_print_length	INT
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'location_cache_cpu_quota';
+name	data_type
+location_cache_cpu_quota	DOUBLE
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'default_row_format';
+name	data_type
+default_row_format	STRING
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'log_disk_size';
+name	data_type
+log_disk_size	CAPACITY
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'rpc_timeout';
+name	data_type
+rpc_timeout	TIME
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'config_additional_dir';
+name	data_type
+config_additional_dir	STR_LIST
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = '_obkv_feature_mode';
+name	data_type
+_obkv_feature_mode	MODE
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_debug';
+name	data_type
+plsql_debug	BOOL
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'open_cursors';
+name	data_type
+open_cursors	INT
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'cpu_quota_concurrency';
+name	data_type
+cpu_quota_concurrency	DOUBLE
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_ccflags';
+name	data_type
+plsql_ccflags	STRING
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'range_optimizer_max_mem_size';
+name	data_type
+range_optimizer_max_mem_size	CAPACITY
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'merger_check_interval';
+name	data_type
+merger_check_interval	TIME
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'major_freeze_duty_time';
+name	data_type
+major_freeze_duty_time	MOMENT
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'compatible';
+name	data_type
+compatible	VERSION
+================  [5] check data_tpye for V$OB_PARAMETERS  =================
+select name, data_type from V$OB_PARAMETERS where name = 'enable_sql_audit';
+name	data_type
+enable_sql_audit	BOOL
+select name, data_type from V$OB_PARAMETERS where name = 'max_string_print_length';
+name	data_type
+max_string_print_length	INT
+select name, data_type from V$OB_PARAMETERS where name = 'location_cache_cpu_quota';
+name	data_type
+location_cache_cpu_quota	DOUBLE
+select name, data_type from V$OB_PARAMETERS where name = 'default_row_format';
+name	data_type
+default_row_format	STRING
+select name, data_type from V$OB_PARAMETERS where name = 'log_disk_size';
+name	data_type
+log_disk_size	CAPACITY
+select name, data_type from V$OB_PARAMETERS where name = 'rpc_timeout';
+name	data_type
+rpc_timeout	TIME
+select name, data_type from V$OB_PARAMETERS where name = 'config_additional_dir';
+name	data_type
+config_additional_dir	STR_LIST
+select name, data_type from V$OB_PARAMETERS where name = '_obkv_feature_mode';
+name	data_type
+_obkv_feature_mode	MODE
+select name, data_type from V$OB_PARAMETERS where name = 'plsql_debug';
+name	data_type
+plsql_debug	BOOL
+select name, data_type from V$OB_PARAMETERS where name = 'open_cursors';
+name	data_type
+open_cursors	INT
+select name, data_type from V$OB_PARAMETERS where name = 'cpu_quota_concurrency';
+name	data_type
+cpu_quota_concurrency	DOUBLE
+select name, data_type from V$OB_PARAMETERS where name = 'plsql_ccflags';
+name	data_type
+plsql_ccflags	STRING
+select name, data_type from V$OB_PARAMETERS where name = 'range_optimizer_max_mem_size';
+name	data_type
+range_optimizer_max_mem_size	CAPACITY
+select name, data_type from V$OB_PARAMETERS where name = 'merger_check_interval';
+name	data_type
+merger_check_interval	TIME
+select name, data_type from V$OB_PARAMETERS where name = 'major_freeze_duty_time';
+name	data_type
+major_freeze_duty_time	MOMENT
+select name, data_type from V$OB_PARAMETERS where name = 'compatible';
+name	data_type
+compatible	VERSION
+=================  [6] check data_tpye for show parameters  =================
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'enable_sql_audit';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	enable_sql_audit	BOOL	value	info	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'max_string_print_length';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	max_string_print_length	INT	value	info	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'location_cache_cpu_quota';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	location_cache_cpu_quota	DOUBLE	value	info	TENANT	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'default_row_format';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	default_row_format	STRING	value	info	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'log_disk_size';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	log_disk_size	CAPACITY	value	info	LOGSERVICE	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'rpc_timeout';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	rpc_timeout	TIME	value	info	RPC	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'config_additional_dir';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	config_additional_dir	STR_LIST	value	info	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_debug';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	plsql_debug	BOOL	value	info	OBSERVER	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'open_cursors';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	open_cursors	INT	value	info	OBSERVER	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'cpu_quota_concurrency';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	cpu_quota_concurrency	DOUBLE	value	info	TENANT	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_ccflags';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	plsql_ccflags	STRING	value	info	OBSERVER	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'range_optimizer_max_mem_size';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	range_optimizer_max_mem_size	CAPACITY	value	info	TENANT	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'merger_check_interval';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	merger_check_interval	TIME	value	info	DAILY_MERGE	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'major_freeze_duty_time';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	major_freeze_duty_time	MOMENT	value	info	DAILY_MERGE	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'compatible';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone1	observer	server_ip	server_port	compatible	VERSION	value	info	ROOT_SERVICE	TENANT	DEFAULT	DYNAMIC_EFFECTIVE

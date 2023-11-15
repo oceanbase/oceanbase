@@ -1,0 +1,49 @@
+# owner: peihan.dph
+# owner group: sql2
+# tags: optimizer
+
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+sleep 2;
+
+connection default;
+
+--disable_warnings
+--error 0,1051
+drop table t1;
+--enable_warnings
+
+create table t1(c1 int, c2 varchar(10), c3 decimal);
+
+insert into t1 values(0, 'abc', '0.1');
+insert into t1 values(1, 'def', '1.1');
+insert into t1 values(2, 'ghi', '2.1');
+insert into t1 values(3, 'jkl', '3.1');
+insert into t1 values(4, 'mno', '4.1');
+insert into t1 values(5, 'pqr', '5.1');
+insert into t1 values(6, 'stu', '6.1');
+insert into t1 values(7, 'vwx', '7.1');
+insert into t1 values(8, 'yz', '8.1');
+insert into t1 values(9, null, null);
+
+connection syscon;
+sleep 2;
+
+
+--result_format 4
+--explain_protocol 1
+connection default;
+set @@ob_enable_plan_cache = 0;
+#set  @@ob_enable_trace_log=1;
+#set  @@ob_log_level='trace';
+
+set ob_enable_plan_cache = 0;
+select /*+ tracing(0) */ * from t1;
+select /*+ tracing(1) */ * from t1;
+
+connection syscon;
+sleep 2;
+
+connection default;
+drop table t1;
+--sleep 2

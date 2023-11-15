@@ -1,0 +1,11 @@
+drop table if exists msdt_lob;
+drop table if exists msdt_normal;
+create table msdt_lob(c1 text, c2 int);
+alter table msdt_lob drop c2;
+create table msdt_normal(a int, b int);
+result
+1
+result
+1
+drop table msdt_lob;
+drop table msdt_normal;

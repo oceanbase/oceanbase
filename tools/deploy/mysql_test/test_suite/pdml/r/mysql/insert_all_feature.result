@@ -1,0 +1,889 @@
+alter system set_tp tp_no = 217, error_code = 1234, frequency = 1;
+=>> init env
+drop table t_target;
+create table t_target(c1 int primary key, c2 int) partition by hash(c1) partitions 5;
+drop table t_data;
+=>> 1. 无全局索引情况
+=>> 1a. 相同分区形式
+create table t_data(c1 int primary key, c2 int) partition by hash(c1) partitions 5;
+insert into t_data values(1, 1), (2, 2), (3, 3), (4, 4), (5, 5);
+explain basic insert /*+enable_parallel_dml parallel(2) */ into t_target select * from t_data;
+Query Plan
+===============================================================
+|ID|OPERATOR                                  |NAME           |
+---------------------------------------------------------------
+|0 |OPTIMIZER STATS MERGE                     |               |
+|1 |└─PX COORDINATOR                          |               |
+|2 |  └─EXCHANGE OUT DISTR                    |:EX10001       |
+|3 |    └─INSERT                              |               |
+|4 |      └─OPTIMIZER STATS GATHER            |               |
+|5 |        └─EXCHANGE IN DISTR               |               |
+|6 |          └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000       |
+|7 |            └─SUBPLAN SCAN                |ANONYMOUS_VIEW1|
+|8 |              └─PX BLOCK ITERATOR         |               |
+|9 |                └─TABLE FULL SCAN         |t_data         |
+===============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil), rowset=16
+  1 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), filter(nil), rowset=16
+  2 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), filter(nil), rowset=16
+      dop=2
+  3 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), filter(nil)
+      columns([{t_target: ({t_target: (t_target.c1, t_target.c2)})}]), partitions(p[0-4]), 
+      column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)])
+  4 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [PARTITION_ID]), filter(nil), rowset=16
+  5 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
+  6 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)]), dop=2
+  7 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
+      access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
+  8 - output([t_data.c1], [t_data.c2]), filter(nil), rowset=16
+  9 - output([t_data.c1], [t_data.c2]), filter(nil), rowset=16
+      access([t_data.c1], [t_data.c2]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, 
+      range_key([t_data.c1]), range(MIN ; MAX)always true
+insert /*+enable_parallel_dml parallel(2) */ into t_target select * from t_data;
+select * from t_target;
+c1	c2
+1	1
+2	2
+3	3
+4	4
+5	5
+delete from t_target;
+drop table t_data;
+=>> 1b. 分区数量不同
+create table t_data(c1 int primary key, c2 int) partition by hash(c1) partitions 3;
+insert into t_data values(1, 1), (2, 2), (3, 3), (4, 4), (5, 5);
+explain basic insert /*+enable_parallel_dml parallel(2) */ into t_target select * from t_data;
+Query Plan
+===============================================================
+|ID|OPERATOR                                  |NAME           |
+---------------------------------------------------------------
+|0 |OPTIMIZER STATS MERGE                     |               |
+|1 |└─PX COORDINATOR                          |               |
+|2 |  └─EXCHANGE OUT DISTR                    |:EX10001       |
+|3 |    └─INSERT                              |               |
+|4 |      └─OPTIMIZER STATS GATHER            |               |
+|5 |        └─EXCHANGE IN DISTR               |               |
+|6 |          └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000       |
+|7 |            └─SUBPLAN SCAN                |ANONYMOUS_VIEW1|
+|8 |              └─PX BLOCK ITERATOR         |               |
+|9 |                └─TABLE FULL SCAN         |t_data         |
+===============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil), rowset=16
+  1 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), filter(nil), rowset=16
+  2 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), filter(nil), rowset=16
+      dop=2
+  3 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), filter(nil)
+      columns([{t_target: ({t_target: (t_target.c1, t_target.c2)})}]), partitions(p[0-4]), 
+      column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)])
+  4 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [PARTITION_ID]), filter(nil), rowset=16
+  5 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
+  6 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)]), dop=2
+  7 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
+      access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
+  8 - output([t_data.c1], [t_data.c2]), filter(nil), rowset=16
+  9 - output([t_data.c1], [t_data.c2]), filter(nil), rowset=16
+      access([t_data.c1], [t_data.c2]), partitions(p[0-2])
+      is_index_back=false, is_global_index=false, 
+      range_key([t_data.c1]), range(MIN ; MAX)always true
+insert /*+enable_parallel_dml parallel(2) */ into t_target select * from t_data;
+select * from t_target;
+c1	c2
+1	1
+2	2
+3	3
+4	4
+5	5
+delete from t_target;
+drop table t_data;
+=>> 1c. 分区列不同
+create table t_data(c1 int, c2 int primary key) partition by hash(c2) partitions 5;
+insert into t_data values(1, 1), (2, 2), (3, 3), (4, 4), (5, 5);
+explain basic insert /*+enable_parallel_dml parallel(2) */ into t_target select * from t_data;
+Query Plan
+===============================================================
+|ID|OPERATOR                                  |NAME           |
+---------------------------------------------------------------
+|0 |OPTIMIZER STATS MERGE                     |               |
+|1 |└─PX COORDINATOR                          |               |
+|2 |  └─EXCHANGE OUT DISTR                    |:EX10001       |
+|3 |    └─INSERT                              |               |
+|4 |      └─OPTIMIZER STATS GATHER            |               |
+|5 |        └─EXCHANGE IN DISTR               |               |
+|6 |          └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000       |
+|7 |            └─SUBPLAN SCAN                |ANONYMOUS_VIEW1|
+|8 |              └─PX BLOCK ITERATOR         |               |
+|9 |                └─TABLE FULL SCAN         |t_data         |
+===============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil), rowset=16
+  1 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), filter(nil), rowset=16
+  2 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), filter(nil), rowset=16
+      dop=2
+  3 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), filter(nil)
+      columns([{t_target: ({t_target: (t_target.c1, t_target.c2)})}]), partitions(p[0-4]), 
+      column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)])
+  4 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [PARTITION_ID]), filter(nil), rowset=16
+  5 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
+  6 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)]), dop=2
+  7 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
+      access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
+  8 - output([t_data.c1], [t_data.c2]), filter(nil), rowset=16
+  9 - output([t_data.c2], [t_data.c1]), filter(nil), rowset=16
+      access([t_data.c2], [t_data.c1]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, 
+      range_key([t_data.c2]), range(MIN ; MAX)always true
+insert /*+enable_parallel_dml parallel(2) */ into t_target select * from t_data;
+select * from t_target;
+c1	c2
+1	1
+2	2
+3	3
+4	4
+5	5
+delete from t_target;
+drop table t_data;
+=>> 1d. 源数据表是非分区表
+create table t_data(c1 int, c2 int);
+insert into t_data values(1, 1), (2, 2), (3, 3), (4, 4), (5, 5);
+explain basic insert /*+enable_parallel_dml parallel(2) */ into t_target select * from t_data;
+Query Plan
+===============================================================
+|ID|OPERATOR                                  |NAME           |
+---------------------------------------------------------------
+|0 |OPTIMIZER STATS MERGE                     |               |
+|1 |└─PX COORDINATOR                          |               |
+|2 |  └─EXCHANGE OUT DISTR                    |:EX10001       |
+|3 |    └─INSERT                              |               |
+|4 |      └─OPTIMIZER STATS GATHER            |               |
+|5 |        └─EXCHANGE IN DISTR               |               |
+|6 |          └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000       |
+|7 |            └─SUBPLAN SCAN                |ANONYMOUS_VIEW1|
+|8 |              └─PX BLOCK ITERATOR         |               |
+|9 |                └─TABLE FULL SCAN         |t_data         |
+===============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil), rowset=16
+  1 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), filter(nil), rowset=16
+  2 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), filter(nil), rowset=16
+      dop=2
+  3 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), filter(nil)
+      columns([{t_target: ({t_target: (t_target.c1, t_target.c2)})}]), partitions(p[0-4]), 
+      column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)])
+  4 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [PARTITION_ID]), filter(nil), rowset=16
+  5 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
+  6 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)]), dop=2
+  7 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
+      access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
+  8 - output([t_data.c1], [t_data.c2]), filter(nil), rowset=16
+  9 - output([t_data.c1], [t_data.c2]), filter(nil), rowset=16
+      access([t_data.c1], [t_data.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t_data.__pk_increment]), range(MIN ; MAX)always true
+insert /*+enable_parallel_dml parallel(2) */ into t_target select * from t_data;
+select * from t_target;
+c1	c2
+1	1
+2	2
+3	3
+4	4
+5	5
+delete from t_target;
+drop table t_data;
+drop table t_target;
+=>> 1e. 目标表是非分区表
+create table t_target(c1 int primary key, c2 int);
+create table t_data(c1 int, c2 int);
+insert into t_data values(1, 1), (2, 2), (3, 3), (4, 4), (5, 5);
+explain basic insert /*+enable_parallel_dml parallel(2) */ into t_target select * from t_data;
+Query Plan
+==========================================================
+|ID|OPERATOR                             |NAME           |
+----------------------------------------------------------
+|0 |OPTIMIZER STATS MERGE                |               |
+|1 |└─PX COORDINATOR                     |               |
+|2 |  └─EXCHANGE OUT DISTR               |:EX10001       |
+|3 |    └─INSERT                         |               |
+|4 |      └─OPTIMIZER STATS GATHER       |               |
+|5 |        └─EXCHANGE IN DISTR          |               |
+|6 |          └─EXCHANGE OUT DISTR (HASH)|:EX10000       |
+|7 |            └─SUBPLAN SCAN           |ANONYMOUS_VIEW1|
+|8 |              └─PX BLOCK ITERATOR    |               |
+|9 |                └─TABLE FULL SCAN    |t_data         |
+==========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil), rowset=16
+  1 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), filter(nil), rowset=16
+  2 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), filter(nil), rowset=16
+      dop=2
+  3 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), filter(nil)
+      columns([{t_target: ({t_target: (t_target.c1, t_target.c2)})}]), partitions(p0), 
+      column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)])
+  4 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), filter(nil), rowset=16
+  5 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
+  6 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)]), dop=2
+  7 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
+      access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
+  8 - output([t_data.c1], [t_data.c2]), filter(nil), rowset=16
+  9 - output([t_data.c1], [t_data.c2]), filter(nil), rowset=16
+      access([t_data.c1], [t_data.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t_data.__pk_increment]), range(MIN ; MAX)always true
+insert /*+enable_parallel_dml parallel(2) */ into t_target select * from t_data;
+drop table t_data;
+drop table t_target;
+=>> 1f. 有生成列的情况
+create table t_target(c1 int primary key, c2 int, c3 int generated always as (c1 + 1));
+create table t_data(c1 int, c2 int);
+insert into t_data values(1, 1), (2, 2), (3, 3), (4, 4), (5, 5);
+explain basic insert /*+enable_parallel_dml parallel(2) */ into t_target(c1, c2) select * from t_data;
+Query Plan
+==========================================================
+|ID|OPERATOR                             |NAME           |
+----------------------------------------------------------
+|0 |OPTIMIZER STATS MERGE                |               |
+|1 |└─PX COORDINATOR                     |               |
+|2 |  └─EXCHANGE OUT DISTR               |:EX10001       |
+|3 |    └─INSERT                         |               |
+|4 |      └─OPTIMIZER STATS GATHER       |               |
+|5 |        └─EXCHANGE IN DISTR          |               |
+|6 |          └─EXCHANGE OUT DISTR (HASH)|:EX10000       |
+|7 |            └─SUBPLAN SCAN           |ANONYMOUS_VIEW1|
+|8 |              └─PX BLOCK ITERATOR    |               |
+|9 |                └─TABLE FULL SCAN    |t_data         |
+==========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil), rowset=16
+  1 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 1, INT(-1, 0))))]), filter(nil), rowset=16
+  2 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 1, INT(-1, 0))))]), filter(nil), rowset=16
+      dop=2
+  3 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 1, INT(-1, 0))))]), filter(nil)
+      columns([{t_target: ({t_target: (t_target.c1, t_target.c2, t_target.c3)})}]), partitions(p0), 
+      column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
+      0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 1, INT(-1, 0))))])
+  4 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 1, INT(-1, 0))))]), filter(nil), rowset=16
+  5 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
+  6 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)]), dop=2
+  7 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
+      access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2])
+  8 - output([t_data.c1], [t_data.c2]), filter(nil), rowset=16
+  9 - output([t_data.c1], [t_data.c2]), filter(nil), rowset=16
+      access([t_data.c1], [t_data.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t_data.__pk_increment]), range(MIN ; MAX)always true
+insert /*+enable_parallel_dml parallel(2) */ into t_target(c1, c2) select * from t_data;
+drop table t_data;
+drop table t_target;
+=>> 2. 包含全局索引情况
+=>> 2a. 普通全局索引
+create table t_data(c1 int primary key, c2 int, c3 int) partition by hash(c1) partitions 5;
+insert into t_data values(1, 1, 1), (2, 2, 2), (3, 3, 3), (4, 4, 4), (5, 5, 5);
+create table t_target(c1 int primary key, c2 int, c3 int) partition by hash(c1) partitions 5;
+create index gindex1 on t_target(c2, c3) partition by hash(c2) partitions 5;
+create index gindex2 on t_target(c1, c3) partition by hash(c3) partitions 2;
+explain basic insert /*+enable_parallel_dml parallel(2) */ into t_target select * from t_data;
+Query Plan
+=================================================================================
+|ID|OPERATOR                                                  |NAME             |
+---------------------------------------------------------------------------------
+|0 |OPTIMIZER STATS MERGE                                     |                 |
+|1 |└─PX COORDINATOR                                          |                 |
+|2 |  └─EXCHANGE OUT DISTR                                    |:EX10003         |
+|3 |    └─INDEX INSERT                                        |t_target(gindex2)|
+|4 |      └─EXCHANGE IN DISTR                                 |                 |
+|5 |        └─EXCHANGE OUT DISTR (PKEY HASH)                  |:EX10002         |
+|6 |          └─MATERIAL                                      |                 |
+|7 |            └─INDEX INSERT                                |t_target(gindex1)|
+|8 |              └─EXCHANGE IN DISTR                         |                 |
+|9 |                └─EXCHANGE OUT DISTR (PKEY HASH)          |:EX10001         |
+|10|                  └─MATERIAL                              |                 |
+|11|                    └─INSERT                              |                 |
+|12|                      └─OPTIMIZER STATS GATHER            |                 |
+|13|                        └─EXCHANGE IN DISTR               |                 |
+|14|                          └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000         |
+|15|                            └─SUBPLAN SCAN                |ANONYMOUS_VIEW1  |
+|16|                              └─PX BLOCK ITERATOR         |                 |
+|17|                                └─TABLE FULL SCAN         |t_data           |
+=================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil), rowset=16
+  1 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil), rowset=16
+  2 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil), rowset=16
+      dop=2
+  3 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil)
+      columns([{t_target: ({gindex2: (t_target.c1, t_target.c3)})}]), partitions(p[0-1]), 
+      column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)])
+  4 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [PARTITION_ID]), filter(nil), rowset=16
+  5 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [PARTITION_ID]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)]), dop=2
+  6 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil), rowset=16
+  7 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil)
+      columns([{t_target: ({gindex1: (t_target.c2, t_target.c3, t_target.c1)})}]), partitions(p[0-4]), 
+      column_values([column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,
+      0),NOT NULL,ANONYMOUS_VIEW1.c1)])
+  8 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [PARTITION_ID]), filter(nil), rowset=16
+  9 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [PARTITION_ID]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), dop=2
+ 10 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil), rowset=16
+ 11 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)]), filter(nil)
+      columns([{t_target: ({t_target: (t_target.c1, t_target.c2, t_target.c3)})}]), partitions(p[0-4]), 
+      column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
+      0),NULL,ANONYMOUS_VIEW1.c3)])
+ 12 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [PARTITION_ID]), filter(nil), rowset=16
+ 13 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+ 14 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)]), dop=2
+ 15 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+      access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
+ 16 - output([t_data.c1], [t_data.c2], [t_data.c3]), filter(nil), rowset=16
+ 17 - output([t_data.c1], [t_data.c2], [t_data.c3]), filter(nil), rowset=16
+      access([t_data.c1], [t_data.c2], [t_data.c3]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, 
+      range_key([t_data.c1]), range(MIN ; MAX)always true
+insert /*+enable_parallel_dml parallel(2) */ into t_target select * from t_data;
+select /*+index(t_target primary)*/ * from t_target;
+c1	c2	c3
+1	1	1
+2	2	2
+3	3	3
+4	4	4
+5	5	5
+select /*+index(t_target gindex1)*/ c2, c3 from t_target;
+c2	c3
+1	1
+2	2
+3	3
+4	4
+5	5
+select /*+index(t_target gindex2)*/ c1, c3 from t_target;
+c1	c3
+1	1
+2	2
+3	3
+4	4
+5	5
+drop table t_target;
+drop table t_data;
+=>> 2b. 普通全局索引含有生成列的情况
+create table t_data(c1 int primary key, c2 int, c3 int) partition by hash(c1) partitions 5;
+insert into t_data values(1, 1, 1), (2, 2, 2), (3, 3, 3), (4, 4, 4), (5, 5, 5);
+create table t_target(c1 int primary key, c2 int, c3 int, c4 int generated always as (c1 + 1)) partition by hash(c1) partitions 5;
+create index gindex1 on t_target(c2, c4) partition by hash(c2) partitions 5;
+create index gindex2 on t_target(c1, c4) partition by hash(c4) partitions 2;
+explain basic insert /*+enable_parallel_dml parallel(2) */ into t_target(c1, c2, c3) select * from t_data;
+Query Plan
+=================================================================================
+|ID|OPERATOR                                                  |NAME             |
+---------------------------------------------------------------------------------
+|0 |OPTIMIZER STATS MERGE                                     |                 |
+|1 |└─PX COORDINATOR                                          |                 |
+|2 |  └─EXCHANGE OUT DISTR                                    |:EX10003         |
+|3 |    └─INDEX INSERT                                        |t_target(gindex2)|
+|4 |      └─EXCHANGE IN DISTR                                 |                 |
+|5 |        └─EXCHANGE OUT DISTR (PKEY HASH)                  |:EX10002         |
+|6 |          └─MATERIAL                                      |                 |
+|7 |            └─INDEX INSERT                                |t_target(gindex1)|
+|8 |              └─EXCHANGE IN DISTR                         |                 |
+|9 |                └─EXCHANGE OUT DISTR (PKEY HASH)          |:EX10001         |
+|10|                  └─MATERIAL                              |                 |
+|11|                    └─INSERT                              |                 |
+|12|                      └─OPTIMIZER STATS GATHER            |                 |
+|13|                        └─EXCHANGE IN DISTR               |                 |
+|14|                          └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000         |
+|15|                            └─SUBPLAN SCAN                |ANONYMOUS_VIEW1  |
+|16|                              └─PX BLOCK ITERATOR         |                 |
+|17|                                └─TABLE FULL SCAN         |t_data           |
+=================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil), rowset=16
+  1 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil), rowset=16
+  2 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil), rowset=16
+      dop=2
+  3 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil)
+      columns([{t_target: ({gindex2: (t_target.c1, t_target.c4)})}]), partitions(p[0-1]), 
+      column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,
+      PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 1, INT(-1, 0))))])
+  4 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+  5 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 1, INT(-1, 
+      0))))]), dop=2
+  6 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil), rowset=16
+  7 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil)
+      columns([{t_target: ({gindex1: (t_target.c2, t_target.c4, t_target.c1)})}]), partitions(p[0-4]), 
+      column_values([column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,
+      PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 1, INT(-1, 0))))], [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)])
+  8 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+  9 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), dop=2
+ 10 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil), rowset=16
+ 11 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil)
+      columns([{t_target: ({t_target: (t_target.c1, t_target.c2, t_target.c3, t_target.c4)})}]), partitions(p[0-4]), 
+      column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
+      0),NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) 
+      + 1, INT(-1, 0))))])
+ 12 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+ 13 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+ 14 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)]), dop=2
+ 15 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+      access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
+ 16 - output([t_data.c1], [t_data.c2], [t_data.c3]), filter(nil), rowset=16
+ 17 - output([t_data.c1], [t_data.c2], [t_data.c3]), filter(nil), rowset=16
+      access([t_data.c1], [t_data.c2], [t_data.c3]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, 
+      range_key([t_data.c1]), range(MIN ; MAX)always true
+insert /*+enable_parallel_dml parallel(2) */ into t_target(c1, c2, c3) select * from t_data;
+select /*+index(t_target primary)*/ * from t_target;
+c1	c2	c3	c4
+1	1	1	2
+2	2	2	3
+3	3	3	4
+4	4	4	5
+5	5	5	6
+select /*+index(t_target gindex1)*/ c2, c4 from t_target;
+c2	c4
+1	2
+2	3
+3	4
+4	5
+5	6
+select /*+index(t_target gindex2)*/ c1, c4 from t_target;
+c1	c4
+1	2
+2	3
+3	4
+4	5
+5	6
+drop table t_target;
+drop table t_data;
+=>> 2c. unique全局索引以及含有生成列情况
+create table t_data(c1 int primary key, c2 int, c3 int) partition by hash(c1) partitions 5;
+insert into t_data values(1, 1, 1), (2, 2, 2), (3, 3, 3), (4, 4, 4), (5, 5, 5);
+create table t_target(c1 int primary key, c2 int, c3 int, c4 int generated always as (c1 + 1)) partition by hash(c1) partitions 5;
+create unique index ugindex1 on t_target(c2) global;
+explain basic insert /*+enable_parallel_dml parallel(2) */ into t_target(c1, c2, c3) select * from t_data;
+Query Plan
+==========================================================================
+|ID|OPERATOR                                          |NAME              |
+--------------------------------------------------------------------------
+|0 |OPTIMIZER STATS MERGE                             |                  |
+|1 |└─PX COORDINATOR                                  |                  |
+|2 |  └─EXCHANGE OUT DISTR                            |:EX10002          |
+|3 |    └─INDEX INSERT                                |t_target(ugindex1)|
+|4 |      └─EXCHANGE IN DISTR                         |                  |
+|5 |        └─EXCHANGE OUT DISTR (HASH)               |:EX10001          |
+|6 |          └─MATERIAL                              |                  |
+|7 |            └─INSERT                              |                  |
+|8 |              └─OPTIMIZER STATS GATHER            |                  |
+|9 |                └─EXCHANGE IN DISTR               |                  |
+|10|                  └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000          |
+|11|                    └─SUBPLAN SCAN                |ANONYMOUS_VIEW1   |
+|12|                      └─PX BLOCK ITERATOR         |                  |
+|13|                        └─TABLE FULL SCAN         |t_data            |
+==========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil), rowset=16
+  1 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil), rowset=16
+  2 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil), rowset=16
+      dop=2
+  3 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil)
+      columns([{t_target: ({ugindex1: (t_target.c2, t_target.c1)})}]), partitions(p0), 
+      column_values([column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)])
+  4 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil), rowset=16
+  5 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), dop=2
+  6 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil), rowset=16
+  7 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil)
+      columns([{t_target: ({t_target: (t_target.c1, t_target.c2, t_target.c3, t_target.c4)})}]), partitions(p[0-4]), 
+      column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
+      0),NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) 
+      + 1, INT(-1, 0))))])
+  8 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+  9 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+ 10 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)]), dop=2
+ 11 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+      access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
+ 12 - output([t_data.c1], [t_data.c2], [t_data.c3]), filter(nil), rowset=16
+ 13 - output([t_data.c1], [t_data.c2], [t_data.c3]), filter(nil), rowset=16
+      access([t_data.c1], [t_data.c2], [t_data.c3]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, 
+      range_key([t_data.c1]), range(MIN ; MAX)always true
+create unique index ugindex2 on t_target(c3) global partition by hash(c3) partitions 3;
+explain basic insert /*+enable_parallel_dml parallel(2) */ into t_target(c1, c2, c3) select * from t_data;
+Query Plan
+==================================================================================
+|ID|OPERATOR                                                  |NAME              |
+----------------------------------------------------------------------------------
+|0 |OPTIMIZER STATS MERGE                                     |                  |
+|1 |└─PX COORDINATOR                                          |                  |
+|2 |  └─EXCHANGE OUT DISTR                                    |:EX10003          |
+|3 |    └─INDEX INSERT                                        |t_target(ugindex2)|
+|4 |      └─EXCHANGE IN DISTR                                 |                  |
+|5 |        └─EXCHANGE OUT DISTR (PKEY HASH)                  |:EX10002          |
+|6 |          └─MATERIAL                                      |                  |
+|7 |            └─INDEX INSERT                                |t_target(ugindex1)|
+|8 |              └─EXCHANGE IN DISTR                         |                  |
+|9 |                └─EXCHANGE OUT DISTR (HASH)               |:EX10001          |
+|10|                  └─MATERIAL                              |                  |
+|11|                    └─INSERT                              |                  |
+|12|                      └─OPTIMIZER STATS GATHER            |                  |
+|13|                        └─EXCHANGE IN DISTR               |                  |
+|14|                          └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000          |
+|15|                            └─SUBPLAN SCAN                |ANONYMOUS_VIEW1   |
+|16|                              └─PX BLOCK ITERATOR         |                  |
+|17|                                └─TABLE FULL SCAN         |t_data            |
+==================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil), rowset=16
+  1 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil), rowset=16
+  2 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil), rowset=16
+      dop=2
+  3 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil)
+      columns([{t_target: ({ugindex2: (t_target.c3, t_target.c1)})}]), partitions(p[0-2]), 
+      column_values([column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)])
+  4 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+  5 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)]), dop=2
+  6 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil), rowset=16
+  7 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil)
+      columns([{t_target: ({ugindex1: (t_target.c2, t_target.c1)})}]), partitions(p0), 
+      column_values([column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)])
+  8 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil), rowset=16
+  9 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), dop=2
+ 10 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil), rowset=16
+ 11 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil)
+      columns([{t_target: ({t_target: (t_target.c1, t_target.c2, t_target.c3, t_target.c4)})}]), partitions(p[0-4]), 
+      column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
+      0),NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) 
+      + 1, INT(-1, 0))))])
+ 12 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+ 13 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+ 14 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)]), dop=2
+ 15 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+      access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
+ 16 - output([t_data.c1], [t_data.c2], [t_data.c3]), filter(nil), rowset=16
+ 17 - output([t_data.c1], [t_data.c2], [t_data.c3]), filter(nil), rowset=16
+      access([t_data.c1], [t_data.c2], [t_data.c3]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, 
+      range_key([t_data.c1]), range(MIN ; MAX)always true
+create unique index ugindex3 on t_target(c2, c3, c4) global partition by hash(c4) partitions 3;
+explain basic insert /*+enable_parallel_dml parallel(2) */ into t_target(c1, c2, c3) select * from t_data;
+Query Plan
+==========================================================================================
+|ID|OPERATOR                                                          |NAME              |
+------------------------------------------------------------------------------------------
+|0 |OPTIMIZER STATS MERGE                                             |                  |
+|1 |└─PX COORDINATOR                                                  |                  |
+|2 |  └─EXCHANGE OUT DISTR                                            |:EX10004          |
+|3 |    └─INDEX INSERT                                                |t_target(ugindex3)|
+|4 |      └─EXCHANGE IN DISTR                                         |                  |
+|5 |        └─EXCHANGE OUT DISTR (PKEY HASH)                          |:EX10003          |
+|6 |          └─MATERIAL                                              |                  |
+|7 |            └─INDEX INSERT                                        |t_target(ugindex2)|
+|8 |              └─EXCHANGE IN DISTR                                 |                  |
+|9 |                └─EXCHANGE OUT DISTR (PKEY HASH)                  |:EX10002          |
+|10|                  └─MATERIAL                                      |                  |
+|11|                    └─INDEX INSERT                                |t_target(ugindex1)|
+|12|                      └─EXCHANGE IN DISTR                         |                  |
+|13|                        └─EXCHANGE OUT DISTR (HASH)               |:EX10001          |
+|14|                          └─MATERIAL                              |                  |
+|15|                            └─INSERT                              |                  |
+|16|                              └─OPTIMIZER STATS GATHER            |                  |
+|17|                                └─EXCHANGE IN DISTR               |                  |
+|18|                                  └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000          |
+|19|                                    └─SUBPLAN SCAN                |ANONYMOUS_VIEW1   |
+|20|                                      └─PX BLOCK ITERATOR         |                  |
+|21|                                        └─TABLE FULL SCAN         |t_data            |
+==========================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil), rowset=16
+  1 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil), rowset=16
+  2 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil), rowset=16
+      dop=2
+  3 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil)
+      columns([{t_target: ({ugindex3: (t_target.c2, t_target.c3, t_target.c4, t_target.c1)})}]), partitions(p[0-2]), 
+      column_values([column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,
+      0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 1, INT(-1, 0))))], [column_conv(INT,PS:(11,0),NOT NULL,
+      ANONYMOUS_VIEW1.c1)])
+  4 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+  5 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 1, INT(-1, 
+      0))))]), dop=2
+  6 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil), rowset=16
+  7 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil)
+      columns([{t_target: ({ugindex2: (t_target.c3, t_target.c1)})}]), partitions(p[0-2]), 
+      column_values([column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)])
+  8 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+  9 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)]), dop=2
+ 10 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil), rowset=16
+ 11 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil)
+      columns([{t_target: ({ugindex1: (t_target.c2, t_target.c1)})}]), partitions(p0), 
+      column_values([column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)])
+ 12 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil), rowset=16
+ 13 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)]), dop=2
+ 14 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil), rowset=16
+ 15 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil)
+      columns([{t_target: ({t_target: (t_target.c1, t_target.c2, t_target.c3, t_target.c4)})}]), partitions(p[0-4]), 
+      column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
+      0),NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) 
+      + 1, INT(-1, 0))))])
+ 16 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+ 17 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+ 18 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)]), dop=2
+ 19 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+      access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
+ 20 - output([t_data.c1], [t_data.c2], [t_data.c3]), filter(nil), rowset=16
+ 21 - output([t_data.c1], [t_data.c2], [t_data.c3]), filter(nil), rowset=16
+      access([t_data.c1], [t_data.c2], [t_data.c3]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, 
+      range_key([t_data.c1]), range(MIN ; MAX)always true
+insert /*+enable_parallel_dml parallel(2) */ into t_target(c1, c2, c3) select * from t_data;
+select /*+index(t_target primary)*/ *  from t_target;
+c1	c2	c3	c4
+1	1	1	2
+2	2	2	3
+3	3	3	4
+4	4	4	5
+5	5	5	6
+select /*+index(t_target ugindex1)*/ c2 from t_target;
+c2
+1
+2
+3
+4
+5
+select /*+index(t_target ugindex2)*/ c3 from t_target;
+c3
+1
+2
+3
+4
+5
+select /*+index(t_target ugindex3)*/ c2, c3, c4 from t_target;
+c2	c3	c4
+1	1	2
+2	2	3
+3	3	4
+4	4	5
+5	5	6
+drop table t_target;
+drop table t_data;
+=>> 2d. unique全局索引包含null的情况
+create table t_data(c1 int primary key, c2 int, c3 int) partition by hash(c1) partitions 5;
+create table t_target(c1 int primary key, c2 int, c3 int, c4 int generated always as (c1 + 1)) partition by hash(c1) partitions 5;
+insert into t_data values(1, null, 1), (2, 2, null), (3, null, null), (4, 4, null), (5, null, 5);
+explain basic insert /*+enable_parallel_dml parallel(2) */ into t_target(c1, c2, c3) select * from t_data;
+Query Plan
+===============================================================
+|ID|OPERATOR                                  |NAME           |
+---------------------------------------------------------------
+|0 |OPTIMIZER STATS MERGE                     |               |
+|1 |└─PX COORDINATOR                          |               |
+|2 |  └─EXCHANGE OUT DISTR                    |:EX10001       |
+|3 |    └─INSERT                              |               |
+|4 |      └─OPTIMIZER STATS GATHER            |               |
+|5 |        └─EXCHANGE IN DISTR               |               |
+|6 |          └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000       |
+|7 |            └─SUBPLAN SCAN                |ANONYMOUS_VIEW1|
+|8 |              └─PX BLOCK ITERATOR         |               |
+|9 |                └─TABLE FULL SCAN         |t_data         |
+===============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil), rowset=16
+  1 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil), rowset=16
+  2 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil), rowset=16
+      dop=2
+  3 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))]), filter(nil)
+      columns([{t_target: ({t_target: (t_target.c1, t_target.c2, t_target.c3, t_target.c4)})}]), partitions(p[0-4]), 
+      column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
+      0),NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) 
+      + 1, INT(-1, 0))))])
+  4 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),
+      NULL,ANONYMOUS_VIEW1.c3)], [column_conv(INT,PS:(11,0),NULL,column_conv(INT,PS:(11,0),NULL,cast(column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1) + 
+      1, INT(-1, 0))))], [PARTITION_ID]), filter(nil), rowset=16
+  5 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+  6 - output([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [PARTITION_ID], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+      (#keys=1, [column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)]), dop=2
+  7 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+      access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
+  8 - output([t_data.c1], [t_data.c2], [t_data.c3]), filter(nil), rowset=16
+  9 - output([t_data.c1], [t_data.c2], [t_data.c3]), filter(nil), rowset=16
+      access([t_data.c1], [t_data.c2], [t_data.c3]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, 
+      range_key([t_data.c1]), range(MIN ; MAX)always true
+insert /*+enable_parallel_dml parallel(2) */ into t_target(c1, c2, c3) select * from t_data;
+select * from t_target order by c1;
+c1	c2	c3	c4
+1	NULL	1	2
+2	2	NULL	3
+3	NULL	NULL	4
+4	4	NULL	5
+5	NULL	5	6
+select /*+index (t_target ugindex1)*/ c2, c1 from t_target order by c2, c1;
+c2	c1
+NULL	1
+NULL	3
+NULL	5
+2	2
+4	4
+select /*+index (t_target ugindex2)*/ c3, c1 from t_target order by c3, c1;
+c3	c1
+NULL	2
+NULL	3
+NULL	4
+1	1
+5	5
+select /*+index (t_target ugindex3)*/ c2, c3, c4 from t_target order by c2, c1;
+c2	c3	c4
+NULL	1	2
+NULL	NULL	4
+NULL	5	6
+2	NULL	3
+4	NULL	5
+drop table t_target;
+drop table t_data;
+alter system set_tp tp_no = 217, error_code = 1234, frequency = 0;

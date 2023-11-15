@@ -1,0 +1,269 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: xiaoyi.xy
+# owner group: SQL3
+# description: foobar
+--disable_warnings
+drop table if exists t1,t2,t3;
+--enable_warnings
+
+#
+### single field
+#
+
+create table t1(a varchar(50) primary key, b int default 0);
+
+# empty table
+select * from t1;
+
+select * from t1 where a > -1;
+select * from t1 where a = -1;
+select * from t1 where a < -1;
+
+select * from t1 where a > 0;
+select * from t1 where a = 0;
+select * from t1 where a < 0;
+
+select * from t1 where a > 1;
+select * from t1 where a = 1;
+select * from t1 where a < 1;
+
+let $i=10;
+disable_query_log;
+while($i > -10)
+{
+ eval insert into t1(a) values('$i');
+ dec $i;
+}
+enable_query_log;
+select * from t1;
+select * from t1 where a > -1;
+select * from t1 where a = -1;
+select * from t1 where a < -1;
+
+select * from t1 where a > 0;
+select * from t1 where a = 0;
+select * from t1 where a < 0;
+
+select * from t1 where a > 1;
+select * from t1 where a = 1;
+select * from t1 where a < 1;
+
+
+drop table t1;
+
+
+#
+## more fields
+#
+
+
+create table t1(a varchar(50) primary key, b int, c int);
+
+# empty table
+select * from t1;
+
+select * from t1 where a > -1;
+select * from t1 where a = -1;
+select * from t1 where a < -1;
+
+select * from t1 where a > 0;
+select * from t1 where a = 0;
+select * from t1 where a < 0;
+
+select * from t1 where a > 1;
+select * from t1 where a = 1;
+select * from t1 where a < 1;
+
+let $i=10;
+disable_query_log;
+while($i > -10)
+{
+ eval insert into t1 values('$i','$i','$i');
+ dec $i;
+}
+
+enable_query_log;
+
+select * from t1;
+select * from t1 where a > -1;
+select * from t1 where a = -1;
+select * from t1 where a < -1;
+
+select * from t1 where a > 0;
+select * from t1 where a = 0;
+select * from t1 where a < 0;
+
+select * from t1 where a > 1;
+select * from t1 where a = 2;
+select * from t1 where a < 3;
+
+drop table t1;
+
+#
+## pk: two fields
+#
+
+create table t1(a int, b int, c int, primary key(a,b));
+
+# empty table
+select * from t1;
+
+select * from t1 where a > -1;
+select * from t1 where a = -1;
+select * from t1 where a < -1;
+select * from t1 where a > 0;
+select * from t1 where a = 0;
+select * from t1 where a < 0;
+select * from t1 where a > 1;
+select * from t1 where a = 1;
+select * from t1 where a < 1;
+
+select * from t1 where a > -1 and b > -1;
+select * from t1 where a = -1 and b = -1;
+select * from t1 where a < -1 and b < -1;
+select * from t1 where a > 0 and b > 0;
+select * from t1 where a = 0 and b = 0;
+select * from t1 where a < 0 and b < 0;
+select * from t1 where a > 1 and b > 1;
+select * from t1 where a = 1 and b = 1;
+select * from t1 where a < 1 and b < 1;
+
+select * from t1 where a > -1 and b < -1;
+select * from t1 where a = -1 and b != -1;
+select * from t1 where a < -1 and b > -1;
+select * from t1 where a > 0 and b < 0;
+select * from t1 where a = 0 and b != 0;
+select * from t1 where a < 0 and b > 0;
+select * from t1 where a > 1 and b < 1;
+select * from t1 where a = 1 and b != 1;
+select * from t1 where a < 1 and b > 1;
+
+let $i=10;
+disable_query_log;
+while($i > -10)
+{
+ eval insert into t1 values('$i','$i','$i');
+ dec $i;
+}
+enable_query_log;
+
+select * from t1 where a > -1;
+select * from t1 where a = -1;
+select * from t1 where a < -1;
+select * from t1 where a > 0;
+select * from t1 where a = 0;
+select * from t1 where a < 0;
+select * from t1 where a > 1;
+select * from t1 where a = 1;
+select * from t1 where a < 1;
+
+select * from t1 where a > -1 and b > -1;
+select * from t1 where a = -1 and b = -1;
+select * from t1 where a < -1 and b < -1;
+select * from t1 where a > 0 and b > 0;
+select * from t1 where a = 0 and b = 0;
+select * from t1 where a < 0 and b < 0;
+select * from t1 where a > 1 and b > 1;
+select * from t1 where a = 1 and b = 1;
+select * from t1 where a < 1 and b < 1;
+
+select * from t1 where a > -1 and b < -1;
+select * from t1 where a = -1 and b != -1;
+select * from t1 where a < -1 and b > -1;
+select * from t1 where a > 0 and b < 0;
+select * from t1 where a = 0 and b != 0;
+select * from t1 where a < 0 and b > 0;
+select * from t1 where a > 1 and b < 1;
+select * from t1 where a = 1 and b != 1;
+select * from t1 where a < 1 and b > 1;
+
+select * from t1;
+
+#drop table t1;
+
+
+#
+## pk as all fields
+#
+
+#create table t1(a int, b int, c int, primary key(a,b,c));
+
+# empty table
+#select * from t1;
+
+#select * from t1 where a > -1;
+#select * from t1 where a = -1;
+#select * from t1 where a < -1;
+#select * from t1 where a > 0;
+#select * from t1 where a = 0;
+#select * from t1 where a < 0;
+#select * from t1 where a > 1;
+#select * from t1 where a = 1;
+#select * from t1 where a < 1;
+
+#select * from t1 where a > -1 and b > -1 and c > -1;
+#select * from t1 where a = -1 and b = -1 and c = -1;
+#select * from t1 where a < -1 and b < -1 and c < -1;
+#select * from t1 where a > 0 and b > 0 and c > 0;
+#select * from t1 where a = 0 and b = 0 and c = 0;
+#select * from t1 where a < 0 and b < 0 and c < 0;
+#select * from t1 where a > 1 and b > 1 and c > 1;
+#select * from t1 where a = 1 and b = 1 and c = 1;
+#select * from t1 where a < 1 and b < 1 and c < 1;
+
+#select * from t1 where a > -1 and b < -1 and c > -1;
+#select * from t1 where a = -1 and b != -1 and c = -1;
+#select * from t1 where a < -1 and b > -1 and c < -1;
+#select * from t1 where a > 0 and b < 0 and c > 0;
+#select * from t1 where a = 0 and b != 0 and c = 0;
+#select * from t1 where a < 0 and b > 0 and c < 0;
+#select * from t1 where a > 1 and b < 1 and c > 1;
+#select * from t1 where a = 1 and b != 1 and c = 1;
+#select * from t1 where a < 1 and b > 1 and c < 1;
+
+#let $i=10;
+#disable_query_log;
+#while($i > -10)
+#{
+# eval insert into t1 values('$i','$i','$i');
+# dec $i;
+#}
+#enable_query_log;
+
+#select * from t1;
+
+#select * from t1 where a > -1;
+#select * from t1 where a = -1;
+#select * from t1 where a < -1;
+#select * from t1 where a > 0;
+#select * from t1 where a = 0;
+#select * from t1 where a < 0;
+#select * from t1 where a > 1;
+#select * from t1 where a = 1;
+#select * from t1 where a < 1;
+
+#select * from t1 where a > -1 and b > -1 and c > -1;
+#select * from t1 where a = -1 and b = -1 and c = -1;
+#select * from t1 where a < -1 and b < -1 and c < -1;
+#select * from t1 where a > 0 and b > 0 and c > 0;
+#select * from t1 where a = 0 and b = 0 and c = 0;
+#select * from t1 where a < 0 and b < 0 and c < 0;
+#select * from t1 where a > 1 and b > 1 and c > 1;
+#select * from t1 where a = 1 and b = 1 and c = 1;
+#select * from t1 where a < 1 and b < 1 and c < 1;
+
+#select * from t1 where a > -1 and b < -1 and c > -1;
+#select * from t1 where a = -1 and b != -1 and c = -1;
+#select * from t1 where a < -1 and b > -1 and c < -1;
+#select * from t1 where a > 0 and b < 0 and c > 0;
+#select * from t1 where a = 0 and b != 0 and c = 0;
+#select * from t1 where a < 0 and b > 0 and c < 0;
+#select * from t1 where a > 1 and b < 1 and c > 1;
+#select * from t1 where a = 1 and b != 1 and c = 1;
+#select * from t1 where a < 1 and b > 1 and c < 1;
+
+#drop table t1;
+
+

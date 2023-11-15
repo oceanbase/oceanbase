@@ -1,0 +1,39 @@
+drop table if exists t1,t2,t3;
+create table t1(a int primary key, c int);
+insert into t1(a) values(-1);
+insert into t1(a) values(1);
+insert into t1(a) values(0);
+select * from t1;
+a	c
+-1	NULL
+0	NULL
+1	NULL
+drop table t1;
+create table t1(a int, b int, c int primary key);
+insert into t1 values(NULL,NULL,1);
+insert into t1 values(NULL,1,2);
+insert into t1 values(1,NULL,3);
+insert into t1 values(1,1,4);
+insert into t1 values(NULL,NULL,5);
+insert into t1 values(NULL,1,6);
+insert into t1 values(1,NULL,7);
+select * from t1;
+a	b	c
+NULL	NULL	1
+NULL	1	2
+1	NULL	3
+1	1	4
+NULL	NULL	5
+NULL	1	6
+1	NULL	7
+drop table t1;
+create table t1(a varchar(20) ,b varchar(128) primary key);
+insert into t1 values(NULL,'abc');
+insert into t1 values('1','cde');
+insert into t1 values(NULL,'egf');
+select * from t1;
+a	b
+NULL	abc
+1	cde
+NULL	egf
+drop table t1;

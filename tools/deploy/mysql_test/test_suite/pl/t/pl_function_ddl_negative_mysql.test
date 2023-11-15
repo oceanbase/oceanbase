@@ -1,0 +1,40 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#tags: pl
+#owner: linlin.xll
+#owner group: sql1
+#description: test pl ddl negative
+
+--result_format 4
+
+--disable_query_log
+--disable_result_log
+--source mysql_test/include/index_quick_major.inc
+--enable_query_log
+--enable_result_log
+
+use test;
+
+delimiter |;
+--error ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG
+CREATE FUNCTION my_func() returns int BEGIN create database my_db; return 1; END |
+--error ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG
+CREATE FUNCTION my_func() returns int BEGIN alter database my_db read only; return 1; END |
+--error ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG
+CREATE FUNCTION my_func() returns int BEGIN drop database my_db; return 1; END |
+--error ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG
+CREATE FUNCTION my_func() returns int BEGIN create table my_tab(col int); return 1; END |
+--error ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG
+CREATE FUNCTION my_func() returns int BEGIN drop table my_tab; return 1; END |
+--error ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG
+CREATE FUNCTION my_func() returns int BEGIN rename table my_tab to t2; return 1; END |
+--error ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG
+CREATE FUNCTION my_func() returns int BEGIN truncate table my_tab; return 1; END |
+--error ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG
+CREATE FUNCTION my_func() returns int BEGIN create view my_view as select 1; return 1; END |
+--error ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG
+CREATE FUNCTION my_func() returns int BEGIN drop view my_view; return 1; END |
+--error ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG
+CREATE FUNCTION my_func() returns int BEGIN create index my_idx on my_tab(col); return 1; END |
+

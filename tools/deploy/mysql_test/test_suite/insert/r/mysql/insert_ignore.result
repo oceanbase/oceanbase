@@ -1,0 +1,326 @@
+drop table if exists t1,t2, test, t_ignore;
+CREATE TABLE t1(a BIGINT primary key);
+insert into t1 values(100);
+insert into t1 values(100);
+ERROR 23000: Duplicate entry '100' for key 'PRIMARY'
+insert ignore into t1 values(100);
+insert ignore into t1 values(100) on duplicate key update a = a + 1;
+replace ignore into t1 values(100);
+ERROR 0A000: replace statement with ignore not supported
+select * from t1;
+a
+101
+delete from t1;
+insert ignore into t1 values('a');
+select * from t1;
+a
+0
+insert ignore into t1 values('a'), ('b'), ('c');
+select * from t1;
+a
+0
+delete from t1;
+insert ignore into t1 values(null);
+Warnings:
+Warning	1048	Column 'a' cannot be null
+select * from t1;
+a
+0
+drop table t1;
+create table t1(a varchar(2) primary key);
+insert ignore into t1 values('aaaaa');
+Warnings:
+Warning	1265	Data truncated for column '"test"."t1"."a"' at row 1
+select * from t1;
+a
+aa
+insert ignore into t1 values(null);
+Warnings:
+Warning	1048	Column 'a' cannot be null
+select * from t1;
+a
+
+aa
+drop table t1;
+create table test(c1 int primary key, c2 int unique key, c3 int);
+insert into test values(1,2,3);
+insert into test values(1,5,4);
+ERROR 23000: Duplicate entry '1' for key 'PRIMARY'
+insert ignore into test values(1,5,4);
+insert ignore into test values(2,4,5) on duplicate key update c2 = c2 -1 ;
+insert into test values(2,3,4) on duplicate key update c2 = 2;
+ERROR 23000: Duplicate entry '2' for key 'c2'
+insert ignore into test values(2,3,4) on duplicate key update c2 = 2;
+insert into test values(2,2,4);
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+insert ignore into test values(2,2,4);
+insert into test values(10,12,14);
+insert into test values(11,14,15);
+insert into test values(19,14,22) on duplicate key update c1 = c1 - 1;
+ERROR 23000: Duplicate entry '10' for key 'PRIMARY'
+select * from test;
+c1	c2	c3
+1	2	3
+2	4	5
+10	12	14
+11	14	15
+insert ignore test values(19,14,22) on duplicate key update c1 = c1 - 1;
+select * from test;
+c1	c2	c3
+1	2	3
+2	4	5
+10	12	14
+11	14	15
+delete from test;
+insert into test values(100,101,102), (101, 102, 103), (102,103,105);
+insert into test values(103, 104, 105), (102, 105, 104);
+ERROR 23000: Duplicate entry '102' for key 'PRIMARY'
+insert into test values(103, 104, 105), (104, 103, 105), (105,106, 107);
+ERROR 23000: Duplicate entry '103' for key 'c2'
+insert into test values(103, 104, 106),(104,105,106),(103, 106, 108);
+ERROR 23000: Duplicate entry '103' for key 'PRIMARY'
+insert into test values(103, 104, 105), (104,105,106), (105, 104, 107);
+ERROR 23000: Duplicate entry '104' for key 'c2'
+insert ignore test values (103, 104, 105), (102, 105, 104);
+select * from test;
+c1	c2	c3
+100	101	102
+101	102	103
+102	103	105
+103	104	105
+insert ignore into test values(103, 104, 105), (104, 103, 105), (105,106,107);
+select * from test;
+c1	c2	c3
+100	101	102
+101	102	103
+102	103	105
+103	104	105
+105	106	107
+insert ignore into test values(110, 111,112), (111, 112,113),(110,113, 114);
+select * from test;
+c1	c2	c3
+100	101	102
+101	102	103
+102	103	105
+103	104	105
+105	106	107
+110	111	112
+111	112	113
+insert ignore into test values(120, 121, 123), (121, 122, 123), (123, 121, 134);
+select * from test;
+c1	c2	c3
+100	101	102
+101	102	103
+102	103	105
+103	104	105
+105	106	107
+110	111	112
+111	112	113
+120	121	123
+121	122	123
+delete from test;
+insert into test values(1, 2, 3), (2,3,4), (3,4,5);
+insert into test values(4,5,6), (5,6,7),(2,7,8) on duplicate key update c3 = c3 + 1;
+select * from test;
+c1	c2	c3
+1	2	3
+2	3	5
+3	4	5
+4	5	6
+5	6	7
+insert into test values(7,8,9), (8,9, 10), (9,3, 10)  on duplicate key update c3 = c3 + 1;
+select * from test;
+c1	c2	c3
+1	2	3
+2	3	6
+3	4	5
+4	5	6
+5	6	7
+7	8	9
+8	9	10
+insert into test values(10,11,12), (11, 12, 13), (10,13,14) on duplicate key update c3 = c3 + 1;
+select * from test;
+c1	c2	c3
+1	2	3
+2	3	6
+3	4	5
+4	5	6
+5	6	7
+7	8	9
+8	9	10
+10	11	13
+11	12	13
+insert into test values(12,13,14), (15,16,17), (16,13,14) on duplicate key update c3 = c3 + 1;
+select * from test;
+c1	c2	c3
+1	2	3
+2	3	6
+3	4	5
+4	5	6
+5	6	7
+7	8	9
+8	9	10
+10	11	13
+11	12	13
+12	13	15
+15	16	17
+delete from test;
+"compare with insert up and insert ignore up. up and down"
+insert ignore into test values(1, 2, 3), (2,3,4), (3,4,5);
+insert ignore into test values(4,5,6), (5,6,7),(2,7,8) on duplicate key update c3 = c3 + 1;
+select * from test;
+c1	c2	c3
+1	2	3
+2	3	5
+3	4	5
+4	5	6
+5	6	7
+insert ignore into test values(7,8,9), (8,9, 10), (9,3, 10)  on duplicate key update c3 = c3 + 1;
+select * from test;
+c1	c2	c3
+1	2	3
+2	3	6
+3	4	5
+4	5	6
+5	6	7
+7	8	9
+8	9	10
+insert ignore into test values(10,11,12), (11, 12, 13), (10,13,14) on duplicate key update c3 = c3 + 1;
+select * from test;
+c1	c2	c3
+1	2	3
+2	3	6
+3	4	5
+4	5	6
+5	6	7
+7	8	9
+8	9	10
+10	11	13
+11	12	13
+insert ignore into test values(12,13,14), (15,16,17), (16,13,14) on duplicate key update c3 = c3 + 1;
+select * from test;
+c1	c2	c3
+1	2	3
+2	3	6
+3	4	5
+4	5	6
+5	6	7
+7	8	9
+8	9	10
+10	11	13
+11	12	13
+12	13	15
+15	16	17
+delete from test;
+insert into test values(1, 2, 3), (2,3,4), (3,4,5);
+insert into test values(4,5,6),(5,6,7),(3,0,0),(2,0,0) on duplicate key update c2 = c2 - 1;
+ERROR 23000: Duplicate entry '3' for key 'c2'
+insert ignore into test values(4,5,6),(5,6,7),(3,0,0),(2,0,0) on duplicate key update c2 = c2 - 1;
+select * from test;
+c1	c2	c3
+1	2	3
+2	3	4
+3	4	5
+4	5	6
+5	6	7
+delete from test;
+insert into test values(1, 2, 3), (2,3,4), (3,4,5);
+insert into test values(4,5,6),(5,6,7),(2,0,0),(1,0,0) on duplicate key update c1 = c1 + 1;
+ERROR 23000: Duplicate entry '3' for key 'PRIMARY'
+insert ignore into test values(4,5,6),(5,6,7),(2,0,0),(1,0,0) on duplicate key update c1 = c1 + 1;
+select * from test;
+c1	c2	c3
+1	2	3
+2	3	4
+3	4	5
+4	5	6
+5	6	7
+delete from test;
+insert into test values(1, 2, 3), (2,3,4), (3,4,5);
+insert into test values(4,5,6),(5,6,7), (6,2,3),(7,3,5) on duplicate key update c1 = c1 + 1;
+ERROR 23000: Duplicate entry '2' for key 'PRIMARY'
+insert ignore into test values(4,5,6),(5,6,7), (6,2,3),(7,3,5) on duplicate key update c1 = c1 + 1;
+select * from test;
+c1	c2	c3
+1	2	3
+2	3	4
+3	4	5
+4	5	6
+5	6	7
+delete from test;
+insert into test values(1, 2, 3), (2,3,4), (3,4,5);
+insert into test values(4,5,6),(5,6,7), (6,3,3),(7,4,5) on duplicate key update c2 = c2 - 1;
+ERROR 23000: Duplicate entry '2' for key 'c2'
+insert ignore into test values(4,5,6),(5,6,7), (6,3,3),(7,4,5) on duplicate key update c2 = c2 - 1;
+select * from test;
+c1	c2	c3
+1	2	3
+2	3	4
+3	4	5
+4	5	6
+5	6	7
+delete from test;
+insert into test values(1, 2, 3), (2,3,4), (3,4,5);
+insert into test values(4,5,6),(5,6,7), (6,7,3),(7,10, 0),(4,8,5), (5,9,0) on duplicate key update c1 = c1 + 1;
+ERROR 23000: Duplicate entry '5' for key 'PRIMARY'
+insert ignore into test values(4,5,6),(5,6,7), (6,7,3),(7,10, 0),(4,8,5), (5,9,0) on duplicate key update c1 = c1 + 1;
+select * from test;
+c1	c2	c3
+1	2	3
+2	3	4
+3	4	5
+4	5	6
+5	6	7
+6	7	3
+7	10	0
+delete from test;
+insert into test values(1, 2, 3), (2,3,4), (3,4,5);
+insert into test values(4,5,6),(5,6,7), (6,7,3),(7,8, 0),(4,10,5), (5,9,0) on duplicate key update c2 = c2 + 1;
+ERROR 23000: Duplicate entry '6' for key 'c2'
+insert ignore into test values(4,5,6),(5,6,7), (6,7,3),(7,8, 0),(4,10,5), (5,9,0) on duplicate key update c2 = c2 + 1;
+select * from test;
+c1	c2	c3
+1	2	3
+2	3	4
+3	4	5
+4	5	6
+5	6	7
+6	7	3
+7	8	0
+delete from test;
+insert into test values(1, 2, 3), (2,3,4), (3,4,5);
+insert into test values(4,5,6),(5,6,7), (6,7,3),(7,8,1),(9,5,5),(8, 6,9)on duplicate key update c2 = c2 + 1;
+ERROR 23000: Duplicate entry '6' for key 'c2'
+insert ignore into test values(4,5,6),(5,6,7), (6,7,3),(7,8,1),(9,5,5),(8, 6,9)on duplicate key update c2 = c2 + 1;
+select * from test;
+c1	c2	c3
+1	2	3
+2	3	4
+3	4	5
+4	5	6
+5	6	7
+6	7	3
+7	8	1
+delete from test;
+insert into test values(1, 2, 3), (2,3,4), (3,4,5);
+insert into test values(4,5,6),(5,6,7), (6,7,3),(7,8,1),(9,5,5),(8, 6,9) on duplicate key update c1=c1+1;
+ERROR 23000: Duplicate entry '5' for key 'PRIMARY'
+insert ignore into test values(4,5,6),(5,6,7), (6,7,3),(7,8,1),(9,5,5),(8, 6,9) on duplicate key update c1=c1+1;
+select * from test;
+c1	c2	c3
+1	2	3
+2	3	4
+3	4	5
+4	5	6
+5	6	7
+6	7	3
+7	8	1
+drop table test;
+CREATE TABLE t_ignore (`c1` bigint(20) NOT NULL AUTO_INCREMENT, `c2` varchar(50)  NOT NULL, PRIMARY KEY (`c1`));
+INSERT IGNORE INTO t_ignore (c1) value (1);
+Warnings:
+Warning	1364	Field 'c2' doesn't have a default value
+SELECT * FROM t_ignore;
+c1	c2
+1	
+DROP TABLE t_ignore;

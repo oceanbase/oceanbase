@@ -1,0 +1,43 @@
+drop table if exists ob_new_sql_test;
+drop table if exists a1;
+create table ob_new_sql_test(c0 varchar(10) primary key, c1 int, c2 int);
+insert into ob_new_sql_test(c0, c1) values ('0001',1);
+select * from ob_new_sql_test where c0='0001';
+c0	c1	c2
+0001	1	NULL
+select * from ob_new_sql_test;
+c0	c1	c2
+0001	1	NULL
+select length(c0) from ob_new_sql_test;
+length(c0)
+4
+select hex(c0) from ob_new_sql_test;
+hex(c0)
+30303031
+drop table ob_new_sql_test;
+SELECT 'a' = 'a ';
+'a' = 'a '
+1
+SELECT 'a\0' < 'a';
+'a\0' < 'a'
+1
+SELECT 'a\0' < 'a ';
+'a\0' < 'a '
+1
+SELECT 'a\t' < 'a';
+'a\t' < 'a'
+1
+SELECT 'a\t' < 'a ';
+'a\t' < 'a '
+1
+create table a1 (rowkey_suffix int primary key,price int);
+insert into a1 (rowkey_suffix, price) values(10,10);
+insert into a1 (rowkey_suffix, price) values(20,20);
+select * from a1 where rowkey_suffix=price;
+rowkey_suffix	price
+10	10
+20	20
+select * from a1 where rowkey_suffix=price and price=10;
+rowkey_suffix	price
+10	10
+drop table a1;

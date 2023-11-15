@@ -1,0 +1,24 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: rkaizhan.dkz
+#owner group: sql1
+#tags: dml
+#description:
+
+--disable_warnings
+drop table if exists t;
+--enable_warnings
+create table t (c1 int primary key, c2 int);
+
+--error 1062
+insert into t values(1,2),(3,4),(1,2);
+
+insert into t values(1,2),(3,4),(5,6);
+select * from t;
+
+select * from t where c1 in (1,3,1);
+
+select * from t where c1 in (1,1);
+
+drop table t;

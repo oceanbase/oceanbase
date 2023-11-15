@@ -1,0 +1,28 @@
+# ----------------------------------------------------------------------
+# Create spatial index test of GEOMETRY spatial index.
+# ----------------------------------------------------------------------
+DROP TABLE IF EXISTS tab;
+CREATE TABLE tab(c1 int NOT NULL PRIMARY KEY,c2 GEOMETRY NOT NULL SRID 0,
+c3 GEOMETRY NOT NULL SRID 0,c4 GEOMETRY NOT NULL SRID 0,c5 GEOMETRY NOT NULL SRID 0);
+CREATE SPATIAL INDEX idx1 on tab(c2);
+CREATE SPATIAL INDEX idx2 on tab(c3 ASC) COMMENT 'wl6968';
+ERROR HY000: Incorrect usage of spatial/fulltext/hash index and explicit index order.
+CREATE SPATIAL INDEX idx2 on tab(c3 DESC) COMMENT 'wl6968';
+ERROR HY000: Incorrect usage of spatial/fulltext/hash index and explicit index order.
+CREATE SPATIAL INDEX idx3 on tab(c4);
+CREATE SPATIAL INDEX idx4 on tab(c5 DESC) COMMENT 'Spatial index on Geometry type column';
+ERROR HY000: Incorrect usage of spatial/fulltext/hash index and explicit index order.
+SHOW INDEXES FROM tab;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+tab	0	PRIMARY	1	c1	A	NULL	NULL	NULL		BTREE	available		YES	NULL
+tab	1	idx1	1	c2	A	NULL	NULL	NULL		SPATIAL	available		YES	NULL
+tab	1	idx3	1	c4	A	NULL	NULL	NULL		SPATIAL	available		YES	NULL
+INSERT INTO tab(c1,c2,c3,c4,c5) 
+VALUES(1,ST_GeomFromText('POINT(10 10)'),ST_GeomFromText('LINESTRING(5 5,20 20,30 30)'),
+ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))'),
+ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))'));
+INSERT INTO tab(c1,c2,c3,c4,c5) 
+VALUES(3,ST_GeomFromText('POINT(4 4)'),ST_GeomFromText('LINESTRING(130 130,140 140,150 150)'),
+ST_GeomFromText('POLYGON((7 1,6 2,6 3,10 3,10 1,7 1))'),
+ST_GeomFromText('POLYGON((4 -2,5 -4,6 -5,7 -4,7 2,4 -2))'));
+DROP TABLE tab;

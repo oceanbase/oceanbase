@@ -1,0 +1,142 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: yuchen.wyc
+#owner group: sql1
+# tags: optimizer, global_index
+--result_format 4
+--explain_protocol 2
+
+--disable_warnings
+drop database if exists muhangtest;
+create database muhangtest;
+use muhangtest;
+--enable_warnings
+
+set ob_enable_plan_cache = off;
+set ob_enable_transformation = false;
+
+--disable_warnings
+drop table if exists t21;
+--enable_warnings
+create table t21(a int, b int, c int, d int, e int, primary key(a,b,c,d)) partition by hash(b) 
+subpartition by range columns(c,d) 
+subpartition template (
+subpartition p0 values less than (5,5),  
+subpartition p1 values less than (100,100)) partitions 2; 
+create index gkey on t21(b,c,d) global partition by hash(b) partitions 5;
+--source mysql_test/include/check_all_idx_ok.inc
+--real_sleep 3
+--disable_query_log
+--disable_result_log
+insert into t21 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+--enable_query_log
+--enable_result_log
+--sleep 1
+
+--disable_warnings
+drop table if exists t22;
+--enable_warnings
+create table t22(a int, b int, c int, d int, e int, primary key(a,b,c,d))
+partition by range columns(b) subpartition by hash(c) subpartitions 2 ( 
+  partition p0 values less than (5),
+  partition p1 values less than (maxvalue)
+);
+create index gkey on t22(b,c,d) global partition by hash(b) partitions 5;
+--source mysql_test/include/check_all_idx_ok.inc
+--real_sleep 3
+--disable_query_log
+--disable_result_log
+insert into t22 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+--enable_query_log
+--enable_result_log
+--sleep 1
+
+drop table if exists t23;
+--enable_warnings
+create table t23(a int, b int, c int, d int, e int, primary key(a,b,c,d)) 
+partition by range columns(b,d) subpartition by hash(c) subpartitions 2 ( 
+  partition p0 values less than (5,5),
+  partition p1 values less than (maxvalue,maxvalue)
+);
+create index gkey on t23(b,c,d) global partition by hash(b) partitions 5;
+--source mysql_test/include/check_all_idx_ok.inc
+--real_sleep 3
+--disable_query_log
+--disable_result_log
+insert into t23 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+--enable_query_log
+--enable_result_log
+--sleep 1
+
+--disable_warnings
+drop table if exists t24;
+--enable_warnings
+create table t24(a int, b int, c int, d int, e int, primary key(a,b,c,d)) partition by hash(b) 
+subpartition by list columns(c) 
+subpartition template (
+subpartition p0 values in (1,2,3,4),  
+subpartition p1 values in (default)) partitions 2; 
+create index gkey on t24(b,c,d) global partition by hash(b) partitions 5;
+--source mysql_test/include/check_all_idx_ok.inc
+insert into t24 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+--sleep 1
+
+--disable_warnings
+drop table if exists t25;
+--enable_warnings
+create table t25(a int, b int, c int, d int, e int, primary key(a,b,c,d), key k1(b) local, key k2(c,b) local, key k3(c,d,b) local) partition by hash(b) 
+subpartition by list columns(c,d) 
+subpartition template (
+subpartition p0 values in ((1,1),(2,2),(3,3),(4,4)),  
+subpartition p1 values in (default)) partitions 2; 
+create index gkey on t25(b,c,d) global partition by hash(b) partitions 5;
+--source mysql_test/include/check_all_idx_ok.inc
+insert into t25 values(1,1,1,1,1),(2,2,2,2,2),(3,3,3,3,3),(4,4,4,4,4),(5,5,5,5,5),(6,6,6,6,6),(7,7,7,7,7),(8,8,8,8,8),(9,9,9,9,9),(10,10,10,10,10);
+--sleep 1
+
+select /*+index(t21 gkey)*/ * from t21 where a in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t21 gkey)*/ * from t21 where b in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t21 gkey)*/ * from t21 where (c,b) in ((1,1),(2,2),(3,3),(4,4),(5,5)) order by a,b,c,d;
+select /*+index(t21 gkey)*/ * from t21 where (c,d,b) in ((1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5)) order by a,b,c,d;
+
+### test range columns partitioning followed by hash partitioning
+select /*+index(t22 gkey)*/ * from t22 where a in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t22 gkey)*/ * from t22 where b in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t22 gkey)*/ * from t22 where (c,b) in ((1,1),(2,2),(3,3),(4,4),(5,5)) order by a,b,c,d;
+select /*+index(t22 gkey)*/ * from t22 where (c,d,b) in ((1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5)) order by a,b,c,d;
+
+select /*+index(t23 gkey)*/ * from t23 where a in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t23 gkey)*/ * from t23 where b in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t23 gkey)*/ * from t23 where (c,b) in ((1,1),(2,2),(3,3),(4,4),(5,5)) order by a,b,c,d;
+select /*+index(t23 gkey)*/ * from t23 where (c,d,b) in ((1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5)) order by a,b,c,d;
+
+#test hash partitioning followed by list columns partitioning
+select /*+index(t24 gkey)*/ * from t24 where a in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t24 gkey)*/ * from t24 where b in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t24 gkey)*/ * from t24 where (c,b) in ((1,1),(2,2),(3,3),(4,4),(5,5)) order by a,b,c,d;
+select /*+index(t24 gkey)*/ * from t24 where (c,d,b) in ((1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5)) order by a,b,c,d;
+
+select /*+index(t25 gkey)*/ * from t25 where a in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t25 gkey)*/ * from t25 where b in (1,2,3,4,5) order by a,b,c,d;
+select /*+index(t25 gkey)*/ * from t25 where (c,b) in ((1,1),(2,2),(3,3),(4,4),(5,5)) order by a,b,c,d;
+select /*+index(t25 gkey)*/ * from t25 where (c,d,b) in ((1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5)) order by a,b,c,d;
+
+#fix bug:
+--disable_warnings
+drop table if exists t26;
+drop table if exists t27;
+drop function if exists n_1;
+--enable_warnings
+create table t26(c1 int , c2 int , c3 int);
+create index gkey on t26(c1) global partition by hash(c1) partitions 5;
+insert into t26 values(1,1,1),(2,2,2),(3,3,3),(999,999,999),(1111,1111,1111);
+create table t27(c1 int ,c2 int, c3 int);
+delimiter /;
+create function n_1() returns int not deterministic 
+begin
+  insert into t27 values(1,0,1);
+  return 1;
+end/
+delimiter ;/
+select/*+ index(t26 gkey) */ * from t26 where c2=n_1();

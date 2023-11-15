@@ -1,0 +1,58 @@
+# owner: yanyuan.cxf
+# owner group: transaction
+# description: 本case是为了测试查询sstable上未提交的数据
+
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+connect (conn2,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn0,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+
+connection conn1;
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+create table t1(a int);
+
+connection conn0;
+let $__table_id__=query_get_value(select /*+QUERY_TIMEOUT(10000000)*/ table_id from oceanbase.__all_virtual_table where table_name= 't1', table_id, 1);
+
+connection conn1;
+# 测试普通标记脏事务
+begin;
+insert into t1 value(1);
+insert into t1 value(2);
+insert into t1 value(3);
+insert into t1 value(4);
+insert into t1 value(5);
+insert into t1 value(6);
+
+
+connection conn0;
+set ob_query_timeout=100000000;
+alter system minor freeze tenant = sys;
+alter system minor freeze tenant = all_user;
+alter system minor freeze tenant = all_meta;
+--source mysql_test/include/wait_minor_merge.inc
+
+connection conn2;
+# 不同事务查询sstable未提交数据
+select * from t1;
+
+
+connection conn1;
+#同一事务查询sstable未提交数据
+select * from t1;
+
+commit;
+#查sstable未提交数据，但事务已提交
+select * from t1;
+
+connection conn2;
+
+select * from t1;
+
+drop table t1;

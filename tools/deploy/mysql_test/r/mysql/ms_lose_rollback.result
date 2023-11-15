@@ -1,0 +1,10 @@
+drop table if exists t1;
+create table t1(c1 int primary key, c2 int);
+insert into t1 values(1,1);
+set autocommit=0;
+insert into t1 values(1,1);
+ERROR 23000: Duplicate entry '1' for key 'PRIMARY'
+rollback;
+insert into t1 values(1,1);
+ERROR 23000: Duplicate entry '1' for key 'PRIMARY'
+rollback;

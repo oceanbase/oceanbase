@@ -1,0 +1,83 @@
+# owner: yuchen.wyc
+# owner group: SQL2
+# Test of sys_var tx_isolation and transaction_isolation
+
+SET @old_tx_isolation := @@global.tx_isolation;
+SET @old_transaction_isolation := @@global.tx_isolation;
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@global.tx_isolation=NULL;
+
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@global.transaction_isolation=NULL;
+
+--Error ER_WRONG_VALUE_FOR_VAR
+SET @@global.tx_isolation='';
+
+--Error ER_WRONG_VALUE_FOR_VAR
+SET @@global.transaction_isolation='';
+
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@session.tx_isolation=NULL;
+
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@session.transaction_isolation=NULL;
+
+--Error ER_WRONG_VALUE_FOR_VAR
+SET @@session.tx_isolation='';
+
+--Error ER_WRONG_VALUE_FOR_VAR
+SET @@session.transaction_isolation='';
+
+--Error ER_NOT_SUPPORTED_YET
+SET @@global.tx_isolation='READ-UNCOMMITTED';
+
+--Error ER_NOT_SUPPORTED_YET
+SET @@global.transaction_isolation='READ-UNCOMMITTED';
+
+SET @@global.tx_isolation='read-COMMITTED';
+SELECT @@global.tx_isolation;
+
+SET @@global.tx_isolation='REPEATABLE-READ';
+SELECT @@global.tx_isolation;
+
+SET @@global.tx_isolation='SERIALIZable';
+SELECT @@global.tx_isolation;
+
+SET @@global.transaction_isolation='read-committed';
+SELECT @@global.transaction_isolation;
+
+SET @@global.transaction_isolation='repeatable-READ';
+SELECT @@global.transaction_isolation;
+
+SET @@global.transaction_isolation='SERIALizable';
+SELECT @@global.transaction_isolation;
+
+--Error ER_NOT_SUPPORTED_YET
+SET @@session.tx_isolation='READ-UNCOMMITTED';
+
+--Error ER_NOT_SUPPORTED_YET
+SET @@session.transaction_isolation='READ-UNCOMMITTED';
+
+SET @@session.tx_isolation='READ-COMMITTED';
+SELECT @@session.tx_isolation;
+
+SET @@session.tx_isolation='REPEATABLE-READ';
+SELECT @@session.tx_isolation;
+
+SET @@session.tx_isolation='serializable';
+SELECT @@session.tx_isolation;
+
+SET @@session.transaction_isolation='READ-COMMITTED';
+SELECT @@session.transaction_isolation;
+
+SET @@session.transaction_isolation='REPEATABLE-READ';
+SELECT @@session.transaction_isolation;
+
+SET @@session.transaction_isolation='serializable';
+SELECT @@session.transaction_isolation;
+
+SET @@session.transaction_isolation='READ-COMMITTED';
+SELECT @@session.transaction_isolation;
+
+SET @@global.tx_isolation='read-COMMITTED';
+SELECT @@global.tx_isolation;
