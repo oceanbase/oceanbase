@@ -143,6 +143,12 @@ private:
     int get_error_ret() { return error_ret; }
     int64_t get_renew_lease_count() { return renew_lease_count_; }
 
+    void clear_ser_content()
+    {
+      lease_item_array_.reuse();
+      max_ser_size_ = 0;
+    }
+
     TO_STRING_KV(K(renew_lease_count_),
                  K(max_ser_size_),
                  K(loop_start_time_),
