@@ -490,7 +490,10 @@ int ObSQLUtils::calc_raw_expr_without_row(
 // it a member function of ObExpr, otherwise it will be abused in SQL Engine.
 void ObSQLUtils::clear_expr_eval_flags(const ObExpr &expr, ObEvalCtx &ctx)
 {
-  if (expr.eval_func_ != NULL) {
+  if (expr.eval_func_ != NULL || T_OP_ROW == expr.type_) {
+    // The eval_func_ of the T_OP_ROW expression is null, causing the issue where the evaluation
+    // flag of the child expressions is not cleared. For more detail, see issue
+    //
     expr.get_eval_info(ctx).clear_evaluated_flag();
     for (int64_t i = 0; i < expr.arg_cnt_; i++) {
       clear_expr_eval_flags(*expr.args_[i], ctx);
