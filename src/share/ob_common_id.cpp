@@ -59,7 +59,7 @@ int ObCommonID::deserialize(const char* buf, const int64_t data_len, int64_t& po
 int64_t ObCommonID::get_serialize_size() const
 {
   int64_t size = 0;
-  size += serialization::encoded_length_i64(id_);
+  size += serialization::encoded_length_vi64(id_);
   return size;
 }
 
