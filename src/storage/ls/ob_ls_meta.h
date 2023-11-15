@@ -33,6 +33,13 @@ namespace oceanbase
 {
 namespace storage
 {
+class ObLSCreateType
+{
+public:
+  static const int64_t NORMAL = 0;
+  static const int64_t RESTORE = 1;
+  static const int64_t MIGRATE = 2;
+};
 
 class ObLSMeta
 {
@@ -48,8 +55,11 @@ public:
            const int64_t create_scn);
   void reset();
   bool is_valid() const;
-  void set_ls_create_status(const ObInnerLSStatus &status);
-  ObInnerLSStatus get_ls_create_status() const;
+  int set_start_work_state();
+  int set_start_ha_state();
+  int set_finish_ha_state();
+  int set_remove_state();
+  const ObLSPersistentState &get_persistent_state() const;
   ObLSMeta &operator=(const ObLSMeta &other);
   share::SCN get_clog_checkpoint_scn() const;
   palf::LSN &get_clog_base_lsn();
@@ -94,6 +104,7 @@ public:
       share::ObLSRestoreStatus &ls_restore_status);
   int set_rebuild_info(const ObLSRebuildInfo &rebuild_info);
   int get_rebuild_info(ObLSRebuildInfo &rebuild_info) const;
+  int get_create_type(int64_t &create_type) const;
 
   int init(
       const uint64_t tenant_id,
@@ -104,18 +115,43 @@ public:
 
   ObReplicaType get_replica_type() const
   { return unused_replica_type_; }
-  class ObSpinLockTimeGuard
+  // IF I have locked with W:
+  //    lock with R/W will be succeed do nothing.
+  // ELSE:
+  //    lock with R/W
+  class ObReentrantWLockGuard
   {
   public:
-    ObSpinLockTimeGuard(common::ObSpinLock &lock,
-                        const int64_t warn_threshold = 100 * 1000 /* 100 ms */);
-    ~ObSpinLockTimeGuard() {}
+    ObReentrantWLockGuard(common::ObLatch &lock,
+                          const bool try_lock = false,
+                          const int64_t warn_threshold = 100 * 1000 /* 100 ms */);
+    ~ObReentrantWLockGuard();
+    inline int get_ret() const { return ret_; }
     void click(const char *mod = NULL) { time_guard_.click(mod); }
+    bool locked() const { return common::OB_SUCCESS == ret_; }
   private:
+    bool first_locked_;
     ObTimeGuard time_guard_;
-    ObSpinLockGuard lock_guard_;
+    common::ObLatch &lock_;
+    int ret_;
   };
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(ls_create_status),
+  class ObReentrantRLockGuard
+  {
+  public:
+    ObReentrantRLockGuard(common::ObLatch &lock,
+                          const bool try_lock = false,
+                          const int64_t warn_threshold = 100 * 1000 /* 100 ms */);
+    ~ObReentrantRLockGuard();
+    inline int get_ret() const { return ret_; }
+    void click(const char *mod = NULL) { time_guard_.click(mod); }
+    bool locked() const { return common::OB_SUCCESS == ret_; }
+  private:
+    bool first_locked_;
+    ObTimeGuard time_guard_;
+    common::ObLatch &lock_;
+    int ret_;
+  };
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(ls_persistent_state),
                K_(clog_checkpoint_scn), K_(clog_base_lsn),
                K_(rebuild_seq), K_(migration_status), K(gc_state_), K(offline_scn_),
                K_(restore_status), K_(replayable_point), K_(tablet_change_checkpoint_scn),
@@ -123,12 +159,12 @@ public:
 private:
   int check_can_update_();
 public:
-  mutable common::ObSpinLock lock_;
+  mutable common::ObLatch lock_;
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
 private:
   ObReplicaType unused_replica_type_;
-  ObInnerLSStatus ls_create_status_;
+  ObLSPersistentState ls_persistent_state_;
   typedef common::ObFunction<int(ObLSMeta &)> WriteSlog;
   // for test
   void set_write_slog_func_(WriteSlog write_slog);

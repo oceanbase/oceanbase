@@ -182,7 +182,7 @@ int ObLSTxCtxMgr::init(const int64_t tenant_id,
   } else {
     is_inited_ = true;
     is_leader_serving_ = false;
-    state_ = State::F_WORKING;
+    state_ = State::F_ALL_BLOCKED;
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
     tx_table_ = tx_table;

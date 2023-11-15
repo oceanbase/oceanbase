@@ -53,7 +53,7 @@ int ObTxTable::init(ObLS *ls)
     ls_ = ls;
     ls_id_ = ls->get_ls_id();
     epoch_ = 0;
-    state_ = TxTableState::ONLINE;
+    state_ = TxTableState::OFFLINE;
     mini_cache_hit_cnt_ = 0;
     kv_cache_hit_cnt_ = 0;
     read_tx_data_table_cnt_ = 0;
@@ -166,8 +166,8 @@ int ObTxTable::online()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tx table is not init.", KR(ret));
-  } else if (OB_FAIL(load_tx_data_table_())) {
-    LOG_WARN("failed to load tx data table", K(ret));
+  } else if (OB_FAIL(tx_data_table_.online())) {
+    LOG_WARN("failed to online tx data table", K(ret));
   } else if (OB_FAIL(load_tx_ctx_table_())) {
     LOG_WARN("failed to load tx ctx table", K(ret));
   } else {
@@ -478,46 +478,6 @@ int ObTxTable::load_tx_ctx_table_()
         LOG_WARN("fail to restore tx ctx table", K(ret), KPC(sstable));
       }
     }
-  }
-
-  return ret;
-}
-
-int ObTxTable::load_tx_data_table_()
-{
-  int ret = OB_SUCCESS;
-  ObTabletHandle handle;
-  ObTablet *tablet;
-  ObLSTabletService *ls_tablet_svr = ls_->get_tablet_svr();
-
-  if (NULL == ls_tablet_svr) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("get ls tablet svr failed", K(ret));
-  } else if (OB_FAIL(ls_tablet_svr->get_tablet(LS_TX_DATA_TABLET, handle))) {
-    LOG_WARN("get tablet failed", K(ret));
-  } else if (FALSE_IT(tablet = handle.get_obj())) {
-  } else if (OB_FAIL(ls_tablet_svr->create_memtable(LS_TX_DATA_TABLET, 0 /* schema_version */))) {
-    LOG_WARN("failed to create memtable", K(ret));
-  } else {
-    // load tx data table succed
-  }
-
-  return ret;
-}
-
-int ObTxTable::load_tx_table()
-{
-  int ret = OB_SUCCESS;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("tx table is not init.", KR(ret));
-  } else if (OB_FAIL(load_tx_data_table_())) {
-    LOG_WARN("failed to load tx data table", K(ret));
-  } else if (OB_FAIL(load_tx_ctx_table_())) {
-    LOG_WARN("failed to load tx ctx table", K(ret));
-  } else {
-    // do nothing
   }
 
   return ret;

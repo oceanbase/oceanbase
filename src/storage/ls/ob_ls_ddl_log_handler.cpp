@@ -174,7 +174,7 @@ int ObLSDDLLogHandler::init(ObLS *ls)
     LOG_WARN("fail to init ddl log replayer", K(ret));
   } else {
     TCWLockGuard guard(online_lock_);
-    is_online_ = true;
+    is_online_ = false;
     ls_ = ls;
     last_rec_scn_ = ls_->get_clog_checkpoint_scn();
     is_inited_ = true;

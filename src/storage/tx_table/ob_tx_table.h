@@ -105,7 +105,6 @@ public:
   void destroy();
   int create_tablet(const lib::Worker::CompatMode compat_mode, const share::SCN &create_scn);
   int remove_tablet();
-  int load_tx_table();
   int prepare_offline();
   int offline();
   int online();
@@ -298,7 +297,6 @@ private:
       share::schema::ObTableSchema &schema);
   int restore_tx_ctx_table_(ObITable &trans_sstable);
   int load_tx_ctx_table_();
-  int load_tx_data_table_();
   int offline_tx_ctx_table_();
   int offline_tx_data_table_();
 

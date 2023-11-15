@@ -156,6 +156,7 @@ public:  // ObTxDataTable
   virtual void reset();
   virtual void destroy();
   int offline();
+  int online();
 
   /**
    * @brief Allocate tx data with slice allocator

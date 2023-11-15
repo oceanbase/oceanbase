@@ -33,7 +33,8 @@ int ObLSWRSHandler::init(const share::ObLSID &ls_id)
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObLSWRSHandler init twice", K(ret), K(is_inited_));
   } else {
-    is_enabled_ = true;
+    is_enabled_ = false;
+    ls_weak_read_ts_.set_min();
     is_inited_ = true;
     ls_id_ = ls_id;
     STORAGE_LOG(INFO, "ObLSWRSHandler init success", K(*this));

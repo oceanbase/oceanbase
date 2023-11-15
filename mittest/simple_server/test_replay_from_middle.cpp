@@ -681,7 +681,7 @@ void ObTxDataTable::update_calc_upper_info_(const SCN &max_decided_scn)
   }
 }
 
-int ObLSService::enable_replay()
+int ObLSService::online_ls()
 {
   // do nothing
   int ret = OB_SUCCESS;
@@ -711,7 +711,6 @@ int ObLSService::enable_replay()
   /**************************** addtional code *****************************/
 
   int tmp_ret = OB_SUCCESS;
-  ObInnerLSStatus ls_status;
   common::ObSharedGuard<ObLSIterator> ls_iter;
   ObLS *ls = nullptr;
   bool can_replay = true;

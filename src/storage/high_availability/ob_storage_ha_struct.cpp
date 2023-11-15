@@ -426,7 +426,7 @@ int ObMigrationStatusHelper::check_ls_transfer_tablet_(
   ObLS *ls = nullptr;
   ObLSHandle ls_handle;
   ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_WITHOUT_CHECK);
-  ObInnerLSStatus create_status;
+  ObLSPersistentState ls_status;
   bool need_check_allow_gc = true;
   bool need_wait_dest_ls_replay = false;
   ObLSRestoreStatus restore_status;
@@ -441,8 +441,8 @@ int ObMigrationStatusHelper::check_ls_transfer_tablet_(
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls not exist", K(ret), K(ls_id));
-  } else if (FALSE_IT(create_status = ls->get_ls_meta().get_ls_create_status())) {
-  } else if (ObInnerLSStatus::COMMITTED != create_status) {
+  } else if (FALSE_IT(ls_status = ls->get_persistent_state())) {
+  } else if (ls_status.is_need_gc()) {
     allow_gc = true;
   } else if (OB_FAIL(set_ls_migrate_gc_status_(*ls, migration_status))) {
     LOG_WARN("failed to set ls gc status", KR(ret));

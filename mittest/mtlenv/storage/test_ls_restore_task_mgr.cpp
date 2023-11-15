@@ -517,11 +517,6 @@ int ObLSTabletIterator::get_next_tablet(ObTabletHandle &handle)
   return OB_ITER_END;
 }
 
-int ObLS::load_ls_inner_tablet()
-{
-  return OB_SUCCESS;
-}
-
 }
 
 namespace unittest

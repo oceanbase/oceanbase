@@ -325,8 +325,6 @@ int ObTablet::init_for_first_time_creation(
       create_scn, snapshot_version, compat_mode, table_store_flag, table_schema.get_schema_version()/*create_schema_version*/))) {
     LOG_WARN("failed to init tablet meta", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id),
         K(create_scn), K(snapshot_version), K(compat_mode), K(table_store_flag));
-  } else if (is_ls_inner_tablet() && OB_FAIL(inner_create_memtable())) {
-    LOG_WARN("failed to create first memtable", K(ret), K(tablet_id));
   } else if (OB_FAIL(pull_memtables(allocator, ddl_kvs_addr, ddl_kv_count))) {
     LOG_WARN("fail to pull memtable", K(ret));
   } else {

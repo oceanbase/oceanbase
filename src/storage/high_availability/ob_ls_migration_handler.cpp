@@ -1149,7 +1149,9 @@ void ObLSMigrationHandler::wait(bool &wait_finished)
   share::ObTenantBase *tenant_base = MTL_CTX();
   omt::ObTenant *tenant = nullptr;
 
-  if (OB_ISNULL(tenant_base)) {
+  if (!is_inited_) {
+    wait_finished = true;
+  } else if (OB_ISNULL(tenant_base)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tenant base should not be NULL", K(ret), KP(tenant_base));
   } else if (FALSE_IT(tenant = static_cast<omt::ObTenant *>(tenant_base))) {

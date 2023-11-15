@@ -244,6 +244,7 @@ int ObTabletGCHandler::init(ObLS *ls)
     STORAGE_LOG(WARN, "invalid argument", KR(ret));
   } else {
     ls_ = ls;
+    set_stop();
     is_inited_ = true;
   }
   return ret;

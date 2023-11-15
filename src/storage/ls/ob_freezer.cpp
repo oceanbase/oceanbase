@@ -386,7 +386,7 @@ ObFreezer::ObFreezer()
     high_priority_freeze_cnt_(0),
     low_priority_freeze_cnt_(0),
     need_resubmit_log_(false),
-    enable_(true),
+    enable_(false),
     is_inited_(false)
 {}
 
@@ -400,7 +400,7 @@ ObFreezer::ObFreezer(ObLS *ls)
     high_priority_freeze_cnt_(0),
     low_priority_freeze_cnt_(0),
     need_resubmit_log_(false),
-    enable_(true),
+    enable_(false),
     is_inited_(false)
 {}
 
@@ -420,7 +420,7 @@ void ObFreezer::reset()
   high_priority_freeze_cnt_ = 0;
   low_priority_freeze_cnt_ = 0;
   need_resubmit_log_ = false;
-  enable_ = true;
+  enable_ = false;
   is_inited_ = false;
 }
 
@@ -441,7 +441,6 @@ int ObFreezer::init(ObLS *ls)
     high_priority_freeze_cnt_ = 0;
     low_priority_freeze_cnt_ = 0;
     need_resubmit_log_ = false;
-    enable_ = true;
 
     is_inited_ = true;
   }
@@ -584,7 +583,7 @@ int ObFreezer::ls_freeze_task()
   while (!get_ls_data_checkpoint()->ls_freeze_finished()) {
     if (TC_REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
       if (need_resubmit_log()) {
-        int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
+        int64_t read_lock = LSLOCKALL;
         int64_t write_lock = 0;
         ObLSLockGuard lock_ls(ls_, ls_->lock_, read_lock, write_lock);
         if (OB_FAIL(check_ls_state())) {
@@ -620,7 +619,7 @@ int ObFreezer::check_ls_state()
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(ls_->is_stopped_)) {
+  if (OB_UNLIKELY(ls_->is_stopped())) {
     ret = OB_NOT_RUNNING;
     STORAGE_LOG(WARN, "ls stopped", K(ret), K_(ls_->ls_meta));
   } else if (OB_UNLIKELY(!(ls_->get_log_handler()->is_replay_enabled()))) {
@@ -864,7 +863,7 @@ int ObFreezer::tablet_freeze_task(ObTableHandleV2 handle)
     } else if (OB_FAIL(wait_memtable_ready_for_flush_with_ls_lock(memtable))) {
         TRANS_LOG(WARN, "[Freezer] fail to wait memtable ready_for_flush", K(ret), K(ls_id));
     } else {
-      int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
+      int64_t read_lock = LSLOCKALL;
       int64_t write_lock = 0;
       ObLSLockGuard lock_ls(ls_, ls_->lock_, read_lock, write_lock);
       if (OB_FAIL(check_ls_state())) {
@@ -904,7 +903,7 @@ int ObFreezer::wait_memtable_ready_for_flush_with_ls_lock(memtable::ObMemtable *
 int ObFreezer::try_wait_memtable_ready_for_flush_with_ls_lock(memtable::ObMemtable *memtable, bool &ready_for_flush, const int64_t start)
 {
   int ret = OB_SUCCESS;
-  int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
+  int64_t read_lock = LSLOCKALL;
   int64_t write_lock = 0;
   ObLSLockGuard lock_ls(ls_, ls_->lock_, read_lock, write_lock);
 
@@ -1221,7 +1220,7 @@ int ObFreezer::finish_freeze_with_ls_lock(memtable::ObMemtable *memtable)
 {
   int ret = OB_SUCCESS;
   share::ObLSID ls_id = get_ls_id();
-  int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
+  int64_t read_lock = LSLOCKALL;
   int64_t write_lock = 0;
   ObLSLockGuard lock_ls(ls_, ls_->lock_, read_lock, write_lock);
 

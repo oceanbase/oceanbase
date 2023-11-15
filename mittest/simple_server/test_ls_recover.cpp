@@ -356,6 +356,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_commit_slog)
   ObLSService* ls_svr = MTL(ObLSService*);
   ObLSID id_103(103);
   palf::PalfBaseInfo palf_base_info;
+  int64_t create_type = ObLSCreateType::NORMAL;
   const ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
 
   LOG_INFO("ObLSBeforeRestartTest::create_unfinished_ls_with_inner_tablet 1");
@@ -378,7 +379,95 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_commit_slog)
                                       unused_allow_log_sync));
   ASSERT_EQ(OB_SUCCESS, ls->create_ls_inner_tablet(arg.get_compat_mode(),
                                                    arg.get_create_scn()));
-  ASSERT_EQ(OB_SUCCESS, ls_svr->write_commit_create_ls_slog_(ls->get_ls_id()));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->write_commit_create_ls_slog_(ls->get_ls_id(), create_type));
+}
+
+// this ls will be offlined state after restart
+TEST_F(ObLSBeforeRestartTest, create_restore_ls)
+{
+  uint64_t tenant_id = 0;
+  ASSERT_EQ(OB_SUCCESS, get_tenant_id(tenant_id));
+  share::ObTenantSwitchGuard tenant_guard;
+  ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(tenant_id));
+
+  ObCreateLSArg arg;
+  ObLS *ls = NULL;
+  ObLSService* ls_svr = MTL(ObLSService*);
+  ObLSID id_104(104);
+  palf::PalfBaseInfo palf_base_info;
+  int64_t create_type = ObLSCreateType::RESTORE;
+  const ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
+
+  LOG_INFO("ObLSBeforeRestartTest::create_unfinished_ls_with_inner_tablet 1");
+  ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(tenant_id, id_104, arg));
+  LOG_INFO("create_ls", K(arg), K(id_104));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->inner_create_ls_(arg.get_ls_id(),
+                                                 migration_status,
+                                                 ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_START),
+                                                 arg.get_create_scn(),
+                                                 ls));
+  const bool unused_allow_log_sync = true;
+  prepare_palf_base_info(arg, palf_base_info);
+  ObLSLockGuard lock_ls(ls);
+  const ObLSMeta &ls_meta = ls->get_ls_meta();
+  ASSERT_EQ(OB_SUCCESS, ls_svr->add_ls_to_map_(ls));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->write_prepare_create_ls_slog_(ls_meta));
+  ASSERT_EQ(OB_SUCCESS, ls->create_ls(arg.get_tenant_info().get_tenant_role(),
+                                      palf_base_info,
+                                      arg.get_replica_type(),
+                                      unused_allow_log_sync));
+  ASSERT_EQ(OB_SUCCESS, ls->create_ls_inner_tablet(arg.get_compat_mode(),
+                                                   arg.get_create_scn()));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->write_commit_create_ls_slog_(ls->get_ls_id(), create_type));
+  ASSERT_EQ(OB_SUCCESS, ls->finish_create_ls());
+  ASSERT_EQ(OB_SUCCESS, ls_svr->post_create_ls_(create_type, ls));
+
+  // check the ls, it should be offlined.
+  ASSERT_TRUE(ls->is_offline());
+}
+
+// this ls will be offline state after restart
+TEST_F(ObLSBeforeRestartTest, create_rebuild_ls)
+{
+  uint64_t tenant_id = 0;
+  ASSERT_EQ(OB_SUCCESS, get_tenant_id(tenant_id));
+  share::ObTenantSwitchGuard tenant_guard;
+  ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(tenant_id));
+
+  ObCreateLSArg arg;
+  ObLS *ls = NULL;
+  ObLSService* ls_svr = MTL(ObLSService*);
+  ObLSID id_105(105);
+  palf::PalfBaseInfo palf_base_info;
+  int64_t create_type = ObLSCreateType::NORMAL;
+  const ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
+
+  LOG_INFO("ObLSBeforeRestartTest::create_unfinished_ls_with_inner_tablet 1");
+  ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(tenant_id, id_105, arg));
+  LOG_INFO("create_ls", K(arg), K(id_105));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->inner_create_ls_(arg.get_ls_id(),
+                                                 migration_status,
+                                                 ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_NONE),
+                                                 arg.get_create_scn(),
+                                                 ls));
+  const bool unused_allow_log_sync = true;
+  prepare_palf_base_info(arg, palf_base_info);
+  ObLSLockGuard lock_ls(ls);
+  const ObLSMeta &ls_meta = ls->get_ls_meta();
+  ASSERT_EQ(OB_SUCCESS, ls_svr->add_ls_to_map_(ls));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->write_prepare_create_ls_slog_(ls_meta));
+  ASSERT_EQ(OB_SUCCESS, ls->create_ls(arg.get_tenant_info().get_tenant_role(),
+                                      palf_base_info,
+                                      arg.get_replica_type(),
+                                      unused_allow_log_sync));
+  ASSERT_EQ(OB_SUCCESS, ls->create_ls_inner_tablet(arg.get_compat_mode(),
+                                                   arg.get_create_scn()));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->write_commit_create_ls_slog_(ls->get_ls_id(), create_type));
+  ASSERT_EQ(OB_SUCCESS, ls->finish_create_ls());
+  ASSERT_EQ(OB_SUCCESS, ls_svr->post_create_ls_(create_type, ls));
+
+  // make it be a rebuild ls.
+  ASSERT_EQ(OB_SUCCESS, ls->set_ls_rebuild());
 }
 
 class ObLSAfterRestartTest : public ObSimpleClusterTestBase
@@ -430,6 +519,8 @@ TEST_F(ObLSAfterRestartTest, check_unfinished_ls)
 {
   LOG_INFO("check_unfinished_ls");
   uint64_t tenant_id = 0;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
   ASSERT_EQ(OB_SUCCESS, get_tenant_id(tenant_id));
   share::ObTenantSwitchGuard tenant_guard;
   ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(tenant_id));
@@ -437,16 +528,23 @@ TEST_F(ObLSAfterRestartTest, check_unfinished_ls)
   // 1. restart success. no need check.
   // 2. check exist ls exist.
   // 3. check not exist ls not exist.
+  // 4. check ls status.
   bool exist = false;
   ObLSID id_100(100);
   ObLSID id_101(101);
   ObLSID id_102(102);
   ObLSID id_103(103);
+  ObLSID id_104(104); // this is a restore ls
+  ObLSID id_105(105); // this is a rebuild ls
 
   constexpr int NOT_EXIST_NUM = 3;
-  constexpr int EXIST_NUM = 1;
+  constexpr int EXIST_NUM = 3;
+  constexpr int OFFLINED_NUM = 2;
+  constexpr int NORMAL_NUM = 1;
   ObLSID not_exist_ls[NOT_EXIST_NUM] = {id_100, id_101, id_102};
-  ObLSID exist_ls[EXIST_NUM] = {id_103};
+  ObLSID exist_ls[EXIST_NUM] = {id_103, id_104, id_105};
+  ObLSID offlined_ls[OFFLINED_NUM] = {id_104, id_105};
+  ObLSID normal_ls[NORMAL_NUM] = {id_103};
 
   ObLSService* ls_svr = MTL(ObLSService*);
   LOG_INFO("check_unfinished_ls not exist ls");
@@ -461,6 +559,27 @@ TEST_F(ObLSAfterRestartTest, check_unfinished_ls)
     LOG_INFO("check_unfinished_ls exist ls", K(exist_ls[i]));
     ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_exist(exist_ls[i], exist));
     ASSERT_TRUE(exist);
+  }
+
+  LOG_INFO("check exist ls offlined status");
+  for (int i = 0; i < OFFLINED_NUM; i++) {
+    LOG_INFO("check_unfinished_ls offlined ls", K(offlined_ls[i]));
+    ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(offlined_ls[i], ls_handle, ObLSGetMod::TXSTORAGE_MOD));
+    ls = ls_handle.get_ls();
+    ASSERT_NE(nullptr, ls);
+    LOG_INFO("ls status", KPC(ls));
+    ASSERT_TRUE(ls->is_offline());
+    ASSERT_TRUE(ls->get_persistent_state().is_ha_state());
+  }
+
+  LOG_INFO("check exist ls normal status");
+  for (int i = 0; i < NORMAL_NUM; i++) {
+    LOG_INFO("check_unfinished_ls normal ls", K(normal_ls[i]));
+    ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(normal_ls[i], ls_handle, ObLSGetMod::TXSTORAGE_MOD));
+    ls = ls_handle.get_ls();
+    ASSERT_NE(nullptr, ls);
+    ASSERT_FALSE(ls->is_offline());
+    ASSERT_TRUE(ls->get_persistent_state().is_normal_state());
   }
 }
 

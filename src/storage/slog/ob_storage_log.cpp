@@ -149,6 +149,30 @@ DEF_TO_STRING(ObLSIDLog)
 
 OB_SERIALIZE_MEMBER(ObLSIDLog, ls_id_);
 
+ObCreateLSCommitSLog::ObCreateLSCommitSLog(ObLSID &ls_id,
+                                           const int64_t create_type)
+  : ObLSIDLog(ls_id),
+    create_type_(create_type)
+{
+}
+
+bool ObCreateLSCommitSLog::is_valid() const
+{
+  return ObLSIDLog::is_valid();
+}
+
+DEF_TO_STRING(ObCreateLSCommitSLog)
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(ls_id));
+  J_KV(K_(create_type));
+  J_OBJ_END();
+  return pos;
+}
+
+OB_SERIALIZE_MEMBER_INHERIT(ObCreateLSCommitSLog, ObLSIDLog, create_type_);
+
 ObCreateTabletLog::ObCreateTabletLog(ObTablet *tablet)
   : tablet_(tablet)
 {

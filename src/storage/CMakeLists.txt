@@ -416,6 +416,7 @@ ob_set_subtarget(ob_storage ls
   ls/ob_ls_meta.cpp
   ls/ob_ls_meta_package.cpp
   ls/ob_ls_role_handler.cpp
+  ls/ob_ls_state.cpp
   ls/ob_ls_sync_tablet_seq_handler.cpp
   ls/ob_ls_switch_checker.cpp
   ls/ob_ls_tablet_service.cpp

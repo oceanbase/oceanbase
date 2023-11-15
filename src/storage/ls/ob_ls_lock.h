@@ -21,13 +21,12 @@ namespace oceanbase
 namespace storage
 {
 
-static const int64_t LSLOCKLS      = 1L;
-static const int64_t LSLOCKLOG     = 1L << 1;
-static const int64_t LSLOCKTX      = 1L << 2;
-static const int64_t LSLOCKSTORAGE = 1L << 3;
-static const int64_t LSLOCKLOGMETA = 1L << 4;
+static const int64_t LSLOCKLSSTATE      = 1L;
+static const int64_t LSLOCKLOGSTATE     = 1L << 1;
+static const int64_t LSLOCKTXSTATE      = 1L << 2;
+static const int64_t LSLOCKSTORAGESTATE = 1L << 3;
 
-static const int64_t LSLOCKSIZE = 5;
+static const int64_t LSLOCKSIZE = 4;
 static const int64_t LSLOCKMASK = (1L << LSLOCKSIZE) - 1;
 static const int64_t LSLOCKALL = LSLOCKMASK;
 
@@ -129,6 +128,17 @@ private:
   share::ObLSID ls_id_;
   int64_t mark_;
   int64_t start_ts_;
+};
+
+class ObLSStateGuard
+{
+public:
+  ObLSStateGuard(ObLS *ls);
+  ~ObLSStateGuard();
+  int check();
+private:
+  ObLS *ls_;
+  int64_t begin_state_seq_;
 };
 
 } // storage

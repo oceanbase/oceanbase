@@ -101,7 +101,7 @@ int ObLogHandler::init(const int64_t id,
     lc_cb_ = lc_cb;
     rpc_proxy_ = rpc_proxy;
     is_in_stop_state_ = false;
-    is_offline_ = false;
+    is_offline_ = true; // offline at default.
     is_inited_ = true;
     FLOG_INFO("ObLogHandler init success", K(id), K(palf_handle));
   }

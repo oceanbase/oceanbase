@@ -81,7 +81,8 @@ public:
   int replay_create_ls(const ObLSMeta &ls_meta);
   // replay create ls commit slog.
   // @param [in] ls_id, the create process of which is committed.
-  int replay_create_ls_commit(const share::ObLSID &ls_id);
+  // @param [in] create_type, the create type, it is maybe a normal ls/migrate ls/restore ls
+  int replay_create_ls_commit(const share::ObLSID &ls_id, const int64_t create_type);
   // create a LS for replay or update LS's meta
   // @param [in] ls_meta, all the parameters that is needed to create a LS for replay
   int replay_update_ls(const ObLSMeta &ls_meta);
@@ -103,8 +104,8 @@ public:
 
   // remove the ls that is creating and write abort slog.
   int gc_ls_after_replay_slog();
-  // enable replay all ls clog
-  int enable_replay();
+  // online all ls
+  int online_ls();
 
   // check whether a ls exist or not.
   // @param [in] ls_id, the ls we will check.
@@ -167,7 +168,8 @@ private:
   int inner_del_ls_(ObLS *&ls);
   int add_ls_to_map_(ObLS *ls);
   int write_prepare_create_ls_slog_(const ObLSMeta &ls_meta) const;
-  int write_commit_create_ls_slog_(const share::ObLSID &ls_id) const;
+  int write_commit_create_ls_slog_(const share::ObLSID &ls_id,
+                                   const int64_t create_type) const;
   int write_abort_create_ls_slog_(const share::ObLSID &ls_id) const;
   int write_remove_ls_slog_(const share::ObLSID &ls_id) const;
   int remove_ls_from_map_(const share::ObLSID &ls_id);
@@ -176,6 +178,8 @@ private:
   int restore_update_ls_(const ObLSMetaPackage &meta_package);
   int replay_remove_ls_(const share::ObLSID &ls_id);
   int replay_create_ls_(const ObLSMeta &ls_meta);
+  int post_create_ls_(const int64_t create_type,
+                      ObLS *&ls);
   void del_ls_after_create_ls_failed_(ObLSCreateState& ls_create_state, ObLS *ls);
 
   int alloc_ls_(ObLS *&ls);

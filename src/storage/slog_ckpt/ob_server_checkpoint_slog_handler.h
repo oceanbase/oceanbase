@@ -100,7 +100,7 @@ private:
 
   int handle_tenant_deleting(const uint64_t tenant_id);
   int finish_slog_replay();
-  static int enable_replay_clog();
+  static int online_ls();
   int mock_start(); // for test;
 
 private:

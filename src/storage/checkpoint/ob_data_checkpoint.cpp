@@ -394,11 +394,11 @@ void ObDataCheckpoint::ls_frozen_to_active_(int64_t &last_time)
   bool ls_frozen_list_is_empty = false;
   do {
     {
-      int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
+      int64_t read_lock = LSLOCKALL;
       int64_t write_lock = 0;
       ObLSLockGuard lock_ls(ls_, ls_->lock_, read_lock, write_lock);
 
-      if (OB_UNLIKELY(ls_->is_stopped_)) {
+      if (OB_UNLIKELY(ls_->is_stopped())) {
         ret = OB_NOT_RUNNING;
         STORAGE_LOG(WARN, "ls stopped", K(ret), K_(ls_->ls_meta));
       } else if (OB_UNLIKELY(!(ls_->get_log_handler()->is_replay_enabled()))) {
@@ -455,11 +455,11 @@ void ObDataCheckpoint::ls_frozen_to_prepare_(int64_t &last_time)
   bool ls_frozen_list_is_empty = false;
   do {
     {
-      int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
+      int64_t read_lock = LSLOCKALL;
       int64_t write_lock = 0;
       ObLSLockGuard lock_ls(ls_, ls_->lock_, read_lock, write_lock);
 
-      if (OB_UNLIKELY(ls_->is_stopped_)) {
+      if (OB_UNLIKELY(ls_->is_stopped())) {
         ret = OB_NOT_RUNNING;
         STORAGE_LOG(WARN, "ls stopped", K(ret), K_(ls_->ls_meta));
       } else if (OB_UNLIKELY(!(ls_->get_log_handler()->is_replay_enabled()))) {

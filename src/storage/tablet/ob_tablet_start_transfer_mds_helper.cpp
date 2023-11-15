@@ -465,12 +465,14 @@ int ObTabletStartTransferOutHelper::try_enable_dest_ls_clog_replay(
 {
   MDS_TG(100_ms);
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObLSService* ls_srv = nullptr;
   ObLSHandle dest_ls_handle;
   ObLS *dest_ls = NULL;
   SCN max_decided_scn;
-  bool can_replay = true;
+  bool can_online = true;
   ObLSTransferInfo transfer_info;
+  static const int64_t SLEEP_TS = 100_ms;
   if (!scn.is_valid() || !dest_ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("replay scn or dest ls id is invalid", K(ret), K(scn), K(dest_ls_id));
@@ -495,15 +497,24 @@ int ObTabletStartTransferOutHelper::try_enable_dest_ls_clog_replay(
   } else {
     transfer_info = dest_ls->get_ls_startup_transfer_info();
     dest_ls->get_ls_startup_transfer_info().reset();
-    if (OB_FAIL(dest_ls->check_can_replay_clog(can_replay))) {
-      LOG_WARN("failed to check can replay clog", KR(ret), K(dest_ls));
-    } else if (!can_replay) {
+    if (OB_FAIL(dest_ls->check_can_online(can_online))) {
+      LOG_WARN("failed to check can online", KR(ret), K(dest_ls));
+    } else if (!can_online) {
       // do nothing
-    } else if (CLICK_FAIL(dest_ls->enable_replay())) {
-      dest_ls->get_ls_startup_transfer_info() = transfer_info;
-      LOG_ERROR("fail to enable replay", K(ret), K(scn), K(dest_ls_id), "ls_startup_transfer_info", dest_ls->get_ls_startup_transfer_info());
+    } else if (CLICK_FAIL(dest_ls->online())) {
+      LOG_ERROR("fail to online ls", K(ret), K(scn), K(dest_ls_id), "ls_startup_transfer_info", dest_ls->get_ls_startup_transfer_info());
     } else {
-      LOG_INFO("succ enable ls clog replay", K(dest_ls_id), K(scn), "ls_startup_transfer_info", dest_ls->get_ls_startup_transfer_info());
+      LOG_INFO("succ online ls", K(dest_ls_id), K(scn), "ls_startup_transfer_info", dest_ls->get_ls_startup_transfer_info());
+    }
+    if (CLICK_FAIL(ret)) {
+      dest_ls->get_ls_startup_transfer_info() = transfer_info;
+      // rollback the ls to offline state.
+      do {
+        if (CLICK_TMP_FAIL(dest_ls->offline())) {
+          LOG_WARN("online failed", K(ret), K(dest_ls_id));
+          ob_usleep(SLEEP_TS);
+        }
+      } while (CLICK_TMP_FAIL(tmp_ret));
     }
   }
 

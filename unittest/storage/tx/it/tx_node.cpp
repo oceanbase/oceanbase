@@ -294,6 +294,7 @@ int ObTxNode::create_ls_(const ObLSID ls_id) {
   if (Leader == role_) {
     OZ(get_location_adapter_().fill(ls_id, addr_));
   }
+  mock_ls_.get_tx_svr()->online();
   return ret;
 }
 

@@ -21,6 +21,7 @@
 #include "storage/ls/ob_ls.h"
 #include "storage/ls/ob_ls_lock.h"
 #include "storage/ls/ob_ls_meta.h"
+#include "storage/ls/ob_ls_state.h"
 #include "storage/slog/ob_storage_log.h"
 #include "storage/slog/ob_storage_log_replayer.h"
 #include "storage/slog/ob_storage_logger.h"
@@ -385,16 +386,17 @@ int ObLSService::write_prepare_create_ls_slog_(const ObLSMeta &ls_meta) const
   return ret;
 }
 
-int ObLSService::write_commit_create_ls_slog_(const share::ObLSID &ls_id) const
+int ObLSService::write_commit_create_ls_slog_(const share::ObLSID &ls_id,
+                                              const int64_t create_type) const
 {
   int ret = OB_SUCCESS;
   share::ObLSID tmp_ls_id = ls_id;
-  ObCreateLSCommitSLog slog_entry(tmp_ls_id);
+  ObCreateLSCommitSLog slog_entry(tmp_ls_id, create_type);
   ObStorageLogParam log_param;
   ObStorageLogger *slogger = MTL(ObStorageLogger*);
   log_param.data_ = &slog_entry;
   log_param.cmd_ = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
-                                            ObRedoLogSubType::OB_REDO_LOG_CREATE_LS_COMMIT);
+                                          ObRedoLogSubType::OB_REDO_LOG_CREATE_LS_COMMIT);
   if (OB_FAIL(slogger->write_log(log_param))) {
     LOG_WARN("fail to write create ls commit slog", K(log_param));
   }
@@ -441,6 +443,7 @@ int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
   ObLS *ls = NULL;
   ObStorageLogger *slogger = MTL(ObStorageLogger*);
   ObLSCreateState state = ObLSCreateState::CREATE_STATE_INIT;
+  int64_t create_type = ObLSCreateType::NORMAL;
   bool is_commit = true;
   bool need_retry = true;
   bool ls_exist = false;
@@ -492,9 +495,10 @@ int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
                                         ls))) {
       LOG_WARN("inner create log stream failed.", K(ret), K(arg), K(migration_status));
     } else {
+      create_type = is_ls_to_restore_(arg) ? ObLSCreateType::RESTORE : ObLSCreateType::NORMAL;
       state = ObLSCreateState::CREATE_STATE_INNER_CREATED;
-      // TODO by yunlong: to remove allow_log_sync flag
-      const bool unused_allow_log_sync = true;
+      // disable sync at default
+      const bool allow_log_sync = false;
       prepare_palf_base_info(arg, palf_base_info);
       ObLSLockGuard lock_ls(ls);
       const ObLSMeta &ls_meta = ls->get_ls_meta();
@@ -508,48 +512,30 @@ int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
       } else if (OB_FAIL(ls->create_ls(arg.get_tenant_info().get_tenant_role(),
                                        palf_base_info,
                                        arg.get_replica_type(),
-                                       unused_allow_log_sync))) {
+                                       allow_log_sync))) {
         LOG_WARN("enable ls palf failed", K(ret), K(arg), K(palf_base_info));
-        // only restore ls does not need enable replay
       } else if (FALSE_IT(state = ObLSCreateState::CREATE_STATE_PALF_ENABLED)) {
-        // inner tablet reverted by inner_del_ls_ if fail to create
         // only restore ls with base will not need create inner tablet
       } else if (need_create_inner_tablets_(arg) &&
                  OB_FAIL(ls->create_ls_inner_tablet(arg.get_compat_mode(),
                                                     arg.get_create_scn()))) {
         LOG_WARN("create ls inner tablet failed", K(ret), K(arg));
-      } else if (OB_FAIL(write_commit_create_ls_slog_(ls->get_ls_id()))) {
+      } else if (OB_FAIL(write_commit_create_ls_slog_(ls->get_ls_id(), create_type))) {
         LOG_WARN("fail to write create log stream commit slog", K(ret), K(ls_meta));
-      } else {
-        state = ObLSCreateState::CREATE_STATE_FINISH;
-        ls->finish_create(is_commit);
-        if (OB_FAIL(ls->start())) {
-          LOG_ERROR("ls start failed", K(ret), K(arg));
-        } else if (!is_ls_to_restore_(arg) &&
-                   OB_FAIL(ls->enable_replay_without_lock())) {
-          LOG_WARN("enable ls replay failed", K(ret), K(arg));
-        } else if (is_ls_to_restore_(arg)) {
-          if (OB_FAIL(ls->offline_without_lock())) {
-            LOG_WARN("failed to offline", K(ret), K(arg));
-          } else if (OB_FAIL(ls->get_log_handler()->enable_sync())) {
-            LOG_WARN("failed to enable sync", K(ret), K(arg));
-          } else if (OB_FAIL(ls->get_ls_restore_handler()->online())) {
-            LOG_WARN("failed to online restore handler", K(ret), K(arg));
-          }
-        }
-
-        FLOG_INFO("add ls to ls service succ", K(ls->get_ls_id()), K(arg));
-        if (OB_SUCCESS != (tmp_ret = ls->report_replica_info())) {
-          LOG_WARN("fail to report ls", KR(tmp_ret), K(arg));
-        }
+      } else if (FALSE_IT(state = ObLSCreateState::CREATE_STATE_FINISH)) {
+      } else if (OB_FAIL(ls->finish_create_ls())) {
+        LOG_WARN("finish create ls failed", KR(ret));
+      } else if (OB_FAIL(post_create_ls_(create_type, ls))) {
+        LOG_WARN("post create ls failed", K(ret), K(arg));
       }
       if (OB_FAIL(ret)) {
         do {
           need_retry = false;
           if (state >= ObLSCreateState::CREATE_STATE_WRITE_PREPARE_SLOG) {
-            is_commit = false;
-            ls->finish_create(is_commit);
-            if (OB_SUCCESS != (tmp_ret = write_abort_create_ls_slog_(ls->get_ls_id()))) {
+            if (OB_TMP_FAIL(ls->set_remove_state())) {
+              need_retry = true;
+              LOG_ERROR("ls set remove state failed", KR(tmp_ret), K(ls_meta));
+            } else if (OB_TMP_FAIL(write_abort_create_ls_slog_(ls->get_ls_id()))) {
               need_retry = true;
               LOG_ERROR("fail to write create log stream abort slog", K(tmp_ret), K(ls_meta));
             }
@@ -572,6 +558,50 @@ int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
     }
   }
   FLOG_INFO("create_ls finish", K(ret), K(arg), K(abs_timeout_ts));
+  return ret;
+}
+
+int ObLSService::post_create_ls_(const int64_t create_type,
+                                 ObLS *&ls)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  switch(create_type) {
+  case ObLSCreateType::NORMAL: {
+    if (OB_FAIL(ls->online_without_lock())) {
+      LOG_ERROR("ls start failed", K(ret));
+    } else if (OB_FAIL(ls->set_start_work_state())) {
+      LOG_ERROR("ls set start work state failed", KR(ret), KPC(ls));
+    } else {
+    }
+    break;
+  }
+  case ObLSCreateType::RESTORE: {
+    if (OB_FAIL(ls->get_log_handler()->enable_sync())) {
+      LOG_WARN("failed to enable sync", K(ret));
+    } else if (OB_FAIL(ls->get_ls_restore_handler()->online())) {
+      LOG_WARN("failed to online restore handler", K(ret));
+    } else if (OB_FAIL(ls->set_start_ha_state())) {
+      LOG_ERROR("ls set start ha state failed", KR(ret), KPC(ls));
+    } else {
+    }
+    break;
+  }
+  case ObLSCreateType::MIGRATE: {
+    if (OB_FAIL(ls->set_start_ha_state())) {
+      LOG_ERROR("ls set start ha state failed", KR(ret), KPC(ls));
+    }
+    break;
+  }
+  default: {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("should not be here.", KR(ret));
+  } // default
+  } // switch
+
+  if (OB_SUCCESS != (tmp_ret = ls->report_replica_info())) {
+    LOG_WARN("fail to report ls", KR(tmp_ret), KPC(ls));
+  }
   return ret;
 }
 
@@ -660,13 +690,13 @@ int ObLSService::replay_remove_ls(const share::ObLSID &ls_id)
   return ret;
 }
 
-int ObLSService::replay_create_ls_commit(const share::ObLSID &ls_id)
+int ObLSService::replay_create_ls_commit(const share::ObLSID &ls_id,
+                                         const int64_t create_type)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   ObLSHandle ls_handle;
-  bool is_commit = true;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("the ls service has not been inited", K(ret));
@@ -679,8 +709,33 @@ int ObLSService::replay_create_ls_commit(const share::ObLSID &ls_id)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is null", K(ls_id));
   } else {
-    ls->finish_create(is_commit);
-    FLOG_INFO("replay create ls succ", K(ls_id));
+    ObLSLockGuard lock_ls(ls);
+    switch(create_type) {
+    case ObLSCreateType::NORMAL: {
+      if (OB_FAIL(ls->set_start_work_state())) {
+        LOG_ERROR("ls set start work state failed", KR(ret), K(ls_id));
+      }
+      break;
+    }
+    case ObLSCreateType::RESTORE: {
+      if (OB_FAIL(ls->set_start_ha_state())) {
+        LOG_ERROR("ls set start ha state failed", KR(ret), K(ls_id));
+      }
+      break;
+    }
+    case ObLSCreateType::MIGRATE: {
+      if (OB_FAIL(ls->set_start_ha_state())) {
+        LOG_ERROR("ls set start ha state failed", KR(ret), K(ls_id));
+      }
+      break;
+    }
+    default: {
+      if (OB_FAIL(ls->set_start_work_state())) {
+        LOG_ERROR("ls set start work state failed", KR(ret), K(ls_id));
+      }
+    } // default
+    } // switch
+    FLOG_INFO("replay create ls", KR(ret), K(ls_id));
   }
   return ret;
 }
@@ -692,7 +747,7 @@ int ObLSService::gc_ls_after_replay_slog()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   static const int64_t SLEEP_TS = 100_ms;
-  ObInnerLSStatus ls_status;
+  ObLSPersistentState ls_status;
   common::ObSharedGuard<ObLSIterator> ls_iter;
   ObLS *ls = nullptr;
   lib::ObMutexGuard change_guard(change_lock_);
@@ -712,8 +767,8 @@ int ObLSService::gc_ls_after_replay_slog()
         LOG_ERROR("ls is null", K(ret));
       // this must be succeed
       } else {
-        ls_status = ls->get_create_state();
-        if (ObInnerLSStatus::CREATING == ls_status || ObInnerLSStatus::REMOVED == ls_status) {
+        ls_status = ls->get_persistent_state();
+        if (ls_status.is_need_gc()) {
           do {
             if (OB_TMP_FAIL(ls->stop())) {
               LOG_WARN("ls stop failed", K(tmp_ret), K(ls->get_ls_id()), KP(ls));
@@ -726,7 +781,7 @@ int ObLSService::gc_ls_after_replay_slog()
           } while(tmp_ret != OB_SUCCESS);
         }
         ObLSLockGuard lock_ls(ls);
-        if (ObInnerLSStatus::CREATING == ls_status) {
+        if (ls_status.is_init_state()) {
           do {
             if (OB_TMP_FAIL(write_abort_create_ls_slog_(ls->get_ls_id()))) {
               LOG_ERROR("fail to write create ls abort slog", K(tmp_ret), KPC(ls));
@@ -736,7 +791,7 @@ int ObLSService::gc_ls_after_replay_slog()
             }
           } while (tmp_ret != OB_SUCCESS);
           remove_ls_(ls);
-        } else if (ObInnerLSStatus::REMOVED == ls_status) {
+        } else if (ls_status.is_zombie_state()) {
           remove_ls_(ls);
         }
       }
@@ -749,14 +804,15 @@ int ObLSService::gc_ls_after_replay_slog()
   return ret;
 }
 
-int ObLSService::enable_replay()
+// online all the ls
+int ObLSService::online_ls()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObInnerLSStatus ls_status;
   common::ObSharedGuard<ObLSIterator> ls_iter;
   ObLS *ls = nullptr;
-  bool can_replay = true;
+  bool can_online = true;
+  int64_t create_type = ObLSCreateType::NORMAL;
   if (OB_FAIL(get_ls_iter(ls_iter, ObLSGetMod::TXSTORAGE_MOD))) {
     LOG_WARN("failed to get ls iter", K(ret));
   } else {
@@ -768,16 +824,16 @@ int ObLSService::enable_replay()
       } else if (nullptr == ls) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("ls is null", K(ret));
-      } else if (OB_FAIL(ls->check_can_replay_clog(can_replay))) {
-        LOG_WARN("failed to check ls can replay clog", K(ret), KPC(ls));
-      } else if (!can_replay) {
-        // ls can not enable replay
-      } else if (OB_FAIL(ls->enable_replay())) {
-        if (OB_LS_IS_DELETED == ret) {
-          ret = OB_SUCCESS;
-          LOG_WARN("ls status is WAIT_GC, skip it", K(ls->get_ls_id()));
-        } else {
-          LOG_ERROR("fail to enable replay", K(ret));
+      } else {
+        ObLSLockGuard lock_ls(ls);
+        if (OB_FAIL(ls->check_can_online(can_online))) {
+          LOG_WARN("check ls can online failed", K(ret));
+        } else if (!can_online) {
+          // ls can not online, do nothing
+        } else if (OB_FAIL(ls->get_create_type(create_type))) {
+          LOG_WARN("get ls create type failed", K(ret));
+        } else if (OB_FAIL(post_create_ls_(create_type, ls))) {
+          LOG_WARN("post create ls failed", K(ret));
         }
       }
     }
@@ -835,8 +891,9 @@ int ObLSService::replay_remove_ls_(const share::ObLSID &ls_id)
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is null", K(ls_id));
+  } else if (OB_FAIL(ls->set_remove_state())) {
+    LOG_ERROR("ls set remove state failed", KR(ret), K(ls_id));
   } else {
-    ls->set_create_state(ObInnerLSStatus::REMOVED);
   }
   if (OB_LS_NOT_EXIST == ret) {
     ret = OB_SUCCESS;
@@ -873,8 +930,7 @@ int ObLSService::replay_create_ls_(const ObLSMeta &ls_meta)
     palf::PalfBaseInfo palf_base_info;
     palf_base_info.generate_by_default();
     ObTenantRole unused_tenant_role = share::PRIMARY_TENANT_ROLE;
-    // TODO by yunlong: to remove allow_log_sync flag
-    const bool unused_allow_log_sync = true;
+    const bool allow_log_sync = false;
     ObLSLockGuard lock_ls(ls);
     if (OB_FAIL(ls->set_ls_meta(ls_meta))) {
       LOG_WARN("set ls meta failed", K(ret), K(ls_meta));
@@ -884,7 +940,7 @@ int ObLSService::replay_create_ls_(const ObLSMeta &ls_meta)
       // do nothing
     } else if (OB_FAIL(ls->load_ls(unused_tenant_role,
                                    palf_base_info,
-                                   unused_allow_log_sync))) {
+                                   allow_log_sync))) {
       LOG_WARN("enable ls palf failed", K(ret), K(ls_meta));
     } else {
       ls->disable_to_read();
@@ -961,7 +1017,6 @@ int ObLSService::remove_ls(
     } else if (OB_ISNULL(ls = handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("log stream is null, unexpected error", K(ls_id));
-    } else if (FALSE_IT(ls->set_is_remove())) {
     // ls leader gc must has block tx start, gracefully kill tx and write offline log before here.
     } else if (OB_FAIL(ls->offline())) {
       LOG_WARN("ls offline failed", K(ret), K(ls_id), KP(ls));
@@ -977,7 +1032,8 @@ int ObLSService::remove_ls(
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
       } else if (FALSE_IT(task = new(task) ObLSSafeDestroyTask())) {
-      } else if (FALSE_IT(ls->set_create_state(ObInnerLSStatus::REMOVED))) {
+      } else if (OB_FAIL(ls->set_remove_state())) {
+        LOG_WARN("ls set remove state failed", KR(ret), K(ls_id));
         // set ls to remove state and prevent slog write
       } else if(!is_replay &&
                 OB_FAIL(write_remove_ls_slog_(ls_id))) {
@@ -1060,6 +1116,7 @@ int ObLSService::create_ls_for_ha(
   ObLSRestoreStatus restore_status = ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_NONE);
   bool ls_exist = false;
   bool waiting_destroy = false;
+  int64_t create_type = ObLSCreateType::MIGRATE;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1112,7 +1169,6 @@ int ObLSService::create_ls_for_ha(
       palf::PalfBaseInfo palf_base_info;
       palf_base_info.generate_by_default();
       ObLSLockGuard lock_ls(ls);
-      // TODO by yunlong: to remove allow_log_sync flag
       const bool allow_log_sync = false;
       ls_meta = ls->get_ls_meta();
       if (OB_FAIL(add_ls_to_map_(ls))) {
@@ -1128,26 +1184,24 @@ int ObLSService::create_ls_for_ha(
                                        allow_log_sync))) {
         LOG_WARN("enable ls palf failed", K(ret), K(ls_meta));
       } else if (FALSE_IT(state = ObLSCreateState::CREATE_STATE_PALF_ENABLED)) {
-      } else if (OB_FAIL(write_commit_create_ls_slog_(ls->get_ls_id()))) {
+      } else if (OB_FAIL(write_commit_create_ls_slog_(ls->get_ls_id(), create_type))) {
         LOG_WARN("fail to write create log stream commit slog", K(ret), K(ls_meta));
-      } else {
-        state = ObLSCreateState::CREATE_STATE_FINISH;
-        ls->finish_create(is_commit);
-        if (OB_FAIL(ls->start())) {
-          LOG_ERROR("ls start failed", K(tmp_ret), K(ls_meta));
-        } else if (OB_FAIL(ls->get_ls_migration_handler()->add_ls_migration_task(task_id, arg))) {
-          LOG_WARN("failed to add ls migration task", K(ret), K(arg));
-        } else {
-          FLOG_INFO("add ls to ls service succ", K(ls->get_ls_id()), K(ls_meta));
-        }
+      } else if (OB_FAIL(ls->finish_create_ls())) {
+        LOG_WARN("finish create ls failed", KR(ret));
+      } else if (OB_FAIL(post_create_ls_(create_type, ls))) {
+        LOG_WARN("post create ls failed", K(ret), K(arg));
+      } else if (FALSE_IT(state = ObLSCreateState::CREATE_STATE_FINISH)) {
+      } else if (OB_FAIL(ls->get_ls_migration_handler()->add_ls_migration_task(task_id, arg))) {
+        LOG_WARN("failed to add ls migration task", K(ret), K(arg));
       }
       if (OB_FAIL(ret)) {
         do {
           need_retry = false;
           if (state >= ObLSCreateState::CREATE_STATE_WRITE_PREPARE_SLOG) {
-            is_commit = false;
-            ls->finish_create(is_commit);
-            if (OB_SUCCESS != (tmp_ret = write_abort_create_ls_slog_(ls->get_ls_id()))) {
+            if (OB_TMP_FAIL(ls->set_remove_state())) {
+              need_retry = true;
+              LOG_ERROR("fail to set ls remove state", K(tmp_ret), K(ls_meta));
+            } else if (OB_TMP_FAIL(write_abort_create_ls_slog_(ls->get_ls_id()))) {
               need_retry = true;
               LOG_ERROR("fail to write create log stream abort slog", K(tmp_ret), K(ls_meta));
             }

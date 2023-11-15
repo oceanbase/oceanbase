@@ -43,7 +43,7 @@ using namespace logservice;
 ObLSRestoreHandler::ObLSRestoreHandler()
   : is_inited_(false),
     is_stop_(false),
-    is_online_(true),
+    is_online_(false),
     rebuild_seq_(0),
     result_mgr_(),
     ls_(nullptr),

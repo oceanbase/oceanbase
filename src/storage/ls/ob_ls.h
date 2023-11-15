@@ -170,9 +170,7 @@ struct DiagnoseInfo
 };
 
 class ObIComponentFactory;
-enum class ObInnerLSStatus;
 
-// sizeof(ObLS): 77248
 class ObLS : public common::ObLink
 {
 public:
@@ -215,11 +213,15 @@ public:
   void destroy();
   int offline();
   int online();
+  int online_without_lock();
   int offline_without_lock();
   int enable_for_restore();
-  bool is_offline() const { return is_offlined_; } // mock function, TODO(@yanyuan)
-  bool is_remove() const { return ATOMIC_LOAD(&is_remove_); }
-  void set_is_remove() { return ATOMIC_STORE(&is_remove_, true); }
+  bool is_offline() const
+  { return running_state_.is_offline(); }
+  bool is_stopped() const
+  { return running_state_.is_stopped(); }
+  int64_t get_state_seq() const
+  { return ATOMIC_LOAD(&state_seq_); }
 
   ObLSTxService *get_tx_svr() { return &ls_tx_svr_; }
   ObLockTable *get_lock_table() { return &lock_table_; }
@@ -258,8 +260,6 @@ public:
   checkpoint::ObTabletGCHandler *get_tablet_gc_handler() { return &tablet_gc_handler_; }
   ObLSMemberListService *get_member_list_service() { return &member_list_service_; }
   checkpoint::ObTabletEmptyShellHandler *get_tablet_empty_shell_handler() { return &tablet_empty_shell_handler_; }
-  // make sure the schema version does not back off.
-  int save_base_schema_version();
 
   // get ls info
   int get_ls_info(ObLSVTInfo &ls_info);
@@ -267,10 +267,13 @@ public:
   // report the ls replica info to RS.
   int report_replica_info();
 
-  // set create state of ls.
-  // @param[in] new_status, the new create state which will be set.
-  void set_create_state(const ObInnerLSStatus new_status);
-  ObInnerLSStatus get_create_state() const;
+  // set disk state of ls.
+  int set_start_work_state();
+  int set_start_ha_state();
+  int set_finish_ha_state();
+  int set_remove_state();
+  ObLSPersistentState get_persistent_state() const;
+  int finish_create_ls();
 
   bool is_create_committed() const;
   bool is_need_gc() const;
@@ -304,8 +307,6 @@ public:
   // create all the inner tablet.
   int create_ls_inner_tablet(const lib::Worker::CompatMode compat_mode,
                              const share::SCN &create_scn);
-  // load all the inner tablet.
-  int load_ls_inner_tablet();
 
   // get the meta package of ls: ObLSMeta, PalfBaseInfo
   // @param[in] check_archive, if need check archive,
@@ -320,10 +321,6 @@ public:
   // update the ls meta of ls.
   // @param[in] ls_meta, which is used to update the ls's meta.
   int set_ls_meta(const ObLSMeta &ls_meta);
-  // finish ls create process. set the create state to COMMITTED or ABORTED.
-  // @param[in] is_commit, whether the create process is commit or not.
-  void finish_create(const bool is_commit);
-
   // for ls gc
   int block_tablet_transfer_in();
   int block_tx_start();
@@ -354,11 +351,12 @@ public:
 
   int flush_if_need(const bool need_flush);
   int try_sync_reserved_snapshot(const int64_t new_reserved_snapshot, const bool update_flag);
-  bool is_stopped() const { return is_stopped_; }
   int check_can_replay_clog(bool &can_replay);
+  int check_can_online(bool &can_online);
 
   TO_STRING_KV(K_(ls_meta), K_(switch_epoch), K_(log_handler), K_(restore_handler), K_(is_inited), K_(tablet_gc_handler), K_(startup_transfer_info));
 private:
+  void update_state_seq_();
   int ls_init_for_dup_table_();
   int ls_destory_for_dup_table_();
   int stop_();
@@ -440,7 +438,7 @@ public:
   DELEGATE_WITH_RET(ls_meta_, get_ls_replayable_point, int);
   int inc_update_transfer_scn(const share::SCN &transfer_scn);
   int set_transfer_scn(const share::SCN &transfer_scn);
-  // get ls_meta_package and unsorted tablet_ids, add read lock of LSLOCKLOGMETA.
+  // get ls_meta_package and unsorted tablet_ids, add read lock of LSLOCKLSMETA.
   // @param [in] check_archive if need check archive, for backup task is false, migration/rebuild is true
   // @param [out] meta_package
   // @param [out] tablet_ids
@@ -450,6 +448,7 @@ public:
   DELEGATE_WITH_RET(ls_meta_, get_migration_and_restore_status, int);
   DELEGATE_WITH_RET(ls_meta_, set_rebuild_info, int);
   DELEGATE_WITH_RET(ls_meta_, get_rebuild_info, int);
+  DELEGATE_WITH_RET(ls_meta_, get_create_type, int);
 
 
   // get ls_meta_package and sorted tablet_metas for backup. tablet gc is forbidden meanwhile.
@@ -924,9 +923,11 @@ private:
 private:
   bool is_inited_;
   uint64_t tenant_id_;
-  bool is_stopped_;
-  bool is_offlined_;
-  bool is_remove_;
+  // set running state of ls.
+  // WARN: MUST PROTECT WITH LS LOCK.
+  ObLSRunningState running_state_;
+  // protected by lock_, and change while running/disk state changed
+  int64_t state_seq_;
   uint64_t switch_epoch_;// started from 0, odd means online, even means offline
   ObLSMeta ls_meta_;
   observer::ObIMetaReport *rs_reporter_;

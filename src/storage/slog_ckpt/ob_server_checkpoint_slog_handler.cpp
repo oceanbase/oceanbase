@@ -113,8 +113,8 @@ int ObServerCheckpointSlogHandler::start()
     LOG_WARN("fail to try write checkpoint for compat", K(ret));
   } else if (OB_FAIL(finish_slog_replay())) {
     LOG_ERROR("fail to finish slog replay", KR(ret));
-  } else if (OB_FAIL(enable_replay_clog())) {
-    LOG_ERROR("fail to enable replay clog", KR(ret));
+  } else if(OB_FAIL(online_ls())) {
+    LOG_WARN("fail to online_ls", K(ret));
   } else if (OB_FAIL(task_timer_.start())) { // start checkpoint task after finsh replay slog
     LOG_WARN("fail to start task timer", K(ret));
   } else {
@@ -248,7 +248,7 @@ int ObServerCheckpointSlogHandler::finish_slog_replay()
   return ret;
 }
 
-int ObServerCheckpointSlogHandler::enable_replay_clog()
+int ObServerCheckpointSlogHandler::online_ls()
 {
   int ret = OB_SUCCESS;
   common::ObArray<uint64_t> tenant_ids;
@@ -264,7 +264,7 @@ int ObServerCheckpointSlogHandler::enable_replay_clog()
   for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.size(); i++) {
     const uint64_t &tenant_id = tenant_ids.at(i);
     MTL_SWITCH(tenant_id) {
-      if (OB_FAIL(OB_FAIL(MTL(ObLSService*)->enable_replay()))) {
+      if (OB_FAIL(MTL(ObLSService*)->online_ls())) {
         LOG_WARN("fail enable replay clog", K(ret));
       } else if (OB_ISNULL(transfer_service = (MTL(ObTransferService *)))) {
         ret = OB_ERR_UNEXPECTED;

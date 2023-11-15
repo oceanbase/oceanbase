@@ -247,5 +247,35 @@ ObLSLockWithPendingReplayGuard::~ObLSLockWithPendingReplayGuard()
   start_ts_ = INT64_MAX;
 }
 
+// ================== ls state guard =====================
+ObLSStateGuard::ObLSStateGuard(ObLS *ls)
+  : ls_(ls),
+    begin_state_seq_(-1)
+{
+  if (OB_NOT_NULL(ls_)) {
+    begin_state_seq_ = ls_->get_state_seq();
+  }
+}
+
+ObLSStateGuard::~ObLSStateGuard()
+{
+  ls_ = nullptr;
+  begin_state_seq_ = -1;
+}
+
+int ObLSStateGuard::check()
+{
+  int ret = OB_SUCCESS;
+  int64_t curr_seq = -1;
+  if (OB_ISNULL(ls_)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (FALSE_IT(curr_seq = ls_->get_state_seq())) {
+  } else if (begin_state_seq_ != curr_seq) {
+    ret = OB_STATE_NOT_MATCH;
+    STORAGE_LOG(WARN, "sequence not match", KR(ret), KPC(ls_));
+  }
+  return ret;
+}
+
 } // storage
 } // oceanbase
