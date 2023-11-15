@@ -1280,11 +1280,13 @@ OB_INLINE static int binary_check_micro_infos(
         if (OB_UNLIKELY(check_border_idx > 0)) {
           // move to left if the two rightmost endkeys is same(possible in multiple ranges)
           int cmp_ret = 0;
-          for (; OB_SUCC(ret) && 0 == cmp_ret && check_border_idx > start; check_border_idx--) {
+          for (; OB_SUCC(ret) && check_border_idx > start; check_border_idx--) {
             const ObDatumRowkey *cur_endkey = (micro_infos + check_border_idx)->endkey_;
             const ObDatumRowkey *prev_endkey = (micro_infos + check_border_idx - 1)->endkey_;
             if (OB_FAIL(cur_endkey->compare(*prev_endkey, datum_utils, cmp_ret, false))) {
               LOG_WARN("fail to compare rowkey", K(ret), KPC(cur_endkey), KPC(prev_endkey));
+            } else if (cmp_ret != 0) {
+              break;
             }
           }
         }

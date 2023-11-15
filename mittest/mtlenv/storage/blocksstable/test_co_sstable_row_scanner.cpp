@@ -599,7 +599,7 @@ void TestCOSSTableRowScanner::test_row_scan_and_column_scan_with_multi_range2()
   OK(multi_scanner_.get_blockscan_start(start_row_id, range_idx, block_scan_state));
   ASSERT_EQ(range_row_ids_[4].start_row_id_, start_row_id);
   ASSERT_EQ(4, range_idx);
-  ASSERT_EQ(PENDING_BLOCK_SCAN, multi_scanner_.prefetcher_.block_scan_state_);
+  ASSERT_TRUE(PENDING_BLOCK_SCAN == multi_scanner_.prefetcher_.block_scan_state_ || IN_END_OF_RANGE == multi_scanner_.prefetcher_.block_scan_state_);
   ASSERT_EQ(BLOCKSCAN_RANGE, block_scan_state);
 
   forward_blockscan_to_end(&multi_scanner_, end_row_id, block_scan_state, is_reverse);
@@ -676,14 +676,13 @@ void TestCOSSTableRowScanner::test_reverse_row_scan_and_column_scan_with_multi_r
   OK(multi_scanner_.get_blockscan_start(start_row_id, range_idx, block_scan_state));
   ASSERT_EQ(range_row_ids_[4].end_row_id_, start_row_id);
   ASSERT_EQ(4, range_idx);
-  ASSERT_EQ(PENDING_BLOCK_SCAN, multi_scanner_.prefetcher_.block_scan_state_);
+  ASSERT_TRUE(PENDING_BLOCK_SCAN == multi_scanner_.prefetcher_.block_scan_state_ || IN_END_OF_RANGE == multi_scanner_.prefetcher_.block_scan_state_);
   ASSERT_EQ(BLOCKSCAN_RANGE, block_scan_state);
 
   forward_blockscan_to_end(&multi_scanner_, end_row_id, block_scan_state, is_reverse);
   ASSERT_EQ(border_id1 + 1, end_row_id);
   ASSERT_EQ(BLOCKSCAN_FINISH, block_scan_state);
-  consume_rows_by_row_store(&multi_scanner_, border_id1, range_row_ids_[4].start_row_id_,
-                             is_reverse);
+  consume_rows_by_row_store(&multi_scanner_, border_id1, range_row_ids_[4].start_row_id_, is_reverse);
   check_iter_end(&multi_scanner_);
 }
 
