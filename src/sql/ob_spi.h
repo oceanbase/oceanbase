@@ -494,7 +494,8 @@ public:
                               uint64_t routine_id,
                               int64_t cursor_index);
   static int dbms_dynamic_open(pl::ObPLExecCtx *ctx,
-                               pl::ObDbmsCursorInfo &cursor);
+                               pl::ObDbmsCursorInfo &cursor,
+                               bool is_dbms_sql = false);
   static int dbms_cursor_fetch(pl::ObPLExecCtx *ctx,
                               pl::ObDbmsCursorInfo &cursor,
                               bool is_server_cursor = false);
@@ -803,7 +804,8 @@ private:
   static int dbms_cursor_execute(pl::ObPLExecCtx *ctx,
                                  const ObString ps_sql,
                                  stmt::StmtType stmt_type,
-                                 pl::ObDbmsCursorInfo &cursor);
+                                 pl::ObDbmsCursorInfo &cursor,
+                                 bool is_dbms_sql);
 
   static int adjust_out_params(ObResultSet &result_set,
                                ObSPIOutParams &out_params);
