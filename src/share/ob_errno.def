@@ -1173,6 +1173,9 @@ DEFINE_ERROR(OB_ERR_TABLE_WITHOUT_ALIAS, -5515, ER_TF_MUST_HAVE_ALIAS, "42000", 
 DEFINE_ERROR_EXT(OB_ERR_DEPRECATED_SYNTAX, -5516, ER_WARN_DEPRECATED_SYNTAX, "HY000", "This syntax is deprecated and will be removed in a future release", "%s is deprecated and will be removed in a future release. Please use \'%s\' instead");
 DEFINE_ERROR(OB_ERR_NON_STRING_NOT_SUPPORT, -5517, ER_NOT_SUPPORTED_YET, "42000", "This version of MySQL doesn't yet support 'non-string DEFAULT value for a column in a JSON_TABLE expression'");
 
+//for changed solidify session vars of generated cols
+DEFINE_ERROR_EXT_DEP(OB_ERR_SESSION_VAR_CHANGED, -5540, -1, "HY000", "System variables are different from the old values solidified.", "System variable '%.*s' is different from the old value solidified for '%.*s'(old value:%.*s).");
+
 DEFINE_ERROR_EXT(OB_ERR_SP_ALREADY_EXISTS, -5541, ER_SP_ALREADY_EXISTS, "42000", "procedure/function already exists", "%s %.*s already exists");
 DEFINE_ERROR_EXT(OB_ERR_SP_DOES_NOT_EXIST, -5542, ER_SP_DOES_NOT_EXIST, "42000", "procedure/function does not exist", "%s %.*s.%.*s does not exist");
 DEFINE_PLS_ERROR_EXT(OB_ERR_SP_UNDECLARED_VAR, -5543, ER_SP_UNDECLARED_VAR, "42000", "Undeclared variable", "Undeclared variable: %.*s", 201, "identifier must be declared", "identifier '%.*s' must be declared");

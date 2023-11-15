@@ -44,6 +44,7 @@ const char *const STR_COLUMN_TYPE_RAW = "raw";
 const char *const STR_COLUMN_TYPE_UNKNOWN = "unknown";
 
 class ObTableSchema;
+class ObLocalSessionVar;
 class ObColumnSchemaV2 : public ObSchema
 {
   OB_UNIS_VERSION_V(1);
@@ -376,6 +377,7 @@ private:
   uint64_t sub_type_;
   ObSkipIndexColumnAttr skip_index_attr_;
   int64_t lob_chunk_size_;
+  ObLocalSessionVar local_session_vars_;
 };
 
 inline int32_t ObColumnSchemaV2::get_data_length() const

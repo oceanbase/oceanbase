@@ -1995,7 +1995,8 @@ public:
       need_rebuild_trigger_(false),
       foreign_key_checks_(true),
       is_add_to_scheduler_(false),
-      inner_sql_exec_addr_()
+      inner_sql_exec_addr_(),
+      local_session_var_(&allocator_)
   {
   }
   virtual ~ObAlterTableArg()
@@ -2060,7 +2061,8 @@ public:
                K_(is_add_to_scheduler),
                K_(table_id),
                K_(hidden_table_id),
-               K_(inner_sql_exec_addr));
+               K_(inner_sql_exec_addr),
+               K_(local_session_var));
 private:
   int alloc_index_arg(const ObIndexArg::IndexActionType index_action_type, ObIndexArg *&index_arg);
 public:
@@ -2092,6 +2094,7 @@ public:
   bool foreign_key_checks_;
   bool is_add_to_scheduler_;
   common::ObAddr inner_sql_exec_addr_;
+  ObLocalSessionVar local_session_var_;
   int serialize_index_args(char *buf, const int64_t data_len, int64_t &pos) const;
   int deserialize_index_args(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_index_args_serialize_size() const;
@@ -2350,7 +2353,9 @@ public:
         nls_timestamp_format_(),
         nls_timestamp_tz_format_(),
         sql_mode_(0),
-        inner_sql_exec_addr_()
+        inner_sql_exec_addr_(),
+        allocator_(),
+        local_session_var_(&allocator_)
   {
     index_action_type_ = ADD_INDEX;
     index_using_type_ = share::schema::USING_BTREE;
@@ -2378,6 +2383,8 @@ public:
     nls_timestamp_tz_format_.reset();
     sql_mode_ = 0;
     inner_sql_exec_addr_.reset();
+    local_session_var_.reset();
+    allocator_.reset();
   }
   void set_index_action_type(const IndexActionType type) { index_action_type_  = type; }
   bool is_valid() const;
@@ -2395,6 +2402,8 @@ public:
       SHARE_LOG(WARN, "fail to assign fulltext columns", K(ret));
     } else if (OB_FAIL(index_schema_.assign(other.index_schema_))) {
       SHARE_LOG(WARN, "fail to assign index schema", K(ret));
+    } else if (OB_FAIL(local_session_var_.deep_copy(other.local_session_var_))){
+      SHARE_LOG(WARN, "fail to copy local session vars", K(ret));
     } else {
       index_type_ = other.index_type_;
       index_option_ = other.index_option_;
@@ -2444,6 +2453,8 @@ public:
   common::ObString nls_timestamp_tz_format_;
   ObSQLMode sql_mode_;
   common::ObAddr inner_sql_exec_addr_;
+  common::ObArenaAllocator allocator_;
+  ObLocalSessionVar local_session_var_;
 
 };
 

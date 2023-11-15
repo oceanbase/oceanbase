@@ -92,19 +92,23 @@ ColumnType ObColumnSchemaV2::convert_str_to_column_type(const char *str)
 }
 
 ObColumnSchemaV2::ObColumnSchemaV2()
-    : ObSchema()
+    : ObSchema(),
+    local_session_vars_(get_allocator())
 {
   reset();
 }
 
 ObColumnSchemaV2::ObColumnSchemaV2(ObIAllocator *allocator)
-    : ObSchema(allocator)
+    : ObSchema(allocator),
+    local_session_vars_(allocator)
 {
   reset();
 }
 
 ObColumnSchemaV2::ObColumnSchemaV2(const ObColumnSchemaV2 &src_schema)
-    : ObSchema()
+    : ObSchema(),
+    local_session_vars_(get_allocator())
+
 {
   reset();
   *this = src_schema;
@@ -166,6 +170,12 @@ ObColumnSchemaV2 &ObColumnSchemaV2::operator =(const ObColumnSchemaV2 &src_schem
       }
     } else {/*do nothing*/}
 
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(local_session_vars_.deep_copy(src_schema.local_session_vars_))) {
+        LOG_WARN("fail to deep copy sys var info", K(ret));
+      }
+    }
+
     if (OB_FAIL(ret)) {
       error_ret_ = ret;
     }
@@ -206,6 +216,7 @@ int64_t ObColumnSchemaV2::get_convert_size() const
   for (int64_t i = 0; i < extended_type_info_.count(); ++i) {
     convert_size += extended_type_info_.at(i).length() + 1;
   }
+  convert_size += local_session_vars_.get_deep_copy_size();
   return convert_size;
 }
 
@@ -267,6 +278,7 @@ void ObColumnSchemaV2::reset()
   reset_string_array(extended_type_info_);
   skip_index_attr_.reset();
   lob_chunk_size_ = OB_DEFAULT_LOB_CHUNK_SIZE;
+  local_session_vars_.reset();
   ObSchema::reset();
 }
 
@@ -317,7 +329,8 @@ OB_DEF_SERIALIZE(ObColumnSchemaV2)
                 udt_set_id_,
                 sub_type_,
                 skip_index_attr_,
-                lob_chunk_size_);
+                lob_chunk_size_,
+                local_session_vars_);
   }
 
   return ret;
@@ -385,7 +398,8 @@ OB_DEF_DESERIALIZE(ObColumnSchemaV2)
                 udt_set_id_,
                 sub_type_,
                 skip_index_attr_,
-                lob_chunk_size_);
+                lob_chunk_size_,
+                local_session_vars_);
   }
   return ret;
 }
@@ -431,7 +445,8 @@ OB_DEF_SERIALIZE_SIZE(ObColumnSchemaV2)
               udt_set_id_,
               sub_type_,
               skip_index_attr_,
-              lob_chunk_size_);
+              lob_chunk_size_,
+              local_session_vars_);
   return len;
 }
 
@@ -527,7 +542,8 @@ int64_t ObColumnSchemaV2::to_string(char *buf, const int64_t buf_len) const
     K_(sub_type),
     K_(skip_index_attr),
     K_(lob_chunk_size),
-    KPC_(column_ref_idxs));
+    KPC_(column_ref_idxs),
+    K(local_session_vars_));
   J_OBJ_END();
   return pos;
 }

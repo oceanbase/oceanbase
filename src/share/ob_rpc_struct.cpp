@@ -2246,7 +2246,8 @@ OB_DEF_SERIALIZE(ObAlterTableArg)
       need_rebuild_trigger_,
       foreign_key_checks_,
       is_add_to_scheduler_,
-      inner_sql_exec_addr_);
+      inner_sql_exec_addr_,
+      local_session_var_);
 
   return ret;
 }
@@ -2335,7 +2336,8 @@ OB_DEF_DESERIALIZE(ObAlterTableArg)
       need_rebuild_trigger_,
       foreign_key_checks_,
       is_add_to_scheduler_,
-      inner_sql_exec_addr_);
+      inner_sql_exec_addr_,
+      local_session_var_);
   return ret;
 }
 
@@ -2377,7 +2379,8 @@ OB_DEF_SERIALIZE_SIZE(ObAlterTableArg)
         need_rebuild_trigger_,
         foreign_key_checks_,
         is_add_to_scheduler_,
-        inner_sql_exec_addr_);
+        inner_sql_exec_addr_,
+        local_session_var_);
   }
 
   if (OB_FAIL(ret)) {
@@ -2765,7 +2768,8 @@ DEF_TO_STRING(ObCreateIndexArg)
        K_(nls_timestamp_format),
        K_(nls_timestamp_tz_format),
        K_(sql_mode),
-       K_(inner_sql_exec_addr));
+       K_(inner_sql_exec_addr),
+       K_(local_session_var));
   J_OBJ_END();
   return pos;
 }
@@ -2788,7 +2792,8 @@ OB_SERIALIZE_MEMBER((ObCreateIndexArg, ObIndexArg),
                     nls_timestamp_format_,
                     nls_timestamp_tz_format_,
                     sql_mode_,
-                    inner_sql_exec_addr_);
+                    inner_sql_exec_addr_,
+                    local_session_var_);
 
 bool ObAlterIndexArg::is_valid() const
 {
