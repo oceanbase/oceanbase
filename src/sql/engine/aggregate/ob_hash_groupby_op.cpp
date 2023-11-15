@@ -979,6 +979,9 @@ int ObHashGroupByOp::load_data()
     int64_t nth_dup_data = 0;
     bool last_group = false;
     bool insert_group_ht = false;
+    bool can_insert_ht = !is_dump_enabled
+                          || local_group_rows_.size() < MIN_INMEM_GROUPS
+                          || (!start_dump && !need_start_dump(input_rows, est_part_cnt, check_dump));
     do {
       // one-dup-data
       if (OB_FAIL(ret)) {
@@ -1012,9 +1015,7 @@ int ObHashGroupByOp::load_data()
           LOG_WARN("fail to process row", K(ret), KPC(exist_curr_gr_item));
         }
       } else {
-        if (!is_dump_enabled
-            || local_group_rows_.size() < MIN_INMEM_GROUPS
-            || (!start_dump && !need_start_dump(input_rows, est_part_cnt, check_dump))) {
+        if (can_insert_ht) {
           ++agged_row_cnt_;
           ++agged_group_cnt_;
           ObGroupRowItem *tmp_gr_item = NULL;
@@ -1940,6 +1941,11 @@ int ObHashGroupByOp::batch_process_duplicate_data(
   ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
   batch_info_guard.set_batch_size(child_brs.size_);
   MEMSET(is_dumped_, 0, sizeof(bool) * child_brs.size_);
+  bool can_insert_ht = NULL == bloom_filter
+                        && (!enable_dump_
+                        || local_group_rows_.size() < MIN_INMEM_GROUPS
+                        || process_check_dump
+                        || !need_start_dump(input_rows, est_part_cnt, force_check_dump));
   do {
     // firstly process duplicate data
     if (OB_FAIL(next_duplicate_data_permutation(nth_dup_data, last_group, &child_brs, insert_group_ht))) {
@@ -1976,11 +1982,7 @@ int ObHashGroupByOp::batch_process_duplicate_data(
           agged_row_cnt_++;
           LOG_DEBUG("exist item", K(gri_cnt_per_batch_), K(*exist_curr_gr_item),
             K(i), K(agged_row_cnt_));
-        } else if (NULL == bloom_filter
-                  && (!enable_dump_
-                  || local_group_rows_.size() < MIN_INMEM_GROUPS
-                  || process_check_dump
-                  || !need_start_dump(input_rows, est_part_cnt, force_check_dump))) {
+        } else if (can_insert_ht) {
           ++agged_row_cnt_;
           ++agged_group_cnt_;
           ObGroupRowItem *tmp_gr_item = NULL;
@@ -2030,7 +2032,6 @@ int ObHashGroupByOp::batch_process_duplicate_data(
                                     K(parts[part_idx]->datum_store_.get_row_cnt()), K(i));
           }
         }
-        force_check_dump = false;
       } // for end
       if (OB_SUCC(ret) && 0 < tmp_group_cnt) {
         if (OB_FAIL(group_store_.add_batch(dup_groupby_exprs_, eval_ctx_, *child_brs.skip_,
