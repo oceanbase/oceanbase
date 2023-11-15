@@ -129,7 +129,7 @@ int ObDupTableLogDumpIterator::dump_dup_table_log()
             }
             break;
           }
-          case DupTableLogEntryType::DuptableStatLog: {
+          case DupTableLogEntryType::DupTableStatLog: {
             if (OB_FAIL(iter_stat_log_(deser_pos + log_entry_size, deser_pos))) {
               DUP_TABLE_LOG(WARN, "iter dup table stat log failed", K(ret), K(deser_pos),
                             K(log_entry_size));

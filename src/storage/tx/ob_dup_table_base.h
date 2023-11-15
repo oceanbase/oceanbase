@@ -68,8 +68,17 @@ struct DupTableInterfaceStat
   int64_t dup_table_follower_read_tablet_not_exist_cnt_;
   int64_t dup_table_follower_read_tablet_not_ready_cnt_;
   int64_t dup_table_follower_read_lease_expired_cnt_;
+
   int64_t dup_table_redo_sync_succ_cnt_;
   int64_t dup_table_redo_sync_fail_cnt_;
+
+  int64_t dup_table_log_entry_cnt_;
+  int64_t dup_table_log_entry_total_size_;
+
+  int64_t dup_table_log_replay_total_time_;
+  int64_t dup_table_log_deser_total_time_;
+  int64_t dup_table_lease_log_sync_total_time_;
+  int64_t dup_table_tablet_log_sync_total_time_;
 
   void reset()
   {
@@ -77,17 +86,35 @@ struct DupTableInterfaceStat
     dup_table_follower_read_tablet_not_exist_cnt_ = 0;
     dup_table_follower_read_tablet_not_ready_cnt_ = 0;
     dup_table_follower_read_lease_expired_cnt_ = 0;
+
     dup_table_redo_sync_succ_cnt_ = 0;
     dup_table_redo_sync_fail_cnt_ = 0;
+
+    dup_table_log_entry_cnt_ = 0;
+    dup_table_log_entry_total_size_ = 0;
+
+    dup_table_log_replay_total_time_ = 0;
+    dup_table_log_deser_total_time_ = 0;
+    dup_table_lease_log_sync_total_time_ = 0;
+    dup_table_tablet_log_sync_total_time_ = 0;
   }
 
   TO_STRING_KV(K(dup_table_follower_read_succ_cnt_),
                K(dup_table_follower_read_tablet_not_exist_cnt_),
-               K(dup_table_follower_read_lease_expired_cnt_),
+               K(dup_table_follower_read_tablet_not_ready_cnt_),
                K(dup_table_follower_read_lease_expired_cnt_),
                K(dup_table_redo_sync_succ_cnt_),
-               K(dup_table_redo_sync_fail_cnt_));
+               K(dup_table_redo_sync_fail_cnt_),
+               K(dup_table_log_entry_cnt_),
+               K(dup_table_log_entry_total_size_),
+               K(dup_table_log_replay_total_time_),
+               K(dup_table_log_deser_total_time_),
+               K(dup_table_lease_log_sync_total_time_),
+               K(dup_table_tablet_log_sync_total_time_));
 };
+
+#define DUP_LEASE_LIFE_PREFIX "[DupLeaseLife] "
+#define DUP_TABLET_LIFE_PREFIX "[DupTabletLife] "
 
 /*******************************************************
  *  Dup_Table LS Role State
@@ -881,9 +908,35 @@ enum class DupTableLogEntryType
 {
   TabletChangeLog = 1,
   LeaseListLog,
-  DuptableStatLog,
+  DupTableStatLog,
   MAX
+
 };
+
+static const char *get_entry_type_str(const DupTableLogEntryType &entry_type)
+{
+  const char *entry_str = nullptr;
+  switch (entry_type) {
+  case DupTableLogEntryType::TabletChangeLog: {
+    entry_str = "DupTabletLog";
+    break;
+  }
+  case DupTableLogEntryType::LeaseListLog: {
+    entry_str = "DupLeaseLog";
+    break;
+  }
+
+  case DupTableLogEntryType::DupTableStatLog: {
+    entry_str = "DupStatLog";
+    break;
+  }
+  default: {
+    entry_str = "UNKNOWN entry type";
+    break;
+  }
+  }
+  return entry_str;
+}
 
 typedef common::ObSEArray<DupTableLogEntryType, 2> DupLogTypeArray;
 
@@ -928,9 +981,10 @@ public:
                         logservice::ObLogHandler *log_handler,
                         ObDupTableLSCheckpoint *dup_ls_ckpt,
                         ObDupTableLSLeaseMgr *lease_mgr,
-                        ObLSDupTabletsMgr *tablets_mgr)
+                        ObLSDupTabletsMgr *tablets_mgr,
+                        DupTableInterfaceStat *interface_stat)
       : ls_id_(ls_id), block_buf_(nullptr), log_handler_(log_handler), dup_ls_ckpt_(dup_ls_ckpt),
-        lease_mgr_ptr_(lease_mgr), tablet_mgr_ptr_(tablets_mgr)
+        lease_mgr_ptr_(lease_mgr), tablet_mgr_ptr_(tablets_mgr), interface_stat_ptr_(interface_stat)
   {
     reset();
   }
@@ -968,8 +1022,8 @@ public:
                K(logging_lsn_));
 
 private:
-  static const int64_t MAX_LOG_BLOCK_SIZE ;
-  static const int64_t RESERVED_LOG_HEADER_SIZE ; //100 Byte
+  static const int64_t MAX_LOG_BLOCK_SIZE;
+  static const int64_t RESERVED_LOG_HEADER_SIZE; // 100 Byte
   int prepare_serialize_log_entry_(int64_t &max_ser_size, DupLogTypeArray &type_array);
   int serialize_log_entry_(const int64_t max_ser_size, const DupLogTypeArray &type_array);
   int deserialize_log_entry_();
@@ -979,13 +1033,13 @@ private:
 private:
   void after_submit_log(const bool submit_result, const bool for_replay);
 
-
 #define LOG_OPERATOR_INIT_CHECK                                                                  \
   if (OB_SUCC(ret)) {                                                                            \
-    if (OB_ISNULL(log_handler_) || OB_ISNULL(lease_mgr_ptr_) || OB_ISNULL(tablet_mgr_ptr_)) {    \
+    if (OB_ISNULL(log_handler_) || OB_ISNULL(lease_mgr_ptr_) || OB_ISNULL(tablet_mgr_ptr_)       \
+        || OB_ISNULL(interface_stat_ptr_)) {                                                     \
       ret = OB_NOT_INIT;                                                                         \
       DUP_TABLE_LOG(ERROR, "invalid log operator", K(ret), KP(log_handler_), KP(lease_mgr_ptr_), \
-                    KP(tablet_mgr_ptr_));                                                        \
+                    KP(tablet_mgr_ptr_), KP(interface_stat_ptr_));                               \
     }                                                                                            \
   }
 
@@ -1005,6 +1059,8 @@ private:
 
   ObDupTableLSLeaseMgr *lease_mgr_ptr_;
   ObLSDupTabletsMgr *tablet_mgr_ptr_;
+
+  DupTableInterfaceStat *interface_stat_ptr_;
 
   DupTabletSetIDArray logging_tablet_set_ids_;
   DupTableLeaseItemArray logging_lease_addrs_;
@@ -1028,7 +1084,6 @@ private:
   uint64_t log_entry_count_;
   uint64_t total_log_entry_wait_time_;
 };
-
 /*******************************************************
  *  Dup_Table Msg
  *******************************************************/

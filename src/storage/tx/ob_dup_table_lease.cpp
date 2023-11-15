@@ -86,7 +86,7 @@ int ObDupTableLSLeaseMgr::recive_lease_request(const ObDupTableLeaseRequest &lea
     if (OB_HASH_NOT_EXIST != ret) {
       DUP_TABLE_LOG(WARN, "get from lease_req_cache_ failed", K(ret), K(lease_req));
     } else {
-      DUP_TABLE_LOG(INFO, "first lease request from new dup_table follower", K(ret), K(lease_req));
+      DUP_TABLE_LOG(INFO, "first lease request from the new dup_table follower", K(ret), K(lease_req));
     }
   } else if (tmp_lease_info.cache_lease_req_.is_ready()) {
     DUP_TABLE_LOG(INFO, "leader lease info is logging which can not recive new lease request",
@@ -105,7 +105,7 @@ int ObDupTableLSLeaseMgr::recive_lease_request(const ObDupTableLeaseRequest &lea
     }
   }
 
-  DUP_TABLE_LOG(INFO, "cache lease request", K(ret), K(leader_lease_map_.size()), K(lease_req),
+  DUP_TABLE_LOG(DEBUG, "cache lease request", K(ret), K(leader_lease_map_.size()), K(lease_req),
                 K(tmp_lease_info));
   return ret;
 }
@@ -135,17 +135,20 @@ int ObDupTableLSLeaseMgr::prepare_serialize(int64_t &max_ser_size,
         if (OB_FAIL(hash_for_each_remove(tmp_addr, leader_lease_map_, req_handler))) {
           DUP_TABLE_LOG(WARN, "handle lease requests failed", K(ret));
         }
+
+        if (OB_SUCC(ret) && req_handler.get_renew_lease_count() > 0) {
+          DUP_TABLE_LOG(DEBUG, "renew lease list in the log", K(ret), K(req_handler),
+                        K(lease_header_array), K(max_ser_size), K(loop_start_time),
+                        K(last_lease_req_cache_handle_time_));
+        } else if (OB_SUCC(ret) && req_handler.get_renew_lease_count() == 0) {
+          req_handler.clear_ser_content();
+        }
+
         if (req_handler.get_error_ret() != OB_SUCCESS) {
-          lease_header_array.reuse();
+          req_handler.clear_ser_content();
           ret = req_handler.get_error_ret();
         } else {
           max_ser_size += req_handler.get_max_ser_size();
-        }
-
-        if (OB_SUCC(ret) && req_handler.get_renew_lease_count() > 0) {
-          DUP_TABLE_LOG(INFO, "renew lease list in the log", K(ret), K(req_handler),
-                        K(lease_header_array), K(max_ser_size), K(loop_start_time),
-                        K(last_lease_req_cache_handle_time_));
         }
 
         if (OB_SUCC(ret) && req_handler.get_max_ser_size() > 0) {
@@ -233,6 +236,10 @@ int ObDupTableLSLeaseMgr::deserialize_lease_log(DupTableLeaseItemArray &lease_he
         }
       }
     }
+
+    if (OB_SUCC(ret)) {
+      pos = tmp_pos;
+    }
   }
   return ret;
 }
@@ -292,6 +299,11 @@ int ObDupTableLSLeaseMgr::lease_log_synced(const bool sync_result,
               // reset req cache to invalid state
               leader_lease_ptr->cache_lease_req_.set_invalid();
             }
+            if (!for_replay) {
+              DUP_TABLE_LOG(
+                  INFO, DUP_LEASE_LIFE_PREFIX "update lease expired ts in the leader_lease_map",
+                  K(ret), K(lease_log_scn), K(for_replay), K(lease_owner), KPC(leader_lease_ptr));
+            }
           }
         } else {
           // if log sync failed, allow renew lease req
@@ -314,36 +326,6 @@ int ObDupTableLSLeaseMgr::lease_log_synced(const bool sync_result,
   return ret;
 }
 
-// int ObDupTableLSLeaseMgr::log_cb_success()
-// {
-//   int ret = OB_SUCCESS;
-//   SpinWLockGuard guard(lease_lock_);
-//
-//   const bool is_success = true;
-//   LeaseDurableHandler durable_handler(is_success);
-//
-//   if (OB_FAIL(hash_for_each_update(leader_lease_map_, durable_handler))) {
-//     DUP_TABLE_LOG(WARN, "update durable lease info", K(ret), K(is_success));
-//   }
-//
-//   return ret;
-// }
-//
-// int ObDupTableLSLeaseMgr::log_cb_failure()
-// {
-//   int ret = OB_SUCCESS;
-//   SpinWLockGuard guard(lease_lock_);
-//
-//   const bool is_success = false;
-//   LeaseDurableHandler durable_handler(is_success);
-//
-//   if (OB_FAIL(hash_for_each_update(leader_lease_map_, durable_handler))) {
-//     DUP_TABLE_LOG(WARN, "update durable lease info", K(ret), K(is_success));
-//   }
-//
-//   return ret;
-// }
-
 bool ObDupTableLSLeaseMgr::can_grant_lease_(const common::ObAddr &addr,
                                             const share::SCN &local_max_applyed_scn,
                                             const DupTableLeaderLeaseInfo &lease_info)
@@ -355,12 +337,14 @@ bool ObDupTableLSLeaseMgr::can_grant_lease_(const common::ObAddr &addr,
   DupTableTsInfo cache_ts_info;
   if (OB_FAIL(dup_ls_handle_ptr_->get_cache_ts_info(addr, cache_ts_info))) {
     lease_success = false;
-    DUP_TABLE_LOG(WARN, "Not allowed to acquire lease - get cache ts info failed", K(ret), K(ls_id),
-                  K(addr), K(cache_ts_info), K(local_max_applyed_scn), K(lease_info));
+    DUP_TABLE_LOG(
+        WARN, DUP_LEASE_LIFE_PREFIX "Not allowed to acquire lease - get cache ts info failed",
+        K(ret), K(ls_id), K(addr), K(cache_ts_info), K(local_max_applyed_scn), K(lease_info));
   } else if (!cache_ts_info.max_replayed_scn_.is_valid() || !local_max_applyed_scn.is_valid()) {
     lease_success = false;
-    DUP_TABLE_LOG(WARN, "Not allowed to acquire lease - invalid applyed scn", K(ret), K(ls_id),
-                  K(addr), K(cache_ts_info), K(local_max_applyed_scn), K(lease_info));
+    DUP_TABLE_LOG(WARN, DUP_LEASE_LIFE_PREFIX "Not allowed to acquire lease - invalid applyed scn",
+                  K(ret), K(ls_id), K(addr), K(cache_ts_info), K(local_max_applyed_scn),
+                  K(lease_info));
   } else {
 
     uint64_t local_max_applied_ts = local_max_applyed_scn.get_val_for_gts();
@@ -370,12 +354,18 @@ bool ObDupTableLSLeaseMgr::can_grant_lease_(const common::ObAddr &addr,
     if (local_max_applied_ts > follower_replayed_ts
         && local_max_applied_ts - follower_replayed_ts >= MAX_APPLIED_SCN_INTERVAL) {
       lease_success = false;
-      DUP_TABLE_LOG(WARN, "Not allowed to acquire lease - slow replay", K(ret), K(ls_id), K(addr),
-                    K(local_max_applied_ts), K(follower_replayed_ts),
+      DUP_TABLE_LOG(WARN, DUP_LEASE_LIFE_PREFIX "Not allowed to acquire lease - slow replay",
+                    K(ret), K(ls_id), K(addr), K(local_max_applied_ts), K(follower_replayed_ts),
                     K(local_max_applied_ts - follower_replayed_ts), K(MAX_APPLIED_SCN_INTERVAL),
                     K(cache_ts_info), K(lease_info));
     }
   }
+
+  if (lease_success) {
+    DUP_TABLE_LOG(INFO, DUP_LEASE_LIFE_PREFIX "Lease will be granted to the follower", K(ret),
+                  K(addr), K(local_max_applyed_scn), K(lease_info), K(cache_ts_info));
+  }
+
   return lease_success;
 }
 
@@ -449,7 +439,7 @@ int ObDupTableLSLeaseMgr::follower_handle()
         DUP_TABLE_LOG(WARN, "post lease request failed", K(ret), K(leader_addr));
       } else {
         last_lease_req_post_time_ = loop_start_time;
-        DUP_TABLE_LOG(INFO, "post lease request success", K(ret), K(leader_addr), K(req),
+        DUP_TABLE_LOG(DEBUG, "post lease request success", K(ret), K(leader_addr), K(req),
                       K(cur_ls_id));
       }
     }
@@ -500,8 +490,9 @@ int ObDupTableLSLeaseMgr::follower_try_acquire_lease(const share::SCN &lease_log
           follower_lease_info_.durable_lease_.request_ts_
           + follower_lease_info_.durable_lease_.lease_interval_us_;
 
-      DUP_TABLE_LOG(INFO, "The follower can get new lease from this lease log", K(ret), K(ls_id),
-                    K(lease_log_scn), K(self_addr), K(acquire_new_lease), K(follower_lease_info_));
+      DUP_TABLE_LOG(
+          INFO, DUP_LEASE_LIFE_PREFIX "The follower can get new lease from this lease log", K(ret),
+          K(ls_id), K(lease_log_scn), K(self_addr), K(acquire_new_lease), K(follower_lease_info_));
     } else {
       DUP_TABLE_LOG(DEBUG, "No new lease in this lease log", K(ret), K(ls_id), K(lease_log_scn),
                     K(self_addr), K(follower_lease_info_));
@@ -785,33 +776,6 @@ bool ObDupTableLSLeaseMgr::LeaseReqCacheHandler::operator()(
   return will_remove;
 }
 
-// int ObDupTableLSLeaseMgr::LeaseDurableHandler::operator()(
-//     common::hash::HashMapPair<common::ObAddr, DupTableLeaderLeaseInfo> &hash_pair)
-// {
-//   int ret = OB_SUCCESS;
-//
-//   if (hash_pair.second.cache_lease_req_.is_ready()) {
-//     if (is_success_) {
-//       // set durable lease info
-//       hash_pair.second.confirmed_lease_info_.request_ts_ =
-//           hash_pair.second.cache_lease_req_.request_ts_;
-//
-//       hash_pair.second.confirmed_lease_info_.lease_interval_us_ =
-//           hash_pair.second.cache_lease_req_.lease_interval_us_;
-//
-//       hash_pair.second.lease_expired_ts_ =
-//           hash_pair.second.cache_lease_req_.lease_acquire_ts_
-//           + hash_pair.second.cache_lease_req_.lease_interval_us_;
-//     }
-//     hash_pair.second.cache_lease_req_.reset();
-//     // avoid serializing older lease request than previous log
-//     hash_pair.second.cache_lease_req_.request_ts_ =
-//         hash_pair.second.confirmed_lease_info_.request_ts_;
-//   }
-//
-//   return ret;
-// }
-
 int ObDupTableLSLeaseMgr::GetLeaseValidAddrFunctor::operator()(
     common::hash::HashMapPair<common::ObAddr, DupTableLeaderLeaseInfo> &hash_pair)
 {
@@ -965,159 +929,6 @@ int ObDupTableLSLeaseMgr::LeaderLeaseMgrStatFunctor::operator()(
 
   return ret;
 }
-
-// OB_DEF_SERIALIZE(DupTableLeaderLeaseInfo)
-// {
-//   int ret = OB_SUCCESS;
-//   int64_t tmp_pos = pos;
-//
-//   int64_t tmp_request_ts_ = 0;
-//   int64_t tmp_lease_interval = 0;
-//
-//   if (cache_lease_req_.is_ready()) {
-//     tmp_request_ts_ = cache_lease_req_.request_ts_;
-//     tmp_lease_interval = cache_lease_req_.lease_interval_us_;
-//   } else {
-//     tmp_request_ts_ = confirmed_lease_info_.request_ts_;
-//     tmp_lease_interval = confirmed_lease_info_.lease_interval_us_;
-//   }
-//
-//   if (OB_FAIL(common::serialization::encode(buf, buf_len, tmp_pos, tmp_request_ts_))) {
-//     DUP_TABLE_LOG(WARN, "encode request_ts failed", K(ret));
-//   } else if (OB_FAIL(common::serialization::encode(buf, buf_len, tmp_pos, tmp_lease_interval))) {
-//     DUP_TABLE_LOG(WARN, "encode lease_interval failed", K(ret));
-//   } else {
-//     pos = tmp_pos;
-//   }
-//
-//   return ret;
-// }
-//
-// OB_DEF_DESERIALIZE(DupTableLeaderLeaseInfo)
-// {
-//   int ret = OB_SUCCESS;
-//   int64_t tmp_pos = pos;
-//
-//   if (OB_FAIL(common::serialization::decode(buf, data_len, tmp_pos,
-//                                             confirmed_lease_info_.request_ts_))) {
-//     DUP_TABLE_LOG(WARN, "decode request_ts failed", K(ret));
-//   } else if (OB_FAIL(common::serialization::decode(buf, data_len, tmp_pos,
-//                                                    confirmed_lease_info_.lease_interval_us_))) {
-//     DUP_TABLE_LOG(WARN, "decode lease_interval failed", K(ret));
-//   } else {
-//     cache_lease_req_.request_ts_ = confirmed_lease_info_.request_ts_;
-//     pos = tmp_pos;
-//   }
-//
-//   return ret;
-// }
-//
-// OB_DEF_SERIALIZE_SIZE(DupTableLeaderLeaseInfo)
-// {
-//   int64_t total_length = 0;
-//
-//   int64_t tmp_request_ts_ = 0;
-//   int64_t tmp_lease_interval = 0;
-//
-//   if (cache_lease_req_.is_ready()) {
-//     tmp_request_ts_ = cache_lease_req_.request_ts_;
-//     tmp_lease_interval = cache_lease_req_.lease_interval_us_;
-//   } else {
-//     tmp_request_ts_ = confirmed_lease_info_.request_ts_;
-//     tmp_lease_interval = confirmed_lease_info_.lease_interval_us_;
-//   }
-//
-//   total_length += common::serialization::encoded_length(tmp_request_ts_);
-//   total_length += common::serialization::encoded_length(tmp_lease_interval);
-//
-//   return total_length;
-// }
-
-// int ObDupTableLSLeaseMgr::LeaderLeaseInfoSerCallBack::operator()(
-//     const common::hash::HashMapPair<common::ObAddr, DupTableLeaderLeaseInfo> &hash_pair)
-// {
-//   int ret = OB_SUCCESS;
-//
-//   if (OB_FAIL(hash_pair.first.serialize(buf_, buf_len_, pos_))) {
-//     DUP_TABLE_LOG(WARN, "serialize key(addr) failed", K(ret), K(hash_pair.first));
-//   } else if (OB_FAIL(hash_pair.second.serialize(buf_, buf_len_, pos_))) {
-//     DUP_TABLE_LOG(WARN, "serialize val(leader_lease_info) failed", K(ret), K(hash_pair.first));
-//   }
-//
-//   return ret;
-// }
-//
-// int ObDupTableLSLeaseMgr::LeaderLeaseInfoDeSerCallBack::operator()(
-//     DupTableLeaderLeaseMap &lease_map)
-// {
-//   int ret = OB_SUCCESS;
-//
-//   common::ObAddr lease_addr;
-//   DupTableLeaderLeaseInfo lease_info;
-//
-//   if (OB_FAIL(lease_addr.deserialize(buf_, buf_len_, pos_))) {
-//     DUP_TABLE_LOG(WARN, "deserialize key(addr) failed", K(ret), K(lease_addr));
-//   } else if (OB_FAIL(lease_info.deserialize(buf_, buf_len_, pos_))) {
-//     DUP_TABLE_LOG(WARN, "deserialize val(leader_lease_info) failed", K(ret), K(lease_addr));
-//   } else if (OB_FAIL(lease_map.set_refactored(lease_addr, lease_info, 1))) {
-//     DUP_TABLE_LOG(WARN, "insert into lease_map failed", K(ret));
-//   }
-//
-//   return ret;
-// }
-//
-// int64_t ObDupTableLSLeaseMgr::LeaderLeaseInfoGetSizeCallBack::operator()(
-//     const common::hash::HashMapPair<common::ObAddr, DupTableLeaderLeaseInfo> &hash_pair)
-// {
-//   int64_t total_length = 0;
-//   total_length += hash_pair.first.get_serialize_size();
-//   total_length += hash_pair.second.get_serialize_size();
-//   return total_length;
-// }
-//
-// OB_DEF_SERIALIZE(ObDupTableLSLeaseMgr)
-// {
-//   int ret = OB_SUCCESS;
-//
-//   SpinRLockGuard guard(lease_lock_);
-//
-//   LeaderLeaseInfoSerCallBack ser_cb(buf, buf_len, pos);
-//
-//   if (OB_FAIL(hash_for_each_serialize(leader_lease_map_, ser_cb))) {
-//     DUP_TABLE_LOG(WARN, "serialize leader_lease_map failed", K(ret));
-//   } else {
-//     pos = ser_cb.get_pos();
-//   }
-//   return ret;
-// }
-//
-// OB_DEF_DESERIALIZE(ObDupTableLSLeaseMgr)
-// {
-//   int ret = OB_SUCCESS;
-//   SpinWLockGuard guard(lease_lock_);
-//
-//   LeaderLeaseInfoDeSerCallBack deser_cb(buf, data_len, pos);
-//
-//   if (OB_FAIL(leader_lease_map_.clear())) {
-//     DUP_TABLE_LOG(WARN, "clear leader_lease_map_ failed", K(ret));
-//   } else if (OB_FAIL(hash_for_each_deserialize(leader_lease_map_, deser_cb))) {
-//     DUP_TABLE_LOG(WARN, "serialize leader_lease_map failed", K(ret));
-//   } else {
-//     pos = deser_cb.get_pos();
-//   }
-//   return ret;
-// }
-//
-// OB_DEF_SERIALIZE_SIZE(ObDupTableLSLeaseMgr)
-// {
-//   int64_t serialize_size = 0;
-//   SpinRLockGuard guard(lease_lock_);
-//
-//   LeaderLeaseInfoGetSizeCallBack get_size_cb;
-//   serialize_size += hash_for_each_serialize_size(leader_lease_map_, get_size_cb);
-//
-//   return serialize_size;
-// }
 
 } // namespace transaction
 } // namespace oceanbase
