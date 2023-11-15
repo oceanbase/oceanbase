@@ -14133,8 +14133,7 @@ int ObPLResolver::resolve_sys_func_access(ObObjAccessIdent &access_ident,
     }
     if (OB_FAIL(ret)) {
     } else if (!access_ident.sys_func_expr_->get_result_type().is_xml_sql_type()
-                && !(access_ident.sys_func_expr_->get_result_type().is_ext()
-                     && access_ident.sys_func_expr_->get_result_type().get_udt_id() == T_OBJ_XML)) {
+                && !(access_ident.sys_func_expr_->get_result_type().is_ext())) {
       ret = OB_ERR_NOT_OBJ_REF;
       LOG_WARN("unsupported sys func ident",
         K(ret), K(access_ident), K(access_ident.sys_func_expr_->get_result_type()),
