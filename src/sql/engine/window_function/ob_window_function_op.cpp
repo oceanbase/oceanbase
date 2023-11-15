@@ -1702,8 +1702,12 @@ int ObWindowFunctionOp::compute_push_down_by_pass(WinFuncCell &wf_cell, common::
     LOG_WARN("wf_cell is not aggr", K(ret));
   } else {
     AggrCell *aggr_func = static_cast<AggrCell *>(&wf_cell);
-    if (OB_FAIL(aggr_func->aggr_processor_.fast_single_row_agg(
-                eval_ctx_, wf_cell.wf_info_.aggr_info_))) {
+    if (OB_UNLIKELY(1 != aggr_func->aggr_processor_.get_aggr_infos().count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("aggr infos count mismatch", K(ret),
+                K(aggr_func->aggr_processor_.get_aggr_infos().count()));
+    } else if (OB_FAIL(aggr_func->aggr_processor_.fast_single_row_agg(
+                eval_ctx_, aggr_func->aggr_processor_.get_aggr_infos().at(0)))) {
       LOG_WARN("fast_single_row_one_aggr_info failed", K(ret));
     } else {
       ObDatum &result_datum = wf_cell.wf_info_.aggr_info_.expr_->locate_expr_datum(eval_ctx_);
