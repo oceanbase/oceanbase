@@ -512,14 +512,35 @@ int ObLogTableScan::replace_index_back_pushdown_filters(ObRawExprReplacer &repla
   return ret;
 }
 
+int ObLogTableScan::has_nonpushdown_filter(bool &has_npd_filter)
+{
+  int ret = OB_SUCCESS;
+  has_npd_filter = false;
+  ObArray<ObRawExpr*> nonpushdown_filters;
+  ObArray<ObRawExpr*> scan_pushdown_filters;
+  ObArray<ObRawExpr*> lookup_pushdown_filters;
+  if (OB_FAIL(extract_pushdown_filters(nonpushdown_filters,
+                                       scan_pushdown_filters,
+                                       lookup_pushdown_filters,
+                                       true /*ignore pushdown filters*/))) {
+    LOG_WARN("extract pushdnow filters failed", K(ret));
+  } else if (!nonpushdown_filters.empty()) {
+    has_npd_filter = true;
+  }
+  return ret;
+}
+
 int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_filters,
                                              ObIArray<ObRawExpr*> &scan_pushdown_filters,
-                                             ObIArray<ObRawExpr*> &lookup_pushdown_filters)
+                                             ObIArray<ObRawExpr*> &lookup_pushdown_filters,
+                                             bool ignore_pd_filter /*= false */)
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObRawExpr*> &filters = get_filter_exprs();
   const auto &flags = get_filter_before_index_flags();
-  if (get_contains_fake_cte() || is_virtual_table(get_ref_table_id()) || EXTERNAL_TABLE == get_table_type()) {
+  if (get_contains_fake_cte() ||
+      is_virtual_table(get_ref_table_id()) ||
+      EXTERNAL_TABLE == get_table_type()) {
     //all filters can not push down to storage
     if (OB_FAIL(nonpushdown_filters.assign(filters))) {
       LOG_WARN("store non-pushdown filters failed", K(ret));
@@ -543,10 +564,13 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
         if (OB_FAIL(nonpushdown_filters.push_back(filters.at(i)))) {
           LOG_WARN("push UDF filter store non-pushdown filter failed", K(ret), K(i));
         }
-      } else if (filters.at(i)->has_flag(CNT_DYNAMIC_USER_VARIABLE)) {
+      } else if (filters.at(i)->has_flag(CNT_DYNAMIC_USER_VARIABLE)
+              || filters.at(i)->has_flag(CNT_ASSIGN_EXPR)) {
         if (OB_FAIL(nonpushdown_filters.push_back(filters.at(i)))) {
           LOG_WARN("push variable assign filter store non-pushdown filter failed", K(ret), K(i));
         }
+      } else if (ignore_pd_filter) {
+        //ignore_pd_filter: only extract non-pushdown filters, ignore others
       } else if (!get_index_back()) {
         if (OB_FAIL(scan_pushdown_filters.push_back(filters.at(i)))) {
           LOG_WARN("store pushdown filter failed", K(ret));

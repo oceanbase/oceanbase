@@ -479,18 +479,16 @@ int ObDASRef::close_all_task()
     }
     ret = COVER_SUCC(last_end_ret);
 
-    if (OB_SUCC(ret)) {
-      if (OB_ISNULL(session = exec_ctx_.get_my_session())) {
-        ret = OB_NOT_INIT;
-        LOG_WARN("session is nullptr", K(ret));
-      }
+    if (OB_ISNULL(session = exec_ctx_.get_my_session())) {
+      ret = COVER_SUCC(OB_NOT_INIT);
+      LOG_WARN("session is nullptr", K(ret));
     }
     bool merge_trans_result_fail = (ret != OB_SUCCESS);
     // any fail during merge trans_result,
     // need set trans_result incomplete, in order to
     // indicate some transaction participants info unknown
     if (merge_trans_result_fail && OB_NOT_NULL(session)) {
-      LOG_WARN("close all task fail, set trans_result to incomplete");
+      LOG_WARN("close all task fail, set trans_result to incomplete", K(ret));
       session->get_trans_result().set_incomplete();
     }
     batched_tasks_.destroy();
