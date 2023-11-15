@@ -1123,12 +1123,11 @@ int ObPartTransCtx::get_gts_callback(const MonotonicTs srr,
                                      const SCN &gts,
                                      const MonotonicTs receive_gts_ts)
 {
-  TRANS_LOG(DEBUG, "ObPartTransCtx get_gts_callback begin", KPC(this));
   int ret = OB_SUCCESS;
   bool need_revert_ctx = false;
   {
-    // TRANS_LOG(INFO, "get_gts_callback begin", K(*this));
     CtxLockGuard guard(lock_);
+    TRANS_LOG(DEBUG, "ObPartTransCtx get_gts_callback begin", KPC(this));
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       TRANS_LOG(WARN, "ObPartTransCtx not inited", K(ret));
@@ -1187,23 +1186,26 @@ int ObPartTransCtx::get_gts_callback(const MonotonicTs srr,
       need_revert_ctx = true;
     }
     REC_TRANS_TRACE_EXT2(tlog_, get_gts_callback, OB_Y(ret), OB_ID(srr), srr.mts_, OB_Y(gts),  OB_ID(ref), get_ref());
-  }
-  // before revert self
-  if (OB_FAIL(ret)) {
-    if (OB_EAGAIN == ret) {
-      TRANS_LOG(WARN, "ObPartTransCtx::get_gts_callback - retry gts task by TsMgr", KR(ret), K(*this),
-                K(gts));
-    } else {
-      TRANS_LOG(WARN, "ObPartTransCtx::get_gts_callback", KR(ret), K(*this), K(gts));
-      if (sub_state_.is_gts_waiting()) {
-        sub_state_.clear_gts_waiting();
+
+    // before revert self
+    if (OB_FAIL(ret)) {
+      if (OB_EAGAIN == ret) {
+        TRANS_LOG(WARN, "ObPartTransCtx::get_gts_callback - retry gts task by TsMgr", KR(ret), K(*this),
+                  K(gts));
+      } else {
+        TRANS_LOG(WARN, "ObPartTransCtx::get_gts_callback", KR(ret), K(*this), K(gts));
+        if (sub_state_.is_gts_waiting()) {
+          sub_state_.clear_gts_waiting();
+        }
       }
     }
+    TRANS_LOG(DEBUG, "ObPartTransCtx get_gts_callback end", KPC(this));
   }
+
   if (need_revert_ctx) {
     ret = ls_tx_ctx_mgr_->revert_tx_ctx_without_lock(this);
   }
-  TRANS_LOG(DEBUG, "ObPartTransCtx get_gts_callback end", KPC(this));
+
   return ret;
 }
 
@@ -1265,19 +1267,21 @@ int ObPartTransCtx::gts_elapse_callback(const MonotonicTs srr, const SCN &gts)
       need_revert_ctx = true;
     }
     REC_TRANS_TRACE_EXT2(tlog_, gts_elapse_callback, OB_Y(ret), OB_ID(srr), srr.mts_, OB_Y(gts),  OB_ID(ref), get_ref());
-  }
-  // before revert self
-  if (OB_FAIL(ret)) {
-    if (OB_EAGAIN == ret) {
-      TRANS_LOG(WARN, "ObPartTransCtx::gts_elapse_callback - retry gts task by TsMgr", KR(ret), K(*this),
-                K(gts));
-    } else {
-      TRANS_LOG(WARN, "ObPartTransCtx::gts_elapse_callback", KR(ret), K(*this), K(gts));
-      if (sub_state_.is_gts_waiting()) {
-        sub_state_.clear_gts_waiting();
+
+      // before revert self
+    if (OB_FAIL(ret)) {
+      if (OB_EAGAIN == ret) {
+        TRANS_LOG(WARN, "ObPartTransCtx::gts_elapse_callback - retry gts task by TsMgr", KR(ret), K(*this),
+                  K(gts));
+      } else {
+        TRANS_LOG(WARN, "ObPartTransCtx::gts_elapse_callback", KR(ret), K(*this), K(gts));
+        if (sub_state_.is_gts_waiting()) {
+          sub_state_.clear_gts_waiting();
+        }
       }
     }
   }
+
   if (need_revert_ctx) {
     ret = ls_tx_ctx_mgr_->revert_tx_ctx_without_lock(this);
   }
