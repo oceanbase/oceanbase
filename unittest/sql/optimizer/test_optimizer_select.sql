@@ -144,7 +144,7 @@ select /*+no_use_px*/ t1.c1 from t1 left join t2 t on t1.c1=t.c1,t2 left join t3
 
 # case 39 const predicates
 select * from t1 where true;
-# TODO shengle bug:
+# TODO shengle bug: issue/37559700
 # select * from t1 where 1=2;
 # select * from t1, t2 where 1+1=2 and t1.c1=t2.c1+1;
 select * from t1 left join t2 t on t1.c1=t.c1 where false;
@@ -962,7 +962,7 @@ Select distinct 1, 1 + (@var:=1) from t7;
 # A(remote) + B(remote) on same server, generate remote plan
 select t1.c2 + t2.c1 from t1, t2 where t1.c1 = t2.c2 and t1.c1 and t1.c1 = 1 and t2.c1 = 1;
 
-# UNION and onetime expr related bug fix: k3.alibaba-inc.com/issue/8081505
+# UNION and onetime expr related bug fix:
 (select 'b') union select cast((select 'a') as char(20));
 select cast((select 'a' from dual order by 1 limit 100) as char(20)) union (select 'b') union select cast((select 'a' from dual order by 1 limit 100) as char(20));
 (select (select b from t12) from t3) union (select c3 from t3);
