@@ -48,7 +48,7 @@ public:
   void set_service_type(const ServiceType service_type) { service_type_ = service_type; }
   ServiceType get_service_type() const { return service_type_; }
   int handle_request(const ObGtsRequest &request, obrpc::ObGtsRpcResult &result);
-  int get_number(const int64_t base_id, int64_t &gts);
+  int get_number(int64_t &gts);
   void get_virtual_info(int64_t &ts_value,
                         ServiceType &service_type,
                         common::ObRole &role,

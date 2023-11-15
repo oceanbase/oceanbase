@@ -289,7 +289,7 @@ int ObGtsSource::get_gts_from_local_timestamp_service_(ObAddr &leader,
   if (OB_ISNULL(timestamp_access)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "timestamp access is null", KR(ret), KP(timestamp_access), K_(tenant_id), K(leader));
-  } else if (OB_FAIL(timestamp_access->get_number(ObTimeUtility::current_time_ns(), tmp_gts))) {
+  } else if (OB_FAIL(timestamp_access->get_number(tmp_gts))) {
     if (EXECUTE_COUNT_PER_SEC(100)) {
       TRANS_LOG(WARN, "global_timestamp_service get gts fail", K(leader), K(tmp_gts), KR(ret));
     }
