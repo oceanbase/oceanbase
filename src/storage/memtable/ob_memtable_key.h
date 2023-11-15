@@ -174,7 +174,9 @@ public:
       if (common::ObNullType != value.get_type()
           && common::ObExtendType != value.get_type()
           && schema_meta.get_type() != value.get_type()
-          && !common::is_match_alter_integer_column_online_ddl_rules(schema_meta, value.get_meta())) {
+          && !(lib::is_mysql_mode()
+            && (common::is_match_alter_integer_column_online_ddl_rules(schema_meta, value.get_meta())
+              || common::is_match_alter_integer_column_online_ddl_rules(value.get_meta(), schema_meta)))) {
         TRANS_LOG(WARN, "data/schema type does not match",
                   "index", i,
                   "data_type", value.get_type(),
