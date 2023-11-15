@@ -154,6 +154,18 @@ OB_INLINE static int get_skip_index_store_upper_size(
   return ret;
 }
 
+OB_INLINE static bool is_skip_index_black_list_type(const ObObjType &obj_type)
+{
+  return ob_is_json_tc(obj_type) || ob_is_geometry_tc(obj_type)
+      || ob_is_user_defined_sql_type(obj_type);
+}
+
+OB_INLINE static bool is_skip_index_while_list_type(const ObObjType &obj_type)
+{
+  const ObObjTypeClass tc = ob_obj_type_class(obj_type);
+  return (ObNullTC <= tc && tc <= ObLobTC) || ObDecimalIntTC == tc;
+}
+
 } // blocksstable
 } // oceanbase
 

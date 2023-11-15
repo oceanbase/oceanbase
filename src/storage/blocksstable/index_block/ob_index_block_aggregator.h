@@ -24,7 +24,7 @@ namespace blocksstable
 class ObIColAggregator
 {
 public:
-  ObIColAggregator() : can_aggregate_(true) {}
+  ObIColAggregator() : col_desc_(), can_aggregate_(true) {}
   virtual ~ObIColAggregator() {}
 
   virtual int init(const ObColDesc &col_desc, ObStorageDatum &result) = 0;
@@ -35,7 +35,9 @@ public:
   VIRTUAL_TO_STRING_KV(K_(can_aggregate));
 
   void set_not_aggregate() { can_aggregate_ = false; }
+  inline ObColDesc get_col_decs() const { return col_desc_; }
 protected:
+  int inner_init(const ObColDesc &col_desc, ObStorageDatum &result);
   static int copy_agg_datum(const ObDatum &src, ObDatum &dst);
   static bool need_set_not_aggregate(const ObObjType type, const ObDatum &datum)
   {
@@ -44,6 +46,7 @@ protected:
            (is_lob_storage(type) && !datum.is_null() && !datum.get_lob_data().in_row_);
   }
 protected:
+  ObColDesc col_desc_;
   bool can_aggregate_;
 };
 
@@ -67,7 +70,7 @@ private:
 class ObColMaxAggregator : public ObIColAggregator
 {
 public:
-  ObColMaxAggregator() : cmp_func_(nullptr), result_(nullptr), obj_type_(ObObjType::ObMaxType) {}
+  ObColMaxAggregator() : cmp_func_(nullptr), result_(nullptr) {}
   virtual ~ObColMaxAggregator() {}
 
   int init(const ObColDesc &col_desc, ObStorageDatum &result) override;
@@ -78,14 +81,13 @@ public:
 private:
   common::ObDatumCmpFuncType cmp_func_;
   ObStorageDatum *result_;
-  ObObjType obj_type_;
   DISALLOW_COPY_AND_ASSIGN(ObColMaxAggregator);
 };
 
 class ObColMinAggregator : public ObIColAggregator
 {
 public:
-  ObColMinAggregator() : cmp_func_(nullptr), result_(nullptr), obj_type_(ObObjType::ObMaxType) {}
+  ObColMinAggregator() : cmp_func_(nullptr), result_(nullptr) {}
   virtual ~ObColMinAggregator() {}
 
   int init(const ObColDesc &col_desc, ObStorageDatum &result) override;
@@ -96,7 +98,6 @@ public:
 private:
   common::ObDatumCmpFuncType cmp_func_;
   ObStorageDatum *result_;
-  ObObjType obj_type_;
   DISALLOW_COPY_AND_ASSIGN(ObColMinAggregator);
 };
 

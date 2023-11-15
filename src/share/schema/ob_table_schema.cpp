@@ -7190,8 +7190,7 @@ int ObTableSchema::check_skip_index_valid() const
       ret = OB_ERR_UNEXPECTED;
       LOG_USER_ERROR(OB_ERR_UNEXPECTED, "skip index on virtual generated column");
       LOG_WARN("unexpected skip index on virtual generated column", K(ret), KPC(column_schema));
-    } else if (OB_UNLIKELY(is_lob_storage(column_schema->get_meta_type().get_type()) &&
-        !ob_is_large_text(column_schema->get_meta_type().get_type()))) {
+    } else if (OB_UNLIKELY(is_skip_index_black_list_type(column_schema->get_meta_type().get_type()))) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "skip index on column with invalid column type");
       LOG_USER_ERROR(OB_NOT_SUPPORTED, ob_obj_type_str(column_schema->get_meta_type().get_type()));

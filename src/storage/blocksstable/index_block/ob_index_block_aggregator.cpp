@@ -46,6 +46,9 @@ int ObColNullCountAggregator::init(const ObColDesc &col_desc, ObStorageDatum &re
   } else {
     null_count_ = 0;
     result_ = &result;
+    if (is_skip_index_black_list_type(col_desc.col_type_.get_type())) {
+      set_not_aggregate();
+    }
   }
   return ret;
 }
@@ -53,7 +56,11 @@ int ObColNullCountAggregator::init(const ObColDesc &col_desc, ObStorageDatum &re
 void ObColNullCountAggregator::reuse()
 {
   null_count_ = 0;
-  can_aggregate_ = true;
+  if (is_skip_index_black_list_type(col_desc_.col_type_.get_type())) {
+    set_not_aggregate();
+  } else {
+    can_aggregate_ = true;
+  }
 }
 
 int ObColNullCountAggregator::eval(const ObStorageDatum &datum, const bool is_data)
@@ -101,11 +108,11 @@ int ObColMaxAggregator::init(const ObColDesc &col_desc, ObStorageDatum &result)
     cmp_func_ = basic_funcs->null_first_cmp_;
     result_ = &result;
     result_->set_null();
-    if (col_desc.col_type_.is_lob_storage() && !ob_is_large_text(col_desc.col_type_.get_type())) {
+    if (is_skip_index_black_list_type(col_desc.col_type_.get_type())) {
       set_not_aggregate();
     }
-    obj_type_ = col_desc.col_type_.get_type();
-    LOG_DEBUG("[SKIP INDEX] init max aggregator", K(obj_type_), K(can_aggregate_));
+    col_desc_ = col_desc;
+    LOG_DEBUG("[SKIP INDEX] init max aggregator", K(col_desc_), K(can_aggregate_));
   }
   return ret;
 }
@@ -115,7 +122,7 @@ void ObColMaxAggregator::reuse()
   if (nullptr != result_) {
     result_->set_null();
   }
-  if (is_lob_storage(obj_type_) && !ob_is_large_text(obj_type_)) {
+  if (is_skip_index_black_list_type(col_desc_.col_type_.get_type())) {
     set_not_aggregate();
   } else {
     can_aggregate_ = true;
@@ -130,15 +137,15 @@ int ObColMaxAggregator::eval(const ObStorageDatum &datum, const bool is_data)
     LOG_WARN("Not init", K(ret));
   } else if (!can_aggregate_ || datum.is_nop()) {
     // Skip
-  } else if (need_set_not_aggregate(obj_type_, datum)){
+  } else if (need_set_not_aggregate(col_desc_.col_type_.get_type(), datum)){
     set_not_aggregate();
   } else {
     int cmp_res = 0;
     if (OB_FAIL(cmp_func_(datum, *result_, cmp_res))){
-      LOG_WARN("Failed to compare datum", K(ret), K(datum), K(*result_), K(obj_type_));
+      LOG_WARN("Failed to compare datum", K(ret), K(datum), K(*result_), K(col_desc_));
     } else if (cmp_res > 0) {
       if (OB_FAIL(copy_agg_datum(datum, *result_))) {
-        LOG_WARN("Fail to copy aggregated datum", K(ret), K(datum), KPC(result_), K(obj_type_));
+        LOG_WARN("Fail to copy aggregated datum", K(ret), K(datum), KPC(result_), K(col_desc_));
       }
     }
   }
@@ -172,11 +179,11 @@ int ObColMinAggregator::init(const ObColDesc &col_desc, ObStorageDatum &result)
     cmp_func_ = basic_funcs->null_last_cmp_;
     result_ = &result;
     result_->set_null();
-    if (col_desc.col_type_.is_lob_storage() && !ob_is_large_text(col_desc.col_type_.get_type())) {
+    if (is_skip_index_black_list_type(col_desc.col_type_.get_type())) {
       set_not_aggregate();
     }
-    obj_type_ = col_desc.col_type_.get_type();
-    LOG_DEBUG("[SKIP INDEX] init min aggregator", K(obj_type_), K(can_aggregate_));
+    col_desc_ = col_desc;
+    LOG_DEBUG("[SKIP INDEX] init min aggregator", K(col_desc_), K(can_aggregate_));
   }
   return ret;
 }
@@ -186,7 +193,7 @@ void ObColMinAggregator::reuse()
   if (nullptr != result_) {
     result_->set_null();
   }
-  if (is_lob_storage(obj_type_) && !ob_is_large_text(obj_type_)) {
+  if (is_skip_index_black_list_type(col_desc_.col_type_.get_type())) {
     set_not_aggregate();
   } else {
     can_aggregate_ = true;
@@ -201,15 +208,15 @@ int ObColMinAggregator::eval(const ObStorageDatum &datum, const bool is_data)
     LOG_WARN("Not init", K(ret));
   } else if (!can_aggregate_ || datum.is_nop()) {
     // Skip
-  } else if (need_set_not_aggregate(obj_type_, datum)){
+  } else if (need_set_not_aggregate(col_desc_.col_type_.get_type(), datum)){
     set_not_aggregate();
   } else {
     int cmp_res = 0;
     if (OB_FAIL(cmp_func_(datum, *result_, cmp_res))){
-      LOG_WARN("Failed to compare datum", K(ret), K(datum), K(*result_), K(obj_type_));
+      LOG_WARN("Failed to compare datum", K(ret), K(datum), K(*result_), K(col_desc_));
     } else if (cmp_res < 0) {
       if (OB_FAIL(copy_agg_datum(datum, *result_))) {
-        LOG_WARN("Fail to copy aggregated datum", K(ret), K(datum), KPC(result_), K(obj_type_));
+        LOG_WARN("Fail to copy aggregated datum", K(ret), K(datum), KPC(result_), K(col_desc_));
       }
     }
   }
@@ -331,7 +338,10 @@ int ObSkipIndexAggregator::eval(const ObDatumRow &datum_row)
           LOG_WARN("Unexcepted extended datum" , K(ret), K(datum), K(datum_row), K(idx_col_meta));
         }
       } else if (OB_FAIL(col_aggs_.at(i)->eval(datum, is_data_))) {
-        LOG_WARN("Fail to eval aggregate column", K(ret), K(datum), K_(is_data), K(idx_col_meta), K(i));
+        col_aggs_.at(i)->set_not_aggregate();
+        LOG_ERROR("Fail to eval aggregate column", K(ret), K(datum), K_(is_data),
+            K(idx_col_meta), K(i), K(col_aggs_.at(i)->get_col_decs()));
+        ret = OB_SUCCESS;
       }
     }
   }
@@ -361,7 +371,10 @@ int ObSkipIndexAggregator::eval(const char *buf, const int64_t buf_size)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected ext agg datum", K(ret), K(tmp_datum));
       } else if (OB_FAIL(col_aggs_.at(i)->eval(tmp_datum, false))) {
-        LOG_WARN("Fail to eval aggregate column", K(ret), K(tmp_datum), K(idx_col_meta), K(i));
+        col_aggs_.at(i)->set_not_aggregate();
+        LOG_ERROR("Fail to eval aggregate column", K(ret), K(tmp_datum), K_(is_data),
+            K(idx_col_meta), K(i), K(col_aggs_.at(i)->get_col_decs()));
+        ret = OB_SUCCESS;
       }
     }
   }
@@ -533,7 +546,12 @@ int ObSkipIndexAggregator::init_col_aggregator(
   int ret = OB_SUCCESS;
   ObIColAggregator *col_aggregator = nullptr;
   void *buf = nullptr;
-  if (OB_ISNULL(buf = allocator.alloc(sizeof(T)))) {
+  const ObObjType col_type = col_desc.col_type_.get_type();
+  if (!is_skip_index_while_list_type(col_type) &&
+      !is_skip_index_black_list_type(col_type)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported skip index on column with unknown column type", K(col_desc), K(col_type));
+  } else if (OB_ISNULL(buf = allocator.alloc(sizeof(T)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Fail to alloc memory for column aggregator", K(ret));
   } else if (FALSE_IT(col_aggregator = new (buf) T())) {

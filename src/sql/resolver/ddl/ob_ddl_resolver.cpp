@@ -11273,7 +11273,7 @@ int ObDDLResolver::resolve_column_skip_index(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected invalid type list node", K(ret),
           K(type_list_node->num_child_), K(type_list_node->type_));
-    } else if (is_lob_storage(column_schema.get_data_type()) && !ob_is_large_text(column_schema.get_data_type())) {
+    } else if (is_skip_index_black_list_type(column_schema.get_data_type())) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("invalid column type", K(ret), K(column_schema));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "build skip index on invalid type");
