@@ -177,7 +177,7 @@ int ObMicroBufferWriter::reserve(const int64_t size)
     if (OB_ISNULL(buf = allocator_.alloc(alloc_size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc memory", K(ret), K(alloc_size));
-    } else if (len_ > 0) {
+    } else if (data_ != nullptr) {
       has_expand_ = true;
       if (lazy_move_) {
         lazy_move_ = false;

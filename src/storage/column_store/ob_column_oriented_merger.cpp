@@ -139,7 +139,7 @@ int ObCOMerger::init_merge_iters(ObSSTable *sstable)
     }
 
     if (OB_ISNULL(row_store_iter_)) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "Failed to allocate memory for partition iter", K(ret));
     } else if (OB_FAIL(row_store_iter_->init(merge_param_, sstable, merge_param_.cg_rowkey_read_info_))) {
       STORAGE_LOG(WARN, "failed to init iter", K(ret), K(merge_param_), KPC(sstable));
