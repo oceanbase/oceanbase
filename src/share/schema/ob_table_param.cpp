@@ -396,6 +396,7 @@ void ObColumnParam::reset()
   is_virtual_gen_col_ = false;
   is_gen_col_udf_expr_ = false;
   is_hidden_ = false;
+  lob_chunk_size_ = OB_DEFAULT_LOB_CHUNK_SIZE;
 }
 
 void ObColumnParam::destroy()
@@ -453,7 +454,8 @@ OB_DEF_SERIALIZE(ObColumnParam)
               is_virtual_gen_col_,
               is_gen_col_udf_expr_,
               is_nullable_for_read_,
-              is_hidden_);
+              is_hidden_,
+              lob_chunk_size_);
   return ret;
 }
 
@@ -494,6 +496,7 @@ OB_DEF_DESERIALIZE(ObColumnParam)
       LOG_WARN("Fail to deep copy cur_default_value, ", K(ret), K_(cur_default_value));
     }
   }
+  OB_UNIS_DECODE(lob_chunk_size_);
 
   return ret;
 }
@@ -514,7 +517,8 @@ OB_DEF_SERIALIZE_SIZE(ObColumnParam)
               is_gen_col_,
               is_virtual_gen_col_,
               is_gen_col_udf_expr_,
-              is_hidden_);
+              is_hidden_,
+              lob_chunk_size_);
   return len;
 }
 
@@ -532,6 +536,7 @@ int ObColumnParam::assign(const ObColumnParam &other)
     is_virtual_gen_col_ = other.is_virtual_gen_col_;
     is_gen_col_udf_expr_= other.is_gen_col_udf_expr_;
     is_hidden_ = other.is_hidden_;
+    lob_chunk_size_ = other.lob_chunk_size_;
     if (OB_FAIL(deep_copy_obj(other.cur_default_value_, cur_default_value_))) {
       LOG_WARN("Fail to deep copy cur_default_value, ", K(ret), K(cur_default_value_));
     } else if (OB_FAIL(deep_copy_obj(other.orig_default_value_, orig_default_value_))) {
@@ -1211,6 +1216,7 @@ int ObTableParam::convert_column_schema_to_param(const ObColumnSchemaV2 &column_
                                 column_schema.is_virtual_generated_column());
   column_param.set_gen_col_udf_expr(column_schema.is_generated_column_using_udf());
   column_param.set_is_hidden(column_schema.is_hidden());
+  column_param.set_lob_chunk_size(column_schema.get_lob_chunk_size());
   LOG_DEBUG("convert_column_schema_to_param", K(column_schema), K(column_param), K(lbt()));
   if (column_schema.is_generated_column()) {
     ObObj nop_obj;

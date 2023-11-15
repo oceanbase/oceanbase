@@ -206,6 +206,9 @@ public:
   inline bool is_hidden() const { return is_hidden_; }
   int assign(const ObColumnParam &other);
 
+  inline void set_lob_chunk_size(int64_t chunk_size) { lob_chunk_size_ = chunk_size; }
+  inline int64_t get_lob_chunk_size() const { return lob_chunk_size_; }
+
   TO_STRING_KV(K_(column_id),
                K_(meta_type),
                K_(order),
@@ -217,7 +220,8 @@ public:
                K_(is_gen_col),
                K_(is_virtual_gen_col),
                K_(is_gen_col_udf_expr),
-               K_(is_hidden));
+               K_(is_hidden),
+               K_(lob_chunk_size));
 private:
   int deep_copy_obj(const common::ObObj &src, common::ObObj &dest);
 private:
@@ -234,6 +238,7 @@ private:
   bool is_virtual_gen_col_;
   bool is_gen_col_udf_expr_;
   bool is_hidden_;
+  int64_t lob_chunk_size_;
 };
 
 typedef common::ObFixedArray<ObColumnParam *, common::ObIAllocator> Columns;

@@ -72,6 +72,7 @@ public:
   inline void set_order_in_rowkey(const common::ObOrderType order_in_rowkey) { order_in_rowkey_ = order_in_rowkey; }
   inline void set_udt_set_id(const uint64_t id) { udt_set_id_ = id; }
   inline void set_sub_data_type(const uint64_t sub_type) { sub_type_ = sub_type; }
+  inline void set_lob_chunk_size(const int64_t chunk_size) { lob_chunk_size_ = chunk_size; }
 
   int set_part_key_pos(const int64_t part_key_pos);
   inline int64_t get_part_key_pos() const
@@ -158,6 +159,7 @@ public:
   inline uint64_t& get_column_id() { return column_id_; }
   inline uint64_t get_udt_set_id() const { return udt_set_id_; }
   inline uint64_t get_sub_data_type() const { return sub_type_; }
+  inline int64_t get_lob_chunk_size() const { return lob_chunk_size_; }
   inline int64_t get_schema_version() const { return schema_version_; }
   inline int64_t get_rowkey_position() const { return rowkey_position_; }
   inline int64_t get_index_position() const { return index_position_; }
@@ -370,6 +372,7 @@ private:
   uint64_t udt_set_id_;
   uint64_t sub_type_;
   ObSkipIndexColumnAttr skip_index_attr_;
+  int64_t lob_chunk_size_;
 };
 
 inline int32_t ObColumnSchemaV2::get_data_length() const
