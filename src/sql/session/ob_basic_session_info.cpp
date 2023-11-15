@@ -149,7 +149,8 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       thread_id_(0),
       is_password_expired_(false),
       process_query_time_(0),
-      last_update_tz_time_(0)
+      last_update_tz_time_(0),
+      is_client_sessid_support_(false)
 {
   thread_data_.reset();
   MEMSET(sys_vars_, 0, sizeof(sys_vars_));
@@ -433,6 +434,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   is_password_expired_ = false;
   process_query_time_ = 0;
   last_update_tz_time_ = 0;
+  is_client_sessid_support_ = false;
   sess_bt_buff_pos_ = 0;
   ATOMIC_SET(&sess_ref_cnt_ , 0);
   // 最后再重置所有allocator
@@ -4393,7 +4395,8 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
               flt_vars_.last_flt_trace_id_,
               flt_vars_.row_traceformat_,
               flt_vars_.last_flt_span_id_,
-              exec_min_cluster_version_);
+              exec_min_cluster_version_,
+              is_client_sessid_support_);
   }();
   return ret;
 }
@@ -4592,6 +4595,10 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
     OB_UNIS_DECODE(exec_min_cluster_version_);
   } else {
     exec_min_cluster_version_ = CLUSTER_VERSION_4_0_0_0;
+  }
+  if (OB_SUCC(ret) && pos < data_len) {
+    LST_DO_CODE(OB_UNIS_DECODE,
+    is_client_sessid_support_);
   }
   // deep copy string.
   if (OB_SUCC(ret)) {
@@ -4905,7 +4912,8 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
               flt_vars_.last_flt_trace_id_,
               flt_vars_.row_traceformat_,
               flt_vars_.last_flt_span_id_,
-              exec_min_cluster_version_);
+              exec_min_cluster_version_,
+              is_client_sessid_support_);
   return len;
 }
 
