@@ -430,6 +430,12 @@ int ObTablet::init_for_merge(
     ddl_kvs_ = ddl_kvs_addr;
     ddl_kv_count_ = ddl_kv_count;
     ALLOC_AND_INIT(allocator, table_store_addr_, (*this), param, (*old_table_store));
+    if (OB_UNLIKELY(ddl_kv_count_ != ddl_kv_count
+                 || ddl_kv_count != table_store_addr_.get_ptr()->get_ddl_memtable_count())) {
+      // This is defense code. If it runs at here, it must be a bug. And, just abort to preserve the enviroment
+      // for debugging. Please remove me, after the problem is found.
+      ob_abort();
+    }
   }
 
   if (FAILEDx(table_store_cache_.init(table_store_addr_.get_ptr()->get_major_sstables(),
@@ -5342,6 +5348,8 @@ int64_t ObTablet::to_string(char *buf, const int64_t buf_len) const
          KP_(allocator),
          K_(tablet_meta),
          K_(table_store_cache),
+         KP_(ddl_kvs),
+         K_(ddl_kv_count),
          K_(table_store_addr),
          K_(storage_schema_addr),
          K_(next_tablet_guard),
