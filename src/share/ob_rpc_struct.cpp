@@ -7600,6 +7600,67 @@ DEF_TO_STRING(ObSetMemberListArgV2)
 
 OB_SERIALIZE_MEMBER(ObSetMemberListArgV2, tenant_id_, id_, member_list_, paxos_replica_num_, arbitration_service_, learner_list_);
 
+bool ObQuickPrepareArg::is_valid() const
+{
+  return OB_INVALID_TENANT_ID != tenant_id_ && id_.is_valid();
+}
+
+void ObQuickPrepareArg::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  id_.reset();
+}
+
+int ObQuickPrepareArg::assign(const ObQuickPrepareArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("arg is invalid", KR(ret), K(arg));
+  } else {
+    tenant_id_ = arg.tenant_id_;
+    id_ = arg.id_;
+  }
+  return ret;
+}
+
+int ObQuickPrepareArg::init(const int64_t tenant_id, const share::ObLSID &id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || !id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(id));
+  } else {
+    tenant_id_ = tenant_id;
+    id_ = id;
+  }
+  return ret;
+}
+
+DEF_TO_STRING(ObQuickPrepareArg)
+{
+  int64_t pos = 0;
+  J_KV(K_(tenant_id), K_(id));
+  return pos;
+}
+
+OB_SERIALIZE_MEMBER(ObQuickPrepareArg, tenant_id_, id_);
+
+OB_SERIALIZE_MEMBER(ObQuickPrepareResult, ret_);
+bool ObQuickPrepareResult::is_valid() const
+{
+  return true;
+}
+int ObQuickPrepareResult::assign(const ObQuickPrepareResult &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    ret_ = other.ret_;
+  }
+  return ret;
+}
+
 bool ObGetLSAccessModeInfoArg::is_valid() const
 {
   return OB_INVALID_TENANT_ID != tenant_id_

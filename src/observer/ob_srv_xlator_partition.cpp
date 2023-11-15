@@ -107,6 +107,7 @@ void oceanbase::observer::init_srv_xlator_for_partition(ObSrvRpcXlator *xlator) 
   RPC_PROCESSOR(ObDumpTenantCacheMasterKeyP, gctx_);
 #endif
   RPC_PROCESSOR(ObRpcSetMemberListP, gctx_);
+  RPC_PROCESSOR(ObRpcQuickPrepareP, gctx_);
   RPC_PROCESSOR(ObRpcCreateLSP, gctx_);
 #ifdef OB_BUILD_ARBITRATION
   RPC_PROCESSOR(ObRpcCreateArbP, gctx_);

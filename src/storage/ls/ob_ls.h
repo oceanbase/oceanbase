@@ -602,6 +602,7 @@ public:
   // @param [out] member_list, the member_list of current log_service
   // @param [out] quorum, the quorum of member_list
   // int get_paxos_member_list(common::ObMemberList &member_list, int64_t &quorum) const;
+  DELEGATE_WITH_RET(log_handler_, quick_prepare, int);
   CONST_DELEGATE_WITH_RET(log_handler_, get_paxos_member_list, int);
   // get paxos member list and learner list of log_service
   // @param [out] member_list, the member_list of current log_service

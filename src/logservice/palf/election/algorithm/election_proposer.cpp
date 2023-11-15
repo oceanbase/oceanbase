@@ -296,6 +296,21 @@ int ElectionProposer::reschedule_or_register_prepare_task_after_(const int64_t d
   #undef PRINT_WRAPPER
 }
 
+int ElectionProposer::quick_prepare() {
+  #define PRINT_WRAPPER KR(ret)
+  int ret = OB_SUCCESS;
+  if (check_leader()) {// Leader不应该接受rpc发起的prepare请求
+    LOG_RENEW_LEASE(INFO, "leader not allow do quick prepare");
+  } else {
+    if (role_ == ObRole::LEADER) {
+      role_ = ObRole::FOLLOWER;
+    }
+    this->prepare(role_);// 只有Follower可以走到这里
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
 int ElectionProposer::start()
 {
   #define PRINT_WRAPPER K(*this)

@@ -95,6 +95,7 @@ public:
                                       const int64_t paxos_replica_num,
                                       const common::GlobalLearnerList &learner_list) = 0;
 #endif
+  virtual int quick_prepare() = 0;
   virtual int set_region(const common::ObRegion &region) = 0;
   virtual int set_election_priority(palf::election::ElectionPriority *priority) = 0;
   virtual int reset_election_priority() = 0;
@@ -311,6 +312,7 @@ public:
                               const int64_t paxos_replica_num,
                               const common::GlobalLearnerList &learner_list) override final;
 #endif
+  int quick_prepare();
   int set_region(const common::ObRegion &region) override final;
   int set_election_priority(palf::election::ElectionPriority *priority) override final;
   int reset_election_priority() override final;

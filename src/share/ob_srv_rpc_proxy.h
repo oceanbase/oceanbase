@@ -180,6 +180,7 @@ public:
   RPC_S(PR5 dump_tenant_cache_master_key, OB_DUMP_TENANT_CACHE_MASTER_KEY, (obrpc::UInt64), ObDumpCacheMasterKeyResultArg);
 #endif
   RPC_AP(PR5 set_member_list, OB_SET_MEMBER_LIST, (obrpc::ObSetMemberListArgV2), obrpc::ObSetMemberListResult);
+  RPC_AP(PR5 quick_prepare, OB_QUICK_PREPARE, (obrpc::ObQuickPrepareArg), obrpc::ObQuickPrepareResult);
   RPC_AP(PR5 create_ls, OB_CREATE_LS, (obrpc::ObCreateLSArg), obrpc::ObCreateLSResult);
 #ifdef OB_BUILD_ARBITRATION
   RPC_S(PR5 create_arb, OB_CREATE_ARB, (obrpc::ObCreateArbArg), obrpc::ObCreateArbResult);

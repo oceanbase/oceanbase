@@ -251,6 +251,14 @@ int LogConfigMgr::set_initial_member_list(const common::ObMemberList &member_lis
   return ret;
 }
 
+int LogConfigMgr::quick_prepare()
+{
+  int ret = OB_SUCCESS;
+  SpinLockGuard guard(lock_);
+  election_->quick_prepare();
+  return ret;
+}
+
 int LogConfigMgr::set_initial_config_info_(const LogConfigInfoV2 &config_info,
                                            const int64_t proposal_id,
                                            LogConfigVersion &init_config_version)

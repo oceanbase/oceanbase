@@ -3229,6 +3229,55 @@ private:
   int ret_;
 };
 
+struct ObQuickPrepareArg {
+  OB_UNIS_VERSION(1);
+public:
+  ObQuickPrepareArg() : tenant_id_(OB_INVALID_TENANT_ID), id_() {}
+  ~ObQuickPrepareArg() {}
+  bool is_valid() const;
+  void reset();
+  int assign(const ObQuickPrepareArg &arg);
+  int init(const int64_t tenant_id, const share::ObLSID &id);
+  DECLARE_TO_STRING;
+  int64_t get_tenant_id() const
+  {
+    return tenant_id_;
+  }
+  share::ObLSID get_ls_id() const
+  {
+    return id_;
+  }
+private:
+  int64_t tenant_id_;
+  share::ObLSID id_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObQuickPrepareArg);
+};
+
+struct ObQuickPrepareResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObQuickPrepareResult(): ret_(common::OB_SUCCESS) {}
+  ~ObQuickPrepareResult() {}
+  bool is_valid() const;
+  int assign(const ObQuickPrepareResult &other);
+  TO_STRING_KV(K_(ret));
+  void init(const int ret)
+  {
+    ret_ = ret;
+  }
+  int get_result() const
+  {
+    return ret_;
+  }
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObQuickPrepareResult);
+private:
+  int ret_;
+};
+
 struct ObGetLSAccessModeInfoArg
 {
   OB_UNIS_VERSION(1);

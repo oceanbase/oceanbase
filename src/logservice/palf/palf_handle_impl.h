@@ -292,6 +292,7 @@ public:
 #endif
   // set region for self
   // @param [common::ObRegion] region
+  virtual int quick_prepare() = 0;
   virtual int set_region(const common::ObRegion &region) = 0;
   // set region info for paxos members
   // @param [common::ObArrayHashMap<common::ObAddr, common::ObRegion>] regions of Paxos members
@@ -871,6 +872,7 @@ public:
                               const int64_t paxos_replica_num,
                               const common::GlobalLearnerList &learner_list) override final;
 #endif
+  int quick_prepare() override final;
   int set_region(const common::ObRegion &region) override final;
   int set_paxos_member_region_map(const LogMemberRegionMap &region_map) override final;
   int submit_log(const PalfAppendOptions &opts,
