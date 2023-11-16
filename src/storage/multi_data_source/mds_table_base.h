@@ -25,6 +25,10 @@
 
 namespace oceanbase
 {
+namespace transaction
+{
+enum class NotifyType : int64_t;
+}
 namespace share
 {
 class SCN;
@@ -34,6 +38,7 @@ namespace storage
 class ObTabletPointer;
 namespace mds
 {
+extern TLOCAL(transaction::NotifyType, TLOCAL_MDS_TRANS_NOTIFY_TYPE);
 template <typename K, typename V>
 class MdsRow;
 template <typename K, typename V>

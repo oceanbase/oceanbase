@@ -190,6 +190,7 @@ int ObMulSourceTxDataNotifier::notify(const ObTxBufferNodeArray &array,
         }
         }
       } else {
+        mds::TLOCAL_MDS_TRANS_NOTIFY_TYPE = notify_type;
         switch (node.type_) {
           #define NEED_GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION
           #define _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENUM_NAME) \
@@ -251,6 +252,7 @@ int ObMulSourceTxDataNotifier::notify(const ObTxBufferNodeArray &array,
           default:
             ob_abort();
         }
+        mds::TLOCAL_MDS_TRANS_NOTIFY_TYPE = NotifyType::UNKNOWN;
       }
       if (OB_FAIL(ret)) {
         TRANS_LOG(WARN, "notify data source failed", KR(ret), K(node));
