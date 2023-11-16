@@ -1767,9 +1767,14 @@ int ObSelectResolver::resolve_order_item(const ParseNode &sort_node, OrderItem &
     }
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(order_item.expr_) && order_item.expr_->has_flag(CNT_ASSIGN_EXPR)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("Not supported variable assignment in order by item", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Variable assignment in order by item");
+    LOG_USER_WARN(OB_ERR_DEPRECATED_SYNTAX, "Setting user variables within expressions",
+      "SET variable=expression, ... or SELECT expression(s) INTO variables(s)");
+    if (OB_NOT_NULL(session_info_) && OB_NOT_NULL(session_info_->get_cur_exec_ctx()) &&
+        OB_NOT_NULL(session_info_->get_cur_exec_ctx()->get_sql_ctx())) {
+      const ObSqlCtx *sql_ctx = session_info_->get_cur_exec_ctx()->get_sql_ctx();
+      LOG_ERROR("Variable assignment in order by items will cause uncertain behavior",
+                K(ObString(sql_ctx->sql_id_)));
+    }
   }
   return ret;
 }

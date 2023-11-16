@@ -6925,6 +6925,13 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
     ret = phy_plan.set_vars(log_plan.get_stmt()->get_query_ctx()->variables_);
   }
 
+  if (OB_SUCC(ret) && !log_plan.get_stmt()->is_explain_stmt()) {
+    if (OB_FAIL(generate_rt_exprs(log_plan.get_stmt()->get_query_ctx()->var_init_exprs_,
+                                  phy_plan.var_init_exprs_))) {
+      LOG_WARN("generate var init exprs failed", KR(ret));
+    }
+  }
+
   if (OB_SUCC(ret)) {
     //convert insert row param index map
     stmt::StmtType stmt_type = stmt::T_NONE;

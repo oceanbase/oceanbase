@@ -599,7 +599,6 @@ private:
   // constraint for duplicate table to choose replica
   // dist plan will use this as (dup_tab_pos, advisor_tab_pos) pos is position in base constraint
   DupTabReplicaArray dup_table_replica_cons_;
-
 public:
   ObExprFrameInfo expr_frame_info_;
 
@@ -611,6 +610,7 @@ public:
   bool need_drive_dml_query_;
   int64_t tx_id_; //for dblink recover xa tx
   int64_t tm_sessid_; //for dblink get connection attached on tm session
+  ExprFixedArray var_init_exprs_;
 private:
   bool is_returning_; //是否设置了returning
 
