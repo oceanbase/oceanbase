@@ -175,6 +175,7 @@ private:
   const static uint8_t OB_JSON_TYPE_EXTRA_DATA      = 5;
   const static uint8_t OB_JSON_TYPE_TYPE_ERROR      = 6;
   const static uint8_t OB_JSON_TYPE_IMPLICIT        = 7;
+  const static uint8_t OB_JSON_TYPE_DOT             = 8;
 
   const static uint8_t json_doc_id      = 0;
   const static uint8_t json_path_id     = 1;

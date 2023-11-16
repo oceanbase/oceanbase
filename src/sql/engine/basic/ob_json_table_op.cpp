@@ -850,8 +850,7 @@ int JtFuncHelpler::cast_json_to_res(JtScanCtx* ctx, ObIJsonBase* js_val, JtColNo
                                  : ctx->spec_ptr_->value_expr_->datum_meta_.cs_type_;
   ObCollationLevel dst_coll_level = col_info.data_type_.get_collation_level();
 
-  if (OB_ISNULL(js_val)
-      || (lib::is_mysql_mode() && js_val->json_type() == common::ObJsonNodeType::J_NULL)) {
+  if (OB_ISNULL(js_val)) {
     res.set_null();
   } else {
     switch (dst_type) {
@@ -2338,7 +2337,7 @@ int JtColNode::get_next_row(ObIJsonBase* in, JtScanCtx* ctx, bool& is_null_value
     }
   } else if (col_type == COL_TYPE_EXISTS || col_type == COL_TYPE_QUERY || col_type == COL_TYPE_VALUE) {
     if (!need_cast_res) {
-    } else if (is_null_result_ || (curr_ && curr_->json_type() == ObJsonNodeType::J_NULL && !curr_->is_real_json_null(curr_))) {
+    } else if (is_null_result_ || (curr_ && curr_->json_type() == ObJsonNodeType::J_NULL && (!curr_->is_real_json_null(curr_) || lib::is_mysql_mode()))) {
       if (!need_pro_emtpy) {
         col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_null();
       } else if (OB_FAIL(set_val_on_empty(ctx, need_cast_res))) {

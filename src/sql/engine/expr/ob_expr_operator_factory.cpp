@@ -1309,6 +1309,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprXmlcast);
   REG_OP_ORCL(ObExprUpdateXml);
   REG_OP_ORCL(ObExprTempTableSSID);
+  REG_OP_ORCL(ObExprJsonObjectStar);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

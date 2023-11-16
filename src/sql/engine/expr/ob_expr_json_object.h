@@ -68,6 +68,21 @@ private:
     DISALLOW_COPY_AND_ASSIGN(ObExprJsonObject);
 };
 
+// mock inner expr as json object with star node
+class ObExprJsonObjectStar : public ObFuncExprOperator
+{
+public:
+  explicit ObExprJsonObjectStar(common::ObIAllocator &alloc);
+  virtual ~ObExprJsonObjectStar();
+  virtual int calc_result_typeN(ObExprResType& type, ObExprResType* types, int64_t param_num,
+    common::ObExprTypeCtx& type_ctx) const override;
+  static int eval_ora_json_object_star(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const override;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObExprJsonObjectStar);
+};
+
 } //sql
 } //oceanbase
 #endif //OCEANBASE_SQL_OB_EXPR_JSON_OBJECT_H_
