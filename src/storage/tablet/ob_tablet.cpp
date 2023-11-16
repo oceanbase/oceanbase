@@ -4028,7 +4028,7 @@ int ObTablet::get_kept_multi_version_start(
     ObTabletMediumInfoReader medium_info_reader(tablet);
     if (OB_FAIL(medium_info_reader.init(arena_allocator))) {
       LOG_WARN("failed to init medium info reader", K(ret));
-    } else if (OB_FAIL(medium_info_reader.get_min_medium_snapshot(min_medium_snapshot))) {
+    } else if (OB_FAIL(medium_info_reader.get_min_medium_snapshot(last_major_snapshot_version, min_medium_snapshot))) {
       LOG_WARN("failed to get min medium snapshot", K(ret), K(tablet));
     }
   }
