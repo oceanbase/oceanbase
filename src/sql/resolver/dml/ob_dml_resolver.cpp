@@ -1407,7 +1407,7 @@ int ObDMLResolver::check_column_udt_type(ParseNode *root_node)
         if (OB_ISNULL(col_expr)) {
           ret = OB_ERR_BAD_FIELD_ERROR;
           LOG_WARN("get invalid identifier name", K(ret), K(tab_str), K(col_str), K(tab_has_alias));
-        } else if (!col_expr->get_result_type().is_user_defined_sql_type()) {
+        } else if (!col_expr->get_result_type().is_user_defined_sql_type() && !col_expr->get_result_type().is_ext()) {
           ret = OB_ERR_NOT_OBJ_REF;
         }
       }
