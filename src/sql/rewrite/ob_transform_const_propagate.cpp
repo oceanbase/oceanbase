@@ -770,7 +770,9 @@ int ObTransformConstPropagate::collect_equal_pair_from_pullup(ObDMLStmt *stmt,
                                               is_valid))) {
           LOG_WARN("failed to check const expr validity", K(ret));
         } else if (!is_valid) {
-          if (equal_info.const_expr_->is_static_scalar_const_expr()) {
+          ObObjType col_type = equal_info.column_expr_->get_result_type().get_type();
+          if (!(ob_is_text_tc(col_type) || ob_is_lob_tc(col_type) || ob_is_json_tc(col_type)) &&
+              equal_info.const_expr_->is_static_scalar_const_expr()) {
             ObObj result;
             bool got_result = false;
             if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx_->exec_ctx_,
@@ -1437,6 +1439,8 @@ int ObTransformConstPropagate::check_cast_const_expr(ExprConstInfo &const_info,
     LOG_WARN("get unexpected null", K(ret));
   } else if (!const_info.const_expr_->is_static_scalar_const_expr()) {
     is_valid = false;
+  } else if (const_info.need_add_constraint_ == PRE_CALC_RESULT_NULL) {
+    // do nothing
   } else if (OB_FAIL(ObRawExprUtils::check_need_cast_expr(const_info.const_expr_->get_result_type(),
                                                         const_info.column_expr_->get_result_type(),
                                                         need_cast,
