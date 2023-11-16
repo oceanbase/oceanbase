@@ -156,7 +156,7 @@ static int ob_expr_convert_to_time(const ObDatum &datum,
                                   ObObjType type,
                                   const ObScale scale,
                                   bool with_date,
-                                  bool is_dayofmonth,
+                                  bool is_allow_incomplete_dates,
                                   ObEvalCtx &ctx,
                                   ObTime &ot,
                                   bool has_lob_header)
@@ -170,8 +170,9 @@ static int ob_expr_convert_to_time(const ObDatum &datum,
     ObTime ot2;
     ObDateSqlMode date_sql_mode;
     date_sql_mode.init(session->get_sql_mode());
+    date_sql_mode.allow_incomplete_dates_ = is_allow_incomplete_dates;
     if (OB_FAIL(ob_datum_to_ob_time_with_date(datum, type, scale, get_timezone_info(session),
-        ot2, get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), is_dayofmonth, date_sql_mode,
+        ot2, get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), date_sql_mode,
         has_lob_header))) {
       LOG_WARN("cast to ob time failed", K(ret));
     } else {
@@ -190,7 +191,7 @@ static int ob_expr_convert_to_time(const ObDatum &datum,
 }
 
 int ObExprTimeBase::calc(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum,
-                        int32_t type, bool with_date, bool is_dayofmonth /* false */)
+                        int32_t type, bool with_date, bool is_allow_incomplete_dates /* false */)
 {
   int ret = OB_SUCCESS;
   ObDatum *param_datum = NULL;
@@ -205,7 +206,7 @@ int ObExprTimeBase::calc(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum
   } else {
     ObTime ot;
     if (OB_FAIL(ob_expr_convert_to_time(*param_datum, expr.args_[0]->datum_meta_.type_,
-                                        expr.args_[0]->datum_meta_.scale_, with_date, is_dayofmonth,
+                                        expr.args_[0]->datum_meta_.scale_, with_date, is_allow_incomplete_dates,
                                         ctx, ot, expr.args_[0]->obj_meta_.has_lob_header()))) {
       LOG_WARN("cast to ob time failed", K(ret), K(lbt()), K(session->get_stmt_type()));
       LOG_USER_WARN(OB_ERR_CAST_VARCHAR_TO_TIME);
@@ -245,7 +246,7 @@ int ObExprTimeBase::calc(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum
           LOG_WARN("the parameter idx should be within a reasonable range", K(idx));
         }
       }
-    } else if (with_date && !is_dayofmonth && ot.parts_[DT_DATE] + DAYS_FROM_ZERO_TO_BASE < 0) {
+    } else if (with_date && !is_allow_incomplete_dates && ot.parts_[DT_DATE] + DAYS_FROM_ZERO_TO_BASE < 0) {
       expr_datum.set_null();
     } else {
       expr_datum.set_int32(ot.parts_[type]);

@@ -738,7 +738,7 @@ int calc_round_expr_datetime_inner(const ObDatum &x_datum, const ObString &fmt_s
   const ObTimeZoneInfo *tz_info = get_timezone_info(ctx.exec_ctx_.get_my_session());
   if (OB_FAIL(ob_datum_to_ob_time_with_date(x_datum, ObDateTimeType, NUMBER_SCALE_UNKNOWN_YET,
                               tz_info, ob_time,
-                              get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), false, 0, false))) {
+                              get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), 0, false))) {
     LOG_WARN("ob_datum_to_ob_time_with_date failed", K(ret));
   } else {
     ObTimeConvertCtx cvrt_ctx(TZ_INFO(ctx.exec_ctx_.get_my_session()), false);

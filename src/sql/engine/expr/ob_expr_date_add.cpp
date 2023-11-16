@@ -170,7 +170,7 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDat
                                             get_timezone_info(session),
                                             ob_time,
                                             get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()),
-                                            false, date_sql_mode,
+                                            date_sql_mode,
                                             expr.args_[0]->obj_meta_.has_lob_header()))) {
         uint64_t cast_mode = 0;
         ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
@@ -506,8 +506,10 @@ int ObExprLastDay::calc_last_day(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &ex
     int64_t res_date_utc = 0;
     ObDateSqlMode date_sql_mode;
     date_sql_mode.init(session->get_sql_mode());
+    date_sql_mode.no_zero_in_date_ = is_no_zero_in_date(session->get_sql_mode());
+    date_sql_mode.allow_incomplete_dates_ = !is_no_zero_in_date(session->get_sql_mode());
     if (OB_FAIL(ObTimeConverter::calc_last_date_of_the_month(ori_date_utc, res_date_utc,
-                res_type, !is_no_zero_in_date(session->get_sql_mode()), date_sql_mode))) {
+                res_type, date_sql_mode))) {
       LOG_WARN("fail to calc last mday", K(ret), K(ori_date_utc), K(res_date_utc));
       if (!is_oracle_mode()) {
         uint64_t cast_mode = 0;

@@ -75,7 +75,7 @@ int ObExprWeekOfYear::calc_weekofyear(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
                  *param_datum, expr.args_[0]->datum_meta_.type_,
                  expr.args_[0]->datum_meta_.scale_,
                  get_timezone_info(session),
-                 ot, get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), false, date_sql_mode,
+                 ot, get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), date_sql_mode,
                  expr.args_[0]->obj_meta_.has_lob_header()))) {
     LOG_WARN("cast to ob time failed", K(ret));
     uint64_t cast_mode = 0;
@@ -148,7 +148,7 @@ int ObExprWeekDay::calc_weekday(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &exp
                  *param_datum, expr.args_[0]->datum_meta_.type_,
                  expr.args_[0]->datum_meta_.scale_,
                  get_timezone_info(session),
-                 ot, get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), false, date_sql_mode,
+                 ot, get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), date_sql_mode,
                  expr.args_[0]->obj_meta_.has_lob_header()))) {
     LOG_WARN("cast to ob time failed", K(ret));
     uint64_t cast_mode = 0;
@@ -316,7 +316,7 @@ int ObExprYearWeek::calc_yearweek(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
                      *param_datum, expr.args_[0]->datum_meta_.type_,
                      expr.args_[0]->datum_meta_.scale_,
                      get_timezone_info(session),
-                     ot, get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), false,
+                     ot, get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()),
                      date_sql_mode, expr.args_[0]->obj_meta_.has_lob_header()))) {
     LOG_WARN("cast to ob time failed", K(ret));
     uint64_t cast_mode = 0;
@@ -434,7 +434,7 @@ int ObExprWeek::calc_week(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datu
                  *param_datum, expr.args_[0]->datum_meta_.type_,
                  expr.args_[0]->datum_meta_.scale_,
                  get_timezone_info(session),
-                 ot, get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), false, date_sql_mode,
+                 ot, get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), date_sql_mode,
                  expr.args_[0]->obj_meta_.has_lob_header()))) {
     LOG_WARN("cast to ob time failed", K(ret));
     uint64_t cast_mode = 0;

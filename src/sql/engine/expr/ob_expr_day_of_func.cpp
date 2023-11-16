@@ -112,7 +112,7 @@ int ObExprToSeconds::calc_toseconds(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
                                               expr.args_[0]->datum_meta_.scale_,
                                               get_timezone_info(session), ot,
                                               get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()),
-                                              false, date_sql_mode,
+                                              date_sql_mode,
                                               expr.args_[0]->obj_meta_.has_lob_header()))) {
       LOG_WARN("cast to ob time failed", K(ret));
       uint64_t cast_mode = 0;

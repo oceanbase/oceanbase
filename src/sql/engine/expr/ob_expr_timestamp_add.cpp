@@ -221,7 +221,7 @@ int calc_timestampadd_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datu
                 expr.args_[2]->datum_meta_.type_,
                 expr.args_[2]->datum_meta_.scale_,
                 cvrt_ctx.tz_info_, ot,
-                get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), false, 0,
+                get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), 0,
                 expr.args_[2]->obj_meta_.has_lob_header()))) {
       LOG_WARN("cast to ob time failed", K(ret), K(*timestamp_datum));
     } else if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(ot, cvrt_ctx, ts))) {
