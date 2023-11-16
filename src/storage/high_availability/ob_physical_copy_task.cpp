@@ -1533,7 +1533,10 @@ int ObTabletCopyFinishTask::check_finish_copy_tablet_data_valid_()
 
     if (OB_SUCC(ret)) {
       int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = MTL(observer::ObTabletTableUpdater*)->submit_tablet_update_task(
+      if (OB_ISNULL(MTL(observer::ObTabletTableUpdater*))) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("tablet table updater should not be null", K(tmp_ret));
+      } else if (OB_SUCCESS != (tmp_ret = MTL(observer::ObTabletTableUpdater*)->submit_tablet_update_task(
           ls_->get_ls_id(), tablet_id_))) {
         LOG_WARN("failed to submit tablet update task", K(tmp_ret), KPC(ls_), K(tablet_id_));
       }

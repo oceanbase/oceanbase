@@ -1834,9 +1834,6 @@ bool ObTransferHandler::can_retry_(
   return bool_ret;
 }
 
-// TODO(yangyi.yyy): Found a problem that only the leader reports the tablet meta table here. However,
-// this is not correct. Every replica needs to be reported, otherwise the __all_tablet_meta_table will not be updated.
-// WILL FIX THIS LATER
 int ObTransferHandler::report_to_meta_table_(
     const share::ObTransferTaskInfo &task_info)
 {
@@ -1851,9 +1848,12 @@ int ObTransferHandler::report_to_meta_table_(
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < task_info.tablet_list_.count(); ++i) {
       const ObTransferTabletInfo &tablet_info = task_info.tablet_list_.at(i);
-      if (OB_SUCCESS != (tmp_ret = MTL(observer::ObTabletTableUpdater*)->submit_tablet_update_task(
+      if (OB_ISNULL(MTL(observer::ObTabletTableUpdater*))) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("tablet table updater should not be null", K(tmp_ret));
+      } else if (OB_SUCCESS != (tmp_ret = MTL(observer::ObTabletTableUpdater*)->submit_tablet_update_task(
           task_info.dest_ls_id_, tablet_info.tablet_id_))) {
-        LOG_WARN("failed to submit tablet update task", K(ret), K(tablet_info), K(task_info));
+        LOG_WARN("failed to submit tablet update task", K(tmp_ret), K(tablet_info), K(task_info));
       }
     }
   }
