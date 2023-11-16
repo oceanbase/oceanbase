@@ -6926,9 +6926,40 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
   }
 
   if (OB_SUCC(ret) && !log_plan.get_stmt()->is_explain_stmt()) {
-    if (OB_FAIL(generate_rt_exprs(log_plan.get_stmt()->get_query_ctx()->var_init_exprs_,
-                                  phy_plan.var_init_exprs_))) {
-      LOG_WARN("generate var init exprs failed", KR(ret));
+    const ObIArray<ObRawExpr*> &var_init_exprs = log_plan.get_stmt()->get_query_ctx()->var_init_exprs_;
+    phy_plan.var_init_exprs_.set_capacity(var_init_exprs.count());
+    for (int i = 0; OB_SUCC(ret) && i < var_init_exprs.count(); ++i) {
+      const ObRawExpr *var_init_expr = var_init_exprs.at(i);
+      LOG_DEBUG("start to generate var init expr", KPC(var_init_expr));
+      /**
+       * What is a user variable initialization expression?
+       * In MySQL, the user variable assignment clause in SELECT FROM DUAL statement will always be
+       * executed before the statement is executed.
+       * However, in OceanBase, such clauses may not be executed due to short-circuit operation in the execution path,
+       * leading to uninitialized user variables.
+       * For example: SELECT * FROM t1, (SELECT @rownum:=0) AS init;
+       * In this statement, if t1 is an empty table, MySQL will still execute SELECT @rownum:=0,
+       * while OB will not.
+       * To accommodate this behavior,
+       * we collect the expressions that appear in SELECT FROM DUAL and can be executed independently,
+       * and execute them once as the initialization operation for user variables before the plan is executed.
+       **/
+      if (!var_init_expr->has_flag(CNT_SUB_QUERY) &&
+          !var_init_expr->has_flag(CNT_AGG) &&
+          !var_init_expr->has_flag(CNT_WINDOW_FUNC) &&
+          !var_init_expr->has_flag(CNT_ONETIME) &&
+          !var_init_expr->has_flag(CNT_ALIAS) &&
+          !var_init_expr->has_flag(CNT_DYNAMIC_PARAM) &&
+          !ObOptimizerUtil::has_psedu_column(*var_init_expr) &&
+          !ObOptimizerUtil::has_hierarchical_expr(*var_init_expr) &&
+          var_init_expr->get_relation_ids().is_empty()) {
+        ObExpr *var_rt_expr = nullptr;
+        if (OB_FAIL(generate_rt_expr(*var_init_expr, var_rt_expr))) {
+          LOG_WARN("generate var init expr failed", KR(ret), KPC(var_init_expr));
+        } else if (OB_FAIL(phy_plan.var_init_exprs_.push_back(var_rt_expr))) {
+          LOG_WARN("store var rt expr failed", KR(ret));
+        }
+      }
     }
   }
 
