@@ -240,7 +240,8 @@ void ObSSTable::reset()
   LOG_DEBUG("reset sstable.", KP(this), K(key_), K(is_tmp_sstable_));
   // dec ref first, then reset sstable meta
   if (is_tmp_sstable_) {
-    ObSSTable::dec_macro_ref();
+    ObSSTable::dec_macro_ref(); // dec the used_size added by sstable::init()
+    dec_used_size(); // dec the used_size added by shared_mgr::try_switch_block()
   }
   if (nullptr != meta_) {
     meta_->reset();
