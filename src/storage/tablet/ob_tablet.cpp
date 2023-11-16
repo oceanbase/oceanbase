@@ -4033,16 +4033,18 @@ int ObTablet::get_kept_multi_version_start(
     }
   }
 
-  // for compat, if receive ls_reserved_snapshot clog, should consider ls.get_min_reserved_snapshot()
-  if (ls.get_min_reserved_snapshot() > 0) {
-    ls_min_reserved_snapshot = ls.get_min_reserved_snapshot();
-  }
   if (OB_SUCC(ret)) {
     const int64_t old_min_reserved_snapshot = min_reserved_snapshot;
-    min_reserved_snapshot = common::min(
-        ls_min_reserved_snapshot,
-        common::min(min_reserved_snapshot, min_medium_snapshot));
-    multi_version_start = MIN(MAX(min_reserved_snapshot, multi_version_start), tablet.get_snapshot_version());
+    if (ls.get_min_reserved_snapshot() > 0) {
+      ls_min_reserved_snapshot = ls.get_min_reserved_snapshot();
+      min_reserved_snapshot = common::min(
+          ls_min_reserved_snapshot,
+          common::min(min_reserved_snapshot, min_medium_snapshot));
+      multi_version_start = MIN(MAX(min_reserved_snapshot, multi_version_start), tablet.get_snapshot_version());
+    } else {
+      // not sync reserved snapshot clog yet, should not push multi_version_start
+      multi_version_start = MIN(multi_version_start, tablet.get_snapshot_version());
+    }
 
     const int64_t current_time = common::ObTimeUtility::fast_current_time() * 1000; // needs ns here.
     if (current_time - multi_version_start > 120 * 60 * 1000 * 1000L /*2 hour*/) {
@@ -4054,7 +4056,7 @@ int ObTablet::get_kept_multi_version_start(
       }
     }
   }
-  LOG_DEBUG("get multi version start", K(ret), K(ls_id), K(tablet_id),
+  LOG_INFO("get multi version start", K(ret), K(ls_id), K(tablet_id),
       K(multi_version_start), K(min_reserved_snapshot), K(min_medium_snapshot),
       K(ls_min_reserved_snapshot), K(last_major_snapshot_version));
   return ret;
