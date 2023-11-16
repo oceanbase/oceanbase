@@ -428,6 +428,13 @@ int ObTablet::init_for_merge(
     ddl_kvs_ = ddl_kvs_addr;
     ddl_kv_count_ = ddl_kv_count;
     ALLOC_AND_INIT(allocator, table_store_addr_, (*this), param, (*old_table_store));
+    if (OB_UNLIKELY(ddl_kv_count_ != ddl_kv_count
+                 || ddl_kv_count != table_store_addr_.get_ptr()->get_ddl_memtable_count())) {
+      // This is defense code. If it runs at here, it must be a bug.
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("It encounters a ddl kv array bug, please pay attention", K(ret), K(ddl_kv_count), K(ddl_kv_count_),
+          "table store ddl kv count", table_store_addr_.get_ptr()->get_ddl_memtable_count());
+    }
   }
 
   if (FAILEDx(table_store_cache_.init(table_store_addr_.get_ptr()->get_major_sstables(),
