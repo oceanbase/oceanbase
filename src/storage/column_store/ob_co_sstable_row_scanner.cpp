@@ -35,7 +35,7 @@ ObCOSSTableRowScanner::ObCOSSTableRowScanner()
     reverse_scan_(false),
     is_limit_end_(false),
     state_(BEGIN),
-    blockscan_state_(BLOCKSCAN_RANGE),
+    blockscan_state_(MAX_STATE),
     group_by_project_idx_(0),
     group_size_(0),
     column_group_cnt_(-1),
@@ -133,7 +133,7 @@ void ObCOSSTableRowScanner::reset()
   group_size_ = 0;
   reverse_scan_ = false;
   state_ = BEGIN;
-  blockscan_state_ = BLOCKSCAN_RANGE;
+  blockscan_state_ = MAX_STATE;
   range_ = nullptr;
   is_limit_end_ = false;
   pending_end_row_id_ = OB_INVALID_CS_ROW_ID;
@@ -163,7 +163,7 @@ void ObCOSSTableRowScanner::reuse()
   group_size_ = 0;
   reverse_scan_ = false;
   state_ = BEGIN;
-  blockscan_state_ = BLOCKSCAN_RANGE;
+  blockscan_state_ = MAX_STATE;
   range_ = nullptr;
   is_limit_end_ = false;
   pending_end_row_id_ = OB_INVALID_CS_ROW_ID;
@@ -182,11 +182,11 @@ int ObCOSSTableRowScanner::get_next_rows()
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             LOG_WARN("Fail to get blockscan start", K(ret), KPC(this));
           } else {
-            set_filter_not_applied();
+            blockscan_state_ = MAX_STATE;
             state_ = END;
           }
         } else if (BLOCKSCAN_FINISH == blockscan_state_) {
-          set_filter_not_applied();
+          blockscan_state_ = MAX_STATE;
           ret = OB_PUSHDOWN_STATUS_CHANGED;
         } else {
           LOG_DEBUG("[COLUMNSTORE] COScanner get_next_rows [change to filter_rows]", K(ret), K_(state), K_(blockscan_state),
@@ -202,6 +202,9 @@ int ObCOSSTableRowScanner::get_next_rows()
         } else if (OB_FAIL(filter_rows(blockscan_state_))) {
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             LOG_WARN("Fail to filter rows", K(ret), KPC(this));
+          } else if (MAX_STATE == blockscan_state_) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("Unexpected blockscan state", K(ret), K_(blockscan_state));
           } else {
             ret = OB_SUCCESS;
             state_ = STATE_TRANSITION[blockscan_state_];
@@ -236,7 +239,7 @@ int ObCOSSTableRowScanner::get_next_rows()
         } else {
           batched_row_store_->set_end();
         }
-        set_filter_not_applied();
+        blockscan_state_ = MAX_STATE;
         break;
       }
     }
@@ -540,9 +543,6 @@ int ObCOSSTableRowScanner::filter_rows(BlockScanState &blockscan_state)
   } else {
     ret = filter_rows_without_limit(blockscan_state);
   }
-  if (nullptr != block_row_store_) {
-    block_row_store_->set_filter_applied(true);
-  }
   LOG_TRACE("[COLUMNSTORE] COScanner filter_rows [end]", K(ret), K_(state), K_(blockscan_state),
             K_(current), K_(group_size), K_(end));
   return ret;
@@ -797,6 +797,9 @@ int ObCOSSTableRowScanner::inner_get_next_row(const ObDatumRow *&store_row)
   } else if (OB_FAIL(row_scanner_->inner_get_next_row_with_row_id(store_row, row_id))) {
     if (OB_UNLIKELY(OB_PUSHDOWN_STATUS_CHANGED != ret && OB_ITER_END != ret)) {
       LOG_WARN("Fail to get next row from row scanner", K(ret));
+    } else if (OB_PUSHDOWN_STATUS_CHANGED == ret) {
+      state_ = BEGIN;
+      blockscan_state_ = BLOCKSCAN_RANGE;
     }
   } else if (nullptr == getter_project_iter_) {
     // All columns have been fetched in the row scanner.

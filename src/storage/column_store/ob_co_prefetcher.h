@@ -66,7 +66,7 @@ public:
   {
     return block_scan_state_;
   }
-  OB_INLINE bool is_in_row_store_scan_mode()
+  OB_INLINE bool is_in_row_store_scan_mode() const
   {
     return ROW_STORE_SCAN == block_scan_state_;
   }
@@ -88,7 +88,7 @@ public:
   {
     return PENDING_BLOCK_SCAN == block_scan_state_;
   }
-  OB_INLINE virtual bool switch_to_columnar_scan()
+  OB_INLINE virtual bool switch_to_columnar_scan() const
   {
     return !is_in_row_store_scan_mode();
   }
