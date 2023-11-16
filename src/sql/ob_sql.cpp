@@ -608,6 +608,10 @@ int ObSql::do_real_prepare(const ObString &sql, ObSqlCtx &context, ObResultSet &
   } else if (is_mysql_mode() && ObSQLUtils::is_mysql_ps_not_support_stmt(parse_result)) {
     ret = OB_ER_UNSUPPORTED_PS;
     LOG_WARN("This command is not supported in the prepared statement protocol yet", K(ret));
+  } else if (parse_result.question_mark_ctx_.count_ > common::OB_MAX_PS_PARAM_COUNT) {
+    ret = OB_ERR_PS_TOO_MANY_PARAM;
+    LOG_WARN("There are too many parameters in the prepared statement", K(ret));
+    LOG_USER_ERROR(OB_ERR_PS_TOO_MANY_PARAM);
   } else if (result.is_simple_ps_protocol()) {
     if (OB_FAIL(ObResolverUtils::resolve_stmt_type(parse_result, stmt_type))) {
       LOG_WARN("failed to resolve stmt type", K(ret));
