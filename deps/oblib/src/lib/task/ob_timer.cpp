@@ -453,6 +453,7 @@ void ObTimer::run1()
       }
       token.task->runTimerTask();
       ObMonitor<Mutex>::Lock guard(monitor_);
+      running_task_ = NULL;
       if (token.task == uncanceled_task_) {
         uncanceled_task_ = NULL;
         token.delay = 0;
