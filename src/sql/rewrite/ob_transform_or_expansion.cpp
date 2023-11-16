@@ -1193,11 +1193,16 @@ int ObTransformOrExpansion::check_upd_del_stmt_validity(const ObDelUpdStmt &stmt
 {
   int ret = OB_SUCCESS;
   is_valid = true;
+  ObQueryCtx *query_ctx = stmt.get_query_ctx();
   ObSEArray<ObDmlTableInfo*, 2> table_infos;
   if (OB_FAIL(const_cast<ObDelUpdStmt&>(stmt).get_dml_table_infos(table_infos))) {
     LOG_WARN("failed to get dml table infos", K(ret));
   } else if (1 != table_infos.count()) {
     is_valid = false;
+    OPT_TRACE("multi dml table not support or expansion");
+  } else if (OB_ISNULL(table_infos.at(0)) || OB_ISNULL(query_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null param", K(ret));
   } else {
     // TODO following code has been removed on 3.2
     // ObDmlTableInfo* table_info = table_infos.at(0);
@@ -1207,6 +1212,21 @@ int ObTransformOrExpansion::check_upd_del_stmt_validity(const ObDelUpdStmt &stmt
     //     is_valid = false;
     //   }
     // }
+    if (NULL != stmt.get_part_expr(table_infos.at(0)->loc_table_id_,
+                                   table_infos.at(0)->ref_table_id_)) {
+      bool is_use_pdml = false;
+      if (query_ctx->get_global_hint().get_pdml_option() == ObPDMLOption::ENABLE) {
+        is_use_pdml = true;
+      } else if (query_ctx->get_global_hint().get_pdml_option() == ObPDMLOption::DISABLE) {
+        is_use_pdml = false;
+      } else if (OB_FAIL(ctx_->session_info_->get_enable_parallel_dml(is_use_pdml))) {
+        LOG_WARN("failed to get enable parallel dml", K(ret));
+      }
+      if (OB_SUCC(ret) && is_use_pdml) {
+        is_valid = false;
+        OPT_TRACE("parallel dml table not support or expansion");
+      }
+    }
   }
   return ret;
 }
