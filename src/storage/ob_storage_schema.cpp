@@ -430,7 +430,7 @@ int ObStorageSchema::init(
     STORAGE_LOG(WARN, "failed to generate column array", K(ret), K(input_schema));
   } else if (OB_FAIL(generate_column_group_array(input_schema, allocator))) {
     STORAGE_LOG(WARN, "Failed to generate column group array", K(ret));
-  } else if (OB_UNLIKELY(!is_valid())) {
+  } else if (OB_UNLIKELY(!ObStorageSchema::is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "storage schema is invalid", K(ret));
   } else {
@@ -1586,6 +1586,74 @@ void ObStorageSchema::update_column_cnt(const int64_t input_col_cnt)
     column_info_simplified_ = true;
     STORAGE_LOG(INFO, "update column cnt", K(column_cnt_), K(store_column_cnt_), K(column_cnt_), K(column_array_.count()));
   }
+}
+
+int ObCreateTabletSchema::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  BASE_SER((, ObStorageSchema));
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              table_id_,
+              index_status_,
+              truncate_version_);
+  return ret;
+}
+
+int ObCreateTabletSchema::deserialize(common::ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObStorageSchema::deserialize(allocator, buf, data_len, pos))) {
+    STORAGE_LOG(WARN, "failed to deserialize", KR(ret));
+  } else {
+    LST_DO_CODE(OB_UNIS_DECODE,
+                table_id_,
+                index_status_,
+                truncate_version_);
+  }
+  return ret;
+}
+
+int64_t ObCreateTabletSchema::get_serialize_size() const
+{
+  int64_t len = ObStorageSchema::get_serialize_size();
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              table_id_,
+              index_status_,
+              truncate_version_);
+  return len;
+}
+
+int ObCreateTabletSchema::init(
+    common::ObIAllocator &allocator,
+    const share::schema::ObTableSchema &input_schema,
+    const lib::Worker::CompatMode compat_mode,
+    const bool skip_column_info,
+    const int64_t compat_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObStorageSchema::init(allocator, input_schema, compat_mode, skip_column_info, compat_version))) {
+    STORAGE_LOG(WARN, "failed to init", K(ret), KPC(this));
+  } else {
+    table_id_ = input_schema.get_table_id();
+    index_status_ = input_schema.get_index_status();
+    truncate_version_ = input_schema.get_truncate_version();
+  }
+  return ret;
+}
+
+int ObCreateTabletSchema::init(
+    common::ObIAllocator &allocator,
+    const ObCreateTabletSchema &old_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObStorageSchema::init(allocator, old_schema))) {
+    STORAGE_LOG(WARN, "failed to init", K(ret), KPC(this));
+  } else {
+    table_id_ = old_schema.get_table_id();
+    index_status_ = old_schema.get_index_status();
+    truncate_version_ = old_schema.get_truncate_version();
+  }
+  return ret;
 }
 
 } // namespace storage

@@ -63,27 +63,37 @@ private:
 struct ObBatchCreateTabletHelper
 {
 public:
-  ObBatchCreateTabletHelper() :arg_(), table_schemas_map_(), result_(common::OB_NOT_MASTER), next_(NULL) {}
+  ObBatchCreateTabletHelper()
+    : batch_arg_(),
+      table_schemas_map_(),
+      result_(common::OB_NOT_MASTER),
+      next_(NULL)
+  {}
   int init(const share::ObLSID &ls_key,
            const int64_t tenant_id,
            const share::SCN &major_frozen_scn,
            const bool need_check_tablet_cnt);
-  int try_add_table_schema(const share::schema::ObTableSchema *table_schema, int64_t &index);
+  int try_add_table_schema(const share::schema::ObTableSchema *table_schema,
+      int64_t &index,
+      const lib::Worker::CompatMode compat_mode);
   int add_arg_to_batch_arg(const ObTabletCreatorArg &arg);
   void reset()
   {
-    arg_.reset();
+    batch_arg_.reset();
     table_schemas_map_.clear();
     result_ = common::OB_NOT_MASTER;
   }
   DECLARE_TO_STRING;
-  obrpc::ObBatchCreateTabletArg arg_;
+  obrpc::ObBatchCreateTabletArg batch_arg_;
   //table_id : index of table_schems_ in arg
   common::hash::ObHashMap<int64_t, int64_t> table_schemas_map_;
   //the result of create tablet
   int result_;
   ObBatchCreateTabletHelper *next_;
 private:
+  int add_table_schema_(const share::schema::ObTableSchema &table_schema,
+      const lib::Worker::CompatMode compat_mode,
+      int64_t &index);
   DISALLOW_COPY_AND_ASSIGN(ObBatchCreateTabletHelper);
 };
 

@@ -1936,8 +1936,7 @@ int ObLSTabletService::create_tablet(
     const common::ObTabletID &data_tablet_id,
     const share::SCN &create_scn,
     const int64_t snapshot_version,
-    const share::schema::ObTableSchema &table_schema,
-    const lib::Worker::CompatMode &compat_mode,
+    const ObCreateTabletSchema &create_tablet_schema,
     ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
@@ -1961,12 +1960,12 @@ int ObLSTabletService::create_tablet(
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("new tablet is null", K(ret), KP(tablet), KP(allocator), K(tablet_handle));
     } else if (OB_FAIL(ObTabletCreateDeleteHelper::check_need_create_empty_major_sstable(
-        table_schema, need_create_empty_major_sstable))) {
+        create_tablet_schema, need_create_empty_major_sstable))) {
       LOG_WARN("failed to check need create sstable", K(ret));
     } else if (OB_FAIL(tablet->init_for_first_time_creation(*allocator, ls_id, tablet_id, data_tablet_id,
-        create_scn, snapshot_version, table_schema, compat_mode, need_create_empty_major_sstable, freezer))) {
+        create_scn, snapshot_version, create_tablet_schema, need_create_empty_major_sstable, freezer))) {
       LOG_WARN("failed to init tablet", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id),
-          K(create_scn), K(snapshot_version), K(table_schema), K(compat_mode));
+          K(create_scn), K(snapshot_version), K(create_tablet_schema));
     } else if (OB_FAIL(t3m->compare_and_swap_tablet(key, tablet_handle, tablet_handle))) {
       LOG_WARN("failed to compare and swap tablet", K(ret), K(key), K(tablet_handle));
     } else if (OB_FAIL(tablet_id_set_.set(tablet_id))) {
