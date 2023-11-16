@@ -338,6 +338,7 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
              !static_cast< const ObInsertStmt &>(stmt).value_from_select()) {
     can_use_pdml = false;
   } else if ((stmt.is_update_stmt() || stmt.is_delete_stmt())
+             && static_cast<const ObDelUpdStmt &>(stmt).dml_source_from_join()
              && static_cast<const ObDelUpdStmt &>(stmt).is_dml_table_from_join()) {
     can_use_pdml = false;
   } else if (OB_FAIL(check_pdml_supported_feature(static_cast<const ObDelUpdStmt&>(stmt),

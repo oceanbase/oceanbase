@@ -183,6 +183,8 @@ int ObUpdateResolver::resolve(const ParseNode &parse_tree)
       LOG_TRACE("view not updatable", K(ret));
     } else if (OB_FAIL(update_stmt->check_dml_need_filter_null())) {
       LOG_WARN("failed to check dml need filter null", K(ret));
+    } else if (OB_FAIL(update_stmt->check_dml_source_from_join())) {
+      LOG_WARN("failed to check dml source from join", K(ret));
     } else if (lib::is_mysql_mode() && OB_FAIL(check_safe_update_mode(update_stmt))) {
       LOG_WARN("failed to check fulfill safe update mode", K(ret));
     } else { /*do nothing*/ }
