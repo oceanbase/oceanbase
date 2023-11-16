@@ -358,6 +358,7 @@ int ObBlockCipher::decrypt(const char *key, const int64_t key_len,
 static void* ob_malloc_openssl(size_t nbyte, const char *, int)
 {
   ObMemAttr attr;
+  attr.ctx_id_ = ObCtxIds::GLIBC;
   attr.label_ = ObModIds::OB_BUFFER;
   return ob_malloc(nbyte, attr);
 }
@@ -365,6 +366,7 @@ static void* ob_malloc_openssl(size_t nbyte, const char *, int)
 static void* ob_realloc_openssl(void *ptr, size_t nbyte, const char *, int)
 {
   ObMemAttr attr;
+  attr.ctx_id_ = ObCtxIds::GLIBC;
   attr.label_ = ObModIds::OB_BUFFER;
   return ob_realloc(ptr, nbyte, attr);
 }
