@@ -325,13 +325,12 @@ int ObPhysicalCopyTask::fetch_macro_block_(
     ret = OB_NOT_INIT;
     LOG_WARN("physical copy physical task do not init", K(ret));
   } else {
-    const int64_t *task_idx = nullptr;
     LOG_INFO("init reader", K(copy_table_key_));
-    if (!copy_ctx_->is_leader_restore_) {
-      task_idx = &task_idx_;
-    }
-    if (OB_FAIL(index_block_rebuilder.init(
-            *copy_ctx_->sstable_index_builder_, copy_ctx_->need_sort_macro_meta_, task_idx))) {
+    if (OB_UNLIKELY(task_idx_ < 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected task_idx_", K(ret), K(task_idx_));
+    } else if (OB_FAIL(index_block_rebuilder.init(
+            *copy_ctx_->sstable_index_builder_, copy_ctx_->need_sort_macro_meta_, &task_idx_))) {
       LOG_WARN("failed to init index block rebuilder", K(ret), K(copy_table_key_));
     } else if (OB_FAIL(get_macro_block_reader_(reader))) {
       LOG_WARN("fail to get macro block reader", K(ret));
