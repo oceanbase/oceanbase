@@ -1038,6 +1038,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprCurrentScn::eval_current_scn,                                 /* 606 */
   ObExprTempTableSSID::calc_temp_table_ssid,                          /* 607 */
   ObExprAlignDate4Cmp::eval_align_date4cmp,                            /* 608 */
+  ObExprJsonObjectStar::eval_ora_json_object_star,                    /* 609 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

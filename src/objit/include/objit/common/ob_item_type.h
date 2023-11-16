@@ -809,6 +809,7 @@ typedef enum ObItemType
   T_FUN_SYS_XML_ATTRIBUTES_VALUES = 1701,
   T_FUN_SYS_UPDATE_XML = 1702,
   T_FUN_SYS_PRIV_MAKE_XML_BINARY = 1703,  // add only for xml dml rewrite
+  T_FUN_SYS_JSON_OBJECT_WILD_STAR = 1704, // wild star in json object
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table

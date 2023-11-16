@@ -219,28 +219,33 @@ public:
                                        bool include_hidden,
                                        ColumnItem *&col_item);
   // dot notation
-  int pre_process_dot_notation(ParseNode &node);
+  int pre_process_json_expr(ParseNode &node);
   int print_json_path(ParseNode *&tmp_path, ObJsonBuffer &res_str);
   int check_depth_obj_access_ref(ParseNode *node, int8_t &depth, bool &exist_fun, ObJsonBuffer &sql_str, bool obj_check = true);  // obj_check : whether need check dot notaion
   int check_first_node_name(const ObString &node_name, bool &check_res);
   int transform_dot_notation2_json_query(ParseNode &node, const ObString &sql_str);
   int transform_dot_notation2_json_value(ParseNode &node, const ObString &sql_str);
-  int check_column_json_type(ParseNode *tab_col, bool &is_json_col, int8_t only_is_json = 1);
+  int check_column_json_type(ParseNode *tab_col, bool &is_json_col, bool &is_json_type, int8_t only_is_json = 1);
   int check_size_obj_access_ref(ParseNode *node);
   /* json object resolve star */
   int get_target_column_list(ObSEArray<ColumnItem, 4> &target_list, ObString &tab_name, bool all_tab,
                             bool &tab_has_alias, TableItem *&tab_item, bool is_col = false);
-  int add_column_expr_for_json_object_node(ParseNode *node,
-                                common::ObIAllocator &allocator,
-                                ObVector<ParseNode *> &t_vec,
-                                ObString col_name,
-                                ObString table_name);
-  int expand_star_in_json_object(ParseNode *node, common::ObIAllocator &allocator, int64_t pos, int64_t& col_num);
-  int check_is_json_constraint(common::ObIAllocator &allocator, ParseNode *col_node, bool& format_json, int8_t only_is_json = 0); // 1 is json & json type ; 0 is json; 2 json type
+  int pre_process_json_expr_constraint(ParseNode *node, common::ObIAllocator &allocator);
+  int process_json_object_array_node(ParseNode *node, common::ObIAllocator &allocator);
+  int process_dot_notation_in_json_object(ParseNode*& expr_node,
+                                          ParseNode* cur_node,
+                                          common::ObIAllocator &allocator,
+                                          int& pos);
+  int process_json_agg_node(ParseNode*& node, common::ObIAllocator &allocator);
+  int pre_check_dot_notation(ParseNode &node, int8_t& depth, bool& exist_fun, ObJsonBuffer& sql_str);
+  int check_is_json_constraint(common::ObIAllocator &allocator,
+                               ParseNode *col_node,
+                               bool& is_json_cst,
+                               bool& is_json_type,
+                               int8_t only_is_json = 0); // 1 is json & json type ; 0 is json; 2 json type
   bool is_array_json_expr(ParseNode *node);
   bool is_object_json_expr(ParseNode *node);
   int set_format_json_output(ParseNode *node);
-  int pre_process_json_object_contain_star(ParseNode *node, common::ObIAllocator &allocator);
   int transfer_to_inner_joined(const ParseNode &parse_node, JoinedTable *&joined_table);
   virtual int check_special_join_table(const TableItem &join_table, bool is_left_child, ObItemType join_type);
   /**

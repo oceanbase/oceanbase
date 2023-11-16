@@ -1443,23 +1443,26 @@ int ObRawExprPrinter::print_json_object(ObSysFunRawExpr *expr)
   if (OB_SUCC(ret)) {
     for (int i = 0; i < num_para - 4; i += 3) {
       PRINT_EXPR(expr->get_param_expr(i));
-      DATA_PRINTF(" VALUE ");
-      PRINT_EXPR(expr->get_param_expr(i + 1));
-      if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(i + 2))->get_value().is_int()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("type value isn't int value");
+      if (T_FUN_SYS_JSON_OBJECT_WILD_STAR == expr->get_param_expr(i)->get_expr_type()) { // do nothing
       } else {
-        int64_t type = static_cast<ObConstRawExpr*>(expr->get_param_expr(i + 2))->get_value().get_int();
-        switch (type) {
-          case 0:
-            break;
-          case 1:
-            DATA_PRINTF(" format json");
-            break;
-          default:
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("invalid type value.", K(type));
-            break;
+        DATA_PRINTF(" VALUE ");
+        PRINT_EXPR(expr->get_param_expr(i + 1));
+        if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(i + 2))->get_value().is_int()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("type value isn't int value");
+        } else {
+          int64_t type = static_cast<ObConstRawExpr*>(expr->get_param_expr(i + 2))->get_value().get_int();
+          switch (type) {
+            case 0:
+              break;
+            case 1:
+              DATA_PRINTF(" format json");
+              break;
+            default:
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid type value.", K(type));
+              break;
+          }
         }
       }
       if (i != num_para - 7 && OB_SUCC(ret)) {
@@ -1968,6 +1971,23 @@ int ObRawExprPrinter::print_json_value(ObSysFunRawExpr *expr)
   return ret;
 }
 
+int ObRawExprPrinter::print_dot_notation(ObSysFunRawExpr *expr)
+{
+  INIT_SUCC(ret);
+  PRINT_EXPR(expr->get_param_expr(0));
+  // DATA_PRINTF(".");
+  // PRINT_EXPR(expr->get_param_expr(1));
+  ObObj path_obj = static_cast<ObConstRawExpr*>(expr->get_param_expr(1))->get_value();
+  ObItemType expr_type = expr->get_param_expr(1)->get_expr_type();
+  if (T_VARCHAR != expr_type && T_CHAR != expr_type) {
+  } else if (!path_obj.get_string().empty()) {
+    // we should print string without quote
+    DATA_PRINTF("%.*s", (path_obj.get_string().length() - 1), (path_obj.get_string().ptr() + 1));
+  }
+
+  return ret;
+}
+
 int ObRawExprPrinter::print_json_query(ObSysFunRawExpr *expr)
 {
   INIT_SUCC(ret);
@@ -2362,6 +2382,23 @@ int ObRawExprPrinter::print_is_json(ObSysFunRawExpr *expr)
   return ret;
 }
 
+int ObRawExprPrinter::print_json_object_star(ObSysFunRawExpr *expr)
+{
+  INIT_SUCC(ret);
+  ObObj tab_obj = static_cast<ObConstRawExpr*>(expr->get_param_expr(0))->get_value();
+  ObItemType expr_type = expr->get_param_expr(0)->get_expr_type();
+  if (T_VARCHAR != expr_type && T_CHAR != expr_type) {
+  } else if (!tab_obj.get_string().empty()) {
+    // we should print string without qoute
+    DATA_PRINTF("%.*s", (tab_obj.get_string().length()), (tab_obj.get_string().ptr()));
+    DATA_PRINTF(".");
+  }
+  if (OB_SUCC(ret)) {
+    DATA_PRINTF("*");
+  }
+  return ret;
+}
+
 int ObRawExprPrinter::print_json_expr(ObSysFunRawExpr *expr)
 {
   int ret = OB_SUCCESS;
@@ -2372,11 +2409,21 @@ int ObRawExprPrinter::print_json_expr(ObSysFunRawExpr *expr)
     ObString func_name = expr->get_func_name();
     switch (expr->get_expr_type()) {
       case T_FUN_SYS_JSON_VALUE: {
+        // if json value only have one mismatch clause, the size of parameter is 13
+        const int8_t JSN_VAL_WITH_ONE_MISMATCH = 13;
+        const int8_t JSN_VAL_FROM_DOT_NOTATION = 8;
         // json value parameter count more than 12, because mismatch is multi-val and default value.
         // json_value(expr(0), expr(1) returning cast_type ascii xxx on empty(default value) xxx on error(default value) xxx on mismatch (xxx))
-        if (OB_UNLIKELY(expr->get_param_count() < 12)) {
+        if (OB_UNLIKELY(expr->get_param_count() < JSN_VAL_WITH_ONE_MISMATCH)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected param count of expr to type", K(ret), KPC(expr));
+        } else if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(JSN_VAL_WITH_ONE_MISMATCH - 1))->get_value().is_int()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("type value isn't int value");
+        } else if (static_cast<ObConstRawExpr*>(expr->get_param_expr(JSN_VAL_WITH_ONE_MISMATCH - 1))->get_value().get_int() == JSN_VAL_FROM_DOT_NOTATION) {
+          if (OB_FAIL(print_dot_notation(expr))) {
+            LOG_WARN("fail to print dot notation", K(ret));
+          }
         } else {
           DATA_PRINTF("json_value(");
           PRINT_EXPR(expr->get_param_expr(0));
@@ -2390,9 +2437,17 @@ int ObRawExprPrinter::print_json_expr(ObSysFunRawExpr *expr)
       }
       case T_FUN_SYS_JSON_QUERY: {
         // json query (json doc, json path, (returning cast_type) opt_scalars opt_pretty opt_ascii opt_wrapper on_error on_empty on_mismatch).
+        int64_t type = 0;
         if (OB_UNLIKELY(expr->get_param_count() != 11)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected param count of expr to type", K(ret), KPC(expr), K(expr->get_param_count()));
+        } else if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(10))->get_value().is_int()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("type value isn't int value");
+        } else if (static_cast<ObConstRawExpr*>(expr->get_param_expr(10))->get_value().get_int() == 3) {
+          if (OB_FAIL(print_dot_notation(expr))) {
+            LOG_WARN("fail to print dot notation", K(ret));
+          }
         } else {
           DATA_PRINTF("json_query(");
           PRINT_EXPR(expr->get_param_expr(0));
@@ -3074,6 +3129,12 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         } else { // mysql default
           DATA_PRINTF("%.*s", LEN_AND_PTR(func_name));
           OZ(inner_print_fun_params(*expr));
+        }
+        break;
+      }
+      case T_FUN_SYS_JSON_OBJECT_WILD_STAR: {
+        if (OB_FAIL(print_json_object_star(expr))) {
+          LOG_WARN("fail to print star in json object", K(ret));
         }
         break;
       }

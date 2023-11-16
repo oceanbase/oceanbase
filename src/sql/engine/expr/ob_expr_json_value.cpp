@@ -1789,7 +1789,7 @@ int ObExprJsonValue::get_on_mismatch(const ObExpr &expr,
           LOG_WARN("mismatch option add fail", K(ret));
         }
       } else if (option_type >= OB_JSON_TYPE_MISSING_DATA &&
-                 option_type <= OB_JSON_TYPE_IMPLICIT) {
+                 option_type <= OB_JSON_TYPE_DOT) {
         uint8_t old_value = 0;
         switch(option_type) {
           case OB_JSON_TYPE_MISSING_DATA :{
