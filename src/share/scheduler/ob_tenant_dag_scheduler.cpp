@@ -2679,9 +2679,14 @@ int ObDagPrioScheduler::loop_ready_dag_list(bool &is_found)
     ObMutexGuard guard(prio_lock_);
     if (running_task_cnts_ < adaptive_task_limit_) {
       // if extra_erase_dag_net not null, the is_found must be false.
-      is_found = (OB_SUCCESS == schedule_one_(delayed_erase_dag_nets, extra_erase_dag_net));
+      if (!check_need_load_shedding_(true/*for_schedule*/)) {
+        is_found = (OB_SUCCESS == schedule_one_(delayed_erase_dag_nets, extra_erase_dag_net));
+      }
+
       while (running_task_cnts_ < adaptive_task_limit_ && is_found) {
-        if (OB_SUCCESS != schedule_one_(delayed_erase_dag_nets, extra_erase_dag_net)) {
+        if (check_need_load_shedding_(true/*for_schedule*/)) {
+          break;
+        } else if (OB_SUCCESS != schedule_one_(delayed_erase_dag_nets, extra_erase_dag_net)) {
           break;
         }
       }
@@ -3307,6 +3312,10 @@ bool ObDagPrioScheduler::try_switch(ObTenantDagWorker &worker)
       need_pause = true;
       pause_worker_(worker);
     }
+    if (is_rank_dag_prio()) {
+      need_pause = check_need_load_shedding_(false /*for_schedule*/);
+    }
+
     if (!need_pause && !waiting_workers_.is_empty()) {
       if (waiting_workers_.get_first()->need_wake_up()) {
         // schedule_one will schedule the first worker on the waiting list first
@@ -3327,6 +3336,37 @@ bool ObDagPrioScheduler::try_switch(ObTenantDagWorker &worker)
   (void)erase_dag_nets_without_lock_(delayed_erase_dag_nets, extra_erase_dag_net); // ignore tmp_ret
   return need_pause;
 }
+
+// under prio lock
+bool ObDagPrioScheduler::check_need_load_shedding_(const bool for_schedule)
+{
+  bool need_shedding = false;
+  compaction::ObTenantTabletScheduler *tablet_scheduler = nullptr;
+
+  if (OB_ISNULL(tablet_scheduler = MTL(compaction::ObTenantTabletScheduler *))) {
+    // may be during the start phase
+  } else if (tablet_scheduler->enable_adaptive_merge_schedule()) {
+    ObTenantTabletStatMgr *stat_mgr = MTL(ObTenantTabletStatMgr *);
+    int64_t load_shedding_factor = 1;
+    const int64_t extra_limit = for_schedule ? 0 : 1;
+
+    if (OB_ISNULL(stat_mgr)) {
+    } else if (FALSE_IT(load_shedding_factor = MAX(1, stat_mgr->get_load_shedding_factor()))) {
+    } else if (load_shedding_factor <= 1 || !is_rank_dag_prio()) {
+      // no need to load shedding
+    } else {
+      const int64_t load_shedding_limit = MAX(2, limits_ / load_shedding_factor);
+      if (running_task_cnts_ > load_shedding_limit + extra_limit) {
+        need_shedding = true;
+        if (REACH_TENANT_TIME_INTERVAL(30_s)) {
+          FLOG_INFO("DagScheduler needs to load shedding", K(load_shedding_factor), K(extra_limit), K_(limits));
+        }
+      }
+    }
+  }
+  return need_shedding;
+}
+
 
 /***************************************ObDagNetScheduler impl********************************************/
 void ObDagNetScheduler::destroy()

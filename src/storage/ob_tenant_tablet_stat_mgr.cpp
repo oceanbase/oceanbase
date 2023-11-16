@@ -18,6 +18,7 @@
 #include "storage/ob_tenant_tablet_stat_mgr.h"
 #include "observer/ob_server_struct.h"
 #include "observer/ob_server.h"
+#include <sys/sysinfo.h>
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -280,9 +281,9 @@ bool ObTenantSysStat::is_full_cpu_usage() const
 {
   bool bret = false;
   if (is_small_tenant()) {
-    bret = max_cpu_cnt_ * 60 <= cpu_usage_percentage_;
+    bret = 75 <= cpu_usage_percentage_;
   } else {
-    bret = max_cpu_cnt_ * 70 <= cpu_usage_percentage_;
+    bret = 85 <= cpu_usage_percentage_;
   }
   return bret;
 }
@@ -502,6 +503,82 @@ void ObTabletStreamPool::free(ObTabletStreamNode *node)
 }
 
 
+/************************************* ObTenantSysLoadShedder *************************************/
+ObTenantSysLoadShedder::ObTenantSysLoadShedder()
+{
+  reset();
+}
+
+void ObTenantSysLoadShedder::reset()
+{
+  MEMSET(this, 0, sizeof(ObTenantSysLoadShedder));
+  load_shedding_factor_ = 1;
+}
+
+void ObTenantSysLoadShedder::refresh_sys_load()
+{
+  if (load_shedding_factor_ > 1 &&
+      ObTimeUtility::fast_current_time() < effect_time_ + SHEDDER_EXPIRE_TIME) {
+    // do nothing
+  } else if (REACH_TENANT_TIME_INTERVAL(CPU_TIME_SAMPLING_INTERVAL)) {
+    load_shedding_factor_ = 1;
+    (void) refresh_cpu_utility();
+
+    if (1 >= load_shedding_factor_) {
+      (void) refresh_cpu_usage();
+    }
+  }
+}
+
+int ObTenantSysLoadShedder::refresh_cpu_utility()
+{
+  int ret = OB_SUCCESS;
+  int64_t curr_cpu_time = last_cpu_time_;
+  int64_t inc_cpu_time = 0;
+  int64_t physical_cpu_utility = 0;
+  double max_cpu_cnt = 0; // placeholder
+
+  if (OB_FAIL(GCTX.omt_->get_tenant_cpu(MTL_ID(), min_cpu_cnt_, max_cpu_cnt))) {
+    LOG_WARN("failed to get tennant cpu cnt", K(ret));
+  } else if (OB_FAIL(GCTX.omt_->get_tenant_cpu_time(MTL_ID(), curr_cpu_time))) {
+    LOG_WARN("failed to get tennant cpu cnt", K(ret));
+  } else {
+    const int64_t curr_sample_time = ObTimeUtility::fast_current_time();
+    if (0 == last_sample_time_) {
+      // first time sample, no need to calculate cpu utility
+    } else {
+      inc_cpu_time = curr_cpu_time - last_cpu_time_;
+      physical_cpu_utility = inc_cpu_time * 100 / (curr_sample_time - last_sample_time_);
+    }
+    last_sample_time_ = curr_sample_time;
+
+    if (physical_cpu_utility >= min_cpu_cnt_ * CPU_UTIL_THRESHOLD) {
+      ATOMIC_STORE(&load_shedding_factor_, DEFAULT_LOAD_SHEDDING_FACTOR);
+      effect_time_ = ObTimeUtility::fast_current_time();
+    }
+  }
+
+  // debug log, remove later
+  FLOG_INFO("BatMan refresh cpu utility", K(ret), K(load_shedding_factor_), K(min_cpu_cnt_), K(inc_cpu_time), K(physical_cpu_utility));
+  return ret;
+}
+
+int ObTenantSysLoadShedder::refresh_cpu_usage()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(GCTX.omt_->get_tenant_cpu_usage(MTL_ID(), cpu_usage_))) {
+    LOG_WARN("failed to get tenant cpu usage", K(ret));
+  } else if (cpu_usage_ * 100 >= CPU_UTIL_THRESHOLD) {
+    effect_time_ = ObTimeUtility::fast_current_time();
+    ATOMIC_STORE(&load_shedding_factor_, DEFAULT_LOAD_SHEDDING_FACTOR);
+  }
+
+  // debug log, remove later
+  FLOG_INFO("BatMan refresh cpu usage", K(ret), K(load_shedding_factor_), "cpu_usage_percent", cpu_usage_ * 100 * 100);
+  return ret;
+}
+
 /************************************* ObTenantTabletStatMgr *************************************/
 ObTenantTabletStatMgr::ObTenantTabletStatMgr()
   : report_stat_task_(*this),
@@ -509,6 +586,7 @@ ObTenantTabletStatMgr::ObTenantTabletStatMgr()
     stream_map_(),
     bucket_lock_(),
     report_queue_(),
+    load_shedder_(),
     report_cursor_(0),
     pending_cursor_(0),
     report_tg_id_(0),
@@ -545,6 +623,7 @@ int ObTenantTabletStatMgr::init(const int64_t tenant_id)
   } else if (OB_FAIL(TG_SCHEDULE(report_tg_id_, report_stat_task_, TABLET_STAT_PROCESS_INTERVAL, repeat))) {
     LOG_WARN("failed to schedule tablet stat update task", K(ret));
   } else {
+    load_shedder_.refresh_sys_load();
     is_inited_ = true;
   }
   if (!is_inited_) {
@@ -596,6 +675,7 @@ void ObTenantTabletStatMgr::reset()
     is_inited_ = false;
   }
   bucket_lock_.destroy();
+  load_shedder_.reset();
   FLOG_INFO("ObTenantTabletStatMgr destroyed!");
 }
 
@@ -771,7 +851,7 @@ int ObTenantTabletStatMgr::get_sys_stat(ObTenantSysStat &sys_stat)
   } else {
     sys_stat.memory_hold_ = lib::get_tenant_memory_hold(MTL_ID());
     sys_stat.memory_limit_ = lib::get_tenant_memory_limit(MTL_ID());
-    sys_stat.cpu_usage_percentage_ *= 100;
+    sys_stat.cpu_usage_percentage_ *= 100 * 100;
   }
   return ret;
 }
@@ -886,6 +966,7 @@ void ObTenantTabletStatMgr::refresh_all(const int64_t step)
 void ObTenantTabletStatMgr::TabletStatUpdater::runTimerTask()
 {
   mgr_.process_stats();
+  mgr_.refresh_sys_load();
 
   int64_t interval_step = 0;
   if (CHECK_SCHEDULE_TIME_INTERVAL(CHECK_INTERVAL, interval_step)) {

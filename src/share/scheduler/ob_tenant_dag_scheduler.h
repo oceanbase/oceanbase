@@ -953,6 +953,7 @@ private:
   int deal_with_fail_dag_(ObIDag &dag, bool &retry_flag);
   int finish_task_in_dag_(ObITask &task, ObIDag &dag, ObIDagNet *&erase_dag_net);
   void pause_worker_(ObTenantDagWorker &worker);
+  bool check_need_load_shedding_(const bool for_schedule);
 
 public:
   static const int32_t MAX_SHOW_DAG_CNT = 100;
