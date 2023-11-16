@@ -195,6 +195,7 @@ target_link_libraries(oblib_base_base_base
   oss
   easy
   ${DEP_DIR}/lib/libisal.a
+  ${DEP_DIR}/lib/libcurl.a
   ${DEP_DIR}/lib/libssl.a
   ${DEP_DIR}/lib/libcrypto.a
   ${DEP_DIR}/lib/libs2.a
@@ -209,7 +210,7 @@ target_link_libraries(oblib_base_base_base
   -L${DEP_DIR}/var/usr/lib
   -L${DEP_3RD_DIR}/usr/lib
   -L${DEP_3RD_DIR}/usr/lib64
-  -laio -lpthread -lcurl -ldl -lrt
+  -laio -lpthread -ldl -lrt
   ${ARCH_LDFLAGS}
  )
 else()
@@ -220,6 +221,7 @@ target_link_libraries(oblib_base_base_base
   easy
   ${DEP_DIR}/lib/libisal.a
   $<$<STREQUAL:"${ARCHITECTURE}","x86_64">:${DEP_DIR}/lib/libunwind.a>
+  ${DEP_DIR}/lib/libcurl.a
   ${DEP_3RD_DIR}/usr/local/babassl-ob/lib/libssl.a
   ${DEP_3RD_DIR}/usr/local/babassl-ob/lib/libcrypto.a
   ${DEP_3RD_DIR}/u01/obclient/lib/libobclnt.a
@@ -232,7 +234,7 @@ target_link_libraries(oblib_base_base_base
   -L${DEP_DIR}/var/usr/lib
   -L${DEP_3RD_DIR}/usr/lib
   -L${DEP_3RD_DIR}/usr/lib64
-  -laio -lpthread -lcurl -ldl -lrt
+  -laio -lpthread -ldl -lrt
   ${ARCH_LDFLAGS}
  )
 endif()

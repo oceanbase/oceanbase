@@ -3,7 +3,7 @@ all: pstore_example_d pstore_example_s
 OBINSTALLDIR=/tmpfs/zhuweng.yzf/home/admin/oceanbase/
 DEP_DIR=/home/zhuweng.yzf/myWorkspace/oceanbase/rpm/.dep_create
 OSS_DIR=/home/zhuweng.yzf/myWorkspace/oceanbase/src/library/src/lib/restore/oss/
-LIBS=-l:libvsclient.a -l:liboss_c_sdk.a -l:libaprutil-1.a -l:libapr-1.a -l:libmxml.a -l:libeasy.a -lpthread -lc -lm -lrt -ldl -laio -lcurl -lssl -lcrypt
+LIBS=-l:libvsclient.a -l:liboss_c_sdk.a -l:libaprutil-1.a -l:libapr-1.a -l:libmxml.a -l:libeasy.a -lpthread -lc -lm -lrt -ldl -laio -l:libcurl.a -lssl -lcrypt
 
 LDFLAGS=-L/usr/lib64/ -L$(OBINSTALLDIR)/lib -L$(DEP_DIR)/lib -L$(OSS_DIR)/lib
 CPPFLAGS=-I$(OBINSTALLDIR)/include -I$(OBINSTALLDIR)/include/easy  -I${DEP_DIR}/include -I${DEP_DIR}/include/mysql
@@ -15,7 +15,7 @@ pstore_example_d: ob_pstore_example.o
 
 pstore_example_s_LDADD= -l:libeasy.a -l:libobtable.a -l:libeasy.a -l:libvsclient.a -l:liboss_c_sdk.a -l:libaprutil-1.a -l:libapr-1.a -l:libmxml.a
 pstore_example_s: ob_pstore_example.o
-	$(CXX) -v $(CXXFLAGS) -o $@ $^ $(LDFLAGS) $(pstore_example_s_LDADD) -lpthread -laio -lssl -lcrypt -lcrypto -lcurl -lrt -lmysqlclient_r -ldl
+	$(CXX) -v $(CXXFLAGS) -o $@ $^ $(LDFLAGS) $(pstore_example_s_LDADD) -lpthread -laio -lssl -lcrypt -lcrypto -l:libcurl.a -lrt -lmysqlclient_r -ldl
 
 
 
