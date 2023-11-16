@@ -224,7 +224,6 @@ private:
   int prepare_dir_and_create_meta_(const char *log_pool_path,
                                    const char *log_pool_tmp_path);
   int do_load_(const char *log_disk_path);
-  int recover_(const int64_t has_allocated_block_byte_size);
   int scan_log_disk_dir_(const char *log_disk_path, int64_t &has_allocated_block_cnt);
   int scan_log_pool_dir_and_do_trim_();
   int trim_log_pool_dir_and_init_block_id_range_(const BlockIdArray &block_id_array,

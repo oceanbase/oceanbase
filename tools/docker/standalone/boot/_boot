@@ -10,12 +10,12 @@ PHASE_START_TIME=0
 function timediff() {
   start_time=$1
   end_time=$2
-  
+
   start_s=${start_time%.*}
   start_nanos=${start_time#*.}
   end_s=${end_time%.*}
   end_nanos=${end_time#*.}
-  
+
   if [ "$end_nanos" -lt "$start_nanos" ];then
       end_s=$(( 10#$end_s - 1 ))
       end_nanos=$(( 10#$end_nanos + 10**9 ))
@@ -151,7 +151,7 @@ else # nothing here, bootstrap
   sed -i "s|@OB_DATAFILE_SIZE@|${OB_DATAFILE_SIZE}|g" $TMPFILE
   sed -i "s|@OB_LOG_DISK_SIZE@|${OB_LOG_DISK_SIZE}|g" $TMPFILE
   sed -i "s|@OB_ROOT_PASSWORD@|${OB_ROOT_PASSWORD}|g" $TMPFILE
-  
+
   [ "${OB_DATA_DIR}" ] && echo "    data_dir: ${OB_DATA_DIR}" >> $TMPFILE
   [ "${OB_REDO_DIR}" ] && echo "    redo_dir: ${OB_REDO_DIR}" >> $TMPFILE
   print_end_phase
@@ -171,9 +171,15 @@ else # nothing here, bootstrap
       deploy_failed
     fi
     print_end_phase
-    
+
     print_start_phase "Ob-deploy restore store dir"
     rm -rf ${OB_HOME_PATH}/store && tar -Sxzvf /root/boot/store.tar.gz -C ${OB_HOME_PATH}
+    BLOCK_CNT=`cat /root/boot/block_cnt`
+    for i in $(seq 0 $[ $BLOCK_CNT - 1 ])
+    do
+      fallocate -o 0 -l 67108864 ${OB_HOME_PATH}/store/clog/log_pool/$i
+      echo "restore block id $i"
+    done
     print_end_phase
 
     print_start_phase "Ob-deploy import etc"

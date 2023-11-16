@@ -58,7 +58,7 @@ if __name__ == "__main__":
     parser.add_argument("--memory_size", type=int, default=3221225472)
     parser.add_argument("--log_disk_size", type=int, default=3221225472)
     args = parser.parse_args()
-    
+
     bin_abs_path = os.path.abspath(args.observer_bin_path)
     home_abs_path = os.path.abspath(args.observer_home_path)
     data_abs_path = os.path.abspath(args.data_path)
@@ -129,9 +129,17 @@ if __name__ == "__main__":
         logging.warn("deploy observer failed")
         kill_server()
         exit(-1)
-    
+
     # stop observer
     kill_server()
+
+    # record block cnt
+    record_block_cnt_cmd = "cd %s/clog/log_pool && echo $[ `ls | wc -l` - 1 ] > %s/block_cnt" % (data_abs_path, store_tar_file_path)
+    record_res = subprocess.call(record_block_cnt_cmd, shell=True)
+    if record_res != 0:
+        logging.warn("record block cnt failed")
+        exit(-1)
+    logging.info("record block cnt ok")
 
     # build store tar file
     build_store_tar_cmd = "cd %s/clog/log_pool && ls | grep '[0-9]' | xargs rm && cd %s/.. && \

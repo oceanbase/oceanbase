@@ -592,42 +592,15 @@ int ObServerLogBlockMgr::do_load_(const char *log_disk_path)
     CLOG_LOG(WARN, "try_continous_do_resize_ failed", K(ret), KPC(this),
              K(log_disk_path), K(has_allocated_block_cnt));
   } else if (FALSE_IT(time_guard.click("try_continous_to_resize_"))
-             || (false
+             || false
                     == check_log_pool_whehter_is_integrity_(has_allocated_block_cnt
-                                                            * BLOCK_SIZE) &&
-                OB_FAIL(recover_(has_allocated_block_cnt * BLOCK_SIZE)))) {
+                                                            * BLOCK_SIZE)) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(ERROR, "check_log_pool_whehter_is_integrity_ failed, unexpected error",
              K(ret), KPC(this), K(log_disk_path), K(has_allocated_block_cnt));
   } else {
     block_cnt_in_use_ = has_allocated_block_cnt;
     CLOG_LOG(INFO, "do_load_ success", K(ret), KPC(this), K(time_guard));
-  }
-  return ret;
-}
-
-int ObServerLogBlockMgr::recover_(const int64_t has_allocated_block_byte_size)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    CLOG_LOG(WARN, "ObServerLogBlockMGR is not inited", K(ret), KPC(this));
-  } else {
-    const int64_t meta_curr_total_size_byte = log_pool_meta_.curr_total_size_;
-    const int64_t free_size_byte = get_free_size_guarded_by_lock_();
-    if (meta_curr_total_size_byte == free_size_byte + has_allocated_block_byte_size) {
-      // do nothing
-    } else if (meta_curr_total_size_byte > free_size_byte + has_allocated_block_byte_size) {
-      LogPoolMeta new_log_pool_meta = log_pool_meta_;
-      new_log_pool_meta.curr_total_size_ = free_size_byte + has_allocated_block_byte_size;
-      new_log_pool_meta.status_ = EXPANDING_STATUS;
-      return do_resize_(log_pool_meta_, 
-                        calc_block_cnt_by_size_(meta_curr_total_size_byte) - 
-                        calc_block_cnt_by_size_(free_size_byte + has_allocated_block_byte_size),
-                        new_log_pool_meta);
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-    }
   }
   return ret;
 }

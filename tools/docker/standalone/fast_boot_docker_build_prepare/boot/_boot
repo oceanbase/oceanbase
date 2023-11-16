@@ -1,13 +1,9 @@
 #!/bin/bash
-LOCAL_RPM=$1
-LOCAL_LIB_RPM=$2
-
 CWD=$(cd `dirname $0`;pwd)
 cd "${CWD}"
 
 echo "================== prepare python env ... =================="
-yum install -y wget python3 && wget https://bootstrap.pypa.io/pip/3.6/get-pip.py && \
-python3 ./get-pip.py && pip install pymysql
+yum install -y wget python3 && pip3 install pymysql
 if [ $? == 0 ]; then
     echo "================== prepare python env ok  =================="
 else
@@ -16,7 +12,7 @@ else
 fi
 
 echo "================== install oceanbase rpm ... =================="
-cd /root/pkg && yum install -y ${LOCAL_RPM} && yum install -y ${LOCAL_LIB_RPM}
+cd /root/pkg && yum install -y *.rpm
 if [ $? == 0 ]; then
     echo "================== install oceanbase rpm ok  =================="
 else

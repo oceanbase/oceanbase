@@ -117,9 +117,8 @@ docker -v 参数的详细说明可以参考 [docker volumn](https://docs.docker.
 - 必须：将`MODE`配置项修改为`STANDALONE`
 - 可选：修改其余配置项
 
-修改完毕后，执行镜像构建脚本，目前支持使用远程RPM包构建以及本地编译生成的RPM包两种方式：
+修改完毕后，执行镜像构建脚本：
 
-- 本地：`./fast_boot_docker_build.sh -L <oceanbase_rpm_path> <oceanbase_lib_rpm_path>`
-- 远程：`./fast_boot_docker_build.sh -R <remote_rpm_version>`
+- `./fast_boot_docker_build.sh <oceanbase_rpm_version>` 例如：`./fast_boot_docker_build.sh 4.2.1.0-100000102023092807`
 
 等待构建完毕后，可使用前述相同的方式启动、测试实例。
