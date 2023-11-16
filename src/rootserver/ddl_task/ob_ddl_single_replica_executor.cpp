@@ -175,16 +175,20 @@ int ObDDLSingleReplicaExecutor::schedule_task()
         LOG_INFO("send build single replica request", K(arg), K(dest_leader_addr));
       }
     }
-    if (OB_SUCCESS != (tmp_ret = proxy.wait_all(ret_array))) {
-      LOG_WARN("rpc_proxy wait failed", K(ret), K(tmp_ret));
+    if (OB_TMP_FAIL(proxy.wait_all(ret_array))) {
+      LOG_WARN("rpc_pRoxy wait failed", KR(ret), KR(tmp_ret));
       ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
-    } else if (OB_SUCC(ret)) {
-      const ObIArray<const obrpc::ObDDLBuildSingleReplicaRequestResult *> &result_array = proxy.get_results();
-      if (ret_array.count() != idxs.count() || result_array.count() != idxs.count()) {
+    } else if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(proxy.check_return_cnt(ret_array.count()))) {
+      LOG_WARN("return cnt not match", KR(ret), "return_cnt", ret_array.count());
+    } else {
+      if (ret_array.count() != idxs.count()) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("error unexpected, ret array count is not equal to request count", K(ret));
+        LOG_WARN("error unexpected, ret array count is not equal to request count",
+                 KR(ret), "return_cnt", ret_array.count(), "idxs_cnt", idxs.count());
       }
       ObSpinLockGuard guard(lock_);
+      const ObIArray<const obrpc::ObDDLBuildSingleReplicaRequestResult *> &result_array = proxy.get_results();
       for (int64_t i = 0; OB_SUCC(ret) && i < ret_array.count(); ++i) {
         const int64_t idx = idxs.at(i);
         if (!build_infos.at(idx).need_schedule()) { // already handle respone rpc

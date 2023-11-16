@@ -200,31 +200,37 @@ int ObRootMinorFreeze::do_minor_freeze(const ParamsContainer &params) const
   ObMinorFreezeProxy proxy(*rpc_proxy_, &ObSrvRpcProxy::minor_freeze);
   LOG_INFO("do minor freeze", K(params));
 
-  for (int64_t i = 0; i < params.get_params().count() && OB_SUCC(check_cancel()); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < params.get_params().count(); ++i) {
     const MinorFreezeParam &param = params.get_params().at(i);
-
-    if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = proxy.call(param.server,
-                                                        MINOR_FREEZE_TIMEOUT, param.arg)))) {
-      LOG_WARN("proxy call failed", K(tmp_ret), K(param.arg),
+    if (OB_FAIL(check_cancel())) {
+      LOG_WARN("fail to check cancel", KR(ret));
+    } else if (OB_TMP_FAIL(proxy.call(param.server, MINOR_FREEZE_TIMEOUT, param.arg))) {
+      LOG_WARN("proxy call failed", KR(tmp_ret), K(param.arg),
                "dest addr", param.server);
-      failure_cnt ++;
+      failure_cnt++;
     }
   }
 
-  if (OB_FAIL(proxy.wait())) {
-    LOG_WARN("proxy wait failed", K(ret));
+  ObArray<int> return_code_array;
+  if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
+    LOG_WARN("proxy wait failed", KR(ret), KR(tmp_ret));
+    ret = OB_SUCC(ret) ? tmp_ret : ret;
+  } else if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(proxy.check_return_cnt(return_code_array.count()))) {
+    LOG_WARN("return cnt not match", KR(ret), "return_cnt", return_code_array.count());
   } else {
     for (int i = 0; i < proxy.get_results().count(); ++i) {
-      if (OB_SUCCESS != (tmp_ret = static_cast<int>(*proxy.get_results().at(i)))) {
+      if (OB_TMP_FAIL(static_cast<int>(*proxy.get_results().at(i)))) {
         LOG_WARN("fail to do minor freeze on target server, ", K(tmp_ret),
                  "dest addr:", proxy.get_dests().at(i),
                  "param:", proxy.get_args().at(i));
-        failure_cnt ++;
+        failure_cnt++;
       }
     }
   }
 
-  if (0 != failure_cnt && OB_CANCELED != ret) {
+  if (OB_FAIL(ret)) {
+  } else if (0 != failure_cnt) {
     ret = OB_PARTIAL_FAILED;
     LOG_WARN("minor freeze partial failed", KR(ret), K(failure_cnt));
   }

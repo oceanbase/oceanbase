@@ -1703,10 +1703,13 @@ int ObCheckTabletDataComplementOp::do_check_tablets_merge_status(
     // handle batch result
     int tmp_ret = OB_SUCCESS;
     common::ObArray<int> return_ret_array;
-    if (OB_SUCCESS != (tmp_ret = proxy.wait_all(return_ret_array))) {
+    if (OB_TMP_FAIL(proxy.wait_all(return_ret_array))) {
       LOG_WARN("rpc proxy wait failed", K(tmp_ret));
       ret = OB_SUCCESS == ret ? tmp_ret : ret;
-    } else if (OB_SUCC(ret)) {
+    } else if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(proxy.check_return_cnt(return_ret_array.count()))) {
+      LOG_WARN("return cnt not match", KR(ret), "return_cnt", return_ret_array.count());
+    } else {
       if (return_ret_array.count() != ip_tablets_map.size()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("rpc proxy rsp size not equal to send size", K(ret), K(return_ret_array.count()), K(ip_tablets_map.size()));

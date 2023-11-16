@@ -110,7 +110,6 @@ private:
       const int64_t majority_cnt,
       const ObIArray<int> &return_code_array,
       const ObGetLSReplayedScnProxy &proxy,
-      const int64_t rpc_count,
       share::SCN &majority_min_readable_scn);
 
   int construct_new_member_list_(

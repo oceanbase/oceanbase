@@ -375,46 +375,41 @@ int ObSchemaHistoryRecycler::get_recycle_schema_version_by_server(
     }
     ObArray<int> return_code_array;
     int tmp_ret = OB_SUCCESS; // always wait all
-    if (OB_SUCCESS != (tmp_ret = proxy_batch.wait_all(return_code_array))) {
-      LOG_WARN("wait batch result failed", K(tmp_ret), KR(ret));
+    if (OB_TMP_FAIL(proxy_batch.wait_all(return_code_array))) {
+      LOG_WARN("wait batch result failed", KR(tmp_ret), KR(ret));
       ret = OB_SUCC(ret) ? tmp_ret : ret;
-    }
-    if (OB_FAIL(ret)) {
-    } else if (return_code_array.count() != server_list.count()
-               || return_code_array.count() != proxy_batch.get_results().count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cnt not match", KR(ret),
-               "return_cnt", return_code_array.count(),
-               "result_cnt", proxy_batch.get_results().count(),
-               "server_cnt", server_list.count());
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < return_code_array.count(); i++) {
-      int res_ret = return_code_array.at(i);
-      const ObAddr &addr = proxy_batch.get_dests().at(i);
-      if (OB_SUCCESS != res_ret) {
-        ret = res_ret;
-        LOG_WARN("rpc execute failed", KR(ret), K(addr));
-      } else {
-        const obrpc::ObGetMinSSTableSchemaVersionRes *result = proxy_batch.get_results().at(i);
-        if (OB_ISNULL(result)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("result is null", KR(ret));
-        } else if (result->ret_list_.count() != arg.tenant_id_arg_list_.count()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("cnt not match", KR(ret),
-                   "tenant_cnt", arg.tenant_id_arg_list_.count(),
-                   "result_cnt", result->ret_list_.count());
+    } else if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(proxy_batch.check_return_cnt(return_code_array.count()))) {
+      LOG_WARN("fail to check return cnt", KR(ret), "return_cnt", return_code_array.count());
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < return_code_array.count(); i++) {
+        int res_ret = return_code_array.at(i);
+        const ObAddr &addr = proxy_batch.get_dests().at(i);
+        if (OB_SUCCESS != res_ret) {
+          ret = res_ret;
+          LOG_WARN("rpc execute failed", KR(ret), K(addr));
         } else {
-          for (int64_t j = 0; OB_SUCC(ret) && j < result->ret_list_.count(); j++) {
-            int64_t schema_version = result->ret_list_.at(j);
-            uint64_t tenant_id = arg.tenant_id_arg_list_.at(j);
-            if (FAILEDx(fill_recycle_schema_versions(
-                tenant_id, schema_version, recycle_schema_versions))) {
-              LOG_WARN("fail to fill recycle schema versions",
-                       KR(ret), K(tenant_id), K(schema_version));
+          const obrpc::ObGetMinSSTableSchemaVersionRes *result = proxy_batch.get_results().at(i);
+          if (OB_ISNULL(result)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("result is null", KR(ret));
+          } else if (result->ret_list_.count() != arg.tenant_id_arg_list_.count()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("cnt not match", KR(ret),
+                     "tenant_cnt", arg.tenant_id_arg_list_.count(),
+                     "result_cnt", result->ret_list_.count());
+          } else {
+            for (int64_t j = 0; OB_SUCC(ret) && j < result->ret_list_.count(); j++) {
+              int64_t schema_version = result->ret_list_.at(j);
+              uint64_t tenant_id = arg.tenant_id_arg_list_.at(j);
+              if (FAILEDx(fill_recycle_schema_versions(
+                  tenant_id, schema_version, recycle_schema_versions))) {
+                LOG_WARN("fail to fill recycle schema versions",
+                         KR(ret), K(tenant_id), K(schema_version));
+              }
+              LOG_INFO("[SCHEMA_RECYCLE] get recycle schema version from observer",
+                       KR(ret), K(addr), K(tenant_id), K(schema_version));
             }
-            LOG_INFO("[SCHEMA_RECYCLE] get recycle schema version from observer",
-                     KR(ret), K(addr), K(tenant_id), K(schema_version));
           }
         }
       }

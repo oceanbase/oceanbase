@@ -2200,6 +2200,8 @@ int ObRootUtils::notify_switch_leader(
       if (OB_TMP_FAIL(proxy.wait())) {
         ret = OB_SUCC(ret) ? tmp_ret : ret;
         LOG_WARN("failed to wait all result", KR(ret), KR(tmp_ret));
+      } else if (OB_SUCC(ret)) {
+        // arg/dest/result can be used here.
       }
     }
   }

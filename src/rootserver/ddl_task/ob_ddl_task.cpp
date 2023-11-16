@@ -1810,10 +1810,13 @@ int check_trans_end(const ObArray<SendItem> &send_array,
     // collect result
     int tmp_ret = OB_SUCCESS;
     common::ObArray<int> tmp_ret_array;
-    if (OB_SUCCESS != (tmp_ret = proxy.wait_all(tmp_ret_array))) {
-      LOG_WARN("rpc proxy wait failed", K(tmp_ret));
+    if (OB_TMP_FAIL(proxy.wait_all(tmp_ret_array))) {
+      LOG_WARN("rpc proxy wait failed", KR(ret), KR(tmp_ret));
       ret = OB_SUCCESS == ret ? tmp_ret : ret;
-    } else if (OB_SUCC(ret)) {
+    } else if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(proxy.check_return_cnt(tmp_ret_array.count()))) {
+      LOG_WARN("return cnt not match", KR(ret), "return_cnt", tmp_ret_array.count());
+    } else {
       const ObIArray<const Res *> &result_array = proxy.get_results();
       const ObIArray<Arg> &arg_array = proxy.get_args();
       const ObIArray<ObAddr> &dest_array = proxy.get_dests();
