@@ -18,6 +18,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/multi_data_source/ob_mds_table_merge_dag_param.h"
+#include "storage/tx/ob_multi_data_source.h"
 
 namespace oceanbase
 {
@@ -25,6 +26,8 @@ namespace storage
 {
 namespace mds
 {
+
+TLOCAL(transaction::NotifyType, TLOCAL_MDS_TRANS_NOTIFY_TYPE) = transaction::NotifyType::UNKNOWN;
 
 int MdsTableBase::advance_state_to(State new_state) const
 {
