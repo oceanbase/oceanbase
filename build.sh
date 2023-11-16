@@ -3,6 +3,7 @@
 TOPDIR=`readlink -f \`dirname $0\``
 BUILD_SH=$TOPDIR/build.sh
 
+
 DEP_DIR=${TOPDIR}/deps/3rd/usr/local/oceanbase/deps/devel
 TOOLS_DIR=${TOPDIR}/deps/3rd/usr/local/oceanbase/devtools
 CMAKE_COMMAND="${TOOLS_DIR}/bin/cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=1"
