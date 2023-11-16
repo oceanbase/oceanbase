@@ -639,6 +639,7 @@ int ObVirtualShowTrace::find_child_span_info(sql::ObFLTShowTraceRec::trace_forma
   }
 
 
+  // invalid span check
   for (int64_t i = 0; OB_SUCC(ret) && i < tmp_arr.count(); ++i) {
     if (arr.count() > 0) {
       if (OB_ISNULL(arr.at(arr.count() - 1))) {
@@ -646,9 +647,11 @@ int ObVirtualShowTrace::find_child_span_info(sql::ObFLTShowTraceRec::trace_forma
       } else if (OB_ISNULL(tmp_arr.at(i))) {
          // do nothing
       } else {
-        if (arr.at(arr.count() - 1)->data_.start_ts_ > tmp_arr.at(i)->data_.start_ts_) {
-          ret = OB_ERR_UNEXPECTED;
+        // There is a 2s clock error between machines
+        if (arr.at(arr.count() - 1)->data_.start_ts_ - tmp_arr.at(i)->data_.start_ts_ > 10000000 &&
+           arr.at(arr.count() - 1)->data_.span_id_ == tmp_arr.at(i)->data_.parent_span_id_) {
           LOG_WARN("invalid trace span", K(arr.at(arr.count() - 1)->data_), K(tmp_arr.at(i)->data_));
+          LOG_USER_ERROR(OB_ERR_UNEXPECTED, "invalid trace span");
         }
       }
     }
