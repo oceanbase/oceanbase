@@ -7422,6 +7422,13 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
                     || ob_is_xml_sql_type(result_type.get_type(), result_type.get_subschema_id())))) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_WARN("xml type can not convert other type in pl", K(ret));
+        } else if (result_type.is_ext()
+                    && (result_type.get_accuracy().get_accuracy() == 300004 ||
+                        result_type.get_accuracy().get_accuracy() == 300005)
+                    && obj.is_xml_sql_type()) {
+          // Disable sql_udt to anytype conversion
+          ret = OB_ERR_INVALID_XML_DATATYPE;
+          LOG_WARN("sql udt type can not convert extend any type", K(ret));
         } else if (OB_FAIL(ObExprColumnConv::convert_with_null_check(tmp_obj, obj, result_type, is_strict, cast_ctx, type_info))) {
           LOG_WARN("fail to convert with null check", K(ret));
         }
