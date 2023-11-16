@@ -247,12 +247,10 @@ public:
   int fetch_table_store(ObTabletMemberWrapper<ObTabletTableStore> &wrapper) const;
   int load_storage_schema(
       common::ObIAllocator &allocator,
-      const ObStorageSchema *&storage_schema) const;
+      ObStorageSchema *&storage_schema) const;
   int read_medium_info_list(
       common::ObArenaAllocator &allocator,
       const compaction::ObMediumCompactionInfoList *&medium_info_list) const;
-
-  static void free_storage_schema(common::ObIAllocator &allocator, const ObStorageSchema *storage_schema);
 
   void set_tablet_addr(const ObMetaDiskAddr &tablet_addr);
   void set_allocator(ObArenaAllocator *allocator) { allocator_ = allocator; }

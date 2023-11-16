@@ -2180,7 +2180,7 @@ int ObLS::try_update_upper_trans_version_and_gc_sstable(
         LOG_WARN("failed to check need remove old store", K(tmp_ret), K(snapshot_info), K(tablet_id));
       } else if (need_remove) {
         ObArenaAllocator tmp_arena("RmOldTblTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-        const ObStorageSchema *storage_schema = nullptr;
+        ObStorageSchema *storage_schema = nullptr;
         if (OB_TMP_FAIL(tablet->load_storage_schema(tmp_arena, storage_schema))) {
           LOG_WARN("failed to load storage schema", K(tmp_ret), K(tablet));
         } else {
@@ -2193,7 +2193,7 @@ int ObLS::try_update_upper_trans_version_and_gc_sstable(
                 K(tablet_id), K(snapshot_info), KPC(tablet));
           }
         }
-        ObTablet::free_storage_schema(tmp_arena, storage_schema);
+        ObTabletObjLoadHelper::free(tmp_arena, storage_schema);
       }
     }
   } // end while

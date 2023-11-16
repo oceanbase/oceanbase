@@ -552,7 +552,7 @@ bool ObBasicTabletMergeCtx::need_swap_tablet(const ObTablet &tablet,
 int ObBasicTabletMergeCtx::get_storage_schema()
 {
   int ret  = OB_SUCCESS;
-  const ObStorageSchema *schema_on_tablet = nullptr;
+  ObStorageSchema *schema_on_tablet = nullptr;
   if (OB_FAIL(get_tablet()->load_storage_schema(mem_ctx_.get_allocator(), schema_on_tablet))) {
     LOG_WARN("failed to load storage schema", K(ret), K_(tablet_handle));
   } else {

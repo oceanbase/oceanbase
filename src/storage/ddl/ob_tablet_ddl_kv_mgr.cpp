@@ -726,7 +726,7 @@ int ObTabletDDLKvMgr::update_tablet(ObTablet &tablet,
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
   ObArenaAllocator tmp_arena("DDLUpdateTblTmp");
-  const ObStorageSchema *storage_schema = nullptr;
+  ObStorageSchema *storage_schema = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -760,7 +760,7 @@ int ObTabletDDLKvMgr::update_tablet(ObTablet &tablet,
       LOG_INFO("update tablet success", K(ls_id_), K(tablet_id_), K(param), K(start_scn), K(snapshot_version), K(ddl_checkpoint_scn));
     }
   }
-  ObTablet::free_storage_schema(tmp_arena, storage_schema);
+  ObTabletObjLoadHelper::free(tmp_arena, storage_schema);
   return ret;
 }
 
@@ -788,7 +788,7 @@ int ObTabletDDLKvMgr::update_ddl_major_sstable(ObTablet &tablet)
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
   ObArenaAllocator allocator;
-  const ObStorageSchema *storage_schema = nullptr;
+  ObStorageSchema *storage_schema = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -808,7 +808,7 @@ int ObTabletDDLKvMgr::update_ddl_major_sstable(ObTablet &tablet)
       LOG_WARN("failed to update tablet table store", K(ret), K(ls_id_), K(tablet_id_), K(param));
     }
   }
-  ObTablet::free_storage_schema(allocator, storage_schema);
+  ObTabletObjLoadHelper::free(allocator, storage_schema);
   return ret;
 }
 

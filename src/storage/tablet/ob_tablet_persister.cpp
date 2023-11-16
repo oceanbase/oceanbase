@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/tablet/ob_tablet_persister.h"
+#include "storage/ob_storage_schema.h"
 #include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
@@ -1119,7 +1120,7 @@ int ObTabletPersister::load_storage_schema_and_fill_write_info(
     common::ObIArray<ObSharedBlockWriteInfo> &write_infos)
 {
   int ret = OB_SUCCESS;
-  const ObStorageSchema *storage_schema = nullptr;
+  ObStorageSchema *storage_schema = nullptr;
   if (OB_FAIL(tablet.load_storage_schema(allocator, storage_schema))) {
     LOG_WARN("fail to load storage schema", K(ret));
   } else if (OB_ISNULL(storage_schema)) {
@@ -1128,7 +1129,7 @@ int ObTabletPersister::load_storage_schema_and_fill_write_info(
   } else if (OB_FAIL(fill_write_info(allocator, storage_schema, write_infos))) {
     LOG_WARN("fail to fill write info", K(ret), KP(storage_schema));
   }
-  ObTablet::free_storage_schema(allocator, storage_schema);
+  ObTabletObjLoadHelper::free(allocator, storage_schema);
   return ret;
 }
 

@@ -783,10 +783,10 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator tmp_arena("ShrBlkMgrTmp");
-  const ObStorageSchema *storage_schema = nullptr;
+  ObStorageSchema *storage_schema = nullptr;
   data_desc.reset();
   if (OB_FAIL(tablet.load_storage_schema(tmp_arena, storage_schema))) {
-    LOG_WARN("fail to load storage schema", K(ret), K(tablet));
+  LOG_WARN("fail to load storage schema", K(ret), K(tablet));
   } else if (OB_FAIL(data_desc.init(
         *storage_schema,
         tablet.get_tablet_meta().ls_id_,
@@ -802,7 +802,7 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
     // from that of old sstable, since the encryption method of one tablet may change before defragmentation
     LOG_WARN("failed to update basic info from macro_meta", KR(ret), K(basic_meta));
   }
-  ObTablet::free_storage_schema(tmp_arena, storage_schema);
+  ObTabletObjLoadHelper::free(tmp_arena, storage_schema);
   return ret;
 }
 

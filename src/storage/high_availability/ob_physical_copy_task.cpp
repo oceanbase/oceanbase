@@ -971,7 +971,7 @@ int ObSSTableCopyFinishTask::create_empty_sstable_()
     ObTabletHandle tablet_handle;
     ObTablet *tablet = nullptr;
     common::ObArenaAllocator tmp_allocator; // for storage schema
-    const ObStorageSchema *storage_schema_ptr = nullptr;
+    ObStorageSchema *storage_schema_ptr = nullptr;
     if (OB_FAIL(ls_->ha_get_tablet(copy_ctx_.tablet_id_, tablet_handle))) {
       LOG_WARN("failed to get tablet", K(ret), K(copy_ctx_));
     } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
@@ -990,7 +990,7 @@ int ObSSTableCopyFinishTask::create_empty_sstable_()
             tablet_copy_finish_task_->get_allocator(), table_handle))) {
       LOG_WARN("failed to create co sstable", K(ret), K(param), K(copy_ctx_));
     }
-    ObTablet::free_storage_schema(tmp_allocator, storage_schema_ptr);
+    ObTabletObjLoadHelper::free(tmp_allocator, storage_schema_ptr);
   } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable(param,
           tablet_copy_finish_task_->get_allocator(), table_handle))) {
     LOG_WARN("failed to create sstable", K(ret), K(param), K(copy_ctx_));

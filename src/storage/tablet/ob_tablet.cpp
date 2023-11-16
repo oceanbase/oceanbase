@@ -381,7 +381,7 @@ int ObTablet::init_for_merge(
   common::ObArenaAllocator tmp_arena_allocator(common::ObMemAttr(MTL_ID(), "InitTablet"));
   ObTabletMemberWrapper<ObTabletTableStore> old_table_store_wrapper;
   const ObTabletTableStore *old_table_store = nullptr;
-  const ObStorageSchema *old_storage_schema = nullptr;
+  ObStorageSchema *old_storage_schema = nullptr;
   const ObTabletMdsData &old_mds_data = old_tablet.mds_data_;
   const bool update_in_major_type_merge = param.need_report_ && param.sstable_->is_major_sstable();
   int64_t finish_medium_scn = 0;
@@ -484,7 +484,7 @@ int ObTablet::init_for_merge(
   if (OB_UNLIKELY(!is_inited_)) {
     reset();
   }
-  ObTablet::free_storage_schema(tmp_arena_allocator, old_storage_schema);
+  ObTabletObjLoadHelper::free(tmp_arena_allocator, old_storage_schema);
 
   return ret;
 }
@@ -502,7 +502,7 @@ int ObTablet::init_for_mds_table_dump(
   common::ObArenaAllocator tmp_arena_allocator(common::ObMemAttr(MTL_ID(), "InitTabletMDS"));
   ObTabletMemberWrapper<ObTabletTableStore> old_table_store_wrapper;
   const ObTabletTableStore *old_table_store = nullptr;
-  const ObStorageSchema *old_storage_schema = nullptr;
+  ObStorageSchema *old_storage_schema = nullptr;
   int64_t finish_medium_scn = 0;
   ObITable **ddl_kvs_addr = nullptr;
   int64_t ddl_kv_count = 0;
@@ -559,7 +559,7 @@ int ObTablet::init_for_mds_table_dump(
     is_inited_ = true;
     LOG_INFO("succeeded to init tablet for mds table dump", K(ret), K(old_tablet), K(flush_scn), KPC(this), K(mds_table_data), K(base_data));
   }
-  ObTablet::free_storage_schema(tmp_arena_allocator, old_storage_schema);
+  ObTabletObjLoadHelper::free(tmp_arena_allocator, old_storage_schema);
 
   return ret;
 }
@@ -668,7 +668,7 @@ int ObTablet::init_for_defragment(
   common::ObArenaAllocator tmp_arena_allocator(common::ObMemAttr(MTL_ID(), "InitTablet"));
   ObTabletMemberWrapper<ObTabletTableStore> old_table_store_wrapper;
   const ObTabletTableStore *old_table_store = nullptr;
-  const ObStorageSchema *old_storage_schema = nullptr;
+  ObStorageSchema *old_storage_schema = nullptr;
   const ObTabletMdsData &old_mds_data = old_tablet.mds_data_;
   allocator_ = &allocator;
   ObITable **ddl_kvs_addr = nullptr;
@@ -738,7 +738,7 @@ int ObTablet::init_for_defragment(
   if (OB_UNLIKELY(!is_inited_)) {
     reset();
   }
-  ObTablet::free_storage_schema(tmp_arena_allocator, old_storage_schema);
+  ObTabletObjLoadHelper::free(tmp_arena_allocator, old_storage_schema);
 
   return ret;
 }
@@ -778,7 +778,7 @@ int ObTablet::init_for_sstable_replace(
   common::ObArenaAllocator tmp_arena_allocator(common::ObMemAttr(MTL_ID(), "InitTablet"));
   ObTabletMemberWrapper<ObTabletTableStore> old_table_store_wrapper;
   const ObTabletTableStore *old_table_store = nullptr;
-  const ObStorageSchema *old_storage_schema = nullptr;
+  ObStorageSchema *old_storage_schema = nullptr;
   const ObStorageSchema *storage_schema = nullptr;
   int64_t finish_medium_scn = 0;
   ObITable **ddl_kvs_addr = nullptr;
@@ -867,7 +867,7 @@ int ObTablet::init_for_sstable_replace(
   if (OB_UNLIKELY(!is_inited_)) {
     reset();
   }
-  ObTablet::free_storage_schema(tmp_arena_allocator, old_storage_schema);
+  ObTabletObjLoadHelper::free(tmp_arena_allocator, old_storage_schema);
 
 #ifdef ERRSIM
   ObErrsimBackfillPointType point_type(ObErrsimBackfillPointType::TYPE::ERRSIM_REPLACE_SWAP_BEFORE);
@@ -939,7 +939,7 @@ int ObTablet::fetch_autoinc_seq(ObTabletMemberWrapper<ObTabletAutoincSeq> &wrapp
   return ret;
 }
 
-int ObTablet::load_storage_schema(common::ObIAllocator &allocator, const ObStorageSchema *&storage_schema) const
+int ObTablet::load_storage_schema(common::ObIAllocator &allocator, ObStorageSchema *&storage_schema) const
 {
   int ret = OB_SUCCESS;
   ObStorageSchema *schema = nullptr;
@@ -957,7 +957,7 @@ int ObTablet::load_storage_schema(common::ObIAllocator &allocator, const ObStora
   }
 
   if (OB_FAIL(ret)) {
-    ObTablet::free_storage_schema(allocator, schema);
+    ObTabletObjLoadHelper::free(allocator, schema);
   } else if (OB_ISNULL(schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to load storage schema", K(ret), K_(storage_schema_addr));
@@ -965,19 +965,11 @@ int ObTablet::load_storage_schema(common::ObIAllocator &allocator, const ObStora
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected invalid schema", K(ret), K_(storage_schema_addr), KPC(schema));
 
-    ObTablet::free_storage_schema(allocator, schema);
+    ObTabletObjLoadHelper::free(allocator, schema);
   } else {
     storage_schema = schema;
   }
   return ret;
-}
-
-void ObTablet::free_storage_schema(common::ObIAllocator &allocator, const ObStorageSchema *storage_schema)
-{
-  if (OB_NOT_NULL(storage_schema)) {
-    storage_schema->~ObStorageSchema();
-    allocator.free(const_cast<ObStorageSchema*>(storage_schema));
-  }
 }
 
 int ObTablet::read_medium_info_list(
@@ -1046,7 +1038,7 @@ int ObTablet::init_with_update_medium_info(
   ObTabletMemberWrapper<ObTabletAutoincSeq> auto_inc_seqwrapper;
   const ObTabletMeta &old_tablet_meta = old_tablet.tablet_meta_;
   const ObTabletTableStore *old_table_store = nullptr;
-  const ObStorageSchema *old_storage_schema = nullptr;
+  ObStorageSchema *old_storage_schema = nullptr;
   const ObTabletMdsData &old_mds_data = old_tablet.mds_data_;
 
   if (OB_UNLIKELY(is_inited_)) {
@@ -1104,7 +1096,7 @@ int ObTablet::init_with_update_medium_info(
     }
   }
 
-  ObTablet::free_storage_schema(allocator, old_storage_schema);
+  ObTabletObjLoadHelper::free(allocator, old_storage_schema);
 
   if (OB_UNLIKELY(!is_inited_)) {
     reset();
@@ -1121,7 +1113,7 @@ int ObTablet::init_with_new_snapshot_version(
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   const ObTabletMeta &old_tablet_meta = old_tablet.tablet_meta_;
   const ObTabletTableStore *old_table_store = nullptr;
-  const ObStorageSchema *old_storage_schema = nullptr;
+  ObStorageSchema *old_storage_schema = nullptr;
   const ObTabletMdsData &old_mds_data = old_tablet.mds_data_;
 
   if (OB_UNLIKELY(is_inited_)) {
@@ -1178,13 +1170,11 @@ int ObTablet::init_with_new_snapshot_version(
     is_inited_ = true;
   }
 
-  ObTablet::free_storage_schema(allocator, old_storage_schema);
-
   if (OB_UNLIKELY(!is_inited_)) {
     reset();
   }
 
-  ObTablet::free_storage_schema(allocator, old_storage_schema);
+  ObTabletObjLoadHelper::free(allocator, old_storage_schema);
 
   return ret;
 }
@@ -1241,7 +1231,7 @@ int ObTablet::check_sstable_column_checksum() const
 {
   int ret = OB_SUCCESS;
   common::ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "CKColCKS"));
-  const ObStorageSchema *storage_schema = nullptr;
+  ObStorageSchema *storage_schema = nullptr;
   ObTableStoreIterator iter;
   int64_t schema_col_cnt = 0;
   int64_t sstable_col_cnt = 0;
@@ -1282,7 +1272,7 @@ int ObTablet::check_sstable_column_checksum() const
       }
     }
   }
-  ObTablet::free_storage_schema(allocator, storage_schema);
+  ObTabletObjLoadHelper::free(allocator, storage_schema);
   return ret;
 }
 
@@ -1472,7 +1462,7 @@ int ObTablet::deserialize_post_work(common::ObArenaAllocator &allocator)
     LOG_WARN("failed to increase macro ref cnt", K(ret));
   } else {
     ObArenaAllocator arena_allocator(common::ObMemAttr(MTL_ID(), "TmpSchema"));
-    const ObStorageSchema *schema = nullptr;
+    ObStorageSchema *schema = nullptr;
     if (!is_empty_shell()) {
       if (OB_FAIL(load_storage_schema(arena_allocator, schema))) {
         LOG_WARN("load storage schema failed", K(ret));
@@ -1486,7 +1476,7 @@ int ObTablet::deserialize_post_work(common::ObArenaAllocator &allocator)
             K(schema->schema_version_));
         tablet_meta_.max_sync_storage_schema_version_ = schema->schema_version_;
       }
-      ObTablet::free_storage_schema(arena_allocator, schema);
+      ObTabletObjLoadHelper::free(arena_allocator, schema);
     }
     if (OB_SUCC(ret) && tablet_meta_.has_next_tablet_) {
       if (next_tablet_guard_.get_obj()->deserialize_post_work(allocator)) {
@@ -1823,7 +1813,7 @@ int ObTablet::deserialize(
         }
       }
       if (OB_SUCC(ret) && !is_empty_shell()) {
-        const ObStorageSchema *storage_schema = nullptr;
+        ObStorageSchema *storage_schema = nullptr;
         if (OB_FAIL(load_storage_schema(allocator, storage_schema))) {
           LOG_WARN("failed to load storage schema", K(ret));
         } else if (OB_FAIL(table_store_cache_.init(table_store->get_major_sstables(),
@@ -1831,7 +1821,7 @@ int ObTablet::deserialize(
                 storage_schema->is_row_store()))) {
           LOG_WARN("failed to init table store cache", K(ret), KPC(this));
         }
-        ObTablet::free_storage_schema(allocator, storage_schema);
+        ObTabletObjLoadHelper::free(allocator, storage_schema);
       }
     }
 
@@ -3621,7 +3611,7 @@ int ObTablet::get_schema_version_from_storage_schema(int64_t &schema_version) co
 {
   int ret = OB_SUCCESS;
   const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
-  const ObStorageSchema *storage_schema = nullptr;
+  ObStorageSchema *storage_schema = nullptr;
   ObArenaAllocator arena_allocator(common::ObMemAttr(MTL_ID(), "TmpSchema"));
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -3631,7 +3621,7 @@ int ObTablet::get_schema_version_from_storage_schema(int64_t &schema_version) co
   } else {
     schema_version = storage_schema->schema_version_;
   }
-  ObTablet::free_storage_schema(arena_allocator, storage_schema);
+  ObTabletObjLoadHelper::free(arena_allocator, storage_schema);
   return ret;
 }
 
@@ -3642,7 +3632,7 @@ int ObTablet::get_newest_schema_version(int64_t &schema_version) const
 
   ObArenaAllocator tmp_allocator;
   ObSEArray<storage::ObITable *, MAX_MEMSTORE_CNT> memtables;
-  const ObStorageSchema *schema_on_tablet = nullptr;
+  ObStorageSchema *schema_on_tablet = nullptr;
   int64_t store_column_cnt_in_schema = 0;
   if (OB_FAIL(get_memtables(memtables, true/*need_active*/))) {
     LOG_WARN("failed to get memtables", KR(ret), KPC(this));
@@ -3666,7 +3656,7 @@ int ObTablet::get_newest_schema_version(int64_t &schema_version) const
       schema_version = MAX(max_schema_version_on_memtable, schema_version);
     }
   }
-  ObTablet::free_storage_schema(tmp_allocator, schema_on_tablet);
+  ObTabletObjLoadHelper::free(tmp_allocator, schema_on_tablet);
   return ret;
 }
 
@@ -4035,7 +4025,7 @@ int ObTablet::build_read_info(common::ObArenaAllocator &allocator, const ObTable
   int ret = OB_SUCCESS;
   int64_t full_stored_col_cnt = 0;
   common::ObArenaAllocator tmp_allocator(common::ObMemAttr(MTL_ID(), "TmpSchema"));
-  const ObStorageSchema *storage_schema = nullptr;
+  ObStorageSchema *storage_schema = nullptr;
   ObSEArray<share::schema::ObColDesc, 16> cols_desc;
   tablet = (tablet == nullptr) ? this : tablet;
   if (OB_FAIL(tablet->load_storage_schema(tmp_allocator, storage_schema))) {
@@ -4053,7 +4043,7 @@ int ObTablet::build_read_info(common::ObArenaAllocator &allocator, const ObTable
                                              cols_desc))) {
     LOG_WARN("fail to init rowkey read info", K(ret), KPC(storage_schema));
   }
-  ObTablet::free_storage_schema(tmp_allocator, storage_schema);
+  ObTabletObjLoadHelper::free(tmp_allocator, storage_schema);
   return ret;
 }
 
@@ -4153,7 +4143,7 @@ int ObTablet::build_migration_tablet_param(
     mig_tablet_param.is_empty_shell_ = is_empty_shell();
 
     ObArenaAllocator arena_allocator(common::ObMemAttr(MTL_ID(), "BuildMigParam"));
-    const ObStorageSchema *storage_schema = nullptr;
+    ObStorageSchema *storage_schema = nullptr;
     const ObTabletAutoincSeq *tablet_autoinc_seq = nullptr;
     if (!is_empty_shell()) {
       if (OB_FAIL(load_storage_schema(arena_allocator, storage_schema))) {
@@ -4165,7 +4155,6 @@ int ObTablet::build_migration_tablet_param(
       } else if (OB_FAIL(mig_tablet_param.mds_data_.init(mig_tablet_param.allocator_, mds_data_))) {
         LOG_WARN("failed to assign mds data", K(ret), K_(mds_data));
       }
-      ObTablet::free_storage_schema(arena_allocator, storage_schema);
     } else {
       const ObTabletCreateDeleteMdsUserData &user_data = mds_data_.tablet_status_cache_;
       const int64_t serialize_size = user_data.get_serialize_size();
@@ -4180,7 +4169,7 @@ int ObTablet::build_migration_tablet_param(
         mig_tablet_param.mds_data_.tablet_status_committed_kv_.v_.user_data_.assign_ptr(buffer, serialize_size);
       }
     }
-    ObTablet::free_storage_schema(arena_allocator, storage_schema);
+    ObTabletObjLoadHelper::free(arena_allocator, storage_schema);
   }
 
   return ret;
@@ -5004,7 +4993,7 @@ int ObTablet::get_storage_schema_for_transfer_in(
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = tablet_meta_.ls_id_;
   const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
-  const ObStorageSchema *tablet_storage_schema = nullptr;
+  ObStorageSchema *tablet_storage_schema = nullptr;
   ObIMemtableMgr *memtable_mgr = nullptr;
   ObArray<ObTableHandleV2> memtables;
   int64_t max_column_cnt_in_memtable = 0;
@@ -5050,7 +5039,7 @@ int ObTablet::get_storage_schema_for_transfer_in(
     LOG_INFO("succeeded to get storage schema from transfer source tablet", K(ret), K(storage_schema), K(max_column_cnt_in_memtable),
         K(max_schema_version_in_memtable), K(old_column_cnt), K(store_column_cnt_in_schema), K(old_schema_version));
   }
-  ObTablet::free_storage_schema(allocator, tablet_storage_schema);
+  ObTabletObjLoadHelper::free(allocator, tablet_storage_schema);
   return ret;
 }
 
@@ -6519,10 +6508,10 @@ int ObTablet::check_transfer_seq_equal(const ObTablet &tablet, const int64_t tra
 int ObTablet::get_column_store_sstable_checksum(common::ObIArray<int64_t> &column_checksums, ObCOSSTableV2 &co_sstable)
 {
   int ret = OB_SUCCESS;
-  const ObStorageSchema *storage_schema = nullptr;
+  ObStorageSchema *storage_schema = nullptr;
   ObArenaAllocator allocator;
   if (OB_FAIL(load_storage_schema(allocator, storage_schema))) {
-    LOG_WARN("fail to load_storage_schema", K(ret));
+    LOG_WARN("fail to load storage schema", K(ret));
   } else {
     const common::ObIArray<ObStorageColumnGroupSchema> &column_groups = storage_schema->get_column_groups();
     column_checksums.reset();
@@ -6577,7 +6566,7 @@ int ObTablet::get_column_store_sstable_checksum(common::ObIArray<int64_t> &colum
       }
     }
   }
-  free_storage_schema(allocator, storage_schema);
+  ObTabletObjLoadHelper::free(allocator, storage_schema);
   return ret;
 }
 
