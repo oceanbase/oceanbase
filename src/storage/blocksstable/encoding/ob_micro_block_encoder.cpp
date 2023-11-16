@@ -96,6 +96,7 @@ ObMicroBlockEncoder::ObMicroBlockEncoder() : ctx_(), header_(NULL),
     data_buffer_(),
     datum_rows_(OB_MALLOC_NORMAL_BLOCK_SIZE, MICRO_BLOCK_PAGE_ALLOCATOR),
     all_col_datums_(OB_MALLOC_NORMAL_BLOCK_SIZE, MICRO_BLOCK_PAGE_ALLOCATOR),
+    pivot_allocator_(lib::ObMemAttr(MTL_ID(), blocksstable::OB_ENCODING_LABEL_PIVOT), OB_MALLOC_MIDDLE_BLOCK_SIZE),
     estimate_size_(0), estimate_size_limit_(0),
     header_size_(0), expand_pct_(DEFAULT_ESTIMATE_REAL_SIZE_PCT),
     row_buf_holder_(),
@@ -210,9 +211,13 @@ void ObMicroBlockEncoder::reset()
   datum_rows_.reset();
   FOREACH(cv, all_col_datums_) {
     ObColDatums *p = *cv;
-    OB_DELETE(ObColDatums, blocksstable::OB_ENCODING_LABEL_PIVOT, p);
+    if (nullptr != p) {
+      p->~ObColDatums();
+      pivot_allocator_.free(p);
+    }
   }
   all_col_datums_.reset();
+  pivot_allocator_.reset();
   estimate_size_ = 0;
   estimate_size_limit_ = 0;
   header_size_ = 0;
@@ -242,6 +247,7 @@ void ObMicroBlockEncoder::reuse()
   FOREACH(c, all_col_datums_) {
     (*c)->reuse();
   }
+  // pivot_allocator_  pivot array memory is cached until encoder reset()
   row_buf_holder_.reuse();
   estimate_size_ = 0;
   // estimate_size_limit_
@@ -312,15 +318,17 @@ int ObMicroBlockEncoder::init_all_col_values(const ObMicroBlockEncodingCtx &ctx)
   if (OB_FAIL(all_col_datums_.reserve(ctx.column_cnt_))) {
     LOG_WARN("reserve array failed", K(ret), "size", ctx.column_cnt_);
   }
-  lib::ObMemAttr attr(MTL_ID(), blocksstable::OB_ENCODING_LABEL_PIVOT);
   for (int64_t i = all_col_datums_.count(); i < ctx.column_cnt_ && OB_SUCC(ret); ++i) {
-    ObColDatums *c = OB_NEW(ObColDatums, attr);
+    ObColDatums *c = OB_NEWx(ObColDatums, &pivot_allocator_, pivot_allocator_);
     if (OB_ISNULL(c)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc memory failed", K(ret), K(ctx));
     } else if (OB_FAIL(all_col_datums_.push_back(c))) {
       LOG_WARN("push back column values failed", K(ret));
-      OB_DELETE(ObColDatums, attr, c);
+      if (nullptr != c) {
+        c->~ObColDatums();
+        pivot_allocator_.free(c);
+      }
     }
   }
   return ret;
