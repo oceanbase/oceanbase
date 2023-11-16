@@ -8352,6 +8352,13 @@ void ObDetectMasterRsLSResult::reset()
   ls_info_.reset();
 }
 
+bool ObDetectMasterRsLSResult::is_valid() const
+{
+  return ObRole::INVALID_ROLE != role_ // sys ls replica is leader/follower
+         || master_rs_.is_valid();     // sys ls replica not exist
+
+}
+
 void ObDetectMasterRsLSResult::set_role(const common::ObRole &role)
 {
   role_ = role;

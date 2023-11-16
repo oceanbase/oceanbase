@@ -605,15 +605,19 @@ int ObRestoreScheduler::restore_keystore(const share::ObPhysicalRestoreJob &job_
     }
 
     int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = proxy.wait_all(return_code_array))) {
+    if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
       LOG_WARN("wait batch result failed", KR(tmp_ret), KR(ret));
       ret = OB_SUCC(ret) ? tmp_ret : ret;
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < return_code_array.count(); i++) {
-      ret = return_code_array.at(i);
-      const ObAddr &addr = proxy.get_dests().at(i);
-      if (OB_FAIL(ret)) {
-        LOG_WARN("failed to restore key", KR(ret), K(addr));
+    } else if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(proxy.check_return_cnt(return_code_array.count()))) {
+      LOG_WARN("fail to check return cnt", KR(ret), "return_cnt", return_code_array.count());
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < return_code_array.count(); i++) {
+        ret = return_code_array.at(i);
+        const ObAddr &addr = proxy.get_dests().at(i);
+        if (OB_FAIL(ret)) {
+          LOG_WARN("failed to restore key", KR(ret), K(addr));
+        }
       }
     }
   }

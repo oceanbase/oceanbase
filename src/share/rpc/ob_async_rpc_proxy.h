@@ -140,6 +140,8 @@ public:
   const common::ObIArray<common::ObAddr> &get_dests() const { return dests_; }
   const common::ObIArray<const RpcResult *> &get_results() const { return results_; }
   int receive_response();
+
+  int check_return_cnt(const int64_t return_cnt) const;
 private:
   int call_rpc(const common::ObAddr &server, const int64_t timeout, const int64_t cluster_id,
                const uint64_t tenant_id, const RpcArg &arg, ObAsyncCB<PC, ObAsyncRpcProxy, RpcProxy> *cb);
@@ -185,6 +187,7 @@ template<ObRpcPacketCode PC, typename RpcArg, typename RpcResult, typename Func,
 void ObAsyncRpcProxy<PC, RpcArg, RpcResult, Func, RpcProxy>::reuse()
 {
   args_.reuse();
+  dests_.reuse();
   results_.reuse();
   response_count_ = 0;
   ObAsyncCB<PC, ObAsyncRpcProxy, RpcProxy> *cb = cb_list_.get_first();
@@ -463,6 +466,24 @@ int ObAsyncRpcProxy<PC, RpcArg, RpcResult, Func, RpcProxy>::receive_response()
         RPC_LOG(WARN, "condition broadcast failed", K(tmp_ret));
       }
     }
+  }
+  return ret;
+}
+
+template<ObRpcPacketCode PC, typename RpcArg, typename RpcResult, typename Func, typename RpcProxy>
+int ObAsyncRpcProxy<PC, RpcArg, RpcResult, Func, RpcProxy>::check_return_cnt(
+    const int64_t return_cnt) const
+{
+  int ret = common::OB_SUCCESS;
+  if (return_cnt != args_.count()
+      || return_cnt != dests_.count()
+      || return_cnt != results_.count()) {
+    ret = common::OB_INVALID_ARGUMENT;
+    RPC_LOG(WARN, "return cnt not match",
+            KR(ret), K(return_cnt),
+            "arg_cnt", args_.count(),
+            "dest_cnt", dests_.count(),
+            "result_cnt", results_.count());
   }
   return ret;
 }

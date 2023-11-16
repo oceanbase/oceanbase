@@ -862,22 +862,23 @@ int ObLSLocationService::detect_ls_leaders_(
     if (OB_TMP_FAIL(proxy.wait_all(return_ret_array))) { // ignore ret
       LOG_WARN("wait batch result failed", KR(tmp_ret), KR(ret));
       ret = OB_SUCC(ret) ? tmp_ret : ret;
+    } else if (OB_FAIL(ret)) {
     } else {
+      // don't use arg/dest here because call() may has failure.
+      // !use_invalid_addr means count of args_/dest_/results_/return_rets are matched.
+      const bool use_invalid_addr = (OB_SUCCESS != proxy.check_return_cnt(return_ret_array.count()));
       ObAddr invalid_addr;
-      for (int64_t i = 0; OB_SUCC(ret) && i < return_ret_array.count(); i++) {
-        int return_ret = return_ret_array.at(i);
+      for (int64_t i = 0; OB_SUCC(ret) && i < proxy.get_results().count(); i++) {
         const obrpc::ObGetLeaderLocationsResult *result = proxy.get_results().at(i);
-        if (OB_SUCCESS == return_ret) {
-          if (OB_NOT_NULL(result)) {
-            if (OB_FAIL(append(leaders, result->get_leader_replicas()))) {
-              LOG_WARN("fail to append array", KR(ret), KPC(result));
-            }
-          } else {
-            LOG_TRACE("result is null", K(i), K(timeout));
-          }
+        const ObAddr &addr = use_invalid_addr ? invalid_addr : dests.at(i);
+        if (!use_invalid_addr && OB_SUCCESS != return_ret_array.at(i)) {
+          LOG_WARN("fail to get result by rpc, just ignore", "tmp_ret", return_ret_array.at(i), K(addr));
+        } else if (OB_ISNULL(result) || !result->is_valid()) {
+          // return fail
+        } else if (OB_FAIL(append(leaders, result->get_leader_replicas()))) {
+          LOG_WARN("fail to append array", KR(ret), KPC(result));
         } else {
-          LOG_TRACE("fail to detect ls leader", "ret", return_ret, K(timeout),
-                    "addr", OB_ISNULL(result) ? invalid_addr : result->get_addr());
+          LOG_TRACE("result is null", K(i), K(timeout), K(addr));
         }
       } // end for
     }

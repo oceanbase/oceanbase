@@ -346,9 +346,11 @@ int ObPreBootstrap::notify_sys_tenant_server_unit_resource()
       }
     }
     int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = notify_proxy.wait())) {
+    if (OB_TMP_FAIL(notify_proxy.wait())) {
       LOG_WARN("fail to wait notify resource", K(ret), K(tmp_ret));
       ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
+    } else if (OB_SUCC(ret)) {
+      // can use arg/dest/result here.
     }
   }
 
@@ -924,18 +926,22 @@ int ObBootstrap::broadcast_sys_schema(const ObSArray<ObTableSchema> &table_schem
 
     ObArray<int> return_code_array;
     int tmp_ret = OB_SUCCESS; // always wait all
-    if (OB_SUCCESS != (tmp_ret = proxy.wait_all(return_code_array))) {
+    if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
       LOG_WARN("wait batch result failed", KR(tmp_ret), KR(ret));
       ret = OB_SUCC(ret) ? tmp_ret : ret;
+    } else if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(proxy.check_return_cnt(return_code_array.count()))) {
+      LOG_WARN("return cnt not match", KR(ret), "return_cnt", return_code_array.count());
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < return_code_array.count(); i++) {
+        int res_ret = return_code_array.at(i);
+        const ObAddr &addr = proxy.get_dests().at(i);
+        if (OB_SUCCESS != res_ret) {
+          ret = res_ret;
+          LOG_WARN("broadcast schema failed", KR(ret), K(addr));
+        }
+      } // end for
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < return_code_array.count(); i++) {
-      int res_ret = return_code_array.at(i);
-      const ObAddr &addr = proxy.get_dests().at(i);
-      if (OB_SUCCESS != res_ret) {
-        ret = res_ret;
-        LOG_WARN("broadcast schema failed", KR(ret), K(addr));
-      }
-    } // end for
   }
   BOOTSTRAP_CHECK_SUCCESS();
   return ret;

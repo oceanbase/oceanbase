@@ -399,7 +399,6 @@ int ObLSCreator::create_ls_(const ObILSAddr &addrs,
       LOG_WARN("fail to set timeout ctx", KR(ret));
     } else {
       obrpc::ObCreateLSArg arg;
-      int64_t rpc_count = 0;
       int tmp_ret = OB_SUCCESS;
       ObArray<int> return_code_array;
       lib::Worker::CompatMode new_compat_mode = compat_mode == ORACLE_MODE ?
@@ -409,7 +408,6 @@ int ObLSCreator::create_ls_(const ObILSAddr &addrs,
       for (int64_t i = 0; OB_SUCC(ret) && i < addrs.count(); ++i) {
         arg.reset();
         const ObLSReplicaAddr &addr = addrs.at(i);
-        rpc_count++;
         if (OB_FAIL(arg.init(tenant_id_, id_, addr.replica_type_,
                 addr.replica_property_, tenant_info, create_scn, new_compat_mode,
                 create_with_palf, palf_base_info))) {
@@ -424,10 +422,10 @@ int ObLSCreator::create_ls_(const ObILSAddr &addrs,
       //wait all
       if (OB_TMP_FAIL(create_ls_proxy_.wait_all(return_code_array))) {
         ret = OB_SUCC(ret) ? tmp_ret : ret;
-        LOG_WARN("failed to wait all async rpc", KR(ret), KR(tmp_ret), K(rpc_count));
+        LOG_WARN("failed to wait all async rpc", KR(ret), KR(tmp_ret));
       }
-      if (FAILEDx(check_create_ls_result_(rpc_count, paxos_replica_num, return_code_array, member_list, learner_list))) {
-        LOG_WARN("failed to check ls result", KR(ret), K(rpc_count), K(paxos_replica_num), K(return_code_array), K(learner_list));
+      if (FAILEDx(check_create_ls_result_(paxos_replica_num, return_code_array, member_list, learner_list))) {
+        LOG_WARN("failed to check ls result", KR(ret), K(paxos_replica_num), K(return_code_array), K(learner_list));
       }
 
 #ifdef OB_BUILD_ARBITRATION
@@ -555,11 +553,11 @@ int ObLSCreator::try_create_arbitration_service_replica_(
 }
 #endif
 
-int ObLSCreator::check_create_ls_result_(const int64_t rpc_count,
-                                        const int64_t paxos_replica_num,
-                                        const ObIArray<int> &return_code_array,
-                                        common::ObMemberList &member_list,
-                                        common::GlobalLearnerList &learner_list)
+int ObLSCreator::check_create_ls_result_(
+    const int64_t paxos_replica_num,
+    const ObIArray<int> &return_code_array,
+    common::ObMemberList &member_list,
+    common::GlobalLearnerList &learner_list)
 {
   int ret = OB_SUCCESS;
   member_list.reset();
@@ -567,13 +565,13 @@ int ObLSCreator::check_create_ls_result_(const int64_t rpc_count,
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret));
-  } else if (rpc_count != return_code_array.count()
-             || rpc_count !=  create_ls_proxy_.get_results().count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("rpc count not equal to result count", KR(ret), K(rpc_count),
-          K(return_code_array), "arg count", create_ls_proxy_.get_args().count());
+  } else if (return_code_array.count() != create_ls_proxy_.get_results().count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rpc count not equal to result count", KR(ret),
+             K(return_code_array.count()), K(create_ls_proxy_.get_results().count()));
   } else {
     const int64_t timestamp = 1;
+    // don't use arg/dest here because call() may has failure.
     for (int64_t i = 0; OB_SUCC(ret) && i < return_code_array.count(); ++i) {
       if (OB_SUCCESS != return_code_array.at(i)) {
         LOG_WARN("rpc is failed", KR(ret), K(return_code_array.at(i)), K(i));
@@ -607,11 +605,12 @@ int ObLSCreator::check_create_ls_result_(const int64_t rpc_count,
               LOG_WARN("failed to add member", KR(ret), K(addr));
             }
           }
-          LOG_TRACE("create ls result", KR(ret), K(i), K(addr), KPC(result), K(rpc_count));
+          LOG_TRACE("create ls result", KR(ret), K(i), K(addr), KPC(result));
         }
       }
     }
-    if (rootserver::majority(paxos_replica_num) > member_list.get_member_number()) {
+    if (OB_FAIL(ret)) {
+    } else if (rootserver::majority(paxos_replica_num) > member_list.get_member_number()) {
       ret = OB_REPLICA_NUM_NOT_ENOUGH;
       LOG_WARN("success count less than majority", KR(ret), K(paxos_replica_num),
                K(member_list));
@@ -733,11 +732,9 @@ int ObLSCreator::set_member_list_(const common::ObMemberList &member_list,
     if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.rpc_timeout))) {
       LOG_WARN("fail to set timeout ctx", KR(ret));
     } else {
-      int64_t rpc_count = 0;
       ObArray<int> return_code_array;
       for (int64_t i = 0; OB_SUCC(ret) && i < member_list.get_member_number(); ++i) {
         ObAddr addr;
-        rpc_count++;
         ObSetMemberListArgV2 arg;
         if (OB_FAIL(arg.init(tenant_id_, id_, paxos_replica_num, member_list, arbitration_service, learner_list))) {
           LOG_WARN("failed to init set member list arg", KR(ret), K_(id), K_(tenant_id),
@@ -755,11 +752,11 @@ int ObLSCreator::set_member_list_(const common::ObMemberList &member_list,
 
       if (OB_TMP_FAIL(set_member_list_proxy_.wait_all(return_code_array))) {
         ret = OB_SUCC(ret) ? tmp_ret : ret;
-        LOG_WARN("failed to wait all async rpc", KR(ret), KR(tmp_ret), K(rpc_count));
+        LOG_WARN("failed to wait all async rpc", KR(ret), KR(tmp_ret));
 
       }
-      if (FAILEDx(check_set_memberlist_result_(rpc_count, return_code_array, paxos_replica_num))) {
-        LOG_WARN("failed to check set member liset result", KR(ret), K(rpc_count),
+      if (FAILEDx(check_set_memberlist_result_(return_code_array, paxos_replica_num))) {
+        LOG_WARN("failed to check set member liset result", KR(ret),
             K(paxos_replica_num), K(return_code_array));
       }
     }
@@ -777,21 +774,21 @@ int ObLSCreator::set_member_list_(const common::ObMemberList &member_list,
   return ret;
 }
 
-int ObLSCreator::check_set_memberlist_result_(const int64_t rpc_count,
-                            const ObIArray<int> &return_code_array,
-                            const int64_t paxos_replica_num)
+int ObLSCreator::check_set_memberlist_result_(
+    const ObIArray<int> &return_code_array,
+    const int64_t paxos_replica_num)
 {
   int ret = OB_SUCCESS;
   int64_t success_cnt = 0;
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret));
-  } else if (rpc_count != return_code_array.count()
-             || rpc_count !=  set_member_list_proxy_.get_results().count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("rpc count not equal to result count", KR(ret), K(rpc_count),
-          K(return_code_array), "arg count", set_member_list_proxy_.get_args().count());
+  } else if (return_code_array.count() != set_member_list_proxy_.get_results().count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rpc count not equal to result count", KR(ret),
+        K(return_code_array.count()), K(set_member_list_proxy_.get_results().count()));
   } else {
+    // don't use arg/dest here because call() may has failure.
     for (int64_t i = 0; OB_SUCC(ret) && i < return_code_array.count(); ++i) {
       if (OB_SUCCESS != return_code_array.at(i)) {
         LOG_WARN("rpc is failed", KR(ret), K(return_code_array.at(i)), K(i));
@@ -807,7 +804,8 @@ int ObLSCreator::check_set_memberlist_result_(const int64_t rpc_count,
         }
       }
     }
-    if (rootserver::majority(paxos_replica_num) > success_cnt) {
+    if (OB_FAIL(ret)) {
+    } else if (rootserver::majority(paxos_replica_num) > success_cnt) {
       ret = OB_REPLICA_NUM_NOT_ENOUGH;
       LOG_WARN("success count less than majority", KR(ret), K(success_cnt),
                K(paxos_replica_num));

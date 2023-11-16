@@ -175,14 +175,12 @@ private:
       const ObTenantRole &tenant_role,
       const ObAddr &arbitration_service);
 #endif
- int check_create_ls_result_(const int64_t rpc_count,
-                            const int64_t paxos_replica_num,
-                            const ObIArray<int> &return_code_array,
-                            common::ObMemberList &member_list,
-                            common::GlobalLearnerList &learner_list);
- int check_set_memberlist_result_(const int64_t rpc_count,
-                            const ObIArray<int> &return_code_array,
-                            const int64_t paxos_replica_num);
+ int check_create_ls_result_(const int64_t paxos_replica_num,
+                             const ObIArray<int> &return_code_array,
+                             common::ObMemberList &member_list,
+                             common::GlobalLearnerList &learner_list);
+ int check_set_memberlist_result_(const ObIArray<int> &return_code_array,
+                                  const int64_t paxos_replica_num);
 
   // alloc ls addr for duplicate log stream
   // @params[in]  tenant_id, which tenant's log stream

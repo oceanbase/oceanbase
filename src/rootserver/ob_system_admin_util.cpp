@@ -714,14 +714,15 @@ int ObAdminRefreshSchema::call_server(const ObAddr &server)
     if (OB_FAIL(proxy.call(server, timeout_ts, arg))) {
       LOG_WARN("notify switch schema failed", KR(ret), K(server), K_(schema_version), K_(schema_info));
     }
-
     if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
       ret = OB_SUCC(ret) ? tmp_ret : ret;
       LOG_WARN("fail to wait all", KR(ret), KR(tmp_ret), K(server));
     } else if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(return_code_array.empty())) {
+    } else if (OB_FAIL(proxy.check_return_cnt(return_code_array.count()))) {
+      LOG_WARN("fail to check return cnt", KR(ret), K(server), "return_cnt", return_code_array.count());
+    } else if (OB_UNLIKELY(1 != return_code_array.count())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("return_code_array is empty", KR(ret), K(server));
+      LOG_WARN("return_code_array count shoud be 1", KR(ret), K(server), "return_cnt", return_code_array.count());
     } else {
       ret = return_code_array.at(0);
     }

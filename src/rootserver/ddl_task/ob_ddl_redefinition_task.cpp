@@ -2634,19 +2634,21 @@ int ObSyncTabletAutoincSeqCtx::call_and_process_all_tablet_autoinc_seqs(P &proxy
     // wait rpc and process result
     int tmp_ret = OB_SUCCESS;
     common::ObArray<int> tmp_ret_array;
-    if (OB_SUCCESS != (tmp_ret = proxy.wait_all(tmp_ret_array))) {
-      LOG_WARN("rpc proxy wait failed", K(tmp_ret));
+    if (OB_TMP_FAIL(proxy.wait_all(tmp_ret_array))) {
+      LOG_WARN("rpc proxy wait failed", KR(ret), KR(tmp_ret));
       ret = OB_SUCCESS == ret ? tmp_ret : ret;
-    } else if (OB_SUCC(ret)) {
-      const auto &result_array = proxy.get_results();
-      if (tmp_ret_array.count() != ls_to_tablet_map.size() || result_array.count() != ls_to_tablet_map.size()) {
+    } else if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(proxy.check_return_cnt(tmp_ret_array.count()))) {
+      LOG_WARN("return cnt not match", KR(ret), "return_cnt", tmp_ret_array.count());
+    } else {
+      if (tmp_ret_array.count() != ls_to_tablet_map.size()) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("result count not match", K(ret), K(ls_to_tablet_map.size()), K(tmp_ret_array.count()), K(result_array.count()));
+        LOG_WARN("result count not match", KR(ret), K(ls_to_tablet_map.size()), K(tmp_ret_array.count()));
       } else {
         ObHashMap<ObLSID, ObSEArray<ObMigrateTabletAutoincSeqParam, 1>>::hashtable::iterator map_iter = ls_to_tablet_map.begin();
         int64_t new_params_cnt = 0;
-
         // check and reserve first
+        const auto &result_array = proxy.get_results();
         for (int64_t i = 0; OB_SUCC(ret) && i < result_array.count(); ++i, ++map_iter) {
           const int rpc_ret_code = tmp_ret_array.at(i);
           const auto *cur_result = result_array.at(i);

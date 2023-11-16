@@ -349,15 +349,12 @@ void ObTenantInfoLoader::broadcast_tenant_info_content_()
     }
 
     int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = proxy.wait_all(return_code_array))) {
+    if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
       LOG_WARN("wait all batch result failed", KR(ret), KR(tmp_ret));
       ret = OB_SUCCESS == ret ? tmp_ret : ret;
-    } else if (proxy.get_results().count() != return_code_array.count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("result count not match", KR(ret),
-                K(rpc_count), K(return_code_array), "arg count",
-                proxy.get_args().count(), K(proxy.get_results().count()));
     } else if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(proxy.check_return_cnt(return_code_array.count()))) {
+      LOG_WARN("fail to check return cnt", KR(ret), "return_cnt", return_code_array.count());
     } else {
       (void)ATOMIC_AAF(&broadcast_times_, 1);
       ObUpdateTenantInfoCacheRes res;
