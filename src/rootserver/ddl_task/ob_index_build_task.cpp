@@ -1224,17 +1224,9 @@ int ObIndexBuildTask::update_index_status_in_schema(const ObTableSchema &index_s
     int64_t ddl_rpc_timeout = 0;
     int64_t tmp_timeout = 0;
     if (INDEX_STATUS_AVAILABLE == new_status) {
-      const bool is_create_index_syntax = create_index_arg_.ddl_stmt_str_.trim().prefix_match_ci("create");
-      if (create_index_arg_.ddl_stmt_str_.empty()) {
-        // alter table syntax.
-      } else if (OB_UNLIKELY(!is_create_index_syntax)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected err", K(ret), "ddl_stmt_str", create_index_arg_.ddl_stmt_str_, K(create_index_arg_));
-      } else {
-        // For create index syntax, create_index_arg_ will record the user sql, and generate the ddl_stmt_str when anabling index.
-        // For alter table add index syntax, create_index_arg_ will not record the user sql, and generate the ddl_stmt_str when generating index schema.
-        arg.ddl_stmt_str_ = create_index_arg_.ddl_stmt_str_;
-      }
+      // For create index syntax, create_index_arg_ will record the user sql, and generate the ddl_stmt_str when nabling index.
+      // For alter table add index syntax, create_index_arg_ will not record the user sql, and generate the ddl_stmt_str when generating index schema.
+      arg.ddl_stmt_str_ = create_index_arg_.ddl_stmt_str_;
     }
 
     DEBUG_SYNC(BEFORE_UPDATE_GLOBAL_INDEX_STATUS);
@@ -1325,10 +1317,11 @@ int ObIndexBuildTask::clean_on_failed()
           index_name = "__fake";
         } else if (OB_FAIL(index_schema->get_index_name(index_name))) {
           LOG_WARN("get index name failed", K(ret));
-        } else if (0 == parent_task_id_
-          && !create_index_arg_.ddl_stmt_str_.trim().prefix_match_ci("create")) {
-          // generate ddl_stmt if it is not a child task.
-          if (is_oracle_mode) {
+        } else if (0 == parent_task_id_) {
+          if (!create_index_arg_.ddl_stmt_str_.empty()) { // means create index syntax.
+            // 1. rollback of alter table add index is completed by the following splicing sql.
+            // 2. rollback of create index does nothing here because the stmt only be recorded when enabling index.
+          } else if (is_oracle_mode) {
             if (OB_FAIL(drop_index_sql.append_fmt("drop index \"%.*s\"", index_name.length(), index_name.ptr()))) {
               LOG_WARN("generate drop index sql failed", K(ret));
             }
