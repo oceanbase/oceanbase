@@ -89,24 +89,29 @@ int ObMicroBlockDataHandle::get_micro_block_data(
       block_data = loaded_block_data_;
     } else {
       try_release_loaded_block();
-      //try sync io
-      ObMicroBlockId micro_block_id;
-      micro_block_id.macro_id_ = macro_block_id_;
-      micro_block_id.offset_ = micro_info_.offset_;
-      micro_block_id.size_ = micro_info_.size_;
-      is_loaded_block_ = true;
-      if (OB_FAIL(ObStorageCacheSuite::get_instance().get_micro_block_cache(is_data_block).load_block(
-                  micro_block_id,
-                  des_meta_,
-                  macro_reader,
-                  loaded_block_data_,
-                  allocator_))) {
-        LOG_WARN("Fail to load micro block, ", K(ret), K_(tenant_id), K_(macro_block_id), K_(micro_info));
-        try_release_loaded_block();
+      if (THIS_WORKER.get_timeout_remain() <= 0) {
+      // already timeout, don't retry
+      LOG_WARN("get data block data already timeout", K(ret), K(THIS_WORKER.get_timeout_remain()));
       } else {
-        io_handle_.reset();
-        block_state_ = ObSSTableMicroBlockState::NEED_SYNC_IO;
-        block_data = loaded_block_data_;
+        //try sync io
+        ObMicroBlockId micro_block_id;
+        micro_block_id.macro_id_ = macro_block_id_;
+        micro_block_id.offset_ = micro_info_.offset_;
+        micro_block_id.size_ = micro_info_.size_;
+        is_loaded_block_ = true;
+        if (OB_FAIL(ObStorageCacheSuite::get_instance().get_micro_block_cache(is_data_block).load_block(
+                    micro_block_id,
+                    des_meta_,
+                    macro_reader,
+                    loaded_block_data_,
+                    allocator_))) {
+          LOG_WARN("Fail to load micro block, ", K(ret), K_(tenant_id), K_(macro_block_id), K_(micro_info));
+          try_release_loaded_block();
+        } else {
+          io_handle_.reset();
+          block_state_ = ObSSTableMicroBlockState::NEED_SYNC_IO;
+          block_data = loaded_block_data_;
+        }
       }
     }
   }
