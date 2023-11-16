@@ -1743,3 +1743,5 @@ DEF_BOOL(_enable_range_extraction_for_not_in, OB_TENANT_PARAMETER, "True",
 //     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_STR(palf_inject_receive_log_error_zone, OB_CLUSTER_PARAMETER, "", "specifies the zone name that palf module want to inject error when receive log",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_STR(migrate_check_member_list_error_zone, OB_CLUSTER_PARAMETER, "", "specifies the zone name that migrate want to inject error when change member list",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

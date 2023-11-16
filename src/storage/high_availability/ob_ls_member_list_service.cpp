@@ -411,11 +411,11 @@ int ObLSMemberListService::check_ls_transfer_scn_validity_for_standby_(palf::Log
       share::SCN transfer_scn;
       palf::LogConfigVersion config_version;
       bool need_get_config_version = (addr == leader_addr);
-      if (OB_FAIL(get_config_version_and_transfer_scn_(batch_proxy,
-                                                       addr,
-                                                       need_get_config_version,
-                                                       ls_->get_tenant_id(),
-                                                       ls_->get_ls_id()))) {
+      if (OB_TMP_FAIL(get_config_version_and_transfer_scn_(batch_proxy,
+                                                           addr,
+                                                           need_get_config_version,
+                                                           ls_->get_tenant_id(),
+                                                           ls_->get_ls_id()))) {
         STORAGE_LOG(WARN, "failed to get config version and transfer scn", K(ret), K(addr));
       }
     }
@@ -441,6 +441,8 @@ int ObLSMemberListService::check_ls_transfer_scn_validity_for_standby_(palf::Log
                                                       leader_config_version,
                                                       leader_transfer_scn))) {
       STORAGE_LOG(WARN, "failed to process result from async rpc", KR(ret), KR(tmp_ret));
+    } else {
+      STORAGE_LOG(INFO, "process result from async rpc", KR(ret), K(return_code_array), K(addr_list), K(batch_proxy.get_results()));
     }
     if (OB_SUCC(ret)) {
       // standby check transfer scn need reach majority
@@ -475,8 +477,16 @@ int ObLSMemberListService::process_result_from_async_rpc_(
   int tmp_ret = OB_SUCCESS;
   ARRAY_FOREACH_X(proxy.get_results(), idx, cnt, OB_SUCC(ret)) {
     const ObStorageChangeMemberRes *response = proxy.get_results().at(idx);
+    const int res_ret = return_code_array.at(idx);
     bool check_pass = false;
-    if (OB_ISNULL(response)) {
+    if (OB_SUCCESS != res_ret) {
+#ifdef ERRSIM
+      SERVER_EVENT_ADD("storage_ha", "check_ls_transfer_scn_validity_for_standby_failed",
+                      "tenant_id", ls_->get_tenant_id(),
+                      "ls_id", ls_->get_ls_id().id(),
+                      "result", res_ret);
+#endif
+    } else if (OB_ISNULL(response)) {
       tmp_ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "hb_response is null", KR(ret), KR(tmp_ret));
     } else if (for_standby && OB_FAIL(check_ls_transfer_scn_(response->transfer_scn_, check_pass))) {
