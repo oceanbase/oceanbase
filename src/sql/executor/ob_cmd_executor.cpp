@@ -1005,6 +1005,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObTableTTLStmt, ObTableTTLExecutor);
         break;
       }
+      case stmt::T_ALTER_SYSTEM_RESET_PARAMETER: {
+        DEFINE_EXECUTE_CMD(ObResetConfigStmt, ObResetConfigExecutor);
+        break;
+      }
       case stmt::T_CS_DISKMAINTAIN:
       case stmt::T_TABLET_CMD:
       case stmt::T_SWITCH_ROOTSERVER:

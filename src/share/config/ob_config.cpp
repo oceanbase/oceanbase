@@ -115,6 +115,8 @@ void ObConfigItem::init(Scope::ScopeInfo scope_info,
     set_name(name);
     if (!set_value(def)) {
       OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Set config item value failed", K(name), K(def));
+    } else if (!set_default_value(def)) {
+      OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Set config item default value failed", K(name), K(def));
     } else {
      set_info(info);
      attr_ = attr;

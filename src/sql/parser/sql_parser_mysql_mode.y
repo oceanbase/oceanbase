@@ -446,7 +446,7 @@ END_P SET_VAR DELIMITER
 %type <node> tablegroup_option_list tablegroup_option alter_tablegroup_actions alter_tablegroup_action tablegroup_option_list_space_seperated
 %type <node> opt_tg_partition_option tg_hash_partition_option tg_key_partition_option tg_range_partition_option tg_subpartition_option tg_list_partition_option
 %type <node> alter_column_behavior opt_set opt_position_column
-%type <node> alter_system_stmt alter_system_set_parameter_actions alter_system_settp_actions settp_option alter_system_set_parameter_action server_info_list server_info
+%type <node> alter_system_stmt alter_system_set_parameter_actions alter_system_settp_actions settp_option alter_system_set_parameter_action server_info_list server_info alter_system_reset_parameter_actions alter_system_reset_parameter_action
 %type <node> opt_comment opt_as
 %type <node> column_name relation_name function_name column_label var_name relation_name_or_string row_format_option
 %type <node> audit_stmt audit_clause op_audit_tail_clause audit_operation_clause audit_all_shortcut_list audit_all_shortcut auditing_on_clause auditing_by_user_clause audit_user_list audit_user audit_user_with_host_name
@@ -16150,6 +16150,13 @@ SET DECRYPTION IDENTIFIED BY string_list
   merge_nodes(string_list_node, result, T_STRING_LIST, $5);
   malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_SET_DECRYPTION, 1, string_list_node);
 }
+|
+ALTER SYSTEM RESET alter_system_reset_parameter_actions
+{
+  (void)$3;
+  merge_nodes($$, result, T_SYTEM_ACTION_LIST, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_SYSTEM_RESET_PARAMETER, 1, $$);
+}
 ;
 
 opt_sql_throttle_for_priority:
@@ -17153,6 +17160,28 @@ opt_server_or_zone opt_tenant_name
                            );
   $$->value_ = $5[0];                /* scope */
 };
+
+alter_system_reset_parameter_actions:
+alter_system_reset_parameter_action
+{
+  $$ = $1;
+}
+| alter_system_reset_parameter_actions ',' alter_system_reset_parameter_action
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+alter_system_reset_parameter_action:
+NAME_OB opt_config_scope opt_tenant_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SYSTEM_ACTION, 2,
+                          $1, /* param_name */
+                          $3  /* tenant */
+                          );
+  $$->value_ = $2[0];
+}
+;
 
 opt_comment:
 COMMENT STRING_VALUE

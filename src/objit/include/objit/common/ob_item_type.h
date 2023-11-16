@@ -2291,6 +2291,8 @@ typedef enum ObItemType
   T_COL_SKIP_INDEX_LIST,
   T_COL_SKIP_INDEX_MIN_MAX,
   T_COL_SKIP_INDEX_SUM,
+  T_ALTER_SYSTEM_RESET,
+  T_ALTER_SYSTEM_RESET_PARAMETER,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

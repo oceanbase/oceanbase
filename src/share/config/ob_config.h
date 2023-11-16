@@ -148,6 +148,18 @@ public:
     }
     return ret == OB_SUCCESS;
   }
+  bool set_default_value(const char *str)
+  {
+    int64_t pos = 0;
+    int ret = OB_SUCCESS;
+    const char *ptr = value_default_ptr();
+    if (nullptr == ptr) {
+      ret = OB_INVALID_ARGUMENT;
+    } else {
+      ret = databuff_printf(const_cast<char *>(ptr), value_default_len(), pos, "%s", str);
+    }
+    return OB_SUCCESS == ret;
+  }
   virtual bool set_dump_value(const char *str)
   {
     UNUSED(str);
@@ -188,6 +200,10 @@ public:
   {
     ObLatchRGuard rd_guard(const_cast<ObLatch&>(lock_), ObLatchIds::CONFIG_LOCK);
     return value_ptr();
+  }
+  const char *default_str() const
+  {
+    return value_default_ptr();
   }
   int case_compare(const char* str) const
   {
@@ -249,6 +265,8 @@ protected:
   virtual const char *value_reboot_ptr() const = 0;
   virtual uint64_t value_len() const = 0;
   virtual uint64_t value_reboot_len() const = 0;
+  virtual const char *value_default_ptr() const = 0;
+  virtual uint64_t value_default_len() const = 0;
 
   const ObConfigChecker *ck_;
   int64_t version_;
@@ -313,7 +331,6 @@ protected:
   {
     return sizeof(value_reboot_str_);
   }
-
   static const int64_t MAX_INDEX_SIZE = 64;
   struct ObInnerConfigIntListItem
   {
@@ -328,12 +345,19 @@ protected:
     int size_;
     bool valid_;
   };
-
+  const char *value_default_ptr() const override
+  {
+    return value_default_str_;
+  }
+  uint64_t value_default_len() const override
+  {
+    return sizeof(value_default_str_);
+  }
   struct ObInnerConfigIntListItem value_;
   static const uint64_t VALUE_BUF_SIZE = 32 * MAX_INDEX_SIZE;
   char value_str_[VALUE_BUF_SIZE];
   char value_reboot_str_[VALUE_BUF_SIZE];
-
+  char value_default_str_[VALUE_BUF_SIZE];
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigIntListItem);
 };
@@ -455,10 +479,17 @@ protected:
   {
     return sizeof(value_reboot_str_);
   }
-
+  const char *value_default_ptr() const override
+  {
+    return value_default_str_;
+  }
+  uint64_t value_default_len() const override
+  {
+    return sizeof(value_default_str_);
+  }
   char value_str_[VALUE_BUF_SIZE];
   char value_reboot_str_[VALUE_BUF_SIZE];
-
+  char value_default_str_[VALUE_BUF_SIZE];
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigStrListItem);
 };
@@ -592,10 +623,18 @@ protected:
   {
     return sizeof(value_reboot_str_);
   }
-
+  const char *value_default_ptr() const override
+  {
+    return value_default_str_;
+  }
+  uint64_t value_default_len() const override
+  {
+    return sizeof(value_default_str_);
+  }
   static const uint64_t VALUE_BUF_SIZE = 64UL;
   char value_str_[VALUE_BUF_SIZE];
   char value_reboot_str_[VALUE_BUF_SIZE];
+  char value_default_str_[VALUE_BUF_SIZE];
 
 private:
   double value_;
@@ -674,10 +713,18 @@ protected:
   {
     return sizeof(value_reboot_str_);
   }
-
+  const char *value_default_ptr() const override
+  {
+    return value_default_str_;
+  }
+  uint64_t value_default_len() const override
+  {
+    return sizeof(value_default_str_);
+  }
   static const uint64_t VALUE_BUF_SIZE = 32UL;
   char value_str_[VALUE_BUF_SIZE];
   char value_reboot_str_[VALUE_BUF_SIZE];
+  char value_default_str_[VALUE_BUF_SIZE];
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigCapacityItem);
@@ -733,10 +780,18 @@ protected:
   {
     return sizeof(value_reboot_str_);
   }
-
+  const char *value_default_ptr() const override
+  {
+    return value_default_str_;
+  }
+  uint64_t value_default_len() const override
+  {
+    return sizeof(value_default_str_);
+  }
   static const uint64_t VALUE_BUF_SIZE = 32UL;
   char value_str_[VALUE_BUF_SIZE];
   char value_reboot_str_[VALUE_BUF_SIZE];
+  char value_default_str_[VALUE_BUF_SIZE];
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigTimeItem);
@@ -791,10 +846,18 @@ protected:
   {
     return sizeof(value_reboot_str_);
   }
-
+  const char *value_default_ptr() const override
+  {
+    return value_default_str_;
+  }
+  uint64_t value_default_len() const override
+  {
+    return sizeof(value_default_str_);
+  }
   static const uint64_t VALUE_BUF_SIZE = 32UL;
   char value_str_[VALUE_BUF_SIZE];
   char value_reboot_str_[VALUE_BUF_SIZE];
+  char value_default_str_[VALUE_BUF_SIZE];
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigIntItem);
@@ -866,9 +929,18 @@ protected:
   {
     return sizeof(value_reboot_str_);
   }
+  const char *value_default_ptr() const override
+  {
+    return value_default_str_;
+  }
+  uint64_t value_default_len() const override
+  {
+    return sizeof(value_default_str_);
+  }
   static const uint64_t VALUE_BUF_SIZE = 64UL;
   char value_str_[VALUE_BUF_SIZE];
   char value_reboot_str_[VALUE_BUF_SIZE];
+  char value_default_str_[VALUE_BUF_SIZE];
 
 private:
   struct ObInnerConfigMomentItem value_;
@@ -914,10 +986,18 @@ protected:
   {
     return sizeof(value_reboot_str_);
   }
-
+  const char *value_default_ptr() const override
+  {
+    return value_default_str_;
+  }
+  uint64_t value_default_len() const override
+  {
+    return sizeof(value_default_str_);
+  }
   static const uint64_t VALUE_BUF_SIZE = 8UL;
   char value_str_[VALUE_BUF_SIZE];
   char value_reboot_str_[VALUE_BUF_SIZE];
+  char value_default_str_[VALUE_BUF_SIZE];
 
 private:
   bool value_;
@@ -988,10 +1068,18 @@ protected:
   {
     return sizeof(value_reboot_str_);
   }
-
+  const char *value_default_ptr() const override
+  {
+    return value_default_str_;
+  }
+  uint64_t value_default_len() const override
+  {
+    return sizeof(value_default_str_);
+  }
   static const uint64_t VALUE_BUF_SIZE = 65536UL;
   char value_str_[VALUE_BUF_SIZE];
   char value_reboot_str_[VALUE_BUF_SIZE];
+  char value_default_str_[VALUE_BUF_SIZE];
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigStringItem);
@@ -1124,10 +1212,18 @@ protected:
   {
     return sizeof(value_reboot_str_);
   }
-
+  const char *value_default_ptr() const override
+  {
+    return value_default_str_;
+  }
+  uint64_t value_default_len() const override
+  {
+    return sizeof(value_default_str_);
+  }
   static const uint64_t VALUE_BUF_SIZE = 2048UL;
   char value_str_[VALUE_BUF_SIZE];
   char value_reboot_str_[VALUE_BUF_SIZE];
+  char value_default_str_[VALUE_BUF_SIZE];
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigLogArchiveOptionsItem);
@@ -1204,10 +1300,18 @@ protected:
   {
     return sizeof(value_reboot_str_);
   }
-
+  const char *value_default_ptr() const override
+  {
+    return value_default_str_;
+  }
+  uint64_t value_default_len() const override
+  {
+    return sizeof(value_default_str_);
+  }
   static const uint64_t VALUE_BUF_SIZE = 32UL; // 32 is enough for version like 4.2.0.0
   char value_str_[VALUE_BUF_SIZE];
   char value_reboot_str_[VALUE_BUF_SIZE];
+  char value_default_str_[VALUE_BUF_SIZE];
   char value_dump_str_[VALUE_BUF_SIZE];
   bool dump_value_updated_;
 
@@ -1300,12 +1404,21 @@ protected:
   {
     return sizeof(value_reboot_str_);
   }
+  const char *value_default_ptr() const override
+  {
+    return value_default_str_;
+  }
+  uint64_t value_default_len() const override
+  {
+    return sizeof(value_default_str_);
+  }
 protected:
   static const uint64_t VALUE_BUF_SIZE = 65536UL;
   static const int64_t MAX_MODE_BYTES = 32;
   ObConfigParser *parser_;
   char value_str_[VALUE_BUF_SIZE];
   char value_reboot_str_[VALUE_BUF_SIZE];
+  char value_default_str_[VALUE_BUF_SIZE];
   // max bits size: 8 * 32 = 256
   uint8_t value_[MAX_MODE_BYTES];
 private:
