@@ -95,24 +95,31 @@ int ObTabletPersister::persist_and_transform_tablet(
     const ObTablet &old_tablet,
     ObTabletHandle &new_handle)
 {
-  TIMEGUARD_INIT(STORAGE, 10_ms);
   int ret = OB_SUCCESS;
   common::ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "PATF"));
   common::ObSEArray<ObSharedBlocksWriteCtx, 16> tablet_meta_write_ctxs;
   common::ObSEArray<ObSharedBlocksWriteCtx, 16> sstable_meta_write_ctxs;
+  const int64_t start_click =  ObTimeUtility::current_time();
+  int64_t recursively_persist_click = 0;
+  int64_t persist_4k_tablet_click = 0;
 
   if (OB_UNLIKELY(!old_tablet.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid old tablet to persist", K(ret), K(old_tablet));
-  } else if (CLICK_FAIL(recursively_persist(
+  } else if (OB_FAIL(recursively_persist(
       old_tablet, allocator, tablet_meta_write_ctxs, sstable_meta_write_ctxs, new_handle))) {
     LOG_WARN("fail to recursively persist and fill tablet", K(ret), K(old_tablet));
-  } else if (CLICK_FAIL(check_tablet_meta_ids(tablet_meta_write_ctxs, *(new_handle.get_obj())))) {
+  } else if (FALSE_IT(recursively_persist_click = ObTimeUtility::current_time())) {
+  } else if (OB_FAIL(check_tablet_meta_ids(tablet_meta_write_ctxs, *(new_handle.get_obj())))) {
     LOG_WARN("fail to check whether tablet meta's macro ids match", K(ret), K(tablet_meta_write_ctxs), KPC(new_handle.get_obj()));
-  } else if (CLICK_FAIL(persist_4k_tablet(allocator, new_handle))) {
+  } else if (OB_FAIL(persist_4k_tablet(allocator, new_handle))) {
     LOG_WARN("fail to persist 4k tablet", K(ret), K(new_handle), KPC(new_handle.get_obj()));
+  } else if (FALSE_IT(persist_4k_tablet_click = ObTimeUtility::current_time())) {
   } else {
-    FLOG_INFO("succeed to persist 4k tablet", K(&old_tablet), K(new_handle.get_obj()));
+    FLOG_INFO("succeed to persist 4k tablet", K(&old_tablet), K(new_handle.get_obj()),
+       "total_cost", persist_4k_tablet_click -  start_click,
+       "recursively_persist_cost", recursively_persist_click - start_click,
+       "persist_4k_tablet_cost", persist_4k_tablet_click - recursively_persist_click);
   }
   return ret;
 }
