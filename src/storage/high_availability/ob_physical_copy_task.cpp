@@ -773,7 +773,7 @@ int ObSSTableCopyFinishTask::prepare_data_store_desc_(
   ObTablet *tablet = nullptr;
   ObMergeType merge_type;
   ObArenaAllocator allocator;
-  const ObStorageSchema *storage_schema = nullptr;
+  ObStorageSchema *storage_schema = nullptr;
   ObTabletHandle tablet_handle;
 
   if (!tablet_id.is_valid() || cluster_version < 0 || OB_ISNULL(sstable_param)) {
@@ -822,7 +822,7 @@ int ObSSTableCopyFinishTask::prepare_data_store_desc_(
       }
     }
   }
-  ObTablet::free_storage_schema(allocator, storage_schema);
+  ObTabletObjLoadHelper::free(allocator, storage_schema);
   return ret;
 }
 

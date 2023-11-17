@@ -766,7 +766,7 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator tmp_arena("ShrBlkMgrTmp");
-  const ObStorageSchema *storage_schema = nullptr;
+  ObStorageSchema *storage_schema = nullptr;
   data_desc.reset();
   if (OB_FAIL(tablet.load_storage_schema(tmp_arena, storage_schema))) {
     LOG_WARN("fail to load storage schema", K(ret), K(tablet));
@@ -796,7 +796,7 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
       data_desc.col_default_checksum_array_.pop_back();
     }
   }
-  ObTablet::free_storage_schema(tmp_arena, storage_schema);
+  ObTabletObjLoadHelper::free(tmp_arena, storage_schema);
   return ret;
 }
 

@@ -1439,7 +1439,7 @@ int ObTransferReplaceTableTask::fill_empty_minor_sstable(
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
-  const ObStorageSchema *tablet_storage_schema = nullptr;
+  ObStorageSchema *tablet_storage_schema = nullptr;
   ObTableHandleV2 empty_minor_table_handle;
 
   if (IS_NOT_INIT) {
@@ -1473,7 +1473,7 @@ int ObTransferReplaceTableTask::fill_empty_minor_sstable(
         LOG_INFO("[TRANSFER_BACKFILL]succ fill empty minor sstable", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_,
             K(empty_minor_table_handle), K(start_scn), K(end_scn));
       }
-      ObTablet::free_storage_schema(allocator, tablet_storage_schema);
+      ObTabletObjLoadHelper::free(allocator, tablet_storage_schema);
     }
   }
   return ret;
@@ -1782,7 +1782,7 @@ int ObTransferReplaceTableTask::build_migration_param_(
   param.reset();
   ObTablet *src_tablet = nullptr;
   ObArenaAllocator allocator;
-  const ObStorageSchema *src_storage_schema = nullptr;
+  ObStorageSchema *src_storage_schema = nullptr;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;

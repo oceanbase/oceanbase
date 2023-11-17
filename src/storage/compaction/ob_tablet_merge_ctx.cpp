@@ -1039,7 +1039,7 @@ int ObTabletMergeCtx::get_storage_schema_to_merge(const ObTablesHandleArray &mer
 {
   int ret = OB_SUCCESS;
   const ObMergeType &merge_type = param_.merge_type_;
-  const ObStorageSchema *schema_on_tablet = nullptr;
+  ObStorageSchema *schema_on_tablet = nullptr;
   int64_t max_column_cnt_in_memtable = 0;
   int64_t max_column_cnt_on_recorder = 0;
   int64_t max_schema_version_in_memtable = 0;
@@ -1107,7 +1107,7 @@ int ObTabletMergeCtx::get_storage_schema_to_merge(const ObTablesHandleArray &mer
       K(max_column_cnt_in_memtable), K(max_schema_version_in_memtable), K(max_column_cnt_on_recorder));
     if (!use_schema_on_tablet) {
       // destroy loaded schema memory after print log
-      ObTablet::free_storage_schema(allocator_, schema_on_tablet);
+      ObTabletObjLoadHelper::free(allocator_, schema_on_tablet);
     }
   }
   return ret;
