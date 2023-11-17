@@ -1525,7 +1525,10 @@ int ObStaticEngineExprCG::gen_expr_with_row_desc(const ObRawExpr *expr,
   if (NULL == schema_guard) {
     schema_guard = &session->get_cached_schema_guard_info().get_schema_guard();
   }
-  CK(OB_NOT_NULL(buf));
+  if (OB_ISNULL(buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for temp expr", K(ret));
+  }
   CK(OB_NOT_NULL(expr));
   if (OB_SUCC(ret)) {
     LOG_TRACE("generate temp expr", K(*expr), K(row_desc));
