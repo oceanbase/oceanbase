@@ -223,6 +223,8 @@ int ObStorageHATabletsBuilder::create_all_tablets(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream should not be NULL", K(ret), KP(ls), K(param_));
   } else {
+    static const int64_t CREATE_TABLETS_WARN_THRESHOLD = 60 * 1000 * 1000; //60s
+    common::ObTimeGuard timeguard("tablets_builder_create_all_tablets", CREATE_TABLETS_WARN_THRESHOLD);
     while (OB_SUCC(ret)) {
       tablet_info.reset();
       tablet_simple_info.reset();
@@ -266,6 +268,8 @@ int ObStorageHATabletsBuilder::create_all_tablets(
       }
 #endif
     }
+    LOG_INFO("create all tablets finish", K(ret), "sys_tablet_count", sys_tablet_id_list.count(),
+                                                  "data_tablet_count", data_tablet_id_list.count());
   }
   return ret;
 }
@@ -2677,7 +2681,7 @@ int ObStorageHATabletBuilderUtil::inner_update_tablet_table_store_with_major_(
                             SCN::min_scn()/*clog_checkpoint_scn*/,
                             true/*need_check_sstable*/,
                             true/*allow_duplicate_sstable*/,
-                            ObMergeType::MEDIUM_MERGE/*merge_type*/);
+                            compaction::ObMergeType::MEDIUM_MERGE/*merge_type*/);
     if (tablet_storage_schema->get_schema_version() < storage_schema.get_schema_version()) {
       SERVER_EVENT_ADD("storage_ha", "schema_change_need_merge_tablet_meta",
                       "tenant_id", MTL_ID(),
