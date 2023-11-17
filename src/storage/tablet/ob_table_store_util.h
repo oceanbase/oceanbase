@@ -145,7 +145,7 @@ public:
     ddl_kvs_   = nullptr;
     count_     = 0;
   }
-  OB_INLINE bool count() const { return count_; }
+  OB_INLINE int64_t count() const { return count_; }
   OB_INLINE bool empty() const { return 0 == count_; }
   OB_INLINE bool is_valid() const { return 1 == count_ || (is_inited_ && count_ > 1 && nullptr != ddl_kvs_); }
   OB_INLINE int64_t get_deep_copy_size() const { return count_ * sizeof(ObITable *); }
