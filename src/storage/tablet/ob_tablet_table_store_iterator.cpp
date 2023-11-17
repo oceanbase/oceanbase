@@ -38,8 +38,9 @@ ObTableStoreIterator::ObTableStoreIterator(const bool reverse, const bool need_l
   sstable_handle_array_.set_attr(ObMemAttr(MTL_ID(), "TblHdlArray"));
 }
 
-void ObTableStoreIterator::operator=(const ObTableStoreIterator& other)
+int ObTableStoreIterator::assign(const ObTableStoreIterator& other)
 {
+  int ret = OB_SUCCESS;
   if (this != &other) {
     need_load_sstable_ = other.need_load_sstable_;
     if (other.table_store_handle_.is_valid()) {
@@ -47,23 +48,42 @@ void ObTableStoreIterator::operator=(const ObTableStoreIterator& other)
     } else if (table_store_handle_.is_valid()) {
       table_store_handle_.reset();
     }
-    if (other.sstable_handle_array_.count() > 0) {
-      sstable_handle_array_ = other.sstable_handle_array_;
+
+    if (OB_FAIL(ret)) {
+    } else if (other.sstable_handle_array_.count() > 0) {
+      if (OB_FAIL(sstable_handle_array_.assign(other.sstable_handle_array_))) {
+        LOG_WARN("assign sstable handle array fail", K(ret));
+      }
     } else if (sstable_handle_array_.count() > 0) {
       sstable_handle_array_.reset();
     }
-    table_ptr_array_ = other.table_ptr_array_;
-    pos_ = other.pos_;
-    step_ = other.step_;
-    memstore_retired_ = other.memstore_retired_;
-    if (OB_UNLIKELY(nullptr != other.transfer_src_table_store_handle_)) {
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(table_ptr_array_.assign(other.table_ptr_array_))) {
+      LOG_WARN("assign table ptr array fail", K(ret));
+    } else {
+      pos_ = other.pos_;
+      step_ = other.step_;
+      memstore_retired_ = other.memstore_retired_;
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(nullptr != other.transfer_src_table_store_handle_)) {
       if (nullptr == transfer_src_table_store_handle_) {
         void *meta_hdl_buf = ob_malloc(sizeof(ObStorageMetaHandle), ObMemAttr(MTL_ID(), "TransferMetaH"));
-        transfer_src_table_store_handle_ = new (meta_hdl_buf) ObStorageMetaHandle();
+        if (OB_ISNULL(meta_hdl_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocator memory for handle", K(ret));
+        } else {
+          transfer_src_table_store_handle_ = new (meta_hdl_buf) ObStorageMetaHandle();
+        }
       }
-       *transfer_src_table_store_handle_ = *(other.transfer_src_table_store_handle_);
+      if (OB_SUCC(ret)) {
+        *transfer_src_table_store_handle_ = *(other.transfer_src_table_store_handle_);
+      }
     }
   }
+  return ret;
 }
 
 ObTableStoreIterator::~ObTableStoreIterator()
