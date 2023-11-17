@@ -1688,7 +1688,7 @@ bool ObCreateTableArg::is_allow_when_upgrade() const
   return bret;
 }
 
-OB_SERIALIZE_MEMBER(ObCreateTableRes, table_id_, schema_version_);
+OB_SERIALIZE_MEMBER(ObCreateTableRes, table_id_, schema_version_, task_id_);
 
 bool ObCreateTableLikeArg::is_valid() const
 {
