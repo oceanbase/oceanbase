@@ -258,18 +258,31 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
       if (OB_SUCC(ret) && !has_error) {
         // if has_error, don't need to update routine route sql
         ObArray<const ObRoutineInfo *> routine_infos;
+        ObSEArray<ObRoutineInfo, 2> routine_spec_infos;
         ObPLRoutineTable &spec_routine_table = package_spec_ast.get_routine_table();
         ObPLRoutineTable &body_routine_table = package_body_ast.get_routine_table();
         OZ (schema_checker_->get_schema_guard()->get_routine_infos_in_package(
             session_info_->get_effective_tenant_id(),
             package_spec_info->get_package_id(),
             routine_infos));
+        if (OB_SUCC(ret) && routine_infos.empty() && spec_routine_table.get_count() > 1) {
+          OZ (ObCreatePackageResolver::resolve_functions_spec(
+            *package_spec_info, routine_spec_infos, spec_routine_table));
+          CK (routine_spec_infos.count() > 0);
+          for (int64_t i = 0; OB_SUCC(ret) && i < routine_spec_infos.count(); ++i) {
+            OZ (routine_infos.push_back(&routine_spec_infos.at(i)));
+          }
+        }
+
         OZ (ObCreatePackageBodyResolver::update_routine_route_sql(*allocator_,
                                                                   *session_info_,
                                                                   pkg_arg.public_routine_infos_,
                                                                   spec_routine_table,
                                                                   body_routine_table,
                                                                   routine_infos));
+        if (OB_FAIL(ret)) {
+          pkg_arg.public_routine_infos_.reset();
+        }
       }
     }
     if (OB_SUCC(ret)) {
