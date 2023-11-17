@@ -301,6 +301,7 @@ _enable_skip_index
 _enable_system_tenant_memory_limit
 _enable_tenant_sql_net_thread
 _enable_trace_session_leak
+_enable_trace_tablet_leak
 _enable_transaction_internal_routing
 _enable_values_table_folding
 _enable_var_assign_use_das

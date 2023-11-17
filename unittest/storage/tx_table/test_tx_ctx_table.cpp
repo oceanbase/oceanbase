@@ -36,6 +36,10 @@ using namespace storage;
 using namespace blocksstable;
 using namespace share;
 
+int storage::ObTenantMetaMemMgr::fetch_tenant_config()
+{
+  return OB_SUCCESS;
+}
 
 namespace unittest
 {
