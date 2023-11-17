@@ -49,6 +49,7 @@ int ObColNullCountAggregator::init(const ObColDesc &col_desc, ObStorageDatum &re
     if (is_skip_index_black_list_type(col_desc.col_type_.get_type())) {
       set_not_aggregate();
     }
+    col_desc_ = col_desc;
   }
   return ret;
 }
@@ -73,6 +74,9 @@ int ObColNullCountAggregator::eval(const ObStorageDatum &datum, const bool is_da
     // Skip
   } else if (is_data) {
     null_count_ += datum.is_null() ? 1 : 0;
+  } else if (datum.is_null()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected index block data", K(ret), K(datum));
   } else {
     null_count_ += datum.get_int();
   }
