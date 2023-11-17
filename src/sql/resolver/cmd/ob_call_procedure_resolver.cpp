@@ -478,11 +478,11 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
                         param->get_expr_type() != T_QUESTIONMARK &&
                         param->get_expr_type() != T_OP_GET_PACKAGE_VAR &&
                         !param->is_obj_access_expr()) {
-              ret = OB_ERR_CALL_WRONG_ARG;
-              LOG_WARN("PLS-00306: wrong number or types of arguments in call stmt", K(ret));
+              ret = OB_ERR_OUT_PARAM_NOT_BIND_VAR;
+              LOG_WARN("output parameter not a bind variable", K(ret));
             } else if (param->is_obj_access_expr() && !(static_cast<const ObObjAccessRawExpr *>(param))->for_write()) {
-              ret = OB_ERR_CALL_WRONG_ARG;
-              LOG_WARN("PLS-00306: wrong number or types of arguments in call stmt", K(ret));
+              ret = OB_ERR_OUT_PARAM_NOT_BIND_VAR;
+              LOG_WARN("output parameter not a bind variable", K(ret));
             } else if (param_info->is_sys_refcursor_type()
                       || (param_info->is_pkg_type() && pl_type.is_cursor_type())) {
               OZ (call_proc_info->add_out_param(i,

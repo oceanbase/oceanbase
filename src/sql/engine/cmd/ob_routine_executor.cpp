@@ -276,8 +276,8 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
                     }
                   }
                 } else {
-                  ret = OB_ERR_CALL_WRONG_ARG;
-                  LOG_WARN("PLS-00306: wrong number or types of arguments in call stmt", K(ret));
+                  ret = OB_ERR_OUT_PARAM_NOT_BIND_VAR;
+                  LOG_WARN("output parameter not a bind variable", K(ret));
                 }
               } else {
                 ctx.get_physical_plan_ctx()->get_param_store_for_update().at(i) = params.at(i);
