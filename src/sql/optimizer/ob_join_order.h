@@ -2252,14 +2252,10 @@ struct NullAwareAntiJoinInfo {
                                       bool both_access,
                                       ValidPathInfo &path_info);
 
-    int check_depend_function_table(const ObJoinOrder &left_tree,
-                                    const ObJoinOrder &right_tree,
-                                    const ObJoinType join_type,
-                                    ValidPathInfo &path_info);
-    int check_depend_json_table(const ObJoinOrder &left_tree,
-                                    const ObJoinOrder &right_tree,
-                                    const ObJoinType join_type,
-                                    ValidPathInfo &path_info);
+    int check_depend_table(const ObJoinOrder &left_tree,
+                           const ObJoinOrder &right_tree,
+                           const ObJoinType join_type,
+                           ValidPathInfo &path_info);
     int check_subquery_in_join_condition(const ObJoinType join_type,
                                          const ObIArray<ObRawExpr*> &join_conditions,
                                          ValidPathInfo &path_info);

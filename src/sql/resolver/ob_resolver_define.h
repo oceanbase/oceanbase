@@ -348,6 +348,7 @@ struct ObResolverParams
        enable_res_map_(false),
        need_check_col_dup_(true),
        is_specified_col_name_(false),
+       is_resolve_lateral_derived_table_(false),
        package_guard_(NULL)
   {}
   bool is_force_trace_log() { return force_trace_log_; }
@@ -415,6 +416,7 @@ public:
   bool need_check_col_dup_;
   bool is_specified_col_name_;//mark if specify the column name in create view or create table as..
   bool is_in_sys_view_;
+  bool is_resolve_lateral_derived_table_; // used to mark resolve lateral derived table.
   pl::ObPLPackageGuard *package_guard_;
 };
 } // end namespace sql

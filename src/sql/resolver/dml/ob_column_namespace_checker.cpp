@@ -29,7 +29,8 @@ namespace sql
 const TableItem *ObColumnNamespaceChecker::ObTableItemIterator::get_next_table_item()
 {
   const TableItem *table_item = NULL;
-  if (table_container_.cur_joined_table_ != NULL) {
+  if (table_container_.cur_joined_table_ != NULL  &&
+      !table_container_.params_.is_resolve_lateral_derived_table_) {
     //current_table_ is not null, means that we are resolving join table at present
     //so we can't touch the attribute of table in the current level
     if (0 == next_table_item_idx_) {
@@ -41,6 +42,11 @@ const TableItem *ObColumnNamespaceChecker::ObTableItemIterator::get_next_table_i
   } else {
     if (next_table_item_idx_ < table_container_.all_table_refs_.count()) {
       table_item = table_container_.all_table_refs_.at(next_table_item_idx_++);
+    } else if (next_table_item_idx_ == table_container_.all_table_refs_.count() &&
+               table_container_.params_.is_resolve_lateral_derived_table_ &&
+               table_container_.cur_joined_table_ != NULL) {
+      ++next_table_item_idx_;
+      table_item = table_container_.cur_joined_table_;
     } else {
       table_item = NULL;
     }
@@ -262,7 +268,7 @@ int ObColumnNamespaceChecker::check_column_exists(const TableItem &table_item, c
                 params_.session_info_->get_effective_tenant_id(), table_id, col_name, is_exist))) {
       LOG_WARN("check column exists failed", K(ret));
     }
-  } else if (table_item.is_generated_table() || table_item.is_temp_table()) {
+  } else if (table_item.is_generated_table() || table_item.is_temp_table() || table_item.is_lateral_table()) {
     ObSelectStmt *ref_stmt = table_item.ref_query_;
     if (OB_ISNULL(ref_stmt)) {
       ret = OB_NOT_INIT;

@@ -148,7 +148,8 @@ int ObTransformSimplifyOrderby::remove_order_by_for_view_stmt(ObDMLStmt *stmt, b
       if (OB_ISNULL(table_item)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("joined table is null", K(ret));
-      } else if (!table_item->is_generated_table()) {
+      } else if (!table_item->is_generated_table() &&
+                 !table_item->is_lateral_table()) {
         /*do nothing*/
       } else if (OB_ISNULL(view_stmt = table_item->ref_query_)) {
         ret = OB_ERR_UNEXPECTED;

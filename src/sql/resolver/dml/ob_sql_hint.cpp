@@ -1270,7 +1270,7 @@ int ObStmtHint::replace_name_for_single_table_view(ObIAllocator *allocator,
   const ObDMLStmt *child_stmt = NULL;
   if (OB_ISNULL(query_hint_)
       || OB_ISNULL(stmt.get_table_item_by_id(view_table.table_id_))
-      || OB_UNLIKELY(!view_table.is_generated_table())
+      || OB_UNLIKELY(!view_table.is_generated_table() && !view_table.is_lateral_table())
       || OB_ISNULL(child_stmt = view_table.ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected params", K(ret), K(query_hint_), K(target_table), K(child_stmt));

@@ -1122,6 +1122,8 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>OB_DDL_SCHEMA_VERSION { return OB_DDL_SCHEMA_VERSION; }
 <hint>DYNAMIC_SAMPLING { return DYNAMIC_SAMPLING; }
 <hint>PUSHDOWN { return PUSHDOWN; }
+<hint>DECORRELATE { return DECORRELATE; }
+<hint>NO_DECORRELATE { return NO_DECORRELATE; }
 <hint>{identifier} {
   if (!(IS_FAST_PARAMETERIZE)) {
     check_value(yylval);

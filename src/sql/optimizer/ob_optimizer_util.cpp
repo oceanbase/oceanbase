@@ -3435,12 +3435,25 @@ int ObOptimizerUtil::convert_subplan_scan_equal_sets(ObIAllocator *allocator,
   int ret = OB_SUCCESS;
   EqualSets dummy_equal_sets;
   ObSEArray<ObRawExpr *, 8> raw_eset;
+  TableItem *table_item = NULL;
+  if (OB_ISNULL(table_item = parent_stmt.get_table_item_by_id(table_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < input_equal_sets.count(); ++i) {
     const EqualSet *input_eset = input_equal_sets.at(i);
+    bool contain_exec_param = false;
     raw_eset.reuse();
     if (OB_ISNULL(input_eset)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
+    } else if (table_item->is_lateral_table() &&
+               OB_FAIL(check_contain_my_exec_param(*input_eset,
+                                                   table_item->exec_params_,
+                                                   contain_exec_param))) {
+      LOG_WARN("failed to check contain my exec param", K(ret));
+    } else if (contain_exec_param) {
+      // do nothing
     } else if (OB_FAIL(ObOptimizerUtil::convert_subplan_scan_expr(expr_factory,
                                                                   dummy_equal_sets,
                                                                   table_id,
@@ -3471,16 +3484,28 @@ int ObOptimizerUtil::convert_subplan_scan_fd_item_sets(ObFdItemFactory &fd_facto
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 8> new_parent_exprs;
   ObRelIds tables;
+  TableItem* table_item = NULL;
   if (OB_FAIL(tables.add_member(parent_stmt.get_table_bit_index(table_id)))) {
     LOG_WARN("failed to add relid", K(ret), K(parent_stmt), K(table_id));
+  } else if (OB_ISNULL(table_item = parent_stmt.get_table_item_by_id(table_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(table_item));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < input_fd_item_sets.count(); ++i) {
     const ObFdItem *old_fd_item = NULL;
+    bool contain_exec_param = false;
     new_parent_exprs.reuse();
     if (OB_ISNULL(old_fd_item = input_fd_item_sets.at(i)) ||
         OB_ISNULL(old_fd_item->get_parent_exprs())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(old_fd_item));
+    } else if (table_item->is_lateral_table() &&
+               OB_FAIL(check_contain_my_exec_param(*old_fd_item->get_parent_exprs(),
+                                                   table_item->exec_params_,
+                                                   contain_exec_param))) {
+      LOG_WARN("failed to check contain my exec param", K(ret));
+    } else if (contain_exec_param) {
+      // do nothing
     } else if (OB_FAIL(convert_subplan_scan_fd_parent_exprs(expr_factory,
                                                             equal_sets,
                                                             const_exprs,
@@ -4857,16 +4882,29 @@ int ObOptimizerUtil::get_subplan_const_column(const ObDMLStmt &parent_stmt,
                                               ObIArray<ObRawExpr *> &output_exprs)
 {
   int ret = OB_SUCCESS;
+  TableItem *table_item = parent_stmt.get_table_item_by_id(table_id);
+  if (OB_ISNULL(table_item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < child_stmt.get_select_item_size(); ++i) {
     const ObRawExpr *expr = child_stmt.get_select_item(i).expr_;
     ObRawExpr *parent_expr = NULL;
     bool is_const = false;
+    bool contains = false;
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr is null", K(ret), K(expr));
     } else if (OB_FAIL(is_const_expr_recursively(expr, exec_ref_exprs, is_const))) {
       LOG_WARN("failed to check expr is const expr", K(ret));
     } else if (!is_const) {
+      // do nothing
+    } else if (table_item->is_lateral_table() &&
+               OB_FAIL(ObOptimizerUtil::check_contain_my_exec_param(expr,
+                                                                    table_item->exec_params_,
+                                                                    contains))) {
+      LOG_WARN("failed to check contain my exec param", K(ret));
+    } else if (contains) {
       // do nothing
     } else if (NULL == (parent_expr = parent_stmt.get_column_expr_by_id(table_id,
                                                                         OB_APP_MIN_COLUMN_ID + i))) {
@@ -8215,7 +8253,7 @@ int ObOptimizerUtil::expr_calculable_by_exprs(const ObRawExpr *src_expr,
   return ret;
 }
 
-int ObOptimizerUtil::check_contain_my_exec_param(ObRawExpr* expr, const common::ObIArray<ObExecParamRawExpr*> & my_exec_params, bool &contain)
+int ObOptimizerUtil::check_contain_my_exec_param(const ObRawExpr* expr, const common::ObIArray<ObExecParamRawExpr*> & my_exec_params, bool &contain)
 {
   int ret = OB_SUCCESS;
   bool is_stack_overflow = false;
@@ -9187,6 +9225,26 @@ bool ObOptimizerUtil::find_superset(const ObRelIds &rel_ids,
     bret = (single_table_ids.at(i).is_superset(rel_ids));
   }
   return bret;
+}
+
+int ObOptimizerUtil::check_contain_my_exec_param(const ObIArray<ObRawExpr *> &exprs,
+                                                 const ObIArray<ObExecParamRawExpr*> &my_exec_params,
+                                                 bool &contain)
+{
+  int ret = OB_SUCCESS;
+  contain = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !contain && i < exprs.count(); ++i) {
+    const ObRawExpr* expr = exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(check_contain_my_exec_param(expr,
+                                                   my_exec_params,
+                                                   contain))) {
+      LOG_WARN("failed to check contain my exec param", K(ret));
+    }
+  }
+  return ret;
 }
 
 int ObOptimizerUtil::check_ancestor_node_support_skip_scan(ObLogicalOperator* op, bool &can_use_batch_nlj)
