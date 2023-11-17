@@ -1597,12 +1597,12 @@ int ObLS::finish_slog_replay()
   } else if (ls_meta_.get_persistent_state().can_update_ls_meta() &&
              OB_FAIL(ls_meta_.set_migration_status(new_migration_status, false /*no need write slog*/))) {
     LOG_WARN("failed to set migration status", K(ret), K(new_migration_status));
+  } else if (OB_FAIL(running_state_.create_finish(ls_meta_.ls_id_))) {
+    LOG_WARN("create finish failed", KR(ret), K(ls_meta_));
   } else if (is_need_gc()) {
     LOG_INFO("this ls should be gc later", KPC(this));
     // ls will be gc later and tablets in the ls are not complete,
     // so skip the following steps, otherwise load_ls_inner_tablet maybe encounter error.
-  } else if (OB_FAIL(running_state_.create_finish(ls_meta_.ls_id_))) {
-    LOG_WARN("create finish failed", KR(ret), K(ls_meta_));
   } else {
     // after slog replayed, the ls must be offlined state.
     ls_tablet_svr_.enable_to_read();
