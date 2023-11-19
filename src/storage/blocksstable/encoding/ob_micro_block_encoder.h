@@ -154,6 +154,7 @@ private:
   ObSelfBufferWriter data_buffer_;
   ObConstDatumRowArray datum_rows_;
   common::ObArray<ObColDatums *> all_col_datums_;
+  ObArenaAllocator pivot_allocator_;
   int64_t buffered_rows_checksum_;
   int64_t estimate_size_;
   int64_t estimate_size_limit_;

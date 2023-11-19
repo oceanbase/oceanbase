@@ -524,7 +524,11 @@ private:
   const static int64_t BLOCK_ITEM_CNT = BLOCK_SIZE / sizeof(T);
   const static int64_t MAX_BLOCK_CNT = (MAX_COUNT + BLOCK_ITEM_CNT - 1) / BLOCK_ITEM_CNT;
 public:
-  ObPodFix2dArray() : size_(0) { MEMSET(block_list_, 0, sizeof(T *) * MAX_BLOCK_CNT); }
+  explicit ObPodFix2dArray(ObIAllocator &allocator)
+    : allocator_(&allocator), size_(0)
+  {
+    MEMSET(block_list_, 0, sizeof(T *) * MAX_BLOCK_CNT);
+  }
   ~ObPodFix2dArray() { destroy(); }
 
   OB_INLINE int64_t count() const { return size_; }
@@ -566,7 +570,7 @@ public:
       if (NULL == block_list_[i]) {
         break;
       } else {
-        common::ob_free(block_list_[i]);
+        allocator_->free(block_list_[i]);
         block_list_[i] = NULL;
       }
     }
@@ -604,11 +608,10 @@ private:
       ret = common::OB_SIZE_OVERFLOW;
       STORAGE_LOG(WARN, "size will overflow", K(ret), K_(size), K(block_cnt), K(cur_cnt));
     } else {
-      common::ObMemAttr ma(MTL_ID(), blocksstable::OB_ENCODING_LABEL_PIVOT);
       for (int64_t i = 0; i < block_cnt && OB_SUCC(ret); ++i) {
         if (NULL == block_list_[cur_cnt + i]) {
-          T *block = static_cast<T *>(common::ob_malloc(BLOCK_SIZE, ma));
-          if (NULL == block) {
+          T *block = static_cast<T *>(allocator_->alloc(BLOCK_SIZE));
+          if (OB_ISNULL(block)) {
             ret = common::OB_ALLOCATE_MEMORY_FAILED;
             STORAGE_LOG(WARN, "alloc block failed",
                 K(ret), "block_size", static_cast<int64_t>(BLOCK_SIZE));
@@ -621,12 +624,12 @@ private:
     return ret;
   }
 private:
+  ObIAllocator *allocator_;
   T *block_list_[MAX_BLOCK_CNT];
   int64_t size_;
 };
 
-typedef ObPodFix2dArray<common::ObObj, 64 << 10, common::OB_MALLOC_MIDDLE_BLOCK_SIZE> ObColValues;
-typedef ObPodFix2dArray<ObDatum, 64 << 10, common::OB_MALLOC_MIDDLE_BLOCK_SIZE> ObColDatums;
+typedef ObPodFix2dArray<ObDatum, 64 << 10, common::OB_MALLOC_NORMAL_BLOCK_SIZE> ObColDatums;
 
 class ObMapAttrOperator
 {

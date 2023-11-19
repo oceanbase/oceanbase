@@ -569,7 +569,7 @@ struct ObColumnEncodingCtx
   int64_t fix_data_size_;
   int64_t max_string_size_;
   int64_t extend_value_bit_;
-  const ObPodFix2dArray<ObDatum, 64 << 10, common::OB_MALLOC_MIDDLE_BLOCK_SIZE> *col_datums_;
+  const ObPodFix2dArray<ObDatum, 64 << 10, common::OB_MALLOC_NORMAL_BLOCK_SIZE> *col_datums_;
   ObEncodingHashTable *ht_;
   ObMultiPrefixTree *prefix_tree_;
   const ObMicroBlockEncodingCtx *encoding_ctx_;
