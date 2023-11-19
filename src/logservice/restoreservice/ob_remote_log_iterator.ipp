@@ -267,6 +267,13 @@ int ObRemoteLogIterator<LogEntryType>::next_entry_(LogEntryType &entry, LSN &lsn
         }
       }
     }
+
+    // threads consume archive may increase or decrease, if threads stop, just retry
+    if (! done && OB_SUCC(ret) && OB_NOT_NULL(&lib::Thread::current()) ? lib::Thread::current().has_set_stop() : false) {
+      ret = OB_EAGAIN;
+      CLOG_LOG(INFO, "thread stop, try again", K(id_), K(lsn));
+    }
+
   } while (OB_SUCCESS == ret && ! done);
 
   if (OB_NEED_RETRY == ret) {
