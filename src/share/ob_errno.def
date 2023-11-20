@@ -2383,6 +2383,11 @@ DEFINE_ERROR(OB_ERR_CLIENT_LOCAL_FILES_DISABLED, -9762, ER_CLIENT_LOCAL_FILES_DI
 DEFINE_ORACLE_ERROR(OB_ERR_OUT_PARAM_NOT_BIND_VAR, -9763, -1, "HY000", "output parameter not a bind variable", 6577, "output parameter not a bind variable");
 
 ////////////////////////////////////////////////////////////////
+//error code for OBKV [-10500, -10700)
+////////////////////////////////////////////////////////////////
+DEFINE_ERROR(OB_ERR_KV_GLOBAL_INDEX_ROUTE, -10500, -1, "HY000", "incorrect route for obkv global index, client router should refresh.");
+
+////////////////////////////////////////////////////////////////
 //error code for SQL [-11000 ---- -12000)
 ////////////////////////////////////////////////////////////////
 DEFINE_ERROR(OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN, -11000, ER_VALUES_CLAUSE_NEED_HAVE_COLUMN, "HY000", "Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement.");
