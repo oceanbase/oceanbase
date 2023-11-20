@@ -38,7 +38,7 @@ private:
 
 #define SERVER_EVENT_INSTANCE (::oceanbase::observer::ObAllServerEventHistoryTableOperator::get_instance())
 #define SERVER_EVENT_ADD(args...)                                         \
-  SERVER_EVENT_INSTANCE.add_event(args)
+  SERVER_EVENT_INSTANCE.add_event<false>(args)
 #define SERVER_EVENT_SYNC_ADD(args...)                                         \
   SERVER_EVENT_INSTANCE.sync_add_event(args)
 #define SERVER_EVENT_ADD_WITH_RETRY(args...)                                         \

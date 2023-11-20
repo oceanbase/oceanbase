@@ -8126,7 +8126,10 @@ int ObRootService::admin_set_config(obrpc::ObAdminSetConfigArg &arg)
       }
     }
   }
-  ROOTSERVICE_EVENT_ADD("root_service", "admin_set_config", K(ret), K(arg));
+  // Add event one by one if more than one parameters are set
+  for (int i = 0; i < arg.items_.count(); i++) {
+    ROOTSERVICE_EVENT_ADD_TRUNCATE("root_service", "admin_set_config", K(ret), "arg", arg.items_.at(i), "is_inner", arg.is_inner_);
+  }
   return ret;
 }
 
