@@ -65,18 +65,28 @@ DEF_TO_STRING(ObPLDataType)
 int ObPLDataType::get_udt_type_by_name(uint64_t tenant_id,
                                        uint64_t owner_id,
                                        const ObString &udt,
+                                       sql::ObSQLSessionInfo &session_info,
                                        share::schema::ObSchemaGetterGuard &schema_guard,
                                        ObPLDataType &pl_type,
-                                       ObSchemaObjVersion *obj_version)
+                                       ObIArray<ObSchemaObjVersion> *deps)
 {
   int ret = OB_SUCCESS;
   const ObUDTTypeInfo *udt_info = NULL;
   ObPLType type = ObPLType::PL_INVALID_TYPE;
   OZ (schema_guard.get_udt_info(tenant_id, owner_id, OB_INVALID_ID, udt, udt_info));
   if (OB_SUCC(ret) && OB_ISNULL(udt_info)) {
-    ret = OB_ERR_SP_UNDECLARED_TYPE;
-    LOG_WARN("udt not exist", K(ret), K(tenant_id), K(owner_id), K(udt));
-    LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_TYPE, udt.length(), udt.ptr());
+    uint64_t object_owner_id = session_info.get_database_id();
+    ObString object_name = udt;
+    bool exist = false;
+    OZ (get_synonym_object(tenant_id, object_owner_id, object_name, exist, session_info, schema_guard, deps));
+    if (OB_SUCC(ret) && exist) {
+      OZ (schema_guard.get_udt_info(tenant_id, object_owner_id, OB_INVALID_ID, object_name, udt_info));
+    }
+    if (OB_SUCC(ret) && OB_ISNULL(udt_info)) {
+      ret = OB_ERR_SP_UNDECLARED_TYPE;
+      LOG_WARN("udt not exist", K(ret), K(tenant_id), K(owner_id), K(udt));
+      LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_TYPE, udt.length(), udt.ptr());
+    }
   }
 #ifdef OB_BUILD_ORACLE_PL
   OX (type = udt_info->is_opaque()
@@ -88,8 +98,10 @@ int ObPLDataType::get_udt_type_by_name(uint64_t tenant_id,
 #endif
   OX (pl_type.set_user_type_id(type, udt_info->get_type_id()));
   OX (pl_type.set_type_from(PL_TYPE_UDT));
-  if (OB_SUCC(ret) && OB_NOT_NULL(obj_version)) {
-    new(obj_version)ObSchemaObjVersion(udt_info->get_type_id(), udt_info->get_schema_version(), DEPENDENCY_TYPE);
+  if (OB_SUCC(ret) && OB_NOT_NULL(deps)) {
+    share::schema::ObSchemaObjVersion obj_version;
+    new(&obj_version)ObSchemaObjVersion(udt_info->get_type_id(), udt_info->get_schema_version(), DEPENDENCY_TYPE);
+    OZ (deps->push_back(obj_version));
   }
   return ret;
 }
@@ -105,7 +117,7 @@ int ObPLDataType::get_pkg_type_by_name(uint64_t tenant_id,
                                        common::ObMySQLProxy &sql_proxy,
                                        bool is_pkg_var, // pkg var or pkg type
                                        ObPLDataType &pl_type,
-                                       ObSchemaObjVersion *obj_version)
+                                       ObIArray<ObSchemaObjVersion> *deps)
 {
   int ret = OB_SUCCESS;
   const share::schema::ObPackageInfo *package_info = NULL;
@@ -120,18 +132,28 @@ int ObPLDataType::get_pkg_type_by_name(uint64_t tenant_id,
   OZ (schema_guard.get_package_info(tenant_id, owner_id, pkg, share::schema::PACKAGE_TYPE,
                                     compatible_mode, package_info));
   if (OB_SUCC(ret) && OB_ISNULL(package_info)) {
-    ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
-    LOG_WARN("package not exist", K(ret), K(tenant_id), K(owner_id), K(pkg), K(type));
-    {
-      ObString db_name("");
-      const ObDatabaseSchema *database_schema = NULL;
-      if (OB_SUCCESS == schema_guard.get_database_schema(tenant_id, owner_id, database_schema)) {
-        if (NULL != database_schema) {
-          db_name =database_schema->get_database_name_str();
+    uint64_t object_owner_id = session_info.get_database_id();
+    ObString object_name = pkg;
+    bool exist = false;
+    OZ (get_synonym_object(tenant_id, object_owner_id, object_name, exist, session_info, schema_guard, deps));
+    if (OB_SUCC(ret) && exist) {
+      OZ (schema_guard.get_package_info(tenant_id, object_owner_id, object_name, share::schema::PACKAGE_TYPE,
+                                        compatible_mode, package_info));
+    }
+    if (OB_SUCC(ret) && OB_ISNULL(package_info)) {
+      ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
+      LOG_WARN("package not exist", K(ret), K(tenant_id), K(owner_id), K(pkg), K(type));
+      {
+        ObString db_name("");
+        const ObDatabaseSchema *database_schema = NULL;
+        if (OB_SUCCESS == schema_guard.get_database_schema(tenant_id, owner_id, database_schema)) {
+          if (NULL != database_schema) {
+            db_name =database_schema->get_database_name_str();
+          }
         }
+        LOG_USER_ERROR(OB_ERR_PACKAGE_DOSE_NOT_EXIST, "PACKAGE OR TABLE",
+                                 db_name.length(), db_name.ptr(), pkg.length(), pkg.ptr());
       }
-      LOG_USER_ERROR(OB_ERR_PACKAGE_DOSE_NOT_EXIST, "PACKAGE OR TABLE",
-                               db_name.length(), db_name.ptr(), pkg.length(), pkg.ptr());
     }
   }
   OX (package_manager = &(session_info.get_pl_engine()->get_package_manager()));
@@ -183,14 +205,64 @@ int ObPLDataType::get_pkg_type_by_name(uint64_t tenant_id,
       }
     }
   }
-  if (OB_SUCC(ret) && OB_NOT_NULL(obj_version)) {
-    new(obj_version)ObSchemaObjVersion(package_info->get_package_id(),
-                                       package_info->get_schema_version(),
-                                       DEPENDENCY_PACKAGE);
+  if (OB_SUCC(ret) && OB_NOT_NULL(deps)) {
+    share::schema::ObSchemaObjVersion obj_version;
+    new(&obj_version)ObSchemaObjVersion(package_info->get_package_id(),
+                                        package_info->get_schema_version(),
+                                        DEPENDENCY_PACKAGE);
+    OZ (deps->push_back(obj_version));
   }
   return ret;
 }
 #endif
+
+int ObPLDataType::collect_synonym_deps(uint64_t tenant_id,
+                                       ObSynonymChecker &synonym_checker,
+                                       share::schema::ObSchemaGetterGuard &schema_guard,
+                                       ObIArray<ObSchemaObjVersion> *deps)
+{
+  int ret = OB_SUCCESS;
+  if (synonym_checker.has_synonym() && OB_NOT_NULL(deps)) {
+    const ObIArray<uint64_t> &synonym_ids = synonym_checker.get_synonym_ids();
+    for (int64_t i = 0; OB_SUCC(ret) && i < synonym_checker.get_synonym_ids().count(); ++i) {
+      int64_t schema_version = OB_INVALID_VERSION;
+      ObSchemaObjVersion obj_version;
+      if (OB_FAIL(schema_guard.get_schema_version(SYNONYM_SCHEMA, tenant_id, synonym_ids.at(i), schema_version))) {
+        LOG_WARN("failed to get schema version", K(ret), K(tenant_id), K(synonym_ids.at(i)));
+      } else if (OB_UNLIKELY(OB_INVALID_VERSION == schema_version)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema version is invalid", K(ret), K(tenant_id), K(synonym_ids.at(i)));
+      } else {
+        obj_version.object_id_ = synonym_ids.at(i);
+        obj_version.object_type_ = DEPENDENCY_SYNONYM;
+        obj_version.version_ = schema_version;
+        if (OB_FAIL(deps->push_back(obj_version))) {
+          LOG_WARN("failed to push back obj version to array", K(ret), KPC(deps), K(obj_version));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPLDataType::get_synonym_object(uint64_t tenant_id,
+                                     uint64_t &owner_id,
+                                     ObString &object_name,
+                                     bool &exist,
+                                     sql::ObSQLSessionInfo &session_info,
+                                     share::schema::ObSchemaGetterGuard &schema_guard,
+                                     ObIArray<ObSchemaObjVersion> *deps)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaChecker schema_checker;
+  ObSynonymChecker synonym_checker;
+  OZ (schema_checker.init(schema_guard, session_info.get_sessid()));
+  OZ (ObResolverUtils::resolve_synonym_object_recursively(
+    schema_checker, synonym_checker,
+    tenant_id, owner_id, object_name, owner_id, object_name, exist));
+  OZ (collect_synonym_deps(tenant_id, synonym_checker, schema_guard, deps));
+  return ret;
+}
 
 int ObPLDataType::get_table_type_by_name(uint64_t tenant_id,
                                          uint64_t owner_id,
@@ -201,14 +273,23 @@ int ObPLDataType::get_table_type_by_name(uint64_t tenant_id,
                                          share::schema::ObSchemaGetterGuard &schema_guard,
                                          bool is_rowtype,
                                          ObPLDataType &pl_type,
-                                         ObSchemaObjVersion *obj_version)
+                                         ObIArray<ObSchemaObjVersion> *deps)
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_info = NULL;
   OZ (schema_guard.get_table_schema(tenant_id, owner_id, table, false, table_info));
   if (OB_SUCC(ret) && OB_ISNULL(table_info)) {
-    ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("table is not exist", K(ret), K(tenant_id), K(owner_id), K(table), K(type), K(is_rowtype));
+    uint64_t object_owner_id = session_info.get_database_id();
+    ObString object_name = table;
+    bool exist = false;
+    OZ (get_synonym_object(tenant_id, object_owner_id, object_name, exist, session_info, schema_guard, deps));
+    if (OB_SUCC(ret) && exist) {
+      OZ (schema_guard.get_table_schema(tenant_id, object_owner_id, object_name, false, table_info));
+    }
+    if (OB_SUCC(ret) && OB_ISNULL(table_info)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("table is not exist", K(ret), K(tenant_id), K(owner_id), K(table), K(type), K(is_rowtype));
+    }
   }
   if (is_rowtype) {
     CK (type.empty());
@@ -241,11 +322,13 @@ int ObPLDataType::get_table_type_by_name(uint64_t tenant_id,
       LOG_WARN("table`s column not found!", K(ret), K(tenant_id), K(owner_id), K(table), K(type));
     }
   }
-  if (OB_SUCC(ret) && OB_NOT_NULL(obj_version)) {
+  if (OB_SUCC(ret) && OB_NOT_NULL(deps)) {
     bool is_view = table_info->is_view_table() && !table_info->is_materialized_view();
-    new(obj_version)ObSchemaObjVersion(table_info->get_table_id(),
-                                       table_info->get_schema_version(),
-                                       is_view ? DEPENDENCY_VIEW : DEPENDENCY_TABLE);
+    ObSchemaObjVersion obj_version;
+    new(&obj_version)ObSchemaObjVersion(table_info->get_table_id(),
+                                        table_info->get_schema_version(),
+                                        is_view ? DEPENDENCY_VIEW : DEPENDENCY_TABLE);
+    OZ (deps->push_back(obj_version));
   }
   return ret;
 }
@@ -256,7 +339,7 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                         ObIAllocator &allocator,
                                         common::ObMySQLProxy &sql_proxy,
                                         pl::ObPLDataType &pl_type,
-                                        ObSchemaObjVersion *obj_version,
+                                        ObIArray<ObSchemaObjVersion> *deps,
                                         ObPLDbLinkGuard *dblink_guard)
 {
   int ret = OB_SUCCESS;
@@ -286,9 +369,10 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
         OZ (get_udt_type_by_name(tenant_id,
                                  iparam->get_type_owner(),
                                  iparam->get_type_name(),
+                                 session_info,
                                  schema_guard,
                                  pl_type,
-                                 obj_version));
+                                 deps));
         break;
       }
 #ifdef OB_BUILD_ORACLE_PL
@@ -303,7 +387,7 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                  sql_proxy,
                                  false,
                                  pl_type,
-                                 obj_version));
+                                 deps));
         break;
       }
       case SP_EXTERN_PKG_VAR: {
@@ -317,7 +401,7 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                  sql_proxy,
                                  true,
                                  pl_type,
-                                 obj_version));
+                                 deps));
         break;
       }
       case SP_EXTERN_TAB_COL: {
@@ -330,7 +414,7 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                    schema_guard,
                                    false,
                                    pl_type,
-                                   obj_version));
+                                   deps));
         if (OB_SUCC(ret) && iparam->is_in_param() && ob_is_numeric_type(pl_type.get_obj_type())) {
           const ObAccuracy &default_accuracy =  ObAccuracy::DDL_DEFAULT_ACCURACY2[lib::is_oracle_mode()][pl_type.get_obj_type()];
           // precision of decimal int must be equal to precision defined in schema.
@@ -350,7 +434,7 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                    schema_guard,
                                    false,
                                    pl_type,
-                                   obj_version));
+                                   deps));
         if (OB_TABLE_NOT_EXIST == ret || OB_ERR_COLUMN_NOT_FOUND == ret) {
           ret = OB_SUCCESS;
           OZ (get_pkg_type_by_name(tenant_id,
@@ -363,7 +447,7 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                    sql_proxy,
                                    true,
                                    pl_type,
-                                   obj_version));
+                                   deps));
         }
         break;
       }
@@ -382,7 +466,7 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                    schema_guard,
                                    true,
                                    pl_type,
-                                   obj_version));
+                                   deps));
         break;
       }
       case SP_EXTERN_LOCAL_VAR : {
