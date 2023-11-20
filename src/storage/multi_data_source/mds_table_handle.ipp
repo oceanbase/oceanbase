@@ -167,7 +167,7 @@ int MdsTableHandle::set(T &&data, MdsCtx &ctx, const int64_t lock_timeout_us)
     } else if (TLOCAL_MDS_TRANS_NOTIFY_TYPE == transaction::NotifyType::REGISTER_SUCC) {
       if (lock_timeout_us > 30_s) {// timeout no more than 30s
         MDS_LOG(INFO, "timeout ts mustn't more than 30s in current version",
-                      KR(ret), K(unit_id), K(data), K(ctx), K(lock_timeout_us), K(converted_timeout));
+                      KR(ret), K(unit_id), K(data), K(ctx), K(lock_timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
         converted_timeout = 30_s;
       } else {
         converted_timeout = lock_timeout_us;
@@ -176,7 +176,7 @@ int MdsTableHandle::set(T &&data, MdsCtx &ctx, const int64_t lock_timeout_us)
       ret = OB_OP_NOT_ALLOW;// this call may deadlock with other threads and can not be avoided
       MDS_LOG(ERROR, "you mustn't do maybe hung operation in trans callbacks :"
                      " on_redo/before_prepare/on_prepare/on_commit/on_abort",
-                     KR(ret), K(unit_id), K(data), K(ctx), K(lock_timeout_us), K(converted_timeout));
+                     KR(ret), K(unit_id), K(data), K(ctx), K(lock_timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
       MDS_ASSERT(false);// abort in test environment
     }
     if (OB_SUCC(ret)) {
@@ -262,7 +262,7 @@ int MdsTableHandle::get_snapshot(OP &&read_op,
     } else if (TLOCAL_MDS_TRANS_NOTIFY_TYPE == transaction::NotifyType::REGISTER_SUCC) {
       if (timeout_us > 30_s) {// timeout no more than 30s
         MDS_LOG(INFO, "timeout ts mustn't more than 30s in current version", KR(ret), K(unit_id), K(snapshot),
-                      K(read_seq), K(timeout_us), K(converted_timeout));
+                      K(read_seq), K(timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
         converted_timeout = 30_s;
       } else {
         converted_timeout = timeout_us;
@@ -271,7 +271,7 @@ int MdsTableHandle::get_snapshot(OP &&read_op,
       ret = OB_OP_NOT_ALLOW;// this call may deadlock with other threads and can not be avoided
       MDS_LOG(ERROR, "you mustn't do maybe hung operation in trans callbacks :"
                      " on_redo/before_prepare/on_prepare/on_commit/on_abort", KR(ret), K(unit_id), K(snapshot),
-                     K(read_seq), K(timeout_us), K(converted_timeout));
+                     K(read_seq), K(timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
       MDS_ASSERT(false);// abort in test environment
     }
     if (OB_SUCC(ret)) {
@@ -314,7 +314,7 @@ int MdsTableHandle::get_by_writer(OP &&read_op,
     } else if (TLOCAL_MDS_TRANS_NOTIFY_TYPE == transaction::NotifyType::REGISTER_SUCC) {
       if (timeout_us > 30_s) {// timeout no more than 30s
         MDS_LOG(INFO, "timeout ts mustn't more than 30s in current version", KR(ret), K(unit_id), K(writer),
-                      K(snapshot), K(read_seq), K(timeout_us), K(converted_timeout));
+                      K(snapshot), K(read_seq), K(timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
         converted_timeout = 30_s;
       } else {
         converted_timeout = timeout_us;
@@ -323,7 +323,7 @@ int MdsTableHandle::get_by_writer(OP &&read_op,
       ret = OB_OP_NOT_ALLOW;// this call may deadlock with other threads and can not be avoided
       MDS_LOG(ERROR, "you mustn't do maybe hung operation in trans callbacks :"
                      " on_redo/before_prepare/on_prepare/on_commit/on_abort", KR(ret), K(unit_id), K(writer),
-                     K(snapshot), K(read_seq), K(timeout_us), K(converted_timeout));
+                     K(snapshot), K(read_seq), K(timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
       MDS_ASSERT(false);// abort in test environment
     }
     if (OB_SUCC(ret)) {
@@ -380,7 +380,7 @@ int MdsTableHandle::set(const Key &key, Value &&data, MdsCtx &ctx, const int64_t
     } else if (TLOCAL_MDS_TRANS_NOTIFY_TYPE == transaction::NotifyType::REGISTER_SUCC) {
       if (lock_timeout_us > 30_s) {// timeout no more than 30s
         MDS_LOG(INFO, "timeout ts mustn't more than 30s in current version", KR(ret), K(unit_id), K(key), K(data), K(ctx),
-                      K(lock_timeout_us), K(converted_timeout));
+                      K(lock_timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
         converted_timeout = 30_s;
       } else {
         converted_timeout = lock_timeout_us;
@@ -389,7 +389,7 @@ int MdsTableHandle::set(const Key &key, Value &&data, MdsCtx &ctx, const int64_t
       ret = OB_OP_NOT_ALLOW;// this call may deadlock with other threads and can not be avoided
       MDS_LOG(ERROR, "you mustn't do maybe hung operation in trans callbacks :"
                      " on_redo/before_prepare/on_prepare/on_commit/on_abort", KR(ret), K(unit_id), K(key), K(data),
-                     K(ctx), K(lock_timeout_us), K(converted_timeout));
+                     K(ctx), K(lock_timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
       MDS_ASSERT(false);// abort in test environment
     }
     if (OB_SUCC(ret)) {
@@ -441,7 +441,7 @@ int MdsTableHandle::remove(const Key &key, MdsCtx &ctx, const int64_t lock_timeo
     } else if (TLOCAL_MDS_TRANS_NOTIFY_TYPE == transaction::NotifyType::REGISTER_SUCC) {
       if (lock_timeout_us > 30_s) {// timeout no more than 30s
         MDS_LOG(INFO, "timeout ts mustn't more than 30s in current version", KR(ret), K(unit_id), K(key), K(ctx),
-                      K(lock_timeout_us), K(converted_timeout));
+                      K(lock_timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
         converted_timeout = 30_s;
       } else {
         converted_timeout = lock_timeout_us;
@@ -450,7 +450,7 @@ int MdsTableHandle::remove(const Key &key, MdsCtx &ctx, const int64_t lock_timeo
       ret = OB_OP_NOT_ALLOW;// this call may deadlock with other threads and can not be avoided
       MDS_LOG(ERROR, "you mustn't do maybe hung operation in trans callbacks :"
                      " on_redo/before_prepare/on_prepare/on_commit/on_abort", KR(ret), K(unit_id), K(key), K(ctx),
-                      K(lock_timeout_us), K(converted_timeout));
+                      K(lock_timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
       MDS_ASSERT(false);// abort in test environment
     }
     if (OB_SUCC(ret)) {
@@ -532,7 +532,7 @@ int MdsTableHandle::get_snapshot(const Key &key,
     } else if (TLOCAL_MDS_TRANS_NOTIFY_TYPE == transaction::NotifyType::REGISTER_SUCC) {
       if (timeout_us > 30_s) {// timeout no more than 30s
         MDS_LOG(INFO, "timeout ts mustn't more than 30s in current version", KR(ret), K(unit_id), K(key), K(snapshot),
-                      K(read_seq), K(timeout_us), K(converted_timeout));
+                      K(read_seq), K(timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
         converted_timeout = 30_s;
       } else {
         converted_timeout = timeout_us;
@@ -541,7 +541,7 @@ int MdsTableHandle::get_snapshot(const Key &key,
       ret = OB_OP_NOT_ALLOW;// this call may deadlock with other threads and can not be avoided
       MDS_LOG(ERROR, "you mustn't do maybe hung operation in trans callbacks :"
                      " on_redo/before_prepare/on_prepare/on_commit/on_abort", KR(ret), K(unit_id), K(key), K(snapshot),
-                     K(read_seq), K(timeout_us), K(converted_timeout));
+                     K(read_seq), K(timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
       MDS_ASSERT(false);// abort in test environment
     }
     if (OB_SUCC(ret)) {
@@ -583,7 +583,7 @@ int MdsTableHandle::get_by_writer(const Key &key,
     } else if (TLOCAL_MDS_TRANS_NOTIFY_TYPE == transaction::NotifyType::REGISTER_SUCC) {
       if (timeout_us > 30_s) {// timeout no more than 30s
         MDS_LOG(INFO, "timeout ts mustn't more than 30s in current version", KR(ret), K(unit_id), K(key), K(writer),
-                       K(snapshot), K(read_seq), K(timeout_us), K(converted_timeout));
+                       K(snapshot), K(read_seq), K(timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
         converted_timeout = 30_s;
       } else {
         converted_timeout = timeout_us;
@@ -592,7 +592,7 @@ int MdsTableHandle::get_by_writer(const Key &key,
       ret = OB_OP_NOT_ALLOW;// this call may deadlock with other threads and can not be avoided
       MDS_LOG(ERROR, "you mustn't do maybe hung operation in trans callbacks :"
                      " on_redo/before_prepare/on_prepare/on_commit/on_abort", KR(ret), K(unit_id), K(key), K(writer),
-                     K(snapshot), K(read_seq), K(timeout_us), K(converted_timeout));
+                     K(snapshot), K(read_seq), K(timeout_us), K(converted_timeout), K(TLOCAL_MDS_TRANS_NOTIFY_TYPE));
       MDS_ASSERT(false);// abort in test environment
     }
     if (OB_SUCC(ret)) {
