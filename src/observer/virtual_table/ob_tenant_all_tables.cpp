@@ -36,8 +36,8 @@ namespace observer
 #define TABLE_STATUS_SQL  "select /*+ leading(a) no_use_nl(ts)*/" \
                     "cast( coalesce(ts.row_cnt,0) as unsigned) as table_rows," \
                     "cast( coalesce(ts.data_size,0) as unsigned) as data_length," \
-                    "cast(a.gmt_create as datetime) as create_time," \
-                    "cast(a.gmt_modified as datetime) as update_time " \
+                    "a.gmt_create as create_time," \
+                    "a.gmt_modified as update_time " \
                     "from " \
                     "(" \
                     "select tenant_id," \
@@ -262,10 +262,19 @@ int ObTenantAllTables::get_table_stats()
                 LOG_WARN("get next row failed", K(ret));
               }
             } else {
+              int64_t default_time = 0;
+              int64_t time = 0;
+              common::ObTimeZoneInfoWrap tz_info_wrap;
+              GET_TIMESTAMP_COL_BY_NAME_IGNORE_NULL_WITH_DEFAULT_VALUE(
+                    result->get_timestamp, "create_time", time,
+                    default_time, tz_info_wrap.get_time_zone_info());
+              tab_stat.set_create_time(time);
+              GET_TIMESTAMP_COL_BY_NAME_IGNORE_NULL_WITH_DEFAULT_VALUE(
+                    result->get_timestamp, "update_time", time,
+                    default_time, tz_info_wrap.get_time_zone_info());
+              tab_stat.set_update_time(time);
               EXTRACT_UINT_FIELD_TO_CLASS_MYSQL(*result, table_rows, tab_stat, int64_t);
               EXTRACT_UINT_FIELD_TO_CLASS_MYSQL(*result, data_length, tab_stat, int64_t);
-              EXTRACT_LAST_DDL_TIME_FIELD_TO_INT_MYSQL(*result, create_time, tab_stat, int64_t);
-              EXTRACT_LAST_DDL_TIME_FIELD_TO_INT_MYSQL(*result, update_time, tab_stat, int64_t);
             }
           }
         }
