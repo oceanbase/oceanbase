@@ -4432,21 +4432,25 @@ int ObTablet::get_kept_snapshot_info(
     ObTabletMediumInfoReader medium_info_reader(*this);
     if (OB_FAIL(medium_info_reader.init(arena_allocator))) {
       LOG_WARN("failed to init medium info reader", K(ret));
-    } else if (OB_FAIL(medium_info_reader.get_min_medium_snapshot(min_medium_snapshot))) {
+    } else if (OB_FAIL(medium_info_reader.get_min_medium_snapshot(max_merged_snapshot, min_medium_snapshot))) {
       LOG_WARN("failed to get min medium snapshot", K(ret), K(tablet_id));
     }
   }
 
-  // for compat, if receive ls_reserved_snapshot clog, should consider ls.get_min_reserved_snapshot()
-  if (min_reserved_snapshot_on_ls > 0) {
-    ls_min_reserved_snapshot = min_reserved_snapshot_on_ls;
-  }
   if (OB_SUCC(ret)) {
+    bool use_multi_version_start_on_tablet = false;
     const int64_t old_min_reserved_snapshot = min_reserved_snapshot;
-    snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_LS_RESERVED, ls_min_reserved_snapshot);
-    snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_MIN_MEDIUM, min_medium_snapshot);
-    if (snapshot_info.snapshot_ < get_multi_version_start()) {
-      // tablet already had large multi_version_start
+    if (min_reserved_snapshot_on_ls > 0) {
+      snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_LS_RESERVED, ls_min_reserved_snapshot);
+      snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_MIN_MEDIUM, min_medium_snapshot);
+      if (snapshot_info.snapshot_ < get_multi_version_start()) {
+        use_multi_version_start_on_tablet = true;
+      }
+    } else {
+      // if not sync ls_reserved_snapshot yet, should use multi_version_start on tablet
+      use_multi_version_start_on_tablet = true;
+    }
+    if (use_multi_version_start_on_tablet) {
       snapshot_info.snapshot_type_ = ObStorageSnapshotInfo::SNAPSHOT_MULTI_VERSION_START_ON_TABLET;
       snapshot_info.snapshot_ = get_multi_version_start();
     }
@@ -4467,7 +4471,7 @@ int ObTablet::get_kept_snapshot_info(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("snapshot info is invalid", KR(ret), K(snapshot_info));
   }
-  LOG_DEBUG("get multi version start", "ls_id", get_tablet_meta().ls_id_, K(tablet_id),
+  LOG_TRACE("get multi version start", "ls_id", get_tablet_meta().ls_id_, K(tablet_id),
       K(snapshot_info), K(min_reserved_snapshot), K(get_tablet_meta()),
       K(min_medium_snapshot), K(min_reserved_snapshot_on_ls), K(max_merged_snapshot));
   return ret;

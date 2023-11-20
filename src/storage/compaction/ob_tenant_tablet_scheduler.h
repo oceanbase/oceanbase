@@ -23,6 +23,7 @@
 #include "lib/hash/ob_hashset.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler_task_mgr.h"
 #include "storage/compaction/ob_compaction_schedule_iterator.h"
+#include "share/compaction/ob_schedule_batch_size_mgr.h"
 
 namespace oceanbase
 {
@@ -277,6 +278,7 @@ public:
   int schedule_next_round_for_leader(
     const ObIArray<compaction::ObTabletCheckInfo> &tablet_ls_infos,
     const ObIArray<compaction::ObTabletCheckInfo> &finish_tablet_ls_infos);
+  OB_INLINE int64_t get_schedule_batch_size() const { return batch_size_mgr_.get_schedule_batch_size(); }
 private:
   friend struct ObTenantTabletSchedulerTaskMgr;
   int schedule_next_medium_for_leader(
@@ -363,11 +365,11 @@ private:
   ObCompactionScheduleIterator minor_ls_tablet_iter_;
   ObCompactionScheduleIterator medium_ls_tablet_iter_;
   ObCompactionScheduleIterator gc_sst_tablet_iter_;
-  int64_t schedule_tablet_batch_size_;
   int64_t error_tablet_cnt_; // for diagnose
   int64_t loop_cnt_;
   ObProhibitScheduleMediumMap prohibit_medium_map_;
   ObTenantTabletSchedulerTaskMgr timer_task_mgr_;
+  ObScheduleBatchSizeMgr batch_size_mgr_;
 };
 
 } // namespace compaction

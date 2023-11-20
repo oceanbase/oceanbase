@@ -68,8 +68,6 @@ int64_t ObBatchFinishCheckStat::to_string(char *buf, const int64_t buf_len) cons
 /*
  * ObTenantMediumChecker implement
  * */
-const int64_t ObTenantMediumChecker::MAX_BATCH_CHECK_NUM;
-
 int ObTenantMediumChecker::mtl_init(ObTenantMediumChecker *&tablet_medium_checker)
 {
   return tablet_medium_checker->init();
@@ -254,15 +252,17 @@ int ObTenantMediumChecker::check_medium_finish_schedule()
         tablet_ls_set_.clear();
       }
     }
-    if (FAILEDx(batch_tablet_ls_infos.reserve(MAX_BATCH_CHECK_NUM))) {
-      LOG_WARN("fail to reserve array", K(ret), "size", MAX_BATCH_CHECK_NUM);
-    } else if (OB_FAIL(finish_tablet_ls_infos.reserve(MAX_BATCH_CHECK_NUM))) {
-      LOG_WARN("fail to reserve array", K(ret), "size", MAX_BATCH_CHECK_NUM);
+    const int64_t batch_size = MTL(ObTenantTabletScheduler *)->get_schedule_batch_size();
+    if (OB_FAIL(ret) || tablet_ls_infos.empty()) {
+    } else if (OB_FAIL(batch_tablet_ls_infos.reserve(batch_size))) {
+      LOG_WARN("fail to reserve array", K(ret), "size", batch_size);
+    } else if (OB_FAIL(finish_tablet_ls_infos.reserve(batch_size))) {
+      LOG_WARN("fail to reserve array", K(ret), "size", batch_size);
     } else {
       // batch check
       int64_t info_count = tablet_ls_infos.count();
       int64_t start_idx = 0;
-      int64_t end_idx = min(MAX_BATCH_CHECK_NUM, info_count);
+      int64_t end_idx = min(batch_size, info_count);
       int64_t cost_ts = ObTimeUtility::fast_current_time();
       ObBatchFinishCheckStat stat;
       while (start_idx < end_idx) {
@@ -272,7 +272,7 @@ int ObTenantMediumChecker::check_medium_finish_schedule()
           LOG_INFO("success to batch check medium finish", K(start_idx), K(end_idx), K(info_count));
         }
         start_idx = end_idx;
-        end_idx = min(start_idx + MAX_BATCH_CHECK_NUM, info_count);
+        end_idx = min(start_idx + batch_size, info_count);
       }
       cost_ts = ObTimeUtility::fast_current_time() - cost_ts;
       ADD_COMPACTION_EVENT(

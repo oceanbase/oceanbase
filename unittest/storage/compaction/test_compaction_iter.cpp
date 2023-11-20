@@ -35,12 +35,13 @@ public:
   MockObCompactionScheduleIterator(const int64_t batch_tablet_cnt)
     : ObCompactionScheduleIterator(
       true/*is_major, no meaning*/,
-      ObLSGetMod::STORAGE_MOD,
-      batch_tablet_cnt),
+      ObLSGetMod::STORAGE_MOD),
       mock_tablet_id_cnt_(0),
       error_tablet_idx_(-1),
       errno_(OB_SUCCESS)
-  {}
+  {
+    max_batch_tablet_cnt_ = batch_tablet_cnt;
+  }
   virtual int get_cur_ls_handle(ObLSHandle &ls_handle) override
   {
     return OB_SUCCESS;
