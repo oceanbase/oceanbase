@@ -520,11 +520,11 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
 }
 
 int ObTabletDDLUtil::try_get_first_ddl_sstable(ObTablet &tablet,
+                                               ObTableStoreIterator &ddl_table_iter,
                                                blocksstable::ObSSTable *&first_sstable)
 {
   int ret = OB_SUCCESS;
   first_sstable = nullptr;
-  ObTableStoreIterator ddl_table_iter;
 
   ObITable *first_ddl_sstable = nullptr;
   if (OB_FAIL(tablet.get_ddl_sstables(ddl_table_iter))) {

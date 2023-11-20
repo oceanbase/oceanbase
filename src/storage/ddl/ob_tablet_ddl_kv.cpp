@@ -709,8 +709,9 @@ int ObDDLKV::close(ObTablet &tablet)
     ddl_param.start_scn_ = ddl_start_scn_;
     ddl_param.snapshot_version_ = snapshot_version_;
     ddl_param.data_format_version_ = data_format_version_;
+    ObTableStoreIterator ddl_table_iter; // need to hold first_sstable until finish
     ObSSTable *first_sstable = nullptr;
-    if (OB_FAIL(ObTabletDDLUtil::try_get_first_ddl_sstable(tablet, first_sstable))) {
+    if (OB_FAIL(ObTabletDDLUtil::try_get_first_ddl_sstable(tablet, ddl_table_iter, first_sstable))) {
       LOG_WARN("fail to get first sstable", K(ret), K(tablet));
     } else if (OB_FAIL(ObTabletDDLUtil::create_ddl_sstable(tablet, ddl_param, meta_array, first_sstable, allocator, sstable))) {
       LOG_WARN("create ddl sstable failed", K(ret), K(ddl_param), KP(first_sstable));
