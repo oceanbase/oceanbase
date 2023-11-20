@@ -2753,6 +2753,8 @@ int ObTabletMigrationTask::generate_tablet_copy_finish_task_(
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
   } else if (OB_FAIL(ctx_->ha_table_info_mgr_.get_tablet_meta(copy_tablet_ctx_->tablet_id_, src_tablet_meta))) {
     LOG_WARN("failed to get src tablet meta", K(ret), KPC(copy_tablet_ctx_));
+  } else if (OB_FAIL(check_transfer_seq_equal_(src_tablet_meta))) {
+    LOG_WARN("failed to check transfer seq equal", K(ret), KPC(ctx_), KPC(copy_tablet_ctx_));
   } else if (OB_FAIL(tablet_copy_finish_task->init(
       copy_tablet_ctx_->tablet_id_, ls, reporter, restore_action, src_tablet_meta, copy_tablet_ctx_))) {
     LOG_WARN("failed to init tablet copy finish task", K(ret), KPC(ctx_), KPC(copy_tablet_ctx_));
@@ -2908,6 +2910,32 @@ int ObTabletMigrationTask::check_need_copy_sstable_(
     LOG_WARN("failed to get table info", K(ret), KPC(copy_tablet_ctx_), K(table_key));
   } else if (OB_FAIL(ObStorageHATaskUtils::check_need_copy_sstable(*copy_table_info, copy_tablet_ctx_->tablet_handle_, need_copy))) {
     LOG_WARN("failed to check need copy sstable", K(ret), KPC(copy_tablet_ctx_), K(table_key));
+  }
+  return ret;
+}
+
+int ObTabletMigrationTask::check_transfer_seq_equal_(
+    const ObMigrationTabletParam *src_tablet_meta)
+{
+  int ret = OB_SUCCESS;
+  ObLS *ls = nullptr;
+  ObTabletHandle tablet_handle;
+  ObTablet *tablet = nullptr;
+  ObTabletMigrationDag *tablet_migration_dag = nullptr;
+  if (OB_ISNULL(src_tablet_meta) || OB_ISNULL(copy_tablet_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx should not be null", K(ret), KP(src_tablet_meta), KP_(copy_tablet_ctx));
+  } else if (FALSE_IT(tablet_migration_dag = static_cast<ObTabletMigrationDag *>(dag_))) {
+  } else if (OB_FAIL(tablet_migration_dag->get_ls(ls))) {
+    LOG_WARN("failed to get ls", K(ret));
+  } else if (OB_FAIL(ls->ha_get_tablet(copy_tablet_ctx_->tablet_id_, tablet_handle))) {
+    LOG_WARN("failed to get tablet", K(ret));
+  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be NULL", K(ret));
+  } else if (tablet->get_tablet_meta().transfer_info_.transfer_seq_ != src_tablet_meta->transfer_info_.transfer_seq_) {
+    ret = OB_TABLET_TRANSFER_SEQ_NOT_MATCH;
+    LOG_WARN("tablet transfer seq not eq with transfer seq", KPC(tablet), KPC(src_tablet_meta));
   }
   return ret;
 }

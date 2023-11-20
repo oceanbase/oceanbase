@@ -2776,7 +2776,7 @@ int ObStorageHATabletBuilderUtil::inner_update_tablet_table_store_with_minor_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("inner update tablet table store with minor get invalid argument", K(ret), KP(ls), KP(tablet));
   } else if (need_tablet_meta_merge && OB_FAIL(check_need_merge_tablet_meta_(src_tablet_meta, tablet, need_merge))) {
-    LOG_WARN("failedto check remote logical sstable exist", K(ret), KPC(tablet));
+    LOG_WARN("failed to check remote logical sstable exist", K(ret), KPC(tablet));
   } else {
     const ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
     update_table_store_param.tablet_meta_ = need_merge ? src_tablet_meta : nullptr;
