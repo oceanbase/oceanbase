@@ -543,7 +543,7 @@ int ObTransformSimplifyWinfunc::check_stmt_win_can_be_removed(ObSelectStmt *sele
     LOG_WARN("failed to check stmt unique", K(ret));
   } else if (!is_unique) {
     /*do nothing*/
-  } else if (BoundType::BOUND_CURRENT_ROW != win_expr->get_upper().type_
+  } else if (BoundType::BOUND_CURRENT_ROW != win_expr->get_lower().type_
              && BoundType::BOUND_CURRENT_ROW != win_expr->get_upper().type_
              && win_expr->get_upper().is_preceding_ == win_expr->get_lower().is_preceding_) {
     //upper 与 lower 均非 BOUND_CURRENT_ROW 且 is_preceding 相同时, 可能出现不包含当前行的窗口, 禁止消除

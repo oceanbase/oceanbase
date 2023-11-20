@@ -2470,7 +2470,7 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt &stmt)
       LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
     } else if (OB_FAIL(stmt.formalize_stmt(session_info))) {
       LOG_WARN("failed to formalize stmt", K(ret));
-    } else if (OB_FAIL(stmt.formalize_stmt_expr_reference())) {
+    } else if (OB_FAIL(stmt.formalize_stmt_expr_reference(expr_factory, session_info))) {
       LOG_WARN("failed to formalize stmt expr reference", K(ret));
     }
   }
@@ -4528,7 +4528,7 @@ int ObTransformPreProcess::transform_merge_into_subquery(ObMergeStmt *merge_stmt
                                                    update_has_subquery,
                                                    delete_subquery_exprs))) {
     LOG_WARN("failed to allocate delete condition subquery", K(ret));
-  } else if (OB_FAIL(merge_stmt->formalize_stmt_expr_reference())) {
+  } else if (OB_FAIL(merge_stmt->formalize_stmt_expr_reference(expr_factory, ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt expr reference", K(ret));
   }
   return ret;
