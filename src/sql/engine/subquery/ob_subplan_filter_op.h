@@ -239,7 +239,7 @@ private:
     }
   }
 
-  int prepare_rescan_params(bool save);
+  int prepare_rescan_params(bool save, int64_t &params_size);
   int prepare_onetime_exprs();
   int prepare_onetime_exprs_inner();
   int handle_update_set();
@@ -282,6 +282,9 @@ private:
   common::ObSEArray<Iterator*, 8> subplan_iters_to_check_;
   lib::MemoryContext last_store_row_mem_;
   ObBatchResultHolder brs_holder_;
+public:
+  static const int64_t MAX_PX_RESCAN_PARAMS_SIZE = 4 << 20; // 4M
+  static const int64_t MAX_DUMP_SIZE = 16 << 20; // 16M
 };
 
 class GroupParamBackupGuard
