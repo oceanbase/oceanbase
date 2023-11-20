@@ -23,6 +23,9 @@
 #include "lib/oblog/ob_log_module.h"        // LOG_*
 #include "lib/ob_errno.h"
 
+#include "rocksdb/table_properties.h"
+#include "rocksdb/utilities/table_properties_collectors.h"
+
 namespace oceanbase
 {
 namespace libobcdc
@@ -51,9 +54,12 @@ int RocksDbStoreService::init(const std::string &path)
   } else if (OB_FAIL(init_dir_(path.c_str()))) {
     LOG_ERROR("init_dir_ fail", K(ret));
   } else {
+    const int total_threads = 32;
+    const int64_t sliding_window_size = 10000;
+    const int64_t deletion_trigger = 1000;
+    const double deletion_ratio = 0.1;
     m_db_path_ = path;
     m_options_.create_if_missing = true;
-    const int total_threads = 32;
     // By default, RocksDB uses only one background thread for flush and
     // compaction. Calling this function will set it up such that total of
     // `total_threads` is used. Good value for `total_threads` is the number of
@@ -66,6 +72,21 @@ int RocksDbStoreService::init(const std::string &path)
     // 2G
     m_options_.db_write_buffer_size = 2 << 30;
     m_options_.max_open_files = 100;
+    // Creates a factory of a table property collector that marks a SST
+    // file as need-compaction when it observe at least "D" deletion
+    // entries in any "N" consecutive entries, or the ratio of tombstone
+    // entries >= deletion_ratio.
+    //
+    // @param sliding_window_size "N". Note that this number will be
+    //     round up to the smallest multiple of 128 that is no less
+    //     than the specified size.
+    // @param deletion_trigger "D".  Note that even when "N" is changed,
+    //     the specified number for "D" will not be changed.
+    // @param deletion_ratio, if <= 0 or > 1, disable triggering compaction
+    //     based on deletion ratio. Disabled by default.
+    m_options_.table_properties_collector_factories.emplace_back(
+      rocksdb::NewCompactOnDeletionCollectorFactory(sliding_window_size, deletion_trigger, deletion_ratio));
+    m_options_.statistics = rocksdb::CreateDBStatistics();
 
     rocksdb::Status s = rocksdb::DB::Open(m_options_, m_db_path_, &m_db_);
     if (!s.ok()) {
@@ -290,7 +311,9 @@ int RocksDbStoreService::del(const std::string &key)
     ret = OB_IN_STOP_STATE;
   } else {
     // find column family handle for cf
-    rocksdb::Status s = m_db_->Delete(rocksdb::WriteOptions(), key);
+    rocksdb::WriteOptions writer_options;
+    writer_options.disableWAL = true;
+    rocksdb::Status s = m_db_->Delete(writer_options, key);
     if (!s.ok()) {
       ret = OB_IO_ERROR;
       _LOG_ERROR("delete %s from rocksdb failed, error %s", key.c_str(), s.ToString().c_str());
@@ -336,7 +359,9 @@ int RocksDbStoreService::del_range(void *cf_handle, const std::string &begin_key
   } else if (is_stopped()) {
     ret = OB_IN_STOP_STATE;
   } else {
-    rocksdb::Status s = m_db_->DeleteRange(rocksdb::WriteOptions(), column_family_handle,
+    rocksdb::WriteOptions writer_options;
+    writer_options.disableWAL = true;
+    rocksdb::Status s = m_db_->DeleteRange(writer_options, column_family_handle,
         begin_key, end_key);
 
     if (!s.ok()) {
@@ -352,32 +377,67 @@ int RocksDbStoreService::del_range(void *cf_handle, const std::string &begin_key
   return ret;
 }
 
-int RocksDbStoreService::compact_range(void *cf_handle, const std::string &begin_key, const std::string &end_key)
+int RocksDbStoreService::compact_range(
+    void *cf_handle,
+    const std::string &begin_key,
+    const std::string &end_key,
+    const bool op_entire_cf)
 {
   int ret = OB_SUCCESS;
   int64_t start_ts = get_timestamp();
   rocksdb::ColumnFamilyHandle *column_family_handle = static_cast<rocksdb::ColumnFamilyHandle *>(cf_handle);
+  rocksdb::CompactRangeOptions compact_option;
+  compact_option.change_level = true;
 
   if (OB_ISNULL(column_family_handle)) {
-    LOG_ERROR("column_family_handle is NULL");
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("column_family_handle is NULL");
   } else if (is_stopped()) {
     ret = OB_IN_STOP_STATE;
   } else {
-    rocksdb::Slice begin(begin_key);
-    rocksdb::Slice end(end_key);
-    rocksdb::Status s = m_db_->CompactRange(rocksdb::CompactRangeOptions(), column_family_handle,
-        &begin, &end);
+    rocksdb::Status s;
+    if (op_entire_cf) {
+      // compact from nullptr to nullptr means compact all data in the column_family
+      s = m_db_->CompactRange(compact_option, column_family_handle, nullptr, nullptr);
+    } else {
+      rocksdb::Slice begin(begin_key);
+      rocksdb::Slice end(end_key);
+      s = m_db_->CompactRange(compact_option, column_family_handle, &begin, &end);
+    }
 
     if (!s.ok()) {
-      LOG_ERROR("CompactRange %s from rocksdb failed, error %s", begin_key.c_str(), s.ToString().c_str());
-      ret = OB_ERR_UNEXPECTED;
+      _LOG_WARN("COMPACT_RANGE [%s - %s] failed, reason: [%s]", begin_key.c_str(), end_key.c_str(), s.ToString().c_str());
     } else {
-      // NOTICE invoke this interface lob data clean task interval
-      double time_cost = (get_timestamp() - start_ts)/1000.0;
-      _LOG_INFO("COMPACT_RANGE time_cost=%.3lfms start_key=%s end_key=%s", time_cost, begin_key.c_str(), end_key.c_str());
+      int64_t time_cost = get_timestamp() - start_ts;
+      _LOG_INFO("COMPACT_RANGE [%s - %s] time_cost=%s", begin_key.c_str(), end_key.c_str(), TVAL_TO_STR(time_cost));
     }
   }
+  return ret;
+}
+
+int RocksDbStoreService::flush(void *cf_handle)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_ts = get_timestamp();
+  rocksdb::ColumnFamilyHandle *column_family_handle = static_cast<rocksdb::ColumnFamilyHandle *>(cf_handle);
+  rocksdb::FlushOptions flush_option; // default wait=true, allow_wait_stall=false
+
+  if (OB_ISNULL(column_family_handle)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("column_family_handle is NULL");
+  } else if (is_stopped()) {
+    ret = OB_IN_STOP_STATE;
+  } else {
+    rocksdb::Status s = m_db_->Flush(flush_option, column_family_handle);
+
+    if (! s.ok()) {
+      _LOG_WARN("ROCKSDB FLUSH failed, reason: [%s]", s.ToString().c_str());
+    } else {
+      int64_t time_cost = get_timestamp() - start_ts;
+      _LOG_INFO("ROCKSDB FLUSH SUCC, time_cost=%s", TVAL_TO_STR(time_cost));
+    }
+  }
+
   return ret;
 }
 
@@ -403,6 +463,7 @@ int RocksDbStoreService::create_column_family(const std::string& column_family_n
   cf_options.max_write_buffer_number = 9;
   // Column Family's default memtable size is 64M, when the maximum limit is exceeded, memtable -> immutable memtable, increase write_buffer_size, can reduce write amplification
   cf_options.write_buffer_size = rocksdb_write_buffer_size << 20;
+  cf_options.level_compaction_dynamic_level_bytes = true;
   // config rocksdb compression
   // supported compress algorithms will print in LOG file
   // cf_options.compression = rocksdb::CompressionType::kLZ4Compression;
@@ -435,8 +496,6 @@ int RocksDbStoreService::drop_column_family(void *cf_handle)
   if (OB_ISNULL(column_family_handle)) {
     LOG_ERROR("column_family_handle is NULL");
     ret = OB_INVALID_ARGUMENT;
-  } else if (is_stopped()) {
-    ret = OB_IN_STOP_STATE;
   } else {
     rocksdb::Status status = m_db_->DropColumnFamily(column_family_handle);
 
@@ -459,8 +518,6 @@ int RocksDbStoreService::destory_column_family(void *cf_handle)
   if (OB_ISNULL(column_family_handle)) {
     LOG_ERROR("column_family_handle is NULL");
     ret = OB_INVALID_ARGUMENT;
-  } else if (is_stopped()) {
-    ret = OB_IN_STOP_STATE;
   } else {
     rocksdb::Status status = m_db_->DestroyColumnFamilyHandle(column_family_handle);
 

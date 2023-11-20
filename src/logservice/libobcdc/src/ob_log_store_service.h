@@ -62,7 +62,8 @@ public:
   virtual int del(const std::string &key) = 0;
   virtual int del(void *cf_handle, const std::string &key) = 0;
   virtual int del_range(void *cf_handle, const std::string &begin_key, const std::string &end_key) = 0;
-  virtual int compact_range(void *cf_handle, const std::string &begin_key, const std::string &end_key) = 0;
+  virtual int compact_range(void *cf_handle, const std::string &begin_key, const std::string &end_key, const bool op_entire_cf = false) = 0;
+  virtual int flush(void *cf_handle) = 0;
 
   virtual int create_column_family(const std::string& column_family_name,
       void *&cf_handle) = 0;
