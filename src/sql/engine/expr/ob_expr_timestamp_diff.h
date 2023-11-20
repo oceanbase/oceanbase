@@ -34,6 +34,7 @@ public:
   static int eval_timestamp_diff(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   virtual int cg_expr(ObExprCGCtx &ctx, const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
+  DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   static int calc(int64_t &res, bool &is_null, int64_t unit_value, int64_t usec_left,
                   int64_t usec_right, const common::ObTimeZoneInfo *tz_info);

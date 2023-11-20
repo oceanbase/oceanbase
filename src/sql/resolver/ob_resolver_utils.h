@@ -493,7 +493,8 @@ public:
                                            share::schema::ObColumnSchemaV2 &generated_column,
                                            ObRawExpr *&expr,
                                            const PureFunctionCheckStatus
-                                             check_status = DISABLE_CHECK);
+                                             check_status = DISABLE_CHECK,
+                                           bool coltype_not_defined = false);
   static int resolve_generated_column_expr(ObResolverParams &params,
                                            const ParseNode *node,
                                            share::schema::ObTableSchema &tbl_schema,
@@ -501,7 +502,8 @@ public:
                                            share::schema::ObColumnSchemaV2 &generated_column,
                                            ObRawExpr *&expr,
                                            const PureFunctionCheckStatus
-                                             check_status = DISABLE_CHECK);
+                                             check_status = DISABLE_CHECK,
+                                           bool coltype_not_defined = false);
   static int resolve_generated_column_info(const common::ObString &expr_str,
                                            ObIAllocator &allocator,
                                            ObItemType &root_expr_type,

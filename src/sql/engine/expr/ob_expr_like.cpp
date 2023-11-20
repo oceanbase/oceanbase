@@ -1094,5 +1094,12 @@ int ObExprLike::eval_like_expr_batch_only_text_vectorized(BATCH_EVAL_FUNC_ARG_DE
   return ret;
 }
 
+DEF_SET_LOCAL_SESSION_VARS(ObExprLike, raw_expr) {
+  int ret = OB_SUCCESS;
+  SET_LOCAL_SYSVAR_CAPACITY(1);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
+  return ret;
+}
+
 }
 }

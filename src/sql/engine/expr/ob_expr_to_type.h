@@ -37,6 +37,7 @@ public:
 public:
   OB_INLINE void set_expect_type(common::ObObjType expect_type) { expect_type_ = expect_type; }
   OB_INLINE void set_cast_mode(common::ObCastMode cast_mode) { cast_mode_ = cast_mode; }
+  DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   int calc_result_type_for_literal(ObExprResType &type, ObExprResType &type1, common::ObExprTypeCtx &type_ctx) const;
   int calc_result_type_for_column(ObExprResType &type, ObExprResType &type1, common::ObExprTypeCtx &type_ctx) const;

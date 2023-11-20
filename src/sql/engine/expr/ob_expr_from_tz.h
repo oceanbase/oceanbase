@@ -30,11 +30,12 @@ public:
                                 common::ObExprTypeCtx &type_ctx) const;
   static int eval_from_tz_val(const common::ObOTimestampData &in_ts_val,
                               const common::ObString &tz_str,
-                              ObSQLSessionInfo &my_session,
+                              const common::ObTimeZoneInfo *tz_info,
                               common::ObOTimestampData &out_ts_val);
   static int eval_from_tz(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                       ObExpr &expr) const override;
+  DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprFromTz);

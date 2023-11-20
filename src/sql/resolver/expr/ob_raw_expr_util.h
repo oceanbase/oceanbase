@@ -254,10 +254,26 @@ public:
                                          const ObSchemaChecker *schema_checker = NULL,
                                          const ObResolverUtils::PureFunctionCheckStatus
                                            check_status = ObResolverUtils::DISABLE_CHECK,
+                                         const bool need_check_simple_column = true,
+                                         bool use_def_collation = false,
+                                          ObCollationType connection_collation = CS_TYPE_INVALID);
+  static int build_generated_column_expr(const common::ObString &expr_str,
+                                         ObRawExprFactory &expr_factory,
+                                         const ObSQLSessionInfo &session_info,
+                                         ObRawExpr *&expr,
+                                         common::ObIArray<ObQualifiedName> &columns,
+                                         const ObTableSchema* new_table_schema,
+                                         const bool sequence_allowed,
+                                        ObDMLResolver *dml_resolver,
+                                         const ObSchemaChecker *schema_checker = NULL,
+                                         const ObResolverUtils::PureFunctionCheckStatus
+                                           check_status = ObResolverUtils::DISABLE_CHECK,
                                          const bool need_check_simple_column = true);
   static int build_generated_column_expr(const common::ObString &expr_str,
                                          ObRawExprFactory &expr_factory,
                                          const ObSQLSessionInfo &session_info,
+                                         ObSQLMode sql_mode,
+                                         ObCollationType connection_collation,
                                          ObRawExpr *&expr,
                                          common::ObIArray<ObQualifiedName> &columns,
                                          const ObTableSchema* new_table_schema,
@@ -354,7 +370,9 @@ public:
                             common::ObIArray<ObUDFInfo> &udf_info,
                             common::ObIArray<ObOpRawExpr*> &op_exprs,
                             bool is_prepare_protocol/*= false*/,
-                            TgTimingEvent tg_timing_event = TgTimingEvent::TG_TIMING_EVENT_INVALID);
+                            TgTimingEvent tg_timing_event = TgTimingEvent::TG_TIMING_EVENT_INVALID,
+                            bool use_def_collation = false,
+                            ObCollationType def_collation = CS_TYPE_INVALID);
   static bool is_same_raw_expr(const ObRawExpr *src, const ObRawExpr *dst);
   /// replace all `from' to `to' in the raw_expr
   static int replace_all_ref_column(ObRawExpr *&raw_expr, const common::ObIArray<ObRawExpr *> &exprs, int64_t& offset);
@@ -559,13 +577,16 @@ public:
   static int build_column_conv_expr(ObRawExprFactory &expr_factory,
                                     const share::schema::ObColumnSchemaV2 *column_schema,
                                     ObRawExpr *&expr,
-                                    const sql::ObSQLSessionInfo *session_info);
+                                    const sql::ObSQLSessionInfo *session_info,
+                                    const ObLocalSessionVar *local_vars = NULL);
   static int build_column_conv_expr(ObRawExprFactory &expr_factory,
                                     common::ObIAllocator &allocator,
                                     const ObColumnRefRawExpr &col_expr,
                                     ObRawExpr *&expr,
                                     const ObSQLSessionInfo *session_info,
-                                    bool is_generated_column = false);
+                                    bool is_generated_column = false,
+                                    const ObLocalSessionVar *local_vars = NULL,
+                                    int64_t local_var_id = OB_INVALID_INDEX_INT64);
   static int build_column_conv_expr(const ObSQLSessionInfo *session_info,
                                     ObRawExprFactory &expr_factory,
                                     const common::ObObjType &type,
@@ -576,7 +597,9 @@ public:
                                     const common::ObIArray<common::ObString> *type_infos,
                                     ObRawExpr *&expr,
                                     bool is_in_pl = false,
-                                    bool is_generated_column = false);
+                                    bool is_generated_column = false,
+                                    const ObLocalSessionVar *local_vars = NULL,
+                                    int64_t local_var_id = OB_INVALID_INDEX_INT64);
   static int build_var_int_expr(ObRawExprFactory &expr_factory,
                                 ObConstRawExpr *&expr);
   static int build_default_expr(ObRawExprFactory &expr_factory,
@@ -1151,6 +1174,10 @@ public:
   static int check_is_valid_generated_col(ObRawExpr *expr, ObIAllocator &allocator);
 
   static bool is_column_ref_skip_implicit_cast(const ObRawExpr *expr);
+
+  static int extract_local_vars_for_gencol(ObRawExpr *expr,
+                                           const ObSQLMode sql_mode,
+                                           ObColumnSchemaV2 &gen_col);
 
 private :
   static int create_real_cast_expr(ObRawExprFactory &expr_factory,

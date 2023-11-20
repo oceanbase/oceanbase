@@ -165,5 +165,13 @@ int ObExprPad::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
   return ret;
 }
 
+DEF_SET_LOCAL_SESSION_VARS(ObExprPad, raw_expr) {
+  int ret = OB_SUCCESS;
+  SET_LOCAL_SYSVAR_CAPACITY(2);
+  EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_MAX_ALLOWED_PACKET);
+  EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_COLLATION_CONNECTION);
+  return ret;
+}
+
 }
 }

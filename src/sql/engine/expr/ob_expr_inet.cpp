@@ -14,6 +14,7 @@
 #include <string.h>
 #include "sql/engine/expr/ob_expr_inet.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/expr/ob_expr_util.h"
 
 using namespace oceanbase::common;
 
@@ -388,11 +389,18 @@ int ObExprInetAton::calc_inet_aton(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& 
       }else if (is_ip_format_invalid) {
         uint64_t cast_mode = 0;
         ObSQLSessionInfo* session = ctx.exec_ctx_.get_my_session();
+        ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+        ObSQLMode sql_mode = 0;
         if (OB_UNLIKELY(OB_ISNULL(session))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("session is NULL", K(ret));
+        } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
+          LOG_WARN("get sql mode failed", K(ret));
         } else {
-          ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
+          ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
+                                            session->is_ignore_stmt(),
+                                            sql_mode,
+                                            cast_mode);
           if (CM_IS_WARN_ON_FAIL(cast_mode)) { //support no strict sql_mode
             expr_datum.set_null();
           } else {
@@ -402,6 +410,15 @@ int ObExprInetAton::calc_inet_aton(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& 
         }
       }
     }
+  }
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprInetAton, raw_expr) {
+  int ret = OB_SUCCESS;
+  if (is_mysql_mode()) {
+    SET_LOCAL_SYSVAR_CAPACITY(1);
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_SQL_MODE);
   }
   return ret;
 }
@@ -426,7 +443,7 @@ inline int ObExprInet6Ntoa::calc_result_type1(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null",K(ret));
   } else {
-    type.set_collation_type(get_default_collation_type(type.get_type(), *type_ctx.get_session()));
+    type.set_collation_type(get_default_collation_type(type.get_type(), type_ctx));
   }
   return ret;
 }
@@ -480,11 +497,18 @@ int ObExprInet6Ntoa::calc_inet6_ntoa(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
         if (OB_SUCC(ret) && is_ip_format_invalid) {
           uint64_t cast_mode = 0;
           ObSQLSessionInfo* session = ctx.exec_ctx_.get_my_session();
+          ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+          ObSQLMode sql_mode = 0;
           if (OB_UNLIKELY(OB_ISNULL(session))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("session is NULL", K(ret));
+          } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
+            LOG_WARN("get sql mode failed", K(ret));
           } else {
-            ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
+            ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
+                                              session->is_ignore_stmt(),
+                                              sql_mode,
+                                              cast_mode);
             if (CM_IS_WARN_ON_FAIL(cast_mode)) {
               expr_datum.set_null(); //support no strict sql_mode
             } else {
@@ -495,6 +519,16 @@ int ObExprInet6Ntoa::calc_inet6_ntoa(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
         }
       }
     }
+  }
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprInet6Ntoa, raw_expr) {
+  int ret = OB_SUCCESS;
+  if (lib::is_mysql_mode()) {
+    SET_LOCAL_SYSVAR_CAPACITY(2);
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_SQL_MODE);
   }
   return ret;
 }
@@ -550,10 +584,16 @@ int ObExprInet6Aton::calc_inet6_aton(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
         } else if (is_ip_format_invalid) {
           uint64_t cast_mode = 0;
           ObSQLSessionInfo* session = ctx.exec_ctx_.get_my_session();
+          ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+          ObSQLMode sql_mode = 0;
           if (OB_ISNULL(session)) {
             LOG_WARN("session is NULL", K(ret));
+          } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
+            LOG_WARN("get sql mode failed", K(ret));
           } else {
-            ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
+            ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
+                                              session->is_ignore_stmt(),
+                                              sql_mode, cast_mode);
             if (CM_IS_WARN_ON_FAIL(cast_mode)) {
               expr_datum.set_null(); //support no strict mode
             } else {
@@ -600,6 +640,15 @@ int ObExprInet6Aton::inet6_aton(const ObString& ip, bool& is_ip_format_invalid, 
         str_result.assign(result_buf, static_cast<int32_t>(sizeof(in_addr)));
       }
     }
+  }
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprInet6Aton, raw_expr) {
+  int ret = OB_SUCCESS;
+  if (lib::is_mysql_mode()) {
+    SET_LOCAL_SYSVAR_CAPACITY(1);
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_SQL_MODE);
   }
   return ret;
 }

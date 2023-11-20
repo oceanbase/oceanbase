@@ -880,6 +880,19 @@ int ObExecContext::get_pwj_map(PWJTabletIdMap *&pwj_map)
   return ret;
 }
 
+int ObExecContext::get_local_var_array(int64_t local_var_array_id, const ObLocalSessionVar *&var_array)
+{
+  int ret = OB_SUCCESS;
+  var_array = NULL;
+  if (OB_ISNULL(phy_plan_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("phy_plan_ctx_ is null", K(ret));
+  } else if (OB_FAIL(phy_plan_ctx_->get_local_session_vars(local_var_array_id, var_array))) {
+    LOG_WARN("get local session var failed", K(ret), K(local_var_array_id));
+  }
+  return ret;
+}
+
 int ObExecContext::fill_px_batch_info(ObBatchRescanParams &params,
     int64_t batch_id, sql::ObExpr::ObExprIArray &array)
 {

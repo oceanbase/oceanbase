@@ -85,6 +85,13 @@ int ObExprSha::eval_sha(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
   return ret;
 }
 
+DEF_SET_LOCAL_SESSION_VARS(ObExprSha, raw_expr) {
+  int ret = OB_SUCCESS;
+  SET_LOCAL_SYSVAR_CAPACITY(1);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
+  return ret;
+}
+
 ObExprSha2::ObExprSha2(ObIAllocator &alloc)
     : ObStringExprOperator(alloc, T_FUN_SYS_SHA2, N_SHA2, 2, VALID_FOR_GENERATED_COL)
 {
@@ -151,6 +158,13 @@ int ObExprSha2::eval_sha2(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datu
       LOG_WARN("fail to convert sha_str to hex", K(sha_str), K(ret));
     }
   }
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprSha2, raw_expr) {
+  int ret = OB_SUCCESS;
+  SET_LOCAL_SYSVAR_CAPACITY(1);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
   return ret;
 }
 

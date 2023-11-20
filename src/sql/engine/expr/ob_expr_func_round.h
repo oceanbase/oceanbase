@@ -53,6 +53,7 @@ public:
                             ObEvalCtx &ctx,
                             const ObBitVector &skip,
                             const int64_t batch_size);
+  DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   // engine 3.0
   int se_deduce_type(ObExprResType &type,

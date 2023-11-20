@@ -18,7 +18,6 @@
 #include "lib/hash/ob_hashmap.h"
 #include "share/schema/ob_schema_struct.h"
 #include "common/rowkey/ob_rowkey_info.h"
-
 namespace oceanbase
 {
 namespace share
@@ -44,6 +43,7 @@ const char *const STR_COLUMN_TYPE_RAW = "raw";
 const char *const STR_COLUMN_TYPE_UNKNOWN = "unknown";
 
 class ObTableSchema;
+class ObLocalSessionVar;
 class ObColumnSchemaV2 : public ObSchema
 {
     OB_UNIS_VERSION_V(1);
@@ -321,6 +321,9 @@ public:
     return ret;
   }
 
+  inline ObLocalSessionVar &get_local_session_var() { return local_session_vars_; }
+  inline const ObLocalSessionVar &get_local_session_var() const { return local_session_vars_; }
+
   DECLARE_VIRTUAL_TO_STRING;
 private:
   int alloc_column_ref_set();
@@ -373,6 +376,7 @@ private:
   uint64_t sub_type_;
   ObSkipIndexColumnAttr skip_index_attr_;
   int64_t lob_chunk_size_;
+  ObLocalSessionVar local_session_vars_;
 };
 
 inline int32_t ObColumnSchemaV2::get_data_length() const

@@ -193,5 +193,12 @@ int ObExprPLSQLCodeSQLErrm::eval_pl_sql_code_errm(
   return ret;
 }
 
+DEF_SET_LOCAL_SESSION_VARS(ObExprPLSQLCodeSQLErrm, raw_expr) {
+  int ret = OB_SUCCESS;
+  SET_LOCAL_SYSVAR_CAPACITY(1);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
+  return ret;
+}
+
 }
 }

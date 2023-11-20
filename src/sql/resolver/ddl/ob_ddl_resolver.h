@@ -209,6 +209,7 @@ public:
                                ObIArray<ObString> &gen_col_expr_arr);
   static int init_empty_session(const common::ObTimeZoneInfoWrap &tz_info_wrap,
                                 const ObString *nls_formats,
+                                const share::schema::ObLocalSessionVar *local_session_var,
                                 common::ObIAllocator &allocator,
                                 share::schema::ObTableSchema &table_schema,
                                 const ObSQLMode sql_mode,
@@ -217,6 +218,7 @@ public:
   static int reformat_generated_column_expr(ObObj &default_value,
                                             const common::ObTimeZoneInfoWrap &tz_info_wrap,
                                             const common::ObString *nls_formats,
+                                            const share::schema::ObLocalSessionVar &local_session_var,
                                             common::ObIAllocator &allocator,
                                             share::schema::ObTableSchema &table_schema,
                                             share::schema::ObColumnSchemaV2 &column,
@@ -231,11 +233,13 @@ public:
       ObSQLSessionInfo *session_info,
       ObSchemaChecker *schema_checker,
       ObRawExpr *&expr,
-      ObRawExprFactory &expr_factory);
+      ObRawExprFactory &expr_factory,
+      bool coltype_not_defined = false);
   static int check_default_value(
       common::ObObj &default_value,
       const common::ObTimeZoneInfoWrap &tz_info_wrap,
       const common::ObString *nls_formats,
+      const ObLocalSessionVar *local_session_var,
       common::ObIAllocator &allocator,
       share::schema::ObTableSchema &table_schema,
       share::schema::ObColumnSchemaV2 &column_schema,
@@ -248,6 +252,7 @@ public:
       common::ObObj &default_value,
       const common::ObTimeZoneInfoWrap &tz_info_wrap,
       const common::ObString *nls_formats,
+      const ObLocalSessionVar *local_session_var,
       common::ObIAllocator &allocator,
       share::schema::ObTableSchema &table_schema,
       ObIArray<share::schema::ObColumnSchemaV2> &resolved_cols,
@@ -256,7 +261,8 @@ public:
       const ObSQLMode sql_mode,
       ObSQLSessionInfo *session_info,
       bool allow_sequence,
-      ObSchemaChecker *schema_checker = NULL);
+      ObSchemaChecker *schema_checker = NULL,
+      bool coltype_not_defined = false);
   static int check_default_value(
       common::ObObj &default_value,
       const common::ObTimeZoneInfoWrap &tz_info_wrap,
@@ -269,7 +275,8 @@ public:
       const ObSQLMode sql_mode,
       ObSQLSessionInfo *session_info,
       bool allow_sequence,
-      ObSchemaChecker *schema_checker);
+      ObSchemaChecker *schema_checker,
+      bool coltype_not_defined = false);
   static int calc_default_value(
       share::schema::ObColumnSchemaV2 &column_schema,
       common::ObObj &default_value,

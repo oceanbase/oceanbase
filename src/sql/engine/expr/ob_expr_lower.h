@@ -42,6 +42,8 @@ public:
   int cg_expr_nls_common(ObExprCGCtx &op_cg_ctx,
                          const ObRawExpr &raw_expr,
                          ObExpr &rt_expr) const;
+  DECLARE_SET_LOCAL_SESSION_VARS;
+
 protected:
   virtual int calc(const common::ObCollationType cs_type, char *src, int32_t src_len,
                    char *dest, int32_t det_len, int32_t &out_len) const = 0;
