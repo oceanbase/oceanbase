@@ -846,10 +846,6 @@ public:
   transaction::ObTxClass get_trans_type() const { return trans_type_; }
 
   void get_session_priv_info(share::schema::ObSessionPrivInfo &session_priv) const;
-  void set_found_rows(const int64_t count) { found_rows_ = count; }
-  int64_t get_found_rows() const { return found_rows_; }
-  void set_affected_rows(const int64_t count) { affected_rows_ = count; }
-  int64_t get_affected_rows() const { return affected_rows_; }
   bool has_user_super_privilege() const;
   bool has_user_process_privilege() const;
   int check_read_only_privilege(const bool read_only,

@@ -586,6 +586,13 @@ public:
     sql_select_limit = sys_vars_cache_.get_sql_select_limit();
     return common::OB_SUCCESS;
   }
+  void set_found_rows(const int64_t count) { found_rows_ = count; }
+  int64_t get_found_rows() const { return found_rows_; }
+  void set_affected_rows(const int64_t count)
+  {
+    affected_rows_ = count;
+  }
+  int64_t get_affected_rows() const { return affected_rows_; }
   // session保留compatible mode，主要用于传递mode，方便后续进行guard切换，如inner sql connection等
   // 其他需要用mode地方请尽量使用线程上的is_oracle|mysql_mode
   // 同时可以使用check_compatibility_mode来检查线程与session上的mode是否一致
