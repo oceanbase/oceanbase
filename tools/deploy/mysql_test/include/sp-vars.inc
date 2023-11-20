@@ -47,33 +47,33 @@ BEGIN
   DECLARE i1, i2, i3, i4 TINYINT;
   DECLARE u1, u2, u3, u4 TINYINT UNSIGNED;
   DECLARE d1, d2, d3 DECIMAL(64, 2);
-
+ 
   SET i1 = 1e200;
   SET i2 = -1e200;
   SET i3 = 300;
   SET i4 = -300;
-
+ 
   SELECT i1, i2, i3, i4;
 
   SET i1 = 10 * 10 * 10;
   SET i2 = -10 * 10 * 10;
   SET i3 = sign(10 * 10) * 10 * 20;
   SET i4 = sign(-10 * 10) * -10 * 20;
-
+  
   SELECT i1, i2, i3, i4;
 
   SET u1 = 1e200;
   SET u2 = -1e200;
   SET u3 = 300;
   SET u4 = -300;
-
+ 
   SELECT u1, u2, u3, u4;
 
   SET u1 = 10 * 10 * 10;
   SET u2 = -10 * 10 * 10;
   SET u3 = sign(10 * 10) * 10 * 20;
   SET u4 = sign(-10 * 10) * -10 * 20;
-
+  
   SELECT u1, u2, u3, u4;
 
   SET d1 = 1234;
