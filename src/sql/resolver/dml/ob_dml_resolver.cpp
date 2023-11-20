@@ -11263,7 +11263,7 @@ int ObDMLResolver::check_disable_parallel_state(ObRawExpr *expr)
   if (OB_FAIL(ret)) {
   } else if (T_FUN_UDF == expr->get_expr_type()) {
     ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr*>(expr);
-    ObSchemaObjVersion return_value_version;
+    ObSEArray<ObSchemaObjVersion, 1> return_value_version;
     CK (OB_NOT_NULL(udf_expr));
     OZ (ObResolverUtils::set_parallel_info(*params_.session_info_,
                                             *params_.schema_checker_->get_schema_guard(),
@@ -11280,15 +11280,17 @@ int ObDMLResolver::check_disable_parallel_state(ObRawExpr *expr)
           pl::PL_VARRAY_TYPE == udf_expr->get_result_type().get_extend_type())) {
       OX (stmt->get_query_ctx()->disable_udf_parallel_ |= true);
     }
-    if (OB_SUCC(ret) && return_value_version.is_valid()) {
+    if (OB_SUCC(ret) && return_value_version.count()) {
       uint64_t database_id = OB_INVALID_ID;
       OZ (params_.schema_checker_->get_schema_guard()->get_database_id(params_.session_info_->get_effective_tenant_id(),
                                                                       udf_expr->get_database_name().empty()
                                                                       ? params_.session_info_->get_database_name()
                                                                       : udf_expr->get_database_name(),
                                                                       database_id));
-      OZ (stmt->add_global_dependency_table(return_value_version));
-      OZ (stmt->add_ref_obj_version(view_ref_id_, database_id, ObObjectType::VIEW, return_value_version, *allocator_));
+      for (int64_t i = 0; OB_SUCC(ret) && i < return_value_version.count(); ++i) {
+        OZ (stmt->add_global_dependency_table(return_value_version.at(i)));
+        OZ (stmt->add_ref_obj_version(view_ref_id_, database_id, ObObjectType::VIEW, return_value_version.at(i), *allocator_));
+      }
     }
   } else if (T_FUN_PL_OBJECT_CONSTRUCT == expr->get_expr_type()) {
     OX (stmt->get_query_ctx()->disable_udf_parallel_ |= true);

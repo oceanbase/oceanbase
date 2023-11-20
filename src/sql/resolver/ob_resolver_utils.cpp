@@ -6959,7 +6959,7 @@ int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
                                        share::schema::ObSchemaGetterGuard &schema_guard,
                                        ObRawExpr &expr,
                                        bool &contain_select_stmt,
-                                       ObSchemaObjVersion &return_value_version)
+                                       ObIArray<ObSchemaObjVersion> &return_value_version)
 {
   int ret = OB_SUCCESS;
   const ObRoutineInfo *routine_info = NULL;
