@@ -300,6 +300,9 @@ int ObIDiagnoseInfoMgr::get_with_param(const int64_t key, ObIDiagnoseInfo *out_i
       if (OB_HASH_NOT_EXIST != ret) {
         STORAGE_LOG(WARN, "failed to get info from map", K(ret), K(key));
       }
+    } else if (OB_ISNULL(info->info_param_)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "info_param is null", K(ret), K(info));
     } else {
       out_info->shallow_copy(info);
       if (OB_FAIL(info->info_param_->deep_copy(allocator, out_info->info_param_))) {
