@@ -3455,6 +3455,12 @@ public:
   int deserialize_create_tablet_schemas(const char *buf,
       const int64_t data_len,
       int64_t &pos);
+  static int is_old_mds(const char *buf,
+      int64_t data_len,
+      bool &is_old_mds);
+  static int skip_unis_array_len(const char *buf,
+      int64_t data_len,
+      int64_t &pos);
   DECLARE_TO_STRING;
 
 public:
@@ -3480,6 +3486,12 @@ public:
   int assign (const ObBatchRemoveTabletArg &arg);
   int init(const ObIArray<common::ObTabletID> &tablet_ids,
            const share::ObLSID id);
+  static int is_old_mds(const char *buf,
+      int64_t data_len,
+      bool &is_old_mds);
+  static int skip_array_len(const char *buf,
+      int64_t data_len,
+      int64_t &pos);
   DECLARE_TO_STRING;
 
 public:
