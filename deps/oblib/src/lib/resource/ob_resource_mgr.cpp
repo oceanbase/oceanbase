@@ -27,8 +27,6 @@ namespace oceanbase
 using namespace common;
 namespace lib
 {
-
-bool ObTenantMemoryMgr::error_log_when_tenant_500_oversize = false;
 ObTenantMemoryMgr::ObTenantMemoryMgr()
   : cache_washer_(NULL), tenant_id_(common::OB_INVALID_ID),
     limit_(INT64_MAX), sum_hold_(0), rpc_hold_(0), cache_hold_(0),
@@ -266,12 +264,6 @@ bool ObTenantMemoryMgr::update_hold(const int64_t size, const uint64_t ctx_id,
       } else {
         updated = true;
       }
-    }
-    if (OB_UNLIKELY(error_log_when_tenant_500_oversize &&
-                    OB_SERVER_TENANT_ID == tenant_id_ &&
-                    sum_hold_ > (1LL<<30))) {
-      LOG_ERROR_RET(OB_ERROR, "the hold memory of tenant_500 is over the reserved memory",
-                        K_(sum_hold));
     }
   }
   if (!updated) {
