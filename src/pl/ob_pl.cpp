@@ -49,6 +49,7 @@
 #endif
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 #include "sql/engine/dml/ob_trigger_handler.h"
+#include "pl/ob_pl_allocator.h"
 namespace oceanbase
 {
 using namespace common;
@@ -1560,7 +1561,9 @@ int ObPL::trans_sql(PlTransformTreeCtx &trans_ctx, ParseNode *root, ObExecContex
         }
         CK (OB_NOT_NULL(trans_ctx.params_));
         for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
-          OZ (trans_ctx.params_->push_back(params.at(i)));
+          ObObjParam obj = params.at(i);
+          OZ (deep_copy_obj(ctx.get_allocator(), params.at(i), obj));
+          OZ (trans_ctx.params_->push_back(obj));
         }
       }
     }
@@ -1636,13 +1639,14 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
                               ObCacheObjGuard &cacheobj_guard)
 {
   int ret = OB_SUCCESS;
+  ObString pc_key;
   CK (OB_NOT_NULL(ctx.get_my_session()));
   CK (OB_NOT_NULL(block));
   if (OB_SUCC(ret)) {
+    ObArenaAllocator paramerter_alloc("AnonyParam", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObString sql(static_cast<int64_t>(block->str_len_), block->str_value_);
-    ObString pc_key;
     ParseResult parse_result;
-    ObPLParser pl_parser(allocator,
+    ObPLParser pl_parser(paramerter_alloc,
                       ctx.get_my_session()->get_charsets4parser(),
                       ctx.get_my_session()->get_sql_mode());
     OZ (pl_parser.fast_parse(sql, parse_result));
@@ -1650,7 +1654,7 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
       PlTransformTreeCtx trans_ctx;
       ParseNode *block_node = NULL;
       memset(&trans_ctx, 0, sizeof(PlTransformTreeCtx));
-      trans_ctx.allocator_ = &allocator;
+      trans_ctx.allocator_ = &paramerter_alloc;
       trans_ctx.raw_sql_ = sql;
       trans_ctx.raw_anonymous_off_ = block->pl_str_off_;
       trans_ctx.params_ = &params;
@@ -1679,11 +1683,12 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
             trans_ctx.buf_len_ += trans_ctx.raw_sql_.length() - trans_ctx.copied_idx_;
           }
         }
-        pc_key.assign_ptr(trans_ctx.buf_, trans_ctx.buf_len_);
-        OZ (get_pl_function(ctx, params, OB_INVALID_ID, pc_key, cacheobj_guard));
+        //pc_key.assign_ptr(trans_ctx.buf_, trans_ctx.buf_len_);
+        OZ (ob_write_string(ctx.get_allocator(), ObString(trans_ctx.buf_len_, trans_ctx.buf_), pc_key));
       }
     }
   }
+  OZ (get_pl_function(ctx, params, OB_INVALID_ID, pc_key, cacheobj_guard));
   return ret;
 }
 

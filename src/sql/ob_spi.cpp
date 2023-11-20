@@ -42,7 +42,7 @@
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/dblink/ob_pl_dblink_util.h"
 #endif
-
+#include "pl/ob_pl_allocator.h"
 namespace oceanbase
 {
 using namespace sqlclient;
@@ -233,7 +233,7 @@ int ObSPIResultSet::is_set_global_var(ObSQLSessionInfo &session, const ObString 
 {
   int ret = OB_SUCCESS;
   has_global_variable = false;
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_SET_VAR), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ParseResult parse_result;
   ParseMode parse_mode = STD_MODE;
   ObParser parser(allocator, session.get_sql_mode(), session.get_charsets4parser());
@@ -1250,7 +1250,7 @@ int ObSPIService::set_variable(ObPLExecCtx *ctx,
     LOG_WARN("Argument passed in is NULL", K(ctx), K(name), K(value), K(ret));
   } else {
     ObSQLSessionInfo *session = ctx->exec_ctx_->get_my_session();
-    ObArenaAllocator allocator;
+    ObArenaAllocator allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_SET_VAR), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     if (OB_ISNULL(session)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Argument in pl context is NULL", K(session), K(ret));
@@ -1588,7 +1588,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
           // SQL_AUDIT_START
           ObWaitEventDesc max_wait_desc;
           ObWaitEventStat total_wait_desc;
-          ObArenaAllocator allocator;
+          ObArenaAllocator allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_STATIC_SQL_EXEC), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
           const bool enable_perf_event = lib::is_diagnose_info_enabled();
           const bool enable_sql_audit =
             GCONF.enable_sql_audit && ctx->exec_ctx_->get_my_session()->get_local_ob_enable_sql_audit();
@@ -2399,7 +2399,7 @@ int ObSPIService::calc_dynamic_sqlstr(
     LOG_WARN("Dynamic sql is not a string", K(ret), K(result), K(sql_str));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Dynamic sql is not a string");
   } else {
-    ObArenaAllocator temp_allocator;
+    ObArenaAllocator temp_allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_DYNAMIC_SQL_EXEC), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObString tmp_sql;
     ObString user_sql;
     ObCharsetType client_cs_type = CHARSET_INVALID;
@@ -2622,7 +2622,7 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
     ObSQLSessionInfo *session = NULL;
     ObMySQLProxy *sql_proxy = NULL;
     ObSqlString sql_str;
-    ObArenaAllocator allocator;
+    ObArenaAllocator allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_DYNAMIC_SQL_EXEC), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     HEAP_VAR(ObSPIResultSet, spi_result) {
       stmt::StmtType stmt_type = stmt::T_NONE;
       ObString ps_sql;
@@ -2758,7 +2758,7 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
         session->set_query_start_time(ObTimeUtility::current_time());
         bool is_retry = false;
         do {
-          ObArenaAllocator allocator;
+          ObArenaAllocator allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_DYNAMIC_SQL_EXEC), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
           ParamStore exec_params( (ObWrapperAllocator(allocator)) );
           ObWaitEventDesc max_wait_desc;
           ObWaitEventStat total_wait_desc;
@@ -3340,7 +3340,7 @@ int ObSPIService::spi_dynamic_open(ObPLExecCtx *ctx,
   int ret = OB_SUCCESS;
   ObSqlString sql_str;
   stmt::StmtType stmt_type = stmt::T_NONE;
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_DYNAMIC_SQL_EXEC), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObString ps_sql;
   bool for_update = false;
   bool hidden_rowid = false;
@@ -6968,7 +6968,7 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
         ObArray<ObPLCollection*> bulk_tables;
         ObArray<ObCastCtx> cast_ctxs;
         ObArray<std::pair<uint64_t, uint64_t>> package_vars_info;
-        ObArenaAllocator tmp_allocator;
+        ObArenaAllocator tmp_allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_BULK_INTO), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
         OZ (bulk_tables.reserve(OB_DEFAULT_SE_ARRAY_COUNT));
         OZ (cast_ctxs.reserve(OB_DEFAULT_SE_ARRAY_COUNT));
         OZ (package_vars_info.reserve(OB_DEFAULT_SE_ARRAY_COUNT));
