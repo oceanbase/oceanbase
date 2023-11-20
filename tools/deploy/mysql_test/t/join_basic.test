@@ -66,3 +66,4 @@ select * from t2;
 select * from t1, t2 where t1.c1>=t2.c1;
 
 drop table orders,persons, t1, t2, t3;
+

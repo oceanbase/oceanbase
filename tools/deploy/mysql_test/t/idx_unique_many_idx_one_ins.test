@@ -29,3 +29,5 @@ create unique index idx_5 on tbl1(d4);
 create unique index idx_7 on tbl1(i1,v2,i3,d4,i6);
 #--source mysql_test/include/check_idx_error.inc
 drop table tbl1;
+
+

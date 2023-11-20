@@ -5,7 +5,7 @@ set @@session.explicit_defaults_for_timestamp=off;
 #owner group: sql1
 
 #
-## Bug
+## Bug 
 #
 # partition by key()
 --disable_warnings

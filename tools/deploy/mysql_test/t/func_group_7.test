@@ -17,13 +17,13 @@ drop table if exists t1,t2,t3,t4,t5;
 ## Bug #10966: Variance functions return wrong data type
 ##
 #
-#create table t1 select variance(0);
-#show create table t1;
-#drop table t1;
+#create table t1 select variance(0);                                               
+#show create table t1;                                                           
+#drop table t1;                                                                  
 #create table t1 select stddev(0);
 #show create table t1;
 #drop table t1;
-#
+# 
 #
 ##
 ## Bug#22555: STDDEV yields positive result for groups with only one row
@@ -127,7 +127,7 @@ drop table t1;
 #
 ##
 ## Bug #23184: SELECT causes server crash
-##
+## 
 CREATE TABLE t1 (a INT, b INT primary key);
 INSERT INTO t1 VALUES (1,1),(1,2),(1,3),(1,4),(1,5),(1,6),(1,7),(1,8);
 #INSERT INTO t1 SELECT a, b+8       FROM t1;
@@ -150,7 +150,7 @@ SELECT a,AVG(DISTINCT b) AS average FROM t1 GROUP BY a HAVING average > 50;
 DROP TABLE t1;
 #
 ##
-## Bug #27573: MIN() on an indexed column which is always NULL sets _other_
+## Bug #27573: MIN() on an indexed column which is always NULL sets _other_ 
 ## results to NULL
 ##
 CREATE TABLE t1 ( a INT, b INT primary key);
@@ -186,7 +186,7 @@ EXPLAIN SELECT MIN(a), MIN(b) FROM t4 where a = 2;
 SELECT MIN(a), MIN(b) FROM t4 where a = 2;
 SELECT MIN(b), min(c) FROM t4 where a = 2;
 #
-CREATE TABLE t5( a INT, b INT, primary KEY( a, b),c int);
+CREATE TABLE t5( a INT, b INT, primary KEY( a, b),c int); 
 INSERT INTO t5(a,b) VALUES( 1, 1 ), ( 1, 2 );
 --replace_regex /Plan signature: [0-9]*/Plan signature/
 --disable_result_log
@@ -201,13 +201,13 @@ DROP TABLE t1, t2, t3, t4, t5;
 #drop table t4, t5;
 #
 ##
-## Bug #31156: mysqld: item_sum.cc:918:
+## Bug #31156: mysqld: item_sum.cc:918: 
 ##  virtual bool Item_sum_distinct::setup(THD*): Assertion
 ##
 #
 #CREATE TABLE t1 (a INT);
 #INSERT INTO t1 values (),(),();
-#SELECT (SELECT SLEEP(0) FROM t1 ORDER BY AVG(DISTINCT a) ) as x FROM t1
+#SELECT (SELECT SLEEP(0) FROM t1 ORDER BY AVG(DISTINCT a) ) as x FROM t1 
 #  GROUP BY x;
 #SELECT 1 FROM t1 GROUP BY (SELECT SLEEP(0) FROM t1 ORDER BY AVG(DISTINCT a) );
 #
@@ -287,10 +287,10 @@ SELECT COUNT(*),a FROM t1;
 SELECT COUNT(*) FROM t1 a JOIN t1 b ON a.a= b.a;
 #
 #--error ER_MIX_OF_GROUP_FUNC_AND_FIELDS
-#SELECT COUNT(*), (SELECT count(*) FROM t1 inr WHERE inr.a = outr.a)
+#SELECT COUNT(*), (SELECT count(*) FROM t1 inr WHERE inr.a = outr.a) 
  #FROM t1 outr;
 #
-#SELECT COUNT(*) FROM t1 a JOIN t1 outr
+#SELECT COUNT(*) FROM t1 a JOIN t1 outr 
 #  ON a.a= (SELECT count(*) FROM t1 inr WHERE inr.a = outr.a);
 #
 #SET SQL_MODE=default;
@@ -301,13 +301,13 @@ DROP TABLE t1;
 #--echo End of 5.0 tests
 #
 #--echo #
-#--echo # BUG#47280 - strange results from count(*) with order by multiple
+#--echo # BUG#47280 - strange results from count(*) with order by multiple 
 #--echo #             columns without where/group
-#--echo #
+#--echo # 
 #
-#--echo #
+#--echo # 
 #--echo # Initialize test
-#--echo #
+#--echo # 
 #
 CREATE TABLE t1 (
   pk INT NOT NULL,
@@ -322,7 +322,7 @@ INSERT INTO t1 VALUES (1,11),(2,12),(3,13);
 #--echo #
 #
 #--echo
-#--echo # Masking all correct values {11...13} for column i in this result.
+#--echo # Masking all correct values {11...13} for column i in this result. 
 #--replace_column 2 #
 SELECT MAX(pk) as max, i
 FROM t1
@@ -386,7 +386,7 @@ DROP TABLE t1;
 #CREATE TABLE t1 (a INT);
 #INSERT INTO t1 VALUES (1), (2);
 #
-#SELECT MAX((SELECT 1 FROM t1 ORDER BY @var LIMIT 1)) m FROM t1 t2, t1
+#SELECT MAX((SELECT 1 FROM t1 ORDER BY @var LIMIT 1)) m FROM t1 t2, t1 
 #       ORDER BY t1.a;
 #
 #DROP TABLE t1;
@@ -414,7 +414,7 @@ DROP TABLE t1;
 #
 #
 #--echo #
-#--echo # Bug #11766094 - 59132: MIN() AND MAX() REMOVE UNSIGNEDNESS
+#--echo # Bug #11766094 - 59132: MIN() AND MAX() REMOVE UNSIGNEDNESS 
 #--echo #
 #
 #CREATE TABLE t1 (a BIGINT UNSIGNED);

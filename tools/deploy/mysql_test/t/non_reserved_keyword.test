@@ -27,3 +27,4 @@ select use_bloom_filter() from dual;
 select use_bloom() from dual;
 
 drop table t_status;
+

@@ -23,11 +23,11 @@ create table table_t8(c1 int null,c2 int not null);
 create view view_v8 as select c1+c2 from table_t8;
 desc view_v8;
 Field	Type	Null	Key	Default	Extra
-c1+c2	bigint(12)	YES		NULL
+c1+c2	bigint(12)	YES		NULL	
 create view view_v9 as select c1+c2 from table_t8 a;
 desc view_v9;
 Field	Type	Null	Key	Default	Extra
-c1+c2	bigint(12)	YES		NULL
+c1+c2	bigint(12)	YES		NULL	
 drop table table_t8;
 drop view view_v8;
 drop view view_v9;

@@ -50,16 +50,16 @@ insert into t2 values
 --enable_query_log
 
 ##############one table union #############
-#all use index
+#all use index 
 --sorted_result
-(select /*+index(t1 i1) */ pk1,c1 from t1 where c1<30 order by c1) union all (select /*+index(t1 i1) */ pk1,c1 from t1 where c1 > 10 order by c1);
-select * from ((select /*+index(t1 i1) */ pk1,c1 from t1 where c1<30 order by c1) union all (select /*+index(t1 i1) */ pk1,c1 from t2 where c1 > 10 order by c1) ) a order by pk1, a.c1;
+(select /*+index(t1 i1) */ pk1,c1 from t1 where c1<30 order by c1) union all (select /*+index(t1 i1) */ pk1,c1 from t1 where c1 > 10 order by c1); 
+select * from ((select /*+index(t1 i1) */ pk1,c1 from t1 where c1<30 order by c1) union all (select /*+index(t1 i1) */ pk1,c1 from t2 where c1 > 10 order by c1) ) a order by pk1, a.c1; 
 --sorted_result
-(select /*+index(t1 i1) */ pk1,c1 from t1 where c1<30 order by c1) union  (select /*+index(t1 i1) */ pk1,c1 from t1 where c1 > 10 order by c1);
+(select /*+index(t1 i1) */ pk1,c1 from t1 where c1<30 order by c1) union  (select /*+index(t1 i1) */ pk1,c1 from t1 where c1 > 10 order by c1); 
 --sorted_result
-(select /*+index(t1 i1) */ pk1,c1 from t1 where c1<30 order by c1) except (select /*+index(t1 i1) */ pk1,c1 from t1 where c1 > 10 order by c1);
+(select /*+index(t1 i1) */ pk1,c1 from t1 where c1<30 order by c1) except (select /*+index(t1 i1) */ pk1,c1 from t1 where c1 > 10 order by c1); 
 --sorted_result
-(select /*+index(t1 i1) */ pk1,c1 from t1 where c1<30 order by c1) intersect (select /*+index(t1 i1) */ pk1,c1 from t1 where c1 > 10 order by c1);
+(select /*+index(t1 i1) */ pk1,c1 from t1 where c1<30 order by c1) intersect (select /*+index(t1 i1) */ pk1,c1 from t1 where c1 > 10 order by c1); 
 
 --sorted_result
 (select c1,c2,c3 from t1 where c1=11 order by c2) union (select c1,c2,c3 from t1 where c1=22 and c2 like 'column3_' order by c1) union distinct select c1,c2,c3 from t1 where c1>22 and c2 is not null and c3>='2013-12-11 11:11:11' union all (select c1,c2,c3 from t1 where c4<2 and c5>1 and c6=3 order by c4) except  (select c1,c2,c3 from t1 where c3 <= '2013-12-11 11:11:11' order by c3);

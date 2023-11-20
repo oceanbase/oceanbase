@@ -24,3 +24,4 @@ select /* QUERY_TIMEOUT(15000000) */ id from notify_000 where  gmt_create <= cur
 select /* QUERY_TIMEOUT(15000000) */ id, business_order, business_type from notify_000 where gmt_create <= current_timestamp() AND gmt_create >= date_sub(current_timestamp(), INTERVAL 6 MINUTE) AND ((status = 'N') AND (gmt_modify < current_timestamp())) limit 1;
 select id, plugin, plugin_host, parameter, group_no, status, gmt_create, gmt_local_create, gmt_modify, iw_user_id, channel_endpoint, business_order, business_type from notify_000 where (iw_user_id ='1111') and (gmt_create < current_timestamp()) and (gmt_create >= current_timestamp());
 delete from notify_history_000 where ((group_no = (- 1)) AND (iw_user_id = '1111'));
+

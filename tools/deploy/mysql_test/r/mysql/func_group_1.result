@@ -29,7 +29,7 @@ count(distinct a)	count(distinct grp)
 create table t2 (pk int primary key, grp int, a int, c char(10));
 select grp,max(a)+max(grp),max(c) from t1 group by grp order by grp;
 grp	max(a)+max(grp)	max(c)
-NULL	NULL
+NULL	NULL	
 1	2	a
 2	5	c
 3	9	E

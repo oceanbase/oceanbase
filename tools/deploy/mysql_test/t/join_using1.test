@@ -34,3 +34,4 @@ SELECT * FROM  (SELECT * FROM tjuo1) tjuo1_alias RIGHT JOIN tjuo2  USING (c1) RI
 SELECT * FROM  (SELECT c2 FROM tjuo1 as i1 JOIN (SELECT * FROM tjuo2) as i2 USING (c1) ) as t12 RIGHT JOIN (SELECT * FROM tjuo3) as tjuo3_alias USING (c2);
 SELECT * FROM  (SELECT c2 FROM tjuo1 as i1 JOIN (SELECT * FROM tjuo2) as i2 USING (c1) ) as t12;
 drop table tjuo1, tjuo2, tjuo3;
+

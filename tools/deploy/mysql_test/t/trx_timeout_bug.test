@@ -8,15 +8,16 @@ set @@session.explicit_defaults_for_timestamp=off;
 --disable_warnings
 drop table if exists t1;
 --enable_warnings
-create table t1(pk int primary key, i1 int, v1 varchar(20));
-set autocommit=0;
-set session ob_trx_timeout=10000000;
+create table t1(pk int primary key, i1 int, v1 varchar(20)); 
+set autocommit=0;                    
+set session ob_trx_timeout=10000000;                                                            
 #because start from 4.0 empty delete won't cause session into txn,
 #we do some really modifies here
 --disable_query_log
 insert into t1 values(1,1,'1');
 --enable_query_log
-delete from t1 where pk<4;
+delete from t1 where pk<4;          
 sleep 12;
 --error 6002
 commit;
+

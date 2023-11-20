@@ -142,3 +142,4 @@ commit;
 
 select * from tbl1 where pk in (100,200);
 delete  from tbl1 where pk in (100,200);
+

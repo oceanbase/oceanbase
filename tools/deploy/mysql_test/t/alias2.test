@@ -33,3 +33,6 @@ select c5+1 c51,c6 c61,c7+1 c71 from t1 where c1=1 and c2='s' and c3=1.5;
 select c5+1 c51,c6 c61,c7+1 c71 from t1 where c1=1 and c2='s' and c3=1.5 and c5 in (1,2,3);
 
 drop table t1;
+
+
+

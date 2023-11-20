@@ -16,7 +16,7 @@ let $a=abcdefghij;
 let $p=abcdefghij;
 let $cnt=1000;
 while($cnt)
-{
+{ 
    let $a=$a$p;
    dec $cnt;
 }

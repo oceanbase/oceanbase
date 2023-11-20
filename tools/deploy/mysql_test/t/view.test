@@ -58,7 +58,7 @@ create view view_v1_null_default as select c1,c2 from view_t1_null_default;
 #create view view_v1_not_null_default as select * from view_t1_not_null_default;
 create view view_v1_not_null_default as select c1,c2 from view_t1_not_null_default;
 #
-## Bug
+## Bug 
 #
 create table table_t8(c1 int null,c2 int not null);
 create view view_v8 as select c1+c2 from table_t8;
@@ -208,7 +208,7 @@ drop view if exists v1,v2,v3;
 drop table if exists t1;
 --enable_warnings
 
-# Bug
+# Bug 
 --disable_warnings
 drop table if exists t1;
 --enable_warnings

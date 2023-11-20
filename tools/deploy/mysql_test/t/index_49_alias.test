@@ -28,3 +28,5 @@ select /*+index(t1 i1) */ * from t1 b where b.c2 > 0 and b.c2 < 5;
 select /*+index(b i1) */ * from t1 b where b.c2 > 0 and b.c2 < 5;
 
 drop table t1;
+
+

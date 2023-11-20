@@ -27,18 +27,18 @@ insert into tbl4 values(1,'now','haha',1.6256,'2014-05-04 12:00:00',3.45);
 insert into tbl4 values(2,'now1','haha',1.6256,'2014-05-04 12:00:00',-0.25);
 insert into tbl4 values(3,'now2','haha',1.6256,'2014-05-04 12:00:00',0.253);
 insert into tbl4 values(4,'now3','haha',1.6256,'2014-05-04 12:00:00',1.677);
-select * from tbl1 join tbl2 on  tbl1.i1=tbl2.i1 join tbl3  on tbl1.i1=tbl3.i1 join tbl4 on tbl1.i1=tbl4.i1;
-select * from tbl1 a join tbl2 b on  a.i1=b.i1 join tbl3 c on a.i1=c.i1 join tbl4 d on a.i1=d.i1;
+select * from tbl1 join tbl2 on  tbl1.i1=tbl2.i1 join tbl3  on tbl1.i1=tbl3.i1 join tbl4 on tbl1.i1=tbl4.i1; 
+select * from tbl1 a join tbl2 b on  a.i1=b.i1 join tbl3 c on a.i1=c.i1 join tbl4 d on a.i1=d.i1; 
 select * from tbl1 join tbl2 on  tbl1.i1=tbl2.i1 join tbl3  on tbl1.i1=tbl3.i1 join tbl4 on tbl1.i1=tbl4.i1 where tbl1.i1=1;
 select * from tbl1 join tbl2 on  tbl1.i1=tbl2.i1 join tbl3  on tbl2.i1=tbl3.i1 join tbl4 on tbl3.i1=tbl4.i1;
 select * from tbl1 a join tbl2 b on a.i1=b.i1 join tbl3 c on b.i1=c.i1 join tbl4 d on c.i1=d.i1;
 --replace_regex /Plan signature: [0-9]*/Plan signature/
 --disable_result_log
-explain select * from tbl1 join tbl2 on  tbl1.i1=tbl2.i1 join tbl3  on tbl1.i1=tbl3.i1 join tbl4 on tbl1.i1=tbl4.i1;
+explain select * from tbl1 join tbl2 on  tbl1.i1=tbl2.i1 join tbl3  on tbl1.i1=tbl3.i1 join tbl4 on tbl1.i1=tbl4.i1; 
 --enable_result_log
 --replace_regex /Plan signature: [0-9]*/Plan signature/
 --disable_result_log
-explain select * from tbl1 a join tbl2 b on  a.i1=b.i1 join tbl3 c on a.i1=c.i1 join tbl4 d on a.i1=d.i1;
+explain select * from tbl1 a join tbl2 b on  a.i1=b.i1 join tbl3 c on a.i1=c.i1 join tbl4 d on a.i1=d.i1; 
 --enable_result_log
 --replace_regex /Plan signature: [0-9]*/Plan signature/
 --disable_result_log
@@ -48,18 +48,18 @@ explain select * from tbl1 join tbl2 on  tbl1.i1=tbl2.i1 join tbl3  on tbl2.i1=t
 --disable_result_log
 explain select * from tbl1 a join tbl2 b on a.i1=b.i1 join tbl3 c on b.i1=c.i1 join tbl4 d on c.i1=d.i1;
 --enable_result_log
-select * from tbl1  left join tbl2 on  tbl1.i1=tbl2.i1  left join tbl3  on tbl1.i1=tbl3.i1  left join tbl4 on tbl1.i1=tbl4.i1;
-select * from tbl1 a  left join tbl2 b on  a.i1=b.i1  left join tbl3 c on a.i1=c.i1  left join tbl4 d on a.i1=d.i1;
+select * from tbl1  left join tbl2 on  tbl1.i1=tbl2.i1  left join tbl3  on tbl1.i1=tbl3.i1  left join tbl4 on tbl1.i1=tbl4.i1; 
+select * from tbl1 a  left join tbl2 b on  a.i1=b.i1  left join tbl3 c on a.i1=c.i1  left join tbl4 d on a.i1=d.i1; 
 select * from tbl1  left join tbl2 on  tbl1.i1=tbl2.i1  left join tbl3  on tbl1.i1=tbl3.i1  left join tbl4 on tbl1.i1=tbl4.i1 where tbl1.i1=1;
 select * from tbl1  left join tbl2 on  tbl1.i1=tbl2.i1  left join tbl3  on tbl2.i1=tbl3.i1  left join tbl4 on tbl3.i1=tbl4.i1;
 select * from tbl1 a  left join tbl2 b on a.i1=b.i1  left join tbl3 c on b.i1=c.i1  left join tbl4 d on c.i1=d.i1;
 --replace_regex /Plan signature: [0-9]*/Plan signature/
 --disable_result_log
-explain select* from tbl1  left join tbl2 on  tbl1.i1=tbl2.i1  left join tbl3  on tbl1.i1=tbl3.i1  left join tbl4 on tbl1.i1=tbl4.i1;
+explain select* from tbl1  left join tbl2 on  tbl1.i1=tbl2.i1  left join tbl3  on tbl1.i1=tbl3.i1  left join tbl4 on tbl1.i1=tbl4.i1; 
 --enable_result_log
 --replace_regex /Plan signature: [0-9]*/Plan signature/
 --disable_result_log
-explain select* from tbl1 a  left join tbl2 b on  a.i1=b.i1  left join tbl3 c on a.i1=c.i1  left join tbl4 d on a.i1=d.i1;
+explain select* from tbl1 a  left join tbl2 b on  a.i1=b.i1  left join tbl3 c on a.i1=c.i1  left join tbl4 d on a.i1=d.i1; 
 --enable_result_log
 --replace_regex /Plan signature: [0-9]*/Plan signature/
 --disable_result_log

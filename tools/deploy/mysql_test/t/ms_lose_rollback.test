@@ -17,3 +17,5 @@ insert into t1 values(1,1);
 rollback;
 insert into t1 values(1,1);
 rollback;
+
+

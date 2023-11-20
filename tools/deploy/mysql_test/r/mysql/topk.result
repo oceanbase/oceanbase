@@ -376,7 +376,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c2)),
-       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))
+       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) 
       / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
       limit(5), offset(nil)
   1 - output([T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1))], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2))],
@@ -404,7 +404,7 @@ Outputs & filters:
       force partition granule
   9 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain basic select /*+topk(20 6)*/ avg(c1), avg(c2), avg(c3)  from t1 where c2 <10 group by c2 order by avg(c1);
 Query Plan
@@ -428,7 +428,7 @@ Outputs & filters:
        DOUBLE(-1, -1)))) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1)))]), filter(nil), rowset=256
       sort_keys([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4)), ASC])
   1 - output([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))], [INTERNAL_FUNCTION(cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c
-      1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4)), cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c2)), DECIMAL(33, 0))
+      1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4)), cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c2)), DECIMAL(33, 0)) 
       / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4)), cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3,
        DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1)))]), filter(nil), rowset=256
       dop=1
@@ -452,7 +452,7 @@ Outputs & filters:
       force partition granule
   8 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain basic select /*+topk(20 6)*/ avg(c1), avg(c2), avg(c3)  from t1 where c2 <10 order by avg(c1) limit 5;
 Query Plan
@@ -470,7 +470,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c2)),
-       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))
+       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) 
       / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
       limit(5), offset(nil)
   1 - output([T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1))], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2))],
@@ -490,7 +490,7 @@ Outputs & filters:
       force partition granule
   6 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain basic select /*+topk(20 6)*/ avg(c1), avg(c2), avg(c3)  from t1 where c2 <10 group by c2 order by avg(c1) limit 5 for update nowait;
 Query Plan
@@ -513,7 +513,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c2)),
-       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))
+       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) 
       / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
   1 - output([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))], [T_FUN_SUM(T_FUN_SUM(t1.c2))],
        [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2))], [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))], [T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1))))]), filter(nil), rowset=256
@@ -547,7 +547,7 @@ Outputs & filters:
       force partition granule
  11 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain basic select avg(c1), avg(c2), avg(c3)  from t1 where c2 <10 group by c2 order by avg(c1) limit 5;
 Query Plan
@@ -568,7 +568,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c2)),
-       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))
+       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) 
       / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
       limit(5), offset(nil)
   1 - output([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))], [T_FUN_SUM(T_FUN_SUM(t1.c2))],
@@ -598,7 +598,7 @@ Outputs & filters:
       force partition granule
   9 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain basic select /*+topk(20 6)*/ sql_calc_found_rows avg(c2), avg(c3)  from t1 where c2 <10 group by c2 order by avg(c1) limit 5;
 Query Plan
@@ -647,7 +647,7 @@ Outputs & filters:
       force partition granule
   9 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain basic select /*+topk(20 6)*/  avg(c1), avg(c2), avg(c3)  from t1 where c2 <10 group by c2 order by (select c1  from t1 where c2 = 1 and c1 != 1) limit 5;
 Query Plan
@@ -672,7 +672,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c2)),
-       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))
+       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) 
       / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
       limit(5), offset(nil)
   1 - output([T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1))], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2))],
@@ -700,7 +700,7 @@ Outputs & filters:
       force partition granule
   9 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
  10 - output([t1.c1]), filter(nil), rowset=256
  11 - output([t1.c1]), filter(nil), rowset=256
@@ -709,8 +709,8 @@ Outputs & filters:
       force partition granule
  13 - output([t1.c1]), filter([t1.c2 = 1]), rowset=256
       access([t1.c1], [t1.c2]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([t1.c1]), range(NULL ; 1), (1 ; MAX),
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.c1]), range(NULL ; 1), (1 ; MAX), 
       range_cond([t1.c1 != 1])
 explain basic select /*+topk(20 6)*/ distinct avg(c1), avg(c2), avg(c3)  from t1 where c2 <10 group by c2 order by avg(c1) limit 5;
 Query Plan
@@ -736,53 +736,53 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c2)),
-       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))
+       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) 
       / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
       limit(5), offset(nil)
   1 - output([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c2)),
-       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))
+       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) 
       / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
       sort_keys([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4)), ASC])
   2 - output([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c2)),
-       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))
+       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) 
       / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
       dop=1
   3 - output([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c2)),
-       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))
+       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) 
       / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
       limit(5), offset(nil)
   4 - output([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c2)),
-       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))
+       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) 
       / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
       distinct([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c2)),
-       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))
+       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) 
       / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1))])
   5 - output([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c2)),
-       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))
+       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) 
       / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
       sort_keys([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4)), ASC],
        [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c2)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4)), ASC], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3,
        DOUBLE(-1, -1)))) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1)), ASC])
   6 - output([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c2)),
-       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))
+       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) 
       / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
       (#keys=3, [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c2)),
-       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))
+       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) 
       / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1))]), dop=1
   7 - output([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c2)),
-       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))
+       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) 
       / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
       distinct([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c2)),
-       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))
+       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) 
       / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1))])
   8 - output([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c2)),
-       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))
+       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) 
       / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
       sort_keys([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4)), ASC],
        [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c2)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4)), ASC], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3,
        DOUBLE(-1, -1)))) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1)), ASC])
   9 - output([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c2)),
-       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))
+       DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))) 
       / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1))]), filter(nil), rowset=256
       group([t1.c2]), agg_func([T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1))], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2))],
        [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))], [T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1))))])
@@ -799,7 +799,7 @@ Outputs & filters:
       force partition granule
  14 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain basic select /*+topk(20 6)*/ sum(c1), avg(c2), group_concat(c3, c1)  from t1 where c2 <10 group by c2 order by avg(c1) limit 5;
 Query Plan
@@ -842,7 +842,7 @@ Outputs & filters:
       force partition granule
   9 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain basic select /*+topk(1 2) use_hash_aggregation*/ c3, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by c3 limit 1;
 Query Plan
@@ -897,7 +897,7 @@ Outputs & filters:
       force partition granule
  10 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain basic select /*+topk(90 2) use_hash_aggregation*/ c3, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <30 group by c2 order by c3 limit 10;
 Query Plan
@@ -952,7 +952,7 @@ Outputs & filters:
       force partition granule
  10 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 30]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain basic select /*+topk(1 1)*/ c3, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by c3 limit 1;
 Query Plan
@@ -1007,7 +1007,7 @@ Outputs & filters:
       force partition granule
  10 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain basic select /*+topk(1 1)*/ c3, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <12 group by c2 order by c3 limit 1 offset 4;
 Query Plan
@@ -1062,7 +1062,7 @@ Outputs & filters:
       force partition granule
  10 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 12]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain basic select /*+topk(1 1)*/ c3, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by c3 limit 0;
 Query Plan
@@ -1117,7 +1117,7 @@ Outputs & filters:
       force partition granule
  10 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain basic  select /*+topk(1 1)*/ c2, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <12 group by c2 order by avg(c3), sum(c1)/sum(c2) limit 5;
 Query Plan
@@ -1174,7 +1174,7 @@ Outputs & filters:
        [T_FUN_MIN(t1.c3)], [T_FUN_MAX(t1.c1)], [T_FUN_COUNT(t1.c1)]), filter(nil), rowset=256
       sort_keys([cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))) / cast(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1))), DOUBLE(-1, -1)), DOUBLE(-1, -1)), ASC], [cast(T_FUN_SUM(t1.c1),
        DECIMAL(33, 0)) / cast(T_FUN_SUM(t1.c2), DECIMAL(33, 0)), ASC]), minimum_row_count:1 top_precision:1 , limit(5), offset(nil)
-  8 - output([t1.c2], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))], [cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))
+  8 - output([t1.c2], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))], [cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))) 
       / cast(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1))), DOUBLE(-1, -1)), DOUBLE(-1, -1))], [T_FUN_SUM(t1.c1)], [T_FUN_SUM(t1.c2)], [cast(T_FUN_SUM(t1.c1), DECIMAL(33,
        0)) / cast(T_FUN_SUM(t1.c2), DECIMAL(33, 0))], [T_FUN_COUNT(t1.c3)], [T_FUN_MIN(t1.c3)], [T_FUN_MAX(t1.c1)], [T_FUN_COUNT(t1.c1)]), filter(nil), rowset=256
       group([t1.c2]), agg_func([T_FUN_SUM(t1.c2)], [T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c3)], [T_FUN_MIN(t1.c3)], [T_FUN_MAX(t1.c1)], [T_FUN_COUNT(t1.c1)],
@@ -1183,7 +1183,7 @@ Outputs & filters:
       force partition granule
  10 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 12]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain basic  select /*+topk(1 1)*/ c1, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by avg(c3) desc, sum(c1)/sum(c2)  limit 5;
 Query Plan
@@ -1249,7 +1249,7 @@ Outputs & filters:
       force partition granule
  10 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain basic select /*+topk(1 1)*/ c2, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by avg(c3) desc, sum(c1)/sum(c2) + avg(c2)  limit 5;
 Query Plan
@@ -1312,7 +1312,7 @@ Outputs & filters:
       sort_keys([cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))) / cast(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1))), DOUBLE(-1, -1)), DOUBLE(-1, -1)), DESC], [cast(T_FUN_SUM(t1.c1),
        DECIMAL(33, 0)) / cast(T_FUN_SUM(t1.c2), DECIMAL(33, 0)) + cast(cast(T_FUN_SUM(t1.c2), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t1.c2), DECIMAL(20, 0)), DECIMAL(15,
        4)), ASC]), minimum_row_count:1 top_precision:1 , limit(5), offset(nil)
-  8 - output([t1.c2], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))], [cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))
+  8 - output([t1.c2], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))], [cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))) 
       / cast(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1))), DOUBLE(-1, -1)), DOUBLE(-1, -1))], [T_FUN_SUM(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_COUNT(t1.c2)], [cast(T_FUN_SUM(t1.c1),
        DECIMAL(33, 0)) / cast(T_FUN_SUM(t1.c2), DECIMAL(33, 0)) + cast(cast(T_FUN_SUM(t1.c2), DECIMAL(33, 0)) / cast(T_FUN_COUNT(t1.c2), DECIMAL(20, 0)), DECIMAL(15,
        4))], [T_FUN_COUNT(t1.c3)], [T_FUN_MIN(t1.c3)], [T_FUN_MAX(t1.c1)], [T_FUN_COUNT(t1.c1)]), filter(nil), rowset=256
@@ -1322,7 +1322,7 @@ Outputs & filters:
       force partition granule
  10 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain basic select /*+topk(1 1)*/ avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by avg(c3) desc, sum(c1)+sum(c2)  limit 5;
 Query Plan
@@ -1374,9 +1374,9 @@ Outputs & filters:
       (#keys=1, [t1.c2]), dop=1
   7 - output([t1.c2], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_SUM(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_COUNT(t1.c3)],
        [T_FUN_MIN(t1.c3)], [T_FUN_MAX(t1.c1)], [T_FUN_COUNT(t1.c1)]), filter(nil), rowset=256
-      sort_keys([cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))) / cast(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1))), DOUBLE(-1, -1)), DOUBLE(-1, -1)), DESC], [T_FUN_SUM(t1.c1)
+      sort_keys([cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))) / cast(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1))), DOUBLE(-1, -1)), DOUBLE(-1, -1)), DESC], [T_FUN_SUM(t1.c1) 
       + T_FUN_SUM(t1.c2), ASC]), minimum_row_count:1 top_precision:1 , limit(5), offset(nil)
-  8 - output([t1.c2], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))], [cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))
+  8 - output([t1.c2], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))], [cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))) 
       / cast(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1))), DOUBLE(-1, -1)), DOUBLE(-1, -1))], [T_FUN_SUM(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_SUM(t1.c1) + T_FUN_SUM(t1.c2)],
        [T_FUN_COUNT(t1.c3)], [T_FUN_MIN(t1.c3)], [T_FUN_MAX(t1.c1)], [T_FUN_COUNT(t1.c1)]), filter(nil), rowset=256
       group([t1.c2]), agg_func([T_FUN_SUM(t1.c2)], [T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c3)], [T_FUN_MIN(t1.c3)], [T_FUN_MAX(t1.c1)], [T_FUN_COUNT(t1.c1)],
@@ -1385,7 +1385,7 @@ Outputs & filters:
       force partition granule
  10 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain basic select /*+topk(0 0)*/ c2, sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by avg(c3) desc, sum(c1)+sum(c2)  limit 5;
 Query Plan
@@ -1441,7 +1441,7 @@ Outputs & filters:
       force partition granule
   9 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain basic select /*+topk(0 10)*/ c2, sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by avg(c3) desc, sum(c1)+sum(c2)  limit 5;
 Query Plan
@@ -1492,9 +1492,9 @@ Outputs & filters:
       (#keys=1, [t1.c2]), dop=1
   7 - output([t1.c2], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_SUM(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_COUNT(t1.c3)],
        [T_FUN_MIN(t1.c3)], [T_FUN_MAX(t1.c1)], [T_FUN_COUNT(t1.c1)]), filter(nil), rowset=256
-      sort_keys([cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))) / cast(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1))), DOUBLE(-1, -1)), DOUBLE(-1, -1)), DESC], [T_FUN_SUM(t1.c1)
+      sort_keys([cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))) / cast(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1))), DOUBLE(-1, -1)), DOUBLE(-1, -1)), DESC], [T_FUN_SUM(t1.c1) 
       + T_FUN_SUM(t1.c2), ASC]), minimum_row_count:10 top_precision:0 , limit(5), offset(nil)
-  8 - output([t1.c2], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))], [cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))
+  8 - output([t1.c2], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))], [cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))) 
       / cast(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1))), DOUBLE(-1, -1)), DOUBLE(-1, -1))], [T_FUN_SUM(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_SUM(t1.c1) + T_FUN_SUM(t1.c2)],
        [T_FUN_COUNT(t1.c3)], [T_FUN_MIN(t1.c3)], [T_FUN_MAX(t1.c1)], [T_FUN_COUNT(t1.c1)]), filter(nil), rowset=256
       group([t1.c2]), agg_func([T_FUN_SUM(t1.c2)], [T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c3)], [T_FUN_MIN(t1.c3)], [T_FUN_MAX(t1.c1)], [T_FUN_COUNT(t1.c1)],
@@ -1503,7 +1503,7 @@ Outputs & filters:
       force partition granule
  10 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain basic select /*+topk(50 0)*/ c2, sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by avg(c3) desc, sum(c1)+sum(c2)  limit 5;
 Query Plan
@@ -1554,9 +1554,9 @@ Outputs & filters:
       (#keys=1, [t1.c2]), dop=1
   7 - output([t1.c2], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_SUM(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_COUNT(t1.c3)],
        [T_FUN_MIN(t1.c3)], [T_FUN_MAX(t1.c1)], [T_FUN_COUNT(t1.c1)]), filter(nil), rowset=256
-      sort_keys([cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))) / cast(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1))), DOUBLE(-1, -1)), DOUBLE(-1, -1)), DESC], [T_FUN_SUM(t1.c1)
+      sort_keys([cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))) / cast(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1))), DOUBLE(-1, -1)), DOUBLE(-1, -1)), DESC], [T_FUN_SUM(t1.c1) 
       + T_FUN_SUM(t1.c2), ASC]), minimum_row_count:0 top_precision:50 , limit(5), offset(nil)
-  8 - output([t1.c2], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))], [cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))
+  8 - output([t1.c2], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))], [cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))) 
       / cast(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1))), DOUBLE(-1, -1)), DOUBLE(-1, -1))], [T_FUN_SUM(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_SUM(t1.c1) + T_FUN_SUM(t1.c2)],
        [T_FUN_COUNT(t1.c3)], [T_FUN_MIN(t1.c3)], [T_FUN_MAX(t1.c1)], [T_FUN_COUNT(t1.c1)]), filter(nil), rowset=256
       group([t1.c2]), agg_func([T_FUN_SUM(t1.c2)], [T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c3)], [T_FUN_MIN(t1.c3)], [T_FUN_MAX(t1.c1)], [T_FUN_COUNT(t1.c1)],
@@ -1565,7 +1565,7 @@ Outputs & filters:
       force partition granule
  10 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain basic select /*+topk(10000 1)*/ c2, sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by avg(c3) desc, sum(c1)+sum(c2)  limit 5;
 Query Plan
@@ -1616,9 +1616,9 @@ Outputs & filters:
       (#keys=1, [t1.c2]), dop=1
   7 - output([t1.c2], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_SUM(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_COUNT(t1.c3)],
        [T_FUN_MIN(t1.c3)], [T_FUN_MAX(t1.c1)], [T_FUN_COUNT(t1.c1)]), filter(nil), rowset=256
-      sort_keys([cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))) / cast(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1))), DOUBLE(-1, -1)), DOUBLE(-1, -1)), DESC], [T_FUN_SUM(t1.c1)
+      sort_keys([cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))) / cast(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1))), DOUBLE(-1, -1)), DOUBLE(-1, -1)), DESC], [T_FUN_SUM(t1.c1) 
       + T_FUN_SUM(t1.c2), ASC]), minimum_row_count:1 top_precision:10000 , limit(5), offset(nil)
-  8 - output([t1.c2], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))], [cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))
+  8 - output([t1.c2], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))], [cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))) 
       / cast(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1))), DOUBLE(-1, -1)), DOUBLE(-1, -1))], [T_FUN_SUM(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_SUM(t1.c1) + T_FUN_SUM(t1.c2)],
        [T_FUN_COUNT(t1.c3)], [T_FUN_MIN(t1.c3)], [T_FUN_MAX(t1.c1)], [T_FUN_COUNT(t1.c1)]), filter(nil), rowset=256
       group([t1.c2]), agg_func([T_FUN_SUM(t1.c2)], [T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c3)], [T_FUN_MIN(t1.c3)], [T_FUN_MAX(t1.c1)], [T_FUN_COUNT(t1.c1)],
@@ -1627,7 +1627,7 @@ Outputs & filters:
       force partition granule
  10 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain basic select /*+topk(1 10000)*/ c2, sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1)  from t1 where c2 <10 group by c2 order by avg(c3) desc, sum(c1)+sum(c2)  limit 5;
 Query Plan
@@ -1678,9 +1678,9 @@ Outputs & filters:
       (#keys=1, [t1.c2]), dop=1
   7 - output([t1.c2], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_SUM(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_COUNT(t1.c3)],
        [T_FUN_MIN(t1.c3)], [T_FUN_MAX(t1.c1)], [T_FUN_COUNT(t1.c1)]), filter(nil), rowset=256
-      sort_keys([cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))) / cast(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1))), DOUBLE(-1, -1)), DOUBLE(-1, -1)), DESC], [T_FUN_SUM(t1.c1)
+      sort_keys([cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))) / cast(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1))), DOUBLE(-1, -1)), DOUBLE(-1, -1)), DESC], [T_FUN_SUM(t1.c1) 
       + T_FUN_SUM(t1.c2), ASC]), minimum_row_count:10000 top_precision:1 , limit(5), offset(nil)
-  8 - output([t1.c2], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))], [cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))
+  8 - output([t1.c2], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))], [cast(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))) 
       / cast(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1))), DOUBLE(-1, -1)), DOUBLE(-1, -1))], [T_FUN_SUM(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_SUM(t1.c1) + T_FUN_SUM(t1.c2)],
        [T_FUN_COUNT(t1.c3)], [T_FUN_MIN(t1.c3)], [T_FUN_MAX(t1.c1)], [T_FUN_COUNT(t1.c1)]), filter(nil), rowset=256
       group([t1.c2]), agg_func([T_FUN_SUM(t1.c2)], [T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c3)], [T_FUN_MIN(t1.c3)], [T_FUN_MAX(t1.c1)], [T_FUN_COUNT(t1.c1)],
@@ -1689,7 +1689,7 @@ Outputs & filters:
       force partition granule
  10 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 < 10]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
 set @@ob_enable_transformation=default;
 explain basic select * from (select /*+topk(0 4)*/ avg(c1)  from t1 where c2 <10 group by c2 order by sum(c2) limit 5) as a;
@@ -1732,7 +1732,7 @@ Outputs & filters:
       force partition granule
  10 - output([t1.c1], [t1.c2]), filter([t1.c2 < 10]), rowset=256
       access([t1.c1], [t1.c2]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain basic select c1  from t1 where c1 < any (select /*+topk(0 4)*/ avg(c1)  from t1 where c2 <10 group by c2 order by sum(c2)  limit 5);
 Query Plan
@@ -1769,7 +1769,7 @@ Outputs & filters:
       force partition granule
   4 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
   5 - output([VIEW1.avg(c1)]), filter(nil), rowset=256
   6 - output([VIEW1.avg(c1)]), filter(nil), rowset=256
@@ -1795,7 +1795,7 @@ Outputs & filters:
       force partition granule
  17 - output([t1.c1], [t1.c2]), filter([t1.c2 < 10]), rowset=256
       access([t1.c1], [t1.c2]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain basic (select /*+topk(0 4)*/ avg(c1)  from t1 where c2 <10 group by c2 order by sum(c2) limit 5) union (select /*+topk(0 10)*/ sum(c1)  from t1 where c2 <10 group by c2 order by sum(c2) limit 7);
 Query Plan
@@ -1842,7 +1842,7 @@ Outputs & filters:
       force partition granule
   9 - output([t1.c1], [t1.c2]), filter([t1.c2 < 10]), rowset=256
       access([t1.c1], [t1.c2]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
  10 - output([UNION([1])]), filter(nil), rowset=256
  11 - output([cast(cast(VIEW1.T_FUN_SUM(t1.c1), DECIMAL(33, 0)) / cast(VIEW1.T_FUN_COUNT(t1.c1), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=256
@@ -1898,7 +1898,7 @@ Outputs & filters:
       force partition granule
   4 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
   5 - output([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL(33, 0)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL(20, 0)), DECIMAL(15, 4))]), filter(nil), rowset=256
       limit(1), offset(nil)
@@ -1921,7 +1921,7 @@ Outputs & filters:
       force partition granule
  15 - output([t1.c1], [t1.c2]), filter([t1.c2 < 10]), rowset=256
       access([t1.c1], [t1.c2]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
 explain basic select * from (select /*+topk(10 5)*/ c3, c1, avg(c1), sum(c2), sum(c1) + sum(c2), count(c3), min(c3), max(c1), sum(c2)/count(c1), sum(c3)/sum(c1) from t1 group by c2 order by c3 limit 7) as a left join t2 on a.c1 = t2.c1 left join t3 on t3.c1 = a.c1;
 Query Plan
@@ -1967,7 +1967,7 @@ Outputs & filters:
       affinitize, force partition granule
   4 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil), rowset=256
       access([t3.c1], [t3.c2], [t3.c3]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t3.c1]), range(MIN ; MAX)always true
   5 - output([a.c1], [t2.c1], [t2.c2], [t2.c3], [a.c3], [a.avg(c1)], [a.sum(c2)], [a.sum(c1) + sum(c2)], [a.count(c3)], [a.min(c3)], [a.max(c1)], [a.sum(c2)/count(c1)],
        [a.sum(c3)/sum(c1)]), filter(nil), rowset=256
@@ -1981,7 +1981,7 @@ Outputs & filters:
       affinitize, force partition granule
   9 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=256
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true
  10 - output([a.c1], [a.c3], [a.avg(c1)], [a.sum(c2)], [a.sum(c1) + sum(c2)], [a.count(c3)], [a.min(c3)], [a.max(c1)], [a.sum(c2)/count(c1)], [a.sum(c3)/sum(c1)]), filter(nil), rowset=256
  11 - output([a.c1], [a.c3], [a.avg(c1)], [a.sum(c2)], [a.sum(c1) + sum(c2)], [a.count(c3)], [a.min(c3)], [a.max(c1)], [a.sum(c2)/count(c1)], [a.sum(c3)/sum(c1)]), filter(nil), rowset=256
@@ -2022,7 +2022,7 @@ Outputs & filters:
       force partition granule
  23 - output([t1.c1], [t1.c3], [t1.c2]), filter(nil), rowset=256
       access([t1.c1], [t1.c3], [t1.c2]), partitions(p[0-1])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
 drop table t1;
 drop table t2;

@@ -54,3 +54,4 @@ select * from test;
 set @@global.ob_enable_plan_cache= 1;
 drop table test;
 drop database db1;
+

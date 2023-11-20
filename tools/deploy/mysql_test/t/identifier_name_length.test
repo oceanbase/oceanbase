@@ -28,7 +28,7 @@ create table dddddddddd2222222222333333333344444444445555555555666666666612345 (
 drop table if exists alter_table1;
 --enable_warnings
 
-create table alter_table1 (cc1 int primary key);
+create table alter_table1 (cc1 int primary key); 
 ALTER TABLE alter_table1 CHANGE cc1 `hhhhhhhhhh222222222233333333334444444444555555555566666666661234` INT;
 
 --disable_warnings
@@ -39,7 +39,7 @@ drop table if exists alter_table1;
 drop table if exists alter_table2;
 --enable_warnings
 
-create table alter_table2 (cc2 int primary key);
+create table alter_table2 (cc2 int primary key); 
 #--error 1059
 ALTER TABLE alter_table2 CHANGE cc2 `gggggggggg2222222222333333333344444444445555555555666666666612345` INT;
 
@@ -64,11 +64,11 @@ use vvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvv2
 drop database vvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvv2222222222333333333344444444445555555555666666666612345vvvvvvvvvv2222222222333333333344444444445555555555666666666a193;
 
 ##name can not ended with ' '
---error 1102
+--error 1102 
 create database `adc `;
---error 1102
+--error 1102 
 drop database `adc `;
---error 1102
+--error 1102 
 use `adc `;
 
 ##when bytes number of name  is between  65 and 191,return error 1102
@@ -78,30 +78,30 @@ drop database vvvvvvvvvv2222222222333333333344444444445555555555666666666612a65;
 use vvvvvvvvvv2222222222333333333344444444445555555555666666666612a65;
 
 #when database name is prefix of '#mysql50#' and end of these alpha '~' ,'.', '\\' ,'/' return error 1102
---error 1102
+--error 1102 
 create database `#mysql50#~`;
---error 1102
+--error 1102 
 drop database `#mysql50#~`;
---error 1102
+--error 1102 
 use `#mysql50#~`;
 
---error 1102
+--error 1102 
 create database `#mysql50#.`;
---error 1102
+--error 1102 
 drop database `#mysql50#.`;
---error 1102
+--error 1102 
 use `#mysql50#.`;
 
---error 1102
+--error 1102 
 create database `#mysql50#\\`;
---error 1102
+--error 1102 
 drop database `#mysql50#\\`;
---error 1102
+--error 1102 
 use `#mysql50#\\`;
 
---error 1102
+--error 1102 
 create database `#mysql50#/`;
---error 1102
+--error 1102 
 drop database `#mysql50#/`;
---error 1102
+--error 1102 
 use `#mysql50#/`;
