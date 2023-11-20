@@ -1211,7 +1211,8 @@ bool ObResultSet::need_end_trans_callback() const
   } else if (is_returning_) {
     need = false;
   } else if (my_session_.get_has_temp_table_flag()
-             || my_session_.has_tx_level_temp_table()) {
+             || my_session_.has_tx_level_temp_table()
+             || (OB_NOT_NULL(physical_plan_) && physical_plan_->is_contain_oracle_trx_level_temporary_table())) {
     need = false;
   } else if (stmt::T_END_TRANS == get_stmt_type()) {
     need = true;
