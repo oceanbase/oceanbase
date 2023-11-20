@@ -32,15 +32,6 @@ namespace obrpc
 {
 struct ObBatchCreateTabletArg;
 }
-
-namespace share
-{
-namespace schema
-{
-class ObTableSchema;
-}
-}
-
 namespace blocksstable
 {
 class ObSSTable;
@@ -134,9 +125,6 @@ public:
       ObTabletHandle &handle);
   static int check_need_create_empty_major_sstable(
       const ObCreateTabletSchema &create_tablet_schema,
-      bool &need_create_sstable);
-  static int check_need_create_empty_major_sstable(
-      const ObTableSchema &table_schema,
       bool &need_create_sstable);
   // Attention !!! only used when first creating tablet
   static int create_empty_sstable(

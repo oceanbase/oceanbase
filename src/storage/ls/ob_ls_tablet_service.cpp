@@ -1984,8 +1984,7 @@ int ObLSTabletService::create_inner_tablet(
     const common::ObTabletID &data_tablet_id,
     const share::SCN &create_scn,
     const int64_t snapshot_version,
-    const share::schema::ObTableSchema &table_schema,
-    const lib::Worker::CompatMode &compat_mode,
+    const ObCreateTabletSchema &create_tablet_schema,
     ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
@@ -2007,12 +2006,12 @@ int ObLSTabletService::create_inner_tablet(
     LOG_ERROR("new tablet is null", K(ret), KPC(tmp_tablet), K(tmp_tablet_hdl));
   } else if (FALSE_IT(time_guard.click("CreateTablet"))) {
   } else if (OB_FAIL(ObTabletCreateDeleteHelper::check_need_create_empty_major_sstable(
-      table_schema, need_create_empty_major_sstable))) {
+      create_tablet_schema, need_create_empty_major_sstable))) {
     LOG_WARN("failed to check need create sstable", K(ret));
   } else if (OB_FAIL(tmp_tablet->init_for_first_time_creation(allocator, ls_id, tablet_id, data_tablet_id,
-      create_scn, snapshot_version, table_schema, compat_mode, need_create_empty_major_sstable, freezer))) {
+      create_scn, snapshot_version, create_tablet_schema, need_create_empty_major_sstable, freezer))) {
     LOG_WARN("failed to init tablet", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id),
-        K(create_scn), K(snapshot_version), K(table_schema), K(compat_mode));
+        K(create_scn), K(snapshot_version), K(create_tablet_schema));
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(inner_remove_tablet(ls_id, tablet_id))) {
       LOG_ERROR("failed to delete tablet from t3m", K(ret), K(key), K(lbt()));
@@ -5843,8 +5842,7 @@ int ObLSTabletService::create_ls_inner_tablet(
     const share::ObLSID &ls_id,
     const common::ObTabletID &tablet_id,
     const SCN &major_frozen_scn,
-    const share::schema::ObTableSchema &table_schema,
-    const lib::Worker::CompatMode &compat_mode,
+    const ObCreateTabletSchema &create_tablet_schema,
     const SCN &create_scn)
 {
   int ret = OB_SUCCESS;
@@ -5860,12 +5858,12 @@ int ObLSTabletService::create_ls_inner_tablet(
   } else if (OB_UNLIKELY(!ls_id.is_valid())
       || OB_UNLIKELY(!tablet_id.is_valid())
       || OB_UNLIKELY(!major_frozen_scn.is_valid())
-      || OB_UNLIKELY(!table_schema.is_valid())
-      || OB_UNLIKELY(lib::Worker::CompatMode::INVALID == compat_mode)
+      || OB_UNLIKELY(!create_tablet_schema.is_valid())
+      || OB_UNLIKELY(lib::Worker::CompatMode::INVALID == create_tablet_schema.get_compat_mode())
       || OB_UNLIKELY(!create_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id), K(major_frozen_scn),
-        K(table_schema), K(compat_mode), K(create_scn));
+        K(create_tablet_schema), K(create_scn));
   } else if (OB_UNLIKELY(ls_id != ls_->get_ls_id())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls id is unexpected", K(ret), "arg_ls_id", ls_id, "ls_id", ls_->get_ls_id());
@@ -5878,9 +5876,9 @@ int ObLSTabletService::create_ls_inner_tablet(
     ret = OB_TABLET_EXIST;
     LOG_WARN("tablet already exists", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_FAIL(create_inner_tablet(ls_id, tablet_id, tablet_id/*data_tablet_id*/,
-        create_scn, snapshot_version, table_schema, compat_mode, tablet_handle))) {
+        create_scn, snapshot_version, create_tablet_schema, tablet_handle))) {
     LOG_WARN("failed to do create tablet", K(ret), K(ls_id), K(tablet_id),
-        K(create_scn), K(major_frozen_scn), K(table_schema), K(compat_mode));
+        K(create_scn), K(major_frozen_scn), K(create_tablet_schema));
   }
 
   return ret;

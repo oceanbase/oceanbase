@@ -533,17 +533,14 @@ public:
   // create_ls_inner_tablet
   // @param [in] ls_id
   // @param [in] tablet_id
-  // @param [in] memstore_version
   // @param [in] frozen_timestamp
-  // @param [in] table_schema
-  // @param [in] compat_mode
+  // @param [in] create_tablet_schema
   // @param [in] create_scn
   // int create_ls_inner_tablet(
   //     const share::ObLSID &ls_id,
   //     const common::ObTabletID &tablet_id,
-  //     const int64_t frozen_timestamp,
-  //     const share::schema::ObTableSchema &table_schema,
-  //     const lib::Worker::CompatMode &compat_mode,
+  //     const share::SCN &frozen_timestamp,
+  //     const ObCreateTabletSchema &create_tablet_schema,
   //     const share::SCN &create_scn);
   DELEGATE_WITH_RET(ls_tablet_svr_, create_ls_inner_tablet, int);
   // remove_ls_inner_tablet

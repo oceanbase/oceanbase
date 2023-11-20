@@ -325,8 +325,6 @@ int ObTablet::init_for_first_time_creation(
       create_scn, snapshot_version, compat_mode, table_store_flag, storage_schema.get_schema_version()/*create_schema_version*/))) {
     LOG_WARN("failed to init tablet meta", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id),
         K(create_scn), K(snapshot_version), K(compat_mode), K(table_store_flag));
-  } else if (is_ls_inner_tablet() && OB_FAIL(inner_create_memtable())) {
-    LOG_WARN("failed to create first memtable", K(ret), K(tablet_id));
   } else if (OB_FAIL(pull_memtables(allocator, ddl_kvs_addr, ddl_kv_count))) {
     LOG_WARN("fail to pull memtable", K(ret));
   } else {
@@ -351,101 +349,6 @@ int ObTablet::init_for_first_time_creation(
   } else if (OB_FAIL(table_store_cache_.init(table_store_addr_.get_ptr()->get_major_sstables(),
       table_store_addr_.get_ptr()->get_minor_sstables(),
       storage_schema.is_row_store()))) {
-    LOG_WARN("failed to init table store cache", K(ret), KPC(this));
-  } else if (OB_FAIL(check_sstable_column_checksum())) {
-    LOG_WARN("failed to check sstable column checksum", K(ret), KPC(this));
-  } else if (OB_FAIL(build_read_info(allocator))) {
-    LOG_WARN("failed to build read info", K(ret));
-  } else if (!is_ls_inner_tablet() && OB_FAIL(mds_data_.init_for_first_creation(allocator))) {
-    LOG_WARN("failed to init mds data", K(ret));
-  } else if (is_ls_inner_tablet() && OB_FAIL(mds_data_.init_with_tablet_status(allocator, ObTabletStatus::NORMAL, ObTabletMdsUserDataType::CREATE_TABLET))) {
-    LOG_WARN("failed to init mds data for ls inner tablet", K(ret));
-  } else if (FALSE_IT(set_mem_addr())) {
-  } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
-    LOG_WARN("failed to increase macro ref cnt", K(ret));
-  } else {
-    is_inited_ = true;
-    LOG_INFO("succeeded to init tablet for first time creation", K(ret), K(*this));
-  }
-
-  if (OB_UNLIKELY(!is_inited_)) {
-    reset();
-  }
-
-  return ret;
-}
-
-int ObTablet::init_for_first_time_creation(
-    common::ObArenaAllocator &allocator,
-    const share::ObLSID &ls_id,
-    const common::ObTabletID &tablet_id,
-    const common::ObTabletID &data_tablet_id,
-    const share::SCN &create_scn,
-    const int64_t snapshot_version,
-    const share::schema::ObTableSchema &table_schema,
-    const lib::Worker::CompatMode compat_mode,
-    const bool need_empty_major_table,
-    ObFreezer *freezer)
-{
-  int ret = OB_SUCCESS;
-  const int64_t default_max_sync_medium_scn = 0;
-  ObTableHandleV2 table_handle;
-  ObTabletTableStoreFlag table_store_flag;
-  if (need_empty_major_table) {
-    table_store_flag.set_with_major_sstable();
-  } else {
-    table_store_flag.set_without_major_sstable();
-  }
-  ObITable **ddl_kvs_addr = nullptr;
-  int64_t ddl_kv_count = 0;
-
-  if (OB_UNLIKELY(is_inited_)) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("init twice", K(ret), K(is_inited_));
-  } else if (OB_UNLIKELY(!ls_id.is_valid())
-      || OB_UNLIKELY(!tablet_id.is_valid())
-      || OB_UNLIKELY(!data_tablet_id.is_valid())
-      //|| OB_UNLIKELY(create_scn <= OB_INVALID_TIMESTAMP)
-      || OB_UNLIKELY(OB_INVALID_VERSION == snapshot_version)
-      || OB_UNLIKELY(!table_schema.is_valid())
-      || OB_UNLIKELY(lib::Worker::CompatMode::INVALID == compat_mode)
-      || OB_ISNULL(freezer)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id),
-        K(create_scn), K(snapshot_version), K(table_schema), K(compat_mode), KP(freezer));
-  } else if (OB_UNLIKELY(!pointer_hdl_.is_valid())
-      || OB_ISNULL(memtable_mgr_)
-      || OB_ISNULL(log_handler_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet pointer handle is invalid", K(ret), K_(pointer_hdl), K_(memtable_mgr), K_(log_handler));
-  } else if (OB_FAIL(init_shared_params(ls_id, tablet_id, table_schema.get_schema_version(),
-      default_max_sync_medium_scn, compat_mode, freezer))) {
-    LOG_WARN("failed to init shared params", K(ret), K(ls_id), K(tablet_id), K(compat_mode), KP(freezer));
-  } else if (OB_FAIL(tablet_meta_.init(ls_id, tablet_id, data_tablet_id,
-      create_scn, snapshot_version, compat_mode, table_store_flag, table_schema.get_schema_version()/*create_schema_version*/))) {
-    LOG_WARN("failed to init tablet meta", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id),
-        K(create_scn), K(snapshot_version), K(compat_mode), K(table_store_flag));
-  } else if (OB_FAIL(pull_memtables(allocator, ddl_kvs_addr, ddl_kv_count))) {
-    LOG_WARN("fail to pull memtable", K(ret));
-  } else {
-    ddl_kvs_ = ddl_kvs_addr;
-    ddl_kv_count_ = ddl_kv_count;
-    ALLOC_AND_INIT(allocator, storage_schema_addr_, table_schema, compat_mode,
-      false/*skip_column_info*/, ObStorageSchema::STORAGE_SCHEMA_VERSION_V3);
-  }
-  if (OB_FAIL(ret)) {
-  } else if (need_empty_major_table
-      && OB_FAIL(ObTabletCreateDeleteHelper::create_empty_sstable(
-          allocator, *storage_schema_addr_.get_ptr(), tablet_id, snapshot_version, table_handle))) {
-    LOG_WARN("failed to make empty co sstable", K(ret), K(snapshot_version));
-  } else {
-    ALLOC_AND_INIT(allocator, table_store_addr_, (*this), static_cast<ObSSTable *>(table_handle.get_table()));
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(table_store_cache_.init(table_store_addr_.get_ptr()->get_major_sstables(),
-      table_store_addr_.get_ptr()->get_minor_sstables(),
-      table_schema.is_row_store()))) {
     LOG_WARN("failed to init table store cache", K(ret), KPC(this));
   } else if (OB_FAIL(check_sstable_column_checksum())) {
     LOG_WARN("failed to check sstable column checksum", K(ret), KPC(this));
