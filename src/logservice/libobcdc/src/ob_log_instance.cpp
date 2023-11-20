@@ -101,6 +101,8 @@ namespace libobcdc
 ObLogInstance *ObLogInstance::instance_ = NULL;
 static ObSimpleMemLimitGetter mem_limit_getter;
 
+const int64_t ObLogInstance::DAEMON_THREAD_COUNT = 1;
+
 ObLogInstance *ObLogInstance::get_instance()
 {
   if (NULL == instance_) {
@@ -560,6 +562,8 @@ int ObLogInstance::init_common_(uint64_t start_tstamp_ns, ERROR_CALLBACK err_cb)
       LOG_ERROR("check config fail", KR(ret));
     } else if (OB_FAIL(dump_config_())) {
       LOG_ERROR("dump_config_ fail", KR(ret));
+    } else if (OB_FAIL(lib::ThreadPool::set_thread_count(DAEMON_THREAD_COUNT))) {
+      LOG_ERROR("set ObLogInstance daemon thread count failed", KR(ret), K(DAEMON_THREAD_COUNT));
     } else if (OB_FAIL(trans_task_pool_alloc_.init(
         TASK_POOL_ALLOCATOR_TOTAL_LIMIT,
         TASK_POOL_ALLOCATOR_HOLD_LIMIT,
@@ -1384,6 +1388,7 @@ void ObLogInstance::do_destroy_(const bool force_destroy)
     timer_tid_ = 0;
     sql_tid_ = 0;
     flow_control_tid_ = 0;
+    lib::ThreadPool::destroy();
 
     (void)trans_task_pool_.destroy();
     (void)trans_task_pool_alloc_.destroy();
@@ -1552,6 +1557,7 @@ void ObLogInstance::mark_stop_flag(const char *stop_reason)
     committer_->mark_stop_flag();
     resource_collector_->mark_stop_flag();
     timezone_info_getter_->mark_stop_flag();
+    lib::ThreadPool::stop();
 
     LOG_INFO("mark_stop_flag end", K(global_errno_), KCSTRING(stop_reason));
   }
@@ -2229,6 +2235,8 @@ int ObLogInstance::start_threads_()
   } else if (0 != (pthread_ret = pthread_create(&flow_control_tid_, NULL, flow_control_thread_func_, this))) {
     LOG_ERROR("start flow control thread fail", K(pthread_ret), KERRNOMSG(pthread_ret));
     ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(lib::ThreadPool::start())) {
+    LOG_ERROR("start daemon threads failed", KR(ret), K(DAEMON_THREAD_COUNT));
   } else {
     LOG_INFO("start instance threads succ", K(timer_tid_), K(sql_tid_), K(flow_control_tid_));
   }
@@ -2273,6 +2281,65 @@ void ObLogInstance::wait_threads_stop_()
 
     flow_control_tid_ = 0;
   }
+
+  LOG_INFO("wait daemon threads stop");
+  lib::ThreadPool::wait();
+  LOG_INFO("wait daemon threads stop done");
+}
+
+void ObLogInstance::run1()
+{
+  int ret = OB_SUCCESS;
+  const int64_t thread_idx = lib::ThreadPool::get_thread_idx();
+  const int64_t thread_count = lib::ThreadPool::get_thread_count();
+
+  if (OB_UNLIKELY(thread_count != DAEMON_THREAD_COUNT || thread_idx >= thread_count)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid thread count or thread idx", KR(ret), K(thread_idx), K(thread_count), K(DAEMON_THREAD_COUNT));
+  } else if (0 == thread_idx) {
+    // handle storage_operation
+    lib::set_thread_name("CDC-BGD-STORAGE_OP");
+    if (OB_FAIL(daemon_handle_storage_op_thd_())) {
+      LOG_ERROR("handle_storage_op in background failed", KR(ret), K(thread_idx), K(thread_count));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("unexpect daemon thread", KR(ret), K(thread_count), K(thread_idx));
+  }
+
+  if (OB_SUCCESS != ret && OB_IN_STOP_STATE != ret) {
+    handle_error(ret, "obcdc daemon thread[idx=%ld] exits, err=%d", lib::ThreadPool::get_thread_idx(), ret);
+    mark_stop_flag("DAEMON THEAD EXIST");
+  }
+}
+
+int ObLogInstance::daemon_handle_storage_op_thd_()
+{
+  int ret = OB_SUCCESS;
+  const int64_t TIMER_INTERVAL = 5 * _SEC_;
+
+  while (OB_SUCC(ret) && ! lib::ThreadPool::has_set_stop()) {
+    ob_usleep(TIMER_INTERVAL);
+    ObLogTraceIdGuard trace_guard;
+
+    if (! is_memory_working_mode(working_mode_)) {
+      if (OB_ISNULL(tenant_mgr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("expect valid tenant_mgr", KR(ret));
+      } else {
+        const int64_t redo_flush_interval = TCONF.rocksdb_flush_interval.get();
+        const int64_t redo_compact_interval = TCONF.rocksdb_compact_interval.get();
+        if (redo_flush_interval > 0 && REACH_TIME_INTERVAL(redo_flush_interval)) {
+          tenant_mgr_->flush_storaged_redo();
+        }
+        if (redo_compact_interval > 0 && REACH_TIME_INTERVAL(redo_compact_interval)) {
+          tenant_mgr_->compact_storaged_redo();
+        }
+      }
+    }
+  }
+
+  return ret;
 }
 
 void ObLogInstance::reload_config_()
