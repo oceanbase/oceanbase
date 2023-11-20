@@ -16,6 +16,8 @@
 #include "share/location_cache/ob_location_struct.h"
 #include "share/location_cache/ob_location_update_task.h"
 #include "share/location_cache/ob_tablet_ls_map.h" // ObTabletLSMap
+#include "share/location_cache/ob_tablet_location_refresh_service.h"
+#include "share/location_cache/ob_tablet_location_broadcast.h" // ObTabletLocationSender, ObTabletLocationUpdater
 
 namespace oceanbase
 {
@@ -39,9 +41,14 @@ public:
         sql_proxy_(NULL),
         inner_cache_(),
         async_queue_(),
-        clear_expired_cache_task_(*this) {}
+        clear_expired_cache_task_(*this),
+        broadcast_sender_(),
+        broadcast_updater_(),
+        auto_refresh_service_() {}
   virtual ~ObTabletLSService() {}
-  int init(common::ObMySQLProxy &sql_proxy);
+  int init(share::schema::ObMultiVersionSchemaService &schema_service,
+           common::ObMySQLProxy &sql_proxy,
+           obrpc::ObSrvRpcProxy &srv_rpc_proxy);
   // Gets the mapping between the tablet and log stream synchronously.
   //
   // @param [in] tenant_id: target tenant which the tablet belongs to
@@ -86,13 +93,21 @@ public:
       bool &stopped);
   // Unused.
   int process_barrier(const ObTabletLSUpdateTask &task, bool &stopped);
+  int start();
   void stop();
   void wait();
   int destroy();
   int reload_config();
 
   int clear_expired_cache();
+  int submit_broadcast_task(const ObTabletLocationBroadcastTask &task);
+  int submit_update_task(const ObTabletLocationBroadcastTask &task);
 
+  int update_cache(const ObTabletLSCache &tablet_cache, const bool update_only);
+
+  int get_tablet_ids_from_cache(
+      const uint64_t tenant_id,
+      common::ObIArray<ObTabletID> &tablet_ids);
 private:
   int get_from_cache_(
       const uint64_t tenant_id,
@@ -102,7 +117,6 @@ private:
       const uint64_t tenant_id,
       const ObTabletID &tablet_id,
       ObTabletLSCache &tablet_cache);
-  int update_cache_(const ObTabletLSCache &tablet_cache);
   int set_timeout_ctx_(common::ObTimeoutCtx &ctx);
   bool is_valid_key_(const uint64_t tenant_id, const ObTabletID &tablet_id) const;
   int erase_cache_(const uint64_t tenant_id, const ObTabletID &tablet_id);
@@ -122,7 +136,10 @@ private:
   ObTabletLSMap inner_cache_; // Store the mapping between tablet and log stream in user tenant.
   ObTabletLSUpdateQueue async_queue_;
   ObClearTabletLSCacheTimerTask clear_expired_cache_task_; // timer task used to clear the expired cache
+  ObTabletLocationSender broadcast_sender_; // broadcast updated tablet location to every server
+  ObTabletLocationUpdater broadcast_updater_; // process received broadcast task
   //TODO: need more queue later
+  ObTabletLocationRefreshService auto_refresh_service_;
 };
 
 } // end namespace share

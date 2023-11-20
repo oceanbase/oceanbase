@@ -19,6 +19,7 @@
 #include "lib/string/ob_sql_string.h" // ObSqlString
 #include "lib/mysqlclient/ob_mysql_proxy.h" // ObISqlClient, SMART_VAR
 #include "observer/ob_sql_client_decorator.h" // ObSQLClientRetryWeak
+#include "share/transfer/ob_transfer_info.h"
 
 namespace oceanbase
 {
@@ -633,7 +634,7 @@ int ObTabletToLSTableOperator::inner_batch_get_(
     common::ObIArray<ObTabletLSCache> &tablet_ls_caches)
 {
   int ret = OB_SUCCESS;
-  const char *query_column_str = "tablet_id, ls_id, ORA_ROWSCN";
+  const char *query_column_str = "*";
   const bool keep_order = false;
   INNER_BATCH_GET(sql_proxy, tenant_id, tablet_ids, start_idx, end_idx,
       query_column_str, keep_order, tablet_ls_caches);
@@ -651,19 +652,21 @@ int ObTabletToLSTableOperator::construct_results_(
     tablet_ls_cache.reset();
     uint64_t tablet_id = ObTabletID::INVALID_TABLET_ID;
     int64_t ls_id = ObLSID::INVALID_LS_ID;
-    int64_t row_scn = OB_MIN_SCN_TS_NS;
+    int64_t transfer_seq = OB_INVALID_TRANSFER_SEQ;
     EXTRACT_INT_FIELD_MYSQL(res, "tablet_id", tablet_id, uint64_t);
     EXTRACT_INT_FIELD_MYSQL(res, "ls_id", ls_id, int64_t);
-    EXTRACT_INT_FIELD_MYSQL(res, "ORA_ROWSCN", row_scn, int64_t);
+    EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(
+      res, "transfer_seq", transfer_seq, int64_t,
+      false/*skip null error*/, true/*skip column error*/, 0 /*default value*/);
     const int64_t now = ObTimeUtility::fast_current_time();
     if (FAILEDx(tablet_ls_cache.init(
         tenant_id,
         ObTabletID(tablet_id),
         ObLSID(ls_id),
         now,
-        row_scn))) {
+        transfer_seq))) {
       LOG_WARN("init tablet_ls_cache failed", KR(ret), K(tenant_id),
-          K(tablet_id), K(ls_id), K(now), K(row_scn));
+          K(tablet_id), K(ls_id), K(now), K(transfer_seq));
     } else if (OB_FAIL(tablet_ls_caches.push_back(tablet_ls_cache))) {
       LOG_WARN("fail to push back", KR(ret), K(tablet_ls_cache));
     }
