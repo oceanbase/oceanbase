@@ -7063,6 +7063,14 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
             if (OB_SUCC(ret) && table->get_count() > 0) {
               if (implicit_cursor == NULL || !implicit_cursor->get_in_forall()) {
                 // only clear table data, do not reset collection allocator
+                if (table->get_element_desc().is_composite_type()) {
+                  for (int64_t i = 0; i < table->get_count(); ++i) {
+                    int tmp_ret = OB_SUCCESS;
+                    if ((tmp_ret = ObUserDefinedType::destruct_obj(table->get_data()[i], ctx->exec_ctx_->get_my_session())) != OB_SUCCESS) {
+                      LOG_WARN("failed to destruct obj, memory may leak", K(ret), K(tmp_ret), K(i));
+                    }
+                  }
+                }
                 table->set_count(0);
                 table->set_first(OB_INVALID_INDEX);
                 table->set_last(OB_INVALID_INDEX);
@@ -7735,7 +7743,8 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
         //对于object而言, get_column_count是record的列数, 这里会整体拷贝object, 因此不能用get_column_count作为跳数
         start_idx += 0 == i ? 0 : 1;
       }
-      if (OB_SUCC(ret) && !need_ignore) {
+      if (OB_FAIL(ret)) {
+      } else if (!need_ignore) {
         int64_t old_count = table->get_count();
         void *old_data = table->get_data();
         ObIAllocator *allocator = table->get_allocator();
@@ -7747,9 +7756,6 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
           LOG_WARN("get a invalid address", K(bulk_addr), K(row_count), K(old_count), K(table->get_column_count()), K(table->get_data()), K(ret));
         } else {
           table->set_count(append_mode ? old_count + row_count : row_count);
-          if (OB_NOT_NULL(table->get_data())) {
-            allocator->free(table->get_data());
-          }
           table->set_data(reinterpret_cast<ObObj*>(bulk_addr));
           table->set_first(1);
           table->set_last(table->get_count());
@@ -7827,6 +7833,31 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
             OZ (table->shrink());
           } else if (OB_NOT_NULL(bulk_addr)) {
             allocator->free(bulk_addr);
+          }
+        }
+      } else {
+        // need free memory
+        if (is_type_record) {
+          for (int64_t j = 0; j < row_count; ++j) {
+            for (int64_t k = 0; k < table->get_column_count(); ++k) {
+              int64_t idx = j * column_count + start_idx + k;
+              if (obj_array.at(idx).is_pl_extend()) {
+                int tmp_ret = OB_SUCCESS;
+                if ((tmp_ret = ObUserDefinedType::destruct_obj(obj_array.at(idx), ctx->exec_ctx_->get_my_session())) != OB_SUCCESS) {
+                  LOG_WARN("failed to destruct obj, memory may leak", K(ret), K(tmp_ret), K(idx), K(obj_array));
+                }
+              }
+            }
+          }
+        } else {
+          for (int64_t j = 0; j < row_count; ++j) {
+            int64_t idx = j * column_count + start_idx;
+            if (obj_array.at(idx).is_pl_extend()) {
+              int tmp_ret = OB_SUCCESS;
+              if ((tmp_ret = ObUserDefinedType::destruct_obj(obj_array.at(idx), ctx->exec_ctx_->get_my_session())) != OB_SUCCESS) {
+                LOG_WARN("failed to destruct obj, memory may leak", K(ret), K(tmp_ret), K(idx), K(obj_array));
+              }
+            }
           }
         }
       }
