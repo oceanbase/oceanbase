@@ -2895,6 +2895,14 @@ int ObStorageGetConfigVersionAndTransferScnDelegate::process()
   const uint64_t tenant_id = arg_.tenant_id_;
   const share::ObLSID &ls_id = arg_.ls_id_;
   const bool need_get_config_version = arg_.need_get_config_version_;
+#ifdef ERRSIM
+  if (!GCONF.migrate_check_member_list_error_zone.get_value_string().empty()) {
+    if (0 == strcmp(GCONF.zone.str(), GCONF.migrate_check_member_list_error_zone.str())) {
+      SERVER_EVENT_SYNC_ADD("storage_ha", "before_get_config_version_and_transfer_scn");
+      DEBUG_SYNC(BEFORE_GET_CONFIG_VERSION_AND_TRANSFER_SCN);
+    }
+  }
+#endif
   MTL_SWITCH(tenant_id) {
     ObLSHandle ls_handle;
     ObLSService *ls_service = NULL;
