@@ -99,10 +99,7 @@ public:
       data_(nullptr),
       reset_memory_threshold_(0),
       memory_reclaim_cnt_(0),
-      has_expand_(false),
-      lazy_move_(false),
-      old_buf_(nullptr),
-      old_size_(0)
+      has_expand_(false)
   {}
   ~ObMicroBufferWriter() { reset(); };
   int init(const int64_t capacity, const int64_t reserve_size = DEFAULT_MIDDLE_BLOCK_SIZE);
@@ -111,32 +108,10 @@ public:
   inline int64_t remain_buffer_size() const { return buffer_size_ - len_; }
   inline int64_t size() const { return buffer_size_; } //curr buffer size
   inline bool has_expand() const { return has_expand_; }
-  inline char *data() { assert(old_buf_ == nullptr); return data_; }
+  inline char *data() { return data_; }
   inline char *current() { return data_ + len_; }
   int reserve(const int64_t size);
   int ensure_space(const int64_t append_size);
-  // don't use it, only for encoding
-  int set_lazy_move_cur_buf()
-  {
-    int ret = OB_SUCCESS;
-    if (OB_UNLIKELY(old_buf_ != nullptr)) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "unexpected old buf", K(ret));
-    } else {
-      lazy_move_ = true;
-    }
-    return ret;
-  }
-  void move_buf()
-  {
-    lazy_move_ = false;
-    if (old_buf_ != nullptr) {
-      MEMCPY(data_, old_buf_, old_size_);
-      allocator_.free(old_buf_);
-      old_buf_ = nullptr;
-      old_size_ = 0;
-    }
-  }
   inline void pop_back(const int64_t size) { len_ = MAX(0, len_ - size); }
   int write_nop(const int64_t size, bool is_zero = false);
   int write(const ObDatumRow &row, const int64_t rowkey_cnt, int64_t &len);
@@ -163,7 +138,7 @@ public:
   void reset();
   inline int64_t length() const { return len_; }
   TO_STRING_KV(K_(capacity), K_(buffer_size), K_(len), K_(data), K_(default_reserve), K_(reset_memory_threshold),
-      K_(memory_reclaim_cnt), K_(has_expand), K_(lazy_move), K_(old_buf), K_(old_size));
+      K_(memory_reclaim_cnt), K_(has_expand));
 private:
   int expand(const int64_t size);
 private:
@@ -179,10 +154,6 @@ private:
   int64_t reset_memory_threshold_;
   int64_t memory_reclaim_cnt_;
   bool has_expand_;
-
-  bool lazy_move_;
-  char *old_buf_;
-  int64_t old_size_;
 
 private:
   static const int64_t MIN_BUFFER_SIZE = 1 << 12; //4kb

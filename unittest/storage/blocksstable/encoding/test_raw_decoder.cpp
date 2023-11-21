@@ -53,11 +53,13 @@ public:
 int ObMicroBlockRawEncoder::build_block(char *&buf, int64_t &size)
 {
   int ret = OB_SUCCESS;
-  int64_t need_size = 0;
-  if (!is_inited_) {
+  int64_t encoders_need_size = 0;
+  const int64_t col_header_size = ctx_.column_cnt_ * (sizeof(ObColumnHeader));
+  char *encoding_meta_buf = nullptr;
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (datum_rows_.empty()) {
+  } else if (OB_UNLIKELY(datum_rows_.empty())) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("empty micro block", K(ret));
   } else if (OB_FAIL(set_datum_rows_ptr())) {
@@ -66,11 +68,11 @@ int ObMicroBlockRawEncoder::build_block(char *&buf, int64_t &size)
     LOG_WARN("pivot rows to columns failed", K(ret));
   } else if (OB_FAIL(row_indexs_.reserve(datum_rows_.count()))) {
     LOG_WARN("array reserve failed", K(ret), "count", datum_rows_.count());
-  } else if (OB_FAIL(encoder_detection(need_size))) {
+  } else if (OB_FAIL(encoder_detection(encoders_need_size))) {
     LOG_WARN("detect column encoding failed", K(ret));
   } else {
-
-    for (int64_t i = 0; i < ctx_.column_cnt_; ++i) {
+    encoders_need_size = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < ctx_.column_cnt_; ++i) {
       const bool force_var_store = false;
       if (NULL != encoders_[i]) {
         free_encoder(encoders_[i]);
@@ -87,12 +89,36 @@ int ObMicroBlockRawEncoder::build_block(char *&buf, int64_t &size)
         encoders_[i] = e;
       }
     }
+    for (int64_t i = 0; OB_SUCC(ret) && i < encoders_.count(); i++) {
+      int64_t need_size = 0;
+      if (OB_FAIL(encoders_.at(i)->get_encoding_store_meta_need_space(need_size))) {
+        STORAGE_LOG(WARN, "fail to get_encoding_store_meta_need_space", K(ret), K(i), K(encoders_));
+      } else {
+        need_size += encoders_.at(i)->calc_encoding_fix_data_need_space();
+        encoders_need_size += need_size;
+      }
+    }
+  }
 
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(data_buffer_.ensure_space(col_header_size + encoders_need_size))) {
+    STORAGE_LOG(WARN, "fail to ensure space", K(ret), K(data_buffer_));
+  } else if (OB_ISNULL(encoding_meta_buf = static_cast<char *>(encoding_meta_allocator_.alloc(encoders_need_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "fail to alloc fix header buf", K(ret), K(encoders_need_size));
+  } else {
+    STORAGE_LOG(DEBUG, "[debug] build micro block", K_(estimate_size), K_(header_size), K_(expand_pct),
+        K(datum_rows_.count()), K(ctx_));
 
-    // <1> store encoding metas and fix cols data
+    // <1> store encoding metas and fix cols data in encoding_meta_buffer
     int64_t encoding_meta_offset = 0;
-    if (OB_FAIL(store_encoding_meta_and_fix_cols(encoding_meta_offset))) {
+    int64_t encoding_meta_size = 0;
+    ObBufferWriter meta_buf_writer(encoding_meta_buf, encoders_need_size, 0);
+    if (OB_FAIL(store_encoding_meta_and_fix_cols(meta_buf_writer, encoding_meta_offset))) {
       LOG_WARN("failed to store encoding meta and fixed col data", K(ret));
+    } else if (FALSE_IT(encoding_meta_size = meta_buf_writer.length())) {
+    } else if (OB_FAIL(data_buffer_.write_nop(encoding_meta_size))) {
+      STORAGE_LOG(WARN, "failed to write nop", K(ret), K(meta_buf_writer), K(data_buffer_));
     }
 
     // <2> set row data store offset
@@ -101,7 +127,7 @@ int ObMicroBlockRawEncoder::build_block(char *&buf, int64_t &size)
       if (OB_FAIL(set_row_data_pos(fix_data_size))) {
         LOG_WARN("set row data position failed", K(ret));
       } else {
-        get_header(data_buffer_)->var_column_count_ = static_cast<int16_t>(var_data_encoders_.count());
+        get_header(data_buffer_)->var_column_count_ = static_cast<uint16_t>(var_data_encoders_.count());
       }
     }
 
@@ -123,10 +149,12 @@ int ObMicroBlockRawEncoder::build_block(char *&buf, int64_t &size)
         }
         ObIntegerArrayGenerator gen;
         const int64_t row_index_size = row_indexs_.count() * get_header(data_buffer_)->row_index_byte_;
-        if (OB_FAIL(gen.init(data_buffer_.data() + data_buffer_.length(), get_header(data_buffer_)->row_index_byte_))) {
+        if (OB_FAIL(data_buffer_.ensure_space(row_index_size))) {
+          STORAGE_LOG(WARN, "fail to ensure space", K(ret), K(row_index_size), K(data_buffer_));
+        } else if (OB_FAIL(gen.init(data_buffer_.data() + data_buffer_.length(), get_header(data_buffer_)->row_index_byte_))) {
           LOG_WARN("init integer array generator failed",
               K(ret), "byte", get_header(data_buffer_)->row_index_byte_);
-        } else if (OB_FAIL(data_buffer_.write_nop(row_index_size, true))) {
+        } else if (OB_FAIL(data_buffer_.write_nop(row_index_size))) {
           LOG_WARN("advance data buffer failed", K(ret), K(row_index_size));
         } else {
           for (int64_t idx = 0; idx < row_indexs_.count(); ++idx) {
@@ -136,19 +164,20 @@ int ObMicroBlockRawEncoder::build_block(char *&buf, int64_t &size)
       }
     }
 
-    // <5> fill header
+    // <5> fill header, encoding_meta and fix cols data
     if (OB_SUCC(ret)) {
-      get_header(data_buffer_)->row_count_ = static_cast<int16_t>(datum_rows_.count());
+      get_header(data_buffer_)->row_count_ = static_cast<uint32_t>(datum_rows_.count());
       get_header(data_buffer_)->has_string_out_row_ = has_string_out_row_;
       get_header(data_buffer_)->all_lob_in_row_ = !has_lob_out_row_;
-
-
+      get_header(data_buffer_)->max_merged_trans_version_ = max_merged_trans_version_;
       const int64_t header_size = get_header(data_buffer_)->header_size_;
       char *data = data_buffer_.data() + header_size;
       FOREACH(e, encoders_) {
         MEMCPY(data, &(*e)->get_column_header(), sizeof(ObColumnHeader));
         data += sizeof(ObColumnHeader);
       }
+      // fill encoding meta and fix cols data
+      MEMCPY(data_buffer_.data() + encoding_meta_offset, encoding_meta_buf, encoding_meta_size);
     }
 
     if (OB_SUCC(ret)) {
@@ -161,7 +190,7 @@ int ObMicroBlockRawEncoder::build_block(char *&buf, int64_t &size)
         ObIColumnEncoder *e = encoders_.at(idx);
         pe.type_ = static_cast<ObColumnHeader::Type>(e->get_column_header().type_);
         if (ObColumnHeader::is_inter_column_encoder(pe.type_)) {
-          pe.ref_col_idx_ = static_cast<ObColumnEqualEncoder *>(e)->get_ref_col_idx();
+          pe.ref_col_idx_ = static_cast<ObSpanColumnEncoder *>(e)->get_ref_col_idx();
         } else {
           pe.ref_col_idx_ = 0;
         }
@@ -214,6 +243,7 @@ public:
     decode_res_pool_ = new(allocator_.alloc(sizeof(ObDecodeResourcePool))) ObDecodeResourcePool;
     tenant_ctx_.set(decode_res_pool_);
     share::ObTenantEnv::set_tenant(&tenant_ctx_);
+    encoder_.encoding_meta_allocator_.set_tenant_id(OB_SERVER_TENANT_ID);
     encoder_.data_buffer_.allocator_.set_tenant_id(OB_SERVER_TENANT_ID);
     encoder_.row_buf_holder_.allocator_.set_tenant_id(OB_SERVER_TENANT_ID);
     decode_res_pool_->init();
