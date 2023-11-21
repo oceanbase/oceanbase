@@ -777,11 +777,14 @@ int ObDropTenantExecutor::execute(ObExecContext &ctx, ObDropTenantStmt &stmt)
       LOG_USER_ERROR(OB_TENANT_NOT_EXIST, drop_tenant_arg.tenant_name_.length(), drop_tenant_arg.tenant_name_.ptr());
       LOG_WARN("tenant not exist", KR(ret), K(drop_tenant_arg));
     }
-  } else if (OB_FAIL(common_rpc_proxy->drop_tenant(drop_tenant_arg))) {
-    LOG_WARN("rpc proxy drop tenant failed", K(ret));
-  } else if (OB_FAIL(check_tenant_has_been_dropped_(
-             ctx, stmt, tenant_schema->get_tenant_id()))) {
-    LOG_WARN("fail to check tenant has been dropped", KR(ret), KPC(tenant_schema));
+  } else {
+    DEBUG_SYNC(BEFORE_DROP_TENANT);
+    if (OB_FAIL(common_rpc_proxy->drop_tenant(drop_tenant_arg))) {
+      LOG_WARN("rpc proxy drop tenant failed", K(ret));
+    } else if (OB_FAIL(check_tenant_has_been_dropped_(
+              ctx, stmt, tenant_schema->get_tenant_id()))) {
+      LOG_WARN("fail to check tenant has been dropped", KR(ret), KPC(tenant_schema));
+    }
   }
   return ret;
 }
