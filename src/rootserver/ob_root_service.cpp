@@ -10217,7 +10217,8 @@ int ObRootService::purge_recyclebin_objects(int64_t purge_each_time)
         if (OB_FAIL(schema_service_->cal_purge_need_timeout(arg, cal_timeout))) {
           LOG_WARN("fail to cal purge need timeout", KR(ret), K(arg));
         } else if (0 == cal_timeout) {
-          purge_sum = 0;
+          LOG_INFO("cal purge need timeout is zero, just exit", K(tenant_id), K(purge_sum));
+          break;
         } else if (OB_FAIL(common_proxy_.timeout(cal_timeout).purge_expire_recycle_objects(arg, affected_rows))) {
           LOG_WARN("purge reyclebin objects failed", KR(ret),
               K(current_time), K(expire_time), K(affected_rows), K(arg));
@@ -10225,8 +10226,8 @@ int ObRootService::purge_recyclebin_objects(int64_t purge_each_time)
           purge_sum -= affected_rows;
           if (arg.purge_num_ != affected_rows) {
             int64_t cost_time = ObTimeUtility::current_time() - start_time;
-            LOG_INFO("purge recycle objects", KR(ret), K(cost_time),
-                K(expire_time), K(current_time), K(affected_rows));
+            LOG_INFO("purge recycle objects", KR(ret), K(tenant_id), K(cost_time), K(purge_sum),
+                                              K(cal_timeout), K(expire_time), K(current_time), K(affected_rows));
             if (OB_SUCC(ret) && in_service()) {
               ob_usleep(SLEEP_INTERVAL);
             }
@@ -10234,8 +10235,8 @@ int ObRootService::purge_recyclebin_objects(int64_t purge_each_time)
           }
         }
         int64_t cost_time = ObTimeUtility::current_time() - start_time;
-        LOG_INFO("purge recycle objects", KR(ret), K(cost_time),
-            K(expire_time), K(current_time), K(affected_rows));
+        LOG_INFO("purge recycle objects", KR(ret), K(tenant_id), K(cost_time), K(purge_sum),
+                                          K(cal_timeout), K(expire_time), K(current_time), K(affected_rows));
         if (OB_SUCC(ret) && in_service()) {
           ob_usleep(SLEEP_INTERVAL);
         }
