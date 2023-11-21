@@ -110,7 +110,10 @@ private:
   // The cluster id and tenant id indicate the unique tenant
   bool is_fetcher_stale_(const int64_t cluster_id, const uint64_t tenant_id);
   int stop_fetcher_safely_();
+  // check ls empty before destory fetcher
   void destroy_fetcher_();
+  // destroy fetcher forcedly, without check
+  void destroy_fetcher_forcedly_();
 
   int check_ls_stale_(const share::ObLSID &id, const int64_t proposal_id, bool &is_stale);
   int get_ls_count_in_fetcher_(int64_t &count);
