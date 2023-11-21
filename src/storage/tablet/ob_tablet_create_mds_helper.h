@@ -95,7 +95,7 @@ private:
   static bool is_pure_data_tablets(const obrpc::ObCreateTabletInfo &info);
   static bool is_mixed_tablets(const obrpc::ObCreateTabletInfo &info);
   static bool is_pure_aux_tablets(const obrpc::ObCreateTabletInfo &info);
-  static bool is_hidden_tablets(const obrpc::ObCreateTabletInfo &info);
+  static bool is_bind_hidden_tablets(const obrpc::ObCreateTabletInfo &info);
   static int check_pure_data_or_mixed_tablets_info(
       const share::ObLSID &ls_id,
       const obrpc::ObCreateTabletInfo &info,
@@ -134,7 +134,7 @@ private:
       const share::SCN &scn,
       mds::BufferCtx &ctx,
       common::ObIArray<common::ObTabletID> &tablet_id_array);
-  static int build_hidden_tablets(
+  static int build_bind_hidden_tablets(
       const obrpc::ObBatchCreateTabletArg &arg,
       const obrpc::ObCreateTabletInfo &info,
       const bool for_replay,
