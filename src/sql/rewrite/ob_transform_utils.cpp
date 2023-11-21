@@ -13353,6 +13353,67 @@ int ObTransformUtils::check_is_json_constraint(ObTransformerCtx *ctx,
   return ret;
 }
 
+int ObTransformUtils::add_dummy_expr_for_json_object_node(ObTransformerCtx *ctx,
+                                                          ObSEArray<ObRawExpr *, 1>& param_array)
+{
+  INIT_SUCC(ret);
+  ObConstRawExpr* key_expr = NULL;
+  ObConstRawExpr* value_expr = NULL;
+  ObConstRawExpr* format_expr = NULL;
+  const char *ptr_name = "DUMMY";
+  const char *ptr_value = "X";
+  if (OB_ISNULL(ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("input can not be null", K(ret));
+  } else if (OB_FAIL(ctx->expr_factory_->create_raw_expr(T_VARCHAR, key_expr))) {
+    LOG_WARN("create const expr failed", K(ret));
+  } else if (OB_ISNULL(key_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("true expr is NULL", K(ret));
+  } else {
+    ObObj key_obj;
+    key_obj.set_varchar(ptr_name);
+    key_obj.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+    key_obj.set_collation_level(CS_LEVEL_IMPLICIT);
+    key_expr->set_value(key_obj);
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ctx->expr_factory_->create_raw_expr(T_VARCHAR, value_expr))) {
+    LOG_WARN("create const expr failed", K(ret));
+  } else if (OB_ISNULL(key_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("true expr is NULL", K(ret));
+  } else {
+    ObObj val_obj;
+    val_obj.set_varchar(ptr_value);
+    val_obj.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+    val_obj.set_collation_level(CS_LEVEL_IMPLICIT);
+    value_expr->set_value(val_obj);
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ctx->expr_factory_->create_raw_expr(T_INT, format_expr))) {
+    LOG_WARN("create const expr failed", K(ret));
+  } else if (OB_ISNULL(format_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("true expr is NULL", K(ret));
+  } else {
+    ObObj format_obj;
+    format_obj.set_int(0);
+    format_expr->set_data_type(ObIntType);
+    format_expr->set_value(format_obj);
+    format_expr->set_param(format_obj);
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(param_array.push_back(key_expr))) {
+    LOG_WARN("can not push key expr to array", K(ret));
+  } else if (OB_FAIL(param_array.push_back(value_expr))) {
+    LOG_WARN("can not push key expr to array", K(ret));
+  } else if (OB_FAIL(param_array.push_back(format_expr))) {
+    LOG_WARN("can not push key expr to array", K(ret));
+  }
+  return ret;
+}
+
 int ObTransformUtils::add_column_expr_for_json_object_node(ObTransformerCtx *ctx,
                                                            ObDMLStmt *stmt,
                                                            ColumnItem& col_item,
@@ -13423,6 +13484,7 @@ int ObTransformUtils::get_expand_node_from_star(ObTransformerCtx *ctx,
   ObString tab_name;
   bool tab_has_alias = false;
   ObSEArray<ColumnItem, 4> columns_list;
+  bool is_empty_table = false;
 
   if (OB_ISNULL(param_expr) || param_expr->get_param_count() != 1
       || OB_ISNULL(param_expr->get_param_expr(TABLE_NAME_POS))) {
@@ -13434,11 +13496,15 @@ int ObTransformUtils::get_expand_node_from_star(ObTransformerCtx *ctx,
     all_tab = false;
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(get_column_node_from_table(ctx, stmt, tab_name, columns_list, all_tab, tab_has_alias, table))) {
+  } else if (OB_FAIL(get_column_node_from_table(ctx, stmt, tab_name, columns_list, all_tab, tab_has_alias, table, is_empty_table))) {
     LOG_WARN("fail to get coulmn node from table", K(ret));
   } else if (OB_ISNULL(table)) {
-    ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
-    LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, tab_name.length(), tab_name.ptr());
+    if (!is_empty_table) {
+      ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+      LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, tab_name.length(), tab_name.ptr());
+    } else if (OB_FAIL(add_dummy_expr_for_json_object_node(ctx, param_array))) {
+      LOG_WARN("fail to resolve dual table", K(ret));
+    }
   } else {
     int64_t num = columns_list.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < num; i++) {
@@ -13458,19 +13524,24 @@ int ObTransformUtils::get_column_node_from_table(ObTransformerCtx *ctx,
                                                  ObSEArray<ColumnItem, 4>& column_list,
                                                  bool all_tab,
                                                  bool &tab_has_alias,
-                                                 TableItem *&tab_item)
+                                                 TableItem *&tab_item,
+                                                 bool &is_empty_table)
 {
   INIT_SUCC(ret);
   int64_t num = 0;
   ObColumnRefRawExpr *col_expr = NULL;
   const ObTableSchema *table_schema = NULL;
   const ObColumnSchemaV2 *col_schema = NULL;
+  bool col_is_exist = false;
 
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("select stmt is null");
   } else {
     num = stmt->get_table_size();
+  }
+  if (num == 0) {
+    is_empty_table = true;
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < num; i++) {
     const TableItem *tmp_table_item = stmt->get_table_item(i);
@@ -13505,14 +13576,19 @@ int ObTransformUtils::get_column_node_from_table(ObTransformerCtx *ctx,
         ObTableSchema::const_column_iterator iter = table_schema->column_begin();
         ObTableSchema::const_column_iterator end = table_schema->column_end();
         for (int64_t i = 0; OB_SUCC(ret) && iter != end; ++iter, i++) {
+          col_is_exist = false;
           col_schema = *iter;
           col_expr = NULL;
           ColumnItem column_item;
           ColumnItem* col_item = stmt->get_column_item_by_id(tmp_table_item->table_id_, col_schema->get_column_id());
           if (OB_NOT_NULL(col_item)) {
-          } else if (OB_ISNULL(col_schema)) {
+            col_is_exist = true;
+          } else if (OB_ISNULL(col_schema) || col_schema->is_generated_column()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("column schema is NULL", K(ret));
+          } else if (col_schema->is_extend()) {
+            ret = OB_ERR_JSON_FUN_UNSUPPORTED_TYPE;
+            LOG_WARN("unsupported data type in json object function", K(ret));
           } else if (ObRawExprUtils::build_column_expr(*ctx->expr_factory_, *col_schema, col_expr)) {
             LOG_WARN("fail to create col expr by column schema", K(ret));
           } else {
@@ -13525,7 +13601,7 @@ int ObTransformUtils::get_column_node_from_table(ObTransformerCtx *ctx,
             col_item = &column_item;
           }
           if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(stmt->add_column_item(*col_item))) {
+          } else if (!col_is_exist && OB_FAIL(stmt->add_column_item(*col_item))) {
             LOG_WARN("add column item to stmt failed", K(ret), K(col_item));
           } else if (OB_FAIL(column_list.push_back(*col_item))) {
             LOG_WARN("fail to push column expr in array", K(ret));

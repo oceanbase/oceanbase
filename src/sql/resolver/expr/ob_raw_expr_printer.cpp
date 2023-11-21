@@ -1974,9 +1974,10 @@ int ObRawExprPrinter::print_json_value(ObSysFunRawExpr *expr)
 int ObRawExprPrinter::print_dot_notation(ObSysFunRawExpr *expr)
 {
   INIT_SUCC(ret);
-  PRINT_EXPR(expr->get_param_expr(0));
-  // DATA_PRINTF(".");
-  // PRINT_EXPR(expr->get_param_expr(1));
+  const ObString db_str(0, "");
+  ObColumnRefRawExpr *bin_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(0));
+  bin_expr->set_database_name(db_str);
+  PRINT_EXPR(bin_expr); // table_name.col_name  not print db_name
   ObObj path_obj = static_cast<ObConstRawExpr*>(expr->get_param_expr(1))->get_value();
   ObItemType expr_type = expr->get_param_expr(1)->get_expr_type();
   if (T_VARCHAR != expr_type && T_CHAR != expr_type) {
@@ -2409,10 +2410,10 @@ int ObRawExprPrinter::print_json_expr(ObSysFunRawExpr *expr)
     ObString func_name = expr->get_func_name();
     switch (expr->get_expr_type()) {
       case T_FUN_SYS_JSON_VALUE: {
-        // if json value only have one mismatch clause, the size of parameter is 12
-        const int8_t JSN_VAL_WITH_ONE_MISMATCH = 12;
-        // json value parameter count more than 12, because mismatch is multi-val and default value.
-        // json_value(expr(0), expr(1) returning cast_type ascii xxx on empty(default value) xxx on error(default value) xxx on mismatch (xxx))
+        // if json value only have one mismatch clause, the size of parameter is 13
+        const int8_t JSN_VAL_WITH_ONE_MISMATCH = 13;
+        // json value parameter count more than 13, because mismatch is multi-val and default value.
+        // json_value(expr(0), expr(1) returning cast_type truncate ascii xxx on empty(default value) xxx on error(default value) xxx on mismatch (xxx))
         if (OB_UNLIKELY(expr->get_param_count() < JSN_VAL_WITH_ONE_MISMATCH)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected param count of expr to type", K(ret), KPC(expr));
