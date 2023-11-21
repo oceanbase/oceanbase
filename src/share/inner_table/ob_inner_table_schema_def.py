@@ -13147,6 +13147,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12453: __all_virtual_tenant_snapshot_create_job
 # 12454: __all_virtual_wr_sqltext
 # 12455: __all_virtual_trusted_root_certificate_info
+# 12456: __all_virtual_dbms_lock_allocated
 # 余留位置
 #
 
