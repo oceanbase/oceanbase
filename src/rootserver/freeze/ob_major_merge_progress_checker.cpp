@@ -233,7 +233,8 @@ int ObMajorMergeProgressChecker::check_verification(
   if (OB_SUCC(ret)) {
     table_ids_.batch_start_idx_ = idx + 1;
   } else {
-    (void) reuse_rest_table(idx, unfinish_table_id_array);
+    // record first failed table, need check in next loop
+    table_ids_.batch_start_idx_ = idx;
   }
   return ret;
 }
@@ -399,16 +400,29 @@ int ObMajorMergeProgressChecker::get_table_and_index_schema(
   return ret;
 }
 
-void ObMajorMergeProgressChecker::reuse_rest_table(
-  const int64_t start_idx,
+void ObMajorMergeProgressChecker::deal_with_unfinish_table_ids(
+  const int error_no,
   ObIArray<uint64_t> &unfinish_table_id_array)
 {
-  int tmp_ret = OB_SUCCESS;
-  for (int64_t idx = start_idx; idx < table_ids_.count(); ++idx) {
-    const uint64_t table_id = table_ids_.at(idx);
-    if (OB_TMP_FAIL(unfinish_table_id_array.push_back(table_id))) {
-      LOG_WARN_RET(tmp_ret, "failed to push table_id into finish_array");
+  int ret = OB_SUCCESS;
+  bool assgin_flag = true;
+  if (OB_SUCCESS != error_no) {
+    if (0 == table_ids_.batch_start_idx_) {
+      // table_ids_ should not be modified
+      assgin_flag = false;
+    } else {
+      // need reuse all rest table in after start_idx
+      for (int64_t idx = table_ids_.batch_start_idx_; OB_SUCC(ret) && idx < table_ids_.count(); ++idx) {
+        const uint64_t table_id = table_ids_.at(idx);
+        if (OB_FAIL(unfinish_table_id_array.push_back(table_id))) {
+          LOG_WARN("failed to push table_id into finish_array", K(table_id));
+        }
+      }
     }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (assgin_flag && OB_FAIL(table_ids_.assign(unfinish_table_id_array))) {
+    LOG_WARN("failed to assign table ids", KR(ret), K(unfinish_table_id_array));
   }
 }
 
@@ -419,6 +433,7 @@ int ObMajorMergeProgressChecker::prepare_check_progress(
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   exist_uncompacted_table = true;
+  table_ids_.start_looping();
   if (OB_TMP_FAIL(ls_locality_cache_.refresh_ls_locality(first_loop_in_cur_round_ /*force_refresh*/))) {
     LOG_WARN("failed to refresh ls locality", K(tmp_ret));
   }
@@ -439,7 +454,6 @@ int ObMajorMergeProgressChecker::prepare_check_progress(
   } else {
     tmp_time_guard.click(ObRSCompactionTimeGuard::GET_TABLET_LS_PAIRS);
     first_loop_in_cur_round_ = false;
-    table_ids_.start_looping();
     exist_uncompacted_table = progress_.exist_uncompacted_table();
     progress_.clear_before_each_loop();
     reset_uncompacted_tablets();
@@ -570,9 +584,7 @@ int ObMajorMergeProgressChecker::check_progress(
       tmp_time_guard.click(ObRSCompactionTimeGuard::CKM_VERIFICATION);
       total_time_guard_.add_time_guard(tmp_time_guard);
       // deal with finish_table_id_array after loop table_ids_
-      if (OB_TMP_FAIL(table_ids_.assign(unfinish_table_id_array))) {
-        LOG_WARN("failed to assign", KR(tmp_ret), K(unfinish_table_id_array));
-      }
+      (void) deal_with_unfinish_table_ids(ret, unfinish_table_id_array);
     } // SMART_VAR
     if (FAILEDx(check_index_and_rest_table())) {
       LOG_WARN("failed check index ckm and rest table", KR(ret), K_(compaction_scn));

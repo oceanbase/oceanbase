@@ -72,7 +72,9 @@ public:
 private:
   int set_table_compaction_info_status(const uint64_t table_id, const compaction::ObTableCompactionInfo::Status status);
 
-  void reuse_rest_table(const int64_t start_idx, ObIArray<uint64_t> &unfinish_table_id_array);
+  void deal_with_unfinish_table_ids(
+    const int error_no,
+    ObIArray<uint64_t> &unfinish_table_id_array);
   bool can_not_ignore_warning(int ret)
   {
     return OB_FREEZE_SERVICE_EPOCH_MISMATCH == ret || OB_CHECKSUM_ERROR == ret;
