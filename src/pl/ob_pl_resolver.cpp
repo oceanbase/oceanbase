@@ -11709,32 +11709,31 @@ int ObPLResolver::resolve_udf_info(
       && db_name.empty()
       && OB_NOT_NULL(routine_info)
       && routine_info->get_database_id() != OB_INVALID_ID) {
-    if (routine_info->get_database_id() != resolve_ctx_.session_info_.get_database_id()) {
-      const ObDatabaseSchema *database_schema = NULL;
-      OZ (resolve_ctx_.schema_guard_.get_database_schema(
-        resolve_ctx_.session_info_.get_effective_tenant_id(), routine_info->get_database_id(), database_schema));
-      CK (OB_NOT_NULL(database_schema));
-      OX (db_name = database_schema->get_database_name_str());
-    }
-    if (OB_SUCC(ret) && routine_info->get_package_id() != OB_INVALID_ID) {
-      if (routine_info->is_udt_routine()) {
-        const share::schema::ObUDTTypeInfo *udt_info = NULL;
-        OZ (resolve_ctx_.schema_guard_.get_udt_info(
-          routine_info->get_tenant_id(), routine_info->get_package_id(), udt_info));
-        CK (OB_NOT_NULL(udt_info));
-        OX (package_name = udt_info->get_type_name());
+    if (OB_SYS_DATABASE_ID == routine_info->get_database_id()) {
+      db_name = OB_SYS_DATABASE_NAME;
+    } else {
+      // may be synonym, we should process public synonym in here, do not add db prefix for public synonym.
+      ObString &synonym_name = udf_info.udf_package_.empty() ? udf_info.udf_name_ : udf_info.udf_package_;
+      ObString object_name;
+      uint64_t object_database_id = OB_INVALID_ID;
+      uint64_t synonym_id = OB_INVALID_ID;
+      bool exist = false;
+      bool is_public = false;
+      OZ (schema_checker.get_synonym_schema(resolve_ctx_.session_info_.get_effective_tenant_id(),
+                                            resolve_ctx_.session_info_.get_database_id(),
+                                            synonym_name,
+                                            object_database_id, synonym_id, object_name, exist,
+                                            true, // need search public synonym
+                                            &is_public));
+      if (OB_FAIL(ret) || !exist) {
+        ret = OB_SUCCESS; // some case may not be synonym.
+      } else if (!is_public) {
+        if (routine_info->get_database_id() != resolve_ctx_.session_info_.get_database_id()) {
+          db_name = resolve_ctx_.session_info_.get_database_name();
+        }
       } else {
-        const share::schema::ObPackageInfo *package_info = NULL;
-        OZ (resolve_ctx_.schema_guard_.get_package_info(
-          routine_info->get_tenant_id(), routine_info->get_package_id(), package_info));
-        CK (OB_NOT_NULL(package_info));
-        OX (package_name = package_info->get_package_name());
+        db_name = OB_SYS_DATABASE_NAME;
       }
-    }
-    if (OB_SUCC(ret) &&
-        OB_NOT_NULL(udf_info.ref_expr_) &&
-        udf_info.ref_expr_->get_func_name().case_compare(routine_info->get_routine_name()) != 0) {
-      OX (udf_info.ref_expr_->set_func_name(routine_info->get_routine_name()));
     }
   }
 
