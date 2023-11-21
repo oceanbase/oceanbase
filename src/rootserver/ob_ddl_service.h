@@ -936,7 +936,9 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
   //----End of functions for managing package----
 
   //----Functions for managing trigger----
-  virtual int create_trigger(const obrpc::ObCreateTriggerArg &arg);
+  virtual int create_trigger(const obrpc::ObCreateTriggerArg &arg,
+                             ObSchemaGetterGuard &schema_guard,
+                             obrpc::ObCreateTriggerRes *res);
   virtual int drop_trigger(const obrpc::ObDropTriggerArg &arg);
   virtual int alter_trigger(const obrpc::ObAlterTriggerArg &arg);
   //----End of functions for managing trigger----
@@ -1026,7 +1028,8 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
                               ObIArray<ObDependencyInfo> &dep_infos,
                               const common::ObString *ddl_stmt_str,
                               bool for_insert_errors,
-                              share::schema::ObSchemaGetterGuard &schema_guard);
+                              share::schema::ObSchemaGetterGuard &schema_guard,
+                              int64_t &table_schema_version);
   int drop_trigger_in_trans(const share::schema::ObTriggerInfo &trigger_info,
                             const common::ObString *ddl_stmt_str,
                             share::schema::ObSchemaGetterGuard &schema_guard);

@@ -8647,12 +8647,13 @@ int ObDDLOperator::create_trigger(ObTriggerInfo &trigger_info,
                                   ObMySQLTransaction &trans,
                                   ObErrorInfo &error_info,
                                   ObIArray<ObDependencyInfo> &dep_infos,
+                                  int64_t &table_schema_version,
                                   const ObString *ddl_stmt_str,
                                   bool is_update_table_schema_version,
                                   bool is_for_truncate_table)
 {
   int ret = OB_SUCCESS;
-
+  table_schema_version = OB_INVALID_VERSION;
   ObSchemaService *schema_service = schema_service_.get_schema_service();
   const uint64_t tenant_id = trigger_info.get_tenant_id();
   int64_t new_schema_version = OB_INVALID_VERSION;
@@ -8674,8 +8675,10 @@ int ObDDLOperator::create_trigger(ObTriggerInfo &trigger_info,
       trigger_info.get_trigger_name(), is_replace);
   if (!trigger_info.is_system_type() && is_update_table_schema_version) {
     uint64_t base_table_id = trigger_info.get_base_object_id();
+    OZ (schema_service_.gen_new_schema_version(tenant_id, new_schema_version));
+    OX (table_schema_version = new_schema_version);
     OZ (schema_service->get_table_sql_service().update_data_table_schema_version(
-        trans, tenant_id, base_table_id, false/*in offline ddl white list*/),
+        trans, tenant_id, base_table_id, false/*in offline ddl white list*/, new_schema_version),
         base_table_id, trigger_info.get_trigger_name());
   }
   if (OB_FAIL(ret)) {
