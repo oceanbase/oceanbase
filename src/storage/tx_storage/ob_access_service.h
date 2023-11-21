@@ -108,15 +108,17 @@ public:
   virtual int get_multi_ranges_cost(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
+      const int64_t timeout_us,
       const common::ObIArray<common::ObStoreRange> &ranges,
       int64_t &total_size) override;
   virtual int split_multi_ranges(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
-      const ObIArray<ObStoreRange> &ranges,
+      const int64_t timeout_us,
+      const common::ObIArray<ObStoreRange> &ranges,
       const int64_t expected_task_count,
-      ObIAllocator &allocator,
-      ObArrayArray<ObStoreRange> &multi_range_split_array) override;
+      common::ObIAllocator &allocator,
+      common::ObArrayArray<ObStoreRange> &multi_range_split_array) override;
 
   // DML interface
   int delete_rows(
@@ -184,12 +186,14 @@ public:
   int estimate_row_count(
       const ObTableScanParam &param,
       const ObTableScanRange &scan_range,
+      const int64_t timeout_us,
       ObIArray<ObEstRowCountRecord> &est_records,
       int64_t &logical_row_count,
       int64_t &physical_row_count) const;
   int estimate_block_count_and_row_count(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
+      const int64_t timeout_us,
       int64_t &macro_block_count,
       int64_t &micro_block_count,
       int64_t &sstable_row_count,

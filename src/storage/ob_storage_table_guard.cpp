@@ -171,6 +171,7 @@ int ObStorageTableGuard::refresh_and_protect_table(ObRelativeTable &relative_tab
   while (OB_SUCC(ret) && need_to_refresh_table(*iter.table_iter())) {
     if (OB_FAIL(store_ctx_.ls_->get_tablet_svr()->get_read_tables(
         tablet_id,
+        ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
         store_ctx_.mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx(),
         iter,
         relative_table.allow_not_ready()))) {
