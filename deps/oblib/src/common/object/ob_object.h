@@ -515,6 +515,7 @@ struct ObLobDataOutRowCtx
     WRITE,
     ERASE,
     EMPTY_SQL, // lob col not change in full sql update, out row ctx is empty
+    DIFF,
   };
   ObLobDataOutRowCtx()
     : is_full_(0), op_(0), offset_(0), check_sum_(0), seq_no_st_(0), seq_no_cnt_(0),
@@ -530,7 +531,8 @@ struct ObLobDataOutRowCtx
   uint32_t seq_no_cnt_;
   uint32_t del_seq_no_cnt_; // for sql update
   uint64_t modified_len_;
-  uint32_t first_meta_offset_;
+  uint32_t first_meta_offset_ : 24;
+  uint32_t chunk_size_ : 8;   // unit is kb
 };
 
 struct ObLobData

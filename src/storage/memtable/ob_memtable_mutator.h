@@ -103,6 +103,7 @@ enum class MutatorType
 {
   MUTATOR_ROW = 0,
   MUTATOR_TABLE_LOCK = 1,
+  MUTATOR_ROW_EXT_INFO = 2,
 };
 
 const char * get_mutator_type_str(MutatorType mutator_type);
