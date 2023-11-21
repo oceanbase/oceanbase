@@ -15172,12 +15172,14 @@ int ObPLResolver::add_external_cursor(ObPLBlockNS &ns,
 }
 
 int ObPLResolver::resolve_cursor(ObPLCompileUnitAST &func,
+                                 const ObPLBlockNS &ns,
                                  const ObString &database_name,
                                  const ObString &package_name,
                                  const ObString &cursor_name,
-                                 const ObPLCursor *&cursor)
+                                 int64_t &index)
 {
   int ret = OB_SUCCESS;
+  const ObPLCursor *cursor = NULL;
   // package name is not null and not equal to current ns, search global
   uint64_t tenant_id = resolve_ctx_.session_info_.get_effective_tenant_id();
   int64_t compatible_mode = lib::is_oracle_mode() ? COMPATIBLE_ORACLE_MODE
@@ -15223,23 +15225,34 @@ int ObPLResolver::resolve_cursor(ObPLCompileUnitAST &func,
                            db_name.length(), db_name.ptr(),
                            package_name.length(), package_name.ptr());
   }
-  OZ (package_manager.get_package_cursor(
-        resolve_ctx_, package_info->get_package_id(), cursor_name, cursor, idx));
-  if (OB_SUCC(ret) && OB_ISNULL(cursor)) {
-    ret = OB_ERR_SP_CURSOR_MISMATCH;
-    LOG_WARN("can not found cursor",
-             K(resolve_ctx_.session_info_.get_database_name()),
-             K(db_name), K(package_name), K(cursor_name));
-    LOG_USER_ERROR(OB_ERR_SP_CURSOR_MISMATCH, cursor_name.length(), cursor_name.ptr());
-  }
-  OZ (func.add_dependency_objects(cursor->get_value().get_ref_objects()));
-  if (OB_SUCC(ret)) {
-    ObSchemaObjVersion obj_version;
-    obj_version.object_id_ = package_info->get_package_id();
-    obj_version.object_type_ = DEPENDENCY_PACKAGE;
-    obj_version.version_ = package_info->get_schema_version();
-    OZ (func.add_dependency_object(obj_version));
-    OX (func.set_rps());
+  if (OB_FAIL(ret)) {
+  } else if (OB_NOT_NULL(package_info)
+            && database_id == resolve_ctx_.session_info_.get_database_id()
+            && package_info->get_package_name() == ns.get_package_name()) {
+    // search local again, package name may synonym.
+    OZ (resolve_cursor(cursor_name, ns, index, func, false, true), K(cursor_name));
+  } else {
+    OZ (package_manager.get_package_cursor(
+          resolve_ctx_, package_info->get_package_id(), cursor_name, cursor, idx));
+    if (OB_SUCC(ret) && OB_ISNULL(cursor)) {
+      ret = OB_ERR_SP_CURSOR_MISMATCH;
+      LOG_WARN("can not found cursor",
+               K(resolve_ctx_.session_info_.get_database_name()),
+               K(db_name), K(package_name), K(cursor_name));
+      LOG_USER_ERROR(OB_ERR_SP_CURSOR_MISMATCH, cursor_name.length(), cursor_name.ptr());
+    }
+    OZ (func.add_dependency_objects(cursor->get_value().get_ref_objects()));
+    if (OB_SUCC(ret)) {
+      ObSchemaObjVersion obj_version;
+      obj_version.object_id_ = package_info->get_package_id();
+      obj_version.object_type_ = DEPENDENCY_PACKAGE;
+      obj_version.version_ = package_info->get_schema_version();
+      OZ (func.add_dependency_object(obj_version));
+      OX (func.set_rps());
+    }
+    CK (OB_NOT_NULL(cursor));
+    CK (OB_NOT_NULL(current_block_));
+    OZ (add_external_cursor(current_block_->get_namespace(), NULL, *cursor, index, func));
   }
   return ret;
 }
@@ -15273,20 +15286,15 @@ int ObPLResolver::resolve_cursor(
                  K(db_name), K(package_name), K(cursor_name));
         LOG_USER_ERROR(OB_ERR_SP_CURSOR_MISMATCH, cursor_name.length(), cursor_name.ptr());
       } else {
-        OZ (resolve_cursor(cursor_name, ns, index, func), cursor_name);
+        OZ (resolve_cursor(cursor_name, ns, index, func), K(cursor_name));
       }
     } else if (db_name == resolve_ctx_.session_info_.get_database_name()
                && package_name == ns.get_package_name()) {
       // package_name is not null and equal to current ns, search local
-      OZ (resolve_cursor(cursor_name, ns, index, func, false, true), cursor_name);
+      OZ (resolve_cursor(cursor_name, ns, index, func, false, true), K(cursor_name));
     } else {
       // search global cursor
-      const ObPLCursor *cursor = NULL;
-      OZ (resolve_cursor(
-        func, db_name, package_name, cursor_name, cursor));
-      CK (OB_NOT_NULL(cursor));
-      CK (OB_NOT_NULL(current_block_));
-      OZ (add_external_cursor(current_block_->get_namespace(), NULL, *cursor, index, func));
+      OZ (resolve_cursor(func, ns, db_name, package_name, cursor_name, index));
     }
   } else if (T_OBJ_ACCESS_REF == parse_tree->type_) {
     CK (2 == parse_tree->num_child_);
@@ -15316,12 +15324,7 @@ int ObPLResolver::resolve_cursor(
         OZ (resolve_cursor(cursor_name, ns, index, func, false, true), cursor_name);
       } else {
         // search global cursor
-        const ObPLCursor *cursor = NULL;
-        OZ (resolve_cursor(
-          func, db_name, package_name, cursor_name, cursor));
-        CK (OB_NOT_NULL(cursor));
-        CK (OB_NOT_NULL(current_block_));
-        OZ (add_external_cursor(current_block_->get_namespace(), NULL, *cursor, index, func));
+        OZ (resolve_cursor(func, ns, db_name, package_name, cursor_name, index));
       }
     } else {
       const ObStmtNodeTree *cursor_name = parse_tree->children_[0];

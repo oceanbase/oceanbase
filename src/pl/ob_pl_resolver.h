@@ -789,10 +789,11 @@ private:
                         const ObPLBlockNS &ns,
                         const ObPLConditionValue **value);
   int resolve_cursor(ObPLCompileUnitAST &func,
+                     const ObPLBlockNS &ns,
                      const ObString &db_name,
                      const ObString &package_name,
                      const ObString &cursor_name,
-                     const ObPLCursor *&cursor);
+                     int64_t &index);
   int resolve_cursor(const ObStmtNodeTree *parse_tree,
                      const ObPLBlockNS &ns,
                      int64_t &index,
