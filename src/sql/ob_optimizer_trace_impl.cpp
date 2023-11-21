@@ -30,6 +30,7 @@
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "lib/file/file_directory_utils.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/optimizer/ob_dynamic_sampling.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -407,7 +408,7 @@ int ObOptimizerTraceImpl::append(const ObObj& value)
   int64_t pos = 0;
   if (value.is_invalid_type()) {
     ret = append(" ");
-  } else if (OB_FAIL(value.print_smart(buf, buf_len, pos))) {
+  } else if (OB_FAIL(value.print_sql_literal(buf, buf_len, pos))) {
     LOG_WARN("failed to print obj", K(ret));
   } else if (OB_FAIL(log_handle_.append(buf, pos))) {
     LOG_WARN("failed to append value", K(ret));
@@ -722,6 +723,87 @@ int ObOptimizerTraceImpl::append(const CandidatePlan &plan)
     append("parallel:", plan.plan_tree_->get_parallel(), ", parallel rule:", plan.plan_tree_->get_op_parallel_rule());
     append(", server count:", plan.plan_tree_->get_server_cnt());
     append(plan.plan_tree_->get_sharding());
+    decrease_section();
+  }
+  return ret;
+}
+
+int ObOptimizerTraceImpl::append(const ObDSResultItem &ds_result)
+{
+  int ret = OB_SUCCESS;
+  const ObOptDSStat *stat = ds_result.stat_handle_.stat_;
+  if (NULL == stat) {
+  } else if (OB_FAIL(append("table id:", ds_result.index_id_))) {
+    LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_DS_BASIC_STAT == ds_result.type_ &&
+             OB_FAIL(append(", tpye:basic"))) {
+    LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_DS_OUTPUT_STAT == ds_result.type_ &&
+             OB_FAIL(append(", tpye:output"))) {
+    LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_DS_FILTER_OUTPUT_STAT == ds_result.type_ &&
+             OB_FAIL(append(", tpye:filter and output"))) {
+    LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_FALSE_IT(increase_section())) {
+  } else if (OB_FAIL(new_line())) {
+    LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_FAIL(append("rows:",
+                            stat->get_rowcount()))) {
+    LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_FAIL(new_line())) {
+    LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_FAIL(append("macro_block_num:",
+                            stat->get_macro_block_num()))) {
+    LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_FAIL(new_line())) {
+    LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_FAIL(append("micro_block_num:",
+                            stat->get_micro_block_num()))) {
+    LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_FAIL(new_line())) {
+    LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_FAIL(append("sample_block_ratio:",
+                            stat->get_sample_block_ratio()))) {
+    LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_FAIL(new_line())) {
+    LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_FAIL(append("ds_level:",
+                            stat->get_ds_level()))) {
+    LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_FAIL(new_line())) {
+    LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_FAIL(append("dml_cnt:",
+                            stat->get_dml_cnt()))) {
+    LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_FAIL(new_line())) {
+    LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_FAIL(append("ds_degree:",
+                            stat->get_ds_degree()))) {
+    LOG_WARN("failed to append msg", K(ret));
+  } else {
+    for (int64_t j = 0; OB_SUCC(ret) && j < stat->get_ds_col_stats().count(); ++j) {
+      const ObOptDSColStat &col_stat = stat->get_ds_col_stats().at(j);
+      if (OB_FAIL(append("column id:", col_stat.column_id_, ":"))) {
+        LOG_WARN("failed to append msg", K(ret));
+      } else if (OB_FALSE_IT(increase_section())) {
+      } else if (OB_FAIL(new_line())) {
+        LOG_WARN("failed to append msg", K(ret));
+      } else if (OB_FAIL(append("NDV:", col_stat.num_distinct_))) {
+        LOG_WARN("failed to append msg", K(ret));
+      } else if (OB_FAIL(new_line())) {
+        LOG_WARN("failed to append msg", K(ret));
+      } else if (OB_FAIL(append("Null:", col_stat.num_null_))) {
+        LOG_WARN("failed to append msg", K(ret));
+      } else if (OB_FAIL(new_line())) {
+        LOG_WARN("failed to append msg", K(ret));
+      } else if (OB_FAIL(append("degree:", col_stat.degree_))) {
+        LOG_WARN("failed to append msg", K(ret));
+      } else if (OB_FAIL(new_line())) {
+        LOG_WARN("failed to append msg", K(ret));
+      } else {
+        decrease_section();
+      }
+    }
     decrease_section();
   }
   return ret;

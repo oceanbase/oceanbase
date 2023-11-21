@@ -793,7 +793,10 @@ int ObLogPlan::generate_join_orders()
   //如果有leading hint就在这里按leading hint指定的join order枚举,
   //如果根据leading hint没有枚举到有效join order，就忽略hint重新枚举。
   if (OB_SUCC(ret)) {
+    OPT_TRACE_TITLE("BASIC TABLE STATISTICS");
     OPT_TRACE_STATIS(stmt, get_basic_table_metas());
+    OPT_TRACE_TITLE("UPDATE TABLE STATISTICS");
+    OPT_TRACE_STATIS(stmt, get_update_table_metas());
     OPT_TRACE_TITLE("START GENERATE JOIN ORDER");
     if (OB_FAIL(init_bushy_tree_info(from_table_items))) {
       LOG_WARN("failed to init bushy tree infos", K(ret));

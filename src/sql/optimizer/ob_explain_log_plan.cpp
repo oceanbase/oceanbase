@@ -70,6 +70,7 @@ int ObExplainLogPlan::generate_normal_raw_plan()
       values_op = static_cast<ObLogValues*>(top);
       values_op->set_explain_plan(child_plan);
       ObSqlPlan sql_plan(get_allocator());
+      sql_plan.set_session_info(get_optimizer_context().get_session_info());
       ObExplainLogPlan *explain_plan = static_cast<ObExplainLogPlan*>(child_plan);
       ObSEArray<common::ObString, 64> plan_strs;
       const ObString& into_table = explain_stmt->get_into_table();
