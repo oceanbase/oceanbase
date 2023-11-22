@@ -51,6 +51,7 @@ public:
                        K_(is_ignore),
                        K_(is_batch_stmt),
                        K_(is_insert_up),
+                       K_(is_table_api),
                        K_(tz_info),
                        K_(table_param),
                        K_(encrypt_meta));
@@ -74,7 +75,8 @@ public:
       uint64_t is_ignore_                       : 1;
       uint64_t is_batch_stmt_                   : 1;
       uint64_t is_insert_up_                    : 1;
-      uint64_t reserved_                        : 61;
+      uint64_t is_table_api_                    : 1;
+      uint64_t reserved_                        : 59;
     };
   };
 protected:
