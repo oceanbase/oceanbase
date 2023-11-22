@@ -376,6 +376,7 @@ private:
       MacroBlkIdMap &mark_info,
       common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
       ObMacroBlockMarkerStatus &tmp_status);
+  int set_group_id(const uint64_t tenant_id);
   bool continue_mark();
   int do_sweep(MacroBlkIdMap &mark_info);
 
@@ -477,6 +478,9 @@ private:
   ObMacroBlockSeqGenerator blk_seq_generator_;
   int64_t alloc_num_;
   lib::ObMutex resize_file_lock_;
+
+  // for resource_isolation
+  uint64_t group_id_;
 
   bool is_inited_;
   bool is_started_;

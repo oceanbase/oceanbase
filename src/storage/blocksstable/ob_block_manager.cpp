@@ -23,6 +23,7 @@
 #include "share/ob_io_device_helper.h"
 #include "share/ob_unit_getter.h"
 #include "share/rc/ob_tenant_base.h"
+#include "share/resource_manager/ob_resource_manager.h"
 #include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/ob_macro_block_struct.h"
 #include "storage/blocksstable/ob_sstable_meta.h"
@@ -140,6 +141,7 @@ ObBlockManager::ObBlockManager()
     blk_seq_generator_(),
     alloc_num_(0),
     resize_file_lock_(),
+    group_id_(0),
     is_inited_(false),
     is_started_(false)
 {
@@ -273,6 +275,7 @@ void ObBlockManager::destroy()
   marker_status_.reset();
   blk_seq_generator_.reset();
   ATOMIC_STORE(&alloc_num_, 0);
+  group_id_ = 0;
   is_inited_ = false;
 }
 
@@ -1018,7 +1021,9 @@ int ObBlockManager::mark_macro_blocks(
       const uint64_t tenant_id = mtl_tenant_ids.at(i);
       MacroBlockId macro_id;
       MTL_SWITCH(tenant_id) {
-        if (OB_FAIL(mark_tenant_blocks(mark_info, macro_id_set, tmp_status))) {
+        if (OB_FAIL(set_group_id(tenant_id))) {
+          LOG_WARN("isolate CPU and IOPS failed", K(ret));
+        } else if (OB_FAIL(mark_tenant_blocks(mark_info, macro_id_set, tmp_status))) {
           LOG_WARN("fail to mark tenant blocks", K(ret), K(tenant_id));
         } else if (OB_FALSE_IT(MTL(ObSharedMacroBlockMgr*)->get_cur_shared_block(macro_id))) {
         } else if (OB_FAIL(mark_held_shared_block(macro_id, mark_info, macro_id_set, tmp_status))) {
@@ -1409,6 +1414,31 @@ int ObBlockManager::update_mark_info(const MacroBlockId &macro_id,
 
     if (OB_FAIL(mark_info.insert_or_update(macro_id, false))) {
       LOG_WARN("fail to insert or update mark info", K(ret), K(macro_id));
+    }
+  }
+  return ret;
+}
+
+int ObBlockManager::set_group_id(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(tenant_id <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
+  } else {
+    uint64_t consumer_group_id = 0;
+    if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_function_type(tenant_id, ObFunctionType::PRIO_OTHER_BACKGROUND, consumer_group_id))) {
+      //function level
+      LOG_WARN("fail to get group id by function", K(ret), K(tenant_id), K(consumer_group_id));
+    } else if (consumer_group_id != group_id_) {
+      // for CPU isolation, depend on cgroup
+      if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid() && OB_FAIL(GCTX.cgroup_ctrl_->add_self_to_group(tenant_id, consumer_group_id))) {
+        LOG_WARN("bind back thread to group failed", K(ret), K(GETTID()), K(tenant_id), K(consumer_group_id));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      group_id_ = consumer_group_id;
+      THIS_WORKER.set_group_id(static_cast<int32_t>(consumer_group_id));
     }
   }
   return ret;
