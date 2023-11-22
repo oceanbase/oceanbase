@@ -32,7 +32,12 @@ function do_install {
   if [[ "$sources" == "" ]]
   then
     [[ "$quiet" == "false" ]] && echo -e "\033[0;31mFAIL\033[0m\nNo such file: $1"
-    return 1
+    if [ "$quiet" == "false" ]
+    then
+      return 1
+    else
+      return 0
+    fi
   fi
   target=$2
   err_msg=$(libtool --mode=install cp $sources $target 2>&1 >/dev/null)
