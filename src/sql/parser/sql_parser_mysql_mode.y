@@ -9212,6 +9212,10 @@ NO_REWRITE opt_qb_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_MATERIALIZE, 2, $3, $4);
 }
+| SEMI_TO_INNER opt_qb_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SEMI_TO_INNER, 1, $2);
+}
 | SEMI_TO_INNER '(' qb_name_option relation_factor_in_use_join_hint_list ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_SEMI_TO_INNER, 2, $3, $4);
@@ -9219,6 +9223,10 @@ NO_REWRITE opt_qb_name
 | NO_SEMI_TO_INNER opt_qb_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_NO_SEMI_TO_INNER, 1, $2);
+}
+| COALESCE_SQ opt_qb_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COALESCE_SQ, 1, $2);
 }
 | COALESCE_SQ '(' qb_name_option multi_qb_name_list ')'
 {

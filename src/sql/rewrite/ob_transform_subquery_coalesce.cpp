@@ -2462,7 +2462,8 @@ int ObTransformSubqueryCoalesce::construct_transform_hint(ObDMLStmt &stmt, void 
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(hint->add_qb_name_list(qb_names))) {
         LOG_WARN("failed to add qb names", K(ret));
-      } else if (NULL != myhint && myhint->enable_coalesce_sq(qb_names.qb_names_)) {
+      } else if (NULL != myhint && (myhint->get_qb_name_list().count() == 0 ||
+                                    myhint->enable_coalesce_sq(qb_names.qb_names_))) {
         use_hint = true;
       }
     }
@@ -2527,7 +2528,8 @@ int ObTransformSubqueryCoalesce::check_hint_valid(const ObDMLStmt &stmt,
     LOG_WARN("unexpected null", K(ret), K(query_hint));
   } else {
     const ObCoalesceSqHint *myhint = static_cast<const ObCoalesceSqHint*>(get_hint(stmt.get_stmt_hint()));
-    force_trans = NULL != myhint && myhint->enable_coalesce_sq(qb_names);
+    force_trans = NULL != myhint && (myhint->get_qb_name_list().count() == 0 ||
+                                     myhint->enable_coalesce_sq(qb_names));
     force_no_trans = !force_trans && query_hint->has_outline_data();
   }
   return ret;
