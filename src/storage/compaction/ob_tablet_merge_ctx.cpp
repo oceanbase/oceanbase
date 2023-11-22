@@ -756,6 +756,9 @@ int ObTabletMergeCtx::init_get_medium_compaction_info(
     schema_ctx_.schema_version_ = medium_info.storage_schema_.schema_version_;
     data_version_ = medium_info.data_version_;
     is_tenant_major_merge_ = medium_info.is_major_compaction();
+    if (medium_info.medium_compat_version_ >= ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V4) {
+      is_schema_changed = medium_info.is_schema_changed_;
+    }
   }
   return ret;
 }
