@@ -116,7 +116,7 @@ public:
                    bool has_lob_header) :
     type_(type), cs_type_(cs_type), is_init_(false), is_lob_(false), is_outrow_(false),
     has_lob_header_(has_lob_header), state_(TEXTSTRING_ITER_INVALID), datum_str_(datum_str),
-    ctx_(nullptr), err_ret_(OB_SUCCESS)
+    ctx_(nullptr), err_ret_(OB_SUCCESS), tmp_alloc_(nullptr)
   {
     if (is_lob_storage(type)) {
       validate_has_lob_header(has_lob_header_);
@@ -126,7 +126,7 @@ public:
   ObTextStringIter(const ObObj &obj) :
     type_(obj.get_type()), cs_type_(obj.get_collation_type()), is_init_(false), is_lob_(false),
     is_outrow_(false), has_lob_header_(obj.has_lob_header()), state_(TEXTSTRING_ITER_INVALID),
-    datum_str_(obj.get_string()), ctx_(nullptr), err_ret_(OB_SUCCESS)
+    datum_str_(obj.get_string()), ctx_(nullptr), err_ret_(OB_SUCCESS), tmp_alloc_(nullptr)
   {
     if (is_lob_storage(obj.get_type())) {
       validate_has_lob_header(has_lob_header_);
@@ -139,14 +139,14 @@ public:
 
   int init(uint32_t buffer_len,
            const sql::ObBasicSessionInfo *session = NULL,
-           ObIAllocator *allocator = NULL,
-           bool clone_remote = false);
+           ObIAllocator *res_allocator = NULL,
+           ObIAllocator *tmp_allocator = NULL);
 
   ObTextStringIterState get_next_block(ObString &str);
 
   int get_current_block(ObString &str);
 
-  int get_full_data(ObString &data_str, ObIAllocator *allocator = nullptr);
+  int get_full_data(ObString &data_str);
 
   int get_inrow_or_outrow_prefix_data(ObString &data_str,
                                       uint32_t prefix_char_len = DEAFULT_LOB_PREFIX_CHAR_LEN);
@@ -207,6 +207,7 @@ private:
   const ObString datum_str_;
   ObLobTextIterCtx *ctx_;
   int err_ret_;
+  ObIAllocator *tmp_alloc_;
 };
 
 // wrapper class to handle templob output(including string types)
