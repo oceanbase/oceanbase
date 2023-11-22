@@ -36,12 +36,24 @@ int ObExprAnd::calc_result_typeN(ObExprResType &type,
                                  ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
-  UNUSED(types_stack);
-  UNUSED(param_num);
   int ret = OB_SUCCESS;
-  type.set_type(ObInt32Type);
-  type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
-  type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
+  if (OB_ISNULL(types_stack)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("null types", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < param_num; i++) {
+      if (types_stack[i].is_ext()) {
+        ret = OB_ERR_EXPRESSION_WRONG_TYPE;
+        LOG_WARN("PLS-00382: expression is of wrong type", K(ret), K(types_stack[i].get_type()));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    type.set_type(ObInt32Type);
+    type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
+    type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
+  }
   return ret;
 }
 
