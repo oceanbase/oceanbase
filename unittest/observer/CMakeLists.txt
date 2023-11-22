@@ -8,5 +8,6 @@ storage_unittest(test_ingress_bw_alloc_manager net/test_ingress_bw_alloc_manager
 ob_unittest(test_obkv_config tableapi/test_obkv_config.cpp)
 ob_unittest(test_uniq_task_queue)
 ob_unittest(test_table_connection tableapi/test_table_connection.cpp)
+ob_unittest(test_check_os_params test_check_os_params.cpp)
 
 add_subdirectory(rpc EXCLUDE_FROM_ALL)
