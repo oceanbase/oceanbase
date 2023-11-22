@@ -282,6 +282,7 @@ public:
       const share::SCN clog_checkpoint_scn = share::SCN::min_scn());
   int get_read_tables(
       const common::ObTabletID &tablet_id,
+      const int64_t timeout_us,
       const int64_t snapshot_version,
       ObTabletTableIterator &iter,
       const bool allow_no_ready_read = false);
@@ -373,11 +374,13 @@ public:
       const ObLockFlag lock_flag,
       const bool is_sfu);
   int get_multi_ranges_cost(
-      const ObTabletID &tablet_id,
+      const common::ObTabletID &tablet_id,
+      const int64_t timeout_us,
       const common::ObIArray<common::ObStoreRange> &ranges,
       int64_t &total_size);
   int split_multi_ranges(
-      const ObTabletID &tablet_id,
+      const common::ObTabletID &tablet_id,
+      const int64_t timeout_us,
       const ObIArray<ObStoreRange> &ranges,
       const int64_t expected_task_count,
       common::ObIAllocator &allocator,
@@ -385,11 +388,13 @@ public:
   int estimate_row_count(
       const ObTableScanParam &param,
       const ObTableScanRange &scan_range,
-      ObIArray<ObEstRowCountRecord> &est_records,
+      const int64_t timeout_us,
+      common::ObIArray<ObEstRowCountRecord> &est_records,
       int64_t &logical_row_count,
       int64_t &physical_row_count);
   int estimate_block_count_and_row_count(
       const common::ObTabletID &tablet_id,
+      const int64_t timeout_us,
       int64_t &macro_block_count,
       int64_t &micro_block_count,
       int64_t &sstable_row_count,

@@ -172,6 +172,7 @@ int ObUniqueIndexChecker::scan_table_with_column_checksum(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("error unexpected, ls must not be nullptr", K(ret));
       } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_read_tables(tablet_id_,
+                                                                               ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
                                                                                param.snapshot_version_,
                                                                                iterator, allow_not_ready))) {
         if (OB_REPLICA_NOT_READABLE == ret) {

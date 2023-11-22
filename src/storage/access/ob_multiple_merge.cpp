@@ -1245,6 +1245,7 @@ int ObMultipleMerge::refresh_tablet_iter()
       LOG_WARN("ls is null", K(ret), K(ls_handle));
     } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_read_tables(
         tablet_id,
+        ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
         get_table_param_->sample_info_.is_no_sample()
           ? access_ctx_->store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx()
           : INT64_MAX,
