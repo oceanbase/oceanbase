@@ -7210,6 +7210,7 @@ int ObSelectLogPlan::if_plan_need_late_materialization(ObLogicalOperator *top,
   ObLogSort *child_sort = NULL;
   ObLogTableScan *table_scan = NULL;
   ObSEArray<uint64_t, 4> used_column_ids;
+  bool contain_enumset_rowkey = false;
   if (OB_ISNULL(top) || OB_ISNULL(stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(top), K(get_stmt()), K(ret));
@@ -7221,6 +7222,10 @@ int ObSelectLogPlan::if_plan_need_late_materialization(ObLogicalOperator *top,
              NULL == table_scan->get_plan() ||
              NULL == child_sort) {
     //do nothing
+  } else if (OB_FAIL(contain_enum_set_rowkeys(*table_scan, contain_enumset_rowkey))) {
+    LOG_WARN("check whether table has enumset rowkey failed", K(ret));
+  } else if (contain_enumset_rowkey) {
+    //if there are enumset rowkeys, don't use late materialization since 'enumset_col = ?' cannot be used to extract query ranges
   } else if (OB_FAIL(if_index_back_plan_need_late_materialization(child_sort,
                                                                   table_scan,
                                                                   used_column_ids,
@@ -7622,6 +7627,27 @@ int ObSelectLogPlan::check_external_table_scan(ObSelectStmt *stmt, bool &has_ext
     }
     for (int i = 0; OB_SUCC(ret) && !has_external_table && i < child_stmts.count(); i++) {
       ret = SMART_CALL(check_external_table_scan(child_stmts.at(i), has_external_table));
+    }
+  }
+  return ret;
+}
+
+int ObSelectLogPlan::contain_enum_set_rowkeys(const ObLogTableScan &table_scan, bool &contain) {
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> table_keys;
+  contain = false;
+  if (OB_FAIL(get_rowkey_exprs(table_scan.get_table_id(),
+                              table_scan.get_ref_table_id(),
+                              table_keys))) {
+    LOG_WARN("failed to generate rowkey exprs", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !contain && i < table_keys.count(); ++i) {
+      if (OB_ISNULL(table_keys.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("row key is null", K(ret));
+      } else if (ob_is_enumset_tc(table_keys.at(i)->get_result_type().get_type())) {
+        contain = true;
+      }
     }
   }
   return ret;

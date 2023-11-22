@@ -883,6 +883,8 @@ private:
 
   int check_external_table_scan(ObSelectStmt *stmt, bool &has_external_table);
 
+  int contain_enum_set_rowkeys(const ObLogTableScan &table_scan, bool &contain);
+
   DISALLOW_COPY_AND_ASSIGN(ObSelectLogPlan);
 };
 }//end of namespace sql
