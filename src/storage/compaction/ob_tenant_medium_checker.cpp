@@ -268,8 +268,6 @@ int ObTenantMediumChecker::check_medium_finish_schedule()
       while (start_idx < end_idx) {
         if (OB_TMP_FAIL(check_medium_finish(tablet_ls_infos, start_idx, end_idx, batch_tablet_ls_infos, finish_tablet_ls_infos, stat))) {
           LOG_WARN("failed to check medium finish", K(tmp_ret));
-        } else {
-          LOG_INFO("success to batch check medium finish", K(start_idx), K(end_idx), K(info_count));
         }
         start_idx = end_idx;
         end_idx = min(start_idx + batch_size, info_count);
@@ -318,7 +316,7 @@ int ObTenantMediumChecker::check_medium_finish(
         }
       }
     }
-    ObStorageCompactionTimeGuard time_guard;
+    ObCompactionScheduleTimeGuard time_guard;
     stat.filter_cnt_ += (end_idx - start_idx - check_tablet_ls_infos.count());
     if (FAILEDx(ObMediumCompactionScheduleFunc::batch_check_medium_finish(
         ls_info_map_, finish_tablet_ls_infos, check_tablet_ls_infos, time_guard))) {
@@ -339,11 +337,11 @@ int ObTenantMediumChecker::check_medium_finish(
       if (OB_FAIL(MTL(ObTenantTabletScheduler*)->schedule_next_round_for_leader(check_tablet_ls_infos, finish_tablet_ls_infos))) {
         LOG_WARN("failed to leader schedule", K(ret));
       } else {
-        time_guard.click(ObStorageCompactionTimeGuard::SCHEDULER_NEXT_ROUND);
-        LOG_INFO("success to leader schedule", K(ret),
-          K(check_tablet_ls_infos.count()), K(finish_tablet_ls_infos.count()), K(time_guard));
+        time_guard.click(ObCompactionScheduleTimeGuard::SCHEDULER_NEXT_ROUND);
       }
     }
+    LOG_INFO("finish medium check", K(ret), K(start_idx), K(end_idx),
+          K(check_tablet_ls_infos.count()), K(finish_tablet_ls_infos.count()), K(time_guard));
   }
   return ret;
 }
