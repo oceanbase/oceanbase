@@ -474,6 +474,18 @@ bool ObSQLSessionInfo::is_spf_mlj_group_rescan_enabled() const
   return bret;
 }
 
+int ObSQLSessionInfo::is_enable_range_extraction_for_not_in(bool &enabled) const
+{
+  int ret = OB_SUCCESS;
+  enabled = true;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    enabled = tenant_config->_enable_range_extraction_for_not_in;
+  }
+  return ret;
+}
+
 void ObSQLSessionInfo::destroy(bool skip_sys_var)
 {
   if (is_inited_) {
