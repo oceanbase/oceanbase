@@ -501,6 +501,19 @@ int ObTenantInfoLoader::get_sync_scn(share::SCN &sync_scn)
   return ret;
 }
 
+int ObTenantInfoLoader::get_recovery_until_scn(share::SCN &recovery_until_scn)
+{
+  int ret = OB_SUCCESS;
+  share::ObAllTenantInfo tenant_info;
+  recovery_until_scn.set_invalid();
+  if (OB_FAIL(get_tenant_info(tenant_info))) {
+    LOG_WARN("failed to get tenant info", KR(ret));
+  } else {
+    recovery_until_scn = tenant_info.get_recovery_until_scn();
+  }
+  return ret;
+}
+
 int ObTenantInfoLoader::get_tenant_info(share::ObAllTenantInfo &tenant_info)
 {
   int ret = OB_SUCCESS;

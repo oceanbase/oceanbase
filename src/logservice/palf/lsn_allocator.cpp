@@ -105,35 +105,64 @@ int LSNAllocator::inc_update_last_log_info(const LSN &lsn, const int64_t log_id,
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (!lsn.is_valid() || !scn.is_valid() || OB_INVALID_LOG_ID == log_id) {
+  } else if (OB_UNLIKELY(!lsn.is_valid() || !scn.is_valid() || OB_INVALID_LOG_ID == log_id)) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid arguments", K(ret), K(lsn), K(scn), K(log_id));
   } else {
     LSNTsMeta last;
     LSNTsMeta next;
-    while (true) {
-      WLockGuard guard(lock_);
-      LOAD128(last, &lsn_ts_meta_);
-      const int64_t cur_log_id = log_id_base_ + last.log_id_delta_;
-      next.log_id_delta_ = 0;
-      next.scn_delta_ = 0;
-      next.lsn_val_ = lsn.val_;
-      next.is_need_cut_ = 1;
-      if (log_id < cur_log_id) {
-        // no need update
+    bool need_update_base = false;
+    do {
+      if (need_update_base) {
+        WLockGuard guard(lock_);
+        LOAD128(last, &lsn_ts_meta_);
+        const int64_t cur_log_id = log_id_base_ + last.log_id_delta_;
+        next.log_id_delta_ = 0;
+        next.scn_delta_ = 0;
+        next.lsn_val_ = lsn.val_;
+        next.is_need_cut_ = 1;
+
+        if (log_id < cur_log_id || lsn.val_ < last.lsn_val_) {
+          // no need update
+        } else if (CAS128(&lsn_ts_meta_, last, next)) {
+          log_id_base_ = log_id;
+          scn_base_ = scn.get_val_for_logservice();
+          PALF_LOG(TRACE, "inc_update_last_log_info success", K(lsn), K(scn), K(log_id));
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          PALF_LOG(ERROR, "CAS128 failed, unexpected", K(ret));
+        }
         break;
-      } else if (next.lsn_val_ < last.lsn_val_) {
-        // no need update
-        break;
-      } else if (CAS128(&lsn_ts_meta_, last, next)) {
-        log_id_base_ = log_id;
-        scn_base_ = scn.get_val_for_logservice();
-        PALF_LOG(TRACE, "inc_update_last_log_info success", K(lsn), K(scn), K(log_id));
-        break;
-      } else {
-        PAUSE();
       }
-    }
+      need_update_base = false;
+      RLockGuard guard(lock_);
+      while (OB_SUCC(ret)) {
+        LOAD128(last, &lsn_ts_meta_);
+        const int64_t cur_log_id = log_id_base_ + last.log_id_delta_;
+        if (log_id < cur_log_id || lsn.val_ < last.lsn_val_) {
+          // no need update
+          break;
+        } else if (log_id - log_id_base_ >= LOG_ID_DELTA_UPPER_BOUND) {
+          // log_id reaches the upper bound
+          need_update_base = true;
+          break;
+        } else if (scn.get_val_for_logservice() - scn_base_ >= LOG_TS_DELTA_UPPER_BOUND) {
+          // scn reaches the upper bound
+          need_update_base = true;
+          break;
+        } else {
+          next.log_id_delta_ = log_id - log_id_base_;
+          next.scn_delta_ = scn.get_val_for_logservice() - scn_base_;
+          next.lsn_val_ = lsn.val_;
+          next.is_need_cut_ = 1;
+          if (CAS128(&lsn_ts_meta_, last, next)) {
+            break;
+          } else {
+            PAUSE();
+          }
+        }
+      }
+    } while (need_update_base);
   }
   return ret;
 }
