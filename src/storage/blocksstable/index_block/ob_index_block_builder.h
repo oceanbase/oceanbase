@@ -297,6 +297,7 @@ protected:
   bool is_inited_;
   bool is_closed_;
   ObDataStoreDesc *index_store_desc_;
+  // full_store_col_desc in data_store_desc is only used to generate skip index
   const ObDataStoreDesc *data_store_desc_;
   ObIndexBlockRowBuilder row_builder_;
   ObDatumRowkey last_rowkey_;

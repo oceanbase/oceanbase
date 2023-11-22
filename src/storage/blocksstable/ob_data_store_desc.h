@@ -134,6 +134,7 @@ struct ObColDataStoreDesc
                K_(col_default_checksum_array), K_(agg_meta_array));
 
 private:
+  // simplified do not generate skip index, do not init agg_meta_array
   int generate_skip_index_meta(
       const share::schema::ObMergeSchema &schema,
       const storage::ObStorageColumnGroupSchema *cg_schema);
