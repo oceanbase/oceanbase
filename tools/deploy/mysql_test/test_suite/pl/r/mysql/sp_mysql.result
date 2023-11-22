@@ -1850,6 +1850,7 @@ test	bug2267_1	PROCEDURE	'admin'@'%'	0000-00-00 00:00:00	0000-00-00 00:00:00	DEF
 test	bug2267_2	PROCEDURE	'admin'@'%'	0000-00-00 00:00:00	0000-00-00 00:00:00	DEFINER	NULL	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 test	bug2267_3	PROCEDURE	'admin'@'%'	0000-00-00 00:00:00	0000-00-00 00:00:00	DEFINER	NULL	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 test	bug2267_4	PROCEDURE	'admin'@'%'	0000-00-00 00:00:00	0000-00-00 00:00:00	DEFINER	NULL	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+test	bug3843	PROCEDURE	'admin'@'%'	0000-00-00 00:00:00	0000-00-00 00:00:00	DEFINER	NULL	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 call bug2267_2()|
 Db	Name	Type	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
 test	bug2267_4	FUNCTION	'admin'@'%'	0000-00-00 00:00:00	0000-00-00 00:00:00	DEFINER	NULL	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
@@ -2092,16 +2093,12 @@ drop function bug3132|
 drop procedure if exists bug3843|
 create procedure bug3843()
 analyze table t1|
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'analyze table t1' at line 2
 call bug3843()|
-ERROR 42000: procedure test.bug3843 does not exist
 call bug3843()|
-ERROR 42000: procedure test.bug3843 does not exist
 select 1+2|
 1+2
 3
 drop procedure bug3843|
-ERROR 42000: PROCEDURE test.bug3843 does not exist
 create table t3 ( s1 char(10) )|
 insert into t3 values ('a'), ('b')|
 drop procedure if exists bug3368|

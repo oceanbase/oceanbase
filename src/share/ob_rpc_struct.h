@@ -10183,6 +10183,17 @@ private:
   int ret_;
 };
 
+struct ObCancelGatherStatsArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCancelGatherStatsArg() : tenant_id_(0), task_id_() {}
+  bool is_valid() const { return tenant_id_ > 0; }
+  uint64_t tenant_id_;
+  common::ObString task_id_;
+  TO_STRING_KV(K(tenant_id_), K(task_id_));
+};
+
 }//end namespace obrpc
 }//end namespace oceanbase
 #endif

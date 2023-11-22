@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_topk_hist_estimator.h"
+#include "share/stat/ob_dbms_stats_utils.h"
 #include <stdint.h>
 
 namespace oceanbase
@@ -183,7 +184,7 @@ int ObTopKFrequencyHistograms::merge_distribute_top_k_fre_items(const ObObj &obj
       bucket_num_ = N_ / window_size_;
       if (bucket_num_ > bucket_num_old) {
         if (OB_FAIL(shrink_topk_items())) {
-          LOG_WARN("failed to try shrinking topk fre item");
+          LOG_WARN("failed to try shrinking topk fre item", K(ret));
         }
       }
     }
@@ -232,7 +233,7 @@ int ObTopKFrequencyHistograms::add_top_k_frequency_item(uint64_t datum_hash, con
   return ret;
 }
 
-int ObTopKFrequencyHistograms::add_top_k_frequency_item(const ObObj &obj)
+int ObTopKFrequencyHistograms::add_top_k_frequency_item(const ObObj &obj, int64_t repeat_cnt)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(window_size_ <= 0 ||
@@ -251,7 +252,6 @@ int ObTopKFrequencyHistograms::add_top_k_frequency_item(const ObObj &obj)
       }
     }
     if (OB_SUCC(ret)) {
-      ++ N_;
       if (!by_pass_) {
         ObTopkBaseItem *item = NULL;
         uint64_t obj_hash = 0;
@@ -259,13 +259,18 @@ int ObTopKFrequencyHistograms::add_top_k_frequency_item(const ObObj &obj)
         if (OB_FAIL(obj.hash_murmur(obj_hash, seed))) {
           LOG_WARN("fail to do hash", K(ret));
         } else if (NULL != (item = get_entry(obj_hash))) {
-          item->fre_times_ ++;
-        } else if (OB_FAIL(add_entry(obj_hash, obj, 1L, bucket_num_ - 1))) {
+          item->fre_times_ += repeat_cnt;
+        } else if (OB_FAIL(add_entry(obj_hash, obj, repeat_cnt, bucket_num_ - 1))) {
           LOG_WARN("failed to add new entry", K(ret));
         }
-        if (OB_SUCC(ret) && N_ % window_size_ == 0) {
-          if (OB_FAIL(shrink_topk_items())) {
-            LOG_WARN("failed to try shrinking topk fre item");
+        if (OB_SUCC(ret)) {
+          int64_t bucket_num_old = bucket_num_;
+          N_ = N_ + repeat_cnt;
+          bucket_num_ = N_ > window_size_ ? N_ / window_size_ : bucket_num_;
+          if (bucket_num_ > bucket_num_old) {
+            if (OB_FAIL(shrink_topk_items())) {
+              LOG_WARN("failed to try shrinking topk fre item", K(ret));
+            }
           }
         }
       }
@@ -435,7 +440,9 @@ int ObTopKFrequencyHistograms::shrink_topk_items()
 bool ObTopKFrequencyHistograms::is_satisfied_by_pass() const
 {
   bool is_satisfied = false;
-  if (N_ % (window_size_ * 100) == 0) {
+  if (max_disuse_cnt_ > 0) {
+    is_satisfied = disuse_cnt_ >= max_disuse_cnt_;
+  } else if (N_ % (window_size_ * 100) == 0) {
     if (1.0 * disuse_cnt_ / N_ > get_current_min_topk_ratio()) {
       is_satisfied = true;
       LOG_INFO("topk hist is statisfied by pass", K(disuse_cnt_), K(N_), K(get_current_min_topk_ratio()));
@@ -621,5 +628,88 @@ OB_DEF_DESERIALIZE(ObTopKFrequencyHistograms)
   OB_UNIS_DECODE(disuse_cnt_);
   return ret;
 }
+
+ObTopkHistEstimator::ObTopkHistEstimator(ObExecContext &ctx, ObIAllocator &allocator)
+  : ObBasicStatsEstimator(ctx, allocator)
+{}
+
+int ObTopkHistEstimator::estimate(const ObOptStatGatherParam &param,
+                                  ObOptStat &opt_stat)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator("ObTopkHistEst", OB_MALLOC_NORMAL_BLOCK_SIZE, param.tenant_id_);
+  ObSqlString raw_sql;
+  int64_t duration_time = -1;
+  ObSEArray<ObOptStat, 1> tmp_opt_stats;
+  if (OB_FAIL(add_topk_hist_stat_items(param.column_params_, opt_stat))) {
+    LOG_WARN("failed to add topk hist stat items", K(ret));
+  } else if (get_item_size() <= 0) {
+    //no need topk histogram item.
+  } else if (OB_FAIL(fill_hints(allocator, param.tab_name_, param.gather_vectorize_))) {
+    LOG_WARN("failed to fill hints", K(ret));
+  } else if (OB_FAIL(add_from_table(param.db_name_, param.tab_name_))) {
+    LOG_WARN("failed to add from table", K(ret));
+  } else if (OB_UNLIKELY(param.partition_infos_.count() > 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(param));
+  } else if (!param.partition_infos_.empty() &&
+             OB_FAIL(fill_partition_info(allocator, param.partition_infos_.at(0).part_name_))) {
+    LOG_WARN("failed to add partition info", K(ret));
+  } else if (OB_FAIL(fill_parallel_info(allocator, param.degree_))) {
+    LOG_WARN("failed to add query sql parallel info", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::get_valid_duration_time(param.gather_start_time_,
+                                                               param.max_duration_time_,
+                                                               duration_time))) {
+    LOG_WARN("failed to get valid duration time", K(ret));
+  } else if (OB_FAIL(fill_query_timeout_info(allocator, duration_time))) {
+    LOG_WARN("failed to fill query timeout info", K(ret));
+  } else if (OB_FAIL(fill_sample_info(allocator, param.sample_info_))) {
+    LOG_WARN("failed to fill sample info", K(ret));
+  } else if (OB_FAIL(fill_specify_scn_info(allocator, param.sepcify_scn_))) {
+    LOG_WARN("failed to fill specify scn info", K(ret));
+  } else if (OB_FAIL(pack(raw_sql))) {
+    LOG_WARN("failed to pack raw sql", K(ret));
+  } else if (OB_FAIL(tmp_opt_stats.push_back(opt_stat))) {
+    LOG_WARN("failed to push back", K(ret));
+  } else if (OB_FAIL(do_estimate(param.tenant_id_, raw_sql.string(), false,
+                                 opt_stat, tmp_opt_stats))) {
+    LOG_WARN("failed to evaluate basic stats", K(ret));
+  } else {
+    LOG_TRACE("succeed to gather topk histogram", K(opt_stat.column_stats_));
+  }
+  return ret;
+}
+
+int ObTopkHistEstimator::add_topk_hist_stat_items(const ObIArray<ObColumnStatParam> &column_params,
+                                                  ObOptStat &opt_stat)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(opt_stat.table_stat_) ||
+      OB_UNLIKELY(opt_stat.column_stats_.count() != column_params.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(opt_stat), K(column_params));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_params.count(); ++i) {
+      const ObColumnStatParam *col_param = &column_params.at(i);
+      if (OB_ISNULL(opt_stat.column_stats_.at(i)) ||
+          OB_UNLIKELY(col_param->column_id_ != opt_stat.column_stats_.at(i)->get_column_id())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), KPC(opt_stat.column_stats_.at(i)), KPC(col_param));
+      } else if (opt_stat.column_stats_.at(i)->get_histogram().get_type() != ObHistType::TOP_FREQUENCY) {
+        //do nothing
+      } else {
+        int64_t max_disuse_cnt = std::ceil(opt_stat.column_stats_.at(i)->get_num_not_null() * 1.0 / col_param->bucket_num_);
+        if (OB_FAIL(add_stat_item(ObStatTopKHist(col_param,
+                                                 opt_stat.table_stat_,
+                                                 opt_stat.column_stats_.at(i),
+                                                 max_disuse_cnt)))) {
+          LOG_WARN("failed to add statistic item", K(ret));
+        } else {/*do noting*/}
+      }
+    }
+  }
+  return ret;
+}
+
 }
 }

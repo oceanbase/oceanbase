@@ -538,6 +538,10 @@ public:
     {
       session.set_cur_exec_ctx(&exec_ctx);
     }
+    ExecCtxSessionRegister(ObSQLSessionInfo &session, ObExecContext *exec_ctx)
+    {
+      session.set_cur_exec_ctx(exec_ctx);
+    }
   };
   friend class ExecCtxSessionRegister;
   enum SessionType

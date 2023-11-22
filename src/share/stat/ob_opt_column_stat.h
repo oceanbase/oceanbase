@@ -285,6 +285,10 @@ public:
   virtual int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue *&value) const override;
   int deep_copy(const ObOptColumnStat &src, char *buf, const int64_t size, int64_t &pos);
   int deep_copy(const ObOptColumnStat &value);
+  int deep_copy_llc_bitmap(const char *bitmap, const int64_t size);
+  int deep_copy_histogram(const ObHistogram &hist);
+
+  int assign(const ObOptColumnStat &other);
 
   int64_t get_last_analyzed() const { return last_analyzed_; }
   void set_last_analyzed(int64_t last) { last_analyzed_ = last; }
@@ -300,6 +304,8 @@ public:
   void set_llc_bitmap(char *bitmap, const int64_t size) {
     llc_bitmap_ = bitmap; llc_bitmap_size_ = size; }
 
+  void set_version(const int64_t version) { version_ = version; }
+  int64_t get_version() const { return version_; }
   bool is_valid() const
   {
     return common::OB_INVALID_ID != table_id_
@@ -310,6 +316,7 @@ public:
   }
 
   void add_col_len(int64_t len) { total_col_len_ += len; }
+  void set_total_col_len(int64_t len) { total_col_len_ = len; }
   int64_t get_total_col_len() const { return total_col_len_; }
 
   int merge_column_stat(const ObOptColumnStat &other);

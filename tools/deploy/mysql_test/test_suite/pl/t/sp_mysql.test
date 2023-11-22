@@ -2641,17 +2641,17 @@ drop function bug3132|
 #
 --disable_warnings ONCE
 drop procedure if exists bug3843|
---error 1064
+
 create procedure bug3843()
   analyze table t1|
 
 # Testing for packets out of order
---error 1305
+
 call bug3843()|
---error 1305
+
 call bug3843()|
 select 1+2|
---error 1305
+
 drop procedure bug3843|
 
 #

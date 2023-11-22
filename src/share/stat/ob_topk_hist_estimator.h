@@ -15,6 +15,7 @@
 
 #include "share/stat/ob_stat_define.h"
 #include "share/rc/ob_tenant_base.h"
+#include "share/stat/ob_basic_stats_estimator.h"
 
 namespace oceanbase
 {
@@ -91,7 +92,8 @@ class ObTopKFrequencyHistograms
       obj_buf2_("OptTopObjbuf2"),
       by_pass_(false),
       disuse_cnt_(0),
-      obj_memory_limit_(0)
+      obj_memory_limit_(0),
+      max_disuse_cnt_(0)
     {
       topk_buf_.set_tenant_id(MTL_ID());
       obj_buf1_.set_tenant_id(MTL_ID());
@@ -104,7 +106,7 @@ class ObTopKFrequencyHistograms
     int create_topk_fre_items(const ObObjMeta *obj_meta = NULL);
     int sort_topk_fre_items(ObIArray<ObTopkItem> &items);
     int shrink_topk_items();
-    int add_top_k_frequency_item(const ObObj &obj);
+    int add_top_k_frequency_item(const ObObj &obj, int64_t repeat_cnt);
     int add_top_k_frequency_item(uint64_t datum_hash, const ObDatum &datum);
     int merge_distribute_top_k_fre_items(const ObObj &obj);
     void set_window_size(int64_t window_size) { window_size_ = window_size; }
@@ -126,6 +128,8 @@ class ObTopKFrequencyHistograms
     double get_current_min_topk_ratio() const;
     void set_the_obj_memory_use_limit();
     int64_t get_max_reserved_item_size() const { return item_size_ * 1.5; }
+    void set_max_disuse_cnt(int64_t max_disuse_cnt) { max_disuse_cnt_ = max_disuse_cnt; }
+    //int64_t get_max_disuse_cnt()
     ObTopkItem *alloc_topk_item();
     ObTopkDatumItem *alloc_topk_datum_item();
     ObIAllocator &get_allocator()
@@ -179,6 +183,19 @@ class ObTopKFrequencyHistograms
     bool by_pass_;
     int64_t disuse_cnt_;
     int64_t obj_memory_limit_;
+    int64_t max_disuse_cnt_;
+};
+
+class ObTopkHistEstimator : public ObBasicStatsEstimator
+{
+public:
+  explicit ObTopkHistEstimator(ObExecContext &ctx, ObIAllocator &allocator);
+
+  int estimate(const ObOptStatGatherParam &param,
+               ObOptStat &opt_stat);
+private:
+  int add_topk_hist_stat_items(const ObIArray<ObColumnStatParam> &column_params,
+                               ObOptStat &opt_stat);
 };
 
 } // end of namespace common

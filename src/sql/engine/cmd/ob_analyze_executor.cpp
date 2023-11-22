@@ -44,8 +44,7 @@ namespace sql
 int ObAnalyzeExecutor::execute(ObExecContext &ctx, ObAnalyzeStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  ObTableStatParam param;
-  param.allocator_ = &ctx.get_allocator();
+  ObSEArray<ObTableStatParam,1> params;
   share::schema::ObSchemaGetterGuard *schema_guard = ctx.get_virtual_table_ctx().schema_guard_;
   ObSQLSessionInfo *session = ctx.get_my_session();
   bool in_restore = false;
@@ -59,48 +58,71 @@ int ObAnalyzeExecutor::execute(ObExecContext &ctx, ObAnalyzeStmt &stmt)
              GCTX.is_standby_cluster()) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "analyze table during restore or standby cluster");
-  } else if (OB_FAIL(stmt.fill_table_stat_param(ctx, param))) {
+  } else if (OB_FAIL(stmt.fill_table_stat_params(ctx, params))) {
     LOG_WARN("failed to fill table stat param", K(ret));
-  } else if (OB_FAIL(pl::ObDbmsStats::process_not_size_manual_column(ctx, param))) {
-    LOG_WARN("failed to process not size_manual column", K(ret));
-  } else if (!stmt.is_delete_histogram()) {
-    int64_t task_cnt = 1;
-    int64_t seq_id = 1;
-    int64_t start_time = ObTimeUtility::current_time();
-    ObOptStatTaskInfo task_info;
-    if (OB_FAIL(pl::ObDbmsStats::init_gather_task_info(ctx, ObOptStatGatherType::MANUAL_GATHER,
-                                                       start_time, task_cnt, task_info))) {
-      LOG_WARN("failed to init gather task info", K(ret));
-    } else {
-      ObOptStatGatherStat gather_stat(task_info);
-      ObOptStatGatherStatList::instance().push(gather_stat);
-      ObOptStatRunningMonitor running_monitor(ctx.get_allocator(), start_time, param.allocator_->used(), gather_stat);
-      if (OB_FAIL(running_monitor.add_table_info(param))) {
-        LOG_WARN("failed to add table info", K(ret));
-      } else if (OB_FAIL(ObDbmsStatsLockUnlock::check_stat_locked(ctx, param))) {
-        LOG_WARN("failed check stat locked", K(ret));
-      } else if (OB_FAIL(ObOptStatMonitorManager::flush_database_monitoring_info(ctx, false, true))) {
-        LOG_WARN("failed to do flush database monitoring info", K(ret));
-      } else if (OB_FAIL(ObDbmsStatsExecutor::gather_table_stats(ctx, param))) {
-        LOG_WARN("failed to gather table stats", K(ret));
-      } else if (OB_FAIL(pl::ObDbmsStats::update_stat_cache(session->get_rpc_tenant_id(), param))) {
-        LOG_WARN("failed to update stat cache", K(ret));
-      } else {
-        LOG_TRACE("succeed to gather table stats", K(param));
-      }
-      running_monitor.set_monitor_result(ret, ObTimeUtility::current_time(), param.allocator_->used());
-      ObOptStatGatherStatList::instance().remove(gather_stat);
-      task_info.task_end_time_ = ObTimeUtility::current_time();
-      task_info.ret_code_ = ret;
-      task_info.failed_count_ = ret == OB_SUCCESS ? 0 : 1;
-      ObOptStatManager::get_instance().update_opt_stat_task_stat(task_info);
-      ObOptStatManager::get_instance().update_opt_stat_gather_stat(gather_stat);
-    }
   } else {
-    if (OB_FAIL(ObDbmsStatsExecutor::delete_table_stats(ctx, param, true))) {
-      LOG_WARN("failed to drop table stats", K(ret));
-    } else {
-      LOG_TRACE("succeed to drop table stats", K(param));
+    for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
+      if (OB_FAIL(pl::ObDbmsStats::process_not_size_manual_column(ctx, params.at(i)))) {
+        LOG_WARN("failed to process not size_manual column", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (stmt.is_delete_histogram()) {
+        //must be only one param
+        if (OB_FAIL(ObDbmsStatsExecutor::delete_table_stats(ctx, params.at(0), true))) {
+          LOG_WARN("failed to drop table stats", K(ret));
+        } else {
+          LOG_TRACE("succeed to drop table stats", K(params));
+        }
+      } else {
+        int64_t task_cnt = params.count();
+        int64_t start_time = ObTimeUtility::current_time();
+        ObOptStatTaskInfo task_info;
+        if (OB_FAIL(pl::ObDbmsStats::init_gather_task_info(ctx, ObOptStatGatherType::MANUAL_GATHER,
+                                                          start_time, task_cnt, task_info))) {
+          LOG_WARN("failed to init gather task info", K(ret));
+        } else {
+          int64_t i = 0;
+          for (; OB_SUCC(ret) && i < params.count(); ++i) {
+            ObTableStatParam &param = params.at(i);
+            ObArenaAllocator tmp_alloc("OptStatGather", OB_MALLOC_NORMAL_BLOCK_SIZE, param.tenant_id_);
+            param.allocator_ = &tmp_alloc;//use the temp allocator to free memory after gather stats.
+            start_time = ObTimeUtility::current_time();
+            ObOptStatGatherStat gather_stat(task_info);
+            ObOptStatGatherStatList::instance().push(gather_stat);
+            ObOptStatRunningMonitor running_monitor(ctx.get_allocator(), start_time, param.allocator_->used(), gather_stat);
+            if (OB_FAIL(running_monitor.add_monitor_info(ObOptStatRunningPhase::GATHER_PREPARE))) {
+              LOG_WARN("failed to add add monitor info", K(ret));
+            } else if (OB_FAIL(running_monitor.add_table_info(param))) {
+              LOG_WARN("failed to add table info", K(ret));
+            } else if (OB_FAIL(ObDbmsStatsLockUnlock::check_stat_locked(ctx, param))) {
+              LOG_WARN("failed check stat locked", K(ret));
+            } else if (OB_FAIL(ObOptStatMonitorManager::flush_database_monitoring_info(ctx, false, true))) {
+              LOG_WARN("failed to do flush database monitoring info", K(ret));
+            } else if (OB_FAIL(ObDbmsStatsExecutor::gather_table_stats(ctx, param, running_monitor))) {
+              LOG_WARN("failed to gather table stats", K(ret));
+            } else if (OB_FAIL(pl::ObDbmsStats::update_stat_cache(session->get_rpc_tenant_id(), param))) {
+              LOG_WARN("failed to update stat cache", K(ret));
+            } else {
+              LOG_TRACE("succeed to gather table stats", K(param));
+            }
+            running_monitor.set_monitor_result(ret, ObTimeUtility::current_time(), param.allocator_->used());
+            sql::ObSQLSessionInfo *origin_session = THIS_WORKER.get_session();
+            THIS_WORKER.set_session(NULL);
+            ObOptStatManager::get_instance().update_opt_stat_gather_stat(gather_stat);
+            THIS_WORKER.set_session(origin_session);
+            ObOptStatGatherStatList::instance().remove(gather_stat);
+            task_info.completed_table_count_ ++;
+          }
+          task_info.task_end_time_ = ObTimeUtility::current_time();
+          task_info.ret_code_ = ret;
+          task_info.failed_count_ = ret == OB_SUCCESS ? 0 : params.count() - i + 1;
+          sql::ObSQLSessionInfo *origin_session = THIS_WORKER.get_session();
+          THIS_WORKER.set_session(NULL);
+          ObOptStatManager::get_instance().update_opt_stat_task_stat(task_info);
+          THIS_WORKER.set_session(origin_session);
+        }
+      }
     }
   }
   return ret;
