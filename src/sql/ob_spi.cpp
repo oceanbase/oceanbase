@@ -6528,7 +6528,8 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
             spi_result.get_result_set()->set_stmt_type(static_cast<stmt::StmtType>(type));
             OZ (GCTX.sql_engine_->handle_pl_execute(
                     ps_sql, *session, exec_params, *spi_result.get_result_set(), spi_result.get_sql_ctx(),
-                    true /* is_prepare_protocol */, false /* is_dynamic_sql */), exec_params);
+                    true /* is_prepare_protocol */, false /* is_dynamic_sql */),
+                K(ps_sql), K(exec_params));
             OZ (adjust_out_params(*spi_result.get_result_set(), out_params));
           }
         }
@@ -7172,6 +7173,18 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
           CK (OB_NOT_NULL(table = reinterpret_cast<ObPLCollection*>(result_address.get_ext())));
           CK (OB_NOT_NULL(table));
           OZ (bulk_tables.push_back(table));
+#ifdef OB_BUILD_ORACLE_PL
+          if (OB_SUCC(ret) && table->is_varray()) {
+            ObPLVArray *varray = static_cast<ObPLVArray*>(table);
+            bool append_mode = (NULL == implicit_cursor ? false : implicit_cursor->get_in_forall());
+            int64_t new_count = append_mode ? (table->get_count() + row_count) : row_count;
+            CK (OB_NOT_NULL(varray));
+            if (OB_SUCC(ret) && new_count > varray->get_capacity()) {
+              ret = OB_ERR_SUBSCRIPT_OUTSIDE_LIMIT;
+              LOG_WARN("Subscript outside of limit", K(ret), K(append_mode), K(new_count), KPC(varray));
+            }
+          }
+#endif
         }
         if (OB_SUCC(ret)) {
           for (int64_t i = 0; OB_SUCC(ret) && i < bulk_tables.count(); ++i) {

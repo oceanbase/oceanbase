@@ -3247,16 +3247,68 @@ int ObRawExprPrinter::print_translate(ObSysFunRawExpr *expr)
 int ObRawExprPrinter::print(ObUDFRawExpr *expr)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(buf_) || OB_ISNULL(pos_) || OB_ISNULL(expr)) {
+  if (OB_ISNULL(buf_) || OB_ISNULL(pos_) || OB_ISNULL(expr) || OB_ISNULL(schema_guard_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt_ is NULL of buf_ is NULL or pos_ is NULL or expr is NULL", K(ret));
   } else {
-    if (!print_params_.for_dblink_ &&
-        !expr->get_database_name().empty() &&
-         expr->get_database_name().case_compare("oceanbase") != 0) {
-      PRINT_IDENT_WITH_QUOT(expr->get_database_name());
-      DATA_PRINTF(".");
+    if (!print_params_.for_dblink_) {
+      if (!expr->get_database_name().empty()) {
+        if (expr->get_database_name().case_compare("oceanbase") != 0) {
+          PRINT_IDENT_WITH_QUOT(expr->get_database_name());
+          DATA_PRINTF(".");
+        }
+      } else if (OB_ISNULL(schema_guard_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema_guard for print raw expr is null", K(ret));
+      } else {
+
+#define PRINT_IMPLICIT_DATABASE_NAME(OBJECT, object_id, get_object_info_func, get_name_func) \
+do { \
+  const uint64_t tenant_id = pl::get_tenant_id_by_object_id(object_id); \
+  const share::schema::ObDatabaseSchema *database_schema = NULL; \
+  const share::schema::OBJECT *object_info = NULL; \
+  ObSchemaChecker checker; \
+  bool exist = false; \
+  bool is_private_synonym = false; \
+  if (OB_SYS_TENANT_ID == tenant_id) { \
+  } else if (OB_FAIL(schema_guard_->get_object_info_func(tenant_id, object_id, object_info))) { \
+    LOG_WARN("failed to get udt info", K(ret), KPC(expr), K(tenant_id)); \
+  } else if (OB_ISNULL(object_info)) { \
+    ret = OB_ERR_UNEXPECTED; \
+    LOG_WARN("object info is null", K(ret), KPC(expr), K(tenant_id)); \
+  } else if (OB_FAIL(schema_guard_->get_database_schema(tenant_id, object_info->get_database_id(), database_schema))) { \
+    LOG_WARN("failed to get database schema", K(ret), KPC(expr), K(tenant_id)); \
+  } else if (OB_ISNULL(database_schema)) { \
+    ret = OB_ERR_UNEXPECTED; \
+    LOG_WARN("database schema info is null", K(ret), K(database_schema), KPC(expr), K(tenant_id)); \
+  } else if (OB_FAIL(checker.init(*schema_guard_, schema_guard_->get_session_id()))) { \
+    LOG_WARN("failed to init schema checker", K(ret)); \
+  } else if (OB_FAIL(checker.check_exist_same_name_object_with_synonym(tenant_id, \
+                                                                       database_schema->get_database_id(), \
+                                                                       database_schema->get_database_name_str(), \
+                                                                       exist, \
+                                                                       is_private_synonym))) { \
+    LOG_WARN("failed to check exist same name object with database name", K(ret), KPC(database_schema)); \
+  } else if (!exist) { \
+    PRINT_IDENT_WITH_QUOT(database_schema->get_database_name_str()); \
+    DATA_PRINTF("."); \
+  } \
+} while (0)
+
+        if (expr->get_pkg_id() != OB_INVALID_ID) { // package or udt udf
+          if (expr->get_is_udt_udf()) {
+            PRINT_IMPLICIT_DATABASE_NAME(ObUDTTypeInfo, expr->get_pkg_id(), get_udt_info, get_type_name);
+          } else if (!expr->is_pkg_body_udf()) {
+            PRINT_IMPLICIT_DATABASE_NAME(ObPackageInfo, expr->get_pkg_id(), get_package_info, get_package_name);
+          }
+        } else if (expr->get_udf_id() != OB_INVALID_ID && 0 == expr->get_subprogram_path().count()) { // standalone udf
+          PRINT_IMPLICIT_DATABASE_NAME(ObRoutineInfo, expr->get_udf_id(), get_routine_info, get_routine_name);
+        }
+      }
+
+#undef PRINT_IMPLICIT_DATABASE_NAME
     }
+
     if (!expr->get_package_name().empty() &&
         !expr->get_is_udt_cons()) {
       PRINT_IDENT_WITH_QUOT(expr->get_package_name());

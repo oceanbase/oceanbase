@@ -1579,7 +1579,7 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
         }
       }
       //then database name
-      if (OB_SUCC(ret) && OB_INVALID_INDEX == var_idx && OB_INVALID_INDEX == parent_id) {
+      if (OB_SUCC(ret) && is_mysql_mode() && OB_INVALID_INDEX == var_idx && OB_INVALID_INDEX == parent_id) {
         uint64_t tenant_id = session_info.get_effective_tenant_id();
         uint64_t db_id = OB_INVALID_ID;
         if (OB_FAIL(schema_guard.get_database_id(tenant_id, name, db_id))) {
@@ -1724,6 +1724,20 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
                                                                 *get_dependency_table()));
             }
           }
+        }
+      }
+      //then database name
+      if (OB_SUCC(ret) && is_oracle_mode() && OB_INVALID_INDEX == var_idx && OB_INVALID_INDEX == parent_id) {
+        uint64_t tenant_id = session_info.get_effective_tenant_id();
+        uint64_t db_id = OB_INVALID_ID;
+        if (OB_FAIL(schema_guard.get_database_id(tenant_id, name, db_id))) {
+          LOG_WARN("get database id failed", K(ret));
+        } else if (OB_INVALID_ID == db_id) {
+          type = ObPLExternalNS::INVALID_VAR;
+        } else {
+          type = DB_NS;
+          parent_id = OB_INVALID_INDEX;
+          var_idx = db_id;
         }
       }
       // 尝试看是不是系统变量的特殊写法，如 set SQL_MODE='ONLY_FULL_GROUP_BY';
@@ -2040,21 +2054,7 @@ int ObPLExternalNS::resolve_external_type_by_name(const ObString &db_name, const
         ObSchemaChecker schema_checker;
         ObSynonymChecker synonym_checker;
         OZ (schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_sessid()));
-        OZ (ObResolverUtils::resolve_synonym_object_recursively(
-          schema_checker, synonym_checker,
-          tenant_id, db_id, type_name, object_db_id, object_name, exist));
-        if (OB_FAIL(ret)) {
-        } else if (exist) {
-          if (OB_FAIL(resolve_ctx_.schema_guard_.get_udt_info(tenant_id, object_db_id,
-                                                              OB_INVALID_ID, object_name,
-                                                              udt_info))) {
-            LOG_WARN("get udt info failed", K(ret));
-          }
-        } else if (OB_FAIL(resolve_ctx_.schema_guard_.get_udt_info(tenant_id, db_id,
-                                                              OB_INVALID_ID, type_name,
-                                                              udt_info))) {
-          LOG_WARN("get udt info failed", K(ret));
-        }
+        OZ (resolve_ctx_.schema_guard_.get_udt_info(tenant_id, db_id, OB_INVALID_ID, type_name, udt_info));
       }
       if (OB_SUCC(ret) && (is_oracle_sys_user || OB_ISNULL(udt_info))) {
         // try system udt

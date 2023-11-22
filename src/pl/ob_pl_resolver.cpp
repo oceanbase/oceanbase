@@ -11924,16 +11924,35 @@ int ObPLResolver::resolve_udf_info(
 #endif
 
   // adjust routine database name, will set to ObUDFRawExpr later.
-  if (OB_SUCC(ret) && db_name.empty() && OB_NOT_NULL(routine_info)) {
-    if (routine_info->get_database_id() != OB_INVALID_ID &&
-        routine_info->get_database_id() != resolve_ctx_.session_info_.get_database_id()) {
-      const ObDatabaseSchema *database_schema = NULL;
-      OZ (resolve_ctx_.schema_guard_.get_database_schema(
-        resolve_ctx_.session_info_.get_effective_tenant_id(), routine_info->get_database_id(), database_schema));
-      CK (OB_NOT_NULL(database_schema));
-      OX (db_name = database_schema->get_database_name_str());
+  if (OB_SUCC(ret)
+      && db_name.empty()
+      && OB_NOT_NULL(routine_info)
+      && routine_info->get_database_id() != OB_INVALID_ID) {
+    if (OB_SYS_DATABASE_ID == routine_info->get_database_id()) {
+      db_name = OB_SYS_DATABASE_NAME;
     } else {
-      OX (db_name = resolve_ctx_.session_info_.get_database_name());
+      // may be synonym, we should process public synonym in here, do not add db prefix for public synonym.
+      ObString &synonym_name = udf_info.udf_package_.empty() ? udf_info.udf_name_ : udf_info.udf_package_;
+      ObString object_name;
+      uint64_t object_database_id = OB_INVALID_ID;
+      uint64_t synonym_id = OB_INVALID_ID;
+      bool exist = false;
+      bool is_public = false;
+      OZ (schema_checker.get_synonym_schema(resolve_ctx_.session_info_.get_effective_tenant_id(),
+                                            resolve_ctx_.session_info_.get_database_id(),
+                                            synonym_name,
+                                            object_database_id, synonym_id, object_name, exist,
+                                            true, // need search public synonym
+                                            &is_public));
+      if (OB_FAIL(ret) || !exist) {
+        ret = OB_SUCCESS; // some case may not be synonym.
+      } else if (!is_public) {
+        if (routine_info->get_database_id() != resolve_ctx_.session_info_.get_database_id()) {
+          db_name = resolve_ctx_.session_info_.get_database_name();
+        }
+      } else {
+        db_name = OB_SYS_DATABASE_NAME;
+      }
     }
   }
 
@@ -13361,7 +13380,7 @@ int ObPLResolver::resolve_name(ObQualifiedName &q_name,
                                        access_idxs,
                                        func,
                                        access_ident.is_pl_udf()))) {
-        LOG_IN_CHECK_MODE("match var idents failed", K(ret), K(i), K(q_name.access_idents_));
+        LOG_IN_CHECK_MODE("failed to resolve access ident", K(ret), K(i), K(q_name.access_idents_));
       }
     }
   }
@@ -14253,12 +14272,12 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
         int64_t var_idx = access_ident.access_index_;
         const ObPLVar *local_var = NULL;
         CK (OB_NOT_NULL(sym_tbl));
-        OV (var_idx >= 0 && var_idx < sym_tbl->get_count(),
-            OB_ERR_UNEXPECTED, K(var_idx), K(sym_tbl->get_count()));
-        CK (OB_NOT_NULL(local_var = sym_tbl->get_symbol(var_idx)));
-        OX (pl_data_type = local_var->get_type());
-        OX (type = ObPLExternalNS::LOCAL_VAR);
-        OX (var_index = var_idx);
+        if (OB_SUCC(ret) && var_idx >= 0 && var_idx < sym_tbl->get_count()) {
+          CK (OB_NOT_NULL(local_var = sym_tbl->get_symbol(var_idx)));
+          OX (pl_data_type = local_var->get_type());
+          OX (type = ObPLExternalNS::LOCAL_VAR);
+          OX (var_index = var_idx);
+        }
       } else {
         OZ (ns.resolve_symbol(access_ident.access_name_,
                               type,
@@ -15379,12 +15398,14 @@ int ObPLResolver::add_external_cursor(ObPLBlockNS &ns,
 }
 
 int ObPLResolver::resolve_cursor(ObPLCompileUnitAST &func,
+                                 const ObPLBlockNS &ns,
                                  const ObString &database_name,
                                  const ObString &package_name,
                                  const ObString &cursor_name,
-                                 const ObPLCursor *&cursor)
+                                 int64_t &index)
 {
   int ret = OB_SUCCESS;
+  const ObPLCursor *cursor = NULL;
   // package name is not null and not equal to current ns, search global
   uint64_t tenant_id = resolve_ctx_.session_info_.get_effective_tenant_id();
   int64_t compatible_mode = lib::is_oracle_mode() ? COMPATIBLE_ORACLE_MODE
@@ -15430,23 +15451,34 @@ int ObPLResolver::resolve_cursor(ObPLCompileUnitAST &func,
                            db_name.length(), db_name.ptr(),
                            package_name.length(), package_name.ptr());
   }
-  OZ (package_manager.get_package_cursor(
-        resolve_ctx_, package_info->get_package_id(), cursor_name, cursor, idx));
-  if (OB_SUCC(ret) && OB_ISNULL(cursor)) {
-    ret = OB_ERR_SP_CURSOR_MISMATCH;
-    LOG_WARN("can not found cursor",
-             K(resolve_ctx_.session_info_.get_database_name()),
-             K(db_name), K(package_name), K(cursor_name));
-    LOG_USER_ERROR(OB_ERR_SP_CURSOR_MISMATCH, cursor_name.length(), cursor_name.ptr());
-  }
-  OZ (func.add_dependency_objects(cursor->get_value().get_ref_objects()));
-  if (OB_SUCC(ret)) {
-    ObSchemaObjVersion obj_version;
-    obj_version.object_id_ = package_info->get_package_id();
-    obj_version.object_type_ = DEPENDENCY_PACKAGE;
-    obj_version.version_ = package_info->get_schema_version();
-    OZ (func.add_dependency_object(obj_version));
-    OX (func.set_rps());
+  if (OB_FAIL(ret)) {
+  } else if (OB_NOT_NULL(package_info)
+            && database_id == resolve_ctx_.session_info_.get_database_id()
+            && package_info->get_package_name() == ns.get_package_name()) {
+    // search local again, package name may synonym.
+    OZ (resolve_cursor(cursor_name, ns, index, func, false, true), K(cursor_name));
+  } else {
+    OZ (package_manager.get_package_cursor(
+          resolve_ctx_, package_info->get_package_id(), cursor_name, cursor, idx));
+    if (OB_SUCC(ret) && OB_ISNULL(cursor)) {
+      ret = OB_ERR_SP_CURSOR_MISMATCH;
+      LOG_WARN("can not found cursor",
+               K(resolve_ctx_.session_info_.get_database_name()),
+               K(db_name), K(package_name), K(cursor_name));
+      LOG_USER_ERROR(OB_ERR_SP_CURSOR_MISMATCH, cursor_name.length(), cursor_name.ptr());
+    }
+    OZ (func.add_dependency_objects(cursor->get_value().get_ref_objects()));
+    if (OB_SUCC(ret)) {
+      ObSchemaObjVersion obj_version;
+      obj_version.object_id_ = package_info->get_package_id();
+      obj_version.object_type_ = DEPENDENCY_PACKAGE;
+      obj_version.version_ = package_info->get_schema_version();
+      OZ (func.add_dependency_object(obj_version));
+      OX (func.set_rps());
+    }
+    CK (OB_NOT_NULL(cursor));
+    CK (OB_NOT_NULL(current_block_));
+    OZ (add_external_cursor(current_block_->get_namespace(), NULL, *cursor, index, func));
   }
   return ret;
 }
@@ -15480,20 +15512,15 @@ int ObPLResolver::resolve_cursor(
                  K(db_name), K(package_name), K(cursor_name));
         LOG_USER_ERROR(OB_ERR_SP_CURSOR_MISMATCH, cursor_name.length(), cursor_name.ptr());
       } else {
-        OZ (resolve_cursor(cursor_name, ns, index, func), cursor_name);
+        OZ (resolve_cursor(cursor_name, ns, index, func), K(cursor_name));
       }
     } else if (db_name == resolve_ctx_.session_info_.get_database_name()
                && package_name == ns.get_package_name()) {
       // package_name is not null and equal to current ns, search local
-      OZ (resolve_cursor(cursor_name, ns, index, func, false, true), cursor_name);
+      OZ (resolve_cursor(cursor_name, ns, index, func, false, true), K(cursor_name));
     } else {
       // search global cursor
-      const ObPLCursor *cursor = NULL;
-      OZ (resolve_cursor(
-        func, db_name, package_name, cursor_name, cursor));
-      CK (OB_NOT_NULL(cursor));
-      CK (OB_NOT_NULL(current_block_));
-      OZ (add_external_cursor(current_block_->get_namespace(), NULL, *cursor, index, func));
+      OZ (resolve_cursor(func, ns, db_name, package_name, cursor_name, index));
     }
   } else if (T_OBJ_ACCESS_REF == parse_tree->type_) {
     CK (2 == parse_tree->num_child_);
@@ -15523,12 +15550,7 @@ int ObPLResolver::resolve_cursor(
         OZ (resolve_cursor(cursor_name, ns, index, func, false, true), cursor_name);
       } else {
         // search global cursor
-        const ObPLCursor *cursor = NULL;
-        OZ (resolve_cursor(
-          func, db_name, package_name, cursor_name, cursor));
-        CK (OB_NOT_NULL(cursor));
-        CK (OB_NOT_NULL(current_block_));
-        OZ (add_external_cursor(current_block_->get_namespace(), NULL, *cursor, index, func));
+        OZ (resolve_cursor(func, ns, db_name, package_name, cursor_name, index));
       }
     } else {
       const ObStmtNodeTree *cursor_name = parse_tree->children_[0];
@@ -17542,7 +17564,9 @@ int ObPLResolver::get_udt_names(
     CK (OB_INVALID_ID != db_id);
     OZ (schema_guard.get_database_schema(tenant_id, db_id, db_schema));
     CK (OB_NOT_NULL(db_schema));
-    OX (database_name = db_schema->get_database_name_str());
+    if (OB_SUCC(ret) && resolve_ctx_.session_info_.get_database_name().case_compare(db_schema->get_database_name_str()) != 0) {
+      OX (database_name = db_schema->get_database_name_str());
+    }
     OX (udt_name = udt_info->get_type_name());
   }
   return ret;

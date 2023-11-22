@@ -34,7 +34,7 @@
   } while(0);
 #endif
 
-#ifndef NDEBUG
+#ifdef NDEBUG
 #ifndef SET_LOG_CHECK_MODE
 #define SET_LOG_CHECK_MODE()                        \
   bool set_check_mode = false;                      \
@@ -795,10 +795,11 @@ private:
                         const ObPLBlockNS &ns,
                         const ObPLConditionValue **value);
   int resolve_cursor(ObPLCompileUnitAST &func,
+                     const ObPLBlockNS &ns,
                      const ObString &db_name,
                      const ObString &package_name,
                      const ObString &cursor_name,
-                     const ObPLCursor *&cursor);
+                     int64_t &index);
   int resolve_cursor(const ObStmtNodeTree *parse_tree,
                      const ObPLBlockNS &ns,
                      int64_t &index,
@@ -1086,10 +1087,10 @@ private:
                                    ObPLFunctionAST &func,
                                    int64_t &idx);
   int check_update_column(const ObPLBlockNS &ns, const ObIArray<ObObjAccessIdx>& access_idxs);
-  static int get_udt_names(ObSchemaGetterGuard &schema_guard,
-                           const uint64_t udt_id,
-                           ObString &database_name,
-                           ObString &udt_name);
+  int get_udt_names(ObSchemaGetterGuard &schema_guard,
+                    const uint64_t udt_id,
+                    ObString &database_name,
+                    ObString &udt_name);
   static int get_udt_database_name(ObSchemaGetterGuard &schema_guard,
                                    const uint64_t udt_id, ObString &db_name);
   static bool check_with_rowid(const ObString &routine_name,
