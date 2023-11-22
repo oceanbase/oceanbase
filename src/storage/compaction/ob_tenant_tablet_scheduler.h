@@ -142,6 +142,7 @@ public:
     FLAG_MAX
   };
   static const char *ProhibitFlagStr[];
+  static const int64_t TABLET_ID_MAP_BUCKET_NUM = OB_MAX_LS_NUM_PER_TENANT_PER_SERVER * 1024;
   static bool is_valid_flag(const ProhibitFlag flag)
   {
     return flag >= TRANSFER && flag < FLAG_MAX;
@@ -150,14 +151,19 @@ public:
   ~ObProhibitScheduleMediumMap() { destroy(); }
   int init();
   void destroy();
-  int clear_flag(const share::ObLSID &ls_id, const ProhibitFlag &input_flag);
-  int add_flag(const share::ObLSID &ls_id, const ProhibitFlag &input_flag);
+  int clear_flag(const ObTabletID &tablet_id, const ProhibitFlag &input_flag);
+  int add_flag(const ObTabletID &tablet_id, const ProhibitFlag &input_flag);
+  int batch_clear_flags(const ObIArray<ObTabletID> &tablet_ids, const ProhibitFlag &input_flag);
+  int batch_add_flags(const ObIArray<ObTabletID> &tablet_ids, const ProhibitFlag &input_flag);
   int64_t to_string(char *buf, const int64_t buf_len) const;
   int64_t get_transfer_flag_cnt() const;
 private:
+  int inner_batch_check_tablets_not_prohibited_(const ObIArray<ObTabletID> &tablet_ids); // hold lock outside !!
+  int inner_batch_add_tablets_prohibit_flags_(const ObIArray<ObTabletID> &tablet_ids, const ProhibitFlag &input_flag); // hold lock outside !!
+  int inner_clear_flag_(const ObTabletID &tablet_id, const ProhibitFlag &input_flag); // hold lock outside !!
   int64_t transfer_flag_cnt_;
   mutable obsys::ObRWLock lock_;
-  common::hash::ObHashMap<share::ObLSID, ProhibitFlag> ls_id_map_;
+  common::hash::ObHashMap<ObTabletID, ProhibitFlag> tablet_id_map_; // tablet is used for transfer of medium compaction
 };
 
 class ObTenantTabletScheduler
@@ -228,12 +234,13 @@ public:
   OB_INLINE bool could_major_merge_start() const { return major_merge_status_; }
   int check_tablet_could_schedule_by_status(const ObTablet &tablet, bool &could_schedule_merge);
   // The transfer task sets the flag that prohibits the scheduling of medium when the log stream is src_ls of transfer
-  int stop_ls_schedule_medium(const share::ObLSID &ls_id);
-  int clear_prohibit_medium_flag(const share::ObLSID &ls_id, const ObProhibitScheduleMediumMap::ProhibitFlag &input_flag)
+  int stop_tablets_schedule_medium(const ObIArray<ObTabletID> &tablet_ids, const ObProhibitScheduleMediumMap::ProhibitFlag &input_flag);
+  int clear_tablets_prohibit_medium_flag(const ObIArray<ObTabletID> &tablet_ids, const ObProhibitScheduleMediumMap::ProhibitFlag &input_flag);
+  int clear_prohibit_medium_flag(const ObTabletID &tablet_id, const ObProhibitScheduleMediumMap::ProhibitFlag &input_flag)
   {
-    return prohibit_medium_map_.clear_flag(ls_id, input_flag);
+    return prohibit_medium_map_.clear_flag(tablet_id, input_flag);
   }
-  int ls_start_schedule_medium(const share::ObLSID &ls_id, bool &ls_could_schedule_medium);
+  int tablet_start_schedule_medium(const ObTabletID &tablet_id, bool &tablet_could_schedule_medium);
   const ObProhibitScheduleMediumMap& get_prohibit_medium_ls_map() const {
     return prohibit_medium_map_;
   }
@@ -302,7 +309,7 @@ private:
     const share::SCN &weak_read_ts,
     const bool could_major_merge,
     const bool enable_adaptive_compaction,
-    const bool ls_could_schedule_medium,
+    const bool tablet_could_schedule_medium,
     compaction::ObLSLocality ls_locality,
     int64_t &merge_version,
     bool &is_leader,
