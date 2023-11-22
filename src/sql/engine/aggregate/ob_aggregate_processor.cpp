@@ -7056,7 +7056,7 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
 
           bool need_key_string_convert = (ObCharset::charset_type_by_coll(cs_type_key) != CHARSET_UTF8MB4);
 
-          if (OB_ISNULL(key_string.ptr())) {
+          if (OB_ISNULL(key_string.ptr()) || key_string.length() ==  0) {
             ret = OB_ERR_NULL_VALUE;
             LOG_WARN("unexpected null result", K(ret));
           } else if (is_absent_on_null && ob_is_null(type_value)) {
