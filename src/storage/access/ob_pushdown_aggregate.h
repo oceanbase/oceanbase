@@ -556,8 +556,17 @@ public:
   virtual bool finished() const override { return aggregated_; }
   virtual int reserve_group_by_buf(const int64_t size) override;
   virtual int output_extra_group_by_result(const int64_t start, const int64_t count) override;
+  OB_INLINE void set_determined_value()
+  {
+    is_determined_value_ = true;
+    result_datum_.reuse();
+    result_datum_.set_null();
+    aggregated_ = true;
+  }
+  INHERIT_TO_STRING_KV("ObAggCell", ObAggCell, K_(is_determined_value), K_(aggregated_flag_cnt));
 private:
   void clear_group_by_info();
+  bool is_determined_value_;
   int64_t aggregated_flag_cnt_;
   ObGroupByExtendableBuf<bool> *aggregated_flag_buf_;
   common::ObArenaAllocator datum_allocator_;

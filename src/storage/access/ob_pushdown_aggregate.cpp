@@ -2375,6 +2375,7 @@ int ObSumAggCell::collect_result_to_decimal_int(
 
 ObFirstRowAggCell::ObFirstRowAggCell(const ObAggCellBasicInfo &basic_info, common::ObIAllocator &allocator)
     : ObAggCell(basic_info, allocator),
+      is_determined_value_(false),
       aggregated_flag_cnt_(0),
       aggregated_flag_buf_(),
       datum_allocator_("ObStorageAgg", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
@@ -2384,6 +2385,7 @@ ObFirstRowAggCell::ObFirstRowAggCell(const ObAggCellBasicInfo &basic_info, commo
 
 void ObFirstRowAggCell::reset()
 {
+  is_determined_value_ = false;
   aggregated_flag_cnt_ = 0;
   free_group_by_buf(allocator_, aggregated_flag_buf_);
   if (nullptr != agg_datum_buf_) {
@@ -2400,6 +2402,9 @@ void ObFirstRowAggCell::reuse()
   ObAggCell::reuse();
   aggregated_flag_cnt_ = 0;
   datum_allocator_.reuse();
+  if (is_determined_value_) {
+    set_determined_value();
+  }
 }
 
 void ObFirstRowAggCell::clear_group_by_info()
