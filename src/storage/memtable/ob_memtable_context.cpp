@@ -635,7 +635,7 @@ int ObMemtableCtx::fill_redo_log(char *buf,
   if (OB_SUCCESS != ret && OB_EAGAIN != ret && OB_ENTRY_NOT_EXIST != ret) {
     TRANS_LOG(WARN, "fill_redo_log fail", "ret", ret, "trans_id",
               NULL == ctx_ ? "" : S(ctx_->get_trans_id()),
-              "buf", buf,
+              KP(buf),
               "buf_len", buf_len,
               "buf_pos", buf_pos,
               "pending_log_size", trans_mgr_.get_pending_log_size(),
