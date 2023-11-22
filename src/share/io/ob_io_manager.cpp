@@ -1200,9 +1200,8 @@ int ObTenantIOManager::delete_consumer_group_config(const int64_t group_id)
           LOG_WARN("stop phy queues failed", K(ret), K(tenant_id_), K(index));
         }
       } else if (OB_STATE_NOT_MATCH == ret) {
-        // group delete twice
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("group delete twice", K(ret), K(index), K(group_id));
+        // group delete twice, maybe deleted by delete_directive or delete_plan
+        LOG_INFO("group delete twice", K(ret), K(index), K(group_id));
       } else {
         LOG_WARN("get index from map failed", K(ret), K(group_id), K(index));
       }
