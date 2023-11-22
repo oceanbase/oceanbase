@@ -46,6 +46,8 @@ class ObDBMSSchedTableOperator
 public:
   ObDBMSSchedTableOperator() : sql_proxy_(NULL) {}
   virtual ~ObDBMSSchedTableOperator() {};
+  static constexpr int64_t JOB_NAME_MAX_SIZE = 128;
+  static const int64_t JOB_ID_OFFSET = (1LL<<50);
 
   int init(common::ObISQLClient *sql_proxy) { sql_proxy_ = sql_proxy; return common::OB_SUCCESS; }
 
@@ -54,6 +56,8 @@ public:
   int update_for_end(
     uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, int err, const common::ObString &errmsg);
   int update_nextdate(uint64_t tenant_id, ObDBMSSchedJobInfo &job_info);
+
+  int seperate_job_id_from_name(common::ObString &job_name, int64_t &job_id);
 
   int get_dbms_sched_job_info(
     uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id, const common::ObString &job_name,

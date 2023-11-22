@@ -70,6 +70,7 @@ int ObDBMSSchedTableOperator::update_for_start(
   OZ (dml.add_gmt_modified(now));
   OZ (dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
   OZ (dml.add_pk_column("job", job_info.job_));
+  OZ (dml.add_pk_column("job_name", job_info.job_name_));
   OZ (dml.add_time_column("this_date", job_info.this_date_));
   OZ (dml.add_column("state", "SCHEDULED"));
   OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
@@ -95,10 +96,29 @@ int ObDBMSSchedTableOperator::update_nextdate(
   OZ (dml.add_gmt_modified(now));
   OZ (dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
   OZ (dml.add_pk_column("job", job_info.job_));
+  OZ (dml.add_pk_column("job_name", job_info.job_name_));
   OZ (dml.add_time_column("next_date", job_info.next_date_));
   OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
   OZ (sql_proxy_->write(tenant_id, sql.ptr(), affected_rows));
 
+  return ret;
+}
+
+int ObDBMSSchedTableOperator::seperate_job_id_from_name(ObString &job_name, int64_t &job_id)
+{
+  int ret = OB_SUCCESS;
+  const char* prefix = "JOB$_";
+  if (job_name.prefix_match(prefix)) {
+    char nptr[JOB_NAME_MAX_SIZE];
+    char *endptr = NULL;
+    snprintf(nptr, JOB_NAME_MAX_SIZE, "%.*s", job_name.length(), job_name.ptr());
+    job_id = strtoll(nptr + strlen(prefix), &endptr, 10);
+    if (job_id <= 0) {
+      LOG_WARN("job_id is not right", K(job_name), K(nptr), K(job_id));
+    } else if (*endptr != '\0' || job_id <= JOB_ID_OFFSET) {
+      job_id = 0; // use job_info.job_ when job_id is not formal
+    }
+  }
   return ret;
 }
 
@@ -159,12 +179,13 @@ int ObDBMSSchedTableOperator::update_for_end(
       OZ (dml1.add_column("state", "COMPLETED"));
       OZ (dml1.add_column("enabled", job_info.enabled_));
     }
-    CK (job_info.this_date_ > 0);
-    OX (job_info.total_ += (now - job_info.this_date_));
+    CK (job_info.this_date_ > 0 || !errmsg.empty());
+    OX (job_info.total_ += (job_info.this_date_ > 0 ? now - job_info.this_date_ : 0));
     OZ (dml1.add_gmt_modified(now));
     OZ (dml1.add_pk_column("tenant_id",
           ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
     OZ (dml1.add_pk_column("job", job_info.job_));
+    OZ (dml1.add_pk_column("job_name", job_info.job_name_));
     OZ (dml1.add_column(true, "this_date"));
     OZ (dml1.add_time_column("last_date", job_info.this_date_));
     OZ (dml1.add_time_column("next_date", job_info.next_date_));
@@ -194,7 +215,12 @@ int ObDBMSSchedTableOperator::update_for_end(
     OZ (dml2.add_gmt_create(now));
     OZ (dml2.add_gmt_modified(now));
     OZ (dml2.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
-    OZ (dml2.add_pk_column("job", job_info.job_));
+    int64_t job_id = 0;
+    OZ (seperate_job_id_from_name(job_info.get_job_name(), job_id));
+    if (job_id <= 0) {
+      job_id = job_info.get_job_id();
+    }
+    OZ (dml2.add_pk_column("job", job_id));
     OZ (dml2.add_time_column("time", now));
     OZ (dml2.add_column("code", err));
     OZ (dml2.add_column(
@@ -532,8 +558,11 @@ int ObDBMSSchedTableOperator::calc_execute_at(
       execute_at = now;
       delay = 0;
     } else {
+      int tmp_ret = OB_SUCCESS;
       LOG_WARN("job maybe missed, ignore it", K(last_sub_next), K(now), K(job_info), K(execute_at), K(delay), K(ignore_nextdate), K(lbt()));
-      OZ(update_for_end(job_info.get_tenant_id(), job_info, 0, "check job missed"));
+      if (OB_SUCCESS != (tmp_ret = update_for_end(job_info.get_tenant_id(), job_info, 0, "check job missed"))) {
+        LOG_WARN("update for end failed for missed job", K(tmp_ret));
+      }
       delay = -1;
     }
   } else {
