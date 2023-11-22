@@ -1383,6 +1383,27 @@ int ObDDLUtil::check_tenant_status_normal(
   return ret;
 }
 
+int ObDDLUtil::check_schema_version_refreshed(
+    const uint64_t tenant_id,
+    const int64_t target_schema_version)
+{
+  int ret = OB_SUCCESS;
+  int64_t refreshed_schema_version = 0;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || target_schema_version <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(tenant_id), K(target_schema_version));
+  } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_refreshed_schema_version(
+      tenant_id, refreshed_schema_version))) {
+    LOG_WARN("get refreshed schema version failed", K(ret), K(tenant_id), K(refreshed_schema_version));
+  } else if (!ObSchemaService::is_formal_version(refreshed_schema_version) || refreshed_schema_version < target_schema_version) {
+    ret = OB_SCHEMA_EAGAIN;
+    if (REACH_TIME_INTERVAL(1000L * 1000L)) {
+      LOG_INFO("tenant schema not refreshed to the target version", K(ret), K(tenant_id), K(target_schema_version), K(refreshed_schema_version));
+    }
+  }
+  return ret;
+}
+
 /******************           ObCheckTabletDataComplementOp         *************/
 
 int ObCheckTabletDataComplementOp::check_task_inner_sql_session_status(
