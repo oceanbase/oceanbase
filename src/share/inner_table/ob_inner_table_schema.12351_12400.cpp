@@ -6321,6 +6321,21 @@ int ObInnerTableSchema::all_virtual_thread_schema(ObTableSchema &table_schema)
       false, //is_autoincrement
       false); //is_on_update_for_timestamp
   }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("cgroup_path", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      256, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
   if (OB_SUCC(ret)) {
     table_schema.get_part_option().set_part_num(1);
     table_schema.set_part_level(PARTITION_LEVEL_ONE);

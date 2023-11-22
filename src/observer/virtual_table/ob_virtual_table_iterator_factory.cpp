@@ -210,6 +210,7 @@
 #include "observer/virtual_table/ob_all_virtual_px_p2p_datahub.h"
 #include "observer/virtual_table/ob_all_virtual_ls_log_restore_status.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_buffer_info.h"
+#include "observer/virtual_table/ob_all_virtual_cgroup_config.h"
 #include "observer/virtual_table/ob_virtual_flt_config.h"
 #include "observer/virtual_table/ob_all_virtual_activity_metrics.h"
 #include "observer/virtual_table/ob_all_virtual_checkpoint_diagnose_info.h"
@@ -2578,6 +2579,13 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
+          case OB_ALL_VIRTUAL_CGROUP_CONFIG_TID: {
+            ObAllVirtualCgroupConfig *all_virtual_cgroup_config = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualCgroupConfig, all_virtual_cgroup_config))) {
+              vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_cgroup_config);
+            }
+            break;
+	        }
         END_CREATE_VT_ITER_SWITCH_LAMBDA
 
 #define AGENT_VIRTUAL_TABLE_CREATE_ITER

@@ -12718,7 +12718,8 @@ def_table_schema(
     ('latch_wait',          'varchar:16'),
     ('latch_hold',          'varchar:256'),
     ('trace_id',            'varchar:40'),
-    ('loop_ts',             'timestamp')
+    ('loop_ts',             'timestamp'),
+    ('cgroup_path',         'varchar:256')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -12969,7 +12970,25 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   keywords = all_def_keywords['__all_balance_group_ls_stat']))
 
 # 12418: __all_virtual_cgroup_info
-# 12419: __all_virtual_cgroup_config
+def_table_schema(
+  owner             = 'fengshuo.fs',
+  table_name        = '__all_virtual_cgroup_config',
+  table_id          = '12419',
+  table_type        = 'VIRTUAL_TABLE',
+  in_tenant_space   = True,
+  gm_columns        = [],
+  rowkey_columns    = [],
+  normal_columns    = [
+    ('svr_ip',              'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port',            'int'),
+    ('cfs_quota_us',        'int'),
+    ('cfs_period_us',       'int'),
+    ('shares',              'int'),
+    ('cgroup_path',         'varchar:256')
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 def_table_schema(
   owner = 'guoyun.lgy',
@@ -13561,7 +13580,8 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keyword
 
 # 15417: __all_virtual_column_group_mapping
 
-# 15418: __all_virtual_cgroup_config
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15418', all_def_keywords['__all_virtual_cgroup_config'])))
+
 # 15419: __all_virutal_column_group_history
 # 15420: __all_virutal_column_group_maping_history
 # 余留位置
@@ -27910,7 +27930,8 @@ SELECT svr_ip AS SVR_IP,
        status AS STATUS,
        latch_wait AS LATCH_WAIT,
        latch_hold AS LATCH_HOLD,
-       trace_id AS TRACE_ID
+       trace_id AS TRACE_ID,
+       cgroup_path AS CGROUP_PATH
 FROM oceanbase.__all_virtual_thread
 """.replace("\n", " "),
 )
@@ -30162,8 +30183,42 @@ def_table_schema(
 """.replace("\n", " "),
 )
 
-#21479 GV$OB_CGROUP_CONFIG
-#21480 V$OB_CGROUP_CONFIG
+def_table_schema(
+  owner           = 'huangrenhuang.hrh',
+  table_name      = 'GV$OB_CGROUP_CONFIG',
+  table_id        = '21479',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT svr_ip AS SVR_IP,
+       svr_port AS SVR_PORT,
+       cfs_quota_us AS CFS_QUOTA_US,
+       cfs_period_us AS CFS_PERIOD_US,
+       shares AS SHARES,
+       cgroup_path AS CGROUP_PATH
+FROM oceanbase.__all_virtual_cgroup_config
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'huangrenhuang.hrh',
+  table_name      = 'V$OB_CGROUP_CONFIG',
+  table_id        = '21480',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+  *
+FROM oceanbase.GV$OB_CGROUP_CONFIG
+WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+)
 #21485 DBA_OB_FORMAT_OUTLINES
 #21499 DBA_OB_INDEX_USAGE
 
@@ -54786,8 +54841,46 @@ def_table_schema(
     ],
 )
 
-# 28200: GV$OB_CGROUP_CONFIG
-# 28201: V$OB_CGROUP_CONFIG
+def_table_schema(
+  owner           = 'huangrenhaung.hrh',
+  table_name      = 'GV$OB_CGROUP_CONFIG',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28200',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT svr_ip AS SVR_IP,
+       svr_port AS SVR_PORT,
+       cfs_quota_us AS CFS_QUOTA_US,
+       cfs_period_us AS CFS_PERIOD_US,
+       shares AS SHARES,
+       cgroup_path AS CGROUP_PATH
+FROM SYS.ALL_VIRTUAL_CGROUP_CONFIG
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'huangrenhuang.hrh',
+  table_name      = 'V$OB_CGROUP_CONFIG',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28201',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+  *
+FROM SYS.GV$OB_CGROUP_CONFIG
+WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+)
 
 ################################################################################
 # Lob Table (50000, 70000)

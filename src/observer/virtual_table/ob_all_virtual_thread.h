@@ -19,6 +19,7 @@ namespace oceanbase
 {
 namespace observer
 {
+
 class ObAllVirtualThread : public common::ObVirtualTableScannerIterator
 {
   enum COLUMN_ID_LIST
@@ -33,7 +34,8 @@ class ObAllVirtualThread : public common::ObVirtualTableScannerIterator
     LATCH_WAIT,
     LATCH_HOLD,
     TRACE_ID,
-    LOOP_TS
+    LOOP_TS,
+    CGROUP_PATH
   };
 
 public:
@@ -50,6 +52,7 @@ private:
   char wait_addr_[16];
   char locks_addr_[256];
   char trace_id_buf_[40];
+  char cgroup_path_buf_[256];
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualThread);

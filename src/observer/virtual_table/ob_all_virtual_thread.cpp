@@ -54,8 +54,8 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
     const int64_t col_count = output_column_ids_.count();
     pid_t pid = getpid();
     StackMgr::Guard guard(g_stack_mgr);
-    for (auto* header = *guard; OB_NOT_NULL(header); header = guard.next()) {
-      auto* thread_base = (char*)(header->pth_);
+    for (oceanbase::lib::ObStackHeader* header = *guard; OB_NOT_NULL(header); header = guard.next()) {
+      char* thread_base = (char*)(header->pth_);
       if (OB_NOT_NULL(thread_base)) {
         GET_OTHER_TSI_ADDR(tid, &get_tid_cache());
         {
@@ -216,6 +216,63 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
             case LOOP_TS: {
               GET_OTHER_TSI_ADDR(loop_ts, &oceanbase::lib::Thread::loop_ts_);
               cells[i].set_timestamp(loop_ts);
+              break;
+            }
+            case CGROUP_PATH: {
+              int64_t pid = getpid();
+              char path[256];
+              snprintf(path, 256, "/proc/%ld/task/%ld/cgroup", pid, tid);
+              FILE *file = fopen(path, "r");
+              if (NULL == file) {
+                cells[i].set_varchar("");
+              } else {
+                /*
+                file content
+                7:perf_event:/
+                6:cpuset,cpu,cpuacct:/oceanbase/tenant_0001
+                5:blkio:/system.slice/staragentctl.service
+                4:devices:/system.slice/staragentctl.service
+                3:hugetlb:/
+                cgroup_path = /tenant_0001
+                */
+                char ch;
+                int read_len = 0;
+                int discard_len = 30;
+                int cpu_line_begin = 0;
+                int cpu_line_end = 0;
+                int cgroup_path_len = 0;
+                char read_buff[512];
+                // 读取文件内容
+                while ((ch = fgetc(file)) != EOF) {
+                  if (511 > read_len) {
+                    read_buff[read_len++] = ch;
+                  }
+                }
+                bool is_read_end = false;
+                for (int i = 1; i < read_len && !is_read_end; i++) {
+                  if (read_buff[i] == ':' && read_buff[i - 1] == '6') {
+                    cpu_line_begin = i;
+                  }
+                  if (read_buff[i] == ':' && read_buff[i - 1] == '5') {
+                    cpu_line_end = i - 1;
+                    is_read_end = true;
+                  }
+                }
+                cgroup_path_len = cpu_line_end - cpu_line_begin - 1;
+                if (cgroup_path_len < discard_len) {
+                  cells[i].set_varchar("");
+                } else {
+                  cgroup_path_len = cgroup_path_len - discard_len;
+                  strncpy(cgroup_path_buf_, read_buff + cpu_line_begin + discard_len, cgroup_path_len);
+                  cgroup_path_buf_[cgroup_path_len] = '\0';
+                  cells[i].set_varchar(cgroup_path_buf_);
+                }
+              }
+              cells[i].set_collation_type(
+                  ObCharset::get_default_collation(ObCharset::get_default_charset()));
+              if (NULL != file) {
+                fclose(file);
+              }
               break;
             }
             default: {
