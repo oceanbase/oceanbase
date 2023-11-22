@@ -34,6 +34,7 @@ public:
   void reset();
   const char *get_result_str() const { return is_succeed_ ? "SUCCESS" : "FAILED"; }
   const char *get_comment() const { return comment_.ptr(); }
+  const ObString get_comment_str() const { return comment_.str(); }
   bool is_succeed() const { return is_succeed_; }
   bool is_comment_setted() const { return !comment_.is_empty(); }
   ObImportResult &operator=(const ObImportResult &result);

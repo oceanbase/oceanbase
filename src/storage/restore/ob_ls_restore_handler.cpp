@@ -814,13 +814,13 @@ int ObILSRestoreState::deal_failed_restore(const ObLSRestoreResultMgr &result_mg
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(update_restore_status_(*ls_, next_status))) {
-    LOG_WARN("failed to update restore status", K(ret), KPC(ls_), K(next_status));
   } else if (OB_FAIL(result_mgr.get_comment_str(ls_->get_ls_id(), self_addr_, comment))) {
     LOG_WARN("fail to get comment str", K(ret));
   } else if (OB_FAIL(report_ls_restore_progress_(*ls_, next_status, result_mgr.get_trace_id(),
       result_mgr.get_result(), comment.ptr()))) {
     LOG_WARN("fail to report ls restore progress", K(ret));
+  } else if (OB_FAIL(update_restore_status_(*ls_, next_status))) {
+    LOG_WARN("failed to update restore status", K(ret), KPC(ls_), K(next_status));
   } else if (OB_FAIL(report_ls_restore_status_(*ls_, next_status))) {
     LOG_WARN("fail to report ls restore progress", K(ret));
   }
@@ -2170,7 +2170,9 @@ int ObLSRestoreConsistentScnState::set_empty_for_transfer_tablets_()
       LOG_INFO("skip tablet which restore status is not full",
                "tablet_id", tablet->get_tablet_meta().tablet_id_,
                "ha_status", tablet->get_tablet_meta().ha_status_);
-    } else if (OB_FAIL(ls_->update_tablet_restore_status(tablet->get_tablet_meta().tablet_id_, restore_status))) {
+    } else if (OB_FAIL(ls_->update_tablet_restore_status(tablet->get_tablet_meta().tablet_id_,
+                                                         restore_status,
+                                                         true/* need reset tranfser flag */))) {
       LOG_WARN("failed to update tablet restore status to EMPTY", K(ret), KPC(tablet));
     } else {
       LOG_INFO("update tablet restore status to EMPTY",

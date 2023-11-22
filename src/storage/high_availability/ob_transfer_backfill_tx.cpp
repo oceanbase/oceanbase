@@ -164,8 +164,10 @@ int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam
         // If source tablet is UNDEFINED, directly set dest tablet EMPTY, but keep
         // transfer table. Then the restore handler will schedule it to restore minor
         // without creating remote logical table.
+        // Remote logical table is no longer relyed needed during physical copy, just reset has tranfser table flag.
         if (OB_FAIL(dest_ls_->update_tablet_restore_status(tablet->get_tablet_meta().tablet_id_,
-                                                           ObTabletRestoreStatus::EMPTY))) {
+                                                           ObTabletRestoreStatus::EMPTY,
+                                                           true/* need reset tranfser flag */))) {
           LOG_WARN("fail to set empty", K(ret), KPC(tablet));
         } else {
           dest_ls_->get_ls_restore_handler()->try_record_one_tablet_to_restore(tablet->get_tablet_meta().tablet_id_);
