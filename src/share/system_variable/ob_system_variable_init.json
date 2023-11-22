@@ -3459,35 +3459,5 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
-  },
-  "_affected_rows": {
-    "id": 10161,
-    "name": "_affected_rows",
-    "default_value": "-1",
-    "base_value": "-1",
-    "data_type": "int",
-    "info": "affected rows.",
-    "flags": "SESSION | INVISIBLE | NEED_SERIALIZE",
-    "min_val": "-1",
-    "max_val": "9223372036854775807",
-    "publish_version": "",
-    "info_cn": "",
-    "background_cn": "",
-    "ref_url": ""
-  },
-  "_found_rows": {
-    "id": 10162,
-    "name": "_found_rows",
-    "default_value": "1",
-    "base_value": "1",
-    "data_type": "int",
-    "info": "found rows.",
-    "flags": "SESSION | INVISIBLE | NEED_SERIALIZE",
-    "min_val": "-1",
-    "max_val": "9223372036854775807",
-    "publish_version": "",
-    "info_cn": "",
-    "background_cn": "",
-    "ref_url": ""
   }
 }

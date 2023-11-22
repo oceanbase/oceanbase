@@ -123,7 +123,6 @@ const char *ObSysVarParallelDegreePolicy::PARALLEL_DEGREE_POLICY_NAMES[] = {
 };
 
 const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
-  "_affected_rows",
   "_aggregation_optimization_settings",
   "_clear_last_archive_timestamp",
   "_create_audit_purge_job",
@@ -137,7 +136,6 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_force_parallel_ddl_dop",
   "_force_parallel_dml_dop",
   "_force_parallel_query_dop",
-  "_found_rows",
   "_groupby_nopushdown_cut_ratio",
   "_nlj_batching_enabled",
   "_ob_ols_policy_session_labels",
@@ -371,7 +369,6 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
 };
 
 const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
-  SYS_VAR__AFFECTED_ROWS,
   SYS_VAR__AGGREGATION_OPTIMIZATION_SETTINGS,
   SYS_VAR__CLEAR_LAST_ARCHIVE_TIMESTAMP,
   SYS_VAR__CREATE_AUDIT_PURGE_JOB,
@@ -385,7 +382,6 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR__FORCE_PARALLEL_DDL_DOP,
   SYS_VAR__FORCE_PARALLEL_DML_DOP,
   SYS_VAR__FORCE_PARALLEL_QUERY_DOP,
-  SYS_VAR__FOUND_ROWS,
   SYS_VAR__GROUPBY_NOPUSHDOWN_CUT_RATIO,
   SYS_VAR__NLJ_BATCHING_ENABLED,
   SYS_VAR__OB_OLS_POLICY_SESSION_LABELS,
@@ -861,9 +857,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "ob_enable_pl_cache",
   "ob_default_lob_inrow_threshold",
   "_enable_storage_cardinality_estimation",
-  "lc_time_names",
-  "_affected_rows",
-  "_found_rows"
+  "lc_time_names"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1275,8 +1269,6 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarObDefaultLobInrowThreshold)
         + sizeof(ObSysVarEnableStorageCardinalityEstimation)
         + sizeof(ObSysVarLcTimeNames)
-        + sizeof(ObSysVarAffectedRows)
-        + sizeof(ObSysVarFoundRows)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -3470,24 +3462,6 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LC_TIME_NAMES))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarLcTimeNames));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarAffectedRows())) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("fail to new ObSysVarAffectedRows", K(ret));
-      } else {
-        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__AFFECTED_ROWS))] = sys_var_ptr;
-        ptr = (void *)((char *)ptr + sizeof(ObSysVarAffectedRows));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarFoundRows())) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("fail to new ObSysVarFoundRows", K(ret));
-      } else {
-        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__FOUND_ROWS))] = sys_var_ptr;
-        ptr = (void *)((char *)ptr + sizeof(ObSysVarFoundRows));
       }
     }
 
@@ -6170,28 +6144,6 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLcTimeNames())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarLcTimeNames", K(ret));
-      }
-      break;
-    }
-    case SYS_VAR__AFFECTED_ROWS: {
-      void *ptr = NULL;
-      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarAffectedRows)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarAffectedRows)));
-      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarAffectedRows())) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("fail to new ObSysVarAffectedRows", K(ret));
-      }
-      break;
-    }
-    case SYS_VAR__FOUND_ROWS: {
-      void *ptr = NULL;
-      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarFoundRows)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarFoundRows)));
-      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarFoundRows())) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("fail to new ObSysVarFoundRows", K(ret));
       }
       break;
     }

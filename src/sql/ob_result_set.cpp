@@ -604,7 +604,7 @@ OB_INLINE void ObResultSet::store_affected_rows(ObPhysicalPlanCtx &plan_ctx)
     affected_row = get_affected_rows();
   }
   NG_TRACE_EXT(affected_rows, OB_ID(affected_rows), affected_row);
-  my_session_.update_sys_variable(SYS_VAR__AFFECTED_ROWS, affected_row);
+  my_session_.set_affected_rows(affected_row);
 }
 
 OB_INLINE void ObResultSet::store_found_rows(ObPhysicalPlanCtx &plan_ctx)
@@ -620,7 +620,7 @@ OB_INLINE void ObResultSet::store_found_rows(ObPhysicalPlanCtx &plan_ctx)
       int64_t found_rows = -1;
       found_rows = plan_ctx.get_found_rows();
       rows = found_rows == 0 ? return_rows_ : found_rows;
-      my_session_.update_sys_variable(SYS_VAR__FOUND_ROWS, rows);
+      my_session_.set_found_rows(rows);
       NG_TRACE_EXT(store_found_rows,
                    OB_ID(found_rows), found_rows,
                    OB_ID(return_rows), return_rows_);

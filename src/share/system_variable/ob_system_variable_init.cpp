@@ -3429,43 +3429,13 @@ static struct VarsInit{
     ObSysVars[242].alias_ = "OB_SV_LC_TIME_NAMES" ;
     }();
 
-    [&] (){
-      ObSysVars[243].default_value_ = "-1" ;
-      ObSysVars[243].info_ = "affected rows." ;
-      ObSysVars[243].name_ = "_affected_rows" ;
-      ObSysVars[243].data_type_ = ObIntType ;
-      ObSysVars[243].min_val_ = "-1" ;
-      ObSysVars[243].max_val_ = "9223372036854775807" ;
-      ObSysVars[243].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[243].id_ = SYS_VAR__AFFECTED_ROWS ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__AFFECTED_ROWS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__AFFECTED_ROWS] = 243 ;
-      ObSysVars[243].base_value_ = "-1" ;
-    ObSysVars[243].alias_ = "OB_SV__AFFECTED_ROWS" ;
-    }();
-
-    [&] (){
-      ObSysVars[244].default_value_ = "1" ;
-      ObSysVars[244].info_ = "found rows." ;
-      ObSysVars[244].name_ = "_found_rows" ;
-      ObSysVars[244].data_type_ = ObIntType ;
-      ObSysVars[244].min_val_ = "-1" ;
-      ObSysVars[244].max_val_ = "9223372036854775807" ;
-      ObSysVars[244].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[244].id_ = SYS_VAR__FOUND_ROWS ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__FOUND_ROWS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__FOUND_ROWS] = 244 ;
-      ObSysVars[244].base_value_ = "1" ;
-    ObSysVars[244].alias_ = "OB_SV__FOUND_ROWS" ;
-    }();
-
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 245;
+static int64_t var_amount = 243;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}
