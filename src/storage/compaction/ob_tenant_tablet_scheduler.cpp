@@ -546,15 +546,19 @@ int ObTenantTabletScheduler::schedule_merge(const int64_t broadcast_version)
     LOG_WARN("Invalid argument, ", K(broadcast_version), K(ret));
   } else if (broadcast_version <= get_frozen_version()) {
   } else {
+    int tmp_ret = OB_SUCCESS;
+    // add progress first before change frozen_version_
+    if (OB_TMP_FAIL(MTL(ObTenantCompactionProgressMgr *)->add_progress(broadcast_version))) {
+      LOG_WARN("failed to add progress", K(tmp_ret), K(broadcast_version));
+    }
     {
       obsys::ObRLockGuard frozen_version_guard(frozen_version_lock_);
       frozen_version_ = broadcast_version;
     }
 
     LOG_INFO("schedule merge major version", K(broadcast_version));
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(MTL(ObTenantCompactionProgressMgr *)->add_progress(broadcast_version))) {
-      LOG_WARN("failed to add progress", K(tmp_ret), K(broadcast_version));
+    if (OB_TMP_FAIL(MTL(ObTenantCompactionProgressMgr *)->init_progress(broadcast_version))) {
+      LOG_WARN("failed to init progress", K(tmp_ret), K(broadcast_version));
     }
     loop_cnt_ = 0;
     clear_error_tablet_cnt();
@@ -1624,11 +1628,8 @@ int ObTenantTabletScheduler::update_major_progress(const int64_t merge_version)
   if (major_merged_scn > merged_version_) {
     FLOG_INFO("last major merge finish", K(merge_version), K(major_merged_scn), K(merged_version_));
     merged_version_ = major_merged_scn;
-    if (OB_FAIL(MTL(ObTenantCompactionProgressMgr *)->update_progress_status(
-        merged_version_, share::ObIDag::DAG_STATUS_FINISH))) {
-      LOG_WARN("failed to finish progress", KR(ret), K(merge_version));
-    }
-  } else if (OB_FAIL(MTL(ObTenantCompactionProgressMgr *)->update_progress_status(
+  }
+  if (OB_FAIL(MTL(ObTenantCompactionProgressMgr *)->update_progress_status(
       merge_version, share::ObIDag::DAG_STATUS_NODE_RUNNING))) {
     LOG_WARN("failed to update progress", KR(ret), K(merge_version));
   }

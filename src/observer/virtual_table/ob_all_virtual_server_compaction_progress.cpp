@@ -73,6 +73,12 @@ int ObAllVirtualServerCompactionProgress::fill_cells()
   int64_t compression_ratio = 0;
   int64_t estimate_finish_time = 0;
   compaction::ObServerCompactionEvent tmp_event;
+  if (!progress_.is_inited_) {
+    progress_.total_tablet_cnt_ = -1;
+    progress_.unfinished_tablet_cnt_ = -1;
+    progress_.data_size_ = -1;
+    progress_.unfinished_data_size_ = -1;
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
     uint64_t col_id = output_column_ids_.at(i);
     switch (col_id) {
@@ -147,8 +153,8 @@ int ObAllVirtualServerCompactionProgress::fill_cells()
       cells[i].set_timestamp(progress_.estimated_finish_time_);
       break;
     case COMMENTS:
-      cells[i].set_varchar("");
-      cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+      MEMSET(event_buf_, '\0', sizeof(event_buf_));
+      tmp_event.reset();
       if (share::ObIDag::DAG_STATUS_FINISH != progress_.status_) {
         MTL_SWITCH(progress_.tenant_id_) {
           MTL(compaction::ObServerCompactionEventHistory *)->get_last_event(tmp_event);
@@ -158,13 +164,15 @@ int ObAllVirtualServerCompactionProgress::fill_cells()
             }
           }
         }
-        if (OB_SUCC(ret)) {
-          cells[i].set_varchar(event_buf_);
-        }
       } else {
         progress_.sum_time_guard_.to_string(event_buf_, sizeof(event_buf_));
-        cells[i].set_varchar(event_buf_);
       }
+      {
+        int64_t pos = strlen(event_buf_);
+        databuff_printf(event_buf_, sizeof(event_buf_), pos, "is_inited:%d", progress_.is_inited_);
+      }
+      cells[i].set_varchar(event_buf_);
+      cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
       break;
     default:
       ret = OB_ERR_UNEXPECTED;
