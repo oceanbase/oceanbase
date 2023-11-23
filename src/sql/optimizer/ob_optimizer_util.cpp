@@ -8046,31 +8046,67 @@ int ObOptimizerUtil::check_contain_batch_stmt_parameter(ObRawExpr* expr, bool &c
 }
 
 /* Check whether src_expr can be calculated by const exprs and dst_exprs */
-int ObOptimizerUtil::expr_calculable_by_exprs(const ObRawExpr *src_expr,
+int ObOptimizerUtil::expr_calculable_by_exprs(ObRawExpr *src_expr,
                                               const ObIArray<ObRawExpr*> &dst_exprs,
+                                              const bool need_check_contain,
+                                              const bool used_in_compare,
                                               bool &is_calculable)
 {
   int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 2> parent_exprs;
+  if (OB_FAIL(expr_calculable_by_exprs(src_expr, dst_exprs, parent_exprs,
+                                       need_check_contain, used_in_compare, is_calculable))) {
+    LOG_WARN("fail to check expr is calculable by other exprs", K(ret));
+  }
+  return ret;
+}
+
+
+int ObOptimizerUtil::expr_calculable_by_exprs(ObRawExpr *src_expr,
+                                              const ObIArray<ObRawExpr*> &dst_exprs,
+                                              ObIArray<ObRawExpr*> &parent_exprs,
+                                              const bool need_check_contain,
+                                              const bool used_in_compare,
+                                              bool &is_calculable)
+{
+  int ret = OB_SUCCESS;
+  bool can_replace = false;
+  bool is_const_inherit = false;
   is_calculable = true;
   if (OB_ISNULL(src_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret));
   } else if (src_expr->is_const_expr()) {
+    // is calculable
   } else if (dst_exprs.empty()) {
     is_calculable = false;
-  } else if (ObOptimizerUtil::find_item(dst_exprs, src_expr)) {
+  } else if (OB_FAIL(ObTransformUtils::check_can_replace(src_expr, parent_exprs,
+                                                         used_in_compare, can_replace))) {
+    LOG_WARN("failed to check can replace expr", K(ret));
+  } else if (!can_replace) {
+    is_calculable = false;
+  } else if (need_check_contain && ObOptimizerUtil::find_item(dst_exprs, src_expr)) {
+    // is calculable
+  } else if (OB_FAIL(src_expr->is_const_inherit_expr(is_const_inherit, true))) {
+    LOG_WARN("failed to check is const inherit expr", K(ret));
+  } else if (!is_const_inherit) {
+    is_calculable = false;
   } else {
-    int64_t N = src_expr->get_param_count();
-    if (N > 0) {
-      for (int64_t i = 0; OB_SUCC(ret) && is_calculable && i < N; ++i) {
-        if (OB_FAIL(SMART_CALL(expr_calculable_by_exprs(src_expr->get_param_expr(i),
-                                                  dst_exprs,
-                                                  is_calculable)))) {
-          LOG_WARN("failed to smart call", K(ret));
-        }
+    if (OB_FAIL(parent_exprs.push_back(src_expr))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && is_calculable && i < src_expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(expr_calculable_by_exprs(src_expr->get_param_expr(i),
+                                                      dst_exprs,
+                                                      parent_exprs,
+                                                      true,
+                                                      used_in_compare,
+                                                      is_calculable)))) {
+        LOG_WARN("failed to smart call expr_calculable_by_exprs", K(ret));
       }
-    } else {
-      is_calculable = false;
+    }
+    if (OB_SUCC(ret)) {
+      parent_exprs.pop_back();
     }
   }
   return ret;
@@ -8111,27 +8147,17 @@ int ObOptimizerUtil::get_minset_of_exprs(const ObIArray<ObRawExpr *> &src_exprs,
   int ret = OB_SUCCESS;
   //find expr which can not be evaluated by other exprs
   for (int i = 0; OB_SUCC(ret) && i < src_exprs.count(); ++i) {
-    if (OB_ISNULL(src_exprs.at(i))) {
+    ObRawExpr *expr = src_exprs.at(i);
+    bool is_calculable = false;
+    if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret), K(src_exprs.at(i)));
-    } else if (src_exprs.at(i)->get_param_count() == 0 ||
-               src_exprs.at(i)->has_flag(CNT_WINDOW_FUNC) ||
-               src_exprs.at(i)->has_flag(CNT_AGG)) {
-      if (OB_FAIL(min_set.push_back(src_exprs.at(i)))) {
-        LOG_WARN("fail to push back expr", K(ret));
-      }
-    } else {
-      bool calculable = true;
-      for (int64_t j = 0; OB_SUCC(ret) && calculable && j < src_exprs.at(i)->get_param_count(); ++j) {
-        if (OB_FAIL(ObOptimizerUtil::expr_calculable_by_exprs(src_exprs.at(i)->get_param_expr(j), src_exprs, calculable))) {
-          LOG_WARN("fail to check if candi expr is calculable", K(ret));
-        }
-      }
-      if (OB_SUCC(ret) && !calculable) {
-        if (OB_FAIL(min_set.push_back(src_exprs.at(i)))) {
-          LOG_WARN("failed to push back expr", K(ret));
-        }
-      }
+      LOG_WARN("unexpected null", K(ret), K(expr));
+    } else if (OB_FAIL(expr_calculable_by_exprs(expr, src_exprs, false, true, is_calculable))) {
+      LOG_WARN("fail to check expr is calculable by other exprs", K(ret));
+    } else if (is_calculable) {
+      // do nothing
+    } else if (OB_FAIL(min_set.push_back(expr))) {
+      LOG_WARN("fail to push back expr", K(ret));
     }
   }
   return ret;

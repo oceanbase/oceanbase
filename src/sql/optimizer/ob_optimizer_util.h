@@ -1370,8 +1370,17 @@ public:
 
   static int check_contain_batch_stmt_parameter(ObRawExpr* expr, bool &contain);
 
-  static int expr_calculable_by_exprs(const ObRawExpr *src_expr,
+  static int expr_calculable_by_exprs(ObRawExpr *src_expr,
                                       const ObIArray<ObRawExpr*> &dst_exprs,
+                                      const bool need_check_contain,
+                                      const bool used_in_compare,
+                                      bool &is_calculable);
+
+  static int expr_calculable_by_exprs(ObRawExpr *src_expr,
+                                      const ObIArray<ObRawExpr*> &dst_exprs,
+                                      ObIArray<ObRawExpr*> &parent_exprs,
+                                      const bool need_check_contain,
+                                      const bool used_in_compare,
                                       bool &is_calculable);
   static int get_minset_of_exprs(const ObIArray<ObRawExpr *> &src_exprs,
                                  ObIArray<ObRawExpr *> &min_set);
