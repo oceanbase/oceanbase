@@ -23,6 +23,7 @@ struct ObScheduleBatchSizeMgr
   ~ObScheduleBatchSizeMgr() {}
   void set_tablet_batch_size(const int64_t tablet_batch_size);
   int64_t get_schedule_batch_size() const { return tablet_batch_size_; }
+  int64_t get_checker_batch_size() const;
   void get_rs_check_batch_size(
     const int64_t table_cnt,
     int64_t &table_id_batch_size) const;
@@ -37,6 +38,8 @@ private:
   const static int64_t TABLE_ID_BATCH_CHECK_SIZE = 200;
   const static int64_t TOTAL_TABLE_CNT_THREASHOLD = 100 * 1000; // 10w
   const static int64_t DEFAULT_INNER_TABLE_SCAN_BATCH_SIZE = 500;
+  const static int64_t DEFAULT_CHECKER_BATCH_SIZE = 200;
+  // cached compaction_schedule_tablet_batch_cnt: [10000,200000]
   int64_t tablet_batch_size_;
 };
 

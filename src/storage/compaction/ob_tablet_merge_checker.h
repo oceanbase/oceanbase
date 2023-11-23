@@ -21,6 +21,7 @@ namespace oceanbase
 namespace storage
 {
 class ObTablet;
+class ObLS;
 }
 
 namespace compaction
@@ -32,6 +33,8 @@ public:
   static int check_could_merge_for_medium(
     const storage::ObTablet &tablet,
     bool &could_schedule_merge);
+  static int check_ls_state(storage::ObLS &ls, bool &need_merge);
+  static int check_ls_state_in_major(storage::ObLS &ls, bool &need_merge);
 private:
   static const int64_t PRINT_LOG_INVERVAL = 2 * 60 * 1000 * 1000L; // 2m
 };

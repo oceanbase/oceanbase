@@ -17,10 +17,15 @@ namespace compaction
 {
 void ObScheduleBatchSizeMgr::set_tablet_batch_size(const int64_t tablet_batch_size)
 {
-  if (tablet_batch_size != tablet_batch_size_) {
+  if (tablet_batch_size != tablet_batch_size_ && tablet_batch_size > 0) {
     LOG_INFO("succeeded to reload new merge schedule tablet batch cnt", K(tablet_batch_size));
     tablet_batch_size_ = tablet_batch_size;
   }
+}
+
+int64_t ObScheduleBatchSizeMgr::get_checker_batch_size() const
+{
+  return MAX(DEFAULT_CHECKER_BATCH_SIZE, tablet_batch_size_ / 100);
 }
 
 void ObScheduleBatchSizeMgr::get_rs_check_batch_size(

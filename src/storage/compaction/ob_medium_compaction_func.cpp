@@ -1202,18 +1202,16 @@ int ObMediumCompactionScheduleFunc::batch_check_medium_finish(
     checksum_items.set_attr(ObMemAttr(MTL_ID(), "CkmItems"));
     if (OB_FAIL(batch_check_medium_meta_table(tablet_ls_infos, ls_info_map, finish_tablet_ls_infos, time_guard))) {
       LOG_WARN("failed to check inner table", K(ret), K(tablet_ls_infos));
-    } else {
-      if (OB_SUCC(ret) && !finish_tablet_ls_infos.empty()) {
-        if (OB_FAIL(checksum_items.reserve(finish_tablet_ls_infos.count()))) {
-          LOG_WARN("failed to reserve array", KR(ret), "array_cnt", finish_tablet_ls_infos.count());
-        } else if (OB_FAIL(ObTabletReplicaChecksumOperator::get_tablets_replica_checksum(
-            MTL_ID(), finish_tablet_ls_infos, checksum_items))) {
-          LOG_WARN("failed to get tablet checksum", K(ret));
-        } else if (FALSE_IT(time_guard.click(ObCompactionScheduleTimeGuard::SEARCH_CHECKSUM))) {
-        } else if (OB_FAIL(batch_check_medium_checksum(finish_tablet_ls_infos, checksum_items))) {
-          LOG_WARN("failed to check medium tablets checksum", K(ret));
-        } else if (FALSE_IT(time_guard.click(ObCompactionScheduleTimeGuard::CHECK_CHECKSUM))) {
-        }
+    } else if (!finish_tablet_ls_infos.empty()) {
+      if (OB_FAIL(checksum_items.reserve(finish_tablet_ls_infos.count()))) {
+        LOG_WARN("failed to reserve array", KR(ret), "array_cnt", finish_tablet_ls_infos.count());
+      } else if (OB_FAIL(ObTabletReplicaChecksumOperator::get_tablets_replica_checksum(
+          MTL_ID(), finish_tablet_ls_infos, checksum_items))) {
+        LOG_WARN("failed to get tablet checksum", K(ret));
+      } else if (FALSE_IT(time_guard.click(ObCompactionScheduleTimeGuard::SEARCH_CHECKSUM))) {
+      } else if (OB_FAIL(batch_check_medium_checksum(finish_tablet_ls_infos, checksum_items))) {
+        LOG_WARN("failed to check medium tablets checksum", K(ret));
+      } else if (FALSE_IT(time_guard.click(ObCompactionScheduleTimeGuard::CHECK_CHECKSUM))) {
       }
     }
   }

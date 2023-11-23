@@ -990,7 +990,7 @@ int ObCompactionDiagnoseMgr::check_ls_status(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is null", K(ret), K(ls_id));
   } else if (!ls_hash_exist) {
-    if (OB_TMP_FAIL(ObTenantTabletScheduler::check_ls_state(*ls, need_merge))) {
+    if (OB_TMP_FAIL(ObTabletMergeChecker::check_ls_state(*ls, need_merge))) {
       LOG_WARN("failed to check ls state", K(tmp_ret), KPC(ls), K(need_merge));
     } else if (need_merge) {
       weak_read_ts_ready = ObTenantTabletScheduler::check_weak_read_ts_ready(compaction_scn, *ls);
