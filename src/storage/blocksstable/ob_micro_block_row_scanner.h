@@ -115,7 +115,11 @@ public:
       const int64_t row_cap,
       storage::ObGroupByCell &group_by_cell) const;
   OB_INLINE void reserve_reader_memory(bool reserve)
-  { reader_->reserve_reader_memory(reserve); }
+  {
+    if (nullptr != reader_) {
+      reader_->reserve_reader_memory(reserve);
+    }
+  }
   int64_t get_current_pos() const
   { return current_; }
   VIRTUAL_TO_STRING_KV(K_(can_ignore_multi_version));
