@@ -107,8 +107,6 @@ public:
 
   bool is_empty_co_table() const { return is_empty_co_; }
   int fill_cg_sstables(const common::ObIArray<ObITable *> &cg_tables);
-  virtual int inc_macro_ref(bool &inc_success) const override;
-  virtual void dec_macro_ref() const override;
   OB_INLINE const ObCOSSTableMeta &get_cs_meta() const { return cs_meta_; }
   OB_INLINE ObSSTableArray &get_cg_sstables() { return cg_sstables_; }
   OB_INLINE const ObSSTableArray &get_cg_sstables() const { return cg_sstables_; }

@@ -24,6 +24,7 @@
 #include "storage/blocksstable/ob_macro_block_checker.h"
 #include "storage/blocksstable/ob_super_block_buffer_holder.h"
 #include "storage/ob_super_block_struct.h"
+#include "storage/tablet/ob_tablet_block_aggregated_info.h"
 
 namespace oceanbase
 {
@@ -345,6 +346,17 @@ private:
       common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
       ObMacroBlockMarkerStatus &tmp_status);
   int mark_tenant_blocks(
+      MacroBlkIdMap &mark_info,
+      common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
+      ObMacroBlockMarkerStatus &tmp_status);
+  int mark_tablet_block(
+      MacroBlkIdMap &mark_info,
+      storage::ObTabletHandle &handle,
+      common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
+      ObMacroBlockMarkerStatus &tmp_status);
+  int do_mark_tablet_block(
+      const ObIArray<blocksstable::MacroBlockId> &id_arr,
+      const ObTabletMacroType block_type,
       MacroBlkIdMap &mark_info,
       common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
       ObMacroBlockMarkerStatus &tmp_status);

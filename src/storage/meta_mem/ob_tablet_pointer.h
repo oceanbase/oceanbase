@@ -59,7 +59,8 @@ public:
 
   // load and dump interface
   int acquire_obj(ObTablet *&t);
-  int read_from_disk(common::ObArenaAllocator &allocator, char *&r_buf, int64_t &r_len, ObMetaDiskAddr &addr);
+  int read_from_disk(const bool is_full_load,
+      common::ObArenaAllocator &allocator, char *&r_buf, int64_t &r_len, ObMetaDiskAddr &addr);
   int deserialize(
       common::ObArenaAllocator &allocator,
       const char *buf,

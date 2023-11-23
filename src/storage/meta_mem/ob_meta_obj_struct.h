@@ -36,7 +36,8 @@ public:
     FILE = 1,
     BLOCK = 2,
     MEM = 3,
-    MAX = 4,
+    RAW_BLOCK = 4, // refer the shared block of storage meta which has no header
+    MAX = 5,
   };
 public:
   ObMetaDiskAddr();
@@ -49,13 +50,16 @@ public:
   bool operator !=(const ObMetaDiskAddr &other) const;
   bool is_equal_for_persistence(const ObMetaDiskAddr &other) const;
 
-  OB_INLINE bool is_block() const { return BLOCK == type_; }
-  OB_INLINE bool is_disked() const { return BLOCK == type_ || FILE == type_; }
+  OB_INLINE bool is_block() const { return BLOCK == type_ || RAW_BLOCK == type_; }
+  OB_INLINE bool is_raw_block() const { return RAW_BLOCK == type_; }
+  OB_INLINE bool is_disked() const { return BLOCK == type_ || FILE == type_ || RAW_BLOCK == type_; }
   OB_INLINE bool is_file() const { return FILE == type_; }
   OB_INLINE bool is_memory() const { return MEM == type_; }
   OB_INLINE bool is_none() const { return NONE == type_; }
   OB_INLINE void set_none_addr() { type_ = NONE; }
   OB_INLINE void set_seq(const uint64_t seq) { seq_ = seq; }
+  OB_INLINE void set_size(const uint64_t size) { size_ = size; }
+  OB_INLINE void set_type(const DiskType type) { type_ = type; }
   OB_INLINE int64_t file_id() const { return file_id_; }
   OB_INLINE uint64_t size() const { return size_; }
   OB_INLINE uint64_t offset() const { return offset_; }
@@ -72,7 +76,8 @@ public:
   int set_block_addr(
       const blocksstable::MacroBlockId &macro_id,
       const int64_t offset,
-      const int64_t size);
+      const int64_t size,
+      const DiskType block_type);
   int get_file_addr(
       int64_t &file_id,
       int64_t &offset,

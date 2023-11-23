@@ -48,7 +48,7 @@ int ObMetaDiskAddr::get_block_addr(
     int64_t &size) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(DiskType::BLOCK != type_)) {
+  if (OB_UNLIKELY(!is_block())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("type isn't block, not support", K(ret), KPC(this));
   } else {
@@ -63,21 +63,23 @@ int ObMetaDiskAddr::get_block_addr(
 int ObMetaDiskAddr::set_block_addr(
     const blocksstable::MacroBlockId &macro_id,
     const int64_t offset,
-    const int64_t size)
+    const int64_t size,
+    const DiskType block_type)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!macro_id.is_valid()
                 || offset < 0 || offset > MAX_OFFSET
-                || size < 0 || size > MAX_SIZE)) {
+                || size < 0 || size > MAX_SIZE
+                || (DiskType::RAW_BLOCK != block_type && DiskType::BLOCK != block_type))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(macro_id), K(offset), K(size));
+    LOG_WARN("invalid argument", K(ret), K(macro_id), K(offset), K(size), K(block_type));
   } else {
     first_id_ = macro_id.first_id();
     second_id_ = macro_id.second_id();
     third_id_ = macro_id.third_id();
     offset_ = offset;
     size_ = size;
-    type_ = DiskType::BLOCK;
+    type_ = block_type;
   }
   return ret;
 }
@@ -155,6 +157,7 @@ bool ObMetaDiskAddr::is_valid() const
          && size_ <= ObLogConstants::MAX_LOG_FILE_SIZE;
       break;
     case DiskType::BLOCK:
+    case DiskType::RAW_BLOCK:
       ret = second_id_ >= -1 && second_id_ < INT64_MAX && size_ > 0;
       break;
     case DiskType::MEM:

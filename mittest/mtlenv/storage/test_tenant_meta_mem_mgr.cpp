@@ -30,6 +30,7 @@
 #include "storage/tablet/ob_tablet_status.h"
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/test_dml_common.h"
+#include "storage/slog_ckpt/ob_linked_macro_block_writer.h"
 
 namespace oceanbase
 {
@@ -675,8 +676,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
   ASSERT_TRUE(tablet->pointer_hdl_.is_valid());
 
   ObSSTable sstable;
-  common::ObSEArray<ObSharedBlocksWriteCtx, 16> tablet_meta_write_ctxs;
-  common::ObSEArray<ObSharedBlocksWriteCtx, 16> sstable_meta_write_ctxs;
+  common::ObSEArray<ObSharedBlocksWriteCtx, 16> total_write_ctxs;
   checkpoint::ObCheckpointExecutor ckpt_executor;
   checkpoint::ObDataCheckpoint data_checkpoint;
   ObLS ls;
@@ -685,6 +685,9 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
   ObLSTabletService ls_tablet_svr;
   MockObLogHandler log_handler;
   ObFreezer freezer;
+  ObTabletSpaceUsage space_usage;
+  ObTabletMacroInfo tablet_macro_info;
+  ObLinkedMacroBlockItemWriter linked_writer;
   ObArenaAllocator schema_allocator;
   ObCreateTabletSchema create_tablet_schema;
   prepare_data_schema(schema_allocator, create_tablet_schema);
@@ -701,12 +704,13 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
       create_scn, create_scn.get_val_for_tx(), create_tablet_schema, true, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
+  ObTabletPersister persister;
 
   ObTabletHandle new_handle;
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
-  ASSERT_EQ(common::OB_SUCCESS, ObTabletPersister::persist_and_fill_tablet(
-      *tablet, allocator_, tablet_meta_write_ctxs, sstable_meta_write_ctxs, new_handle));
-  ASSERT_EQ(common::OB_SUCCESS, ObTabletPersister::persist_4k_tablet(allocator_, new_handle));
+  ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
+      *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info));
+  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(tablet_macro_info, new_handle, space_usage));
 
   ObMetaDiskAddr addr = new_handle.get_obj()->get_tablet_addr();
   ret = t3m_.compare_and_swap_tablet(key, new_handle, new_handle);
@@ -765,8 +769,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
   ASSERT_TRUE(tablet->pointer_hdl_.is_valid());
 
   ObSSTable sstable;
-  common::ObSEArray<ObSharedBlocksWriteCtx, 16> tablet_meta_write_ctxs;
-  common::ObSEArray<ObSharedBlocksWriteCtx, 16> sstable_meta_write_ctxs;
+  common::ObSEArray<ObSharedBlocksWriteCtx, 16> total_write_ctxs;
   checkpoint::ObCheckpointExecutor ckpt_executor;
   checkpoint::ObDataCheckpoint data_checkpoint;
   ObLS ls;
@@ -775,6 +778,9 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
   ObLSTabletService ls_tablet_svr;
   MockObLogHandler log_handler;
   ObFreezer freezer;
+  ObTabletSpaceUsage space_usage;
+  ObTabletMacroInfo tablet_macro_info;
+  ObLinkedMacroBlockItemWriter linked_writer;
   ObArenaAllocator schema_allocator;
   ObCreateTabletSchema create_tablet_schema;
   prepare_data_schema(schema_allocator, create_tablet_schema);
@@ -794,10 +800,11 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
   ASSERT_EQ(1, tablet->get_ref());
 
   ObTabletHandle new_handle;
+  ObTabletPersister persister;
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
-  ASSERT_EQ(common::OB_SUCCESS, ObTabletPersister::persist_and_fill_tablet(
-      *tablet, allocator_, tablet_meta_write_ctxs, sstable_meta_write_ctxs, new_handle));
-  ASSERT_EQ(common::OB_SUCCESS, ObTabletPersister::persist_4k_tablet(allocator_, new_handle));
+  ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
+      *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info));
+  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(tablet_macro_info, new_handle, space_usage));
 
   ObMetaDiskAddr addr = new_handle.get_obj()->get_tablet_addr();
 
@@ -868,8 +875,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
   ASSERT_TRUE(nullptr != tablet);
   ASSERT_TRUE(tablet->pointer_hdl_.is_valid());
 
-  common::ObSEArray<ObSharedBlocksWriteCtx, 16> tablet_meta_write_ctxs;
-  common::ObSEArray<ObSharedBlocksWriteCtx, 16> sstable_meta_write_ctxs;
+  common::ObSEArray<ObSharedBlocksWriteCtx, 16> total_write_ctxs;
   checkpoint::ObCheckpointExecutor ckpt_executor;
   checkpoint::ObDataCheckpoint data_checkpoint;
   ObLS ls;
@@ -878,6 +884,9 @@ TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
   ObLSTabletService ls_tablet_svr;
   MockObLogHandler log_handler;
   ObFreezer freezer;
+  ObTabletSpaceUsage space_usage;
+  ObTabletMacroInfo tablet_macro_info;
+  ObLinkedMacroBlockItemWriter linked_writer;
   ObArenaAllocator schema_allocator;
   ObCreateTabletSchema create_tablet_schema;
   prepare_data_schema(schema_allocator, create_tablet_schema);
@@ -897,10 +906,11 @@ TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
   ASSERT_EQ(1, tablet->get_ref());
 
   ObTabletHandle new_handle;
+  ObTabletPersister persister;
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
-  ASSERT_EQ(common::OB_SUCCESS, ObTabletPersister::persist_and_fill_tablet(
-      *tablet, allocator_, tablet_meta_write_ctxs, sstable_meta_write_ctxs, new_handle));
-  ASSERT_EQ(common::OB_SUCCESS, ObTabletPersister::persist_4k_tablet(allocator_, new_handle));
+  ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
+      *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info));
+  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(tablet_macro_info, new_handle, space_usage));
 
   ret = t3m_.compare_and_swap_tablet(key, new_handle, new_handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
@@ -951,8 +961,7 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
   ASSERT_TRUE(tablet->pointer_hdl_.is_valid());
 
   ObSSTable sstable;
-  common::ObSEArray<ObSharedBlocksWriteCtx, 16> tablet_meta_write_ctxs;
-  common::ObSEArray<ObSharedBlocksWriteCtx, 16> sstable_meta_write_ctxs;
+  common::ObSEArray<ObSharedBlocksWriteCtx, 16> total_write_ctxs;
   checkpoint::ObCheckpointExecutor ckpt_executor;
   checkpoint::ObDataCheckpoint data_checkpoint;
   ObLS ls;
@@ -961,6 +970,9 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
   ObLSTabletService ls_tablet_svr;
   MockObLogHandler log_handler;
   ObFreezer freezer;
+  ObTabletSpaceUsage space_usage;
+  ObTabletMacroInfo tablet_macro_info;
+  ObLinkedMacroBlockItemWriter linked_writer;
   ObArenaAllocator schema_allocator;
   ObCreateTabletSchema create_tablet_schema;
   prepare_data_schema(schema_allocator, create_tablet_schema);
@@ -986,10 +998,11 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
   ASSERT_EQ(1, tablet->get_ref());
 
   ObTabletHandle new_handle;
+  ObTabletPersister persister;
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
-  ASSERT_EQ(common::OB_SUCCESS, ObTabletPersister::persist_and_fill_tablet(
-      *tablet, allocator_, tablet_meta_write_ctxs, sstable_meta_write_ctxs, new_handle));
-  ASSERT_EQ(common::OB_SUCCESS, ObTabletPersister::persist_4k_tablet(allocator_, new_handle));
+  ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
+      *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info));
+  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(tablet_macro_info, new_handle, space_usage));
 
   ret = t3m_.compare_and_swap_tablet(key, new_handle, new_handle);
   tablet = new_handle.get_obj();

@@ -414,13 +414,13 @@ TEST_F(TestMetaDiskAddr, test_meta_disk_address)
 
   ObMetaDiskAddr block_addr;
   ASSERT_TRUE(!block_addr.is_valid());
-  ASSERT_EQ(OB_INVALID_ARGUMENT, block_addr.set_block_addr(macro_id, 0, sizeof(ObTablet)));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, block_addr.set_block_addr(macro_id, 0, sizeof(ObTablet), ObMetaDiskAddr::DiskType::BLOCK));
   macro_id.block_index_ = 100;
-  ASSERT_EQ(OB_INVALID_ARGUMENT, block_addr.set_block_addr(macro_id, -1, sizeof(ObTablet)));
-  ASSERT_EQ(OB_INVALID_ARGUMENT, block_addr.set_block_addr(macro_id, ObMetaDiskAddr::MAX_OFFSET + 10, sizeof(ObTablet)));
-  ASSERT_EQ(OB_INVALID_ARGUMENT, block_addr.set_block_addr(macro_id, 0, -1));
-  ASSERT_EQ(OB_INVALID_ARGUMENT, block_addr.set_block_addr(macro_id, ObMetaDiskAddr::MAX_OFFSET + 10, ObMetaDiskAddr::MAX_SIZE + sizeof(ObTablet)));
-  ASSERT_EQ(OB_SUCCESS, block_addr.set_block_addr(macro_id, 0, sizeof(ObTablet)));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, block_addr.set_block_addr(macro_id, -1, sizeof(ObTablet), ObMetaDiskAddr::DiskType::BLOCK));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, block_addr.set_block_addr(macro_id, ObMetaDiskAddr::MAX_OFFSET + 10, sizeof(ObTablet), ObMetaDiskAddr::DiskType::BLOCK));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, block_addr.set_block_addr(macro_id, 0, -1, ObMetaDiskAddr::DiskType::BLOCK));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, block_addr.set_block_addr(macro_id, ObMetaDiskAddr::MAX_OFFSET + 10, ObMetaDiskAddr::MAX_SIZE + sizeof(ObTablet), ObMetaDiskAddr::DiskType::BLOCK));
+  ASSERT_EQ(OB_SUCCESS, block_addr.set_block_addr(macro_id, 0, sizeof(ObTablet), ObMetaDiskAddr::DiskType::BLOCK));
   ASSERT_TRUE(block_addr.is_valid());
   ASSERT_EQ(ObMetaDiskAddr::DiskType::BLOCK, block_addr.type_);
   ASSERT_EQ(macro_id.first_id_, block_addr.first_id_);

@@ -38,13 +38,13 @@
 #include "storage/tablet/ob_tablet_mds_data.h"
 #include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 #include "storage/high_availability/ob_tablet_transfer_info.h"
+#include "storage/tablet/ob_tablet_space_usage.h"
 
 namespace oceanbase
 {
 namespace storage
 {
 struct ObMigrationTabletParam;
-
 class ObTabletMeta final
 {
   friend class ObTablet;
@@ -143,7 +143,8 @@ public:
                K_(ddl_commit_scn),
                K_(mds_checkpoint_scn),
                K_(transfer_info),
-               K_(create_schema_version));
+               K_(create_schema_version),
+               K_(space_usage));
 
 public:
   int32_t version_;
@@ -175,6 +176,7 @@ public:
   share::SCN ddl_commit_scn_;
   share::SCN mds_checkpoint_scn_;
   ObTabletTransferInfo transfer_info_; // alignment: 8B, size: 32B
+  ObTabletSpaceUsage space_usage_; // calculated by tablet persist, ObMigrationTabletParam doesn't need it
   int64_t create_schema_version_; // add after 4.2, record schema_version when first create tablet. NEED COMPAT
   //ATTENTION : Add a new variable need consider ObMigrationTabletParam
   // and tablet meta init interface for migration.

@@ -301,7 +301,7 @@ int ObLinkedMacroBlockItemWriter::set_pre_block_inflight_items_addr(
     for (int64_t idx = first_inflight_item_idx_;
         OB_SUCC(ret) && idx < first_inflight_item_idx_ + pre_block_inflight_items_cnt_; idx++) {
       ObMetaDiskAddr addr;
-      if (OB_FAIL(addr.set_block_addr(pre_block_id, offset, item_size_arr_.at(idx)))) {
+      if (OB_FAIL(addr.set_block_addr(pre_block_id, offset, item_size_arr_.at(idx), ObMetaDiskAddr::DiskType::BLOCK))) {
         LOG_WARN("fail to push back address", K(ret), K(addr));
       } else if (OB_FAIL(item_disk_addr_arr_.push_back(addr))) {
         LOG_WARN("fail to push back address", K(ret), K(addr));

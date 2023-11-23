@@ -25,7 +25,38 @@ namespace oceanbase
 {
 namespace storage
 {
+struct ObBlockInfoSet;
+class ObTabletMacroInfo;
 class ObCOSSTableV2;
+
+struct ObSharedBlockIndex final
+{
+public:
+  ObSharedBlockIndex()
+    : shared_macro_id_(), nested_offset_(0)
+  {
+  }
+  ObSharedBlockIndex(const blocksstable::MacroBlockId &shared_macro_id, const int64_t nested_offset)
+    : shared_macro_id_(shared_macro_id), nested_offset_(nested_offset)
+  {
+  }
+  ~ObSharedBlockIndex()
+  {
+    reset();
+  }
+  void reset()
+  {
+    shared_macro_id_.reset();
+    nested_offset_ = 0;
+  }
+  int hash(uint64_t &hash_val) const;
+  bool operator ==(const ObSharedBlockIndex &other) const;
+
+  TO_STRING_KV(K_(shared_macro_id), K_(nested_offset));
+public:
+  blocksstable::MacroBlockId shared_macro_id_;
+  int64_t nested_offset_;
+};
 
 class ObTabletTransformArg final
 {
@@ -48,11 +79,14 @@ public:
                K_(extra_medium_info),
                K_(medium_info_list_addr),
                K_(auto_inc_seq_addr),
+               K_(tablet_macro_info_addr),
+               KP_(tablet_macro_info_ptr),
                K_(tablet_status_cache),
                K_(is_row_store));
 public:
   const share::ObTabletAutoincSeq *auto_inc_seq_ptr_;
   const ObRowkeyReadInfo *rowkey_read_info_ptr_;
+  const ObTabletMacroInfo *tablet_macro_info_ptr_;
   ObTabletMeta tablet_meta_;
   ObMetaDiskAddr table_store_addr_;
   ObMetaDiskAddr storage_schema_addr_;
@@ -63,18 +97,17 @@ public:
   compaction::ObExtraMediumInfo extra_medium_info_;
   ObMetaDiskAddr medium_info_list_addr_;
   ObMetaDiskAddr auto_inc_seq_addr_;
+  ObMetaDiskAddr tablet_macro_info_addr_;
   ObTabletCreateDeleteMdsUserData tablet_status_cache_;
   bool is_row_store_;
   ObITable **ddl_kvs_;
   int64_t ddl_kv_count_;
-  // memtable::ObIMemtable **memtables_;
   memtable::ObIMemtable *memtables_[MAX_MEMSTORE_CNT];
   int64_t memtable_count_;
   // If you want to add new member, make sure all member is assigned in 2 convert function.
   // ObTabletPersister::convert_tablet_to_mem_arg
   // ObTabletPersister::convert_tablet_to_disk_arg
 };
-
 
 class ObSSTablePersistWrapper final
 {
@@ -91,17 +124,83 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObSSTablePersistWrapper);
 };
 
+class ObITabletMetaModifier
+{
+public:
+  ObITabletMetaModifier() = default;
+  virtual ~ObITabletMetaModifier() = default;
+  virtual int modify_tablet_meta(ObTabletMeta &meta) = 0;
+};
+
+
+class ObMultiTimeStats
+{
+public:
+  class TimeStats
+  {
+  public:
+    explicit TimeStats(const char *owner);
+    void click(const char *step_name);
+    ~TimeStats() {}
+    int64_t to_string(char *buf, const int64_t buf_len) const;
+    int set_extra_info(const char *fmt, ...);
+    int64_t get_total_time() const { return last_ts_ - start_ts_; }
+
+  private:
+    static const int64_t MAX_CLICK_COUNT = 16;
+    static const int64_t MAX_EXTRA_INFO_LENGTH = 128;
+    const char *owner_;
+    int64_t start_ts_;
+    int64_t last_ts_;
+    const char *click_str_[MAX_CLICK_COUNT];
+    int32_t click_[MAX_CLICK_COUNT];
+    int32_t click_count_;
+    char extra_info_[MAX_EXTRA_INFO_LENGTH];
+    bool has_extra_info_;
+
+    DISALLOW_COPY_AND_ASSIGN(TimeStats);
+  };
+
+  explicit ObMultiTimeStats(ObArenaAllocator *allocator);
+  ~ObMultiTimeStats();
+  int acquire_stats(const char *owner, TimeStats *&stats);
+  int64_t to_string(char *buf, const int64_t buf_len) const;
+
+private:
+  static const int64_t MAX_STATS_CNT = 16;
+  ObArenaAllocator *allocator_;
+  TimeStats *stats_;
+  int32_t stats_count_;
+
+  DISALLOW_COPY_AND_ASSIGN(ObMultiTimeStats);
+};
 
 class ObTabletPersister final
 {
 public:
-  ObTabletPersister() = default;
-  ~ObTabletPersister() = default;
+  static const int64_t MAP_EXTEND_RATIO = 2;
+  typedef typename common::hash::ObHashMap<ObSharedBlockIndex,
+                                          int64_t,
+                                          common::hash::NoPthreadDefendMode,
+                                          common::hash::hash_func<ObSharedBlockIndex>,
+                                          common::hash::equal_to<ObSharedBlockIndex>,
+                                          common::hash::SimpleAllocer<common::hash::HashMapTypes<ObSharedBlockIndex, int64_t>::AllocType>,
+                                          common::hash::NormalPointer,
+                                          oceanbase::common::ObMalloc,
+                                          MAP_EXTEND_RATIO> SharedMacroMap;
+  typedef typename SharedMacroMap::iterator SharedMacroIterator;
+public:
+  explicit ObTabletPersister(const int64_t ctx_id = 0);
+  ~ObTabletPersister();
   // Persist the old tablet itself and all internal members, and transform it into a new tablet
   // from object pool. The old tablet can be allocated by allocator or from object pool.
   static int persist_and_transform_tablet(
       const ObTablet &old_tablet,
       ObTabletHandle &new_handle);
+  static int persist_and_transform_only_tablet_meta(
+      const ObTablet &old_tablet,
+      ObITabletMetaModifier &modifier,
+      ObTabletHandle &new_tablet);
   // copy from old tablet
   static int copy_from_old_tablet(
       const ObTablet &old_tablet,
@@ -113,10 +212,25 @@ public:
       const ObTablet &old_tablet,
       char *buf,
       const int64_t len);
+  static int convert_macro_info_map(SharedMacroMap &shared_macro_map, ObBlockInfoSet::TabletMacroMap &aggregated_info_map);
+  static int copy_sstable_macro_info(
+      const blocksstable::ObSSTable &sstable,
+      SharedMacroMap &shared_macro_map,
+      ObBlockInfoSet &block_info_set);
+  static int copy_shared_macro_info(
+      const blocksstable::ObSSTableMacroInfo &macro_info,
+      SharedMacroMap &shared_macro_map,
+      ObBlockInfoSet::TabletMacroSet &meta_id_set);
+  static int copy_data_macro_ids(
+      const blocksstable::ObSSTableMacroInfo &macro_info,
+      ObBlockInfoSet &block_info_set);
   static int transform_empty_shell(const ObTablet &old_tablet, ObTabletHandle &new_handle);
 private:
+  static int do_copy_ids(
+      blocksstable::ObMacroIdIterator &iter,
+      ObBlockInfoSet::TabletMacroSet &id_set);
   static int check_tablet_meta_ids(
-      const common::ObIArray<ObSharedBlocksWriteCtx> &tablet_meta_write_ctxs,
+      const ObBlockInfoArray<blocksstable::MacroBlockId> &meta_id_arr,
       const ObTablet &tablet);
   static int acquire_tablet(
       const ObTabletPoolType &type,
@@ -127,60 +241,64 @@ private:
       const ObTablet &tablet,
       ObTabletMemberWrapper<share::ObTabletAutoincSeq> &auto_inc_seq,
       ObTabletTransformArg &arg);
-  static int convert_tablet_to_disk_arg(
-      common::ObArenaAllocator &allocator,
+  int convert_tablet_to_disk_arg(
       const ObTablet &tablet,
-      common::ObIArray<ObSharedBlocksWriteCtx> &tablet_meta_write_ctxs,
-      common::ObIArray<ObSharedBlocksWriteCtx> &sstable_meta_write_ctxs,
+      common::ObIArray<ObSharedBlocksWriteCtx> &total_write_ctxs,
       ObTabletPoolType &type,
-      ObTabletTransformArg &arg);
+      ObTabletTransformArg &arg,
+      int64_t &total_tablet_meta_size,
+      ObBlockInfoSet &block_info_set);
   static int convert_arg_to_tablet(
       const ObTabletTransformArg &arg,
-      ObTablet &tablet,
-      ObArenaAllocator &allocator);
-  static int transform(
+      ObTablet &tablet);
+  int transform(
       const ObTabletTransformArg &arg,
       char *buf,
       const int64_t len);
-  static int recursively_persist(
+  int persist_and_fill_tablet(
       const ObTablet &old_tablet,
-      common::ObArenaAllocator &allocator,
-      common::ObIArray<ObSharedBlocksWriteCtx> &tablet_meta_write_ctxs,
-      common::ObIArray<ObSharedBlocksWriteCtx> &sstable_meta_write_ctxs,
-      ObTabletHandle &new_handle);
-  static int persist_and_fill_tablet(
+      ObLinkedMacroBlockItemWriter &linked_writer,
+      common::ObIArray<ObSharedBlocksWriteCtx> &total_write_ctxs,
+      ObTabletHandle &new_handle,
+      ObTabletSpaceUsage &space_usage,
+      ObTabletMacroInfo &macro_info);
+  int modify_and_fill_tablet(
       const ObTablet &old_tablet,
-      common::ObArenaAllocator &allocator,
-      common::ObIArray<ObSharedBlocksWriteCtx> &tablet_meta_write_ctxs,
-      common::ObIArray<ObSharedBlocksWriteCtx> &sstable_meta_write_ctxs,
+      ObITabletMetaModifier &modifier,
       ObTabletHandle &new_handle);
-  static int fetch_and_persist_sstable(
-      common::ObArenaAllocator &allocator,
+  int fetch_and_persist_sstable(
       ObTableStoreIterator &table_iter,
       ObTabletTableStore &new_table_store,
-      common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs);
+      common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs,
+      int64_t &total_tablet_meta_size,
+      ObBlockInfoSet &block_info_set);
   static int fetch_and_persist_co_sstable(
     common::ObArenaAllocator &allocator,
     storage::ObCOSSTableV2 *co_sstable,
     common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs,
-    common::ObIArray<ObMetaDiskAddr> &cg_addrs);
+    common::ObIArray<ObMetaDiskAddr> &cg_addrs,
+    int64_t &total_tablet_meta_size,
+    ObBlockInfoSet &block_info_set,
+    SharedMacroMap &shared_macro_map);
   static int batch_write_sstable_info(
     common::ObIArray<ObSharedBlockWriteInfo> &write_infos,
     common::ObIArray<ObSharedBlocksWriteCtx> &write_ctxs,
     common::ObIArray<ObMetaDiskAddr> &addrs,
-    common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs);
+    common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs,
+    ObBlockInfoSet &block_info_set);
   static int load_auto_inc_seq_and_write_info(
       common::ObArenaAllocator &allocator,
       const ObTabletComplexAddr<share::ObTabletAutoincSeq> &complex_addr,
       const share::ObTabletAutoincSeq *&auto_inc_seq,
       common::ObIArray<ObSharedBlockWriteInfo> &write_infos,
       ObMetaDiskAddr &addr);
-  static int fetch_table_store_and_write_info(
+  int fetch_table_store_and_write_info(
       const ObTablet &tablet,
-      common::ObArenaAllocator &allocator,
       ObTabletMemberWrapper<ObTabletTableStore> &wrapper,
       common::ObIArray<ObSharedBlockWriteInfo> &write_infos,
-      common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs);
+      common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs,
+      int64_t &total_tablet_meta_size,
+      ObBlockInfoSet &block_info_set);
   static int load_storage_schema_and_fill_write_info(
       const ObTablet &tablet,
       common::ObArenaAllocator &allocator,
@@ -194,11 +312,15 @@ private:
       common::ObArenaAllocator &allocator,
       const ObTabletComplexAddr<ObTabletDumpedMediumInfo> &complex_addr,
       common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs,
-      ObMetaDiskAddr &addr);
+      ObMetaDiskAddr &addr,
+      int64_t &total_tablet_meta_size,
+      ObBlockInfoSet::TabletMacroSet &meta_block_id_set);
   static int link_write_medium_info_list(
       const ObTabletDumpedMediumInfo *medium_info_list,
       common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs,
-      ObMetaDiskAddr &addr);
+      ObMetaDiskAddr &addr,
+      int64_t &total_tablet_meta_size,
+      ObBlockInfoSet::TabletMacroSet &meta_block_id_set);
   template <typename T>
   static int fill_write_info(
       common::ObArenaAllocator &allocator,
@@ -211,18 +333,36 @@ private:
   static int write_and_fill_args(
       const common::ObIArray<ObSharedBlockWriteInfo> &write_infos,
       ObTabletTransformArg &arg,
-      common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs);
-  static int persist_4k_tablet(
+      common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs,
+      int64_t &total_tablet_meta_size,
+      ObBlockInfoSet::TabletMacroSet &meta_block_id_set);
+  int persist_aggregated_meta(
+      const ObTabletMacroInfo &tablet_macro_info,
+      ObTabletHandle &new_handle,
+      ObTabletSpaceUsage &space_usage);
+  static int fill_tablet_write_info(
       common::ObArenaAllocator &allocator,
-      ObTabletHandle &new_handle);
-  static int load_table_store(
+      const ObTablet *tablet,
+      const ObTabletMacroInfo &tablet_macro_info,
+      ObSharedBlockWriteInfo &write_info);
+  int load_table_store(
       common::ObArenaAllocator &allocator,
       const ObTablet &tablet,
       const ObMetaDiskAddr &addr,
       ObTabletTableStore *&table_store);
+  void print_time_stats(
+      const ObMultiTimeStats::TimeStats &time_stats,
+      const int64_t stats_warn_threshold,
+      const int64_t print_interval);
 
 public:
   static const int64_t SSTABLE_MAX_SERIALIZE_SIZE = 1966080L;  // 1.875MB
+
+private:
+  ObArenaAllocator allocator_;
+  ObMultiTimeStats multi_stats_;
+
+  DISALLOW_COPY_AND_ASSIGN(ObTabletPersister);
 };
 
 template <typename T>

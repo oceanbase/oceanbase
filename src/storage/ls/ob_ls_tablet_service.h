@@ -31,6 +31,7 @@
 #include "storage/tablet/ob_tablet_common.h"
 #include "storage/tablet/ob_tablet_memtable_mgr.h"
 #include "storage/tablet/ob_tablet_id_set.h"
+#include "storage/tablet/ob_tablet_persister.h"
 #include "storage/lob/ob_lob_manager.h"
 #include "storage/multi_data_source/mds_table_mgr.h"
 
@@ -248,6 +249,9 @@ public:
   int update_tablet_release_memtable_for_offline(
       const common::ObTabletID &tablet_id,
       const SCN scn);
+  int update_tablet_ddl_commit_scn(
+      const common::ObTabletID &tablet_id,
+      const SCN ddl_commit_scn);
   int update_tablet_restore_status(
       const common::ObTabletID &tablet_id,
       const ObTabletRestoreStatus::STATUS &restore_status,
@@ -467,6 +471,20 @@ private:
     int operator()(const common::ObTabletID &tablet_id);
     common::ObTabletID cur_tablet_id_;
     ObLSTabletService *tablet_svr_;
+  };
+  class ObUpdateDDLCommitSCN final : public ObITabletMetaModifier
+  {
+  public:
+    explicit ObUpdateDDLCommitSCN(const share::SCN ddl_commit_scn) : ddl_commit_scn_(ddl_commit_scn) {}
+    virtual ~ObUpdateDDLCommitSCN() = default;
+    virtual int modify_tablet_meta(ObTabletMeta &meta) override
+    {
+      meta.ddl_commit_scn_ = ddl_commit_scn_;
+      return OB_SUCCESS;
+    }
+  private:
+    const share::SCN ddl_commit_scn_;
+    DISALLOW_COPY_AND_ASSIGN(ObUpdateDDLCommitSCN);
   };
 private:
   static int refresh_memtable_for_ckpt(

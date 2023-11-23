@@ -22,6 +22,7 @@ namespace oceanbase
 {
 namespace storage
 {
+class ObSharedBlockIOCallback;
 struct ObSharedBlockWriteInfo final
 {
 public:
@@ -36,7 +37,7 @@ public:
   int64_t offset_;
   int64_t size_;
   common::ObIOFlag io_desc_;
-  common::ObIOCallback *io_callback_;
+  ObSharedBlockIOCallback *io_callback_;
 };
 
 struct ObSharedBlockReadInfo final
@@ -51,7 +52,7 @@ public:
 public:
   ObMetaDiskAddr addr_;
   common::ObIOFlag io_desc_;
-  common::ObIOCallback *io_callback_;
+  ObSharedBlockIOCallback *io_callback_;
   int64_t io_timeout_ms_;
   DISALLOW_COPY_AND_ASSIGN(ObSharedBlockReadInfo);
 };
@@ -127,11 +128,37 @@ protected:
   DISALLOW_COPY_AND_ASSIGN(ObSharedBlockBaseHandle);
 };
 
+class ObSharedBlockIOCallback : public common::ObIOCallback
+{
+public:
+  ObSharedBlockIOCallback(common::ObIAllocator *io_allocator, const ObMetaDiskAddr addr)
+    : io_allocator_(io_allocator), addr_(addr), data_buf_(nullptr) {}
+  virtual ~ObSharedBlockIOCallback();
+  virtual int alloc_data_buf(const char *io_data_buffer, const int64_t data_size) override;
+  int inner_process(const char *data_buffer, const int64_t size) override;
+  virtual int do_process(const char *buf, const int64_t buf_len) = 0;
+  virtual int64_t size() const = 0;
+  virtual const char *get_data() override;
+  virtual ObIAllocator *get_allocator() override { return io_allocator_; }
+
+  VIRTUAL_TO_STRING_KV(K_(addr), KP_(io_allocator), KP_(data_buf));
+  bool is_valid() const
+  {
+    return addr_.is_block() && nullptr != io_allocator_;
+  }
+
+private:
+  ObIAllocator *io_allocator_;
+  ObMetaDiskAddr addr_;
+  char *data_buf_;   // actual data buffer
+};
+
 
 class ObSharedBlockReadHandle final
 {
   friend class ObSharedBlockReaderWriter;
   friend class ObSharedBlockLinkIter;
+  friend class ObSharedBlockIOCallback;
 public:
   ObSharedBlockReadHandle();
   ObSharedBlockReadHandle(ObIAllocator &allocator);
@@ -143,13 +170,7 @@ public:
   int wait();
   int get_data(ObIAllocator &allocator, char *&buf, int64_t &buf_len);
   void reset();
-  TO_STRING_KV(K_(macro_handle));
-public:
-  static int parse_data(
-      const char *data_buf,
-      const int64_t data_size,
-      char *&buf,
-      int64_t &buf_len);
+  TO_STRING_KV(K_(addr), K_(macro_handle));
 
 private:
   static int verify_checksum(
@@ -158,10 +179,12 @@ private:
       int64_t &header_size,
       int64_t &buf_len);
   int alloc_io_buf(char *&buf, const int64_t &buf_size);
-  int set_macro_handle(const blocksstable::ObMacroBlockHandle &macro_handle);
+  int set_addr_and_macro_handle(const ObMetaDiskAddr &addr, const blocksstable::ObMacroBlockHandle &macro_handle);
+
 private:
   ObIAllocator *allocator_;
   blocksstable::ObMacroBlockHandle macro_handle_;
+  ObMetaDiskAddr addr_;
 };
 
 class ObSharedBlockWriteHandle final : public ObSharedBlockBaseHandle
@@ -239,6 +262,10 @@ public:
   void reset();
   void get_cur_shared_block(blocksstable::MacroBlockId &macro_id);
   static int async_read(const ObSharedBlockReadInfo &read_info, ObSharedBlockReadHandle &block_handle);
+  static int parse_data_from_macro_block(
+      blocksstable::ObMacroBlockHandle &macro_handle,
+      const ObMetaDiskAddr addr,
+      char *&buf, int64_t &buf_len);
   int async_write(
       const ObSharedBlockWriteInfo &write_info,
       ObSharedBlockWriteHandle &block_handle);
@@ -264,17 +291,16 @@ private:
       const ObSharedBlockWriteArgs &write_args,
       ObSharedBlockBaseHandle &block_handle); // cross
   int calc_store_size(
-      const ObSharedBlockHeader &header,
+      const int64_t total_size,
       const bool need_align,
       int64_t &store_size,
       int64_t &align_store_size);
   int inner_write_block(
       const ObSharedBlockHeader &header,
       const char *buf,
-      const int64_t &size,
-      ObSharedBlockBaseHandle &block_handle,
-      const bool need_flush = true,
-      const bool need_align = true);
+      const int64_t size,
+      const ObSharedBlockWriteArgs &write_args,
+      ObSharedBlockBaseHandle &block_handle);
   int switch_block(blocksstable::ObMacroBlockHandle &macro_handle);
   int reserve_header();
 private:
@@ -282,13 +308,14 @@ struct ObSharedBlockWriteArgs final
 {
 public:
   ObSharedBlockWriteArgs()
-    : need_flush_(true), need_align_(true), is_linked_(false)
+    : need_flush_(true), need_align_(true), is_linked_(false), with_header_(true)
   {}
   ~ObSharedBlockWriteArgs() = default;
-  TO_STRING_KV(K_(need_flush), K_(need_align), K_(is_linked));
+  TO_STRING_KV(K_(need_flush), K_(need_align), K_(is_linked), K_(with_header));
   bool need_flush_;
   bool need_align_;
   bool is_linked_;
+  bool with_header_;
 };
 private:
   lib::ObMutex mutex_;

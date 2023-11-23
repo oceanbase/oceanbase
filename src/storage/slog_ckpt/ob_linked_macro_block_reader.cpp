@@ -413,7 +413,7 @@ int ObLinkedMacroBlockItemReader::parse_item(
     } else {
       offset = buf_pos_;
     }
-    if (OB_FAIL(addr.set_block_addr(buf_block_id_, offset, size))) {
+    if (OB_FAIL(addr.set_block_addr(buf_block_id_, offset, size, ObMetaDiskAddr::DiskType::BLOCK))) {
       LOG_WARN("fail to set block address", K(ret), K(buf_block_id_), K(offset), K(size));
     } else {
       buf_pos_ += sizeof(ObLinkedMacroBlockItemHeader);
