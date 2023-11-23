@@ -2595,6 +2595,8 @@ private:
     return !(orig_key == (new_key));
   }
 
+  bool need_modify_dep_obj_status(const obrpc::ObAlterTableArg &alter_table_arg) const;
+
 private:
   bool inited_;
   volatile bool stopped_;

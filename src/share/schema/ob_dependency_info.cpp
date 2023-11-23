@@ -541,6 +541,7 @@ int ObDependencyInfo::modify_all_obj_status(const ObIArray<std::pair<uint64_t, s
           } else if (!view_schema.is_view_table()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get wrong schema", K(ret), K(view_schema));
+          } else if (new_status == view_schema.get_object_status()) {
           } else if (OB_FAIL(schema_service.gen_new_schema_version(tenant_id, refresh_schema_version))) {
             LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
           } else if (OB_FAIL(ddl_operator.update_table_status(view_schema, refresh_schema_version,

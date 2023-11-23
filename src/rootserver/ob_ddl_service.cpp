@@ -10865,8 +10865,10 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
       } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
         LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
       // All alter table behaviors will cause the status to change, which is not as fine as oracle
-      } else if (OB_FAIL(ObDependencyInfo::modify_dep_obj_status(trans, tenant_id, orig_table_schema->get_table_id(),
-                                                                 ddl_operator, *schema_service_))) {
+      } else if (need_modify_dep_obj_status(alter_table_arg)
+                 && OB_FAIL(ObDependencyInfo::modify_dep_obj_status(trans, tenant_id,
+                                                                    orig_table_schema->get_table_id(),
+                                                                    ddl_operator, *schema_service_))) {
         LOG_WARN("failed to modify obj status", K(ret));
       } else {
         ObArray<ObTableSchema> global_idx_schema_array;
@@ -11774,7 +11776,8 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
       }
       // TODO yiren, refactor it, create user hidden table after alter index/column/part/cst...
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObDependencyInfo::modify_dep_obj_status(trans, tenant_id, orig_table_schema->get_table_id(),
+      } else if (need_modify_dep_obj_status(alter_table_arg)
+                 && OB_FAIL(ObDependencyInfo::modify_dep_obj_status(trans, tenant_id, orig_table_schema->get_table_id(),
                                                       ddl_operator, *schema_service_))) {
         LOG_WARN("failed to modify obj status", K(ret));
       } else if (OB_FAIL(check_ddl_with_primary_key_operation(alter_table_arg,
@@ -36083,6 +36086,14 @@ int ObDDLService::check_same_subpartition_(const bool is_oracle_mode, const ObSu
       LOG_WARN("fail to check partition value", KR(ret), K(l), K(r));
   }
   return ret;
+}
+
+bool ObDDLService::need_modify_dep_obj_status(const obrpc::ObAlterTableArg &alter_table_arg) const
+{
+  const AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
+  return (alter_table_arg.is_alter_columns_
+          || (alter_table_arg.is_alter_options_
+              && alter_table_schema.alter_option_bitset_.has_member(ObAlterTableArg::TABLE_NAME)));
 }
 
 } // end namespace rootserver
