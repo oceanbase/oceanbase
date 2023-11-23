@@ -970,7 +970,6 @@ public:
                K_(sweep_cost_time),
                KTIME_(start_time),
                KTIME_(last_end_time),
-               K_(mark_finished),
                K_(hold_info));
 public:
   int64_t total_block_count_;
@@ -991,7 +990,6 @@ public:
   int64_t sweep_cost_time_;
   int64_t start_time_;
   int64_t last_end_time_;
-  bool mark_finished_;
   ObSimpleMacroBlockInfo hold_info_;
 };
 
