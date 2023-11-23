@@ -76,7 +76,8 @@ public:
       uint64_t is_batch_stmt_                   : 1;
       uint64_t is_insert_up_                    : 1;
       uint64_t is_table_api_                    : 1;
-      uint64_t reserved_                        : 59;
+      uint64_t is_access_mlog_as_master_table_  : 1;
+      uint64_t reserved_                        : 58;
     };
   };
 protected:

@@ -1567,6 +1567,7 @@ public:
   uint64_t get_aux_lob_piece_tid() const { return aux_lob_piece_tid_; }
   bool has_lob_column() const;
   bool has_lob_aux_table() const { return (aux_lob_meta_tid_ != OB_INVALID_ID && aux_lob_piece_tid_ != OB_INVALID_ID); }
+  bool has_mlog_table() const { return (OB_INVALID_ID != mlog_tid_); }
   inline void add_table_flag(uint64_t flag) { table_flags_ |= flag; }
   inline void del_table_flag(uint64_t flag) { table_flags_ &= ~flag; }
   inline void add_or_del_table_flag(uint64_t flag, bool is_add)
@@ -1593,6 +1594,8 @@ public:
     rls_group_ids_.reset();
     rls_context_ids_.reset();
   }
+  void set_mlog_tid(const uint64_t& table_id) { mlog_tid_ = table_id; }
+  uint64_t get_mlog_tid() const { return mlog_tid_; }
   DECLARE_VIRTUAL_TO_STRING;
 
 protected:
@@ -1795,6 +1798,7 @@ protected:
   int64_t column_group_arr_capacity_;
   CgIdHashArray *cg_id_hash_arr_;
   CgNameHashArray *cg_name_hash_arr_;
+  uint64_t mlog_tid_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema
