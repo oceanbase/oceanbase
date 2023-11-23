@@ -143,6 +143,7 @@ TEST_F(TestTableSessPool, mgr_get_session)
   const ObTableApiCredential *cred = nullptr;
   ASSERT_EQ(OB_SUCCESS, guard.get_credential(cred));
   ASSERT_NE(nullptr, cred);
+  mgr->destroy();
 }
 
 TEST_F(TestTableSessPool, mgr_update_session)
