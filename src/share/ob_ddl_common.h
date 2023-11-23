@@ -135,6 +135,7 @@ enum ObDDLTaskStatus {
   CHECK_TABLE_EMPTY = 15,
   WAIT_CHILD_TASK_FINISH = 16,
   REPENDING = 17,
+  START_REFRESH_MVIEW_TASK = 18,
   FAIL = 99,
   SUCCESS = 100
 };
@@ -195,6 +196,9 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
       break;
     case ObDDLTaskStatus::REPENDING:
       str = "REPENDING";
+      break;
+    case ObDDLTaskStatus::START_REFRESH_MVIEW_TASK:
+      str = "START_REFRESH_MVIEW_TASK";
       break;
     case ObDDLTaskStatus::FAIL:
       str = "FAIL";
