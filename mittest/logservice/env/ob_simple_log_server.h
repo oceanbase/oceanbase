@@ -261,7 +261,9 @@ class ObSimpleLogServer : public ObISimpleLogServer
 public:
   ObSimpleLogServer()
     : handler_(deliver_),
-      transport_(NULL)
+      transport_(NULL),
+      batch_rpc_transport_(NULL),
+      high_prio_rpc_transport_(NULL)
   {
   }
   ~ObSimpleLogServer()
@@ -405,6 +407,8 @@ private:
   logservice::ObLogService log_service_;
   ObTenantMutilAllocator *allocator_;
   rpc::frame::ObReqTransport *transport_;
+  rpc::frame::ObReqTransport *batch_rpc_transport_;
+  rpc::frame::ObReqTransport *high_prio_rpc_transport_;
   ObLSService ls_service_;
   ObLocationService location_service_;
   MockMetaReporter reporter_;
@@ -421,6 +425,8 @@ private:
   // 内部表中记录日志盘规格
   palf::PalfDiskOptions inner_table_disk_opts_;
   ObLooper looper_;
+  obrpc::ObBatchRpc batch_rpc_;
+  int batch_rpc_tg_id_;
 };
 
 } // end unittest
