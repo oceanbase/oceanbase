@@ -856,7 +856,7 @@ int ObTenantIOManager::update_basic_io_config(const ObTenantIOConfig &io_config)
         if (OB_FAIL(io_clock_->update_io_clocks(io_config_))) {
           LOG_WARN("refresh io clock failed", K(ret), K(io_config_));
         } else {
-          LOG_INFO("update basic io config success", K(tenant_id_), K(io_config_), K(io_config), K(io_clock_));
+          LOG_INFO("update basic io config success", K(tenant_id_), K(io_config_), K(io_config), KPC(io_clock_));
         }
       }
     }
@@ -1342,7 +1342,7 @@ void ObTenantIOManager::print_io_status()
       if (OB_FAIL(callback_mgr_.get_queue_count(queue_count_array))) {
         LOG_WARN("get callback queue count failed", K(ret));
       }
-      LOG_INFO("[IO STATUS]", K_(tenant_id), K_(ref_cnt), K_(io_config),
+      LOG_INFO("[IO STATUS CONFIG]", K_(tenant_id), K_(ref_cnt), K_(io_config),
           "allocated_memory", io_allocator_.get_allocated_size(),
           "callback_queues", queue_count_array);
     }
