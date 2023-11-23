@@ -105,6 +105,7 @@ int ObExprAdd::calc_result_type2(ObExprResType &type,
       } else if (is_oracle && type.get_precision() > OB_MAX_NUMBER_PRECISION) {
         type1.set_calc_type(ObNumberType);
         type2.set_calc_type(ObNumberType);
+        type.set_number();
       } else {
         if (ObRawExprUtils::decimal_int_need_cast(type1.get_accuracy(), type.get_accuracy()) ||
               ObRawExprUtils::decimal_int_need_cast(type2.get_accuracy(), type.get_accuracy())) {
