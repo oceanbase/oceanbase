@@ -314,8 +314,6 @@ int ObTabletPointer::dump_meta_obj(ObMetaObjGuard<ObTablet> &guard, void *&free_
   } else if (OB_UNLIKELY(obj_.ptr_->get_ref() < 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, tablet ref is less than 1", K(ret), KPC(obj_.ptr_));
-  } else if (OB_UNLIKELY(phy_addr_.is_file())) {
-    LOG_INFO("obj is empty shell, don't be wash", K(ret), K(phy_addr_));
   } else if (OB_ISNULL(obj_.pool_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("obj is not allocated from pool", K(ret), K(*this));
