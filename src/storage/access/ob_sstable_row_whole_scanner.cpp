@@ -42,17 +42,16 @@ ObSSTableRowWholeScanner::~ObSSTableRowWholeScanner()
   }
 }
 
-int ObSSTableRowWholeScanner::alloc_io_buf()
+int ObSSTableRowWholeScanner::alloc_io_buf(compaction::ObCompactionBuffer &io_buf, int64_t buf_size)
 {
   int ret = OB_SUCCESS;
   int64_t size = common::OB_DEFAULT_MACRO_BLOCK_SIZE * PREFETCH_DEPTH;
-  if (OB_ISNULL(buf_ = reinterpret_cast<char*>(io_allocator_.alloc(size)))) { //continuous memory
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(WARN, "failed to alloc ObSSTableRowWholeScanner read info buffer", K(ret), K(size));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < PREFETCH_DEPTH; ++i) {
-      io_buf_[i] = buf_ + common::OB_DEFAULT_MACRO_BLOCK_SIZE * i;
+  if (OB_LIKELY(io_buf.is_inited())) {
+    if (OB_FAIL(io_buf.reserve(buf_size))) {
+      LOG_WARN("fail to reserve io buf", K(ret), K(io_buf), K(buf_size));
     }
+  } else if (OB_FAIL(io_buf.init(common::OB_DEFAULT_MACRO_BLOCK_SIZE, buf_size))) {
+    LOG_WARN("fail to init io buf", K(ret), K(io_buf), K(buf_size));
   }
   return ret;
 }
@@ -77,8 +76,6 @@ void ObSSTableRowWholeScanner::reset()
     micro_scanner_ = nullptr;
   }
   allocator_.reset();
-  io_allocator_.reset();
-  buf_ = nullptr;
   is_inited_ = false;
   last_micro_block_recycled_ = false;
   last_mvcc_row_already_output_ = false;
@@ -86,7 +83,7 @@ void ObSSTableRowWholeScanner::reset()
 
 void ObSSTableRowWholeScanner::reuse()
 {
-  ObStoreRowIterator::reuse();
+  ObStoreRowIterator::reset();
   iter_param_ = nullptr;
   access_ctx_ = nullptr;
   sstable_ = nullptr;
@@ -104,8 +101,6 @@ void ObSSTableRowWholeScanner::reuse()
     micro_scanner_ = nullptr;
   }
   allocator_.reuse();
-  io_allocator_.reuse();
-  buf_ = nullptr;
   is_inited_ = false;
   last_micro_block_recycled_ = false;
   last_mvcc_row_already_output_ = false;
@@ -208,8 +203,6 @@ int ObSSTableRowWholeScanner::inner_open(
       rowkey_read_info = iter_param.read_info_;
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(alloc_io_buf())) {
-      LOG_WARN("alloc io buffers failed", K(ret));
     } else if (OB_FAIL(init_micro_scanner(range))) {
       LOG_WARN("Failed to init micro scanner", K(ret));
     } else if (OB_FAIL(macro_block_iter_.open(
@@ -272,8 +265,8 @@ int ObSSTableRowWholeScanner::open(
     MacroScanHandle &scan_handle = scan_handles_[0];
     scan_handle.reset();
 
-    if (OB_FAIL(alloc_io_buf())) {
-      LOG_WARN("alloc io buffers failed", K(ret));
+    if (OB_FAIL(alloc_io_buf(io_buf_[0], sstable_->get_macro_read_size()))) {
+      LOG_WARN("alloc io buffers failed", K(ret), K(sstable_->get_macro_read_size()));
     } else if (OB_FAIL(init_micro_scanner(&query_range))) {
       LOG_WARN("Fail to init micro scanner", K(ret));
     } else {
@@ -287,7 +280,7 @@ int ObSSTableRowWholeScanner::open(
       read_info.size_ = sstable_->get_macro_read_size();
       read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
       read_info.io_desc_.set_group_id(ObIOModule::SSTABLE_WHOLE_SCANNER_IO);
-      read_info.buf_ = io_buf_[0];
+      read_info.buf_ = io_buf_[0].data();
 
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObBlockManager::async_read_block(read_info, scan_handle.macro_io_handle_))) {
@@ -424,6 +417,8 @@ int ObSSTableRowWholeScanner::prefetch()
       } else {
         LOG_WARN("Fail to get_next_macro_block ", K(ret), K(macro_block_iter_));
       }
+    } else if (OB_FAIL(alloc_io_buf(io_buf_[io_index], sstable_->get_macro_read_size()))) {
+      LOG_WARN("alloc io buffers failed", K(ret), K(sstable_->get_macro_read_size()));
     } else {
       scan_handle.is_left_border_ = (0 == prefetch_macro_cursor_);
       scan_handle.is_right_border_ = false; // set right border correctly when open macro block
@@ -433,7 +428,7 @@ int ObSSTableRowWholeScanner::prefetch()
       read_info.size_ = sstable_->get_macro_read_size();
       read_info.io_desc_.set_wait_event(common::ObWaitEventIds::DB_FILE_COMPACT_READ);
       read_info.io_desc_.set_group_id(ObIOModule::SSTABLE_WHOLE_SCANNER_IO);
-      read_info.buf_ = io_buf_[io_index];
+      read_info.buf_ = io_buf_[io_index].data();
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObBlockManager::async_read_block(read_info, scan_handle.macro_io_handle_))) {
         LOG_WARN("Fail to read macro block, ", K(ret), K(read_info));

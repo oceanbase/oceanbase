@@ -56,7 +56,6 @@ public:
       access_ctx_(nullptr),
       sstable_(nullptr),
       allocator_(common::ObModIds::OB_SSTABLE_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-      io_allocator_("SSTRWS_IOUB", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       prefetch_macro_cursor_(0),
       cur_macro_cursor_(0),
       is_macro_prefetch_end_(false),
@@ -68,12 +67,13 @@ public:
       last_micro_block_recycled_(false),
       last_mvcc_row_already_output_(false),
       iter_macro_cnt_(0),
-      buf_(nullptr)
+      io_buf_()
   {}
 
   virtual ~ObSSTableRowWholeScanner();
-  int alloc_io_buf();
+  int alloc_io_buf(compaction::ObCompactionBuffer &io_buf, int64_t buf_size);
   virtual void reset() override;
+  virtual void reuse() override;
   int open(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
@@ -97,7 +97,6 @@ protected:
       ObITable *table,
       const void *query_range) override;
   virtual int inner_get_next_row(const blocksstable::ObDatumRow *&row) override;
-  virtual void reuse() override;
 private:
   int init_micro_scanner(const blocksstable::ObDatumRange *range);
   int open_macro_block();
@@ -126,7 +125,6 @@ private:
   blocksstable::ObSSTable *sstable_;
   blocksstable::ObDatumRange query_range_;
   common::ObArenaAllocator allocator_;
-  common::ObArenaAllocator io_allocator_;
   int64_t prefetch_macro_cursor_;
   int64_t cur_macro_cursor_;
   bool is_macro_prefetch_end_;
@@ -140,8 +138,7 @@ private:
   bool last_micro_block_recycled_;
   bool last_mvcc_row_already_output_;
   int64_t iter_macro_cnt_;
-  char *buf_;
-  char *io_buf_[PREFETCH_DEPTH];
+  compaction::ObCompactionBuffer io_buf_[PREFETCH_DEPTH];
 };
 
 }
