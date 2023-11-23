@@ -533,7 +533,8 @@ public:
   static int deduce_max_len_from_oracle_dfm(const ObString &format,
                                             int64_t &max_char_len);
   static int ob_time_to_str_format(const ObTime &ob_time, const ObString &format,
-                                   char *buf, int64_t buf_len, int64_t &pos, bool &res_null);
+                                   char *buf, int64_t buf_len, int64_t &pos, bool &res_null,
+                                   const ObString &locale_name);
   static int ob_time_to_datetime(ObTime &ob_time, const ObTimeConvertCtx &cvrt_ctx, int64_t &value);
   static int ob_time_to_otimestamp(ObTime &ob_time, ObOTimestampData &value);
   static int32_t ob_time_to_date(ObTime &ob_time);

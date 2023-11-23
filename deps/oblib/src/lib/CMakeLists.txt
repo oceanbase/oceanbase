@@ -153,6 +153,8 @@ ob_set_subtarget(oblib_lib common_mixed
   trace/ob_trace_event.cpp
   wait_event/ob_wait_class.cpp
   wait_event/ob_wait_event.cpp
+  locale/ob_locale_type.cc
+  locale/ob_locale.cpp
 )
 
 ob_set_subtarget(oblib_lib lock

@@ -666,6 +666,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12437	__all_virtual_checkpoint_diagnose_memtable_info	2	201001	1
 12438	__all_virtual_checkpoint_diagnose_checkpoint_unit_info	2	201001	1
 12439	__all_virtual_checkpoint_diagnose_info	2	201001	1
+12450	__all_virtual_sys_variable_default_value	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -1035,6 +1036,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21478	V$OB_TENANT_RUNTIME_INFO	1	201001	1
 21479	GV$OB_CGROUP_CONFIG	1	201001	1
 21480	V$OB_CGROUP_CONFIG	1	201001	1
+21500	DBA_OB_SYS_VARIABLES	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

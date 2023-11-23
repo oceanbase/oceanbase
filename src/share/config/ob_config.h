@@ -179,6 +179,11 @@ public:
     ObLatchRGuard rd_guard(const_cast<ObLatch&>(lock_), ObLatchIds::CONFIG_LOCK);
     return ObString::make_string(value_ptr()).case_compare(str);
   }
+  const char *default_str() const
+  {
+    ObLatchRGuard rd_guard(const_cast<ObLatch&>(lock_), ObLatchIds::CONFIG_LOCK);
+    return value_default_ptr();
+  }
   virtual const char *spfile_str() const
   {
     const char *ret = nullptr;
@@ -217,6 +222,9 @@ public:
   {
     return attr_.is_static();
   }
+  virtual bool is_default(const char *value_str_,
+                          const char *value_default_str_,
+                          int64_t size) const;
   virtual bool operator >(const char *) const { return false; }
   virtual bool operator >=(const char *) const { return false; }
   virtual bool operator <(const char *) const { return false; }
@@ -231,6 +239,7 @@ protected:
   virtual bool set(const char *str) = 0;
   virtual const char *value_ptr() const = 0;
   virtual const char *value_reboot_ptr() const = 0;
+  virtual const char *value_default_ptr() const = 0;
   virtual uint64_t value_len() const = 0;
   virtual uint64_t value_reboot_len() const = 0;
 
@@ -642,7 +651,7 @@ protected:
   {
     return value_str_;
   }
-  char const *value_reboot_ptr() const override
+  const char *value_reboot_ptr() const override
   {
     return value_reboot_str_;
   }

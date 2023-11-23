@@ -217,6 +217,8 @@
 #include "observer/virtual_table/ob_all_virtual_checkpoint_diagnose_memtable_info.h"
 
 #include "observer/virtual_table/ob_all_virtual_kv_connection.h"
+#include "observer/virtual_table/ob_all_virtual_sys_variable_default_value.h"
+
 namespace oceanbase
 {
 using namespace common;
@@ -2536,6 +2538,16 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualKvConnection, kv_connection))) {
               kv_connection->set_connection_mgr(&table::ObTableConnectionMgr::get_instance());
               vt_iter = static_cast<ObVirtualTableIterator *>(kv_connection);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_SYS_VARIABLE_DEFAULT_VALUE_TID:
+          {
+            ObSysVarDefaultValue *sys_var_default_value = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObSysVarDefaultValue, sys_var_default_value))) {
+              SERVER_LOG(ERROR, "fail to new", K(ret), K(pure_tid));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(sys_var_default_value);
             }
             break;
           }

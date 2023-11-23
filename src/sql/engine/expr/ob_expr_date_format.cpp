@@ -80,6 +80,7 @@ int ObExprDateFormat::calc_date_format(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   uint64_t cast_mode = 0;
   bool res_null = false;
   ObDateSqlMode date_sql_mode;
+  ObString locale_name;
   ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
   ObSQLMode sql_mode = 0;
   const common::ObTimeZoneInfo *tz_info = NULL;
@@ -116,13 +117,16 @@ int ObExprDateFormat::calc_date_format(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     }
   } else if (OB_UNLIKELY(format->get_string().empty())) {
     expr_datum.set_null();
+  } else if (OB_FAIL(session->get_locale_name(locale_name))) {
+      LOG_WARN("failed to get locale time name", K(expr), K(expr_datum));
   } else if (OB_FAIL(ObTimeConverter::ob_time_to_str_format(ob_time,
                                                             format->get_string(),
                                                             buf,
                                                             buf_len,
                                                             pos,
-                                                            res_null))) {
-    LOG_WARN("failed to convert ob time to str with format");
+                                                            res_null,
+                                                            locale_name))) {
+      LOG_WARN("failed to convert ob time to str with format");
   } else if (res_null) {
     expr_datum.set_null();
   } else {

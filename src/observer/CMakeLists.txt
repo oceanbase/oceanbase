@@ -399,6 +399,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_cgroup_config.cpp
   virtual_table/ob_virtual_flt_config.cpp
   virtual_table/ob_all_virtual_kv_connection.cpp
+  virtual_table/ob_all_virtual_sys_variable_default_value.cpp
   virtual_table/ob_all_virtual_activity_metrics.cpp
   virtual_table/ob_all_virtual_checkpoint_diagnose_info.cpp
   virtual_table/ob_all_virtual_checkpoint_diagnose_memtable_info.cpp

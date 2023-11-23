@@ -7636,6 +7636,8 @@ def_table_schema(
       ('scope', 'varchar:OB_MAX_CONFIG_SCOPE_LEN'),
       ('source', 'varchar:OB_MAX_CONFIG_SOURCE_LEN'),
       ('edit_level', 'varchar:OB_MAX_CONFIG_EDIT_LEVEL_LEN'),
+      ('default_value', 'varchar:OB_MAX_CONFIG_VALUE_LEN'),
+      ('isdefault', 'int')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -8375,7 +8377,9 @@ def_table_schema(
       ('scope', 'varchar:OB_MAX_CONFIG_SCOPE_LEN'),
       ('source', 'varchar:OB_MAX_CONFIG_SOURCE_LEN'),
       ('edit_level', 'varchar:OB_MAX_CONFIG_EDIT_LEVEL_LEN'),
-      ('tenant_id', 'int', 'true')
+      ('tenant_id', 'int', 'true'),
+      ('default_value', 'varchar:OB_MAX_CONFIG_VALUE_LEN'),
+      ('isdefault', 'int')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -13178,6 +13182,19 @@ def_table_schema(
 # 12442: __all_tenant_scheduler_running_job
 #
 
+def_table_schema(
+  owner = 'linzhigang.lzg',
+  table_name     = '__all_virtual_sys_variable_default_value',
+  table_id       = '12450',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [],
+  in_tenant_space = True,
+  normal_columns = [
+  ('variable_name', 'varchar:OB_MAX_CONFIG_NAME_LEN', 'false', ''),
+  ('default_value', 'varchar:OB_MAX_CONFIG_VALUE_LEN', 'true')
+  ],
+)
 # 余留位置
 #
 
@@ -13584,6 +13601,9 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15418'
 
 # 15419: __all_virutal_column_group_history
 # 15420: __all_virutal_column_group_maping_history
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15428', all_def_keywords['__all_sys_variable']))
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15429', all_def_keywords['__all_virtual_sys_variable_default_value']))
+
 # 余留位置
 
 
@@ -21769,7 +21789,13 @@ SELECT
   VALUE,
   INFO,
   SECTION,
-  EDIT_LEVEL
+  EDIT_LEVEL,
+  DEFAULT_VALUE,
+  CAST (CASE ISDEFAULT
+        WHEN 1
+        THEN 'YES'
+        ELSE 'NO'
+        END AS CHAR(3)) AS ISDEFAULT
 FROM oceanbase.__all_virtual_tenant_parameter_stat
 """.replace("\n", " ")
 )
@@ -24995,21 +25021,28 @@ def_table_schema(
   view_definition =
   """
   SELECT
-    GMT_CREATE AS CREATE_TIME,
-    GMT_MODIFIED AS MODIFY_TIME,
-    TENANT_ID,
-    NAME,
-    VALUE,
-    MIN_VAL as MIN_VALUE,
-    MAX_VAL as MAX_VALUE,
-    CASE FLAGS & 0x3
+    a.GMT_CREATE AS CREATE_TIME,
+    a.GMT_MODIFIED AS MODIFY_TIME,
+    a.TENANT_ID as TENANT_ID,
+    a.NAME as NAME,
+    a.VALUE as VALUE,
+    a.MIN_VAL as MIN_VALUE,
+    a.MAX_VAL as MAX_VALUE,
+    CASE a.FLAGS & 0x3
         WHEN 1 THEN "GLOBAL_ONLY"
         WHEN 2 THEN "SESSION_ONLY"
         WHEN 3 THEN "GLOBAL | SESSION"
         ELSE NULL
     END as SCOPE,
-    INFO
-  FROM oceanbase.__all_virtual_sys_variable
+    a.INFO as INFO,
+    b.DEFAULT_VALUE as DEFAULT_VALUE,
+    CAST (CASE WHEN a.VALUE = b.DEFAULT_VALUE
+          THEN 'YES'
+          ELSE 'NO'
+          END AS CHAR(3)) AS ISDEFAULT
+  FROM oceanbase.__all_virtual_sys_variable a
+  join oceanbase.__all_virtual_sys_variable_default_value b
+  where a.name = b.variable_name;
   """.replace("\n", " "),
 )
 
@@ -30222,6 +30255,41 @@ WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 #21485 DBA_OB_FORMAT_OUTLINES
 #21499 DBA_OB_INDEX_USAGE
 
+def_table_schema(
+  owner           = 'linzhigang.lzg',
+  table_name      = 'DBA_OB_SYS_VARIABLES',
+  table_id        = '21500',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+    a.GMT_CREATE AS CREATE_TIME,
+    a.GMT_MODIFIED AS MODIFY_TIME,
+    a.NAME as NAME,
+    a.VALUE as VALUE,
+    a.MIN_VAL as MIN_VALUE,
+    a.MAX_VAL as MAX_VALUE,
+    CASE a.FLAGS & 0x3
+        WHEN 1 THEN "GLOBAL_ONLY"
+        WHEN 2 THEN "SESSION_ONLY"
+        WHEN 3 THEN "GLOBAL | SESSION"
+        ELSE NULL
+    END as SCOPE,
+    a.INFO as INFO,
+    b.DEFAULT_VALUE as DEFAULT_VALUE,
+    CAST (CASE WHEN a.VALUE = b.DEFAULT_VALUE
+          THEN 'YES'
+          ELSE 'NO'
+          END AS CHAR(3)) AS ISDEFAULT
+  FROM oceanbase.__all_sys_variable a
+  join oceanbase.__all_virtual_sys_variable_default_value b
+  where a.name = b.variable_name;
+  """.replace("\n", " "),
+)
 # 余留位置
 
 
@@ -52707,7 +52775,13 @@ SELECT
   VALUE,
   INFO,
   SECTION,
-  EDIT_LEVEL
+  EDIT_LEVEL,
+  DEFAULT_VALUE,
+  CAST (CASE ISDEFAULT
+        WHEN 1
+        THEN 'YES'
+        ELSE 'NO'
+        END AS VARCHAR2(3)) AS ISDEFAULT
 FROM SYS.ALL_VIRTUAL_TENANT_PARAMETER_STAT
 """.replace("\n", " ")
 )
@@ -54881,6 +54955,45 @@ FROM SYS.GV$OB_CGROUP_CONFIG
 WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )
+
+
+def_table_schema(
+  owner           = 'linzhigang.lzg',
+  table_name      = 'DBA_OB_SYS_VARIABLES',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28211',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+    A.GMT_CREATE AS CREATE_TIME,
+    A.GMT_MODIFIED AS MODIFY_TIME,
+    A.NAME as NAME,
+    A.VALUE as VALUE,
+    A.MIN_VAL as MIN_VALUE,
+    A.MAX_VAL as MAX_VALUE,
+    CASE BITAND(A.FLAGS,3)
+        WHEN 1 THEN 'GLOBAL_ONLY'
+        WHEN 2 THEN 'SESSION_ONLY'
+        WHEN 3 THEN 'GLOBAL | SESSION'
+        ELSE NULL
+    END as SCOPE,
+    A.INFO as INFO,
+    B.DEFAULT_VALUE as DEFAULT_VALUE,
+    CAST (CASE WHEN A.VALUE = B.DEFAULT_VALUE
+          THEN 'YES'
+          ELSE 'NO'
+          END AS VARCHAR2(3)) AS ISDEFAULT
+  FROM SYS.ALL_VIRTUAL_SYS_VARIABLE_REAL_AGENT A, SYS.ALL_VIRTUAL_SYS_VARIABLE_DEFAULT_VALUE B
+  WHERE A.NAME = B.VARIABLE_NAME;
+  """.replace("\n", " "),
+)
+# 余留位置
 
 ################################################################################
 # Lob Table (50000, 70000)

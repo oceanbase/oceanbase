@@ -40,7 +40,7 @@
                                     common::ObConfigWorkAreaPolicyChecker, args))
 
 // TODO: use parameter instead of config
-#define _DEF_PARAMETER_EASY(access_specifier, param, scope, name, args...)                 \
+#define _DEF_PARAMETER_EASY(access_specifier, param, scope, name, def, args...)                 \
 access_specifier:                                                                          \
   class ObConfig ## param ## Item ## _ ## name                                 \
       : public common::ObConfig ## param ## Item                               \
@@ -48,17 +48,22 @@ access_specifier:                                                               
   public:                                                                      \
     ObConfig ## param ## Item ## _ ## name()                                   \
         : common::ObConfig ## param ## Item(local_container(), scope, #name,   \
-          args) {}                                                             \
+          def, args) {}                                                        \
     template <class T>                                                         \
     ObConfig ## param ## Item ## _ ## name& operator=(T value)                 \
     {                                                                          \
       common::ObConfig ## param ## Item::operator=(value);                     \
       return *this;                                                            \
     }                                                                          \
+    const char *value_default_ptr() const override                             \
+    {                                                                          \
+      return value_default_str_;                                               \
+    }                                                                          \
+    static constexpr const char* value_default_str_ = def;                     \
     TO_STRING_KV(K_(value_str))                                                \
   } name;
 
-#define _DEF_PARAMETER_RANGE_EASY(access_specifier, param, scope, name, args...)           \
+#define _DEF_PARAMETER_RANGE_EASY(access_specifier, param, scope, name, def, args...)           \
 access_specifier:                                                                          \
   class ObConfig ## param ## Item ## _ ## name                                 \
       : public common::ObConfig ## param ## Item                               \
@@ -66,13 +71,18 @@ access_specifier:                                                               
   public:                                                                      \
     ObConfig ## param ## Item ## _ ## name()                                   \
         : common::ObConfig ## param ## Item(local_container(), scope,          \
-          #name, args) {}                                                      \
+          #name, def, args) {}                                                 \
     template <class T>                                                         \
     ObConfig ## param ## Item ## _ ## name& operator=(T value)                 \
     {                                                                          \
       common::ObConfig ## param ## Item::operator=(value);                     \
       return *this;                                                            \
     }                                                                          \
+    const char *value_default_ptr() const override                             \
+    {                                                                          \
+      return value_default_str_;                                               \
+    }                                                                          \
+    static constexpr const char* value_default_str_ = def;                     \
   } name;
 
 #define _DEF_PARAMETER_CHECKER_EASY(access_specifier, param, scope, name, def, checker, args...) \
@@ -93,8 +103,12 @@ access_specifier:                                                               
       common::ObConfig ## param ## Item::operator=(value);                     \
       return *this;                                                            \
     }                                                                          \
+    const char *value_default_ptr() const override                             \
+    {                                                                          \
+      return value_default_str_;                                               \
+    }                                                                          \
+    static constexpr const char* value_default_str_ = def;                     \
   } name;
-
 #define _DEF_PARAMETER_PARSER_EASY(access_specifier, param, scope, name, def, parser, args...)   \
 access_specifier:                                                                          \
   class ObConfig ## param ## Item ## _ ## name                                 \
@@ -104,7 +118,12 @@ access_specifier:                                                               
     ObConfig ## param ## Item ## _ ## name()                                   \
         : common::ObConfig ## param ## Item(                                   \
             local_container(), scope, #name, def, 							               \
-			new (std::nothrow) parser(), args) {}                                    \
+            new (std::nothrow) parser(), args) {}                                    \
+    const char *value_default_ptr() const override                             \
+    {                                                                          \
+      return value_default_str_;                                               \
+    }                                                                          \
+    static constexpr const char* value_default_str_ = def;                     \
   } name;
 
 ////////////////////////////////////////////////////////////////////////////////
