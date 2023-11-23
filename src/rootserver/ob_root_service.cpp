@@ -85,6 +85,7 @@
 #include "rootserver/ob_ddl_sql_generator.h"
 #include "rootserver/ddl_task/ob_ddl_task.h"
 #include "rootserver/ddl_task/ob_constraint_task.h"
+#include "share/ob_ddl_sim_point.h"
 #include "storage/ob_file_system_router.h"
 #include "storage/tx/ob_ts_mgr.h"
 #include "lib/stat/ob_diagnose_info.h"
@@ -1610,7 +1611,11 @@ int ObRootService::schedule_load_ddl_task()
 {
   int ret = OB_SUCCESS;
   const bool did_repeat = false;
+#ifdef ERRSIM
+  const int64_t delay = 1000L * 1000L; //1s
+#else
   const int64_t delay = 5L * 1000L * 1000L; //5s
+#endif
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -3031,9 +3036,13 @@ int ObRootService::parallel_create_table(const ObCreateTableArg &arg, ObCreateTa
   }
   int64_t cost = ObTimeUtility::current_time() - begin_time;
   LOG_TRACE("finish create table", KR(ret), K(arg), K(cost));
-  ROOTSERVICE_EVENT_ADD("ddl", "parallel_create_table",
-                        K(ret), K(tenant_id),
-                        "table_id", res.table_id_, K(cost));
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "parallel create table",
+                        K(tenant_id),
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "table_id", res.table_id_,
+                        "schema_version", res.schema_version_,
+                        K(cost));
   return ret;
 }
 
@@ -3728,7 +3737,14 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
   RS_TRACE(create_table_end);
   FORCE_PRINT_TRACE(THE_RS_TRACE, "[create table]");
   int64_t cost = ObTimeUtility::current_time() - begin_time;
-  ROOTSERVICE_EVENT_ADD("ddl", "create_table", K(ret), "table_id", res.table_id_, K(cost));
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "create table",
+                        "tenant_id", arg.schema_.get_tenant_id(),
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "table_id", res.table_id_,
+                        "schema_version", res.schema_version_,
+                        K(cost));
+  LOG_INFO("finish create table ddl", K(ret), K(cost), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -3994,9 +4010,24 @@ int ObRootService::create_hidden_table(const obrpc::ObCreateHiddenTableArg &arg,
   } else if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(arg));
+  } else if (OB_FAIL(DDL_SIM(arg.tenant_id_, arg.task_id_, CREATE_HIDDEN_TABLE_RPC_FAILED))) {
+    LOG_WARN("ddl sim failure", K(ret), K(arg));
+  } else if (OB_FAIL(DDL_SIM(arg.tenant_id_, arg.task_id_, CREATE_HIDDEN_TABLE_RPC_SLOW))) {
+    LOG_WARN("ddl sim failure", K(ret), K(arg));
   } else if (OB_FAIL(ddl_service_.create_hidden_table(arg, res))) {
     LOG_WARN("do create hidden table in trans failed", K(ret), K(arg));
   }
+  char tenant_id_buffer[128];
+  snprintf(tenant_id_buffer, sizeof(tenant_id_buffer), "orig_tenant_id:%ld, target_tenant_id:%ld",
+            arg.tenant_id_, arg.dest_tenant_id_);
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "create hidden table",
+                        "tenant_id", tenant_id_buffer,
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "task_id", res.task_id_,
+                        "table_id", arg.table_id_,
+                        "schema_version", res.schema_version_);
+  LOG_INFO("finish create hidden table ddl", K(ret), K(arg), K(res), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -4042,9 +4073,19 @@ int ObRootService::abort_redef_table(const obrpc::ObAbortRedefTableArg &arg)
   } else if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(arg));
+  } else if (OB_FAIL(DDL_SIM(arg.tenant_id_, arg.task_id_, ABORT_REDEF_TABLE_RPC_FAILED))) {
+    LOG_WARN("ddl sim failure", K(ret), K(arg));
+  } else if (OB_FAIL(DDL_SIM(arg.tenant_id_, arg.task_id_, ABORT_REDEF_TABLE_RPC_SLOW))) {
+    LOG_WARN("ddl sim failure", K(ret), K(arg));
   } else if (OB_FAIL(ddl_scheduler_.abort_redef_table(ObDDLTaskID(tenant_id, task_id)))) {
     LOG_WARN("cancel task failed", K(ret), K(tenant_id), K(task_id));
   }
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "abort redef table",
+                        "tenant_id", arg.tenant_id_,
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "task_id", arg.task_id_);
+  LOG_INFO("finish abort redef table ddl", K(ret), K(arg), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -4066,9 +4107,19 @@ int ObRootService::finish_redef_table(const obrpc::ObFinishRedefTableArg &arg)
   } else if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(arg));
+  } else if (OB_FAIL(DDL_SIM(arg.tenant_id_, arg.task_id_, FINISH_REDEF_TABLE_RPC_FAILED))) {
+    LOG_WARN("ddl sim failure", K(ret), K(arg));
+  } else if (OB_FAIL(DDL_SIM(arg.tenant_id_, arg.task_id_, FINISH_REDEF_TABLE_RPC_SLOW))) {
+    LOG_WARN("ddl sim failure", K(ret), K(arg));
   } else if (OB_FAIL(ddl_scheduler_.finish_redef_table(ObDDLTaskID(tenant_id, task_id)))) {
     LOG_WARN("failed to finish redef table", K(ret), K(task_id), K(tenant_id));
   }
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "finish redef table",
+                        "tenant_id", arg.tenant_id_,
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "task_id", arg.task_id_);
+  LOG_INFO("finish abort redef table ddl", K(ret), K(arg), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -4095,6 +4146,10 @@ int ObRootService::copy_table_dependents(const obrpc::ObCopyTableDependentsArg &
   } else if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(arg));
+  } else if (OB_FAIL(DDL_SIM(arg.tenant_id_, arg.task_id_, COPY_TABLE_DEPENDENTS_RPC_FAILED))) {
+    LOG_WARN("ddl sim failure", K(ret), K(arg));
+  } else if (OB_FAIL(DDL_SIM(arg.tenant_id_, arg.task_id_, COPY_TABLE_DEPENDENTS_RPC_SLOW))) {
+    LOG_WARN("ddl sim failure", K(ret), K(arg));
   } else if (OB_FAIL(ddl_scheduler_.copy_table_dependents(ObDDLTaskID(tenant_id, task_id),
                                                           is_copy_constraints,
                                                           is_copy_indexes,
@@ -4103,6 +4158,12 @@ int ObRootService::copy_table_dependents(const obrpc::ObCopyTableDependentsArg &
                                                           is_ignore_errors))) {
     LOG_WARN("failed to copy table dependents", K(ret), K(arg));
   }
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "copy table dependents",
+                        "tenant_id", tenant_id,
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "task_id", task_id);
+  LOG_INFO("finish copy table dependents ddl", K(ret), K(arg), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -4126,6 +4187,20 @@ int ObRootService::start_redef_table(const obrpc::ObStartRedefTableArg &arg, obr
   } else if (OB_FAIL(ddl_scheduler_.start_redef_table(arg, res))) {
     LOG_WARN("start redef table failed", K(ret));
   }
+  char tenant_id_buffer[128];
+  snprintf(tenant_id_buffer, sizeof(tenant_id_buffer), "orig_tenant_id:%ld, target_tenant_id:%ld",
+            arg.orig_tenant_id_, arg.target_tenant_id_);
+  char table_id_buffer[128];
+  snprintf(table_id_buffer, sizeof(table_id_buffer), "orig_table_id:%ld, target_table_id:%ld",
+            arg.orig_table_id_, arg.target_table_id_);
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "redef table",
+                        "tenant_id", tenant_id_buffer,
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "task_id", res.task_id_,
+                        "table_id", table_id_buffer,
+                        "schema_version", res.schema_version_);
+  LOG_INFO("finish redef table ddl", K(arg), K(ret), K(res), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -4250,6 +4325,17 @@ int ObRootService::alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlter
       }
     }
   }
+  char table_id_buffer[256];
+  snprintf(table_id_buffer, sizeof(table_id_buffer), "table_id:%ld, hidden_table_id:%ld",
+            arg.table_id_, arg.hidden_table_id_);
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "alter table",
+                        K(tenant_id),
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "task_id", res.task_id_,
+                        "table_id", table_id_buffer,
+                        "schema_version", res.schema_version_);
+  LOG_INFO("finish alter table ddl", K(ret), K(arg), K(res), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -4274,6 +4360,17 @@ int ObRootService::create_index(const ObCreateIndexArg &arg, obrpc::ObAlterTable
       LOG_WARN("create_index failed", K(arg), K(ret));
     }
   }
+  char table_id_buffer[256];
+  snprintf(table_id_buffer, sizeof(table_id_buffer), "data_table_id:%ld, index_table_id:%ld",
+            arg.data_table_id_, arg.index_table_id_);
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "create index",
+                        "tenant_id", arg.tenant_id_,
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "task_id", res.task_id_,
+                        "table_id", table_id_buffer,
+                        "schema_version", res.schema_version_);
+  LOG_INFO("finish create index ddl", K(ret), K(arg), K(res), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -4356,6 +4453,14 @@ int ObRootService::drop_table(const obrpc::ObDropTableArg &arg, obrpc::ObDDLRes 
   } else if (OB_FAIL(ddl_service_.drop_table(arg, res))) {
     LOG_WARN("ddl service failed to drop table", K(ret), K(arg), K(res));
   }
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "drop table",
+                        "tenant_id", arg.tenant_id_,
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "task_id", res.task_id_,
+                        "session_id", arg.session_id_,
+                        "schema_version", res.schema_id_);
+  LOG_INFO("finish drop table ddl", K(ret), K(arg), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -4488,6 +4593,14 @@ int ObRootService::drop_index(const obrpc::ObDropIndexArg &arg, obrpc::ObDropInd
       LOG_WARN("index_builder drop_index failed", K(arg), K(ret));
     }
   }
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "drop index",
+                        "tenant_id", res.tenant_id_,
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "task_id", res.task_id_,
+                        "table_id", arg.index_table_id_,
+                        "schema_version", res.schema_version_);
+  LOG_INFO("finish drop index ddl", K(ret), K(arg), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -4503,6 +4616,14 @@ int ObRootService::rebuild_index(const obrpc::ObRebuildIndexArg &arg, obrpc::ObA
   } else if (OB_FAIL(ddl_service_.rebuild_index(arg, res))) {
     LOG_WARN("ddl_service rebuild index failed", K(arg), K(ret));
   }
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "rebuild index",
+                        "tenant_id", arg.tenant_id_,
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "task_id", res.task_id_,
+                        "table_id", arg.index_table_id_,
+                        "schema_version", res.schema_version_);
+  LOG_INFO("finish rebuild index ddl", K(ret), K(arg), K(res), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -4606,6 +4727,14 @@ int ObRootService::truncate_table(const obrpc::ObTruncateTableArg &arg, obrpc::O
       LOG_WARN("ddl service failed to truncate table", K(arg), K(ret), K(frozen_scn));
     }
   }
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "truncate table",
+                        "tenant_id", arg.tenant_id_,
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "task_id", res.task_id_,
+                        "table_id", arg.table_name_,
+                        "schema_version", res.schema_id_);
+  LOG_INFO("finish truncate table ddl", K(ret), K(arg), K(res), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -4628,6 +4757,15 @@ int ObRootService::truncate_table_v2(const obrpc::ObTruncateTableArg &arg, obrpc
     } else if (OB_FAIL(ddl_service_.new_truncate_table(arg, res, frozen_scn))) {
       LOG_WARN("ddl service failed to truncate table", K(arg), K(ret));
     }
+    ROOTSERVICE_EVENT_ADD("ddl scheduler", "truncate table new",
+                          "tenant_id", arg.tenant_id_,
+                          "ret", ret,
+                          "trace_id", *ObCurTraceId::get_trace_id(),
+                          "task_id", res.task_id_,
+                          "table_name", arg.table_name_,
+                          "schema_version", res.schema_id_,
+                          frozen_scn);
+    LOG_INFO("finish new truncate table ddl", K(ret), K(arg), K(res), "ddl_event_info", ObDDLEventInfo());
   }
   return ret;
 }
@@ -4832,6 +4970,8 @@ int ObRootService::calc_column_checksum_repsonse(const obrpc::ObCalcColumnChecks
   } else if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(arg));
+  } else if (OB_FAIL(DDL_SIM(arg.tenant_id_, arg.task_id_, PROCESS_COLUMN_CHECKSUM_RESPONSE_SLOW))) {
+    LOG_WARN("ddl sim failure: procesc column checksum response slow", K(ret));
   } else if (OB_FAIL(ddl_scheduler_.on_column_checksum_calc_reply(
           arg.tablet_id_, ObDDLTaskKey(arg.tenant_id_, arg.target_table_id_, arg.schema_version_), arg.ret_code_))) {
     LOG_WARN("handle column checksum calc response failed", K(ret), K(arg));
@@ -8712,8 +8852,13 @@ int ObRootService::upgrade_table_schema(const obrpc::ObUpgradeTableSchemaArg &ar
       }
     }
   }
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "update table schema",
+                        "tenant_id", arg.get_tenant_id(),
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "table_id", arg.get_table_id());
   FLOG_INFO("[UPGRADE] finish upgrade table", KR(ret), K(arg),
-            "cost_us", ObTimeUtility::current_time() - start);
+            "cost_us", ObTimeUtility::current_time() - start, "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -10150,10 +10295,21 @@ int ObRootService::build_ddl_single_replica_response(const obrpc::ObDDLBuildSing
   } else if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(arg));
+  } else if (OB_FAIL(DDL_SIM(arg.tenant_id_, arg.task_id_, PROCESS_BUILD_SSTABLE_RESPONSE_SLOW))) {
+    LOG_WARN("ddl sim failure: procesc build sstable response slow", K(ret));
   } else if (OB_FAIL(ddl_scheduler_.on_sstable_complement_job_reply(
       arg.tablet_id_/*source tablet id*/, ObDDLTaskKey(arg.dest_tenant_id_, arg.dest_schema_id_, arg.dest_schema_version_), arg.snapshot_version_, arg.execution_id_, arg.ret_code_, info))) {
     LOG_WARN("handle column checksum calc response failed", K(ret), K(arg));
   }
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "build ddl single replica response",
+                        "tenant_id", arg.tenant_id_,
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "task_id", arg.task_id_,
+                        "tablet_id_", arg.tablet_id_,
+                        "snapshot_version_", arg.snapshot_version_,
+                        arg.source_table_id_);
+  LOG_INFO("finish build ddl single replica response ddl", K(ret), K(arg), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -10369,6 +10525,12 @@ int ObRootService::cancel_ddl_task(const ObCancelDDLTaskArg &arg)
   } else {
     LOG_INFO("succeed to cancel ddl task", K(arg));
   }
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "cancel ddl task",
+                        "tenant_id", MTL_ID(),
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "task_id", arg.get_task_id());
+  LOG_INFO("finish cancel ddl task ddl", K(ret), K(arg), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 

@@ -9062,6 +9062,43 @@ def_table_schema(
 # table_id = 11118: used for __all_virtual_ddl_sim_point on enhance_ddl_quality branch
 # table_id = 11119: used for __all_virtual_ddl_sim_point_stat on enhance_ddl_quality branch
 
+def_table_schema(
+  owner = 'jianyun.sjy',
+  table_name = '__all_virtual_ddl_sim_point',
+  table_id = '11118',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [
+    ('sim_point_id', 'int'),
+    ('sim_point_name', 'varchar:1024'),
+    ('sim_point_description', 'varchar:OB_MAX_CHAR_LENGTH'),
+    ('sim_point_action', 'varchar:OB_MAX_CHAR_LENGTH'),
+  ],
+  vtable_route_policy = 'local',
+)
+
+def_table_schema(
+  owner = 'jianyun.sjy',
+  table_name = '__all_virtual_ddl_sim_point_stat',
+  table_id = '11119',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('ddl_task_id', 'int'),
+    ('sim_point_id', 'int'),
+    ('trigger_count', 'int'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
+
+
 ################################################################
 ################################################################
 # INFORMATION SCHEMA

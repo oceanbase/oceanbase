@@ -353,6 +353,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 11115	__all_virtual_io_quota	2	201001	1
 11116	__all_virtual_server_compaction_event_history	2	201001	1
 11117	__all_virtual_tablet_stat	2	201001	1
+11118	__all_virtual_ddl_sim_point	2	201001	1
+11119	__all_virtual_ddl_sim_point_stat	2	201001	1
 12001	SESSION_VARIABLES	2	201002	1
 12006	GLOBAL_STATUS	2	201002	1
 12008	SESSION_STATUS	2	201002	1

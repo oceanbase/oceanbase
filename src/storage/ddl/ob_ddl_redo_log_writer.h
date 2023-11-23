@@ -128,7 +128,11 @@ private:
     int init(int tg_id);
     virtual void runTimerTask() override;
   private:
+#ifdef ERRSIM
+    const static int64_t REFRESH_INTERVAL = 100 * 1000; // 100ms
+#else
     const static int64_t REFRESH_INTERVAL = 1 * 1000 * 1000; // 1s
+#endif
     bool is_inited_;
     DISABLE_COPY_ASSIGN(RefreshSpeedHandleTask);
   };
@@ -286,6 +290,7 @@ public:
   ~ObDDLSSTableRedoWriter();
   int init(const share::ObLSID &ls_id, const ObTabletID &tablet_id);
   int start_ddl_redo(const ObITable::TableKey &table_key,
+                     const int64_t ddl_task_id,
                      const int64_t execution_id,
                      const int64_t data_format_version,
                      ObDDLKvMgrHandle &ddl_kv_mgr_handle);

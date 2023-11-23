@@ -30,6 +30,8 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "share/schema/ob_multi_version_schema_service.h"
+#include "share/ob_ddl_sim_point.h"
+#include "observer/ob_server_event_history_table_operator.h"
 #include "storage/column_store/ob_column_oriented_sstable.h"
 
 using namespace oceanbase::observer;
@@ -209,7 +211,7 @@ int ObDDLTableDumpTask::init(const share::ObLSID &ls_id,
 int ObDDLTableDumpTask::process()
 {
   int ret = OB_SUCCESS;
-  LOG_INFO("ddl dump task start process", K(*this));
+  LOG_INFO("ddl dump task start process", K(*this), "ddl_event_info", ObDDLEventInfo());
   ObTabletHandle tablet_handle;
   ObDDLKvMgrHandle ddl_kv_mgr_handle;
   ObLSHandle ls_handle;
@@ -252,6 +254,14 @@ int ObDDLTableDumpTask::process()
       LOG_WARN("release ddl kv failed", K(ret), K(freeze_scn_));
     }
   }
+  SERVER_EVENT_ADD("ddl", "ddl table dump task",
+    "tenant_id", MTL_ID(),
+    "ret", ret,
+    "trace_id", *ObCurTraceId::get_trace_id(),
+    "tablet_id", tablet_id_,
+    "freeze_scn", freeze_scn_,
+    "ls_id", ls_id_);
+  LOG_INFO("ddl dump task start process", K(ret), K(*this), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -289,10 +299,12 @@ int ObDDLTableMergeTask::process()
 #ifdef ERRSIM
   if (0 != GCONF.errsim_max_ddl_sstable_count) {
     MAX_DDL_SSTABLE = GCONF.errsim_max_ddl_sstable_count;
-    LOG_INFO("set max ddl sstable in errsim mode", K(MAX_DDL_SSTABLE));
+  } else {
+    MAX_DDL_SSTABLE = 2;
   }
+  LOG_INFO("set max ddl sstable in errsim mode", K(MAX_DDL_SSTABLE));
 #endif
-  LOG_INFO("ddl merge task start process", K(*this));
+  LOG_INFO("ddl merge task start process", K(*this), "ddl_event_info", ObDDLEventInfo());
   ObTabletHandle tablet_handle;
   ObDDLKvMgrHandle ddl_kv_mgr_handle;
   ObLSHandle ls_handle;
@@ -345,6 +357,7 @@ int ObDDLTableMergeTask::process()
       } else {
         sstable = static_cast<ObSSTable *>(
             table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(false/*first*/));
+        skip_major_process = true;
       }
     } else if (tablet_handle.get_obj()->get_tablet_meta().table_store_flag_.with_major_sstable()) {
       skip_major_process = true;
@@ -357,6 +370,16 @@ int ObDDLTableMergeTask::process()
     } else if (merge_param_.start_scn_ > SCN::min_scn() && merge_param_.start_scn_ < ddl_param.start_scn_) {
       ret = OB_TASK_EXPIRED;
       LOG_INFO("ddl merge task expired, do nothing", K(merge_param_), "new_start_scn", ddl_param.start_scn_);
+#ifdef ERRSIM
+    } else {
+      const SCN commit_scn = ddl_kv_mgr_handle.get_obj()->get_commit_scn(tablet_handle.get_obj()->get_tablet_meta());
+      skip_major_process = commit_scn.is_valid_and_not_min()
+        && ObTimeUtility::current_time() - commit_scn.convert_to_ts() <= GCONF.errsim_ddl_major_delay_time;
+#endif
+    }
+    if (OB_FAIL(ret)) {
+    } else if (skip_major_process) {
+      // do nothing
     } else if (OB_FAIL(ObTabletDDLUtil::compact_ddl_sstable(*tablet_handle.get_obj(),
                                                             ddl_table_iter,
                                                             tablet_handle.get_obj()->get_rowkey_read_info(),
@@ -387,12 +410,14 @@ int ObDDLTableMergeTask::process()
         LOG_WARN("fail to submit tablet update task", K(ret), K(tenant_id), K(merge_param_));
       }
       if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(sstable)) {
+        // not set success
       } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->set_commit_success(merge_param_.start_scn_))) {
         if (OB_EAGAIN != ret) {
           LOG_WARN("set is commit success failed", K(ret));
         }
       } else {
-        LOG_INFO("commit ddl sstable succ", K(ddl_param), K(merge_param_));
+        LOG_INFO("commit ddl sstable succ", K(ddl_param), K(merge_param_), "ddl_event_info", ObDDLEventInfo());
       }
     }
   }
@@ -948,6 +973,8 @@ int ObTabletDDLUtil::report_ddl_checksum(const share::ObLSID &ls_id,
     ret = OB_TABLE_NOT_EXIST;
     LOG_INFO("table not exit", K(ret), K(tenant_id), K(table_id));
     ret = OB_TASK_EXPIRED; // for ignore warning
+  } else if (OB_FAIL(DDL_SIM(tenant_id, ddl_task_id, REPORT_DDL_CHECKSUM_FAILED))) {
+    LOG_WARN("ddl sim failure", K(tenant_id), K(ddl_task_id));
   } else {
     ObArray<ObColDesc> column_ids;
     ObArray<ObDDLChecksumItem> ddl_checksum_items;

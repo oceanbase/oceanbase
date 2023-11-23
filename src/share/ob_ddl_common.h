@@ -95,6 +95,7 @@ enum ObDDLType
   ///< @note add new normal ddl type before this line
   DDL_MAX
 };
+const char *get_ddl_type(ObDDLType ddl_type);
 
 enum ObDDLTaskType
 {
@@ -598,6 +599,29 @@ private:
 
 };
 
+typedef common::ObCurTraceId::TraceId DDLTraceId;
+class ObDDLEventInfo final
+{
+public:
+  ObDDLEventInfo();
+  ObDDLEventInfo(const int32_t sub_id);
+  ~ObDDLEventInfo() = default;
+  void record_in_guard();
+  void copy_event(const ObDDLEventInfo &other);
+  void init_sub_trace_id(const int32_t sub_id);
+  const DDLTraceId &get_trace_id() const { return trace_id_; }
+  const DDLTraceId &get_parent_trace_id() const { return parent_trace_id_; }
+  int set_trace_id(const DDLTraceId &trace_id) { return trace_id_.set(trace_id.get()); }
+  void reset();
+  TO_STRING_KV(K(addr_), K(event_ts_), K(sub_id_), K(trace_id_), K(parent_trace_id_));
+
+public:
+  ObAddr addr_;
+  int32_t sub_id_;
+  int64_t event_ts_;
+  DDLTraceId parent_trace_id_;
+  DDLTraceId trace_id_;
+};
 
 
 }  // end namespace share

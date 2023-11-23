@@ -16,6 +16,7 @@
 #include "lib/rc/context.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/ob_ddl_error_message_table_operator.h"
+#include "share/ob_ddl_sim_point.h"
 #include "rootserver/ddl_task/ob_ddl_scheduler.h"
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ddl_task/ob_ddl_task.h"
@@ -160,6 +161,7 @@ int ObDDLRetryTask::init(const uint64_t tenant_id,
                          const uint64_t object_id,
                          const int64_t schema_version,
                          const int64_t consumer_group_id,
+                         const int32_t sub_task_trace_id,
                          const share::ObDDLType &ddl_type,
                          const obrpc::ObDDLArg *ddl_arg, 
                          const int64_t task_status)
@@ -188,6 +190,7 @@ int ObDDLRetryTask::init(const uint64_t tenant_id,
     target_object_id_ = object_id;
     schema_version_ = schema_version;
     consumer_group_id_ = consumer_group_id;
+    sub_task_trace_id_ = sub_task_trace_id;
     tenant_id_ = tenant_id;
     task_id_ = task_id;
     task_type_ = ddl_type;
@@ -208,6 +211,8 @@ int ObDDLRetryTask::init(const ObDDLTaskRecord &task_record)
   if (OB_UNLIKELY(!task_record.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(task_record));
+  } else if (OB_FAIL(DDL_SIM(task_record.tenant_id_, task_record.task_id_, DDL_TASK_INIT_BY_RECORD_FAILED))) {
+    LOG_WARN("ddl sim failure", K(task_record.tenant_id_), K(task_record.task_id_));
   } else if (OB_ISNULL(root_service_ = GCTX.root_service_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root service is null", K(ret));
@@ -310,6 +315,8 @@ int ObDDLRetryTask::check_schema_change_done()
   } else if (OB_ISNULL(root_service_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, RETRY_TASK_CHECK_SCHEMA_CHANGED_FAILED))) {
+    LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
   } else {
     common::ObMySQLProxy &proxy = root_service_->get_sql_proxy();
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
@@ -322,6 +329,8 @@ int ObDDLRetryTask::check_schema_change_done()
           " SELECT status FROM %s WHERE task_id = %lu",
           OB_ALL_DDL_TASK_STATUS_TNAME, task_id_))) {
         LOG_WARN("assign query string failed", K(ret), KPC(this));
+      } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, RETRY_TASK_CHECK_SCHEMA_CHANGED_SLOW))) {
+        LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
       } else if (OB_FAIL(proxy.read(res, tenant_id_, query_string.ptr()))) {
         LOG_WARN("read record failed", K(ret), K(query_string));
       } else if (OB_UNLIKELY(nullptr == (result = res.get_result()))) {
@@ -352,6 +361,8 @@ int ObDDLRetryTask::drop_schema(const ObDDLTaskStatus next_task_status)
   } else if (OB_ISNULL(ddl_arg_) || lib::Worker::CompatMode::INVALID == compat_mode_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error", K(ret), KP(ddl_arg_), K(compat_mode_));
+  } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, RETRY_TASK_DROP_SCHEMA_FAILED))) {
+    LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
   } else if (OB_FAIL(check_schema_change_done())) {
     LOG_WARN("check task finished failed", K(ret));
   } else if (is_schema_change_done_) {
@@ -450,6 +461,8 @@ int ObDDLRetryTask::wait_alter_table(const ObDDLTaskStatus new_status)
   } else if (OB_ISNULL(ddl_arg_) || lib::Worker::CompatMode::INVALID == compat_mode_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error", K(ret), KP(ddl_arg_), K(compat_mode_));
+  } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, RETRY_TASK_WAIT_ALTER_TABLE_FAILED))) {
+    LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
   } else {
     switch (task_type_) {
     case ObDDLType::DDL_DROP_DATABASE:
@@ -603,6 +616,10 @@ int ObDDLRetryTask::process()
       }
     }
     ddl_tracing_.release_span_hierarchy();
+    if (OB_FAIL(ret)) {
+      add_event_info("ddl retry task process fail");
+      LOG_INFO("ddl retry task process fail", K(ret), K(snapshot_version_), K(object_id_), K(target_object_id_), K(schema_version_), "ddl_event_info", ObDDLEventInfo());
+    }
   }
   return ret;
 }
@@ -702,6 +719,8 @@ int ObDDLRetryTask::update_task_status_wait_child_task_finish(
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(task_id));
+  } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, RETRY_TASK_UPDATE_BY_CHILD_FAILED))) {
+    LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(task_id));
   } else if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id, task_id, curr_task_status, execution_id))) {
     LOG_WARN("select for update failed", K(ret), K(tenant_id), K(task_id));
   } else if (OB_UNLIKELY(ObDDLTaskStatus::DROP_SCHEMA != curr_task_status)) {
