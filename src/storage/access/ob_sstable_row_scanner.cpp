@@ -60,6 +60,23 @@ void ObSSTableRowScanner<PrefetchType>::reuse()
 }
 
 template<typename PrefetchType>
+bool ObSSTableRowScanner<PrefetchType>::can_blockscan() const
+{
+  return is_scan(type_) &&
+         nullptr != block_row_store_ &&
+         block_row_store_->can_blockscan();
+}
+
+template<typename PrefetchType>
+bool ObSSTableRowScanner<PrefetchType>::can_batch_scan() const
+{
+    return can_blockscan() &&
+          block_row_store_->filter_applied() &&
+          // can batch scan when only enable_pd_aggregate, as it uses own datum buffer and only return aggregated result
+          (iter_param_->vectorized_enabled_ || iter_param_->enable_pd_aggregate());
+}
+
+template<typename PrefetchType>
 int ObSSTableRowScanner<PrefetchType>::inner_open(
     const ObTableIterParam &iter_param,
     ObTableAccessContext &access_ctx,
@@ -236,8 +253,7 @@ int ObSSTableRowScanner<PrefetchType>::inner_get_next_row(const ObDatumRow *&sto
   if (OB_UNLIKELY(!is_opened_)) {
     ret = OB_NOT_INIT;
    LOG_WARN("ObSSTableRowScanner has not been opened", K(ret));
-  } else if (nullptr != block_row_store_ && !block_row_store_->is_disabled() && prefetcher_.switch_to_columnar_scan()) {
-    block_row_store_->set_filter_applied(true);
+  } else if (can_batch_scan()) {
     ret = OB_PUSHDOWN_STATUS_CHANGED;
   } else {
     while(OB_SUCC(ret)) {
@@ -308,7 +324,7 @@ int ObSSTableRowScanner<PrefetchType>::fetch_row(ObSSTableReadHandle &read_handl
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("Fail to open cur data block", K(ret), KPC(this));
         }
-      } else if (can_vectorize()) {
+      } else if (can_batch_scan()) {
         ret = OB_PUSHDOWN_STATUS_CHANGED;
         LOG_TRACE("[Vectorized|Aggregate] pushdown status changed, fuse=>pushdown", K(ret),
                   K(prefetcher_.cur_micro_data_fetch_idx_));
@@ -328,7 +344,7 @@ int ObSSTableRowScanner<PrefetchType>::fetch_row(ObSSTableReadHandle &read_handl
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             LOG_WARN("Fail to open cur data block", K(ret), KPC(this));
           }
-        } else if (can_vectorize()) {
+        } else if (can_batch_scan()) {
           ret = OB_PUSHDOWN_STATUS_CHANGED;
           LOG_TRACE("[Vectorized|Aggregate] pushdown status changed, fuse=>pushdown", K(ret),
                     K(prefetcher_.cur_micro_data_fetch_idx_));
@@ -351,13 +367,6 @@ int ObSSTableRowScanner<PrefetchType>::refresh_blockscan_checker(const blockssta
     LOG_WARN("Failed to prepare blockscan check info", K(ret), K(rowkey), KPC(this));
   }
   return ret;
-}
-
-template<typename PrefetchType>
-bool ObSSTableRowScanner<PrefetchType>::can_vectorize() const
-{
-  return (iter_param_->vectorized_enabled_ || iter_param_->enable_pd_aggregate()) &&
-      nullptr != block_row_store_ && block_row_store_->filter_applied();
 }
 
 template<typename PrefetchType>
@@ -422,7 +431,7 @@ int ObSSTableRowScanner<PrefetchType>::fetch_rows(ObSSTableReadHandle &read_hand
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("Fail to open cur data block", K(ret), KPC(this));
         }
-      } else if (!can_vectorize()) {
+      } else if (!can_batch_scan()) {
         ret = OB_PUSHDOWN_STATUS_CHANGED;
         LOG_TRACE("[Vectorized] pushdown status changed, pushdown=>fuse", K(ret),
                   K(prefetcher_.cur_micro_data_fetch_idx_));
@@ -445,7 +454,7 @@ int ObSSTableRowScanner<PrefetchType>::fetch_rows(ObSSTableReadHandle &read_hand
           }
         } else if (need_prefetch && OB_FAIL(prefetcher_.prefetch())) {
           LOG_WARN("Fail to do prefetch", K(ret), K_(prefetcher));
-        } else if (!can_vectorize()) {
+        } else if (!can_batch_scan()) {
           ret = OB_PUSHDOWN_STATUS_CHANGED;
           LOG_TRACE("[Vectorized] pushdown status changed, pushdown=>fuse", K(ret),
                     K(prefetcher_.cur_micro_data_fetch_idx_));
@@ -460,6 +469,22 @@ int ObSSTableRowScanner<PrefetchType>::fetch_rows(ObSSTableReadHandle &read_hand
 }
 
 /***************             For columnar store              ****************/
+
+template<>
+bool ObSSTableRowScanner<ObCOPrefetcher>::can_blockscan() const
+{
+  return is_scan(type_) &&
+         nullptr != block_row_store_ &&
+         prefetcher_.switch_to_columnar_scan();
+}
+
+template<>
+bool ObSSTableRowScanner<ObCOPrefetcher>::can_batch_scan() const
+{
+  return can_blockscan() &&
+         !block_row_store_->is_disabled() &&
+         iter_param_->vectorized_enabled_ && iter_param_->enable_pd_filter();
+}
 
 template<typename PrefetchType>
 int ObSSTableRowScanner<PrefetchType>::get_blockscan_start(

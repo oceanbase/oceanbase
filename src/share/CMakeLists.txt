@@ -71,6 +71,7 @@ ob_set_subtarget(ob_share compaction
   compaction/ob_compaction_locality_cache.cpp
   compaction/ob_table_ckm_items.cpp
   compaction/ob_compaction_time_guard.cpp
+  compaction/ob_schedule_batch_size_mgr.cpp
 )
 
 ob_set_subtarget(ob_share common
@@ -87,6 +88,7 @@ ob_set_subtarget(ob_share common
   ob_column_checksum_error_operator.cpp
   ob_core_table_proxy.cpp
   ob_ddl_checksum.cpp
+  ob_ddl_sim_point.cpp
   ob_ddl_common.cpp
   ob_ddl_error_message_table_operator.cpp
   ob_ddl_task_executor.cpp

@@ -556,6 +556,7 @@ public:
         column_infos_(alloc),
         alloc_(alloc)
   {
+    das_ctdef_.is_table_api_ = true;
   }
   TO_STRING_KV(K_(das_ctdef),
                K_(related_ctdefs));
@@ -595,6 +596,7 @@ public:
         related_ins_ctdefs_(alloc),
         alloc_(alloc)
   {
+    das_ctdef_.is_table_api_ = true;
   }
   TO_STRING_KV(K_(full_row),
                K_(delta_row),
@@ -651,6 +653,7 @@ public:
         related_ctdefs_(alloc),
         alloc_(alloc)
   {
+    das_ctdef_.is_table_api_ = true;
   }
   TO_STRING_KV(K_(das_ctdef),
                K_(related_ctdefs));
@@ -742,6 +745,7 @@ public:
         das_ctdef_(alloc),
         alloc_(alloc)
   {
+    das_ctdef_.is_table_api_ = true;
   }
   TO_STRING_KV(K_(das_ctdef));
   ObDASLockCtDef das_ctdef_;

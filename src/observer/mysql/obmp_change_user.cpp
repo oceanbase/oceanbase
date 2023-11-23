@@ -254,6 +254,7 @@ int ObMPChangeUser::process()
     if (OB_FAIL(send_error_packet(ret, NULL))) {
       OB_LOG(WARN,"response fail packet fail", K(ret));
     }
+    need_disconnect = true;
   }
 
   if (OB_UNLIKELY(need_disconnect) && is_conn_valid()) {

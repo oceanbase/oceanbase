@@ -115,7 +115,7 @@ int ObMediumCompactionScheduleFunc::find_valid_freeze_info(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get schema service from MTL", K(ret));
   } else if (OB_FAIL(tablet.fetch_table_store(table_store_wrapper))) {
-    LOG_WARN("load medium info list fail", K(ret), K(tablet));
+    LOG_WARN("failed to fetch table store", K(ret), K(tablet));
   } else {
     last_major = static_cast<ObSSTable *>(table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(true/*last*/));
     if (OB_ISNULL(last_major)) {
@@ -501,7 +501,7 @@ int ObMediumCompactionScheduleFunc::get_max_reserved_snapshot(int64_t &max_reser
     // not sync reserved snapshot yet, should not schedule now
   } else if (OB_FAIL(MTL(ObTenantFreezeInfoMgr*)->get_min_reserved_snapshot(
       tablet->get_tablet_meta().tablet_id_, last_major_snapshot_version, snapshot_info))) {
-    LOG_WARN("failed to get multi version from freeze info mgr", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_);
+    LOG_WARN("failed to get reserved snapshot from freeze info mgr", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_);
   } else {
     max_reserved_snapshot = MAX(ls_.get_min_reserved_snapshot(), snapshot_info.snapshot_);
   }
@@ -564,14 +564,14 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
     LOG_WARN("failed to add dependent tablet", K(ret), KPC(this));
   } else {
     const ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
-    LOG_TRACE("decide_medium_snapshot", K(ret), KPC(this), K(tablet_id));
+    LOG_TRACE("decide_medium_snapshot", K(ret), KPC(this), K(compat_version), K(tablet_id), K(max_sync_medium_scn), K(merge_reason));
     int64_t max_reserved_snapshot = 0;
     int64_t schema_version = 0;
     ObGetMergeTablesResult result;
     ObMediumCompactionInfo medium_info;
 
-    if (OB_FAIL(medium_info.init_data_version())) {
-      LOG_WARN("fail to set data version", K(ret));
+    if (OB_FAIL(medium_info.init_data_version(compat_version))) {
+      LOG_WARN("fail to set data version", K(ret), K(tablet_id), K(compat_version));
     } else if (is_user_request(merge_reason)) {
       if (OB_FAIL(choose_medium_scn_for_user_request(medium_info, result, schema_version))) {
         LOG_WARN("failed to choose medium scn for user request", K(ret), KPC(this));
@@ -979,7 +979,7 @@ int ObMediumCompactionScheduleFunc::batch_check_medium_meta_table(
     } else if (OB_FAIL(ObTabletTableOperator::batch_get_tablet_info(GCTX.sql_proxy_, MTL_ID(), tablet_ls_infos, tablet_infos))) {
       LOG_WARN("failed to get tablet info", K(ret), K(tablet_ls_infos));
     } else {
-      time_guard.click(ObStorageCompactionTimeGuard::SEARCH_META_TABLE);
+      time_guard.click(ObCompactionScheduleTimeGuard::SEARCH_META_TABLE);
       for (int64_t i = 0, idx = 0; OB_SUCC(ret) && i < tablet_infos.count() && idx < tablet_ls_infos.count(); ++idx) {
         bool merge_finish = false;
         const ObTabletCheckInfo &tablet_ls_info = tablet_ls_infos.at(idx);
@@ -1000,7 +1000,7 @@ int ObMediumCompactionScheduleFunc::batch_check_medium_meta_table(
           ++i;
         }
       }
-      time_guard.click(ObStorageCompactionTimeGuard::CHECK_META_TABLE);
+      time_guard.click(ObCompactionScheduleTimeGuard::CHECK_META_TABLE);
     }
   }
   return ret;
@@ -1209,10 +1209,10 @@ int ObMediumCompactionScheduleFunc::batch_check_medium_finish(
         } else if (OB_FAIL(ObTabletReplicaChecksumOperator::get_tablets_replica_checksum(
             MTL_ID(), finish_tablet_ls_infos, checksum_items))) {
           LOG_WARN("failed to get tablet checksum", K(ret));
-        } else if (FALSE_IT(time_guard.click(ObStorageCompactionTimeGuard::SEARCH_CHECKSUM))) {
+        } else if (FALSE_IT(time_guard.click(ObCompactionScheduleTimeGuard::SEARCH_CHECKSUM))) {
         } else if (OB_FAIL(batch_check_medium_checksum(finish_tablet_ls_infos, checksum_items))) {
           LOG_WARN("failed to check medium tablets checksum", K(ret));
-        } else if (FALSE_IT(time_guard.click(ObStorageCompactionTimeGuard::CHECK_CHECKSUM))) {
+        } else if (FALSE_IT(time_guard.click(ObCompactionScheduleTimeGuard::CHECK_CHECKSUM))) {
         }
       }
     }

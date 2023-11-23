@@ -42,6 +42,7 @@ public:
       const int64_t dest_schema_version,
       const int64_t parallelism,
       const int64_t consumer_group_id,
+      const int32_t sub_task_trace_id,
       const obrpc::ObAlterTableArg &alter_table_arg,
       const int64_t task_status = share::ObDDLTaskStatus::PREPARE,
       const int64_t snapshot_version = 0);
@@ -57,6 +58,8 @@ protected:
   virtual int obtain_snapshot(const share::ObDDLTaskStatus next_task_status) override;
   virtual int fail() override;
   virtual int success() override;
+private:
+  int check_health();
 private:
   static const int64_t OB_RECOVER_RESTORE_TABLE_TASK_VERSION = 1L;
 };

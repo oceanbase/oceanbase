@@ -122,6 +122,7 @@ public:
   {
     LOG_INFO("test_and_check_string_encoding", K(size), K(type), K(use_zero_len_as_null), K(has_null), K(is_fix_len),
         K(use_nullbitmap), K(all_null), K(half_null_half_empty), K(use_null_replaced_ref));
+    ObArenaAllocator local_arena;
     ObStringStreamEncoderCtx ctx;
     ObCSEncodingOpt encoding_opt;
     bool is_use_zero_len_as_null = use_zero_len_as_null;
@@ -140,7 +141,7 @@ public:
 
     ObStringStreamEncoder encoder;
     uint32_t *data = nullptr;
-    ObColDatums *datums = new ObColDatums();
+    ObColDatums *datums = new ObColDatums(local_arena);
     ASSERT_EQ(OB_SUCCESS, datums->resize(max_count));
     datums->reuse();
     if (half_null_half_empty) {
@@ -203,7 +204,7 @@ public:
     str_data.set(all_string_writer.data(), all_string_writer.length());
 
     // 3. decode str
-    ObColDatums *datums2 = new ObColDatums();
+    ObColDatums *datums2 = new ObColDatums(local_arena);
     ASSERT_EQ(OB_SUCCESS, datums2->resize(max_count));
     datums2->reuse();
     for (int64_t i = 0; i < size; i++) {

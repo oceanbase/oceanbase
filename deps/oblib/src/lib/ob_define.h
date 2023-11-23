@@ -608,6 +608,15 @@ const int64_t OB_END_RESERVED_COLUMN_ID_NUM = 16;
 const uint64_t OB_APP_MIN_COLUMN_ID = 16;
 const uint64_t OB_ACTION_FLAG_COLUMN_ID = OB_ALL_MAX_COLUMN_ID
                                           - OB_END_RESERVED_COLUMN_ID_NUM + 1; /* 65520 */
+const uint64_t OB_MLOG_SEQ_NO_COLUMN_ID = OB_ALL_MAX_COLUMN_ID
+                                          - OB_END_RESERVED_COLUMN_ID_NUM + 2; /* 65521 */
+const uint64_t OB_MLOG_DML_TYPE_COLUMN_ID = OB_ALL_MAX_COLUMN_ID
+                                          - OB_END_RESERVED_COLUMN_ID_NUM + 3; /* 65522 */
+const uint64_t OB_MLOG_OLD_NEW_COLUMN_ID = OB_ALL_MAX_COLUMN_ID
+                                           - OB_END_RESERVED_COLUMN_ID_NUM + 4; /* 65523 */
+const uint64_t OB_MLOG_ROWID_COLUMN_ID = OB_ALL_MAX_COLUMN_ID
+                                         - OB_END_RESERVED_COLUMN_ID_NUM + 5; /* 65524 */
+
 const uint64_t OB_MAX_TMP_COLUMN_ID = OB_ALL_MAX_COLUMN_ID
                                       - OB_END_RESERVED_COLUMN_ID_NUM;
 const int32_t OB_COUNT_AGG_PD_COLUMN_ID = INT32_MAX - 1;
@@ -842,7 +851,11 @@ const char *const OB_DIAG_TENANT_NAME = "diag";
 //for sync ddl (ClusterID_TenantID_SchemaVersion)
 const char *const OB_DDL_ID_VAR_NAME = "__oceanbase_ddl_id";
 const int64_t OB_MAX_DDL_ID_STR_LENGTH = 64;
+#ifdef ERRSIM
+const int64_t OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT = 30L * 60L * 1000L * 1000L; // 30 minutes
+#else
 const int64_t OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT = 7L * 24L * 60L * 60L * 1000L * 1000L; // 7days
+#endif
 
 const int64_t OB_MAX_PARTITION_SHARDING_LENGTH = 10;
 
@@ -2448,10 +2461,10 @@ OB_INLINE char* ob_get_tname()
   return tname;
 }
 
-OB_INLINE const char*& ob_get_origin_thread_name()
+OB_INLINE char* ob_get_origin_thread_name()
 {
-  thread_local const char* tname = nullptr;
-  return tname;
+  thread_local char ori_tname[oceanbase::OB_THREAD_NAME_BUF_LEN] = {0};
+  return ori_tname;
 }
 
 static const char* PARALLEL_DDL_THREAD_NAME = "DDLPQueueTh";

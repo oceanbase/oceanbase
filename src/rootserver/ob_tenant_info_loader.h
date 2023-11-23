@@ -130,6 +130,15 @@ public:
   */
  int get_sync_scn(share::SCN &sync_scn);
 
+  /**
+  * @description:
+  *    get tenant recovery_until_scn.
+  *       for SYS/META tenant: there isn't recovery_until_scn
+  *       for user tenant: get recovery_until_scn from __all_tenant_info cache
+  * @param[out] recovery_until_scn
+  */
+ int get_recovery_until_scn(share::SCN &recovery_until_scn);
+
  /**
   * @description:
   *    get tenant is_standby_normal_status

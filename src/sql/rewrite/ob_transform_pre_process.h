@@ -458,6 +458,9 @@ struct DistinctObjMeta
 
   int replace_group_id_in_stmt(ObSelectStmt *stmt);
   int replace_group_id_in_expr_recursive(ObRawExpr *&expr);
+  // transform json object with star
+  int transform_json_object_expr_with_star(const ObIArray<ObParentDMLStmt> &parent_stmts,
+                                           ObDMLStmt *stmt, bool &trans_happened);
   int transform_udt_columns(const common::ObIArray<ObParentDMLStmt> &parent_stmts, ObDMLStmt *stmt, bool &trans_happened);
   int transform_udt_column_conv_function(ObDmlTableInfo &table_info,
                                          ObIArray<ObRawExpr*> &column_conv_exprs,

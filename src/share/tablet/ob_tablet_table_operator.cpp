@@ -210,7 +210,7 @@ int ObTabletTableOperator::inner_batch_get_tablet_by_sql_(
       } else if (OB_ISNULL(result.get_result())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get mysql result failed", KR(ret), "sql", sql.ptr());
-      } else if (OB_FAIL(construct_tablet_infos_(*result.get_result(), tablet_infos))) {
+      } else if (OB_FAIL(construct_tablet_infos(*result.get_result(), tablet_infos))) {
         LOG_WARN("construct tablet info failed", KR(ret), K(tablet_infos));
       }
     }
@@ -366,7 +366,7 @@ int ObTabletTableOperator::inner_batch_get_by_sql_(
       } else if (OB_ISNULL(result.get_result())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get mysql result failed", KR(ret), "sql", sql.ptr());
-      } else if (OB_FAIL(construct_tablet_infos_(*result.get_result(), tablet_infos))) {
+      } else if (OB_FAIL(construct_tablet_infos(*result.get_result(), tablet_infos))) {
         LOG_WARN("construct tablet info failed", KR(ret), K(tablet_infos));
       }
     }
@@ -374,7 +374,7 @@ int ObTabletTableOperator::inner_batch_get_by_sql_(
   return ret;
 }
 
-int ObTabletTableOperator::construct_tablet_infos_(
+int ObTabletTableOperator::construct_tablet_infos(
     sqlclient::ObMySQLResult &res,
     ObIArray<ObTabletInfo> &tablet_infos)
 {
@@ -655,7 +655,7 @@ int ObTabletTableOperator::range_get(
       } else if (OB_ISNULL(result.get_result())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get mysql result failed", KR(ret), K(sql));
-      } else if (OB_FAIL(construct_tablet_infos_(*result.get_result(), tablet_infos))) {
+      } else if (OB_FAIL(construct_tablet_infos(*result.get_result(), tablet_infos))) {
         LOG_WARN("construct tablet info failed", KR(ret), K(sql), K(tablet_infos));
       } else if (OB_UNLIKELY(tablet_infos.count() > range_size)) {
         ret = OB_ERR_UNEXPECTED;

@@ -35,6 +35,7 @@
 #include "storage/meta_mem/ob_tablet_map_key.h"
 #include "storage/meta_mem/ob_tablet_pointer.h"
 #include "storage/meta_mem/ob_tenant_meta_obj_pool.h"
+#include "storage/meta_mem/ob_tablet_leak_checker.h"
 #include "storage/tablet/ob_tablet_memtable_mgr.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_full_tablet_creator.h"
@@ -151,6 +152,8 @@ public:
   {
     return lib::is_mini_mode() ? MIN_MODE_MAX_MEMTABLE_CNT_IN_OBJ_POOL : MAX_MEMTABLE_CNT_IN_OBJ_POOL;
   }
+
+  static int register_into_tb_map(const char *file, const int line, const char *func, int32_t &index);
 
   static int get_tablet_pool_type(const int64_t tablet_size, ObTabletPoolType &type)
   {
@@ -278,6 +281,9 @@ public:
   int release_memtable_and_mds_table_for_ls_offline(const ObTabletMapKey &key);
 
   TO_STRING_KV(K_(tenant_id), K_(is_inited), "tablet count", tablet_map_.count());
+
+  int inc_ref_in_leak_checker(const int32_t index);
+  int dec_ref_in_leak_checker(const int32_t index);
 private:
   int fill_buffer_infos(
       const ObTabletPoolType pool_type,
@@ -290,6 +296,7 @@ private:
                                          const bool is_old,
                                          const share::SCN &ls_checkpoint,
                                          share::SCN &min_end_scn);
+  int fetch_tenant_config();
 
 private:
   typedef ObResourceValueStore<ObTabletPointer> TabletValueStore;
@@ -415,23 +422,11 @@ private:
   static const int64_t DEFAULT_TABLET_WASH_HEAP_COUNT = 16;
   static const int64_t DEFAULT_MINOR_SSTABLE_SET_COUNT = 49999;
   static const int64_t SSTABLE_GC_MAX_TIME = 500; // 500us
+  static const int64_t LEAK_CHECKER_CONFIG_REFRESH_TIMEOUT = 10000000 * 10; // 10s
   typedef common::ObBinaryHeap<CandidateTabletInfo, HeapCompare, DEFAULT_TABLET_WASH_HEAP_COUNT> Heap;
   typedef common::ObDList<ObMetaObjBufferNode> TabletBufferList;
   typedef common::hash::ObHashSet<MinMinorSSTableInfo, common::hash::NoPthreadDefendMode> SSTableSet;
   typedef common::hash::ObHashSet<ObTabletMapKey, hash::NoPthreadDefendMode> PinnedTabletSet;
-
-  class TenantMetaAllocator : public common::ObFIFOAllocator
-  {
-  public:
-    TenantMetaAllocator(const uint64_t tenant_id, TryWashTabletFunc &wash_func)
-    : common::ObFIFOAllocator(tenant_id), wash_func_(wash_func) {};
-    virtual ~TenantMetaAllocator() = default;
-    TO_STRING_KV("used", used(), "total", total());
-  protected:
-    virtual void *alloc_align(const int64_t size, const int64_t align) override;
-  private:
-    TryWashTabletFunc &wash_func_;
-  };
 
 private:
   int acquire_tablet(const ObTabletPoolType type, ObTabletHandle &tablet_handle);
@@ -473,6 +468,7 @@ private:
   int push_memtable_into_gc_map_(memtable::ObMemtable *memtable);
   void batch_gc_memtable_();
   void batch_destroy_memtable_(memtable::ObMemtableSet *memtable_set);
+  bool is_tablet_handle_leak_checker_enabled();
 
 private:
   common::SpinRWLock wash_lock_;
@@ -491,6 +487,7 @@ private:
   common::ObLinkQueue free_tables_queue_;
   common::ObSpinLock gc_queue_lock_;
   common::hash::ObHashMap<share::ObLSID, memtable::ObMemtableSet*> gc_memtable_map_;
+  ObTabletLeakChecker leak_checker_;
 
   ObTenantMetaObjPool<memtable::ObMemtable> memtable_pool_;
   ObTenantMetaObjPool<ObNormalTabletBuffer> tablet_buffer_pool_;
@@ -508,7 +505,9 @@ private:
   TabletBufferList large_tablet_header_;
 
   common::ObConcurrentFIFOAllocator meta_cache_io_allocator_;
+  int64_t last_access_tenant_config_ts_;
 
+  bool is_tablet_leak_checker_enabled_;
   bool is_inited_;
 };
 

@@ -19,3 +19,5 @@ commit;
 set autocommit=1;
 select * from t1;
 disconnect conn1;
+
+

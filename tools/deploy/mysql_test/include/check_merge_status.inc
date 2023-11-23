@@ -18,7 +18,7 @@ if ($merge_stage == 0) {
     {
         --echo failed
     }
-
+    
     ## check broadcast in freeze_info_detector
     let $__i__= $timeout_s;
     while($__i__ > 0)

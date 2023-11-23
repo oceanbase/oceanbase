@@ -23,6 +23,8 @@
 #include "lib/hash/ob_hashset.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler_task_mgr.h"
 #include "storage/compaction/ob_compaction_schedule_iterator.h"
+#include "share/compaction/ob_schedule_batch_size_mgr.h"
+#include "storage/compaction/ob_compaction_schedule_util.h"
 
 namespace oceanbase
 {
@@ -44,42 +46,6 @@ struct ObTabletStatKey;
 
 namespace compaction
 {
-
-struct ObScheduleStatistics
-{
-public:
-  ObScheduleStatistics() { reset(); }
-  ~ObScheduleStatistics() {}
-  OB_INLINE void reset()
-  {
-    add_weak_read_ts_event_flag_ = false;
-    check_weak_read_ts_cnt_ = 0;
-    start_timestamp_ = 0;
-    clear_tablet_cnt();
-  }
-  OB_INLINE void clear_tablet_cnt()
-  {
-    schedule_dag_cnt_ = 0;
-    submit_clog_cnt_ = 0;
-    finish_cnt_ = 0;
-    wait_rs_validate_cnt_ = 0;
-  }
-  OB_INLINE void start_merge()
-  {
-    add_weak_read_ts_event_flag_ = true;
-    check_weak_read_ts_cnt_ = 0;
-    start_timestamp_ = ObTimeUtility::fast_current_time();
-    clear_tablet_cnt();
-  }
-  TO_STRING_KV(K_(schedule_dag_cnt), K_(submit_clog_cnt), K_(finish_cnt), K_(wait_rs_validate_cnt));
-  bool add_weak_read_ts_event_flag_;
-  int64_t check_weak_read_ts_cnt_;
-  int64_t start_timestamp_;
-  int64_t schedule_dag_cnt_;
-  int64_t submit_clog_cnt_;
-  int64_t finish_cnt_;
-  int64_t wait_rs_validate_cnt_;
-};
 
 class ObFastFreezeChecker
 {
@@ -277,6 +243,7 @@ public:
   int schedule_next_round_for_leader(
     const ObIArray<compaction::ObTabletCheckInfo> &tablet_ls_infos,
     const ObIArray<compaction::ObTabletCheckInfo> &finish_tablet_ls_infos);
+  OB_INLINE int64_t get_schedule_batch_size() const { return batch_size_mgr_.get_schedule_batch_size(); }
 private:
   friend struct ObTenantTabletSchedulerTaskMgr;
   int schedule_next_medium_for_leader(
@@ -301,7 +268,8 @@ private:
     const bool enable_adaptive_compaction,
     bool &is_leader,
     bool &tablet_merge_finish,
-    bool &tablet_need_freeze_flag);
+    bool &tablet_need_freeze_flag,
+    ObCompactionTimeGuard &time_guard);
   int after_schedule_tenant_medium(
     const int64_t merge_version,
     bool all_ls_weak_read_ts_ready);
@@ -358,16 +326,17 @@ private:
   int64_t merged_version_; // the merged major version of the local server, may be not accurate after reboot
   int64_t inner_table_merged_scn_;
   uint64_t min_data_version_;
+  ObCompactionScheduleTimeGuard time_guard_;
   ObScheduleStatistics schedule_stats_;
   ObFastFreezeChecker fast_freeze_checker_;
   ObCompactionScheduleIterator minor_ls_tablet_iter_;
   ObCompactionScheduleIterator medium_ls_tablet_iter_;
   ObCompactionScheduleIterator gc_sst_tablet_iter_;
-  int64_t schedule_tablet_batch_size_;
   int64_t error_tablet_cnt_; // for diagnose
   int64_t loop_cnt_;
   ObProhibitScheduleMediumMap prohibit_medium_map_;
   ObTenantTabletSchedulerTaskMgr timer_task_mgr_;
+  ObScheduleBatchSizeMgr batch_size_mgr_;
 };
 
 } // namespace compaction

@@ -23,6 +23,7 @@
 #include "share/ob_common_rpc_proxy.h"
 #include "lib/worker.h"
 #include "rootserver/ob_root_utils.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {
@@ -45,6 +46,7 @@ int ObCreateDatabaseExecutor::execute(ObExecContext &ctx, ObCreateDatabaseStmt &
   const obrpc::ObCreateDatabaseArg &create_database_arg = stmt.get_create_database_arg();
   obrpc::ObCreateDatabaseArg &tmp_arg = const_cast<obrpc::ObCreateDatabaseArg&>(create_database_arg);
   ObString first_stmt;
+  obrpc::UInt64 database_id(0);
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
      SQL_ENG_LOG(WARN, "fail to get first stmt" , K(ret));
   } else {
@@ -63,14 +65,22 @@ int ObCreateDatabaseExecutor::execute(ObExecContext &ctx, ObCreateDatabaseStmt &
     SQL_ENG_LOG(WARN, "fail to get physical plan ctx", K(ret), K(ctx), K(common_rpc_proxy));
   } else {
     //为什么create database的协议需要返回database_id，暂时没有用上。
-    obrpc::UInt64 database_id(0);
     if (OB_FAIL(common_rpc_proxy->create_database(create_database_arg, database_id))) {
       SQL_ENG_LOG(WARN, "rpc proxy create table failed", K(ret));
     } else {
       ctx.get_physical_plan_ctx()->set_affected_rows(1);
     }
   }
-  SQL_ENG_LOG(INFO, "finish execute create database.", K(ret), K(stmt));
+  if (OB_NOT_NULL(common_rpc_proxy)) {
+    SERVER_EVENT_ADD("ddl", "create database execute finish",
+      "tenant_id", MTL_ID(),
+      "ret", ret,
+      "trace_id", *ObCurTraceId::get_trace_id(),
+      "rpc_dst", common_rpc_proxy->get_server(),
+      "database_info", database_id,
+      "schema_version", create_database_arg.database_schema_.get_schema_version());
+  }
+  SQL_ENG_LOG(INFO, "finish execute create database.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(create_database_arg));
   return ret;
 }
 
@@ -167,6 +177,16 @@ int ObAlterDatabaseExecutor::execute(ObExecContext &ctx, ObAlterDatabaseStmt &st
       SQL_ENG_LOG(WARN, "failed to update sys variable", K(ret));
     }
   }
+  if (OB_NOT_NULL(common_rpc_proxy)) {
+    SERVER_EVENT_ADD("ddl", "alter database execute finish",
+      "tenant_id", MTL_ID(),
+      "ret", ret,
+      "trace_id", *ObCurTraceId::get_trace_id(),
+      "rpc_dst", common_rpc_proxy->get_server(),
+      "database_info", alter_database_arg.database_schema_.get_database_id(),
+      "schema_version", alter_database_arg.database_schema_.get_schema_version());
+  }
+    SQL_ENG_LOG(INFO, "finish execute alter database", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(alter_database_arg));
   return ret;
 }
 
@@ -238,7 +258,15 @@ int ObDropDatabaseExecutor::execute(ObExecContext &ctx, ObDropDatabaseStmt &stmt
       ctx.get_physical_plan_ctx()->set_affected_rows(drop_database_res.affected_row_);
     }
   }
-  SQL_ENG_LOG(INFO, "finish execute drop database.", K(ret), K(stmt));
+  if (OB_NOT_NULL(common_rpc_proxy)) {
+    SERVER_EVENT_ADD("ddl", "drop database execute finish",
+      "tenant_id", MTL_ID(),
+      "ret", ret,
+      "trace_id", *ObCurTraceId::get_trace_id(),
+      "rpc_dst", common_rpc_proxy->get_server(),
+      "database_info", database_id);
+  }
+  SQL_ENG_LOG(INFO, "finish execute drop database.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(drop_database_arg));
   return ret;
 }
 
@@ -268,6 +296,17 @@ int ObFlashBackDatabaseExecutor::execute(ObExecContext &ctx, ObFlashBackDatabase
   } else if (OB_FAIL(common_rpc_proxy->flashback_database(flashback_database_arg))) {
     SQL_ENG_LOG(WARN, "rpc proxy flashback database failed", K(ret));
   }
+
+  if (OB_NOT_NULL(common_rpc_proxy)) {
+    SERVER_EVENT_ADD("ddl", "flashback database execute finish",
+      "tenant_id", MTL_ID(),
+      "ret", ret,
+      "trace_id", *ObCurTraceId::get_trace_id(),
+      "rpc_dst", common_rpc_proxy->get_server(),
+      "origin_db_name", flashback_database_arg.origin_db_name_,
+      "new_db_name", flashback_database_arg.new_db_name_);
+  }
+  SQL_ENG_LOG(INFO, "finish execute flashback database.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(flashback_database_arg));
   return ret;
 }
 
@@ -297,6 +336,16 @@ int ObPurgeDatabaseExecutor::execute(ObExecContext &ctx, ObPurgeDatabaseStmt &st
   } else if (OB_FAIL(common_rpc_proxy->purge_database(purge_database_arg))) {
     SQL_ENG_LOG(WARN, "rpc proxy purge database failed", K(ret));
   }
+
+  if (OB_NOT_NULL(common_rpc_proxy)) {
+    SERVER_EVENT_ADD("ddl", "purge database execute finish",
+      "tenant_id", MTL_ID(),
+      "ret", ret,
+      "trace_id", *ObCurTraceId::get_trace_id(),
+      "rpc_dst", common_rpc_proxy->get_server(),
+      "database_info", purge_database_arg.db_name_);
+  }
+  SQL_ENG_LOG(INFO, "finish purge database.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(purge_database_arg));
   return ret;
 }
 

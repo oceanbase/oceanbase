@@ -5,5 +5,5 @@ set @@session.explicit_defaults_for_timestamp=off;
 # owner group: SQL2
 # description:
 #
---error 1064
+--error 1064 
 SELECT name FROM master.dbo.sysdatabases WHERE status <> 512;

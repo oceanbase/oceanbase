@@ -5,7 +5,7 @@ set @@session.explicit_defaults_for_timestamp=off;
 #owner: linlin.xll
 #owner group: SQL1
 #description:
-#tags: sys_vars
+#tags: sys_vars 
 
 show collation;
 show collation;

@@ -852,7 +852,7 @@ void ObIOTuner::print_sender_status()
 
       ret = sender->get_sender_info(reservation_ts, group_limitation_ts, tenant_limitation_ts, proportion_ts);
       if (OB_NOT_INIT != ret) {
-        LOG_INFO("[IO SENDER STATUS]", "send_index", sender->sender_index_, "req_count", sender->get_queue_count(),
+        LOG_INFO("[IO STATUS SENDER]", "send_index", sender->sender_index_, "req_count", sender->get_queue_count(),
                  K(reservation_ts), K(group_limitation_ts), K(tenant_limitation_ts), K(proportion_ts));
       }
     }

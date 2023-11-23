@@ -201,29 +201,29 @@ public:
                           const int64_t &prev_log_proposal_id,
                           const LSN &prev_lsn,
                           const LSN &curr_lsn,
-                          const LogWriteBuf &write_buf)
+                          const LogWriteBuf &write_buf,
+                          const bool need_batch_rpc)
   {
     int ret = OB_SUCCESS;
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       PALF_LOG(ERROR, "LogEngine not init", K(ret), KPC(this));
-    } else if (OB_FAIL(log_net_service_.submit_push_log_req(member_list,
-                                                            push_log_type,
-                                                            msg_proposal_id,
-                                                            prev_log_proposal_id,
-                                                            prev_lsn,
-                                                            curr_lsn,
-                                                            write_buf))) {
-      // PALF_LOG(ERROR,
-      //          "LogNetService submit_group_entry_to_memberlist failed",
-      //          K(ret),
-      //          KPC(this),
-      //          K(member_list),
-      //          K(prev_log_proposal_id),
-      //          K(prev_lsn),
-      //          K(prev_log_proposal_id),
-      //          K(curr_lsn),
-      //          K(write_buf));
+    } else if (!need_batch_rpc
+               && OB_FAIL(log_net_service_.submit_push_log_req(member_list,
+                                                               push_log_type,
+                                                               msg_proposal_id,
+                                                               prev_log_proposal_id,
+                                                               prev_lsn,
+                                                               curr_lsn,
+                                                               write_buf))) {
+    } else if (need_batch_rpc
+               && OB_FAIL(log_net_service_.submit_batch_push_log_req(member_list,
+                                                                     push_log_type,
+                                                                     msg_proposal_id,
+                                                                     prev_log_proposal_id,
+                                                                     prev_lsn,
+                                                                     curr_lsn,
+                                                                     write_buf))) {
     } else {
       PALF_LOG(TRACE,
                "submit_group_entry_to_memberlist success",
@@ -233,7 +233,8 @@ public:
                K(msg_proposal_id),
                K(prev_log_proposal_id),
                K(prev_lsn),
-               K(curr_lsn));
+               K(curr_lsn),
+               K(need_batch_rpc));
     }
     return ret;
   }
@@ -251,7 +252,8 @@ public:
   // @param[in] lsn: the offset of log
   virtual int submit_push_log_resp(const common::ObAddr &server,
                                    const int64_t &msg_proposal_id,
-                                   const LSN &lsn);
+                                   const LSN &lsn,
+                                   const bool is_batch);
 
   template <class List>
   int submit_prepare_meta_req_(const List &member_list, const int64_t &log_proposal_id)

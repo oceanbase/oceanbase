@@ -43,9 +43,9 @@ SELECT INFLUX_ID FROM fin_settle_serial_map  WHERE FINANCE_EXCHANGE_CODE IN ('EX
 create table fin_influx_terminal(influx_id	varchar(64)  primary key, inst_id	varchar(32), inst_merchant_no	varchar(32), inst_terminal_no	varchar(32), term_batch_no	varchar(6), term_trace_no	varchar(6), rrn	varchar(12), auth_code	varchar(6), gmt_create	datetime, gmt_modified	datetime, finance_exchange_code	varchar(32), inst_account_no	varchar(32), exchange_amount	int, exchange_currency	char(3), extension	varchar(4000));
 select influx_id, inst_id, inst_merchant_no, inst_terminal_no, term_batch_no, term_trace_no, rrn, auth_code, gmt_create, gmt_modified, finance_exchange_code, inst_account_no, exchange_amount, exchange_currency, extension from fin_influx_terminal  where influx_id='0001' and term_trace_no = '123';
 
-## table 5 fin_info_transaction
-create table fin_info_transaction(
-info_id	varchar(64) primary key,
+## table 5 fin_info_transaction 
+create table fin_info_transaction( 
+info_id	varchar(64) primary key, 
 inst_id	varchar(32),
 business_code	varchar(16),
 sub_business_code	varchar(16),
@@ -76,7 +76,7 @@ gmt_create	datetime,
 gmt_modified	datetime,
 primary key(inst_id, term_batch_no, inst_merchant_no, term_trace_no, inst_terminal_no)
 );
-#selects to add
+#selects to add 
 
 
 ## table 7 fin_request_no_unique
@@ -141,7 +141,7 @@ gmt_modified	datetime
 select influx_id, org_influx_id, inst_id, business_code, sub_business_code, exchange_type, finance_exchange_code, settle_serial_no, payer_account_no, exchange_amount, exchange_currency, account_amount, account_currency, settle_amount, settle_currency, settle_status, exchange_status, result_code, result_description, recover_flag, recon_flag, negative_flag, negative_exchange_type, request_identify, request_biz_no, pay_unique_no, pay_channel_api, inst_channel_api, clear_channel, biz_identity, gmt_submit, gmt_resp, gmt_settle, gmt_create, gmt_modified from fin_influx_transaction where influx_id = '0001';
 
 select influx_id, org_influx_id, inst_id, business_code, sub_business_code, exchange_type, finance_exchange_code, settle_serial_no, payer_account_no, exchange_amount, exchange_currency, account_amount, account_currency, settle_amount, settle_currency, settle_status, exchange_status, result_code, result_description, recover_flag, recon_flag, negative_flag, negative_exchange_type, request_identify, request_biz_no, pay_unique_no, pay_channel_api, inst_channel_api, clear_channel, biz_identity, gmt_submit, gmt_resp, gmt_settle, gmt_create, gmt_modified from fin_influx_transaction  where finance_exchange_code = 'ss' and settle_serial_no = '00001';
-
+ 
 select influx_id, org_influx_id, inst_id, business_code, sub_business_code, exchange_type, finance_exchange_code, settle_serial_no, payer_account_no, exchange_amount, exchange_currency, account_amount, account_currency, settle_amount, settle_currency, settle_status, exchange_status, result_code, result_description, recover_flag, recon_flag, negative_flag, negative_exchange_type, request_identify, request_biz_no, pay_unique_no, pay_channel_api, inst_channel_api, clear_channel, biz_identity, gmt_submit, gmt_resp, gmt_settle, gmt_create, gmt_modified from fin_influx_transaction   where inst_channel_api = 'api' and settle_serial_no = '00001';
 
 ### table 10 idx1_fin_influx_transaction
@@ -182,9 +182,9 @@ gmt_modified	datetime,
 primary key(inst_account_no, gmt_create, influx_id)
 );
 select influx_id, payer_account_no, payer_name, inst_account_no, inst_account_name, card_type, card_index, issuer, agreement_no, certificate_type, certificate_no, mobile_phone, pay_tool, bill_no, bill_type, gmt_create, gmt_modified from fin_influx_payer where influx_id='0001';
-
+   
 select influx_id, payer_account_no, payer_name, inst_account_no, inst_account_name, card_type, card_index, issuer, agreement_no, certificate_type, certificate_no, mobile_phone, pay_tool, bill_no, bill_type, gmt_create, gmt_modified from fin_influx_payer where bill_no='sss';
-
+   
 select influx_id, payer_account_no, payer_name, inst_account_no, inst_account_name, card_type, card_index, issuer, agreement_no, certificate_type, certificate_no, mobile_phone, pay_tool, bill_no, bill_type, gmt_create, gmt_modified from fin_influx_payer where inst_account_no='0001' and gmt_create>='2012-10-1 23:00:00' and gmt_create<='2012-12-23 23:00:00';
 
 ## table 12 idx1_fin_influx_payer

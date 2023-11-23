@@ -1875,7 +1875,9 @@ int ObPartitionIncrementalRangeSpliter::ObIncrementalIterator::prepare_get_table
     }
   }
   if (OB_SUCC(ret)) {
-    *get_tbl_param_.tablet_iter_.table_iter() = tbls_iter_;
+    if (OB_FAIL(get_tbl_param_.tablet_iter_.table_iter()->assign(tbls_iter_))) {
+      STORAGE_LOG(WARN, "Failed to assign tablet iterator", KR(ret));
+    }
   }
   return ret;
 }

@@ -106,7 +106,7 @@ int ObTabletMediumInfoReader::get_next_medium_info(
     compaction::ObMediumCompactionInfo &medium_info)
 {
   int ret = OB_SUCCESS;
-
+  medium_info.reset();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
@@ -204,13 +204,14 @@ int ObTabletMediumInfoReader::get_specified_medium_info(
         break;
       }
     }
-    tmp_medium_info.reset();
   } // end of while
   return ret;
 }
 
 // temp solution, TODO(@xianzhi)
-int ObTabletMediumInfoReader::get_min_medium_snapshot(int64_t &min_medium_snapshot)
+int ObTabletMediumInfoReader::get_min_medium_snapshot(
+  const int64_t last_major_snapshot_version,
+  int64_t &min_medium_snapshot)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator tmp_allocator;
@@ -225,7 +226,7 @@ int ObTabletMediumInfoReader::get_min_medium_snapshot(int64_t &min_medium_snapsh
       } else {
         LOG_WARN("failed to get medium info", K(ret));
       }
-    } else {
+    } else if (tmp_key.get_medium_snapshot() > last_major_snapshot_version) {
       min_medium_snapshot = tmp_key.get_medium_snapshot();
       break;
     }
@@ -252,7 +253,6 @@ int ObTabletMediumInfoReader::get_max_medium_snapshot(int64_t &max_medium_snapsh
     } else {
       max_medium_snapshot = tmp_key.get_medium_snapshot();
     }
-    tmp_medium_info.reset();
   } // end of while
   return ret;
 }

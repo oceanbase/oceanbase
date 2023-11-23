@@ -144,6 +144,10 @@ public:
                                  const ObRawExpr *to,
                                  const EqualSets &equal_sets);
 
+  static bool is_exprs_equivalent(const common::ObIArray<ObRawExpr*> &from,
+                                 const common::ObIArray<ObRawExpr*> &to,
+                                 const EqualSets &equal_sets);
+
   static bool is_expr_equivalent(const ObRawExpr *from,
                                  const ObRawExpr *to);
 

@@ -18,6 +18,7 @@ RUN mkdir -p /root/pkg && \
 
 COPY boot /root/boot/
 ENV PATH /root/boot:$PATH
+ENV LD_LIBRARY_PATH /root/ob/lib:$LD_LIBRARY_PATH
 
 WORKDIR /root
 CMD _boot

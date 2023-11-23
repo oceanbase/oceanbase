@@ -125,6 +125,7 @@ private:
   ObMicroBufferWriter all_string_data_buffer_;
 
   common::ObArray<ObColDatums *> all_col_datums_;
+  ObArenaAllocator pivot_allocator_;
   common::ObSEArray<uint32_t, 512> datum_row_offset_arr_;
   int64_t estimate_size_;
   int64_t estimate_size_limit_;

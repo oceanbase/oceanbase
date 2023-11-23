@@ -955,7 +955,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
       }
       case T_FUN_SYS_JSON_QUERY: {
         if (OB_FAIL(process_json_query_node(node, expr))) {
-          LOG_WARN("fail to process lnnvl node", K(ret), K(node));
+          LOG_WARN("fail to process json query node", K(ret), K(node));
         }
         break;
       }
@@ -967,7 +967,13 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
       }
       case T_FUN_SYS_JSON_OBJECT: {
         if (OB_FAIL(process_ora_json_object_node(node, expr))) {
-          LOG_WARN("fail to process lnnvl node", K(ret), K(node));
+          LOG_WARN("fail to process json object node", K(ret), K(node));
+        }
+        break;
+      }
+      case T_FUN_SYS_JSON_OBJECT_WILD_STAR: {
+        if (OB_FAIL(process_ora_json_object_star_node(node, expr))) {
+          LOG_WARN("fail to process json object star node", K(ret), K(node));
         }
         break;
       }
@@ -5253,6 +5259,26 @@ int ObRawExprResolverImpl::malloc_new_specified_type_node(common::ObIAllocator &
       t_vec[1] = NULL;
       col_node->children_ = t_vec;
     }
+  } else if (type == T_FUN_SYS_JSON_OBJECT_WILD_STAR) {
+    col_node->type_ = T_FUN_SYS_JSON_OBJECT_WILD_STAR;
+    col_node->num_child_ = 1;
+    col_node->is_hidden_const_ = 1;
+    int64_t alloc_access_size = sizeof(ParseNode *) * 1;
+    ParseNode **t_vec = NULL;
+    if (OB_ISNULL(t_vec = static_cast<ParseNode **>(allocator.alloc(alloc_access_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory", K(ret), K(sizeof(ParseNode)));
+    } else {
+      t_vec[0] = NULL;
+      col_node->children_ = t_vec;
+    }
+  } else if (type == T_VARCHAR) {
+    col_node->type_ = T_VARCHAR;
+    col_node->str_value_ = col_name.ptr();
+    col_node->raw_text_ = col_name.ptr();
+    col_node->str_len_ = col_name.length();
+    col_node->text_len_ = col_name.length();
+    col_node->num_child_ = 0;
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("node type not exits");
@@ -5354,6 +5380,83 @@ int ObRawExprResolverImpl::get_column_raw_text_from_node(const ParseNode *node, 
   return ret;
 }
 
+int ObRawExprResolverImpl::create_json_object_star_node(ParseNode *&node, common::ObIAllocator &allocator, int64_t &pos)
+{
+  INIT_SUCC(ret);
+  bool all_tab = true;
+  ObSEArray<ColumnItem, 4> columns_list;
+  ParseNode* json_object_star = NULL;
+  ParseNode* table_node = NULL;
+  ParseNode* value_node = NULL;
+  ObString tab_name;
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node should not be null", K(ret));
+  } else if (OB_NOT_NULL(node->children_[pos]) && OB_NOT_NULL(node->children_[pos]->children_[1])) {
+    tab_name.assign_ptr(node->children_[pos]->children_[1]->str_value_, node->children_[pos]->children_[1]->str_len_);
+    all_tab = false;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(json_object_star = static_cast<ParseNode*>(allocator.alloc(sizeof(ParseNode))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate memory", K(ret), K(sizeof(ParseNode)));
+  } else {
+    json_object_star = new(json_object_star) ParseNode;
+    if (OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(allocator, "", json_object_star, T_FUN_SYS_JSON_OBJECT_WILD_STAR))) {
+      LOG_WARN("create json doc node fail", K(ret));
+    } else if (OB_ISNULL(table_node = static_cast<ParseNode*>(allocator.alloc(sizeof(ParseNode))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory", K(ret), K(sizeof(ParseNode)));
+    } else {
+      table_node = new(table_node) ParseNode;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (all_tab && OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(allocator, "", table_node, T_INT))) {
+    LOG_WARN("fail to create int node", K(ret));
+  } else if (!all_tab && OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(allocator, tab_name, table_node, T_VARCHAR))) {
+    LOG_WARN("fail to create table name node", K(ret));
+  } else {
+    json_object_star->children_[0] = table_node;
+    node->children_[pos] = json_object_star;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(value_node = static_cast<ParseNode*>(allocator.alloc(sizeof(ParseNode))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate memory", K(ret), K(sizeof(ParseNode)));
+  } else {
+    value_node = new(value_node) ParseNode;
+    if (OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(allocator, "", value_node, T_INT))) {
+      LOG_WARN("create json doc node fail", K(ret));
+    } else {
+      node->children_[pos + 1] = value_node;
+    }
+  }
+  return ret;
+}
+
+int ObRawExprResolverImpl::process_ora_json_object_star_node(const ParseNode *node, ObRawExpr *&expr)
+{
+  INIT_SUCC(ret);
+  ObSysFunRawExpr *func_expr = NULL;
+  if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS, func_expr))) {
+    LOG_WARN("fail to create func_expr");
+  } else {
+    CK(OB_NOT_NULL(func_expr));
+    OX(func_expr->set_func_name(ObString::make_string("json_object_star")));
+    // child 0 is table name
+    for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; i++) {
+      ObRawExpr *param_expr = NULL;
+      CK(OB_NOT_NULL(node->children_[i]));
+      OZ(SMART_CALL(recursive_resolve(node->children_[i], param_expr)));
+      CK(OB_NOT_NULL(param_expr));
+      OZ(func_expr->add_param_expr(param_expr));
+    }
+    OX(expr = func_expr);
+  }
+  return ret;
+}
+
 int ObRawExprResolverImpl::process_ora_json_object_node(const ParseNode *node, ObRawExpr *&expr)
 {
   INIT_SUCC(ret);
@@ -5429,9 +5532,14 @@ int ObRawExprResolverImpl::process_ora_json_object_node(const ParseNode *node, O
           data_node = node->children_[0];
           for (int64_t i = 0; OB_SUCC(ret) && i < data_node->num_child_; i++) {  // 3 node in group
             ObRawExpr *para_expr = NULL;
-            cur_node_kv = NULL;
+            cur_node_kv = data_node->children_[i];
             int val_pos = i + 1; //  key is i where i % 3 == 0 , value is i + 1, format json is i + 2
-            if (OB_ISNULL(data_node->children_[i])) {
+            if (OB_ISNULL(cur_node_kv)) {
+            } else if (cur_node_kv->type_ == T_COLUMN_REF // process star node
+                       && OB_NOT_NULL(cur_node_kv->children_[2])
+                       && cur_node_kv->children_[2]->type_ == T_STAR
+                       && OB_FAIL(ObRawExprResolverImpl::create_json_object_star_node(data_node, ctx_.local_allocator_, i))) {
+              LOG_WARN("fail to create json object star node", K(ret));
             } else if ((i % 3 == 1) && data_node->children_[i]->type_ == T_NULL && data_node->children_[i]->value_ == 2) {  // 2 is flag of empty value
               cur_node_kv = data_node->children_[i - 1];
             } else {

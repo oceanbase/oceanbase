@@ -1042,6 +1042,7 @@ int ObTenantIOManager::update_basic_io_config(const ObTenantIOConfig &io_config)
         LOG_WARN("update io clock unit config failed", K(ret), K(io_config), K(io_config_));
       } else {
         io_config_.unit_config_ = io_config.unit_config_;
+        LOG_INFO("update io clock success", K(tenant_id_), K(io_config_), KPC(io_clock_));
       }
     }
     if (OB_FAIL(ret)) {
@@ -1446,9 +1447,8 @@ int ObTenantIOManager::delete_consumer_group_config(const int64_t group_id)
           LOG_WARN("stop phy queues failed", K(ret), K(tenant_id_), K(index));
         }
       } else if (OB_STATE_NOT_MATCH == ret) {
-        // group delete twice
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("group delete twice", K(ret), K(index), K(group_id));
+        // group delete twice, maybe deleted by delete_directive or delete_plan
+        LOG_INFO("group delete twice", K(ret), K(index), K(group_id));
       } else {
         LOG_WARN("get index from map failed", K(ret), K(group_id), K(index));
       }
@@ -1627,7 +1627,7 @@ void ObTenantIOManager::print_io_status()
       if (OB_FAIL(callback_mgr_.get_queue_count(queue_count_array))) {
         LOG_WARN("get callback queue count failed", K(ret));
       }
-      LOG_INFO("[IO STATUS]", K_(tenant_id), K_(ref_cnt), K_(io_config),
+      LOG_INFO("[IO STATUS CONFIG]", K_(tenant_id), K_(ref_cnt), K_(io_config),
           "allocated_memory", io_allocator_.get_allocated_size(),
           "free_request_count", io_request_pool_.get_free_cnt(),
           "free_result_count", io_result_pool_.get_free_cnt(),

@@ -172,8 +172,7 @@ public:
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       const share::SCN &frozen_timestamp,
-      const share::schema::ObTableSchema &table_schema,
-      const lib::Worker::CompatMode &compat_mode,
+      const ObCreateTabletSchema &create_tablet_schema,
       const share::SCN &create_scn);
   int remove_ls_inner_tablet(
       const share::ObLSID &ls_id,
@@ -185,8 +184,7 @@ public:
       const common::ObTabletID &data_tablet_id,
       const share::SCN &create_scn,
       const int64_t snapshot_version,
-      const share::schema::ObTableSchema &table_schema,
-      const lib::Worker::CompatMode &compat_mode,
+      const ObCreateTabletSchema &create_tablet_schema,
       ObTabletHandle &tablet_handle);
   int create_transfer_in_tablet(
       const share::ObLSID &ls_id,
@@ -252,7 +250,8 @@ public:
       const SCN scn);
   int update_tablet_restore_status(
       const common::ObTabletID &tablet_id,
-      const ObTabletRestoreStatus::STATUS &restore_status);
+      const ObTabletRestoreStatus::STATUS &restore_status,
+      const bool need_reset_transfer_flag);
   int update_tablet_ha_data_status(
       const common::ObTabletID &tablet_id,
       const ObTabletDataStatus::STATUS &data_status);
@@ -284,6 +283,7 @@ public:
       const share::SCN clog_checkpoint_scn = share::SCN::min_scn());
   int get_read_tables(
       const common::ObTabletID &tablet_id,
+      const int64_t timeout_us,
       const int64_t snapshot_version,
       ObTabletTableIterator &iter,
       const bool allow_no_ready_read = false);
@@ -375,11 +375,13 @@ public:
       const ObLockFlag lock_flag,
       const bool is_sfu);
   int get_multi_ranges_cost(
-      const ObTabletID &tablet_id,
+      const common::ObTabletID &tablet_id,
+      const int64_t timeout_us,
       const common::ObIArray<common::ObStoreRange> &ranges,
       int64_t &total_size);
   int split_multi_ranges(
-      const ObTabletID &tablet_id,
+      const common::ObTabletID &tablet_id,
+      const int64_t timeout_us,
       const ObIArray<ObStoreRange> &ranges,
       const int64_t expected_task_count,
       common::ObIAllocator &allocator,
@@ -387,11 +389,13 @@ public:
   int estimate_row_count(
       const ObTableScanParam &param,
       const ObTableScanRange &scan_range,
-      ObIArray<ObEstRowCountRecord> &est_records,
+      const int64_t timeout_us,
+      common::ObIArray<ObEstRowCountRecord> &est_records,
       int64_t &logical_row_count,
       int64_t &physical_row_count);
   int estimate_block_count_and_row_count(
       const common::ObTabletID &tablet_id,
+      const int64_t timeout_us,
       int64_t &macro_block_count,
       int64_t &micro_block_count,
       int64_t &sstable_row_count,
@@ -512,8 +516,7 @@ private:
       const common::ObTabletID &data_tablet_id,
       const share::SCN &create_scn,
       const int64_t snapshot_version,
-      const share::schema::ObTableSchema &table_schema,
-      const lib::Worker::CompatMode &compat_mode,
+      const ObCreateTabletSchema &create_tablet_schema,
       ObTabletHandle &tablet_handle);
   int refresh_tablet_addr(
       const share::ObLSID &ls_id,

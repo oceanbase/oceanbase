@@ -1266,7 +1266,9 @@ int ObIDagNet::add_dag_warning_info()
     dag_net = static_cast<compaction::ObCOMergeDagNet*>(this);
   }
   if (OB_NOT_NULL(first_fail_dag_info_) && is_cancel()) { // is_cancel means co dag net failed in the end
-    if (OB_FAIL(MTL(ObDagWarningHistoryManager*)->add_dag_warning_info(*first_fail_dag_info_))) {
+    if (OB_ISNULL(first_fail_dag_info_->info_param_)) { // maybe caused by 4013
+      COMMON_LOG(INFO, "info param is null", K_(first_fail_dag_info));
+    } else if (OB_FAIL(MTL(ObDagWarningHistoryManager*)->add_dag_warning_info(*first_fail_dag_info_))) {
       COMMON_LOG(WARN, "failed to add dag warning info", K(ret), KPC(this), KPC_(first_fail_dag_info));
     } else if (OB_NOT_NULL(dag_net)) {
       if (OB_TMP_FAIL(MTL(compaction::ObDiagnoseTabletMgr *)->add_diagnose_tablet(
@@ -1617,26 +1619,22 @@ void ObTenantDagWorker::resume()
 int ObTenantDagWorker::set_dag_resource(const uint64_t group_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(GCTX.cgroup_ctrl_)) {
-    //cgroup not init, cannot bind thread and control resource
-  } else {
-    uint64_t consumer_group_id = 0;
-    if (group_id != 0) {
-      //user level
-      consumer_group_id = group_id;
-    } else if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_function_type(MTL_ID(), function_type_, consumer_group_id))) {
-      //function level
-      LOG_WARN("fail to get group id by function", K(ret), K(MTL_ID()), K(function_type_), K(consumer_group_id));
-    }
-    if (OB_SUCC(ret) && consumer_group_id != group_id_) {
-      // for CPU isolation, depend on cgroup
-      if (GCTX.cgroup_ctrl_->is_valid() && OB_FAIL(GCTX.cgroup_ctrl_->add_self_to_group(MTL_ID(), consumer_group_id))) {
-        LOG_WARN("bind back thread to group failed", K(ret), K(GETTID()), K(MTL_ID()), K(group_id));
-      } else {
-        // for IOPS isolation, only depend on consumer_group_id
-        ATOMIC_SET(&group_id_, consumer_group_id);
-        THIS_WORKER.set_group_id(static_cast<int32_t>(consumer_group_id));
-      }
+  uint64_t consumer_group_id = 0;
+  if (group_id != 0) {
+    //user level
+    consumer_group_id = group_id;
+  } else if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_function_type(MTL_ID(), function_type_, consumer_group_id))) {
+    //function level
+    LOG_WARN("fail to get group id by function", K(ret), K(MTL_ID()), K(function_type_), K(consumer_group_id));
+  }
+  if (OB_SUCC(ret) && consumer_group_id != group_id_) {
+    // for CPU isolation, depend on cgroup
+    if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid() && OB_FAIL(GCTX.cgroup_ctrl_->add_self_to_group(MTL_ID(), consumer_group_id))) {
+      LOG_WARN("bind back thread to group failed", K(ret), K(GETTID()), K(MTL_ID()), K(group_id));
+    } else {
+      // for IOPS isolation, only depend on consumer_group_id
+      ATOMIC_SET(&group_id_, consumer_group_id);
+      THIS_WORKER.set_group_id(static_cast<int32_t>(consumer_group_id));
     }
   }
   return ret;
@@ -2679,9 +2677,14 @@ int ObDagPrioScheduler::loop_ready_dag_list(bool &is_found)
     ObMutexGuard guard(prio_lock_);
     if (running_task_cnts_ < adaptive_task_limit_) {
       // if extra_erase_dag_net not null, the is_found must be false.
-      is_found = (OB_SUCCESS == schedule_one_(delayed_erase_dag_nets, extra_erase_dag_net));
+      if (!check_need_load_shedding_(true/*for_schedule*/)) {
+        is_found = (OB_SUCCESS == schedule_one_(delayed_erase_dag_nets, extra_erase_dag_net));
+      }
+
       while (running_task_cnts_ < adaptive_task_limit_ && is_found) {
-        if (OB_SUCCESS != schedule_one_(delayed_erase_dag_nets, extra_erase_dag_net)) {
+        if (check_need_load_shedding_(true/*for_schedule*/)) {
+          break;
+        } else if (OB_SUCCESS != schedule_one_(delayed_erase_dag_nets, extra_erase_dag_net)) {
           break;
         }
       }
@@ -3307,6 +3310,10 @@ bool ObDagPrioScheduler::try_switch(ObTenantDagWorker &worker)
       need_pause = true;
       pause_worker_(worker);
     }
+    if (is_rank_dag_prio()) {
+      need_pause = check_need_load_shedding_(false /*for_schedule*/);
+    }
+
     if (!need_pause && !waiting_workers_.is_empty()) {
       if (waiting_workers_.get_first()->need_wake_up()) {
         // schedule_one will schedule the first worker on the waiting list first
@@ -3327,6 +3334,37 @@ bool ObDagPrioScheduler::try_switch(ObTenantDagWorker &worker)
   (void)erase_dag_nets_without_lock_(delayed_erase_dag_nets, extra_erase_dag_net); // ignore tmp_ret
   return need_pause;
 }
+
+// under prio lock
+bool ObDagPrioScheduler::check_need_load_shedding_(const bool for_schedule)
+{
+  bool need_shedding = false;
+  compaction::ObTenantTabletScheduler *tablet_scheduler = nullptr;
+
+  if (OB_ISNULL(tablet_scheduler = MTL(compaction::ObTenantTabletScheduler *))) {
+    // may be during the start phase
+  } else if (tablet_scheduler->enable_adaptive_merge_schedule()) {
+    ObTenantTabletStatMgr *stat_mgr = MTL(ObTenantTabletStatMgr *);
+    int64_t load_shedding_factor = 1;
+    const int64_t extra_limit = for_schedule ? 0 : 1;
+
+    if (OB_ISNULL(stat_mgr)) {
+    } else if (FALSE_IT(load_shedding_factor = MAX(1, stat_mgr->get_load_shedding_factor()))) {
+    } else if (load_shedding_factor <= 1 || !is_rank_dag_prio()) {
+      // no need to load shedding
+    } else {
+      const int64_t load_shedding_limit = MAX(2, limits_ / load_shedding_factor);
+      if (running_task_cnts_ > load_shedding_limit + extra_limit) {
+        need_shedding = true;
+        if (REACH_TENANT_TIME_INTERVAL(30_s)) {
+          FLOG_INFO("DagScheduler needs to load shedding", K(load_shedding_factor), K(extra_limit), K_(limits));
+        }
+      }
+    }
+  }
+  return need_shedding;
+}
+
 
 /***************************************ObDagNetScheduler impl********************************************/
 void ObDagNetScheduler::destroy()

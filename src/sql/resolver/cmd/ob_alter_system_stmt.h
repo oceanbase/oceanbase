@@ -1340,6 +1340,16 @@ private:
   obrpc::ObRecoverTableArg rpc_arg_;
 };
 
+class ObResetConfigStmt : public ObSystemCmdStmt
+{
+public:
+  ObResetConfigStmt() : ObSystemCmdStmt(stmt::T_ALTER_SYSTEM_RESET_PARAMETER) {}
+  virtual ~ObResetConfigStmt() {}
+  obrpc::ObAdminSetConfigArg &get_rpc_arg() { return rpc_arg_; }
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
+private:
+  obrpc::ObAdminSetConfigArg rpc_arg_;
+};
 
 } // end namespace sql
 } // end namespace oceanbase

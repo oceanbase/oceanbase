@@ -267,7 +267,7 @@ int ObColDataStoreDesc::init(
       } else if (OB_FAIL(merge_schema.get_mulit_version_rowkey_column_ids(col_desc_array_))) {
         STORAGE_LOG(WARN, "fail to get rowkey column ids", K(ret));
       } else if (is_major && OB_FAIL(generate_skip_index_meta(merge_schema, nullptr/*cg_schema*/))) {
-      STORAGE_LOG(WARN, "failed to generate skip index meta", K(ret));
+        STORAGE_LOG(WARN, "failed to generate skip index meta", K(ret));
       }
     }
     if (FAILEDx(gene_col_default_checksum_array(merge_schema))) {
@@ -469,6 +469,8 @@ int ObColDataStoreDesc::generate_skip_index_meta(
   } else if (OB_UNLIKELY(!agg_meta_array_.empty())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected non-empty aggregate meta array", K(ret));
+  } else if (schema.is_column_info_simplified()) {
+      // simplified do not generate skip index, do not init agg_meta_array
   } else if (OB_FAIL(schema.get_skip_index_col_attr(skip_idx_attrs))) {
     STORAGE_LOG(WARN, "failed to get skip index col attr", K(ret));
   } else if (OB_UNLIKELY(skip_idx_attrs.count() < full_stored_col_cnt_)) {

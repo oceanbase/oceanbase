@@ -313,7 +313,7 @@ struct ObColumnCSEncodingCtx
   int64_t dict_var_data_size_;
   int64_t fix_data_size_;
   int64_t max_string_size_;
-  const ObPodFix2dArray<ObDatum, 1 << 20, common::OB_MALLOC_MIDDLE_BLOCK_SIZE> *col_datums_;
+  const ObPodFix2dArray<ObDatum, 1 << 20, common::OB_MALLOC_NORMAL_BLOCK_SIZE> *col_datums_;
   ObEncodingHashTable *ht_;
   const ObMicroBlockEncodingCtx *encoding_ctx_;
   ObMicroBufferWriter *all_string_buf_writer_;

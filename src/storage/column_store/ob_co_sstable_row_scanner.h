@@ -45,6 +45,18 @@ public:
       const void *query_range) override;
   virtual void reset() override;
   virtual void reuse() override;
+  virtual bool can_blockscan() const override
+  {
+    return is_scan(type_) &&
+           nullptr != block_row_store_ &&
+           MAX_STATE != blockscan_state_;
+  }
+  virtual bool can_batch_scan() const override
+  {
+     return can_blockscan() &&
+            iter_param_->vectorized_enabled_ &&
+            iter_param_->enable_pd_filter();
+  }
   virtual int get_next_rows() override;
   TO_STRING_KV(KPC_(iter_param),
                KP_(access_ctx),
@@ -140,12 +152,6 @@ private:
       current_ -= count;
     } else {
       current_ += count;
-    }
-  }
-  OB_INLINE void set_filter_not_applied()
-  {
-    if (nullptr != block_row_store_) {
-      block_row_store_->set_filter_applied(false);
     }
   }
   OB_INLINE bool is_group_idx_expr(sql::ObExpr *e) const

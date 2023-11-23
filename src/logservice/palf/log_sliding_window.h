@@ -470,6 +470,7 @@ private:
                                 const LSN &lsn,
                                 const LogWriteBuf &log_write_buf);
   bool need_execute_fetch_(const FetchTriggerType &fetch_trigger_type);
+  bool need_use_batch_rpc_(const int64_t buf_size) const;
 public:
   typedef common::ObLinearHashMap<common::ObAddr, LsnTsInfo> SvrMatchOffsetMap;
   static const int64_t TMP_HEADER_SER_BUF_LEN = 256; // log header序列化的临时buffer大小
@@ -524,7 +525,7 @@ private:
   // max_flushed_lsn_: start lsn of max flushed log, it can be used as prev_lsn for fetching log.
   // max_flushed_end_lsn_: end lsn of max flushed log, it can be used as start_lsn for fetching log.
   // max_flushed_log_pid_: the proposal_id of max flushed log.
-  mutable RWLock max_flushed_info_lock_;
+  mutable common::ObSpinLock max_flushed_info_lock_;
   LSN max_flushed_lsn_;
   LSN max_flushed_end_lsn_;
   int64_t max_flushed_log_pid_;
@@ -591,6 +592,7 @@ private:
   bool is_rebuilding_;
   LSN last_rebuild_lsn_;
   LSN last_record_end_lsn_;
+  ObMiniStat::ObStatItem push_log_rpc_post_cost_stat_;
   ObMiniStat::ObStatItem fs_cb_cost_stat_;
   ObMiniStat::ObStatItem log_life_time_stat_;
   int64_t accum_slide_log_cnt_;

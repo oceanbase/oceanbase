@@ -143,7 +143,7 @@ Outputs & filters:
       force partition granule
   6 - output([t8.c15]), filter(nil), rowset=16
       access([t8.c15]), partitions(p[0-19])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t8.c7], [t8.c6]), range(MIN,MIN ; MAX,MAX)always true
   7 - output([t8.c15]), filter(nil), rowset=16
   8 - output([t8.c15]), filter(nil), rowset=16
@@ -152,11 +152,11 @@ Outputs & filters:
       force partition granule
  10 - output([t8.c15]), filter(nil), rowset=16
       access([t8.c15]), partitions(p[0-19])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t8.c7], [t8.c6]), range(MIN,MIN ; MAX,MAX)always true
  11 - output([t8_alias1.c10]), filter(nil), rowset=16
       access([t8_alias1.c10]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=true,
+      limit(1), offset(nil), is_index_back=false, is_global_index=true, 
       range_key([t8_alias1.c10], [t8_alias1.c18], [t8_alias1.c7], [t8_alias1.c6]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 (select /*+USE_HASH_AGGREGATION*/ c15 from (select c15 from t8) except (select c15 from t8) order by 1 limit 1000) union all (select  t8_alias1.c10 from t8 t8_alias1 limit 1);
 c15
@@ -192,7 +192,7 @@ Outputs & filters:
       force partition granule
   6 - output([t8.c15]), filter(nil), rowset=16
       access([t8.c15]), partitions(p[0-19])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t8.c7], [t8.c6]), range(MIN,MIN ; MAX,MAX)always true
   7 - output([t8.c15]), filter(nil), rowset=16
   8 - output([t8.c15]), filter(nil), rowset=16
@@ -201,11 +201,11 @@ Outputs & filters:
       force partition granule
  10 - output([t8.c15]), filter(nil), rowset=16
       access([t8.c15]), partitions(p[0-19])
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([t8.c7], [t8.c6]), range(MIN,MIN ; MAX,MAX)always true
  11 - output([t8_alias1.c10]), filter(nil), rowset=16
       access([t8_alias1.c10]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=true,
+      limit(1), offset(nil), is_index_back=false, is_global_index=true, 
       range_key([t8_alias1.c10], [t8_alias1.c18], [t8_alias1.c7], [t8_alias1.c6]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
 (select /*+USE_HASH_AGGREGATION*/ c15 from (select c15 from t8) intersect (select c15 from t8) order by 1 limit 1000) union all (select  t8_alias1.c10 from t8 t8_alias1 limit 1);
 c15
@@ -234,14 +234,14 @@ Outputs & filters:
   2 - output([EXCEPT([1])], [cast(EXCEPT([1]), VARCHAR(127))]), filter(nil), rowset=16
   3 - output([t8.c6]), filter([t8.c6 < 1000]), rowset=16
       access([t8.c6]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t8.c7], [t8.c6]), range(MIN,MIN ; MAX,MAX)always true
   4 - output([t8.c6]), filter([t8.c6 > -1000]), rowset=16
       access([t8.c6]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t8.c7], [t8.c6]), range(MIN,MIN ; MAX,MAX)always true
   5 - output([t8_alias1.c10]), filter(nil), rowset=16
       access([t8_alias1.c10]), partitions(p0)
-      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t8_alias1.c7], [t8_alias1.c6]), range(MIN,MIN ; MAX,MAX)always true
 drop table t1,t2,t3,t4,t5,t6, t8;

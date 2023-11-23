@@ -25,6 +25,7 @@
 #include "storage/ls/ob_ls.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "common/ob_tablet_id.h"
+#include "storage/compaction/ob_tenant_tablet_scheduler.h"
 
 namespace oceanbase
 {
@@ -819,8 +820,20 @@ int ObFreezer::tablet_freeze_with_rewrite_meta(const ObTabletID &tablet_id)
             LOG_WARN("exist running mini compaction dag, try later", K(ret), K(ls_id), K(tablet_id));
           } else if (OB_FAIL(get_ls_tablet_svr()->update_tablet_snapshot_version(tablet_id, freeze_snapshot_version.get_val_for_tx()))) {
             LOG_WARN("failed to update tablet snapshot version", K(ret), K(ls_id), K(tablet_id), K(freeze_snapshot_version));
-          } else {
-            TRANS_LOG(INFO, "[Freezer] memtable_mgr doesn't have memtable", K(ret), K(ls_id), K(tablet_id));
+          } else if (memtable_mgr->get_medium_info_recorder().get_max_saved_version() >= freeze_snapshot_version.get_val_for_tx()) {
+            int tmp_ret = OB_SUCCESS;
+            if (OB_TMP_FAIL(compaction::ObTenantTabletScheduler::schedule_merge_dag(
+                  ls_id,
+                  *tablet,
+                  MEDIUM_MERGE,
+                  freeze_snapshot_version.get_val_for_tx()))) {
+              if (OB_SIZE_OVERFLOW != tmp_ret && OB_EAGAIN != tmp_ret) {
+                ret = tmp_ret;
+                LOG_WARN("failed to schedule medium merge dag", K(ret), K(ls_id), K(tablet_id));
+              }
+            } else {
+              TRANS_LOG(INFO, "[Freezer] memtable_mgr doesn't have memtable", K(ret), K(ls_id), K(tablet_id));
+            }
           }
         } else {
           TRANS_LOG(INFO, "[Freezer] memtable_mgr has memtable", K(ret), K(ls_id), K(tablet_id));

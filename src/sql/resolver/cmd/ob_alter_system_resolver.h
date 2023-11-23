@@ -241,6 +241,27 @@ private:
 
 };
 
+class ObResetConfigResolver : public ObSystemCmdResolver
+{
+public:
+  ObResetConfigResolver(ObResolverParams &params) : ObSystemCmdResolver(params) {}
+  virtual ~ObResetConfigResolver() {}
+  virtual int resolve(const ParseNode &parse_tree);
+private:
+  int check_param_valid(int64_t tenant_id,
+      const common::ObString &name_node, const common::ObString &value_node);
+};
+class ObAlterSystemResetResolver : public ObSystemCmdResolver
+{
+public:
+  ObAlterSystemResetResolver(ObResolverParams &params) : ObSystemCmdResolver(params) {}
+  virtual ~ObAlterSystemResetResolver() {}
+  virtual int resolve(const ParseNode &parse_tree);
+private:
+  int check_param_valid(int64_t tenant_id,
+      const common::ObString &name_node, const common::ObString &value_node);
+};
+
 DEF_SIMPLE_CMD_RESOLVER(ObBackupDatabaseResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObBackupManageResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObBackupCleanResolver);

@@ -5,7 +5,7 @@ set @@session.explicit_defaults_for_timestamp=off;
 #owner: linlin.xll
 #owner group: SQL1
 #description:
-#tags:sys_vars
+#tags:sys_vars 
 
 connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
 connection conn1;

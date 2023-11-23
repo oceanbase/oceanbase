@@ -31,8 +31,8 @@ INFLUX_ID
 create table fin_influx_terminal(influx_id	varchar(64)  primary key, inst_id	varchar(32), inst_merchant_no	varchar(32), inst_terminal_no	varchar(32), term_batch_no	varchar(6), term_trace_no	varchar(6), rrn	varchar(12), auth_code	varchar(6), gmt_create	datetime, gmt_modified	datetime, finance_exchange_code	varchar(32), inst_account_no	varchar(32), exchange_amount	int, exchange_currency	char(3), extension	varchar(4000));
 select influx_id, inst_id, inst_merchant_no, inst_terminal_no, term_batch_no, term_trace_no, rrn, auth_code, gmt_create, gmt_modified, finance_exchange_code, inst_account_no, exchange_amount, exchange_currency, extension from fin_influx_terminal  where influx_id='0001' and term_trace_no = '123';
 influx_id	inst_id	inst_merchant_no	inst_terminal_no	term_batch_no	term_trace_no	rrn	auth_code	gmt_create	gmt_modified	finance_exchange_code	inst_account_no	exchange_amount	exchange_currency	extension
-create table fin_info_transaction(
-info_id	varchar(64) primary key,
+create table fin_info_transaction( 
+info_id	varchar(64) primary key, 
 inst_id	varchar(32),
 business_code	varchar(16),
 sub_business_code	varchar(16),

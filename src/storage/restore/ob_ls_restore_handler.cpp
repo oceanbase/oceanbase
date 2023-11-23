@@ -814,13 +814,13 @@ int ObILSRestoreState::deal_failed_restore(const ObLSRestoreResultMgr &result_mg
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(update_restore_status_(*ls_, next_status))) {
-    LOG_WARN("failed to update restore status", K(ret), KPC(ls_), K(next_status));
   } else if (OB_FAIL(result_mgr.get_comment_str(ls_->get_ls_id(), self_addr_, comment))) {
     LOG_WARN("fail to get comment str", K(ret));
   } else if (OB_FAIL(report_ls_restore_progress_(*ls_, next_status, result_mgr.get_trace_id(),
       result_mgr.get_result(), comment.ptr()))) {
     LOG_WARN("fail to report ls restore progress", K(ret));
+  } else if (OB_FAIL(update_restore_status_(*ls_, next_status))) {
+    LOG_WARN("failed to update restore status", K(ret), KPC(ls_), K(next_status));
   } else if (OB_FAIL(report_ls_restore_status_(*ls_, next_status))) {
     LOG_WARN("fail to report ls restore progress", K(ret));
   }
@@ -1516,7 +1516,7 @@ int ObLSRestoreStartState::do_restore()
     LOG_WARN("fail to check ls created", K(ret), KPC(ls_));
   } else if (!is_created) {
     if (OB_FAIL(do_with_uncreated_ls_())) {
-      LOG_WARN("fail to do with uncreadted ls", K(ret), KPC(ls_));
+      LOG_WARN("fail to do with uncreated ls", K(ret), KPC(ls_));
     }
   } else if (OB_FAIL(check_ls_leader_ready_(is_ready))) {
     LOG_WARN("fail to check is ls leader ready", K(ret), KPC(ls_));
@@ -1573,11 +1573,21 @@ int ObLSRestoreStartState::do_with_no_ls_meta_()
   int ret = OB_SUCCESS;
   // ls with no ls meta means it created after backup ls_attr_infos.
   // this ls doesn't have ls meta and tablet in backup, it only needs to replay clog.
-  // so just advance to restore to consistent_scn and start replay clog.
-  ObLSRestoreStatus next_status(ObLSRestoreStatus::Status::RESTORE_TO_CONSISTENT_SCN);
+  ObLSRestoreStatus next_status;
+  bool is_finish = false;
   if (OB_FAIL(online_())) {
-    LOG_WARN("fail to enable log", K(ret));
-  } else if (OB_FAIL(report_start_replay_clog_lsn_())) {
+    LOG_WARN("fail to online ls", K(ret), KPC_(ls));
+  } else if (OB_FAIL(check_replay_to_target_scn_(ls_restore_arg_->get_consistent_scn(), is_finish))) {
+    LOG_WARN("failed to check clog replay to consistent scn", K(ret));
+  } else if (!is_finish) {
+    // the ls is created before consistent scn
+    next_status = ObLSRestoreStatus::Status::RESTORE_TO_CONSISTENT_SCN;
+  } else {
+    // the ls is created after consistent scn
+    next_status = ObLSRestoreStatus::Status::WAIT_RESTORE_TO_CONSISTENT_SCN;
+  }
+
+  if (FAILEDx(report_start_replay_clog_lsn_())) {
     LOG_WARN("fail to report start replay clog lsn", K(ret));
   } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
     LOG_WARN("fail to advance status", K(ret), K(*ls_), K(next_status));
@@ -2160,7 +2170,9 @@ int ObLSRestoreConsistentScnState::set_empty_for_transfer_tablets_()
       LOG_INFO("skip tablet which restore status is not full",
                "tablet_id", tablet->get_tablet_meta().tablet_id_,
                "ha_status", tablet->get_tablet_meta().ha_status_);
-    } else if (OB_FAIL(ls_->update_tablet_restore_status(tablet->get_tablet_meta().tablet_id_, restore_status))) {
+    } else if (OB_FAIL(ls_->update_tablet_restore_status(tablet->get_tablet_meta().tablet_id_,
+                                                         restore_status,
+                                                         true/* need reset tranfser flag */))) {
       LOG_WARN("failed to update tablet restore status to EMPTY", K(ret), KPC(tablet));
     } else {
       LOG_INFO("update tablet restore status to EMPTY",

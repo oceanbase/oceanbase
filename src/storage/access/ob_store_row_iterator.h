@@ -87,15 +87,13 @@ public:
     return OB_NOT_SUPPORTED;
   }
   virtual int set_ignore_shadow_row() { return OB_NOT_SUPPORTED; }
-  bool can_blockscan() const
+  virtual bool can_blockscan() const
   {
-    return is_scan(type_) && is_sstable_iter_ &&
-        nullptr != block_row_store_ && block_row_store_->can_blockscan();
+    return false;
   }
-  bool filter_applied() const
+  virtual bool can_batch_scan() const
   {
-    return is_scan(type_) && is_sstable_iter_ &&
-        nullptr != block_row_store_ && block_row_store_->filter_applied();
+    return false;
   }
   virtual int get_next_row(const blocksstable::ObDatumRow *&row);
   virtual int get_next_rows()

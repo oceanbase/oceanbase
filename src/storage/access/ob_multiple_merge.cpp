@@ -380,6 +380,9 @@ int ObMultipleMerge::get_next_row(ObDatumRow *&row)
 int ObMultipleMerge::get_next_rows(int64_t &count, int64_t capacity)
 {
   int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(access_param_->get_op())) {
+    access_param_->get_op()->clear_evaluated_flag();
+  }
   count = 0;
   if (access_param_->iter_param_.enable_pd_aggregate()) {
     ObDatumRow *row = nullptr;
@@ -407,6 +410,9 @@ int ObMultipleMerge::get_next_rows(int64_t &count, int64_t capacity)
     }
   } else {
     ret = get_next_normal_rows(count, capacity);
+  }
+  if (OB_NOT_NULL(access_param_->get_op())) {
+    access_param_->get_op()->clear_evaluated_flag();
   }
   return ret;
 }
@@ -1239,6 +1245,7 @@ int ObMultipleMerge::refresh_tablet_iter()
       LOG_WARN("ls is null", K(ret), K(ls_handle));
     } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_read_tables(
         tablet_id,
+        ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
         get_table_param_->sample_info_.is_no_sample()
           ? access_ctx_->store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx()
           : INT64_MAX,

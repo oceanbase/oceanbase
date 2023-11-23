@@ -325,13 +325,12 @@ int ObPhysicalCopyTask::fetch_macro_block_(
     ret = OB_NOT_INIT;
     LOG_WARN("physical copy physical task do not init", K(ret));
   } else {
-    const int64_t *task_idx = nullptr;
     LOG_INFO("init reader", K(copy_table_key_));
-    if (!copy_ctx_->is_leader_restore_) {
-      task_idx = &task_idx_;
-    }
-    if (OB_FAIL(index_block_rebuilder.init(
-            *copy_ctx_->sstable_index_builder_, copy_ctx_->need_sort_macro_meta_, task_idx))) {
+    if (OB_UNLIKELY(task_idx_ < 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected task_idx_", K(ret), K(task_idx_));
+    } else if (OB_FAIL(index_block_rebuilder.init(
+            *copy_ctx_->sstable_index_builder_, copy_ctx_->need_sort_macro_meta_, &task_idx_))) {
       LOG_WARN("failed to init index block rebuilder", K(ret), K(copy_table_key_));
     } else if (OB_FAIL(get_macro_block_reader_(reader))) {
       LOG_WARN("fail to get macro block reader", K(ret));
@@ -971,7 +970,7 @@ int ObSSTableCopyFinishTask::create_empty_sstable_()
     ObTabletHandle tablet_handle;
     ObTablet *tablet = nullptr;
     common::ObArenaAllocator tmp_allocator; // for storage schema
-    const ObStorageSchema *storage_schema_ptr = nullptr;
+    ObStorageSchema *storage_schema_ptr = nullptr;
     if (OB_FAIL(ls_->ha_get_tablet(copy_ctx_.tablet_id_, tablet_handle))) {
       LOG_WARN("failed to get tablet", K(ret), K(copy_ctx_));
     } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
@@ -990,7 +989,7 @@ int ObSSTableCopyFinishTask::create_empty_sstable_()
             tablet_copy_finish_task_->get_allocator(), table_handle))) {
       LOG_WARN("failed to create co sstable", K(ret), K(param), K(copy_ctx_));
     }
-    ObTablet::free_storage_schema(tmp_allocator, storage_schema_ptr);
+    ObTabletObjLoadHelper::free(tmp_allocator, storage_schema_ptr);
   } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable(param,
           tablet_copy_finish_task_->get_allocator(), table_handle))) {
     LOG_WARN("failed to create sstable", K(ret), K(param), K(copy_ctx_));

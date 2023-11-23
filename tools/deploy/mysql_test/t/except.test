@@ -24,7 +24,7 @@ insert into t4 values(1,0),(2,0),(3,1),(4,1);
 select * from t1 except select * from t1;
 --error 1064
 select * from t1 except all select * from t1;
-#partial same
+#partial same 
 select * from t1 except select * from t2;
 --error 1064
 select * from t1 except all select * from t2;
@@ -93,3 +93,5 @@ select c2 from t5 except  all select c2 from t6;
 
 
 drop table t1,t2,t3,t4,t5,t6;
+
+

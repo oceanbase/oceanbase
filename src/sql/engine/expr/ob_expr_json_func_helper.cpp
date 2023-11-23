@@ -1629,8 +1629,15 @@ int ObJsonExprHelper::calc_asciistr_in_expr(const ObString &src,
               buf[pos++] = '\\';
             }
             if (OB_SUCC(ret) && '\\' != wchar) {
+              if (OB_UNLIKELY(pos >= buf_len)) {
+                ret = OB_SIZE_OVERFLOW;
+                LOG_WARN("size overflow", K(ret), K(pos), K(buf_len));
+              } else {
+                buf[pos++] = 'u';
+              }
               int64_t hex_writtern_bytes = 0;
-              if (OB_FAIL(hex_print(temp_buf + i*utf16_minmb_len, utf16_minmb_len,
+              if (OB_FAIL(ret)) {
+              } else if (OB_FAIL(hex_print(temp_buf + i*utf16_minmb_len, utf16_minmb_len,
                                     buf + pos, buf_len - pos, hex_writtern_bytes))) {
                 LOG_WARN("fail to convert to hex", K(ret), K(temp_written_bytes), K(pos), K(buf_len));
               } else {

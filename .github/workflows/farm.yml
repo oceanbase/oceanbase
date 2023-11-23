@@ -3,9 +3,12 @@ name: Farm
 on:
   pull_request:
     branches: [ master,develop ]
+  schedule:
+    - cron: '30 9 * * *'
 
 jobs:
   farm:
+    if: ${{ github.repository_owner == 'oceanbase' }}
     name: Farm
     runs-on: ubuntu-latest
     steps:

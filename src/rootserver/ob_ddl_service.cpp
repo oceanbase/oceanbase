@@ -16052,8 +16052,9 @@ int ObDDLService::rebuild_triggers_on_hidden_table(
         }
         if (OB_SUCC(ret)) {
           ObSEArray<ObDependencyInfo, 1> dep_infos;
+          int64_t table_schema_version = OB_INVALID_VERSION;
           OZ (ddl_operator.create_trigger(new_trigger_info, trans, error_info, dep_infos,
-          nullptr, false/*is_update_table_schema_version*/));
+          table_schema_version, nullptr, false/*is_update_table_schema_version*/));
         }
       }
     }
@@ -21224,7 +21225,8 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
         ObMockFKParentTableSchema *mock_fk_parent_table_ptr = NULL; // will use it when drop a fk_parent_table
         mock_fk_parent_table_schema.reset();
         const ObTableItem &table_item = drop_table_arg.tables_.at(i);
-        const ObTableSchema *table_schema = NULL;
+        const ObTableSchema *table_schema = nullptr;
+        const ObTableSchema *data_table_schema = nullptr;
         tmp_table_schema.reset();
         is_db_in_recyclebin = false;
         //ensure use the newest schema of each table
@@ -21245,7 +21247,6 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
           LOG_WARN("can not drop table in recyclebin, use purge instead", K(ret), K(table_item));
         } else if (OB_FAIL(tmp_table_schema.assign(*table_schema))) {
           LOG_WARN("fail to assign table schema", K(ret));
-        } else if (FALSE_IT(tmp_table_schema.set_in_offline_ddl_white_list(table_item.is_hidden_))) {
         } else if (OB_FAIL(schema_guard.check_database_in_recyclebin(
                    tenant_id, table_schema->get_database_id(), is_db_in_recyclebin))) {
           LOG_WARN("check database in recyclebin failed", K(ret));
@@ -21254,6 +21255,17 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
           LOG_WARN("can not drop table in recyclebin", K(ret), K(*table_schema));
         } else if (OB_FAIL(check_enable_sys_table_ddl(*table_schema, OB_DDL_DROP_TABLE))) {
           LOG_WARN("ddl is not allowed on sys table", K(ret));
+        } else if (drop_table_arg.table_type_ == USER_INDEX
+          && OB_FAIL(schema_guard.get_table_schema(tenant_id, tmp_table_schema.get_data_table_id(), data_table_schema))) {
+          LOG_WARN("failed to get data table schema", K(ret));
+        } else if (drop_table_arg.table_type_ == USER_INDEX
+          && OB_ISNULL(data_table_schema)) {
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("data table not found", K(ret), K(tmp_table_schema.get_data_table_id()));
+        } else if (FALSE_IT(tmp_table_schema.set_in_offline_ddl_white_list(table_item.is_hidden_ ||
+            (nullptr != data_table_schema && ObTableStateFlag::TABLE_STATE_HIDDEN_OFFLINE_DDL == data_table_schema->get_table_state_flag())))) {
+        // to drop a data table, in_offline_ddl_white_list is decided by the `table_item.is_hidden_`.
+          // to drop a index table, in_offline_ddl_white_list is decided by the `table_item.is_hidden_` or data tables' state flag.
         } else if (!tmp_table_schema.check_can_do_ddl()) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("offline ddl is being executed, other ddl operations are not allowed",
@@ -21382,16 +21394,10 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
                           mock_fk_parent_table_ptr /* will use it when drop a fk_parent_table */))) {
                 LOG_WARN("ddl_service_ drop_table failed", K(table_item), K(tenant_id), K(ret));
               } else if (drop_table_arg.task_id_ != 0 && drop_table_arg.table_type_ == USER_INDEX) {
-                const ObTableSchema *data_table_schema = nullptr;
-                if (OB_FAIL(schema_guard.get_table_schema(tenant_id, tmp_table_schema.get_data_table_id(), data_table_schema))) {
-                  LOG_WARN("failed to get data table schema", K(ret));
-                } else if (OB_ISNULL(data_table_schema)) {
-                  ret = OB_TABLE_NOT_EXIST;
-                  LOG_WARN("data table not found", K(ret), K(tmp_table_schema.get_data_table_id()));
-                } else if (OB_FAIL(ObDDLLock::unlock_for_add_drop_index(*data_table_schema,
-                                                                        tmp_table_schema,
-                                                                        ObTableLockOwnerID(drop_table_arg.task_id_),
-                                                                        trans))) {
+                if (OB_FAIL(ObDDLLock::unlock_for_add_drop_index(*data_table_schema,
+                                                                tmp_table_schema,
+                                                                ObTableLockOwnerID(drop_table_arg.task_id_),
+                                                                trans))) {
                   LOG_WARN("failed to unlock for add drop index", K(ret));
                 }
               }
@@ -25351,8 +25357,11 @@ int ObDDLService::drop_tenant(const ObDropTenantArg &arg)
       FLOG_INFO("is standby tenant, need drop force", K(tenant_info));
     }
   }
-
-  if (FAILEDx(schema_guard.get_schema_version(OB_SYS_TENANT_ID, refreshed_schema_version))) {
+  if (OB_FAIL(ret)) {
+    // ignore
+  } else if (OB_ISNULL(tenant_schema)) {
+    // We need to ignore the drop tenant if exists statement in the case that the tenant has already been deleted
+  } else if (OB_FAIL(schema_guard.get_schema_version(OB_SYS_TENANT_ID, refreshed_schema_version))) {
     LOG_WARN("failed to get tenant schema version", KR(ret));
   } else if (OB_FAIL(trans.start(sql_proxy_, OB_SYS_TENANT_ID, refreshed_schema_version))) {
     LOG_WARN("start transaction failed", KR(ret), K(user_tenant_id), K(refreshed_schema_version));
@@ -30701,10 +30710,11 @@ int ObDDLService::drop_package(const ObPackageInfo &package_info,
   return ret;
 }
 
-int ObDDLService::create_trigger(const ObCreateTriggerArg &arg)
+int ObDDLService::create_trigger(const ObCreateTriggerArg &arg,
+                                 ObSchemaGetterGuard &schema_guard,
+                                 ObCreateTriggerRes *res)
 {
   int ret = OB_SUCCESS;
-  ObSchemaGetterGuard schema_guard;
   ObTriggerInfo new_trigger_info;
   //in_second_stage_ is false, Indicates that the trigger is created normally
   //true Indicates that the error message is inserted into the system table after the trigger is created
@@ -30719,8 +30729,6 @@ int ObDDLService::create_trigger(const ObCreateTriggerArg &arg)
   if (OB_FAIL(new_trigger_info.assign(arg.trigger_info_))) {
     LOG_WARN("assign trigger_info failed", K(ret));
   } else if (FALSE_IT(tenant_id = new_trigger_info.get_tenant_id())) {
-  } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
-    LOG_WARN("o get schema guard in inner table failed", KR(ret), K(tenant_id));
   } else {
     const ObTriggerInfo *old_trigger_info = NULL;
     if (!arg.is_valid()) {
@@ -30744,14 +30752,24 @@ int ObDDLService::create_trigger(const ObCreateTriggerArg &arg)
       }
     }
   }
-  if (OB_SUCC(ret) &&
-      OB_FAIL(create_trigger_in_trans(new_trigger_info,
-                                      const_cast<ObErrorInfo &>(arg.error_info_),
-                                      const_cast<ObSArray<ObDependencyInfo> &>(arg.dependency_infos_),
-                                      &arg.ddl_stmt_str_,
-                                      arg.in_second_stage_,
-                                      schema_guard))) {
-    LOG_WARN("create trigger in trans failed", K(ret));
+  if (OB_SUCC(ret)) {
+    bool with_res = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_1_2);
+    int64_t table_schema_version = OB_INVALID_VERSION;
+    if (with_res && OB_ISNULL(res)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("res is NULL", K(ret));
+    } else if (OB_FAIL(create_trigger_in_trans(new_trigger_info,
+                                        const_cast<ObErrorInfo &>(arg.error_info_),
+                                        const_cast<ObSArray<ObDependencyInfo> &>(arg.dependency_infos_),
+                                        &arg.ddl_stmt_str_,
+                                        arg.in_second_stage_,
+                                        schema_guard,
+                                        table_schema_version))) {
+      LOG_WARN("create trigger in trans failed", K(ret));
+    } else if (with_res && !arg.in_second_stage_) {
+      res->table_schema_version_ = table_schema_version;
+      res->trigger_schema_version_ = new_trigger_info.get_schema_version();
+    }
   }
   return ret;
 }
@@ -30761,7 +30779,8 @@ int ObDDLService::create_trigger_in_trans(ObTriggerInfo &trigger_info,
                                           ObIArray<ObDependencyInfo> &dep_infos,
                                           const ObString *ddl_stmt_str,
                                           bool in_second_stage,
-                                          share::schema::ObSchemaGetterGuard &schema_guard)
+                                          share::schema::ObSchemaGetterGuard &schema_guard,
+                                          int64_t &table_schema_version)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = trigger_info.get_tenant_id();
@@ -30776,7 +30795,7 @@ int ObDDLService::create_trigger_in_trans(ObTriggerInfo &trigger_info,
   if (OB_SUCC(ret) && !in_second_stage) {
       OZ (adjust_trigger_action_order(schema_guard, trans, ddl_operator, trigger_info, true));
   }
-  OZ (ddl_operator.create_trigger(trigger_info, trans, error_info, dep_infos, ddl_stmt_str));
+  OZ (ddl_operator.create_trigger(trigger_info, trans, error_info, dep_infos, table_schema_version, ddl_stmt_str));
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
@@ -31029,7 +31048,9 @@ int ObDDLService::create_trigger_for_truncate_table(ObSchemaGetterGuard &schema_
         new_table_schema.get_trigger_list().push_back(new_trigger_id);
         if (OB_SUCC(ret)) {
           ObSEArray<ObDependencyInfo, 1> dep_infos;
+          int64_t table_schema_version = OB_INVALID_VERSION;
           if (OB_FAIL(ddl_operator.create_trigger(new_trigger_info, trans, error_info, dep_infos,
+                                                  table_schema_version,
                                                   &origin_trigger_info->get_trigger_body(),
                                                   is_update_table_schema_version,
                                                   true))) {

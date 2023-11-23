@@ -173,7 +173,7 @@ int ObMicroBlockWriter::append_row(const ObDatumRow &row)
       ret = OB_INVALID_ARGUMENT;
       STORAGE_LOG(WARN, "append row column count is not consistent with init column count",
           K(get_header(data_buffer_)->column_count_), K(row.get_column_count()), K(ret));
-    } else if (OB_FAIL(data_buffer_.write(row, rowkey_column_count_, pos))) {
+    } else if (OB_FAIL(data_buffer_.write_row(row, rowkey_column_count_, pos))) {
       if (OB_BUF_NOT_ENOUGH != ret) {
         STORAGE_LOG(WARN, "row writer fail to write row.", K(ret), K(rowkey_column_count_),
             K(row), K(OB_P(data_buffer_.remain())), K(pos));

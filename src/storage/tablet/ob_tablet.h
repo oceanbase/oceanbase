@@ -186,8 +186,7 @@ public:
       const common::ObTabletID &data_tablet_id,
       const share::SCN &create_scn,
       const int64_t snapshot_version,
-      const share::schema::ObTableSchema &table_schema,
-      const lib::Worker::CompatMode compat_mode,
+      const ObStorageSchema &storage_schema,
       const bool need_empty_major_table,
       ObFreezer *freezer);
   // dump/merge build new multi version tablet
@@ -247,12 +246,10 @@ public:
   int fetch_table_store(ObTabletMemberWrapper<ObTabletTableStore> &wrapper) const;
   int load_storage_schema(
       common::ObIAllocator &allocator,
-      const ObStorageSchema *&storage_schema) const;
+      ObStorageSchema *&storage_schema) const;
   int read_medium_info_list(
       common::ObArenaAllocator &allocator,
       const compaction::ObMediumCompactionInfoList *&medium_info_list) const;
-
-  static void free_storage_schema(common::ObIAllocator &allocator, const ObStorageSchema *storage_schema);
 
   void set_tablet_addr(const ObMetaDiskAddr &tablet_addr);
   void set_allocator(ObArenaAllocator *allocator) { allocator_ = allocator; }

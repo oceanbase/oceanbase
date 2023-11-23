@@ -431,6 +431,11 @@ DEF_INT(_temporary_file_io_area_size, OB_TENANT_PARAMETER, "1", "[0, 50)",
          "memory buffer size of temporary file, as a percentage of total tenant memory. "
          "Range: [0, 50), percentage",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_temporary_file_meta_memory_limit_percentage, OB_TENANT_PARAMETER, "0", "[0,100]",
+        "The memory limit of temporary file meta, and the value is a percentage of the tenant's memory. "
+        "The default value is 70. For compatibility, 0 is 70% of tenant memory."
+        "Range: [0, 100], percentage",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_storage_meta_memory_limit_percentage, OB_TENANT_PARAMETER, "20", "[0, 50)",
          "maximum memory for storage meta, as a percentage of total tenant memory. "
          "Range: [0, 50), percentage, 0 means no limit to storage meta memory",
@@ -762,6 +767,9 @@ DEF_TIME(_ob_get_gts_ahead_interval, OB_CLUSTER_PARAMETER, "0s", "[0s, 1s]",
 //// rpc config
 DEF_TIME(rpc_timeout, OB_CLUSTER_PARAMETER, "2s",
          "the time during which a RPC request is permitted to execute before it is terminated",
+         ObParameterAttr(Section::RPC, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_stream_rpc_max_wait_timeout, OB_TENANT_PARAMETER, "30s", "[1s,)",
+         "the maximum timeout for a tenant worker thread to wait for the next request while processing streaming RPC",
          ObParameterAttr(Section::RPC, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_pkt_nio, OB_CLUSTER_PARAMETER, "True",
          "enable pkt-nio, the new RPC framework"
@@ -1695,6 +1703,9 @@ DEF_INT(_ha_tablet_info_batch_count, OB_TENANT_PARAMETER, "0", "[0,]",
 DEF_TIME(_ha_rpc_timeout, OB_TENANT_PARAMETER, "0", "[0,120s]",
          "the rpc timeout for storage high availability. Range:[0, 120s]",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_trace_tablet_leak, OB_TENANT_PARAMETER, "False",
+        "enable t3m tablet leak checker. The default value is False",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // for set errsim module types, format like transfer;migration
 ERRSIM_DEF_STR_LIST(errsim_module_types, OB_TENANT_PARAMETER, "",

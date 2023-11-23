@@ -1008,16 +1008,19 @@ struct ObCreateTableRes
 public:
   ObCreateTableRes() :
       table_id_(OB_INVALID_ID),
-      schema_version_(OB_INVALID_VERSION)
+      schema_version_(OB_INVALID_VERSION),
+      task_id_(0)
   {}
   int assign(const ObCreateTableRes &other) {
     table_id_ = other.table_id_;
     schema_version_ = other.schema_version_;
+    task_id_ = other.task_id_;
     return common::OB_SUCCESS;
   }
-  TO_STRING_KV(K_(table_id), K_(schema_version));
+  TO_STRING_KV(K_(table_id), K_(schema_version), K_(task_id));
   uint64_t table_id_;
   int64_t schema_version_;
+  int64_t task_id_;
 };
 
 struct ObCreateTableLikeArg : public ObDDLArg
@@ -3434,7 +3437,8 @@ struct ObBatchCreateTabletArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObBatchCreateTabletArg() { reset(); }
+  ObBatchCreateTabletArg()
+  { reset(); }
   ~ObBatchCreateTabletArg() {}
   bool is_valid() const;
   bool is_inited() const;
@@ -3444,6 +3448,19 @@ public:
                          const share::SCN &major_frozen_scn,
                          const bool need_check_tablet_cnt);
   int64_t get_tablet_count() const;
+  int serialize_for_create_tablet_schemas(char *buf,
+      const int64_t data_len,
+      int64_t &pos) const;
+  int64_t get_serialize_size_for_create_tablet_schemas() const;
+  int deserialize_create_tablet_schemas(const char *buf,
+      const int64_t data_len,
+      int64_t &pos);
+  static int is_old_mds(const char *buf,
+      int64_t data_len,
+      bool &is_old_mds);
+  static int skip_unis_array_len(const char *buf,
+      int64_t data_len,
+      int64_t &pos);
   DECLARE_TO_STRING;
 
 public:
@@ -3453,6 +3470,8 @@ public:
   common::ObSArray<ObCreateTabletInfo> tablets_;
   bool need_check_tablet_cnt_;
   bool is_old_mds_;
+  common::ObSArray<storage::ObCreateTabletSchema*> create_tablet_schemas_;
+  ObArenaAllocator allocator_;
 };
 
 struct ObBatchRemoveTabletArg
@@ -3467,6 +3486,12 @@ public:
   int assign (const ObBatchRemoveTabletArg &arg);
   int init(const ObIArray<common::ObTabletID> &tablet_ids,
            const share::ObLSID id);
+  static int is_old_mds(const char *buf,
+      int64_t data_len,
+      bool &is_old_mds);
+  static int skip_array_len(const char *buf,
+      int64_t data_len,
+      int64_t &pos);
   DECLARE_TO_STRING;
 
 public:
@@ -6391,6 +6416,25 @@ public:
   };
   share::schema::ObErrorInfo error_info_;
   common::ObSArray<share::schema::ObDependencyInfo> dependency_infos_;
+};
+
+struct ObCreateTriggerRes
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  ObCreateTriggerRes() :
+    table_schema_version_(OB_INVALID_VERSION),
+    trigger_schema_version_(OB_INVALID_VERSION)
+  {}
+  int assign(const ObCreateTriggerRes &other) {
+    table_schema_version_ = other.table_schema_version_;
+    trigger_schema_version_ = other.trigger_schema_version_;
+    return common::OB_SUCCESS;
+  }
+  TO_STRING_KV(K_(table_schema_version), K_(trigger_schema_version));
+  int64_t table_schema_version_;
+  int64_t trigger_schema_version_;
 };
 
 struct ObDropTriggerArg : public ObDDLArg

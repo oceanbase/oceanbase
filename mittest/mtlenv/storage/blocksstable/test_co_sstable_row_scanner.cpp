@@ -49,6 +49,7 @@ public:
   virtual void SetUp();
   virtual void TearDown();
   virtual void prepare_schema();
+  void prepare_co_query_param(const bool is_reverse);
   void generate_range(
       const int64_t start,
       const int64_t end,
@@ -133,6 +134,14 @@ void TestCOSSTableRowScanner::TearDown()
 {
   tablet_handle_.reset();
   TestIndexBlockDataPrepare::TearDown();
+}
+
+void TestCOSSTableRowScanner::prepare_co_query_param(const bool is_reverse)
+{
+  prepare_query_param(is_reverse);
+  iter_param_.pd_storage_flag_.set_blockscan_pushdown(true);
+  iter_param_.pd_storage_flag_.set_filter_pushdown(true);
+  iter_param_.vectorized_enabled_ = true;
 }
 
 void TestCOSSTableRowScanner::prepare_schema()
@@ -382,7 +391,7 @@ void TestCOSSTableRowScanner::test_row_scan_only(const bool is_reverse)
   int64_t start = 0;
   int64_t end = row_cnt_ - 1;
   generate_range(start, end, range_);
-  prepare_query_param(is_reverse);
+  prepare_co_query_param(is_reverse);
   OK(scanner_.inner_open(iter_param_, context_, &sstable_, &range_));
   scanner_.block_row_store_ = &block_row_store_;
   if (is_reverse) {
@@ -400,7 +409,7 @@ void TestCOSSTableRowScanner::test_row_scan_and_column_scan(const bool is_revers
   int64_t start = 0;
   int64_t end = row_cnt_ - 1;
   generate_range(start, end, range_);
-  prepare_query_param(is_reverse);
+  prepare_co_query_param(is_reverse);
   OK(scanner_.inner_open(iter_param_, context_, &sstable_, &range_));
   scanner_.block_row_store_ = &block_row_store_;
 
@@ -445,7 +454,7 @@ void TestCOSSTableRowScanner::test_row_scan_and_column_scan_with_multi_range1()
   const bool is_reverse = false;
   prepare_test_case(level_cnt);
   generate_ranges_case1(is_reverse);
-  prepare_query_param(is_reverse);
+  prepare_co_query_param(is_reverse);
   OK(multi_scanner_.inner_open(iter_param_, context_, &sstable_, &ranges_));
   multi_scanner_.block_row_store_ = &block_row_store_;
   consume_rows_by_row_store(&multi_scanner_, range_row_ids_[0].start_row_id_,
@@ -494,7 +503,7 @@ void TestCOSSTableRowScanner::test_reverse_row_scan_and_column_scan_with_multi_r
   const bool is_reverse = true;
   prepare_test_case(level_cnt);
   generate_ranges_case1(is_reverse);
-  prepare_query_param(is_reverse);
+  prepare_co_query_param(is_reverse);
   OK(multi_scanner_.inner_open(iter_param_, context_, &sstable_, &ranges_));
   multi_scanner_.block_row_store_ = &block_row_store_;
   consume_rows_by_row_store(&multi_scanner_, range_row_ids_[0].end_row_id_,
@@ -539,7 +548,7 @@ void TestCOSSTableRowScanner::test_row_scan_and_column_scan_with_multi_range2()
   const bool is_reverse = false;
   prepare_test_case(level_cnt);
   generate_ranges_case2(is_reverse);
-  prepare_query_param(is_reverse);
+  prepare_co_query_param(is_reverse);
   OK(multi_scanner_.inner_open(iter_param_, context_, &sstable_, &ranges_));
   multi_scanner_.block_row_store_ = &block_row_store_;
 
@@ -616,7 +625,7 @@ void TestCOSSTableRowScanner::test_reverse_row_scan_and_column_scan_with_multi_r
   const bool is_reverse = true;
   prepare_test_case(level_cnt);
   generate_ranges_case2(is_reverse);
-  prepare_query_param(is_reverse);
+  prepare_co_query_param(is_reverse);
   OK(multi_scanner_.inner_open(iter_param_, context_, &sstable_, &ranges_));
   multi_scanner_.block_row_store_ = &block_row_store_;
 

@@ -1869,7 +1869,8 @@ int ObMacroBlockWriter::agg_micro_block(const ObMicroIndexInfo &micro_index_info
 {
   int ret = OB_SUCCESS;
   if (micro_index_info.is_pre_aggregated() && nullptr != data_aggregator_) {
-    if (OB_FAIL(data_aggregator_->eval(micro_index_info.agg_row_buf_, micro_index_info.agg_buf_size_))) {
+    if (OB_FAIL(data_aggregator_->eval(micro_index_info.agg_row_buf_,
+        micro_index_info.agg_buf_size_, micro_index_info.get_row_count()))) {
       LOG_WARN("Fail to evaluate by micro block", K(ret), K(micro_index_info));
     }
   }

@@ -405,17 +405,20 @@ int ObServerMemoryConfig::set_500_tenant_limit(const int64_t limit_mode)
 
   int ret = OB_SUCCESS;
   bool unlimited = false;
-  auto ma = ObMallocAllocator::get_instance();
+  int64_t tenant_limit = INT64_MAX;
+  ObMallocAllocator *ma = ObMallocAllocator::get_instance();
   if (UNLIMIT_MODE == limit_mode) {
     unlimited = true;
-    ObTenantMemoryMgr::error_log_when_tenant_500_oversize = false;
   } else if (CTX_LIMIT_MODE == limit_mode) {
-    ObTenantMemoryMgr::error_log_when_tenant_500_oversize = false;
+    // do-nothing
   } else if (TENANT_LIMIT_MODE == limit_mode) {
-    ObTenantMemoryMgr::error_log_when_tenant_500_oversize = true;
+    tenant_limit = system_memory_ - get_extra_memory();
   } else {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid limit mode", K(ret), K(limit_mode));
+  }
+  if (OB_SUCC(ret)) {
+    set_tenant_memory_limit(OB_SERVER_TENANT_ID, tenant_limit);
   }
   for (int ctx_id = 0; OB_SUCC(ret) && ctx_id < ObCtxIds::MAX_CTX_ID; ++ctx_id) {
     if (ObCtxIds::SCHEMA_SERVICE == ctx_id ||
@@ -567,6 +570,16 @@ bool enable_pkt_nio(bool start_as_client) {
 int64_t get_max_rpc_packet_size()
 {
   return GCONF._max_rpc_packet_size;
+}
+
+int64_t get_stream_rpc_max_wait_timeout(int64_t tenant_id)
+{
+  int64_t stream_rpc_max_wait_timeout = ObRpcProcessorBase::DEFAULT_WAIT_NEXT_PACKET_TIMEOUT;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (OB_LIKELY(tenant_config.is_valid())) {
+    stream_rpc_max_wait_timeout = tenant_config->_stream_rpc_max_wait_timeout;
+  }
+  return stream_rpc_max_wait_timeout;
 }
 } // end of namespace obrpc
 } // end of namespace oceanbase

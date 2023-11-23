@@ -917,51 +917,7 @@ bool ObTenantFreezer::is_replay_pending_log_too_large(const int64_t pending_size
   return bool_ret;
 }
 
-int ObTenantFreezer::get_tenant_memstore_used(int64_t &total_memstore_used,
-                                              const bool force_refresh)
-{
-  int ret = OB_SUCCESS;
-  int64_t unused_active_memstore_used = 0;
-  int64_t unused_memstore_freeze_trigger = 0;
-  int64_t unused_memstore_limit = 0;
-  int64_t unused_freeze_cnt = 0;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("[TenantFreezer] tenant manager not init", KR(ret));
-  } else if (OB_FAIL(get_tenant_memstore_cond_(unused_active_memstore_used,
-                                               total_memstore_used,
-                                               unused_memstore_freeze_trigger,
-                                               unused_memstore_limit,
-                                               unused_freeze_cnt,
-                                               force_refresh))) {
-    LOG_WARN("get tenant memstore used failed", K(ret));
-  }
-  return ret;
-}
-
-int ObTenantFreezer::get_tenant_memstore_cond(int64_t &active_memstore_used,
-                                              int64_t &total_memstore_used,
-                                              int64_t &memstore_freeze_trigger,
-                                              int64_t &memstore_limit,
-                                              int64_t &freeze_cnt,
-                                              const bool force_refresh)
-{
-  int ret = OB_SUCCESS;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("[TenantFreezer] tenant manager not init", KR(ret));
-  } else if (OB_FAIL(get_tenant_memstore_cond_(active_memstore_used,
-                                               total_memstore_used,
-                                               memstore_freeze_trigger,
-                                               memstore_limit,
-                                               freeze_cnt,
-                                               force_refresh))) {
-    LOG_WARN("get tenant memstore used failed", K(ret));
-  }
-  return ret;
-}
-
-int ObTenantFreezer::get_tenant_memstore_cond_(
+int ObTenantFreezer::get_tenant_memstore_cond(
     int64_t &active_memstore_used,
     int64_t &total_memstore_used,
     int64_t &memstore_freeze_trigger,
@@ -985,8 +941,11 @@ int ObTenantFreezer::get_tenant_memstore_cond_(
   memstore_freeze_trigger = 0;
   memstore_limit = 0;
 
-  if (!force_refresh &&
-      current_time - last_refresh_timestamp < MEMSTORE_USED_CACHE_REFRESH_INTERVAL) {
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("[TenantFreezer] tenant manager not init", KR(ret));
+  } else if (!force_refresh &&
+             current_time - last_refresh_timestamp < MEMSTORE_USED_CACHE_REFRESH_INTERVAL) {
     active_memstore_used = last_active_memstore_used;
     total_memstore_used = last_total_memstore_used;
     memstore_freeze_trigger = last_memstore_freeze_trigger;

@@ -85,3 +85,5 @@ select pk1 from t1 where key2=NULL and key3<=NULL;
 ##
 select * from t1 where key2=NULL and key3>=NULL;
 select pk1 from t1 where key2=NULL and key3>=NULL;
+
+

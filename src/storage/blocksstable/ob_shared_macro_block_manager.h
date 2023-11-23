@@ -73,6 +73,7 @@ public:
   static int mtl_init(ObSharedMacroBlockMgr* &shared_block_mgr);
 
 private:
+  bool is_recyclable(const MacroBlockId &macro_id, const int64_t &used_size) const ;
   class ObBlockDefragmentationTask : public common::ObTimerTask
   {
   public:
@@ -91,8 +92,8 @@ private:
   struct GetSmallBlockOp
   {
   public:
-    GetSmallBlockOp(ObIArray<MacroBlockId> &block_ids, ObIArray<MacroBlockId> &unused_block_ids)
-        : block_ids(block_ids), unused_block_ids(unused_block_ids), execution_ret_(OB_SUCCESS) {}
+    GetSmallBlockOp(ObSharedMacroBlockMgr &shared_mgr, ObIArray<MacroBlockId> &block_ids, ObIArray<MacroBlockId> &unused_block_ids)
+        : shared_mgr_(shared_mgr), block_ids(block_ids), unused_block_ids(unused_block_ids), execution_ret_(OB_SUCCESS) {}
     bool operator()(const MacroBlockId &id, const int32_t used_size)
     {
       int ret = OB_SUCCESS;
@@ -109,7 +110,7 @@ private:
         } else {
           bool_ret = true;
         }
-      } else if (used_size > 0 && used_size < RECYCLABLE_BLOCK_SIZE) {
+      } else if (shared_mgr_.is_recyclable(id, used_size)) {
         if (OB_FAIL(block_ids.push_back(id))) {
           STORAGE_LOG(WARN, "fail to get small block", K(ret), K(id));
         } else {
@@ -123,6 +124,7 @@ private:
     }
     int64_t get_execution_ret() { return execution_ret_; }
   private:
+    ObSharedMacroBlockMgr &shared_mgr_;
     ObIArray<MacroBlockId> &block_ids;
     ObIArray<MacroBlockId> &unused_block_ids;
     int64_t execution_ret_; // if the number of recyclable blocks reaches 1000, set it to OB_ITER_END

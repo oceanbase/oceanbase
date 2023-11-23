@@ -75,6 +75,8 @@ enum ObJBVerType:uint8_t {
   J_OTIMESTAMPTZ_V0 = 27,
   J_ODAYSECOND_V0 = 28,
   J_OYEARMONTH_V0 = 29,
+  J_DOC_HEADER_V0 = 30,
+  J_FORWARD_V0 = 31,
 
   J_ERROR_V0 = 200
 };

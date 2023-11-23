@@ -5,7 +5,7 @@ set @@session.explicit_defaults_for_timestamp=off;
 #owner: linlin.xll
 #owner group: sql2
 #description:
-#tags: join,optimizer
+#tags: join,optimizer 
 
 --disable_warnings
 drop database if exists yy;

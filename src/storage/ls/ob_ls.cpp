@@ -1263,7 +1263,7 @@ int ObLS::get_replica_status(ObReplicaStatus &replica_status)
 {
   int ret = OB_SUCCESS;
   ObMigrationStatus migration_status;
-  ObLSMeta::ObReentrantRLockGuard guard(ls_meta_.lock_);
+  RDLockGuard guard(meta_rwlock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
@@ -1402,6 +1402,60 @@ int ObLS::ObLSInnerTabletIDIter::get_next(common::ObTabletID  &tablet_id)
   return ret;
 }
 
+ObLS::RDLockGuard::RDLockGuard(RWLock &lock, const int64_t abs_timeout_us)
+  : lock_(lock), ret_(OB_SUCCESS), start_ts_(0)
+{
+  ObTimeGuard tg("ObLS::rwlock", LOCK_CONFLICT_WARN_TIME);
+  if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.rdlock(ObLatchIds::LS_LOCK,
+                                                     abs_timeout_us)))) {
+    STORAGE_LOG_RET(WARN, ret_, "Fail to read lock, ", K_(ret));
+  } else {
+    start_ts_ = ObTimeUtility::current_time();
+  }
+}
+
+ObLS::RDLockGuard::~RDLockGuard()
+{
+  if (OB_LIKELY(OB_SUCCESS == ret_)) {
+    if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.unlock()))) {
+      STORAGE_LOG_RET(WARN, ret_, "Fail to unlock, ", K_(ret));
+    }
+  }
+  const int64_t end_ts = ObTimeUtility::current_time();
+  if (end_ts - start_ts_ > 5 * 1000 * 1000) {
+    STORAGE_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "ls lock cost too much time", K_(start_ts),
+                    "cost_us", end_ts - start_ts_, K(lbt()));
+  }
+  start_ts_ = INT64_MAX;
+}
+
+ObLS::WRLockGuard::WRLockGuard(RWLock &lock, const int64_t abs_timeout_us)
+  : lock_(lock), ret_(OB_SUCCESS), start_ts_(0)
+{
+  ObTimeGuard tg("ObLS::rwlock", LOCK_CONFLICT_WARN_TIME);
+  if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.wrlock(ObLatchIds::LS_LOCK,
+                                                     abs_timeout_us)))) {
+    STORAGE_LOG_RET(WARN, ret_, "Fail to read lock, ", K_(ret));
+  } else {
+    start_ts_ = ObTimeUtility::current_time();
+  }
+}
+
+ObLS::WRLockGuard::~WRLockGuard()
+{
+  if (OB_LIKELY(OB_SUCCESS == ret_)) {
+    if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.unlock()))) {
+      STORAGE_LOG_RET(WARN, ret_, "Fail to unlock, ", K_(ret));
+    }
+  }
+  const int64_t end_ts = ObTimeUtility::current_time();
+  if (end_ts - start_ts_ > 5 * 1000 * 1000) {
+    STORAGE_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "ls lock cost too much time", K_(start_ts),
+                    "cost_us", end_ts - start_ts_, K(lbt()));
+  }
+  start_ts_ = INT64_MAX;
+}
+
 int ObLS::block_tx_start()
 {
   int ret = OB_SUCCESS;
@@ -1470,7 +1524,7 @@ int ObLS::update_tablet_table_store(
     ObTabletHandle &handle)
 {
   int ret = OB_SUCCESS;
-  ObLSMeta::ObReentrantRLockGuard guard(ls_meta_.lock_);
+  RDLockGuard guard(meta_rwlock_);
 
   return update_tablet_table_store_without_lock_(tablet_id, param, handle);
 }
@@ -1507,7 +1561,7 @@ int ObLS::update_tablet_table_store(
     const ObIArray<storage::ObITable *> &tables)
 {
   int ret = OB_SUCCESS;
-  ObLSMeta::ObReentrantRLockGuard guard(ls_meta_.lock_);
+  RDLockGuard guard(meta_rwlock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls hasn't been inited", K(ret));
@@ -1533,7 +1587,7 @@ int ObLS::build_ha_tablet_new_table_store(
     const ObBatchUpdateTableStoreParam &param)
 {
   int ret = OB_SUCCESS;
-  ObLSMeta::ObReentrantRLockGuard guard(ls_meta_.lock_);
+  RDLockGuard guard(meta_rwlock_);
   const share::ObLSID &ls_id = ls_meta_.ls_id_;
   const int64_t rebuild_seq = ls_meta_.get_rebuild_seq();
   if (IS_NOT_INIT) {
@@ -1559,7 +1613,7 @@ int ObLS::build_new_tablet_from_mds_table(
     const share::SCN &flush_scn)
 {
   int ret = OB_SUCCESS;
-  ObLSMeta::ObReentrantRLockGuard guard(ls_meta_.lock_);
+  RDLockGuard guard(meta_rwlock_);
   const share::ObLSID &ls_id = ls_meta_.ls_id_;
   const int64_t rebuild_seq = ls_meta_.get_rebuild_seq();
   if (IS_NOT_INIT) {
@@ -1597,12 +1651,12 @@ int ObLS::finish_slog_replay()
   } else if (ls_meta_.get_persistent_state().can_update_ls_meta() &&
              OB_FAIL(ls_meta_.set_migration_status(new_migration_status, false /*no need write slog*/))) {
     LOG_WARN("failed to set migration status", K(ret), K(new_migration_status));
+  } else if (OB_FAIL(running_state_.create_finish(ls_meta_.ls_id_))) {
+    LOG_WARN("create finish failed", KR(ret), K(ls_meta_));
   } else if (is_need_gc()) {
     LOG_INFO("this ls should be gc later", KPC(this));
     // ls will be gc later and tablets in the ls are not complete,
     // so skip the following steps, otherwise load_ls_inner_tablet maybe encounter error.
-  } else if (OB_FAIL(running_state_.create_finish(ls_meta_.ls_id_))) {
-    LOG_WARN("create finish failed", KR(ret), K(ls_meta_));
   } else {
     // after slog replayed, the ls must be offlined state.
     ls_tablet_svr_.enable_to_read();
@@ -1880,7 +1934,7 @@ int ObLS::get_ls_meta_package_and_tablet_ids(const bool check_archive,
   int ret = OB_SUCCESS;
   const bool need_initial_state = false;
   ObHALSTabletIDIterator iter(ls_meta_.ls_id_, need_initial_state);
-  ObLSMeta::ObReentrantRLockGuard guard(ls_meta_.lock_);
+  RDLockGuard guard(meta_rwlock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
@@ -1948,7 +2002,7 @@ int ObLS::get_transfer_scn(share::SCN &scn)
   int ret = OB_SUCCESS;
   share::SCN max_tablet_scn;
   max_tablet_scn.set_min();
-  ObLSMeta::ObReentrantRLockGuard guard(ls_meta_.lock_);
+  RDLockGuard guard(meta_rwlock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
@@ -2127,7 +2181,7 @@ int ObLS::try_update_upper_trans_version_and_gc_sstable(
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObLSMeta::ObReentrantRLockGuard guard(ls_meta_.lock_);
+  RDLockGuard guard(meta_rwlock_);
   bool update_upper_trans_version = true;
   const share::ObLSID &ls_id = get_ls_id();
   ObMigrationStatus migration_status;
@@ -2180,7 +2234,7 @@ int ObLS::try_update_upper_trans_version_and_gc_sstable(
         LOG_WARN("failed to check need remove old store", K(tmp_ret), K(snapshot_info), K(tablet_id));
       } else if (need_remove) {
         ObArenaAllocator tmp_arena("RmOldTblTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-        const ObStorageSchema *storage_schema = nullptr;
+        ObStorageSchema *storage_schema = nullptr;
         if (OB_TMP_FAIL(tablet->load_storage_schema(tmp_arena, storage_schema))) {
           LOG_WARN("failed to load storage schema", K(tmp_ret), K(tablet));
         } else {
@@ -2193,7 +2247,7 @@ int ObLS::try_update_upper_trans_version_and_gc_sstable(
                 K(tablet_id), K(snapshot_info), KPC(tablet));
           }
         }
-        ObTablet::free_storage_schema(tmp_arena, storage_schema);
+        ObTabletObjLoadHelper::free(tmp_arena, storage_schema);
       }
     }
   } // end while
@@ -2270,7 +2324,7 @@ int ObLS::diagnose(DiagnoseInfo &info) const
 int ObLS::inc_update_transfer_scn(const share::SCN &transfer_scn)
 {
   int ret = OB_SUCCESS;
-  ObLSMeta::ObReentrantWLockGuard guard(ls_meta_.lock_);
+  WRLockGuard guard(meta_rwlock_);
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ls_meta_.inc_update_transfer_scn(transfer_scn))) {
     LOG_WARN("fail to set transfer scn", K(ret), K(transfer_scn), K_(ls_meta));
@@ -2287,7 +2341,7 @@ int ObLS::set_migration_status(
 {
   int ret = OB_SUCCESS;
   share::ObLSRestoreStatus restore_status;
-  ObLSMeta::ObReentrantWLockGuard guard(ls_meta_.lock_);
+  WRLockGuard guard(meta_rwlock_);
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -2323,7 +2377,7 @@ int ObLS::set_restore_status(
 {
   int ret = OB_SUCCESS;
   ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
-  ObLSMeta::ObReentrantWLockGuard guard(ls_meta_.lock_);
+  WRLockGuard guard(meta_rwlock_);
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -2374,7 +2428,7 @@ int ObLS::set_gc_state(const logservice::LSGCState &gc_state, const share::SCN &
 int ObLS::set_ls_rebuild()
 {
   int ret = OB_SUCCESS;
-  ObLSMeta::ObReentrantWLockGuard guard(ls_meta_.lock_);
+  WRLockGuard guard(meta_rwlock_);
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;

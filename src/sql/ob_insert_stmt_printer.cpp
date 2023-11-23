@@ -171,7 +171,7 @@ int ObInsertStmtPrinter::print_values()
       if (OB_ISNULL(view) || OB_ISNULL(sub_select_stmt = view->ref_query_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sub select stmt is null", K(ret), K(sub_select_stmt));
-      } else if (OB_FAIL(print_subquery(sub_select_stmt, PRINT_CTE | FORCE_COL_ALIAS))) {
+      } else if (OB_FAIL(print_subquery(sub_select_stmt, PRINT_CTE))) {
         LOG_WARN("failed to print subquery", K(ret));
       }
     } else {

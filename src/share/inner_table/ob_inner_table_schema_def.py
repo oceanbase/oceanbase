@@ -6373,6 +6373,7 @@ def_table_schema(
 # 499 :__all_transfer_partition_task_history
 # 500 : __all_tenant_snapshot_create_job
 # 501 : __wr_sqltext
+# 502 : __all_trusted_root_certificate
 #
 # 余留位置
 ################################################################################
@@ -9060,6 +9061,43 @@ def_table_schema(
 
 # table_id = 11118: used for __all_virtual_ddl_sim_point on enhance_ddl_quality branch
 # table_id = 11119: used for __all_virtual_ddl_sim_point_stat on enhance_ddl_quality branch
+
+def_table_schema(
+  owner = 'jianyun.sjy',
+  table_name = '__all_virtual_ddl_sim_point',
+  table_id = '11118',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [
+    ('sim_point_id', 'int'),
+    ('sim_point_name', 'varchar:1024'),
+    ('sim_point_description', 'varchar:OB_MAX_CHAR_LENGTH'),
+    ('sim_point_action', 'varchar:OB_MAX_CHAR_LENGTH'),
+  ],
+  vtable_route_policy = 'local',
+)
+
+def_table_schema(
+  owner = 'jianyun.sjy',
+  table_name = '__all_virtual_ddl_sim_point_stat',
+  table_id = '11119',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('ddl_task_id', 'int'),
+    ('sim_point_id', 'int'),
+    ('trigger_count', 'int'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
+
 
 ################################################################
 ################################################################
@@ -13145,6 +13183,9 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12452: __all_virtual_transfer_partition_task_history
 # 12453: __all_virtual_tenant_snapshot_create_job
 # 12454: __all_virtual_wr_sqltext
+# 12455: __all_virtual_trusted_root_certificate_info
+# 12456: __all_virtual_dbms_lock_allocated
+# 12457: __all_virtual_sharing_storage_compaction_info
 # 余留位置
 #
 
@@ -30196,6 +30237,8 @@ def_table_schema(
 #21506 CDB_WR_SQLTEXT
 #21507 GV$OB_ACTIVE_SESSION_HISTORY
 #21508 V$OB_ACTIVE_SESSION_HISTORY
+#21509 GV$OB_TRUSTED_ROOT_CERTIFICATE
+#21510 DBA_OB_CLONE_JOBS
 # 余留位置
 
 ################################################################################

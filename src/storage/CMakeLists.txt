@@ -553,6 +553,7 @@ ob_set_subtarget(ob_storage common_mixed
   checkpoint/ob_checkpoint_executor.cpp
   checkpoint/ob_data_checkpoint.cpp
   checkpoint/ob_freeze_checkpoint.cpp
+  meta_mem/ob_tablet_leak_checker.cpp
   meta_mem/ob_meta_obj_struct.cpp
   meta_mem/ob_tablet_handle.cpp
   meta_mem/ob_tablet_map_key.cpp
@@ -585,6 +586,7 @@ ob_set_subtarget(ob_storage compaction
   compaction/ob_tenant_tablet_scheduler.cpp
   compaction/ob_tenant_tablet_scheduler_task_mgr.cpp
   compaction/ob_compaction_schedule_iterator.cpp
+  compaction/ob_compaction_schedule_util.cpp
   compaction/ob_schedule_dag_func.cpp
   compaction/ob_extra_medium_info.cpp
   compaction/ob_medium_compaction_func.cpp

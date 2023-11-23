@@ -32,7 +32,7 @@ select c1 as a1,c2 as a2 from t1 group by a2 having a1>0 order by a1;
 select c1 as a1,c2 as a2 from t1 group by a2 having a1>0 order by a2;
 
 
-# select expr
+# select expr 
 select c1+c2 as total from t1 order by total;
 select c1, c1+c2 as total from t1 group by total order by c1;
 select c1, c1+c2 as total from t1 group by total having c1>2 order by c1 desc;
@@ -42,3 +42,6 @@ select c1, c1+c2 as total from t1 group by total having c1>2 order by c1 desc;
 select c1 as a1, c2 as a2 from t1 where c1>1;
 select c1 as a1, c2 as a2 from t1 where c2>1;
 select c1,c1+c2 as a1 from t1 where c1+c2>2;
+
+
+

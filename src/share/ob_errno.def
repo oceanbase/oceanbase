@@ -1940,14 +1940,22 @@ DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_OPTION_KEY, -7286, ER_INVALID_OPTION_
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_OPTION_VALUE, -7287, ER_INVALID_OPTION_VALUE, "22023", "Invalid value for option in function.", "Invalid value \'%.192s\' for option \'%.192s\' in function \'%.192s\'.", 600, "Invalid value for option in function.", "Invalid value \'%.192s\' for option \'%.192s\' in function \'%.192s\'.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_GEOMETRY_TYPE, -7288, ER_UNEXPECTED_GEOMETRY_TYPE, "22S01", "Unknown WKB type.", "Unknown WKB type(%d)! Full WKB type number was (%d).", 600, "Unknown WKB type.", "Unknown WKB type(%d)! Full WKB type number was (%d).");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_FTS_MUST_HAVE_TEXT_COL, -7289, ER_BAD_FT_COLUMN, "42000", "A FTS index may only contain a text type column.", "A FTS index may only contain a text type column.", 600, "A FTS index may only contain a text type column.", "A FTS index may only contain a text type column.");
+DEFINE_ORACLE_ERROR(OB_ERR_DIMENSION_NUMBER_IS_OUT_OF_RANGE, -7290, -1, "HY000", "dimension number is out of range", 13000, "dimension number is out of range");
+DEFINE_ORACLE_ERROR_DEP(OB_ERR_INVALID_GTYPE_IN_SDO_GEROMETRY, -7291, -1, "HY000", "Invalid Gtype in the SDO_GEOMETRY object", 13028, "Invalid Gtype in the SDO_GEOMETRY object");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_SRID_IN_SDO_GEOMETRY, -7292, -1, "HY000", "Invalid SRID in the SDO_GEOMETRY object", 13029, "Invalid SRID in the SDO_GEOMETRY object");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_GTYPE_FOR_POINT_OBJECT, -7293, -1, "HY000", "Invalid Gtype in the SDO_GEOMETRY object for point object", 13031, "Invalid Gtype in the SDO_GEOMETRY object for point object");
+DEFINE_ORACLE_ERROR_DEP(OB_ERR_INVALID_NULL_SDO_GEOMETRY, -7294, -1, "HY000", "Invalid NULL  SDO_GEOMETRY object", 13032, "Invalid NULL  SDO_GEOMETRY object");
+DEFINE_ORACLE_ERROR_DEP(OB_ERR_INVALID_DATA_IN_SDO_ELEM_INFO_ARRAY, -7295, -1, "HY000", "Invalid data in the SDO_ELEM_INFO_ARRAY in SDO_GEOMETRY object", 13033, "Invalid data in the SDO_ELEM_INFO_ARRAY in SDO_GEOMETRY object");
+DEFINE_ORACLE_ERROR_DEP(OB_ERR_INVALID_DATA_IN_SDO_ORDINATE_ARRAY, -7296, -1, "HY000", "Invalid data in the SDO_ORDINATE_ARRAY in SDO_GEOMETRY object", 13034, "Invalid data in the SDO_ORDINATE_ARRAY in SDO_GEOMETRY object");
+DEFINE_ORACLE_ERROR_DEP(OB_ERR_VALUE_NOT_ALLOWED, -7297, -1, "HY000", "value not allowed", 24323, "value not allowed");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_INVALID_XML_DATATYPE, -7402, -1, "22000", "Invalid data type for the operation", "inconsistent datatypes: expected %s got %s", 932, "inconsistent datatypes", "inconsistent datatypes: expected %s got %s");
 DEFINE_ORACLE_ERROR(OB_ERR_XML_MISSING_COMMA, -7403, -1, "42000", "missing comma", 917, "missing comma");
-DEFINE_ORACLE_ERROR(OB_ERR_INVALID_XPATH_EXPRESSION, -7404, -1, "42000", "invalid xpath expression", 31013, "invalid xpath expression");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_XPATH_EXPRESSION, -7404, ER_UNKNOWN_ERROR, "42000", "invalid xpath expression", 31013, "invalid xpath expression");
 DEFINE_ORACLE_ERROR(OB_ERR_EXTRACTVALUE_MULTI_NODES, -7405, -1, "42000", "EXTRACTVALUE cannot extract values of multiple nodes", 19025, "EXTRACTVALUE cannot extract values of multiple nodes");
 DEFINE_ORACLE_ERROR(OB_ERR_XML_FRAMENT_CONVERT, -7406, -1, "42000", "Cannot convert XML fragment to the required datatype", 19012, "Cannot convert XML fragment to the required datatype");
 DEFINE_ORACLE_ERROR(OB_INVALID_PRINT_OPTION, -7407, -1, "42000", "The specified printing option is invalid", 31188, "The specified printing option is invalid");
 DEFINE_ORACLE_ERROR(OB_XML_CHAR_LEN_TOO_SMALL, -7408, -1, "42000", "character length specified for XMLSerialize is too small.", 19044, "character length specified for XMLSerialize is too small.");
-DEFINE_ORACLE_ERROR(OB_XPATH_EXPRESSION_UNSUPPORTED, -7409, -1, "42000", "Given XPATH expression not supported", 31012, "Given XPATH expression not supported");
+DEFINE_ORACLE_ERROR(OB_XPATH_EXPRESSION_UNSUPPORTED, -7409, ER_UNKNOWN_ERROR, "42000", "Given XPATH expression not supported", 31012, "Given XPATH expression not supported");
 DEFINE_ORACLE_ERROR(OB_EXTRACTVALUE_NOT_LEAF_NODE, -7410, -1, "42000", "EXTRACTVALUE can only retrieve value of leaf node", 19026, "EXTRACTVALUE can only retrieve value of leaf node");
 DEFINE_ORACLE_ERROR(OB_XML_INSERT_FRAGMENT, -7411, -1, "42000", "Cannot insert XML fragments", 19010, "Cannot insert XML fragments");
 DEFINE_ORACLE_ERROR(OB_ERR_NO_ORDER_MAP_SQL, -7412, -1, "42000", "cannot ORDER objects without MAP or ORDER method", 22950, "cannot ORDER objects without MAP or ORDER method");
@@ -1970,6 +1978,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_XQUERY_UNSUPPORTED, -7428, -1, "42000", "unsupported 
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_XML_CHILD_NAME, -7429, -1, "42000", "The document being inserted does not conform to specified child name", 31056, "The document being inserted does not conform to specified child name");
 DEFINE_ORACLE_ERROR(OB_ERR_XML_NOT_SUPPORT_OPERATION, -7430, -1, "42000", "XML node '' (type=%s) does not support this operation", 31195, "XML node '' (type=%s) does not support this operation");
 DEFINE_ORACLE_ERROR(OB_ERR_JSON_FUN_UNSUPPORTED_TYPE, -7431, -1, "HY000", "Input to JSON generation function has unsupported data type", 40654, "Input to JSON generation function has unsupported data type");
+DEFINE_ORACLE_ERROR(OB_ERR_COMPARE_VARRAY_LOB_ATTR, -7432, -1, "42000", "cannot compare VARRAY or LOB attributes of an object type", 22901, "cannot compare VARRAY or LOB attributes of an object type");
 
 ////////////////////////////////////////////////////////////////
 // !!! Fatal errors and the client should close the connection, -8000 ~ -8999
@@ -2085,6 +2094,7 @@ DEFINE_ERROR(OB_NO_TABLET_NEED_BACKUP, -9095, -1, "HY000", "No tablet need backu
 DEFINE_ERROR(OB_ERR_RESTORE_STANDBY_VERSION_LAG, -9096, -1, "HY000", "standby binary version is lower than primary data version, standby need upgrade");
 DEFINE_ERROR(OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED, -9097, -1, "HY000", "primary tenant has been dropped");
 DEFINE_ERROR_DEP(OB_CLOUD_OBJECT_NOT_APPENDABLE, -9098, -1, "HY000", "normal object in object_storage(oss,cos,etc.) can't be appended content");
+DEFINE_ERROR_EXT_DEP(OB_RESTORE_TENANT_FAILED, -9099, -1, "HY000", "restore tenant failed", "%s restore failed, %s");
 // end of backup and restore error codes 9001 ~ 9099
 
 ////////////////////////////////////////////////////////////////
@@ -2156,7 +2166,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_WHEN_CLAUSE, -9545, -1, "HY000", "WHEN clause cannot 
 DEFINE_ORACLE_ERROR(OB_ERR_NEW_OLD_REFERENCES, -9546, -1, "HY000", "NEW or OLD references not allowed in table level triggers", 4082, "NEW or OLD references not allowed in table level triggers");
 DEFINE_PLS_ERROR_EXT(OB_ERR_TYPE_DECL_ILLEGAL, -9547, -1, "HY000", "%%TYPE must be applied to a variable, column, field or attribute, not to other", "%%TYPE must be applied to a variable, column, field or attribute, not to '%.*s'", 206, "%%TYPE must be applied to a variable, column, field or attribute, not to other", "%%TYPE must be applied to a variable, column, field or attribute, not to '%.*s'");
 DEFINE_PLS_ERROR_EXT(OB_ERR_OBJECT_INVALID, -9548, -1, "HY000", "object is invalid", "object '%.*s' is invalid", 905, "object is invalid", "object '%.*s' is invalid");
-DEFINE_ORACLE_ERROR_DEP(OB_ERR_XML_PARSE, -9549, -1, "HY000", "XML parsing failed", 31011, "XML parsing failed");
+DEFINE_ORACLE_ERROR_DEP(OB_ERR_XML_PARSE, -9549, ER_WRONG_VALUE, "HY000", "XML parsing failed", 31011, "XML parsing failed");
 DEFINE_PLS_ERROR_EXT(OB_ERR_EXP_NOT_ASSIGNABLE, -9550, -1, "HY000", "expression cannot be used as an assignment", "expression '%.*s' cannot be used as an assignment", 363, "expression cannot be used as an assignment", "expression '%.*s' cannot be used as an assignment");
 DEFINE_ORACLE_ERROR(OB_ERR_CURSOR_CONTAIN_BOTH_REGULAR_AND_ARRAY, -9551, -1, "HY000", "Cursor contains both regular and array defines which is illegal", 29256, "Cursor contains both regular and array defines which is illegal");
 DEFINE_PLS_ERROR(OB_ERR_STATIC_BOOL_EXPR, -9552, -1, "HY000", "a static boolean expression must be used", 174, "a static boolean expression must be used");
@@ -2371,6 +2381,12 @@ DEFINE_ORACLE_ERROR_EXT(OB_ERR_MLOG_IS_YOUNGER, -9759, -1, "HY000", "materialize
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH, -9760, -1, "HY000", "cannot fast refresh materialized view", "cannot fast refresh materialized view `%s`.`%s`", 12052, "cannot fast refresh materialized view", "cannot fast refresh materialized view %s.%s");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_MVIEW_NEVER_REFRESH, -9761, -1, "HY000", "cannot explicitly refresh a NEVER REFRESH materialized view", "cannot explicitly refresh a NEVER REFRESH materialized view (`%s`)", 23538, "cannot explicitly refresh a NEVER REFRESH materialized view", "cannot explicitly refresh a NEVER REFRESH materialized view (%s)");
 DEFINE_ERROR(OB_ERR_CLIENT_LOCAL_FILES_DISABLED, -9762, ER_CLIENT_LOCAL_FILES_DISABLED, "42000", "Loading local data is disabled; this must be enabled on both the client and server sides");
+DEFINE_ORACLE_ERROR(OB_ERR_OUT_PARAM_NOT_BIND_VAR, -9763, -1, "HY000", "output parameter not a bind variable", 6577, "output parameter not a bind variable");
+
+////////////////////////////////////////////////////////////////
+//error code for OBKV [-10500, -10700)
+////////////////////////////////////////////////////////////////
+DEFINE_ERROR(OB_ERR_KV_GLOBAL_INDEX_ROUTE, -10500, -1, "HY000", "incorrect route for obkv global index, client router should refresh.");
 
 ////////////////////////////////////////////////////////////////
 //error code for SQL [-11000 ---- -12000)

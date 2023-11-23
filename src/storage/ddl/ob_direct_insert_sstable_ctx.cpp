@@ -17,6 +17,7 @@
 #include "share/ob_ddl_error_message_table_operator.h"
 #include "share/ob_ddl_common.h"
 #include "share/ob_tablet_autoincrement_service.h"
+#include "share/ob_ddl_sim_point.h"
 #include "storage/ddl/ob_ddl_merge_task.h"
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "storage/compaction/ob_column_checksum_calculator.h"
@@ -488,7 +489,7 @@ int ObSSTableInsertTabletContext::update(const int64_t snapshot_version)
       LOG_WARN("invalid argument", K(ret), K(table_key));
     } else if (data_sstable_redo_writer_.get_start_scn().is_valid_and_not_min()) {
       // ddl start log is already written, do nothing
-    } else if (OB_FAIL(data_sstable_redo_writer_.start_ddl_redo(table_key,
+    } else if (OB_FAIL(data_sstable_redo_writer_.start_ddl_redo(table_key, build_param_.ddl_task_id_,
       build_param_.execution_id_, build_param_.data_format_version_, ddl_kv_mgr_handle_))) {
       LOG_WARN("fail write start log", K(ret), K(table_key), K(build_param_));
     }
@@ -543,6 +544,8 @@ int ObSSTableInsertTabletContext::build_sstable_slice(
           ret = OB_SUCCESS;
           break;
         }
+      } else if (OB_FAIL(DDL_SIM(MTL_ID(), build_param_.ddl_task_id_, DDL_INSERT_SSTABLE_GET_NEXT_ROW_FAILED))) {
+        LOG_WARN("ddl sim failure", K(ret), K(MTL_ID()), K(build_param_));
       } else if (tablet_id != row_tablet_id) {
         ret = OB_SUCCESS;
         break;
@@ -554,15 +557,15 @@ int ObSSTableInsertTabletContext::build_sstable_slice(
               "", static_cast<int>(sizeof("UNIQUE IDX") - 1), "UNIQUE IDX");
           char index_key_buffer[OB_TMP_BUF_SIZE_256];
           ObStoreRowkey index_key;
-          int64_t task_id = 0;
+          ObDDLErrorMessageTableOperator::ObDDLErrorInfo info;
           index_key.assign(row_val->cells_, rowkey_column_num);
           if (OB_TMP_FAIL(ObDDLErrorMessageTableOperator::extract_index_key(*table_schema, index_key, index_key_buffer, OB_TMP_BUF_SIZE_256))) {   // read the unique key that violates the unique constraint
             LOG_WARN("extract unique index key failed", K(tmp_ret), K(index_key), K(index_key_buffer));
             // TODO(shuangcan): check if we need to change part_id to tablet_id
-          } else if (OB_TMP_FAIL(ObDDLErrorMessageTableOperator::get_index_task_id(*GCTX.sql_proxy_, *table_schema, task_id))) {
-            LOG_WARN("get task id of index table failed", K(tmp_ret), K(task_id), KPC(table_schema));
-          } else if (OB_TMP_FAIL(ObDDLErrorMessageTableOperator::generate_index_ddl_error_message(ret, *table_schema,
-            task_id, row_tablet_id.id(), GCTX.self_addr(), *GCTX.sql_proxy_, index_key_buffer, report_ret_code))) {
+          } else if (OB_TMP_FAIL(ObDDLErrorMessageTableOperator::get_index_task_info(*GCTX.sql_proxy_, *table_schema, info))) {
+            LOG_WARN("get task id of index table failed", K(tmp_ret), K(info), KPC(table_schema));
+          } else if (OB_TMP_FAIL(ObDDLErrorMessageTableOperator::generate_index_ddl_error_message(ret, *table_schema, info.trace_id_str_,
+            info.task_id_, info.parent_task_id_, row_tablet_id.id(), GCTX.self_addr(), *GCTX.sql_proxy_, index_key_buffer, report_ret_code))) {
             LOG_WARN("generate index ddl error message", K(tmp_ret), K(ret), K(report_ret_code));
           }
           if (OB_ERR_DUPLICATED_UNIQUE_KEY == report_ret_code) {

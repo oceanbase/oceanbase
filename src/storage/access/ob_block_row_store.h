@@ -67,9 +67,6 @@ public:
   OB_INLINE bool can_blockscan() const { return can_blockscan_; }
   OB_INLINE bool filter_pushdown() const { return pd_filter_info_.is_pd_filter_; }
   OB_INLINE bool filter_applied() const { return filter_applied_; }
-  // For columnar store.
-  // TODO(hanling: it is used for compatible with row store and will be deprecated in the future)
-  OB_INLINE void set_filter_applied(const bool is_filter_applied) { filter_applied_ = is_filter_applied; }
   OB_INLINE bool filter_is_null() const { return pd_filter_info_.is_pd_filter_ && nullptr == pd_filter_info_.filter_; }
   int apply_blockscan(
       blocksstable::ObIMicroBlockRowScanner &micro_scanner,

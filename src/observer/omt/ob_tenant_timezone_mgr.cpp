@@ -55,7 +55,7 @@ int ObTenantTimezoneMgr::UpdateTenantTZOp::operator() (common::hash::HashMapPair
   if (OB_FAIL(tenant_tz.get_tz_mgr().fetch_time_zone_info())) {
     LOG_WARN("fail to update time zone info", K(ret));
   }
-  return ret;
+  return OB_SUCCESS;
 }
 
 void ObTenantTimezoneMgr::UpdateTenantTZTask::runTimerTask()

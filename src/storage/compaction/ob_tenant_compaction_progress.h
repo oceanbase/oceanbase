@@ -70,6 +70,7 @@ struct ObTenantCompactionProgress : public ObCompactionProgress
 {
   ObTenantCompactionProgress()
     : ObCompactionProgress(),
+      is_inited_(false),
       total_tablet_cnt_(0),
       unfinished_tablet_cnt_(0),
       sum_time_guard_()
@@ -77,12 +78,13 @@ struct ObTenantCompactionProgress : public ObCompactionProgress
   }
   bool is_valid() const;
   ObTenantCompactionProgress & operator=(const ObTenantCompactionProgress &other);
-  INHERIT_TO_STRING_KV("ObCompactionProgress", ObCompactionProgress, K_(total_tablet_cnt),
+  INHERIT_TO_STRING_KV("ObCompactionProgress", ObCompactionProgress, K_(is_inited), K_(total_tablet_cnt),
       K_(unfinished_tablet_cnt), K_(sum_time_guard));
 
+  bool is_inited_;
   int64_t total_tablet_cnt_;
   int64_t unfinished_tablet_cnt_;
-  ObCompactionTimeGuard sum_time_guard_;
+  ObStorageCompactionTimeGuard sum_time_guard_;
 };
 
 /*
@@ -103,6 +105,7 @@ public:
   void destroy();
 
   int add_progress(const int64_t major_snapshot_version);
+  int init_progress(const int64_t major_snapshot_version);
   int update_progress_status(const int64_t major_snapshot_version, share::ObIDag::ObDagStatus status);
   int update_progress(
       const int64_t major_snapshot_version,
@@ -116,8 +119,7 @@ public:
   int update_compression_ratio(const int64_t major_snapshot_version, storage::ObSSTableMergeInfo &info);
 
 private:
-  int init_progress_(ObTenantCompactionProgress &progress);
-  int loop_major_sstable_(int64_t version, const bool equal_flag, int64_t &cnt, int64_t &size);
+  int loop_major_sstable_(int64_t version, int64_t &cnt, int64_t &size);
   int finish_progress_(ObTenantCompactionProgress &progress);
   OB_INLINE int get_pos_(const int64_t major_snapshot_version, int64_t &pos) const;
 

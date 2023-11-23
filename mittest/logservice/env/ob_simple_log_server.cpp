@@ -30,6 +30,7 @@
 #include "share/ob_io_device_helper.h"
 #include "share/ob_thread_mgr.h"
 #include "logservice/palf/palf_options.h"
+#include "share/rpc/ob_batch_processor.h"
 
 namespace oceanbase
 {
@@ -278,6 +279,8 @@ int ObSimpleLogServer::init_network_(const common::ObAddr &addr, const bool is_b
   int ret = OB_SUCCESS;
   ObNetOptions opts;
   opts.rpc_io_cnt_ = 10;
+  opts.high_prio_rpc_io_cnt_ = 10;
+  opts.batch_rpc_io_cnt_ = 10;
   opts.tcp_user_timeout_ = 10 * 1000 * 1000; // 10s
   addr_ = addr;
   obrpc::ObRpcNetHandler::CLUSTER_ID = 1;
@@ -293,6 +296,18 @@ int ObSimpleLogServer::init_network_(const common::ObAddr &addr, const bool is_b
     SERVER_LOG(ERROR, "net_ listen failed", K(ret));
   } else if (is_bootstrap && OB_FAIL(srv_proxy_.init(transport_))) {
     SERVER_LOG(ERROR, "init srv_proxy_ failed");
+  } else if (is_bootstrap && OB_FAIL(net_.add_high_prio_rpc_listen(addr_.get_port(), handler_, high_prio_rpc_transport_))) {
+    SERVER_LOG(ERROR, "net_ listen failed", K(ret));
+  } else if (is_bootstrap && OB_FAIL(net_.batch_rpc_net_register(handler_, batch_rpc_transport_))) {
+    SERVER_LOG(ERROR, "batch_rpc_ init failed", K(ret));
+  } else if (FALSE_IT(batch_rpc_transport_->set_bucket_count(10))) {
+  } else if (is_bootstrap && OB_FAIL(batch_rpc_.init(batch_rpc_transport_, high_prio_rpc_transport_, addr))) {
+    SERVER_LOG(ERROR, "batch_rpc_ init failed", K(ret));
+  // } else if (is_bootstrap && OB_FAIL(TG_SET_RUNNABLE_AND_START(lib::TGDefIDs::BRPC, batch_rpc_))) {
+  } else if (is_bootstrap && OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::BRPC, batch_rpc_tg_id_))) {
+    SERVER_LOG(ERROR, "batch_rpc_ init failed", K(ret));
+  } else if (is_bootstrap && OB_FAIL(TG_SET_RUNNABLE_AND_START(batch_rpc_tg_id_, batch_rpc_))) {
+    SERVER_LOG(ERROR, "batch_rpc_ start failed", K(ret));
   } else {
     deliver_.node_id_ = node_id_;
     SERVER_LOG(INFO, "init_network success", K(ret), K(addr_), K(node_id_), K(opts));
@@ -395,7 +410,7 @@ int ObSimpleLogServer::init_log_service_()
   net_keepalive_ = MTL_NEW(MockNetKeepAliveAdapter, "SimpleLog");
 
   if (OB_FAIL(net_keepalive_->init(&deliver_))) {
-  } else if (OB_FAIL(log_service_.init(opts, clog_dir.c_str(), addr_, allocator_, transport_, &ls_service_,
+  } else if (OB_FAIL(log_service_.init(opts, clog_dir.c_str(), addr_, allocator_, transport_, &batch_rpc_, &ls_service_,
       &location_service_, &reporter_, &log_block_pool_, &sql_proxy_, net_keepalive_))) {
     SERVER_LOG(ERROR, "init_log_service_ fail", K(ret));
   } else if (OB_FAIL(log_block_pool_.create_tenant(opts.disk_options_.log_disk_usage_limit_size_))) {
@@ -442,6 +457,11 @@ int ObSimpleLogServer::simple_close(const bool is_shutdown = false)
   guard.click("destroy_palf_env");
 
   if (is_shutdown) {
+    TG_STOP(batch_rpc_tg_id_);
+    TG_WAIT(batch_rpc_tg_id_);
+    TG_DESTROY(batch_rpc_tg_id_);
+    batch_rpc_tg_id_ = -1;
+
     net_.rpc_shutdown();
     net_.stop();
     net_.wait();
@@ -734,6 +754,12 @@ int ObLogDeliver::handle_req_(rpc::ObRequest &req)
     return OB_SUCCESS;
   }
   switch (pkt.get_pcode()) {
+    #define BATCH_RPC_PROCESS() \
+      ObBatchP p;\
+      p.init(); \
+      p.set_ob_request(req);\
+      p.run();\
+      break;
     #define PROCESS(processer) \
     processer p;\
     p.init();\
@@ -832,6 +858,10 @@ int ObLogDeliver::handle_req_(rpc::ObRequest &req)
     case obrpc::OB_LOG_NOTIFY_FETCH_LOG: {
       modify_pkt.set_tenant_id(node_id_);
       PROCESS(LogNotifyFetchLogReqP)
+    }
+    case obrpc::OB_BATCH: {
+      modify_pkt.set_tenant_id(node_id_);
+      BATCH_RPC_PROCESS()
     }
     default:
       SERVER_LOG(ERROR, "invalid req type", K(pkt.get_pcode()));

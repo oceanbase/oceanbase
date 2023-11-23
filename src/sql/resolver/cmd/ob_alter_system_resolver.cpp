@@ -1891,6 +1891,174 @@ int check_backup_zone(const ObString &backup_zone)
   return ret;
 }
 
+static int alter_system_set_reset_constraint_check_and_add_item_mysql_mode(obrpc::ObAdminSetConfigArg &rpc_arg, ObAdminSetConfigItem &item, ObSQLSessionInfo *& session_info)
+{
+  int ret = OB_SUCCESS;
+  bool is_backup_config = false;
+  bool can_set_trace_control_info = false;
+  int  tmp_ret = OB_SUCCESS;
+  tmp_ret = OB_E(EventTable::EN_ENABLE_SET_TRACE_CONTROL_INFO) OB_SUCCESS;
+  if (OB_SUCCESS != tmp_ret) {
+    can_set_trace_control_info = true;
+  }
+  share::ObBackupConfigChecker backup_config_checker;
+  if (OB_ISNULL(session_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("session_info is NULL", KP(session_info), K(ret));
+  } else if (OB_FAIL(backup_config_checker.check_config_name(item.name_.ptr(), is_backup_config))) {
+    LOG_WARN("fail to check is valid backup config", K(ret), "config_name", item.name_.ptr(), "config value", item.value_.ptr());
+  } else if (is_backup_config) {
+    if (rpc_arg.is_valid() && !rpc_arg.is_backup_config_) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup configuration items cannot be set together with non data backup configuration items");
+      LOG_WARN("backup configuration items cannot be set together with non data backup configuration items", K(ret));
+    } else {
+      rpc_arg.is_backup_config_ = true;
+    }
+  } else if (rpc_arg.is_valid() && rpc_arg.is_backup_config_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup configuration items cannot be set together with non data backup configuration items");
+    LOG_WARN("backup configuration items cannot be set together with non data backup configuration items", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(rpc_arg.items_.push_back(item))) {
+    LOG_WARN("add config item failed", K(ret), K(item));
+  } else if (0 == STRCMP(item.name_.ptr(), Ob_STR_BACKUP_REGION)) {
+    if (OB_FAIL(check_backup_region(item.value_.str()))) {
+      LOG_WARN("failed to check backup dest", K(ret));
+    }
+  } else if (0 == STRCMP(item.name_.ptr(), OB_STR_BACKUP_ZONE)) {
+    if (OB_FAIL(check_backup_zone(item.value_.str()))) {
+      LOG_WARN("failed to check backup dest", K(ret));
+    }
+  } else if (0 == STRCMP(item.name_.ptr(), CLUSTER_ID)) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("cluster_id is not allowed to modify");
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "alter the parameter cluster_id");
+  } else if (0 == STRCMP(item.name_.ptr(), QUERY_RESPPONSE_TIME_FLUSH)) {
+    if(OB_FAIL(observer::ObRSTCollector::get_instance().flush_query_response_time(item.exec_tenant_id_, item.value_.str()))){
+      LOG_WARN("set query response time flush", K(ret));
+    }
+  } else if (0 == STRCMP(item.name_.ptr(), QUERY_RESPPONSE_TIME_STATS)) {
+    if(OB_FAIL(observer::ObRSTCollector::get_instance().control_query_response_time(item.exec_tenant_id_, item.value_.str()))){
+      LOG_WARN("set query response time stats", K(ret));
+    }
+  } else if (!can_set_trace_control_info &&
+              session_info != NULL &&
+              0 == STRCMP(item.name_.ptr(), OB_STR_TRC_CONTROL_INFO) &&
+              !session_info->is_inner()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("_trace_control_info is not allowed to modify");
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "alter the parameter _trace_control_info");
+  }
+  return ret;
+}
+
+static int set_reset_check_param_valid_oracle_mode(uint64_t tenant_id ,
+    const ObString &name, const ObString &value, ObSchemaChecker *& schema_checker)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_TDE_SECURITY
+  if (OB_ISNULL(schema_checker)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("schema_checker is NULL", K(ret));
+  } else if (0 == name.case_compare("tde_method")) {
+    ObString tde_method;
+    uint64_t compat_version = 0;
+    if (!ObTdeMethodUtil::is_valid(value)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported other method", K(value), K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter invalid tde_method");
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+      LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+    } else if (compat_version < DATA_VERSION_4_2_1_0
+               && ObTdeMethodUtil::is_aes256_algorithm(value)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("encrypt table key with aes256 is not supported", K(ret), K(value));
+    } else if (OB_FAIL(share::ObEncryptionUtil::get_tde_method(tenant_id, tde_method))) {
+      LOG_WARN("fail to check tenant is method internal", K(ret));
+    } else if (0 != tde_method.case_compare("none") && 0 != value.case_compare(tde_method)) {
+      // tde_method修改规则
+      // 当主密钥已经存在于租户内, 不允许修改为其他类型.
+      // 主备库场景放开此限制, 检查主密钥的类型是否和要修改的类型一致.
+      const share::schema::ObKeystoreSchema *keystore_schema = NULL;
+      if (OB_FAIL(schema_checker->get_keystore_schema(tenant_id, keystore_schema))) {
+        LOG_WARN("fail get keystore schema", K(ret));
+      } else if (OB_ISNULL(keystore_schema)) {
+        ret = OB_OBJECT_NAME_NOT_EXIST;
+        LOG_WARN("fail to get keystore schema", K(ret));
+      } else if (0 != keystore_schema->get_master_key_id()) {
+        if (!GCTX.is_standby_cluster()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("alter tde method is not support", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter tde method with master key exists");
+        } else if (0 == keystore_schema->get_master_key().case_compare("kms")
+            && 0 == value.case_compare("bkmi")) {
+          /*do nothing*/
+        } else if (0 == keystore_schema->get_master_key().case_compare(value)) {
+          /*do nothing*/
+        } else if (ObTdeMethodUtil::is_internal(value)) {
+            /*do nothing*/
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("alter tde method is not support", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter tde method with master key exists");
+        }
+      }
+    }
+  } else if (0 == name.case_compare(EXTERNAL_KMS_INFO)) {
+    ObString tde_method;
+    ObKmsClient *client = NULL;
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+    if (OB_FAIL(share::ObEncryptionUtil::get_tde_method(tenant_id, tde_method))) {
+      LOG_WARN("fail to get method internal", K(ret));
+    } else if (OB_FAIL(ObKmsClientUtil::get_kms_client(allocator, tde_method, client))) {
+      LOG_WARN("fail to get kms client", K(tde_method), K(ret));
+    } else if (OB_ISNULL(client)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("kms_client is null", K(tde_method), K(ret));
+    } else if (OB_FAIL(client->init(value.ptr(), value.length()))) {
+      LOG_WARN("the json str is not valid", K(ret));
+    }
+  }
+#endif
+  return ret;
+}
+
+static int alter_system_set_reset_constraint_check_and_add_item_oracle_mode(obrpc::ObAdminSetConfigArg &rpc_arg, ObAdminSetConfigItem &item,
+          uint64_t tenant_id, ObSchemaChecker *& schema_checker)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupConfigChecker backup_config_checker;
+  bool is_backup_config = false;
+  if (OB_FAIL(backup_config_checker.check_config_name(item.name_.ptr(), is_backup_config))) {
+    LOG_WARN("fail to check is valid backup config", K(ret), "config_name", item.name_.ptr(), "config value", item.value_.ptr());
+  } else if (is_backup_config) {
+    if (rpc_arg.is_valid() && !rpc_arg.is_backup_config_) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup configuration items cannot be set together with non data backup configuration items");
+      LOG_WARN("backup configuration items cannot be set together with non data backup configuration items", K(ret));
+    } else {
+      rpc_arg.is_backup_config_ = true;
+    }
+  } else if (rpc_arg.is_valid() && rpc_arg.is_backup_config_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup configuration items cannot be set together with non data backup configuration items");
+    LOG_WARN("backup configuration items cannot be set together with non data backup configuration items", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(set_reset_check_param_valid_oracle_mode(
+          tenant_id,
+          ObString(item.name_.size(), item.name_.ptr()),
+          ObString(item.value_.size(), item.value_.ptr()), schema_checker))) {
+    LOG_WARN("fail to check param valid", K(ret));
+  } else if (OB_FAIL(rpc_arg.items_.push_back(item))) {
+    LOG_WARN("add config item failed", K(ret), K(item));
+  }
+  return ret;
+}
+
 /* for mysql mode */
 int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
 {
@@ -2055,59 +2223,8 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                 } // if
 
                 if (OB_SUCC(ret)) {
-                  bool is_backup_config = false;
-                  bool can_set_trace_control_info = false;
-                  int  tmp_ret = OB_SUCCESS;
-                  tmp_ret = OB_E(EventTable::EN_ENABLE_SET_TRACE_CONTROL_INFO) OB_SUCCESS;
-                  if (OB_SUCCESS != tmp_ret) {
-                    can_set_trace_control_info = true;
-                  }
-                  share::ObBackupConfigChecker backup_config_checker;
-                  if (OB_FAIL(backup_config_checker.check_config_name(item.name_.ptr(), is_backup_config))) {
-                    LOG_WARN("fail to check is valid backup config", K(ret), "config_name", item.name_.ptr(), "config value", item.value_.ptr());
-                  } else if (is_backup_config) {
-                    if (stmt->get_rpc_arg().is_valid() && !stmt->get_rpc_arg().is_backup_config_) {
-                      ret = OB_NOT_SUPPORTED;
-                      LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup configuration items cannot be set together with non data backup configuration items");
-                      LOG_WARN("backup configuration items cannot be set together with non data backup configuration items", K(ret));
-                    } else {
-                      stmt->get_rpc_arg().is_backup_config_ = true;
-                    }
-                  } else if (stmt->get_rpc_arg().is_valid() && stmt->get_rpc_arg().is_backup_config_) {
-                    ret = OB_NOT_SUPPORTED;
-                    LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup configuration items cannot be set together with non data backup configuration items");
-                    LOG_WARN("backup configuration items cannot be set together with non data backup configuration items", K(ret));
-                  }
-                  if (OB_FAIL(ret)) {
-                  } else if (OB_FAIL(stmt->get_rpc_arg().items_.push_back(item))) {
-                    LOG_WARN("add config item failed", K(ret), K(item));
-                  } else if (0 == STRCMP(item.name_.ptr(), Ob_STR_BACKUP_REGION)) {
-                    if (OB_FAIL(check_backup_region(item.value_.str()))) {
-                      LOG_WARN("failed to check backup dest", K(ret));
-                    }
-                  } else if (0 == STRCMP(item.name_.ptr(), OB_STR_BACKUP_ZONE)) {
-                    if (OB_FAIL(check_backup_zone(item.value_.str()))) {
-                      LOG_WARN("failed to check backup dest", K(ret));
-                    }
-                  } else if (0 == STRCMP(item.name_.ptr(), CLUSTER_ID)) {
-                    ret = OB_OP_NOT_ALLOW;
-                    LOG_WARN("cluster_id is not allowed to modify");
-                    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "alter the parameter cluster_id");
-                  } else if (0 == STRCMP(item.name_.ptr(), QUERY_RESPPONSE_TIME_FLUSH)) {
-                    if(OB_FAIL(observer::ObRSTCollector::get_instance().flush_query_response_time(item.exec_tenant_id_, item.value_.str()))){
-                      LOG_WARN("set query response time flush", K(ret));
-                    }
-                  } else if (0 == STRCMP(item.name_.ptr(), QUERY_RESPPONSE_TIME_STATS)) {
-                    if(OB_FAIL(observer::ObRSTCollector::get_instance().control_query_response_time(item.exec_tenant_id_, item.value_.str()))){
-                      LOG_WARN("set query response time stats", K(ret));
-                    }  
-                  } else if (!can_set_trace_control_info &&
-                              session_info_ != NULL &&
-                              0 == STRCMP(item.name_.ptr(), OB_STR_TRC_CONTROL_INFO) &&
-                              !session_info_->is_inner()) {
-                    ret = OB_OP_NOT_ALLOW;
-                    LOG_WARN("_trace_control_info is not allowed to modify");
-                    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "alter the parameter _trace_control_info");
+                  if (OB_FAIL(alter_system_set_reset_constraint_check_and_add_item_mysql_mode(stmt->get_rpc_arg(), item, session_info_))) {
+                    LOG_WARN("constraint check failed", K(ret));
                   }
                 }
               }
@@ -3695,74 +3812,6 @@ int ObRefreshTempTableResolver::resolve(const ParseNode &parse_tree)
   return ret;
 }
 
-int ObAlterSystemSetResolver::check_param_valid(int64_t tenant_id ,
-    const ObString &name, const ObString &value)
-{
-  int ret = OB_SUCCESS;
-#ifdef OB_BUILD_TDE_SECURITY
-  if (0 == name.case_compare("tde_method")) {
-    ObString tde_method;
-    uint64_t compat_version = 0;
-    if (!ObTdeMethodUtil::is_valid(value)) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not supported other method", K(value), K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter invalid tde_method");
-    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
-      LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
-    } else if (compat_version < DATA_VERSION_4_2_1_0
-               && ObTdeMethodUtil::is_aes256_algorithm(value)) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("encrypt table key with aes256 is not supported", K(ret), K(value));
-    } else if (OB_FAIL(share::ObEncryptionUtil::get_tde_method(tenant_id, tde_method))) {
-      LOG_WARN("fail to check tenant is method internal", K(ret));
-    } else if (0 != tde_method.case_compare("none") && 0 != value.case_compare(tde_method)) {
-      // tde_method修改规则
-      // 当主密钥已经存在于租户内, 不允许修改为其他类型.
-      // 主备库场景放开此限制, 检查主密钥的类型是否和要修改的类型一致.
-      const share::schema::ObKeystoreSchema *keystore_schema = NULL;
-      if (OB_FAIL(schema_checker_->get_keystore_schema(tenant_id, keystore_schema))) {
-        LOG_WARN("fail get keystore schema", K(ret));
-      } else if (OB_ISNULL(keystore_schema)) {
-        ret = OB_OBJECT_NAME_NOT_EXIST;
-        LOG_WARN("fail to get keystore schema", K(ret));
-      } else if (0 != keystore_schema->get_master_key_id()) {
-        if (!GCTX.is_standby_cluster()) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("alter tde method is not support", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter tde method with master key exists");
-        } else if (0 == keystore_schema->get_master_key().case_compare("kms")
-            && 0 == value.case_compare("bkmi")) {
-          /*do nothing*/
-        } else if (0 == keystore_schema->get_master_key().case_compare(value)) {
-          /*do nothing*/
-        } else if (ObTdeMethodUtil::is_internal(value)) {
-            /*do nothing*/
-        } else {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("alter tde method is not support", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter tde method with master key exists");
-        }
-      }
-    }
-  } else if (0 == name.case_compare(EXTERNAL_KMS_INFO)) {
-    ObString tde_method;
-    ObKmsClient *client = NULL;
-    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
-    if (OB_FAIL(share::ObEncryptionUtil::get_tde_method(tenant_id, tde_method))) {
-      LOG_WARN("fail to get method internal", K(ret));
-    } else if (OB_FAIL(ObKmsClientUtil::get_kms_client(allocator, tde_method, client))) {
-      LOG_WARN("fail to get kms client", K(tde_method), K(ret));
-    } else if (OB_ISNULL(client)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("kms_client is null", K(tde_method), K(ret));
-    } else if (OB_FAIL(client->init(value.ptr(), value.length()))) {
-      LOG_WARN("the json str is not valid", K(ret));
-    }
-  }
-#endif
-  return ret;
-}
-
 // for oracle mode grammer: alter system set sys_var = val
 int ObAlterSystemSetResolver::resolve(const ParseNode &parse_tree)
 {
@@ -3830,7 +3879,7 @@ int ObAlterSystemSetResolver::resolve(const ParseNode &parse_tree)
       ObSetConfigStmt *setconfig_stmt = create_stmt<ObSetConfigStmt>();
       if (OB_ISNULL(setconfig_stmt)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("create set config stmt failed");
+        LOG_WARN("create set config stmt failed", KR(ret));
       } else {
         HEAP_VAR(ObCreateTableResolver, ddl_resolver, params_) {
           for (int64_t i = 0; OB_SUCC(ret) && i < parse_tree.num_child_; ++i) {
@@ -3905,34 +3954,9 @@ int ObAlterSystemSetResolver::resolve(const ParseNode &parse_tree)
                   }
                 }
                 if (OB_SUCC(ret)) {
-                  share::ObBackupConfigChecker backup_config_checker;
-                  bool is_backup_config = false;
-                  if (OB_FAIL(backup_config_checker.check_config_name(item.name_.ptr(), is_backup_config))) {
-                    LOG_WARN("fail to check is valid backup config", K(ret), "config_name", item.name_.ptr(), "config value", item.value_.ptr());
-                  } else if (is_backup_config) {
-                    if (setconfig_stmt->get_rpc_arg().is_valid() && !setconfig_stmt->get_rpc_arg().is_backup_config_) {
-                      ret = OB_NOT_SUPPORTED;
-                      LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup configuration items cannot be set together with non data backup configuration items");
-                      LOG_WARN("backup configuration items cannot be set together with non data backup configuration items", K(ret));
-                    } else {
-                      setconfig_stmt->get_rpc_arg().is_backup_config_ = true;
-                    }
-                  } else if (setconfig_stmt->get_rpc_arg().is_valid() && setconfig_stmt->get_rpc_arg().is_backup_config_) {
-                    ret = OB_NOT_SUPPORTED;
-                    LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup configuration items cannot be set together with non data backup configuration items");
-                    LOG_WARN("backup configuration items cannot be set together with non data backup configuration items", K(ret));
-                  }
-
-                  if (OB_FAIL(ret)) {
-                  } else if (OB_FAIL(check_param_valid(
-                          tenant_id,
-                          ObString(item.name_.size(), item.name_.ptr()),
-                          ObString(item.value_.size(), item.value_.ptr())))) {
-                    LOG_WARN("fail to check param valid", K(ret));
-                  } else if (OB_FAIL(
-                                 setconfig_stmt->get_rpc_arg().items_.push_back(
-                                     item))) {
-                    LOG_WARN("add config item failed", K(ret), K(item));
+                  if (OB_FAIL(alter_system_set_reset_constraint_check_and_add_item_oracle_mode(
+                      setconfig_stmt->get_rpc_arg(), item, tenant_id, schema_checker_))) {
+                    LOG_WARN("constraint check failed", K(ret));
                   }
                 }
               }
@@ -5670,6 +5694,290 @@ int resolve_restore_until(const ParseNode &time_node,
       with_restore_scn = true;
     }
   }
+  return ret;
+}
+
+//for mysql mode
+int ObResetConfigResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(T_ALTER_SYSTEM_RESET_PARAMETER != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_ALTER_SYSTEM_RESET_PARAMETER", "type", get_type_name(parse_tree.type_));
+  } else {
+    if (OB_UNLIKELY(NULL == parse_tree.children_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("children should not be null");
+    } else {
+      const ParseNode *list_node = parse_tree.children_[0];
+      if (OB_UNLIKELY(NULL == list_node)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("list_node should not be null");
+      } else if (OB_UNLIKELY(NULL == list_node->children_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("children should not be null");
+      } else {
+        ObResetConfigStmt *stmt = create_stmt<ObResetConfigStmt>();
+        if (OB_UNLIKELY(NULL == stmt)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_ERROR("create stmt failed", K(ret));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < list_node->num_child_; i++) {
+            const ParseNode *action_node = list_node->children_[i];
+            if (NULL == action_node) {
+              continue;
+            } else {
+              HEAP_VAR(ObAdminSetConfigItem, item) {
+                if (OB_LIKELY(NULL != session_info_)) {
+                  item.exec_tenant_id_ = session_info_->get_effective_tenant_id();
+                } else {
+                  LOG_WARN("session is null");
+                  item.exec_tenant_id_ = OB_INVALID_TENANT_ID;
+                }
+                if (OB_UNLIKELY(NULL == action_node->children_)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("children should not be null");
+                } else if (OB_UNLIKELY(NULL == action_node->children_[0])) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("children[0] should not be null");
+                } else {
+                  // config name
+                  ObString name(action_node->children_[0]->str_len_,
+                                action_node->children_[0]->str_value_);
+                  ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, name);
+                  if (OB_FAIL(item.name_.assign(name))) {
+                    LOG_WARN("assign config name failed", K(name), K(ret));
+                  } else {
+                    ObConfigItem *ci = NULL;
+                    ObConfigItem * const *sys_ci_ptr = NULL;
+                    ObConfigItem * const *tenant_ci_ptr = NULL;
+                    sys_ci_ptr = GCONF.get_container().get(ObConfigStringKey(item.name_.ptr()));
+                    if (OB_NOT_NULL(sys_ci_ptr)) {
+                      ci = *sys_ci_ptr;
+                    } else {
+                      int tmp_ret = OB_SUCCESS;
+                      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(OB_SYS_TENANT_ID));
+                      if (!tenant_config.is_valid()) {
+                        tmp_ret = OB_ERR_UNEXPECTED;
+                        LOG_WARN("failed to get tenant config", KR(tmp_ret));
+                      } else if (OB_ISNULL(tenant_ci_ptr = (tenant_config->get_container().get(
+                                                ObConfigStringKey(item.name_.ptr()))))) {
+                        tmp_ret = OB_ERR_SYS_CONFIG_UNKNOWN;
+                        LOG_WARN("can't found config item", KR(tmp_ret), "item", item);
+                      } else {
+                        ci = *tenant_ci_ptr;
+                      }
+                    }
+                    if (OB_FAIL(ret)) {
+                      LOG_WARN("error ret", KR(ret));
+                    } else {
+                      if (OB_NOT_NULL(ci)) {
+                        if (OB_FAIL(item.value_.assign(ci->default_str()))) {
+                          LOG_WARN("assign config value failed", K(ret));
+                        } else {
+                          //ignore config scope
+                          //tenant
+                          if (NULL != action_node->children_[1]) {
+                            const ParseNode *n = action_node->children_[1];
+                            if (T_TENANT_NAME == n->type_) {
+                              uint64_t tenant_id = item.exec_tenant_id_;
+                              if (OB_SYS_TENANT_ID != tenant_id) {
+                                ret = OB_ERR_NO_PRIVILEGE;
+                                LOG_WARN("non sys tenant", K(tenant_id), K(ret));
+                              } else {
+                                ObString tenant_name(n->children_[0]->str_len_,
+                                                      n->children_[0]->str_value_);
+                                if (OB_FAIL(item.tenant_name_.assign(tenant_name))) {
+                                  LOG_WARN("assign tenant name failed", K(tenant_name), K(ret));
+                                }
+                              }
+                            } else {
+                              ret = OB_ERR_UNEXPECTED;
+                              LOG_WARN("resolve tenant name failed", K(ret));
+                            }
+                          }
+                          if (OB_SUCC(ret)) {
+                            if (OB_FAIL(alter_system_set_reset_constraint_check_and_add_item_mysql_mode(stmt->get_rpc_arg(), item, session_info_))) {
+                              LOG_WARN("constraint check failed", K(ret));
+                            }
+                          }
+                        }
+                      } else {
+                        ret = OB_ERR_SYS_CONFIG_UNKNOWN;
+                        LOG_WARN("unknown config", K(ret), K(item));
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAlterSystemResetResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  bool set_parameters = false;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  if (OB_UNLIKELY(T_ALTER_SYSTEM_RESET != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("parse_tree.type_ must be T_ALTER_SYSTEM_RESET", K(ret), K(parse_tree.type_));
+  } else if (OB_ISNULL(session_info_) || OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("session_info_ or allocator_ is NULL", K(ret), K(session_info_), K(allocator_));
+  } else {
+    tenant_id = session_info_->get_effective_tenant_id();
+    /* first round: detect set variables or parameters */
+    for (int64_t i = 0; OB_SUCC(ret) && i < parse_tree.num_child_; ++i) {
+      ParseNode *set_node = nullptr, *set_param_node = nullptr;
+      if (OB_ISNULL(set_node = parse_tree.children_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("set_node should not be null", K(ret));
+      } else if (T_ALTER_SYSTEM_RESET_PARAMETER != set_node->type_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("set_node->type_ must be T_ALTER_SYSTEM_RESET_PARAMETER", K(ret),
+                 K(set_node->type_));
+      } else if (OB_ISNULL(set_param_node = set_node->children_[0])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("set_node is null", K(ret));
+      } else if (OB_UNLIKELY(T_VAR_VAL != set_param_node->type_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("type is not T_VAR_VAL", K(ret), K(set_param_node->type_));
+      } else {
+        ParseNode *var = nullptr;
+        if (OB_ISNULL(var = set_param_node->children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("var is NULL", K(ret));
+        } else if (T_IDENT != var->type_) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+              "Variable name isn't identifier type");
+        } else {
+          ObString name(var->str_len_, var->str_value_);
+          share::ObBackupConfigChecker backup_config_checker;
+          bool is_backup_config = false;
+          if (OB_FAIL(backup_config_checker.check_config_name(name, is_backup_config))) {
+            LOG_WARN("fail to check config name", K(ret), K(name));
+          } else if (is_backup_config) {
+            set_parameters = true;
+            break;
+          } else {
+            omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+            if (tenant_config.is_valid() &&
+              nullptr != tenant_config->get_container().get(ObConfigStringKey(name))) {
+              set_parameters = true;
+              break;
+            }
+          }
+        }
+      }
+    } // for
+  }
+  /* second round: gen stmt */
+  if (OB_SUCC(ret)) {
+    if (set_parameters) {
+      ObSetConfigStmt *setconfig_stmt = create_stmt<ObSetConfigStmt>();
+      if (OB_ISNULL(setconfig_stmt)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("create set config stmt failed", KR(ret));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < parse_tree.num_child_; ++i) {
+          ParseNode *set_node = nullptr, *set_param_node = nullptr;
+          if (OB_ISNULL(set_node = parse_tree.children_[i])) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("set_node should not be null", K(ret));
+          } else if (T_ALTER_SYSTEM_RESET_PARAMETER != set_node->type_) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("set_node->type_ must be T_ALTER_SYSTEM_RESET_PARAMETER",
+                      K(ret), K(set_node->type_));
+          } else if (OB_ISNULL(set_param_node = set_node->children_[0])) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("set_node is null", K(ret));
+          } else if (OB_UNLIKELY(T_VAR_VAL != set_param_node->type_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("type is not T_VAR_VAL", K(ret), K(set_param_node->type_));
+          } else {
+            ParseNode *name_node = nullptr, *value_node = nullptr;
+            HEAP_VAR(ObAdminSetConfigItem, item) {
+              item.exec_tenant_id_ = tenant_id;
+              /* name */
+              if (OB_ISNULL(name_node = set_param_node->children_[0])) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("var is NULL", K(ret));
+              } else if (T_IDENT != name_node->type_) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                    "Variable name isn't identifier type");
+              } else {
+                ObString name(name_node->str_len_, name_node->str_value_);
+                ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, name);
+                if (OB_FAIL(item.name_.assign(name))) {
+                  LOG_WARN("assign config name failed", K(name), K(ret));
+                }
+              }
+              if (OB_FAIL(ret)) {
+                continue;
+              }
+              //value
+              ObConfigItem *ci = NULL;
+              ObConfigItem * const *tenant_ci_ptr = NULL;
+              {
+                int tmp_ret = OB_SUCCESS;
+                omt::ObTenantConfigGuard tenant_config(TENANT_CONF(OB_SYS_TENANT_ID));
+                if (!tenant_config.is_valid()) {
+                  tmp_ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("failed to get tenant config", KR(tmp_ret));
+                } else if (OB_ISNULL(tenant_ci_ptr = (tenant_config->get_container().get(
+                                          ObConfigStringKey(item.name_.ptr()))))) {
+                  tmp_ret = OB_ERR_SYS_CONFIG_UNKNOWN;
+                  LOG_WARN("can't found config item", KR(tmp_ret), "item", item);
+                } else {
+                  ci = *tenant_ci_ptr;
+                }
+              }
+              if (OB_FAIL(ret)) {
+                LOG_WARN("error ret", KR(ret));
+              } else {
+                if (OB_NOT_NULL(ci)) {
+                  if (OB_FAIL(item.value_.assign(ci->default_str()))) {
+                    LOG_WARN("assign config value failed", K(ret));
+                  }
+                } else {
+                  ret = OB_ERR_SYS_CONFIG_UNKNOWN;
+                }
+              }
+              if (OB_SUCC(ret)) {
+                if (OB_FAIL(alter_system_set_reset_constraint_check_and_add_item_oracle_mode(
+                    setconfig_stmt->get_rpc_arg(), item, tenant_id, schema_checker_))) {
+                  LOG_WARN("constraint check failed", KR(ret));
+                }
+              }
+            }
+          }
+        } // for
+      }
+    } else {
+      ret = OB_ERR_SYS_CONFIG_UNKNOWN;
+      LOG_WARN("variables do not support reset or unknown config item", KR(ret));
+    }
+    /* 无论设置租户级配置项，还是系统参数，都需要alter system权限。
+       对租户级配置项的修改，算是一种扩展，借用alter system权限进行控制 */
+    if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
+      CK (OB_NOT_NULL(schema_checker_));
+      OZ (schema_checker_->check_ora_ddl_priv(
+          session_info_->get_effective_tenant_id(),
+          session_info_->get_priv_user_id(),
+          ObString(""),
+          stmt::T_ALTER_SYSTEM_RESET_PARAMETER,
+          session_info_->get_enable_role_array()),
+          session_info_->get_effective_tenant_id(), session_info_->get_user_id());
+    }
+  } // if
   return ret;
 }
 

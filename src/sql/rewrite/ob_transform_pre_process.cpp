@@ -79,6 +79,15 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
       }
     }
     if (OB_SUCC(ret)) {
+      if (OB_FAIL(transform_json_object_expr_with_star(parent_stmts, stmt, is_happened))) {
+        LOG_WARN("failed to transform for json object star", K(ret));
+      } else {
+        trans_happened |= is_happened;
+        OPT_TRACE("transform for udt columns", is_happened);
+        LOG_TRACE("succeed to transform for udt columns", K(is_happened), K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
       if (OB_FAIL(transform_udt_columns(parent_stmts, stmt, is_happened))) {
         LOG_WARN("failed to transform for transform for cast multiset", K(ret));
       } else {
@@ -2461,7 +2470,7 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt &stmt)
       LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
     } else if (OB_FAIL(stmt.formalize_stmt(session_info))) {
       LOG_WARN("failed to formalize stmt", K(ret));
-    } else if (OB_FAIL(stmt.formalize_stmt_expr_reference())) {
+    } else if (OB_FAIL(stmt.formalize_stmt_expr_reference(expr_factory, session_info))) {
       LOG_WARN("failed to formalize stmt expr reference", K(ret));
     }
   }
@@ -4519,7 +4528,7 @@ int ObTransformPreProcess::transform_merge_into_subquery(ObMergeStmt *merge_stmt
                                                    update_has_subquery,
                                                    delete_subquery_exprs))) {
     LOG_WARN("failed to allocate delete condition subquery", K(ret));
-  } else if (OB_FAIL(merge_stmt->formalize_stmt_expr_reference())) {
+  } else if (OB_FAIL(merge_stmt->formalize_stmt_expr_reference(expr_factory, ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt expr reference", K(ret));
   }
   return ret;
@@ -7144,6 +7153,37 @@ int ObTransformPreProcess::check_skip_child_select_view(const ObIArray<ObParentD
       skip_for_view_table = true;
     }
   }
+  return ret;
+}
+
+int ObTransformPreProcess::transform_json_object_expr_with_star(const ObIArray<ObParentDMLStmt> &parent_stmts,
+                                                                ObDMLStmt *stmt, bool &trans_happened)
+{
+  INIT_SUCC(ret);
+  ObSEArray<ObRawExpr*, 4> replace_exprs;
+
+  JsonObjectStarChecker expr_checker(replace_exprs);
+  ObStmtExprGetter visitor;
+  visitor.checker_ = &expr_checker;
+  if (OB_SUCC(ret) && OB_FAIL(stmt->iterate_stmt_expr(visitor))) {
+    LOG_WARN("get relation exprs failed", K(ret));
+  }
+
+  //collect query udt exprs which need to be replaced
+  for (int64_t i = 0; OB_SUCC(ret) && i < replace_exprs.count(); i++) {
+    if (OB_ISNULL(replace_exprs.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("replace expr is null", K(ret));
+    } else {
+      ObSysFunRawExpr *func_expr = static_cast<ObSysFunRawExpr*>(replace_exprs.at(i));
+      if (OB_FAIL(ObTransformUtils::expand_wild_star_to_columns(ctx_, stmt, func_expr))) {
+        LOG_WARN("fail to transform star to column node", K(ret));
+      } else {
+        trans_happened = true;
+      }
+    }
+  }
+
   return ret;
 }
 

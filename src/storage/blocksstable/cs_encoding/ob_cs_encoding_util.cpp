@@ -22,7 +22,7 @@ namespace blocksstable
 using namespace common;
 
 const int64_t ObCSEncodingUtil::ENCODING_ROW_COUNT_THRESHOLD = 4;
-// limit by typedef ObPodFix2dArray<ObDatum, 1 << 20, common::OB_MALLOC_MIDDLE_BLOCK_SIZE> ObColDatums;
+// limit by typedef ObPodFix2dArray<ObDatum, 1 << 20, common::OB_MALLOC_NORMAL_BLOCK_SIZE> ObColDatums;
 const int64_t ObCSEncodingUtil::MAX_MICRO_BLOCK_ROW_CNT = 1L << 20; // 1M
 const int64_t ObCSEncodingUtil::DEFAULT_DATA_BUFFER_SIZE = common::OB_DEFAULT_MACRO_BLOCK_SIZE;
 const int64_t ObCSEncodingUtil::MAX_BLOCK_ENCODING_STORE_SIZE = 2 * DEFAULT_DATA_BUFFER_SIZE;

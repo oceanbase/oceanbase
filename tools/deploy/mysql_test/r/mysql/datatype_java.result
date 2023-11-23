@@ -1,6 +1,6 @@
 set sql_mode='';
 drop table if exists t;
-create table t(id int primary key auto_increment,
+create table t(id int primary key auto_increment, 
 int_val smallint,
 uint_val smallint unsigned,
 flt_val float(5, 3),

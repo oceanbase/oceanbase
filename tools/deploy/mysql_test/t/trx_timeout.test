@@ -109,4 +109,4 @@ select * from t1;
 #connection conn1;
 #--error 4012
 #commit;
-set global  ob_trx_timeout = 100000000;
+set global  ob_trx_timeout = 100000000; 

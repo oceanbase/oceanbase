@@ -1148,6 +1148,14 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(TableTTL);
         break;
       }
+      case T_ALTER_SYSTEM_RESET_PARAMETER: {
+        REGISTER_STMT_RESOLVER(ResetConfig);
+        break;
+      }
+      case T_ALTER_SYSTEM_RESET: {
+        REGISTER_STMT_RESOLVER(AlterSystemReset);
+        break;
+      }
       default: {
         ret = OB_NOT_SUPPORTED;
         const char *type_name = get_type_name(parse_tree.type_);

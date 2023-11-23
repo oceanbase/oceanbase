@@ -272,8 +272,6 @@ int ObMultipleScanMerge::locate_blockscan_border()
       LOG_WARN("Unexpected null iter", K(ret), K(consumers_[0]));
     } else if (OB_FAIL(iter->refresh_blockscan_checker(border_key))) {
       LOG_WARN("Failed to check pushdown skip", K(ret), K(border_key));
-    } else {
-      block_row_store_->set_filter_applied(true);
     }
   }
   return ret;
@@ -547,7 +545,7 @@ int ObMultipleScanMerge::can_batch_scan(bool &can_batch)
     } else if (OB_ISNULL(iter = iters_.at(consumers_[0]))) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "Unexpected null iter", K(ret), K(consumers_[0]), K(iters_), K(*this));
-    } else if (iter->filter_applied()) {
+    } else if (iter->can_batch_scan()) {
       can_batch = true;
     }
   }

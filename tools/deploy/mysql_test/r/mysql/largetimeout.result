@@ -22,8 +22,8 @@ drop table if exists t1;
 create table t1(a int primary key ,b int);
 desc t1;
 Field	Type	Null	Key	Default	Extra
-a	int(11)	NO	PRI	NULL
-b	int(11)	YES		NULL
+a	int(11)	NO	PRI	NULL	
+b	int(11)	YES		NULL	
 select * from t1;
 a	b
 drop table t1;

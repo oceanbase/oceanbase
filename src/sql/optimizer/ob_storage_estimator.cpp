@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "ob_storage_estimator.h"
+#include "lib/worker.h"
 #include "storage/tx_storage/ob_access_service.h"
 #include "storage/access/ob_table_scan_range.h"
 #include "share/ob_simple_batch.h"
@@ -126,6 +127,7 @@ int ObStorageEstimator::storage_estimate_partition_batch_rowcount(
     int64_t rc_logical = 0;
     int64_t rc_physical = 0;
     ObArenaAllocator allocator;
+    const int64_t timeout_us = THIS_WORKER.get_timeout_remain();
     ObAccessService *access_service = NULL;
     storage::ObTableScanRange table_scan_range;
     if (OB_ISNULL(access_service = MTL(ObAccessService *))) {
@@ -135,13 +137,14 @@ int ObStorageEstimator::storage_estimate_partition_batch_rowcount(
       STORAGE_LOG(WARN, "Failed to init table scan range", K(ret), K(batch));
     } else if (OB_FAIL(access_service->estimate_row_count(table_scan_param,
                                                           table_scan_range,
+                                                          timeout_us,
                                                           est_records,
                                                           rc_logical,
                                                           rc_physical))) {
       LOG_TRACE("OPT:[STORAGE EST FAILED, USE STAT EST]", "storage_ret", ret);
     } else {
       LOG_TRACE("storage estimate row count result", K(rc_logical), K(rc_physical),
-                K(table_scan_param), K(table_scan_range), K(ret));
+                K(table_scan_param), K(table_scan_range), K(timeout_us), K(ret));
         logical_row_count = rc_logical < 0 ? 1.0 : static_cast<double>(rc_logical);
         physical_row_count = rc_physical < 0 ? 1.0 : static_cast<double>(rc_physical);
     }
@@ -172,18 +175,20 @@ int ObStorageEstimator::storage_estimate_block_count_and_row_count(
   } else {
     const uint64_t tenant_id = arg.tenant_id_;
     MTL_SWITCH(tenant_id) {
+      const int64_t timeout_us = THIS_WORKER.get_timeout_remain();
       ObAccessService *access_service = NULL;
       if (OB_ISNULL(access_service = MTL(ObAccessService *))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(access_service));
       } else if (OB_FAIL(access_service->estimate_block_count_and_row_count(arg.ls_id_,
-                                                                           arg.tablet_id_,
-                                                                           macro_block_count,
-                                                                           micro_block_count,
-                                                                           sstable_row_count,
-                                                                           memtable_row_count,
-                                                                           cg_macro_cnt_arr,
-                                                                           cg_micro_cnt_arr))) {
+                                                                            arg.tablet_id_,
+                                                                            timeout_us,
+                                                                            macro_block_count,
+                                                                            micro_block_count,
+                                                                            sstable_row_count,
+                                                                            memtable_row_count,
+                                                                            cg_macro_cnt_arr,
+                                                                            cg_micro_cnt_arr))) {
         LOG_WARN("OPT:[STORAGE EST BLOCK COUNT FAILED]", "storage_ret", ret);
       } else if (OB_UNLIKELY(cg_count != 0 &&
                              (cg_macro_cnt_arr.count() > cg_count

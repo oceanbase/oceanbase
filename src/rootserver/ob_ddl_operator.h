@@ -799,6 +799,7 @@ public:
                      common::ObMySQLTransaction &trans,
                      share::schema::ObErrorInfo &error_info,
                      ObIArray<ObDependencyInfo> &dep_infos,
+                     int64_t &table_schema_version,
                      const common::ObString *ddl_stmt_str/*=NULL*/,
                      bool is_update_table_schema_version = true,
                      bool is_for_truncate_table = false);

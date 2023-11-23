@@ -233,35 +233,6 @@ void ObEventHistoryTableOperator::destroy()
   inited_ = false;
 }
 
-int ObEventHistoryTableOperator::add_event(const char *module, const char *event)
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (NULL == module || NULL == event) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("neither module or event can be NULL", KP(module), KP(event), K(ret));
-  } else {
-    const int64_t now = ObTimeUtility::current_time();
-    ObDMLSqlSplicer dml;
-    if (OB_FAIL(dml.add_gmt_create(now))
-        || OB_FAIL(dml.add_column("module", module))
-        || OB_FAIL(dml.add_column("event", event))) {
-      LOG_WARN("add column failed", K(ret));
-    } else {
-      ObSqlString sql;
-      if (OB_FAIL(dml.splice_insert_sql(event_table_name_, sql))) {
-        LOG_WARN("splice_insert_sql failed",
-            "table_name", event_table_name_, K(ret));
-      } else if (OB_FAIL(add_task(sql))) {
-        LOG_WARN("add_task failed", K(sql), K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObEventHistoryTableOperator::gen_event_ts(int64_t &event_ts)
 {
   int ret = OB_SUCCESS;

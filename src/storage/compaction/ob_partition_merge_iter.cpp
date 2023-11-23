@@ -559,7 +559,7 @@ int ObPartitionMacroMergeIter::open_curr_range(const bool for_rewrite, const boo
         LOG_WARN("fail to switch_query_range", K(ret));
       }
     } else {
-      iter->reset();
+      iter->reuse();
       if (OB_FAIL(iter->open(
           access_param_.iter_param_,
           access_context_,
@@ -712,7 +712,7 @@ int ObPartitionMacroMergeIter::exist(const ObDatumRow &row, bool &is_exist)
       LOG_WARN("fail to switch_query_range", K(ret), K(cs_datum_range_));
     }
   } else {
-    iter->reset();
+    iter->reuse();
     if (OB_FAIL(iter->open(
               access_param_.iter_param_,
               access_context_,
@@ -773,7 +773,7 @@ int ObPartitionMacroMergeIter::check_row_changed(const blocksstable::ObDatumRow 
         LOG_WARN("fail to switch_query_range", K(ret), K(cs_datum_range_));
       }
     } else {
-      iter->reset();
+      iter->reuse();
       if (OB_FAIL(iter->open(
           access_param_.iter_param_,
           access_context_,
@@ -1811,7 +1811,7 @@ int ObPartitionMinorMacroMergeIter::open_curr_macro_block()
     LOG_WARN("Unepxcted opened macro block to open", K(ret));
   } else {
     ObSSTableRowWholeScanner *iter = reinterpret_cast<ObSSTableRowWholeScanner *>(row_iter_);
-    iter->reset();
+    iter->reuse();
     if (OB_FAIL(iter->open(
                 access_param_.iter_param_,
                 access_context_,

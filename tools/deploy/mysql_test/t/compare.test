@@ -94,17 +94,17 @@ drop table a1;
 #CREATE TABLE t2 (a int);
 #INSERT INTO t2 VALUES (1),(2);
 #
-#SELECT a,
-#  (SELECT COUNT(*) FROM t1
-#   WHERE b = t2.a AND CONCAT(b,c) = CONCAT('0',t2.a,'01')) x
+#SELECT a, 
+#  (SELECT COUNT(*) FROM t1 
+#   WHERE b = t2.a AND CONCAT(b,c) = CONCAT('0',t2.a,'01')) x 
 #FROM t2 ORDER BY a;
 #
 --disable_result_log
-#EXPLAIN EXTENDED
+#EXPLAIN EXTENDED 
 --enable_result_log
-#SELECT a,
-#  (SELECT COUNT(*) FROM t1
-#   WHERE b = t2.a AND CONCAT(b,c) = CONCAT('0',t2.a,'01')) x
+#SELECT a, 
+#  (SELECT COUNT(*) FROM t1 
+#   WHERE b = t2.a AND CONCAT(b,c) = CONCAT('0',t2.a,'01')) x 
 #FROM t2 ORDER BY a;
 #
 #DROP TABLE t1,t2;
@@ -113,7 +113,7 @@ drop table a1;
 ## Bug #39353: Multiple conditions on timestamp column crashes server
 ##
 #
-#CREATE TABLE t1 (a TIMESTAMP);
+#CREATE TABLE t1 (a TIMESTAMP); 
 #INSERT INTO t1 VALUES (NOW()),(NOW()),(NOW());
 #SELECT * FROM t1 WHERE a > '2008-01-01' AND a = '0000-00-00';
 #DROP TABLE t1;

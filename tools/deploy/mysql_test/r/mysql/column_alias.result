@@ -42,5 +42,5 @@ c1	c1
 2	3
 show columns from tt1;
 Field	Type	Null	Key	Default	Extra
-c1	int(11)	NO	PRI	NULL
-c2	int(11)	YES		NULL
+c1	int(11)	NO	PRI	NULL	
+c2	int(11)	YES		NULL	

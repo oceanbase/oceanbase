@@ -121,7 +121,7 @@ select v.c1 from v join t2 using(c1);
 --error 1356
 select v.c1 from v join t2 using(c2);
 
-#column in where
+#column in where 
 --disable_warnings
 drop table if exists t1,t2;
 drop view if exists v;
@@ -166,7 +166,7 @@ select c1 from v group by c2;
 --error 1356
 select c1 from v group by (select c2);
 
-#column in having
+#column in having 
 #drop table if exists t1,t2;
 #drop view if exists v;
 #create table t1(c1 int,c2 int);
@@ -186,7 +186,7 @@ drop view if exists v;
 --enable_warnings
 create table t1(c1 int,c2 int);
 insert into t1 values(1,2),(2,3),(3,4);
-create view v as select c1,c2 from t1 order by c2;
+create view v as select c1,c2 from t1 order by c2; 
 alter table t1 drop column c2;
 #order by 即使是从select里找到了c2(select中的c2不报错是因为view_stmt)，因为select里面的c2也是无效列，因此最终结果也是视图无效
 --error 1356
@@ -354,7 +354,7 @@ alter table t2 add column c3 int;
 select (select c3 from v limit 1) from t2;
 
 #
-##Bug
+##Bug 
 #
 --disable_warnings
 drop table if exists t1;
@@ -431,7 +431,7 @@ select * from v2;
 select * from v3;
 
 #
-## Bug :
+## Bug : 
 ## 主要测试在非select语句引用select_stmt(view展开)的问题，select结果作为其它stmt的输入暂时不支持，
 ## 这里仅仅针对bug加入回归case
 #
@@ -462,12 +462,12 @@ show warnings;
 
 #Bug 对于基表schema失效的视图，查询成功后不应该有warning
 --disable_warnings
-drop table if exists t1;
+drop table if exists t1; 
 drop view if exists v;
 --enable_warnings
 create table t1(c1 int,c2 int);
-create view v as select * from t1;
-alter table t1 drop column c2;
+create view v as select * from t1; 
+alter table t1 drop column c2; 
 --error 1356
 select c1 from v;
 show warnings;
@@ -488,7 +488,7 @@ select * from xy;
 
 #Bug 创建视图中包含union子句并且类型为char的时候长度出错
 --disable_warnings
-drop table if exists t1;
+drop table if exists t1; 
 drop table if exists t2;
 drop view if exists v;
 --enable_warnings
@@ -509,7 +509,7 @@ create view v as (select k, v from t1) union (select 1, 1 from t1);
 show create view v;
 
 --disable_warnings
-drop table if exists t1;
+drop table if exists t1; 
 drop table if exists t2;
 --enable_warnings
 CREATE TABLE `t11` ( `a` int(11) NOT NULL, `b` int(11) DEFAULT NULL, `c` int(11) DEFAULT NULL, PRIMARY KEY (`a`) );

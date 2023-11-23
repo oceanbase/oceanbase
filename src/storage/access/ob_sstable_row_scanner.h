@@ -41,6 +41,8 @@ public:
   virtual ~ObSSTableRowScanner();
   virtual void reset();
   virtual void reuse();
+  virtual bool can_blockscan() const override;
+  virtual bool can_batch_scan() const override;
   TO_STRING_KV(K_(is_opened), K_(cur_range_idx), K_(prefetcher), KPC_(sstable));
 protected:
   int inner_open(
@@ -59,7 +61,6 @@ protected:
 
 private:
   OB_INLINE int init_micro_scanner();
-  OB_INLINE bool can_vectorize() const;
   int open_cur_data_block(ObSSTableReadHandle &read_handle);
   int fetch_rows(ObSSTableReadHandle &read_handle);
   // For columnar store

@@ -629,16 +629,17 @@ bool ObTabletCreateDeleteHelper::is_pure_hidden_tablets(const ObCreateTabletInfo
 }
 
 int ObTabletCreateDeleteHelper::check_need_create_empty_major_sstable(
-    const ObTableSchema &table_schema,
+    const ObCreateTabletSchema &create_table_schema,
     bool &need_create_sstable)
 {
   int ret = OB_SUCCESS;
   need_create_sstable = false;
-  if (OB_UNLIKELY(!table_schema.is_valid())) {
+  if (OB_UNLIKELY(!create_table_schema.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(table_schema));
+    LOG_WARN("invalid args", K(ret), K(create_table_schema));
   } else {
-    need_create_sstable = !(table_schema.is_user_hidden_table() || (table_schema.is_index_table() && !table_schema.can_read_index()));
+    need_create_sstable = !(create_table_schema.is_user_hidden_table()
+        || (create_table_schema.is_index_table() && !create_table_schema.can_read_index()));
   }
   return ret;
 }

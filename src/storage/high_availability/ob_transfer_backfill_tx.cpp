@@ -164,8 +164,10 @@ int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam
         // If source tablet is UNDEFINED, directly set dest tablet EMPTY, but keep
         // transfer table. Then the restore handler will schedule it to restore minor
         // without creating remote logical table.
+        // Remote logical table is no longer relyed needed during physical copy, just reset has tranfser table flag.
         if (OB_FAIL(dest_ls_->update_tablet_restore_status(tablet->get_tablet_meta().tablet_id_,
-                                                           ObTabletRestoreStatus::EMPTY))) {
+                                                           ObTabletRestoreStatus::EMPTY,
+                                                           true/* need reset tranfser flag */))) {
           LOG_WARN("fail to set empty", K(ret), KPC(tablet));
         } else {
           dest_ls_->get_ls_restore_handler()->try_record_one_tablet_to_restore(tablet->get_tablet_meta().tablet_id_);
@@ -1439,7 +1441,7 @@ int ObTransferReplaceTableTask::fill_empty_minor_sstable(
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
-  const ObStorageSchema *tablet_storage_schema = nullptr;
+  ObStorageSchema *tablet_storage_schema = nullptr;
   ObTableHandleV2 empty_minor_table_handle;
 
   if (IS_NOT_INIT) {
@@ -1473,7 +1475,7 @@ int ObTransferReplaceTableTask::fill_empty_minor_sstable(
         LOG_INFO("[TRANSFER_BACKFILL]succ fill empty minor sstable", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_,
             K(empty_minor_table_handle), K(start_scn), K(end_scn));
       }
-      ObTablet::free_storage_schema(allocator, tablet_storage_schema);
+      ObTabletObjLoadHelper::free(allocator, tablet_storage_schema);
     }
   }
   return ret;
@@ -1782,7 +1784,7 @@ int ObTransferReplaceTableTask::build_migration_param_(
   param.reset();
   ObTablet *src_tablet = nullptr;
   ObArenaAllocator allocator;
-  const ObStorageSchema *src_storage_schema = nullptr;
+  ObStorageSchema *src_storage_schema = nullptr;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;

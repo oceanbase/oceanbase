@@ -38,3 +38,4 @@ select * FROM t1  ORDER BY a desc LIMIT 8;
 select count(*) c FROM t1 WHERE a > 0 ORDER BY c LIMIT 3;
 select sum(a) c FROM t1 WHERE a > 0 ORDER BY c LIMIT 3;
 drop table t1;
+

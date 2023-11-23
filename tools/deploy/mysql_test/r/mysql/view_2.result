@@ -215,7 +215,7 @@ create table t1(c1 int);
 create view v as select c1 from t1;
 desc v;
 Field	Type	Null	Key	Default	Extra
-c1	int(11)	YES		NULL
+c1	int(11)	YES		NULL	
 drop table if exists t1,t2;
 drop view if exists v;
 create table t1(c1 int);
@@ -223,15 +223,15 @@ create table t2(c1 int);
 create view v as (select c1 from t1) union (select c1 from t2);
 desc v;
 Field	Type	Null	Key	Default	Extra
-c1	int(11)	YES		NULL
+c1	int(11)	YES		NULL	
 drop table if exists t1;
 drop view if exists v;
 create table t1(c1 int,c2 int);
 create view v as select c1,c2 from t1;
 desc v;
 Field	Type	Null	Key	Default	Extra
-c1	int(11)	YES		NULL
-c2	int(11)	YES		NULL
+c1	int(11)	YES		NULL	
+c2	int(11)	YES		NULL	
 alter table t1 drop column c2;
 desc v;
 ERROR 42S22: View 'view.v' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
@@ -253,13 +253,13 @@ create view vv as select c1,c2 from v;
 create or replace view v as select c1 from t1;
 desc v;
 Field	Type	Null	Key	Default	Extra
-c1	int(11)	YES		NULL
+c1	int(11)	YES		NULL	
 desc vv;
 ERROR 42S22: View 'view.vv' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
 create or replace view vv as select c1 from v;
 desc vv;
 Field	Type	Null	Key	Default	Extra
-c1	int(11)	NO
+c1	int(11)	NO			
 drop table if exists t1,t2,t3,t4;
 drop view if exists v,vv;
 create table t1(c1 int,c2 int);
@@ -269,13 +269,13 @@ create table t4(c1 int,c2 int);
 create view v as ((select * from t1) union (select c1,c2 from t2)) union (select * from t3);
 desc v;
 Field	Type	Null	Key	Default	Extra
-c1	int(11)	YES		NULL
-c2	int(11)	YES		NULL
+c1	int(11)	YES		NULL	
+c2	int(11)	YES		NULL	
 create view vv as (select * from v) union (select * from t4);
 desc vv;
 Field	Type	Null	Key	Default	Extra
-c1	int(11)	NO
-c2	int(11)	NO
+c1	int(11)	NO			
+c2	int(11)	NO			
 drop table if exists t1,t2;
 drop view if exists v;
 create table t1(c1 int,c2 int);
@@ -437,25 +437,25 @@ Outputs & filters:
       merge_directions([ASC])
   1 - output([t11.a]), filter(nil), rowset=16
       access([t11.a]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t11.a]), range(10 ; MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t11.a]), range(10 ; MAX), 
       range_cond([t11.a > 10])
   2 - output([t21.a]), filter(nil), rowset=16
       access([t21.a]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([t21.a]), range(10 ; MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([t21.a]), range(10 ; MAX), 
       range_cond([t21.a > 10])
 Used Hint:
 -------------------------------------
   /*+
-
+      
   */
 Qb name trace:
 -------------------------------------
-  stmt_id:0, stmt_type:T_EXPLAIN
+  stmt_id:0, stmt_type:T_EXPLAIN 
   stmt_id:1, SEL$1 > SEL$CFEA49FE > SEL$A7A036C9 > SEL$AC33F27C > SEL$21AFC505
   stmt_id:2, SEL$2
-Outline Data:
+Outline Data: 
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA

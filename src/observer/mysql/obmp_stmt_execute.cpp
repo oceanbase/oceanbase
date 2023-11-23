@@ -570,7 +570,7 @@ int ObMPStmtExecute::before_process()
     }
   }
   if (OB_FAIL(ret)) {
-    send_error_packet(ret, NULL);
+    send_error_packet(ret, NULL, (void *)(ctx_.get_reroute_info()));
     if (OB_ERR_PREPARE_STMT_CHECKSUM == ret) {
       force_disconnect();
       LOG_WARN("prepare stmt checksum error, disconnect connection", K(ret));
@@ -1784,7 +1784,7 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
   do_after_process(session, ctx_, async_resp_used);
 
   if (OB_FAIL(ret) && need_response_error && is_conn_valid()) {
-    send_error_packet(ret, NULL);
+    send_error_packet(ret, NULL, (void *)(ctx_.get_reroute_info()));
   }
 
   return ret;
@@ -1939,7 +1939,7 @@ int ObMPStmtExecute::process()
 
   if (OB_FAIL(ret) && is_conn_valid()) {
     if (need_response_error) {
-      send_error_packet(ret, NULL);
+      send_error_packet(ret, NULL, (void *)(ctx_.get_reroute_info()));
     }
     if (need_disconnect) {
       force_disconnect();

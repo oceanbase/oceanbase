@@ -1350,7 +1350,6 @@ int ObAccessPathEstimation::process_dynamic_sampling_estimation(ObOptimizerConte
 {
   int ret = OB_SUCCESS;
   LOG_TRACE("begin process dynamic sampling estimation", K(paths), K(is_inner_path));
-  OPT_TRACE("begin to process table dynamic sampling estimation");
   ObDSTableParam ds_table_param;
   ObSEArray<ObDSResultItem, 4> ds_result_items;
   bool only_ds_basic_stat = false;
@@ -1382,6 +1381,7 @@ int ObAccessPathEstimation::process_dynamic_sampling_estimation(ObOptimizerConte
   } else if (!only_ds_basic_stat && ds_paths.empty()) {
     //do nothing
   } else {
+    OPT_TRACE("begin to process table dynamic sampling estimation");
     ObArenaAllocator allocator("ObOpTableDS", OB_MALLOC_NORMAL_BLOCK_SIZE, ctx.get_session_info()->get_effective_tenant_id());
     ObDynamicSampling dynamic_sampling(ctx, allocator);
     int64_t start_time = ObTimeUtility::current_time();
@@ -1414,8 +1414,10 @@ int ObAccessPathEstimation::process_dynamic_sampling_estimation(ObOptimizerConte
                                                                   is_inner_path, ds_result_items))) {
       LOG_WARN("failed to estimate path rowcount by dynamic sampling", K(ret));
     }
+    OPT_TRACE("end to process table dynamic sampling estimation");
+    OPT_TRACE_TITLE("DYNAMIC SAMPLE RESULT");
+    OPT_TRACE(ds_result_items);
   }
-  OPT_TRACE("end to process table dynamic sampling estimation");
   return ret;
 }
 

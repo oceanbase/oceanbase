@@ -558,6 +558,20 @@ bool ObOptimizerUtil::is_expr_equivalent(const ObRawExpr *from,
   return found;
 }
 
+bool ObOptimizerUtil::is_exprs_equivalent(const common::ObIArray<ObRawExpr*> &from,
+                                          const common::ObIArray<ObRawExpr*> &to,
+                                          const EqualSets &equal_sets)
+{
+  bool b_ret = true;
+  if (from.count() != to.count()) {
+    b_ret = false;
+  }
+  for (int64_t i = 0; b_ret && i < from.count(); ++i) {
+    b_ret = is_expr_equivalent(from.at(i), to.at(i), equal_sets);
+  }
+  return b_ret;
+}
+
 bool ObOptimizerUtil::is_expr_equivalent(const ObRawExpr *from,
                                          const ObRawExpr *to)
 {
@@ -5892,6 +5906,9 @@ bool ObOptimizerUtil::is_lossless_type_conv(const ObExprResType &child_type, con
           is_lossless = (dst_type.get_scale() >= child_type.get_scale()
                          && dst_type.get_precision() >= child_type.get_precision());
         }
+      } else if (ObNumberTC == dst_tc) {
+        is_lossless = NUMBER_SCALE_UNKNOWN_YET == dst_type.get_scale()
+                      && PRECISION_UNKNOWN_YET == dst_type.get_precision();
       }
     }
   }
@@ -6038,6 +6055,9 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
             is_lossless = (dst_type.get_scale() >= child_type.get_scale()
                            && dst_type.get_precision() >= child_type.get_precision());
           }
+        } else if (ObNumberTC == dst_tc) {
+          is_lossless = NUMBER_SCALE_UNKNOWN_YET == dst_type.get_scale()
+                        && PRECISION_UNKNOWN_YET == dst_type.get_precision();
         }
       }
     }

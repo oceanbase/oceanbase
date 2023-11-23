@@ -5,10 +5,10 @@ set @@session.explicit_defaults_for_timestamp=off;
 #owner group: sql1
 
 #test:
-#create index objecting to columns
+#create index objecting to columns 
 ###TODO regenerate result file after physicalplan  output is ready
 --disable_query_log
---source mysql_test/include/index_quick_major.inc
+--source mysql_test/include/index_quick_major.inc 
 --real_sleep 1
 --disable_warnings
 drop table if exists t1;

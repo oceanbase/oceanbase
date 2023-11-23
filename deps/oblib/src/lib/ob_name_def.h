@@ -1003,6 +1003,7 @@
 #define N_JSON_EQUAL                        "json_equal"
 #define N_JSON_QUERY                        "json_query"
 #define N_JSON_EXISTS                       "json_exists"
+#define N_JSON_OBJECT_STAR                  "json_object_star"
 
 #define N_POINT                             "point"
 #define N_LINESTRING                        "linestring"

@@ -66,7 +66,7 @@ public:
   // used for small sstable
   int change_macro_id(const MacroBlockId &macro_block_id);
 
-  TO_STRING_KV(KP(allocator_), K_(last_key), K_(data_column_cnt), K_(data_blocks_cnt),
+  TO_STRING_KV(KP(allocator_), K_(last_key), K_(task_idx), K_(data_column_cnt), K_(data_blocks_cnt),
       K_(use_old_macro_block_count), K_(meta_block_offset), K_(meta_block_size),
       K_(last_macro_size), KP(macro_metas_), K_(is_inited));
   common::ObIAllocator *allocator_;
@@ -297,6 +297,7 @@ protected:
   bool is_inited_;
   bool is_closed_;
   ObDataStoreDesc *index_store_desc_;
+  // full_store_col_desc in data_store_desc is only used to generate skip index
   const ObDataStoreDesc *data_store_desc_;
   ObIndexBlockRowBuilder row_builder_;
   ObDatumRowkey last_rowkey_;

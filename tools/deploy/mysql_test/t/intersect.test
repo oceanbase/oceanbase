@@ -34,7 +34,7 @@ select * from t1 intersect all (select * from t2 where false);
 (select * from t1 where false) intersect all (select * from t2 where false) intersect (select * from t3 where false);
 
 
-#
+# 
 select c1 from t1 intersect select c1 from t1;
 --error 1064
 select c1 from t1 intersect all select c1 from t1;
@@ -102,3 +102,5 @@ insert into t8 values('cdxLVdvvJjcoHFBECqXKkRGoMXYgNsTpJRrqYaluQdfEeB00000',0,'R
 explain ((select c6 from t8 where c6 < 1000) except (select c6 from t8 where c6 > -1000) order by c6 limit 1000) union all (select  t8_alias1.c10 from t8 t8_alias1 limit 1);
 
 drop table t1,t2,t3,t4,t5,t6, t8;
+
+

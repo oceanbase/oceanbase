@@ -62,6 +62,8 @@ public:
   inline bool is_redefined() const { return schema_version_ != OB_INVALID_VERSION; }
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(schema_version), K_(orig_tablet_ids), K_(hidden_tablet_ids));
   bool is_valid() { return true; }
+  static int is_old_mds(const char *buf, const int64_t len, bool &is_old_mds);
+  static int skip_array_len(const char *buf, int64_t data_len, int64_t &pos);
   OB_UNIS_VERSION_V(1);
 
 public:
@@ -92,7 +94,7 @@ public:
   // common
   template<typename F>
   static int modify_tablet_binding_new_mds(ObLS &ls, const ObTabletID &tablet_id, const share::SCN &replay_scn, mds::BufferCtx &ctx, const bool for_old_mds, F op);
-  static bool has_lob_tablets(const obrpc::ObBatchCreateTabletArg &arg, const obrpc::ObCreateTabletInfo &info);
+  static int has_lob_tablets(const obrpc::ObBatchCreateTabletArg &arg, const obrpc::ObCreateTabletInfo &info, bool &has_lob);
   static int get_ls(const share::ObLSID &ls_id, ObLSHandle &ls_handle);
 private:
   const ObLS &ls_;

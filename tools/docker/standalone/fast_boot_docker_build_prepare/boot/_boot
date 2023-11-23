@@ -1,0 +1,30 @@
+#!/bin/bash
+CWD=$(cd `dirname $0`;pwd)
+cd "${CWD}"
+
+echo "================== prepare python env ... =================="
+yum install -y wget python3 && pip3 install pymysql
+if [ $? == 0 ]; then
+    echo "================== prepare python env ok  =================="
+else
+    echo "================== prepare python env failed  =================="
+    exit -1
+fi
+
+echo "================== install oceanbase rpm ... =================="
+cd /root/pkg && yum install -y *.rpm
+if [ $? == 0 ]; then
+    echo "================== install oceanbase rpm ok  =================="
+else
+    echo "================== install oceanbase rpm failed  =================="
+    exit -1
+fi
+
+cd "${CWD}"
+python3 ./init_store_for_fast_start.py /home/admin/oceanbase/bin/observer . /root/dest /root/dest/etc -d /root/store
+if [ $? == 0 ]; then
+    echo "================== prepare fast boot finish ===================="
+else
+    echo "================== prepare fast boot failed ===================="
+    exit -1
+fi

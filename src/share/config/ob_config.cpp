@@ -766,7 +766,7 @@ ObConfigMomentItem::ObConfigMomentItem(ObConfigContainer *container,
                                        const char *def,
                                        const char *info,
                                        const ObParameterAttr attr)
-    :  value_()
+    : value_()
 {
   MEMSET(value_str_, 0, sizeof(value_str_));
   MEMSET(value_reboot_str_, 0, sizeof(value_reboot_str_));

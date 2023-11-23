@@ -1140,6 +1140,7 @@ public:
       bool &is_not_barrier,
       ObSchemaOperationType &op_type) const;
   ObIAllocator &get_log_entry_task_base_allocator() { return log_entry_task_base_allocator_; };
+  void set_unserved() { set_unserved_(); }
 
   TO_STRING_KV(
       "state", serve_state_,

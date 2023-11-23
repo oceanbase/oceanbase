@@ -141,6 +141,8 @@ ObTenantMetaMemMgr::ObTenantMetaMemMgr(const uint64_t tenant_id)
     tx_ctx_memtable_pool_(tenant_id, MAX_TX_CTX_MEMTABLE_CNT_IN_OBJ_POOL, "TxCtxMemObj", ObCtxIds::DEFAULT_CTX_ID),
     lock_memtable_pool_(tenant_id, MAX_LOCK_MEMTABLE_CNT_IN_OBJ_POOL, "LockMemObj", ObCtxIds::DEFAULT_CTX_ID),
     meta_cache_io_allocator_(),
+    last_access_tenant_config_ts_(-1),
+    is_tablet_leak_checker_enabled_(false),
     is_inited_(false)
 {
   for (int64_t i = 0; i < ObITable::TableType::MAX_TABLE_TYPE; i++) {
@@ -192,6 +194,8 @@ int ObTenantMetaMemMgr::init()
     LOG_WARN("fail to create thread for t3m", K(ret));
   } else if (OB_FAIL(meta_cache_io_allocator_.init(OB_MALLOC_MIDDLE_BLOCK_SIZE, "StorMetaCacheIO", tenant_id_, mem_limit))) {
     LOG_WARN("fail to init storage meta cache io allocator", K(ret), K_(tenant_id), K(mem_limit));
+  } else if (OB_FAIL(fetch_tenant_config())) {
+    LOG_WARN("fail to fetch tenant config", K(ret));
   } else {
     init_pool_arr();
     is_inited_ = true;
@@ -199,6 +203,20 @@ int ObTenantMetaMemMgr::init()
 
   if (OB_UNLIKELY(!is_inited_)) {
     destroy();
+  }
+  return ret;
+}
+
+int ObTenantMetaMemMgr::fetch_tenant_config()
+{
+  int ret = OB_SUCCESS;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+  if (!tenant_config.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid tenant config", K(ret), K(tenant_id_));
+  } else {
+    is_tablet_leak_checker_enabled_ = tenant_config->_enable_trace_tablet_leak;
+    LOG_INFO("fetch tenant config", K(tenant_id_), K(is_tablet_leak_checker_enabled_));
   }
   return ret;
 }
@@ -1791,6 +1809,51 @@ int ObTenantMetaMemMgr::get_meta_mem_status(common::ObIArray<ObTenantMetaMemStat
   return ret;
 }
 
+int ObTenantMetaMemMgr::register_into_tb_map(const char *file, const int line,
+                                             const char *func, int32_t &index) {
+  int ret = OB_SUCCESS;
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+
+  if (OB_NOT_NULL(t3m) && !t3m->is_tablet_handle_leak_checker_enabled()) {
+    // do nothing
+  } else if (OB_FAIL(ObTabletHandleIndexMap::get_instance()->register_handle(file, line, func, index))) {
+    LOG_WARN("failed to register handle", KP(t3m), K(file), K(line), K(func), K(index));
+  }
+
+  return ret;
+}
+
+int ObTenantMetaMemMgr::inc_ref_in_leak_checker(const int32_t index)
+{
+  int ret = OB_SUCCESS;
+
+  if (!is_tablet_handle_leak_checker_enabled()) {
+    // do nothing
+  } else if (OB_FAIL(leak_checker_.inc_ref(index))) {
+    LOG_WARN("failed to inc ref in leak checker", K(index));
+  }
+
+  return ret;
+}
+
+int ObTenantMetaMemMgr::dec_ref_in_leak_checker(const int32_t index)
+{
+  int ret = OB_SUCCESS;
+
+  if (!is_tablet_handle_leak_checker_enabled()) {
+    // do nothing
+  } else if (OB_FAIL(leak_checker_.dec_ref(index))) {
+    LOG_WARN("failed to dec ref in leak checker", K(ret), K(index));
+  }
+
+  return ret;
+}
+
+bool ObTenantMetaMemMgr::is_tablet_handle_leak_checker_enabled()
+{
+  return is_tablet_leak_checker_enabled_;
+}
+
 int ObTenantMetaMemMgr::del_tablet(const ObTabletMapKey &key)
 {
   int ret = OB_SUCCESS;
@@ -2028,6 +2091,11 @@ int ObTenantMetaMemMgr::dump_tablet_info()
       FLOG_INFO("dump large tablet buffer", "buffer", static_cast<const void*>(ObMetaObjBufferHelper::get_obj_buffer(node)), KP(node));
     }
   }
+
+  if (is_tablet_handle_leak_checker_enabled()) {
+    leak_checker_.dump_pinned_tablet_info();
+  }
+
   return ret;
 }
 

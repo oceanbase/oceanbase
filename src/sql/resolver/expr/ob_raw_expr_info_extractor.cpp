@@ -576,8 +576,6 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
            || T_FUN_SYS_IS_JSON == expr.get_expr_type()
            || (T_FUN_SYS_JSON_MERGE_PATCH == expr.get_expr_type() && lib::is_oracle_mode())
            || T_FUN_SYS_JSON_OBJECT == expr.get_expr_type()
-           || T_FUN_SYS_XML_ELEMENT == expr.get_expr_type()
-           || T_FUN_SYS_XMLPARSE == expr.get_expr_type()
            || IS_LABEL_SE_POLICY_FUNC(expr.get_expr_type()))
         && OB_FAIL(expr.clear_flag(IS_CONST_EXPR))) {
       LOG_WARN("failed to clear flag", K(ret));

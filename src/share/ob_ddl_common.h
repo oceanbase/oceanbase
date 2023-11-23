@@ -95,6 +95,7 @@ enum ObDDLType
   ///< @note add new normal ddl type before this line
   DDL_MAX
 };
+const char *get_ddl_type(ObDDLType ddl_type);
 
 enum ObDDLTaskType
 {
@@ -134,6 +135,7 @@ enum ObDDLTaskStatus {
   CHECK_TABLE_EMPTY = 15,
   WAIT_CHILD_TASK_FINISH = 16,
   REPENDING = 17,
+  START_REFRESH_MVIEW_TASK = 18,
   FAIL = 99,
   SUCCESS = 100
 };
@@ -194,6 +196,9 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
       break;
     case ObDDLTaskStatus::REPENDING:
       str = "REPENDING";
+      break;
+    case ObDDLTaskStatus::START_REFRESH_MVIEW_TASK:
+      str = "START_REFRESH_MVIEW_TASK";
       break;
     case ObDDLTaskStatus::FAIL:
       str = "FAIL";
@@ -499,6 +504,9 @@ public:
   static int check_tenant_status_normal(
       ObISQLClient *proxy,
       const uint64_t check_tenant_id);
+  static int check_schema_version_refreshed(
+      const uint64_t tenant_id,
+      const int64_t target_schema_version);
 private:
   static int generate_order_by_str(
       const ObIArray<int64_t> &select_column_ids,
@@ -595,6 +603,29 @@ private:
 
 };
 
+typedef common::ObCurTraceId::TraceId DDLTraceId;
+class ObDDLEventInfo final
+{
+public:
+  ObDDLEventInfo();
+  ObDDLEventInfo(const int32_t sub_id);
+  ~ObDDLEventInfo() = default;
+  void record_in_guard();
+  void copy_event(const ObDDLEventInfo &other);
+  void init_sub_trace_id(const int32_t sub_id);
+  const DDLTraceId &get_trace_id() const { return trace_id_; }
+  const DDLTraceId &get_parent_trace_id() const { return parent_trace_id_; }
+  int set_trace_id(const DDLTraceId &trace_id) { return trace_id_.set(trace_id.get()); }
+  void reset();
+  TO_STRING_KV(K(addr_), K(event_ts_), K(sub_id_), K(trace_id_), K(parent_trace_id_));
+
+public:
+  ObAddr addr_;
+  int32_t sub_id_;
+  int64_t event_ts_;
+  DDLTraceId parent_trace_id_;
+  DDLTraceId trace_id_;
+};
 
 
 }  // end namespace share

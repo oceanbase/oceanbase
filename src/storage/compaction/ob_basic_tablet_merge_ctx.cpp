@@ -376,7 +376,7 @@ int ObBasicTabletMergeCtx::build_ctx(bool &finish_flag)
     if (OB_TABLET_NOT_EXIST != ret) {
       LOG_PRINT_WRAPPER("failed to get ls_handle/tablet_handle/rebuild_seq");
     }
-  } else if (ObTablet::check_transfer_seq_equal(*get_tablet(), get_transfer_seq())) {
+  } else if (OB_FAIL(ObTablet::check_transfer_seq_equal(*get_tablet(), get_transfer_seq()))) {
     LOG_WARN("new tablet transfer seq not eq with old transfer seq", K(ret),
         "new_tablet_meta", get_tablet()->get_tablet_meta(),
         "old_transfer_seq", get_transfer_seq());
@@ -552,7 +552,7 @@ bool ObBasicTabletMergeCtx::need_swap_tablet(const ObTablet &tablet,
 int ObBasicTabletMergeCtx::get_storage_schema()
 {
   int ret  = OB_SUCCESS;
-  const ObStorageSchema *schema_on_tablet = nullptr;
+  ObStorageSchema *schema_on_tablet = nullptr;
   if (OB_FAIL(get_tablet()->load_storage_schema(mem_ctx_.get_allocator(), schema_on_tablet))) {
     LOG_WARN("failed to load storage schema", K(ret), K_(tablet_handle));
   } else {
@@ -1004,7 +1004,9 @@ int ObBasicTabletMergeCtx::get_medium_compaction_info()
     static_param_.data_version_ = medium_info.data_version_;
     static_param_.is_rebuild_column_store_ = (medium_info.medium_merge_reason_ == ObAdaptiveMergePolicy::REBUILD_COLUMN_GROUP);
     static_param_.is_tenant_major_merge_ = medium_info.is_major_compaction();
-    static_param_.is_schema_changed_ = medium_info.is_schema_changed_;
+    if (medium_info.medium_compat_version_ >= ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V4) {
+      static_param_.is_schema_changed_ = medium_info.is_schema_changed_;
+    }
     static_param_.merge_reason_ = (ObAdaptiveMergePolicy::AdaptiveMergeReason)medium_info.medium_merge_reason_;
     FLOG_INFO("get storage schema to merge", "param", get_dag_param(), KPC_(static_param_.schema), K(medium_info));
   }

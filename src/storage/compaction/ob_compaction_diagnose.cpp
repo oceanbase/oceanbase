@@ -300,6 +300,9 @@ int ObIDiagnoseInfoMgr::get_with_param(const int64_t key, ObIDiagnoseInfo *out_i
       if (OB_HASH_NOT_EXIST != ret) {
         STORAGE_LOG(WARN, "failed to get info from map", K(ret), K(key));
       }
+    } else if (OB_ISNULL(info->info_param_)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "info_param is null", K(ret), K(info));
     } else {
       out_info->shallow_copy(info);
       if (OB_FAIL(info->info_param_->deep_copy(allocator, out_info->info_param_))) {
@@ -1283,9 +1286,11 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_major_merge(
   } else {
     LOG_TRACE("diagnose tablet major merge", K(ls_id), K(tablet_id), K(compaction_scn), K(max_sync_medium_scn), K(last_major_snapshot_version));
     if (last_major_snapshot_version < compaction_scn) {
+      // max_sync_medium_scn > last_major_snapshot_version means last compaction is not finished,
+      // this will be diagnosed in diagnose_tablet_medium_merge
       if (max_sync_medium_scn < compaction_scn
           && max_sync_medium_scn == last_major_snapshot_version) {
-        // last compaction finish
+        // now last compaction finish
         if (OB_TMP_FAIL(get_and_set_suspect_info(MEDIUM_MERGE, ls_id, tablet_id))) {
           LOG_WARN("failed get major merge suspect info", K(ret), K(ls_id));
         }
@@ -1304,7 +1309,7 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_major_merge(
           }
           ++diagnose_tablet_count_[COMPACTION_DIAGNOSE_MAJOR_NOT_SCHEDULE];
         }
-      } else if (max_sync_medium_scn == compaction_scn) {
+      } else if (max_sync_medium_scn >= compaction_scn) {
         if (tablet.get_snapshot_version() < compaction_scn) { // wait mini compaction or tablet freeze
           if (ObTimeUtility::current_time_ns() > compaction_scn + WAIT_MEDIUM_SCHEDULE_INTERVAL) {
             if (DIAGNOSE_TABELT_MAX_COUNT > diagnose_tablet_count_[COMPACTION_DIAGNOSE_MAJOR_NOT_SCHEDULE] && can_add_diagnose_info()) {

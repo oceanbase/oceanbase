@@ -110,3 +110,15 @@ docker run -d -p 2881:2881 -v $PWD/ob:/root/ob -v $PWD/obd:/root/.obd --name oce
 `oceanbase-ce` docker默认会将数据保存到 /root/ob 目录。必须同时绑定 /root/ob 和 /root/.obd 目录。如果仅仅绑定 /root/ob 目录的话，容器就没办法重启了，因为oceanbase-ce 是使用 [obd](https://github.com/oceanbase/obdeploy)来管理数据库集群的，而启动一个全新的docker容器时，里面没有任何数据库集群信息。
 
 docker -v 参数的详细说明可以参考 [docker volumn](https://docs.docker.com/storage/volumes/)。
+
+## 快速单机启动镜像构建
+在`tools/docker/standalone`目录下提供`fast_boot_docker_build.sh`脚本，通过该脚本可以构建快速启动镜像。在运行脚本之前，请首先修改`tools/docker/standalone/boot/_env`环境配置脚本：
+
+- 必须：将`MODE`配置项修改为`STANDALONE`
+- 可选：修改其余配置项
+
+修改完毕后，执行镜像构建脚本：
+
+- `./fast_boot_docker_build.sh <oceanbase_rpm_version>` 例如：`./fast_boot_docker_build.sh 4.2.1.0-100000102023092807`
+
+等待构建完毕后，可使用前述相同的方式启动、测试实例。
