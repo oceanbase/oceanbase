@@ -4958,6 +4958,10 @@ int ObTablet::get_mds_table_rec_log_scn(SCN &rec_scn)
   } else if (is_ls_inner_tablet()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("inner tablet does not have mds table", K(ret));
+  } else if (is_empty_shell()) {
+    // empty shell tablet is considered persisted and has no mds table
+    // however due to table pointer still hold the mds table, manually
+    // skip getting mds table from caller
   } else if (OB_FAIL(inner_get_mds_table(mds_table))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
