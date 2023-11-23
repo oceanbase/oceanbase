@@ -1306,7 +1306,7 @@ int ObLSTxCtxMgr::traverse_tx_to_submit_redo_log(ObTransID &fail_tx_id)
   int ret = OB_SUCCESS;
   RLockGuard guard(rwlock_);
   ObTxSubmitLogFunctor fn(ObTxSubmitLogFunctor::SUBMIT_REDO_LOG);
-  if (is_master_() && OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
+  if (!is_follower_() && OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
     if (OB_SUCCESS != fn.get_result()) {
       // get real ret code
       ret = fn.get_result();
@@ -1324,7 +1324,7 @@ int ObLSTxCtxMgr::traverse_tx_to_submit_next_log()
   int ret = OB_SUCCESS;
   RLockGuard guard(rwlock_);
   ObTxSubmitLogFunctor fn(ObTxSubmitLogFunctor::SUBMIT_NEXT_LOG);
-  if (is_master_() && OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
+  if (!is_follower_() && OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
     if (OB_SUCCESS != fn.get_result()) {
       // get real ret code
       ret = fn.get_result();
