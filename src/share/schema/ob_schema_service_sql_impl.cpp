@@ -4826,6 +4826,7 @@ int ObSchemaServiceSQLImpl::fetch_tables(
   const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
   const char *table_name = NULL;
   int64_t start_time = ObTimeUtility::current_time();
+  DEBUG_SYNC(BEFORE_FETCH_SIMPLE_TABLES);
   if (!check_inner_stat()) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", K(ret));
