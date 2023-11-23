@@ -97,11 +97,12 @@ TXN_FREE_ROUTE_MEMBERS(static, PRE_STATIC_DECODE, POST_STATIC_DECODE,
 TXN_FREE_ROUTE_MEMBERS(dynamic,PRE_DYNAMIC_DECODE, POST_DYNAMIC_DECODE,
                        op_sn_,
                        state_,
-                       flags_.v_,
+                       flags_.compat_for_tx_route_,
                        active_ts_,
                        active_scn_,
                        abort_cause_,
-                       can_elr_);
+                       can_elr_,
+                       flags_.for_serialize_v_);
 TXN_FREE_ROUTE_MEMBERS(parts,,,
                        parts_);
 // the fields 'dup with static' are required when preceding of txn is of query like
