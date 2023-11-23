@@ -1004,7 +1004,9 @@ int ObBasicTabletMergeCtx::get_medium_compaction_info()
     static_param_.data_version_ = medium_info.data_version_;
     static_param_.is_rebuild_column_store_ = (medium_info.medium_merge_reason_ == ObAdaptiveMergePolicy::REBUILD_COLUMN_GROUP);
     static_param_.is_tenant_major_merge_ = medium_info.is_major_compaction();
-    static_param_.is_schema_changed_ = medium_info.is_schema_changed_;
+    if (medium_info.medium_compat_version_ >= ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V4) {
+      static_param_.is_schema_changed_ = medium_info.is_schema_changed_;
+    }
     static_param_.merge_reason_ = (ObAdaptiveMergePolicy::AdaptiveMergeReason)medium_info.medium_merge_reason_;
     FLOG_INFO("get storage schema to merge", "param", get_dag_param(), KPC_(static_param_.schema), K(medium_info));
   }

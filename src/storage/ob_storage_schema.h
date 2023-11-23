@@ -233,7 +233,6 @@ public:
   virtual inline share::schema::ObTableMode get_table_mode_struct() const override { return table_mode_; }
   virtual inline share::schema::ObTableType get_table_type() const override { return table_type_; }
   virtual inline share::schema::ObIndexType get_index_type() const override { return index_type_; }
-  virtual inline share::schema::ObIndexStatus get_index_status() const override { return index_status_; }
   const common::ObIArray<ObStorageColumnSchema> &get_store_column_schemas() const { return column_array_; }
   const common::ObIArray<ObStorageColumnGroupSchema> &get_column_groups() const { return column_group_array_; }
   virtual inline common::ObRowStoreType get_row_store_type() const override { return row_store_type_; }
@@ -262,7 +261,7 @@ public:
 
   VIRTUAL_TO_STRING_KV(KP(this), K_(storage_schema_version), K_(version),
       K_(is_use_bloomfilter), K_(column_info_simplified), K_(compat_mode), K_(table_type), K_(index_type),
-      K_(index_status), K_(row_store_type), K_(schema_version),
+      K_(row_store_type), K_(schema_version),
       K_(column_cnt), K_(store_column_cnt), K_(tablet_size), K_(pctfree), K_(block_size), K_(progressive_merge_round),
       K_(master_key_id), K_(compressor_type), K_(encryption), K_(encrypt_key),
       "rowkey_cnt", rowkey_array_.count(), K_(rowkey_array), "column_cnt", column_array_.count(), K_(column_array),
@@ -333,8 +332,6 @@ public:
   share::schema::ObTableType table_type_;
   share::schema::ObTableMode table_mode_;
   share::schema::ObIndexType index_type_;
-  share::schema::ObIndexStatus index_status_;
-
   ObRowStoreType row_store_type_;
   int64_t schema_version_;
   int64_t column_cnt_; // include virtual generated column

@@ -1410,7 +1410,6 @@ int ObMigrationTabletParam::construct_placeholder_storage_schema_and_medium(
   storage_schema.table_type_ = ObTableType::USER_TABLE;
   //storage_schema.table_mode_
   storage_schema.index_type_ = ObIndexType::INDEX_TYPE_PRIMARY;
-  storage_schema.index_status_ = ObIndexStatus::INDEX_STATUS_AVAILABLE;
   storage_schema.row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
   storage_schema.schema_version_ = ObStorageSchema::STORAGE_SCHEMA_VERSION_V3;
   storage_schema.column_cnt_ = 1;
