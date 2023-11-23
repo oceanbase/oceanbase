@@ -4142,6 +4142,8 @@ def_table_schema(
     ('readable_scn', 'uint', 'false', '0'),
     ('sync_scn', 'uint', 'false', '0'),
     ('drop_scn', 'uint', 'false', '0'),
+    ('config_version', 'varchar:128', "false", ""),
+    ('bconfig_version', 'varchar:1024', "false", ""),
   ],
 )
 
