@@ -113,6 +113,10 @@ public:
   {
     return status_ >= RESTORE_START && status_ <= WAIT_RESTORE_TO_CONSISTENT_SCN;
   }
+  bool is_before_restore_to_consistent_scn() const
+  {
+    return status_ >= RESTORE_START && status_ < WAIT_RESTORE_TO_CONSISTENT_SCN;
+  }
   Status get_status() const { return status_; }
   int set_status(int32_t status);
 

@@ -2166,10 +2166,6 @@ int ObLSRestoreConsistentScnState::set_empty_for_transfer_tablets_()
       LOG_WARN("failed to get tablet status", K(ret), KPC(tablet));
     } else if (!is_commited && ObTabletStatus::TRANSFER_IN == user_data.tablet_status_.get_status()) {
       LOG_INFO("skip tablet which transfer in not commit", "tablet_id", tablet->get_tablet_meta().tablet_id_, K(user_data));
-    } else if (!tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
-      LOG_INFO("skip tablet which restore status is not full",
-               "tablet_id", tablet->get_tablet_meta().tablet_id_,
-               "ha_status", tablet->get_tablet_meta().ha_status_);
     } else if (OB_FAIL(ls_->update_tablet_restore_status(tablet->get_tablet_meta().tablet_id_,
                                                          restore_status,
                                                          true/* need reset tranfser flag */))) {
