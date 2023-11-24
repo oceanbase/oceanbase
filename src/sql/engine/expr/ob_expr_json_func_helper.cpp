@@ -13,6 +13,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "lib/ob_errno.h"
+#include "share/ob_json_access_utils.h"
 #include "sql/engine/expr/ob_expr_cast.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_datum_cast.h"
@@ -119,8 +120,8 @@ int ObJsonExprHelper::get_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
   ObExpr *json_arg = expr.args_[index];
   ObObjType val_type = json_arg->datum_meta_.type_;
   ObCollationType cs_type = json_arg->datum_meta_.cs_type_;
-
   bool is_oracle = lib::is_oracle_mode();
+  bool allow_partial_update = false;
 
   if (OB_UNLIKELY(OB_FAIL(json_arg->eval(ctx, json_datum)))) {
     LOG_WARN("eval json arg failed", K(ret));
@@ -131,6 +132,13 @@ int ObJsonExprHelper::get_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
     LOG_WARN("input type error", K(val_type));
   } else if (lib::is_mysql_mode() && OB_FAIL(ObJsonExprHelper::ensure_collation(val_type, cs_type))) {
     LOG_WARN("fail to ensure collation", K(ret), K(val_type), K(cs_type));
+  } else if (ob_is_json(val_type)
+      && OB_FAIL(ObJsonExprHelper::is_allow_partial_update(expr, ctx, json_datum->get_string(), allow_partial_update))) {
+    LOG_WARN("get partial updaet setting fail", K(ret));
+  } else if (allow_partial_update) {
+    if (OB_FAIL(get_json_for_partial_update(expr, *json_arg, ctx, allocator, *json_datum, j_base))) {
+      LOG_WARN("get_json_for_partial_update fail", K(ret), K(val_type));
+    }
   } else {
     ObString j_str;
     if (OB_FAIL(get_json_or_str_data(json_arg, ctx, allocator, j_str, is_null))) {
@@ -138,6 +146,7 @@ int ObJsonExprHelper::get_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
     } else if (is_null) {
     } else {
       ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(val_type);
+
       ObJsonInType expect_type = need_to_tree ? ObJsonInType::JSON_TREE : j_in_type;
       bool relax_json = (lib::is_oracle_mode() && relax);
       uint32_t parse_flag = relax_json ? ObJsonParser::JSN_RELAXED_FLAG : 0;
@@ -158,6 +167,103 @@ int ObJsonExprHelper::get_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
   return ret;
 }
 
+int ObJsonExprHelper::get_partial_json_bin(
+    ObIAllocator &allocator,
+    ObILobCursor *cursor,
+    ObJsonBinUpdateCtx *update_ctx,
+    ObIJsonBase *&j_base)
+{
+  INIT_SUCC(ret);
+  ObJsonBinCtx *bin_ctx = nullptr;
+  ObJsonBin *j_bin = nullptr;
+  if (OB_ISNULL(cursor)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cursor is null", KR(ret));
+  } else if (OB_ISNULL(update_ctx) && OB_ISNULL(update_ctx = OB_NEWx(ObJsonBinUpdateCtx, &allocator, &allocator))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc update ctx fail", K(ret));
+  } else if (OB_FALSE_IT(update_ctx->set_lob_cursor(cursor))) {
+  // build json bin
+  } else if (OB_ISNULL(bin_ctx = OB_NEWx(ObJsonBinCtx, &allocator))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc ctx fail", K(ret), K(sizeof(ObJsonBinCtx)));
+  } else if (OB_FALSE_IT(bin_ctx->update_ctx_ = update_ctx)) {
+  } else if (OB_FALSE_IT(bin_ctx->is_update_ctx_alloc_ = true)) {
+  } else if (OB_ISNULL(j_bin = OB_NEWx(ObJsonBin, &allocator, &allocator, bin_ctx, true))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc update ctx fail", K(ret));
+  } else if (OB_FAIL(j_bin->reset_iter())) {
+    LOG_WARN("fail to reset iter", K(ret));
+  } else {
+    j_base = j_bin;
+  }
+  return ret;
+}
+
+int ObJsonExprHelper::get_json_for_partial_update(
+    const ObExpr &expr,
+    const ObExpr &json_expr,
+    ObEvalCtx &ctx,
+    ObIAllocator &allocator,
+    ObDatum &json_datum,
+    ObIJsonBase *&j_base)
+{
+  INIT_SUCC(ret);
+  ObString lob_str = json_datum.get_string();
+  ObLobLocatorV2 locator(lob_str);
+  bool allow_partial_update = false;
+  ObString metas;
+  ObLobCursor *cursor = nullptr;
+  int64_t query_timeout_ts = ObTimeUtility::current_time() + 60 * USECS_PER_SEC;
+  ObLobManager *lob_mgr = MTL(ObLobManager*);
+  uint8_t root_type = 0;
+  if (lob_str.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("lob locator is empty", KR(ret));
+  } else if (OB_FAIL(get_session_query_timeout_ts(ctx, query_timeout_ts))) {
+    LOG_WARN("get_session_query_timeout fail", K(ret), K(locator));
+  } else if (locator.is_delta_temp_lob()) {
+    ObJsonDeltaLob delta_lob;
+    if (OB_FAIL(delta_lob.init(&allocator, locator, query_timeout_ts))) {
+      LOG_WARN("init json delta lob fail", K(ret), K(locator));
+    } else {
+      j_base = delta_lob.get_json_bin();
+    }
+  } else if (! locator.is_persist_lob() || locator.is_inrow()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("persis lob or no-delta inrow lob locator not support", KR(ret), K(locator));
+  } else if (OB_FAIL(lob_mgr->query(&allocator, locator, query_timeout_ts, false, nullptr, cursor))) {
+    LOG_WARN("build lob cursor fail", K(ret), K(locator));
+  } else if (OB_FAIL(cursor->read_i8(0, reinterpret_cast<int8_t*>(&root_type)))) {
+    LOG_WARN("read root type fail", KR(ret), KPC(cursor));
+  } else if (! ObJsonBin::is_doc_header(root_type)) {
+    // if root type not doc header, means that old json data.
+    // old json is not binary charset in lob, so can not use partial lob
+    ObString j_str;
+    if (cursor->has_one_chunk_with_all_data()) {
+      LOG_DEBUG("one chunk will all data", K(lob_str), K(root_type), KPC(cursor), K(json_datum), K(json_expr));
+      if (OB_FAIL(cursor->get_one_chunk_with_all_data(j_str))) {
+        LOG_WARN("get real data fail", KR(ret), K(json_datum), K(json_expr));
+      }
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, json_datum,
+                json_expr.datum_meta_, json_expr.obj_meta_.has_lob_header(), j_str))) {
+      LOG_WARN("get real data fail", KR(ret), K(json_datum), K(json_expr));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(
+          &allocator, j_str, ObJsonInType::JSON_BIN, ObJsonInType::JSON_TREE, j_base, 0))) {
+      LOG_WARN("get json base fail", K(ret), K(j_str));
+    }
+    cursor->~ObLobCursor();
+    cursor = nullptr;
+  } else if (OB_FAIL(get_partial_json_bin(allocator, cursor, nullptr, j_base))) {
+    LOG_WARN("fail to reset iter", K(ret));
+  } else if (OB_ISNULL(j_base)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get j_base is null", KR(ret), K(locator));
+  }
+  return ret;
+}
 
 int ObJsonExprHelper::get_json_val(const common::ObObj &data, ObExprCtx &ctx,
                                    bool is_bool, common::ObIAllocator *allocator,
@@ -608,25 +714,36 @@ int ObJsonExprHelper::json_base_replace(ObIJsonBase *json_old, ObIJsonBase *json
                                         ObIJsonBase *&json_doc)
 {
   INIT_SUCC(ret);
+  ObIAllocator *allocator = json_doc->get_allocator();
+  ObIJsonBase *parent = nullptr;
+  ObIJsonBase *new_node = json_new;
+
   if (json_old == json_doc) {
     json_doc = json_new;
   } else {
-    ObIJsonBase *json_old_tree = json_old;
-    ObIAllocator *allocator = json_doc->get_allocator();
-    if (!json_old->is_tree() &&
-        ObJsonBaseFactory::transform(allocator, json_old, ObJsonInType::JSON_TREE, json_old_tree)) {
-      LOG_WARN("fail to transform to tree", K(ret), K(*json_old));
-    } else {
-      ObIJsonBase *parent = static_cast<ObJsonNode *>(json_old_tree)->get_parent();
-      if(OB_NOT_NULL(parent) && parent != json_doc) {
-        if (OB_FAIL(parent->replace(json_old_tree, json_new))) {
-          LOG_WARN("json base replace failed", K(ret));
-        }
-      } else {
-        if (OB_FAIL(json_doc->replace(json_old_tree, json_new))) {
-          LOG_WARN("json base replace failed", K(ret));
-        }
+    if (json_doc->is_bin()) {
+      if (OB_NOT_NULL(json_new) && ! json_new->is_bin() && OB_FAIL(ObJsonBaseFactory::transform(allocator, json_new, ObJsonInType::JSON_BIN, new_node))) {
+        LOG_WARN("fail to transform to tree", K(ret), K(json_new));
       }
+    } else {
+      if (OB_NOT_NULL(json_new) && ! json_new->is_tree() && ObJsonBaseFactory::transform(allocator, json_new, ObJsonInType::JSON_TREE, new_node)) {
+        LOG_WARN("fail to transform to tree", K(ret), K(*json_old));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(json_old->get_parent(parent))) {
+      LOG_WARN("get old parent fail", K(ret));
+    } else if(OB_NOT_NULL(parent)) {
+      if (OB_FAIL(parent->replace(json_old, new_node))) {
+        LOG_WARN("json base replace failed", K(ret));
+      }
+    } else if (OB_FAIL(json_doc->replace(json_old, new_node))) {
+      LOG_WARN("json base replace failed", K(ret));
+    }
+
+    if (OB_SUCC(ret) && OB_FAIL(refresh_root_when_bin_rebuild_all(json_doc))) {
+      LOG_WARN("refresh_root_when_bin_rebuild_all fail", K(ret));
     }
   }
   return ret;
@@ -774,7 +891,8 @@ int ObJsonExprHelper::is_json_zero(const ObString& data, int& result)
 {
   INIT_SUCC(ret);
   int tmp_result = 0;
-  ObJsonBin j_bin(data.ptr(), data.length());
+  ObJsonBinCtx ctx;
+  ObJsonBin j_bin(data.ptr(), data.length(), &ctx);
   if (data.length() == 0) {
     result = 1; 
   } else if (OB_FAIL(j_bin.reset_iter())) {
@@ -1764,6 +1882,358 @@ int ObJsonExprHelper::pre_default_value_check(ObObjType dst_type, ObString time_
   }
   return ret;
 }
+
+/********** ObJsonExprHelper for json partial update  ****************/
+int ObJsonExprHelper::pack_json_diff_res(
+    const ObExpr &expr,
+    ObEvalCtx &ctx,
+    ObIAllocator &temp_allocator,
+    ObIJsonBase *json_doc,
+    ObDatum &res)
+{
+  INIT_SUCC(ret);
+  ObJsonBin *bin = nullptr;
+  ObJsonDeltaLob json_delta_lob;
+  char *res_buf = nullptr;
+  int64_t res_buf_len = 0;
+  int64_t pos = 0;
+  if (OB_ISNULL(json_doc)) {
+    res.set_null();
+  } else if (! json_doc->is_bin()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("not json binary", K(ret), K(json_doc));
+  } else if (OB_FALSE_IT(bin = static_cast<ObJsonBin*>(json_doc))) {
+  } else if (OB_FAIL(json_delta_lob.init(bin))) {
+    LOG_WARN("init fail", K(ret), K(bin));
+  } else if (OB_FAIL(json_delta_lob.check_binary_diff())) {
+    LOG_WARN("init fail", K(ret), K(bin));
+  } else if (OB_FALSE_IT(res_buf_len = json_delta_lob.get_serialize_size())) {
+  } else if (OB_ISNULL(res_buf = expr.get_str_res_mem(ctx, res_buf_len))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc memory for delta lob locator fail", K(ret), K(res_buf_len));
+  } else if (OB_FAIL(json_delta_lob.serialize(res_buf, res_buf_len, pos))) {
+    LOG_WARN("serialize fail", KR(ret), K(res_buf_len));
+  } else {
+    res.set_string(res_buf, res_buf_len);
+  }
+  return ret;
+}
+
+int ObJsonExprHelper::pack_json_res(
+    const ObExpr &expr,
+    ObEvalCtx &ctx,
+    ObIAllocator &temp_allocator,
+    ObIJsonBase *json_doc,
+    ObDatum &res)
+{
+  INIT_SUCC(ret);
+  bool shoudl_pack_diff = false;
+  ObJsonBin *json_bin = nullptr;
+  if (OB_ISNULL(json_doc)) {
+  } else if (! json_doc->is_bin()) {
+  } else if (OB_FALSE_IT(json_bin = static_cast<ObJsonBin*>(json_doc))) {
+  } else if (OB_FAIL(json_bin->should_pack_diff(shoudl_pack_diff))) {
+    LOG_WARN("get should_pack_diff fail", K(ret));
+  }
+
+  if (OB_ISNULL(json_doc)) {
+    res.set_null();
+  } else if (shoudl_pack_diff) {
+    if (OB_FAIL(ObJsonExprHelper::pack_json_diff_res(expr, ctx, temp_allocator, json_doc, res))) {
+      LOG_WARN("pack diff fail", K(ret));
+    }
+  } else {
+    ObString str;
+    if (OB_FAIL(ObJsonWrapper::get_raw_binary(json_doc, str, &temp_allocator))) {
+      LOG_WARN("json_set result to binary failed", K(ret));
+    } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, str))) {
+      LOG_WARN("fail to pack json result", K(ret));
+    }
+  }
+  return ret;
+}
+
+
+int ObJsonExprHelper::is_allow_partial_update(
+    const ObExpr &expr,
+    ObEvalCtx &ctx,
+    const ObString &locator_str,
+    bool &allow_partial_update)
+{
+  INIT_SUCC(ret);
+  ObString option;
+  ObLobLocatorV2 locator(locator_str);
+  sql::ObSQLSessionInfo *session = nullptr;
+  if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is NULL", K(ret));
+  // 1. is delta lob
+  // 2. perisit outrow lob
+  } else if (! locator.is_delta_temp_lob() && ! (locator.is_persist_lob() && ! locator.is_inrow())) {
+  } else if (is_json_partial_update_mode(expr)) {
+    option = session->get_log_row_value_option();
+    allow_partial_update = option.case_compare(OB_LOG_ROW_VALUE_PARTIAL_JSON) == 0
+        || option.case_compare(OB_LOG_ROW_VALUE_PARTIAL_ALL) == 0;
+  }
+  return ret;
+}
+
+bool ObJsonExprHelper::is_json_partial_update_mode(const ObExpr &expr)
+{
+  return (expr.extra_ & OB_JSON_PARTIAL_UPDATE_ALLOW) != 0;
+}
+
+int ObJsonExprHelper::refresh_root_when_bin_rebuild_all(ObIJsonBase *j_base)
+{
+  INIT_SUCC(ret);
+  ObJsonBin *j_bin = nullptr;
+  ObJsonBinUpdateCtx *update_ctx = nullptr;
+  if (OB_ISNULL(j_base)) {
+  } else if (! j_base->is_bin()) {
+  } else if (OB_FALSE_IT(j_bin = static_cast<ObJsonBin*>(j_base))) {
+  } else if (OB_ISNULL(update_ctx = j_bin->get_update_ctx())) {
+  } else if (! update_ctx->is_rebuild_all()) {
+  } else if (OB_FAIL(j_bin->reset(0))) {
+    LOG_WARN("reset fail", K(ret), K(*j_bin));
+  }
+  return ret;
+}
+
+int ObJsonExprHelper::init_json_expr_extra_info(
+    ObIAllocator *allocator,
+    const ObRawExpr &raw_expr,
+    const ObExprOperatorType type,
+    ObExpr &rt_expr)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t extra = raw_expr.get_extra();
+  if (! is_json_partial_update_mode(extra)) { // only used for json partial update now
+  } else {
+    rt_expr.extra_ = extra;
+  }
+  return ret;
+}
+
+int ObJsonExprHelper::get_session_query_timeout_ts(ObEvalCtx &ctx, int64_t &timeout_ts)
+{
+  int ret = OB_SUCCESS;
+  sql::ObSQLSessionInfo *session = nullptr;
+  if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is NULL", K(ret));
+  } else {
+    timeout_ts = session->get_query_timeout_ts();
+  }
+  return ret;
+}
+
+/********** ObJsonExprHelper for json partial update  ****************/
+
+
+/********** ObJsonDeltaLob ****************/
+
+int ObJsonDeltaLob::init(ObJsonBin *j_bin)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(update_ctx_ = j_bin->get_update_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("update ctx is null", K(ret), KPC(j_bin));
+  } else {
+    cursor_ = static_cast<ObLobCursor*>(update_ctx_->cursor_);
+    partial_data_ = cursor_->partial_data_;
+  }
+  return ret;
+}
+
+int ObJsonDeltaLob::init(ObIAllocator *allocator, ObLobLocatorV2 locator, int64_t query_timeout_ts)
+{
+  int ret = OB_SUCCESS;
+  allocator_ = allocator;
+  query_timeout_ts_ = query_timeout_ts;
+  if (OB_FAIL(deserialize(locator))) {
+    LOG_WARN("deserialize json delta lob fail", K(ret), K(locator));
+  }
+  return ret;
+}
+
+int64_t ObJsonDeltaLob::get_lob_diff_serialize_size() const
+{
+  int64_t len = 0;
+  // binary diff (lob diff)
+  const ObJsonBinaryDiffArray &binary_diffs = update_ctx_->binary_diffs_;
+  len += sizeof(ObLobDiff) * binary_diffs.count();
+
+  // json diff
+  const ObJsonDiffArray &json_diffs = update_ctx_->json_diffs_;
+  ObJsonDiffHeader json_diff_header;
+  json_diff_header.cnt_ = json_diffs.count();
+  len += json_diff_header.get_serialize_size();
+  for (int i = 0; i < json_diffs.count(); ++i) {
+    const ObJsonDiff& diff = json_diffs[i];
+    len += json_diffs[i].get_serialize_size();
+  }
+  return len;
+}
+
+uint32_t ObJsonDeltaLob::get_lob_diff_cnt() const
+{
+  return  update_ctx_->binary_diffs_.count();
+}
+
+int64_t ObJsonDeltaLob::get_partial_data_serialize_size() const
+{
+  return nullptr == partial_data_ ? 0 : partial_data_->get_serialize_size();
+}
+
+int ObJsonDeltaLob::check_binary_diff() const
+{
+  INIT_SUCC(ret);
+  for (int i = 0; OB_SUCC(ret) && i < partial_data_->index_.count(); ++i) {
+    ObLobChunkIndex &chunk_index = partial_data_->index_[i];
+    uint64_t chunk_start_offset = chunk_index.offset_;
+    uint64_t chunk_end_offset = chunk_index.offset_ + chunk_index.byte_len_;
+    uint64_t max_end_offset = chunk_start_offset + partial_data_->chunk_size_;
+    bool is_chunk_updated = false;
+    for (int j = 0; ! chunk_index.is_add_ && j < update_ctx_->binary_diffs_.count(); ++j) {
+      const ObJsonBinaryDiff &diff = update_ctx_->binary_diffs_[j];
+      uint64_t diff_start_offset = diff.dst_offset_;
+      uint64_t diff_end_offset = diff.dst_offset_ + diff.dst_len_;
+      if (diff_start_offset >= chunk_start_offset && diff_start_offset < chunk_end_offset) {
+        is_chunk_updated = true;
+      } else if (diff_end_offset > chunk_start_offset && diff_end_offset <= chunk_end_offset) {
+        is_chunk_updated = true;
+      } else if (diff_start_offset <= chunk_start_offset &&  chunk_end_offset <= diff_end_offset) {
+        is_chunk_updated = true;
+      }
+    }
+    // if it should be updated and it's exist chunk, but no modified flag and old data, this is unexpected.
+    if (is_chunk_updated
+        && ! chunk_index.is_add_ // exist chunk
+        && ! (chunk_index.is_modified_ && chunk_index.old_data_idx_ >= 0))  { // no modified flag and old data
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("old data not set", KR(ret), K(i), K(chunk_index));
+    }
+  }
+  return ret;
+}
+
+int ObJsonDeltaLob::serialize_partial_data(char* buf, const int64_t buf_len, int64_t& pos) const
+{
+  INIT_SUCC(ret);
+  if (OB_ISNULL(partial_data_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("partial_data_ is null", KR(ret));
+  } else if (OB_FAIL(partial_data_->serialize(buf, buf_len, pos))) {
+    LOG_WARN("serialize fail", K(ret), K(buf_len), K(pos));
+  }
+  return ret;
+}
+
+int ObJsonDeltaLob::deserialize_partial_data(ObLobDiffHeader *diff_header)
+{
+  INIT_SUCC(ret);
+  ObLobAccessParam *param = nullptr;
+  char *buf = diff_header->data_;
+  int64_t data_len = diff_header->persist_loc_size_;
+  int64_t pos = 0;
+  ObLobLocatorV2 locator;
+  ObLobManager* lob_mgr = MTL(ObLobManager*);
+  if (OB_ISNULL(partial_data_ = OB_NEWx(ObLobPartialData, allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc lob param fail", K(ret), "size", sizeof(ObLobPartialData));
+  } else if (OB_FAIL(partial_data_->init())) {
+    LOG_WARN("map create fail", K(ret));
+  } else if (OB_FAIL(partial_data_->deserialize(buf, data_len, pos))) {
+    LOG_WARN("deserialize fail", K(ret), K(data_len), K(pos), KPC(diff_header));
+  } else if (OB_FALSE_IT(locator.assign_buffer(partial_data_->locator_.ptr(), partial_data_->locator_.length()))) {
+  } else if (OB_FAIL(lob_mgr->query(allocator_, locator,
+                    query_timeout_ts_, false, partial_data_, cursor_))) {
+    LOG_WARN("build_lob_param fail", K(ret));
+  }
+  return ret;
+}
+
+int ObJsonDeltaLob::serialize_lob_diffs(char* buf, const int64_t buf_len, ObLobDiffHeader *diff_header) const
+{
+  int ret = OB_SUCCESS;
+  char *diff_data_ptr = diff_header->get_inline_data_ptr();
+  ObLobDiff *lob_diffs = diff_header->get_diff_ptr();
+  int64_t data_len = buf_len - (diff_data_ptr - buf);
+  int64_t data_pos = 0;
+
+  for (int i = 0; OB_SUCC(ret) && i < diff_header->diff_cnt_; ++i) {
+    const ObJsonBinaryDiff &diff = update_ctx_->binary_diffs_[i];
+    ObLobDiff *lob_diff = new (lob_diffs + i) ObLobDiff();
+    lob_diff->type_ = get_diff_type();
+    lob_diff->dst_offset_ = diff.dst_offset_;
+    lob_diff->dst_len_ = diff.dst_len_;
+  }
+
+  const ObJsonDiffArray &json_diffs = update_ctx_->json_diffs_;
+  ObJsonDiffHeader json_diff_header;
+  json_diff_header.cnt_ = json_diffs.count();
+  if (OB_FAIL(json_diff_header.serialize(diff_data_ptr, data_len, data_pos))) {
+    LOG_WARN("serialize json diff header fail", KR(ret), K(buf_len), K(data_pos));
+  }
+  for (int i = 0; OB_SUCC(ret) && i < json_diffs.count(); ++i) {
+    const ObJsonDiff& diff = json_diffs[i];
+    if (OB_FAIL(diff.serialize(diff_data_ptr, data_len, data_pos))) {
+      LOG_WARN("serialize json diff fail", KR(ret), K(i), K(buf_len), K(data_pos), K(json_diffs));
+    }
+  }
+  return ret;
+}
+
+int ObJsonDeltaLob::deserialize_lob_diffs(char* buf, const int64_t buf_len, ObLobDiffHeader *diff_header)
+{
+  INIT_SUCC(ret);
+  ObJsonBinUpdateCtx *update_ctx = nullptr;
+  ObLobDiff *lob_diffs = nullptr;
+  char *data_ptr = nullptr;
+  if (OB_ISNULL(update_ctx_ = OB_NEWx(ObJsonBinUpdateCtx, allocator_, allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc update ctx fail", K(ret), "size", sizeof(ObJsonBinUpdateCtx));
+  } else if (OB_ISNULL(data_ptr = diff_header->get_inline_data_ptr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("data_ptr is null", K(ret), KPC(diff_header));
+  } else if (OB_ISNULL(lob_diffs = diff_header->get_diff_ptr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("lob_diffs is null", K(ret), KPC(diff_header));
+  } else {
+    int64_t data_len = buf_len - (data_ptr - buf);
+    int64_t data_pos = 0;
+    for (int64_t i = 0 ; OB_SUCC(ret) && i < diff_header->diff_cnt_; ++i) {
+      ObLobDiff &lob_diff = lob_diffs[i];
+      ObJsonBinaryDiff binary_diff;
+      binary_diff.dst_offset_ = lob_diff.dst_offset_;
+      binary_diff.dst_len_ = lob_diff.dst_len_;
+      if (OB_FAIL(update_ctx_->binary_diffs_.push_back(binary_diff))) {
+        LOG_WARN("push diff fail", KR(ret), K(lob_diff), K(binary_diff), K(i), KPC(diff_header));
+      }
+    }
+
+    ObJsonDiffHeader json_diff_header;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(json_diff_header.deserialize(data_ptr, data_len, data_pos))) {
+      LOG_WARN("deserialize json diff header fail", K(ret), K(data_len), K(data_pos), K(json_diff_header));
+    }
+    for (int64_t i = 0 ; OB_SUCC(ret) && i < json_diff_header.cnt_; ++i) {
+      ObJsonDiff json_diff;
+      if (OB_FAIL(json_diff.deserialize(data_ptr, data_len, data_pos))) {
+        LOG_WARN("deserialize fail", K(ret), K(i), K(json_diff_header), K(data_len), K(data_pos));
+      } else if (OB_FAIL(update_ctx_->json_diffs_.push_back(json_diff))) {
+        LOG_WARN("push diff fail", KR(ret), K(i), K(json_diff), K(i), K(json_diff_header), KPC(diff_header));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObJsonExprHelper::get_partial_json_bin(*allocator_, cursor_, update_ctx_, j_base_))) {
+      LOG_WARN("get_partial_json_bin fail", K(ret));
+    }
+  }
+  return ret;
+}
+
+/********** ObJsonDeltaLob ****************/
 
 }
 }

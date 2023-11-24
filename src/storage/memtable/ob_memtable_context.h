@@ -337,6 +337,7 @@ public:
   virtual ObOBJLockCallback *alloc_table_lock_callback(ObIMvccCtx &ctx,
                                                        ObLockMemtable *memtable) override;
   virtual void free_table_lock_callback(ObITransCallback *cb) override;
+  virtual void free_ext_info_callback(ObITransCallback *cb) override;
   virtual common::ObIAllocator &get_query_allocator();
   virtual void inc_lock_for_read_retry_count();
   // When row lock conflict occurs in a remote execution, record the trans id in

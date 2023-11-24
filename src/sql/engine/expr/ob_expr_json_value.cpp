@@ -15,6 +15,7 @@
 #include "ob_expr_json_value.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "share/object/ob_obj_cast.h"
+#include "share/ob_json_access_utils.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "share/object/ob_obj_cast_util.h"
 #include "share/object/ob_obj_cast.h"
@@ -1467,7 +1468,7 @@ int ObExprJsonValue::cast_to_json(common::ObIAllocator *allocator,
   if (OB_ISNULL(j_base)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("json base is null", K(ret));
-  } else if (CAST_FAIL(j_base->get_raw_binary(val, allocator))) {
+  } else if (CAST_FAIL(ObJsonWrapper::get_raw_binary(j_base, val, allocator))) {
     is_type_cast = 1;
     LOG_WARN("failed to get raw binary", K(ret));
   }

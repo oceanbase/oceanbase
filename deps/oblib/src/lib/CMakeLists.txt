@@ -99,6 +99,7 @@ ob_set_subtarget(oblib_lib common_mixed
   hash/ob_hashutils.cpp
   hash/xxhash.c
   hash_func/murmur_hash.cpp
+  lob/ob_lob_base.cpp
   json/ob_json.cpp
   json/ob_json_print_utils.cpp
   json/ob_yson.cpp
@@ -107,6 +108,7 @@ ob_set_subtarget(oblib_lib common_mixed
   json_type/ob_json_bin.cpp
   json_type/ob_json_base.cpp
   json_type/ob_json_parse.cpp
+  json_type/ob_json_diff.cpp
   lds/ob_lds_define.cpp
   net/ob_addr.cpp
   net/ob_net_util.cpp

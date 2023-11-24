@@ -14,6 +14,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_keys.h"
 #include "ob_expr_json_func_helper.h"
+#include "share/ob_json_access_utils.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
@@ -87,7 +88,7 @@ int ObExprJsonKeys::get_keys_from_wrapper(ObIJsonBase *json_doc,
     iter.next();
   }
   
-  if (OB_FAIL(res_array.get_raw_binary(str, allocator))) {
+  if (OB_FAIL(ObJsonWrapper::get_raw_binary(&res_array, str, allocator))) {
     LOG_WARN("json_keys get result binary failed", K(ret));
   }
   return ret;

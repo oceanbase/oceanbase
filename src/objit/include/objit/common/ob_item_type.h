@@ -2276,6 +2276,7 @@ typedef enum ObItemType
   T_DECORRELATE,
   T_NO_DECORRELATE,
   T_DBLINK_UDF,
+  T_COLUMN_ADD_WITH_LOB_PARAMS,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

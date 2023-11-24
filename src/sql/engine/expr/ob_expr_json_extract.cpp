@@ -14,6 +14,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_extract.h"
 #include "ob_expr_json_func_helper.h"
+#include "share/ob_json_access_utils.h"
 #include "lib/json_type/ob_json_tree.h"
 
 using namespace oceanbase::common;
@@ -194,7 +195,7 @@ int ObExprJsonExtract::eval_json_extract(const ObExpr &expr, ObEvalCtx &ctx, ObD
       ObString raw_str;
       if (OB_FAIL(ret)) {
         LOG_WARN("json extarct get results failed", K(ret));
-      } else if (OB_FAIL(jb_res->get_raw_binary(raw_str, &allocator))) {
+      } else if (OB_FAIL(ObJsonWrapper::get_raw_binary(jb_res, raw_str, &allocator))) {
         LOG_WARN("json extarct get result binary failed", K(ret));
       } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_str))) {
         LOG_WARN("fail to pack json result", K(ret));

@@ -76,6 +76,7 @@ public:
   }
   OB_INLINE void set_parent(ObJsonNode *parent) { parent_ = parent; }
   OB_INLINE ObJsonNode *get_parent() { return parent_; }
+  OB_INLINE int get_parent(ObIJsonBase *&parent) const override { parent = parent_; return OB_SUCCESS; }
   virtual bool is_scalar() const { return false; }
   virtual bool is_number() const { return false; }
   virtual uint32_t depth() const = 0;

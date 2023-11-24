@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/aggregate/ob_aggregate_processor.h"
 #include "share/object/ob_obj_cast.h"
+#include "share/ob_json_access_utils.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr_add.h"
 #include "sql/engine/expr/ob_expr_minus.h"
@@ -6420,7 +6421,7 @@ int ObAggregateProcessor::get_json_arrayagg_result(const ObAggrInfo &aggr_info,
       ret = OB_SUCCESS;
       ObString str;
       // output res
-      if (OB_FAIL(json_array.get_raw_binary(str, &aggr_alloc_))) {
+      if (OB_FAIL(ObJsonWrapper::get_raw_binary(&json_array, str, &aggr_alloc_))) {
         LOG_WARN("get result binary failed", K(ret));
       } else {
         ObTextStringDatumResult text_result(ObJsonType, aggr_info.expr_->obj_meta_.has_lob_header(), &concat_result);
@@ -6528,7 +6529,7 @@ int ObAggregateProcessor::get_ora_json_arrayagg_result(const ObAggrInfo &aggr_in
         }
       } else if (ob_is_json(rsp_type)) {
         ObString raw_binary_str;
-        if (OB_FAIL(json_array.get_raw_binary(raw_binary_str, &tmp_alloc))) {
+        if (OB_FAIL(ObJsonWrapper::get_raw_binary(&json_array, raw_binary_str, &aggr_alloc_))) {
           LOG_WARN("get result binary failed", K(ret));
         } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(*aggr_info.expr_, eval_ctx_, concat_result, raw_binary_str, &aggr_alloc_))) {
           LOG_WARN("fail to pack res result.", K(ret));
@@ -6682,7 +6683,7 @@ int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
       json_object.stable_sort();
       json_object.unique();
       // output res
-      if (OB_FAIL(json_object.get_raw_binary(str, &aggr_alloc_))) {
+      if (OB_FAIL(ObJsonWrapper::get_raw_binary(&json_object, str, &aggr_alloc_))) {
         LOG_WARN("get result binary failed", K(ret));
       } else {
         ObTextStringDatumResult text_result(ObJsonType, aggr_info.expr_->obj_meta_.has_lob_header(), &concat_result);
@@ -7068,7 +7069,7 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
         }
       } else if (ob_is_json(rsp_type)) {
         ObString raw_binary_str;
-        if (OB_FAIL(j_obj.get_raw_binary(raw_binary_str, &tmp_alloc))) {
+        if (OB_FAIL(ObJsonWrapper::get_raw_binary(&j_obj, raw_binary_str, &aggr_alloc_))) {
           LOG_WARN("get result binary failed", K(ret));
         } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(*aggr_info.expr_, eval_ctx_, concat_result, raw_binary_str, &aggr_alloc_))) {
           LOG_WARN("fail to pack res result.", K(ret));

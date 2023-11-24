@@ -101,6 +101,12 @@ private:
                            TableLockRedoDataNode &redo,
                            const bool log_for_lock_node,
                            bool &fake_fill);
+  int fill_ext_info_redo(ObITransCallbackIterator &cursor,
+                         ObMutatorWriter &mmw,
+                         RedoDataNode &redo,
+                         const bool log_for_lock_node,
+                         bool &fake_fill);
+
   bool check_dup_tablet_(const ObITransCallback * callback_ptr) const;
   void bug_detect_for_logging_blocked_();
 private:

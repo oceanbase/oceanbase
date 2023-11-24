@@ -19,6 +19,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "share/object/ob_obj_cast_util.h"
 #include "share/object/ob_obj_cast.h"
+#include "share/ob_json_access_utils.h"
 #include "sql/engine/expr/ob_expr_cast.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
@@ -540,7 +541,7 @@ int ObExprJsonQuery::set_result(ObObjType dst_type,
       LOG_WARN("json extarct get results failed", K(ret));
     } else if (OB_FAIL(ObJsonBaseFactory::transform(allocator, jb_res, ObJsonInType::JSON_BIN, jb_res_bin))) { // to BIN
       LOG_WARN("fail to transform to tree", K(ret));
-    } else if (OB_FAIL(jb_res_bin->get_raw_binary(raw_str, allocator))) {
+    } else if (OB_FAIL(ObJsonWrapper::get_raw_binary(jb_res_bin, raw_str, allocator))) {
       LOG_WARN("json extarct get result binary failed", K(ret));
     } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_str))) {
       LOG_WARN("fail to pack json result", K(ret));

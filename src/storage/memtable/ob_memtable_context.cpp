@@ -359,6 +359,8 @@ void ObMemtableCtx::callback_free(ObITransCallback *cb)
     TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "cb is null, unexpected error", KP(cb), K(*this));
   } else if (cb->is_table_lock_callback()) {
     free_table_lock_callback(cb);
+  } else if (MutatorType::MUTATOR_ROW_EXT_INFO == cb->get_mutator_type()) {
+    free_ext_info_callback(cb);
   } else {
     ATOMIC_INC(&callback_free_count_);
     TRANS_LOG(DEBUG, "callback release succ", KP(cb), K(*this), K(lbt()));
@@ -393,6 +395,24 @@ void ObMemtableCtx::free_table_lock_callback(ObITransCallback *cb)
   } else {
     TRANS_LOG(DEBUG, "callback release succ", KP(cb), K(*this), K(lbt()));
     lock_mem_ctx_.free_lock_op_callback(cb);
+    cb = NULL;
+  }
+}
+
+void ObMemtableCtx::free_ext_info_callback(ObITransCallback *cb)
+{
+  if (OB_ISNULL(cb)) {
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "cb is null, unexpected error", KP(cb), K(*this));
+  } else if (MutatorType::MUTATOR_ROW_EXT_INFO != cb->get_mutator_type()) {
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "cb is not ext info callback", "type", cb->get_mutator_type(), K(*this));
+  } else {
+    TRANS_LOG(DEBUG, "callback release succ", KP(cb), K(*this), K(lbt()));
+    ObExtInfoCallback *ext_cb = static_cast<ObExtInfoCallback *>(cb);
+    ext_cb->~ObExtInfoCallback();
+
+    ATOMIC_INC(&callback_free_count_);
+    TRANS_LOG(DEBUG, "callback release succ", KP(cb), K(*this), K(lbt()));
+    trans_mgr_.callback_free(cb);
     cb = NULL;
   }
 }

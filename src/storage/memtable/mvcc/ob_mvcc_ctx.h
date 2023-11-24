@@ -45,6 +45,7 @@ namespace storage
 {
 class ObLsmtTransNode;
 class ObFreezer;
+class ObExtInfoCallback;
 }
 
 using namespace transaction::tablelock;
@@ -182,6 +183,12 @@ public:
       ObMemCtxLockOpLinkNode *lock_op,
       const share::SCN scn);
   int inc_pending_log_size(const int64_t size);
+  int register_ext_info_commit_cb(
+      const int64_t timeout,
+      const blocksstable::ObDmlFlag dml_flag,
+      ObObj &index_data,
+      ObObj &ext_info_data);
+
 public:
   virtual void reset()
   {
@@ -228,6 +235,8 @@ public:
   virtual void free_table_lock_callback(ObITransCallback *cb) = 0;
   ObMvccRowCallback *alloc_row_callback(ObIMvccCtx &ctx, ObMvccRow &value, ObMemtable *memtable);
   ObMvccRowCallback *alloc_row_callback(ObMvccRowCallback &cb, ObMemtable *memtable);
+  storage::ObExtInfoCallback *alloc_ext_info_callback();
+  virtual void free_ext_info_callback(ObITransCallback *cb) = 0;
   int append_callback(ObITransCallback *cb);
 private:
   void check_row_callback_registration_between_stmt_();

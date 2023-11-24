@@ -24,6 +24,7 @@
 #include "storage/memtable/ob_memtable_mutator.h"   // ObMemtableMutatorMeta
 #include "storage/memtable/ob_memtable_context.h"   // ObTransRowFlag
 #include "storage/blocksstable/ob_row_reader.h"     // ObRowReader
+#include "storage/lob/ob_ext_info_callback.h"       // ObExtInfoLog
 
 #include "ob_log_binlog_record.h"                   // ObLogBR
 #include "ob_log_binlog_record_pool.h"              // ObLogBRPool
@@ -973,6 +974,37 @@ int MutatorRow::get_cols(
     }
   }
 
+  return ret;
+}
+
+int MutatorRow::parse_ext_info_log(ObString &ext_info_log)
+{
+  int ret = OB_SUCCESS;
+  blocksstable::ObRowReader row_reader;
+  blocksstable::ObDatumRow datum_row;
+  bool is_found = false;
+  if (OB_UNLIKELY(cols_parsed_)) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_ERROR("columns has been parsed", KR(ret), K(cols_parsed_));
+  } else if (OB_UNLIKELY(! deserialized_)) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_ERROR("row has not been deserialized", KR(ret));
+  } else if (OB_ISNULL(new_row_.data_) || OB_UNLIKELY(new_row_.size_ <= 0)) {
+      LOG_WARN("new row data is empty", K(new_row_),
+          "mutator_row", (const ObMemtableMutatorRow &)(*this));
+      new_cols_.reset();
+  } else if (OB_UNLIKELY(new_cols_.num_ > 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("column value list is not reseted", KR(ret), K(new_cols_));
+  } else if (OB_FAIL(row_reader.read_row(new_row_.data_, new_row_.size_, nullptr, datum_row))) {
+    LOG_ERROR("Failed to read datum row", K(ret));
+  } else if (datum_row.get_column_count() != storage::ObExtInfoCallback::OB_EXT_INFO_MUTATOR_ROW_COUNT) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("ext info mutator column count invalid", KR(ret), "column_count", datum_row.get_column_count());
+  } else {
+    ext_info_log = datum_row.storage_datums_[storage::ObExtInfoCallback::OB_EXT_INFO_MUTATOR_ROW_VALUE_IDX].get_string();
+    cols_parsed_ = true;
+  }
   return ret;
 }
 

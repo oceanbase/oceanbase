@@ -1148,6 +1148,14 @@ int ObAlterTableResolver::resolve_column_options(const ParseNode &node,
             }
             break;
           }
+        case T_COLUMN_ADD_WITH_LOB_PARAMS: {
+            if (OB_FAIL(resolve_add_column(*column_node->children_[0]))) {
+              SQL_RESV_LOG(WARN, "Resolve column option error!", K(ret));
+            } else if (OB_FAIL(resolve_lob_storage_parameters(column_node->children_[1]))) {
+              SQL_RESV_LOG(WARN, "Resolve lob storage parameters error!", K(ret));
+            }
+            break;
+          }
         default:{
             ret = OB_ERR_UNEXPECTED;
             SQL_RESV_LOG(WARN, "Unknown column option type!",

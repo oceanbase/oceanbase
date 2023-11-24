@@ -14,6 +14,7 @@
 #include "ob_expr_json_search.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "share/object/ob_obj_cast.h"
+#include "share/ob_json_access_utils.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "lib/signal/safe_snprintf.h"
 #include "ob_expr_json_func_helper.h"
@@ -475,7 +476,7 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       res.set_null();
     } else {
       ObString raw_bin;
-      if (OB_FAIL(j_res->get_raw_binary(raw_bin, &temp_allocator))) {
+      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_res, raw_bin, &temp_allocator))) {
         LOG_WARN("json_keys get result binary failed", K(ret));
       } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_bin))) {
         LOG_WARN("fail to pack json result", K(ret));

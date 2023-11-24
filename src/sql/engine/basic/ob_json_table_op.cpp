@@ -15,6 +15,7 @@
 #include "ob_json_table_op.h"
 #include "share/object/ob_obj_cast_util.h"
 #include "share/object/ob_obj_cast.h"
+#include "share/ob_json_access_utils.h"
 #include "common/sql_mode/ob_sql_mode_utils.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/engine/expr/ob_datum_cast.h"
@@ -811,7 +812,7 @@ int JtFuncHelpler::cast_to_json(common::ObIAllocator *allocator, ObIJsonBase *j_
   if (OB_ISNULL(j_base)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("json base is null", K(ret));
-  } else if (OB_FAIL(j_base->get_raw_binary(val, allocator))) {
+  } else if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, val, allocator))) {
     LOG_WARN("failed to get raw binary", K(ret));
   }
 

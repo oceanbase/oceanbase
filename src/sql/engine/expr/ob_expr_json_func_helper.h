@@ -19,10 +19,12 @@
 #include "share/object/ob_obj_cast.h"
 #include "objit/common/ob_item_type.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "lib/lob/ob_lob_base.h"
 #include "lib/json_type/ob_json_tree.h"
 #include "lib/json_type/ob_json_base.h"
 #include "lib/json_type/ob_json_bin.h"
 #include "lib/json_type/ob_json_parse.h"
+#include "lib/json_type/ob_json_diff.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 
 using namespace oceanbase::common;
@@ -31,6 +33,7 @@ namespace oceanbase
 {
 namespace sql
 {
+
 class ObJsonExprHelper final
 {
   class ObJsonPathCacheCtx : public ObExprOperatorCtx
@@ -63,6 +66,28 @@ public:
                           common::ObArenaAllocator &allocator,
                           uint16_t index, ObIJsonBase*& j_base,
                           bool &is_null, bool need_to_tree=true, bool relax = true);
+
+  static int get_json_for_partial_update(
+      const ObExpr &expr,
+      const ObExpr &json_expr,
+      ObEvalCtx &ctx,
+      ObIAllocator &allocator,
+      ObDatum &json_datum,
+      ObIJsonBase *&j_base);
+
+  static int get_partial_json_bin(
+      ObIAllocator &allocator,
+      ObILobCursor *cursor,
+      ObJsonBinUpdateCtx *update_ctx,
+      ObIJsonBase *&j_base);
+  static int get_json_for_partial_update_with_curosr(
+      const ObExpr &expr,
+      const ObExpr &json_expr,
+      ObEvalCtx &ctx,
+      ObIAllocator &allocator,
+      ObDatum &json_datum,
+      ObIJsonBase *&j_base);
+
 
   static int cast_to_json_tree(ObString &text, common::ObIAllocator *allocator, uint32_t parse_flag = 0);
   /*
@@ -200,6 +225,13 @@ public:
     return ret;
   }
 
+  static int pack_json_res(
+      const ObExpr &expr,
+      ObEvalCtx &ctx,
+      ObIAllocator &temp_allocator,
+      ObIJsonBase *json_doc,
+      ObDatum &res);
+
   /**
    * the following 3 functions is used for json_query and json_mergepatch
    * as the returning type is the same
@@ -244,9 +276,71 @@ public:
                                      ObEvalCtx &ctx,
                                      ObString& result,
                                      int32_t reserve_len = 0);
+
+
+  static int is_allow_partial_update(const ObExpr &expr, ObEvalCtx &ctx, const ObString &locator_str, bool &allow_partial_update);
+  static bool is_json_partial_update_mode(const ObExpr &expr);
+  static bool is_json_partial_update_mode(const uint64_t flag) { return (flag & OB_JSON_PARTIAL_UPDATE_ALLOW) != 0; }
+  static bool is_json_partial_update_last_expr(const uint64_t flag) { return (flag & OB_JSON_PARTIAL_UPDATE_LAST_EXPR) != 0; }
+  static bool is_json_partial_update_first_expr(const uint64_t flag) { return (flag & OB_JSON_PARTIAL_UPDATE_FIRST_EXPR) != 0; }
+
+  static int pack_json_diff_res(
+    const ObExpr &expr,
+    ObEvalCtx &ctx,
+    ObIAllocator &temp_allocator,
+    ObIJsonBase *json_doc,
+    ObDatum &res);
+
+  static int refresh_root_when_bin_rebuild_all(ObIJsonBase *j_base);
+
+  static int init_json_expr_extra_info(
+      ObIAllocator *allocator,
+      const ObRawExpr &raw_expr,
+      const ObExprOperatorType type,
+      ObExpr &rt_expr);
+
+  static int get_session_query_timeout_ts(ObEvalCtx &ctx, int64_t &timeout_ts);
+
 private:
   const static uint32_t RESERVE_MIN_BUFF_SIZE = 32;
   DISALLOW_COPY_AND_ASSIGN(ObJsonExprHelper);
+};
+
+class ObJsonDeltaLob : public ObDeltaLob {
+public:
+  ObJsonDeltaLob():
+    allocator_(nullptr),
+    update_ctx_(nullptr),
+    j_base_(nullptr),
+    cursor_(nullptr),
+    partial_data_(nullptr),
+    query_timeout_ts_(0)
+  {}
+
+  int init(ObJsonBin *j_bin);
+  int init(ObIAllocator *allocator, ObLobLocatorV2 locator, int64_t query_timeout_ts);
+
+  int64_t get_partial_data_serialize_size() const;
+  int64_t get_lob_diff_serialize_size() const;
+  uint32_t get_lob_diff_cnt() const;
+
+  int serialize_partial_data(char* buf, const int64_t buf_len, int64_t& pos) const;
+  int deserialize_partial_data(ObLobDiffHeader *diff_header);
+  int serialize_lob_diffs(char* buf, const int64_t buf_len, ObLobDiffHeader *diff_header) const;
+  int deserialize_lob_diffs(char* buf, const int64_t buf_len, ObLobDiffHeader *diff_header);
+
+  int check_binary_diff() const;
+  ObIJsonBase* get_json_bin() { return j_base_; }
+  ObLobDiff::DiffType get_diff_type() const { return  ObLobDiff::DiffType::WRITE_DIFF; }
+
+protected:
+  ObIAllocator *allocator_;
+  ObJsonBinUpdateCtx *update_ctx_;
+
+  ObIJsonBase *j_base_;
+  ObLobCursor *cursor_;
+  ObLobPartialData *partial_data_;
+  int64_t query_timeout_ts_;
 };
 
 } // sql

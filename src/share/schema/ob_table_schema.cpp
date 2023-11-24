@@ -4202,7 +4202,7 @@ int ObTableSchema::check_alter_column_accuracy(const ObColumnSchemaV2 &src_colum
         if (ob_is_number_tc(src_col_type) || src_meta.is_bit() || src_meta.is_char()
          || src_meta.is_varchar() || src_meta.is_varbinary() || src_meta.is_text()
          || src_meta.is_blob() || src_meta.is_timestamp() || src_meta.is_datetime()
-         || src_meta.is_integer_type()) {
+         || src_meta.is_integer_type() || src_meta.is_json()) {
            // online, do nothing
         } else {
           is_offline = true;
@@ -4687,7 +4687,8 @@ int ObTableSchema::check_is_exactly_same_type(const ObColumnSchemaV2 &src_column
       }
     } else {
       if (src_column.is_string_type() || src_column.is_raw()
-          || ob_is_rowid_tc(src_column.get_data_type())) {
+          || ob_is_rowid_tc(src_column.get_data_type())
+          || src_column.is_json()) {
         if (src_column.get_charset_type() == dst_column.get_charset_type() &&
             src_column.get_collation_type() == dst_column.get_collation_type() &&
             src_column.get_data_length() == dst_column.get_data_length() &&

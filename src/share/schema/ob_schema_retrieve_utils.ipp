@@ -1401,6 +1401,7 @@ int ObSchemaRetrieveUtils::fill_column_schema(
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, srs_id, column, uint64_t, true, true, OB_DEFAULT_COLUMN_SRS_ID);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, udt_set_id, column, int64_t, true, true, 0);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, sub_data_type, column, int64_t, true, true, 0);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, lob_chunk_size, column, int64_t, true, true, OB_DEFAULT_LOB_CHUNK_SIZE);
 
     common::ColumnType default_type = column.get_data_type();
     if (column.is_generated_column() || column.is_identity_column()) {

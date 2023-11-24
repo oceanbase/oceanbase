@@ -45,6 +45,17 @@ void ObStringBuffer::reuse()
   len_ = 0;
 }
 
+int ObStringBuffer::get_result_string(ObString &buffer)
+{
+  INIT_SUCC(ret);
+  buffer.assign_buffer(data_, cap_);
+  buffer.set_length(len_);
+  data_ = nullptr;
+  len_ = 0;
+  cap_ = 0;
+  return ret;
+}
+
 int ObStringBuffer::append(const char *str)
 {
   return append(str, NULL == str ? 0 : strlen(str));

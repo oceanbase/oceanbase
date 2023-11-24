@@ -18,6 +18,7 @@
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/memtable/ob_memtable_util.h"
 #include "storage/tablelock/ob_table_lock_callback.h"
+#include "storage/lob/ob_ext_info_callback.h"
 #include "storage/ls/ob_freezer.h"
 namespace oceanbase
 {
@@ -269,6 +270,36 @@ void ObIMvccCtx::check_row_callback_registration_between_stmt_()
     TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "register commit not match expection", K(*trans_ctx));
   }
 }
+
+int ObIMvccCtx::register_ext_info_commit_cb(
+    const int64_t timeout,
+    const blocksstable::ObDmlFlag dml_flag,
+    ObObj &index_data,
+    ObObj &ext_info_data)
+{
+  int ret = OB_SUCCESS;
+  storage::ObExtInfoCbRegister cb_register;
+  if (OB_FAIL(cb_register.register_cb(this, timeout, dml_flag, index_data, ext_info_data))) {
+    TRANS_LOG(ERROR, "register ext info callback failed", K(ret), K(cb_register), K(*this));
+  }
+  return ret;
+}
+
+storage::ObExtInfoCallback *ObIMvccCtx::alloc_ext_info_callback()
+{
+  int ret = OB_SUCCESS;
+  void *cb_buffer = nullptr;
+  storage::ObExtInfoCallback *cb = nullptr;
+  if (nullptr == (cb_buffer = callback_alloc(sizeof(storage::ObExtInfoCallback)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    TRANS_LOG(WARN, "alloc ObExtInfoCallback fail", K(ret));
+  } else if (nullptr == (cb = new(cb_buffer) storage::ObExtInfoCallback())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    TRANS_LOG(WARN, "construct ObExtInfoCallback object fail", K(ret), "cb_buffer", cb_buffer);
+  }
+  return cb;
+}
+
 }
 }
 

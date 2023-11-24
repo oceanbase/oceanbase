@@ -3853,6 +3853,10 @@ int ObTableSqlService::gen_column_dml(
   uint64_t tenant_data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(exec_tenant_id, tenant_data_version))) {
     LOG_WARN("get tenant data version failed", K(ret));
+  } else if (tenant_data_version < DATA_VERSION_4_2_2_0 && column.get_lob_chunk_size() != OB_DEFAULT_LOB_CHUNK_SIZE) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("tenant data version is less than 4.2.2, lob chunk size is not supported", K(ret), K(tenant_data_version), K(column));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.2, lob chunk size");
   } else if (tenant_data_version < DATA_VERSION_4_2_0_0 &&
              (column.is_xmltype() || column.get_udt_set_id() != 0 || column.get_sub_data_type() != 0)) {
     ret = OB_NOT_SUPPORTED;
@@ -4008,6 +4012,7 @@ int ObTableSqlService::gen_column_dml(
                             // todo : tenant_data_version >= DATA_VERSION_4_2_0_0
                          || (tenant_data_version >= DATA_VERSION_4_2_0_0 && OB_FAIL(dml.add_column("udt_set_id", column.get_udt_set_id())))
                          || (tenant_data_version >= DATA_VERSION_4_2_0_0 &&OB_FAIL(dml.add_column("sub_data_type", column.get_sub_data_type())))
+                         || (tenant_data_version >= DATA_VERSION_4_2_2_0 && OB_FAIL(dml.add_column("lob_chunk_size", column.get_lob_chunk_size())))
                          || (tenant_data_version >= DATA_VERSION_4_2_2_0 &&OB_FAIL(dml.add_column("local_session_vars", ObHexEscapeSqlStr(local_session_var))))
                          || OB_FAIL(dml.add_gmt_create())
                          || OB_FAIL(dml.add_gmt_modified()))) {

@@ -18,6 +18,7 @@
 #include "ob_memtable_context.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tablelock/ob_table_lock_callback.h"
+#include "storage/lob/ob_ext_info_callback.h"
 
 namespace oceanbase
 {
@@ -126,6 +127,8 @@ int ObRedoLogGenerator::fill_redo_log(char *buf,
           ret = fill_row_redo(cursor, mmw, redo, log_for_lock_node, fake_fill, encrypt_info);
         } else if (MutatorType::MUTATOR_TABLE_LOCK == iter->get_mutator_type()) {
           ret = fill_table_lock_redo(cursor, mmw, table_lock_redo, log_for_lock_node, fake_fill);
+        } else if (MutatorType::MUTATOR_ROW_EXT_INFO == iter->get_mutator_type()) {
+          ret = fill_ext_info_redo(cursor, mmw, redo, log_for_lock_node, fake_fill);
         } else {
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "mutator row type not expected.", K(ret));
@@ -380,6 +383,30 @@ int ObRedoLogGenerator::fill_table_lock_redo(ObITransCallbackIterator &cursor,
 
   TRANS_LOG(DEBUG, "fill table lock redo.",
             K(ret), K(*titer), K(redo.lock_id_), K(redo.lock_mode_));
+  return ret;
+}
+
+int ObRedoLogGenerator::fill_ext_info_redo(
+    ObITransCallbackIterator &cursor,
+    ObMutatorWriter &mmw,
+    RedoDataNode &redo,
+    const bool log_for_lock_node,
+    bool &fake_fill)
+{
+  int ret = OB_SUCCESS;
+  ObExtInfoCallback *ext_iter = (ObExtInfoCallback *)*cursor;
+  if (OB_FAIL(ext_iter->get_redo(redo))) {
+    if (OB_ITER_END != ret) {
+      TRANS_LOG(WARN, "get_redo fail", K(ret));
+    } else {
+      ret = OB_SUCCESS;
+    }
+  } else if (OB_FAIL(mmw.append_ext_info_log_kv(mem_ctx_->get_max_table_version(),
+                                                redo, false/*is_big_row*/))) {
+    if (OB_BUF_NOT_ENOUGH != ret) {
+      TRANS_LOG(WARN, "mutator writer append_kv fail", K(ret));
+    }
+  }
   return ret;
 }
 

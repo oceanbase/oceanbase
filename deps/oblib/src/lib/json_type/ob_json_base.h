@@ -134,6 +134,7 @@ public:
   OB_INLINE bool is_bin() const { return get_internal_type() == ObJsonInType::JSON_BIN; }
   OB_INLINE ObIAllocator *get_allocator() { return allocator_; }
   OB_INLINE void set_allocator(ObIAllocator *allocator) { allocator_ = allocator; }
+  virtual int reset() { return OB_SUCCESS; }
 public:
   // Get internal json type(tree or binary).
   //
@@ -154,6 +155,8 @@ public:
   //
   // @return see ObObjType.
   virtual ObObjType field_type() const = 0;
+
+  virtual int get_parent(ObIJsonBase *& parent) const = 0;
 
   // Gey key by index from json node array.
   //
@@ -295,6 +298,8 @@ public:
   // @param [out] out The string of json binary.
   // @return Returns OB_SUCCESS on success, error code otherwise.
   virtual int get_raw_binary(common::ObString &out, ObIAllocator *allocator = NULL);
+  // for old version that without json doc header
+  virtual int get_raw_binary_v0(common::ObString &out, ObIAllocator *allocator = NULL);
 
   // get object_iterator
   //

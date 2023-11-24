@@ -524,6 +524,11 @@ protected:
                                         common::ObString &pk_name);
   int resolve_srid_node(share::schema::ObColumnSchemaV2 &column,
                         const ParseNode &srid_node);
+
+  int resolve_lob_storage_parameters(const ParseNode *node);
+  int resolve_lob_storage_parameter(share::schema::ObColumnSchemaV2 &column, const ParseNode &param_node);
+  int resolve_lob_chunk_size(const ParseNode &size_node, int64_t &lob_chunk_size);
+  int resolve_lob_chunk_size(share::schema::ObColumnSchemaV2 &column, const ParseNode &lob_chunk_size_node);
   /*
   int resolve_generated_column_definition(
       share::schema::ObColumnSchemaV2 &column,

@@ -14,6 +14,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_array_append.h"
+#include "share/ob_json_access_utils.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 
 using namespace oceanbase::common;
@@ -176,7 +177,7 @@ int ObExprJsonArrayAppend::eval_json_array_append(const ObExpr &expr, ObEvalCtx 
     ObString raw_bin;
     if (is_null) {
       res.set_null();
-    } else if (OB_FAIL(j_base->get_raw_binary(raw_bin, &temp_allocator))) {
+    } else if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
       LOG_WARN("failed: get json raw binary", K(ret));
     } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_bin))) {
       LOG_WARN("fail to pack json result", K(ret));

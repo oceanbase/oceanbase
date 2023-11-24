@@ -8,18 +8,28 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file contains implementation for lob_access_utils.
  */
 
-#ifndef OCEANBASE_LIB_JSON_TYPE_OB_JSON_COMMON_
-#define OCEANBASE_LIB_JSON_TYPE_OB_JSON_COMMON_
-#include "lib/string/ob_string_buffer.h"
-#include "lib/lob/ob_lob_base.h"
+#ifndef OCEANBASE_SHARE_OB_JSON_ACCESS_UTILS_
+#define OCEANBASE_SHARE_OB_JSON_ACCESS_UTILS_
 
-namespace oceanbase {
+#include "lib/string/ob_string.h"
+
+namespace oceanbase
+{
 namespace common {
+class ObIJsonBase;
+class ObIAllocator;
+}
+namespace share
+{
+class ObJsonWrapper
+{
+public:
+  static int get_raw_binary(common::ObIJsonBase *j_base, common::ObString &result, common::ObIAllocator *allocator);
+};
 
-typedef ObStringBuffer ObJsonBuffer;
-
-} // namespace common
-} // namespace oceanbase
-#endif // OCEANBASE_LIB_JSON_TYPE_OB_JSON_COMMON
+} // end namespace share
+} // end namespace oceanbase
+#endif

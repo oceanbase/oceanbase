@@ -552,6 +552,7 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
   ObStringBuffer enum_set_values_str(&str_allocator);
   bool is_geometry = is_geometry_type(ctype);
   bool is_xml = is_xml_type(ctype);
+  bool is_json_diff = br->isJsonDiffColVal(cname);
 
   int64_t column_index = index + 1;
   ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_name:%s", column_index, cname);
@@ -560,6 +561,9 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
   ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_is_signed:%s", column_index, is_signed);
   ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_encoding:%s", column_index, encoding);
   ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_is_not_null:%s", column_index, is_not_null);
+  if (is_json_diff) {
+    ROW_PRINTF(ptr, size, pos, ri, "[C%ld] is_json_diff:true", column_index);
+  }
   if (enable_print_detail) {
     if (is_hidden_row_key_column) {
       ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_is_hidden_rowkey:%d", column_index, is_hidden_row_key_column);

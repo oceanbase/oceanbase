@@ -33,6 +33,21 @@ uint32_t ObLobSeqId::load32be(const char *ptr) {
   return ntohl(val);
 }
 
+int ObLobSeqId::get_seq_id(int64_t idx, ObString &seq_id)
+{
+  INIT_SUCC(ret);
+  if (seq_id.length() < sizeof(uint32_t)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("seq id buffer not enough", K(ret), K(idx), K(seq_id));
+  } else if ((idx + 1) * ObLobSeqId::LOB_SEQ_STEP_LEN > ObLobSeqId::LOB_SEQ_STEP_MAX) {
+    LOG_WARN("idx too big", K(ret), K(idx));
+  } else {
+    uint32_t seq_num = (idx + 1) * ObLobSeqId::LOB_SEQ_STEP_LEN;
+    ObLobSeqId::store32be(seq_id.ptr(), seq_num);
+  }
+  return ret;
+}
+
 ObLobSeqId::ObLobSeqId(const ObString& seq_id, ObIAllocator* allocator)
   : allocator_(allocator),
     seq_id_(seq_id),

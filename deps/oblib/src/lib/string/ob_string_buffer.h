@@ -33,6 +33,7 @@ public:
   common::ObIAllocator *get_allocator() const { return allocator_; }
   void reset();
   void reuse();
+  int get_result_string(ObString &buffer);
 
   int append(const char *str);
   int append(const char *str, const uint64_t len);

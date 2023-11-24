@@ -104,6 +104,7 @@ enum class MutatorType
 {
   MUTATOR_ROW = 0,
   MUTATOR_TABLE_LOCK = 1,
+  MUTATOR_ROW_EXT_INFO = 2,
 };
 
 const char * get_mutator_type_str(MutatorType mutator_type);
@@ -321,6 +322,12 @@ public:
   int append_table_lock_kv(
       const int64_t table_version,
       const TableLockRedoDataNode &redo);
+
+  int append_ext_info_log_kv(
+      const int64_t table_version,
+      const RedoDataNode &redo,
+      const bool is_big_row);
+
   int append_row_kv(
       const int64_t table_version,
       const RedoDataNode &redo,

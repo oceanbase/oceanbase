@@ -2140,9 +2140,13 @@ bool ObIJsonBase::is_real_json_null(const ObIJsonBase* ptr) const
 {
   bool ret_bool = false;
   if (ptr->json_type() == ObJsonNodeType::J_NULL) {
-    ObIJsonBase* tmp = const_cast<ObIJsonBase*>(ptr);
-    ObJsonNull* tmp_null = static_cast<ObJsonNull*>(tmp);
-    ret_bool = !(tmp_null->is_not_null());
+    if (ptr->is_bin()) {
+      ret_bool = true;
+    } else {
+      ObIJsonBase* tmp = const_cast<ObIJsonBase*>(ptr);
+      ObJsonNull* tmp_null = static_cast<ObJsonNull*>(tmp);
+      ret_bool = !(tmp_null->is_not_null());
+    }
   }
   return ret_bool;
 }
@@ -3645,7 +3649,7 @@ int ObIJsonBase::print_float(ObJsonBuffer &j_buf) const
   if (OB_FAIL(j_buf.reserve(FLOAT_TO_STRING_CONVERSION_BUFFER_SIZE + 1))) {
     LOG_WARN("fail to reserve memory for j_buf", K(ret));
   } else {
-    double val = get_double();
+    double val = get_float();
     char *start = j_buf.ptr() + j_buf.length();
     uint64_t len = ob_gcvt(val, ob_gcvt_arg_type::OB_GCVT_ARG_FLOAT,
         FLOAT_TO_STRING_CONVERSION_BUFFER_SIZE, start, NULL);
@@ -4826,14 +4830,14 @@ int ObIJsonBase::get_used_size(uint64_t &size)
 
   if (is_bin()) {
     const ObJsonBin *j_bin = static_cast<const ObJsonBin *>(this);
-    size = j_bin->get_used_bytes();
+    ret = j_bin->get_used_bytes(size);
   } else { // is tree
     ObArenaAllocator allocator;
     ObIJsonBase *j_bin = NULL;
     if (OB_FAIL(ObJsonBaseFactory::transform(&allocator, this, ObJsonInType::JSON_BIN, j_bin))) {
       LOG_WARN("fail to transform to tree", K(ret));
     } else {
-      size = static_cast<const ObJsonBin *>(j_bin)->get_used_bytes();
+      ret = static_cast<const ObJsonBin *>(j_bin)->get_used_bytes(size);
     }
   }
 
@@ -4880,6 +4884,32 @@ int ObIJsonBase::get_raw_binary(common::ObString &out, ObIAllocator *allocator)
       if (OB_FAIL(ObJsonBaseFactory::transform(allocator, this, ObJsonInType::JSON_BIN, j_bin))) {
         LOG_WARN("fail to transform to tree", K(ret));
       } else if (OB_FAIL(static_cast<const ObJsonBin *>(j_bin)->get_raw_binary(out, allocator))) {
+        LOG_WARN("fail to get raw binary after transforming", K(ret), K(*j_bin));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObIJsonBase::get_raw_binary_v0(common::ObString &out, ObIAllocator *allocator)
+{
+  INIT_SUCC(ret);
+
+  if (is_bin()) {
+    const ObJsonBin *j_bin = static_cast<const ObJsonBin *>(this);
+    if (OB_FAIL(j_bin->get_raw_binary_v0(out, allocator))) {
+      LOG_WARN("fail to get raw binary", K(ret), K(*j_bin));
+    }
+  } else { // is tree
+    if (OB_ISNULL(allocator)) { // check param
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("param allocator is null", K(ret));
+    } else {
+      ObIJsonBase *j_bin = NULL;
+      if (OB_FAIL(ObJsonBaseFactory::transform(allocator, this, ObJsonInType::JSON_BIN, j_bin))) {
+        LOG_WARN("fail to transform to tree", K(ret));
+      } else if (OB_FAIL(static_cast<const ObJsonBin *>(j_bin)->get_raw_binary_v0(out, allocator))) {
         LOG_WARN("fail to get raw binary after transforming", K(ret), K(*j_bin));
       }
     }
