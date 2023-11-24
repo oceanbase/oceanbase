@@ -446,11 +446,9 @@ int ObTenantStorageCheckpointWriter::get_tablet_with_addr(
     ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
-
   ObSharedBlockReadInfo read_info;
   int64_t buf_len;
   char *buf = nullptr;
-  int64_t pos = 0;
   read_info.addr_ = addr_info.new_addr_;
   // only need load first-level meta
   if (addr_info.new_addr_.is_raw_block()) {
@@ -462,6 +460,7 @@ int ObTenantStorageCheckpointWriter::get_tablet_with_addr(
   do {
     ObArenaAllocator allocator("SlogCkptWriter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObSharedBlockReadHandle block_handle(allocator);
+    int64_t pos = 0;
     if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->acquire_tablet_from_pool(
         addr_info.tablet_pool_type_,
         WashTabletPriority::WTP_LOW,
