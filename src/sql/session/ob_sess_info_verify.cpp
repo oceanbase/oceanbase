@@ -13,6 +13,7 @@
 
 #define USING_LOG_PREFIX SERVER
 
+#include <math.h>
 #include "sql/session/ob_sess_info_verify.h"
 #include "share/ob_define.h"
 #include "share/system_variable/ob_system_variable_factory.h"
@@ -358,10 +359,12 @@ int ObSessInfoVerify::deserialize_sess_info_veri_id(sql::ObSQLSessionInfo &sess,
       char* ptr = NULL;
       ObAddr addr;
       char ip_buf[MAX_IP_ADDR_LENGTH] = "";
+      uint64_t length = v_len;
       if (OB_FAIL(ObProtoTransUtil::get_str(buf, len, pos, v_len, ptr))) {
         OB_LOG(WARN,"failed to resolve veri level", K(ret));
-      } else if (FALSE_IT(memcpy(ip_buf, ptr, v_len))) {
-      } else if (FALSE_IT(ip_buf[v_len] = '\0')) {
+      } else if (FALSE_IT(length = std::min(length, uint64_t(MAX_IP_ADDR_LENGTH - 1)))) {
+      } else if (FALSE_IT(memcpy(ip_buf, ptr, length))) {
+      } else if (FALSE_IT(ip_buf[length] = '\0')) {
       } else if (OB_FAIL(addr.parse_from_cstring(ip_buf))) {
         OB_LOG(WARN,"failed to parse from cstring", K(ret));
       } else if (OB_FAIL(sess_info_verification.set_verify_info_addr(addr))) {
