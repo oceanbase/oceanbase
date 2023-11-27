@@ -731,8 +731,15 @@ void ObTxDesc::implicit_start_tx_()
 {
   if (parts_.count() > 0 && state_ == ObTxDesc::State::IDLE) {
     state_ = ObTxDesc::State::IMPLICIT_ACTIVE;
-    active_ts_ = ObClockGenerator::getClock();
-    expire_ts_ = active_ts_ + timeout_us_;
+    if (expire_ts_ == INT64_MAX ) {
+      /*
+       * To calculate transaction's execution time
+       * and determine whether transaction has timeout
+       * just set active_ts and expire_ts on stmt's first execution
+       */
+      active_ts_ = ObClockGenerator::getClock();
+      expire_ts_ = active_ts_ + timeout_us_;
+    }
     active_scn_ = get_tx_seq();
     state_change_flags_.mark_all();
   }
