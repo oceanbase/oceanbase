@@ -24,11 +24,9 @@
 #include "share/ob_lob_access_utils.h"
 #include "lib/charset/ob_charset.h"
 #include "observer/mysql/obmp_stmt_prexecute.h"
-#ifdef OB_BUILD_ORACLE_XML
 #include "lib/xml/ob_multi_mode_interface.h"
 #include "lib/xml/ob_xml_util.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
-#endif
 
 namespace oceanbase
 {
@@ -259,10 +257,8 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
         } else if ((value.is_lob() || value.is_lob_locator() || value.is_json() || value.is_geometry())
                   && OB_FAIL(process_lob_locator_results(value, result))) {
           LOG_WARN("convert lob locator to longtext failed", K(ret));
-#ifdef OB_BUILD_ORACLE_XML
         } else if (value.is_user_defined_sql_type() && OB_FAIL(ObXMLExprHelper::process_sql_udt_results(value, result))) {
           LOG_WARN("convert udt to client format failed", K(ret), K(value.get_udt_subschema_id()));
-#endif
         }
       }
     }

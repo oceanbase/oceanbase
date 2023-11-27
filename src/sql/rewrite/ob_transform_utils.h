@@ -904,6 +904,37 @@ public:
                                       ObIArray<ObRawExpr*> &equal_conds);
 
   static int extract_udt_exprs(ObRawExpr *expr, ObIArray<ObRawExpr *> &udt_exprs);
+  // json object with star : json_object(*)
+  static int check_is_json_constraint(ObTransformerCtx *ctx,
+                                      ObDMLStmt *stmt,
+                                      ColumnItem& col_item,
+                                      bool &is_json);
+  static int extract_json_object_exprs(ObRawExpr *expr, ObIArray<ObRawExpr *> &json_exprs);
+  static int expand_wild_star_to_columns(ObTransformerCtx *ctx,
+                                         ObDMLStmt *stmt,
+                                         ObSysFunRawExpr *json_object_expr);
+  static int get_columnitem_from_json_table(ObDMLStmt *stmt,
+                                            const TableItem *tmp_table_item,
+                                            ObSEArray<ColumnItem, 4>& column_list);
+  static int get_column_node_from_table(ObTransformerCtx *ctx,
+                                        ObDMLStmt *stmt,
+                                        ObString& tab_name,
+                                        ObSEArray<ColumnItem, 4>& column_list,
+                                        bool all_tab,
+                                        bool &tab_has_alias,
+                                        TableItem *&tab_item,
+                                        bool &is_empty_table);
+  static int add_column_expr_for_json_object_node(ObTransformerCtx *ctx,
+                                                  ObDMLStmt *stmt,
+                                                  ColumnItem& col_item,
+                                                  ObSEArray<ObRawExpr *, 1>& param_array);
+  static int add_dummy_expr_for_json_object_node(ObTransformerCtx *ctx,
+                                                 ObSEArray<ObRawExpr *, 1>& param_array);
+  static int get_expand_node_from_star(ObTransformerCtx *ctx,
+                                       ObDMLStmt *stmt,
+                                       ObRawExpr *param_expr,
+                                       ObSEArray<ObRawExpr *, 1>& param_array);
+  // end json object with star
 
   static int extract_udf_exprs(ObRawExpr *expr, ObIArray<ObRawExpr *> &udf_exprs);
 

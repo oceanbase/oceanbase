@@ -61,7 +61,7 @@ int ObExprJsonSet::calc_result_typeN(ObExprResType& type,
   return ret;
 }                   
 
-int ObExprJsonSet::set_value(ObJsonBaseVector &hit, ObIJsonBase *&json_doc, ObIJsonBase* json_val,
+int ObExprJsonSet::set_value(ObJsonSeekResult &hit, ObIJsonBase *&json_doc, ObIJsonBase* json_val,
                              ObJsonPath *json_path, ObIAllocator *allocator)
 {
   INIT_SUCC(ret);
@@ -76,7 +76,7 @@ int ObExprJsonSet::set_value(ObJsonBaseVector &hit, ObIJsonBase *&json_doc, ObIJ
     if (OB_FAIL(json_doc->seek(*json_path, json_path->path_node_cnt() - 1, true, true, hit))) {
       LOG_WARN("json seek failed", K(ret));
     } else if (hit.size() != 0) {
-      ObIJsonBase* pos_node = *hit.last();
+      ObIJsonBase* pos_node = hit.last();
       ObJsonPathBasicNode* path_last = json_path->last_path_node();
       if (path_last->get_node_type() == JPN_ARRAY_CELL) {
         if (pos_node->json_type() == ObJsonNodeType::J_ARRAY) {
@@ -165,7 +165,7 @@ int ObExprJsonSet::eval_json_set(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
   }
   
   for (int64_t i = 1; OB_SUCC(ret) && !is_null_result && i < expr.arg_cnt_; i+=2) {
-    ObJsonBaseVector hit;
+    ObJsonSeekResult hit;
     ObDatum *path_data = NULL;
     ObJsonPath *json_path = NULL;
     if (expr.args_[i]->datum_meta_.type_ == ObNullType) {

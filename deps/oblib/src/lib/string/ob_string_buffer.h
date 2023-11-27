@@ -36,7 +36,7 @@ public:
   int get_result_string(ObString &buffer);
 
   int append(const char *str);
-  int append(const char *str, const uint64_t len);
+  int append(const char *str, const uint64_t len, int8_t index = -1);
   int append(const ObString &str);
   int reserve(const uint64_t len);
   int extend(const uint64_t len);

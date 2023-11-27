@@ -119,6 +119,8 @@ private:
   int pre_check_json_path_valid(const ParseNode *node);
   int get_column_raw_text_from_node(const ParseNode *node, ObString &col_name);
   int process_ora_json_object_node(const ParseNode *node, ObRawExpr *&expr);
+  int create_json_object_star_node(ParseNode *&node, common::ObIAllocator &allocator, int64_t &pos);
+  int process_ora_json_object_star_node(const ParseNode *node, ObRawExpr *&expr);
   int process_is_json_node(const ParseNode *node, ObRawExpr *&expr);
   int process_json_equal_node(const ParseNode *node, ObRawExpr *&expr);
   int process_json_query_node(const ParseNode *node, ObRawExpr *&expr);

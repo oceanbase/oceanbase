@@ -33,11 +33,7 @@ public:
                                 ObExprResType* types,
                                 int64_t param_num,
                                 common::ObExprTypeCtx& type_ctx) const override;
-#ifdef OB_BUILD_ORACLE_XML
   static int eval_sys_makexml(const ObExpr &expr, ObEvalCtx &ctx,  ObDatum &res);
-#else
-  static int eval_sys_makexml(const ObExpr &expr, ObEvalCtx &ctx,  ObDatum &res) { return OB_NOT_SUPPORTED; }
-#endif
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;

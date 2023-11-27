@@ -102,6 +102,7 @@ public:
   int get_array_element(uint64_t index, ObIJsonBase *&value) const override;
   int get_object_value(uint64_t index, ObIJsonBase *&value) const override;
   int get_object_value(const ObString &key, ObIJsonBase *&value) const override;
+  int get_object_value(uint64_t index, ObString &key, ObIJsonBase *&value) const override;
   int get_key(uint64_t index, common::ObString &key_out) const override;
   int array_remove(uint64_t index) override;
   int object_remove(const common::ObString &key) override;
@@ -236,6 +237,18 @@ public:
   // @return Returns ObJsonNode on success, NULL otherwise.
   ObJsonNode *get_value(uint64_t index) const;
 
+  // Get object pair by index.
+  //
+  // @param [in] index The index.
+  // @param [out] key The key.
+  // @param [out] vale The value.
+  int get_value_by_idx(uint64_t index, ObString& key, ObJsonNode*& value) const;
+  // Get object pair by index.
+  //
+  // @param [in] index The index.
+  // @param [out] key The key.
+  int get_key_by_idx(uint64_t index, ObString& key) const;
+
   // Get json node by index.
   //
   // @param [in] index The index.
@@ -260,7 +273,7 @@ public:
   // @param [in] key    The key.
   // @param [in] value  The Json node.
   // @return Returns OB_SUCCESS on success, error code otherwise.
-  int add(const common::ObString &key, ObJsonNode *value, bool with_unique_key = false, bool is_lazy_sort = false, bool need_overwrite = true);
+  int add(const common::ObString &key, ObJsonNode *value, bool with_unique_key = false, bool is_lazy_sort = false, bool need_overwrite = true, bool is_schema = false);
 
   // Rename key in current object if exist.
   //
@@ -291,6 +304,8 @@ public:
   //
   // @return void
   void clear();
+
+  void get_obj_array(ObJsonObjectArray*& obj_array) { obj_array = &object_array_; }
 
 private:
   uint64_t serialize_size_;
@@ -564,6 +579,13 @@ public:
         is_null_to_str_(false)
   {
   }
+  explicit ObJsonString(ObString str)
+      : ObJsonScalar(),
+        str_(str),
+        ext_(0),
+        is_null_to_str_(false)
+  {
+  }
   virtual ~ObJsonString() {}
   int64_t to_string(char *buf, const int64_t buf_len) const
   {
@@ -578,6 +600,7 @@ public:
   OB_INLINE void set_is_null_to_str(bool value) { is_null_to_str_ = value; }
   OB_INLINE bool get_is_null_to_str() const { return is_null_to_str_; }
   OB_INLINE uint64_t length() const { return str_.length(); }
+  OB_INLINE ObString get_str() const { return str_; }
   OB_INLINE uint64_t get_serialize_size()
   {
     return serialization::encoded_length_vi64(length()) + length();

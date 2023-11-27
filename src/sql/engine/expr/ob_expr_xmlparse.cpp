@@ -13,11 +13,9 @@
 
 #include "ob_expr_xmlparse.h"
 #include "sql/engine/ob_exec_context.h"
-#ifdef OB_BUILD_ORACLE_XML
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
 #include "lib/xml/ob_xml_tree.h"
 #include "lib/xml/ob_xml_util.h"
-#endif
 
 #define USING_LOG_PREFIX SQL_ENG
 
@@ -86,7 +84,6 @@ int ObExprXmlparse::calc_result_typeN(ObExprResType &type,
   return ret;
 }
 
-#ifdef OB_BUILD_ORACLE_XML
 int ObExprXmlparse::eval_xmlparse(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   INIT_SUCC(ret);
@@ -186,7 +183,6 @@ int ObExprXmlparse::eval_xmlparse(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &r
 
   return ret;
 }
-#endif
 
 int ObExprXmlparse::get_clause_opt(const ObExpr &expr,
                                    ObEvalCtx &ctx,

@@ -13,9 +13,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_sys_makexml.h"
-#ifdef OB_BUILD_ORACLE_XML
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
-#endif
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
@@ -79,7 +77,6 @@ int ObExprSysMakeXML::calc_result_typeN(ObExprResType& type,
   return ret;
 }
 
-#ifdef OB_BUILD_ORACLE_XML
 int ObExprSysMakeXML::eval_sys_makexml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
@@ -166,7 +163,6 @@ int ObExprSysMakeXML::eval_sys_makexml(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   }
   return ret;
 }
-#endif
 
 int ObExprSysMakeXML::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                               ObExpr &rt_expr) const

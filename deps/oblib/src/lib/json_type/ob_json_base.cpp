@@ -127,17 +127,56 @@ bool ObIJsonBase::is_json_date(ObJsonNodeType json_type) const
   return ret_bool;
 }
 
-// only use in seek, this can not from stack memory
-int ObIJsonBase::add_if_missing(ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const
+// apend node to unique vector judge duplicate
+int ObIJsonBase::append_node_to_sort_vector(ObJsonBaseSortedVector &dup, ObJsonSeekResult& res, const ObIJsonBase* node) const
 {
   INIT_SUCC(ret);
-
   ObJsonBaseCmp cmp;
   ObJsonBaseUnique unique;
   ObJsonBaseSortedVector::iterator pos = dup.end();
+  if (res.size() == 0) {
+  } else if (res.size() == 1 && dup.size() == 0) { // only second node need append res[0], dup size > 0 then ignore
+    if (OB_ISNULL(res.res_point_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get first node", K(ret));
+    } else if (dup.remain() < 2 && OB_FAIL(dup.reserve(OB_PATH_RESULT_EXPAND_SIZE))) {
+      LOG_WARN("fail to expand vactor", K(ret));
+    } else if (OB_FAIL(dup.insert_unique(res.res_point_, pos, cmp, unique))) {
+      LOG_WARN("fail to push_back value into duplicate", K(ret), K(dup.size()));
+    } else if (OB_FAIL(dup.insert_unique(node, pos, cmp, unique))) {
+      LOG_WARN("fail to push_back value into duplicate", K(ret), K(dup.size()));
+    }
+  } else if (dup.remain() == 0 && OB_FAIL(dup.reserve(OB_PATH_RESULT_EXPAND_SIZE))) {
+    LOG_WARN("fail to expand vactor", K(ret));
+  } else if (OB_FAIL(dup.insert_unique(node, pos, cmp, unique))) {
+    LOG_WARN("fail to push_back value into result", K(ret), K(dup.size()));
+  }
+  return ret;
+}
 
-  if ((OB_SUCC(dup.insert_unique(this, pos, cmp, unique)))) {
-    if (OB_FAIL(res.push_back(this))) {
+// only use in seek, use stack memory should deep copy.
+int ObIJsonBase::add_if_missing(ObJsonBaseSortedVector &dup, ObJsonSeekResult &res, ObIAllocator* allocator) const
+{
+  INIT_SUCC(ret);
+  ObIJsonBase* cur_json = const_cast<ObIJsonBase*>(this);
+  ObJsonBin* json_bin = NULL;
+
+  // Reduce array allocation size ： 2
+  // binary need clone new node
+  if (is_bin()) {
+    if (res.size() == 0) {
+      json_bin = static_cast<ObJsonBin*>(res.res_point_);
+    }
+    if (OB_FAIL((static_cast<ObJsonBin*>(cur_json))->clone_new_node(json_bin, allocator))) {
+      LOG_WARN("failed to create json binary", K(ret));
+    } else if (OB_ISNULL(cur_json = json_bin)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get json binary value", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_SUCC(append_node_to_sort_vector(dup, res, cur_json))) {
+    if (OB_FAIL(res.push_node(cur_json))) {
       LOG_WARN("fail to push_back value into result", K(ret), K(res.size()));
     }
   } else if (ret == OB_CONFLICT_VALUE) {
@@ -151,9 +190,10 @@ int ObIJsonBase::find_array_range(ObIAllocator* allocator, ObSeekParentInfo &par
                                   const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                                   const ObJsonPathBasicNode *path_node, bool is_auto_wrap,
                                   bool only_need_one, bool is_lax, ObJsonBaseSortedVector &dup,
-                                  ObJsonBaseVector &res, PassingMap* sql_var) const
+                                  ObJsonSeekResult &res, PassingMap* sql_var) const
 {
   INIT_SUCC(ret);
+  ObJsonBin st_json(allocator_); // use stack variable instead of deep copy
   SMART_VAR (ObArrayRange, range) {
     if (OB_FAIL(path_node->get_array_range(element_count(), range))) {
       LOG_WARN("fail to get array range", K(ret), K(element_count()));
@@ -161,7 +201,7 @@ int ObIJsonBase::find_array_range(ObIAllocator* allocator, ObSeekParentInfo &par
       bool is_done = false;
       ObIJsonBase *jb_ptr = NULL;
       for (uint32_t i = range.array_begin_; OB_SUCC(ret) && i < range.array_end_ && !is_done; ++i) {
-        jb_ptr = NULL; // reset jb_ptr to NULL
+        jb_ptr = &st_json; // reset jb_ptr to stack var
         ret = get_array_element(i, jb_ptr);
         if (OB_ISNULL(jb_ptr)) {
           ret = OB_ERR_NULL_VALUE;
@@ -183,16 +223,17 @@ int ObIJsonBase::find_array_cell(ObIAllocator* allocator, ObSeekParentInfo &pare
                                 const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                                 const ObJsonPathBasicNode *path_node, bool is_auto_wrap,
                                 bool only_need_one, bool is_lax, ObJsonBaseSortedVector &dup,
-                                ObJsonBaseVector &res, PassingMap* sql_var) const
+                                ObJsonSeekResult &res, PassingMap* sql_var) const
 {
   INIT_SUCC(ret);
-
+  ObJsonBin st_json(allocator_); // use stack variable instead of deep copy
+  ObIJsonBase *jb_ptr = NULL;
   SMART_VAR (ObJsonArrayIndex, idx) {
     if (OB_FAIL(path_node->get_first_array_index(element_count(), idx))) {
       LOG_WARN("failed to get array index.", K(ret), K(element_count()));
     } else {
       if (idx.is_within_bounds()) {
-        ObIJsonBase *jb_ptr = NULL;
+        jb_ptr = &st_json; // reset jb_ptr to stack var
         ret = get_array_element(idx.get_array_index(), jb_ptr);
         if (OB_ISNULL(jb_ptr)) {
           ret = OB_ERR_NULL_VALUE;
@@ -210,7 +251,7 @@ int ObIJsonBase::find_array_cell(ObIAllocator* allocator, ObSeekParentInfo &pare
 }
 
 int ObIJsonBase::seek(const ObJsonPath &path, uint32_t node_cnt, bool is_auto_wrap,
-                      bool only_need_one, ObJsonBaseVector &res, PassingMap* sql_var) const
+                      bool only_need_one, ObJsonSeekResult &res, PassingMap* sql_var) const
 {
   INIT_SUCC(ret);
   ObSeekParentInfo parent_info;
@@ -243,7 +284,7 @@ int ObIJsonBase::seek(const ObJsonPath &path, uint32_t node_cnt, bool is_auto_wr
 
 int ObIJsonBase::seek(ObIAllocator* allocator, const ObJsonPath &path,
                       uint32_t node_cnt, bool is_auto_wrap,bool only_need_one,
-                      bool is_lax, ObJsonBaseVector &res, PassingMap* sql_var) const
+                      bool is_lax, ObJsonSeekResult &res, PassingMap* sql_var) const
 {
   INIT_SUCC(ret);
   // 对于$后的path节点而言，其parent_info.parent_path为begin()
@@ -275,12 +316,14 @@ int ObIJsonBase::find_member(ObIAllocator* allocator, ObSeekParentInfo &parent_i
                             const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                             const ObJsonPathBasicNode *path_node, bool is_auto_wrap,
                             bool only_need_one, bool is_lax, ObJsonBaseSortedVector &dup,
-                            ObJsonBaseVector &res, PassingMap* sql_var) const
+                            ObJsonSeekResult &res, PassingMap* sql_var) const
 {
   INIT_SUCC(ret);
 
   ObIJsonBase *jb_ptr = NULL;
+  ObJsonBin st_json(allocator_); // use stack variable instead of deep copy
   if (json_type() == ObJsonNodeType::J_OBJECT) {
+    jb_ptr = &st_json;
     ObString key_name(path_node->get_object().len_, path_node->get_object().object_name_);
     ret = get_object_value(key_name, jb_ptr);
     if (OB_SUCC(ret)) {
@@ -300,7 +343,7 @@ int ObIJsonBase::find_member(ObIAllocator* allocator, ObSeekParentInfo &parent_i
   } else if (is_lax && is_auto_wrap && json_type() == ObJsonNodeType::J_ARRAY) {
     bool is_done = false;
     for (uint32_t i = 0; OB_SUCC(ret) && i < element_count() && !is_done; ++i) {
-      jb_ptr = NULL; // reset jb_ptr to NULL
+      jb_ptr = &st_json; // reset jb_ptr to stack var
       ret = get_array_element(i, jb_ptr);
       if (OB_ISNULL(jb_ptr)) {
         ret = OB_ERR_NULL_VALUE;
@@ -322,19 +365,20 @@ int ObIJsonBase::find_member_wildcard(ObIAllocator* allocator, ObSeekParentInfo 
                                       const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                                       const ObJsonPathBasicNode *path_node, bool is_auto_wrap,
                                       bool only_need_one, bool is_lax, ObJsonBaseSortedVector &dup,
-                                      ObJsonBaseVector &res, PassingMap* sql_var) const
+                                      ObJsonSeekResult &res, PassingMap* sql_var) const
 {
   INIT_SUCC(ret);
 
   ObIJsonBase *jb_ptr = NULL;
   bool is_done = false;
+  ObJsonBin st_json(allocator_); // use stack variable instead of deep copy
   if (json_type() == ObJsonNodeType::J_OBJECT) {
     uint64_t count = element_count();
     is_done = false;
     if (is_lax && !is_auto_wrap) is_auto_wrap = true;
 
     for (uint64_t i = 0; i < count && OB_SUCC(ret) && !is_done; ++i) {
-      jb_ptr = NULL; // reset jb_ptr to NULL
+      jb_ptr = &st_json;
       ret = get_object_value(i, jb_ptr);
       if (OB_ISNULL(jb_ptr)) {
         ret = OB_ERR_NULL_VALUE;
@@ -351,7 +395,7 @@ int ObIJsonBase::find_member_wildcard(ObIAllocator* allocator, ObSeekParentInfo 
   } else if (is_lax && is_auto_wrap && json_type() == ObJsonNodeType::J_ARRAY) {
     is_done = false;
     for (uint32_t i = 0; OB_SUCC(ret) && i < element_count() && !is_done; ++i) {
-      jb_ptr = NULL; // reset jb_ptr to NULL
+      jb_ptr = &st_json;
       ret = get_array_element(i, jb_ptr);
       if (OB_ISNULL(jb_ptr)) {
         ret = OB_ERR_NULL_VALUE;
@@ -373,11 +417,11 @@ int ObIJsonBase::find_ellipsis(ObIAllocator* allocator, ObSeekParentInfo &parent
                               const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                               const ObJsonPathBasicNode *path_node, bool is_auto_wrap,
                               bool only_need_one, bool is_lax, ObJsonBaseSortedVector &dup,
-                              ObJsonBaseVector &res, PassingMap* sql_var) const
+                              ObJsonSeekResult &res, PassingMap* sql_var) const
 {
   INIT_SUCC(ret);
-    bool is_done = false;
-
+  bool is_done = false;
+  ObJsonBin st_json(allocator_); // use stack variable instead of deep copy
   if (OB_FAIL(find_child(allocator, parent_info, cur_node + 1, last_node,
                         is_auto_wrap, only_need_one, is_lax, dup, res, sql_var))) {
     LOG_WARN("fail to seek recursively", K(ret), K(is_auto_wrap), K(only_need_one));
@@ -385,7 +429,7 @@ int ObIJsonBase::find_ellipsis(ObIAllocator* allocator, ObSeekParentInfo &parent
     uint64_t size = element_count();
     ObIJsonBase *jb_ptr = NULL;
     for (uint32_t i = 0; i < size && !is_done && OB_SUCC(ret); ++i) {
-      jb_ptr = NULL; // reset jb_ptr to NULL
+      jb_ptr = &st_json; // reset jb_ptr to stack var
       ret = get_array_element(i, jb_ptr);
       if (OB_ISNULL(jb_ptr)) {
         ret = OB_ERR_NULL_VALUE;
@@ -400,9 +444,9 @@ int ObIJsonBase::find_ellipsis(ObIAllocator* allocator, ObSeekParentInfo &parent
     }
   } else if (json_type() == ObJsonNodeType::J_OBJECT) {
     uint64_t count = element_count();
-    ObIJsonBase *jb_ptr = NULL;
+    ObIJsonBase *jb_ptr = NULL; // set jb_ptr to stack var
     for (uint32_t i = 0; i < count && !is_done && OB_SUCC(ret); ++i) {
-      jb_ptr = NULL; // reset jb_ptr to NULL
+      jb_ptr = &st_json;; // reset jb_ptr to NULL
       ret = get_object_value(i, jb_ptr);
       if (OB_ISNULL(jb_ptr)) {
         ret = OB_ERR_NULL_VALUE;
@@ -423,14 +467,15 @@ int ObIJsonBase::find_array_wildcard(ObIAllocator* allocator, ObSeekParentInfo &
                                     const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                                     const ObJsonPathBasicNode *path_node, bool is_auto_wrap,
                                     bool only_need_one, bool is_lax, ObJsonBaseSortedVector &dup,
-                                    ObJsonBaseVector &res, PassingMap* sql_var) const
+                                    ObJsonSeekResult &res, PassingMap* sql_var) const
 {
   INIT_SUCC(ret);
 
   ObIJsonBase *jb_ptr = NULL;
   bool is_done = false;
+  ObJsonBin st_json(allocator_); // use stack variable instead of deep copy
   for (uint32_t i = 0; OB_SUCC(ret) && i < element_count() && !is_done; ++i) {
-    jb_ptr = NULL; // reset jb_ptr to NULL
+    jb_ptr = &st_json; // reset jb_ptr to stack var
     ret = get_array_element(i, jb_ptr);
     if (OB_ISNULL(jb_ptr)) {
       ret = OB_ERR_NULL_VALUE;
@@ -451,10 +496,11 @@ int ObIJsonBase::find_multi_array_ranges(ObIAllocator* allocator, ObSeekParentIn
                                           const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                                           const ObJsonPathBasicNode *path_node, bool is_auto_wrap,
                                           bool only_need_one, bool is_lax, ObJsonBaseSortedVector &dup,
-                                          ObJsonBaseVector &res, PassingMap* sql_var) const
+                                          ObJsonSeekResult &res, PassingMap* sql_var) const
 {
   INIT_SUCC(ret);
   uint64_t array_size = path_node->get_multi_array_size();
+  ObJsonBin st_json(allocator_); // use stack variable instead of deep copy
 
   for (uint64_t array_idx = 0; array_idx < array_size && OB_SUCC(ret); ++array_idx) {
     SMART_VAR (ObArrayRange, range) {
@@ -463,28 +509,21 @@ int ObIJsonBase::find_multi_array_ranges(ObIAllocator* allocator, ObSeekParentIn
       } else {
         bool is_done = false;
         ObIJsonBase *jb_ptr = NULL;
-        ObJsonBaseVector hit;
         ObJsonBaseSortedVector tmp_dup;
         for (uint32_t i = range.array_begin_; OB_SUCC(ret) && i < range.array_end_ && !is_done; ++i) {
-          jb_ptr = NULL; // reset jb_ptr to NULL
+          jb_ptr = &st_json; // reset jb_ptr to stack var
           ret = get_array_element(i, jb_ptr);
           if (OB_ISNULL(jb_ptr)) {
             ret = OB_ERR_NULL_VALUE;
             LOG_WARN("fail to get array child dom", K(ret), K(i));
           } else if (OB_FAIL(jb_ptr->find_child(allocator, parent_info, cur_node + 1,
                                                 last_node, is_auto_wrap, only_need_one,
-                                                is_lax, tmp_dup, hit, sql_var))) {
+                                                is_lax, tmp_dup, res, sql_var))) {
             LOG_WARN("fail to seek recursively", K(ret), K(i));
           } else {
             is_done = is_seek_done(res, only_need_one);
           }
         } // end of search for each cell in arrar_range
-
-        if (OB_SUCC(ret) && hit.size() > 0 ) {
-          for (int hit_idx = 0; hit_idx < hit.size(); ++hit_idx) {
-            res.push_back(hit[hit_idx]);
-          }
-        } // add the result into res
       }
     } // end of each range
   }
@@ -494,7 +533,7 @@ int ObIJsonBase::find_multi_array_ranges(ObIAllocator* allocator, ObSeekParentIn
 int ObIJsonBase::find_basic_child(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
                                   const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                                   bool is_auto_wrap, bool only_need_one, bool is_lax,
-                                  ObJsonBaseSortedVector &dup, ObJsonBaseVector &res,
+                                  ObJsonBaseSortedVector &dup, ObJsonSeekResult &res,
                                   PassingMap* sql_var) const
 {
   INIT_SUCC(ret);
@@ -552,7 +591,7 @@ int ObIJsonBase::find_basic_child(ObIAllocator* allocator, ObSeekParentInfo &par
 int ObIJsonBase::find_array_child(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
                                   const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                                   bool is_auto_wrap, bool only_need_one, bool is_lax,
-                                  ObJsonBaseSortedVector &dup, ObJsonBaseVector &res,
+                                  ObJsonBaseSortedVector &dup, ObJsonSeekResult &res,
                                   PassingMap* sql_var) const
 {
   INIT_SUCC(ret);
@@ -583,7 +622,7 @@ int ObIJsonBase::find_array_child(ObIAllocator* allocator, ObSeekParentInfo &par
       if (!is_lax) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("should be oracle mode!", K(ret), K(only_need_one));
-      }else if (cur_json_type == ObJsonNodeType::J_ARRAY) {
+      } else if (cur_json_type == ObJsonNodeType::J_ARRAY) {
         if (OB_FAIL(find_multi_array_ranges(allocator, parent_info, cur_node, last_node, path_node,
                                             is_auto_wrap, only_need_one, is_lax, dup, res, sql_var))) {
           LOG_WARN("fail in find array range.", K(ret));
@@ -646,7 +685,7 @@ int ObIJsonBase::find_array_child(ObIAllocator* allocator, ObSeekParentInfo &par
 int ObIJsonBase::find_abs_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
                                 const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                                 const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
-                                bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const
+                                bool is_lax, ObJsonBaseSortedVector &dup, ObJsonSeekResult &res) const
 {
   INIT_SUCC(ret);
   switch (json_type()) {
@@ -742,7 +781,7 @@ int ObIJsonBase::find_abs_method(ObIAllocator* allocator, ObSeekParentInfo &pare
 int ObIJsonBase::find_ceiling_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
                                     const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                                     const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
-                                    bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const
+                                    bool is_lax, ObJsonBaseSortedVector &dup, ObJsonSeekResult &res) const
 {
   INIT_SUCC(ret);
   switch (json_type()) {
@@ -814,7 +853,7 @@ int ObIJsonBase::find_ceiling_method(ObIAllocator* allocator, ObSeekParentInfo &
 int ObIJsonBase::find_floor_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
                                   const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                                   const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
-                                  bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const
+                                  bool is_lax, ObJsonBaseSortedVector &dup, ObJsonSeekResult &res) const
 {
   INIT_SUCC(ret);
   switch (json_type()) {
@@ -888,14 +927,15 @@ int ObIJsonBase::find_floor_method(ObIAllocator* allocator, ObSeekParentInfo &pa
 int ObIJsonBase::find_numeric_item_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
                                         const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                                         const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
-                                        bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const
+                                        bool is_lax, ObJsonBaseSortedVector &dup, ObJsonSeekResult &res) const
 {
   INIT_SUCC(ret);
   ObIJsonBase *jb_ptr = NULL;
+  ObJsonBin st_json(allocator_); // use stack variable instead of deep copy
   if (json_type() == ObJsonNodeType::J_ARRAY && is_auto_wrap) {
     bool is_done = false;
     for (uint32_t i = 0; OB_SUCC(ret) && i < element_count() && !is_done; ++i) {
-      jb_ptr = NULL; // reset jb_ptr to NULL
+      jb_ptr = &st_json; // reset jb_ptr to stack var
       ret = get_array_element(i, jb_ptr);
       if (OB_ISNULL(jb_ptr)) {
         ret = OB_ERR_NULL_VALUE;
@@ -960,7 +1000,7 @@ int ObIJsonBase::find_numeric_item_method(ObIAllocator* allocator, ObSeekParentI
 int ObIJsonBase::find_type_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
                                   const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                                   const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
-                                  bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const
+                                  bool is_lax, ObJsonBaseSortedVector &dup, ObJsonSeekResult &res) const
 {
   INIT_SUCC(ret);
   char* ans_char = nullptr;
@@ -1050,7 +1090,7 @@ int ObIJsonBase::find_type_method(ObIAllocator* allocator, ObSeekParentInfo &par
 int ObIJsonBase::find_length_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
                                     const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                                     const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
-                                    bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const
+                                    bool is_lax, ObJsonBaseSortedVector &dup, ObJsonSeekResult &res) const
 {
   INIT_SUCC(ret);
   ObIJsonBase *jb_ptr = NULL;
@@ -1106,7 +1146,7 @@ int ObIJsonBase::find_length_method(ObIAllocator* allocator, ObSeekParentInfo &p
 int ObIJsonBase::find_size_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
                                   const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                                   const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
-                                  bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const
+                                  bool is_lax, ObJsonBaseSortedVector &dup, ObJsonSeekResult &res) const
 {
   INIT_SUCC(ret);
   ObIJsonBase *jb_ptr = NULL;
@@ -1139,7 +1179,7 @@ int ObIJsonBase::find_size_method(ObIAllocator* allocator, ObSeekParentInfo &par
 int ObIJsonBase::find_boolean_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
                                       const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                                       const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
-                                      bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const
+                                      bool is_lax, ObJsonBaseSortedVector &dup, ObJsonSeekResult &res) const
 {
   INIT_SUCC(ret);
   ObIJsonBase* jb_ptr = nullptr;
@@ -1284,7 +1324,7 @@ bool ObIJsonBase::check_legal_ora_date(const ObString date) const
 int ObIJsonBase::find_date_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
                                   const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                                   const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
-                                  bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const
+                                  bool is_lax, ObJsonBaseSortedVector &dup, ObJsonSeekResult &res) const
 {
   INIT_SUCC(ret);
   ObIJsonBase* jb_ptr = nullptr;
@@ -1373,7 +1413,7 @@ int ObIJsonBase::find_date_method(ObIAllocator* allocator, ObSeekParentInfo &par
 int ObIJsonBase::find_timestamp_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
                                       const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                                       const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
-                                      bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const
+                                      bool is_lax, ObJsonBaseSortedVector &dup, ObJsonSeekResult &res) const
 {
   INIT_SUCC(ret);
   ObIJsonBase *jb_ptr = NULL;
@@ -1470,7 +1510,7 @@ int ObIJsonBase::find_timestamp_method(ObIAllocator* allocator, ObSeekParentInfo
 int ObIJsonBase::find_double_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
                                     const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                                     const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
-                                    bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const
+                                    bool is_lax, ObJsonBaseSortedVector &dup, ObJsonSeekResult &res) const
 {
   INIT_SUCC(ret);
   ObIJsonBase *jb_ptr = NULL;
@@ -1553,7 +1593,7 @@ int ObIJsonBase::find_double_method(ObIAllocator* allocator, ObSeekParentInfo &p
 int ObIJsonBase::find_number_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
                                     const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                                     const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
-                                    bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const
+                                    bool is_lax, ObJsonBaseSortedVector &dup, ObJsonSeekResult &res) const
 {
   INIT_SUCC(ret);
 
@@ -1620,7 +1660,7 @@ int ObIJsonBase::find_number_method(ObIAllocator* allocator, ObSeekParentInfo &p
 int ObIJsonBase::find_string_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
                                   const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                                   const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
-                                  bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const
+                                  bool is_lax, ObJsonBaseSortedVector &dup, ObJsonSeekResult &res) const
 {
   INIT_SUCC(ret);
   ObIJsonBase *jb_ptr = NULL;
@@ -1700,7 +1740,7 @@ int ObIJsonBase::find_string_method(ObIAllocator* allocator, ObSeekParentInfo &p
 int ObIJsonBase::find_trans_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
                                   const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                                   const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
-                                  bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const
+                                  bool is_lax, ObJsonBaseSortedVector &dup, ObJsonSeekResult &res) const
 {
   INIT_SUCC(ret);
   ObIJsonBase *jb_ptr = NULL;
@@ -1808,7 +1848,7 @@ int ObIJsonBase::find_trans_method(ObIAllocator* allocator, ObSeekParentInfo &pa
 int ObIJsonBase::find_func_child(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
                                 const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                                 bool is_auto_wrap, bool only_need_one, bool is_lax,
-                                ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const
+                                ObJsonBaseSortedVector &dup, ObJsonSeekResult &res) const
 {
   INIT_SUCC(ret);
   SMART_VAR (ObJsonPathFuncNode*, path_node) {
@@ -2208,13 +2248,14 @@ int ObIJsonBase::trans_json_node(ObIAllocator* allocator, ObIJsonBase* &left, Ob
 // for compare ——> (subpath, scalar/sql_var)
 // 左边调用compare，左边遇到数组自动解包
 // 只要有一个结果为true则返回true，找不到或结果为false均返回false
-int ObIJsonBase::cmp_to_right_recursively(ObIAllocator* allocator, const ObJsonBaseVector& hit,
+int ObIJsonBase::cmp_to_right_recursively(ObIAllocator* allocator, ObJsonSeekResult& hit,
                                           const ObJsonPathNodeType node_type,
                                           ObIJsonBase* right_arg, bool& filter_result) const
 {
   INIT_SUCC(ret);
   bool cmp_result = false;
   bool null_flag = false;
+  ObJsonBin st_json(allocator_); // use stack variable instead of deep copy
   if (OB_ISNULL(right_arg)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("compare value is null.", K(ret));
@@ -2232,7 +2273,7 @@ int ObIJsonBase::cmp_to_right_recursively(ObIAllocator* allocator, const ObJsonB
         uint64_t size = hit[i]->element_count();
         ObIJsonBase *jb_ptr = NULL;
         for (uint32_t array_i = 0; array_i < size && !cmp_result && OB_SUCC(ret); ++array_i) {
-          jb_ptr = NULL; // reset jb_ptr to NULL
+          jb_ptr = &st_json; // reset jb_ptr to stack var
           ret = hit[i]->get_array_element(array_i, jb_ptr);
           int cmp_res = -3;
           // 类型相同可以直接用compare函数比较
@@ -2297,13 +2338,14 @@ int ObIJsonBase::cmp_to_right_recursively(ObIAllocator* allocator, const ObJsonB
 // for compare ——> ( scalar/sql_var, subpath)
 // 左边调用compare，右边是数组时自动解包
 // 只要有一个结果为true则返回true，找不到或结果为false均返回false
-int ObIJsonBase::cmp_to_left_recursively(ObIAllocator* allocator, const ObJsonBaseVector& hit,
+int ObIJsonBase::cmp_to_left_recursively(ObIAllocator* allocator, ObJsonSeekResult& hit,
                                           const ObJsonPathNodeType node_type,
                                           ObIJsonBase* left_arg, bool& filter_result) const
 {
   INIT_SUCC(ret);
   bool cmp_result = false;
   bool null_flag = false;
+  ObJsonBin st_json(allocator_); // use stack variable instead of deep copy
   if (OB_ISNULL(left_arg)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("compare value is null.", K(ret));
@@ -2321,7 +2363,7 @@ int ObIJsonBase::cmp_to_left_recursively(ObIAllocator* allocator, const ObJsonBa
         uint64_t size = hit[i]->element_count();
         ObIJsonBase *jb_ptr = NULL;
         for (uint32_t array_i = 0; array_i < size && !cmp_result && OB_SUCC(ret); ++array_i) {
-          jb_ptr = NULL; // reset jb_ptr to NULL
+          jb_ptr = &st_json; // reset jb_ptr to stack var
           ret = hit[i]->get_array_element(array_i, jb_ptr);
           int cmp_res = -3;
           // 类型相同可以直接用compare函数比较
@@ -2653,7 +2695,7 @@ int ObIJsonBase::get_sign_result_left_subpath(ObIAllocator* allocator, ObSeekPar
   } else {
     ObPathComparison comp_content = path_node->node_content_.comp_;
 
-    SMART_VAR (ObJsonBaseVector, hit) {
+    SMART_VAR (ObJsonSeekResult, hit) {
       ObJsonPath* sub_path = comp_content.comp_left_.filter_path_;
 
       // get left arg
@@ -2703,7 +2745,7 @@ int ObIJsonBase::get_sign_result_right_subpath(ObIAllocator* allocator, ObSeekPa
   } else {
     ObPathComparison comp_content = path_node->node_content_.comp_;
 
-    SMART_VAR (ObJsonBaseVector,hit) {
+    SMART_VAR (ObJsonSeekResult, hit) {
       ObJsonPath* sub_path = comp_content.comp_right_.filter_path_;
       // get right arg
       if (OB_FAIL(parent_info.parent_jb_->seek(allocator, (*sub_path),
@@ -3069,12 +3111,14 @@ int ObIJsonBase::str_cmp_autowrap(ObIAllocator* allocator, const ObString& right
 {
   INIT_SUCC(ret);
   ObJsonNodeType j_type = json_type();
+  ObJsonBin st_json(allocator_); // use stack variable instead of deep copy
+  ObIJsonBase* jb_ptr = NULL;
   if (j_type == ObJsonNodeType::J_NULL && is_real_json_null(this)) {
     filter_result = false;
   } else if (j_type == ObJsonNodeType::J_ARRAY) {
     if (autowrap) {
       for (uint32_t i = 0; OB_SUCC(ret) && i < element_count() && !filter_result; ++i) {
-        ObIJsonBase* jb_ptr = NULL; // reset jb_ptr to NULL
+        jb_ptr = &st_json; // reset jb_ptr to stack var
         ret = get_array_element(i, jb_ptr);
         if (OB_ISNULL(jb_ptr)) {
           ret = OB_ERR_NULL_VALUE;
@@ -3156,7 +3200,7 @@ int ObIJsonBase::get_str_comp_result(ObIAllocator* allocator, ObSeekParentInfo &
 
   if (OB_SUCC(ret) && !end_comp && comp_content.left_type_ == ObJsonPathNodeType::JPN_SUB_PATH) {
     // compare recursively
-    SMART_VAR (ObJsonBaseVector, hit) {
+    SMART_VAR (ObJsonSeekResult, hit) {
       ObJsonPath* sub_path = comp_content.comp_left_.filter_path_;
       if (sub_path->path_not_str()) {
         // 如果最后一个节点的类型是item function，且返回值一定不为string，如number/abs/length...会报错
@@ -3225,7 +3269,7 @@ int ObIJsonBase::find_comp_result(ObIAllocator* allocator, ObSeekParentInfo &par
     } else {
       ObJsonPath* sub_path = path_node->node_content_.comp_.comp_right_.filter_path_;
       ObJsonPathNodeType last_node_type = sub_path->get_last_node_type();
-      SMART_VAR (ObJsonBaseVector, hit) {
+      SMART_VAR (ObJsonSeekResult, hit) {
         if (OB_FAIL(parent_info.parent_jb_->seek(allocator, (*sub_path),
                     sub_path->path_node_cnt(), true, true, true, hit, sql_var))) {
         // 查找失败则直接将结果视为false
@@ -3352,7 +3396,7 @@ int ObIJsonBase::find_cond_result(ObIAllocator* allocator, ObSeekParentInfo &par
 int ObIJsonBase::find_filter_child(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
                                   const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                                   bool is_auto_wrap, bool only_need_one, bool is_lax,
-                                  ObJsonBaseSortedVector &dup, ObJsonBaseVector &res,
+                                  ObJsonBaseSortedVector &dup, ObJsonSeekResult &res,
                                   PassingMap* sql_var) const
 {
   INIT_SUCC(ret);
@@ -3406,7 +3450,7 @@ int ObIJsonBase::find_filter_child(ObIAllocator* allocator, ObSeekParentInfo &pa
 int ObIJsonBase::find_child(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
                             const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
                             bool is_auto_wrap, bool only_need_one, bool is_lax,
-                            ObJsonBaseSortedVector &dup, ObJsonBaseVector &res,
+                            ObJsonBaseSortedVector &dup, ObJsonSeekResult &res,
                             PassingMap* sql_var) const
 {
   INIT_SUCC(ret);
@@ -3414,7 +3458,7 @@ int ObIJsonBase::find_child(ObIAllocator* allocator, ObSeekParentInfo &parent_in
   // If the path expression is already at the end, the current DOM is the res,
   // and it is added to the res
   if (cur_node == last_node) {
-    add_if_missing(dup, res);
+    ret = add_if_missing(dup, res, allocator);
   } else {
     ObJsonNodeType cur_json_type = json_type();
     ObJsonPathNodeType cur_node_type = (*cur_node)->get_node_type();
@@ -3505,9 +3549,7 @@ int ObIJsonBase::print_array(ObJsonBuffer &j_buf, uint64_t depth, bool is_pretty
       } else {
         ObIJsonBase *jb_ptr = NULL;
         ObJsonBin j_bin(allocator_);
-        if (is_bin()) {
-          jb_ptr = &j_bin;
-        }
+        jb_ptr = &j_bin;
         if (OB_FAIL(get_array_element(i, jb_ptr))) {
           LOG_WARN("fail to get array element", K(ret), K(depth), K(i));
         } else if (OB_FAIL(jb_ptr->print(j_buf, true, is_pretty, depth))) {
@@ -3526,6 +3568,19 @@ int ObIJsonBase::print_array(ObJsonBuffer &j_buf, uint64_t depth, bool is_pretty
     }
   }
 
+  return ret;
+}
+
+int ObIJsonBase::pint_colon(ObJsonBuffer &j_buf, bool is_pretty) const
+{
+  INIT_SUCC(ret);
+  if (lib::is_oracle_mode() && is_pretty) {
+    if (OB_FAIL(j_buf.append(" : "))) {
+      LOG_WARN("fail to append \" : \"", K(ret));
+    }
+  } else if (OB_FAIL(j_buf.append(":"))) {
+    LOG_WARN("fail to append \":\"", K(ret));
+  }
   return ret;
 }
 
@@ -3552,16 +3607,14 @@ int ObIJsonBase::print_object(ObJsonBuffer &j_buf, uint64_t depth, bool is_prett
           LOG_WARN("fail to newline and indent", K(ret), K(depth), K(i), K(key));
         } else if (!key.empty() && OB_FAIL(ObJsonBaseUtil::append_string(j_buf, true, key.ptr(), key.length()))) { // key
           LOG_WARN("fail to print string", K(ret), K(depth), K(i), K(key));
-        } else if (OB_FAIL(j_buf.append(":"))) {
+        } else if (OB_FAIL(pint_colon(j_buf, is_pretty))) {
           LOG_WARN("fail to append \":\"", K(ret), K(depth), K(i), K(key));
         } else if (lib::is_mysql_mode() && OB_FAIL(j_buf.append(" "))) {
           LOG_WARN("fail to append \" \"", K(ret), K(depth), K(i), K(key));
         } else {
           ObIJsonBase *jb_ptr = NULL;
           ObJsonBin j_bin(allocator_);
-          if (is_bin()) {
-            jb_ptr = &j_bin;
-          }
+          jb_ptr = &j_bin;
           if (OB_FAIL(get_object_value(i, jb_ptr))) {
             LOG_WARN("fail to get object value", K(ret), K(i), K(is_pretty), K(depth));
           } else if (OB_FAIL(jb_ptr->print(j_buf, true, is_pretty, depth))) { // value
@@ -3940,9 +3993,7 @@ int ObIJsonBase::calc_json_hash_value(uint64_t val, hash_algo hash_func, uint64_
       uint64_t size = element_count();
       ObIJsonBase *jb_ptr = NULL;
       ObJsonBin j_bin(allocator_);
-      if (is_bin()) {
-        jb_ptr = &j_bin;
-      }
+      jb_ptr = &j_bin;
       for (uint64_t i = 0; i < size && OB_SUCC(ret); i++) {
         if (OB_FAIL(get_array_element(i, jb_ptr))) {
           LOG_WARN("fail to get this json array element", K(ret), K(i), K(size));
@@ -3965,9 +4016,7 @@ int ObIJsonBase::calc_json_hash_value(uint64_t val, hash_algo hash_func, uint64_
       ObString key;
       ObIJsonBase *jb_ptr = NULL;
       ObJsonBin j_bin(allocator_);
-      if (is_bin()) {
-        jb_ptr = &j_bin;
-      }
+      jb_ptr = &j_bin;
       for (uint64_t i = 0; OB_SUCC(ret) && i < count; i++) {
         if (OB_FAIL(get_key(i, key))) {
           LOG_WARN("failed to get key", K(ret), K(i));
@@ -4106,10 +4155,8 @@ int ObIJsonBase::compare_array(const ObIJsonBase &other, int &res) const
       ObIJsonBase *jb_b_ptr = NULL;
       ObJsonBin j_bin_a(allocator_);
       ObJsonBin j_bin_b(allocator_);
-      if (is_bin()) {
-        jb_a_ptr = &j_bin_a;
-        jb_b_ptr = &j_bin_b;
-      }
+      jb_a_ptr = &j_bin_a;
+      jb_b_ptr = &j_bin_b;
       if (OB_FAIL(get_array_element(i, jb_a_ptr))) {
         LOG_WARN("fail to get this json array element", K(ret), K(i), K(size_a));
       } else if (OB_FAIL(other.get_array_element(i, jb_b_ptr))) {
@@ -4158,10 +4205,8 @@ int ObIJsonBase::compare_object(const ObIJsonBase &other, int &res) const
           ObIJsonBase *jb_b_ptr = NULL;
           ObJsonBin j_bin_a(allocator_);
           ObJsonBin j_bin_b(allocator_);
-          if (is_bin()) {
-            jb_a_ptr = &j_bin_a;
-            jb_b_ptr = &j_bin_b;
-          }
+          jb_a_ptr = &j_bin_a;
+          jb_b_ptr = &j_bin_b;
           // Compare value.
           if (OB_FAIL(get_object_value(i, jb_a_ptr))) {
             LOG_WARN("fail to get this json obj element", K(ret), K(i), K(len_a));
@@ -4560,7 +4605,7 @@ static constexpr int type_comparison[JSON_TYPE_NUM][JSON_TYPE_NUM] = {
   /* 9  DATE */         {1,  1,  1,  1,  1,  1,  1,  1,  1,  0, -1, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
   /* 10  TIME */        {1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  0, -1, -1, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
   /* 11  DATETIME */    {1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  0,  0, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
-  /* 12  TIMESTAMP */   {1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  0,  0, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
+  /* 12  TIMESTAMP */   {1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  0,  0, -1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  2,  2,  2,  2},
   /* 13  OPAQUE */      {1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
   /* 14  empty */       {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2},
   /*  ORACLE MODE */
@@ -4575,7 +4620,7 @@ static constexpr int type_comparison[JSON_TYPE_NUM][JSON_TYPE_NUM] = {
   /* 23  ORAWID */      {2,  2,  2,  2,  2,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  2},
   /* 24  ORACLEDATE*/   {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,  2},
   /* 25  ODATE */       {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,  2},
-  /* 26  OTIMESTAMP */  {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,  2},
+  /* 26  OTIMESTAMP */  {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,  2},
   /* 27  TIMESTAMPTZ*/  {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  2,  2,  2},
   /* 28  ODAYSECOND */  {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  2,  2},
   /* 29  OYEARMONTH */  {2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  0,  2},
@@ -5723,14 +5768,6 @@ int ObIJsonBase::to_time(int64_t &value) const
       ret = OB_OPERATE_OVERFLOW;
       break;
     }
-    case ObJsonNodeType::J_INT: {
-      int64_t in_val = get_int();
-      if (OB_FAIL(ObTimeConverter::int_to_time(in_val, time))) {
-        LOG_WARN("int_to_date failed", K(ret), K(in_val), K(time));
-      }
-      break;
-    }
-
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to cast json type to time", K(ret), K(json_type()));
@@ -5882,6 +5919,7 @@ int ObIJsonBase::to_bit(uint64_t &value) const
   return ret;
 }
 
+
 int ObJsonBaseFactory::get_json_base(ObIAllocator *allocator, const ObString &buf,
                                      ObJsonInType in_type, ObJsonInType expect_type,
                                      ObIJsonBase *&out, uint32_t parse_flag)
@@ -5895,7 +5933,14 @@ int ObJsonBaseFactory::get_json_base(ObIAllocator *allocator, const char *ptr, u
 {
   INIT_SUCC(ret);
   void *buf = NULL;
+  ObJsonBin *j_bin = NULL;
+  bool is_schema = HAS_FLAG(parse_flag, ObJsonParser::JSN_SCHEMA_FLAG);
 
+  if (OB_NOT_NULL(out) && out->is_bin()) {
+    buf = out;
+    j_bin = static_cast<ObJsonBin*>(out);
+    allocator = out->get_allocator();
+  }
   if (OB_ISNULL(allocator)) { // check allocator
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("param allocator is NULL", K(ret), KP(allocator), KP(ptr));
@@ -5915,30 +5960,42 @@ int ObJsonBaseFactory::get_json_base(ObIAllocator *allocator, const char *ptr, u
     } else if (expect_type == ObJsonInType::JSON_TREE) {
       out = j_tree;
     } else { // expect json bin
-      if (OB_ISNULL(buf = allocator->alloc(sizeof(ObJsonBin)))) {
+      if (OB_NOT_NULL(j_bin)) {
+      } else if (OB_ISNULL(buf = allocator->alloc(sizeof(ObJsonBin)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc memory", K(ret), K(in_type), K(expect_type), K(sizeof(ObJsonBin)));
       } else {
-        ObJsonBin *j_bin = new (buf) ObJsonBin(allocator);
-        if (OB_FAIL(j_bin->parse_tree(j_tree))) {
-          LOG_WARN("fail to parse tree", K(ret), K(in_type), K(expect_type), K(*j_tree));
-        } else {
-          out = j_bin;
-        }
+        j_bin = new (buf) ObJsonBin(allocator);
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(j_bin) || !j_bin->is_bin()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("j_bin can not be null", K(ret));
+      } else if (OB_FAIL(j_bin->parse_tree(j_tree))) {
+        LOG_WARN("fail to parse tree", K(ret), K(in_type), K(expect_type), K(*j_tree));
+      } else {
+        out = j_bin;
       }
     }
   } else if (in_type == ObJsonInType::JSON_BIN) {
-    if (OB_ISNULL(buf = allocator->alloc(sizeof(ObJsonBin)))) {
+    if (OB_NOT_NULL(buf)) {
+    } else if (OB_ISNULL(buf = allocator->alloc(sizeof(ObJsonBin)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory", K(ret), K(in_type), K(expect_type), K(sizeof(ObJsonBin)));
-    } else {
-      ObJsonBin *j_bin = new (buf) ObJsonBin(ptr, length, allocator);
+    }
+    if (OB_SUCC(ret)) {
+      j_bin = new (buf) ObJsonBin(ptr, length, allocator);
       if (OB_FAIL(j_bin->reset_iter())) {
         LOG_WARN("fail to reset iter", K(ret), K(in_type), K(expect_type));
       } else if (expect_type == ObJsonInType::JSON_BIN) {
-        out = j_bin;
+        if (is_schema && OB_FAIL(ObJsonBaseUtil::check_json_schema_ref_def(*allocator, j_bin))) {
+          LOG_WARN("fail to check json sceham", K(ret), K(in_type), K(expect_type));
+        } else {
+          out = j_bin;
+        }
       } else { // expect json tree
         ObJsonNode *j_tree = NULL;
+        j_bin->set_is_schema(is_schema);
         if (OB_FAIL(j_bin->to_tree(j_tree))) {
           LOG_WARN("fail to change bin to tree", K(ret), K(in_type), K(expect_type), K(*j_bin));
         } else {
@@ -6630,15 +6687,15 @@ int ObJsonBaseUtil::get_bit_len(const ObString &str, int32_t &bit_len)
   return ret;
 }
 
-int ObJsonBaseUtil::get_bit_len(uint64_t value, int32_t &bit_len)
+int32_t ObJsonBaseUtil::get_bit_len(uint64_t value)
 {
-  int ret = OB_SUCCESS;
+  int32_t bit_len = 0;
   if (0 == value) {
     bit_len = 1;
   } else {
     bit_len = static_cast<int32_t>(sizeof(unsigned long long) * 8 - __builtin_clzll(value));
   }
-  return ret;
+  return bit_len;
 }
 
 uint64_t ObJsonBaseUtil::hex_to_uint64(const ObString &str)
@@ -6763,6 +6820,39 @@ bool ObJsonBaseUtil::binary_search(ObSortedVector<ObIJsonBase *> &vec, ObIJsonBa
   return is_found;
 }
 
+int ObJsonBaseUtil::check_json_schema_ref_def(ObIAllocator& allocator, ObIJsonBase* json_doc)
+{
+  INIT_SUCC(ret);
+  if (OB_ISNULL(json_doc)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("should not be null", K(ret));
+  } else {
+    ObJsonSeekResult hit;
+    common::ObString path_ref;
+    path_ref = lib::is_mysql_mode() ? "$**.\"$ref\"" : "$..\"$ref\"";
+    ObJsonPath j_path(path_ref, &allocator);
+    if (OB_FAIL(j_path.parse_path())) {
+      LOG_WARN("fail to parse json path", K(ret));
+    } else if (OB_FAIL(json_doc->seek(j_path, j_path.path_node_cnt(), false, false, hit))) {
+      LOG_WARN("fail to seek $ref definition", K(ret));
+    } else {
+      for (int i = 0; OB_SUCC(ret) && i < hit.size(); ++i) {
+        if (OB_ISNULL(hit[i])) {
+          ret = OB_ERR_NULL_VALUE;
+          LOG_WARN("should not be null", K(ret));
+        } else if (hit[i]->json_type() == ObJsonNodeType::J_STRING) {
+          ObString str(hit[i]->get_data_length(), hit[i]->get_data());
+          if (str.length() > 0 && str[0] != '#') {
+            ret = OB_ERR_UNSUPPROTED_REF_IN_JSON_SCHEMA;
+            LOG_WARN("unsupported ref in json schema", K(ret));
+          }
+        }
+      } // check value of "$ref", if is string must begin with "#"
+    }
+  }
+  return ret;
+}
+
 int ObJsonHashValue::calc_time(ObDTMode dt_mode, const ObIJsonBase *jb)
 {
   INIT_SUCC(ret);
@@ -6833,6 +6923,54 @@ int JsonObjectIterator::get_value(ObString &key, ObIJsonBase *&value)
 void JsonObjectIterator::next()
 {
   curr_element_++;
+}
+
+int ObJsonSeekResult::push_node(ObIJsonBase *node)
+{
+  INIT_SUCC(ret);
+  if (size_ == 0) {
+    res_point_ = node;
+  } else if (res_vector_.remain() == 0 && OB_FAIL(res_vector_.reserve(OB_PATH_RESULT_EXPAND_SIZE))) {
+    LOG_WARN("fail to expand vactor", K(ret));
+  } else if (OB_FAIL(res_vector_.push_back(node))) {
+    LOG_WARN("fail to push_back value into result", K(ret), K(res_vector_.size()));
+  }
+  size_ ++;
+  return ret;
+}
+
+ObIJsonBase* ObJsonSeekResult::get_node(const int idx) const
+{
+  ObIJsonBase* res = NULL;
+  if (idx >= size_ || idx < 0) {
+  } else if (idx == 0) {
+    res = res_point_;
+  } else {
+    res = res_vector_[idx - 1];
+  }
+  return res;
+}
+
+ObIJsonBase* ObJsonSeekResult::last()
+{
+  ObIJsonBase* res = NULL;
+  if (size_ == 0) {
+  } else if (size_ == 1) {
+    res = res_point_;
+  } else {
+    res = *res_vector_.last();
+  }
+  return res;
+}
+
+void ObJsonSeekResult::set_node(int idx, ObIJsonBase* node)
+{
+  if (idx >= size_ || idx < 0) {
+  } else if (idx == 0) {
+    res_point_ = node;
+  } else {
+    res_vector_[idx - 1] = node;
+  }
 }
 
 } // namespace common

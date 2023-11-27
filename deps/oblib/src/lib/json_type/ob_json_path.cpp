@@ -964,10 +964,10 @@ bool ObJsonPathCache::is_match(ObString& path_str, size_t idx)
   return result;
 }
 
-int ObJsonPathCache::find_and_add_cache(ObJsonPath*& res_path, ObString& path_str, int arg_idx)
+int ObJsonPathCache::find_and_add_cache(ObJsonPath*& res_path, ObString& path_str, int arg_idx, bool is_const)
 {
   INIT_SUCC(ret);
-  if (!is_match(path_str, arg_idx)) {
+  if (!((is_const && arg_idx < size()) || is_match(path_str, arg_idx))) {
     void* buf = allocator_->alloc(sizeof(ObJsonPath));
     if (OB_NOT_NULL(buf)) {
       ObJsonPath* path = new (buf) ObJsonPath(path_str, allocator_);

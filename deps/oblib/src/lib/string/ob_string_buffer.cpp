@@ -61,7 +61,7 @@ int ObStringBuffer::append(const char *str)
   return append(str, NULL == str ? 0 : strlen(str));
 }
 
-int ObStringBuffer::append(const char *str, const uint64_t len)
+int ObStringBuffer::append(const char *str, const uint64_t len, int8_t index)
 {
   INIT_SUCC(ret);
   if (OB_ISNULL(allocator_)) {
@@ -77,7 +77,7 @@ int ObStringBuffer::append(const char *str, const uint64_t len)
       if (need_len < len_) {
         ret = OB_SIZE_OVERFLOW;
         LOG_WARN("size over flow", K(ret), K(need_len), K(len_));
-      } else if (OB_FAIL(reserve(need_len))) {
+      } else if (OB_FAIL(reserve(index == -1 ? need_len : len))) {
         LOG_WARN("reserve data failed", K(ret), K(need_len), K(len_));
       } else {
         MEMCPY(data_ + len_, str, len);

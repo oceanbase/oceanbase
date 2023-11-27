@@ -121,7 +121,7 @@ int ObExprJsonKeys::eval_json_keys(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     } else if (OB_FAIL(expr.args_[1]->eval(ctx, path_data))) {
       LOG_WARN("eval json path datum failed", K(ret));
     } else {
-      ObJsonBaseVector sub_json_targets;
+      ObJsonSeekResult sub_json_targets;
       ObJsonPath *json_path;
       ObString path_val = path_data->get_string();
       if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(expr.args_[1], ctx, temp_allocator, path_val, is_null_result))) {

@@ -366,6 +366,9 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_is_serving_tenant.cpp
   engine/expr/ob_expr_json_func_helper.cpp
   engine/expr/ob_expr_json_extract.cpp
+  engine/expr/ob_expr_json_schema_valid.cpp
+  engine/expr/ob_expr_json_schema_validation_report.cpp
+  engine/expr/ob_expr_json_schema_validation_report.cpp
   engine/expr/ob_expr_json_contains.cpp
   engine/expr/ob_expr_json_contains_path.cpp
   engine/expr/ob_expr_json_depth.cpp
@@ -384,6 +387,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_json_search.cpp
   engine/expr/ob_expr_json_array.cpp
   engine/expr/ob_expr_json_array_append.cpp
+  engine/expr/ob_expr_json_append.cpp
   engine/expr/ob_expr_json_array_insert.cpp
   engine/expr/ob_expr_json_quote.cpp
   engine/expr/ob_expr_json_unquote.cpp
@@ -637,6 +641,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_sql_mode_convert.cpp
   engine/expr/ob_expr_prefix_pattern.cpp
   engine/expr/ob_expr_sys_makexml.cpp
+  engine/expr/ob_expr_xml_func_helper.cpp
   engine/expr/ob_expr_xmlparse.cpp
   engine/expr/ob_expr_xml_element.cpp
   engine/expr/ob_expr_xml_attributes.cpp
@@ -646,7 +651,11 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_extract_xml.cpp
   engine/expr/ob_expr_xmlcast.cpp
   engine/expr/ob_expr_update_xml.cpp
+  engine/expr/ob_expr_insert_child_xml.cpp
+  engine/expr/ob_expr_xml_delete_xml.cpp
+  engine/expr/ob_expr_xml_sequence.cpp
   engine/expr/ob_expr_temp_table_ssid.cpp
+  engine/expr/ob_expr_json_utils.cpp
 )
 
 ob_set_subtarget(ob_sql engine_join

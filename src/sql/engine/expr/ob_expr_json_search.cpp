@@ -385,7 +385,7 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       bool is_finish = false;
       for (uint64_t i = 4; OB_SUCC(ret) && !is_null && i < expr.arg_cnt_ && !is_finish; i++) {
         ObJsonPath *j_path = json_paths[i - 4];
-        ObJsonBaseVector hit;
+        ObJsonSeekResult hit;
         if (one_flag && hits.size() > 0) {
           is_finish = true;
         } else if (j_path->can_match_many()) {

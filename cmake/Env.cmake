@@ -87,7 +87,6 @@ if(OB_BUILD_CLOSE_MODULES)
   # oralce
   ob_define(OB_BUILD_ORACLE_PARSER ON)
   ob_define(OB_BUILD_ORACLE_PL ON)
-  ob_define(OB_BUILD_ORACLE_XML ON)
   # dblink
   ob_define(OB_BUILD_DBLINK ON)
   # 仲裁功能
@@ -128,10 +127,6 @@ endif()
 
 if(OB_BUILD_ORACLE_PL)
   add_definitions(-DOB_BUILD_ORACLE_PL)
-endif()
-
-if(OB_BUILD_ORACLE_XML)
-  add_definitions(-DOB_BUILD_ORACLE_XML)
 endif()
 
 if(OB_BUILD_ARBITRATION)

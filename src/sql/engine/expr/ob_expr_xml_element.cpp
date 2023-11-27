@@ -13,10 +13,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_xml_element.h"
-#ifdef OB_BUILD_ORACLE_XML
 #include "lib/xml/ob_xml_util.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
-#endif
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -99,7 +97,6 @@ int ObExprXmlElement::calc_result_typeN(ObExprResType& type,
   return ret;
 }
 
-#ifdef OB_BUILD_ORACLE_XML
 int ObExprXmlElement::eval_xml_element(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   INIT_SUCC(ret);
@@ -435,7 +432,7 @@ int ObExprXmlElement::construct_element(ObMulModeMemCtx* mem_ctx,
     LOG_WARN("element node is NULL", K(ret));
   } else if (OB_FAIL(element->init())) {
     LOG_WARN("element init failed", K(ret));
-  } else if (FALSE_IT(element->set_key(name))) {
+  } else if (FALSE_IT(element->set_xml_key(name))) {
   } else if (OB_FAIL(element->alter_member_sort_policy(false))) {
     LOG_WARN("fail to sort child element", K(ret));
   } else if (OB_FAIL(construct_attribute(mem_ctx, attr, element))) {
@@ -451,7 +448,6 @@ int ObExprXmlElement::construct_element(ObMulModeMemCtx* mem_ctx,
   }
   return ret;
 }
-#endif
 
 int ObExprXmlElement::cg_expr(ObExprCGCtx &expr_cg_ctx,
                               const ObRawExpr &raw_expr,

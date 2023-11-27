@@ -911,7 +911,7 @@ TEST_F(TestJsonBase, test_seek)
   ObArenaAllocator allocator(ObModIds::TEST);
   ObIJsonBase *j_tree = NULL;
   ObIJsonBase *j_bin = NULL;
-  ObJsonBaseVector hit;
+  ObJsonSeekResult hit;
   ObJsonBuffer j_buf(&allocator);
 
   // 1. seek_not_exist_member
@@ -1153,7 +1153,7 @@ TEST_F(TestJsonBase, test_oracle_seek)
   ObArenaAllocator allocator(ObModIds::TEST);
   ObIJsonBase *j_tree = NULL;
   ObIJsonBase *j_bin = NULL;
-  ObJsonBaseVector hit;
+  ObJsonSeekResult hit;
   ObJsonBuffer j_buf(&allocator);
 
   // 1. seek_not_exist_member
@@ -1532,7 +1532,7 @@ TEST_F(TestJsonBase, test_seek_str_cmp)
   ObArenaAllocator allocator(ObModIds::TEST);
   ObIJsonBase *j_tree = NULL;
   ObIJsonBase *j_bin = NULL;
-  ObJsonBaseVector hit;
+  ObJsonSeekResult hit;
   ObJsonBuffer j_buf(&allocator);
 
   common::ObString var_name("sql");
@@ -1628,7 +1628,7 @@ TEST_F(TestJsonBase, test_seek_func)
   ObArenaAllocator allocator(ObModIds::TEST);
   ObIJsonBase *j_tree = NULL;
   ObIJsonBase *j_bin = NULL;
-  ObJsonBaseVector hit;
+  ObJsonSeekResult hit;
   ObJsonBuffer j_buf(&allocator);
 
   // 11. seek_type
@@ -1891,7 +1891,7 @@ TEST_F(TestJsonBase, test_seek_bad_filter)
   ObArenaAllocator allocator(ObModIds::TEST);
   ObIJsonBase *j_tree = NULL;
   ObIJsonBase *j_bin = NULL;
-  ObJsonBaseVector hit;
+  ObJsonSeekResult hit;
   ObJsonBuffer j_buf(&allocator);
   INIT_SUCC(ret);
 /*
@@ -1964,7 +1964,7 @@ TEST_F(TestJsonBase, test_seek_filter)
   ObArenaAllocator allocator(ObModIds::TEST);
   ObIJsonBase *j_tree = NULL;
   ObIJsonBase *j_bin = NULL;
-  ObJsonBaseVector hit;
+  ObJsonSeekResult hit;
   ObJsonBuffer j_buf(&allocator);
 
   /*

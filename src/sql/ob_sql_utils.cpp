@@ -2506,6 +2506,21 @@ int FastUdtExprChecker::add_expr(ObRawExpr *&expr)
   return ret;
 }
 
+JsonObjectStarChecker::JsonObjectStarChecker(common::ObIArray<ObRawExpr *> &rel_array)
+  : RelExprCheckerBase(), rel_array_(rel_array), init_size_(rel_array.count())
+{
+
+}
+
+int JsonObjectStarChecker::add_expr(ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObTransformUtils::extract_json_object_exprs(expr, rel_array_))) {
+    LOG_WARN("failed to push back expr", K(ret));
+  }
+  return ret;
+}
+
 //used for C module
 bool check_stack_overflow_c()
 {

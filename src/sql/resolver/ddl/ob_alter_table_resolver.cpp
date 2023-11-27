@@ -24,10 +24,8 @@
 #include "sql/resolver/dml/ob_delete_resolver.h"
 #include "share/ob_index_builder_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
-#ifdef OB_BUILD_ORACLE_XML
 #include "lib/xml/ob_xml_parser.h"
 #include "lib/xml/ob_xml_util.h"
-#endif
 
 namespace oceanbase
 {
@@ -4637,7 +4635,6 @@ int ObAlterTableResolver::add_udt_hidden_column(ObAlterTableStmt *alter_table_st
       LOG_WARN("fail to calc xmltype default value expr", K(ret));
     } else {
       // calc result is 1. string type (not lob) or 2. xmltype binary (need to remove lob header)
-#ifdef OB_BUILD_ORACLE_XML
       ObString res_string;
       ObObj xml_default;
       xml_default.set_null();
@@ -4687,10 +4684,6 @@ int ObAlterTableResolver::add_udt_hidden_column(ObAlterTableStmt *alter_table_st
       } else if (OB_FAIL(hidden_blob.set_orig_default_value(xml_default))) {
         LOG_WARN("fail to set orig default value", K(xml_default), K(ret));
       }
-#else
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("xml type not supported in opensource version", K(ret), K(orig_default_value));
-#endif
     }
 
     if (OB_FAIL(ret)) {

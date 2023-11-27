@@ -31,10 +31,8 @@
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "lib/geo/ob_geometry_cast.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
-#ifdef OB_BUILD_ORACLE_XML
 #include "lib/xml/ob_xml_util.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
-#endif
 #include "pl/ob_pl.h"
 #include "pl/ob_pl_user_type.h"
 namespace oceanbase
@@ -7985,7 +7983,6 @@ CAST_FUNC_NAME(string, udt)
 {
   EVAL_STRING_ARG()
   {
-#ifdef OB_BUILD_ORACLE_XML
   const ObObjMeta &in_obj_meta = expr.args_[0]->obj_meta_;
   ObObjType in_type = expr.args_[0]->datum_meta_.type_;
   ObObjType out_type = expr.datum_meta_.type_;
@@ -8033,9 +8030,6 @@ CAST_FUNC_NAME(string, udt)
       LOG_WARN("pack_xml_res failed", K(ret));
     }
   }
-#else
-  ret = OB_NOT_SUPPORTED;
-#endif
   }
   return ret;
 }
@@ -8045,7 +8039,6 @@ CAST_FUNC_NAME(udt, string)
   // udt(xmltype) can be null: select dump(xmlparse(document NULL)) from dual;
   EVAL_STRING_ARG()
   {
-#ifdef OB_BUILD_ORACLE_XML
     const ObObjMeta &in_obj_meta = expr.args_[0]->obj_meta_;
     const ObObjMeta &out_obj_meta = expr.obj_meta_;
     if (in_obj_meta.is_xml_sql_type()) {
@@ -8085,9 +8078,6 @@ CAST_FUNC_NAME(udt, string)
         "expected", out_obj_meta.get_type(), "got", in_obj_meta.get_type(),
         K(in_obj_meta.get_subschema_id()));
     }
-#else
-  ret = OB_NOT_SUPPORTED;
-#endif
   }
   return ret;
 }
@@ -8096,7 +8086,7 @@ CAST_FUNC_NAME(pl_extend, string)
 {
   EVAL_STRING_ARG()
   {
-#ifdef OB_BUILD_ORACLE_XML
+#ifdef OB_BUILD_ORACLE_PL
     const ObObjMeta &in_obj_meta = expr.args_[0]->obj_meta_;
     const ObObjMeta &out_obj_meta = expr.obj_meta_;
      if (pl::PL_OPAQUE_TYPE == in_obj_meta.get_extend_type()) {
@@ -8170,7 +8160,7 @@ CAST_FUNC_NAME(sql_udt, pl_extend)
   // For PL extend type, detaield udt id is stored in accurcy_ before code generation,
   // then only existed in the data after cg.
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_ORACLE_XML
+#ifdef OB_BUILD_ORACLE_PL
   ObDatum *child_res = NULL;
   if (OB_FAIL(expr.args_[0]->eval(ctx, child_res))) {
     LOG_WARN("eval arg failed", K(ret), K(ctx));
@@ -8234,7 +8224,7 @@ CAST_FUNC_NAME(pl_extend, sql_udt)
   // Convert sql udt type to pl udt type, currently only xmltype is supported
   EVAL_STRING_ARG()
   {
-#ifdef OB_BUILD_ORACLE_XML
+#ifdef OB_BUILD_ORACLE_PL
     const ObObjMeta &in_obj_meta = expr.args_[0]->obj_meta_;
     const ObObjMeta &out_obj_meta = expr.obj_meta_;
     if (pl::PL_OPAQUE_TYPE == in_obj_meta.get_extend_type()) {

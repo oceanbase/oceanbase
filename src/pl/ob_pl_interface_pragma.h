@@ -58,11 +58,10 @@
 #include "pl/sys_package/ob_dbms_rls.h"
 #include "pl/sys_package/ob_json_object_type.h"
 #include "pl/sys_package/ob_json_element_type.h"
-#endif
-#include "pl/sys_package/ob_pl_dbms_resource_manager.h"
-#ifdef OB_BUILD_ORACLE_XML
+#include "pl/sys_package/ob_json_array_type.h"
 #include "pl/sys_package/ob_xml_type.h"
 #endif
+#include "pl/sys_package/ob_pl_dbms_resource_manager.h"
 #include "pl/sys_package/ob_dbms_session.h"
 #include "pl/sys_package/ob_dbms_workload_repository.h"
 
@@ -446,7 +445,6 @@
 #undef PREFIX
   //end of anydata
 
-#ifdef OB_BUILD_ORACLE_XML
   //start of xmltype
   INTERFACE_DEF(INTERFACE_XML_TYPE_TRANSFORM, "XML_TYPE_TRANSFORM", (ObXmlType::transform))
   INTERFACE_DEF(INTERFACE_XML_TYPE_GETCLOBVAL, "XML_TYPE_GETCLOBVAL", (ObXmlType::getclobval))
@@ -458,7 +456,6 @@
   //start of dbms_xmlgen
   INTERFACE_DEF(INTERFACE_DBMS_XMLGEN_CONVERT, "DBMS_XMLGEN_CONVERT", (ObDbmsXmlGen::convert))
   //end of dbms_xmlgen
-#endif
 
   //start of dbms_crypto
   INTERFACE_DEF(INTERFACE_DBMS_CRYPTO_ENCRYPT, "DBMS_CRYPTO_ENCRYPT", (ObDbmsCrypto::encrypt))
@@ -664,6 +661,15 @@
   INTERFACE_DEF(INTERFACE_JSON_OBJECT_RENAME_KEY, "JSON_OBJECT_RENAME_KEY", (ObPlJsonObject::rename_key))
   INTERFACE_DEF(INTERFACE_JSON_OBJECT_CLONE, "JSON_OBJECT_CLONE", (ObPlJsonObject::clone))
   // end of json_object_t
+
+  // start of json_array_t
+  INTERFACE_DEF(INTERFACE_JSON_ARRAY_ON_ERROR, "JSON_ARRAY_ON_ERROR", (ObPlJsonArray::set_on_error))
+  INTERFACE_DEF(INTERFACE_JSON_ARRAY_PARSE, "JSON_ARRAY_PARSE", (ObPlJsonArray::parse))
+  INTERFACE_DEF(INTERFACE_JSON_ARRAY_GET, "JSON_ARRAY_GET", (ObPlJsonArray::get))
+  INTERFACE_DEF(INTERFACE_JSON_ARRAY_GET_TYPE, "JSON_ARRAY_GET_TYPE", (ObPlJsonArray::get_type))
+  INTERFACE_DEF(INTERFACE_JSON_ARRAY_CONSTRUCTOR, "JSON_ARRAY_CONSTRUCTOR", (ObPlJsonArray::constructor))
+  INTERFACE_DEF(INTERFACE_JSON_ARRAY_CLONE, "JSON_ARRAY_CLONE", (ObPlJsonArray::clone))
+  // end of json_array_t
 #endif
   // start of dbms_udr
   INTERFACE_DEF(INTERFACE_DBMS_UDR_CREATE_RULE, "CREATE_RULE", (ObDBMSUserDefineRule::create_rule))

@@ -13,11 +13,9 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_xml_serialize.h"
-#ifdef OB_BUILD_ORACLE_XML
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
 #include "lib/xml/ob_xml_parser.h"
 #include "lib/xml/ob_xml_util.h"
-#endif
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 
@@ -116,7 +114,6 @@ int ObExprXmlSerialize::get_dest_type(const ObExprResType as_type, ObExprResType
 }
 
 
-#ifdef OB_BUILD_ORACLE_XML
 int ObExprXmlSerialize::eval_xml_serialize(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
@@ -280,8 +277,12 @@ int ObExprXmlSerialize::print_format_xml_text(ObIAllocator &allocator,
       print_params.encode = ObString(ObXmlUtil::get_charset_name(ctx.exec_ctx_.get_my_session()->get_local_collation_connection()));
     }
   }
+  ObNsSortedVector* ns_vec_point = nullptr;
+  ObNsSortedVector ns_vec;
 
-  if (OB_FAIL(xml_node->print_content(buff, with_encoding, with_version, format_flag, print_params))) {
+  if (OB_FAIL(ObXmlUtil::init_print_ns(&allocator, xml_node, ns_vec, ns_vec_point))) {
+    LOG_WARN("fail to init ns vector by extend area", K(ret));
+  } else if (OB_FAIL(xml_node->print_content(buff, with_encoding, with_version, format_flag, print_params, ns_vec_point))) {
     LOG_WARN("fail to print xml content", K(ret), K(with_encoding), K(with_version), K(format_flag));
   }
   if (OB_SUCC(ret)) {
@@ -408,7 +409,11 @@ int ObExprXmlSerialize::get_xml_base_by_doc_type(ObMulModeMemCtx* mem_ctx,
     ObString check_xml;
     ObStringBuffer buff(mem_ctx->allocator_);
     ObXmlDocument *xml_doc = nullptr;
-    if (OB_FAIL(node->print_document(buff, CS_TYPE_INVALID, ObXmlFormatType::NO_FORMAT))) {
+    ObNsSortedVector* ns_vec_point = nullptr;
+    ObNsSortedVector ns_vec;
+    if (OB_FAIL(ObXmlUtil::init_print_ns(mem_ctx->allocator_, node, ns_vec, ns_vec_point))) {
+      LOG_WARN("fail to init ns vector by extend area", K(ret));
+    } else if (OB_FAIL(node->print_document(buff, CS_TYPE_INVALID, ObXmlFormatType::NO_FORMAT, 2, ns_vec_point))) {
       LOG_WARN("fail to serialize unparse string", K(ret));
     } else {
       check_xml.assign_ptr(buff.ptr(), buff.length());
@@ -439,7 +444,6 @@ int ObExprXmlSerialize::get_xml_base_by_doc_type(ObMulModeMemCtx* mem_ctx,
   }
   return ret;
 }
-#endif
 
 int ObExprXmlSerialize::cg_expr(ObExprCGCtx &expr_cg_ctx,
                                 const ObRawExpr &raw_expr,

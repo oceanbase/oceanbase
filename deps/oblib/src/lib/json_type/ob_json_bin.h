@@ -407,7 +407,9 @@ public:
         data_(nullptr),
         int_val_(0),
         ctx_(nullptr),
-        is_alloc_ctx_(false)
+        is_alloc_ctx_(false),
+        is_seek_only_(false),
+        is_schema_(false)
   {
     cursor_ = &local_cursor_;
   }
@@ -422,7 +424,9 @@ public:
         data_(nullptr),
         int_val_(0),
         ctx_(nullptr),
-        is_alloc_ctx_(false)
+        is_alloc_ctx_(false),
+        is_seek_only_(false),
+        is_schema_(false)
   {
     cursor_ = &local_cursor_;
   }
@@ -438,7 +442,9 @@ public:
         data_(nullptr),
         int_val_(0),
         ctx_(ctx),
-        is_alloc_ctx_(is_alloc_ctx)
+        is_alloc_ctx_(is_alloc_ctx),
+        is_seek_only_(false),
+        is_schema_(false)
   {
     cursor_ = &local_cursor_;
   }
@@ -454,7 +460,9 @@ public:
         data_(nullptr),
         int_val_(0),
         ctx_(0),
-        is_alloc_ctx_(false)
+        is_alloc_ctx_(false),
+        is_seek_only_(false),
+        is_schema_(false)
   {
     cursor_ = &local_cursor_;
   }
@@ -470,7 +478,9 @@ public:
         data_(nullptr),
         int_val_(0),
         ctx_(ctx),
-        is_alloc_ctx_(false)
+        is_alloc_ctx_(false),
+        is_seek_only_(false),
+        is_schema_(false)
   {
     cursor_ = &local_cursor_;
   }
@@ -528,9 +538,12 @@ public:
   {
     return meta_.field_type_;
   }
+  int get_total_value(ObIAllocator* allocator, ObString &res) const;
+
   int get_array_element(uint64_t index, ObIJsonBase *&value) const override;
   int get_object_value(uint64_t index, ObIJsonBase *&value) const override;
   int get_object_value(const ObString &key, ObIJsonBase *&value) const override;
+  int get_object_value(uint64_t index, ObString &key, ObIJsonBase *&value) const override;
   int get_key(uint64_t index, common::ObString &key_out) const override;
   int raw_binary(common::ObString &out, ObIAllocator *allocator) const;
   int get_raw_binary(common::ObString &out, ObIAllocator *allocator) const;
@@ -784,6 +797,7 @@ public:
 
   // release resource
   void destroy();
+  void set_is_schema(bool is_schema) {is_schema_ = is_schema;}
   virtual int reset();
   OB_INLINE const ObILobCursor* get_cursor() const { return cursor_; }
   OB_INLINE ObILobCursor* get_cursor() { return cursor_; }
@@ -791,6 +805,12 @@ public:
   OB_INLINE ObJsonBinCtx* get_ctx() const { return ctx_; }
   OB_INLINE ObJsonBinUpdateCtx* get_update_ctx() const { return nullptr == ctx_ ? nullptr : ctx_->update_ctx_; }
 
+
+  // get flag for json doc used only for search
+  OB_INLINE bool get_seek_flag() const { return is_seek_only_; }
+  // set flag for json doc
+  OB_INLINE void set_seek_flag(bool is_seek_only) { is_seek_only_ = is_seek_only; }
+  int clone_new_node(ObJsonBin*& res, common::ObIAllocator *allocator) const;
 private:
   // used as stack
   struct ObJBNodeMeta {
@@ -857,6 +877,7 @@ private:
   int deserialize_json_array_v0(ObJsonArray *array);
   int deserialize_json_array(ObJsonArray *array);
 
+  int serialize_number_to_json_decimal(number::ObNumber number, ObJsonBuffer &result);
 
   int calc_size_with_insert_new_value(const ObString &new_key, const ObJsonBin *new_value, ObJsonBinMeta &new_meta) const;
   int calc_size_with_new_value(const ObJsonBin *old_value, const ObJsonBin *new_value, ObJsonBinMeta &new_meta) const;
@@ -979,7 +1000,16 @@ private:
       const ObJsonBin& child_value,
       const int64_t value_offset,
       ObJsonBuffer& result);
-  bool is_at_root() const { return node_stack_.size() == 0; }
+  bool is_at_root() const
+  {
+    bool res = false;
+    if (OB_ISNULL(ctx_) || ctx_->extend_seg_offset_ == 0) {
+      res = (pos_ == 0 || pos_ == OB_JSON_BIN_VALUE_TYPE_LEN) && node_stack_.size() == 0;
+    } else {
+      res = pos_ == sizeof(ObJsonBinDocHeader) && node_stack_.size() == 0;
+    }
+    return res;
+  }
   int init_cursor(const ObString &data);
 
 public:
@@ -1011,9 +1041,12 @@ private:
   number::ObNumber number_;
   ObPrecision prec_;
   ObScale scale_;
-
   ObJsonBinCtx* ctx_;
   bool is_alloc_ctx_;
+  // json doc used only for search
+  bool is_seek_only_;
+
+  bool is_schema_;
 
   DISALLOW_COPY_AND_ASSIGN(ObJsonBin);
 };

@@ -121,7 +121,7 @@ static void check_json_diff_valid(ObIAllocator &allocator, const ObString& j_tex
     int path_idx = path_cache.size();
     ASSERT_EQ(OB_SUCCESS, path_cache.find_and_add_cache(json_path, path_str, path_idx));
     ASSERT_EQ(path_cache.path_stat_at(path_idx), ObPathParseStat::OK_NOT_NULL);
-    ObJsonBaseVector hit;
+    ObJsonSeekResult hit;
     if (json_diffs[i].op_ == ObJsonDiffOp::REPLACE
         || json_diffs[i].op_ == ObJsonDiffOp::REMOVE) {
       ASSERT_EQ(OB_SUCCESS, j_base->seek(*json_path, json_path->path_node_cnt(), true, false, hit));
@@ -981,7 +981,7 @@ TEST_F(TestJsonBin, issue_37549565)
   ObIJsonBase *j_bin = NULL;
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_BIN, j_bin));
-  ObJsonBaseVector hit;
+  ObJsonSeekResult hit;
   int cnt = test_path.path_node_cnt();
   ret = j_bin->seek(test_path, cnt, false, false, hit);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -1005,7 +1005,7 @@ TEST_F(TestJsonBin, test_bin_to_tree_after_seek)
   ObIJsonBase *j_bin = NULL;
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_BIN, j_bin));
-  ObJsonBaseVector hit;
+  ObJsonSeekResult hit;
   int cnt = test_path.path_node_cnt();
   ret = j_bin->seek(test_path, cnt, false, false, hit);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -1158,7 +1158,7 @@ TEST_F(TestJsonBin, test_seek_member) {
   ObIJsonBase *j_bin = NULL;
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_BIN, j_bin));
-  ObJsonBaseVector hit;
+  ObJsonSeekResult hit;
   int cnt = test_path.path_node_cnt();
   long t_seek1 =getCurrentTime();
   ret = j_bin->seek(test_path, cnt, false, false, hit);
@@ -1193,7 +1193,7 @@ TEST_F(TestJsonBin, test_seek_member_wildcard) {
   ObIJsonBase *j_bin = NULL;
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_BIN, j_bin));
-  ObJsonBaseVector hit;
+  ObJsonSeekResult hit;
   int cnt = test_path.path_node_cnt();
   long t_seek1 =getCurrentTime();
   std::cout<<"time of seek:"<<getCurrentTime()-t_seek1<<std::endl;
@@ -1219,7 +1219,7 @@ TEST_F(TestJsonBin, test_seek_array_cell) {
   ObIJsonBase *j_bin = NULL;
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_BIN, j_bin));
-  ObJsonBaseVector hit;
+  ObJsonSeekResult hit;
   int cnt = test_path.path_node_cnt();
   ASSERT_EQ(OB_SUCCESS, j_bin->seek(test_path, cnt, true, false, hit));
   ASSERT_EQ(hit.size(), 1);
@@ -1235,7 +1235,7 @@ TEST_F(TestJsonBin, test_seek_array_range) {
   ObIJsonBase *j_bin = NULL;
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_BIN, j_bin));
-  ObJsonBaseVector hit;
+  ObJsonSeekResult hit;
   int cnt = test_path.path_node_cnt();
   ASSERT_EQ(OB_SUCCESS, j_bin->seek(test_path, cnt, false, false, hit));
   ASSERT_EQ(hit.size(), 2);
@@ -1263,7 +1263,7 @@ TEST_F(TestJsonBin, test_seek_ellipsis) {
   ObIJsonBase *j_bin = NULL;
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::get_json_base(&allocator, j_text,
       ObJsonInType::JSON_TREE, ObJsonInType::JSON_BIN, j_bin));
-  ObJsonBaseVector hit;
+  ObJsonSeekResult hit;
   int cnt = test_path.path_node_cnt();
   long t_seek1 =getCurrentTime();
   std::cout<<"time of seek:"<<getCurrentTime()-t_seek1<<std::endl;
@@ -2194,7 +2194,7 @@ TEST_F(TestJsonBin, test_empty_object_seek)
     ASSERT_EQ(ObJsonNodeType::J_OBJECT, j_bin->json_type());
     ASSERT_TRUE(j_bin->is_bin());
 
-    ObJsonBaseVector hit;
+    ObJsonSeekResult hit;
     int cnt = test_path.path_node_cnt();
     ASSERT_EQ(OB_SUCCESS, j_bin->seek(test_path, cnt, false, false, hit));
     ASSERT_EQ(0, hit.size());
@@ -2219,7 +2219,7 @@ TEST_F(TestJsonBin, test_empty_array_seek)
     ASSERT_EQ(ObJsonNodeType::J_OBJECT, j_bin->json_type());
     ASSERT_TRUE(j_bin->is_bin());
 
-    ObJsonBaseVector hit;
+    ObJsonSeekResult hit;
     int cnt = test_path.path_node_cnt();
     ASSERT_EQ(OB_SUCCESS, j_bin->seek(test_path, cnt, false, false, hit));
     ASSERT_EQ(0, hit.size());
@@ -2956,7 +2956,7 @@ TEST_F(TestJsonBin, test_get_parent)
     ObJsonPath test_path(path_str, &allocator);
     ASSERT_EQ(OB_SUCCESS, test_path.parse_path());
 
-    ObJsonBaseVector hit;
+    ObJsonSeekResult hit;
     int cnt = test_path.path_node_cnt();
     ASSERT_EQ(OB_SUCCESS, j_bin->seek(test_path, cnt, false, false, hit));
     ASSERT_EQ(1, hit.size());
@@ -2993,7 +2993,7 @@ TEST_F(TestJsonBin, test_get_parent)
     ObJsonPath test_path(path_str, &allocator);
     ASSERT_EQ(OB_SUCCESS, test_path.parse_path());
 
-    ObJsonBaseVector hit;
+    ObJsonSeekResult hit;
     int cnt = test_path.path_node_cnt();
     ASSERT_EQ(OB_SUCCESS, j_bin->seek(test_path, cnt, false, false, hit));
     ASSERT_EQ(1, hit.size());
@@ -3252,7 +3252,7 @@ static void json_set(ObIAllocator& allocator, ObString& j_text, std::vector<std:
     int path_idx = path_cache.size();
     ASSERT_EQ(OB_SUCCESS, path_cache.find_and_add_cache(json_path, path, path_idx));
     ASSERT_EQ(path_cache.path_stat_at(path_idx), ObPathParseStat::OK_NOT_NULL);
-    ObJsonBaseVector hit;
+    ObJsonSeekResult hit;
     ASSERT_EQ(OB_SUCCESS, j_bin->seek(*json_path, json_path->path_node_cnt(), true, false, hit));
     ASSERT_EQ(1, hit.size());
     ObIJsonBase *j_parent = nullptr;
@@ -3311,7 +3311,7 @@ TEST_F(TestJsonBin, test_array_remove)
   ObJsonPath test_path(path_str, &allocator);
   ASSERT_EQ(OB_SUCCESS, test_path.parse_path());
 
-  ObJsonBaseVector hit;
+  ObJsonSeekResult hit;
   int cnt = test_path.path_node_cnt();
   ASSERT_EQ(OB_SUCCESS, j_bin->seek(test_path, cnt, false, false, hit));
   ASSERT_EQ(1, hit.size());

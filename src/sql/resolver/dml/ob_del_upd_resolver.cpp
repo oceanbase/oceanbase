@@ -918,7 +918,7 @@ int ObDelUpdResolver::set_base_table_for_updatable_view(TableItem &table_item,
             ret = dml->is_insert_stmt() ? OB_ERR_NON_INSERTABLE_TABLE : OB_ERR_NON_UPDATABLE_TABLE;
             LOG_WARN("view is not updatable", K(ret));
           } else if (new_table_item->is_json_table()) {
-            ret = OB_ERR_NON_INSERTABLE_TABLE;
+            ret = is_mysql_mode() ? OB_ERR_NON_INSERTABLE_TABLE : OB_ERR_VIRTUAL_COL_NOT_ALLOWED;
             LOG_WARN("json table can not be insert", K(ret));
           } else {
             ret = OB_ERR_UNEXPECTED;
@@ -1023,6 +1023,8 @@ int ObDelUpdResolver::set_base_table_for_view(TableItem &table_item, const bool 
       } else if (base->is_values_table()) {
         ret = OB_ERR_NON_UPDATABLE_TABLE;
         LOG_WARN("non update table", K(ret));
+      } else if (base->is_json_table()) {
+        ret = is_mysql_mode() ? OB_ERR_NON_UPDATABLE_TABLE : OB_ERR_O_DELETE_VIEW_NON_KEY_PRESERVED;
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected table type in view", K(ret), K(*base));

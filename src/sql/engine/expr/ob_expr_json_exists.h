@@ -32,6 +32,7 @@ public:
                                 ObExprResType* types,
                                 int64_t param_num,
                                 common::ObExprTypeCtx& type_ctx) const override;
+  virtual bool need_rt_ctx() const override { return true; }
   static int get_path(const ObExpr &expr, ObEvalCtx &ctx, ObJsonPath* &j_path,
                       common::ObArenaAllocator &allocator,
                       ObJsonPathCache &ctx_cache, ObJsonPathCache* &path_cache);
@@ -43,7 +44,9 @@ public:
   static int get_passing(const ObExpr &expr, ObEvalCtx &ctx, PassingMap &pass_map,
                         uint32_t param_num, common::ObArenaAllocator &temp_allocator);
   static int get_error_or_empty(const ObExpr &expr, ObEvalCtx &ctx, uint32_t idx, uint8_t &result);
-  static int set_result(ObDatum &res, const ObJsonBaseVector& hit,
+  static int get_error_option(int8_t option_on_error, bool& res_val);
+  static int get_empty_option(int8_t option_on_empty, bool& res_val);
+  static int set_result(ObDatum &res, ObJsonSeekResult& hit,
                         const uint8_t option_on_error, const uint8_t option_on_empty,
                         const bool is_cover_by_error, const bool is_null_json);
   static int eval_json_exists(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);

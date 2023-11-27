@@ -79,6 +79,15 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
       }
     }
     if (OB_SUCC(ret)) {
+      if (OB_FAIL(transform_json_object_expr_with_star(parent_stmts, stmt, is_happened))) {
+        LOG_WARN("failed to transform for json object star", K(ret));
+      } else {
+        trans_happened |= is_happened;
+        OPT_TRACE("transform for udt columns", is_happened);
+        LOG_TRACE("succeed to transform for udt columns", K(is_happened), K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
       if (OB_FAIL(transform_udt_columns(parent_stmts, stmt, is_happened))) {
         LOG_WARN("failed to transform for transform for cast multiset", K(ret));
       } else {
@@ -7146,6 +7155,37 @@ int ObTransformPreProcess::check_skip_child_select_view(const ObIArray<ObParentD
   return ret;
 }
 
+int ObTransformPreProcess::transform_json_object_expr_with_star(const ObIArray<ObParentDMLStmt> &parent_stmts,
+                                                                ObDMLStmt *stmt, bool &trans_happened)
+{
+  INIT_SUCC(ret);
+  ObSEArray<ObRawExpr*, 4> replace_exprs;
+
+  JsonObjectStarChecker expr_checker(replace_exprs);
+  ObStmtExprGetter visitor;
+  visitor.checker_ = &expr_checker;
+  if (OB_SUCC(ret) && OB_FAIL(stmt->iterate_stmt_expr(visitor))) {
+    LOG_WARN("get relation exprs failed", K(ret));
+  }
+
+  //collect query udt exprs which need to be replaced
+  for (int64_t i = 0; OB_SUCC(ret) && i < replace_exprs.count(); i++) {
+    if (OB_ISNULL(replace_exprs.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("replace expr is null", K(ret));
+    } else {
+      ObSysFunRawExpr *func_expr = static_cast<ObSysFunRawExpr*>(replace_exprs.at(i));
+      if (OB_FAIL(ObTransformUtils::expand_wild_star_to_columns(ctx_, stmt, func_expr))) {
+        LOG_WARN("fail to transform star to column node", K(ret));
+      } else {
+        trans_happened = true;
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObTransformPreProcess::transform_query_udt_columns_exprs(const ObIArray<ObParentDMLStmt> &parent_stmts,
                                                              ObDMLStmt *stmt, bool &trans_happened)
 {
@@ -7195,6 +7235,8 @@ int ObTransformPreProcess::transform_query_udt_columns_exprs(const ObIArray<ObPa
         ObRawExpr *sys_makexml_expr = NULL;
         bool need_transform = false;
         if (!col_expr->is_xml_column() || has_exist_in_array(parent_assign_xml_col_exprs, col_expr)) {
+          // do nothing
+        } else if (col_expr->get_result_type().get_udt_id() == T_OBJ_XML) {
           // do nothing
         } else if (OB_FAIL(ObTransformUtils::create_udt_hidden_columns(ctx_,
                                                                       stmt,

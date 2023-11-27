@@ -15,9 +15,7 @@
 #include "ob_expr_xml_attributes.h"
 #include "share/ob_json_access_utils.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h" // may need json for kv pairs
-#ifdef OB_BUILD_ORACLE_XML
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
-#endif
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
@@ -83,7 +81,6 @@ int ObExprXmlAttributes::calc_result_typeN(ObExprResType &type,
   return ret;
 }
 
-#ifdef OB_BUILD_ORACLE_XML
 int ObExprXmlAttributes::eval_xml_attributes(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   INIT_SUCC(ret);
@@ -151,7 +148,6 @@ int ObExprXmlAttributes::eval_xml_attributes(const ObExpr &expr, ObEvalCtx &ctx,
   }
   return ret;
 }
-#endif
 
 int ObExprXmlAttributes::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const
 {

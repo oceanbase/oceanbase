@@ -101,7 +101,7 @@ int ObExprJsonRemove::eval_json_remove(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     path_cache = ((path_cache != NULL) ? path_cache : &ctx_cache);
   }
   
-  ObJsonBaseVector hits;
+  ObJsonSeekResult hits;
   for (int64_t i = 1; OB_SUCC(ret) && !is_null_result && i < expr.arg_cnt_; i++) {
     hits.clear();
     ObDatum *path_data = NULL;

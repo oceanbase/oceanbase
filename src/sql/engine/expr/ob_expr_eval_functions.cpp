@@ -239,6 +239,8 @@
 #include "ob_expr_json_object.h"
 #include "ob_expr_json_extract.h"
 #include "ob_expr_json_contains.h"
+#include "ob_expr_json_schema_valid.h"
+#include "ob_expr_json_schema_validation_report.h"
 #include "ob_expr_json_contains_path.h"
 #include "ob_expr_json_depth.h"
 #include "ob_expr_json_keys.h"
@@ -250,6 +252,7 @@
 #include "ob_expr_json_valid.h"
 #include "ob_expr_json_remove.h"
 #include "ob_expr_json_array_append.h"
+#include "ob_expr_json_append.h"
 #include "ob_expr_json_array_insert.h"
 #include "ob_expr_json_value.h"
 #include "ob_expr_json_replace.h"
@@ -324,6 +327,9 @@
 #include "ob_expr_xml_serialize.h"
 #include "ob_expr_xmlcast.h"
 #include "ob_expr_update_xml.h"
+#include "ob_expr_insert_child_xml.h"
+#include "ob_expr_xml_delete_xml.h"
+#include "ob_expr_xml_sequence.h"
 #include "ob_expr_generator_func.h"
 #include "ob_expr_random.h"
 #include "ob_expr_randstr.h"
@@ -1038,6 +1044,15 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprCurrentScn::eval_current_scn,                                 /* 606 */
   ObExprTempTableSSID::calc_temp_table_ssid,                          /* 607 */
   ObExprAlignDate4Cmp::eval_align_date4cmp,                            /* 608 */
+  ObExprJsonObjectStar::eval_ora_json_object_star,                    /* 609 */
+  ObExprJsonSchemaValid::eval_json_schema_valid,                       /* 610 */
+  ObExprJsonSchemaValidationReport::eval_json_schema_validation_report,/* 611 */
+  ObExprInsertChildXml::eval_insert_child_xml,                        /* 612 */
+  ObExprDeleteXml::eval_delete_xml,                                   /* 613 */
+  ObExprExtractValue::eval_mysql_extract_value,                       /* 614 */
+  ObExprUpdateXml::eval_mysql_update_xml,                             /* 615 */
+  ObExprXmlSequence::eval_xml_sequence,                               /* 616 */
+  ObExprJsonAppend::eval_json_array_append,                           /* 617 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

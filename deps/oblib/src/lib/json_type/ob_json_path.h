@@ -426,7 +426,7 @@ public:
   size_t size();
   void reset();
 
-  int find_and_add_cache(ObJsonPath*& parse_path, ObString& path_str, int arg_idx);
+  int find_and_add_cache(ObJsonPath*& parse_path, ObString& path_str, int arg_idx, bool is_const = false);
   void set_allocator(common::ObIAllocator *allocator);
   common::ObIAllocator* get_allocator();
 private:

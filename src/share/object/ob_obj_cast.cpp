@@ -34,11 +34,8 @@
 #include "lib/charset/ob_charset.h"
 #include "lib/geo/ob_geometry_cast.h"
 #include "sql/engine/expr/ob_datum_cast.h"
-
-#ifdef OB_BUILD_ORACLE_XML
 #include "lib/xml/ob_xml_util.h"
 #include "lib/xml/ob_xml_parser.h"
-#endif
 
 // from sql_parser_base.h
 #define DEFAULT_STR_LENGTH -1
@@ -113,7 +110,7 @@ static int cast_extend_types_not_support(const ObObjType expect_type,
   UNUSED(out);
   UNUSED(cast_mode);
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_ORACLE_XML
+#ifdef OB_BUILD_ORACLE_PL
   if (in.is_pl_extend()) {
     if (pl::PL_OPAQUE_TYPE == in.get_meta().get_extend_type()) {
       pl::ObPLOpaque *pl_src = reinterpret_cast<pl::ObPLOpaque*>(in.get_ext());
@@ -9184,7 +9181,7 @@ static int sql_udt_pl_extend(const ObObjType expect_type, ObObjCastParams &param
                              const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_ORACLE_XML
+#ifdef OB_BUILD_ORACLE_PL
   if (in.is_xml_sql_type()) {
     // no need to read blob full data
     pl::ObPLXmlType *xmltype = NULL;
@@ -9229,7 +9226,6 @@ static int string_sql_udt(const ObObjType expect_type, ObObjCastParams &params,
                           const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_ORACLE_XML
   if (in.is_string_type()) {
     ObMulModeMemCtx* mem_ctx = nullptr;
     ObIAllocator &temp_allocator = *params.allocator_v2_;
@@ -9288,9 +9284,6 @@ static int string_sql_udt(const ObObjType expect_type, ObObjCastParams &params,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected type to convert format", K(ret), K(expect_type), K(in));
   }
-#else
-  ret = OB_NOT_SUPPORTED;
-#endif
   return ret;
 }
 
@@ -9298,7 +9291,7 @@ static int pl_extend_sql_udt(const ObObjType expect_type, ObObjCastParams &param
                              const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_ORACLE_XML
+#ifdef OB_BUILD_ORACLE_PL
   if (in.is_pl_extend()) {
     if (pl::PL_OPAQUE_TYPE == in.get_meta().get_extend_type()) {
       pl::ObPLOpaque *pl_src = reinterpret_cast<pl::ObPLOpaque*>(in.get_ext());
@@ -9346,7 +9339,7 @@ static int pl_extend_string(const ObObjType expect_type, ObObjCastParams &params
                             const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_ORACLE_XML
+#ifdef OB_BUILD_ORACLE_PL
   if (in.is_pl_extend()) {
     if (pl::PL_OPAQUE_TYPE == in.get_meta().get_extend_type()) {
       pl::ObPLOpaque *pl_src = reinterpret_cast<pl::ObPLOpaque*>(in.get_ext());
@@ -9427,7 +9420,6 @@ static int udt_string(const ObObjType expect_type, ObObjCastParams &params,
                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_ORACLE_XML
   if (in.is_xml_sql_type()) {
     ObString blob_data = in.get_string();
     ObStringBuffer xml_plain_text(params.allocator_v2_);
@@ -9455,9 +9447,6 @@ static int udt_string(const ObObjType expect_type, ObObjCastParams &params,
     LOG_WARN_RET(OB_ERR_INVALID_TYPE_FOR_OP, "inconsistent datatypes",
       "expected", expect_type, "got", in.get_type(), K(in.get_udt_subschema_id()));
   }
-#else
-  ret = OB_NOT_SUPPORTED;
-#endif
   return ret;
 }
 

@@ -27,7 +27,8 @@ namespace pl
 class ObPlJsonUtil {
   enum {
     JSN_PL_ELEMENT_TYPE_ID = 300023,
-    JSN_PL_OBJECT_TYPE_ID = 300024
+    JSN_PL_OBJECT_TYPE_ID = 300024,
+    JSN_PL_ARRAY_TYPE_ID = 300025,
   };
 
 public:
@@ -55,19 +56,21 @@ public:
                                              ObPLJsonBaseType *&jsontype);
   static int print_decimal(number::ObNumber &num, ObScale scale, ObJsonBuffer &j_buf);
   static int get_json_object(sql::ObExecContext &ctx, ObJsonNode*& json_val);
+  static int get_json_array(sql::ObExecContext &ctx, ObJsonNode*& json_val);
   static int get_json_boolean(sql::ObExecContext &ctx, ObObj &data, ObJsonNode*& json_val);
   static int get_json_null(sql::ObExecContext &ctx, ObJsonNode*& json_val);
   static int set_on_error(sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
   static int check_on_error(ObObj &obj, int& err_val);
   static bool proc_on_error(common::ObObj &result, int error_behavior, int &ret);
   static bool is_pl_jsontype(int64_t id) {
-    return (id == JSN_PL_ELEMENT_TYPE_ID || id == JSN_PL_OBJECT_TYPE_ID);
+    return (id == JSN_PL_ELEMENT_TYPE_ID || id == JSN_PL_OBJECT_TYPE_ID || id == JSN_PL_ARRAY_TYPE_ID);
   }
 
   static bool is_hex(const uint8_t input);
   static bool is_hex_string(const ObString& hex_str);
   static bool is_pl_json_element_type(int64_t id) { return (id == JSN_PL_ELEMENT_TYPE_ID); }
   static bool is_pl_json_object_type(int64_t id) { return (id == JSN_PL_OBJECT_TYPE_ID); }
+  static bool is_pl_json_array_type(int64_t id) { return (id == JSN_PL_ARRAY_TYPE_ID); }
 
   static int str_to_lob_storage_obj(ObIAllocator &allocator, const ObString& input, common::ObObj& output);
 

@@ -96,7 +96,7 @@ int ObExprJsonContains::eval_json_contains(const ObExpr &expr, ObEvalCtx &ctx, O
       } else if (expr.args_[2]->datum_meta_.type_ == ObNullType || path_data->is_null()) {
         is_null_result = true;
       } else {
-        ObJsonBaseVector sub_json_targets;
+        ObJsonSeekResult sub_json_targets;
         ObString path_val = path_data->get_string();
         ObJsonPath *json_path;
         if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(expr.args_[2], ctx, temp_allocator, path_val, is_null_result))) {

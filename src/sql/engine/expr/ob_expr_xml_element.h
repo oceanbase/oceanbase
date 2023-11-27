@@ -19,9 +19,7 @@
 #include "lib/json_type/ob_json_bin.h" // for ObJsonBin
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "lib/container/ob_vector.h"
-#ifdef OB_BUILD_ORACLE_XML
 #include "lib/xml/ob_xml_util.h"
-#endif
 
 using namespace oceanbase::common;
 
@@ -41,16 +39,11 @@ public:
                                 int64_t param_num,
                                 common::ObExprTypeCtx& type_ctx)
                                 const override;
-#ifdef OB_BUILD_ORACLE_XML
   static int eval_xml_element(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
-#else
-  static int eval_xml_element(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res) { return OB_NOT_SUPPORTED; }
-#endif
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
 private:
-#ifdef OB_BUILD_ORACLE_XML
   static int get_keys_from_wrapper(ObIJsonBase *json_doc,
                                    ObIAllocator *allocator,
                                    ObString &str);
@@ -70,7 +63,6 @@ private:
   static int construct_value_array(ObIAllocator &allocator,
                                     const ObString &value,
                                     ObVector<ObObj, ElementObjCacheStatArena> &res_value);
-#endif
   DISALLOW_COPY_AND_ASSIGN(ObExprXmlElement);
 };
 

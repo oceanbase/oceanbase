@@ -33,6 +33,16 @@ ObExprJsonArrayAppend::ObExprJsonArrayAppend(ObIAllocator &alloc)
 {
 }
 
+ObExprJsonArrayAppend::ObExprJsonArrayAppend(
+    ObIAllocator &alloc,
+    ObExprOperatorType type,
+    const char *name,
+    int32_t param_num,
+    ObValidForGeneratedColFlag valid_for_generated_col,
+    int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, valid_for_generated_col, dimension)
+{
+}
+
 ObExprJsonArrayAppend::~ObExprJsonArrayAppend()
 {
 }
@@ -87,7 +97,7 @@ int ObExprJsonArrayAppend::eval_json_array_append(const ObExpr &expr, ObEvalCtx 
   common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
   ObIJsonBase *j_base = NULL;
   bool is_null = false;
-  ObJsonBaseVector hit;
+  ObJsonSeekResult hit;
 
   if (expr.datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN) {
     ret = OB_ERR_INVALID_JSON_CHARSET;

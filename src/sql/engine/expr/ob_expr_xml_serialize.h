@@ -15,10 +15,8 @@
 #define OCEANBASE_SQL_OB_EXPR_XML_SERIALIZE_H_
 
 #include "sql/engine/expr/ob_expr_operator.h"
-#ifdef OB_BUILD_ORACLE_XML
 #include "lib/xml/ob_multi_mode_interface.h"
 #include "lib/xml/ob_xml_tree.h"
-#endif
 using namespace oceanbase::common;
 
 namespace oceanbase
@@ -35,16 +33,11 @@ public:
                                 int64_t param_num,
                                 common::ObExprTypeCtx& type_ctx)
                                 const override;
-#ifdef OB_BUILD_ORACLE_XML
   static int eval_xml_serialize(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
-#else
-  static int eval_xml_serialize(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res) { return OB_NOT_SUPPORTED; }
-#endif
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   int get_dest_type(const ObExprResType as_type, ObExprResType &dst_type) const;
-#ifdef OB_BUILD_ORACLE_XML
 private:
   static bool is_supported_return_type(ObObjType val_type, ObCollationType cs_type);
 
@@ -100,7 +93,6 @@ private:
   const static int64_t OB_XML_DEFAULTS_IMPLICIT = 0;
   const static int64_t OB_XML_HIDE_DEFAULTS = 1;
   const static int64_t OB_XML_SHOW_DEFAULTS = 2;
-#endif
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprXmlSerialize);
 };

@@ -138,6 +138,8 @@ private:
   int print_json_expr(ObSysFunRawExpr *expr);
   int print_json_value(ObSysFunRawExpr *expr);
   int print_json_query(ObSysFunRawExpr *expr);
+  int print_dot_notation(ObSysFunRawExpr *expr);
+  int print_json_object_star(ObSysFunRawExpr *expr);
   int print_json_exists(ObSysFunRawExpr *expr);
   int print_json_equal(ObSysFunRawExpr *expr);
   int print_json_array(ObSysFunRawExpr *expr);

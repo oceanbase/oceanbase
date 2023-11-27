@@ -712,6 +712,7 @@ ObString seek_suite_ellipsis[2] = {"name=\"b\"", "name=\"d\""};
 TEST_F(TestXPath, test_seek_suite_ellipsis) // tested
 {
   // 用于解析
+  set_compat_mode(oceanbase::lib::Worker::CompatMode::ORACLE);
   ObString str0 = "//@name";
   ObString xml_text("<root><a name=\"b\" age=\"18\"><c name=\"d\" age=\"1\"/></a></root>");
   int ret = OB_SUCCESS;
@@ -2626,7 +2627,7 @@ TEST_F(TestXPath, test_seek_root_ancestor) // tested
 
   ASSERT_EQ(OB_SUCCESS, ret);
   ObPathExprIter pathiter(&allocator);
-  pathiter.init(ctx,str0, default_ns, doc, &pass);
+  pathiter.init(ctx, str0, default_ns, doc, &pass);
   // 解析
   ret = pathiter.open();
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -2694,6 +2695,490 @@ TEST_F(TestXPath, test_seek_root_parent) // tested
   ObIMulModeBase* res;
   ret = pathiter.get_next_node(res);
   ASSERT_EQ(OB_ITER_END, ret);
+}
+
+# define NS_TEST_COUNT 3
+# define ADD_NS_RES_COUNT 6
+ObString ns_key[NS_TEST_COUNT] = {"", "f", "h"};
+ObString ns_value[NS_TEST_COUNT] = {"ns1", "ns2", "ns3"};
+TEST_F(TestXPath, test_basic_add_ns)
+{
+  set_compat_mode(oceanbase::lib::Worker::CompatMode::ORACLE);
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ObString xml_text(
+    "<a xmlns=\"ns1\" xmlns:f=\"ns2\" xmlns:h=\"ns3\">"
+      "<f:b b1=\"b1\" b2=\"b2\">"
+        "<c>"
+          "<h:d>"
+            "<f:e></f:e>"
+          "</h:d>"
+        "</c>"
+      "</f:b>"
+      "<h:b1>"
+      "</h:b1>"
+    "</a>");
+  ObString xml_with_entend("<f:b xmlns:f=\"ns2\" b1=\"b1\" b2=\"b2\"><c xmlns=\"ns1\"><h:d xmlns:h=\"ns3\"><f:e/></h:d></c></f:b>");
+  ObXmlDocument* doc = nullptr;
+  ObMulModeMemCtx* ctx = nullptr;
+  ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
+  ret = ObXmlParserUtils::parse_document_text(ctx, xml_text, doc);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObXmlBin xbin(ctx);
+  ASSERT_EQ(xbin.parse_tree(doc), OB_SUCCESS);
+
+  // seek
+  ObString str0 = "/a/f:b";
+  ObString str1 = "/ns1:a/ns2:b";
+  ObString default_ns(ns_value[0]);
+  ObPathVarObject pass(allocator);
+  for (int i = 1; i < NS_TEST_COUNT && OB_SUCC(ret); ++i) {
+    ObDatum* data = static_cast<ObDatum*>(allocator.alloc(sizeof(ObDatum)));
+    data = new(data) ObDatum();
+    data->set_string(ns_value[i]); // default ns value
+    ASSERT_EQ(true, OB_NOT_NULL(data));
+    ret = pass.add(ns_key[i], data);
+  }
+  ObJsonBuffer buf(&allocator);
+  ObPathExprIter pathiter_bin(&allocator);
+  pathiter_bin.init(ctx, str0, default_ns, &xbin, &pass);
+  ret = pathiter_bin.open();
+  ret = pathiter_bin.path_node_->node_to_string(buf);
+  ObString str2(buf.ptr());
+  ASSERT_EQ(str1, str2);
+  buf.reset();
+  int idx = 0;
+  ObIMulModeBase* res;
+  int i = 0;
+  while (OB_SUCC(ret)) {
+    buf.reset();
+    ObIMulModeBase* res;
+    ret = pathiter_bin.get_next_node(res);
+    if (i < 1) {
+      ASSERT_EQ(OB_SUCCESS, ret);
+      res->print(buf,true);
+      ObString s(buf.ptr());
+      ASSERT_EQ(s, xml_with_entend);
+    } else {
+      ASSERT_EQ(OB_ITER_END, ret);
+    }
+    ++i;
+  }
+}
+ObString add_ns_res[ADD_NS_RES_COUNT] = {
+  "<a xmlns=\"ns1\" xmlns:f=\"ns2\" xmlns:h=\"ns3\"><f:b b1=\"b1\" b2=\"b2\"><c><h:d><f:e/></h:d></c></f:b><h:b1/></a>",
+  "<f:b xmlns:f=\"ns2\" b1=\"b1\" b2=\"b2\"><c xmlns=\"ns1\"><h:d xmlns:h=\"ns3\"><f:e/></h:d></c></f:b>",
+  "<c xmlns=\"ns1\"><h:d xmlns:h=\"ns3\"><f:e xmlns:f=\"ns2\"/></h:d></c>",
+  "<h:d xmlns:h=\"ns3\"><f:e xmlns:f=\"ns2\"/></h:d>",
+  "<f:e xmlns:f=\"ns2\"/>",
+  "<h:b1 xmlns:h=\"ns3\"/>"};
+TEST_F(TestXPath, test_add_ns)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ObString xml_text(
+    "<a xmlns=\"ns1\" xmlns:f=\"ns2\" xmlns:h=\"ns3\">"
+      "<f:b b1=\"b1\" b2=\"b2\">"
+        "<c>"
+          "<h:d>"
+            "<f:e></f:e>"
+          "</h:d>"
+        "</c>"
+      "</f:b>"
+      "<h:b1>"
+      "</h:b1>"
+    "</a>");
+  ObXmlDocument* doc = nullptr;
+  ObMulModeMemCtx* ctx = nullptr;
+  ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
+  ret = ObXmlParserUtils::parse_document_text(ctx, xml_text, doc);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObXmlBin xbin(ctx);
+  ASSERT_EQ(xbin.parse_tree(doc), OB_SUCCESS);
+
+  // seek
+  ObString str0 = "//*";
+  ObString str1 = "//*";
+  ObString default_ns(ns_value[0]);
+  ObPathVarObject pass(allocator);
+  for (int i = 1; i < NS_TEST_COUNT && OB_SUCC(ret); ++i) {
+    ObDatum* data = static_cast<ObDatum*>(allocator.alloc(sizeof(ObDatum)));
+    data = new(data) ObDatum();
+    data->set_string(ns_value[i]); // default ns value
+    ASSERT_EQ(true, OB_NOT_NULL(data));
+    ret = pass.add(ns_key[i], data);
+  }
+  ObJsonBuffer buf(&allocator);
+  ObPathExprIter pathiter_bin(&allocator);
+  pathiter_bin.init(ctx, str0, default_ns, &xbin, &pass, true);
+  ret = pathiter_bin.open();
+  ret = pathiter_bin.path_node_->node_to_string(buf);
+  ObString str2(buf.ptr());
+  ASSERT_EQ(str1, str2);
+  buf.reset();
+  int idx = 0;
+  ObIMulModeBase* res;
+  int i = 0;
+  while (OB_SUCC(ret)) {
+    buf.reset();
+    ObIMulModeBase* res;
+    ret = pathiter_bin.get_next_node(res);
+    if (i < ADD_NS_RES_COUNT) {
+      ASSERT_EQ(OB_SUCCESS, ret);
+      res->print(buf,true);
+      ObString s(buf.ptr());
+      std::cout<<i<<": "<<s.ptr()<<std::endl;
+      ASSERT_EQ(s, add_ns_res[i]);
+    } else {
+      ASSERT_EQ(OB_ITER_END, ret);
+    }
+    ++i;
+  }
+}
+
+TEST_F(TestXPath, test_add_ns_and_merge)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ObString xml_text(
+    "<a xmlns=\"ns1\" xmlns:f=\"ns2\" xmlns:h=\"ns3\">"
+      "<f:b b1=\"b1\" b2=\"b2\">"
+        "<c>"
+          "<h:d>"
+            "<f:e></f:e>"
+          "</h:d>"
+        "</c>"
+      "</f:b>"
+      "<h:b1>"
+      "</h:b1>"
+    "</a>");
+  ObXmlDocument* doc = nullptr;
+  ObMulModeMemCtx* ctx = nullptr;
+  ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
+  ret = ObXmlParserUtils::parse_document_text(ctx, xml_text, doc);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObXmlBin xbin(ctx);
+  ASSERT_EQ(xbin.parse_tree(doc), OB_SUCCESS);
+
+  // seek
+  ObString str0 = "//*";
+  ObString str1 = "//*";
+  ObString default_ns(ns_value[0]);
+  ObPathVarObject pass(allocator);
+  for (int i = 1; i < NS_TEST_COUNT && OB_SUCC(ret); ++i) {
+    ObDatum* data = static_cast<ObDatum*>(allocator.alloc(sizeof(ObDatum)));
+    data = new(data) ObDatum();
+    data->set_string(ns_value[i]); // default ns value
+    ASSERT_EQ(true, OB_NOT_NULL(data));
+    ret = pass.add(ns_key[i], data);
+  }
+  ObJsonBuffer buf(&allocator);
+  ObPathExprIter pathiter_bin(&allocator);
+  pathiter_bin.init(ctx, str0, default_ns, &xbin, &pass, true);
+  ret = pathiter_bin.open();
+  ret = pathiter_bin.path_node_->node_to_string(buf);
+  ObString str2(buf.ptr());
+  ASSERT_EQ(str1, str2);
+  buf.reset();
+  int idx = 0;
+  ObIMulModeBase* res;
+  int i = 0;
+  while (OB_SUCC(ret)) {
+    buf.reset();
+    ObIMulModeBase* res;
+    ret = pathiter_bin.get_next_node(res);
+    if (i == 0) { // first ans without extend
+      ASSERT_EQ(OB_SUCCESS, ret);
+      res->print(buf,true);
+      ObString s(buf.ptr());
+      std::cout<<i<<": "<<s.ptr()<<std::endl;
+      ASSERT_EQ(s, add_ns_res[i]);
+    } else if (i < ADD_NS_RES_COUNT) {
+      ASSERT_EQ(OB_SUCCESS, ret);
+      ObXmlBin* bin_res = static_cast<ObXmlBin*>(res);
+      ASSERT_EQ(bin_res->check_extend(), true);
+      ObXmlBin merge_res(ctx);
+      ASSERT_EQ(OB_SUCCESS, bin_res->merge_extend(merge_res));
+      merge_res.print(buf, true);
+      ObString s(buf.ptr());
+      std::cout<<i<<": "<<s.ptr()<<std::endl;
+      ASSERT_EQ(s, add_ns_res[i]);
+    } else {
+      ASSERT_EQ(OB_ITER_END, ret);
+    }
+    ++i;
+  }
+}
+
+// test add value without merge
+ObString add_prefix_ns_res[ADD_NS_RES_COUNT] = {
+  "<a xmlns:f=\"ns2\" xmlns:h=\"ns3\"><f:b b1=\"b1\" b2=\"b2\"><c><h:d><f:e/></h:d></c></f:b><h:b1/></a>",
+  "<f:b xmlns:f=\"ns2\" b1=\"b1\" b2=\"b2\"><c><h:d xmlns:h=\"ns3\"><f:e/></h:d></c></f:b>",
+  "<c><h:d xmlns:h=\"ns3\"><f:e xmlns:f=\"ns2\"/></h:d></c>",
+  "<h:d xmlns:h=\"ns3\"><f:e xmlns:f=\"ns2\"/></h:d>",
+  "<f:e xmlns:f=\"ns2\"/>",
+  "<h:b1 xmlns:h=\"ns3\"/>"};
+TEST_F(TestXPath, test_add_prefix_ns_and_merge)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ObString xml_text(
+    "<a xmlns:f=\"ns2\" xmlns:h=\"ns3\">"
+      "<f:b b1=\"b1\" b2=\"b2\">"
+        "<c>"
+          "<h:d>"
+            "<f:e></f:e>"
+          "</h:d>"
+        "</c>"
+      "</f:b>"
+      "<h:b1>"
+      "</h:b1>"
+    "</a>");
+  ObXmlDocument* doc = nullptr;
+  ObMulModeMemCtx* ctx = nullptr;
+  ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
+  ret = ObXmlParserUtils::parse_document_text(ctx, xml_text, doc);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObXmlBin xbin(ctx);
+  ASSERT_EQ(xbin.parse_tree(doc), OB_SUCCESS);
+
+  // seek
+  ObString str0 = "//*";
+  ObString str1 = "//*";
+  ObString default_ns(ns_value[0]);
+  ObPathVarObject pass(allocator);
+  for (int i = 1; i < NS_TEST_COUNT && OB_SUCC(ret); ++i) {
+    ObDatum* data = static_cast<ObDatum*>(allocator.alloc(sizeof(ObDatum)));
+    data = new(data) ObDatum();
+    data->set_string(ns_value[i]); // default ns value
+    ASSERT_EQ(true, OB_NOT_NULL(data));
+    ret = pass.add(ns_key[i], data);
+  }
+  ObJsonBuffer buf(&allocator);
+  ObPathExprIter pathiter_bin(&allocator);
+  pathiter_bin.init(ctx, str0, default_ns, &xbin, &pass, true);
+  ret = pathiter_bin.open();
+  ret = pathiter_bin.path_node_->node_to_string(buf);
+  ObString str2(buf.ptr());
+  ASSERT_EQ(str1, str2);
+  buf.reset();
+  int idx = 0;
+  ObIMulModeBase* res;
+  int i = 0;
+  while (OB_SUCC(ret)) {
+    buf.reset();
+    ObIMulModeBase* res;
+    ret = pathiter_bin.get_next_node(res);
+    if (i == 0) { // first ans without extend
+      ASSERT_EQ(OB_SUCCESS, ret);
+      res->print(buf,true);
+      ObString s(buf.ptr());
+      std::cout<<i<<": "<<s.ptr()<<std::endl;
+      ASSERT_EQ(s, add_prefix_ns_res[i]);
+    } else if (i < ADD_NS_RES_COUNT) {
+      ASSERT_EQ(OB_SUCCESS, ret);
+      ObXmlBin* bin_res = static_cast<ObXmlBin*>(res);
+      ASSERT_EQ(bin_res->check_extend(), true);
+      ObXmlBin merge_res(ctx);
+      ASSERT_EQ(OB_SUCCESS, bin_res->merge_extend(merge_res));
+      ASSERT_EQ(OB_SUCCESS, merge_res.print(buf, true));
+      ObString s(buf.ptr());
+      std::cout<<i<<": "<<s.ptr()<<std::endl;
+      ASSERT_EQ(s, add_prefix_ns_res[i]);
+    } else {
+      ASSERT_EQ(OB_ITER_END, ret);
+    }
+    ++i;
+  }
+}
+
+// test update ns definition while merge
+ObString new_prefix_ns_res[ADD_NS_RES_COUNT] = {
+  "<a xmlns:f=\"ns2\" xmlns:h=\"ns3\"><f:b xmlns:f=\"ns1\" b1=\"b1\" b2=\"b2\"><c><h:d><f:e/></h:d></c></f:b><f:b1/></a>",
+  "<f:b xmlns:f=\"ns1\" b1=\"b1\" b2=\"b2\"><c><h:d xmlns:h=\"ns3\"><f:e/></h:d></c></f:b>",
+  "<c><h:d xmlns:h=\"ns3\"><f:e xmlns:f=\"ns1\"/></h:d></c>",
+  "<h:d xmlns:h=\"ns3\"><f:e xmlns:f=\"ns1\"/></h:d>",
+  "<f:e xmlns:f=\"ns1\"/>",
+  "<f:b1 xmlns:f=\"ns2\"/>"};
+TEST_F(TestXPath, test_new_prefix_ns_and_merge)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ObString xml_text(
+    "<a xmlns:f=\"ns2\" xmlns:h=\"ns3\">"
+      "<f:b xmlns:f=\"ns1\" b1=\"b1\" b2=\"b2\">"
+        "<c>"
+          "<h:d>"
+            "<f:e></f:e>"
+          "</h:d>"
+        "</c>"
+      "</f:b>"
+      "<f:b1>"
+      "</f:b1>"
+    "</a>");
+  ObXmlDocument* doc = nullptr;
+  ObMulModeMemCtx* ctx = nullptr;
+  ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
+  ret = ObXmlParserUtils::parse_document_text(ctx, xml_text, doc);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObXmlBin xbin(ctx);
+  ASSERT_EQ(xbin.parse_tree(doc), OB_SUCCESS);
+
+  // seek
+  ObString str0 = "//*";
+  ObString str1 = "//*";
+  ObString default_ns(ns_value[0]);
+  ObPathVarObject pass(allocator);
+  for (int i = 1; i < NS_TEST_COUNT && OB_SUCC(ret); ++i) {
+    ObDatum* data = static_cast<ObDatum*>(allocator.alloc(sizeof(ObDatum)));
+    data = new(data) ObDatum();
+    data->set_string(ns_value[i]); // default ns value
+    ASSERT_EQ(true, OB_NOT_NULL(data));
+    ret = pass.add(ns_key[i], data);
+  }
+  ObJsonBuffer buf(&allocator);
+  ObPathExprIter pathiter_bin(&allocator);
+  pathiter_bin.init(ctx, str0, default_ns, &xbin, &pass, true);
+  ret = pathiter_bin.open();
+  ret = pathiter_bin.path_node_->node_to_string(buf);
+  ObString str2(buf.ptr());
+  ASSERT_EQ(str1, str2);
+  buf.reset();
+  int idx = 0;
+  ObIMulModeBase* res;
+  int i = 0;
+  while (OB_SUCC(ret)) {
+    buf.reset();
+    ObIMulModeBase* res;
+    ret = pathiter_bin.get_next_node(res);
+    if (i == 0) { // first ans without extend
+      ASSERT_EQ(OB_SUCCESS, ret);
+      res->print(buf,true);
+      ObString s(buf.ptr());
+      std::cout<<i<<": "<<s.ptr()<<std::endl;
+      ASSERT_EQ(s, new_prefix_ns_res[i]);
+    } else if (i < ADD_NS_RES_COUNT) {
+      ASSERT_EQ(OB_SUCCESS, ret);
+      ObXmlBin* bin_res = static_cast<ObXmlBin*>(res);
+      ASSERT_EQ(bin_res->check_extend(), true);
+      ObXmlBin merge_res(ctx);
+      ASSERT_EQ(OB_SUCCESS, bin_res->merge_extend(merge_res));
+      merge_res.print(buf, true);
+      ObString s(buf.ptr());
+      std::cout<<i<<": "<<s.ptr()<<std::endl;
+      ASSERT_EQ(s, new_prefix_ns_res[i]);
+    } else {
+      ASSERT_EQ(OB_ITER_END, ret);
+    }
+    ++i;
+  }
+}
+
+// test update ns definition while merge
+# define MERGE_NS_RES_COUNT 20
+ObString merge_ns_ans[MERGE_NS_RES_COUNT] = {
+  "<a xmlns:f=\"ns2\" xmlns:h=\"ns3\"><f:b xmlns:f=\"ns1\" b1=\"b1\" b2=\"b2\"><c xmlns=\"ns1\"><h:d><f:e><g>ggg</g></f:e></h:d></c></f:b><f:b1><c1>ccc</c1></f:b1><!-- test comment1 --><b2><c2 xmlns=\"ns4\"><d2>ddd</d2></c2></b2><b3><!-- test comment2 --><c3 xmlns:k=\"ns4\"><d3>ddd</d3></c3></b3></a>",
+  "<f:b xmlns:f=\"ns1\" b1=\"b1\" b2=\"b2\"><c xmlns=\"ns1\"><h:d xmlns:h=\"ns3\"><f:e><g>ggg</g></f:e></h:d></c></f:b>",
+  "<c xmlns=\"ns1\"><h:d xmlns:h=\"ns3\"><f:e xmlns:f=\"ns1\"><g>ggg</g></f:e></h:d></c>",
+  "<h:d xmlns:h=\"ns3\"><f:e xmlns:f=\"ns1\"><g xmlns=\"ns1\">ggg</g></f:e></h:d>",
+  "<f:e xmlns:f=\"ns1\"><g xmlns=\"ns1\">ggg</g></f:e>",
+  "<g xmlns=\"ns1\">ggg</g>",
+  "ggg",
+  "<f:b1 xmlns:f=\"ns2\"><c1 xmlns=\"ns1\">ccc</c1></f:b1>",
+  "<c1 xmlns=\"ns1\">ccc</c1>",
+  "ccc",
+  "<!-- test comment1 -->",
+  "<b2 xmlns=\"ns1\"><c2 xmlns=\"ns4\"><d2>ddd</d2></c2></b2>",
+  "<c2 xmlns=\"ns4\"><d2>ddd</d2></c2>",
+  "<d2 xmlns=\"ns4\">ddd</d2>",
+  "ddd",
+  "<b3 xmlns=\"ns4\"><!-- test comment2 --><c3 xmlns:k=\"ns4\"><d3>ddd</d3></c3></b3>",
+  "<!-- test comment2 -->",
+  "<c3 xmlns=\"ns4\" xmlns:k=\"ns4\"><d3>ddd</d3></c3>",
+  "<d3 xmlns=\"ns4\">ddd</d3>",
+  "ddd"};
+TEST_F(TestXPath, test_merge_ns)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ObString xml_text(
+    "<a xmlns:f=\"ns2\" xmlns:h=\"ns3\">"
+      "<f:b xmlns:f=\"ns1\" b1=\"b1\" b2=\"b2\">"
+        "<c xmlns=\"ns1\">"
+          "<h:d>"
+            "<f:e> <g>ggg</g></f:e>"
+          "</h:d>"
+        "</c>"
+      "</f:b>"
+      "<f:b1>"
+        "<c1>ccc</c1>"
+      "</f:b1>"
+      "<!-- test comment1 -->"
+      "<b2>"
+        "<c2 xmlns=\"ns4\">"
+          "<d2>ddd</d2>"
+        "</c2>"
+      "</b2>"
+      "<b3>"
+        "<!-- test comment2 -->"
+        "<c3 xmlns:k=\"ns4\">"
+          "<d3>ddd</d3>"
+        "</c3>"
+      "</b3>"
+    "</a>");
+  ObXmlDocument* doc = nullptr;
+  ObMulModeMemCtx* ctx = nullptr;
+  ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
+  ret = ObXmlParserUtils::parse_document_text(ctx, xml_text, doc);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObXmlBin xbin(ctx);
+  ASSERT_EQ(xbin.parse_tree(doc), OB_SUCCESS);
+
+  // seek
+  ObString str0 = "//node()";
+  ObString str1 = "//node()";
+  ObString default_ns(ns_value[0]);
+  ObPathVarObject pass(allocator);
+  for (int i = 1; i < NS_TEST_COUNT && OB_SUCC(ret); ++i) {
+    ObDatum* data = static_cast<ObDatum*>(allocator.alloc(sizeof(ObDatum)));
+    data = new(data) ObDatum();
+    data->set_string(ns_value[i]); // default ns value
+    ASSERT_EQ(true, OB_NOT_NULL(data));
+    ret = pass.add(ns_key[i], data);
+  }
+  ObJsonBuffer buf(&allocator);
+  ObPathExprIter pathiter_bin(&allocator);
+  pathiter_bin.init(ctx, str0, default_ns, &xbin, &pass, true);
+  ret = pathiter_bin.open();
+  ret = pathiter_bin.path_node_->node_to_string(buf);
+  ObString str2(buf.ptr());
+  ASSERT_EQ(str1, str2);
+  buf.reset();
+  int idx = 0;
+  ObIMulModeBase* res;
+  int i = 0;
+  while (OB_SUCC(ret)) {
+    buf.reset();
+    ObIMulModeBase* res;
+    ret = pathiter_bin.get_next_node(res);
+    if (i < MERGE_NS_RES_COUNT) {
+      ASSERT_EQ(OB_SUCCESS, ret);
+      ObXmlBin* bin_res = static_cast<ObXmlBin*>(res);
+      if (bin_res->check_extend()) {
+        ObXmlBin merge_res(ctx);
+        ASSERT_EQ(OB_SUCCESS, bin_res->merge_extend(merge_res));
+        merge_res.print(buf, true);
+      } else {
+        bin_res->print(buf, true);
+      }
+      ObString s(buf.ptr());
+      std::cout<<i<<": "<<s.ptr()<<std::endl;
+      ASSERT_EQ(s, merge_ns_ans[i]);
+    } else {
+      ASSERT_EQ(OB_ITER_END, ret);
+    }
+    ++i;
+  }
 }
 
 int main(int argc, char** argv)

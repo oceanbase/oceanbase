@@ -481,5 +481,56 @@ int ObExprJsonObject::eval_option_clause_value(ObExpr *expr,
   return ret;
 }
 
+ObExprJsonObjectStar::ObExprJsonObjectStar(ObIAllocator &alloc)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_OBJECT_WILD_STAR, N_JSON_OBJECT_STAR, OCCUR_AS_PAIR, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+{
+}
+
+ObExprJsonObjectStar::~ObExprJsonObjectStar()
+{
+}
+
+int ObExprJsonObjectStar::calc_result_typeN(ObExprResType& type,
+                                            ObExprResType* types_stack,
+                                            int64_t param_num,
+                                            ObExprTypeCtx& type_ctx) const
+{
+  INIT_SUCC(ret);
+  if (param_num != 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("incorrect num of param", K(ret));
+  } else {
+    types_stack[0].set_calc_type(types_stack[0].get_type());
+    types_stack[0].set_calc_collation_type(types_stack[0].get_collation_type());
+    ObExprResType dst_type;
+    dst_type.set_type(ObObjType::ObVarcharType);
+    dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+    dst_type.set_full_length(4000, 1);
+    if (OB_FAIL(ObJsonExprHelper::set_dest_type(types_stack[0], type, dst_type, type_ctx))) {
+      LOG_WARN("set dest type failed", K(ret));
+    } else {
+      type.set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+    }
+  }
+  return ret;
+}
+
+int ObExprJsonObjectStar::eval_ora_json_object_star(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
+{
+  INIT_SUCC(ret);
+  ret = OB_ERR_UNEXPECTED;
+  LOG_WARN("can not be use this expr, should transform to real column", K(ret));
+  return ret;
+}
+
+int ObExprJsonObjectStar::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                                  ObExpr &rt_expr) const
+{
+  UNUSED(expr_cg_ctx);
+  UNUSED(raw_expr);
+  rt_expr.eval_func_ = eval_ora_json_object_star;
+  return OB_SUCCESS;
+}
+
 } // sql
 } // oceanbase

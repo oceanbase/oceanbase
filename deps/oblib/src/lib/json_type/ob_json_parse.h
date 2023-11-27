@@ -36,6 +36,8 @@ public:
   static const uint32_t JSN_STRICT_FLAG = 1;
   static const uint32_t JSN_RELAXED_FLAG = 2;
   static const uint32_t JSN_UNIQUE_FLAG = 4;
+  static const uint32_t JSN_SCHEMA_FLAG = 8;
+  static const uint32_t JSN_PRESERVE_DUP_FLAG = 16;
 
   static const int PARSE_SYNTAXERR_MESSAGE_LENGTH = 256;
   static int get_tree(ObIAllocator *allocator, const ObString &text,
@@ -127,15 +129,18 @@ public:
     EXPECT_OBJECT_VALUE,
     EXPECT_EOF
   };
-  explicit ObRapidJsonHandler(ObIAllocator *allocator, bool with_unique_key = false)
+  explicit ObRapidJsonHandler(ObIAllocator *allocator, bool with_unique_key = false, bool is_schema = false, bool preserve_dup_key = false)
       : next_state_(ObJsonExpectNextState::EXPECT_ANYTHING),
         dom_as_built_(NULL),
         current_element_(NULL),
         depth_(0),
         key_(),
         allocator_(allocator),
+        err_code_(OB_SUCCESS),
         with_unique_key_(with_unique_key),
-        with_duplicate_key_(false)
+        with_duplicate_key_(false),
+        is_schema_(is_schema),
+        preserve_dup_key_(preserve_dup_key)
   {
   }
   virtual ~ObRapidJsonHandler() {}
@@ -177,6 +182,7 @@ public:
   bool EndArray(rapidjson::SizeType length);
   bool Key(const char *str, rapidjson::SizeType length, bool copy);
   bool has_duplicate_key() { return with_duplicate_key_; }
+  int get_error_code() { return err_code_; }
 
 private:
   ObJsonExpectNextState next_state_;  // The state that is expected to be resolved next.
@@ -185,8 +191,11 @@ private:
   uint64_t depth_;                    // The depth of the tree currently parsed.
   common::ObString key_;              // The current resolved key value
   ObIAllocator *allocator_;           // A memory allocator that allocates node memory.
+  int err_code_;                      // error code
   bool with_unique_key_;              // Whether check unique key for object
   bool with_duplicate_key_;           // Whether contain duplicate key for object
+  bool is_schema_;                    // is json schema text
+  bool preserve_dup_key_;             // preserve duplicate key
   DISALLOW_COPY_AND_ASSIGN(ObRapidJsonHandler);
 };
 
