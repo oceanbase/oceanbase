@@ -221,6 +221,9 @@ int ObTxCtxTableRecoverHelper::recover(const blocksstable::ObDatumRow &row,
     } else {
       finish_recover_one_tx_ctx_();
     }
+    // clear it cause buffer ctx memory need released
+    // and ObString in buffer node no need released cause it's just part reference of deserialized buffer
+    ctx_info_.exec_info_.clear_buffer_ctx_in_multi_data_source();
   }
 
   if (OB_SUCC(ret)) {
