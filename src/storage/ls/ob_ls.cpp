@@ -772,6 +772,11 @@ void ObLS::destroy()
   }
   transaction::ObTransService *txs_svr = MTL(transaction::ObTransService *);
   FLOG_INFO("ObLS destroy", K(this), K(*this), K(lbt()));
+  if (running_state_.is_running()) {
+    if (OB_TMP_FAIL(offline_(start_ts))) {
+      LOG_WARN("offline a running ls failed", K(tmp_ret), K(ls_meta_.ls_id_));
+    }
+  }
   if (OB_TMP_FAIL(stop_())) {
     LOG_WARN("ls stop failed.", K(tmp_ret), K(ls_meta_.ls_id_));
   } else {

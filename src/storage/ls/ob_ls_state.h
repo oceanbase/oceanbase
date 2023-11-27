@@ -33,6 +33,10 @@ public:
             State::LS_OFFLINED == state_ ||
             State::LS_STOPPED == state_);
   }
+  bool is_running() const
+  {
+    return State::LS_RUNNING == state_;
+  }
   bool is_stopped() const
   {
     return (State::LS_INIT == state_ ||
