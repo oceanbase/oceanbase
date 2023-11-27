@@ -535,6 +535,20 @@ bool ObSQLSessionInfo::is_var_assign_use_das_enabled() const
   return bret;
 }
 
+int ObSQLSessionInfo::is_adj_index_cost_enabled(bool &enabled, int64_t &stats_cost_percent) const
+{
+  int ret = OB_SUCCESS;
+  enabled = false;
+  stats_cost_percent = 0;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    stats_cost_percent = tenant_config->optimizer_index_cost_adj;
+    enabled = (0 != stats_cost_percent);
+  }
+  return ret;
+}
+
 void ObSQLSessionInfo::destroy(bool skip_sys_var)
 {
   if (is_inited_) {

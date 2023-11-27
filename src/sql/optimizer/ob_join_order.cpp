@@ -5091,7 +5091,7 @@ int AccessPath::assign(const AccessPath &other, common::ObIAllocator *allocator)
 
 // compute auto dop for access path
 int AccessPath::compute_parallel_degree(const int64_t cur_min_parallel_degree,
-                                        int64_t &parallel) const
+                                        int64_t &parallel)
 {
   int ret = OB_SUCCESS;
   parallel = ObGlobalHint::UNSET_PARALLEL;
@@ -5275,24 +5275,57 @@ int AccessPath::prepare_estimate_parallel(const int64_t pre_parallel,
 int AccessPath::estimate_cost_for_parallel(const int64_t cur_parallel,
                                            const double part_cnt_per_dop,
                                            double &px_cost,
-                                           double &cost) const
+                                           double &cost)
 {
   int ret = OB_SUCCESS;
   px_cost = 0.0;
   cost = 0.0;
+  double stats_phy_query_range_row_count = 0;
+  double stats_logical_query_range_row_count = 0;
+  int64_t opt_stats_cost_percent = 0;
+  bool adj_cost_is_valid = false;
+  double storage_est_cost = 0.0;
+  double stats_est_cost = 0.0;
+  double storage_est_px_cost = 0.0;
+  double stats_est_px_cost = 0.0;
+  double opt_phy_query_range_row_count = est_cost_info_.phy_query_range_row_count_;
+  double opt_logical_query_range_row_count = est_cost_info_.logical_query_range_row_count_;
   if (OB_ISNULL(parent_) || OB_ISNULL(parent_->get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(parent_), K(ret));
+  } else if (OB_FAIL(check_adj_index_cost_valid(stats_phy_query_range_row_count,
+                                                stats_logical_query_range_row_count,
+                                                opt_stats_cost_percent,
+                                                adj_cost_is_valid))) {
+    LOG_WARN("failed to check adj index cost valid", K(ret));
   } else {
     ObOptimizerContext &opt_ctx = parent_->get_plan()->get_optimizer_context();
     if (OB_FAIL(ObOptEstCost::cost_table_for_parallel(est_cost_info_,
                                                       cur_parallel,
                                                       part_cnt_per_dop,
-                                                      px_cost,
-                                                      cost,
+                                                      storage_est_px_cost,
+                                                      storage_est_cost,
                                                       opt_ctx.get_cost_model_type()))) {
       LOG_WARN("failed to calculated cost for parallel", K(ret));
-    } else { /*do nothing*/ }
+    } else if (!adj_cost_is_valid) {
+      cost = storage_est_cost;
+      px_cost = storage_est_px_cost;
+    } else if (OB_FALSE_IT(est_cost_info_.phy_query_range_row_count_ = stats_phy_query_range_row_count)) {
+    } else if (OB_FALSE_IT(est_cost_info_.logical_query_range_row_count_ = stats_logical_query_range_row_count)) {
+    } else if (OB_FAIL(ObOptEstCost::cost_table_for_parallel(est_cost_info_,
+                                                              cur_parallel,
+                                                              part_cnt_per_dop,
+                                                              stats_est_px_cost,
+                                                              stats_est_cost,
+                                                              opt_ctx.get_cost_model_type()))) {
+      LOG_WARN("failed to calculated cost for parallel", K(ret));
+    } else {
+      double rate = opt_stats_cost_percent * 1.0 / 100.0;
+      cost = storage_est_cost * (1-rate) + stats_est_cost * rate;
+      px_cost = storage_est_px_cost * (1-rate) + stats_est_px_cost * rate;
+      est_cost_info_.phy_query_range_row_count_ = opt_phy_query_range_row_count;
+      est_cost_info_.logical_query_range_row_count_ = opt_logical_query_range_row_count;
+    }
   }
   return ret;
 }
@@ -5300,17 +5333,44 @@ int AccessPath::estimate_cost_for_parallel(const int64_t cur_parallel,
 int AccessPath::estimate_cost()
 {
   int ret = OB_SUCCESS;
+  double stats_phy_query_range_row_count = 0;
+  double stats_logical_query_range_row_count = 0;
+  int64_t opt_stats_cost_percent = 0;
+  bool adj_cost_is_valid = false;
+  double storage_est_cost = 0.0;
+  double stats_est_cost = 0.0;
+  double opt_phy_query_range_row_count = est_cost_info_.phy_query_range_row_count_;
+  double opt_logical_query_range_row_count = est_cost_info_.logical_query_range_row_count_;
   if (OB_ISNULL(parent_) || OB_ISNULL(parent_->get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(parent_), K(ret));
+  } else if (OB_FAIL(check_adj_index_cost_valid(stats_phy_query_range_row_count,
+                                                stats_logical_query_range_row_count,
+                                                opt_stats_cost_percent,
+                                                adj_cost_is_valid))) {
+    LOG_WARN("failed to check adj index cost valid", K(ret));
   } else {
     ObOptimizerContext &opt_ctx = parent_->get_plan()->get_optimizer_context();
     if (OB_FAIL(ObOptEstCost::cost_table(est_cost_info_,
                                         parallel_,
-                                        cost_,
+                                        storage_est_cost,
                                         opt_ctx.get_cost_model_type()))) {
       LOG_WARN("failed to get index access info", K(ret));
-    } else { /*do nothing*/ }
+    } else if (!adj_cost_is_valid) {
+      cost_ = storage_est_cost;
+    } else if (OB_FALSE_IT(est_cost_info_.phy_query_range_row_count_ = stats_phy_query_range_row_count)) {
+    } else if (OB_FALSE_IT(est_cost_info_.logical_query_range_row_count_ = stats_logical_query_range_row_count)) {
+    } else if (OB_FAIL(ObOptEstCost::cost_table(est_cost_info_,
+                                                parallel_,
+                                                stats_est_cost,
+                                                opt_ctx.get_cost_model_type()))) {
+      LOG_WARN("failed to get index access info", K(ret));
+    } else {
+      double rate = opt_stats_cost_percent * 1.0 / 100.0;
+      cost_ = storage_est_cost * (1-rate) + stats_est_cost * rate;
+      est_cost_info_.phy_query_range_row_count_ = opt_phy_query_range_row_count;
+      est_cost_info_.logical_query_range_row_count_ = opt_logical_query_range_row_count;
+    }
   }
   return ret;
 }
@@ -5320,18 +5380,54 @@ int AccessPath::re_estimate_cost(EstimateCostInfo &param, double &card, double &
   int ret = OB_SUCCESS;
   card = get_path_output_rows();
   ObOptimizerContext *opt_ctx = NULL;
+  double stats_phy_query_range_row_count = 0;
+  double stats_logical_query_range_row_count = 0;
+  int64_t opt_stats_cost_percent = 0;
+  bool adj_cost_is_valid = false;
+  double storage_est_cost = 0.0;
+  double stats_est_cost = 0.0;
+  double storage_est_card = card;
+  double stats_est_card = card;
+  double opt_phy_query_range_row_count = est_cost_info_.phy_query_range_row_count_;
+  double opt_logical_query_range_row_count = est_cost_info_.logical_query_range_row_count_;
   param.need_parallel_ = (ObGlobalHint::UNSET_PARALLEL == param.need_parallel_ || is_match_all())
                          ? parallel_ : param.need_parallel_;
   if (OB_ISNULL(parent_) || OB_ISNULL(parent_->get_plan()) ||
       OB_ISNULL(opt_ctx = &parent_->get_plan()->get_optimizer_context())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(parent_), K(opt_ctx), K(ret));
+  } else if (OB_FAIL(check_adj_index_cost_valid(stats_phy_query_range_row_count,
+                                                stats_logical_query_range_row_count,
+                                                opt_stats_cost_percent,
+                                                adj_cost_is_valid))) {
+    LOG_WARN("failed to check adj index cost valid", K(ret));
   } else if (OB_FAIL(re_estimate_cost(param, est_cost_info_, sample_info_,
                                       opt_ctx->get_cost_model_type(),
-                                      card, cost))) {
+                                      storage_est_card,
+                                      storage_est_cost))) {
     LOG_WARN("failed to re estimate cost", K(ret));
-  } else if (param.override_) {
-    cost_ = cost;
+  } else if (!adj_cost_is_valid) {
+    cost = storage_est_cost;
+    card = storage_est_card;
+    if (param.override_) {
+      cost_ = cost;
+    }
+  } else if (OB_FALSE_IT(est_cost_info_.phy_query_range_row_count_ = stats_phy_query_range_row_count)) {
+  } else if (OB_FALSE_IT(est_cost_info_.logical_query_range_row_count_ = stats_logical_query_range_row_count)) {
+  } else if (OB_FAIL(re_estimate_cost(param, est_cost_info_, sample_info_,
+                                      opt_ctx->get_cost_model_type(),
+                                      stats_est_card,
+                                      stats_est_cost))) {
+    LOG_WARN("failed to re estimate cost", K(ret));
+  } else {
+    double rate = opt_stats_cost_percent * 1.0 / 100.0;
+    cost = storage_est_cost * (1-rate) + stats_est_cost * rate;
+    card = storage_est_card * (1-rate) + stats_est_card * rate;
+    est_cost_info_.phy_query_range_row_count_ = opt_phy_query_range_row_count;
+    est_cost_info_.logical_query_range_row_count_ = opt_logical_query_range_row_count;
+    if (param.override_) {
+      cost_ = cost;
+    }
   }
   return ret;
 }
@@ -5405,6 +5501,51 @@ int AccessPath::re_estimate_cost(const EstimateCostInfo &param,
       est_cost_info.phy_query_range_row_count_ = orign_phy_query_range_row_count;
       est_cost_info.logical_query_range_row_count_ = orign_logical_query_range_row_count;
     }
+  }
+  return ret;
+}
+
+int AccessPath::check_adj_index_cost_valid(double &stats_phy_query_range_row_count,
+                                          double &stats_logical_query_range_row_count,
+                                          int64_t &opt_stats_cost_percent,
+                                          bool &is_valid)const
+{
+  int ret = OB_SUCCESS;
+  ObLogPlan *plan = NULL;
+  ObOptimizerContext *opt_ctx = NULL;
+  ObSQLSessionInfo *session_info = NULL;
+  const OptTableMeta* table_meta = NULL;
+  bool enable_adj_index_cost = false;
+  opt_stats_cost_percent = 0;
+  double selectivity = 0.0;
+  if (OB_ISNULL(parent_) || OB_ISNULL(plan = parent_->get_plan()) ||
+      OB_ISNULL(opt_ctx = &plan->get_optimizer_context()) ||
+      OB_ISNULL(session_info = opt_ctx->get_session_info()) ||
+      OB_ISNULL(table_meta = plan->get_basic_table_metas().get_table_meta_by_table_id(table_id_))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected null", K(plan), K(opt_ctx), K(ret));
+  } else if (session_info->is_adj_index_cost_enabled(enable_adj_index_cost, opt_stats_cost_percent)) {
+    LOG_WARN("failed to check adjust scan enabled", K(ret));
+  } else if (!enable_adj_index_cost || //session disable adjust
+             est_cost_info_.prefix_filters_.empty() || //not have query range
+             !est_cost_info_.pushdown_prefix_filters_.empty() ||  //can not use storage estimate
+             table_meta->use_default_stat()) {  //not have optimzier stats
+    is_valid = false;
+    LOG_TRACE("disable adjust index cost", K(enable_adj_index_cost),
+                                           K(est_cost_info_.prefix_filters_.empty()),
+                                           K(est_cost_info_.pushdown_prefix_filters_.empty()),
+                                           K(table_meta->use_default_stat()));
+  } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(plan->get_basic_table_metas(),
+                                                            plan->get_selectivity_ctx(),
+                                                            est_cost_info_.prefix_filters_,
+                                                            selectivity,
+                                                            plan->get_predicate_selectivities()))) {
+    LOG_WARN("failed to calculate selectivity", K(ret));
+  } else {
+    stats_logical_query_range_row_count = get_table_row_count() * selectivity;
+    stats_phy_query_range_row_count = stats_logical_query_range_row_count;
+    is_valid = true;
+    LOG_TRACE("enable adjust index cost, ", K(opt_stats_cost_percent), K(stats_logical_query_range_row_count));
   }
   return ret;
 }

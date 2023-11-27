@@ -628,7 +628,7 @@ struct EstimateCostInfo {
     { return est_cost_info_; }
     ObCostTableScanInfo &get_cost_table_scan_info() { return est_cost_info_; }
     int compute_parallel_degree(const int64_t cur_min_parallel_degree,
-                                int64_t &parallel) const;
+                                int64_t &parallel);
     int check_and_prepare_estimate_parallel_params(const int64_t cur_min_parallel_degree,
                                                    int64_t &px_part_gi_min_part_per_dop,
                                                    double &cost_threshold_us,
@@ -646,7 +646,7 @@ struct EstimateCostInfo {
     int estimate_cost_for_parallel(const int64_t cur_parallel,
                                    const double part_cnt_per_dop,
                                    double &px_cost,
-                                   double &cost) const;
+                                   double &cost);
     virtual int estimate_cost() override;
     virtual int re_estimate_cost(EstimateCostInfo &info, double &card, double &cost) override;
     static int re_estimate_cost(const EstimateCostInfo &param,
@@ -655,6 +655,10 @@ struct EstimateCostInfo {
                                 const ObOptEstCost::MODEL_TYPE model_type,
                                 double &card,
                                 double &cost);
+    int check_adj_index_cost_valid(double &stats_phy_query_range_row_count,
+                                   double &stats_logical_query_range_row_count,
+                                   int64_t &opt_stats_cost_percent,
+                                   bool &is_valid) const;
     inline bool can_use_remote_estimate()
     {
       return NULL == table_opt_info_ ? false :
