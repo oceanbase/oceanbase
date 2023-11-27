@@ -1068,7 +1068,7 @@ int ObBlockManager::mark_tenant_blocks(
     LOG_WARN("fail to mark tenant meta blocks", K(ret));
   } else {
     ObArenaAllocator iter_allocator("MarkIter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-    ObTenantTabletIterator tablet_iter(*t3m, iter_allocator);
+    ObTenantTabletIterator tablet_iter(*t3m, iter_allocator, nullptr/*no op*/);
     ObTabletHandle handle;
     while (OB_SUCC(ret)) {
       handle.reset();

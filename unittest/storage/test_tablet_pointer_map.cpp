@@ -261,6 +261,9 @@ TEST_F(TestMetaPointerMap, test_meta_pointer_map)
   phy_addr.offset_ = 0;
   phy_addr.size_ = 4096;
   phy_addr.type_ = ObMetaDiskAddr::DiskType::BLOCK;
+
+  old_tablet->is_inited_ = true;
+  old_tablet->table_store_addr_.addr_.set_none_addr(); // mock empty_shell to pass test
   ret = tablet_map_.compare_and_swap_addr_and_object(key, phy_addr, handle, handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
@@ -271,6 +274,9 @@ TEST_F(TestMetaPointerMap, test_meta_pointer_map)
   tablet_obj.pool_ = &MTL(ObTenantMetaMemMgr*)->tablet_buffer_pool_;
   ObTabletHandle tablet_handle;
   tablet_handle.set_obj(tablet_obj);
+
+  tablet->is_inited_ = true;
+  tablet->table_store_addr_.addr_.set_none_addr(); // mock empty_shell to pass test
   ret = tablet_map_.compare_and_swap_addr_and_object(key, phy_addr, handle, tablet_handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet_map_.map_.size());
@@ -344,6 +350,10 @@ TEST_F(TestMetaPointerMap, test_erase_and_load_concurrency)
   phy_addr.offset_ = 0;
   phy_addr.size_ = 4096;
   phy_addr.type_ = ObMetaDiskAddr::DiskType::BLOCK;
+
+  old_tablet->is_inited_ = true;
+  old_tablet->table_store_addr_.addr_.set_none_addr(); // mock empty_shell to pass test
+
   ret = tablet_map_.compare_and_swap_addr_and_object(key, phy_addr, handle, handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 

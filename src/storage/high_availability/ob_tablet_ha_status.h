@@ -104,6 +104,8 @@ public:
   int deserialize(const char *buf, const int64_t len, int64_t &pos);
   int64_t get_serialize_size() const;
   void reset();
+  int64_t get_ha_status() const { return ha_status_; }
+  void set_ha_status(int64_t ha_status) { ha_status_ = ha_status;}
   bool is_none() const { return is_data_status_complete() && is_restore_status_full(); }
   bool is_data_status_complete() const { return ObTabletDataStatus::is_complete(data_status_); }
   bool is_restore_status_full() const { return ObTabletRestoreStatus::is_full(restore_status_); }

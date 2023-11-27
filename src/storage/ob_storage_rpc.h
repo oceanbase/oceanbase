@@ -33,6 +33,7 @@
 #include "storage/lob/ob_lob_rpc_struct.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
 #include "share/rpc/ob_async_rpc_proxy.h"
+#include "storage/meta_mem/ob_tablet_pointer.h"
 
 namespace oceanbase
 {
@@ -1331,6 +1332,16 @@ private:
   common::ObArenaAllocator allocator_;
   int64_t last_send_time_;
   int64_t data_size_;
+};
+
+class ObHasTransferTableFilterOp final : public ObITabletFilterOp
+{
+public:
+  int do_filter(const ObTabletResidentInfo &info, bool &is_skipped) override
+  {
+    is_skipped = !info.has_transfer_table();
+    return OB_SUCCESS;
+  }
 };
 
 } // storage

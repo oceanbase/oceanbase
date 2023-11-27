@@ -18,6 +18,7 @@
 #include "storage/blocksstable/ob_block_manager.h"
 #include "lib/task/ob_timer.h"
 #include "storage/compaction/ob_compaction_util.h"
+#include "storage/meta_mem/ob_tablet_pointer.h"
 
 namespace oceanbase
 {
@@ -194,6 +195,15 @@ private:
   common::ObArenaAllocator io_allocator_;
   int tg_id_;
   bool is_inited_;
+};
+
+class ObHasNestedTableFilterOp final : public ObITabletFilterOp
+{
+public:
+	int do_filter(const ObTabletResidentInfo &info, bool &is_skipped) override {
+    is_skipped = !info.has_nested_table();
+    return OB_SUCCESS;
+  }
 };
 
 } // namespace blocksstable

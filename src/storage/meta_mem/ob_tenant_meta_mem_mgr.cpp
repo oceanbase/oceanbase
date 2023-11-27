@@ -1586,6 +1586,33 @@ int ObTenantMetaMemMgr::get_tablet(
   return ret;
 }
 
+int ObTenantMetaMemMgr::get_tablet_with_filter(
+    const WashTabletPriority &priority,
+    const ObTabletMapKey &key,
+    ObITabletFilterOp &op,
+    ObTabletHandle &handle)
+{
+  int ret = OB_SUCCESS;
+  handle.reset();
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantMetaMemMgr hasn't been initialized", K(ret));
+  } else if (OB_UNLIKELY(!key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(key));
+  } else if (OB_FAIL(tablet_map_.get_meta_obj_with_filter(key, op, handle))) {
+    if (OB_ENTRY_NOT_EXIST != ret && OB_ITEM_NOT_SETTED != ret && OB_NOT_THE_OBJECT != ret) {
+      LOG_WARN("fail to get tablet", K(ret), K(key));
+    }
+  } else if (OB_ISNULL(handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet is null", K(ret), K(key), K(handle));
+  } else {
+    handle.set_wash_priority(priority);
+  }
+  return ret;
+}
+
 int ObTenantMetaMemMgr::get_tablet_with_allocator(
     const WashTabletPriority &priority,
     const ObTabletMapKey &key,
@@ -1601,7 +1628,7 @@ int ObTenantMetaMemMgr::get_tablet_with_allocator(
   } else if (OB_UNLIKELY(!key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(key), KP(&allocator));
-  } else if (OB_FAIL(tablet_map_.get_meta_obj_with_external_memory(key, allocator, handle, force_alloc_new))) {
+  } else if (OB_FAIL(tablet_map_.get_meta_obj_with_external_memory(key, allocator, handle, force_alloc_new, nullptr/*no_op*/))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("fail to get tablet", K(ret), K(key));
     }
@@ -1882,8 +1909,7 @@ int ObTenantMetaMemMgr::compare_and_swap_tablet(
       if (OB_ISNULL(t_ptr = reinterpret_cast<ObTabletPointer *>(ptr_hdl.get_resource_ptr()))) {
         ret = common::OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get tablet pointer", K(ret), K(key), K(ptr_hdl));
-      } else if (CLICK_FAIL(t_ptr->add_tablet_to_old_version_chain(
-          reinterpret_cast<ObTablet *>(old_handle.get_obj())))) {
+      } else if (CLICK_FAIL(t_ptr->add_tablet_to_old_version_chain(old_handle.get_obj()))) {
         LOG_WARN("fail to add tablet to old version chain", K(ret), K(key), KPC(old_tablet));
       }
     }
@@ -1902,7 +1928,6 @@ int ObTenantMetaMemMgr::compare_and_swap_tablet(
       LOG_WARN("failed to check and set initial state", K(ret), K(key));
     }
   }
-
   LOG_DEBUG("compare and swap object", K(ret), KPC(new_handle.get_obj()), K(lbt()));
   return ret;
 }
@@ -2354,9 +2379,11 @@ int ObT3mTabletMapIterator::FetchTabletItemOp::operator()(TabletPair &pair)
 
 ObTenantTabletIterator::ObTenantTabletIterator(
     ObTenantMetaMemMgr &t3m,
-    common::ObArenaAllocator &allocator)
+    common::ObArenaAllocator &allocator,
+    ObITabletFilterOp *op)
   : ObT3mTabletMapIterator(t3m),
-    allocator_(&allocator)
+    allocator_(&allocator),
+    op_(op)
 {
 }
 
@@ -2377,7 +2404,7 @@ int ObTenantTabletIterator::get_next_tablet(ObTabletHandle &handle)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("allocator_ is nullptr, which is not allowed", K(ret));
         } else if (OB_FAIL(tablet_map_.get_meta_obj_with_external_memory(
-            key, *allocator_, handle)) && OB_ENTRY_NOT_EXIST != ret) {
+            key, *allocator_, handle, false/*force*/, op_)) && !ignore_err_code(ret)) {
           LOG_WARN("fail to get tablet handle", K(ret), K(key));
         }
         if (OB_SUCC(ret) || ignore_err_code(ret)) {
@@ -2389,7 +2416,7 @@ int ObTenantTabletIterator::get_next_tablet(ObTabletHandle &handle)
           ++idx_;
         }
       }
-    } while (ignore_err_code(ret)); // ignore deleted tablet
+    } while (ignore_err_code(ret)); // ignore deleted tablet or skipped tablet
   }
   return ret;
 }

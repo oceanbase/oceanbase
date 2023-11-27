@@ -206,6 +206,54 @@ int ObTabletPointerMap::try_get_in_memory_meta_obj(
   return ret;
 }
 
+int ObTabletPointerMap::try_get_in_memory_meta_obj_with_filter(
+    const ObTabletMapKey &key,
+    ObITabletFilterOp &op,
+    ObTabletPointerHandle &ptr_hdl,
+    ObMetaObjGuard<ObTablet> &guard,
+    bool &is_in_memory)
+{
+  int ret = OB_SUCCESS;
+  uint64_t hash_val = 0;
+  ObTabletPointer *t_ptr = nullptr;
+  is_in_memory = false;
+  if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+    STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
+  } else {
+    common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
+    if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
+      if (common::OB_ENTRY_NOT_EXIST != ret) {
+        STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
+      }
+    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_resource_ptr())) {
+      ret = common::OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "fail to get meta pointer", K(ret), KP(t_ptr), K(key));
+    } else if (OB_UNLIKELY(t_ptr->get_addr().is_none())) {
+      ret = OB_ITEM_NOT_SETTED;
+      STORAGE_LOG(DEBUG, "pointer addr is none, no object to be got", K(ret), K(key), KPC(t_ptr));
+    } else if (t_ptr->is_in_memory()) {
+      if (t_ptr->is_attr_valid()) { // try skip tablet with attr
+        ObTabletResidentInfo info(key, *t_ptr);
+        bool is_skipped = false;
+        if (OB_FAIL(op(info, is_skipped))) {
+          STORAGE_LOG(WARN, "fail to skip tablet", K(ret), KP(t_ptr), K(key), K(info));
+        } else if (is_skipped) {
+          ret = OB_NOT_THE_OBJECT;
+        }
+      } else {
+        op.inc_invalid_attr_cnt();
+      }
+      if (OB_SUCC(ret)) {
+        t_ptr->get_obj(guard);
+        is_in_memory = true;
+      }
+    } else {
+      op.inc_not_in_memory_cnt();
+    }
+  }
+  return ret;
+}
+
 int ObTabletPointerMap::get_meta_obj(
     const ObTabletMapKey &key,
     ObMetaObjGuard<ObTablet> &guard)
@@ -234,6 +282,39 @@ int ObTabletPointerMap::get_meta_obj(
   }
   return ret;
 }
+
+int ObTabletPointerMap::get_meta_obj_with_filter(
+    const ObTabletMapKey &key,
+    ObITabletFilterOp &op,
+    ObMetaObjGuard<ObTablet> &guard)
+{
+  int ret = common::OB_SUCCESS;
+  ObTabletPointerHandle ptr_hdl(*this);
+  bool is_in_memory = false;
+  guard.reset();
+  if (OB_UNLIKELY(!key.is_valid())) {
+    ret = common::OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(key));
+  } else if (OB_FAIL(try_get_in_memory_meta_obj_with_filter(key, op, ptr_hdl, guard, is_in_memory))) {
+    if (OB_ENTRY_NOT_EXIST == ret || OB_ITEM_NOT_SETTED == ret) {
+      STORAGE_LOG(DEBUG, "meta obj does not exist", K(ret), K(key));
+    } else if (OB_NOT_THE_OBJECT == ret) {
+      STORAGE_LOG(DEBUG, "this tablet has been skipped", K(ret), K(key));
+    } else {
+      STORAGE_LOG(WARN, "fail to try get in memory meta obj", K(ret), K(key));
+    }
+  } else if (OB_UNLIKELY(!is_in_memory)) {
+    if (OB_FAIL(load_and_hook_meta_obj(key, ptr_hdl, guard))) {
+      STORAGE_LOG(WARN, "fail to load and hook meta obj", K(ret), K(key));
+    } else {
+      EVENT_INC(ObStatEventIds::TABLET_CACHE_MISS);
+    }
+  } else {
+    EVENT_INC(ObStatEventIds::TABLET_CACHE_HIT);
+  }
+  return ret;
+}
+
 
 int ObTabletPointerMap::load_and_hook_meta_obj(
     const ObTabletMapKey &key,
@@ -395,7 +476,8 @@ int ObTabletPointerMap::get_meta_obj_with_external_memory(
     const ObTabletMapKey &key,
     common::ObArenaAllocator &allocator,
     ObMetaObjGuard<ObTablet> &guard,
-    const bool force_alloc_new)
+    const bool force_alloc_new,
+    ObITabletFilterOp *op)
 {
   int ret = common::OB_SUCCESS;
   uint64_t hash_val = 0;
@@ -403,7 +485,7 @@ int ObTabletPointerMap::get_meta_obj_with_external_memory(
   ObTabletPointer *t_ptr = nullptr;
   bool is_in_memory = false;
   guard.reset();
-  if (OB_UNLIKELY(!key.is_valid())) {
+  if (OB_UNLIKELY(!key.is_valid() || (force_alloc_new && nullptr != op))) { /*only support filter when not force new*/
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(key));
   } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
@@ -415,7 +497,8 @@ int ObTabletPointerMap::get_meta_obj_with_external_memory(
         STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
       }
     }
-  } else if (OB_FAIL(try_get_in_memory_meta_obj(key, ptr_hdl, guard, is_in_memory))) {
+  } else if ((nullptr == op && OB_FAIL(try_get_in_memory_meta_obj(key, ptr_hdl, guard, is_in_memory)))
+      || (nullptr != op && OB_FAIL(try_get_in_memory_meta_obj_with_filter(key, *op, ptr_hdl, guard, is_in_memory)))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       STORAGE_LOG(DEBUG, "meta obj does not exist", K(ret), K(key));
     } else {
@@ -612,6 +695,9 @@ int ObTabletPointerMap::compare_and_swap_addr_and_object(
     if (OB_SUCC(ret)) {
       t_ptr->set_addr_with_reset_obj(new_addr);
       t_ptr->set_obj(new_guard);
+      if (OB_FAIL(t_ptr->set_tablet_attr(*new_guard.get_obj()))) {
+        STORAGE_LOG(WARN, "failed to update tablet attr", K(ret), K(key), K(new_addr), K(new_guard));
+      }
     }
   }
 
