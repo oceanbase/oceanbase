@@ -111,6 +111,8 @@ ignore_replay_checksum_error
 index_block_cache_priority
 internal_sql_execute_timeout
 job_queue_processes
+kv_transport_compress_func
+kv_transport_compress_threshold
 kv_ttl_duty_duration
 kv_ttl_history_recycle_interval
 large_query_threshold
@@ -218,7 +220,6 @@ system_memory
 sys_bkgd_migration_change_member_list_timeout
 sys_bkgd_migration_retry_num
 sys_bkgd_net_percentage
-tableapi_transport_compress_func
 tablet_ls_cache_priority
 tablet_meta_table_check_interval
 tablet_meta_table_scan_batch_count

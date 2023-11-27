@@ -435,6 +435,7 @@ int ObTableQuerySyncP::execute_query()
   ObTableApiScanRowIterator &row_iter = query_ctx.row_iter_;
   ObTableQueryResultIterator *result_iter = nullptr;
   bool is_hkv = (ObTableEntityType::ET_HKV == arg_.entity_type_);
+  ObCompressorType compressor_type = INVALID_COMPRESSOR;
 
   // 1. create scan executor
   if (OB_FAIL(ObTableSpecCgService::generate<TABLE_API_EXEC_SCAN>(*allocator, tb_ctx, spec))) {
@@ -459,18 +460,6 @@ int ObTableQuerySyncP::execute_query()
       LOG_WARN("fail to open scan row iterator", K(ret));
     } else {
       result_iter->set_scan_result(&row_iter);
-      // hbase model, compress the result packet
-      if (is_hkv) {
-        ObCompressorType compressor_type = INVALID_COMPRESSOR;
-        if (OB_FAIL(ObCompressorPool::get_instance().get_compressor_type(
-            GCONF.tableapi_transport_compress_func, compressor_type))) {
-          compressor_type = INVALID_COMPRESSOR;
-        } else if (NONE_COMPRESSOR == compressor_type) {
-          compressor_type = INVALID_COMPRESSOR;
-        }
-        this->set_result_compress_type(compressor_type);
-        ret = OB_SUCCESS; // reset ret
-      }
     }
   }
 
@@ -495,8 +484,16 @@ int ObTableQuerySyncP::execute_query()
       // no more result
       result_.is_end_ = true;
     }
-  }
 
+    // check if need compress the result
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCC(ret) &&
+        OB_NOT_NULL(one_result) &&
+        OB_TMP_FAIL(ObKVConfigUtil::get_compress_type(MTL_ID(), one_result->get_result_size(), compressor_type))) {
+      LOG_WARN("fail to check compress config", K(tmp_ret), K(compressor_type));
+    }
+    this->set_result_compress_type(compressor_type);
+  }
   return ret;
 }
 
@@ -537,6 +534,7 @@ int ObTableQuerySyncP::query_scan_without_init()
   ObTableQueryResultIterator *result_iter = query_session_->get_result_iterator();
   ObTableQuerySyncCtx &query_ctx = query_session_->get_query_ctx();
   ObTableCtx &tb_ctx = query_ctx.tb_ctx_;
+  ObCompressorType compressor_type = INVALID_COMPRESSOR;
 
   if (OB_ISNULL(result_iter)) {
     ret = OB_ERR_NULL_VALUE;
@@ -561,6 +559,15 @@ int ObTableQuerySyncP::query_scan_without_init()
       result_.query_session_id_ = query_session_id_;
       audit_row_count_ = result_.get_row_count();
     }
+
+    // check if need compress the result
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCC(ret) &&
+        OB_NOT_NULL(query_result) &&
+        OB_TMP_FAIL(ObKVConfigUtil::get_compress_type(MTL_ID(), query_result->get_result_size(), compressor_type))) {
+      LOG_WARN("fail to check compress config", K(tmp_ret), K(compressor_type));
+    }
+    this->set_result_compress_type(compressor_type);
   }
 
   return ret;

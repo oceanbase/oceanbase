@@ -161,6 +161,7 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
   int32_t result_count = 0;
   const int64_t timeout_ts = get_timeout_ts();
   ObTableApiScanRowIterator row_iter;
+  ObCompressorType compressor_type = INVALID_COMPRESSOR;
 
   // 1. create result iterator
   if (OB_FAIL(ObTableQueryUtils::generate_query_result_iterator(allocator_,
@@ -174,18 +175,6 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
     LOG_WARN("fail to open scan row iterator", K(ret));
   } else {
     result_iter->set_scan_result(&row_iter);
-    // hbase model, compress the result packet
-    if (is_hkv) {
-      ObCompressorType compressor_type = INVALID_COMPRESSOR;
-      if (OB_FAIL(ObCompressorPool::get_instance().get_compressor_type(
-          GCONF.tableapi_transport_compress_func, compressor_type))) {
-        compressor_type = INVALID_COMPRESSOR;
-      } else if (NONE_COMPRESSOR == compressor_type) {
-        compressor_type = INVALID_COMPRESSOR;
-      }
-      this->set_result_compress_type(compressor_type);
-      ret = OB_SUCCESS; // reset ret
-    }
   }
 
   // 2. loop get row and serialize row
@@ -229,7 +218,16 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
       LOG_WARN("fail to close row iter", K(tmp_ret));
       ret = COVER_SUCC(tmp_ret);
     }
-    ObTableQueryUtils::destroy_result_iterator(result_iter);
+
+    // check if need compress the result
+    if (OB_SUCC(ret) &&
+        OB_NOT_NULL(one_result) &&
+        OB_TMP_FAIL(ObKVConfigUtil::get_compress_type(MTL_ID(), one_result->get_result_size(), compressor_type))) {
+      LOG_WARN("fail to check compress config", K(tmp_ret), K(compressor_type));
+    }
+    this->set_result_compress_type(compressor_type);
+
+     ObTableQueryUtils::destroy_result_iterator(result_iter);
 
     LOG_DEBUG("last result", K(ret), "row_count", result_.get_row_count());
     NG_TRACE_EXT(tag1, OB_ID(return_rows), result_count, OB_ID(arg2), result_row_count_);

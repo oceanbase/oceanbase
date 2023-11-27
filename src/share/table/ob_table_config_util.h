@@ -15,6 +15,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/ob_print_utils.h"
 #include "share/config/ob_server_config.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 namespace oceanbase
 {
 namespace common
@@ -64,6 +65,14 @@ public:
   static bool is_ttl_enable();
   static bool is_rerouting_enable();
   static bool is_hotkey_enable();
+};
+
+class ObKVConfigUtil
+{
+public:
+  static int get_compress_type(const int64_t tenant_id,
+                               int64_t result_size,
+                               ObCompressorType &compressor_type);
 };
 
 }
