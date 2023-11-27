@@ -3745,6 +3745,7 @@ int ObSchemaMgr::get_hidden_table_schema(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_INVALID_INDEX_NAME);
 int ObSchemaMgr::get_index_schema(
   const uint64_t tenant_id,
   const uint64_t database_id,
@@ -3788,7 +3789,10 @@ int ObSchemaMgr::get_index_schema(
       // can determine whether the index is in the recycle bin based on database_id
       ObString cutted_index_name;
       uint64_t data_table_id = ObSimpleTableSchemaV2::extract_data_table_id_from_index_name(table_name);
-      if (OB_INVALID_ID == data_table_id) {
+      if (OB_UNLIKELY(ERRSIM_INVALID_INDEX_NAME)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("turn on ERRSIM_INVALID_INDEX_NAME", KR(ret));
+      } else if (OB_INVALID_ID == data_table_id) {
         // nothing to do, need to go on and it will get a empty ptr of dst table_schema
       } else if (OB_FAIL(ObSimpleTableSchemaV2::get_index_name(table_name, cutted_index_name))) {
         if (OB_SCHEMA_ERROR == ret) {
