@@ -115,7 +115,12 @@ int ObAllVirtualSysParameterStat::inner_sys_get_next_row(ObNewRow *&row)
             break;
           }
         case VALUE: {
-            cells[i].set_varchar(sys_iter_->second->str());
+            if ((OB_SYS_TENANT_ID != session_->get_login_tenant_id() || session_->is_inner()) &&
+                0 == ObString(SSL_EXTERNAL_KMS_INFO).case_compare(sys_iter_->first.str())) {
+              cells[i].set_varchar("");
+            } else {
+              cells[i].set_varchar(sys_iter_->second->str());
+            }
             cells[i].set_collation_type(
                 ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
@@ -218,7 +223,12 @@ int ObAllVirtualSysParameterStat::inner_tenant_get_next_row(common::ObNewRow *&r
             break;
           }
         case VALUE: {
-            cells[i].set_varchar(tenant_iter_->second->str());
+            if ((OB_SYS_TENANT_ID != session_->get_login_tenant_id() || session_->is_inner()) &&
+                0 == ObString(EXTERNAL_KMS_INFO).case_compare(tenant_iter_->first.str())) {
+              cells[i].set_varchar("");
+            } else {
+              cells[i].set_varchar(tenant_iter_->second->str());
+            }
             cells[i].set_collation_type(
                 ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
