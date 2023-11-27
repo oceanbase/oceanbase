@@ -365,6 +365,7 @@ _rpc_checksum
 _single_zone_deployment_on
 _sort_area_size
 _temporary_file_io_area_size
+_temporary_file_meta_memory_limit_percentage
 _trx_commit_retry_interval
 _upgrade_stage
 _xa_gc_interval
