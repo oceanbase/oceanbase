@@ -23,6 +23,7 @@
 #include "sql/plan_cache/ob_plan_cache_util.h"
 #include "sql/engine/user_defined_function/ob_udf_ctx_mgr.h"
 #include "sql/engine/expr/ob_expr.h"
+#include "sql/engine/ob_subschema_ctx.h"
 namespace oceanbase
 {
 namespace sql
@@ -594,6 +595,7 @@ private:
   bool is_ps_rewrite_sql_;
   // timeout use by spm, don't need to serialize
   int64_t spm_ts_timeout_us_;
+  ObSubSchemaCtx subschema_ctx_;
 };
 
 }
