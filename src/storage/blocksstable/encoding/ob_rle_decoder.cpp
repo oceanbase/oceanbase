@@ -570,6 +570,8 @@ int ObRLEDecoder::read_distinct(
       ctx.col_header_->length_ - meta_header_->offset_,
       group_by_cell))) {
     LOG_WARN("Failed to load dict", K(ret));
+  } else if (has_null_value()) {
+    group_by_cell.add_distinct_null_value();
   }
   return ret;
 }
@@ -586,6 +588,20 @@ int ObRLEDecoder::read_reference(
     LOG_WARN("Failed to extract refs",K(ret));
   }
   return ret;
+}
+
+bool ObRLEDecoder::has_null_value() const
+{
+  int ret = OB_SUCCESS;
+  bool has_null = false;
+  int64_t ref;
+  const int64_t dict_count = dict_decoder_.get_dict_header()->count_;
+  const ObIntArrayFuncTable &refs = ObIntArrayFuncTable::instance(meta_header_->ref_byte_);
+  for (int64_t i = 0; !has_null && i < meta_header_->count_; ++i) {
+    ref = refs.at_(meta_header_->payload_ + ref_offset_, i);
+    has_null = ref >= dict_count;
+  }
+  return has_null;
 }
 
 } // end namespace blocksstable

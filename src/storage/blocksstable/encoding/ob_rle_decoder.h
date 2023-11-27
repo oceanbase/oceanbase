@@ -150,6 +150,8 @@ private:
       const int64_t row_cap,
       storage::ObGroupByCell &group_by_cell) const override;
 
+  bool has_null_value() const;
+
 private:
   const ObRLEMetaHeader *meta_header_;
   uint16_t ref_offset_;

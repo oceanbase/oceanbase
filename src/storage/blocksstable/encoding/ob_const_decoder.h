@@ -147,6 +147,8 @@ private:
       int64_t &null_count,
       uint32_t *ref_buf = nullptr) const;
 
+  bool has_null_execption_value() const;
+
 private:
   const ObConstMetaHeader *meta_header_;
   ObDictDecoder dict_decoder_;
