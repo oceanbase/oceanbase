@@ -552,6 +552,7 @@ ob_set_subtarget(ob_storage common
   ob_value_row_iterator.cpp
   ob_common_id_utils.cpp
   ob_tenant_tablet_stat_mgr.cpp
+  ob_protected_memtable_mgr_handle.cpp
 )
 
 ob_set_subtarget(ob_storage common_mixed

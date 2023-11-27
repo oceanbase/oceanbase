@@ -259,10 +259,11 @@ TEST_F(TestTrans, basic)
   ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
   ObTabletHandle tablet_handle;
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet_svr()->get_tablet(tablet_id, tablet_handle, 0));
-  ObIMemtableMgr *mt_mgr = tablet_handle.get_obj()->get_memtable_mgr();
-  ASSERT_EQ(1, mt_mgr->get_memtable_count_());
+  ObProtectedMemtableMgrHandle *protected_handle = NULL;
+  ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->get_protected_memtable_mgr_handle(protected_handle));
+  ASSERT_EQ(1, protected_handle->memtable_mgr_handle_.get_memtable_mgr()->get_memtable_count_());
   ObTableHandleV2 mt_handle;
-  ASSERT_EQ(OB_SUCCESS, mt_mgr->get_active_memtable(mt_handle));
+  ASSERT_EQ(OB_SUCCESS, protected_handle->get_active_memtable(mt_handle));
   memtable::ObMemtable *mt;
   ASSERT_EQ(OB_SUCCESS, mt_handle.get_data_memtable(mt));
 

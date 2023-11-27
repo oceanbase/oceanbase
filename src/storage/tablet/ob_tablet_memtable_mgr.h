@@ -144,6 +144,39 @@ private:
   ObStorageSchemaRecorder schema_recorder_; // 120B
   compaction::ObTabletMediumCompactionInfoRecorder medium_info_recorder_; // 96B
 };
+
+class ObTabletMemtableMgrPool
+{
+public:
+  ObTabletMemtableMgrPool()
+    : allocator_(sizeof(ObTabletMemtableMgr), lib::ObMemAttr(MTL_ID(), "TltMemtablMgr")),
+      count_(0) {}
+  static int mtl_init(ObTabletMemtableMgrPool* &m) { return OB_SUCCESS; }
+  void destroy() {}
+  ObTabletMemtableMgr* acquire()
+  {
+    void *ptr = allocator_.alloc();
+    ObTabletMemtableMgr *ret = NULL;
+    if (OB_NOT_NULL(ptr)) {
+      ret = new(ptr)ObTabletMemtableMgr();
+      ATOMIC_INC(&count_);
+    }
+    return ret;
+  }
+  void release(ObTabletMemtableMgr *mgr)
+  {
+    OB_ASSERT(OB_NOT_NULL(mgr));
+    mgr->~ObTabletMemtableMgr();
+    allocator_.free(static_cast<void*>(mgr));
+    ATOMIC_DEC(&count_);
+  }
+
+  int64_t get_count() { return ATOMIC_LOAD(&count_); }
+private:
+  common::ObSliceAlloc allocator_;
+  int64_t count_;
+};
+
 }
 }
 

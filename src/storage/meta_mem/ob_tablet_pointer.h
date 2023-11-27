@@ -15,10 +15,11 @@
 
 #include "lib/lock/ob_mutex.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
-#include "storage/ob_i_memtable_mgr.h"
 #include "storage/tablet/ob_tablet_ddl_info.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/multi_data_source/mds_table_handler.h"
+#include "storage/ob_i_memtable_mgr.h"
+#include "storage/ob_protected_memtable_mgr_handle.h"
 
 namespace oceanbase
 {
@@ -35,8 +36,7 @@ class ObTabletPointer final
   friend class ObTenantMetaMemMgr;
 public:
   ObTabletPointer();
-  ObTabletPointer(
-      const ObLSHandle &ls_handle,
+  ObTabletPointer(const ObLSHandle &ls_handle,
       const ObMemtableMgrHandle &memtable_mgr_handle);
   ~ObTabletPointer();
   int get_in_memory_obj(ObMetaObjGuard<ObTablet> &guard);
@@ -76,7 +76,7 @@ public:
 
   // do not KPC memtable_mgr, may dead lock
   TO_STRING_KV(K_(phy_addr), K_(obj), K_(ls_handle), K_(ddl_kv_mgr_handle),
-      KP(memtable_mgr_handle_.get_memtable_mgr()), K_(ddl_info), K_(initial_state), KP_(old_version_chain));
+      K_(protected_memtable_mgr_handle), K_(ddl_info), K_(initial_state), KP_(old_version_chain));
 public:
   bool get_initial_state() const;
   void set_initial_state(const bool initial_state);
@@ -84,14 +84,14 @@ public:
   void get_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   int set_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   int remove_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle);
-  int get_mds_table(mds::MdsTableHandle &handle, bool not_exist_create = false);
+  int get_mds_table(const ObTabletID &tablet_id, mds::MdsTableHandle &handle, bool not_exist_create = false);
   // interfaces forward to mds_table_handler_
   void mark_mds_table_deleted();
   void set_tablet_status_written();
   bool is_tablet_status_written() const;
   int try_release_mds_nodes_below(const share::SCN &scn);
   int try_gc_mds_table();
-  int release_memtable_and_mds_table_for_ls_offline();
+  int release_memtable_and_mds_table_for_ls_offline(const ObTabletID &tablet_id);
   int get_min_mds_ckpt_scn(share::SCN &scn);
   ObLS *get_ls() const;
 private:
@@ -103,7 +103,7 @@ private:
   ObMetaObj<ObTablet> obj_; // 40B
   ObLSHandle ls_handle_; // 24B
   ObDDLKvMgrHandle ddl_kv_mgr_handle_; // 48B
-  ObMemtableMgrHandle memtable_mgr_handle_; // 16B
+  ObProtectedMemtableMgrHandle protected_memtable_mgr_handle_; // 32B
   ObTabletDDLInfo ddl_info_; // 32B
   bool initial_state_; // 1B
   ObByteLock ddl_kv_mgr_lock_; // 1B

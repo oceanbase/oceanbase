@@ -562,12 +562,8 @@ int ObTabletBackfillTXTask::get_backfill_tx_memtables_(
       memtables.reset();
       table_array.reset();
       bool is_memtable_ready = true;
-      ObIMemtableMgr *memtable_mgr = nullptr;
-      if (OB_ISNULL(memtable_mgr = tablet->get_memtable_mgr())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("memtable mgr should not be NULL", K(ret), KP(memtable_mgr));
-      } else if (OB_FAIL(memtable_mgr->get_all_memtables(memtables))) {
-        LOG_WARN("failed to get all memtables", K(ret), KPC(tablet));
+      if (OB_FAIL(tablet->get_all_memtables(memtables))) {
+        LOG_WARN("failed to get_memtable_mgr for get all memtable", K(ret), KPC(tablet));
       } else if (memtables.empty()) {
         break;
       } else {

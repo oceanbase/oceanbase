@@ -155,11 +155,8 @@ int ObAllVirtualMemstoreInfo::get_next_memtable(memtable::ObMemtable *&mt)
       } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "invalid tablet handle", K(ret), K(tablet_handle));
-      } else if (OB_ISNULL(memtable_mgr = tablet_handle.get_obj()->get_memtable_mgr())) {
-        ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "memtable mgr is null", K(ret));
-      } else if (OB_FAIL(memtable_mgr->get_all_memtables(tables_handle_))) {
-        SERVER_LOG(WARN, "fail to get all memtables for log stream", K(ret));
+      } else if (OB_FAIL(tablet_handle.get_obj()->get_all_memtables(tables_handle_))) {
+        SERVER_LOG(WARN, "failed to get_memtable_mgr for get all memtable", K(ret), KPC(tablet_handle.get_obj()));
       }
     } else if (OB_FAIL(tables_handle_.at(memtable_array_pos_++).get_data_memtable(mt))) {
       // get next memtable

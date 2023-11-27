@@ -372,7 +372,10 @@ public:
   int update_upper_trans_version(ObLS &ls, bool &is_updated);
 
   // memtable operation
-  ObIMemtableMgr *get_memtable_mgr() const { return memtable_mgr_; } // TODO(bowen.gbw): get memtable mgr from tablet pointer handle
+  bool has_memtable() const;
+  int get_all_memtables(ObTableHdlArray &handle) const;
+  int get_boundary_memtable(ObTableHandleV2 &handle) const;
+  int get_protected_memtable_mgr_handle(ObProtectedMemtableMgrHandle *&handle) const;
 
   // get the active memtable for write or replay.
   int get_active_memtable(ObTableHandleV2 &handle) const;
@@ -617,6 +620,7 @@ private:
   static int inc_linked_block_ref_cnt(const ObMetaDiskAddr &head_addr, bool &inc_success);
   static void dec_linked_block_ref_cnt(const ObMetaDiskAddr &head_addr);
   int64_t get_try_cache_size() const;
+  int inner_release_memtables(const share::SCN scn);
 private:
   static bool ignore_ret(const int ret);
   int inner_check_valid(const bool ignore_ha_status = false) const;
@@ -625,6 +629,8 @@ private:
   int64_t get_self_serialize_size() const;
   int get_memtable_mgr(ObIMemtableMgr *&memtable_mgr) const;
   int get_tablet_memtable_mgr(ObTabletMemtableMgr *&memtable_mgr) const;
+
+  int64_t get_self_size() const;
   int check_schema_version(const int64_t schema_version);
   int check_snapshot_readable(const int64_t snapshot_version);
   int get_column_store_sstable_checksum(common::ObIArray<int64_t> &column_checksums, ObCOSSTableV2 &co_sstable);
@@ -844,7 +850,6 @@ private:
   memtable::ObIMemtable *memtables_[MAX_MEMSTORE_CNT];
   ObArenaAllocator *allocator_;
   mutable common::SpinRWLock memtables_lock_;                // size: 12B, alignment: 4B
-  ObIMemtableMgr *memtable_mgr_;
   logservice::ObLogHandler *log_handler_;
 
   //ATTENTION : Add a new variable need consider ObMigrationTabletParam

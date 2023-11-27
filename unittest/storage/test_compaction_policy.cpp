@@ -318,7 +318,8 @@ int TestCompactionPolicy::mock_memtable(
     ObTableHandleV2 &table_handle)
 {
   int ret = OB_SUCCESS;
-  ObTabletMemtableMgr *mt_mgr = static_cast<ObTabletMemtableMgr *>(tablet.memtable_mgr_);
+  SCN clog_checkpoint_scn;
+  ObProtectedMemtableMgrHandle *protected_handle = NULL;
 
   ObITable::TableKey table_key;
   int64_t end_border = -1;
@@ -334,7 +335,18 @@ int TestCompactionPolicy::mock_memtable(
   ObLSService *ls_svr = nullptr;
 
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr *);
-  if (OB_FAIL(t3m->acquire_memtable(table_handle))) {
+
+  if (OB_FAIL(tablet.get_protected_memtable_mgr_handle(protected_handle))) {
+    LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret), K(tablet));
+  }
+  // if memtable_mgr not exist, create it
+  else if (OB_FAIL(protected_handle->create_tablet_memtable_mgr_(
+          tablet.get_tablet_meta().ls_id_, tablet.get_tablet_meta().tablet_id_, lib::Worker::CompatMode::MYSQL))) {
+    LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret));
+  }
+  ObTabletMemtableMgr *mt_mgr = static_cast<ObTabletMemtableMgr *>(protected_handle->memtable_mgr_handle_.get_memtable_mgr());
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(t3m->acquire_memtable(table_handle))) {
     LOG_WARN("failed to acquire memtable", K(ret));
   } else if (OB_ISNULL(memtable = static_cast<ObMemtable*>(table_handle.get_table()))) {
     ret = OB_ERR_UNEXPECTED;
@@ -698,7 +710,6 @@ TEST_F(TestCompactionPolicy, basic_create_tablet)
   ObTablet *tablet = tablet_handle.get_obj();
   ObTabletTableStore &table_store = *tablet->table_store_addr_.get_ptr();
   ASSERT_EQ(true, table_store.is_valid());
-  ASSERT_TRUE(nullptr != tablet->memtable_mgr_);
 }
 
 TEST_F(TestCompactionPolicy, basic_create_memtable)
@@ -709,7 +720,13 @@ TEST_F(TestCompactionPolicy, basic_create_memtable)
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(true, tablet_handle.is_valid());
 
-  ObTabletMemtableMgr *mt_mgr = static_cast<ObTabletMemtableMgr *>(tablet_handle.get_obj()->memtable_mgr_);
+  SCN clog_checkpoint_scn;
+  ObProtectedMemtableMgrHandle *protected_handle = NULL;
+  ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->get_protected_memtable_mgr_handle(protected_handle));
+  // if memtable_mgr not exist, create it
+  const ObTabletMeta &tablet_meta = tablet_handle.get_obj()->get_tablet_meta();
+  ASSERT_EQ(OB_SUCCESS, protected_handle->create_tablet_memtable_mgr_(tablet_meta.ls_id_, tablet_meta.tablet_id_, lib::Worker::CompatMode::MYSQL));
+  ObTabletMemtableMgr *mt_mgr = static_cast<ObTabletMemtableMgr *>(protected_handle->memtable_mgr_handle_.get_memtable_mgr());
   ASSERT_EQ(0, mt_mgr->get_memtable_count_());
   ObTableHandleV2 frozen_memtable;
   ret = TestCompactionPolicy::mock_memtable(1, 100, 100, *tablet_handle.get_obj(), frozen_memtable);
@@ -811,7 +828,9 @@ TEST_F(TestCompactionPolicy, basic_prepare_tablet)
   ASSERT_EQ(2, table_store.major_tables_.count());
   ASSERT_EQ(2, table_store.minor_tables_.count());
 
-  ObTabletMemtableMgr *mt_mgr = static_cast<ObTabletMemtableMgr *>(tablet_handle_.get_obj()->memtable_mgr_);
+  ObProtectedMemtableMgrHandle *protected_handle = NULL;
+  ASSERT_EQ(OB_SUCCESS, tablet_handle_.get_obj()->get_protected_memtable_mgr_handle(protected_handle));
+  ObTabletMemtableMgr *mt_mgr = static_cast<ObTabletMemtableMgr *>(protected_handle->memtable_mgr_handle_.get_memtable_mgr());
   ASSERT_EQ(2, mt_mgr->get_memtable_count_());
 }
 
@@ -1085,7 +1104,7 @@ TEST_F(TestCompactionPolicy, test_minor_dag_intersect)
 int main(int argc, char **argv)
 {
   system("rm -rf test_compaction_policy.log*");
-  OB_LOGGER.set_file_name("test_compaction_policy.log");
+  OB_LOGGER.set_file_name("test_compaction_policy.log", true);
   OB_LOGGER.set_log_level("INFO");
   CLOG_LOG(INFO, "begin unittest: test_compaction_policy");
   ::testing::InitGoogleTest(&argc, argv);

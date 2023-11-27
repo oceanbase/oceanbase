@@ -1024,7 +1024,6 @@ int ObDumpMemtableP::process()
       ObLSService* ls_svr = nullptr;
       ObTabletHandle tablet_handle;
       ObLSHandle ls_handle;
-      ObIMemtableMgr *memtable_mgr = nullptr;
       common::ObSEArray<ObTableHandleV2, 7> tables_handle;
 
       if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
@@ -1047,11 +1046,8 @@ int ObDumpMemtableP::process()
       } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "invalid tablet handle", K(ret), K(tablet_handle));
-      } else if (OB_ISNULL(memtable_mgr = tablet_handle.get_obj()->get_memtable_mgr())) {
-        ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "memtable mgr is null", K(ret));
-      } else if (OB_FAIL(memtable_mgr->get_all_memtables(tables_handle))) {
-        SERVER_LOG(WARN, "fail to get all memtables for log stream", K(ret));
+      } else if (OB_FAIL(tablet_handle.get_obj()->get_all_memtables(tables_handle))) {
+        LOG_WARN("failed to get all memtable", K(ret), KPC(tablet_handle.get_obj()));
       } else {
         memtable::ObMemtable *mt;
         mkdir("/tmp/dump_memtable/", S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
