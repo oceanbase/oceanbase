@@ -50,7 +50,6 @@ static void make_random_logic_id(blocksstable::ObLogicMacroBlockId &logic_id)
   logic_id.tablet_id_ = random(1, 10000000);
   blocksstable::ObMacroDataSeq seq;
   seq.macro_data_seq_ = random(1, 10000000);
-  seq.version_ = blocksstable::ObMacroDataSeq::MACRO_DATA_SEQ_VERSION;
   logic_id.data_seq_ = seq;
   logic_id.logic_version_ = random(1, 10000000);
 }
