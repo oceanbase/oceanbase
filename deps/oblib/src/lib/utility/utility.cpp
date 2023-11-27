@@ -1418,8 +1418,9 @@ int ObBandwidthThrottle::limit_and_sleep(const int64_t bytes, const int64_t last
       const int64_t copy_KB = (total_bytes_ - last_printed_bytes_) / 1024;
       const int64_t speed_KB_per_s = copy_KB * 1000 / print_interval_ms;
       const int64_t sleep_ms_sum = total_sleep_ms_ - last_printed_sleep_ms_;
+      const int64_t rate_KB = rate_ / 1024;
       COMMON_LOG(INFO, "print band limit", KCSTRING_(comment), K(copy_KB), K(sleep_ms_sum), K(speed_KB_per_s),
-          K_(total_sleep_ms), K_(total_bytes), "rate_KB/s", rate_, K(print_interval_ms));
+          K_(total_sleep_ms), K_(total_bytes), "rate_KB/s", rate_KB, K(print_interval_ms));
       last_printed_bytes_ = total_bytes_;
       last_printed_sleep_ms_ = total_sleep_ms_;
       last_printed_ts_ = cur_time;
