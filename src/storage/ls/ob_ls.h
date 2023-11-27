@@ -879,6 +879,8 @@ public:
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, get_min_reserved_snapshot, int64_t);
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, add_dependent_medium_tablet, int);
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, del_dependent_medium_tablet, int);
+  int set_ls_migration_gc(bool &allow_gc);
+
 private:
   // StorageBaseUtil
   // table manager: create, remove and guard get.

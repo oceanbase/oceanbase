@@ -2467,5 +2467,42 @@ bool ObLS::is_in_gc()
   return bret;
 }
 
+int ObLS::set_ls_migration_gc(
+    bool &allow_gc)
+{
+  int ret = OB_SUCCESS;
+  allow_gc = false;
+  const bool write_slog = true;
+  const ObMigrationStatus change_status = ObMigrationStatus::OB_MIGRATION_STATUS_GC;
+  ObMigrationStatus curr_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+  ObLSRebuildInfo rebuild_info;
+  WRLockGuard guard(meta_rwlock_);
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ls is not inited", K(ret), K(ls_meta_));
+  } else if (!ls_meta_.get_persistent_state().can_update_ls_meta()) {
+    ret = OB_STATE_NOT_MATCH;
+    STORAGE_LOG(WARN, "state not match, cannot update ls meta", K(ret), K(ls_meta_));
+  } else if (OB_FAIL(ls_meta_.get_rebuild_info(rebuild_info))) {
+    LOG_WARN("failed to get rebuild info", K(ret), K(ls_meta_));
+  } else if (rebuild_info.is_in_rebuild()) {
+    allow_gc = false;
+  } else if (OB_FAIL(ls_meta_.get_migration_status(curr_status))) {
+    LOG_WARN("failed to get migration status", K(ret), K(ls_meta_));
+  } else if (ObMigrationStatusHelper::check_allow_gc_abandoned_ls(curr_status)) {
+    allow_gc = true;
+  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != curr_status) {
+    allow_gc = false;
+  } else if (OB_FAIL(ls_meta_.set_migration_status(change_status, write_slog))) {
+    LOG_WARN("failed to set migration status", K(ret), K(change_status));
+  } else {
+    ls_tablet_svr_.disable_to_read();
+    allow_gc = true;
+  }
+  return ret;
+}
+
+
 }
 }

@@ -117,7 +117,7 @@ private:
   static bool check_migration_status_is_fail_(const ObMigrationStatus &cur_status);
   static int set_ls_migrate_gc_status_(
       ObLS &ls,
-      const ObMigrationStatus &migration_status);
+      bool &allow_gc);
   static int check_ls_with_transfer_task_(
       ObLS &ls,
       bool &need_check_allow_gc,
