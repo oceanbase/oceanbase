@@ -528,6 +528,9 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
       // need at ps mode
       if (!is_packed && value.get_type() != fields->at(i).type_.get_type()) {
         ObCastCtx cast_ctx(&allocator, NULL, CM_WARN_ON_FAIL, fields->at(i).type_.get_collation_type());
+        if (ObDecimalIntType == fields->at(i).type_.get_type()) {
+          cast_ctx.res_accuracy_ = const_cast<ObAccuracy*>(&fields->at(i).accuracy_);
+        }
         if (OB_FAIL(common::ObObjCaster::to_type(fields->at(i).type_.get_type(),
                                           cast_ctx,
                                           value,
