@@ -543,6 +543,15 @@ void ObLogger::destroy()
   }
 }
 
+void ObLogger::drop_log_items(ObIBaseLogItem **items, const int64_t item_cnt)
+{
+  ObPLogItem **log_item = reinterpret_cast<ObPLogItem **>(items);
+  for (int64_t i = 0; i < item_cnt; ++i) {
+    free_log_item(log_item[i]);
+    items[i] = NULL;
+  }
+}
+
 void ObLogger::set_trace_mode(bool trace_mode)
 {
   trace_mode_ = trace_mode;

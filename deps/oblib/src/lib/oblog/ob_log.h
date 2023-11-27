@@ -792,6 +792,7 @@ private:
       bool& disable);
 
   int log_new_file_info(const ObPLogFileStruct &log_file);
+  void drop_log_items(ObIBaseLogItem **items, const int64_t item_cnt) override;
 private:
   static const char *const errstr_[];
   // default log rate limiter if there's no tl_log_limiger
