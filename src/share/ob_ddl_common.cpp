@@ -1166,9 +1166,8 @@ int ObDDLUtil::get_ddl_rpc_timeout(const int64_t tablet_count, int64_t &ddl_rpc_
   const int64_t rpc_timeout_upper = 20L * 60L * 1000L * 1000L; // upper 20 minutes
   const int64_t cost_per_tablet = 20L * 60L * 100L; // 10000 tablets use 20 minutes, so 1 tablet use 20 * 60 * 100 us
   ddl_rpc_timeout_us = tablet_count * cost_per_tablet;
-  ddl_rpc_timeout_us = max(ddl_rpc_timeout_us, GCONF._ob_ddl_timeout);
   ddl_rpc_timeout_us = min(ddl_rpc_timeout_us, rpc_timeout_upper);
-  ddl_rpc_timeout_us = max(ddl_rpc_timeout_us, GCONF.rpc_timeout);
+  ddl_rpc_timeout_us = max(ddl_rpc_timeout_us, GCONF._ob_ddl_timeout);
   return ret;
 }
 
