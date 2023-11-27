@@ -2485,6 +2485,7 @@ int ObRootBackup::insert_tenant_backup_task_failed(ObMySQLTransaction &trans, co
     tenant_backup_task.passwd_ = info.passwd_;
     tenant_backup_task.result_ = OB_CANCELED;
     tenant_backup_task.date_ = backup_date;
+    tenant_backup_task.compatible_ = OB_BACKUP_CURRENT_COMPAITBLE_VERSION;
     if (OB_FAIL(tenant_task_updater.init(trans))) {
       LOG_WARN("failed to init tenant backup task updater", K(ret), K(info));
     } else if (OB_FAIL(tenant_task_updater.insert_tenant_backup_task(tenant_backup_task))) {
