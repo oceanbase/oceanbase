@@ -110,14 +110,14 @@ int ObStatMaxValue::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
   return ret;
 }
 
-int ObStatMaxValue::decode(ObObj &obj)
+int ObStatMaxValue::decode(ObObj &obj, ObIAllocator &allocator)
 {
   // print cstring and hex string here
   int ret = OB_SUCCESS;
   if (OB_ISNULL(col_stat_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("col stat is not given", K(ret), K(col_stat_));
-  } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(obj))) {
+  } else if (OB_FAIL(ObDbmsStatsUtils::truncate_string_for_opt_stats(obj, allocator))) {
     LOG_WARN("fail to truncate string", K(ret));
   } else {
     col_stat_->set_max_value(obj);
@@ -140,14 +140,14 @@ int ObStatMinValue::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
   return ret;
 }
 
-int ObStatMinValue::decode(ObObj &obj)
+int ObStatMinValue::decode(ObObj &obj, ObIAllocator &allocator)
 {
   // print cstring and hex string here
   int ret = OB_SUCCESS;
   if (OB_ISNULL(col_stat_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("col stat is not given", K(ret), K(col_stat_));
-  } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(obj))) {
+  } else if (OB_FAIL(ObDbmsStatsUtils::truncate_string_for_opt_stats(obj, allocator))) {
     LOG_WARN("fail to truncate string", K(ret));
   } else {
     col_stat_->set_min_value(obj);

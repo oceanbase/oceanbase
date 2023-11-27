@@ -1362,7 +1362,7 @@ int ObDbmsStatsExecutor::update_online_stat(ObExecContext &ctx,
       //guard.~CompatModeGuard();
       if (has_stash_savepoint) {
         int pop_ret = ObSqlTransControl::release_stash_savepoint(ctx, stash_savepoint_name);
-        if (OB_SUCCESS != pop_ret) {
+        if (OB_SUCCESS != pop_ret && OB_SAVEPOINT_NOT_EXIST != pop_ret) {
           LOG_WARN("fail to release stash savepoint", K(pop_ret));
           ret = OB_SUCCESS == ret ? pop_ret : ret;
         }

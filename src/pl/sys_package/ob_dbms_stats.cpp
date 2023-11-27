@@ -181,6 +181,10 @@ int ObDbmsStats::gather_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
   } else if (OB_ISNULL(ctx.get_my_session()) || OB_ISNULL(ctx.get_task_executor_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(ctx.get_my_session()), K(ctx.get_task_executor_ctx()));
+  } else if (ctx.get_my_session()->get_is_in_retry()) {
+    ret = OB_ERR_DBMS_STATS_PL;
+    LOG_WARN("retry gather schema stats is not allowed", K(ret));
+    LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"retry gather schema stats is not allowed");
   } else if (OB_FAIL(ObOptStatMonitorManager::flush_database_monitoring_info(ctx, false, true))) {
     LOG_WARN("failed to do flush database monitoring info", K(ret));
   } else if (OB_FAIL(get_all_table_ids_in_database(ctx, params.at(0), global_param, table_ids))) {
@@ -939,6 +943,10 @@ int ObDbmsStats::delete_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
     ObSEArray<uint64_t, 4> table_ids;
     if (OB_FAIL(check_statistic_table_writeable(ctx))) {
       LOG_WARN("failed to check tenant is restore", K(ret));
+    } else if (ctx.get_my_session()->get_is_in_retry()) {
+      ret = OB_ERR_DBMS_STATS_PL;
+      LOG_WARN("retry delete schema stats is not allowed", K(ret));
+      LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"retry delete schema stats is not allowed");
     } else if (OB_FAIL(get_all_table_ids_in_database(ctx, params.at(0), global_param, table_ids))) {
       LOG_WARN("failed to get all table ids in database", K(ret));
     } else {
@@ -1416,6 +1424,10 @@ int ObDbmsStats::export_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
     ObString tmp_str;
     if (OB_FAIL(check_statistic_table_writeable(ctx))) {
       LOG_WARN("failed to check tenant is restore", K(ret));
+    } else if (ctx.get_my_session()->get_is_in_retry()) {
+      ret = OB_ERR_DBMS_STATS_PL;
+      LOG_WARN("retry export schema stats is not allowed", K(ret));
+      LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"retry export schema stats is not allowed");
     } else if (OB_FAIL(get_all_table_ids_in_database(ctx, params.at(0), global_param, table_ids))) {
       LOG_WARN("failed to get all table ids in database", K(ret));
     } else if (OB_FAIL(parse_table_info(ctx,
@@ -1763,6 +1775,10 @@ int ObDbmsStats::import_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
     ObSEArray<uint64_t, 4> table_ids;
     if (OB_FAIL(check_statistic_table_writeable(ctx))) {
       LOG_WARN("failed to check tenant is restore", K(ret));
+     } else if (ctx.get_my_session()->get_is_in_retry()) {
+      ret = OB_ERR_DBMS_STATS_PL;
+      LOG_WARN("retry import schema stats is not allowed", K(ret));
+      LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"retry import schema stats is not allowed");
     } else if (OB_FAIL(get_all_table_ids_in_database(ctx, params.at(0), global_param, table_ids))) {
       LOG_WARN("failed to get all table ids in database", K(ret));
     } else if (OB_FAIL(parse_table_info(ctx,
@@ -2073,6 +2089,10 @@ int ObDbmsStats::lock_schema_stats(sql::ObExecContext &ctx,
     ObSEArray<uint64_t, 4> table_ids;
     if (OB_FAIL(check_statistic_table_writeable(ctx))) {
       LOG_WARN("failed to check tenant is restore", K(ret));
+    } else if (ctx.get_my_session()->get_is_in_retry()) {
+      ret = OB_ERR_DBMS_STATS_PL;
+      LOG_WARN("retry lock schema stats is not allowed", K(ret));
+      LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"retry lock schema stats is not allowed");
     } else if (OB_FAIL(get_all_table_ids_in_database(ctx, params.at(0), global_param, table_ids))) {
       LOG_WARN("failed to get all table ids in database", K(ret));
     } else if (OB_FAIL(params.at(1).get_varchar(stat_type_str))) {
@@ -2263,7 +2283,11 @@ int ObDbmsStats::unlock_schema_stats(sql::ObExecContext &ctx,
     ObSEArray<uint64_t, 4> table_ids;
     global_param.stattype_ = StatTypeLocked::TABLE_ALL_TYPE;
     global_param.allocator_ = &ctx.get_allocator();
-    if (OB_FAIL(get_all_table_ids_in_database(ctx, params.at(0), global_param, table_ids))) {
+    if (ctx.get_my_session()->get_is_in_retry()) {
+      ret = OB_ERR_DBMS_STATS_PL;
+      LOG_WARN("retry unlock schema stats is not allowed", K(ret));
+      LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"retry unlock schema stats is not allowed");
+    } else if (OB_FAIL(get_all_table_ids_in_database(ctx, params.at(0), global_param, table_ids))) {
       LOG_WARN("failed to get all table ids in database", K(ret));
     } else if (!params.at(1).is_null() && OB_FAIL(params.at(1).get_varchar(stat_type_str))) {
       LOG_WARN("failed to get stattype", K(ret));
@@ -2438,6 +2462,10 @@ int ObDbmsStats::restore_schema_stats(sql::ObExecContext &ctx,
   int64_t specify_time = 0;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (ctx.get_my_session()->get_is_in_retry()) {
+    ret = OB_ERR_DBMS_STATS_PL;
+    LOG_WARN("retry restore schema stats is not allowed", K(ret));
+    LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"retry restore schema stats is not allowed");
   } else if (OB_FAIL(get_all_table_ids_in_database(ctx, params.at(0), global_param, table_ids))) {
     LOG_WARN("failed to get all table ids in database", K(ret));
   } else if (lib::is_oracle_mode()) {
@@ -2826,6 +2854,10 @@ int ObDbmsStats::set_schema_prefs(sql::ObExecContext &ctx,
   ObStatPrefs *stat_pref = NULL;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (ctx.get_my_session()->get_is_in_retry()) {
+    ret = OB_ERR_DBMS_STATS_PL;
+    LOG_WARN("retry set schema stats is not allowed", K(ret));
+    LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"retry set schema stats is not allowed");
   } else if (OB_FAIL(get_all_table_ids_in_database(ctx, params.at(0), global_param, table_ids))) {
     LOG_WARN("failed to get all table ids in database", K(ret));
   } else if (!params.at(1).is_null() && OB_FAIL(params.at(1).get_string(opt_name))) {
@@ -2945,6 +2977,10 @@ int ObDbmsStats::delete_schema_prefs(sql::ObExecContext &ctx,
   ObStatPrefs *stat_pref = NULL;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (ctx.get_my_session()->get_is_in_retry()) {
+    ret = OB_ERR_DBMS_STATS_PL;
+    LOG_WARN("retry delete schema stats is not allowed", K(ret));
+    LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"retry delete schema stats is not allowed");
   } else if (OB_FAIL(get_all_table_ids_in_database(ctx, params.at(0), dummy_param, table_ids))) {
     LOG_WARN("failed to get all table ids in database", K(ret));
   } else if (params.at(1).is_null()) {

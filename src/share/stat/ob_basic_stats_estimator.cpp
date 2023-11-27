@@ -173,9 +173,9 @@ int ObBasicStatsEstimator::estimate_block_count(ObExecContext &ctx,
   } else if (param.part_level_ == share::schema::PARTITION_LEVEL_TWO &&
              OB_FAIL(generate_first_part_idx_map(param.all_part_infos_, first_part_idx_map))) {
     LOG_WARN("failed to generate first part idx map", K(ret));
-  } else if (OB_FAIL(do_estimate_block_count_and_row_count(ctx, param.tenant_id_, table_id, tablet_ids,
-                                                           partition_ids, estimate_result))) {
-    LOG_WARN("failed to do estimate block count and row count", K(ret));
+  } else if (OB_FAIL(do_estimate_block_count(ctx, param.tenant_id_, table_id, tablet_ids,
+                                             partition_ids, estimate_result))) {
+    LOG_WARN("failed to do estimate block count", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < estimate_result.count(); ++i) {
       BolckNumPair block_num_pair;
@@ -233,12 +233,32 @@ int ObBasicStatsEstimator::estimate_block_count(ObExecContext &ctx,
   return ret;
 }
 
+int ObBasicStatsEstimator::do_estimate_block_count(ObExecContext &ctx,
+                                                   const uint64_t tenant_id,
+                                                   const uint64_t table_id,
+                                                   const ObIArray<ObTabletID> &tablet_ids,
+                                                   const ObIArray<ObObjectID> &partition_ids,
+                                                   ObIArray<EstimateBlockRes> &estimate_res)
+{
+  int ret = OB_SUCCESS;
+  int64_t retry_cnt = 0;
+  do {
+    if (OB_FAIL(do_estimate_block_count_and_row_count(ctx, tenant_id, table_id, tablet_ids,
+                                                      partition_ids, estimate_res))) {
+      DAS_CTX(ctx).get_location_router().refresh_location_cache_by_errno(true, ret);
+      ++ retry_cnt;
+      LOG_WARN("failed to do estimate block count and row count", K(ret));
+    }
+  } while (OB_FAIL(ret) && retry_cnt < 2);//retry one time if failed to estimate.
+  return ret;
+}
+
 int ObBasicStatsEstimator::do_estimate_block_count_and_row_count(ObExecContext &ctx,
-                                                                const uint64_t tenant_id,
-                                                                const uint64_t table_id,
-                                                                const ObIArray<ObTabletID> &tablet_ids,
-                                                                const ObIArray<ObObjectID> &partition_ids,
-                                                                ObIArray<EstimateBlockRes> &estimate_res)
+                                                                 const uint64_t tenant_id,
+                                                                 const uint64_t table_id,
+                                                                 const ObIArray<ObTabletID> &tablet_ids,
+                                                                 const ObIArray<ObObjectID> &partition_ids,
+                                                                 ObIArray<EstimateBlockRes> &estimate_res)
 {
   int ret = OB_SUCCESS;
   common::ObSEArray<ObCandiTabletLoc, 4> candi_tablet_locs;

@@ -53,7 +53,7 @@ bool ObColumnStatParam::is_valid_opt_col_type(const ObObjType type)
       type_class == ColumnTypeClass::ObBitTC ||
       type_class == ColumnTypeClass::ObEnumSetTC ||
       type_class == ColumnTypeClass::ObIntervalTC ||
-      (lib::is_mysql_mode() && type == ObTinyTextType)) {
+      (lib::is_mysql_mode() && type_class == ColumnTypeClass::ObTextTC)) {
     ret = true;
   }
   return ret;
