@@ -363,7 +363,8 @@ int ObTransService::handle_tx_commit_timeout(ObTxDesc &tx, const int64_t delay)
     int64_t now = ObClockGenerator::getClock();
     if (!tx.commit_task_.is_registered()){
       TRANS_LOG(INFO, "task canceled", K(tx));
-    } else if (FALSE_IT(tx.commit_task_.set_registered(false))) {
+    } else if (OB_FAIL(unregister_commit_retry_task_(tx))) {
+      TRANS_LOG(ERROR, "deregister timeout task fail", K(tx), K(ret));
     } else if (tx.flags_.RELEASED_) {
       TRANS_LOG(INFO, "tx released, cancel commit retry", K(tx));
     } else if (tx.state_ != ObTxDesc::State::IN_TERMINATE) {
@@ -2799,9 +2800,10 @@ int ObTransService::handle_timeout_for_xa(ObTxDesc &tx, const int64_t delay)
       tx_id = tx.tx_id_;
       if (!tx.commit_task_.is_registered()){
         TRANS_LOG(INFO, "task canceled", K(tx));
+      } else if(OB_FAIL(unregister_commit_retry_task_(tx))) {
+        TRANS_LOG(ERROR, "deregister timeout task fail", K(tx), K(ret));
       } else if (tx.flags_.RELEASED_) {
         TRANS_LOG(INFO, "tx released, cancel commit retry", K(tx));
-      } else if (FALSE_IT(tx.commit_task_.set_registered(false))) {
       } else {
         if (ObTxDesc::State::SUB_PREPARING == tx.state_) {
           ret = handle_sub_prepare_timeout_(tx, delay);
