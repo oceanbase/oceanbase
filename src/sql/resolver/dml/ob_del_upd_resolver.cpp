@@ -1767,14 +1767,36 @@ int ObDelUpdResolver::build_returning_lob_expr(ObColumnRefRawExpr *ref_expr, ObS
   return ret;
 }
 
-bool ObDelUpdResolver::need_all_columns(const ObTableSchema &table_schema, int64_t binlog_row_image)
+int ObDelUpdResolver::need_all_columns(const ObTableSchema &table_schema,
+                                       const int64_t binlog_row_image,
+                                       const int64_t need_check_uk,
+                                       bool &need_all_columns)
 {
-  return (table_schema.is_heap_table() ||
-          table_schema.get_foreign_key_infos().count() > 0 ||
-          table_schema.get_trigger_list().count() > 0 ||
-          table_schema.has_check_constraint() ||
-          table_schema.has_generated_and_partkey_column() ||
-          binlog_row_image == ObBinlogRowImage::FULL);
+  int ret = OB_SUCCESS;
+  const bool is_binlog_full_mode = (ObBinlogRowImage::FULL == binlog_row_image) ? true : false;
+  bool has_not_null_uk = false;
+  if (!is_binlog_full_mode && need_check_uk && table_schema.is_heap_table()) {
+    // Need check UK for heap table only when binlog_row_image is not FULL.
+    ObSchemaGetterGuard *schema_guard = NULL;
+    CK (OB_NOT_NULL(schema_checker_));
+    CK (OB_NOT_NULL(schema_guard = schema_checker_->get_schema_guard()));
+    if (OB_SUCC(ret) && OB_FAIL(table_schema.has_not_null_unique_key(*schema_guard, has_not_null_uk))) {
+      LOG_WARN("has_not_null_unique_key failed", K(ret), K(table_schema));
+    }
+  }
+  // For heap table:
+  // 1) If it does not have [NOT NULL UK], need record all columns.
+  // 2) If it has [NOT NULL UK], only need record all columns when UK is one of the updated columns,
+  //    or just need record UK in OldRow.
+  if (OB_SUCC(ret)) {
+    need_all_columns = (is_binlog_full_mode ||
+            (table_schema.is_heap_table() && !has_not_null_uk) ||
+            table_schema.get_foreign_key_infos().count() > 0 ||
+            table_schema.get_trigger_list().count() > 0 ||
+            table_schema.has_check_constraint() ||
+            table_schema.has_generated_and_partkey_column());
+  }
+  return ret;
 }
 
 int ObDelUpdResolver::add_all_columns_to_stmt(const TableItem &table_item,
@@ -1809,7 +1831,6 @@ int ObDelUpdResolver::add_all_columns_to_stmt(const TableItem &table_item,
   }
   return ret;
 }
-
 int ObDelUpdResolver::add_all_lob_columns_to_stmt(const TableItem &table_item,
                                                   ObIArray<ObColumnRefRawExpr*> &column_exprs)
 {
@@ -1902,6 +1923,72 @@ int ObDelUpdResolver::add_all_rowkey_columns_to_stmt(const TableItem &table_item
         LOG_WARN("get column schema failed", K(rowkey_column_id));
       } else if (OB_FAIL(add_column_to_stmt(table_item, *column_schema, column_exprs))) {
         LOG_WARN("add column to stmt failed", K(ret), K(table_item));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDelUpdResolver::add_all_unique_key_columns_to_stmt(const TableItem &table_item,
+                                                         ObIArray<ObColumnRefRawExpr*> &column_exprs)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *table_schema = NULL;
+  const TableItem &base_table_item = table_item.get_base_table_item();
+  ObDelUpdStmt *stmt = get_del_upd_stmt();
+
+  ObSchemaGetterGuard *schema_guard = NULL;
+  uint64_t view_id = OB_INVALID_ID;
+  CK (OB_NOT_NULL(schema_checker_));
+  CK (OB_NOT_NULL(schema_guard = schema_checker_->get_schema_guard()));
+
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(stmt));
+  } else if (stmt->has_instead_of_trigger()) {
+    // do nothing, instead of trigger doesn't have rowkey
+  } else if (OB_ISNULL(params_.session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params_.session_info_ is null", K(ret));
+  } else if (OB_FAIL(schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(),
+                                                       base_table_item.ref_id_,
+                                                       table_schema,
+                                                       base_table_item.is_link_table()))) {
+    LOG_WARN("table schema not found", K(base_table_item));
+  } else if (NULL == table_schema) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid table schema", K(table_item));
+  } else {
+    // extract all column_ids for unique key, and add them into stmt
+    ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+    if (OB_FAIL(table_schema->get_simple_index_infos(simple_index_infos))) {
+      LOG_WARN("get simple_index_infos failed", K(ret));
+    } else {
+      const uint64_t tenant_id = table_schema->get_tenant_id();
+      for (int64_t i = 0; OB_SUCCESS == ret && i < simple_index_infos.count(); ++i) {
+        const ObTableSchema *index_table_schema = NULL;
+        if (OB_FAIL(schema_guard->get_table_schema(tenant_id,
+            simple_index_infos.at(i).table_id_, index_table_schema))) {
+          LOG_WARN("fail to get table schema", K(tenant_id),
+                  K(simple_index_infos.at(i).table_id_), K(ret));
+        } else if (OB_ISNULL(index_table_schema)) {
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("index table schema must not be NULL", K(ret));
+        } else if (!index_table_schema->is_unique_index()) {
+          // not unique index, skip
+        } else {
+          ObTableSchema::const_column_iterator iter = index_table_schema->column_begin();
+          for ( ; iter != index_table_schema->column_end(); iter++) {
+            const ObColumnSchemaV2 *column_schema = *iter;
+            if (OB_ISNULL(column_schema)) {
+              LOG_WARN("unexpected err", KPC(column_schema));
+            } else if (!column_schema->is_index_column()) {
+              // skip non index column
+            } else if (OB_FAIL(add_column_to_stmt(table_item, *column_schema, column_exprs))) {
+              LOG_WARN("add column to stmt failed", K(ret), K(table_item));
+            } else { /*do nothing*/ }
+          }
+        }
       }
     }
   }
@@ -2012,6 +2099,47 @@ int ObDelUpdResolver::add_all_index_rowkey_to_stmt(const TableItem &table_item,
   return ret;
 }
 
+int ObDelUpdResolver::add_necessary_columns_for_minimal_mode(const TableItem &table_item,
+                                                             ObIArray<ObColumnRefRawExpr*> &column_exprs)
+{
+  // The timestamp and datetime columns need to be recorded unconditionly for MINIMAL mode.
+  int ret = OB_SUCCESS;
+  const ObTableSchema *table_schema = NULL;
+  const TableItem& base_table_item = table_item.get_base_table_item();
+  if (OB_ISNULL(params_.session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params_.session_info_ is null", K(ret));
+  } else if (OB_FAIL(schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(),
+                                                       base_table_item.ref_id_,
+                                                       table_schema,
+                                                       base_table_item.is_link_table()))) {
+    LOG_WARN("not find table schema", K(ret), K(base_table_item));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(table_schema), K(ret));
+  } else {
+    ObTableSchema::const_column_iterator iter = table_schema->column_begin();
+    ObTableSchema::const_column_iterator end = table_schema->column_end();
+    for (; OB_SUCC(ret) && iter != end; ++iter) {
+      const ObColumnSchemaV2 *column = *iter;
+      if (OB_ISNULL(column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid column schema", K(column));
+      } else if (column->get_meta_type().is_datetime() ||
+        column->get_meta_type().is_timestamp() ||
+        column->get_meta_type().is_time() ||
+        column->get_meta_type().is_date() ||
+        column->get_meta_type().is_otimestamp_type()) {
+        // date/datatime and time/timestamp column need to be added to old_row
+        if (OB_FAIL(add_column_to_stmt(table_item, *column, column_exprs))) {
+          LOG_WARN("add column item to stmt failed", K(ret));
+        }
+      } else { /* do nothing */ }
+    }
+  }
+  return ret;
+}
+
 int ObDelUpdResolver::add_all_index_rowkey_to_stmt(const TableItem &table_item,
                                                    const ObTableSchema *index_schema,
                                                    ObIArray<ObColumnRefRawExpr *> &column_items)
@@ -2090,6 +2218,34 @@ int ObDelUpdResolver::add_all_partition_key_columns_to_stmt(const TableItem &tab
           LOG_WARN("get column schema failed", K(base_table_id), K(rowkey_column_id));
         } else if (OB_FAIL(add_column_to_stmt(table_item, *column_schema, column_exprs, stmt))) {
           LOG_WARN("add column to stmt failed", K(ret), K(table_item), KPC(column_schema));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDelUpdResolver::add_udt_hidden_columns_for_minimal_mode(const TableItem &table_item,
+                                                              const ObTableSchema *table_schema,
+                                                              ObColumnRefRawExpr *col_expr,
+                                                              ObIArray<ObColumnRefRawExpr *> &column_items)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_schema) || OB_ISNULL(col_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid arguments", K(ret));
+  } else if (!col_expr->get_result_type().is_user_defined_sql_type()) {
+    // not udt column ref, do nothing
+  } else {
+    ObSEArray<ObColumnSchemaV2 *, 1> hidden_cols;
+    if (OB_FAIL(table_schema->get_column_schema_in_same_col_group(col_expr->get_column_id(),
+                                                                  col_expr->get_udt_set_id(),
+                                                                  hidden_cols))) {
+      LOG_WARN("failed to get column schema", K(ret));
+    } else {
+      for (int i = 0; i < hidden_cols.count() && OB_SUCC(ret); i++) {
+        if (OB_FAIL(add_column_to_stmt(table_item, *(hidden_cols[i]), column_items))) {
+          LOG_WARN("add column to stmt failed", K(ret), K(table_item), K(i), K(*(hidden_cols[i])));
         }
       }
     }
