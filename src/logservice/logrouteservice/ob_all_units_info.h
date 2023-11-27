@@ -52,7 +52,7 @@ struct ObUnitsRecord
 class ObUnitsRecordInfo
 {
 public:
-  static const int64_t ALL_SERVER_DEFAULT_RECORDS_NUM = 26;
+  static const int64_t ALL_SERVER_DEFAULT_RECORDS_NUM = 16;
   typedef common::ObSEArray<ObUnitsRecord, ALL_SERVER_DEFAULT_RECORDS_NUM> ObUnitsRecordArray;
 
   ObUnitsRecordInfo() { reset(); }

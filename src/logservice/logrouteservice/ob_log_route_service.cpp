@@ -769,6 +769,100 @@ int ObLogRouteService::async_server_query_req(
   return ret;
 }
 
+int ObLogRouteService::get_ls_svr_list_(const ObLSRouterKey &router_key,
+    LSSvrList &svr_list)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(query_ls_log_info_and_update_(router_key, svr_list))) {
+    LOG_WARN("failed to query_ls_log_info_and_update_", K(router_key), K(svr_list));
+  } else if (0 == svr_list.count()) {
+    // 1. Log Stream quickly GC in the transfer scenario, so the Log Stream can not get server list from GV$OB_LOG_STAT
+    // 2. We employ the complementary mechanism of querying the server list from GV$OB_UNITS
+    if (OB_FAIL(query_units_info_and_update_(router_key, svr_list))) {
+      LOG_WARN("failed to query_units_info_and_update", K(router_key), K(svr_list));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    // Sort by Fetch log priority when add_server_or_update completed
+    svr_list.sort_by_priority();
+  }
+
+  if (OB_SUCC(ret)) {
+    const int64_t svr_count_before_filter = svr_list.count();
+    ObArray<ObAddr> remove_svrs;
+
+    if (OB_FAIL(svr_list.filter_by_svr_blacklist(svr_blacklist_, remove_svrs))) {
+      LOG_ERROR("ls_svr_list filter_by_svr_blacklist fail", KR(ret), K(remove_svrs));
+    } else {
+      const int64_t svr_count_after_filter = svr_list.count();
+
+      // print if has svr filtered
+      if (svr_count_before_filter > svr_count_after_filter) {
+        _LOG_INFO("[SERVER_BLACKLIST] [FILTER] [KEY=%s] [FILTER_SVR_CNT=%ld(%ld/%ld)] [REMOVE_SVR=%s]",
+            to_cstring(router_key), svr_count_before_filter - svr_count_after_filter,
+            svr_count_before_filter, svr_count_after_filter, to_cstring(remove_svrs));
+      }
+    }
+  }
+
+  LOG_INFO("get_ls_svr_list_ done", KR(ret), K(router_key), K(svr_list), K(tg_id_));
+
+  return ret;
+}
+
+int ObLogRouteService::query_ls_log_info_and_update_(const ObLSRouterKey &router_key,
+    LSSvrList &svr_list)
+{
+  int ret = OB_SUCCESS;
+
+  ObLSLogInfo ls_log_info;
+  if (OB_FAIL(systable_queryer_.get_ls_log_info(router_key.get_tenant_id(),
+      router_key.get_ls_id(), ls_log_info))) {
+    LOG_WARN("failed to get_ls_log_info", K(router_key));
+  } else {
+    svr_list.reset();
+    const ObLSLogInfo::LogStatRecordArray &log_stat_records = ls_log_info.get_log_stat_array();
+    ARRAY_FOREACH_NORET(log_stat_records, idx) {
+      int tmp_ret = OB_SUCCESS;
+      const LogStatRecord &rec = log_stat_records.at(idx);
+      const ObAddr& svr = rec.server_;
+      RegionPriority region_priority = RegionPriority::REGION_PRIORITY_UNKNOWN;
+      if (! all_svr_cache_.is_svr_avail(svr, region_priority)) {
+        // ignore
+      } else if (OB_TMP_FAIL(svr_list.add_server_or_update(rec.server_, rec.begin_lsn_, rec.end_lsn_,
+          region_priority, ObRole::LEADER == rec.role_))) {
+        LOG_WARN_RET(tmp_ret, "failed to add_server_or_update after get_ls_log_info", K(router_key), K(rec));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObLogRouteService::query_units_info_and_update_(const ObLSRouterKey &router_key,
+    LSSvrList &svr_list)
+{
+  int ret = OB_SUCCESS;
+
+  ObUnitsRecordInfo units_record_info;
+  if (OB_FAIL(systable_queryer_.get_all_units_info(router_key.get_tenant_id(), units_record_info))) {
+    LOG_WARN("failed to get_all_units_info", K(router_key));
+  } else {
+    const ObUnitsRecordInfo::ObUnitsRecordArray &units_record_array = units_record_info.get_units_record_array();
+    ARRAY_FOREACH_NORET(units_record_array, idx) {
+      int tmp_ret = OB_SUCCESS;
+      const ObUnitsRecord &record = units_record_array.at(idx);
+      if (OB_TMP_FAIL(svr_list.add_server_or_update(record.server_, palf::LSN(palf::PALF_INITIAL_LSN_VAL),
+          palf::LSN(palf::LOG_MAX_LSN_VAL), RegionPriority::REGION_PRIORITY_UNKNOWN, false))) {
+        LOG_WARN_RET(tmp_ret, "failed to add_server_or_update after get_all_units_info", K(record), K(router_key));
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObLogRouteService::get_ls_router_value_(
     const ObLSRouterKey &router_key,
     ObLSRouterValue *&router_value)
@@ -854,6 +948,32 @@ bool ObLogRouteService::ObLSRouterKeyGetter::operator()(const ObLSRouterKey &key
   return OB_SUCCESS == ret;
 }
 
+bool ObLogRouteService::ObAllLSRouterKeyGetter::operator()(const ObLSRouterKey &key, ObLSRouterValue *value)
+{
+  int ret = OB_SUCCESS;
+
+  UNUSED(value);
+
+  if (OB_FAIL(router_keys_.push_back(key))) {
+    LOG_WARN("failed to push_back key into router_keys_", K(key), "count", router_keys_.count());
+  }
+
+  return OB_SUCCESS == ret;
+}
+
+bool ObLogRouteService::ObLSRouterValueUpdater::operator()(const ObLSRouterKey &key, ObLSRouterValue *value)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(value)) {
+    // ignore
+  } else {
+    value->refresh_ls_svr_list(svr_list_);
+  }
+
+  return OB_SUCCESS == ret;
+}
+
 bool ObLogRouteService::ObLSRouterValueGetter::operator()(const ObLSRouterKey &key, ObLSRouterValue *value)
 {
   int ret = OB_SUCCESS;
@@ -872,19 +992,6 @@ bool ObLogRouteService::ObLSRouterValueGetter::operator()(const ObLSRouterKey &k
   return OB_SUCCESS == ret;
 }
 
-bool ObLogRouteService::ObLSRouterKeyUpdater::operator()(const ObLSRouterKey &key, ObLSRouterValue *value)
-{
-  int ret = OB_SUCCESS;
-
-  if (nullptr != value) {
-    if (OB_FAIL(log_route_service_.update_server_list_(key, *value))) {
-      LOG_WARN("log_route_service_ update_server_list_ failed", KR(ret), K(key));
-    }
-  }
-
-  return true;
-}
-
 int ObLogRouteService::update_all_ls_server_list_()
 {
   int ret = OB_SUCCESS;
@@ -893,11 +1000,27 @@ int ObLogRouteService::update_all_ls_server_list_()
     ret = OB_NOT_INIT;
     LOG_ERROR("ObLogRouteService has not been inited", KR(ret));
   } else {
-    ObLSRouterKeyUpdater ls_rkey_updater(*this);
-
-    if (OB_FAIL(ls_router_map_.for_each(ls_rkey_updater))) {
+    ObAllLSRouterKeyGetter all_ls_routerkey_getter;
+    if (OB_FAIL(ls_router_map_.for_each(all_ls_routerkey_getter))) {
       LOG_WARN("ls_router_map_ update_all_ls_server_list_ for_each failed", KR(ret));
-    } else {}
+    } else {
+      const ObIArray<ObLSRouterKey> &router_keys = all_ls_routerkey_getter.router_keys_;
+      LSSvrList tmp_svr_list;
+      ObLSRouterValueUpdater updater(tmp_svr_list);
+
+      ARRAY_FOREACH_NORET(router_keys, idx) {
+        tmp_svr_list.reset();
+        const ObLSRouterKey &key = router_keys.at(idx);
+        if (OB_FAIL(get_ls_svr_list_(key, tmp_svr_list))) {
+          LOG_WARN("failed to get_ls_svr_list when update_all_ls_server_list", K(key), K(idx),
+            "count", router_keys.count());
+        } else if (OB_FAIL(ls_router_map_.operate(key, updater))) {
+          if (OB_ENTRY_NOT_EXIST != ret) {
+            LOG_WARN("failed to update router_value for key", K(key));
+          }
+        }
+      }
+    }
   }
 
   return ret;
@@ -913,71 +1036,15 @@ int ObLogRouteService::update_server_list_(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_ERROR("ObLogRouteService has not been inited", KR(ret));
-  } else if (OB_FAIL(systable_queryer_.get_ls_log_info(router_key.get_tenant_id(), router_key.get_ls_id(),
-          ls_log_info))) {
-    LOG_WARN("ObLogSysTableQueryer get_ls_log_info failed", KR(ret), K(router_key));
   } else {
-    LOG_DEBUG("get_ls_log_info success", K(router_key), K(ls_log_info));
-    // Add Lock to update
-    ObByteLockGuard guard(router_value.get_lock());
-    const ObLSLogInfo::LogStatRecordArray &log_stat_records = ls_log_info.get_log_stat_array();
-    LSSvrList &ls_svr_list = router_value.get_ls_svr_list();
-
-    ls_svr_list.reset();
-
-    ARRAY_FOREACH_N(log_stat_records, idx, count) {
-      const LogStatRecord &record = log_stat_records.at(idx);
-      const ObAddr &server = record.server_;
-      RegionPriority region_priority = REGION_PRIORITY_UNKNOWN;
-
-      if (! all_svr_cache_.is_svr_avail(server, region_priority)) {
-        // ignore the server which is not available
-      } else if (OB_FAIL(ls_svr_list.add_server_or_update(server,
-              record.begin_lsn_, record.end_lsn_, region_priority, (LEADER == record.role_)))) {
-        LOG_WARN("ObLogRouteService add_server_or_update failed", KR(ret), K(router_key),
-            K(router_value));
-      } else {}
-    } // ARRAY_FOREACH_N
-
-    // 1. Log Stream quickly GC in the transfer scenario, so the Log Stream can not get server list from GV$OB_LOG_STAT
-    // 2. We employ the complementary mechanism of querying the server list from GV$OB_UNITS
-    if (OB_SUCC(ret)) {
-      if (ls_svr_list.count() <= 0) {
-        if (OB_FAIL(query_units_info_and_update_(router_key, router_value))) {
-          LOG_WARN("query_units_info_and_update_ failed", KR(ret), K(router_key));
-        }
-      }
+    LSSvrList tmp_svr_list;
+    if (OB_FAIL(get_ls_svr_list_(router_key, tmp_svr_list))) {
+      LOG_WARN("failed to get_ls_svr_list when update_server_list", K(router_key));
+    } else {
+      router_value.refresh_ls_svr_list(tmp_svr_list);
     }
 
-    if (OB_SUCC(ret)) {
-      // Sort by Fetch log priority when add_server_or_update completed
-      ls_svr_list.sort_by_priority();
-    }
-
-    if (OB_SUCC(ret)) {
-      const int64_t svr_count_before_filter = ls_svr_list.count();
-      ObArray<ObAddr> remove_svrs;
-
-      if (OB_FAIL(ls_svr_list.filter_by_svr_blacklist(svr_blacklist_, remove_svrs))) {
-        LOG_ERROR("ls_svr_list filter_by_svr_blacklist fail", KR(ret), K(remove_svrs));
-      } else {
-        const int64_t svr_count_after_filter = ls_svr_list.count();
-
-        // print if has svr filtered
-        if (svr_count_before_filter > svr_count_after_filter) {
-          _LOG_INFO("[SERVER_BLACKLIST] [FILTER] [KEY=%s] [FILTER_SVR_CNT=%ld(%ld/%ld)] [REMOVE_SVR=%s]",
-              to_cstring(router_key), svr_count_before_filter - svr_count_after_filter,
-              svr_count_before_filter, svr_count_after_filter, to_cstring(remove_svrs));
-        }
-      }
-    }
-
-    // No available server, need retry
-    if (ls_svr_list.count() <= 0) {
-      ret = OB_NEED_RETRY;
-    }
-
-    LOG_INFO("update server list done", KR(ret), K(router_key), K(ls_log_info), K(ls_svr_list), K_(tg_id));
+    LOG_INFO("update server list done", KR(ret), K(router_key), K(ls_log_info), K(tmp_svr_list), K(tg_id_));
   }
 
   return ret;
