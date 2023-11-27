@@ -207,7 +207,7 @@ public:
   {
     return update_ts_;
   }
-  TO_STRING_KV(K_(key), K_(ls_info));
+  TO_STRING_KV(K_(key), K_(ls_info), KTIME_(update_ts));
 
 private:
   ObBLKey key_;
