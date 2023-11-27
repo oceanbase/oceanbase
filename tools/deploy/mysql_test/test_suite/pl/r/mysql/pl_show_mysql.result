@@ -89,9 +89,9 @@ from mysql.proc
 +------+------+-----------+---------------+----------+-----------------+------------------+---------------+------------+---------+-----------+
 | db   | name | type      | specific_name | language | sql_data_access | is_deterministic | security_type | param_list | returns | body      |
 +------+------+-----------+---------------+----------+-----------------+------------------+---------------+------------+---------+-----------+
-| test | f    | PROCEDURE | f             | SQL      | CONTAINS_SQL    | NO               | DEFINER       | x int      | null    | begin
+| test | f    | PROCEDURE | f             | SQL      | CONTAINS_SQL    | NO               | DEFINER       | x int      |         | begin
 end |
-| test | p    | PROCEDURE | p             | SQL      | CONTAINS_SQL    | NO               | DEFINER       | x int      | null    | begin
+| test | p    | PROCEDURE | p             | SQL      | CONTAINS_SQL    | NO               | DEFINER       | x int      |         | begin
 end |
 +------+------+-----------+---------------+----------+-----------------+------------------+---------------+------------+---------+-----------+
 drop procedure f;
