@@ -3793,10 +3793,6 @@ int ObDagNetScheduler::check_ls_compaction_dag_exist_with_cancel(const ObLSID &l
     if (OB_ISNULL(cur_dag_net = iter->second)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("dag net is unepxected null", K(ret), KP(cur_dag_net));
-    } else if (cur_dag_net->check_finished_and_mark_stop()) {
-      LOG_INFO("start finish dag net", K(ret), KPC(cur_dag_net));
-      (void) finish_dag_net_without_lock(*cur_dag_net);
-      (void) scheduler_->free_dag_net(cur_dag_net);
     } else if (cur_dag_net->is_co_dag_net()) {
       compaction::ObCOMergeDagNet *co_dag_net = static_cast<compaction::ObCOMergeDagNet*>(cur_dag_net);
       if (ls_id == co_dag_net->get_dag_param().ls_id_) {
