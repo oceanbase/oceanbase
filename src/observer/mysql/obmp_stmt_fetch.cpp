@@ -353,7 +353,7 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("get unexpect streaming result set.", K(ret), K(cursor.get_id()));
               }
-              if (OB_OCI_DEFAULT != offset_type_ || OB_OCI_FETCH_NEXT != offset_type_) {
+              if (OB_OCI_DEFAULT != offset_type_ && OB_OCI_FETCH_NEXT != offset_type_) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("streaming result set not support this offset type.", K(ret), 
                                                                                K(cursor.get_id()), 
