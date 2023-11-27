@@ -574,10 +574,11 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
           LOG_WARN("rpc proxy create table failed", KR(ret), "dst", common_rpc_proxy->get_server());
         }
       } else {
+        DEBUG_SYNC(BEFORE_SEND_PARALLEL_CREATE_TABLE);
         int64_t start_time = ObTimeUtility::current_time();
         ObTimeoutCtx ctx;
-        if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF._ob_ddl_timeout))) {
-          LOG_WARN("fail to set timeout ctx", KR(ret));
+        if (OB_FAIL(ctx.set_timeout(common_rpc_proxy->get_timeout()))) {
+          LOG_WARN("fail to set timeout ctx", K(ret));
         } else if (OB_FAIL(common_rpc_proxy->parallel_create_table(create_table_arg, res))) {
           LOG_WARN("rpc proxy create table failed", KR(ret), "dst", common_rpc_proxy->get_server());
         } else {
@@ -2227,7 +2228,7 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
       } else {
         // new parallel truncate
         ObTimeoutCtx ctx;
-        if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, (static_cast<obrpc::ObRpcProxy*>(common_rpc_proxy))->timeout()))) {
+        if (OB_FAIL(ctx.set_timeout(common_rpc_proxy->get_timeout()))) {
           LOG_WARN("fail to set timeout ctx", K(ret));
         } else {
           int64_t start_time = ObTimeUtility::current_time();
