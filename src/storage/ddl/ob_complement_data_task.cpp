@@ -1134,6 +1134,9 @@ int ObComplementWriteTask::append_row(ObScan *scan)
 {
   int ret = OB_SUCCESS;
   ObDataStoreDesc data_desc;
+  ObStoreRange scan_range;
+  ObDatumRange scan_datum_range;
+  ObRowkeyReadInfo rowkey_read_info;
   HEAP_VARS_3((ObMacroBlockWriter, writer),
               (ObSchemaGetterGuard, schema_guard),
               (ObRelativeTable, relative_table)) {
@@ -1229,6 +1232,15 @@ int ObComplementWriteTask::append_row(ObScan *scan)
       } else if (OB_FAIL(datum_row.init(allocator, data_desc.get_full_stored_col_descs().count()))) {
         LOG_WARN("failed to init datum row", K(ret), K(data_desc.get_full_stored_col_descs()));
       }
+      #ifdef ENABLE_DEBUG_LOG
+        if (FAILEDx(param_->ranges_.at(task_id_, scan_range))) {
+          LOG_WARN("fail to get range", K(ret));
+        } else if (OB_FAIL(scan_datum_range.from_range(scan_range, allocator))) {
+          LOG_WARN("failed to transfer datum range", K(ret), K(scan_range));
+        } else if (OB_FAIL(rowkey_read_info.init(allocator, data_desc))) {
+          LOG_WARN("failed to init rowkey read info", K(ret), K(data_desc));
+        }
+      #endif
     }
     while (OB_SUCC(ret)) {      //get each row from row_iter
       const ObDatumRow *tmp_row = nullptr;
@@ -1247,6 +1259,28 @@ int ObComplementWriteTask::append_row(ObScan *scan)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tmp_row is nullptr", K(ret));
       }
+
+      #ifdef ENABLE_DEBUG_LOG
+        int32_t compare_low_result = 0;
+        int32_t compare_high_result = 0;
+        ObDatumRowkey cur_row_key;
+        if (FAILEDx(cur_row_key.assign(tmp_row->storage_datums_, data_desc.schema_rowkey_col_cnt_))) {
+          LOG_WARN("Failed to assign cur key", K(ret), KPC(tmp_row));
+        } else if (OB_FAIL(cur_row_key.compare(scan_datum_range.start_key_, rowkey_read_info.get_datum_utils(), compare_low_result))) {
+          LOG_WARN("compared failed", K(ret), K(cur_row_key), K(scan_datum_range.start_key_));
+        } else if (OB_FAIL(cur_row_key.compare(scan_datum_range.end_key_, rowkey_read_info.get_datum_utils(), compare_high_result))) {
+          LOG_WARN("compared failed", K(ret), K(cur_row_key), K(scan_datum_range.end_key_));
+        } else if ((scan_datum_range.is_left_open() && compare_low_result <= 0)
+            || (scan_datum_range.is_left_closed() && compare_low_result < 0)) {
+          LOG_ERROR("rowkey order err", K(ret), K(compare_low_result), K(scan_datum_range), K(cur_row_key), KPC(tmp_row));
+          ob_abort();
+        } else if ((scan_datum_range.is_right_open() && compare_high_result >= 0)
+            || (scan_datum_range.is_right_closed() && compare_high_result > 0)) {
+          LOG_ERROR("rowkey order err", K(ret), K(compare_high_result), K(scan_datum_range), K(cur_row_key), KPC(tmp_row));
+          ob_abort();
+        }
+      #endif
+
       for (int64_t i = 0; OB_SUCC(ret) && i < org_col_ids_.count(); i++) {
         ObStorageDatum &datum = tmp_row->storage_datums_[i];
         if (datum.is_nop() || datum.is_null()) {
