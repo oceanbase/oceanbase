@@ -301,7 +301,7 @@ public:
     } else if (OB_ENTRY_NOT_EXIST == ret) {
       // key不存在，创建value并插入map
       if (only_update) {
-        // do nothing
+        ret = OB_SUCCESS;
       } else if (OB_FAIL(map_.create(bl_key, value))) {
         // 可能前面get时还没有这个key，但是在create之前别的线程把这个key插入map了
         TRANS_LOG(WARN, "map create error", KR(ret), K(bl_key), K(ls_info));
