@@ -1629,7 +1629,8 @@ int ObPlanCacheValue::match(ObPlanCacheCtx &pc_ctx,
       } else if (OB_ISNULL(ps_param)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid argument", K(ps_param));
-      } else if (ps_param->is_pl_extend() || !not_param_var_[i].ps_param_.can_compare(*ps_param)) {
+      } else if (ps_param->is_pl_extend() || not_param_var_[i].ps_param_.is_pl_extend()
+                  || !not_param_var_[i].ps_param_.can_compare(*ps_param)) {
         is_same = false;
         LOG_WARN("can not compare", K(not_param_var_[i].ps_param_), K(*ps_param), K(i));
       } else if (not_param_var_[i].ps_param_.is_string_type()
