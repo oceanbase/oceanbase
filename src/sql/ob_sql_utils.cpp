@@ -600,6 +600,24 @@ int ObSQLUtils::is_charset_data_version_valid(ObCharsetType charset_type, const 
   return ret;
 }
 
+int ObSQLUtils::is_collation_data_version_valid(ObCollationType collation_type, const int64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+#ifndef OB_BUILD_CLOSE_MODULES
+   uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    SQL_LOG(WARN, "failed to GET_MIN_DATA_VERSION", K(ret));
+  } else if (data_version < DATA_VERSION_4_2_2_0 &&
+             (CS_TYPE_UTF16_UNICODE_CI == collation_type ||
+              CS_TYPE_UTF8MB4_UNICODE_CI == collation_type)) {
+    ret = OB_NOT_SUPPORTED;
+    SQL_LOG(WARN, "Unicode collation not supported when data_version < 4_2_2_0", K(collation_type), K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.2, unicode collation is");
+  }
+#endif
+  return ret;
+}
+
 // 参数raw_expr中如果出现函数addr_to_partition_id，
 // 那么得到的partition_id结果在后面无法映射到相应的addr
 int ObSQLUtils::calc_calculable_expr(ObSQLSessionInfo *session,

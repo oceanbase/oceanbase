@@ -10,16 +10,21 @@ ob_set_subtarget(oblib_lib ALONE
 )
 
 ob_set_subtarget(oblib_lib charset
-  charset/ob_ctype_bin_os.cc
-  charset/ob_ctype_gb18030_os.cc
-  charset/ob_ctype_gbk_os.cc
-  charset/ob_ctype_latin1_os.cc
-  charset/ob_ctype_mb_os.cc
-  charset/ob_ctype_simple_os.cc
-  charset/ob_ctype_os.cc
-  charset/ob_ctype_utf16_os.cc
-  charset/ob_ctype_utf8_os.cc
-  charset/ob_dtoa_os.cc
+  charset/ob_ctype_bin.cc
+  charset/ob_ctype.cc
+  charset/ob_ctype_gb18030.cc
+  charset/ob_ctype_gbk.cc
+  charset/ob_ctype_latin1.cc
+  charset/ob_ctype_mb.cc
+  charset/ob_ctype_simple.cc
+  charset/ob_ctype_uca.cc
+  charset/ob_ctype_utf8.cc
+  charset/ob_ctype_utf16.cc
+  charset/ob_dtoa.cc
+  charset/uca900_ja_tbls.cc
+  charset/uca900_zh_tbls.cc
+  charset/uca900_zh2_tbls.cc
+  charset/uca900_zh3_tbls.cc
   charset/ob_charset.cpp
 )
 

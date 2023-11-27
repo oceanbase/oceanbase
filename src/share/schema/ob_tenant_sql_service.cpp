@@ -78,7 +78,10 @@ int ObTenantSqlService::alter_tenant(
     LOG_WARN("invalid tenant schema", K(tenant_schema), K(ret));
   } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(tenant_schema.get_charset_type(),
                                                                     tenant_schema.get_tenant_id()))) {
-    LOG_WARN("failed to check charset data version valid", K(ret));
+    LOG_WARN("failed to check charset data version valid", K(tenant_schema.get_charset_type()), K(ret));
+  } else if (OB_FAIL(sql::ObSQLUtils::is_collation_data_version_valid(tenant_schema.get_collation_type(),
+                                                                      tenant_schema.get_tenant_id()))) {
+    LOG_WARN("failed to check charset data version valid", K(tenant_schema.get_collation_type()), K(ret));
   } else if (OB_FAIL(replace_tenant(tenant_schema, op, sql_client, ddl_stmt_str))) {
     LOG_WARN("replace_tenant failed", K(tenant_schema), K(op), K(ret));
   }
