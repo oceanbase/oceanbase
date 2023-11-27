@@ -65,7 +65,9 @@ public:
     share::SCN global_broadcast_scn,
     const int64_t expected_epoch); // For each round major_freeze, need invoke this once.
   int clear_cached_info();
-  int get_uncompacted_tablets(common::ObArray<share::ObTabletReplica> &uncompacted_tablets) const;
+  int get_uncompacted_tablets(
+    common::ObArray<share::ObTabletReplica> &uncompacted_tablets,
+    common::ObArray<uint64_t> &uncompacted_table_ids) const;
   void reset_uncompacted_tablets();
   int check_progress(compaction::ObMergeProgress &progress);
   const compaction::ObTabletLSPairCache &get_tablet_ls_pair_cache() const { return tablet_ls_pair_cache_; }
@@ -146,6 +148,7 @@ private:
   compaction::ObTableCompactionInfoMap table_compaction_map_; // <table_id, compaction_info>
   ObChecksumValidator ckm_validator_;
   common::ObSEArray<share::ObTabletReplica, DEBUG_INFO_CNT> uncompacted_tablets_; // record for diagnose
+  common::ObSEArray<uint64_t, DEBUG_INFO_CNT> uncompacted_table_ids_; // record for diagnose
   common::SpinRWLock diagnose_rw_lock_;
   // cache of ls_infos in __all_ls_meta_table
   share::ObCompactionLocalityCache ls_locality_cache_;

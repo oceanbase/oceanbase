@@ -304,7 +304,8 @@ bool ObMajorFreezeService::is_paused() const
 }
 
 int ObMajorFreezeService::get_uncompacted_tablets(
-    ObArray<ObTabletReplica> &uncompacted_tablets) const
+    ObArray<ObTabletReplica> &uncompacted_tablets,
+    ObArray<uint64_t> &uncompacted_table_ids) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -314,7 +315,7 @@ int ObMajorFreezeService::get_uncompacted_tablets(
     if (OB_ISNULL(tenant_major_freeze_)) {
       ret = OB_LEADER_NOT_EXIST;
       LOG_WARN("tenant_major_freeze is null", KR(ret), K_(tenant_id));
-    } else if (OB_FAIL(tenant_major_freeze_->get_uncompacted_tablets(uncompacted_tablets))) {
+    } else if (OB_FAIL(tenant_major_freeze_->get_uncompacted_tablets(uncompacted_tablets, uncompacted_table_ids))) {
       LOG_WARN("fail to get uncompacted tablets", KR(ret), K_(tenant_id));
     }
   }
