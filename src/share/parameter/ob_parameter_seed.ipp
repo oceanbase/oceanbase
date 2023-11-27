@@ -1724,3 +1724,6 @@ ERRSIM_DEF_STR(migrate_check_member_list_error_zone, OB_CLUSTER_PARAMETER, "", "
 DEF_BOOL(_enable_range_extraction_for_not_in, OB_TENANT_PARAMETER, "True",
         "Enable extract query range for not in predicate",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(optimizer_index_cost_adj, OB_TENANT_PARAMETER, "0", "[0,100]",
+        "adjust costing of index scan",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
