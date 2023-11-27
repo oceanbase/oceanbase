@@ -256,28 +256,15 @@ bool ObStmtCompareContext::compare_query(const ObQueryRefRawExpr &first,
   } else if (OB_FAIL(ObStmtComparer::check_stmt_containment(first_sel,
                                                             second_sel,
                                                             stmt_map_info,
-                                                            relation))) {
+                                                            relation,
+                                                            true))) {
     LOG_WARN("failed to compute stmt relationship", K(ret));
     err_code_ = ret;
   } else if (stmt_map_info.is_select_item_equal_ && QueryRelation::QUERY_EQUAL == relation) {
-    bool is_same = true;
-    for (int64_t i = 0; OB_SUCC(ret) && is_same && i < first_sel->get_select_item_size(); ++i) {
-      ObRawExpr *first_expr = first_sel->get_select_item(i).expr_;
-      ObRawExpr *second_expr = second_sel->get_select_item(i).expr_;
-      if (OB_ISNULL(first_expr) || OB_ISNULL(second_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret), KP(first_expr), KP(second_expr));
-        err_code_ = ret;
-      } else {
-        is_same = first_expr->same_as(*second_expr, this);
-      }
-    }
-    if (OB_SUCC(ret) && is_same) {
-      bret = true;
-      if (OB_FAIL(append(equal_param_info_, stmt_map_info.equal_param_map_))) {
-        LOG_WARN("failed to append equal param", K(ret));
-        err_code_ = ret;
-      }
+    bret = true;
+    if (OB_FAIL(append(equal_param_info_, stmt_map_info.equal_param_map_))) {
+      LOG_WARN("failed to append equal param", K(ret));
+      err_code_ = ret;
     }
   }
   return bret;
@@ -399,7 +386,8 @@ int ObStmtComparer::is_same_from(const ObDMLStmt *first,
 int ObStmtComparer::check_stmt_containment(const ObDMLStmt *first,
                                            const ObDMLStmt *second,
                                            ObStmtMapInfo &map_info,
-                                           QueryRelation &relation)
+                                           QueryRelation &relation,
+                                           bool is_strict_select_list)
 {
   int ret = OB_SUCCESS;
   int64_t first_count = 0;
@@ -682,7 +670,8 @@ int ObStmtComparer::check_stmt_containment(const ObDMLStmt *first,
                                                 second_exprs,
                                                 map_info,
                                                 map_info.select_item_map_,
-                                                match_count))) {
+                                                match_count,
+                                                is_strict_select_list))) {
         LOG_WARN("failed to compute output expr map", K(ret));
       } else if (match_count == first_exprs.count() && match_count == second_exprs.count()) {
         map_info.is_select_item_equal_ = true;
@@ -751,7 +740,8 @@ int ObStmtComparer::compute_conditions_map(const ObDMLStmt *first,
                                            const ObIArray<ObRawExpr*> &second_exprs,
                                            ObStmtMapInfo &map_info,
                                            ObIArray<int64_t> &condition_map,
-                                           int64_t &match_count)
+                                           int64_t &match_count,
+                                           bool is_same_by_order)
 {
   int ret = OB_SUCCESS;
   ObSqlBitSet<> matched_items;
@@ -766,23 +756,45 @@ int ObStmtComparer::compute_conditions_map(const ObDMLStmt *first,
     for (int64_t i = 0; OB_SUCC(ret) && i < first_exprs.count(); ++i) {
       bool is_match = false;
       condition_map.at(i) = OB_INVALID_ID;
-      for (int64_t j = 0; OB_SUCC(ret) && !is_match && j < second_exprs.count(); ++j) {
-        if (matched_items.has_member(j)) {
-          // do nothing
-        } else if (OB_FAIL(is_same_condition(first_exprs.at(i),
-                                             second_exprs.at(j),
-                                             context,
-                                             is_match))) {
-          LOG_WARN("failed to check is condition equal", K(ret));
-        } else if (!is_match) {
-          // do nothing
-        } else if (OB_FAIL(append(map_info.equal_param_map_, context.equal_param_info_))) {
-          LOG_WARN("failed to append exprs", K(ret));
-        } else if (OB_FAIL(matched_items.add_member(j))) {
-          LOG_WARN("failed to add member", K(ret));
-        } else {
-          match_count++;
-          condition_map.at(i) = j;
+      if (!is_same_by_order) {
+        // is same to any one
+        for (int64_t j = 0; OB_SUCC(ret) && !is_match && j < second_exprs.count(); ++j) {
+          if (matched_items.has_member(j)) {
+            // do nothing
+          } else if (OB_FAIL(is_same_condition(first_exprs.at(i),
+                                              second_exprs.at(j),
+                                              context,
+                                              is_match))) {
+            LOG_WARN("failed to check is condition equal", K(ret));
+          } else if (!is_match) {
+            // do nothing
+          } else if (OB_FAIL(append(map_info.equal_param_map_, context.equal_param_info_))) {
+            LOG_WARN("failed to append exprs", K(ret));
+          } else if (OB_FAIL(matched_items.add_member(j))) {
+            LOG_WARN("failed to add member", K(ret));
+          } else {
+            match_count++;
+            condition_map.at(i) = j;
+          }
+        }
+      } else {
+        // is same by order
+        if (i < second_exprs.count()) {
+          if (OB_FAIL(is_same_condition(first_exprs.at(i),
+                                        second_exprs.at(i),
+                                        context,
+                                        is_match))) {
+            LOG_WARN("failed to check is condition equal", K(ret));
+          } else if (!is_match) {
+            // do nothing
+          } else if (OB_FAIL(append(map_info.equal_param_map_, context.equal_param_info_))) {
+            LOG_WARN("failed to append exprs", K(ret));
+          } else if (OB_FAIL(matched_items.add_member(i))) {
+            LOG_WARN("failed to add member", K(ret));
+          } else {
+            match_count++;
+            condition_map.at(i) = i;
+          }
         }
       }
     }
