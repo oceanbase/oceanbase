@@ -13189,6 +13189,8 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12456: __all_virtual_dbms_lock_allocated
 # 12457: __all_virtual_sharing_storage_compaction_info
 # 12458: __all_virtual_ls_snapshot_in_storage_node
+# 12459: __all_virtual_index_usage_info
+
 # 余留位置
 #
 
@@ -13612,6 +13614,8 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keyword
 # 15437: __all_virtual_clone_job_history
 # 15438: __all_virtual_tenant_snapshot_create_job
 # 15439: __all_virtual_ls_snapshot_in_storage_node
+# 15440: __all_virtual_index_usage_info
+
 # 余留位置
 
 ################################################################################
@@ -30248,6 +30252,8 @@ def_table_schema(
 #21510 DBA_OB_CLONE_JOBS
 #21511 mysql.role_edges
 #21512 mysql.default_roles
+#21513 CDB_INDEX_USAGE
+
 # 余留位置
 
 ################################################################################
@@ -54847,6 +54853,7 @@ def_table_schema(
 # 28211: DBA_OB_SYS_VARIABLES
 # 28212: GV$OB_ACTIVE_SESSION_HISTORY
 # 28213: V$OB_ACTIVE_SESSION_HISTORY
+# 28214: DBA_INDEX_USAGE
 
 ################################################################################
 # Lob Table (50000, 70000)
