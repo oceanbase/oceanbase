@@ -96,11 +96,18 @@ public:
   {
     return (read_info_ != nullptr && read_info_ != rowkey_read_info_) ? read_info_->get_group_idx_col_index() : common::OB_INVALID_INDEX;
   }
-  bool can_be_reused(const uint32_t cg_idx, const sql::ObExpr *expr) const
+  bool can_be_reused(const uint32_t cg_idx, const common::ObIArray<sql::ObExpr*> &exprs, const bool is_aggregate)
   {
-    // there is only one column in cg now
-    bool can_reuse = cg_idx == cg_idx_ && nullptr != output_exprs_
-                  && 1 == output_exprs_->count() && output_exprs_->at(0) == expr;
+    bool can_reuse = cg_idx == cg_idx && enable_pd_aggregate() == is_aggregate
+                      && nullptr != output_exprs_ && output_exprs_->count() == exprs.count() ;
+    if (can_reuse) {
+      for (int64_t i = 0; i < exprs.count(); ++i) {
+        if (output_exprs_->at(i) != exprs.at(i)) {
+          can_reuse = false;
+          break;
+        }
+      }
+    }
     return can_reuse;
   }
   OB_INLINE bool need_fill_group_idx() const
