@@ -4005,15 +4005,16 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
             session_info->get_raw_audit_record().exec_record_ = record_bk;
             session_info->get_raw_audit_record().try_cnt_ = retry_cnt;
           }
-          if (OB_SUCCESS != ret && OB_NOT_NULL(spi_cursor)) {
-            spi_cursor->~ObSPICursor();
-            LOG_WARN("fill cursor failed.", K(ret), K(cursor.get_id()), K(sql_stmt), K(ps_sql), K(session->get_sessid()));
-          }
           int close_ret = spi_result.close_result_set();
           if (OB_SUCCESS != close_ret) {
             LOG_WARN("close mysql result failed", K(ret), K(close_ret));
           }
           ret = OB_SUCCESS == ret ? close_ret : ret;
+          if (OB_SUCCESS != ret && OB_NOT_NULL(spi_cursor)) {
+            spi_cursor->~ObSPICursor();
+            LOG_WARN("fill cursor failed.", K(ret), K(cursor.get_id()), K(sql_stmt), K(ps_sql), K(session->get_sessid()));
+          }
+
           retry_cnt++;
         } while (!cursor.is_ps_cursor() && RETRY_TYPE_NONE != retry_ctrl.get_retry_type());
         session->set_query_start_time(old_query_start_time);
