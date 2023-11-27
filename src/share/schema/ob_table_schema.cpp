@@ -5954,9 +5954,10 @@ int ObTableSchema::has_not_null_unique_key(ObSchemaGetterGuard &schema_guard, bo
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("index table schema must not be NULL", K(ret), "table_id", simple_index_infos.at(i).table_id_);
       } else {
-        // check whether the columns of unique index are not nullable
+        // check whether all index columns of this unique index are not nullable
         ObTableSchema::const_column_iterator iter = index_table_schema->column_begin();
-        for ( ; OB_SUCC(ret) && !bool_result && iter != index_table_schema->column_end(); iter++) {
+        bool has_nullable_index_column = false;
+        for ( ; OB_SUCC(ret) && !has_nullable_index_column && iter != index_table_schema->column_end(); iter++) {
           const ObColumnSchemaV2 *column = *iter;
           if (OB_ISNULL(column)) {
             ret = OB_ERR_UNDEFINED;
@@ -5965,9 +5966,15 @@ int ObTableSchema::has_not_null_unique_key(ObSchemaGetterGuard &schema_guard, bo
             // this column is not index column, skip
           } else if (false == column->is_nullable() ||             // mysql mode
                      true == column->has_not_null_constraint()) {  // oracle mode
-            // find not null column, end loop
-            bool_result = true;
-          } else { /*do nothing*/ }
+            // this index column is not nullable, continue
+          } else {
+            // this index column is nullable, end loop
+            has_nullable_index_column = true;
+          }
+        }
+        if (OB_SUCC(ret) && !has_nullable_index_column) {
+          // All index columns of this unique key index are not nullable, return true.
+          bool_result = true;
         }
       }
     }
