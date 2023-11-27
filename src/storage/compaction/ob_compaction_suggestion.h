@@ -18,13 +18,86 @@
 #include "lib/allocator/page_arena.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/container/ob_iarray.h"
+#include "storage/ob_sstable_struct.h"
 
 namespace oceanbase
 {
 namespace compaction
 {
 class ObPartitionMergeProgress;
-struct ObTabletMergeInfo;
+
+// 32 B
+struct ObCompactionHistogramBucket final
+{
+  ObCompactionHistogramBucket()
+  {
+    clear();
+  }
+  ~ObCompactionHistogramBucket() {}
+  void clear() {
+    max_time_ = 0;
+    min_time_ = INT64_MAX;
+    sum_time_ = 0;
+    finish_cnt_ = 0;
+  }
+  int64_t max_time_;
+  int64_t min_time_;
+  int64_t sum_time_;
+  int64_t finish_cnt_;
+};
+
+struct ObCompactionHistogramBucketUtil final
+{
+  static int64_t get_index(const int64_t times);
+  static int64_t get_index_value(const int64_t index);
+
+  static const int64_t MAX_BUCKET_VALUE = 10000 * 1000LL * 1000LL; // 10000s
+  static const int64_t MIN_BUCKET_VALUE = 1;
+  static const int64_t BUCKET_MAX_COUNT = 24;
+  // 1ms,2ms,5ms,10ms,20ms,40ms,80ms,160ms,320ms,640ms,1280ms,2560ms,5120ms,10000ms,20000ms,40000ms,80000ms,
+  // 160000ms,320000ms,640000ms,1280000ms,2560000ms,5120000ms,10000000ms
+  static constexpr int64_t Bucket[BUCKET_MAX_COUNT] = {
+    MIN_BUCKET_VALUE, 2000LL, 5000LL, 10000LL, 20000LL, 40000LL, 80000LL, 160000LL,
+    320000LL, 640000LL, 1280000LL, 2560000LL, 5120000LL, 10000000LL, 20000000LL, 40000000LL,
+    80000000LL, 160000000LL, 320000000LL, 640000000LL, 1280000000LL, 2560000000LL, 5120000000LL, MAX_BUCKET_VALUE};
+};
+
+// 8 B+768 B=776 B
+class ObCompactionHistogramStat final
+{
+public:
+  ObCompactionHistogramStat()
+  {
+    clear();
+  }
+  ~ObCompactionHistogramStat() {}
+
+  void clear()
+  {
+    running_cnt_ = 0;
+    failed_cnt_ = 0;
+    for (int64_t i = 0; i < ObCompactionHistogramBucketUtil::BUCKET_MAX_COUNT; ++i) {
+      bucket_[i].clear();
+    }
+  }
+  bool is_empty() const;
+  int add_value(const int64_t time, const bool failed);
+  int64_t get_total_cnt() const;
+  int64_t get_sum_time() const;
+  int64_t get_min_time() const;
+  int64_t get_max_time() const;
+  int64_t get_percentile(const double p) const;
+  DECLARE_TO_STRING;
+
+private:
+  int64_t get_left_time(const int64_t idx) const;
+  int64_t get_right_time(const int64_t idx) const;
+
+public:
+  int32_t running_cnt_; // running dag cnt now
+  int32_t failed_cnt_;
+  ObCompactionHistogramBucket bucket_[ObCompactionHistogramBucketUtil::BUCKET_MAX_COUNT];
+};
 
 template <typename T>
 class ObInfoRingArray
@@ -95,22 +168,31 @@ struct ObCompactionSuggestion
   char suggestion_[common::OB_DIAGNOSE_INFO_LENGTH];
 };
 
-struct ObDagSuggestionEvent {
-  ObDagSuggestionEvent()
-    : insufficient_threads_(0)
-  {}
-  int analyze_insufficient_thread(
-    const int64_t priority,
-    const share::ObDagType::ObDagTypeEnum dag_type,
-    char *buf,
-    const int64_t buf_len);
+// 7760 B
+struct ObCompactionDagStatus final
+{
+  ObCompactionDagStatus()
+  { clear(); }
+  ~ObCompactionDagStatus() {}
 
-  TO_STRING_KV(K_(insufficient_threads));
+  void clear();
+  void update_running_cnt(const ObIArray<int64_t> &dag_running_cnts);
+  void update_finish_cnt(
+      const share::ObDagType::ObDagTypeEnum type,
+      const bool failed,
+      const int64_t exe_time);
 
-  static const int16_t TOLERATE_INSUFFICIENT_THREADS_COUNT = 100;
-  static constexpr float TOLERATE_SCHEDULE_DAG_RATIO = 0.01;
-  int16_t insufficient_threads_;
-  // TODO(@jingshui)
+  DECLARE_TO_STRING;
+
+  // max COMPACTION mode dag is DAG_TYPE_MDS_TABLE_MERGE, which is 9
+  static const int64_t COMPACTION_DAG_MAX = 10;
+  // max COMPACTION prio DAG_PRIO_COMPACTION_LOW = 4
+  static const int64_t COMPACTION_PRIORITY_MAX = 5;
+  // for mini/minor/major merge
+  static constexpr int64_t COST_LONG_TIME[COMPACTION_PRIORITY_MAX] = {
+    10 * 60 * 1000 * 1000L, INT64_MAX, 20 * 60 * 1000 * 1000L, INT64_MAX, 60 * 60 * 1000 * 1000L}; // 10m,30m,60m
+
+  ObCompactionHistogramStat histogram_stat_[COMPACTION_DAG_MAX];
 };
 
 /*
@@ -118,40 +200,58 @@ struct ObDagSuggestionEvent {
  * */
 class ObCompactionSuggestionMgr {
 public:
+  enum ObCompactionSuggestionReason
+  {
+    DAG_FULL,
+    SCHE_SLOW,
+    DAG_COST_LONGTIME,
+    MAX_REASON
+  };
+  static int mtl_init(ObCompactionSuggestionMgr *&compaction_suggestion_mgr);
   ObCompactionSuggestionMgr()
-    : allocator_("CompSuggestMgr"),
+    : is_inited_(false),
+      click_time_(ObTimeUtility::fast_current_time()),
+      allocator_("CompSuggestMgr"),
+      lock_(ObLatchIds::COMPACTION_DIAGNOSE_LOCK),
+      compaction_dag_status_(),
       array_(allocator_)
   {
   }
-  ~ObCompactionSuggestionMgr() { array_.destroy(); }
+  ~ObCompactionSuggestionMgr() { destroy(); }
 
   int init();
-  int get(const int64_t pos, ObCompactionSuggestion &info)
+  void destroy()
   {
-    return array_.get(pos, info);
+    array_.destroy();
   }
+  int get_suggestion_list(ObIArray<ObCompactionSuggestion> &input_array);
+  // func for compaction status
+  int update_running_cnt(const ObIArray<int64_t> &dag_running_cnts);
+  int update_finish_cnt(
+      const share::ObDagType::ObDagTypeEnum type,
+      const bool failed,
+      const int64_t exe_time);
+  void clear_compaction_dag_status();
 
-  static ObCompactionSuggestionMgr &get_instance() {
-    static ObCompactionSuggestionMgr instance_;
-    return instance_;
-  }
+  int analyze_merge_info(
+    const ObSSTableMergeInfo &merge_info,
+    const share::ObDagType::ObDagTypeEnum type,
+    const int64_t cost_time);
 
-  int analyze_merge_info(ObTabletMergeInfo &merge_info, ObPartitionMergeProgress &progress);
-  int analyze_schedule_status(
-    ObTabletMergeInfo &tablet_merge_info,
-    const uint64_t tenant_id,
-    const share::ObDagType::ObDagTypeEnum dag_type,
-    const int64_t priority,
-    const int64_t schedule_wait_time);
-  int analyze_insufficient_thread(
-    const uint64_t tenant_id,
-    const share::ObDagType::ObDagTypeEnum dag_type,
-    const int64_t priority,
-    const int64_t thread_limit,
-    const int64_t added_dag_cnts,
-    const int64_t scheduled_dag_cnts);
-
+  int diagnose_for_suggestion(
+      const ObIArray<int64_t> &reasons,
+      const ObIArray<int64_t> &running_cnts,
+      const ObIArray<int64_t> &thread_limits,
+      const ObIArray<int64_t> &dag_running_cnts);
 public:
+  static const int64_t TOO_MANY_FAILED_COUNT = 20;
+  static const int64_t SCAN_AVERAGE_RAITO = 4; // 2 * 2
+  static const int64_t INC_ROW_CNT_PARAM = 5 * 1000 * 1000; // 5 Million
+  static const int64_t SINGLE_PARTITION_MACRO_CNT_PARAM = 256 * 1024; // single partition size 500G
+  static const int64_t MACRO_CNT_PARAM = 5 * 1000; // 5 k
+
+  static const char *ObCompactionSuggestionReasonStr[];
+  static const char* get_suggestion_reason(const int64_t reason);
   static const char *ObAddWorkerThreadSuggestion[share::ObDagPrio::DAG_PRIO_MAX];
   static const char* get_add_thread_suggestion(const int64_t priority);
 private:
@@ -160,21 +260,23 @@ private:
       const int64_t max_value,
       const int64_t min_value,
       const int64_t avg_value);
+  int analyze_for_suggestion(
+    const int64_t reason,
+    const int64_t priority,
+    const int64_t thread_limit,
+    const int64_t running_task,
+    ObCompactionDagStatus &dag_status);
 
 private:
   friend class ObCompactionSuggestionIterator;
 private:
   static const int64_t SUGGESTION_MAX_CNT = 200;
-  static const int64_t SCHEDULE_WAIT_LONG_TIME = 1000L * 1000L * 60L * 10; // 10 mins
-  static const int64_t SCAN_AVERAGE_RAITO = 4; // 2 * 2
-  static const int64_t INC_ROW_CNT_PARAM = 5 * 1000 * 1000; // 5 Million
-  static const int64_t MERGE_COST_TIME_PARAM = 1000L * 1000L * 60L * 60L; // 1 hour
-  static const int64_t SINGLE_PARTITION_MACRO_CNT_PARAM = 256 * 1024; // single partition size 500G
-  static const int64_t MACRO_CNT_PARAM = 10 * 1000; // 10 k
-  static constexpr float MACRO_MULTIPLEXED_PARAM = 0.3;
 
+  bool is_inited_;
+  int64_t click_time_;
   ObArenaAllocator allocator_;
-  ObDagSuggestionEvent dag_event_[share::ObDagType::ObDagTypeEnum::DAG_TYPE_MAX];
+  lib::ObMutex lock_;
+  ObCompactionDagStatus compaction_dag_status_;
   ObInfoRingArray<ObCompactionSuggestion> array_;
 };
 
@@ -186,7 +288,7 @@ class ObCompactionSuggestionIterator
 {
 public:
   ObCompactionSuggestionIterator() :
-    tenant_id_(OB_INVALID_TENANT_ID),
+    suggestion_array_(),
     cur_idx_(0),
     is_opened_(false)
   {
@@ -196,12 +298,12 @@ public:
   int get_next_info(ObCompactionSuggestion &info);
   void reset()
   {
-    tenant_id_ = OB_INVALID_TENANT_ID;
+    suggestion_array_.reset();
     cur_idx_ = 0;
     is_opened_ = false;
   }
 private:
-  int64_t tenant_id_;
+  ObArray<ObCompactionSuggestion> suggestion_array_;
   int64_t cur_idx_;
   bool is_opened_;
 };

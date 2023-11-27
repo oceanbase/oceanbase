@@ -88,6 +88,8 @@ int64_t ObStorageCompactionTimeGuard::to_string(char *buf, const int64_t buf_len
 {
   int64_t pos = 0;
   int64_t total_cost = 0;
+  J_KV(K_(add_time));
+  common::databuff_printf(buf, buf_len, pos, "|");
   if (idx_ > DAG_WAIT_TO_SCHEDULE && click_poinsts_[DAG_WAIT_TO_SCHEDULE] > COMPACTION_SHOW_TIME_THRESHOLD) {
     fmt_ts_to_meaningful_str(buf, buf_len, pos, "wait_schedule_time", click_poinsts_[DAG_WAIT_TO_SCHEDULE]);
   }
@@ -343,7 +345,6 @@ ObTabletMergeDag::ObTabletMergeDag(
     compat_mode_(lib::Worker::CompatMode::INVALID),
     ctx_(nullptr),
     param_(),
-    time_guard_(),
     allocator_("MergeDag", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::MERGE_NORMAL_CTX_ID)
 {
 }
@@ -851,6 +852,7 @@ int ObTabletMergeDag::alloc_merge_ctx()
     LOG_WARN("failed to allocate ctx", KR(ret), KP(ctx_));
   } else {
     ctx_->merge_dag_ = this;
+    ctx_->init_time_guard(get_add_time());
     ctx_->time_guard_click(ObStorageCompactionTimeGuard::DAG_WAIT_TO_SCHEDULE);
   }
   return ret;

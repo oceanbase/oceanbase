@@ -291,11 +291,6 @@ void ObCtxMergeInfoCollector::finish(ObTabletMergeInfo &merge_info)
       LOG_WARN_RET(tmp_ret, "fail to update update merge info");
     }
 
-    if (OB_TMP_FAIL(compaction::ObCompactionSuggestionMgr::get_instance()
-                        .analyze_merge_info(merge_info, *merge_progress_))) {
-      LOG_WARN_RET(tmp_ret, "fail to analyze merge info");
-    }
-
     if (OB_TMP_FAIL(merge_progress_->finish_merge_progress())) {
       LOG_WARN_RET(tmp_ret, "fail to update final merge progress");
     }
@@ -702,6 +697,7 @@ void ObBasicTabletMergeCtx::add_sstable_merge_info(
     sstable_merge_info.task_id_ = warning_info.task_id_;
     sstable_merge_info.retry_cnt_ = warning_info.retry_cnt_;
     sstable_merge_info.error_location_ = warning_info.location_;
+    sstable_merge_info.early_create_time_ = warning_info.gmt_create_;
     warning_info.info_param_ = nullptr;
   }
 
@@ -709,7 +705,7 @@ void ObBasicTabletMergeCtx::add_sstable_merge_info(
   int64_t suspect_info_hash = ObScheduleSuspectInfo::gen_hash(MTL_ID(), hash);
   info_allocator.reuse();
   if (OB_SUCCESS == MTL(compaction::ObScheduleSuspectInfoMgr *)->get_with_param(suspect_info_hash, &ret_info, info_allocator)) {
-    sstable_merge_info.add_time_ = ret_info.add_time_;
+    sstable_merge_info.suspect_add_time_ = ret_info.add_time_;
     sstable_merge_info.info_param_ = ret_info.info_param_;
     if (OB_TMP_FAIL(MTL(compaction::ObScheduleSuspectInfoMgr *)->delete_info(suspect_info_hash))) {
       LOG_WARN_RET(tmp_ret, "failed to delete old suspect info", K(sstable_merge_info));
@@ -720,6 +716,16 @@ void ObBasicTabletMergeCtx::add_sstable_merge_info(
     LOG_WARN_RET(tmp_ret, "failed to add sstable merge info", K(sstable_merge_info));
   }
   sstable_merge_info.info_param_ = nullptr;
+
+  // ATTENTION : merge_dag_ is nullptr when tablet is columnar store
+  if (!sstable_merge_info.is_fake_) {
+    int64_t cost_time = sstable_merge_info.merge_finish_time_ - time_guard.add_time_;
+    if (nullptr != merge_dag_) {
+      MTL(ObCompactionSuggestionMgr*)->analyze_merge_info(sstable_merge_info, merge_dag_->get_type(), cost_time);
+    } else {
+      MTL(ObCompactionSuggestionMgr*)->analyze_merge_info(sstable_merge_info, ObDagType::DAG_TYPE_CO_MERGE_BATCH_EXECUTE, cost_time);
+    }
+  }
 }
 
 int ObBasicTabletMergeCtx::init_static_param_and_desc()

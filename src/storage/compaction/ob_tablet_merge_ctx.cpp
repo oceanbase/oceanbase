@@ -46,16 +46,6 @@ int ObTabletMergeCtx::prepare_index_tree()
 
 void ObTabletMergeCtx::update_and_analyze_progress()
 {
-  int tmp_ret = OB_SUCCESS;
-  const int64_t schedule_wait_time = info_collector_.time_guard_.get_specified_cost_time(ObStorageCompactionTimeGuard::DAG_WAIT_TO_SCHEDULE);
-  if (nullptr != merge_dag_ && OB_TMP_FAIL(ObCompactionSuggestionMgr::get_instance().analyze_schedule_status(
-            merge_info_,
-            MTL_ID(),
-            merge_dag_->get_type(),
-            merge_dag_->get_priority(),
-            schedule_wait_time))) {
-    LOG_WARN_RET(tmp_ret, "fail to analyze schedule status");
-  }
   (void) info_collector_.finish(merge_info_);
 }
 

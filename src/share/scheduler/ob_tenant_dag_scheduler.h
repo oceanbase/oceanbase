@@ -39,6 +39,7 @@ class ObCompactionDiagnoseMgr;
 class ObTabletMergeDag;
 struct ObIBasicInfoParam;
 class ObCompactionMemoryContext;
+struct ObCompactionDagStatus;
 }
 namespace share
 {
@@ -51,7 +52,8 @@ class ObTenantDagScheduler;
 class ObTenantDagWorker;
 
 
-struct ObDiagnoseLocation {
+struct ObDiagnoseLocation final
+{
   ObDiagnoseLocation()
     : filename_(nullptr),
       function_(nullptr),
@@ -880,6 +882,7 @@ public:
   int cancel_dag(const ObIDag &dag, const bool force_cancel = false);
   int check_dag_exist(const ObIDag &dag, bool &exist);
   int64_t get_limit();
+  int64_t get_adaptive_limit();
   int64_t get_running_task_cnt();
   int set_thread_score(const int64_t score, int64_t &old_val, int64_t &new_val);
   bool try_switch(ObTenantDagWorker &worker);
@@ -977,7 +980,7 @@ private:
   DagList dag_list_[DAG_LIST_MAX];
   lib::ObMutex prio_lock_;  // Make sure the lock is outside if there are nested locks
   WorkerList waiting_workers_;  // workers waiting for time slice to run
-  WorkerList running_workers_;  // running workers
+  WorkerList running_workers_;  // running workers // lock with prio_lock_
   ObIAllocator* allocator_;
   ObIAllocator* ha_allocator_;
   ObTenantDagScheduler *scheduler_;
@@ -1053,14 +1056,15 @@ public:
     bret &= dag_net_sche_.is_empty();
     return bret;
   } // only for unittest
-  int64_t get_cur_dag_cnt() const { return ATOMIC_LOAD(&dag_cnt_); }
-  void add_cur_dag_cnt() { ATOMIC_INC(&dag_cnt_); }
-  void sub_cur_dag_cnt() { ATOMIC_DEC(&dag_cnt_); }
+
+  DEFINE_ATOMIC_ARRAY_FUNC(running_dag_cnts, running_dag_cnts_);
   DEFINE_ATOMIC_ARRAY_FUNC(added_dag_cnts, added_dag_cnts_);
   DEFINE_ATOMIC_ARRAY_FUNC(scheduled_dag_cnts, scheduled_dag_cnts_);
   DEFINE_ATOMIC_ARRAY_FUNC(scheduled_task_cnts, scheduled_task_cnts_);
   DEFINE_ATOMIC_ARRAY_FUNC(scheduled_data_size, scheduled_data_size_);
   DEFINE_ATOMIC_ARRAY_FUNC(type_dag_cnt, dag_cnts_);
+
+  DEFINE_ATOMIC_VAR_FUNC(cur_dag_cnt, dag_cnt_);
   DEFINE_ATOMIC_VAR_FUNC(total_running_task_cnt, total_running_task_cnt_);
   DEFINE_ATOMIC_VAR_FUNC(scheduled_task_cnt, scheduled_task_cnt_);
   bool need_fast_schedule_dag_net() { return ATOMIC_LOAD(&fast_schedule_dag_net_); }
@@ -1072,6 +1076,7 @@ public:
   int64_t get_dag_count(const ObDagType::ObDagTypeEnum type);
   int64_t get_running_task_cnt(const ObDagPrio::ObDagPrioEnum priority);
   int get_limit(const int64_t prio, int64_t &limit);
+  int get_adaptive_limit(const int64_t prio, int64_t &limit);
   int check_dag_exist(const ObIDag *dag, bool &exist);
   // force_cancel: whether to cancel running dag
   int cancel_dag(const ObIDag *dag, const bool force_cancel = false);
@@ -1100,6 +1105,7 @@ public:
       int64_t &start_time);
   int diagnose_all_dags();
   int get_compaction_dag_count(int64_t dag_count);
+  void get_suggestion_reason(const int64_t priority, int64_t &reason);
 
   // 1. check ls compaction exist
   // 2. cancel ls compaction waiting dag
@@ -1124,6 +1130,7 @@ private:
   static const int64_t LOOP_WAITING_DAG_LIST_INTERVAL = 5 * 1000 * 1000L; // 5s
   static const int64_t LOOP_RUNNING_DAG_NET_MAP_INTERVAL = 3 * 60 * 1000 * 1000L; // 3m
   static const int32_t MAX_SHOW_DAG_NET_CNT_PER_PRIO = 500;
+  static const int64_t MANY_DAG_COUNT = 2000;
 private:
   int schedule();
   void loop_dag_net();
@@ -1132,7 +1139,9 @@ private:
   int try_reclaim_threads();
   void destroy_all_workers();
   int set_thread_score(const int64_t priority, const int64_t concurrency);
+  void inner_get_suggestion_reason(const ObDagType::ObDagTypeEnum type, int64_t &reason);
   void dump_dag_status(const bool force_dump = false);
+  void diagnose_for_suggestion();
   bool is_dag_map_full();
   int gene_basic_info(
       ObDagSchedulerInfo *info_list,
@@ -1155,6 +1164,7 @@ private:
   int64_t total_running_task_cnt_;  // atomic value
   int64_t scheduled_task_cnt_; // atomic value // interval scheduled task count
   int64_t dag_cnts_[ObDagType::DAG_TYPE_MAX]; // just for showing // atomic value
+  int64_t running_dag_cnts_[ObDagType::DAG_TYPE_MAX]; // atomic value
   int64_t added_dag_cnts_[ObDagType::DAG_TYPE_MAX]; // atomic value // interval add dag count
   int64_t scheduled_dag_cnts_[ObDagType::DAG_TYPE_MAX]; // atomic value // interval scheduled dag count
   int64_t scheduled_task_cnts_[ObDagType::DAG_TYPE_MAX]; // atomic value // interval scheduled task count
