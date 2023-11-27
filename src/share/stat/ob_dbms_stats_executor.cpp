@@ -1308,6 +1308,8 @@ int ObDbmsStatsExecutor::update_online_stat(ObExecContext &ctx,
       bool need_reset_default_database = false;
       bool need_reset_trx_lock_timeout = false;
       observer::ObInnerSQLConnection *conn = NULL;
+      const ObString stash_savepoint_name("online stat stash savepoint");
+      bool has_stash_savepoint = false;
       //lib::CompatModeGuard guard(lib::Worker::CompatMode::MYSQL);
       if (OB_FAIL(prepare_conn_and_store_session_for_online_stats(ctx.get_my_session(),
                                                                   ctx.get_sql_proxy(),
@@ -1339,13 +1341,18 @@ int ObDbmsStatsExecutor::update_online_stat(ObExecContext &ctx,
                                                            cur_column_stats,
                                                            column_stats))) {
         LOG_WARN("fail to merge col stats", K(ret), K(cur_column_stats));
-      } else if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(ctx, conn, table_stats, column_stats,
-                                                             false, true))) {
-        LOG_WARN("fail to update stat", K(ret), K(table_stats), K(column_stats));
-      } else if (OB_FAIL(ObBasicStatsEstimator::update_last_modified_count(conn, param))) {
-        LOG_WARN("failed to update last modified count", K(ret));
+      } else if (OB_FAIL(ObSqlTransControl::create_stash_savepoint(ctx, stash_savepoint_name))) {
+        LOG_WARN("failed to create stash savepoint", K(ret));
       } else {
-        succ_to_write_stats = true;
+        //The purpose of creating stash savepoint is to prevent tx desc info from being reset due to update lock conflict failure.
+        has_stash_savepoint = true;
+        if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(ctx, conn, table_stats, column_stats, false, true))) {
+          LOG_WARN("fail to update stat", K(ret), K(table_stats), K(column_stats));
+        } else if (OB_FAIL(ObBasicStatsEstimator::update_last_modified_count(conn, param))) {
+          LOG_WARN("failed to update last modified count", K(ret));
+        } else {
+          succ_to_write_stats = true;
+        }
       }
       if (ret == OB_ERR_EXCLUSIVE_LOCK_CONFLICT) {
         ret = OB_SUCCESS;
@@ -1353,6 +1360,13 @@ int ObDbmsStatsExecutor::update_online_stat(ObExecContext &ctx,
       }
       //release source
       //guard.~CompatModeGuard();
+      if (has_stash_savepoint) {
+        int pop_ret = ObSqlTransControl::release_stash_savepoint(ctx, stash_savepoint_name);
+        if (OB_SUCCESS != pop_ret) {
+          LOG_WARN("fail to release stash savepoint", K(pop_ret));
+          ret = OB_SUCCESS == ret ? pop_ret : ret;
+        }
+      }
       if (OB_NOT_NULL(conn)) {
         int tmp_ret = OB_SUCCESS;
         ctx.get_sql_proxy()->close(conn, tmp_ret);

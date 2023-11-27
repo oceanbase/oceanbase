@@ -517,7 +517,7 @@ int ObOptStatSqlService::update_column_stat(share::schema::ObSchemaGetterGuard *
     LOG_WARN("failed to construct column stat sql", K(ret));
   // construct histogram delete column
   } else if (!only_update_col_stat &&
-             construct_delete_column_histogram_sql(exec_tenant_id, column_stats, delete_histogram)) {
+             OB_FAIL(construct_delete_column_histogram_sql(exec_tenant_id, column_stats, delete_histogram))) {
     LOG_WARN("failed to construc delete column histogram sql", K(ret));
   // construct histogram insert sql
   } else if (!only_update_col_stat &&
@@ -533,8 +533,8 @@ int ObOptStatSqlService::update_column_stat(share::schema::ObSchemaGetterGuard *
   } else if (!only_update_col_stat &&
              OB_FAIL(conn->execute_write(exec_tenant_id, delete_histogram.ptr(), affected_rows))) {
     LOG_WARN("failed to execute write", K(delete_histogram));
-  } else if (OB_FAIL(need_histogram &&
-              conn->execute_write(exec_tenant_id, insert_histogram.ptr(), affected_rows))) {
+  } else if (need_histogram &&
+             OB_FAIL(conn->execute_write(exec_tenant_id, insert_histogram.ptr(), affected_rows))) {
     LOG_WARN("failed to execute write", K(insert_histogram));
   } else if (OB_FAIL(conn->execute_write(exec_tenant_id, column_stats_sql.ptr(), affected_rows))) {
     LOG_WARN("failed to execute write", K(column_stats_sql));
