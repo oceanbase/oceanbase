@@ -2732,6 +2732,18 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
           }
         }
       }
+      // force sql run das logic if sql stmt has pl question mark expr, and its type is complex type
+      if (OB_SUCC(ret) &&
+          OB_NOT_NULL(ctx_.stmt_) &&
+          OB_NOT_NULL(c_expr) &&
+          OB_NOT_NULL(session_info->get_pl_context()) &&
+          T_QUESTIONMARK == c_expr->get_expr_type() &&
+          c_expr->get_result_type().is_ext() &&
+          (pl::PL_RECORD_TYPE == c_expr->get_result_type().get_extend_type() ||
+          pl::PL_NESTED_TABLE_TYPE == c_expr->get_result_type().get_extend_type() ||
+          pl::PL_VARRAY_TYPE == c_expr->get_result_type().get_extend_type())) {
+        ctx_.stmt_->get_query_ctx()->disable_udf_parallel_ |= true;
+      }
     }
     expr = c_expr;
   }
