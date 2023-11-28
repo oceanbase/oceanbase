@@ -117,6 +117,7 @@ void oceanbase::observer::init_srv_xlator_for_partition(ObSrvRpcXlator *xlator) 
   RPC_PROCESSOR(ObRegisterTxDataP, gctx_);
   RPC_PROCESSOR(ObRpcGetLSAccessModeP, gctx_);
   RPC_PROCESSOR(ObRpcChangeLSAccessModeP, gctx_);
+  RPC_PROCESSOR(ObTabletLocationReceiveP, gctx_);
 }
 
 void oceanbase::observer::init_srv_xlator_for_migrator(ObSrvRpcXlator *xlator) {

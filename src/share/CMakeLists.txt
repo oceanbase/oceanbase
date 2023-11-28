@@ -210,7 +210,9 @@ ob_set_subtarget(ob_share common_mixed
   location_cache/ob_ls_location_map.cpp
   location_cache/ob_tablet_ls_service.cpp
   location_cache/ob_tablet_ls_map.cpp
+  location_cache/ob_tablet_location_broadcast.cpp
   location_cache/ob_vtable_location_service.cpp
+  location_cache/ob_tablet_location_refresh_service.cpp
   inner_table/ob_inner_table_schema.vt.cpp
   inner_table/ob_inner_table_schema.lob.cpp
   inner_table/ob_inner_table_schema_misc.ipp

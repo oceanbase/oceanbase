@@ -15,7 +15,9 @@
 #include "share/transfer/ob_transfer_task_operator.h"
 #include "share/ob_dml_sql_splicer.h" // ObDMLSqlSplicer
 #include "lib/mysqlclient/ob_mysql_proxy.h" // ObISqlClient, SMART_VAR
+#include "lib/mysqlclient/ob_mysql_transaction.h" // ObMySQLTransaction
 #include "share/inner_table/ob_inner_table_schema.h" // OB_ALL_TRANSFER_TASK_TNAME
+#include "share/location_cache/ob_location_struct.h" // ObTabletLSCache
 
 namespace oceanbase
 {
@@ -1078,6 +1080,322 @@ int ObTransferTaskOperator::update_comment(
     } else {
       LOG_INFO("update comment successfully", K(tenant_id), K(task_id), K(comment), K(affected_rows));
     }
+  }
+  return ret;
+}
+
+int ObTransferTaskOperator::generate_transfer_task_id(
+    common::ObMySQLTransaction &trans,
+    const uint64_t tenant_id,
+    ObTransferTaskID &new_task_id)
+{
+  int ret = OB_SUCCESS;
+  new_task_id.reset();
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else {
+    SMART_VAR(ObISQLClient::ReadResult, res) {
+    ObSqlString sql;
+    common::sqlclient::ObMySQLResult *result = NULL;
+    if (OB_FAIL(sql.assign_fmt(
+        "SELECT MAX(task_id) AS task_id, 0 AS is_history FROM %s "
+        "UNION SELECT MAX(task_id) AS task_id, 1 AS is_history FROM %s",
+        OB_ALL_TRANSFER_TASK_TNAME, OB_ALL_TRANSFER_TASK_HISTORY_TNAME))) {
+      LOG_WARN("fail to assign fmt", KR(ret));
+    } else if (OB_FAIL(trans.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get mysql result failed", KR(ret), K(tenant_id), K(sql));
+    } else {
+      int64_t row_count = 0;
+      int64_t max_task_id = 0;
+      while (OB_SUCC(ret)) {
+        if (OB_FAIL(result->next())) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            break;
+          } else {
+            LOG_WARN("fail to get next", KR(ret));
+          }
+        } else {
+          row_count++;
+          int64_t task_id = OB_INVALID_ID; // NULL means empty, then convert to 0
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(
+            *result, "task_id", task_id, int64_t,
+            true /*skip_null_error*/, false /*skip_column_error*/, 0 /*default_value*/);
+          if (OB_SUCC(ret)) {
+            max_task_id = max(max_task_id, task_id);
+          }
+        }
+      } // end while
+
+      if (OB_SUCC(ret)) {
+        if (OB_UNLIKELY(2 != row_count)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("row_count not match", KR(ret), K(tenant_id), K(row_count));
+        } else {
+          new_task_id = ObTransferTaskID(max_task_id + 1);
+        }
+      }
+    }
+    } // end SMART_VAR
+  }
+  return ret;
+}
+
+int ObTransferTaskOperator::fetch_initial_base_task_id(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    ObTransferTaskID &base_task_id)
+{
+  int ret = OB_SUCCESS;
+  base_task_id.reset();
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else {
+    SMART_VAR(ObISQLClient::ReadResult, res) {
+    ObSqlString sql;
+    common::sqlclient::ObMySQLResult *result = NULL;
+    if (OB_FAIL(sql.assign_fmt(
+        "SELECT MIN(task_id) AS task_id, 0 AS is_history FROM %s "
+        "UNION SELECT MAX(task_id) AS task_id, 1 AS is_history FROM %s",
+        OB_ALL_TRANSFER_TASK_TNAME, OB_ALL_TRANSFER_TASK_HISTORY_TNAME))) {
+      LOG_WARN("fail to assign fmt", KR(ret));
+    } else if (OB_FAIL(sql_proxy.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get mysql result failed", KR(ret), K(tenant_id), K(sql));
+    } else {
+      int64_t min_process_task_id = OB_INVALID_ID;
+      int64_t max_history_task_id = OB_INVALID_ID;
+      while (OB_SUCC(ret)) {
+        if (OB_FAIL(result->next())) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            break;
+          } else {
+            LOG_WARN("fail to get next", KR(ret));
+          }
+        } else {
+          int64_t task_id = OB_INVALID_ID; // NULL means empty, then convert to 0
+          int64_t is_history = 0;
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(
+            *result, "task_id", task_id, int64_t,
+            true /*skip_null_error*/, false /*skip_column_error*/, 0 /*default_value*/);
+          EXTRACT_INT_FIELD_MYSQL(*result, "is_history", is_history, int64_t);
+
+          if (OB_FAIL(ret)) {
+          } else if (0 == is_history) {
+            min_process_task_id = task_id;
+          } else {
+            max_history_task_id = task_id;
+          }
+        }
+      } // end while
+
+      if (OB_SUCC(ret)) {
+        if (OB_UNLIKELY(min_process_task_id < 0 || max_history_task_id < 0)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid result", KR(ret), K(tenant_id), K(min_process_task_id), K(max_history_task_id));
+        } else if (0 == min_process_task_id && 0 == max_history_task_id) {
+          // __all_transfer_task/__all_transfer_task_history are empty
+          base_task_id = ObTransferTaskID(0);
+        } else if (0 == min_process_task_id && 0 < max_history_task_id) {
+          // only __all_transfer_task is empty
+          base_task_id = ObTransferTaskID(max_history_task_id);
+        } else if (0 < min_process_task_id && 0 == max_history_task_id) {
+          // only __all_transfer_task_history is empty
+          base_task_id = ObTransferTaskID(min_process_task_id - 1);
+        } else {
+          // __all_transfer_task/__all_transfer_task_history are not empty
+          int64_t min_task_id = min(min_process_task_id - 1, max_history_task_id);
+          base_task_id = ObTransferTaskID(min_task_id);
+        }
+      }
+    }
+    } // end SMART_VAR
+  }
+  return ret;
+}
+
+int ObTransferTaskOperator::fetch_inc_task_infos(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    const ObTransferTaskID &base_task_id,
+    common::ObIArray<ObTransferRefreshInfo> &inc_task_infos)
+{
+  int ret = OB_SUCCESS;
+  inc_task_infos.reset();
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+      || !base_task_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id/base_task_id", KR(ret), K(tenant_id), K(base_task_id));
+  } else {
+    SMART_VAR(ObISQLClient::ReadResult, res) {
+    ObSqlString sql;
+    common::sqlclient::ObMySQLResult *result = NULL;
+    // transfer task which status is `completed` but tablet_list is invalid actually do nothing.
+    ObTransferStatus complete_status(ObTransferStatus::COMPLETED);
+    ObTransferStatus fail_status(ObTransferStatus::FAILED);
+
+#define FETCH_INC_TRANSFER_TASKS_SQL "SELECT task_id, " \
+    "(CASE WHEN status = '%s' AND (tablet_list is null OR tablet_list = '') THEN '%s' ELSE status END) AS STATUS " \
+    "FROM %s WHERE task_id > %ld "
+
+    if (OB_FAIL(sql.assign_fmt(
+        FETCH_INC_TRANSFER_TASKS_SQL " UNION " FETCH_INC_TRANSFER_TASKS_SQL,
+        complete_status.str(), fail_status.str(), OB_ALL_TRANSFER_TASK_TNAME, base_task_id.id(),
+        complete_status.str(), fail_status.str(), OB_ALL_TRANSFER_TASK_HISTORY_TNAME, base_task_id.id()
+        ))) {
+      LOG_WARN("fail to assign sql", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(sql_proxy.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get mysql result failed", KR(ret), K(tenant_id), K(sql));
+    } else {
+      int64_t task_id_val = ObTransferTaskID::INVALID_ID;
+      ObString status_str;
+      while (OB_SUCC(ret)) {
+        if (OB_FAIL(result->next())) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            break;
+          } else {
+            LOG_WARN("fail to get next", KR(ret));
+          }
+        } else {
+          EXTRACT_INT_FIELD_MYSQL(*result, "task_id", task_id_val, int64_t);
+          EXTRACT_VARCHAR_FIELD_MYSQL(*result, "STATUS", status_str);
+
+          ObTransferStatus status;
+          if (FAILEDx(status.parse_from_str(status_str))) {
+            LOG_WARN("fail to parse status", KR(ret), K(status_str));
+          } else {
+            ObTransferTaskID task_id(task_id_val);
+            ObTransferRefreshStatus refresh_status;
+            ObTransferRefreshInfo refresh_info;
+            (void) refresh_status.convert_from(status);
+            if (OB_UNLIKELY(!task_id.is_valid() || !refresh_status.is_valid())) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("invaild task_id/refresh_status",
+                       KR(ret), K(tenant_id), K(task_id), K(refresh_status), K(status));
+            } else if (OB_FAIL(refresh_info.init(task_id, refresh_status))) {
+              LOG_WARN("fail to init refresh info",
+                       KR(ret), K(tenant_id), K(task_id), K(refresh_status));
+            } else if (OB_FAIL(inc_task_infos.push_back(refresh_info))) {
+              LOG_WARN("fail to push back refresh info",
+                       KR(ret), K(tenant_id), K(refresh_info));
+            }
+          }
+        }
+      } // end while
+    }
+    } // end SMART_VAR
+#undef TRANSFER_TASK_COLUMNS
+  }
+  return ret;
+}
+
+int ObTransferTaskOperator::batch_get_tablet_ls_cache(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    const common::ObIArray<ObTransferTaskID> &task_ids,
+    common::ObIArray<ObTabletLSCache> &tablet_ls_caches)
+{
+  int ret = OB_SUCCESS;
+  tablet_ls_caches.reset();
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+      || task_ids.count() <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id/task_ids_cnt",
+             KR(ret), K(tenant_id), "task_ids_cnt", task_ids.count());
+  } else {
+    SMART_VAR(ObISQLClient::ReadResult, res) {
+    ObSqlString sql;
+    common::sqlclient::ObMySQLResult *result = NULL;
+
+    ObSqlString task_ids_str;
+    for (int64_t i = 0; OB_SUCC(ret) && i < task_ids.count(); i++) {
+      if (OB_FAIL(task_ids_str.append_fmt("%s%ld",
+          0 == i ? "" : ", ", task_ids.at(i).id()))) {
+        LOG_WARN("fail to append fmt", KR(ret), K(i), K(task_ids.at(i)));
+      }
+    } // end for
+
+    if (FAILEDx(sql.assign_fmt(
+        "SELECT tablet_list, dest_ls FROM %s WHERE task_id in (%s) "
+        "UNION SELECT tablet_list, dest_ls FROM %s WHERE task_id in (%s)",
+        OB_ALL_TRANSFER_TASK_TNAME, task_ids_str.ptr(),
+        OB_ALL_TRANSFER_TASK_HISTORY_TNAME, task_ids_str.ptr()))) {
+      LOG_WARN("fail to assign fmt", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(sql_proxy.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get mysql result failed", KR(ret), K(tenant_id), K(sql));
+    } else {
+      const int64_t now = ObTimeUtility::fast_current_time();
+      int64_t row_cnt = 0;
+      while (OB_SUCC(ret)) {
+        if (OB_FAIL(result->next())) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            break;
+          } else {
+            LOG_WARN("fail to get next", KR(ret));
+          }
+        } else {
+          row_cnt++;
+          ObString tablet_list_str;
+          int64_t dest_ls_id = ObLSID::INVALID_LS_ID;
+          EXTRACT_INT_FIELD_MYSQL(*result, "dest_ls", dest_ls_id, int64_t);
+          EXTRACT_VARCHAR_FIELD_MYSQL(*result, "tablet_list", tablet_list_str);
+
+          ObTransferTabletList tablet_list;
+          ObLSID ls_id(dest_ls_id);
+          if (FAILEDx(tablet_list.parse_from_display_str(tablet_list_str))) {
+            LOG_WARN("fail to parse from str", KR(ret), K(tablet_list_str));
+          } else {
+            for (int64_t i = 0; OB_SUCC(ret) && i < tablet_list.count(); i++) {
+              const ObTransferTabletInfo &tablet_info = tablet_list.at(i);
+              ObTabletLSCache tablet_ls_cache;
+              // `transfer_seq` in __all_transfer_task/__all_transfer_task_history means
+              // the original `transfer_seq` before transfer task execute.
+              // We should use `transfer_seq` + 1 as the result of related transfer task.
+              int64_t transfer_seq = tablet_info.transfer_seq() + 1;
+              if (OB_FAIL(tablet_ls_cache.init(
+                  tenant_id,
+                  tablet_info.tablet_id(),
+                  ls_id,
+                  now,
+                  transfer_seq))) {
+                LOG_WARN("fail to init tablet-ls cache",
+                         KR(ret), K(tenant_id), K(ls_id), K(tablet_info), K(transfer_seq));
+              } else if (OB_FAIL(tablet_ls_caches.push_back(tablet_ls_cache))) {
+                LOG_WARN("fail to push back tablet-ls cache", KR(ret), K(tablet_ls_cache));
+              }
+            } // end for
+          }
+
+        }
+      } // end while
+
+      if (OB_SUCC(ret)) {
+        if (OB_UNLIKELY(task_ids.count() != row_cnt
+            || tablet_ls_caches.count() <= 0)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("result not match", KR(ret), K(tenant_id), K(row_cnt),
+                   K(task_ids.count()), K(tablet_ls_caches.count()), K(task_ids));
+        }
+      }
+    }
+
+    } // end SMART_VAR
   }
   return ret;
 }

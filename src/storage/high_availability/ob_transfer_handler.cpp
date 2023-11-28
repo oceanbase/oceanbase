@@ -419,6 +419,7 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
   palf::LogConfigVersion config_version;
   bool is_leader = true;
   bool succ_block_tx = false;
+  bool commit_succ = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -494,15 +495,18 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
       DEBUG_SYNC(BEFORE_TRANSFER_START_COMMIT);
     }
 
+    commit_succ = OB_SUCC(ret);
     if (OB_TMP_FAIL(commit_trans_(ret, trans))) {
       LOG_WARN("failed to commit trans", K(tmp_ret), K(ret));
       if (OB_SUCCESS == ret) {
         ret = tmp_ret;
       }
+      commit_succ = false;
     }
 
     clear_prohibit_(task_info, succ_block_tx, succ_stop_medium);
   }
+
 
   if (OB_FAIL(ret)) {
     if (!is_leader) {
@@ -519,6 +523,10 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
     if (OB_FAIL(report_to_meta_table_(task_info))) {
       LOG_WARN("failed to report to meta table", K(ret), K(task_info));
     }
+  }
+
+  if (commit_succ && OB_TMP_FAIL(broadcast_tablet_location_(task_info))) {
+    LOG_WARN("failed to submit submit tablet_broadcast task", KR(tmp_ret), K(task_info));
   }
 
   if (OB_SUCCESS != (tmp_ret = record_server_event_(ret, round_, task_info))) {
@@ -2305,6 +2313,47 @@ int ObTransferHandler::get_src_ls_member_list_(
   } else if (member_list.get_member_number() <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("src ls member list number is unexpected", K(ret), K(member_list));
+  }
+  return ret;
+}
+
+int ObTransferHandler::broadcast_tablet_location_(const ObTransferTaskInfo &task_info)
+{
+  int ret = OB_SUCCESS;
+  share::ObLocationService *location_service = nullptr;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("transfer handler do not init", K(ret));
+  } else if (OB_UNLIKELY(!task_info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("task_info not valid", KR(ret), K(task_info));
+  } else if (OB_ISNULL(location_service = GCTX.location_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("location service should not be NULL", K(ret), KP(location_service));
+  } else {
+    ObTabletLocationBroadcastTask broadcast_task;
+    ObArray<ObTransferTabletInfo> tablet_info_list;
+    if (OB_FAIL(tablet_info_list.reserve(task_info.tablet_list_.count()))) {
+      LOG_WARN("failed to reserve for tablet_info_list", KR(ret), "count", task_info.tablet_list_.count());
+    }
+    // increment transfer_seq
+    FOREACH_CNT_X(tablet_info, task_info.tablet_list_, OB_SUCC(ret)) {
+      ObTransferTabletInfo new_tablet_info;
+      if (OB_FAIL(new_tablet_info.init(tablet_info->tablet_id(), tablet_info->transfer_seq() + 1))) {
+        LOG_WARN("failed to init new_table_info", KR(ret), KPC(tablet_info));
+      } else if (OB_FAIL(tablet_info_list.push_back(new_tablet_info))) {
+        LOG_WARN("failed to push_back", KR(ret), K(new_tablet_info));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(broadcast_task.init(task_info.tenant_id_,
+                                           task_info.task_id_,
+                                           task_info.dest_ls_id_,
+                                           tablet_info_list))) {
+      LOG_WARN("failed to init broadcast_task", KR(ret), K(task_info), K(tablet_info_list));
+    } else if (OB_FAIL(location_service->submit_tablet_broadcast_task(broadcast_task))) {
+      LOG_WARN("failed to submit tablet location broadcast task", KR(ret), K(broadcast_task));
+    }
   }
   return ret;
 }
