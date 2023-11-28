@@ -453,12 +453,12 @@ int ObTenantStorageCheckpointWriter::get_tablet_with_addr(
   ObSharedBlockReadInfo read_info;
   int64_t buf_len;
   char *buf = nullptr;
-  int64_t pos = 0;
   read_info.addr_ = addr_info.new_addr_;
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
 
   do {
-    ObArenaAllocator allocator("SlogCkptWriter");
+    int64_t pos = 0;
+    ObArenaAllocator allocator("SlogCkptWriter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObSharedBlockReadHandle block_handle;
     if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->acquire_tablet_from_pool(
         addr_info.tablet_pool_type_,
