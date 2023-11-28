@@ -437,7 +437,6 @@ public:
   OB_INLINE ObITable *get_table() { return table_; }
   OB_INLINE const ObITable *get_table() const { return table_; }
   OB_INLINE common::ObIAllocator *get_allocator() { return allocator_; }
-  OB_INLINE const ObStorageMetaHandle &get_meta_handle() { return meta_handle_; }
 
   int get_sstable(blocksstable::ObSSTable *&sstable);
   int get_sstable(const blocksstable::ObSSTable *&sstable) const;

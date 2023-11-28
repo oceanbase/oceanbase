@@ -300,7 +300,9 @@ int ObTenantCompactionMemPool::init()
   } else {
     chunk_allocator_.set_tenant_id(MTL_ID());
     piece_allocator_.set_tenant_id(MTL_ID());
-    max_block_num_ = MAX_MEMORY_LIMIT / ObCompactionBufferChunk::DEFAULT_BLOCK_SIZE;
+    max_block_num_ = MTL_IS_MINI_MODE()
+                   ? MAX_MEMORY_LIMIT / ObCompactionBufferChunk::DEFAULT_BLOCK_SIZE
+                   : MAX_MEMORY_LIMIT / (ObCompactionBufferChunk::DEFAULT_BLOCK_SIZE * 2);
     total_block_num_ = 0;
     is_inited_ = true;
   }

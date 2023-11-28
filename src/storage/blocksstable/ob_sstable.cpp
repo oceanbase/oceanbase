@@ -61,17 +61,17 @@ int ObSSTableMetaHandle::get_sstable_meta(const ObSSTableMeta *&sstable_meta) co
 
 
 ObSSTableMetaCache::ObSSTableMetaCache()
-  : version_(0),
-    upper_trans_version_(0),
-    max_merged_trans_version_(0),
+  : header_(0),
     data_macro_block_count_(0),
-    row_count_(0),
-    occupy_size_(0),
-    data_checksum_(0),
-    total_macro_block_count_(0),
-    reuse_macro_block_count_(0),
     nested_size_(0),
     nested_offset_(0),
+    total_macro_block_count_(0),
+    total_use_old_macro_block_count_(0),
+    row_count_(0),
+    occupy_size_(0),
+    max_merged_trans_version_(0),
+    data_checksum_(0),
+    upper_trans_version_(0),
     filled_tx_scn_(share::SCN::min_scn()),
     contain_uncommitted_row_(false)
 {
@@ -79,22 +79,24 @@ ObSSTableMetaCache::ObSSTableMetaCache()
 
 void ObSSTableMetaCache::reset()
 {
-  version_ = 0;
-  upper_trans_version_ = 0;
-  max_merged_trans_version_ = 0;
+  header_ = 0;
   data_macro_block_count_ = 0;
-  row_count_ = 0;
-  occupy_size_ = 0;
-  data_checksum_ = 0;
-  total_macro_block_count_ = 0;
-  reuse_macro_block_count_ = 0;
   nested_size_ = 0;
   nested_offset_ = 0;
-  filled_tx_scn_ = share::SCN::min_scn();
+  total_macro_block_count_ = 0;
+  total_use_old_macro_block_count_ = 0;
+  row_count_ = 0;
+  occupy_size_ = 0;
+  max_merged_trans_version_ = 0;
+  data_checksum_ = 0;
+  upper_trans_version_ = 0;
+  filled_tx_scn_.set_min();
   contain_uncommitted_row_ = false;
 }
 
-int ObSSTableMetaCache::init(blocksstable::ObSSTableMeta *meta)
+int ObSSTableMetaCache::init(
+    const blocksstable::ObSSTableMeta *meta,
+    const bool has_multi_version_row)
 {
   int ret = OB_SUCCESS;
 
@@ -102,19 +104,23 @@ int ObSSTableMetaCache::init(blocksstable::ObSSTableMeta *meta)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid argument", K(ret), KPC(meta));
   } else {
+    reset();
     version_ = SSTABLE_META_CACHE_VERSION;
-    upper_trans_version_ = meta->get_upper_trans_version();
-    max_merged_trans_version_ = meta->get_max_merged_trans_version();
-    data_macro_block_count_ = meta->get_data_macro_block_count();
+    has_multi_version_row_ = has_multi_version_row;
+    status_ = NORMAL;
+
+    data_macro_block_count_ = (int32_t) meta->get_data_macro_block_count();
+    nested_size_ = (int32_t) meta->get_macro_info().get_nested_size();
+    nested_offset_ = (int32_t) meta->get_macro_info().get_nested_offset();
+    total_macro_block_count_ = (int32_t) meta->get_total_macro_block_count();
+    total_use_old_macro_block_count_ = (int32_t) meta->get_total_use_old_macro_block_count();
     row_count_ = meta->get_row_count();
     occupy_size_ = meta->get_occupy_size();
+    max_merged_trans_version_ = meta->get_max_merged_trans_version();
     data_checksum_ = meta->get_data_checksum();
-    total_macro_block_count_ = (int32_t) meta->get_total_macro_block_count();
-    reuse_macro_block_count_ = (int32_t) meta->get_total_use_old_macro_block_count();
-    contain_uncommitted_row_ = meta->contain_uncommitted_row();
-    nested_size_ = meta->get_macro_info().get_nested_size();
-    nested_offset_ = meta->get_macro_info().get_nested_offset();
+    upper_trans_version_ = meta->get_upper_trans_version();
     filled_tx_scn_ = meta->get_filled_tx_scn();
+    contain_uncommitted_row_ = meta->contain_uncommitted_row();
   }
   return ret;
 }
@@ -123,19 +129,24 @@ OB_DEF_SERIALIZE_SIMPLE(ObSSTableMetaCache)
 {
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_ENCODE,
-    version_,
-    upper_trans_version_,
-    max_merged_trans_version_,
-    data_macro_block_count_,
-    row_count_,
-    occupy_size_,
-    data_checksum_,
-    total_macro_block_count_,
-    reuse_macro_block_count_,
-    nested_size_,
-    nested_offset_,
-    filled_tx_scn_,
-    contain_uncommitted_row_);
+      header_,
+      data_macro_block_count_,
+      nested_size_,
+      nested_offset_,
+      total_macro_block_count_,
+      total_use_old_macro_block_count_,
+      row_count_,
+      occupy_size_,
+      max_merged_trans_version_);
+
+  if (has_multi_version_row_) {
+    LST_DO_CODE(OB_UNIS_ENCODE,
+      upper_trans_version_,
+      filled_tx_scn_,
+      contain_uncommitted_row_);
+  } else {
+    LST_DO_CODE(OB_UNIS_ENCODE, data_checksum_);
+  }
   return ret;
 }
 
@@ -143,19 +154,24 @@ OB_DEF_DESERIALIZE_SIMPLE(ObSSTableMetaCache)
 {
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_DECODE,
-    version_,
-    upper_trans_version_,
-    max_merged_trans_version_,
-    data_macro_block_count_,
-    row_count_,
-    occupy_size_,
-    data_checksum_,
-    total_macro_block_count_,
-    reuse_macro_block_count_,
-    nested_size_,
-    nested_offset_,
-    filled_tx_scn_,
-    contain_uncommitted_row_);
+      header_,
+      data_macro_block_count_,
+      nested_size_,
+      nested_offset_,
+      total_macro_block_count_,
+      total_use_old_macro_block_count_,
+      row_count_,
+      occupy_size_,
+      max_merged_trans_version_);
+
+  if (has_multi_version_row_) {
+    LST_DO_CODE(OB_UNIS_DECODE,
+      upper_trans_version_,
+      filled_tx_scn_,
+      contain_uncommitted_row_);
+  } else {
+    LST_DO_CODE(OB_UNIS_DECODE, data_checksum_);
+  }
   return ret;
 }
 
@@ -163,20 +179,65 @@ OB_DEF_SERIALIZE_SIZE_SIMPLE(ObSSTableMetaCache)
 {
   int64_t len = 0;
   LST_DO_CODE(OB_UNIS_ADD_LEN,
-    version_,
-    upper_trans_version_,
-    max_merged_trans_version_,
-    data_macro_block_count_,
-    row_count_,
-    occupy_size_,
-    data_checksum_,
-    total_macro_block_count_,
-    reuse_macro_block_count_,
-    nested_size_,
-    nested_offset_,
-    filled_tx_scn_,
-    contain_uncommitted_row_);
+      header_,
+      data_macro_block_count_,
+      nested_size_,
+      nested_offset_,
+      total_macro_block_count_,
+      total_use_old_macro_block_count_,
+      row_count_,
+      occupy_size_,
+      max_merged_trans_version_);
+
+  if (has_multi_version_row_) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN,
+      upper_trans_version_,
+      filled_tx_scn_,
+      contain_uncommitted_row_);
+  } else {
+    LST_DO_CODE(OB_UNIS_ADD_LEN, data_checksum_);
+  }
   return len;
+}
+
+int ObSSTableMetaCache::deserialize_for_compat(
+    const bool has_multi_version_row,
+    const char *buf,
+    const int64_t data_len,
+    int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(nullptr == buf || data_len < 0 || data_len < pos)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else {
+    // SSTABLE_VERSION, need do a new ckpt to rewrite to SSTABLE_VERSION_V2
+    int64_t data_macro_block_count = 0;
+    int64_t nested_size = 0;
+    int64_t nested_offset = 0;
+
+    LST_DO_CODE(OB_UNIS_DECODE,
+        upper_trans_version_,
+        max_merged_trans_version_,
+        data_macro_block_count,
+        nested_size,
+        nested_offset,
+        contain_uncommitted_row_,
+        filled_tx_scn_);
+
+    if (OB_SUCC(ret)) {
+      version_ = SSTABLE_META_CACHE_VERSION;
+      has_multi_version_row_ = has_multi_version_row;
+
+      data_macro_block_count_ = static_cast<int32_t>(data_macro_block_count);
+      nested_size_ = static_cast<int32_t>(nested_size);
+      nested_offset_ = static_cast<int32_t>(nested_offset);
+
+      status_ = PADDING;
+    }
+  }
+  return ret;
 }
 
 
@@ -1161,7 +1222,7 @@ int ObSSTable::deserialize(common::ObArenaAllocator &allocator,
         LOG_WARN("fail to transform root block data", K(ret));
       } else if (OB_FAIL(check_valid_for_reading())) {
         LOG_WARN("fail to check valid for reading", K(ret));
-      } else if (OB_FAIL(meta_cache_.init(meta_))) { // for compat
+      } else if (OB_FAIL(meta_cache_.init(meta_, is_multi_version_table()))) { // for compat
         LOG_WARN("fail to init meta cache with meta", K(ret));
       }
     } else {
@@ -1245,7 +1306,6 @@ int ObSSTable::serialize_fixed_struct(char *buf, const int64_t buf_len, int64_t 
 int ObSSTable::deserialize_fixed_struct(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  int64_t old_pos = pos;
   if (OB_ISNULL(buf) || OB_UNLIKELY(data_len < 0 || data_len < pos)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
@@ -1261,22 +1321,17 @@ int ObSSTable::deserialize_fixed_struct(const char *buf, const int64_t data_len,
     } else if (OB_UNLIKELY(pos + payload_size > data_len)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("semi deserialize buffer not enough", K(ret), K(pos), K(payload_size), K(data_len));
-    } else if (version == SSTABLE_VERSION_V2) {
-      LST_DO_CODE(OB_UNIS_DECODE,
-          addr_,
-          meta_cache_);
     } else {
-      // SSTABLE_VERSION, need do a new ckpt to rewrite to SSTABLE_VERSION_V2
-      LST_DO_CODE(OB_UNIS_DECODE,
-          addr_,
-          meta_cache_.upper_trans_version_,
-          meta_cache_.max_merged_trans_version_,
-          meta_cache_.data_macro_block_count_,
-          meta_cache_.nested_size_,
-          meta_cache_.nested_offset_,
-          meta_cache_.contain_uncommitted_row_,
-          meta_cache_.filled_tx_scn_);
+      LST_DO_CODE(OB_UNIS_DECODE, addr_);
     }
+
+    if (OB_FAIL(ret)) {
+    } else if (version == SSTABLE_VERSION_V2) {
+      LST_DO_CODE(OB_UNIS_DECODE, meta_cache_);
+    } else if (OB_FAIL(meta_cache_.deserialize_for_compat(is_multi_version_table(), buf, data_len, pos))) {
+      LOG_WARN("failed to deserialize meta cache for compat", K(ret));
+    }
+
     if (OB_SUCC(ret)) {
       valid_for_reading_ = key_.is_valid();
     }
@@ -1883,7 +1938,7 @@ int ObSSTable::init_sstable_meta(
       LOG_WARN("fail to init sstable meta", K(ret));
     } else if (OB_FAIL(meta_->transform_root_block_extra_buf(*allocator))) {
       LOG_WARN("fail to transform root block data", K(ret));
-    } else if (OB_FAIL(meta_cache_.init(meta_))) {
+    } else if (OB_FAIL(meta_cache_.init(meta_, is_multi_version_table()))) {
       LOG_WARN("fail to init meta cache with meta", K(ret));
     }
   }
