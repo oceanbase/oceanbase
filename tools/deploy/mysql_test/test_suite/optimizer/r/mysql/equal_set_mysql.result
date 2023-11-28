@@ -6106,10 +6106,10 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |PX COORDINATOR             |        |1       |109         |
-|1 |└─EXCHANGE OUT DISTR       |:EX10000|1       |109         |
-|2 |  └─PX PARTITION ITERATOR  |        |1       |108         |
-|3 |    └─NESTED-LOOP JOIN     |        |1       |108         |
+|0 |PX COORDINATOR             |        |1       |115         |
+|1 |└─EXCHANGE OUT DISTR       |:EX10000|1       |114         |
+|2 |  └─PX PARTITION ITERATOR  |        |1       |113         |
+|3 |    └─NESTED-LOOP JOIN     |        |1       |113         |
 |4 |      ├─SUBPLAN SCAN       |VIEW2   |1       |95          |
 |5 |      │ └─MERGE DISTINCT   |        |1       |95          |
 |6 |      │   └─TABLE FULL SCAN|t2      |1       |95          |
@@ -6142,11 +6142,11 @@ Query Plan
 =================================================================
 |ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |PX COORDINATOR               |        |1       |124         |
-|1 |└─EXCHANGE OUT DISTR         |:EX10000|1       |123         |
-|2 |  └─PX PARTITION ITERATOR    |        |1       |123         |
-|3 |    └─NESTED-LOOP SEMI JOIN  |        |1       |123         |
-|4 |      ├─NESTED-LOOP JOIN     |        |1       |108         |
+|0 |PX COORDINATOR               |        |1       |135         |
+|1 |└─EXCHANGE OUT DISTR         |:EX10000|1       |135         |
+|2 |  └─PX PARTITION ITERATOR    |        |1       |134         |
+|3 |    └─NESTED-LOOP SEMI JOIN  |        |1       |134         |
+|4 |      ├─NESTED-LOOP JOIN     |        |1       |113         |
 |5 |      │ ├─SUBPLAN SCAN       |VIEW3   |1       |95          |
 |6 |      │ │ └─MERGE DISTINCT   |        |1       |95          |
 |7 |      │ │   └─TABLE FULL SCAN|t2      |1       |95          |
@@ -6188,12 +6188,12 @@ Query Plan
 |ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
 |0 |PX COORDINATOR                 |        |1       |102         |
-|1 |└─EXCHANGE OUT DISTR           |:EX10000|1       |101         |
+|1 |└─EXCHANGE OUT DISTR           |:EX10000|1       |102         |
 |2 |  └─PX PARTITION ITERATOR      |        |1       |100         |
 |3 |    └─NESTED-LOOP SEMI JOIN    |        |1       |100         |
 |4 |      ├─TABLE FULL SCAN        |t1      |1       |95          |
-|5 |      └─SUBPLAN SCAN           |VIEW2   |1       |108         |
-|6 |        └─NESTED-LOOP JOIN     |        |1       |108         |
+|5 |      └─SUBPLAN SCAN           |VIEW2   |1       |113         |
+|6 |        └─NESTED-LOOP JOIN     |        |1       |113         |
 |7 |          ├─SUBPLAN SCAN       |VIEW3   |1       |95          |
 |8 |          │ └─MERGE DISTINCT   |        |1       |95          |
 |9 |          │   └─TABLE FULL SCAN|t3      |1       |95          |

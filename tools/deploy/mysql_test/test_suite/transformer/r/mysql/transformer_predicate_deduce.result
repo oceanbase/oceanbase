@@ -3685,30 +3685,31 @@ create table t2 (c1 int, c2 int, primary key(c2));
 
 explain extended_noaddr select count(*) from t1 A, t2 B where A.c1 >= 5630905 and A.c1 < 5631105 and A.c1 = B.c2 and A.c2 = B.c2;
 Query Plan
-=========================================================
-|ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
----------------------------------------------------------
-|0 |SCALAR GROUP BY          |    |1       |6           |
-|1 |└─NESTED-LOOP JOIN       |    |1       |6           |
-|2 |  ├─TABLE RANGE SCAN     |A   |1       |4           |
-|3 |  └─DISTRIBUTED TABLE GET|B   |1       |18          |
-=========================================================
+====================================================
+|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
+----------------------------------------------------
+|0 |SCALAR GROUP BY     |    |1       |8           |
+|1 |└─MERGE JOIN        |    |1       |8           |
+|2 |  ├─TABLE RANGE SCAN|A   |1       |4           |
+|3 |  └─TABLE RANGE SCAN|B   |1       |4           |
+====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_COUNT(*)]), filter(nil), rowset=16
       group(nil), agg_func([T_FUN_COUNT(*)])
   1 - output(nil), filter(nil), rowset=16
-      conds(nil), nl_params_([A.c1(:0)]), use_batch=true
+      equal_conds([A.c1 = B.c2]), other_conds(nil)
+      merge_directions([ASC])
   2 - output([A.c1]), filter([A.c2 < 5631105], [A.c1 = A.c2]), rowset=16
       access([A.c1], [A.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([A.c1]), range[5630905 ; 5631105), 
       range_cond([A.c1 >= 5630905], [A.c1 < 5631105])
-  3 - output(nil), filter(nil), rowset=16
-      access([GROUP_ID]), partitions(p0)
+  3 - output([B.c2]), filter(nil), rowset=16
+      access([B.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
-      range_key([B.c2]), range(MIN ; MAX), 
-      range_cond([:0 = B.c2])
+      range_key([B.c2]), range[5630905 ; 5631105), 
+      range_cond([B.c2 < 5631105], [B.c2 >= 5630905])
 Used Hint:
 -------------------------------------
   /*+
@@ -3723,10 +3724,9 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       LEADING(@"SEL$0208448F" ("db_predicate_deduce"."A"@"SEL$1" "db_predicate_deduce"."B"@"SEL$1"))
-      USE_NL(@"SEL$0208448F" "db_predicate_deduce"."B"@"SEL$1")
+      USE_MERGE(@"SEL$0208448F" "db_predicate_deduce"."B"@"SEL$1")
       FULL(@"SEL$0208448F" "A"@"SEL$1")
       FULL(@"SEL$0208448F" "B"@"SEL$1")
-      USE_DAS(@"SEL$0208448F" "B"@"SEL$1")
       PRED_DEDUCE(@"SEL$1")
       OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
@@ -3751,7 +3751,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:1
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:1
@@ -3766,30 +3766,31 @@ create table t2 (c1 int, c2 int, index (c2));
 
 explain extended_noaddr select count(*) from t1 A, t2 B where A.c1 >= 5630905 and A.c1 < 5631105 and A.c1 = B.c2 and A.c2 = B.c2;
 Query Plan
-=================================================================
-|ID|OPERATOR                        |NAME |EST.ROWS|EST.TIME(us)|
------------------------------------------------------------------
-|0 |SCALAR GROUP BY                 |     |1       |9           |
-|1 |└─NESTED-LOOP JOIN              |     |1       |9           |
-|2 |  ├─TABLE RANGE SCAN            |A(c1)|1       |7           |
-|3 |  └─DISTRIBUTED TABLE RANGE SCAN|B(c2)|1       |18          |
-=================================================================
+=====================================================
+|ID|OPERATOR            |NAME |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SCALAR GROUP BY     |     |1       |11          |
+|1 |└─MERGE JOIN        |     |1       |11          |
+|2 |  ├─TABLE RANGE SCAN|A(c1)|1       |7           |
+|3 |  └─TABLE RANGE SCAN|B(c2)|1       |4           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_COUNT(*)]), filter(nil), rowset=16
       group(nil), agg_func([T_FUN_COUNT(*)])
   1 - output(nil), filter(nil), rowset=16
-      conds(nil), nl_params_([A.c1(:0)]), use_batch=true
+      equal_conds([A.c1 = B.c2]), other_conds(nil)
+      merge_directions([ASC])
   2 - output([A.c1]), filter([A.c2 < 5631105], [A.c1 = A.c2]), rowset=16
       access([A.__pk_increment], [A.c1], [A.c2]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[false,false], 
       range_key([A.c1], [A.__pk_increment]), range(5630905,MIN ; 5631105,MIN), 
       range_cond([A.c1 >= 5630905], [A.c1 < 5631105])
-  3 - output(nil), filter(nil), rowset=16
-      access([GROUP_ID]), partitions(p0)
+  3 - output([B.c2]), filter(nil), rowset=16
+      access([B.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
-      range_key([B.c2], [B.__pk_increment]), range(MIN ; MAX), 
-      range_cond([:0 = B.c2])
+      range_key([B.c2], [B.__pk_increment]), range(5630905,MIN ; 5631105,MIN), 
+      range_cond([B.c2 < 5631105], [B.c2 >= 5630905])
 Used Hint:
 -------------------------------------
   /*+
@@ -3804,10 +3805,9 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       LEADING(@"SEL$0208448F" ("db_predicate_deduce"."A"@"SEL$1" "db_predicate_deduce"."B"@"SEL$1"))
-      USE_NL(@"SEL$0208448F" "db_predicate_deduce"."B"@"SEL$1")
+      USE_MERGE(@"SEL$0208448F" "db_predicate_deduce"."B"@"SEL$1")
       INDEX(@"SEL$0208448F" "A"@"SEL$1" "c1")
       INDEX(@"SEL$0208448F" "B"@"SEL$1" "c2")
-      USE_DAS(@"SEL$0208448F" "B"@"SEL$1")
       PRED_DEDUCE(@"SEL$1")
       OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
@@ -3833,7 +3833,7 @@ Optimization Info:
       index_back_rows:0
       output_rows:1
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[c2, t2]
       pruned_index_name:[t2]
       stats version:0
