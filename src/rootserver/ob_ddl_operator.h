@@ -311,6 +311,9 @@ public:
       const common::ObString *ddl_stmt_str = NULL);
   int reinit_autoinc_row(const ObTableSchema &table_schema,
                          common::ObMySQLTransaction &trans);
+  // for alter table autoinc to check __all_auto_increment
+  int try_reinit_autoinc_row(const ObTableSchema &table_schema,
+                             common::ObMySQLTransaction &trans);
   int create_sequence_in_create_table(share::schema::ObTableSchema &table_schema,
                                       common::ObMySQLTransaction &trans,
                                       share::schema::ObSchemaGetterGuard &schema_guard,
