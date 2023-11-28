@@ -13,6 +13,7 @@
 #include "ob_batch_proxy.h"
 #include "share/config/ob_server_config.h"
 #include "share/ob_cluster_version.h"
+#include "share/resource_manager/ob_cgroup_ctrl.h"
 
 namespace oceanbase
 {
@@ -100,8 +101,11 @@ int ObBatchRpcProxy::post_batch(uint64_t tenant_id, const common::ObAddr &addr, 
   int ret = OB_SUCCESS;
   static BatchCallBack s_cb;
   BatchCallBack *cb = &s_cb;
-
-  ret = this->to(addr).dst_cluster_id(dst_cluster_id).by(tenant_id).as(OB_SERVER_TENANT_ID).post_packet(pkt, cb);
+  if (CLOG_BATCH_REQ == batch_type) {
+    ret = this->to(addr).dst_cluster_id(dst_cluster_id).by(tenant_id).group_id(share::OBCG_CLOG).post_packet(pkt, cb);
+  } else {
+    ret = this->to(addr).dst_cluster_id(dst_cluster_id).by(tenant_id).as(OB_SERVER_TENANT_ID).post_packet(pkt, cb);
+  }
   return ret;
 }
 

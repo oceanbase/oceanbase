@@ -3103,10 +3103,11 @@ int PalfHandleImpl::receive_batch_log(const common::ObAddr &server,
       if (OB_FAIL(iterator.get_entry(buf_each_round, buf_len_each_round, curr_lsn_each_round, curr_log_proposal_id))) {
         PALF_LOG(ERROR, "get_entry failed", K(ret), KPC(this), K(iterator), KP(buf_each_round));
       } else if (OB_FAIL(receive_log_(server, FETCH_LOG_RESP, msg_proposal_id, prev_lsn_each_round,
-            prev_log_proposal_id_each_round, curr_lsn_each_round, buf_each_round, buf_len_each_round))) {
-        PALF_LOG(WARN, "receive_log failed", K(ret), KPC(this), K(iterator), K(server), K(FETCH_LOG_RESP), K(msg_proposal_id),
-            K(prev_lsn_each_round), K(prev_log_proposal_id_each_round), K(curr_lsn_each_round), KP(buf_each_round),
-            K(buf_len_each_round));
+                                      prev_log_proposal_id_each_round, curr_lsn_each_round, buf_each_round,
+                                      buf_len_each_round))) {
+        PALF_LOG(WARN, "receive_log failed", K(ret), KPC(this), K(iterator), K(server), K(FETCH_LOG_RESP),
+            K(msg_proposal_id), K(prev_lsn_each_round), K(prev_log_proposal_id_each_round),
+            K(curr_lsn_each_round), KP(buf_each_round), K(buf_len_each_round));
       }
       prev_lsn_each_round = curr_lsn_each_round;
       prev_log_proposal_id_each_round = curr_log_proposal_id;

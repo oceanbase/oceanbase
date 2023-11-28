@@ -78,17 +78,24 @@ int ObLogRestoreScheduler::modify_thread_count_(const share::ObLogRestoreSourceT
 {
   int ret = OB_SUCCESS;
   int64_t restore_concurrency = 0;
+  const int64_t MIN_LOG_RESTORE_CONCURRENCY = 1;
+  const int64_t MAX_LOG_RESTORE_CONCURRENCY = 100;
   // for primary tenant, set restore_concurrency to 1.
   // otherwise, set restore_concurrency to tenant config.
   if (MTL_GET_TENANT_ROLE_CACHE() == share::ObTenantRole::PRIMARY_TENANT
       || !share::is_location_log_source_type(source_type)) {
-    restore_concurrency = 1;
+    restore_concurrency = MIN_LOG_RESTORE_CONCURRENCY;
   } else {
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
     if (!tenant_config.is_valid()) {
-      restore_concurrency = 1L;
+      restore_concurrency = MIN_LOG_RESTORE_CONCURRENCY;
     } else if (0 == tenant_config->log_restore_concurrency) {
-      restore_concurrency = MTL_CPU_COUNT();
+      const int64_t max_cpu = MTL_CPU_COUNT();
+      if (max_cpu <= 8) {
+        restore_concurrency = max_cpu * 4;
+      } else {
+        restore_concurrency = MAX_LOG_RESTORE_CONCURRENCY;
+      }
     } else {
       restore_concurrency = tenant_config->log_restore_concurrency;
     }
