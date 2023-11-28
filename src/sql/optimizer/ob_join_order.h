@@ -659,6 +659,10 @@ struct EstimateCostInfo {
                                 double &card,
                                 double &index_back_cost,
                                 double &cost);
+    int check_adj_index_cost_valid(double &stats_phy_query_range_row_count,
+                                   double &stats_query_range_row_count,
+                                   int64_t &opt_stats_cost_percent,
+                                   bool &is_valid) const;
     inline bool can_use_remote_estimate()
     {
       return NULL == table_opt_info_ ? false :
