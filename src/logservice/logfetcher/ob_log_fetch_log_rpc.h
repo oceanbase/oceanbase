@@ -407,7 +407,7 @@ private:
     // Use the stream identifier to delete the request structure
     int remove(RpcRequest *target);
 
-    TO_STRING_KV(K_(count), K_(head), K_(tail));
+    TO_STRING_KV(K_(count), KP_(head), KP_(tail));
   };
 
 public:
