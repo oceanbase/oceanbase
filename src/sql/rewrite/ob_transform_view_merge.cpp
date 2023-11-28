@@ -530,6 +530,11 @@ int ObTransformViewMerge::check_basic_validity(ObDMLStmt *parent_stmt,
              || child_stmt->is_values_table_query()) {
     can_be = false;
     OPT_TRACE("not a valid view");
+  } else if (!force_merge && parent_stmt->get_table_size() > 1 && child_stmt->get_table_size() > 1 &&
+              parent_stmt->get_table_size() + child_stmt->get_table_size() - 1 > 10) {
+    // More than 10 tables may result in the inability to enumerate a valid join order.
+    can_be = false;
+    OPT_TRACE("Too Many Table Items");
   } else if (OB_FAIL(ObTransformUtils::check_has_assignment(*child_stmt, has_assignment))) {
     LOG_WARN("check has assignment failed", K(ret));
   } else if (has_assignment) {
