@@ -1066,6 +1066,26 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, //ObExprJsonAppend::eval_json_array_append                    /* 631 */
   ObExprJsonObjectStar::eval_ora_json_object_star,                    /* 632 */
   NULL, //ObExprCurrentRole::eval_current_role                        /* 633 */
+  NULL, //ObExprUdtConstruct::eval_udt_construct,                     /* 634 */
+  NULL, //ObExprUDTAttributeAccess::eval_attr_access,                 /* 635 */
+  NULL, //ObExprPrivSTNumInteriorRings::eval_priv_st_numinteriorrings,/* 636 */
+  NULL, //ObExprPrivSTIsCollection::eval_priv_st_iscollection,        /* 637 */
+  NULL, //ObExprPrivSTEquals::eval_priv_st_equals,                    /* 638 */
+  NULL, //ObExprPrivSTTouches::eval_priv_st_touches,                  /* 639 */
+  NULL, //ObExprPrivSTMakeEnvelope::eval_priv_st_makeenvelope,        /* 640 */
+  NULL, //ObExprPrivSTClipByBox2D::eval_priv_st_clipbybox2d,          /* 641 */
+  NULL, //ObExprPrivSTPointOnSurface::eval_priv_st_pointonsurface,    /* 642 */
+  NULL, //ObExprPrivSTGeometryType::eval_priv_st_geometrytype,        /* 643 */
+  NULL, //ObExprSTCrosses::eval_st_crosses,                           /* 644 */
+  NULL, //ObExprSTOverlaps::eval_st_overlaps,                         /* 645 */
+  NULL, //ObExprSTUnion::eval_st_union,                               /* 646 */
+  NULL, //ObExprSTLength::eval_st_length,                             /* 647 */
+  NULL, //ObExprSTDifference::eval_st_difference,                     /* 648 */
+  NULL, //ObExprSTAsGeoJson::eval_st_asgeojson,                       /* 649 */
+  NULL, //ObExprSTCentroid::eval_st_centroid,                         /* 650 */
+  NULL, //ObExprSTSymDifference::eval_st_symdifference,               /* 651 */
+  NULL, //ObExprPrivSTAsMVTGeom::eval_priv_st_asmvtgeom,              /* 652 */
+  NULL, //ObExprPrivSTMakeValid::eval_priv_st_makevalid,              /* 653 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
