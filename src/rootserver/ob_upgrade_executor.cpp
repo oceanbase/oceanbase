@@ -305,10 +305,11 @@ int ObUpgradeExecutor::execute(
   } else if (version > 0 && !ObUpgradeChecker::check_data_version_exist(version)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("unsupported version to run upgrade job", KR(ret), K(arg));
-  } else if (OB_FAIL(set_execute_mark_())) {
-    LOG_WARN("fail to set execute mark", KR(ret));
   } else if (OB_FAIL(construct_tenant_ids_(arg.tenant_ids_, tenant_ids))) {
     LOG_WARN("fail to construct tenant_ids", KR(ret), K(arg));
+  } else if (OB_FAIL(set_execute_mark_())) {
+    LOG_WARN("fail to set execute mark", KR(ret));
+    // NOTICE: don't add any `else if` after set_execute_mark_().
   } else {
     const uint64_t tenant_id = (1 == tenant_ids.count()) ?  tenant_ids.at(0) : 0;
     const int64_t BUF_LEN = common::MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH;
