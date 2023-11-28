@@ -16,6 +16,7 @@
 #include "sql/engine/basic/ob_chunk_row_store.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "sql/engine/aggregate/ob_aggregate_processor.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -707,7 +708,14 @@ int ObHybridHistograms::build_hybrid_hist(ObAggregateProcessor::HybridHistExtraR
           if (bucket_rows > bucket_size || 0 == i || extra->get_material_row_count() - 1 == i) {
             bucket_rows = 0;
             ObObj ep_val;
-            if (OB_FAIL(row->cells()[0].to_obj(ep_val, obj_meta))) {
+            common::ObArenaAllocator tmp_alloctor("BulidHybridHist", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+            ObDatum new_datum = row->cells()[0];
+            if (obj_meta.is_lob_storage() &&
+                OB_FAIL(build_prefix_str_datum_for_lob(tmp_alloctor,
+                                                       obj_meta, row->cells()[0],
+                                                       new_datum))) {
+              LOG_WARN("failed to build prefix str datum for lob", K(ret));
+            } else if (OB_FAIL(new_datum.to_obj(ep_val, obj_meta))) {
               LOG_WARN("failed to obj", K(ret));
             } else if (OB_FAIL(ob_write_obj(*alloc, ep_val, ep_val))) {
               LOG_WARN("failed to write obj", K(ret), K(ep_val));
@@ -748,6 +756,42 @@ int ObHybridHistograms::build_hybrid_hist(ObAggregateProcessor::HybridHistExtraR
     pop_freq_ = pop_freq;
     LOG_TRACE("succeed to build hybrid histogram", K(bucket_num), K(bucket_size), K(total_count),
                             K(pop_count), K(pop_freq), K(num_distinct), K(hybrid_buckets_.count()));
+  }
+  return ret;
+}
+
+int ObHybridHistograms::build_prefix_str_datum_for_lob(ObIAllocator &allocator,
+                                                       const ObObjMeta &obj_meta,
+                                                       const ObDatum &old_datum,
+                                                       ObDatum &new_datum)
+{
+  int ret = OB_SUCCESS;
+  if (!obj_meta.is_lob_storage()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(obj_meta));
+  } else {
+    ObObj obj;
+    ObString str;
+    bool can_reuse = false;
+    if (OB_FAIL(old_datum.to_obj(obj, obj_meta))) {
+      LOG_WARN("failed to obj", K(ret));
+    } else if (OB_FAIL(ObDbmsStatsUtils::check_text_can_reuse(obj, can_reuse))) {
+      LOG_WARN("failed to check text obj can reuse", K(ret), K(obj));
+    } else if (can_reuse) {
+      new_datum = old_datum;
+    } else if (OB_FAIL(sql::ObTextStringHelper::read_prefix_string_data(&allocator, obj, str, OPT_STATS_MAX_VALUE_CHAR_LEN))) {
+      LOG_WARN("failed to read prefix string data", K(ret));
+    } else {
+      ObTextStringDatumResult text_result(obj_meta.get_type(), obj_meta.has_lob_header(), &new_datum);
+      if (OB_FAIL(text_result.init(str.length(), &allocator))) {
+        LOG_WARN("init lob result failed");
+      } else if (OB_FAIL(text_result.append(str.ptr(), str.length()))) {
+        LOG_WARN("failed to append realdata", K(ret), K(str), K(text_result));
+      } else {
+        text_result.set_result();
+        LOG_TRACE("Succeed to build_prefix_str_datum_for_lob", K(obj), K(str));
+      }
+    }
   }
   return ret;
 }

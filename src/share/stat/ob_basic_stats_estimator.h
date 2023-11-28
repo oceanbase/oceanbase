@@ -91,6 +91,13 @@ public:
   static int gen_tablet_list(const ObTableStatParam &param,
                              ObSqlString &tablet_list);
 
+  static int do_estimate_block_count(ObExecContext &ctx,
+                                     const uint64_t tenant_id,
+                                     const uint64_t table_id,
+                                     const ObIArray<ObTabletID> &tablet_ids,
+                                     const ObIArray<ObObjectID> &partition_ids,
+                                     ObIArray<EstimateBlockRes> &estimate_res);
+
   static int do_estimate_block_count_and_row_count(ObExecContext &ctx,
                                                    const uint64_t tenant_id,
                                                    const uint64_t table_id,

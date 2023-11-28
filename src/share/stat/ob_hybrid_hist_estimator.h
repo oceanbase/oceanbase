@@ -77,6 +77,10 @@ public:
                         int64_t pop_count,
                         int64_t pop_freq,
                         const ObObjMeta &obj_meta);
+  static int build_prefix_str_datum_for_lob(ObIAllocator &allocator,
+                                            const ObObjMeta &obj_meta,
+                                            const ObDatum &old_datum,
+                                            ObDatum &new_datum);
   TO_STRING_KV(K_(total_count),
                K_(num_distinct),
                K_(pop_count),

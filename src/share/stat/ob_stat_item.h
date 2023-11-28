@@ -131,7 +131,7 @@ public:
     ObStatColItem(param, stat)
   {}
   virtual int gen_expr(char *buf, const int64_t buf_len, int64_t &pos) override;
-  virtual int decode(ObObj &obj) override;
+  virtual int decode(ObObj &obj, ObIAllocator &allocator) override;
 };
 
 class ObStatMinValue : public ObStatColItem
@@ -144,7 +144,7 @@ public:
   {}
 
   virtual int gen_expr(char *buf, const int64_t buf_len, int64_t &pos) override;
-  virtual int decode(ObObj &obj) override;
+  virtual int decode(ObObj &obj, ObIAllocator &allocator) override;
 };
 
 class ObStatNumNull : public ObStatColItem

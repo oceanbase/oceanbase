@@ -153,9 +153,9 @@ int ObBasicStatsEstimator::estimate_block_count(ObExecContext &ctx,
   } else if (param.part_level_ == share::schema::PARTITION_LEVEL_TWO &&
              OB_FAIL(generate_first_part_idx_map(param.all_part_infos_, first_part_idx_map))) {
     LOG_WARN("failed to generate first part idx map", K(ret));
-  } else if (OB_FAIL(do_estimate_block_count_and_row_count(ctx, param.tenant_id_, table_id, tablet_ids,
-                                                           partition_ids, estimate_result))) {
-    LOG_WARN("failed to do estimate block count and row count", K(ret));
+  } else if (OB_FAIL(do_estimate_block_count(ctx, param.tenant_id_, table_id, tablet_ids,
+                                             partition_ids, estimate_result))) {
+    LOG_WARN("failed to do estimate block count", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < estimate_result.count(); ++i) {
       BolckNumPair block_num_pair;
@@ -213,12 +213,32 @@ int ObBasicStatsEstimator::estimate_block_count(ObExecContext &ctx,
   return ret;
 }
 
+int ObBasicStatsEstimator::do_estimate_block_count(ObExecContext &ctx,
+                                                   const uint64_t tenant_id,
+                                                   const uint64_t table_id,
+                                                   const ObIArray<ObTabletID> &tablet_ids,
+                                                   const ObIArray<ObObjectID> &partition_ids,
+                                                   ObIArray<EstimateBlockRes> &estimate_res)
+{
+  int ret = OB_SUCCESS;
+  int64_t retry_cnt = 0;
+  do {
+    if (OB_FAIL(do_estimate_block_count_and_row_count(ctx, tenant_id, table_id, tablet_ids,
+                                                      partition_ids, estimate_res))) {
+      DAS_CTX(ctx).get_location_router().refresh_location_cache_by_errno(true, ret);
+      ++ retry_cnt;
+      LOG_WARN("failed to do estimate block count and row count", K(ret));
+    }
+  } while (OB_FAIL(ret) && retry_cnt < 2);//retry one time if failed to estimate.
+  return ret;
+}
+
 int ObBasicStatsEstimator::do_estimate_block_count_and_row_count(ObExecContext &ctx,
-                                                                const uint64_t tenant_id,
-                                                                const uint64_t table_id,
-                                                                const ObIArray<ObTabletID> &tablet_ids,
-                                                                const ObIArray<ObObjectID> &partition_ids,
-                                                                ObIArray<EstimateBlockRes> &estimate_res)
+                                                                 const uint64_t tenant_id,
+                                                                 const uint64_t table_id,
+                                                                 const ObIArray<ObTabletID> &tablet_ids,
+                                                                 const ObIArray<ObObjectID> &partition_ids,
+                                                                 ObIArray<EstimateBlockRes> &estimate_res)
 {
   int ret = OB_SUCCESS;
   common::ObSEArray<ObCandiTabletLoc, 4> candi_tablet_locs;
@@ -945,14 +965,17 @@ int ObBasicStatsEstimator::get_need_stats_table_cnt(ObExecContext &ctx,
   int ret = OB_SUCCESS;
   ObSqlString select_sql;
   if (OB_FAIL(select_sql.append_fmt(
-          "select count(1) as cnt from (select m.table_id from " \
+          "select count(1) as cnt from (select distinct m.table_id from " \
           "%s m left join %s up on m.table_id = up.table_id and up.pname = 'STALE_PERCENT' join %s gp on gp.sname = 'STALE_PERCENT' " \
           "where (case when (m.inserts+m.updates+m.deletes) = 0 then 0 "
           "else ((m.inserts+m.updates+m.deletes) - (m.last_inserts+m.last_updates+m.last_deletes)) * 1.0 / (m.inserts+m.updates+m.deletes) > " \
-          "(CASE WHEN up.valchar IS NOT NULL THEN cast(up.valchar as signed) * 1.0 / 100 ELSE Cast(gp.spare4 AS signed) * 1.0 / 100 end) end)) ",
+          "(CASE WHEN up.valchar IS NOT NULL THEN cast(up.valchar as signed) * 1.0 / 100 ELSE Cast(gp.spare4 AS signed) * 1.0 / 100 end) end) " \
+          "UNION select distinct table_id from %s where table_id not in (select table_id from %s)) ",
           share::OB_ALL_MONITOR_MODIFIED_TNAME,
           share::OB_ALL_OPTSTAT_USER_PREFS_TNAME,
-          share::OB_ALL_OPTSTAT_GLOBAL_PREFS_TNAME))) {
+          share::OB_ALL_OPTSTAT_GLOBAL_PREFS_TNAME,
+          share::OB_ALL_MONITOR_MODIFIED_TNAME,
+          share::OB_ALL_TABLE_STAT_TNAME))) {
     LOG_WARN("failed to append fmt", K(ret));
   } else {
     ObCommonSqlProxy *sql_proxy = ctx.get_sql_proxy();
@@ -999,13 +1022,16 @@ int ObBasicStatsEstimator::get_need_stats_tables(ObExecContext &ctx,
   if (OB_FAIL(select_sql.append_fmt(
           "select distinct table_id from (select m.table_id from " \
           "%s m left join %s up on m.table_id = up.table_id and up.pname = 'STALE_PERCENT' join %s gp on gp.sname = 'STALE_PERCENT' " \
-          "where (case when (m.inserts+m.updates+m.deletes) = 0 then 0 "
+          "where (case when (m.inserts+m.updates+m.deletes) = 0 then 0 "\
           "else ((m.inserts+m.updates+m.deletes) - (m.last_inserts+m.last_updates+m.last_deletes)) * 1.0 / (m.inserts+m.updates+m.deletes) > " \
-          "(CASE WHEN up.valchar IS NOT NULL THEN cast(up.valchar as signed) * 1.0 / 100 ELSE Cast(gp.spare4 AS signed) * 1.0 / 100 end) end)) "
+          "(CASE WHEN up.valchar IS NOT NULL THEN cast(up.valchar as signed) * 1.0 / 100 ELSE Cast(gp.spare4 AS signed) * 1.0 / 100 end) end) "\
+          " UNION ALL select table_id from %s where table_id not in (select table_id from %s)) "
           "ORDER BY table_id DESC limit %ld",
           share::OB_ALL_MONITOR_MODIFIED_TNAME,
           share::OB_ALL_OPTSTAT_USER_PREFS_TNAME,
           share::OB_ALL_OPTSTAT_GLOBAL_PREFS_TNAME,
+          share::OB_ALL_MONITOR_MODIFIED_TNAME,
+          share::OB_ALL_TABLE_STAT_TNAME,
           slice_cnt))) {
     LOG_WARN("failed to append fmt", K(ret));
   } else {
