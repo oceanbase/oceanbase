@@ -103,7 +103,7 @@ int ObDBMSSchedJobTask::scheduler(ObDBMSSchedJobKey *job_key)
     LOG_WARN("dbms sched job task not init", K(ret));
   } else if (OB_ISNULL(job_key)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("NULL ptr for job id", K(ret), KPC(job_key));
+    LOG_WARN("NULL ptr for job id", K(ret));
   } else if (!job_key->is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("job id is invalid", K(ret), KPC(job_key));
@@ -129,6 +129,7 @@ int ObDBMSSchedJobTask::add_new_job(ObDBMSSchedJobKey *new_job_key)
     ObDBMSSchedJobKey *replace_job_key = NULL;
     OZ (wait_vector_.replace(new_job_key, iter, compare_job_key, equal_job_key, replace_job_key));
   }
+  /*
   LOG_DEBUG("JobKEYS INFO HEADER ==== ", KPC(new_job_key), K(wait_vector_.count()));
   int i = 0;
   for (WaitVectorIterator iter = wait_vector_.begin();
@@ -136,6 +137,7 @@ int ObDBMSSchedJobTask::add_new_job(ObDBMSSchedJobKey *new_job_key)
     ObDBMSSchedJobKey *job = *iter;
     LOG_DEBUG("JobKEYS INFO ELEMENT ====", K(i), KPC(job));
   }
+  */
   return ret;
 }
 
@@ -283,9 +285,9 @@ int ObDBMSSchedJobMaster::scheduler()
           if (OB_SUCCESS != (tmp_ret = scheduler_task_.wait_vector().remove(scheduler_task_.wait_vector().begin()))) {
             LOG_WARN("fail to remove job_id from sorted vector", K(ret));
           } else if (OB_SUCCESS != (tmp_ret = scheduler_job(job_key))) {
-            LOG_WARN("fail to scheduler single dbms sched job", K(ret), K(tmp_ret), KPC(job_key));
+            LOG_WARN("fail to scheduler single dbms sched job", K(ret), K(tmp_ret));
           } else {
-            LOG_INFO("success to scheduler single dbms sched job", K(ret), K(tmp_ret), KPC(job_key));
+            LOG_INFO("success to scheduler single dbms sched job", K(ret), K(tmp_ret));
           }
         }
       }
