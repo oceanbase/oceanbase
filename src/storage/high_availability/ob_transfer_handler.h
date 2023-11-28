@@ -236,8 +236,8 @@ private:
       const uint64_t tenant_id,
       const share::ObLSID &ls_id);
   int record_server_event_(const int32_t ret, const int64_t round, const share::ObTransferTaskInfo &task_info) const;
-  int clear_prohibit_medium_flag_(const share::ObLSID &ls_id);
-  int stop_ls_schedule_medium_(const share::ObLSID &ls_id, bool &succ_stop);
+  int clear_prohibit_medium_flag_(const ObIArray<ObTabletID> &tablet_ids);
+  int stop_tablets_schedule_medium_(const ObIArray<ObTabletID> &tablet_ids, bool &succ_stop);
   int get_next_tablet_info_(
       const share::ObLSID &dest_ls_id,
       const ObTransferTabletInfo &transfer_tablet_info,
@@ -245,6 +245,7 @@ private:
       obrpc::ObCopyTabletInfo &tablet_info);
   int clear_prohibit_(
       const share::ObTransferTaskInfo &task_info,
+      const ObIArray<ObTabletID> &tablet_ids,
       const bool is_block_tx,
       const bool is_medium_stop);
   int get_config_version_(

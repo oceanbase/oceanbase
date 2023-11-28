@@ -397,7 +397,7 @@ struct ObTransferTaskInfo final
   bool is_valid() const;
   int convert_from(const uint64_t tenant_id, const ObTransferTask &task);
   int assign(const ObTransferTaskInfo &task_info);
-
+  int fill_tablet_ids(ObIArray<ObTabletID> &tablet_ids) const;
   TO_STRING_KV(K_(tenant_id), K_(src_ls_id), K_(dest_ls_id), K_(task_id), K_(trace_id),
       K_(status), K_(table_lock_owner_id), K_(table_lock_tablet_list), K_(tablet_list),
       K_(start_scn), K_(finish_scn), K_(result));
