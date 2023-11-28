@@ -591,7 +591,7 @@ int JtFuncHelpler::cast_to_otimstamp(ObIJsonBase *j_base,
   INIT_SUCC(ret);
   int64_t val;
 
-  oceanbase::common::ObTimeConvertCtx cvrt_ctx(NULL, true);
+  oceanbase::common::ObTimeConvertCtx cvrt_ctx(NULL, dst_type == ObTimestampType);
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
@@ -613,12 +613,7 @@ int JtFuncHelpler::cast_to_otimstamp(ObIJsonBase *j_base,
   } else if (OB_FAIL(j_base->to_datetime(val, &cvrt_ctx))) {
     LOG_WARN("wrapper to datetime failed.", K(ret), K(*j_base));
   } else if (dst_type == ObTimestampType) {
-    int64_t t_out_val = 0;
-    ret = ObTimeConverter::datetime_to_timestamp(val,
-                                                cvrt_ctx.tz_info_,
-                                                t_out_val);
-    ret = OB_ERR_UNEXPECTED_TZ_TRANSITION == ret ? OB_INVALID_DATE_VALUE : ret;
-    out_val.time_us_ = t_out_val;
+    out_val.time_us_ = val;
     out_val.time_ctx_.tail_nsec_ = 0;
   } else {
     if (OB_FAIL(ObTimeConverter::odate_to_otimestamp(val, cvrt_ctx.tz_info_, dst_type, out_val))) {
