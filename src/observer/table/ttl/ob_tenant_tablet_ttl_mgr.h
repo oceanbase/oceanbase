@@ -26,7 +26,8 @@ namespace table
 struct ObTTLTaskCtx
 {
 public :
-  ObTTLTaskCtx() : task_info_(),
+  ObTTLTaskCtx() : rowkey_cp_allcoator_(ObMemAttr(MTL_ID(), "TTLTaskCtx")),
+                   task_info_(),
                    task_status_(common::ObTTLTaskStatus::OB_TTL_TASK_INVALID),
                    ttl_para_(),
                    task_start_time_(OB_INVALID_ID),
@@ -39,10 +40,13 @@ public :
     return task_info_.is_valid() && ttl_para_.is_valid();
   }
 
+  int deep_copy_rowkey(const ObString &rowkey);
+
   TO_STRING_KV(K_(task_info), K_(task_status), K_(ttl_para), K_(task_start_time),
                K_(last_modify_time), K_(failure_times), K_(is_dirty), K_(need_refresh));
 
 public:
+  common::ObArenaAllocator  rowkey_cp_allcoator_; // for rowkey copy in ObTTLTaskInfo
   ObTTLTaskInfo    task_info_;
   common::ObTTLTaskStatus task_status_;
   table::ObTTLTaskParam   ttl_para_;
@@ -78,8 +82,7 @@ class ObTenantTabletTTLMgr : public logservice::ObIReplaySubHandler,
 public:
   friend ObTTLTaskCtx;
   ObTenantTabletTTLMgr()
-  : allocator_(ObMemAttr(MTL_ID(), "TenantTTLMgr")),
-    tenant_id_(common::OB_INVALID_TENANT_ID),
+  : tenant_id_(common::OB_INVALID_TENANT_ID),
     schema_service_(NULL),
     sql_proxy_(NULL),
     is_inited_(false),
@@ -180,21 +183,17 @@ private:
     }
     void destory()
     {
+      for (TabletTaskMap::const_iterator iter = tablet_task_map_.begin(); iter != tablet_task_map_.end();
+        ++iter) {
+        ObTTLTaskCtx *ctx = iter->second;
+        if (OB_NOT_NULL(ctx)) {
+          ctx->~ObTTLTaskCtx();
+        }
+      }
       tablet_task_map_.destroy();
       allocator_.reset();
     }
-    void reuse()
-    {
-     tablet_task_map_.reuse();
-     allocator_.reuse();
-     is_usr_trigger_ = false;
-     need_check_ = false;
-     is_dirty_ = false;
-     ttl_continue_ = true;
-     state_ = common::ObTTLTaskStatus::OB_TTL_TASK_INVALID;
-     is_finished_ = true;
-    }
-
+    void reuse();
     TO_STRING_KV(K_(tenant_id),
                  K_(task_id),
                  K_(is_usr_trigger),
@@ -265,7 +264,6 @@ private:
   static const int64_t DEFAULT_TABLET_PAIR_SIZE = 1024;
   static const int64_t DEFAULT_PARAM_BUCKET_SIZE = 200;
   static const int64_t TTL_NORMAL_TIME_THRESHOLD = 3*1000*1000; // 3s
-  common::ObArenaAllocator allocator_;
   uint64_t tenant_id_;
   ObTTLTenantInfo local_tenant_task_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
