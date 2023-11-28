@@ -689,7 +689,10 @@ int ObSSTableIndexBuilder::init_meta_iter(ObMacroMetaIter &iter)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "invalid sstable builder", K(ret), K_(is_inited));
-  } else if (FALSE_IT(sort_roots())) {
+  } else if (OB_FAIL(trim_empty_roots())) {
+    STORAGE_LOG(WARN, "fail to trim empty roots", K(ret));
+  } else if (OB_FAIL(sort_roots())) {
+    STORAGE_LOG(WARN, "fail to sort roots", K(ret));
   } else if (OB_FAIL(iter.init(roots_, index_store_desc_.get_desc().is_cg()))) {
     STORAGE_LOG(WARN, "fail to init iter", K(ret));
   }
