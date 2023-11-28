@@ -90,8 +90,10 @@ int ObTenantTabletTTLMgr::switch_to_leader()
     } else {
       has_start_ = true;
     }
-  } else {
-    resume();
+  }
+  if (OB_SUCC(ret)) {
+    ATOMIC_STORE(&is_leader_, true);
+    ATOMIC_STORE(&need_do_for_switch_, true);
   }
   const int64_t cost_us = ObTimeUtility::current_time() - start_time_us;
   FLOG_INFO("tenant_tablet_ttl_mgr: finish to switch_to_leader", KR(ret), K_(tenant_id), KPC_(ls), K(cost_us));
@@ -125,20 +127,10 @@ void ObTenantTabletTTLMgr::inner_switch_to_follower()
 {
   FLOG_INFO("tenant_tablet_ttl_mgr: begin to switch_to_follower", K_(tenant_id), KPC_(ls));
   const int64_t start_time_us = ObTimeUtility::current_time();
-  pause();
-  ATOMIC_STORE(&need_reuse_for_switch_, true);
+  ATOMIC_STORE(&is_leader_, false);
+  ATOMIC_STORE(&need_do_for_switch_, true);
   const int64_t cost_us = ObTimeUtility::current_time() - start_time_us;
   FLOG_INFO("tenant_tablet_ttl_mgr: finish to switch_to_follower", K_(tenant_id), KPC_(ls), K(cost_us));
-}
-
-void ObTenantTabletTTLMgr::resume()
-{
-  is_paused_ = false;
-}
-
-void ObTenantTabletTTLMgr::pause()
-{
-  is_paused_ = true;
 }
 
 int ObTenantTabletTTLMgr::start()
@@ -149,7 +141,7 @@ int ObTenantTabletTTLMgr::start()
     ret = OB_NOT_INIT;
     LOG_WARN("tablet ttl mgr not init", KR(ret));
   } else if (OB_FAIL(TG_START(tg_id_))) {
-    LOG_WARN("failed to create ObTenantTabletTTLMgr thread", K(ret), K_(tg_id));
+    LOG_WARN("fail to create ObTenantTabletTTLMgr thread", K(ret), K_(tg_id));
   } else if (OB_FAIL(TG_SCHEDULE(tg_id_, periodic_task_, periodic_delay_, true))) {
     LOG_WARN("fail to schedule periodic task", KR(ret), K_(tg_id));
   } else {
@@ -172,9 +164,9 @@ void ObTenantTabletTTLMgr::stop()
     TG_STOP(tg_id_);
     is_timer_start_ = false;
     common::ObSpinLockGuard guard(lock_);
-    // set is_paused_ to true to ensure after stop, not new TTL dag task will be generate,
+    // set is_leader_ to false to ensure after stop, not new TTL dag task will be generate,
     // i.e., dag_ref won't increase anymore
-    is_paused_ = true;
+    ATOMIC_STORE(&is_leader_, false);
   }
   FLOG_INFO("tenant_tablet_ttl_mgr: finish to stop", K(ret), K_(is_timer_start), K_(tenant_id), KPC_(ls));
 }
@@ -206,7 +198,7 @@ int ObTenantTabletTTLMgr::check_and_handle_event()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet ttl manager not init", KR(ret));
-  } else if (is_paused_) {
+  } else if (!is_leader_) {
     // do nothing, not leader
   } else {
     if (OB_FAIL(check_schema_version())) {
@@ -255,7 +247,10 @@ void ObTenantTabletTTLMgr::check_ttl_tenant_state()
     for (tablet_task_iter iter = local_tenant_task_.tablet_task_map_.begin();
             OB_SUCC(ret) && !tenant_dirty && iter != local_tenant_task_.tablet_task_map_.end(); ++iter) {
       ctx = iter->second;
-      if (OB_ISNULL(ctx)) {
+      if (need_skip_run()) {
+        ret = OB_EAGAIN;
+        FLOG_INFO("skip this run cuz of leader switch", KR(ret), K_(is_leader), K_(need_do_for_switch));
+      } else if (OB_ISNULL(ctx)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fatal err, ttl ctx in map is null", K(local_tenant_task_.tenant_id_));
       } else {
@@ -368,16 +363,21 @@ int ObTenantTabletTTLMgr::generate_batch_tablet_task(ObIArray<share::ObTabletTab
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < tablet_pairs.count(); i++) {
-    ObTTLTaskInfo task_info;
-    uint64_t table_id = tablet_pairs.at(i).get_table_id();
-    task_info.tablet_id_ = tablet_pairs.at(i).get_tablet_id();
-    task_info.tenant_id_ = tenant_id_;
-    task_info.table_id_ = table_id;
-    ObTTLTaskParam param;
-    if (OB_FAIL(param_map.get_refactored(table_id, param))) {
-      LOG_WARN("fail to get ttl param", KR(ret), K(table_id));
-    } else if (OB_FAIL(generate_one_tablet_task(task_info, param))) {
-      LOG_WARN("fail to generate task", KR(ret), K(task_info), K(param));
+    if (need_skip_run()) {
+      ret = OB_EAGAIN;
+      FLOG_INFO("skip this run cuz of leader switch", KR(ret), K_(is_leader), K_(need_do_for_switch));
+    } else {
+      ObTTLTaskInfo task_info;
+      uint64_t table_id = tablet_pairs.at(i).get_table_id();
+      task_info.tablet_id_ = tablet_pairs.at(i).get_tablet_id();
+      task_info.tenant_id_ = tenant_id_;
+      task_info.table_id_ = table_id;
+      ObTTLTaskParam param;
+      if (OB_FAIL(param_map.get_refactored(table_id, param))) {
+        LOG_WARN("fail to get ttl param", KR(ret), K(table_id));
+      } else if (OB_FAIL(generate_one_tablet_task(task_info, param))) {
+        LOG_WARN("fail to generate task", KR(ret), K(task_info), K(param));
+      }
     }
   }
 
@@ -534,26 +534,36 @@ int ObTenantTabletTTLMgr::check_and_generate_tablet_tasks()
 
 void OBTTLTimerPeriodicTask::runTimerTask()
 {
-  int ret = OB_SUCCESS;
   ObCurTraceId::init(GCONF.self_addr_);
   ObTimeGuard guard("OBTTLTimerPeriodicTask::runTimerTask", TTL_TIME_TASKER_THRESHOLD);
+  tablet_ttl_mgr_.run_task();
+}
+
+void ObTenantTabletTTLMgr::run_task()
+{
+  int ret = OB_SUCCESS;
   if (!ObKVFeatureModeUitl::is_ttl_enable()) {
     // do nothing
     LOG_DEBUG("ttl is disable");
+  } else if (ATOMIC_BCAS(&need_do_for_switch_, true, false)) {
+    // reuse and skip task once
+    common::ObSpinLockGuard guard(lock_); // need lock for reuse tenant task
+    local_tenant_task_.reuse();
+    FLOG_INFO("resue local tenant task cuz of switch leader");
   } else if (common::ObTTLUtil::check_can_do_work()) {
-    if (OB_FAIL(tablet_ttl_mgr_.check_tenant_memory())) {
+    if (OB_FAIL(check_tenant_memory())) {
       LOG_WARN("fail to check all tenant memory", KR(ret));
     }
 
     // explicit cover error code
     ret = OB_SUCCESS;
-    if (OB_FAIL(tablet_ttl_mgr_.reload_tenant_task())) {
+    if (OB_FAIL(reload_tenant_task())) {
       LOG_WARN("fail to reload tenant task", KR(ret));
     }
 
     // explicit cover error code
     ret = OB_SUCCESS;
-    if (OB_FAIL(tablet_ttl_mgr_.check_and_handle_event())) {
+    if (OB_FAIL(check_and_handle_event())) {
       LOG_WARN("fail to scan and handle all tenant event", KR(ret));
     }
   }
@@ -666,7 +676,10 @@ int ObTenantTabletTTLMgr::handle_all_tablet_event(common::ObSArray<ObTabletID>& 
     for (tablet_task_iter iter = local_tenant_task_.tablet_task_map_.begin();
         iter != local_tenant_task_.tablet_task_map_.end(); ++iter) {
       ctx = iter->second;
-      if (OB_ISNULL(ctx)) {
+      if (need_skip_run()) {
+        ret = OB_EAGAIN;
+        FLOG_INFO("skip this run cuz of leader switch", KR(ret), K_(is_leader), K_(need_do_for_switch));
+      } else if (OB_ISNULL(ctx)) {
         ret = OB_ERR_NULL_VALUE;
         LOG_WARN("fatal err, ttl ctx in map is null", KR(ret));
       } else if (OB_FAIL(handle_one_tablet_event(ctx))) {
@@ -754,7 +767,7 @@ int ObTenantTabletTTLMgr::check_tenant_memory()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet ttl mgr not init", KR(ret));
-  } else if (!is_paused_) {
+  } else if (is_leader_) {
     common::ObSpinLockGuard guard(lock_);
     bool last_ttl_continue = local_tenant_task_.ttl_continue_;
     int64_t total_memstore_used = 0;
@@ -845,7 +858,10 @@ int ObTenantTabletTTLMgr::sync_all_dirty_task(ObIArray<ObTabletID>& dirty_tasks)
   ObTimeGuard guard("ObTenantTabletTTLMgr::sync_all_dirty_record", TTL_NORMAL_TIME_THRESHOLD);
   for (int i = 0; OB_SUCC(ret) && i < dirty_tasks.count() && !tenant_state_changed; i++) {
     // tenant_state_changed is true means that tenant status is changed, we should refresh our status first
-    if (OB_FAIL(sync_sys_table(dirty_tasks.at(i), tenant_state_changed))) {
+    if (need_skip_run()) {
+      ret = OB_EAGAIN;
+      FLOG_INFO("skip this run cuz of leader switch", KR(ret), K_(is_leader), K_(need_do_for_switch));
+    } else if (OB_FAIL(sync_sys_table(dirty_tasks.at(i), tenant_state_changed))) {
       LOG_WARN("fail to sync sys table", KR(ret));
     }
   }
@@ -1113,7 +1129,7 @@ bool ObTenantTabletTTLMgr::can_schedule_tenant(const ObTTLTenantInfo &tenant_inf
 
 bool ObTenantTabletTTLMgr::can_schedule_task(const ObTTLTaskCtx &ttl_task)
 {
-  return !is_paused_ && ttl_task.task_status_ == OB_TTL_TASK_PENDING;
+  return is_leader_ && ttl_task.task_status_ == OB_TTL_TASK_PENDING;
 }
 
 int ObTenantTabletTTLMgr::try_schedule_remaining_tasks(const ObTTLTaskCtx *current_ctx)
@@ -1125,7 +1141,10 @@ int ObTenantTabletTTLMgr::try_schedule_remaining_tasks(const ObTTLTaskCtx *curre
                             iter != local_tenant_task_.tablet_task_map_.end()
                             && OB_SUCC(ret); ++iter) {
       ctx = iter->second;
-      if (OB_ISNULL(ctx)) {
+      if (need_skip_run()) {
+        ret = OB_EAGAIN;
+        FLOG_INFO("skip this run cuz of leader switch", KR(ret), K_(is_leader), K_(need_do_for_switch));
+      } else if (OB_ISNULL(ctx)) {
         ret = OB_ERR_NULL_VALUE;
         LOG_ERROR("fatal err, ttl ctx in map is null", KR(ret), K(local_tenant_task_.tenant_id_));
       } else if (current_ctx == ctx) {
@@ -1237,17 +1256,13 @@ int ObTenantTabletTTLMgr::refresh_tablet_task(ObTTLTaskCtx &ttl_task, bool refre
 int ObTenantTabletTTLMgr::reload_tenant_task()
 {
   common::ObSpinLockGuard guard(lock_);
-  if (ATOMIC_BCAS(&need_reuse_for_switch_, true, false)) {
-    local_tenant_task_.reuse();
-    FLOG_INFO("resue local tenant task cuz of switch to follower");
-  }
   int ret = OB_SUCCESS;
   ObTTLStatus tenant_task;
   ObTTLTaskStatus expected_state;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (is_paused_) {
+  } else if (!is_leader_) {
     // do nothing
   } else if (OB_FAIL(ObTTLUtil::read_tenant_ttl_task(tenant_id_, *sql_proxy_, tenant_task))) {
     if (OB_ITER_END == ret) {
@@ -1279,7 +1294,7 @@ int ObTenantTabletTTLMgr::reload_tenant_task()
     local_tenant_task_.state_ = expected_state;
     local_tenant_task_.is_dirty_ = true;
   } else {/* task status not change, do nothing */}
-  FLOG_INFO("finish reload tenant task", K(local_tenant_task_), K(tenant_task), K(is_paused_));
+  FLOG_INFO("finish reload tenant task", K(local_tenant_task_), K(tenant_task), K_(is_leader));
   return ret;
 }
 

@@ -95,7 +95,7 @@ class ObTTLTaskScheduler : public common::ObTimerTask
 public:
   ObTTLTaskScheduler()
   : del_ten_arr_(), sql_proxy_(nullptr), is_inited_(false), periodic_launched_(false),
-    need_reload_(true), is_paused_(false)
+    need_reload_(true), is_leader_(true), need_do_for_switch_(true)
   {}
   ~ObTTLTaskScheduler() {}
 
@@ -111,7 +111,7 @@ public:
   void runTimerTask() override;
 
   int try_add_periodic_task();
-  void set_need_reload(bool need_reload) { need_reload_ = need_reload; }
+  void set_need_reload(bool need_reload) { ATOMIC_STORE(&need_reload_, need_reload); }
 
   void pause();
   void resume();
@@ -149,6 +149,7 @@ private:
   int check_all_tablet_finished(bool &all_finished);
   int check_tablet_table_finished(common::ObIArray<share::ObTabletTablePair> &pairs, bool &all_finished);
   int move_all_task_to_history_table(bool need_cancel);
+  OB_INLINE bool need_skip_run() { return ATOMIC_LOAD(&need_do_for_switch_); }
 private:
   static const int64_t TBALE_CHECK_BATCH_SIZE = 200;
   static const int64_t TBALET_CHECK_BATCH_SIZE = 1024;
@@ -166,8 +167,9 @@ private:
   bool need_reload_;
   lib::ObMutex mutex_;
   ObArray<share::ObTabletTablePair> tablet_table_pairs_;
-  bool is_paused_;
+  bool is_leader_; // current ttl manager in ls leader or not
   const int64_t OB_TTL_TASK_RETRY_INTERVAL = 15*1000*1000; // 15s
+  bool need_do_for_switch_; // need wait follower finish after switch leader
 };
 
 class ObTenantTTLManager
