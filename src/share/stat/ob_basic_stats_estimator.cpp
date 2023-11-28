@@ -342,11 +342,14 @@ int ObBasicStatsEstimator::stroage_estimate_block_count_and_row_count(ObExecCont
   } else {
     obrpc::ObSrvRpcProxy *rpc_proxy = NULL;
     const ObSQLSessionInfo *session_info = NULL;
-    int64_t timeout = 10 * 1000 * 1000;  // 10s
+    int64_t timeout = std::min(MAX_OPT_STATS_PROCESS_RPC_TIMEOUT, THIS_WORKER.get_timeout_remain());
     if (OB_ISNULL(session_info = ctx.get_my_session()) ||
         OB_ISNULL(rpc_proxy = GCTX.srv_rpc_proxy_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("rpc_proxy or session is null", K(ret), K(rpc_proxy), K(session_info));
+    } else if (0 >= timeout) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("query timeout is reached", K(ret), K(timeout));
     } else if (OB_FAIL(rpc_proxy->to(addr)
                        .timeout(timeout)
                        .by(session_info->get_rpc_tenant_id())

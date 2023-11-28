@@ -62,6 +62,7 @@ const int64_t MAGIC_MAX_AUTO_SAMPLE_SIZE = 22000;
 const int64_t MAGIC_MIN_SAMPLE_SIZE = 2500;
 const int64_t MAGIC_BASE_SAMPLE_SIZE = 1000;
 const double MAGIC_SAMPLE_CUT_RATIO = 0.00962;
+const int64_t MAX_OPT_STATS_PROCESS_RPC_TIMEOUT = 300000000;//one optimizer stats processing rpc time should not exceed 300 seconds
 
 enum StatLevel
 {
