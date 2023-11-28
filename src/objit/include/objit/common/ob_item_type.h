@@ -495,6 +495,7 @@ typedef enum ObItemType
 
   T_FUN_SYS_CURRENT_USER_PRIV = 766,
   T_FUN_SYS_CURRENT_ROLE = 767,
+  T_FUN_SYS_EXTRACT_CERT_EXPIRED_TIME = 768,
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
 

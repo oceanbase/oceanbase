@@ -1072,4 +1072,5 @@
 #define N_ALIGN_DATE4CMP                    "align_date4cmp"
 #define N_INEER_IS_TRUE                     "inner_is_true"
 #define N_INNER_DECODE_LIKE                 "inner_decode_like"
+#define N_EXTRACT_CERT_EXPIRED_TIME         "extract_cert_expired_time"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_
