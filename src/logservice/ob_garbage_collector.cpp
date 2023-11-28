@@ -29,6 +29,7 @@
 #include "share/ob_srv_rpc_proxy.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/ls/ob_ls_life_manager.h"
+#include "share/ob_debug_sync.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "rootserver/ob_ls_recovery_reportor.h"      // ObLSRecoveryReportor
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
@@ -1033,6 +1034,7 @@ void ObGCHandler::block_ls_transfer_in_(const SCN &block_scn)
 
 void ObGCHandler::offline_ls_(const SCN &offline_scn)
 {
+  DEBUG_SYNC(LS_GC_BEFORE_OFFLINE);
   int ret = OB_SUCCESS;
   LSGCState gc_state = INVALID_LS_GC_STATE;
   ObLSID ls_id = ls_->get_ls_id();
