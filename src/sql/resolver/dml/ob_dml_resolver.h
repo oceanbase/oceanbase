@@ -219,6 +219,7 @@ public:
                                        bool include_hidden,
                                        ColumnItem *&col_item);
   // dot notation
+  int expand_column_in_json_object_star(ParseNode *node);
   int pre_process_json_expr(ParseNode &node);
   int print_json_path(ParseNode *&tmp_path, ObJsonBuffer &res_str);
   int check_depth_obj_access_ref(ParseNode *node, int8_t &depth, bool &exist_fun, ObJsonBuffer &sql_str, bool obj_check = true);  // obj_check : whether need check dot notaion

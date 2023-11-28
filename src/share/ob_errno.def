@@ -1944,6 +1944,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_NULL_FOR_XML_CONSTRUCTOR, -7416, -1, "42000", "Expect
 DEFINE_ORACLE_ERROR(OB_ERR_XML_INDEX, -7417, -1, "42000", "cannot create index on expression with datatype ADT '%.*s'", 2327 ,"cannot create index on expression with datatype ADT '%.*s'");
 DEFINE_ORACLE_ERROR(OB_ERR_UPDATE_XML_WITH_INVALID_NODE, -7418, -1, "42000", "XML nodes must be updated with valid nodes and of the same type'", 31067 ,"XML nodes must be updated with valid nodes and of the same type");
 DEFINE_ORACLE_ERROR(OB_LOB_VALUE_NOT_EXIST, -7419, -1, "42000", "LOB value does not exist", 22922 ,"LOB value does not exist");
+DEFINE_ORACLE_ERROR(OB_ERR_JSON_FUN_UNSUPPORTED_TYPE, -7420, -1, "HY000", "Input to JSON generation function has unsupported data type", 40654, "Input to JSON generation function has unsupported data type");
 ////////////////////////////////////////////////////////////////
 // !!! Fatal errors and the client should close the connection, -8000 ~ -8999
 ////////////////////////////////////////////////////////////////

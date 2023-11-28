@@ -916,7 +916,8 @@ public:
                                         ObSEArray<ColumnItem, 4>& column_list,
                                         bool all_tab,
                                         bool &tab_has_alias,
-                                        TableItem *&tab_item);
+                                        TableItem *&tab_item,
+                                        bool &is_empty_table);
   static int add_column_expr_for_json_object_node(ObTransformerCtx *ctx,
                                                   ObDMLStmt *stmt,
                                                   ColumnItem& col_item,
@@ -925,6 +926,8 @@ public:
                                        ObDMLStmt *stmt,
                                        ObRawExpr *param_expr,
                                        ObSEArray<ObRawExpr *, 1>& param_array);
+  static int add_dummy_expr_for_json_object_node(ObTransformerCtx *ctx,
+                                                 ObSEArray<ObRawExpr *, 1>& param_array);
   // end json object with star
   static int add_cast_for_replace(ObRawExprFactory &expr_factory,
                                   const ObRawExpr *from_expr,
