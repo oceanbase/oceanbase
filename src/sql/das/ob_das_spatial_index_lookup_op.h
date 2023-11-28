@@ -37,7 +37,9 @@ public:
                              sorter_(allocator),
                              is_sorted_(false),
                              is_whole_range_(false),
-                             is_inited_(false) {}
+                             is_inited_(false),
+                             mbr_filter_cnt_(0),
+                             index_back_cnt_(0) {}
   virtual ~ObSpatialIndexLookupOp();
 
   int init(const ObDASScanCtDef *lookup_ctdef,
@@ -67,6 +69,8 @@ private:
   bool is_sorted_;
   bool is_whole_range_;
   bool is_inited_;
+  int64_t mbr_filter_cnt_;
+  int64_t index_back_cnt_;
 };
 
 }  // namespace sql

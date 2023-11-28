@@ -56,6 +56,8 @@ int ObSpatialIndexLookupOp::init(const ObDASScanCtDef *lookup_ctdef,
       }
     }
     is_whole_range_ |= (mbr_filters_->count() == 0);
+    mbr_filter_cnt_ = 0;
+    index_back_cnt_ = 0;
   }
   return ret;
 }
@@ -130,6 +132,7 @@ int ObSpatialIndexLookupOp::save_rowkeys()
        LOG_WARN("store lookup key range failed", K(ret), K(scan_param_));
       }
       last_rowkey_ = *idx_row;
+      index_back_cnt_++;
       LOG_DEBUG("build data table range", K(ret), K(*idx_row), K(lookup_range), K(scan_param_.key_ranges_.count()));
     }
   }
@@ -199,6 +202,7 @@ int ObSpatialIndexLookupOp::get_next_row()
         if (OB_SUCC(ret) || OB_ITER_END == ret) {
           state_ = DO_LOOKUP;
           index_end_ = (OB_ITER_END == ret);
+          LOG_INFO("index back cnt", K(index_back_cnt_), K(mbr_filter_cnt_));
           ret = OB_SUCCESS;
         }
         break;
@@ -293,6 +297,7 @@ int ObSpatialIndexLookupOp::process_data_table_rowkey()
       LOG_WARN("filter mbr failed", K(ret));
     } else if (!is_whole_range_ && pass_through) {
       // not target
+      mbr_filter_cnt_++;
     } else if (OB_FAIL(sorter_.add_item(table_rowkey))) {
       LOG_WARN("filter mbr failed", K(ret));
     } else {

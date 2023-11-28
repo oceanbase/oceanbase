@@ -674,16 +674,17 @@ void ObGeoExprUtils::geo_func_error_handle(int error_ret, const char* func_name)
   }
 }
 
-int ObGeoExprUtils::zoom_in_geos_for_relation(ObGeometry &geo1, ObGeometry &geo2)
+int ObGeoExprUtils::zoom_in_geos_for_relation(ObGeometry &geo1, ObGeometry &geo2,
+                                              bool is_geo1_cached, bool is_geo2_cached)
 {
   int ret = OB_SUCCESS;
   if (geo1.get_zoom_in_value() > 0 || geo2.get_zoom_in_value() > 0) {
     uint32_t zoom_in = geo1.get_zoom_in_value();
     zoom_in = zoom_in > geo2.get_zoom_in_value() ? zoom_in : geo2.get_zoom_in_value();
     ObGeoZoomInVisitor zoom_in_visitor(zoom_in);
-    if (OB_FAIL(geo1.do_visit(zoom_in_visitor))) {
+    if (!is_geo1_cached && OB_FAIL(geo1.do_visit(zoom_in_visitor))) {
       LOG_WARN("failed to zoom in visit", K(ret), K(zoom_in));
-    } else if (OB_FAIL(geo2.do_visit(zoom_in_visitor))) {
+    } else if (!is_geo2_cached && OB_FAIL(geo2.do_visit(zoom_in_visitor))) {
       LOG_WARN("failed to zoom in visit", K(ret), K(zoom_in));
     }
   }
@@ -700,6 +701,58 @@ int ObGeoExprUtils::pack_geo_res(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
     LOG_WARN("failed to append realdata", K(ret), K(text_result));
   } else {
     text_result.set_result();
+  }
+  return ret;
+}
+
+ObGeoConstParamCache* ObGeoExprUtils::get_geo_constParam_cache(const uint64_t& id, ObExecContext *exec_ctx)
+{
+  INIT_SUCC(ret);
+  ObGeoConstParamCache* cache_ctx = NULL;
+  if (ObExpr::INVALID_EXP_CTX_ID != id) {
+    cache_ctx = static_cast<ObGeoConstParamCache*>(exec_ctx->get_expr_op_ctx(id));
+    if (OB_ISNULL(cache_ctx)) {
+      // if pathcache not exist, create one
+      void *cache_ctx_buf = NULL;
+      ret = exec_ctx->create_expr_op_ctx(id, sizeof(ObGeoConstParamCache), cache_ctx_buf);
+      if (OB_SUCC(ret) && OB_NOT_NULL(cache_ctx_buf)) {
+        cache_ctx = new (cache_ctx_buf) ObGeoConstParamCache(&exec_ctx->get_allocator());
+      }
+    }
+  }
+  return cache_ctx;
+}
+
+ObGeometry * ObGeoConstParamCache::get_const_param_cache(int arg_idx)
+{
+  ObGeometry * res = nullptr;
+  INIT_SUCC(ret);
+  if (arg_idx == 1) {
+    res = param2_;
+  } else if (arg_idx == 0) {
+    res = param1_;
+  }
+  return res;
+}
+
+int ObGeoConstParamCache::add_const_param_cache(int arg_idx, const common::ObGeometry &cache)
+{
+  INIT_SUCC(ret);
+  ObGeometry *geo = nullptr;
+  ObString data;
+  if (OB_FAIL(ObGeoTypeUtil::create_geo_by_type(*allocator_, cache.type(), cache.crs() == ObGeoCRS::Geographic, true, geo))) {
+    LOG_WARN("fail to create geo by type", K(ret));
+  } else if (OB_FAIL(ob_write_string(*allocator_, ObString(cache.length(), cache.val()), data))) {
+    LOG_WARN("fail to copy geo data", K(ret));
+  } else {
+    geo->set_data(data);
+    geo->set_srid(cache.get_srid());
+    geo->set_zoom_in_value(cache.get_zoom_in_value());
+    if (arg_idx == 0) {
+      param1_ = geo;
+    } else if (arg_idx == 1) {
+      param2_ = geo;
+    }
   }
   return ret;
 }

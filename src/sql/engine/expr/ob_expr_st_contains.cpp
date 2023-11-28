@@ -91,6 +91,7 @@ int ObExprSTContains::eval_st_contains(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   } else if (gis_datum1->is_null() || gis_datum2->is_null()) {
     res.set_null();
   } else {
+    ObGeoConstParamCache* const_param_cache = ObGeoExprUtils::get_geo_constParam_cache(expr.expr_ctx_id_, &ctx.exec_ctx_);
     bool is_geo1_empty = false;
     bool is_geo2_empty = false;
     ObGeometry *geo1 = NULL;
@@ -103,37 +104,59 @@ int ObExprSTContains::eval_st_contains(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     ObString wkb2 = gis_datum2->get_string();
     omt::ObSrsCacheGuard srs_guard;
     const ObSrsItem *srs = NULL;
+    bool is_geo1_cached = false;
+    bool is_geo2_cached = false;
 
-    if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *gis_datum1,
+    if (gis_arg1->is_static_const_) {
+      geo1 = const_param_cache->get_const_param_cache(0);
+      if (geo1 != NULL) {
+        srid1 = geo1->get_srid();
+        is_geo1_cached = true;
+      }
+    }
+    if (gis_arg2->is_static_const_) {
+      geo2 = const_param_cache->get_const_param_cache(1);
+      if (geo2 != NULL) {
+        srid2 = geo2->get_srid();
+        is_geo2_cached = true;
+      }
+    }
+
+    if (!is_geo1_cached && OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *gis_datum1,
               gis_arg1->datum_meta_, gis_arg1->obj_meta_.has_lob_header(), wkb1))) {
       LOG_WARN("fail to get real string data", K(ret), K(wkb1));
-    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *gis_datum2,
+    } else if (!is_geo2_cached && OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *gis_datum2,
               gis_arg2->datum_meta_, gis_arg2->obj_meta_.has_lob_header(), wkb2))) {
       LOG_WARN("fail to get real string data", K(ret), K(wkb2));
-    } else if (OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb1, type1, srid1))) {
+    } else if (!is_geo1_cached && OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb1, type1, srid1))) {
       if (ret == OB_ERR_GIS_INVALID_DATA) {
         LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_CONTAINS);
       }
       LOG_WARN("get type and srid from wkb failed", K(wkb1), K(ret));
-    } else if (OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb2, type2, srid2))) {
+    } else if (!is_geo2_cached && OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb2, type2, srid2))) {
       LOG_WARN("get type and srid from wkb failed", K(wkb2), K(ret));
     } else if (srid1 != srid2) {
       LOG_WARN("srid not the same", K(srid1), K(srid2));
       ret = OB_ERR_GIS_DIFFERENT_SRIDS;
-    } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb1, srs, true, N_ST_CONTAINS))) {
-      LOG_WARN("fail to get srs item", K(ret), K(wkb1));
-    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb1, geo1, srs, N_ST_CONTAINS))) {
+    } else if (!is_geo1_cached && OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb1, geo1, srs, N_ST_CONTAINS))) {
       LOG_WARN("get first geo by wkb failed", K(ret));
-    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb2, geo2, srs, N_ST_CONTAINS))) {
+    } else if (!is_geo2_cached && OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb2, geo2, srs, N_ST_CONTAINS))) {
       LOG_WARN("get second geo by wkb failed", K(ret));
     } else if (OB_FAIL(ObGeoExprUtils::check_empty(geo1, is_geo1_empty))
         || OB_FAIL(ObGeoExprUtils::check_empty(geo2, is_geo2_empty))) {
       LOG_WARN("check geo empty failed", K(ret));
     } else if (is_geo1_empty || is_geo2_empty) {
       res.set_null();
-    } else if (OB_FAIL(ObGeoExprUtils::zoom_in_geos_for_relation(*geo1, *geo2))) {
+    } else if (OB_FAIL(ObGeoExprUtils::zoom_in_geos_for_relation(*geo1, *geo2, is_geo1_cached, is_geo2_cached))) {
       LOG_WARN("zoom in geos failed", K(ret));
     } else {
+      if (gis_arg1->is_static_const_ && !is_geo1_cached &&
+          OB_FAIL(const_param_cache->add_const_param_cache(0, *geo1))) {
+        LOG_WARN("add geo1 to const cache failed", K(ret));
+      } else if (gis_arg2->is_static_const_ && !is_geo2_cached &&
+          OB_FAIL(const_param_cache->add_const_param_cache(1, *geo2))) {
+        LOG_WARN("add geo2 to const cache failed", K(ret));
+      }
       ObGeoEvalCtx gis_context(&temp_allocator, srs);
       bool result = false;
       if (OB_FAIL(gis_context.append_geo_arg(geo2)) || OB_FAIL(gis_context.append_geo_arg(geo1))) {

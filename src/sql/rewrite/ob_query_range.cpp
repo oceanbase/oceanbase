@@ -8809,7 +8809,7 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
     }
   }
   if (s2object == NULL && OB_SUCC(ret)) {
-    s2object = OB_NEWx(ObS2Adapter, (&tmp_alloc), (&tmp_alloc), (input_srid != 0 ? srs_item->is_geographical_srs() : false));
+    s2object = OB_NEWx(ObS2Adapter, (&tmp_alloc), (&tmp_alloc), (input_srid != 0 ? srs_item->is_geographical_srs() : false), true);
     if (OB_ISNULL(s2object)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc s2 object", K(ret));

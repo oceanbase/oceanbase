@@ -31,6 +31,7 @@ namespace oceanbase
 namespace sql
 {
 
+class ObGeoConstParamCache;
 enum class ObGeoAxisOrder
 {
   LONG_LAT = 0,
@@ -109,10 +110,33 @@ public:
                         common::ObString &res_wkb,
                         uint32_t srs_id = 0);
   static void geo_func_error_handle(int ret, const char* func_name);
-  static int zoom_in_geos_for_relation(common::ObGeometry &geo1, common::ObGeometry &geo2);
+  static int zoom_in_geos_for_relation(common::ObGeometry &geo1, common::ObGeometry &geo2,
+                                       bool is_geo1_cached = false, bool is_geo2_cached = false);
 
   static int pack_geo_res(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res, const ObString &str);
+  static ObGeoConstParamCache* get_geo_constParam_cache(const uint64_t& id, ObExecContext *exec_ctx);
 
+};
+
+class ObGeoConstParamCache : public ObExprOperatorCtx {
+
+public:
+  ObGeoConstParamCache(common::ObIAllocator *allocator) :
+        ObExprOperatorCtx(),
+        allocator_(allocator),
+        param1_(nullptr),
+        param2_(nullptr) {}
+  ~ObGeoConstParamCache() {};
+
+  ObGeometry *get_const_param_cache(int arg_idx);
+  int add_const_param_cache(int arg_idx, const common::ObGeometry &cache);
+  void set_allocator(common::ObIAllocator *allocator);
+  common::ObIAllocator* get_allocator();
+
+private:
+  common::ObIAllocator *allocator_;
+  common::ObGeometry * param1_;
+  common::ObGeometry * param2_;
 };
 
 } // sql
