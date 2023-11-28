@@ -1176,7 +1176,8 @@ int ObTransformTempTable::create_temp_table(ObDMLStmt &root_stmt,
     if (OB_ISNULL(stmt)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null stmt", K(ret));
-    } else if (OB_FAIL(stmt->formalize_stmt_expr_reference())) {
+    } else if (OB_FAIL(stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
+                                                           ctx_->session_info_))) {
       LOG_WARN("failed to formalize stmt reference", K(ret));
     }
   }
@@ -1186,7 +1187,8 @@ int ObTransformTempTable::create_temp_table(ObDMLStmt &root_stmt,
       LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
     } else if (OB_FAIL(temp_table_query->formalize_stmt(ctx_->session_info_))) {
       LOG_WARN("failed to formalize stmt", K(ret));
-    } else if (OB_FAIL(temp_table_query->formalize_stmt_expr_reference())) {
+    } else if (OB_FAIL(temp_table_query->formalize_stmt_expr_reference(ctx_->expr_factory_,
+                                                                       ctx_->session_info_))) {
       LOG_WARN("failed to formalize stmt reference", K(ret));
     }
   }
@@ -2595,7 +2597,8 @@ int ObTransformTempTable::prepare_eval_cte_cost_stmt(ObDMLStmt &root_stmt,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(copied_stmt->formalize_stmt(ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt", K(ret));
-  } else if (OB_FAIL(copied_stmt->formalize_stmt_expr_reference())) {
+  } else if (OB_FAIL(copied_stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
+                                                                ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt", K(ret));
   }
   return ret;
