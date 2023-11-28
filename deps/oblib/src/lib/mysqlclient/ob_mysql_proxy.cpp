@@ -104,8 +104,9 @@ int ObCommonSqlProxy::read(ReadResult &result, const uint64_t tenant_id, const c
       conn->set_force_remote_exec(true);
     }
   }
-  conn->set_user_timeout(user_set_timeout);
+
   if (OB_FAIL(ret)) {
+  } else if (FALSE_IT(conn->set_user_timeout(user_set_timeout))) {
   } else if (OB_FAIL(read(conn, result, tenant_id, sql))) {
     LOG_WARN("read failed", K(ret));
   }
