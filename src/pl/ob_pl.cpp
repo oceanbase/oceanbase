@@ -822,6 +822,8 @@ void ObPLContext::destory(
           reset_autocommit_ &&
           session_info.is_in_transaction()) {
         ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not supported cmd execute udf which has dml stmt", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "use cmd stmt execute udf which has dml stmt");
       }
       if (OB_SUCCESS != ret && session_info.is_in_transaction()) { // PL执行失败, 需要回滚
         int tmp_ret = OB_SUCCESS;
