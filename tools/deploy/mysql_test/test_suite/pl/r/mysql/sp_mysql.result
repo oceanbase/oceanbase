@@ -1275,7 +1275,7 @@ comment "111111111111" sql security invoker
 insert into test.t1 values (x, y)|
 show procedure status like 'bar'|
 Db	Name	Type	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
-test	bar	PROCEDURE	root@localhost	0000-00-00 00:00:00	0000-00-00 00:00:00	DEFINER	111111111111	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+test	bar	PROCEDURE	root@localhost	0000-00-00 00:00:00	0000-00-00 00:00:00	INVOKER	111111111111	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 alter procedure bar comment "2222222222" sql security definer|
 alter procedure bar comment "3333333333"|
 alter procedure bar|
