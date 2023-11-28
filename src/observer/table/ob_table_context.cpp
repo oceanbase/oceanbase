@@ -501,7 +501,7 @@ int ObTableCtx::adjust_column_type(const ObExprResType &column_type,
                                    bool is_autoincrement/*=false*/)
 {
   int ret = OB_SUCCESS;
-  const bool is_not_nullable = column_type.is_not_null_for_read();
+  const bool is_not_nullable = column_type.is_not_null_for_write();
   const ObCollationType cs_type = column_type.get_collation_type();
 
   // 1. check nullable

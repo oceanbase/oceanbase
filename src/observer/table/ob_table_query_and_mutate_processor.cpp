@@ -319,7 +319,7 @@ int ObTableQueryAndMutateP::execute_htable_put(const ObITableEntity &new_entity)
       LOG_WARN("fail to init table ctx", K(ret));
     } else if (OB_FAIL(tb_ctx.init_trans(get_trans_desc(), get_tx_snapshot()))) {
       LOG_WARN("fail to init trans", K(ret), K(tb_ctx));
-    } else if (OB_FAIL(ObTableOpWrapper::process_op<TABLE_API_EXEC_INSERT_UP>(tb_ctx, op_result))) {
+    } else if (OB_FAIL(ObTableOpWrapper::process_insert_up_op(tb_ctx, op_result))) {
       LOG_WARN("fail to process insert up op", K(ret));
     }
   }
@@ -643,7 +643,7 @@ int ObTableQueryAndMutateP::execute_htable_insert(const ObITableEntity &new_enti
       LOG_WARN("fail to init table ctx", K(ret));
     } else if (OB_FAIL(tb_ctx.init_trans(get_trans_desc(), get_tx_snapshot()))) {
       LOG_WARN("fail to init trans", K(ret), K(tb_ctx));
-    } else if (OB_FAIL(ObTableOpWrapper::process_op<TABLE_API_EXEC_INSERT>(tb_ctx, op_result))) {
+    } else if (OB_FAIL(ObTableOpWrapper::process_insert_op(tb_ctx, op_result))) {
       LOG_WARN("fail to process insert op", K(ret));
     }
   }
@@ -846,36 +846,17 @@ int ObTableQueryAndMutateP::execute_one_mutation(ObTableQueryResult &one_result,
             }
             break;
           }
-          case ObTableOperationType::INCREMENT: {
-            if (tb_ctx_.is_ttl_table()) {
-              ret = process_dml_op<TABLE_API_EXEC_TTL>(*new_entity, tmp_affect_rows);
-            } else {
-              ret = process_dml_op<TABLE_API_EXEC_INSERT_UP>(*new_entity, tmp_affect_rows);
-            }
-            if (OB_FAIL(ret)) {
-              LOG_WARN("fail to do increment", K(ret), K(tb_ctx_.is_ttl_table()));
-            } else {
-              affected_rows += tmp_affect_rows;
-            }
-            break;
-          }
+          case ObTableOperationType::INCREMENT:
           case ObTableOperationType::APPEND: {
-            if (tb_ctx_.is_ttl_table()) {
-              ret = process_dml_op<TABLE_API_EXEC_TTL>(*new_entity, tmp_affect_rows);
-            } else {
-              ret = process_dml_op<TABLE_API_EXEC_INSERT_UP>(*new_entity, tmp_affect_rows);
-            }
-            if (OB_FAIL(ret)) {
-              LOG_WARN("fail to do append", K(ret), K(tb_ctx_.is_ttl_table()));
-            } else {
+            ret = process_insert_up(*new_entity, tmp_affect_rows);
+            if (OB_SUCC(ret)) {
               affected_rows += tmp_affect_rows;
             }
             break;
           }
           case ObTableOperationType::INSERT: { // 使用mutation上的entity执行insert
-            if (OB_FAIL(process_dml_op<TABLE_API_EXEC_INSERT>(mutate_entity, tmp_affect_rows))) {
-              LOG_WARN("ail to execute table insert", K(ret));
-            } else {
+            ret = process_insert(mutate_entity, tmp_affect_rows);
+            if (OB_SUCC(ret)) {
               affected_rows += tmp_affect_rows;
             }
             break;

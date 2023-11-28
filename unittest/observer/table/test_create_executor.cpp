@@ -462,6 +462,7 @@ TEST_F(TestCreateExecutor, cons_column_type)
 TEST_F(TestCreateExecutor, check_column_type)
 {
   ObExprResType column_type;
+  column_type.set_result_flag(NOT_NULL_WRITE_FLAG);
   ObObj obj;
   uint32_t res_flag = 0;
   ObTableCtx fake_ctx(allocator_);

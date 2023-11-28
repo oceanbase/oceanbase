@@ -79,6 +79,26 @@ private:
     return ret;
   }
   int process_get();
+  int process_insert()
+  {
+    int ret = OB_SUCCESS;
+    if (!tb_ctx_.is_ttl_table()) {
+      ret = process_dml_op<table::TABLE_API_EXEC_INSERT>();
+    } else {
+      ret = process_dml_op<table::TABLE_API_EXEC_TTL>();
+    }
+    return ret;
+  }
+  int process_insert_up()
+  {
+    int ret = OB_SUCCESS;
+    if (!tb_ctx_.is_ttl_table()) {
+      ret = process_dml_op<table::TABLE_API_EXEC_INSERT_UP>();
+    } else {
+      ret = process_dml_op<table::TABLE_API_EXEC_TTL>();
+    }
+    return ret;
+  }
 private:
   table::ObTableEntity request_entity_;
   table::ObTableEntity result_entity_;

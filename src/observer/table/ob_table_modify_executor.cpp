@@ -23,6 +23,32 @@ namespace oceanbase
 {
 namespace table
 {
+
+int ObTableApiModifyExecutor::check_row_null(const ObExprPtrIArray &row, const ColContentIArray &column_infos)
+{
+  int ret = OB_SUCCESS;
+
+  if (row.count() < column_infos.count()) { // column_infos count less than row count when do update
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid row count", K(ret), K(row), K(column_infos));
+  }
+
+  for (int i = 0; OB_SUCC(ret) && i < column_infos.count(); i++) {
+    ObDatum *datum = NULL;
+    const bool is_nullable = column_infos.at(i).is_nullable_;
+    uint64_t col_idx = column_infos.at(i).projector_index_;
+    if (OB_FAIL(row.at(col_idx)->eval(eval_ctx_, datum))) {
+      LOG_WARN("fail to eval datum", K(ret), K(row), K(column_infos), K(col_idx));
+    } else if (!is_nullable && datum->is_null()) {
+      const ObString &column_name = column_infos.at(i).column_name_;
+      ret = OB_BAD_NULL_ERROR;
+      LOG_WARN("bad null error", K(ret), K(row), K(column_name));
+    }
+  }
+
+  return ret;
+}
+
 int ObTableApiModifyExecutor::open()
 {
   int ret = OB_SUCCESS;
@@ -239,6 +265,8 @@ int ObTableApiModifyExecutor::insert_row_to_das(const ObTableInsCtDef &ins_ctdef
   ObChunkDatumStore::StoredRow* stored_row = nullptr;
   if (OB_FAIL(calc_tablet_loc(tablet_loc))) {
     LOG_WARN("fail to calc partition key", K(ret));
+  } else if (OB_FAIL(check_row_null(ins_ctdef.new_row_, ins_ctdef.column_infos_))) {
+    LOG_WARN("fail to check row nullable", K(ret));
   } else if (OB_FAIL(ObDMLService::insert_row(ins_ctdef.das_ctdef_,
                                               ins_rtdef.das_rtdef_,
                                               tablet_loc,
@@ -582,6 +610,8 @@ int ObTableApiModifyExecutor::insert_upd_new_row_to_das(const ObTableUpdCtDef &u
     } else if (OB_ISNULL(upd_rtdef.dins_rtdef_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("dins_rtdef_ is null", K(ret));
+    } else if (OB_FAIL(check_row_null(upd_ctdef.new_row_, upd_ctdef.assign_columns_))) {
+      LOG_WARN("fail to check row nullable", K(ret));
     } else if (OB_FAIL(ObDMLService::insert_row(*upd_ctdef.dins_ctdef_,
                                                 *upd_rtdef.dins_rtdef_,
                                                 tablet_loc,
