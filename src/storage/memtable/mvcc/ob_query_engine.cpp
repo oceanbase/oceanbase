@@ -405,6 +405,7 @@ int ObQueryEngine::sample_rows(Iterator<BtreeRawIterator> *iter, const ObMemtabl
           }
           gap_size = 0;
         }
+
         if (blocksstable::ObDmlFlag::DF_NOT_EXIST == value->first_dml_flag_ &&
             blocksstable::ObDmlFlag::DF_NOT_EXIST == value->last_dml_flag_ &&
             nullptr != value->list_head_ &&
@@ -425,6 +426,7 @@ int ObQueryEngine::sample_rows(Iterator<BtreeRawIterator> *iter, const ObMemtabl
         } else {
           // existent row, not change estimation total row count
         }
+
         if (sample_row_count >= MAX_SAMPLE_ROW_COUNT) {
           break;
         }
@@ -441,8 +443,6 @@ int ObQueryEngine::sample_rows(Iterator<BtreeRawIterator> *iter, const ObMemtabl
   if (gap_size >= OB_SKIP_RANGE_LIMIT) {
     physical_row_count -= static_cast<int64_t>(static_cast<double>(gap_size) * ratio);
   }
-  TRANS_LOG(DEBUG, "memtable after sample", KR(ret), K(sample_row_count), K(logical_row_count),
-      K(physical_row_count), K(gap_size), K(ratio));
   return ret;
 }
 
@@ -685,6 +685,7 @@ int ObQueryEngine::estimate_row_count(const transaction::ObTransID &tx_id,
       TRANS_LOG(WARN, "failed to sample rows", KR(ret), K(*start_key), K(*end_key));
     }
   }
+
   logical_row_count = log_row_count1 + log_row_count2;
   // since remaining_row_count actually includes phy_row_count1, so we don't
   // want to add it twice here
