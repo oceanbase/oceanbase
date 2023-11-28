@@ -6963,10 +6963,33 @@ int ObRootService::drop_package(const obrpc::ObDropPackageArg &arg)
 int ObRootService::create_trigger(const obrpc::ObCreateTriggerArg &arg)
 {
   int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(ddl_service_.create_trigger(arg))) {
+  } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(
+                     arg.trigger_info_.get_tenant_id(), schema_guard))) {
+    LOG_WARN("get schema guard with version in inner table failed", K(ret));
+  } else if (OB_FAIL(ddl_service_.create_trigger(arg, schema_guard, NULL))) {
+    LOG_WARN("failed to create trigger", K(ret));
+  }
+  return ret;
+}
+
+int ObRootService::create_trigger_with_res(const obrpc::ObCreateTriggerArg &arg,
+                                           obrpc::ObCreateTriggerRes &res)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(
+                     arg.trigger_info_.get_tenant_id(), schema_guard))) {
+    LOG_WARN("get schema guard with version in inner table failed", K(ret));
+  } else if (OB_FAIL(check_parallel_ddl_conflict(schema_guard, arg))) {
+    LOG_WARN("check parallel ddl conflict failed", K(ret));
+  } else if (OB_FAIL(ddl_service_.create_trigger(arg, schema_guard, &res))) {
     LOG_WARN("failed to create trigger", K(ret));
   }
   return ret;
