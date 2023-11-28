@@ -292,6 +292,7 @@ int ObSharedMacroBlockMgr::try_switch_macro_block()
   int ret = OB_SUCCESS;
   const MacroBlockId &block_id = macro_handle_.get_macro_id();
   const int32_t used_size = offset_;
+  // we add_block_size extraly to avoid defragmenting the previous block if some sstables haven't been inited
   if (block_id.is_valid() && OB_FAIL(add_block(block_id, used_size))) {
     LOG_WARN("fail to add cur block to map", K(ret), K(block_id));
   } else if (FALSE_IT(macro_handle_.reset())) {
@@ -328,6 +329,12 @@ void ObSharedMacroBlockMgr::get_cur_shared_block(MacroBlockId &macro_id)
 {
   lib::ObMutexGuard guard(mutex_);
   macro_id = macro_handle_.get_macro_id();
+}
+
+bool ObSharedMacroBlockMgr::is_recyclable(const MacroBlockId &macro_id, const int64_t &used_size) const
+{
+  // current macro block is excluded
+  return macro_id != macro_handle_.get_macro_id() && used_size < RECYCLABLE_BLOCK_SIZE;
 }
 
 int ObSharedMacroBlockMgr::add_block(const MacroBlockId &block_id, const int64_t block_size)
@@ -385,7 +392,7 @@ int ObSharedMacroBlockMgr::get_recyclable_blocks(ObIAllocator &allocator, ObIArr
     // since we need for_loop, we need mutex to protect array
     lib::ObMutexGuard guard(blocks_mutex_);
     ObFixedArray<MacroBlockId, ObIAllocator> recycled_block_ids(allocator);
-    GetSmallBlockOp getOp(block_ids, recycled_block_ids);
+    GetSmallBlockOp getOp(*this, block_ids, recycled_block_ids);
 
     if (OB_FAIL(recycled_block_ids.init(MAX_RECYCLABLE_BLOCK_CNT))) {
       LOG_WARN("fail to init recycled_block_ids", K(ret));
