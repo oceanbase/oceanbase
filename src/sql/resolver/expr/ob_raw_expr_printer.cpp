@@ -3375,8 +3375,9 @@ do { \
     DATA_PRINTF("."); \
   } \
 } while (0)
-
-        if (expr->get_pkg_id() != OB_INVALID_ID) { // package or udt udf
+        if (expr->is_dblink_sys_func()) {
+          // do nothing ...
+        } else if (expr->get_pkg_id() != OB_INVALID_ID) { // package or udt udf
           if (expr->get_is_udt_udf()) {
             PRINT_IMPLICIT_DATABASE_NAME(ObUDTTypeInfo, expr->get_pkg_id(), get_udt_info, get_type_name);
           } else if (!expr->is_pkg_body_udf()) {
