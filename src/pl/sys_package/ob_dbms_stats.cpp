@@ -5320,28 +5320,33 @@ int ObDbmsStats::gather_database_stats_job_proc(sql::ObExecContext &ctx,
   } else if (lib::is_mysql_mode() && !params.empty() && !params.at(0).is_null() &&
              OB_FAIL(params.at(0).get_int(duration_time))) {
     LOG_WARN("failed to get duration", K(ret), K(params.at(0)));
-  } else if (OB_FAIL(ObOptStatMonitorManager::flush_database_monitoring_info(ctx))) {
-    LOG_WARN("failed to flush database monitoring info", K(ret));
-  } else if (OB_FAIL(init_gather_task_info(ctx, ObOptStatGatherType::AUTO_GATHER, start_time, 0, task_info))) {
-    LOG_WARN("failed to init gather task info", K(ret));
-  } else if (OB_FAIL(gather_database_table_stats(ctx, duration_time, succeed_cnt, task_info))) {
-    LOG_WARN("failed to gather table stats", K(ret));
-  } else {/*do nothing*/}
-  const int64_t exe_time = ObTimeUtility::current_time() - start_time;
-  LOG_INFO("have been gathered database stats job",
-            "the total used time:", exe_time,
-            "the duration time:", duration_time,
-            "the toatal gather table cnt:", task_info.task_table_count_,
-            "the succeed to gather table cnt:", succeed_cnt,
-            "the failed to gather table cnt:", task_info.failed_count_, K(ret));
-  //reset the error code, the reason is that the total gather time is reach the duration time.
-  ret = ret == OB_TIMEOUT ? OB_SUCCESS : ret;
-  task_info.task_end_time_ = ObTimeUtility::current_time();
-  task_info.ret_code_ = ret;
-  sql::ObSQLSessionInfo *origin_session = THIS_WORKER.get_session();
-  THIS_WORKER.set_session(NULL);
-  ObOptStatManager::get_instance().update_opt_stat_task_stat(task_info);
-  THIS_WORKER.set_session(origin_session);
+  } else if (duration_time > 0) {
+    THIS_WORKER.set_timeout_ts(duration_time);
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObOptStatMonitorManager::flush_database_monitoring_info(ctx))) {
+      LOG_WARN("failed to flush database monitoring info", K(ret));
+    } else if (OB_FAIL(init_gather_task_info(ctx, ObOptStatGatherType::AUTO_GATHER, start_time, 0, task_info))) {
+      LOG_WARN("failed to init gather task info", K(ret));
+    } else if (OB_FAIL(gather_database_table_stats(ctx, duration_time, succeed_cnt, task_info))) {
+      LOG_WARN("failed to gather table stats", K(ret));
+    } else {/*do nothing*/}
+    const int64_t exe_time = ObTimeUtility::current_time() - start_time;
+    LOG_INFO("have been gathered database stats job",
+              "the total used time:", exe_time,
+              "the duration time:", duration_time,
+              "the toatal gather table cnt:", task_info.task_table_count_,
+              "the succeed to gather table cnt:", succeed_cnt,
+              "the failed to gather table cnt:", task_info.failed_count_, K(ret));
+    //reset the error code, the reason is that the total gather time is reach the duration time.
+    ret = ret == OB_TIMEOUT ? OB_SUCCESS : ret;
+    task_info.task_end_time_ = ObTimeUtility::current_time();
+    task_info.ret_code_ = ret;
+    sql::ObSQLSessionInfo *origin_session = THIS_WORKER.get_session();
+    THIS_WORKER.set_session(NULL);
+    ObOptStatManager::get_instance().update_opt_stat_task_stat(task_info);
+    THIS_WORKER.set_session(origin_session);
+  }
   return ret;
 }
 

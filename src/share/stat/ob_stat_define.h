@@ -65,6 +65,7 @@ const double MAGIC_SAMPLE_CUT_RATIO = 0.00962;
 const static int64_t MAX_NUM_OF_WRITE_STATS = 2000;
 const static int64_t DEFAULT_STAT_GATHER_VECTOR_BATCH_SIZE = 256;
 const static int64_t MIN_GATHER_WORK_ARANA_SIZE = 10 * 1024L * 1024L; //10M
+const int64_t MAX_OPT_STATS_PROCESS_RPC_TIMEOUT = 300000000;//one optimizer stats processing rpc time should not exceed 300 seconds
 
 enum StatLevel
 {

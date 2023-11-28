@@ -246,6 +246,7 @@ bool ObDbmsStatsUtils::is_no_stat_virtual_table(const int64_t table_id)
          table_id == share::OB_ALL_VIRTUAL_TRANS_LOCK_STAT_TID ||
          table_id == share::OB_ALL_VIRTUAL_TRANS_SCHEDULER_TID ||
          table_id == share::OB_ALL_VIRTUAL_SQL_AUDIT_TID ||
+         table_id == share::OB_TENANT_VIRTUAL_SHOW_RESTORE_PREVIEW_TID ||
          table_id == share::OB_ALL_VIRTUAL_SESSTAT_ORA_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_TABLE_ORA_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_PROCEDURE_ORA_TID ||
