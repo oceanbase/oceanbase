@@ -1086,6 +1086,10 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, //ObExprSTSymDifference::eval_st_symdifference,               /* 651 */
   NULL, //ObExprPrivSTAsMVTGeom::eval_priv_st_asmvtgeom,              /* 652 */
   NULL, //ObExprPrivSTMakeValid::eval_priv_st_makevalid,              /* 653 */
+  NULL, //ObExprAuditLogSetFilter::eval_set_filter,                   /* 654 */
+  NULL, //ObExprAuditLogRemoveFilter::eval_remove_filter,             /* 655 */
+  NULL, //ObExprAuditLogSetUser::eval_set_user,                       /* 656 */
+  NULL, //ObExprAuditLogRemoveUser::eval_remove_user,                 /* 657 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
