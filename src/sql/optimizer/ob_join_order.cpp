@@ -8879,8 +8879,8 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   int ret = OB_SUCCESS;
   bool is_basic = false;
   bool is_remote = false;
-  bool is_match_repart = false;
-  bool is_match_single_side_hash = false;
+  bool is_left_match_repart = false;
+  bool is_right_match_repart = false;
   bool is_partition_wise = false;
   bool is_ext_partition_wise = false;
   bool right_is_base_table = false;
@@ -9116,150 +9116,125 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
       OPT_TRACE("plan will not use ext partition wise method");
     }
   }
-  // check if match left re-partition
-  if (OB_SUCC(ret) && (distributed_methods & DIST_PARTITION_NONE)) {
-    OPT_TRACE("check partition none method");
-    if (NULL == right_path.get_strong_sharding()) {
-      is_match_repart = false;
-      OPT_TRACE("strong sharding of right path is null, not use partition none");
-    } else if (!right_path.get_sharding()->is_distributed_with_table_location_and_partitioning()) {
-      is_match_repart = false;
-      OPT_TRACE("right path not meet repart");
-    } else if (OB_FAIL(right_sharding->get_all_partition_keys(target_part_keys, true))) {
+
+  if (OB_SUCC(ret) &&
+      ((distributed_methods & DIST_PARTITION_NONE)
+       || (distributed_methods & DIST_HASH_NONE)
+       || ((distributed_methods & DIST_BROADCAST_NONE) && path_info.force_slave_mapping_))) {
+    target_part_keys.reuse();
+    if (OB_FAIL(right_sharding->get_all_partition_keys(target_part_keys, true))) {
       LOG_WARN("failed to get partition keys", K(ret));
     } else if (OB_FAIL(ObShardingInfo::check_if_match_repart_or_rehash(equal_sets,
                                                                       left_join_keys,
                                                                       right_join_keys,
                                                                       target_part_keys,
-                                                                      is_match_repart))) {
+                                                                      is_right_match_repart))) {
       LOG_WARN("failed to check if match repartition", K(ret));
-    } else { /*do nothing*/ }
+    }
+  }
 
-    if (OB_SUCC(ret)) {
-      bool need_reduce_dop = right_path.parallel_more_than_part_cnt();
-      if (!is_match_repart) {
-        OPT_TRACE("plan will not use partition none method");
-        distributed_methods &= ~DIST_PARTITION_NONE;
-        if (path_info.force_slave_mapping_) {
-          OPT_TRACE("force slave mapping and prune broadcast/bc2host none method");
-          distributed_methods &= ~DIST_BROADCAST_NONE;
-          if (use_shared_hash_join && HASH_JOIN == join_algo) {
-            distributed_methods &= ~DIST_BC2HOST_NONE;
-          }
-        }
-      } else if (need_reduce_dop) {
-        OPT_TRACE("plan will use partition none method with parallel degree reduced");
-      } else {
-        OPT_TRACE("plan will use partition none method and prune broadcast/bc2host/hash none method");
-        distributed_methods &= ~DIST_BROADCAST_NONE;
-        distributed_methods &= ~DIST_HASH_NONE;
-        if (use_shared_hash_join && HASH_JOIN == join_algo) {
-          distributed_methods &= ~DIST_BC2HOST_NONE;
-        }
-        need_pull_to_local = right_path.exchange_allocated_;
+  if (OB_SUCC(ret) &&
+      ((distributed_methods & DIST_NONE_PARTITION)
+       || (distributed_methods & DIST_NONE_HASH)
+       || ((distributed_methods & DIST_NONE_BROADCAST) && path_info.force_slave_mapping_))) {
+    target_part_keys.reuse();
+    if (OB_FAIL(left_sharding->get_all_partition_keys(target_part_keys, true))) {
+      LOG_WARN("failed to get partition keys", K(ret));
+    } else if (OB_FAIL(ObShardingInfo::check_if_match_repart_or_rehash(equal_sets,
+                                                                      right_join_keys,
+                                                                      left_join_keys,
+                                                                      target_part_keys,
+                                                                      is_left_match_repart))) {
+      LOG_WARN("failed to check if match repartition", K(ret));
+    }
+  }
+
+  // check if match left re-partition
+  if (OB_SUCC(ret) && (distributed_methods & DIST_PARTITION_NONE)) {
+    OPT_TRACE("check partition none method");
+    if (NULL == right_path.get_strong_sharding()) {
+      OPT_TRACE("strong sharding of right path is null, not use partition none");
+      distributed_methods &= ~DIST_PARTITION_NONE;
+    } else if (!right_path.get_sharding()->is_distributed_with_table_location_and_partitioning()
+               || !is_right_match_repart) {
+      OPT_TRACE("right path not meet repart, not use partition none");
+      distributed_methods &= ~DIST_PARTITION_NONE;
+    } else if (right_path.parallel_more_than_part_cnt()) {
+      OPT_TRACE("plan will use partition none method with parallel degree reduced");
+    } else {
+      OPT_TRACE("plan will use partition none method and prune broadcast/bc2host/hash none method");
+      distributed_methods &= ~DIST_BROADCAST_NONE;
+      distributed_methods &= ~DIST_HASH_NONE;
+      if (use_shared_hash_join && HASH_JOIN == join_algo) {
+        distributed_methods &= ~DIST_BC2HOST_NONE;
       }
+      need_pull_to_local = right_path.exchange_allocated_;
     }
   }
   // check if match hash none
   if (OB_SUCC(ret) && (distributed_methods & DIST_HASH_NONE)) {
     OPT_TRACE("check hash none method");
-    target_part_keys.reuse();
     if (NULL == right_path.get_strong_sharding()) {
-      is_match_single_side_hash = false;
       OPT_TRACE("strong sharding of right path is null, not use hash none");
+      distributed_methods &= ~DIST_HASH_NONE;
     } else if (!right_sharding->is_distributed_without_table_location_with_partitioning() ||
-               !ObShardingInfo::is_shuffled_server_list(right_path.get_server_list())) {
-      is_match_single_side_hash = false;
-    } else if (OB_FAIL(right_sharding->get_all_partition_keys(target_part_keys, true))) {
-      LOG_WARN("failed to get partition keys", K(ret));
-    } else if (OB_FAIL(ObShardingInfo::check_if_match_repart_or_rehash(equal_sets,
-                                                                      left_join_keys,
-                                                                      right_join_keys,
-                                                                      target_part_keys,
-                                                                      is_match_single_side_hash))) {
-      LOG_WARN("failed to check if match hash-none", K(ret));
-    } else { /*do nothing*/ }
-
-    if (OB_SUCC(ret)) {
-      if (!is_match_single_side_hash) {
-        OPT_TRACE("plan will not use hash none method");
-        distributed_methods &= ~DIST_HASH_NONE;
-      } else {
-        OPT_TRACE("plan will use hash none method and prune broadcast none method");
-        // not prune DIST_BC2HOST_NONE under shared hash join
-        distributed_methods &= ~DIST_BROADCAST_NONE;
-      }
+               !ObShardingInfo::is_shuffled_server_list(right_path.get_server_list()) ||
+               !is_right_match_repart) {
+      OPT_TRACE("plan will not use hash none method");
+      distributed_methods &= ~DIST_HASH_NONE;
+    } else {
+      OPT_TRACE("plan will use hash none method and prune broadcast none method");
+      distributed_methods &= ~DIST_BROADCAST_NONE;
     }
   }
   // check if match right re-partition
   if (OB_SUCC(ret) && (distributed_methods & DIST_NONE_PARTITION)) {
     OPT_TRACE("check none partition method");
-    target_part_keys.reuse();
     if (NULL == left_path.get_strong_sharding()) {
-      is_match_repart = false;
       OPT_TRACE("strong sharding of left path is null, not use none partition");
-    } else if (!left_path.get_sharding()->is_distributed_with_table_location_and_partitioning()) {
-      is_match_repart = false;
-      OPT_TRACE("left path not meet repart");
-    } else if (OB_FAIL(left_sharding->get_all_partition_keys(target_part_keys, true))) {
-      LOG_WARN("failed to get all partition keys", K(ret));
-    } else if (OB_FAIL(ObShardingInfo::check_if_match_repart_or_rehash(equal_sets,
-                                                                      right_join_keys,
-                                                                      left_join_keys,
-                                                                      target_part_keys,
-                                                                      is_match_repart))) {
-      LOG_WARN("failed to check if match repartition", K(ret));
-    } else { /*do nothing*/ }
-
-    if (OB_SUCC(ret)) {
-      bool need_reduce_dop = left_path.parallel_more_than_part_cnt();
-      if (!is_match_repart) {
-        OPT_TRACE("plan will not use none partition method");
-        distributed_methods &= ~DIST_NONE_PARTITION;
-        if (path_info.force_slave_mapping_) {
-          OPT_TRACE("force slave mapping and prune none broadcast method");
-          distributed_methods &= ~DIST_NONE_BROADCAST;
-        }
-      } else if (need_reduce_dop) {
-        OPT_TRACE("plan will use none partition method with parallel degree reduced");
-      } else {
-        OPT_TRACE("plan will use none partition method and prune none broadcast/hash method");
-        distributed_methods &= ~DIST_NONE_BROADCAST;
-        distributed_methods &= ~DIST_NONE_HASH;
-        need_pull_to_local = false;
-      }
+      distributed_methods &= ~DIST_NONE_PARTITION;
+    } else if (!left_path.get_sharding()->is_distributed_with_table_location_and_partitioning()
+               || !is_left_match_repart) {
+      OPT_TRACE("left path not meet repart, not use none partition");
+      distributed_methods &= ~DIST_NONE_PARTITION;
+    } else if (left_path.parallel_more_than_part_cnt()) {
+      OPT_TRACE("plan will use none partition method with parallel degree reduced");
+    } else {
+      OPT_TRACE("plan will use none partition method and prune none broadcast/hash method");
+      distributed_methods &= ~DIST_NONE_BROADCAST;
+      distributed_methods &= ~DIST_NONE_HASH;
+      need_pull_to_local = false;
     }
   }
   // check if match none-hash
   if (OB_SUCC(ret) && (distributed_methods & DIST_NONE_HASH)) {
     OPT_TRACE("check none hash method");
-    target_part_keys.reuse();
     if (NULL == left_path.get_strong_sharding()) {
-      is_match_single_side_hash = false;
       OPT_TRACE("strong sharding of left path is null, not use none hash");
+      distributed_methods &= ~DIST_NONE_HASH;
     } else if (!left_sharding->is_distributed_without_table_location_with_partitioning() ||
-               !ObShardingInfo::is_shuffled_server_list(left_path.get_server_list())) {
-      is_match_single_side_hash = false;
-    } else if (OB_FAIL(left_sharding->get_all_partition_keys(target_part_keys, true))) {
-      LOG_WARN("failed to get all partition keys", K(ret));
-    } else if (OB_FAIL(ObShardingInfo::check_if_match_repart_or_rehash(equal_sets,
-                                                                      right_join_keys,
-                                                                      left_join_keys,
-                                                                      target_part_keys,
-                                                                      is_match_single_side_hash))) {
-      LOG_WARN("failed to check if match none-hash", K(ret));
-    } else { /*do nothing*/ }
-
-    if (OB_SUCC(ret)) {
-      if (!is_match_single_side_hash) {
-        OPT_TRACE("plan will not use none hash method");
-        distributed_methods &= ~DIST_NONE_HASH;
-      } else {
-        OPT_TRACE("plan will use none hash method and prune none broadcast method");
-        distributed_methods &= ~DIST_NONE_BROADCAST;
-      }
+               !ObShardingInfo::is_shuffled_server_list(left_path.get_server_list()) ||
+               !is_left_match_repart) {
+      OPT_TRACE("plan will not use none hash method");
+      distributed_methods &= ~DIST_NONE_HASH;
+    } else {
+      OPT_TRACE("plan will use none hash method and prune none broadcast method");
+      distributed_methods &= ~DIST_NONE_BROADCAST;
     }
   }
+
+  if (OB_SUCC(ret) && (distributed_methods & DIST_BROADCAST_NONE)
+      && path_info.force_slave_mapping_ && !is_right_match_repart) {
+    OPT_TRACE("force slave mapping and right path not meet repart, prune broadcast none method");
+    distributed_methods &= ~DIST_BROADCAST_NONE;
+  }
+
+  if (OB_SUCC(ret) && (distributed_methods & DIST_NONE_BROADCAST)
+      && path_info.force_slave_mapping_ && !is_left_match_repart) {
+    OPT_TRACE("force slave mapping and left path not meet repart, prune none broadcast method");
+    distributed_methods &= ~DIST_NONE_BROADCAST;
+  }
+
   /*
    * if we have other parallel join methods, avoid pull to local execution,
    * we may change this strategy in future
