@@ -66,6 +66,64 @@ int ObBatchUnbindTabletArg::assign(const ObBatchUnbindTabletArg &other)
   return ret;
 }
 
+int ObBatchUnbindTabletArg::skip_array_len(const char *buf,
+    int64_t data_len,
+    int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t count = 0;
+  if (pos > data_len) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid args", K(ret), KP(buf), K(data_len), K(pos));
+  } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &count))) {
+    TRANS_LOG(WARN, "failed to decode array count", K(ret), KP(buf), K(data_len));
+  } else if (count < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid args", K(ret), KP(buf), K(data_len), K(pos), K(count));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
+      ObTabletID tablet_id;
+      OB_UNIS_DECODE(tablet_id);
+    }
+  }
+  return ret;
+}
+
+int ObBatchUnbindTabletArg::is_old_mds(const char *buf,
+    int64_t data_len,
+    bool &is_old_mds)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  is_old_mds = false;
+  int64_t version = 0;
+  int64_t len = 0;
+  uint64_t tenant_id;
+  share::ObLSID id;
+  int64_t schema_version;
+
+  if (OB_ISNULL(buf) || OB_UNLIKELY(data_len <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid args", K(ret), KP(buf), K(data_len));
+  } else {
+    LST_DO_CODE(OB_UNIS_DECODE, version, len, tenant_id, id, schema_version);
+    if (OB_FAIL(ret)) {
+    }
+    // orig tablets array
+    else if (OB_FAIL(skip_array_len(buf, data_len, pos))) {
+      TRANS_LOG(WARN, "failed to skip_unis_array_len", K(ret), KP(buf), K(data_len), K(pos));
+    }
+    // hidden tablets array
+    else if (OB_FAIL(skip_array_len(buf, data_len, pos))) {
+      TRANS_LOG(WARN, "failed to skip_unis_array_len", K(ret), KP(buf), K(data_len), K(pos));
+    } else {
+      LST_DO_CODE(OB_UNIS_DECODE, is_old_mds);
+    }
+  }
+
+  return ret;
+}
+
 OB_DEF_SERIALIZE(ObBatchUnbindTabletArg)
 {
   int ret = OB_SUCCESS;
