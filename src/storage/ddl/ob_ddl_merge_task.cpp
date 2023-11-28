@@ -482,7 +482,7 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
   data_desc.reset();
   ObLSService *ls_service = MTL(ObLSService *);
   ObArenaAllocator tmp_arena("DDLIdxDescTmp");
-  const ObStorageSchema *storage_schema = nullptr;
+  ObStorageSchema *storage_schema = nullptr;
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   const ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
   if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || snapshot_version <= 0 || data_format_version < 0)) {
@@ -535,7 +535,7 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
     }
     data_desc.is_ddl_ = true;
   }
-  ObTablet::free_storage_schema(tmp_arena, storage_schema);
+  ObTabletObjLoadHelper::free(tmp_arena, storage_schema);
   return ret;
 }
 
@@ -638,7 +638,7 @@ int ObTabletDDLUtil::create_ddl_sstable(ObTablet &tablet,
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator tmp_arena("CreateDDLSstTmp");
-  const ObStorageSchema *storage_schema = nullptr;
+  ObStorageSchema *storage_schema = nullptr;
   SMART_VAR(ObSSTableMergeRes, res) {
     if (OB_UNLIKELY(nullptr == sstable_index_builder || !ddl_param.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
@@ -726,7 +726,7 @@ int ObTabletDDLUtil::create_ddl_sstable(ObTablet &tablet,
         }
       }
     }
-    ObTablet::free_storage_schema(tmp_arena, storage_schema);
+    ObTabletObjLoadHelper::free(tmp_arena, storage_schema);
   }
   return ret;
 }
@@ -745,7 +745,7 @@ int ObTabletDDLUtil::update_ddl_table_store(ObTablet &tablet,
     ObLSHandle ls_handle;
     ObTabletHandle tablet_handle;
     ObArenaAllocator allocator;
-    const ObStorageSchema *tablet_storage_schema = nullptr;
+    ObStorageSchema *tablet_storage_schema = nullptr;
     if (OB_FAIL(ls_service->get_ls(ddl_param.ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
       LOG_WARN("get ls failed", K(ret), K(ddl_param));
     } else if (OB_FAIL(tablet.load_storage_schema(allocator, tablet_storage_schema))) {
@@ -778,7 +778,7 @@ int ObTabletDDLUtil::update_ddl_table_store(ObTablet &tablet,
         LOG_INFO("ddl update table store success", K(ddl_param), K(table_store_param), K(sstable));
       }
     }
-    ObTablet::free_storage_schema(allocator, tablet_storage_schema);
+    ObTabletObjLoadHelper::free(allocator, tablet_storage_schema);
   }
   return ret;
 }

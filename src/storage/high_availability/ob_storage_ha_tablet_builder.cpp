@@ -1057,7 +1057,7 @@ int ObStorageHATabletsBuilder::hold_local_reuse_sstable_(
   tables_handle.reset();
   ObTablet *tablet = nullptr;
   ObArenaAllocator arena_allocator;
-  const ObStorageSchema *tablet_storage_schema = nullptr;
+  ObStorageSchema *tablet_storage_schema = nullptr;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("storage ha tablets builder do not init", K(ret));
@@ -1107,7 +1107,7 @@ int ObStorageHATabletsBuilder::hold_local_reuse_sstable_(
       }
     } // end of while
   }
-  ObTablet::free_storage_schema(arena_allocator, tablet_storage_schema);
+  ObTabletObjLoadHelper::free(arena_allocator, tablet_storage_schema);
   return ret;
 }
 
@@ -1244,7 +1244,7 @@ int ObStorageHATabletsBuilder::create_remote_logical_sstable_(
   void *buf = nullptr;
   ObSSTable *sstable = nullptr;
   ObArenaAllocator allocator;
-  const ObStorageSchema *storage_schema = nullptr;
+  ObStorageSchema *storage_schema = nullptr;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("storage ha tablets builder do not init", K(ret));
@@ -1266,7 +1266,7 @@ int ObStorageHATabletsBuilder::create_remote_logical_sstable_(
     table_handle.set_sstable(sstable, &arena_allocator);
     LOG_INFO("succeed to create remote logical sstable", K(tablet_id), K(table_handle), KPC(tablet));
   }
-  ObTablet::free_storage_schema(allocator, storage_schema);
+  ObTabletObjLoadHelper::free(allocator, storage_schema);
   return ret;
 }
 
@@ -2389,7 +2389,7 @@ int ObStorageHATabletBuilderUtil::inner_update_tablet_table_store_with_major_(
   SCN tablet_snapshot_version;
   ObTenantMetaMemMgr *meta_mem_mgr = nullptr;
   ObArenaAllocator allocator;
-  const ObStorageSchema *tablet_storage_schema = nullptr;
+  ObStorageSchema *tablet_storage_schema = nullptr;
   if (multi_version_start < 0 || OB_ISNULL(tablet) || OB_ISNULL(ls) || !table_handle.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table ptr should not be null", K(ret), K(multi_version_start), KP(tablet), K(table_handle), KP(ls));
@@ -2436,7 +2436,7 @@ int ObStorageHATabletBuilderUtil::inner_update_tablet_table_store_with_major_(
       LOG_WARN("failed to build ha tablet new table store", K(ret), KPC(tablet), K(param));
     }
   }
-  ObTablet::free_storage_schema(allocator, tablet_storage_schema);
+  ObTabletObjLoadHelper::free(allocator, tablet_storage_schema);
   return ret;
 }
 

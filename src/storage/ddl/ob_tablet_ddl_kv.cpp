@@ -89,7 +89,7 @@ int ObDDLKV::init_sstable_param(ObTablet &tablet,
                                 ObTabletCreateSSTableParam &sstable_param)
 {
   int ret = OB_SUCCESS;
-  const ObStorageSchema *storage_schema_ptr = nullptr;
+  ObStorageSchema *storage_schema_ptr = nullptr;
   ObArenaAllocator allocator;
   if (OB_UNLIKELY(!table_key.is_valid() || !ddl_start_scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
@@ -150,7 +150,7 @@ int ObDDLKV::init_sstable_param(ObTablet &tablet,
       }
     }
   }
-  ObTablet::free_storage_schema(allocator, storage_schema_ptr);
+  ObTabletObjLoadHelper::free(allocator, storage_schema_ptr);
   return ret;
 }
 

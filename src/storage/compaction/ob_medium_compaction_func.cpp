@@ -432,7 +432,7 @@ int ObMediumCompactionScheduleFunc::choose_medium_schema_version(
 {
   int ret = OB_SUCCESS;
   const int64_t tablet_snapshot_version = tablet.get_snapshot_version();
-  const ObStorageSchema *schema_on_tablet = nullptr;
+  ObStorageSchema *schema_on_tablet = nullptr;
   int64_t store_column_cnt_in_schema = 0;
   ObSEArray<storage::ObITable *, MAX_MEMSTORE_CNT> memtables;
 

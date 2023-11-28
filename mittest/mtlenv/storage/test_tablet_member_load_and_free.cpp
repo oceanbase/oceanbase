@@ -156,13 +156,13 @@ TEST_F(TestTabletMemberLoadAndFree, storage_schema)
 
   // load storage schema, memory type
   ASSERT_TRUE(tablet->storage_schema_addr_.is_memory_object());
-  const ObStorageSchema *storage_schema = nullptr;
+  ObStorageSchema *storage_schema = nullptr;
   ret = tablet->load_storage_schema(arena_allocator, storage_schema);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_NE(nullptr, storage_schema);
 
   ASSERT_NE(0, arena_allocator.used());
-  ObTablet::free_storage_schema(arena_allocator, storage_schema);
+  ObTabletObjLoadHelper::free(arena_allocator, storage_schema);
   arena_allocator.clear();
   ASSERT_EQ(0, arena_allocator.used());
 
@@ -181,7 +181,7 @@ TEST_F(TestTabletMemberLoadAndFree, storage_schema)
   ASSERT_NE(nullptr, storage_schema);
 
   ASSERT_NE(0, arena_allocator.used());
-  ObTablet::free_storage_schema(arena_allocator, storage_schema);
+  ObTabletObjLoadHelper::free(arena_allocator, storage_schema);
   arena_allocator.clear();
   ASSERT_EQ(0, arena_allocator.used());
 }
