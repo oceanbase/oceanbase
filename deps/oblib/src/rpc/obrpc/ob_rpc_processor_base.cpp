@@ -349,6 +349,7 @@ void ObRpcProcessorBase::compress_result(const char *src_buf, int64_t src_len,
   common::ObCompressor *compressor = nullptr;
   int64_t real_len = 0;
   bool need_compress = true;
+  int pcode = m_get_pcode();
   if (OB_FAIL(common::ObCompressorPool::get_instance().get_compressor(result_compress_type_, compressor))) {
   } else if (OB_FAIL(compressor->compress(src_buf, src_len, dst_buf, dst_len, real_len))) {
     need_compress = false;
@@ -356,7 +357,7 @@ void ObRpcProcessorBase::compress_result(const char *src_buf, int64_t src_len,
     need_compress = false;
   } else {
   }
-  RPC_OBRPC_LOG(DEBUG, "result compressed", K(ret), K(need_compress),
+  RPC_OBRPC_LOG(DEBUG, "result compressed", K(ret), K(pcode), K(need_compress),
                 K_(result_compress_type), K(src_len), K(real_len));
   if (OB_SUCC(ret) && need_compress) {
     pkt->set_content(dst_buf, real_len);
