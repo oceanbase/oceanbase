@@ -6298,7 +6298,30 @@ def_table_schema(
 # 482 : __all_tablet_reorganize_history
 # 483 : __all_storage_ha_error_diagnose
 # 484 : __all_storage_ha_perf_diagnose
-
+all_transfer_partition_task_def= dict(
+    owner = 'msy164651',
+    table_name    = '__all_transfer_partition_task',
+    table_id = '498',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    in_tenant_space = True,
+    is_cluster_private = False,
+    meta_record_in_sys = False,
+    rowkey_columns = [
+        ('task_id', 'int', 'false'),
+    ],
+    normal_columns = [
+        ('table_id', 'int', 'false'),
+        ('object_id', 'int', 'false'),
+        ('dest_ls', 'int', 'false'),
+        ('status', 'varchar:OB_DEFAULT_STATUS_LENTH', 'false'),
+        ('balance_job_id', 'int', 'false'),
+        ('transfer_task_id', 'int', 'false'),
+        ('comment', 'longtext', 'true'),
+    ],
+)
+def_table_schema(**all_transfer_partition_task_def)
+def_table_schema(**gen_history_table_def_of_task(499, all_transfer_partition_task_def))
 #
 # 余留位置
 ################################################################################
@@ -12994,7 +13017,17 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12432: __all_virtual_column_gorup_mapping_history
 # 12433: __all_virtual_storage_ha_error_diagnose
 # 12434: __all_virtual_storage_ha_perf_diagnose
-#
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12451',
+  table_name = '__all_virtual_transfer_partition_task',
+  keywords = all_def_keywords['__all_transfer_partition_task']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12452',
+  table_name = '__all_virtual_transfer_partition_task_history',
+  keywords = all_def_keywords['__all_transfer_partition_task_history']))
+
+
 # 余留位置
 #
 
@@ -13399,6 +13432,10 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keyword
 # 15418: __all_virtual_cgroup_config
 # 15419: __all_virutal_column_group_history
 # 15420: __all_virutal_column_group_maping_history
+
+def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15430', all_def_keywords['__all_transfer_partition_task'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15431', all_def_keywords['__all_transfer_partition_task_history'])))
+
 # 余留位置
 
 ################################################################################
@@ -29949,6 +29986,102 @@ def_table_schema(
 
 #21479 GV$OB_CGROUP_CONFIG
 #21480 V$OB_CGROUP_CONFIG
+def_table_schema(
+  owner           = 'msy164651',
+  table_name      = 'DBA_OB_TRANSFER_PARTITION_TASKS',
+  table_id        = '21501',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT TASK_ID,
+         GMT_CREATE AS CREATE_TIME,
+         GMT_MODIFIED AS MODIFY_TIME,
+         TABLE_ID,
+         OBJECT_ID,
+         DEST_LS,
+         BALANCE_JOB_ID,
+         TRANSFER_TASK_ID,
+         STATUS,
+         COMMENT
+  FROM oceanbase.__all_transfer_partition_task
+  """.replace("\n", " "),
+)
+def_table_schema(
+  owner           = 'msy164651',
+  table_name      = 'CDB_OB_TRANSFER_PARTITION_TASKS',
+  table_id        = '21502',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT TENANT_ID,
+         TASK_ID,
+         GMT_CREATE AS CREATE_TIME,
+         GMT_MODIFIED AS MODIFY_TIME,
+         TABLE_ID,
+         OBJECT_ID,
+         DEST_LS,
+         BALANCE_JOB_ID,
+         TRANSFER_TASK_ID,
+         STATUS,
+         COMMENT
+  FROM oceanbase.__all_virtual_transfer_partition_task
+  """.replace("\n", " "),
+)
+def_table_schema(
+  owner           = 'msy164651',
+  table_name      = 'DBA_OB_TRANSFER_PARTITION_TASK_HISTORY',
+  table_id        = '21503',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT TASK_ID,
+         CREATE_TIME,
+         FINISH_TIME,
+         TABLE_ID,
+         OBJECT_ID,
+         DEST_LS,
+         BALANCE_JOB_ID,
+         TRANSFER_TASK_ID,
+         STATUS,
+         COMMENT
+  FROM oceanbase.__all_transfer_partition_task_history
+  """.replace("\n", " "),
+)
+def_table_schema(
+  owner           = 'msy164651',
+  table_name      = 'CDB_OB_TRANSFER_PARTITION_TASK_HISTORY',
+  table_id        = '21504',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT TENANT_ID,
+         TASK_ID,
+         CREATE_TIME,
+         FINISH_TIME,
+         TABLE_ID,
+         OBJECT_ID,
+         DEST_LS,
+         BALANCE_JOB_ID,
+         TRANSFER_TASK_ID,
+         STATUS,
+         COMMENT
+  FROM oceanbase.__all_virtual_transfer_partition_task_history
+  """.replace("\n", " "),
+)
 
 # 余留位置
 
@@ -48439,6 +48572,60 @@ def_table_schema(
     WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
 )
+
+def_table_schema(
+  owner           = 'msy164651',
+  table_name      = 'DBA_OB_TRANSFER_PARTITION_TASKS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25275',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT TASK_ID,
+         GMT_CREATE AS CREATE_TIME,
+         GMT_MODIFIED AS MODIFY_TIME,
+         TABLE_ID,
+         OBJECT_ID,
+         DEST_LS,
+         BALANCE_JOB_ID,
+         TRANSFER_TASK_ID,
+         STATUS,
+         "COMMENT"
+  FROM SYS.ALL_VIRTUAL_TRANSFER_PARTITION_TASK_REAL_AGENT
+  """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'msy164651',
+  table_name      = 'DBA_OB_TRANSFER_PARTITION_TASK_HISTORY',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25276',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT TASK_ID,
+         CREATE_TIME,
+         FINISH_TIME,
+         TABLE_ID,
+         OBJECT_ID,
+         DEST_LS,
+         BALANCE_JOB_ID,
+         TRANSFER_TASK_ID,
+         STATUS,
+         "COMMENT"
+  FROM SYS.ALL_VIRTUAL_TRANSFER_PARTITION_TASK_HISTORY_REAL_AGENT
+  """.replace("\n", " "),
+)
 # 25268: DBA_OB_IMPORT_STMT_EXEC_HISTORY
 
 def_table_schema(
@@ -48480,7 +48667,6 @@ def_table_schema(
       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
 )
-
 # 余留位置
 
 #### End Data Dictionary View
@@ -55372,6 +55558,14 @@ def_sys_index_table(
   index_using_type = 'USING_BTREE',
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_kv_ttl_task_history'])
+
+def_sys_index_table(
+  index_name = 'idx_transfer_partition_key',
+  index_table_id = 101098,
+  index_columns = ['table_id', 'object_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_UNIQUE_LOCAL',
+  keywords = all_def_keywords['__all_transfer_partition_task'])
 
 ################################################################################
 # Oracle Agent table Index

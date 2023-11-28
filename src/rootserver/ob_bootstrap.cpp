@@ -494,7 +494,7 @@ int ObPreBootstrap::check_is_all_server_empty(bool &is_empty)
   return ret;
 }
 
-bool ObBootstrap::TableIdCompare::operator() (const ObTableSchema* left, const ObTableSchema* right)
+bool ObBootstrap::TableIdCompare::operator() (const ObSimpleTableSchemaV2* left, const ObSimpleTableSchemaV2* right)
 {
   bool bret = false;
 

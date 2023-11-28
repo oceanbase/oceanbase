@@ -65,8 +65,13 @@ public:
 
   ObBalanceJob &get_balance_job() { return balance_job_; }
   ObArray<ObBalanceTask> &get_balance_task() { return balance_tasks_; }
-
-
+  static int transfer_logical_task_to_balance_task(
+    const uint64_t tenant_id,
+    const ObBalanceJobID &balance_job_id,
+    const ObLSID &src_ls, const ObLSID &dest_ls,
+    const uint64_t src_ls_group, const uint64_t dest_ls_group,
+    const ObTransferPartList &part_list,
+    ObArray<ObBalanceTask> &task_array);
   // For ObAllBalanceGroupBuilder::NewPartitionCallback
   // handle new partition of every balance group
   int on_new_partition(

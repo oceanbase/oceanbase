@@ -162,8 +162,9 @@ int ObTenantTransferService::process_task_(const ObTransferTask::TaskStatus &tas
       LOG_WARN("fail to process init task", KR(ret), K(task_stat));
     }
   } else if (task_stat.get_status().is_finish_status()) {
+    ObTransferTask transfer_task;//no used
     if (OB_FAIL(try_clear_transfer_task(
-        task_stat.get_task_id(),
+        task_stat.get_task_id(), transfer_task,
         all_part_list,
         finished_part_list))) {
       LOG_WARN("fail to process finish task", KR(ret), K(task_stat));
@@ -1115,7 +1116,8 @@ int ObTenantTransferService::generate_transfer_task(
   return ret;
 }
 
-int ObTenantTransferService::try_cancel_transfer_task(const ObTransferTaskID task_id)
+int ObTenantTransferService::try_cancel_transfer_task(
+    const ObTransferTaskID task_id)
 {
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
@@ -1206,12 +1208,12 @@ int ObTenantTransferService::try_cancel_transfer_task(const ObTransferTaskID tas
 
 int ObTenantTransferService::try_clear_transfer_task(
     const ObTransferTaskID task_id,
+    ObTransferTask &task,
     share::ObTransferPartList &all_part_list,
     share::ObTransferPartList &finished_part_list)
 {
   int ret = OB_SUCCESS;
   DEBUG_SYNC(BEFORE_PROCESS_BALANCE_TASK_TRANSFER_END);
-  ObTransferTask task;
   if (OB_FAIL(unlock_and_clear_task_(task_id, task))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       int64_t create_time = OB_INVALID_TIMESTAMP;

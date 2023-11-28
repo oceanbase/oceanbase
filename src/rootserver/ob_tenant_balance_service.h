@@ -103,6 +103,9 @@ private:
   void reset();
   int persist_job_and_task_(const share::ObBalanceJob &job,
                             ObArray<share::ObBalanceTask> &tasks);
+  int persist_job_and_task_in_trans_(const share::ObBalanceJob &job,
+                            ObArray<share::ObBalanceTask> &tasks,
+                            common::ObMySQLTransaction &trans);
   int construct_dependency_of_each_task_(ObArray<share::ObBalanceTask> &tasks);
   int lock_and_check_balance_job_(common::ObMySQLTransaction &trans, const uint64_t tenant_id);
   int try_update_job_comment_(const share::ObBalanceJob &job, const common::ObSqlString &comment);
@@ -112,6 +115,10 @@ private:
       int64_t &last_statistic_schema_version,
       share::ObTransferTaskID &last_statistic_max_transfer_task_id);
   int get_active_unit_num_(int64_t &active_unit_num) const;
+  //transfer partition
+  int transfer_partition_(int64_t &job_cnt);
+  int try_finish_transfer_partition_(const share::ObBalanceJob &job,
+      common::ObMySQLTransaction &trans);
 private:
   bool inited_;
   bool loaded_;

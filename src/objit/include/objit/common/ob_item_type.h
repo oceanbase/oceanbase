@@ -2274,6 +2274,9 @@ typedef enum ObItemType
   T_VALUES_TABLE_EXPRESSION,//used to values statement
   T_VALUES_ROW_LIST,//used to values statement
   T_LOB_INROW_THRESHOLD,
+  T_TRANSFER_PARTITION, // transfer tablet manually
+  T_TRANSFER_PARTITION_TO_LS,
+  T_PARTITION_INFO,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

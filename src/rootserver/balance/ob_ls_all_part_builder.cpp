@@ -146,7 +146,7 @@ int ObLSAllPartBuilder::build_part_info_(
 
     // compute part object id based on table schema and tablet id
     if (PARTITION_LEVEL_ZERO == table_schema->get_part_level()) {
-      part_object_id = 0;
+      part_object_id = table_schema->get_object_id();
     } else if (OB_FAIL(table_schema->get_part_id_by_tablet(tablet_id, part_id, subpart_id))) {
       if (OB_TABLET_NOT_EXIST == ret) {
         LOG_WARN("tablet not exist in table schema, need retry", KR(ret), K(tablet_id), KPC(table_schema));

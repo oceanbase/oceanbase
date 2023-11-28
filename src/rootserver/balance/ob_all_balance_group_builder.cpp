@@ -528,7 +528,7 @@ int ObAllBalanceGroupBuilder::build_bg_for_partlevel_zero_(const ObSimpleTableSc
     bool in_new_pg = true; // in new partition group
     ObLSID dest_ls_id;
     const uint64_t table_id = table_schema.get_table_id();
-    ObObjectID part_object_id = 0;
+    ObObjectID part_object_id = table_schema.get_object_id();
     ObTabletID tablet_id = table_schema.get_tablet_id();
     const uint64_t part_group_uid = table_id; // each table is an independent partition group
 

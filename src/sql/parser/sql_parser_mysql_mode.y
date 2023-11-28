@@ -362,6 +362,8 @@ END_P SET_VAR DELIMITER
 
         ZONE ZONE_LIST ZONE_TYPE
 
+        TRANSFER OBJECT_ID
+
 %type <node> sql_stmt stmt_list stmt opt_end_p
 %type <node> select_stmt update_stmt delete_stmt
 %type <node> insert_stmt single_table_insert values_clause dml_table_name
@@ -518,6 +520,7 @@ END_P SET_VAR DELIMITER
 %type <node> json_table_ordinality_column_def json_table_exists_column_def json_table_value_column_def json_table_nested_column_def
 %type <node> opt_value_on_empty_or_error_or_mismatch opt_on_mismatch
 %type <node> table_values_caluse table_values_caluse_with_order_by_and_limit values_row_list row_value
+%type <node> transfer_partition_stmt transfer_partition_clause part_info
 
 %type <node> ttl_definition ttl_expr ttl_unit
 %start sql_stmt
@@ -685,6 +688,7 @@ stmt:
   | method_opt              { $$ = $1; check_question_mark($$, result); }
   | switchover_tenant_stmt   { $$ = $1; check_question_mark($$, result); }
   | recover_tenant_stmt   { $$ = $1; check_question_mark($$, result); }
+  | transfer_partition_stmt { $$ = $1; check_question_mark($$, result); }
   ;
 
 /*****************************************************************************
@@ -17509,7 +17513,33 @@ opt_restore_until
 {
   malloc_terminal_node($$, result->malloc_pool_, T_RECOVER_CANCEL);
 };
-
+/*===========================================================
+ *
+ * 手动transfer命令
+ *
+ *===========================================================*/
+transfer_partition_stmt:
+ALTER SYSTEM transfer_partition_clause opt_tenant_name
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TRANSFER_PARTITION, 2, $3, $4);
+}
+;
+transfer_partition_clause:
+TRANSFER PARTITION part_info TO LS INTNUM
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TRANSFER_PARTITION_TO_LS, 2, $3, $6);
+}
+;
+part_info:
+TABLE_ID opt_equal_mark INTNUM ',' OBJECT_ID opt_equal_mark INTNUM
+{
+  (void) ($2);
+  (void) ($6);
+   malloc_non_terminal_node($$, result->malloc_pool_, T_PARTITION_INFO, 2, $3, $7);
+}
+;
 /*===========================================================
  *
  *	Name classification
@@ -18904,6 +18934,8 @@ ACCOUNT
 |       CONNECT
 |       STATEMENT_ID
 |       KV_ATTRIBUTES
+|       OBJECT_ID
+|       TRANSFER
 ;
 
 unreserved_keyword_special:

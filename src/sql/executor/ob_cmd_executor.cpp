@@ -1005,6 +1005,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObTableTTLStmt, ObTableTTLExecutor);
         break;
       }
+      case stmt::T_TRANSFER_PARTITION: {
+        DEFINE_EXECUTE_CMD(ObTransferPartitionStmt, ObTransferPartitionExecutor);
+        break;
+      }
       case stmt::T_CS_DISKMAINTAIN:
       case stmt::T_TABLET_CMD:
       case stmt::T_SWITCH_ROOTSERVER:

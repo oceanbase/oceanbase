@@ -17,6 +17,7 @@
 #include "share/ob_rpc_struct.h"
 #include "share/scheduler/ob_sys_task_stat.h"
 #include "share/backup/ob_backup_clean_struct.h"
+#include "rootserver/ob_transfer_partition_command.h"
 
 namespace oceanbase
 {
@@ -1332,6 +1333,19 @@ public:
   obrpc::ObRecoverTableArg &get_rpc_arg() { return rpc_arg_; }
 private:
   obrpc::ObRecoverTableArg rpc_arg_;
+};
+
+class ObTransferPartitionStmt : public ObSystemCmdStmt
+{
+public:
+  ObTransferPartitionStmt()
+    : ObSystemCmdStmt(stmt::T_TRANSFER_PARTITION),
+      arg_() {}
+  virtual ~ObTransferPartitionStmt() {}
+
+  rootserver::ObTransferPartitionArg &get_arg() { return arg_; }
+private:
+  rootserver::ObTransferPartitionArg arg_;
 };
 
 

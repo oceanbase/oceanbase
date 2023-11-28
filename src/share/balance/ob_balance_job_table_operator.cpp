@@ -32,7 +32,7 @@ static const char* BALANCE_JOB_STATUS_ARRAY[] =
 };
 static const char *BALANCE_JOB_TYPE[] =
 {
-  "LS_BALANCE", "PARTITION_BALANCE",
+  "LS_BALANCE", "PARTITION_BALANCE", "TRANSFER_PARTITION"
 };
 
 const char* ObBalanceJobStatus::to_str() const
