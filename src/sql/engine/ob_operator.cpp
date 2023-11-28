@@ -886,6 +886,9 @@ int ObOperator::inner_rescan()
   if (br_it_) {
     br_it_->rescan();
   }
+  // If an operator rescan after drained, the exch_drained_ must be reset
+  // so it can be drained again.
+  exch_drained_ = false;
   batch_reach_end_ = false;
   row_reach_end_ = false;
   clear_batch_end_flag();
@@ -1445,6 +1448,14 @@ int ObOperator::do_drain_exch()
   } else if (!exch_drained_) {
     int tmp_ret = inner_drain_exch();
     exch_drained_ = true;
+    // If an operator is drained, it means that the parent operator will never call its
+    // get_next_batch function again theoretically. However, we cannot guarantee that there won't be
+    // any bugs that call get_next_batch again after drain. To prevent this situation, we set the
+    // all iter end flags here.
+    // For specific case, refer to issue:
+    brs_.end_ = true;
+    batch_reach_end_ = true;
+    row_reach_end_ = true;
     if (!spec_.is_receive()) {
       for (int64_t i = 0; i < child_cnt_ && OB_SUCC(ret); i++) {
         if (OB_ISNULL(children_[i])) {
