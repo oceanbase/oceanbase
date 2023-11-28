@@ -73,7 +73,7 @@ int ObLSWorker::init(const int64_t worker_thread_num,
     LOG_ERROR("init timer fail", KR(ret), K(max_timer_task_count));
   }
   // Initializing the thread pool
-  else if (OB_FAIL(StreamWorkerThread::init(worker_thread_num,
+  else if (OB_FAIL(ObMapQueueThreadPool::init(OB_SERVER_TENANT_ID, worker_thread_num,
       ObModIds::OB_LS_WORKER_THREAD))) {
     LOG_ERROR("init worker thread fail", KR(ret), K(worker_thread_num));
   } else {
@@ -103,7 +103,7 @@ void ObLSWorker::destroy()
     inited_ = false;
     stream_paused_ = false;
     fetcher_resume_time_ = OB_INVALID_TIMESTAMP;
-    StreamWorkerThread::destroy();
+    ObMapQueueThreadPool::destroy();
     timer_.destroy();
     fetcher_host_ = nullptr;
     idle_pool_ = NULL;
@@ -123,7 +123,7 @@ int ObLSWorker::start()
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(timer_.start())) {
     LOG_ERROR("start timer thread fail", KR(ret));
-  } else if (OB_FAIL(StreamWorkerThread::start())) {
+  } else if (OB_FAIL(ObMapQueueThreadPool::start())) {
     LOG_ERROR("start stream worker fail", KR(ret));
   } else {
     LOG_INFO("start stream worker succ");
@@ -137,7 +137,7 @@ void ObLSWorker::stop()
     LOG_INFO("stop stream worker begin");
     mark_stop_flag();
     timer_.stop();
-    StreamWorkerThread::stop();
+    ObMapQueueThreadPool::stop();
     LOG_INFO("stop stream worker succ");
   }
 }
@@ -146,7 +146,7 @@ void ObLSWorker::mark_stop_flag()
 {
   LOG_INFO("stream worker mark_stop_flag begin");
   timer_.mark_stop_flag();
-  StreamWorkerThread::mark_stop_flag();
+  ObMapQueueThreadPool::has_set_stop() = true;
   LOG_INFO("stream worker mark_stop_flag end");
 }
 
@@ -289,7 +289,7 @@ int ObLSWorker::dispatch_stream_task(FetchStream &task, const char *from_mod)
     }
 
     // Rotating the task of fetching log streams to work threads
-    if (OB_FAIL(StreamWorkerThread::push(&task, hash_val))) {
+    if (OB_FAIL(ObMapQueueThreadPool::push(&task, hash_val))) {
       if (OB_IN_STOP_STATE != ret) {
         LOG_ERROR("push stream task into thread queue fail", KR(ret));
       }
@@ -320,8 +320,7 @@ int ObLSWorker::hibernate_stream_task(FetchStream &task, const char *from_mod)
 }
 
 // hendle function for thread pool
-int ObLSWorker::handle(void *data,
-    const int64_t thread_index,
+void ObLSWorker::handle(void *data,
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
@@ -329,11 +328,11 @@ int ObLSWorker::handle(void *data,
   FetchStream *task = static_cast<FetchStream *>(data);
   ObLogTraceIdGuard trace_guard;
 
-  LOG_DEBUG("[STAT] [STREAM_WORKER] [HANDLE_STREAM_TASK]", K_(stream_paused), K(thread_index),
+  LOG_DEBUG("[STAT] [STREAM_WORKER] [HANDLE_STREAM_TASK]", K_(stream_paused), "thread_index", get_thread_idx(),
       K(task), KPC(task));
 
   if (OB_ISNULL(task)) {
-    LOG_ERROR("invalid task", K(task), K(thread_index));
+    LOG_ERROR("invalid task", K(task), "thread_index", get_thread_idx());
     ret = OB_INVALID_ARGUMENT;
   }
   // If the stream task is currently suspended, the task is put to sleep
@@ -353,7 +352,7 @@ int ObLSWorker::handle(void *data,
     // Can no longer continue with the task
   }
 
-  if (0 == thread_index) {
+  if (0 == get_thread_idx()) {
     if (REACH_TIME_INTERVAL(STAT_INTERVAL)) {
       print_stat_();
     }
@@ -361,9 +360,9 @@ int ObLSWorker::handle(void *data,
 
   if (OB_SUCCESS != ret && OB_IN_STOP_STATE != ret && OB_NOT_NULL(err_handler_)) {
     err_handler_->handle_error(ret, "stream worker exits on error, err=%d, thread_index=%ld",
-        ret, thread_index);
+        ret, get_thread_idx());
+    ObMapQueueThreadPool::has_set_stop() = true; // mark thread pool stop;
   }
-  return ret;
 }
 
 void ObLSWorker::configure(const ObLogConfig & config)

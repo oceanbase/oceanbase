@@ -497,9 +497,7 @@ int ObLogArchivePieceContext::get_piece_(const SCN &scn,
 {
   int ret = OB_SUCCESS;
   bool done = false;
-  int64_t times = 0;
-  const int64_t MAX_RETRY_TIMES = 100;
-  while (OB_SUCC(ret) && ! done && times < MAX_RETRY_TIMES) {
+  while (OB_SUCC(ret) && ! done) {
     if (OB_FAIL(switch_round_if_need_(scn, lsn))) {
       CLOG_LOG(WARN, "switch round if need failed", K(ret), KPC(this));
     } else if (OB_FAIL(switch_piece_if_need_(file_id, scn, lsn))) {
@@ -517,12 +515,11 @@ int ObLogArchivePieceContext::get_piece_(const SCN &scn,
       CLOG_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "get piece cost too much time", K(scn), K(lsn), KPC(this));
     }
 
-    times++;
-  }
-
-  if (OB_SUCC(ret) && ! done && times == MAX_RETRY_TIMES) {
-    ret = OB_ERR_TOO_MUCH_TIME;
-    CLOG_LOG(ERROR, "retry too much times", K(times), KPC(this));
+    // threads consume archive may increase or decrease, if threads stop, just retry
+    if (! done && OB_SUCC(ret) && OB_NOT_NULL(&lib::Thread::current()) ? lib::Thread::current().has_set_stop() : false) {
+      ret = OB_EAGAIN;
+      CLOG_LOG(INFO, "thread stop, try again", K(id_), K(scn), K(lsn));
+    }
   }
 
   return ret;

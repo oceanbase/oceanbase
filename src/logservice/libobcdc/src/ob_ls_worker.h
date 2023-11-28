@@ -20,12 +20,13 @@
 #include "lib/lock/ob_spin_lock.h"              // ObSpinLock
 
 #include "ob_log_config.h"                      // ObLogConfig
-#include "ob_map_queue_thread.h"                // ObMapQueueThread
+#include "lib/thread/ob_map_queue_thread_pool.h"// ObMapQueueThreadPool
 #include "ob_log_timer.h"                       // ObLogFixedTimer
 #include "ob_log_ls_fetch_stream.h"             // FetchStream
 
 namespace oceanbase
 {
+using namespace common;
 namespace libobcdc
 {
 
@@ -62,9 +63,7 @@ class IObLogFetcherDeadPool;
 class IObLogSvrFinder;
 class IObLogErrHandler;
 
-typedef common::ObMapQueueThread<IObLSWorker::MAX_THREAD_NUM> StreamWorkerThread;
-
-class ObLSWorker : public IObLSWorker, public StreamWorkerThread
+class ObLSWorker : public IObLSWorker, public ObMapQueueThreadPool
 {
   static const int64_t STAT_INTERVAL = 5 * _SEC_;
 
@@ -101,7 +100,8 @@ public:
 
 public:
   // Overloading thread handling functions
-  virtual int handle(void *data, const int64_t thread_index, volatile bool &stop_flag);
+  // virtual int handle(void *data, const int64_t thread_index, volatile bool &stop_flag);
+  virtual void handle(void *data, volatile bool &stop_flag) override;
 
 public:
   static void configure(const ObLogConfig & config);
