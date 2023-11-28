@@ -386,7 +386,7 @@ int ObDBMSSchedJobMaster::scheduler()
       } else {
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = scheduler_job(job_key))) {
-          LOG_WARN("fail to scheduler single dbms sched job", K(ret), K(tmp_ret), KPC(job_key));
+          LOG_WARN("fail to scheduler single dbms sched job", K(ret), K(tmp_ret));
         } else {
           LOG_INFO("success to scheduler single dbms sched job", K(ret), K(tmp_ret), KPC(job_key));
         }
@@ -425,6 +425,7 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
         LOG_INFO("delete invalid job from hash set", K(tmp), K(ret), K(job_info), KPC(job_key));
       }
       allocator_.free(job_key); // sql proxy error
+      job_key = NULL;
     } else{
       bool ignore_nextdate = false;
       if (!job_key->is_check() && !job_info.is_running() && !job_info.is_broken() && !job_info.is_disabled()) {
@@ -722,8 +723,9 @@ int ObDBMSSchedJobMaster::register_job(
   OZ (scheduler_task_.scheduler(job_key));
   if (OB_FAIL(ret) && OB_NOT_NULL(job_key)) {
     allocator_.free(job_key);
+    job_key = NULL;
   }
-  LOG_INFO("register dbms sched job", K(ret), K(job_info), KPC(job_key), K(ignore_nextdate));
+  LOG_INFO("register dbms sched job", K(ret), K(job_info), K(ignore_nextdate));
 
   return ret;
 }
