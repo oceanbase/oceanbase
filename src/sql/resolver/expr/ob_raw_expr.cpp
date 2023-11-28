@@ -887,6 +887,8 @@ int ObConstRawExpr::assign(const ObRawExpr &other)
       is_date_unit_ = const_expr.is_date_unit_;
       is_literal_bool_ = const_expr.is_literal_bool();
       array_param_group_id_ = const_expr.get_array_param_group_id();
+      is_dynamic_eval_questionmark_ = const_expr.is_dynamic_eval_questionmark_;
+      orig_questionmark_type_.assign(const_expr.get_orig_qm_type());
     }
   }
   return ret;
@@ -942,6 +944,9 @@ void ObConstRawExpr::reset()
   literal_prefix_.reset();
   is_literal_bool_ = false;
   array_param_group_id_ = -1;
+  is_dynamic_eval_questionmark_ = false;
+  orig_questionmark_type_.reset();
+
 }
 
 void ObConstRawExpr::set_is_date_unit()
@@ -958,6 +963,32 @@ uint64_t ObConstRawExpr::hash_internal(uint64_t seed) const
 {
   uint64_t hash_val = seed;
   value_.hash(hash_val, seed);
+  if (T_QUESTIONMARK == get_expr_type() && is_dynamic_eval_questionmark()) {
+    if (!(result_type_.is_decimal_int() || result_type_.is_number())
+        || !(orig_questionmark_type_.is_decimal_int() || orig_questionmark_type_.is_number())) {
+      int ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported dynamic eval quesiton mark", K(ret));
+      OB_ASSERT(false);
+      // do nothing
+    } else {
+      // if questionmark is evaluated during runtime, it's value is determined by:
+      // - value_
+      // - result_type_
+      // - result_type_'s cast_mode
+      ObCastMode cm = result_type_.get_cast_mode();
+      hash_val = ObMurmurHash::hash(&cm, sizeof(uint64_t), hash_val);
+      if (result_type_.is_decimal_int()) {
+        // value determined by precision & scale
+        ObPrecision prec = result_type_.get_precision();
+        ObScale scale = result_type_.get_scale();
+        hash_val = ObMurmurHash::hash(&prec, sizeof(ObPrecision), hash_val);
+        hash_val = ObMurmurHash::hash(&scale, sizeof(ObScale), hash_val);
+      } else if (result_type_.is_number()) {
+        // decint->number, precision & scale are both ignored
+        // do nothing
+      }
+    }
+  }
   return hash_val;
 }
 
@@ -966,7 +997,12 @@ bool ObConstRawExpr::inner_same_as(
     ObExprEqualCheckContext *check_context) const
 {
   bool bool_ret = false;
-  if (check_context != NULL && check_context->override_const_compare_) {
+  if ((T_QUESTIONMARK == get_expr_type() && is_dynamic_eval_questionmark())
+      || (T_QUESTIONMARK == expr.get_expr_type() && expr.is_static_const_expr()
+          && static_cast<const ObConstRawExpr &>(expr).is_dynamic_eval_questionmark())) {
+    // for simplicity's sake, if question is evaluated during runtime, just return false
+    // do nothing
+  } else if (check_context != NULL && check_context->override_const_compare_) {
     if (expr.is_const_raw_expr()) {
       bool_ret = check_context->compare_const(*this, static_cast<const ObConstRawExpr&>(expr));
     }
@@ -997,6 +1033,24 @@ bool ObConstRawExpr::inner_same_as(
     }
   }
   return bool_ret;
+}
+
+int ObConstRawExpr::set_dynamic_eval_questionmark(const ObExprResType &dst_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!(dst_type.is_decimal_int() || dst_type.is_number())
+                  || !(result_type_.is_decimal_int() || result_type_.is_number()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("not supported types for questionmark dynamic eval", K(ret));
+  } else if (OB_UNLIKELY(is_dynamic_eval_questionmark_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpectedly set dynamic evaluation twice", K(ret));
+  } else {
+    is_dynamic_eval_questionmark_ = true;
+    orig_questionmark_type_.assign(result_type_);
+    result_type_.assign(dst_type);
+  }
+  return ret;
 }
 
 bool ObExprEqualCheckContext::compare_const(const ObConstRawExpr &left,

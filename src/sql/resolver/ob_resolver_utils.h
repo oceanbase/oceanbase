@@ -811,6 +811,8 @@ private:
   static int handle_varchar_charset(ObCharsetType charset_type,
                                     ObIAllocator &allocator,
                                     ParseNode *&node);
+
+  static int is_negative_ora_nmb(const common::ObObjParam &obj_param, bool &is_neg, bool &is_zero);
   static const common::ObString stmt_type_string[];
 
   // disallow construct

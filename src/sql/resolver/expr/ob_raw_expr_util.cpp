@@ -362,6 +362,11 @@ int ObRawExprUtils::resolve_op_expr_implicit_cast(ObRawExprFactory &expr_factory
           if (is_arith_op && ob_is_string_tc(r_type1) && ObDecimalIntType == r_type2) {
             dst_type = ObNumberType;
           }
+          // if col cmps decint_const, do not cast col to ObDecimalIntType, use ObNumber instead
+          // i.e. cast(col as number) = cast(decint_const as number)
+          if (dst_type == ObDecimalIntType && sub_expr2->is_const_expr() && !sub_expr1->is_const_expr()) {
+            dst_type = ObNumberType;
+          }
           // oracle mode
           // create table t (a float);
           // column 'a' type is ObNumberFloatType
@@ -420,6 +425,11 @@ int ObRawExprUtils::resolve_op_expr_implicit_cast(ObRawExprFactory &expr_factory
           ObCastMode cast_mode = CM_NONE;
           ObObjType dst_type = r_type1;
           if (is_arith_op && ob_is_string_tc(r_type2) && ObDecimalIntType == r_type1) {
+            dst_type = ObNumberType;
+          }
+          // if col cmps decint_const, do not cast col to ObDecimalIntType, use ObNumber instead
+          // i.e. cast(col as number) = cast(decint_const as number)
+          if (dst_type == ObDecimalIntType && sub_expr1->is_const_expr() && !sub_expr2->is_const_expr()) {
             dst_type = ObNumberType;
           }
           if (ob_is_decimal_int_tc(dst_type)
@@ -6672,14 +6682,17 @@ bool ObRawExprUtils::has_prefix_str_expr(const ObRawExpr &expr,
         && param_expr1->same_as(orig_column_expr)) {
       if (3 == tmp->get_param_count()) {
         int64_t one = 1;
+        int cmp_ret = 0;
         const ObRawExpr *param_expr2 = tmp->get_param_expr(1);
         if (param_expr2 != NULL && param_expr2->is_const_raw_expr()) {
           const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr*>(param_expr2);
-          if ((const_expr->get_value().is_int() && const_expr->get_value().get_int() == 1) ||
-               (const_expr->get_value().is_oracle_decimal()  && 0 == const_expr->get_value().get_number().compare(one))) {
-            bret = true;
-            substr_expr = tmp;
-          }
+          if ((const_expr->get_value().is_int() && const_expr->get_value().get_int() == 1)
+              || (const_expr->get_value().is_oracle_decimal()
+                  && OB_SUCCESS == ora_cmp_integer(*const_expr, one, cmp_ret) && cmp_ret == 0))
+            {
+              bret = true;
+              substr_expr = tmp;
+            }
         }
       }
     }
@@ -8809,6 +8822,27 @@ int ObRawExprUtils::build_dummy_count_expr(ObRawExprFactory &expr_factory,
     LOG_WARN("failed to extract expr info", K(ret));
   } else {
     expr = count_expr;
+  }
+  return ret;
+}
+
+int ObRawExprUtils::ora_cmp_integer(const ObConstRawExpr &const_expr, const int64_t v, int &cmp_ret)
+{
+  int ret = OB_SUCCESS;
+  if (const_expr.get_result_type().is_number()) {
+    cmp_ret = const_expr.get_value().get_number().compare(v);
+  } else if (const_expr.get_result_type().is_decimal_int()) {
+    const ObObj &obj = const_expr.get_value();
+    ObDatum d;
+    d.ptr_ = reinterpret_cast<const char *>(&v);
+    d.pack_ = sizeof(int64_t);
+    ret = wide::compare(obj, d, cmp_ret);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("decimal int comparing failed", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected ora integer", K(ret), K(const_expr));
   }
   return ret;
 }

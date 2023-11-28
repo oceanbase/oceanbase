@@ -82,6 +82,8 @@ private:
   int cast_param_type_for_mysql(const common::ObObj& in,
                                 common::ObExprCtx& expr_ctx,
                                 common::ObObj& out) const;
+
+  static int ora_get_integer(const ObDatum &int_datum, const ObExpr &expr, int64_t &v);
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprSubstr);
 };

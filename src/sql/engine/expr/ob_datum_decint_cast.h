@@ -1220,6 +1220,123 @@ REG_SER_FUNC_ARRAY(OB_SFA_DECIMAL_INT_CAST_EXPR_EVAL, g_decimalint_cast_function
 REG_SER_FUNC_ARRAY(OB_SFA_DECIMAL_INT_CAST_EXPR_EVAL_BATCH, g_decimalint_cast_batch_functions,
                    ARRAYSIZEOF(g_decimalint_cast_batch_functions));
 
+int eval_questionmark_decint2nmb(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx.exec_ctx_.get_physical_plan_ctx())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("NULL plan ctx", K(ret));
+  } else {
+    const ParamStore &param_store = ctx.exec_ctx_.get_physical_plan_ctx()->get_param_store();
+    if (expr.extra_ >= param_store.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid param store idx", K(ret), K(expr), K(param_store.count()));
+    } else {
+      const ObObj &v = param_store.at(expr.extra_);
+      ObNumStackOnceAlloc tmp_alloc;
+      ObIAllocator &eval_allocator = ctx.exec_ctx_.get_eval_res_allocator();
+      number::ObNumber out_nmb;
+      if (v.get_type() != ObDecimalIntType) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid decimal int", K(ret), K(v));
+      } else if (OB_FAIL(wide::to_number(v.get_decimal_int(), v.get_int_bytes(), v.get_scale(),
+                                         tmp_alloc, out_nmb))) {
+        LOG_WARN("to_number failed", K(ret));
+      } else {
+        expr_datum.set_number(out_nmb);
+      }
+    }
+  }
+  return ret;
+}
+
+static int _eval_questionmark_nmb2decint(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum,
+                                         const ObCastMode cm)
+{
+  int ret = OB_SUCCESS;
+  number::ObNumber in_nmb;
+  ObDecimalIntBuilder tmp_alloc, res_val;
+  ObDecimalInt *decint = nullptr;
+  int32_t int_bytes = 0;
+  ObPrecision out_prec = expr.datum_meta_.precision_;
+  ObScale out_scale = expr.datum_meta_.scale_;
+  ObScale in_scale = 0;
+  if (OB_ISNULL(ctx.exec_ctx_.get_physical_plan_ctx())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("NULL plan ctx", K(ret));
+  } else {
+    const ParamStore &param_store = ctx.exec_ctx_.get_physical_plan_ctx()->get_param_store();
+    if (expr.extra_ >= param_store.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid param store idx", K(ret), K(expr), K(param_store.count()));
+    } else {
+      const ObObj &v = param_store.at(expr.extra_);
+      if (OB_FAIL(v.get_number(in_nmb))) {
+        LOG_WARN("get number from object failed", K(ret));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (FALSE_IT(in_scale = in_nmb.get_scale())) {
+  } else if (OB_FAIL(wide::from_number(in_nmb, tmp_alloc, in_scale, decint, int_bytes))) {
+    LOG_WARN("from number failed", K(ret), K(in_nmb));
+  } else if (OB_FAIL(scale_const_decimalint_expr(decint, int_bytes, in_scale, out_scale, out_prec,
+                                                 cm, res_val))) {
+    LOG_WARN("scale const decimal int failed", K(ret));
+  } else {
+    expr_datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
+  }
+  return ret;
+}
+
+static int _eval_questionmark_decint2decint(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum,
+                                            const ObCastMode cm)
+{
+  int ret = OB_SUCCESS;
+  ObScale out_scale = expr.datum_meta_.scale_;
+  ObPrecision out_prec = expr.datum_meta_.precision_;
+  ObDecimalIntBuilder res_val;
+  if (OB_ISNULL(ctx.exec_ctx_.get_physical_plan_ctx())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("NULL plan ctx", K(ret));
+  } else {
+    const ParamStore &param_store = ctx.exec_ctx_.get_physical_plan_ctx()->get_param_store();
+    if (expr.extra_ >= param_store.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid param store idx", K(ret), K(expr), K(param_store.count()));
+    } else {
+      const ObObj &v = param_store.at(expr.extra_);
+      if (OB_FAIL(ObDatumCast::common_scale_decimalint(v.get_decimal_int(), v.get_int_bytes(),
+                                                       v.get_scale(), out_scale, out_prec, cm,
+                                                       res_val))) {
+        LOG_WARN("scale decimal int failed", K(ret));
+      } else {
+        expr_datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
+      }
+    }
+  }
+  return ret;
+}
+
+// nmb2decint
+
+int eval_questionmark_nmb2decint_eqcast(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+{
+  return _eval_questionmark_nmb2decint(expr, ctx, expr_datum, CM_CONST_TO_DECIMAL_INT_EQ);
+}
+
+// decint2decint
+
+int eval_questionmark_decint2decint_eqcast(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+{
+  return _eval_questionmark_decint2decint(expr, ctx, expr_datum, CM_CONST_TO_DECIMAL_INT_EQ);
+}
+
+int eval_questionmark_decint2decint_normalcast(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+{
+  return _eval_questionmark_decint2decint(expr, ctx, expr_datum, CM_NONE);
+}
+
 } // namespace sql
 } // namespace oceanbase
 #endif

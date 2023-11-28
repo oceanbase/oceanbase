@@ -74,6 +74,26 @@ int compare(const T &lhs, const P &rhs, int &result)
   }
   return ret;
 }
+
+template<typename T, typename P>
+bool abs_equal(const T &lhs, const P &rhs)
+{
+#define ABS_CMP(ltype, rtype)                                                                      \
+  const ltype &lv = *reinterpret_cast<const ltype *>(lhs_decint);                                  \
+  const rtype &rv = *reinterpret_cast<const rtype *>(rhs_decint);                                  \
+  is_equal = (((lv + rv) == 0) || (lv == rv));
+
+  int ret = OB_SUCCESS;
+  bool is_equal = false;
+  const ObDecimalInt *lhs_decint = lhs.get_decimal_int();
+  const ObDecimalInt *rhs_decint = rhs.get_decimal_int();
+  int32_t lhs_bytes = lhs.get_int_bytes();
+  int32_t rhs_bytes = rhs.get_int_bytes();
+
+  DISPATCH_INOUT_WIDTH_TASK(lhs_bytes, rhs_bytes, ABS_CMP);
+  return is_equal;
+#undef ABS_CMP
+}
 } // end namespace wide
 } // end namespace common
 } // end namespace oceanbase

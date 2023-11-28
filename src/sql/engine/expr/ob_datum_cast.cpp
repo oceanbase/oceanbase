@@ -11995,7 +11995,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*interval*/
     cast_inconsistent_types,/*rowid*/
     decimalint_lob,/*lob*/
-    cast_inconsistent_types,/*json*/
+    decimalint_json,/*json*/
     cast_not_support,/*decimalint*/
     cast_to_udt_not_support, /*udt*/
     decimalint_decimalint,/*decimalint*/

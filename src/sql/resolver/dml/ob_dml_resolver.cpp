@@ -14662,14 +14662,10 @@ int ObDMLResolver::add_fake_schema(ObSelectStmt *left_stmt)
             } else {
               expr = new_expr;
             }
-          }
-          if (OB_SUCC(ret)) {
-            new_col = new (new_col) ObColumnSchemaV2(allocator_);
-            new_col->set_column_name(cte_ctx_.cte_col_names_.at(i));
-            new_col->set_tenant_id(tbl_schema->get_tenant_id());
-            new_col->set_table_id(magic_table_id);
-            new_col->set_column_id(magic_col_id+i);
-            // consider following case:
+          } else if (lib::is_oracle_mode() && expr->is_const_expr()
+                     && expr->get_result_type().is_decimal_int()) {
+            // casting decimal int constants to number in oracle mode to avoid type deduction error.
+            // for exmaple, consider following case:
             // WITH fibonacci (n, fib_n, next_fib_n) AS
             // (
             //   SELECT 1, 0, 1 from dual
@@ -14682,17 +14678,28 @@ int ObDMLResolver::add_fake_schema(ObSelectStmt *left_stmt)
             // column `fib_n` will deduced as decimal int with (P, S) = (1, 0), which is incorrect.
             //
             // column type deduced by numeric constant should use ObNumberType, not ObDecimalIntType.
-            if (lib::is_oracle_mode() && expr->get_result_type().is_decimal_int()
-                && expr->is_const_expr()) {
-              ObObjMeta num_meta;
-              num_meta.set_number();
-              new_col->set_meta_type(num_meta);
-              new_col->set_accuracy(
-                ObAccuracy::DDL_DEFAULT_ACCURACY2[lib::is_oracle_mode()][ObNumberType]);
+            ObRawExpr *new_expr = nullptr;
+            ObExprResType nmb_type;
+            nmb_type.set_number();
+            nmb_type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
+            nmb_type.set_precision(PRECISION_UNKNOWN_YET);
+            if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(
+                  params_.expr_factory_, session_info_, *expr, nmb_type, new_expr))) {
+              LOG_WARN("create cast expr for decimal int failed", K(ret));
+            } else if (OB_FAIL(new_expr->add_flag(IS_INNER_ADDED_EXPR))) {
+              LOG_WARN("add flag failed", K(ret));
             } else {
-              new_col->set_meta_type(expr->get_result_type());
-              new_col->set_accuracy(expr->get_accuracy());
+              expr = new_expr;
             }
+          }
+          if (OB_SUCC(ret)) {
+            new_col = new (new_col) ObColumnSchemaV2(allocator_);
+            new_col->set_column_name(cte_ctx_.cte_col_names_.at(i));
+            new_col->set_tenant_id(tbl_schema->get_tenant_id());
+            new_col->set_table_id(magic_table_id);
+            new_col->set_column_id(magic_col_id + i);
+            new_col->set_meta_type(expr->get_result_type());
+            new_col->set_accuracy(expr->get_accuracy());
             new_col->set_collation_type(expr->get_collation_type());
             new_col->set_extended_type_info(expr->get_enum_set_values());
             new_col->add_column_flag(CTE_GENERATED_COLUMN_FLAG);

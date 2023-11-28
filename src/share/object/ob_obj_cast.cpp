@@ -12705,7 +12705,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*interval*/
     cast_inconsistent_types,/*rowid*/
     decimalint_lob,/*lob*/
-    cast_inconsistent_types,/*json*/
+    cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
     cast_to_udt_not_support, /* udt */
     decimalint_decimalint,/*decimalint*/
@@ -12724,7 +12724,7 @@ bool cast_supported(const ObObjType orig_type, const ObCollationType orig_cs_typ
                   ob_is_invalid_obj_type(expect_type))) {
     LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid cast type", K(orig_type), K(expect_type));
   // number类型可以转换为clob但是不能转为blob, 无法通过矩阵实现这一点，所以在这里做特殊处理。
-  } else if (is_oracle_mode() && (clob_in || ob_is_number_tc(orig_type) || ob_is_int_tc(orig_type)
+  } else if (is_oracle_mode() && (clob_in || ob_is_number_tc(orig_type) || ob_is_int_tc(orig_type) || ob_is_decimal_int(orig_type)
                                   || ob_is_datetime_tc(orig_type)) && blob_out) {
     bret = false;
   } else if (is_oracle_mode() &&

@@ -398,6 +398,10 @@ int ObStaticEngineExprCG::cg_expr_parents(const ObIArray<ObRawExpr *> &raw_exprs
 
 extern int eval_question_mark_func(EVAL_FUNC_ARG_DECL);
 extern int eval_assign_question_mark_func(EVAL_FUNC_ARG_DECL);
+extern int eval_questionmark_decint2nmb(EVAL_FUNC_ARG_DECL);
+extern int eval_questionmark_nmb2decint_eqcast(EVAL_FUNC_ARG_DECL);
+extern int eval_questionmark_decint2decint_eqcast(EVAL_FUNC_ARG_DECL);
+extern int eval_questionmark_decint2decint_normalcast(EVAL_FUNC_ARG_DECL);
 
 // init eval_func_, inner_eval_func_, expr_ctx_id_, extra_
 int ObStaticEngineExprCG::cg_expr_by_operator(const ObIArray<ObRawExpr *> &raw_exprs,
@@ -427,6 +431,36 @@ int ObStaticEngineExprCG::cg_expr_by_operator(const ObIArray<ObRawExpr *> &raw_e
         rt_expr->eval_func_ = raw_expr->has_flag(IS_TABLE_ASSIGN) ?
                               &eval_assign_question_mark_func:
                               &eval_question_mark_func;
+      }
+    } else if (T_QUESTIONMARK == rt_expr->type_ && raw_expr->is_static_const_expr()
+               && static_cast<ObConstRawExpr *>(raw_expr)->is_dynamic_eval_questionmark()) {
+      ObConstRawExpr *c_expr = static_cast<ObConstRawExpr*>(raw_expr);
+      int64_t param_idx = 0;
+      OZ(c_expr->get_value().get_unknown(param_idx));
+      if (OB_SUCC(ret)) {
+        rt_expr->extra_ = param_idx;
+        // rt_expr->eval_func_ = dynamic_eval_questionmark;
+        if (c_expr->get_orig_qm_type().is_decimal_int() && ob_is_number_tc(rt_expr->datum_meta_.type_)) {
+          rt_expr->eval_func_ = eval_questionmark_decint2nmb;
+        } else if (c_expr->get_orig_qm_type().is_number() && ob_is_decimal_int(rt_expr->datum_meta_.type_)) {
+          ObCastMode cm = c_expr->get_result_type().get_cast_mode();
+          if ((cm & CM_CONST_TO_DECIMAL_INT_EQ) != 0) {
+            rt_expr->eval_func_ = eval_questionmark_nmb2decint_eqcast;
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unpexected cast mode", K(ret), K(cm));
+          }
+        } else if (c_expr->get_orig_qm_type().is_decimal_int() && ob_is_decimal_int(rt_expr->datum_meta_.type_)) {
+          ObCastMode cm = c_expr->get_result_type().get_cast_mode();
+          if ((cm & CM_CONST_TO_DECIMAL_INT_EQ) != 0) {
+            rt_expr->eval_func_ = eval_questionmark_decint2decint_eqcast;
+          } else if (OB_UNLIKELY(CM_IS_CONST_TO_DECIMAL_INT(cm))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected cast mode", K(ret), K(cm));
+          } else {
+            rt_expr->eval_func_ = eval_questionmark_decint2decint_normalcast;
+          }
+        }
       }
     } else if (!IS_EXPR_OP(rt_expr->type_) || IS_AGGR_FUN(rt_expr->type_)) {
       // do nothing
@@ -539,9 +573,13 @@ int ObStaticEngineExprCG::classify_exprs(const ObIArray<ObRawExpr *> &raw_exprs,
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < raw_exprs.count(); i++) {
     ObItemType type = raw_exprs.at(i)->get_expr_type();
+    bool is_dynamic_eval_questionamrk =
+      raw_exprs.at(i)->is_static_const_expr()
+      && static_cast<ObConstRawExpr *>(raw_exprs.at(i))->is_dynamic_eval_questionmark();
     if (T_QUESTIONMARK == type && !rt_question_mark_eval_
-      && !raw_exprs.at(i)->has_flag(IS_TABLE_ASSIGN)) {
+      && !raw_exprs.at(i)->has_flag(IS_TABLE_ASSIGN) && !is_dynamic_eval_questionamrk) {
       if (raw_exprs.at(i)->has_flag(IS_DYNAMIC_PARAM)) {
+        // if questionmark is dynamic evaluated, e.g. decint->nmb, use dynamic_param_frame as its memory
         if (dynamic_param_exprs.push_back(raw_exprs.at(i))) {
           LOG_WARN("fail to push expr", K(ret), K(i), K(raw_exprs));
         }

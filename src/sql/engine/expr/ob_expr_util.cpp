@@ -38,6 +38,12 @@ int ObExprUtil::get_int64_from_obj(const ObObj &obj,
   } else if (OB_UNLIKELY(obj.is_number())) {
     number::ObNumber nmb = obj.get_number();
     ret = get_int64_from_num(nmb, expr_ctx, is_trunc, out);
+  } else if (ob_is_decimal_int(obj.get_type())) {
+    bool is_valid_int64 = false;
+    ret = wide::check_range_valid_int64(obj.get_decimal_int(), obj.get_int_bytes(), is_valid_int64, out);
+    if (OB_SUCC(ret) && !is_valid_int64) {
+      out = INT64_MAX;
+    }
   } else {
     // 除了 number 之外的类型，强制转换成 number
     // 并 trunc 成一个整数
@@ -144,6 +150,41 @@ int ObExprUtil::trunc_num2int64(const common::number::ObNumber &nmb, int64_t &v)
   return ret;
 }
 
+int ObExprUtil::trunc_decint2int64(const ObDecimalInt *decint, const int32_t int_bytes, const ObScale scale, int64_t &v)
+{
+#define TRUNC_DECINT_CASE(len, int_type)                                                           \
+  case len: {                                                                                      \
+    ret = wide::scale_down_decimalint_for_trunc(*reinterpret_cast<const int_type *>(decint),       \
+                                                scale, tmp_res);                                   \
+  } break
+
+  int ret = OB_SUCCESS;
+  ObDecimalIntBuilder tmp_res;
+  bool is_valid = false;
+  switch (int_bytes) {
+  TRUNC_DECINT_CASE(4, int32_t);
+  TRUNC_DECINT_CASE(8, int64_t);
+  TRUNC_DECINT_CASE(16, int128_t);
+  TRUNC_DECINT_CASE(32, int256_t);
+  TRUNC_DECINT_CASE(64, int512_t);
+  default: {
+    ret = OB_ERR_UNEXPECTED;
+  }
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("scale down decimal int for truncating failed", K(ret), K(int_bytes), K(scale));
+  } else if (OB_FAIL(wide::check_range_valid_int64(tmp_res.get_decimal_int(), tmp_res.get_int_bytes(), is_valid, v))) {
+    LOG_WARN("check valid int64_t failed", K(ret));
+  } else if (is_valid) {
+    // do nothing
+  } else {
+    v = wide::is_negative(tmp_res.get_decimal_int(), tmp_res.get_int_bytes()) ? INT64_MIN : INT64_MAX;
+  }
+
+  return ret;
+#undef TRUNC_DECINT_CASE
+}
+
 int ObExprUtil::round_num2int64(const common::number::ObNumber &nmb, int64_t &v)
 {
   int ret = OB_SUCCESS;
@@ -170,6 +211,41 @@ int ObExprUtil::round_num2int64(const common::number::ObNumber &nmb, int64_t &v)
     }
   }
   return ret;
+}
+
+int ObExprUtil::round_decint2int64(const ObDecimalInt *decint, const int32_t int_bytes, const ObScale scale, int64_t &v)
+{
+#define ROUND_DECINT_CASE(len, int_byte)                                                           \
+  case len: {                                                                                      \
+    ret = wide::scale_down_decimalint_for_round(*reinterpret_cast<const int_byte *>(decint),       \
+                                                scale, tmp_res);                                   \
+  } break
+
+  int ret = OB_SUCCESS;
+  ObDecimalIntBuilder tmp_res;
+  bool is_valid_int64 = false;
+  switch (int_bytes) {
+  ROUND_DECINT_CASE(4, int32_t);
+  ROUND_DECINT_CASE(8, int64_t);
+  ROUND_DECINT_CASE(16, int128_t);
+  ROUND_DECINT_CASE(32, int256_t);
+  ROUND_DECINT_CASE(64, int512_t);
+  default: {
+    ret = OB_ERR_UNEXPECTED;
+  }
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("scale down decimalint for rounding failed", K(ret), K(int_bytes), K(scale));
+  } else if (OB_FAIL(wide::check_range_valid_int64(tmp_res.get_decimal_int(),
+                                                   tmp_res.get_int_bytes(), is_valid_int64, v))) {
+    LOG_WARN("check valid int64 failed", K(ret));
+  } else if (is_valid_int64) {
+    // do nothing
+  } else {
+    v = v = wide::is_negative(tmp_res.get_decimal_int(), tmp_res.get_int_bytes()) ? INT64_MIN : INT64_MAX;
+  }
+  return ret;
+#undef ROUND_DECINT_CASE
 }
 
 int ObExprUtil::get_int_param_val(ObDatum *datum, bool is_decint, int64_t &int_val)

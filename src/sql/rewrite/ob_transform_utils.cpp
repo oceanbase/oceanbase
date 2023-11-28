@@ -10185,7 +10185,7 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
                                                         expr->get_param_expr(i),
                                                         need_query_compare,
                                                         trans_ctx,
-                                                        T_OP_ADD == expr->get_expr_type())))) {
+                                                        in_add_expr || T_OP_ADD == expr->get_expr_type())))) {
         LOG_WARN("failed to replace with groupby columns.", K(ret));
       } else { /*do nothing.*/ }
     }
@@ -10381,6 +10381,8 @@ bool ObTransformUtils::check_objparam_abs_equal(const ObObjParam &obj1, const Ob
     is_abs_equal = (obj1.get_double() + obj2.get_double() == 0) || (obj1.get_double() == obj2.get_double());
   } else if(obj1.is_float() && obj2.is_float()) {
     is_abs_equal = (obj1.get_float() + obj2.get_float() == 0) || (obj1.get_float() == obj2.get_float());
+  } else if (obj1.is_decimal_int() && obj2.is_decimal_int()) {
+    is_abs_equal = wide::abs_equal(obj1, obj2);
   }
   return is_abs_equal;
 }
@@ -10393,6 +10395,8 @@ bool ObTransformUtils::check_objparam_negative(const ObObjParam &obj1) {
     is_neg = (obj1.get_double() < 0);
   } else if(obj1.is_float()) {
     is_neg = (obj1.get_float()  < 0);
+  } else if (obj1.is_decimal_int()) {
+    is_neg = wide::is_negative(obj1.get_decimal_int(), obj1.get_int_bytes());
   }
   return is_neg;
 }

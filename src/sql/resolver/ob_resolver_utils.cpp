@@ -589,7 +589,8 @@ if ((OB_FAIL(ret) || 0 == routines.count())   \
    || ob_is_uint_tc(type)     \
    || ob_is_float_tc(type)    \
    || ob_is_double_tc(type)   \
-   || ob_is_number_tc(type))
+   || ob_is_number_tc(type)   \
+   || ob_is_decimal_int_tc(type))
 
 int ObResolverUtils::check_type_match(ObResolverParams &params,
                                       ObRoutineMatchInfo::MatchInfo &match_info,
@@ -1136,10 +1137,10 @@ int ObResolverUtils::pick_routine(ObIArray<ObRoutineMatchInfo> &match_infos,
 // 4. BINARY_DOUBLE
 // 实际测试下来, PLS_INTEGER的优先级最低
 
-#define NUMRIC_TYPE_LEVEL(type)                               \
-  ob_is_number_tc(type) ? 1                                   \
-    : ob_is_float_tc(type) ? 2                                \
-      : ob_is_double_tc(type) ? 3                             \
+#define NUMRIC_TYPE_LEVEL(type)                                \
+  (ob_is_number_tc(type) || ob_is_decimal_int(type)) ? 1       \
+    : ob_is_float_tc(type) ? 2                                 \
+      : ob_is_double_tc(type) ? 3                              \
         : ob_is_int_tc(type) || ob_is_uint_tc(type) ? 4 : 5;
 
   // 处理所有的匹配都需要经过Cast的情况
@@ -2542,7 +2543,7 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
       int16_t len = 0;
       ObString tmp_string(static_cast<int32_t>(node->str_len_), node->str_value_);
       bool use_decimalint_as_result = false;
-      if (enable_decimal_int_type && !is_from_pl && lib::is_mysql_mode()) {
+      if (enable_decimal_int_type && !is_from_pl) {
         // 如果开启decimal int类型，T_NUMBER解析成decimal int
         int32_t val_len = 0;
         ret = wide::from_string(node->str_value_, node->str_len_, allocator, scale, precision,
@@ -8363,12 +8364,14 @@ int ObResolverUtils::resolver_param(ObPlanCacheCtx &pc_ctx,
       /* nothing */
     } else if (ob_is_numeric_type(obj_param.get_type())) {
       // -0 is also counted as negative
+      bool is_neg = false, is_zero = false;
       if (must_be_positive_idx.has_member(param_idx)) {
         if (obj_param.is_boolean()) {
           // boolean will skip this check
         } else if (lib::is_oracle_mode()) {
-          if (obj_param.is_negative_number() ||
-              (obj_param.is_zero_number() && '-' == raw_param->str_value_[0])) {
+          if (OB_FAIL(is_negative_ora_nmb(obj_param, is_neg, is_zero))) {
+            LOG_WARN("check oracle negative number failed", K(ret));
+          } else if (is_neg || (is_zero && '-' == raw_param->str_value_[0])) {
             ret = OB_ERR_UNEXPECTED;
             pc_ctx.should_add_plan_ = false; // 内部主动抛出not supported时候需要设置这个标志，以免新计划add plan导致锁冲突
             LOG_TRACE("param must be positive", K(ret), K(param_idx), K(obj_param));
@@ -8389,6 +8392,23 @@ int ObResolverUtils::resolver_param(ObPlanCacheCtx &pc_ctx,
   }
   return ret;
 }
+
+int ObResolverUtils::is_negative_ora_nmb(const ObObjParam &obj_param, bool &is_neg, bool &is_zero)
+{
+  int ret = OB_SUCCESS;
+  if (obj_param.is_decimal_int()) {
+    is_neg = wide::is_negative(obj_param.get_decimal_int(), obj_param.get_int_bytes());
+    is_zero = wide::is_zero(obj_param.get_decimal_int(), obj_param.get_int_bytes());
+  } else if (obj_param.is_number()) {
+    is_neg = obj_param.is_negative_number();
+    is_zero = obj_param.is_zero_decimalint();
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected obj type", K(obj_param));
+  }
+  return ret;
+}
+
 
 }  // namespace sql
 }  // namespace oceanbase

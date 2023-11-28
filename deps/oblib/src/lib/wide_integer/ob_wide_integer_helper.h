@@ -478,6 +478,49 @@ inline bool is_negative(const ObDecimalInt *decint, int32_t int_bytes)
   }
 }
 
+inline bool is_zero(const ObDecimalInt *decint, int32_t int_bytes)
+{
+  if (int_bytes == 0) {
+    return true;
+  }
+  switch (int_bytes) {
+  case sizeof(int32_t): return *(decint->int32_v_) == 0;
+  case sizeof(int64_t): return *(decint->int64_v_) == 0;
+  case sizeof(int128_t): return *(decint->int128_v_) == 0;
+  case sizeof(int256_t): return *(decint->int256_v_) == 0;
+  case sizeof(int512_t): return *(decint->int512_v_) == 0;
+  default: return false;
+  }
+}
+
+inline int negate(const ObDecimalInt *decint, int32_t int_bytes, ObDecimalInt *&out_decint,
+                  ObIAllocator &allocator)
+{
+#define NEG_VAL_CASE(int_type)                                                                     \
+  case sizeof(int_type): {                                                                         \
+    *reinterpret_cast<int_type *>(out_decint) = -(*reinterpret_cast<const int_type *>(decint));    \
+  } break
+
+  int ret = OB_SUCCESS;
+  out_decint = nullptr;
+  if (int_bytes == 0) {
+    // do nothing
+  } else if (OB_ISNULL(out_decint = (ObDecimalInt *)allocator.alloc(int_bytes))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    SQL_LOG(WARN, "allocate memory failed", K(ret));
+  } else {
+    switch (int_bytes) {
+      LST_DO_CODE(NEG_VAL_CASE, int32_t, int64_t, int128_t, int256_t, int512_t);
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_LOG(WARN, "unexpected int bytes", K(ret), K(int_bytes));
+    }
+    }
+  }
+  return ret;
+#undef NEG_VAL_CASE
+}
+
 template <typename T>
 int scale_up_decimalint(const T &x, unsigned scale, ObDecimalIntBuilder &res)
 {

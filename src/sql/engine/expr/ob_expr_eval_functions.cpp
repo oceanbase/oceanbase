@@ -425,6 +425,10 @@ extern int calc_scn_to_timestamp_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
 extern int calc_sqrt_expr_mysql_in_batch(const ObExpr &, ObEvalCtx &, const ObBitVector &, const int64_t);
 extern int calc_sqrt_expr_oracle_double_in_batch(const ObExpr &, ObEvalCtx &, const ObBitVector &, const int64_t);
 extern int calc_sqrt_expr_oracle_number_in_batch(const ObExpr &, ObEvalCtx &, const ObBitVector &, const int64_t);
+extern int eval_questionmark_decint2nmb(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int eval_questionmark_nmb2decint_eqcast(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int eval_questionmark_decint2decint_eqcast(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int eval_questionmark_decint2decint_normalcast(const ObExpr &, ObEvalCtx &, ObDatum &);
 
 // append only, can not delete, set to NULL for mark delete
 static ObExpr::EvalFunc g_expr_eval_functions[] = {
@@ -1090,6 +1094,10 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, //ObExprAuditLogRemoveFilter::eval_remove_filter,             /* 655 */
   NULL, //ObExprAuditLogSetUser::eval_set_user,                       /* 656 */
   NULL, //ObExprAuditLogRemoveUser::eval_remove_user,                 /* 657 */
+  eval_questionmark_decint2nmb,                                       /* 658 */
+  eval_questionmark_nmb2decint_eqcast,                                /* 659 */
+  eval_questionmark_decint2decint_eqcast,                             /* 660 */
+  eval_questionmark_decint2decint_normalcast                          /* 661 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

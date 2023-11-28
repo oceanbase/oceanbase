@@ -1061,6 +1061,8 @@ int ObPlanSet::match_constraint(const ParamStore &params, bool &is_matched)
       } else if (param1.is_float() && param2.is_float()) {
         is_matched = (0 == param1.get_float() + param2.get_float()) ||
                      (param1.get_float() == param2.get_float());
+      } else if (param1.is_decimal_int() && param2.is_decimal_int()) {
+        is_matched = wide::abs_equal(param1, param2);
       } else if (param1.can_compare(param2) &&
                  param1.get_collation_type() == param2.get_collation_type()) {
         is_matched = (0 == param1.compare(param2));

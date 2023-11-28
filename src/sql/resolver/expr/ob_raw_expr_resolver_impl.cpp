@@ -158,19 +158,39 @@ int ObRawExprResolverImpl::try_negate_const(ObRawExpr *&expr,
         break;
       }
       case T_NUMBER: {
-        number::ObNumber val;
-        number::ObNumber negative_val;
-        if (is_odd && OB_SUCC(const_expr->get_value().get_number(val))
-            && OB_SUCC(val.negate(negative_val, ctx_.expr_factory_.get_allocator()))) {
-          ObObj new_val;
-          new_val.set_number(negative_val);
-          new_val.set_scale(const_expr->get_accuracy().get_scale());
+        bool negated = false;
+        ObObj new_val;
+        if (const_expr->get_value().is_decimal_int()) {
+          ObDecimalInt *neg_dec = nullptr;
+          if (is_odd
+              && OB_FAIL(wide::negate(const_expr->get_value().get_decimal_int(),
+                                      const_expr->get_value().get_int_bytes(), neg_dec,
+                                      ctx_.expr_factory_.get_allocator()))) {
+            LOG_WARN("negate decimal int failed", K(ret));
+          } else {
+            new_val.set_decimal_int(const_expr->get_value().get_int_bytes(),
+                                    const_expr->get_value().get_scale(), neg_dec);
+            negated = true;
+          }
+        } else {
+          number::ObNumber val;
+          number::ObNumber negative_val;
+          if (is_odd && OB_SUCC(const_expr->get_value().get_number(val))
+              && OB_SUCC(val.negate(negative_val, ctx_.expr_factory_.get_allocator()))) {
+            new_val.set_number(negative_val);
+            new_val.set_scale(const_expr->get_accuracy().get_scale());
+            negated = true;
+          }
+        }
+        if (OB_SUCC(ret) && negated) {
           const_expr->set_expr_type(T_NUMBER);
           const_expr->set_value(new_val);
           if (lib::is_oracle_mode()) {
-            const_expr->set_precision(static_cast<ObPrecision>(const_expr->get_accuracy().get_precision()));
+            const_expr->set_precision(
+              static_cast<ObPrecision>(const_expr->get_accuracy().get_precision()));
           } else {
-            const_expr->set_precision(static_cast<ObPrecision>(const_expr->get_accuracy().get_precision() + 1));
+            const_expr->set_precision(
+              static_cast<ObPrecision>(const_expr->get_accuracy().get_precision() + 1));
           }
         }
         break;
