@@ -537,6 +537,8 @@ int ObLLVMHelper::initialize()
   llvm::InitializeNativeTargetAsmPrinter();
   llvm::InitializeNativeTargetAsmParser();
 
+  llvm::sys::DynamicLibrary::LoadLibraryPermanently(nullptr);
+
 #if !defined(__aarch64__)
   // initialize LLVM X86 unfold table
   llvm::lookupUnfoldTable(0);
