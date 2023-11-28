@@ -118,7 +118,7 @@ int ObRpcProtocolProcessor::decode(easy_message_t *ms, ObRpcPacket *&pkt)
   bool is_demand_data_enough = false;
   int64_t preceding_data_len = 0;
   int64_t decode_data_len = 0;
-  common::ObTimeGuard timeguard("ObRpcProtocolProcessor::encode", common::OB_EASY_HANDLER_COST_TIME);
+  common::ObTimeGuard timeguard("ObRpcProtocolProcessor::decode", common::OB_EASY_HANDLER_COST_TIME);
   if (OB_FAIL(resolve_packet_type(timeguard, ms, is_demand_data_enough, preceding_data_len, decode_data_len))) {
     LOG_ERROR("failed to resolve packet type", K(ret));
   } else if (is_demand_data_enough) {
