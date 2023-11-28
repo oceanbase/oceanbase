@@ -351,9 +351,11 @@ int ObSessInfoVerify::deserialize_sess_info_veri_id(sql::ObSQLSessionInfo &sess,
       char* ptr = NULL;
       ObAddr addr;
       char ip_buf[MAX_IP_ADDR_LENGTH] = "";
+      int64_t length = 0;
       if (OB_FAIL(ObProtoTransUtil::get_str(buf, len, pos, v_len, ptr))) {
         OB_LOG(WARN,"failed to resolve veri level", K(ret));
-      } else if (FALSE_IT(memcpy(ip_buf, ptr, v_len))) {
+      } else if (FALSE_IT(length = (v_len > MAX_IP_ADDR_LENGTH ? MAX_IP_ADDR_LENGTH : v_len))) {
+      } else if (FALSE_IT(memcpy(ip_buf, ptr, length))) {
       } else if (FALSE_IT(ip_buf[v_len] = '\0')) {
       } else if (OB_FAIL(addr.parse_from_cstring(ip_buf))) {
         OB_LOG(WARN,"failed to parse from cstring", K(ret));
