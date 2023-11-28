@@ -119,7 +119,7 @@ private:
   bool check_job_; // for check job update ...
 };
 
-class ObDBMSSchedJobTask : public ObTimerTask
+class ObDBMSSchedJobTask
 {
 public:
   typedef common::ObSortedVector<ObDBMSSchedJobKey *> WaitVector;
@@ -127,8 +127,6 @@ public:
 
   ObDBMSSchedJobTask()
     : inited_(false),
-      job_key_(NULL),
-      ready_queue_(NULL),
       allocator_(NULL),
       wait_vector_(0, NULL, ObModIds::VECTOR),
       lock_(common::ObLatchIds::DBMS_SCHEDULER_TASK_LOCK) {}
@@ -136,15 +134,13 @@ public:
   virtual ~ObDBMSSchedJobTask() {}
 
   int init();
-  int start(dbms_job::ObDBMSJobQueue *ready_queue, common::ObVSliceAlloc *allocator);
+  int start(common::ObVSliceAlloc *allocator);
   int stop();
   int destroy();
 
-  void runTimerTask();
-
   int scheduler(ObDBMSSchedJobKey *job_key);
   int add_new_job(ObDBMSSchedJobKey *job_key);
-  int immediately(ObDBMSSchedJobKey *job_key);
+  WaitVector &wait_vector() { return wait_vector_; }
 
   inline static bool compare_job_key(
     const ObDBMSSchedJobKey *lhs, const ObDBMSSchedJobKey *rhs);
@@ -153,14 +149,9 @@ public:
 
 private:
   bool inited_;
-  ObDBMSSchedJobKey *job_key_;
-  dbms_job::ObDBMSJobQueue *ready_queue_;
   common::ObVSliceAlloc *allocator_;
   WaitVector wait_vector_;
-
   ObSpinLock lock_;
-  ObTimer timer_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDBMSSchedJobTask);
 };
@@ -271,7 +262,6 @@ private:
   obrpc::ObDBMSSchedJobRpcProxy *job_rpc_proxy_;
 
   common::ObAddr self_addr_;
-  dbms_job::ObDBMSJobQueue ready_queue_;
   ObDBMSSchedJobTask scheduler_task_;
   ObDBMSSchedJobThread scheduler_thread_;
   ObDBMSSchedTableOperator table_operator_;
