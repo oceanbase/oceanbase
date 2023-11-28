@@ -391,6 +391,7 @@ int ObAlterTableResolver::set_table_options()
     alter_table_schema.set_table_mode_struct(table_mode_);
     alter_table_schema.set_tablespace_id(tablespace_id_);
     alter_table_schema.set_dop(table_dop_);
+    alter_table_schema.set_lob_inrow_threshold(lob_inrow_threshold_);
     //deep copy
     if (OB_FAIL(ret)) {
       //do nothing

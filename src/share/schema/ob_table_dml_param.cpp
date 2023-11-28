@@ -39,7 +39,8 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator &allocator)
     columns_(allocator),
     col_map_(allocator),
     pk_name_(),
-    read_info_()
+    read_info_(),
+    lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD)
 {
 }
 
@@ -65,6 +66,7 @@ void ObTableSchemaParam::reset()
   col_map_.clear();
   pk_name_.reset();
   read_info_.reset();
+  lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
 }
 
 int ObTableSchemaParam::convert(const ObTableSchema *schema)
@@ -83,6 +85,7 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
     table_id_ = schema->get_table_id();
     schema_version_ = schema->get_schema_version();
     table_type_ = schema->get_table_type();
+    lob_inrow_threshold_ = schema->get_lob_inrow_threshold();
   }
 
   if (OB_SUCC(ret) && schema->is_user_table() && !schema->is_heap_table()) {
@@ -334,7 +337,8 @@ int64_t ObTableSchemaParam::to_string(char *buf, const int64_t buf_len) const
        K_(index_name),
        K_(pk_name),
        K_(columns),
-       K_(read_info));
+       K_(read_info),
+       K_(lob_inrow_threshold));
   J_OBJ_END();
   return pos;
 }
@@ -367,6 +371,7 @@ OB_DEF_SERIALIZE(ObTableSchemaParam)
   OB_UNIS_ENCODE(spatial_geo_col_id_);
   OB_UNIS_ENCODE(spatial_cellid_col_id_);
   OB_UNIS_ENCODE(spatial_mbr_col_id_);
+  OB_UNIS_ENCODE(lob_inrow_threshold_);
   return ret;
 }
 
@@ -412,6 +417,7 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
   OB_UNIS_DECODE(spatial_geo_col_id_);
   OB_UNIS_DECODE(spatial_cellid_col_id_);
   OB_UNIS_DECODE(spatial_mbr_col_id_);
+  OB_UNIS_DECODE(lob_inrow_threshold_);
   return ret;
 }
 
@@ -443,6 +449,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchemaParam)
   OB_UNIS_ADD_LEN(spatial_geo_col_id_);
   OB_UNIS_ADD_LEN(spatial_cellid_col_id_);
   OB_UNIS_ADD_LEN(spatial_mbr_col_id_);
+  OB_UNIS_ADD_LEN(lob_inrow_threshold_);
   return len;
 }
 

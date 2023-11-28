@@ -2791,6 +2791,19 @@ int ObDDLService::set_raw_table_options(
           }
           break;
         }
+        case ObAlterTableArg::LOB_INROW_THRESHOLD: {
+          uint64_t compat_version = OB_INVALID_VERSION;
+          if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+            LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
+          } else if (compat_version < DATA_VERSION_4_2_1_2) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("lob inrow threshold less than 4.2.1.2 not support", K(ret), K(compat_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "lob inrow threshold less than 4.2.1.2");
+          } else {
+            new_table_schema.set_lob_inrow_threshold(alter_table_schema.get_lob_inrow_threshold());
+          }
+          break;
+        }
         default: {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Unknown option!", K(i));

@@ -517,6 +517,8 @@ protected:
                                         common::ObString &pk_name);
   int resolve_srid_node(share::schema::ObColumnSchemaV2 &column,
                         const ParseNode &srid_node);
+  int resolve_lob_inrow_threshold(const ParseNode *option_node, const bool is_index_option);
+
   /*
   int resolve_generated_column_definition(
       share::schema::ObColumnSchemaV2 &column,
@@ -918,6 +920,8 @@ protected:
   common::ObString ttl_definition_;
   common::ObString kv_attributes_;
   ObNameGeneratedType name_generated_type_;
+  bool is_set_lob_inrow_threshold_;
+  int64_t lob_inrow_threshold_;
 private:
   template <typename STMT>
   DISALLOW_COPY_AND_ASSIGN(ObDDLResolver);
