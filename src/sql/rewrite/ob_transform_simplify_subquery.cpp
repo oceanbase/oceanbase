@@ -1976,9 +1976,11 @@ int ObTransformSimplifySubquery::try_trans_any_all_as_exists(ObDMLStmt *stmt,
     }
   } else {
     //check children
-    bool child_is_bool_expr = expr->get_expr_type() == T_OP_OR ||
-                              expr->get_expr_type() == T_OP_AND ||
-                              expr->get_expr_type() == T_OP_XOR;
+    bool is_and_or_expr = (expr->get_expr_type() == T_OP_OR ||
+                           expr->get_expr_type() == T_OP_AND ||
+                           expr->get_expr_type() == T_OP_XOR);
+    bool child_is_bool_expr = lib::is_oracle_mode() ? is_and_or_expr
+                              : is_bool_expr && is_and_or_expr;
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       if (OB_FAIL(SMART_CALL(try_trans_any_all_as_exists(stmt,
                                                          expr->get_param_expr(i),
