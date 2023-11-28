@@ -1012,9 +1012,12 @@ int ObSql::do_add_ps_cache(const PsCacheInfoCtx &info_ctx,
     ObPsStmtItem *ps_stmt_item = NULL;
     ObPsStmtInfo *ref_stmt_info = NULL;
     bool duplicate_prepare = false;
+    ObPsSqlKey ps_key;
+    ps_key.db_id_ = db_id;
+    ps_key.ps_sql_ = info_ctx.normalized_sql_;
+    ps_key.is_client_return_hidden_rowid_ = session.is_client_return_rowid();
     // add stmt item
-    if (OB_FAIL(ps_cache->get_or_add_stmt_item(db_id,
-                                               info_ctx.normalized_sql_,
+    if (OB_FAIL(ps_cache->get_or_add_stmt_item(ps_key,
                                                is_contain_tmp_tbl,
                                                ps_stmt_item))) {
       LOG_WARN("get or create stmt item faield", K(ret), K(db_id), K(info_ctx.normalized_sql_));
@@ -1724,6 +1727,10 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
       bool need_do_real_prepare = false;
       uint64_t db_id = OB_INVALID_ID;
       (void)session.get_database_id(db_id);
+      ObPsSqlKey ps_key;
+      ps_key.db_id_ = db_id;
+      ps_key.ps_sql_ = stmt;
+      ps_key.is_client_return_hidden_rowid_ = session.is_client_return_rowid();
       ObPsStmtId inner_stmt_id = OB_INVALID_STMT_ID;
       ObPsStmtId client_stmt_id = OB_INVALID_STMT_ID;
       ObPsStmtInfo *stmt_info = NULL;
@@ -1751,7 +1758,7 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
                    K(db_id), K(stmt), K(need_do_real_prepare), K(context.secondary_namespace_),
                    K(result.is_simple_ps_protocol()));
         }
-      } else if (OB_FAIL(ps_cache->ref_stmt_item(db_id, stmt, stmt_item))) {
+      } else if (OB_FAIL(ps_cache->ref_stmt_item(ps_key, stmt_item))) {
         if (OB_HASH_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
           need_do_real_prepare = true;
@@ -1786,7 +1793,7 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
         LOG_WARN("fail to check schema version", K(ret));
       } else if (is_expired) {
         stmt_info->set_is_expired();
-        if (OB_FAIL(ps_cache->erase_stmt_item(inner_stmt_id, stmt_info->get_sql_key()))) {
+        if (OB_FAIL(ps_cache->erase_stmt_item(inner_stmt_id, ps_key))) {
           LOG_WARN("fail to erase stmt item", K(ret), K(*stmt_info));
         }
         need_do_real_prepare = true;

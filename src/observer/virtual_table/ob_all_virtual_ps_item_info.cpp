@@ -239,8 +239,6 @@ int ObAllVirtualPsItemInfo::get_next_row_from_specified_tenant(uint64_t tenant_i
         } else if (OB_ISNULL(stmt_item)) {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "stmt_item is NULL", K(ret));
-        } else {
-          // done
         }
         SERVER_LOG(DEBUG, "all setup", K(ret), K(tmp_ret), KP(stmt_info), KP(stmt_item));
 
