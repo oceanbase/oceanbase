@@ -979,16 +979,12 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
   if (OB_ISNULL(root_service = GCTX.root_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, root service must not be nullptr", K(ret));
-  } else if (OB_FAIL(root_service->get_schema_service().check_if_tenant_has_been_dropped(dst_tenant_id_, is_tenant_dropped))) {
-    LOG_WARN("check if tenant has been dropped failed", K(ret), K(dst_tenant_id_));
-  } else if (is_tenant_dropped) {
-    need_retry_ = false;
-    LOG_INFO("tenant has been dropped, exit anyway", K(ret), K(task_id_), K(parent_task_id_), K(dst_tenant_id_));
-  } else if (OB_FAIL(ObAllTenantInfoProxy::is_standby_tenant(&root_service->get_sql_proxy(), dst_tenant_id_, is_standby_tenant))) {
-    LOG_WARN("check is standby tenant failed", K(ret), K(dst_tenant_id_));
-  } else if (is_standby_tenant) {
-    need_retry_ = false;
-    LOG_INFO("tenant is standby, exit anyway", K(ret), K(task_id_), K(parent_task_id_), K(dst_tenant_id_));
+  } else if (OB_FAIL(ObDDLUtil::check_tenant_status_normal(&root_service->get_sql_proxy(), dst_tenant_id_))
+          || OB_FAIL(ObDDLUtil::check_tenant_status_normal(&root_service->get_sql_proxy(), tenant_id_))) {
+    if (OB_TENANT_HAS_BEEN_DROPPED == ret || OB_STANDBY_READ_ONLY == ret) {
+      need_retry_ = false;
+      LOG_INFO("tenant status is abnormal, exit anyway", K(ret), K(task_id_), K(parent_task_id_), K(tenant_id_), K(dst_tenant_id_));
+    }
   } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), dst_tenant_id_))) {
     LOG_WARN("start transaction failed", K(ret));
   } else {

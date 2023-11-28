@@ -1347,6 +1347,42 @@ int ObDDLUtil::get_tenant_schema_guard(
   return ret;
 }
 
+int ObDDLUtil::check_tenant_status_normal(
+    ObISQLClient *proxy,
+    const uint64_t check_tenant_id)
+{
+  int ret = OB_SUCCESS;
+  bool is_tenant_dropped = false;
+  bool is_standby_tenant = false;
+  const ObSimpleTenantSchema *tenant_schema = nullptr;
+  ObSchemaGetterGuard schema_guard;
+  if (OB_ISNULL(proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("proxy is null", K(ret));
+  } else if (OB_FAIL(GSCHEMASERVICE.get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
+    LOG_WARN("get sys tenant schema guard failed", K(ret));
+  } else if (OB_FAIL(schema_guard.check_if_tenant_has_been_dropped(check_tenant_id, is_tenant_dropped))) {
+    LOG_WARN("check tenant dropped failed", K(ret), K(check_tenant_id));
+  } else if (is_tenant_dropped) {
+    ret = OB_TENANT_HAS_BEEN_DROPPED;
+    LOG_INFO("tenant has been dropped", K(ret), K(check_tenant_id));
+  } else if (OB_FAIL(schema_guard.get_tenant_info(check_tenant_id, tenant_schema))) {
+    LOG_WARN("get tenant schema failed", K(ret), K(check_tenant_id));
+  } else if (OB_ISNULL(tenant_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret), K(check_tenant_id));
+  } else if (tenant_schema->is_dropping() || tenant_schema->is_in_recyclebin()) {
+    ret = OB_TENANT_HAS_BEEN_DROPPED;
+    LOG_INFO("tenant in dropping or in recyclebin", K(ret), K(check_tenant_id));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_standby_tenant(proxy, check_tenant_id, is_standby_tenant))) {
+    LOG_WARN("check is standby tenant failed", K(ret), K(check_tenant_id));
+  } else if (is_standby_tenant) {
+    ret = OB_STANDBY_READ_ONLY;
+    LOG_INFO("tenant is standby", K(ret), K(check_tenant_id));
+  }
+  return ret;
+}
+
 /******************           ObCheckTabletDataComplementOp         *************/
 
 int ObCheckTabletDataComplementOp::check_task_inner_sql_session_status(
