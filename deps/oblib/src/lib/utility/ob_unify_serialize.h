@@ -15,8 +15,26 @@
 
 #include "lib/utility/serialization.h"
 
-namespace oceanbase {
-namespace lib {
+namespace oceanbase
+{
+namespace lib
+{
+
+#ifdef ENABLE_SERIALIZATION_CHECK
+static constexpr int MAX_SERIALIZE_RECORD_LENGTH = 256;
+struct SerializeDiagnoseRecord
+{
+  uint8_t encoded_lens[MAX_SERIALIZE_RECORD_LENGTH];
+  int count = -1;
+  int check_index = -1;
+  int flag = 0;
+};
+RLOCAL_EXTERN(SerializeDiagnoseRecord, ser_diag_record);
+void begin_record_serialization();
+void finish_record_serialization();
+void begin_check_serialization();
+void finish_check_serialization();
+#endif
 
 #define SERIAL_PARAMS char *buf, const int64_t buf_len, int64_t &pos
 #define DESERIAL_PARAMS const char *buf, const int64_t data_len, int64_t &pos
@@ -67,8 +85,32 @@ namespace lib {
     }                                                                    \
   }
 
+#ifdef ENABLE_SERIALIZATION_CHECK
+#define OB_UNIS_ADD_LEN(obj)                                                                                        \
+  {                                                                                                                 \
+    int64_t this_len = NS_::encoded_length(obj);                                                                    \
+    if (!(std::is_same<uint8_t, decltype(obj)>::value || std::is_same<int8_t, decltype(obj)>::value ||              \
+            std::is_same<bool, decltype(obj)>::value || std::is_same<char, decltype(obj)>::value)) {                \
+      if (1 == oceanbase::lib::ser_diag_record.flag &&                                                              \
+          oceanbase::lib::ser_diag_record.count < oceanbase::lib::MAX_SERIALIZE_RECORD_LENGTH) {                    \
+        oceanbase::lib::ser_diag_record.encoded_lens[oceanbase::lib::ser_diag_record.count++] =                     \
+            static_cast<uint8_t>(this_len);                                                                         \
+      } else if (2 == oceanbase::lib::ser_diag_record.flag &&                                                       \
+                 oceanbase::lib::ser_diag_record.check_index < oceanbase::lib::ser_diag_record.count) {             \
+        int ret = OB_ERR_UNEXPECTED;                                                                                \
+        int record_len = oceanbase::lib::ser_diag_record.encoded_lens[oceanbase::lib::ser_diag_record.check_index]; \
+        if (this_len != record_len) {                                                                               \
+          OB_LOG(ERROR, "encoded length not match", "name", MSTR(obj), K(this_len), K(record_len), K(obj));                 \
+        }                                                                                                           \
+        oceanbase::lib::ser_diag_record.check_index++;                                                              \
+      }                                                                                                             \
+    }                                                                                                               \
+    len += this_len;                                                                                                \
+  }
+#else
 #define OB_UNIS_ADD_LEN(obj)                                             \
   len += NS_::encoded_length(obj)
+#endif
 //-----------------------------------------------------------------------
 
 // serialize_ no header
@@ -316,6 +358,7 @@ inline uint64_t &get_unis_compat_version()
 }
 
 #define UNIS_VERSION_GUARD(x)
-}} // namespace oceanbase::lib
+}  // namespace lib
+}  // namespace oceanbase
 
 #endif /* _OCEABASE_LIB_UTILITY_OB_UNIFY_SERIALIZE_H_ */

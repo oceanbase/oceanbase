@@ -229,6 +229,7 @@ ob_set_subtarget(oblib_lib utility
   utility/utility.cpp
   utility/ob_backtrace.cpp
   utility/ob_proto_trans_util.cpp
+  utility/ob_unify_serialize.cpp
 )
 
 ob_set_subtarget(oblib_lib ash

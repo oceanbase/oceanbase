@@ -354,6 +354,8 @@ struct ElectionPriorityAdaptivedSerializationBuffer
   }
   unsigned char *priority_buffer_;
   int64_t buffer_used_size_;
+public:
+  TO_STRING_KV(K(buffer_used_size_));
 };
 class ElectionAcceptResponseMsgMiddle : public ElectionMsgBase
 {

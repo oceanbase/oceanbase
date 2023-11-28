@@ -224,6 +224,9 @@ public:
 
 
   DISALLOW_COPY_AND_ASSIGN(ObTaskExecutorCtx);
+  TO_STRING_KV(K(table_locations_), K(retry_times_), K(min_cluster_version_), K(expected_worker_cnt_),
+      K(admited_worker_cnt_), K(query_tenant_begin_schema_version_), K(query_sys_begin_schema_version_),
+      K(minimal_worker_cnt_));
 };
 
 class ObExecutorRpcImpl;

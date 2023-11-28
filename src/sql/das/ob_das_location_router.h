@@ -331,6 +331,7 @@ public:
   }
   int save_success_task(const common::ObTabletID &succ_id)
   { return succ_tablet_list_.push_back(succ_id); }
+  TO_STRING_KV(K(all_tablet_list_));
 private:
   int get_vt_svr_pair(uint64_t vt_id, const VirtualSvrPair *&vt_svr_pair);
   int get_vt_tablet_loc(uint64_t table_id,
