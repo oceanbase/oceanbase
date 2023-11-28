@@ -2065,7 +2065,7 @@ int ObDMLStmtPrinter::print_with()
                 || TableItem::RECURSIVE_CTE == cte_table->cte_type_) {
         if (OB_FAIL(print_cte_define_title(cte_table))) {
           LOG_WARN("print column name failed", K(ret));
-        } else if (OB_FAIL(print_subquery(cte_table->ref_query_, PRINT_BRACKET))) {
+        } else if (OB_FAIL(print_subquery(cte_table->ref_query_, PRINT_BRACKET | FORCE_COL_ALIAS))) {
           LOG_WARN("print table failed", K(ret));
         } else if (OB_FAIL(print_search_and_cycle(cte_table->ref_query_))) {
           LOG_WARN("print search and cycle failed", K(ret));
