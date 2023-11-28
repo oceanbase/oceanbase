@@ -217,7 +217,7 @@ int ObExprPLAssocIndex::do_eval_assoc_index(int64_t &assoc_idx,
       } else {
         if (info.out_of_range_set_err_) {
           ret = OB_READ_NOTHING;
-          LOG_WARN("key of associative not exists", K(key), K(*assoc_array), K(ret));
+          LOG_WARN("key of associative not exists", K(key), KPC(assoc_array), K(ret));
         } else {
           // pl collection的构建有时候会走到这里，out of range的话默认属性是赋值为NULL
           // 例如 aa('e')  ===> NULL, 如果aa是关联数组，e不是一个key

@@ -1128,7 +1128,7 @@ public:
   int prior(int64_t idx, ObObj &result);
   int exist(int64_t idx, ObObj &result);
 
-  TO_STRING_KV(KP_(allocator), K_(type), K_(count), K_(first), K_(last), K_(data), K_(key), K_(sort));
+  TO_STRING_KV(KP_(allocator), K_(type), K_(count), K_(first), K_(last), KP_(data), KP_(key), KP_(sort));
 private:
   common::ObObj *key_;
   int64_t *sort_; //每一个元素的sort属性存储的是排序在自己后面元素的下标，从0开始

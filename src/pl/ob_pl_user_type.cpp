@@ -360,6 +360,7 @@ int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session, bool 
             ret = OB_ERR_UNEXPECTED;
             LOG_ERROR("here must be a bug!!!", K(collection_allocator), K(ret));
           } else {
+            ObPLAssocArray *assoc = NULL;
             collection_allocator->reset();
             collection->set_allocator(NULL);
             collection->set_data(NULL);
@@ -367,6 +368,11 @@ int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session, bool 
             collection->set_first(OB_INVALID_INDEX);
             collection->set_last(OB_INVALID_INDEX);
             set_null ? src.set_null() : collection->set_null();
+            if (collection->is_associative_array()
+                && OB_NOT_NULL(assoc = static_cast<ObPLAssocArray*>(collection))) {
+              assoc->set_key(NULL);
+              assoc->set_sort(NULL);
+            }
           }
         }
       }
