@@ -1336,6 +1336,7 @@ int ObRestoreScheduler::restore_wait_to_consistent_scn(const share::ObPhysicalRe
     } else if (OB_FAIL(check_tenant_replay_to_consistent_scn(tenant_id, job_info.get_consistent_scn(), is_replay_finish))) {
       LOG_WARN("fail to check tenant replay to consistent scn", K(ret));
     } else if (!is_replay_finish) {
+    } else if (FALSE_IT(DEBUG_SYNC(AFTER_WAIT_RESTORE_TO_CONSISTENT_SCN))) {
     } else if (OB_FAIL(trans.start(sql_proxy_, exec_tenant_id))) {
       LOG_WARN("fail to start trans", K(ret));
     } else if (OB_FAIL(set_restore_to_target_scn_(trans, job_info, job_info.get_restore_scn()))) {
