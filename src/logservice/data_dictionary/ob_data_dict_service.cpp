@@ -444,6 +444,7 @@ int ObDataDictService::get_tenant_schema_guard_(
     const bool is_force_fallback)
 {
   int ret = OB_SUCCESS;
+  const int64_t sleep_ts_on_schema_err = 100 * _MSEC_;
   ObMultiVersionSchemaService::RefreshSchemaMode refresh_mode = ObMultiVersionSchemaService::RefreshSchemaMode::NORMAL;
 
   if (is_force_fallback) {
@@ -452,7 +453,7 @@ int ObDataDictService::get_tenant_schema_guard_(
     refresh_mode = ObMultiVersionSchemaService::RefreshSchemaMode::FORCE_LAZY;
   }
 
-  RETRY_FUNC_ON_ERROR(OB_SCHEMA_EAGAIN, stop_flag_, *schema_service_, get_tenant_schema_guard,
+  RETRY_FUNC_ON_ERROR_WITH_SLEEP(OB_SCHEMA_EAGAIN, sleep_ts_on_schema_err, stop_flag_, *schema_service_, get_tenant_schema_guard,
       tenant_id_,
       schema_guard,
       schema_version,
