@@ -555,7 +555,19 @@ int ObTenantRoleTransitionService::wait_ls_balance_task_finish_()
             LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id_));
           } else if (cur_tenant_info.get_sync_scn() == cur_tenant_info.get_standby_scn()) {
             is_finish = true;
-            LOG_INFO("has transfer task, and repaly to newest", KR(ret), K(cur_tenant_info));
+            for (int64_t i = 0; OB_SUCC(ret) && i < balance_task_array.count() && !is_finish; ++i) {
+              const ObBalanceTask &task = balance_task_array.at(i);
+              if (OB_FAIL(ObLSServiceHelper::check_transfer_task_replay(tenant_id_,
+                      task.get_src_ls_id(), task.get_dest_ls_id(), cur_tenant_info.get_sync_scn(),
+                      is_finish))) {
+                LOG_WARN("failed to check transfer task replay", KR(ret), K(cur_tenant_info), K(task));
+              } else if (!is_finish) {
+                LOG_INFO("has transfe task, and not replay to newest", K(task));
+              }
+            }//end for
+            if (OB_SUCC(ret) && is_finish) {
+            LOG_INFO("has transfer task, and replay to newest", KR(ret), K(cur_tenant_info));
+            }
           }
         } else if (OB_FAIL(ret)) {
           LOG_WARN("failed to pop task", KR(ret), K(tenant_id_));

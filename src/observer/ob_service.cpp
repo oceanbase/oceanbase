@@ -76,6 +76,7 @@
 #include "observer/report/ob_tenant_meta_checker.h"//ObTenantMetaChecker
 #include "rootserver/backup/ob_backup_task_scheduler.h" // ObBackupTaskScheduler
 #include "rootserver/backup/ob_backup_schedule_task.h" // ObBackupScheduleTask
+#include "rootserver/ob_ls_recovery_stat_handler.h"//get_all_ls_replica_readbable_scn
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
@@ -3024,7 +3025,6 @@ int ObService::get_ls_replayed_scn(
   } else if (arg.get_tenant_id() != MTL_ID() && OB_FAIL(guard.switch_to(arg.get_tenant_id()))) {
     LOG_WARN("switch tenant failed", KR(ret), K(arg));
   }
-
   if (OB_SUCC(ret)) {
     ObLSService *ls_svr = MTL(ObLSService*);
     ObLSHandle ls_handle;
@@ -3039,12 +3039,17 @@ int ObService::get_ls_replayed_scn(
       LOG_WARN("log stream is null", KR(ret), K(arg), K(ls_handle));
     } else if (OB_FAIL(ls->get_max_decided_scn(cur_readable_scn))) {
       LOG_WARN("failed to get_max_decided_scn", KR(ret), K(arg), KPC(ls));
-    } else if (OB_FAIL(result.init(arg.get_tenant_id(), arg.get_ls_id(), cur_readable_scn))) {
-      LOG_WARN("failed to init res", KR(ret), K(arg), K(cur_readable_scn));
-    } else {
-      LOG_INFO("finish get_ls_replayed_scn", KR(ret), K(cur_readable_scn), K(arg), K(result));
+    } else if (arg.is_all_replica()) {
+      if (OB_FAIL(ls->get_all_replica_min_readable_scn(cur_readable_scn))) {
+        LOG_WARN("failed to get all replica readable scn", KR(ret));
+      }
     }
+    if (FAILEDx(result.init(arg.get_tenant_id(), arg.get_ls_id(), cur_readable_scn, GCTX.self_addr()))) {
+      LOG_WARN("failed to init res", KR(ret), K(arg), K(cur_readable_scn));
+    }
+    LOG_INFO("finish get_ls_replayed_scn", KR(ret), K(cur_readable_scn), K(arg), K(result));
   }
+
   return ret;
 }
 

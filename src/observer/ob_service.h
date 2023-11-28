@@ -273,7 +273,6 @@ private:
       share::ObTabletReplica &tablet_replica,
       share::ObTabletReplicaChecksumItem &tablet_checksum,
       const bool need_checksum);
-
   int register_self();
   int check_server_empty(bool &server_empty);
 

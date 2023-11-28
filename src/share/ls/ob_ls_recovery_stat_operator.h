@@ -21,6 +21,7 @@
 #include "lib/container/ob_iarray.h"//ObIArray
 #include "logservice/palf/log_define.h"//SCN
 #include "share/scn.h"//SCN
+#include "logservice/palf/log_meta_info.h"//LogConfigVersion
 
 namespace oceanbase
 {
@@ -49,7 +50,8 @@ struct ObLSRecoveryStat
         sync_scn_(),
         readable_scn_(),
         create_scn_(),
-        drop_scn_() {}
+        drop_scn_(),
+        config_version_() {}
   virtual ~ObLSRecoveryStat() {}
   bool is_valid() const;
   int init(const uint64_t tenant_id,
@@ -57,10 +59,12 @@ struct ObLSRecoveryStat
            const SCN &sync_scn,
            const SCN &readable_scn,
            const SCN &create_scn,
-           const SCN &drop_scn);
+           const SCN &drop_scn,
+           const palf::LogConfigVersion &config_version);
   int init_only_recovery_stat(const uint64_t tenant_id, const ObLSID &id,
                               const SCN &sync_scn,
-                              const SCN &readable_scn);
+                              const SCN &readable_scn,
+                              const palf::LogConfigVersion &config_version);
   void reset();
   int assign(const ObLSRecoveryStat &other);
   uint64_t get_tenant_id() const
@@ -87,8 +91,12 @@ struct ObLSRecoveryStat
   {
     return drop_scn_;
   }
+  const palf::LogConfigVersion &get_config_version() const
+  {
+    return config_version_;
+  }
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(sync_scn), K_(readable_scn),
-               K_(create_scn), K_(drop_scn));
+               K_(create_scn), K_(drop_scn), K(config_version_));
 
  private:
   uint64_t tenant_id_;
@@ -97,6 +105,7 @@ struct ObLSRecoveryStat
   SCN readable_scn_;//min weak read timestamp TODO need different majorty replicas and all replicas
   SCN create_scn_;//ts less than first clog ts
   SCN drop_scn_; //ts larger than last user data's clog and before offline
+  palf::LogConfigVersion config_version_;
 };
 
 /*
@@ -254,6 +263,17 @@ public:
   int get_user_ls_sync_scn(const uint64_t tenant_id,
       ObISQLClient &client,
       SCN &sync_scn);
+  /*
+  * description: update ls config_version and return current readable_scn
+  * @param[in] tenant_id
+  * @param[in] ls_id
+  * @param[in] config_version :will not fallback
+  * @param[in] client
+  * @param[out] readable scn
+  */
+  int update_ls_config_version(const uint64_t tenant_id,
+  const ObLSID &ls_id, const palf::LogConfigVersion &config_version,
+  ObMySQLProxy &client, SCN &readable_scn);
 private:
 
   int get_min_create_scn_(const uint64_t tenant_id,
