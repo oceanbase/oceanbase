@@ -191,7 +191,7 @@ struct ObCompactionDagStatus final
   // for mini/minor/major merge
   static constexpr int64_t COST_LONG_TIME[COMPACTION_PRIORITY_MAX] = {
     10 * 60 * 1000 * 1000L, INT64_MAX, 20 * 60 * 1000 * 1000L, INT64_MAX, 60 * 60 * 1000 * 1000L}; // 10m,30m,60m
-
+  static int64_t get_cost_long_time(const int64_t prio);
   ObCompactionHistogramStat histogram_stat_[COMPACTION_DAG_MAX];
 };
 

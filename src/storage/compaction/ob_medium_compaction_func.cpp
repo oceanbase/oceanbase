@@ -1100,7 +1100,7 @@ int ObMediumCompactionScheduleFunc::check_medium_checksum(
       if (prev_item.is_key_valid()) {
         if (curr_item.is_same_tablet(prev_item)) { // same tablet
           if (OB_TMP_FAIL(curr_item.verify_checksum(prev_item))) {
-            LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "checksum error in tablet replica checksum", KR(ret),
+            LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "checksum error in tablet replica checksum", KR(tmp_ret),
               K(curr_item), K(prev_item));
             if (OB_SUCCESS == check_ret) {
               if (OB_TMP_FAIL(error_pairs.push_back(ObTabletLSPair(curr_item.tablet_id_, curr_item.ls_id_)))) {

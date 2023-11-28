@@ -169,7 +169,8 @@ int ObAllVirtualServerCompactionProgress::fill_cells()
       }
       {
         int64_t pos = strlen(event_buf_);
-        databuff_printf(event_buf_, sizeof(event_buf_), pos, "is_inited:%d", progress_.is_inited_);
+        databuff_printf(event_buf_, sizeof(event_buf_), pos, "is_inited:%d,real_finish_cnt:%ld",
+            progress_.is_inited_, progress_.real_finish_cnt_);
       }
       cells[i].set_varchar(event_buf_);
       cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
