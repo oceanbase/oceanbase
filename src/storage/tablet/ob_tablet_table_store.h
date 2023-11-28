@@ -82,6 +82,7 @@ public:
   }
   OB_INLINE bool is_ready_for_read() const { return is_ready_for_read_; }
   OB_INLINE int64_t get_table_count() const { return major_tables_.count() + minor_tables_.count(); }
+  OB_INLINE int64_t get_ddl_memtable_count() const { return ddl_mem_sstables_.count(); }
 
   // Interfaces below that access sstable array member of table store directly does not guarantee
   // sstables in array were loaded
