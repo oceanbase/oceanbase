@@ -253,6 +253,7 @@ protected:
   int add_default_sequence_id_to_stmt(const uint64_t table_id);
   int recursive_search_sequence_expr(const ObRawExpr *default_expr);
   int check_need_match_all_params(const common::ObIArray<ObColumnRefRawExpr*> &value_desc, bool &need_match);
+  int check_write_inner_table_allowed(const ObDmlTableInfo &table_info, const ObString &database_name);
 private:
   common::hash::ObPlacementHashSet<uint64_t, 4229> insert_column_ids_;
   bool is_column_specify_;

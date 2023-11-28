@@ -411,6 +411,7 @@ int ObDeleteResolver::generate_delete_table_info(const TableItem &table_item)
     LOG_WARN("failed to allocate table info", K(ret));
   } else {
     table_info = new(ptr) ObDeleteTableInfo();
+    ObString database_name;
     if (OB_FAIL(table_info->part_ids_.assign(base_table_item.part_ids_))) {
       LOG_WARN("failed to assign part ids", K(ret));
     } else if (!delete_stmt->has_instead_of_trigger()) {
@@ -433,6 +434,7 @@ int ObDeleteResolver::generate_delete_table_info(const TableItem &table_item)
         table_info->ref_table_id_ = base_table_item.ref_id_;
         table_info->table_name_ = table_schema->get_table_name_str();
         table_info->is_link_table_ = base_table_item.is_link_table();
+        database_name = base_table_item.database_name_;
       }
     } else {
       uint64_t view_id = OB_INVALID_ID;
@@ -445,10 +447,13 @@ int ObDeleteResolver::generate_delete_table_info(const TableItem &table_item)
         table_info->loc_table_id_ = table_item.table_id_;
         table_info->ref_table_id_ = view_id;
         table_info->table_name_ = table_item.table_name_;
+        database_name = table_item.database_name_;
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(delete_stmt->get_delete_table_info().push_back(table_info))) {
+      if (OB_FAIL(check_write_inner_table_allowed(*table_info, database_name))) {
+        LOG_WARN("failed to check write inner table allowed", K(ret));
+      } else if (OB_FAIL(delete_stmt->get_delete_table_info().push_back(table_info))) {
         LOG_WARN("failed to push back table info", K(ret));
       } else if (gindex_cnt > 0) {
         delete_stmt->set_has_global_index(true);
