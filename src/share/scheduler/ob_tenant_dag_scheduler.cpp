@@ -3685,7 +3685,8 @@ int ObDagNetScheduler::loop_running_dag_net_map()
 int ObDagNetScheduler::loop_blocking_dag_net_list()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_ISNULL(scheduler_))) {
+  if (OB_ISNULL(scheduler_)) {
+    ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(WARN, "scheduler is null", KP(scheduler_));
   } else {
     ObMutexGuard guard(dag_net_map_lock_);

@@ -295,5 +295,75 @@ int ObTabletLSPairCache::get_tablet_ls_pairs(
   return ret;
 }
 
+/**
+ * -------------------------------------------------------------------ObUncompactInfo-------------------------------------------------------------------
+ */
+ObUncompactInfo::ObUncompactInfo()
+  : diagnose_rw_lock_(ObLatchIds::MAJOR_FREEZE_DIAGNOSE_LOCK),
+    tablets_(),
+    table_ids_()
+{}
+
+ObUncompactInfo::~ObUncompactInfo()
+{
+  reset();
+}
+
+void ObUncompactInfo::reset()
+{
+  SpinWLockGuard w_guard(diagnose_rw_lock_);
+  tablets_.reuse();
+  table_ids_.reuse();
+}
+
+void ObUncompactInfo::add_table(const uint64_t table_id)
+{
+  int ret = OB_SUCCESS;
+  SpinWLockGuard w_guard(diagnose_rw_lock_);
+  if (table_ids_.count() < DEBUG_INFO_CNT
+      && OB_FAIL(table_ids_.push_back(table_id))) {
+    LOG_WARN("fail to push_back", KR(ret), K(table_id));
+  }
+}
+
+void ObUncompactInfo::add_tablet(const share::ObTabletReplica &replica)
+{
+  int ret = OB_SUCCESS;
+  SpinWLockGuard w_guard(diagnose_rw_lock_);
+  if (tablets_.count() < DEBUG_INFO_CNT
+      && OB_FAIL(tablets_.push_back(replica))) {
+    LOG_WARN("fail to push_back", KR(ret), K(replica));
+  }
+}
+
+void ObUncompactInfo::add_tablet(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const common::ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  ObTabletReplica fake_replica;
+  fake_replica.fake_for_diagnose(tenant_id, ls_id, tablet_id);
+  SpinWLockGuard w_guard(diagnose_rw_lock_);
+  if (tablets_.count() < DEBUG_INFO_CNT
+      && OB_FAIL(tablets_.push_back(fake_replica))) {
+    LOG_WARN("fail to push_back", KR(ret), K(fake_replica));
+  }
+}
+
+int ObUncompactInfo::get_uncompact_info(
+    ObIArray<ObTabletReplica> &input_tablets,
+    ObIArray<uint64_t> &input_table_ids) const
+{
+  int ret = OB_SUCCESS;
+  SpinRLockGuard r_guard(diagnose_rw_lock_);
+  if (OB_FAIL(input_tablets.assign(tablets_))) {
+    LOG_WARN("fail to assign uncompacted_tablets", KR(ret), K_(tablets));
+  } else if (OB_FAIL(input_table_ids.assign(table_ids_))) {
+    LOG_WARN("fail to assign uncompacted_tablets", KR(ret), K_(table_ids));
+  }
+  return ret;
+}
+
 } // namespace compaction
 } // namespace oceanbase
