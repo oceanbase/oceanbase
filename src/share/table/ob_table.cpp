@@ -1486,7 +1486,7 @@ int ObTableQueryResult::add_row(const ObNewRow &row)
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc cells buffer", K(ret), K(lob_storage_count));
       }
-      for (int i = 0; OB_SUCC(ret) && i < N; ++i) {
+      for (int i = 0, lob_cell_idx = 0; OB_SUCC(ret) && i < N; ++i) {
         const ObObj &cell = new_row.get_cell(i);
         ObObjType type = cell.get_type();
         if (is_lob_storage(type)) {
@@ -1494,12 +1494,13 @@ int ObTableQueryResult::add_row(const ObNewRow &row)
           if (cell.has_lob_header()) {
             if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&allocator_, cell, real_data))) {
               LOG_WARN("fail to read real string date", K(ret), K(cell));
-            } else if (i >= lob_storage_count) {
+            } else if (lob_cell_idx >= lob_storage_count) {
               ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected index count", K(ret), K(i), K(lob_storage_count));
+              LOG_WARN("unexpected index count", K(ret), K(lob_cell_idx), K(lob_storage_count));
             } else {
-              lob_cells[i].set_lob_value(type, real_data.ptr(), real_data.length());
-              new_row.get_cell(i) = lob_cells[i]; // switch lob cell
+              lob_cells[lob_cell_idx].set_lob_value(type, real_data.ptr(), real_data.length());
+              new_row.get_cell(i) = lob_cells[lob_cell_idx]; // switch lob cell
+              lob_cell_idx++;
             }
           }
         }
