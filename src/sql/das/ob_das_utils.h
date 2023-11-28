@@ -57,6 +57,7 @@ public:
                                    const common::ObAccuracy &col_accuracy,
                                    common::ObIAllocator &allocator,
                                    common::ObObj &value);
+  static int padding_fixed_string_value(int64_t max_len, ObIAllocator &alloc, ObObj &value);
   static int generate_spatial_index_rows(ObIAllocator &allocator,
                                          const ObDASDMLBaseCtDef &das_ctdef,
                                          const ObString &wkb_str,
