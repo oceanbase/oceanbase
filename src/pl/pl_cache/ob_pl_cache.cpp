@@ -478,7 +478,7 @@ int ObPLObjectValue::match_dep_schema(const ObPLCacheCtx &pc_ctx,
       if (OB_ISNULL(stored_schema_objs_.at(i))) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid null table schema", K(ret), K(i));
-      } else if (schema_array.at(i).is_tmp_table_) { // check for tmp table
+      } else if (schema_array.at(i).is_tmp_table_ && lib::is_mysql_mode()) { // check for tmp table
         is_same = ((session_info->get_sessid_for_table() == sessid_) &&
                    (session_info->get_sess_create_time() == sess_create_time_));
         if (!is_same) {
