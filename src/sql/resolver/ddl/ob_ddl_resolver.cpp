@@ -3832,7 +3832,7 @@ int ObDDLResolver::resolve_lob_inrow_threshold(const ParseNode *option_node, con
     if (lob_inrow_threshold_ < OB_MIN_LOB_INROW_THRESHOLD || lob_inrow_threshold_ > OB_MAX_LOB_INROW_THRESHOLD) {
       ret = OB_INVALID_ARGUMENT;
       SQL_RESV_LOG(ERROR, "invalid inrow threshold", K(ret), K(lob_inrow_threshold_));
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "invalid inrow threshold");
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "lob inrow threshold, should be [0, 786432]");
     } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
       if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::LOB_INROW_THRESHOLD))) {
         SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
