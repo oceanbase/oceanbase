@@ -254,6 +254,8 @@ public:
   int wait_write_finish(const int64_t block_id, const int64_t timeout_ms);
   int get_disk_macro_block_list(common::ObIArray<MacroBlockId> &macro_id_list);
   int get_macro_block(const int64_t block_id, ObTmpMacroBlock *&t_mblk);
+  // use io_allocator_ to allocate tenant extent memory.
+  common::ObIAllocator &get_extent_allocator() { return allocator_; }
   void print_block_usage() { tmp_block_manager_.print_block_usage(); }
   OB_INLINE void inc_page_cache_num(const int64_t num) {
     ATOMIC_FAA(&page_cache_num_, num);
@@ -350,6 +352,7 @@ public:
   int get_macro_block_list(common::ObIArray<TenantTmpBlockCntPair> &tmp_block_cnt_pairs);
   int get_all_tenant_id(common::ObIArray<uint64_t> &tenant_ids);
   int64_t get_next_blk_id();
+  int get_tenant_extent_allocator(const int64_t tenant_id, common::ObIAllocator *&allocator);
 
   static int64_t get_block_size()
   {
