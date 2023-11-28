@@ -3708,7 +3708,6 @@ int ObDelUpdResolver::generate_insert_table_info(const TableItem &table_item,
   const ObTableSchema *table_schema = NULL;
   uint64_t index_tid[OB_MAX_INDEX_PER_TABLE];
   int64_t gindex_cnt = OB_MAX_INDEX_PER_TABLE;
-  ObString database_name;
   if (OB_ISNULL(del_upd_stmt) || OB_ISNULL(schema_checker_) || OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(del_upd_stmt), K(schema_checker_), K(session_info_));
@@ -3739,7 +3738,6 @@ int ObDelUpdResolver::generate_insert_table_info(const TableItem &table_item,
       table_info.ref_table_id_ = base_table_item.ref_id_;
       table_info.table_name_ = table_schema->get_table_name_str();
       table_info.is_link_table_ = base_table_item.is_link_table();
-      database_name = base_table_item.database_name_;
     }
   } else {
     uint64_t view_id = OB_INVALID_ID;
@@ -3752,15 +3750,10 @@ int ObDelUpdResolver::generate_insert_table_info(const TableItem &table_item,
       table_info.loc_table_id_ = table_item.table_id_;
       table_info.ref_table_id_ = view_id;
       table_info.table_name_ = table_item.table_name_;
-      database_name = table_item.database_name_;
     }
   }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(check_write_inner_table_allowed(table_info, database_name))) {
-      LOG_WARN("failed to check write inner table allowed", K(ret));
-    } else if (gindex_cnt > 0) {
-      del_upd_stmt->set_has_global_index(true);
-    }
+  if (OB_SUCC(ret) && gindex_cnt > 0) {
+    del_upd_stmt->set_has_global_index(true);
   }
   return ret;
 }
@@ -4574,28 +4567,6 @@ int ObDelUpdResolver::check_need_match_all_params(const common::ObIArray<ObColum
         }
       }
     }
-  }
-  return ret;
-}
-
-int ObDelUpdResolver::check_write_inner_table_allowed(const ObDmlTableInfo &table_info,
-                                                      const ObString &database_name)
-{
-  int ret = OB_SUCCESS;
-  ObSessionPrivInfo session_priv;
-  if (OB_ISNULL(params_.session_info_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session_info is null", K(ret));
-  } else if (FALSE_IT(params_.session_info_->get_session_priv_info(session_priv))) {
-  } else if (is_sys_tenant(session_priv.tenant_id_)) {
-    /* system tenant, no checking */
-  } else if (is_inner_table(table_info.ref_table_id_)) {
-    ret = OB_ERR_NO_DB_PRIVILEGE;
-    LOG_WARN("not allow to operate on db", K(ret), K(table_info.ref_table_id_));
-    LOG_USER_ERROR(OB_ERR_NO_DB_PRIVILEGE,
-                   session_priv.user_name_.length(), session_priv.user_name_.ptr(),
-                   session_priv.host_name_.length(),session_priv.host_name_.ptr(),
-                   database_name.length(), database_name.ptr());
   }
   return ret;
 }

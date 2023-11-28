@@ -521,7 +521,6 @@ int ObUpdateResolver::generate_update_table_info(ObTableAssignment &table_assign
     LOG_WARN("failed to allocate table info", K(ret));
   } else {
     table_info = new(ptr) ObUpdateTableInfo();
-    ObString database_name;
     if (OB_FAIL(table_info->assignments_.assign(table_assign.assignments_))) {
       LOG_WARN("failed to assign exprs", K(ret));
     } else if (OB_FAIL(table_info->part_ids_.assign(table_item->get_base_table_item().part_ids_))) {
@@ -551,7 +550,6 @@ int ObUpdateResolver::generate_update_table_info(ObTableAssignment &table_assign
         table_info->ref_table_id_ = table_item->get_base_table_item().ref_id_;
         table_info->table_name_ = table_schema->get_table_name_str();
         table_info->is_link_table_ = table_item->get_base_table_item().is_link_table();
-        database_name = table_item->get_base_table_item().database_name_;
       }
     } else {
       // view has `instead of trigger`
@@ -566,13 +564,10 @@ int ObUpdateResolver::generate_update_table_info(ObTableAssignment &table_assign
         table_info->loc_table_id_ = table_item->table_id_;
         table_info->ref_table_id_ = view_id;
         table_info->table_name_ = table_item->table_name_;
-        database_name = table_item->database_name_;
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(check_write_inner_table_allowed(*table_info, database_name))) {
-        LOG_WARN("failed to check write inner table allowed", K(ret));
-      } else if (OB_FAIL(update_stmt->get_update_table_info().push_back(table_info))) {
+      if (OB_FAIL(update_stmt->get_update_table_info().push_back(table_info))) {
         LOG_WARN("failed to push back table info", K(ret));
       } else if (gindex_cnt > 0) {
         update_stmt->set_has_global_index(true);
