@@ -44,6 +44,35 @@ namespace datadict
     bret; \
   })
 
+#define RETRY_FUNC_ON_ERROR_WITH_SLEEP(err_no, sleep_us, stop_flag, var, func, args...) \
+  do {\
+    if (OB_SUCC(ret)) \
+    { \
+      int64_t _retry_func_on_error_last_print_time = common::ObClockGenerator::getClock();\
+      int64_t _retry_func_on_error_cur_print_time = 0;\
+      const int64_t _PRINT_RETRY_FUNC_INTERVAL = 10 * _SEC_;\
+      ret = (err_no); \
+      while ((err_no) == ret && ! (stop_flag)) \
+      { \
+        ret = ::oceanbase::common::OB_SUCCESS; \
+        ret = (var).func(args); \
+        if (err_no == ret) { \
+          ob_usleep(sleep_us); \
+        }\
+        _retry_func_on_error_cur_print_time = common::ObClockGenerator::getClock();\
+        if (_retry_func_on_error_cur_print_time - _retry_func_on_error_last_print_time >= _PRINT_RETRY_FUNC_INTERVAL) {\
+          _DDLOG(INFO, "It has been %ld us since last print, last_print_time=%ld, func_name=%s", \
+              _PRINT_RETRY_FUNC_INTERVAL, _retry_func_on_error_last_print_time, #func);\
+          _retry_func_on_error_last_print_time = _retry_func_on_error_cur_print_time;\
+        }\
+      } \
+      if ((stop_flag)) \
+      { \
+        ret = OB_IN_STOP_STATE; \
+      } \
+    } \
+  } while (0)
+
 /*
  * Memory size.
  */
