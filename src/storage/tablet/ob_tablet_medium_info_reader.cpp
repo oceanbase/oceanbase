@@ -210,7 +210,9 @@ int ObTabletMediumInfoReader::get_specified_medium_info(
 }
 
 // temp solution, TODO(@xianzhi)
-int ObTabletMediumInfoReader::get_min_medium_snapshot(int64_t &min_medium_snapshot)
+int ObTabletMediumInfoReader::get_min_medium_snapshot(
+  const int64_t last_major_snapshot_version,
+  int64_t &min_medium_snapshot)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator tmp_allocator;
@@ -225,7 +227,7 @@ int ObTabletMediumInfoReader::get_min_medium_snapshot(int64_t &min_medium_snapsh
       } else {
         LOG_WARN("failed to get medium info", K(ret));
       }
-    } else {
+    } else if (tmp_key.get_medium_snapshot() > last_major_snapshot_version) {
       min_medium_snapshot = tmp_key.get_medium_snapshot();
       break;
     }
