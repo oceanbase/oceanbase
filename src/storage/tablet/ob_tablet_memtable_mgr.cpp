@@ -34,13 +34,15 @@ namespace storage
 using namespace mds;
 
 ObTabletMemtableMgr::ObTabletMemtableMgr()
-  : ObIMemtableMgr(LockType::OB_SPIN_RWLOCK, &lock_def_),
-    ls_(nullptr),
+  : ls_(nullptr),
     lock_def_(common::ObLatchIds::TABLET_MEMTABLE_LOCK),
     retry_times_(0),
     schema_recorder_(),
     medium_info_recorder_()
 {
+  lock_.lock_type_ = LockType::OB_SPIN_RWLOCK;
+  lock_.lock_ = &lock_def_;
+
 #if defined(__x86_64__)
   static_assert(sizeof(ObTabletMemtableMgr) <= 2048, "The size of ObTabletMemtableMgr will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
@@ -79,6 +81,11 @@ void ObTabletMemtableMgr::destroy()
   medium_info_recorder_.destroy();
   retry_times_ = 0;
   is_inited_ = false;
+}
+
+void ObTabletMemtableMgr::reset()
+{
+  destroy();
 }
 
 int ObTabletMemtableMgr::init(const common::ObTabletID &tablet_id,

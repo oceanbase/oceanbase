@@ -82,15 +82,8 @@ private:
   static const int64_t TX_DATA_MEMTABLE_MAX_FREEZE_WAIT_TIME = 1000; // 1ms
 
 public:  // ObTxDataMemtableMgr
-  ObTxDataMemtableMgr()
-    : ObIMemtableMgr(LockType::OB_SPIN_RWLOCK, &lock_def_),
-      is_freezing_(false),
-      ls_id_(0),
-      mini_merge_recycle_commit_versions_ts_(0),
-      tx_data_table_(nullptr),
-      ls_tablet_svr_(nullptr),
-      slice_allocator_(nullptr) {}
-  virtual ~ObTxDataMemtableMgr() = default;
+  ObTxDataMemtableMgr();
+  virtual ~ObTxDataMemtableMgr();
   int init(const common::ObTabletID &tablet_id,
            const share::ObLSID &ls_id,
            ObFreezer *freezer,
