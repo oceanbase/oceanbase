@@ -152,6 +152,9 @@ void ObPxTargetMgr::run1()
           LOG_INFO("found a server is not longer alive, so refresh all", K(it->first));
         }
       }
+      if (px_res_refresh_funtor.need_refresh_all_) {
+        alive_server_set_.clear();
+      }
     }
   }
 }
