@@ -69,6 +69,7 @@ enum class ObTxDataSourceType : int64_t
 
 enum class NotifyType : int64_t
 {
+  UNKNOWN = -1,
   REGISTER_SUCC = 0,
   ON_REDO = 1,
   TX_END = 2,
