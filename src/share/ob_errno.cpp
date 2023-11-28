@@ -22557,6 +22557,18 @@ static const _error _error_OB_CLOUD_OBJECT_NOT_APPENDABLE = {
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -9098, normal object in object_storage(oss,cos,etc.) can't be appended content",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9098, normal object in object_storage(oss,cos,etc.) can't be appended content"
 };
+static const _error _error_OB_RESTORE_TENANT_FAILED = {
+      .error_name            = "OB_RESTORE_TENANT_FAILED",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "HY000",
+      .str_error             = "restore tenant failed",
+      .str_user_error        = "%s restore failed, %s",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -9099, restore tenant failed",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9099, %s restore failed, %s"
+};
 static const _error _error_OB_NO_SUCH_FILE_OR_DIRECTORY = {
       .error_name            = "OB_NO_SUCH_FILE_OR_DIRECTORY",
       .error_cause           = "Internal Error",
@@ -27682,6 +27694,7 @@ struct ObStrErrorInit
     _errors[-OB_ERR_RESTORE_STANDBY_VERSION_LAG] = &_error_OB_ERR_RESTORE_STANDBY_VERSION_LAG;
     _errors[-OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED] = &_error_OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED;
     _errors[-OB_CLOUD_OBJECT_NOT_APPENDABLE] = &_error_OB_CLOUD_OBJECT_NOT_APPENDABLE;
+    _errors[-OB_RESTORE_TENANT_FAILED] = &_error_OB_RESTORE_TENANT_FAILED;
     _errors[-OB_NO_SUCH_FILE_OR_DIRECTORY] = &_error_OB_NO_SUCH_FILE_OR_DIRECTORY;
     _errors[-OB_FILE_OR_DIRECTORY_EXIST] = &_error_OB_FILE_OR_DIRECTORY_EXIST;
     _errors[-OB_FILE_OR_DIRECTORY_PERMISSION_DENIED] = &_error_OB_FILE_OR_DIRECTORY_PERMISSION_DENIED;
