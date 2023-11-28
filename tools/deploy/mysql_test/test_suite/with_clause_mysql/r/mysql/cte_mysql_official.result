@@ -773,4 +773,15 @@ SELECT * FROM all_destinations;
 | Mars    |         20 | Mars,Jupiter,Saturn,Earth,Mars |        1 |
 +---------+------------+--------------------------------+----------+
 
+create table t1(c1 int);
+create table t2(c1 int);
+create table t3(c1 int);
+CREATE VIEW `nview9` AS select `t3`.`c1` AS `c1` from (WITH RECURSIVE `cte` as (select t1.c1 AS c1 from t1) select `cte`.`c1` AS `c1` from `cte` where (`cte`.`c1` > 1000)) `t3`;
+delete from nview9;
+ERROR HY000: The target table nview9 of the DELETE is not updatable
+
+create view v1 as select * from (with qn as (select 'with' from dual) select * from qn);
+delete from v1;
+ERROR HY000: The target table v1 of the DELETE is not updatable
+
 drop database cte_st;

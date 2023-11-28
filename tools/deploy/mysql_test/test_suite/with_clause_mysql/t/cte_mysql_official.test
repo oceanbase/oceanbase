@@ -443,4 +443,15 @@ AND is_cycle=0
 )
 SELECT * FROM all_destinations;
 
+create table t1(c1 int);
+create table t2(c1 int);
+create table t3(c1 int);
+CREATE VIEW `nview9` AS select `t3`.`c1` AS `c1` from (WITH RECURSIVE `cte` as (select t1.c1 AS c1 from t1) select `cte`.`c1` AS `c1` from `cte` where (`cte`.`c1` > 1000)) `t3`;
+--error 1288
+delete from nview9;
+
+create view v1 as select * from (with qn as (select 'with' from dual) select * from qn);
+--error 1288
+delete from v1;
+
 drop database cte_st;
