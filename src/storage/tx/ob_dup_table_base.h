@@ -72,6 +72,8 @@ struct DupTableInterfaceStat
   int64_t dup_table_redo_sync_succ_cnt_;
   int64_t dup_table_redo_sync_fail_cnt_;
 
+  share::SCN dup_table_max_applying_scn_;
+
   int64_t dup_table_log_entry_cnt_;
   int64_t dup_table_log_entry_total_size_;
 
@@ -86,6 +88,8 @@ struct DupTableInterfaceStat
     dup_table_follower_read_tablet_not_exist_cnt_ = 0;
     dup_table_follower_read_tablet_not_ready_cnt_ = 0;
     dup_table_follower_read_lease_expired_cnt_ = 0;
+
+    dup_table_max_applying_scn_.set_min();
 
     dup_table_redo_sync_succ_cnt_ = 0;
     dup_table_redo_sync_fail_cnt_ = 0;
@@ -105,6 +109,7 @@ struct DupTableInterfaceStat
                K(dup_table_follower_read_lease_expired_cnt_),
                K(dup_table_redo_sync_succ_cnt_),
                K(dup_table_redo_sync_fail_cnt_),
+               K(dup_table_max_applying_scn_),
                K(dup_table_log_entry_cnt_),
                K(dup_table_log_entry_total_size_),
                K(dup_table_log_replay_total_time_),

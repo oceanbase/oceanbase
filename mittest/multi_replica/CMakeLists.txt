@@ -22,6 +22,7 @@ endfunction()
 
 ob_unittest_multi_replica(test_ob_multi_replica_basic)
 ob_unittest_multi_replica(test_ob_dup_table_basic)
+ob_unittest_multi_replica(test_ob_dup_table_restart)
 ob_unittest_multi_replica(test_ob_dup_table_leader_switch)
 ob_unittest_multi_replica(test_ob_dup_table_tablet_gc)
 ob_unittest_multi_replica(test_mds_replay_from_ctx_table)

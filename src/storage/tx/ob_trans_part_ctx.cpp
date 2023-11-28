@@ -6469,7 +6469,7 @@ int ObPartTransCtx::errism_dup_table_redo_sync_()
   return ret;
 }
 
-int ObPartTransCtx::errism_submit_prepare_log_()
+OB_NOINLINE int ObPartTransCtx::errism_submit_prepare_log_()
 {
 
   int ret = OB_SUCCESS;

@@ -71,7 +71,6 @@ public:
   uint64_t hash() const { return tenant_id_; }
 
 private:
-  int execute_();
   int execute_for_dup_ls_();
   int refresh_dup_tablet_schema_(bool need_refresh,
                                  ObTenantDupTabletSchemaHelper::TabletIDSet &tenant_dup_tablet_set,

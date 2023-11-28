@@ -39,7 +39,7 @@ public:
 
 public:
   static const int64_t LEASE_UNIT;
-  static const int64_t DEFAULT_LEASE_INTERVAL;
+  static int64_t DEFAULT_LEASE_INTERVAL;
   static const int64_t MIN_LEASE_INTERVAL;
 
   TO_STRING_KV(K(leader_lease_map_.size()), K(follower_lease_info_));
