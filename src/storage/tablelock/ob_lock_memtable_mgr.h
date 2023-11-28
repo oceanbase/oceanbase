@@ -48,8 +48,7 @@ class ObLockMemtableMgr : public storage::ObIMemtableMgr
 {
 public:
   ObLockMemtableMgr();
-  virtual ~ObLockMemtableMgr() { reset(); }
-  void reset();
+  virtual ~ObLockMemtableMgr();
 
   // ================== Unified Class Method ==================
   //

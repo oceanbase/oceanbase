@@ -56,6 +56,7 @@ public:
   virtual int get_active_memtable(ObTableHandleV2 &handle) const override;
   virtual int get_all_memtables(ObTableHdlArray &handle) override;
   virtual void destroy() override;
+  void reset();
   uint32_t get_ls_freeze_clock();
 
   bool has_active_memtable();
