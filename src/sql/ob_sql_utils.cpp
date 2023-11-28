@@ -1038,7 +1038,8 @@ int ObSQLUtils::check_and_convert_db_name(const ObCollationType cs_type, const b
     }
 
     ObString last_name(name_len, name_str);
-    if (!preserve_lettercase) {
+    if (!preserve_lettercase
+        || (lib::is_mysql_mode() && 0 == name.case_compare(OB_INFORMATION_SCHEMA_NAME))) {
       ObCharset::casedn(CS_TYPE_UTF8MB4_BIN, last_name);
     }
     if (OB_ERR_WRONG_IDENT_NAME == (ret = check_ident_name(cs_type, last_name, check_for_path_chars,
