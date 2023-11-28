@@ -20,6 +20,7 @@ namespace oceanbase
 namespace sql
 {
 class ObSQLSessionInfo;
+class ObExecEnv;
 }
 namespace observer
 {
