@@ -31,6 +31,7 @@ public:
 
 private:
   static int read_one_int(const char *file_name, int64_t &value);
+  static int read_one_line(const char* file_path, char* buffer, size_t buffer_size);
   static bool is_path_valid(const char *file_name);
   static int check_max_map_count(bool strict_check);         // 1
   static int check_vm_min_free_kbytes(bool strict_check);    // 2
@@ -40,6 +41,7 @@ private:
   static int check_ulimit_process_limit(bool strict_check);
   static int check_ulimit_core_file_size(bool strict_check);
   static int check_ulimit_stack_size(bool strict_check);  // 8
+  static int check_current_clocksource(bool strict_check);  // 9
 };
 
 int check_os_params(bool strict_check_params);

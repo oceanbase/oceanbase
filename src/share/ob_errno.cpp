@@ -4365,6 +4365,18 @@ static const _error _error_OB_AUTOINC_CACHE_NOT_EQUAL = {
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -4400, Autoinc cache's autoinc version is not equal to request's autoinc version",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4400, Autoinc cache's autoinc version is not equal to request's autoinc version"
 };
+static const _error _error_OB_IMPROPER_OS_PARAM = {
+      .error_name            = "OB_IMPROPER_OS_PARAM",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "HY000",
+      .str_error             = "OS params check failed, because the operating system has improper parameter configurations",
+      .str_user_error        = "OS params check failed, because the operating system has improper parameter configurations",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -4403, OS params check failed, because the operating system has improper parameter configurations",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4403, OS params check failed, because the operating system has improper parameter configurations"
+};
 static const _error _error_OB_IMPORT_NOT_IN_SERVER = {
       .error_name            = "OB_IMPORT_NOT_IN_SERVER",
       .error_cause           = "Internal Error",
@@ -26178,6 +26190,7 @@ struct ObStrErrorInit
     _errors[-OB_INVALID_SUB_PARTITION_TYPE] = &_error_OB_INVALID_SUB_PARTITION_TYPE;
     _errors[-OB_ERR_UNEXPECTED_UNIT_STATUS] = &_error_OB_ERR_UNEXPECTED_UNIT_STATUS;
     _errors[-OB_AUTOINC_CACHE_NOT_EQUAL] = &_error_OB_AUTOINC_CACHE_NOT_EQUAL;
+    _errors[-OB_IMPROPER_OS_PARAM] = &_error_OB_IMPROPER_OS_PARAM;
     _errors[-OB_IMPORT_NOT_IN_SERVER] = &_error_OB_IMPORT_NOT_IN_SERVER;
     _errors[-OB_CONVERT_ERROR] = &_error_OB_CONVERT_ERROR;
     _errors[-OB_BYPASS_TIMEOUT] = &_error_OB_BYPASS_TIMEOUT;
