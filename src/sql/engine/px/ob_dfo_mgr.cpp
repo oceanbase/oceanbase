@@ -285,7 +285,7 @@ int ObDfoWorkerAssignment::assign_worker(ObDfoMgr &dfo_mgr,
     // compatible with version before 4.2
     compatible_before_420 = true;
     scale_rate = static_cast<double>(admited_worker_count) / static_cast<double>(expected_worker_count);
-  } else if (0 <= admited_worker_count || minimal_worker_count == admited_worker_count) {
+  } else if (0 >= admited_worker_count || minimal_worker_count == admited_worker_count) {
     scale_rate = 0.0;
   } else if (OB_UNLIKELY(minimal_worker_count > admited_worker_count
                          || minimal_worker_count >= expected_worker_count)) {
@@ -312,7 +312,8 @@ int ObDfoWorkerAssignment::assign_worker(ObDfoMgr &dfo_mgr,
     }
     LOG_TRACE("assign worker count to dfo",
               "dfo_id", child->get_dfo_id(), K(admited_worker_count),
-              K(expected_worker_count), "dop", child->get_dop(), K(scale_rate), K(val));
+              K(expected_worker_count), K(minimal_worker_count),
+              "dop", child->get_dop(), K(scale_rate), K(val));
   }
 
   // 因为上面取了 max，所以可能实际 assigned 的会超出 admission 数，这时应该报错
@@ -323,6 +324,7 @@ int ObDfoWorkerAssignment::assign_worker(ObDfoMgr &dfo_mgr,
   } else if (total_assigned > admited_worker_count && admited_worker_count != 0) {
     // 意味着某些 dfo 理论上一个线程都分不到
     ret = OB_ERR_PARALLEL_SERVERS_TARGET_NOT_ENOUGH;
+    LOG_USER_ERROR(OB_ERR_PARALLEL_SERVERS_TARGET_NOT_ENOUGH, total_assigned);
     LOG_WARN("total assigned worker to dfos is more than admited_worker_count",
              K(total_assigned),
              K(admited_worker_count),
