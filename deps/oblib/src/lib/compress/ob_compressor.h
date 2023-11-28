@@ -20,6 +20,7 @@ namespace oceanbase
 {
 namespace common
 {
+class ObIAllocator;
 class ObCompressor
 {
 public:
@@ -28,6 +29,18 @@ public:
   ObCompressor() {}
   virtual ~ObCompressor() {}
 
+  virtual int compress(const char *src_buffer,
+                       const int64_t src_data_size,
+                       char *dst_buffer,
+                       const int64_t dst_buffer_size,
+                       int64_t &dst_data_size,
+                       ObIAllocator *allocator) { return OB_NOT_SUPPORTED; }
+  virtual int decompress(const char *src_buffer,
+                         const int64_t src_data_size,
+                         char *dst_buffer,
+                         const int64_t dst_buffer_size,
+                         int64_t &dst_data_size,
+                         ObIAllocator *allocator) { return OB_NOT_SUPPORTED; }
   virtual int compress(const char *src_buffer,
                        const int64_t src_data_size,
                        char *dst_buffer,
