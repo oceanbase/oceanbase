@@ -45,6 +45,12 @@ int __attribute__((weak)) check_arb_white_list(int64_t cluster_id, bool& is_arb)
   return ret;
 }
 
+int64_t __attribute__((weak)) get_stream_rpc_max_wait_timeout(int64_t tenant_id)
+{
+  //do nothing
+  UNUSED(tenant_id);
+  return ObRpcProcessorBase::DEFAULT_WAIT_NEXT_PACKET_TIMEOUT;
+}
 void ObRpcProcessorBase::reuse()
 {
   rpc_pkt_ = NULL;
@@ -541,6 +547,11 @@ int ObRpcProcessorBase::flush(int64_t wait_timeout)
   is_stream_ = true;
   rpc::ObRequest *req = NULL;
   UNIS_VERSION_GUARD(unis_version_);
+
+  const int64_t stream_rpc_max_wait_timeout = get_stream_rpc_max_wait_timeout(tenant_id_);
+  if (0 == wait_timeout || wait_timeout > stream_rpc_max_wait_timeout) {
+    wait_timeout = stream_rpc_max_wait_timeout;
+  }
 
   if (nullptr == sc_) {
     sc_ = OB_NEWx(ObRpcStreamCond, (&lib::this_worker().get_sql_arena_allocator()), *sh_);
