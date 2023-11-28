@@ -11552,6 +11552,7 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
   //"case a when b xx when c xx" to "case when a == b then xx case when a == c then xx"
   if (OB_SUCC(ret)) {
     bool transformed = false;
+    OZ (formalize_expr(*expr));
     OZ(ObTransformPreProcess::transform_expr(unit_ast.get_expr_factory(),
                                               resolve_ctx_.session_info_, expr,
                                               transformed));
