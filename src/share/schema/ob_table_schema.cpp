@@ -5809,6 +5809,7 @@ int ObSimpleTableSchemaV2::get_index_name(const ObString &table_name, ObString &
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_EXTRACT_DATA_TABLE_ID);
 uint64_t ObSimpleTableSchemaV2::extract_data_table_id_from_index_name(const ObString &index_name)
 {
   int64_t pos = 0;
@@ -5818,9 +5819,14 @@ uint64_t ObSimpleTableSchemaV2::extract_data_table_id_from_index_name(const ObSt
     LOG_WARN_RET(OB_INVALID_ARGUMENT, "index table name not in valid format", K(index_name));
   } else {
     pos = strlen(OB_INDEX_PREFIX);
+    if (OB_UNLIKELY(ERRSIM_EXTRACT_DATA_TABLE_ID)) {
+      pos = index_name.length();
+      int ret = OB_SUCCESS;
+      LOG_WARN("turn on error injection ERRSIM_EXTRACT_DATA_TABLE_ID", KR(ret));
+    }
     while (NULL != index_name.ptr() &&
-        isdigit(*(index_name.ptr() + pos)) &&
-        pos < index_name.length()) {
+        pos < index_name.length() &&
+        isdigit(*(index_name.ptr() + pos))) {
       ++pos;
     }
     if (pos + 1 >= index_name.length()) {
