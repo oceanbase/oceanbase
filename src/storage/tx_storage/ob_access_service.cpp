@@ -1039,6 +1039,7 @@ int ObAccessService::lock_row(
 int ObAccessService::estimate_row_count(
     const ObTableScanParam &param,
     const ObTableScanRange &scan_range,
+    const int64_t timeout_us,
     ObIArray<ObEstRowCountRecord> &est_records,
     int64_t &logical_row_count,
     int64_t &physical_row_count) const
@@ -1058,9 +1059,9 @@ int ObAccessService::estimate_row_count(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is unexpected null", K(ret));
   } else if (OB_FAIL(ls->get_tablet_svr()->estimate_row_count(
-              param, scan_range, est_records,
-              logical_row_count, physical_row_count))) {
-    LOG_WARN("failed to estimate row count", K(ret), K(param));
+      param, scan_range, timeout_us, est_records,
+      logical_row_count, physical_row_count))) {
+    LOG_WARN("failed to estimate row count", K(ret), K(param), K(scan_range), K(timeout_us));
   }
   return ret;
 }
@@ -1068,6 +1069,7 @@ int ObAccessService::estimate_row_count(
 int ObAccessService::estimate_block_count_and_row_count(
     const share::ObLSID &ls_id,
     const common::ObTabletID &tablet_id,
+    const int64_t timeout_us,
     int64_t &macro_block_count,
     int64_t &micro_block_count,
     int64_t &sstable_row_count,
@@ -1088,7 +1090,9 @@ int ObAccessService::estimate_block_count_and_row_count(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is unexpected null", K(ret));
   } else if (OB_FAIL(ls->get_tablet_svr()->estimate_block_count_and_row_count(
-              tablet_id, macro_block_count, micro_block_count, sstable_row_count, memtable_row_count))) {
+      tablet_id, timeout_us,
+      macro_block_count, micro_block_count,
+      sstable_row_count, memtable_row_count))) {
     LOG_WARN("failed to estimate block count and row count", K(ret), K(ls_id), K(tablet_id));
   }
   return ret;
@@ -1097,6 +1101,7 @@ int ObAccessService::estimate_block_count_and_row_count(
 int ObAccessService::get_multi_ranges_cost(
     const share::ObLSID &ls_id,
     const common::ObTabletID &tablet_id,
+    const int64_t timeout_us,
     const common::ObIArray<common::ObStoreRange> &ranges,
     int64_t &total_size)
 {
@@ -1120,7 +1125,7 @@ int ObAccessService::get_multi_ranges_cost(
   } else if (OB_ISNULL(tablet_service = ls->get_tablet_svr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tablet service should not be null", K(ret), K(ls_id));
-  } else if (OB_FAIL(tablet_service->get_multi_ranges_cost(tablet_id, ranges, total_size))) {
+  } else if (OB_FAIL(tablet_service->get_multi_ranges_cost(tablet_id, timeout_us, ranges, total_size))) {
     LOG_WARN("Fail to get multi ranges cost", K(ret), K(ls_id), K(tablet_id));
   }
   return ret;
@@ -1177,9 +1182,10 @@ int ObAccessService::revert_scan_iter(ObNewRowIterator *iter)
 int ObAccessService::split_multi_ranges(
     const share::ObLSID &ls_id,
     const common::ObTabletID &tablet_id,
+    const int64_t timeout_us,
     const ObIArray<ObStoreRange> &ranges,
     const int64_t expected_task_count,
-    ObIAllocator &allocator,
+    common::ObIAllocator &allocator,
     ObArrayArray<ObStoreRange> &multi_range_split_array)
 {
   int ret = OB_SUCCESS;
@@ -1203,7 +1209,8 @@ int ObAccessService::split_multi_ranges(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tablet service should not be null", K(ret), K(ls_id));
   } else if (OB_FAIL(tablet_service->split_multi_ranges(
-      tablet_id, ranges, expected_task_count, allocator, multi_range_split_array))) {
+      tablet_id, timeout_us, ranges,
+      expected_task_count, allocator, multi_range_split_array))) {
     LOG_WARN("Fail to split multi ranges", K(ret), K(ls_id), K(tablet_id));
   }
   return ret;
