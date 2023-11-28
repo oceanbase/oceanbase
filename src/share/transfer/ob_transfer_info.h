@@ -91,6 +91,65 @@ struct ObTransferStatusHelper
       bool &can_change);
 };
 
+/////////////// ObTransferRefreshStatus///////////////
+// For auto refresh tablet location
+class ObTransferRefreshStatus final
+{
+public:
+ enum STATUS : uint8_t
+ {
+   UNKNOWN = 0,
+   DOING = 1,
+   DONE = 2,
+   INVALID
+ };
+ ObTransferRefreshStatus() : status_(INVALID) {}
+ ~ObTransferRefreshStatus() {}
+ explicit ObTransferRefreshStatus(const ObTransferRefreshStatus &other) : status_(other.status_) {}
+ explicit ObTransferRefreshStatus(const ObTransferRefreshStatus::STATUS &status) : status_(status) {}
+
+ ObTransferRefreshStatus &operator=(const ObTransferRefreshStatus &other);
+ ObTransferRefreshStatus &operator=(const ObTransferRefreshStatus::STATUS &status);
+
+ bool is_valid() const { return UNKNOWN <= status_ && status_ < INVALID; }
+ void reset() { status_ = INVALID; }
+ const char *str() const;
+
+ bool is_unknown_status() const { return UNKNOWN == status_; }
+ bool is_doing_status() const { return DOING == status_; }
+ bool is_done_status() const { return DONE == status_; }
+
+ void convert_from(const ObTransferStatus &status);
+ void update(const ObTransferRefreshStatus &other, bool &changed);
+
+ TO_STRING_KV(K_(status), "status", str());
+private:
+  STATUS status_;
+};
+
+class ObTransferRefreshInfo final
+{
+public:
+  ObTransferRefreshInfo() : task_id_(), status_() {}
+  ~ObTransferRefreshInfo() {}
+
+  int init(const ObTransferTaskID &task_id,
+           const ObTransferRefreshStatus &status);
+  void reset();
+
+  const ObTransferTaskID &get_task_id() const { return task_id_; }
+  ObTransferRefreshStatus &get_status() { return status_; }
+  const ObTransferRefreshStatus &get_status() const { return status_; }
+
+  static bool less_than(const ObTransferRefreshInfo &left, const ObTransferRefreshInfo &right)
+  { return left.task_id_ < right.task_id_; }
+
+  TO_STRING_KV(K_(task_id), K_(status));
+private:
+  ObTransferTaskID task_id_;
+  ObTransferRefreshStatus status_;
+};
+
 /////////////// ObTransferTabletInfo ///////////////
 // <TabletID:TransferSeq>
 // Represents a Tablet for Transfer

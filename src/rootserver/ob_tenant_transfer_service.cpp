@@ -1095,8 +1095,8 @@ int ObTenantTransferService::generate_transfer_task(
     const int64_t part_count = min(get_tablet_count_threshold_(), part_list.count());
     if (OB_FAIL(transfer_part_list.reserve(part_count))) {
       LOG_WARN("reserve failed", KR(ret), K(part_count));
-    } else if (OB_FAIL(ObCommonIDUtils::gen_unique_id(tenant_id_, task_id))) {
-      LOG_WARN("gen_unique_id failed", KR(ret), K(task_id), K_(tenant_id));
+    } else if (OB_FAIL(ObTransferTaskOperator::generate_transfer_task_id(trans, tenant_id_, task_id))) {
+      LOG_WARN("fail to generate transfer task id", KR(ret), K_(tenant_id));
     } else {
       // process from the back of part_list makes it easier to remove when task is done
       for (int64_t i = part_list.count() - 1; OB_SUCC(ret) && (i >= part_list.count() - part_count); --i) {

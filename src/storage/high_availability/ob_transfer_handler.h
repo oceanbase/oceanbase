@@ -264,6 +264,7 @@ private:
       const ObTransferStatus &status,
       const bool find_by_src_ls,
       bool &task_exist) const;
+  int broadcast_tablet_location_(const share::ObTransferTaskInfo &task_info);
 
 private:
   static const int64_t INTERVAL_US = 1 * 1000 * 1000; //1s
