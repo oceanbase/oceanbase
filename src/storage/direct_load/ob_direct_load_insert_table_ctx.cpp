@@ -26,8 +26,9 @@ using namespace table;
  */
 
 ObDirectLoadInsertTableParam::ObDirectLoadInsertTableParam()
-  : table_id_(OB_INVALID_ID), schema_version_(0), snapshot_version_(0), execution_id_(0), ddl_task_id_(0)
+  : table_id_(OB_INVALID_ID), schema_version_(0), snapshot_version_(0), execution_id_(0), ddl_task_id_(0), ls_partition_ids_()
 {
+  ls_partition_ids_.set_attr(ObMemAttr(MTL_ID(), "DLITP_ids"));
 }
 
 ObDirectLoadInsertTableParam::~ObDirectLoadInsertTableParam()

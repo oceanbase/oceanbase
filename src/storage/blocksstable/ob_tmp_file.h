@@ -222,7 +222,10 @@ private:
 class ObTmpFileMeta final
 {
 public:
-  explicit ObTmpFileMeta() : fd_(-1), dir_id_(-1), allocator_(NULL), extents_() {}
+  explicit ObTmpFileMeta() : fd_(-1), dir_id_(-1), allocator_(NULL), extents_()
+  {
+    extents_.set_attr(ObMemAttr(MTL_ID(), "TMP_META"));
+  }
   ~ObTmpFileMeta();
   int clear();
   int init(const int64_t fd, const int64_t dir_id, common::ObIAllocator *allocator);
