@@ -99,13 +99,15 @@ void ClientLSKey::reset()
 ///////////////////////////////////////////ClientLSCtx///////////////////////////////////////////
 
 ClientLSCtx::ClientLSCtx()
-  : is_inited_(false),
-    source_lock_(ObLatchIds::CDC_SERVICE_LS_CTX_LOCK),
+  : source_lock_(ObLatchIds::CDC_SERVICE_LS_CTX_LOCK),
+    source_version_(0),
     source_(NULL),
+    proto_type_(FetchLogProtocolType::Unknown),
     fetch_mode_(FetchMode::FETCHMODE_UNKNOWN),
     last_touch_ts_(OB_INVALID_TIMESTAMP),
     client_progress_(OB_INVALID_TIMESTAMP)
 {
+  update_touch_ts();
 }
 
 ClientLSCtx::~ClientLSCtx()
@@ -113,84 +115,225 @@ ClientLSCtx::~ClientLSCtx()
   reset();
 }
 
-int ClientLSCtx::init(int64_t client_progress)
+int ClientLSCtx::init(int64_t client_progress, const FetchLogProtocolType type)
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_TIMESTAMP != client_progress) {
-    is_inited_ = true;
     set_progress(client_progress);
+    set_proto_type(type);
     set_fetch_mode(FetchMode::FETCHMODE_ONLINE, "ClientLSCtxInit");
     update_touch_ts();
   } else {
     ret = OB_INVALID_ARGUMENT;
-    EXTLOG_LOG(WARN, "client progress is invalid", KR(ret), K(client_progress));
+    LOG_WARN("client progress is invalid", KR(ret), K(client_progress));
   }
+  return ret;
+}
+
+int ClientLSCtx::try_init_archive_source(const ObLSID &ls_id,
+    const ObBackupDest &archive_dest,
+    const int64_t dest_version)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_NOT_NULL(source_)) {
+    ret = OB_INIT_TWICE;
+    LOG_TRACE("archive source is not null, no need to init");
+  } else {
+    SpinWLockGuard ctx_source_guard(source_lock_);
+    logservice::ObRemoteLogParent *tmp_source = nullptr;
+
+    // double check to avoid concurrency issue
+    if (OB_NOT_NULL(source_)) {
+      ret = OB_INIT_TWICE;
+      LOG_INFO("archive source is not null, no need to init");
+    } else if (! archive_dest.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("archive dest is not valid", K(archive_dest), K(dest_version));
+    } else if (OB_ISNULL(tmp_source = logservice::ObResSrcAlloctor::alloc(ObLogRestoreSourceType::LOCATION, ls_id))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc RemoteLocationParent failed", KR(ret), K(ls_id));
+    } else if (OB_FAIL(static_cast<logservice::ObRemoteLocationParent*>(tmp_source)->set(
+        archive_dest, SCN::max_scn()))) {
+        LOG_WARN("source set archive dest info failed", KR(ret), K(archive_dest));
+    } else if (OB_FAIL(set_source_version_(tmp_source, dest_version))) {
+      // expect set success, source should be null and dest_info_version should be 0
+      LOG_WARN("failed to set source and version", K(dest_version),
+          K(archive_dest), K(ls_id));
+    } else {
+      LOG_INFO("init archive source succ", K(archive_dest), K(dest_version), K(ls_id));
+    }
+
+    if (OB_FAIL(ret) && OB_NOT_NULL(tmp_source)) {
+      logservice::ObResSrcAlloctor::free(tmp_source);
+    }
+  }
+
+  return ret;
+}
+
+int ClientLSCtx::try_deep_copy_source(const ObLSID &ls_id,
+    logservice::ObRemoteLogParent *&target_src,
+    int64_t &version) const
+{
+  int ret = OB_SUCCESS;
+
+  SpinRLockGuard ctx_source_guard(source_lock_);
+  if (OB_ISNULL(source_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("source in ClientLSCtx is null, cannot get source from ctx", KR(ret), K(ls_id));
+  } else {
+    logservice::ObRemoteLogParent *tmp_source = logservice::ObResSrcAlloctor::alloc(
+        source_->get_source_type(), ls_id);
+    if (OB_ISNULL(tmp_source)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("source allocated is null, allocate failed", KR(ret), K(ls_id));
+    } else if (OB_FAIL(source_->deep_copy_to(*tmp_source))) {
+      LOG_WARN("deep copy from source in ctx failed", KR(ret), K(ls_id));
+    } else {
+      target_src = tmp_source;
+      version = source_version_;
+    }
+
+    if (OB_FAIL(ret) && OB_NOT_NULL(tmp_source)) {
+      logservice::ObResSrcAlloctor::free(tmp_source);
+    }
+  }
+
+  return ret;
+}
+
+int ClientLSCtx::try_update_archive_source(logservice::ObRemoteLogParent *target_source,
+    const int64_t source_ver)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(target_source)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get null source when trying to update archive source in ctx", KPC(this), K(source_ver), KP(target_source));
+  } else {
+    SpinWLockGuard ctx_source_guard(source_lock_);
+    if (OB_ISNULL(source_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null source in ctx, unexpected", KPC(this));
+    } else if (source_ver < source_version_) {
+      LOG_INFO("no need to update archive source whose version is higher", K(source_ver), K(source_version_));
+    } else if (source_ver > source_version_) {
+      // target source should come from ctx some time ago, if it's newer than the source in ctx,
+      // it should be some concurrency issue which is unexpected, because the source in ctx should
+      // never rollback.
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("target source is newer than the source in ctx, unexpected", K(source_ver), K(source_version_));
+    } else if (source_->get_source_type() != target_source->get_source_type()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("source type doesn't match", KPC(source_), KPC(target_source));
+    } else if (OB_FAIL(source_->update_locate_info(*target_source))) {
+      LOG_WARN("update locate info failed", KPC(source_), KPC(target_source));
+    }
+  }
+
+  return ret;
+}
+
+int ClientLSCtx::try_change_archive_source(const ObLSID &ls_id,
+    const ObBackupDest &dest,
+    const int64_t source_ver)
+{
+  int ret = OB_SUCCESS;
+
+  SpinWLockGuard ctx_source_guard(source_lock_);
+  if (nullptr == source_) {
+    // ignore & continue
+  } else if (source_ver > source_version_) {
+    logservice::ObRemoteLocationParent *new_source = static_cast<logservice::ObRemoteLocationParent*>(
+        logservice::ObResSrcAlloctor::alloc(ObLogRestoreSourceType::LOCATION, ls_id));
+    if (OB_ISNULL(new_source)) {
+      // continue
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc new source", K(ls_id));
+    } else if (OB_FAIL(new_source->set(dest, SCN::max_scn()))) {
+      // fatal error, not continue
+      LOG_WARN("failed to set archive dest", K(dest), K(ls_id));
+    } else if (OB_FAIL(set_source_version_(new_source, source_ver))) {
+      if (OB_NO_NEED_UPDATE == ret) {
+        LOG_INFO("no need update source", K(source_ver), K(source_version_));
+      } else {
+        LOG_WARN("failed to set source version", K(dest), K(ls_id), K(source_ver));
+      }
+    }
+
+    if (OB_FAIL(ret) && OB_NOT_NULL(new_source)) {
+      logservice::ObResSrcAlloctor::free(new_source);
+    }
+  } else {
+    // old or equal version, not update
+  }
+
   return ret;
 }
 
 void ClientLSCtx::reset()
 {
-  is_inited_ = false;
   if (NULL != source_) {
     logservice::ObResSrcAlloctor::free(source_);
     source_ = NULL;
+    source_version_ = 0;
   }
+  proto_type_ = FetchLogProtocolType::Unknown;
   fetch_mode_ = FetchMode::FETCHMODE_UNKNOWN;
   last_touch_ts_ = OB_INVALID_TIMESTAMP;
   client_progress_ = OB_INVALID_TIMESTAMP;
 }
 
-void ClientLSCtx::set_source(logservice::ObRemoteLogParent *source)
+void ClientLSCtx::set_source_(logservice::ObRemoteLogParent *source)
 {
-  if (NULL != source_) {
-    logservice::ObResSrcAlloctor::free(source_);
-    source_ = NULL;
-  }
+  logservice::ObRemoteLogParent *origin_source = source_;
   source_ = source;
+  if (NULL != origin_source) {
+    logservice::ObResSrcAlloctor::free(origin_source);
+  }
+
+}
+
+int ClientLSCtx::set_source_version_(logservice::ObRemoteLogParent *source, const int64_t version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(source)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get null source when set source", KP(source), K(version));
+  } else if (version > source_version_) {
+    set_source_(source);
+    source_version_ = version;
+  } else {
+    ret = OB_NO_NEED_UPDATE;
+  }
+
+  return ret;
 }
 
 //////////////////////////////////////////////////////////////////////////
 int ObCdcGetSourceFunctor::operator()(const share::ObLSID &id, logservice::ObRemoteSourceGuard &guard) {
   int ret = OB_SUCCESS;
-  ObSpinLockGuard ctx_source_guard(ctx_.source_lock_);
-  logservice::ObRemoteLogParent *ctx_source = ctx_.get_source();
-  if (OB_ISNULL(ctx_source)) {
+  logservice::ObRemoteLogParent *source = nullptr;
+  if (OB_FAIL(ctx_.try_deep_copy_source(id, source, version_))) {
+    LOG_WARN("failed to deep copy source", K(id), K(ctx_));
+  } else if (OB_ISNULL(source)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("source in ClientLSCtx is null, cannot get source from ctx", KR(ret), K(id));
-  } else {
-    logservice::ObRemoteLogParent *source = logservice::ObResSrcAlloctor::alloc(ctx_source->get_source_type(), id);
-    if (OB_ISNULL(source)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("source allocated is null, allocate failed", KR(ret), K(id));
-    } else if (OB_FAIL(ctx_source->deep_copy_to(*source))) {
-      LOG_WARN("deep copy from source in ctx failed", KR(ret), K(id));
-    } else if (OB_FAIL(guard.set_source(source))) {
-      LOG_WARN("RemoteSourceGuard set source failed", KR(ret));
-    } else { }
-
-    if (OB_FAIL(ret) && OB_NOT_NULL(source)) {
-      logservice::ObResSrcAlloctor::free(source);
-      source = nullptr;
-    }
-  }
+    LOG_WARN("get null source after deep copy, unexpected", KP(source), K(id));
+  } else if (OB_FAIL(guard.set_source(source))) {
+    LOG_WARN("RemoteSourceGuard set source failed", KR(ret));
+  } else { }
   return ret;
 }
 
 int ObCdcUpdateSourceFunctor::operator()(const share::ObLSID &id, logservice::ObRemoteLogParent *source) {
   int ret = OB_SUCCESS;
   UNUSED(id);
-  ObSpinLockGuard ctx_source_guard(ctx_.source_lock_);
-  logservice::ObRemoteLogParent *ctx_source = ctx_.get_source();
   if (OB_ISNULL(source)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("source is null when updating source", KR(ret), K(id));
-  } else if (OB_ISNULL(ctx_source)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("source in ctx is null when updating source", KR(ret), K(id));
-  } else if (ctx_source->get_source_type() != source->get_source_type()) {
-    LOG_WARN("the type of source and ctx_source is not same", KR(ret), KPC(source), KPC(ctx_source));
-  } else if (OB_FAIL(ctx_source->update_locate_info(*source))) {
-    LOG_WARN("update locate info failed", KR(ret));
+  } else if (OB_FAIL(ctx_.try_update_archive_source(source, version_))) {
+    LOG_WARN("failed to update source in ctx", KR(ret), K(id));
   }
   return ret;
 }

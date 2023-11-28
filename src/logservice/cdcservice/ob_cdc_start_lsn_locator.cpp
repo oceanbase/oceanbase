@@ -23,6 +23,7 @@ namespace cdc
 {
 ObCdcStartLsnLocator::ObCdcStartLsnLocator()
   : is_inited_(false),
+    host_(NULL),
     tenant_id_(OB_INVALID_TENANT_ID),
     large_buffer_pool_(NULL),
     log_ext_handler_(NULL)
@@ -35,6 +36,7 @@ ObCdcStartLsnLocator::~ObCdcStartLsnLocator()
 }
 
 int ObCdcStartLsnLocator::init(const uint64_t tenant_id,
+    ObCdcService *host,
     archive::LargeBufferPool *buffer_pool,
     logservice::ObLogExternalStorageHandler *log_ext_handler)
 {
@@ -43,11 +45,13 @@ int ObCdcStartLsnLocator::init(const uint64_t tenant_id,
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("inited twice", KR(ret));
-  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id) || OB_ISNULL(buffer_pool)) {
+  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id) || OB_ISNULL(buffer_pool) ||
+      OB_ISNULL(host)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(buffer_pool));
   } else {
     is_inited_ = true;
+    host_ = host;
     tenant_id_ = tenant_id;
     large_buffer_pool_ = buffer_pool;
     log_ext_handler_ = log_ext_handler;
@@ -60,6 +64,7 @@ void ObCdcStartLsnLocator::destroy()
 {
   if (is_inited_) {
     is_inited_ = false;
+    host_ = NULL;
     tenant_id_ = OB_INVALID_TENANT_ID;
     large_buffer_pool_ = NULL;
     log_ext_handler_ = NULL;
@@ -218,8 +223,8 @@ int ObCdcStartLsnLocator::do_locate_ls_(const bool fetch_archive_only,
   if (OB_SUCC(ret) && need_seek_archive) {
     logservice::ObLogArchivePieceContext piece_ctx;
     share::ObBackupDest backup_dest;
-    if (OB_FAIL(ObCdcService::get_backup_dest(ls_id, backup_dest))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
+    if (OB_FAIL(host_->get_archive_dest_snapshot(ls_id, backup_dest))) {
+      if (OB_ALREADY_IN_NOARCHIVE_MODE == ret) {
         ret = OB_ERR_OUT_OF_LOWER_BOUND;
         LOG_WARN("try to seek start lsn in archive, but archive dest doesn't exist", KR(ret), K(ls_id));
       } else {

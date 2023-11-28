@@ -65,6 +65,7 @@ int64_t ObSimpleLogClusterTestBase::node_cnt_ = 1;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
 constexpr int64_t timeout_ts_us = 3 * 1000 * 1000;
+int64_t log_entry_size = 2 * 1024 * 1024 + 16 * 1024;
 
 void read_padding_entry(PalfHandleImplGuard &leader, SCN padding_scn, LSN padding_log_lsn)
 {
@@ -142,12 +143,12 @@ TEST_F(TestObSimpleLogClusterSingleReplica, single_replica_flashback)
 
     // flashback到PADDING日志
     switch_flashback_to_append(leader, mode_version);
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 31, leader_idx, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 31, leader_idx, log_entry_size));
     EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->sw_.get_max_lsn()));
     EXPECT_EQ(OB_ITER_END, read_log(leader));
     EXPECT_GT(LSN(PALF_BLOCK_SIZE), leader.palf_handle_impl_->sw_.get_max_lsn());
     int remained_log_size = LSN(PALF_BLOCK_SIZE) - leader.palf_handle_impl_->sw_.get_max_lsn();
-    EXPECT_LT(remained_log_size, MAX_LOG_BODY_SIZE);
+    EXPECT_LT(remained_log_size, log_entry_size);
     int need_log_size = remained_log_size - 5*1024;
     PALF_LOG(INFO, "runlin trace print sw1", K(leader.palf_handle_impl_->sw_));
     // 保证末尾只剩小于1KB的空间
@@ -1150,10 +1151,10 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_gc_block)
   block_id_t min_block_id;
   share::SCN min_block_scn;
   EXPECT_EQ(OB_ENTRY_NOT_EXIST, log_engine->get_min_block_info_for_gc(min_block_id, min_block_scn));
-  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 31, leader_idx, MAX_LOG_BODY_SIZE));
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 31, leader_idx, log_entry_size));
   EXPECT_EQ(OB_SUCCESS, wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader));
   EXPECT_EQ(OB_ERR_OUT_OF_UPPER_BOUND, log_engine->get_min_block_info_for_gc(min_block_id, min_block_scn));
-  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, leader_idx, MAX_LOG_BODY_SIZE));
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, leader_idx, log_entry_size));
   EXPECT_EQ(OB_SUCCESS, wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader));
   block_id_t expect_block_id = 1;
   share::SCN expect_scn;
@@ -1163,7 +1164,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_gc_block)
   EXPECT_EQ(OB_SUCCESS, log_engine->delete_block(0));
   EXPECT_EQ(false, log_engine->min_block_max_scn_.is_valid());
 
-  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, leader_idx, MAX_LOG_BODY_SIZE));
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, leader_idx, log_entry_size));
   EXPECT_EQ(OB_SUCCESS, wait_lsn_until_flushed(leader.palf_handle_impl_->get_max_lsn(), leader));
   expect_block_id = 2;
   EXPECT_EQ(OB_SUCCESS, log_engine->get_min_block_info_for_gc(min_block_id, min_block_scn));
@@ -1633,9 +1634,9 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_iterator_with_flashback)
     const int64_t append_id = ATOMIC_AAF(&palf_id_, 1);
     PalfHandleImplGuard append_leader;
     EXPECT_EQ(OB_SUCCESS, create_paxos_group(append_id, leader_idx, append_leader));
-    EXPECT_EQ(OB_SUCCESS, submit_log(append_leader, 31, leader_idx, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, submit_log(append_leader, 31, leader_idx, log_entry_size));
     const LSN padding_start_lsn = append_leader.get_palf_handle_impl()->get_max_lsn();
-    EXPECT_EQ(OB_SUCCESS, submit_log(append_leader, 1, leader_idx, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, submit_log(append_leader, 1, leader_idx, log_entry_size));
     EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(append_leader, append_leader.get_palf_handle_impl()->get_max_lsn()));
     SCN padding_scn = append_leader.get_palf_handle_impl()->get_max_scn();
     padding_scn = padding_scn.minus(padding_scn, 1);
@@ -1720,6 +1721,75 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_iterator_with_flashback)
     EXPECT_EQ(OB_SUCCESS, submit_log(raw_write_leader, 100, leader_idx, 1000));
     EXPECT_EQ(OB_SUCCESS, buff_iterator_padding_start.next());
     EXPECT_EQ(OB_SUCCESS, group_buff_iterator_padding_start.next());
+  }
+}
+
+TEST_F(TestObSimpleLogClusterSingleReplica, test_raw_read)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "test_raw_read");
+  OB_LOGGER.set_log_level("TRACE");
+  int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  int64_t leader_idx = 0;
+  PalfHandleImplGuard leader;
+  const int64_t read_buf_ptr_len = PALF_BLOCK_SIZE;
+  char *read_buf_ptr = reinterpret_cast<char*>(mtl_malloc_align(
+    LOG_DIO_ALIGN_SIZE, PALF_BLOCK_SIZE + 2 * LOG_DIO_ALIGN_SIZE, "mittest"));
+  EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
+  leader.palf_handle_impl_->log_engine_.log_storage_.hot_cache_ = NULL;
+  // 提交100条日志, 每条日志大小为30K.
+  {
+    char *read_buf = read_buf_ptr;
+    int64_t nbytes = read_buf_ptr_len;
+    int64_t out_read_size = 0;
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, leader_idx, 1000));
+    EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->get_max_lsn()));
+    const int64_t curr_real_size = leader.palf_handle_impl_->get_max_lsn() - LSN(PALF_INITIAL_LSN_VAL);
+
+    const LSN invalid_lsn(1);
+    char *invalid_read_buf = read_buf_ptr + 1;
+    const int64_t invalid_nbytes = 1;
+
+    // 非DIO对齐度
+    EXPECT_EQ(OB_INVALID_ARGUMENT, leader.palf_handle_impl_->raw_read(
+      invalid_lsn, invalid_read_buf, invalid_nbytes, out_read_size));
+    EXPECT_EQ(OB_INVALID_ARGUMENT, leader.palf_handle_impl_->raw_read(
+      LSN(PALF_INITIAL_LSN_VAL), invalid_read_buf, invalid_nbytes, out_read_size));
+    EXPECT_EQ(OB_INVALID_ARGUMENT, leader.palf_handle_impl_->raw_read(
+      LSN(PALF_INITIAL_LSN_VAL), read_buf, invalid_nbytes, out_read_size));
+    PALF_LOG(INFO, "raw read success");
+
+    // 读取成功
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->raw_read(LSN(PALF_INITIAL_LSN_VAL), read_buf, PALF_BLOCK_SIZE, out_read_size));
+    EXPECT_LE(out_read_size, PALF_BLOCK_SIZE);
+    EXPECT_EQ(out_read_size, curr_real_size);
+
+    // 读取长度超过end_lsn
+    PALF_LOG(INFO, "raw read return OB_ERR_OUT_OF_UPPER_BOUND");
+    LSN out_of_upper_bound(PALF_BLOCK_SIZE);
+    EXPECT_EQ(OB_ERR_OUT_OF_UPPER_BOUND, leader.palf_handle_impl_->raw_read(
+      out_of_upper_bound, read_buf, PALF_BLOCK_SIZE, out_read_size));
+
+    // 模拟生成2个文件
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 40, leader_idx, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->get_max_lsn()));
+
+    // 模拟跨文件读
+    PALF_LOG(INFO, "raw read cross file");
+    LSN curr_read_lsn(lower_align(PALF_BLOCK_SIZE/2, LOG_DIO_ALIGN_SIZE));
+    int64_t expected_read_size = LSN(PALF_BLOCK_SIZE) - curr_read_lsn;
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->raw_read(
+      curr_read_lsn, read_buf, PALF_BLOCK_SIZE, out_read_size));
+    EXPECT_EQ(out_read_size, expected_read_size);
+
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->delete_block(0));
+
+    // 模拟lower_bound
+    PALF_LOG(INFO, "raw read return OB_ERR_OUT_OF_LOWER_BOUND");
+    LSN out_of_lower_bound(PALF_INITIAL_LSN_VAL);
+    EXPECT_EQ(OB_ERR_OUT_OF_LOWER_BOUND, leader.palf_handle_impl_->raw_read(out_of_lower_bound, read_buf, PALF_BLOCK_SIZE, out_read_size));
+    if (NULL != read_buf_ptr) {
+      mtl_free_align(read_buf_ptr);
+    }
   }
 }
 

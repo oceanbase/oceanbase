@@ -51,7 +51,7 @@ private:
   static const int64_t STAT_INTERVAL = 30 * _SEC_;
   static const int64_t DEFAULT_TASK_SET_SIZE = 16;
 
-  typedef obrpc::ObCdcLSFetchLogResp::FeedbackType Feedback;
+  typedef obrpc::FeedbackType Feedback;
 
   // Class global variables
 public:

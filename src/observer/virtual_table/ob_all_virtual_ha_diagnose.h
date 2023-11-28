@@ -55,6 +55,7 @@ enum IOStatColumn
   ENABLE_SYNC,
   ENABLE_VOTE,
   ARB_SRV_INFO,
+  PARENT,
 };
 
 class ObAllVirtualHADiagnose : public common::ObVirtualTableScannerIterator
@@ -76,6 +77,7 @@ private:
   char gc_state_str_[VARCHAR_32] = {'\0'};
   char min_rec_log_scn_log_type_str_[VARCHAR_32] = {'\0'};
   char restore_handler_role_str_[VARCHAR_32] = {'\0'};
+  char parent_[common::OB_IP_PORT_STR_BUFF] = {'\0'};
   omt::ObMultiTenant *omt_;
 };
 } // namespace observer

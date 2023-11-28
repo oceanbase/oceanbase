@@ -64,6 +64,7 @@ ObSimpleArbServer::~ObSimpleArbServer()
 int ObSimpleArbServer::simple_init(const std::string &cluster_name,
                                    const common::ObAddr &addr,
                                    const int64_t node_id,
+                                   LogMemberRegionMap *region_map,
                                    bool is_bootstrap)
 {
   const std::string logserver_dir = cluster_name + "/port_" + std::to_string(addr.get_port());
@@ -191,7 +192,7 @@ int ObSimpleArbServer::simple_restart(const std::string &cluster_name,
   srv_network_frame_.deliver_.stop();
   palf_env_mgr_.destroy();
   timer_.destroy();
-  if (OB_FAIL(simple_init(cluster_name, self_, node_idx, false))) {
+  if (OB_FAIL(simple_init(cluster_name, self_, node_idx, NULL, false))) {
     CLOG_LOG(WARN, "simple_init failed", K(ret));
   } else if (OB_FAIL(srv_network_frame_.deliver_.start(srv_network_frame_.normal_rpc_qhandler_,
       srv_network_frame_.server_rpc_qhandler_))) {

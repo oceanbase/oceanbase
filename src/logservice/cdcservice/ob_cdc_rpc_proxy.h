@@ -16,6 +16,7 @@
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "rpc/obrpc/ob_rpc_processor.h"
 #include "ob_cdc_req.h"
+#include "ob_cdc_raw_log_req.h"
 
 namespace oceanbase
 {
@@ -41,6 +42,9 @@ public:
 
   RPC_AP(@PR5 async_stream_fetch_miss_log, OB_LS_FETCH_MISSING_LOG,
          (ObCdcLSFetchMissLogReq), ObCdcLSFetchLogResp);
+
+  RPC_AP(@PR5 async_stream_fetch_raw_log, OB_CDC_FETCH_RAW_LOG,
+         (ObCdcFetchRawLogReq), ObCdcFetchRawLogResp);
 };
 
 } // namespace obrpc

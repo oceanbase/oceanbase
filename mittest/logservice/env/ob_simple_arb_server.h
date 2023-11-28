@@ -173,10 +173,12 @@ public:
   }
   int update_server_log_disk(const int64_t log_disk_size)
     {return OB_SUCCESS;}
+  MockObLocalityManager *get_locality_manager() { return NULL; }
 public:
   int simple_init(const std::string &cluster_name,
                   const common::ObAddr &addr,
                   const int64_t node_id,
+                  LogMemberRegionMap *region_map,
                   bool is_bootstrap) override final;
   int simple_start(const bool is_bootstrap) override final;
   int simple_close(const bool is_shutdown) override final;

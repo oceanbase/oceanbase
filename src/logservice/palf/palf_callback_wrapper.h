@@ -130,8 +130,11 @@ public:
   PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_truncate_event);
   PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_role_change_event);
   PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, add_log_write_stat);
+  PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_parent_child_change_event);
 
   PALF_PLUGINS_DELEGATE_PTR(palflite_monitor_, palflite_monitor_lock_, record_create_or_delete_event);
+
+  PALF_PLUGINS_DELEGATE_PTR(locality_cb_, locality_cb_lock_, get_server_region);
   TO_STRING_KV(KP_(loc_cb), KP_(palf_monitor), KP_(palflite_monitor));
 private:
   common::RWLock loc_lock_;
@@ -140,6 +143,8 @@ private:
   PalfMonitorCb *palf_monitor_;
   common::RWLock palflite_monitor_lock_;
   PalfLiteMonitorCb *palflite_monitor_;
+  common::RWLock locality_cb_lock_;
+  PalfLocalityInfoCb *locality_cb_;
 };
 } // end namespace palf
 } // end namespace oceanbase

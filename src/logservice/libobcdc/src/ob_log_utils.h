@@ -246,6 +246,7 @@ const char *print_table_status(int status);
 const char *print_compat_mode(const lib::Worker::CompatMode &compat_mode);
 const char *get_ctype_string(int ctype);
 bool is_lob_type(const int ctype);
+bool is_string_type(const int ctype);
 bool is_json_type(const int ctype);
 bool is_geometry_type(const int ctype);
 bool is_xml_type(const int ctype);

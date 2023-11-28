@@ -68,28 +68,36 @@ int LogReader::pread(const block_id_t block_id,
   int read_io_fd = -1;
   out_read_size = 0;
   char block_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
-  if (OB_FAIL(convert_to_normal_block(log_dir_, block_id, block_path, OB_MAX_FILE_NAME_LENGTH))) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "pread failed", K(block_id), K(offset), K(in_read_size), K(read_buf));
+  } else if (!is_valid_block_id(block_id) || offset >= block_size_ || 0 >= in_read_size || !read_buf.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", K(block_id), K(offset), K(in_read_size), K(read_buf));
+  } else if (OB_FAIL(convert_to_normal_block(log_dir_, block_id, block_path, OB_MAX_FILE_NAME_LENGTH))) {
     PALF_LOG(ERROR, "convert_to_normal_block failed", K(ret));
   } else if (-1 == (read_io_fd = ::open(block_path, LOG_READ_FLAG))) {
-    ret = ENOENT == errno ? OB_NO_SUCH_FILE_OR_DIRECTORY : OB_IO_ERROR;
+    ret = convert_sys_errno();
     PALF_LOG(WARN, "LogReader open block failed", K(ret), K(errno), K(block_path), K(read_io_fd));
   } else {
     int64_t remained_read_size = in_read_size;
+    int64_t remained_read_buf_len = read_buf.buf_len_;
     int64_t step = MAX_LOG_BUFFER_SIZE;
     while (remained_read_size > 0 && OB_SUCC(ret)) {
       const int64_t curr_in_read_size = MIN(step, remained_read_size);
       char *curr_read_buf = read_buf.buf_ + in_read_size - remained_read_size;
-      const offset_t curr_read_lsn = offset + in_read_size - remained_read_size;
+      const offset_t curr_read_offset = offset + in_read_size - remained_read_size;
+      const int64_t curr_read_buf_len = remained_read_buf_len - out_read_size;
       int64_t curr_out_read_size = 0;
-      if (OB_FAIL(inner_pread_(read_io_fd, curr_read_lsn, curr_in_read_size, curr_read_buf, curr_out_read_size))) {
+      if (OB_FAIL(inner_pread_(read_io_fd, curr_read_offset, curr_in_read_size, curr_read_buf, curr_read_buf_len, curr_out_read_size))) {
         PALF_LOG(WARN, "LogReader inner_pread_ failed", K(ret), K(read_io_fd), K(block_id), K(offset),
-            K(in_read_size), K(read_buf), K(curr_in_read_size), K(curr_read_lsn), K(curr_out_read_size),
+            K(in_read_size), K(read_buf), K(curr_in_read_size), K(curr_read_offset), K(curr_out_read_size),
             K(remained_read_size), K(block_path));
       } else {
         out_read_size += curr_out_read_size;
         remained_read_size -= curr_out_read_size;
         PALF_LOG(TRACE, "inner_pread_ success", K(ret), K(read_io_fd), K(block_id), K(offset), K(in_read_size),
-            K(out_read_size), K(read_buf), K(curr_in_read_size), K(curr_read_lsn), K(curr_out_read_size),
+            K(out_read_size), K(read_buf), K(curr_in_read_size), K(curr_read_offset), K(curr_out_read_size),
             K(remained_read_size), K(block_path));
       }
     }
@@ -106,6 +114,7 @@ int LogReader::inner_pread_(const int read_io_fd,
                             offset_t start_offset,
                             int64_t in_read_size,
                             char *read_buf,
+                            const int64_t read_buf_len,
                             int64_t &out_read_size) const
 {
   int ret = OB_SUCCESS;
@@ -113,15 +122,14 @@ int LogReader::inner_pread_(const int read_io_fd,
   offset_t backoff = start_offset - aligned_start_offset;
   int64_t aligned_in_read_size = upper_align(in_read_size + backoff, LOG_DIO_ALIGN_SIZE);
   int64_t limited_and_aligned_in_read_size = 0;
-  if (MAX_LOG_BUFFER_SIZE + LOG_DIO_ALIGN_SIZE < aligned_in_read_size) {
-    ret = OB_BUF_NOT_ENOUGH;
-    PALF_LOG(ERROR, "aligned_in_read_size is greater than MAX BUFFER LEN",
-        K(ret), K(read_io_fd), K(start_offset), K(aligned_start_offset), K(backoff), K(in_read_size), K(aligned_in_read_size));
-  } else if (OB_FAIL(limit_and_align_in_read_size_by_block_size_(
+  if (OB_FAIL(limit_and_align_in_read_size_by_block_size_(
           aligned_start_offset, aligned_in_read_size,  limited_and_aligned_in_read_size))) {
     PALF_LOG(WARN, "limited_and_aligned_in_read_size failed, maybe read offset exceed block size",
         K(ret), K(start_offset), K(in_read_size), K(aligned_start_offset), K(aligned_in_read_size),
         K(limited_and_aligned_in_read_size));
+  } else if (limited_and_aligned_in_read_size > read_buf_len) {
+    ret = OB_BUF_NOT_ENOUGH;
+    PALF_LOG(WARN, "buffer not enough to hold read result");
   } else if (0 >= (out_read_size = ob_pread(read_io_fd, read_buf, limited_and_aligned_in_read_size, aligned_start_offset))){
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(WARN, "pread failed, maybe concurrently with truncate", K(ret), K(read_io_fd), K(aligned_start_offset),

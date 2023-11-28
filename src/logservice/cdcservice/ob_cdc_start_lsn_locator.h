@@ -29,6 +29,7 @@ namespace cdc
 {
 using oceanbase::share::ObLSID;
 using oceanbase::palf::LSN;
+class ObCdcService;
 
 typedef obrpc::ObCdcReqStartLSNByTsReq ObLocateLSNByTsReq;
 typedef obrpc::ObCdcReqStartLSNByTsResp ObLocateLSNByTsResp;
@@ -39,6 +40,7 @@ public:
   ObCdcStartLsnLocator();
   ~ObCdcStartLsnLocator();
   int init(const uint64_t tenant_id,
+      ObCdcService *host,
       archive::LargeBufferPool *large_buffer_pool,
       logservice::ObLogExternalStorageHandler *log_ext_handler);
   void destroy();
@@ -64,6 +66,7 @@ private:
 
 private:
   bool is_inited_;
+  ObCdcService *host_;
   uint64_t tenant_id_;
   archive::LargeBufferPool *large_buffer_pool_;
   logservice::ObLogExternalStorageHandler *log_ext_handler_;

@@ -56,6 +56,10 @@ const char *print_switch_reason(const KickOutReason reason)
       str = "Discarded";
       break;
 
+    case ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF:
+      str = "ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF";
+      break;
+
     default:
       str = "NONE";
       break;

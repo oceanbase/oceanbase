@@ -221,6 +221,45 @@ bool ObLogArchivePieceContext::is_valid() const
     && archive_dest_.is_valid();
 }
 
+int ObLogArchivePieceContext::get_raw_read_piece(const share::SCN &pre_scn,
+    const palf::LSN &start_lsn,
+    int64_t &dest_id,
+    int64_t &round_id,
+    int64_t &piece_id,
+    int64_t &file_id,
+    int64_t &file_offset)
+{
+  int ret = OB_SUCCESS;
+  int64_t unused_offset = -1;
+  palf::LSN unused_lsn;
+  palf::LSN min_lsn;
+  bool unused_flag = false;
+  // if piece context not valid, reset it
+  if (! is_valid()) {
+    reset_locate_info();
+  }
+
+  file_id = cal_archive_file_id_(start_lsn);
+  if (OB_UNLIKELY(! pre_scn.is_valid() || ! start_lsn.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", K(ret), K(pre_scn), K(start_lsn));
+  } else if (OB_FAIL(get_piece_(pre_scn, start_lsn, file_id, dest_id,
+          round_id, piece_id, unused_offset, unused_lsn, unused_flag))) {
+    CLOG_LOG(WARN, "get piece failed", KPC(this));
+  } else if (FALSE_IT(min_lsn = inner_piece_context_.min_lsn_in_piece_)) {
+  } else if (archive::cal_archive_file_id(min_lsn, palf::PALF_BLOCK_SIZE) == file_id) {
+    // the first file in piece may not match 64MB size, so get real_offset based on min_lsn_in_piece
+    if (OB_UNLIKELY(min_lsn > start_lsn)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      file_offset = (start_lsn - min_lsn) + archive::ARCHIVE_FILE_HEADER_SIZE;
+    }
+  } else {
+    file_offset = palf::lsn_2_offset(start_lsn, palf::PALF_BLOCK_SIZE) + archive::ARCHIVE_FILE_HEADER_SIZE;
+  }
+  return ret;
+}
+
 int ObLogArchivePieceContext::get_piece(const SCN &pre_scn,
     const palf::LSN &start_lsn,
     int64_t &dest_id,

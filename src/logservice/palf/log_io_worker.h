@@ -119,7 +119,6 @@ private:
     typedef ObFixedArray<BatchLogIOFlushLogTask *, common::ObIAllocator> BatchLogIOFlushLogTaskArray;
     BatchLogIOFlushLogTaskArray batch_io_task_array_;
     int64_t handle_count_;
-    int64_t has_batched_size_;
     int64_t usable_count_;
     int64_t batch_width_;
     ObMiniStat::ObStatItem *wait_cost_stat_;

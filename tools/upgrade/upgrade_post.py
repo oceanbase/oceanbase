@@ -2178,6 +2178,39 @@
 #    fail_list.append('Table api connection is not allowed to use zlib as compression algorithm during the upgrade, please use other compression algorithms by setting table_api_transport_compress_func')
 #  logging.info('check table_api_transport_compress_func success')
 #
+## 20. check oracle tenant's standby_replication privs
+#def check_oracle_standby_replication_exist(query_cur):
+#  check_success = True
+#  min_cluster_version = 0
+#  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
+#  (desc, results) = query_cur.exec_query(sql)
+#  if len(results) != 1:
+#    check_success = False
+#    fail_list.append('min_observer_version is not sync')
+#  elif len(results[0]) != 1:
+#    check_success = False
+#    fail_list.append('column cnt not match')
+#  else:
+#    min_cluster_version = get_version(results[0][0])
+#    (desc, results) = query_cur.exec_query("""select tenant_id from oceanbase.__all_tenant where compatibility_mode = 1""")
+#    if len(results[0]) > 0 :
+#      tenant_ids = results
+#      if min_cluster_version < get_version("4.2.2.0") :
+#        for tenant_id in tenant_ids:
+#          sql = """select count(1)=1 from oceanbase.__all_virtual_user where user_name='STANDBY_REPLICATION' and tenant_id=%d""" % (tenant_id[0])
+#          (desc, results) = query_cur.exec_query(sql)
+#          if results[0][0] == 1 :
+#            check_success = False
+#            fail_list.append('{0} tenant standby_replication already exists, please check'.format(tenant_id[0]))
+#      else :
+#        for tenant_id in tenant_ids:
+#          sql = """select count(1)=0 from oceanbase.__all_virtual_user where user_name='STANDBY_REPLICATION' and tenant_id=%d""" % (tenant_id[0])
+#          (desc, results) = query_cur.exec_query(sql)
+#          if results[0][0] == 1 :
+#            check_success = False
+#            fail_list.append('{0} tenant standby_replication not exist, please check'.format(tenant_id[0]))
+#  if check_success:
+#    logging.info('check oracle standby_replication privs success')
 ## last check of do_check, make sure no function execute after check_fail_list
 #def check_fail_list():
 #  if len(fail_list) != 0 :
@@ -2220,6 +2253,7 @@
 #      check_schema_status(query_cur)
 #      check_server_version(query_cur)
 #      check_not_supported_tenant_name(query_cur)
+#      check_oracle_standby_replication_exist(query_cur)
 #      check_log_transport_compress_func(query_cur)
 #      check_table_compress_func(query_cur)
 #      check_table_api_transport_compress_func(query_cur)

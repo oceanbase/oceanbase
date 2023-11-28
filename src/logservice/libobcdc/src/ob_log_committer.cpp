@@ -1263,7 +1263,7 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
         // unexpected
         LOG_ERROR("unexpected skiping trans with valid br", KR(ret), K(trans_ctx));
       } else {
-        LOG_INFO("trans has no valid br to output, skip this trans", KR(ret), K(trans_ctx));
+        LOG_DEBUG("trans has no valid br to output, skip this trans", KR(ret), K(trans_ctx));
         ret = OB_SUCCESS;
       }
     } else {

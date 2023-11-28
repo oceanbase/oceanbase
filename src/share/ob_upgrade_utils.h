@@ -88,6 +88,7 @@ public:
   int init(int64_t data_version,
            UpgradeMode mode,
            common::ObMySQLProxy &sql_proxy,
+           common::ObOracleSqlProxy &oracle_sql_proxy,
            obrpc::ObSrvRpcProxy &rpc_proxy,
            obrpc::ObCommonRpcProxy &common_proxy,
            share::schema::ObMultiVersionSchemaService &schema_service,
@@ -106,6 +107,7 @@ protected:
   uint64_t tenant_id_;
   UpgradeMode mode_;
   common::ObMySQLProxy *sql_proxy_;
+  common::ObOracleSqlProxy *oracle_sql_proxy_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;
   obrpc::ObCommonRpcProxy *common_proxy_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
@@ -121,6 +123,7 @@ public:
   virtual ~ObUpgradeProcesserSet();
   int init(ObBaseUpgradeProcessor::UpgradeMode mode,
            common::ObMySQLProxy &sql_proxy,
+           common::ObOracleSqlProxy &oracle_sql_proxy,
            obrpc::ObSrvRpcProxy &rpc_proxy,
            obrpc::ObCommonRpcProxy &common_proxy,
            share::schema::ObMultiVersionSchemaService &schema_service,
@@ -221,8 +224,17 @@ private:
   int post_upgrade_for_dbms_scheduler();
 };
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 2)
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 2, 0)
 
+class ObUpgradeFor4220Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor4220Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor4220Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
+private:
+  int post_upgrade_for_create_replication_role_in_oracle();
+};
 /* =========== special upgrade processor end   ============= */
 
 /* =========== upgrade processor end ============= */

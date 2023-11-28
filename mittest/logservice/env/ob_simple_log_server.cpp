@@ -138,6 +138,7 @@ int ObSimpleLogServer::simple_init(
     const std::string &cluster_name,
     const common::ObAddr &addr,
     const int64_t node_id,
+    LogMemberRegionMap *region_map,
     const bool is_bootstrap = false)
 {
   int ret = OB_SUCCESS;
@@ -160,6 +161,8 @@ int ObSimpleLogServer::simple_init(
 
   if (is_bootstrap && OB_FAIL(init_memory_dump_timer_())) {
     SERVER_LOG(ERROR, "init_memory_dump_timer_ failed", K(ret), K_(node_id));
+  } else if (is_bootstrap && OB_FAIL(mock_locality_manager_.init(region_map))) {
+    SERVER_LOG(ERROR, "mock_locality_manager_ init fail", K(ret));
   } else if (FALSE_IT(guard.click("init_memory_dump_timer_"))
       || OB_FAIL(init_network_(addr, is_bootstrap))) {
     SERVER_LOG(WARN, "init_network failed", K(ret), K(addr));
@@ -411,7 +414,7 @@ int ObSimpleLogServer::init_log_service_()
 
   if (OB_FAIL(net_keepalive_->init(&deliver_))) {
   } else if (OB_FAIL(log_service_.init(opts, clog_dir.c_str(), addr_, allocator_, transport_, &batch_rpc_, &ls_service_,
-      &location_service_, &reporter_, &log_block_pool_, &sql_proxy_, net_keepalive_))) {
+      &location_service_, &reporter_, &log_block_pool_, &sql_proxy_, net_keepalive_, &mock_locality_manager_))) {
     SERVER_LOG(ERROR, "init_log_service_ fail", K(ret));
   } else if (OB_FAIL(log_block_pool_.create_tenant(opts.disk_options_.log_disk_usage_limit_size_))) {
     SERVER_LOG(ERROR, "crete tenant failed", K(ret));
@@ -469,6 +472,7 @@ int ObSimpleLogServer::simple_close(const bool is_shutdown = false)
 
     timer_handle_.stop_and_wait();
     timer_.destroy();
+    mock_locality_manager_.destroy();
   }
   SERVER_LOG(INFO, "stop LogService success", K(ret), K(is_shutdown), K(guard));
   return ret;
@@ -481,7 +485,7 @@ int ObSimpleLogServer::simple_restart(const std::string &cluster_name, const int
   ObTimeGuard guard("simple_restart", 0);
   if (OB_FAIL(simple_close())) {
     SERVER_LOG(ERROR, "simple_close failed", K(ret));
-  } else if (FALSE_IT(guard.click("simple_close")) || OB_FAIL(simple_init(cluster_name, addr_, node_idx))) {
+  } else if (FALSE_IT(guard.click("simple_close")) || OB_FAIL(simple_init(cluster_name, addr_, node_idx, NULL))) {
     SERVER_LOG(ERROR, "simple_init failed", K(ret));
   } else if (FALSE_IT(guard.click("simple_init")) || OB_FAIL(simple_start())) {
     SERVER_LOG(ERROR, "simple_start failed", K(ret));

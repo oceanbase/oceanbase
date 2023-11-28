@@ -503,9 +503,9 @@ public:
 class FetchLogARpcResultPool : public IFetchLogARpcResultPool
 {
   typedef common::ObSmallObjPool<FetchLogARpcResult> ResultPool;
-  // 16M
+  // 18M
 public:
-  static const int64_t DEFAULT_RESULT_POOL_BLOCK_SIZE = (1 << 24L) + (1 << 20L);
+  static const int64_t DEFAULT_RESULT_POOL_BLOCK_SIZE = (1 << 24L) + (1 << 21L);
 
 public:
   FetchLogARpcResultPool() : inited_(false), pool_() {}

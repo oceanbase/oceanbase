@@ -50,6 +50,24 @@ public:
     return OB_SUCCESS;
   }
 
+  virtual int append_big_log(const void *buffer,
+                             const int64_t nbytes,
+                             const share::SCN &ref_scn,
+                             const bool need_nonblock,
+                             logservice::AppendCb *cb,
+                             palf::LSN &lsn,
+                             share::SCN &scn)
+  {
+    UNUSED(need_nonblock);
+    UNUSED(buffer);
+    UNUSED(nbytes);
+    UNUSED(ref_scn);
+    UNUSED(cb);
+    UNUSED(lsn);
+    UNUSED(scn);
+    return OB_SUCCESS;
+  }
+
   virtual int append(const void *buffer,
                      const int64_t nbytes,
                      const int64_t ref_ts_ns,
@@ -402,11 +420,6 @@ public:
   int get_member_gc_stat(const common::ObAddr &addr, bool &is_valid_member, obrpc::LogMemberGCStat &stat) const
   {
     UNUSEDx(addr, is_valid_member, stat);
-    return OB_SUCCESS;
-  }
-  int set_region(const common::ObRegion &region)
-  {
-    UNUSED(region);
     return OB_SUCCESS;
   }
   void wait_append_sync()

@@ -21,6 +21,7 @@
 #include "logservice/palf/palf_iterator.h"      // PalfGroupBufferIterator
 #include "logservice/palf_handle_guard.h"       // PalfHandleGuard
 #include "ob_cdc_req.h"                         // RPC Request and Response
+#include "ob_cdc_raw_log_req.h"
 #include "ob_cdc_define.h"
 #include "ob_cdc_struct.h"                      // ClientLSCtx
 #include "logservice/archiveservice/large_buffer_pool.h" // LargeBufferPool
@@ -41,6 +42,8 @@ using oceanbase::palf::LogEntry;
 
 struct FetchRunTime;
 
+class ObCdcService;
+
 class ObCdcFetcher
 {
   // When fetch log finds that the remaining time is less than RPC_QIT_RESERVED_TIME,
@@ -52,6 +55,7 @@ public:
   ~ObCdcFetcher();
   int init(const uint64_t tenant_id,
       ObLSService *ls_service,
+      ObCdcService *host,
       archive::LargeBufferPool *buffer_pool,
       logservice::ObLogExternalStorageHandler *log_ext_handler);
   void destroy();
@@ -65,6 +69,9 @@ public:
   // TODO optimize fetch LogEntry(Random read)
   int fetch_missing_log(const obrpc::ObCdcLSFetchMissLogReq &req,
       obrpc::ObCdcLSFetchLogResp &resp);
+
+  int fetch_raw_log(const obrpc::ObCdcFetchRawLogReq &req,
+      obrpc::ObCdcFetchRawLogResp &resp);
 
 private:
   // @retval OB_SUCCESS         Success
@@ -84,6 +91,7 @@ private:
       ClientLSCtx &ctx,
       ObCdcFetchLogTimeStats &fetch_time_stat);
   int set_fetch_mode_before_fetch_log_(const ObLSID &ls_id,
+      const LSN &start_lsn,
       const bool test_switch_fetch_mode,
       bool &ls_exist_in_palf,
       palf::PalfHandleGuard &palf_guard,
@@ -135,7 +143,6 @@ private:
       LogEntryType &log_group_entry,
       LSN &lsn,
       ClientLSCtx &ctx);
-  int init_archive_source_(ClientLSCtx &ctx, ObLSID ls_id);
   // Check whether has reached time limit
   inline bool is_time_up_(const int64_t scan_round, const int64_t end_tstamp)
   {
@@ -180,6 +187,11 @@ private:
   int check_lag_follower_(const ObLSID &ls_id,
       palf::PalfHandleGuard &palf_handle_guard,
       obrpc::ObCdcLSFetchLogResp &resp);
+
+  int check_ls_sync_status_(const ObLSID &ls_id,
+      palf::PalfHandleGuard &palf_handle_guard,
+      ObRole &role,
+      bool &in_sync);
   int do_fetch_missing_log_(const obrpc::ObCdcLSFetchMissLogReq &req,
       FetchRunTime &frt,
       obrpc::ObCdcLSFetchLogResp &resp,
@@ -201,9 +213,30 @@ private:
       bool &ls_exist_in_palf,
       bool &archive_is_on);
 
+  int do_fetch_raw_log_(const obrpc::ObCdcFetchRawLogReq &req,
+      obrpc::ObCdcFetchRawLogResp &resp,
+      ClientLSCtx &ctx);
+
+  int fetch_raw_log_in_palf_(const ObLSID &ls_id,
+      const LSN &start_lsn,
+      const int64_t req_size,
+      obrpc::ObCdcFetchRawLogResp &resp,
+      bool &ls_exist_in_palf,
+      bool &fetch_log_succ,
+      ClientLSCtx &ctx);
+
+  int fetch_raw_log_in_archive_(const ObLSID &ls_id,
+      const LSN &start_lsn,
+      const int64_t req_size,
+      const int64_t progress,
+      obrpc::ObCdcFetchRawLogResp &resp,
+      bool &archive_is_on,
+      bool &fetch_log_succ,
+      ClientLSCtx &ctx);
 private:
   bool is_inited_;
   uint64_t           tenant_id_;
+  ObCdcService       *host_;
   ObLSService        *ls_service_;
   archive::LargeBufferPool *large_buffer_pool_;
   logservice::ObLogExternalStorageHandler *log_ext_handler_;

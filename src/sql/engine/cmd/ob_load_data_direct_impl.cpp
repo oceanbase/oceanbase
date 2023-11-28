@@ -1860,16 +1860,18 @@ int ObLoadDataDirectImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
     }
   }
 
-  if (OB_FAIL(init_execute_param())) {
-    LOG_WARN("fail to init execute param", KR(ret), K(ctx), K(load_stmt));
-  } else if (OB_FAIL(init_execute_context())) {
-    LOG_WARN("fail to init execute context", KR(ret), K(ctx), K(load_stmt));
-  } else {
-    LOG_INFO("LOAD DATA init finish", K_(execute_param), "file_path", load_args.file_name_);
-    ObLoadDataStat *job_stat = execute_ctx_.job_stat_;
-    OZ(ob_write_string(job_stat->allocator_, load_args.file_name_, job_stat->file_path_));
-    job_stat->file_column_ = execute_param_.data_access_param_.file_column_num_;
-    job_stat->load_mode_ = static_cast<int64_t>(execute_param_.dup_action_);
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(init_execute_param())) {
+      LOG_WARN("fail to init execute param", KR(ret), K(ctx), K(load_stmt));
+    } else if (OB_FAIL(init_execute_context())) {
+      LOG_WARN("fail to init execute context", KR(ret), K(ctx), K(load_stmt));
+    } else {
+      LOG_INFO("LOAD DATA init finish", K_(execute_param), "file_path", load_args.file_name_);
+      ObLoadDataStat *job_stat = execute_ctx_.job_stat_;
+      OZ(ob_write_string(job_stat->allocator_, load_args.file_name_, job_stat->file_path_));
+      job_stat->file_column_ = execute_param_.data_access_param_.file_column_num_;
+      job_stat->load_mode_ = static_cast<int64_t>(execute_param_.dup_action_);
+    }
   }
 
   if (OB_SUCC(ret)) {

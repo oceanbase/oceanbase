@@ -100,5 +100,25 @@ void free_read_buf(ReadBuf &read_buf)
     read_buf.buf_len_ = 0;
   }
 }
+
+bool is_valid_raw_read_buf(const ReadBuf &raw_read_buf,
+                           const int64_t offset,
+                           const int64_t nbytes)
+{
+  bool bool_ret = false;
+  if (!raw_read_buf.is_valid() || offset < 0) {
+    bool_ret = false;
+  } else {
+    const char *ptr = raw_read_buf.buf_;
+    const char *aligned_ptr = reinterpret_cast<char *>(common::upper_align(
+      reinterpret_cast<int64_t>(ptr),
+      LOG_DIO_ALIGN_SIZE));
+    const int64_t aligned_offset = common::upper_align(offset, LOG_DIO_ALIGN_SIZE);
+    const int64_t aligned_nbytes = common::upper_align(nbytes, LOG_DIO_ALIGN_SIZE);
+    bool_ret = (ptr == aligned_ptr && offset == aligned_offset && nbytes == aligned_nbytes);
+  }
+  return bool_ret;
+}
+
 } // end of logservice
 } // end of oceanbase
