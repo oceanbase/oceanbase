@@ -147,7 +147,9 @@ private:
  
 class ObLobMetaManager {
 public:
-  ObLobMetaManager() {}
+  explicit ObLobMetaManager(const uint64_t tenant_id) :
+    persistent_lob_adapter_(tenant_id)
+  {}
   ~ObLobMetaManager() {}
   // write one lob meta row
   int write(ObLobAccessParam& param, ObLobMetaInfo& in_row);

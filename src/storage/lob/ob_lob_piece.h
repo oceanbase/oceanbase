@@ -40,7 +40,9 @@ private:
 class ObLobPieceManager
 {
 public:
-  ObLobPieceManager() {}
+  explicit ObLobPieceManager(const uint64_t tenant_id):
+    persistent_lob_adapter_(tenant_id)
+  {}
   ~ObLobPieceManager() {}
   int get(ObLobAccessParam& param, uint64_t piece_id, ObLobPieceInfo& info);
   int write(ObLobAccessParam& param, ObLobPieceInfo& in_row);
