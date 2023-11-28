@@ -5821,9 +5821,12 @@ bool ObOptimizerUtil::is_lossless_type_conv(const ObExprResType &child_type, con
       if (child_type.get_type() == dst_type.get_type() &&
             dst_type.get_obj_meta().get_collation_type() == child_type.get_obj_meta().get_collation_type()) {
         is_lossless = true;
-       }
-     }
-   }
+      }
+    } else if (ObNumberTC == child_tc && ObNumberTC == dst_tc) {
+      is_lossless = NUMBER_SCALE_UNKNOWN_YET == dst_type.get_scale()
+                    && PRECISION_UNKNOWN_YET == dst_type.get_precision();
+    }
+  }
   return is_lossless;
 }
 
@@ -5926,6 +5929,9 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
             is_lossless = true;
           }
         }
+      } else if (ObNumberTC == child_tc && ObNumberTC == dst_tc) {
+        is_lossless = NUMBER_SCALE_UNKNOWN_YET == dst_type.get_scale()
+                      && PRECISION_UNKNOWN_YET == dst_type.get_precision();
       }
     }
   }
