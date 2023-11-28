@@ -276,6 +276,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       sql::ObPlanBaselineMgr*,                       \
       sql::ObPsCache*,                               \
       sql::ObPlanCache*,                             \
+      oceanbase::common::ObDetectManager*,           \
       sql::dtl::ObTenantDfc*,                        \
       omt::ObPxPools*,                               \
       lib::Worker::CompatMode,                       \
@@ -308,7 +309,6 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       ObTestModule*,                                 \
       oceanbase::common::sqlclient::ObTenantOciEnvs*, \
       rootserver::ObHeartbeatService*,              \
-      oceanbase::common::ObDetectManager*,          \
       TenantErrsimModule                            \
       TenantErrsimEvent                             \
       oceanbase::sql::ObTenantSQLSessionMgr*,       \
