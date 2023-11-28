@@ -89,8 +89,7 @@ public:
   virtual void TearDown() override;
   static void SetUpTestCase();
   static void TearDownTestCase();
-
-  void prepare_data_schema(ObTableSchema &table_schema);
+  void prepare_data_schema(common::ObArenaAllocator &allocator, ObCreateTabletSchema &create_tablet_schema);
   void prepare_create_sstable_param();
   void gc_all_tablets();
 public:
@@ -168,9 +167,12 @@ void TestTenantMetaMemMgr::TearDown()
   tenant_base->set(old_t3m);
 }
 
-void TestTenantMetaMemMgr::prepare_data_schema(ObTableSchema &table_schema)
+void TestTenantMetaMemMgr::prepare_data_schema(
+  common::ObArenaAllocator &allocator, ObCreateTabletSchema &create_tablet_schema
+)
 {
   int ret = OB_SUCCESS;
+  ObTableSchema table_schema;
   const uint64_t table_id = 219039915101;
   int64_t micro_block_size = 16 * 1024;
   ObColumnSchemaV2 column;
@@ -215,6 +217,10 @@ void TestTenantMetaMemMgr::prepare_data_schema(ObTableSchema &table_schema)
     ASSERT_EQ(OB_SUCCESS, table_schema.add_column(column));
   }
   LOG_INFO("dump data table schema", LITERAL_K(TEST_ROWKEY_COLUMN_CNT), K(table_schema));
+
+  ret = create_tablet_schema.init(allocator, table_schema, lib::Worker::CompatMode::MYSQL,
+        false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V2);
+  ASSERT_EQ(OB_SUCCESS, ret);
 }
 
 void TestTenantMetaMemMgr::prepare_create_sstable_param()
@@ -673,14 +679,15 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
   ObLSTabletService ls_tablet_svr;
   MockObLogHandler log_handler;
   ObFreezer freezer;
-  ObTableSchema table_schema;
-  prepare_data_schema(table_schema);
+  ObArenaAllocator schema_allocator;
+  ObCreateTabletSchema create_tablet_schema;
+  prepare_data_schema(schema_allocator, create_tablet_schema);
 
   ret = freezer.init(&ls);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ObTabletCreateSSTableParam param;
-  ret = ObTabletCreateDeleteHelper::build_create_sstable_param(table_schema, tablet_id, 100, param);
+  ret = ObTabletCreateDeleteHelper::build_create_sstable_param(create_tablet_schema, tablet_id, 100, param);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ret = ObTabletCreateDeleteHelper::create_sstable(param, allocator_, sstable);
@@ -693,8 +700,8 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
   ObTabletTableStoreFlag store_flag;
   store_flag.set_with_major_sstable();
   ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
-      create_scn, create_scn.get_val_for_tx(), table_schema,
-      lib::Worker::CompatMode::MYSQL, store_flag, &sstable, &freezer);
+      create_scn, create_scn.get_val_for_tx(), create_tablet_schema,
+      store_flag, &sstable, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 
@@ -771,14 +778,15 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
   ObLSTabletService ls_tablet_svr;
   MockObLogHandler log_handler;
   ObFreezer freezer;
-  ObTableSchema table_schema;
-  prepare_data_schema(table_schema);
+  ObArenaAllocator schema_allocator;
+  ObCreateTabletSchema create_tablet_schema;
+  prepare_data_schema(schema_allocator, create_tablet_schema);
 
   ret = freezer.init(&ls);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ObTabletCreateSSTableParam param;
-  ret = ObTabletCreateDeleteHelper::build_create_sstable_param(table_schema, tablet_id, 100, param);
+  ret = ObTabletCreateDeleteHelper::build_create_sstable_param(create_tablet_schema, tablet_id, 100, param);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ret = ObTabletCreateDeleteHelper::create_sstable(param, allocator_, sstable);
@@ -791,7 +799,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
   ObTabletTableStoreFlag store_flag;
   store_flag.set_with_major_sstable();
   ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
-      create_scn, create_scn.get_val_for_tx(), table_schema, lib::Worker::CompatMode::MYSQL,
+      create_scn, create_scn.get_val_for_tx(), create_tablet_schema,
       store_flag, &sstable, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
@@ -881,8 +889,9 @@ TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
   ObLSTabletService ls_tablet_svr;
   MockObLogHandler log_handler;
   ObFreezer freezer;
-  ObTableSchema table_schema;
-  prepare_data_schema(table_schema);
+  ObArenaAllocator schema_allocator;
+  ObCreateTabletSchema create_tablet_schema;
+  prepare_data_schema(schema_allocator, create_tablet_schema);
 
   ret = freezer.init(&ls);
   ASSERT_EQ(common::OB_SUCCESS, ret);
@@ -894,7 +903,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
   ObTabletTableStoreFlag store_flag;
   store_flag.set_with_major_sstable();
   ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
-      create_scn, create_scn.get_val_for_tx(), table_schema, lib::Worker::CompatMode::MYSQL,
+      create_scn, create_scn.get_val_for_tx(), create_tablet_schema,
       store_flag, nullptr, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
@@ -1058,14 +1067,15 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
   ObLSTabletService ls_tablet_svr;
   MockObLogHandler log_handler;
   ObFreezer freezer;
-  ObTableSchema table_schema;
-  prepare_data_schema(table_schema);
+  ObArenaAllocator schema_allocator;
+  ObCreateTabletSchema create_tablet_schema;
+  prepare_data_schema(schema_allocator, create_tablet_schema);
 
   ret = freezer.init(&ls);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ObTabletCreateSSTableParam param;
-  ret = ObTabletCreateDeleteHelper::build_create_sstable_param(table_schema, tablet_id, 100, param);
+  ret = ObTabletCreateDeleteHelper::build_create_sstable_param(create_tablet_schema, tablet_id, 100, param);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ret = ObTabletCreateDeleteHelper::create_sstable(param, allocator_, sstable);
@@ -1078,8 +1088,7 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
   ObTabletTableStoreFlag store_flag;
   store_flag.set_with_major_sstable();
   ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
-      create_scn, create_scn.get_val_for_tx(), table_schema,
-      lib::Worker::CompatMode::MYSQL, store_flag, &sstable, &freezer);
+      create_scn, create_scn.get_val_for_tx(), create_tablet_schema, store_flag, &sstable, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 
@@ -1154,7 +1163,9 @@ TEST_F(TestTenantMetaMemMgr, test_wash_mem_tablet)
   ObFreezer freezer;
   ObTableSchema table_schema;
   ObTabletCreateSSTableParam param;
-  prepare_data_schema(table_schema);
+  ObArenaAllocator schema_allocator;
+  ObCreateTabletSchema create_tablet_schema;
+  prepare_data_schema(schema_allocator, create_tablet_schema);
 
   ret = freezer.init(&ls);
   ASSERT_EQ(common::OB_SUCCESS, ret);
@@ -1200,8 +1211,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_mem_tablet)
   ObTabletTableStoreFlag store_flag;
   store_flag.set_with_major_sstable();
   ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
-      create_scn, create_scn.get_val_for_tx(), table_schema,
-      lib::Worker::CompatMode::MYSQL, store_flag, &sstable, &freezer);
+      create_scn, create_scn.get_val_for_tx(), create_tablet_schema, store_flag, &sstable, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 
