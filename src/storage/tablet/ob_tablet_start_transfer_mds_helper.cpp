@@ -1623,6 +1623,20 @@ bool ObTabletStartTransferInHelper::check_can_replay_commit(
       transfer_service->wakeup();
     }
   }
+  if (b_ret) {
+    int tmp_ret = OB_SUCCESS;
+    for (int64_t i = 0; OB_SUCC(ret) && i < tx_start_transfer_in_info.tablet_meta_list_.count(); ++i) {
+      const ObMigrationTabletParam &tablet_info = tx_start_transfer_in_info.tablet_meta_list_.at(i);
+      observer::ObIMetaReport *reporter = GCTX.ob_service_;
+      if (OB_ISNULL(reporter)) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("tablet table updater should not be null", K(tmp_ret));
+      } else if (OB_SUCCESS != (tmp_ret = reporter->submit_tablet_update_task(MTL_ID(),
+          tx_start_transfer_in_info.dest_ls_id_, tablet_info.tablet_id_))) {
+        LOG_WARN("failed to submit tablet update task", K(tmp_ret), K(tablet_info));
+      }
+    }
+  }
   ObTransferUtils::clear_transfer_module();
   return b_ret;
 }

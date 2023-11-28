@@ -1808,9 +1808,6 @@ bool ObTransferHandler::can_retry_(
   return bool_ret;
 }
 
-// TODO(yangyi.yyy): Found a problem that only the leader reports the tablet meta table here. However,
-// this is not correct. Every replica needs to be reported, otherwise the __all_tablet_meta_table will not be updated.
-// WILL FIX THIS LATER
 int ObTransferHandler::report_to_meta_table_(
     const share::ObTransferTaskInfo &task_info)
 {
