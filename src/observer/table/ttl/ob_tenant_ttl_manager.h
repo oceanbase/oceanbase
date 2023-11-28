@@ -146,9 +146,9 @@ private:
 
   int check_task_need_move(bool &need_move);
 private:
-  int check_all_tabelt_finished(bool &all_finished);
+  int check_all_tablet_finished(bool &all_finished);
   int check_tablet_table_finished(common::ObIArray<share::ObTabletTablePair> &pairs, bool &all_finished);
-  int move_all_task_to_history_table();
+  int move_all_task_to_history_table(bool need_cancel);
 private:
   static const int64_t TBALE_CHECK_BATCH_SIZE = 200;
   static const int64_t TBALET_CHECK_BATCH_SIZE = 1024;

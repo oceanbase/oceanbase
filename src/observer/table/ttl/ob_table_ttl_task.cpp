@@ -216,18 +216,20 @@ int ObTableTTLDeleteTask::process_one()
     ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
   }
 
-  info_.max_version_del_cnt_ += result.get_max_version_del_row();
-  info_.ttl_del_cnt_ += result.get_ttl_del_row();
   info_.scan_cnt_ += result.get_scan_row();
   info_.err_code_ = ret;
   info_.row_key_ = result.get_end_rowkey();
-  if (OB_SUCC(ret)
-      && result.get_del_row() < PER_TASK_DEL_ROWS
-      && result.get_end_ts() > ObTimeUtility::current_time()) {
-    ret = OB_ITER_END; // finsh task
-    info_.err_code_ = ret;
-    LOG_DEBUG("finish delete", KR(ret), K_(info));
+  if (OB_SUCC(ret)) {
+    info_.max_version_del_cnt_ += result.get_max_version_del_row();
+    info_.ttl_del_cnt_ += result.get_ttl_del_row();
+    if (result.get_del_row() < PER_TASK_DEL_ROWS
+        && result.get_end_ts() > ObTimeUtility::current_time()) {
+      ret = OB_ITER_END; // finsh task
+      info_.err_code_ = ret;
+      LOG_DEBUG("finish delete", KR(ret), K_(info));
+    }
   }
+
   int64_t cost = ObTimeUtil::current_time() - start_time;
   LOG_DEBUG("finish process one", KR(ret), K(cost));
   return ret;

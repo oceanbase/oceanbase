@@ -139,10 +139,6 @@ int ObTTLUtil::transform_tenant_state(const common::ObTTLTaskStatus& tenant_stat
     status = OB_TTL_TASK_RUNNING;
   } else if (tenant_status == OB_RS_TTL_TASK_SUSPEND) {
     status = OB_TTL_TASK_PENDING;
-  } else if (tenant_status == OB_RS_TTL_TASK_CANCEL) {
-    status = OB_TTL_TASK_CANCEL;
-  } else if (tenant_status == OB_RS_TTL_TASK_MOVE) {
-    status = OB_TTL_TASK_MOVING;
   } else {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid type", K(tenant_status), K(status));
@@ -153,7 +149,8 @@ int ObTTLUtil::transform_tenant_state(const common::ObTTLTaskStatus& tenant_stat
 int ObTTLUtil::check_tenant_state(uint64_t tenant_id,
                                   common::ObISQLClient& proxy,
                                   const ObTTLTaskStatus local_state,
-                                  const int64_t local_task_id)
+                                  const int64_t local_task_id,
+                                  bool &tenant_state_changed)
 {
   int ret = OB_SUCCESS;
 
@@ -174,6 +171,7 @@ int ObTTLUtil::check_tenant_state(uint64_t tenant_id,
     LOG_WARN("fail to transform ttl tenant task status", KR(ret), K(tenant_task.status_));
   } else if (tenant_state != local_state) {
     ret = OB_EAGAIN;
+    tenant_state_changed = true;
     FLOG_INFO("state of tenant task is different from local task state", K(ret), K(tenant_id), K(tenant_task.task_id_ ), K(local_state));
   }
 
@@ -594,13 +592,26 @@ bool ObTTLUtil::check_can_process_tenant_tasks(uint64_t tenant_id)
 
 int ObTTLUtil::move_task_to_history_table(uint64_t tenant_id, uint64_t task_id,
                                           common::ObMySQLTransaction& proxy,
-                                          int64_t batch_size, int64_t &move_rows)
+                                          int64_t batch_size, int64_t &move_rows,
+                                          bool need_cancel)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   int64_t insert_rows = 0;
   int64_t delete_rows = 0;
-  if (OB_FAIL(sql.assign_fmt("replace into %s select * from %s "
+  if (!need_cancel &&
+      OB_FAIL(sql.assign_fmt("replace into %s select * from %s "
+              " where task_id = %ld and tablet_id != -1 and table_id != -1"
+              " order by tenant_id, task_id, table_id, tablet_id LIMIT %ld",
+              share::OB_ALL_KV_TTL_TASK_HISTORY_TNAME,
+              share::OB_ALL_KV_TTL_TASK_TNAME,
+              task_id, batch_size))) {
+    LOG_WARN("sql assign fmt failed", K(ret));
+  } else if (need_cancel &&
+      OB_FAIL(sql.assign_fmt("replace into %s select gmt_create, gmt_modified,"
+              " tenant_id, task_id, table_id, tablet_id, task_start_time,"
+              " task_update_time, trigger_type, if(status=4, 4, 3) as status,"
+              " ttl_del_cnt, max_version_del_cnt, scan_cnt, row_key, ret_code from %s"
               " where task_id = %ld and tablet_id != -1  and table_id != -1"
               " order by tenant_id, task_id, table_id, tablet_id LIMIT %ld",
               share::OB_ALL_KV_TTL_TASK_HISTORY_TNAME,
@@ -807,6 +818,7 @@ int ObTableTTLChecker::init(const schema::ObTableSchema &table_schema, bool in_f
       ObString right = ttl_definition;
       bool is_end = false;
       int64_t i = 0;
+      // example: "c +  INTERVAL 40 MINUTE"
       while (OB_SUCC(ret) && !is_end) {
         ObString left = right.split_on(',');
         if (left.empty()) {
@@ -815,11 +827,13 @@ int ObTableTTLChecker::init(const schema::ObTableSchema &table_schema, bool in_f
         }
         ObTableTTLExpr ttl_expr;
         ObString column_str = left.split_on('+').trim();
+        // example: "  INTERVAL 40 MINUTE"
         left = left.trim();
+        // example: "INTERVAL 40 MINUTE"
         left += strlen("INTERVAL");
+        // example: "40  MINUTE"
         left = left.trim();
         ObString interval_str = left.split_on(' ');
-        left.trim();
         ObString time_unit_str = left;
 
         ttl_expr.column_name_ = column_str;
@@ -838,7 +852,7 @@ int ObTableTTLChecker::init(const schema::ObTableSchema &table_schema, bool in_f
           ttl_expr.time_unit_ = ObTableTTLTimeUnit::YEAR;
         } else {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("unepxected time unit", K(ret));
+          LOG_WARN("unepxected time unit", K(ret), K(time_unit_str));
         }
 
         // 2. get delta second and month
@@ -1141,16 +1155,16 @@ int ObTTLUtil::check_is_ttl_table(const ObTableSchema &table_schema, bool &is_tt
   return ret;
 }
 
-int ObTTLUtil::check_ttl_task_exists(uint64_t tenant_id, common::ObISQLClient& proxy,
-                                     const uint64_t& task_id, const uint64_t& table_id,
-                                     ObTabletID& tablet_id, bool &is_exists)
+int ObTTLUtil::check_task_status_from_sys_table(uint64_t tenant_id, common::ObISQLClient& proxy,
+                                                const uint64_t& task_id, const uint64_t& table_id,
+                                                ObTabletID& tablet_id, bool &is_exists, bool &is_end_state)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
-  uint64_t result_cnt = 0;
-  if (OB_FAIL(sql.assign_fmt("SELECT (SELECT COUNT(*) FROM %s WHERE table_id = %ld"
-    " AND tablet_id = %ld AND task_id = %ld) + (SELECT COUNT(*) FROM %s WHERE"
-    " table_id = %ld AND tablet_id = %ld AND task_id = %ld) AS cnt",
+  ObTTLTaskStatus status = ObTTLTaskStatus::OB_TTL_TASK_INVALID;
+  if (OB_FAIL(sql.assign_fmt("(SELECT STATUS FROM %s WHERE table_id = %ld"
+    " AND tablet_id = %ld AND task_id = %ld limit 1) UNION (SELECT STATUS FROM %s WHERE"
+    " table_id = %ld AND tablet_id = %ld AND task_id = %ld limit 1)",
       share::OB_ALL_KV_TTL_TASK_HISTORY_TNAME, table_id, tablet_id.id(), task_id,
       share::OB_ALL_KV_TTL_TASK_TNAME, table_id, tablet_id.id(), task_id))) {
     LOG_WARN("sql assign fmt failed", K(ret));
@@ -1163,20 +1177,27 @@ int ObTTLUtil::check_ttl_task_exists(uint64_t tenant_id, common::ObISQLClient& p
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("error unexpected, query result must not be NULL", K(ret));
       } else if (OB_FAIL(result->next())) {
-        LOG_WARN("fail to get next row", K(ret));
+        if (OB_ITER_END == ret) {
+          // not exist, refresh ret
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to get next row", K(ret));
+        }
       } else {
-        EXTRACT_INT_FIELD_MYSQL(*result, "cnt", result_cnt, uint64_t);
+        int64_t temp_status = 0;
+        EXTRACT_INT_FIELD_MYSQL(*result, "STATUS", temp_status, int64_t);
+        status = EVAL_TASK_PURE_STATUS(temp_status);
+        if (OB_SUCCESS == result->next()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected ttl task record count", KR(ret), K(tenant_id), K(task_id), K(table_id), K(tablet_id));
+        }
       }
     }
   }
 
   if (OB_SUCC(ret)) {
-    if (result_cnt > 1) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected ttl task record count", KR(ret), K(tenant_id), K(task_id), K(table_id), K(tablet_id));
-    } else {
-      is_exists = (result_cnt > 0);
-    }
+    is_exists = (status != ObTTLTaskStatus::OB_TTL_TASK_INVALID);
+    is_end_state = ObTTLUtil::is_ttl_task_status_end_state(status);
   }
 
   return ret;

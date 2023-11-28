@@ -272,7 +272,8 @@ public:
   static int check_tenant_state(uint64_t tenant_id,
                                 common::ObISQLClient& proxy,
                                 const ObTTLTaskStatus local_state,
-                                const int64_t local_task_id);
+                                const int64_t local_task_id,
+                                bool &tenant_state_changed);
   static int insert_ttl_task(uint64_t tenant_id,
                              const char* tname,
                              common::ObISQLClient& proxy,
@@ -316,7 +317,8 @@ public:
 
   static int move_task_to_history_table(uint64_t tenant_id, uint64_t task_id,
                                         common::ObMySQLTransaction& proxy,
-                                        int64_t batch_size, int64_t &move_rows);
+                                        int64_t batch_size, int64_t &move_rows,
+                                        bool need_cancel = false);
 
   static int move_tenant_task_to_history_table(uint64_t tenant_id, uint64_t task_id,
                                                common::ObMySQLTransaction& proxy);
@@ -332,10 +334,12 @@ public:
 
   static int check_is_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table);
   static int get_tenant_table_ids(const uint64_t tenant_id, common::ObIArray<uint64_t> &table_id_array);
-  static int check_ttl_task_exists(uint64_t tenant_id, common::ObISQLClient& proxy,
-                                   const uint64_t& task_id, const uint64_t& table_id,
-                                   ObTabletID& tablet_id, bool &is_exists);
-
+  static int check_task_status_from_sys_table(uint64_t tenant_id, common::ObISQLClient& proxy,
+                                              const uint64_t& task_id, const uint64_t& table_id,
+                                              ObTabletID& tablet_id, bool &is_exists, bool &is_end_state);
+  static inline bool is_ttl_task_status_end_state(ObTTLTaskStatus status) {
+    return status == ObTTLTaskStatus::OB_TTL_TASK_CANCEL || status == ObTTLTaskStatus::OB_TTL_TASK_FINISH;
+  }
   const static uint64_t TTL_TENNAT_TASK_TABLET_ID = -1;
   const static uint64_t TTL_TENNAT_TASK_TABLE_ID = -1;
 private:
