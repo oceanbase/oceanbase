@@ -97,6 +97,10 @@ public:
     NORMAL_COLUMN_GROUP_SSTABLE = 18,
     ROWKEY_COLUMN_GROUP_SSTABLE = 19,
     COLUMN_ORIENTED_META_SSTABLE = 20,
+    DDL_MERGE_CO_SSTABLE = 21, // used for column store ddl, for base sstable
+    DDL_MERGE_CG_SSTABLE = 22, // used for column store ddl, for normal cg sstable, rowkey cg not supported
+    DDL_MEM_CO_SSTABLE = 23,
+    DDL_MEM_CG_SSTABLE = 24,
     // < add new sstable before here, See is_sstable()
 
     MAX_TABLE_TYPE

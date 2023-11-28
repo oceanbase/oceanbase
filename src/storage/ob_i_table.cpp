@@ -70,7 +70,11 @@ const char* ObITable::table_type_name_[] =
   "COL_ORIENTED",
   "NORMAL_COL_GROUP",
   "ROWKEY_COL_GROUP",
-  "COL_ORIENTED_META"
+  "COL_ORIENTED_META",
+  "DDL_MERGE_CO",
+  "DDL_MERGE_CG",
+  "DDL_MEM_CO",
+  "DDL_MEM_CG"
 };
 
 uint64_t ObITable::TableKey::hash() const
