@@ -129,13 +129,14 @@ public:
     : inited_(false),
       job_key_(NULL),
       ready_queue_(NULL),
+      allocator_(NULL),
       wait_vector_(0, NULL, ObModIds::VECTOR),
       lock_(common::ObLatchIds::DBMS_SCHEDULER_TASK_LOCK) {}
 
   virtual ~ObDBMSSchedJobTask() {}
 
   int init();
-  int start(dbms_job::ObDBMSJobQueue *ready_queue);
+  int start(dbms_job::ObDBMSJobQueue *ready_queue, common::ObVSliceAlloc *allocator);
   int stop();
   int destroy();
 
@@ -154,6 +155,7 @@ private:
   bool inited_;
   ObDBMSSchedJobKey *job_key_;
   dbms_job::ObDBMSJobQueue *ready_queue_;
+  common::ObVSliceAlloc *allocator_;
   WaitVector wait_vector_;
 
   ObSpinLock lock_;
@@ -176,6 +178,7 @@ public:
       job_rpc_proxy_(NULL),
       self_addr_(),
       lock_(common::ObLatchIds::DBMS_SCHEDULER_MASTER_LOCK),
+      allocator_(ObMemAttr(OB_SERVER_TENANT_ID, "DbmsScheduler"), OB_MALLOC_NORMAL_BLOCK_SIZE, block_alloc_),
       alive_jobs_() {}
 
   virtual ~ObDBMSSchedJobMaster() { alive_jobs_.destroy(); };
@@ -274,7 +277,8 @@ private:
   ObDBMSSchedTableOperator table_operator_;
 
   common::ObSpinLock lock_;
-  common::ObArenaAllocator allocator_;
+  common::ObBlockAllocMgr block_alloc_;
+  common::ObVSliceAlloc allocator_;
 
   common::hash::ObHashSet<JobIdByTenant> alive_jobs_;
 

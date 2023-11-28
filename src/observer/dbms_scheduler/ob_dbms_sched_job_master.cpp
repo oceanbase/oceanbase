@@ -56,7 +56,7 @@ int ObDBMSSchedJobTask::init()
   return ret;
 }
 
-int ObDBMSSchedJobTask::start(dbms_job::ObDBMSJobQueue *ready_queue)
+int ObDBMSSchedJobTask::start(dbms_job::ObDBMSJobQueue *ready_queue, ObVSliceAlloc *allocator)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -66,6 +66,7 @@ int ObDBMSSchedJobTask::start(dbms_job::ObDBMSJobQueue *ready_queue)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL ptr", K(ret), K(ready_queue));
   }
+  allocator_ = allocator;
   ready_queue_ = ready_queue;
   OZ (timer_.start());
   return ret;
@@ -81,9 +82,20 @@ int ObDBMSSchedJobTask::stop()
     timer_.cancel(*this);
     timer_.stop();
     timer_.wait();
+    if (allocator_ != NULL) {
+      for (WaitVectorIterator iter = wait_vector_.begin();
+              OB_SUCC(ret) && iter != wait_vector_.end(); ++iter) {
+        ObDBMSSchedJobKey *job_key = *iter;
+        allocator_->free(job_key);
+      }
+    }
     wait_vector_.clear();
-    job_key_ = NULL;
+    if (job_key_ != NULL) {
+      allocator_->free(job_key_);
+      job_key_ = NULL;
+    }
     ready_queue_ = NULL;
+    allocator_ = NULL;
   }
   return ret;
 }
@@ -173,6 +185,10 @@ int ObDBMSSchedJobTask::add_new_job(ObDBMSSchedJobKey *new_job_key)
     if (OB_ISNULL(job_key_)) {
       job_key_ = new_job_key;
       OZ (timer_.schedule(*this, job_key_->get_delay()));
+      if (OB_FAIL(ret)) {
+        LOG_ERROR("timer schedule failed", K(ret), K(new_job_key));
+        job_key_ = NULL;
+      }
     } else if (new_job_key->get_execute_at() >= job_key_->get_execute_at()) {
       WaitVectorIterator iter;
       ObDBMSSchedJobKey *replace_job_key = NULL;
@@ -183,6 +199,10 @@ int ObDBMSSchedJobTask::add_new_job(ObDBMSSchedJobKey *new_job_key)
       OZ (wait_vector_.insert(job_key_, iter, compare_job_key));
       OX (job_key_ = new_job_key);
       OZ (timer_.schedule(*this, job_key_->get_delay()));
+      if (OB_FAIL(ret)) {
+        LOG_ERROR("timer schedule failed", K(ret), K(new_job_key));
+        job_key_ = NULL;
+      }
     }
   }
   return ret;
@@ -293,7 +313,7 @@ int ObDBMSSchedJobMaster::start()
     // alreay running , do nothing ...
   } else if (OB_FAIL(scheduler_thread_.push(static_cast<void *>(this)))) {
     LOG_WARN("fail to start scheduler thread", K(ret));
-  } else if (OB_FAIL(scheduler_task_.start(&ready_queue_))) {
+  } else if (OB_FAIL(scheduler_task_.start(&ready_queue_, &allocator_))) {
     LOG_WARN("fail to start ready queue", K(ret));
   }
   LOG_INFO("dbms sched job master started", K(ret));
@@ -308,6 +328,20 @@ int ObDBMSSchedJobMaster::stop()
     sleep(1);
   }
   scheduler_task_.stop();
+  ObLink* ptr = NULL;
+  ObDBMSSchedJobKey *job_key = NULL;
+  int64_t timeout = 10 * 1000L;
+  while (OB_SUCC(ret) && ready_queue_.size() > 0) {
+    if (OB_FAIL(ready_queue_.pop(ptr, timeout))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        LOG_INFO("dbms sched job master wait timeout, no entry", K(ret));
+      } else {
+        LOG_ERROR("fail to pop dbms sched job ready queue", K(ret), K(timeout));
+      }
+    } else if (OB_NOT_NULL(job_key = static_cast<ObDBMSSchedJobKey *>(ptr))) {
+      allocator_.free(job_key);
+    }
+  }
   ready_queue_.clear();
   alive_jobs_.clear();
   stoped_ = false;
@@ -383,7 +417,7 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
     OZ (table_operator_.get_dbms_sched_job_info(
       job_key->get_tenant_id(), job_key->is_oracle_tenant(), job_key->get_job_id(), job_key->get_job_name(), allocator, job_info));
 
-    if (OB_FAIL(ret) || !job_info.valid()) {
+    if (OB_FAIL(ret) || !job_info.valid() || job_info.is_disabled() || job_info.is_broken()) {
       int tmp = alive_jobs_.erase_refactored(job_id_by_tenant);
       if (tmp != OB_SUCCESS) {
         LOG_ERROR("failed delete invalid job from hash set", K(tmp), K(ret), K(job_info), KPC(job_key));
@@ -395,7 +429,7 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
       bool ignore_nextdate = false;
       if (!job_key->is_check() && !job_info.is_running() && !job_info.is_broken() && !job_info.is_disabled()) {
         bool can_running = false;
-        OZ (table_operator_.check_job_can_running(job_info.get_tenant_id(), can_running));
+        OZ (table_operator_.check_job_can_running(job_info.get_tenant_id(), alive_jobs_.size(), can_running));
         if (OB_SUCC(ret) && can_running) {
           OZ (get_execute_addr(job_info, execute_addr));
           OZ (table_operator_.update_for_start(
@@ -410,7 +444,7 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
       int tmp_ret = OB_SUCCESS;
       // always add job to queue. we need this to check job status changes.
       if (OB_SUCCESS != (tmp_ret = register_job(job_info, job_key, ignore_nextdate))) {
-        LOG_WARN("failed to register job to job queue", K(tmp_ret), K(job_info));
+        LOG_WARN("some error happened, erase job", K(ret), K(tmp_ret), K(job_info));
         int tmp = alive_jobs_.erase_refactored(job_id_by_tenant);
         if (tmp != OB_SUCCESS) {
           LOG_ERROR("failed delete invalid job from hash set", K(tmp), K(job_info));
@@ -428,7 +462,7 @@ int ObDBMSSchedJobMaster::destroy()
   ready_queue_.destroy();
   scheduler_task_.destroy();
   scheduler_thread_.destroy();
-  allocator_.clear();
+  allocator_.destroy();
   return OB_SUCCESS;
 }
 
@@ -520,7 +554,7 @@ int ObDBMSSchedJobMaster::server_random_pick(int64_t tenant_id, ObString &pick_z
     bool is_alive = false;
     bool is_active = false;
     bool on_server = false;
-    int64_t pos = rand_.get(0,255) % total_server.count();
+    int64_t pos = rand_.get(0,65536) % total_server.count();
     int64_t cnt = 0;
     do {
       pos = (pos + 1) % total_server.count();
@@ -566,7 +600,14 @@ int ObDBMSSchedJobMaster::check_all_tenants()
       const ObTenantSchema *tenant_schema = NULL;
       OZ (schema_guard.get_tenant_info(tenant_ids.at(i), tenant_schema));
       CK (OB_NOT_NULL(tenant_schema));
-      if (OB_SUCC(ret)) {
+      int64_t tenant_id = tenant_ids.at(i);
+      bool is_tenant_standby = false;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObAllTenantInfoProxy::is_standby_tenant(GCTX.sql_proxy_, tenant_id, is_tenant_standby))) {
+        LOG_WARN("check is standby tenant failed", K(ret), K(tenant_id));
+      } else if (is_tenant_standby) {
+        LOG_INFO("tenant is standby, not check new jobs", K(tenant_id));
+      } else {
         uint64_t data_version = 0;
         if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_ids.at(i), data_version))) {
           LOG_WARN("fail to get tenant data version", KR(ret), K(data_version));
@@ -602,7 +643,7 @@ int ObDBMSSchedJobMaster::register_new_jobs(uint64_t tenant_id, bool is_oracle_t
   JobIdByTenant job_id_by_tenant;
   for (int64_t i = 0; OB_SUCC(ret) && i < job_infos.count(); i++) {
     job_info = job_infos.at(i);
-    if (job_info.valid()) {
+    if (job_info.valid() && !job_info.is_disabled()) {
       job_id_by_tenant.set_tenant_id(job_info.get_tenant_id());
       job_id_by_tenant.set_job_id(job_info.get_job_id());
       int tmp = alive_jobs_.exist_refactored(job_id_by_tenant);
@@ -610,8 +651,11 @@ int ObDBMSSchedJobMaster::register_new_jobs(uint64_t tenant_id, bool is_oracle_t
         // do nothing ...
         LOG_DEBUG("job exist", K(alive_jobs_), K(job_id_by_tenant));
       } else if (OB_HASH_NOT_EXIST == tmp) {
-        OZ (register_job(job_info));
         OZ (alive_jobs_.set_refactored(job_id_by_tenant));
+        OZ (register_job(job_info));
+        if (OB_FAIL(ret)) {
+          alive_jobs_.erase_refactored(job_id_by_tenant);
+        }
         LOG_INFO("register new job", K(ret), K(tenant_id), K(job_info));
       } else {
         LOG_ERROR("dbms sched job master check job exist failed", K(ret), K(job_info));

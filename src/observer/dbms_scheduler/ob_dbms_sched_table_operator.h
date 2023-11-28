@@ -80,7 +80,7 @@ public:
   int calc_execute_at(
     ObDBMSSchedJobInfo &job_info, int64_t &execute_at, int64_t &delay, bool ignore_nextdate = false);
 
-  int check_job_can_running(int64_t tenant_id, bool &can_running);
+  int check_job_can_running(int64_t tenant_id, int64_t alive_job_count, bool &can_running);
 
   int check_job_timeout(ObDBMSSchedJobInfo &job_info);
 
