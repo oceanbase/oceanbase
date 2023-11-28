@@ -1488,7 +1488,8 @@ int ObLSTabletService::update_tablet_report_status(const common::ObTabletID &tab
 
 int ObLSTabletService::update_tablet_restore_status(
     const common::ObTabletID &tablet_id,
-    const ObTabletRestoreStatus::STATUS &restore_status)
+    const ObTabletRestoreStatus::STATUS &restore_status,
+    const bool need_reset_transfer_flag)
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
@@ -1527,7 +1528,7 @@ int ObLSTabletService::update_tablet_restore_status(
       LOG_WARN("can not change restore status", K(ret), K(current_status), K(restore_status), KPC(tablet));
     } else if (OB_FAIL(tablet->tablet_meta_.ha_status_.set_restore_status(restore_status))) {
       LOG_WARN("failed to set restore status", K(ret), K(restore_status), KPC(tablet));
-    } else if (restore_status == ObTabletRestoreStatus::UNDEFINED
+    } else if (need_reset_transfer_flag
                && OB_FALSE_IT((void)tablet->tablet_meta_.reset_transfer_table())) {
     } else {
       // TODO(jiahua.cjh) move check valid to tablet init after generate new version tablet.
@@ -1545,7 +1546,7 @@ int ObLSTabletService::update_tablet_restore_status(
         ob_abort();
       } else {
         time_guard.click("CASwap");
-        LOG_INFO("succeeded to build new tablet", K(ret), K(key), K(disk_addr), K(restore_status), K(tablet_handle));
+        LOG_INFO("succeeded to build new tablet", K(ret), K(key), K(disk_addr), K(restore_status), K(need_reset_transfer_flag), K(tablet_handle));
       }
       if (OB_FAIL(ret)) {
         int tmp_ret = OB_SUCCESS;
