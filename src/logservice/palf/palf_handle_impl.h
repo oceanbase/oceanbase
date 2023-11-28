@@ -236,10 +236,10 @@ public:
   }
   bool is_valid() const
   {
-    return (committed_end_lsn_.is_valid()
-            && last_submit_lsn_.is_valid()
-            && INVALID_PROPOSAL_ID != last_submit_log_pid_);
+    //last_submit_log_pid_ may be INVALID_PROPOSAL_ID when newly created replica has never synced any log
+    return (committed_end_lsn_.is_valid() && last_submit_lsn_.is_valid());
   }
+
   bool operator==(const RebuildMetaInfo &other) const
   {
     return (committed_end_lsn_ == other.committed_end_lsn_
