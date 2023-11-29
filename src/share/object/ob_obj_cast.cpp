@@ -6205,6 +6205,7 @@ static int text_text(const ObObjType expect_type, ObObjCastParams &params,
     }
   } else {
     out = in;
+    out.set_type(expect_type); // set expect_type
   }
   LOG_DEBUG("obj text cast to text", K(in), K(out),
     K(ret), K(in_type), K(out_type), K(in_cs_type), K(out_cs_type));
