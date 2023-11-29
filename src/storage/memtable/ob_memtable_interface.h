@@ -230,7 +230,11 @@ public:
     int64_t ref_cnt = ObITable::dec_ref();
     checkpoint::ObCheckpointDiagnoseMgr *cdm = MTL(checkpoint::ObCheckpointDiagnoseMgr*);
     if (0 == ref_cnt) {
-      REPORT_CHECKPOINT_DIAGNOSE_INFO(update_start_gc_time_for_checkpoint_unit, trace_id_, get_tablet_id())
+      if (get_tablet_id().is_ls_inner_tablet()) {
+        REPORT_CHECKPOINT_DIAGNOSE_INFO(update_start_gc_time_for_checkpoint_unit, trace_id_, get_tablet_id())
+      } else {
+        REPORT_CHECKPOINT_DIAGNOSE_INFO(update_start_gc_time_for_memtable, trace_id_, get_tablet_id())
+      }
     }
     return ref_cnt;
   }

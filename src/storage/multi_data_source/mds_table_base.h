@@ -112,7 +112,7 @@ public:
   trace_id_(checkpoint::INVALID_TRACE_ID) { construct_sequence_ = ObMdsGlobalSequencer::generate_senquence(); }
   virtual ~MdsTableBase()
   {
-    REPORT_CHECKPOINT_DIAGNOSE_INFO(update_start_gc_time_for_memtable, trace_id_, tablet_id_);
+    REPORT_CHECKPOINT_DIAGNOSE_INFO(update_start_gc_time_for_checkpoint_unit, trace_id_, tablet_id_);
   }
   int init(const ObTabletID tablet_id,
            const share::ObLSID ls_id,

@@ -16,7 +16,6 @@
 #include "ob_common_checkpoint.h"
 #include "common/ob_tablet_id.h"
 #include "share/ob_ls_id.h"
-#include "lib/lock/ob_rwlock.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/ob_errno.h"
 #include "share/ob_define.h"
@@ -155,7 +154,7 @@ struct ObCheckpointUnitDiagnoseInfo
     K_(merge_finish_time), K_(start_gc_time));
 private:
   // lock/unlock in ObTraceInfo
-  obsys::ObRWLock lock_;
+  common::SpinRWLock lock_;
 };
 
 struct ObMemtableDiagnoseInfo : public ObCheckpointUnitDiagnoseInfo
@@ -205,7 +204,7 @@ public:
       const int64_t checkpoint_start_time);
   void reset()
   {
-    obsys::ObWLockGuard lock(lock_);
+    SpinRLockGuard lock(lock_);
     reset_without_lock_();
   }
   void reset_without_lock_();
@@ -250,7 +249,7 @@ public:
   ObArenaAllocator allocator_;
   ObCheckpointUnitDiagnoseInfoMap checkpoint_unit_diagnose_info_map_;
   ObMemtableDiagnoseInfoMap memtable_diagnose_info_map_;
-  obsys::ObRWLock lock_;
+  common::SpinRWLock lock_;
 };
 
 #define DEF_UPDATE_TIME_FUNCTOR(function, diagnose_info_type, diagnose_info_time)         \
@@ -358,7 +357,7 @@ int ObTraceInfo::add_diagnose_info(const ObCheckpointDiagnoseParam &param,
     const OP &op)
 {
   int ret = OB_SUCCESS;
-  obsys::ObRLockGuard lock(lock_);
+  SpinRLockGuard lock(lock_);
   if (check_trace_id_(param)) {
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(sizeof(T)))) {
@@ -366,7 +365,7 @@ int ObTraceInfo::add_diagnose_info(const ObCheckpointDiagnoseParam &param,
       TRANS_LOG(WARN, "failed to alloc", KR(ret));
     } else {
       T *diagnose_info = new (ptr)T();
-      obsys::ObWLockGuard lock(diagnose_info->lock_);
+      SpinRLockGuard lock(diagnose_info->lock_);
       op(*diagnose_info);
       if (OB_FAIL(get_diagnose_info_map_<T>().set_refactored(param.key_, diagnose_info,
               0 /* not overwrite */ ))) {
@@ -382,7 +381,7 @@ int ObTraceInfo::update_diagnose_info(const ObCheckpointDiagnoseParam &param,
     const OP &op)
 {
   int ret = OB_SUCCESS;
-  obsys::ObRLockGuard lock(lock_);
+  SpinRLockGuard lock(lock_);
 
   if (check_trace_id_(param)) {
     T *diagnose_info = NULL;
@@ -392,7 +391,7 @@ int ObTraceInfo::update_diagnose_info(const ObCheckpointDiagnoseParam &param,
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "diagnose info is NULL", KR(ret), K(param.key_), KPC(this));
     } else {
-      obsys::ObWLockGuard lock(diagnose_info->lock_);
+      SpinRLockGuard lock(diagnose_info->lock_);
       op(*diagnose_info);
     }
   }
@@ -405,7 +404,7 @@ int ObTraceInfo::read_diagnose_info(const int64_t trace_id,
 {
   int ret = OB_SUCCESS;
   TRANS_LOG(INFO, "read_diagenose_info in ObTraceInfo", KPC(this));
-  obsys::ObRLockGuard lock(lock_);
+  SpinRLockGuard lock(lock_);
   if (check_trace_id_(trace_id)) {
     FOREACH(iter, get_diagnose_info_map_<T>()) {
       ObCheckpointDiagnoseKey key = iter->first;
@@ -414,7 +413,7 @@ int ObTraceInfo::read_diagnose_info(const int64_t trace_id,
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "diagnose_info is NULL", KR(ret), K(key));
       } else {
-        obsys::ObRLockGuard diagnose_lock(diagnose_info->lock_);
+        SpinRLockGuard diagnose_lock(diagnose_info->lock_);
         if (OB_FAIL(op(*this, key, *diagnose_info))) {
           TRANS_LOG(WARN, "failed to op in read_diagnose_info", KR(ret), K(key), K(diagnose_info));
         }
@@ -429,7 +428,7 @@ int ObTraceInfo::read_trace_info(const int64_t trace_id, const OP &op)
 {
   int ret = OB_SUCCESS;
   TRANS_LOG(INFO, "read_trace_info in ObTraceInfo", KPC(this));
-  obsys::ObRLockGuard lock(lock_);
+  SpinRLockGuard lock(lock_);
   if (INVALID_TRACE_ID == trace_id
       || check_trace_id_(trace_id)) {
     if (OB_FAIL(op(*this))) {
@@ -499,7 +498,7 @@ private:
   int64_t first_pos_;
   int64_t last_pos_;
   ObTraceInfo trace_info_arr_[MAX_TRACE_INFO_ARR_SIZE];
-  obsys::ObRWLock pos_lock_;
+  common::SpinRWLock pos_lock_;
   // max count of trace_info, others in trace_info_arr  will be reset
   int64_t max_trace_info_size_;
   bool is_inited_;
@@ -535,7 +534,7 @@ int ObCheckpointDiagnoseMgr::read_trace_info(const OP &op)
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "ObCheckpointDiagnoseMgr not inited.", KR(ret));
   } else {
-    obsys::ObRLockGuard lock(pos_lock_);
+    SpinRLockGuard lock(pos_lock_);
     if (get_trace_info_count() > 0) {
       for (int64_t i = first_pos_; OB_SUCC(ret) && i <= last_pos_; i++) {
         ret = trace_info_arr_[i % MAX_TRACE_INFO_ARR_SIZE].read_trace_info(i, op);
