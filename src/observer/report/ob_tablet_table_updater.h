@@ -244,6 +244,11 @@ private:
   int reput_to_queue_(
     const common::ObIArray<ObTabletTableUpdateTask> &tasks);
 
+  int check_tenant_status_(
+      const uint64_t tenant_id,
+      bool &tenant_dropped,
+      bool &schema_not_ready);
+
 private:
   const int64_t MINI_MODE_UPDATE_TASK_THREAD_CNT = 1;
   const int64_t MIN_UPDATE_TASK_THREAD_CNT = 2;
