@@ -281,7 +281,8 @@ int ObPLPackageState::make_pkg_var_kv_value(ObPLExecCtx &ctx, ObObj &var_val, in
       ObPLResolveCtx resolve_ctx(*ctx.allocator_,
                                  *sql_session,
                                  *ctx.exec_ctx_->get_sql_ctx()->schema_guard_,
-                                 package_guard,
+                                 nullptr != ctx.exec_ctx_->get_package_guard() ? *ctx.exec_ctx_->get_package_guard()
+                                                                                 : package_guard,
                                  *ctx.exec_ctx_->get_sql_proxy(),
                                  false /*is_ps*/);
       OZ (sql_session->get_pl_engine()
