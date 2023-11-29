@@ -6378,6 +6378,8 @@ def_table_schema(
 # 502 : __all_trusted_root_certificate
 # 503 : __all_audit_log_filter
 # 504 : __all_audit_log_user
+# 505 : __all_column_privilege
+# 506 : __all_column_privilege_history
 #
 # 余留位置
 ################################################################################
@@ -13195,7 +13197,8 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12459: __all_virtual_index_usage_info
 # 12460: __all_virtual_audit_log_filter
 # 12461: __all_virtual_audit_log_user
-
+# 12462: __all_virtual_column_privilege
+# 12463: __all_virtual_column_privilege_history
 # 余留位置
 #
 
@@ -30260,7 +30263,7 @@ def_table_schema(
 #21513 CDB_INDEX_USAGE
 #21514 mysql.audit_log_filter
 #21515 mysql.audit_log_user
-
+#21516 mysql.columns_priv
 # 余留位置
 
 ################################################################################
@@ -55668,7 +55671,7 @@ def_sys_index_table(
 # 101097 : placeholder for index of __all_mview_refresh_stats
 # 101098 : placeholder for index of __all_transfer_partition_task
 # 101099 : placeholder for index of __all_client_to_server_session_info
-
+# 101100 : placeholder for index of __all_column_privilege
 ################################################################################
 # Oracle Agent table Index
 def_agent_index_table(
