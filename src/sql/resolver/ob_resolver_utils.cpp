@@ -942,9 +942,11 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
       ObObjType src_type;
       if (T_SP_CPARAM == first_arg->get_expr_type()) {
         ObCallParamRawExpr *call_expr = static_cast<ObCallParamRawExpr*>(first_arg);
+        OZ (call_expr->get_expr()->extract_info());
         OZ (call_expr->get_expr()->deduce_type(&resolve_ctx.session_info_));
         OZ (get_type_and_type_id(call_expr->get_expr(), src_type, src_type_id));
       } else {
+        OZ (first_arg->extract_info());
         OZ (first_arg->deduce_type(&resolve_ctx.session_info_));
         OZ (get_type_and_type_id(first_arg, src_type, src_type_id));
       }
@@ -983,6 +985,7 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
       ObCallParamRawExpr* call_expr = static_cast<ObCallParamRawExpr*>(expr_params.at(i));
       OX (has_assign_param = true);
       CK (OB_NOT_NULL(call_expr) && OB_NOT_NULL(call_expr->get_expr()));
+      OZ (call_expr->get_expr()->extract_info());
       OZ (call_expr->get_expr()->deduce_type(&resolve_ctx.session_info_));
       CK (!call_expr->get_name().empty());
       OZ (routine_info->find_param_by_name(call_expr->get_name(), position));
@@ -993,6 +996,7 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
       LOG_WARN("can not set param without assign after param with assign",
                K(ret), K(i), K(expr_params), K(match_info));
     } else {
+      OZ (expr_params.at(i)->extract_info());
       OZ (expr_params.at(i)->deduce_type(&resolve_ctx.session_info_));
       OX (position = i + offset);
       OX (expr = expr_params.at(i));
