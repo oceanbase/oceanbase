@@ -1402,7 +1402,7 @@ struct NullAwareAntiJoinInfo {
                                 ObIArray<ObRawExpr*> &subquery_exprs);
 
     int param_json_table_expr(ObRawExpr* &json_table_expr,
-                              ObExecParamRawExpr*& nl_params,
+                              ObIArray<ObExecParamRawExpr *> &nl_params,
                               ObIArray<ObRawExpr*> &subquery_exprs);
     int generate_json_table_default_val(ObIArray<ObExecParamRawExpr *> &nl_param,
                                         ObIArray<ObRawExpr *> &subquery_exprs,

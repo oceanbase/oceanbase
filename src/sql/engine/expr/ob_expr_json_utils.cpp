@@ -1351,8 +1351,7 @@ int ObJsonUtil::cast_to_res(common::ObIAllocator *allocator,
 {
   INIT_SUCC(ret);
   ObJsonUtil::ObJsonCastSqlScalar cast_func_ = get_json_cast_func(cast_param.dst_type_);
-  if (OB_ISNULL(j_base)
-      || (lib::is_mysql_mode() && j_base->json_type() == common::ObJsonNodeType::J_NULL)) {
+  if (OB_ISNULL(j_base)) {
     res.set_null();
   } else if (OB_ISNULL(cast_func_)) {
     ret = OB_ERR_UNEXPECTED;

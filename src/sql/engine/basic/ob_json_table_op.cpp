@@ -1741,7 +1741,8 @@ int ObRegCol::eval_regular_col(void *in, JtScanCtx* ctx, bool& is_null_value)
     } else if (ctx->is_json_table_func()
               && curr_ && NOT_DATUM == res_flag_
               && static_cast<ObIJsonBase*>(curr_)->json_type() == ObJsonNodeType::J_NULL
-            && !static_cast<ObIJsonBase*>(curr_)->is_real_json_null(static_cast<ObIJsonBase*>(curr_))) {
+              && (!static_cast<ObIJsonBase*>(curr_)->is_real_json_null(static_cast<ObIJsonBase*>(curr_))
+                  || lib::is_mysql_mode())) {
       curr_ = nullptr;
     }
   }
@@ -2566,7 +2567,7 @@ int JsonTableFunc::init_ctx(ObRegCol &scan_node, JtScanCtx*& ctx)
       }
     }
   }
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) || COL_TYPE_ORDINALITY == scan_node.type()) {
   } else if (scan_node.node_type() == REG_TYPE) {
     if (!scan_node.is_emp_evaled_) {
       need_eval = false;
@@ -2611,6 +2612,9 @@ int JsonTableFunc::init_ctx(ObRegCol &scan_node, JtScanCtx*& ctx)
     scan_node.res_flag_ = ResultType::NOT_DATUM;
     ObExpr* col_expr = ctx->spec_ptr_->column_exprs_.at(scan_node.col_info_.output_column_idx_);
     if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(scan_node.path_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to resolve json path", K(ret), K(scan_node.col_info_.path_));
     } else if (OB_FAIL(set_expr_exec_param(scan_node, ctx))) {
       LOG_WARN("fail to init expr param", K(ret));
     } else if (OB_FAIL(RegularCol::check_item_method_json(scan_node, ctx))) {

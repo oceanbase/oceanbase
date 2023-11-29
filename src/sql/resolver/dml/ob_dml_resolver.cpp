@@ -9249,7 +9249,7 @@ int ObDMLResolver::generate_json_table_output_column_item(TableItem *table_item,
 
   OX (col_expr->set_database_name(table_item->database_name_));
   if (OB_FAIL(ret)) {
-  } else if (OB_SUCC(ret) && lib::is_oracle_mode() && ob_is_enumset_tc(col_expr->get_data_type())) {
+  } else if (lib::is_oracle_mode() && ob_is_enumset_tc(col_expr->get_data_type())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support enum set in table function", K(ret));
   } else {
