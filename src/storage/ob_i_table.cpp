@@ -74,7 +74,8 @@ const char* ObITable::table_type_name_[] =
   "DDL_MERGE_CO",
   "DDL_MERGE_CG",
   "DDL_MEM_CO",
-  "DDL_MEM_CG"
+  "DDL_MEM_CG",
+  "MDS"
 };
 
 uint64_t ObITable::TableKey::hash() const
