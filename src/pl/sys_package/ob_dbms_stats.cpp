@@ -5243,10 +5243,10 @@ int ObDbmsStats::gather_database_stats_job_proc(sql::ObExecContext &ctx,
   } else if (lib::is_mysql_mode() && !params.empty() && !params.at(0).is_null() &&
              OB_FAIL(params.at(0).get_int(duration_time))) {
     LOG_WARN("failed to get duration", K(ret), K(params.at(0)));
-  } else if (duration_time > 0) {
-    THIS_WORKER.set_timeout_ts(duration_time);
-  }
-  if (OB_SUCC(ret)) {
+  } else {
+    if (duration_time > 0) {
+      THIS_WORKER.set_timeout_ts(duration_time + ObTimeUtility::current_time());
+    }
     if (OB_FAIL(ObOptStatMonitorManager::flush_database_monitoring_info(ctx))) {
       LOG_WARN("failed to flush database monitoring info", K(ret));
     } else if (OB_FAIL(init_gather_task_info(ctx, ObOptStatGatherType::AUTO_GATHER, start_time, 0, task_info))) {
