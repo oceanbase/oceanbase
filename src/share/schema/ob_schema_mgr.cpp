@@ -22,6 +22,7 @@
 #include "observer/ob_server_struct.h"
 #include "rootserver/ob_root_utils.h"
 #include "sql/dblink/ob_dblink_utils.h"
+#include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase
 {
