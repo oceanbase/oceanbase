@@ -2205,5 +2205,20 @@ int ObDWARFHelper::find_function_from_pc(uint64_t pc, ObDIEAddress &func)
   return ret;
 }
 
+int ObLLVMHelper::add_compiled_object(size_t length, const char *ptr)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(jit_));
+  CK (OB_NOT_NULL(ptr));
+  CK (OB_LIKELY(length > 0));
+  OX (jit_->add_compiled_object(length, ptr));
+  return ret;
 }
+
+const ObString& ObLLVMHelper::get_compiled_object()
+{
+  return jit_->get_compiled_object();
+}
+
+} // namespace jit
 }

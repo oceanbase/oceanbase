@@ -6302,12 +6302,32 @@ def_table_schema(
 # 482 : __all_tablet_reorganize_history
 # 483 : __all_storage_ha_error_diagnose
 # 484 : __all_storage_ha_perf_diagnose
-# 493 : __all_ncomp_dll
+
+all_ncomp_dll = dict(
+  owner = 'hr351303',
+  table_name = '__all_ncomp_dll',
+  table_id = '493',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('database_id', 'int', 'false'),
+    ('key_id', 'int'),
+    ('compile_db_id', 'int'),
+    ('arch_type', 'int'),
+  ],
+  in_tenant_space = True,
+
+  normal_columns = [
+    ('merge_version', 'int'),
+    ('dll', 'longblob', 'true',''),
+  ],
+)
+def_table_schema(**all_ncomp_dll)
+
 # 495 : __all_index_usage_info
 #
 # 余留位置
 ################################################################################
-
 
 
 # Virtual Table (10000, 20000]

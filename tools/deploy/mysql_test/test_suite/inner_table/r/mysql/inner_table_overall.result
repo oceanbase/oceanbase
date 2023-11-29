@@ -260,6 +260,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 478	__all_import_table_job_history	0	201001	1
 479	__all_import_table_task	0	201001	1
 480	__all_import_table_task_history	0	201001	1
+493	__all_ncomp_dll	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1

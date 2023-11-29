@@ -19,7 +19,6 @@
 #include "lib/string/ob_string.h"
 #include "lib/string/ob_sql_string.h"
 #include "share/schema/ob_ddl_sql_service.h"
-#include "share/schema/ob_dependency_info.h"
 #include "share/config/ob_server_config.h"
 #include "share/ob_get_compat_mode.h"
 #include "share/ob_partition_modify.h"

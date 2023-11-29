@@ -34,6 +34,7 @@ ob_set_subtarget(ob_pl common
   ob_pl_stmt.cpp
   ob_pl_type.cpp
   ob_pl_user_type.cpp
+  ob_pl_persistent.cpp
 )
 
 ob_set_subtarget(ob_pl pl_cache

@@ -81,7 +81,10 @@ int ObPLCacheMgr::get_pl_cache(ObPlanCache *lib_cache, ObCacheObjGuard& guard, O
   int ret = OB_SUCCESS;
   ObGlobalReqTimeService::check_req_timeinfo();
   pc_ctx.handle_id_ = guard.get_ref_handle();
-  if (OB_FAIL(get_pl_object(lib_cache, pc_ctx, guard))) {
+  if (OB_NOT_NULL(pc_ctx.session_info_) &&
+      false == pc_ctx.session_info_->get_local_ob_enable_pl_cache()) {
+    // do nothing
+  } else if (OB_FAIL(get_pl_object(lib_cache, pc_ctx, guard))) {
     PL_CACHE_LOG(DEBUG, "fail to get plan", K(ret));
   } else if (OB_ISNULL(guard.get_cache_obj())) {
     ret = OB_ERR_UNEXPECTED;
@@ -133,6 +136,9 @@ int ObPLCacheMgr::add_pl_cache(ObPlanCache *lib_cache, ObILibCacheObject *pl_obj
   if (OB_ISNULL(lib_cache)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lib cache is null");
+  } else if (OB_NOT_NULL(pc_ctx.session_info_) &&
+              false == pc_ctx.session_info_->get_local_ob_enable_pl_cache()) {
+    // do nothing
   } else if (OB_ISNULL(pl_object)) {
      ret = OB_INVALID_ARGUMENT;
      PL_CACHE_LOG(WARN, "invalid physical plan", K(ret));

@@ -282,6 +282,7 @@ _enable_oracle_priv_check
 _enable_parallel_minor_merge
 _enable_parallel_table_creation
 _enable_partition_level_retry
+_enable_persistent_compiled_routine
 _enable_pkt_nio
 _enable_plan_cache_mem_diagnosis
 _enable_protocol_diagnose
