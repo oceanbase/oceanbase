@@ -119,13 +119,15 @@ int ObExprJsonSchemaValidationReport::eval_json_schema_validation_report(const O
     if (OB_FAIL(j_schema_bin.reset_iter())) {
       LOG_WARN("fail to reset iter for new json bin", K(ret));
     } else {
+      // schema validation only seek, do not need reserve parent stack
+      j_schema_bin.set_seek_flag(true);
       j_schema = &j_schema_bin;
     }
   }
 
   if (OB_FAIL(ret)) {
   } else if (!is_null_result && OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, 1,
-                                             j_doc, is_null_result, false, true, true))) {
+                                             j_doc, is_null_result, false, false, true))) {
     LOG_WARN("get_json_doc failed", K(ret));
   } else if (is_null_result) {
     res.set_null();

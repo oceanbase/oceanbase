@@ -500,7 +500,7 @@ TEST_F(TestJsonSchema, test_parse_add_pro)
 # define PATTERN_PRO_ADD 2
 ObString pattern_pro_add_str[PATTERN_PRO_ADD] = {
   "{\"schema\": {\"type\": 32, \"required\": [\"name\", \"email\"]}, \"properties\": {\"I_0\": {\"schema\": {\"type\": 128, \"maxLength\": 20}}, \"S_25\": {\"schema\": {\"type\": 128, \"maxLength\": 20}}}, \"patternProperties\": {\"^I_\": {\"schema\": {\"type\": 16}}, \"^S_\": {\"schema\": {\"type\": 4}}, \"^[SI]*\": {\"schema\": {\"maxLength\": 20}}}, "
-  "\"additionalProperties\": [[[\"I_0\", \"S_25\"], [\"^I_\", \"^S_\", \"^[SI]*\"]], {\"schema\": {\"type\": 4}}]}",
+  "\"additionalProperties\": [[[\"I_0\", \"S_25\", \"name\", \"email\"], [\"^I_\", \"^S_\", \"^[SI]*\"]], {\"schema\": {\"type\": 4}}]}",
   "{}",
 };
 TEST_F(TestJsonSchema, test_parse_pattern_pro_additional)

@@ -230,10 +230,12 @@ int ObJsonExprHelper::get_const_json_schema(const common::ObObj &data, const cha
   } else if (ObJsonExprHelper::is_convertible_to_json(val_type)) {
     ObCollationType cs_type = data.get_collation_type();
     ObIJsonBase* j_base = nullptr;
+    // whether it is Oracle or MySQL, only lowercase true/false is considered a Boolean value
+    // so, use strict mode
     if (OB_FAIL(ObJsonExprHelper::transform_convertible_2jsonBase(data, val_type, allocator,
                                                                   cs_type, j_base, ObConv2JsonParam(false,
                                                                   data.has_lob_header(), false,
-                                                                  true, true, true)))) {
+                                                                  lib::is_oracle_mode(), true, true)))) {
       if (ret == OB_ERR_NULL_VALUE || ret == OB_ERR_INVALID_JSON_TEXT) { // json_str is null
         if (lib::is_oracle_mode()) {
           ret = OB_ERR_JSON_SYNTAX_ERROR;

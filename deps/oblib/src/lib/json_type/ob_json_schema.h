@@ -211,6 +211,7 @@ private:
   int handle_properties(ObJsonObject*& json_schema, bool is_composition, ObJsonArray*comp_array, ObIArray<ObJsonObject*>& pro_array);
   int handle_pattern_properties(ObJsonObject* json_schema, ObJsonObject* pro_schema, bool is_composition,
                                 ObJsonArray* comp_array, const ObIArray<ObJsonObject*>& pro_array);
+  int add_required_key(ObJsonNode* pro, ObJsonNode* required, ObJsonArray* pro_key_array);
   int handle_additional_properties(ObJsonSubSchemaKeywords& key_words, ObJsonObject* json_schema, bool is_composition, ObJsonArray* comp_array);
   int handle_array_schema(ObJsonObject* json_schema, bool is_composition, ObJsonArray*comp_array, bool is_additonal);
   int handle_array_tuple_schema(ObJsonObject* json_schema, bool is_composition, ObJsonArray*comp_array);
@@ -427,6 +428,9 @@ public:
   static bool check_multiple_of(const double& json_val, const double& multi_val);
   static ObString get_pointer_key(ObString& ref_str, bool& end_while);
   static int set_valid_number_type_by_mode(ObIJsonBase *json_doc, ObJsonSchemaType& valid_type);
+  static bool is_legal_json_pointer_name(const ObString& name);
+  static bool is_legal_json_pointer_start(const char& ch);
+  static bool is_legal_json_pointer_char(const char& ch);
 };
 
 } // namespace common
