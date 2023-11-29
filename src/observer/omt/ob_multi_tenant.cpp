@@ -133,6 +133,7 @@
 #include "rootserver/ob_heartbeat_service.h"
 #include "share/detect/ob_detect_manager.h"
 #include "observer/table/ttl/ob_ttl_service.h"
+#include "storage/high_availability/ob_storage_ha_diagnose_mgr.h"
 #ifdef ERRSIM
 #include "share/errsim_module/ob_tenant_errsim_module_mgr.h"
 #include "share/errsim_module/ob_tenant_errsim_event_mgr.h"
@@ -525,7 +526,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     }
     MTL_BIND2(mtl_new_default, rootserver::ObHeartbeatService::mtl_init, nullptr, rootserver::ObHeartbeatService::mtl_stop, rootserver::ObHeartbeatService::mtl_wait, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, table::ObTTLService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
-
+    MTL_BIND2(mtl_new_default, storage::ObStorageHADiagMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
 #ifdef ERRSIM
     MTL_BIND2(mtl_new_default, ObTenantErrsimModuleMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTenantErrsimEventMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);

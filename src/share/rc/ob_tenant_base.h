@@ -181,6 +181,7 @@ namespace observer
 }
 namespace storage {
   class MockTenantModuleEnv;
+  class ObStorageHADiagMgr;
 }
 
 namespace share
@@ -318,7 +319,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       table::ObHTableLockMgr*,                      \
       table::ObTTLService*,                         \
       table::ObTableApiSessPoolMgr*,                \
-      storage::checkpoint::ObCheckpointDiagnoseMgr* \
+      storage::checkpoint::ObCheckpointDiagnoseMgr*,\
+      storage::ObStorageHADiagMgr*                  \
   )
 
 

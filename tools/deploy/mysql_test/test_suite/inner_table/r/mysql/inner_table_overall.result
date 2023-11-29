@@ -260,6 +260,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 478	__all_import_table_job_history	0	201001	1
 479	__all_import_table_task	0	201001	1
 480	__all_import_table_task_history	0	201001	1
+483	__all_storage_ha_error_diagnose_history	0	201001	1
+484	__all_storage_ha_perf_diagnose_history	0	201001	1
 493	__all_ncomp_dll	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
@@ -664,6 +666,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12426	__all_virtual_import_table_task	2	201001	1
 12427	__all_virtual_import_table_task_history	2	201001	1
 12429	__all_virtual_data_activity_metrics	2	201001	1
+12433	__all_virtual_storage_ha_error_diagnose	2	201001	1
+12434	__all_virtual_storage_ha_perf_diagnose	2	201001	1
 12437	__all_virtual_checkpoint_diagnose_memtable_info	2	201001	1
 12438	__all_virtual_checkpoint_diagnose_checkpoint_unit_info	2	201001	1
 12439	__all_virtual_checkpoint_diagnose_info	2	201001	1

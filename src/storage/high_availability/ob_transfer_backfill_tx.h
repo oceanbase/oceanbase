@@ -16,6 +16,7 @@
 #include "ob_storage_ha_struct.h"
 #include "ob_storage_ha_dag.h"
 #include "share/scn.h"
+#include "share/ob_storage_ha_diagnose_struct.h"
 
 namespace oceanbase
 {
@@ -86,6 +87,7 @@ public:
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual bool is_valid() const;
   virtual DagNetCtxType get_dag_net_ctx_type() { return ObIHADagNetCtx::TRANSFER_BACKFILL_TX; }
+  const share::ObLSID &get_ls_id() const { return dest_ls_id_; }
 public:
   uint64_t tenant_id_;
 #ifdef ERRSIM
@@ -250,6 +252,14 @@ private:
   int check_major_sstable_(
       const ObTablet *tablet,
       const ObTabletMemberWrapper<ObTabletTableStore> &table_store_wrapper);
+  void process_transfer_perf_diagnose_(
+      const int64_t timestamp,
+      const int64_t start_ts,
+      const bool is_report,
+      const share::ObLSID &dest_ls_id,
+      const share::SCN &log_sync_scn,
+      const common::ObTabletID &tablet_id,
+      const share::ObStorageHACostItemName name) const;
 private:
   bool is_inited_;
   ObTransferBackfillTXCtx *ctx_;

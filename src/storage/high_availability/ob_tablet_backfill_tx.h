@@ -121,6 +121,13 @@ private:
   int get_all_backfill_tx_tables_(
       ObTablet *tablet,
       common::ObIArray<ObTableHandleV2> &table_array);
+  int get_diagnose_support_info_(share::ObLSID &dest_ls_id, share::SCN &log_sync_scn) const;
+  void process_transfer_perf_diagnose_(
+      const int64_t timestamp,
+      const int64_t start_ts,
+      const bool is_report,
+      const ObStorageHACostItemName name,
+      const int result) const;
 private:
   bool is_inited_;
   ObBackfillTXCtx *backfill_tx_ctx_;
@@ -148,6 +155,14 @@ private:
   int do_backfill_tx_();
   int prepare_partition_merge_();
   int update_merge_sstable_();
+  int get_diagnose_support_info_(share::ObLSID &dest_ls_id, share::SCN &log_sync_scn) const;
+  void process_transfer_perf_diagnose_(
+      const int64_t timestamp,
+      const int64_t start_ts,
+      const bool is_report,
+      const ObStorageHACostItemType type,
+      const ObStorageHACostItemName name,
+      const int result) const;
 
 private:
   bool is_inited_;
