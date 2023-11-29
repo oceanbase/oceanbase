@@ -113,7 +113,7 @@ int ObExprJsonQuery::calc_returning_type(ObExprResType& type,
     ObJsonPath j_path(j_path_text, allocator);
     if (j_path_text.length() == 0) {
       dst_type.set_type(ObObjType::ObVarcharType);
-      dst_type.set_collation_type(CS_TYPE_INVALID);
+      dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
       dst_type.set_full_length(VARCHAR2_DEFAULT_LEN, 1);
     } else if (OB_FAIL(j_path.parse_path())) {
       ret = OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR;
@@ -123,7 +123,7 @@ int ObExprJsonQuery::calc_returning_type(ObExprResType& type,
       dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
     } else {
       dst_type.set_type(ObObjType::ObVarcharType);
-      dst_type.set_collation_type(CS_TYPE_INVALID);
+      dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
       dst_type.set_full_length(VARCHAR2_DEFAULT_LEN, 1);
     }
   } else if (OB_FAIL(ObJsonExprHelper::get_cast_type(types_stack[JSN_QUE_RET], dst_type))) {

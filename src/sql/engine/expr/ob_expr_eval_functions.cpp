@@ -1044,15 +1044,30 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprCurrentScn::eval_current_scn,                                 /* 606 */
   ObExprTempTableSSID::calc_temp_table_ssid,                          /* 607 */
   ObExprAlignDate4Cmp::eval_align_date4cmp,                            /* 608 */
-  ObExprJsonObjectStar::eval_ora_json_object_star,                    /* 609 */
-  ObExprJsonSchemaValid::eval_json_schema_valid,                       /* 610 */
-  ObExprJsonSchemaValidationReport::eval_json_schema_validation_report,/* 611 */
-  ObExprInsertChildXml::eval_insert_child_xml,                        /* 612 */
-  ObExprDeleteXml::eval_delete_xml,                                   /* 613 */
-  ObExprExtractValue::eval_mysql_extract_value,                       /* 614 */
-  ObExprUpdateXml::eval_mysql_update_xml,                             /* 615 */
-  ObExprXmlSequence::eval_xml_sequence,                               /* 616 */
-  ObExprJsonAppend::eval_json_array_append,                           /* 617 */
+  NULL, //ObExprMod::mod_decimalint,                                  /* 609 */
+  NULL, //calc_bool_expr_for_decint_type,                             /* 610 */
+  NULL, //ObExprIs::decimal_int_is_true,                              /* 611 */
+  NULL, //ObExprIs::decimal_int_is_false,                             /* 612 */
+  NULL, //ObExprIsNot::decimal_int_is_not_true,                       /* 613 */
+  NULL, //ObExprIsNot::decimal_int_is_not_false,                      /* 614 */
+  NULL, //ObExprInnerIsTrue::int_is_true_start,                       /* 615 */
+  NULL, //ObExprInnerIsTrue::int_is_true_end,                         /* 616 */
+  NULL, //ObExprInnerIsTrue::float_is_true_start,                     /* 617 */
+  NULL, //ObExprInnerIsTrue::float_is_true_end,                       /* 618 */
+  NULL, //ObExprInnerIsTrue::double_is_true_start,                    /* 619 */
+  NULL, //ObExprInnerIsTrue::double_is_true_end,                      /* 620 */
+  NULL, //ObExprInnerIsTrue::number_is_true_start,                    /* 621 */
+  NULL, //ObExprInnerIsTrue::number_is_true_end,                      /* 622 */
+  NULL, //ObExprInnerDecodeLike::eval_inner_decode_like               /* 623 */
+  ObExprJsonSchemaValid::eval_json_schema_valid,                      /* 624 */
+  ObExprJsonSchemaValidationReport::eval_json_schema_validation_report, /* 625 */
+  ObExprInsertChildXml::eval_insert_child_xml,                        /* 626 */
+  ObExprDeleteXml::eval_delete_xml,                                   /* 627 */
+  ObExprExtractValue::eval_mysql_extract_value,                       /* 628 */
+  ObExprUpdateXml::eval_mysql_update_xml,                             /* 629 */
+  ObExprXmlSequence::eval_xml_sequence,                               /* 630 */
+  ObExprJsonAppend::eval_json_array_append,                           /* 631 */
+  ObExprJsonObjectStar::eval_ora_json_object_star                     /* 632 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
