@@ -7326,7 +7326,9 @@ int ObTablet::get_boundary_memtable(ObTableHandleV2 &handle) const
   if (OB_FAIL(get_protected_memtable_mgr_handle(protected_handle))) {
     LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret), KPC(this));
   } else if (OB_FAIL(protected_handle->get_boundary_memtable(handle))) {
-    LOG_WARN("failed to get boundary memtable", K(ret));
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("failed to get boundary memtable", K(ret));
+    }
   }
   return ret;
 }
