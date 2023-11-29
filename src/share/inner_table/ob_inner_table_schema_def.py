@@ -2795,7 +2795,7 @@ def_table_schema(
       ('user_message', 'longtext', 'true'),
       ('dba_message', 'varchar:OB_MAX_ERROR_MSG_LEN', 'true'),
       ('parent_task_id', 'int', 'false', 0),
-      ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'false', 'NULL')
+      ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true')
     ],
 )
 
