@@ -1160,6 +1160,14 @@ int ObTabletMergeTask::process()
   return ret;
 }
 
+ObTxTableMergeDag::~ObTxTableMergeDag()
+{
+  if (param_.is_reserve_mode_) {
+    MTL(ObTenantCompactionMemPool *)->release_reserve_mem();
+    FLOG_INFO("TxTable Compaction Leave the Reserve Mode", K(param_));
+  }
+}
+
 ObTabletMiniMergeDag::~ObTabletMiniMergeDag()
 {
   if (param_.is_reserve_mode_) {
