@@ -1300,23 +1300,20 @@ int ObDbmsStatsExecutor::update_online_stat(ObExecContext &ctx,
   if (OB_SUCC(ret)) {
     SMART_VAR(sql::ObSQLSessionInfo::StmtSavedValue, saved_value) {
       int64_t nested_count = -1;
-      ObExecContext *origin_exec_ctx = NULL;
       ObSqlString old_db_name;
       int64_t old_db_id = -1;
       int64_t old_trx_lock_timeout = -1;
       bool need_restore_session = false;
       bool need_reset_default_database = false;
       bool need_reset_trx_lock_timeout = false;
-      observer::ObInnerSQLConnection *conn = NULL;
-      const ObString stash_savepoint_name("online stat stash savepoint");
-      bool has_stash_savepoint = false;
+      common::sqlclient::ObISQLConnection *conn = NULL;
+      ctx.set_is_online_stats_gathering(true);
       //lib::CompatModeGuard guard(lib::Worker::CompatMode::MYSQL);
       if (OB_FAIL(prepare_conn_and_store_session_for_online_stats(ctx.get_my_session(),
                                                                   ctx.get_sql_proxy(),
                                                                   schema_guard,
                                                                   saved_value,
                                                                   nested_count,
-                                                                  origin_exec_ctx,
                                                                   old_db_name,
                                                                   old_db_id,
                                                                   old_trx_lock_timeout,
@@ -1341,32 +1338,20 @@ int ObDbmsStatsExecutor::update_online_stat(ObExecContext &ctx,
                                                            cur_column_stats,
                                                            column_stats))) {
         LOG_WARN("fail to merge col stats", K(ret), K(cur_column_stats));
-      } else if (OB_FAIL(ObSqlTransControl::create_stash_savepoint(ctx, stash_savepoint_name))) {
-        LOG_WARN("failed to create stash savepoint", K(ret));
+      } else if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(ctx, conn, table_stats, column_stats, false, true))) {
+        LOG_WARN("fail to update stat", K(ret), K(table_stats), K(column_stats));
+      } else if (OB_FAIL(ObBasicStatsEstimator::update_last_modified_count(conn, param))) {
+        LOG_WARN("failed to update last modified count", K(ret));
       } else {
-        //The purpose of creating stash savepoint is to prevent tx desc info from being reset due to update lock conflict failure.
-        has_stash_savepoint = true;
-        if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(ctx, conn, table_stats, column_stats, false, true))) {
-          LOG_WARN("fail to update stat", K(ret), K(table_stats), K(column_stats));
-        } else if (OB_FAIL(ObBasicStatsEstimator::update_last_modified_count(conn, param))) {
-          LOG_WARN("failed to update last modified count", K(ret));
-        } else {
-          succ_to_write_stats = true;
-        }
+        succ_to_write_stats = true;
       }
-      if (ret == OB_ERR_EXCLUSIVE_LOCK_CONFLICT) {
+      if (ret == OB_ERR_EXCLUSIVE_LOCK_CONFLICT || ret == OB_ERR_SHARED_LOCK_CONFLICT) {
         ret = OB_SUCCESS;
         LOG_INFO("update online stats occur lock conflict, just skip");
       }
       //release source
       //guard.~CompatModeGuard();
-      if (has_stash_savepoint) {
-        int pop_ret = ObSqlTransControl::release_stash_savepoint(ctx, stash_savepoint_name);
-        if (OB_SUCCESS != pop_ret && OB_SAVEPOINT_NOT_EXIST != pop_ret) {
-          LOG_WARN("fail to release stash savepoint", K(pop_ret));
-          ret = OB_SUCCESS == ret ? pop_ret : ret;
-        }
-      }
+      ctx.set_is_online_stats_gathering(false);
       if (OB_NOT_NULL(conn)) {
         int tmp_ret = OB_SUCCESS;
         ctx.get_sql_proxy()->close(conn, tmp_ret);
@@ -1378,7 +1363,6 @@ int ObDbmsStatsExecutor::update_online_stat(ObExecContext &ctx,
         if (OB_SUCCESS != (tmp_ret = restore_session_for_online_stat(ctx.get_my_session(),
                                                                      saved_value,
                                                                      nested_count,
-                                                                     origin_exec_ctx,
                                                                      old_db_name,
                                                                      old_db_id,
                                                                      old_trx_lock_timeout,
@@ -1406,14 +1390,13 @@ int ObDbmsStatsExecutor::prepare_conn_and_store_session_for_online_stats(sql::Ob
                                                                          share::schema::ObSchemaGetterGuard *schema_guard,
                                                                          sql::ObSQLSessionInfo::StmtSavedValue &saved_value,
                                                                          int64_t &nested_count,
-                                                                         ObExecContext *origin_exec_ctx,
                                                                          ObSqlString &old_db_name,
                                                                          int64_t &old_db_id,
                                                                          int64_t &old_trx_lock_timeout,
                                                                          bool &need_restore_session,
                                                                          bool &need_reset_default_database,
                                                                          bool &need_reset_trx_lock_timeout,
-                                                                         observer::ObInnerSQLConnection *&conn)
+                                                                         sqlclient::ObISQLConnection *&conn)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(session) || OB_ISNULL(sql_proxy) || OB_ISNULL(schema_guard)) {
@@ -1425,14 +1408,11 @@ int ObDbmsStatsExecutor::prepare_conn_and_store_session_for_online_stats(sql::Ob
   } else {
     need_restore_session = true;
     nested_count = session->get_nested_count();
-    origin_exec_ctx = session->get_cur_exec_ctx();
     //2.modify seesion info
     //2.1 modify query start time
     session->set_query_start_time(ObTimeUtility::current_time());
     session->set_inner_session();
     session->set_nested_count(-1);
-    typedef ObSQLSessionInfo::ExecCtxSessionRegister MyExecCtxSessionRegister;
-    MyExecCtxSessionRegister ctx_register(*session, NULL);
     if (OB_FAIL(old_db_name.append(session->get_database_name()))) {
       LOG_WARN("failed to append", K(ret));
     } else {
@@ -1468,8 +1448,8 @@ int ObDbmsStatsExecutor::prepare_conn_and_store_session_for_online_stats(sql::Ob
             if (OB_ISNULL(pool = static_cast<observer::ObInnerSQLConnectionPool *>(sql_proxy->get_pool()))) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("get unexpected error", K(ret), K(pool));
-            } else if OB_FAIL(pool->acquire_spi_conn(session, conn)) {
-              LOG_WARN("failed to acquire spi conn", K(ret));
+            } else if (OB_FAIL(pool->acquire(session, conn))) {
+              LOG_WARN("failed to acquire conn", K(ret));
             }
           }
         }
@@ -1482,7 +1462,6 @@ int ObDbmsStatsExecutor::prepare_conn_and_store_session_for_online_stats(sql::Ob
 int ObDbmsStatsExecutor::restore_session_for_online_stat(sql::ObSQLSessionInfo *session,
                                                          sql::ObSQLSessionInfo::StmtSavedValue &saved_value,
                                                          int64_t nested_count,
-                                                         ObExecContext *origin_exec_ctx,
                                                          ObSqlString &old_db_name,
                                                          int64_t old_db_id,
                                                          int64_t old_trx_lock_timeout,
@@ -1499,8 +1478,6 @@ int ObDbmsStatsExecutor::restore_session_for_online_stat(sql::ObSQLSessionInfo *
       LOG_WARN("failed to restore session", K(ret), K(session));
     } else {
       session->set_nested_count(nested_count);
-      typedef ObSQLSessionInfo::ExecCtxSessionRegister MyExecCtxSessionRegister;
-      MyExecCtxSessionRegister ctx_register(*session, origin_exec_ctx);
     }
     //2.restore seesion compatible oracle mode
     if (lib::is_oracle_mode()) {

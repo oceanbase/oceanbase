@@ -479,6 +479,8 @@ public:
     return ret;
   }
   int get_local_var_array(int64_t local_var_array_id, const ObLocalSessionVar *&var_array);
+  void set_is_online_stats_gathering(bool v) { is_online_stats_gathering_ = v; }
+  bool is_online_stats_gathering() const { return is_online_stats_gathering_; }
 private:
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);
   int set_phy_op_ctx_ptr(uint64_t index, void *phy_op);
@@ -658,6 +660,8 @@ protected:
   ObExecFeedbackInfo fb_info_;
   // for dml report user warning/error at specific row
   int64_t cur_row_num_;
+  // for online stats gathering
+  bool is_online_stats_gathering_;
   //---------------
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
