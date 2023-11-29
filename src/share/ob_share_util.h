@@ -21,10 +21,6 @@ namespace common
 class ObTimeoutCtx;
 class ObISQLClient;
 }
-namespace storage
-{
-  class ObLS;
-}
 namespace share
 {
 
@@ -122,11 +118,6 @@ public:
     const uint64_t tenant_id,
     const ObSqlString &sql,
     SCN &ora_rowscn);
-  // wait the given ls's end_scn be larger than or equal to sys_ls_target_scn
-  // @params[in]: sys_ls_target_scn
-  // @params[in]: ls
-  static int wait_user_ls_sync_scn_locally(const share::SCN &sys_ls_target_scn, storage::ObLS &ls);
-
   static bool is_tenant_enable_rebalance(const uint64_t tenant_id);
   static bool is_tenant_enable_transfer(const uint64_t tenant_id);
 };
