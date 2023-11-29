@@ -99,7 +99,8 @@
                                                               "bucket_cnt," \
                                                               "histogram_type," \
                                                               "global_stats," \
-                                                              "user_stats) VALUES "
+                                                              "user_stats,"\
+                                                              "spare1) VALUES "
 
 
 #define INSERT_HISTOGRAM_STAT_SQL "INSERT INTO __all_histogram_stat(tenant_id," \
@@ -239,6 +240,7 @@
                                             "col_stat.bucket_cnt as bucket_cnt,"     \
                                             "col_stat.density as density,"        \
                                             "col_stat.last_analyzed as last_analyzed,"\
+                                            "col_stat.spare1 as compress_type,"\
                                             "hist_stat.endpoint_num as endpoint_num, "    \
                                             "hist_stat.b_endpoint_value as b_endpoint_value," \
                                             "hist_stat.endpoint_repeat_cnt as endpoint_repeat_cnt "\
@@ -258,8 +260,6 @@ using namespace share::schema;
 using namespace common::sqlclient;
 namespace common
 {
-
-const char *ObOptStatSqlService::bitmap_compress_lib_name = "zlib_1.0";
 
 ObOptStatSqlService::ObOptStatSqlService()
     : inited_(false), mysql_proxy_(nullptr), mutex_(ObLatchIds::DEFAULT_MUTEX), config_(nullptr)
@@ -905,8 +905,11 @@ int ObOptStatSqlService::get_column_stat_sql(const uint64_t tenant_id,
   char *llc_hex_buf = NULL;
   int64_t llc_comp_size = 0;
   int64_t llc_hex_size = 0;
-  if (OB_UNLIKELY(ObHistType::INVALID_TYPE != stat.get_histogram().get_type() &&
-                  stat.get_histogram().get_bucket_cnt() == 0)) {
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get tenant data version", KR(ret), K(tenant_id), K(data_version));
+  } else if (OB_UNLIKELY(ObHistType::INVALID_TYPE != stat.get_histogram().get_type() &&
+                         stat.get_histogram().get_bucket_cnt() == 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(stat));
   } else if (OB_FAIL(get_valid_obj_str(stat.get_min_value(), min_meta, allocator, min_str, print_params)) ||
@@ -918,6 +921,8 @@ int ObOptStatSqlService::get_column_stat_sql(const uint64_t tenant_id,
   } else if (stat.get_llc_bitmap_size() <= 0) {
     // do nothing
   } else if (OB_FAIL(get_compressed_llc_bitmap(allocator,
+                                               data_version < DATA_VERSION_4_2_2_0 ? bitmap_compress_lib_name[ObOptStatCompressType::ZSTD_COMPRESS] :
+                                                                                     bitmap_compress_lib_name[ObOptStatCompressType::ZSTD_1_3_8_COMPRESS],
                                                stat.get_llc_bitmap(),
                                                stat.get_llc_bitmap_size(),
                                                llc_comp_buf,
@@ -955,7 +960,9 @@ int ObOptStatSqlService::get_column_stat_sql(const uint64_t tenant_id,
         OB_FAIL(dml_splicer.add_column("bucket_cnt", stat.get_histogram().get_bucket_cnt())) ||
         OB_FAIL(dml_splicer.add_column("histogram_type", stat.get_histogram().get_type())) ||
         OB_FAIL(dml_splicer.add_column("global_stats", 0)) ||
-        OB_FAIL(dml_splicer.add_column("user_stats", 0))) {
+        OB_FAIL(dml_splicer.add_column("user_stats", 0)) ||
+        OB_FAIL(dml_splicer.add_column("spare1", data_version < DATA_VERSION_4_2_2_0 ? ObOptStatCompressType::ZSTD_COMPRESS :
+                                                                                       ObOptStatCompressType::ZSTD_1_3_8_COMPRESS))) {
       LOG_WARN("failed to add dml splicer column", K(ret));
     } else if (OB_FAIL(dml_splicer.splice_values(sql_string))) {
       LOG_WARN("failed to get sql string", K(ret));
@@ -1314,20 +1321,27 @@ int ObOptStatSqlService::fill_column_stat(ObIAllocator &allocator,
           EXTRACT_VARCHAR_FIELD_MYSQL(result, "distinct_cnt_synopsis", hex_str);
           char *bitmap_buf = NULL;
           if (OB_SUCC(ret) && llc_bitmap_size > 0) {
-            if (NULL == (bitmap_buf = static_cast<char*>(allocator.alloc(hex_str.length())))) {
-              ret = OB_ALLOCATE_MEMORY_FAILED;
-              LOG_ERROR("allocate memory for llc_bitmap failed.", K(hex_str.length()), K(ret));
-            } else {
-              common::str_to_hex(hex_str.ptr(), hex_str.length(), bitmap_buf, hex_str.length());
-              // decompress llc bitmap;
-              char *decomp_buf = NULL ;
-              int64_t decomp_size = ObOptColumnStat::NUM_LLC_BUCKET;
-              const int64_t bitmap_size = hex_str.length() / 2;
-              if (OB_FAIL(get_decompressed_llc_bitmap(allocator, bitmap_buf,
-                                                      bitmap_size, decomp_buf, decomp_size))) {
-                COMMON_LOG(WARN, "decompress bitmap buffer failed.", K(ret));
+            int64_t compress_type = ObOptStatCompressType::MAX_COMPRESS;
+            EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "compress_type", compress_type, int64_t, true, false, ObOptStatCompressType::ZSTD_COMPRESS);
+            if (OB_SUCC(ret)) {
+              if (OB_UNLIKELY(compress_type < 0 || compress_type >= ObOptStatCompressType::MAX_COMPRESS)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("get unexpected error", K(ret), K(compress_type));
+              } else if (NULL == (bitmap_buf = static_cast<char*>(allocator.alloc(hex_str.length())))) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_ERROR("allocate memory for llc_bitmap failed.", K(hex_str.length()), K(ret));
               } else {
-                stat->set_llc_bitmap(decomp_buf, decomp_size);
+                common::str_to_hex(hex_str.ptr(), hex_str.length(), bitmap_buf, hex_str.length());
+                // decompress llc bitmap;
+                char *decomp_buf = NULL ;
+                int64_t decomp_size = ObOptColumnStat::NUM_LLC_BUCKET;
+                const int64_t bitmap_size = hex_str.length() / 2;
+                if (OB_FAIL(get_decompressed_llc_bitmap(allocator, bitmap_compress_lib_name[compress_type], bitmap_buf,
+                                                        bitmap_size, decomp_buf, decomp_size))) {
+                  COMMON_LOG(WARN, "decompress bitmap buffer failed.", K(ret));
+                } else {
+                  stat->set_llc_bitmap(decomp_buf, decomp_size);
+                }
               }
             }
           }
@@ -1355,6 +1369,7 @@ int ObOptStatSqlService::fill_column_stat(ObIAllocator &allocator,
 }
 
 int ObOptStatSqlService::get_compressed_llc_bitmap(ObIAllocator &allocator,
+                                                   const char *bitmap_compress_name,
                                                    const char *bitmap_buf,
                                                    int64_t bitmap_size,
                                                    char *&comp_buf,
@@ -1363,20 +1378,20 @@ int ObOptStatSqlService::get_compressed_llc_bitmap(ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   ObCompressor *compressor  = NULL;
   int64_t max_comp_size = 0;
-  if (NULL == bitmap_buf || bitmap_size <= 0) {
+  if (NULL == bitmap_buf || bitmap_size <= 0 || bitmap_compress_name == NULL) {
     ret = common::OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid arguments.", KP(bitmap_buf), K(bitmap_size), K(ret));
+    COMMON_LOG(WARN, "invalid arguments.", KP(bitmap_buf), K(bitmap_size), K(bitmap_compress_name), K(ret));
   } else if (OB_FAIL(ObCompressorPool::get_instance().get_compressor(
-      bitmap_compress_lib_name, compressor))) {
+      bitmap_compress_name, compressor))) {
     COMMON_LOG(WARN, "cannot create compressor, do not compress data.",
-               K(bitmap_compress_lib_name), K(ret));
+               K(bitmap_compress_name), K(ret));
   } else if (NULL == compressor) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(WARN, "compressor is NULL, do not compress data.",
-               K(bitmap_compress_lib_name), K(ret));
+               K(bitmap_compress_name), K(ret));
   } else if (OB_FAIL(compressor->get_max_overflow_size(bitmap_size, max_comp_size))) {
     COMMON_LOG(WARN, "get max overflow size failed.",
-               K(bitmap_compress_lib_name), K(bitmap_size), K(ret));
+               K(bitmap_compress_name), K(bitmap_size), K(ret));
   } else {
     max_comp_size += bitmap_size;
     if (NULL == (comp_buf = static_cast<char*>(allocator.alloc(max_comp_size)))) {
@@ -1402,6 +1417,7 @@ int ObOptStatSqlService::get_compressed_llc_bitmap(ObIAllocator &allocator,
 }
 
 int ObOptStatSqlService::get_decompressed_llc_bitmap(ObIAllocator &allocator,
+                                                     const char *bitmap_compress_name,
                                                      const char *comp_buf,
                                                      int64_t comp_size,
                                                      char *&bitmap_buf,
@@ -1411,7 +1427,10 @@ int ObOptStatSqlService::get_decompressed_llc_bitmap(ObIAllocator &allocator,
   const int64_t max_bitmap_size = ObOptColumnStat::NUM_LLC_BUCKET; // max size of uncompressed buffer.
   ObCompressor* compressor = NULL;
 
-  if (comp_size >= ObOptColumnStat::NUM_LLC_BUCKET) {
+  if (OB_ISNULL(bitmap_compress_name)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(bitmap_compress_name));
+  } else if (comp_size >= ObOptColumnStat::NUM_LLC_BUCKET) {
     // not compressed bitmap, use directly;
     bitmap_buf = const_cast<char*>(comp_buf);
     bitmap_size = comp_size;
@@ -1419,13 +1438,13 @@ int ObOptStatSqlService::get_decompressed_llc_bitmap(ObIAllocator &allocator,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate memory for uncompressed data failed.", K(max_bitmap_size), K(ret));
   } else if (OB_FAIL(ObCompressorPool::get_instance().get_compressor(
-      bitmap_compress_lib_name, compressor)))  {
+      bitmap_compress_name, compressor)))  {
     LOG_WARN("cannot create compressor, do not uncompress data.",
-               K(bitmap_compress_lib_name), K(ret));
+               K(bitmap_compress_name), K(ret));
   } else if (NULL == compressor) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("compressor is NULL, do not compress data.",
-             K(bitmap_compress_lib_name), K(ret));
+             K(bitmap_compress_name), K(ret));
   } else if (OB_FAIL(compressor->decompress(comp_buf,
                                             comp_size,
                                             bitmap_buf,

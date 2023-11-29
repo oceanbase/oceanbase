@@ -37,7 +37,7 @@ namespace common {
 #define FETCH_COL_STATS_HISTROY "SELECT table_id, partition_id, column_id, object_type stat_level,\
                                  distinct_cnt num_distinct, null_cnt num_null, b_max_value,\
                                  b_min_value, avg_len, distinct_cnt_synopsis, distinct_cnt_synopsis_size,\
-                                 histogram_type, sample_size, bucket_cnt, density, last_analyzed\
+                                 histogram_type, sample_size, bucket_cnt, density, last_analyzed, spare1 as compress_type \
                                  FROM %s T WHERE tenant_id = %lu and table_id = %ld \
                                  and partition_id in %s and savtime in (SELECT min(savtime) From \
                                  %s TF where TF.tenant_id = T.tenant_id \
@@ -122,7 +122,8 @@ namespace common {
                                                    sample_size,               \
                                                    density,                   \
                                                    bucket_cnt,                \
-                                                   histogram_type) %s"
+                                                   histogram_type,            \
+                                                   spare1) %s"
 
 #define SELECT_COLUMN_STAT               "SELECT   tenant_id,                 \
                                                    table_id,                  \
@@ -144,12 +145,13 @@ namespace common {
                                                    sample_size,               \
                                                    density,                   \
                                                    bucket_cnt,                \
-                                                   histogram_type             \
+                                                   histogram_type,            \
+                                                   spare1                     \
                                              FROM %s                          \
                                              WHERE %s"
 
 #define COLUMN_STAT_MOCK_VALUE_PATTERN "(%lu, %lu, %ld, %lu, usec_to_time(%ld), 0, 0, usec_to_time(%ld), 0, 0, \
-                                         %s, '%.*s', %s, '%.*s', 0, '', 0, -1, 0.000000, 0, 0)"
+                                         %s, '%.*s', %s, '%.*s', 0, '', 0, -1, 0.000000, 0, 0, NULL)"
 
 #define INSERT_HISTOGRAM_STAT_HISTORY "INSERT INTO %s(tenant_id,                \
                                                       table_id,                 \
@@ -1350,21 +1352,28 @@ int ObDbmsStatsHistoryManager::fill_column_stat_history(ObIAllocator &allocator,
     EXTRACT_VARCHAR_FIELD_MYSQL(result, "distinct_cnt_synopsis", hex_str);
     char *bitmap_buf = NULL;
     if (OB_SUCC(ret) && llc_bitmap_size > 0) {
-      if (NULL == (bitmap_buf = static_cast<char*>(allocator.alloc(hex_str.length())))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("allocate memory for llc_bitmap failed.", K(hex_str.length()), K(ret));
-      } else {
-        common::str_to_hex(hex_str.ptr(), hex_str.length(), bitmap_buf, hex_str.length());
-        // decompress llc bitmap;
-        char *decomp_buf = NULL ;
-        int64_t decomp_size = ObOptColumnStat::NUM_LLC_BUCKET;
-        const int64_t bitmap_size = hex_str.length() / 2;
-        if (OB_FAIL(ObOptStatSqlService::get_decompressed_llc_bitmap(allocator, bitmap_buf,
-                                                                     bitmap_size, decomp_buf,
-                                                                     decomp_size))) {
-          COMMON_LOG(WARN, "decompress bitmap buffer failed.", K(ret));
+      int64_t compress_type = ObOptStatCompressType::MAX_COMPRESS;
+      EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "compress_type", compress_type, int64_t, true, false, ObOptStatCompressType::ZSTD_COMPRESS);
+      if (OB_SUCC(ret)) {
+        if (OB_UNLIKELY(compress_type < 0 || compress_type >= ObOptStatCompressType::MAX_COMPRESS)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected error", K(ret), K(compress_type));
+        } else if (NULL == (bitmap_buf = static_cast<char*>(allocator.alloc(hex_str.length())))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_ERROR("allocate memory for llc_bitmap failed.", K(hex_str.length()), K(ret));
         } else {
-          col_stat->set_llc_bitmap(decomp_buf, decomp_size);
+          common::str_to_hex(hex_str.ptr(), hex_str.length(), bitmap_buf, hex_str.length());
+          // decompress llc bitmap;
+          char *decomp_buf = NULL ;
+          int64_t decomp_size = ObOptColumnStat::NUM_LLC_BUCKET;
+          const int64_t bitmap_size = hex_str.length() / 2;
+          if (OB_FAIL(ObOptStatSqlService::get_decompressed_llc_bitmap(allocator, bitmap_compress_lib_name[compress_type],
+                                                                       bitmap_buf, bitmap_size,
+                                                                       decomp_buf, decomp_size))) {
+            COMMON_LOG(WARN, "decompress bitmap buffer failed.", K(ret));
+          } else {
+            col_stat->set_llc_bitmap(decomp_buf, decomp_size);
+          }
         }
       }
     }

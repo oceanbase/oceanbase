@@ -73,6 +73,15 @@ struct ObOptKeyColumnStat
                KPC_(stat),
                K(only_histogram_stat_));
 };
+
+enum ObOptStatCompressType
+{
+  ZSTD_COMPRESS               = 0,
+  ZSTD_1_3_8_COMPRESS         = 1,
+  MAX_COMPRESS                = 2
+};
+
+static const char *bitmap_compress_lib_name[ObOptStatCompressType::MAX_COMPRESS] = {"zlib_1.0", "zstd_1.3.8"};
 /**
  * SQL Service for fetching/updating table level statistics and column level statistics
  */
@@ -139,12 +148,14 @@ public:
                          const int64_t degree);
 
   static int get_decompressed_llc_bitmap(ObIAllocator &allocator,
+                                         const char *bitmap_compress_name,
                                          const char *comp_buf,
                                          int64_t comp_size,
                                          char *&bitmap_buf,
                                          int64_t &bitmap_size);
 
   static int get_compressed_llc_bitmap(ObIAllocator &allocator,
+                                       const char *bitmap_compress_name,
                                        const char *bitmap_buf,
                                        int64_t bitmap_size,
                                        char *&comp_buf,
@@ -263,8 +274,6 @@ private:
 
   int get_gather_stat_task_value(const ObOptStatTaskInfo &task_info,
                                  ObSqlString &values_str);
-
-  static const char *bitmap_compress_lib_name;
 
   bool inited_;
   ObMySQLProxy *mysql_proxy_;

@@ -804,7 +804,7 @@ int ObDbmsStats::delete_table_stats(ObExecContext &ctx, ParamStore &params, ObOb
     LOG_WARN("failed to get no invalidate", K(ret));
   } else if (!params.at(10).is_null() && OB_FAIL(params.at(10).get_bool(stat_param.force_))) {
     LOG_WARN("failed to get no invalidate", K(ret));
-  } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_1_2 &&
+  } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0 &&
              OB_FAIL(parse_degree_option(ctx, params.at(11), stat_param))) {
     LOG_WARN("parse degree param failed", K(ret));
   } else if (!cascade_columns) {
@@ -889,7 +889,7 @@ int ObDbmsStats::delete_column_stats(ObExecContext &ctx, ParamStore &params, ObO
                                               ctx.get_my_session()->get_dtc_params(),
                                               col_stat_type))) {
     LOG_WARN("failed to convert vaild ident name", K(ret));
-  } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_1_2 &&
+  } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0 &&
              OB_FAIL(parse_degree_option(ctx, params.at(11), stat_param))) {
     LOG_WARN("parse degree param failed", K(ret));
   } else if (0 == col_stat_type.case_compare("ALL")) {
@@ -965,7 +965,7 @@ int ObDbmsStats::delete_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
           LOG_WARN("failed to get no invalidate", K(ret));
         } else if (!params.at(5).is_null() && OB_FAIL(params.at(5).get_bool(stat_param.force_))) {
           LOG_WARN("failed to get no invalidate", K(ret));
-        } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_1_2 &&
+        } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0 &&
                    OB_FAIL(parse_degree_option(ctx, params.at(6), stat_param))) {
           LOG_WARN("parse degree param failed", K(ret));
         } else {
@@ -1052,7 +1052,7 @@ int ObDbmsStats::delete_index_stats(ObExecContext &ctx, ParamStore &params, ObOb
     LOG_WARN("failed to get no invalidate", K(ret));
   } else if (!params.at(9).is_null() && OB_FAIL(params.at(9).get_bool(index_stat_param.force_))) {
     LOG_WARN("failed to get force", K(ret));
-  } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_1_2 &&
+  } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0 &&
              OB_FAIL(parse_degree_option(ctx, params.at(11), index_stat_param))) {
     LOG_WARN("parse degree param failed", K(ret));
   } else {
@@ -5320,10 +5320,10 @@ int ObDbmsStats::gather_database_stats_job_proc(sql::ObExecContext &ctx,
   } else if (lib::is_mysql_mode() && !params.empty() && !params.at(0).is_null() &&
              OB_FAIL(params.at(0).get_int(duration_time))) {
     LOG_WARN("failed to get duration", K(ret), K(params.at(0)));
-  } else if (duration_time > 0) {
-    THIS_WORKER.set_timeout_ts(duration_time);
-  }
-  if (OB_SUCC(ret)) {
+  } else {
+    if (duration_time > 0) {
+      THIS_WORKER.set_timeout_ts(duration_time + ObTimeUtility::current_time());
+    }
     if (OB_FAIL(ObOptStatMonitorManager::flush_database_monitoring_info(ctx))) {
       LOG_WARN("failed to flush database monitoring info", K(ret));
     } else if (OB_FAIL(init_gather_task_info(ctx, ObOptStatGatherType::AUTO_GATHER, start_time, 0, task_info))) {
@@ -6240,7 +6240,7 @@ int ObDbmsStats::copy_table_stats(sql::ObExecContext &ctx,
   dummy_part_name.set_null();
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
-  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_1_2) {
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_2_0) {
     //do nothing
   } else if (OB_FAIL(parse_table_part_info(ctx,
                                     params.at(0),
