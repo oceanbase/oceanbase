@@ -2242,8 +2242,6 @@ int ObLSTabletService::create_memtable(
   ObTabletHandle old_tablet_handle;
   const ObTabletMapKey key(ls_->get_ls_id(), tablet_id);
   ObTabletHandle new_tablet_handle;
-  ObTabletMemberWrapper<ObTabletTableStore> table_store;
-  ObTabletMemberWrapper<share::ObTabletAutoincSeq> autoinc_seq;
 
   ObTimeGuard time_guard("ObLSTabletService::create_memtable", 10_ms);
   if (OB_UNLIKELY(!is_inited_)) {
