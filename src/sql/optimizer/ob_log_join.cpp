@@ -1392,6 +1392,8 @@ int ObLogJoin::check_if_disable_batch(ObLogicalOperator* root, bool &can_use_bat
       // For the global index lookup, if there is a pushdown filter when scanning the index,
       // batch cannot be used.
       can_use_batch_nlj = false;
+    } else if (ts->get_scan_direction() != default_asc_direction() && ts->get_scan_direction() != ObOrderDirection::UNORDERED) {
+      can_use_batch_nlj = false;
     } else {
       SMART_VAR(ObTablePartitionInfo, tmp_info) {
         ObTablePartitionInfo *tmp_info_ptr = &tmp_info;
