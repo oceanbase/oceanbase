@@ -66,6 +66,18 @@ struct ObTransferUtils
   static int get_gts(const uint64_t tenant_id, share::SCN &gts);
   static void set_transfer_module();
   static void clear_transfer_module();
+  static int get_need_check_member(
+      const common::ObIArray<ObAddr> &total_member_addr_list,
+      const common::ObIArray<ObAddr> &finished_member_addr_list,
+      common::ObIArray<ObAddr> &member_addr_list);
+  static int check_ls_replay_scn(
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      const share::SCN &check_scn,
+      const int32_t group_id,
+      const common::ObIArray<ObAddr> &member_addr_list,
+      ObTimeoutCtx &timeout_ctx,
+      common::ObIArray<ObAddr> &finished_addr_list);
 };
 
 } // end namespace storage

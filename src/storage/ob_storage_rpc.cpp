@@ -2696,12 +2696,31 @@ int ObGetTransferStartScnP::process()
   return ret;
 }
 
-ObFetchLSReplayScnP::ObFetchLSReplayScnP(
-    common::ObInOutBandwidthThrottle *bandwidth_throttle)
-    : ObStorageStreamRpcP(bandwidth_throttle)
+OFetchLSReplayScnDelegate::OFetchLSReplayScnDelegate(obrpc::ObFetchLSReplayScnRes &result)
+  : is_inited_(false),
+    arg_(),
+    result_(result)
 {
 }
-int ObFetchLSReplayScnP::process()
+
+int OFetchLSReplayScnDelegate::init(
+    const obrpc::ObFetchLSReplayScnArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("fetch ls replay scn delegate init twice", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arg", K(ret), K(arg));
+  } else {
+    arg_ = arg;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int OFetchLSReplayScnDelegate::process()
 {
   int ret = OB_SUCCESS;
   MTL_SWITCH(arg_.tenant_id_) {
@@ -2710,11 +2729,7 @@ int ObFetchLSReplayScnP::process()
     ObLS *ls = NULL;
     SCN max_decided_scn;
     LOG_INFO("start to fetch ls replay scn", K(arg_));
-    if (OB_ISNULL(bandwidth_throttle_)) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(ERROR, "bandwidth_throttle_ must not null", K(ret),
-                  KP_(bandwidth_throttle));
-    } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+    if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
     } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
@@ -2728,6 +2743,18 @@ int ObFetchLSReplayScnP::process()
       result_.replay_scn_ = max_decided_scn;
       LOG_INFO("get ls replay scn", K(max_decided_scn), K(arg_));
     }
+  }
+  return ret;
+}
+
+int ObFetchLSReplayScnP::process()
+{
+  int ret = OB_SUCCESS;
+  OFetchLSReplayScnDelegate delegate(result_);
+  if (OB_FAIL(delegate.init(arg_))) {
+    LOG_WARN("failed to init delegate", K(ret));
+  } else if (OB_FAIL(delegate.process())) {
+    LOG_WARN("failed to do process", K(ret), K_(arg));
   }
   return ret;
 }
@@ -3485,38 +3512,6 @@ int ObStorageRpc::get_transfer_start_scn(
       LOG_WARN("failed to get transfer start scn", K(ret), K(src_info), K(arg));
     } else {
       transfer_start_scn = res.start_scn_;
-    }
-  }
-  return ret;
-}
-
-int ObStorageRpc::fetch_ls_replay_scn(
-    const uint64_t tenant_id,
-    const ObStorageHASrcInfo &src_info,
-    const share::ObLSID &ls_id,
-    SCN &ls_replay_scn)
-{
-  int ret = OB_SUCCESS;
-  ls_replay_scn.reset();
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "storage rpc is not inited", K(ret));
-  } else if (tenant_id == OB_INVALID_ID || !src_info.is_valid() || !ls_id.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(src_info), K(ls_id));
-  } else {
-    ObFetchLSReplayScnArg arg;
-    ObFetchLSReplayScnRes res;
-    arg.tenant_id_ = tenant_id;
-    arg.ls_id_ = ls_id;
-    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
-                           .by(tenant_id)
-                           .dst_cluster_id(src_info.cluster_id_)
-                           .group_id(share::OBCG_STORAGE_HA_LEVEL2)
-                           .fetch_ls_replay_scn(arg, res))) {
-      LOG_WARN("failed to fetch ls replay scn", K(ret), K(src_info), K(arg));
-    } else {
-      ls_replay_scn = res.replay_scn_;
     }
   }
   return ret;

@@ -677,20 +677,23 @@ int ObTxFinishTransfer::wait_all_ls_replica_replay_scn_(const ObTransferTaskID &
     const int64_t quorum, ObTimeoutCtx &timeout_ctx, bool &check_passed)
 {
   int ret = OB_SUCCESS;
+  common::ObArray<common::ObAddr> finished_addr_list;
+
   while (OB_SUCC(ret)) {
     check_passed = false;
     if (timeout_ctx.is_timeouted()) {
       ret = OB_TIMEOUT;
       LOG_WARN("some ls replay not finished", K(ret), K(tenant_id), K(ls_id));
     } else if (OB_FAIL(check_all_ls_replica_replay_scn_(
-            task_id, tenant_id, ls_id, member_addr_list, finish_scn, quorum, check_passed))) {
+            task_id, tenant_id, ls_id, member_addr_list, finish_scn, timeout_ctx, finished_addr_list))) {
       LOG_WARN("failed to check all ls replica replay scn",
           K(ret),
           K(tenant_id),
           K(member_addr_list),
           K(ls_id),
           K(quorum));
-    } else if (check_passed) {
+    } else if (finished_addr_list.count() == member_addr_list.count()) {
+      check_passed = true;
       LOG_INFO("all ls has passed ls replica replay scn", K(tenant_id), K(ls_id));
       break;
     } else {
@@ -713,48 +716,19 @@ int ObTxFinishTransfer::wait_all_ls_replica_replay_scn_(const ObTransferTaskID &
 }
 
 int ObTxFinishTransfer::check_all_ls_replica_replay_scn_(const ObTransferTaskID &task_id, const uint64_t tenant_id,
-    const share::ObLSID &ls_id, const common::ObArray<common::ObAddr> &member_addr_list, const share::SCN &finish_scn,
-    const int64_t quorum, bool &meet_criteria)
+    const share::ObLSID &ls_id, const common::ObIArray<common::ObAddr> &total_addr_list, const share::SCN &finish_scn,
+    ObTimeoutCtx &timeout_ctx, common::ObIArray<common::ObAddr> &finished_addr_list)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   int64_t cur_quorum = 0;
-  FOREACH_X(location, member_addr_list, OB_SUCC(ret))
-  {
-    if (OB_ISNULL(location)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("location should not be null", K(ret));
-    } else {
-      const common::ObAddr &server = *location;
-      bool passed_finish_scn = false;
-      if (OB_FAIL(inner_check_ls_replay_scn_(task_id, tenant_id, ls_id, server, finish_scn, passed_finish_scn))) {
-        LOG_WARN("failed to check criteria", K(ret), K(task_id), K(tenant_id), K(ls_id), K(server));
-      } else if (!passed_finish_scn) {
-        LOG_INFO("server has not passed finish scn", K(task_id), K(tenant_id), K(server), K(finish_scn));
-      } else {
-        cur_quorum++;
-        LOG_INFO("server has replayed passed finish scn", K(ret), K(server));
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    meet_criteria = cur_quorum == quorum ;
-  }
-  return ret;
-}
-
-int ObTxFinishTransfer::inner_check_ls_replay_scn_(const ObTransferTaskID &task_id, const uint64_t tenant_id,
-    const share::ObLSID &ls_id, const common::ObAddr &addr, const SCN &finish_scn, bool &passed_scn)
-{
-  int ret = OB_SUCCESS;
-  passed_scn = false;
-  const int64_t cluster_id = GCONF.cluster_id;
-  SCN tmp_finish_scn;
-  if (OB_FAIL(fetch_ls_replay_scn_(task_id, cluster_id, addr, tenant_id, ls_id, tmp_finish_scn))) {
-    LOG_WARN("failed to fetch finish scn for transfer", K(ret), K(task_id), K(tenant_id), K(ls_id));
-  } else {
-    passed_scn = tmp_finish_scn >= finish_scn;
-    LOG_INFO("check ls replay scn", K(passed_scn), K(tmp_finish_scn), K(finish_scn));
+  common::ObArray<ObAddr> member_addr_list;
+  const int32_t group_id = share::OBCG_STORAGE_HA_LEVEL2;
+  if (OB_FAIL(ObTransferUtils::get_need_check_member(total_addr_list, finished_addr_list, member_addr_list))) {
+    LOG_WARN("failed to get need check member", K(ret), K(task_id), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(ObTransferUtils::check_ls_replay_scn(
+      tenant_id, ls_id, finish_scn, group_id, member_addr_list, timeout_ctx, finished_addr_list))) {
+    LOG_WARN("failed to check ls replay scn", K(ret), K(total_addr_list), K(finish_scn));
   }
   return ret;
 }
@@ -980,32 +954,6 @@ int ObTxFinishTransfer::report_result_(
         ob_usleep(REPORT_RETRY_INTERVAL_MS);
       }
     }
-  }
-  return ret;
-}
-
-int ObTxFinishTransfer::fetch_ls_replay_scn_(const ObTransferTaskID &task_id, const int64_t cluster_id,
-    const common::ObAddr &server_addr, const uint64_t tenant_id, const share::ObLSID &ls_id, share::SCN &finish_scn)
-{
-  int ret = OB_SUCCESS;
-  ObLSService *ls_service = NULL;
-  storage::ObStorageRpc *storage_rpc = NULL;
-  storage::ObStorageHASrcInfo src_info;
-  src_info.src_addr_ = server_addr;
-  src_info.cluster_id_ = GCONF.cluster_id;
-  if (!src_info.is_valid() || !ls_id.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(src_info), K(ls_id));
-  } else if (OB_ISNULL(ls_service = MTL_WITH_CHECK_TENANT(ObLSService *, tenant_id))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log stream service is NULL", K(ret));
-  } else if (OB_ISNULL(storage_rpc = ls_service->get_storage_rpc())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("storage rpc proxy is NULL", K(ret));
-  } else if (OB_FAIL(storage_rpc->fetch_ls_replay_scn(tenant_id, src_info, ls_id, finish_scn))) {
-    LOG_WARN("failed to fetch ls replay scn", K(ret), K(tenant_id), K(src_info), K(ls_id));
-  } else {
-    LOG_INFO("fetch ls replay scn", K(tenant_id), K(src_info), K(ls_id));
   }
   return ret;
 }

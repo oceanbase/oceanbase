@@ -754,7 +754,6 @@ public:
   RPC_S(PR5 update_ls_meta, OB_HA_UPDATE_LS_META, (ObRestoreUpdateLSMetaArg));
   RPC_S(PR5 get_ls_active_trans_count, OB_GET_LS_ACTIVE_TRANSACTION_COUNT, (ObGetLSActiveTransCountArg), ObGetLSActiveTransCountRes);
   RPC_S(PR5 get_transfer_start_scn, OB_GET_TRANSFER_START_SCN, (ObGetTransferStartScnArg), ObGetTransferStartScnRes);
-  RPC_S(PR5 fetch_ls_replay_scn, OB_HA_FETCH_LS_REPLAY_SCN, (ObFetchLSReplayScnArg), ObFetchLSReplayScnRes);
   RPC_S(PR5 lock_config_change, OB_HA_LOCK_CONFIG_CHANGE, (ObStorageConfigChangeOpArg), ObStorageConfigChangeOpRes);
   RPC_S(PR5 unlock_config_change, OB_HA_UNLOCK_CONFIG_CHANGE, (ObStorageConfigChangeOpArg), ObStorageConfigChangeOpRes);
   RPC_S(PR5 get_config_change_lock_stat, OB_HA_GET_CONFIG_CHANGE_LOCK_STAT, (ObStorageConfigChangeOpArg), ObStorageConfigChangeOpRes);
@@ -765,6 +764,7 @@ public:
   RPC_AP(PR5 check_transfer_tablet_backfill_completed, OB_HA_CHECK_TRANSFER_TABLET_BACKFILL, (obrpc::ObCheckTransferTabletBackfillArg), obrpc::ObCheckTransferTabletBackfillRes);
   RPC_AP(PR5 get_config_version_and_transfer_scn, OB_HA_CHANGE_MEMBER_SERVICE, (obrpc::ObStorageChangeMemberArg), obrpc::ObStorageChangeMemberRes);
   RPC_AP(PR5 check_start_transfer_tablets, OB_CHECK_START_TRANSFER_TABLETS, (obrpc::ObTransferTabletInfoArg), obrpc::Int64);
+  RPC_AP(PR5 fetch_ls_replay_scn, OB_HA_FETCH_LS_REPLAY_SCN, (obrpc::ObFetchLSReplayScnArg), obrpc::ObFetchLSReplayScnRes);
 };
 
 template <ObRpcPacketCode RPC_CODE>
@@ -952,13 +952,26 @@ protected:
 };
 
 class ObFetchLSReplayScnP:
-    public ObStorageStreamRpcP<OB_HA_FETCH_LS_REPLAY_SCN>
+    public ObStorageRpcProxy::Processor<OB_HA_FETCH_LS_REPLAY_SCN>
 {
 public:
-  explicit ObFetchLSReplayScnP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  ObFetchLSReplayScnP() = default;
   virtual ~ObFetchLSReplayScnP() {}
 protected:
   int process();
+};
+
+class OFetchLSReplayScnDelegate final
+{
+public:
+  OFetchLSReplayScnDelegate(obrpc::ObFetchLSReplayScnRes &result);
+  int init(const obrpc::ObFetchLSReplayScnArg &arg);
+  int process();
+private:
+  bool is_inited_;
+  obrpc::ObFetchLSReplayScnArg arg_;
+  obrpc::ObFetchLSReplayScnRes &result_;
+  DISALLOW_COPY_AND_ASSIGN(OFetchLSReplayScnDelegate);
 };
 
 class ObCheckTransferTabletsBackfillP:
@@ -1157,12 +1170,6 @@ public:
       const share::ObLSID &ls_id,
       const common::ObIArray<share::ObTransferTabletInfo> &tablet_list,
       share::SCN &transfer_start_scn) = 0;
-
-  virtual int fetch_ls_replay_scn(
-      const uint64_t tenant_id,
-      const ObStorageHASrcInfo &src_info,
-      const share::ObLSID &ls_id,
-      share::SCN &ls_replay_scn) = 0;
   virtual int lock_config_change(
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &src_info,
@@ -1251,12 +1258,6 @@ public:
       const share::ObLSID &ls_id,
       const common::ObIArray<share::ObTransferTabletInfo> &tablet_list,
       share::SCN &transfer_start_scn);
-
-  virtual int fetch_ls_replay_scn(
-      const uint64_t tenant_id,
-      const ObStorageHASrcInfo &src_info,
-      const share::ObLSID &ls_id,
-      share::SCN &ls_replay_scn);
   virtual int lock_config_change(
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &src_info,
