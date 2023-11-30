@@ -83,7 +83,6 @@ int ObExprSTWithin::eval_st_within(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
   ObDatum *gis_datum2 = NULL;
   ObExpr *gis_arg1 = expr.args_[0];
   ObExpr *gis_arg2 = expr.args_[1];
-
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
   if (OB_FAIL(gis_arg1->eval(ctx, gis_datum1)) || OB_FAIL(gis_arg2->eval(ctx, gis_datum2))) {
@@ -107,14 +106,14 @@ int ObExprSTWithin::eval_st_within(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     bool is_geo1_cached = false;
     bool is_geo2_cached = false;
 
-    if (gis_arg1->is_static_const_) {
+    if (OB_NOT_NULL(const_param_cache) && gis_arg1->is_static_const_) {
       geo1 = const_param_cache->get_const_param_cache(0);
       if (geo1 != NULL) {
         srid1 = geo1->get_srid();
         is_geo1_cached = true;
       }
     }
-    if (gis_arg2->is_static_const_) {
+    if (OB_NOT_NULL(const_param_cache) && gis_arg2->is_static_const_) {
       geo2 = const_param_cache->get_const_param_cache(1);
       if (geo2 != NULL) {
         srid2 = geo2->get_srid();
@@ -149,12 +148,14 @@ int ObExprSTWithin::eval_st_within(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     } else if (OB_FAIL(ObGeoExprUtils::zoom_in_geos_for_relation(*geo1, *geo2, is_geo1_cached, is_geo2_cached))) {
       LOG_WARN("zoom in geos failed", K(ret));
     } else {
-      if (gis_arg1->is_static_const_ && !is_geo1_cached &&
+      if (OB_NOT_NULL(const_param_cache)) {
+        if (gis_arg1->is_static_const_ && !is_geo1_cached &&
           OB_FAIL(const_param_cache->add_const_param_cache(0, *geo1))) {
-        LOG_WARN("add geo1 to const cache failed", K(ret));
-      } else if (gis_arg2->is_static_const_ && !is_geo2_cached &&
-          OB_FAIL(const_param_cache->add_const_param_cache(1, *geo2))) {
-        LOG_WARN("add geo2 to const cache failed", K(ret));
+          LOG_WARN("add geo1 to const cache failed", K(ret));
+        } else if (gis_arg2->is_static_const_ && !is_geo2_cached &&
+            OB_FAIL(const_param_cache->add_const_param_cache(1, *geo2))) {
+          LOG_WARN("add geo2 to const cache failed", K(ret));
+        }
       }
       ObGeoEvalCtx gis_context(&temp_allocator, srs);
       bool result = false;

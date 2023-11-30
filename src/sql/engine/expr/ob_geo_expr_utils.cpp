@@ -709,13 +709,20 @@ ObGeoConstParamCache* ObGeoExprUtils::get_geo_constParam_cache(const uint64_t& i
 {
   INIT_SUCC(ret);
   ObGeoConstParamCache* cache_ctx = NULL;
-  if (ObExpr::INVALID_EXP_CTX_ID != id) {
+  uint64_t data_version = 0;
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_1_2) {
+    // geo para cache not available, return null
+  }  else if (ObExpr::INVALID_EXP_CTX_ID != id) {
     cache_ctx = static_cast<ObGeoConstParamCache*>(exec_ctx->get_expr_op_ctx(id));
     if (OB_ISNULL(cache_ctx)) {
-      // if pathcache not exist, create one
+      // if geoparamcache not exist, create one
       void *cache_ctx_buf = NULL;
-      ret = exec_ctx->create_expr_op_ctx(id, sizeof(ObGeoConstParamCache), cache_ctx_buf);
-      if (OB_SUCC(ret) && OB_NOT_NULL(cache_ctx_buf)) {
+      if (OB_FAIL(exec_ctx->create_expr_op_ctx(id, sizeof(ObGeoConstParamCache), cache_ctx_buf))) {
+        LOG_WARN("failed to create expr op ctx", K(ret));
+      } else if (OB_ISNULL(cache_ctx_buf)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("cache ctx is null", K(ret));
+      } else {
         cache_ctx = new (cache_ctx_buf) ObGeoConstParamCache(&exec_ctx->get_allocator());
       }
     }

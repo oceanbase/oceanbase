@@ -1688,7 +1688,9 @@ int ObTableCtx::check_insert_up_can_use_put(bool &use_put)
   int ret = OB_SUCCESS;
   use_put = true;
 
-  if (is_inc_or_append()) { // increment or append operarion need old value to calculate, can not use put
+  if (!is_htable()) {
+    use_put = false;
+  } else if (is_inc_or_append()) { // increment or append operarion need old value to calculate, can not use put
     use_put = false;
   } else if (ObTableOperationType::INSERT_OR_UPDATE != operation_type_) {
     ret = OB_INVALID_ARGUMENT;

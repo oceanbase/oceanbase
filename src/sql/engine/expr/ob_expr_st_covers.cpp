@@ -81,20 +81,19 @@ int ObExprPrivSTCovers::eval_st_covers_common(const ObExpr &expr, ObEvalCtx &ctx
   bool is_geo2_empty = false;
   omt::ObSrsCacheGuard srs_guard;
   const ObSrsItem *srs = NULL;
-  ObGeoConstParamCache* const_param_cache = ObGeoExprUtils::get_geo_constParam_cache(expr.expr_ctx_id_, &ctx.exec_ctx_);
   bool is_geo1_cached = false;
   bool is_geo2_cached = false;
   ObExpr *gis_arg1 = expr.args_[0];
   ObExpr *gis_arg2 = expr.args_[1];
-
-  if (gis_arg1->is_static_const_) {
+  ObGeoConstParamCache* const_param_cache = ObGeoExprUtils::get_geo_constParam_cache(expr.expr_ctx_id_, &ctx.exec_ctx_);
+  if (OB_NOT_NULL(const_param_cache) && gis_arg1->is_static_const_) {
     geo1 = const_param_cache->get_const_param_cache(0);
     if (geo1 != NULL) {
       srid1 = geo1->get_srid();
       is_geo1_cached = true;
     }
   }
-  if (gis_arg2->is_static_const_) {
+  if (OB_NOT_NULL(const_param_cache) && gis_arg2->is_static_const_) {
     geo2 = const_param_cache->get_const_param_cache(1);
     if (geo2 != NULL) {
       srid2 = geo2->get_srid();
@@ -126,6 +125,15 @@ int ObExprPrivSTCovers::eval_st_covers_common(const ObExpr &expr, ObEvalCtx &ctx
   } else if (OB_FAIL(ObGeoExprUtils::zoom_in_geos_for_relation(*geo1, *geo2, is_geo1_cached, is_geo2_cached))) {
     LOG_WARN("zoom in geos failed", K(ret));
   } else {
+    if (OB_NOT_NULL(const_param_cache)) {
+      if (gis_arg1->is_static_const_ && !is_geo1_cached &&
+          OB_FAIL(const_param_cache->add_const_param_cache(0, *geo1))) {
+        LOG_WARN("add geo1 to const cache failed", K(ret));
+      } else if (gis_arg2->is_static_const_ && !is_geo2_cached &&
+          OB_FAIL(const_param_cache->add_const_param_cache(1, *geo2))) {
+        LOG_WARN("add geo2 to const cache failed", K(ret));
+      }
+    }
     ObGeoEvalCtx gis_context(&temp_allocator, srs);
     bool result = false;
     if (OB_FAIL(gis_context.append_geo_arg(geo2)) || OB_FAIL(gis_context.append_geo_arg(geo1))) {
