@@ -1963,6 +1963,8 @@ DEFINE_ORACLE_ERROR(OB_ERR_INVALID_XML_CHILD_NAME, -7429, -1, "42000", "The docu
 DEFINE_ORACLE_ERROR(OB_ERR_XML_NOT_SUPPORT_OPERATION, -7430, -1, "42000", "XML node '' (type=%s) does not support this operation", 31195, "XML node '' (type=%s) does not support this operation");
 DEFINE_ORACLE_ERROR(OB_ERR_JSON_FUN_UNSUPPORTED_TYPE, -7431, -1, "HY000", "Input to JSON generation function has unsupported data type", 40654, "Input to JSON generation function has unsupported data type");
 
+DEFINE_ORACLE_ERROR(OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD, -7433, -1, "42000", "Parent %.*s already contains child entry %s%.*s", 31003, "Parent %.*s already contains child entry %s%.*s");
+
 ////////////////////////////////////////////////////////////////
 // !!! Fatal errors and the client should close the connection, -8000 ~ -8999
 ////////////////////////////////////////////////////////////////

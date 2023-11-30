@@ -363,8 +363,28 @@ int ObExprInsertChildXml::insert_attributes_node(ObString key_str,
   } else if (OB_ISNULL(element = static_cast<ObXmlElement*>(insert_node))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get insert node null", K(ret));
-  } else if (OB_FAIL(element->add_attr_by_str(key_str, value_str, ObMulModeNodeType::M_ATTRIBUTE))) {
-    LOG_WARN("add element failed", K(ret), K(key_str), K(value_str));
+  } else {
+    int64_t count = insert_node->attribute_size();
+    for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
+      ObXmlAttribute *att = nullptr;
+      if (OB_ISNULL(insert_node->attribute_at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get attribute null", K(ret), K(i));
+      } else if (insert_node->attribute_at(i)->type() != M_ATTRIBUTE) {
+        // do nothing
+      } else if (OB_ISNULL(att = static_cast<ObXmlAttribute*>(insert_node->attribute_at(i)))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("cast to attribute null", K(ret), K(i));
+      } else if (key_str.compare(att->get_key()) == 0) {
+        ObString ele_err_info = element->get_key();
+        ret = OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD;
+        LOG_WARN("Parent already contains child entry", K(ret), K(i), K(value_str), K(key_str));
+        LOG_USER_ERROR(OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD, ele_err_info.length(), ele_err_info.ptr(), "@", key_str.length(), key_str.ptr());
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(element->add_attr_by_str(key_str, value_str, ObMulModeNodeType::M_ATTRIBUTE))) {
+      LOG_WARN("add element failed", K(ret), K(key_str), K(value_str));
+    }
   }
 
   return ret;
