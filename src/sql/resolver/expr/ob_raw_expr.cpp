@@ -1322,7 +1322,11 @@ int ObQueryRefRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
   for (int64_t i = 0; OB_SUCC(ret) && i < exec_params_.count(); ++i) {
     ObRawExpr *exec_param = exec_params_.at(i);
     ObRawExpr *new_expr = NULL;
-    if (OB_FAIL(copier.do_copy_expr(exec_param, new_expr))) {
+    if (OB_FAIL(copier.find_in_copy_context(exec_param, new_expr))) {
+      LOG_WARN("failed to find in copy context", K(ret));
+    } else if (new_expr != NULL) {
+      exec_params_.at(i) = static_cast<ObExecParamRawExpr *>(new_expr);
+    } else if (OB_FAIL(copier.do_copy_expr(exec_param, new_expr))) {
       LOG_WARN("failed to copy exec param", K(ret));
     } else if (OB_ISNULL(new_expr) ||
                OB_UNLIKELY(!new_expr->is_exec_param_expr())) {
