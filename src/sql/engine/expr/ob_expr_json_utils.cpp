@@ -977,7 +977,7 @@ int cast_to_timstamp(common::ObIAllocator *allocator,
   UNUSED(allocator);
   ObOTimestampData out_val;
   int64_t val;
-  oceanbase::common::ObTimeConvertCtx cvrt_ctx(NULL, true);
+  oceanbase::common::ObTimeConvertCtx cvrt_ctx(NULL, cast_param.dst_type_ == ObTimestampType);
   GET_SESSION()
   {
     if (OB_ISNULL(j_base)) {
@@ -999,12 +999,7 @@ int cast_to_timstamp(common::ObIAllocator *allocator,
       is_type_mismatch = 1;
       LOG_WARN("wrapper to datetime failed.", K(ret), K(*j_base));
     } else if (cast_param.dst_type_ == ObTimestampType) {
-      int64_t t_out_val = 0;
-      ret = ObTimeConverter::datetime_to_timestamp(val,
-                                                  cvrt_ctx.tz_info_,
-                                                  t_out_val);
-      ret = OB_ERR_UNEXPECTED_TZ_TRANSITION == ret ? OB_INVALID_DATE_VALUE : ret;
-      out_val.time_us_ = t_out_val;
+      out_val.time_us_ = val;
       out_val.time_ctx_.tail_nsec_ = 0;
     } else if (OB_FAIL(ObTimeConverter::odate_to_otimestamp(val, cvrt_ctx.tz_info_, cast_param.dst_type_, out_val))) {
       is_type_mismatch = 1;

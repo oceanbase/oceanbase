@@ -1464,7 +1464,7 @@ int ObRawExprResolverImpl::process_xml_attributes_values_node(const ParseNode *n
         // parameter 1 of function xmlelement without aliased
         ret = OB_ERR_XMLELEMENT_ALIASED;
         LOG_WARN("get column raw text failed", K(ret));
-      } else if (!col_name.empty() && OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(ctx_.local_allocator_,
+      } else if (!col_name.empty() && OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(ctx_.expr_factory_.get_allocator(),
                                                                                 ObString(col_name.length(), easy_string_toupper(col_name.ptr())),
                                                                                 &key_node, T_CHAR))) {
         LOG_WARN("create key node failed", K(ret));
@@ -5788,7 +5788,7 @@ int ObRawExprResolverImpl::process_ora_json_object_node(const ParseNode *node, O
             } else if (cur_node_kv->type_ == T_COLUMN_REF // process star node
                        && OB_NOT_NULL(cur_node_kv->children_[2])
                        && cur_node_kv->children_[2]->type_ == T_STAR
-                       && OB_FAIL(ObRawExprResolverImpl::create_json_object_star_node(data_node, ctx_.local_allocator_, i))) {
+                       && OB_FAIL(ObRawExprResolverImpl::create_json_object_star_node(data_node, ctx_.expr_factory_.get_allocator(), i))) {
               LOG_WARN("fail to create json object star node", K(ret));
             } else if ((i % 3 == 1) && data_node->children_[i]->type_ == T_NULL && data_node->children_[i]->value_ == 2) {  // 2 is flag of empty value
               cur_node_kv = data_node->children_[i - 1];
@@ -5828,7 +5828,7 @@ int ObRawExprResolverImpl::process_ora_json_object_node(const ParseNode *node, O
               }
               para_expr = NULL;
               if (OB_FAIL(ret)) {
-              } else if (OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(ctx_.local_allocator_, col_name, &key_node, T_CHAR))) {
+              } else if (OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(ctx_.expr_factory_.get_allocator(), col_name, &key_node, T_CHAR))) {
                 LOG_WARN("create json doc node fail", K(ret));
               } else if (OB_FAIL(SMART_CALL(recursive_resolve(&key_node, para_expr)))) {
                 LOG_WARN("fail to get raw expr from node", K(ret), K(i));
@@ -5919,7 +5919,7 @@ int ObRawExprResolverImpl::process_json_query_node(const ParseNode *node, ObRawE
   if (OB_SUCC(ret)) {
     if (returning_type->type_ == T_NULL) {
       ObString path_str(node->children_[1]->text_len_, node->children_[1]->raw_text_);
-      if (OB_FAIL(ObJsonPath::change_json_expr_res_type_if_need(ctx_.local_allocator_, path_str, const_cast<ParseNode&>(*returning_type), OPT_JSON_QUERY))) {
+      if (OB_FAIL(ObJsonPath::change_json_expr_res_type_if_need(ctx_.expr_factory_.get_allocator(), path_str, const_cast<ParseNode&>(*returning_type), OPT_JSON_QUERY))) {
         LOG_WARN("set return type by path item method fail", K(ret), K(path_str));
       }
     }
@@ -6004,7 +6004,7 @@ int ObRawExprResolverImpl::pre_check_json_path_valid(const ParseNode *node)
   INIT_SUCC(ret);
 
   ObString j_path_text(node->str_len_, node->str_value_);
-  ObJsonPath j_path(j_path_text, &ctx_.local_allocator_);
+  ObJsonPath j_path(j_path_text, &ctx_.expr_factory_.get_allocator());
   if (j_path_text.length() == 0) {
   } else if (OB_FAIL(j_path.parse_path())) {
     ret = OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR;
@@ -6063,7 +6063,7 @@ int ObRawExprResolverImpl::process_json_value_node(const ParseNode *node, ObRawE
     ObString default_val(7, "default");
     if (OB_NOT_NULL(returning_type->raw_text_) && (0 == default_val.case_compare(returning_type->raw_text_)) && node->children_[1]->text_len_ > 0) {
       ObString path_str(node->children_[1]->text_len_, node->children_[1]->raw_text_);
-      if (OB_FAIL(ObJsonPath::change_json_expr_res_type_if_need(ctx_.local_allocator_, path_str, const_cast<ParseNode&>(*returning_type), OPT_JSON_VALUE))) {
+      if (OB_FAIL(ObJsonPath::change_json_expr_res_type_if_need(ctx_.expr_factory_.get_allocator(), path_str, const_cast<ParseNode&>(*returning_type), OPT_JSON_VALUE))) {
         LOG_WARN("set return type by path item method fail", K(ret), K(path_str));
       }
     }
@@ -6116,7 +6116,7 @@ int ObRawExprResolverImpl::process_json_value_node(const ParseNode *node, ObRawE
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("mismatch node is null", K(ret));
     } else {
-      if (OB_FAIL(expand_node(ctx_.local_allocator_, const_cast<ParseNode *>(on_mismatch), 0, mismatch_arr))) {
+      if (OB_FAIL(expand_node(ctx_.expr_factory_.get_allocator(), const_cast<ParseNode *>(on_mismatch), 0, mismatch_arr))) {
         LOG_WARN("parse mismatch has error", K(ret), K(mismatch_arr.size()));
       } else {
         // [json_text][json_path][returning_type][empty_type][empty_default_value][error_type][error_default_value]
