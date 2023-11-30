@@ -3319,8 +3319,10 @@ int ObLobManager::erase_process_meta_info(ObLobAccessParam& param, ObLobMetaScan
       result.meta_result_.len_ = tmp_len;
 
       // global pos, from 0
+      // meta_iter.get_cur_pos use byte_len for binary charset, so cur_piece_begin should use byte_len too for binary charset
+      // or if char_len is less than for byte_len, will cause cur_piece_begin incorrect
       uint64_t cur_piece_end = meta_iter.get_cur_pos();
-      uint64_t cur_piece_begin = cur_piece_end - result.meta_result_.info_.char_len_;
+      uint64_t cur_piece_begin = cur_piece_end - (is_char ? result.meta_result_.info_.char_len_ : result.meta_result_.info_.byte_len_);
 
       // local pos, from current piece;
       // if is_char, char pos; else byte pos
@@ -3350,6 +3352,10 @@ int ObLobManager::erase_process_meta_info(ObLobAccessParam& param, ObLobMetaScan
           piece_byte_len = piece_char_len;
           piece_char_len = result.meta_result_.info_.char_len_;
         }
+      } else {
+        // consider we process char lob as byte len
+        // we may get a char len which is diff from byte len
+        piece_char_len = piece_byte_len;
       }
 
       if (OB_FAIL(ret)) {
