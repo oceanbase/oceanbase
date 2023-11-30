@@ -14133,6 +14133,25 @@ int ObInnerTableSchema::all_virtual_core_all_table_schema(ObTableSchema &table_s
       name_generated_type_default,
       name_generated_type_default); //default_value
   }
+
+  if (OB_SUCC(ret)) {
+    ObObj lob_inrow_threshold_default;
+    lob_inrow_threshold_default.set_int(OB_DEFAULT_LOB_INROW_THRESHOLD);
+    ADD_COLUMN_SCHEMA_T("lob_inrow_threshold", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      lob_inrow_threshold_default,
+      lob_inrow_threshold_default); //default_value
+  }
   table_schema.set_index_using_type(USING_HASH);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);

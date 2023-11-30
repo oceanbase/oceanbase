@@ -324,12 +324,13 @@ public:
                       uint64_t len,
                       int64_t timeout,
                       ObLobLocatorV2 &lob);
-  inline bool can_write_inrow(uint64_t len) { return len <= LOB_IN_ROW_MAX_LENGTH; }
 
   common::ObIAllocator& get_ext_info_log_allocator() { return ext_info_log_allocator_; }
   static bool lob_handle_has_char_len(ObLobAccessParam& param);
   static int64_t* get_char_len_ptr(ObLobAccessParam& param);
   static int update_out_ctx(ObLobAccessParam& param, ObLobMetaInfo *old_info, ObLobMetaInfo& new_info);
+
+  inline bool can_write_inrow(uint64_t len, int64_t inrow_threshold) { return len <= inrow_threshold; }
 
 private:
   // private function

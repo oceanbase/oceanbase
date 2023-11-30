@@ -1356,7 +1356,7 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
                 LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, column.get_column_name(),
                     ObAccuracy::MAX_ACCURACY2[is_oracle_mode][column.get_data_type()].get_length());
               } else {
-                length = min(length, OB_MAX_LOB_HANDLE_LENGTH);
+                length = min(length, table_schema.get_lob_inrow_threshold());
               }
             }
             if (OB_SUCC(ret) && (row_data_length += length) > OB_MAX_USER_ROW_LENGTH) {
@@ -2442,6 +2442,23 @@ int ObCreateTableResolver::set_table_option_to_schema(ObTableSchema &table_schem
           OB_FAIL(table_schema.set_ttl_definition(ttl_definition_)) ||
           OB_FAIL(table_schema.set_kv_attributes(kv_attributes_))) {
         SQL_RESV_LOG(WARN, "set table_options failed", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      // if lob_inrow_threshold not set, used config default_lob_inrow_threshold
+      if (is_set_lob_inrow_threshold_) {
+        table_schema.set_lob_inrow_threshold(lob_inrow_threshold_);
+      } else if (OB_ISNULL(session_info_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("session if NULL", K(ret));
+      } else if (OB_FALSE_IT((lob_inrow_threshold_ = session_info_->get_default_lob_inrow_threshold()))) {
+      } else if (lob_inrow_threshold_ < OB_MIN_LOB_INROW_THRESHOLD || lob_inrow_threshold_ > OB_MAX_LOB_INROW_THRESHOLD) {
+        ret = OB_INVALID_ARGUMENT;
+        SQL_RESV_LOG(ERROR, "invalid inrow threshold", K(ret), K(lob_inrow_threshold_));
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "invalid inrow threshold");
+      } else {
+        table_schema.set_lob_inrow_threshold(lob_inrow_threshold_);
       }
     }
 

@@ -54,6 +54,7 @@ public:
   OB_INLINE uint64_t get_spatial_geo_col_id() const { return spatial_geo_col_id_; }
   OB_INLINE uint64_t get_spatial_cellid_col_id() const { return spatial_cellid_col_id_; }
   OB_INLINE uint64_t get_spatial_mbr_col_id() const { return spatial_mbr_col_id_; }
+  OB_INLINE int64_t get_lob_inrow_threshold() const { return lob_inrow_threshold_; }
   OB_INLINE int64_t get_column_count() const { return columns_.count(); }
   OB_INLINE const Columns &get_columns() const { return columns_; }
   OB_INLINE const ColumnMap &get_col_map() const { return col_map_; }
@@ -105,6 +106,7 @@ private:
   ColumnMap col_map_;
   common::ObString pk_name_; // use for printing error msg in oracle mode
   storage::ObTableReadInfo read_info_;
+  int64_t lob_inrow_threshold_;
 };
 
 class ObTableDMLParam

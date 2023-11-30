@@ -1162,6 +1162,7 @@ int ObComplementWriteTask::append_row(ObScan *scan)
     int64_t rowkey_column_cnt = 0;
     const int64_t extra_rowkey_cnt = storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     bool ddl_committed = false;
+    int64_t lob_inrow_threshold = OB_DEFAULT_LOB_INROW_THRESHOLD;
     if (OB_UNLIKELY(!is_inited_)) {
       ret = OB_NOT_INIT;
       LOG_WARN("ObComplementWriteTask is not inited", K(ret));
@@ -1208,6 +1209,7 @@ int ObComplementWriteTask::append_row(ObScan *scan)
         LOG_WARN("fail to open macro block writer", K(ret), K(data_desc));
       } else {
         rowkey_column_cnt = hidden_table_schema->get_rowkey_column_num();
+        lob_inrow_threshold = hidden_table_schema->get_lob_inrow_threshold();
       }
       ObTableSchemaParam schema_param(allocator);
       // Hack to prevent row reshaping from converting empty string to null.
@@ -1288,9 +1290,11 @@ int ObComplementWriteTask::append_row(ObScan *scan)
         } else if (org_col_ids_.at(i).col_type_.is_lob_storage()) {
           lob_cnt++;
           const int64_t timeout_ts = ObTimeUtility::current_time() + 60000000; // 60s
+          ObLobStorageParam lob_storage_param;
+          lob_storage_param.inrow_threshold_ = lob_inrow_threshold;
           if (OB_FAIL(ObInsertLobColumnHelper::insert_lob_column(
               lob_allocator, param_->dest_ls_id_, param_->dest_tablet_id_,
-              org_col_ids_.at(i), datum, timeout_ts, true, param_->orig_tenant_id_))) {
+              org_col_ids_.at(i), lob_storage_param, datum, timeout_ts, true, param_->orig_tenant_id_))) {
             LOG_WARN("fail to insert_lob_col", K(ret), K(datum));
           }
         }

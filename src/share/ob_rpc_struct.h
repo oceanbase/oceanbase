@@ -1931,6 +1931,7 @@ public:
        ENABLE_EXTENDED_ROWID,
        TTL_DEFINITION,
        KV_ATTRIBUTES,
+       LOB_INROW_THRESHOLD,
        MAX_OPTION = 1000
   };
   enum AlterPartitionType

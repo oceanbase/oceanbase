@@ -4281,6 +4281,7 @@ int ObLSTabletService::set_lob_storage_params(
     LOG_WARN("column_param is null", K(ret), K(table_param));
   } else {
     lob_param.schema_chunk_size_ = column_param->get_lob_chunk_size();
+    lob_param.inrow_threshold_ = table_param->get_data_table().get_lob_inrow_threshold();
   }
   return ret;
 }

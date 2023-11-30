@@ -456,6 +456,7 @@ public:
   inline const ObString &get_plsql_ccflags() const;
   inline const ObString &get_iso_nls_currency() const;
   inline const ObString &get_log_row_value_option() const;
+  int64_t get_default_lob_inrow_threshold() const;
   bool get_local_autocommit() const;
   uint64_t get_local_auto_increment_increment() const;
   uint64_t get_local_auto_increment_offset() const;
@@ -1521,6 +1522,7 @@ public:
         iso_nls_currency_(),
         ob_pl_block_timeout_(0),
         log_row_value_option_(),
+        default_lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
         autocommit_(false),
         ob_enable_trace_log_(false),
         ob_enable_sql_audit_(false),
@@ -1604,6 +1606,7 @@ public:
       runtime_filter_max_in_num_ = 0;
       runtime_bloom_filter_max_size_ = INT32_MAX;
       ncharacter_set_connection_ = ObCharsetType::CHARSET_INVALID;
+      default_lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
     }
 
     inline bool operator==(const SysVarsCacheData &other) const {
@@ -1648,7 +1651,8 @@ public:
             ob_plsql_ccflags_ == other.ob_plsql_ccflags_ &&
             log_row_value_option_ == other.log_row_value_option_ &&
             ob_max_read_stale_time_ == other.ob_max_read_stale_time_  &&
-            ncharacter_set_connection_ == other.ncharacter_set_connection_;
+            ncharacter_set_connection_ == other.ncharacter_set_connection_ &&
+            default_lob_inrow_threshold_ == other.default_lob_inrow_threshold_;
       bool equal2 = true;
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         if (nls_formats_[i] != other.nls_formats_[i]) {
@@ -1744,9 +1748,17 @@ public:
         log_row_value_option_.assign_ptr(log_row_value_option_buf_, option.length());
       }
     }
+    void set_default_lob_inrow_threshold(const int64_t default_lob_inrow_threshold)
+    {
+      default_lob_inrow_threshold_ = default_lob_inrow_threshold;
+    }
     const common::ObString &get_log_row_value_option() const
     {
       return log_row_value_option_;
+    }
+    int64_t get_default_lob_inrow_threshold() const
+    {
+      return default_lob_inrow_threshold_;
     }
 
     TO_STRING_KV(K(autocommit_), K(ob_enable_trace_log_), K(ob_enable_sql_audit_), K(nls_length_semantics_),
@@ -1757,7 +1769,7 @@ public:
                  K_(optimizer_use_sql_plan_baselines), K_(optimizer_capture_sql_plan_baselines),
                  K_(is_result_accurate), K_(character_set_results),
                  K_(character_set_connection), K_(ob_pl_block_timeout), K_(ob_plsql_ccflags),
-                 K_(iso_nls_currency), K_(log_row_value_option), K_(ob_max_read_stale_time));
+                 K_(iso_nls_currency), K_(log_row_value_option), K_(ob_max_read_stale_time), K_(default_lob_inrow_threshold));
   public:
     static const int64_t MAX_NLS_FORMAT_STR_LEN = 256;
 
@@ -1792,6 +1804,7 @@ public:
 
     common::ObString log_row_value_option_;
     char log_row_value_option_buf_[OB_TMP_BUF_SIZE_256];
+    int64_t default_lob_inrow_threshold_;
 
     //==========  需要序列化  ============
     bool autocommit_;
@@ -1932,6 +1945,7 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, runtime_filter_max_in_num);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, runtime_bloom_filter_max_size);
     DEF_SYS_VAR_CACHE_FUNCS(ObCharsetType, ncharacter_set_connection);
+    DEF_SYS_VAR_CACHE_FUNCS(int64_t, default_lob_inrow_threshold);
     void set_autocommit_info(bool inc_value)
     {
       inc_data_.autocommit_ = inc_value;
@@ -2000,6 +2014,7 @@ private:
         bool inc_runtime_filter_max_in_num_:1;
         bool inc_runtime_bloom_filter_max_size_:1;
         bool inc_ncharacter_set_connection_:1;
+        bool inc_default_lob_inrow_threshold_:1;
         bool inc_ob_enable_pl_cache_:1;
       };
     };
@@ -2281,6 +2296,11 @@ inline const ObString &ObBasicSessionInfo::get_iso_nls_currency() const
 inline const ObString &ObBasicSessionInfo::get_log_row_value_option() const
 {
   return sys_vars_cache_.get_log_row_value_option();
+}
+
+inline int64_t ObBasicSessionInfo::get_default_lob_inrow_threshold() const
+{
+  return sys_vars_cache_.get_default_lob_inrow_threshold();
 }
 
 inline bool ObBasicSessionInfo::get_local_autocommit() const

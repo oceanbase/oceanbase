@@ -2018,6 +2018,26 @@ int ObSysVarOnCheckFuncs::check_log_row_value_option_is_valid(sql::ObExecContext
   return ret;
 }
 
+int ObSysVarOnCheckFuncs::check_default_lob_inrow_threshold(sql::ObExecContext &ctx,
+                                                const ObSetVar &set_var,
+                                                const ObBasicSysVar &sys_var,
+                                                const common::ObObj &in_val,
+                                                common::ObObj &out_val)
+{
+  int ret = OB_SUCCESS;
+  int64_t inrow_threshold = 0;
+  if (OB_FAIL(in_val.get_int(inrow_threshold))) {
+    LOG_WARN("get_int fail", K(ret), K(in_val));
+  } else if (inrow_threshold < OB_MIN_LOB_INROW_THRESHOLD || inrow_threshold > OB_MAX_LOB_INROW_THRESHOLD) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("lob inrow_threshold invalid", KR(ret), K(inrow_threshold));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "invalid inrow_threshold LOB storage option value");
+  } else {
+    out_val = in_val;
+  }
+  return ret;
+}
+
 bool ObSysVarOnCheckFuncs::can_set_trans_var(ObSetVar::SetScopeType scope,
                                              ObBasicSessionInfo &session)
 {

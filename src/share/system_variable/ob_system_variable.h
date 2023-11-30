@@ -893,6 +893,11 @@ public:
                                                   const ObBasicSysVar &sys_var,
                                                   const common::ObObj &in_val,
                                                   common::ObObj &out_val);
+  static int check_default_lob_inrow_threshold(sql::ObExecContext &ctx,
+                                                  const ObSetVar &set_var,
+                                                  const ObBasicSysVar &sys_var,
+                                                  const common::ObObj &in_val,
+                                                  common::ObObj &out_val);
   static int check_runtime_filter_type_is_valid(sql::ObExecContext &ctx,
                                                 const ObSetVar &set_var,
                                                 const ObBasicSysVar &sys_var,

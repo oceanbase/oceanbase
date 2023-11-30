@@ -1824,6 +1824,12 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
     }
   }
 
+  if (OB_SUCC(ret) && !strict_compat_ && !is_oracle_mode && !is_index_tbl) {
+    if (OB_FAIL(print_table_definition_lob_params(table_schema, buf, buf_len, pos))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print store format", K(ret), K(table_schema));
+    }
+  }
+
   if (OB_SUCC(ret) && pos > 0) {
     pos -= 1;
     buf[pos] = '\0';      // remove trailer space
@@ -5468,6 +5474,21 @@ int ObSchemaPrinter::print_column_lob_params(const ObColumnSchemaV2 &column_sche
     // default value not display
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, " CHUNK '%ldKB'", column_schema.get_lob_chunk_size()/ObLobDataOutRowCtx::OUTROW_LOB_CHUNK_SIZE_UNIT))) {
     SHARE_SCHEMA_LOG(WARN, "fail to print column", K(ret), K(column_schema));
+  }
+  return ret;
+}
+
+int ObSchemaPrinter::print_table_definition_lob_params(const ObTableSchema &table_schema,
+                                                       char* buf,
+                                                       const int64_t& buf_len,
+                                                       int64_t& pos) const
+{
+  int ret = OB_SUCCESS;
+  if (table_schema.get_lob_inrow_threshold() == OB_DEFAULT_LOB_INROW_THRESHOLD) {
+    // if is default not display
+    SHARE_SCHEMA_LOG(INFO, "default inrow threashold not display", K(ret), "lob inrow threshold", table_schema.get_lob_inrow_threshold());
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "LOB_INROW_THRESHOLD=%ld ", table_schema.get_lob_inrow_threshold()))) {
+    SHARE_SCHEMA_LOG(WARN, "fail to print lob inrow threshold", K(ret), K(table_schema));
   }
   return ret;
 }

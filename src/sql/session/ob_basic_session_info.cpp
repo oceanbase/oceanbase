@@ -2667,6 +2667,12 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       }
       break;
     }
+    case SYS_VAR_OB_DEFAULT_LOB_INROW_THRESHOLD: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_default_lob_inrow_threshold(int_val));
+      break;
+    }
     default: {
       //do nothing
     }
@@ -3098,6 +3104,12 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
       OX (sys_vars_cache.set_base_runtime_bloom_filter_max_size(int_val));
+      break;
+    }
+    case SYS_VAR_OB_DEFAULT_LOB_INROW_THRESHOLD: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base_default_lob_inrow_threshold(int_val));
       break;
     }
     default: {

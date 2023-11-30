@@ -222,7 +222,8 @@ ObSSTableInsertSliceWriter::ObSSTableInsertSliceWriter()
     lob_cnt_(0),
     sql_mode_for_ddl_reshape_(0),
     reshape_ptr_(nullptr),
-    is_inited_(false)
+    is_inited_(false),
+    lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD)
 {
 }
 
@@ -263,6 +264,7 @@ int ObSSTableInsertSliceWriter::init(const ObSSTableInsertSliceParam &slice_para
     } else {
       data_desc_.sstable_index_builder_ = slice_param.sstable_index_builder_;
       data_desc_.is_ddl_ = true;
+      lob_inrow_threshold_ = table_schema->get_lob_inrow_threshold();
       if (OB_FAIL(macro_block_writer_.open(data_desc_, slice_param.start_seq_,
                                            &redo_log_writer_callback_))) {
         LOG_WARN("fail to open macro block writer", KR(ret), K_(data_desc),
@@ -351,8 +353,10 @@ int ObSSTableInsertSliceWriter::append_row(const ObNewRow &row_val)
         const int64_t timeout_ts =
           ObTimeUtility::current_time() + ObInsertLobColumnHelper::LOB_ACCESS_TX_TIMEOUT;
         bool has_lob_header = store_row_.row_val_.cells_[i].has_lob_header();
+        ObLobStorageParam lob_storage_param;
+        lob_storage_param.inrow_threshold_ = lob_inrow_threshold_;
         if (OB_FAIL(ObInsertLobColumnHelper::insert_lob_column(
-              lob_allocator_, ls_id_, tablet_id_, col_descs_->at(i), datum, timeout_ts, has_lob_header,
+              lob_allocator_, ls_id_, tablet_id_, col_descs_->at(i), lob_storage_param, datum, timeout_ts, has_lob_header,
               MTL_ID()))) {
           LOG_WARN("fail to insert_lob_col", KR(ret), K(datum));
         }

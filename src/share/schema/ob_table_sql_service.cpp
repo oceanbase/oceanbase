@@ -2677,6 +2677,10 @@ int ObTableSqlService::gen_table_dml(
                              || !table.get_external_file_pattern().empty()))) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("external table is not support before 4.2", K(ret), K(table));
+  } else if (data_version < DATA_VERSION_4_2_1_2
+             && OB_UNLIKELY(OB_DEFAULT_LOB_INROW_THRESHOLD != table.get_lob_inrow_threshold())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("lob_inrow_threshold not support before 4.2.1.2", K(ret), K(table));
   } else {
   if (data_version < DATA_VERSION_4_2_1_0
       && (!table.get_ttl_definition().empty() || !table.get_kv_attributes().empty())) {
@@ -2812,6 +2816,8 @@ int ObTableSqlService::gen_table_dml(
             && OB_FAIL(dml.add_column("kv_attributes", ObHexEscapeSqlStr(kv_attributes))))
         || (data_version >= DATA_VERSION_4_2_1_0
             && OB_FAIL(dml.add_column("name_generated_type", table.get_name_generated_type())))
+        || (data_version >= DATA_VERSION_4_2_1_2
+            && OB_FAIL(dml.add_column("lob_inrow_threshold", table.get_lob_inrow_threshold())))
         ) {
       LOG_WARN("add column failed", K(ret));
     }
@@ -2838,6 +2844,10 @@ int ObTableSqlService::gen_table_options_dml(
     LOG_WARN("ttl definition and kv attributes is not supported in version less than 4.2.1",
         "ttl_definition", table.get_ttl_definition().empty(),
         "kv_attributes", table.get_kv_attributes().empty());
+  } else if (data_version < DATA_VERSION_4_2_1_2
+             && OB_UNLIKELY(OB_DEFAULT_LOB_INROW_THRESHOLD != table.get_lob_inrow_threshold())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("lob_inrow_threshold not support before 4.2.1.2", K(ret), K(table));
   } else {}
   if (OB_SUCC(ret)) {
     const ObPartitionOption &part_option = table.get_part_option();
@@ -2935,6 +2945,8 @@ int ObTableSqlService::gen_table_options_dml(
             && OB_FAIL(dml.add_column("kv_attributes", ObHexEscapeSqlStr(kv_attributes))))
         || ((data_version >= DATA_VERSION_4_2_1_0)
             && OB_FAIL(dml.add_column("name_generated_type", table.get_name_generated_type())))
+        || (data_version >= DATA_VERSION_4_2_1_2
+            && OB_FAIL(dml.add_column("lob_inrow_threshold", table.get_lob_inrow_threshold())))
         ) {
       LOG_WARN("add column failed", K(ret));
     }

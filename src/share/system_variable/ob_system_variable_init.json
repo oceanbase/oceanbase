@@ -3367,6 +3367,20 @@
     "background_cn": "",
     "ref_url": ""
    },
+   "ob_default_lob_inrow_threshold": {
+    "id": 10158,
+    "name": "ob_default_lob_inrow_threshold",
+    "default_value": "4096",
+    "base_value": "4096",
+    "data_type": "int",
+    "info": "default lob inrow threshold config",
+    "flags": "Global | SESSION",
+    "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_default_lob_inrow_threshold",
+    "publish_version": "4212",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
   "_enable_storage_cardinality_estimation": {
     "id": 10159,
     "name": "_enable_storage_cardinality_estimation",
