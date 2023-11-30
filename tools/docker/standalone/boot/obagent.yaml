@@ -1,7 +1,7 @@
 obagent:
   # The list of servers to be monitored. This list is consistent with the servers in oceanbase-ce.
   servers:
-    - 127.0.0.1
+    - @OB_SERVER_IP@
   # Set dependent components for the component.
   # When the associated configurations are not done, OBD will automatically get the these configurations from the dependent components.
   depends:

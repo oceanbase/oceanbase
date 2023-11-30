@@ -9,9 +9,18 @@ RUN yum install -y yum-utils && \
     yum install -y libaio mysql && \
     yum clean all
 
-RUN mkdir -p /root/pkg && mkdir -p /root/store && mkdir -p /root/dest && \
+ENV OBVersion=$VERSION
+RUN if [ -z "${OBVersion}" ]; then \
+      echo "VERSION is empty, then build the docker with latest rpm"; \
+      VersionPre=`yum info oceanbase-ce | grep Version | awk '{print $3}'`; \
+      Release=`yum info oceanbase-ce | grep Release | awk '{print $3}' | awk -F. '{print $1}'`; \
+      OBVersion="${VersionPre}-${Release}"; \
+    else \
+      echo "build the docker with VERSION ${OBVersion}"; \
+    fi && \
+    mkdir -p /root/pkg && mkdir -p /root/store && mkdir -p /root/dest && \
     cd /root/pkg && \
-    yum install -y --downloadonly --downloaddir=. oceanbase-ce-${VERSION}.el7 oceanbase-ce-libs-${VERSION}.el7 && \
+    yum install -y --downloadonly --downloaddir=. oceanbase-ce-${OBVersion}.el7 oceanbase-ce-libs-${OBVersion}.el7 && \
     rm -rf /usr/obd/mirror/remote/* && \
     yum clean all
 
@@ -22,3 +31,5 @@ ENV LD_LIBRARY_PATH /home/admin/oceanbase/lib:/root/ob/lib:$LD_LIBRARY_PATH
 
 WORKDIR /root
 CMD _boot
+
+EXPOSE 2881

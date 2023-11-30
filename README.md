@@ -89,7 +89,7 @@ obd demo
 
     ```shell
     # Deploy a mini standalone instance.
-    docker run -p 2881:2881 --name oceanbase-ce -e MINI_MODE=1 -d oceanbase/oceanbase-ce
+    docker run -p 2881:2881 --name oceanbase-ce -e MODE=mini -d oceanbase/oceanbase-ce
     ```
 
 2. Connect to the OceanBase Database instance:

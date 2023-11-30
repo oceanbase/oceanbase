@@ -123,3 +123,12 @@ docker -v 参数的详细说明可以参考 [docker volumn](https://docs.docker.
 - `./fast_boot_docker_build.sh <oceanbase_rpm_version>` 例如：`./fast_boot_docker_build.sh 4.2.1.0-100000102023092807`
 
 等待构建完毕后，可使用前述相同的方式启动、测试实例。
+
+## 故障诊断
+提供了一系列诊断方法用来诊断docker中的出错情况
+### 支持‘enable_rich_error_msg’参数
+- 首先在docker启动的过程中会默认开启‘enable_rich_error_msg’参数，如果在启动过程中发生错误，可以trace指令拿到更多的报错信息，启动成功后，docker会将该参数设置为关闭转态。
+- 用户可以通过打开该参数拿到更多运行阶段的sql语句的报错信息，打开方法为使用系统租户连接上docker中的oceanbase，然后执行
+```bash
+alter system set enable_rich_error_msg = true;
+```
