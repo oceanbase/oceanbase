@@ -235,37 +235,27 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
                 3:hugetlb:/
                 cgroup_path = /tenant_0001
                 */
-                char ch;
-                int read_len = 0;
-                int discard_len = 30;
-                int cpu_line_begin = 0;
-                int cpu_line_end = 0;
-                int cgroup_path_len = 0;
-                char read_buff[512];
-                // 读取文件内容
-                while ((ch = fgetc(file)) != EOF) {
-                  if (511 > read_len) {
-                    read_buff[read_len++] = ch;
+                bool is_find = false;
+                int min_len = 2;
+                int discard_len = 1;
+                char read_buff[PATH_BUFSIZE];
+                while (fgets(read_buff, sizeof(read_buff), file) != NULL && !is_find) {
+                  const char* match_begin =  strstr(read_buff, ":/");
+                  const char* match_cpu =  strstr(read_buff, "cpu");
+                  if (match_begin != NULL && match_cpu != NULL) {
+                    is_find = true;
+                    match_begin += discard_len;
+                    snprintf(cgroup_path_buf_, PATH_BUFSIZE, "%s", match_begin);
                   }
                 }
-                bool is_read_end = false;
-                for (int i = 1; i < read_len && !is_read_end; i++) {
-                  if (read_buff[i] == ':' && read_buff[i - 1] == '6') {
-                    cpu_line_begin = i;
+                int cgroup_path_len = strlen(cgroup_path_buf_);
+                if (is_find && min_len < cgroup_path_len) {
+                  if (cgroup_path_buf_[cgroup_path_len - 1] == '\n') {
+                    cgroup_path_buf_[cgroup_path_len - 1] = '\0';
                   }
-                  if (read_buff[i] == ':' && read_buff[i - 1] == '5') {
-                    cpu_line_end = i - 1;
-                    is_read_end = true;
-                  }
-                }
-                cgroup_path_len = cpu_line_end - cpu_line_begin - 1;
-                if (cgroup_path_len < discard_len) {
-                  cells[i].set_varchar("");
-                } else {
-                  cgroup_path_len = cgroup_path_len - discard_len;
-                  strncpy(cgroup_path_buf_, read_buff + cpu_line_begin + discard_len, cgroup_path_len);
-                  cgroup_path_buf_[cgroup_path_len] = '\0';
                   cells[i].set_varchar(cgroup_path_buf_);
+                } else {
+                  cells[i].set_varchar("");
                 }
               }
               cells[i].set_collation_type(

@@ -19,17 +19,6 @@ namespace oceanbase
 {
 namespace observer
 {
-
-class CGroupPathLink: public common::ObLink
-{
-public:
-  CGroupPathLink(const char *path)
-      : path_(path)
-  {}
-public:
-  const char* path_;
-};
-
 class ObAllVirtualCgroupConfig : public common::ObVirtualTableScannerIterator
 {
   enum COLUMN_ID_LIST
@@ -51,14 +40,15 @@ public:
 private:
   static const int32_t PATH_BUFSIZE = 256;
   static const int32_t VALUE_BUFSIZE = 32;
+  static constexpr const char *const root_cgroup_path = "/sys/fs/cgroup/cpu";
+  static constexpr const char *const cgroup_link_path = "cgroup";
   bool is_inited_;
   char ip_buf_[common::OB_IP_STR_BUFF];
   char cgroup_path_buf_[PATH_BUFSIZE];
-  const char *root_cgroup_  = "cgroup";
+  char cgroup_origin_path_[PATH_BUFSIZE];
 private:
   int check_cgroup_dir_exist_(const char *cgroup_path);
   int read_cgroup_path_dir_(const char *cgroup_path);
-  int get_cur_cgroup_path_sub_paths_(const char *cur_cgroup_path, common::ObIArray<char *> &result);
   int add_cgroup_config_info_(const char *cgroup_path);
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualCgroupConfig);
 };

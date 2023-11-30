@@ -12,13 +12,14 @@
 
 #include "lib/file/file_directory_utils.h"
 #include "ob_all_virtual_cgroup_config.h"
-
+#include <fts.h>
 namespace oceanbase
 {
 using namespace lib;
 
 namespace observer
 {
+
 ObAllVirtualCgroupConfig::ObAllVirtualCgroupConfig() : is_inited_(false)
 {
 }
@@ -48,7 +49,7 @@ int ObAllVirtualCgroupConfig::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
-    if (OB_FAIL(read_cgroup_path_dir_(root_cgroup_))) {
+    if (OB_FAIL(read_cgroup_path_dir_(cgroup_link_path))) {
       ret = OB_ITER_END;
     } else {
       scanner_it_ = scanner_.begin();
@@ -71,6 +72,7 @@ int ObAllVirtualCgroupConfig::check_cgroup_dir_exist_(const char *cgroup_path)
 {
   int ret = OB_SUCCESS;
   bool exist_cgroup = false;
+  int link_len = 0;
   if (OB_ISNULL(cgroup_path)) {
     ret = OB_INVALID_ARGUMENT;
     SERVER_LOG(WARN, "invalid arguments.", K(cgroup_path), K(ret));
@@ -79,51 +81,13 @@ int ObAllVirtualCgroupConfig::check_cgroup_dir_exist_(const char *cgroup_path)
   } else if (!exist_cgroup) {
     ret = OB_FILE_NOT_EXIST;
     SERVER_LOG(WARN, "no cgroup directory found. disable cgroup support", K(cgroup_path), K(ret));
-  }
-  return ret;
-}
-
-int ObAllVirtualCgroupConfig::get_cur_cgroup_path_sub_paths_(const char *cur_cgroup_path, common::ObIArray<char *> &result)
-{
-  int ret = OB_SUCCESS;
-  struct dirent *dp;
-  DIR *dfd;
-  if((dfd = opendir(cur_cgroup_path)) == NULL) {
-    ret = OB_FILE_NOT_EXIST;
-    SERVER_LOG(WARN, "open cgroup_path failed : ", K(ret), K(cur_cgroup_path));
+  } else if (-1 == (link_len = readlink(cgroup_path, cgroup_origin_path_, PATH_BUFSIZE))) {
+    SERVER_LOG(WARN, "The named file is not a symbolic link", K(cgroup_path), K(ret));
+    snprintf(cgroup_origin_path_, PATH_BUFSIZE, "%s", cgroup_path);
+  } else if (link_len > 0 && cgroup_origin_path_[link_len - 1] == '/') {
+    cgroup_origin_path_[link_len - 1] = '\0';
   } else {
-    common::ObSEArray<char *, 16> tmp_array;
-    while((dp = readdir(dfd)) != NULL && OB_SUCC(ret)) {
-      if(strcmp(dp->d_name, ".") != 0 && strcmp(dp -> d_name, "..") != 0 && dp->d_type == DT_DIR) {
-        char* next_path = (char *)ob_malloc(PATH_BUFSIZE, "CGROUP_PATH_BUF");
-        if (OB_ISNULL(next_path)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          SERVER_LOG(WARN, "cgroup sub path not memory : ", K(ret), K(cur_cgroup_path));
-        } else {
-          sprintf(next_path, "%s/%s", cur_cgroup_path, dp->d_name);
-          if(OB_FAIL(tmp_array.push_back(next_path))) {
-            SERVER_LOG(WARN, "tmp array add sub path failed : ", K(ret), K(cur_cgroup_path));
-          }
-        }
-      }
-    }
-    closedir(dfd);
-    if (OB_SUCC(ret)) {
-      for (int i = tmp_array.count() - 1; i >= 0 && OB_SUCC(ret); i--) {
-        if (OB_ISNULL(tmp_array[i])) {
-          ret = OB_NULL_CHECK_ERROR;
-          SERVER_LOG(WARN, "tmp array get null : ", K(ret), K(tmp_array));
-        } else if (OB_FAIL(result.push_back(tmp_array[i]))) {
-          SERVER_LOG(WARN, "push to result failed : ", K(ret), K(tmp_array));
-        }
-      }
-    } else {
-      for (int i = 0; i < tmp_array.count() && OB_SUCC(ret); i++) {
-        if (OB_NOT_NULL(tmp_array[i])) {
-          ob_free(tmp_array[i]);
-        }
-      }
-    }
+    cgroup_origin_path_[link_len] = '\0';
   }
   return ret;
 }
@@ -131,32 +95,22 @@ int ObAllVirtualCgroupConfig::get_cur_cgroup_path_sub_paths_(const char *cur_cgr
 int ObAllVirtualCgroupConfig::read_cgroup_path_dir_(const char *cgroup_path)
 {
   int ret = OB_SUCCESS;
-  common::ObSEArray<char *, 16> path_stack;
   if (OB_FAIL(check_cgroup_dir_exist_(cgroup_path))) {
     SERVER_LOG(WARN, "cgroup config file not exist : ", K(ret), K(cgroup_path));
-  } else if(OB_FAIL(get_cur_cgroup_path_sub_paths_(cgroup_path, path_stack))) {
-    SERVER_LOG(WARN, "get root cgroup sub path failed : ", K(ret), K(cgroup_path));
   } else {
-    while (!path_stack.empty() && OB_SUCC(ret)) {
-      char *cur_path = NULL;
-      if (OB_FAIL(path_stack.pop_back(cur_path))) {
-        SERVER_LOG(WARN, "cgroup path stack pop failed", K(ret), K(path_stack));
-      } else if (OB_ISNULL(cur_path)) {
-        ret = OB_ERR_NULL_VALUE;
-        SERVER_LOG(WARN, "cgroup path stack pop null", K(ret), K(path_stack));
-      } else if (OB_FAIL(add_cgroup_config_info_(cur_path))) {
-        SERVER_LOG(WARN, "add cgroup config info failed : ", K(ret), K(cur_path));
-      } else if (OB_FAIL(get_cur_cgroup_path_sub_paths_(cur_path, path_stack))) {
-        SERVER_LOG(WARN, "get cur cgroup sub path failed : ", K(ret), K(cur_path));
+    char *dir[] = {cgroup_origin_path_, NULL};
+    FTS *ftsp = fts_open(dir, FTS_NOCHDIR, NULL);
+    if (OB_NOT_NULL(ftsp)) {
+      FTSENT *node = NULL;
+      while ((node = fts_read(ftsp)) != NULL && OB_SUCC(ret)) {
+        if (node->fts_info == FTS_D) {
+          ret = add_cgroup_config_info_(node->fts_path);
+        }
       }
-      if (OB_NOT_NULL(cur_path)) {
-        ob_free(cur_path);
-      }
+      fts_close(ftsp);
     }
-  }
-  for (int i = 0; i < path_stack.count(); i++) {
-    if (OB_NOT_NULL(path_stack[i])) {
-      ob_free(path_stack[i]);
+    if (OB_FAIL(ret)) {
+      SERVER_LOG(WARN, "cgroup config read : ", K(ret), K(cgroup_origin_path_));
     }
   }
   return ret;
@@ -192,7 +146,9 @@ int ObAllVirtualCgroupConfig::add_cgroup_config_info_(const char *cgroup_path)
           int cfs_quota_us = atoi(buf);
           cells[i].set_int(cfs_quota_us);
         }
-        fclose(file);
+        if (NULL != file) {
+          fclose(file);
+        }
         break;
       }
       case CFS_PERIOD_US: {
@@ -207,7 +163,9 @@ int ObAllVirtualCgroupConfig::add_cgroup_config_info_(const char *cgroup_path)
           int cfs_period_us = atoi(buf);
           cells[i].set_int(cfs_period_us);
         }
-        fclose(file);
+        if (NULL != file) {
+          fclose(file);
+        }
         break;
       }
       case SHARES: {
@@ -222,14 +180,20 @@ int ObAllVirtualCgroupConfig::add_cgroup_config_info_(const char *cgroup_path)
           int shares = atoi(buf);
           cells[i].set_int(shares);
         }
-        fclose(file);
+        if (NULL != file) {
+          fclose(file);
+        }
         break;
       }
       case CGROUP_PATH: {
-        int path_len = strlen(cgroup_path) - strlen(root_cgroup_);
-        strncpy(cgroup_path_buf_, cgroup_path + strlen(root_cgroup_), path_len);
-        cgroup_path_buf_[path_len] = '\0';
-        cells[i].set_varchar(cgroup_path_buf_);
+        int path_len = strlen(cgroup_path) - strlen(root_cgroup_path);
+        if (path_len <= 0) {
+          cells[i].set_varchar("");
+        } else {
+          strncpy(cgroup_path_buf_, cgroup_path + strlen(root_cgroup_path), path_len);
+          cgroup_path_buf_[path_len] = '\0';
+          cells[i].set_varchar(cgroup_path_buf_);
+        }
         cells[i].set_collation_type(
             ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
