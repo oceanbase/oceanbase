@@ -896,7 +896,17 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
       das_rtdef.scan_flag_.set_iter_uncommitted_row();
     }
   }
-  if (MY_SPEC.batch_scan_flag_ || is_lookup) {
+  if (MY_SPEC.batch_scan_flag_) {
+    // if tsc enable batch rescan, the output order of tsc is determined by group id
+    if (das_rtdef.scan_flag_.scan_order_ == ObQueryFlag::Reverse) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Scan order is not supported in batch rescan", K(ret), K(das_rtdef.scan_flag_.scan_order_));
+    } else {
+      das_rtdef.scan_flag_.scan_order_ = ObQueryFlag::KeepOrder;
+    }
+  }
+
+  if (is_lookup) {
     das_rtdef.scan_flag_.scan_order_ = ObQueryFlag::KeepOrder;
   }
   das_rtdef.scan_flag_.is_lookup_for_4377_ = is_lookup;
