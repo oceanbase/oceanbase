@@ -1714,6 +1714,12 @@ DEF_STR_WITH_CHECKER(sql_protocol_min_tls_version, OB_CLUSTER_PARAMETER, "none",
 DEF_MODE_WITH_PARSER(_obkv_feature_mode, OB_CLUSTER_PARAMETER, "", common::ObKvFeatureModeParser,
     "_obkv_feature_mode is a option list to control specified OBKV features on/off.",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_TIME(_standby_max_replay_gap_time, OB_TENANT_PARAMETER, "60s", "[10s,)",
+        "The difference in replayable_scn between log streams on standby tenants is not greater than "
+        "_standby_max_replay_gap_time, and the gap between sync_scn and replayable_scn of each log stream "
+        "is kept reasonably small. Range: [10s, )",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(_ha_diagnose_history_recycle_interval, OB_CLUSTER_PARAMETER, "7d", "[2m, 180d]",
          "The recycle interval time of diagnostic history data. Range: [2m, 180d]",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

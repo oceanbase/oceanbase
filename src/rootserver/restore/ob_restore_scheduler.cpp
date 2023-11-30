@@ -19,7 +19,7 @@
 #include "rootserver/ob_unit_manager.h"//convert_pool_name_lis
 #include "rootserver/ob_ls_service_helper.h"//create_new_ls_in_trans
 #include "rootserver/ob_common_ls_service.h"//do_create_user_ls
-#include "rootserver/ob_tenant_role_transition_service.h"
+#include "rootserver/standby/ob_tenant_role_transition_service.h"
 #include "share/ob_schema_status_proxy.h"
 #include "share/schema/ob_schema_utils.h"
 #include "share/schema/ob_schema_mgr.h"
@@ -34,7 +34,7 @@
 #include "share/restore/ob_log_restore_source_mgr.h"
 #include "share/ls/ob_ls_recovery_stat_operator.h"//ObLSRecoveryStatOperator
 #include "share/ob_rpc_struct.h"
-#include "share/ob_primary_standby_service.h"
+#include "rootserver/standby/ob_standby_service.h"
 #include "logservice/palf/log_define.h"//scn
 #include "share/scn.h"
 #include "ob_restore_service.h"
@@ -632,7 +632,9 @@ int ObRestoreScheduler::post_check(const ObPhysicalRestoreJob &job_info)
   DEBUG_SYNC(BEFORE_PHYSICAL_RESTORE_POST_CHECK);
   ObAllTenantInfo all_tenant_info; 
   const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id_);
-
+  ObTenantRoleTransitionService role_transition_service;
+  ObTenantRoleTransCostDetail cost_detail;
+  ObTenantRoleTransAllLSInfo all_ls;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
@@ -656,9 +658,18 @@ int ObRestoreScheduler::post_check(const ObPhysicalRestoreJob &job_info)
             share::STANDBY_TENANT_ROLE, all_tenant_info.get_switchover_status(),
             share::NORMAL_SWITCHOVER_STATUS, new_switch_ts))) {
       LOG_WARN("failed to update tenant role", KR(ret), K(tenant_id_), K(all_tenant_info));
+    } else if (OB_FAIL(all_ls.init())) {
+      LOG_WARN("fail to init all_ls", KR(ret));
+    } else if (OB_FAIL(role_transition_service.init(
+        tenant_id_,
+        ObSwitchTenantArg::OpType::INVALID,
+        sql_proxy_,
+        GCTX.srv_rpc_proxy_,
+        &cost_detail,
+        &all_ls))) {
+      LOG_WARN("fail to init role_transition_service", KR(ret), K(tenant_id_),
+          KP(sql_proxy_), KP(GCTX.srv_rpc_proxy_));
     } else {
-      ObTenantRoleTransitionService role_transition_service(tenant_id_, sql_proxy_,
-                                            GCTX.srv_rpc_proxy_, ObSwitchTenantArg::OpType::INVALID);
       (void)role_transition_service.broadcast_tenant_info(
             ObTenantRoleTransitionConstants::RESTORE_TO_STANDBY_LOG_MOD_STR);
     }

@@ -6935,6 +6935,9 @@ public:
 
   bool is_valid() const;
   bool operator==(const obrpc::ObCheckpoint &r) const;
+  bool operator < (const ObCheckpoint &that) {
+    return this->cur_sync_scn_ < that.cur_sync_scn_;
+  }
   share::ObLSID get_ls_id() const
   {
     return ls_id_;
@@ -6954,7 +6957,8 @@ public:
             && cur_sync_scn_.is_valid_and_not_min() && cur_restore_source_max_scn_.is_valid_and_not_min());
   }
 
-  TO_STRING_KV(K_(ls_id), K_(cur_sync_scn), K_(cur_restore_source_max_scn));
+  TO_STRING_KV("ls_id", ls_id_.id(), "cur_sync_scn", cur_sync_scn_.get_val_for_inner_table_field(),
+      "cur_restore_source_max_scn", cur_restore_source_max_scn_.get_val_for_inner_table_field());
 
   share::ObLSID ls_id_;
   share::SCN cur_sync_scn_;

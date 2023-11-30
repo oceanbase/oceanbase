@@ -50,6 +50,7 @@ ob_set_subtarget(ob_rootserver common
   ob_root_utils.cpp
   ob_root_inspection.cpp
   ob_rs_event_history_table_operator.cpp
+  ob_tenant_event_history_table_operator.cpp
   ob_rs_job_table_operator.cpp
   ob_rs_reentrant_thread.cpp
   ob_rs_thread_checker.cpp
@@ -77,11 +78,9 @@ ob_set_subtarget(ob_rootserver common
   ob_tenant_info_loader.cpp
   ob_create_standby_from_net_actor.cpp
   ob_primary_ls_service.cpp
-  ob_recovery_ls_service.cpp
   ob_balance_ls_primary_zone.cpp
   ob_common_ls_service.cpp
   ob_ls_service_helper.cpp
-  ob_tenant_role_transition_service.cpp
   ob_tenant_transfer_service.cpp
   ob_tenant_balance_service.cpp
   ob_ls_balance_helper.cpp
@@ -164,6 +163,12 @@ ob_set_subtarget(ob_rootserver virtual_table
   virtual_table/ob_virtual_core_inner_table.cpp
   virtual_table/ob_all_virtual_backup_task_scheduler_stat.cpp
   virtual_table/ob_all_virtual_ls_replica_task_plan.cpp
+)
+
+ob_set_subtarget(ob_rootserver standby
+  standby/ob_standby_service.cpp
+  standby/ob_recovery_ls_service.cpp
+  standby/ob_tenant_role_transition_service.cpp
 )
 
 ob_server_add_target(ob_rootserver)

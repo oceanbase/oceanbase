@@ -22,7 +22,7 @@
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "storage/tx_storage/ob_ls_map.h"     // ObLSIterator
 #include "storage/tx_storage/ob_ls_service.h"   // ObLSService
-#include "rootserver/ob_recovery_ls_service.h" //ObLSRecoveryService
+#include "rootserver/standby/ob_recovery_ls_service.h" //ObLSRecoveryService
 
 using namespace oceanbase::share;
 

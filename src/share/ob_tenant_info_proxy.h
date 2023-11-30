@@ -112,9 +112,13 @@ IS_TENANT_STATUS(prepare_switching_to_standby)
 IS_TENANT_STATUS(prepare_flashback_for_switch_to_primary)
 #undef IS_TENANT_STATUS 
 
- TO_STRING_KV(K_(tenant_id), K_(tenant_role), K_(switchover_status),
-              K_(switchover_epoch), K_(sync_scn), K_(replayable_scn),
-              K_(standby_scn), K_(recovery_until_scn), K_(log_mode), K_(max_ls_id));
+  TO_STRING_KV(K_(tenant_id), "tenant_role", tenant_role_.to_str(),
+    "switchover_status", switchover_status_.to_str(),
+    K_(switchover_epoch), "sync_scn", sync_scn_.get_val_for_inner_table_field(),
+    "replayable_scn", replayable_scn_.get_val_for_inner_table_field(),
+    "standby_scn", standby_scn_.get_val_for_inner_table_field(),
+    "recovery_until_scn", recovery_until_scn_.get_val_for_inner_table_field(),
+    "log_mode", log_mode_.to_str(), "max_ls_id", max_ls_id_.id());
   DECLARE_TO_YSON_KV;
 
   // Getter&Setter

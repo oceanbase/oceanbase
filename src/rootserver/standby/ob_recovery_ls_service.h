@@ -17,7 +17,7 @@
 #include "logservice/palf/lsn.h"//palf::LSN
 #include "logservice/palf/palf_iterator.h"          //PalfBufferIterator
 #include "logservice/restoreservice/ob_log_restore_handler.h"//RestoreStatusInfo
-#include "ob_primary_ls_service.h" //ObTenantThreadHelper
+#include "rootserver/ob_primary_ls_service.h" //ObTenantThreadHelper
 #include "lib/lock/ob_spin_lock.h" //ObSpinLock
 #include "storage/tx/ob_multi_data_source.h" //ObTxBufferNode
 #include "src/share/restore/ob_log_restore_source.h" //ObLogRestoreSourceItem

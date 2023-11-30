@@ -97,7 +97,7 @@
 #include "share/ash/ob_active_sess_hist_task.h"
 #include "share/ash/ob_active_sess_hist_list.h"
 #include "share/ob_server_blacklist.h"
-#include "share/ob_primary_standby_service.h" // ObPrimaryStandbyService
+#include "rootserver/standby/ob_standby_service.h" // ObStandbyService
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "share/longops_mgr/ob_longops_mgr.h"
 #include "logservice/palf/election/interface/election.h"
@@ -471,8 +471,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     } else if (OB_FAIL(imc_tasks_.init())) {
       LOG_ERROR("init imc tasks failed", KR(ret));
 #endif
-    } else if (OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.init(&sql_proxy_, &schema_service_))) {
-      LOG_ERROR("init OB_PRIMARY_STANDBY_SERVICE failed", KR(ret));
+    } else if (OB_FAIL(OB_STANDBY_SERVICE.init(&sql_proxy_, &schema_service_))) {
+      LOG_ERROR("init OB_STANDBY_SERVICE failed", KR(ret));
     } else if (OB_FAIL(init_px_target_mgr())) {
       LOG_ERROR("init px target mgr failed", KR(ret));
     } else if (OB_FAIL(OB_BACKUP_INDEX_CACHE.init())) {
@@ -773,9 +773,9 @@ void ObServer::destroy()
     ObVirtualTenantManager::get_instance().destroy();
     FLOG_INFO("virtual tenant manager destroyed");
 
-    FLOG_INFO("begin to destroy OB_PRIMARY_STANDBY_SERVICE");
-    OB_PRIMARY_STANDBY_SERVICE.destroy();
-    FLOG_INFO("OB_PRIMARY_STANDBY_SERVICE destroyed");
+    FLOG_INFO("begin to destroy OB_STANDBY_SERVICE");
+    OB_STANDBY_SERVICE.destroy();
+    FLOG_INFO("OB_STANDBY_SERVICE destroyed");
 
     FLOG_INFO("begin to destroy rootservice event history");
     ROOTSERVICE_EVENT_INSTANCE.destroy();

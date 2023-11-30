@@ -37,7 +37,7 @@
 #include "share/ob_errno.h"
 #include "share/ob_share_util.h"                           //ObShareUtil
 #include "share/schema/ob_multi_version_schema_service.h"  //ObMultiSchemaService
-#include "share/ob_primary_standby_service.h" // ObPrimaryStandbyService
+#include "rootserver/standby/ob_standby_service.h" // ObStandbyService
 #include "share/ob_standby_upgrade.h"  // ObStandbyUpgrade
 #include "share/ob_upgrade_utils.h"  // ObUpgradeChecker
 #include "share/ob_global_stat_proxy.h" // ObGlobalStatProxy

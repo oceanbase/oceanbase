@@ -445,6 +445,32 @@ int ObAllTenantInfoProxy::update_tenant_recovery_status_in_trans(
     SCN new_replay_scn = gen_new_replayable_scn(old_tenant_info.get_replayable_scn(), replay_scn, new_sync_scn);
     SCN new_scn = gen_new_standby_scn(old_tenant_info.get_standby_scn(), readable_scn, new_replay_scn);
 
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (OB_UNLIKELY(!tenant_config.is_valid())) {
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "tenant config is invalid", K(tenant_id));
+    } else {
+      const int64_t MAX_GAP = tenant_config->_standby_max_replay_gap_time * 1000;
+      const int64_t REAL_GAP = new_replay_scn.get_val_for_gts() - new_scn.get_val_for_gts();
+      const bool IS_MAX_GAP_REACHED = REAL_GAP > MAX_GAP ? true : false;
+      SCN new_standby_scn_plus_gap;
+      new_standby_scn_plus_gap = SCN::plus(new_scn, MAX_GAP);
+      if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000)) { // 10s
+        LOG_INFO("tenant scn gap info", K(IS_MAX_GAP_REACHED), K(REAL_GAP), K(MAX_GAP), K(new_sync_scn),
+            K(new_replay_scn), K(new_scn), K(old_tenant_info));
+      }
+      if (old_tenant_info.is_standby()
+          && new_replay_scn.is_valid()
+          && new_standby_scn_plus_gap.is_valid()
+          && new_replay_scn > new_standby_scn_plus_gap) {
+        if (new_standby_scn_plus_gap >= old_tenant_info.get_replayable_scn()
+            && old_tenant_info.get_standby_scn() > SCN::base_scn()) {
+          // sys ls's readable_scn starts from base_scn
+          // replayable_scn cannot start from base_scn, it's too slow when restore tenant
+          // at the beginning time, replayable_scn should be sync_scn
+          new_replay_scn = new_standby_scn_plus_gap;
+        }
+      }
+    }
     if (old_tenant_info.get_sync_scn() == new_sync_scn
         && old_tenant_info.get_replayable_scn() == new_replay_scn
         && old_tenant_info.get_standby_scn() == new_scn) {

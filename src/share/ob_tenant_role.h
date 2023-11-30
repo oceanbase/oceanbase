@@ -58,7 +58,7 @@ public:
   bool is_standby() const { return STANDBY_TENANT == value_; }
   bool is_restore() const { return RESTORE_TENANT == value_; }
 
-  TO_STRING_KV(K_(value));
+  TO_STRING_KV("tenant_role", to_str(), K_(value));
   DECLARE_TO_YSON_KV;
 private:
   Role value_;

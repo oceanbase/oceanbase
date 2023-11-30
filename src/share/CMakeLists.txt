@@ -180,7 +180,6 @@ ob_set_subtarget(ob_share common
   ob_inner_kv_table_operator.cpp
   ob_inner_table_operator.cpp
   ob_standby_upgrade.cpp
-  ob_primary_standby_service.cpp
   ob_common_id.cpp
   ob_cluster_event_history_table_operator.cpp
   scn.cpp

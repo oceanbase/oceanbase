@@ -41,7 +41,7 @@
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "observer/omt/ob_tenant.h" //ObTenant
 #include "rootserver/freeze/ob_major_freeze_helper.h" //ObMajorFreezeHelper
-#include "share/ob_primary_standby_service.h" // ObPrimaryStandbyService
+#include "rootserver/standby/ob_standby_service.h" // ObStandbyService
 #include "rpc/obmysql/ob_sql_sock_session.h"
 #include "sql/plan_cache/ob_plan_cache.h"
 #include "sql/plan_cache/ob_ps_cache.h"
@@ -2038,9 +2038,7 @@ int ObSwitchTenantExecutor::execute(ObExecContext &ctx, ObSwitchTenantStmt &stmt
 
     // TODO support specify ALL
     if (OB_FAIL(ret)) {
-    } else if (arg.get_is_verify()) {
-      //do nothing
-    } else if (OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.switch_tenant(arg))) {
+    } else if (OB_FAIL(OB_STANDBY_SERVICE.switch_tenant(arg))) {
       LOG_WARN("failed to switch_tenant", KR(ret), K(arg));
     }
 
@@ -2064,7 +2062,7 @@ int ObRecoverTenantExecutor::execute(ObExecContext &ctx, ObRecoverTenantStmt &st
 
     // TODO support specify ALL and tenant list
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.recover_tenant(arg))) {
+    } else if (OB_FAIL(OB_STANDBY_SERVICE.recover_tenant(arg))) {
       LOG_WARN("failed to recover_tenant", KR(ret), K(arg));
     }
   }

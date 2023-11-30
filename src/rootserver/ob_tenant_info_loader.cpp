@@ -467,6 +467,25 @@ int ObTenantInfoLoader::check_is_primary_normal_status(bool &is_primary_normal_s
   return ret;
 }
 
+int ObTenantInfoLoader::check_is_prepare_flashback_for_switch_to_primary_status(bool &is_prepare)
+{
+  int ret = OB_SUCCESS;
+  is_prepare = false;
+
+  if (OB_SYS_TENANT_ID == MTL_ID() || is_meta_tenant(MTL_ID())) {
+    is_prepare = false;
+  } else {
+    // user tenant
+    share::ObAllTenantInfo tenant_info;
+    if (OB_FAIL(tenant_info_cache_.get_tenant_info(tenant_info))) {
+      LOG_WARN("failed to get tenant info", KR(ret));
+    } else {
+      is_prepare = tenant_info.is_prepare_flashback_for_switch_to_primary_status();
+    }
+  }
+  return ret;
+}
+
 int ObTenantInfoLoader::get_replayable_scn(share::SCN &replayable_scn)
 {
   int ret = OB_SUCCESS;

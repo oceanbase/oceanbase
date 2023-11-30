@@ -48,6 +48,7 @@
 #include "sql/optimizer/ob_join_order.h"
 #include "rootserver/ob_bootstrap.h"
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
+#include "rootserver/ob_tenant_event_history_table_operator.h" // TENANT_EVENT_INSTANCE
 #include "observer/ob_server.h"
 #include "observer/ob_dump_task_generator.h"
 #include "observer/ob_server_schema_updater.h"
@@ -228,6 +229,8 @@ int ObService::init(common::ObMySQLProxy &sql_proxy,
     FLOG_WARN("client_manager_.initialize failed", "self_addr", gctx_.self_addr(), KR(ret));
   } else if (OB_FAIL(CLUSTER_EVENT_INSTANCE.init(sql_proxy))) {
     FLOG_WARN("init cluster event history table failed", KR(ret));
+  } else if (OB_FAIL(TENANT_EVENT_INSTANCE.init(sql_proxy, gctx_.self_addr()))) {
+    FLOG_WARN("init tenant event history table failed", KR(ret), K(gctx_.self_addr()));
   } else if (OB_FAIL(SERVER_EVENT_INSTANCE.init(sql_proxy, gctx_.self_addr()))) {
     FLOG_WARN("init server event history table failed", KR(ret));
   } else if (OB_FAIL(DEALOCK_EVENT_INSTANCE.init(sql_proxy))) {
@@ -426,6 +429,10 @@ int ObService::destroy()
     FLOG_INFO("begin to destroy cluster event instance");
     CLUSTER_EVENT_INSTANCE.destroy();
     FLOG_INFO("cluster event instance destroyed");
+
+    FLOG_INFO("begin to destroy tenant event instance");
+    TENANT_EVENT_INSTANCE.destroy();
+    FLOG_INFO("tenant event instance destroyed");
 
     FLOG_INFO("begin to destroy server event instance");
     SERVER_EVENT_INSTANCE.destroy();

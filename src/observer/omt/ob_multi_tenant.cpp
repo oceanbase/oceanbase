@@ -99,7 +99,7 @@
 #include "rootserver/ob_tenant_info_loader.h"//ObTenantInfoLoader
 #include "rootserver/ob_create_standby_from_net_actor.h" // ObCreateStandbyFromNetActor
 #include "rootserver/ob_primary_ls_service.h"//ObLSService
-#include "rootserver/ob_recovery_ls_service.h"//ObRecoveryLSService
+#include "rootserver/standby/ob_recovery_ls_service.h"//ObRecoveryLSService
 #include "rootserver/ob_common_ls_service.h"//ObCommonLSService
 #include "rootserver/restore/ob_restore_service.h" //ObRestoreService
 #include "rootserver/ob_tenant_transfer_service.h" // ObTenantTransferService

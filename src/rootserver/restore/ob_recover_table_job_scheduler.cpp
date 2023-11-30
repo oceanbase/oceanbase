@@ -17,7 +17,7 @@
 #include "rootserver/restore/ob_recover_table_initiator.h"
 #include "rootserver/restore/ob_restore_service.h"
 #include "share/backup/ob_backup_data_table_operator.h"
-#include "share/ob_primary_standby_service.h"
+#include "rootserver/standby/ob_standby_service.h"
 #include "share/location_cache/ob_location_service.h"
 #include "share/restore/ob_physical_restore_table_operator.h"
 #include "share/restore/ob_import_util.h"
@@ -652,7 +652,7 @@ int ObRecoverTableJobScheduler::failover_to_primary_(
   MTL_SWITCH(OB_SYS_TENANT_ID) {
     if (OB_FAIL(switch_tenant_arg.init(aux_tenant_id, obrpc::ObSwitchTenantArg::OpType::FAILOVER_TO_PRIMARY, "", false))) {
       LOG_WARN("failed to init switch tenant arg", K(ret), K(aux_tenant_id));
-    } else if (OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.switch_tenant(switch_tenant_arg))) {
+    } else if (OB_FAIL(OB_STANDBY_SERVICE.switch_tenant(switch_tenant_arg))) {
       LOG_WARN("failed to switch_tenant", KR(ret), K(switch_tenant_arg));
     } else {
       LOG_INFO("[RECOVER_TABLE]succeed to switch aux tenant role to primary", K(aux_tenant_id), K(job));

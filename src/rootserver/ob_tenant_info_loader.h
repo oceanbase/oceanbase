@@ -17,7 +17,7 @@
 #include "lib/utility/ob_print_utils.h" //TO_STRING_KV
 #include "share/ob_tenant_info_proxy.h"//ObAllTenantInfo
 #include "lib/lock/ob_spin_rwlock.h" //lock
-#include "rootserver/ob_tenant_role_transition_service.h"//ObTenantRoleTransitionConstants
+#include "rootserver/standby/ob_tenant_role_transition_service.h"//ObTenantRoleTransitionConstants
 
 namespace oceanbase {
 namespace common
@@ -156,6 +156,7 @@ public:
   * @param[out] is_primary_normal_status
   */
  int check_is_primary_normal_status(bool &is_primary_normal_status);
+ int check_is_prepare_flashback_for_switch_to_primary_status(bool &is_prepare);
 
  int refresh_tenant_info();
  int update_tenant_info_cache(const int64_t new_ora_rowscn, const ObAllTenantInfo &new_tenant_info);

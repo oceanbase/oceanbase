@@ -10,20 +10,46 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_STANDBY_OB_PRIMARY_STANDBY_SERVICE_H_
-#define OCEANBASE_STANDBY_OB_PRIMARY_STANDBY_SERVICE_H_
+#ifndef OCEANBASE_STANDBY_OB_STANDBY_SERVICE_H_
+#define OCEANBASE_STANDBY_OB_STANDBY_SERVICE_H_
 
 #include "share/ob_rpc_struct.h"                          // ObAdminClusterArg
 #include "share/ob_rs_mgr.h"                              // ObRsMgr
 #include "lib/mysqlclient/ob_isql_client.h"               // ObISQLClient
 #include "rootserver/ob_ddl_service.h"                    // ObDDLService
 #include "share/schema/ob_multi_version_schema_service.h" // ObMultiVersionSchemaService
+#include "rootserver/standby/ob_tenant_role_transition_service.h" // ObTenantRoleTransitionService
 
+// usage: TENANT_ROLE_TRANS_USER_ERR_WITH_SUFFIX(OB_OP_NOT_ALLOW, "tenant status is not normal")
+// the output to user will be "tenant status is not normal, switchover to primary is not allowed"
+#define TENANT_ROLE_TRANS_USER_ERR_WITH_SUFFIX(TRT_ERR_RET, TRT_ERR_MSG, TRT_OP) \
+({ \
+  int tmp_ret = OB_SUCCESS; \
+  ObSqlString err_msg; \
+  if (OB_TMP_FAIL(err_msg.append_fmt(TRT_ERR_MSG))) {  \
+    LOG_WARN("fail to assign error message", KR(tmp_ret));  \
+  } else { \
+    if (obrpc::ObSwitchTenantArg::OpType::SWITCH_TO_PRIMARY == TRT_OP) {  \
+      tmp_ret = err_msg.append_fmt(", switchover to primary is"); \
+    } else if (obrpc::ObSwitchTenantArg::OpType::SWITCH_TO_STANDBY == TRT_OP) {  \
+      tmp_ret = err_msg.append_fmt(", switchover to standby is"); \
+    } else if (obrpc::ObSwitchTenantArg::OpType::FAILOVER_TO_PRIMARY == TRT_OP) { \
+      tmp_ret = err_msg.append_fmt(", failover to primary is"); \
+    } else { \
+      tmp_ret = err_msg.append_fmt(", this operation is"); \
+    } \
+    if (OB_SUCCESS != tmp_ret) { \
+      LOG_WARN("fail to assign error message", KR(tmp_ret)); \
+    } else { \
+      LOG_USER_ERROR(TRT_ERR_RET, err_msg.ptr()); \
+    } \
+  }  \
+})
 namespace oceanbase
 {
 
 using namespace share;
-
+using namespace rootserver;
 namespace share
 {
 namespace schema
@@ -35,15 +61,15 @@ class ObMultiVersionSchemaService;
 namespace standby
 {
 
-class ObPrimaryStandbyService
+class ObStandbyService
 {
 public:
-  ObPrimaryStandbyService(): 
+  ObStandbyService():
            sql_proxy_(NULL),
            schema_service_(NULL),
            inited_(false) {}
-  virtual ~ObPrimaryStandbyService() {}
-
+  virtual ~ObStandbyService() {}
+  typedef obrpc::ObSwitchTenantArg::OpType RoleTransType;
   int init(ObMySQLProxy *sql_proxy,
            share::schema::ObMultiVersionSchemaService *schema_service);
   void destroy();
@@ -110,7 +136,14 @@ private:
    * @param[in] arg tenant switch arguments
    * @return return code
    */
-  int failover_to_primary(const uint64_t tenant_id, const obrpc::ObSwitchTenantArg::OpType &switch_optype);
+  int failover_to_primary(
+      const uint64_t tenant_id,
+      const obrpc::ObSwitchTenantArg::OpType &switch_optype,
+      const bool is_verify,
+      const share::ObAllTenantInfo &tenant_info,
+      share::SCN &switch_scn,
+      ObTenantRoleTransCostDetail &cost_detail,
+      ObTenantRoleTransAllLSInfo &all_ls);
 
   /**
    * @description:
@@ -129,7 +162,13 @@ private:
    * @param[in] arg tenant switch arguments which include primary tenant switchover checkpoint
    * @return return code
    */
-  int switch_to_primary(const uint64_t tenant_id, const obrpc::ObSwitchTenantArg::OpType &switch_optype);
+  int switch_to_primary(
+      const uint64_t tenant_id,
+      const obrpc::ObSwitchTenantArg::OpType &switch_optype,
+      const bool is_verify,
+      share::SCN &switch_scn,
+      ObTenantRoleTransCostDetail &cost_detail,
+      ObTenantRoleTransAllLSInfo &all_ls);
 
   /**
    * @description:
@@ -137,7 +176,14 @@ private:
    * @param[in] tenant_id the primary tenant id to switch
    * @return return code
    */
-  int switch_to_standby(const uint64_t tenant_id, const obrpc::ObSwitchTenantArg::OpType &switch_optype);
+  int switch_to_standby(
+      const uint64_t tenant_id,
+      const obrpc::ObSwitchTenantArg::OpType &switch_optype,
+      const bool is_verify,
+      share::ObAllTenantInfo &tenant_info,
+      share::SCN &switch_scn,
+      ObTenantRoleTransCostDetail &cost_detail,
+      ObTenantRoleTransAllLSInfo &all_ls);
 
   /**
    * @description:
@@ -195,6 +241,13 @@ private:
 
   /**
    * @description:
+   *    check ls restore_status is normal
+   * @param[in] tenant_id the tenant id to check
+   * @return return code
+   */
+  int check_ls_restore_status_(const uint64_t tenant_id);
+  /**
+   * @description:
    *    get tenant status from all_tenant
    * @param[in] tenant_id
    * @param[out] status tenant status from all_tenant
@@ -203,14 +256,12 @@ private:
   int get_tenant_status_(
       const uint64_t tenant_id,
       ObTenantStatus &status);
-
-  /**
-   * @description:
-   *    check ls restore_status is normal
-   * @param[in] tenant_id the tenant id to check
-   * @return return code
-   */
-  int check_ls_restore_status_(const uint64_t tenant_id);
+  int check_if_tenant_status_is_normal_(const uint64_t tenant_id, const RoleTransType op_type);
+  void tenant_event_start_(const uint64_t switch_tenant_id, const obrpc::ObSwitchTenantArg &arg,
+      int ret, int64_t begin_ts, const share::ObAllTenantInfo &tenant_info);
+  void tenant_event_end_(const uint64_t switch_tenant_id, const obrpc::ObSwitchTenantArg &arg,
+      int ret, int64_t cost, int64_t end_ts, const share::SCN switch_scn,
+      ObTenantRoleTransCostDetail &cost_detail, ObTenantRoleTransAllLSInfo &all_ls);
 private:
   const static int64_t SEC_UNIT = 1000L * 1000L;
   const static int64_t PRINT_INTERVAL = 10 * 1000 * 1000L;
@@ -220,19 +271,19 @@ private:
   bool inited_;
 };
 
-class ObPrimaryStandbyServiceGetter
+class ObStandbyServiceGetter
 {
 public:
-  static ObPrimaryStandbyService &get_instance()
+  static ObStandbyService &get_instance()
   {
-    static ObPrimaryStandbyService primary_standby_service;
-    return primary_standby_service;
+    static ObStandbyService standby_service;
+    return standby_service;
   }
 };
 
-#define OB_PRIMARY_STANDBY_SERVICE (oceanbase::standby::ObPrimaryStandbyServiceGetter::get_instance())
+#define OB_STANDBY_SERVICE (oceanbase::standby::ObStandbyServiceGetter::get_instance())
 
 }  // end namespace standby
 }  // end namespace oceanbase
 
-#endif  // OCEANBASE_STANDBY_OB_PRIMARY_STANDBY_SERVICE_H_
+#endif  // OCEANBASE_STANDBY_OB_STANDBY_SERVICE_H_

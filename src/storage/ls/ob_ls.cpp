@@ -36,7 +36,7 @@
 #include "rootserver/ob_create_standby_from_net_actor.h"
 #include "rootserver/ob_heartbeat_service.h"
 #include "rootserver/ob_primary_ls_service.h"
-#include "rootserver/ob_recovery_ls_service.h"
+#include "rootserver/standby/ob_recovery_ls_service.h"
 #include "rootserver/ob_tenant_transfer_service.h" // ObTenantTransferService
 #include "rootserver/ob_tenant_balance_service.h"
 #include "rootserver/restore/ob_restore_service.h"
