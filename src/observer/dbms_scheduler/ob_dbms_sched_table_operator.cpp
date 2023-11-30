@@ -63,9 +63,6 @@ int ObDBMSSchedTableOperator::update_for_start(
   CK (OB_LIKELY(tenant_id != OB_INVALID_ID));
   CK (OB_LIKELY(job_info.job_ != OB_INVALID_ID));
 
-  OZ (calc_execute_at(
-    job_info, (update_nextdate ? job_info.next_date_ : dummy_execute_at), delay, true));
-
   OX (job_info.this_date_ = now);
   OZ (dml.add_gmt_modified(now));
   OZ (dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
@@ -75,7 +72,8 @@ int ObDBMSSchedTableOperator::update_for_start(
   OZ (dml.add_column("state", "SCHEDULED"));
   OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
   OZ (sql_proxy_->write(tenant_id, sql.ptr(), affected_rows));
-
+  OZ (calc_execute_at(
+    job_info, (update_nextdate ? job_info.next_date_ : dummy_execute_at), delay, true));
   return ret;
 }
 
@@ -135,8 +133,6 @@ int ObDBMSSchedTableOperator::update_for_end(
   ObSqlString sql2;
   int64_t affected_rows = 0;
   const int64_t now = ObTimeUtility::current_time();
-  int64_t next_date;
-  int64_t delay;
 
   UNUSED(errmsg);
 
@@ -274,7 +270,7 @@ int ObDBMSSchedTableOperator::check_auto_drop(ObDBMSSchedJobInfo &job_info)
   return ret;
 }
 
-int ObDBMSSchedTableOperator::check_job_can_running(int64_t tenant_id, bool &can_running)
+int ObDBMSSchedTableOperator::check_job_can_running(int64_t tenant_id, int64_t alive_job_count, bool &can_running)
 {
   int ret = OB_SUCCESS;
   uint64_t job_queue_processor = 0;
@@ -287,33 +283,37 @@ int ObDBMSSchedTableOperator::check_job_can_running(int64_t tenant_id, bool &can
   CK (tenant_config.is_valid());
   OX (job_queue_processor = tenant_config->job_queue_processes);
   // found current running job count
-  OZ (sql.append_fmt("select count(*) from %s where this_date is not null", OB_ALL_TENANT_SCHEDULER_JOB_TNAME));
+  if (OB_FAIL(ret)) {
+  } else if (alive_job_count <= job_queue_processor) {
+    can_running = true;
+  } else {
+    OZ (sql.append_fmt("select count(*) from %s where this_date is not null", OB_ALL_TENANT_SCHEDULER_JOB_TNAME));
 
-  CK (OB_NOT_NULL(GCTX.schema_service_));
-  OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id, guard));
-  OZ (guard.check_tenant_is_restore(tenant_id, is_restore));
+    CK (OB_NOT_NULL(GCTX.schema_service_));
+    OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id, guard));
+    OZ (guard.check_tenant_is_restore(tenant_id, is_restore));
 
-  // job can not run in standy cluster and restore.
-  if (OB_SUCC(ret) && job_queue_processor > 0
-      && !GCTX.is_standby_cluster()
-      && !is_restore) {
-    SMART_VAR(ObMySQLProxy::MySQLResult, result) {
-      if (OB_FAIL(sql_proxy_->read(result, tenant_id, sql.ptr()))) {
-        LOG_WARN("execute query failed", K(ret), K(sql), K(tenant_id));
-      } else if (OB_NOT_NULL(result.get_result())) {
-        if (OB_SUCCESS == (ret = result.get_result()->next())) {
-          int64_t int_value = 0;
-          if (OB_FAIL(result.get_result()->get_int(static_cast<const int64_t>(0), int_value))) {
-            LOG_WARN("failed to get column in row. ", K(ret));
+    // job can not run in standy cluster and restore.
+    if (OB_SUCC(ret) && job_queue_processor > 0
+        && !is_restore) {
+      SMART_VAR(ObMySQLProxy::MySQLResult, result) {
+        if (OB_FAIL(sql_proxy_->read(result, tenant_id, sql.ptr()))) {
+          LOG_WARN("execute query failed", K(ret), K(sql), K(tenant_id));
+        } else if (OB_NOT_NULL(result.get_result())) {
+          if (OB_SUCCESS == (ret = result.get_result()->next())) {
+            int64_t int_value = 0;
+            if (OB_FAIL(result.get_result()->get_int(static_cast<const int64_t>(0), int_value))) {
+              LOG_WARN("failed to get column in row. ", K(ret));
+            } else {
+              job_running_cnt = static_cast<uint64_t>(int_value);
+            }
           } else {
-            job_running_cnt = static_cast<uint64_t>(int_value);
+            LOG_WARN("failed to calc all running job, no row return", K(ret));
           }
-        } else {
-          LOG_WARN("failed to calc all running job, no row return", K(ret));
         }
       }
+      OX (can_running = (job_queue_processor > job_running_cnt));
     }
-    OX (can_running = (job_queue_processor > job_running_cnt));
   }
   return ret;
 }

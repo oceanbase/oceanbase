@@ -1330,7 +1330,7 @@ DEF_INT(connection_control_max_connection_delay, OB_TENANT_PARAMETER, "214748364
 DEF_BOOL(ob_proxy_readonly_transaction_routing_policy, OB_TENANT_PARAMETER, "false",
          "Proxy route policy for readonly sql: whether regard begining read only stmts as in transaction",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(job_queue_processes, OB_TENANT_PARAMETER, "1000", "[0,1000]",
+DEF_INT(job_queue_processes, OB_TENANT_PARAMETER, "1000", "[0,16384]",
         "specifies the maximum number of job slaves per instance that can be created "
         "for the execution of DBMS_JOB jobs and Oracle Scheduler (DBMS_SCHEDULER) jobs.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
