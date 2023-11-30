@@ -867,7 +867,7 @@ int ObRootService::init(ObServerConfig &config,
     // init ddl service
     FLOG_WARN("init ddl_service_ failed", KR(ret));
   } else if (OB_FAIL(unit_manager_.init(sql_proxy_, *config_, rpc_proxy_, *schema_service,
-                                        root_balancer_))) {
+                                        root_balancer_, *this))) {
     // init unit manager
     FLOG_WARN("init unit_manager failed", KR(ret));
   } else if (OB_FAIL(snapshot_manager_.init(self_addr_))) {
@@ -10743,7 +10743,10 @@ int ObRootService::handle_get_root_key(const obrpc::ObRootKeyArg &arg,
 {
   int ret = OB_SUCCESS;
   ObRootKey root_key;
-  if (OB_UNLIKELY(arg.is_set_ || !arg.is_valid())) {
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(arg.is_set_ || !arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else if (OB_FAIL(ObMasterKeyGetter::instance().get_root_key(arg.tenant_id_, root_key))) {
@@ -10751,19 +10754,18 @@ int ObRootService::handle_get_root_key(const obrpc::ObRootKeyArg &arg,
   } else if (obrpc::RootKeyType::INVALID != root_key.key_type_) {
     result.key_type_ = root_key.key_type_;
     result.root_key_ = root_key.key_;
-  } else if (OB_FAIL(get_root_key_from_obs(arg, result))) {
+  } else if (OB_FAIL(get_root_key_from_obs_(arg, result))) {
     LOG_WARN("failed to get root key from obs", K(ret));
   }
   return ret;
 }
 
-int ObRootService::get_root_key_from_obs(const obrpc::ObRootKeyArg &arg,
-                                         obrpc::ObRootKeyResult &result)
+int ObRootService::get_root_key_from_obs_(const obrpc::ObRootKeyArg &arg,
+                                          obrpc::ObRootKeyResult &result)
 {
   int ret = OB_SUCCESS;
   ObZone empty_zone;
   ObArray<ObAddr> active_server_list;
-  ObArray<ObAddr> inactive_server_list;
   const ObSimpleTenantSchema *simple_tenant = NULL;
   ObSchemaGetterGuard guard;
   const uint64_t tenant_id = arg.tenant_id_;
@@ -10779,12 +10781,11 @@ int ObRootService::get_root_key_from_obs(const obrpc::ObRootKeyArg &arg,
     enable_default = true;
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(SVR_TRACER.get_servers_by_status(empty_zone, active_server_list,
-                                                      inactive_server_list))) {
-    LOG_WARN("get alive servers failed", K(ret));
+  } else if (OB_FAIL(SVR_TRACER.get_alive_servers(empty_zone, active_server_list))) {
+    LOG_WARN("get alive servers failed", KR(ret));
   } else if (OB_FAIL(ObDDLService::notify_root_key(rpc_proxy_, arg, active_server_list, result,
-                                                   enable_default))) {
-    LOG_WARN("failed to notify root key");
+                                                   enable_default, false/*need_call_rs*/))) {
+    LOG_WARN("failed to notify root key", KR(ret));
   }
   return ret;
 }
