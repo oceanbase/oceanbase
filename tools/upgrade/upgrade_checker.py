@@ -623,7 +623,7 @@ def check_oracle_standby_replication_exist(query_cur):
   else:
     min_cluster_version = get_version(results[0][0])
     (desc, results) = query_cur.exec_query("""select tenant_id from oceanbase.__all_tenant where compatibility_mode = 1""")
-    if len(results[0]) > 0 :
+    if len(results) > 0 :
       tenant_ids = results
       if min_cluster_version < get_version("4.2.2.0") :
         for tenant_id in tenant_ids:
