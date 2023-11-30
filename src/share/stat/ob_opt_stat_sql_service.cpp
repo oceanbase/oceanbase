@@ -1879,7 +1879,8 @@ int ObOptStatSqlService::fetch_table_rowcnt(const uint64_t tenant_id,
                            ObSchemaUtils::get_real_table_mappings_tid(table_id) : table_id;
   if (OB_FAIL(gen_tablet_list_str(all_tablet_ids, all_ls_ids, tablet_list_str, tablet_ls_list_str))) {
     LOG_WARN("failed to gen tablet list str", K(ret));
-  } else if (OB_FAIL(raw_sql.append_fmt("select /*+opt_param('enable_in_range_optimization','true')*/ tablet_id, max(row_count) from "\
+  } else if (OB_FAIL(raw_sql.append_fmt("select /*+opt_param('enable_in_range_optimization','true') opt_param('use_default_opt_stat','true')*/"\
+                                         "tablet_id, max(row_count) from "\
                                          "(select cast(tablet_id as unsigned) as tablet_id, cast(inserts - deletes as signed) as row_count "\
                                          "from %s where tenant_id = %lu and table_id = %lu and tablet_id in %s union all "\
                                          "select cast(tablet_id as unsigned) as tablet_id, cast(row_count as signed) as row_count from %s, "\

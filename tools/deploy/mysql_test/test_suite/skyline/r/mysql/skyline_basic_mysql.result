@@ -941,7 +941,7 @@ Query Plan
 =============================================================
 |ID|OPERATOR            |NAME         |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|             |2       |8           |
+|0 |MERGE UNION DISTINCT|             |1       |8           |
 |1 |├─TABLE FULL SCAN   |t1(idx_a_b_c)|1       |4           |
 |2 |└─TABLE FULL SCAN   |t2(idx_x_y_z)|1       |4           |
 =============================================================
@@ -961,7 +961,7 @@ Query Plan
 =============================================================
 |ID|OPERATOR            |NAME         |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|             |2       |8           |
+|0 |MERGE UNION DISTINCT|             |1       |8           |
 |1 |├─TABLE FULL SCAN   |t1(idx_a_b_c)|1       |4           |
 |2 |└─TABLE FULL SCAN   |t2(idx_x_y_z)|1       |4           |
 =============================================================
@@ -981,7 +981,7 @@ Query Plan
 =============================================================
 |ID|OPERATOR            |NAME         |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|             |2       |8           |
+|0 |MERGE UNION DISTINCT|             |1       |8           |
 |1 |├─TABLE RANGE SCAN  |t1(idx_b_c_a)|1       |4           |
 |2 |└─TABLE RANGE SCAN  |t2(idx_x_y_z)|1       |4           |
 =============================================================
@@ -1003,7 +1003,7 @@ Query Plan
 =============================================================
 |ID|OPERATOR            |NAME         |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|             |2       |8           |
+|0 |MERGE UNION DISTINCT|             |1       |8           |
 |1 |├─TABLE RANGE SCAN  |t1(idx_b_c_a)|1       |4           |
 |2 |└─TABLE RANGE SCAN  |t2(idx_x_y_z)|1       |4           |
 =============================================================
@@ -1466,7 +1466,7 @@ Query Plan
 ================================================================
 |ID|OPERATOR               |NAME         |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------
-|0 |MERGE UNION DISTINCT   |             |2       |13          |
+|0 |MERGE UNION DISTINCT   |             |1       |13          |
 |1 |├─TABLE FULL SCAN      |t2(idx_x_y_z)|1       |4           |
 |2 |└─SORT                 |             |1       |8           |
 |3 |  └─MERGE JOIN         |             |1       |8           |
@@ -3081,7 +3081,7 @@ Query Plan
 =================================================================
 |ID|OPERATOR            |NAME             |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|                 |2       |8           |
+|0 |MERGE UNION DISTINCT|                 |1       |8           |
 |1 |├─TABLE RANGE SCAN  |t6(idx_b_e_d_c_a)|1       |4           |
 |2 |└─TABLE FULL SCAN   |tmp(idx_c1_c2_c3)|1       |4           |
 =================================================================
@@ -3102,7 +3102,7 @@ Query Plan
 =================================================================
 |ID|OPERATOR            |NAME             |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|                 |2       |9           |
+|0 |MERGE UNION DISTINCT|                 |1       |9           |
 |1 |├─TABLE FULL SCAN   |t6(idx_b_e_d_c_a)|1       |4           |
 |2 |└─TABLE FULL SCAN   |tmp(idx_c1_c2_c3)|1       |4           |
 =================================================================
@@ -3122,7 +3122,7 @@ Query Plan
 =================================================================
 |ID|OPERATOR            |NAME             |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|                 |2       |11          |
+|0 |MERGE UNION DISTINCT|                 |1       |11          |
 |1 |├─TABLE FULL SCAN   |tmp(idx_c1_c2_c3)|1       |4           |
 |2 |└─SORT              |                 |1       |7           |
 |3 |  └─TABLE FULL SCAN |t6(idx_b_c)      |1       |7           |
@@ -3145,7 +3145,7 @@ Query Plan
 =================================================================
 |ID|OPERATOR            |NAME             |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|                 |2       |11          |
+|0 |MERGE UNION DISTINCT|                 |1       |11          |
 |1 |├─TABLE FULL SCAN   |tmp(idx_c1_c2_c3)|1       |4           |
 |2 |└─SORT              |                 |1       |7           |
 |3 |  └─TABLE FULL SCAN |t6(idx_b_a_c)    |1       |7           |
@@ -3168,7 +3168,7 @@ Query Plan
 =================================================================
 |ID|OPERATOR            |NAME             |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|                 |2       |9           |
+|0 |MERGE UNION DISTINCT|                 |1       |9           |
 |1 |├─TABLE FULL SCAN   |t6(idx_b_e_d_c_a)|1       |4           |
 |2 |└─TABLE FULL SCAN   |tmp(idx_c1_c2_c3)|1       |4           |
 =================================================================

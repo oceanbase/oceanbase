@@ -1264,7 +1264,8 @@ struct NullAwareAntiJoinInfo {
         filters_(),
         subquery_exprs_(),
         inner_paths_(),
-        table_opt_info_(NULL)
+        table_opt_info_(NULL),
+        est_method_(EST_INVALID)
       {}
 
       bool is_inner_path_;
@@ -1283,6 +1284,7 @@ struct NullAwareAntiJoinInfo {
       ObSEArray<ObPCConstParamInfo, 4> const_param_constraints_;
 
       ObSEArray<ObExprConstraint, 4> expr_constraints_;
+      ObBaseTableEstMethod est_method_;
     };
 
     struct DeducedExprInfo {
@@ -2346,7 +2348,8 @@ struct NullAwareAntiJoinInfo {
 
     int estimate_rowcount_for_access_path(ObIArray<AccessPath*> &all_paths,
                                           const bool is_inner_path,
-                                          common::ObIArray<ObRawExpr*> &filter_exprs);
+                                          common::ObIArray<ObRawExpr*> &filter_exprs,
+                                          ObBaseTableEstMethod &method);
 
     inline bool can_use_remote_estimate(OptimizationMethod method)
     {

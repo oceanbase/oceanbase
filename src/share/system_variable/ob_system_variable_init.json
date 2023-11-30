@@ -3366,6 +3366,19 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
+   },
+  "_enable_storage_cardinality_estimation": {
+    "id": 10159,
+    "name": "_enable_storage_cardinality_estimation",
+    "default_value": "1",
+    "base_value": "1",
+    "data_type": "bool",
+    "info": "whether use storage cardinality estimation in session",
+    "flags": "GLOBAL | SESSION | INVISIBLE | INFLUENCE_PLAN | NEED_SERIALIZE",
+    "publish_version": "430",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
   },
   "lc_time_names": {
     "id": 10160,

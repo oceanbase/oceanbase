@@ -200,7 +200,7 @@ Query Plan
 ==============================================================
 |ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |HASH SEMI JOIN               |     |1       |12          |
+|0 |HASH SEMI JOIN               |     |1       |13          |
 |1 |├─NESTED-LOOP JOIN CARTESIAN |     |1       |8           |
 |2 |│ ├─TABLE FULL SCAN          |t2   |1       |4           |
 |3 |│ └─MATERIAL                 |     |1       |4           |

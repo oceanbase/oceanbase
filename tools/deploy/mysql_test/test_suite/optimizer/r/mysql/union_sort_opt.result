@@ -1740,7 +1740,7 @@ Query Plan
 ==========================================================
 |ID|OPERATOR           |NAME       |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------
-|0 |HASH DISTINCT      |           |1       |13          |
+|0 |HASH DISTINCT      |           |5       |14          |
 |1 |└─UNION ALL        |           |5       |12          |
 |2 |  ├─TABLE FULL SCAN|t1(Reverse)|1       |4           |
 |3 |  ├─TABLE FULL SCAN|t2         |2       |4           |
@@ -1833,15 +1833,15 @@ Query Plan
 =============================================================================
 |ID|OPERATOR                   |NAME                  |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------------
-|0 |SORT                       |                      |5       |52          |
-|1 |└─SUBPLAN SCAN             |TUT                   |5       |50          |
-|2 |  └─MERGE UNION DISTINCT   |                      |11      |50          |
+|0 |SORT                       |                      |5       |51          |
+|1 |└─SUBPLAN SCAN             |TUT                   |5       |49          |
+|2 |  └─MERGE UNION DISTINCT   |                      |11      |49          |
 |3 |    ├─MERGE UNION DISTINCT |                      |6       |39          |
 |4 |    │ ├─TABLE GET          |table2_bigint         |5       |26          |
 |5 |    │ └─SORT               |                      |1       |11          |
 |6 |    │   └─TOP-N SORT       |                      |1       |11          |
 |7 |    │     └─TABLE FULL SCAN|table100_bigint       |1       |10          |
-|8 |    └─SORT                 |                      |5       |8           |
+|8 |    └─SORT                 |                      |5       |7           |
 |9 |      └─TABLE FULL SCAN    |table2_bigint(Reverse)|5       |6           |
 =============================================================================
 Outputs & filters:

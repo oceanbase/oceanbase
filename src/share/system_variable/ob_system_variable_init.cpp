@@ -3337,17 +3337,30 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[236].default_value_ = "en_US" ;
-      ObSysVars[236].info_ = "The locale indicated by the lc_time_names system variable controls the language used to display day and month names and abbreviations" ;
-      ObSysVars[236].name_ = "lc_time_names" ;
-      ObSysVars[236].data_type_ = ObVarcharType ;
-      ObSysVars[236].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[236].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_locale_type_is_valid" ;
-      ObSysVars[236].id_ = SYS_VAR_LC_TIME_NAMES ;
+      ObSysVars[236].default_value_ = "1" ;
+      ObSysVars[236].info_ = "whether use storage cardinality estimation in session" ;
+      ObSysVars[236].name_ = "_enable_storage_cardinality_estimation" ;
+      ObSysVars[236].data_type_ = ObIntType ;
+      ObSysVars[236].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[236].id_ = SYS_VAR__ENABLE_STORAGE_CARDINALITY_ESTIMATION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__ENABLE_STORAGE_CARDINALITY_ESTIMATION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__ENABLE_STORAGE_CARDINALITY_ESTIMATION] = 236 ;
+      ObSysVars[236].base_value_ = "1" ;
+    ObSysVars[236].alias_ = "OB_SV__ENABLE_STORAGE_CARDINALITY_ESTIMATION" ;
+    }();
+
+    [&] (){
+      ObSysVars[237].default_value_ = "en_US" ;
+      ObSysVars[237].info_ = "The locale indicated by the lc_time_names system variable controls the language used to display day and month names and abbreviations" ;
+      ObSysVars[237].name_ = "lc_time_names" ;
+      ObSysVars[237].data_type_ = ObVarcharType ;
+      ObSysVars[237].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[237].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_locale_type_is_valid" ;
+      ObSysVars[237].id_ = SYS_VAR_LC_TIME_NAMES ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LC_TIME_NAMES)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_LC_TIME_NAMES] = 236 ;
-      ObSysVars[236].base_value_ = "en_US" ;
-    ObSysVars[236].alias_ = "OB_SV_LC_TIME_NAMES" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LC_TIME_NAMES] = 237 ;
+      ObSysVars[237].base_value_ = "en_US" ;
+    ObSysVars[237].alias_ = "OB_SV_LC_TIME_NAMES" ;
     }();
 
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
@@ -3356,7 +3369,7 @@ static struct VarsInit{
   }
 }vars_init;
 
-static int64_t var_amount = 237;
+static int64_t var_amount = 238;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

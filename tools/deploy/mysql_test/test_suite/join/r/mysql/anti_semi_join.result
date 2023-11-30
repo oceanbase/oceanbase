@@ -115,7 +115,7 @@ Query Plan
 =======================================================
 |ID|OPERATOR              |NAME |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------
-|0 |NESTED-LOOP ANTI JOIN |     |7       |10          |
+|0 |NESTED-LOOP ANTI JOIN |     |8       |10          |
 |1 |├─TABLE FULL SCAN     |xy_t1|8       |5           |
 |2 |└─MATERIAL            |     |5       |5           |
 |3 |  └─TABLE FULL SCAN   |xy_t2|5       |5           |
@@ -151,7 +151,7 @@ Query Plan
 ====================================================
 |ID|OPERATOR           |NAME |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |MERGE ANTI JOIN    |     |7       |11          |
+|0 |MERGE ANTI JOIN    |     |8       |11          |
 |1 |├─SORT             |     |8       |6           |
 |2 |│ └─TABLE FULL SCAN|xy_t1|8       |5           |
 |3 |└─SORT             |     |5       |5           |
@@ -192,7 +192,7 @@ Query Plan
 ======================================================
 |ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |HASH RIGHT ANTI JOIN |     |7       |11          |
+|0 |HASH RIGHT ANTI JOIN |     |8       |11          |
 |1 |├─TABLE FULL SCAN    |xy_t2|5       |5           |
 |2 |└─TABLE FULL SCAN    |xy_t1|8       |5           |
 ======================================================
@@ -335,7 +335,7 @@ Query Plan
 =======================================================
 |ID|OPERATOR              |NAME |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------
-|0 |NESTED-LOOP SEMI JOIN |     |2       |10          |
+|0 |NESTED-LOOP SEMI JOIN |     |1       |10          |
 |1 |├─TABLE FULL SCAN     |xy_t1|8       |5           |
 |2 |└─MATERIAL            |     |5       |5           |
 |3 |  └─TABLE FULL SCAN   |xy_t2|5       |5           |
@@ -365,7 +365,7 @@ Query Plan
 ====================================================
 |ID|OPERATOR           |NAME |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |MERGE SEMI JOIN    |     |2       |11          |
+|0 |MERGE SEMI JOIN    |     |1       |11          |
 |1 |├─SORT             |     |8       |6           |
 |2 |│ └─TABLE FULL SCAN|xy_t1|8       |5           |
 |3 |└─SORT             |     |5       |5           |
@@ -400,7 +400,7 @@ Query Plan
 ======================================================
 |ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |HASH RIGHT SEMI JOIN |     |2       |11          |
+|0 |HASH RIGHT SEMI JOIN |     |1       |11          |
 |1 |├─TABLE FULL SCAN    |xy_t2|5       |5           |
 |2 |└─TABLE FULL SCAN    |xy_t1|8       |5           |
 ======================================================
@@ -430,7 +430,7 @@ Query Plan
 =======================================================
 |ID|OPERATOR              |NAME |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------
-|0 |NESTED-LOOP ANTI JOIN |     |7       |10          |
+|0 |NESTED-LOOP ANTI JOIN |     |8       |10          |
 |1 |├─TABLE FULL SCAN     |xy_t1|8       |5           |
 |2 |└─MATERIAL            |     |5       |5           |
 |3 |  └─TABLE FULL SCAN   |xy_t2|5       |5           |
@@ -466,7 +466,7 @@ Query Plan
 ====================================================
 |ID|OPERATOR           |NAME |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |MERGE ANTI JOIN    |     |7       |11          |
+|0 |MERGE ANTI JOIN    |     |8       |11          |
 |1 |├─SORT             |     |8       |6           |
 |2 |│ └─TABLE FULL SCAN|xy_t1|8       |5           |
 |3 |└─SORT             |     |5       |5           |
@@ -507,7 +507,7 @@ Query Plan
 ======================================================
 |ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |HASH RIGHT ANTI JOIN |     |7       |11          |
+|0 |HASH RIGHT ANTI JOIN |     |8       |11          |
 |1 |├─TABLE FULL SCAN    |xy_t2|5       |5           |
 |2 |└─TABLE FULL SCAN    |xy_t1|8       |5           |
 ======================================================
@@ -541,7 +541,7 @@ Query Plan
 =======================================================
 |ID|OPERATOR              |NAME |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------
-|0 |NESTED-LOOP SEMI JOIN |     |2       |10          |
+|0 |NESTED-LOOP SEMI JOIN |     |1       |10          |
 |1 |├─TABLE FULL SCAN     |xy_t1|8       |5           |
 |2 |└─MATERIAL            |     |5       |5           |
 |3 |  └─TABLE FULL SCAN   |xy_t2|5       |5           |
@@ -571,7 +571,7 @@ Query Plan
 ====================================================
 |ID|OPERATOR           |NAME |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |MERGE SEMI JOIN    |     |2       |11          |
+|0 |MERGE SEMI JOIN    |     |1       |11          |
 |1 |├─SORT             |     |8       |6           |
 |2 |│ └─TABLE FULL SCAN|xy_t1|8       |5           |
 |3 |└─SORT             |     |5       |5           |
@@ -606,7 +606,7 @@ Query Plan
 ======================================================
 |ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |HASH RIGHT SEMI JOIN |     |2       |11          |
+|0 |HASH RIGHT SEMI JOIN |     |1       |11          |
 |1 |├─TABLE FULL SCAN    |xy_t2|5       |5           |
 |2 |└─TABLE FULL SCAN    |xy_t1|8       |5           |
 ======================================================
@@ -2828,11 +2828,11 @@ Query Plan
 =========================================================================
 |ID|OPERATOR                        |NAME         |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
-|0 |SCALAR GROUP BY                 |             |1       |4669        |
-|1 |└─SUBPLAN FILTER                |             |29      |4668        |
+|0 |SCALAR GROUP BY                 |             |1       |4665        |
+|1 |└─SUBPLAN FILTER                |             |29      |4664        |
 |2 |  ├─TABLE FULL SCAN             |xy_t1        |116     |11          |
-|3 |  ├─DISTRIBUTED TABLE RANGE SCAN|xy_t3(idx_c2)|2       |21          |
-|4 |  └─DISTRIBUTED TABLE RANGE SCAN|xy_t2(idx_c2)|2       |21          |
+|3 |  ├─DISTRIBUTED TABLE RANGE SCAN|xy_t3(idx_c2)|1       |21          |
+|4 |  └─DISTRIBUTED TABLE RANGE SCAN|xy_t2(idx_c2)|1       |21          |
 =========================================================================
 Outputs & filters:
 -------------------------------------
@@ -3483,8 +3483,8 @@ Query Plan
 ========================================================
 |ID|OPERATOR               |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------
-|0 |SORT                   |     |2       |11          |
-|1 |└─HASH RIGHT SEMI JOIN |     |2       |11          |
+|0 |SORT                   |     |1       |11          |
+|1 |└─HASH RIGHT SEMI JOIN |     |1       |11          |
 |2 |  ├─TABLE FULL SCAN    |xy_t2|5       |5           |
 |3 |  └─TABLE FULL SCAN    |xy_t1|8       |5           |
 ========================================================
@@ -3513,8 +3513,8 @@ Query Plan
 ======================================================
 |ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |SORT                 |     |2       |11          |
-|1 |└─MERGE SEMI JOIN    |     |2       |11          |
+|0 |SORT                 |     |1       |11          |
+|1 |└─MERGE SEMI JOIN    |     |1       |11          |
 |2 |  ├─SORT             |     |8       |6           |
 |3 |  │ └─TABLE FULL SCAN|xy_t1|8       |5           |
 |4 |  └─SORT             |     |5       |5           |
@@ -3550,8 +3550,8 @@ Query Plan
 =========================================================
 |ID|OPERATOR                |NAME |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SORT                    |     |2       |10          |
-|1 |└─NESTED-LOOP SEMI JOIN |     |2       |10          |
+|0 |SORT                    |     |1       |10          |
+|1 |└─NESTED-LOOP SEMI JOIN |     |1       |10          |
 |2 |  ├─TABLE FULL SCAN     |xy_t1|8       |5           |
 |3 |  └─MATERIAL            |     |5       |5           |
 |4 |    └─TABLE FULL SCAN   |xy_t2|5       |5           |
@@ -3615,8 +3615,8 @@ Query Plan
 ====================================================
 |ID|OPERATOR           |NAME |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SORT               |     |2       |11          |
-|1 |└─HASH SEMI JOIN   |     |2       |11          |
+|0 |SORT               |     |1       |11          |
+|1 |└─HASH SEMI JOIN   |     |1       |11          |
 |2 |  ├─TABLE FULL SCAN|xy_t2|5       |5           |
 |3 |  └─TABLE FULL SCAN|xy_t1|8       |5           |
 ====================================================
@@ -3645,8 +3645,8 @@ Query Plan
 ======================================================
 |ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |SORT                 |     |2       |11          |
-|1 |└─MERGE SEMI JOIN    |     |2       |11          |
+|0 |SORT                 |     |1       |11          |
+|1 |└─MERGE SEMI JOIN    |     |1       |11          |
 |2 |  ├─SORT             |     |5       |5           |
 |3 |  │ └─TABLE FULL SCAN|xy_t2|5       |5           |
 |4 |  └─SORT             |     |8       |6           |
@@ -3682,8 +3682,8 @@ Query Plan
 =========================================================
 |ID|OPERATOR                |NAME |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SORT                    |     |2       |10          |
-|1 |└─NESTED-LOOP SEMI JOIN |     |2       |10          |
+|0 |SORT                    |     |1       |10          |
+|1 |└─NESTED-LOOP SEMI JOIN |     |1       |10          |
 |2 |  ├─TABLE FULL SCAN     |xy_t2|5       |5           |
 |3 |  └─MATERIAL            |     |8       |5           |
 |4 |    └─TABLE FULL SCAN   |xy_t1|8       |5           |
@@ -3747,8 +3747,8 @@ Query Plan
 ====================================================
 |ID|OPERATOR           |NAME |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SORT               |     |2       |11          |
-|1 |└─HASH JOIN        |     |2       |11          |
+|0 |SORT               |     |1       |11          |
+|1 |└─HASH JOIN        |     |1       |11          |
 |2 |  ├─TABLE FULL SCAN|xy_t2|5       |5           |
 |3 |  └─TABLE FULL SCAN|xy_t1|8       |5           |
 ====================================================
@@ -3776,7 +3776,7 @@ Query Plan
 ==================================================
 |ID|OPERATOR         |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------
-|0 |MERGE JOIN       |     |2       |9           |
+|0 |MERGE JOIN       |     |1       |9           |
 |1 |├─TABLE FULL SCAN|xy_t2|5       |5           |
 |2 |└─TABLE FULL SCAN|xy_t1|8       |5           |
 ==================================================
@@ -3832,8 +3832,8 @@ Query Plan
 ====================================================
 |ID|OPERATOR           |NAME |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SORT               |     |2       |11          |
-|1 |└─HASH SEMI JOIN   |     |2       |11          |
+|0 |SORT               |     |1       |11          |
+|1 |└─HASH SEMI JOIN   |     |1       |11          |
 |2 |  ├─TABLE FULL SCAN|xy_t2|5       |5           |
 |3 |  └─TABLE FULL SCAN|xy_t1|8       |5           |
 ====================================================
@@ -3862,7 +3862,7 @@ Query Plan
 ====================================================
 |ID|OPERATOR           |NAME |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |MERGE SEMI JOIN    |     |2       |10          |
+|0 |MERGE SEMI JOIN    |     |1       |10          |
 |1 |├─TABLE FULL SCAN  |xy_t2|5       |5           |
 |2 |└─SORT             |     |8       |6           |
 |3 |  └─TABLE FULL SCAN|xy_t1|8       |5           |
@@ -3893,7 +3893,7 @@ Query Plan
 =======================================================
 |ID|OPERATOR              |NAME |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------
-|0 |NESTED-LOOP SEMI JOIN |     |2       |10          |
+|0 |NESTED-LOOP SEMI JOIN |     |1       |10          |
 |1 |├─TABLE FULL SCAN     |xy_t2|5       |5           |
 |2 |└─MATERIAL            |     |8       |5           |
 |3 |  └─TABLE FULL SCAN   |xy_t1|8       |5           |
@@ -3952,8 +3952,8 @@ Query Plan
 ========================================================
 |ID|OPERATOR               |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------
-|0 |SORT                   |     |7       |11          |
-|1 |└─HASH RIGHT ANTI JOIN |     |7       |11          |
+|0 |SORT                   |     |8       |11          |
+|1 |└─HASH RIGHT ANTI JOIN |     |8       |11          |
 |2 |  ├─TABLE FULL SCAN    |xy_t2|5       |5           |
 |3 |  └─TABLE FULL SCAN    |xy_t1|8       |5           |
 ========================================================
@@ -3988,8 +3988,8 @@ Query Plan
 ======================================================
 |ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |SORT                 |     |7       |11          |
-|1 |└─MERGE ANTI JOIN    |     |7       |11          |
+|0 |SORT                 |     |8       |11          |
+|1 |└─MERGE ANTI JOIN    |     |8       |11          |
 |2 |  ├─SORT             |     |8       |6           |
 |3 |  │ └─TABLE FULL SCAN|xy_t1|8       |5           |
 |4 |  └─SORT             |     |5       |5           |
@@ -4031,8 +4031,8 @@ Query Plan
 =========================================================
 |ID|OPERATOR                |NAME |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SORT                    |     |7       |10          |
-|1 |└─NESTED-LOOP ANTI JOIN |     |7       |10          |
+|0 |SORT                    |     |8       |10          |
+|1 |└─NESTED-LOOP ANTI JOIN |     |8       |10          |
 |2 |  ├─TABLE FULL SCAN     |xy_t1|8       |5           |
 |3 |  └─MATERIAL            |     |5       |5           |
 |4 |    └─TABLE FULL SCAN   |xy_t2|5       |5           |
@@ -4108,8 +4108,8 @@ Query Plan
 ====================================================
 |ID|OPERATOR           |NAME |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SORT               |     |4       |11          |
-|1 |└─HASH ANTI JOIN   |     |4       |10          |
+|0 |SORT               |     |5       |11          |
+|1 |└─HASH ANTI JOIN   |     |5       |10          |
 |2 |  ├─TABLE FULL SCAN|xy_t2|5       |5           |
 |3 |  └─TABLE FULL SCAN|xy_t1|8       |5           |
 ====================================================
@@ -4141,8 +4141,8 @@ Query Plan
 ======================================================
 |ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |SORT                 |     |4       |11          |
-|1 |└─MERGE ANTI JOIN    |     |4       |10          |
+|0 |SORT                 |     |5       |11          |
+|1 |└─MERGE ANTI JOIN    |     |5       |10          |
 |2 |  ├─SORT             |     |5       |5           |
 |3 |  │ └─TABLE FULL SCAN|xy_t2|5       |5           |
 |4 |  └─SORT             |     |8       |6           |
@@ -4181,8 +4181,8 @@ Query Plan
 =========================================================
 |ID|OPERATOR                |NAME |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SORT                    |     |4       |10          |
-|1 |└─NESTED-LOOP ANTI JOIN |     |4       |10          |
+|0 |SORT                    |     |5       |10          |
+|1 |└─NESTED-LOOP ANTI JOIN |     |5       |10          |
 |2 |  ├─TABLE FULL SCAN     |xy_t2|5       |5           |
 |3 |  └─MATERIAL            |     |8       |5           |
 |4 |    └─TABLE FULL SCAN   |xy_t1|8       |5           |
@@ -4252,8 +4252,8 @@ Query Plan
 ====================================================
 |ID|OPERATOR           |NAME |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SORT               |     |4       |11          |
-|1 |└─HASH ANTI JOIN   |     |4       |11          |
+|0 |SORT               |     |5       |11          |
+|1 |└─HASH ANTI JOIN   |     |5       |11          |
 |2 |  ├─TABLE FULL SCAN|xy_t2|5       |5           |
 |3 |  └─TABLE FULL SCAN|xy_t1|8       |5           |
 ====================================================
@@ -4286,7 +4286,7 @@ Query Plan
 ==================================================
 |ID|OPERATOR         |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------
-|0 |MERGE ANTI JOIN  |     |4       |9           |
+|0 |MERGE ANTI JOIN  |     |5       |9           |
 |1 |├─TABLE FULL SCAN|xy_t2|5       |5           |
 |2 |└─TABLE FULL SCAN|xy_t1|8       |5           |
 ==================================================
@@ -4318,7 +4318,7 @@ Query Plan
 ========================================================
 |ID|OPERATOR               |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------
-|0 |NESTED-LOOP ANTI JOIN  |     |4       |109         |
+|0 |NESTED-LOOP ANTI JOIN  |     |5       |109         |
 |1 |├─TABLE FULL SCAN      |xy_t2|5       |5           |
 |2 |└─DISTRIBUTED TABLE GET|xy_t1|1       |21          |
 ========================================================
@@ -4385,10 +4385,10 @@ Query Plan
 ========================================================
 |ID|OPERATOR               |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------
-|0 |SORT                   |     |2       |10          |
-|1 |└─HASH RIGHT ANTI JOIN |     |2       |10          |
-|2 |  ├─SUBPLAN SCAN       |VIEW1|3       |5           |
-|3 |  │ └─TABLE FULL SCAN  |xy_t1|3       |5           |
+|0 |SORT                   |     |4       |10          |
+|1 |└─HASH RIGHT ANTI JOIN |     |4       |9           |
+|2 |  ├─SUBPLAN SCAN       |VIEW1|1       |5           |
+|3 |  │ └─TABLE FULL SCAN  |xy_t1|1       |5           |
 |4 |  └─TABLE FULL SCAN    |xy_t2|5       |5           |
 ========================================================
 Outputs & filters:
@@ -4422,11 +4422,11 @@ Query Plan
 ======================================================
 |ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |SORT                 |     |2       |10          |
-|1 |└─HASH ANTI JOIN     |     |2       |10          |
+|0 |SORT                 |     |4       |10          |
+|1 |└─HASH ANTI JOIN     |     |4       |10          |
 |2 |  ├─TABLE FULL SCAN  |xy_t2|5       |5           |
-|3 |  └─SUBPLAN SCAN     |VIEW1|3       |5           |
-|4 |    └─TABLE FULL SCAN|xy_t1|3       |5           |
+|3 |  └─SUBPLAN SCAN     |VIEW1|1       |5           |
+|4 |    └─TABLE FULL SCAN|xy_t1|1       |5           |
 ======================================================
 Outputs & filters:
 -------------------------------------
@@ -4459,11 +4459,11 @@ Query Plan
 ======================================================
 |ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |SORT                 |     |2       |10          |
-|1 |└─HASH ANTI JOIN     |     |2       |10          |
+|0 |SORT                 |     |4       |10          |
+|1 |└─HASH ANTI JOIN     |     |4       |10          |
 |2 |  ├─TABLE FULL SCAN  |xy_t2|5       |5           |
-|3 |  └─SUBPLAN SCAN     |VIEW1|3       |5           |
-|4 |    └─TABLE FULL SCAN|xy_t1|3       |5           |
+|3 |  └─SUBPLAN SCAN     |VIEW1|1       |5           |
+|4 |    └─TABLE FULL SCAN|xy_t1|1       |5           |
 ======================================================
 Outputs & filters:
 -------------------------------------

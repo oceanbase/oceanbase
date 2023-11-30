@@ -545,7 +545,7 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |UPDATE           |    |1       |31          |
+|0 |UPDATE           |    |1       |32          |
 |1 |└─TABLE FULL SCAN|a   |1       |4           |
 =================================================
 Outputs & filters:
@@ -580,7 +580,7 @@ Query Plan
 ==============================================================
 |ID|OPERATOR           |NAME           |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |INSERT             |               |1       |13          |
+|0 |INSERT             |               |1       |14          |
 |1 |└─SUBPLAN SCAN     |ANONYMOUS_VIEW1|1       |4           |
 |2 |  └─TABLE FULL SCAN|a              |1       |4           |
 ==============================================================
@@ -1743,7 +1743,7 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |UPDATE           |    |1       |31          |
+|0 |UPDATE           |    |1       |29          |
 |1 |└─TABLE FULL SCAN|a   |1       |4           |
 =================================================
 Outputs & filters:
@@ -1761,7 +1761,7 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |DELETE           |    |1       |13          |
+|0 |DELETE           |    |1       |11          |
 |1 |└─TABLE FULL SCAN|a   |1       |4           |
 =================================================
 Outputs & filters:
@@ -1778,7 +1778,7 @@ Query Plan
 ==============================================================
 |ID|OPERATOR           |NAME           |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |INSERT             |               |1       |13          |
+|0 |INSERT             |               |1       |11          |
 |1 |└─SUBPLAN SCAN     |ANONYMOUS_VIEW1|1       |4           |
 |2 |  └─TABLE FULL SCAN|a              |1       |4           |
 ==============================================================
@@ -1840,7 +1840,7 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |UPDATE           |    |1       |31          |
+|0 |UPDATE           |    |1       |29          |
 |1 |└─TABLE FULL SCAN|a   |1       |4           |
 =================================================
 Outputs & filters:
@@ -1858,7 +1858,7 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |DELETE           |    |1       |13          |
+|0 |DELETE           |    |1       |11          |
 |1 |└─TABLE FULL SCAN|a   |1       |4           |
 =================================================
 Outputs & filters:
@@ -1875,7 +1875,7 @@ Query Plan
 ==============================================================
 |ID|OPERATOR           |NAME           |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |INSERT             |               |1       |13          |
+|0 |INSERT             |               |1       |11          |
 |1 |└─SUBPLAN SCAN     |ANONYMOUS_VIEW1|1       |4           |
 |2 |  └─TABLE FULL SCAN|a              |1       |4           |
 ==============================================================
@@ -2229,7 +2229,7 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |UPDATE           |    |1       |33          |
+|0 |UPDATE           |    |1       |32          |
 |1 |└─TABLE FULL SCAN|a   |1       |4           |
 =================================================
 Outputs & filters:
@@ -2247,7 +2247,7 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |DELETE           |    |1       |14          |
+|0 |DELETE           |    |1       |13          |
 |1 |└─TABLE FULL SCAN|a   |1       |4           |
 =================================================
 Outputs & filters:
@@ -2264,7 +2264,7 @@ Query Plan
 ==============================================================
 |ID|OPERATOR           |NAME           |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |INSERT             |               |1       |15          |
+|0 |INSERT             |               |1       |14          |
 |1 |└─SUBPLAN SCAN     |ANONYMOUS_VIEW1|1       |4           |
 |2 |  └─TABLE FULL SCAN|a              |1       |4           |
 ==============================================================
@@ -2948,8 +2948,8 @@ Query Plan
 ===================================================
 |ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------
-|0 |MERGE JOIN         |    |0       |8           |
-|1 |├─TABLE FULL SCAN  |b   |0       |4           |
+|0 |MERGE JOIN         |    |1       |8           |
+|1 |├─TABLE FULL SCAN  |b   |1       |4           |
 |2 |└─SORT             |    |1       |4           |
 |3 |  └─TABLE FULL SCAN|a   |1       |4           |
 ===================================================
@@ -3008,22 +3008,22 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |HASH JOIN        |    |0       |8           |
-|1 |├─TABLE FULL SCAN|b   |0       |4           |
-|2 |└─TABLE FULL SCAN|a   |1       |4           |
+|0 |HASH JOIN        |    |1       |9           |
+|1 |├─TABLE FULL SCAN|a   |1       |4           |
+|2 |└─TABLE FULL SCAN|b   |1       |4           |
 =================================================
 Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2], [b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), rowset=16
       equal_conds([a.c1 = b.c1]), other_conds(nil)
-  1 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([b.c1 <=> NULL]), rowset=16
-      access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([b.__pk_increment]), range(MIN ; MAX)always true
-  2 - output([a.c1], [a.c2]), filter(nil), rowset=16
+  1 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([b.c1 <=> NULL]), rowset=16
+      access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select /*+ NO_REWRITE */ * from t1 a, t2 b where a.c1 = b.c1 and b.c1 <=> null;
 +------+------+------+------+------+------+
 | c1   | c2   | c1   | c2   | c3   | c4   |
@@ -3034,22 +3034,22 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |HASH JOIN        |    |0       |8           |
-|1 |├─TABLE FULL SCAN|b   |0       |4           |
-|2 |└─TABLE FULL SCAN|a   |1       |4           |
+|0 |HASH JOIN        |    |1       |9           |
+|1 |├─TABLE FULL SCAN|a   |1       |4           |
+|2 |└─TABLE FULL SCAN|b   |1       |4           |
 =================================================
 Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2], [b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), rowset=16
       equal_conds([a.c1 = b.c1]), other_conds(nil)
-  1 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([b.c1 <=> NULL]), rowset=16
-      access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([b.__pk_increment]), range(MIN ; MAX)always true
-  2 - output([a.c1], [a.c2]), filter(nil), rowset=16
+  1 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter([b.c1 <=> NULL]), rowset=16
+      access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([b.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 a, t2 b where a.c1 = b.c1 and b.c1 <=> null;
 +------+------+------+------+------+------+
 | c1   | c2   | c1   | c2   | c3   | c4   |
@@ -3685,30 +3685,31 @@ create table t2 (c1 int, c2 int, primary key(c2));
 
 explain extended_noaddr select count(*) from t1 A, t2 B where A.c1 >= 5630905 and A.c1 < 5631105 and A.c1 = B.c2 and A.c2 = B.c2;
 Query Plan
-=========================================================
-|ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
----------------------------------------------------------
-|0 |SCALAR GROUP BY          |    |1       |6           |
-|1 |└─NESTED-LOOP JOIN       |    |1       |6           |
-|2 |  ├─TABLE RANGE SCAN     |A   |1       |4           |
-|3 |  └─DISTRIBUTED TABLE GET|B   |1       |18          |
-=========================================================
+====================================================
+|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
+----------------------------------------------------
+|0 |SCALAR GROUP BY     |    |1       |8           |
+|1 |└─MERGE JOIN        |    |1       |8           |
+|2 |  ├─TABLE RANGE SCAN|B   |1       |4           |
+|3 |  └─TABLE RANGE SCAN|A   |1       |4           |
+====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_COUNT(*)]), filter(nil), rowset=16
       group(nil), agg_func([T_FUN_COUNT(*)])
   1 - output(nil), filter(nil), rowset=16
-      conds(nil), nl_params_([A.c1(:0)]), use_batch=true
-  2 - output([A.c1]), filter([A.c2 < 5631105], [A.c1 = A.c2]), rowset=16
+      equal_conds([A.c1 = B.c2]), other_conds(nil)
+      merge_directions([ASC])
+  2 - output([B.c2]), filter(nil), rowset=16
+      access([B.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([B.c2]), range[5630905 ; 5631105), 
+      range_cond([B.c2 < 5631105], [B.c2 >= 5630905])
+  3 - output([A.c1]), filter([A.c2 < 5631105], [A.c1 = A.c2]), rowset=16
       access([A.c1], [A.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([A.c1]), range[5630905 ; 5631105), 
       range_cond([A.c1 >= 5630905], [A.c1 < 5631105])
-  3 - output(nil), filter(nil), rowset=16
-      access([GROUP_ID]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([B.c2]), range(MIN ; MAX), 
-      range_cond([:0 = B.c2])
 Used Hint:
 -------------------------------------
   /*+
@@ -3722,28 +3723,16 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      LEADING(@"SEL$0208448F" ("db_predicate_deduce"."A"@"SEL$1" "db_predicate_deduce"."B"@"SEL$1"))
-      USE_NL(@"SEL$0208448F" "db_predicate_deduce"."B"@"SEL$1")
-      FULL(@"SEL$0208448F" "A"@"SEL$1")
+      LEADING(@"SEL$0208448F" ("db_predicate_deduce"."B"@"SEL$1" "db_predicate_deduce"."A"@"SEL$1"))
+      USE_MERGE(@"SEL$0208448F" "db_predicate_deduce"."A"@"SEL$1")
       FULL(@"SEL$0208448F" "B"@"SEL$1")
-      USE_DAS(@"SEL$0208448F" "B"@"SEL$1")
+      FULL(@"SEL$0208448F" "A"@"SEL$1")
       PRED_DEDUCE(@"SEL$1")
       OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
 -------------------------------------
-  A:
-      table_rows:1
-      physical_range_rows:1
-      logical_range_rows:1
-      index_back_rows:0
-      output_rows:0
-      table_dop:1
-      dop_method:Table DOP
-      avaiable_index_name:[t1]
-      stats version:0
-      dynamic sampling level:1
   B:
       table_rows:1
       physical_range_rows:1
@@ -3751,10 +3740,23 @@ Optimization Info:
       index_back_rows:0
       output_rows:1
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
+  A:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t1]
+      stats version:0
+      dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   Plan Type:
       LOCAL
   Note:
@@ -3766,30 +3768,31 @@ create table t2 (c1 int, c2 int, index (c2));
 
 explain extended_noaddr select count(*) from t1 A, t2 B where A.c1 >= 5630905 and A.c1 < 5631105 and A.c1 = B.c2 and A.c2 = B.c2;
 Query Plan
-=================================================================
-|ID|OPERATOR                        |NAME |EST.ROWS|EST.TIME(us)|
------------------------------------------------------------------
-|0 |SCALAR GROUP BY                 |     |1       |9           |
-|1 |└─NESTED-LOOP JOIN              |     |1       |9           |
-|2 |  ├─TABLE RANGE SCAN            |A(c1)|1       |7           |
-|3 |  └─DISTRIBUTED TABLE RANGE SCAN|B(c2)|1       |18          |
-=================================================================
+=====================================================
+|ID|OPERATOR            |NAME |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SCALAR GROUP BY     |     |1       |11          |
+|1 |└─MERGE JOIN        |     |1       |11          |
+|2 |  ├─TABLE RANGE SCAN|B(c2)|1       |4           |
+|3 |  └─TABLE RANGE SCAN|A(c1)|1       |7           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_COUNT(*)]), filter(nil), rowset=16
       group(nil), agg_func([T_FUN_COUNT(*)])
   1 - output(nil), filter(nil), rowset=16
-      conds(nil), nl_params_([A.c1(:0)]), use_batch=true
-  2 - output([A.c1]), filter([A.c2 < 5631105], [A.c1 = A.c2]), rowset=16
+      equal_conds([A.c1 = B.c2]), other_conds(nil)
+      merge_directions([ASC])
+  2 - output([B.c2]), filter(nil), rowset=16
+      access([B.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([B.c2], [B.__pk_increment]), range(5630905,MIN ; 5631105,MIN), 
+      range_cond([B.c2 < 5631105], [B.c2 >= 5630905])
+  3 - output([A.c1]), filter([A.c2 < 5631105], [A.c1 = A.c2]), rowset=16
       access([A.__pk_increment], [A.c1], [A.c2]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[false,false], 
       range_key([A.c1], [A.__pk_increment]), range(5630905,MIN ; 5631105,MIN), 
       range_cond([A.c1 >= 5630905], [A.c1 < 5631105])
-  3 - output(nil), filter(nil), rowset=16
-      access([GROUP_ID]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([B.c2], [B.__pk_increment]), range(MIN ; MAX), 
-      range_cond([:0 = B.c2])
 Used Hint:
 -------------------------------------
   /*+
@@ -3803,29 +3806,16 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      LEADING(@"SEL$0208448F" ("db_predicate_deduce"."A"@"SEL$1" "db_predicate_deduce"."B"@"SEL$1"))
-      USE_NL(@"SEL$0208448F" "db_predicate_deduce"."B"@"SEL$1")
-      INDEX(@"SEL$0208448F" "A"@"SEL$1" "c1")
+      LEADING(@"SEL$0208448F" ("db_predicate_deduce"."B"@"SEL$1" "db_predicate_deduce"."A"@"SEL$1"))
+      USE_MERGE(@"SEL$0208448F" "db_predicate_deduce"."A"@"SEL$1")
       INDEX(@"SEL$0208448F" "B"@"SEL$1" "c2")
-      USE_DAS(@"SEL$0208448F" "B"@"SEL$1")
+      INDEX(@"SEL$0208448F" "A"@"SEL$1" "c1")
       PRED_DEDUCE(@"SEL$1")
       OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
 -------------------------------------
-  A:
-      table_rows:1
-      physical_range_rows:1
-      logical_range_rows:1
-      index_back_rows:1
-      output_rows:0
-      table_dop:1
-      dop_method:Table DOP
-      avaiable_index_name:[c1, t1]
-      unstable_index_name:[t1]
-      stats version:0
-      dynamic sampling level:1
   B:
       table_rows:1
       physical_range_rows:1
@@ -3833,11 +3823,25 @@ Optimization Info:
       index_back_rows:0
       output_rows:1
       table_dop:1
-      dop_method:DAS DOP
+      dop_method:Table DOP
       avaiable_index_name:[c2, t2]
       pruned_index_name:[t2]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
+  A:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:1
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[c1, t1]
+      unstable_index_name:[t1]
+      stats version:0
+      dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   Plan Type:
       LOCAL
   Note:
@@ -3918,6 +3922,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   A:
       table_rows:1
       physical_range_rows:1
@@ -3929,6 +3934,7 @@ Optimization Info:
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -4013,9 +4019,9 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |HASH JOIN        |    |4       |9           |
-|1 |├─TABLE FULL SCAN|t1  |4       |4           |
-|2 |└─TABLE FULL SCAN|t2  |4       |4           |
+|0 |HASH JOIN        |    |3       |9           |
+|1 |├─TABLE FULL SCAN|t1  |2       |4           |
+|2 |└─TABLE FULL SCAN|t2  |2       |4           |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -4041,9 +4047,9 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |HASH JOIN        |    |4       |9           |
-|1 |├─TABLE FULL SCAN|t1  |4       |4           |
-|2 |└─TABLE FULL SCAN|t2  |4       |4           |
+|0 |HASH JOIN        |    |3       |9           |
+|1 |├─TABLE FULL SCAN|t1  |2       |4           |
+|2 |└─TABLE FULL SCAN|t2  |2       |4           |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -4069,11 +4075,11 @@ Query Plan
 ===================================================
 |ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------
-|0 |HASH JOIN          |    |4       |14          |
-|1 |├─TABLE FULL SCAN  |t3  |4       |4           |
-|2 |└─HASH JOIN        |    |4       |9           |
-|3 |  ├─TABLE FULL SCAN|t1  |4       |4           |
-|4 |  └─TABLE FULL SCAN|t2  |4       |4           |
+|0 |HASH JOIN          |    |3       |14          |
+|1 |├─TABLE FULL SCAN  |t3  |2       |4           |
+|2 |└─HASH JOIN        |    |3       |9           |
+|3 |  ├─TABLE FULL SCAN|t1  |2       |4           |
+|4 |  └─TABLE FULL SCAN|t2  |2       |4           |
 ===================================================
 Outputs & filters:
 -------------------------------------
@@ -4107,8 +4113,8 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |HASH JOIN        |    |1       |9           |
-|1 |├─TABLE FULL SCAN|t3  |1       |4           |
+|0 |HASH JOIN        |    |2       |9           |
+|1 |├─TABLE FULL SCAN|t3  |2       |5           |
 |2 |└─TABLE FULL SCAN|t1  |5       |4           |
 =================================================
 Outputs & filters:
@@ -4136,8 +4142,8 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |HASH JOIN        |    |3       |11          |
-|1 |├─TABLE FULL SCAN|t2  |4       |5           |
+|0 |HASH JOIN        |    |1       |11          |
+|1 |├─TABLE FULL SCAN|t2  |2       |4           |
 |2 |└─TABLE FULL SCAN|t1  |5       |4           |
 =================================================
 Outputs & filters:
@@ -4162,23 +4168,23 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |HASH JOIN        |    |1       |9           |
-|1 |├─TABLE FULL SCAN|t2  |1       |4           |
-|2 |└─TABLE FULL SCAN|t1  |3       |4           |
+|0 |HASH JOIN        |    |2       |9           |
+|1 |├─TABLE FULL SCAN|t1  |1       |4           |
+|2 |└─TABLE FULL SCAN|t2  |2       |4           |
 =================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
       equal_conds([t1.c3 = cast(t2.c3, VARCHAR(1048576))]), other_conds(nil)
-  1 - output([t2.c3], [t2.c1], [t2.c2], [cast(t2.c3, VARCHAR(1048576))]), filter([cast(t2.c3, VARCHAR(1048576)) IN (cast('a', VARCHAR(1048576)), cast('b',
+  1 - output([t1.c3], [t1.c1], [t1.c2]), filter([t1.c3 IN (cast('a', VARCHAR(1048576)), cast('b', VARCHAR(1048576)), cast('c', VARCHAR(1048576)))]), rowset=16
+      access([t1.c3], [t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c3], [t2.c1], [t2.c2], [cast(t2.c3, VARCHAR(1048576))]), filter([cast(t2.c3, VARCHAR(1048576)) IN (cast('a', VARCHAR(1048576)), cast('b',
        VARCHAR(1048576)), cast('c', VARCHAR(1048576)))]), rowset=16
       access([t2.c3], [t2.c1], [t2.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
-  2 - output([t1.c3], [t1.c1], [t1.c2]), filter([t1.c3 IN (cast('a', VARCHAR(1048576)), cast('b', VARCHAR(1048576)), cast('c', VARCHAR(1048576)))]), rowset=16
-      access([t1.c3], [t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select * from t1,t2 where t1.c3 = t2.c3 and t1.c3 in ('a','b','c');
 +------+------+------+------+------+------+
 | c1   | c2   | c3   | c1   | c2   | c3   |
@@ -4288,8 +4294,8 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |HASH JOIN        |    |1       |9           |
-|1 |├─TABLE FULL SCAN|t3  |3       |5           |
+|0 |HASH JOIN        |    |4       |10          |
+|1 |├─TABLE FULL SCAN|t3  |4       |5           |
 |2 |└─TABLE FULL SCAN|t1  |5       |4           |
 =================================================
 Outputs & filters:
@@ -4321,23 +4327,23 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |HASH JOIN        |    |1       |9           |
-|1 |├─TABLE FULL SCAN|t2  |1       |4           |
-|2 |└─TABLE FULL SCAN|t3  |3       |5           |
+|0 |HASH JOIN        |    |7       |10          |
+|1 |├─TABLE FULL SCAN|t3  |4       |5           |
+|2 |└─TABLE FULL SCAN|t2  |4       |5           |
 =================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t3.c1], [t2.c1]), filter(nil), rowset=16
       equal_conds([cast(t3.c2, DOUBLE(-1, -1)) = t2.c2]), other_conds(nil)
-  1 - output([t2.c2], [t2.c1]), filter([(T_OP_BTW, t2.c2, cast(10, DOUBLE(-1, -1)), cast(cast(100, FLOAT(0, -1)), DOUBLE(-1, -1)))]), rowset=16
-      access([t2.c2], [t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
-  2 - output([t3.c1], [cast(t3.c2, DOUBLE(-1, -1))]), filter([(T_OP_BTW, cast(t3.c2, DOUBLE(-1, -1)), cast(10, DOUBLE(-1, -1)), cast(cast(100, FLOAT(0, 
+  1 - output([t3.c1], [cast(t3.c2, DOUBLE(-1, -1))]), filter([(T_OP_BTW, cast(t3.c2, DOUBLE(-1, -1)), cast(10, DOUBLE(-1, -1)), cast(cast(100, FLOAT(0, 
       -1)), DOUBLE(-1, -1)))]), rowset=16
       access([t3.c2], [t3.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c2], [t2.c1]), filter([(T_OP_BTW, t2.c2, cast(10, DOUBLE(-1, -1)), cast(cast(100, FLOAT(0, -1)), DOUBLE(-1, -1)))]), rowset=16
+      access([t2.c2], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 select t3.c1,t2.c1 from t3,t2 where t3.c2 = t2.c2 and t2.c2 between 10 and cast(100 as float);
 +------+------+
 | c1   | c1   |
@@ -4352,8 +4358,8 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |HASH JOIN        |    |3       |10          |
-|1 |├─TABLE FULL SCAN|t3  |3       |5           |
+|0 |HASH JOIN        |    |4       |10          |
+|1 |├─TABLE FULL SCAN|t3  |4       |5           |
 |2 |└─TABLE FULL SCAN|t2  |5       |5           |
 =================================================
 Outputs & filters:
@@ -4384,22 +4390,22 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |HASH JOIN        |    |1       |9           |
-|1 |├─TABLE FULL SCAN|t1  |1       |5           |
-|2 |└─TABLE FULL SCAN|t2  |1       |5           |
+|0 |HASH JOIN        |    |2       |10          |
+|1 |├─TABLE FULL SCAN|t2  |1       |5           |
+|2 |└─TABLE FULL SCAN|t1  |2       |5           |
 =================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t2.c1]), filter(nil), rowset=16
       equal_conds([t1.c2 = t2.c3]), other_conds(nil)
-  1 - output([t1.c2], [t1.c1]), filter([(T_OP_LIKE, t1.c2, 'a_', '\\')]), rowset=16
-      access([t1.c2], [t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
-  2 - output([t2.c3], [t2.c1]), filter([(T_OP_LIKE, t2.c3, 'a_', '\\')]), rowset=16
+  1 - output([t2.c3], [t2.c1]), filter([(T_OP_LIKE, t2.c3, 'a_', '\\')]), rowset=16
       access([t2.c3], [t2.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t1.c2], [t1.c1]), filter([(T_OP_LIKE, t1.c2, 'a_', '\\')]), rowset=16
+      access([t1.c2], [t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select t1.c1,t2.c1 from t1,t2 where t1.c2 = t2.c3 and t2.c3 like 'a_';
 +------+------+
 | c1   | c1   |
@@ -4410,22 +4416,22 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |HASH JOIN        |    |1       |9           |
-|1 |├─TABLE FULL SCAN|t1  |1       |5           |
-|2 |└─TABLE FULL SCAN|t2  |1       |5           |
+|0 |HASH JOIN        |    |2       |10          |
+|1 |├─TABLE FULL SCAN|t2  |1       |5           |
+|2 |└─TABLE FULL SCAN|t1  |2       |5           |
 =================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t2.c1]), filter(nil), rowset=16
       equal_conds([t1.c2 = t2.c3]), other_conds(nil)
-  1 - output([t1.c2], [t1.c1]), filter([(T_OP_LIKE, t1.c2, 'a_', '\\')]), rowset=16
-      access([t1.c2], [t1.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
-  2 - output([t2.c3], [t2.c1]), filter([(T_OP_LIKE, t2.c3, 'a_', '\\')]), rowset=16
+  1 - output([t2.c3], [t2.c1]), filter([(T_OP_LIKE, t2.c3, 'a_', '\\')]), rowset=16
       access([t2.c3], [t2.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t1.c2], [t1.c1]), filter([(T_OP_LIKE, t1.c2, 'a_', '\\')]), rowset=16
+      access([t1.c2], [t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select t1.c1,t2.c1 from t1,t2 where t1.c2 = t2.c3 and t1.c2 like 'a_';
 +------+------+
 | c1   | c1   |

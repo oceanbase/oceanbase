@@ -252,6 +252,7 @@ namespace share
   static const char* const OB_SV__OB_PROXY_WEAKREAD_FEEDBACK = "_ob_proxy_weakread_feedback";
   static const char* const OB_SV_NCHARACTER_SET_CONNECTION = "ncharacter_set_connection";
   static const char* const OB_SV_ENABLE_PL_CACHE = "ob_enable_pl_cache";
+  static const char* const OB_SV__ENABLE_STORAGE_CARDINALITY_ESTIMATION = "_enable_storage_cardinality_estimation";
   static const char* const OB_SV_LC_TIME_NAMES = "lc_time_names";
 
 }

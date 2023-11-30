@@ -1264,6 +1264,9 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_FAIL(BUF_PRINTF("dynamic sampling level:%ld", table_meta->get_ds_level()))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_NOT_NULL(est_cost_info_) &&
+               OB_FAIL(print_est_method(est_cost_info_->est_method_, buf, buf_len, pos))) {
+      LOG_WARN("failed to print est method", K(ret));
     }
     END_BUF_PRINT(plan_item.optimizer_, plan_item.optimizer_len_);
   }
@@ -1311,6 +1314,41 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
                   plan_item.special_predicates_len_);
   }
 
+  return ret;
+}
+
+int ObLogTableScan::print_est_method(ObBaseTableEstMethod method, char *buf, int64_t &buf_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (method == EST_INVALID) {
+    // do nothing
+  } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
+    LOG_WARN("BUF_PRINTF fails", K(ret));
+  } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
+    LOG_WARN("BUF_PRINTF fails", K(ret));
+  } else if (OB_FAIL(BUF_PRINTF("estimation method:["))) {
+    LOG_WARN("BUF_PRINTF fails", K(ret));
+  } else if ((EST_DEFAULT & method) &&
+             OB_FAIL(BUF_PRINTF("DEFAULT, "))) {
+    LOG_WARN("BUF_PRINTF fails");
+  } else if ((EST_STAT & method) &&
+             OB_FAIL(BUF_PRINTF("OPTIMIZER STATISTICS, "))) {
+    LOG_WARN("BUF_PRINTF fails");
+  } else if ((EST_STORAGE & method) &&
+             OB_FAIL(BUF_PRINTF("STORAGE, "))) {
+    LOG_WARN("BUF_PRINTF fails");
+  } else if (((EST_DS_BASIC) & method) &&
+             OB_FAIL(BUF_PRINTF("DYNAMIC SAMPLING BASIC, "))) {
+    LOG_WARN("BUF_PRINTF fails");
+  } else if (((EST_DS_FULL) & method) &&
+             OB_FAIL(BUF_PRINTF("DYNAMIC SAMPLING FULL, "))) {
+    LOG_WARN("BUF_PRINTF fails");
+  } else {
+    pos -= 2;
+    if (OB_FAIL(BUF_PRINTF("]"))) {
+      LOG_WARN("BUF_PRINTF fails");
+    }
+  }
   return ret;
 }
 
@@ -2004,7 +2042,7 @@ bool ObLogTableScan::is_need_feedback() const
 
   ret = sel >= SELECTION_THRESHOLD && !is_multi_part_table_scan_;
 
-  LOG_TRACE("is_need_feedback", K(estimate_method_), K(table_row_count_),
+  LOG_TRACE("is_need_feedback", K(table_row_count_),
             K(query_range_row_count_), K(table_row_count_), K(sel), K(ret));
   return ret;
 }

@@ -2014,10 +2014,13 @@ int ObDbmsStats::lock_table_stats(sql::ObExecContext &ctx,
     stat_param.global_stat_param_.need_modify_ = true;
     stat_param.part_stat_param_.need_modify_ = true;
     stat_param.subpart_stat_param_.need_modify_ = true;
+    stat_param.no_invalidate_ = true;
     if (OB_FAIL(ObDbmsStatsLockUnlock::set_table_stats_lock(ctx, stat_param, true))) {
       LOG_WARN("failed to lock table stats", K(ret));
     } else if (OB_FAIL(lock_or_unlock_index_stats(ctx, stat_param, true))) {
       LOG_WARN("failed to lock index stats", K(ret));
+    } else if (OB_FAIL(update_stat_cache(ctx.get_my_session()->get_rpc_tenant_id(), stat_param))) {
+      LOG_WARN("failed to update stat cache", K(ret));
     } else {/*do nothing*/}
   }
   return ret;
@@ -2061,8 +2064,11 @@ int ObDbmsStats::lock_partition_stats(sql::ObExecContext &ctx,
     stat_param.global_stat_param_.need_modify_ = false;
     stat_param.part_stat_param_.need_modify_ = true;
     stat_param.subpart_stat_param_.need_modify_ = false;
+    stat_param.no_invalidate_ = true;
     if (OB_FAIL(ObDbmsStatsLockUnlock::set_table_stats_lock(ctx, stat_param, true))) {
       LOG_WARN("failed to lock table stats", K(ret));
+    } else if (OB_FAIL(update_stat_cache(ctx.get_my_session()->get_rpc_tenant_id(), stat_param))) {
+      LOG_WARN("failed to update stat cache", K(ret));
     } else {/*do nothing */}
   }
   return ret;
@@ -2119,10 +2125,13 @@ int ObDbmsStats::lock_schema_stats(sql::ObExecContext &ctx,
           stat_param.part_stat_param_.need_modify_ = true;
           stat_param.subpart_stat_param_.need_modify_ = true;
           stat_param.allocator_ = &tmp_alloc;//use the temp allocator free memory after stat lock
+          stat_param.no_invalidate_ = true;
           if (OB_FAIL(ObDbmsStatsLockUnlock::set_table_stats_lock(ctx, stat_param, true))) {
             LOG_WARN("failed to lock table stats", K(ret));
           } else if (OB_FAIL(lock_or_unlock_index_stats(ctx, stat_param, true))) {
             LOG_WARN("failed to lock index stats", K(ret));
+          } else if (OB_FAIL(update_stat_cache(ctx.get_my_session()->get_rpc_tenant_id(), stat_param))) {
+            LOG_WARN("failed to update stat cache", K(ret));
           } else {
             tmp_alloc.reset();
           }
@@ -2209,10 +2218,13 @@ int ObDbmsStats::unlock_table_stats(sql::ObExecContext &ctx,
     stat_param.global_stat_param_.need_modify_ = true;
     stat_param.part_stat_param_.need_modify_ = true;
     stat_param.subpart_stat_param_.need_modify_ = true;
+    stat_param.no_invalidate_ = true;
     if (OB_FAIL(ObDbmsStatsLockUnlock::set_table_stats_lock(ctx, stat_param, false))) {
       LOG_WARN("failed to lock table stats", K(ret));
     } else if (OB_FAIL(lock_or_unlock_index_stats(ctx, stat_param, false))) {
       LOG_WARN("failed to lock index stats", K(ret));
+    } else if (OB_FAIL(update_stat_cache(ctx.get_my_session()->get_rpc_tenant_id(), stat_param))) {
+      LOG_WARN("failed to update stat cache", K(ret));
     } else {/*do nothing*/}
   }
   return ret;
@@ -2256,8 +2268,11 @@ int ObDbmsStats::unlock_partition_stats(sql::ObExecContext &ctx,
     stat_param.global_stat_param_.need_modify_ = false;
     stat_param.part_stat_param_.need_modify_ = true;
     stat_param.subpart_stat_param_.need_modify_ = false;
+    stat_param.no_invalidate_ = true;
     if (OB_FAIL(ObDbmsStatsLockUnlock::set_table_stats_lock(ctx, stat_param, false))) {
       LOG_WARN("failed to lock table stats", K(ret));
+    } else if (OB_FAIL(update_stat_cache(ctx.get_my_session()->get_rpc_tenant_id(), stat_param))) {
+      LOG_WARN("failed to update stat cache", K(ret));
     } else {/*do nothing */}
   }
   return ret;
@@ -2314,10 +2329,13 @@ int ObDbmsStats::unlock_schema_stats(sql::ObExecContext &ctx,
           stat_param.part_stat_param_.need_modify_ = true;
           stat_param.subpart_stat_param_.need_modify_ = true;
           stat_param.allocator_ = &tmp_alloc;//use the temp allocator to free memory after stat unlock
+          stat_param.no_invalidate_ = true;
           if (OB_FAIL(ObDbmsStatsLockUnlock::set_table_stats_lock(ctx, stat_param, false))) {
             LOG_WARN("failed to lock table stats", K(ret));
           } else if (OB_FAIL(lock_or_unlock_index_stats(ctx, stat_param, false))) {
             LOG_WARN("failed to lock index stats", K(ret));
+          } else if (OB_FAIL(update_stat_cache(ctx.get_my_session()->get_rpc_tenant_id(), stat_param))) {
+            LOG_WARN("failed to update stat cache", K(ret));
           } else {
             tmp_alloc.reset();
           }

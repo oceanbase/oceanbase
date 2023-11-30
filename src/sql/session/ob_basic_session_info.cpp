@@ -3510,6 +3510,13 @@ int ObBasicSessionInfo::is_serial_set_order_forced(bool &force_set_order, bool i
   return ret;
 }
 
+int ObBasicSessionInfo::is_storage_estimation_enabled(bool &storage_estimation_enabled) const
+{
+  int ret = OB_SUCCESS;
+  ret = get_bool_sys_var(SYS_VAR__ENABLE_STORAGE_CARDINALITY_ESTIMATION, storage_estimation_enabled);
+  return ret;
+}
+
 int ObBasicSessionInfo::is_select_index_enabled(bool &select_index_enabled) const
 {
   return get_bool_sys_var(SYS_VAR_OB_ENABLE_INDEX_DIRECT_SELECT, select_index_enabled);

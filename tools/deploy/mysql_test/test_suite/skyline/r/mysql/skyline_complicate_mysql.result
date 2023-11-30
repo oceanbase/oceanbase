@@ -928,7 +928,7 @@ Query Plan
 ============================================================================
 |ID|OPERATOR            |NAME                        |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|                            |2       |8           |
+|0 |MERGE UNION DISTINCT|                            |1       |8           |
 |1 |├─TABLE FULL SCAN   |skyline_int(idx_v3_v4_v5_v2)|1       |4           |
 |2 |└─TABLE FULL SCAN   |other                       |1       |4           |
 ============================================================================
@@ -971,7 +971,7 @@ Query Plan
 ===============================================================================
 |ID|OPERATOR            |NAME                           |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|                               |2       |8           |
+|0 |MERGE UNION DISTINCT|                               |1       |8           |
 |1 |├─TABLE FULL SCAN   |skyline_int(idx_v4_v5_v6_v2_v3)|1       |4           |
 |2 |└─TABLE FULL SCAN   |skyline_int(idx_v2_v3_v4)      |1       |4           |
 ===============================================================================
@@ -1350,7 +1350,7 @@ Query Plan
 ===============================================================================
 |ID|OPERATOR            |NAME                           |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|                               |2       |12          |
+|0 |MERGE UNION DISTINCT|                               |1       |12          |
 |1 |├─MERGE JOIN        |                               |1       |8           |
 |2 |│ ├─TABLE FULL SCAN |skyline_int(idx_v4_v5_v6_v2_v3)|1       |4           |
 |3 |│ └─TABLE FULL SCAN |other                          |1       |4           |
@@ -1414,7 +1414,7 @@ Query Plan
 =====================================================
 |ID|OPERATOR            |NAME |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |MERGE UNION DISTINCT|     |2       |8           |
+|0 |MERGE UNION DISTINCT|     |1       |8           |
 |1 |├─TABLE FULL SCAN   |other|1       |4           |
 |2 |└─TABLE FULL SCAN   |other|1       |4           |
 =====================================================

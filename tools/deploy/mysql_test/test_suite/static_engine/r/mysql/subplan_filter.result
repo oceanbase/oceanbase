@@ -1778,6 +1778,7 @@ Optimization Info:
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -1788,7 +1789,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -1879,6 +1881,7 @@ Optimization Info:
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -1889,7 +1892,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -1980,6 +1984,7 @@ Optimization Info:
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -1991,6 +1996,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -2090,6 +2096,7 @@ Optimization Info:
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2100,7 +2107,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2111,7 +2119,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -2211,6 +2220,7 @@ Optimization Info:
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2221,7 +2231,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2232,7 +2243,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -2332,6 +2344,7 @@ Optimization Info:
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2342,7 +2355,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2353,7 +2367,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -2453,6 +2468,7 @@ Optimization Info:
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2463,7 +2479,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2474,7 +2491,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -2583,6 +2601,7 @@ Optimization Info:
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2593,7 +2612,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2604,7 +2624,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -2616,6 +2637,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -2765,6 +2787,7 @@ Optimization Info:
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -2776,6 +2799,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2786,7 +2810,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -2798,6 +2823,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -2809,6 +2835,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2819,7 +2846,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -2831,6 +2859,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2841,7 +2870,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -2991,6 +3021,7 @@ Optimization Info:
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -3001,7 +3032,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -3012,7 +3044,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -3024,6 +3057,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -3035,6 +3069,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -3045,7 +3080,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -3057,6 +3093,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -3067,7 +3104,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -3217,6 +3255,7 @@ Optimization Info:
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -3227,7 +3266,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -3238,7 +3278,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -3250,6 +3291,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -3261,6 +3303,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -3271,7 +3314,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -3283,6 +3327,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -3293,7 +3338,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       DISTRIBUTED
   Note:

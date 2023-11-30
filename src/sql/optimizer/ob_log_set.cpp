@@ -421,6 +421,10 @@ int ObLogSet::get_re_est_cost_infos(const EstimateCostInfo &param,
                                 ? param.need_row_count_ : -1;
   double cur_child_card = 0.0;
   double cur_child_cost = 0.0;
+  if (OB_UNLIKELY(is_set_distinct() && get_num_of_child() != child_ndv_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected child ndv count", K(child_ndv_));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
     const ObLogicalOperator *child = get_child(i);
     cur_param.reset();
@@ -435,14 +439,15 @@ int ObLogSet::get_re_est_cost_infos(const EstimateCostInfo &param,
     } else if (OB_FAIL(cost_infos.push_back(ObBasicCostInfo(cur_child_card, cur_child_cost,
                                                             child->get_width())))) {
       LOG_WARN("push back child's cost info failed", K(ret));
-    } else if (ObSelectStmt::UNION == get_set_op()) {
+    } else if (ObSelectStmt::UNION == get_set_op() && !is_set_distinct()) {
       card += cur_child_card;
       child_cost += cur_child_cost;
-    } else if (ObSelectStmt::INTERSECT == get_set_op()) {
-      card = (0 == i || cur_child_card < card) ? cur_child_card : card;
-      child_cost += cur_child_cost;
-    } else if (ObSelectStmt::EXCEPT == get_set_op()) {
-      card = 0 == i ? cur_child_card : card;
+    } else {
+      if (0 == i) {
+        card = child_ndv_.at(i);
+      } else {
+        card = ObOptSelectivity::get_set_stmt_output_ndv(card, child_ndv_.at(i), get_set_op());
+      }
       child_cost += cur_child_cost;
     }
   }

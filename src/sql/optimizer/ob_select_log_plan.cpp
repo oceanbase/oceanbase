@@ -3947,7 +3947,18 @@ int ObSelectLogPlan::allocate_distinct_set_as_top(ObLogicalOperator *left_child,
     set_op->assign_set_op(select_stmt->get_set_op());
     set_op->set_algo_type(set_method);
     set_op->set_distributed_algo(dist_set_method);
-    if (OB_FAIL(set_op->compute_property())) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < set_op->get_num_of_child(); i ++) {
+      const OptTableMeta *table_meta = get_update_table_metas().get_table_meta_by_table_id(i);
+      double child_ndv = 0;
+      if (OB_NOT_NULL(table_meta)) {
+        child_ndv = table_meta->get_distinct_rows();
+      }
+      if (OB_FAIL(set_op->add_child_ndv(child_ndv))) {
+        LOG_WARN("failed to add child ndv", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(set_op->compute_property())) {
       LOG_WARN("failed to compute property", K(ret));
     } else {
       top = set_op;

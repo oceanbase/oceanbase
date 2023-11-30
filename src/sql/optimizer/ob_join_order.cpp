@@ -2484,16 +2484,19 @@ int ObJoinOrder::will_use_skip_scan(const uint64_t table_id,
  */
 int ObJoinOrder::estimate_rowcount_for_access_path(ObIArray<AccessPath*> &all_paths,
                                                    const bool is_inner_path,
-                                                   common::ObIArray<ObRawExpr*> &filter_exprs)
+                                                   common::ObIArray<ObRawExpr*> &filter_exprs,
+                                                   ObBaseTableEstMethod &method)
 {
   int ret = OB_SUCCESS;
   bool is_use_ds = false;
+  method = EST_INVALID;
+  get_plan()->get_selectivity_ctx().set_dependency_type(FilterDependencyType::INDEPENDENT);
   if (OB_FAIL(ObAccessPathEstimation::estimate_rowcount(OPT_CTX, all_paths,
                                                         is_inner_path,
                                                         filter_exprs,
-                                                        is_use_ds))) {
+                                                        method))) {
     LOG_WARN("failed to do access path estimation", K(ret));
-  } else if (!is_inner_path && !is_use_ds && OB_FAIL(compute_table_rowcount_info())) {
+  } else if (!is_inner_path && !(method & EST_DS_FULL) && OB_FAIL(compute_table_rowcount_info())) {
     LOG_WARN("failed to compute table rowcount info", K(ret));
   }
   return ret;
@@ -2663,42 +2666,33 @@ int ObJoinOrder::revise_output_rows_after_creating_path(PathHelper &helper,
     // get the minimal output row count
     int64_t maximum_count = -1;
     int64_t range_prefix_count = -1;
-    RowCountEstMethod estimate_method = INVALID_METHOD;
-    for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); ++i) {
-      AccessPath *path = access_paths.at(i);
-      if (OB_ISNULL(path)) {
+    if (helper.est_method_ & EST_STORAGE) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); ++i) {
+        AccessPath *path = access_paths.at(i);
+        if (OB_ISNULL(path)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("null path", K(ret));
+        } else if (OB_UNLIKELY((range_prefix_count = path->range_prefix_count_) < 0)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected range prefix count", K(ret), K(range_prefix_count));
+        } else if (maximum_count <= range_prefix_count) {
+          LOG_TRACE("OPT:revise output rows", K(path->output_row_count_),
+              K(output_rows_), K(maximum_count), K(range_prefix_count), K(ret));
+          if (maximum_count == range_prefix_count) {
+            output_rows_ = std::min(path->output_row_count_, output_rows_);
+          } else {
+            output_rows_ = path->output_row_count_;
+            maximum_count = range_prefix_count;
+          }
+        } else { /*do nothing*/ }
+      }
+    } else {
+      if (OB_UNLIKELY(access_paths.empty()) ||
+          OB_ISNULL(access_paths.at(0))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("null path", K(ret));
-      } else if (path->est_cost_info_.row_est_method_ == BASIC_STAT &&
-          (estimate_method == STORAGE_STAT)) {
-        // do nothing if the path is estimated by ndv
-      } else if (OB_UNLIKELY((range_prefix_count = path->range_prefix_count_) < 0)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected range prefix count", K(ret), K(range_prefix_count));
-      } else if (maximum_count <= range_prefix_count) {
-        LOG_TRACE("OPT:revise output rows", K(path->output_row_count_),
-            K(output_rows_), K(maximum_count), K(range_prefix_count), K(ret));
-        if (maximum_count == range_prefix_count) {
-          output_rows_ = std::min(path->output_row_count_, output_rows_);
-        } else {
-          output_rows_ = path->output_row_count_;
-          maximum_count = range_prefix_count;
-        }
-        estimate_method = path->est_cost_info_.row_est_method_;
-      } else { /*do nothing*/ }
-    }
-
-    // update index rows in normal path
-    for (int64_t i = 0; OB_SUCC(ret) && i < interesting_paths_.count(); ++i) {
-      if (OB_ISNULL(interesting_paths_.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("null path", K(ret));
-      } else if (!interesting_paths_.at(i)->is_access_path()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("should be access path", K(ret));
+        LOG_WARN("unexpected null", K(access_paths));
       } else {
-        path = static_cast<AccessPath *> (interesting_paths_.at(i));
-        path->est_cost_info_.row_est_method_ = estimate_method;
+        output_rows_ = access_paths.at(0)->output_row_count_;
       }
     }
 
@@ -3679,7 +3673,8 @@ int ObJoinOrder::estimate_size_for_base_table(PathHelper &helper,
     LOG_WARN("failed to fill path index meta info", K(ret));
   } else if (OB_FAIL(estimate_rowcount_for_access_path(access_paths,
                                                   helper.is_inner_path_,
-                                                  helper.filters_))) {
+                                                  helper.filters_,
+                                                  helper.est_method_))) {
     LOG_WARN("failed to estimate and add access path", K(ret));
   } else {
     LOG_TRACE("estimate rows for base table", K(output_rows_),
@@ -11976,6 +11971,7 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
       bool has_opt_stat = false;
       OptTableStatType stat_type = OptTableStatType::DEFAULT_TABLE_STAT;
       int64_t last_analyzed = 0;
+      bool is_stat_locked = false;
       const int64_t origin_part_cnt = all_used_part_id.count();
       bool use_global = false;
       ObSEArray<int64_t, 1> global_part_ids;
@@ -12028,6 +12024,7 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
           LOG_WARN("failed to get table stats", K(ret));
         } else {
           last_analyzed = stat.get_last_analyzed();
+          is_stat_locked = stat.get_stat_locked();
           table_meta_info_.table_row_count_ = stat.get_row_count();
           table_meta_info_.part_size_ = !use_global ? static_cast<double>(stat.get_avg_data_size()) :
                                                       static_cast<double>(stat.get_avg_data_size() * all_used_part_id.count())
@@ -12085,7 +12082,8 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
                       stat_type,
                       global_part_ids,
                       scale_ratio,
-                      last_analyzed))) {
+                      last_analyzed,
+                      is_stat_locked))) {
           LOG_WARN("failed to add base table meta info", K(ret));
         }
       }

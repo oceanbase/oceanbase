@@ -1280,7 +1280,7 @@ Query Plan
 |ID|OPERATOR                |NAME|EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------
 |0 |SORT                    |    |13      |18          |
-|1 |└─MERGE FULL OUTER JOIN |    |13      |13          |
+|1 |└─MERGE FULL OUTER JOIN |    |13      |14          |
 |2 |  ├─SORT                |    |5       |6           |
 |3 |  │ └─TABLE FULL SCAN   |t7  |5       |5           |
 |4 |  └─SORT                |    |13      |7           |
@@ -1423,7 +1423,7 @@ Query Plan
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
 |0 |SORT                 |    |5       |15          |
-|1 |└─MERGE OUTER JOIN   |    |5       |13          |
+|1 |└─MERGE OUTER JOIN   |    |5       |14          |
 |2 |  ├─SORT             |    |5       |6           |
 |3 |  │ └─TABLE FULL SCAN|t7  |5       |5           |
 |4 |  └─SORT             |    |13      |7           |
@@ -1493,7 +1493,7 @@ Query Plan
 =========================================================
 |ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SORT                     |    |5       |13          |
+|0 |SORT                     |    |5       |14          |
 |1 |└─NESTED-LOOP OUTER JOIN |    |5       |12          |
 |2 |  ├─TABLE FULL SCAN      |t7  |5       |5           |
 |3 |  └─MATERIAL             |    |13      |7           |
@@ -1572,7 +1572,7 @@ Query Plan
 |ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
 |0 |SORT                     |    |13      |18          |
-|1 |└─MERGE RIGHT OUTER JOIN |    |13      |13          |
+|1 |└─MERGE RIGHT OUTER JOIN |    |13      |14          |
 |2 |  ├─SORT                 |    |5       |6           |
 |3 |  │ └─TABLE FULL SCAN    |t7  |5       |5           |
 |4 |  └─SORT                 |    |13      |7           |
@@ -1658,7 +1658,7 @@ Query Plan
 =========================================================
 |ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SORT                     |    |13      |15          |
+|0 |SORT                     |    |13      |16          |
 |1 |└─NESTED-LOOP OUTER JOIN |    |13      |11          |
 |2 |  ├─TABLE FULL SCAN      |t2  |13      |5           |
 |3 |  └─MATERIAL             |    |5       |5           |

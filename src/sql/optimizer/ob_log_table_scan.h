@@ -60,7 +60,6 @@ public:
         phy_query_range_row_count_(0),
         query_range_row_count_(0),
         index_back_row_count_(0),
-        estimate_method_(INVALID_METHOD),
         table_opt_info_(NULL),
         est_records_(),
         part_expr_(NULL),
@@ -361,8 +360,6 @@ public:
   inline double get_query_range_row_count() const { return query_range_row_count_; }
   inline void set_index_back_row_count(double index_back_row_count) { index_back_row_count_ = index_back_row_count; }
   inline double get_index_back_row_count() const { return index_back_row_count_; }
-  inline void set_estimate_method(RowCountEstMethod method) { estimate_method_ = method; }
-  inline RowCountEstMethod get_estimate_method() const { return estimate_method_; }
   int is_top_table_scan(bool &is_top_table_scan)
   {
     int ret = common::OB_SUCCESS;
@@ -451,6 +448,7 @@ public:
   share::schema::ObTableType get_table_type() const { return table_type_; }
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
+  int print_est_method(ObBaseTableEstMethod method, char *buf, int64_t &buf_len, int64_t &pos);
   int get_plan_object_info(PlanText &plan_text,
                            ObSqlPlanItem &plan_item);
   inline ObTablePartitionInfo *get_global_index_back_table_partition_info() { return global_index_back_table_partition_info_; }
@@ -557,7 +555,6 @@ protected: // memeber variables
   double phy_query_range_row_count_; // 估计出的抽出的query range中所包含的行数(physical)
   double query_range_row_count_; // 估计出的抽出的query range中所包含的行数(logical)
   double index_back_row_count_;  // 估计出的需要回表的行数
-  RowCountEstMethod estimate_method_;
   BaseTableOptInfo *table_opt_info_;
   common::ObSEArray<common::ObEstRowCountRecord, 4, common::ModulePageAllocator, true> est_records_;
 

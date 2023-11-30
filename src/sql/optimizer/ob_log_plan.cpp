@@ -4316,7 +4316,6 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
     scan->set_phy_query_range_row_count(ap->phy_query_range_row_count_);
     scan->set_query_range_row_count(ap->query_range_row_count_);
     scan->set_index_back_row_count(ap->index_back_row_count_);
-    scan->set_estimate_method(ap->est_cost_info_.row_est_method_);
     scan->set_pre_query_range(ap->pre_query_range_);
     scan->set_skip_scan(OptSkipScanState::SS_DISABLE != ap->use_skip_scan_);
     scan->set_table_type(table_schema->get_table_type());
@@ -6910,7 +6909,7 @@ int ObLogPlan::init_distinct_helper(const ObIArray<ObRawExpr*> &distinct_exprs,
   distinct_helper.force_use_merge_ = get_log_plan_hint().use_merge_distinct();
   if (OB_FAIL(candidates_.get_best_plan(best_plan))) {
     LOG_WARN("failed to get best plan", K(ret));
-  } else if (OB_ISNULL(best_plan)) {
+  } else if (OB_ISNULL(best_plan) || OB_ISNULL(get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (get_log_plan_hint().no_pushdown_distinct()) {
@@ -6931,6 +6930,18 @@ int ObLogPlan::init_distinct_helper(const ObIArray<ObRawExpr*> &distinct_exprs,
     get_selectivity_ctx().init_op_ctx(&best_plan->get_output_equal_sets(), best_plan->get_card());
     if (distinct_exprs.empty()) {
       distinct_helper.group_ndv_ = 1.0;
+    } else if (get_stmt()->is_set_stmt()) {
+      // union distinct
+      const ObSelectStmt *sel_stmt = static_cast<const ObSelectStmt *>(get_stmt());
+      distinct_helper.group_ndv_ = 0.0;
+      for (int64_t i = 0; i < sel_stmt->get_set_query().count(); i ++) {
+        const OptTableMeta *table_meta = get_update_table_metas().get_table_meta_by_table_id(i);
+        double child_ndv = 0;
+        if (OB_NOT_NULL(table_meta)) {
+          child_ndv = table_meta->get_distinct_rows();
+        }
+        distinct_helper.group_ndv_ += child_ndv;
+      }
     } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(get_update_table_metas(),
                                                             get_selectivity_ctx(),
                                                             distinct_exprs,
