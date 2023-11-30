@@ -19,6 +19,7 @@
 #include "lib/geo/ob_geo_reverse_coordinate_visitor.h"
 #include "lib/geo/ob_geo_to_wkt_visitor.h"
 #include "lib/geo/ob_geo_func_common.h"
+#include "lib/geo/ob_geo_3d.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -104,6 +105,7 @@ int ObExprSTAsText::eval_st_astext_common(const ObExpr &expr,
   bool need_reverse = false;
   ObDatum *gis_datum = NULL;
   ObString wkb;
+  bool is_3d_geo = false;
   // get geo
   if (OB_FAIL(expr.args_[0]->eval(ctx, gis_datum))) {
     LOG_WARN("eval geo args failed", K(ret));
@@ -167,23 +169,12 @@ int ObExprSTAsText::eval_st_astext_common(const ObExpr &expr,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null geo", K(ret));
     } else {
-      if (is_geog && need_reverse) {
-        ObGeoReverseCoordinateVisitor rcoord_visitor;
-        if (OB_FAIL(geo->do_visit(rcoord_visitor))) {
-          ret = OB_ERR_GIS_INVALID_DATA;
-          LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, func_name);
-          LOG_WARN("failed to reverse geometry coordinate", K(ret));
-        }
+      if (is_geog && need_reverse && OB_FAIL(ObGeoExprUtils::reverse_coordinate(geo, func_name))) {
+        LOG_WARN("failed to reverse geometry coordinate", K(ret));
       }
-      if (OB_FAIL(ret)) {
-      } else {
-        ObGeoToWktVisitor wkt_visitor(&tmp_allocator);
-        if (OB_FAIL(geo->do_visit(wkt_visitor))) {
-          ret = OB_ERR_GIS_INVALID_DATA;
-          LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, func_name);
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(to_wkt(tmp_allocator, geo, res_wkt, func_name))) {
           LOG_WARN("failed to transform geo to wkt", K(ret));
-        } else {
-          wkt_visitor.get_wkt(res_wkt);
         }
       }
     }
@@ -196,6 +187,30 @@ int ObExprSTAsText::eval_st_astext_common(const ObExpr &expr,
     LOG_WARN("fail to pack geo res", K(ret));
   }
 
+  return ret;
+}
+
+int ObExprSTAsText::to_wkt(ObIAllocator &allocator, ObGeometry *geo, ObString &res_wkt, const char *func_name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(geo)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null geo", K(ret));
+  } else if (ObGeoTypeUtil::is_3d_geo_type(geo->type())) {
+    ObGeometry3D *geo_3d  = static_cast<ObGeometry3D *>(geo);
+    if (OB_FAIL(geo_3d->to_wkt(allocator, res_wkt))) {
+      LOG_WARN("fail to reserver coordiante in geo 3d", K(ret));
+    }
+  } else {
+    ObGeoToWktVisitor wkt_visitor(&allocator);
+    if (OB_FAIL(geo->do_visit(wkt_visitor))) {
+      ret = OB_ERR_GIS_INVALID_DATA;
+      LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, func_name);
+      LOG_WARN("failed to transform geo to wkt", K(ret));
+    } else {
+      wkt_visitor.get_wkt(res_wkt);
+    }
+  }
   return ret;
 }
 

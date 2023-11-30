@@ -19,6 +19,7 @@
 #include "lib/xml/ob_xml_bin.h"
 #include "lib/xml/ob_xml_util.h"
 #include "lib/xml/ob_xml_parser.h"
+#include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/ob_result_set.h"
@@ -1139,22 +1140,30 @@ int ObXMLExprHelper::process_sql_udt_results(ObObj& value, sql::ObResultSet &res
   } else if (OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lob fake allocator is null.", K(ret), K(value));
-  } else if (OB_FAIL(process_sql_udt_results(value, allocator, &result.get_session()))) {
+  } else if (OB_FAIL(process_sql_udt_results(value,
+                                             allocator,
+                                             &result.get_session(),
+                                             &result.get_exec_context(),
+                                             result.is_ps_protocol()))) {
     LOG_WARN("convert udt to client format failed.", K(ret), K(value));
   } else { /* do nothing */ }
   return ret;
 }
 
 int ObXMLExprHelper::process_sql_udt_results(common::ObObj& value,
-                                              common::ObIAllocator *allocator,
-                                              sql::ObSQLSessionInfo *session_info)
+                                             common::ObIAllocator *allocator,
+                                             sql::ObSQLSessionInfo *session_info,
+                                             sql::ObExecContext *exec_context,
+                                             bool is_ps_protocol,
+                                             const ColumnsFieldIArray *fields,
+                                             ObSchemaGetterGuard *schema_guard) // need fields and schema guard
 {
   int ret = OB_SUCCESS;
-  if (!value.is_xml_sql_type()) {
+  if (!value.is_user_defined_sql_type() && !value.is_collection_sql_type()) {
     ret = OB_NOT_SUPPORTED;
     OB_LOG(WARN, "not supported udt type", K(ret),
            K(value.get_type()), K(value.get_udt_subschema_id()));
-  } else {
+  } else if (value.is_xml_sql_type()) {
     bool is_client_support_binary_xml = false; // client receive xml as json, like json
     if (value.is_null() || value.is_nop_value()) {
       // do nothing
@@ -1227,6 +1236,56 @@ int ObXMLExprHelper::process_sql_udt_results(common::ObObj& value,
           if (OB_SUCC(ret)) {
             value.set_udt_value(converted_str.ptr(), converted_str.length());
           }
+        }
+      }
+    }
+  } else {
+    if (OB_ISNULL(exec_context)) {
+      ret = OB_BAD_NULL_ERROR;
+    } else if (OB_ISNULL(exec_context->get_physical_plan_ctx())) {
+      // no physical plan, build new one
+      if (OB_ISNULL(fields)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("no fields to rebuild udt meta", K(ret), K(lbt()));
+      } else if (OB_FAIL(exec_context->create_physical_plan_ctx())) {
+        LOG_WARN("failed to create physical plan ctx of subschema id", K(ret), K(lbt()));
+      } else if (OB_FAIL(exec_context->get_physical_plan_ctx()->build_subschema_by_fields(fields, schema_guard))) {
+        LOG_WARN("failed to rebuild_subschema by fields", K(ret), K(*fields), K(lbt()));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else {
+      const uint16_t subschema_id = value.get_meta().get_subschema_id();
+      ObSqlUDTMeta udt_meta;
+      if (OB_ISNULL(exec_context->get_physical_plan_ctx())) {
+        // build temp subschema id
+      } else if (OB_FAIL(exec_context->get_sqludt_meta_by_subschema_id(subschema_id, udt_meta))) {
+        LOG_WARN("failed to get udt meta", K(ret), K(subschema_id));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (!ObObjUDTUtil::ob_is_supported_sql_udt(udt_meta.udt_id_)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not supported to get udt meta", K(ret), K(udt_meta.udt_id_));
+      } else if (!is_ps_protocol) {
+        ObSqlUDT sql_udt;
+        sql_udt.set_udt_meta(udt_meta);
+        ObString res_str;
+        if (OB_FAIL(sql::ObSqlUdtUtils::convert_sql_udt_to_string(value, allocator, exec_context,
+                                                                  sql_udt, res_str))) {
+          LOG_WARN("failed to convert udt to string", K(ret), K(subschema_id));
+        } else {
+          value.set_udt_value(res_str.ptr(), res_str.length());
+        }
+      } else {
+        ObString udt_data = value.get_string();
+        ObObj result;
+        if (OB_FAIL(ObSqlUdtUtils::cast_sql_record_to_pl_record(exec_context,
+                                                                result,
+                                                                udt_data,
+                                                                udt_meta))) {
+          LOG_WARN("failed to cast sql collection to pl collection", K(ret), K(udt_meta.udt_id_));
+        } else {
+          value = result;
         }
       }
     }

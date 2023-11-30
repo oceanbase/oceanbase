@@ -36,6 +36,7 @@
 #include "sql/engine/expr/ob_expr_cast.h"
 #include "common/ob_smart_call.h"
 #include "pl/ob_pl_resolver.h"
+#include "pl/ob_pl_type.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/resolver/dml/ob_dml_resolver.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
@@ -987,6 +988,7 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
           OX (const_default_expr->set_expr_obj_meta(null_meta));
           OX (param_exprs.at(i) = default_expr);
           // rewrite param type, for do not cast default value
+          CK(udf_raw_expr->get_param_count() < udf_raw_expr->get_params_type().count());
           OX (udf_raw_expr->get_params_type().at(
             udf_raw_expr->get_param_count()).set_meta(null_meta));
         }
@@ -3857,11 +3859,17 @@ int ObRawExprUtils::try_add_cast_expr_above(ObRawExprFactory *expr_factory,
   const ObExprResType &src_type = expr.get_result_type();
   CK(OB_NOT_NULL(session) && OB_NOT_NULL(expr_factory));
   OZ(ObRawExprUtils::check_need_cast_expr(src_type, dst_type, need_cast, is_scale_adjust_cast));
+  if (ret == OB_ERR_INVALID_TYPE_FOR_OP &&
+      const_cast<ObSQLSessionInfo *>(session)->is_pl_prepare_stage() &&
+      dst_type.is_geometry() && lib::is_oracle_mode()) {
+    ret = OB_SUCCESS;
+    need_cast = true;
+  }
   if (OB_SUCC(ret) && need_cast) {
     if (T_FUN_SYS_CAST == expr.get_expr_type()
         && expr.has_flag(IS_OP_OPERAND_IMPLICIT_CAST)
         && !(is_scale_adjust_cast
-             || (src_type.is_user_defined_sql_type()
+             || ((src_type.is_user_defined_sql_type() || src_type.is_collection_sql_type())
                   && (dst_type.is_character_type() || dst_type.is_null())))) {
       // cases like: select xmltype(var)||xmltype(var) as "res1" from t1 t;
       // xmltype is a lp constructor, an implicit cast is added to cast PL xmltype to SQL xmltype
@@ -3900,9 +3908,10 @@ int ObRawExprUtils::try_add_cast_expr_above(ObRawExprFactory *expr_factory,
   return ret;
 }
 
+
 int ObRawExprUtils::implict_cast_pl_udt_to_sql_udt(ObRawExprFactory *expr_factory,
-                                                    const ObSQLSessionInfo *session,
-                                                    ObRawExpr* &real_ref_expr)
+                                                   const ObSQLSessionInfo *session,
+                                                   ObRawExpr* &real_ref_expr)
 {
   int ret = OB_SUCCESS;
 
@@ -3910,17 +3919,36 @@ int ObRawExprUtils::implict_cast_pl_udt_to_sql_udt(ObRawExprFactory *expr_factor
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("real_ref_expr is null", K(ret));
   } else if (real_ref_expr->get_result_type().is_ext()) {
-    if (real_ref_expr->get_result_type().get_udt_id() == T_OBJ_XML) {
-      // add implicit cast to sql xmltype
+    uint64_t udt_id = real_ref_expr->get_result_type().get_udt_id();
+    if (ObObjUDTUtil::ob_is_supported_sql_udt(udt_id)) {
       ObRawExpr *new_expr = NULL;
       ObCastMode cast_mode = CM_NONE;
       ObExprResType sql_udt_type;
-      sql_udt_type.set_sql_udt(ObXMLSqlType); // set subschema id
       if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false, 0, session, cast_mode))) {
         LOG_WARN("get default cast mode failed", K(ret));
+      } else if (udt_id == T_OBJ_SDO_GEOMETRY) {
+        sql_udt_type.set_geometry();
+      } else {
+        ObExecContext * exec_ctx = const_cast<ObSQLSessionInfo *>(session)->get_cur_exec_ctx();
+        uint16_t subschema_id;
+        if (OB_ISNULL(exec_ctx)) {
+          ret = OB_NOT_INIT;
+          LOG_WARN("exec context is null", K(ret), K(udt_id));
+        } else if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(udt_id, subschema_id))) {
+          LOG_WARN("failed to get ssubschema meta", K(ret), K(udt_id));
+        } else if (subschema_id == ObMaxSystemUDTSqlType) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid udt id", K(ret), K(udt_id));
+        } else {
+          // Add implicit cast from pl extend to sql udt
+          sql_udt_type.set_sql_udt(subschema_id); // set subschema id
+          sql_udt_type.set_udt_id(udt_id);
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(
-                                            expr_factory, session,
-                                            *real_ref_expr,  sql_udt_type, cast_mode, new_expr))) {
+                                              expr_factory, session,
+                                              *real_ref_expr,  sql_udt_type, cast_mode, new_expr))) {
         LOG_WARN("try add cast expr above failed", K(ret));
       } else if (OB_FAIL(new_expr->add_flag(IS_OP_OPERAND_IMPLICIT_CAST))) {
         LOG_WARN("failed to add flag", K(ret));
@@ -3933,8 +3961,8 @@ int ObRawExprUtils::implict_cast_pl_udt_to_sql_udt(ObRawExprFactory *expr_factor
 }
 
 int ObRawExprUtils::implict_cast_sql_udt_to_pl_udt(ObRawExprFactory *expr_factory,
-                                                    const ObSQLSessionInfo *session,
-                                                    ObRawExpr* &real_ref_expr)
+                                                   const ObSQLSessionInfo *session,
+                                                   ObRawExpr* &real_ref_expr)
 {
   int ret = OB_SUCCESS;
 
@@ -3942,19 +3970,53 @@ int ObRawExprUtils::implict_cast_sql_udt_to_pl_udt(ObRawExprFactory *expr_factor
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("real_ref_expr is null", K(ret));
   } else if (real_ref_expr->get_result_type().is_user_defined_sql_type()) {
-    if (real_ref_expr->get_result_type().is_xml_sql_type()) {
-      // add implicit cast to sql xmltype
-      ObRawExpr *new_expr = NULL;
-      ObCastMode cast_mode = CM_NONE;
-      ObExprResType pl_udt_type;
-      pl_udt_type.set_ext();
-      pl_udt_type.set_extend_type(pl::PL_OPAQUE_TYPE);
-      pl_udt_type.set_udt_id(T_OBJ_XML);
+    ObRawExpr *new_expr = NULL;
+    ObCastMode cast_mode = CM_NONE;
+    ObExprResType pl_udt_type;
+    pl_udt_type.set_ext();
+
+    uint16_t subschema_id = real_ref_expr->get_result_type().get_subschema_id();
+    const uint64_t expr_udt_id = (subschema_id == ObXMLSqlType)
+                                 ? T_OBJ_XML
+                                 : real_ref_expr->get_result_type().get_udt_id();
+
+    OB_ASSERT(ObObjUDTUtil::ob_is_supported_sql_udt(expr_udt_id));
+    ObSqlUDTMeta udt_meta;
+    ObExecContext * exec_ctx = const_cast<ObSQLSessionInfo *>(session)->get_cur_exec_ctx();
+    if (!ObObjUDTUtil::ob_is_supported_sql_udt(expr_udt_id)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unsupported udt type for sql udt",
+                K(ret), K(real_ref_expr->get_result_type()), K(expr_udt_id));
+    } else if (OB_ISNULL(exec_ctx)) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("exec context is null", K(ret), K(expr_udt_id));
+    } else if (subschema_id == ObInvalidSqlType) { // called in resolver, cast sql udt to pl udt
+      if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(expr_udt_id, subschema_id))) {
+        LOG_WARN("failed to get subschema id by udt id", K(ret), K(expr_udt_id));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(exec_ctx->get_sqludt_meta_by_subschema_id(subschema_id, udt_meta))) {
+      LOG_WARN("failed to get udt meta", K(ret), K(udt_meta.udt_id_));
+    } else if (!ObObjUDTUtil::ob_is_supported_sql_udt(udt_meta.udt_id_)) {
+      // Just bypass un-supported type, not return error here.
+    } else {
+      // can get extend type by schema guard, leave use of subschema when deduce.
+      OB_ASSERT(expr_udt_id == udt_meta.udt_id_);
+      pl_udt_type.set_udt_id(udt_meta.udt_id_);
+      // set pl extend type, use udt_meta extend type, or get extend type from udtinfoschema
+      if (subschema_id == ObXMLSqlType) {
+        pl_udt_type.set_extend_type(pl::PL_OPAQUE_TYPE);
+      } else {
+        // PL_RECORD_TYPE or PL_VARRAY_TYPE is supported
+        pl_udt_type.set_extend_type(udt_meta.pl_type_);
+      }
+      // add implicit cast from sql udt to pl extend
       if (OB_FAIL(ObSQLUtils::get_default_cast_mode(session, cast_mode))) {
         LOG_WARN("get default cast mode failed", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(
-                                            expr_factory, session,
-                                            *real_ref_expr,  pl_udt_type, cast_mode, new_expr))) {
+                                             expr_factory, session,
+                                             *real_ref_expr,  pl_udt_type, cast_mode, new_expr))) {
         LOG_WARN("try add cast expr above failed", K(ret));
       } else if (OB_FAIL(new_expr->add_flag(IS_OP_OPERAND_IMPLICIT_CAST))) {
         LOG_WARN("failed to add flag", K(ret));
@@ -4010,6 +4072,7 @@ int ObRawExprUtils::create_cast_expr(ObRawExprFactory &expr_factory,
       // pl xmltype -> sql xmltype -> char type is supported only in sql scenario
       ObExprResType sql_udt_type;
       sql_udt_type.set_sql_udt(ObXMLSqlType); // set subschema id
+      sql_udt_type.set_udt_id(T_OBJ_XML);
       OZ(create_real_cast_expr(expr_factory, src_expr, sql_udt_type, extra_cast, session));
       OZ(create_real_cast_expr(expr_factory, extra_cast, dst_type, func_expr, session));
     } else {
@@ -4726,9 +4789,8 @@ int ObRawExprUtils::build_column_conv_expr(ObRawExprFactory &expr_factory,
                                               expr_factory,
                                               col_ref.get_data_type(),
                                               col_ref.get_collation_type(),
-                                              (col_ref.get_data_type() != ObUserDefinedSQLType)
-                                                ? col_ref.get_accuracy().get_accuracy()
-                                                : col_ref.get_subschema_id(),
+                                              // accuracy used as udt id for udt columns
+                                              col_ref.get_accuracy().get_accuracy(),
                                               !col_ref.is_not_null_for_write(),
                                               &column_conv_info,
                                               &col_ref.get_enum_set_values(),
@@ -4873,6 +4935,9 @@ int ObRawExprUtils::build_column_conv_expr(const ObSQLSessionInfo *session_info,
       f_expr->set_func_name(ObString::make_string(N_COLUMN_CONV));
       f_expr->set_data_type(dest_type);
       f_expr->set_expr_type(T_FUN_COLUMN_CONV);
+      if (ob_is_user_defined_type(dest_type) || ob_is_collection_sql_type(dest_type)) {
+        f_expr->set_udt_id(accuracy);
+      }
       if (expr->is_for_generated_column()) {
         f_expr->set_for_generated_column();
       }
@@ -6420,13 +6485,9 @@ int ObRawExprUtils::init_column_expr(const ObColumnSchemaV2 &column_schema, ObCo
     }
   }
   if (OB_SUCC(ret) && column_schema.is_xmltype()) {
-  //  column_expr.set_udt_id(column_schema.get_sub_data_type());
-  // }
-  // ToDo : @gehao, need to conver extend type to udt type?
-  //if (OB_SUCC(ret) && column_schema.is_sql_xmltype()) {
     column_expr.set_data_type(ObUserDefinedSQLType);
+    column_expr.set_udt_id(column_schema.get_sub_data_type());
     column_expr.set_subschema_id(ObXMLSqlType);
-    // reset accuracy
   }
 
   return ret;
@@ -6877,8 +6938,10 @@ int ObRawExprUtils::check_composite_cast(ObRawExpr *&expr, ObSchemaChecker &sche
                     && src->get_param_expr(0)->get_expr_type() == T_QUESTIONMARK))) {
       if (ObNullType == src->get_result_type().get_type()) {
         // do nothing
-      } else if (src->get_result_type().is_user_defined_sql_type()) {
+      } else if (src->get_result_type().is_user_defined_sql_type() ||
+                 (src->get_result_type().is_geometry() && is_oracle_mode() && udt_id == T_OBJ_SDO_GEOMETRY)) {
         // allow pl udt cast to sql udt type
+        // allow oracle gis cast to pl extend
       } else if (ObExtendType != src->get_result_type().get_type()) {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("invalid cast a normal type to udt", K(ret));
@@ -7631,8 +7694,17 @@ int ObRawExprUtils::create_type_expr(ObRawExprFactory &expr_factory,
       parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX] = dst_type.get_precision();
       parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX] = dst_type.get_scale();
     }
-    if (dst_type.is_ext()) {
-      dst_expr->set_udt_id(dst_type.get_udt_id());
+    if (dst_type.is_ext()
+        || dst_type.is_user_defined_sql_type()
+        || dst_type.is_collection_sql_type()) {
+      // it is not possible to use arg[1] (u32) to record udt_id
+      // use subschema id before type deduce maybe also not good idea
+      // but we can always record real udt id on ObExprResType
+      if (dst_type.is_xml_sql_type()) {
+        dst_expr->set_udt_id(T_OBJ_XML);
+      } else {
+        dst_expr->set_udt_id(dst_type.get_udt_id());
+      }
     }
 
     val.set_int(parse_node.value_);

@@ -1499,6 +1499,7 @@ public:
   inline void inc_in_bytes(int64_t in_bytes) { IGNORE_RETURN ATOMIC_FAA(&in_bytes_, in_bytes); }
   inline int64_t get_out_bytes() const { return ATOMIC_LOAD(&out_bytes_); }
   inline void inc_out_bytes(int64_t out_bytes) { IGNORE_RETURN ATOMIC_FAA(&out_bytes_, out_bytes); }
+  bool is_pl_prepare_stage() const;
 private:
   transaction::ObTxnFreeRouteCtx txn_free_route_ctx_;
   //save the current sql exec context in session

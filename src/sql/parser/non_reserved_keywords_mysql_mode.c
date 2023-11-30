@@ -1000,6 +1000,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"statement_id", STATEMENT_ID},
   {"TTL", TTL},
   {"kv_attributes", KV_ATTRIBUTES},
+  {"_st_asmvt", _ST_ASMVT},
 };
 
 /** https://dev.mysql.com/doc/refman/5.7/en/sql-syntax-prepared-statements.html

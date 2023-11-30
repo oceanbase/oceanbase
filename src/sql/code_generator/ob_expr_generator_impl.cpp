@@ -44,6 +44,8 @@
 #include "sql/engine/expr/ob_expr_cast.h"
 #include "sql/engine/expr/ob_expr_calc_partition_id.h"
 #include "sql/engine/expr/ob_pl_expr_subquery.h"
+#include "sql/engine/expr/ob_expr_sql_udt_construct.h"
+#include "sql/engine/expr/ob_expr_priv_attribute_access.h"
 
 namespace oceanbase
 {
@@ -660,6 +662,15 @@ int ObExprGeneratorImpl::visit_simple_op(ObNonTerminalRawExpr &expr)
           cast_op->set_implicit_cast(is_implicit);
           LOG_DEBUG("cast debug, explicit or implicit", K(ret), K(is_implicit));
           break;
+        }
+        case T_FUN_SYS_PRIV_SQL_UDT_CONSTRUCT: {
+          ObExprUdtConstruct *object_op = static_cast<ObExprUdtConstruct*>(op);
+          ret = visit_sql_udt_construct_expr(expr, object_op);
+          break;
+        }
+        case T_FUN_SYS_PRIV_SQL_UDT_ATTR_ACCESS: {
+          ObExprUDTAttributeAccess *access_op = static_cast<ObExprUDTAttributeAccess*>(op);
+          ret = visit_sql_udt_attr_access_expr(expr, access_op);
         }
         default: {
           break;
@@ -1483,6 +1494,33 @@ int ObExprGeneratorImpl::visit_pl_assoc_index_expr(ObOpRawExpr &expr,
   return ret;
 }
 
+int ObExprGeneratorImpl::visit_sql_udt_construct_expr(ObRawExpr &expr,
+                                                      ObExprUdtConstruct *udt_construct)
+{
+  int ret = OB_SUCCESS;
+  ObUDTConstructorRawExpr &udt_raw_expr = static_cast<ObUDTConstructorRawExpr&>(expr);
+  CK (OB_NOT_NULL(udt_construct));
+  OX (udt_construct->set_udt_id(udt_raw_expr.get_udt_id()));
+  OX (udt_construct->set_root_udt_id(udt_raw_expr.get_root_udt_id()));
+  OX (udt_construct->set_attribute_pos(udt_raw_expr.get_attribute_pos()));
+  OX (udt_construct->set_real_param_num(static_cast<int32_t>(udt_raw_expr.get_param_count())));
+  OX (udt_construct->set_row_dimension(ObExprOperator::NOT_ROW_DIMENSION));
+  return ret;
+}
+
+int ObExprGeneratorImpl::visit_sql_udt_attr_access_expr(ObRawExpr &expr,
+                                                        ObExprUDTAttributeAccess *udt_attr_access)
+{
+  int ret = OB_SUCCESS;
+  ObUDTAttributeAccessRawExpr &udt_raw_expr = static_cast<ObUDTAttributeAccessRawExpr&>(expr);
+  CK (OB_NOT_NULL(udt_attr_access));
+  OX (udt_attr_access->set_udt_id(udt_raw_expr.get_udt_id()));
+  OX (udt_attr_access->set_attribute_type(udt_raw_expr.get_attribute_type()));
+  OX (udt_attr_access->set_real_param_num(static_cast<int32_t>(udt_raw_expr.get_param_count())));
+  OX (udt_attr_access->set_row_dimension(ObExprOperator::NOT_ROW_DIMENSION));
+  return ret;
+}
+
 int ObExprGeneratorImpl::visit(ObOpRawExpr &expr)
 {
   int ret = OB_SUCCESS;
@@ -1565,6 +1603,12 @@ int ObExprGeneratorImpl::visit(ObOpRawExpr &expr)
       } else if (T_FUN_PL_OBJECT_CONSTRUCT == expr.get_expr_type()) {
         ObExprObjectConstruct *object = static_cast<ObExprObjectConstruct *>(op);
         ret = visit_pl_object_construct_expr(expr, object);
+      } else if (T_FUN_SYS_PRIV_SQL_UDT_CONSTRUCT == expr.get_expr_type()) {
+        ObExprUdtConstruct *object_op = static_cast<ObExprUdtConstruct*>(op);
+        ret = visit_sql_udt_construct_expr(expr, object_op);
+      } else if (T_FUN_SYS_PRIV_SQL_UDT_ATTR_ACCESS == expr.get_expr_type()) {
+        ObExprUDTAttributeAccess *access_op = static_cast<ObExprUDTAttributeAccess*>(op);
+        ret = visit_sql_udt_attr_access_expr(expr, access_op);
       } else {
         op->set_real_param_num(static_cast<int32_t>(expr.get_param_count()));
         op->set_row_dimension(ObExprOperator::NOT_ROW_DIMENSION);

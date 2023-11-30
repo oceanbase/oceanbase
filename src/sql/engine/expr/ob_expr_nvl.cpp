@@ -64,6 +64,8 @@ int ObExprNvlUtil::calc_result_type(ObExprResType &type,
     type.set_collation_type(CS_TYPE_BINARY);
   } else if (ob_is_json(type.get_type())) {
     type.set_collation_level(CS_LEVEL_IMPLICIT);
+  } else if (ob_is_geometry(type.get_type())) {
+    type.set_geometry();
   }
   if (OB_SUCC(ret)) {
     type.set_length(MAX(type1.get_length(), type2.get_length()));
@@ -74,11 +76,17 @@ int ObExprNvlUtil::calc_result_type(ObExprResType &type,
   }
 
   if (OB_SUCC(ret) && ob_is_user_defined_sql_type(type.get_type())) {
+    bool is_one_type_null = ob_is_null(type1.get_type()) || ob_is_null(type2.get_type());
+    ObExprResType &udt_type = !type1.is_null() ? type1 : type2;
     if (type1.is_xml_sql_type() || type2.is_xml_sql_type()) {
       type.set_subschema_id(ObXMLSqlType);
+    } else if ((is_one_type_null || type1.get_udt_id() == type2.get_udt_id())
+                && udt_type.get_udt_id() != OB_INVALID_ID) {
+      type.set_subschema_id(udt_type.get_subschema_id());
+      type.set_udt_id(udt_type.get_udt_id());
     } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unsupported udt failed", K(ret), K(type1), K(type2));
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("unsupported udt for nvl", K(ret), K(type1), K(type2));
     }
   }
   return ret;
@@ -276,6 +284,14 @@ int ObExprOracleNvl::calc_nvl_oralce_result_type(ObExprResType &type,
       OX (type.set_udt_id(type1.get_udt_id()));
     } else if (type.is_temporal_type()) {
       type.set_scale(0);
+    } else if (type.is_user_defined_sql_type()) {
+      // only two situations:
+      // 1. both type1 and type2 are UDT, and have same udt_id
+      // 2. one of type1 and type2 is null, need to set accuracy for udt_id_
+      ObExprResType &null_type = type1.is_null() ? type1 : type2;
+      if (null_type.is_null()) {
+        null_type.set_calc_accuracy(type.get_accuracy());
+      }
     }
     /*
      *

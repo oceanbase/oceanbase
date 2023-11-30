@@ -97,7 +97,11 @@ extern ObRawExpr *USELESS_POINTER;
     || ((op) == T_FUN_SYS_ST_COVERS) \
     || ((op) == T_FUN_SYS_ST_DWITHIN) \
     || ((op) == T_FUN_SYS_ST_WITHIN) \
-    || ((op) == T_FUN_SYS_ST_CONTAINS)) \
+    || ((op) == T_FUN_SYS_ST_CONTAINS) \
+    || ((op) == T_FUN_SYS_PRIV_ST_EQUALS) \
+    || ((op) == T_FUN_SYS_PRIV_ST_TOUCHES) \
+    || ((op) == T_FUN_SYS_ST_CROSSES) \
+    || ((op) == T_FUN_SYS_ST_OVERLAPS)) \
 
 #define IS_MYSQL_GEO_OP(op) \
   (((op) == T_FUN_SYS_ST_GEOMFROMTEXT) \
@@ -136,8 +140,15 @@ extern ObRawExpr *USELESS_POINTER;
     || ((op) == T_FUN_SYS_ST_DISTANCE_SPHERE) \
     || ((op) == T_FUN_SYS_ST_DWITHIN) \
     || ((op) == T_FUN_SYS_ST_WITHIN) \
-    || ((op) == T_FUN_SYS_ST_CONTAINS)) \
-
+    || ((op) == T_FUN_SYS_ST_CONTAINS) \
+    || ((op) == T_FUN_SYS_ST_CROSSES) \
+    || ((op) == T_FUN_SYS_ST_OVERLAPS) \
+    || ((op) == T_FUN_SYS_ST_UNION) \
+    || ((op) == T_FUN_SYS_ST_LENGTH) \
+    || ((op) == T_FUN_SYS_ST_DIFFERENCE) \
+    || ((op) == T_FUN_SYS_ST_ASGEOJSON) \
+    || ((op) == T_FUN_SYS_ST_CENTROID) \
+    || ((op) == T_FUN_SYS_ST_SYMDIFFERENCE)) \
 
 #define IS_PRIV_GEO_OP(op) \
   (((op) == T_FUN_SYS_PRIV_ST_BUFFER) \
@@ -148,7 +159,17 @@ extern ObRawExpr *USELESS_POINTER;
     || ((op) == T_FUN_SYS_PRIV_ST_POINT) \
     || ((op) == T_FUN_SYS_PRIV_ST_GEOGFROMTEXT) \
     || ((op) == T_FUN_SYS_PRIV_ST_GEOGRAPHYFROMTEXT) \
-    || ((op) == T_FUN_SYS_PRIV_ST_ASEWKT)) \
+    || ((op) == T_FUN_SYS_PRIV_ST_ASEWKT) \
+    || ((op) == T_FUN_SYS_PRIV_ST_NUMINTERIORRINGS) \
+    || ((op) == T_FUN_SYS_PRIV_ST_ISCOLLECTION) \
+    || ((op) == T_FUN_SYS_PRIV_ST_EQUALS) \
+    || ((op) == T_FUN_SYS_PRIV_ST_TOUCHES) \
+    || ((op) == T_FUN_SYS_PRIV_ST_MAKEENVELOPE) \
+    || ((op) == T_FUN_SYS_PRIV_ST_CLIPBYBOX2D) \
+    || ((op) == T_FUN_SYS_PRIV_ST_POINTONSURFACE) \
+    || ((op) == T_FUN_SYS_PRIV_ST_GEOMETRYTYPE) \
+    || ((op) == T_FUN_SYS_PRIV_ST_ASMVTGEOM) \
+    || ((op) == T_FUN_SYS_PRIV_ST_MAKE_VALID)) \
 
 #define IS_GEO_OP(op) ((IS_MYSQL_GEO_OP(op)) || IS_PRIV_GEO_OP(op))
 
@@ -2640,7 +2661,6 @@ public:
 
   bool is_xml_column() const { return ob_is_xml_pl_type(get_data_type(), get_udt_id())
                                       || ob_is_xml_sql_type(get_data_type(), get_subschema_id()); }
-
   bool is_udt_hidden_column() const { return is_hidden_column() && get_udt_set_id() > 0;}
 
   inline common::ObGeoType get_geo_type() const { return static_cast<common::ObGeoType>(srs_info_.geo_type_); }
@@ -3612,7 +3632,7 @@ public:
   const pl::ObPLDataType& get_elem_type() const { return elem_type_; }
   int64_t get_capacity() const { return capacity_; }
   uint64_t get_udt_id() const { return udt_id_; }
-
+  int64_t get_udt_version() const { return coll_schema_version_; }
   int assign(const ObRawExpr &other) override;
   int inner_deep_copy(ObIRawExprCopier &copier) override;
 
@@ -3682,6 +3702,8 @@ public:
 
   inline void set_udt_id(uint64_t udt_id) { udt_id_ = udt_id; }
   uint64_t get_udt_id() { return udt_id_; }
+
+  int64_t get_udt_version() { return object_schema_version_; }
 
   inline int add_elem_type(ObExprResType &elem_type)
   {
@@ -3906,6 +3928,8 @@ public:
   inline void set_pkg_id(uint64_t pkg_id){ pkg_id_ = pkg_id; }
   inline uint64_t get_pkg_id() const { return pkg_id_; }
   inline uint64_t get_udf_id() const { return udf_id_; }
+  inline int64_t get_pkg_version() const { return pkg_schema_version_; }
+  inline int64_t get_udf_version() const { return udf_schema_version_; }
   inline const ObIArray<int64_t> &get_subprogram_path() const { return subprogram_path_; }
   inline pl::ObPLIntegerType get_pls_type() const { return pls_type_; }
   inline common::ObIArray<ObExprResType> &get_params_type() { return params_type_; }
@@ -4926,6 +4950,126 @@ inline uint64_t ObPlQueryRefRawExpr::hash_internal(uint64_t seed) const
   }
   return hash_value;
 }
+
+class ObUDTConstructorRawExpr : public ObSysFunRawExpr
+{
+public:
+  ObUDTConstructorRawExpr(common::ObIAllocator &alloc)
+    : ObSysFunRawExpr(alloc),
+      udt_id_(OB_INVALID_ID),
+      root_udt_id_(OB_INVALID_ID),
+      attr_pos_(0),
+      access_names_(),
+      database_id_(OB_INVALID_ID),
+      object_schema_version_(common::OB_INVALID_VERSION) {}
+  ObUDTConstructorRawExpr()
+    : ObSysFunRawExpr(),
+      udt_id_(OB_INVALID_ID),
+      root_udt_id_(OB_INVALID_ID),
+      attr_pos_(0),
+      access_names_(),
+      database_id_(OB_INVALID_ID),
+      object_schema_version_(common::OB_INVALID_VERSION) {}
+
+  virtual ~ObUDTConstructorRawExpr() {}
+
+  inline void set_udt_id(uint64_t udt_id) { udt_id_ = udt_id; }
+  uint64_t get_udt_id() { return udt_id_; }
+  inline void set_root_udt_id(uint64_t udt_id) { root_udt_id_ = udt_id; }
+  uint64_t get_root_udt_id() { return root_udt_id_; }
+  inline void set_attribute_pos(uint64_t attr_pos) { attr_pos_ = attr_pos; }
+  uint64_t get_attribute_pos() { return attr_pos_; }
+  int set_access_names(const common::ObIArray<ObObjAccessIdent> &access_idents);
+  int add_access_name(const common::ObString &access_name) { return access_names_.push_back(access_name); }
+  const common::ObIArray<ObString>& get_access_names() const { return access_names_; }
+
+  int assign(const ObRawExpr &other) override;
+  int inner_deep_copy(ObIRawExprCopier &copier) override;
+
+  inline void set_database_id(int64_t database_id)
+  {
+    database_id_ = database_id;
+  }
+
+  OB_INLINE uint64_t get_database_id() const { return database_id_; }
+
+  inline void set_coll_schema_version(int64_t schema_version)
+  {
+    object_schema_version_ = schema_version;
+  }
+
+  inline bool need_add_dependency()
+  {
+    return object_schema_version_ != common::OB_INVALID_VERSION;
+  }
+
+  int get_schema_object_version(share::schema::ObSchemaObjVersion &obj_version);
+
+  virtual ObExprOperator *get_op() override;
+
+  VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
+                                            N_RESULT_TYPE, result_type_,
+                                            N_EXPR_INFO, info_,
+                                            N_REL_ID, rel_ids_,
+                                            N_FUNC, get_func_name(),
+                                            N_CHILDREN, exprs_,
+                                            K_(database_id),
+                                            K_(object_schema_version));
+private:
+  uint64_t udt_id_;
+  // 记录Object每个元素的类型
+  uint64_t root_udt_id_;
+  uint64_t attr_pos_;
+  // 用于打印构造函数的名字
+  common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> access_names_;
+  int64_t database_id_;
+  int64_t object_schema_version_;
+};
+
+class ObUDTAttributeAccessRawExpr : public ObSysFunRawExpr
+{
+public:
+  ObUDTAttributeAccessRawExpr(common::ObIAllocator &alloc)
+    : ObSysFunRawExpr(alloc),
+      udt_id_(OB_INVALID_ID),
+      object_schema_version_(common::OB_INVALID_VERSION) {}
+  ObUDTAttributeAccessRawExpr()
+    : ObSysFunRawExpr(),
+      udt_id_(OB_INVALID_ID),
+      object_schema_version_(common::OB_INVALID_VERSION) {}
+
+  virtual ~ObUDTAttributeAccessRawExpr() {}
+
+  inline void set_udt_id(uint64_t udt_id) { udt_id_ = udt_id; }
+  uint64_t get_udt_id() { return udt_id_; }
+
+  inline void set_attribute_type(uint64_t attr_type) { attr_type_ = attr_type; }
+  uint64_t get_attribute_type() { return attr_type_; }
+
+
+  int assign(const ObRawExpr &other) override;
+  int inner_deep_copy(ObIRawExprCopier &copier) override;
+
+  inline void set_schema_object_version(int64_t schema_version)
+  {
+    object_schema_version_ = schema_version;
+  }
+
+  inline bool need_add_dependency()
+  {
+    return object_schema_version_ != common::OB_INVALID_VERSION;
+  }
+
+  int get_schema_object_version(share::schema::ObSchemaObjVersion &obj_version);
+
+  virtual ObExprOperator *get_op() override;
+
+private:
+  uint64_t udt_id_;
+  uint64_t attr_type_; // attribute type
+  int64_t object_schema_version_;
+};
+
 
 }// end sql
 }// end oceanbase

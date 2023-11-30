@@ -18,19 +18,14 @@
 #include "lib/geo/ob_geo_tree.h"
 #include "lib/geo/ob_geo_to_tree_visitor.h"
 #include "lib/oblog/ob_log_module.h"
+#include "lib/geo/ob_geo_utils.h"
+#include "lib/geo/ob_geo_func_utils.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
 {
 namespace common
 {
-
-enum class ObBGStrategyType
-{
-  DEFAULT_NONE = 0,
-  PL_PA_STRATEGY,
-  LL_LA_AA_STRATEGY,
-};
 
 template <typename GeometryType1, typename GeometryType2>
 static void apply_bg_union_inner(const GeometryType1 *geo1, const GeometryType2 *geo2, const ObGeoEvalCtx &context,
@@ -64,7 +59,7 @@ template <typename GeometryType1, typename GeometryType2, typename GeometryRes>
 static int apply_bg_union(const ObGeometry *g1, const ObGeometry *g2, const ObGeoEvalCtx &context, ObGeometry *&result)
 {
   INIT_SUCC(ret);
-  GeometryRes *res = OB_NEWx(GeometryRes, context.get_allocator());
+  GeometryRes *res = OB_NEWx(GeometryRes, context.get_allocator(), g1->get_srid(), *context.get_allocator());
   if (OB_ISNULL(res)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create go by type", K(ret));
@@ -133,7 +128,7 @@ template <typename IGeometryType1, typename IGeometryType2, typename GeometryRes
 static int apply_bg_union_collection(const ObGeometry *g1, const ObGeometry *g2, const ObGeoEvalCtx &context, ObGeometry *&result)
 {
   INIT_SUCC(ret);
-  GeometryRes *res = OB_NEWx(GeometryRes, context.get_allocator());
+  GeometryRes *res = OB_NEWx(GeometryRes, context.get_allocator(), g1->get_srid(), *context.get_allocator());
   if (OB_ISNULL(res)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create go by type", K(ret));
@@ -169,7 +164,7 @@ template <typename GeometryType1, typename GeometryType2,
 static int apply_bg_multi_union_collection(const ObGeometry *g1, const ObGeometry *g2, const ObGeoEvalCtx &context, ObGeometry *&result)
 {
   INIT_SUCC(ret);
-  GeometryRes *res = OB_NEWx(GeometryRes, context.get_allocator());
+  GeometryRes *res = OB_NEWx(GeometryRes, context.get_allocator(), g1->get_srid(), *context.get_allocator());
   if (OB_ISNULL(res)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create go by type", K(ret));
@@ -211,7 +206,7 @@ static int apply_bg_diff_union_collection(const ObGeometry *g1, const ObGeometry
   INIT_SUCC(ret);
   GeometryRes *res = NULL;
 
-  GeometryDiffType *diff_geo = OB_NEWx(GeometryDiffType, context.get_allocator());
+  GeometryDiffType *diff_geo = OB_NEWx(GeometryDiffType, context.get_allocator(), g1->get_srid(), *context.get_allocator());
   if (OB_ISNULL(diff_geo)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create go by type", K(ret));
@@ -219,7 +214,7 @@ static int apply_bg_diff_union_collection(const ObGeometry *g1, const ObGeometry
     const GeometryType1 *geo1 = reinterpret_cast<const GeometryType1 *>(g1->val());
     const GeometryType2 *geo2 = reinterpret_cast<const GeometryType2 *>(g2->val());
     apply_bg_difference(geo1, geo2, context, diff_geo);
-    res = OB_NEWx(GeometryRes, context.get_allocator());
+    res = OB_NEWx(GeometryRes, context.get_allocator(), g1->get_srid(), *context.get_allocator());
     if (OB_ISNULL(res)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to create go by type", K(ret));
@@ -288,7 +283,7 @@ static int apply_bg_union_multiline_multipolygon(const ObGeometry *g1, const ObG
 {
   INIT_SUCC(ret);
   GeometryRes *res = NULL;
-  GeometryDiffType *diff_geo = OB_NEWx(GeometryDiffType, context.get_allocator());
+  GeometryDiffType *diff_geo = OB_NEWx(GeometryDiffType, context.get_allocator(), g1->get_srid(), *context.get_allocator());
   if (OB_ISNULL(diff_geo)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create go by type", K(ret));
@@ -296,7 +291,7 @@ static int apply_bg_union_multiline_multipolygon(const ObGeometry *g1, const ObG
     const GeometryType1 *geo1 = reinterpret_cast<const GeometryType1 *>(g1->val());
     const GeometryType2 *geo2 = reinterpret_cast<const GeometryType2 *>(g2->val());
     apply_bg_difference(geo1, geo2, context, diff_geo);
-    res = OB_NEWx(GeometryRes, context.get_allocator());
+    res = OB_NEWx(GeometryRes, context.get_allocator(), g1->get_srid(), *context.get_allocator());
     if (OB_ISNULL(res)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to create go by type", K(ret));
@@ -307,14 +302,20 @@ static int apply_bg_union_multiline_multipolygon(const ObGeometry *g1, const ObG
         LOG_WARN("failed to do geo visit", K(ret));
       } else {
         GeometryTreeType2 *geo2_tree = static_cast<GeometryTreeType2 *>(visitor.get_geometry());
-        FOREACH_X(item, *geo2_tree, OB_SUCC(ret)) {
-          if (OB_FAIL(res->push_back(*item))) {
+        if (diff_geo->is_empty()) {
+          if (OB_FAIL(res->push_back(*geo2_tree))) {
             LOG_WARN("failed to add geo to collection", K(ret));
           }
-        }
-        FOREACH_X(diff_item, *diff_geo, OB_SUCC(ret)) {
-          if (OB_FAIL(res->push_back(*diff_item))) {
-            LOG_WARN("failed to add geo to collection", K(ret));
+        } else {
+          FOREACH_X(item, *geo2_tree, OB_SUCC(ret)) {
+            if (OB_FAIL(res->push_back(*item))) {
+              LOG_WARN("failed to add geo to collection", K(ret));
+            }
+          }
+          FOREACH_X(diff_item, *diff_geo, OB_SUCC(ret)) {
+            if (OB_FAIL(res->push_back(*diff_item))) {
+              LOG_WARN("failed to add geo to collection", K(ret));
+            }
           }
         }
       }
@@ -332,7 +333,7 @@ static int apply_bg_union_multipoint_multigeo(const ObGeometry *g1, const ObGeom
 {
   INIT_SUCC(ret);
   GeometryRes *res = NULL;
-  GeometryDiffType *diff_geo = OB_NEWx(GeometryDiffType, context.get_allocator());
+  GeometryDiffType *diff_geo = OB_NEWx(GeometryDiffType, context.get_allocator(), g1->get_srid(), *context.get_allocator());
   if (OB_ISNULL(diff_geo)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create go by type", K(ret));
@@ -340,7 +341,7 @@ static int apply_bg_union_multipoint_multigeo(const ObGeometry *g1, const ObGeom
     const GeometryType1 *geo1 = reinterpret_cast<const GeometryType1 *>(g1->val());
     const GeometryType2 *geo2 = reinterpret_cast<const GeometryType2 *>(g2->val());
     apply_bg_difference(geo1, geo2, context, diff_geo);
-    res = OB_NEWx(GeometryRes, context.get_allocator());
+    res = OB_NEWx(GeometryRes, context.get_allocator(), g1->get_srid(), *context.get_allocator());
     if (OB_ISNULL(res)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to create go by type", K(ret));
@@ -351,14 +352,20 @@ static int apply_bg_union_multipoint_multigeo(const ObGeometry *g1, const ObGeom
         LOG_WARN("failed to do geo visit", K(ret));
       } else {
         GeometryTreeType2 *geo2_tree = static_cast<GeometryTreeType2 *>(visitor.get_geometry());
-        FOREACH_X(item, *geo2_tree, OB_SUCC(ret)) {
-          if (OB_FAIL(res->push_back(*item))) {
+        if (diff_geo->is_empty()) {
+          if (OB_FAIL(res->push_back(*geo2_tree))) {
             LOG_WARN("failed to add geo to collection", K(ret));
           }
-        }
-        FOREACH_X(diff_item, *diff_geo, OB_SUCC(ret)) {
-          if (OB_FAIL(push_back_innerpoint(*diff_item, context, *res))) {
-            LOG_WARN("failed to add geo to collection", K(ret));
+        } else {
+          FOREACH_X(item, *geo2_tree, OB_SUCC(ret)) {
+            if (OB_FAIL(res->push_back(*item))) {
+              LOG_WARN("failed to add geo to collection", K(ret));
+            }
+          }
+          FOREACH_X(diff_item, *diff_geo, OB_SUCC(ret)) {
+            if (OB_FAIL(push_back_innerpoint(*diff_item, context, *res))) {
+              LOG_WARN("failed to add geo to collection", K(ret));
+            }
           }
         }
       }
@@ -376,7 +383,7 @@ static int apply_bg_union_multipoint_geo(const ObGeometry *g1, const ObGeometry 
 {
   INIT_SUCC(ret);
   GeometryRes *res = NULL;
-  GeometryDiffType *diff_geo = OB_NEWx(GeometryDiffType, context.get_allocator());
+  GeometryDiffType *diff_geo = OB_NEWx(GeometryDiffType, context.get_allocator(), g1->get_srid(), *context.get_allocator());
   if (OB_ISNULL(diff_geo)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create geo by type", K(ret));
@@ -384,7 +391,7 @@ static int apply_bg_union_multipoint_geo(const ObGeometry *g1, const ObGeometry 
     const GeometryType1 *geo1 = reinterpret_cast<const GeometryType1 *>(g1->val());
     const GeometryType2 *geo2 = reinterpret_cast<const GeometryType2 *>(g2->val());
     apply_bg_difference(geo1, geo2, context, diff_geo);
-    res = OB_NEWx(GeometryRes, context.get_allocator());
+    res = OB_NEWx(GeometryRes, context.get_allocator(), g1->get_srid(), *context.get_allocator());
     if (OB_ISNULL(res)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to create go by type", K(ret));
@@ -441,6 +448,91 @@ public:
     }
   };
 
+  template<typename GcTreeType, typename PtType>
+  static int eval_unions_gc(const ObGeometry *g1, const ObGeometry *g2, const ObGeoEvalCtx &context, ObGeometry *&result)
+  {
+    int ret = OB_SUCCESS;
+    if (g1->type() != ObGeoType::GEOMETRYCOLLECTION && g2->type() != ObGeoType::GEOMETRYCOLLECTION) {
+      ret = OB_ERR_GIS_INVALID_DATA;
+      LOG_WARN("both g1 or g2 are not geometry collection", K(ret), K(g1->type()), K(g2->type()));
+    } else {
+      ObIAllocator *allocator = context.get_allocator();
+      bool is_g1_empty = false;
+      bool is_g2_empty = false;
+      uint32_t srid = g1->get_srid();
+      GcTreeType *res_coll = OB_NEWx(GcTreeType, allocator, srid, *allocator);
+      ObGeometry *geo1 = const_cast<ObGeometry *>(g1);
+      ObGeometry *geo2 = const_cast<ObGeometry *>(g2);
+      if (OB_ISNULL(res_coll)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failt alloc memory for geometry", K(ret));
+      } else if (OB_FAIL(ObGeoTypeUtil::check_empty(geo1, is_g1_empty))) {
+        LOG_WARN("fail to check is g1 empty", K(ret));
+      } else if (OB_FAIL(ObGeoTypeUtil::check_empty(geo2, is_g2_empty))) {
+        LOG_WARN("fail to check is g2 empty", K(ret));
+      } else if (!is_g1_empty || !is_g2_empty) {
+        typename GcTreeType::sub_mpt_type *mpt = NULL;
+        typename GcTreeType::sub_ml_type *mls = NULL;
+        typename GcTreeType::sub_mp_type *mpy = NULL;
+        ObGeoToTreeVisitor tree_visitor1(allocator);
+        ObGeoToTreeVisitor tree_visitor2(allocator);
+        GcTreeType *geo_coll = OB_NEWx(GcTreeType, allocator, srid, *allocator);
+        ObGeometry *g1_tree = nullptr;
+        ObGeometry *g2_tree = nullptr;
+        if (OB_ISNULL(geo_coll)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failt alloc memory for geometry", K(ret));
+        } else if (OB_FAIL(geo1->do_visit(tree_visitor1))) {
+          LOG_WARN("fail to do visit", K(ret));
+        } else if (FALSE_IT(g1_tree = tree_visitor1.get_geometry())) {
+        } else if (OB_FAIL(geo_coll->push_back(*g1_tree))) {
+          LOG_WARN("fail to push back geometry", K(ret));
+        } else if (OB_FAIL(geo2->do_visit(tree_visitor2))) {
+          LOG_WARN("fail to do visit", K(ret));
+        } else if (FALSE_IT(g2_tree = tree_visitor2.get_geometry())) {
+        } else if (OB_FAIL(geo_coll->push_back(*g2_tree))) {
+          LOG_WARN("fail to push back geometry", K(ret));
+        } else if (OB_FAIL(ObGeoFuncUtils::ob_geo_gc_split(*allocator, *geo_coll, mpt, mls, mpy))) {
+          LOG_WARN("failed to do gc split", K(ret));
+        } else if (OB_FAIL(ObGeoFuncUtils::ob_geo_gc_union(*allocator, *context.get_srs(), mpt, mls, mpy))) {
+          LOG_WARN("failed to do gc union", K(ret));
+        } else {
+          for (int i = 0; OB_SUCC(ret) && i < mpy->size(); ++i) {
+            if (OB_FAIL(
+                    res_coll->push_back(reinterpret_cast<const ObGeometry &>((*mpy)[i])))) {
+              LOG_WARN("fail to push back geometry", K(ret));
+            }
+          }
+          for (int i = 0; OB_SUCC(ret) && i < mls->size(); ++i) {
+            if (OB_FAIL(
+                    res_coll->push_back(reinterpret_cast<const ObGeometry &>((*mls)[i])))) {
+              LOG_WARN("fail to push back geometry", K(ret));
+            }
+          }
+          for (int i = 0; OB_SUCC(ret) && i < mpt->size(); ++i) {
+            typename GcTreeType::sub_mpt_type::value_type &pt = (*mpt)[i];
+            PtType *pt_tree = OB_NEWx(PtType,
+                allocator,
+                pt.template get<0>(),
+                pt.template get<1>(),
+                srid,
+                allocator);
+            if (OB_ISNULL(pt_tree)) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("fail to allocate memory", K(ret));
+            } else if (OB_FAIL(res_coll->push_back(
+                            reinterpret_cast<const ObGeometry &>(*pt_tree)))) {
+              LOG_WARN("fail to push back geometry", K(ret));
+            }
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        result = res_coll;
+      }
+    }
+    return ret;
+  }
 };
 
 // cartesian point
@@ -606,7 +698,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncUnionImpl, ObWkbGeomMultiLineString, ObWk
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncUnionImpl, ObWkbGeomMultiLineString, ObWkbGeomLineString, ObGeometry *)
 {
-  return apply_bg_union<ObWkbGeomLineString, ObWkbGeomLineString, ObCartesianMultilinestring>(g2, g1, context, result);
+  return apply_bg_union<ObWkbGeomLineString, ObWkbGeomMultiLineString, ObCartesianMultilinestring>(g2, g1, context, result);
 } OB_GEO_FUNC_END;
 
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncUnionImpl, ObWkbGeomMultiLineString, ObWkbGeomPolygon, ObGeometry *)
@@ -673,6 +765,25 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncUnionImpl, ObWkbGeomMultiPolygon, ObWkbGe
 {
   return apply_bg_union<ObWkbGeomMultiPolygon, ObWkbGeomMultiPolygon, ObCartesianMultipolygon>(g1, g2, context, result);
 } OB_GEO_FUNC_END;
+
+// cartisian collection
+OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncUnionImpl, ObWkbGeomCollection, ObWkbGeomCollection, ObGeometry *)
+{
+  return eval_unions_gc<ObCartesianGeometrycollection, ObCartesianPoint>(g1, g2, context, result);
+}
+OB_GEO_FUNC_END;
+
+OB_GEO_CART_BINARY_FUNC_GEO2_BEGIN(ObGeoFuncUnionImpl, ObWkbGeomCollection, ObGeometry *)
+{
+  return eval_unions_gc<ObCartesianGeometrycollection, ObCartesianPoint>(g2, g1, context, result);
+}
+OB_GEO_FUNC_END;
+
+OB_GEO_CART_BINARY_FUNC_GEO1_BEGIN(ObGeoFuncUnionImpl, ObWkbGeomCollection, ObGeometry *)
+{
+  return eval_unions_gc<ObCartesianGeometrycollection, ObCartesianPoint>(g1, g2, context, result);
+}
+OB_GEO_FUNC_END;
 
 // geographic point
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncUnionImpl, ObWkbGeogPoint, ObWkbGeogPoint, ObGeometry *)
@@ -837,7 +948,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncUnionImpl, ObWkbGeogMultiLineString, ObWk
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncUnionImpl, ObWkbGeogMultiLineString, ObWkbGeogLineString, ObGeometry *)
 {
-  return apply_bg_union<ObWkbGeogLineString, ObWkbGeogLineString, ObGeographMultilinestring>(g2, g1, context, result);
+  return apply_bg_union<ObWkbGeogLineString, ObWkbGeogMultiLineString, ObGeographMultilinestring>(g2, g1, context, result);
 } OB_GEO_FUNC_END;
 
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncUnionImpl, ObWkbGeogMultiLineString, ObWkbGeogPolygon, ObGeometry *)
@@ -904,6 +1015,26 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncUnionImpl, ObWkbGeogMultiPolygon, ObWkbGe
 {
   return apply_bg_union<ObWkbGeogMultiPolygon, ObWkbGeogMultiPolygon, ObGeographMultipolygon>(g1, g2, context, result);
 } OB_GEO_FUNC_END;
+
+// geograph collection
+OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncUnionImpl, ObWkbGeogCollection, ObWkbGeogCollection, ObGeometry *)
+{
+  return eval_unions_gc<ObGeographGeometrycollection, ObGeographPoint>(g1, g2, context, result);
+}
+OB_GEO_FUNC_END;
+
+OB_GEO_CART_BINARY_FUNC_GEO2_BEGIN(ObGeoFuncUnionImpl, ObWkbGeogCollection, ObGeometry *)
+{
+  return eval_unions_gc<ObGeographGeometrycollection, ObGeographPoint>(g2, g1, context, result);
+}
+OB_GEO_FUNC_END;
+
+OB_GEO_CART_BINARY_FUNC_GEO1_BEGIN(ObGeoFuncUnionImpl, ObWkbGeogCollection, ObGeometry *)
+{
+  return eval_unions_gc<ObGeographGeometrycollection, ObGeographPoint>(g1, g2, context, result);
+}
+OB_GEO_FUNC_END;
+
 
 // tree cartesian polygon
 OB_GEO_CART_TREE_FUNC_BEGIN(ObGeoFuncUnionImpl, ObCartesianPolygon, ObCartesianPolygon, ObGeometry *)

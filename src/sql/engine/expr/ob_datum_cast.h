@@ -210,11 +210,14 @@ public:
   // same with ObObjCaster::to_type().
   // input is ObExpr, and output is ObDatum, it's better if input is also ObDatum.
   // we will do this later if necessary.
+  // subschema id from sql udt type is a combination of (cs_type_ and cs_level_),
+  // datum meta does not have cs_level_, or we can use ObDatum precision_ as subschema id?
   int to_type(const ObDatumMeta &dst_type,
               const ObExpr &src_expr,
               const common::ObCastMode &cm,
               common::ObDatum *&res,
-              int64_t batch_idx = 0);
+              int64_t batch_idx = 0,
+              const uint16_t subschema_id = 0);
   // for xxx -> enumset.
   int to_type(const ObDatumMeta &dst_type,
               const common::ObIArray<common::ObString> &str_values,
@@ -233,7 +236,8 @@ private:
   int setup_cast_expr(const ObDatumMeta &dst_type,
                       const ObExpr &src_expr,
                       const common::ObCastMode cm,
-                      ObExpr &cast_expr);
+                      ObExpr &cast_expr,
+                      const uint16_t subschema_id = 0);
   bool inited_;
   ObEvalCtx *eval_ctx_;
   ObExpr *cast_expr_;

@@ -52,6 +52,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDoubleType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*TinyIntType*/
@@ -106,6 +108,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDecimalIntType,  /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*SmallIntType*/
@@ -160,6 +164,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDecimalIntType,  /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*MediumIntType*/
@@ -214,6 +220,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDecimalIntType,  /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*Int32Type*/
@@ -268,6 +276,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDecimalIntType,  /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*IntType*/
@@ -322,6 +332,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDecimalIntType,  /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*UTinyIntType*/
@@ -376,6 +388,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDecimalIntType,  /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*USmallIntType*/
@@ -430,6 +444,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDecimalIntType,  /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*UMediumIntType*/
@@ -484,6 +500,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDecimalIntType,  /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*UInt32Type*/
@@ -538,6 +556,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDecimalIntType,  /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*UInt64Type*/
@@ -592,6 +612,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDecimalIntType,  /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*FloatType*/
@@ -646,6 +668,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDoubleType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*DoubleType*/
@@ -700,6 +724,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDoubleType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*UFloatType*/
@@ -754,6 +780,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDoubleType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*UDoubleType*/
@@ -808,6 +836,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDoubleType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*NumberType*/
@@ -862,6 +892,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObNumberType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*UNumberType*/
@@ -916,6 +948,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObNumberType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*DateTimeType*/
@@ -970,6 +1004,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObNumberType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*TimestampType*/
@@ -1024,6 +1060,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObNumberType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*DateType*/
@@ -1078,6 +1116,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObNumberType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*TimeType*/
@@ -1132,6 +1172,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObNumberType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*YearType*/
@@ -1186,6 +1228,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObNumberType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*VarcharType*/
@@ -1240,6 +1284,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDoubleType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*CharType*/
@@ -1294,6 +1340,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDoubleType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*HexStringType*/
@@ -1344,6 +1392,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDoubleType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*ExtendType*/
@@ -1398,6 +1448,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObMaxType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 
   /*UnknownType*/
@@ -1452,6 +1504,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDoubleType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
   /*ObTinyTextType*/
   {
@@ -1505,6 +1559,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDoubleType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
   /*ObTextType*/
   {
@@ -1558,6 +1614,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDoubleType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
   /*ObMediumTextType*/
   {
@@ -1611,6 +1669,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDoubleType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
   /*ObLongTextType*/
   {
@@ -1664,6 +1724,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDoubleType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
     /*BitType*/
   {
@@ -1717,6 +1779,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObNumberType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
   /*ObEnumType*/
   {
@@ -1770,6 +1834,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDoubleType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
   /*ObSetType*/
   {
@@ -1823,6 +1889,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDoubleType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
   /*ObEnumInnerType*/
   {
@@ -1876,6 +1944,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObMaxType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
   /*ObSetInnerType*/
   {
@@ -1929,6 +1999,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObMaxType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
   /*ObTimestampTZType*/
   {
@@ -1982,6 +2054,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObNumberType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
   /*ObTimestampLTZType*/
   {
@@ -2035,6 +2109,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObNumberType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
    /* ObTimestampNanoType*/
   {
@@ -2088,6 +2164,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObNumberType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
   /*ObRawType*/
   {
@@ -2141,6 +2219,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObNumberType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
   /*ObIntervalYMType*/
   {
@@ -2194,6 +2274,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObMaxType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
   /*ObIntervalDSType*/
   {
@@ -2247,6 +2329,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObMaxType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
   /*ObNumberFloatType*/
   {
@@ -2300,6 +2384,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObMaxType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
   /*ObNVarchar2Type*/
   {
@@ -2353,6 +2439,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObMaxType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
   /*ObNCharType*/
   {
@@ -2406,6 +2494,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObMaxType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
   /*ObURowIDType*/
   {
@@ -2459,6 +2549,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObMaxType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
   /*ObLobType*/
   {
@@ -2512,6 +2604,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObMaxType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
   /*ObJsonType*/
   {
@@ -2565,6 +2659,8 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObDoubleType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
   /*ObGeometryType*/
   {
@@ -2617,7 +2713,9 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObLobType     */
     ObMaxType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
-    ObMaxType,         /* ObUserDefinedSqlType  */
+    ObMaxType,      /* UDT */
+    ObMaxType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
   /*ObUserDefinedSqlType*/
   {
@@ -2671,5 +2769,117 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSqlType  */
+    ObMaxType,         /* ObDecimalIntType */
+    ObMaxType,         /*  ObCollectionSQLType*/
+  },
+  /*ObDecimalIntType*/
+  {
+    ObDoubleType,      /* NullType  */
+    ObDecimalIntType,  /* TinyIntType  */
+    ObDecimalIntType,  /* SmallIntType  */
+    ObDecimalIntType,  /* MediumIntType  */
+    ObDecimalIntType,  /* Int32Type  */
+    ObDecimalIntType,  /* IntType  */
+    ObDecimalIntType,  /* UTinyIntType  */
+    ObDecimalIntType,  /* USmallIntType  */
+    ObDecimalIntType,  /* UMediumIntType  */
+    ObDecimalIntType,  /* UInt32Type  */
+    ObDecimalIntType,  /* UInt64Type  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,      /* UNumberType  */
+    ObNumberType,      /* DateTimeType  */
+    ObNumberType,      /* TimestampType  */
+    ObNumberType,      /* DateType  */
+    ObNumberType,      /* TimeType  */
+    ObNumberType,      /* YearType  */
+    ObDoubleType,      /* VarcharType  */
+    ObDoubleType,      /* CharType  */
+    ObDoubleType,      /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObDoubleType,      /* UnknownType  */
+    ObDoubleType,      /* ObTinyTextType  */
+    ObDoubleType,      /* ObTextType  */
+    ObDoubleType,      /* ObMediumTextType  */
+    ObDoubleType,     /* ObLongTextType  */
+    ObNumberType,      /* ObBitType */
+    ObDoubleType,      /* ObEnumType  */
+    ObDoubleType,      /* ObSetType  */
+    ObMaxType,         /* ObEnumInnerType  */
+    ObMaxType,         /* ObSetInnerType  */
+    ObNumberType,      /* ObTimestampTZType  */
+    ObNumberType,      /* ObTimestampLTZType  */
+    ObNumberType,      /* ObTimestampNanoType  */
+    ObNumberType,      /* ObRawType  */
+    ObMaxType,         /* ObIntervalYMType     */
+    ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /* ObGeometryType */
+    ObMaxType,         /* UDT */
+    ObDecimalIntType,      /* ObDecimalIntType  */
+    ObMaxType,         /*  ObCollectionSQLType*/
+  },
+  /*ObCollectionSqlType*/
+  {
+    ObMaxType,         /* NullType  */
+    ObMaxType,         /* TinyIntType  */
+    ObMaxType,         /* SmallIntType  */
+    ObMaxType,         /* MediumIntType  */
+    ObMaxType,         /* Int32Type  */
+    ObMaxType,         /* IntType  */
+    ObMaxType,         /* UTinyIntType  */
+    ObMaxType,         /* USmallIntType  */
+    ObMaxType,         /* UMediumIntType  */
+    ObMaxType,         /* UInt32Type  */
+    ObMaxType,         /* UInt64Type  */
+    ObMaxType,         /* FloatType  */
+    ObMaxType,         /* DoubleType  */
+    ObMaxType,         /* UFloatType  */
+    ObMaxType,         /* UDoubleType  */
+    ObMaxType,         /* NumberType  */
+    ObMaxType,         /* UNumberType  */
+    ObMaxType,         /* DateTimeType  */
+    ObMaxType,         /* TimestampType  */
+    ObMaxType,         /* DateType  */
+    ObMaxType,         /* TimeType  */
+    ObMaxType,         /* YearType  */
+    ObMaxType,         /* VarcharType  */
+    ObMaxType,         /* CharType  */
+    ObMaxType,         /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,         /* UnknownType  */
+    ObMaxType,         /* ObTinyTextType  */
+    ObMaxType,         /* ObTextType  */
+    ObMaxType,         /* ObMediumTextType  */
+    ObMaxType,         /* ObLongTextType  */
+    ObMaxType,         /* ObBitType  */
+    ObMaxType,         /* ObEnumType  */
+    ObMaxType,         /* ObSetType  */
+    ObMaxType,         /* ObEnumInnerType  */
+    ObMaxType,         /* ObSetInnerType  */
+    ObMaxType,         /* ObTimestampTZType  */
+    ObMaxType,         /* ObTimestampLTZType  */
+    ObMaxType,         /* ObTimestampNanoType  */
+    ObMaxType,         /* ObRawType  */
+    ObMaxType,         /* ObIntervalYMType     */
+    ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObMaxType,         /* ObJsonType     */
+    ObMaxType,         /* ObGeometryType */
+    ObMaxType,         /* ObUserDefinedSqlType  */
+    ObMaxType,         /* ObDecimalIntType */
+    ObMaxType,         /*  ObCollectionSQLType*/
   },
 };

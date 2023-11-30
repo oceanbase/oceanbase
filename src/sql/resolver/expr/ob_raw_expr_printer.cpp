@@ -20,6 +20,7 @@
 #include "lib/worker.h"
 #include "pl/ob_pl_user_type.h"
 #include "pl/ob_pl_stmt.h"
+#include "lib/geo/ob_sdo_geo_object.h"
 
 // include expr header
 #include "sql/engine/expr/ob_expr_json_query.h"
@@ -1095,6 +1096,8 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
       SET_SYMBOL_IF_EMPTY("approx_count_distinct_synopsis");
     case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE:
       SET_SYMBOL_IF_EMPTY("approx_count_distinct_synopsis_merge");
+    case T_FUN_SYS_ST_ASMVT:
+      SET_SYMBOL_IF_EMPTY("_st_asmvt");
     case T_FUN_PL_AGG_UDF:{
       if (type == T_FUN_PL_AGG_UDF) {
         if (OB_ISNULL(expr->get_pl_agg_udf_expr()) ||
@@ -3275,6 +3278,15 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         OZ(inner_print_fun_params(*expr));
         break;
       }
+      // for bugfix: 52438113/52226266
+      case T_FUN_SYS_PRIV_SQL_UDT_CONSTRUCT: {
+        OZ(print_sql_udt_construct(expr));
+        break;
+      }
+      case T_FUN_SYS_PRIV_SQL_UDT_ATTR_ACCESS: {
+        OZ(print_sql_udt_attr_access(expr));
+        break;
+      }
       default: {
         DATA_PRINTF("%.*s", LEN_AND_PTR(func_name));
         OZ(inner_print_fun_params(*expr));
@@ -4822,6 +4834,92 @@ int ObRawExprPrinter::print_xml_attributes_expr(ObSysFunRawExpr *expr)
           }
         }
         DATA_PRINTF(")");
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRawExprPrinter::print_sql_udt_attr_access(ObSysFunRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr) || (expr->get_param_count() != 2)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param count of expr", K(ret), KPC(expr));
+  } else if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(1))->get_value().is_int()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("doc type value isn't int value");
+  } else {
+    PRINT_EXPR(expr->get_param_expr(0));
+    DATA_PRINTF(".");
+    int64_t attr_idx = static_cast<ObConstRawExpr*>(expr->get_param_expr(1))->get_value().get_int();
+    switch (static_cast<ObSdoGeoAttrIdx>(attr_idx)) {
+      case ObSdoGeoAttrIdx::ObGtype: {
+        PRINT_IDENT_WITH_QUOT("SDO_GTYPE");
+        break;
+      }
+      case ObSdoGeoAttrIdx::ObSrid: {
+        PRINT_IDENT_WITH_QUOT("SDO_SRID");
+        break;
+      }
+      case ObSdoGeoAttrIdx::ObPointX: {
+        DATA_PRINTF("\"SDO_POINT\".\"X\"");
+        break;
+      }
+      case ObSdoGeoAttrIdx::ObPointY: {
+        DATA_PRINTF("\"SDO_POINT\".\"Y\"");
+        break;
+      }
+      case ObSdoGeoAttrIdx::ObPointZ: {
+        DATA_PRINTF("\"SDO_POINT\".\"Z\"");
+        break;
+      }
+      case ObSdoGeoAttrIdx::ObElemArray: {
+        PRINT_IDENT_WITH_QUOT("SDO_ELEM_INFO");
+        break;
+      }
+      case ObSdoGeoAttrIdx::ObOrdArray: {
+        PRINT_IDENT_WITH_QUOT("SDO_ORDINATES");
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid format type value", K(attr_idx), K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRawExprPrinter::print_sql_udt_construct(ObSysFunRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr) || (expr->get_param_count() != 2)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param count of expr", K(ret), KPC(expr));
+  } else if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(1))->get_value().is_int()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("doc type value isn't int value");
+  } else {
+    PRINT_EXPR(expr->get_param_expr(0));
+    DATA_PRINTF(".");
+    int64_t udt_id = static_cast<ObConstRawExpr*>(expr->get_param_expr(1))->get_value().get_int();
+    switch (static_cast<ObUDTType>(udt_id)) {
+      case ObUDTType::T_OBJ_SDO_POINT: {
+        PRINT_IDENT_WITH_QUOT("SDO_POINT");
+        break;
+      }
+      case ObUDTType::T_OBJ_SDO_ELEMINFO_ARRAY: {
+        PRINT_IDENT_WITH_QUOT("SDO_ELEM_INFO");
+        break;
+      }
+      case ObUDTType::T_OBJ_SDO_ORDINATE_ARRAY: {
+        PRINT_IDENT_WITH_QUOT("SDO_ORDINATES");
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid format type value", K(udt_id), K(ret));
       }
     }
   }

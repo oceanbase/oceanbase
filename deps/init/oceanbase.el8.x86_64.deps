@@ -29,6 +29,7 @@ devdeps-boost-1.74.0-22022110914.el8.x86_64.rpm
 devdeps-s2geometry-0.9.0-42022111116.el8.x86_64.rpm
 devdeps-icu-69.1-72022112416.el8.x86_64.rpm
 devdeps-cos-c-sdk-5.0.16-52023070517.el8.x86_64.rpm
+devdeps-protobuf-c-1.4.1-100000062023102016.el8.x86_64.rpm
 
 [tools]
 obdevtools-binutils-2.30-12022100413.el8.x86_64.rpm

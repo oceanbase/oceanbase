@@ -244,8 +244,24 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
     ObCollationLevel coll_level = ObRawExprUtils::get_column_collation_level(types[0].get_type());
     type.set_collation_level(coll_level);
     type.set_accuracy(types[2].get_accuracy());
-    if (type.get_type() == ObUserDefinedSQLType) {
-      type.set_subschema_id(types[2].get_accuracy().get_accuracy());
+    if (type.get_type() == ObUserDefinedSQLType
+        || type.get_type() == ObCollectionSQLType) {
+      uint64_t udt_id = types[2].get_accuracy().get_accuracy();
+      uint16_t subschema_id = ObMaxSystemUDTSqlType;
+      // need const cast to modify subschema ctx, in physcial plan ctx belong to cur exec_ctx;
+      ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
+      ObExecContext *exec_ctx = OB_ISNULL(session) ? NULL : session->get_cur_exec_ctx();
+      if (udt_id == T_OBJ_XML) {
+        subschema_id = ObXMLSqlType;
+      } else if (OB_ISNULL(exec_ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("need context to search subschema mapping", K(ret), K(udt_id));
+      } else if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(udt_id, subschema_id))) {
+        LOG_WARN("failed to get sub schema id", K(ret), K(udt_id));
+      }
+      if (OB_SUCC(ret)) {
+        type.set_subschema_id(subschema_id);
+      }
     }
     if (types[3].is_not_null_for_read()) {
       type.set_result_flag(NOT_NULL_FLAG | NOT_NULL_WRITE_FLAG);
@@ -253,7 +269,7 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
 
     bool enumset_to_varchar = false;
     //here will wrap type_to_str if necessary
-    if (ob_is_enumset_tc(types[4].get_type())) {
+    if (OB_SUCC(ret) && ob_is_enumset_tc(types[4].get_type())) {
       ObObjType calc_type = enumset_calc_types_[OBJ_TYPE_TO_CLASS[types[0].get_type()]];
       if (OB_UNLIKELY(ObMaxType == calc_type)) {
         ret = OB_ERR_UNEXPECTED;
@@ -281,9 +297,12 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
       //cast type when type not same.
       const ObObjTypeClass value_tc = ob_obj_type_class(types[4].get_type());
       const ObObjTypeClass type_tc = ob_obj_type_class(types[0].get_type());
+      ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
+      bool is_prepare_stage = session->is_pl_prepare_stage();
       if (lib::is_oracle_mode()
           && OB_UNLIKELY(!cast_supported(types[4].get_type(), types[4].get_collation_type(),
-                                         types[0].get_type(), types[1].get_collation_type()))) {
+                                         types[0].get_type(), types[1].get_collation_type()))
+          && !(is_prepare_stage && type_tc == ObGeometryTC)) {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("inconsistent datatypes", "expected", type_tc, "got", value_tc);
       } else {
@@ -291,6 +310,10 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
                                type_ctx.get_raw_expr()->get_extra() |
                                CM_COLUMN_CONVERT);
         types[4].set_calc_meta(type);
+        if (ob_is_user_defined_type(type.get_type())
+            || ob_is_collection_sql_type(type.get_type())) { // if calc meta is udt, set calc udt id
+          types[4].set_calc_accuracy(type.get_accuracy());
+        }
       }
     }
     LOG_DEBUG("finish calc_result_typeN", K(type), K(types[4]), K(types[0]), K(enumset_to_varchar));

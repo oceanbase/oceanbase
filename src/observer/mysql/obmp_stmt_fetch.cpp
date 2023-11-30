@@ -472,6 +472,12 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
           }
           ObPLExecCtx pl_ctx(cursor.get_allocator(), exec_ctx, &params,
                             NULL/*result*/, &ret, NULL/*func*/, true);
+          ObSchemaGetterGuard schema_guard;
+          if (OB_SUCC(ret) && need_fetch) {
+            if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(session.get_effective_tenant_id(), schema_guard))) {
+              LOG_WARN("get tenant schema guard failed ", K(ret), K(session.get_effective_tenant_id()));
+            }
+          }
           while (OB_SUCC(ret) && need_fetch && row_num < fetch_limit
                   && OB_SUCC(sql::ObSPIService::dbms_cursor_fetch(&pl_ctx,
                                                   static_cast<pl::ObDbmsCursorInfo&>(cursor)))) {
@@ -491,7 +497,7 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
               OZ (response_row(session, row, fields, column_flag_, cursor_id_,
                                 0 == row_num ? true : false, cursor.is_packed()));
             } else {
-              OZ (response_row(session, row, fields, cursor.is_packed()));
+              OZ (response_row(session, row, fields, cursor.is_packed(), exec_ctx, cursor.is_ps_cursor(), &schema_guard));
             }
             if (OB_SUCC(ret)) {
               ++row_num;

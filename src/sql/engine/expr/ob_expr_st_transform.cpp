@@ -118,7 +118,8 @@ int ObExprSTTransform::eval_st_transform(const ObExpr &expr, ObEvalCtx &ctx, ObD
       if (OB_SUCC(ret)) {
         if (dest_srid == src_srid) { // return src geo directly
           ObString res_wkb;
-          if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb, src_geo, src_srs_item, N_ST_TRANSFORM, false, false, false))) {
+          if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb, src_geo, src_srs_item, N_ST_TRANSFORM,
+                                                      ObGeoBuildFlag::GEO_ALLOW_3D))) {
             LOG_WARN("fail to create geo", K(ret), K(wkb));
           } else if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(*src_geo, expr, ctx, src_srs_item, res_wkb))) {
             LOG_WARN("failed to write geometry to wkb", K(ret));
@@ -181,7 +182,7 @@ int ObExprSTTransform::eval_st_transform(const ObExpr &expr, ObEvalCtx &ctx, ObD
           ret = OB_ERR_TRANSFORM_TARGET_SRS_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_ERR_TRANSFORM_TARGET_SRS_NOT_SUPPORTED, dest_srid);
         } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb, src_geo,
-                                                          src_srs_item, N_ST_TRANSFORM))) {
+                                                  src_srs_item, N_ST_TRANSFORM, ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT))) {
           LOG_WARN("failed to parse wkb", K(ret));
         } else if (OB_FAIL(correct_context.append_geo_arg(src_geo))) {
           LOG_WARN("failed to append geo arg to gis context", K(ret), K(correct_context.get_geo_count()));

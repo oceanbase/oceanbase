@@ -50,4 +50,6 @@ static ObObjType ROUND_RESULT_TYPE[ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSQLType */
+    ObDecimalIntType,  /* ObDecimalIntType */
+    ObMaxType,         /* ObCollectionSQLType */
 };

@@ -50,6 +50,7 @@ static ObObjType NEG_RESULT_TYPE[ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType   */
     ObMaxType,         /* ObUserDefinedSQLType   */
+    ObMaxType,         /* ObCollectionSQLType */
 };
 
 static ObObjType NEG_RESULT_TYPE_ORACLE[ObMaxType] =
@@ -104,4 +105,5 @@ static ObObjType NEG_RESULT_TYPE_ORACLE[ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType   */
     ObMaxType,         /* ObUserDefinedSQLType   */
+    ObMaxType,         /* ObCollectionSQLType */
 };

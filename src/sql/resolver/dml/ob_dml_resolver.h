@@ -229,13 +229,20 @@ public:
                                        bool include_hidden,
                                        ColumnItem *&col_item);
   // dot notation
+  int pre_process_mvt_agg(ParseNode &node);
+  int pre_process_dot_notation(ParseNode &node);
   int pre_process_json_expr(ParseNode &node);
   int print_json_path(ParseNode *&tmp_path, ObJsonBuffer &res_str);
   int check_depth_obj_access_ref(ParseNode *node, int8_t &depth, bool &exist_fun, ObJsonBuffer &sql_str, bool obj_check = true);  // obj_check : whether need check dot notaion
   int check_first_node_name(const ObString &node_name, bool &check_res);
   int transform_dot_notation2_json_query(ParseNode &node, const ObString &sql_str);
   int transform_dot_notation2_json_value(ParseNode &node, const ObString &sql_str);
-  int check_column_json_type(ParseNode *tab_col, bool &is_json_col, bool &is_json_type, int8_t only_is_json = 1);
+  int transform_geo_dot_notation_attr(ParseNode &node, const ObString &sql_str, const ObColumnRefRawExpr &col_expr);
+  int transform_udt_attrbute_name(const ObString &sql_str, ObIAllocator &allocator, ObString &attr_name);
+  int create_col_ref_node(ParseNode *table_node, const ObString &column_name, ParseNode *&new_node);
+  int create_int_val_node(ParseNode *table_node, const uint64_t value, ParseNode *&new_node);
+  int create_char_node(const ObString &value, ParseNode *&new_node);
+  int check_column_json_type(ParseNode *tab_col, bool &is_json_cst, bool &is_json_type, ObColumnRefRawExpr *&column_expr, int8_t only_is_json = 1);
   int check_size_obj_access_ref(ParseNode *node);
   /* json object resolve star */
   int get_target_column_list(ObSEArray<ColumnItem, 4> &target_list, ObString &tab_name, bool all_tab,
@@ -940,6 +947,8 @@ private:
 
   int replace_col_udt_qname(ObQualifiedName& q_name);
   int check_column_udt_type(ParseNode *root_node);
+  int mock_get_udt_meta(uint16_t subschema_id, uint64_t &udt_type_id, ObSqlUDTMeta &udt_meta);
+  int mock_get_subschema_meta(uint64_t udt_type_id, uint16_t &subschema_id);
 
   int replace_pl_relative_expr_to_question_mark(ObRawExpr *&real_ref_expr);
   bool check_expr_has_colref(ObRawExpr *expr);

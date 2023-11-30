@@ -18,7 +18,9 @@
 #include "lib/geo/ob_geo_reverse_coordinate_visitor.h"
 #include "lib/geo/ob_geo_to_tree_visitor.h"
 #include "lib/geo/ob_geo_wkb_check_visitor.h"
+#include "lib/geo/ob_wkb_byte_order_visitor.h"
 #include "lib/geo/ob_geo_func_common.h"
+#include "lib/geo/ob_geo_3d.h"
 #include "observer/omt/ob_tenant_srs.h"
 
 using namespace oceanbase::common;
@@ -111,7 +113,7 @@ int ObIExprSTGeomFromWKB::eval_geom_wkb(const ObExpr &expr, ObEvalCtx &ctx, ObDa
   bool is_lat_long = false;
   ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian;
   uint32_t srid = 0;
-
+  bool is_3d_geo = false;
   // get srid
   if (num_args > 1) {
     expr.args_[1]->eval(ctx, datum);
@@ -175,21 +177,17 @@ int ObIExprSTGeomFromWKB::eval_geom_wkb(const ObExpr &expr, ObEvalCtx &ctx, ObDa
       }
       if (OB_SUCC(ret)) {
         geo->set_srid(srid);
+        is_3d_geo = ObGeoTypeUtil::is_3d_geo_type(geo->type());
       }
     }
   }
 
   if (!is_null_result && OB_SUCC(ret)) {
-    if (need_reverse && is_geographical) {
-      ObGeoReverseCoordinateVisitor reverse_visitor;
-      if (OB_FAIL(geo->do_visit(reverse_visitor))) {
-        ret = OB_ERR_GIS_INVALID_DATA;
-        LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, get_func_name());
-        LOG_WARN("failed to reverse geometry coordinate", K(ret));
-      }
+    if (need_reverse && is_geographical && OB_FAIL(ObGeoExprUtils::reverse_coordinate(geo, get_func_name()))) {
+      LOG_WARN("failed to reverse geometry coordinate", K(ret));
     }
 
-    if (bo == ObGeoWkbByteOrder::BigEndian) {
+    if (OB_SUCC(ret) && !is_3d_geo && bo == ObGeoWkbByteOrder::BigEndian) {
       ObGeoToTreeVisitor tree_visitor(&tmp_allocator);
       if (OB_FAIL(geo->do_visit(tree_visitor))) {
         LOG_WARN("fail to do visit", K(ret), K(geo->type()));
@@ -198,7 +196,7 @@ int ObIExprSTGeomFromWKB::eval_geom_wkb(const ObExpr &expr, ObEvalCtx &ctx, ObDa
       }
     }
 
-    if (OB_SUCC(ret) && is_geographical) {
+    if (OB_SUCC(ret)&& is_geographical) {
       if (OB_FAIL(ObGeoExprUtils::check_coordinate_range(srs_item, geo, get_func_name()))) {
         LOG_WARN("check geo coordinate range failed", K(ret));
       }
@@ -256,14 +254,31 @@ int ObIExprSTGeomFromWKB::create_by_wkb_without_srid(ObIAllocator &allocator,
       geo->set_srid(srid);
       ObString wkb_nosrid(wkb.length(), wkb.ptr());
       geo->set_data(wkb_nosrid);
-      ObGeoWkbCheckVisitor wkb_check(wkb_nosrid, bo);
-      ObIWkbGeometry *geo_bin = static_cast<ObIWkbGeometry *>(geo);
-      if (OB_FAIL(geo->do_visit(wkb_check))) {
-        ret = OB_ERR_GIS_INVALID_DATA;
-        LOG_WARN("invalid wkb", K(wkb), K(type), K(srid), K(crs));
-      } else if (geo_bin->length() != wkb.length()) {
-        ret = OB_ERR_GIS_INVALID_DATA;
-        LOG_WARN("invalid wkb", K(wkb.length()), K(geo_bin->length()), K(type), K(srid), K(crs));
+      if (ObGeoTypeUtil::is_3d_geo_type(geo->type())) {
+        ObGeometry3D *geo_3d = static_cast<ObGeometry3D *>(geo);
+        if (OB_FAIL(geo_3d->check_wkb_valid())) {
+          LOG_WARN("invalid wkb", K(ret), K(type), K(srid), K(crs));
+        }
+      } else {
+        ObGeoWkbCheckVisitor wkb_check(wkb_nosrid, bo);
+        ObIWkbGeometry *geo_bin = static_cast<ObIWkbGeometry *>(geo);
+        if (OB_FAIL(geo->do_visit(wkb_check))) {
+          ret = OB_ERR_GIS_INVALID_DATA;
+          LOG_WARN("invalid wkb", K(wkb), K(type), K(srid), K(crs));
+        } else if (bo == ObGeoWkbByteOrder::BigEndian) {
+          // transform to LittleEndian
+          ObWkbByteOrderVisitor bo_visitor(&allocator, ObGeoWkbByteOrder::LittleEndian);
+          if (OB_FAIL(geo->do_visit(bo_visitor))) {
+            LOG_WARN("fail to transform big endian to little endian", K(ret));
+          } else {
+            geo->set_data(bo_visitor.get_wkb());
+            bo = ObGeoWkbByteOrder::LittleEndian;
+          }
+        }
+        if (OB_SUCC(ret) && geo_bin->length() != wkb.length()) {
+          ret = OB_ERR_GIS_INVALID_DATA;
+          LOG_WARN("invalid wkb", K(wkb.length()), K(geo_bin->length()), K(type), K(srid), K(crs));
+        }
       }
     }
   }

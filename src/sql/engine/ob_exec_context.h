@@ -28,6 +28,7 @@
 #include "sql/das/ob_das_context.h"
 #include "sql/engine/cmd/ob_table_direct_insert_ctx.h"
 #include "pl/ob_pl_package_guard.h"
+#include "lib/udt/ob_udt_type.h"
 
 #define GET_PHY_PLAN_CTX(ctx) ((ctx).get_physical_plan_ctx())
 #define GET_MY_SESSION(ctx) ((ctx).get_my_session())
@@ -467,6 +468,11 @@ public:
   void set_errcode(const int errcode) { ATOMIC_STORE(&errcode_, errcode); }
   int get_errcode() const { return ATOMIC_LOAD(&errcode_); }
   hash::ObHashMap<uint64_t, void*> &get_dblink_snapshot_map() { return dblink_snapshot_map_; }
+  int get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlUDTMeta &udt_meta);
+  int get_subschema_id_by_udt_id(uint64_t udt_type_id,
+                                 uint16_t &subschema_id,
+                                 share::schema::ObSchemaGetterGuard *schema_guard = NULL);
+
   ObExecFeedbackInfo &get_feedback_info() { return fb_info_; };
   void set_cur_rownum(int64_t cur_rownum) { cur_row_num_ = cur_rownum; }
   int64_t get_cur_rownum() { return cur_row_num_; }

@@ -1729,6 +1729,120 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetInnerTC, real_tc>(const ObObj &obj1, \
     }   \
 	  return cmp_ret; \
   }
+
+// ObUserDefinedSQLTC vs ObUserDefinedSQLTC
+// for udt nested null bitmap
+#define DEFINE_CMP_OP_FUNC_UDT_UDT(op, op_str)                                                \
+  template <> inline                                                                            \
+  int ObObjCmpFuncs::cmp_op_func<ObUserDefinedSQLTC, ObUserDefinedSQLTC, op>(const ObObj &obj1, \
+                                                         const ObObj &obj2,                     \
+                                                         const ObCompareCtx &cmp_ctx)           \
+  {                                                                                             \
+    OBJ_TYPE_CLASS_CHECK(obj1, ObUserDefinedSQLTC);                                                       \
+    OBJ_TYPE_CLASS_CHECK(obj2, ObUserDefinedSQLTC);                                                       \
+    ObCollationType cs_type = cmp_ctx.cmp_cs_type_; \
+    if (CS_TYPE_INVALID == cs_type) { \
+      if (obj1.get_collation_type() != obj2.get_collation_type() \
+          || CS_TYPE_INVALID == obj1.get_collation_type()) { \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+      } else { \
+        cs_type = obj1.get_collation_type(); \
+      } \
+    } \
+	  return CS_TYPE_INVALID != cs_type \
+           ? static_cast<int>(ObCharset::strcmpsp(cs_type, obj1.v_.string_, obj1.val_len_, \
+                                                  obj2.v_.string_, obj2.val_len_, CALC_WITH_END_SPACE(obj1, obj2, cmp_ctx)) op_str 0) \
+           : CR_OB_ERROR; \
+  }
+
+#define DEFINE_CMP_FUNC_UDT_UDT()                                                             \
+  template <> inline                                                                            \
+  int ObObjCmpFuncs::cmp_func<ObUserDefinedSQLTC, ObUserDefinedSQLTC>(const ObObj &obj1,        \
+                                                const ObObj &obj2,                              \
+                                                const ObCompareCtx &cmp_ctx)                    \
+  {                                                                                             \
+    OBJ_TYPE_CLASS_CHECK(obj1, ObUserDefinedSQLTC);                                             \
+    OBJ_TYPE_CLASS_CHECK(obj2, ObUserDefinedSQLTC);                                             \
+    ObCollationType cs_type = cmp_ctx.cmp_cs_type_; \
+    if (CS_TYPE_INVALID == cs_type) { \
+      if (obj1.get_collation_type() != obj2.get_collation_type() \
+          || CS_TYPE_INVALID == obj1.get_collation_type()) { \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+      } else { \
+        cs_type = obj1.get_collation_type(); \
+      } \
+    } \
+    return CS_TYPE_INVALID != cs_type \
+           ? INT_TO_CR(ObCharset::strcmpsp(cs_type, obj1.v_.string_, obj1.val_len_, \
+                                           obj2.v_.string_, obj2.val_len_, CALC_WITH_END_SPACE(obj1, obj2, cmp_ctx))) \
+           : CR_OB_ERROR; \
+  }
+
+#define DEFINE_CMP_OP_FUNC_COLLECTION_COLLECTION(op, op_str) \
+  template <> inline \
+  int ObObjCmpFuncs::cmp_op_func<ObCollectionSQLTC, ObCollectionSQLTC, op>(const ObObj &obj1, \
+                                                             const ObObj &obj2, \
+                                                             const ObCompareCtx &cmp_ctx) \
+  { \
+    int ret = CR_OB_ERROR; \
+    OBJ_TYPE_CLASS_CHECK(obj1, ObCollectionSQLTC);\
+    OBJ_TYPE_CLASS_CHECK(obj2, ObCollectionSQLTC);\
+    ObCollationType cs_type = cmp_ctx.cmp_cs_type_; \
+    if (CS_TYPE_INVALID == cs_type) { \
+      if (obj1.get_collation_type() != obj2.get_collation_type() \
+          || CS_TYPE_INVALID == obj1.get_collation_type()) { \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+      } else { \
+        cs_type = obj1.get_collation_type(); \
+      } \
+    } \
+    if (obj1.is_outrow_lob() || obj2.is_outrow_lob()) { \
+      LOG_ERROR("not support outrow lobs", K(obj1), K(obj2)); \
+      ret = CR_OB_ERROR; \
+    } else { \
+      ObString data_str1 = obj1.get_string();\
+      ObString data_str2 = obj2.get_string();\
+      ret = CS_TYPE_INVALID != cs_type \
+            ? static_cast<int>(ObCharset::strcmpsp(cs_type, data_str1.ptr(), data_str1.length(), \
+                                                   data_str2.ptr(), data_str2.length(), \
+                                                   CALC_WITH_END_SPACE(obj1, obj2, cmp_ctx)) op_str 0) \
+            : CR_OB_ERROR; \
+    } \
+    return ret; \
+  }
+
+#define DEFINE_CMP_FUNC_COLLECTION_COLLECTION() \
+  template <> inline \
+  int ObObjCmpFuncs::cmp_func<ObCollectionSQLTC, ObCollectionSQLTC>(const ObObj &obj1, \
+                                                      const ObObj &obj2, \
+                                                      const ObCompareCtx &cmp_ctx) \
+  { \
+    int ret = CR_OB_ERROR; \
+    OBJ_TYPE_CLASS_CHECK(obj1, ObCollectionSQLTC);\
+    OBJ_TYPE_CLASS_CHECK(obj2, ObCollectionSQLTC);\
+    ObCollationType cs_type = cmp_ctx.cmp_cs_type_; \
+    if (CS_TYPE_INVALID == cs_type) { \
+      if (obj1.get_collation_type() != obj2.get_collation_type() \
+          || CS_TYPE_INVALID == obj1.get_collation_type()) { \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+      } else { \
+        cs_type = obj1.get_collation_type(); \
+      } \
+    } \
+    if (obj1.is_outrow_lob() || obj2.is_outrow_lob()) { \
+      LOG_ERROR("not support outrow lobs", K(obj1), K(obj2)); \
+      ret = CR_OB_ERROR; \
+    } else { \
+      ObString data_str1 = obj1.get_string();\
+      ObString data_str2 = obj2.get_string();\
+      ret = CS_TYPE_INVALID != cs_type \
+            ? INT_TO_CR(ObCharset::strcmpsp(cs_type, data_str1.ptr(), data_str1.length(), \
+                                                   data_str2.ptr(), data_str2.length(), \
+                                                   CALC_WITH_END_SPACE(obj1, obj2, cmp_ctx))) \
+            : CR_OB_ERROR; \
+    } \
+    return ret; \
+  }
 //==============================
 
 #define DEFINE_CMP_FUNCS(tc, type) \
@@ -2129,6 +2243,24 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetInnerTC, real_tc>(const ObObj &obj1, \
   DEFINE_CMP_OP_FUNC_GEOMETRY_GEOMETRY(CO_NE, !=); \
   DEFINE_CMP_FUNC_GEOMETRY_GEOMETRY()
 
+#define DEFINE_CMP_FUNCS_UDT_UDT() \
+  DEFINE_CMP_OP_FUNC_UDT_UDT(CO_EQ, ==); \
+  DEFINE_CMP_OP_FUNC_UDT_UDT(CO_LE, <=); \
+  DEFINE_CMP_OP_FUNC_UDT_UDT(CO_LT, < ); \
+  DEFINE_CMP_OP_FUNC_UDT_UDT(CO_GE, >=); \
+  DEFINE_CMP_OP_FUNC_UDT_UDT(CO_GT, > ); \
+  DEFINE_CMP_OP_FUNC_UDT_UDT(CO_NE, !=); \
+  DEFINE_CMP_FUNC_UDT_UDT()
+
+#define DEFINE_CMP_FUNCS_COLLECTION_COLLECTION() \
+  DEFINE_CMP_OP_FUNC_COLLECTION_COLLECTION(CO_EQ, ==); \
+  DEFINE_CMP_OP_FUNC_COLLECTION_COLLECTION(CO_LE, <=); \
+  DEFINE_CMP_OP_FUNC_COLLECTION_COLLECTION(CO_LT, < ); \
+  DEFINE_CMP_OP_FUNC_COLLECTION_COLLECTION(CO_GE, >=); \
+  DEFINE_CMP_OP_FUNC_COLLECTION_COLLECTION(CO_GT, > ); \
+  DEFINE_CMP_OP_FUNC_COLLECTION_COLLECTION(CO_NE, !=); \
+  DEFINE_CMP_FUNC_COLLECTION_COLLECTION()
+
 #define DEFINE_CMP_FUNCS_STRING_TEXT() \
   DEFINE_CMP_OP_FUNC_STRING_TEXT(CO_EQ, ==); \
   DEFINE_CMP_OP_FUNC_STRING_TEXT(CO_LE, <=); \
@@ -2271,6 +2403,8 @@ DEFINE_CMP_FUNCS_TEXT_STRING();
 DEFINE_CMP_FUNCS_LOB_LOB();
 DEFINE_CMP_FUNCS_JSON_JSON();
 DEFINE_CMP_FUNCS_GEOMETRY_GEOMETRY();
+DEFINE_CMP_FUNCS_UDT_UDT();
+DEFINE_CMP_FUNCS_COLLECTION_COLLECTION();
 
 DEFINE_CMP_FUNCS_ENUMSETINNER_INT();
 DEFINE_CMP_FUNCS_ENUMSETINNER_UINT();
@@ -2443,6 +2577,8 @@ DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObRowIDTC, ObRowIDTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObLobTC, ObLobTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObJsonTC, ObJsonTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObGeometryTC, ObGeometryTC, ObMaxTC, ObMaxTC)
+DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObUserDefinedSQLTC, ObUserDefinedSQLTC, ObMaxTC, ObMaxTC)
+DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObCollectionSQLTC, ObCollectionSQLTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_LEFTNULL_ENTRY(ObExtendTC)
 DEFINE_CMP_FUNCS_NULLSAFE_LEFTNULL_ENTRY(ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObExtendTC)
@@ -2477,6 +2613,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimalint
+    NULL, // collection
   },
   { // int
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2504,6 +2642,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimalint
+    NULL, // collection
   },
   { // uint
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2531,6 +2671,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimalint
+    NULL, // collection
   },
   { // float
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2558,6 +2700,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimalint
+    NULL, // collection
   },
   { // double
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2585,6 +2729,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimalint
+    NULL, // collection
   },
   { // number
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2612,6 +2758,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimalint
+    NULL, // collection
   },
   { // datetime
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2639,6 +2787,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimalint
+    NULL, // collection
   },
   { // date
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2666,6 +2816,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimalint
+    NULL, // collection
   },
   { // time
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2693,6 +2845,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimalint
+    NULL, // collection
   },
   { // year
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2720,6 +2874,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimalint
+    NULL, // collection
   },
   { // string
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2747,6 +2903,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimalint
+    NULL, // collection
   },
   { // extend
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObExtendTC),
@@ -2774,6 +2932,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimalint
+    NULL, // collection
   },
   { // unknown
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2801,6 +2961,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimalint
+    NULL, // collection
   },
   { // text
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2828,6 +2990,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimalint
+    NULL, // collection
   },
   { // bit
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2855,6 +3019,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimalint
+    NULL, // collection
   },
   { //enumset
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2882,6 +3048,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimalint
+    NULL, // collection
   },
   { //enumsetInner
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2909,6 +3077,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimalint
+    NULL, // collection
   },
   { // otimestamp
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2936,6 +3106,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimalint
+    NULL, // collection
   },
   { // raw
    DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2963,6 +3135,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
    NULL, // json
    NULL, // geometry
    NULL, // udt
+   NULL, // decimalint
+   NULL, // collection
   },
   { // interval
    DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2990,6 +3164,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
    NULL, // json
    NULL, // geometry
    NULL, // udt
+   NULL, // decimalint
+   NULL, // collection
   },
   { // rowid
    DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -3017,6 +3193,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
    NULL, // json
    NULL, // geometry
    NULL, // udt
+   NULL, // decimalint
+   NULL, // collection
   },
   { // lob
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -3044,6 +3222,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimalint
+    NULL, // collection
   },
   { // json
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -3071,6 +3251,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObJsonTC, ObJsonTC, ObMaxTC, ObMaxTC), // json
     NULL, // geometry
     NULL, // udt
+    NULL, // decimalint
+    NULL, // collection
   },
   { // geometry
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -3098,6 +3280,8 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // json
     DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObGeometryTC, ObGeometryTC, ObMaxTC, ObMaxTC), // geometry
     NULL, // udt
+    NULL, // decimalint
+    NULL, // collection
   },
     { // udt
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -3124,8 +3308,70 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // lob
     NULL, // json
     NULL, // geometry
-    NULL, // udt
+    DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObUserDefinedSQLTC, ObUserDefinedSQLTC, ObMaxTC, ObMaxTC), // udt
+    NULL, // decimalint
+    NULL, // collection
   },
+  { // decimal int
+    DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC), // null
+    NULL, // int
+    NULL, // uint
+    NULL, // float
+    NULL, // double
+    NULL, // number
+    NULL, // datetime
+    NULL, // date
+    NULL, // time
+    NULL, // year
+    NULL, // string
+    NULL, // extend
+    NULL, // unknown
+    NULL, // text
+    NULL, // bit
+    NULL, // enumset
+    NULL, // enumset inner
+    NULL, // otimestamp
+    NULL, // raw.
+    NULL, // interval
+    NULL, // rowid
+    NULL, // lob
+    NULL, // json
+    NULL, // geometry
+    NULL, // udt
+    NULL, // decimalint
+    NULL, // collection
+  }
+  ,
+  { // collection
+    DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
+    NULL,  // int
+    NULL,  // uint
+    NULL,  // float
+    NULL,  // double
+    NULL,  // number
+    NULL,  // datetime
+    NULL,  // date
+    NULL,  // time
+    NULL,  // year
+    NULL,  // string
+    NULL,  // extend
+    NULL,  // unknown
+    NULL,  // text
+    NULL,  // bit
+    NULL,  // enumset
+    NULL,  //enumsetInner will not go here
+    NULL, // otimestamp
+    NULL, // raw
+    NULL, // interval
+    NULL, // rowid
+    NULL, // lob
+    NULL, // json
+    NULL, // geometry
+    NULL, // udt
+    NULL, // decimalint
+    DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObCollectionSQLTC, ObCollectionSQLTC, ObMaxTC, ObMaxTC), // collection
+},
+
 };
 
 const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
@@ -3156,6 +3402,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY(ObNullTC, ObMaxTC),//json
     DEFINE_CMP_FUNCS_ENTRY(ObNullTC, ObMaxTC),//geometry
     DEFINE_CMP_FUNCS_ENTRY(ObNullTC, ObMaxTC),//udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
   },
   { // int
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3183,6 +3431,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
   },
   { // uint
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3210,6 +3460,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
   },
   { // float
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3237,6 +3489,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
   },
   { // double
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3264,6 +3518,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
   },
   { // number
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3291,6 +3547,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
   },
   { // datetime
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3318,6 +3576,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
   },
   { // date
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3345,6 +3605,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
   },
   { // time
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3372,6 +3634,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
   },
   { // year
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3399,6 +3663,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
   },
   { // string
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3426,6 +3692,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
   },
   { // extend
     DEFINE_CMP_FUNCS_ENTRY(ObExtendTC, ObNullTC),
@@ -3453,6 +3721,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
   },
   { // unknown
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3480,6 +3750,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
   },
   { // text
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3507,6 +3779,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
   },
   { // bit
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3534,6 +3808,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
   },
   { //enumset
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3561,6 +3837,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
   },
   { //enumsetInner
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3588,6 +3866,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
   },
   { // otimestamp
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3615,6 +3895,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
   },
   { // raw
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3642,6 +3924,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
   },
   { // interval
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC), //null
@@ -3669,6 +3953,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
   },
   { // rowid
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC), //null
@@ -3696,6 +3982,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
   },
   { // lob
     DEFINE_CMP_FUNCS_ENTRY_NULL, //null
@@ -3723,6 +4011,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
   },
   { // json
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC), //null
@@ -3750,6 +4040,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY(ObJsonTC, ObJsonTC),  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
   },
   { // geometry
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC), //null
@@ -3777,6 +4069,8 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY(ObGeometryTC, ObGeometryTC),  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
   },
   { // udt
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC), //null
@@ -3803,7 +4097,66 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
+    DEFINE_CMP_FUNCS_ENTRY(ObUserDefinedSQLTC, ObUserDefinedSQLTC), //  compare for udt nested null bitmap
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // collection
+  },
+  { // decimalint place_holder
+    DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC), //null
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // int
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // uint
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // float
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // double
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // number
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // datetime
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // date
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // time
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // year
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // string
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // extend
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // unknown
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // text
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // bit
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // enumset
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // enumsetInner will not go here
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // otimestamp
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // raw
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // interval
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
+    DEFINE_CMP_FUNCS_ENTRY_NULL, // json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // udt
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // decimal int
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // collection
+  },
+  { // collection
+    DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC), //null
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // int
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // uint
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // float
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // double
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // number
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // datetime
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // date
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // time
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // year
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // string
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //extend
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // unknown
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // text
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // bit
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // enumset
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // enumsetInner will not go here
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // otimestamp
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // raw
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // interval
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //udt
+    DEFINE_CMP_FUNCS_ENTRY(ObCollectionSQLTC, ObCollectionSQLTC), // collection
   },
 };
 

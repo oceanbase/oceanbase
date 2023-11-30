@@ -50,6 +50,8 @@
 <NULL, JSON> : defined
 <NULL, GEOMETRY> : defined
 <NULL, UDT> : not defined
+<NULL, DECIMAL_INT> : defined
+<NULL, COLLECTION> : defined
 
 /**************** TINYINT ****************/
 
@@ -103,6 +105,8 @@
 <TINYINT, JSON> : not defined
 <TINYINT, GEOMETRY> : not defined
 <TINYINT, UDT> : not defined
+<TINYINT, DECIMAL_INT> : not defined
+<TINYINT, COLLECTION> : not defined
 
 /**************** SMALLINT ****************/
 
@@ -156,6 +160,8 @@
 <SMALLINT, JSON> : not defined
 <SMALLINT, GEOMETRY> : not defined
 <SMALLINT, UDT> : not defined
+<SMALLINT, DECIMAL_INT> : not defined
+<SMALLINT, COLLECTION> : not defined
 
 /**************** MEDIUMINT ****************/
 
@@ -209,6 +215,8 @@
 <MEDIUMINT, JSON> : not defined
 <MEDIUMINT, GEOMETRY> : not defined
 <MEDIUMINT, UDT> : not defined
+<MEDIUMINT, DECIMAL_INT> : not defined
+<MEDIUMINT, COLLECTION> : not defined
 
 /**************** INT ****************/
 
@@ -262,6 +270,8 @@
 <INT, JSON> : not defined
 <INT, GEOMETRY> : not defined
 <INT, UDT> : not defined
+<INT, DECIMAL_INT> : not defined
+<INT, COLLECTION> : not defined
 
 /**************** BIGINT ****************/
 
@@ -315,6 +325,8 @@
 <BIGINT, JSON> : not defined
 <BIGINT, GEOMETRY> : not defined
 <BIGINT, UDT> : not defined
+<BIGINT, DECIMAL_INT> : not defined
+<BIGINT, COLLECTION> : not defined
 
 /**************** TINYINT UNSIGNED ****************/
 
@@ -368,6 +380,8 @@
 <TINYINT UNSIGNED, JSON> : not defined
 <TINYINT UNSIGNED, GEOMETRY> : not defined
 <TINYINT UNSIGNED, UDT> : not defined
+<TINYINT UNSIGNED, DECIMAL_INT> : not defined
+<TINYINT UNSIGNED, COLLECTION> : not defined
 
 /**************** SMALLINT UNSIGNED ****************/
 
@@ -421,6 +435,8 @@
 <SMALLINT UNSIGNED, JSON> : not defined
 <SMALLINT UNSIGNED, GEOMETRY> : not defined
 <SMALLINT UNSIGNED, UDT> : not defined
+<SMALLINT UNSIGNED, DECIMAL_INT> : not defined
+<SMALLINT UNSIGNED, COLLECTION> : not defined
 
 /**************** MEDIUMINT UNSIGNED ****************/
 
@@ -474,6 +490,8 @@
 <MEDIUMINT UNSIGNED, JSON> : not defined
 <MEDIUMINT UNSIGNED, GEOMETRY> : not defined
 <MEDIUMINT UNSIGNED, UDT> : not defined
+<MEDIUMINT UNSIGNED, DECIMAL_INT> : not defined
+<MEDIUMINT UNSIGNED, COLLECTION> : not defined
 
 /**************** INT UNSIGNED ****************/
 
@@ -527,6 +545,8 @@
 <INT UNSIGNED, JSON> : not defined
 <INT UNSIGNED, GEOMETRY> : not defined
 <INT UNSIGNED, UDT> : not defined
+<INT UNSIGNED, DECIMAL_INT> : not defined
+<INT UNSIGNED, COLLECTION> : not defined
 
 /**************** BIGINT UNSIGNED ****************/
 
@@ -580,6 +600,8 @@
 <BIGINT UNSIGNED, JSON> : not defined
 <BIGINT UNSIGNED, GEOMETRY> : not defined
 <BIGINT UNSIGNED, UDT> : not defined
+<BIGINT UNSIGNED, DECIMAL_INT> : not defined
+<BIGINT UNSIGNED, COLLECTION> : not defined
 
 /**************** FLOAT ****************/
 
@@ -633,6 +655,8 @@
 <FLOAT, JSON> : not defined
 <FLOAT, GEOMETRY> : not defined
 <FLOAT, UDT> : not defined
+<FLOAT, DECIMAL_INT> : not defined
+<FLOAT, COLLECTION> : not defined
 
 /**************** DOUBLE ****************/
 
@@ -686,6 +710,8 @@
 <DOUBLE, JSON> : not defined
 <DOUBLE, GEOMETRY> : not defined
 <DOUBLE, UDT> : not defined
+<DOUBLE, DECIMAL_INT> : not defined
+<DOUBLE, COLLECTION> : not defined
 
 /**************** FLOAT UNSIGNED ****************/
 
@@ -739,6 +765,8 @@
 <FLOAT UNSIGNED, JSON> : not defined
 <FLOAT UNSIGNED, GEOMETRY> : not defined
 <FLOAT UNSIGNED, UDT> : not defined
+<FLOAT UNSIGNED, DECIMAL_INT> : not defined
+<FLOAT UNSIGNED, COLLECTION> : not defined
 
 /**************** DOUBLE UNSIGNED ****************/
 
@@ -792,6 +820,8 @@
 <DOUBLE UNSIGNED, JSON> : not defined
 <DOUBLE UNSIGNED, GEOMETRY> : not defined
 <DOUBLE UNSIGNED, UDT> : not defined
+<DOUBLE UNSIGNED, DECIMAL_INT> : not defined
+<DOUBLE UNSIGNED, COLLECTION> : not defined
 
 /**************** DECIMAL ****************/
 
@@ -845,6 +875,8 @@
 <DECIMAL, JSON> : not defined
 <DECIMAL, GEOMETRY> : not defined
 <DECIMAL, UDT> : not defined
+<DECIMAL, DECIMAL_INT> : not defined
+<DECIMAL, COLLECTION> : not defined
 
 /**************** DECIMAL UNSIGNED ****************/
 
@@ -898,6 +930,8 @@
 <DECIMAL UNSIGNED, JSON> : not defined
 <DECIMAL UNSIGNED, GEOMETRY> : not defined
 <DECIMAL UNSIGNED, UDT> : not defined
+<DECIMAL UNSIGNED, DECIMAL_INT> : not defined
+<DECIMAL UNSIGNED, COLLECTION> : not defined
 
 /**************** DATETIME ****************/
 
@@ -951,6 +985,8 @@
 <DATETIME, JSON> : not defined
 <DATETIME, GEOMETRY> : not defined
 <DATETIME, UDT> : not defined
+<DATETIME, DECIMAL_INT> : not defined
+<DATETIME, COLLECTION> : not defined
 
 /**************** TIMESTAMP ****************/
 
@@ -1004,6 +1040,8 @@
 <TIMESTAMP, JSON> : not defined
 <TIMESTAMP, GEOMETRY> : not defined
 <TIMESTAMP, UDT> : not defined
+<TIMESTAMP, DECIMAL_INT> : not defined
+<TIMESTAMP, COLLECTION> : not defined
 
 /**************** DATE ****************/
 
@@ -1057,6 +1095,8 @@
 <DATE, JSON> : not defined
 <DATE, GEOMETRY> : not defined
 <DATE, UDT> : not defined
+<DATE, DECIMAL_INT> : not defined
+<DATE, COLLECTION> : not defined
 
 /**************** TIME ****************/
 
@@ -1110,6 +1150,8 @@
 <TIME, JSON> : not defined
 <TIME, GEOMETRY> : not defined
 <TIME, UDT> : not defined
+<TIME, DECIMAL_INT> : not defined
+<TIME, COLLECTION> : not defined
 
 /**************** YEAR ****************/
 
@@ -1163,6 +1205,8 @@
 <YEAR, JSON> : not defined
 <YEAR, GEOMETRY> : not defined
 <YEAR, UDT> : not defined
+<YEAR, DECIMAL_INT> : not defined
+<YEAR, COLLECTION> : not defined
 
 /**************** VARCHAR ****************/
 
@@ -1216,6 +1260,8 @@
 <VARCHAR, JSON> : not defined
 <VARCHAR, GEOMETRY> : not defined
 <VARCHAR, UDT> : not defined
+<VARCHAR, DECIMAL_INT> : not defined
+<VARCHAR, COLLECTION> : not defined
 
 /**************** CHAR ****************/
 
@@ -1269,6 +1315,8 @@
 <CHAR, JSON> : not defined
 <CHAR, GEOMETRY> : not defined
 <CHAR, UDT> : not defined
+<CHAR, DECIMAL_INT> : not defined
+<CHAR, COLLECTION> : not defined
 
 /**************** HEX_STRING ****************/
 
@@ -1322,6 +1370,8 @@
 <HEX_STRING, JSON> : not defined
 <HEX_STRING, GEOMETRY> : not defined
 <HEX_STRING, UDT> : not defined
+<HEX_STRING, DECIMAL_INT> : not defined
+<HEX_STRING, COLLECTION> : not defined
 
 /**************** EXT ****************/
 
@@ -1375,6 +1425,8 @@
 <EXT, JSON> : defined
 <EXT, GEOMETRY> : defined
 <EXT, UDT> : not defined
+<EXT, DECIMAL_INT> : defined
+<EXT, COLLECTION> : defined
 
 /**************** UNKNOWN ****************/
 
@@ -1428,6 +1480,8 @@
 <UNKNOWN, JSON> : not defined
 <UNKNOWN, GEOMETRY> : not defined
 <UNKNOWN, UDT> : not defined
+<UNKNOWN, DECIMAL_INT> : not defined
+<UNKNOWN, COLLECTION> : not defined
 
 /**************** TINYTEXT ****************/
 
@@ -1481,6 +1535,8 @@
 <TINYTEXT, JSON> : not defined
 <TINYTEXT, GEOMETRY> : not defined
 <TINYTEXT, UDT> : not defined
+<TINYTEXT, DECIMAL_INT> : not defined
+<TINYTEXT, COLLECTION> : not defined
 
 /**************** TEXT ****************/
 
@@ -1534,6 +1590,8 @@
 <TEXT, JSON> : not defined
 <TEXT, GEOMETRY> : not defined
 <TEXT, UDT> : not defined
+<TEXT, DECIMAL_INT> : not defined
+<TEXT, COLLECTION> : not defined
 
 /**************** MEDIUMTEXT ****************/
 
@@ -1587,6 +1645,8 @@
 <MEDIUMTEXT, JSON> : not defined
 <MEDIUMTEXT, GEOMETRY> : not defined
 <MEDIUMTEXT, UDT> : not defined
+<MEDIUMTEXT, DECIMAL_INT> : not defined
+<MEDIUMTEXT, COLLECTION> : not defined
 
 /**************** LONGTEXT ****************/
 
@@ -1640,6 +1700,8 @@
 <LONGTEXT, JSON> : not defined
 <LONGTEXT, GEOMETRY> : not defined
 <LONGTEXT, UDT> : not defined
+<LONGTEXT, DECIMAL_INT> : not defined
+<LONGTEXT, COLLECTION> : not defined
 
 /**************** BIT ****************/
 
@@ -1693,6 +1755,8 @@
 <BIT, JSON> : not defined
 <BIT, GEOMETRY> : not defined
 <BIT, UDT> : not defined
+<BIT, DECIMAL_INT> : not defined
+<BIT, COLLECTION> : not defined
 
 /**************** ENUM ****************/
 
@@ -1746,6 +1810,8 @@
 <ENUM, JSON> : not defined
 <ENUM, GEOMETRY> : not defined
 <ENUM, UDT> : not defined
+<ENUM, DECIMAL_INT> : not defined
+<ENUM, COLLECTION> : not defined
 
 /**************** SET ****************/
 
@@ -1799,6 +1865,8 @@
 <SET, JSON> : not defined
 <SET, GEOMETRY> : not defined
 <SET, UDT> : not defined
+<SET, DECIMAL_INT> : not defined
+<SET, COLLECTION> : not defined
 
 /**************** ENUM_INNER ****************/
 
@@ -1852,6 +1920,8 @@
 <ENUM_INNER, JSON> : not defined
 <ENUM_INNER, GEOMETRY> : not defined
 <ENUM_INNER, UDT> : not defined
+<ENUM_INNER, DECIMAL_INT> : not defined
+<ENUM_INNER, COLLECTION> : not defined
 
 /**************** SET_INNER ****************/
 
@@ -1905,6 +1975,8 @@
 <SET_INNER, JSON> : not defined
 <SET_INNER, GEOMETRY> : not defined
 <SET_INNER, UDT> : not defined
+<SET_INNER, DECIMAL_INT> : not defined
+<SET_INNER, COLLECTION> : not defined
 
 /**************** TIMESTAMP_WITH_TIME_ZONE ****************/
 
@@ -1958,6 +2030,8 @@
 <TIMESTAMP_WITH_TIME_ZONE, JSON> : not defined
 <TIMESTAMP_WITH_TIME_ZONE, GEOMETRY> : not defined
 <TIMESTAMP_WITH_TIME_ZONE, UDT> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, DECIMAL_INT> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, COLLECTION> : not defined
 
 /**************** TIMESTAMP_WITH_LOCAL_TIME_ZONE ****************/
 
@@ -2011,6 +2085,8 @@
 <TIMESTAMP_WITH_LOCAL_TIME_ZONE, JSON> : not defined
 <TIMESTAMP_WITH_LOCAL_TIME_ZONE, GEOMETRY> : not defined
 <TIMESTAMP_WITH_LOCAL_TIME_ZONE, UDT> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, DECIMAL_INT> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, COLLECTION> : not defined
 
 /**************** TIMESTAMP ****************/
 
@@ -2064,6 +2140,8 @@
 <TIMESTAMP, JSON> : not defined
 <TIMESTAMP, GEOMETRY> : not defined
 <TIMESTAMP, UDT> : not defined
+<TIMESTAMP, DECIMAL_INT> : not defined
+<TIMESTAMP, COLLECTION> : not defined
 
 /**************** RAW ****************/
 
@@ -2117,6 +2195,8 @@
 <RAW, JSON> : not defined
 <RAW, GEOMETRY> : not defined
 <RAW, UDT> : not defined
+<RAW, DECIMAL_INT> : not defined
+<RAW, COLLECTION> : not defined
 
 /**************** INTERVAL_YEAR_TO_MONTH ****************/
 
@@ -2170,6 +2250,8 @@
 <INTERVAL_YEAR_TO_MONTH, JSON> : not defined
 <INTERVAL_YEAR_TO_MONTH, GEOMETRY> : not defined
 <INTERVAL_YEAR_TO_MONTH, UDT> : not defined
+<INTERVAL_YEAR_TO_MONTH, DECIMAL_INT> : not defined
+<INTERVAL_YEAR_TO_MONTH, COLLECTION> : not defined
 
 /**************** INTERVAL_DAY_TO_SECOND ****************/
 
@@ -2223,6 +2305,8 @@
 <INTERVAL_DAY_TO_SECOND, JSON> : not defined
 <INTERVAL_DAY_TO_SECOND, GEOMETRY> : not defined
 <INTERVAL_DAY_TO_SECOND, UDT> : not defined
+<INTERVAL_DAY_TO_SECOND, DECIMAL_INT> : not defined
+<INTERVAL_DAY_TO_SECOND, COLLECTION> : not defined
 
 /**************** NUMBER_FLOAT ****************/
 
@@ -2276,6 +2360,8 @@
 <NUMBER_FLOAT, JSON> : not defined
 <NUMBER_FLOAT, GEOMETRY> : not defined
 <NUMBER_FLOAT, UDT> : not defined
+<NUMBER_FLOAT, DECIMAL_INT> : not defined
+<NUMBER_FLOAT, COLLECTION> : not defined
 
 /**************** NVARCHAR2 ****************/
 
@@ -2329,6 +2415,8 @@
 <NVARCHAR2, JSON> : not defined
 <NVARCHAR2, GEOMETRY> : not defined
 <NVARCHAR2, UDT> : not defined
+<NVARCHAR2, DECIMAL_INT> : not defined
+<NVARCHAR2, COLLECTION> : not defined
 
 /**************** NCHAR ****************/
 
@@ -2382,6 +2470,8 @@
 <NCHAR, JSON> : not defined
 <NCHAR, GEOMETRY> : not defined
 <NCHAR, UDT> : not defined
+<NCHAR, DECIMAL_INT> : not defined
+<NCHAR, COLLECTION> : not defined
 
 /**************** ROWID ****************/
 
@@ -2435,6 +2525,8 @@
 <ROWID, JSON> : not defined
 <ROWID, GEOMETRY> : not defined
 <ROWID, UDT> : not defined
+<ROWID, DECIMAL_INT> : not defined
+<ROWID, COLLECTION> : not defined
 
 /**************** LOB ****************/
 
@@ -2488,6 +2580,8 @@
 <LOB, JSON> : not defined
 <LOB, GEOMETRY> : not defined
 <LOB, UDT> : not defined
+<LOB, DECIMAL_INT> : not defined
+<LOB, COLLECTION> : not defined
 
 /**************** JSON ****************/
 
@@ -2541,6 +2635,8 @@
 <JSON, JSON> : defined
 <JSON, GEOMETRY> : not defined
 <JSON, UDT> : not defined
+<JSON, DECIMAL_INT> : not defined
+<JSON, COLLECTION> : not defined
 
 /**************** GEOMETRY ****************/
 
@@ -2594,6 +2690,8 @@
 <GEOMETRY, JSON> : not defined
 <GEOMETRY, GEOMETRY> : defined
 <GEOMETRY, UDT> : not defined
+<GEOMETRY, DECIMAL_INT> : not defined
+<GEOMETRY, COLLECTION> : not defined
 
 /**************** UDT ****************/
 
@@ -2647,4 +2745,116 @@
 <UDT, JSON> : not defined
 <UDT, GEOMETRY> : not defined
 <UDT, UDT> : not defined
+<UDT, DECIMAL_INT> : not defined
+<UDT, COLLECTION> : not defined
+
+/**************** DECIMAL_INT ****************/
+
+<DECIMAL_INT, NULL> : defined
+<DECIMAL_INT, TINYINT> : not defined
+<DECIMAL_INT, SMALLINT> : not defined
+<DECIMAL_INT, MEDIUMINT> : not defined
+<DECIMAL_INT, INT> : not defined
+<DECIMAL_INT, BIGINT> : not defined
+<DECIMAL_INT, TINYINT UNSIGNED> : not defined
+<DECIMAL_INT, SMALLINT UNSIGNED> : not defined
+<DECIMAL_INT, MEDIUMINT UNSIGNED> : not defined
+<DECIMAL_INT, INT UNSIGNED> : not defined
+<DECIMAL_INT, BIGINT UNSIGNED> : not defined
+<DECIMAL_INT, FLOAT> : not defined
+<DECIMAL_INT, DOUBLE> : not defined
+<DECIMAL_INT, FLOAT UNSIGNED> : not defined
+<DECIMAL_INT, DOUBLE UNSIGNED> : not defined
+<DECIMAL_INT, DECIMAL> : not defined
+<DECIMAL_INT, DECIMAL UNSIGNED> : not defined
+<DECIMAL_INT, DATETIME> : not defined
+<DECIMAL_INT, TIMESTAMP> : not defined
+<DECIMAL_INT, DATE> : not defined
+<DECIMAL_INT, TIME> : not defined
+<DECIMAL_INT, YEAR> : not defined
+<DECIMAL_INT, VARCHAR> : not defined
+<DECIMAL_INT, CHAR> : not defined
+<DECIMAL_INT, HEX_STRING> : not defined
+<DECIMAL_INT, EXT> : defined
+<DECIMAL_INT, UNKNOWN> : not defined
+<DECIMAL_INT, TINYTEXT> : not defined
+<DECIMAL_INT, TEXT> : not defined
+<DECIMAL_INT, MEDIUMTEXT> : not defined
+<DECIMAL_INT, LONGTEXT> : not defined
+<DECIMAL_INT, BIT> : not defined
+<DECIMAL_INT, ENUM> : not defined
+<DECIMAL_INT, SET> : not defined
+<DECIMAL_INT, ENUM_INNER> : not defined
+<DECIMAL_INT, SET_INNER> : not defined
+<DECIMAL_INT, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<DECIMAL_INT, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<DECIMAL_INT, TIMESTAMP> : not defined
+<DECIMAL_INT, RAW> : not defined
+<DECIMAL_INT, INTERVAL_YEAR_TO_MONTH> : not defined
+<DECIMAL_INT, INTERVAL_DAY_TO_SECOND> : not defined
+<DECIMAL_INT, NUMBER_FLOAT> : not defined
+<DECIMAL_INT, NVARCHAR2> : not defined
+<DECIMAL_INT, NCHAR> : not defined
+<DECIMAL_INT, ROWID> : not defined
+<DECIMAL_INT, LOB> : not defined
+<DECIMAL_INT, JSON> : not defined
+<DECIMAL_INT, GEOMETRY> : not defined
+<DECIMAL_INT, UDT> : not defined
+<DECIMAL_INT, DECIMAL_INT> : not defined
+<DECIMAL_INT, COLLECTION> : not defined
+
+/**************** COLLECTION ****************/
+
+<COLLECTION, NULL> : defined
+<COLLECTION, TINYINT> : not defined
+<COLLECTION, SMALLINT> : not defined
+<COLLECTION, MEDIUMINT> : not defined
+<COLLECTION, INT> : not defined
+<COLLECTION, BIGINT> : not defined
+<COLLECTION, TINYINT UNSIGNED> : not defined
+<COLLECTION, SMALLINT UNSIGNED> : not defined
+<COLLECTION, MEDIUMINT UNSIGNED> : not defined
+<COLLECTION, INT UNSIGNED> : not defined
+<COLLECTION, BIGINT UNSIGNED> : not defined
+<COLLECTION, FLOAT> : not defined
+<COLLECTION, DOUBLE> : not defined
+<COLLECTION, FLOAT UNSIGNED> : not defined
+<COLLECTION, DOUBLE UNSIGNED> : not defined
+<COLLECTION, DECIMAL> : not defined
+<COLLECTION, DECIMAL UNSIGNED> : not defined
+<COLLECTION, DATETIME> : not defined
+<COLLECTION, TIMESTAMP> : not defined
+<COLLECTION, DATE> : not defined
+<COLLECTION, TIME> : not defined
+<COLLECTION, YEAR> : not defined
+<COLLECTION, VARCHAR> : not defined
+<COLLECTION, CHAR> : not defined
+<COLLECTION, HEX_STRING> : not defined
+<COLLECTION, EXT> : defined
+<COLLECTION, UNKNOWN> : not defined
+<COLLECTION, TINYTEXT> : not defined
+<COLLECTION, TEXT> : not defined
+<COLLECTION, MEDIUMTEXT> : not defined
+<COLLECTION, LONGTEXT> : not defined
+<COLLECTION, BIT> : not defined
+<COLLECTION, ENUM> : not defined
+<COLLECTION, SET> : not defined
+<COLLECTION, ENUM_INNER> : not defined
+<COLLECTION, SET_INNER> : not defined
+<COLLECTION, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<COLLECTION, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<COLLECTION, TIMESTAMP> : not defined
+<COLLECTION, RAW> : not defined
+<COLLECTION, INTERVAL_YEAR_TO_MONTH> : not defined
+<COLLECTION, INTERVAL_DAY_TO_SECOND> : not defined
+<COLLECTION, NUMBER_FLOAT> : not defined
+<COLLECTION, NVARCHAR2> : not defined
+<COLLECTION, NCHAR> : not defined
+<COLLECTION, ROWID> : not defined
+<COLLECTION, LOB> : not defined
+<COLLECTION, JSON> : not defined
+<COLLECTION, GEOMETRY> : not defined
+<COLLECTION, UDT> : not defined
+<COLLECTION, DECIMAL_INT> : not defined
+<COLLECTION, COLLECTION> : not defined
 

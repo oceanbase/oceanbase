@@ -404,11 +404,31 @@
 #include "sql/engine/expr/ob_expr_xml_serialize.h"
 #include "sql/engine/expr/ob_expr_xmlcast.h"
 #include "sql/engine/expr/ob_expr_update_xml.h"
+#include "sql/engine/expr/ob_expr_sql_udt_construct.h"
+#include "sql/engine/expr/ob_expr_priv_attribute_access.h"
 #include "sql/engine/expr/ob_expr_insert_child_xml.h"
 #include "sql/engine/expr/ob_expr_xml_delete_xml.h"
 #include "sql/engine/expr/ob_expr_xml_sequence.h"
 #include "sql/engine/expr/ob_expr_temp_table_ssid.h"
+#include "sql/engine/expr/ob_expr_priv_st_numinteriorrings.h"
+#include "sql/engine/expr/ob_expr_priv_st_iscollection.h"
+#include "sql/engine/expr/ob_expr_priv_st_equals.h"
+#include "sql/engine/expr/ob_expr_priv_st_touches.h"
 #include "sql/engine/expr/ob_expr_align_date4cmp.h"
+#include "sql/engine/expr/ob_expr_priv_st_makeenvelope.h"
+#include "sql/engine/expr/ob_expr_priv_st_clipbybox2d.h"
+#include "sql/engine/expr/ob_expr_priv_st_pointonsurface.h"
+#include "sql/engine/expr/ob_expr_priv_st_geometrytype.h"
+#include "sql/engine/expr/ob_expr_st_crosses.h"
+#include "sql/engine/expr/ob_expr_st_overlaps.h"
+#include "sql/engine/expr/ob_expr_st_union.h"
+#include "sql/engine/expr/ob_expr_st_length.h"
+#include "sql/engine/expr/ob_expr_st_difference.h"
+#include "sql/engine/expr/ob_expr_st_asgeojson.h"
+#include "sql/engine/expr/ob_expr_st_centroid.h"
+#include "sql/engine/expr/ob_expr_st_symdifference.h"
+#include "sql/engine/expr/ob_expr_priv_st_asmvtgeom.h"
+#include "sql/engine/expr/ob_expr_priv_st_makevalid.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -1009,7 +1029,25 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprRandom);
     REG_OP(ObExprRandstr);
     REG_OP(ObExprPrefixPattern);
+    REG_OP(ObExprPrivSTNumInteriorRings);
+    REG_OP(ObExprPrivSTIsCollection);
+    REG_OP(ObExprPrivSTEquals);
+    REG_OP(ObExprPrivSTTouches);
     REG_OP(ObExprAlignDate4Cmp);
+    REG_OP(ObExprPrivSTMakeEnvelope);
+    REG_OP(ObExprPrivSTClipByBox2D);
+    REG_OP(ObExprPrivSTPointOnSurface);
+    REG_OP(ObExprPrivSTGeometryType);
+    REG_OP(ObExprSTCrosses);
+    REG_OP(ObExprSTOverlaps);
+    REG_OP(ObExprSTUnion);
+    REG_OP(ObExprSTLength);
+    REG_OP(ObExprSTDifference);
+    REG_OP(ObExprSTAsGeoJson);
+    REG_OP(ObExprSTCentroid);
+    REG_OP(ObExprSTSymDifference);
+    REG_OP(ObExprPrivSTAsMVTGeom);
+    REG_OP(ObExprPrivSTMakeValid);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
@@ -1319,6 +1357,8 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprXmlSerialize);
   REG_OP_ORCL(ObExprXmlcast);
   REG_OP_ORCL(ObExprUpdateXml);
+  REG_OP_ORCL(ObExprUdtConstruct);
+  REG_OP_ORCL(ObExprUDTAttributeAccess);
   REG_OP_ORCL(ObExprInsertChildXml);
   REG_OP_ORCL(ObExprDeleteXml);
   REG_OP_ORCL(ObExprXmlSequence);
@@ -1454,6 +1494,9 @@ void ObExprOperatorFactory::get_function_alias_name(const ObString &origin_name,
     } else if (0 == origin_name.case_compare("area")) {
       // area is synonym for st_area
       alias_name = ObString::make_string(N_ST_AREA);
+    } else if (0 == origin_name.case_compare("centroid")) {
+      // centroid is synonym for st_centroid
+      alias_name = ObString::make_string(N_ST_CENTROID);
     } else {
       //do nothing
     }

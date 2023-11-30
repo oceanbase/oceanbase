@@ -319,11 +319,7 @@ public:
                             ObRawExprFactory &expr_factory,
                             const ObDMLStmt *stmt,
                             ObDMLStmt *&new_stmt);
-  static int create_udt_hidden_columns(ObTransformerCtx *ctx,
-                                       ObDMLStmt *stmt,
-                                       const ObColumnRefRawExpr &udt_expr,
-                                       ObColumnRefRawExpr *&col_expr,
-                                       bool &need_transform);
+
   /**
    * @brief joined_table需要维护一个基表的table id列表
    * 对于它的左右子节点，如果是基表 或者generated table，直接使用其table id；

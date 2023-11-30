@@ -31,6 +31,7 @@
 #include "storage/tx/ob_clog_encrypt_info.h"
 #include "storage/tx/ob_trans_define.h"
 #include "sql/monitor/ob_plan_info_manager.h"
+#include "sql/engine/ob_subschema_ctx.h"
 
 namespace oceanbase
 {
@@ -486,6 +487,8 @@ public:
 
   void set_enable_px_fast_reclaim(bool value) { is_enable_px_fast_reclaim_ = value; }
   bool is_enable_px_fast_reclaim() const { return is_enable_px_fast_reclaim_; }
+  ObSubSchemaCtx &get_subschema_ctx_for_update() { return subschema_ctx_; }
+  const ObSubSchemaCtx &get_subschema_ctx() const { return subschema_ctx_; }
   int set_all_local_session_vars(ObIArray<ObLocalSessionVar> *all_local_session_vars);
   ObIArray<ObLocalSessionVar> & get_all_local_session_vars() { return all_local_session_vars_; }
 public:
@@ -665,6 +668,7 @@ public:
   ObLogicalPlanRawData logical_plan_;
   // for detector manager
   bool is_enable_px_fast_reclaim_;
+  ObSubSchemaCtx subschema_ctx_;
 private:
   common::ObFixedArray<ObLocalSessionVar, common::ObIAllocator> all_local_session_vars_;
 };

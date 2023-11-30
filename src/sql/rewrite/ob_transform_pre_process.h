@@ -462,23 +462,6 @@ struct DistinctObjMeta
   int transform_json_object_expr_with_star(const ObIArray<ObParentDMLStmt> &parent_stmts,
                                            ObDMLStmt *stmt, bool &trans_happened);
   int transform_udt_columns(const common::ObIArray<ObParentDMLStmt> &parent_stmts, ObDMLStmt *stmt, bool &trans_happened);
-  int transform_udt_column_conv_function(ObDmlTableInfo &table_info,
-                                         ObIArray<ObRawExpr*> &column_conv_exprs,
-                                         ObColumnRefRawExpr &udt_col,
-                                         ObColumnRefRawExpr &hidd_col);
-  int transform_udt_column_value_expr_inner(ObDMLStmt *stmt, ObDmlTableInfo &table_info, ObRawExpr *&old_expr, ObRawExpr *hidd_expr = NULL);
-  int transform_xml_binary(ObRawExpr *hidden_blob_expr, ObRawExpr *&new_expr);
-  int transform_udt_column_value_expr(ObDMLStmt *stmt, ObDmlTableInfo &table_info, ObRawExpr *old_expr, ObRawExpr *&new_expr, ObRawExpr *hidd_expr = NULL);
-  int transform_udt_column_conv_param_expr(ObDmlTableInfo &table_info, ObRawExpr *old_expr, ObRawExpr *&new_expr);
-  int replace_udt_assignment_exprs(ObDMLStmt *stmt, ObDmlTableInfo &table_info, ObIArray<ObAssignment> &assignments, bool &trans_happened);
-  int set_hidd_col_not_null_attr(const ObColumnRefRawExpr &udt_col, ObIArray<ObColumnRefRawExpr *> &column_exprs);
-  int check_skip_child_select_view(const ObIArray<ObParentDMLStmt> &parent_stmts, ObDMLStmt *stmt, bool &skip_for_view_table);
-  int transform_query_udt_columns_exprs(const ObIArray<ObParentDMLStmt> &parent_stmts, ObDMLStmt *stmt, bool &trans_happened);
-  int transform_udt_columns_constraint_exprs(ObDMLStmt *stmt, bool &trans_happened);
-  int get_update_generated_udt_in_parent_stmt(const ObIArray<ObParentDMLStmt> &parent_stmts, const ObDMLStmt *stmt,
-                                              ObIArray<ObColumnRefRawExpr*> &col_exprs);
-  int get_dml_view_col_exprs(const ObDMLStmt *stmt, ObIArray<ObColumnRefRawExpr*> &assign_col_exprs);
-
    /*
    * following functions are used for transform rowid in subquery
    */

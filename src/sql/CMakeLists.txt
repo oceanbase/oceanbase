@@ -128,6 +128,7 @@ ob_set_subtarget(ob_sql engine
   engine/user_defined_function/ob_user_defined_function.cpp
   engine/window_function/ob_window_function_op.cpp
   engine/opt_statistics/ob_optimizer_stats_gathering_op.cpp
+  engine/ob_subschema_ctx.cpp
 )
 
 ob_set_subtarget(ob_sql engine_aggregate
@@ -651,6 +652,29 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_extract_xml.cpp
   engine/expr/ob_expr_xmlcast.cpp
   engine/expr/ob_expr_update_xml.cpp
+  engine/expr/ob_expr_sql_udt_utils.cpp
+  engine/expr/ob_expr_temp_table_ssid.cpp
+  engine/expr/ob_expr_collection_construct.cpp
+  engine/expr/ob_expr_sql_udt_construct.cpp
+  engine/expr/ob_expr_priv_attribute_access.cpp
+  engine/expr/ob_expr_priv_st_numinteriorrings.cpp
+  engine/expr/ob_expr_priv_st_iscollection.cpp
+  engine/expr/ob_expr_priv_st_equals.cpp
+  engine/expr/ob_expr_priv_st_touches.cpp
+  engine/expr/ob_expr_priv_st_makeenvelope.cpp
+  engine/expr/ob_expr_priv_st_clipbybox2d.cpp
+  engine/expr/ob_expr_priv_st_pointonsurface.cpp
+  engine/expr/ob_expr_priv_st_geometrytype.cpp
+  engine/expr/ob_expr_st_crosses.cpp
+  engine/expr/ob_expr_st_overlaps.cpp
+  engine/expr/ob_expr_st_union.cpp
+  engine/expr/ob_expr_st_length.cpp
+  engine/expr/ob_expr_st_difference.cpp
+  engine/expr/ob_expr_st_asgeojson.cpp
+  engine/expr/ob_expr_st_centroid.cpp
+  engine/expr/ob_expr_st_symdifference.cpp
+  engine/expr/ob_expr_priv_st_asmvtgeom.cpp
+  engine/expr/ob_expr_priv_st_makevalid.cpp
   engine/expr/ob_expr_insert_child_xml.cpp
   engine/expr/ob_expr_xml_delete_xml.cpp
   engine/expr/ob_expr_xml_sequence.cpp
@@ -1186,6 +1210,7 @@ ob_set_subtarget(ob_sql rewrite
   rewrite/ob_transform_subquery_coalesce.cpp
   rewrite/ob_transform_temp_table.cpp
   rewrite/ob_transform_utils.cpp
+  rewrite/ob_transform_udt_utils.cpp
   rewrite/ob_transform_view_merge.cpp
   rewrite/ob_transform_where_subquery_pullup.cpp
   rewrite/ob_transform_win_magic.cpp

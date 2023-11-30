@@ -6590,12 +6590,16 @@ int ObDDLService::resolve_timestamp_column(AlterColumnSchema *alter_column_schem
                                             ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
+  bool is_oracle_mode = false;
   if (OB_ISNULL(alter_column_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("alter_column_schema is NULL", K(ret));
+  } else if (OB_FAIL(new_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("fail to check if tenant mode is oracle mode", K(ret));
   } else if (ObTimestampType != new_column_schema.get_data_type()
       || new_column_schema.is_generated_column()
-      || false == alter_column_schema->check_timestamp_column_order_) {
+      || false == alter_column_schema->check_timestamp_column_order_
+      || new_column_schema.is_udt_related_column(is_oracle_mode)) {
     //nothing to do
   } else {
     bool is_first_timestamp = false;
@@ -8179,6 +8183,7 @@ int ObDDLService::add_new_column_to_table_schema(
     AlterColumnSchema &alter_column_schema,
     ObIArray<ObString> &gen_col_expr_arr,
     ObSchemaGetterGuard &schema_guard,
+    uint64_t &curr_udt_set_id,
     ObDDLOperator *ddl_operator,
     common::ObMySQLTransaction *trans)
 {
@@ -8217,9 +8222,9 @@ int ObDDLService::add_new_column_to_table_schema(
     } else {
       if (alter_column_schema.is_udt_hidden_column()) {
         // udt hidden column
-        char col_name[128] = {0};
-        alter_column_schema.set_udt_set_id(max_used_column_id);
-        databuff_printf(col_name, 128, "SYS_NC%05lu$",max_used_column_id + 1);
+        char col_name[OB_MAX_COLUMN_NAME_LENGTH] = {0};
+        alter_column_schema.set_udt_set_id(curr_udt_set_id);
+        databuff_printf(col_name, OB_MAX_COLUMN_NAME_LENGTH, "SYS_NC%05lu$",max_used_column_id + 1);
         if (OB_FAIL(alter_column_schema.set_column_name(col_name))) {
           SQL_RESV_LOG(WARN, "failed to set column name", K(ret));
         }
@@ -8237,6 +8242,7 @@ int ObDDLService::add_new_column_to_table_schema(
         }
         if (alter_column_schema.is_xmltype()) {
           alter_column_schema.set_udt_set_id(alter_column_schema.get_column_id());
+          curr_udt_set_id = alter_column_schema.get_udt_set_id();
         }
         new_table_schema.set_max_used_column_id(max_used_column_id);
       }
@@ -8266,10 +8272,10 @@ int ObDDLService::add_new_column_to_table_schema(
     ObSchemaChecker schema_checker;
     if (OB_FAIL(schema_checker.init(schema_guard))) {
       LOG_WARN("failed to init schema guard", K(ret));
-    } else if (alter_column_schema.is_udt_related_column()) {
-      // 1. xmltype cannot be primary key
-      // 2. xmltype column and its hidden blob column default value is calc/set in resolver
-      //    only check xmltype schema version on rs in check_parallel_ddl_conflict
+    } else if (alter_column_schema.is_udt_related_column(is_oracle_mode)) {
+      // udt column/oracle gis not need to do the flowing else ifs:
+      // 1. default values is check and calculated in resolver, only check dependency version on RS
+      // 2. udt column and it's hidden columns cannot be primary key
       LOG_INFO("alter table add udt related column", K(alter_column_schema));
     } else if (OB_FAIL(ObDDLResolver::check_default_value(
                 alter_column_schema.get_cur_default_value(),
@@ -8352,6 +8358,7 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
   // drop column related.
   int64_t new_table_cols_cnt = 0;
   ObArray<int64_t> drop_cols_id_arr;
+  uint64_t curr_udt_set_id = 0;
   bool is_oracle_mode = false;
   LOG_DEBUG("check before alter table column", K(origin_table_schema), K(alter_table_schema), K(new_table_schema));
   ObSchemaChecker schema_checker;
@@ -8461,6 +8468,7 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
                                                        *alter_column_schema,
                                                        gen_col_expr_arr,
                                                        schema_guard,
+                                                       curr_udt_set_id,
                                                        nullptr,
                                                        nullptr))) {
               LOG_WARN("failed to add new column to table schema", K(ret));
@@ -8825,6 +8833,7 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
     ObArray<ObTableSchema> idx_schema_array;
     common::hash::ObHashSet<ObColumnNameHashWrapper> update_column_name_set;
     ObSEArray<ObString, 4> gen_col_expr_arr;
+    uint64_t curr_udt_set_id = 0;
     bool is_origin_table_has_lob_column = false;
     if (OB_FAIL(update_column_name_set.create(32))) {
       LOG_WARN("failed to create update column name set", K(ret));
@@ -8889,6 +8898,7 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                                                        *alter_column_schema,
                                                        gen_col_expr_arr,
                                                        schema_guard,
+                                                       curr_udt_set_id,
                                                        &ddl_operator,
                                                        &trans))) {
               LOG_WARN("failed to add new column to table schema", K(ret));
@@ -8961,6 +8971,7 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                                                             update_column_name_set))) {
               RS_LOG(WARN, "failed to pre check orig column schema", K(ret));
             } else if (!alter_column_schema->is_generated_column()   /* Not support modify to generate columns, so there is no need to check again here */
+                      && !alter_column_schema->is_udt_related_column(is_oracle_mode)  /* udt default values are checked in resolver */
                       && OB_FAIL(ObDDLResolver::check_default_value(alter_column_schema->get_cur_default_value(),
                                                                     tz_info_wrap,
                                                                     nls_formats,

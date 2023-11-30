@@ -67,9 +67,7 @@ int ObExprPrivSTTransform::calc_result_typeN(ObExprResType& type,
     if (OB_SUCC(ret)) {
       ObCastMode cast_mode = type_ctx.get_cast_mode();
       cast_mode &= ~CM_WARN_ON_FAIL; // make cast return error when fail
-      type.set_type(ObGeometryType);
-      type.set_collation_level(common::CS_LEVEL_COERCIBLE);
-      type.set_collation_type(CS_TYPE_BINARY);
+      type.set_geometry();
       type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObGeometryType]).get_length());
     }
   }
@@ -119,7 +117,8 @@ int ObExprPrivSTTransform::eval_priv_st_transform(const ObExpr &expr, ObEvalCtx 
       LOG_WARN("get tenant srs guard failed", K(session->get_effective_tenant_id()), K(src_srid), K(ret));
     } else if (src_srid != 0 && OB_FAIL(srs_guard.get_srs_item(src_srid, src_srs_item))) {
       LOG_WARN("failed to get srs item", K(ret), K(src_srid));
-    } else if (OB_FAIL(ObGeoTypeUtil::create_geo_by_wkb(temp_allocator, wkb, src_srs_item, src_geo))) {
+    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb, src_geo, src_srs_item, N_PRIV_ST_TRANSFORM,
+                                                    ObGeoBuildFlag::GEO_ALLOW_3D))) {
       LOG_WARN("get geo by wkb failed", K(ret), K(wkb));
       if (ret != OB_ERR_SRS_NOT_FOUND) {
         ret = OB_ERR_GIS_INVALID_DATA;

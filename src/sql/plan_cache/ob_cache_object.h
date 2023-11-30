@@ -125,10 +125,10 @@ struct ObParamInfo
   common::ParamFlag flag_;
   common::ObScale scale_;
   common::ObObjType type_;
-  common::ObObjType ext_real_type_;
+  common::ObObjType ext_real_type_; // use as high 4 bytes of udt id if type is sql udt
   //处理Oracle模式空串在plan_cache中的匹配
   bool is_oracle_empty_string_;
-  common::ObCollationType col_type_;
+  common::ObCollationType col_type_; // use as low 4 bytes of udt id if type is sql udt
 
   OB_UNIS_VERSION_V(1);
 };

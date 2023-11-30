@@ -333,13 +333,19 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
     LOG_WARN("invalid row_dimension_", K(row_dimension_), K(ret));
   } else if (OB_FAIL(get_cast_type(type2, cast_raw_expr->get_extra(), dst_type))) {
     LOG_WARN("get cast dest type failed", K(ret));
-  } else if (OB_FAIL(adjust_udt_cast_type(type1, dst_type))) {
+  } else if (OB_FAIL(adjust_udt_cast_type(type1, dst_type, type_ctx))) {
      LOG_WARN("adjust udt cast sub type failed", K(ret));
   } else if (OB_UNLIKELY(!cast_supported(type1.get_type(), type1.get_collation_type(),
                                         dst_type.get_type(), dst_type.get_collation_type()))) {
     if (session->is_varparams_sql_prepare()) {
       type.set_null();
       LOG_TRACE("ps prepare phase ignores type deduce error");
+    } else if (const_cast<ObSQLSessionInfo *>(session)->is_pl_prepare_stage()
+               && dst_type.is_geometry()
+               && lib::is_oracle_mode()) {
+      // oracle gis ignore ignore type deduce error in pl prepare
+      type.set_geometry();
+      LOG_TRACE("pl prepare phase ignores type deduce error");
     } else {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("transition does not support", "src", ob_obj_type_str(type1.get_type()),
@@ -394,7 +400,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
         type.set_precision(float_precision);
         type.set_scale(float_scale);
       }
-    } else if (dst_type.is_user_defined_sql_type()) {
+    } else if (dst_type.is_user_defined_sql_type() || dst_type.is_collection_sql_type()) {
       type.set_type(dst_type.get_type());
       type.set_subschema_id(dst_type.get_subschema_id());
     } else {
@@ -441,7 +447,9 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
           type.set_collation_type(ob_is_nstring_type(dst_type.get_type()) ?
                                   collation_nation : collation_connection);
         }
-      } else if (ob_is_extend(dst_type.get_type())) {
+      } else if (ob_is_extend(dst_type.get_type())
+                 || dst_type.is_user_defined_sql_type()
+                 || dst_type.is_collection_sql_type()) {
         type.set_udt_id(type2.get_udt_id());
       } else {
         type.set_length(length);
@@ -607,18 +615,15 @@ int ObExprCast::get_cast_type(const ObExprResType param_type2,
       }
     } else if (ob_is_raw(obj_type)) {
       dst_type.set_length(parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX]);
-    } else if (ob_is_extend(obj_type)) {
+    } else if (ob_is_extend(obj_type)
+               || ob_is_user_defined_sql_type(obj_type)
+               || ob_is_collection_sql_type(obj_type)) {
       dst_type.set_udt_id(param_type2.get_udt_id());
     } else if (lib::is_mysql_mode() && ob_is_json(obj_type)) {
       dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
     } else if (ob_is_geometry(obj_type)) {
-      if (lib::is_mysql_mode()) {
-        dst_type.set_collation_type(CS_TYPE_BINARY);
-        dst_type.set_collation_level(CS_LEVEL_IMPLICIT);
-      } else {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not support cast to geometry in oracle mode", K(ret));
-      }
+      dst_type.set_collation_type(CS_TYPE_BINARY);
+      dst_type.set_collation_level(CS_LEVEL_IMPLICIT);
     } else if (ob_is_interval_tc(obj_type)) {
       if (CM_IS_EXPLICIT_CAST(cast_mode) &&
           ((ObIntervalYMType != obj_type && !ObIntervalScaleUtil::scale_check(parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX])) ||
@@ -645,36 +650,140 @@ int ObExprCast::get_cast_type(const ObExprResType param_type2,
   return ret;
 }
 
-int ObExprCast::adjust_udt_cast_type(const ObExprResType &src_type, ObExprResType &dst_type) const
+int ObExprCast::adjust_udt_cast_type(const ObExprResType &src_type,
+                                     ObExprResType &dst_type,
+                                     ObExprTypeCtx &type_ctx) const
 {
+  // set subschema id in this function for cast
   int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
+  ObExecContext *exec_ctx = OB_ISNULL(session) ? NULL : session->get_cur_exec_ctx();
   if (src_type.is_ext()) {
-    if (dst_type.is_user_defined_sql_type()) {
-      if (src_type.get_udt_id() == T_OBJ_XML) {
-        dst_type.set_sql_udt(ObXMLSqlType);
-      } else {
+    if (dst_type.is_user_defined_sql_type() || dst_type.is_collection_sql_type()) {
+      // phy_plan_ctx_ may not exist during deduce,
+      // save subschema mapping on sql_ctx_ before phy_plan ready?
+      const uint64_t udt_type_id = src_type.get_udt_id();
+      uint16_t subschema_id = ObMaxSystemUDTSqlType;
+
+      if (udt_type_id == T_OBJ_XML) {
+        subschema_id = 0;
+      } else if (OB_ISNULL(exec_ctx)) {
+        ret = OB_BAD_NULL_ERROR;
+        LOG_WARN("need ctx to get subschema mapping",
+                 K(ret), K(src_type), K(dst_type), KP(session), KP(exec_ctx));
+      } else if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(udt_type_id, subschema_id))) {
+        LOG_WARN("failed to get subshcema_meta_info",
+                 K(ret), K(src_type), K(dst_type), K(udt_type_id));
+      } else if (dst_type.get_udt_id() != src_type.get_udt_id()) {
+        // not xmltype, udt id must setted in both pl types and sql types
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("udt id mismarch", K(ret), K(src_type), K(dst_type),
+                 K(dst_type.get_udt_id()), K(src_type.get_udt_id()));
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (subschema_id == ObMaxSystemUDTSqlType) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("cast unsupported pl udt type to sql udt type", K(ret), K(src_type), K(dst_type));
+        LOG_WARN("cast unsupported pl udt type to sql udt type",
+                 K(ret), K(src_type), K(dst_type), K(udt_type_id));
+      } else {
+        dst_type.set_subschema_id(subschema_id);
+        dst_type.set_udt_id(udt_type_id);
       }
     } else if (dst_type.is_character_type() && !is_called_in_sql()) {
       ret = OB_ERR_EXPRESSION_WRONG_TYPE;
       LOG_WARN("PLS-00382: expression is of wrong type", K(ret), K(src_type), K(dst_type));
+    } else if (dst_type.is_ext()) {
+      // disallow PL sdo_geometry cast
+      uint64_t src_udt_id = src_type.get_udt_id();
+      uint64_t dst_udt_id = dst_type.get_udt_id();
+      if (ObGeometryTypeCastUtil::is_sdo_geometry_udt(src_udt_id)
+                && ObGeometryTypeCastUtil::is_sdo_geometry_udt(dst_udt_id)) {
+        if (!ObGeometryTypeCastUtil::is_sdo_geometry_type_compatible(src_udt_id, dst_udt_id)) {
+          ret = OB_ERR_EXPRESSION_WRONG_TYPE;
+          LOG_WARN("udt id mismatch", K(ret), K(src_type), K(dst_type),
+              K(src_udt_id), K(dst_udt_id));
+        }
+      }
     }
-  } else if (src_type.is_user_defined_sql_type()) {
+  } else if (src_type.is_user_defined_sql_type() || src_type.is_collection_sql_type()) {
+    const uint16_t subschema_id = src_type.get_subschema_id(); // do not need subschema id ?
+    uint64_t udt_id = 0;
+    uint64_t src_udt_id = src_type.get_udt_id();
+    uint64_t dst_udt_id = dst_type.get_udt_id();
     if (dst_type.is_ext()) {
-      if (src_type.is_xml_sql_type()) {
-        dst_type.set_udt_id(T_OBJ_XML);
-      } else {
+      ObSqlUDTMeta udt_meta;
+      if (subschema_id == ObXMLSqlType) {
+        udt_id = T_OBJ_XML;
+      } else if (OB_ISNULL(exec_ctx)) {
+        ret = OB_BAD_NULL_ERROR;
+        LOG_WARN("need ctx to get subschema mapping",
+                 K(ret), K(src_type), K(dst_type), KP(session), KP(exec_ctx));
+      } else if (OB_FAIL(exec_ctx->get_sqludt_meta_by_subschema_id(subschema_id, udt_meta))) {
+        LOG_WARN("Failed to get subshcema_meta_info",
+                  K(ret), K(src_type), K(dst_type), K(udt_meta.udt_id_));
+      } else if (udt_meta.udt_id_ == T_OBJ_NOT_SUPPORTED) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("cast unsupported sql udt type to pl udt type", K(ret), K(src_type), K(dst_type));
+        LOG_WARN("cast unsupported sql udt type to pl udt type",
+                  K(ret), K(src_type), K(dst_type), K(subschema_id));
+      } else if (ObGeometryTypeCastUtil::is_sdo_geometry_udt(src_udt_id)
+                && ObGeometryTypeCastUtil::is_sdo_geometry_udt(dst_udt_id)) {
+        uint16_t dst_subschema_id = ObInvalidSqlType;
+        if (!ObGeometryTypeCastUtil::is_sdo_geometry_type_compatible(src_udt_id, dst_udt_id)) {
+          ret = OB_ERR_EXPRESSION_WRONG_TYPE;
+          LOG_WARN("udt id mismatch", K(ret), K(src_type), K(dst_type),
+              K(src_udt_id), K(dst_udt_id));
+        } else if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(dst_udt_id, dst_subschema_id))) {
+          LOG_WARN("unsupported udt id", K(ret), K(dst_subschema_id));
+        } else {
+          dst_type.set_type(ObUserDefinedSQLType);
+          dst_type.set_subschema_id(dst_subschema_id);
+          udt_id = dst_udt_id;
+        }
+      } else if (dst_udt_id != src_udt_id) {
+        // not xmltype or sdo_geometry, udt id must setted in both pl types and sql types
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("udt id mismatch", K(ret), K(src_type), K(dst_type),
+                 K(dst_udt_id), K(src_udt_id));
+      } else {
+        udt_id = udt_meta.udt_id_;
+      }
+
+      if (OB_SUCC(ret)) {
+        dst_type.set_udt_id(udt_id);
       }
     } else if (dst_type.is_user_defined_sql_type()) {
-      dst_type.set_subschema_id(ObXMLSqlType);
+      dst_type.set_subschema_id(subschema_id);
+      LOG_INFO("cast from sql udt to sql udt", K(src_type), K(dst_type), K(lbt()));
     }
-  } else if (src_type.is_null() || src_type.is_character_type()) {
-    // null or chararcter type can cast to xmltype (other udt types are not supported yet)
-    if (dst_type.get_type() == ObUserDefinedSQLType) {
-      dst_type.set_sql_udt(ObXMLSqlType);
+  } else if ((src_type.is_null() || src_type.is_character_type())
+             && (dst_type.get_type() == ObUserDefinedSQLType
+                 || dst_type.get_type() == ObCollectionSQLType)) {
+    const uint64_t udt_type_id = dst_type.get_udt_id();
+    uint16_t subschema_id = ObMaxSystemUDTSqlType;
+
+    if (!ObObjUDTUtil::ob_is_supported_sql_udt(dst_type.get_udt_id())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unsupported udt type for sql udt", K(ret), K(src_type), K(dst_type),
+               K(dst_type.get_udt_id()), K(src_type.get_udt_id()));
+    } else if (udt_type_id == T_OBJ_XML) {
+      subschema_id = 0;
+    } else if (OB_ISNULL(exec_ctx)) {
+      ret = OB_BAD_NULL_ERROR;
+      LOG_WARN("need ctx to get subschema mapping",
+                K(ret), K(src_type), K(dst_type), KP(session), KP(exec_ctx));
+    } else if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(udt_type_id, subschema_id))) {
+      LOG_WARN("failed to get subshcema_meta_info",
+                K(ret), K(src_type), K(dst_type), K(udt_type_id));
+    } else { /* do nothing */ }
+
+    if (OB_FAIL(ret)) {
+    } else if (subschema_id == ObMaxSystemUDTSqlType) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("cast unsupported pl udt type to sql udt type",
+                K(ret), K(src_type), K(dst_type), K(udt_type_id));
+    } else {
+      dst_type.set_subschema_id(subschema_id);
     }
   }
   return ret;

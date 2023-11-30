@@ -72,7 +72,7 @@ private:
   bool is_ring_closed_;
 
   template<typename T>
-  int check_common_header(T *geo, ObGeoType geo_type, ObGeoWkbByteOrder &bo);
+  int check_common_header(T *geo, ObGeoType geo_type, ObGeoWkbByteOrder bo);
   template<typename T>
   int check_point(T *geo);
   template<typename T>

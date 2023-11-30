@@ -91,6 +91,8 @@ enum ObObjType
   ObGeometryType      = 48, // Geometry type
 
   ObUserDefinedSQLType = 49, // User defined type in SQL
+  ObDecimalIntType     = 50, // placeholder(from master), decimal int type
+  ObCollectionSQLType  = 51, // collection(varray and nested table) in SQL
   ObMaxType                 // invalid type, or count of obj type
 };
 
@@ -124,6 +126,7 @@ enum ObObjOType
   ObOJsonType         = 24,
   ObOGeometryType     = 25,
   ObOUDTSqlType       = 26,
+  ObOCollectionSqlType  = 27,
   ObOMaxType          //invalid type, or count of ObObjOType
 };
 
@@ -138,6 +141,16 @@ enum class ObGeoType
   MULTIPOLYGON = 6,
   GEOMETRYCOLLECTION = 7,
   GEOTYPEMAX = 31, // 5 bit for geometry type in column schema,set max 31
+  // 3d geotype is not supported to define as subtype yet,
+  // only use for inner type
+  POINTZ = 1001,
+  LINESTRINGZ = 1002,
+  POLYGONZ = 1003,
+  MULTIPOINTZ = 1004,
+  MULTILINESTRINGZ = 1005,
+  MULTIPOLYGONZ = 1006,
+  GEOMETRYCOLLECTIONZ = 1007,
+  GEO3DTYPEMAX = 1024,
 };
 
 //for cast/cmp map
@@ -199,6 +212,8 @@ static ObObjOType OBJ_TYPE_TO_O_TYPE[ObMaxType+1] = {
   ObOJsonType,               //ObJsonType = 47,
   ObOGeometryType,           //ObGeometryType = 48,
   ObOUDTSqlType,             //ObUserDefinedSQLType = 49,
+  ObONumberType,             //ObDecimalIntType = 50,
+  ObOCollectionSqlType,      //ObCollectionSQLType = 51,
   ObONotSupport              //ObMaxType,
 };
 
@@ -230,6 +245,8 @@ enum ObObjTypeClass
   ObJsonTC          = 22, // json type class 
   ObGeometryTC      = 23, // geometry type class
   ObUserDefinedSQLTC = 24, // user defined type class in SQL
+  ObDecimalIntTC     = 25, // decimal int class
+  ObCollectionSQLTC = 26, // collection type class in SQL
   ObMaxTC,
   // invalid type classes are below, only used as the result of XXXX_type_promotion()
   // to indicate that the two obj can't be promoted to the same type.
@@ -290,7 +307,9 @@ enum ObObjTypeClass
     (ObLobType, ObLobTC),                      \
     (ObJsonType, ObJsonTC),                    \
     (ObGeometryType, ObGeometryTC),            \
-    (ObUserDefinedSQLType, ObUserDefinedSQLTC)
+    (ObUserDefinedSQLType, ObUserDefinedSQLTC), \
+    (ObDecimalIntType, ObDecimalIntTC), \
+    (ObCollectionSQLType, ObCollectionSQLTC)
 
 #define SELECT_SECOND(x, y) y
 #define SELECT_TC(arg) SELECT_SECOND arg
@@ -330,6 +349,8 @@ const ObObjType OBJ_DEFAULT_TYPE[ObActualMaxTC] =
   ObJsonType,       // json
   ObGeometryType,   // geometry
   ObUserDefinedSQLType, // user defined type in sql
+  ObDecimalIntType, // decimal int
+  ObCollectionSQLType,  // collection type in sql
   ObMaxType,        // maxtype
   ObUInt64Type,     // int&uint
   ObMaxType,        // lefttype
@@ -366,6 +387,7 @@ static ObObjTypeClass OBJ_O_TYPE_TO_CLASS[ObOMaxType + 1] =
   ObJsonTC,       // ObOJsonType
   ObGeometryTC,   // ObOGeometryType
   ObUserDefinedSQLTC, // ObOUDTSqlType
+  ObCollectionSQLTC, // ObCollectionSqlType
   ObMaxTC
 };
 
@@ -1066,16 +1088,23 @@ enum ObExtObjType
   T_EXT_SQL_END = 200
 };
 
+// systemd defined udt type (fixed udt id)
 enum ObUDTType
 {
+  T_OBJ_NOT_SUPPORTED = 0,
   T_OBJ_XML = 300001,
+  T_OBJ_SDO_POINT = 300027,
+  T_OBJ_SDO_GEOMETRY = 300028,
+  T_OBJ_SDO_ELEMINFO_ARRAY = 300029,
+  T_OBJ_SDO_ORDINATE_ARRAY = 300030,
 };
 
 // reserved sub schema id for system defined types
 enum ObSystemUDTSqlType
 {
   ObXMLSqlType = 0,
-  ObMaxSystemUDTSqlType = 16
+  ObMaxSystemUDTSqlType = 16, // used not supported cases;
+  ObInvalidSqlType = 17 // only used when subschema id not set, like the creation of col ref rawexpr
 };
 
 OB_INLINE bool is_valid_obj_type(const ObObjType type)
@@ -1136,7 +1165,7 @@ OB_INLINE bool ob_is_castable_type_class(ObObjTypeClass tc)
       || ObBitTC == tc || ObEnumSetTC == tc || ObEnumSetInnerTC == tc || ObTextTC == tc
       || ObOTimestampTC == tc || ObRawTC == tc || ObIntervalTC == tc
       || ObRowIDTC == tc || ObLobTC == tc || ObJsonTC == tc || ObGeometryTC == tc
-      || ObUserDefinedSQLTC == tc;
+      || ObUserDefinedSQLTC == tc || ObCollectionSQLTC == tc;
 }
 
 //used for arithmetic
@@ -1369,7 +1398,11 @@ inline bool ob_is_var_len_type(const ObObjType type) {
       || ob_is_rowid_tc(type)
       || ob_is_lob_locator(type);
 }
-inline bool is_lob_storage(const ObObjType type) { return ob_is_large_text(type) || ob_is_json_tc(type) || ob_is_geometry_tc(type); }
+inline bool ob_is_collection_sql_type(const ObObjType type) { return ObCollectionSQLType == type; }
+inline bool is_lob_storage(const ObObjType type) { return ob_is_large_text(type)
+                                                          || ob_is_json_tc(type)
+                                                          || ob_is_geometry_tc(type)
+                                                          || ob_is_collection_sql_type(type); }
 inline bool ob_is_geometry(const ObObjType type) { return ObGeometryType == type; }
 
 inline bool ob_is_user_defined_sql_type(const ObObjType type) { return ObUserDefinedSQLType == type; }

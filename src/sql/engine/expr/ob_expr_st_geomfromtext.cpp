@@ -109,6 +109,7 @@ int ObExprSTGeomFromText::eval_st_geomfromtext_common(const ObExpr &expr,
   bool is_lat_long = false;
   bool is_geog = false;
   bool need_reverse = false;
+  bool is_3d_geo = false;
 
   // get wkt
   if (OB_FAIL(expr.args_[0]->eval(ctx, datum))) {
@@ -189,15 +190,11 @@ int ObExprSTGeomFromText::eval_st_geomfromtext_common(const ObExpr &expr,
       LOG_WARN("failed to parse wkt", K(ret));
     } else if (OB_ISNULL(geo)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null geo afer parse_wkt", K(ret), K(wkt));
+      LOG_WARN("unexpected null geo after parse_wkt", K(ret), K(wkt));
     } else {
-      if (is_geog && need_reverse) {
-        ObGeoReverseCoordinateVisitor rcoord_visitor;
-        if (OB_FAIL(geo->do_visit(rcoord_visitor))) {
-          ret = OB_ERR_GIS_INVALID_DATA;
-          LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, func_name);
-          LOG_WARN("failed to reverse geometry coordinate", K(ret));
-        }
+      is_3d_geo = ObGeoTypeUtil::is_3d_geo_type(geo->type());
+      if (is_geog && need_reverse && OB_FAIL(ObGeoExprUtils::reverse_coordinate(geo, func_name))) {
+        LOG_WARN("failed to reverse geometry coordinate", K(ret));
       }
       if (is_geog && OB_SUCC(ret)) {
         if (OB_FAIL(ObGeoExprUtils::check_coordinate_range(srs_item, geo, func_name))) {

@@ -65,6 +65,15 @@ int ObExprOracleDecode::calc_result_typeN(ObExprResType &type,
     } else if (lib::is_oracle_mode() && types_stack[CALC_TYPE_INDEX].get_type() == ObUserDefinedSQLType) {
       ret = OB_ERR_NO_ORDER_MAP_SQL;
       LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
+    } else if (lib::is_oracle_mode()
+               && (types_stack[CALC_TYPE_INDEX].get_type() == ObGeometryType || types_stack[0].get_type() == ObGeometryType)) {
+      if (types_stack[CALC_TYPE_INDEX].get_type() == types_stack[0].get_type()) {
+        ret = OB_ERR_COMPARE_VARRAY_LOB_ATTR;
+        LOG_WARN("Incorrect cmp type with geometry arguments", K(ret));
+      } else {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("invalid type of parameter", K(ret), K(types_stack[0]), K(types_stack[1]));
+      }
     }
     for (int64_t i = 1; OB_SUCC(ret) && i < param_num; i += 2) {
       if (has_default && i == param_num - 1) {

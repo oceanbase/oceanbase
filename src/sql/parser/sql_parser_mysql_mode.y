@@ -337,7 +337,7 @@ END_P SET_VAR DELIMITER
         SET_TP SHARE SHUTDOWN SIGNED SIMPLE SLAVE SLOW SLOT_IDX SNAPSHOT SOCKET SOME SONAME SOUNDS
         SOURCE SPFILE SPLIT SQL_AFTER_GTIDS SQL_AFTER_MTS_GAPS SQL_BEFORE_GTIDS SQL_BUFFER_RESULT
         SQL_CACHE SQL_NO_CACHE SQL_ID SQL_THREAD SQL_TSI_DAY SQL_TSI_HOUR SQL_TSI_MINUTE SQL_TSI_MONTH
-        SQL_TSI_QUARTER SQL_TSI_SECOND SQL_TSI_WEEK SQL_TSI_YEAR SRID STANDBY STAT START STARTS STATS_AUTO_RECALC
+        SQL_TSI_QUARTER SQL_TSI_SECOND SQL_TSI_WEEK SQL_TSI_YEAR SRID STANDBY _ST_ASMVT STAT START STARTS STATS_AUTO_RECALC
         STATS_PERSISTENT STATS_SAMPLE_PAGES STATUS STATEMENTS STATISTICS STD STDDEV STDDEV_POP STDDEV_SAMP STRONG
         SYNCHRONIZATION STOP STORAGE STORAGE_FORMAT_VERSION STORE STORING STRING
         SUBCLASS_ORIGIN SUBDATE SUBJECT SUBPARTITION SUBPARTITIONS SUBSTR SUBSTRING SUCCESSFUL SUM
@@ -2943,6 +2943,26 @@ MOD '(' expr ',' expr ')'
 | GEOMCOLLECTION '(' ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_GEOMCOLLECTION, 1, NULL);
+}
+| _ST_ASMVT '(' column_ref ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_ST_ASMVT, 1, $3);
+}
+| _ST_ASMVT '(' column_ref ',' text_string ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_ST_ASMVT, 2, $3, $5);
+}
+| _ST_ASMVT '(' column_ref ',' text_string ',' INTNUM ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_ST_ASMVT, 3, $3, $5, $7);
+}
+| _ST_ASMVT '(' column_ref ',' text_string ',' INTNUM ',' text_string ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_ST_ASMVT, 4, $3, $5, $7, $9);
+}
+| _ST_ASMVT '(' column_ref ',' text_string ',' INTNUM ',' text_string ',' text_string ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_ST_ASMVT, 5, $3, $5, $7, $9, $11);
 }
 ;
 
@@ -18853,6 +18873,7 @@ ACCOUNT
 |       SQL_TSI_WEEK
 |       SQL_TSI_YEAR
 |       SRID
+|       _ST_ASMVT
 |       STACKED
 |       STANDBY
 |       START

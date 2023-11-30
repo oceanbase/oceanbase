@@ -7076,6 +7076,18 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
     }
   }
 #endif
+  // assgin subschema ctx
+  if (OB_SUCC(ret)
+      && (plan_ctx->get_subschema_ctx().is_inited()
+          && plan_ctx->get_subschema_ctx().get_subschema_count() > 0)) {
+    if (phy_plan.get_subschema_ctx_for_update().get_subschema_count() > 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("subschema ctx overwrite", K(ret));
+    } else if (OB_FAIL(phy_plan.get_subschema_ctx_for_update().assgin(plan_ctx->get_subschema_ctx()))) {
+      LOG_WARN("fail to assgin subschema ctx", K(ret));
+    }
+  }
+
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(log_plan.get_stmt())) {
       ret = OB_ERR_UNEXPECTED;

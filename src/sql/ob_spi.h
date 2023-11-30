@@ -1034,7 +1034,8 @@ private:
                                 bool is_type_record);
 
   static int store_datums(ObObj &dest_addr, ObIArray<ObObj> &result,
-                          ObIAllocator *alloc, ObSQLSessionInfo *session_info, bool is_schema_object);
+                          ObIAllocator *alloc,  ObSQLSessionInfo *session_info,
+                          bool is_schema_object);
 
   static int store_datum(int64_t &current_addr, const ObObj &obj, ObSQLSessionInfo *session_info);
 
@@ -1121,6 +1122,7 @@ private:
                                     const int64_t *formal_param_idxs,
                                     const ObSqlExpression **actual_param_exprs,
                                     int64_t cursor_param_count);
+  static bool is_sql_type_into_pl(ObObj &dest_addr, ObIArray<ObObj> &obj_array);
 };
 
 struct ObPLSubPLSqlTimeGuard

@@ -87,6 +87,7 @@ enum ObObjDatumMapType : uint8_t {
   OBJ_DATUM_4BYTE_LEN_DATA, // 4 bytes ObObj::val_len_ + 8 bytes ObObj::v_
   OBJ_DATUM_2BYTE_LEN_DATA, // 2 bytes ObObj::val_len_ + 8 bytes ObObj::v_
   OBJ_DATUM_FULL,  // full ObObj
+  OBJ_DATUM_DECIMALINT, // decimal int
   OBJ_DATUM_MAPPING_MAX
 };
 
@@ -101,6 +102,7 @@ enum DatumReserveSize {
   OBJ_DATUM_4BYTE_LEN_DATA_RES_SIZE = 12,
   OBJ_DATUM_FULL_DATA_RES_SIZE = 16,
   OBJ_DATUM_NUMBER_RES_SIZE = 40,
+  OBJ_DATUM_DECIMALINT_MAX_RES_SIZE = 64,
   OBJ_DATUM_STRING_RES_SIZE = 128,
   OBJ_DATUM_MAX_RES_SIZE = 128
 };
@@ -717,6 +719,7 @@ inline int ObDatum::from_obj(const ObObj &obj, const ObObjDatumMapType map_type)
       case OBJ_DATUM_4BYTE_LEN_DATA: { obj2datum<OBJ_DATUM_4BYTE_LEN_DATA>(obj); break; }
       case OBJ_DATUM_2BYTE_LEN_DATA: { obj2datum<OBJ_DATUM_2BYTE_LEN_DATA>(obj); break; }
       case OBJ_DATUM_FULL: { obj2datum<OBJ_DATUM_FULL>(obj); break; }
+      case OBJ_DATUM_DECIMALINT: // decimal int, place_holder
       case OBJ_DATUM_MAPPING_MAX: {
         ret = common::OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "invalid obj datum mapping", K(ret), K(obj), K(map_type));
@@ -749,6 +752,7 @@ inline int ObDatum::from_storage_datum(const ObDatum &datum, const ObObjDatumMap
       case OBJ_DATUM_2BYTE_LEN_DATA:
         { datum2datum<OBJ_DATUM_NUMBER>(datum); break; }
       case OBJ_DATUM_FULL: { datum2datum<OBJ_DATUM_FULL>(datum); break; }
+      case OBJ_DATUM_DECIMALINT: // decimal int, place_holder
       case OBJ_DATUM_MAPPING_MAX: {
         ret = common::OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "invalid datum datum mapping", K(ret), K(datum), K(map_type));
@@ -794,7 +798,8 @@ inline int ObDatum::from_obj(const ObObj &obj)
       case ObLobType:
       case ObJsonType:
       case ObGeometryType:
-      case ObUserDefinedSQLType: {
+      case ObUserDefinedSQLType:
+      case ObCollectionSQLType: {
         obj2datum<OBJ_DATUM_STRING>(obj);
         break;
       }
@@ -851,6 +856,7 @@ inline int ObDatum::from_obj(const ObObj &obj)
         obj2datum<OBJ_DATUM_FULL>(obj);
         break;
       }
+      case ObDecimalIntType: //place_holder
       case ObMaxType: {
         ret = common::OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "invalid obj type", K(ret), K(obj), K(obj.get_type()));
@@ -879,6 +885,7 @@ inline int ObDatum::to_obj(
       case OBJ_DATUM_4BYTE_LEN_DATA: { datum2obj<OBJ_DATUM_4BYTE_LEN_DATA>(obj); break; }
       case OBJ_DATUM_2BYTE_LEN_DATA: { datum2obj<OBJ_DATUM_2BYTE_LEN_DATA>(obj); break; }
       case OBJ_DATUM_FULL: { datum2obj<OBJ_DATUM_FULL>(obj); break; }
+      case OBJ_DATUM_DECIMALINT: // decimal int, place_holder
       case OBJ_DATUM_MAPPING_MAX: {
         ret = common::OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "invalid obj datum mapping", K(ret), K(map_type));
@@ -916,7 +923,8 @@ inline int ObDatum::to_obj(ObObj &obj, const ObObjMeta &meta) const
       case ObLobType:
       case ObJsonType:
       case ObGeometryType:
-      case ObUserDefinedSQLType: {
+      case ObUserDefinedSQLType:
+      case ObCollectionSQLType: {
         datum2obj<OBJ_DATUM_STRING>(obj);
         break;
       }
@@ -973,6 +981,7 @@ inline int ObDatum::to_obj(ObObj &obj, const ObObjMeta &meta) const
         datum2obj<OBJ_DATUM_FULL>(obj);
         break;
       }
+      case ObDecimalIntType: //place_holder
       case ObMaxType: {
         ret = common::OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "invalid obj type", K(ret), K(meta.get_type()));

@@ -59,9 +59,7 @@ int ObExprSTCoordinate::calc_result_typeN(ObExprResType& type,
     if (param_num == 1) {
       type.set_double();
     } else if (param_num == 2) {
-      type.set_type(ObGeometryType);
-      type.set_collation_level(common::CS_LEVEL_COERCIBLE);
-      type.set_collation_type(CS_TYPE_BINARY);
+      type.set_geometry();
       type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObGeometryType]).get_length());
     }
   }
@@ -104,7 +102,7 @@ int ObExprSTCoordinate::eval_common(const ObExpr &expr,
     } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb, srs, true, func_name))) {
       LOG_WARN("fail to get srs item", K(ret), K(wkb));
     } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb,
-        geo, srs, func_name, false))) {
+        geo, srs, func_name, ObGeoBuildFlag::GEO_CORRECT | ObGeoBuildFlag::GEO_CHECK_RANGE))) {
       LOG_WARN("failed to create geometry object with raw wkb", K(ret));
     } else if (ObGeoType::POINT != geo->type()) {
       ret = OB_ERR_UNEXPECTED_GEOMETRY_TYPE;

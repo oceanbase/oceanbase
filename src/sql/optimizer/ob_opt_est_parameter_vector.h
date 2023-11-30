@@ -85,6 +85,19 @@ const static double comparison_params_vector[ObMaxTC+1] = {
   VECTOR_CMP_INT_COST,            // extend
   VECTOR_INVALID_CMP_COST,        // unknown
   VECTOR_CMP_CHAR_COST,           // TinyText,MediumText, Text ,LongText
+  VECTOR_CMP_INT_COST,            // Bit
+  VECTOR_CMP_CHAR_COST,           // enum, set
+  VECTOR_CMP_INT_COST,            // ObEnumSetInnerTC
+  VECTOR_CMP_INT_COST,            // timestamp with time zone
+  VECTOR_CMP_CHAR_COST,           // raw
+  VECTOR_CMP_INT_COST,            // interval
+  VECTOR_CMP_INT_COST,            // rowid
+  VECTOR_CMP_CHAR_COST,           // lob
+  VECTOR_CMP_CHAR_COST,           // json
+  VECTOR_CMP_CHAR_COST,           // geometry
+  VECTOR_CMP_CHAR_COST,           // user defined type
+  VECTOR_CMP_NUMBER_COST,         // ObDecimalIntTC
+  VECTOR_CMP_CHAR_COST,           // collection sql type
 };
 
 const static double hash_params_vector[ObMaxTC+1] = {
@@ -102,6 +115,19 @@ const static double hash_params_vector[ObMaxTC+1] = {
   VECTOR_HASH_INT_COST,            // extend
   VECTOR_INVALID_HASH_COST,        // unknown
   VECTOR_HASH_CHAR_COST,           // TinyText,MediumText, Text ,LongText
+  VECTOR_HASH_INT_COST,            // Bit
+  VECTOR_HASH_CHAR_COST,           // enum, set
+  VECTOR_HASH_INT_COST,            // ObEnumSetInnerTC
+  VECTOR_HASH_INT_COST,            // timestamp with time zone
+  VECTOR_HASH_CHAR_COST,           // raw
+  VECTOR_HASH_INT_COST,            // interval
+  VECTOR_HASH_INT_COST,            // rowid
+  VECTOR_HASH_CHAR_COST,           // lob
+  VECTOR_HASH_CHAR_COST,           // json
+  VECTOR_HASH_CHAR_COST,           // geometry
+  VECTOR_HASH_CHAR_COST,           // user defined type
+  VECTOR_HASH_NUMBER_COST,         // ObDecimalIntTC
+  VECTOR_HASH_CHAR_COST,           // collection sql type
 };
 
 const static ObOptEstCostModel::ObCostParams cost_params_vector(

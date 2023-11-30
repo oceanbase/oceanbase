@@ -20,6 +20,7 @@
 #include "lib/geo/ob_geo_wkb_check_visitor.h"
 #include "lib/geo/ob_geo_to_tree_visitor.h"
 #include "lib/geo/ob_geo_func_common.h"
+#include "lib/geo/ob_geo_3d.h"
 #include "observer/omt/ob_tenant_srs.h"
 
 using namespace oceanbase::common;
@@ -84,7 +85,7 @@ int ObExprPrivSTGeomFromEWKB::eval_st_geomfromewkb(const ObExpr &expr, ObEvalCtx
   ObGeometry *geo_tree = NULL;
   bool need_reverse = false;
   bool is_geographical = false;
-
+  bool is_3d_geo = false;
   // get ewkb
   if (OB_FAIL(expr.args_[0]->eval(ctx, datum))) {
     LOG_WARN("failed to eval first argument", K(ret));
@@ -116,6 +117,7 @@ int ObExprPrivSTGeomFromEWKB::eval_st_geomfromewkb(const ObExpr &expr, ObEvalCtx
         ret = OB_ERR_GIS_INVALID_DATA;
         LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_GEOMFROMEWKB);
       }
+    } else if (FALSE_IT(is_3d_geo = ObGeoTypeUtil::is_3d_geo_type(geo->type()))) {
     } else if (OB_NOT_NULL(srs)) {
       is_geographical = srs->is_geographical_srs();
     }
@@ -139,13 +141,8 @@ int ObExprPrivSTGeomFromEWKB::eval_st_geomfromewkb(const ObExpr &expr, ObEvalCtx
   }
 
   if (!is_null_result && OB_SUCC(ret)) {
-    if (need_reverse) {
-      ObGeoReverseCoordinateVisitor reverse_visitor;
-      if (OB_FAIL(geo->do_visit(reverse_visitor))) {
-        ret = OB_ERR_GIS_INVALID_DATA;
-        LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_GEOMFROMEWKB);
-        LOG_WARN("failed to reverse geometry coordinate", K(ret));
-      }
+    if (need_reverse && OB_FAIL(ObGeoExprUtils::reverse_coordinate(geo, N_PRIV_ST_GEOMFROMEWKB))) {
+      LOG_WARN("failed to reverse geometry coordinate", K(ret));
     }
 
     if (OB_SUCC(ret) && is_geographical) {
@@ -185,7 +182,7 @@ int ObExprPrivSTGeomFromEWKB::get_header_info_from_ewkb(const ObString &ewkb,
     header.bo_ = static_cast<ObGeoWkbByteOrder>(*(ewkb.ptr()));
     char *ptr = const_cast<char *>(ewkb.ptr() + WKB_GEO_BO_SIZE);
     uint32_t wkb_type = ObGeoWkbByteOrderUtil::read<uint32_t>(ptr, header.bo_);
-    if (wkb_type & ObGeoTypeUtil::EWKB_M_FLAG || wkb_type & ObGeoTypeUtil::EWKB_Z_FLAG) {
+    if (wkb_type & ObGeoTypeUtil::EWKB_M_FLAG) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid ewkb type, higher than two dimension is not supported", K(ewkb.length()), K(wkb_type));
     } else {
@@ -194,6 +191,7 @@ int ObExprPrivSTGeomFromEWKB::get_header_info_from_ewkb(const ObString &ewkb,
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid ewkb length", K(ewkb.length()), K(wkb_type));
       } else {
+        uint32_t offset = wkb_type & ObGeoTypeUtil::EWKB_Z_FLAG ? ObGeoTypeUtil::WKB_3D_TYPE_OFFSET : 0;
         wkb_type &= 0x0FFFFFFF;
         if (wkb_type >= 4000) {
           ret = OB_INVALID_ARGUMENT;
@@ -204,7 +202,7 @@ int ObExprPrivSTGeomFromEWKB::get_header_info_from_ewkb(const ObString &ewkb,
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("invalid ewkb type", K(ewkb.length()), K(wkb_type));
           } else {
-            header.type_ = static_cast<ObGeoType>(wkb_type);
+            header.type_ = static_cast<ObGeoType>(wkb_type + offset);
           }
         }
         if (OB_SUCC(ret) && has_srid) {
@@ -279,15 +277,22 @@ int ObExprPrivSTGeomFromEWKB::create_geo_by_ewkb(ObIAllocator &allocator,
     } else {
       geo->set_data(ewkb_data);
       geo->set_srid(header.srid_);
-      ObGeoWkbCheckVisitor ewkb_check(ewkb_data, header.bo_);
-      ObIWkbGeometry *geo_bin = static_cast<ObIWkbGeometry *>(geo);
-      if (OB_FAIL(geo->do_visit(ewkb_check))) {
-        ret = OB_ERR_GIS_INVALID_DATA;
-        LOG_WARN("fail to do ewkb check by wkb checker", K(ret), K(ewkb_data), K(header), K(crs));
-      } else if (geo_bin->length() != ewkb_data.length()
-          && (geo_bin->length() + WKB_GEO_SRID_SIZE != ewkb.length())) {
-        ret = OB_ERR_GIS_INVALID_DATA;
-        LOG_WARN("invalid ewkb length", K(ewkb_data.length()), K(geo_bin->length()), K(header));
+      if (ObGeoTypeUtil::is_3d_geo_type(header.type_)) {
+        ObGeometry3D *geo_3d = static_cast<ObGeometry3D *>(geo);
+        if (OB_FAIL(geo_3d->check_wkb_valid())) {
+          LOG_WARN("fail to check geo 3d is valid", K(ret));
+        }
+      } else {
+        ObGeoWkbCheckVisitor ewkb_check(ewkb_data, header.bo_);
+        ObIWkbGeometry *geo_bin = static_cast<ObIWkbGeometry *>(geo);
+        if (OB_FAIL(geo->do_visit(ewkb_check))) {
+          ret = OB_ERR_GIS_INVALID_DATA;
+          LOG_WARN("fail to do ewkb check by wkb checker", K(ret), K(ewkb_data), K(header), K(crs));
+        } else if (geo_bin->length() != ewkb_data.length()
+            && (geo_bin->length() + WKB_GEO_SRID_SIZE != ewkb.length())) {
+          ret = OB_ERR_GIS_INVALID_DATA;
+          LOG_WARN("invalid ewkb length", K(ewkb_data.length()), K(geo_bin->length()), K(header));
+        }
       }
     }
   }

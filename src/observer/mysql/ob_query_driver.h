@@ -25,6 +25,7 @@ namespace sql
 {
 struct ObSqlCtx;
 class ObSQLSessionInfo;
+class ObExecContext;
 class ObResultSet;
 }
 
@@ -80,7 +81,6 @@ public:
                                    common::ObIAllocator &allocator);
   int convert_lob_locator_to_longtext(common::ObObj& value, sql::ObResultSet &result);
   int process_lob_locator_results(common::ObObj& value, sql::ObResultSet &result);
-  int process_sql_udt_results(common::ObObj& value, sql::ObResultSet &result);
   int convert_lob_value_charset(common::ObObj& value, sql::ObResultSet &result);
   int convert_text_value_charset(common::ObObj& value, sql::ObResultSet &result);
   static int convert_lob_locator_to_longtext(common::ObObj& value, 
@@ -91,11 +91,6 @@ public:
                                          bool is_support_outrow_locator_v2,
                                          common::ObIAllocator *allocator,
                                          const sql::ObSQLSessionInfo *session_info);
-
-  static int process_sql_udt_results(common::ObObj& value,
-                                     common::ObIAllocator *allocator,
-                                     sql::ObSQLSessionInfo *session_info);
-
   static int convert_string_charset(const common::ObString &in_str, 
                                     const common::ObCollationType in_cs_type,
                                     const common::ObCollationType out_cs_type, 

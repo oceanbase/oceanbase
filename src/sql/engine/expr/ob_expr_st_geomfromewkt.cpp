@@ -70,6 +70,7 @@ int ObExprPrivSTGeomFromEwkt::eval_st_geomfromewkt(const ObExpr &expr, ObEvalCtx
   ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
   ObGeometry *geo = NULL;
   bool is_geog = false;
+  bool is_3d_geo = false;
 
   // get wkt
   if (OB_FAIL(expr.args_[0]->eval(ctx, datum))) {

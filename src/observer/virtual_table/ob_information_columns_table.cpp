@@ -714,7 +714,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
         case COLUMN_TYPE: {
             int64_t pos = 0;
             const ObLengthSemantics default_length_semantics = session_->get_local_nls_length_semantics();
-            const uint64_t sub_type = column_schema->is_xmltype() ?
+            const uint64_t sub_type = column_schema->is_extend() ?
                                       column_schema->get_sub_data_type() : static_cast<uint64_t>(column_schema->get_geo_type());
             ObObjType column_type = ObMaxType;
             const ObColumnSchemaV2 *tmp_column_schema = NULL;

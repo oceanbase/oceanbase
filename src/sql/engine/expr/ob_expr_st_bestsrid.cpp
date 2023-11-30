@@ -76,8 +76,9 @@ int ObExprPrivSTBestsrid::get_geog_box(ObEvalCtx &ctx, ObArenaAllocator &temp_al
   const ObSrsItem *srs = NULL;
   if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb, srs))) {
     LOG_WARN("get srs failed", K(ret), K(wkb));
-  } else if (OB_FAIL(ObGeoTypeUtil::create_geo_by_wkb(temp_allocator, wkb, srs, geo))) {
-    LOG_WARN("get geo by wkb failed", K(ret));
+  } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb, geo, srs, N_PRIV_ST_BESTSRID,
+                                                    ObGeoBuildFlag::GEO_ALLOW_3D))) {
+    LOG_WARN("get geo failed", K(ret));
     if (ret != OB_ERR_SRS_NOT_FOUND && ret != OB_ERR_INVALID_GEOMETRY_TYPE) {
       ret = OB_ERR_GIS_INVALID_DATA;
       LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_BESTSRID);

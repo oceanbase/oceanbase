@@ -26,7 +26,9 @@
 #include "lib/geo/ob_geo_check_empty_visitor.h"
 #include "lib/geo/ob_geo_latlong_check_visitor.h"
 #include "lib/geo/ob_geo_zoom_in_visitor.h"
-
+#include "lib/geo/ob_geo_utils.h"
+#include "lib/geo/ob_geo_3d.h"
+#include "lib/geo/ob_geo_reverse_coordinate_visitor.h"
 using namespace oceanbase::common;
 namespace oceanbase
 {
@@ -90,15 +92,12 @@ int ObGeoExprUtils::build_geometry(ObIAllocator &allocator,
                                    ObGeometry *&geo,
                                    const ObSrsItem *srs,
                                    const char *func_name,
-                                   const bool need_normlize /* = true */,
-                                   const bool need_check_ring /* = false */,
-                                   const bool need_correct /* = true */)
+                                   uint8_t build_flag)
 {
   int ret = OB_SUCCESS;
   ObGeoErrLogInfo log_info;
 
-  if (OB_FAIL(ObGeoTypeUtil::build_geometry(allocator, wkb, geo, srs, log_info,
-      need_normlize, need_check_ring, need_correct))) {
+  if (OB_FAIL(ObGeoTypeUtil::build_geometry(allocator, wkb, geo, srs, log_info, build_flag))) {
     if (OB_ERR_GIS_INVALID_DATA == ret && OB_NOT_NULL(func_name)) {
       LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, func_name);
     } else if (OB_ERR_GEOMETRY_PARAM_LONGITUDE_OUT_OF_RANGE == ret && OB_NOT_NULL(func_name)) {
@@ -119,6 +118,7 @@ int ObGeoExprUtils::build_geometry(ObIAllocator &allocator,
   return ret;
 }
 
+// 3d-wkb is allow, and will return ObGeometry3D obj
 int ObGeoExprUtils::construct_geometry(ObIAllocator &allocator,
                                        const ObString &wkb,
                                        omt::ObSrsCacheGuard &srs_guard,
@@ -389,11 +389,18 @@ int ObGeoExprUtils::check_empty(ObGeometry *geo,
 {
   INIT_SUCC(ret);
   is_empty = false;
-  ObGeoCheckEmptyVisitor check_empty_visitor;
-  if (OB_FAIL(geo->do_visit(check_empty_visitor))) {
-    LOG_WARN("check empty geo failed", K(ret));
+  if (ObGeoTypeUtil::is_3d_geo_type(geo->type())) {
+    ObGeometry3D *geo3D = reinterpret_cast<ObGeometry3D *>(geo);
+    if (OB_FAIL(geo3D->check_empty(is_empty))) {
+      LOG_WARN("fail to check 3D geometry empty", K(ret));
+    }
   } else {
-    is_empty = check_empty_visitor.get_result();
+    ObGeoCheckEmptyVisitor check_empty_visitor;
+    if (OB_FAIL(geo->do_visit(check_empty_visitor))) {
+      LOG_WARN("check empty geo failed", K(ret));
+    } else {
+      is_empty = check_empty_visitor.get_result();
+    }
   }
   return ret;
 }
@@ -489,7 +496,7 @@ int ObGeoExprUtils::get_box_bestsrid(ObGeogBox *geo_box1,
   } else {
     geo_box = *geo_box1;
     if (geo_box2 != NULL) {
-      ObGeoBoxUtil::box_uion(*geo_box2, geo_box);
+      ObGeoBoxUtil::box_union(*geo_box2, geo_box);
     }
     ObGeoBoxUtil::get_box_center(geo_box, center);
     width = 180.0 * ObGeoBoxUtil::caculate_box_angular_width(geo_box) / M_PI;
@@ -543,22 +550,15 @@ int ObGeoExprUtils::normalize_wkb(const ObSrsItem *srs,
   if (OB_NOT_NULL(srs)
       && (srs->is_geographical_srs() || srs->is_lat_long_order())) {
     // points in geom need to be normalized
-    ObString calc_wkb;
-    char *calc_buf = (char *)allocator.alloc(wkb.length());
-    if (OB_ISNULL(calc_buf)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory for normalize wkb failed", K(wkb.length()), K(ret));
+    ObGeoNormalizeVisitor normalize_visitor(srs);
+    ObGeoErrLogInfo log_info;
+    if (OB_FAIL(ObGeoTypeUtil::build_geometry(allocator, wkb, geo, srs, log_info, ObGeoBuildFlag::GEO_ALLOW_3D))) {
+      LOG_WARN("fail to build geometry", K(ret));
+    } else if (OB_FAIL(geo->do_visit(normalize_visitor))) {
+      LOG_WARN("normalize geo failed", K(ret));
     } else {
-      MEMCPY(calc_buf, wkb.ptr(), wkb.length());
-      calc_wkb.assign(calc_buf, wkb.length());
-      ObGeoNormalizeVisitor normalize_visitor(srs);
-      if (OB_FAIL(ObGeoTypeUtil::create_geo_by_wkb(allocator, calc_wkb, srs, geo, false))) {
-        LOG_WARN("get geo by wkb failed", K(ret));
-      } else if (OB_FAIL(geo->do_visit(normalize_visitor))) {
-        LOG_WARN("normalize geo failed", K(ret));
-      } else {
-        // do nothing
-      }
+      // do nothing
+      ObString wkb(geo->length(), geo->val());
     }
   }
 
@@ -617,6 +617,26 @@ int ObGeoExprUtils::geo_to_wkb(ObGeometry &geo,
                                uint32_t srs_id /* = 0 */)
 {
   int ret = OB_SUCCESS;
+  if (ObGeoTypeUtil::is_3d_geo_type(geo.type())) {
+    if (OB_FAIL(geo_to_3d_wkb(geo, expr, ctx, srs_item, res_wkb, srs_id))) {
+      LOG_WARN("fail to write 3d geo to wkb", K(ret));
+    }
+  } else {
+    if (OB_FAIL(geo_to_2d_wkb(geo, expr, ctx, srs_item, res_wkb, srs_id))) {
+      LOG_WARN("fail to write 2d geo to wkb", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObGeoExprUtils::geo_to_2d_wkb(ObGeometry &geo,
+                                  const ObExpr &expr,
+                                  ObEvalCtx &ctx,
+                                  const ObSrsItem *srs_item,
+                                  ObString &res_wkb,
+                                  uint32_t srs_id /* = 0 */)
+{
+  int ret = OB_SUCCESS;
   ObGeoWkbSizeVisitor wkb_size_visitor;
 
   if (OB_FAIL(geo.do_visit(wkb_size_visitor))) {
@@ -631,7 +651,7 @@ int ObGeoExprUtils::geo_to_wkb(ObGeometry &geo,
     if (OB_FAIL(str_result.init(res_size, nullptr))) {
       LOG_WARN("fail to init result", K(ret), K(res_size));
     } else if (OB_FAIL(str_result.get_reserved_buffer(res_buf, res_buf_len))) {
-      LOG_WARN("");
+      LOG_WARN("fail to get reserver buffer", K(ret));
     } else if (res_buf_len < res_size) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get invalid res buf len", K(ret), K(res_buf_len), K(res_size));
@@ -662,6 +682,48 @@ int ObGeoExprUtils::geo_to_wkb(ObGeometry &geo,
                                uint32_t srs_id /* = 0 */)
 {
   return ObGeoTypeUtil::to_wkb(*expr_ctx.calc_buf_, geo, srs_item, res_wkb);
+}
+
+int ObGeoExprUtils::geo_to_3d_wkb(common::ObGeometry &geo,
+                                  const ObExpr &expr,
+                                  ObEvalCtx &ctx,
+                                  const common::ObSrsItem *srs_item,
+                                  common::ObString &res_wkb,
+                                  uint32_t srs_id /*= 0 */)
+{
+  int ret = OB_SUCCESS;
+  if (!ObGeoTypeUtil::is_3d_geo_type(geo.type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("geometry is not 3d type", K(ret), K(geo.type()));
+  } else {
+    ObString no_srid_wkb = geo.to_wkb();
+    int64_t res_size = WKB_OFFSET + no_srid_wkb.length();
+    ObDatum tmp_res;  // not used
+    char *res_buf = nullptr;
+    int64_t res_buf_len = 0;
+    ObTextStringDatumResult str_result(expr.datum_meta_.type_, &expr, &ctx, &tmp_res);
+    if (OB_FAIL(str_result.init(res_size, nullptr))) {
+      LOG_WARN("fail to init result", K(ret), K(res_size));
+    } else if (OB_FAIL(str_result.get_reserved_buffer(res_buf, res_buf_len))) {
+      LOG_WARN("fail to get reserved buffer", K(ret));
+    } else if (res_buf_len < res_size) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get invalid res buf len", K(ret), K(res_buf_len), K(res_size));
+    } else {
+      uint32_t srid = srs_item == NULL ? srs_id : srs_item->get_srid();
+      ObGeoWkbByteOrderUtil::write<uint32_t>(res_buf, srid);
+      uint8_t encode_ver = ENCODE_GEO_VERSION(geo.get_version());
+      *(res_buf + WKB_GEO_SRID_SIZE) = encode_ver;
+      if (OB_FAIL(str_result.lseek(WKB_OFFSET, 0))) {
+        LOG_WARN("fail to lseek res", K(ret), K(str_result));
+      } else if (OB_FAIL(str_result.append(no_srid_wkb))) {
+        LOG_WARN("fail to append wkb", K(ret));
+      } else {
+        str_result.get_result_buffer(res_wkb);
+      }
+    }
+  }
+  return ret;
 }
 
 void ObGeoExprUtils::geo_func_error_handle(int error_ret, const char* func_name)
@@ -704,5 +766,294 @@ int ObGeoExprUtils::pack_geo_res(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
   return ret;
 }
 
+int ObGeoExprUtils::reverse_coordinate(ObGeometry *geo, const char *func_name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(geo)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null geo", K(ret));
+  } else if (ObGeoTypeUtil::is_3d_geo_type(geo->type())) {
+    ObGeometry3D *geo_3d  = static_cast<ObGeometry3D *>(geo);
+    if (OB_FAIL(geo_3d->reverse_coordinate())) {
+      LOG_WARN("fail to reserver coordiante in geo 3d", K(ret));
+    }
+  } else {
+    ObGeoReverseCoordinateVisitor rcoord_visitor;
+    if (OB_FAIL(geo->do_visit(rcoord_visitor))) {
+      ret = OB_ERR_GIS_INVALID_DATA;
+      LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, func_name);
+      LOG_WARN("failed to reverse geometry coordinate", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObGeoExprUtils::ob_geo_find_unit(const ObGeoUnit *units, const ObString &name, double &factor)
+{
+  INIT_SUCC(ret);
+  int begin = 0;
+  int end = sizeof(OB_GEO_UNITS)/sizeof(ObGeoUnit) - 1;
+  bool is_found = false;
+  while (begin <= end && !is_found) {
+    int mid = begin + (end - begin) / 2;
+    const int cmp_len = MIN(strlen(units[mid].name), name.length());
+    int cmp_res = strncasecmp(units[mid].name, name.ptr(), cmp_len);
+    if (cmp_res > 0) {
+      end = mid - 1;
+    } else if (cmp_res < 0) {
+      begin = mid + 1;
+    } else {
+      if (name.length() == strlen(units[mid].name)) {
+        is_found = true;
+        factor = units[mid].factor;
+      } else if (name.length() > strlen(units[mid].name)) {
+        begin = mid + 1;
+      } else {
+        end = mid - 1;
+      }
+    }
+  }
+
+  if (!is_found) {
+    ret = OB_ERR_UNIT_NOT_FOUND;
+    char name_str[name.length() + 1];
+    name_str[name.length()] = '\0';
+    MEMCPY(name_str, name.ptr(), name.length());
+    LOG_USER_ERROR(OB_ERR_UNIT_NOT_FOUND, name_str);
+  }
+  return ret;
+}
+
+int ObGeoExprUtils::length_unit_conversion(const ObString &unit_str, const ObSrsItem *srs,
+                                          double in_num, double &out_num)
+{
+  int ret = OB_SUCCESS;
+  double factor = 0.0;
+  if (OB_ISNULL(srs) || srs->get_srid() == 0) {
+    ret = OB_ERR_GEOMETRY_IN_UNKNOWN_LENGTH_UNIT;
+    char name_str[unit_str.length() + 1];
+    name_str[unit_str.length()] = '\0';
+    MEMCPY(name_str, unit_str.ptr(), unit_str.length());
+    LOG_USER_ERROR(OB_ERR_GEOMETRY_IN_UNKNOWN_LENGTH_UNIT, N_ST_DISTANCE, name_str);
+  } else if (OB_FAIL(ob_geo_find_unit(OB_GEO_UNITS, unit_str, factor))) {
+    LOG_WARN("invalid geo unit name", K(ret), K(unit_str));
+  } else {
+    out_num = in_num * (srs->linear_uint() / factor);
+  }
+  return ret;
+}
+
+int ObGeoExprUtils::get_input_geometry(ObIAllocator &allocator, ObDatum *gis_datum, ObEvalCtx &ctx, ObExpr *gis_arg,
+    const ObSrsItem *&srs, ObGeometry *&geo)
+{
+  int ret = OB_SUCCESS;
+  ObString wkb = gis_datum->get_string();
+  ObGeoType type = ObGeoType::GEOTYPEMAX;
+  uint32_t srid = -1;
+  omt::ObSrsCacheGuard srs_guard;
+  if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator,
+          *gis_datum,
+          gis_arg->datum_meta_,
+          gis_arg->obj_meta_.has_lob_header(),
+          wkb))) {
+    LOG_WARN("fail to get real string data", K(ret), K(wkb));
+  } else if (OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb, type, srid))) {
+    if (ret == OB_ERR_GIS_INVALID_DATA) {
+      LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_EQUALS);
+    }
+    LOG_WARN("get type and srid from wkb failed", K(wkb), K(ret));
+  } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(
+                  ctx, srs_guard, wkb, srs, true, N_PRIV_ST_EQUALS))) {
+    LOG_WARN("fail to get srs item", K(ret), K(wkb));
+  } else if (OB_FAIL(ObGeoExprUtils::build_geometry(allocator,
+                  wkb,
+                  geo,
+                  srs,
+                  N_PRIV_ST_EQUALS,
+                  ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT))) {
+    LOG_WARN("get first geo by wkb failed", K(ret));
+  }
+  return ret;
+}
+
+int ObGeoExprUtils::union_polygons(
+    ObIAllocator &allocator, const ObGeometry &poly, ObGeometry *&polygons_union)
+{
+  int ret = OB_SUCCESS;
+  ObGeometry *union_res = nullptr;
+  ObGeoEvalCtx union_ctx(&allocator);
+  if (OB_FAIL(union_ctx.append_geo_arg(&poly))) {
+    LOG_WARN("failed to append geo arg to gis context", K(ret), K(union_ctx.get_geo_count()));
+  } else if (OB_FAIL(union_ctx.append_geo_arg(polygons_union))) {
+    LOG_WARN("failed to append geo arg to gis context", K(ret), K(union_ctx.get_geo_count()));
+  } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::Union>::geo_func::eval(union_ctx, union_res))) {
+    LOG_WARN("eval boost union failed", K(ret));
+  } else {
+    allocator.free(polygons_union);
+    polygons_union = union_res;
+  }
+  return ret;
+}
+
+int ObGeoExprUtils::make_valid_polygon(ObGeometry *poly, ObIAllocator &allocator, ObGeometry *&valid_poly)
+{
+  int ret = OB_SUCCESS;
+  ObGeoEvalCtx gis_context(&allocator);
+  int res_unused = 0;
+  if (OB_ISNULL(poly)
+      || (poly->type() != ObGeoType::POLYGON && poly->type() != ObGeoType::MULTIPOLYGON)) {
+    ret = OB_ERR_GIS_INVALID_DATA;
+    LOG_WARN("invalid geometry input", K(ret), K(poly));
+  } else if (OB_FAIL(gis_context.append_geo_arg(poly))) {
+    LOG_WARN("failed to append geo arg to gis context", K(ret), K(gis_context.get_geo_count()));
+  } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::Correct>::geo_func::eval(
+                 gis_context, res_unused))) {
+    LOG_WARN("eval boost dissolve polygon failed", K(ret));
+  } else if (poly->type() == ObGeoType::POLYGON) {
+    if (OB_FAIL(make_valid_polygon_inner(static_cast<ObCartesianPolygon&>(*poly),
+                                                        allocator, valid_poly))) {
+      LOG_WARN("make polygon valid failed", K(ret));
+    }
+  } else {
+    ObCartesianMultipolygon &mpy = *reinterpret_cast<ObCartesianMultipolygon *>(poly);
+    for (uint32_t i = 0; OB_SUCC(ret) && i < mpy.size(); ++i) {
+      ObGeometry *valid_inner_poly = nullptr;
+      if (OB_FAIL(make_valid_polygon_inner(mpy[i], allocator, valid_inner_poly))) {
+        LOG_WARN("fail to make polygon valid", K(ret));
+      } else if (OB_NOT_NULL(valid_inner_poly) && !valid_inner_poly->is_empty()) {
+        if (OB_ISNULL(valid_poly)) {
+          valid_poly = valid_inner_poly;
+        } else if (OB_FAIL(union_polygons(allocator, *valid_inner_poly, valid_poly))) {
+          LOG_WARN("fail to union holes", K(ret));
+        } else {
+          allocator.free(valid_inner_poly);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObGeoExprUtils::make_valid_polygon_inner(
+    ObCartesianPolygon &poly, ObIAllocator &allocator, ObGeometry *&valid_poly)
+{
+  int ret = OB_SUCCESS;
+  if (!poly.empty() && poly.inner_ring_size() != 0) {
+    ObCartesianPolygon tmp_ext_poly;
+    tmp_ext_poly.exterior_ring() = poly.exterior_ring();
+    ObGeometry *holes_union = nullptr;
+    ObGeometry *shells_union = nullptr;
+    for (uint32_t i = 0; OB_SUCC(ret) && i < poly.inner_ring_size(); ++i) {
+      ObCartesianPolygon tmp_poly;
+      tmp_poly.exterior_ring() = poly.inner_ring(i);
+      bool is_intersects = false;
+      ObGeoEvalCtx correct_context(&allocator);
+      ObGeoEvalCtx intersects_ctx(&allocator);
+      int res_unused;
+      if (OB_FAIL(correct_context.append_geo_arg(&tmp_poly))) {
+        LOG_WARN("build geo gis context failed", K(ret));
+      } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::Correct>::geo_func::eval(correct_context, res_unused))) {
+        LOG_WARN("eval geo correct failed", K(ret));
+      } else if (OB_FAIL(intersects_ctx.append_geo_arg(&tmp_ext_poly))) {
+        LOG_WARN("failed to append geo arg to gis context",
+            K(ret),
+            K(intersects_ctx.get_geo_count()));
+      } else if (OB_FAIL(intersects_ctx.append_geo_arg(&tmp_poly))) {
+        LOG_WARN("failed to append geo arg to gis context",
+            K(ret),
+            K(intersects_ctx.get_geo_count()));
+      } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::Intersects>::geo_func::eval(
+                    intersects_ctx, is_intersects))) {
+        LOG_WARN("eval boost intersects failed", K(ret));
+      } else if (is_intersects) {
+        // holes
+        if (OB_ISNULL(holes_union)) {
+          ObCartesianPolygon *holes = OB_NEWx(ObCartesianPolygon, &allocator, tmp_poly);
+          if (OB_ISNULL(holes)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to alloc memory", K(ret));
+          } else {
+            holes_union = holes;
+          }
+        } else if (OB_FAIL(union_polygons(allocator, *&tmp_poly, holes_union))) {
+          LOG_WARN("fail to union holes", K(ret));
+        }
+      } else {
+        // shells
+        if (OB_ISNULL(shells_union)) {
+          ObCartesianPolygon *shells = OB_NEWx(ObCartesianPolygon, &allocator, tmp_poly);
+          if (OB_ISNULL(shells)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to alloc memory", K(ret));
+          } else {
+            shells_union = shells;
+          }
+        } else if (OB_FAIL(union_polygons(allocator, *&tmp_poly, shells_union))) {
+          LOG_WARN("fail to union shells", K(ret));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(holes_union)) {
+      holes_union = &tmp_ext_poly;
+    } else {
+      ObGeoEvalCtx diff_ctx(&allocator);
+      ObGeometry *diff_holes = nullptr;
+      if (OB_FAIL(diff_ctx.append_geo_arg(&tmp_ext_poly))) {
+        LOG_WARN("failed to append geo arg to gis context", K(ret), K(diff_ctx.get_geo_count()));
+      } else if (OB_FAIL(diff_ctx.append_geo_arg(holes_union))) {
+        LOG_WARN("failed to append geo arg to gis context", K(ret), K(diff_ctx.get_geo_count()));
+      } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::SymDifference>::geo_func::eval(diff_ctx, diff_holes))) {
+        LOG_WARN("eval boost intersects failed", K(ret));
+      } else {
+        holes_union = diff_holes;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_NOT_NULL(shells_union)
+              && OB_FAIL(union_polygons(allocator, *shells_union, holes_union))) {
+      LOG_WARN("fail to union shells", K(ret));
+    } else {
+      if (holes_union->type() == ObGeoType::MULTIPOLYGON
+         && static_cast<ObCartesianMultipolygon*>(holes_union)->size() == 1) {
+        valid_poly = &static_cast<ObCartesianMultipolygon*>(holes_union)->front();
+      } else {
+        valid_poly = holes_union;
+      }
+    }
+  } else if (!poly.empty() && poly.inner_ring_size() == 0) {
+    ObGeoEvalCtx dissol_ctx(&allocator);
+    ObGeometry *diff_holes;
+    if (OB_FAIL(dissol_ctx.append_geo_arg(&poly))) {
+      LOG_WARN("failed to append geo arg to gis context", K(ret), K(dissol_ctx.get_geo_count()));
+    } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::DissolvePolygon>::geo_func::eval(dissol_ctx, diff_holes))) {
+      LOG_WARN("eval boost dissolve polygon failed", K(ret));
+    } else {
+      ObGeoEvalCtx gis_context(&allocator);
+      int res_unused;
+      if (OB_FAIL(gis_context.append_geo_arg(diff_holes))) {
+        LOG_WARN("failed to append geo arg to gis context", K(ret), K(gis_context.get_geo_count()));
+      } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::Correct>::geo_func::eval(gis_context, res_unused))) {
+        LOG_WARN("eval boost correct polygon failed", K(ret));
+      } else {
+        valid_poly = diff_holes;
+      }
+    }
+  } else if (poly.empty()) {
+    valid_poly = &poly;
+  } else {
+    int unused = 0;
+    ObGeoEvalCtx gis_context(&allocator);
+    if (OB_FAIL(gis_context.append_geo_arg(&poly))) {
+      LOG_WARN("failed to append geo arg to gis context", K(ret), K(gis_context.get_geo_count()));
+    } else if (OB_FAIL(
+            ObGeoFunc<ObGeoFuncType::Correct>::geo_func::eval(gis_context, unused))) {
+      LOG_WARN("eval boost correct failed", K(ret));
+    } else {
+      valid_poly = &poly;
+    }
+  }
+  return ret;
+}
 } // sql
 } // oceanbase

@@ -30,6 +30,8 @@
 #include "sql/engine/expr/ob_pl_expr_subquery.h"
 #include "share/config/ob_server_config.h"
 #include "sql/resolver/expr/ob_raw_expr_copier.h"
+#include "sql/engine/expr/ob_expr_sql_udt_construct.h"
+#include "sql/engine/expr/ob_expr_priv_attribute_access.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -69,6 +71,8 @@ int ObRawExprFactory::create_raw_expr<ObSysFunRawExpr>(ObItemType expr_type, ObS
     GENERATE_CASE(T_FUN_PL_OBJECT_CONSTRUCT, ObObjectConstructRawExpr);
     GENERATE_CASE(T_FUN_PL_GET_CURSOR_ATTR, ObPLGetCursorAttrRawExpr);
     GENERATE_CASE(T_FUN_PL_SQLCODE_SQLERRM, ObPLSQLCodeSQLErrmRawExpr);
+    GENERATE_CASE(T_FUN_SYS_PRIV_SQL_UDT_CONSTRUCT, ObUDTConstructorRawExpr);
+    GENERATE_CASE(T_FUN_SYS_PRIV_SQL_UDT_ATTR_ACCESS, ObUDTAttributeAccessRawExpr);
     GENERATE_DEFAULT();
   }
   return ret;
@@ -6299,6 +6303,26 @@ int ObRawExprFactory::create_raw_expr(ObRawExpr::ExprClass expr_class,
       } else {
         dest = dest_scse;
       }
+    } else if (T_FUN_SYS_PRIV_SQL_UDT_CONSTRUCT == expr_type) {
+      ObUDTConstructorRawExpr *dest_udt_expr = nullptr;
+      if (OB_FAIL(create_raw_expr(expr_type, dest_udt_expr))) {
+        LOG_WARN("failed to allocate raw expr", K(dest_udt_expr), K(ret));
+      } else if (OB_ISNULL(dest_udt_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is NULL", K(dest_udt_expr), K(ret));
+      } else {
+        dest = dest_udt_expr;
+      }
+    } else if (T_FUN_SYS_PRIV_SQL_UDT_ATTR_ACCESS == expr_type) {
+      ObUDTAttributeAccessRawExpr *dest_udt_attr_expr = nullptr;
+      if (OB_FAIL(create_raw_expr(expr_type, dest_udt_attr_expr))) {
+        LOG_WARN("failed to allocate raw expr", K(dest_udt_attr_expr), K(ret));
+      } else if (OB_ISNULL(dest_udt_attr_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is NULL", K(dest_udt_attr_expr), K(ret));
+      } else {
+        dest = dest_udt_attr_expr;
+      }
     } else {
       ObSysFunRawExpr *dest_sys = NULL;
       if (OB_FAIL(create_raw_expr(expr_type, dest_sys))) {
@@ -6398,6 +6422,147 @@ int ObRawExprFactory::create_raw_expr(ObRawExpr::ExprClass expr_class,
   }
   }
   return ret;
+}
+
+int ObUDTConstructorRawExpr::get_schema_object_version(share::schema::ObSchemaObjVersion &obj_version)
+{
+  int ret = OB_SUCCESS;
+  CK (object_schema_version_ != OB_INVALID_VERSION);
+  CK (udt_id_ != common::OB_INVALID_ID);
+  OX (obj_version.object_id_ = udt_id_);
+  OX (obj_version.object_type_ = share::schema::DEPENDENCY_TYPE);
+  OX (obj_version.version_ = object_schema_version_);
+
+  return ret;
+}
+
+int ObUDTConstructorRawExpr::set_access_names(
+  const common::ObIArray<ObObjAccessIdent> &access_idents)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < access_idents.count(); ++i) {
+    OZ (access_names_.push_back(access_idents.at(i).access_name_));
+  }
+  return ret;
+}
+
+int ObUDTConstructorRawExpr::assign(const ObRawExpr &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(this != &other)) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObSysFunRawExpr::assign(other))) {
+      LOG_WARN("failed to assign expr", K(ret));
+    } else {
+      const ObUDTConstructorRawExpr &tmp =
+          static_cast<const ObUDTConstructorRawExpr &>(other);
+      udt_id_ = tmp.udt_id_;
+      root_udt_id_ = tmp.root_udt_id_;
+      attr_pos_ = tmp.attr_pos_;
+      object_schema_version_ = tmp.object_schema_version_;
+      if (OB_FAIL(access_names_.assign(tmp.access_names_))) {
+        LOG_WARN("failed to assgin access names", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObUDTConstructorRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObSysFunRawExpr::inner_deep_copy(copier))) {
+    LOG_WARN("failed to copy expr attributes", K(ret));
+  } else if (copier.deep_copy_attributes()) {
+    CK (OB_NOT_NULL(inner_alloc_));
+    for (int64_t i = 0; OB_SUCC(ret) && i < access_names_.count(); ++i) {
+      OZ (ob_write_string(*inner_alloc_, access_names_.at(i), access_names_.at(i)));
+    }
+  }
+  return ret;
+}
+
+ObExprOperator *ObUDTConstructorRawExpr::get_op()
+{
+  int ret = OB_SUCCESS;
+  ObExprOperator *expr_op = NULL;
+  ObExprUdtConstruct *object_op = NULL;
+  if (T_FUN_SYS_PRIV_SQL_UDT_CONSTRUCT == get_expr_type()) {
+    free_op();
+    if (OB_ISNULL(expr_op = ObOpRawExpr::get_op())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("make object construct operator failed", K(ret));
+    }
+    CK (OB_NOT_NULL(object_op = static_cast<ObExprUdtConstruct *>(expr_op)));
+    OX (object_op->set_udt_id(udt_id_));
+    OX (object_op->set_root_udt_id(root_udt_id_));
+    OX (object_op->set_attribute_pos(attr_pos_));
+  }
+  return OB_SUCCESS == ret ? expr_op : NULL;
+}
+
+
+int ObUDTAttributeAccessRawExpr::get_schema_object_version(share::schema::ObSchemaObjVersion &obj_version)
+{
+  int ret = OB_SUCCESS;
+  CK (object_schema_version_ != OB_INVALID_VERSION);
+  CK (udt_id_ != common::OB_INVALID_ID);
+  OX (obj_version.object_id_ = udt_id_);
+  OX (obj_version.object_type_ = share::schema::DEPENDENCY_TYPE);
+  OX (obj_version.version_ = object_schema_version_);
+
+  return ret;
+}
+
+int ObUDTAttributeAccessRawExpr::assign(const ObRawExpr &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(this != &other)) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObSysFunRawExpr::assign(other))) {
+      LOG_WARN("failed to assign expr", K(ret));
+    } else {
+      const ObUDTAttributeAccessRawExpr &tmp =
+          static_cast<const ObUDTAttributeAccessRawExpr &>(other);
+      udt_id_ = tmp.udt_id_;
+      object_schema_version_ = tmp.object_schema_version_;
+      attr_type_ = tmp.attr_type_;
+    }
+  }
+  return ret;
+}
+
+int ObUDTAttributeAccessRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObSysFunRawExpr::inner_deep_copy(copier))) {
+    LOG_WARN("failed to copy expr attributes", K(ret));
+  }
+  return ret;
+}
+
+ObExprOperator *ObUDTAttributeAccessRawExpr::get_op()
+{
+  int ret = OB_SUCCESS;
+  ObExprOperator *expr_op = NULL;
+  ObExprUDTAttributeAccess *object_op = NULL;
+  if (T_FUN_SYS_PRIV_SQL_UDT_ATTR_ACCESS == get_expr_type()) {
+    free_op();
+    if (OB_ISNULL(expr_op = ObOpRawExpr::get_op())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("make object construct operator failed", K(ret));
+    }
+    CK (OB_NOT_NULL(object_op = static_cast<ObExprUDTAttributeAccess *>(expr_op)));
+    object_op->set_attribute_type(attr_type_);
+    object_op->set_udt_id(udt_id_);
+  }
+  return OB_SUCCESS == ret ? expr_op : NULL;
 }
 
 }//namespace sql

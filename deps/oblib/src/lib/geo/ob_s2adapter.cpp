@@ -18,6 +18,7 @@
 #include "lib/geo/ob_geo_utils.h"
 #include "lib/geo/ob_geo_bin.h"
 #include "lib/geo/ob_geo_ibin.h"
+#include "lib/geo/ob_geo_3d.h"
 
 #include <vector>
 #include <memory>
@@ -328,6 +329,15 @@ int64_t ObS2Adapter::init(const ObString &swkb, const ObSrsBoundsItem *bound)
         LOG_WARN("fail to get wkb from swkb", K(ret), K(swkb));
       } else {
         geo->set_data(wkb);
+        if (ObGeoTypeUtil::is_3d_geo_type(type)) {
+          ObGeometry3D *geo_3d = static_cast<ObGeometry3D *>(geo);
+          if (OB_FAIL(geo_3d->to_2d_geo(*allocator_, geo))) {
+            LOG_WARN("fail to convert 3d geo to 2d", K(ret));
+          }
+        }
+      }
+
+      if (OB_SUCC(ret)) {
         geo_ = geo;
         if (OB_FAIL(geo->do_visit(*visitor_))) {
           LOG_WARN("fail to do_visit by ObWkbToS2Visitor", K(ret));

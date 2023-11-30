@@ -63,6 +63,7 @@ enum ObObjTypeStoreClass
   ObIntSC, // signed integers, time types
   ObUIntSC, // unsigned integers, year, float, double
   ObNumberSC, // number
+  ObDecimalIntSC, // wide int place_holder
   ObStringSC, // varchar, char, binary, raw, nvarchar2, nchar, udt_bitmap
   ObTextSC, // text
   ObOTimestampSC, // timestamptz, timestamp ltz, timestamp nano
@@ -117,6 +118,8 @@ OB_INLINE ObObjTypeStoreClass *get_store_class_map()
     ObJsonSC,   //ObJsonTC
     ObGeometrySC, //ObGeometryTC
     ObStringSC, // ObUserDefinedSQLTC， UDT null_bitmaps
+    ObDecimalIntSC, // ObDecimalIntTC, place_holder
+    ObTextSC, // ObCollectionSQLTC
     ObMaxSC // ObMaxTC
   };
   STATIC_ASSERT(ARRAYSIZEOF(store_class_map) == common::ObMaxTC + 1,
@@ -177,6 +180,8 @@ OB_INLINE int64_t *get_type_size_map()
     -1, //Json
     -1, //Geometry
     -1, //ObUserDefinedSQLType
+    -1, //ObDecimalIntType
+    -1, //ObCollectionSQLType
     -1 // ObMaxType
   };
   STATIC_ASSERT(ARRAYSIZEOF(type_size_map) == common::ObMaxType + 1,
@@ -238,6 +243,8 @@ OB_INLINE int64_t *get_estimate_base_store_size_map()
     9, // ObJsonType
     9, // ObGeometryType
     8, // ObUserDefinedSQLType
+    8, // ObDecimalIntType
+    8, // ObCollectionSQLType
     -1 // ObMaxType
   };
   STATIC_ASSERT(ARRAYSIZEOF(estimate_base_store_size_map) == common::ObMaxType + 1,

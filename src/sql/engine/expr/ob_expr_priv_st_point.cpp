@@ -93,9 +93,7 @@ int ObExprPrivSTPoint::calc_result_typeN(ObExprResType& type,
       cast_mode &= ~CM_WARN_ON_FAIL; // make cast return error when fail
       cast_mode |= CM_STRING_INTEGER_TRUNC; // make cast check range when string to int
       type_ctx.set_cast_mode(cast_mode); // cast mode only do work in new sql engine cast frame.
-      type.set_type(ObGeometryType);
-      type.set_collation_level(common::CS_LEVEL_COERCIBLE);
-      type.set_collation_type(CS_TYPE_BINARY);
+      type.set_geometry();
       type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObGeometryType]).get_length());
     }
   }

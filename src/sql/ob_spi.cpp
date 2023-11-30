@@ -2369,9 +2369,33 @@ int ObSPIService::spi_build_record_type(common::ObIAllocator &allocator,
           OX (pl_type.set_user_type_id(user_type->get_type(), udt_id));
           OX (pl_type.set_type_from(user_type->get_type_from()));
         } else {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("unsupported sql udt type", K(ret), K(columns->at(i).cname_), K(columns->at(i).type_));
+          uint16_t subschema_id;
+          uint64_t udt_id = columns->at(i).accuracy_.accuracy_;
+          const ObUserDefinedType *user_type = NULL;
+          OZ (secondary_namespace->get_pl_data_type_by_id(udt_id, user_type));
+          CK (OB_NOT_NULL(user_type));
+          if (OB_FAIL(ret)) {
+          } else if (!ObObjUDTUtil::ob_is_supported_sql_udt(udt_id)) {
+            ret = OB_ERR_INVALID_TYPE_FOR_OP;
+            LOG_WARN("inconsistent datatypes", K(ret), K(udt_id));
+          } else if (OB_FAIL((const_cast<ObExecContext &>(result_set.get_exec_context()).get_subschema_id_by_udt_id(udt_id, subschema_id)))) {
+            LOG_WARN("Failed to get subshcema_meta_info", K(ret), K(udt_id));
+          } else if (subschema_id != columns->at(i).type_.get_udt_subschema_id()) {
+            ret = OB_ERR_INVALID_TYPE_FOR_OP;
+            LOG_WARN("inconsistent datatypes", K(ret), K(subschema_id), K(udt_id), K(columns->at(i).type_.get_udt_subschema_id()));
+          } else {
+            OX (pl_type.set_user_type_id(user_type->get_type(), udt_id));
+            OX (pl_type.set_type_from(user_type->get_type_from()));
+          }
         }
+      } else if (columns->at(i).type_.is_geometry()) {
+        // cast geometry type to pl extend
+        uint64_t udt_id = T_OBJ_SDO_GEOMETRY;
+        const ObUserDefinedType *user_type = NULL;
+        OZ (secondary_namespace->get_pl_data_type_by_id(udt_id, user_type));
+        CK (OB_NOT_NULL(user_type));
+        OX (pl_type.set_user_type_id(user_type->get_type(), udt_id));
+        OX (pl_type.set_type_from(user_type->get_type_from()));
       } else {
         ObDataType data_type;
         data_type.set_meta_type(columns->at(i).type_.get_meta());
@@ -2995,10 +3019,21 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
                           if (!ob_is_xml_pl_type(params[i]->get_type(), params[i]->get_udt_id())) {
                             OZ (pl::ObUserDefinedType::deep_copy_obj(allocator, *params[i], new_param, true));
                           } else {
+                            uint64_t udt_id = params[i]->get_udt_id();
                             const ObDataTypeCastParams dtc_params = sql::ObBasicSessionInfo::create_dtc_params(ctx->exec_ctx_->get_my_session());
                             ObCastCtx cast_ctx(ctx->allocator_, &dtc_params, CM_NONE, ObCharset::get_system_collation());
-                            if (OB_FAIL(ObObjCaster::to_type(ObUserDefinedSQLType, cast_ctx, *params[i], new_param))) {
+                            cast_ctx.exec_ctx_ = ctx->exec_ctx_;
+                            uint16_t subschema_id = ObInvalidSqlType;
+                            if (OB_FAIL(cast_ctx.exec_ctx_->get_subschema_id_by_udt_id(udt_id,
+                                                                                       subschema_id,
+                                                                                       &spi_result.get_scheme_guard()))) {
+                              LOG_WARN("failed to get subschema id by udt_id", K(ret), K(params[i]));
+                            } else if (FALSE_IT(new_param.set_subschema_id(subschema_id))) {
+                            } else if (OB_FAIL(ObObjCaster::to_type(ObUserDefinedSQLType, cast_ctx, *params[i], new_param))) {
                               LOG_WARN("failed to_type", K(ret), K(new_param));
+                            } else { // sql udt params need original udt id for plan choose
+                              new_param.set_udt_id(udt_id);
+                              new_param.set_param_meta(); // param meta also changed
                             }
                           }
                         }
@@ -7188,13 +7223,29 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
           column_count = fields->count();
           actual_column_count = column_count;
         }
+        bool need_subschema_ctx = false;
         for (int64_t i = 0; OB_SUCC(ret) && i < actual_column_count; ++i) {
           ObDataType type;
           type.set_meta_type(fields->at(i).type_.get_meta());
           type.set_accuracy(fields->at(i).accuracy_);
+          if (type.get_meta_type().is_user_defined_sql_type()
+              || type.get_meta_type().is_collection_sql_type()) {
+            // need subschema ctx to convert sql udt to pl types in convert obj
+            need_subschema_ctx = true;
+          }
           if (OB_FAIL(row_desc.push_back(type))) {
             LOG_WARN("push back error", K(i), K(fields->at(i).type_), K(fields->at(i).accuracy_),
                      K(ret));
+          }
+        }
+        if (OB_SUCC(ret) && need_subschema_ctx) {
+          CK (OB_NOT_NULL(exec_ctx->get_physical_plan_ctx()));
+          if (OB_SUCC(ret)) {
+            ObSubSchemaCtx & subschema_ctx = exec_ctx->get_physical_plan_ctx()->get_subschema_ctx();
+            if (OB_FAIL(subschema_ctx.assgin(
+                  static_cast<ObResultSet*>(result_set)->get_physical_plan()->get_subschema_ctx()))) {
+              LOG_WARN("fail to assign subschema ctx", K(ret));
+            }
           }
         }
       }
@@ -7601,7 +7652,12 @@ int ObSPIService::collect_cells(pl::ObPLExecCtx &ctx,
     for (int64_t i = 0; OB_SUCC(ret) && i < row.get_count() - hidden_column_count; ++i) {
       tmp_obj.reset();
       ObObj &obj = row.get_cell(i);
-      obj.set_collation_level(result_types[i].get_collation_level());
+      if (!obj.is_user_defined_sql_type()) {
+        obj.set_collation_level(result_types[i].get_collation_level());
+      }
+      if (row_desc.at(i).get_udt_id() == T_OBJ_XML) {
+        obj.set_subschema_id(ObXMLSqlType);
+      }
       if (obj.is_pl_extend()) {
         // need deep copy immediately at bulk into scenes, because when fetch next row, current row will be free
         OZ (ObUserDefinedType::deep_copy_obj(*cast_ctxs.at(i).allocator_v2_, obj, tmp_obj, true));
@@ -7628,6 +7684,9 @@ int ObSPIService::collect_cells(pl::ObPLExecCtx &ctx,
         result_type.set_accuracy(result_types[i].get_accuracy());
         if ((result_type.is_blob() || result_type.is_blob_locator() || obj.is_blob() || obj.is_blob_locator()) && lib::is_oracle_mode()) {
           cast_ctxs.at(i).cast_mode_ |= CM_ENABLE_BLOB_CAST;
+        }
+        if (OB_ISNULL(cast_ctxs.at(i).exec_ctx_)) {
+          cast_ctxs.at(i).exec_ctx_ = ctx.exec_ctx_;
         }
         OZ (ObExprColumnConv::convert_with_null_check(tmp_obj, obj, result_type, is_strict, cast_ctxs.at(i)));
         if (OB_SUCC(ret) && tmp_obj.need_deep_copy() && obj.get_string_ptr() == tmp_obj.get_string_ptr()) {
@@ -7706,7 +7765,12 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
   for (int i = 0; OB_SUCC(ret) && i < obj_array.count(); ++i) {
     ObObj &obj = obj_array.at(i);
     tmp_obj.reset();
-    obj.set_collation_level(result_types[i].get_collation_level());
+    if (!obj.is_user_defined_sql_type()) {
+      // collation/collation level is used as subschema id for sql udt
+      // but on field collation type, and collation level is set to other values for output
+      // so, ignore cs_type, cs_level setting here
+      obj.set_collation_level(result_types[i].get_collation_level());
+    }
     LOG_DEBUG("column convert", K(obj.get_meta()), K(result_types[i].get_meta_type()),
               K(current_type.at(i)), K(result_types[i].get_accuracy()));
     if (obj.is_pl_extend()/* && pl::PL_RECORD_TYPE == obj.get_meta().get_extend_type()*/
@@ -7739,10 +7803,11 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
       }
     } else if (!(obj.is_pl_extend()
                  || obj.is_user_defined_sql_type()
+                 || obj.is_geometry()
                  || (obj.is_null() && current_type.at(i).get_meta_type().is_user_defined_sql_type()))
                && result_types[i].get_meta_type().is_ext()
                && !ob_is_xml_pl_type(result_types[i].get_obj_type(), result_types[i].get_udt_id())) {
-      // sql udt can cast to pl extend, null from sql udt type can cast to pl extend(xmltype)
+      // sql udt or oracle gis can cast to pl extend, null from sql udt type can cast to pl extend(xmltype)
       // but null may not cast to other pl extends (return error 4016 in store_datums)
       // support: select extract(xmlparse(document '<a>a</a>'), '/b') into xml_data from dual;
       // not support: select null into xml_data from dual;
@@ -7777,6 +7842,9 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
           && lib::is_oracle_mode()) {
         cast_ctx.cast_mode_ |= CM_ENABLE_BLOB_CAST;
       }
+      if (OB_SUCC(ret) && ((result_type.is_ext() && (obj.is_user_defined_sql_type() || obj.is_geometry())))) {
+        cast_ctx.exec_ctx_ = ctx->exec_ctx_;
+      }
       if (OB_FAIL(ret)) {
       } else if (result_type.is_null() || result_type.is_unknown()) {
         tmp_obj = obj;
@@ -7790,9 +7858,11 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
                     || ob_is_string_tc(result_type.get_type())))
             || (!((obj.get_meta().is_ext())
                     || obj.get_meta().get_type() == ObUserDefinedSQLType
+                    || obj.get_meta().is_geometry()
                     || obj.is_null())
                && (result_type.get_type() == ObExtendType
-                    || ob_is_xml_sql_type(result_type.get_type(), result_type.get_subschema_id())))) {
+                    || ob_is_xml_sql_type(result_type.get_type(), result_type.get_subschema_id())))
+            || (obj.get_meta().is_geometry() && result_type.get_type() != ObExtendType)) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_WARN("xml type can not convert other type in pl", K(ret));
         } else if (result_type.is_ext()
@@ -7824,6 +7894,24 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
   }
 
   return ret;
+}
+
+bool ObSPIService::is_sql_type_into_pl(ObObj &dest_addr, ObIArray<ObObj> &obj_array)
+{
+  bool bret = false;
+  if (1 == obj_array.count()) {
+    // query result is oracle gis, will convert to pl extend type
+    if (dest_addr.is_pl_extend() && obj_array.at(0).is_pl_extend()) {
+      ObPLComposite *left = reinterpret_cast<ObPLComposite*>(dest_addr.get_ext());
+      ObPLComposite *right = reinterpret_cast<ObPLComposite*>(obj_array.at(0).get_ext());
+      if (OB_NOT_NULL(left) && OB_NOT_NULL(right)
+          && left->get_id() == right->get_id()
+          && ObObjUDTUtil::ob_is_supported_sql_udt(left->get_id())) {
+        bret = true;
+      }
+    }
+  }
+  return bret;
 }
 
 int ObSPIService::store_result(ObPLExecCtx *ctx,
@@ -7941,7 +8029,7 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
         ObIAllocator *alloc = NULL != pkg_allocator ? pkg_allocator : cast_ctx.allocator_v2_;
         CK (OB_NOT_NULL(alloc));
         // udt会在store datums深拷
-        if (OB_SUCC(ret) && !is_schema_object) {
+        if (OB_SUCC(ret) && !is_schema_object && !is_sql_type_into_pl(result_address, *calc_array)) {
           for (int64_t i = 0; OB_SUCC(ret) && i < calc_array->count(); ++i) {
             ObObj tmp;
             if (calc_array->at(i).is_pl_extend()) {
@@ -8231,17 +8319,14 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
   return ret;
 }
 
-int ObSPIService::store_datums(ObObj &dest_addr,
-                               ObIArray<ObObj> &obj_array,
-                               ObIAllocator *alloc,
-                               ObSQLSessionInfo *session_info,
-                               bool is_schema_object)
+int ObSPIService::store_datums(ObObj &dest_addr, ObIArray<ObObj> &obj_array,
+                               ObIAllocator *alloc, ObSQLSessionInfo *session_info, bool is_schema_object)
 {
   int ret = OB_SUCCESS;
   if (obj_array.empty() || OB_ISNULL(alloc)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Argument passed in is NULL", K(dest_addr), K(obj_array), K(ret));
-  } else if (is_schema_object) {
+  } else if (is_schema_object || is_sql_type_into_pl(dest_addr, obj_array)) {
     ObObj src;
     CK (dest_addr.is_pl_extend());
     /* schema record只能作为单独的into variable存在
@@ -8284,7 +8369,7 @@ int ObSPIService::store_datums(ObObj &dest_addr,
         } else if (OB_ISNULL(record = static_cast<ObPLRecord*>(composite))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected record to store datum", KPC(record), KPC(composite), K(ret));
-        } else if (record->get_count() != obj_array.count()) {
+        } else if (record->get_count() != obj_array.count() && record->get_id() != T_OBJ_SDO_GEOMETRY) {
           //Example: for idx (select obj(1,2) from dual) loop null; end loop;
           //which is not supported yet!!! Will fixed it later in OB 4.2 version.
           ret = OB_NOT_SUPPORTED;

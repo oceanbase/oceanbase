@@ -71,6 +71,8 @@ const ObAccuracy ObAccuracy::DDL_DEFAULT_ACCURACY[ObMaxType] = {
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),     // json
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),     // geometry
   ObAccuracy(),              // user defined type in sql
+  ObAccuracy(10, 0),         // decimal int
+  ObAccuracy(),              // collection type in sql
 };
 
 
@@ -126,6 +128,8 @@ const ObAccuracy ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE + 1][ObMaxType] =
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // json
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // geometry
     ObAccuracy(),              // user defined type in sql
+    ObAccuracy(10, 0),         // decimal int
+    ObAccuracy(),              // collection type in sql
   },
   {
     ObAccuracy(),         // null.
@@ -178,6 +182,8 @@ const ObAccuracy ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE + 1][ObMaxType] =
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // json
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // geometry
     ObAccuracy(),              // user defined type in sql
+    ObAccuracy(10, 0),         // decimal int
+    ObAccuracy(),              // collection type in sql
   }
 };
 
@@ -232,6 +238,8 @@ const ObAccuracy ObAccuracy::MAX_ACCURACY[ObMaxType] = {
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // json
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // geometry
   ObAccuracy(),              // user defined type in sql
+  ObAccuracy(OB_MAX_DECIMAL_PRECISION, OB_MAX_DECIMAL_SCALE), // decimal int
+  ObAccuracy(),              // collection type in sql
 };
 
 const ObAccuracy ObAccuracy::MAX_ACCURACY2[ORACLE_MODE + 1][ObMaxType] = {
@@ -286,6 +294,8 @@ const ObAccuracy ObAccuracy::MAX_ACCURACY2[ORACLE_MODE + 1][ObMaxType] = {
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // json
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // geometry
     ObAccuracy(),              // user defined type in sql
+    ObAccuracy(OB_MAX_DECIMAL_PRECISION, OB_MAX_DECIMAL_SCALE), // decimal int
+    ObAccuracy(),  // collection type in sql
   },
   { /* Oracle */
     ObAccuracy(),         // null.
@@ -337,6 +347,8 @@ const ObAccuracy ObAccuracy::MAX_ACCURACY2[ORACLE_MODE + 1][ObMaxType] = {
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // lob, todo
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // json
     ObAccuracy(),              // user defined type in sql
+    ObAccuracy(OB_MAX_DECIMAL_PRECISION, OB_MAX_DECIMAL_SCALE), // decimal int
+    ObAccuracy(),  // collection type in sql
   }
 };
 
@@ -391,6 +403,8 @@ const ObAccuracy ObAccuracy::DML_DEFAULT_ACCURACY[ObMaxType] = {
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // json
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // geometry
   ObAccuracy(),              // user defined type in sql
+  ObAccuracy(),              // decimal int
+  ObAccuracy(),              // collection type in sql
 };
 
 const ObAccuracy ObAccuracy::MAX_ACCURACY_OLD[ObMaxType] = {

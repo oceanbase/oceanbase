@@ -33,6 +33,7 @@
 #include "share/ob_truncated_string.h"
 #include "sql/spm/ob_spm_evolution_plan.h"
 #include "sql/engine/ob_exec_feedback_info.h"
+#include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 
 namespace oceanbase
 {
@@ -133,6 +134,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     append_table_id_(0),
     logical_plan_(),
     is_enable_px_fast_reclaim_(false),
+    subschema_ctx_(allocator_),
     all_local_session_vars_(&allocator_)
 {
 }
@@ -228,6 +230,7 @@ void ObPhysicalPlan::reset()
   need_record_plan_info_ = false;
   logical_plan_.reset();
   is_enable_px_fast_reclaim_ = false;
+  subschema_ctx_.reset();
   all_local_session_vars_.reset();
 }
 
@@ -240,6 +243,7 @@ void ObPhysicalPlan::destroy()
   expr_op_factory_.destroy();
   stat_.expected_worker_map_.destroy();
   stat_.minimal_worker_map_.destroy();
+  subschema_ctx_.destroy();
 }
 
 int ObPhysicalPlan::copy_common_info(ObPhysicalPlan &src)
@@ -780,7 +784,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     append_table_id_,
                     is_enable_px_fast_reclaim_,
                     gtt_session_scope_ids_,
-                    gtt_trans_scope_ids_);
+                    gtt_trans_scope_ids_,
+                    subschema_ctx_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)

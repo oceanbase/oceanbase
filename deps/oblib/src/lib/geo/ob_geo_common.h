@@ -93,6 +93,7 @@ public:
   int append(const char *str, const uint64_t len);
   int append(const ObString &str);
   int write(uint64_t pos, uint32_t val);
+  int read(uint64_t pos, uint32_t &val);
   const ObString string() const;
   uint64_t length() const;
   int append_zero(const uint64_t len);

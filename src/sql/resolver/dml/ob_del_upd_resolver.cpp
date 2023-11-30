@@ -1537,8 +1537,8 @@ int ObDelUpdResolver::resolve_returning(const ParseNode *parse_tree)
           }
         }
         if (OB_SUCC(ret)
-            && (ob_is_user_defined_sql_type(expr->get_data_type())
-                || ob_is_xml_pl_type(expr->get_data_type(), expr->get_udt_id()))) {
+            && (ob_is_xml_pl_type(expr->get_data_type(), expr->get_udt_id()) ||
+                ob_is_xml_sql_type(expr->get_result_type().get_type(), expr->get_result_type().get_subschema_id()))) {
           // ORA-22816 returning clause is currently not object type columns
           // but this is success in ORA: execute immediate 'insert into t1 values(4,5) returning udt1(c1, c2) into :a' using out a;
           // xmltype is not allowed: execute immediate 'insert into t2 values(:b) returning xmltype(c1) into :a' using b, out a;
@@ -2621,7 +2621,7 @@ int ObDelUpdResolver::generate_column_conv_function(ObInsertTableInfo &table_inf
       } else if (OB_FAIL(find_value_desc(table_info, column_id, column_ref))) {
         LOG_WARN("fail to check column is exists", K(ret), K(column_id));
       } else if ((!session_info_->get_ddl_info().is_ddl() || OB_ISNULL(column_ref)) &&
-                 ( tbl_col->is_xml_column() || (tbl_col->is_udt_hidden_column()))) {
+                 (tbl_col->is_xml_column() || (tbl_col->is_udt_hidden_column()))) {
         if (!tbl_col->is_xml_column()) {
           // do nothing, hidden column with build with xml column together
         } else if (OB_FAIL(build_column_conv_function_for_udt_column(table_info, i, column_ref))) {

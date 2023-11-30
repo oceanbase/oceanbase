@@ -74,6 +74,8 @@ ObObjDatumMapType ObDatum::get_obj_datum_map_type(const ObObjType type)
     OBJ_DATUM_STRING,         // ObJsonType
     OBJ_DATUM_STRING,         // ObGeometryType
     OBJ_DATUM_STRING,         // ObUserDefinedSQLType
+    OBJ_DATUM_DECIMALINT,     // ObDecimalIntType
+    OBJ_DATUM_STRING,         // ObCollectionSQLType
   };
   static_assert(sizeof(maps) / sizeof(maps[0]) == ObMaxType,
       "new added type should extend this map");
@@ -100,6 +102,7 @@ uint32_t ObDatum::get_reserved_size(const ObObjDatumMapType type)
     OBJ_DATUM_4BYTE_LEN_DATA_RES_SIZE, // OBJ_DATUM_4BYTE_LEN_DATA
     OBJ_DATUM_2BYTE_LEN_DATA_RES_SIZE, // OBJ_DATUM_2BYTE_LEN_DATA
     OBJ_DATUM_FULL_DATA_RES_SIZE,      // OBJ_DATUM_FULL
+    OBJ_DATUM_DECIMALINT_MAX_RES_SIZE, // OBJ_DATUM_DECIMALINT
   };
   static_assert(sizeof(OBOBJ_DATUM_MAP_TYPE_TO_RES_SIZE_MAP)
                 / sizeof(OBOBJ_DATUM_MAP_TYPE_TO_RES_SIZE_MAP[0]) == OBJ_DATUM_MAPPING_MAX,

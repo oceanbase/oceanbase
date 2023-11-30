@@ -169,13 +169,8 @@ int ObExprGeomWkb::eval_geom_wkb(const ObExpr &expr,
     if (srid_default_ordering && is_geog && is_lat_long_order) {
       need_reverse = true;
     }
-    if (need_reverse && is_geog) {
-      ObGeoReverseCoordinateVisitor rcoord_visitor;
-      if (OB_FAIL(geo->do_visit(rcoord_visitor))) {
-        LOG_WARN("failed to reverse geometry coordinate", K(ret));
-        ret = OB_ERR_GIS_INVALID_DATA;
-        LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, get_func_name());
-      }
+    if (need_reverse && is_geog && OB_FAIL(ObGeoExprUtils::reverse_coordinate(geo, get_func_name()))) {
+      LOG_WARN("failed to reverse geometry coordinate", K(ret));
     }
   }
 

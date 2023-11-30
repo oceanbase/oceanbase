@@ -30,6 +30,62 @@ namespace oceanbase
 {
 namespace sql
 {
+struct ObGeoUnit
+{
+  const char *name;
+  double factor;
+};
+
+const ObGeoUnit OB_GEO_UNITS[] = {
+  // order by unit s, asc
+  { "British chain (Benoit 1895 A)", 20.1167824 },
+  { "British chain (Benoit 1895 B)", 20.116782494375872 },
+  { "British chain (Sears 1922 truncated)", 20.116756 },
+  { "British chain (Sears 1922)", 20.116765121552632 },
+  { "British foot (1865)", 0.30480083333333335 },
+  { "British foot (1936)", 0.3048007491 },
+  { "British foot (Benoit 1895 A)", 0.3047997333333333 },
+  { "British foot (Benoit 1895 B)", 0.30479973476327077 },
+  { "British foot (Sears 1922 truncated)", 0.30479933333333337 },
+  { "British foot (Sears 1922)", 0.3047994715386762 },
+  { "British link (Benoit 1895 A)", 0.201167824 },
+  { "British link (Benoit 1895 B)", 0.2011678249437587 },
+  { "British link (Sears 1922 truncated)", 0.20116756 },
+  { "British link (Sears 1922)", 0.2011676512155263 },
+  { "British yard (Benoit 1895 A)", 0.9143992 },
+  { "British yard (Benoit 1895 B)", 0.9143992042898124 },
+  { "British yard (Sears 1922 truncated)", 0.914398 },
+  { "British yard (Sears 1922)", 0.9143984146160288 },
+  { "centimetre", 0.01 },
+  { "chain", 20.1168 },
+  { "Clarke's chain", 20.1166195164 },
+  { "Clarke's foot", 0.3047972654 },
+  { "Clarke's link", 0.201166195164 },
+  { "Clarke's yard", 0.9143917962 },
+  { "fathom", 1.8288 },
+  { "foot", 0.3048 },
+  { "German legal metre", 1.0000135965 },
+  { "Gold Coast foot", 0.3047997101815088 },
+  { "Indian foot", 0.30479951024814694 },
+  { "Indian foot (1937)", 0.30479841 },
+  { "Indian foot (1962)", 0.3047996 },
+  { "Indian foot (1975)", 0.3047995 },
+  { "Indian yard", 0.9143985307444408 },
+  { "Indian yard (1937)", 0.91439523 },
+  { "Indian yard (1962)", 0.9143988 },
+  { "Indian yard (1975)", 0.9143985 },
+  { "kilometre", 1000 },
+  { "link", 0.201168 },
+  { "metre", 1 },
+  { "millimetre", 0.001 },
+  { "nautical mile", 1852 },
+  { "Statute mile", 1609.344 },
+  { "US survey chain", 20.11684023368047 },
+  { "US survey foot", 0.30480060960121924 },
+  { "US survey link", 0.2011684023368047 },
+  { "US survey mile", 1609.3472186944375 },
+  { "yard", 0.9144 }
+};
 
 enum class ObGeoAxisOrder
 {
@@ -59,9 +115,7 @@ public:
                             common::ObGeometry *&geo,
                             const common::ObSrsItem *srs,
                             const char *func_name,
-                            const bool need_normlize = true,
-                            const bool need_check_ring = false,
-                            const bool need_correct = true);
+                            uint8_t build_flag = ObGeoBuildFlag::GEO_DEFAULT);
   static int construct_geometry(common::ObIAllocator &allocator,
                                 const common::ObString &wkb,
                                 omt::ObSrsCacheGuard &srs_guard,
@@ -108,11 +162,33 @@ public:
                         const common::ObSrsItem *srs_item,
                         common::ObString &res_wkb,
                         uint32_t srs_id = 0);
+  static int geo_to_2d_wkb(common::ObGeometry &geo,
+                           const ObExpr &expr,
+                           ObEvalCtx &ctx,
+                           const common::ObSrsItem *srs_item,
+                           common::ObString &res_wkb,
+                           uint32_t srs_id = 0);
+  static int geo_to_3d_wkb(common::ObGeometry &geo,
+                           const ObExpr &expr,
+                           ObEvalCtx &ctx,
+                           const common::ObSrsItem *srs_item,
+                           common::ObString &res_wkb,
+                           uint32_t srs_id = 0);
   static void geo_func_error_handle(int ret, const char* func_name);
   static int zoom_in_geos_for_relation(common::ObGeometry &geo1, common::ObGeometry &geo2);
 
   static int pack_geo_res(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res, const ObString &str);
-
+  static int reverse_coordinate(ObGeometry *geo, const char *func_name);
+  static int length_unit_conversion(const ObString &unit_str, const ObSrsItem *srs, double in_num, double &out_num);
+  static int get_input_geometry(ObIAllocator &allocator, ObDatum *gis_datum, ObEvalCtx &ctx, ObExpr *gis_arg,
+    const ObSrsItem *&srs, ObGeometry *&geo);
+  static int make_valid_polygon_inner(
+    ObCartesianPolygon &poly, ObIAllocator &allocator, ObGeometry *&valid_poly);
+  static int union_polygons(
+    ObIAllocator &allocator, const ObGeometry &poly, ObGeometry *&polygons_union);
+  static int make_valid_polygon(ObGeometry *poly, ObIAllocator &allocator, ObGeometry *&valid_poly);
+private:
+  static int ob_geo_find_unit(const ObGeoUnit *units, const ObString &name, double &factor);
 };
 
 } // sql

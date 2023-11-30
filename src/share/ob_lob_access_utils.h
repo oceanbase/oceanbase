@@ -272,6 +272,9 @@ public:
                                            const ObObjMeta &in_obj_meta,
                                            const ObObjMeta &out_obj_meta,
                                            ObIAllocator &allocator);
+  static int calc_inrow_templob_len(uint32 inrow_data_len, int64_t &templob_len);
+  static int64_t calc_inrow_templob_locator_len();
+  static int fill_inrow_templob_header(const int64_t inrow_data_len, char *buf, int64_t buf_len);
 
 protected:
   int calc_buffer_len(const int64_t res_len);

@@ -152,6 +152,7 @@ OB_INLINE int32_t *get_store_class_tag_map()
     2, // ObIntSC
     2, // ObUIntSC
     0, // ObNumberSC
+    0, // ObWideIntSC
     1, // ObStringSC
     -1, // ObTextSC
     -1, // ObOTimestampSC

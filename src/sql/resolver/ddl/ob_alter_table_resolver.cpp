@@ -23,6 +23,7 @@
 #include "sql/resolver/ob_resolver_utils.h"
 #include "sql/resolver/dml/ob_delete_resolver.h"
 #include "share/ob_index_builder_util.h"
+#include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "lib/xml/ob_xml_parser.h"
 #include "lib/xml/ob_xml_util.h"
@@ -4624,7 +4625,6 @@ int ObAlterTableResolver::add_udt_hidden_column(ObAlterTableStmt *alter_table_st
     } else if (column_schema.get_cur_default_value().is_null()) {
     } else if (OB_FAIL(get_udt_column_default_values(column_schema.get_cur_default_value(),
                                                      session_info_->get_tz_info_wrap(),
-                                                     nls_formats_str,
                                                      *allocator_,
                                                      column_schema,
                                                      session_info_->get_sql_mode(),
@@ -4691,6 +4691,30 @@ int ObAlterTableResolver::add_udt_hidden_column(ObAlterTableStmt *alter_table_st
       SQL_RESV_LOG(WARN, "failed to set column name", K(ret));
     } else if (OB_FAIL(alter_table_stmt->add_column(hidden_blob))) {
       SQL_RESV_LOG(WARN, "add column to table_schema failed", K(ret), K(hidden_blob));
+    }
+  } else if (lib::is_oracle_mode() && column_schema.is_geometry()) {
+    ObObj orig_default_value;
+    uint64_t tenant_data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+      LOG_WARN("get tenant data version failed", K(ret));
+    } else if (tenant_data_version < DATA_VERSION_4_2_2_0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("tenant data version is less than 4.2.2, sdo_geometry type is not supported", K(ret), K(tenant_data_version), K(column_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.2, sdo_geometry");
+    } else if (OB_ISNULL(alter_table_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("alter table stmt not exist", K(ret));
+    } else if (column_schema.get_cur_default_value().is_null()) {
+    } else if (OB_FAIL(get_udt_column_default_values(column_schema.get_cur_default_value(),
+                                                     session_info_->get_tz_info_wrap(),
+                                                     *allocator_,
+                                                     column_schema,
+                                                     session_info_->get_sql_mode(),
+                                                     session_info_,
+                                                     schema_checker_,
+                                                     orig_default_value,
+                                                     alter_table_stmt->get_ddl_arg()))) {
+      LOG_WARN("fail to calc xmltype default value expr", K(ret));
     }
   }
   return ret;
@@ -5507,6 +5531,22 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
         if (OB_SUCC(ret)) {
           if (OB_FAIL(check_column_in_part_key(*table_schema_, *origin_col_schema, alter_column_schema))) {
             SQL_RESV_LOG(WARN, "check column in part key failed", K(ret));
+          }
+        }
+        if (OB_SUCC(ret) && alter_column_schema.is_udt_related_column(lib::is_oracle_mode())) {
+          ObString tmp_str;
+          if (OB_FAIL(ObDDLResolver::check_udt_default_value(alter_column_schema.get_cur_default_value(),
+                                                             session_info_->get_tz_info_wrap(),
+                                                             &tmp_str,    // useless
+                                                             *allocator_,
+                                                             *const_cast<ObTableSchema *>(table_schema_),
+                                                             alter_column_schema,
+                                                             session_info_->get_sql_mode(),
+                                                             session_info_,
+                                                             schema_checker_,
+                                                             alter_table_stmt->get_ddl_arg()))) {
+            SQL_RESV_LOG(WARN, "check udt column default value failed in alter table modify stmt",
+                        K(ret), K(alter_column_schema.get_cur_default_value()));
           }
         }
         if (OB_SUCC(ret)) {

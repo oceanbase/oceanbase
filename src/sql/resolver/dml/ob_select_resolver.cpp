@@ -981,6 +981,9 @@ int ObSelectResolver::check_field_list()
       } else if (lib::is_oracle_mode() && ObJsonType == expr->get_data_type()) {
         ret = OB_ERR_INVALID_CMP_OP;
         LOG_WARN("select distinct json not allowed", K(ret));
+      } else if (lib::is_oracle_mode() && ObGeometryType == expr->get_data_type()) {
+        ret = OB_ERR_COMPARE_VARRAY_LOB_ATTR;
+        LOG_WARN("select distinct geometry not allowed", K(ret));
       }
     }
   }
@@ -6509,6 +6512,10 @@ int ObSelectResolver::check_rollup_items_valid(const ObIArray<ObRollupItem> &rol
         if (OB_ISNULL(groupby_expr = groupby_exprs.at(k))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("rollup expr is null", K(ret));
+        } else if (lib::is_oracle_mode() && ObGeometryType == groupby_expr->get_data_type()) {
+           // oracle error code compability
+          ret = OB_ERR_COMPARE_VARRAY_LOB_ATTR;
+          LOG_WARN("Incorrect cmp type with geometry arguments", K(ret));
         } else if (ObLongTextType == groupby_expr->get_data_type()
                   || ObLobType == groupby_expr->get_data_type()
                   || ObJsonType == groupby_expr->get_data_type()

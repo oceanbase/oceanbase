@@ -1867,6 +1867,7 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
         case T_FUN_JSON_OBJECTAGG:
         case T_FUN_ORA_JSON_OBJECTAGG:
         case T_FUN_ORA_XMLAGG:
+        case T_FUN_SYS_ST_ASMVT:
         {
           void *tmp_buf = NULL;
           set_need_advance_collect();
@@ -2282,6 +2283,7 @@ int ObAggregateProcessor::rollup_aggregation(AggrCell &aggr_cell, AggrCell &roll
     case T_FUN_JSON_OBJECTAGG:
     case T_FUN_ORA_JSON_OBJECTAGG:
     case T_FUN_ORA_XMLAGG:
+    case T_FUN_SYS_ST_ASMVT:
     {
       GroupConcatExtraResult *aggr_extra = NULL;
       GroupConcatExtraResult *rollup_extra = NULL;
@@ -2498,6 +2500,7 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
     case T_FUN_JSON_OBJECTAGG:
     case T_FUN_ORA_JSON_OBJECTAGG:
     case T_FUN_ORA_XMLAGG:
+    case T_FUN_SYS_ST_ASMVT:
     {
       GroupConcatExtraResult *extra = NULL;
       if (OB_ISNULL(extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra()))) {
@@ -2760,6 +2763,7 @@ int ObAggregateProcessor::process_aggr_batch_result(
     case T_FUN_JSON_OBJECTAGG:
     case T_FUN_ORA_JSON_OBJECTAGG:
     case T_FUN_ORA_XMLAGG:
+    case T_FUN_SYS_ST_ASMVT:
     {
       GroupConcatExtraResult *extra_info = NULL;
       if (OB_ISNULL(extra_info = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra()))) {
@@ -2998,6 +3002,7 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
     case T_FUN_JSON_OBJECTAGG:
     case T_FUN_ORA_JSON_OBJECTAGG:
     case T_FUN_ORA_XMLAGG:
+    case T_FUN_SYS_ST_ASMVT:
     {
       GroupConcatExtraResult *extra = NULL;
       if (OB_ISNULL(extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra()))) {
@@ -3369,6 +3374,14 @@ int ObAggregateProcessor::collect_aggr_result(
       break;
     }
 
+    case T_FUN_SYS_ST_ASMVT: {
+      GroupConcatExtraResult *extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra());
+      if (OB_FAIL(get_asmvt_result(aggr_info, extra, result))) {
+        LOG_WARN("failed to get asmvt result", K(ret));
+      } else {
+      }
+      break;
+    }
     case T_FUN_GROUP_CONCAT: {
       GroupConcatExtraResult *extra = NULL;
       ObString sep_str;
@@ -7427,6 +7440,146 @@ int ObAggregateProcessor::fast_single_row_agg_batch(ObEvalCtx &eval_ctx, const i
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unknown aggr function type", K(ret), K(aggr_fun), K(*aggr_info.expr_));
       }
+    }
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::get_asmvt_result(const ObAggrInfo &aggr_info,
+                                           GroupConcatExtraResult *&extra,
+                                           ObDatum &concat_result)
+{
+  int ret = OB_SUCCESS;
+  common::ObArenaAllocator tmp_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  if (OB_ISNULL(extra) || OB_UNLIKELY(extra->empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unpexcted null", K(ret), K(extra));
+  } else if (extra->is_iterated() && OB_FAIL(extra->rewind())) {
+    // Group concat row may be iterated in rollup_process(), rewind here.
+    LOG_WARN("rewind failed", KPC(extra), K(ret));
+  } else if (!extra->is_iterated() && OB_FAIL(extra->finish_add_row())) {
+    LOG_WARN("finish_add_row failed", KPC(extra), K(ret));
+  } else {
+    const ObChunkDatumStore::StoredRow *storted_row = NULL;
+    bool inited_tmp_obj = false;
+    ObObj *tmp_obj = NULL;
+    mvt_agg_result mvt_res(tmp_alloc);
+    while (OB_SUCC(ret) && OB_SUCC(extra->get_next_row(storted_row))) {
+      if (OB_ISNULL(storted_row)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(storted_row));
+      } else {
+        // get obj
+        if (!inited_tmp_obj
+            && OB_ISNULL(tmp_obj = static_cast<ObObj*>(tmp_alloc.alloc(sizeof(ObObj) * (storted_row->cnt_))))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory", K(ret), K(tmp_obj));
+        } else if (!inited_tmp_obj && FALSE_IT(inited_tmp_obj = true)) {
+        } else if (OB_FAIL(convert_datum_to_obj(aggr_info, *storted_row, tmp_obj, storted_row->cnt_))) {
+          LOG_WARN("failed to convert datum to obj", K(ret));
+        } else if (!mvt_res.is_inited()
+                   && OB_FAIL(init_asmvt_result(tmp_alloc, aggr_info, tmp_obj, storted_row->cnt_, mvt_res))) {
+          LOG_WARN("failed to init asmvt result", K(ret));
+        } else if (OB_FAIL(mvt_res.generate_feature(tmp_obj, storted_row->cnt_))) {
+          LOG_WARN("failed to generate mvt feature", K(ret));
+        }
+      }
+    }//end of while
+
+    if (ret != OB_ITER_END && ret != OB_SUCCESS) {
+      LOG_WARN("fail to get next row", K(ret));
+    } else {
+      ret = OB_SUCCESS;
+      ObString mvt_str;
+      if (OB_FAIL(mvt_res.mvt_pack(mvt_str))) {
+        LOG_WARN("fail to pack mvt result", K(ret));
+      } else {
+        ObString blob_locator;
+        ObExprStrResAlloc expr_res_alloc(*aggr_info.expr_, eval_ctx_);
+        ObTextStringResult blob_res(ObLongTextType, true, &expr_res_alloc);
+        int64_t total_length = mvt_str.length();
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(blob_res.init(total_length))) {
+          LOG_WARN("failed to init blob res", K(ret), K(mvt_str), K(total_length));
+        } else if (OB_FAIL(blob_res.append(mvt_str))) {
+          LOG_WARN("failed to append xml binary data", K(ret), K(mvt_str));
+        } else {
+          blob_res.get_result_buffer(blob_locator);
+          concat_result.set_string(blob_locator.ptr(), blob_locator.length());
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::init_asmvt_result(ObIAllocator &allocator,
+                                            const ObAggrInfo &aggr_info,
+                                            const ObObj *tmp_obj,
+                                            uint32_t obj_cnt,
+                                            mvt_agg_result &mvt_res)
+{
+  int ret = OB_SUCCESS;
+  uint32_t column_cnt = 0;
+  bool is_param_done = false;
+  mvt_res.inited_ = true;
+  // try get first geom column and column number
+  for (uint32_t i = 0; i < aggr_info.param_exprs_.count() && OB_SUCC(ret); i++) {
+    ObExpr *expr = aggr_info.param_exprs_.at(i);
+    if (expr->type_ == T_REF_COLUMN) {
+      ObString key_name;
+      is_param_done = true;
+      column_cnt++;
+      if (i + 1 >= obj_cnt) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid param", K(ret), K(i), K(obj_cnt));
+      } else if (expr->obj_meta_.is_geometry() && mvt_res.geom_idx_ == UINT32_MAX) {
+        if (mvt_res.geom_name_.empty()) {
+          mvt_res.geom_idx_ = i;
+          if (OB_FAIL(ob_write_string(allocator, tmp_obj[i + 1].get_string(), mvt_res.geom_name_))) {
+            // geo_name
+            LOG_WARN("write string failed", K(ret), K(tmp_obj[i].get_string()));
+          }
+        } else if (mvt_res.geom_name_.case_compare(tmp_obj[i + 1].get_string()) == 0) {
+          mvt_res.geom_idx_ = i;
+        } else if (OB_FAIL(ob_write_string(allocator, tmp_obj[i + 1].get_string(), key_name, true))) {
+          LOG_WARN("write string failed", K(ret), K(tmp_obj[i + 1].get_string()));
+        } else if (OB_FAIL(mvt_res.keys_.push_back(key_name))) {
+          LOG_WARN("failed to push back col name to keys", K(ret), K(i), K(tmp_obj[i + 1].get_string()));
+        }
+        // json type will be expanded
+      } else if (!expr->obj_meta_.is_json() && OB_FAIL(ob_write_string(allocator, tmp_obj[i + 1].get_string(), key_name, true))) {
+        LOG_WARN("write string failed", K(ret), K(tmp_obj[i + 1].get_string()));
+      } else if (!expr->obj_meta_.is_json() &&OB_FAIL(mvt_res.keys_.push_back(key_name))) {
+        LOG_WARN("failed to push back col name to keys", K(ret), K(i), K(tmp_obj[i + 1].get_string()));
+      } else if (!mvt_res.feature_id_name_.empty() && mvt_res.feat_id_idx_ == UINT32_MAX
+                 && mvt_res.feature_id_name_.case_compare(tmp_obj[i + 1].get_string()) == 0) {
+        mvt_res.feat_id_idx_ = i;
+      }
+    } else if (!is_param_done) {
+      if (i == 0
+          && OB_FAIL(ob_write_string(allocator, tmp_obj[i].get_string(), mvt_res.lay_name_, true))) {
+        // layer name
+        LOG_WARN("write string failed", K(ret), K(tmp_obj[i].get_string()));
+      } else if (i == 1) {
+        // extent
+        mvt_res.extent_ = tmp_obj[i].get_int();
+      } else if (i == 2
+                 && OB_FAIL(ob_write_string(allocator, tmp_obj[i].get_string(), mvt_res.geom_name_))) {
+        // geo_name
+        LOG_WARN("write string failed", K(ret), K(tmp_obj[i].get_string()));
+      } else if (i == 3
+                 && OB_FAIL(ob_write_string(allocator, tmp_obj[i].get_string(), mvt_res.feature_id_name_))) {
+        // feature id name
+        LOG_WARN("write string failed", K(ret), K(tmp_obj[i].get_string()));
+      }
+      mvt_res.column_offset_ = i + 1;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    mvt_res.column_cnt_ = column_cnt;
+    if (OB_FAIL(mvt_res.init_layer())) {
+      LOG_WARN("failed to init layer", K(ret));
     }
   }
   return ret;

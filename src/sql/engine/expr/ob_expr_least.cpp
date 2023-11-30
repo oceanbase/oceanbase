@@ -157,7 +157,12 @@ int ObExprLeastGreatest::calc_result_typeN_oracle(ObExprResType &type,
             item_length = OB_MAX_TIMESTAMP_TZ_LENGTH;
             break;
           }
-          case ObUserDefinedSQLTC: {
+          case ObUserDefinedSQLTC:
+          case ObGeometryTC: {
+            item_length = types[i].get_length();
+            break;
+          }
+          case ObCollectionSQLTC: {
             item_length = types[i].get_length();
             break;
           }
@@ -192,6 +197,10 @@ int ObExprLeastGreatest::calc_result_typeN_oracle(ObExprResType &type,
     }
   }
 
+  if (OB_SUCC(ret) && ob_is_geometry(type.get_type())) {
+    ret = OB_ERR_COMPARE_VARRAY_LOB_ATTR;
+    LOG_WARN("Incorrect cmp type with geometry arguments", K(ret));
+  }
 //老执行引擎在类型推导时不为参数设置calc_type, 在执行期再对参数进行cast。
 //新执行引擎需要在类型推导阶段为参数设置好calc_type, 在执行期不再显式执行cast。
   if (OB_SUCC(ret)

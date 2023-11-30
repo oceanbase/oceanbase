@@ -516,9 +516,22 @@ public:
   int get_directory_id(const uint64_t tenant_id,
                        const common::ObString &directory_name,
                        uint64_t &directory_id);
+int flatten_udt_attributes(const uint64_t tenant_id,
+                           const uint64_t udt_id,
+                           ObIAllocator &allocator,
+                           ObString &qualified_name,
+                           int64_t &schema_version,
+                           ObIArray<ObString> &udt_qualified_names);
+  int get_udt_attribute_id(const uint64_t udt_id, const ObString &attr_name, uint64_t &attr_id, uint64_t &attr_pos);
+
 
   int remove_tmp_cte_schemas(const ObString& cte_table_name);
 private:
+
+int construct_udt_qualified_name(const share::schema::ObUDTTypeInfo &udt_info, ObIAllocator &allocator,
+                                 const uint64_t tenant_id,
+                                 ObString &qualified_name,
+                                 ObIArray<ObString> &udt_qualified_names);
   int get_link_table_schema_inner(uint64_t table_id,
                              const share::schema::ObTableSchema *&table_schema) const;
   int get_table_schema_inner(const uint64_t tenant_id, uint64_t table_id,

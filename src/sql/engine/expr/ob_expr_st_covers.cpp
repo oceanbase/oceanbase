@@ -94,10 +94,10 @@ int ObExprPrivSTCovers::eval_st_covers_common(ObEvalCtx &ctx,
   } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb1, srs, true, N_PRIV_ST_COVERS))) {
     LOG_WARN("fail to get srs item", K(ret), K(wkb1));
   } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb1, geo1, srs, N_PRIV_ST_COVERS,
-                                                    true, true))) {
+                                            ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT | ObGeoBuildFlag::GEO_CHECK_RING))) {
     LOG_WARN("get first geo by wkb failed", K(ret));
   } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb2, geo2, srs, N_PRIV_ST_COVERS,
-                                                    true, true))) {
+                                            ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT | ObGeoBuildFlag::GEO_CHECK_RING))) {
     LOG_WARN("get second geo by wkb failed", K(ret));
   } else if (OB_FAIL(ObGeoExprUtils::check_empty(geo1, is_geo1_empty))
       || OB_FAIL(ObGeoExprUtils::check_empty(geo2, is_geo2_empty))) {

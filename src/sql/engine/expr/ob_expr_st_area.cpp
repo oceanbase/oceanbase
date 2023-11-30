@@ -83,7 +83,7 @@ int ObExprSTArea::eval_st_area(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
       LOG_WARN("fail to get real string data", K(ret), K(wkb));
     } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb, srs, true, N_ST_AREA))) {
       LOG_WARN("fail to get srs item", K(ret), K(wkb));
-    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb, geo, srs, N_ST_AREA))) {
+    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb, geo, srs, N_ST_AREA, ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT))) {
       LOG_WARN("get geo by wkb failed", K(ret));
     } else if (geo->type() != ObGeoType::POLYGON && geo->type() != ObGeoType::MULTIPOLYGON) {
       ret = OB_ERR_UNEXPECTED_GEOMETRY_TYPE;

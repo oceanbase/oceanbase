@@ -409,6 +409,20 @@ int ObSQLUtils::calc_const_or_calculable_expr(
       }
     } else {
       is_valid = true;
+      if (result.is_pl_extend()) {
+        if (OB_ISNULL(exec_ctx->get_pl_ctx())) {
+          if (OB_FAIL(exec_ctx->init_pl_ctx())) {
+            LOG_WARN("failed to init pl ctx", K(ret));
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(exec_ctx->get_pl_ctx())) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("pl ctx is null", K(ret));
+        } else if (OB_FAIL(exec_ctx->get_pl_ctx()->add(result))) {
+          LOG_WARN("failed to add pl obj to pl ctx", K(ret));
+        }
+      }
     }
     if (OB_SUCC(ret) && !hit_cache) {
       if (OB_FAIL(store_result_to_ctx(*exec_ctx, raw_expr, result, is_valid))) {
@@ -763,12 +777,19 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
           } else if (OB_UNLIKELY(org_obj_cnt + 1 != phy_plan_ctx.get_param_store().count())) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unpected param store", K(phy_plan_ctx.get_param_store()), K(org_obj_cnt));
-          } else if (OB_FAIL(deep_copy_obj(allocator,
-                                          phy_plan_ctx.get_param_store().at(org_obj_cnt),
-                                          result))) {
-            LOG_WARN("failed to deep copy obj", K(ret));
           } else {
-            // do nothing
+            const ObObj &tmp_result = phy_plan_ctx.get_param_store().at(org_obj_cnt);
+            if (!tmp_result.is_ext()) {
+              if (OB_FAIL(deep_copy_obj(allocator, tmp_result, result))) {
+                LOG_WARN("failed to deep copy obj", K(ret));
+              }
+            } else {
+              // res is_ext, data in obj may be destructed when the temp exec ctx destruct at the end.
+              // e.g. eval_collection_construct is called
+              if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(allocator, tmp_result, result))) {
+                LOG_WARN("failed to deep copy pl extend obj", K(ret), K(tmp_result));
+              }
+            }
           }
         }
       }
@@ -4860,7 +4881,10 @@ int ObSQLUtils::store_result_to_ctx(ObExecContext &exec_ctx,
   } else {
     key = reinterpret_cast<uint64_t>(expr);
     if (is_valid) {
-      if (OB_FAIL(ob_write_obj(exec_ctx.get_allocator(), result, val))) {
+      if (result.is_pl_extend()) {
+        // pl extend type is already deep copied in se_calc_const_expr
+        val = result;
+      } else if (OB_FAIL(ob_write_obj(exec_ctx.get_allocator(), result, val))) {
         LOG_WARN("failed to write obj", K(result), K(ret));
       }
     } else {

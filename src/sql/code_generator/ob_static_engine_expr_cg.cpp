@@ -268,8 +268,13 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr *> &raw_exprs)
       rt_expr->obj_meta_ = result_meta;
       // pl extend type has its own explanation for scale
       if (ObExtendType != rt_expr->obj_meta_.get_type()
-          && ObUserDefinedSQLType != rt_expr->obj_meta_.get_type()) {
+          && ObUserDefinedSQLType != rt_expr->obj_meta_.get_type()
+          && ObCollectionSQLType != rt_expr->obj_meta_.get_type()) {
         rt_expr->obj_meta_.set_scale(rt_expr->datum_meta_.scale_);
+      }
+      if (result_meta.is_xml_sql_type()) {
+        // set xml subschema id = ObXMLSqlType
+        rt_expr->datum_meta_.cs_type_ = CS_TYPE_INVALID;
       }
       if (is_lob_storage(rt_expr->obj_meta_.get_type())) {
         if (cur_cluster_version_ >= CLUSTER_VERSION_4_1_0_0) {

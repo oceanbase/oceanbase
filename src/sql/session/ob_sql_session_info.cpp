@@ -503,6 +503,15 @@ int ObSQLSessionInfo::is_better_inlist_enabled(bool &enabled) const
   return ret;
 }
 
+bool ObSQLSessionInfo::is_pl_prepare_stage() const
+{
+  bool bret = false;
+  if (OB_NOT_NULL(cur_exec_ctx_) && OB_NOT_NULL(cur_exec_ctx_->get_sql_ctx())) {
+    bret = cur_exec_ctx_->get_sql_ctx()->is_prepare_stage_;
+  }
+  return bret;
+}
+
 bool ObSQLSessionInfo::is_index_skip_scan_enabled() const
 {
   bool bret = false;

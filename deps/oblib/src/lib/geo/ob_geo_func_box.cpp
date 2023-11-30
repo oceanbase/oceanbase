@@ -112,7 +112,7 @@ OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncBoxImpl, ObWkbGeogMultiPoint, ObGeogBox *)
         *res = tmp;
         is_start = true;
       } else {
-        ObGeoBoxUtil::box_uion(tmp, *res);
+        ObGeoBoxUtil::box_union(tmp, *res);
       }
     }
     if (OB_SUCC(ret)) {
@@ -141,7 +141,7 @@ OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncBoxImpl, ObWkbGeogMultiLineString, ObGeogBox *)
         *res = tmp;
         is_start = true;
       } else {
-        ObGeoBoxUtil::box_uion(tmp, *res);
+        ObGeoBoxUtil::box_union(tmp, *res);
       }
     }
     if (OB_SUCC(ret)) {
@@ -170,7 +170,7 @@ OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncBoxImpl, ObWkbGeogMultiPolygon, ObGeogBox *)
         *res = tmp;
         is_start = true;
       } else {
-        ObGeoBoxUtil::box_uion(tmp, *res);
+        ObGeoBoxUtil::box_union(tmp, *res);
       }
     }
     if (OB_SUCC(ret)) {
@@ -219,7 +219,7 @@ OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncBoxImpl, ObWkbGeogCollection, ObGeogBox *)
               *res = *subres;
               is_start = true;
             } else {
-              ObGeoBoxUtil::box_uion(*subres, *res);
+              ObGeoBoxUtil::box_union(*subres, *res);
             }
           }
         }
@@ -232,6 +232,194 @@ OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncBoxImpl, ObWkbGeogCollection, ObGeogBox *)
   return ret;
 } OB_GEO_FUNC_END;
 
+OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncBoxImpl, ObWkbGeomPoint, ObGeogBox *)
+{
+  int ret = OB_SUCCESS;
+  ObGeogBox *res = OB_NEWx(ObGeogBox, context.get_allocator());
+  if (OB_ISNULL(res)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to create geo box", K(ret));
+  } else {
+    const ObWkbGeomPoint *point = reinterpret_cast<const ObWkbGeomPoint *>(g->val());
+    res->xmin = point->get<0>();
+    res->xmax = point->get<0>();
+    res->ymin = point->get<1>();
+    res->ymax = point->get<1>();
+    result = res;
+  }
+  return ret;
+}
+OB_GEO_FUNC_END;
+
+OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncBoxImpl, ObWkbGeomLineString, ObGeogBox *)
+{
+  int ret = OB_SUCCESS;
+  ObGeogBox *res = OB_NEWx(ObGeogBox, context.get_allocator());
+  if (OB_ISNULL(res)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to create geo box", K(ret));
+  } else {
+    const ObWkbGeomLineString *line = reinterpret_cast<const ObWkbGeomLineString *>(g->val());
+    if (OB_FAIL(ObGeoBoxUtil::get_geom_line_box(*line, *res))) {
+      LOG_WARN("fail to get poly box", K(ret));
+    } else {
+      result = res;
+    }
+  }
+  return ret;
+}
+OB_GEO_FUNC_END;
+
+OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncBoxImpl, ObWkbGeomPolygon, ObGeogBox *)
+{
+  INIT_SUCC(ret);
+  ObGeogBox *res = OB_NEWx(ObGeogBox, context.get_allocator());
+  if (OB_ISNULL(res)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to create geo box", K(ret));
+  } else {
+    const ObWkbGeomPolygon *poly = reinterpret_cast<const ObWkbGeomPolygon *>(g->val());
+    if (poly->size() <= 0) {
+      ret = OB_ERR_GIS_INVALID_DATA;
+      LOG_WARN("empty polygon has not box", K(ret), K(poly->size()));
+    } else if (OB_FAIL(ObGeoBoxUtil::get_geom_line_box(poly->exterior_ring(), *res))) {
+      LOG_WARN("fail to get poly box", K(ret));
+    } else {
+      result = res;
+    }
+  }
+  return ret;
+}
+OB_GEO_FUNC_END;
+
+OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncBoxImpl, ObWkbGeomMultiPoint, ObGeogBox *)
+{
+  int ret = OB_SUCCESS;
+  ObGeogBox *res = OB_NEWx(ObGeogBox, context.get_allocator());
+  if (OB_ISNULL(res)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to create geo box", K(ret));
+  } else {
+    const ObWkbGeomMultiPoint *multi_point = reinterpret_cast<const ObWkbGeomMultiPoint *>(g->val());
+    if (OB_FAIL(ObGeoBoxUtil::get_geom_line_box(*multi_point, *res))) {
+      LOG_WARN("fail to get poly box", K(ret));
+    } else {
+      result = res;
+    }
+  }
+  return ret;
+}
+OB_GEO_FUNC_END;
+
+OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncBoxImpl, ObWkbGeomMultiLineString, ObGeogBox *)
+{
+  int ret = OB_SUCCESS;
+  ObGeogBox *res = OB_NEWx(ObGeogBox, context.get_allocator());
+  bool is_first_line = true;
+  if (OB_ISNULL(res)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to create geo box", K(ret));
+  } else {
+    const ObWkbGeomMultiLineString *multiline = reinterpret_cast<const ObWkbGeomMultiLineString *>(g->val());
+    ObWkbGeomMultiLineString::iterator iter = multiline->begin();
+    for (; OB_SUCC(ret) && iter != multiline->end(); iter++) {
+      ObGeogBox tmp;
+      if (OB_FAIL(ObGeoBoxUtil::get_geom_line_box(*iter, tmp))) {
+        LOG_WARN("fail to get poly box", K(ret));
+      } else if (is_first_line) {
+        is_first_line = false;
+        *res = tmp;
+      } else {
+        ObGeoBoxUtil::box_union(tmp, *res);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      result = res;
+    }
+  }
+  return ret;
+}
+OB_GEO_FUNC_END;
+
+OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncBoxImpl, ObWkbGeomMultiPolygon, ObGeogBox *)
+{
+  int ret = OB_SUCCESS;
+  ObGeogBox *res = OB_NEWx(ObGeogBox, context.get_allocator());
+  bool is_first_line = true;
+  if (OB_ISNULL(res)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to create geo box", K(ret));
+  } else {
+    const ObWkbGeomMultiPolygon *multipoly = reinterpret_cast<const ObWkbGeomMultiPolygon *>(g->val());
+    ObWkbGeomMultiPolygon::iterator iter = multipoly->begin();
+    for (; OB_SUCC(ret) && iter != multipoly->end(); iter++) {
+      ObGeogBox tmp;
+      if (iter->size() <= 0) {
+        ret = OB_ERR_GIS_INVALID_DATA;
+        LOG_WARN("empty polygon has not box", K(ret), K(iter->size()));
+      } else if (OB_FAIL(ObGeoBoxUtil::get_geom_line_box(iter->exterior_ring(), tmp))) {
+        LOG_WARN("fail to get poly box", K(ret));
+      } else if (is_first_line) {
+        is_first_line = false;
+        *res = tmp;
+      } else {
+        ObGeoBoxUtil::box_union(tmp, *res);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      result = res;
+    }
+  }
+  return ret;
+}
+OB_GEO_FUNC_END;
+
+OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncBoxImpl, ObWkbGeomCollection, ObGeogBox *)
+{
+  int ret = OB_SUCCESS;
+  common::ObIAllocator *allocator = context.get_allocator();
+  ObGeogBox *res = OB_NEWx(ObGeogBox, allocator);
+  bool is_first = true;
+  if (OB_ISNULL(res)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to create geo box", K(ret));
+  } else {
+    const ObWkbGeomCollection *coll = reinterpret_cast<const ObWkbGeomCollection *>(g->val());
+    ObWkbGeomCollection::iterator iter = coll->begin();
+    for (; OB_SUCC(ret) && iter != coll->end(); iter++) {
+      ObWkbGeogCollection::const_pointer sub_ptr = iter.operator->();
+      ObGeoType sub_type = coll->get_sub_type(sub_ptr);
+      ObGeometry *sub_g = NULL;
+      if (OB_FAIL(ObGeoTypeUtil::create_geo_by_type(*allocator, sub_type, false, true, sub_g))) {
+        LOG_WARN("failed to create wkb", K(ret), K(sub_type));
+      } else {
+        ObString wkb_nosrid(WKB_COMMON_WKB_HEADER_LEN, reinterpret_cast<const char *>(sub_ptr));
+        sub_g->set_data(wkb_nosrid);
+        sub_g->set_srid(g->get_srid());
+        ObGeogBox *tmp = NULL;
+        if (OB_FAIL(eval_wkb_unary(sub_g, context, tmp))) {
+          LOG_WARN("fail to eval sub geometry", K(ret), K(sub_type));
+        } else if (OB_ISNULL(tmp)) {
+          ret = OB_ERR_NULL_VALUE;
+          LOG_WARN("sub geometry box is null", K(ret), K(sub_type));
+        } else {
+          if (is_first) {
+            is_first = false;
+            *res = *tmp;
+          } else {
+            ObGeoBoxUtil::box_union(*tmp, *res);
+          }
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      result = res;
+    }
+  }
+  return ret;
+}
+OB_GEO_FUNC_END;
 
 int ObGeoFuncBox::eval(const ObGeoEvalCtx &gis_context, ObGeogBox *&result)
 {

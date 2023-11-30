@@ -2164,7 +2164,6 @@ TEST_F(TestGeoFuncUnion, gc_split)
   ASSERT_EQ(true, is_geo_equal(*res_multi_line, *multi_line_tree));
   ASSERT_EQ(true, is_geo_equal(*res_multi_poly, *multi_poly_tree));
 }
-
 } // namespace common
 } // namespace oceanbase
 

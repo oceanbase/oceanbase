@@ -23,6 +23,11 @@ namespace oceanbase
 {
 namespace common
 {
+enum class ObBGStrategyType {
+  DEFAULT_NONE = 0,
+  PL_PA_STRATEGY,
+  LL_LA_AA_STRATEGY,
+};
 
 class ObGeoFuncUtils
 {
@@ -50,6 +55,8 @@ public:
                            typename GcTreeType::sub_mpt_type *&multi_point,
                            typename GcTreeType::sub_ml_type *&multi_line,
                            typename GcTreeType::sub_mp_type *&multi_poly);
+
+  static int apply_bg_to_tree(const ObGeometry *g1, const ObGeoEvalCtx &context, ObGeometry *&result);
 
 private:
   template<typename GcTreeType>

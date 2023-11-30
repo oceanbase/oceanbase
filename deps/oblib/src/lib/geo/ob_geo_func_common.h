@@ -181,6 +181,11 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObGeoEvalCtx);
 };
 
+struct ObGeoFuncResWithNull {
+  bool bret = false;
+  bool is_null = false;
+};
+
 } // sql
 } // oceanbase
 #endif // OCEANBASE_LIB_OB_GEO_FUNC_COMMON_H_

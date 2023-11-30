@@ -1418,7 +1418,7 @@ public:
 
 
   int get_column_schema_in_same_col_group(uint64_t column_id, uint64_t udt_set_id,
-                                          common::ObSEArray<ObColumnSchemaV2 *, 1> &column_group) const;
+                                          common::ObIArray<ObColumnSchemaV2 *> &column_group) const;
   ObColumnSchemaV2* get_xml_hidden_column_schema(uint64_t column_id, uint64_t udt_set_id) const;
   bool is_same_type_category(const ObColumnSchemaV2 &src_column,
                              const ObColumnSchemaV2 &dst_column) const;

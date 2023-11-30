@@ -250,10 +250,16 @@ int ObPlanSet::match_param_info(const ObParamInfo &param_info,
                 K(param.get_type()));
     }
 
-    if (param.get_collation_type() != param_info.col_type_) {
+    if (param.get_collation_type() != param_info.col_type_
+        && !(param.is_user_defined_sql_type() || param.is_collection_sql_type())) {
       is_same = false;
     } else if (param.get_param_meta().get_type() != param_info.type_) {
       is_same = false;
+    } else if (param.is_user_defined_sql_type() || param.is_collection_sql_type()) {
+      uint64_t udt_id_param = param.get_accuracy().get_accuracy();
+      uint64_t udt_id_info = static_cast<uint64_t>(param_info.ext_real_type_) << 32
+                             | static_cast<uint32_t>(param_info.col_type_);
+      is_same = (udt_id_info == udt_id_param) ? true : false;
     } else if (param.is_ext()) {
       ObDataType data_type;
       if (!param_info.flag_.need_to_check_extend_type_) {

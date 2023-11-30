@@ -85,6 +85,20 @@ const static double comparison_params_normal[ObMaxTC+1] = {
   NORMAL_CMP_INT_COST,            // extend
   NORMAL_INVALID_CMP_COST,        // unknown
   NORMAL_CMP_CHAR_COST,           // TinyText,MediumText, Text ,LongText
+  // TODO:@zhenling.zzg check the new type cost plz
+  NORMAL_CMP_INT_COST,            // Bit
+  NORMAL_CMP_CHAR_COST,           // enum, set
+  NORMAL_CMP_INT_COST,            // ObEnumSetInnerTC
+  NORMAL_CMP_INT_COST,            // timestamp with time zone
+  NORMAL_CMP_CHAR_COST,           // raw
+  NORMAL_CMP_INT_COST,            // interval
+  NORMAL_CMP_INT_COST,            // rowid
+  NORMAL_CMP_CHAR_COST,           // lob
+  NORMAL_CMP_CHAR_COST,           // json
+  NORMAL_CMP_CHAR_COST,           // geometry
+  NORMAL_CMP_CHAR_COST,           // user defined type
+  NORMAL_CMP_NUMBER_COST,         // ObDecimalIntTC
+  NORMAL_CMP_CHAR_COST,           // collection sql type
 };
 
 const static double hash_params_normal[ObMaxTC+1] = {
@@ -102,6 +116,19 @@ const static double hash_params_normal[ObMaxTC+1] = {
   NORMAL_HASH_INT_COST,            // extend
   NORMAL_INVALID_HASH_COST,        // unknown
   NORMAL_HASH_CHAR_COST,           // TinyText,MediumText, Text ,LongText
+  NORMAL_HASH_INT_COST,            // Bit
+  NORMAL_HASH_CHAR_COST,           // enum, set
+  NORMAL_HASH_INT_COST,            // ObEnumSetInnerTC
+  NORMAL_HASH_INT_COST,            // timestamp with time zone
+  NORMAL_HASH_CHAR_COST,           // raw
+  NORMAL_HASH_INT_COST,            // interval
+  NORMAL_HASH_INT_COST,            // rowid
+  NORMAL_HASH_CHAR_COST,           // lob
+  NORMAL_HASH_CHAR_COST,           // json
+  NORMAL_HASH_CHAR_COST,           // geometry
+  NORMAL_HASH_CHAR_COST,           // user defined type
+  NORMAL_HASH_NUMBER_COST,         // ObDecimalIntTC
+  NORMAL_HASH_CHAR_COST,           // collection sql type
 };
 
 const static ObOptEstCostModel::ObCostParams cost_params_normal(

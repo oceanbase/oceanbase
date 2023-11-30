@@ -119,13 +119,15 @@ int ObExprPrivSTDWithin::eval_st_dwithin_common(ObEvalCtx &ctx,
     LOG_WARN("srid not the same", K(srid1), K(srid2), K(ret));
   } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb1, srs))) {
     LOG_WARN("fail to get srs item", K(ret), K(wkb1));
-  } else if (OB_FAIL(ObGeoTypeUtil::create_geo_by_wkb(temp_allocator, wkb1, srs, geo1))) {
+  } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb1, geo1, srs, N_PRIV_ST_TRANSFORM,
+                                                    ObGeoBuildFlag::GEO_ALLOW_3D))) {
     LOG_WARN("get first geo by wkb failed", K(ret));
     if (ret != OB_ERR_SRS_NOT_FOUND && ret != OB_ERR_INVALID_GEOMETRY_TYPE) {
       ret = OB_ERR_GIS_INVALID_DATA;
       LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_DWITHIN);
     }
-  } else if (OB_FAIL(ObGeoTypeUtil::create_geo_by_wkb(temp_allocator, wkb2, srs, geo2))) {
+  } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, wkb2, geo2, srs, N_PRIV_ST_TRANSFORM,
+                                                    ObGeoBuildFlag::GEO_ALLOW_3D))) {
     LOG_WARN("get second geo by wkb failed", K(ret));
     if (ret != OB_ERR_SRS_NOT_FOUND && ret != OB_ERR_INVALID_GEOMETRY_TYPE) {
       ret = OB_ERR_GIS_INVALID_DATA;

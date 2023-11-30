@@ -21,7 +21,6 @@
 
 namespace oceanbase {
 namespace common {
-
 // [srid]
 static const uint32_t WKB_GEO_SRID_SIZE = sizeof(uint32_t);
 // [version]
@@ -87,12 +86,13 @@ public:
   ~ObWkbGeomInnerPoint() {}
   uint64_t length() const;
   template<std::size_t K>
-  double get() const;
+  double get(ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian) const;
   template<std::size_t K>
   void set(double d);
   // candidate function not viable: 'this' argument has type 'point_type' (aka 'const oceanbase::common::ObWkbGeomInnerPoint'), but method is not marked const
   ObWkbGeomInnerPoint& operator=(const ObWkbGeomInnerPoint& p);
   ObWkbGeomInnerPoint& operator=(const ObWkbGeomInnerPoint& p) const;
+  bool equals(const ObWkbGeomInnerPoint& p) const;
   // TODO
   int64_t to_string(char *buffer, const int64_t length) const{
     UNUSED(buffer);
@@ -136,6 +136,8 @@ public:
   const_iterator begin() const { return const_iterator(iter_idx_min(), this); }
   iterator end() { return iterator(iter_idx_max(), this); }
   const_iterator end() const { return const_iterator(iter_idx_max(), this); }
+private:
+  uint8_t bo_;
   DISABLE_COPY_ASSIGN(ObWkbGeomLineString);
 };
 
@@ -158,18 +160,18 @@ public:
 public:
   ObWkbGeomLinearRing() {}
   ~ObWkbGeomLinearRing() {}
-  uint32_t size() const;
-  size_type length() const;
+  uint32_t size(ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian) const;
+  size_type length(ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian) const;
   // iter adaptor
-  index_type iter_idx_max() const { return size(); }
+  index_type iter_idx_max(ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian) const { return size(bo); }
   index_type iter_idx_min() const { return 0; }
   void get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
     ObWkbIterOffsetArray* offsets, pointer& data);
   // iter adapt
   iterator begin() { return iterator(iter_idx_min(), this); }
   const_iterator begin() const { return const_iterator(iter_idx_min(), this); }
-  iterator end() { return iterator(iter_idx_max(), this); }
-  const_iterator end() const { return const_iterator(iter_idx_max(), this); }
+  iterator end(ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian) { return iterator(iter_idx_max(bo), this); }
+  const_iterator end(ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian) const { return const_iterator(iter_idx_max(bo), this); }
   bool empty() const {return false;}
   bool empty() {return false;}
 
@@ -217,11 +219,13 @@ public:
   index_type et(index_type curidx) const { return curidx; }
   void get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
     ObWkbIterOffsetArray* offsets, pointer& data);
-  size_type get_sub_size(const_pointer data) const { return data->length(); };
+  size_type get_sub_size(const_pointer data) const { return data->length(static_cast<ObGeoWkbByteOrder>(bo_)); };
   iterator begin() { return iterator(iter_idx_min(), this); } // for move over exterior
   const_iterator begin() const { return const_iterator(iter_idx_min(), this); } // for move over exterior
   iterator end() { return iterator(iter_idx_max(), this); }
   const_iterator end() const { return const_iterator(iter_idx_max(), this); }
+private:
+  uint8_t bo_;
   DISABLE_COPY_ASSIGN(ObWkbGeomPolygonInnerRings);
 };
 
@@ -239,6 +243,9 @@ public:
   const ObWkbGeomLinearRing& exterior_ring() const;
   ObWkbGeomPolygonInnerRings& inner_rings();
   const ObWkbGeomPolygonInnerRings& inner_rings() const;
+  uint8_t get_bo() const {return bo_;}
+private:
+  uint8_t bo_;
   DISABLE_COPY_ASSIGN(ObWkbGeomPolygon);
 };
 
@@ -273,6 +280,8 @@ public:
   const_iterator begin() const { return const_iterator(iter_idx_min(), this); }
   iterator end() { return iterator(iter_idx_max(), this); }
   const_iterator end() const { return const_iterator(iter_idx_max(), this); }
+private:
+  uint8_t bo_;
   DISABLE_COPY_ASSIGN(ObWkbGeomMultiPoint);
 };
 
@@ -312,6 +321,8 @@ public:
   const_iterator begin() const { return const_iterator(iter_idx_min(), this); }
   iterator end() { return iterator(iter_idx_max(), this); }
   const_iterator end() const { return const_iterator(iter_idx_max(), this); }
+private:
+  uint8_t bo_;
   DISABLE_COPY_ASSIGN(ObWkbGeomMultiLineString);
 };
 
@@ -351,6 +362,8 @@ public:
   const_iterator begin() const { return const_iterator(iter_idx_min(), this); }
   iterator end() { return iterator(iter_idx_max(), this); }
   const_iterator end() const { return const_iterator(iter_idx_max(), this); }
+private:
+  uint8_t bo_;
   DISABLE_COPY_ASSIGN(ObWkbGeomMultiPolygon);
 };
 
@@ -396,6 +409,8 @@ public:
   const_iterator begin() const { return const_iterator(iter_idx_min(), this); }
   iterator end() { return iterator(iter_idx_max(), this); }
   const_iterator end() const { return const_iterator(iter_idx_max(), this); }
+private:
+  uint8_t bo_;
   DISABLE_COPY_ASSIGN(ObWkbGeomCollection);
 };
 
@@ -441,9 +456,9 @@ public:
   ~ObWkbGeogInnerPoint() {}
   uint64_t length() const;
   template<std::size_t K>
-  double get() const;
+  double get(ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian) const;
   template<std::size_t K>
-  void set(double d);
+  void set(double d, ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian);
   ObWkbGeogInnerPoint& operator=(const ObWkbGeogInnerPoint& p);
   // TODO
   int64_t to_string(char *buffer, const int64_t length) const{
@@ -488,6 +503,8 @@ public:
   const_iterator begin() const { return const_iterator(iter_idx_min(), this); }
   iterator end() { return iterator(iter_idx_max(), this); }
   const_iterator end() const { return const_iterator(iter_idx_max(), this); }
+private:
+  uint8_t bo_;
   DISABLE_COPY_ASSIGN(ObWkbGeogLineString);
 };
 
@@ -510,18 +527,18 @@ public:
 public:
   ObWkbGeogLinearRing() {}
   ~ObWkbGeogLinearRing() {}
-  uint32_t size() const;
-  size_type length() const;
+  uint32_t size(ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian) const;
+  size_type length(ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian) const;
   // iter adaptor
-  index_type iter_idx_max() const { return size(); }
+  index_type iter_idx_max(ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian) const { return size(bo); }
   index_type iter_idx_min() const { return 0; }
   void get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
       ObWkbIterOffsetArray* offsets, pointer& data);
   // iter adapt
   iterator begin() { return iterator(iter_idx_min(), this); }
   const_iterator begin() const { return const_iterator(iter_idx_min(), this); }
-  iterator end() { return iterator(iter_idx_max(), this); }
-  const_iterator end() const { return const_iterator(iter_idx_max(), this); }
+  iterator end(ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian) {  return iterator(iter_idx_max(bo), this); }
+  const_iterator end(ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian) const {  return const_iterator(iter_idx_max(bo), this); }
   // for bg::correct
   void push_back(const ObWkbGeogInnerPoint &pt) {
     UNUSED(pt);
@@ -566,12 +583,14 @@ public:
   index_type et(index_type curidx) const { return curidx; }
   void get_sub_addr(const_pointer last_addr, index_type last_idx, index_type cur_idx,
       ObWkbIterOffsetArray* offsets, pointer& data);
-  size_type get_sub_size(const_pointer data) const { return data->length(); };
+  size_type get_sub_size(const_pointer data) const { return data->length(static_cast<ObGeoWkbByteOrder>(bo_)); };
   // iter interface
   iterator begin() { return iterator(iter_idx_min(), this); }
   const_iterator begin() const { return const_iterator(iter_idx_min(), this); }
   iterator end() { return iterator(iter_idx_max(), this); }
   const_iterator end() const { return const_iterator(iter_idx_max(), this); }
+private:
+  uint8_t bo_;
   DISABLE_COPY_ASSIGN(ObWkbGeogPolygonInnerRings);
 };
 
@@ -589,6 +608,9 @@ public:
   const ObWkbGeogLinearRing& exterior_ring() const;
   ObWkbGeogPolygonInnerRings& inner_rings();
   const ObWkbGeogPolygonInnerRings& inner_rings() const;
+  uint8_t get_bo() const {return bo_;}
+private:
+  uint8_t bo_;
   DISABLE_COPY_ASSIGN(ObWkbGeogPolygon);
 };
 
@@ -624,6 +646,8 @@ public:
   const_iterator begin() const { return const_iterator(iter_idx_min(), this); }
   iterator end() { return iterator(iter_idx_max(), this); }
   const_iterator end() const { return const_iterator(iter_idx_max(), this); }
+private:
+  uint8_t bo_;
   DISABLE_COPY_ASSIGN(ObWkbGeogMultiPoint);
 };
 
@@ -663,6 +687,8 @@ public:
   const_iterator begin() const { return const_iterator(iter_idx_min(), this); }
   iterator end() { return iterator(iter_idx_max(), this); }
   const_iterator end() const { return const_iterator(iter_idx_max(), this); }
+private:
+  uint8_t bo_;
   DISABLE_COPY_ASSIGN(ObWkbGeogMultiLineString);
 };
 
@@ -702,6 +728,8 @@ public:
   const_iterator begin() const { return const_iterator(iter_idx_min(), this); }
   iterator end() { return iterator(iter_idx_max(), this); }
   const_iterator end() const { return const_iterator(iter_idx_max(), this); }
+private:
+  uint8_t bo_;
   DISABLE_COPY_ASSIGN(ObWkbGeogMultiPolygon);
 };
 
@@ -746,6 +774,8 @@ public:
   const_iterator begin() const { return const_iterator(iter_idx_min(), this); }
   iterator end() { return iterator(iter_idx_max(), this); }
   const_iterator end() const { return const_iterator(iter_idx_max(), this); }
+private:
+  uint8_t bo_;
   DISABLE_COPY_ASSIGN(ObWkbGeogCollection);
 };
 

@@ -108,7 +108,11 @@ public:
   static int process_sql_udt_results(common::ObObj& value, sql::ObResultSet &result);
   static int process_sql_udt_results(common::ObObj& value,
                                      common::ObIAllocator *allocator,
-                                     sql::ObSQLSessionInfo *session_info);
+                                     sql::ObSQLSessionInfo *session_info,
+                                     sql::ObExecContext *exec_context,
+                                     bool is_ps_protocol,
+                                     const ColumnsFieldIArray *fields = NULL,
+                                     ObSchemaGetterGuard *schema_guard = NULL);
   static uint64_t get_tenant_id(ObSQLSessionInfo *session);
   static int append_header_in_front(ObIAllocator &allocator, ObXmlDocument *&root, ObIMulModeBase *node);
   static int cast_to_res(ObIAllocator &allocator, ObString &xml_content, const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);

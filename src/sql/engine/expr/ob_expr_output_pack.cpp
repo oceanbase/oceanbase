@@ -490,7 +490,7 @@ int ObExprOutputPack::process_lob_locator_results(common::ObObj& value,
   // 3. if client does not support use_lob_locator ,,return full lob data without locator header
   bool is_use_lob_locator = my_session.is_client_use_lob_locator();
   bool is_support_outrow_locator_v2 = my_session.is_client_support_lob_locatorv2();
-  if (!(value.is_lob() || value.is_json() || value.is_lob_locator())) {
+  if (!(value.is_lob() || value.is_json() || value.is_geometry() ||value.is_lob_locator())) {
     // not lob types, do nothing
   } else if (is_use_lob_locator && value.is_lob() && lib::is_oracle_mode()) {
     // if does not have extern header, mock one
@@ -554,6 +554,11 @@ int ObExprOutputPack::process_lob_locator_results(common::ObObj& value,
         LOG_WARN("Lob: init lob str iter failed ", K(value));
       } else {
         ObObjType dst_type = value.is_json() ? ObJsonType : ObLongTextType;
+        if (value.is_json()) {
+          dst_type = ObJsonType;
+        } else if (value.is_geometry()) {
+          dst_type = ObGeometryType;
+        }
         // remove has lob header flag
         value.set_lob_value(dst_type, data.ptr(), static_cast<int32_t>(data.length()));
       }
@@ -643,10 +648,14 @@ int ObExprOutputPack::try_encode_row(const ObExpr &expr, ObEvalCtx &ctx,
           LOG_WARN("convert text obj charset failed", K(ret));
         }
         if (OB_FAIL(ret)) {
-        } else if ((obj.is_lob() || obj.is_lob_locator() || obj.is_json())
+        } else if ((obj.is_lob() || obj.is_lob_locator() || obj.is_json() || obj.is_geometry())
                    && OB_FAIL(process_lob_locator_results(obj, alloc, *session))) {
           LOG_WARN("convert lob locator to longtext failed", K(ret));
-        } else if (obj.is_user_defined_sql_type() && OB_FAIL(ObXMLExprHelper::process_sql_udt_results(obj, &alloc, session))) {
+        } else if ((obj.is_user_defined_sql_type() || obj.is_collection_sql_type())
+                   && OB_FAIL(ObXMLExprHelper::process_sql_udt_results(obj, &alloc, session,
+                                                                       &ctx.exec_ctx_,
+                                                                       session->is_ps_protocol()))
+        ) {
           LOG_WARN("convert udt to client format failed", K(ret), K(obj.get_udt_subschema_id()));
         }
       }

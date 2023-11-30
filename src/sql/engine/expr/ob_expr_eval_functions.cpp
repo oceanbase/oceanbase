@@ -338,8 +338,28 @@
 #include "ob_expr_uniform.h"
 #include "ob_expr_prefix_pattern.h"
 #include "ob_expr_initcap.h"
+#include "ob_expr_sql_udt_construct.h"
+#include "ob_expr_priv_attribute_access.h"
 #include "ob_expr_temp_table_ssid.h"
+#include "ob_expr_priv_st_numinteriorrings.h"
+#include "ob_expr_priv_st_iscollection.h"
+#include "ob_expr_priv_st_equals.h"
+#include "ob_expr_priv_st_touches.h"
 #include "ob_expr_align_date4cmp.h"
+#include "ob_expr_priv_st_makeenvelope.h"
+#include "ob_expr_priv_st_clipbybox2d.h"
+#include "ob_expr_priv_st_pointonsurface.h"
+#include "ob_expr_priv_st_geometrytype.h"
+#include "ob_expr_st_crosses.h"
+#include "ob_expr_st_overlaps.h"
+#include "ob_expr_st_union.h"
+#include "ob_expr_st_length.h"
+#include "ob_expr_st_difference.h"
+#include "ob_expr_st_asgeojson.h"
+#include "ob_expr_st_centroid.h"
+#include "ob_expr_st_symdifference.h"
+#include "ob_expr_priv_st_asmvtgeom.h"
+#include "ob_expr_priv_st_makevalid.h"
 
 namespace oceanbase
 {
@@ -1043,7 +1063,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprJoinFilter::eval_in_filter,                                   /* 605 */
   ObExprCurrentScn::eval_current_scn,                                 /* 606 */
   ObExprTempTableSSID::calc_temp_table_ssid,                          /* 607 */
-  ObExprAlignDate4Cmp::eval_align_date4cmp,                            /* 608 */
+  ObExprAlignDate4Cmp::eval_align_date4cmp,                           /* 608 */
   NULL, //ObExprMod::mod_decimalint,                                  /* 609 */
   NULL, //calc_bool_expr_for_decint_type,                             /* 610 */
   NULL, //ObExprIs::decimal_int_is_true,                              /* 611 */
@@ -1067,7 +1087,27 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprUpdateXml::eval_mysql_update_xml,                             /* 629 */
   ObExprXmlSequence::eval_xml_sequence,                               /* 630 */
   ObExprJsonAppend::eval_json_array_append,                           /* 631 */
-  ObExprJsonObjectStar::eval_ora_json_object_star                     /* 632 */
+  ObExprJsonObjectStar::eval_ora_json_object_star,                    /* 632 */
+  ObExprUdtConstruct::eval_udt_construct,                             /* 634 */
+  ObExprUDTAttributeAccess::eval_attr_access,                         /* 635 */
+  ObExprPrivSTNumInteriorRings::eval_priv_st_numinteriorrings,        /* 636 */
+  ObExprPrivSTIsCollection::eval_priv_st_iscollection,                /* 637 */
+  ObExprPrivSTEquals::eval_priv_st_equals,                            /* 638 */
+  ObExprPrivSTTouches::eval_priv_st_touches,                          /* 639 */
+  ObExprPrivSTMakeEnvelope::eval_priv_st_makeenvelope,                /* 640 */
+  ObExprPrivSTClipByBox2D::eval_priv_st_clipbybox2d,                  /* 641 */
+  ObExprPrivSTPointOnSurface::eval_priv_st_pointonsurface,            /* 642 */
+  ObExprPrivSTGeometryType::eval_priv_st_geometrytype,                /* 643 */
+  ObExprSTCrosses::eval_st_crosses,                                   /* 644 */
+  ObExprSTOverlaps::eval_st_overlaps,                                 /* 645 */
+  ObExprSTUnion::eval_st_union,                                       /* 646 */
+  ObExprSTLength::eval_st_length,                                     /* 647 */
+  ObExprSTDifference::eval_st_difference,                             /* 648 */
+  ObExprSTAsGeoJson::eval_st_asgeojson,                               /* 649 */
+  ObExprSTCentroid::eval_st_centroid,                                 /* 650 */
+  ObExprSTSymDifference::eval_st_symdifference,                       /* 651 */
+  ObExprPrivSTAsMVTGeom::eval_priv_st_asmvtgeom,                      /* 652 */
+  ObExprPrivSTMakeValid::eval_priv_st_makevalid,                      /* 653 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

@@ -3851,8 +3851,17 @@ int ObTableSqlService::gen_column_dml(
   ObArenaAllocator allocator(ObModIds::OB_SCHEMA_OB_SCHEMA_ARENA);
   char *extended_type_info_buf = NULL;
   uint64_t tenant_data_version = 0;
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
   if (OB_FAIL(GET_MIN_DATA_VERSION(exec_tenant_id, tenant_data_version))) {
     LOG_WARN("get tenant data version failed", K(ret));
+  } else if (OB_FAIL(ObCompatModeGetter::get_table_compat_mode(
+               column.get_tenant_id(), column.get_table_id(), compat_mode))) {
+      LOG_WARN("fail to get tenant mode", K(ret), K(column));
+  } else if (tenant_data_version < DATA_VERSION_4_2_2_0 &&
+             column.is_geometry() && compat_mode ==lib::Worker::CompatMode::ORACLE) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("tenant data version is less than 4.2.2, sdo_geometry type is not supported", K(ret), K(tenant_data_version), K(column));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.2, udt");
   } else if (tenant_data_version < DATA_VERSION_4_2_2_0 && column.get_lob_chunk_size() != OB_DEFAULT_LOB_CHUNK_SIZE) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("tenant data version is less than 4.2.2, lob chunk size is not supported", K(ret), K(tenant_data_version), K(column));
@@ -3902,15 +3911,11 @@ int ObTableSqlService::gen_column_dml(
     orig_default_value_buf = static_cast<char *>(allocator.alloc(value_buf_len));
     cur_default_value_buf = static_cast<char *>(allocator.alloc(value_buf_len));
     extended_type_info_buf = static_cast<char *>(allocator.alloc(OB_MAX_VARBINARY_LENGTH));
-    lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
     if (OB_ISNULL(orig_default_value_buf)
         || OB_ISNULL(cur_default_value_buf)
         || OB_ISNULL(extended_type_info_buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory for default value buffer failed");
-    } else if (OB_FAIL(ObCompatModeGetter::get_table_compat_mode(
-               column.get_tenant_id(), column.get_table_id(), compat_mode))) {
-      LOG_WARN("fail to get tenant mode", K(ret), K(column));
     } else {
       MEMSET(orig_default_value_buf, 0, value_buf_len);
       MEMSET(cur_default_value_buf, 0, value_buf_len);
@@ -4009,7 +4014,6 @@ int ObTableSqlService::gen_column_dml(
                          || OB_FAIL(dml.add_column("extended_type_info", ObHexEscapeSqlStr(bin_extended_type_info)))
                          || OB_FAIL(dml.add_column("prev_column_id", column.get_prev_column_id()))
                          || (tenant_data_version >= DATA_VERSION_4_1_0_0 && OB_FAIL(dml.add_column("srs_id", column.get_srs_id())))
-                            // todo : tenant_data_version >= DATA_VERSION_4_2_0_0
                          || (tenant_data_version >= DATA_VERSION_4_2_0_0 && OB_FAIL(dml.add_column("udt_set_id", column.get_udt_set_id())))
                          || (tenant_data_version >= DATA_VERSION_4_2_0_0 &&OB_FAIL(dml.add_column("sub_data_type", column.get_sub_data_type())))
                          || (tenant_data_version >= DATA_VERSION_4_2_2_0 && OB_FAIL(dml.add_column("lob_chunk_size", column.get_lob_chunk_size())))

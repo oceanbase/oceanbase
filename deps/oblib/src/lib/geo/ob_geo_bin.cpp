@@ -105,17 +105,15 @@ uint64_t ObWkbGeomInnerPoint::length() const {
 }
 
 template<>
-double ObWkbGeomInnerPoint::get<0>() const
+double ObWkbGeomInnerPoint::get<0>(ObGeoWkbByteOrder bo/* = ObGeoWkbByteOrder::LittleEndian */) const
 {
-  ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian;
   char* ptr = reinterpret_cast<char*>(const_cast<ObWkbGeomInnerPoint*>(this));
   return ObGeoWkbByteOrderUtil::read<double>(ptr, bo);
 }
 
 template<>
-double ObWkbGeomInnerPoint::get<1>() const
+double ObWkbGeomInnerPoint::get<1>(ObGeoWkbByteOrder bo/* = ObGeoWkbByteOrder::LittleEndian */) const
 {
-  ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian;
   char* ptr = reinterpret_cast<char*>(const_cast<ObWkbGeomInnerPoint*>(this));
   ptr = ptr +  sizeof(double);
   return ObGeoWkbByteOrderUtil::read<double>(ptr, bo);
@@ -151,6 +149,16 @@ ObWkbGeomInnerPoint::ObWkbGeomInnerPoint(const ObWkbGeomInnerPoint& p)
   set<1>(p.get<1>());
 }
 
+bool ObWkbGeomInnerPoint::equals(const ObWkbGeomInnerPoint& p) const
+{
+  bool bret = false;
+  if ((fabs(this->get<0>() - p.get<0>()) <= 1e-12) &&
+      (fabs(this->get<1>() - p.get<1>()) <= 1e-12)) {
+    bret = true;
+  }
+  return bret;
+}
+
 // Cartesian linestring
 uint32_t ObWkbGeomLineString::size() const
 {
@@ -181,16 +189,16 @@ void ObWkbGeomLineString::get_sub_addr(const_pointer last_addr, index_type last_
 }
 
 // Cartesian linearring
-uint32_t ObWkbGeomLinearRing::size() const
+uint32_t ObWkbGeomLinearRing::size(ObGeoWkbByteOrder bo /*= ObGeoWkbByteOrder::LittleEndian*/) const
 {
   char *ptr = reinterpret_cast<char*>(const_cast<ObWkbGeomLinearRing*>(this));
-  return ObGeoWkbByteOrderUtil::read<uint32_t>(ptr, ObGeoWkbByteOrder::LittleEndian);
+  return ObGeoWkbByteOrderUtil::read<uint32_t>(ptr, bo);
 }
 
-ObWkbGeomLinearRing::size_type ObWkbGeomLinearRing::length() const
+ObWkbGeomLinearRing::size_type ObWkbGeomLinearRing::length(ObGeoWkbByteOrder bo /*= ObGeoWkbByteOrder::LittleEndian*/) const
 {
   size_type s = sizeof(uint32_t);
-  s += size() * (sizeof(double) * 2);
+  s += size(bo) * (sizeof(double) * 2);
   return s;
 }
 
@@ -244,7 +252,7 @@ uint32_t ObWkbGeomPolygon::size() const
 uint64_t ObWkbGeomPolygon::length() const
 {
   uint64_t s = WKB_COMMON_WKB_HEADER_LEN;
-  s += exterior_ring().length() + inner_rings().length();
+  s += exterior_ring().length(static_cast<ObGeoWkbByteOrder>(bo_)) + inner_rings().length();
   return s;
 }
 
@@ -519,34 +527,30 @@ uint64_t ObWkbGeogInnerPoint::length() const {
 }
 
 template<>
-double ObWkbGeogInnerPoint::get<0>() const
+double ObWkbGeogInnerPoint::get<0>(ObGeoWkbByteOrder bo/* = ObGeoWkbByteOrder::LittleEndian */) const
 {
-  ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian;
   char* ptr = reinterpret_cast<char*>(const_cast<ObWkbGeogInnerPoint*>(this));
   return ObGeoWkbByteOrderUtil::read<double>(ptr, bo);
 }
 
 template<>
-double ObWkbGeogInnerPoint::get<1>() const
+double ObWkbGeogInnerPoint::get<1>(ObGeoWkbByteOrder bo/* = ObGeoWkbByteOrder::LittleEndian */) const
 {
-  ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian;
   char* ptr = reinterpret_cast<char*>(const_cast<ObWkbGeogInnerPoint*>(this));
   ptr = ptr +  sizeof(double);
   return ObGeoWkbByteOrderUtil::read<double>(ptr, bo);
 }
 
 template<>
-void ObWkbGeogInnerPoint::set<0>(double d)
+void ObWkbGeogInnerPoint::set<0>(double d, ObGeoWkbByteOrder bo /*= ObGeoWkbByteOrder::LittleEndian*/)
 {
-  ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian;
   char* ptr = reinterpret_cast<char*>(const_cast<ObWkbGeogInnerPoint*>(this));
   ObGeoWkbByteOrderUtil::write<double>(ptr, d, bo);
 }
 
 template<>
-void ObWkbGeogInnerPoint::set<1>(double d)
+void ObWkbGeogInnerPoint::set<1>(double d, ObGeoWkbByteOrder bo /*= ObGeoWkbByteOrder::LittleEndian*/)
 {
-  ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian;
   char* ptr = reinterpret_cast<char*>(const_cast<ObWkbGeogInnerPoint*>(this));
   ptr = ptr + sizeof(double);
   ObGeoWkbByteOrderUtil::write<double>(ptr, d, bo);
@@ -595,16 +599,16 @@ void ObWkbGeogLineString::get_sub_addr(const_pointer last_addr, index_type last_
 }
 
 // Geograph linearring
-uint32_t ObWkbGeogLinearRing::size() const
+uint32_t ObWkbGeogLinearRing::size(ObGeoWkbByteOrder bo /*= ObGeoWkbByteOrder::LittleEndian*/) const
 {
   char *ptr = reinterpret_cast<char*>(const_cast<ObWkbGeogLinearRing*>(this));
-  return ObGeoWkbByteOrderUtil::read<uint32_t>(ptr, ObGeoWkbByteOrder::LittleEndian);
+  return ObGeoWkbByteOrderUtil::read<uint32_t>(ptr, bo);
 }
 
-ObWkbGeogLinearRing::size_type ObWkbGeogLinearRing::length() const
+ObWkbGeogLinearRing::size_type ObWkbGeogLinearRing::length(ObGeoWkbByteOrder bo /*= ObGeoWkbByteOrder::LittleEndian*/) const
 {
   size_type s = sizeof(uint32_t);
-  s += size() * (sizeof(double) * 2);
+  s += size(bo) * (sizeof(double) * 2);
   return s;
 }
 
@@ -658,7 +662,7 @@ uint32_t ObWkbGeogPolygon::size() const
 uint64_t ObWkbGeogPolygon::length() const
 {
   uint64_t s = WKB_COMMON_WKB_HEADER_LEN;
-  s += exterior_ring().length() + inner_rings().length();
+  s += exterior_ring().length(static_cast<ObGeoWkbByteOrder>(bo_)) + inner_rings().length();
   return s;
 }
 

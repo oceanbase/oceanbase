@@ -2896,6 +2896,10 @@ int ObTransformUtils::get_simple_filter_column(const ObDMLStmt *stmt,
       case T_FUN_SYS_ST_DWITHIN:
       case T_FUN_SYS_ST_WITHIN:
       case T_FUN_SYS_ST_CONTAINS:
+      case T_FUN_SYS_PRIV_ST_EQUALS:
+      case T_FUN_SYS_PRIV_ST_TOUCHES:
+      case T_FUN_SYS_ST_CROSSES:
+      case T_FUN_SYS_ST_OVERLAPS:
       {
         ObRawExpr *left = NULL;
         ObRawExpr *right = NULL;
@@ -11903,6 +11907,8 @@ int ObTransformUtils::extract_udt_exprs(ObRawExpr *expr, ObIArray<ObRawExpr *> &
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(expr));
+  } else if (expr->get_expr_type() == T_FUN_SYS_PRIV_SQL_UDT_CONSTRUCT) {
+    // do nothing
   } else if (expr->is_column_ref_expr()) {
     ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr *>(expr);
     if (ob_is_extend(col_expr->get_data_type())
@@ -13714,152 +13720,6 @@ int ObTransformUtils::expand_wild_star_to_columns(ObTransformerCtx *ctx,
     for (int32_t i = 0; OB_SUCC(ret) && i < new_col_arr.count(); i++) {
       if (OB_FAIL(json_object_expr->add_param_expr(new_col_arr.at(i)))) {
         LOG_WARN("can not push expr into json object expr", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTransformUtils::create_udt_hidden_columns(ObTransformerCtx *ctx,
-                                                ObDMLStmt *stmt,
-                                                const ObColumnRefRawExpr &udt_expr,
-                                                ObColumnRefRawExpr *&col_expr,
-                                                bool &need_transform)
-{
-  int ret = OB_SUCCESS;
-  const ObTableSchema *table_schema = NULL;
-  const TableItem *table = NULL;
-  col_expr = NULL;
-  const ColumnItem *column_item = NULL;
-  ObSEArray<ObColumnSchemaV2 *, 1> hidden_cols;
-  need_transform = false;
-  bool from_base = false;
-  bool from_xml = false;
-  bool view_table_do_transform = (stmt->get_stmt_type() == stmt::T_INSERT ||
-                                  stmt->get_stmt_type() == stmt::T_UPDATE ||
-                                  stmt->get_stmt_type() == stmt::T_MERGE);
-  if (OB_ISNULL(stmt)
-      || OB_ISNULL(ctx)
-      || OB_ISNULL(ctx->session_info_)
-      || OB_ISNULL(ctx->expr_factory_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("null unexpected", K(ctx), K(stmt), K(ret));
-  } else if (OB_ISNULL(table = stmt->get_table_item_by_id(udt_expr.get_table_id()))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get table item", K(udt_expr.get_table_id()), K(ret));
-  } else if (table->is_view_table_ && (!view_table_do_transform)) {
-    // do nothing.
-    LOG_INFO("udt columns in views does not need transfrom", K(udt_expr.get_table_id()), K(table));
-  } else if (table->is_view_table_ && table->view_base_item_ == NULL) {
-    // do nothing
-  } else if (OB_FAIL(ctx->schema_checker_->get_table_schema(ctx->session_info_->get_effective_tenant_id(),
-                                                            table->ref_id_, table_schema))) {
-    if (((table->is_generated_table() || table->is_temp_table()) && OB_NOT_NULL(table->ref_query_)) || (table->is_json_table() && (OB_NOT_NULL(table->json_table_def_)))) {
-      // situation for select  a from (select xmltype('<note3/>') a from dual )
-      LOG_INFO("table schema not found for tmp view does not need transfrom", K(ret), KPC(table));
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("failed to get table schema", K(ret));
-    }
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table should not be null", K(table->ref_id_));
-  } else {
-    if (table->is_view_table_ && view_table_do_transform) {
-      // for view table, we should check col group in base table
-      const ObTableSchema *base_table_schema = NULL;
-      from_base = true;
-      if (table->view_base_item_ == NULL) {
-        // do nothing or return error
-      } else {
-        ObSelectStmt *real_stmt = NULL;
-        if (OB_ISNULL(real_stmt = table->ref_query_->get_real_stmt())) {
-          // case : view definition is set_op
-          // Bug :
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("real stmt is NULL", K(ret));
-        } else {
-          SelectItem &t_col = real_stmt->get_select_item((udt_expr.get_column_id() - OB_APP_MIN_COLUMN_ID));
-
-          if (t_col.expr_->get_expr_type() == T_FUN_SYS_MAKEXML) { // xmltype special case
-            if (t_col.expr_->get_param_count() != 2) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("invalid xml generated table column", K(ret), K(t_col.expr_));
-            } else if (!t_col.expr_->get_param_expr(1)->is_column_ref_expr()) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("invalid xml generated table column", K(ret), K(t_col.expr_->get_param_expr(1)->is_column_ref_expr()));
-            } else {
-              from_xml = true;
-              col_expr = static_cast<ObColumnRefRawExpr*>(t_col.expr_->get_param_expr(1));
-            }
-          } else if (t_col.expr_->get_expr_type() == T_REF_COLUMN) {
-            int64_t col_id = dynamic_cast<ObColumnRefRawExpr*>(t_col.expr_)->get_column_id();
-            if (OB_FAIL(ctx->schema_checker_->get_table_schema(ctx->session_info_->get_effective_tenant_id(),
-                                                              table->view_base_item_->ref_id_, base_table_schema))) {
-              LOG_WARN("failed to get table schema", K(ret));
-            } else if (OB_ISNULL(base_table_schema)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("table should not be null", K(table->view_base_item_->ref_id_));
-            } else if (OB_FAIL(base_table_schema->get_column_schema_in_same_col_group(col_id,
-                                                                            udt_expr.get_udt_set_id(),
-                                                                            hidden_cols))) {
-              LOG_WARN("failed to get column schema", K(ret));
-            }
-          } else {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("invalid view column type", K(ret), K(t_col.expr_));
-          }
-        }
-      }
-    } else if (OB_FAIL(table_schema->get_column_schema_in_same_col_group(udt_expr.get_column_id(),
-                                                                       udt_expr.get_udt_set_id(),
-                                                                       hidden_cols))) {
-      LOG_WARN("failed to get column schema", K(ret));
-    }
-    if(OB_FAIL(ret)) {
-    } else if (!from_xml && hidden_cols.count() != 1) {
-      // xmltype only 1 hidden column currently
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("hidden cols count is not expected", K(table->ref_id_), K(hidden_cols.count()));
-    } else if (from_base) {
-      if (from_xml) {
-        column_item = stmt->get_column_item_by_base_id(table->table_id_, col_expr->get_column_id());
-      } else {
-        column_item = stmt->get_column_item_by_base_id(table->table_id_, hidden_cols.at(0)->get_column_id());
-      }
-    } else {
-      column_item = stmt->get_column_item(table->table_id_, hidden_cols.at(0)->get_column_id());
-    }
-
-    if(OB_FAIL(ret)) {
-    } else if (OB_NOT_NULL(column_item)) {
-      if (OB_ISNULL(column_item->expr_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("column item expr is null", K(ret));
-      } else {
-        col_expr = column_item->expr_;
-        need_transform = true;
-      }
-    } else if (!from_xml && OB_FAIL(ObRawExprUtils::build_column_expr(*ctx->expr_factory_, *hidden_cols.at(0), col_expr))) {
-      LOG_WARN("build column expr failed", K(ret));
-    } else if (OB_ISNULL(col_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to create raw expr for dummy output", K(ret));
-    } else {
-      if (!from_xml) {
-        col_expr->set_table_id(table->table_id_);
-        col_expr->set_explicited_reference();
-        col_expr->set_column_attr(udt_expr.get_table_name(), col_expr->get_column_name());
-      }
-      ColumnItem column_item;
-      column_item.expr_ = col_expr;
-      column_item.table_id_ = col_expr->get_table_id();
-      column_item.column_id_ = col_expr->get_column_id();
-      column_item.column_name_ = col_expr->get_column_name();
-      if (OB_FAIL(stmt->add_column_item(column_item))) {
-        LOG_WARN("add column item to stmt failed", K(ret));
-      } else {
-        need_transform = true;
       }
     }
   }

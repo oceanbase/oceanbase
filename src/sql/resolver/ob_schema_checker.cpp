@@ -29,6 +29,7 @@
 #include "common/ob_smart_call.h"
 #include "share/schema/ob_sys_variable_mgr.h" // ObSimpleSysVariableSchema
 #include "sql/resolver/ob_stmt_resolver.h"
+#include "pl/ob_pl_stmt.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -1211,10 +1212,9 @@ int ObSchemaChecker::get_sys_udt_id(const ObString &udt_name,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("schema checker is not inited", K_(is_inited));
-  } else if (lib::is_oracle_mode() && udt_name.case_compare("xmltype") == 0) {
-    if (OB_FAIL(schema_mgr_->get_udt_id(OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID, -1, udt_name, udt_id))) {
-      LOG_WARN("get udt info failed", K(ret));
-    }
+  } else if (lib::is_oracle_mode() &&
+             OB_FAIL(schema_mgr_->get_udt_id(OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID, -1, udt_name, udt_id))) {
+    LOG_WARN("get udt info failed", K(ret));
   }
   return ret;
 }
@@ -2960,6 +2960,138 @@ bool ObSchemaChecker::is_ora_priv_check()
     return true;
   else
     return false;
+}
+
+int ObSchemaChecker::flatten_udt_attributes(
+    const uint64_t tenant_id,
+    const uint64_t udt_id,
+    ObIAllocator &allocator,
+    ObString &qualified_name,
+    int64_t &schema_version,
+    ObIArray<ObString> &udt_qualified_names)
+{
+  int ret = OB_SUCCESS;
+  const share::schema::ObUDTTypeInfo *udt_info = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("schema checker is not inited", K_(is_inited));
+  } else if (OB_FAIL(schema_mgr_->get_udt_info(tenant_id, udt_id, udt_info))) {
+    LOG_WARN("get udt info failed", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(udt_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("udt info is null.", K(ret), K(udt_id));
+  } else if (OB_FAIL(construct_udt_qualified_name(*udt_info, allocator, tenant_id, qualified_name, udt_qualified_names))) {
+    LOG_WARN("failed to construct udt qualified name.", K(ret), K(udt_id));
+  } else {
+    schema_version = udt_info->get_schema_version();
+  }
+  return ret;
+}
+
+int ObSchemaChecker::construct_udt_qualified_name(const ObUDTTypeInfo &udt_info, ObIAllocator &allocator,
+                                                  const uint64_t tenant_id,
+                                                  ObString &qualified_name,
+                                                  ObIArray<ObString> &udt_qualified_names)
+{
+  int ret = OB_SUCCESS;
+  bool is_overflow = false;
+  if (OB_FAIL(check_stack_overflow(is_overflow))) {
+    LOG_WARN("failed to check stack overflow", K(ret));
+  } else if (is_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recusive", K(ret));
+  }
+  for (int i = 0; i < udt_info.get_attributes() && OB_SUCC(ret); i++) {
+    const ObUDTTypeAttr *attr = udt_info.get_attrs().at(i);
+    const char *curr_content = qualified_name.ptr() + qualified_name.length();
+    if (OB_ISNULL(attr)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument.", K(ret));
+    } else if ((i + 1) != attr->get_attribute()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("attribute sequence is wrong.", K(ret), K(udt_info.get_type_id()), K(i), K(attr->get_attribute()));
+    } else if (qualified_name.write(".", 1) == 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to write qualified name", K(ret), K(udt_info.get_type_id()));
+    } else if (qualified_name.write(attr->get_name().ptr(), attr->get_name().length()) == 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to write qualified name", K(ret), K(udt_info.get_type_id()), K(attr->get_name()));
+    } else if (attr->get_type_attr_id() >= ObMaxType) {
+      // udt type
+      const ObUDTTypeInfo *sub_udt_info = NULL;
+      if (OB_FAIL(get_udt_info(tenant_id, attr->get_type_attr_id(), sub_udt_info))) {
+        LOG_WARN("failed to get udt info", K(ret), K(tenant_id), K(udt_info.get_type_id()));
+      } else if (sub_udt_info->is_collection()) {
+        char *name_str = static_cast<char *>(allocator.alloc(qualified_name.length()));
+        if (OB_ISNULL(name_str)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to alloc memory", K(ret), K(qualified_name.length()), K(udt_info.get_type_id()));
+        } else {
+          MEMCPY(name_str, qualified_name.ptr(), qualified_name.length());
+          if (OB_FAIL(udt_qualified_names.push_back(ObString(qualified_name.length(), name_str)))) {
+            LOG_WARN("failed to push back qualified name", K(ret), K(udt_info.get_type_id()));
+          }
+        }
+      } else if (sub_udt_info->get_typecode() == UDT_TYPE_OBJECT) {
+        // object
+        if (OB_FAIL(construct_udt_qualified_name(*sub_udt_info, allocator, tenant_id,
+                                                 qualified_name, udt_qualified_names))) {
+          LOG_WARN("add udt attribute to table_schema failed", K(ret), K(attr->get_type_attr_id()), K(tenant_id));
+        }
+      }
+    } else {
+      char *name_str = static_cast<char *>(allocator.alloc(qualified_name.length()));
+      if (OB_ISNULL(name_str)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to alloc memory", K(ret), K(qualified_name.length()), K(udt_info.get_type_id()));
+      } else {
+        MEMCPY(name_str, qualified_name.ptr(), qualified_name.length());
+        if (OB_FAIL(udt_qualified_names.push_back(ObString(qualified_name.length(), name_str)))) {
+          LOG_WARN("failed to push back qualified name", K(ret), K(udt_info.get_type_id()));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      qualified_name.clip(curr_content);
+    }
+  }
+  return ret;
+}
+
+int ObSchemaChecker::get_udt_attribute_id(const uint64_t udt_id, const ObString &attr_name, uint64_t &attr_id, uint64_t &attr_pos)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = pl::get_tenant_id_by_object_id(udt_id);
+  const share::schema::ObUDTTypeInfo *udt_info = NULL;
+  bool is_overflow = false;
+  if (OB_FAIL(check_stack_overflow(is_overflow))) {
+    LOG_WARN("failed to check stack overflow", K(ret));
+  } else if (is_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recusive", K(ret));
+  } else if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("schema checker is not inited", K_(is_inited));
+  } else if (OB_FAIL(schema_mgr_->get_udt_info(tenant_id, udt_id, udt_info))) {
+    LOG_WARN("get udt info failed", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(udt_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("udt info is null.", K(ret), K(udt_id));
+  } else if (!udt_info->is_collection()) {
+    for (int i = 0; i < udt_info->get_attributes() && OB_SUCC(ret) && attr_id == OB_INVALID_ID; i++) {
+      const ObUDTTypeAttr *attr = udt_info->get_attrs().at(i);
+      if (attr->get_name().case_compare(attr_name) == 0) {
+        attr_id = attr->get_type_attr_id();
+        attr_pos++;
+      } else if (attr->get_type_attr_id() >= ObMaxType) {
+        attr_pos++;
+        if (OB_FAIL(get_udt_attribute_id(attr->get_type_attr_id(), attr_name, attr_id, attr_pos))) {
+           LOG_WARN("failed to get udt attribute id", K(ret), K(udt_id));
+        }
+      }
+    }
+  }
+  return ret;
 }
 
 int ObSchemaChecker::remove_tmp_cte_schemas(const ObString& cte_table_name)

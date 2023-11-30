@@ -18,6 +18,10 @@
 
 namespace oceanbase
 {
+namespace common
+{
+class ObGeometry;
+}
 namespace sql
 {
 class ObExprSTAsText : public ObFuncExprOperator
@@ -44,6 +48,7 @@ public:
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
+  static int to_wkt(ObIAllocator &allocator, ObGeometry *geo, ObString &res_wkt, const char *func_name);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSTAsText);
 };

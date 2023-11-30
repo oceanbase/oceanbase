@@ -491,32 +491,12 @@ struct DatumGeoHashCalculator : public DefHashMethod<T>
 {
   static int calc_datum_hash(const ObDatum &datum, const uint64_t seed, uint64_t &res)
   {
-    int ret = OB_SUCCESS;
-    common::ObString wkb;
-    res = 0;
-    common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-    ObTextStringIter str_iter(ObJsonType, CS_TYPE_BINARY, datum.get_string(), HAS_LOB_HEADER);
-    if (datum.is_null()) {
-      res = seed;
-    } else if (OB_FAIL(str_iter.init(0, NULL, &allocator))) {
-      LOG_WARN("Lob: str iter init failed ", K(ret), K(str_iter));
-    } else if (OB_FAIL(str_iter.get_full_data(wkb))) {
-      LOG_WARN("Lob: str iter get full data failed ", K(ret), K(str_iter));
-    } else {
-      ret = ObjHashCalculator<ObGeometryType, T, ObDatum>::calc_hash_value(datum, seed, res);
-    }
-    return ret;
+    return datum_lob_locator_hash(datum, CS_TYPE_UTF8MB4_BIN, seed, T::is_varchar_hash ? T::hash : NULL, res);
   }
 
   static int calc_datum_hash_v2(const ObDatum &datum, const uint64_t seed, uint64_t &res)
   {
-    int ret = OB_SUCCESS;
-    if (datum.is_null()) {
-      res = seed;
-    } else {
-      ret = calc_datum_hash(datum, seed, res);
-    }
-    return ret;
+    return datum_lob_locator_hash(datum, CS_TYPE_UTF8MB4_BIN, seed, T::is_varchar_hash ? T::hash : NULL, res);
   }
 };
 
@@ -1175,6 +1155,8 @@ ObExprBasicFuncs* ObDatumFuncs::get_basic_func(const ObObjType type,
       res = &EXPR_BASIC_GEO_FUNCS[has_lob_locator];
     } else if (ob_is_user_defined_sql_type(type)) {
       res = &EXPR_BASIC_UDT_FUNCS[0];
+    } else if (ob_is_collection_sql_type(type)) {
+      res = &EXPR_BASIC_STR_FUNCS[cs_type][false][has_lob_locator];
     } else if (!is_oracle_mode && ob_is_double_type(type) &&
                 scale > SCALE_UNKNOWN_YET && scale < OB_NOT_FIXED_SCALE) {
       res = &FIXED_DOUBLE_BASIC_FUNCS[scale];

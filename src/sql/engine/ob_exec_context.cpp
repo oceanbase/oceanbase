@@ -140,9 +140,15 @@ ObExecContext::~ObExecContext()
   row_id_list_array_.reset();
   destroy_eval_allocator();
   reset_op_ctx();
-  //对于后台线程, 需要调用析构
-  if (NULL != phy_plan_ctx_ && !THIS_WORKER.has_req_flag()) {
-    phy_plan_ctx_->~ObPhysicalPlanCtx();
+
+  if (NULL != phy_plan_ctx_) {
+    if (!THIS_WORKER.has_req_flag()) {
+      //对于后台线程, 需要调用析构
+      phy_plan_ctx_->~ObPhysicalPlanCtx();
+    } else {
+      // free subschema map memory
+      phy_plan_ctx_->get_subschema_ctx().destroy();
+    }
   }
   phy_plan_ctx_ = NULL;
   // destory gi task info map
@@ -1047,5 +1053,37 @@ DEFINE_GET_SERIALIZE_SIZE(ObExecContext)
   }
   return len;
 }
+
+int ObExecContext::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlUDTMeta &udt_meta)
+{
+  int ret = OB_SUCCESS;
+  if (ob_is_reserved_subschema_id(subschema_id)) {
+    ret = ob_get_reserved_udt_meta(subschema_id, udt_meta);
+  } else if (OB_ISNULL(phy_plan_ctx_)) {
+    ret = OB_NOT_INIT;
+    SQL_ENG_LOG(WARN, "not phyical plan ctx for subschema mapping", K(ret), K(lbt()));
+  } else {
+    ret = phy_plan_ctx_->get_sqludt_meta_by_subschema_id(subschema_id, udt_meta);
+  }
+  return ret;
+}
+
+int ObExecContext::get_subschema_id_by_udt_id(uint64_t udt_type_id,
+                                              uint16_t &subschema_id,
+                                              share::schema::ObSchemaGetterGuard *schema_guard)
+{
+  int ret = OB_SUCCESS;
+  if (ob_is_reserved_udt_id(udt_type_id)) {
+    ret = ob_get_reserved_subschema(udt_type_id, subschema_id);
+  } else if (OB_ISNULL(phy_plan_ctx_)) {
+    ret = OB_NOT_INIT;
+    SQL_ENG_LOG(WARN, "not phyical plan ctx for reverse mapping", K(ret), K(lbt()));
+  } else {
+    schema_guard = OB_ISNULL(schema_guard) ? get_sql_ctx()->schema_guard_ : schema_guard;
+    ret = phy_plan_ctx_->get_subschema_id_by_udt_id(udt_type_id, subschema_id, schema_guard);
+  }
+  return ret;
+}
+
 }  // namespace sql
 }  // namespace oceanbase

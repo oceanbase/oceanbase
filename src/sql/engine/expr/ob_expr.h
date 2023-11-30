@@ -332,7 +332,8 @@ struct ObDynReserveBuf
            || common::ObLobTC == tc
            || common::ObJsonTC == tc
            || common::ObGeometryTC == tc
-           || common::ObUserDefinedSQLTC == tc;
+           || common::ObUserDefinedSQLTC == tc
+           || common::ObCollectionSQLTC == tc;
   }
 
   ObDynReserveBuf() = default;

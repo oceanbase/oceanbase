@@ -28,6 +28,7 @@
 #include "sql/engine/user_defined_function/ob_pl_user_defined_agg_function.h"
 #include "sql/engine/expr/ob_expr_dll_udf.h"
 #include "sql/engine/expr/ob_rt_datum_arith.h"
+#include "lib/geo/ob_geo_mvt.h"
 
 namespace oceanbase
 {
@@ -964,7 +965,14 @@ private:
   int get_ora_xmlagg_result(const ObAggrInfo &aggr_info,
                             GroupConcatExtraResult *&extra,
                             ObDatum &concat_result);
-
+  int get_asmvt_result(const ObAggrInfo &aggr_info,
+                       GroupConcatExtraResult *&extra,
+                       ObDatum &concat_result);
+  int init_asmvt_result(ObIAllocator &allocator,
+                        const ObAggrInfo &aggr_info,
+                        const ObObj *tmp_obj,
+                        uint32_t obj_cnt,
+                        mvt_agg_result &mvt_res);
   int check_key_valid(common::hash::ObHashSet<ObString> &view_key_names, const ObString& key);
 
   int shadow_truncate_string_for_hist(const ObObjMeta obj_meta,
@@ -1108,6 +1116,7 @@ OB_INLINE bool ObAggregateProcessor::need_extra_info(const ObExprOperatorType ex
     case T_FUN_JSON_OBJECTAGG:
     case T_FUN_ORA_JSON_OBJECTAGG:
     case T_FUN_ORA_XMLAGG:
+    case T_FUN_SYS_ST_ASMVT:
     {
       need_extra = true;
       break;

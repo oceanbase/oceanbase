@@ -1185,6 +1185,15 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogCollection, ObWkb
   return ret;
 } OB_GEO_FUNC_END;
 
+OB_GEO_CART_TREE_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObCartesianLineString, ObCartesianPolygon, bool)
+{
+  UNUSED(context);
+  const ObCartesianPoint *geo1 = reinterpret_cast<const ObCartesianPoint *>(g1);
+  const ObCartesianPolygon *geo2 = reinterpret_cast<const ObCartesianPolygon *>(g2);
+  result = boost::geometry::covered_by(*geo1, *geo2);
+  return OB_SUCCESS;
+} OB_GEO_FUNC_END;
+
 int ObGeoFuncCoveredBy::eval(const ObGeoEvalCtx &gis_context, bool &result)
 {
   return ObGeoFuncCoveredByImpl::eval_geo_func(gis_context, result);

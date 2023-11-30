@@ -816,6 +816,27 @@ typedef enum ObItemType
   T_FUN_SYS_INSERTCHILDXML = 1708,
   T_FUN_SYS_DELETEXML = 1709,
   T_FUN_SYS_XMLSEQUENCE = 1710,
+  T_FUN_SYS_PRIV_SQL_UDT_CONSTRUCT = 1711,  // add only for udt default constructor in sql
+  T_FUN_SYS_PRIV_SQL_UDT_ATTR_ACCESS = 1712,  // add only for sql udt access attribute in sql
+  T_FUN_SYS_PRIV_ST_NUMINTERIORRINGS = 1713,
+  T_FUN_SYS_PRIV_ST_ISCOLLECTION = 1714,
+  T_FUN_SYS_PRIV_ST_EQUALS = 1715,
+  T_FUN_SYS_PRIV_ST_TOUCHES = 1716,
+  T_FUN_SYS_PRIV_ST_MAKEENVELOPE = 1717,
+  T_FUN_SYS_PRIV_ST_CLIPBYBOX2D = 1718,
+  T_FUN_SYS_PRIV_ST_POINTONSURFACE = 1719,
+  T_FUN_SYS_PRIV_ST_GEOMETRYTYPE = 1720,
+  T_FUN_SYS_ST_CROSSES = 1721,
+  T_FUN_SYS_ST_OVERLAPS = 1722,
+  T_FUN_SYS_ST_UNION = 1723,
+  T_FUN_SYS_ST_LENGTH = 1724,
+  T_FUN_SYS_ST_DIFFERENCE = 1725,
+  T_FUN_SYS_ST_ASMVT = 1726,
+  T_FUN_SYS_ST_ASGEOJSON = 1727,
+  T_FUN_SYS_ST_CENTROID = 1728,
+  T_FUN_SYS_ST_SYMDIFFERENCE = 1729,
+  T_FUN_SYS_PRIV_ST_ASMVTGEOM = 1730,
+  T_FUN_SYS_PRIV_ST_MAKE_VALID = 1731,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
@@ -2343,7 +2364,11 @@ typedef enum ObContextType {
     || ((op) == T_FUN_SYS_ST_WITHIN) \
     || ((op) == T_FUN_SYS_ST_DWITHIN) \
     || ((op) == T_FUN_SYS_ST_INTERSECTS) \
-    || ((op) == T_FUN_SYS_ST_COVERS)) \
+    || ((op) == T_FUN_SYS_ST_COVERS) \
+    || ((op) == T_FUN_SYS_PRIV_ST_EQUALS) \
+    || ((op) == T_FUN_SYS_PRIV_ST_TOUCHES) \
+    || ((op) == T_FUN_SYS_ST_CROSSES) \
+    || ((op) == T_FUN_SYS_ST_OVERLAPS)) \
 
 //in oracle mode, only lists exprs can accept bool(tinyint) param
 #define ALLOW_BOOL_INPUT(op) \
@@ -2426,6 +2451,7 @@ extern const char *get_type_name(int type);
                          (op) == T_FUN_ORA_JSON_ARRAYAGG || (op) == T_FUN_ORA_JSON_OBJECTAGG ||\
                          (op) == T_FUN_GROUP_ID || \
                          (op) == T_FUN_ORA_XMLAGG || \
+                         (op) == T_FUN_SYS_ST_ASMVT || \
                          ((op) >= T_FUN_SYS_BIT_AND && (op) <= T_FUN_SYS_BIT_XOR))
 #define MAYBE_ROW_OP(op) ((op) >= T_OP_EQ && (op) <= T_OP_NE)
 #define IS_PSEUDO_COLUMN_TYPE(op) \

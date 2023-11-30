@@ -18,6 +18,10 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/schema/ob_udt_info.h"
 #include "pl/ob_pl_user_type.h"
+#include "pl/ob_pl_stmt.h"
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/sys_package/ob_sdo_geometry.h"
+#endif
 
 using namespace oceanbase::common;
 using namespace oceanbase::obmysql;
@@ -88,6 +92,7 @@ static const ObMySQLTypeMap type_maps_[ObMaxType] =
   {EMySQLFieldType::MYSQL_TYPE_JSON,       BLOB_FLAG | BINARY_FLAG, 0}, /* ObJsonType */
   {EMySQLFieldType::MYSQL_TYPE_GEOMETRY,   BLOB_FLAG | BINARY_FLAG, 0}, /* ObGeometryType */
   {EMySQLFieldType::MYSQL_TYPE_COMPLEX,   0, 0}, /* ObUserDefinedSQLType */
+  {EMySQLFieldType::MYSQL_TYPE_COMPLEX,   0, 0}, /* ObCollectionSQLType */
   /* ObMaxType */
 };
 
@@ -195,7 +200,21 @@ int ObSMUtils::cell_str(
         break;
       }
       case ObGeometryTC: {
-        ret = ObMySQLUtil::geometry_cell_str(buf, len, obj.get_string(), pos);
+        if (lib::is_oracle_mode() && type == MYSQL_PROTOCOL_TYPE::TEXT) {
+#ifdef OB_BUILD_ORACLE_PL
+          common::ObArenaAllocator allocator;
+          ObStringBuffer geo_str(&allocator);
+          if (OB_FAIL(pl::ObSdoGeometry::wkb_to_sdo_geometry_text(obj.get_string(), geo_str))) {
+            OB_LOG(WARN, "wkb to sdo geometry text failed", K(ret));
+          } else {
+            ret = ObMySQLUtil::varchar_cell_str(buf, len, geo_str.string(), is_oracle_raw, pos);
+          }
+#else
+          ret = OB_NOT_SUPPORTED;
+#endif
+        } else {
+          ret = ObMySQLUtil::geometry_cell_str(buf, len, obj.get_string(), pos);
+        }
         break;
       }
       case ObBitTC: {
@@ -219,9 +238,27 @@ int ObSMUtils::cell_str(
         if (OB_ISNULL(field) || OB_ISNULL(schema_guard)) {
           ret = OB_ERR_UNEXPECTED;
           OB_LOG(WARN, "complex type need field and schema guard not null", K(ret));
-        } else if (BINARY == type && field->type_.get_type() != ObExtendType) {
+        } else if (BINARY == type && field->type_.get_type() != ObExtendType &&
+                   !field->type_.is_user_defined_sql_type() &&
+                   !field->type_.is_collection_sql_type()) { // sql udt will cast to extend in ps mode
           ret = OB_ERR_UNEXPECTED;
           OB_LOG(WARN, "field type is not ObExtended", K(ret));
+        } else if (field->type_.is_user_defined_sql_type() || field->type_.is_collection_sql_type()) {
+          const uint64_t udt_id = field->accuracy_.get_accuracy();
+          const uint64_t tenant_id = pl::get_tenant_id_by_object_id(udt_id);
+          if (OB_FAIL(schema_guard->get_udt_info(tenant_id, udt_id, udt_info))) {
+            OB_LOG(WARN, "failed to get sys udt info", K(ret), K(field));
+          } else if (OB_ISNULL(udt_info)) {
+            ret = OB_ERR_UNEXPECTED;
+            OB_LOG(WARN, "udt info is null", K(ret));
+          } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, user_type))) {
+            OB_LOG(WARN, "faild to transform to pl type", K(ret));
+          } else if (OB_ISNULL(user_type)) {
+            ret = OB_ERR_UNEXPECTED;
+            OB_LOG(WARN, "user type is null", K(ret));
+          } else if (OB_FAIL(user_type->serialize(*schema_guard, dtc_params.tz_info_, type, src, buf, len, pos))) {
+            OB_LOG(WARN, "failed to serialize", K(ret));
+          }
         } else if (field->type_owner_.empty() || field->type_name_.empty()) {
           if (0 == field->type_name_.case_compare("SYS_REFCURSOR")) {
             ObPLCursorInfo *cursor = reinterpret_cast<ObPLCursorInfo*>(obj.get_int());
@@ -333,8 +370,17 @@ int ObSMUtils::cell_str(
         }
         break;
       }
-      case ObUserDefinedSQLTC: {
-        ret = ObMySQLUtil::sql_utd_cell_str(MTL_ID(), buf, len, obj.get_string(), pos);
+      case ObUserDefinedSQLTC:
+      case ObCollectionSQLTC: {
+        if (obj.get_udt_subschema_id() == 0) { // xml
+          ret = ObMySQLUtil::sql_utd_cell_str(MTL_ID(), buf, len, obj.get_string(), pos);
+        } else if (type == MYSQL_PROTOCOL_TYPE::TEXT) { // common sql udt text protocal
+          ret = ObMySQLUtil::varchar_cell_str(buf, len, obj.get_string(), is_oracle_raw, pos);
+        } else {
+          // ToDo: sql udt binary protocal (result should be the same as extend type)
+          ret = OB_NOT_IMPLEMENT;
+          OB_LOG(WARN, "UDTSQLType binary protocal not implemented", K(ret));
+        }
         break;
       }
       default:

@@ -508,7 +508,10 @@ int ObMPBase::check_and_refresh_schema(uint64_t login_tenant_id,
 int ObMPBase::response_row(ObSQLSessionInfo &session,
                            common::ObNewRow &row,
                            const ColumnsFieldIArray *fields,
-                           bool is_packed)
+                           bool is_packed,
+                           ObExecContext *exec_ctx,
+                           bool is_ps_protocol,
+                           ObSchemaGetterGuard *schema_guard)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
@@ -567,10 +570,14 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
                                     &allocator,
                                     &session))) {
           LOG_WARN("convert lob locator to longtext failed", K(ret));
-        } else if (value.is_user_defined_sql_type()
+        } else if ((value.is_user_defined_sql_type() || value.is_collection_sql_type())
                    && OB_FAIL(ObXMLExprHelper::process_sql_udt_results(value,
                                     &allocator,
-                                    &session))) {
+                                    &session,
+                                    exec_ctx,
+                                    is_ps_protocol,
+                                    fields,
+                                    schema_guard))) {
           LOG_WARN("convert udt to client format failed", K(ret), K(value.get_udt_subschema_id()));
         }
       }
@@ -578,7 +585,7 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
 
     if (OB_SUCC(ret)) {
       const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(&session);
-      ObSMRow sm_row(obmysql::BINARY, tmp_row, dtc_params, fields);
+      ObSMRow sm_row(obmysql::BINARY, tmp_row, dtc_params, fields, schema_guard);
       sm_row.set_packed(is_packed);
       obmysql::OMPKRow rp(sm_row);
       rp.set_is_packed(is_packed);

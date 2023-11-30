@@ -194,6 +194,7 @@ template <>
       case ObJsonType:
       case ObGeometryType:
       case ObUserDefinedSQLType:
+      case ObCollectionSQLType:
       default:
         break;
     }
@@ -3111,7 +3112,7 @@ inline int obj_print_sql<ObUserDefinedSQLType>(const ObObj &obj, char *buffer, i
       pos += sql_str.to_string(buffer + pos, length - pos);
       ret = databuff_printf(buffer, length, pos, "'");
     }
-  } else { // should not come here currently!
+  } else {
     ret = OB_NOT_SUPPORTED;
     COMMON_LOG(WARN, "unsupported udt type", K(ret), K(obj.get_meta()), K(length), K(pos));
   }
@@ -3188,13 +3189,7 @@ inline int obj_val_serialize<ObUserDefinedSQLType>(const ObObj &obj, char* buf, 
   int ret = OB_SUCCESS;
   OB_UNIS_ENCODE(obj.get_meta().get_subschema_id());
   OB_UNIS_ENCODE(obj.get_meta().get_udt_flags());
-  if (OB_FAIL(ret)) {
-  } else if (obj.get_meta().is_xml_sql_type()) {
-    OB_UNIS_ENCODE(obj.get_string());
-  } else { // need callback for different types?
-    ret = OB_NOT_SUPPORTED;
-    COMMON_LOG(WARN, "unsupported udt type", K(ret), K(obj.get_meta()), K(buf_len), K(pos));
-  }
+  OB_UNIS_ENCODE(obj.get_string());
   return ret;
 }
 
@@ -3207,16 +3202,10 @@ inline int obj_val_deserialize<ObUserDefinedSQLType>(ObObj &obj, const char* buf
 
   OB_UNIS_DECODE(subschema_id);
   OB_UNIS_DECODE(udt_flags);
-  if (OB_FAIL(ret)) {
-  } else if (ob_is_xml_sql_type(ObUserDefinedSQLType, subschema_id)) {
-    ObString blob;
-    OB_UNIS_DECODE(blob);
-    if (OB_SUCC(ret)) {
-      obj.set_sql_udt(blob.ptr(), blob.length(), subschema_id, udt_flags);
-    }
-  } else {
-    ret = OB_NOT_SUPPORTED;
-    COMMON_LOG(WARN, "unsupported udt type", K(ret), K(subschema_id), K(udt_flags));
+  ObString blob;
+  OB_UNIS_DECODE(blob);
+  if (OB_SUCC(ret)) {
+    obj.set_sql_udt(blob.ptr(), blob.length(), subschema_id, udt_flags);
   }
   return ret;
 }
@@ -3231,6 +3220,111 @@ inline int64_t obj_val_get_serialize_size<ObUserDefinedSQLType>(const ObObj &obj
   return len;
 }
 
+// DEF_TEXT_PRINT_FUNCS(ObCollectionSQLType);
+template <>
+inline int obj_print_sql<ObCollectionSQLType>(const ObObj &obj, char *buffer, int64_t length,
+                                               int64_t &pos, const ObObjPrintParams &params)
+{
+  UNUSED(params);
+  int ret = OB_SUCCESS;
+  ObString udt_data;
+  if (OB_FAIL(obj.get_udt_print_data(udt_data, buffer, length, pos, true))) {
+  } else if (OB_FAIL(databuff_printf(buffer, length, pos, "'"))) {
+  } else {
+    ObHexEscapeSqlStr sql_str(udt_data);
+    pos += sql_str.to_string(buffer + pos, length - pos);
+    ret = databuff_printf(buffer, length, pos, "'");
+  }
+  return ret;
+}
+
+template <>
+inline int obj_print_str<ObCollectionSQLType>(const ObObj &obj, char *buffer, int64_t length,
+                                               int64_t &pos, const ObObjPrintParams &params)
+{
+  UNUSED(params);
+  int ret = OB_SUCCESS;
+  ObString udt_data;
+  if (OB_FAIL(obj.get_udt_print_data(udt_data, buffer, length, pos, true))) {
+  } else {
+    ret = databuff_printf(buffer, length, pos, "'%.*s'", udt_data.length(), udt_data.ptr());
+  }
+  return ret;
+}
+
+template <>
+inline int obj_print_plain_str<ObCollectionSQLType>(const ObObj &obj, char *buffer, int64_t length,
+                                           int64_t &pos, const ObObjPrintParams &params)
+{
+  int ret = OB_SUCCESS;
+  ObObj tmp_obj = obj;
+  ObString udt_data;
+  if (OB_FAIL(obj.get_udt_print_data(udt_data, buffer, length, pos, true))) {
+  } else {
+    tmp_obj.set_string(obj.get_type(), udt_data);
+    tmp_obj.set_collation_type(CS_TYPE_BINARY);
+    ret = obj_print_plain_str<ObVarcharType>(tmp_obj, buffer, length, pos, params);
+  }
+  return ret;
+}
+template <>
+inline int obj_print_json<ObCollectionSQLType>(const ObObj &obj, char *buf, int64_t buf_len,
+                                                int64_t &pos, const ObObjPrintParams &params)
+{
+  UNUSED(params);
+  int ret = OB_SUCCESS;
+  ObString udt_data;
+  if (OB_FAIL(obj.get_udt_print_data(udt_data, buf, buf_len, pos, true))) {
+  } else {
+    J_OBJ_START();
+    PRINT_META();
+    BUF_PRINTO("COLLECTION");
+    J_COLON();
+    BUF_PRINTO(udt_data);
+    J_OBJ_END();
+  }
+  return ret;
+}
+
+// DEF_TEXT_SERIALIZE_FUNCS(ObCollectionSQLType, TYPE, VTYPE)
+template <>
+inline int obj_val_serialize<ObCollectionSQLType>(const ObObj &obj, char* buf, const int64_t buf_len, int64_t& pos)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(obj.get_meta().get_subschema_id());
+  OB_UNIS_ENCODE(obj.get_meta().get_udt_flags());
+  OB_UNIS_ENCODE(obj.get_string());
+  return ret;
+}
+
+template <>
+inline int obj_val_deserialize<ObCollectionSQLType>(ObObj &obj, const char* buf, const int64_t data_len, int64_t& pos)
+{
+  int ret = OB_SUCCESS;
+  uint16_t subschema_id = uint16_t();
+  uint8_t udt_flags = uint8_t();
+
+  OB_UNIS_DECODE(subschema_id);
+  OB_UNIS_DECODE(udt_flags);
+  ObString blob;
+  OB_UNIS_DECODE(blob);
+  if (OB_SUCC(ret)) {
+    obj.set_sql_collection(blob.ptr(), blob.length(), subschema_id, udt_flags);
+  }
+  return ret;
+}
+
+template <>
+inline int64_t obj_val_get_serialize_size<ObCollectionSQLType>(const ObObj &obj)
+{
+  int64_t len = 0;
+  OB_UNIS_ADD_LEN(obj.get_meta().get_subschema_id());
+  OB_UNIS_ADD_LEN(obj.get_meta().get_udt_flags());
+  OB_UNIS_ADD_LEN(obj.get_string());
+  return len;
+}
+
+DEF_UDT_CS_FUNCS(ObCollectionSQLType);
 }
 }
 

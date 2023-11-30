@@ -1024,6 +1024,10 @@ int ObExprOperator::is_same_kind_type_for_case(const ObExprResType &type1, const
       match = ob_is_json(type2.get_type());
     } else if (type1.is_xml_sql_type() || (type1.is_ext() && type1.get_udt_id() == T_OBJ_XML)) {
       match = type2.is_xml_sql_type() || (type2.is_ext() && type2.get_udt_id() == T_OBJ_XML);
+    } else if (type1.is_geometry()) {
+      match = type2.is_geometry();
+    } else if (type1.is_user_defined_sql_type()) {
+      match = type2.is_user_defined_sql_type() && type1.get_udt_id() == type2.get_udt_id();
     }
   }
   return ret;
@@ -1489,6 +1493,7 @@ int ObExprOperator::aggregate_user_defined_sql_type(
       if (ob_is_user_defined_sql_type(types[i].get_type())) {
         found = true;
         type.set_subschema_id(types[i].get_subschema_id());
+        type.set_udt_id(types[i].get_udt_id());
       }
     }
   }
@@ -1543,6 +1548,16 @@ ObObjType ObExprOperator::enumset_calc_types_[ObMaxTC] =
   ObUInt64Type,/*ObBitTC*/
   ObVarcharType,/*ObEnumSetTC*/
   ObVarcharType,/*ObEnumSetInnerTC*/
+  ObVarcharType, /*ObOTimestampTC*/
+  ObNullType, /*ObRawTC*/
+  ObVarcharType, /*ObInternalTC*/
+  ObVarcharType, /*ObRowIDTC*/
+  ObMaxType, /*ObLobTC*/
+  ObVarcharType, /*ObJsonTC*/
+  ObVarcharType, /*ObGeometryTC*/
+  ObNullType, /*UDT*/
+  ObUInt64Type, /*ObDecimalIntTC*/
+  ObNullType, /*COLLECTION*/
 };
 ////////////////////////////////////////////////////////////////
 
@@ -1984,6 +1999,14 @@ int ObExprOperator::calc_cmp_type2(ObExprResType &type,
       && type_ != T_OP_IS && type_ != T_OP_IS_NOT) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, ob_obj_type_str(type1.get_type()), ob_obj_type_str(type2.get_type()));
+  } else if (is_oracle_mode() && (type1.is_geometry() || type2.is_geometry())) {
+    // oracle error code compability
+    if (type1.get_type() != type2.get_type()) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    } else {
+      ret = OB_ERR_COMPARE_VARRAY_LOB_ATTR;
+    }
+    LOG_WARN("Incorrect cmp type with geometry arguments", K(type1), K(type2), K(type_), K(ret));
   } else if ((type1.is_geometry() || type2.is_geometry())
              && !(type_ == T_OP_EQ
                   || type_ == T_OP_NE
@@ -1992,7 +2015,9 @@ int ObExprOperator::calc_cmp_type2(ObExprResType &type,
                   || type_ == T_OP_SQ_NE
                   || type_ == T_OP_SQ_NSEQ
                   || type_ == T_OP_IS
-                  || type_ == T_OP_IS_NOT)) {
+                  || type_ == T_OP_IS_NOT
+                  || type_ == T_OP_IN
+                  || type_ == T_OP_NOT_IN)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Incorrect cmp type with geometry arguments", K(type1), K(type2), K(type_), K(ret));
   } else if (is_oracle_mode()
@@ -2238,11 +2263,13 @@ int ObRelationalExprOperator::calc_result_type2(ObExprResType &type,
     }
     if (support && type1.is_ext()) {
       support = (type1.get_obj_meta().get_extend_type() == pl::PL_NESTED_TABLE_TYPE ||
-                 ob_is_xml_pl_type(type1.get_type(), type1.get_udt_id()));
+                 ob_is_xml_pl_type(type1.get_type(), type1.get_udt_id()) ||
+                 ObObjUDTUtil::ob_is_supported_sql_udt(type1.get_udt_id()));
     }
     if (support && type2.is_ext()) {
       support = (type2.get_obj_meta().get_extend_type() == pl::PL_NESTED_TABLE_TYPE ||
-                 ob_is_xml_pl_type(type2.get_type(), type2.get_udt_id()));
+                 ob_is_xml_pl_type(type2.get_type(), type2.get_udt_id()) ||
+                 ObObjUDTUtil::ob_is_supported_sql_udt(type2.get_udt_id()));
     }
     if (!support) {
       ret = OB_ERR_CALL_WRONG_ARG;

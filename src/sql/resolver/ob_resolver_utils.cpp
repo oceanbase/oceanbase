@@ -1038,13 +1038,18 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
         || ((ObUserDefinedSQLTC == ob_obj_type_class(dst_type)
             || ObExtendTC == ob_obj_type_class(dst_type))
           && !(ObUserDefinedSQLTC == ob_obj_type_class(src_type)
-                || ObExtendTC == ob_obj_type_class(src_type)))) {
+                || ObExtendTC == ob_obj_type_class(src_type)
+                || ObGeometryTC == ob_obj_type_class(src_type)))
+        || (ObGeometryTC == ob_obj_type_class(src_type)
+            && ObExtendTC != ob_obj_type_class(dst_type))) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("argument count not match", K(ret), K(src_type), K(dst_type));
     } else if (ObExtendTC == ob_obj_type_class(src_type) // 普通类型与复杂类型不能互转
         || ObExtendTC == ob_obj_type_class(dst_type)) {
       if (ObUserDefinedSQLTC == ob_obj_type_class(src_type)
-          || ObUserDefinedSQLTC == ob_obj_type_class(dst_type)) {
+          || ObUserDefinedSQLTC == ob_obj_type_class(dst_type)
+          || ObGeometryTC == ob_obj_type_class(dst_type)
+          || ObGeometryTC == ob_obj_type_class(src_type)) {
       // check can cast
       } else {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
@@ -1088,6 +1093,9 @@ int ObResolverUtils::get_type_and_type_id(
     type = ObTinyIntType;
   } else if (T_FUN_PL_INTEGER_CHECKER == expr->get_expr_type()) {
     type = ObInt32Type;
+  } else if (expr->get_result_type().is_geometry()) {
+    type = ObGeometryType;
+    type_id = T_OBJ_SDO_GEOMETRY;
   } else {
     type = expr->get_result_type().get_type();
   }
@@ -4894,6 +4902,7 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
           case ObLobType:
           case ObLongTextType:
           case ObUserDefinedSQLType:
+          case ObCollectionSQLType:
             ret = OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED;
             LOG_WARN("lob data type in generated column definition", K(ret));
             break;
@@ -5186,12 +5195,64 @@ int ObResolverUtils::resolve_default_expr_v2_column_expr(ObResolverParams &param
     // length('hello')会在resolve后产生一个column，需要将column.ref_expr_替换成真正的sys_func
     bool is_all_sys_func = true;
     ObRawExpr *real_ref_expr = NULL;
+    ObArray<ObRawExpr*> real_exprs;
     for (int64_t i = 0; OB_SUCC(ret) && is_all_sys_func && i < columns.count(); i++) {
       ObQualifiedName &q_name = columns.at(i);
-      if (q_name.is_pl_udf()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "using udf as default value");
-        LOG_WARN("using udf as default value is not supported", K(ret));
+      if (q_name.is_pl_udf()) { // only default constructer is supported
+        if (OB_FAIL(ObResolverUtils::resolve_external_symbol(*params.allocator_,
+                                                             *params.expr_factory_,
+                                                             *params.session_info_,
+                                                             *params.schema_checker_->get_schema_guard(),
+                                                             params.sql_proxy_,
+                                                             &(params.external_param_info_),
+                                                             params.secondary_namespace_,
+                                                             q_name,
+                                                             columns,
+                                                             real_exprs,
+                                                             real_ref_expr,
+                                                             params.package_guard_,
+                                                             params.is_prepare_protocol_,
+                                                             false, /*is_check_mode*/
+                                                             true /*is_sql_scope*/))) {
+          LOG_WARN_IGNORE_COL_NOTFOUND(ret, "failed to resolve var", K(q_name), K(ret));
+        } else if (OB_ISNULL(real_ref_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Invalid expr", K(expr), K(ret));
+        } else if (real_ref_expr->is_udf_expr()
+                   && (expr->get_expr_type() != T_FUN_PL_OBJECT_CONSTRUCT)
+                   && (expr->get_expr_type() != T_FUN_PL_COLLECTION_CONSTRUCT)) {
+          // only default constructor is supported currently
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "using udf as default value");
+          LOG_WARN("using udf as default value is not supported",
+                   K(ret), K(default_expr_v2_column.get_column_name_str()));
+        } else {
+          // column_ref is replaced inside build_generated_column_expr with udf,
+          // here replace udf with object/collection constructor
+          if (OB_FAIL(real_exprs.push_back(real_ref_expr))) {
+            LOG_WARN("push back error", K(ret));
+          }
+          // handle flatterned obj access: a(b,c)->b,c,a repalce ref_expr once an ObQualifiedName handled
+          for (int64_t i = 0; OB_SUCC(ret) && i < real_exprs.count(); ++i) {
+            ObQualifiedName &q_name = columns.at(i);
+            const ObUDFInfo &udf_info = q_name.access_idents_.at(q_name.access_idents_.count() - 1).udf_info_;
+            if (OB_NOT_NULL(udf_info.ref_expr_)) {
+              if (OB_FAIL(ObRawExprUtils::replace_ref_column(real_ref_expr,
+                                                             udf_info.ref_expr_,
+                                                             real_exprs.at(i)))) {
+                LOG_WARN("replace column ref expr failed", K(ret));
+              }
+            }
+          }
+          // replace expr, only outside ref_expr_ is equal to expr
+          const ObUDFInfo &udf_info = q_name.access_idents_.at(q_name.access_idents_.count() - 1).udf_info_;
+          if (OB_SUCC(ret) && OB_NOT_NULL(udf_info.ref_expr_)) {
+            if (OB_FAIL(ObRawExprUtils::replace_ref_column(expr, udf_info.ref_expr_, real_ref_expr))) {
+              LOG_WARN("replace column ref expr failed", K(ret));
+            }
+          }
+          real_ref_expr = NULL;
+        }
       } else if (!q_name.is_sys_func()) {
         is_all_sys_func = false;
       } else if (OB_ISNULL(q_name.access_idents_.at(0).sys_func_expr_)) {

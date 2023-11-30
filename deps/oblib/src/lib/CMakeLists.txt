@@ -79,6 +79,30 @@ ob_set_subtarget(oblib_lib geo
   geo/ob_geo_func_distance.cpp
   geo/ob_geo_func_isvalid.cpp
   geo/ob_geometry_cast.cpp
+  geo/ob_sdo_geo_func_to_wkb.cpp
+  geo/ob_wkb_to_sdo_geo_visitor.cpp
+  geo/ob_wkb_to_json_visitor.cpp
+  geo/ob_wkb_byte_order_visitor.cpp
+  geo/ob_geo_3d.cpp
+  geo/ob_sdo_geo_object.cpp
+  geo/ob_geo_func_equals.cpp
+  geo/ob_geo_func_touches.cpp
+  geo/ob_geo_func_centroid.cpp
+  geo/ob_geo_interior_point_visitor.cpp
+  geo/ob_geo_box_clip_visitor.cpp
+  geo/ob_geo_func_crosses.cpp
+  geo/ob_geo_func_overlaps.cpp
+  geo/ob_geo_elevation_visitor.cpp
+  geo/ob_geo_func_length.cpp
+  geo/ob_geo_mvt_encode_visitor.cpp
+  geo/ob_geo_mvt.cpp
+  geo/ob_vector_tile.pb-c.c
+  geo/ob_geo_func_symdifference.cpp
+  geo/ob_geo_affine_visitor.cpp
+  geo/ob_geo_grid_visitor.cpp
+  geo/ob_geo_simplify_visitor.cpp
+  geo/ob_geo_box_clip_visitor.cpp
+  geo/ob_geo_func_dissolve_polygon.cpp
 )
 
 ob_set_subtarget(oblib_lib common_mixed
@@ -171,6 +195,7 @@ ob_set_subtarget(oblib_lib common_mixed
   xml/ob_binary_aggregate.cpp
   locale/ob_locale_type.cc
   locale/ob_locale.cpp
+  udt/ob_udt_type.cpp
 )
 
 ob_set_subtarget(oblib_lib lock

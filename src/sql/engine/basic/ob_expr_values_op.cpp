@@ -588,7 +588,7 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
           }
         } else if (!dst_expr->obj_meta_.is_lob_storage()) {
           if (OB_FAIL(datum_caster_.to_type(dst_expr->datum_meta_, real_src_expr,
-                                            cm_, datum))) {
+                                            cm_, datum, 0, dst_expr->obj_meta_.get_subschema_id()))) {
             LOG_WARN("fail to dynamic cast", K(dst_expr->datum_meta_),
                                              K(real_src_expr), K(cm_), K(ret));
             if (dst_expr->obj_meta_.is_geometry()) {

@@ -58,8 +58,9 @@
 #include "pl/sys_package/ob_dbms_rls.h"
 #include "pl/sys_package/ob_json_object_type.h"
 #include "pl/sys_package/ob_json_element_type.h"
-#include "pl/sys_package/ob_json_array_type.h"
+#include "pl/sys_package/ob_sdo_geometry.h"
 #include "pl/sys_package/ob_xml_type.h"
+#include "pl/sys_package/ob_json_array_type.h"
 #endif
 #include "pl/sys_package/ob_pl_dbms_resource_manager.h"
 #include "pl/sys_package/ob_dbms_session.h"
@@ -444,6 +445,17 @@
 #undef DEFINE_ANYDATA_INTERFACE
 #undef PREFIX
   //end of anydata
+
+  //start of sdo_geometry
+  INTERFACE_DEF(INTERFACE_SDO_GEOMETRY_GET_WKB, "SDO_GEOMETRY_GET_WKB", (ObSdoGeometry::get_wkb))
+  INTERFACE_DEF(INTERFACE_SDO_GEOMETRY_GET_WKT, "SDO_GEOMETRY_GET_WKT", (ObSdoGeometry::get_wkt))
+  INTERFACE_DEF(INTERFACE_SDO_GEOMETRY_GET_GTYPE, "SDO_GEOMETRY_GET_GTYPE", (ObSdoGeometry::get_gtype))
+  INTERFACE_DEF(INTERFACE_SDO_GEOMETRY_GET_DIMS, "SDO_GEOMETRY_GET_DIMS", (ObSdoGeometry::get_dims))
+  INTERFACE_DEF(INTERFACE_SDO_GEOMETRY_ST_COORDDIM, "SDO_GEOMETRY_ST_COORDDIM", (ObSdoGeometry::st_coorddim))
+  INTERFACE_DEF(INTERFACE_SDO_GEOMETRY_ST_ISVALID, "SDO_GEOMETRY_ST_ISVALID", (ObSdoGeometry::st_isvalid))
+  INTERFACE_DEF(INTERFACE_SDO_GEOMETRY_CONSTRUCTOR, "SDO_GEOMETRY_CONSTRUCTOR", (ObSdoGeometry::constructor))
+  INTERFACE_DEF(INTERFACE_SDO_GEOMETRY_GET_GEOJSON, "SDO_GEOMETRY_GET_GEOJSON", (ObSdoGeometry::get_geojson))
+  //end of sdo_geometry
 
   //start of xmltype
   INTERFACE_DEF(INTERFACE_XML_TYPE_TRANSFORM, "XML_TYPE_TRANSFORM", (ObXmlType::transform))

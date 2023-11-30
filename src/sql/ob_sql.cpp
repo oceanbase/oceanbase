@@ -762,16 +762,38 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
         } else if (ObNumberType == field.type_.get_type()) {
           field.type_.set_number(number);
         }
-        if (expr->get_result_type().is_user_defined_sql_type()) {
-          if (expr->get_result_type().is_xml_sql_type()) {
-            // ToDo : @gehao， need record sub schemid on ObField？
-            field.type_.set_collation_type(CS_TYPE_BINARY);
-            field.type_.set_collation_level(CS_LEVEL_IMPLICIT);
+        if (expr->get_result_type().is_user_defined_sql_type() ||
+            expr->get_result_type().is_collection_sql_type()) {
+          uint16_t subschema_id = expr->get_result_type().get_subschema_id();
+          uint16_t tmp_subschema_id = ObInvalidSqlType;
+          uint64_t udt_id = expr->get_result_type().get_udt_id();
+          ObSqlUDTMeta udt_meta;
+          if (subschema_id == ObXMLSqlType) {
+            udt_id = T_OBJ_XML;
+          }
+          if (OB_FAIL(result_set.get_exec_context().get_subschema_id_by_udt_id(udt_id, tmp_subschema_id))) {
+            LOG_WARN("unsupported udt id", K(ret), K(subschema_id));
+          } else if (OB_FAIL(result_set.get_exec_context().get_sqludt_meta_by_subschema_id(subschema_id, udt_meta))) {
+            LOG_WARN("failed to get udt meta", K(ret), K(subschema_id));
+          } else if(ObObjUDTUtil::ob_is_supported_sql_udt(udt_meta.udt_id_)) {
+            // common udt constructors or functions set udt id , but xml exprs not
+            if (udt_meta.udt_id_ == T_OBJ_XML) {
+              field.accuracy_.set_accuracy(T_OBJ_XML);
+            } else if (udt_id != udt_meta.udt_id_) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("udt id mismarch", K(ret), K(udt_id), K(udt_meta.udt_id_));
+            }
+            field.type_.set_subschema_id(subschema_id);
             field.charsetnr_ = CS_TYPE_BINARY;
-            field.length_ = OB_MAX_LONGTEXT_LENGTH; // set MAX_ACCURACY?
+            field.length_ = OB_MAX_LONGTEXT_LENGTH;
           } else {
             ret = OB_NOT_SUPPORTED;
-            LOG_WARN("udt type not supported", K(ret), "subschema id",expr->get_result_type().get_subschema_id());
+            LOG_WARN("udt type not supported", K(ret), K(subschema_id));
+          }
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(ob_write_string(alloc, ObString(udt_meta.udt_name_len_, udt_meta.udt_name_), field.type_name_))) {
+              LOG_WARN("fail to alloc string", K(i), K(field), K(ret));
+            }
           }
         } else if (!expr->get_result_type().is_ext() && OB_FAIL(expr->get_length_for_meta_in_bytes(field.length_))) {
           LOG_WARN("get length failed", K(ret), KPC(expr));
@@ -2875,8 +2897,10 @@ int ObSql::generate_stmt(ParseResult &parse_result,
 
       ObResolver resolver(resolver_ctx);
       NG_TRACE(resolve_begin);
-
-      if (stmt::T_ANONYMOUS_BLOCK == context.stmt_type_
+      if (OB_FAIL(plan_ctx->build_subschema_ctx_by_param_store(context.schema_guard_))) {
+        // only when param has sql udt types
+        SQL_LOG(WARN, "failed to build sbuschema ctx by param_store", K(ret));
+      } else if (stmt::T_ANONYMOUS_BLOCK == context.stmt_type_
           && context.is_prepare_protocol_
           && !context.is_prepare_stage_
           && !context.is_pre_execute_) {

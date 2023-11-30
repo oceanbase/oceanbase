@@ -19,6 +19,12 @@ namespace oceanbase
 {
 namespace common
 {
+struct ObGeoCoordRangeResult
+{
+  bool is_lati_out_range_ = false;
+  bool is_long_out_range_ = false;
+  double value_out_range_ = NAN;
+};
 
 class ObGeoCoordinateRangeVisitor : public ObEmptyGeoVisitor
 {
@@ -37,9 +43,12 @@ public:
   void reset();
 
   int visit(ObGeographPoint *geo) override;
-
-  template<typename Geo_type>
-  int calculate_point_range(Geo_type *geo);
+  void get_coord_range_result(ObGeoCoordRangeResult& result);
+  static int calculate_point_range(const ObSrsItem *srs,
+                                   double longti,
+                                   double lati,
+                                   bool is_normalized,
+                                   ObGeoCoordRangeResult &result);
 
 private:
   const ObSrsItem *srs_;

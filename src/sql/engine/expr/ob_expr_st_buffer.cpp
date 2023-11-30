@@ -491,15 +491,16 @@ int ObExprSTBuffer::eval_st_buffer(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
       // Consist with mysql, return wkb(add version) if distance is too small.
       // However pg will return fixed geometry.
       ObString res_wkb;
-      if (OB_FAIL(ObGeoTypeUtil::create_geo_by_wkb(temp_allocator, geo_str, srs, geo))) {
-        LOG_WARN("get geo by wkb failed", K(ret), K(geo_str));
+      if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, geo_str,
+                                geo, srs, N_ST_BUFFER, ObGeoBuildFlag::GEO_ALLOW_3D))) {
+        LOG_WARN("parse wkb failed", K(ret), K(geo_str));
       } else if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(*geo, expr, ctx, srs, res_wkb))) {
         LOG_WARN("failed to write geometry to wkb", K(ret));
       } else {
         res.set_string(res_wkb);
       }
     } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, geo_str,
-        geo, srs, N_ST_BUFFER))) {
+        geo, srs, N_ST_BUFFER, ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT))) {
       LOG_WARN("parse wkb failed", K(ret), K(geo_str));
     } else if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(geo_str, srid))) {
       LOG_WARN("get type and srid from wkb failed", K(ret));
@@ -830,7 +831,8 @@ int ObExprPrivSTBuffer::eval_priv_st_buffer(const ObExpr &expr, ObEvalCtx &ctx, 
     LOG_WARN("fail to get real string data", K(ret), K(geo_str));
   } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, geo_str, srs, true))) {
     LOG_WARN("fail to get srs item", K(ret));
-  } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, geo_str, geo, srs, N_PRIV_ST_BUFFER, false, true))) {
+  } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, geo_str, geo, srs, N_PRIV_ST_BUFFER,
+                    ObGeoBuildFlag::GEO_CHECK_RING | ObGeoBuildFlag::GEO_CORRECT | ObGeoBuildFlag::GEO_ALLOW_3D | ObGeoBuildFlag::GEO_CHECK_RANGE))) {
     LOG_WARN("parse wkb failed", K(ret), K(geo_str));
   } else if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(geo_str, srid))) {
     LOG_WARN("get type and srid from wkb failed", K(ret));
