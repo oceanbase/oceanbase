@@ -245,6 +245,7 @@ private:
   common::ObAddr self_;
   palf::PalfEnv *palf_env_;
   IObNetKeepAliveAdapter *net_keepalive_adapter_;
+  common::ObILogAllocator *alloc_mgr_;
 
   ObLogApplyService apply_service_;
   ObLogReplayService replay_service_;

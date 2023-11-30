@@ -540,15 +540,14 @@ DEF_STR_WITH_CHECKER(log_transport_compress_func, OB_TENANT_PARAMETER, "lz4_1.0"
                      "compressor used for log transport. Values: none, lz4_1.0, zstd_1.0, zstd_1.3.8",
                      ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-//DEF_BOOL(enable_clog_persistence_compress, OB_TENANT_PARAMETER, "False",
-//         "If this option is set to true, use compression for clog persistence. "
-//         "The default is false(no compression)",
-//         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(log_storage_compress_all, OB_TENANT_PARAMETER, "False",
+         "specifies whether to compress logs before storing. The default is false(no compression)",
+         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-//DEF_STR_WITH_CHECKER(clog_persistence_compress_func, OB_TENANT_PARAMETER, "lz4_1.0",
-//                     common::ObConfigPerfCompressFuncChecker,
-//                     "compressor used for clog persistence. Values: none, lz4_1.0, zstd_1.0, zstd_1.3.8",
-//                     ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(log_storage_compress_func, OB_TENANT_PARAMETER, "lz4_1.0",
+                     common::ObConfigPerfCompressFuncChecker,
+                     "specifies the algorithms used for log storage compression. Values: lz4_1.0, zstd_1.0, zstd_1.3.8",
+                     ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 //DEF_BOOL(enable_log_archive, OB_CLUSTER_PARAMETER, "False",
 //         "control if enable log archive",

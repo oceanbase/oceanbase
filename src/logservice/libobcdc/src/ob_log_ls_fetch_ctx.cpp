@@ -23,6 +23,9 @@
 #include "ob_log_instance.h"                  // TCTX
 #include "ob_log_fetcher.h"                   // IObLogFetcher
 #include "logservice/restoreservice/ob_remote_log_source_allocator.h"
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+#include "logservice/ob_log_compression.h"
+#endif
 
 #define STAT(level, fmt, args...) OBLOG_FETCHER_LOG(level, "[STAT] [FETCH_CTX] " fmt, ##args)
 #define _STAT(level, fmt, args...) _OBLOG_FETCHER_LOG(level, "[STAT] [FETCH_CTX] " fmt, ##args)
@@ -430,10 +433,11 @@ int LSFetchCtx::read_log(
 {
   int ret = OB_SUCCESS;
   const char *buf = log_entry.get_data_buf();
-  const int64_t buf_len = log_entry.get_data_len();
+  int64_t buf_len = log_entry.get_data_len();
   const int64_t submit_ts = log_entry.get_scn().get_val_for_logservice();
   int64_t pos = 0;
   logservice::ObLogBaseHeader log_base_header;
+
 
   if (OB_ISNULL(part_trans_resolver_)) {
     ret = OB_INVALID_ERROR;
@@ -448,69 +452,106 @@ int LSFetchCtx::read_log(
   } else {
     const logservice::ObLogBaseType &base_type = log_base_header.get_log_type();
 
-    switch (base_type) {
-      case logservice::ObLogBaseType::TRANS_SERVICE_LOG_BASE_TYPE:
-      {
-        if (OB_FAIL(part_trans_resolver_->read(buf, buf_len, pos, lsn, submit_ts, serve_info_, missing, tsi))) {
-          if (OB_ITEM_NOT_SETTED != ret && OB_IN_STOP_STATE != ret) {
-            LOG_ERROR("resolve trans log failed", KR(ret), K(log_entry), K(log_base_header));
-          }
-        }
-        break;
-      }
-      case logservice::ObLogBaseType::KEEP_ALIVE_LOG_BASE_TYPE:
-      {
-        // update progress while group_entry consumed (in fetch_stream)
-        LOG_DEBUG("LOG_STREAM_KEEP_ALIVE", K_(tls_id), K(submit_ts));
-        break;
-      }
-      case logservice::ObLogBaseType::GC_LS_LOG_BASE_TYPE:
-      {
-        // Processing OFFLINE logs
-        if (OB_FAIL(handle_offline_ls_log_(log_entry, stop_flag))) {
-          LOG_ERROR("handle_offline_ls_log_ failed", KR(ret), K(log_entry), K(log_base_header));
-        }
-        break;
-      }
-      case logservice::ObLogBaseType::DATA_DICT_LOG_BASE_TYPE:
-      {
-        // TODO remove
-        LOG_DEBUG("data_dict redo log", K(tls_id_), K(lsn), K(log_entry));
-
-        if (is_loading_data_dict_baseline_data_) {
-          const palf::LSN &data_dict_baseline_start_lsn = start_parameters_.get_data_dict_in_log_info().start_lsn_;
-          const palf::LSN &data_dict_baseline_end_lsn = start_parameters_.get_data_dict_in_log_info().end_lsn_;
-
-          if ((data_dict_baseline_start_lsn <= lsn) && (lsn <= data_dict_baseline_end_lsn)) {
-            if (OB_FAIL(GLOGMETADATASERVICE.read(tls_id_.get_tenant_id(), data_dict_iterator_, buf, buf_len,
-                pos, lsn, submit_ts))) {
-              LOG_ERROR("log_meta_data_service read failed", KR(ret), K(log_entry), K(log_base_header));
-            }
-
-            if (data_dict_baseline_end_lsn == lsn) {
-              LOG_INFO("[DataDictionary] The last log of the baseline data has been fetched", K(tls_id_), K(lsn), K(log_entry));
-            }
-          } else {
-            // do nothing
-          }
-        } else {}
-        break;
-      }
-      default:
-      {
-        char log_base_type_str[logservice::OB_LOG_BASE_TYPE_STR_MAX_LEN] = {'\0'};
-
-        if (OB_FAIL(log_base_type_to_string(base_type, log_base_type_str, logservice::OB_LOG_BASE_TYPE_STR_MAX_LEN))) {
-          LOG_ERROR("log_base_type_to_string failed", KR(ret), K(log_base_type_str));
-        } else {
-          LOG_DEBUG("ignore palf log", K(log_base_type_str), K(log_base_header), K(log_entry));
-        }
-
-        break;
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+    char *decompression_buf = NULL;
+    int64_t decompressed_len = 0;
+    IObLogFetcher *fetcher = static_cast<IObLogFetcher *>(ls_fetch_mgr_->get_fetcher_host());
+    if (OB_ISNULL(fetcher)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("fetcher is nullptr", KR(ret), K(fetcher));
+    } else if (log_base_header.is_compressed()) {
+      if (OB_FAIL(decompress_log_(buf, buf_len, pos, decompression_buf, decompressed_len, fetcher))) {
+        LOG_ERROR("deserialize_log_entry_base_header_ failed", K(log_entry),  K(lsn), K_(tls_id));
+      } else {
+        buf = decompression_buf;
+        buf_len = decompressed_len;
+        pos = 0;
       }
     }
-  }
+#endif
 
+    if (OB_SUCC(ret)) {
+      switch (base_type) {
+        case logservice::ObLogBaseType::TRANS_SERVICE_LOG_BASE_TYPE: {
+          if (OB_FAIL(part_trans_resolver_->read(buf, buf_len, pos, lsn,
+                                                 submit_ts, serve_info_, missing,
+                                                 tsi))) {
+            if (OB_ITEM_NOT_SETTED != ret && OB_IN_STOP_STATE != ret) {
+              LOG_ERROR("resolve trans log failed", KR(ret), K(log_entry),
+                        K(log_base_header));
+            }
+          }
+          break;
+        }
+        case logservice::ObLogBaseType::KEEP_ALIVE_LOG_BASE_TYPE: {
+          // update progress while group_entry consumed (in fetch_stream)
+          LOG_DEBUG("LOG_STREAM_KEEP_ALIVE", K_(tls_id), K(submit_ts));
+          break;
+        }
+        case logservice::ObLogBaseType::GC_LS_LOG_BASE_TYPE: {
+          // Processing OFFLINE logs
+          if (OB_FAIL(handle_offline_ls_log_(log_entry, stop_flag))) {
+            LOG_ERROR("handle_offline_ls_log_ failed", KR(ret), K(log_entry),
+                      K(log_base_header));
+          }
+          break;
+        }
+        case logservice::ObLogBaseType::DATA_DICT_LOG_BASE_TYPE: {
+          // TODO remove
+          LOG_DEBUG("data_dict redo log", K(tls_id_), K(lsn), K(log_entry));
+
+          if (is_loading_data_dict_baseline_data_) {
+            const palf::LSN &data_dict_baseline_start_lsn =
+                start_parameters_.get_data_dict_in_log_info().start_lsn_;
+            const palf::LSN &data_dict_baseline_end_lsn =
+                start_parameters_.get_data_dict_in_log_info().end_lsn_;
+
+            if ((data_dict_baseline_start_lsn <= lsn) &&
+                (lsn <= data_dict_baseline_end_lsn)) {
+              if (OB_FAIL(GLOGMETADATASERVICE.read(
+                          tls_id_.get_tenant_id(), data_dict_iterator_, buf, buf_len,
+                          pos, lsn, submit_ts))) {
+                LOG_ERROR("log_meta_data_service read failed", KR(ret),
+                          K(log_entry), K(log_base_header));
+              }
+
+              if (data_dict_baseline_end_lsn == lsn) {
+                LOG_INFO("[DataDictionary] The last log of the baseline data "
+                         "has been fetched",
+                         K(tls_id_), K(lsn), K(log_entry));
+              }
+            } else {
+              // do nothing
+            }
+          } else {
+          }
+          break;
+        }
+        default: {
+          char log_base_type_str[logservice::OB_LOG_BASE_TYPE_STR_MAX_LEN] = {'\0'};
+
+          if (OB_FAIL(log_base_type_to_string(
+                      base_type, log_base_type_str,
+                      logservice::OB_LOG_BASE_TYPE_STR_MAX_LEN))) {
+            LOG_ERROR("log_base_type_to_string failed", KR(ret),
+                      K(log_base_type_str));
+          } else {
+            LOG_DEBUG("ignore palf log", K(log_base_type_str), K(log_base_header),
+                      K(log_entry));
+          }
+
+          break;
+        }
+      }
+    }
+
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+    if (NULL != fetcher && NULL != decompression_buf) {
+      fetcher->free_decompression_buf(static_cast<void *>(decompression_buf));
+      decompression_buf = NULL;
+    }
+#endif
+  }
   return ret;
 }
 
@@ -1192,6 +1233,34 @@ bool LSFetchCtx::need_switch_server(const common::ObAddr &cur_svr)
 
   return bool_ret;
 }
+
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+int LSFetchCtx::decompress_log_(const char *buf, const int64_t buf_len, int64_t pos,
+                                char *&decompression_buf, int64_t &decompressed_len,
+                                IObLogFetcher *fetcher)
+{
+  int ret = OB_SUCCESS;
+  logservice::LogCompressedPayloadHeader com_header;
+  int64_t com_pos = pos;
+  int64_t final_decompressed_len = 0;
+  if (OB_FAIL(com_header.deserialize(buf, buf_len, com_pos))) {
+    LOG_ERROR("failed to deserialize LogCompressedPayloadHeader", K(tls_id_));
+  } else if (FALSE_IT(decompressed_len = com_header.get_original_len())) {
+  } else if (OB_UNLIKELY(NULL == (decompression_buf = static_cast<char *>
+                                  (fetcher->alloc_decompression_buf(decompressed_len))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate decompression_buf", K(tls_id_));
+  } else if (OB_FAIL(logservice::decompress(fetcher->get_decompression_allocator(),
+                                            buf + pos, buf_len - pos, decompression_buf,
+                                            decompressed_len, final_decompressed_len))) {
+    LOG_ERROR("failed to decompress", K(com_header), K(tls_id_));
+  } else if (OB_UNLIKELY(decompressed_len != final_decompressed_len)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("data is corrupted", K(tls_id_), K(com_header), K(decompressed_len), K(final_decompressed_len));
+  }
+  return ret;
+}
+#endif
 
 /////////////////////////////////// LSProgress ///////////////////////////////////
 

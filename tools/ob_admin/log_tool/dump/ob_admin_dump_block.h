@@ -59,13 +59,13 @@ private:
   int do_dump_(ObAdminDumpIterator &iter, const char *block_namt);
   int parse_single_group_entry_(const palf::LogGroupEntry &entry,
                                 const char *block_name,
-                                palf::LSN lsn);
+                                palf::LSN lsn,
+                                bool &has_encount_error);
   int parse_single_log_entry_(const palf::LogEntry &entry,
                               const char *block_name,
                               palf::LSN lsn);
 
-private:
-  const char *block_path_;
+      private : const char *block_path_;
   share::ObAdminMutatorStringArg str_arg_;
 };
 

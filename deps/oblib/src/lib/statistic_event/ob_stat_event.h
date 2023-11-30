@@ -338,6 +338,8 @@ STAT_EVENT_ADD_DEF(ARCHIVE_WRITE_LOG_SIZE, "archive write log size", ObStatClass
 STAT_EVENT_ADD_DEF(RESTORE_READ_LOG_SIZE, "restore read log size", ObStatClassIds::CLOG, 80013, true, true, true)
 STAT_EVENT_ADD_DEF(RESTORE_WRITE_LOG_SIZE, "restore write log size", ObStatClassIds::CLOG, 80014, true, true, true)
 STAT_EVENT_ADD_DEF(CLOG_TRANS_LOG_TOTAL_SIZE, "clog trans log total size", ObStatClassIds::CLOG, 80057, false, true, true)
+STAT_EVENT_ADD_DEF(LOG_STORAGE_COMPRESS_ORIGINAL_SIZE, "log storage compress original size", ObStatClassIds::CLOG, 80058, false, true, true)
+STAT_EVENT_ADD_DEF(LOG_STORAGE_COMPRESS_COMPRESSED_SIZE, "log storage compress compressed size", ObStatClassIds::CLOG, 80059, false, true, true)
 
 // CLOG.EXTLOG 81001 ~ 90000
 STAT_EVENT_ADD_DEF(CLOG_EXTLOG_FETCH_LOG_SIZE, "external log service fetch log size", ObStatClassIds::CLOG, 81001, false, true, true)

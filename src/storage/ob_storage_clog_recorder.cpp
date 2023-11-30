@@ -270,6 +270,7 @@ int ObIStorageClogRecorder::write_clog(
 {
   int ret = OB_SUCCESS;
   const bool need_nonblock = false;
+  const bool allow_compression = false;
   palf::LSN lsn;
   clog_scn_.reset();
   if (OB_UNLIKELY(nullptr == buf || buf_len < 0)) {
@@ -279,7 +280,7 @@ int ObIStorageClogRecorder::write_clog(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("palf handle is null", K(ret), KP(log_handler_));
   } else if (FALSE_IT(ATOMIC_STORE(&logcb_finish_flag_, false))) {
-  } else if (OB_FAIL(log_handler_->append(buf, buf_len, share::SCN::min_scn(), need_nonblock, logcb_ptr_, lsn, clog_scn_))) {
+  } else if (OB_FAIL(log_handler_->append(buf, buf_len, share::SCN::min_scn(), need_nonblock, allow_compression, logcb_ptr_, lsn, clog_scn_))) {
     LOG_WARN("fail to submit log", K(ret), KPC(this));
   }
   return ret;

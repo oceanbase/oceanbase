@@ -127,6 +127,7 @@ int ObLSTxLogAdapter::submit_log(const char *buf,
   SCN scn;
   int64_t cur_ts = ObClockGenerator::getClock();
   const bool is_big_log = (size > palf::MAX_NORMAL_LOG_BODY_SIZE);
+  const bool allow_compression = true;
 
   if (NULL == buf || 0 >= size || OB_ISNULL(cb) || !base_scn.is_valid() || size > palf::MAX_LOG_BODY_SIZE ||
       base_scn.convert_to_ts() > cur_ts + 86400000000L) {
@@ -135,10 +136,12 @@ int ObLSTxLogAdapter::submit_log(const char *buf,
   } else if (OB_ISNULL(log_handler_) || !log_handler_->is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), KP(log_handler_));
-  } else if (is_big_log && OB_FAIL(log_handler_->append_big_log(buf, size, base_scn, need_nonblock, cb, lsn, scn))) {
+  } else if (is_big_log && OB_FAIL(log_handler_->append_big_log(buf, size, base_scn, need_nonblock,
+                                                                allow_compression, cb, lsn, scn))) {
     TRANS_LOG(WARN, "append big log to palf failed", K(ret), KP(log_handler_), KP(buf), K(size), K(base_scn),
               K(need_nonblock), K(is_big_log));
-  } else if (!is_big_log && OB_FAIL(log_handler_->append(buf, size, base_scn, need_nonblock, cb, lsn, scn))) {
+  } else if (!is_big_log && OB_FAIL(log_handler_->append(buf, size, base_scn, need_nonblock,
+                                                         allow_compression, cb, lsn, scn))) {
     TRANS_LOG(WARN, "append log to palf failed", K(ret), KP(log_handler_), KP(buf), K(size), K(base_scn),
               K(need_nonblock));
   } else {

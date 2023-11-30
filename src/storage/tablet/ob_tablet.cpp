@@ -4045,6 +4045,7 @@ int ObTablet::write_sync_tablet_seq_log(ObTabletAutoincSeq &autoinc_seq,
   ObLogHandler *log_handler = get_log_handler();
   palf::LSN lsn;
   const bool need_nonblock= false;
+  const bool allow_compression= false;
   const SCN ref_scn = SCN::min_scn();
   uint64_t new_autoinc_seq = 0;
   if (OB_FAIL(autoinc_seq.get_autoinc_seq_value(new_autoinc_seq))) {
@@ -4066,6 +4067,7 @@ int ObTablet::write_sync_tablet_seq_log(ObTabletAutoincSeq &autoinc_seq,
                                          buffer_size,
                                          ref_scn,
                                          need_nonblock,
+                                         allow_compression,
                                          cb,
                                          lsn,
                                          scn))) {
@@ -4274,6 +4276,7 @@ int ObTablet::write_tablet_schema_version_change_clog(
 
     palf::LSN lsn;
     const bool need_nonblock= false;
+    const bool allow_compression = false;
     SCN ref_scn;
     ref_scn.set_min();
     scn.reset();
@@ -4291,6 +4294,7 @@ int ObTablet::write_tablet_schema_version_change_clog(
                                            buffer_size,
                                            ref_scn,
                                            need_nonblock,
+                                           allow_compression,
                                            cb,
                                            lsn,
                                            scn))) {

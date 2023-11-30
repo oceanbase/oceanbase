@@ -62,7 +62,9 @@ ObLogFetcher::ObLogFetcher() :
     stop_flag_(true),
     paused_(false),
     pause_time_(OB_INVALID_TIMESTAMP),
-    resume_time_(OB_INVALID_TIMESTAMP)
+    resume_time_(OB_INVALID_TIMESTAMP),
+    decompression_blk_mgr_(DECOMPRESSION_MEM_LIMIT_THRESHOLD),
+    decompression_alloc_(ObMemAttr(OB_SERVER_TENANT_ID, "decompress_buf"), common::OB_MALLOC_BIG_BLOCK_SIZE, decompression_blk_mgr_)
 {
 }
 
@@ -858,6 +860,22 @@ void ObLogFetcher::print_fetcher_stat_()
         "global_upper_limit", NTS_TO_STR(global_upper_limit),
         "dml_progress_limit_sec", dml_progress_limit / _SEC_,
         "fetcher_delay", TVAL_TO_STR(fetcher_delay));
+  }
+}
+
+void *ObLogFetcher::alloc_decompression_buf(int64_t size)
+{
+  void *buf = NULL;
+  if (IS_INIT) {
+    buf = decompression_alloc_.alloc(size);
+  }
+  return buf;
+}
+void ObLogFetcher::free_decompression_buf(void *buf)
+{
+  if (NULL != buf) {
+    decompression_alloc_.free(buf);
+    buf = NULL;
   }
 }
 

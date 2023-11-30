@@ -92,6 +92,9 @@ if(OB_BUILD_CLOSE_MODULES)
   # 仲裁功能
   ob_define(OB_BUILD_ARBITRATION ON)
 
+  # 日志存储压缩
+  ob_define(OB_BUILD_LOG_STORAGE_COMPRESS ON)
+
   # 默认使用BABASSL
   ob_define(OB_USE_BABASSL ON)
   add_definitions(-DOB_USE_BABASSL)
@@ -131,6 +134,10 @@ endif()
 
 if(OB_BUILD_ARBITRATION)
   add_definitions(-DOB_BUILD_ARBITRATION)
+endif()
+
+if(OB_BUILD_LOG_STORAGE_COMPRESS)
+  add_definitions(-DOB_BUILD_LOG_STORAGE_COMPRESS)
 endif()
 
 if(OB_BUILD_DBLINK)

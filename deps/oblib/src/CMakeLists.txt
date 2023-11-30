@@ -56,6 +56,14 @@ if(OB_BUILD_ARBITRATION)
   )
 endif()
 
+if(OB_BUILD_LOG_STORAGE_COMPRESS)
+  target_include_directories(
+    oblib_base_base_base INTERFACE
+    ${CMAKE_SOURCE_DIR}/close_modules/log_storage_compress
+  )
+endif()
+
+
 if(OB_BUILD_ORACLE_PL)
   target_include_directories(
     oblib_base_base_base INTERFACE

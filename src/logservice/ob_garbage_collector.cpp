@@ -942,6 +942,7 @@ int ObGCHandler::submit_log_(const ObGCLSLOGType log_type, bool &is_success)
   int64_t buffer_size = gc_log.get_serialize_size();
   ObGCLSLogCb cb;
   const bool need_nonblock = false;
+  const bool allow_compression = false;
   is_success = false;
   SCN ref_scn;
   palf::LSN lsn;
@@ -961,6 +962,7 @@ int ObGCHandler::submit_log_(const ObGCLSLOGType log_type, bool &is_success)
                                  buffer_size,
                                  ref_scn,
                                  need_nonblock,
+                                 allow_compression,
                                  &cb,
                                  lsn,
                                  scn))) {

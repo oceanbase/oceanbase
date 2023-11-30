@@ -125,19 +125,25 @@ public:
                   const palf::LSN &lsn,
                   const share::SCN &scn,
                   const int64_t log_size,
-                  const bool is_raw_write)
-    : ls_id_(ls_id),
+                  const int64_t base_header_len,
+                  void *decompression_buf,
+                  int64_t decompressed_log_size)
+      : ls_id_(ls_id),
       log_type_(header.get_log_type()),
       lsn_(lsn),
       scn_(scn),
       is_pre_barrier_(header.need_pre_replay_barrier()),
       is_post_barrier_(header.need_post_replay_barrier()),
-      log_size_(log_size),
+      read_log_size_(log_size),
       replay_hint_(std::abs(header.get_replay_hint())),
-      is_raw_write_(is_raw_write),
       init_task_ts_(OB_INVALID_TIMESTAMP),
       first_handle_ts_(OB_INVALID_TIMESTAMP),
-      print_error_ts_(OB_INVALID_TIMESTAMP)
+      print_error_ts_(OB_INVALID_TIMESTAMP),
+      read_log_buf_(NULL),
+      decompression_buf_(decompression_buf),
+      has_decompressed_(false),
+      decompressed_log_size_(decompressed_log_size),
+      base_header_len_(base_header_len)
   {}
   virtual ~ObLogReplayTask()
   {
@@ -146,6 +152,8 @@ public:
   int init(void *log_buf);
   void reset();
   bool is_valid();
+  void *get_replay_payload() const;
+  int64_t get_replay_payload_size() const;
   void shallow_copy(const ObLogReplayTask &other);
 public:
   share::ObLSID ls_id_;
@@ -154,16 +162,18 @@ public:
   share::SCN scn_;
   bool is_pre_barrier_;
   bool is_post_barrier_;
-  int64_t log_size_;
+  int64_t read_log_size_;//
   int64_t replay_hint_;
-  //for standby replay control, need record for cached log replay task;
-  bool is_raw_write_;
   int64_t init_task_ts_;
   int64_t first_handle_ts_;
   int64_t print_error_ts_;
   int64_t replay_cost_; //此任务回放成功时的当次处理时间
   int64_t retry_cost_; //此任务重试的总耗时时间
-  void *log_buf_;
+  void *read_log_buf_;
+  void *decompression_buf_;//buf used to decompress log; if not NULL, means log should be decompessed
+  bool has_decompressed_;
+  int64_t decompressed_log_size_;
+  int64_t base_header_len_;
 
   int64_t to_string(char* buf, const int64_t buf_len) const;
 };
@@ -290,7 +300,7 @@ public:
   int get_base_lsn(palf::LSN &lsn) const;
   int get_base_scn(share::SCN &scn) const;
   int need_skip(const share::SCN &scn, bool &need_skip);
-  int get_log(const char *&buffer, int64_t &nbytes, share::SCN &scn, palf::LSN &offset, bool &is_raw_write);
+  int get_log(const char *&buffer, int64_t &nbytes, share::SCN &scn, palf::LSN &offset);
   int next_log(const share::SCN &replayable_point,
                bool &iterate_end_by_replayable_point);
   // 以当前的终点作为新起点重置迭代器

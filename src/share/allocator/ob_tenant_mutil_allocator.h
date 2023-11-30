@@ -72,7 +72,14 @@ public:
   virtual void free_log_io_flashback_task(palf::LogIOFlashbackTask *ptr) = 0;
   virtual palf::LogIOPurgeThrottlingTask *alloc_log_io_purge_throttling_task(const int64_t palf_id, const int64_t palf_epoch) = 0;
   virtual void free_log_io_purge_throttling_task(palf::LogIOPurgeThrottlingTask *ptr) = 0;
+  virtual void *alloc_append_compression_buf(const int64_t size) = 0;
+  virtual void free_append_compression_buf(void *ptr) = 0;
+  virtual void *alloc_replay_decompression_buf(const int64_t size) = 0;
+  virtual void free_replay_decompression_buf(void *ptr) = 0;
+  virtual ObIAllocator *get_append_compression_allocator() = 0;
+  virtual ObIAllocator *get_replay_decompression_allocator() = 0;
   TO_STRING_KV(K_(flying_log_task), K_(flying_meta_task));
+
 
 protected:
   int64_t flying_log_task_;
@@ -89,8 +96,12 @@ public:
   const int64_t REPLAY_MEM_LIMIT_PERCENT = 5;
   // The memory limit of replay engine
   const int64_t REPLAY_MEM_LIMIT_THRESHOLD = 512 * 1024 * 1024ll;
+  // The memory percent of clog compression
+  const int64_t CLOG_COMPRESSION_MEM_LIMIT_PERCENT = 3;
+  // The memory limit of clog compression
+  const int64_t CLOG_COMPRESSION_MEM_LIMIT_THRESHOLD = 128 * 1024 * 1024L;
+
   // The memory percent of replay engine for inner_table
-  const int64_t INNER_TABLE_REPLAY_MEM_PERCENT = 20;
   static int choose_blk_size(int obj_size);
 
 public:
@@ -134,6 +145,13 @@ public:
   void free_log_io_flashback_task(palf::LogIOFlashbackTask *ptr);
   palf::LogIOPurgeThrottlingTask *alloc_log_io_purge_throttling_task(const int64_t palf_id, const int64_t palf_epoch);
   void free_log_io_purge_throttling_task(palf::LogIOPurgeThrottlingTask *ptr);
+  void *alloc_append_compression_buf(const int64_t size);
+  void free_append_compression_buf(void *ptr);
+  //alloc buf from replay_log_task_alloc
+  void *alloc_replay_decompression_buf(const int64_t size);
+  void free_replay_decompression_buf(void *ptr);
+  ObIAllocator *get_append_compression_allocator() {return &clog_compression_buf_alloc_;}
+  ObIAllocator *get_replay_decompression_allocator() {return &replay_log_task_alloc_;}
 
 private:
   uint64_t tenant_id_ CACHE_ALIGNED;
@@ -147,9 +165,8 @@ private:
   const int LOG_IO_FLASHBACK_TASK_SIZE;
   const int LOG_IO_PURGE_THROTTLING_TASK_SIZE;
   ObBlockAllocMgr clog_blk_alloc_;
-  ObBlockAllocMgr common_blk_alloc_;
-  ObBlockAllocMgr unlimited_blk_alloc_;
   ObBlockAllocMgr replay_log_task_blk_alloc_;
+  ObBlockAllocMgr clog_compressing_blk_alloc_;
   ObVSliceAlloc clog_ge_alloc_;
   ObSliceAlloc log_io_flush_log_task_alloc_;
   ObSliceAlloc log_io_truncate_log_task_alloc_;
@@ -159,6 +176,7 @@ private:
   ObVSliceAlloc replay_log_task_alloc_;
   ObSliceAlloc log_io_flashback_task_alloc_;
   ObSliceAlloc log_io_purge_throttling_task_alloc_;
+  ObVSliceAlloc clog_compression_buf_alloc_;
 };
 
 } // end of namespace common

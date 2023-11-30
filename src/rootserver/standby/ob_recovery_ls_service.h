@@ -144,6 +144,9 @@ private:
  int get_restore_source_value_(ObLogRestoreSourceItem &item, ObSqlString &standby_source_value);
  int do_update_restore_source_(ObRestoreSourceServiceAttr &old_attr, ObLogRestoreSourceMgr &restore_source_mgr);
  int update_source_inner_table_(char *buf, const int64_t buf_size, ObMySQLTransaction &trans, const ObLogRestoreSourceItem &item);
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+ int decompress_log_payload_(const char *in_buf, const int64_t in_buf_len, char *&decompress_buf, int64_t &decompressed_len);
+ #endif
 private:
   bool inited_;
   uint64_t tenant_id_;

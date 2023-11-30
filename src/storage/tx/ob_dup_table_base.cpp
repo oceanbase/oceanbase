@@ -1108,8 +1108,8 @@ int ObDupTableLogOperator::retry_submit_log_block_()
       ret = OB_LOG_TOO_LARGE;
       DUP_TABLE_LOG(WARN, "Too large dup table log. We can not submit it", K(ret),
                     K(big_segment_buf_.is_completed()), KPC(this));
-    } else if (OB_FAIL(log_handler_->append(block_buf_, block_buf_pos, gts_base_scn, false, this,
-                                            logging_lsn_, logging_scn_))) {
+    } else if (OB_FAIL(log_handler_->append(block_buf_, block_buf_pos, gts_base_scn, false,
+                                            false/*allow_compression*/, this, logging_lsn_, logging_scn_))) {
       DUP_TABLE_LOG(WARN, "append block failed", K(ret), K(ls_id_));
     } else {
       if (OB_NOT_NULL(interface_stat_ptr_)) {

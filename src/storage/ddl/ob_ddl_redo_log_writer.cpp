@@ -689,6 +689,7 @@ int ObDDLRedoLogWriter::write(
 
   palf::LSN lsn;
   const bool need_nonblock= false;
+  const bool allow_compression = false;
   SCN base_scn = SCN::min_scn();
   SCN scn;
   uint32_t lock_tid = 0;
@@ -732,6 +733,7 @@ int ObDDLRedoLogWriter::write(
                                          buffer_size,
                                          base_scn,
                                          need_nonblock,
+                                         allow_compression,
                                          cb,
                                          lsn,
                                          scn))) {
@@ -776,6 +778,7 @@ int ObDDLRedoLogWriter::write_ddl_start_log(ObLSHandle &ls_handle,
 
   palf::LSN lsn;
   const bool need_nonblock= false;
+  const bool allow_compression = false;
   SCN scn = SCN::min_scn();
   bool is_external_consistent = false;
   ObBucketHashWLockGuard guard(bucket_lock_, log.get_table_key().get_tablet_id().hash());
@@ -813,6 +816,7 @@ int ObDDLRedoLogWriter::write_ddl_start_log(ObLSHandle &ls_handle,
                                          buffer_size,
                                          SCN::min_scn(),
                                          need_nonblock,
+                                         allow_compression,
                                          cb,
                                          lsn,
                                          scn))) {
@@ -895,6 +899,7 @@ int ObDDLRedoLogWriter::write_ddl_commit_log(ObTabletHandle &tablet_handle,
 
   palf::LSN lsn;
   const bool need_nonblock= false;
+  const bool allow_compression = false;
   SCN base_scn = SCN::min_scn();
   SCN scn = SCN::min_scn();
   bool is_external_consistent = false;
@@ -927,6 +932,7 @@ int ObDDLRedoLogWriter::write_ddl_commit_log(ObTabletHandle &tablet_handle,
                                          buffer_size,
                                          base_scn,
                                          need_nonblock,
+                                         allow_compression,
                                          cb,
                                          lsn,
                                          scn))) {

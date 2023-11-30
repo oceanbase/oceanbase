@@ -171,11 +171,14 @@ public:
   void reset();
   void reset_buf();
   ObAdminMutatorStringArg &operator= (const ObAdminMutatorStringArg &rhs);
-  TO_STRING_KV(KP_(buf), K_(buf_len), K_(pos), K(flag_), K(filter_),
+  TO_STRING_KV(KP_(buf), K_(buf_len), KP(decompress_buf_), K(decompress_buf_len_), K_(pos), K(flag_), K(filter_),
                KPC(log_stat_));
 public:
   char *buf_;
   int64_t buf_len_;
+
+  char *decompress_buf_;
+  int64_t decompress_buf_len_;
   int64_t pos_;
   LogFormatFlag flag_;
 //  int64_t tx_id_;

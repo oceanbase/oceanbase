@@ -32,6 +32,11 @@ ObAdminLogExecutor::~ObAdminLogExecutor()
     mutator_str_buf_ = NULL;
     mutator_buf_size_ = 0;
   }
+  if (NULL != decompress_buf_) {
+    ob_free(decompress_buf_);
+    decompress_buf_ = NULL;
+    decompress_buf_size_ = 0;
+  }
 }
 
 int ObAdminLogExecutor::execute(int argc, char *argv[])
@@ -134,6 +139,9 @@ int ObAdminLogExecutor::dump_all_blocks_(int argc, char **argv, LogFormatFlag fl
     str_arg.flag_ = flag;
     str_arg.buf_ = mutator_str_buf_;
     str_arg.buf_len_ = mutator_buf_size_;
+
+    str_arg.decompress_buf_ = decompress_buf_;
+    str_arg.decompress_buf_len_ = decompress_buf_size_;
     str_arg.pos_ = 0;
     str_arg.filter_ = filter_;
     for (int i = 0; i < argc && OB_SUCC(ret); i++) {
@@ -190,15 +198,26 @@ int ObAdminLogExecutor::alloc_mutator_string_buf_()
   int ret = OB_SUCCESS;
 
   if (OB_ISNULL(mutator_str_buf_)) {
-    mutator_str_buf_ = static_cast<char *>(ob_malloc(MAX_TX_LOG_STRING_SIZE, "AdminDumpLog"));
-    mutator_buf_size_ = MAX_TX_LOG_STRING_SIZE;
+    if (NULL != (mutator_str_buf_ = static_cast<char *>( ob_malloc(MAX_TX_LOG_STRING_SIZE, "AdminDumpLog")))) {
+      mutator_buf_size_ = MAX_TX_LOG_STRING_SIZE;
+    } else {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      mutator_buf_size_ = 0;
+    }
   }
 
-  if (OB_ISNULL(mutator_str_buf_)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    mutator_buf_size_ = 0;
+  if (OB_SUCC(ret)) {
+    if (NULL == decompress_buf_) {
+      if (NULL != (decompress_buf_ = static_cast<char *>(ob_malloc(MAX_TX_LOG_STRING_SIZE, "AdminCompress")))) {
+        decompress_buf_size_ = MAX_TX_LOG_STRING_SIZE;
+      } else {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        decompress_buf_size_ =0;
+        ob_free(mutator_str_buf_);
+        mutator_buf_size_ = 0;
+      }
+    }
   }
-
   return ret;
 }
 

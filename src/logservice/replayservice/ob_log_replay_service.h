@@ -60,6 +60,9 @@ public:
   virtual int switch_to_follower(const share::ObLSID &id, const palf::LSN &begin_lsn) = 0;
   virtual int switch_to_leader(const share::ObLSID &id) = 0;
 };
+/*
+TODO(yaoying.yyy): replayservice的内存管理需要整理一个文档
+*/
 
 class ObLogReplayService: public lib::TGTaskHandler, public ObILogReplayService
 {
@@ -105,8 +108,8 @@ public:
   public:
     explicit StatReplayProcessFunctor()
         : ret_code_(common::OB_SUCCESS),
-          replayed_log_size_(0),
-          unreplayed_log_size_(0) {}
+        replayed_log_size_(0),
+        unreplayed_log_size_(0) {}
     ~StatReplayProcessFunctor(){}
     bool operator()(const share::ObLSID &id, ObReplayStatus *replay_status);
     int get_ret_code() const { return ret_code_; }
@@ -184,7 +187,7 @@ private:
                              const palf::LSN &cur_lsn,
                              const share::SCN &cur_log_submit_scn,
                              const int64_t log_size,
-                             const bool is_raw_write);
+                             const int64_t header_pos);
   bool is_tenant_out_of_memory_() const;
   int handle_submit_task_(ObReplayServiceSubmitTask *submit_task,
                           bool &is_timeslice_run_out);
@@ -204,11 +207,26 @@ private:
                           const int64_t log_size,
                           const int64_t log_count);
   int statistics_replay_cost_(const int64_t init_task_time,
-                               const int64_t first_handle_time);
+                              const int64_t first_handle_time);
   void on_replay_error_(ObLogReplayTask &replay_task, int ret);
   void on_replay_error_();
   // 析构前调用,归还所有日志流的replay status计数
   int remove_all_ls_();
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+  int prepare_decompression_buf_(const ObLSID id,
+                                 const char *log_buf,
+                                 const ObLogBaseHeader &header,
+                                 const int64_t log_size,
+                                 const int64_t base_header_len,
+                                 void *&decompression_buf,
+                                 int64_t &decompressed_len);
+  int transform_replay_task_(ObLogReplayTask *replay_task,
+                             ObReplayStatus *replay_status,
+                             ObLogReplayBuffer *replay_log_buf);
+#endif
+  void free_decompression_buf_(void *&decompression_buf);
+  void free_replay_log_buf_(ObLogReplayBuffer *&replay_buf);
+
   share::SCN inner_get_replayable_point_() const;
 private:
   const int64_t MAX_REPLAY_TIME_PER_ROUND = 10 * 1000; //10ms

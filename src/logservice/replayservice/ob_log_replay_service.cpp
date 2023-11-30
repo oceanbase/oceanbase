@@ -16,6 +16,9 @@
 #include "logservice/ob_log_base_header.h"
 #include "logservice/ob_ls_adapter.h"
 #include "logservice/palf/palf_env.h"
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+#include "logservice/ob_log_compression.h"
+#endif
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "share/scn.h"
 #include "share/ob_thread_mgr.h"
@@ -32,11 +35,11 @@ namespace logservice
 {
 //---------------ReplayProcessStat---------------//
 ReplayProcessStat::ReplayProcessStat()
-  : last_replayed_log_size_(-1),
+    : last_replayed_log_size_(-1),
     rp_sv_(NULL),
     tg_id_(-1),
     is_inited_(false)
-{}
+  {}
 
 ReplayProcessStat::~ReplayProcessStat()
 {
@@ -145,21 +148,21 @@ void ReplayProcessStat::runTimerTask()
 
     if (-1 == estimate_time) {
       CLOG_LOG(INFO, "dump tenant replay process", "tenant_id", MTL_ID(), "unreplayed_log_size(MB)", unreplayed_log_size_MB,
-                "estimate_time(second)=INF, replayed_log_size(MB)", replayed_log_size_MB,
-                "last_replayed_log_size(MB)", last_replayed_log_size_MB, "round_cost_time(second)", round_cost_time,
-                "pending_replay_log_size(MB)", pending_replay_log_size_MB);
+               "estimate_time(second)=INF, replayed_log_size(MB)", replayed_log_size_MB,
+               "last_replayed_log_size(MB)", last_replayed_log_size_MB, "round_cost_time(second)", round_cost_time,
+               "pending_replay_log_size(MB)", pending_replay_log_size_MB);
     } else {
       CLOG_LOG(INFO, "dump tenant replay process", "tenant_id", MTL_ID(), "unreplayed_log_size(MB)", unreplayed_log_size_MB,
-                "estimate_time(second)", estimate_time, "replayed_log_size(MB)", replayed_log_size_MB,
-                "last_replayed_log_size(MB)", last_replayed_log_size_MB, "round_cost_time(second)", round_cost_time,
-                "pending_replay_log_size(MB)", pending_replay_log_size_MB);
+               "estimate_time(second)", estimate_time, "replayed_log_size(MB)", replayed_log_size_MB,
+               "last_replayed_log_size(MB)", last_replayed_log_size_MB, "round_cost_time(second)", round_cost_time,
+               "pending_replay_log_size(MB)", pending_replay_log_size_MB);
     }
   }
 }
 
 //---------------ObLogReplayService---------------//
 ObLogReplayService::ObLogReplayService()
-    : is_inited_(false),
+  : is_inited_(false),
     is_running_(false),
     tg_id_(-1),
     replay_stat_(),
@@ -171,7 +174,7 @@ ObLogReplayService::ObLogReplayService()
     pending_replay_log_size_(0),
     wait_cost_stat_("[REPLAY STAT REPLAY TASK IN QUEUE TIME]", PALF_STAT_PRINT_INTERVAL_US),
     replay_cost_stat_("[REPLAY STAT REPLAY TASK EXECUTE COST TIME]", PALF_STAT_PRINT_INTERVAL_US)
-  {}
+{}
 
 ObLogReplayService::~ObLogReplayService()
 {
@@ -259,7 +262,7 @@ void ObLogReplayService::wait()
   replay_stat_.wait();
   int64_t num = 0;
 
- int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   while (OB_SUCC(TG_GET_QUEUE_NUM(tg_id_, num)) && num > 0) {
     PAUSE();
   }
@@ -317,7 +320,7 @@ void ObLogReplayService::handle(void *task)
     }
   } else if (!is_running_) {
     CLOG_LOG(INFO, "replay service has been stopped, just ignore the task",
-               K(is_running_), KPC(replay_status));
+             K(is_running_), KPC(replay_status));
     revert_replay_status_(replay_status);
     task_to_handle = NULL;
   } else {
@@ -621,9 +624,18 @@ int ObLogReplayService::submit_task(ObReplayServiceTask *task)
   return ret;
 }
 
+void ObLogReplayService::free_decompression_buf_(void *&decompression_buf)
+{
+  if (NULL != decompression_buf) {
+    allocator_->free_replay_decompression_buf(decompression_buf);
+    decompression_buf = NULL;
+  }
+}
+
 void ObLogReplayService::free_replay_task(ObLogReplayTask *task)
 {
   CLOG_LOG(TRACE, "free_replay_task", KPC(task), K(task));
+  free_decompression_buf_(task->decompression_buf_);
   allocator_->free_replay_task(task);
   task = NULL;
 }
@@ -632,9 +644,16 @@ void ObLogReplayService::free_replay_task_log_buf(ObLogReplayTask *task)
 {
   CLOG_LOG(TRACE, "free_replay_task_log_buf", KPC(task), K(task));
   if (NULL != task && task->is_pre_barrier_) {
-    allocator_->free_replay_log_buf(task->log_buf_);
-    task->log_buf_ = NULL;
+    ObLogReplayBuffer *replay_buf = static_cast<ObLogReplayBuffer *>(task->read_log_buf_);
+    free_replay_log_buf_(replay_buf);
+    task->read_log_buf_ = NULL;
   }
+}
+
+void ObLogReplayService::free_replay_log_buf_(ObLogReplayBuffer *&replay_log_buf)
+{
+  allocator_->free_replay_log_buf(replay_log_buf);
+  replay_log_buf = NULL;
 }
 
 int ObLogReplayService::update_replayable_point(const SCN &replayable_scn)
@@ -821,7 +840,7 @@ int ObLogReplayService::pre_check_(ObReplayStatus &replay_status,
     // Check the waiting time of the task in the global queue
     if (OB_SUCC(ret) && (cur_time - enqueue_ts > TASK_QUEUE_WAIT_IN_GLOBAL_QUEUE_TIME_THRESHOLD)) {
       CLOG_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "task queue has waited too much time in global queue, please check single replay task error",
-               K(replay_status), K(task), K(ret));
+                   K(replay_status), K(task), K(ret));
     }
     //unlock
     replay_status.unlock();
@@ -857,20 +876,24 @@ int ObLogReplayService::do_replay_task_(ObLogReplayTask *replay_task,
     }
   } else if (!need_replay) {
     //do nothing
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+  } else if (OB_FAIL(transform_replay_task_(replay_task, replay_status, replay_log_buff))) {
+    CLOG_LOG(WARN, "failed to transform_replay_task", KPC(replay_task), KPC(replay_task));
+#endif
   } else if (replay_task->is_pre_barrier_) {
-    replay_task->log_buf_ = replay_log_buff->log_buf_;
+    replay_task->read_log_buf_ = replay_log_buff->log_buf_;
     if (OB_FAIL(ls_adapter_->replay(replay_task))) {
       replay_log_buff->inc_replay_ref();
-      replay_task->log_buf_ = replay_log_buff;
+      replay_task->read_log_buf_ = replay_log_buff;
       CLOG_LOG(WARN, "ls do pre barrier replay failed", K(ret), K(replay_task), KPC(replay_task),
                KPC(replay_status));
     } else {
       //释放log_buf内存
       CLOG_LOG(INFO, "pre barrier log replay succ", KPC(replay_task), KPC(replay_status),
                K(replay_queue_idx), K(ret));
-      replay_task->log_buf_ = replay_log_buff;
+      replay_task->read_log_buf_ = replay_log_buff;
       free_replay_task_log_buf(replay_task);
-      replay_status->dec_pending_task(replay_task->log_size_);
+      replay_status->dec_pending_task(replay_task->get_replay_payload_size());
     }
   } else if (OB_FAIL(ls_adapter_->replay(replay_task))) {
     CLOG_LOG(WARN, "ls do replay failed", K(ret), KPC(replay_task));
@@ -940,7 +963,7 @@ int ObLogReplayService::fetch_pre_barrier_log_(ObReplayStatus &replay_status,
                                                const LSN &cur_lsn,
                                                const SCN &cur_log_submit_scn,
                                                const int64_t log_size,
-                                               const bool is_raw_write)
+                                               const int64_t header_pos)
 {
   int ret = OB_SUCCESS;
   ObLSID id;
@@ -952,7 +975,6 @@ int ObLogReplayService::fetch_pre_barrier_log_(ObReplayStatus &replay_status,
     const int64_t task_size = sizeof(ObLogReplayTask);
     char *share_log_buf = NULL;
     void *task_buf = NULL;
-    ObMemAttr attr(MTL_ID(), ObModIds::OB_LOG_REPLAY_TASK);
     if (OB_UNLIKELY(NULL == (share_log_buf =static_cast<char *>(allocator_->alloc_replay_log_buf(share_log_size))))) {
       ret = OB_EAGAIN;
       if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
@@ -961,19 +983,21 @@ int ObLogReplayService::fetch_pre_barrier_log_(ObReplayStatus &replay_status,
     } else if (OB_UNLIKELY(NULL == (task_buf = alloc_replay_task(task_size)))) {
       ret = OB_EAGAIN;
       allocator_->free_replay_log_buf(share_log_buf);
+      share_log_buf = NULL;
       if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
         CLOG_LOG(WARN, "failed to alloc log replay task buf", K(ret), K(id), K(cur_lsn));
       }
     } else {
-      replay_task = new (task_buf) ObLogReplayTask(id, header, cur_lsn, cur_log_submit_scn, log_size, is_raw_write);
+      replay_task = new (task_buf) ObLogReplayTask(id, header, cur_lsn, cur_log_submit_scn,
+                                                   log_size, header_pos, NULL, 0);
       ObLogReplayBuffer *replay_log_buffer = new (share_log_buf) ObLogReplayBuffer();
       char *real_log_buf = share_log_buf + sizeof(ObLogReplayBuffer);
       replay_log_buffer->log_buf_ = real_log_buf;
       MEMCPY(real_log_buf, log_buf, log_size);
       if (OB_FAIL(replay_task->init(replay_log_buffer))) {
-        allocator_->free_replay_log_buf(share_log_buf);
+        free_replay_log_buf_(replay_log_buffer);
         CLOG_LOG(ERROR, "init replay task failed", K(ret), K(id), K(id), K(cur_lsn), K(cur_log_submit_scn),
-                 K(log_size), KP(replay_log_buffer), K(header), K(is_raw_write));
+                 K(log_size), KP(replay_log_buffer), K(header), K(header_pos));
       } else {
         CLOG_LOG(TRACE, "fetch_and_submit_pre_barrier_log_", K(ret), K(replay_status), K(replay_task),
                  KPC(replay_task), K(replay_log_buffer->log_buf_));
@@ -994,32 +1018,38 @@ int ObLogReplayService::fetch_and_submit_single_log_(ObReplayStatus &replay_stat
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   const char *log_buf = NULL;
-  bool is_raw_write = true;
   ObLSID id;
   bool need_skip = false;
   bool need_iterate_next_log = false;
   ObLogBaseHeader header;
   int64_t header_pos = 0;
+  void *decompression_buf = NULL;
+  int64_t decompressed_log_size = -1;
   ObLogReplayTask *replay_task = NULL;
   const SCN &replayable_point = inner_get_replayable_point_();
   if (OB_UNLIKELY(OB_ISNULL(submit_task))) {
     ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "submit task is NULL when fetch log", K(id), K(replay_status), KPC(submit_task), K(ret));
-  } else if (OB_FAIL(submit_task->get_log(log_buf, log_size, cur_log_submit_scn, cur_lsn, is_raw_write))) {
-    CLOG_LOG(WARN, "submit task get log value failed", K(id), K(replay_status), K(submit_task));
+    CLOG_LOG(WARN, "submit task is NULL when fetch log", K(replay_status), KPC(submit_task));
+  } else if (OB_FAIL(submit_task->get_log(log_buf, log_size, cur_log_submit_scn, cur_lsn))) {
+    CLOG_LOG(WARN, "submit task get log value failed",  K(replay_status), K(submit_task));
   } else if (OB_FAIL(replay_status.get_ls_id(id))) {
-    CLOG_LOG(ERROR, "replay status get log stream id failed", KPC(submit_task), K(replay_status), KR(ret));
+    CLOG_LOG(ERROR, "replay status get log stream id failed", KPC(submit_task), K(replay_status));
   } else if (OB_FAIL(submit_task->need_skip(cur_log_submit_scn, need_skip))) {
-    CLOG_LOG(INFO, "check need_skip failed", K(replay_status), K(cur_lsn), K(log_size), K(cur_log_submit_scn), KR(ret));
+    CLOG_LOG(INFO, "check need_skip failed", K(replay_status), K(cur_lsn), K(log_size), K(cur_log_submit_scn));
   } else if (need_skip) {
     need_iterate_next_log = true;
-    CLOG_LOG(TRACE, "skip current log", K(replay_status), K(cur_lsn), K(log_size), K(cur_log_submit_scn));
+    CLOG_LOG(TRACE, "skip current log", K(id), K(replay_status), K(cur_lsn), K(log_size), K(cur_log_submit_scn));
   } else if (OB_FAIL(header.deserialize(log_buf, log_size, header_pos))) {
     CLOG_LOG(WARN, "basic header deserialize failed", K(ret), K(header_pos), K(id));
   } else if (ObLogBaseType::PADDING_LOG_BASE_TYPE == header.get_log_type()) {
     // For padding log entry, iterate next log directly.
     need_iterate_next_log = true;
-    CLOG_LOG(INFO, "no need to replay padding log entry", KPC(submit_task), K(header));
+    CLOG_LOG(INFO, "no need to replay padding log entry", K(id), KPC(submit_task), K(header));
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+  } else if (OB_FAIL(prepare_decompression_buf_(id, log_buf, header, log_size, header_pos,
+                                                decompression_buf, decompressed_log_size))) {
+    CLOG_LOG(WARN, "failed to prepare_decompression_buf", KPC(submit_task), K(header));
+#endif
   } else if (header.need_pre_replay_barrier()) {
     // 前向barrier日志的replay task和log buf需要分别分配内存
     if (OB_FAIL(fetch_pre_barrier_log_(replay_status,
@@ -1030,21 +1060,22 @@ int ObLogReplayService::fetch_and_submit_single_log_(ObReplayStatus &replay_stat
                                        cur_lsn,
                                        cur_log_submit_scn,
                                        log_size,
-                                       is_raw_write))) {
+                                       header_pos))) {
       //print log inside
     }
   } else {
     // 非前向barrier日志的replay task分配整块内存
     const int64_t task_size = sizeof(ObLogReplayTask) + log_size;
     char *task_buf = NULL;
-    ObMemAttr attr(MTL_ID(), ObModIds::OB_LOG_REPLAY_TASK);
     if (OB_UNLIKELY(NULL == (task_buf = static_cast<char *>(alloc_replay_task(task_size))))) {
       ret = OB_EAGAIN;
       if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
         CLOG_LOG(WARN, "failed to alloc log replay task buf", K(ret), K(id), K(cur_lsn));
       }
     } else {
-      replay_task = new (task_buf) ObLogReplayTask(id, header, cur_lsn, cur_log_submit_scn, log_size, is_raw_write);
+      replay_task = new (task_buf) ObLogReplayTask(id, header, cur_lsn, cur_log_submit_scn, log_size,
+                                                   header_pos, decompression_buf, decompressed_log_size);
+      decompression_buf = NULL;//decompression_buf will be free by replay_task
       char *task_log_buf = task_buf + sizeof(ObLogReplayTask);
       MEMCPY(task_log_buf, log_buf, log_size);
       if (OB_FAIL(replay_task->init(task_log_buf))) {
@@ -1062,6 +1093,11 @@ int ObLogReplayService::fetch_and_submit_single_log_(ObReplayStatus &replay_stat
       need_iterate_next_log = true;
     }
   }
+
+  if (OB_FAIL(ret)) {
+    free_decompression_buf_(decompression_buf);
+  }
+
   if (OB_FAIL(ret) && NULL != replay_task) {
     if (OB_EAGAIN != ret) {
       replay_status.set_err_info(cur_lsn, cur_log_submit_scn, replay_task->log_type_, replay_task->replay_hint_,
@@ -1136,7 +1172,7 @@ int ObLogReplayService::handle_submit_task_(ObReplayServiceSubmitTask *submit_ta
           }
           if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
             CLOG_LOG(INFO, "succ to submit log task to replay service", K(to_submit_lsn), K(to_submit_scn),
-                       KPC(replay_status));
+                     KPC(replay_status));
           }
         } else if (OB_EAGAIN == ret) {
           // do nothing
@@ -1155,7 +1191,7 @@ int ObLogReplayService::handle_submit_task_(ObReplayServiceSubmitTask *submit_ta
       if (OB_SUCC(ret) && used_time > MAX_SUBMIT_TIME_PER_ROUND) {
         is_timeslice_run_out = true;
       }
-    // end while
+      // end while
     };
     if (OB_SUCCESS !=(tmp_ret = replay_status->batch_push_all_task_queue())) {
       CLOG_LOG(ERROR, "failed to batch_push_all_task_queue", KR(tmp_ret), KPC(replay_status));
@@ -1227,7 +1263,7 @@ int ObLogReplayService::handle_replay_task_(ObReplayServiceReplayTask *task_queu
           task_queue->clear_err_info();
           if (!replay_task->is_pre_barrier_) {
             //前向barrier日志执行回放的线程会提前释放内存
-            replay_status->dec_pending_task(replay_task->log_size_);
+            replay_status->dec_pending_task(replay_task->get_replay_payload_size());
           }
           free_replay_task(replay_task_to_destroy);
           //To avoid a single task occupies too long thread time, the upper limit of
@@ -1262,7 +1298,7 @@ int ObLogReplayService::submit_log_replay_task_(ObLogReplayTask &replay_task,
     CLOG_LOG(ERROR, "invalid arguemnts", K(replay_task), K(replay_status), K(ret));
   } else {
     // need reset info when push failed
-    replay_status.inc_pending_task(replay_task.log_size_);
+    replay_status.inc_pending_task(replay_task.get_replay_payload_size());
     if (replay_task.is_post_barrier_) {
       replay_status.set_post_barrier_submitted(replay_task.lsn_);
     }
@@ -1278,15 +1314,15 @@ int ObLogReplayService::submit_log_replay_task_(ObLogReplayTask &replay_task,
           CLOG_LOG(ERROR, "revoke post barrier failed", K(replay_task), K(replay_status), K(ret), K(tmp_ret));
         }
       }
-      replay_status.dec_pending_task(replay_task.log_size_);
+      replay_status.dec_pending_task(replay_task.get_replay_payload_size());
     }
   }
   return ret;
 }
 
 void ObLogReplayService::statistics_submit_(const int64_t single_submit_task_used,
-                                           const int64_t log_size,
-                                           const int64_t log_count)
+                                            const int64_t log_size,
+                                            const int64_t log_count)
 {
   RLOCAL(int64_t, SUBMIT_TASK_USED);
   RLOCAL(int64_t, SUBMIT_LOG_SIZE);
@@ -1300,19 +1336,81 @@ void ObLogReplayService::statistics_submit_(const int64_t single_submit_task_use
 
   if (TC_REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
     CLOG_LOG(INFO, "handle submit task statistics",
-               "avg_submit_task_used", SUBMIT_TASK_USED / (TASK_COUNT + 1),
-               "avg_submit_task_log_size", SUBMIT_LOG_SIZE / (TASK_COUNT + 1),
-               "avg_submit_task_log_count", SUBMIT_LOG_COUNT / (TASK_COUNT + 1),
-               "avg_log_size", SUBMIT_LOG_SIZE / (SUBMIT_LOG_COUNT + 1),
-               K(*(&SUBMIT_LOG_SIZE)), K(*(&SUBMIT_LOG_COUNT)), K(*(&TASK_COUNT)));
+             "avg_submit_task_used", SUBMIT_TASK_USED / (TASK_COUNT + 1),
+             "avg_submit_task_log_size", SUBMIT_LOG_SIZE / (TASK_COUNT + 1),
+             "avg_submit_task_log_count", SUBMIT_LOG_COUNT / (TASK_COUNT + 1),
+             "avg_log_size", SUBMIT_LOG_SIZE / (SUBMIT_LOG_COUNT + 1),
+             K(*(&SUBMIT_LOG_SIZE)), K(*(&SUBMIT_LOG_COUNT)), K(*(&TASK_COUNT)));
     SUBMIT_TASK_USED= 0;
     SUBMIT_LOG_SIZE = 0;
     TASK_COUNT = 0;
   }
 }
 
+#ifdef OB_BUILD_LOG_STORAGE_COMPRESS
+int ObLogReplayService::prepare_decompression_buf_(const ObLSID id, const char *log_buf,
+                                                   const ObLogBaseHeader &header,
+                                                   const int64_t log_size,
+                                                   const int64_t base_header_len,
+                                                   void *&decompression_buf,
+                                                   int64_t &decompressed_log_size)
+{
+  int ret = OB_SUCCESS;
+  if (header.is_compressed()) {
+    if (OB_UNLIKELY(header.need_pre_replay_barrier())) {
+      ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG(ERROR, "compression of pre_barrier log is not supported", K(id), K(header));
+    } else {
+      LogCompressedPayloadHeader comp_header;
+      int64_t pos = 0;
+      if (OB_FAIL(comp_header.deserialize(log_buf + base_header_len, log_size - base_header_len, pos))) {
+        CLOG_LOG(ERROR, "failed to deserialize LogCompressedPayloadHeader", K(id));
+      } else if (OB_UNLIKELY(NULL == (decompression_buf =
+                                      (allocator_->alloc_replay_decompression_buf(base_header_len + comp_header.get_original_len()))))) {
+        ret = OB_EAGAIN;
+        if (REACH_TIME_INTERVAL(2 * 1000 * 1000L)) {
+          CLOG_LOG(WARN, "failed to allocate decompression_buf", K(id));
+        }
+      } else {
+        decompressed_log_size = comp_header.get_original_len();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogReplayService::transform_replay_task_(ObLogReplayTask *replay_task,
+                                               ObReplayStatus *replay_status,
+                                               ObLogReplayBuffer *replay_log_buf)
+{
+  int ret = OB_SUCCESS;
+  void *decompression_buf = replay_task->decompression_buf_;
+  if ((!replay_task->is_pre_barrier_)/*not pre_barrier log*/
+      && NULL != decompression_buf/*payload is compressed*/
+      && !replay_task->has_decompressed_/*has never been decompressed before*/) {
+    int64_t original_log_size = 0;
+    const int64_t base_header_len = replay_task->base_header_len_;
+    const int64_t decompress_log_size = replay_task->decompressed_log_size_;
+    if (OB_FAIL(logservice::decompress(allocator_->get_replay_decompression_allocator(),
+                                       static_cast<const char *>(replay_task->read_log_buf_) + base_header_len,
+                                       replay_task->read_log_size_ - base_header_len,
+                                       static_cast<char *>(decompression_buf) + base_header_len,
+                                       decompress_log_size, original_log_size))) {
+      CLOG_LOG(ERROR, "failed to decompress", KPC(replay_task), KPC(replay_status));
+    } else if (OB_UNLIKELY(original_log_size != decompress_log_size)) {
+      ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG(ERROR, "data is corrupted", KPC(replay_task), KPC(replay_status), K(original_log_size));
+    } else {
+      MEMCPY(decompression_buf, replay_task->read_log_buf_, base_header_len);
+      replay_task->has_decompressed_ = true;
+    }
+  }
+  return ret;
+}
+#endif
+
 int ObLogReplayService::statistics_replay_cost_(const int64_t init_task_time,
-                                                 const int64_t first_handle_time)
+                                                const int64_t first_handle_time)
 {
   int ret = OB_SUCCESS;
   int64_t handle_finish_time = ObTimeUtility::fast_current_time();
@@ -1324,8 +1422,8 @@ int ObLogReplayService::statistics_replay_cost_(const int64_t init_task_time,
 }
 
 void ObLogReplayService::statistics_replay_(const int64_t single_replay_task_used,
-                                          const int64_t single_destroy_task_used,
-                                          const int64_t retry_count)
+                                            const int64_t single_destroy_task_used,
+                                            const int64_t retry_count)
 {
   RLOCAL(int64_t, REPLAY_TASK_USED);
   RLOCAL(int64_t, RETIRE_TASK_USED);
@@ -1339,10 +1437,10 @@ void ObLogReplayService::statistics_replay_(const int64_t single_replay_task_use
 
   if (TC_REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
     CLOG_LOG(INFO, "handle replay task statistics",
-               "avg_replay_task_used", REPLAY_TASK_USED / (TASK_COUNT + 1),
-               "avg_retire_task_used", RETIRE_TASK_USED / (TASK_COUNT + 1),
-               "avg_retry_count", RETRY_COUNT / (TASK_COUNT + 1),
-               "task_count", *(&TASK_COUNT));
+             "avg_replay_task_used", REPLAY_TASK_USED / (TASK_COUNT + 1),
+             "avg_retire_task_used", RETIRE_TASK_USED / (TASK_COUNT + 1),
+             "avg_retry_count", RETRY_COUNT / (TASK_COUNT + 1),
+             "task_count", *(&TASK_COUNT));
     REPLAY_TASK_USED = 0;
     RETIRE_TASK_USED = 0;
     RETRY_COUNT = 0;
@@ -1475,5 +1573,6 @@ bool ObLogReplayService::FetchLogFunctor::operator()(const share::ObLSID &id,
   ret_code_ = ret;
   return OB_SUCCESS == ret;
 }
+
 } // namespace replayService
 } // namespace oceanbase
