@@ -29,6 +29,7 @@ namespace lib
 {
 
 bool ObTenantMemoryMgr::error_log_when_tenant_500_oversize = false;
+__thread bool ObTenantMemoryMgr::tl_ignore_tenant_500_limit = true;
 ObTenantMemoryMgr::ObTenantMemoryMgr()
   : cache_washer_(NULL), tenant_id_(common::OB_INVALID_ID),
     limit_(INT64_MAX), sum_hold_(0), rpc_hold_(0), cache_hold_(0),
@@ -259,19 +260,22 @@ bool ObTenantMemoryMgr::update_hold(const int64_t size, const uint64_t ctx_id,
     ATOMIC_AAF(&sum_hold_, size);
     updated = true;
   } else {
-    if (sum_hold_ + size <= limit_) {
-      const int64_t nvalue = ATOMIC_AAF(&sum_hold_, size);
-      if (nvalue > limit_) {
-        ATOMIC_AAF(&sum_hold_, -size);
-      } else {
-        updated = true;
+    bool tenant_500_reach_limit = error_log_when_tenant_500_oversize &&
+                                  OB_SERVER_TENANT_ID == tenant_id_ &&
+                                  sum_hold_ + size > (1LL<<30);
+    if (!tenant_500_reach_limit || tl_ignore_tenant_500_limit) {
+      if (sum_hold_ + size <= limit_) {
+        const int64_t nvalue = ATOMIC_AAF(&sum_hold_, size);
+        if (nvalue > limit_) {
+          ATOMIC_AAF(&sum_hold_, -size);
+        } else {
+          updated = true;
+        }
       }
-    }
-    if (OB_UNLIKELY(error_log_when_tenant_500_oversize &&
-                    OB_SERVER_TENANT_ID == tenant_id_ &&
-                    sum_hold_ > (1LL<<30))) {
-      LOG_ERROR_RET(OB_ERROR, "the hold memory of tenant_500 is over the reserved memory",
-                        K_(sum_hold));
+      if (OB_UNLIKELY(tenant_500_reach_limit)) {
+        LOG_ERROR_RET(OB_ERROR, "the hold memory of tenant_500 is over the reserved memory",
+                      K_(sum_hold));
+      }
     }
   }
   if (!updated) {

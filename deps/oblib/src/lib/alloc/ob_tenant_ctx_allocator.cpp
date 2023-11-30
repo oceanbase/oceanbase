@@ -430,7 +430,9 @@ void* ObTenantCtxAllocator::common_alloc(const int64_t size, const ObMemAttr &at
   } else {
     sample_allowed = ObMallocSampleLimiter::malloc_sample_allowed(size, attr);
     alloc_size = sample_allowed ? (size + AOBJECT_BACKTRACE_SIZE) : size;
+    ObTenantMemoryMgr::tl_ignore_tenant_500_limit = false;
     obj = allocator.alloc_object(alloc_size, attr);
+    ObTenantMemoryMgr::tl_ignore_tenant_500_limit = true;
     if (OB_ISNULL(obj) && g_alloc_failed_ctx().need_wash()) {
       int64_t total_size = ta.sync_wash();
       obj = allocator.alloc_object(alloc_size, attr);
@@ -503,7 +505,9 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
   } else {
     sample_allowed = ObMallocSampleLimiter::malloc_sample_allowed(size, attr);
     alloc_size = sample_allowed ? (size + AOBJECT_BACKTRACE_SIZE) : size;
+    ObTenantMemoryMgr::tl_ignore_tenant_500_limit = false;
     obj = allocator.realloc_object(obj, alloc_size, attr);
+    ObTenantMemoryMgr::tl_ignore_tenant_500_limit = true;
     if(OB_ISNULL(obj) && g_alloc_failed_ctx().need_wash()) {
       int64_t total_size = ta.sync_wash();
       obj = allocator.realloc_object(obj, alloc_size, attr);
