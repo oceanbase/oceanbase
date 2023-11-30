@@ -272,9 +272,16 @@ public:
       v.client_ret_ = err;
       v.retry_type_ = RETRY_TYPE_NONE;
       v.no_more_test_ = true;
-    } else if (ObStmt::is_ddl_stmt(v.result_.get_stmt_type(), v.result_.has_global_variable()) || is_direct_load(v)) {
-      // is_direct_load now is DDL stmt, so use the same retry policy
+    } else if (ObStmt::is_ddl_stmt(v.result_.get_stmt_type(), v.result_.has_global_variable())) {
       if (is_ddl_stmt_packet_retry_err(err)) {
+        try_packet_retry(v);
+      } else {
+        v.client_ret_ = err;
+        v.retry_type_ = RETRY_TYPE_NONE;
+      }
+      v.no_more_test_ = true;
+    } else if (is_direct_load(v)) {
+      if (is_direct_load_retry_err(err)) {
         try_packet_retry(v);
       } else {
         v.client_ret_ = err;
