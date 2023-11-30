@@ -8236,7 +8236,13 @@ int ObDDLService::add_column_group_to_table_schema(
     common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
+  bool is_oracle_mode = false;
   if (alter_table_schema.get_column_group_count() == 0) {
+  } else if (!origin_table_schema.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid table schema", K(ret), K(origin_table_schema));
+  } else if (OB_FAIL(origin_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("fail to check if oracle mode", K(ret), K(origin_table_schema));
   } else {
     uint64_t cur_column_group_id = origin_table_schema.get_max_used_column_group_id();
     new_table_schema.reset_column_group_info();
@@ -8259,7 +8265,7 @@ int ObDDLService::add_column_group_to_table_schema(
         if (OB_LIKELY(tenant_config.is_valid())) {
           storage_encoding_mode = tenant_config->storage_encoding_mode;
         }
-        bool is_flat = lib::is_oracle_mode() ? ((OB_STORE_FORMAT_NOCOMPRESS_ORACLE == store_format)
+        bool is_flat = is_oracle_mode ? ((OB_STORE_FORMAT_NOCOMPRESS_ORACLE == store_format)
                                                 || (OB_STORE_FORMAT_BASIC_ORACLE == store_format)
                                                 || (OB_STORE_FORMAT_OLTP_ORACLE == store_format))
                                              : ((OB_STORE_FORMAT_REDUNDANT_MYSQL == store_format)
