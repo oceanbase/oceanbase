@@ -73,9 +73,12 @@ void ObTLTaGuard::revert()
 }
 
 ObMallocAllocator::ObMallocAllocator()
-  : locks_(), allocators_(), unrecycled_lock_(), unrecycled_allocators_(),
+  : locks_(), allocators_(), unrecycled_lock_(false), unrecycled_allocators_(),
     reserved_(0), urgent_(0), max_used_tenant_id_(0), create_on_demand_(false)
 {
+  for (int64_t i = 0; i < PRESERVED_TENANT_COUNT; ++i) {
+    locks_[i].enable_record_stat(false);
+  }
   set_root_allocator();
   is_inited_ = true;
 }

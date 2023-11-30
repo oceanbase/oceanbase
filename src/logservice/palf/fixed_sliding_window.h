@@ -249,17 +249,17 @@ private:
         PALF_LOG(ERROR, "FixedSlidingWindow revert error", KR(ret), K(r_id), K(begin_sn_), K(end_sn_), K(curr_ref));
       } else if (0 == curr_ref) {
         int64_t tmp_end = get_end_sn_();
-        PALF_LOG(TRACE, "revert zero", K(r_id), K(begin_sn_), K(tmp_end));
+        PALF_LOG(DEBUG, "revert zero", K(r_id), K(begin_sn_), K(tmp_end));
         for (int64_t i = idx; i == calc_idx_(tmp_end) && tmp_id < get_begin_sn();) {
           // slot mutex lock for revert/slide, revert/revert
           ObByteLockGuard guard(array_[i].slot_lock_);
-          PALF_LOG(TRACE, "try revert reset", K(i), K(tmp_end), K(begin_sn_));
+          PALF_LOG(DEBUG, "try revert reset", K(i), K(tmp_end), K(begin_sn_));
           // double check end_sn_ to avoid that revert operation inc wrong end_sn_
           if (!(tmp_end == get_end_sn_() && 0 == ATOMIC_LOAD(&(array_[i].ref_)))) {
             break;
           } else {
             // Order is vital: 1. reset slot 2. inc end_sn_, for get/revert mutex
-            PALF_LOG(TRACE, "do revert reset", K(i), K(tmp_end), K(begin_sn_));
+            PALF_LOG(DEBUG, "do revert reset", K(i), K(tmp_end), K(begin_sn_));
             array_[i].reset();
             if (ATOMIC_BCAS(&(end_sn_), tmp_end, (tmp_end+1))) {
               i = calc_idx_(i+1);
@@ -274,7 +274,7 @@ private:
           }
         }
       } else {
-        PALF_LOG(TRACE, "revert succ", K(r_id), K(curr_ref), K(begin_sn_), K(end_sn_));
+        PALF_LOG(DEBUG, "revert succ", K(r_id), K(curr_ref), K(begin_sn_), K(end_sn_));
       }
     }
     return ret;

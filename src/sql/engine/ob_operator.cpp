@@ -301,7 +301,7 @@ int ObOpSpec::create_operator(ObExecContext &exec_ctx, ObOperator *&op) const
   } else if (OB_FAIL(create_exec_feedback_node_recursive(exec_ctx))) {
     LOG_WARN("fail to create exec feedback node", K(ret));
   }
-  LOG_TRACE("trace create operator", K(ret), K(lbt()));
+  LOG_DEBUG("trace create operator", K(ret), K(lbt()));
   return ret;
 }
 
@@ -320,7 +320,7 @@ int ObOpSpec::create_operator_recursive(ObExecContext &exec_ctx, ObOperator *&op
               K(ret), K(id_), KP(kit), KP(children_), K(create_child_cnt), K(type_));
     } else {
       kit->spec_ = this;
-      LOG_TRACE("trace create spec", K(ret), K(id_), K(type_));
+      LOG_DEBUG("trace create spec", K(ret), K(id_), K(type_));
       for (int64_t i = 0; OB_SUCC(ret) && i < child_cnt_; i++) {
         if (NULL == children_[i]) {
           // 这里如果有child但为nullptr，说明是receive算子
@@ -349,7 +349,7 @@ int ObOpSpec::create_operator_recursive(ObExecContext &exec_ctx, ObOperator *&op
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("NULL input returned", K(ret));
         } else {
-          LOG_TRACE("trace create input", K(ret), K(id_), K(type_));
+          LOG_DEBUG("trace create input", K(ret), K(id_), K(type_));
         }
       }
     }

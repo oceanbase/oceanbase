@@ -921,13 +921,16 @@ int ObMediumCompactionScheduleFunc::check_medium_meta_table(
   int ret = OB_SUCCESS;
   merge_finish = false;
   ObTabletInfo tablet_info;
+  ObTabletTableOperator tablet_op;
 
   if (OB_UNLIKELY(check_medium_snapshot <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(check_medium_snapshot), K(ls_id), K(tablet_id));
   } else if (OB_FAIL(init_tablet_filters())) {
     LOG_WARN("failed to init tablet filters", K(ret));
-  } else if (OB_FAIL(ObTabletTableOperator::get_tablet_info(GCTX.sql_proxy_, MTL_ID(), tablet_id, ls_id, tablet_info))) {
+  } else if (OB_FAIL(tablet_op.init(share::OBCG_STORAGE /*group_list*/, *GCTX.sql_proxy_))) {
+    LOG_WARN("failed to init tablet table operator", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_FAIL(tablet_op.get_tablet_info(MTL_ID(), tablet_id, ls_id, tablet_info))) {
     LOG_WARN("failed to get tablet info", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_UNLIKELY(!tablet_info.is_valid())) {
     ret = OB_ERR_UNEXPECTED;

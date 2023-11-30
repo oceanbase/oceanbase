@@ -69,7 +69,6 @@ int ObDistPlans::get_plan(ObPlanCacheCtx &pc_ctx,
       // for single dist plan without px, we already fill the phy locations while calculating plan type
       // for multi table px plan, physical location is calculated in match step
       ObArray<ObCandiTableLoc> candi_table_locs;
-      bool need_check_on_same_server = false;
       if (OB_ISNULL(plan_set_)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid null plan set", K(ret), K(plan_set_));
@@ -77,12 +76,13 @@ int ObDistPlans::get_plan(ObPlanCacheCtx &pc_ctx,
         // do nothing
       } else if (OB_FAIL(ObPhyLocationGetter::get_phy_locations(plan->get_table_locations(),
                                                                 pc_ctx,
-                                                                candi_table_locs,
-                                                                need_check_on_same_server))) {
+                                                                candi_table_locs))) {
         LOG_WARN("failed to get physical table locations", K(ret));
+      } else if (candi_table_locs.empty()) {
+        // do nothing.
       } else if (OB_FAIL(ObPhyLocationGetter::build_table_locs(pc_ctx.exec_ctx_.get_das_ctx(),
-                                                              plan->get_table_locations(),
-                                                              candi_table_locs))) {
+                                                               plan->get_table_locations(),
+                                                               candi_table_locs))) {
         LOG_WARN("fail to init table locs", K(ret));
       }
     }

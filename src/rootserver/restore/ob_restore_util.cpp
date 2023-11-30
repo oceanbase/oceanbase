@@ -120,7 +120,7 @@ int ObRestoreUtil::record_physical_restore_job(
     } else if (has_job) {
       ret = OB_RESTORE_IN_PROGRESS;
       LOG_WARN("restore tenant job already exist", K(ret), K(job));
-    } else if (OB_FAIL(restore_op.init(&sql_client, OB_SYS_TENANT_ID))) {
+    } else if (OB_FAIL(restore_op.init(&sql_client, OB_SYS_TENANT_ID, share::OBCG_STORAGE /*group_id*/))) {
       LOG_WARN("fail init restore op", K(ret));
     } else if (OB_FAIL(restore_op.insert_job(job))) {
       LOG_WARN("fail insert job and partitions", K(ret), K(job));
@@ -142,7 +142,7 @@ int ObRestoreUtil::insert_user_tenant_restore_job(
     ObPhysicalRestoreTableOperator restore_op;
     ObPhysicalRestoreJob initaitor_job_info;
     ObPhysicalRestoreJob job_info;
-    if (OB_FAIL(restore_op.init(&sql_client, OB_SYS_TENANT_ID))) {
+    if (OB_FAIL(restore_op.init(&sql_client, OB_SYS_TENANT_ID, share::OBCG_STORAGE /*group_id*/))) {
       LOG_WARN("failed to init restore op", KR(ret), K(user_tenant_id));
     } else if (OB_FAIL(restore_op.get_job_by_tenant_name(
             tenant_name, initaitor_job_info))) {
@@ -167,9 +167,9 @@ int ObRestoreUtil::insert_user_tenant_restore_job(
       const uint64_t exec_tenant_id = gen_meta_tenant_id(user_tenant_id);
       if (OB_FAIL(trans.start(&sql_client, exec_tenant_id))) {
         LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id));
-      } else if (OB_FAIL(user_restore_op.init(&trans, user_tenant_id))) {
+      } else if (OB_FAIL(user_restore_op.init(&trans, user_tenant_id, share::OBCG_STORAGE /*group_id*/))) {
         LOG_WARN("failed to init restore op", KR(ret), K(user_tenant_id));
-      } else if (OB_FAIL(restore_persist_op.init(user_tenant_id))) {
+      } else if (OB_FAIL(restore_persist_op.init(user_tenant_id, share::OBCG_STORAGE /*group_id*/))) {
         LOG_WARN("failed to init restore persist op", KR(ret), K(user_tenant_id));
       } else if (OB_FAIL(user_restore_op.insert_job(job_info))) {
         LOG_WARN("failed to insert job", KR(ret), K(job_info));
@@ -199,7 +199,7 @@ int ObRestoreUtil::check_has_physical_restore_job(
   ObArray<ObPhysicalRestoreJob> jobs;
   has_job = false;
   ObPhysicalRestoreTableOperator restore_op;
-  if (OB_FAIL(restore_op.init(&sql_client, OB_SYS_TENANT_ID))) {
+  if (OB_FAIL(restore_op.init(&sql_client, OB_SYS_TENANT_ID, share::OBCG_STORAGE /*group_id*/))) {
     LOG_WARN("fail init restore op", K(ret));
   } else if (OB_FAIL(restore_op.get_jobs(jobs))) {
     LOG_WARN("fail get jobs", K(ret));
@@ -828,7 +828,7 @@ int ObRestoreUtil::recycle_restore_job(const uint64_t tenant_id,
     LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id));
   } else {
     ObPhysicalRestoreTableOperator restore_op;
-    if (OB_FAIL(restore_op.init(&trans, tenant_id))) {
+    if (OB_FAIL(restore_op.init(&trans, tenant_id, share::OBCG_STORAGE /*group_id*/))) {
       LOG_WARN("failed to init restore op", KR(ret), K(tenant_id));
     } else if (OB_FAIL(restore_op.remove_job(job_id))) {
       LOG_WARN("failed to remove job", KR(ret), K(tenant_id), K(job_id));
@@ -840,7 +840,7 @@ int ObRestoreUtil::recycle_restore_job(const uint64_t tenant_id,
       common::ObArray<share::ObLSRestoreProgressPersistInfo> ls_restore_progress_infos;
       key.tenant_id_ = tenant_id;
       key.job_id_ = job_info.get_job_id();
-      if (OB_FAIL(persist_helper.init(tenant_id))) {
+      if (OB_FAIL(persist_helper.init(tenant_id, share::OBCG_STORAGE /*group_id*/))) {
         LOG_WARN("failed to init persist helper", KR(ret), K(tenant_id));
       } else if (OB_FAIL(persist_helper.get_restore_process(
                      trans, key, restore_progress))) {
@@ -900,13 +900,13 @@ int ObRestoreUtil::recycle_restore_job(common::ObMySQLProxy &sql_proxy,
     LOG_WARN("invalid argument", KR(ret), K(exec_tenant_id));
   } else if (OB_FAIL(trans.start(&sql_proxy, exec_tenant_id))) {
     LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id));
-  } else if (OB_FAIL(persist_helper.init(tenant_id))) {
+  } else if (OB_FAIL(persist_helper.init(tenant_id, share::OBCG_STORAGE /*group_id*/))) {
     LOG_WARN("failed to init persist helper", KR(ret));
    } else if (OB_FAIL(persist_helper.insert_restore_job_history(trans, history_info))) {
     LOG_WARN("failed to insert restore job history", KR(ret), K(history_info));
   } else {
     ObPhysicalRestoreTableOperator restore_op;
-    if (OB_FAIL(restore_op.init(&trans, tenant_id))) {
+    if (OB_FAIL(restore_op.init(&trans, tenant_id, share::OBCG_STORAGE /*group_id*/))) {
       LOG_WARN("failed to init restore op", KR(ret), K(tenant_id));
     } else if (OB_FAIL(restore_op.remove_job(job_id))) {
       LOG_WARN("failed to remove job", KR(ret), K(tenant_id), K(job_id));
@@ -942,7 +942,7 @@ int ObRestoreUtil::get_user_restore_job_history(common::ObISQLClient &sql_client
     K(initiator_job_id), K(initiator_tenant_id));
   } else {
     ObRestorePersistHelper user_persist_helper;
-    if (OB_FAIL(user_persist_helper.init(user_tenant_id))) {
+    if (OB_FAIL(user_persist_helper.init(user_tenant_id, share::OBCG_STORAGE /*group_id*/))) {
       LOG_WARN("failed to init persist helper", KR(ret), K(user_tenant_id));
     } else if (OB_FAIL(user_persist_helper.get_restore_job_history(
                    sql_client, initiator_job_id, initiator_tenant_id,

@@ -959,7 +959,6 @@ int ObTenantCheckpointSlogHandler::write_checkpoint(bool is_force)
     LOG_WARN("ckpt_cursor_ is invalid", K(ret));
   } else if (is_force // alter system command triggered
              || last_super_block.is_old_version()  // compat upgrade
-             || (last_frozen_version_ < frozen_version && !is_major_doing) // major complete
              || ((start_time > last_ckpt_time_ + min_interval) // slog is long
                  && !is_major_doing
                  && ckpt_cursor_.newer_than(last_super_block.replay_start_point_)

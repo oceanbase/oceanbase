@@ -143,7 +143,6 @@ public:
       ? share::SCN::min_scn()
       : context_->store_ctx_->mvcc_acc_ctx_.get_snapshot_version();
   }
-  uint8_t get_iter_flag() { return iter_flag_; }
 protected:
   int get_real_range(const blocksstable::ObDatumRange &range, blocksstable::ObDatumRange &real_range);
   int prepare_scan();
@@ -167,7 +166,6 @@ protected:
   ObMvccRowIterator row_iter_;
   blocksstable::ObDatumRow row_;
   ObNopBitMap bitmap_;
-  uint8_t iter_flag_;
 };
 
 

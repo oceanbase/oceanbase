@@ -173,6 +173,18 @@ public:
     UNUSED(tenant_id);
     return source_.get_gts(stc, task, gts, receive_gts_ts);
   }
+
+  virtual int get_gts_sync(const uint64_t tenant_id,
+                           const MonotonicTs stc,
+                           int64_t timeout_us,
+                           share::SCN &gts,
+                           MonotonicTs &receive_gts_ts)
+  {
+    UNUSED(tenant_id);
+    UNUSED(timeout_us);
+    return source_.get_gts(stc, NULL, gts, receive_gts_ts);
+  }
+
   virtual int get_gts(const uint64_t tenant_id, ObTsCbTask *task, share::SCN &gts)
   {
     UNUSED(tenant_id);

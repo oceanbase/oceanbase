@@ -246,14 +246,14 @@ void ObTransCallbackMgr::reset()
   flushed_log_size_ = 0;
 }
 
-void ObTransCallbackMgr::callback_free(ObITransCallback *cb)
+void ObTransCallbackMgr::free_mvcc_row_callback(ObITransCallback *cb)
 {
   int64_t owner = cb->owner_;
   if (-1 == owner) {
     TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "callback free failed", KPC(cb));
   } else if (0 == owner) {
-    cb_allocator_.free(cb);
-  } else if (0 < owner) {
+    mem_ctx_obj_pool_.free<ObMvccRowCallback>(cb);
+  } else if (0 < owner && MAX_CB_ALLOCATOR_COUNT >= owner && OB_NOT_NULL(cb_allocators_)) {
     cb_allocators_[owner - 1].free(cb);
   } else {
     TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected cb", KPC(cb));
@@ -261,7 +261,7 @@ void ObTransCallbackMgr::callback_free(ObITransCallback *cb)
   }
 }
 
-void *ObTransCallbackMgr::callback_alloc(const int64_t size)
+void *ObTransCallbackMgr::alloc_mvcc_row_callback()
 {
   int ret = OB_SUCCESS;
   ObITransCallback *callback = nullptr;
@@ -297,14 +297,14 @@ void *ObTransCallbackMgr::callback_alloc(const int64_t size)
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "cb allocators is not inited", K(ret));
       } else {
-        callback = (ObITransCallback *)(cb_allocators_[slot].alloc(size));
+        callback = (ObITransCallback *)(cb_allocators_[slot].alloc(sizeof(ObMvccRowCallback)));
         if (nullptr != callback) {
           callback->owner_ = slot + 1;
         }
       }
     }
   } else {
-    callback = (ObITransCallback *)(cb_allocator_.alloc(size));
+    callback = (ObITransCallback *)(mem_ctx_obj_pool_.alloc<ObMvccRowCallback>());
     if (nullptr != callback) {
       callback->owner_ = 0;
     }

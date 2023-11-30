@@ -703,22 +703,6 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest &req)
       if (need_update_stat) {
         EVENT_INC(MYSQL_PACKET_IN);
         EVENT_ADD(MYSQL_PACKET_IN_BYTES, pkt.get_clen() + OB_MYSQL_HEADER_LENGTH);
-        sql::ObSQLSessionInfo *sess_info = nullptr;
-        if (OB_ISNULL(conn) || OB_ISNULL(GCTX.session_mgr_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("conn or sessoin mgr is NULL", K(ret), KP(conn), K(GCTX.session_mgr_));
-        } else if (OB_FAIL(GCTX.session_mgr_->get_session(conn->sessid_, sess_info))) {
-          LOG_WARN("get session fail", K(ret), "sessid", conn->sessid_,
-                    "proxy_sessid", conn->proxy_sessid_);
-        } else if (OB_ISNULL(sess_info)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("sess_info is null", K(ret));
-        } else {
-          sess_info->inc_in_bytes(pkt.get_clen() + OB_MYSQL_HEADER_LENGTH);
-        }
-        if (OB_NOT_NULL(sess_info)) {
-          GCTX.session_mgr_->revert_session(sess_info);
-        }
       }
       // The tenant check has been done in the recv_request method. For performance considerations, the check here is removed;
       /*

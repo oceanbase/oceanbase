@@ -974,7 +974,7 @@ void ObBlockManager::mark_and_sweep()
       }
 
       if (OB_FAIL(ret)) {
-        // do nothing
+        ATOMIC_FAA(&alloc_num_, alloc_num); // add alloc_num back to trigger next round mark
       } else {
         tmp_status.pending_free_count_ += mark_info.count();
         tmp_status.mark_cost_time_ = ObTimeUtility::fast_current_time() - tmp_status.start_time_;
@@ -1478,7 +1478,8 @@ const int64_t ObBlockManager::InspectBadBlockTask::MAX_SEARCH_COUNT_PER_ROUND = 
 
 ObBlockManager::InspectBadBlockTask::InspectBadBlockTask(ObBlockManager &blk_mgr)
   : blk_mgr_(blk_mgr),
-    last_macro_idx_(0)
+    last_macro_idx_(-1),
+    last_check_time_(0)
 {
 }
 
@@ -1489,12 +1490,21 @@ ObBlockManager::InspectBadBlockTask::~InspectBadBlockTask()
 
 void ObBlockManager::InspectBadBlockTask::reset()
 {
-  last_macro_idx_ = 0;
+  last_macro_idx_ = -1;
+  last_check_time_ = 0;
 }
 
 void ObBlockManager::InspectBadBlockTask::runTimerTask()
 {
-  inspect_bad_block();
+  const int64_t next_check_time = last_check_time_ + ACCESS_TIME_INTERVAL;
+  if (next_check_time <= ObTimeUtility::fast_current_time()) { /* exceed 2 days */
+    inspect_bad_block();
+    if (last_macro_idx_ == -1) { // finished
+      last_check_time_ = ObTimeUtility::fast_current_time();
+    }
+  } else {
+    LOG_INFO("skip inspect bad block", K_(last_check_time), K_(last_macro_idx));
+  }
 }
 
 int ObBlockManager::InspectBadBlockTask::check_block(const MacroBlockId &macro_id)
@@ -1681,7 +1691,12 @@ void ObBlockManager::InspectBadBlockTask::inspect_bad_block()
          && check_count < max_check_count_per_round
          && (ObTimeUtility::current_time() - begin_time) < inspect_timeout_us;
          ++i) {
-      last_macro_idx_ = (last_macro_idx_ + 1) % total_used_macro_block_count;
+      ++last_macro_idx_;
+      if (last_macro_idx_ >= total_used_macro_block_count) {
+        last_macro_idx_ = -1; // finished this round
+        break;
+      }
+
       const MacroBlockId &macro_id = macro_ids.at(last_macro_idx_);
       ObMacroBlockInfo block_info;
       if (OB_FAIL(blk_mgr_.get_macro_block_info(macro_id, block_info))) {

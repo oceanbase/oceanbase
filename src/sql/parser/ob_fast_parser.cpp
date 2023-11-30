@@ -423,7 +423,7 @@ int ObFastParserBase::parser_insert_str(common::ObIAllocator &allocator,
       can_batch_opt = is_valid;
     }
   }
-  LOG_TRACE("after parser insert print curr_sql", K(old_no_param_sql), K(new_truncated_sql),
+  LOG_DEBUG("after parser insert print curr_sql", K(old_no_param_sql), K(new_truncated_sql),
         K(can_batch_opt), K(params_count), K(row_count));
   return ret;
 }

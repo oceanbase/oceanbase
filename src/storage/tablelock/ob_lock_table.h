@@ -17,6 +17,7 @@
 #include "lib/worker.h"
 #include "storage/ob_i_table.h"
 #include "storage/tablelock/ob_obj_lock.h"
+#include "storage/ob_i_memtable_mgr.h" // ObMemtableMgrHandle
 #include "logservice/ob_log_base_type.h"
 
 namespace oceanbase
@@ -62,6 +63,7 @@ namespace tablelock
 struct ObLockParam;
 class ObTableLockOp;
 class ObLockMemtable;
+class ObLockMemtableMgr;
 
 class ObLockTable : public logservice::ObIReplaySubHandler,
                     public logservice::ObIRoleChangeSubHandler,
@@ -69,9 +71,10 @@ class ObLockTable : public logservice::ObIReplaySubHandler,
 {
 public:
   ObLockTable()
-    : parent_(nullptr),
-      is_inited_(false)
-  {}
+    : is_inited_(false),
+      parent_(nullptr),
+      lock_mt_mgr_(nullptr),
+      lock_memtable_handle_() {}
   ~ObLockTable() {}
   int init(storage::ObLS *parent);
   int prepare_for_safe_destroy();
@@ -161,8 +164,11 @@ private:
   static const int64_t LOCKTABLE_SCHEMA_VERSION = 0;
   static const int64_t LOCKTABLE_SCHEMA_ROEKEY_CNT = 1;
   static const int64_t LOCKTABLE_SCHEMA_COLUMN_CNT = 2;
-  storage::ObLS *parent_;
   bool is_inited_;
+  storage::ObLS *parent_;
+  ObLockMemtableMgr *lock_mt_mgr_;
+  storage::ObTableHandleV2 lock_memtable_handle_;
+  TCRWLock rw_lock_;
 };
 
 } // tablelock

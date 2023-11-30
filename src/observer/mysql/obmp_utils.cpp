@@ -149,7 +149,7 @@ int ObMPUtils::sync_session_info(sql::ObSQLSessionInfo &sess, const common::ObSt
   const char *end = buf + len;
   int64_t pos = 0;
 
-  LOG_TRACE("sync sess_inf", K(sess.get_is_in_retry()),
+  LOG_DEBUG("sync sess_inf", K(sess.get_is_in_retry()),
             K(sess.get_sessid()), KP(data), K(len), KPHEX(data, len));
 
   // decode sess_info

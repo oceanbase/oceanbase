@@ -69,7 +69,7 @@ int ObTimestampService::get_timestamp(int64_t &gts)
   int64_t unused_id;
   // 100ms
   const int64_t CHECK_INTERVAL = 100000000;
-  const int64_t current_time = ObTimeUtility::current_time_ns();
+  const int64_t current_time = ObClockGenerator::getClock() * 1000;
   int64_t last_request_ts = ATOMIC_LOAD(&last_request_ts_);
   int64_t time_delta = current_time - last_request_ts;
 

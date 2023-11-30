@@ -140,7 +140,7 @@ int ObPCVSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
     }
   }
   if (pc_ctx.exec_ctx_.get_min_cluster_version() != GET_MIN_CLUSTER_VERSION()) {
-    LOG_TRACE("Lob Debug, using remote min cluster version",
+    LOG_DEBUG("Lob Debug, using remote min cluster version",
              K(pc_ctx.exec_ctx_.get_min_cluster_version()),
              K(GET_MIN_CLUSTER_VERSION()));
   }
@@ -181,7 +181,7 @@ int ObPCVSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
     bool need_check_schema = true;
     DLIST_FOREACH(pcv, pcv_list_) {
       bool is_same = false;
-      LOG_TRACE("get plan, pcv", K(pcv));
+      LOG_DEBUG("get plan, pcv", K(pcv));
       if (OB_FAIL(pcv->get_all_dep_schema(pc_ctx,
                                           pc_ctx.sql_ctx_.session_info_->get_database_id(),
                                           new_tenant_schema_version,

@@ -8653,7 +8653,7 @@ int ObResolverUtils::resolver_param(ObPlanCacheCtx &pc_ctx,
       }
     }
     is_param = true;
-    LOG_TRACE("is_param", K(param_idx), K(obj_param), K(raw_param->type_), K(raw_param->value_),
+    LOG_DEBUG("is_param", K(param_idx), K(obj_param), K(raw_param->type_), K(raw_param->value_),
               "str_value", ObString(raw_param->str_len_, raw_param->str_value_));
   }
   return ret;

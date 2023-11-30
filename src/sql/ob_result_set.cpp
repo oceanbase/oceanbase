@@ -146,7 +146,7 @@ OB_INLINE int ObResultSet::open_plan()
 int ObResultSet::open()
 {
   int ret = OB_SUCCESS;
-  my_session_.set_process_query_time(ObTimeUtility::current_time());
+  my_session_.set_process_query_time(ObClockGenerator::getClock());
   LinkExecCtxGuard link_guard(my_session_, get_exec_context());
   FLTSpanGuard(open);
   if (lib::is_oracle_mode() &&
@@ -974,7 +974,7 @@ OB_INLINE int ObResultSet::auto_end_plan_trans(ObPhysicalPlan& plan,
   bool is_rollback = false;
   my_session_.get_autocommit(ac);
   async = false;
-  LOG_TRACE("auto_end_plan_trans.start", K(ret),
+  LOG_DEBUG("auto_end_plan_trans.start", K(ret),
             K(in_trans), K(ac), K(explicit_trans),
             K(is_async_end_trans_submitted()));
   // explicit start trans will disable auto-commit
@@ -1059,7 +1059,7 @@ OB_INLINE int ObResultSet::auto_end_plan_trans(ObPhysicalPlan& plan,
     }
   }
   NG_TRACE(auto_end_plan_end);
-  LOG_TRACE("auto_end_plan_trans.end", K(ret),
+  LOG_DEBUG("auto_end_plan_trans.end", K(ret),
             K(in_trans), K(ac), K(explicit_trans), K(plan.is_need_trans()),
             K(is_rollback),  K(async),
             K(is_async_end_trans_submitted()));

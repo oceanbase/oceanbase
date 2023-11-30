@@ -132,9 +132,12 @@ public:
   int insert_related_tablet_map();
   void clear()
   {
-    list_.clear();
-    map_.clear();
+    if (!empty()) {
+      list_.clear();
+      map_.clear();
+    }
   }
+  bool empty() const { return list_.empty() && map_.empty(); }
   const RelatedTabletList &get_list() const { return list_; }
   TO_STRING_KV(K_(list), "map_size", map_.size());
 private:

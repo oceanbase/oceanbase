@@ -26,10 +26,15 @@
 
 namespace oceanbase
 {
+namespace transaction
+{
+class ObMemtableCtxObjPool;
+}
 namespace common
 {
 class ObTabletID;
 };
+
 namespace memtable
 {
 class ObMemtableCtxCbAllocator;
@@ -180,31 +185,34 @@ public:
     PARALLEL_STMT = -1
   };
 public:
-  ObTransCallbackMgr(ObIMvccCtx &host, ObMemtableCtxCbAllocator &cb_allocator)
-    : host_(host),
-      callback_list_(*this),
-      callback_lists_(NULL),
-      rwlock_(ObLatchIds::MEMTABLE_CALLBACK_LIST_MGR_LOCK),
-      parallel_stat_(0),
-      for_replay_(false),
-      callback_main_list_append_count_(0),
-      callback_slave_list_append_count_(0),
-      callback_slave_list_merge_count_(0),
-      callback_remove_for_trans_end_count_(0),
-      callback_remove_for_remove_memtable_count_(0),
-      callback_remove_for_fast_commit_count_(0),
-      callback_remove_for_rollback_to_count_(0),
-      pending_log_size_(0),
-      flushed_log_size_(0),
-      cb_allocator_(cb_allocator),
-      cb_allocators_(NULL)
+  ObTransCallbackMgr(ObIMvccCtx &host,
+                     ObMemtableCtxCbAllocator &cb_allocator,
+                     transaction::ObMemtableCtxObjPool &mem_ctx_obj_pool)
+      : host_(host),
+        mem_ctx_obj_pool_(mem_ctx_obj_pool),
+        callback_list_(*this),
+        callback_lists_(NULL),
+        rwlock_(ObLatchIds::MEMTABLE_CALLBACK_LIST_MGR_LOCK),
+        parallel_stat_(0),
+        for_replay_(false),
+        callback_main_list_append_count_(0),
+        callback_slave_list_append_count_(0),
+        callback_slave_list_merge_count_(0),
+        callback_remove_for_trans_end_count_(0),
+        callback_remove_for_remove_memtable_count_(0),
+        callback_remove_for_fast_commit_count_(0),
+        callback_remove_for_rollback_to_count_(0),
+        pending_log_size_(0),
+        flushed_log_size_(0),
+        cb_allocator_(cb_allocator),
+        cb_allocators_(NULL)
   {
   }
   ~ObTransCallbackMgr() {}
   void reset();
   ObIMvccCtx &get_ctx() { return host_; }
-  void *callback_alloc(const int64_t size);
-  void callback_free(ObITransCallback *cb);
+  void *alloc_mvcc_row_callback();
+  void free_mvcc_row_callback(ObITransCallback *cb);
   int append(ObITransCallback *node);
   void before_append(ObITransCallback *node);
   void after_append(ObITransCallback *node, const int ret_code);
@@ -309,6 +317,7 @@ private:
   ObITransCallback *get_guard_() { return callback_list_.get_guard(); }
 private:
   ObIMvccCtx &host_;
+  transaction::ObMemtableCtxObjPool &mem_ctx_obj_pool_;
   ObTxCallbackList callback_list_;
   ObTxCallbackList *callback_lists_;
   common::SpinRWLock rwlock_;

@@ -64,11 +64,11 @@ private:
 OB_NOINLINE int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_id,
                                                         SCN &snapshot,
                                                         const bool is_read_only,
-                                                        bool &acquire_from_follower)
+                                                        ObRole &role)
 {
   int ret = OB_SUCCESS;
   snapshot = tx_version_mgr_.get_max_commit_ts(false);
-  acquire_from_follower = false;
+  role = LEADER;
   return ret;
 }
 class ObTestRegisterMDS : public ::testing::Test

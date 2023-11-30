@@ -1247,7 +1247,7 @@ int ObTableModifyOp::get_next_row_from_child()
       LOG_WARN("fail to get next row", K(ret));
     }
   } else {
-    LOG_TRACE("child output row", "row", ROWEXPR2STR(eval_ctx_, child_->get_spec().output_));
+    LOG_DEBUG("child output row", "row", ROWEXPR2STR(eval_ctx_, child_->get_spec().output_));
   }
   return ret;
 }

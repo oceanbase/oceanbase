@@ -541,7 +541,7 @@ int ObMigrationStatusHelper::check_ls_with_transfer_task_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mysql proxy should not be NULL", K(ret), KP(sql_proxy));
   } else if (OB_FAIL(ObTransferTaskOperator::get_by_src_ls(
-      *sql_proxy, tenant_id, src_ls_id, task, share::OBCG_STORAGE_HA_LEVEL2))) {
+      *sql_proxy, tenant_id, src_ls_id, task, share::OBCG_STORAGE_STREAM))) {
     LOG_WARN("failed to get transfer task", K(ret), K(tenant_id), K(src_ls_id));
     if (OB_ENTRY_NOT_EXIST == ret || OB_TABLE_NOT_EXIST == ret) {
       need_check_allow_gc = true;

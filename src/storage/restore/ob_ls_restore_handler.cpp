@@ -381,7 +381,7 @@ int ObLSRestoreHandler::check_restore_job_exist_(bool &is_exist)
   if (OB_ISNULL(sql_proxy_ = GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql prxoy must not be null", K(ret));
-  } else if (OB_FAIL(restore_table_operator.init(sql_proxy_, tenant_id))) {
+  } else if (OB_FAIL(restore_table_operator.init(sql_proxy_, tenant_id, share::OBCG_STORAGE))) {
     LOG_WARN("failed to init restore table operator", K(ret), K(tenant_id));
   } else if (OB_FAIL(restore_table_operator.get_job_by_tenant_id(tenant_id, job_info))) {
     if (ret == OB_ENTRY_NOT_EXIST) {
@@ -866,7 +866,7 @@ int ObILSRestoreState::report_ls_restore_progress_(
   ls_key.job_id_ = ls_restore_arg_->get_job_id();
   ls_key.ls_id_ = ls.get_ls_id();
   ls_key.addr_ = self_addr_;
-  if (OB_FAIL(helper.init(ls_key.tenant_id_))) {
+  if (OB_FAIL(helper.init(ls_key.tenant_id_, share::OBCG_STORAGE))) {
     LOG_WARN("fail to init restore table helper", K(ret), "tenant_id", ls_key.tenant_id_);
   } else if (OB_FAIL(helper.update_ls_restore_status(*proxy_, ls_key, trace_id, status, result, comment))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
@@ -901,7 +901,7 @@ int ObILSRestoreState::insert_initial_ls_restore_progress_()
   ls_restore_info.key_.addr_ = self_addr_;
   ls_restore_info.restore_scn_ = ls_restore_arg_->get_restore_scn();
   ls_restore_info.status_ = ObLSRestoreStatus::Status::RESTORE_START;
-  if (OB_FAIL(helper.init(ls_restore_info.key_.tenant_id_))) {
+  if (OB_FAIL(helper.init(ls_restore_info.key_.tenant_id_, share::OBCG_STORAGE))) {
     LOG_WARN("fail to init restore table helper", K(ret), "tenant_id", ls_restore_info.key_.tenant_id_);
   } else if (OB_FAIL(helper.insert_initial_ls_restore_progress(*proxy_, ls_restore_info))) {
     LOG_WARN("fail to insert initial ls restore progress info", K(ret), K(ls_restore_info));
@@ -1549,7 +1549,7 @@ int ObLSRestoreStartState::check_ls_leader_ready_(bool &is_ready)
     if (OB_FAIL(sql.assign_fmt("select count(*) ls_count from %s where ls_id=%ld and role = 1",
         OB_ALL_LS_META_TABLE_TNAME, ls_->get_ls_id().id()))) {
       LOG_WARN("fail to assign sql", K(ret));
-    } else if (OB_FAIL(proxy_->read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
+    } else if (OB_FAIL(proxy_->read(res, gen_meta_tenant_id(tenant_id), sql.ptr(), share::OBCG_STORAGE))) {
       LOG_WARN("execute sql failed", K(ret), K(sql));
     } else if (OB_ISNULL(result = res.get_result())) {
       ret = OB_ERR_UNEXPECTED;
@@ -1631,7 +1631,7 @@ int ObLSRestoreStartState::inc_need_restore_ls_cnt_()
   key.tenant_id_ = ls_restore_arg_->tenant_id_;
   key.ls_id_ = ls_->get_ls_id();
   key.addr_ = self_addr_;
-  if (OB_FAIL(helper.init(key.tenant_id_))) {
+  if (OB_FAIL(helper.init(key.tenant_id_, share::OBCG_STORAGE))) {
     LOG_WARN("fail to init helper", K(ret), K(key.tenant_id_));
   } else if (OB_FAIL(trans.start(proxy_, gen_meta_tenant_id(key.tenant_id_)))) {
     LOG_WARN("fail to start trans", K(ret), K(key.tenant_id_));
@@ -1663,7 +1663,7 @@ int ObLSRestoreHandler::fill_restore_arg()
   if (OB_ISNULL(sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql can't null", K(ret), K(sql_proxy_));
-  } else if (OB_FAIL(restore_table_operator.init(sql_proxy_, tenant_id))) {
+  } else if (OB_FAIL(restore_table_operator.init(sql_proxy_, tenant_id, share::OBCG_STORAGE))) {
     LOG_WARN("fail to init restore table operator", K(ret));
   } else {
     HEAP_VAR(ObPhysicalRestoreJob, job_info) {
@@ -1706,7 +1706,7 @@ int ObLSRestoreStartState::check_ls_created_(bool &is_created)
   if (OB_ISNULL(sql_proxy)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is nullptr is unexpected", K(ret));
-  } else if (OB_FAIL(ls_status_operator.get_ls_status_info(user_tenant_id, ls_->get_ls_id(), status_info, *sql_proxy))) {
+  } else if (OB_FAIL(ls_status_operator.get_ls_status_info(user_tenant_id, ls_->get_ls_id(), status_info, *sql_proxy, share::OBCG_STORAGE))) {
     LOG_WARN("fail to get ls status info", K(ret), K(user_tenant_id), "ls_id", ls_->get_ls_id());
   } else if (!status_info.ls_is_create_abort() && !status_info.ls_is_creating()) {
     is_created = true;
@@ -2832,7 +2832,7 @@ int ObLSWaitRestoreConsistentScnState::check_can_advance_status_(bool &can) cons
   int ret = OB_SUCCESS;
   share::ObPhysicalRestoreTableOperator restore_table_operator;
   const uint64_t tenant_id = ls_->get_tenant_id();
-  if (OB_FAIL(restore_table_operator.init(proxy_, tenant_id))) {
+  if (OB_FAIL(restore_table_operator.init(proxy_, tenant_id, share::OBCG_STORAGE))) {
     LOG_WARN("fail to init restore table operator", K(ret), K(tenant_id));
   } else {
     ObLSRestoreStatus next_status(ObLSRestoreStatus::QUICK_RESTORE);

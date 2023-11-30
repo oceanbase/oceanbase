@@ -19,7 +19,7 @@ namespace oceanbase
 {
 namespace memtable
 {
-#define USE_SIMPLE_ROW_LATCH 0
+#define USE_SIMPLE_ROW_LATCH 1
 #if USE_SIMPLE_ROW_LATCH
 struct ObRowLatch
 {

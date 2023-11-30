@@ -54,8 +54,6 @@ struct ObMtStat
   int64_t insert_row_count_;
   int64_t update_row_count_;
   int64_t delete_row_count_;
-  int64_t purge_row_count_;
-  int64_t purge_queue_count_;
   int64_t frozen_time_;
   int64_t ready_for_flush_time_;
   int64_t create_flush_dag_time_;

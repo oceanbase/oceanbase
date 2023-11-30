@@ -18,6 +18,7 @@
 #include "lib/oblog/ob_log_module.h"
 #include "lib/time/ob_time_utility.h"
 #include "lib/utility/ob_print_utils.h"                   // PALF_LOG
+#include "lib/utility/ob_tracepoint.h"
 #include "common/ob_member_list.h"                        // ObMemberList
 #include "common/ob_role.h"                               // ObRole
 #include "fetch_log_engine.h"

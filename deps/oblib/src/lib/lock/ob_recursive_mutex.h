@@ -63,10 +63,7 @@ inline int ObRecursiveMutex::lock()
 inline int ObRecursiveMutex::unlock()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!latch_.is_wrlocked_by())) {
-    ret = OB_ERR_UNEXPECTED;
-    COMMON_LOG(WARN, "The ObRecursiveMutex is not locked, ", K_(latch_id), K(ret));
-  } else if (0 == --lock_cnt_) {
+  if (0 == --lock_cnt_) {
     if (OB_FAIL(latch_.unlock())) {
       COMMON_LOG(WARN, "Fail to unlock the ObRecursiveMutex, ", K_(latch_id), K(ret));
     }

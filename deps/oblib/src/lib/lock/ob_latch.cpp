@@ -118,19 +118,29 @@ int ObLatchMutex::lock(
         //wait
         waited = true;
         // latch mutex wait is an atomic wait event
-        ObLatchWaitEventGuard wait_guard(
-            ObLatchDesc::wait_event_idx(latch_id),
-            abs_timeout_us / 1000,
-            reinterpret_cast<uint64_t>(this),
-            (uint32_t*)&lock_.val(),
-            0,
-            true /*is_atomic*/);
-        if (OB_FAIL(wait(abs_timeout_us, uid))) {
-          if (OB_TIMEOUT != ret) {
-            COMMON_LOG(WARN, "Fail to wait the latch, ", K(ret));
+        if (record_stat_) {
+          ObLatchWaitEventGuard wait_guard(
+              ObLatchDesc::wait_event_idx(latch_id),
+              abs_timeout_us / 1000,
+              reinterpret_cast<uint64_t>(this),
+              (uint32_t*)&lock_.val(),
+              0,
+              true /*is_atomic*/);
+          if (OB_FAIL(wait(abs_timeout_us, uid))) {
+            if (OB_TIMEOUT != ret) {
+              COMMON_LOG(WARN, "Fail to wait the latch, ", K(ret));
+            }
+          } else {
+            break;
           }
         } else {
-          break;
+          if (OB_FAIL(wait(abs_timeout_us, uid))) {
+            if (OB_TIMEOUT != ret) {
+              COMMON_LOG(WARN, "Fail to wait the latch, ", K(ret));
+            }
+          } else {
+            break;
+          }
         }
       }
     }
@@ -146,7 +156,7 @@ int ObLatchMutex::wait(const int64_t abs_timeout_us, const uint32_t uid)
 {
   // performance critical, do not double check the parameters
   int ret = OB_SUCCESS;
-  ObDiagnoseSessionInfo *dsi = ObDiagnoseSessionInfo::get_local_diagnose_info();
+  ObDiagnoseSessionInfo *dsi = (!record_stat_ ? NULL : ObDiagnoseSessionInfo::get_local_diagnose_info());
   int64_t timeout = 0;
   int lock = 0;
 
@@ -569,19 +579,6 @@ void ObLockDiagnose::print()
   }
 }
 #endif
-
-ObLatch::ObLatch()
-  : lock_(0)
-    , record_stat_(true)
-{
-}
-
-ObLatch::~ObLatch()
-{
-  if (0 != lock_) {
-    COMMON_LOG(DEBUG, "invalid lock,", K(lock_), KCSTRING(lbt()));
-  }
-}
 
 int ObLatch::try_rdlock(const uint32_t latch_id)
 {

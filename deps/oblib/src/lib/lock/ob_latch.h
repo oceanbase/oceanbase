@@ -39,7 +39,7 @@ extern bool USE_CO_LATCH;
 
 #define TRY_LOCK_RECORD_STAT(latch_id, spin_cnt, ret)                             \
   do {                                                                            \
-    if (lib::is_diagnose_info_enabled()) {                                        \
+    if (record_stat_ && lib::is_diagnose_info_enabled()) {                        \
       ObDiagnoseTenantInfo *di = ObDiagnoseTenantInfo::get_local_diagnose_info(); \
       if (NULL != di) {                                                           \
         ObLatchStat *p_latch_stat = di->get_latch_stats().get_or_create_item(latch_id); \
@@ -59,7 +59,7 @@ extern bool USE_CO_LATCH;
 
 #define LOCK_RECORD_STAT(latch_id, waited, spin_cnt, yield_cnt)                            \
   do {                                                                                     \
-    if (lib::is_diagnose_info_enabled()) {                                                 \
+    if (record_stat_ && lib::is_diagnose_info_enabled()) {                                 \
       ObDiagnoseTenantInfo *di = ObDiagnoseTenantInfo::get_local_diagnose_info();          \
       if (NULL != di) {                                                                    \
         ObLatchStat *p_latch_stat = di->get_latch_stats().get_or_create_item(latch_id);      \
@@ -213,8 +213,18 @@ class ObLatch
 {
   friend class TCRWLock;
 public:
-  ObLatch();
-  ~ObLatch();
+  ObLatch(const bool need_record_stat = true)
+    : lock_(0)
+      , record_stat_(need_record_stat)
+  {
+  }
+
+  ~ObLatch()
+  {
+    if (0 != lock_) {
+      COMMON_LOG(DEBUG, "invalid lock,", K(lock_), KCSTRING(lbt()));
+    }
+  }
   int try_rdlock(const uint32_t latch_id);
   int try_wrlock(const uint32_t latch_id, const uint32_t *puid = NULL);
   int rdlock(

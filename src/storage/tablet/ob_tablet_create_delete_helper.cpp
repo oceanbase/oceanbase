@@ -70,7 +70,9 @@ int ObTabletCreateDeleteHelper::get_tablet(
     ObTabletHandle &handle,
     const int64_t timeout_us)
 {
-  TIMEGUARD_INIT(STORAGE, 10_ms);
+#ifdef ENABLE_DEBUG_LOG
+  ObTimeGuard tg("ObTabletCreateDeleteHelper::get_tablet", 10000);
+#endif
   int ret = OB_SUCCESS;
   static const int64_t SLEEP_TIME_US = 10;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);

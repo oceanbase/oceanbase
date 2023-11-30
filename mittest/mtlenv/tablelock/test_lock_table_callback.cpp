@@ -112,7 +112,7 @@ private:
                                                 lock_op_node,
                                                 is_replay);
     ASSERT_EQ(OB_SUCCESS, ret);
-    cb = mt_ctx_.alloc_table_lock_callback(mt_ctx_,
+    cb = mt_ctx_.create_table_lock_callback(mt_ctx_,
                                            &memtable_);
     ASSERT_NE(nullptr, cb);
     ret = mt_key.encode(&rowkey);

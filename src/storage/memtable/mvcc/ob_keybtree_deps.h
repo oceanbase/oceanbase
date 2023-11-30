@@ -30,13 +30,17 @@ class ScanHandle;
 template<typename BtreeKey, typename BtreeVal>
 class ObKeyBtree;
 
-
-using RawType = uint64_t;
 enum
 {
   MAX_CPU_NUM = 64,
   RETIRE_LIMIT = 1024,
+  // We maintain 15 kv pair each btree node, because we need maintain a 8-byte
+  // multi-bitset, which means we need 4 bits for position presentation(2^4=16)
+  // and 16 ones for each kv pair. so 16 * 4 = 64 is just suitable for the
+  // implementation. We use 15 as the real pair count because we occupy 4 bit as
+  // the count of the kv-pair.
   NODE_KEY_COUNT = 15,
+  // batch allocation size for btree node allocator
   NODE_COUNT_PER_ALLOC = 128
 };
 
@@ -70,7 +74,7 @@ public:
     bool lock_succ = true;
     while (!ATOMIC_BCAS(&writer_id_, 0, uid)) {
       if (1 == (ATOMIC_LOAD(&read_ref_) & 0x1)) {
-        //sched_yield();
+        // sched_yield();
       } else {
         lock_succ = false;
         break;
@@ -97,6 +101,7 @@ private:
 
 class MultibitSet
 {
+  using RawType = uint64_t;
   enum {
     LEN_OF_COUNTER = 4,
     LEN_OF_PER_INDEX = 4,
@@ -182,12 +187,13 @@ private:
     MAGIC_NUM = 0xb7ee //47086
   };
 public:
-  BtreeNode(): host_(nullptr), max_del_version_(0), level_(0), magic_num_(MAGIC_NUM), lock_(), index_() {}
+  BtreeNode(): host_(nullptr), level_(0), magic_num_(MAGIC_NUM), lock_(), index_() {}
   ~BtreeNode() {}
   void reset();
   OB_INLINE void *get_host() { return host_; }
   OB_INLINE void set_host(void *host) { host_ = host; }
   OB_INLINE MultibitSet& get_index() { return this->index_; }
+  // lock operation
   OB_INLINE bool is_hold_wrlock(const uint16_t uid) const { return lock_.is_hold_wrlock(uid); }
   OB_INLINE int try_rdlock() { return lock_.try_rdlock() ? OB_SUCCESS : OB_EAGAIN; }
   OB_INLINE int try_wrlock(const uint16_t uid) { return lock_.try_wrlock(uid) ? OB_SUCCESS : OB_EAGAIN; }
@@ -196,10 +202,10 @@ public:
   OB_INLINE void set_spin() { lock_.set_spin(); }
   OB_INLINE bool is_leaf() const { return 0 == level_; }
   OB_INLINE int16_t get_level() const { return level_; }
-  // Only leaf nodes use index
   OB_INLINE int get_real_pos(int pos, MultibitSet *index = nullptr) const
   {
     if (is_leaf()) {
+      // Leaf node's kv position is determined by index
       pos = OB_NOT_NULL(index) ? index->at(pos) : index_.at(pos);
     }
     return pos;
@@ -208,6 +214,7 @@ public:
   {
     return (is_leaf() && OB_NOT_NULL(index)) ? index->size() : index_.size();
   }
+  // key value getter
   OB_INLINE BtreeKey &get_key(int pos, MultibitSet *index = nullptr)
   {
     return kvs_[get_real_pos(pos, index)].key_;
@@ -216,7 +223,7 @@ public:
   {
     return kvs_[get_real_pos(pos, index)].key_;
   }
-  OB_INLINE BtreeVal get_val_with_tag(int pos, MultibitSet *index = nullptr) const
+  OB_INLINE BtreeVal get_val(int pos, MultibitSet *index = nullptr) const
   {
     return ATOMIC_LOAD(&kvs_[get_real_pos(pos, index)].val_);
   }
@@ -224,16 +231,7 @@ public:
   {
     ATOMIC_STORE(&kvs_[get_real_pos(pos, index)].val_, val);
   }
-  OB_INLINE BtreeVal get_val(int pos, MultibitSet *index = nullptr) const
-  {
-    return BtreeVal((uint64_t)get_val_with_tag(pos, index) & (~1ULL));
-  }
-  OB_INLINE BtreeVal get_val_with_tag(int pos, int64_t version, MultibitSet *index = nullptr) const {
-    return version >= max_del_version_? get_val_with_tag(pos, index): get_val(pos, index);
-  }
-  int make_new_root(BtreeKey key1, BtreeNode *node_1, BtreeKey key2, BtreeNode *node_2, int16_t level, int64_t version);
-  OB_INLINE int64_t get_max_del_version() const { return max_del_version_; }
-  OB_INLINE void set_max_del_version(int64_t version) { ATOMIC_STORE(&max_del_version_, version); }
+  int make_new_root(BtreeKey key1, BtreeNode *node_1, BtreeKey key2, BtreeNode *node_2, int16_t level);
   bool is_overflow(const int64_t delta, MultibitSet *index = nullptr) { return size(index) + delta > NODE_KEY_COUNT; }
   void print(FILE *file, const int depth) const;
   OB_INLINE int find_pos(CompHelper &nh, BtreeKey key, bool &is_equal, int &pos, MultibitSet *index = nullptr)
@@ -242,8 +240,8 @@ public:
     pos -= 1;
     return ret;
   }
-  int get_next_active_child(int pos, int64_t version, int64_t* cnt, MultibitSet *index = nullptr);
-  int get_prev_active_child(int pos, int64_t version, int64_t* cnt, MultibitSet *index = nullptr);
+  int get_next_active_child(int pos);
+  int get_prev_active_child(int pos);
   OB_INLINE void set_key_value(int pos, BtreeKey key, BtreeVal val)
   {
     kvs_[pos].key_ = key;
@@ -265,8 +263,19 @@ public:
     }
     set_key_value(pos, key, val);
   }
+  OB_INLINE void prefetch()
+  {
+    constexpr int64_t cache_line_cnt = (sizeof(*this) - 1) / CACHE_ALIGN_SIZE + 1;
+    for (int64_t i = 0; i < cache_line_cnt; i++) {
+      __builtin_prefetch((const char *)this + i * CACHE_ALIGN_SIZE, 0, 3);
+    }
+  }
 protected:
-  OB_INLINE int binary_search_upper_bound(CompHelper &nh, BtreeKey key, bool &is_equal, int &pos, MultibitSet *index = nullptr)
+  OB_INLINE int binary_search_upper_bound(CompHelper &nh,
+                                          BtreeKey key,
+                                          bool &is_equal,
+                                          int &pos,
+                                          MultibitSet *index = nullptr)
   {
     // find first item > key
     // valid value to compare is within [start, end)
@@ -284,6 +293,8 @@ protected:
     is_equal = false;
     while (OB_SUCC(ret) && start < end && !is_equal) {
       int mid = start + (end - start) / 2;
+      __builtin_prefetch(get_key(start + (mid - start) / 2, index).get_ptr(), 0, 3);
+      __builtin_prefetch(get_key(start + (end - mid - 1) / 2, index).get_ptr(), 0, 3);
       int cmp_ret = 0;
       if (OB_FAIL(nh.compare(key, get_key(mid, index), cmp_ret))) {
         OB_LOG(ERROR, "failed to compare", K(key), K(get_key(mid, index)));
@@ -303,27 +314,32 @@ protected:
   void copy_and_insert(BtreeNode &dest_node, const int start, const int end, int pos,
                        BtreeKey key_1, BtreeVal val_1, BtreeKey key_2, BtreeVal val_2);
 public:
-  uint64_t get_tag(int pos, MultibitSet *index = nullptr) const
-  {
-    return (uint64_t)ATOMIC_LOAD(&kvs_[get_real_pos(pos, index)].val_) & 1ULL;
-  }
-  uint64_t check_tag(MultibitSet *index = nullptr) const;
-  void replace_child(BtreeNode *new_node, const int pos, BtreeNode *child, int64_t del_version);
-  void replace_child_and_key(BtreeNode *new_node, const int pos, BtreeKey key, BtreeNode *child, int64_t del_version);
-  void split_child_no_overflow(BtreeNode *new_node, const int pos, BtreeKey key_1, BtreeVal val_1,
-                               BtreeKey key_2, BtreeVal val_2, int64_t del_version);
-  void split_child_cause_recursive_split(BtreeNode *new_node_1, BtreeNode *new_node_2, const int pos,
-                                         BtreeKey key_1, BtreeVal val_1, BtreeKey key_2, BtreeVal val_2, int64_t del_version);
+  void replace_child(BtreeNode *new_node, const int pos, BtreeNode *child);
+  void replace_child_and_key(BtreeNode *new_node, const int pos, BtreeKey key, BtreeNode *child);
+  void split_child_no_overflow(BtreeNode *new_node,
+                               const int pos,
+                               BtreeKey key_1, BtreeVal val_1,
+                               BtreeKey key_2, BtreeVal val_2);
+  void split_child_cause_recursive_split(BtreeNode *new_node_1,
+                                         BtreeNode *new_node_2,
+                                         const int pos,
+                                         BtreeKey key_1, BtreeVal val_1,
+                                         BtreeKey key_2, BtreeVal val_2);
 private:
+  // The btree that contains the node
   void *host_;  // 8byte
-  int64_t max_del_version_; // 8byte
+  // level_ presents the btree height. The leaf's level_ is 0
   int16_t level_; // 2byte
   uint16_t magic_num_; // 2byte
   RWLock lock_; // 4byte
-  MultibitSet index_; // 8byte this is the real position of kv.
+  // leaf's key-value is unordered, so index contains the real position of
+  // key-value on leaf
+  MultibitSet index_; // 8byte
   BtreeKV kvs_[NODE_KEY_COUNT]; // 16 * 15 = 240byte
 };
 
+// Path is the node's footprint(the node itself and its postion in its parent
+// node) during the query through btree.
 template<typename BtreeKey, typename BtreeVal>
 class Path
 {
@@ -379,6 +395,7 @@ public:
 private:
   int64_t depth_;
   Item path_[MAX_DEPTH];
+  // whether we found the leaf
   bool is_found_;
 };
 
@@ -390,6 +407,7 @@ private:
 public:
   BaseHandle(QClock& qclock): index_(), qclock_(qclock), qc_slot_(UINT64_MAX), comp_() {}
   ~BaseHandle() { release_ref(); }
+  // qc clock to protect the retire_station
   int acquire_ref();
   void release_ref()
   {
@@ -398,9 +416,11 @@ public:
   }
   OB_INLINE CompHelper &get_comp() { return comp_; }
 protected:
-  // record leaf index
+  // we save the leaf index as the snapshot in case of concurreny write
   MultibitSet index_;
 private:
+  // used to prevent crash during btree destruction, because we use
+  // retire_station between all threads.
   QClock& qclock_;
   uint64_t qc_slot_;
   CompHelper comp_;
@@ -429,9 +449,8 @@ private:
   typedef ObKeyBtree<BtreeKey, BtreeVal> ObKeyBtree;
 private:
   Path path_;
-  int64_t version_;
 public:
-  explicit ScanHandle(ObKeyBtree &tree): BaseHandle(tree.get_qclock()), version_(INT64_MAX) { UNUSED(tree); }
+  explicit ScanHandle(ObKeyBtree &tree): BaseHandle(tree.get_qclock()) { UNUSED(tree); }
   ~ScanHandle() {}
   void reset()
   {
@@ -442,15 +461,17 @@ public:
   int get(BtreeKey &key, BtreeVal &val);
   int get(BtreeKey &key, BtreeVal &val, bool is_backward, BtreeKey*& last_key);
   // for estimate row count in range, leaf node is level 0
-  int pop_level_node(const bool is_backward, const int64_t level, const double ratio,
-      const int64_t gap_limit, int64_t &element_count, int64_t &phy_element_count,
-      BtreeKey*& last_key, int64_t &gap_size);
+  int pop_level_node(const bool is_backward,
+                     const int64_t level,
+                     int64_t &element_count,
+                     int64_t &phy_element_count,
+                     BtreeKey*& last_key);
   int pop_level_node(const int64_t level);
-  int find_path(BtreeNode *root, BtreeKey key, int64_t version);
+  int find_path(BtreeNode *root, BtreeKey key);
   int scan_forward(const int64_t level);
   int scan_backward(const int64_t level);
-  int scan_forward(bool skip_inactive=false, int64_t* skip_cnt=NULL);
-  int scan_backward(bool skip_inactive=false, int64_t* skip_cnt=NULL);
+  int scan_forward();
+  int scan_backward();
 };
 
 template<typename BtreeKey, typename BtreeVal>
@@ -464,7 +485,14 @@ private:
 private:
   ObKeyBtree &base_;
   Path path_;
+  // lists contain old node because of COW
+  // we will retire(epoch based reclaimation) them under success and
+  // reuse(unlock the node) them under failure
   HazardList retire_list_;
+  // lists contain new node because of COW
+  // we will use(through new visible pointer to them) them under success and
+  // free(not need to retire them because of no visible pointer) them under
+  // failure
   HazardList alloc_list_;
 public:
   explicit WriteHandle(ObKeyBtree &tree): BaseHandle(tree.get_qclock()), base_(tree) {}
@@ -476,7 +504,9 @@ public:
   }
   BtreeNode *alloc_node();
   void free_node(BtreeNode *p);
+  // reuse the nodes in retire list and free the nodes in alloc_list
   void free_list();
+  // reture the nodes in retire list
   void retire(const int btree_err);
   int find_path(BtreeNode *root, BtreeKey key)
   {
@@ -527,25 +557,21 @@ public:
   }
 public:
   int insert_and_split_upward(BtreeKey key, BtreeVal &val, BtreeNode *&new_root);
-  int tag_delete(BtreeKey key, BtreeVal& val, int64_t version, BtreeNode *&new_root);
-  int tag_insert(BtreeKey key, BtreeNode *&new_root);
 private:
-  uint64_t check_tag(BtreeNode* node) { return OB_ISNULL(node) ? 0: node->check_tag(); }
-  BtreeNode* add_tag(BtreeNode* node, uint64_t tag) { return (BtreeNode*)((uint64_t)node | tag); }
   int insert_into_node(BtreeNode *old_node, int pos, BtreeKey key, BtreeVal val, BtreeNode *&new_node_1, BtreeNode *&new_node_2);
   // judge whether it's wrlocked
   bool is_hold_wrlock(BtreeNode *node) { return !node->is_hold_wrlock(0); }
   int try_wrlock(BtreeNode *node);
-  int tag_delete_on_leaf(BtreeNode* old_node, int pos, BtreeKey key, BtreeVal& val, int64_t version, BtreeNode*& new_node);
-  int tag_insert_on_leaf(BtreeNode* old_node, int pos, BtreeKey key, BtreeNode*& new_node);
-  int tag_upward(BtreeNode* new_node, BtreeNode*& new_root);
-  int tag_leaf(BtreeNode *old_node, const int pos, BtreeNode*& new_node, uint64_t tag, int64_t version);
-  int replace_child_by_copy(BtreeNode *old_node, const int pos, BtreeVal val, int64_t version, BtreeNode*& new_node);
+  int replace_child_by_copy(BtreeNode *old_node, const int pos, BtreeVal val, BtreeNode*& new_node);
   int replace_child(BtreeNode *old_node, const int pos, BtreeVal val);
-  int replace_child_and_key(BtreeNode *old_node, const int pos, BtreeKey key, BtreeNode *child, BtreeNode *&new_node, int64_t version);
-  int make_new_root(BtreeNode *&root, BtreeKey key1, BtreeNode *node_1, BtreeKey key2, BtreeNode *node_2, int16_t level, int64_t version);
-  int split_child(BtreeNode *old_node, const int pos, BtreeKey key_1, BtreeVal val_1, BtreeKey key_2,
-                  BtreeVal val_2, BtreeNode *&new_node_1, BtreeNode *&new_node_2, int64_t version);
+  int replace_child_and_key(BtreeNode *old_node, const int pos, BtreeKey key, BtreeNode *child, BtreeNode *&new_node);
+  int make_new_root(BtreeNode *&root, BtreeKey key1, BtreeNode *node_1, BtreeKey key2, BtreeNode *node_2, int16_t level);
+  int split_child(BtreeNode *old_node,
+                  const int pos,
+                  BtreeKey key_1, BtreeVal val_1,
+                  BtreeKey key_2, BtreeVal val_2,
+                  BtreeNode *&new_node_1,
+                  BtreeNode *&new_node_2);
 };
 
 // when modify this, pls modify buf_size in ob_keybtree.h.
@@ -565,28 +591,36 @@ public:
   void reset();
   bool is_reverse_scan() const { return scan_backward_; }
   CompHelper& get_comp() { return comp_; }
-  int set_key_range(const BtreeKey min_key, const bool start_exclude,
-                    const BtreeKey max_key, const bool end_exclude, int64_t version);
+  int set_key_range(const BtreeKey min_key,
+                    const bool start_exclude,
+                    const BtreeKey max_key,
+                    const bool end_exclude);
   int get_next(BtreeKey &key, BtreeVal &value);
   int64_t get_root_level() { return scan_handle_.get_root_level(); }
   int next_on_level(const int64_t level, BtreeKey& key, BtreeVal& value);
-  int estimate_one_level(const int64_t level, const int64_t start_batch_count, const int64_t end_batch_count,
-                         const int64_t max_node_count, const int64_t skip_range_limit, const double gap_ratio,
-                         int64_t &level_physical_row_count, int64_t &level_element_count, int64_t &node_count);
+  int estimate_one_level(const int64_t level,
+                         const int64_t start_batch_count,
+                         const int64_t end_batch_count,
+                         const int64_t max_node_count,
+                         int64_t &level_physical_row_count,
+                         int64_t &level_element_count,
+                         int64_t &node_count);
   // physical_row_count is delta row count after purge
   // while element_count is the count of btree node
-  int estimate_element_count(int64_t &physical_row_count, int64_t &element_count, const double ratio);
+  int estimate_element_count(int64_t &physical_row_count, int64_t &element_count);
 private:
   int iter_next(BtreeKey &key, BtreeVal &value);
   // for estimate row count in range
-  int iter_next_batch_level_node(int64_t &element_count, const int64_t batch_count,
-                                 const int64_t level, int64_t &gap_size,
-                                 const int64_t gap_limit, int64_t &phy_element_count,
-                                 const double ratio);
+  int iter_next_batch_level_node(int64_t &element_count,
+                                 const int64_t batch_count,
+                                 const int64_t level,
+                                 int64_t &phy_element_count);
   int comp(BtreeKey& cur_key, BtreeKey* jump_key, int &cmp);
 private:
   ObKeyBtree &btree_;
   ScanHandle scan_handle_;
+  // Optimization that remember the compare result and key in order to reduce
+  // the following compare cost with the same key.
   BtreeKey* jump_key_;
   int cmp_result_;
   CompHelper &comp_;

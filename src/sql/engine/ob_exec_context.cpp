@@ -283,16 +283,6 @@ int ObExecContext::init_phy_op(const uint64_t phy_op_size)
       LOG_WARN("init operator kit store failed", K(ret));
     }
   }
-  if (OB_SUCC(ret)) {
-    if (OB_ISNULL(gi_task_map_)) {
-      // Do nothing.
-    } else if (gi_task_map_->created()) {
-      // Do nothing. If this map has been created, it means this plan is trying to reopen.
-    } else if (OB_FAIL(gi_task_map_->create(PARTITION_WISE_JOIN_TSC_HASH_BUCKET_NUM, /* assume no more than 8 table scan in a plan */
-        ObModIds::OB_SQL_PX))) {
-      LOG_WARN("create gi task map failed", K(ret));
-    }
-  }
   return ret;
 }
 

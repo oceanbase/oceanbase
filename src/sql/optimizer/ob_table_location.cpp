@@ -1420,6 +1420,79 @@ int ObTableLocation::calculate_candi_tablet_locations(
   return ret;
 }
 
+int ObTableLocation::calculate_single_tablet_partition(ObExecContext &exec_ctx,
+                                                       const ParamStore &params,
+                                                       const ObDataTypeCastParams &dtc_params) const
+{
+  int ret = OB_SUCCESS;
+  ObDASTabletMapper tablet_mapper;
+  ObDASCtx &das_ctx = exec_ctx.get_das_ctx();
+  tablet_mapper.set_non_partitioned_table_ids(tablet_id_, object_id_, &related_list_);
+  if (OB_FAIL(das_ctx.get_das_tablet_mapper(loc_meta_.ref_table_id_,
+                                            tablet_mapper,
+                                            &loc_meta_.related_table_ids_))) {
+    LOG_WARN("failed to get das tablet mapper", K(ret));
+  } else {
+    DASRelatedTabletMap *map =
+        static_cast<DASRelatedTabletMap*>(tablet_mapper.get_related_table_info().related_map_);
+    if (OB_NOT_NULL(map) && !related_list_.empty() && OB_FAIL(map->assign(related_list_))) {
+      LOG_WARN("failed to assign related map list", K(ret));
+    }
+  }
+  LOG_DEBUG("calculate single tablet id end", K(loc_meta_), K(object_id_), K(tablet_id_));
+  NG_TRACE(tl_calc_part_id_end);
+
+  ObDASTableLoc *table_loc = nullptr;
+  ObDASTabletLoc *tablet_loc = nullptr;
+  ObDASTableLocMeta *final_meta = nullptr;
+  LOG_DEBUG("das table loc assign begin", K_(loc_meta));
+  if (OB_FAIL(das_ctx.build_table_loc_meta(loc_meta_, final_meta))) {
+    LOG_WARN("build table loc meta failed", K(ret));
+  } else if (OB_FAIL(das_ctx.extended_table_loc(*final_meta, table_loc))) {
+    LOG_WARN("extended table loc failed", K(ret), K(loc_meta_));
+  } else if (OB_FAIL(das_ctx.extended_tablet_loc(*table_loc, tablet_id_, tablet_loc, object_id_))) {
+    LOG_WARN("extended tablet loc failed", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+    das_ctx.clear_all_location_info();
+  }
+  return ret;
+}
+
+int ObTableLocation::calculate_final_tablet_locations(ObExecContext &exec_ctx,
+                                                      const ParamStore &params,
+                                                      const ObDataTypeCastParams &dtc_params) const
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLocation not inited", K(ret));
+  } else if (is_non_partition_optimized_) {
+    // fast path for single tablet
+    if (OB_FAIL(calculate_single_tablet_partition(exec_ctx, params, dtc_params))) {
+      LOG_WARN("failed to calculate single final tablet location", K(ret));
+    }
+  } else {
+    ObSEArray<ObObjectID, 8> partition_ids;
+    ObSEArray<ObObjectID, 8> first_level_part_ids;
+    ObSEArray<ObTabletID, 8> tablet_ids;
+    if (OB_FAIL(calculate_tablet_ids(exec_ctx,
+                                     params,
+                                     tablet_ids,
+                                     partition_ids,
+                                     first_level_part_ids,
+                                     dtc_params))) {
+      LOG_WARN("failed to calculate final tablet ids", K(ret));
+    } else if (OB_FAIL(add_final_tablet_locations(exec_ctx.get_das_ctx(),
+                                                  tablet_ids,
+                                                  partition_ids,
+                                                  first_level_part_ids))) {
+      LOG_WARN("failed to add final tablet locations to das_ctx", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTableLocation::init_partition_ids_by_rowkey2(ObExecContext &exec_ctx,
                                                    ObSQLSessionInfo &session_info,
                                                    ObSchemaGetterGuard &schema_guard,
@@ -1654,7 +1727,6 @@ int ObTableLocation::calculate_tablet_ids(ObExecContext &exec_ctx,
 {
   int ret = OB_SUCCESS;
   ObDASTabletMapper tablet_mapper;
-  ObPartitionIdMap partition_id_map;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLocation not inited", K(ret));
@@ -1665,6 +1737,7 @@ int ObTableLocation::calculate_tablet_ids(ObExecContext &exec_ctx,
                       loc_meta_.ref_table_id_, tablet_mapper, &loc_meta_.related_table_ids_))) {
     LOG_WARN("fail to get das tablet mapper", K(ret));
   } else {
+    ObPartitionIdMap partition_id_map;
     if (is_in_hit_) { //判断是否是in类型
       if (OB_FAIL(calc_partition_ids_by_in_expr(exec_ctx, tablet_mapper, tablet_ids, partition_ids, dtc_params))) {
         LOG_WARN("fail to calc_partition_ids_by_in_expr", K(ret));
@@ -1742,7 +1815,7 @@ int ObTableLocation::calculate_tablet_ids(ObExecContext &exec_ctx,
     }
   }
 
-  LOG_TRACE("calculate tablet ids end", K(loc_meta_), K(partition_ids), K(tablet_ids));
+  LOG_DEBUG("calculate tablet ids end", K(loc_meta_), K(partition_ids), K(tablet_ids));
   NG_TRACE(tl_calc_part_id_end);
   return ret;
 }
@@ -1758,6 +1831,17 @@ int ObTableLocation::get_tablet_locations(ObDASCtx &das_ctx,
                                                                            partition_ids,
                                                                            first_level_part_ids,
                                                                            candi_tablet_locs);
+}
+
+int ObTableLocation::add_final_tablet_locations(ObDASCtx &das_ctx,
+                                                const ObIArray<ObTabletID> &tablet_ids,
+                                                const ObIArray<ObObjectID> &partition_ids,
+                                                const ObIArray<ObObjectID> &first_level_part_ids) const
+{
+  return das_ctx.add_final_table_loc(loc_meta_,
+                                     tablet_ids,
+                                     partition_ids,
+                                     first_level_part_ids);
 }
 
 int ObTableLocation::get_part_col_type(const ObRawExpr *expr,

@@ -251,7 +251,6 @@ int ObPhyLocationGetter::reselect_duplicate_table_best_replica(const ObIArray<Ob
   return ret;
 }
 
-//need_check_on_same_server: out, 是否需要检查分区在同一server, 如果这里检查过了就置为false
 int ObPhyLocationGetter::get_phy_locations(const ObIArray<ObTableLocation> &table_locations,
                                            const ObPlanCacheCtx &pc_ctx,
                                            ObIArray<ObCandiTableLoc> &candi_table_locs,
@@ -336,15 +335,119 @@ int ObPhyLocationGetter::get_phy_locations(const ObIArray<ObTableLocation> &tabl
   return ret;
 }
 
+int ObPhyLocationGetter::get_phy_locations(const ObIArray<ObTableLocation> &table_locations,
+                                           const ObPlanCacheCtx &pc_ctx,
+                                           ObIArray<ObCandiTableLoc> &candi_table_locs)
+{
+  int ret = OB_SUCCESS;
+  bool has_duplicate_tbl_not_in_dml = false;
+  ObExecContext &exec_ctx = pc_ctx.exec_ctx_;
+  const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(pc_ctx.sql_ctx_.session_info_);
+  ObPhysicalPlanCtx *plan_ctx = exec_ctx.get_physical_plan_ctx();
+  const ParamStore &params = plan_ctx->get_param_store();
+  int64_t N = table_locations.count();
+  bool is_retrying = false;
+  if (OB_ISNULL(plan_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid executor ctx!", K(ret), K(plan_ctx));
+  } else {
+    int64_t calculate_candi_table_num = N;
+    for (int64_t i = 0; OB_SUCC(ret) && i < N ; i++) {
+      const ObTableLocation &table_location = table_locations.at(i);
+      if (table_location.get_loc_meta().select_leader_) {
+        if (OB_FAIL(table_location.calculate_final_tablet_locations(exec_ctx,
+                                                                    params,
+                                                                    dtc_params))) {
+          LOG_WARN("failed to calculate final tablet locations", K(table_location), K(ret));
+        } else {
+          calculate_candi_table_num -= 1;
+        }
+      }
+    } // for end
+
+    if (OB_SUCC(ret) && calculate_candi_table_num > 0) {
+      ObSEArray<const ObTableLocation *, 2> table_location_ptrs;
+      ObSEArray<ObCandiTableLoc *, 2> phy_location_info_ptrs;
+
+      if (OB_FAIL(candi_table_locs.prepare_allocate(calculate_candi_table_num))) {
+        LOG_WARN("phy_locations_info prepare allocate error", K(ret), K(calculate_candi_table_num));
+      } else {
+        for (int64_t i = 0, j = 0; OB_SUCC(ret) && i < N && j < calculate_candi_table_num; i++) {
+          const ObTableLocation &table_location = table_locations.at(i);
+          if (!table_location.get_loc_meta().select_leader_) {
+            ObCandiTableLoc &candi_table_loc = candi_table_locs.at(j);
+            NG_TRACE(calc_partition_location_begin);
+            // 这里认为materialized view的复制表是每个server都有副本的，
+            // 因此这里不判断是否能生成materialized view了，一定都能生成
+            if (OB_FAIL(table_location.calculate_candi_tablet_locations(exec_ctx,
+                                                                        params,
+                                                                        candi_table_loc.get_phy_part_loc_info_list_for_update(),
+                                                                        dtc_params))) {
+              LOG_WARN("failed to calculate partition location", K(ret));
+            } else {
+              NG_TRACE(calc_partition_location_end);
+              if (table_location.is_duplicate_table_not_in_dml()) {
+                has_duplicate_tbl_not_in_dml = true;
+              }
+              candi_table_loc.set_duplicate_type(table_location.get_duplicate_type());
+              candi_table_loc.set_table_location_key(
+                  table_location.get_table_id(), table_location.get_ref_table_id());
+              LOG_DEBUG("plan cache util", K(candi_table_loc));
+            }
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(table_location_ptrs.push_back(&table_location))) {
+                LOG_WARN("failed to push back table location ptrs", K(ret), K(i),
+                         K(N), K(table_locations.at(i)));
+              } else if (OB_FAIL(phy_location_info_ptrs.push_back(&candi_table_loc))) {
+                LOG_WARN("failed to push back phy location info ptrs", K(ret), K(i),
+                         K(N), K(candi_table_locs.at(j)));
+              } else if (OB_FAIL(pc_ctx.is_retry_for_dup_tbl(is_retrying))) {
+                LOG_WARN("failed to test if retrying", K(ret));
+              } else if (is_retrying) {
+                LOG_INFO("Physical Location from Location Cache", K(candi_table_loc));
+              }
+              j += 1;
+            }
+          }
+        } // for end
+      }
+
+      //Only check the on_same_server when has table location in the phy_plan.
+      if (OB_SUCC(ret)) {
+        bool on_same_server = true;
+        if (OB_FAIL(ObLogPlan::select_replicas(exec_ctx, table_location_ptrs,
+                                               exec_ctx.get_addr(),
+                                               phy_location_info_ptrs))) {
+          LOG_WARN("failed to select replicas", K(ret), K(table_locations),
+                   K(exec_ctx.get_addr()), K(phy_location_info_ptrs));
+        } else if (!has_duplicate_tbl_not_in_dml || is_retrying) {
+          // do nothing
+        } else if (OB_FAIL(reselect_duplicate_table_best_replica(candi_table_locs,
+                                                                 on_same_server))) {
+          LOG_WARN("failed to reselect replicas", K(ret));
+        }
+        LOG_TRACE("after select_replicas", K(on_same_server), K(has_duplicate_tbl_not_in_dml),
+                  K(candi_table_locs), K(table_locations), K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObPhyLocationGetter::build_table_locs(ObDASCtx &das_ctx,
                                           const ObIArray<ObTableLocation> &table_locations,
                                           const ObIArray<ObCandiTableLoc> &candi_table_locs)
 {
   int ret = OB_SUCCESS;
-  CK(table_locations.count() == candi_table_locs.count());
-  for (int64_t i = 0; OB_SUCC(ret) && i < table_locations.count(); i++) {
-    if (OB_FAIL(das_ctx.add_candi_table_loc(table_locations.at(i).get_loc_meta(), candi_table_locs.at(i)))) {
-      LOG_WARN("add candi table location failed", K(ret), K(table_locations.at(i).get_loc_meta()));
+  CK(table_locations.count() >= candi_table_locs.count());
+  for (int64_t i = 0, j = 0; OB_SUCC(ret) && i < table_locations.count() && j < candi_table_locs.count(); i++) {
+    if (!table_locations.at(i).get_loc_meta().select_leader_) {
+      if (OB_FAIL(das_ctx.add_candi_table_loc(table_locations.at(i).get_loc_meta(), candi_table_locs.at(j)))) {
+        LOG_WARN("add candi table location failed", K(ret), K(table_locations.at(i).get_loc_meta()));
+      } else {
+        j += 1;
+      }
     }
   }
   if (OB_FAIL(ret)) {

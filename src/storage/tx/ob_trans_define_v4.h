@@ -259,6 +259,7 @@ struct ObTxReadSnapshot
   } source_;
   share::ObLSID snapshot_lsid_;    // for source_ = LOCAL                                  //
   common::ObRole snapshot_ls_role_; // for source_ = LS, only can be used for dup_table with a
+  ObAddr snapshot_acquire_addr_;    // snapshot version acquired from which server
                                     // max_commit_ts from the follower
   int64_t uncertain_bound_; // for source_ GLOBAL
   ObSEArray<ObTxLSEpochPair, 1> parts_;
@@ -274,6 +275,7 @@ struct ObTxReadSnapshot
   bool is_none_read() const { return SRC::NONE == source_; }
   bool is_special() const { return SRC::SPECIAL == source_; }
   bool is_ls_snapshot() const { return SRC::LS == source_; }
+  const ObAddr get_snapshot_acquire_addr() const { return snapshot_acquire_addr_; }
   void reset();
   int assign(const ObTxReadSnapshot &);
   ObTxReadSnapshot();
@@ -285,6 +287,7 @@ struct ObTxReadSnapshot
                K_(uncertain_bound),
                K_(snapshot_lsid),
                K_(snapshot_ls_role),
+               K_(snapshot_acquire_addr),
                K_(parts));
   OB_UNIS_VERSION(1);
 };
@@ -610,6 +613,7 @@ public:
   { ObSpinLockGuard guard(lock_); cflict_txs_.reset(); }
   int add_conflict_tx(const ObTransIDAndAddr conflict_tx);
   int merge_conflict_txs(const ObIArray<ObTransIDAndAddr> &conflict_ids);
+  bool has_conflict_txs() const { return cflict_txs_.count() > 0; }
   bool contain(const ObTransID &trans_id) const { return tx_id_ == trans_id; } /*used by TransHashMap*/
   uint64_t get_tenant_id() const { return tenant_id_; }
   void set_cluster_id(uint64_t cluster_id) { cluster_id_ = cluster_id; }

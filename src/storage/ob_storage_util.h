@@ -115,7 +115,7 @@ public:
       data_(NULL),
       allocator_(NULL)
   {
-    MEMSET(local_data_buf_, 0, LOCAL_ARRAY_SIZE * sizeof(common::ObObj));
+    //MEMSET(local_data_buf_, 0, LOCAL_ARRAY_SIZE * sizeof(common::ObObj));
   }
   ~ObObjBufArray()
   {

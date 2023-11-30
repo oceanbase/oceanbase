@@ -22,6 +22,7 @@
 #include "sql/das/ob_das_utils.h"
 #include "sql/ob_sql_context.h"
 #include "storage/tx/wrs/ob_black_list.h"
+#include "storage/tx/ob_trans_service.h"
 #include "lib/rc/context.h"
 
 namespace oceanbase
@@ -916,7 +917,7 @@ int ObDASLocationRouter::nonblock_get_candi_tablet_locations(const ObDASTableLoc
           LOG_WARN("fail to set partition location with only readable replica",
                    K(ret),K(i), K(location), K(candi_tablet_locs), K(tablet_ids), K(partition_ids));
         }
-        LOG_TRACE("set partition location with only readable replica",
+        LOG_DEBUG("set partition location with only readable replica",
                  K(ret),K(i), K(location), K(candi_tablet_locs), K(tablet_ids), K(partition_ids));
       }
     } // for end
@@ -954,12 +955,24 @@ int ObDASLocationRouter::nonblock_get_leader(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   bool is_cache_hit = false;
   tablet_loc.tablet_id_ = tablet_id;
+  ObTransService *trans_service = MTL(ObTransService *);
+  bool is_local_leader = false;
   if (OB_FAIL(all_tablet_list_.push_back(tablet_id))) {
     LOG_WARN("store access tablet id failed", K(ret), K(tablet_id));
-  } else if (OB_FAIL(GCTX.location_service_->nonblock_get(tenant_id,
-                                                          tablet_id,
-                                                          tablet_loc.ls_id_))) {
-    LOG_WARN("nonblock get ls id failed", K(ret), K(tablet_id));
+  } else if (get_total_retry_cnt() > 0 || OB_FAIL(trans_service->check_and_get_ls_info(tablet_id, tablet_loc.ls_id_, is_local_leader))) {
+    ret = OB_SUCCESS;
+    if (OB_FAIL(GCTX.location_service_->nonblock_get(tenant_id,
+                                                     tablet_id,
+                                                     tablet_loc.ls_id_))) {
+      LOG_WARN("nonblock get ls id failed", K(ret), K(tablet_id));
+    } else if (OB_FAIL(GCTX.location_service_->nonblock_get_leader(GCONF.cluster_id,
+                                                                   tenant_id,
+                                                                   tablet_loc.ls_id_,
+                                                                   tablet_loc.server_))) {
+      LOG_WARN("nonblock get ls location failed", K(ret), K(tablet_loc));
+    }
+  } else if (is_local_leader) {
+    tablet_loc.server_ = GCTX.self_addr();
   } else if (OB_FAIL(GCTX.location_service_->nonblock_get_leader(GCONF.cluster_id,
                                                                  tenant_id,
                                                                  tablet_loc.ls_id_,

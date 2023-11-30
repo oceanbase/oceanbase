@@ -389,7 +389,6 @@ const int64_t OB_MAX_TABLE_NUM_PER_STMT = 256;
 const int32_t OB_TMP_BUF_SIZE_256 = 256;
 const int64_t OB_SCHEMA_MGR_MAX_USED_TID_MAP_BUCKET_NUM = 64;
 const int64_t OB_MAX_SLAVE_READ_DELAY_TS = 5 * 1000 * 1000;
-const int64_t OB_SKIP_RANGE_LIMIT = 256;
 
 const int64_t OB_MAX_DIRECTORY_NAME_LENGTH = 128; // Compatible with Oracle
 const int64_t OB_MAX_DIRECTORY_PATH_LENGTH = 4000; // Compatible with Oracle
@@ -867,7 +866,6 @@ const uint64_t OB_SYS_TENANT_ID = 1;
 const uint64_t OB_GTS_TENANT_ID = 2;
 const uint64_t OB_SERVER_TENANT_ID = 500;
 const uint64_t OB_DTL_TENANT_ID = 508;
-const uint64_t OB_DATA_TENANT_ID = 509;
 const uint64_t OB_GTS_SOURCE_TENANT_ID = 511;
 const uint64_t OB_SVR_BLACKLIST_TENANT_ID = 512;
 const uint64_t OB_MAX_RESERVED_TENANT_ID = 1000;

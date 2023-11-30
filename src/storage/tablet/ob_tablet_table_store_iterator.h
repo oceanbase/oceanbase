@@ -43,7 +43,7 @@ public:
     int64_t hdl_idx_;
   };
 public:
-  static const int64_t DEFAULT_TABLE_HANDLE_CNT = 1;
+  static const int64_t DEFAULT_TABLE_HANDLE_CNT = 4;
   static const int64_t DEFAULT_TABLE_CNT = 16;
   typedef common::ObSEArray<ObStorageMetaHandle, DEFAULT_TABLE_HANDLE_CNT> SSTableHandleArray;
   typedef common::ObSEArray<TablePtr, DEFAULT_TABLE_CNT> TableArray;

@@ -1195,8 +1195,6 @@ int ObTenantFreezer::check_memstore_full_(bool &last_result,
 {
   int ret = OB_SUCCESS;
   int64_t current_time = ObClockGenerator::getClock();
-  const int64_t reserved_memstore = from_user ? REPLAY_RESERVE_MEMSTORE_BYTES : 0;
-  ObTenantFreezeCtx ctx;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("[TenantFreezer] tenant manager not init", KR(ret));
@@ -1207,6 +1205,8 @@ int ObTenantFreezer::check_memstore_full_(bool &last_result,
       // Check once when the last memory burst or tenant_id does not match or the interval reaches the threshold
       is_out_of_mem = false;
     } else {
+      const int64_t reserved_memstore = from_user ? REPLAY_RESERVE_MEMSTORE_BYTES : 0;
+      ObTenantFreezeCtx ctx;
       if (false == tenant_info_.is_loaded_) {
         is_out_of_mem = false;
         LOG_INFO("[TenantFreezer] This tenant not exist", K(tenant_id), KR(ret));
@@ -1424,7 +1424,7 @@ int ObTenantFreezer::print_tenant_usage(
                           "memstore_frozen_pos=% '15ld "
                           "memstore_reclaimed_pos=% '15ld\n",
                           tenant_info_.tenant_id_,
-                          ObTimeUtility::fast_current_time(),
+                          ObClockGenerator::getClock(),
                           stat.active_memstore_used_,
                           stat.total_memstore_used_,
                           stat.total_memstore_hold_,
@@ -1624,7 +1624,7 @@ void ObTenantFreezer::halt_prewarm_if_need_(const ObTenantFreezeCtx &ctx)
   int64_t mem_danger_limit = ctx.mem_memstore_limit_
   - ((ctx.mem_memstore_limit_ - ctx.memstore_freeze_trigger_) >> 2);
   if (ctx.total_memstore_hold_ > mem_danger_limit) {
-    int64_t curr_ts = ObTimeUtility::current_time();
+    int64_t curr_ts = ObClockGenerator::getClock();
     if (curr_ts - tenant_info_.last_halt_ts_ > 10L * 1000L * 1000L) {
       if (OB_FAIL(svr_rpc_proxy_->to(self_).
                   halt_all_prewarming_async(tenant_info_.tenant_id_, NULL))) {

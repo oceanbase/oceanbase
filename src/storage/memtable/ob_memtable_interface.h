@@ -53,7 +53,7 @@ class ObIMultiSourceDataUnit;
 class ObIMemtableCtx : public ObIMvccCtx
 {
 public:
-  ObIMemtableCtx(ObMemtableCtxCbAllocator &cb_allocator) : ObIMvccCtx(cb_allocator) {}
+  ObIMemtableCtx() : ObIMvccCtx() {}
   virtual ~ObIMemtableCtx() {}
 public:
   virtual void set_read_only() = 0;
@@ -79,7 +79,6 @@ public:
   virtual void set_trans_ctx(transaction::ObPartTransCtx *ctx) = 0;
   virtual void inc_truncate_cnt() = 0;
   virtual uint64_t get_tenant_id() const = 0;
-  virtual storage::ObTxTableGuard *get_tx_table_guard() = 0;
   virtual int get_conflict_trans_ids(common::ObIArray<transaction::ObTransIDAndAddr> &array) = 0;
   VIRTUAL_TO_STRING_KV("", "");
 public:

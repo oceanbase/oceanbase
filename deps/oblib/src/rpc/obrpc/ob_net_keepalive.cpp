@@ -134,7 +134,7 @@ enum {
 
 int64_t get_usec()
 {
-  return ObTimeUtility::current_time();
+  return ObClockGenerator::getClock();
 }
 
 int set_nonblocking(int fd)

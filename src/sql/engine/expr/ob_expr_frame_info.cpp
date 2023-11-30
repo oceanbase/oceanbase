@@ -639,7 +639,7 @@ int ObTempExpr::eval(ObExecContext &exec_ctx, const ObNewRow &row, ObObj &result
     if (!exec_ctx.use_temp_expr_ctx_cache()) {
       temp_expr_ctx->~ObTempExprCtx();
     }
-    LOG_TRACE("temp expr result", K(result), K(row), K(rt_exprs_));
+    LOG_DEBUG("temp expr result", K(result), K(row), K(rt_exprs_));
   }
 
   return ret;

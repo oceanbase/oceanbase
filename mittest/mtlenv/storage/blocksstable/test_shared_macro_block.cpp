@@ -62,9 +62,6 @@ TEST_F(TestSharedMacroBlk, test_used_size_mgr)
   OK(shared_mgr.add_block(id1, legal_size));
   OK(shared_mgr.free_block(id1, legal_size)); // delete id from mgr
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, shared_mgr.block_used_size_.get(id1, size));
-  OK(shared_mgr.free_block(id1, legal_size));
-  OK(shared_mgr.add_block(id1, legal_size)); // delete id from mgr
-  ASSERT_EQ(OB_ENTRY_NOT_EXIST, shared_mgr.block_used_size_.get(id1, size));
 
   const int64_t recyclable_size = ObSharedMacroBlockMgr::RECYCLABLE_BLOCK_SIZE - 1;
   OK(shared_mgr.add_block(id1, recyclable_size));

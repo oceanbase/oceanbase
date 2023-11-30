@@ -23,6 +23,15 @@ namespace oceanbase
 {
 namespace memtable
 {
+#define MEMSET_(ptr, m, n)                                 \
+  {                                                        \
+    if (n == 8 && m == 0xFF) {                             \
+      *static_cast<uint64_t *>(ptr) = 0xFFFFFFFFFFFFFFFF;  \
+    } else {                                               \
+      MEMSET(ptr, m, n);                                   \
+    }                                                      \
+  }
+
 class ObNopBitMap
 {
 public:
@@ -35,7 +44,7 @@ public:
     cnt_ = size;
     nop_cnt_ = size - rowkey_cnt;
     rowkey_cnt_ = rowkey_cnt;
-    MEMSET(static_cast<void*>(bitmap_), 0xFF, size_ >> 3);
+    MEMSET_(static_cast<void*>(bitmap_), 0xFF, size_ >> 3);
     return common::OB_SUCCESS;
   }
 
@@ -62,7 +71,7 @@ public:
 
   inline void reuse()
   {
-    MEMSET(static_cast<void*>(bitmap_), 0xFF, size_ >> 3);
+    MEMSET_(static_cast<void*>(bitmap_), 0xFF, size_ >> 3);
     nop_cnt_ = cnt_ - rowkey_cnt_;
   }
 

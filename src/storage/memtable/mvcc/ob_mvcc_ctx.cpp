@@ -45,11 +45,6 @@ bool ObIMvccCtx::is_prepared() const
   return (prepare_version >= SCN::min_scn() && SCN::max_scn() != prepare_version);
 }
 
-int ObIMvccCtx::inc_pending_log_size(const int64_t size)
-{
-  return trans_mgr_.inc_pending_log_size(size);
-}
-
 int ObIMvccCtx::register_row_commit_cb(
     const ObMemtableKey *key,
     ObMvccRow *value,
@@ -92,7 +87,7 @@ int ObIMvccCtx::register_row_commit_cb(
     }
 
     if (OB_FAIL(ret)) {
-      callback_free(cb);
+      free_mvcc_row_callback(cb);
       TRANS_LOG(WARN, "append callback failed", K(ret));
     }
   }
@@ -112,7 +107,6 @@ int ObIMvccCtx::register_row_replay_cb(
   int ret = OB_SUCCESS;
   const bool is_replay = true;
   ObMvccRowCallback *cb = NULL;
-  common::ObTimeGuard timeguard("ObIMvccCtx::register_row_replay_cb", 5 * 1000);
   if (OB_ISNULL(key) || OB_ISNULL(value) || OB_ISNULL(node)
       || data_size <= 0 || OB_ISNULL(memtable)) {
     ret = OB_INVALID_ARGUMENT;
@@ -120,7 +114,6 @@ int ObIMvccCtx::register_row_replay_cb(
   } else if (OB_ISNULL(cb = alloc_row_callback(*this, *value, memtable))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     TRANS_LOG(WARN, "alloc row callback failed", K(ret));
-  } else if (FALSE_IT(timeguard.click("alloc_row_callback"))) {
   } else {
     cb->set(key,
             node,
@@ -133,7 +126,6 @@ int ObIMvccCtx::register_row_replay_cb(
       ObRowLatchGuard guard(value->latch_);
       cb->link_trans_node();
     }
-    timeguard.click("link_trans_node");
 
     cb->set_scn(scn);
     if (OB_FAIL(append_callback(cb))) {
@@ -143,11 +135,9 @@ int ObIMvccCtx::register_row_replay_cb(
       }
       TRANS_LOG(WARN, "append callback failed", K(ret));
     }
-    timeguard.click("append_callback");
 
     if (OB_FAIL(ret)) {
-      callback_free(cb);
-      timeguard.click("callback_free");
+      free_mvcc_row_callback(cb);
       TRANS_LOG(WARN, "append callback failed", K(ret));
     }
   }
@@ -164,7 +154,7 @@ int ObIMvccCtx::register_table_lock_cb_(
   const ObStoreRowkey &rowkey = tablelock_fake_rowkey.get_rowkey();
   ObMemtableKey mt_key;
   cb = nullptr;
-  if (OB_ISNULL(cb = alloc_table_lock_callback(*this, memtable))) {
+  if (OB_ISNULL(cb = create_table_lock_callback(*this, memtable))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     TRANS_LOG(WARN, "alloc row callback failed", K(ret));
   } else if (OB_FAIL(mt_key.encode(&rowkey))) {
@@ -231,7 +221,7 @@ ObMvccRowCallback *ObIMvccCtx::alloc_row_callback(ObIMvccCtx &ctx, ObMvccRow &va
   int ret = OB_SUCCESS;
   void *cb_buffer = NULL;
   ObMvccRowCallback *cb = NULL;
-  if (NULL == (cb_buffer = callback_alloc(sizeof(*cb)))) {
+  if (NULL == (cb_buffer = alloc_mvcc_row_callback())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     TRANS_LOG(WARN, "alloc ObRowCB cb_buffer fail", K(ret));
   } else if (NULL == (cb = new(cb_buffer) ObMvccRowCallback(ctx, value, memtable))) {
@@ -246,7 +236,7 @@ ObMvccRowCallback *ObIMvccCtx::alloc_row_callback(ObMvccRowCallback &cb, ObMemta
   int ret = OB_SUCCESS;
   void *cb_buffer = NULL;
   ObMvccRowCallback *new_cb = NULL;
-  if (NULL == (cb_buffer = callback_alloc(sizeof(*new_cb)))) {
+  if (NULL == (cb_buffer = alloc_mvcc_row_callback())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     TRANS_LOG(WARN, "alloc ObRowCB cb_buffer fail", K(ret));
   } else if (NULL == (new_cb = new(cb_buffer) ObMvccRowCallback(cb, memtable))) {
@@ -256,10 +246,6 @@ ObMvccRowCallback *ObIMvccCtx::alloc_row_callback(ObMvccRowCallback &cb, ObMemta
   return new_cb;
 }
 
-int ObIMvccCtx::append_callback(ObITransCallback *cb)
-{
-  return trans_mgr_.append(cb);
-}
 
 void ObIMvccCtx::check_row_callback_registration_between_stmt_()
 {
@@ -285,20 +271,6 @@ int ObIMvccCtx::register_ext_info_commit_cb(
   return ret;
 }
 
-storage::ObExtInfoCallback *ObIMvccCtx::alloc_ext_info_callback()
-{
-  int ret = OB_SUCCESS;
-  void *cb_buffer = nullptr;
-  storage::ObExtInfoCallback *cb = nullptr;
-  if (nullptr == (cb_buffer = callback_alloc(sizeof(storage::ObExtInfoCallback)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    TRANS_LOG(WARN, "alloc ObExtInfoCallback fail", K(ret));
-  } else if (nullptr == (cb = new(cb_buffer) storage::ObExtInfoCallback())) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    TRANS_LOG(WARN, "construct ObExtInfoCallback object fail", K(ret), "cb_buffer", cb_buffer);
-  }
-  return cb;
-}
 
 }
 }

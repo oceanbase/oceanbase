@@ -170,16 +170,9 @@ public:
            const ObQueryFlag &query_flag);
   int get_next_row(const ObMemtableKey *&key,
                    ObMvccValueIterator *&value_iter,
-                   uint8_t& iter_flag,
                    storage::ObStoreRowLockState &lock_state);
   void reset();
   int get_key_val(const ObMemtableKey*& key, ObMvccRow*& row);
-  int try_purge(const transaction::ObTxSnapshot &snapshot_info,
-                const ObMemtableKey* key, ObMvccRow* row);
-  uint8_t get_iter_flag()
-  {
-    return query_engine_iter_? query_engine_iter_->get_iter_flag(): 0;
-  }
 private:
   int check_and_purge_row_(const ObMemtableKey *key, ObMvccRow *row, bool &purged);
 private:

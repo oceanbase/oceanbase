@@ -192,7 +192,8 @@ OB_SERIALIZE_MEMBER(ObTxReadSnapshot,
                     uncertain_bound_,
                     snapshot_lsid_,
                     parts_,
-                    snapshot_ls_role_);
+                    snapshot_ls_role_,
+                    snapshot_acquire_addr_);
 OB_SERIALIZE_MEMBER(ObTxPart, id_, addr_, epoch_, first_scn_, last_scn_);
 
 DEFINE_SERIALIZE(ObTxDesc::FLAG::FOR_FIXED_SER_VAL)
@@ -1118,6 +1119,7 @@ ObTxReadSnapshot::ObTxReadSnapshot()
     source_(SRC::INVL),
     snapshot_lsid_(),
     snapshot_ls_role_(common::ObRole::INVALID_ROLE),
+    snapshot_acquire_addr_(),
     uncertain_bound_(0),
     parts_()
 {}
@@ -1127,6 +1129,7 @@ ObTxReadSnapshot::~ObTxReadSnapshot()
   valid_ = false;
   source_ = SRC::INVL;
   snapshot_ls_role_ = common::INVALID_ROLE;
+  snapshot_acquire_addr_.reset();
   uncertain_bound_ = 0;
 }
 
@@ -1137,6 +1140,7 @@ void ObTxReadSnapshot::reset()
   source_ = SRC::INVL;
   snapshot_lsid_.reset();
   snapshot_ls_role_ = common::INVALID_ROLE;
+  snapshot_acquire_addr_.reset();
   uncertain_bound_ = 0;
   parts_.reset();
 }
@@ -1149,6 +1153,7 @@ int ObTxReadSnapshot::assign(const ObTxReadSnapshot &from)
   source_ = from.source_;
   snapshot_lsid_ = from.snapshot_lsid_;
   snapshot_ls_role_ = from.snapshot_ls_role_;
+  snapshot_acquire_addr_ = from.snapshot_acquire_addr_;
   uncertain_bound_ = from.uncertain_bound_;
   if (OB_FAIL(parts_.assign(from.parts_))) {
    TRANS_LOG(WARN, "assign snapshot fail", K(ret), K(from));
@@ -1505,7 +1510,7 @@ int ObTxDescMgr::add_with_txid(const ObTransID &tx_id, ObTxDesc &tx_desc)
     if (OB_FAIL(ret) && !desc_tx_id.is_valid()) { tx_desc.reset_tx_id(); }
     if (OB_SUCC(ret) && tx_desc.flags_.SHADOW_) { tx_desc.flags_.SHADOW_ = false; }
   }
-  TRANS_LOG(TRACE, "txDescMgr.register trans with txid", K(ret), K(tx_id),
+  TRANS_LOG(TRACE, "txDescMgr.register trans with txid", K(ret), KP(&tx_desc), K(tx_id),
       K(map_.alloc_cnt()));
   return ret;
 }
@@ -1530,14 +1535,14 @@ void ObTxDescMgr::revert(ObTxDesc &tx)
     map_.revert(&tx);
   }
   // tx_id may be invalid when tx was reused before.
-  TRANS_LOG(TRACE, "txDescMgr.revert trans", K(tx_id));
+  TRANS_LOG(TRACE, "txDescMgr.revert trans", K(tx_id), KP(&tx));
 }
 
 int ObTxDescMgr::remove(ObTxDesc &tx)
 {
   int ret = OB_SUCCESS;
   ObTransID tx_id = tx.get_tx_id();
-  TRANS_LOG(TRACE, "txDescMgr.unregister trans:", K(tx_id));
+  TRANS_LOG(TRACE, "txDescMgr.unregister trans:", K(tx_id), KP(&tx));
   OV(inited_, OB_NOT_INIT);
   OX(map_.del(tx_id, &tx));
   OX(tx.flags_.SHADOW_ = true);
@@ -1550,7 +1555,7 @@ int ObTxDescMgr::acquire_tx_ref(const ObTransID &trans_id)
   ObTxDesc *tx_desc;
   CK(trans_id.is_valid());
   OZ(get(trans_id, tx_desc), trans_id);
-  LOG_TRACE("txDescMgr.acquire tx ref", K(ret), K(trans_id));
+  LOG_TRACE("txDescMgr.acquire tx ref", K(ret), K(trans_id), KP(tx_desc));
   return ret;
 }
 

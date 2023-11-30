@@ -125,10 +125,11 @@ int ObLSTxLogAdapter::submit_log(const char *buf,
   int ret = OB_SUCCESS;
   palf::LSN lsn;
   SCN scn;
+  int64_t cur_ts = ObClockGenerator::getClock();
   const bool is_big_log = (size > palf::MAX_NORMAL_LOG_BODY_SIZE);
 
   if (NULL == buf || 0 >= size || OB_ISNULL(cb) || !base_scn.is_valid() || size > palf::MAX_LOG_BODY_SIZE ||
-      base_scn.convert_to_ts() > ObTimeUtility::current_time() + 86400000000L) {
+      base_scn.convert_to_ts() > cur_ts + 86400000000L) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), KP(buf), K(size), K(base_scn), KP(cb));
   } else if (OB_ISNULL(log_handler_) || !log_handler_->is_valid()) {
@@ -144,7 +145,7 @@ int ObLSTxLogAdapter::submit_log(const char *buf,
     cb->set_base_ts(base_scn);
     cb->set_lsn(lsn);
     cb->set_log_ts(scn);
-    cb->set_submit_ts(ObTimeUtility::current_time());
+    cb->set_submit_ts(cur_ts);
     ObTransStatistic::get_instance().add_clog_submit_count(MTL_ID(), 1);
     ObTransStatistic::get_instance().add_trans_log_total_size(MTL_ID(), size);
   }

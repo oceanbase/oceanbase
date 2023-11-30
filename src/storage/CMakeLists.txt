@@ -266,6 +266,7 @@ ob_set_subtarget(ob_storage tx
   tx/ob_location_adapter.cpp
   tx/ob_one_phase_committer.cpp
   tx/ob_standby_timestamp_service.cpp
+  tx/ob_tablet_to_ls_cache.cpp
   tx/ob_timestamp_access.cpp
   tx/ob_timestamp_service.cpp
   tx/ob_time_wheel.cpp

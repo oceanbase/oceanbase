@@ -198,7 +198,7 @@ int ObTransService::reuse_tx(ObTxDesc &tx)
     tx.reset();
     init_tx_(tx, session_id);
   }
-  TRANS_LOG(TRACE, "reuse tx", K(ret), K(orig_tx_id), K(tx));
+  TRANS_LOG(DEBUG, "reuse tx", K(ret), K(orig_tx_id), K(tx));
   ObTransTraceLog &tlog = tx.get_tlog();
   REC_TRANS_TRACE_EXT(&tlog, reuse, OB_Y(ret),
                       OB_ID(addr), (void*)&tx,
@@ -662,8 +662,8 @@ int ObTransService::get_ls_read_snapshot(ObTxDesc &tx,
                                          ObTxReadSnapshot &snapshot)
 {
   int ret = OB_SUCCESS;
-  bool acquire_from_follower  = false;
   bool fallback_get_global_snapshot = false;
+  ObRole role = common::ObRole::INVALID_ROLE;
   // if txn is active use txn's isolation instead
   ObTxIsolationLevel isolation = tx.is_in_tx() ? tx.isolation_ : iso_level;
   if (isolation == ObTxIsolationLevel::SERIAL ||
@@ -675,15 +675,19 @@ int ObTransService::get_ls_read_snapshot(ObTxDesc &tx,
   } else {
     ObSpinLockGuard guard(tx.lock_);
     if (OB_FAIL(tx_sanity_check_(tx))) {
-  } else if (OB_SUCC(acquire_local_snapshot_(lsid,
+    } else if (OB_SUCC(acquire_local_snapshot_(lsid,
                                              snapshot.core_.version_,
                                              true /*is_read_only*/,
-                                             acquire_from_follower))) {
+                                             role))) {
       snapshot.source_ = ObTxReadSnapshot::SRC::LS;
       snapshot.snapshot_lsid_ = lsid;
       snapshot.uncertain_bound_ = 0;
       snapshot.parts_.reset();
-      if(acquire_from_follower) {
+      snapshot.snapshot_acquire_addr_ = GCTX.self_addr();
+      if(role == LEADER) {
+        // primary leader and standy leader
+        snapshot.snapshot_ls_role_ = common::ObRole::LEADER;
+      } else {
         snapshot.snapshot_ls_role_ = common::ObRole::FOLLOWER;
       }
       // If tx id is valid , record tx_id and scn
@@ -743,12 +747,12 @@ int ObTransService::get_ls_read_snapshot_version(const share::ObLSID &local_ls_i
                                                  SCN &snapshot_version)
 {
   int ret = OB_SUCCESS;
-  bool acquire_from_follower = false;
+  ObRole role = common::ObRole::INVALID_ROLE;
   ret = acquire_local_snapshot_(local_ls_id,
                                 snapshot_version,
                                 true /*is_read_only*/,
-                                acquire_from_follower);
-  UNUSED(acquire_from_follower);
+                                role);
+  UNUSED(role);
   return ret;
 }
 
@@ -972,7 +976,7 @@ int ObTransService::create_global_implicit_savepoint_(ObTxDesc &tx,
                       OB_ID(opid), tx.op_sn_,
                       OB_ID(ref), tx.get_ref(),
                       OB_ID(thread_id), GETTID());
-  TRANS_LOG(TRACE, "create global implicit savepoint", K(ret), K(tx), K(tx_param), K(savepoint));
+  TRANS_LOG(DEBUG, "create global implicit savepoint", K(ret), K(tx), K(tx_param), K(savepoint));
   return ret;
 }
 

@@ -35,7 +35,7 @@ class ObResourceGroup;
 
 static const int64_t WORKER_CHECK_PERIOD = 500L;
 static const int64_t REQUEST_WAIT_TIME = 10 * 1000L;
-static const int64_t NESTING_REQUEST_WAIT_TIME = 10 * 1000L;
+static const int64_t NESTING_REQUEST_WAIT_TIME = 1 * 1000 * 1000L;
 
 // Quick Queue Priorities
 enum { QQ_HIGH = 0, QQ_NORMAL, QQ_LOW, QQ_MAX_PRIO };

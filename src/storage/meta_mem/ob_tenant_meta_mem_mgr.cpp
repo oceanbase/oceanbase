@@ -34,6 +34,7 @@
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "share/ob_thread_define.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
+#include "storage/ob_disk_usage_reporter.h"
 
 namespace oceanbase
 {
@@ -772,6 +773,7 @@ int ObTenantMetaMemMgr::gc_tablets_in_queue(bool &all_tablet_cleaned)
       push_tablet_list_into_gc_queue(tablet);
     }
     if (left_recycle_cnt < ONE_ROUND_TABLET_GC_COUNT_THRESHOLD) {
+      static_cast<ObDiskUsageReportTask *>(GCTX.disk_reporter_)->set_count_sstable_data_trigger();
       FLOG_INFO("Finish tablets gc task one round", K(gc_tablets_cnt), K(err_tablets_cnt), K_(wait_gc_tablets_cnt));
     }
     all_tablet_cleaned = (0 == ATOMIC_LOAD(&wait_gc_tablets_cnt_));

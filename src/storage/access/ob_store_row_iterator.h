@@ -67,12 +67,6 @@ public:
       ObTableAccessContext &context,
       ObITable *table,
       const void *query_range);
-  virtual int get_next_row_ext(const blocksstable::ObDatumRow *&row, uint8_t& flag) {
-    int ret = get_next_row(row);
-    flag = get_iter_flag();
-    return ret;
-  }
-  virtual uint8_t get_iter_flag() { return 0; }
   virtual bool is_sstable_iter() const { return is_sstable_iter_; }
   virtual int refresh_blockscan_checker(const blocksstable::ObDatumRowkey &rowkey)
   {

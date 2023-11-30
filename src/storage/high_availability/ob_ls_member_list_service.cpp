@@ -18,6 +18,7 @@
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {
@@ -293,7 +294,7 @@ int ObLSMemberListService::get_config_version_and_transfer_scn_(
   arg.need_get_config_version_ = need_get_config_version;
   const int64_t cluster_id = GCONF.cluster_id;
   const int64_t timeout = GCONF.sys_bkgd_migration_change_member_list_timeout;
-  const uint64_t group_id = share::OBCG_STORAGE_HA_LEVEL2;
+  const uint64_t group_id = share::OBCG_STORAGE;
   if (OB_FAIL(proxy.call(addr,
                          timeout,
                          cluster_id,

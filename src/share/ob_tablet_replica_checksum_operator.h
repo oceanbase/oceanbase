@@ -125,7 +125,8 @@ public:
       const SCN &compaction_scn,
       common::ObISQLClient &sql_proxy,
       common::ObIArray<ObTabletReplicaChecksumItem> &items,
-      const bool include_larger_than = false);
+      const bool include_larger_than = false,
+      const int32_t group_id = 0);
   static int batch_get(
       const uint64_t tenant_id,
       const common::ObSqlString &sql,
@@ -225,6 +226,7 @@ private:
   static int inner_batch_get_by_sql_(
       const uint64_t tenant_id,
       const common::ObSqlString &sql,
+      const int32_t group_id,
       common::ObISQLClient &sql_client,
       common::ObIArray<ObTabletReplicaChecksumItem> &items);
 

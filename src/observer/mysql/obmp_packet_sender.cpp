@@ -943,7 +943,7 @@ int ObMPPacketSender::flush_buffer(const bool is_last)
       }
     }
 
-    int64_t buf_sz = ez_buf_->last - ez_buf_->pos;
+    //int64_t buf_sz = ez_buf_->last - ez_buf_->pos;
     if (OB_SUCCESS != ret) {
     } else if (ObRequest::TRANSPORT_PROTO_EASY == nio_protocol_) {
       ObFlushBufferParam flush_param(*ez_buf_, *req_->get_ez_req(), comp_context_,
@@ -989,6 +989,7 @@ int ObMPPacketSender::flush_buffer(const bool is_last)
         // after flush, set pos to 0
         proto20_context_.curr_proto20_packet_start_pos_ = 0;
       }
+      /*
       ObSQLSessionInfo *sess = nullptr;
       if (OB_FAIL(get_session(sess))) {
         LOG_WARN("fail to get session info", K(ret));
@@ -999,7 +1000,7 @@ int ObMPPacketSender::flush_buffer(const bool is_last)
       }
       if (OB_NOT_NULL(sess)) {
         GCTX.session_mgr_->revert_session(sess);
-      }
+      }*/
     }
   }
   if (is_last) {

@@ -319,7 +319,7 @@ int ObDASIndexDMLAdaptor<N, DMLIterator>::write_tablet(DMLIterator &iter, int64_
 {
   int ret = common::OB_SUCCESS;
   affected_rows = 0;
-  SQL_DAS_LOG(TRACE, "begin to write the main tablet",
+  SQL_DAS_LOG(DEBUG, "begin to write the main tablet",
               K(ls_id_), K(tablet_id_), K(ctdef_->table_id_), K(ctdef_->index_tid_));
   if (ctdef_->is_ignore_) {
     if (OB_FAIL(write_tablet_with_ignore(iter, affected_rows))) {
@@ -337,7 +337,7 @@ int ObDASIndexDMLAdaptor<N, DMLIterator>::write_tablet(DMLIterator &iter, int64_
       RtDefType *related_rtdef = static_cast<RtDefType*>(related_rtdefs_->at(i));
       ObTabletID related_tablet_id = related_tablet_ids_->at(i);
       int64_t index_affected_rows = 0;
-      SQL_DAS_LOG(TRACE, "rewind iterator and write local index tablet",
+      SQL_DAS_LOG(DEBUG, "rewind iterator and write local index tablet",
                   K(ls_id_), K(related_tablet_id), K(related_ctdef->table_id_), K(related_ctdef->index_tid_));
       if (OB_FAIL(iter.rewind(related_ctdef))) {
         SQL_DAS_LOG(WARN, "rewind iterator failed", K(ret));

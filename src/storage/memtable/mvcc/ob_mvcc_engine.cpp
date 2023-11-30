@@ -251,6 +251,7 @@ int ObMvccEngine::check_row_locked(ObMvccAccessCtx &ctx,
 
 int ObMvccEngine::create_kv(
     const ObMemtableKey *key,
+    const bool is_insert,
     ObMemtableKey *stored_key,
     ObMvccRow *&value,
     RowHeaderGetter &getter,
@@ -266,7 +267,14 @@ int ObMvccEngine::create_kv(
     is_new_add = false;
     while (OB_SUCCESS == ret && NULL == value) {
       ObStoreRowkey *tmp_key = nullptr;
-      if (OB_SUCCESS == (ret = query_engine_->get(key, value, stored_key))) {
+      // We optimize the create_kv operation by skipping the first hash table
+      // get for insert operation because it is unnecessary at most cases. Under
+      // the concurrent inserts, we rely on the conflict on the hash table set
+      // and the while loops for the next hash table get to maintain the origin
+      // create_kv semantic
+      if (!(0 == loop_cnt // is the first try in the loop
+            && is_insert) // is insert dml operation
+          && OB_SUCC(query_engine_->get(key, value, stored_key))) {
         if (NULL == value) {
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(WARN, "get NULL value");
@@ -307,8 +315,7 @@ int ObMvccEngine::create_kv(
   return ret;
 }
 
-int ObMvccEngine::mvcc_write(ObIMemtableCtx &ctx,
-                             const concurrent_control::ObWriteFlag write_flag,
+int ObMvccEngine::mvcc_write(storage::ObStoreCtx &ctx,
                              const transaction::ObTxSnapshot &snapshot,
                              ObMvccRow &value,
                              const ObTxNodeArg &arg,
@@ -316,26 +323,26 @@ int ObMvccEngine::mvcc_write(ObIMemtableCtx &ctx,
 {
   int ret = OB_SUCCESS;
   ObMvccTransNode *node = NULL;
+  ObMemtableCtx *mem_ctx = ctx.mvcc_acc_ctx_.get_mem_ctx();
 
-  if (OB_FAIL(build_tx_node_(ctx, arg, node))) {
-    TRANS_LOG(WARN, "build tx node failed", K(ret), K(ctx), K(arg));
+  if (OB_FAIL(build_tx_node_(*mem_ctx, arg, node))) {
+    TRANS_LOG(WARN, "build tx node failed", K(ret), KPC(mem_ctx), K(arg));
   } else if (OB_FAIL(value.mvcc_write(ctx,
-                                      write_flag,
                                       snapshot,
                                       *node,
                                       res))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret &&
         OB_TRANSACTION_SET_VIOLATION != ret) {
-      TRANS_LOG(WARN, "mvcc write failed", K(ret), K(ctx), K(arg));
+      TRANS_LOG(WARN, "mvcc write failed", K(ret), KPC(mem_ctx), K(arg));
     }
   } else {
-    TRANS_LOG(DEBUG, "mvcc write succeed", K(ret), K(ctx), K(arg), K(*node));
+    TRANS_LOG(DEBUG, "mvcc write succeed", K(ret), KPC(mem_ctx), K(arg), K(*node));
   }
 
   return ret;
 }
 
-int ObMvccEngine::mvcc_replay(ObIMemtableCtx &ctx,
+int ObMvccEngine::mvcc_replay(ObMemtableCtx &ctx,
                               const ObMemtableKey *stored_key,
                               ObMvccRow &value,
                               const ObTxNodeArg &arg,
@@ -353,7 +360,7 @@ int ObMvccEngine::mvcc_replay(ObIMemtableCtx &ctx,
   return ret;
 }
 
-int ObMvccEngine::build_tx_node_(ObIMemtableCtx &ctx,
+int ObMvccEngine::build_tx_node_(ObMemtableCtx &ctx,
                                  const ObTxNodeArg &arg,
                                  ObMvccTransNode *&node)
 {

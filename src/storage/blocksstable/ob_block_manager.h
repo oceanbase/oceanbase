@@ -441,6 +441,7 @@ private:
 
     ObBlockManager &blk_mgr_;
     int64_t last_macro_idx_;
+    int64_t last_check_time_;
   private:
     DISALLOW_COPY_AND_ASSIGN(InspectBadBlockTask);
   };

@@ -48,6 +48,7 @@ public:
   ObTabletTableOperator();
   virtual ~ObTabletTableOperator();
   int init(common::ObISQLClient &sql_proxy_);
+  int init(const int32_t group_list, common::ObISQLClient &sql_proxy);
   void reset();
   void set_batch_size(int64_t batch_size) {batch_size_ = batch_size;}
   int get(
@@ -136,15 +137,13 @@ public:
       const int64_t limit,
       int64_t &affected_rows);
 public:
-  static int get_tablet_info(
-      common::ObISQLClient *sql_proxy,
+  int get_tablet_info(
       const uint64_t tenant_id,
       const common::ObTabletID &tablet_id,
       const ObLSID &ls_id,
       ObTabletInfo &tablet_info);
 private:
-  static int inner_batch_get_by_sql_(
-      ObISQLClient &sql_client,
+  int inner_batch_get_by_sql_(
       const uint64_t tenant_id,
       const ObIArray<ObTabletLSPair> &tablet_ls_pairs,
       const int64_t start_idx,
@@ -178,6 +177,7 @@ private:
   bool inited_;
   common::ObISQLClient *sql_proxy_;
   int64_t batch_size_;
+  int32_t group_list_;
 };
 } // end namespace share
 } // end namespace oceanbase

@@ -326,10 +326,6 @@ public:
       const ObITableReadInfo &read_info);
 };
 
-#define STORE_ITER_ROW_IN_GAP 1
-#define STORE_ITER_ROW_BIG_GAP_HINT 2
-#define STORE_ITER_ROW_PARTIAL 8
-
 template <typename AllocatorT>
 int malloc_store_row(
     AllocatorT &allocator,

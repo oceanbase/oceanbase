@@ -12,8 +12,6 @@
 
 #define USING_LOG_PREFIX SQL_PC
 #include "sql/plan_cache/ob_values_table_compression.h"
-#include "sql/plan_cache/ob_plan_cache_struct.h"
-#include "sql/parser/ob_fast_parser.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "sql/engine/expr/ob_expr_version.h"
@@ -381,8 +379,6 @@ int ObValuesTableCompression::try_batch_exec_params(ObIAllocator &allocator,
     } else if (can_fold_params) {
       fp_result.pc_key_.name_.assign_ptr(new_no_param_sql.ptr(), new_no_param_sql.length());
       fp_result.raw_params_.reset();
-      fp_result.raw_params_.set_allocator(&allocator);
-      fp_result.raw_params_.set_capacity(temp_store.count());
       for (int64_t i = 0; i < temp_store.count(); i++) {
         // checked null before
         temp_store.at(i)->node_->pos_ = raw_pos.at(i);

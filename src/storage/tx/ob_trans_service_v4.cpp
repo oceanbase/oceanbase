@@ -663,7 +663,7 @@ int ObTransService::decide_tx_commit_info_(ObTxDesc &tx, ObTxPart *&coord)
     tx.coord_id_ = coord->id_;
   }
 
-  TRANS_LOG(TRACE, "decide tx coord", K(ret), K_(tx.coord_id), K(*this), K(tx));
+  TRANS_LOG(DEBUG, "decide tx coord", K(ret), K_(tx.coord_id), K(*this), K(tx));
   return ret;
 }
 
@@ -985,7 +985,8 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
   } else if (snapshot.is_ls_snapshot() && snapshot.snapshot_lsid_ != ls_id) {
     // try to access differ logstream with snapshot from another logstream
     // it is possible when tablet is tranfered, ignore ret
-    TRANS_LOG(WARN, "use a local snapshot to access other logstream",
+    ret = OB_SNAPSHOT_DISCARDED;
+    TRANS_LOG(WARN, "use a local snapshot to access other logstream, need retry",
               K(ret), K(store_ctx), K(snapshot));
   }
 
@@ -1020,7 +1021,13 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
   }
 
   // need continue to check replica's readability
-  if (OB_SUCC(ret) && !check_readable_ok &&
+  if (OB_SUCC(ret)) {
+    if ((MTL_TENANT_ROLE_CACHE_IS_PRIMARY()
+            && snapshot.snapshot_acquire_addr_ == GCTX.self_addr()
+            && snapshot.snapshot_ls_role_ == common::ObRole::LEADER)
+        || check_readable_ok) {
+      // do nohting
+    } else if (
       OB_FAIL(check_replica_readable_(snapshot,
                                       snapshot.core_.elr_,
                                       snapshot.source_,
@@ -1028,7 +1035,8 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
                                       store_ctx.timeout_,
                                       store_ctx.tablet_id_,
                                       *store_ctx.ls_))) {
-    TRANS_LOG(WARN, "replica not readable", K(ret), K(snapshot), K(ls_id), K(store_ctx));
+      TRANS_LOG(WARN, "replica not readable", K(ret), K(snapshot), K(ls_id), K(store_ctx));
+    }
   }
 
   // setup tx_table_guard
@@ -1060,7 +1068,7 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
     update_max_read_ts_(tenant_id_, ls_id, snapshot.core_.version_);
   }
 
-  TRANS_LOG(TRACE, "get-read-store-ctx", K(ret), K(store_ctx), K(read_latest), K(snapshot));
+  TRANS_LOG(DEBUG, "get-read-store-ctx", K(ret), K(store_ctx), K(read_latest), K(snapshot));
   return ret;
 }
 
@@ -1099,7 +1107,7 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
   ObTxSnapshot snap = snapshot.core_;
   ObTxTableGuard tx_table_guard;
   bool access_started = false;
-  bool acquire_local_snapshot_from_follower  = false;
+  ObRole role = common::ObRole::INVALID_ROLE;
 
   if (tx.access_mode_ == ObTxAccessMode::RD_ONLY) {
     ret = OB_ERR_READ_ONLY_TRANSACTION;
@@ -1111,7 +1119,7 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
              && OB_FAIL(acquire_local_snapshot_(ls_id,
                                                 snap.version_,
                                                 false /*is_read_only*/,
-                                                acquire_local_snapshot_from_follower))) {
+                                                role))) {
     TRANS_LOG(WARN, "acquire ls snapshot for mvcc write fail", K(ret), K(ls_id));
   } else if (snapshot.is_ls_snapshot() && snapshot.snapshot_lsid_ != ls_id) {
     ret = OB_NOT_SUPPORTED;
@@ -1160,7 +1168,7 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
      */
     update_max_read_ts_(tenant_id_, ls_id, snap.version_);
   }
-  TRANS_LOG(TRACE, "get-write-store-ctx", K(ret),
+  TRANS_LOG(DEBUG, "get-write-store-ctx", K(ret),
             K(store_ctx), KPC(this), K(tx), K(snapshot), K(lbt()));
   return ret;
 }
@@ -1224,7 +1232,7 @@ int ObTransService::revert_tx_ctx_(ObLS* ls, ObPartTransCtx *ctx)
     ret = tx_ctx_mgr_.revert_tx_ctx(ctx);
   }
 
-  TRANS_LOG(TRACE, "revert tx ctx", KP(ctx));
+  TRANS_LOG(DEBUG, "revert tx ctx", KP(ctx));
   return ret;
 }
 
@@ -1290,7 +1298,7 @@ void ObTransService::fetch_cflict_tx_ids_from_mem_ctx_to_desc_(ObMvccAccessCtx &
   } else if (OB_FAIL(acc_ctx.tx_desc_->merge_conflict_txs(array))) {
     DETECT_LOG(WARN, "fail to merge ctx conflict trans array", KR(ret), K(acc_ctx));
   } else {
-    DETECT_LOG(TRACE, "fetch conflict ids from mem_ctx to desc", KR(ret), K(array));
+    DETECT_LOG(DEBUG, "fetch conflict ids from mem_ctx to desc", KR(ret), K(array));
   }
 }
 
@@ -1342,7 +1350,7 @@ int ObTransService::revert_store_ctx(storage::ObStoreCtx &store_ctx)
     }
   }
 
-  TRANS_LOG(TRACE, "revert store ctx", K(ret), K(*this), K(lbt()));
+  TRANS_LOG(DEBUG, "revert store ctx", K(ret), K(*this), K(lbt()));
   return ret;
 }
 
@@ -1595,10 +1603,9 @@ int ObTransService::abort_participants_(const ObTxDesc &tx_desc)
 OB_NOINLINE int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_id,
                                                         SCN &snapshot,
                                                         const bool is_read_only,
-                                                        bool &acquire_from_follower)
+                                                        ObRole &role)
 {
   int ret = OB_SUCCESS;
-  acquire_from_follower = false;
   int64_t epoch = 0;
   int64_t committing_dup_trx_cnt = 0;
   int dup_trx_status = OB_SUCCESS;
@@ -1627,6 +1634,8 @@ OB_NOINLINE int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_
     // TRANS_LOG(WARN, "check ls tx service leader serving state fail", K(ret), K(ls_id), K(ret));
   } else if (!is_leader_serving) {
     ret = OB_NOT_MASTER;
+  } else {
+    role = LEADER;
   }
 
   if (OB_NOT_MASTER == ret && is_read_only && ls_handle.is_valid()
@@ -1649,7 +1658,7 @@ OB_NOINLINE int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_
                 K(committing_dup_trx_cnt), K(dup_trx_status));
     } else {
       ret = OB_SUCCESS;
-      acquire_from_follower = true;
+      role = FOLLOWER;
     }
     //                                 +----------------------------------------------------------------+
     //                                 |         get max_commit_ts from a follower as snapshot          |
@@ -1685,9 +1694,9 @@ OB_NOINLINE int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_
     snapshot = SCN::max(snapshot0, snapshot1);
   }
 
-  if (acquire_from_follower) {
+  if (role == FOLLOWER) {
     TRANS_LOG(INFO, "acquire local snapshot from a dup ls follower", K(ret), K(leader), K(epoch),
-              K(acquire_from_follower), K(ls_id), K(dup_trx_status), K(committing_dup_trx_cnt),
+              K(role), K(ls_id), K(dup_trx_status), K(committing_dup_trx_cnt),
               K(can_elr), K(snapshot));
   }
 
@@ -1711,6 +1720,10 @@ int ObTransService::sync_acquire_global_snapshot_(ObTxDesc &tx,
                                   [&]() -> bool { return tx.flags_.INTERRUPTED_; });
   tx.lock_.lock();
   bool interrupted = tx.flags_.INTERRUPTED_;
+  if (interrupted) {
+    ret = OB_ERR_INTERRUPTED;
+    TRANS_LOG(WARN, "acquiring global snapshot has been interrupted", KR(ret), K(tx));
+  }
   tx.clear_interrupt();
   tx.flags_.BLOCK_ = false;
   if (op_sn != tx.op_sn_) {
@@ -1738,33 +1751,27 @@ int ObTransService::acquire_global_snapshot__(const int64_t expire_ts,
   int ret = OB_SUCCESS;
   const MonotonicTs now0 = get_req_receive_mts_();
   const MonotonicTs now = now0 - MonotonicTs(gts_ahead);
-  int retry_times = 0;
-  const int MAX_RETRY_TIMES = 2000; // 2000 * 500us = 1s
-  do {
-    int64_t n = ObClockGenerator::getClock();
-    MonotonicTs rts(0);
-    if (n >= expire_ts) {
-      ret = OB_TIMEOUT;
-    } else if (retry_times++ > MAX_RETRY_TIMES) {
+  const int64_t current_time = ObClockGenerator::getClock();
+  // occupy current worker thread for at most 1s
+  const int64_t MAX_WAIT_TIME_US = 1 * 1000 * 1000;
+  MonotonicTs rts(0);
+
+  if (interrupt_checker()) {
+    ret = OB_ERR_INTERRUPTED;
+  } else if (current_time >= expire_ts) {
+    ret = OB_TIMEOUT;
+    TRANS_LOG(WARN, "get gts timeout", K(ret), K(expire_ts), K(current_time));
+  } else if (OB_FAIL(ts_mgr_->get_gts_sync(tenant_id_, now, MAX_WAIT_TIME_US, snapshot, rts))) {
+    TRANS_LOG(WARN, "get gts fail", K(ret), K(expire_ts), K(now));
+    if (OB_TIMEOUT == ret) {
       ret = OB_GTS_NOT_READY;
-      TRANS_LOG(WARN, "gts not ready", K(ret), K(retry_times));
-    } else if (OB_FAIL(ts_mgr_->get_gts(tenant_id_, now, NULL, snapshot, rts))) {
-      if (OB_EAGAIN == ret) {
-        if (interrupt_checker()) {
-          ret = OB_ERR_INTERRUPTED;
-        } else {
-          ob_usleep(500);
-        }
-      } else {
-        TRANS_LOG(WARN, "get gts fail", K(now));
-      }
-    } else if (OB_UNLIKELY(!snapshot.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "invalid snapshot from gts", K(snapshot), K(now));
-    } else {
-      uncertain_bound = rts.mts_ + gts_ahead;
     }
-  } while (OB_EAGAIN == ret);
+  } else if (OB_UNLIKELY(!snapshot.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "invalid snapshot from gts", K(snapshot), K(now));
+  } else {
+    uncertain_bound = rts.mts_ + gts_ahead;
+  }
 
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "acquire global snapshot fail", K(ret),

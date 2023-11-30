@@ -175,7 +175,7 @@ int ObMemtable::init(const ObITable::TableKey &table_key,
     TRANS_LOG(WARN, "fail to set freezer", K(ret), KP(freezer));
   } else if (OB_FAIL(local_allocator_.init(MTL_ID()))) {
     TRANS_LOG(WARN, "fail to init memstore allocator", K(ret), "tenant id", MTL_ID());
-  } else if (OB_FAIL(query_engine_.init(MTL_ID()))) {
+  } else if (OB_FAIL(query_engine_.init())) {
     TRANS_LOG(WARN, "query_engine.init fail", K(ret), "tenant_id", MTL_ID());
   } else if (OB_FAIL(mvcc_engine_.init(&local_allocator_,
                                        &kv_builder_,
@@ -2602,7 +2602,7 @@ int ObMemtable::set_(
           TRANS_LOG(WARN, "mvcc write fail", K(mtk), K(ret));
         }
       } else {
-        TRANS_LOG(TRACE, "set end, success",
+        TRANS_LOG(DEBUG, "set end, success",
             "ret", ret,
             "tablet_id_", key_.tablet_id_,
             "dml_flag", new_row.flag_.get_dml_flag(),
@@ -2693,11 +2693,12 @@ int ObMemtable::mvcc_replay_(storage::ObStoreCtx &ctx,
   ObMvccRow *value = NULL;
   RowHeaderGetter getter;
   bool is_new_add = false;
-  ObIMemtableCtx *mem_ctx = ctx.mvcc_acc_ctx_.get_mem_ctx();
+  ObMemtableCtx *mem_ctx = ctx.mvcc_acc_ctx_.get_mem_ctx();
   ObMvccReplayResult res;
   common::ObTimeGuard timeguard("ObMemtable::mvcc_replay_", 5 * 1000);
 
   if (OB_FAIL(mvcc_engine_.create_kv(key,
+                                     false, // is_insert
                                      &stored_key,
                                      value,
                                      getter,
@@ -2744,18 +2745,19 @@ int ObMemtable::mvcc_write_(
   ObMvccRow *value = NULL;
   ObMvccWriteResult res;
   ObStoreCtx &ctx = *(context.store_ctx_);
-  ObIMemtableCtx *mem_ctx = ctx.mvcc_acc_ctx_.get_mem_ctx();
+  ObMemtableCtx *mem_ctx = ctx.mvcc_acc_ctx_.get_mem_ctx();
   SCN snapshot_version = ctx.mvcc_acc_ctx_.get_snapshot_version();
   transaction::ObTxSnapshot &snapshot = ctx.mvcc_acc_ctx_.snapshot_;
 
   if (OB_FAIL(mvcc_engine_.create_kv(key,
+                                     // is_insert
+                                     blocksstable::ObDmlFlag::DF_INSERT == arg.data_->dml_flag_,
                                      &stored_key,
                                      value,
                                      getter,
                                      is_new_add))) {
     TRANS_LOG(WARN, "create kv failed", K(ret), K(arg), K(*key));
-  } else if (OB_FAIL(mvcc_engine_.mvcc_write(*mem_ctx,
-                                             ctx.mvcc_acc_ctx_.write_flag_,
+  } else if (OB_FAIL(mvcc_engine_.mvcc_write(ctx,
                                              snapshot,
                                              *value,
                                              arg,

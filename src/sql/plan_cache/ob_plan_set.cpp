@@ -2032,22 +2032,21 @@ void ObSqlPlanSet::reset()
 //need_check_on_same_server: out, 是否需要检查分区在同一server, 如果里面检查过且不在同一server则置为false
 int ObSqlPlanSet::get_phy_locations(const ObIArray<ObTableLocation> &table_locations,
                                     ObPlanCacheCtx &pc_ctx,
-                                    ObIArray<ObCandiTableLoc> &candi_table_locs,
-                                    bool &need_check_on_same_server)
+                                    ObIArray<ObCandiTableLoc> &candi_table_locs)
 {
   int ret = OB_SUCCESS;
-  need_check_on_same_server = true;
   DAS_CTX(pc_ctx.exec_ctx_).clear_all_location_info();
   if (OB_FAIL(ObPhyLocationGetter::get_phy_locations(table_locations,
                                                      pc_ctx,
-                                                     candi_table_locs,
-                                                     need_check_on_same_server))) {
+                                                     candi_table_locs))) {
     LOG_WARN("failed to get phy locations", K(ret), K(table_locations));
+  } else if (candi_table_locs.empty()) {
+    // do nothing.
   } else if (OB_FAIL(ObPhyLocationGetter::build_table_locs(pc_ctx.exec_ctx_.get_das_ctx(),
                                                            table_locations,
                                                            candi_table_locs))) {
-     LOG_WARN("fail to init table locs", K(ret));
-   }
+    LOG_WARN("fail to init table locs", K(ret));
+  }
   return ret;
 }
 
@@ -2063,57 +2062,47 @@ int ObSqlPlanSet::get_phy_locations(const ObIArray<ObTableLocation> &table_locat
  * FALSE: we know partitions on different servers via ObPhyLocationGetter::get_phy_locations
  *        (when there are duplicate tables not in DML), no need to check again
  */
-int ObSqlPlanSet::calc_phy_plan_type_v2(const ObIArray<ObCandiTableLoc> &candi_table_locs,
-                                        ObPhyPlanType &plan_type,
-                                        bool need_check_on_same_server)
+int ObSqlPlanSet::calc_phy_plan_type_v2(const common::ObIArray<ObCandiTableLoc> &candi_table_locs,
+                                        const ObPlanCacheCtx &pc_ctx,
+                                        ObPhyPlanType &plan_type)
 {
   int ret = OB_SUCCESS;
-  int64_t N = candi_table_locs.count();
+  ObDASCtx &das_ctx = pc_ctx.exec_ctx_.get_das_ctx();
+  const DASTableLocList &table_locs = das_ctx.get_table_loc_list();
+  int64_t N = table_locs.size();
   if (0 == N) {
     plan_type = OB_PHY_PLAN_LOCAL;
     SQL_PC_LOG(DEBUG, "no table used, thus local plan");
   } else {
     bool is_all_empty = true;
     bool is_all_single_partition = true;
-    for (int i = 0; is_all_single_partition && i < N; ++i) {
-      if (candi_table_locs.at(i).get_partition_cnt() != 0) {
+    FOREACH_X(table_loc, table_locs, is_all_single_partition)
+    {
+      const DASTabletLocList &tablet_locs = (*table_loc)->get_tablet_locs();
+      if (tablet_locs.size() != 0) {
         is_all_empty = false;
       }
-      if (candi_table_locs.at(i).get_partition_cnt() > 1) {
+      if (tablet_locs.size() > 1) {
         is_all_single_partition = false;
       }
     }
+
     if (is_all_empty) {
       plan_type = OB_PHY_PLAN_LOCAL;
     } else if (is_all_single_partition) {
-      bool is_same = true;
-      ObAddr my_address = GCTX.self_addr();
-      ObAddr first_addr;
-      if (!need_check_on_same_server) {
-        is_same = false;
-      }
-      if (is_same && OB_FAIL(is_partition_in_same_server(candi_table_locs,
-                                                         is_same,
-                                                         first_addr))) {
-        SQL_PC_LOG(WARN, "fail to calculate whether all partitions in same server",
-                   K(ret),
-                   K(candi_table_locs));
-      } else {
-        if (is_same) {
-          if (my_address == first_addr) {
-            plan_type = OB_PHY_PLAN_LOCAL;
-          } else {
-            plan_type = OB_PHY_PLAN_REMOTE;
-          }
+      if (das_ctx.same_server_) {
+        if (GCTX.self_addr() == das_ctx.same_tablet_addr()) {
+          plan_type = OB_PHY_PLAN_LOCAL;
         } else {
-          plan_type = OB_PHY_PLAN_DISTRIBUTED;
+          plan_type = OB_PHY_PLAN_REMOTE;
         }
+      } else {
+        plan_type = OB_PHY_PLAN_DISTRIBUTED;
       }
     } else {
       plan_type = OB_PHY_PLAN_DISTRIBUTED;
     }
   }
-
   return ret;
 }
 
@@ -2331,17 +2320,15 @@ int ObSqlPlanSet::get_plan_type(const ObIArray<ObTableLocation> &table_locations
                                 ObPhyPlanType &plan_type)
 {
   int ret = OB_SUCCESS;
-  bool need_check_on_same_server = true;
   candi_table_locs.reuse();
 
   if (OB_FAIL(get_phy_locations(table_locations,
                                 pc_ctx,
-                                candi_table_locs,
-                                need_check_on_same_server))) {
+                                candi_table_locs))) {
     LOG_WARN("failed to get physical locations", K(ret));
   } else if (OB_FAIL(calc_phy_plan_type_v2(candi_table_locs,
-                                           plan_type,
-                                           need_check_on_same_server))) {
+                                           pc_ctx,
+                                           plan_type))) {
     LOG_WARN("failed to calcute physical plan type", K(ret));
   } else {
     // Lookup算子支持压到远程去执行:

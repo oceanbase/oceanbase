@@ -115,7 +115,7 @@ int64_t ObTabletHandle::calc_wash_score(const WashTabletPriority priority) const
   } else {
     // Formula:
     //   score = (1 - priority) * t + priority * (t - INT64_MAX)
-    const int64_t t = ObTimeUtility::current_time_ns();
+    const int64_t t = ObClockGenerator::getClock() * 1000;
     score = WashTabletPriority::WTP_HIGH == priority ? t : t - INT64_MAX;
   }
   return score;

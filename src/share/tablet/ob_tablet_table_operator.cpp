@@ -29,7 +29,7 @@ using namespace common;
 namespace share
 {
 ObTabletTableOperator::ObTabletTableOperator()
-    : inited_(false), sql_proxy_(NULL), batch_size_(MAX_BATCH_COUNT)
+    : inited_(false), sql_proxy_(NULL), batch_size_(MAX_BATCH_COUNT), group_list_(0)
 {
 }
 
@@ -46,8 +46,27 @@ int ObTabletTableOperator::init(ObISQLClient &sql_proxy)
     LOG_WARN("init twice", KR(ret));
   } else {
     sql_proxy_ = &sql_proxy;
-    inited_ = true;
     batch_size_ = MAX_BATCH_COUNT;
+    group_list_ = 0; /*OBCG_DEFAULT*/
+    inited_ = true;
+  }
+  return ret;
+}
+
+int ObTabletTableOperator::init(const int32_t group_list, common::ObISQLClient &sql_proxy)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", KR(ret));
+  } else if (group_list < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("init tablet table operator get invalid argument", K(ret), K(group_list));
+  } else {
+    sql_proxy_ = &sql_proxy;
+    batch_size_ = MAX_BATCH_COUNT;
+    group_list_ = group_list;
+    inited_ = true;
   }
   return ret;
 }
@@ -122,7 +141,6 @@ int ObTabletTableOperator::get(
 
 // this func used for tablet leader to check merge finish, will not fill empty tablet info when tablet not exist
 int ObTabletTableOperator::get_tablet_info(
-    common::ObISQLClient *sql_proxy,
     const uint64_t tenant_id,
     const common::ObTabletID &tablet_id,
     const ObLSID &ls_id,
@@ -131,12 +149,15 @@ int ObTabletTableOperator::get_tablet_info(
   int ret = OB_SUCCESS;
   ObSEArray<ObTabletLSPair, 1> tablet_ls_pairs;
   ObSEArray<ObTabletInfo, 1> tablet_infos;
-  if (OB_ISNULL(sql_proxy)) {
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_INVALID_ID == tenant_id || !tablet_id.is_valid() || !ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(sql_proxy));
+    LOG_WARN("get tablet info get invalid argument", K(ret), K(tenant_id), K(tablet_id), K(ls_id));
   } else if (OB_FAIL(tablet_ls_pairs.push_back(ObTabletLSPair(tablet_id, ls_id)))) {
     LOG_WARN("fail to push back tablet ls pair", KR(ret), K(tablet_id), K(ls_id));
-  } else if (OB_FAIL(inner_batch_get_by_sql_(*sql_proxy, tenant_id, tablet_ls_pairs, 0/*start_idx*/, 1/*end_idx*/, tablet_infos))) {
+  } else if (OB_FAIL(inner_batch_get_by_sql_(tenant_id, tablet_ls_pairs, 0/*start_idx*/, 1/*end_idx*/, tablet_infos))) {
     LOG_WARN("fail to get tablet info", KR(ret), K(tenant_id), K(tablet_ls_pairs));
   } else if (1 != tablet_infos.count()) {
     ret = OB_ERR_UNEXPECTED;
@@ -194,7 +215,6 @@ int ObTabletTableOperator::batch_get(
     int64_t end_idx = min(batch_size_, pairs_cnt);
     while (OB_SUCC(ret) && (start_idx < end_idx)) {
       if (OB_FAIL(inner_batch_get_by_sql_(
-          *sql_proxy_,
           tenant_id,
           tablet_ls_pairs,
           start_idx,
@@ -242,7 +262,6 @@ int ObTabletTableOperator::batch_get(
 }
 
 int ObTabletTableOperator::inner_batch_get_by_sql_(
-    ObISQLClient &sql_client,
     const uint64_t tenant_id,
     const ObIArray<ObTabletLSPair> &tablet_ls_pairs,
     const int64_t start_idx,
@@ -284,7 +303,7 @@ int ObTabletTableOperator::inner_batch_get_by_sql_(
       }
       if (FAILEDx(sql.append_fmt(") ORDER BY tenant_id, tablet_id, ls_id, svr_ip, svr_port"))) {
         LOG_WARN("assign sql string failed", KR(ret));
-      } else if (OB_FAIL(sql_client.read(result, sql_tenant_id, sql.ptr()))) {
+      } else if (OB_FAIL(sql_proxy_->read(result, sql_tenant_id, sql.ptr(), group_list_))) {
         LOG_WARN("execute sql failed", KR(ret),
             K(tenant_id), K(sql_tenant_id), "sql", sql.ptr());
       } else if (OB_ISNULL(result.get_result())) {
@@ -514,7 +533,7 @@ int ObTabletTableOperator::inner_batch_update_by_sql_(
     }
     if (FAILEDx(dml.splice_batch_insert_update_sql(OB_ALL_TABLET_META_TABLE_TNAME, sql))) {
       LOG_WARN("fail to splice batch insert update sql", KR(ret), K(sql));
-    } else if (OB_FAIL(sql_client.write(sql_tenant_id, sql.ptr(), affected_rows))) {
+    } else if (OB_FAIL(sql_client.write(sql_tenant_id, sql.ptr(), group_list_, affected_rows))) {
       LOG_WARN("fail to execute sql", KR(ret), K(tenant_id), K(sql_tenant_id), K(sql));
     }
   }
@@ -574,7 +593,7 @@ int ObTabletTableOperator::range_get(
           start_tablet_id.id(),
           range_size))) {
         LOG_WARN("fail to assign sql", KR(ret), K(sql));
-      } else if (OB_FAIL(sql_proxy_->read(result, sql_tenant_id, sql.ptr()))) {
+      } else if (OB_FAIL(sql_proxy_->read(result, sql_tenant_id, sql.ptr(), group_list_))) {
         LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql_tenant_id), K(sql));
       } else if (OB_ISNULL(result.get_result())) {
         ret = OB_ERR_UNEXPECTED;
@@ -680,7 +699,7 @@ int ObTabletTableOperator::inner_batch_remove_by_sql_(
     }
     if (FAILEDx(dml.splice_batch_delete_sql(OB_ALL_TABLET_META_TABLE_TNAME, sql))) {
       LOG_WARN("fail to splice batch delete sql", KR(ret), K(sql));
-    } else if (OB_FAIL(sql_client.write(sql_tenant_id, sql.ptr(), affected_rows))) {
+    } else if (OB_FAIL(sql_client.write(sql_tenant_id, sql.ptr(), group_list_, affected_rows))) {
       LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql_tenant_id), K(sql));
     }
   }
@@ -742,7 +761,7 @@ int ObTabletTableOperator::remove_residual_tablet(
       server.get_port(),
       limit))) {
     LOG_WARN("assign sql string failed", KR(ret), K(sql));
-  } else if (OB_FAIL(sql_client.write(sql_tenant_id, sql.ptr(), affected_rows))) {
+  } else if (OB_FAIL(sql_client.write(sql_tenant_id, sql.ptr(), group_list_, affected_rows))) {
     LOG_WARN("execute sql failed", KR(ret), K(sql), K(sql_tenant_id));
   } else if (affected_rows > 0) {
     LOG_INFO("finish to remove residual tablet", KR(ret), K(tenant_id), K(affected_rows));

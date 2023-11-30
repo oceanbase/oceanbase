@@ -1491,8 +1491,6 @@ int ObSqlParameterization::fast_parser(ObIAllocator &allocator,
         ObPCParam *pc_param = NULL;
         char *ptr = (char *)allocator.alloc(param_num * sizeof(ObPCParam));
         fp_result.raw_params_.reset();
-        fp_result.raw_params_.set_allocator(&allocator);
-        fp_result.raw_params_.set_capacity(param_num);
         if (OB_ISNULL(ptr)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           SQL_PC_LOG(WARN, "fail to alloc memory for pc param", K(ret), K(ptr));
@@ -1522,8 +1520,6 @@ int ObSqlParameterization::fast_parser(ObIAllocator &allocator,
           ObPCParam *pc_param = NULL;
           ParamList *p_list = parse_result.param_nodes_;
           char *ptr = (char *)allocator.alloc(param_num * sizeof(ObPCParam));
-          fp_result.raw_params_.set_allocator(&allocator);
-          fp_result.raw_params_.set_capacity(param_num);
           if (OB_ISNULL(ptr)) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             SQL_PC_LOG(WARN, "fail to alloc memory for pc param", K(ret), K(ptr));

@@ -415,66 +415,6 @@ int ObMvccRow::unlink_trans_node(const ObMvccTransNode &node)
   return ret;
 }
 
-bool ObMvccRow::is_partial(const int64_t version) const
-{
-  // TODO(handora.qc): fix it
-  bool bool_ret = false;
-  bool is_locked = false;
-  ObMvccTransNode *last = ATOMIC_LOAD(&list_head_);
-
-  if (NULL == last) {
-    // Case1: no data on the memtable row(so no lock), so the row is completed
-    //        by the version
-    bool_ret = false;
-  } else if (FALSE_IT(is_locked = !(last->is_committed() || last->is_aborted()))) {
-  } else if (!is_locked && version > max_trans_version_.get_val_for_tx()) {
-    // Case2: no data is locked on the memtable row and the max version on the
-    //        row is smaller than the version , so the row is completed by the
-    //        version
-    bool_ret = false;
-  } else {
-    // Case3: if row is locked or the max trans version on the row is larger
-    //        than the version, we mark it as partial, otherwise we mark it as
-    //        completed
-    bool_ret = is_locked || (last->trans_version_.get_val_for_tx() > version);
-  }
-
-  return bool_ret;
-}
-
-bool ObMvccRow::is_del(const int64_t version) const
-{
-  // TODO(handora.qc): fix_it
-  bool bool_ret = false;
-  bool is_locked = false;
-  ObMvccTransNode *last = ATOMIC_LOAD(&list_head_);
-
-  if (NULL == last) {
-    // Case1: no data on the memtable row(so no lock), so the row is not deleted
-    //        by the version
-    bool_ret = false;
-  } else if (FALSE_IT(is_locked = !(last->is_committed() || last->is_aborted()))) {
-  } else if (is_locked) {
-    // Case2: data on the memtable row is locked, so the row may not deleted
-    //        by the version
-    bool_ret = false;
-  } else if (ObDmlFlag::DF_DELETE != last->get_dml_flag()) {
-    // Case3: data on the memtable row is not locked while the last node is not
-    //        delete node so the row is not deleted by the version
-    bool_ret = false;
-  } else if (last->trans_version_.get_val_for_tx() > version) {
-    // Case3: data on the memtable row is not locked, the last node is delete
-    //        node while the trans version of the last node is larger than the
-    //        version so the row may not deleted by the version
-    bool_ret = false;
-  } else {
-    // Case4: Otherwise, the row is deleted by the version
-    bool_ret = true;
-  }
-
-  return bool_ret;
-}
-
 bool ObMvccRow::need_compact(const bool for_read, const bool for_replay)
 {
   bool bool_ret = false;
@@ -808,8 +748,7 @@ int ObMvccRow::wakeup_waiter(const ObTabletID &tablet_id,
   return ret;
 }
 
-int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
-                           const concurrent_control::ObWriteFlag write_flag,
+int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
                            ObMvccTransNode &writer_node,
                            const transaction::ObTxSnapshot &snapshot,
                            ObMvccWriteResult &res)
@@ -818,7 +757,7 @@ int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
 
   ObRowLatchGuard guard(latch_);
   ObMvccTransNode *iter = ATOMIC_LOAD(&list_head_);
-  ObTransID writer_tx_id = ctx.get_tx_id();
+  ObTransID writer_tx_id = ctx.mvcc_acc_ctx_.get_tx_id();
   const SCN snapshot_version = snapshot.version_;
   const ObTxSEQ reader_seq_no = snapshot.scn_;
   bool &can_insert = res.can_insert_;
@@ -851,7 +790,9 @@ int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
       ObTransID data_tx_id = iter->get_tx_id();
 
       if (iter->is_delayed_cleanout() && !(iter->is_committed() || iter->is_aborted()) &&
-          OB_FAIL(ctx.get_tx_table_guard()->cleanout_tx_node(data_tx_id, *this, *iter, false /*need_row_latch*/))) {
+          OB_FAIL(ctx.mvcc_acc_ctx_.get_tx_table_guards()
+                     .tx_table_guard_
+                     .cleanout_tx_node(data_tx_id, *this, *iter, false /*need_row_latch*/))) {
         TRANS_LOG(WARN, "cleanout tx state failed", K(ret), K(*this));
       } else if (iter->is_committed() || iter->is_elr()) {
         // Case 2: the newest node is decided, so we can insert into it
@@ -905,7 +846,7 @@ int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
   if (OB_SUCC(ret)) {
     if (can_insert && need_insert) {
       if (nullptr != list_head_ &&
-          OB_FAIL(concurrent_control::check_sequence_set_violation(write_flag,
+          OB_FAIL(concurrent_control::check_sequence_set_violation(ctx.mvcc_acc_ctx_.write_flag_,
                                                                    reader_seq_no,
                                                                    writer_tx_id,
                                                                    writer_node.get_dml_flag(),
@@ -936,9 +877,8 @@ int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
       }
       if (NULL != writer_node.prev_
           && writer_node.prev_->is_elr()) {
-        ObMemtableCtx &mt_ctx = static_cast<ObMemtableCtx &>(ctx);
-        if (NULL != mt_ctx.get_trans_ctx()) {
-          TX_STAT_READ_ELR_ROW_COUNT_INC(mt_ctx.get_trans_ctx()->get_tenant_id());
+        if (NULL != ctx.mvcc_acc_ctx_.tx_ctx_) {
+          TX_STAT_READ_ELR_ROW_COUNT_INC(ctx.mvcc_acc_ctx_.tx_ctx_->get_tenant_id());
         }
       }
     }
@@ -983,8 +923,7 @@ void ObMvccRow::mvcc_undo()
   }
 }
 
-int ObMvccRow::mvcc_write(ObIMemtableCtx &ctx,
-                          const concurrent_control::ObWriteFlag write_flag,
+int ObMvccRow::mvcc_write(ObStoreCtx &ctx,
                           const transaction::ObTxSnapshot &snapshot,
                           ObMvccTransNode &node,
                           ObMvccWriteResult &res)
@@ -1000,7 +939,6 @@ int ObMvccRow::mvcc_write(ObIMemtableCtx &ctx,
               K(snapshot_version), "txNode_to_write", node,
               "memtableCtx", ctx, "mvccRow", PC(this));
   } else if (OB_FAIL(mvcc_write_(ctx,
-                                 write_flag,
                                  node,
                                  snapshot,
                                  res))) {

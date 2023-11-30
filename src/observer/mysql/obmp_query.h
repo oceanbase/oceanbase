@@ -79,6 +79,7 @@ private:
                     bool &async_resp_used,
                     bool &need_disconnect);
   int process_single_stmt(const sql::ObMultiStmtItem &multi_stmt_item,
+                          ObSMConnection *conn,
                           sql::ObSQLSessionInfo &session,
                           bool has_more_result,
                           bool force_sync_resp,
@@ -96,6 +97,7 @@ private:
     const share::ObPartitionLocation &partition_loc,
     share::ObFBPartitionParam &param);
   int try_batched_multi_stmt_optimization(sql::ObSQLSessionInfo &session,
+                                          ObSMConnection *conn,
                                           common::ObIArray<ObString> &queries,
                                           const ObMPParseStat &parse_stat,
                                           bool &optimization_done,
@@ -106,6 +108,8 @@ private:
   int store_params_value_to_str(ObIAllocator &allocator,
                                 sql::ObSQLSessionInfo &session,
                                 common::ParamStore &params);
+public:
+  static const int64_t MAX_SELF_OBJ_SIZE = 2 * 1024L;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMPQuery);
 private:
@@ -122,6 +126,7 @@ private:
   int64_t params_value_len_;
   char *params_value_;
 }; // end of class ObMPQuery
+STATIC_ASSERT(sizeof(ObMPQuery) < ObMPQuery::MAX_SELF_OBJ_SIZE, "sizeof ObMPQuery not great to 2KB");
 } // end of namespace observer
 } // end of namespace oceanbase
 #endif /* _OBMP_QUERY_H_ */

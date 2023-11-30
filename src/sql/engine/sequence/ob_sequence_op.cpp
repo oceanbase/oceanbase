@@ -16,6 +16,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_physical_plan.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/dml/ob_link_op.h"
 
 namespace oceanbase
 {

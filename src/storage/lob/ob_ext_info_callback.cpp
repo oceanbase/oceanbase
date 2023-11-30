@@ -270,7 +270,7 @@ int ObExtInfoCbRegister::register_cb(
         }
       }
       if (OB_FAIL(ret) && OB_NOT_NULL(cb)) {
-        mvcc_ctx_->callback_free(cb);
+        mvcc_ctx_->free_ext_info_callback(cb);
       }
     }
     if (OB_ITER_END == ret) {
@@ -279,7 +279,7 @@ int ObExtInfoCbRegister::register_cb(
     if (OB_FAIL(ret)) {
       for(int i = 0; i < cb_cnt; ++i) {
         cb_array[i]->del();
-        mvcc_ctx_->callback_free(cb_array[i]);
+        mvcc_ctx_->free_ext_info_callback(cb_array[i]);
       }
     } else if (OB_FALSE_IT(seq_no_cnt_ = cb_cnt)) {
     } else if (OB_FAIL(set_index_data(index_data))) {

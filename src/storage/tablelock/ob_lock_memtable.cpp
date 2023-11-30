@@ -150,7 +150,6 @@ int ObLockMemtable::lock_(
       succ_step = STEP_BEGIN;
       lock_exist = false;
       lock_mode_in_same_trans = 0x0;
-      conflict_tx_set.reset();
       ObMvccWriteGuard guard(true);
       if (ObClockGenerator::getClock() >= param.expired_time_) {
         ret = (ret == OB_TRY_LOCK_ROW_CONFLICT ? OB_ERR_EXCLUSIVE_LOCK_CONFLICT : OB_TIMEOUT);
@@ -212,6 +211,7 @@ int ObLockMemtable::lock_(
       }
     }
     if (need_retry) {
+      conflict_tx_set.reset();
       ob_usleep(USLEEP_TIME);
     }
   } while (need_retry);

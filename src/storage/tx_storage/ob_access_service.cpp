@@ -564,6 +564,12 @@ int ObAccessService::check_write_allowed_(
   const ObTableLockOwnerID lock_owner(0);
   const bool is_try_lock = false;
   const bool is_deadlock_avoid_enabled = false;
+  bool enable_table_lock = true;
+  ret = OB_E(EventTable::EN_ENABLE_TABLE_LOCK) OB_SUCCESS;
+  if (OB_ERR_UNEXPECTED == ret) {
+    enable_table_lock = false;
+    ret = OB_SUCCESS;
+  }
   if (OB_FAIL(check_tenant_out_of_memstore_limit_(is_out_of_mem))) {
     LOG_WARN("fail to check tenant out of mem limit", K(ret), K_(tenant_id));
   } else if (is_out_of_mem && !tablet_id.is_inner_tablet()) {
@@ -581,6 +587,8 @@ int ObAccessService::check_write_allowed_(
   } else if (OB_ISNULL(ls = ctx_guard.get_ls_handle().get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret), K(ls_id), K_(tenant_id));
+  } else if (!enable_table_lock) {
+    // do nothing
   } else {
     // TODO: this may confuse user, because of txn timeout won't notify user proactively
     int64_t lock_expired_ts = MIN(dml_param.timeout_, tx_desc.get_expire_ts());

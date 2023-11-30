@@ -2971,7 +2971,7 @@ bool ObSQLSessionInfo::can_txn_free_route() const
 int ObSQLSessionInfo::calc_txn_free_route()
 {
   int ret = OB_SUCCESS;
-  if (!txn_free_route_ctx_.has_calculated()) {
+  if (txn_free_route_ctx_.is_support_proxy() && !txn_free_route_ctx_.has_calculated()) {
     OZ (ObSqlTransControl::calc_txn_free_route(*this, txn_free_route_ctx_));
     if (OB_SUCC(ret)) {
       txn_static_info_encoder_.is_changed_ = txn_free_route_ctx_.is_static_changed();

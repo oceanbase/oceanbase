@@ -948,7 +948,12 @@ public:
   // used for getting plan
   static int get_phy_locations(const ObIArray<ObTableLocation> &table_locations,
                                const ObPlanCacheCtx &pc_ctx,
-                               ObIArray<ObCandiTableLoc> &phy_location_infos,
+                               ObIArray<ObCandiTableLoc> &phy_location_infos);
+
+  // used for matching plan
+  static int get_phy_locations(const ObIArray<ObTableLocation> &table_locations,
+                               const ObPlanCacheCtx &pc_ctx,
+                               ObIArray<ObCandiTableLoc> &candi_table_locs,
                                bool &need_check_on_same_server);
 
   // used for adding plan

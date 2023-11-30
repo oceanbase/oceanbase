@@ -498,12 +498,10 @@ int ObMultiVersionRowIterator::init(
   if (OB_FAIL(query_engine.scan(
       range.start_key_,  !range.border_flag_.inclusive_start(),
       range.end_key_,    !range.border_flag_.inclusive_end(),
-      ctx.snapshot_.version_.get_val_for_tx(),
       query_engine_iter_))) {
     TRANS_LOG(WARN, "query engine scan fail", K(ret));
   } else {
     query_engine_ = &query_engine;
-    query_engine_iter_->set_version(ctx.snapshot_.version_.get_val_for_tx());
     ctx_ = &ctx;
     version_range_ = version_range;
     is_inited_ = true;
@@ -516,7 +514,6 @@ int ObMultiVersionRowIterator::get_next_row(
     ObMultiVersionValueIterator *&value_iter)
 {
   int ret = OB_SUCCESS;
-  const bool skip_purge_memtable = true;
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "not init", KP(this));
     ret = OB_NOT_INIT;
@@ -525,7 +522,7 @@ int ObMultiVersionRowIterator::get_next_row(
   while (OB_SUCC(ret)) {
     const ObMemtableKey *tmp_key = NULL;
     ObMvccRow *value = NULL;
-    if (OB_FAIL(query_engine_iter_->next(skip_purge_memtable))) {
+    if (OB_FAIL(query_engine_iter_->next())) {
       if (OB_ITER_END != ret) {
         TRANS_LOG(WARN, "query engine iter next fail", K(ret), "ctx", *ctx_);
       }

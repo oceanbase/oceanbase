@@ -195,7 +195,6 @@ int ObBlockMetaTree::insert_macro_block(const ObDDLMacroHandle &macro_handle,
 int ObBlockMetaTree::build_sorted_rowkeys()
 {
   int ret = OB_SUCCESS;
-  const int64_t version = INT64_MAX;
   BtreeIterator iter;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -206,8 +205,7 @@ int ObBlockMetaTree::build_sorted_rowkeys()
                                                ObDatumRowkeyWrapper(&ObDatumRowkey::MIN_ROWKEY, &data_desc_.datum_utils_),
                                                false,
                                                ObDatumRowkeyWrapper(&ObDatumRowkey::MAX_ROWKEY, &data_desc_.datum_utils_),
-                                               false,
-                                               version))) {
+                                               false))) {
     LOG_WARN("locate range failed", K(ret));
   } else if (OB_FAIL(sorted_rowkeys_.reserve(get_macro_block_cnt()))) {
     LOG_WARN("reserve sorted rowkeys failed", K(ret), K(get_macro_block_cnt()));

@@ -57,9 +57,8 @@ class ObMvccRow;
 class ObIMvccCtx
 {
 public:
-  ObIMvccCtx(ObMemtableCtxCbAllocator &cb_allocator)
+  ObIMvccCtx()
     : alloc_type_(0),
-    trans_mgr_(*this, cb_allocator),
     //记录一个事务内第一次执行的table version
     min_table_version_(0),
     //记录一个事务内存最大的一次table version
@@ -78,17 +77,19 @@ public: // for mvcc engine invoke
   // for write
   virtual int write_auth(const bool exclusive) = 0;
   virtual int write_done() = 0;
-  virtual storage::ObTxTableGuard *get_tx_table_guard() = 0;
   virtual void *old_row_alloc(const int64_t size) = 0;
   virtual void old_row_free(void *row) = 0;
-  virtual void *callback_alloc(const int64_t size) = 0;
-  virtual void callback_free(ObITransCallback *cb) = 0;
+  virtual void *alloc_mvcc_row_callback() = 0;
+  virtual void free_mvcc_row_callback(ObITransCallback *cb) = 0;
+  virtual storage::ObExtInfoCallback *alloc_ext_info_callback() = 0;
+  virtual void free_ext_info_callback(ObITransCallback *cb) = 0;
   virtual common::ObIAllocator &get_query_allocator() = 0;
   virtual void set_conflict_trans_id(const uint32_t descriptor)
   { UNUSED(descriptor); }
   virtual int add_conflict_trans_id(const transaction::ObTransID conflict_trans_id) = 0;
   virtual int read_lock_yield() { return common::OB_SUCCESS; }
   virtual int write_lock_yield() { return common::OB_SUCCESS; }
+  virtual int append_callback(ObITransCallback *cb) = 0;
   virtual void inc_lock_for_read_retry_count() = 0;
   virtual void add_lock_for_read_elapse(const int64_t n) = 0;
   virtual int64_t get_lock_for_read_elapse() const = 0;
@@ -100,6 +101,7 @@ public: // for mvcc engine invoke
   virtual void inc_truncate_cnt() = 0;
   virtual void add_trans_mem_total_size(const int64_t size) = 0;
   virtual void update_max_submitted_seq_no(const transaction::ObTxSEQ seq_no) = 0;
+  virtual void inc_pending_log_size(const int64_t size) = 0;
   virtual transaction::ObTransID get_tx_id() const = 0;
   virtual transaction::ObPartTransCtx *get_trans_ctx() const = 0;
   // statics maintainness for txn logging
@@ -107,6 +109,7 @@ public: // for mvcc engine invoke
   virtual void dec_unsubmitted_cnt() = 0;
   virtual void inc_unsynced_cnt() = 0;
   virtual void dec_unsynced_cnt() = 0;
+  virtual bool is_for_replay() const = 0;
   virtual share::SCN get_tx_end_scn() const { return share::SCN::max_scn(); };
 public:
   inline int get_alloc_type() const { return alloc_type_; }
@@ -143,8 +146,6 @@ public:
   inline bool is_commit_version_valid() const { return commit_version_ != share::SCN::min_scn() && commit_version_ != share::SCN::max_scn(); }
   inline void set_lock_start_time(const int64_t start_time) { lock_start_time_ = start_time; }
   inline int64_t get_lock_start_time() { return lock_start_time_; }
-  inline void set_for_replay(const bool for_replay) { trans_mgr_.set_for_replay(for_replay); }
-  inline bool is_for_replay() const { return trans_mgr_.is_for_replay(); }
   inline void set_redo_scn(const share::SCN redo_scn) { redo_scn_ = redo_scn; }
   inline void set_redo_log_id(const int64_t redo_log_id) { redo_log_id_ = redo_log_id; }
   inline share::SCN get_redo_scn() const { return redo_scn_; }
@@ -154,8 +155,6 @@ public:
   share::SCN get_replay_compact_version() const { return replay_compact_version_; }
   void  set_replay_compact_version(const share::SCN v) { replay_compact_version_ = v; }
   inline int64_t get_lock_wait_start_ts() const { return lock_wait_start_ts_; }
-  void acquire_callback_list() { trans_mgr_.acquire_callback_list(); }
-  void revert_callback_list() { trans_mgr_.revert_callback_list(); }
 
   int register_row_commit_cb(
       const ObMemtableKey *key,
@@ -182,7 +181,6 @@ public:
       ObLockMemtable *memtable,
       ObMemCtxLockOpLinkNode *lock_op,
       const share::SCN scn);
-  int inc_pending_log_size(const int64_t size);
   int register_ext_info_commit_cb(
       const int64_t timeout,
       const blocksstable::ObDmlFlag dml_flag,
@@ -193,7 +191,6 @@ public:
   virtual void reset()
   {
     ctx_descriptor_ = 0;
-    trans_mgr_.reset();
     min_table_version_ = INT64_MAX;
     max_table_version_ = 0;
     trans_version_ = share::SCN::max_scn();
@@ -229,15 +226,11 @@ public:
     return pos;
   }
 public:
-  virtual ObOBJLockCallback *alloc_table_lock_callback(
-      ObIMvccCtx &ctx,
-      transaction::tablelock::ObLockMemtable *memtable) = 0;
+  virtual ObOBJLockCallback *create_table_lock_callback(ObIMvccCtx &ctx,
+                                                        transaction::tablelock::ObLockMemtable *memtable) = 0;
   virtual void free_table_lock_callback(ObITransCallback *cb) = 0;
   ObMvccRowCallback *alloc_row_callback(ObIMvccCtx &ctx, ObMvccRow &value, ObMemtable *memtable);
   ObMvccRowCallback *alloc_row_callback(ObMvccRowCallback &cb, ObMemtable *memtable);
-  storage::ObExtInfoCallback *alloc_ext_info_callback();
-  virtual void free_ext_info_callback(ObITransCallback *cb) = 0;
-  int append_callback(ObITransCallback *cb);
 private:
   void check_row_callback_registration_between_stmt_();
   int register_table_lock_cb_(
@@ -248,7 +241,7 @@ protected:
   DISALLOW_COPY_AND_ASSIGN(ObIMvccCtx);
   int alloc_type_;
   uint32_t ctx_descriptor_;
-  ObTransCallbackMgr trans_mgr_;
+  // ObTransCallbackMgr trans_mgr_;
   int64_t min_table_version_;
   int64_t max_table_version_;
   share::SCN trans_version_;

@@ -24,19 +24,17 @@ struct ObScanMergeLoserTreeItem
 {
   const blocksstable::ObDatumRow *row_;
   int64_t iter_idx_;
-  uint8_t iter_flag_;
   bool equal_with_next_;
-  ObScanMergeLoserTreeItem() : row_(NULL), iter_idx_(0), iter_flag_(0), equal_with_next_(false)
+  ObScanMergeLoserTreeItem() : row_(NULL), iter_idx_(0), equal_with_next_(false)
   {}
   ~ObScanMergeLoserTreeItem() = default;
   void reset()
   {
     row_ = NULL;
     iter_idx_ = 0;
-    iter_flag_ = 0;
     equal_with_next_ = false;
   }
-  TO_STRING_KV(K_(iter_idx), K_(iter_flag), KPC(row_));
+  TO_STRING_KV(K_(iter_idx), KPC(row_));
 };
 
 class ObScanMergeLoserTreeCmp

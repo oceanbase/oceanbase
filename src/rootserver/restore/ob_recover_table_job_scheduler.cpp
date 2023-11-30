@@ -549,7 +549,7 @@ int ObRecoverTableJobScheduler::restore_aux_tenant_(share::ObRecoverTableJob &jo
   bool aux_tenant_restore_finish = true;
   int tmp_ret = OB_SUCCESS;
   DEBUG_SYNC(BEFORE_RESTORE_AUX_TENANT);
-  if (OB_FAIL(restore_helper.init(OB_SYS_TENANT_ID))) {
+  if (OB_FAIL(restore_helper.init(OB_SYS_TENANT_ID, share::OBCG_STORAGE /*group_id*/))) {
     LOG_WARN("failed to init retore helper", K(ret));
   } else if (OB_FAIL(restore_helper.get_restore_job_history(
       *sql_proxy_, job.get_initiator_job_id(), job.get_initiator_tenant_id(), restore_history_info))) {
@@ -594,7 +594,7 @@ int ObRecoverTableJobScheduler::active_aux_tenant_(share::ObRecoverTableJob &job
   int tmp_ret = OB_SUCCESS;
   ObRestorePersistHelper restore_helper;
   ObHisRestoreJobPersistInfo restore_history_info;
-  if (OB_FAIL(restore_helper.init(OB_SYS_TENANT_ID))) {
+  if (OB_FAIL(restore_helper.init(OB_SYS_TENANT_ID, share::OBCG_STORAGE /*group_id*/))) {
     LOG_WARN("failed to init retore helper", K(ret));
   } else if (OB_FAIL(restore_helper.get_restore_job_history(
       *sql_proxy_, job.get_initiator_job_id(), job.get_initiator_tenant_id(), restore_history_info))) {

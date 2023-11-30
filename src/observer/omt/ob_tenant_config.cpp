@@ -215,7 +215,7 @@ int ObTenantConfig::got_version(int64_t version, const bool remove_repeat)
                 K_(current_version), K(version));
       update_task_.update_local_ = true;
       update_task_.version_ = version;
-      update_task_.scheduled_time_ = ObTimeUtility::current_monotonic_raw_time();
+      update_task_.scheduled_time_ = ObClockGenerator::getClock();
       schedule_task = true;
       mutex_.unlock();
     }

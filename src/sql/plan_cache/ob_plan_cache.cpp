@@ -740,8 +740,6 @@ int ObPlanCache::construct_fast_parser_result(common::ObIAllocator &allocator,
               K(batch_count), K(first_truncated_sql), K(pc_ctx.raw_sql_), K(fp_result));
         } else {
           fp_result.raw_params_.reset();
-          fp_result.raw_params_.set_allocator(&allocator);
-          fp_result.raw_params_.set_capacity(pc_ctx.insert_batch_opt_info_.multi_raw_params_.at(0)->count());
           if (OB_FAIL(fp_result.raw_params_.assign(*pc_ctx.insert_batch_opt_info_.multi_raw_params_.at(0)))) {
             LOG_WARN("fail to assign raw_param", K(ret));
           } else {
@@ -1229,18 +1227,18 @@ int ObPlanCache::get_cache_obj(ObILibCacheCtx &ctx,
     SQL_PC_LOG(TRACE, "failed to get cache node from lib cache by key", K(ret));
   } else if (OB_UNLIKELY(NULL == cache_node)) {
     ret = OB_SQL_PC_NOT_EXIST;
-    SQL_PC_LOG(TRACE, "cache obj does not exist!", K(key));
+    SQL_PC_LOG(DEBUG, "cache obj does not exist!", K(key));
   } else {
-    LOG_TRACE("inner_get_cache_obj", K(key), K(cache_node));
+    LOG_DEBUG("inner_get_cache_obj", K(key), K(cache_node));
     if (OB_FAIL(cache_node->update_node_stat(ctx))) {
       SQL_PC_LOG(WARN, "failed to update node stat",  K(ret));
     } else if (OB_FAIL(cache_node->get_cache_obj(ctx, key, cache_obj))) {
       if (OB_SQL_PC_NOT_EXIST != ret) {
-        LOG_TRACE("cache_node fail to get cache obj", K(ret));
+        LOG_DEBUG("cache_node fail to get cache obj", K(ret));
       }
     } else {
       guard.cache_obj_ = cache_obj;
-      LOG_TRACE("succ to get cache obj", KPC(key));
+      LOG_DEBUG("succ to get cache obj", KPC(key));
     }
     // release lock whatever
     (void)cache_node->unlock();

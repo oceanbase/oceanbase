@@ -30,6 +30,7 @@
 #include "share/scn.h" // SCN
 #include "share/ls/ob_ls_operator.h" //ObLSFlag
 #include "share/ls/ob_ls_status_operator.h"
+#include "share/resource_manager/ob_cgroup_ctrl.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -614,15 +615,16 @@ int ObLSStatusOperator::get_ls_init_member_list(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant id is invalid", KR(ret), K(tenant_id));
   } else if (OB_FAIL(get_ls_status_(tenant_id, id, true /*need_member_list*/,
-                                    member_list, status_info, client, arb_member, learner_list))) {
+                                    member_list, status_info, client, arb_member, learner_list, oceanbase::share::OBCG_DEFAULT))) {
     LOG_WARN("failed to get ls status", KR(ret), K(id), K(tenant_id));
   }
   return ret;
 }
 
 int ObLSStatusOperator::get_ls_status_info(
-    const uint64_t tenant_id,
-  const ObLSID &id, ObLSStatusInfo &status_info, ObISQLClient &client)
+  const uint64_t tenant_id,
+  const ObLSID &id, ObLSStatusInfo &status_info, ObISQLClient &client,
+  const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   ObMemberList member_list;
@@ -633,7 +635,7 @@ int ObLSStatusOperator::get_ls_status_info(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant id is invalid", KR(ret), K(tenant_id));
   } else if (OB_FAIL(get_ls_status_(tenant_id, id, false /*need_member_list*/,
-                                    member_list, status_info, client, arb_member, learner_list))) {
+                                    member_list, status_info, client, arb_member, learner_list, group_id))) {
     LOG_WARN("failed to get ls status", KR(ret), K(id), K(tenant_id));
   }
   return ret;
@@ -642,7 +644,8 @@ int ObLSStatusOperator::get_ls_status_info(
 int ObLSStatusOperator::get_duplicate_ls_status_info(
     const uint64_t tenant_id,
     ObISQLClient &client,
-    share::ObLSStatusInfo &status_info)
+    share::ObLSStatusInfo &status_info,
+    const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   status_info.reset();
@@ -665,7 +668,7 @@ int ObLSStatusOperator::get_duplicate_ls_status_info(
                  flag_str.ptr()))) {
       LOG_WARN("failed to assign sql", KR(ret), K(sql));
   } else if (OB_FAIL(inner_get_ls_status_(sql, get_exec_tenant_id(tenant_id), need_member_list,
-                                          client, member_list, status_info, arb_member, learner_list))) {
+                                          client, member_list, status_info, arb_member, learner_list, group_id))) {
     LOG_WARN("fail to inner get ls status info", KR(ret), K(sql), K(tenant_id), "exec_tenant_id",
              get_exec_tenant_id(tenant_id), K(need_member_list));
   }
@@ -918,16 +921,17 @@ int ObLSStatusOperator::inner_get_ls_status_(
     ObMemberList &member_list,
     share::ObLSStatusInfo &status_info,
     ObMember &arb_member,
-    common::GlobalLearnerList &learner_list)
+    common::GlobalLearnerList &learner_list,
+    const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   member_list.reset();
   status_info.reset();
   learner_list.reset();
   arb_member.reset();
-  if (OB_UNLIKELY(sql.empty() || OB_INVALID_TENANT_ID == exec_tenant_id)) {
+  if (OB_UNLIKELY(sql.empty() || OB_INVALID_TENANT_ID == exec_tenant_id || group_id < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(sql), K(exec_tenant_id));
+    LOG_WARN("invalid argument", KR(ret), K(sql), K(exec_tenant_id), K(group_id));
   } else {
     ObTimeoutCtx ctx;
     const int64_t default_timeout = GCONF.internal_sql_execute_timeout;
@@ -936,7 +940,7 @@ int ObLSStatusOperator::inner_get_ls_status_(
     } else {
       HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
         common::sqlclient::ObMySQLResult *result = NULL;
-        if (OB_FAIL(client.read(res, exec_tenant_id, sql.ptr()))) {
+        if (OB_FAIL(client.read(res, exec_tenant_id, sql.ptr(), group_id))) {
           LOG_WARN("failed to read", KR(ret), K(exec_tenant_id), K(sql));
         } else if (OB_ISNULL(result = res.get_result())) {
           ret = OB_ERR_UNEXPECTED;
@@ -1000,7 +1004,8 @@ int ObLSStatusOperator::get_ls_status_(const uint64_t tenant_id,
                                        share::ObLSStatusInfo &status_info,
                                        ObISQLClient &client,
                                        ObMember &arb_member,
-                                       common::GlobalLearnerList &learner_list)
+                                       common::GlobalLearnerList &learner_list,
+                                       const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   member_list.reset();
@@ -1008,14 +1013,15 @@ int ObLSStatusOperator::get_ls_status_(const uint64_t tenant_id,
   status_info.reset();
   ObSqlString sql;
   if (OB_UNLIKELY(!id.is_valid()
-                  || OB_INVALID_TENANT_ID == tenant_id)) {
+                  || OB_INVALID_TENANT_ID == tenant_id
+                  || group_id < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(id), K(tenant_id));
+    LOG_WARN("invalid argument", KR(ret), K(id), K(tenant_id), K(group_id));
   } else if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s where ls_id = %ld and tenant_id = %lu",
                                     OB_ALL_LS_STATUS_TNAME, id.id(), tenant_id))) {
     LOG_WARN("failed to assign sql", KR(ret), K(sql));
   } else if (OB_FAIL(inner_get_ls_status_(sql, get_exec_tenant_id(tenant_id), need_member_list,
-                                          client, member_list, status_info, arb_member, learner_list))) {
+                                          client, member_list, status_info, arb_member, learner_list, group_id))) {
     LOG_WARN("fail to inner get ls status info", KR(ret), K(sql), K(tenant_id), "exec_tenant_id",
              get_exec_tenant_id(tenant_id), K(need_member_list));
   }

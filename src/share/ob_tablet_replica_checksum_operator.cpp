@@ -25,6 +25,7 @@
 #include "share/config/ob_server_config.h"
 #include "share/ob_service_epoch_proxy.h"
 #include "share/ob_tablet_meta_table_compaction_operator.h"
+#include "share/resource_manager/ob_cgroup_ctrl.h"
 
 namespace oceanbase
 {
@@ -561,15 +562,16 @@ int ObTabletReplicaChecksumOperator::batch_get(
     const SCN &compaction_scn,
     ObISQLClient &sql_proxy,
     ObIArray<ObTabletReplicaChecksumItem> &items,
-    const bool include_larger_than)
+    const bool include_larger_than,
+    const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   items.reset();
   const int64_t pairs_cnt = pairs.count();
   hash::ObHashMap<ObTabletLSPair, bool> pair_map;
-  if (OB_UNLIKELY(pairs_cnt < 1 || OB_INVALID_TENANT_ID == tenant_id)) {
+  if (OB_UNLIKELY(pairs_cnt < 1 || OB_INVALID_TENANT_ID == tenant_id || group_id < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(pairs_cnt));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(pairs_cnt), K(group_id));
   }
   // Step 1: check repeatable ObTabletLSPair by hash map
   if (FAILEDx(inner_init_tablet_pair_map_(pairs, pair_map))) {
@@ -585,7 +587,7 @@ int ObTabletReplicaChecksumOperator::batch_get(
                                              sql, include_larger_than))) {
       LOG_WARN("fail to construct batch get sql", KR(ret), K(tenant_id), K(compaction_scn), K(pairs),
         K(start_idx), K(end_idx));
-    } else if (OB_FAIL(inner_batch_get_by_sql_(tenant_id, sql, sql_proxy, items))) {
+    } else if (OB_FAIL(inner_batch_get_by_sql_(tenant_id, sql, group_id, sql_proxy, items))) {
       LOG_WARN("fail to inner batch get by sql", KR(ret), K(tenant_id), K(sql));
     } else {
       start_idx = end_idx;
@@ -652,7 +654,8 @@ int ObTabletReplicaChecksumOperator::batch_get(
     ObISQLClient &sql_proxy,
     ObIArray<ObTabletReplicaChecksumItem> &items)
 {
-  return inner_batch_get_by_sql_(tenant_id, sql, sql_proxy, items);
+  const int32_t group_id = oceanbase::share::OBCG_DEFAULT;
+  return inner_batch_get_by_sql_(tenant_id, sql, group_id, sql_proxy, items);
 }
 
 int ObTabletReplicaChecksumOperator::construct_batch_get_sql_str_(
@@ -721,17 +724,18 @@ int ObTabletReplicaChecksumOperator::construct_batch_get_sql_str_(
 int ObTabletReplicaChecksumOperator::inner_batch_get_by_sql_(
     const uint64_t tenant_id,
     const ObSqlString &sql,
+    const int32_t group_id,
     ObISQLClient &sql_proxy,
     ObIArray<ObTabletReplicaChecksumItem> &items)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || group_id < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(group_id));
   } else {
     const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
     SMART_VAR(ObISQLClient::ReadResult, result) {
-      if (OB_FAIL(sql_proxy.read(result, meta_tenant_id, sql.ptr()))) {
+      if (OB_FAIL(sql_proxy.read(result, meta_tenant_id, sql.ptr(), group_id))) {
         LOG_WARN("fail to execute sql", KR(ret), K(tenant_id), K(meta_tenant_id), "sql", sql.ptr());
       } else if (OB_ISNULL(result.get_result())) {
         ret = OB_ERR_UNEXPECTED;

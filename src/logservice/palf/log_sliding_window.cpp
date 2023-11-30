@@ -675,6 +675,7 @@ int LogSlidingWindow::generate_new_group_log_(const LSN &lsn,
                                               bool &is_need_handle)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   is_need_handle = false;
   LogTaskGuard guard(this);
   LogTask *log_task = NULL;
@@ -2910,6 +2911,7 @@ int LogSlidingWindow::truncate_for_rebuild(const PalfBaseInfo &palf_base_info)
         // update local accum_checksum when last_submit_log_info updated
         checksum_.set_accum_checksum(prev_log_info.accum_checksum_);
       }
+
       LSN max_flushed_end_lsn;
       get_max_flushed_end_lsn(max_flushed_end_lsn);
       if (max_flushed_end_lsn <= palf_base_info.curr_lsn_) {
@@ -3045,6 +3047,7 @@ int LogSlidingWindow::truncate(const TruncateLogInfo &truncate_log_info, const L
           PALF_LOG(INFO, "truncate max_flushed_log_info_", K_(palf_id), K_(self), K(truncate_log_info), K(log_end_lsn),
               "old flushed_end_lsn", max_flushed_end_lsn);
         }
+
         PALF_LOG(INFO, "truncate success", K(ret), K_(palf_id), K_(self), K(truncate_log_info), "max_log_id", get_max_log_id(),
             K(log_begin_lsn), K(expected_prev_lsn), K(expected_prev_log_pid), K(prev_accum_checksum));
       }

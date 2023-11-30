@@ -406,7 +406,7 @@ int ObDASWriteBuffer::try_add_row(const ObIArray<ObExpr*> &exprs,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("stored row is null", K(ret));
     } else {
-      LOG_TRACE("add dml_row pay_load here", KPC(stored_row));
+      LOG_DEBUG("add dml_row pay_load here", KPC(stored_row));
     }
 
   }

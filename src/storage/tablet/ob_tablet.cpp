@@ -72,6 +72,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/compaction/ob_medium_list_checker.h"
 #include "storage/memtable/ob_row_conflict_handler.h"
+#include "storage/tablet/ob_tablet_binding_info.h"
 
 namespace oceanbase
 {
@@ -2167,29 +2168,6 @@ int ObTablet::get_max_sync_storage_schema_version(int64_t &max_schema_version) c
   return ret;
 }
 
-int ObTablet::try_update_storage_schema(
-    const int64_t table_id,
-    const int64_t schema_version,
-    ObIAllocator &allocator,
-    const int64_t timeout_ts)
-{
-  int ret = OB_SUCCESS;
-  ObTabletMemtableMgr *data_memtable_mgr = nullptr;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (tablet_meta_.tablet_id_.is_special_merge_tablet()) {
-    // do nothing
-  } else if (OB_FAIL(get_tablet_memtable_mgr(data_memtable_mgr))) {
-    LOG_WARN("failed to get memtable mgr", K(ret));
-  } else if (OB_FAIL(data_memtable_mgr->get_storage_schema_recorder().try_update_storage_schema(
-      table_id, schema_version, allocator, timeout_ts))) {
-    LOG_WARN("fail to record storage schema", K(ret), K(table_id), K(schema_version), K(timeout_ts));
-  }
-  return ret;
-}
-
 int ObTablet::get_max_column_cnt_on_schema_recorder(int64_t &max_column_cnt)
 {
   int ret = OB_SUCCESS;
@@ -2325,11 +2303,6 @@ int ObTablet::lock_row(
   } else if (OB_UNLIKELY(relative_table.get_tablet_id() != tablet_meta_.tablet_id_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet id doesn't match", K(ret), K(relative_table.get_tablet_id()), K(tablet_meta_.tablet_id_));
-  } else if (OB_FAIL(try_update_storage_schema(relative_table.get_table_id(),
-      relative_table.get_schema_version(),
-      store_ctx.mvcc_acc_ctx_.get_mem_ctx()->get_query_allocator(),
-      store_ctx.timeout_))) {
-    LOG_WARN("fail to record table schema", K(ret));
   } else if (OB_FAIL(guard.refresh_and_protect_table(relative_table))) {
     LOG_WARN("fail to protect table", K(ret), "tablet_id", tablet_meta_.tablet_id_);
   }
@@ -2370,11 +2343,6 @@ int ObTablet::lock_row(
   } else if (OB_UNLIKELY(relative_table.get_tablet_id() != tablet_meta_.tablet_id_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet id doesn't match", K(ret), K(relative_table.get_tablet_id()), K(tablet_meta_.tablet_id_));
-  } else if (OB_FAIL(try_update_storage_schema(relative_table.get_table_id(),
-      relative_table.get_schema_version(),
-      store_ctx.mvcc_acc_ctx_.get_mem_ctx()->get_query_allocator(),
-      store_ctx.timeout_))) {
-    LOG_WARN("fail to record table schema", K(ret));
   } else if (OB_FAIL(guard.refresh_and_protect_table(relative_table))) {
     LOG_WARN("fail to protect table", K(ret));
   } else {
@@ -2847,8 +2815,13 @@ int ObTablet::insert_row(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(store_ctx), K(col_descs), K(row), K(ret));
   } else {
-    const bool check_exists = !relative_table.is_storage_index_table()
+    bool check_exists = !relative_table.is_storage_index_table()
                               || relative_table.is_unique_index();
+    ret = OB_E(EventTable::EN_ENABLE_ROWKEY_CONFLICT_CHECK) OB_SUCCESS;
+    if (OB_ERR_UNEXPECTED == ret) {
+      check_exists = false;
+      ret = OB_SUCCESS;
+    }
     if (OB_FAIL(ret)) {
       LOG_WARN("failed to get rowkey columns");
     } else if (check_exists
@@ -2897,11 +2870,6 @@ int ObTablet::update_row(
     } else if (OB_UNLIKELY(relative_table.get_tablet_id() != tablet_meta_.tablet_id_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet id doesn't match", K(ret), K(relative_table.get_tablet_id()), K(tablet_meta_.tablet_id_));
-    } else if (OB_FAIL(try_update_storage_schema(relative_table.get_table_id(),
-        relative_table.get_schema_version(),
-        store_ctx.mvcc_acc_ctx_.get_mem_ctx()->get_query_allocator(),
-        store_ctx.timeout_))) {
-      LOG_WARN("fail to record table schema", K(ret));
     } else if (OB_FAIL(guard.refresh_and_protect_table(relative_table))) {
       LOG_WARN("fail to protect table", K(ret));
     } else if (OB_FAIL(prepare_memtable(relative_table, store_ctx, write_memtable))) {
@@ -2952,11 +2920,6 @@ int ObTablet::insert_row_without_rowkey_check(
     } else if (OB_UNLIKELY(relative_table.get_tablet_id() != tablet_meta_.tablet_id_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet id doesn't match", K(ret), K(relative_table.get_tablet_id()), K(tablet_meta_.tablet_id_));
-    } else if (OB_FAIL(try_update_storage_schema(relative_table.get_table_id(),
-        relative_table.get_schema_version(),
-        store_ctx.mvcc_acc_ctx_.get_mem_ctx()->get_query_allocator(),
-        store_ctx.timeout_))) {
-      LOG_WARN("fail to record table schema", K(ret));
     } else if (OB_FAIL(guard.refresh_and_protect_table(relative_table))) {
       LOG_WARN("fail to protect table", K(ret));
     } else if (OB_FAIL(prepare_memtable(relative_table, store_ctx, write_memtable))) {

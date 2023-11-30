@@ -56,7 +56,7 @@ int ObSessInfoVerify::sync_sess_info_veri(sql::ObSQLSessionInfo &sess,
   const int64_t len = sess_info_veri.length();
   const char *end = buf + len;
   int64_t pos = 0;
-  LOG_TRACE("start sync proxy sess info verification", K(sess.get_is_in_retry()),
+  LOG_DEBUG("start sync proxy sess info verification", K(sess.get_is_in_retry()),
             K(sess.get_sessid()), KP(data), K(len), KPHEX(data, len));
 
   // decode sess_info
@@ -65,7 +65,7 @@ int ObSessInfoVerify::sync_sess_info_veri(sql::ObSQLSessionInfo &sess,
       int16_t extra_id = 0;
       int32_t info_len = 0;
       char *sess_buf = NULL;
-      LOG_TRACE("sync field sess_inf", K(sess.get_sessid()),
+      LOG_DEBUG("sync field sess_inf", K(sess.get_sessid()),
                 KP(data), K(pos), K(len), KPHEX(data+pos, len-pos));
       if (OB_FAIL(ObProtoTransUtil::resolve_type_and_len(buf, len, pos, extra_id, info_len))) {
         LOG_WARN("failed to resolve type and len", K(ret), K(len), K(pos));
@@ -82,10 +82,10 @@ int ObSessInfoVerify::sync_sess_info_veri(sql::ObSQLSessionInfo &sess,
                                                               sess_info_verification))) {
         LOG_WARN("failed to resolve value", K(extra_id), KP(buf), K(len), K(pos), K(info_len));
       } else {
-        LOG_TRACE("success to resolve value", K(extra_id), K(len), K(pos), K(info_len));
+        LOG_DEBUG("success to resolve value", K(extra_id), K(len), K(pos), K(info_len));
       }
     }
-    LOG_TRACE("success to get sess info verification requied by proxy",
+    LOG_DEBUG("success to get sess info verification requied by proxy",
               K(sess_info_verification), K(sess.get_sessid()),
               K(sess.get_proxy_sessid()));
   }
@@ -138,7 +138,7 @@ int ObSessInfoVerify::verify_session_info(sql::ObSQLSessionInfo &sess,
         value_buffer.assign_buffer(ptr, result.verify_info_buf_.length());
         value_buffer.write(result.verify_info_buf_.ptr(), result.verify_info_buf_.length());
       }
-      LOG_TRACE("need verify", K(&result), K(result.need_verify_), K(result.verify_info_buf_));
+      LOG_DEBUG("need verify", K(&result), K(result.need_verify_), K(result.verify_info_buf_));
       if (OB_FAIL(ret)) {
       } else if (result.need_verify_) {
         // verification error injection.
@@ -152,12 +152,12 @@ int ObSessInfoVerify::verify_session_info(sql::ObSQLSessionInfo &sess,
           LOG_ERROR("session info self-verification failed", K(ret), K(sess.get_sessid()),
                   K(sess.get_proxy_sessid()), K(sess_info_verification));
         } else {
-          LOG_TRACE("session info self-verification success", K(ret));
+          LOG_DEBUG("session info self-verification success", K(ret));
         }
       } else {
-        LOG_TRACE("session info no need self-verification", K(ret));
+        LOG_DEBUG("session info no need self-verification", K(ret));
       }
-      LOG_TRACE("verify end", K(sess.get_sessid()),
+      LOG_DEBUG("verify end", K(sess.get_sessid()),
           K(sess.get_proxy_sessid()), K(sess_info_verification));
     }
   } else {

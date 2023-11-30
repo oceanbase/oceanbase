@@ -139,7 +139,7 @@ int ObSqlSockHandler::on_readable(void* udata)
   }
 
   if (OB_SUCCESS != ret || NULL == sql_req) {
-  } else if (FALSE_IT(sess->set_last_decode_succ_and_deliver_time(ObTimeUtility::current_time()))) {
+  } else if (FALSE_IT(sess->set_last_decode_succ_and_deliver_time(ObClockGenerator::getClock()))) {
   } else if (OB_FAIL(deliver_->deliver(*sql_req))) {
     LOG_WARN("deliver sql request fail", K(ret));
   }

@@ -196,6 +196,12 @@ private:
         locks_[i].unlock();
       }
     }
+    void enable_record_stat(const bool need_record)
+    {
+      for (int64_t i = 0; i < BUCKET_COUNT; ++i) {
+        locks_[i].enable_record_stat(need_record);
+      }
+    }
   private:
     ObLatch locks_[BUCKET_COUNT];
   };

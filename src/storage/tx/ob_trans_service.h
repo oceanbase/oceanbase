@@ -45,6 +45,7 @@
 #include "storage/tx/ob_dup_table_util.h"
 #include "ob_tx_free_route.h"
 #include "ob_tx_free_route_msg.h"
+#include "ob_tablet_to_ls_cache.h"
 
 namespace oceanbase
 {
@@ -174,12 +175,12 @@ public:
   int calculate_trans_cost(const ObTransID &tid, uint64_t &cost);
   int get_ls_min_uncommit_prepare_version(const share::ObLSID &ls_id, share::SCN &min_prepare_version);
   int get_min_undecided_log_ts(const share::ObLSID &ls_id, share::SCN &log_ts);
-  int check_dup_table_lease_valid(const ObLSID ls_id, bool &is_dup_ls, bool &is_lease_valid);
+  int check_dup_table_lease_valid(const share::ObLSID ls_id, bool &is_dup_ls, bool &is_lease_valid);
   //get the memory used condition of transaction module
   int iterate_trans_memory_stat(ObTransMemStatIterator &mem_stat_iter);
   int dump_elr_statistic();
   int remove_callback_for_uncommited_txn(
-    const ObLSID ls_id,
+    const share::ObLSID ls_id,
     const memtable::ObMemtableSet *memtable_set);
   int64_t get_tenant_id() const { return tenant_id_; }
   const common::ObAddr &get_server() { return self_; }
@@ -204,6 +205,24 @@ public:
                            const int64_t request_id = 0,
                            const ObRegisterMdsFlag &register_flag = ObRegisterMdsFlag());
   ObTxELRUtil &get_tx_elr_util() { return elr_util_; }
+  int create_tablet(const common::ObTabletID &tablet_id, const share::ObLSID &ls_id)
+  {
+    return tablet_to_ls_cache_.create_tablet(tablet_id, ls_id);
+  }
+  int remove_tablet(const common::ObTabletID &tablet_id, const share::ObLSID &ls_id)
+  {
+    return tablet_to_ls_cache_.remove_tablet(tablet_id, ls_id);
+  }
+  int remove_tablet(const share::ObLSID &ls_id)
+  {
+    return tablet_to_ls_cache_.remove_ls_tablets(ls_id);
+  }
+  int check_and_get_ls_info(const common::ObTabletID &tablet_id,
+                            share::ObLSID &ls_id,
+                            bool &is_local_leader)
+  {
+    return tablet_to_ls_cache_.check_and_get_ls_info(tablet_id, ls_id, is_local_leader);
+  }
 #ifdef ENABLE_DEBUG_LOG
   transaction::ObDefensiveCheckMgr *get_defensive_check_mgr() { return defensive_check_mgr_; }
 #endif
@@ -286,6 +305,8 @@ private:
 #ifdef ENABLE_DEBUG_LOG
   transaction::ObDefensiveCheckMgr *defensive_check_mgr_;
 #endif
+  // in order to pass the mittest, tablet_to_ls_cache_ must be declared before tx_desc_mgr_
+  ObTabletToLSCache tablet_to_ls_cache_;
   // txDesc's manager
   ObTxDescMgr tx_desc_mgr_;
 

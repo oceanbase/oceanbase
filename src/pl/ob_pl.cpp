@@ -1536,8 +1536,6 @@ int ObPL::trans_sql(PlTransformTreeCtx &trans_ctx, ParseNode *root, ObExecContex
     sql_info.need_check_fp_ = false;
     ObPCParam *pc_param = NULL;
     char *ptr = (char *)trans_ctx.allocator_->alloc(param_num * sizeof(ObPCParam));
-    pc_ctx.fp_result_.raw_params_.set_allocator(trans_ctx.allocator_);
-    pc_ctx.fp_result_.raw_params_.set_capacity(param_num);
     if (OB_ISNULL(ptr)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory for pc param", K(ret), K(ptr));

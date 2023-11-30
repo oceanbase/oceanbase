@@ -258,7 +258,7 @@ private:
                                  transaction::ObTransService *txs,
                                  bool &start_hook);
   static uint32_t get_real_session_id(ObSQLSessionInfo &session);
-  static int get_first_lsid(const ObDASCtx &das_ctx, share::ObLSID &first_lsid);
+  static int get_first_lsid(const ObDASCtx &das_ctx, share::ObLSID &first_lsid, bool &is_single_tablet);
   static bool has_same_lsid(const ObDASCtx &das_ctx,
                             const transaction::ObTxReadSnapshot &snapshot,
                             share::ObLSID &first_lsid);

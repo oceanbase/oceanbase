@@ -138,6 +138,7 @@ struct ObTxnFreeRouteCtx {
       global_version_water_mark_ = version;
     }
   }
+  bool is_support_proxy() const { return is_proxy_support_; }
 private:
   void reset_changed_() {
     _changed_ = false;

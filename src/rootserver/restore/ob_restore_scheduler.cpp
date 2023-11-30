@@ -102,7 +102,7 @@ void ObRestoreScheduler::do_work()
     LOG_INFO("[RESTORE] try process restore job");
     ObArray<ObPhysicalRestoreJob> job_infos;
     ObPhysicalRestoreTableOperator restore_op;
-    if (OB_FAIL(restore_op.init(sql_proxy_, tenant_id_))) {
+    if (OB_FAIL(restore_op.init(sql_proxy_, tenant_id_, share::OBCG_STORAGE /*group_id*/))) {
       LOG_WARN("fail init", K(ret), K(tenant_id_));
     } else if (OB_FAIL(restore_op.get_jobs(job_infos))) {
       LOG_WARN("fail to get jobs", KR(ret), K(tenant_id_));
@@ -241,7 +241,7 @@ int ObRestoreScheduler::restore_tenant(const ObPhysicalRestoreJob &job_info)
     ObPhysicalRestoreTableOperator restore_op;
     const int64_t job_id = job_info.get_job_id();
     const uint64_t new_tenant_id = tenant_id;
-    if (OB_FAIL(restore_op.init(sql_proxy_, tenant_id_))) {
+    if (OB_FAIL(restore_op.init(sql_proxy_, tenant_id_, share::OBCG_STORAGE /*group_id*/))) {
       LOG_WARN("fail init", K(ret), K(tenant_id_));
     } else if (OB_FAIL(restore_op.update_restore_option(
             job_id, "tenant_id", new_tenant_id))) {
@@ -458,7 +458,7 @@ int ObRestoreScheduler::fill_restore_statistics(const share::ObPhysicalRestoreJo
   }
   if (OB_SUCC(ret)) {
     share::ObRestorePersistHelper helper;
-    if (OB_FAIL(helper.init(job_info.get_tenant_id()))) {
+    if (OB_FAIL(helper.init(job_info.get_tenant_id(), share::OBCG_STORAGE /*group_id*/))) {
       LOG_WARN("fail to init heler", K(ret));
     } else if (OB_FAIL(helper.insert_initial_restore_progress(*sql_proxy_, restore_progress_info))) {
       LOG_WARN("fail to insert initail ls restore progress", K(ret));
@@ -866,7 +866,7 @@ int ObRestoreScheduler::try_update_job_status(
     LOG_WARN("not inited", K(ret));
   } else if (OB_FAIL(restore_service_->check_stop())) {
     LOG_WARN("restore scheduler stopped", K(ret));
-  } else if (OB_FAIL(restore_op.init(&sql_client, tenant_id_))) {
+  } else if (OB_FAIL(restore_op.init(&sql_client, tenant_id_, share::OBCG_STORAGE /*group_id*/))) {
     LOG_WARN("fail init", K(ret), K(tenant_id_));
   } else {
     PhysicalRestoreStatus next_status = get_next_status(return_ret, job.get_status());
@@ -1470,7 +1470,7 @@ int ObRestoreScheduler::check_all_ls_restore_to_consistent_scn_finish_(
   bool is_finished = false;
   bool is_success = false;
   ObPhysicalRestoreTableOperator restore_op;
-  if (OB_FAIL(restore_op.init(sql_proxy_, tenant_id))) {
+  if (OB_FAIL(restore_op.init(sql_proxy_, tenant_id, share::OBCG_STORAGE/*group_id*/))) {
     LOG_WARN("fail init", K(ret), K(tenant_id_));
   } else if (OB_FAIL(restore_op.check_finish_restore_to_consistent_scn(is_finished, is_success))) {
     LOG_WARN("fail to check finish restore to consistent_scn", K(ret), K(tenant_id));
@@ -1504,7 +1504,7 @@ int ObRestoreScheduler::restore_wait_tenant_finish(const share::ObPhysicalRestor
     LOG_WARN("not inited", KR(ret));
   } else if (OB_FAIL(restore_service_->check_stop())) {
     LOG_WARN("restore scheduler stopped", KR(ret));
-  } else if (OB_FAIL(restore_op.init(sql_proxy_, tenant_id_))) {
+  } else if (OB_FAIL(restore_op.init(sql_proxy_, tenant_id_, share::OBCG_STORAGE /*group_id*/))) {
     LOG_WARN("fail init", K(ret), K(tenant_id_));
   } else if (OB_FAIL(ObRestoreUtil::get_user_restore_job_history(
                  *sql_proxy_, job_info.get_tenant_id(),

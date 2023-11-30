@@ -343,15 +343,15 @@ class ObSqlSock: public ObLink
 public:
   ObSqlSock(ObSqlNioImpl *nio, int fd): dlink_(), all_list_link_(), write_task_link_(), nio_impl_(nio),
             fd_(fd), err_(0), read_buffer_(fd), need_epoll_trigger_write_(false), may_handling_(true),
-            handler_close_flag_(false), need_shutdown_(false), last_decode_time_(0), last_write_time_(0),
+            handler_close_flag_(false), need_shutdown_(false), last_decode_time_(0),
             sql_session_info_(NULL), tls_verion_option_(SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3) {
     memset(sess_, 0, sizeof(sess_));
   }
   ~ObSqlSock() {}
   int64_t get_remain_sz() const { return read_buffer_.get_remain_sz(); }
-  TO_STRING_KV(KP(this), "session_id", get_sql_session_id(), "trace_id", get_trace_id(), "sql_handling_stage", get_sql_request_execute_state(), "sql_initiative_shutdown", need_shutdown_,
-              K_(fd), K_(err), K_(last_decode_time), K_(last_write_time), K_(pending_write_task), K_(need_epoll_trigger_write),
-              "consume_size", read_buffer_.get_consume_sz(), "pending_flag", get_pending_flag(), "may_handling_flag", get_may_handling_flag(), K_(handler_close_flag));
+  TO_STRING_KV(KP(this), "session_id", get_sql_session_id(), "trace_id", get_trace_id(), "sql_handling_stage", get_sql_request_execute_state(),
+               "sql_initiative_shutdown", need_shutdown_, K_(fd), K_(err), K_(last_decode_time), K_(pending_write_task), K_(need_epoll_trigger_write),
+               "consume_size", read_buffer_.get_consume_sz(), "pending_flag", get_pending_flag(), "may_handling_flag", get_may_handling_flag(), K_(handler_close_flag));
   ObSqlNioImpl *get_nio_impl() { return nio_impl_; }
   void set_nio_impl(ObSqlNioImpl *impl) { nio_impl_ = impl; }
   bool set_error(int err) { return 0 == ATOMIC_TAS(&err_, err); }
@@ -383,7 +383,6 @@ public:
       need_epoll_trigger_write_ = false;
       LOG_WARN("pending write task write fail", K(ret));
     } else if (become_clean) {
-      last_write_time_ = ObTimeUtility::current_time();
       need_epoll_trigger_write_ = false;
       LOG_DEBUG("pending write clean", K(this));
     } else {
@@ -410,7 +409,6 @@ public:
         LOG_WARN("write data error", K(errno));
       }
     }
-    last_write_time_ = ObTimeUtility::current_time();
     return ret;
   }
 
@@ -421,9 +419,8 @@ public:
   int get_fd() { return fd_; }
   void disable_may_handling_flag() { ATOMIC_STORE(&may_handling_, false); }
   bool get_may_handling_flag() const { return ATOMIC_LOAD(&may_handling_); }
-  void set_last_decode_time() { last_decode_time_ = ObTimeUtility::current_time(); }
+  void set_last_decode_time() { last_decode_time_ = ObClockGenerator::getClock(); }
   int64_t get_last_decode_time() const  { return last_decode_time_; }
-  int64_t get_last_write_time() const { return last_write_time_; }
   int on_disconnect() {
     ObSqlSockSession* sess = (ObSqlSockSession *)sess_;
     return sess->on_disconnect();
@@ -462,7 +459,6 @@ private:
   bool handler_close_flag_;
   bool need_shutdown_;
   int64_t last_decode_time_;
-  int64_t last_write_time_;
   void* sql_session_info_;
   uint64_t tls_verion_option_;
 private:
@@ -532,7 +528,6 @@ int ObSqlSock::write_handshake_packet(const char* buf, int64_t sz) {
       LOG_WARN("write data error", K_(fd), K(errno));
     }
   }
-  last_write_time_ = ObTimeUtility::current_time();
   return ret;
 }
 
@@ -757,14 +752,14 @@ public:
   }
   void revert_sock(ObSqlSock* s) {
     if (OB_UNLIKELY(s->has_error())) {
-      LOG_TRACE("revert_sock: sock has error", K(*s));
+      LOG_DEBUG("revert_sock: sock has error", K(*s));
       s->disable_may_handling_flag();
     } else if (OB_UNLIKELY(s->need_shutdown())) {
-      LOG_TRACE("sock revert succ and push to close req queue", K(*s));
+      LOG_DEBUG("sock revert succ and push to close req queue", K(*s));
       push_close_req(s);
       s->disable_may_handling_flag();
     } else if (OB_UNLIKELY(!s->end_handle())) {
-      LOG_TRACE("revert_sock: sock still readable", K(*s));
+      LOG_DEBUG("revert_sock: sock still readable", K(*s));
       int ret = OB_SUCCESS;
       if (OB_FAIL(handler_.on_readable(s->sess_))) {
         LOG_TRACE("push to omt queue fail", K(ret), K(*s));
@@ -1018,7 +1013,7 @@ private:
         ObSqlSock* s = CONTAINER_OF(cur, ObSqlSock, all_list_link_);
         cur = cur->next_;
         if (s->get_pending_flag()) {
-          int64_t time_interval = ObTimeUtility::current_time() - s->get_last_decode_time();
+          int64_t time_interval = ObClockGenerator::getClock() - s->get_last_decode_time();
           if (time_interval > max_process_time) {
             LOG_INFO("[sql nio session]", K(*s));
           }

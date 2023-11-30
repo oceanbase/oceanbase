@@ -173,7 +173,7 @@ ObBasicSessionInfo::~ObBasicSessionInfo()
 bool ObBasicSessionInfo::is_server_status_in_transaction() const
 {
   bool in_txn = OB_NOT_NULL(tx_desc_) && tx_desc_->in_tx_for_free_route();
-  LOG_TRACE("decide flag: server in transaction", K(in_txn));
+  LOG_DEBUG("decide flag: server in transaction", K(in_txn));
   return in_txn;
 }
 
@@ -5654,7 +5654,6 @@ int ObBasicSessionInfo::is_timeout(bool &is_timeout)
 int ObBasicSessionInfo::is_trx_commit_timeout(transaction::ObITxCallback *&callback, int &retcode)
 {
   int ret = OB_SUCCESS;
-  int64_t cur_time = ::oceanbase::common::ObTimeUtility::current_time();
   if (is_in_transaction() && tx_desc_->is_committing()) {
     if (tx_desc_->is_tx_timeout()) {
       callback = tx_desc_->cancel_commit_cb();
@@ -6122,7 +6121,7 @@ int ObBasicSessionInfo::update_timezone_info()
 {
   int ret = OB_SUCCESS;
   const int64_t UPDATE_PERIOD = 1000 * 1000 * 5; //5s
-  int64_t cur_time = ObTimeUtility::current_time();
+  int64_t cur_time = ObClockGenerator::getClock();
   if (cur_time - last_update_tz_time_ > UPDATE_PERIOD) {
     ObTZMapWrap tz_map_wrap;
     ObTimeZoneInfoManager *tz_info_mgr = NULL;

@@ -41,7 +41,7 @@ using namespace transaction::tablelock;
 namespace memtable
 {
 ObMemtableCtx::ObMemtableCtx()
-    : ObIMemtableCtx(ctx_cb_allocator_),
+    : ObIMemtableCtx(),
       rwlock_(),
       lock_(),
       end_code_(OB_SUCCESS),
@@ -62,7 +62,9 @@ ObMemtableCtx::ObMemtableCtx()
       is_read_only_(false),
       is_master_(true),
       has_row_updated_(false),
-      lock_mem_ctx_(ctx_cb_allocator_),
+      mem_ctx_obj_pool_(ctx_cb_allocator_),
+      lock_mem_ctx_(*this),
+      trans_mgr_(*this, ctx_cb_allocator_, mem_ctx_obj_pool_),
       is_inited_(false)
 {
 }
@@ -100,10 +102,20 @@ int ObMemtableCtx::init(const uint64_t tenant_id)
   return ret;
 }
 
+// for mintest
 int ObMemtableCtx::enable_lock_table(ObTableHandleV2 &handle)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(lock_mem_ctx_.init(handle))) {
+    TRANS_LOG(WARN, "lock mem ctx init failed", K(ret));
+  }
+  return ret;
+}
+
+int ObMemtableCtx::enable_lock_table(ObLSTxCtxMgr *ls_tx_ctx_mgr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(lock_mem_ctx_.init(ls_tx_ctx_mgr))) {
     TRANS_LOG(WARN, "lock mem ctx init failed", K(ret));
   }
   return ret;
@@ -139,6 +151,7 @@ void ObMemtableCtx::reset()
     truncate_cnt_ = 0;
     unsynced_cnt_ = 0;
     unsubmitted_cnt_ = 0;
+    mem_ctx_obj_pool_.reset();
     lock_mem_ctx_.reset();
     retry_info_.reset();
     trans_mgr_.reset();
@@ -149,16 +162,10 @@ void ObMemtableCtx::reset()
     end_code_ = OB_SUCCESS;
     tx_status_ = ObTxStatus::NORMAL;
     // blocked_trans_ids_.reset();
-    tx_table_guard_.reset();
     //FIXME: ObIMemtableCtx don't have resetfunction,
     //thus ObIMvccCtx::reset is called, so resource_link_is not reset
     ObIMemtableCtx::reset();
   }
-}
-
-void ObMemtableCtx::reset_trans_table_guard()
-{
-  tx_table_guard_.reset();
 }
 
 int64_t ObMemtableCtx::to_string(char *buf, const int64_t buf_len) const
@@ -276,7 +283,7 @@ int ObMemtableCtx::write_auth(const bool exclusive)
       rwlock_.unlock();
     }
   }
-  TRANS_LOG(TRACE, "mem_ctx.write_auth", K(ret), KPC(this));
+  TRANS_LOG(DEBUG, "mem_ctx.write_auth", K(ret), KPC(this));
   return ret;
 }
 
@@ -340,63 +347,48 @@ void ObMemtableCtx::old_row_free(void *row)
   }
 }
 
-void *ObMemtableCtx::callback_alloc(const int64_t size)
+void *ObMemtableCtx::alloc_mvcc_row_callback()
 {
   void* ret = NULL;
-  if (OB_ISNULL(ret = trans_mgr_.callback_alloc(size))) {
-    TRANS_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "callback alloc error, no memory", K(size), K(*this));
+  if (OB_ISNULL(ret = trans_mgr_.alloc_mvcc_row_callback())) {
+    TRANS_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "callback alloc error, no memory", K(*this));
   } else {
-    ATOMIC_FAA(&callback_mem_used_, size);
+    ATOMIC_FAA(&callback_mem_used_, sizeof(ObMvccRowCallback));
     ATOMIC_INC(&callback_alloc_count_);
     TRANS_LOG(DEBUG, "callback alloc succ", K(*this), KP(ret), K(lbt()));
   }
   return ret;
 }
 
-void ObMemtableCtx::callback_free(ObITransCallback *cb)
+void ObMemtableCtx::free_mvcc_row_callback(ObITransCallback *cb)
 {
   if (OB_ISNULL(cb)) {
     TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "cb is null, unexpected error", KP(cb), K(*this));
   } else if (cb->is_table_lock_callback()) {
-    free_table_lock_callback(cb);
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "try to free table lock callback as mvcc row callback", KP(cb), K(*this));
   } else if (MutatorType::MUTATOR_ROW_EXT_INFO == cb->get_mutator_type()) {
-    free_ext_info_callback(cb);
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "try to free ext info callback as mvcc row callback", KP(cb), K(*this));
   } else {
     ATOMIC_INC(&callback_free_count_);
     TRANS_LOG(DEBUG, "callback release succ", KP(cb), K(*this), K(lbt()));
-    trans_mgr_.callback_free(cb);
+    trans_mgr_.free_mvcc_row_callback(cb);
     cb = NULL;
   }
 }
 
-ObOBJLockCallback *ObMemtableCtx::alloc_table_lock_callback(ObIMvccCtx &ctx,
-                                                            ObLockMemtable *memtable)
+storage::ObExtInfoCallback *ObMemtableCtx::alloc_ext_info_callback()
 {
   int ret = OB_SUCCESS;
-  void *cb_buffer = NULL;
-  ObOBJLockCallback *cb = NULL;
-  if (NULL == (cb_buffer = lock_mem_ctx_.alloc_lock_op_callback())) {
+  void *cb_buffer = nullptr;
+  storage::ObExtInfoCallback *cb = nullptr;
+  if (nullptr == (cb_buffer = mem_ctx_obj_pool_.alloc<storage::ObExtInfoCallback>())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    TRANS_LOG(WARN, "alloc ObOBJLockCallback cb_buffer fail", K(ret));
-  }
-  if (NULL != cb_buffer) {
-    if (NULL == (cb = new(cb_buffer) ObOBJLockCallback(ctx, memtable))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      TRANS_LOG(WARN, "construct ObOBJLockCallback object fail", K(ret), "cb_buffer", cb_buffer);
-    }
+    TRANS_LOG(WARN, "alloc ObExtInfoCallback fail", K(ret));
+  } else if (nullptr == (cb = new(cb_buffer) storage::ObExtInfoCallback())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    TRANS_LOG(WARN, "construct ObExtInfoCallback object fail", K(ret), "cb_buffer", cb_buffer);
   }
   return cb;
-}
-
-void ObMemtableCtx::free_table_lock_callback(ObITransCallback *cb)
-{
-  if (OB_ISNULL(cb)) {
-    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "cb is null, unexpected error", KP(cb), K(*this));
-  } else {
-    TRANS_LOG(DEBUG, "callback release succ", KP(cb), K(*this), K(lbt()));
-    lock_mem_ctx_.free_lock_op_callback(cb);
-    cb = NULL;
-  }
 }
 
 void ObMemtableCtx::free_ext_info_callback(ObITransCallback *cb)
@@ -406,13 +398,10 @@ void ObMemtableCtx::free_ext_info_callback(ObITransCallback *cb)
   } else if (MutatorType::MUTATOR_ROW_EXT_INFO != cb->get_mutator_type()) {
     TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "cb is not ext info callback", "type", cb->get_mutator_type(), K(*this));
   } else {
-    TRANS_LOG(DEBUG, "callback release succ", KP(cb), K(*this), K(lbt()));
     ObExtInfoCallback *ext_cb = static_cast<ObExtInfoCallback *>(cb);
     ext_cb->~ObExtInfoCallback();
-
-    ATOMIC_INC(&callback_free_count_);
+    mem_ctx_obj_pool_.free<storage::ObExtInfoCallback>(cb);
     TRANS_LOG(DEBUG, "callback release succ", KP(cb), K(*this), K(lbt()));
-    trans_mgr_.callback_free(cb);
     cb = NULL;
   }
 }

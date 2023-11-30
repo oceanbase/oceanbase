@@ -144,15 +144,20 @@ int ObTxCallbackList::callback_(ObITxCallbackFunctor &functor,
           TRANS_LOG(ERROR, "remove callback failed", KPC(iter));
         } else {
           if (iter->is_need_free()) {
-            callback_mgr_.get_ctx().callback_free(iter);
+            if (iter->is_table_lock_callback()) {
+              callback_mgr_.get_ctx().free_table_lock_callback(iter);
+            } else if (MutatorType::MUTATOR_ROW_EXT_INFO == iter->get_mutator_type()) {
+              callback_mgr_.get_ctx().free_ext_info_callback(iter);
+            } else {
+              callback_mgr_.get_ctx().free_mvcc_row_callback(iter);
+            }
           }
           remove_count++;
         }
       }
 
       if ((++traverse_count & 0xFFFFF) == 0) {
-        TRANS_LOG(WARN, "memtable fifo callback too long",
-                  K(traverse_count), K(functor));
+        TRANS_LOG(WARN, "memtable fifo callback too long", K(traverse_count), K(functor));
       }
     }
   }

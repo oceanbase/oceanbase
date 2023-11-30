@@ -57,7 +57,8 @@ public:
    ~ObMysqlPktContext() {}
   void reset()
   {
-    MEMSET(header_buf_, 0, common::OB_MYSQL_HEADER_LENGTH);
+    static_assert(common::OB_MYSQL_HEADER_LENGTH == 4, "OB_MYSQL_HEADER_LENGTH != 4");
+    *reinterpret_cast<uint32_t *>(header_buf_) = 0;
     header_buffered_len_ = 0;
     payload_buf_alloc_len_ = 0;
     payload_buf_ = NULL;

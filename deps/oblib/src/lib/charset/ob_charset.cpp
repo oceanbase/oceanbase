@@ -2760,53 +2760,49 @@ inline bool ObCharset::is_argument_valid(const ObCharsetInfo *cs, const char *st
   //What if str is null and str_len is zero which means empty string?
   //Do not worry at all. the routine called (like cs->cset->xxxx) will deal with this
   bool is_arg_valid = true;
-  if (lib::is_diagnose_info_enabled()) {
-    if ((OB_ISNULL(str) && OB_UNLIKELY(0 != str_len)) ||
-        OB_UNLIKELY(str_len < 0) ||
-        OB_ISNULL(cs) ||
-        OB_ISNULL(cs->cset)) {
-      is_arg_valid = false;
-      const ObFatalErrExtraInfoGuard *extra_info = ObFatalErrExtraInfoGuard::get_thd_local_val_ptr();
-      BACKTRACE_RET(WARN, OB_INVALID_ARGUMENT, true, "invalid argument. charset info = %p, str = %p, str_len = %ld, extra_info=(%s), lbt=(%s)", cs, str, str_len, (NULL == extra_info) ? NULL : to_cstring(*extra_info), lbt());
-    }
+  if ((OB_ISNULL(str) && OB_UNLIKELY(0 != str_len)) ||
+      OB_UNLIKELY(str_len < 0) ||
+      OB_ISNULL(cs) ||
+      OB_ISNULL(cs->cset)) {
+    is_arg_valid = false;
+    const ObFatalErrExtraInfoGuard *extra_info = ObFatalErrExtraInfoGuard::get_thd_local_val_ptr();
+    BACKTRACE_RET(WARN, OB_INVALID_ARGUMENT, true, "invalid argument. charset info = %p, str = %p, str_len = %ld, extra_info=(%s), lbt=(%s)", cs, str, str_len, (NULL == extra_info) ? NULL : to_cstring(*extra_info), lbt());
   }
   return is_arg_valid;
 }
 inline bool ObCharset::is_argument_valid(const ObCollationType collation_type, const char *str1, int64_t str_len1, const char *str2, int64_t str_len2)
 {
   bool is_arg_valid = true;
-  if (lib::is_diagnose_info_enabled()) {
-    if (OB_UNLIKELY(collation_type <= CS_TYPE_INVALID || collation_type >= CS_TYPE_MAX) ||
-        OB_ISNULL(ObCharset::charset_arr[collation_type]) ||
-        OB_UNLIKELY(str_len1 < 0) ||
-        OB_UNLIKELY(str_len2 < 0) ||
-        (OB_ISNULL(str1) && OB_UNLIKELY(0 != str_len1)) ||
-        (OB_ISNULL(str2) && OB_UNLIKELY(0 != str_len2))) {
+  if (OB_UNLIKELY(collation_type <= CS_TYPE_INVALID || collation_type >= CS_TYPE_MAX) ||
+      OB_ISNULL(ObCharset::charset_arr[collation_type]) ||
+      OB_UNLIKELY(str_len1 < 0) ||
+      OB_UNLIKELY(str_len2 < 0) ||
+      (OB_ISNULL(str1) && OB_UNLIKELY(0 != str_len1)) ||
+      (OB_ISNULL(str2) && OB_UNLIKELY(0 != str_len2))) {
+    is_arg_valid = false;
+    const ObFatalErrExtraInfoGuard *extra_info = ObFatalErrExtraInfoGuard::get_thd_local_val_ptr();
+    BACKTRACE_RET(WARN, OB_INVALID_ARGUMENT, true, "invalid argument."
+        "collation_type = %d,"
+        "str1 = %p,"
+        "str1_len = %ld,"
+        "str2 = %p,"
+        "str2_len = %ld,"
+        "extra_info=(%s),"
+        "lbt=(%s)", collation_type, str1, str_len1, str2, str_len2,
+        (NULL == extra_info) ? NULL : to_cstring(*extra_info), lbt());
+  } else {
+    ObCharsetInfo *cs = static_cast<ObCharsetInfo *>(ObCharset::charset_arr[collation_type]);
+    if (OB_ISNULL(cs->cset) || OB_ISNULL(cs->coll)) {
       is_arg_valid = false;
-      const ObFatalErrExtraInfoGuard *extra_info = ObFatalErrExtraInfoGuard::get_thd_local_val_ptr();
       BACKTRACE_RET(WARN, OB_INVALID_ARGUMENT, true, "invalid argument."
           "collation_type = %d,"
           "str1 = %p,"
           "str1_len = %ld,"
           "str2 = %p,"
           "str2_len = %ld,"
-          "extra_info=(%s),"
-          "lbt=(%s)", collation_type, str1, str_len1, str2, str_len2,
-          (NULL == extra_info) ? NULL : to_cstring(*extra_info), lbt());
-    } else {
-      ObCharsetInfo *cs = static_cast<ObCharsetInfo *>(ObCharset::charset_arr[collation_type]);
-      if (OB_ISNULL(cs->cset) || OB_ISNULL(cs->coll)) {
-        is_arg_valid = false;
-        BACKTRACE_RET(WARN, OB_INVALID_ARGUMENT, true, "invalid argument."
-            "collation_type = %d,"
-            "str1 = %p,"
-            "str1_len = %ld,"
-            "str2 = %p,"
-            "str2_len = %ld,"
-            "charset handler = %p,"
-            "collation handler = %p,"
-            "lbt=(%s)", collation_type, str1, str_len1, str2, str_len2, cs->cset, cs->coll, lbt());
-      }
+          "charset handler = %p,"
+          "collation handler = %p,"
+          "lbt=(%s)", collation_type, str1, str_len1, str2, str_len2, cs->cset, cs->coll, lbt());
     }
   }
   return is_arg_valid;

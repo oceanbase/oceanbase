@@ -753,8 +753,7 @@ public:
   void set_session_in_retry(ObSessionRetryStatus is_retry)
   {
     LockGuard lock_guard(thread_data_mutex_);
-    if (OB_LIKELY(SESS_NOT_IN_RETRY == is_retry ||
-                  SESS_IN_RETRY_FOR_DUP_TBL != thread_data_.is_in_retry_)) {
+    if (SESS_IN_RETRY_FOR_DUP_TBL != thread_data_.is_in_retry_) {
       thread_data_.is_in_retry_ = is_retry;
     } else {
       // if the last retry is for duplicate table

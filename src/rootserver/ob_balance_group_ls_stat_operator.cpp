@@ -1669,7 +1669,8 @@ int ObNewTableTabletAllocator::alloc_ls_for_duplicate_table_(
       } else if (OB_TMP_FAIL(ls_status_operator.get_duplicate_ls_status_info(
                              tenant_id,
                              *GCTX.sql_proxy_,
-                             duplicate_ls_status_info))) {
+                             duplicate_ls_status_info,
+                             share::OBCG_DEFAULT/*group_id*/))) {
         if (OB_ENTRY_NOT_EXIST == tmp_ret) {
           LOG_INFO("duplicate log stream not exist, should create one duplicate log stream");
           tmp_ret = OB_SUCCESS;

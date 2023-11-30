@@ -78,6 +78,7 @@ ObSharedMacroBlockMgr::ObSharedMacroBlockMgr()
     block_used_size_(),
     defragmentation_task_(*this),
     tg_id_(-1),
+    need_defragment_(false),
     is_inited_(false)
 {
 }
@@ -99,6 +100,7 @@ void ObSharedMacroBlockMgr::destroy()
   }
   common_header_buf_ = nullptr;
   block_used_size_.destroy();
+  need_defragment_ = false;
   is_inited_ = false;
 }
 
@@ -356,6 +358,8 @@ int ObSharedMacroBlockMgr::add_block(const MacroBlockId &block_id, const int64_t
       }
     } else if (OB_FAIL(block_used_size_.insert_or_update(block_id, curr_size))) {
       LOG_WARN("fail to add block to map", K(ret), K(block_id), K(curr_size));
+    } else if (is_recyclable(block_id, curr_size)) {
+      ATOMIC_SET(&need_defragment_, true);
     }
   }
   return ret;
@@ -380,6 +384,8 @@ int ObSharedMacroBlockMgr::free_block(const MacroBlockId &block_id, const int64_
       }
     } else if (OB_FAIL(block_used_size_.insert_or_update(block_id, curr_size))) {
       LOG_WARN("fail to set block used size", K(ret), K(block_id), K(block_size), K(curr_size));
+    } else if (is_recyclable(block_id, curr_size)) {
+      ATOMIC_SET(&need_defragment_, true);
     }
   }
   return ret;
@@ -408,6 +414,7 @@ int ObSharedMacroBlockMgr::get_recyclable_blocks(ObIAllocator &allocator, ObIArr
     if (OB_FAIL(ret)) {
       // do nothing
     } else {
+      ATOMIC_SET(&need_defragment_, false);
       int tmp_ret = OB_SUCCESS;
       for (int64_t i = 0; i < recycled_block_ids.count(); ++i) { // ignore tmp_ret
         const MacroBlockId &block_id = recycled_block_ids.at(i);
@@ -434,6 +441,8 @@ int ObSharedMacroBlockMgr::defragment()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObSharedMacroBlockMgr hasn't been initiated", K(ret));
+  } else if (!(ATOMIC_LOAD(&need_defragment_))) { // skip
+    LOG_INFO("skip defragment task", K(ret), K_(need_defragment));
   } else if (OB_FAIL(macro_ids.init(MAX_RECYCLABLE_BLOCK_CNT))) {
     LOG_WARN("fail to init macro ids", K(ret));
   } else if (OB_FAIL(get_recyclable_blocks(task_allocator, macro_ids))) {
@@ -474,6 +483,8 @@ int ObSharedMacroBlockMgr::defragment()
   if (OB_ITER_END == ret || OB_SUCC(ret)) {
     ret = OB_SUCCESS;
     FLOG_INFO("successfully defragment data blocks", K(ret), K(rewrite_cnt), K(block_used_size_.count()));
+  } else {
+    ATOMIC_SET(&need_defragment_, true); // set need_defragment_ true to trigger next round
   }
 
   if (nullptr != sstable_index_builder) {

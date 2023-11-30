@@ -274,6 +274,7 @@ int ObMPQuery::process()
                      "trans_id", session.get_tx_id(), K(session));
           } else if (queries.count() > 1
             && OB_FAIL(try_batched_multi_stmt_optimization(session,
+                                                          conn,
                                                           queries,
                                                           parse_stat,
                                                           optimization_done,
@@ -322,6 +323,7 @@ int ObMPQuery::process()
                 // 原来的值默认为true，会影响单条sql的二次路由，现在改为用 queries.count() 判断。
                 bool is_part_of_multi = queries.count() > 1 ? true : false;
                 ret = process_single_stmt(ObMultiStmtItem(is_part_of_multi, i, queries.at(i)),
+                                          conn,
                                           session,
                                           has_more,
                                           force_sync_resp,
@@ -346,6 +348,7 @@ int ObMPQuery::process()
             EVENT_INC(SQL_SINGLE_QUERY_COUNT);
             // 处理普通的Single Statement
             ret = process_single_stmt(ObMultiStmtItem(false, 0, sql_),
+                                      conn,
                                       session,
                                       has_more,
                                       force_sync_resp,
@@ -417,6 +420,7 @@ int ObMPQuery::process()
  * for details, please ref to
  */
 int ObMPQuery::try_batched_multi_stmt_optimization(sql::ObSQLSessionInfo &session,
+                                                   ObSMConnection *conn,
                                                    common::ObIArray<ObString> &queries,
                                                    const ObMPParseStat &parse_stat,
                                                    bool &optimization_done,
@@ -437,6 +441,7 @@ int ObMPQuery::try_batched_multi_stmt_optimization(sql::ObSQLSessionInfo &sessio
   } else if (!use_plan_cache) {
     // 不打开plan_cache开关，则优化不支持
   } else if (OB_FAIL(process_single_stmt(ObMultiStmtItem(false, 0, sql_, &queries, is_ins_multi_val_opt),
+                                         conn,
                                          session,
                                          has_more,
                                          force_sync_resp,
@@ -460,6 +465,7 @@ int ObMPQuery::try_batched_multi_stmt_optimization(sql::ObSQLSessionInfo &sessio
 }
 
 int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
+                                   ObSMConnection *conn,
                                    ObSQLSessionInfo &session,
                                    bool has_more_result,
                                    bool force_sync_resp,
@@ -482,7 +488,7 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
   session.set_curr_trans_last_stmt_end_time(0);
 
   //============================ 注意这些变量的生命周期 ================================
-  ObSessionStatEstGuard stat_est_guard(get_conn()->tenant_->id(), session.get_sessid());
+  ObSessionStatEstGuard stat_est_guard(conn->tenant_->id(), session.get_sessid());
   if (OB_FAIL(init_process_var(ctx_, multi_stmt_item, session))) {
     LOG_WARN("init process var failed.", K(ret), K(multi_stmt_item));
   } else {

@@ -343,7 +343,6 @@ int ObMPBase::init_process_var(sql::ObSqlCtx &ctx,
                                sql::ObSQLSessionInfo &session) const
 {
   int ret = OB_SUCCESS;
-  bool enable_udr = false;
   if (!packet_sender_.is_conn_valid()) {
     ret = OB_CONNECT_ERROR;
     LOG_WARN("connection already disconnected", K(ret));
@@ -368,13 +367,9 @@ int ObMPBase::init_process_var(sql::ObSqlCtx &ctx,
     }
     ctx.is_protocol_weak_read_ = pkt.is_weak_read();
     ctx.set_enable_strict_defensive_check(GCONF.enable_strict_defensive_check());
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session.get_effective_tenant_id()));
-    if (tenant_config.is_valid()) {
-      enable_udr = tenant_config->enable_user_defined_rewrite_rules;
-    }
-    ctx.set_enable_user_defined_rewrite(enable_udr);
-    LOG_TRACE("protocol flag info", K(ctx.can_reroute_sql_), K(ctx.is_protocol_weak_read_),
-        K(ctx.get_enable_strict_defensive_check()), K(enable_udr));
+    ctx.set_enable_user_defined_rewrite(session.enable_udr());
+    LOG_DEBUG("protocol flag info", K(ctx.can_reroute_sql_), K(ctx.is_protocol_weak_read_),
+        K(ctx.get_enable_strict_defensive_check()), "enable_udr", session.enable_udr());
   }
   return ret;
 }
@@ -603,7 +598,7 @@ int ObMPBase::process_extra_info(sql::ObSQLSessionInfo &session,
 {
   int ret = OB_SUCCESS;
   SessionInfoVerifacation sess_info_verification;
-  LOG_TRACE("process extra info", K(ret),K(pkt.get_extra_info().exist_sess_info_veri()));
+  LOG_DEBUG("process extra info", K(ret),K(pkt.get_extra_info().exist_sess_info_veri()));
   if (FALSE_IT(session.set_has_query_executed(true))) {
   } else if (pkt.get_extra_info().exist_sync_sess_info()
               && OB_FAIL(ObMPUtils::sync_session_info(session,

@@ -2001,6 +2001,8 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg &arg)
       LOG_WARN("fail to get baseline schema version", KR(ret));
     } else if (OB_FAIL(set_cpu_quota_concurrency_config_())) {
       LOG_WARN("failed to update cpu_quota_concurrency", K(ret));
+    } else if (OB_FAIL(set_enable_trace_log_())) {
+      LOG_WARN("fail to set one phase commit config", K(ret));
     }
 
     if (OB_SUCC(ret)) {
@@ -10645,6 +10647,17 @@ void ObRootService::update_cpu_quota_concurrency_in_memory_()
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(OB_SYS_TENANT_ID));
     tenant_config->cpu_quota_concurrency = MAX(10, tenant_config->cpu_quota_concurrency);
   }
+}
+
+int ObRootService::set_enable_trace_log_()
+{
+  int64_t affected_rows = 0;
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(sql_proxy_.write("ALTER SYSTEM SET enable_record_trace_log = false;", affected_rows))) {
+    LOG_WARN("update enable_record_trace_log failed", K(ret));
+  }
+
+  return OB_SUCCESS;
 }
 
 int ObRootService::set_cpu_quota_concurrency_config_()

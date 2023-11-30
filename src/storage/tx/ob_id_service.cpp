@@ -385,7 +385,7 @@ int ObIDService::get_number(const int64_t range, const int64_t base_id, int64_t 
       submit_log_with_lock_(pre_allocated_id, pre_allocated_id);
     }
   }
-  if (REACH_TIME_INTERVAL(100000)) {
+  if (TC_REACH_TIME_INTERVAL(5000000)) {
     TRANS_LOG(INFO, "get number", K(ret), K(service_type_), K(range), K(base_id), K(start_id), K(end_id));
   }
 	return ret;

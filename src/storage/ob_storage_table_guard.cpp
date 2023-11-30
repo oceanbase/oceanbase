@@ -46,7 +46,7 @@ ObStorageTableGuard::ObStorageTableGuard(
     replay_scn_(replay_scn),
     for_multi_source_data_(for_multi_source_data)
 {
-  init_ts_ = ObTimeUtility::current_time();
+  init_ts_ = ObClockGenerator::getClock();
   get_thread_alloc_stat() = 0;
 }
 
@@ -63,7 +63,10 @@ ObStorageTableGuard::~ObStorageTableGuard()
     bool need_sleep = true;
     int64_t left_interval = INT64_MAX;
     if (!for_replay_) {
-      left_interval = min(left_interval, store_ctx_.timeout_ - ObTimeUtility::current_time());
+      left_interval = min(left_interval, store_ctx_.timeout_ - ObClockGenerator::getClock());
+      if (left_interval < 0) {
+        left_interval = 0;
+      }
     }
     if (NULL != memtable_) {
       need_sleep = memtable_->is_active_memtable();
@@ -132,7 +135,7 @@ ObStorageTableGuard::~ObStorageTableGuard()
 
     if (REACH_TIME_INTERVAL(100 * 1000L) &&
         sleep_time > 0) {
-      int64_t cost_time = ObTimeUtility::current_time() - init_ts_;
+      int64_t cost_time = ObClockGenerator::getClock() - init_ts_;
       LOG_INFO("throttle situation", K(sleep_time), K(clock), K(time), K(seq), K(for_replay_), K(cost_time));
     }
 

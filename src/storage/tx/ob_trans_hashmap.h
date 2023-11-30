@@ -100,7 +100,7 @@ public:
   Value *next_;
 };
 
-template<typename Key, typename Value, typename AllocHandle, typename LockType, int64_t BUCKETS_CNT = 64>
+template<typename Key, typename Value, typename AllocHandle, typename LockType, int64_t BUCKETS_CNT = 64, int64_t LOCKS_CNT = BUCKETS_CNT>
 class ObTransHashMap
 {
  typedef common::ObSEArray<Value *, 32> ValueArray;
@@ -120,7 +120,7 @@ public:
       Value *next = nullptr;
       for (int64_t i = 0; i < BUCKETS_CNT; ++i) {
         {
-          BucketWLockGuard guard(buckets_[i].lock_, get_itid());
+          BucketWLockGuard guard(locks_[i % LOCKS_CNT], get_itid());
 
           curr = buckets_[i].next_;
           while (OB_NOT_NULL(curr)) {
@@ -133,6 +133,9 @@ public:
         }
         // reset bucket
         buckets_[i].reset();
+      }
+      for (int64_t i = 0; i < LOCKS_CNT; ++i) {
+        locks_[i].destroy();
       }
       total_cnt_ = 0;
       is_inited_ = false;
@@ -149,12 +152,12 @@ public:
       ret = OB_INIT_TWICE;
       TRANS_LOG(WARN, "ObTransHashMap init twice", K(ret));
     } else {
-      // init bucket, init lock in bucket
-      for (int64_t i = 0 ; OB_SUCC(ret) && i < BUCKETS_CNT; ++i) {
-        if (OB_FAIL(buckets_[i].init(mem_attr))) {
-          TRANS_LOG(WARN, "ObTransHashMap bucket init fail", K(ret));
+      // init lock
+      for (int64_t i = 0 ; OB_SUCC(ret) && i < LOCKS_CNT; ++i) {
+        if (OB_FAIL(locks_[i].init(mem_attr))) {
+          TRANS_LOG(WARN, "ObTransHashMap locks init fail", K(ret));
           for (int64_t j = 0 ; j <= i; ++j) {
-            buckets_[j].destroy();
+            locks_[j].destroy();
           }
         }
       }
@@ -181,7 +184,7 @@ public:
       TRANS_LOG(WARN, "invalid argument", K(key), KP(value));
     } else {
       int64_t pos = key.hash() % BUCKETS_CNT;
-      BucketWLockGuard guard(buckets_[pos].lock_, get_itid());
+      BucketWLockGuard guard(locks_[pos % LOCKS_CNT], get_itid());
       Value *curr = buckets_[pos].next_;
 
       while (OB_NOT_NULL(curr)) {
@@ -224,7 +227,7 @@ public:
       TRANS_LOG(ERROR, "invalid argument", K(key), KP(value));
     } else {
       int64_t pos = key.hash() % BUCKETS_CNT;
-      BucketWLockGuard guard(buckets_[pos].lock_, get_itid());
+      BucketWLockGuard guard(locks_[pos % LOCKS_CNT], get_itid());
       if (buckets_[pos].next_ != value &&
           (NULL == value->prev_ && NULL == value->next_)) {
         // do nothing
@@ -270,7 +273,7 @@ public:
       Value *tmp_value = NULL;
       int64_t pos = key.hash() % BUCKETS_CNT;
 
-      BucketRLockGuard guard(buckets_[pos].lock_, get_itid());
+      BucketRLockGuard guard(locks_[pos % LOCKS_CNT], get_itid());
 
       tmp_value = buckets_[pos].next_;
       while (OB_NOT_NULL(tmp_value)) {
@@ -348,15 +351,20 @@ public:
         const int64_t cnt = array.count();
         for (int64_t i = 0; i < cnt; ++i) {
           if (fn(array.at(i))) {
-            BucketWLockGuard guard(buckets_[pos].lock_, get_itid());
+            BucketWLockGuard guard(locks_[pos % LOCKS_CNT], get_itid());
             if (buckets_[pos].next_ != array.at(i)
                 && (NULL == array.at(i)->prev_ && NULL == array.at(i)->next_)) {
               // do nothing
             } else {
               del_from_bucket_(pos, array.at(i));
+              if (0 == array.at(i)->dec_ref(1)) {
+                TRANS_LOG(WARN, "ref should not be 0 here", K(ret));
+                alloc_handle_.free_value(array.at(i));
+                array.at(i) = NULL;
+              }
             }
           }
-          if (0 == array.at(i)->dec_ref(1)) {
+          if (OB_NOT_NULL(array.at(i)) && 0 == array.at(i)->dec_ref(1)) {
             alloc_handle_.free_value(array.at(i));
           }
         }
@@ -369,7 +377,7 @@ public:
   {
     int ret = common::OB_SUCCESS;
     // read lock
-    BucketRLockGuard guard(buckets_[bucket_pos].lock_, get_itid());
+    BucketRLockGuard guard(locks_[bucket_pos % LOCKS_CNT], get_itid());
     Value *val = buckets_[bucket_pos].next_;
 
     while (OB_SUCC(ret) && OB_NOT_NULL(val)) {
@@ -418,19 +426,13 @@ private:
   {
     Value *next_;
     Value *hot_cache_val_;
-    LockType lock_;
 
     ObTransHashHeader() : next_(NULL), hot_cache_val_(NULL) {}
     ~ObTransHashHeader() { destroy(); }
-    int init(const lib::ObMemAttr &mem_attr)
-    {
-      return lock_.init(mem_attr);
-    }
     void reset()
     {
       next_ = NULL;
       hot_cache_val_ = NULL;
-      lock_.destroy();
     }
     void destroy()
     {
@@ -524,6 +526,7 @@ private:
   // sizeof(QsyncLock) = 4K;
   bool is_inited_;
   ObTransHashHeader buckets_[BUCKETS_CNT];
+  LockType locks_[LOCKS_CNT];
   int64_t total_cnt_;
 #ifndef NDEBUG
 public:

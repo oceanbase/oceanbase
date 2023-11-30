@@ -570,7 +570,7 @@ int ObIndexBlockRowScanner::locate_range(
         begin_idx = start_found - first;
       }
     }
-    LOG_TRACE("Locate range start key in index block by range", K(ret),
+    LOG_DEBUG("Locate range start key in index block by range", K(ret),
         K(range), K(begin_idx), KPC(first), K(idx_data_header_->row_cnt_));
 
     if (OB_FAIL(ret)) {
@@ -598,7 +598,7 @@ int ObIndexBlockRowScanner::locate_range(
         }
       }
     }
-    LOG_TRACE("Locate range in index block by range", K(ret), K(range), K(begin_idx), K(end_idx),
+    LOG_DEBUG("Locate range in index block by range", K(ret), K(range), K(begin_idx), K(end_idx),
       K(is_left_border), K(is_right_border), K_(current), KPC(idx_data_header_));
   } else if (IndexFormat::RAW_DATA == index_format_) {
     if (OB_FAIL(micro_reader_->locate_range(
@@ -607,7 +607,7 @@ int ObIndexBlockRowScanner::locate_range(
         LOG_WARN("Fail to locate range with micro reader", K(ret));
       }
     } else {
-      LOG_TRACE("Binary search range with micro reader", K(ret), K(range), K(begin_idx), K(end_idx));
+      LOG_DEBUG("Binary search range with micro reader", K(ret), K(range), K(begin_idx), K(end_idx));
     }
   } else if (IndexFormat::BLOCK_TREE == index_format_) {
     if (OB_ISNULL(block_meta_tree_)) {

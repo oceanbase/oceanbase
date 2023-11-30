@@ -275,7 +275,9 @@ struct AllocOpHelper
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret), K(alloc_size));
       } else {
-        memset(mem, 0, sizeof(OpType *) * child_cnt);
+        if (child_cnt > 0) {
+          memset(mem, 0, sizeof(OpType *) * child_cnt);
+        }
         op = new (&mem[child_cnt]) OpType(exec_ctx, spec, input);
         if (OB_FAIL(op->set_children_pointer(mem, child_cnt))
             || OB_FAIL(op->init())) {

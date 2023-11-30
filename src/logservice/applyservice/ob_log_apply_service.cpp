@@ -389,7 +389,7 @@ int ObApplyStatus::push_append_cb(AppendCb *cb)
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "apply service not init", K(ret));
   } else {
-    const int64_t start_ts = ObTimeUtility::fast_current_time();
+    const int64_t start_ts = ObClockGenerator::getClock();
     LSN palf_committed_end_lsn;
     const LSN cb_lsn = cb->__get_lsn();
     const SCN cb_scn = cb->__get_scn();
@@ -413,7 +413,7 @@ int ObApplyStatus::push_append_cb(AppendCb *cb)
         }
       }
     }
-    const int64_t push_cost = ObTimeUtility::fast_current_time() - start_ts;
+    const int64_t push_cost = ObClockGenerator::getClock() - start_ts;
     if (push_cost > 1 * 1000) { //1ms
       CLOG_LOG(INFO, "apply service push_task cost too much time", K(thread_index), K(cb_lsn),
                K(cb_sign), KPC(this), K(push_cost));
@@ -525,7 +525,7 @@ int ObApplyStatus::try_handle_cb_queue(ObApplyServiceQueueTask *cb_queue,
       ret = OB_SUCCESS;
     }
   }
-  CLOG_LOG(TRACE, "try_handle_cb_queue finish", KPC(this), KPC(cb_queue), K(ret), K(is_queue_empty), K(is_timeslice_run_out));
+  CLOG_LOG(DEBUG, "try_handle_cb_queue finish", KPC(this), KPC(cb_queue), K(ret), K(is_queue_empty), K(is_timeslice_run_out));
   return ret;
 }
 

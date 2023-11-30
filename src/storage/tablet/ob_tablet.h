@@ -285,11 +285,6 @@ public:
       ObStoreCtx &store_ctx,
       const blocksstable::ObDatumRowkey &rowkey,
       bool &locked);
-  int try_update_storage_schema(
-      const int64_t table_id,
-      const int64_t schema_version,
-      ObIAllocator &allocator,
-      const int64_t timeout_ts);
 
   // table operation
   int get_tablet_meta_ids(ObIArray<blocksstable::MacroBlockId> &meta_ids) const;

@@ -28,20 +28,18 @@ void BtreeNode<BtreeKey, BtreeVal>::reset()
   magic_num_ = MAGIC_NUM;
   level_ = 0;
   new(&lock_) RWLock();
-  max_del_version_ = 0;
   host_ = nullptr;
   ObLink::reset();
 }
 
 template<typename BtreeKey, typename BtreeVal>
-int BtreeNode<BtreeKey, BtreeVal>::make_new_root(BtreeKey key1, BtreeNode *node_1, BtreeKey key2, BtreeNode *node_2, int16_t level, int64_t version)
+int BtreeNode<BtreeKey, BtreeVal>::make_new_root(BtreeKey key1, BtreeNode *node_1, BtreeKey key2, BtreeNode *node_2, int16_t level)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(node_1) || OB_ISNULL(node_2)) {
     ret = OB_INVALID_ARGUMENT;
   } else {
     level_ = level;
-    max_del_version_ = version;
     set_key_value(0, key1, (BtreeVal)node_1);
     set_key_value(1, key2, (BtreeVal)node_2);
     if (is_leaf()) {
@@ -63,21 +61,21 @@ void BtreeNode<BtreeKey, BtreeVal>::print(FILE *file, const int depth) const
     MultibitSet index;
     index.load(index_);
     int count = index.size();
-    fprintf(file, " index=%lx %dV:%ld ", index.get(), count, max_del_version_);
+    fprintf(file, " index=%lx %dV:", index.get(), count);
     for (int i = 0; i < count; i++) {
       fprintf(file, " %lx->%lx", (uint64_t)kvs_[i].key_.get_ptr(), (uint64_t)kvs_[i].val_);
     }
     for (int i = 0; i < count; i++) {
-      fprintf(file, "\n%*s %s%s->%lx", depth * 2 + 2, "|-", get_tag(i, &index) ? "#": "+", get_key(i, &index).repr(), (uint64_t)get_val(i, &index));
+      fprintf(file, "\n%*s %s%s->%lx", depth * 2 + 2, "|-", "+", get_key(i, &index).repr(), (uint64_t)get_val(i, &index));
     }
   } else {
     int count = size();
-    fprintf(file, " index=%lx %dC:%ld", index_.get(), count, max_del_version_);
+    fprintf(file, " index=%lx %dC:", index_.get(), count);
     for (int i = 0; i < count; i++) {
       fprintf(file, " %lx->%lx", (uint64_t)kvs_[i].key_.get_ptr(), (uint64_t)kvs_[i].val_);
     }
     for (int i = 0; i < count; i++) {
-      fprintf(file, "\n%*s %s%s->%lx", depth * 2 + 2, "|-", get_tag(i)? "#": "+", get_key(i).repr(), (uint64_t)get_val(i));
+      fprintf(file, "\n%*s %s%s->%lx", depth * 2 + 2, "|-", "+", get_key(i).repr(), (uint64_t)get_val(i));
       BtreeNode *child = (BtreeNode *)get_val(i);
       child->print(file, depth + 1);
     }
@@ -85,38 +83,16 @@ void BtreeNode<BtreeKey, BtreeVal>::print(FILE *file, const int depth) const
 }
 
 template<typename BtreeKey, typename BtreeVal>
-int BtreeNode<BtreeKey, BtreeVal>::get_next_active_child(int pos, int64_t version, int64_t* cnt, MultibitSet *index)
+int BtreeNode<BtreeKey, BtreeVal>::get_next_active_child(int pos)
 {
-  if (version < max_del_version_) {
-    ++pos;
-  } else {
-    while(++pos < size(index)) {
-      if (!get_tag(pos, index)) {
-        break;
-      }
-      if (OB_NOT_NULL(cnt)) {
-        (*cnt) += estimate_level_weight(level_);
-      }
-    }
-  }
+  ++pos;
   return pos;
 }
 
 template<typename BtreeKey, typename BtreeVal>
-int BtreeNode<BtreeKey, BtreeVal>::get_prev_active_child(int pos, int64_t version, int64_t* cnt, MultibitSet *index)
+int BtreeNode<BtreeKey, BtreeVal>::get_prev_active_child(int pos)
 {
-  if (version < max_del_version_) {
-    --pos;
-  } else {
-    while(--pos >= 0) {
-      if (!get_tag(pos, index)) {
-        break;
-      }
-      if (OB_NOT_NULL(cnt)) {
-        (*cnt) += estimate_level_weight(level_);
-      }
-    }
-  }
+  --pos;
   return pos;
 }
 
@@ -125,7 +101,7 @@ void BtreeNode<BtreeKey, BtreeVal>::copy(BtreeNode &dest, const int dest_start, 
 {
   if (OB_LIKELY(start < end)) {
     for (int i = 0; i < end - start; ++i) {
-      dest.set_key_value(dest_start + i, get_key(start + i), get_val_with_tag(start + i));
+      dest.set_key_value(dest_start + i, get_key(start + i), get_val(start + i));
       if (dest.is_leaf()) {
         dest.index_.unsafe_insert(dest_start + i, dest_start + i);
       }
@@ -149,63 +125,43 @@ void BtreeNode<BtreeKey, BtreeVal>::copy_and_insert(BtreeNode &dest_node, const 
 }
 
 template<typename BtreeKey, typename BtreeVal>
-uint64_t BtreeNode<BtreeKey, BtreeVal>::check_tag(MultibitSet *index) const
-{
-  uint64_t tag = 1;
-  MultibitSet temp;
-  if (OB_ISNULL(index)) {
-    temp.load(this->index_);
-    index = &temp;
-  }
-  for(int i = 0; i < size(index); i++) {
-    if (0 == get_tag(i, index)) {
-      tag = 0;
-      break;
-    }
-  }
-  return tag;
-}
-
-template<typename BtreeKey, typename BtreeVal>
-void BtreeNode<BtreeKey, BtreeVal>::replace_child(BtreeNode *new_node, const int pos, BtreeNode *child, int64_t del_version)
+void BtreeNode<BtreeKey, BtreeVal>::replace_child(BtreeNode *new_node, const int pos, BtreeNode *child)
 {
   new_node->level_ = level_;
-  new_node->max_del_version_ = std::max(max_del_version_, del_version);
   copy(*new_node, 0, 0, size());
   new_node->set_val(pos, (BtreeVal)child);
 }
 
 template<typename BtreeKey, typename BtreeVal>
-void BtreeNode<BtreeKey, BtreeVal>::replace_child_and_key(BtreeNode *new_node, const int pos, BtreeKey key, BtreeNode *child, int64_t del_version)
+void BtreeNode<BtreeKey, BtreeVal>::replace_child_and_key(BtreeNode *new_node, const int pos, BtreeKey key, BtreeNode *child)
 {
   new_node->level_ = level_;
-  new_node->max_del_version_ = std::max(max_del_version_, del_version);
   copy(*new_node, 0, 0, size());
   new_node->insert_into_node(pos, key, (BtreeVal)child);
 }
 
 template<typename BtreeKey, typename BtreeVal>
-void BtreeNode<BtreeKey, BtreeVal>::split_child_no_overflow(BtreeNode *new_node, const int pos, BtreeKey key_1, BtreeVal val_1,
-                                        BtreeKey key_2, BtreeVal val_2, int64_t del_version)
+void BtreeNode<BtreeKey, BtreeVal>::split_child_no_overflow(BtreeNode *new_node,
+                                                            const int pos,
+                                                            BtreeKey key_1, BtreeVal val_1,
+                                                            BtreeKey key_2, BtreeVal val_2)
 {
   new_node->level_ = level_;
-  new_node->max_del_version_ = std::max(max_del_version_, del_version);
   copy_and_insert(*new_node, 0, size(), pos, key_1, val_1, key_2, val_2);
 }
 
 template<typename BtreeKey, typename BtreeVal>
-void BtreeNode<BtreeKey, BtreeVal>::split_child_cause_recursive_split(BtreeNode *new_node_1, BtreeNode *new_node_2,
-                                                  const int pos,
-                                                  BtreeKey key_1,
-                                                  BtreeVal val_1, BtreeKey key_2, BtreeVal val_2, int64_t del_version)
+void BtreeNode<BtreeKey, BtreeVal>::split_child_cause_recursive_split(BtreeNode *new_node_1,
+                                                                      BtreeNode *new_node_2,
+                                                                      const int pos,
+                                                                      BtreeKey key_1, BtreeVal val_1,
+                                                                      BtreeKey key_2, BtreeVal val_2)
 {
   const int32_t half_limit = is_leaf() ?
                              ((ObKeyBtree *)this->get_host())->update_split_info(pos) :
                              NODE_KEY_COUNT / 2;
   new_node_1->level_ = level_;
   new_node_2->level_ = level_;
-  new_node_1->max_del_version_ = std::max(max_del_version_, del_version);
-  new_node_2->max_del_version_ = std::max(max_del_version_, del_version);
   if (pos < half_limit) {
     copy_and_insert(*new_node_1, 0, half_limit, pos, key_1, val_1, key_2, val_2);
     copy(*new_node_2, 0, half_limit, size());
@@ -323,7 +279,7 @@ int ScanHandle<BtreeKey, BtreeVal>::get(BtreeKey &key, BtreeVal &val)
     ret = OB_ITER_END;
   } else {
     key = leaf->get_key(pos, &this->index_);
-    val = leaf->get_val_with_tag(pos, version_, &this->index_);
+    val = leaf->get_val(pos, &this->index_);
   }
   return ret;
 }
@@ -339,16 +295,18 @@ int ScanHandle<BtreeKey, BtreeVal>::get(BtreeKey &key, BtreeVal &val, bool is_ba
   } else {
     MultibitSet *index = &this->index_;
     key = leaf->get_key(pos, index);
-    val = leaf->get_val_with_tag(pos, version_, index);
+    val = leaf->get_val(pos, index);
     last_key = is_backward? &leaf->get_key(0, index): &leaf->get_key(leaf->size(index) - 1, index);
   }
   return ret;
 }
 
 template<typename BtreeKey, typename BtreeVal>
-int ScanHandle<BtreeKey, BtreeVal>::pop_level_node(const bool is_backward, const int64_t level, const double ratio,
-    const int64_t gap_limit, int64_t &element_count, int64_t &phy_element_count,
-    BtreeKey*& last_key, int64_t &gap_size)
+int ScanHandle<BtreeKey, BtreeVal>::pop_level_node(const bool is_backward,
+                                                   const int64_t level,
+                                                   int64_t &element_count,
+                                                   int64_t &phy_element_count,
+                                                   BtreeKey*& last_key)
 {
   int ret = OB_SUCCESS;
   BtreeNode *node = nullptr;
@@ -366,37 +324,6 @@ int ScanHandle<BtreeKey, BtreeVal>::pop_level_node(const bool is_backward, const
     element_count += cur_node_cnt;
     phy_element_count += cur_node_cnt;
     last_key = is_backward? &node->get_key(0, index): &node->get_key(count - 1, index);
-    if (node->check_tag(index)) {
-      gap_size += cur_node_cnt;
-    } else if (gap_size > 0) {
-      if (!is_backward) {
-        for (int64_t i = 0; i < count; ++i) {
-          if (node->get_tag(i, index)) {
-            ++gap_size;
-          } else {
-            if (gap_size >= gap_limit) {
-              element_count -= static_cast<int64_t>(static_cast<double>(gap_size) * ratio);
-              STORAGE_LOG(TRACE, "found a gap", K(element_count), K(gap_size), K(*last_key));
-            }
-            gap_size = 0;
-            break;
-          }
-        }
-      } else {
-        for (int64_t i = count - 1; i >= 0; --i) {
-          if (node->get_tag(i, index)) {
-            ++gap_size;
-          } else {
-            if (gap_size >= gap_limit) {
-              element_count -= static_cast<int64_t>(static_cast<double>(gap_size) * ratio);
-              STORAGE_LOG(TRACE, "found a gap", K(element_count), K(gap_size), K(*last_key));
-            }
-            gap_size = 0;
-            break;
-          }
-        }
-      }
-    }
   }
   return ret;
 }
@@ -420,7 +347,7 @@ int ScanHandle<BtreeKey, BtreeVal>::pop_level_node(const int64_t level)
 }
 
 template<typename BtreeKey, typename BtreeVal>
-int ScanHandle<BtreeKey, BtreeVal>::find_path(BtreeNode *root, BtreeKey key, int64_t version)
+int ScanHandle<BtreeKey, BtreeVal>::find_path(BtreeNode *root, BtreeKey key)
 {
   int ret = OB_SUCCESS;
   int pos = -1;
@@ -428,8 +355,8 @@ int ScanHandle<BtreeKey, BtreeVal>::find_path(BtreeNode *root, BtreeKey key, int
   bool is_found = false;
   MultibitSet *index = &this->index_;
   index->reset();
-  version_ = version;
   while (OB_NOT_NULL(root) && OB_SUCCESS == ret) {
+    root->prefetch();
     if (!may_exist || is_found) {
       pos = 0;
     } else if (OB_FAIL(root->find_pos(this->get_comp(), key, is_found, pos, index))) {
@@ -459,13 +386,11 @@ int ScanHandle<BtreeKey, BtreeVal>::scan_forward(const int64_t level) {
   int ret = OB_SUCCESS;
   BtreeNode *node = nullptr;
   int pos = 0;
-  int64_t version = -1;
-  int64_t *skip_cnt = nullptr;
   MultibitSet *index = &this->index_;
   while (OB_SUCCESS == ret) {
     if (OB_FAIL(path_.pop(node, pos))) {
       ret = OB_ITER_END;
-    } else if ((pos = node->get_next_active_child(pos, version, skip_cnt, index)) >= node->size(index)) {
+    } else if ((pos = node->get_next_active_child(pos)) >= node->size(index)) {
       // do nothing
     } else {
       path_.push(node, pos);
@@ -473,6 +398,7 @@ int ScanHandle<BtreeKey, BtreeVal>::scan_forward(const int64_t level) {
         break;
       } else {
         BtreeNode* child = (BtreeNode*)node->get_val(pos);
+        child->prefetch();
         if (child->is_leaf()) {
           index->load(child->get_index());
         }
@@ -489,13 +415,11 @@ int ScanHandle<BtreeKey, BtreeVal>::scan_backward(const int64_t level)
   int ret = OB_SUCCESS;
   BtreeNode *node = nullptr;
   int pos = 0;
-  int64_t version = -1;
-  int64_t *skip_cnt = nullptr;
   MultibitSet *index = &this->index_;
   while(OB_SUCCESS == ret) {
     if (OB_FAIL(path_.pop(node, pos))) {
       ret = OB_ITER_END;
-    } else if ((pos = node->get_prev_active_child(pos, version, skip_cnt, index)) < 0) {
+    } else if ((pos = node->get_prev_active_child(pos)) < 0) {
       // do nothing
     } else {
       path_.push(node, pos);
@@ -503,6 +427,7 @@ int ScanHandle<BtreeKey, BtreeVal>::scan_backward(const int64_t level)
         break;
       } else {
         BtreeNode* child = (BtreeNode*)node->get_val(pos);
+        child->prefetch();
         if (child->is_leaf()) {
           index->load(child->get_index());
         }
@@ -514,16 +439,16 @@ int ScanHandle<BtreeKey, BtreeVal>::scan_backward(const int64_t level)
 }
 
 template<typename BtreeKey, typename BtreeVal>
-int ScanHandle<BtreeKey, BtreeVal>::scan_forward(bool skip_inactive, int64_t* skip_cnt) {
+int ScanHandle<BtreeKey, BtreeVal>::scan_forward()
+{
   int ret = OB_SUCCESS;
   BtreeNode* node = nullptr;
   int pos = 0;
-  int64_t version = skip_inactive? version_: 0;
   MultibitSet *index = &this->index_;
   while(OB_SUCCESS == ret) {
     if (OB_FAIL(path_.pop(node, pos))) {
       ret = OB_ITER_END;
-    } else if ((pos = node->get_next_active_child(pos, version, skip_cnt, index)) >= node->size(index)) {
+    } else if ((pos = node->get_next_active_child(pos)) >= node->size(index)) {
       // do nothing
     } else {
       path_.push(node, pos);
@@ -531,6 +456,7 @@ int ScanHandle<BtreeKey, BtreeVal>::scan_forward(bool skip_inactive, int64_t* sk
         break;
       } else {
         BtreeNode* child = (BtreeNode*)node->get_val(pos);
+        child->prefetch();
         if (child->is_leaf()) {
           index->load(child->get_index());
         }
@@ -542,17 +468,16 @@ int ScanHandle<BtreeKey, BtreeVal>::scan_forward(bool skip_inactive, int64_t* sk
 }
 
 template<typename BtreeKey, typename BtreeVal>
-int ScanHandle<BtreeKey, BtreeVal>::scan_backward(bool skip_inactive, int64_t* skip_cnt)
+int ScanHandle<BtreeKey, BtreeVal>::scan_backward()
 {
   int ret = OB_SUCCESS;
   BtreeNode *node = nullptr;
   int pos = 0;
-  int64_t version = skip_inactive? version_: 0;
   MultibitSet *index = &this->index_;
   while(OB_SUCCESS == ret) {
     if (OB_FAIL(path_.pop(node, pos))) {
       ret = OB_ITER_END;
-    } else if ((pos = node->get_prev_active_child(pos, version, skip_cnt, index)) < 0) {
+    } else if ((pos = node->get_prev_active_child(pos)) < 0) {
       // do nothing
     } else {
       path_.push(node, pos);
@@ -560,6 +485,7 @@ int ScanHandle<BtreeKey, BtreeVal>::scan_backward(bool skip_inactive, int64_t* s
         break;
       } else {
         BtreeNode* child = (BtreeNode*)node->get_val(pos);
+        child->prefetch();
         if (child->is_leaf()) {
           index->load(child->get_index());
         }
@@ -574,7 +500,7 @@ template<typename BtreeKey, typename BtreeVal>
 BtreeNode<BtreeKey, BtreeVal> *WriteHandle<BtreeKey, BtreeVal>::alloc_node()
 {
   BtreeNode *p = nullptr;
-  if (OB_NOT_NULL(p = (BtreeNode *)base_.alloc_node(get_is_in_delete()))) {
+  if (OB_NOT_NULL(p = (BtreeNode *)base_.alloc_node())) {
     alloc_list_.push(p);
   }
   return p;
@@ -636,66 +562,37 @@ int WriteHandle<BtreeKey, BtreeVal>::insert_and_split_upward(BtreeKey key, Btree
     ret = insert_into_node(old_node, pos, key, val, new_node_1, new_node_2);
   }
   while (OB_SUCCESS == ret && OB_NOT_NULL(new_node_1)) {
-    uint64_t tag1 = check_tag(new_node_1);
-    uint64_t tag2 = check_tag(new_node_2);
     if (OB_ISNULL(new_node_2)) {
-      BTREE_ASSERT(0 == tag1);
       if (OB_SUCCESS != this->path_.pop(old_node, pos)) {
         new_root = new_node_1;
         new_node_1 = nullptr;
       } else if (pos < 0) {
-        ret = replace_child_and_key(old_node, 0, new_node_1->get_key(0, index), add_tag(new_node_1, tag1), new_node_1, 0);
+        ret = replace_child_and_key(old_node, 0, new_node_1->get_key(0, index), new_node_1, new_node_1);
       } else {
-        if (old_node->get_tag(pos, index) == tag1) {
-          ret = replace_child(old_node, pos, (BtreeVal)add_tag(new_node_1, tag1));
-          new_node_1 = nullptr;
-        } else {
-          ret = replace_child_and_key(old_node, pos, new_node_1->get_key(0, index), add_tag(new_node_1, tag1), new_node_1, 0);
-        }
+        ret = replace_child(old_node, pos, (BtreeVal)new_node_1);
+        new_node_1 = nullptr;
       }
     } else {
-      uint64_t v1 = tag1? new_node_1->get_max_del_version(): 0;
-      uint64_t v2 = tag2? new_node_2->get_max_del_version(): 0;
       if (OB_SUCCESS != this->path_.pop(old_node, pos)) {
-        ret = this->make_new_root(new_root, new_node_1->get_key(0, index), add_tag(new_node_1, tag1), new_node_2->get_key(0), add_tag(new_node_2, tag2), (int16_t)(new_node_1->get_level() + 1), std::max(v1, v2));
+        ret = this->make_new_root(new_root,
+                                  new_node_1->get_key(0, index),
+                                  new_node_1,
+                                  new_node_2->get_key(0),
+                                  new_node_2,
+                                  (int16_t)(new_node_1->get_level() + 1));
         new_node_1 = nullptr;
         new_node_2 = nullptr;
       } else {
-        ret = split_child(old_node, std::max(0, pos), new_node_1->get_key(0, index),
-                          (BtreeVal)add_tag(new_node_1, tag1), new_node_2->get_key(0, index),
-                          (BtreeVal)add_tag(new_node_2, tag2), new_node_1, new_node_2, std::max(v1, v2));
+        ret = split_child(old_node,
+                          std::max(0, pos),
+                          new_node_1->get_key(0, index),
+                          (BtreeVal)new_node_1,
+                          new_node_2->get_key(0, index),
+                          (BtreeVal)new_node_2,
+                          new_node_1,
+                          new_node_2);
       }
     }
-  }
-  return ret;
-}
-
-template<typename BtreeKey, typename BtreeVal>
-int WriteHandle<BtreeKey, BtreeVal>::tag_delete(BtreeKey key, BtreeVal& val, int64_t version, BtreeNode *&new_root)
-{
-  int ret = OB_SUCCESS;
-  BtreeNode *old_node = nullptr;
-  int pos = -1;
-  BtreeNode* new_node = nullptr;
-  int iret = this->path_.pop(old_node, pos);
-  UNUSED(iret);
-  if (OB_SUCC(tag_delete_on_leaf(old_node, pos, key, val, version, new_node))) {
-    ret = tag_upward(new_node, new_root);
-  }
-  return ret;
-}
-
-template<typename BtreeKey, typename BtreeVal>
-int WriteHandle<BtreeKey, BtreeVal>::tag_insert(BtreeKey key, BtreeNode *&new_root)
-{
-  int ret = OB_SUCCESS;
-  BtreeNode *old_node = nullptr;
-  int pos = -1;
-  BtreeNode *new_node = nullptr;
-  int iret = this->path_.pop(old_node, pos); // pop may failed, old_node is allowd to be NULL
-  UNUSED(iret);
-  if (OB_SUCC(tag_insert_on_leaf(old_node, pos, key, new_node))) {
-    ret = tag_upward(new_node, new_root);
   }
   return ret;
 }
@@ -716,14 +613,12 @@ int WriteHandle<BtreeKey, BtreeVal>::insert_into_node(BtreeNode *old_node, int p
     // another thread has finished a insert, we should retry.
     ret = OB_EAGAIN;
   } else if (pos < 0
-             || old_node->is_overflow(1, &this->index_)
-             || (OB_SUCCESS == (path_.get(path_.get_root_level() - 1, tmp_node, tmp_pos))
-                 && tmp_node->get_tag(tmp_pos, &this->index_) == 1)) {
+             || old_node->is_overflow(1, &this->index_)) {
     // if father node needs to be updated, we can't append directly because of the possibility of failure of updating father node.
     BtreeKey dummy_key;
     ret = split_child(old_node, pos, pos < 0 ? dummy_key : old_node->get_key(pos, &this->index_),
-                      pos < 0 ? nullptr : old_node->get_val_with_tag(pos, &this->index_),
-                      key, val, new_node_1, new_node_2, 0);
+                      pos < 0 ? nullptr : old_node->get_val(pos, &this->index_),
+                      key, val, new_node_1, new_node_2);
   } else {
     old_node->set_spin();
     old_node->set_key_value(count, key, val);
@@ -753,95 +648,7 @@ int WriteHandle<BtreeKey, BtreeVal>::try_wrlock(BtreeNode *node)
 }
 
 template<typename BtreeKey, typename BtreeVal>
-int WriteHandle<BtreeKey, BtreeVal>::tag_delete_on_leaf(BtreeNode* old_node, int pos, BtreeKey key, BtreeVal& val, int64_t version, BtreeNode*& new_node)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(key);
-  if (OB_ISNULL(old_node) || !this->path_.get_is_found()) {
-    ret = OB_ENTRY_NOT_EXIST;
-  } else {
-    val = old_node->get_val(pos, &this->index_);
-    ret = tag_leaf(old_node, pos, new_node, 1, version);
-  }
-  return ret;
-}
-
-template<typename BtreeKey, typename BtreeVal>
-int WriteHandle<BtreeKey, BtreeVal>::tag_insert_on_leaf(BtreeNode* old_node, int pos, BtreeKey key, BtreeNode*& new_node)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(key);
-  if (OB_ISNULL(old_node) || !this->path_.get_is_found()) {
-    ret = OB_ENTRY_NOT_EXIST;
-  } else {
-    ret = tag_leaf(old_node, pos, new_node, 0, 0);
-  }
-  return ret;
-}
-
-template<typename BtreeKey, typename BtreeVal>
-int WriteHandle<BtreeKey, BtreeVal>::tag_upward(BtreeNode* new_node, BtreeNode*& new_root)
-{
-  int ret = OB_SUCCESS;
-  BtreeNode* old_node = nullptr;
-  int pos = -1;
-  MultibitSet *index = &this->index_;
-  while (OB_SUCCESS == ret && OB_NOT_NULL(new_node)) {
-    uint64_t tag = new_node->check_tag(index);
-    if (OB_SUCCESS != this->path_.pop(old_node, pos)) {
-      new_root = new_node;
-      new_node = nullptr;
-    } else {
-      if (old_node->get_tag(pos, index) == tag) {
-        ret = replace_child(old_node, pos, (BtreeVal)add_tag(new_node, tag));
-        new_node = nullptr;
-      } else {
-        ret = replace_child_by_copy(old_node, pos, (BtreeVal)add_tag(new_node, tag), new_node->get_max_del_version(), new_node);
-      }
-    }
-  }
-  return ret;
-}
-
-template<typename BtreeKey, typename BtreeVal>
-int WriteHandle<BtreeKey, BtreeVal>::tag_leaf(BtreeNode *old_node, const int pos, BtreeNode*& new_node, uint64_t tag, int64_t version)
-{
-  int ret = OB_SUCCESS;
-  uint64_t old_tag = 1;
-  int tmp_pos = -1;
-  BtreeNode * tmp_node = nullptr;
-  if (OB_FAIL(try_wrlock(old_node))) {
-    // do nothing
-  } else if (old_node->is_leaf() && old_node->size() != this->index_.size()) {
-    ret = OB_EAGAIN;
-  } else {
-    // Wrlocked and checked before. No need to use index anymore below.
-    for (int i = 0; i < old_node->size(); ++i) {
-      if (i != pos) {
-        old_tag &= old_node->get_tag(i);
-      }
-    }
-    if (OB_SUCCESS == (path_.get(path_.get_root_level() - 1, tmp_node, tmp_pos))
-        && tmp_node->get_tag(tmp_pos) == (old_tag & tag)) {
-      old_node->set_spin();
-      // if no need to tag_upward, then unlocked.
-      old_node->set_max_del_version(std::max(old_node->get_max_del_version(), version));
-      // Update max_del_version firstly to keep not reading extra tag.
-      old_node->set_val(pos, (BtreeVal)add_tag((BtreeNode*)old_node->get_val(pos), tag));
-      // When it's fast unlocking, DO NOT retire.
-      UNUSED(retire_list_.pop());
-      old_node->wrunlock();
-    } else if (OB_ISNULL(new_node = alloc_node())) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-    } else {
-      old_node->replace_child(new_node, pos, add_tag((BtreeNode*)old_node->get_val(pos, &this->index_), tag), version);
-    }
-  }
-  return ret;
-}
-
-template<typename BtreeKey, typename BtreeVal>
-int WriteHandle<BtreeKey, BtreeVal>::replace_child_by_copy(BtreeNode *old_node, const int pos, BtreeVal val, int64_t version, BtreeNode*& new_node)
+int WriteHandle<BtreeKey, BtreeVal>::replace_child_by_copy(BtreeNode *old_node, const int pos, BtreeVal val, BtreeNode*& new_node)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(try_wrlock(old_node))) {
@@ -851,7 +658,7 @@ int WriteHandle<BtreeKey, BtreeVal>::replace_child_by_copy(BtreeNode *old_node, 
   } else if (OB_ISNULL(new_node = alloc_node())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
-    old_node->replace_child(new_node, pos, (BtreeNode*)val, version);
+    old_node->replace_child(new_node, pos, (BtreeNode*)val);
   }
   return ret;
 }
@@ -872,7 +679,11 @@ int WriteHandle<BtreeKey, BtreeVal>::replace_child(BtreeNode *old_node, const in
 }
 
 template<typename BtreeKey, typename BtreeVal>
-int WriteHandle<BtreeKey, BtreeVal>::replace_child_and_key(BtreeNode *old_node, const int pos, BtreeKey key, BtreeNode *child, BtreeNode *&new_node, int64_t version)
+int WriteHandle<BtreeKey, BtreeVal>::replace_child_and_key(BtreeNode *old_node,
+                                                           const int pos,
+                                                           BtreeKey key,
+                                                           BtreeNode *child,
+                                                           BtreeNode *&new_node)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(old_node) || OB_ISNULL(child)) {
@@ -884,13 +695,18 @@ int WriteHandle<BtreeKey, BtreeVal>::replace_child_and_key(BtreeNode *old_node, 
   } else if (OB_ISNULL(new_node = alloc_node())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
-    old_node->replace_child_and_key(new_node, pos, key, child, version);
+    old_node->replace_child_and_key(new_node, pos, key, child);
   }
   return ret;
 }
 
 template<typename BtreeKey, typename BtreeVal>
-int WriteHandle<BtreeKey, BtreeVal>::make_new_root(BtreeNode *&root, BtreeKey key1, BtreeNode *node_1, BtreeKey key2, BtreeNode *node_2, int16_t level, int64_t version)
+int WriteHandle<BtreeKey, BtreeVal>::make_new_root(BtreeNode *&root,
+                                                   BtreeKey key1,
+                                                   BtreeNode *node_1,
+                                                   BtreeKey key2,
+                                                   BtreeNode *node_2,
+                                                   int16_t level)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(node_1) || OB_ISNULL(node_2)) {
@@ -898,14 +714,18 @@ int WriteHandle<BtreeKey, BtreeVal>::make_new_root(BtreeNode *&root, BtreeKey ke
   } else if (OB_ISNULL(root = alloc_node())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
-    ret = root->make_new_root(key1, node_1, key2, node_2, level, version);
+    ret = root->make_new_root(key1, node_1, key2, node_2, level);
   }
   return ret;
 }
 
 template<typename BtreeKey, typename BtreeVal>
-int WriteHandle<BtreeKey, BtreeVal>::split_child(BtreeNode *old_node, const int pos, BtreeKey key_1, BtreeVal val_1, BtreeKey key_2,
-                BtreeVal val_2, BtreeNode *&new_node_1, BtreeNode *&new_node_2, int64_t version)
+int WriteHandle<BtreeKey, BtreeVal>::split_child(BtreeNode *old_node,
+                                                 const int pos,
+                                                 BtreeKey key_1, BtreeVal val_1,
+                                                 BtreeKey key_2, BtreeVal val_2,
+                                                 BtreeNode *&new_node_1,
+                                                 BtreeNode *&new_node_2)
 {
   int ret = OB_SUCCESS;
   new_node_2 = nullptr;
@@ -917,12 +737,12 @@ int WriteHandle<BtreeKey, BtreeVal>::split_child(BtreeNode *old_node, const int 
     if (OB_ISNULL(new_node_1 = alloc_node()) || OB_ISNULL(new_node_2 = alloc_node())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
-      old_node->split_child_cause_recursive_split(new_node_1, new_node_2, pos, key_1, val_1, key_2, val_2, version);
+      old_node->split_child_cause_recursive_split(new_node_1, new_node_2, pos, key_1, val_1, key_2, val_2);
     }
   } else if (OB_ISNULL(new_node_1 = alloc_node())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
-    old_node->split_child_no_overflow(new_node_1, pos, key_1, val_1, key_2, val_2, version);
+    old_node->split_child_no_overflow(new_node_1, pos, key_1, val_1, key_2, val_2);
   }
   return ret;
 }
@@ -943,14 +763,16 @@ void Iterator<BtreeKey, BtreeVal>::reset()
 }
 
 template<typename BtreeKey, typename BtreeVal>
-int Iterator<BtreeKey, BtreeVal>::set_key_range(const BtreeKey min_key, const bool start_exclude,
-                            const BtreeKey max_key, const bool end_exclude, int64_t version)
+int Iterator<BtreeKey, BtreeVal>::set_key_range(const BtreeKey min_key,
+                                                const bool start_exclude,
+                                                const BtreeKey max_key,
+                                                const bool end_exclude)
 {
   int ret = OB_SUCCESS;
   int cmp = 0;
   if (OB_FAIL(scan_handle_.acquire_ref())) {
     OB_LOG(ERROR, "acquire_ref fail", K(ret));
-  } else if (OB_FAIL(scan_handle_.find_path(ATOMIC_LOAD(&btree_.root_), min_key, version))) {
+  } else if (OB_FAIL(scan_handle_.find_path(ATOMIC_LOAD(&btree_.root_), min_key))) {
     // do nothing
   } else {
     ret = comp_.compare(max_key, min_key, cmp);
@@ -1019,9 +841,13 @@ int Iterator<BtreeKey, BtreeVal>::next_on_level(const int64_t level, BtreeKey& k
 }
 
 template<typename BtreeKey, typename BtreeVal>
-int Iterator<BtreeKey, BtreeVal>::estimate_one_level(const int64_t level, const int64_t start_batch_count, const int64_t end_batch_count,
-                       const int64_t max_node_count, const int64_t skip_range_limit, const double gap_ratio,
-                       int64_t &level_physical_row_count, int64_t &level_element_count, int64_t &node_count)
+int Iterator<BtreeKey, BtreeVal>::estimate_one_level(const int64_t level,
+                                                     const int64_t start_batch_count,
+                                                     const int64_t end_batch_count,
+                                                     const int64_t max_node_count,
+                                                     int64_t &level_physical_row_count,
+                                                     int64_t &level_element_count,
+                                                     int64_t &node_count)
 {
   int ret = OB_SUCCESS;
   node_count = 0;
@@ -1030,26 +856,25 @@ int Iterator<BtreeKey, BtreeVal>::estimate_one_level(const int64_t level, const 
   int64_t batch_physical_row_count= 0;
   int64_t batch_element_count = 0;
   int64_t batch_count = start_batch_count;
-  int64_t gap_size = 0;
+
   while (node_count < max_node_count
       && OB_SUCC(iter_next_batch_level_node(batch_physical_row_count,
-          batch_count, level, gap_size, skip_range_limit, batch_element_count, gap_ratio))) {
+                                            batch_count,
+                                            level,
+                                            batch_element_count))) {
     STORAGE_LOG(TRACE, "iter one batch", K(batch_physical_row_count), K(batch_count), K(level),
-        K(gap_size), K(batch_element_count), K(level_physical_row_count), K(level_element_count),
-        K(node_count));
+                K(batch_element_count), K(level_physical_row_count), K(level_element_count),
+                K(node_count));
     level_physical_row_count += batch_physical_row_count;
     level_element_count += batch_element_count;
     node_count += batch_count;
     batch_count = batch_count * 2 >= end_batch_count ? end_batch_count : batch_count * 2;
   }
-  if (gap_size >= skip_range_limit) {
-    level_physical_row_count -= static_cast<int64_t>(static_cast<double>(gap_size) * gap_ratio);
-  }
   return ret;
 }
 
 template<typename BtreeKey, typename BtreeVal>
-int Iterator<BtreeKey, BtreeVal>::estimate_element_count(int64_t &physical_row_count, int64_t &element_count, const double ratio)
+int Iterator<BtreeKey, BtreeVal>::estimate_element_count(int64_t &physical_row_count, int64_t &element_count)
 {
   int ret = OB_SUCCESS;
   static const int64_t MAX_SAMPLE_LEAF_COUNT = 500;
@@ -1057,11 +882,15 @@ int Iterator<BtreeKey, BtreeVal>::estimate_element_count(int64_t &physical_row_c
   int64_t avg_element_count_per_leaf = 0;
   int64_t level_element_count = 0;
   int64_t level_physical_row_count = 0;
-  int64_t limit = OB_SKIP_RANGE_LIMIT;
   physical_row_count = 0;
   element_count = 0;
-  if (OB_FAIL(estimate_one_level(0, 1, 1024, MAX_SAMPLE_LEAF_COUNT, limit, ratio,
-        level_physical_row_count, level_element_count, node_count))) {
+  if (OB_FAIL(estimate_one_level(0,    /*level*/
+                                 1,    /*start_batch_count*/
+                                 1024, /*end_batch_count*/
+                                 MAX_SAMPLE_LEAF_COUNT,
+                                 level_physical_row_count,
+                                 level_element_count,
+                                 node_count))) {
     if (OB_ITER_END != ret) {
       STORAGE_LOG(WARN, "failed to estimate level 0", K(ret));
     }
@@ -1071,9 +900,13 @@ int Iterator<BtreeKey, BtreeVal>::estimate_element_count(int64_t &physical_row_c
   STORAGE_LOG(TRACE, "finish sample leaf level", K(physical_row_count), K(element_count), K(node_count));
   if (OB_SUCCESS == ret && node_count >= MAX_SAMPLE_LEAF_COUNT) {
     avg_element_count_per_leaf = MAX(std::lround(static_cast<double>(level_element_count) / static_cast<double>(node_count)), 1);
-    limit = limit / avg_element_count_per_leaf + 1;
-    if (OB_FAIL(estimate_one_level(1, 64, 1024, INT64_MAX,
-            limit, ratio, level_physical_row_count, level_element_count, node_count))) {
+    if (OB_FAIL(estimate_one_level(1,         /*level*/
+                                   64,        /*start_batch_count*/
+                                   1024,      /*end_batch_count*/
+                                   INT64_MAX, /*max_node_count*/
+                                   level_physical_row_count,
+                                   level_element_count,
+                                   node_count))) {
       if (OB_ITER_END != ret) {
         STORAGE_LOG(WARN, "failed to estimate level 1", K(ret));
       }
@@ -1092,7 +925,7 @@ template<typename BtreeKey, typename BtreeVal>
 int Iterator<BtreeKey, BtreeVal>::iter_next(BtreeKey &key, BtreeVal &value)
 {
   int ret = OB_SUCCESS;
-  bool skip_inactive = false;
+
   BtreeKey* jump_key = nullptr;
   if (is_iter_end_) {
     ret = OB_ITER_END;
@@ -1105,8 +938,9 @@ int Iterator<BtreeKey, BtreeVal>::iter_next(BtreeKey &key, BtreeVal &value)
     } else if (cmp < 0) {
       ret = OB_ITER_END;
     } else if (cmp > 0) {
-      if (OB_SUCCESS != (scan_backward_ ? scan_handle_.scan_backward(skip_inactive) :
-                            scan_handle_.scan_forward(skip_inactive))) {
+      if (OB_SUCCESS != (scan_backward_ ?
+                         scan_handle_.scan_backward() :
+                         scan_handle_.scan_forward())) {
         is_iter_end_ = true;
       }
     } else if (cmp == 0) {
@@ -1123,10 +957,10 @@ int Iterator<BtreeKey, BtreeVal>::iter_next(BtreeKey &key, BtreeVal &value)
 }
 
 template<typename BtreeKey, typename BtreeVal>
-int Iterator<BtreeKey, BtreeVal>::iter_next_batch_level_node(int64_t &element_count, const int64_t batch_count,
-                                         const int64_t level, int64_t &gap_size,
-                                         const int64_t gap_limit, int64_t &phy_element_count,
-                                         const double ratio)
+int Iterator<BtreeKey, BtreeVal>::iter_next_batch_level_node(int64_t &element_count,
+                                                             const int64_t batch_count,
+                                                             const int64_t level,
+                                                             int64_t &phy_element_count)
 {
   int ret = OB_SUCCESS;
   BtreeKey* jump_key = nullptr;
@@ -1138,9 +972,11 @@ int Iterator<BtreeKey, BtreeVal>::iter_next_batch_level_node(int64_t &element_co
     ret = OB_ITER_END;
   } else {
     while (OB_SUCCESS == ret && cur_level_count < batch_count && !is_iter_end_) {
-      if (OB_FAIL(scan_handle_.pop_level_node(
-                  scan_backward_, level, ratio, gap_limit, element_count, phy_element_count,
-                  jump_key, gap_size))) {
+      if (OB_FAIL(scan_handle_.pop_level_node(scan_backward_,
+                                              level,
+                                              element_count,
+                                              phy_element_count,
+                                              jump_key))) {
       } else {
         // rowkey comparation is very expensive, so we compare rowkey for batch leafs
         if (++cur_level_count == batch_count) {
@@ -1153,18 +989,14 @@ int Iterator<BtreeKey, BtreeVal>::iter_next_batch_level_node(int64_t &element_co
           // do nothing
         } else if (cmp < 0) {
           is_iter_end_ = true;
-          if (gap_size >= gap_limit) {
-            element_count -= static_cast<int64_t>(static_cast<double>(gap_size) * ratio);
-            STORAGE_LOG(DEBUG, "found a gap", K(element_count), K(gap_size), K(*jump_key));
-          }
-          gap_size = 0;
           element_count /= 2; // FIXME: when the last rowkey in the batch leaf is not in the range,
                               // we only return the half of element count.
           phy_element_count /= 2;
         } else if (cmp > 0) {
           // middle leaf
-          if (OB_SUCCESS != (scan_backward_ ? scan_handle_.scan_backward(level) :
-                                scan_handle_.scan_forward(level))) {
+          if (OB_SUCCESS != (scan_backward_ ?
+                             scan_handle_.scan_backward(level) :
+                             scan_handle_.scan_forward(level))) {
             is_iter_end_ = true;
           }
         } else if (cmp == 0) {
@@ -1249,7 +1081,6 @@ void BtreeIterator<BtreeKey, BtreeVal>::reset()
 {
   kv_queue_.reset();
   is_iter_end_ = false;
-  version_ = INT64_MAX;
   end_exclude_ = false;
   start_exclude_ = false;
   new(&end_key_)BtreeKey();
@@ -1262,8 +1093,10 @@ void BtreeIterator<BtreeKey, BtreeVal>::reset()
 }
 
 template<typename BtreeKey, typename BtreeVal>
-int BtreeIterator<BtreeKey, BtreeVal>::set_key_range(const BtreeKey min_key, const bool start_exclude,
-                                 const BtreeKey max_key, const bool end_exclude, int64_t version)
+int BtreeIterator<BtreeKey, BtreeVal>::set_key_range(const BtreeKey min_key,
+                                                     const bool start_exclude,
+                                                     const BtreeKey max_key,
+                                                     const bool end_exclude)
 {
   int ret = OB_SUCCESS;
   int cmp = 0;
@@ -1273,7 +1106,6 @@ int BtreeIterator<BtreeKey, BtreeVal>::set_key_range(const BtreeKey min_key, con
   end_key_ = max_key;
   start_exclude_ = start_exclude;
   end_exclude_ = end_exclude;
-  version_ = version;
   is_iter_end_ = false;
   return ret;
 }
@@ -1308,8 +1140,10 @@ int BtreeIterator<BtreeKey, BtreeVal>::scan_batch()
   int ret = OB_SUCCESS;
   if (is_iter_end_) {
     ret = OB_ITER_END;
-  } else if (OB_FAIL(iter_->set_key_range(start_key_, start_exclude_, end_key_,
-                                          end_exclude_, version_))) {
+  } else if (OB_FAIL(iter_->set_key_range(start_key_,
+                                          start_exclude_,
+                                          end_key_,
+                                          end_exclude_))) {
     // do nothing
   } else {
     BtreeKV item;
@@ -1362,38 +1196,6 @@ BtreeNode<BtreeKey, BtreeVal>* BtreeNodeList<BtreeKey, BtreeVal>::load_lock() {
   while(LOCK == (tail = ATOMIC_TAS(&tail_, LOCK)))
     sched_yield();
   return tail;
-}
-
-template<typename BtreeKey, typename BtreeVal>
-int64_t BtreeNodeAllocator<BtreeKey, BtreeVal>::push_idx()
-{
-  RLOCAL(int64_t, push_idx);
-  if (0 == push_idx) {
-    push_idx = icpu_id();
-  }
-  return (push_idx++) % MAX_LIST_COUNT; 
-}
-
-template<typename BtreeKey, typename BtreeVal>
-int64_t BtreeNodeAllocator<BtreeKey, BtreeVal>::pop_idx()
-{
-  RLOCAL(int64_t, pop_idx);
-  if (0 == pop_idx) {
-    pop_idx = icpu_id();
-  }
-  return (pop_idx++) % MAX_LIST_COUNT; 
-}
-
-template<typename BtreeKey, typename BtreeVal>
-BtreeNode<BtreeKey, BtreeVal> *BtreeNodeAllocator<BtreeKey, BtreeVal>::alloc_node(const bool is_emergency)
-{
-  BtreeNode *p = nullptr;
-  int ret = OB_SUCCESS;
-  UNUSED(is_emergency);
-  if (OB_FAIL(pop(p))) {
-    OB_LOG(WARN, "alloc_block fail", K(get_allocated()));
-  }
-  return p;
 }
 
 template<typename BtreeKey, typename BtreeVal>
@@ -1455,10 +1257,12 @@ void BtreeRawIterator<BtreeKey, BtreeVal>::reset()
 }
 
 template<typename BtreeKey, typename BtreeVal>
-int BtreeRawIterator<BtreeKey, BtreeVal>::set_key_range(const BtreeKey min_key, const bool start_exclude,
-                                    const BtreeKey max_key, const bool end_exclude, int64_t version)
+int BtreeRawIterator<BtreeKey, BtreeVal>::set_key_range(const BtreeKey min_key,
+                                                        const bool start_exclude,
+                                                        const BtreeKey max_key,
+                                                        const bool end_exclude)
 {
-  return iter_->set_key_range(min_key, start_exclude, max_key, end_exclude, version);
+  return iter_->set_key_range(min_key, start_exclude, max_key, end_exclude);
 }
 
 template<typename BtreeKey, typename BtreeVal>
@@ -1575,14 +1379,14 @@ int BtreeRawIterator<BtreeKey, BtreeVal>::split_range(int64_t top_level,
 }
 
 template<typename BtreeKey, typename BtreeVal>
-int BtreeRawIterator<BtreeKey, BtreeVal>::estimate_element_count(int64_t &physical_row_count, int64_t &element_count, const double ratio)
+int BtreeRawIterator<BtreeKey, BtreeVal>::estimate_element_count(int64_t &physical_row_count, int64_t &element_count)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(iter_)) {
     physical_row_count = 0;
     element_count = 0;
     ret = OB_ITER_END;
-  } else if (OB_FAIL(iter_->estimate_element_count(physical_row_count, element_count, ratio))) {
+  } else if (OB_FAIL(iter_->estimate_element_count(physical_row_count, element_count))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       ret = OB_ERR_UNEXPECTED;
     }
@@ -1667,59 +1471,6 @@ int ObKeyBtree<BtreeKey, BtreeVal>::destroy(const bool is_batch_destroy)
 }
 
 template<typename BtreeKey, typename BtreeVal>
-int ObKeyBtree<BtreeKey, BtreeVal>::del(const BtreeKey key, BtreeVal &value, int64_t version)
-{
-  int ret = OB_EAGAIN;
-  while (OB_EAGAIN == ret) {
-    BtreeNode *old_root = nullptr;
-    BtreeNode *new_root = nullptr;
-    WriteHandle handle(*this);
-    handle.get_is_in_delete() = true;
-    if (OB_FAIL(handle.acquire_ref())) {
-      // do nothing
-    } else if (OB_FAIL(handle.find_path(old_root = ATOMIC_LOAD(&root_), key))) {
-      // do nothing
-    } else if (OB_FAIL(handle.tag_delete(key, value, version, new_root = old_root))) {
-      // do nothing
-    } else if (old_root != new_root) {
-      if (!ATOMIC_BCAS(&root_, old_root, new_root)) {
-        ret = OB_EAGAIN;
-      }
-    }
-    handle.release_ref();
-    handle.retire(ret);
-  }
-  return ret;
-}
-
-template<typename BtreeKey, typename BtreeVal>
-int ObKeyBtree<BtreeKey, BtreeVal>::re_insert(const BtreeKey key, BtreeVal value)
-{
-  int ret = OB_EAGAIN;
-  UNUSED(value);
-  while (OB_EAGAIN == ret) {
-    BtreeNode *old_root = nullptr;
-    BtreeNode *new_root = nullptr;
-    WriteHandle handle(*this);
-    handle.get_is_in_delete() = true;
-    if (OB_FAIL(handle.acquire_ref())) {
-      OB_LOG(ERROR, "acquire_ref fail", K(ret));
-    } else if (OB_FAIL(handle.find_path(old_root = ATOMIC_LOAD(&root_), key))) {
-      OB_LOG(ERROR, "re_insert fail", K(ret));
-    } else if (OB_FAIL(handle.tag_insert(key, new_root = old_root))) {
-      // do nothing
-    } else if (old_root != new_root) {
-      if (!ATOMIC_BCAS(&root_, old_root, new_root)) {
-        ret = OB_EAGAIN;
-      }
-    }
-    handle.release_ref();
-    handle.retire(ret);
-  }
-  return ret;
-}
-
-template<typename BtreeKey, typename BtreeVal>
 int ObKeyBtree<BtreeKey, BtreeVal>::insert(const BtreeKey key, BtreeVal &value)
 {
   int ret = OB_SUCCESS;
@@ -1776,36 +1527,42 @@ int ObKeyBtree<BtreeKey, BtreeVal>::get(const BtreeKey key, BtreeVal &value)
 }
 
 template<typename BtreeKey, typename BtreeVal>
-int ObKeyBtree<BtreeKey, BtreeVal>::set_key_range(BtreeIterator &iter, const BtreeKey min_key, const bool start_exclude,
-                              const BtreeKey max_key, const bool end_exclude, int64_t version)
+int ObKeyBtree<BtreeKey, BtreeVal>::set_key_range(BtreeIterator &iter,
+                                                  const BtreeKey min_key,
+                                                  const bool start_exclude,
+                                                  const BtreeKey max_key,
+                                                  const bool end_exclude)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(iter.init(*this))) {
     // do nothing
-  } else if (OB_FAIL(iter.set_key_range(min_key, start_exclude, max_key, end_exclude, version))) {
+  } else if (OB_FAIL(iter.set_key_range(min_key, start_exclude, max_key, end_exclude))) {
     // do nothing
   }
   return ret;
 }
 
 template<typename BtreeKey, typename BtreeVal>
-int ObKeyBtree<BtreeKey, BtreeVal>::set_key_range(BtreeRawIterator &iter, const BtreeKey min_key, const bool start_exclude,
-                              const BtreeKey max_key, const bool end_exclude, int64_t version)
+int ObKeyBtree<BtreeKey, BtreeVal>::set_key_range(BtreeRawIterator &iter,
+                                                  const BtreeKey min_key,
+                                                  const bool start_exclude,
+                                                  const BtreeKey max_key,
+                                                  const bool end_exclude)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(iter.init(*this))) {
     // do nothing
-  } else if (OB_FAIL(iter.set_key_range(min_key, start_exclude, max_key, end_exclude, version))) {
+  } else if (OB_FAIL(iter.set_key_range(min_key, start_exclude, max_key, end_exclude))) {
     // do nothing
   }
   return ret;
 }
 
 template<typename BtreeKey, typename BtreeVal>
-BtreeNode<BtreeKey, BtreeVal> *ObKeyBtree<BtreeKey, BtreeVal>::alloc_node(const bool is_emergency)
+BtreeNode<BtreeKey, BtreeVal> *ObKeyBtree<BtreeKey, BtreeVal>::alloc_node()
 {
   BtreeNode *p = nullptr;
-  if (OB_NOT_NULL(p = (BtreeNode *)node_allocator_.alloc_node(is_emergency))) {
+  if (OB_NOT_NULL(p = (BtreeNode *)node_allocator_.alloc_node())) {
     p->reset();
     p->set_host((void *)this);
   }
