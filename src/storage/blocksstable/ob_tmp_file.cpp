@@ -68,6 +68,9 @@ ObTmpFileIOHandle::ObTmpFileIOHandle()
     last_fd_(OB_INVALID_FD),
     last_extent_id_(0)
 {
+  io_handles_.set_attr(ObMemAttr(MTL_ID(), "TMP_IO_HDL"));
+  page_cache_handles_.set_attr(ObMemAttr(MTL_ID(), "TMP_PCACHE_HDL"));
+  block_cache_handles_.set_attr(ObMemAttr(MTL_ID(), "TMP_BCACHE_HDL"));
 }
 
 ObTmpFileIOHandle::~ObTmpFileIOHandle()

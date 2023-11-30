@@ -310,7 +310,7 @@ int ObDDLTableMergeTask::process()
   ObTableStoreIterator ddl_table_iter;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   const uint64_t tenant_id = MTL_ID();
-  common::ObArenaAllocator allocator("DDLMergeTask");
+  common::ObArenaAllocator allocator("DDLMergeTask", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObSSTable compact_sstable;
   ObSSTable *sstable = nullptr;
   bool skip_major_process = false;
@@ -506,7 +506,7 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
   int ret = OB_SUCCESS;
   data_desc.reset();
   ObLSService *ls_service = MTL(ObLSService *);
-  ObArenaAllocator tmp_arena("DDLIdxDescTmp");
+  ObArenaAllocator tmp_arena("DDLIdxDescTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObStorageSchema *storage_schema = nullptr;
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   const ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
@@ -662,7 +662,7 @@ int ObTabletDDLUtil::create_ddl_sstable(ObTablet &tablet,
                                         blocksstable::ObSSTable &sstable)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator tmp_arena("CreateDDLSstTmp");
+  ObArenaAllocator tmp_arena("CreateDDLSstTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObStorageSchema *storage_schema = nullptr;
   SMART_VAR(ObSSTableMergeRes, res) {
     if (OB_UNLIKELY(nullptr == sstable_index_builder || !ddl_param.is_valid())) {
@@ -769,7 +769,7 @@ int ObTabletDDLUtil::update_ddl_table_store(ObTablet &tablet,
     ObLSService *ls_service = MTL(ObLSService *);
     ObLSHandle ls_handle;
     ObTabletHandle tablet_handle;
-    ObArenaAllocator allocator;
+    ObArenaAllocator allocator("DDLUtil_update", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObStorageSchema *tablet_storage_schema = nullptr;
     if (OB_FAIL(ls_service->get_ls(ddl_param.ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
       LOG_WARN("get ls failed", K(ret), K(ddl_param));
@@ -818,7 +818,7 @@ int ObTabletDDLUtil::compact_ddl_sstable(ObTablet &tablet,
                                          blocksstable::ObSSTable &sstable)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator arena;
+  ObArenaAllocator arena("compact_sst", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObBlockMetaTree meta_tree;
   ObArray<const ObDataMacroBlockMeta *> sorted_metas;
   bool is_data_complete = false;

@@ -43,8 +43,10 @@ ObDirectLoadInsertTableParam::ObDirectLoadInsertTableParam()
     rowkey_column_count_(0),
     column_count_(0),
     online_opt_stat_gather_(false),
-    is_heap_table_(false)
+    is_heap_table_(false),
+    ls_partition_ids_()
 {
+  ls_partition_ids_.set_attr(ObMemAttr(MTL_ID(), "DLITP_ids"));
 }
 
 ObDirectLoadInsertTableParam::~ObDirectLoadInsertTableParam()

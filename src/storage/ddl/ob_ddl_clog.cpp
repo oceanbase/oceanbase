@@ -138,7 +138,7 @@ void ObDDLStartClogCb::try_release()
 
 ObDDLMacroBlockClogCb::ObDDLMacroBlockClogCb()
   : is_inited_(false), status_(), ls_id_(), redo_info_(), macro_block_id_(),
-    arena_("ddl_clog_cb", OB_MALLOC_BIG_BLOCK_SIZE), data_buffer_lock_(), is_data_buffer_freed_(false), ddl_kv_mgr_handle_()
+    data_buffer_lock_(), is_data_buffer_freed_(false), ddl_kv_mgr_handle_()
 {
 
 }
