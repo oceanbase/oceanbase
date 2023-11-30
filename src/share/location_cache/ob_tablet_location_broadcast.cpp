@@ -198,7 +198,7 @@ int ObTabletLocationSender::submit_broadcast_task(const ObTabletLocationBroadcas
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check_inner_stat", KR(ret), K(task));
-  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_2_0) {
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_1_2) {
     // skip
   } else if (0 == get_rate_limit()) {
     // skip
@@ -221,7 +221,7 @@ int ObTabletLocationSender::batch_process_tasks(
   int64_t rate_limit_conf = 0;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check_inner_stat", KR(ret), K(tasks));
-  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_2_0) {
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_1_2) {
     // skip
   } else if (0 == (rate_limit_conf = get_rate_limit())) {
     // skip

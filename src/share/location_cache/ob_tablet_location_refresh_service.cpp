@@ -407,9 +407,9 @@ int ObTabletLocationRefreshService::check_tenant_can_refresh_(const uint64_t ten
   uint64_t data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("fail to check data version", KR(ret), K(tenant_id));
-  } else if (data_version < DATA_VERSION_4_2_2_0) {
+  } else if (data_version < DATA_VERSION_4_2_1_2) {
     ret = OB_EAGAIN;
-    LOG_WARN("tenant's data_version is less than 4.2.2.0, try later",
+    LOG_WARN("tenant's data_version is less than 4.2.1.2, try later",
              KR(ret), K(tenant_id), K(data_version));
   }
   return ret;
@@ -565,7 +565,7 @@ int ObTabletLocationRefreshService::try_init_base_point_(const int64_t tenant_id
   }
 
   // try get base_task_id
-  if (data_version >= DATA_VERSION_4_2_2_0) {
+  if (data_version >= DATA_VERSION_4_2_1_2) {
     if (OB_ISNULL(sql_proxy_)) {
       ret = OB_NOT_INIT;
       LOG_WARN("sql_proxy_ is null", KR(ret));
