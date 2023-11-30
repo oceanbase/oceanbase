@@ -6048,7 +6048,7 @@ int ObRootService::create_outline(const ObCreateOutlineArg &arg)
     bool is_update = false;
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ddl_service_.check_outline_exist(outline_info, is_or_replace, is_update))) {
-        LOG_WARN("failed to check_outline_exist", K(outline_info), K(ret));
+        LOG_WARN("failed to check_outline_exist", K(outline_info), K(is_or_replace), K(is_update), K(ret));
       }
     }
 

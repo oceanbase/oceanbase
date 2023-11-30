@@ -70,6 +70,7 @@ public:
     next_read_step_ = READ_HEADER;
     raw_pkt_.reset();
     is_multi_pkt_ = false;
+    is_auth_switch_ = false;
     arena_.reset(); //fast free memory
   }
 
@@ -92,7 +93,7 @@ public:
   TO_STRING_KV(K_(header_buffered_len), K_(payload_buffered_len), K_(payload_buffered_total_len),
                K_(last_pkt_seq), K_(payload_len), K_(curr_pkt_seq), K_(payload_buf_alloc_len),
                "next_read_step", get_read_step_str(next_read_step_), K_(raw_pkt),
-               "used", arena_.used(), "total", arena_.total(), K_(is_multi_pkt));
+               "used", arena_.used(), "total", arena_.total(), K_(is_multi_pkt), K_(is_auth_switch));
 
 public:
   char header_buf_[common::OB_MYSQL_HEADER_LENGTH];
@@ -108,6 +109,7 @@ public:
   ObMySQLRawPacket raw_pkt_;
   bool is_multi_pkt_;
   common::ObArenaAllocator arena_;
+  bool is_auth_switch_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMysqlPktContext);

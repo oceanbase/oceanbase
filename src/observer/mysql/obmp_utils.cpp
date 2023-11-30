@@ -165,6 +165,9 @@ int ObMPUtils::sync_session_info(sql::ObSQLSessionInfo &sess, const common::ObSt
       int16_t info_type = 0;
       int32_t info_len = 0;
       int64_t pos0 = 0;
+      int64_t tmp_pos = 0;
+      int64_t code = 0;
+      code = OB_E(EventTable::EN_SESS_INFO_DIAGNOSIS_CONTROL) OB_SUCCESS;
       char *sess_buf = NULL;
       LOG_TRACE("sync field sess_inf", K(sess.get_sessid()), KP(data), K(pos), K(len), KPHEX(data+pos, len-pos));
       if (OB_FAIL(ObProtoTransUtil::resolve_type_and_len(buf, len, pos, info_type, info_len))) {
@@ -190,6 +193,12 @@ int ObMPUtils::sync_session_info(sql::ObSQLSessionInfo &sess, const common::ObSt
                                   buf, (int64_t)info_len + pos0, pos0))) {
         LOG_WARN("failed to update session sync info",
                  K(ret), K(info_type), K(sess.get_sessid()), K(succ_info_types), K(pos), K(info_len), K(info_len+pos));
+      } else if (FALSE_IT(tmp_pos = pos)) {
+            // do nothing.
+      } else if (code != OB_SUCCESS && OB_FAIL(ObSessInfoVerify::record_session_info(
+        sess, const_cast<char *>(buf), tmp_pos, info_type, info_len,
+        oceanbase::sql::SessionSyncState::SESSION_SYNC))) {
+            LOG_WARN("failed to record", K(info_type), K(ret), K(info_len), K(tmp_pos));
       } else {
         pos += info_len;
         succ_info_types.add_member(info_type);
@@ -258,6 +267,8 @@ int ObMPUtils::append_modfied_sess_info(common::ObIAllocator &allocator,
       }
     }
 
+    int64_t code = 0;
+    code = OB_E(EventTable::EN_SESS_INFO_DIAGNOSIS_CONTROL) OB_SUCCESS;
     if (OB_FAIL(ret)) {
       // do nothing
     } else if (size == 0){
@@ -272,6 +283,7 @@ int ObMPUtils::append_modfied_sess_info(common::ObIAllocator &allocator,
       // assamble session info as follows:
       // type(2 byte) | len(4 byte) | session_info_val | ....
       int64_t pos = 0;
+      int64_t tmp_pos = 0;
       for (int64_t i=0; OB_SUCC(ret) && i < SESSION_SYNC_MAX_TYPE; i++) {
         oceanbase::sql::SessionSyncInfoType encoder_type = (oceanbase::sql::SessionSyncInfoType)(i);
         if (OB_FAIL(sess.get_sess_encoder(encoder_type, encoder))) {
@@ -294,8 +306,14 @@ int ObMPUtils::append_modfied_sess_info(common::ObIAllocator &allocator,
           } else if (pos + info_len > size) {
             ret = OB_SIZE_OVERFLOW;
             LOG_WARN("buf overflow for info", K(ret), K(buf), K(pos), K(info_type), K(info_len), K(size));
+          } else if (FALSE_IT(tmp_pos = pos)) {
+            // do nothing.
           } else if (OB_FAIL(encoder->serialize(sess, buf + pos, info_len, info_pos))) {
             LOG_WARN("failed to serialize", K(sess), K(ret), K(size), K(buf), K(pos), K(info_type), K(info_len), K(info_pos));
+          } else if (code != OB_SUCCESS && OB_FAIL(ObSessInfoVerify::record_session_info(
+            sess, buf, tmp_pos, info_type, info_len,
+            oceanbase::sql::SessionSyncState::SESSION_FEEDBACK))) {
+            LOG_WARN("failed to record", K(info_type), K(ret), K(info_len), K(tmp_pos));
           } else {
             pos += info_len;
             // reset to not changed

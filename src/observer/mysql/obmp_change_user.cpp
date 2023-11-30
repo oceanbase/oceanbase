@@ -28,6 +28,7 @@
 #include "sql/parser/ob_parser.h"
 #include "sql/parser/ob_parser_utils.h"
 #include "rpc/obmysql/obsm_struct.h"
+#include "rpc/obmysql/packet/ompk_auth_switch.h"
 
 
 using namespace oceanbase::common;
@@ -38,6 +39,7 @@ namespace oceanbase
 {
 namespace observer
 {
+const char *AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD = "mysql_native_password";
 int ObMPChangeUser::deserialize()
 {
   int ret = OB_SUCCESS;
@@ -222,7 +224,12 @@ int ObMPChangeUser::process()
       OB_LOG(WARN, "fail to rollback trans for change user", K(ret), K(session));
     } else {
       session->clean_status();
-      if (OB_FAIL(load_privilege_info(session))) {
+      if (OB_FAIL(load_login_info(session))) {
+        OB_LOG(WARN,"load log info failed", K(ret),K(session->get_sessid()));
+      } else if (get_conn()->is_support_plugin_auth()
+                && get_conn()->client_type_ == common::OB_CLIENT_NON_STANDARD) {
+        // do nothing
+      } else if (OB_FAIL(load_privilege_info_for_change_user(session))) {
         OB_LOG(WARN,"load privilige info failed", K(ret),K(session->get_sessid()));
       } else {
         if (is_proxy_mod) {
@@ -245,10 +252,35 @@ int ObMPChangeUser::process()
 
   //send packet to client
   if (OB_SUCC(ret)) {
-    ObOKPParam ok_param;
-    ok_param.is_on_change_user_ = true;
-    if (OB_FAIL(send_ok_packet(*session, ok_param))) {
-      OB_LOG(WARN, "response ok packet fail", K(ret));
+    /*
+     In order to be compatible with the behavior of mysql change user,
+     an AuthSwitchRequest request will be sent every time to the external client.
+
+     If we're dealing with an older client we can't just send a change plugin
+     packet to re-initiate the authentication handshake, because the client
+     won't understand it. The good thing is that we don't need to : the old
+     client expects us to just check the user credentials here, which we can do
+     by just reading the cached data that are placed there by change user's
+     passwd field.
+     * */
+    if (get_conn()->is_support_plugin_auth()
+        && get_conn()->client_type_ == common::OB_CLIENT_NON_STANDARD) {
+      // send auth switch request
+      OMPKAuthSwitch auth_switch;
+      auth_switch.set_plugin_name(ObString(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD));
+      auth_switch.set_scramble(ObString(sizeof(get_conn()->scramble_buf_), get_conn()->scramble_buf_));
+      if (OB_FAIL(packet_sender_.response_packet(auth_switch, session))) {
+        RPC_LOG(WARN, "failed to send error packet", K(auth_switch), K(ret));
+        disconnect();
+      } else {
+        get_conn()->set_auth_switch_phase();
+      }
+    } else {
+      ObOKPParam ok_param;
+      ok_param.is_on_change_user_ = true;
+      if (OB_FAIL(send_ok_packet(*session, ok_param))) {
+        OB_LOG(WARN, "response ok packet fail", K(ret));
+      }
     }
   } else if (need_response_error) {
     if (OB_FAIL(send_error_packet(ret, NULL))) {
@@ -269,108 +301,6 @@ int ObMPChangeUser::process()
   if (session != NULL) {
     revert_session(session);
   }
-  return ret;
-}
-
-int ObMPChangeUser::load_privilege_info(ObSQLSessionInfo *session)
-{
-  int ret = OB_SUCCESS;
-
-  ObSchemaGetterGuard schema_guard;
-  ObSMConnection *conn = NULL;
-  if (OB_ISNULL(session) || OB_ISNULL(gctx_.schema_service_)) {
-    ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN,"invalid argument", K(session), K(gctx_.schema_service_));
-  } else if (OB_ISNULL(conn = get_conn())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("null conn", K(ret));
-  } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(
-                                  session->get_effective_tenant_id(), schema_guard))) {
-    OB_LOG(WARN,"fail get schema guard", K(ret));
-  } else {
-    share::schema::ObUserLoginInfo login_info;
-    const char *sep_pos = username_.find('@');
-    if (NULL != sep_pos) {
-      ObString username(sep_pos - username_.ptr(), username_.ptr());
-      login_info.user_name_ = username;
-      login_info.tenant_name_ = username_.after(sep_pos);
-      if (login_info.tenant_name_ != session->get_tenant_name()) {
-        ret = OB_OP_NOT_ALLOW;
-        OB_LOG(WARN, "failed to change user in different tenant", K(ret),
-            K(login_info.tenant_name_), K(session->get_tenant_name()));
-        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "forbid! change user command in differernt tenant");
-      }
-    } else {
-      login_info.user_name_ = username_;
-    }
-    if (OB_SUCC(ret)) {
-      if (login_info.tenant_name_.empty()) {
-        login_info.tenant_name_ = session->get_tenant_name();
-      }
-      if (!database_.empty()) {
-        login_info.db_ = database_;
-      }
-      login_info.client_ip_ = session->get_client_ip();
-      OB_LOG(INFO, "com change user", "username", login_info.user_name_,
-            "tenant name", login_info.tenant_name_);
-      login_info.scramble_str_.assign_ptr(conn->scramble_buf_, sizeof(conn->scramble_buf_));
-      login_info.passwd_ = auth_response_;
-
-    }
-    SSL *ssl_st = SQL_REQ_OP.get_sql_ssl_st(req_);
-
-    share::schema::ObSessionPrivInfo session_priv;
-    // disconnect previous user connection first.
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(session->on_user_disconnect())) {
-      LOG_WARN("user disconnect failed", K(ret));
-    }
-    const ObUserInfo *user_info = NULL;
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv,
-                ssl_st, user_info))) {
-      OB_LOG(WARN, "User access denied", K(login_info), K(ret));
-    } else if (OB_FAIL(session->on_user_connect(session_priv, user_info))) {
-      OB_LOG(WARN, "user connect failed", K(ret), K(session_priv));
-    } else {
-      uint64_t db_id = OB_INVALID_ID;
-      const ObSysVariableSchema *sys_variable_schema = NULL;
-      session->set_user(session_priv.user_name_, session_priv.host_name_, session_priv.user_id_);
-      session->set_user_priv_set(session_priv.user_priv_set_);
-      session->set_db_priv_set(session_priv.db_priv_set_);
-      session->set_enable_role_array(session_priv.enable_role_id_array_);
-      if (OB_FAIL(session->set_tenant(login_info.tenant_name_, session_priv.tenant_id_))) {
-        OB_LOG(WARN, "fail to set tenant", "tenant name", login_info.tenant_name_, K(ret));
-      } else if (OB_FAIL(session->set_default_database(database_))) {
-        OB_LOG(WARN, "failed to set default database", K(ret), K(database_));
-      } else if (OB_FAIL(session->set_real_client_ip(login_info.client_ip_))) {
-          LOG_WARN("failed to set_real_client_ip", K(ret));
-      } else if (OB_FAIL(schema_guard.get_sys_variable_schema(session_priv.tenant_id_, sys_variable_schema))) {
-        LOG_WARN("get sys variable schema failed", K(ret));
-      } else if (OB_ISNULL(sys_variable_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("sys variable schema is null", K(ret));
-      } else if (OB_FAIL(session->load_all_sys_vars(*sys_variable_schema, true))) {
-        LOG_WARN("load system variables failed", K(ret));
-      } else if (OB_FAIL(session->update_database_variables(&schema_guard))) {
-        OB_LOG(WARN, "failed to update database variables", K(ret));
-      } else if (!database_.empty() && OB_FAIL(schema_guard.get_database_id(session->get_effective_tenant_id(),
-                                                      session->get_database_name(),
-                                                      db_id))) {
-        OB_LOG(WARN, "failed to get database id", K(ret));
-      } else if (OB_FAIL(update_transmission_checksum_flag(*session))) {
-        LOG_WARN("update transmisson checksum flag failed", K(ret));
-      } else if (OB_FAIL(update_proxy_sys_vars(*session))) {
-        LOG_WARN("update_proxy_sys_vars failed", K(ret));
-      } else if (OB_FAIL(update_charset_sys_vars(*conn, *session))) {
-        LOG_WARN("fail to update charset sys vars", K(ret));
-      } else {
-        session->set_database_id(db_id);
-        session->reset_user_var();
-      }
-    }
-  }
-
   return ret;
 }
 
@@ -494,6 +424,46 @@ int ObMPChangeUser::handle_user_var(const ObString &var, const ObString &val,
     }
     if (OB_SUCC(ret) && OB_FAIL(session.replace_user_variable(var, sess_var))) {
       OB_LOG(WARN, "fail to replace user var", K(ret), K(var), K(sess_var));
+    }
+  }
+  return ret;
+}
+
+int ObMPChangeUser::load_login_info(ObSQLSessionInfo *session)
+{
+  int ret = OB_SUCCESS;
+  share::schema::ObUserLoginInfo login_info;
+  const char *sep_pos = username_.find('@');
+  if (NULL != sep_pos) {
+    ObString username(sep_pos - username_.ptr(), username_.ptr());
+    login_info.user_name_ = username;
+    login_info.tenant_name_ = username_.after(sep_pos);
+    if (login_info.tenant_name_ != session->get_tenant_name()) {
+      ret = OB_OP_NOT_ALLOW;
+      OB_LOG(WARN, "failed to change user in different tenant", K(ret),
+          K(login_info.tenant_name_), K(session->get_tenant_name()));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "forbid! change user command in differernt tenant");
+    }
+  } else {
+    login_info.user_name_ = username_;
+  }
+  if (OB_SUCC(ret)) {
+    if (login_info.tenant_name_.empty()) {
+      login_info.tenant_name_ = session->get_tenant_name();
+    }
+    if (!database_.empty()) {
+      login_info.db_ = database_;
+    }
+    login_info.client_ip_ = session->get_client_ip();
+    OB_LOG(INFO, "com change user", "username", login_info.user_name_,
+          "tenant name", login_info.tenant_name_);
+    const ObSMConnection &conn = *get_conn();
+    login_info.scramble_str_.assign_ptr(conn.scramble_buf_, sizeof(conn.scramble_buf_));
+    login_info.passwd_ = auth_response_;
+    if (OB_FAIL(session->set_login_info(login_info))) {
+      LOG_WARN("failed to set login_info", K(ret));
+    } else if (OB_FAIL(session->set_default_database(database_))) {
+      OB_LOG(WARN, "failed to set default database", K(ret), K(database_));
     }
   }
   return ret;

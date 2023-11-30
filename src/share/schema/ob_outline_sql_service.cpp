@@ -35,7 +35,10 @@ int ObOutlineSqlService::insert_outline(const ObOutlineInfo &outline_info,
   int ret = OB_SUCCESS;
   if (!outline_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    SHARE_SCHEMA_LOG(WARN, "outline_info is invalid", K(outline_info), K(ret));
+    SHARE_SCHEMA_LOG(WARN, "outline_info is invalid", K(outline_info), K(ret),
+                        K(outline_info.is_format()),
+                        K(outline_info.get_format_sql_text_str().empty()),
+                        K(ObOutlineInfo::is_sql_id_valid(outline_info.get_format_sql_id_str())));
   } else {
     if (OB_FAIL(add_outline(sql_client, outline_info))) {
       LOG_WARN("failed to add outline", K(ret));
@@ -71,10 +74,21 @@ int ObOutlineSqlService::replace_outline(const ObOutlineInfo &outline_info,
     uint64_t outline_id = outline_info.get_outline_id();
     ObString outline_params_hex_str;
     ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
+    uint64_t compat_version = 0;
     // modify __all_outline table
     if (OB_SUCC(ret)) {
       if (OB_FAIL(outline_info.get_hex_str_from_outline_params(outline_params_hex_str, allocator))) {
         LOG_WARN("fail to get_hex_str_from_outline_params", K(ret));
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+        LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+      } else if (compat_version < DATA_VERSION_4_2_2_0 &&
+            (!outline_info.get_format_sql_text_str().empty()
+            || !outline_info.get_format_sql_id_str().empty()
+            || outline_info.is_format())) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("format outline is not suppported when tenant's data version is below 4.2.2.0", KR(ret),
+                                  K(outline_info.is_format()), K(outline_info.get_format_sql_text_str().empty()),
+                                  K(outline_info.get_format_sql_id_str().empty()));
       }
 
       if (OB_SUCC(ret)) {
@@ -88,11 +102,23 @@ int ObOutlineSqlService::replace_outline(const ObOutlineInfo &outline_info,
             || OB_FAIL(dml.add_column("outline_params", ObHexEscapeSqlStr(outline_params_hex_str)))
             || OB_FAIL(dml.add_column("sql_text", outline_info.get_sql_text_str().empty() ? ObString::make_string("") : ObHexEscapeSqlStr(outline_info.get_sql_text_str())))
             || OB_FAIL(dml.add_column("sql_id", outline_info.get_sql_id_str().empty() ? ObString::make_string("") : ObHexEscapeSqlStr(outline_info.get_sql_id_str())))
+            || ((compat_version >= DATA_VERSION_4_2_2_0) &&
+            OB_FAIL(dml.add_column("format_sql_text",
+                        outline_info.get_format_sql_text_str().empty() ?
+                            ObString::make_string("") :
+                            ObHexEscapeSqlStr(outline_info.get_format_sql_text_str()))))
+            || ((compat_version >= DATA_VERSION_4_2_2_0) &&
+              OB_FAIL(dml.add_column("format_sql_id",
+                  outline_info.get_format_sql_id_str().empty() ?
+                  ObString::make_string("") :
+                  ObHexEscapeSqlStr(outline_info.get_format_sql_id_str()))))
             || OB_FAIL(dml.add_column("version", ObHexEscapeSqlStr(outline_info.get_version_str())))
             || OB_FAIL(dml.add_column("schema_version", outline_info.get_schema_version()))
             || OB_FAIL(dml.add_column("outline_target", ObHexEscapeSqlStr(
                         outline_info.get_outline_target_str().empty() ? ObString::make_string("")
                         : outline_info.get_outline_target_str())))
+            || ((compat_version >= DATA_VERSION_4_2_2_0) &&
+              OB_FAIL(dml.add_column("format_outline", outline_info.is_format())))
             || OB_FAIL(dml.add_gmt_modified())) {
           LOG_WARN("add column failed", K(ret));
         }
@@ -147,12 +173,20 @@ int ObOutlineSqlService::alter_outline(const ObOutlineInfo &outline_info,
     uint64_t tenant_id = outline_info.get_tenant_id();
     const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
     uint64_t outline_id = outline_info.get_outline_id();
+    uint64_t compat_version = 0;
     ObString outline_params_hex_str;
     ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
     // modify __all_outline table
     if (OB_SUCC(ret)) {
       if (OB_FAIL(outline_info.get_hex_str_from_outline_params(outline_params_hex_str, allocator))) {
         LOG_WARN("fail to get_hex_str_from_max_concurrent_param", K(ret));
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(exec_tenant_id, compat_version))) {
+        LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+      } else if (compat_version < DATA_VERSION_4_2_2_0 &&
+            !outline_info.get_format_sql_text_str().empty()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("format outline is not suppported when tenant's data version is below 4.2.2.0", KR(ret),
+                                  K(outline_info.get_format_sql_text_str().empty()));
       }
 
       // outline_content is described by sql_test here.
@@ -166,6 +200,10 @@ int ObOutlineSqlService::alter_outline(const ObOutlineInfo &outline_info,
                         : outline_info.get_outline_content_str())))
             || OB_FAIL(dml.add_column("outline_params", ObHexEscapeSqlStr(outline_params_hex_str)))
             || OB_FAIL(dml.add_column("sql_text", ObHexEscapeSqlStr(outline_info.get_sql_text_str())))
+            || ((compat_version >= DATA_VERSION_4_2_2_0) &&
+                 OB_FAIL(dml.add_column("format_sql_text",
+                 outline_info.get_format_sql_text_str().empty() ? ObString::make_string("")
+                 : ObHexEscapeSqlStr(outline_info.get_format_sql_text_str()))))
             || OB_FAIL(dml.add_column("schema_version", outline_info.get_schema_version()))
             || OB_FAIL(dml.add_gmt_modified())) {
           LOG_WARN("add column failed", K(ret));
@@ -306,6 +344,7 @@ int ObOutlineSqlService::add_outline(common::ObISQLClient &sql_client,
   int ret = OB_SUCCESS;
   ObSqlString sql;
   ObSqlString values;
+  uint64_t compat_version = 0;
   const char *tname[] = {OB_ALL_OUTLINE_TNAME, OB_ALL_OUTLINE_HISTORY_TNAME};
   ObString max_outline_params_hex_str;
   ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
@@ -313,7 +352,18 @@ int ObOutlineSqlService::add_outline(common::ObISQLClient &sql_client,
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
   if (OB_FAIL(outline_info.get_hex_str_from_outline_params(max_outline_params_hex_str, allocator))) {
     LOG_WARN("fail to get_hex_str_from_outline_params", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(exec_tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(exec_tenant_id));
+  } else if (compat_version < DATA_VERSION_4_2_2_0 &&
+        (!outline_info.get_format_sql_text_str().empty()
+        || !outline_info.get_format_sql_id_str().empty()
+        || outline_info.is_format())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("format outline is not suppported when tenant's data version is below 4.2.2.0", KR(ret),
+                              K(outline_info.is_format()), K(outline_info.get_format_sql_text_str().empty()),
+                              K(outline_info.get_format_sql_id_str().empty()));
   }
+
   for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(tname); i++) {
     if (only_history && 0 == STRCMP(tname[i], OB_ALL_OUTLINE_TNAME)) {
       continue;
@@ -346,6 +396,14 @@ int ObOutlineSqlService::add_outline(common::ObISQLClient &sql_client,
                                       max_outline_params_hex_str.length(), "outline_params");
       SQL_COL_APPEND_ESCAPE_STR_VALUE(sql, values, outline_info.get_outline_target(),
                                       outline_info.get_outline_target_str().length(), "outline_target");
+
+      if (compat_version >= DATA_VERSION_4_2_2_0) {
+        SQL_COL_APPEND_ESCAPE_STR_VALUE(sql, values, outline_info.get_format_sql_id(),
+                                        outline_info.get_format_sql_id_str().length(), "format_sql_id");
+        SQL_COL_APPEND_ESCAPE_STR_VALUE(sql, values, outline_info.get_format_sql_text(),
+                                        outline_info.get_format_sql_text_str().length(), "format_sql_text");
+        SQL_COL_APPEND_VALUE(sql, values, outline_info.is_format(), "format_outline", "%d");
+      }
       if (0 == STRCMP(tname[i], OB_ALL_OUTLINE_HISTORY_TNAME)) {
         SQL_COL_APPEND_VALUE(sql, values, "false", "is_deleted", "%s");
       }

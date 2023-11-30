@@ -72,6 +72,7 @@
 #include "share/scn.h"//SCN
 #include "share/ob_server_table_operator.h"
 #include "share/restore/ob_import_arg.h"
+#include "sql/session/ob_sess_info_verify.h"
 #include "share/location_cache/ob_location_update_task.h"
 #include "storage/ob_storage_schema.h"  // ObCreateTabletSchema
 
@@ -6055,15 +6056,17 @@ struct ObDropOutlineArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObDropOutlineArg(): ObDDLArg(), tenant_id_(common::OB_INVALID_ID), db_name_(), outline_name_() {}
+  ObDropOutlineArg(): ObDDLArg(), tenant_id_(common::OB_INVALID_ID), db_name_(), outline_name_(), is_format_(false) {}
   virtual ~ObDropOutlineArg() {}
   bool is_valid() const;
   virtual bool is_allow_when_upgrade() const { return true; }
-  TO_STRING_KV(K_(tenant_id), K_(db_name), K_(outline_name));
+  int assign(const ObDropOutlineArg &other);
+  TO_STRING_KV(K_(tenant_id), K_(db_name), K_(outline_name), K_(is_format));
 
   uint64_t tenant_id_;
   common::ObString db_name_;
   common::ObString outline_name_;
+  bool is_format_;
 };
 
 struct ObCreateDbLinkArg : public ObDDLArg
@@ -9940,6 +9943,39 @@ public:
 
   uint64_t tenant_id_;
   ObSArray<uint64_t> synonym_ids_;
+};
+
+struct ObSessInfoDiagnosisArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObSessInfoDiagnosisArg()
+    : info_type_(sql::SESSION_SYNC_MAX_TYPE),
+      proxy_sess_id_(0)
+  {
+  }
+  ~ObSessInfoDiagnosisArg() {}
+  bool is_valid() const;
+  void reset()
+  {
+    info_type_ = sql::SESSION_SYNC_MAX_TYPE;
+    proxy_sess_id_ = 0;
+  }
+  int assign(const ObSessInfoDiagnosisArg &other)
+  {
+    int ret = common::OB_SUCCESS;
+    info_type_ = other.info_type_;
+    proxy_sess_id_ = other.proxy_sess_id_;
+    return ret;
+  }
+  void set_info_type(sql::SessionSyncInfoType info_type) { info_type_ = info_type; }
+  sql::SessionSyncInfoType get_info_type() { return info_type_; }
+  void set_proxy_sess_id(uint64_t proxy_sess_id) { proxy_sess_id_ = proxy_sess_id; }
+  uint64_t get_proxy_sess_id() { return proxy_sess_id_; }
+  TO_STRING_KV(K_(info_type), K_(proxy_sess_id));
+private:
+  sql::SessionSyncInfoType info_type_;
+  uint64_t proxy_sess_id_;
 };
 
 // session info self-verification arg

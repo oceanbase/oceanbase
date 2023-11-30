@@ -169,6 +169,17 @@ public:
                            char *buf,
                            int32_t buf_len,
                            int32_t &pos);
+  static int try_format_in_expr(const common::ObString &con_sql,
+                           char *buf,
+                           int32_t buf_len,
+                           int64_t &pos,
+                           bool& can_format);
+  static int search_vector(const char* start, const int64_t buf_len,
+                           int64_t& vec_start, int64_t& vec_end,
+                           bool &is_valid, int64_t& qm_cnt);
+  static bool is_in_expr_prefix(char c);
+  static int search_in_expr_pos(const char* buf, const int64_t buf_len,
+                                int64_t& pos, bool& found);
   static int construct_sql_for_pl(const common::ObString &no_param_sql,
                                   common::ObIArray<ObPCParam *> &not_params,
                                   char *buf,

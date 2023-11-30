@@ -51,7 +51,7 @@ int ObVirtualCSProtocolProcessor::easy_process(easy_request_t *r, bool &need_rea
   ObSMConnection *conn = reinterpret_cast<ObSMConnection*>(r->ms->c->user_data);
   ObCSEasyMemPool pool(r->ms->pool);
   need_read_more = true;
-  if (!conn->is_in_authed_phase()) {
+  if (!conn->is_in_authed_phase() && !conn->is_in_auth_switch_phase()) {
     need_read_more = false;
   } else if (OB_FAIL(do_splice(*conn, pool, r->ipacket, need_read_more))) {
     LOG_ERROR("fail to splice mysql packet", K(ret));

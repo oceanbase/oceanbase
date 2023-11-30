@@ -30,6 +30,7 @@ int ObAlterOutlineResolver::resolve(const ParseNode &parse_tree)
   int ret = OB_SUCCESS;
   ParseNode *node = const_cast<ParseNode *>(&parse_tree);
   ObAlterOutlineStmt *alter_outline_stmt = NULL;
+  uint64_t compat_version = 0;
   if (OB_ISNULL(session_info_) || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session_info_ or allocator_ is NULL",
@@ -45,9 +46,27 @@ int ObAlterOutlineResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_UNLIKELY(NULL == (alter_outline_stmt = create_stmt<ObAlterOutlineStmt>()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("failed to create alter_outline_stmt", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(MTL_ID()));
   } else {
     stmt_ = alter_outline_stmt;
 
+    // resovle outline type
+    bool is_format_otl = false;
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(node->children_[3])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid node children", K(node->children_[3]), K(node->children_));
+    } else {
+      is_format_otl = (node->children_[3]->value_
+                        == ObOutlineType::OUTLINE_TYPE_FORMAT);
+      alter_outline_stmt->set_format_outline(is_format_otl);
+    }
+    if (OB_SUCC(ret) && is_format_otl && compat_version < DATA_VERSION_4_2_2_0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "format outline not supported under oceanbase 4.2.2");
+      LOG_WARN("format outline not supported under oceanbase 4.2.2", K(ret));
+    }
     //resolve database_name and outline_name
     if (OB_SUCC(ret)) {
       ObString db_name;
@@ -61,8 +80,13 @@ int ObAlterOutlineResolver::resolve(const ParseNode &parse_tree)
     }
     //resolve outline_stmt
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(resolve_outline_stmt(node->children_[1], alter_outline_stmt->get_outline_stmt(),
+      if (!is_format_otl && OB_FAIL(resolve_outline_stmt(node->children_[1],
+                                       alter_outline_stmt->get_outline_stmt(),
                                        alter_outline_stmt->get_outline_sql()))) {
+        LOG_WARN("fail to resolve outline stmt", K(ret));
+      } else if (is_format_otl && OB_FAIL(resolve_outline_stmt(node->children_[1],
+                                       alter_outline_stmt->get_outline_stmt(),
+                                       alter_outline_stmt->get_format_outline_sql()))) {
         LOG_WARN("fail to resolve outline stmt", K(ret));
       }
     }

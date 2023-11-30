@@ -94,10 +94,12 @@ ob_set_subtarget(ob_server mysql
   mysql/obmp_stmt_send_long_data.cpp
   mysql/obmp_stmt_send_piece_data.cpp
   mysql/obmp_utils.cpp
+  mysql/obmp_auth_response.cpp
   mysql/obsm_conn_callback.cpp
   mysql/obsm_handler.cpp
   mysql/obsm_row.cpp
   mysql/obsm_utils.cpp
+  mysql/obmp_set_option.cpp
 )
 
 ob_set_subtarget(ob_server net

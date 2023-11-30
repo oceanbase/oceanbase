@@ -5146,11 +5146,22 @@ bool ObBatchGetRoleResult::is_valid() const
 
 bool ObCreateOutlineArg::is_valid() const
 {
-  return OB_INVALID_ID != outline_info_.get_tenant_id()
+  bool ret = (OB_INVALID_ID != outline_info_.get_tenant_id())
       && !outline_info_.get_name_str().empty()
-      && !(outline_info_.get_signature_str().empty() && !ObOutlineInfo::is_sql_id_valid(outline_info_.get_sql_id_str()))
-      && (!outline_info_.get_outline_content_str().empty() || outline_info_.has_outline_params())
-      && !(outline_info_.get_sql_text_str().empty() && !ObOutlineInfo::is_sql_id_valid(outline_info_.get_sql_id_str()));
+      && (!outline_info_.get_outline_content_str().empty() || outline_info_.has_outline_params());
+
+  if (!outline_info_.is_format()) {
+    ret = ret && !(outline_info_.get_sql_text_str().empty() &&
+                !ObOutlineInfo::is_sql_id_valid(outline_info_.get_sql_id_str()))
+              && !(outline_info_.get_signature_str().empty() &&
+                !ObOutlineInfo::is_sql_id_valid(outline_info_.get_sql_id_str()));
+  } else {
+     ret = ret  && !(outline_info_.get_format_sql_text_str().empty() &&
+                  !ObOutlineInfo::is_sql_id_valid(outline_info_.get_format_sql_id_str()))
+                && !(outline_info_.get_signature_str().empty() &&
+                  !ObOutlineInfo::is_sql_id_valid(outline_info_.get_format_sql_id_str()));
+  }
+  return ret;
 }
 
 OB_SERIALIZE_MEMBER((ObCreateOutlineArg, ObDDLArg),
@@ -5178,7 +5189,24 @@ bool ObDropOutlineArg::is_valid() const
 OB_SERIALIZE_MEMBER((ObDropOutlineArg, ObDDLArg),
                     tenant_id_,
                     db_name_,
-                    outline_name_);
+                    outline_name_,
+                    is_format_);
+
+int ObDropOutlineArg::assign(const ObDropOutlineArg &other)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret));
+  } else {
+    tenant_id_ = other.tenant_id_;
+    db_name_ = other.db_name_;
+    outline_name_ = other.outline_name_;
+    is_format_ = other.is_format_;
+  }
+
+  return ret;
+}
 
 bool ObCreateDbLinkArg::is_valid() const
 {
@@ -9123,6 +9151,7 @@ int ObEstBlockArgElement::assign(const ObEstBlockArgElement &other)
 }
 
 OB_SERIALIZE_MEMBER(ObEstBlockArgElement, tenant_id_, tablet_id_, ls_id_);
+OB_SERIALIZE_MEMBER(ObSessInfoDiagnosisArg, info_type_, proxy_sess_id_);
 
 
 int ObEstBlockArg::assign(const ObEstBlockArg &other)

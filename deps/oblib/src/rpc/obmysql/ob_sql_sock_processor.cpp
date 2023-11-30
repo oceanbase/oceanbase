@@ -67,7 +67,7 @@ int ObSqlSockProcessor::decode_sql_packet(ObSqlSockSession& sess, rpc::ObPacket*
         LOG_WARN("sql nio enable ssl for server failed", K(ret));
       }
       break;
-    } else if (!conn.is_in_authed_phase()) {
+    } else if (!conn.is_in_authed_phase() && !conn.is_in_auth_switch_phase()) {
       ret_pkt = pkt;
       sess.set_last_pkt_sz(consume_sz);
     } else if (OB_FAIL(processor->do_splice(conn, sess.pool_, (void*&)pkt, need_read_more))) {

@@ -25,14 +25,18 @@ namespace sql
 {
 
 
-int ObCreateOutlineResolver::resolve_sql_id(const ParseNode *node, ObCreateOutlineStmt &create_outline_stmt)
+int ObCreateOutlineResolver::resolve_sql_id(const ParseNode *node, ObCreateOutlineStmt &create_outline_stmt, bool is_format_sql)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(node) || (node->type_ != T_CHAR && node->type_ != T_VARCHAR)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid sql id");
   } else {
-    create_outline_stmt.get_sql_id() = ObString::make_string(node->str_value_);
+    if (!is_format_sql) {
+      create_outline_stmt.get_sql_id() = ObString::make_string(node->str_value_);
+    } else {
+      create_outline_stmt.get_format_sql_id() = ObString::make_string(node->str_value_);
+    }
   }
   return ret;
 }
@@ -73,14 +77,7 @@ int ObCreateOutlineResolver::resolve_hint(const ParseNode *node, ObCreateOutline
        continue;
       }
       if (hint_node->type_ == T_MAX_CONCURRENT) {
-        if (node->num_child_ > 1) {
-          ret = OB_INVALID_OUTLINE;
-          LOG_USER_ERROR(OB_INVALID_OUTLINE, "outline and sql concurrent limit can not be mixed");
-          LOG_WARN("outline and sql concurrent limit can not be mixed");
-        } else if (1 != hint_node->num_child_) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("max concurrent node should have 1 child", K(ret));
-        } else if (OB_ISNULL(hint_node->children_[0])) {
+        if (OB_ISNULL(hint_node->children_[0])) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("child of max concurrent node should not be NULL", K(ret));
         } else if (hint_node->children_[0]->value_ >= 0) {
@@ -97,6 +94,7 @@ int ObCreateOutlineResolver::resolve(const ParseNode &parse_tree)
   int ret = OB_SUCCESS;
   ParseNode *node = const_cast<ParseNode *>(&parse_tree);
   ObCreateOutlineStmt *create_outline_stmt = NULL;
+  uint64_t compat_version = 0;
   if (OB_ISNULL(session_info_) || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session_info_ or allocator_ is NULL",
@@ -112,6 +110,8 @@ int ObCreateOutlineResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_UNLIKELY(NULL == (create_outline_stmt = create_stmt<ObCreateOutlineStmt>()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("failed to create create_outline_stmt", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(MTL_ID()));
   } else {
     stmt_ = create_outline_stmt;
     //set is_replace
@@ -129,6 +129,24 @@ int ObCreateOutlineResolver::resolve(const ParseNode &parse_tree)
       create_outline_stmt->set_server_version(server_version);
     }
 
+    // resovle outline type
+    bool is_format_otl = false;
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(node->children_[5])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid node children", K(node->children_[5]), K(node->children_));
+    } else {
+      is_format_otl = (node->children_[5]->value_
+                        == ObOutlineType::OUTLINE_TYPE_FORMAT);
+      create_outline_stmt->set_format_outline(is_format_otl);
+    }
+
+    if (OB_SUCC(ret) && is_format_otl && compat_version < DATA_VERSION_4_2_2_0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "format outline not supported under oceanbase 4.2.2");
+      LOG_WARN("format outline not supported under oceanbase 4.2.2", K(ret));
+    }
+
     //resolve database_name and outline_name
     if (OB_SUCC(ret)) {
       ObString db_name;
@@ -144,8 +162,13 @@ int ObCreateOutlineResolver::resolve(const ParseNode &parse_tree)
     if (node->children_[2]->value_ == 1) {
       //resolve outline_stmt
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(resolve_outline_stmt(node->children_[3], create_outline_stmt->get_outline_stmt(),
+        if (!is_format_otl && OB_FAIL(resolve_outline_stmt(node->children_[3],
+                                         create_outline_stmt->get_outline_stmt(),
                                          create_outline_stmt->get_outline_sql()))) {
+          LOG_WARN("fail to resolve outline stmt", K(ret));
+        } else if (is_format_otl && OB_FAIL(resolve_outline_stmt(node->children_[3],
+                                         create_outline_stmt->get_outline_stmt(),
+                                         create_outline_stmt->get_format_outline_sql()))) {
           LOG_WARN("fail to resolve outline stmt", K(ret));
         }
       }
@@ -158,7 +181,9 @@ int ObCreateOutlineResolver::resolve(const ParseNode &parse_tree)
     } else {
       if (OB_FAIL(resolve_hint(node->children_[3], *create_outline_stmt))) {
         LOG_WARN("fail to resolve hint", K(ret));
-      } else if (OB_FAIL(resolve_sql_id(node->children_[4], *create_outline_stmt))) {
+      } else if (OB_FAIL(resolve_sql_id(node->children_[4],
+                                        *create_outline_stmt,
+                                        is_format_otl))) {
         LOG_WARN("fail to resolve sql id", K(ret));
       }
     }

@@ -2310,6 +2310,9 @@ typedef enum ObItemType
   T_TRANSFER_PARTITION_TO_LS,
   T_PARTITION_INFO,
   T_XML_TABLE_EXPRESSION,
+  T_CREATE_FMT_OUTLINE,
+  T_ALTER_FMT_OUTLINE,
+  T_DROP_FMT_OUTLINE,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
@@ -2341,6 +2344,15 @@ typedef enum ObContextType {
     ACCESSED_GLOBALLY = 2,
     INITIALIZED_GLOBALLY = 3,
   }ObContextType;
+
+typedef enum ObOutlineType
+{
+  OUTLINE_TYPE_INVALID = -1, //Attention: add a new type after CACHE_TYPE_INVALID
+  OUTLINE_TYPE_NORMAL,
+  OUTLINE_TYPE_FORMAT,
+  OUTLINE_TYPE_MAX //Attention: add a new type before CACHE_TYPE_MAX
+} ObOutlineType;
+
 
 #define IS_BOOL_OP(op) \
   (((op) >= T_OP_EQ && (op) <= T_OP_NOT_IN && (op) != T_OP_POW) \

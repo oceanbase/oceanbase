@@ -1584,6 +1584,7 @@ public:
   static int v_ob_tenant_runtime_info_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_cgroup_config_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_cgroup_config_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_format_outlines_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_sys_variables_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
   static int dba_objects_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -1839,6 +1840,7 @@ public:
   static int dba_ob_import_table_job_history_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_import_table_tasks_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_import_table_task_history_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_format_outlines_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_instance_schema(share::schema::ObTableSchema &table_schema);
@@ -4130,6 +4132,7 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::v_ob_tenant_runtime_info_schema,
   ObInnerTableSchema::gv_ob_cgroup_config_schema,
   ObInnerTableSchema::v_ob_cgroup_config_schema,
+  ObInnerTableSchema::dba_ob_format_outlines_schema,
   ObInnerTableSchema::dba_ob_sys_variables_schema,
   ObInnerTableSchema::dba_synonyms_schema,
   ObInnerTableSchema::dba_objects_ora_schema,
@@ -4385,6 +4388,7 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::dba_ob_import_table_job_history_ora_schema,
   ObInnerTableSchema::dba_ob_import_table_tasks_ora_schema,
   ObInnerTableSchema::dba_ob_import_table_task_history_ora_schema,
+  ObInnerTableSchema::dba_ob_format_outlines_ora_schema,
   ObInnerTableSchema::gv_ob_sql_audit_ora_schema,
   ObInnerTableSchema::v_ob_sql_audit_ora_schema,
   ObInnerTableSchema::gv_instance_schema,
@@ -5638,6 +5642,7 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_IMPORT_TABLE_TASK_HISTORY_TID,
   OB_GV_OB_CGROUP_CONFIG_TID,
   OB_V_OB_CGROUP_CONFIG_TID,
+  OB_DBA_OB_FORMAT_OUTLINES_TID,
   OB_DBA_OB_SYS_VARIABLES_TID,
   OB_DBA_SYNONYMS_TID,
   OB_DBA_OBJECTS_ORA_TID,
@@ -5893,6 +5898,7 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_IMPORT_TABLE_JOB_HISTORY_ORA_TID,
   OB_DBA_OB_IMPORT_TABLE_TASKS_ORA_TID,
   OB_DBA_OB_IMPORT_TABLE_TASK_HISTORY_ORA_TID,
+  OB_DBA_OB_FORMAT_OUTLINES_ORA_TID,
   OB_GV_OB_SQL_AUDIT_ORA_TID,
   OB_V_OB_SQL_AUDIT_ORA_TID,
   OB_GV_INSTANCE_TID,
@@ -7972,6 +7978,7 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_IMPORT_TABLE_TASK_HISTORY_TNAME,
   OB_GV_OB_CGROUP_CONFIG_TNAME,
   OB_V_OB_CGROUP_CONFIG_TNAME,
+  OB_DBA_OB_FORMAT_OUTLINES_TNAME,
   OB_DBA_OB_SYS_VARIABLES_TNAME,
   OB_DBA_SYNONYMS_TNAME,
   OB_DBA_OBJECTS_ORA_TNAME,
@@ -8227,6 +8234,7 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_IMPORT_TABLE_JOB_HISTORY_ORA_TNAME,
   OB_DBA_OB_IMPORT_TABLE_TASKS_ORA_TNAME,
   OB_DBA_OB_IMPORT_TABLE_TASK_HISTORY_ORA_TNAME,
+  OB_DBA_OB_FORMAT_OUTLINES_ORA_TNAME,
   OB_GV_OB_SQL_AUDIT_ORA_TNAME,
   OB_V_OB_SQL_AUDIT_ORA_TNAME,
   OB_GV_INSTANCE_TNAME,
@@ -11669,10 +11677,10 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 260;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 751;
-const int64_t OB_SYS_VIEW_COUNT = 796;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1812;
+const int64_t OB_SYS_VIEW_COUNT = 798;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1814;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1815;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1817;
 
 } // end namespace share
 } // end namespace oceanbase

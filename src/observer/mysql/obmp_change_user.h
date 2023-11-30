@@ -47,7 +47,7 @@ public:
 protected:
   int process();
   int deserialize();
-  int load_privilege_info(sql::ObSQLSessionInfo *session);
+  int load_login_info(sql::ObSQLSessionInfo *session);
 
 private:
   static int decode_string_kv(const char* attrs_end, const char *&pos, obmysql::ObStringKV &kv);

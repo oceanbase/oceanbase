@@ -25,7 +25,6 @@ struct ObSMConnection;
 }
 namespace sql
 {
-
 class ObFreeSessionCtx
 {
 public:
@@ -55,6 +54,8 @@ public:
   static const int64_t BUCKET_COUNT = 1024;
   typedef SessionInfoKey Key;
   typedef common::hash::ObHashMap<uint64_t, ObSQLSessionInfo*> SessionMap;
+  // proxy session id -> server session id
+  typedef common::hash::ObHashMap<uint64_t, uint32_t> ProxySessionMap;
   explicit ObSQLSessionMgr():
       //null_callback_(),
       sessinfo_map_(),
@@ -140,6 +141,7 @@ public:
   int mark_sessid_unused(uint32_t sess_id);
   //inline ObNullEndTransCallback &get_null_callback() { return null_callback_; }
   SessionMap &get_sess_hold_map() { return sess_hold_map_; }
+  ProxySessionMap &get_proxy_sess_map() { return proxy_sess_map_; }
 private:
   int check_session_leak();
   int get_avaiable_local_seq(uint32_t &local_seq);
@@ -229,6 +231,8 @@ private:
   common::ObFixedQueue<void> sessid_sequence_;
   uint32_t first_seq_;
   uint32_t increment_sessid_;
+  // Record the mapping from proxy session id to server session id
+  ProxySessionMap proxy_sess_map_;
   SessionMap sess_hold_map_;
   DISALLOW_COPY_AND_ASSIGN(ObSQLSessionMgr);
 }; // end of class ObSQLSessionMgr

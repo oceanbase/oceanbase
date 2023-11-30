@@ -46,6 +46,7 @@
 #include "sql/ob_optimizer_trace_impl.h"
 #include "sql/monitor/flt/ob_flt_span_mgr.h"
 #include "storage/tx/ob_tx_free_route.h"
+#include "sql/session/ob_sess_info_verify.h"
 
 namespace oceanbase
 {
@@ -214,22 +215,6 @@ private:
   int64_t schema_version_;
 };
 
-enum SessionSyncInfoType {
-  //SESSION_SYNC_USER_VAR,  // for user variables
-  SESSION_SYNC_APPLICATION_INFO = 0, // for application info
-  SESSION_SYNC_APPLICATION_CONTEXT = 1, // for app ctx
-  SESSION_SYNC_CLIENT_ID = 2, // for client identifier
-  SESSION_SYNC_CONTROL_INFO = 3, // for full trace link control info
-  SESSION_SYNC_SYS_VAR = 4,   // for system variables
-  SESSION_SYNC_TXN_STATIC_INFO = 5,       // 5: basic txn info
-  SESSION_SYNC_TXN_DYNAMIC_INFO = 6,      // 6: txn dynamic info
-  SESSION_SYNC_TXN_PARTICIPANTS_INFO = 7, // 7: txn dynamic info
-  SESSION_SYNC_TXN_EXTRA_INFO = 8,        // 8: txn dynamic info
-  SESSION_SYNC_SEQUENCE_CURRVAL = 9, // for sequence currval
-  SESSION_SYNC_ERROR_SYS_VAR = 10, // for error scene need sync sysvar info
-  SESSION_SYNC_MAX_TYPE,
-};
-
 
 struct SessSyncTxnTypeSet {
   SessSyncTxnTypeSet() {
@@ -250,6 +235,101 @@ struct SessSyncTxnTypeSet {
   }
 };
 
+enum SessionSyncState {
+  SESSION_SYNC_INIT_STATE = 0, // init
+  SESSION_FEEDBACK = 1, // for feedback
+  SESSION_SYNC = 2, // for sync
+  SESSION_SYNC_STATE_MAX_TYPE,
+};
+
+class SessSyncDiagInfo {
+public:
+  SessSyncDiagInfo() : sess_sync_info_type_(SESSION_SYNC_MAX_TYPE),
+                      sync_state_(SESSION_SYNC_INIT_STATE), value_(), time_(0), sess_id_(0),
+                      proxy_sess_id_(0) {}
+  virtual ~SessSyncDiagInfo() {
+
+  }
+  inline bool operator==(const SessSyncDiagInfo &other) const {
+      return addr_ == other.addr_ &&
+            proxy_addr_ == other.proxy_addr_ &&
+            sess_sync_info_type_ == other.sess_sync_info_type_ &&
+            sync_state_ == other.sync_state_ &&
+            value_ == other.value_ &&
+            time_ == other.time_ &&
+            sess_id_ == other.sess_id_ &&
+            proxy_sess_id_ == other.proxy_sess_id_;
+    }
+  inline void reset()
+  {
+    addr_.reset();
+    proxy_addr_.reset();
+    sess_sync_info_type_ = SESSION_SYNC_MAX_TYPE;
+    sync_state_ = SESSION_SYNC_INIT_STATE;
+    value_.reset();
+    time_ = 0;
+    sess_id_ = 0;
+    proxy_sess_id_ = 0;
+  }
+  void set_sess_id(const uint32_t sess_id) {
+    sess_id_ = sess_id;
+  }
+  void set_proxy_sess_id(const uint64_t proxy_sess_id) {
+    proxy_sess_id_ = proxy_sess_id;
+  }
+  void set_addr(const ObAddr addr) {
+    addr_ = addr;
+  }
+  void set_proxy_addr(const ObAddr addr) {
+    proxy_addr_ = addr;
+  }
+  uint32_t get_sess_id() const { return sess_id_; }
+  uint64_t get_proxy_sess_id() const { return proxy_sess_id_; }
+  const common::ObAddr& get_addr() const
+  {
+    return addr_;
+  }
+  common::ObAddr& get_addr()
+  {
+    return addr_;
+  }
+  const common::ObAddr& get_proxy_addr() const
+  {
+    return proxy_addr_;
+  }
+  common::ObAddr& get_proxy_addr()
+  {
+    return proxy_addr_;
+  }
+  int16_t get_sync_info_type() const { return sess_sync_info_type_; }
+  void set_sync_info_type(const int16_t sess_sync_info_type) {
+    sess_sync_info_type_ = sess_sync_info_type;
+  }
+  int16_t get_sync_state() const { return sync_state_; }
+  void set_sync_state(const int16_t sync_state) {
+    sync_state_ = sync_state;
+  }
+  int64_t get_time() const { return time_; }
+  void set_time(const int64_t time) {
+    time_ = time;
+  }
+  ObString &get_value() { return value_; }
+  void set_value(const ObString &value) {
+    value_ = value;
+  }
+  TO_STRING_KV(K_(addr), K_(proxy_addr), K_(sess_sync_info_type), K_(sync_state),
+               K_(value), K_(time), K_(sess_id), K_(proxy_sess_id));
+private:
+  ObAddr addr_; //self addr. ip & port
+  ObAddr proxy_addr_; // proxy addr, ip & port
+  int16_t sess_sync_info_type_; // session sync type
+  int16_t sync_state_;  // feedback or sync state
+  ObString value_;  // diagnosis info
+  int64_t time_;  // GTS
+  uint32_t sess_id_;  // session id
+  uint64_t proxy_sess_id_; // proxy session id
+};
+
 class ObSessInfoEncoder {
 public:
   ObSessInfoEncoder() : is_changed_(false) {}
@@ -267,6 +347,8 @@ public:
                                 const char* last_sess_buf, int64_t last_sess_length) = 0;
   virtual int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
         int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) = 0;
+  virtual int display_diagnosis_sess_info(ObSQLSessionInfo &sess,
+          const int16_t type, int64_t index) = 0;
   bool is_changed_;
 };
 
@@ -283,6 +365,8 @@ public:
                               const char* last_sess_buf, int64_t last_sess_length);
   int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
             int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length);
+  int display_diagnosis_sess_info(ObSQLSessionInfo &sess,
+          const int16_t type, int64_t index);
 };
 
 class ObAppInfoEncoder : public ObSessInfoEncoder {
@@ -298,6 +382,8 @@ public:
                               const char* last_sess_buf, int64_t last_sess_length);
   int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
           int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length);
+  int display_diagnosis_sess_info(ObSQLSessionInfo &sess,
+          const int16_t type, int64_t index);
   int set_client_info(ObSQLSessionInfo* sess, const ObString &client_info);
   int set_module_name(ObSQLSessionInfo* sess, const ObString &mod);
   int set_action_name(ObSQLSessionInfo* sess, const ObString &act);
@@ -327,6 +413,8 @@ public:
                                 const char* last_sess_buf, int64_t last_sess_length);
   virtual int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
           int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length);
+  virtual int display_diagnosis_sess_info(ObSQLSessionInfo &sess,
+          const int16_t type, int64_t index);
 };
 class ObClientIdInfoEncoder : public ObSessInfoEncoder {
 public:
@@ -342,6 +430,8 @@ public:
                                 const char* last_sess_buf, int64_t last_sess_length);
   virtual int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
           int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length);
+  virtual int display_diagnosis_sess_info(ObSQLSessionInfo &sess,
+          const int16_t type, int64_t index);
 };
 
 class ObSequenceCurrvalEncoder : public ObSessInfoEncoder {
@@ -357,6 +447,8 @@ public:
                                 const char* last_sess_buf, int64_t last_sess_length) override;
   virtual int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
                                 int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) override;
+  virtual int display_diagnosis_sess_info(ObSQLSessionInfo &sess,
+          const int16_t type, int64_t index) override;
 };
 
 class ObControlInfoEncoder : public ObSessInfoEncoder {
@@ -373,6 +465,8 @@ public:
                     const char* last_sess_buf, int64_t last_sess_length);
   virtual int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
           int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length);
+  virtual int display_diagnosis_sess_info(ObSQLSessionInfo &sess,
+          const int16_t type, int64_t index);
   static const int16_t CONINFO_BY_SESS = 0xC078;
 };
 
@@ -392,6 +486,8 @@ public:
                                 const char* last_sess_buf, int64_t last_sess_length) override;
   virtual int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
                                 int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) override;
+  virtual int display_diagnosis_sess_info(ObSQLSessionInfo &sess,
+          const int16_t type, int64_t index);
 };
 
 #define DEF_SESSION_TXN_ENCODER(CLS)                                    \
@@ -404,6 +500,7 @@ public:                                                                 \
   int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess) override; \
   int compare_sess_info(const char* current_sess_buf, int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) override; \
   int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf, int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) override; \
+  int display_diagnosis_sess_info(ObSQLSessionInfo &sess, const int16_t type, int64_t index); \
 };
 DEF_SESSION_TXN_ENCODER(ObTxnStaticInfoEncoder);
 DEF_SESSION_TXN_ENCODER(ObTxnDynamicInfoEncoder);
@@ -1101,6 +1198,10 @@ public:
   int set_client_id(const common::ObString &client_identifier);
 
   bool has_sess_info_modified() const;
+  int set_diagnosis_info( uint16_t type,
+                        uint16_t state, uint64_t time, char *buf, int64_t &pos,
+                                            int32_t v_len);
+  int get_diagnosis_info(SessSyncDiagInfo &sess_diag_info, uint16_t type, uint16_t index);
   int set_module_name(const common::ObString &mod);
   int set_action_name(const common::ObString &act);
   int set_client_info(const common::ObString &client_info);
@@ -1268,7 +1369,9 @@ public:
 
   // piece
   void *get_piece_cache(bool need_init = false);
-
+  share::schema::ObUserLoginInfo get_login_info () { return login_info_; }
+  int set_login_info(const share::schema::ObUserLoginInfo &login_info);
+  int set_login_auth_data(const ObString &auth_data);
   void set_load_data_exec_session(bool v) { is_load_data_exec_session_ = v; }
   bool is_load_data_exec_session() const { return is_load_data_exec_session_; }
   inline ObSqlString &get_pl_exact_err_msg() { return pl_exact_err_msg_; }
@@ -1447,6 +1550,8 @@ private:
   char module_buf_[common::OB_MAX_MOD_NAME_LENGTH];
   char action_buf_[common::OB_MAX_ACT_NAME_LENGTH];
   char client_info_buf_[common::OB_MAX_CLIENT_INFO_LENGTH];
+  // record diag_sess_info.
+  char diag_sess_info_buf_[SESSION_SYNC_MAX_TYPE][3][common::OB_MAX_DIAG_SESS_INFO_LENGTH];
   FLTControlInfo flt_control_info_;
   bool trace_enable_ = false;
   bool is_send_control_info_ = false;  // whether send control info to client
@@ -1479,7 +1584,10 @@ private:
   ObTxnExtraInfoEncoder txn_extra_info_encoder_;
   ObSequenceCurrvalEncoder sequence_currval_encoder_;
   ObErrorSyncSysVarEncoder error_sync_sys_var_encoder_;
+
+  int16_t sess_diag_info_index_[SESSION_SYNC_MAX_TYPE];
 public:
+  SessSyncDiagInfo sess_diag_info_[SESSION_SYNC_MAX_TYPE][3];
   void post_sync_session_info();
   void prep_txn_free_route_baseline(bool reset_audit = true);
   void set_txn_free_route(bool txn_free_route);
@@ -1529,6 +1637,7 @@ private:
   int64_t current_dblink_sequence_id_;
   common::ObSEArray<ObSequenceSchema*, 2> dblink_sequence_schemas_;
   bool client_non_standard_;
+  share::schema::ObUserLoginInfo login_info_;
 };
 
 inline bool ObSQLSessionInfo::is_terminate(int &ret) const

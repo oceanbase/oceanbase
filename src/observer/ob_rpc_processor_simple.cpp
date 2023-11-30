@@ -2779,6 +2779,57 @@ int ObSessInfoVerificationP::after_process(int err_code)
   return ret;
 }
 
+int ObSessInfoDiagnosisP::process()
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = NULL;
+  ObString str_result;
+  uint32_t server_sessid = INVALID_SESSID;
+  LOG_TRACE("diagnosis process start", K(ret), K(arg_.get_proxy_sess_id()),
+            K(arg_.get_info_type()));
+  if (OB_ISNULL(gctx_.session_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "session_mgr_ is null", KR(ret));
+  } else if (OB_FAIL(gctx_.session_mgr_->get_proxy_sess_map().get_refactored(
+          arg_.get_proxy_sess_id(), server_sessid))) {
+    if (ret == OB_HASH_NOT_EXIST) {
+      // no need to display info, if current server no this proxy session id.
+      ret = OB_SUCCESS;
+      LOG_DEBUG("current proxy session id not find", K(ret), K(arg_.get_proxy_sess_id()));
+    } else {
+      COMMON_LOG(WARN, "get session failed", KR(ret), K(arg_));
+    }
+  } else if (OB_FAIL(GCTX.session_mgr_->get_session(server_sessid, session))) {
+    LOG_WARN("fail to get session info", K(server_sessid), K(session->get_proxy_sessid()));
+  } else {
+    // consider 3 scene that no need diagnosis:
+    // 1. Broken link reuse session，need diagnosis proxy sess id
+    // 2. Mixed running scene, need diagnosis version
+    // 3. Routing without synchronizing session information, judge is_has_query_executed
+    // 4. need guarantee the latest session information
+    if (arg_.get_proxy_sess_id() == session->get_proxy_sessid() &&
+        GET_MIN_CLUSTER_VERSION() == CLUSTER_CURRENT_VERSION &&
+        session->is_has_query_executed() &&
+        session->is_latest_sess_info()
+        ) {
+      if (OB_FAIL(ObSessInfoVerify::display_session_info(*session,
+          static_cast<int16_t>(arg_.get_info_type())))) {
+        COMMON_LOG(WARN, "fetch session check info failed", KR(ret));
+      } else {
+        LOG_TRACE("success to display diagnosis info", K(arg_.get_proxy_sess_id()));
+      }
+    } else {
+      LOG_TRACE("no need self diagnosis", K(arg_.get_proxy_sess_id()),
+                K(session->get_proxy_sessid()), K(GET_MIN_CLUSTER_VERSION()),
+                K(CLUSTER_CURRENT_VERSION));
+    }
+    if (NULL != session) {
+      gctx_.session_mgr_->revert_session(session);
+    }
+  }
+  return ret;
+}
+
 int ObRpcGetServerResourceInfoP::process()
 {
   int ret = OB_SUCCESS;

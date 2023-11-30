@@ -205,6 +205,7 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
+  MEMSET(sess_diag_info_index_, 0, SESSION_SYNC_MAX_TYPE * sizeof(int16_t));
 }
 
 ObSQLSessionInfo::~ObSQLSessionInfo()
@@ -385,6 +386,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
   current_dblink_sequence_id_ = 0;
   dblink_sequence_schemas_.reset();
+  MEMSET(sess_diag_info_index_, 0, SESSION_SYNC_MAX_TYPE * sizeof(int16_t));
 }
 
 void ObSQLSessionInfo::clean_status()
@@ -2877,6 +2879,23 @@ void* ObSQLSessionInfo::get_piece_cache(bool need_init) {
   return piece_cache_;
 }
 
+int ObSQLSessionInfo::set_login_info(const share::schema::ObUserLoginInfo &login_info)
+{
+  int ret = OB_SUCCESS;
+  OZ (ob_write_string(get_session_allocator(), login_info.tenant_name_, login_info_.tenant_name_));
+  OZ (ob_write_string(get_session_allocator(), login_info.user_name_, login_info_.user_name_));
+  OZ (ob_write_string(get_session_allocator(), login_info.client_ip_, login_info_.client_ip_));
+  OZ (ob_write_string(get_session_allocator(), login_info.passwd_, login_info_.passwd_));
+  OZ (ob_write_string(get_session_allocator(), login_info.db_, login_info_.db_));
+  OZ (ob_write_string(get_session_allocator(), login_info.scramble_str_, login_info_.scramble_str_));
+  return ret;
+}
+
+int ObSQLSessionInfo::set_login_auth_data(const ObString &auth_data) {
+  int ret = OB_SUCCESS;
+  OZ (ob_write_string(get_session_allocator(), auth_data, login_info_.passwd_));
+  return ret;
+}
 
 
 
@@ -3027,6 +3046,36 @@ bool ObSQLSessionInfo::has_sess_info_modified() const {
   return is_changed;
 }
 
+int ObSQLSessionInfo::set_diagnosis_info(uint16_t type,
+                      uint16_t state, uint64_t time, char *buf, int64_t &pos,
+                                            int32_t v_len)
+{
+  int ret = OB_SUCCESS;
+  int64_t index = sess_diag_info_index_[type];
+  const int64_t SESSION_DIAG_INFO_NUM = 3;
+  sess_diag_info_[type][index].reset();
+  MEMSET(diag_sess_info_buf_[type][index], 0x00,
+        common::OB_MAX_DIAG_SESS_INFO_LENGTH);
+  MEMCPY(diag_sess_info_buf_[type][index], buf + pos,
+        min(common::OB_MAX_DIAG_SESS_INFO_LENGTH, v_len));
+  sess_diag_info_[type][index].get_value().assign(
+      &diag_sess_info_buf_[type][index][0],
+      min(common::OB_MAX_DIAG_SESS_INFO_LENGTH, v_len));
+  sess_diag_info_[type][index].set_addr(GCONF.self_addr_);
+  sess_diag_info_[type][index].set_proxy_addr(get_proxy_addr());
+  sess_diag_info_[type][index].set_sync_info_type(type);
+  sess_diag_info_[type][index].set_sync_state(state);
+  sess_diag_info_[type][index].set_time(time);
+  sess_diag_info_[type][index].set_sess_id(get_sessid());
+  sess_diag_info_[type][index].set_proxy_sess_id(get_proxy_sessid());
+  LOG_DEBUG("set sessdiag info", K(sess_diag_info_[type][index]),
+    K(index), KPHEX(buf+pos, v_len),
+    KPHEX(sess_diag_info_[type][index].get_value().ptr(),
+    sess_diag_info_[type][index].get_value().length()));
+  index = (index + 1) % SESSION_DIAG_INFO_NUM;
+  return ret;
+}
+
 int ObSQLSessionInfo::set_module_name(const common::ObString &mod) {
   int ret = OB_SUCCESS;
   MEMSET(module_buf_, 0x00, common::OB_MAX_MOD_NAME_LENGTH);
@@ -3051,6 +3100,21 @@ int ObSQLSessionInfo::set_client_info(const common::ObString &client_info) {
   return ret;
 }
 
+void ObSQLSessionInfo::gen_gtt_session_scope_unique_id()
+{
+  static int64_t cur_ts = 0;
+  int64_t next_ts = ObSQLUtils::combine_server_id(ObSQLUtils::get_next_ts(cur_ts), GCTX.server_id_);
+  gtt_session_scope_unique_id_ = next_ts;
+  LOG_DEBUG("check temporary table ssid session scope", K(next_ts), K(get_sessid_for_table()), K(GCTX.server_id_), K(lbt()));
+}
+
+void ObSQLSessionInfo::gen_gtt_trans_scope_unique_id()
+{
+  static int64_t cur_ts = 0;
+  int64_t next_ts = ObSQLUtils::combine_server_id(ObSQLUtils::get_next_ts(cur_ts), GCTX.server_id_);
+  gtt_trans_scope_unique_id_ = next_ts;
+  LOG_DEBUG("check temporary table ssid trans scope", K(next_ts), K(get_sessid_for_table()), K(GCTX.server_id_), K(lbt()));
+}
 
 int ObSQLSessionInfo::get_sess_encoder(const SessionSyncInfoType sess_sync_info_type, ObSessInfoEncoder* &encoder)
 {
@@ -3222,6 +3286,17 @@ int ObErrorSyncSysVarEncoder::display_sess_info(ObSQLSessionInfo &sess, const ch
       }
     }
   }
+  return ret;
+}
+
+int ObErrorSyncSysVarEncoder::display_diagnosis_sess_info(ObSQLSessionInfo &sess,
+          const int16_t type, int64_t index)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObSessInfoVerify::display_sys_var_diagnosis_session_info(sess, type, index))) {
+    LOG_WARN("fail to display_sys_var_diagnosis_session_info", K(ret));
+  }
+
   return ret;
 }
 
@@ -3416,20 +3491,15 @@ int ObSysVarEncoder::display_sess_info(ObSQLSessionInfo &sess, const char* curre
   return ret;
 }
 
-void ObSQLSessionInfo::gen_gtt_session_scope_unique_id()
+int ObSysVarEncoder::display_diagnosis_sess_info(ObSQLSessionInfo &sess,
+          const int16_t type, int64_t index)
 {
-  static int64_t cur_ts = 0;
-  int64_t next_ts = ObSQLUtils::combine_server_id(ObSQLUtils::get_next_ts(cur_ts), GCTX.server_id_);
-  gtt_session_scope_unique_id_ = next_ts;
-  LOG_DEBUG("check temporary table ssid session scope", K(next_ts), K(get_sessid_for_table()), K(GCTX.server_id_), K(lbt()));
-}
+  int ret = OB_SUCCESS;
+    if (OB_FAIL(ObSessInfoVerify::display_sys_var_diagnosis_session_info(sess, type, index))) {
+    LOG_WARN("fail to display_sys_var_diagnosis_session_info", K(ret));
+  }
 
-void ObSQLSessionInfo::gen_gtt_trans_scope_unique_id()
-{
-  static int64_t cur_ts = 0;
-  int64_t next_ts = ObSQLUtils::combine_server_id(ObSQLUtils::get_next_ts(cur_ts), GCTX.server_id_);
-  gtt_trans_scope_unique_id_ = next_ts;
-  LOG_DEBUG("check temporary table ssid trans scope", K(next_ts), K(get_sessid_for_table()), K(GCTX.server_id_), K(lbt()));
+  return ret;
 }
 
 int ObAppInfoEncoder::serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos)
@@ -3541,6 +3611,33 @@ int ObAppInfoEncoder::display_sess_info(ObSQLSessionInfo &sess, const char* curr
           "last_sess_app_info action name", last_sess_app_info.action_name_,
           "current_sess_app_info module name", sess.get_module_name(),
           "last_sess_app_info module name", last_sess_app_info.module_name_);
+  }
+  return ret;
+}
+
+int ObAppInfoEncoder::display_diagnosis_sess_info(ObSQLSessionInfo &sess,
+          const int16_t type, int64_t index)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  ObSQLSessionInfo::ApplicationInfo record_sess_app_info;
+  if (sess.sess_diag_info_[type][index].get_value().length() == 0) {
+    LOG_INFO("diagnosis sess info is NULL", K(index),
+      K(sess.get_sessid()), K(sess.get_proxy_sessid()));
+  } else if (OB_FAIL(record_sess_app_info.deserialize(
+      sess.sess_diag_info_[type][index].get_value().ptr(),
+      sess.sess_diag_info_[type][index].get_value().length(), pos))) {
+    LOG_WARN("failed to deserialize application info.", K(ret), K(pos));
+  } else {
+    share::ObTaskController::get().allow_next_syslog();
+    LOG_INFO("session diagnosis info", "ERROR_INFO_TYPE", type,
+        "sess_id", sess.sess_diag_info_[type][index].get_sess_id(),
+        "server_addr", sess.sess_diag_info_[type][index].get_addr(),
+        "proxy_sess_id", sess.sess_diag_info_[type][index].get_proxy_sess_id(),
+        "proxy_addr", sess.sess_diag_info_[type][index].get_proxy_addr(),
+        "sync_state", sess.sess_diag_info_[type][index].get_sync_state(),
+        "time", sess.sess_diag_info_[type][index].get_time(),
+        "result", record_sess_app_info);
   }
   return ret;
 }
@@ -3670,6 +3767,33 @@ int ObClientIdInfoEncoder::display_sess_info(ObSQLSessionInfo &sess, const char*
   return ret;
 }
 
+int ObClientIdInfoEncoder::display_diagnosis_sess_info(ObSQLSessionInfo &sess,
+          const int16_t type, int64_t index)
+{
+  int ret = OB_SUCCESS;
+  common::ObString record_sess_client_identifier;
+  int64_t pos = 0;
+  if (sess.sess_diag_info_[type][index].get_value().length() == 0) {
+    LOG_INFO("diagnosis sess info is NULL", K(index),
+      K(sess.get_sessid()), K(sess.get_proxy_sessid()));
+  } else if (OB_FAIL(record_sess_client_identifier.deserialize(
+      sess.sess_diag_info_[type][index].get_value().ptr(),
+      sess.sess_diag_info_[type][index].get_value().length(), pos))) {
+    LOG_WARN("failed to deserialize application info.", K(ret), K(pos));
+  } else {
+    share::ObTaskController::get().allow_next_syslog();
+    LOG_INFO("session diagnosis info", "ERROR_INFO_TYPE", type,
+        "sess_id", sess.sess_diag_info_[type][index].get_sess_id(),
+        "server_addr", sess.sess_diag_info_[type][index].get_addr(),
+        "proxy_sess_id", sess.sess_diag_info_[type][index].get_proxy_sess_id(),
+        "proxy_addr", sess.sess_diag_info_[type][index].get_proxy_addr(),
+        "sync_state", sess.sess_diag_info_[type][index].get_sync_state(),
+        "time", sess.sess_diag_info_[type][index].get_time(),
+        "result", record_sess_client_identifier);
+  }
+  return ret;
+}
+
 int ObAppCtxInfoEncoder::serialize(ObSQLSessionInfo &sess, char *buf, const int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
@@ -3793,6 +3917,37 @@ int ObAppCtxInfoEncoder::display_sess_info(ObSQLSessionInfo &sess, const char* c
   if (OB_FAIL(ret)) {
   } else {
     LOG_TRACE("success to verify app ctx info", K(ret));
+  }
+
+  return ret;
+}
+
+int ObAppCtxInfoEncoder::display_diagnosis_sess_info(ObSQLSessionInfo &sess,
+          const int16_t type, int64_t index)
+{
+  int ret = OB_SUCCESS;
+  const char *buf = sess.sess_diag_info_[type][index].get_value().ptr();
+  int64_t data_len = sess.sess_diag_info_[type][index].get_value().length();
+  int64_t pos = 0;
+  int64_t map_size = 0;
+  if (data_len != 0) {
+    OB_UNIS_DECODE(map_size);
+    if (OB_FAIL(ret)) {
+    } else {
+      //Currently, some diagnosis information is supporte and a diagnosis interface is provided.
+      share::ObTaskController::get().allow_next_syslog();
+      LOG_INFO("session diagnosis info", "ERROR_INFO_TYPE", type,
+          "sess_id", sess.sess_diag_info_[type][index].get_sess_id(),
+          "server_addr", sess.sess_diag_info_[type][index].get_addr(),
+          "proxy_sess_id", sess.sess_diag_info_[type][index].get_proxy_sess_id(),
+          "proxy_addr", sess.sess_diag_info_[type][index].get_proxy_addr(),
+          "sync_state", sess.sess_diag_info_[type][index].get_sync_state(),
+          "time", sess.sess_diag_info_[type][index].get_time(),
+          "result", map_size);
+    }
+  } else {
+    LOG_INFO("diagnosis sess info is NULL", K(index),
+      K(sess.get_sessid()), K(sess.get_proxy_sessid()));
   }
 
   return ret;
@@ -4009,6 +4164,36 @@ int ObSequenceCurrvalEncoder::display_sess_info(ObSQLSessionInfo &sess,
   return ret;
 }
 
+int ObSequenceCurrvalEncoder::display_diagnosis_sess_info(ObSQLSessionInfo &sess,
+          const int16_t type, int64_t index)
+{
+  int ret = OB_SUCCESS;
+  const char *buf = sess.sess_diag_info_[type][index].get_value().ptr();
+  int64_t data_len = sess.sess_diag_info_[type][index].get_value().length();
+  int64_t pos = 0;
+  int64_t map_size = 0;
+  if (data_len != 0) {
+    OB_UNIS_DECODE(map_size);
+    if (OB_FAIL(ret)) {
+    } else {
+      //Currently, some diagnosis information is supporte and a diagnosis interface is provided.
+      share::ObTaskController::get().allow_next_syslog();
+      LOG_INFO("session diagnosis info", "ERROR_INFO_TYPE", type,
+          "sess_id", sess.sess_diag_info_[type][index].get_sess_id(),
+          "server_addr", sess.sess_diag_info_[type][index].get_addr(),
+          "proxy_sess_id", sess.sess_diag_info_[type][index].get_proxy_sess_id(),
+          "proxy_addr", sess.sess_diag_info_[type][index].get_proxy_addr(),
+          "sync_state", sess.sess_diag_info_[type][index].get_sync_state(),
+          "time", sess.sess_diag_info_[type][index].get_time(),
+          "result", map_size);
+    }
+  } else {
+    LOG_INFO("diagnosis sess info is NULL", K(index),
+      K(sess.get_sessid()), K(sess.get_proxy_sessid()));
+  }
+  return ret;
+}
+
 OB_DEF_SERIALIZE(ObInnerContextMap)
 {
   int ret = OB_SUCCESS;
@@ -4204,6 +4389,55 @@ int ObControlInfoEncoder::display_sess_info(ObSQLSessionInfo &sess, const char* 
   return ret;
 }
 
+// The current control info does not meet the synchronization mechanism and cannot be verified
+// Therefore, the diagnostic information is only used for display when the conditions are met
+int ObControlInfoEncoder::display_diagnosis_sess_info(ObSQLSessionInfo &sess,
+          const int16_t type, int64_t index)
+{
+  int ret = OB_SUCCESS;
+  const char *buf = sess.sess_diag_info_[type][index].get_value().ptr();
+  int64_t data_len = sess.sess_diag_info_[type][index].get_value().length();
+  int64_t pos = 0;
+  if (data_len != 0) {
+    FLTControlInfo last_sess_con;
+    FullLinkTraceExtraInfoType extra_type;
+    int32_t v_len = 0;
+    int16_t id = 0;
+    int8_t last_sess_setby_sess = 0;
+    if (OB_FAIL(FLTExtraInfo::resolve_type_and_len(buf, data_len, pos, extra_type, v_len))) {
+      LOG_WARN("failed to resolve type and len", K(data_len), K(pos));
+    } else if (extra_type != FLT_TYPE_CONTROL_INFO) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid extra type", K(extra_type), K(ret));
+    } else if (OB_FAIL(last_sess_con.deserialize(buf, pos+v_len, pos))) {
+      LOG_WARN("failed to resolve control info", K(v_len), K(pos));
+    } else if (OB_FAIL(ObProtoTransUtil::resolve_type_and_len(buf, data_len, pos, id, v_len))) {
+      LOG_WARN("failed to get extra_info", K(ret), KP(buf));
+    } else if (CONINFO_BY_SESS != id) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid id", K(id));
+    } else if (OB_FAIL(ObProtoTransUtil::get_int1(buf, *(const_cast<int64_t *>(&data_len)),
+                                  pos, static_cast<int64_t>(v_len), last_sess_setby_sess))) {
+      LOG_WARN("failed to resolve set by sess", K(ret));
+    } else {
+      share::ObTaskController::get().allow_next_syslog();
+      LOG_INFO("session diagnosis info", "ERROR_INFO_TYPE", type,
+          "sess_id", sess.sess_diag_info_[type][index].get_sess_id(),
+          "server_addr", sess.sess_diag_info_[type][index].get_addr(),
+          "proxy_sess_id", sess.sess_diag_info_[type][index].get_proxy_sess_id(),
+          "proxy_addr", sess.sess_diag_info_[type][index].get_proxy_addr(),
+          "sync_state", sess.sess_diag_info_[type][index].get_sync_state(),
+          "time", sess.sess_diag_info_[type][index].get_time(),
+          "result", last_sess_con);
+    }
+  } else {
+    LOG_INFO("diagnosis sess info is NULL", K(index),
+      K(sess.get_sessid()), K(sess.get_proxy_sessid()));
+  }
+  return ret;
+}
+
+// Transaction layer diagnosis information only provides interface.
 #define SESS_ENCODER_DELEGATE_TO_TXN(CLS, func)                         \
 int CLS::serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos)\
 {                                                                     \
@@ -4234,6 +4468,10 @@ int CLS::compare_sess_info(const char* current_sess_buf, int64_t current_sess_le
 int CLS::display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf, int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) \
 {                                                                       \
   ObSqlTransControl::display_txn_##func##_state(sess, current_sess_buf, current_sess_length, last_sess_buf, last_sess_length); \
+  return OB_SUCCESS;                                                    \
+}                                                                       \
+int CLS::display_diagnosis_sess_info(ObSQLSessionInfo &sess, const int16_t type, int64_t index) \
+{                                                                       \
   return OB_SUCCESS;                                                    \
 }
 

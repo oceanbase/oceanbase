@@ -55,6 +55,8 @@
 #include "observer/mysql/obmp_stmt_send_long_data.h"
 #include "observer/mysql/obmp_stmt_reset.h"
 #include "observer/mysql/obmp_reset_connection.h"
+#include "observer/mysql/obmp_set_option.h"
+#include "observer/mysql/obmp_auth_response.h"
 
 #include "observer/table/ob_table_rpc_processor.h"
 #include "observer/table/ob_table_execute_processor.h"
@@ -226,6 +228,8 @@ int ObSrvMySQLXlator::translate(rpc::ObRequest &req, ObReqProcessor *&processor)
           MYSQL_PROCESSOR(ObMPStmtGetPieceData, gctx_);
           MYSQL_PROCESSOR(ObMPStmtSendLongData, gctx_);
           MYSQL_PROCESSOR(ObMPResetConnection, gctx_);
+          MYSQL_PROCESSOR(ObMPSetOption, gctx_);
+          MYSQL_PROCESSOR(ObMPAuthResponse, gctx_);
           // ps stmt close request may not response packet.
           // Howerver, in get processor phase, it may report
           // error due to lack of memory and this response error packet.

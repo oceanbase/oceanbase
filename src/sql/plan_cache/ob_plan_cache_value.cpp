@@ -182,6 +182,7 @@ ObPlanCacheValue::ObPlanCacheValue()
     stmt_type_(stmt::T_MAX)
 {
   MEMSET(sql_id_, 0, sizeof(sql_id_));
+  MEMSET(format_sql_id_, 0, sizeof(format_sql_id_));
   not_param_index_.set_attr(ObMemAttr(MTL_ID(), "NotParamIdex"));
   neg_param_index_.set_attr(ObMemAttr(MTL_ID(), "NegParamIdex"));
   must_be_positive_idx_.set_attr(ObMemAttr(MTL_ID(), "MustBePosiIdx"));
@@ -271,6 +272,7 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
     is_batch_execute_ = pc_ctx.sql_ctx_.is_batch_params_execute();
     has_dynamic_values_table_ = pc_ctx.exec_ctx_.has_dynamic_values_table();
     MEMCPY(sql_id_, pc_ctx.sql_ctx_.sql_id_, sizeof(pc_ctx.sql_ctx_.sql_id_));
+    MEMCPY(format_sql_id_, pc_ctx.sql_ctx_.format_sql_id_, sizeof(pc_ctx.sql_ctx_.format_sql_id_));
     if (OB_FAIL(not_param_index_.add_members2(pc_ctx.not_param_index_))) {
       LOG_WARN("fail to add not param index members", K(ret));
     } else if (OB_FAIL(neg_param_index_.add_members2(pc_ctx.neg_param_index_))) {
@@ -316,24 +318,36 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
       //deep copy constructed sql
       if (OB_SUCC(ret)) {
         ObString outline_signature_str;
+        ObString outline_format_signature_str;
         if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
           outline_signature_str = pc_ctx.raw_sql_;
+          outline_format_signature_.reset();
         } else {
           outline_signature_str = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_;
+          outline_format_signature_str = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.format_sql_;
         }
-        int64_t size = outline_signature_str.get_serialize_size();
-        if (0 == size) {
+        int64_t size1 = outline_signature_str.get_serialize_size();
+        int64_t size2 = outline_format_signature_str.get_serialize_size();
+        if (0 == size1 || 0 == size2) {
           ret = OB_ERR_UNEXPECTED;
         } else {
-          char *buf = NULL;
-          int64_t pos_s = 0;
-          if (OB_UNLIKELY(NULL == (buf = (char *)pc_alloc_->alloc(size)))) {
+          char *buf1 = NULL;
+          char *buf2 = NULL;
+          int64_t pos_s1 = 0;
+          int64_t pos_s2 = 0;
+          if (OB_UNLIKELY(NULL == (buf1 = (char *)pc_alloc_->alloc(size1)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("fail to alloc mem", K(ret));
-          } else if (OB_FAIL(outline_signature_str.serialize(buf, size, pos_s))) {
+          } else if (OB_UNLIKELY(NULL == (buf2 = (char *)pc_alloc_->alloc(size2)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to alloc mem", K(ret));
+          } else if (OB_FAIL(outline_signature_str.serialize(buf1, size1, pos_s1))) {
+            LOG_WARN("fail to serialize constructed_sql_", K(ret));
+          } else if (OB_FAIL(outline_format_signature_str.serialize(buf2, size2, pos_s2))) {
             LOG_WARN("fail to serialize constructed_sql_", K(ret));
           } else {
-            outline_signature_.assign_ptr(buf, static_cast<ObString::obstr_size_t>(pos_s));
+            outline_signature_.assign_ptr(buf1, static_cast<ObString::obstr_size_t>(pos_s1));
+            outline_format_signature_.assign_ptr(buf2, static_cast<ObString::obstr_size_t>(pos_s2));
           }
         }
       }
@@ -1379,6 +1393,10 @@ void ObPlanCacheValue::reset()
       pc_alloc_->free(outline_signature_.ptr());
       outline_signature_.reset();
     }
+    if (NULL != outline_format_signature_.ptr()) {
+      pc_alloc_->free(outline_format_signature_.ptr());
+      outline_format_signature_.reset();
+    }
     if (NULL != constructed_sql_.ptr()) {
       pc_alloc_->free(constructed_sql_.ptr());
       constructed_sql_.reset();
@@ -1564,18 +1582,38 @@ int ObPlanCacheValue::get_outline_version(ObSchemaGetterGuard &schema_guard,
     //do nothing
   } else {
     const ObString &signature = outline_signature_;
+    const ObString &format_signature = outline_format_signature_;
+    // try normal
     if (OB_FAIL(schema_guard.get_outline_info_with_signature(tenant_id,
             database_id,
             signature,
+            false,
             outline_info))) {
       LOG_WARN("failed to get_outline_info", K(tenant_id), K(database_id), K(signature));
-    } else if (NULL == outline_info) {
-      if (OB_FAIL(schema_guard.get_outline_info_with_sql_id(tenant_id,
-              database_id,
-              ObString::make_string(sql_id_),
-              outline_info))) {
+    // try format
+    } else if (NULL == outline_info &&
+              OB_FAIL(schema_guard.get_outline_info_with_signature(tenant_id,
+                      database_id,
+                      format_signature,
+                      true,
+                      outline_info))) {
         LOG_WARN("failed to get_outline_info", K(tenant_id), K(database_id), K(signature));
-      }
+    // try normal
+    } else if (NULL == outline_info &&
+              OB_FAIL(schema_guard.get_outline_info_with_sql_id(tenant_id,
+                      database_id,
+                      ObString::make_string(sql_id_),
+                      false,
+                      outline_info))) {
+        LOG_WARN("failed to get_outline_info", K(tenant_id), K(database_id), K(signature));
+    // try format
+    } else if (NULL == outline_info && !ObString::make_string(format_sql_id_).empty() &&
+              OB_FAIL(schema_guard.get_outline_info_with_sql_id(tenant_id,
+                      database_id,
+                      ObString::make_string(format_sql_id_),
+                      true,
+                      outline_info))) {
+        LOG_WARN("failed to get_outline_info", K(tenant_id), K(database_id), K(signature));
     }
     if (OB_SUCC(ret)) {
       if (NULL == outline_info) {

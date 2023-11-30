@@ -42,18 +42,26 @@ struct ObBaselineKey : public ObILibCacheKey
     db_id_(common::OB_INVALID_ID),
     constructed_sql_(),
     sql_id_(),
+    format_sql_(),
+    format_sql_id_(),
     sql_cs_type_(common::ObCollationType::CS_TYPE_INVALID) {}
   ObBaselineKey(const ObBaselineKey &other)
   : ObILibCacheKey(ObLibCacheNameSpace::NS_SPM),
     db_id_(other.db_id_),
     constructed_sql_(other.constructed_sql_),
     sql_id_(other.sql_id_),
+    format_sql_(other.format_sql_),
+    format_sql_id_(other.format_sql_id_),
     sql_cs_type_(other.sql_cs_type_) {}
-  ObBaselineKey(uint64_t db_id, const ObString &constructed_sql, const ObString &sql_id)
+  ObBaselineKey(uint64_t db_id, const ObString &constructed_sql,
+                const ObString &sql_id, const ObString &format_sql_id,
+                const ObString &format_sql)
   : ObILibCacheKey(ObLibCacheNameSpace::NS_SPM),
     db_id_(db_id),
     constructed_sql_(constructed_sql),
     sql_id_(sql_id),
+    format_sql_(format_sql),
+    format_sql_id_(format_sql_id),
     sql_cs_type_(common::ObCollationType::CS_TYPE_INVALID) {}
 
   void reset();
@@ -65,11 +73,15 @@ struct ObBaselineKey : public ObILibCacheKey
   TO_STRING_KV(K_(db_id),
                K_(constructed_sql),
                K_(sql_id),
+               K_(format_sql),
+               K_(format_sql_id),
                K_(namespace));
 
   uint64_t  db_id_;
   common::ObString constructed_sql_;    // Storing data only. not use in operator== and hash.
   common::ObString sql_id_;
+  common::ObString format_sql_;          // Storing data only. not use in operator== and hash.
+  common::ObString format_sql_id_;      // Storing data only. not use in operator== and hash.
   common::ObCollationType sql_cs_type_; // Storing data only. not use in operator== and hash.
 };
 

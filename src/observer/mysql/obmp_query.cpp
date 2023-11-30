@@ -910,6 +910,9 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       audit_record.user_client_addr_ = session.get_user_client_addr();
       audit_record.user_group_ = THIS_WORKER.get_group_id();
       MEMCPY(audit_record.sql_id_, ctx_.sql_id_, (int32_t)sizeof(audit_record.sql_id_));
+      MEMCPY(audit_record.format_sql_id_, ctx_.format_sql_id_, (int32_t)sizeof(audit_record.format_sql_id_));
+      audit_record.format_sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
+
       if (NULL != plan) {
         audit_record.plan_type_ = plan->get_plan_type();
         audit_record.table_scan_ = plan->contain_table_scan();

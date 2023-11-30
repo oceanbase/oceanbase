@@ -19954,7 +19954,13 @@ question_mask_size: 0
              { }
           ]
         },
-         { }
+         { },
+         {
+          "type":"T_INT",
+          "int_val":0,
+          "str_len":0,
+          "str_val":""
+        }
       ]
     }
   ]
@@ -20087,7 +20093,13 @@ question_mask_size: 0
              { }
           ]
         },
-         { }
+         { },
+         {
+          "type":"T_INT",
+          "int_val":0,
+          "str_len":0,
+          "str_val":""
+        }
       ]
     }
   ]
@@ -20215,7 +20227,13 @@ question_mask_size: 0
              { }
           ]
         },
-         { }
+         { },
+         {
+          "type":"T_INT",
+          "int_val":0,
+          "str_len":0,
+          "str_val":""
+        }
       ]
     }
   ]
@@ -20343,7 +20361,13 @@ question_mask_size: 0
              { }
           ]
         },
-         { }
+         { },
+         {
+          "type":"T_INT",
+          "int_val":0,
+          "str_len":0,
+          "str_val":""
+        }
       ]
     }
   ]
@@ -20556,6 +20580,12 @@ question_mask_size: 0
              { },
              { }
           ]
+        },
+         {
+          "type":"T_INT",
+          "int_val":0,
+          "str_len":0,
+          "str_val":""
         }
       ]
     }
@@ -20769,6 +20799,12 @@ question_mask_size: 0
              { },
              { }
           ]
+        },
+         {
+          "type":"T_INT",
+          "int_val":0,
+          "str_len":0,
+          "str_val":""
         }
       ]
     }
@@ -20988,6 +21024,12 @@ question_mask_size: 0
              { },
              { }
           ]
+        },
+         {
+          "type":"T_INT",
+          "int_val":0,
+          "str_len":0,
+          "str_val":""
         }
       ]
     }
@@ -21023,6 +21065,12 @@ question_mask_size: 0
             },
              { }
           ]
+        },
+         {
+          "type":"T_INT",
+          "int_val":0,
+          "str_len":0,
+          "str_val":""
         }
       ]
     }
@@ -21063,6 +21111,12 @@ question_mask_size: 0
             },
              { }
           ]
+        },
+         {
+          "type":"T_INT",
+          "int_val":0,
+          "str_len":0,
+          "str_val":""
         }
       ]
     }

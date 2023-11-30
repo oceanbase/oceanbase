@@ -21,11 +21,215 @@
 #include "observer/ob_sql_client_decorator.h"
 #include "observer/ob_server_struct.h"
 #include "share/ob_all_server_tracer.h"
-
+#include "rpc/obrpc/ob_rpc_proxy.h"
+#include "sql/session/ob_sql_session_mgr.h"
+#include "share/ob_rpc_struct.h"
+#include "share/ob_srv_rpc_proxy.h"
+#include "storage/tx/ob_ts_mgr.h"
 namespace oceanbase
 {
 namespace sql
 {
+
+// get gts for record session sync info.
+int ObSessInfoVerify::get_gts(int64_t &time)
+{
+  int ret = OB_SUCCESS;
+  share::SCN gts_scn;
+  const int64_t timeout_us = 1 * 1000 * 1000; // 1s
+  const transaction::MonotonicTs stc_ahead = transaction::MonotonicTs::current_time() ;
+  transaction::MonotonicTs receive_gts_ts(0);
+  const int64_t expire_time_us = common::ObTimeUtility::current_time() + timeout_us;
+  do {
+    ret = OB_TS_MGR.get_gts(MTL_ID(), stc_ahead, NULL, gts_scn, receive_gts_ts);
+    if (ret == OB_EAGAIN) {
+      if (common::ObTimeUtility::current_time() > expire_time_us) {
+        ret = OB_TIMEOUT;
+      } else {
+        ob_usleep(10);
+      }
+    } else if (OB_FAIL(ret)) {
+      CLOG_LOG(WARN, "get gts fail", KR(ret));
+    } else if (!gts_scn.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG(WARN, "get gts fail", K(gts_scn), K(ret));
+    } else {
+      time = gts_scn.get_val_for_tx();
+      CLOG_LOG(TRACE, "get gts", K(gts_scn));
+    }
+  } while (ret == OB_EAGAIN);
+  return ret;
+}
+
+int ObSessInfoVerify::record_session_info(sql::ObSQLSessionInfo &sess, char *buf, int64_t &pos,
+                                            int16_t type, int32_t v_len, int16_t state)
+{
+  int ret = OB_SUCCESS;
+  char *ptr = nullptr;
+  int64_t time = 0;
+  if (OB_FAIL(get_gts(time))) {
+    LOG_WARN("fail to get gts time", K(ret));
+  } else {
+    sess.set_diagnosis_info(type, state, time, buf, pos, v_len);
+  }
+  return ret;
+}
+
+int ObSessInfoVerify::diagnosis_session_info(sql::ObSQLSessionInfo &sess, int16_t type)
+{
+  int ret = OB_SUCCESS;
+  obrpc::ObSessInfoDiagnosisArg arg;
+  ObString current_verify_info;
+  common::ObZone zone;
+  ObArray<share::ObServerInfoInTable> servers_info;
+  if (GET_MIN_CLUSTER_VERSION() == CLUSTER_CURRENT_VERSION) {
+    if (OB_ISNULL(GCTX.srv_rpc_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("fail to get srv_rpc_proxy", K(ret), K(GCTX.srv_rpc_proxy_));
+    } else if (OB_FAIL(share::ObAllServerTracer::get_instance().get_servers_info(
+      zone, servers_info))) {
+      LOG_WARN("fail to get servers info", K(ret));
+    } else if (FALSE_IT(arg.set_info_type(static_cast<oceanbase::sql::SessionSyncInfoType>(type)))) {
+    } else if (FALSE_IT(arg.set_proxy_sess_id(
+              sess.get_proxy_sessid()))) {
+    } else {
+      ObAddr addr;
+      for (int64_t i = 0; OB_SUCC(ret) && i < servers_info.count(); i++) {
+        addr = servers_info.at(i).get_server();
+        LOG_TRACE("need rpc to addr", K(addr),K(i));
+        if (addr != GCTX.self_addr() && OB_FAIL(GCTX.srv_rpc_proxy_->to(addr).by(MTL_ID()).
+                              session_info_diagnosis(arg))) {
+          // rpc fail not self-diagnosis.
+          LOG_TRACE("fail to rpc", K(ret),K(i));
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+      // do nothing.
+    } else if (OB_FAIL(ObSessInfoVerify::display_session_info(sess, type))) {
+      LOG_WARN("fail to display session info", K(ret),
+        K(sess.get_sessid()),K(sess.get_proxy_sessid()));
+    }
+  }
+  return ret;
+}
+
+int ObSessInfoVerify::display_session_info(sql::ObSQLSessionInfo &sess, int16_t type)
+{
+  int ret = OB_SUCCESS;
+  SessSyncDiagInfo result;
+  ObSessInfoEncoder* encoder = NULL;
+  char *buf = NULL;
+
+  oceanbase::sql::SessionSyncInfoType info_type = (oceanbase::sql::SessionSyncInfoType)(type);
+  if (OB_FAIL(sess.get_sess_encoder(info_type, encoder))) {
+    LOG_WARN("failed to get session encoder", K(ret));
+  } else {
+    common::ObSEArray<SessSyncDiagInfo, 3> results;
+    for(int i = 0; OB_SUCC(ret) && i < 3; i++) {
+      if (OB_FAIL(encoder->display_diagnosis_sess_info(sess, type, i))) {
+        LOG_WARN("fail to display_diagnosis_sess_info",
+          K(sess.get_sessid()),K(sess.get_proxy_sessid()));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObSessInfoVerify::display_sys_var_diagnosis_session_info(sql::ObSQLSessionInfo &sess,
+                                                  int16_t type, int64_t index)
+{
+  int ret = OB_SUCCESS;
+  const char *buf = sess.sess_diag_info_[type][index].get_value().ptr();
+  int64_t data_len = sess.sess_diag_info_[type][index].get_value().length();
+  int64_t pos = 0;
+  int64_t buf_pos = 0;
+  int64_t deserialize_sys_var_count = 0;
+  char *ptr = NULL;
+  if (data_len != 0) {
+    LOG_DEBUG("display_diagnosis_sess_info start", K(data_len),
+      KPHEX(buf+pos, data_len), K(sess.get_sessid()));
+    if (OB_FAIL(serialization::decode(buf, data_len , pos, deserialize_sys_var_count))) {
+        LOG_WARN("fail to deserialize sys var count", K(data_len), K(pos), K(ret));
+    } else {
+      common::ObArenaAllocator allocator(common::ObModIds::OB_SQL_SESSION,
+                                                        OB_MALLOC_NORMAL_BLOCK_SIZE,
+                                                        sess.get_effective_tenant_id());
+      int64_t length = deserialize_sys_var_count * (sizeof(uint64_t)
+                        + sizeof(share::ObCharsetSysVar));
+      if (OB_ISNULL(ptr = static_cast<char *>(allocator.alloc(length)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(share::ObCharsetSysVar)),
+                  K((sizeof(uint64_t))), K(deserialize_sys_var_count));
+      } else {
+        LOG_DEBUG("total des sys vars", K(deserialize_sys_var_count));
+        const bool check_timezone_valid = false;
+        for (int64_t i = 0; OB_SUCC(ret) && i < deserialize_sys_var_count; ++i) {
+          ObObj tmp_val;
+          share::ObBasicSysVar *sys_var = NULL;
+          share::ObSysVarClassType sys_var_id = share::SYS_VAR_INVALID;
+          int16_t tmp_sys_var_id = -1;
+          int64_t store_idx = -1;
+          share::ObBasicSysVar *sess_sys_vars = NULL;
+          if (OB_FAIL(serialization::decode(buf, data_len, pos, tmp_sys_var_id))) {
+            LOG_WARN("fail to deserialize sys var id", K(data_len), K(pos), K(ret));
+          } else if (FALSE_IT(sys_var_id = static_cast<share::ObSysVarClassType>(tmp_sys_var_id))) {
+          } else if (OB_FAIL(share::ObSysVarFactory::calc_sys_var_store_idx(sys_var_id, store_idx))) {
+            if (OB_SYS_VARS_MAYBE_DIFF_VERSION == ret) {
+              // Maybe the version is different, for compatibility,
+              // skip this data and continue the loop
+              ret = OB_SUCCESS;
+              int64_t sys_var_version = 0;
+              int64_t sys_var_len = 0;
+              OB_UNIS_DECODEx(sys_var_version);
+              OB_UNIS_DECODEx(sys_var_len);
+              if (OB_SUCC(ret)) {
+                pos += sys_var_len; // skip
+                LOG_WARN("invalid sys var id, maybe version is different, skip it", K(sys_var_id));
+              }
+            } else {
+              LOG_WARN("invalid sys var id", K(sys_var_id), K(ret));
+            }
+          } else if (OB_FAIL(create_tmp_sys_var(sess, sys_var_id,
+              sess_sys_vars, allocator))) {
+            LOG_WARN("fail to create sys var", K(sys_var_id), K(ret));
+          } else if (OB_ISNULL(sess_sys_vars)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("create sys var is NULL", K(ret), K(sys_var_id), K(pos), K(data_len),K(i));
+          } else if (OB_FAIL(sess_sys_vars->deserialize(buf, data_len, pos))) {
+            LOG_WARN("fail to deserialize sys var", K(data_len), K(pos), K(sys_var_id), K(ret));
+          } else if (OB_FAIL(databuff_printf(ptr, length, buf_pos, allocator, " %d,", sys_var_id))) {
+            LOG_WARN("fail to databuff_printf", K(length), K(buf_pos), K(sys_var_id), K(ret));
+          } else if (OB_FAIL(databuff_print_obj(ptr, length, buf_pos, sess_sys_vars->get_value()))){
+            LOG_WARN("fail to databuff_printf obj", K(length), K(buf_pos), K(ret), K(i));
+          } else {
+            LOG_DEBUG("deserialize sync sys var", K(sys_var_id),
+                      K(sess.get_sessid()), K(sess.get_proxy_sessid()));
+          }
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else {
+        share::ObTaskController::get().allow_next_syslog();
+        LOG_INFO("session diagnosis info", "ERROR_INFO_TYPE", type,
+            "sess_id", sess.sess_diag_info_[type][index].get_sess_id(),
+            "server_addr", sess.sess_diag_info_[type][index].get_addr(),
+            "proxy_sess_id", sess.sess_diag_info_[type][index].get_proxy_sess_id(),
+            "proxy_addr", sess.sess_diag_info_[type][index].get_proxy_addr(),
+            "sync_state", sess.sess_diag_info_[type][index].get_sync_state(),
+            "time", sess.sess_diag_info_[type][index].get_time(),
+            "result", ObString(ptr));
+      }
+    }
+  } else {
+    LOG_INFO("diagnosis sess info is NULL", K(index),
+      K(sess.get_sessid()), K(sess.get_proxy_sessid()));
+  }
+  return ret;
+}
 
 int SessionInfoVerifacation::set_verify_info_sess_id(const uint32_t sess_id) {
   int ret = OB_SUCCESS;
@@ -224,9 +428,15 @@ int ObSessInfoVerify::compare_verify_session_info(sql::ObSQLSessionInfo &sess,
                   K(sess.get_proxy_sessid()),
                   "info_type", info_type1);
         int temp_ret = ret;
+        int64_t code = 0;
+        code = OB_E(EventTable::EN_SESS_INFO_DIAGNOSIS_CONTROL) OB_SUCCESS;
         if (OB_FAIL(encoder->display_sess_info(sess, buf1 + pos1, info_len1,
                                   buf2 + pos2, info_len2))) {
           LOG_WARN("fail to display session info", K(ret));
+        } else if (code != OB_SUCCESS && OB_FAIL(
+              ObSessInfoVerify::diagnosis_session_info(sess, info_type1))) {
+          LOG_WARN("fail to diagnosis session info", K(ret), K(info_type1),
+             K(sess.get_sessid()), K(sess.get_proxy_sessid()));
         } else {
           ret = temp_ret;
         }
@@ -531,25 +741,25 @@ int ObSessInfoVerify::sess_veri_control(obmysql::ObMySQLPacket &pkt, sql::ObSQLS
 }
 
 // this function use for get another session id when 1:1 server list test
-bool GetAnotherSessID::operator()(ObSQLSessionMgr::Key key,
-                                             ObSQLSessionInfo *sess_info)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(key);
-  LOG_TRACE("current session info", K(sess_info->get_proxy_sessid()),
-    K(sess_info->get_sessid()), K(sess_id_), K(proxy_sess_id_));
-  if (OB_ISNULL(sess_info)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session info is NULL", KR(ret));
-  } else if (sess_info->get_proxy_sessid() == proxy_sess_id_ &&
-            sess_info->get_sessid() != sess_id_) {
-    sess_id_ = sess_info->get_sessid();
-    LOG_TRACE("find another session id", K(sess_id_));
-  } else {
-    LOG_INFO("not find another session id", K(sess_id_));
-  }
-  return OB_SUCCESS == ret;
-}
+// bool GetAnotherSessID::operator()(ObSQLSessionMgr::Key key,
+//                                              ObSQLSessionInfo *sess_info)
+// {
+//   int ret = OB_SUCCESS;
+//   UNUSED(key);
+//   LOG_TRACE("current session info", K(sess_info->get_proxy_sessid()),
+//     K(sess_info->get_sessid()), K(sess_id_), K(proxy_sess_id_));
+//   if (OB_ISNULL(sess_info)) {
+//     ret = OB_ERR_UNEXPECTED;
+//     LOG_WARN("session info is NULL", KR(ret));
+//   } else if (sess_info->get_proxy_sessid() == proxy_sess_id_ &&
+//             sess_info->get_sessid() != sess_id_) {
+//     sess_id_ = sess_info->get_sessid();
+//     LOG_TRACE("find another session id", K(sess_id_));
+//   } else {
+//     LOG_INFO("not find another session id", K(sess_id_));
+//   }
+//   return OB_SUCCESS == ret;
+// }
 
 } // end of namespace sql
 } // end of namespace oceanbase

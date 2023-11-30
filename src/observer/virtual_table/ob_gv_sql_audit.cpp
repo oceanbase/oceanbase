@@ -1058,6 +1058,17 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         case PLSQL_EXEC_TIME: {
           cells[cell_idx].set_int(record.data_.plsql_exec_time_);
         } break;
+        //format_sql_id
+        case FORMAT_SQL_ID: {
+          if (OB_MAX_SQL_ID_LENGTH == strlen(record.data_.format_sql_id_)) {
+            cells[cell_idx].set_varchar(record.data_.format_sql_id_,
+                                        static_cast<ObString::obstr_size_t>(OB_MAX_SQL_ID_LENGTH));
+          } else {
+            cells[cell_idx].set_varchar("");
+          }
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                              ObCharset::get_default_charset()));
+        } break;
         default: {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(col_id));

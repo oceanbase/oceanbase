@@ -466,7 +466,7 @@ END_P SET_VAR DELIMITER
 %type <node> ls opt_tenant_list_or_ls_or_tablet_id ls_server_or_server_or_zone_or_tenant add_or_alter_zone_option
 %type <node> opt_tenant_list_v2
 %type <node> suspend_or_resume tenant_name opt_tenant_name cache_name opt_cache_name file_id opt_file_id cancel_task_type
-%type <node> sql_id_expr opt_sql_id
+%type <node> sql_id_expr opt_sql_id outline_type
 %type <node> namespace_expr opt_namespace
 %type <node> server_action server_list opt_server_list
 %type <node> zone_action upgrade_action
@@ -11712,31 +11712,31 @@ ROWS
  *
  *****************************************************************************/
 create_outline_stmt:
-create_with_opt_hint opt_replace OUTLINE relation_name ON explainable_stmt opt_outline_target
+create_with_opt_hint opt_replace outline_type OUTLINE relation_name ON explainable_stmt opt_outline_target
 {
   ParseNode *name_node = NULL;
   ParseNode *flag_node = new_terminal_node(result->malloc_pool_, T_DEFAULT);
   flag_node->value_ = 1;
 
   (void)($1);
-  malloc_non_terminal_node(name_node, result->malloc_pool_, T_RELATION_FACTOR, 2, NULL, $4);
-  dup_node_string($4, name_node, result->malloc_pool_);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_OUTLINE, 5, $2, name_node, flag_node, $6, $7);
-  dup_expr_string($6, result, @6.first_column, @6.last_column);
+  malloc_non_terminal_node(name_node, result->malloc_pool_, T_RELATION_FACTOR, 2, NULL, $5);
+  dup_node_string($5, name_node, result->malloc_pool_);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_OUTLINE, 6, $2, name_node, flag_node, $7, $8, $3);
+  dup_expr_string($7, result, @7.first_column, @7.last_column);
 }
 |
-create_with_opt_hint opt_replace OUTLINE relation_name ON STRING_VALUE USING HINT_HINT_BEGIN hint_list_with_end
+create_with_opt_hint opt_replace outline_type OUTLINE relation_name ON STRING_VALUE USING HINT_HINT_BEGIN hint_list_with_end
 {
   ParseNode *name_node = NULL;
   (void)($1);
-  malloc_non_terminal_node(name_node, result->malloc_pool_, T_RELATION_FACTOR, 2, NULL, $4); //前面一个null表示database name
+  malloc_non_terminal_node(name_node, result->malloc_pool_, T_RELATION_FACTOR, 2, NULL, $5); //前面一个null表示database name
   ParseNode *flag_node = new_terminal_node(result->malloc_pool_, T_DEFAULT);
   flag_node->value_ = 2;
 
-  if ($9 != NULL) {
-    dup_expr_string($9, result, @9.first_column, @9.last_column);
+  if ($10 != NULL) {
+    dup_expr_string($10, result, @10.first_column, @10.last_column);
   }
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_OUTLINE, 5, $2, name_node, flag_node, $9, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_OUTLINE, 6, $2, name_node, flag_node, $10, $7, $3);
 }
 ;
 
@@ -11746,13 +11746,13 @@ create_with_opt_hint opt_replace OUTLINE relation_name ON STRING_VALUE USING HIN
  *
  *****************************************************************************/
 alter_outline_stmt:
-ALTER OUTLINE relation_name ADD explainable_stmt opt_outline_target
+ALTER outline_type OUTLINE relation_name ADD explainable_stmt opt_outline_target
 {
   ParseNode *name_node = NULL;
-  malloc_non_terminal_node(name_node, result->malloc_pool_, T_RELATION_FACTOR, 2, NULL, $3);
-  dup_node_string($3, name_node, result->malloc_pool_);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_OUTLINE, 3, name_node, $5, $6);
-  dup_expr_string($5, result, @5.first_column, @5.last_column);
+  malloc_non_terminal_node(name_node, result->malloc_pool_, T_RELATION_FACTOR, 2, NULL, $4);
+  dup_node_string($4, name_node, result->malloc_pool_);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_OUTLINE, 4, name_node, $6, $7, $2);
+  dup_expr_string($6, result, @6.first_column, @6.last_column);
 }
 ;
 
@@ -11762,11 +11762,24 @@ ALTER OUTLINE relation_name ADD explainable_stmt opt_outline_target
  *
  *****************************************************************************/
 drop_outline_stmt:
-DROP OUTLINE relation_factor
+DROP outline_type OUTLINE relation_factor
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_OUTLINE, 1, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_OUTLINE, 2, $4, $2);
 }
 ;
+
+outline_type:
+FORMAT
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = OUTLINE_TYPE_FORMAT;
+  $$->is_hidden_const_ = 1;
+} |
+{ /*EMPTY*/
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = OUTLINE_TYPE_NORMAL;
+  $$->is_hidden_const_ = 1;
+}
 
 opt_outline_target:
 TO explainable_stmt

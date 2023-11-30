@@ -5039,11 +5039,15 @@ public:
   int set_signature(const common::ObString &sig) { return deep_copy_str(sig, signature_); }
   int set_sql_id(const char *sql_id) { return deep_copy_str(sql_id, sql_id_); }
   int set_sql_id(const common::ObString &sql_id) { return deep_copy_str(sql_id, sql_id_); }
+  int set_format_sql_id(const char *sql_id) { return deep_copy_str(sql_id, format_sql_id_); }
+  int set_format_sql_id(const common::ObString &sql_id) { return deep_copy_str(sql_id, format_sql_id_); }
   int set_outline_params(const common::ObString &outline_params_str);
   int set_outline_content(const char *content) { return deep_copy_str(content, outline_content_); }
   int set_outline_content(const common::ObString &content) { return deep_copy_str(content, outline_content_); }
   int set_sql_text(const char *sql) { return deep_copy_str(sql, sql_text_); }
   int set_sql_text(const common::ObString &sql) { return deep_copy_str(sql, sql_text_); }
+  int set_format_sql_text(const char *sql) { return deep_copy_str(sql, format_sql_text_); }
+  int set_format_sql_text(const common::ObString &sql) { return deep_copy_str(sql, format_sql_text_); }
   int set_outline_target(const char *target) { return deep_copy_str(target, outline_target_); }
   int set_outline_target(const common::ObString &target) { return deep_copy_str(target, outline_target_); }
   int set_owner(const char *owner) { return deep_copy_str(owner, owner_); }
@@ -5055,6 +5059,7 @@ public:
   void set_compatible(const bool compatible) { compatible_ = compatible;}
   void set_enabled(const bool enabled) { enabled_ = enabled;}
   void set_format(const ObHintFormat hint_format) { format_ = hint_format;}
+  void set_format_outline(bool is_format) { format_outline_ = is_format;}
 
   inline uint64_t get_tenant_id() const { return tenant_id_; }
   inline uint64_t get_owner_id() const { return owner_id_; }
@@ -5070,12 +5075,17 @@ public:
   inline const char *get_signature() const { return extract_str(signature_); }
   inline const char *get_sql_id() const { return extract_str(sql_id_); }
   inline const common::ObString &get_sql_id_str() const { return sql_id_; }
+  inline const char *get_format_sql_id() const { return extract_str(format_sql_id_); }
+  inline const common::ObString &get_format_sql_id_str() const { return format_sql_id_; }
   inline const common::ObString &get_signature_str() const { return signature_; }
   inline const char *get_outline_content() const { return extract_str(outline_content_); }
   inline const common::ObString &get_outline_content_str() const { return outline_content_; }
   inline const char *get_sql_text() const { return extract_str(sql_text_); }
   inline const common::ObString &get_sql_text_str() const { return sql_text_; }
   inline common::ObString &get_sql_text_str() { return sql_text_; }
+  inline const char *get_format_sql_text() const { return extract_str(format_sql_text_); }
+  inline const common::ObString &get_format_sql_text_str() const { return format_sql_text_; }
+  inline common::ObString &get_format_sql_text_str() { return format_sql_text_; }
   inline const char *get_outline_target() const { return extract_str(outline_target_); }
   inline const common::ObString &get_outline_target_str() const { return outline_target_; }
   inline common::ObString &get_outline_target_str() { return outline_target_; }
@@ -5088,6 +5098,8 @@ public:
   int get_hex_str_from_outline_params(common::ObString &hex_str, common::ObIAllocator &allocator) const;
   const ObOutlineParamsWrapper &get_outline_params_wrapper() const { return outline_params_wrapper_; }
   ObOutlineParamsWrapper &get_outline_params_wrapper() { return outline_params_wrapper_; }
+  bool is_format() { return format_outline_; }
+  bool is_format() const { return format_outline_; }
   bool has_outline_params() const { return outline_params_wrapper_.get_outline_params().count() > 0; }
   int has_concurrent_limit_param(bool &has) const;
   int gen_valid_allocator();
@@ -5100,7 +5112,8 @@ public:
   VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(database_id), K_(outline_id), K_(schema_version),
                        K_(name), K_(signature), K_(sql_id), K_(outline_content), K_(sql_text),
                        K_(owner_id), K_(owner), K_(used), K_(compatible),
-                       K_(enabled), K_(format), K_(outline_params_wrapper), K_(outline_target));
+                       K_(enabled), K_(format), K_(outline_params_wrapper), K_(outline_target),
+                       K_(format_sql_text), K_(format_sql_id), K_(format_outline));
   static bool is_sql_id_valid(const common::ObString &sql_id);
 private:
   static int replace_question_mark(const common::ObString &not_param_sql,
@@ -5134,6 +5147,9 @@ protected:
   ObHintFormat format_;
   uint64_t owner_id_;
   ObOutlineParamsWrapper outline_params_wrapper_;
+  common::ObString format_sql_text_;
+  common::ObString format_sql_id_;
+  bool format_outline_;
 };
 
 class ObDbLinkBaseInfo : public ObSchema
@@ -5805,10 +5821,11 @@ class ObOutlineNameHashWrapper
 public:
   ObOutlineNameHashWrapper() : tenant_id_(common::OB_INVALID_ID),
                                database_id_(common::OB_INVALID_ID),
-                               name_() {}
+                               name_(),
+                               is_format_(false) {}
   ObOutlineNameHashWrapper(const uint64_t tenant_id, const uint64_t database_id,
-                           const common::ObString &name_)
-      : tenant_id_(tenant_id), database_id_(database_id), name_(name_)
+                           const common::ObString &name_, bool is_format)
+      : tenant_id_(tenant_id), database_id_(database_id), name_(name_), is_format_(is_format)
   {}
   ~ObOutlineNameHashWrapper() {}
   inline uint64_t hash() const;
@@ -5820,10 +5837,13 @@ public:
   inline uint64_t get_tenant_id() const { return tenant_id_; }
   inline uint64_t get_database_id() const { return database_id_; }
   inline const common::ObString &get_name() const { return name_; }
+  inline void set_is_format(bool is_format) { is_format_ = is_format; }
+  inline bool is_format() const { return is_format_; }
 private:
   uint64_t tenant_id_;
   uint64_t database_id_;
   common::ObString name_;
+  bool is_format_;
 };
 
 inline uint64_t ObOutlineNameHashWrapper::hash() const
@@ -5832,12 +5852,14 @@ inline uint64_t ObOutlineNameHashWrapper::hash() const
   hash_ret = common::murmurhash(&tenant_id_, sizeof(uint64_t), 0);
   hash_ret = common::murmurhash(&database_id_, sizeof(uint64_t), hash_ret);
   hash_ret = common::murmurhash(name_.ptr(), name_.length(), hash_ret);
+  hash_ret = common::murmurhash(&is_format_, sizeof(bool), hash_ret);
   return hash_ret;
 }
 
 inline bool ObOutlineNameHashWrapper::operator ==(const ObOutlineNameHashWrapper &rv) const
 {
-  return (tenant_id_ == rv.tenant_id_) && (database_id_ == rv.database_id_) && (name_ == rv.name_);
+  return (tenant_id_ == rv.tenant_id_) && (database_id_ == rv.database_id_)
+            && (name_ == rv.name_) && (is_format_ == rv.is_format_);
 }
 
 class ObOutlineSignatureHashWrapper
@@ -5845,10 +5867,11 @@ class ObOutlineSignatureHashWrapper
 public:
   ObOutlineSignatureHashWrapper() : tenant_id_(common::OB_INVALID_ID),
                                     database_id_(common::OB_INVALID_ID),
-                                    signature_() {}
+                                    signature_(),
+                                    is_format_(false) {}
   ObOutlineSignatureHashWrapper(const uint64_t tenant_id, const uint64_t database_id,
-                                const common::ObString &signature)
-      : tenant_id_(tenant_id), database_id_(database_id), signature_(signature)
+                                const common::ObString &signature, bool is_format)
+      : tenant_id_(tenant_id), database_id_(database_id), signature_(signature), is_format_(is_format)
   {}
   ~ObOutlineSignatureHashWrapper() {}
   inline uint64_t hash() const;
@@ -5860,10 +5883,13 @@ public:
   inline uint64_t get_tenant_id() const { return tenant_id_; }
   inline uint64_t get_database_id() const { return database_id_; }
   inline const common::ObString &get_signature() const { return signature_; }
+  inline void set_is_format(bool is_format) { is_format_ = is_format; }
+  inline bool is_format() const { return is_format_; }
 private:
   uint64_t tenant_id_;
   uint64_t database_id_;
   common::ObString signature_;
+  bool is_format_;
 };
 
 class ObOutlineSqlIdHashWrapper
@@ -5871,10 +5897,11 @@ class ObOutlineSqlIdHashWrapper
 public:
   ObOutlineSqlIdHashWrapper() : tenant_id_(common::OB_INVALID_ID),
                                     database_id_(common::OB_INVALID_ID),
-                                    sql_id_() {}
+                                    sql_id_(),
+                                    is_format_(false) {}
   ObOutlineSqlIdHashWrapper(const uint64_t tenant_id, const uint64_t database_id,
-                                const common::ObString &sql_id)
-      : tenant_id_(tenant_id), database_id_(database_id), sql_id_(sql_id)
+                                const common::ObString &sql_id, bool is_format)
+      : tenant_id_(tenant_id), database_id_(database_id), sql_id_(sql_id), is_format_(is_format)
   {}
   ~ObOutlineSqlIdHashWrapper() {}
   inline uint64_t hash() const;
@@ -5886,10 +5913,13 @@ public:
   inline uint64_t get_tenant_id() const { return tenant_id_; }
   inline uint64_t get_database_id() const { return database_id_; }
   inline const common::ObString &get_sql_id() const { return sql_id_; }
+  inline void set_is_format(bool is_format) { is_format_ = is_format; }
+  inline bool is_format() const { return is_format_; }
 private:
   uint64_t tenant_id_;
   uint64_t database_id_;
   common::ObString sql_id_;
+  bool is_format_;
 };
 
 inline uint64_t ObOutlineSqlIdHashWrapper::hash() const
@@ -5898,13 +5928,14 @@ inline uint64_t ObOutlineSqlIdHashWrapper::hash() const
   hash_ret = common::murmurhash(&tenant_id_, sizeof(uint64_t), 0);
   hash_ret = common::murmurhash(&database_id_, sizeof(uint64_t), hash_ret);
   hash_ret = common::murmurhash(sql_id_.ptr(), sql_id_.length(), hash_ret);
+  hash_ret = common::murmurhash(&is_format_, sizeof(bool), hash_ret);
   return hash_ret;
 }
 
 inline bool ObOutlineSqlIdHashWrapper::operator ==(const ObOutlineSqlIdHashWrapper &rv) const
 {
   return (tenant_id_ == rv.tenant_id_) && (database_id_ == rv.database_id_)
-      && (sql_id_ == rv.sql_id_);
+      && (sql_id_ == rv.sql_id_) && (is_format_ == rv.is_format_);
 }
 
 inline uint64_t ObOutlineSignatureHashWrapper::hash() const
@@ -5913,13 +5944,14 @@ inline uint64_t ObOutlineSignatureHashWrapper::hash() const
   hash_ret = common::murmurhash(&tenant_id_, sizeof(uint64_t), 0);
   hash_ret = common::murmurhash(&database_id_, sizeof(uint64_t), hash_ret);
   hash_ret = common::murmurhash(signature_.ptr(), signature_.length(), hash_ret);
+  hash_ret = common::murmurhash(&is_format_, sizeof(bool), hash_ret);
   return hash_ret;
 }
 
 inline bool ObOutlineSignatureHashWrapper::operator ==(const ObOutlineSignatureHashWrapper &rv) const
 {
   return (tenant_id_ == rv.tenant_id_) && (database_id_ == rv.database_id_)
-      && (signature_ == rv.signature_);
+      && (signature_ == rv.signature_) && (is_format_ == rv.is_format_);
 }
 
 class ObSysTableChecker

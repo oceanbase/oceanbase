@@ -55,6 +55,7 @@ ob_set_subtarget(oblib_rpc obmysql_packet
   obmysql/packet/ompk_resheader.cpp
   obmysql/packet/ompk_row.cpp
   obmysql/packet/ompk_ssl_request.cpp
+  obmysql/packet/ompk_auth_switch.cpp
 )
 
 ob_set_subtarget(oblib_rpc obrpc

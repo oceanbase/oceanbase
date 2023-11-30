@@ -14,16 +14,12 @@
 #define OCEANBASE_SQL_OB_SESS_INFO_VERI_H_
 
 #include "share/ob_define.h"
+#include "share/system_variable/ob_sys_var_class_type.h"
 #include "lib/string/ob_string.h"
 #include "lib/atomic/ob_atomic.h"
-#include "rpc/obrpc/ob_rpc_proxy.h"
-#include "sql/session/ob_sql_session_mgr.h"
 #include "rpc/obmysql/packet/ompk_ok.h"
 #include "rpc/obmysql/ob_mysql_packet.h"
 #include "rpc/obmysql/ob_2_0_protocol_utils.h"
-#include "share/ob_rpc_struct.h"
-#include "share/ob_srv_rpc_proxy.h"
-
 
 namespace oceanbase
 {
@@ -32,10 +28,30 @@ namespace obrpc
 {
 class ObSrvRpcProxy;
 }
+namespace share {
+  class ObBasicSysVar;
+  enum ObSysVarClassType;
+}
 
 namespace sql
 {
 
+// Move here to avoid circular dependencies
+enum SessionSyncInfoType {
+  //SESSION_SYNC_USER_VAR,  // for user variables
+  SESSION_SYNC_APPLICATION_INFO = 0, // for application info
+  SESSION_SYNC_APPLICATION_CONTEXT = 1, // for app ctx
+  SESSION_SYNC_CLIENT_ID = 2, // for client identifier
+  SESSION_SYNC_CONTROL_INFO = 3, // for full trace link control info
+  SESSION_SYNC_SYS_VAR = 4,   // for system variables
+  SESSION_SYNC_TXN_STATIC_INFO = 5,       // 5: basic txn info
+  SESSION_SYNC_TXN_DYNAMIC_INFO = 6,      // 6: txn dynamic info
+  SESSION_SYNC_TXN_PARTICIPANTS_INFO = 7, // 7: txn dynamic info
+  SESSION_SYNC_TXN_EXTRA_INFO = 8,        // 8: txn dynamic info
+  SESSION_SYNC_SEQUENCE_CURRVAL = 9, // for sequence currval
+  SESSION_SYNC_ERROR_SYS_VAR = 10, // for error scene need sync sysvar info
+  SESSION_SYNC_MAX_TYPE,
+};
 
 // proxy -> server sess info verification.
 enum SessionInfoVerificationId
@@ -99,23 +115,29 @@ public:
         share::ObSysVarClassType sys_var_id, share::ObBasicSysVar *&sys_var,
         common::ObIAllocator &allocator);
   static int sess_veri_control(obmysql::ObMySQLPacket &pkt, sql::ObSQLSessionInfo *&session);
+  static int get_gts(int64_t &time);
+  static int record_session_info(sql::ObSQLSessionInfo &sess, char *buf, int64_t &pos,
+                                            int16_t type, int32_t v_len, int16_t state);
+  static int diagnosis_session_info(sql::ObSQLSessionInfo &sess, int16_t type);
+  static int display_session_info(sql::ObSQLSessionInfo &sess, int16_t type);
+  static int display_sys_var_diagnosis_session_info(sql::ObSQLSessionInfo &sess, int16_t type, int64_t index);
 };
 
-class GetAnotherSessID
-{
-public:
-  GetAnotherSessID()
-      : sess_id_(0), proxy_sess_id_(0) {}
-  virtual ~GetAnotherSessID() {}
-  bool operator()(SessionInfoKey key, ObSQLSessionInfo *sess_info);
-  void set_sess_id(uint32_t sess_id ) {sess_id_ = sess_id;}
-  void set_proxy_sess_id(uint64_t proxy_sess_id ) {proxy_sess_id_ = proxy_sess_id;}
-  uint32_t get_sess_id() { return sess_id_; }
-  uint64_t get_proxy_sess_id() { return proxy_sess_id_; }
-private:
-  uint32_t sess_id_;
-  uint64_t proxy_sess_id_;
-};
+// class GetAnotherSessID
+// {
+// public:
+//   GetAnotherSessID()
+//       : sess_id_(0), proxy_sess_id_(0) {}
+//   virtual ~GetAnotherSessID() {}
+//   bool operator()(SessionInfoKey key, ObSQLSessionInfo *sess_info);
+//   void set_sess_id(uint32_t sess_id ) {sess_id_ = sess_id;}
+//   void set_proxy_sess_id(uint64_t proxy_sess_id ) {proxy_sess_id_ = proxy_sess_id;}
+//   uint32_t get_sess_id() { return sess_id_; }
+//   uint64_t get_proxy_sess_id() { return proxy_sess_id_; }
+// private:
+//   uint32_t sess_id_;
+//   uint64_t proxy_sess_id_;
+// };
 
 } // namespace sql
 } // namespace oceanbase

@@ -129,6 +129,7 @@ protected:
                    ObSchemaGetterGuard *schema_guard = NULL);
   int process_extra_info(sql::ObSQLSessionInfo &session, const obmysql::ObMySQLRawPacket &pkt,
                                 bool &need_response_error);
+  int load_privilege_info_for_change_user(sql::ObSQLSessionInfo *session);
 protected:
   static const int64_t MAX_TRY_STEPS = 5;
   static int64_t TRY_EZ_BUF_SIZES[MAX_TRY_STEPS];

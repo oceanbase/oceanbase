@@ -3000,6 +3000,7 @@ question_mask_size: 0
 				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+		|--[5],[T_INT], str_value_=[], value=[0]
 
 **************   Case 153   ***************
 create or replace outline out_name on select * from t1;
@@ -3019,6 +3020,7 @@ question_mask_size: 0
 				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+		|--[5],[T_INT], str_value_=[], value=[0]
 
 **************   Case 154   ***************
 create outline out_name on select * from t1;
@@ -3037,6 +3039,7 @@ question_mask_size: 0
 				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+		|--[5],[T_INT], str_value_=[], value=[0]
 
 **************   Case 155   ***************
 create outline out_name on select /*+ssssss*/* from t1;
@@ -3055,6 +3058,7 @@ question_mask_size: 0
 				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+		|--[5],[T_INT], str_value_=[], value=[0]
 
 **************   Case 156   ***************
 create outline out_name on select /*+ssssss*/* from t1 to select /*+ssssss*/* from t1;
@@ -3081,6 +3085,7 @@ question_mask_size: 0
 				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+		|--[5],[T_INT], str_value_=[], value=[0]
 
 **************   Case 157   ***************
 create outline out_name on select /*+ssssss*/* from t1 to select * from t1;
@@ -3107,6 +3112,7 @@ question_mask_size: 0
 				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+		|--[5],[T_INT], str_value_=[], value=[0]
 
 **************   Case 158   ***************
 create outline out_name on insert /*+ssssss*/ into t1 values(1, 2)  to insert /*+ssssss*/ into t1 values(1, 2);
@@ -3139,6 +3145,7 @@ question_mask_size: 0
 						|--[0],[T_INT], str_value_=[1], value=[1]
 						|--[1],[T_INT], str_value_=[2], value=[2]
 			|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
+		|--[5],[T_INT], str_value_=[], value=[0]
 
 **************   Case 159   ***************
 drop outline out_name;
@@ -3148,6 +3155,7 @@ question_mask_size: 0
 	|--[0],[T_DROP_OUTLINE], str_value_=[], value=[0]
 		|--[0],[T_RELATION_FACTOR], str_value_=[out_name], value=[9223372036854775807]
 			|--[1],[T_IDENT], str_value_=[out_name], value=[9223372036854775807]
+		|--[1],[T_INT], str_value_=[], value=[0]
 
 **************   Case 160   ***************
 drop outline db_name.out_name;
@@ -3158,6 +3166,7 @@ question_mask_size: 0
 		|--[0],[T_RELATION_FACTOR], str_value_=[out_name], value=[9223372036854775807]
 			|--[0],[T_IDENT], str_value_=[db_name], value=[9223372036854775807]
 			|--[1],[T_IDENT], str_value_=[out_name], value=[9223372036854775807]
+		|--[1],[T_INT], str_value_=[], value=[0]
 
 **************   Case 161   ***************
 create tenant tt1 replica_num = 1, primary_zone = 'zone1', resource_pool_list = ('zone1') set ob_tcp_invited_nodes='%';

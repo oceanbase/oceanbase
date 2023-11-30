@@ -255,10 +255,42 @@ void ObSQLSessionMgr::ValueAlloc::free_value(ObSQLSessionInfo *session)
     int64_t free_total_count = 0;
     // delete from hold map, ingore error
     int tmp_ret = OB_SUCCESS;
+    ObSQLSessionInfo *tmp_sess = NULL;
+    uint32_t server_sessid = INVALID_SESSID;
     if (OB_SUCCESS != (tmp_ret = GCTX.session_mgr_->get_sess_hold_map().erase_refactored(
                                                     reinterpret_cast<uint64_t>(session)))) {
       LOG_WARN("fail to erase session", K(session->get_sessid()), K(tmp_ret), KP(session));
+    } else if (session->get_proxy_sessid() != 0) {
+      if (OB_SUCCESS != (tmp_ret = GCTX.session_mgr_->get_proxy_sess_map().get_refactored(
+                                                    session->get_proxy_sessid(), server_sessid))) {
+        if (tmp_ret == OB_HASH_NOT_EXIST) {
+          // no need to display info, if current server no this proxy session id.
+          tmp_ret = OB_SUCCESS;
+          LOG_DEBUG("current proxy session id not find", K(tmp_ret), K(session->get_proxy_sessid()));
+        } else {
+          COMMON_LOG(WARN, "get session failed", K(tmp_ret), K(session->get_proxy_sessid()));
+        }
+      } else if (OB_FAIL(GCTX.session_mgr_->get_session(server_sessid, tmp_sess))) {
+        ret = OB_SUCCESS;
+      } else if (OB_ISNULL(tmp_sess)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to alloc session info", K(session->get_proxy_sessid()),
+          K(session->get_sessid()), K(tmp_ret));
+      } else if (session->get_sessid() == tmp_sess->get_sessid()) {
+        if (OB_SUCCESS != (tmp_ret = GCTX.session_mgr_->get_proxy_sess_map().erase_refactored(
+                                                      session->get_proxy_sessid()))) {
+          LOG_WARN("fail to erase proxy session", K(session->get_proxy_sessid()),
+            K(session->get_sessid()), K(tmp_ret));
+        }
+      } else {
+        LOG_DEBUG("no need to erase proxy session", K(session->get_proxy_sessid()),
+          K(session->get_sessid()), K(tmp_sess->get_sessid()), K(tmp_ret));
+      }
+      if (NULL != tmp_sess) {
+        GCTX.session_mgr_->revert_session(tmp_sess);
+      }
     }
+
     auto *t_session_mgr = session->get_tenant_session_mgr();
     if (t_session_mgr != NULL) {
       t_session_mgr->free_session(session);
@@ -278,6 +310,10 @@ int ObSQLSessionMgr::init()
     LOG_WARN("fail to init session map", K(ret));
   } else if (OB_FAIL(sessid_sequence_.init(MAX_LOCAL_SEQ))) {
     LOG_WARN("init sessid sequence failed", K(ret));
+  } else if (OB_FAIL(proxy_sess_map_.create(BUCKET_COUNT,
+                                           SET_USE_500("ProxySessBuck"),
+                                           SET_USE_500("ProxySessNode")))) {
+    LOG_WARN("fail to init proxy session map", K(ret));
   } else if (OB_FAIL(sess_hold_map_.create(BUCKET_COUNT,
                                            SET_USE_500("SessHoldMapBuck"),
                                            SET_USE_500("SessHoldMapNode")))) {
@@ -294,6 +330,7 @@ int ObSQLSessionMgr::init()
 void ObSQLSessionMgr::destroy()
 {
   sessinfo_map_.destroy();
+  proxy_sess_map_.destroy();
   sessid_sequence_.destroy();
   sess_hold_map_.destroy();
 }
@@ -407,7 +444,31 @@ int ObSQLSessionMgr::create_session(const uint64_t tenant_id,
   } else if (OB_ISNULL(tmp_sess)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to alloc session info", K(ret), K(sessid), K(proxy_sessid));
+  } else if (proxy_sessid != 0 && OB_FAIL(GCTX.session_mgr_->get_proxy_sess_map()
+          .set_refactored(proxy_sessid, sessid))) {
+    if (OB_HASH_EXIST == ret) {
+      ret = OB_SUCCESS;
+      int flag = 1;
+      LOG_DEBUG("need to replace proxy session map", K(ret), K(proxy_sessid),
+        K(sessid), K(tmp_sess->get_sessid()));
+      if (OB_FAIL(GCTX.session_mgr_->get_proxy_sess_map()
+            .set_refactored(proxy_sessid, sessid, flag))) {
+        ret = OB_SUCCESS;
+        LOG_WARN("fail to set proxy session, no gurantee verify info", K(proxy_sessid));
+      } else {
+        LOG_DEBUG("success to set proxy session", K(sessid), K(proxy_sessid));
+      }
+    } else {
+      if (FALSE_IT(revert_session(tmp_sess))) {
+      } else if (OB_SUCCESS != (err = sessinfo_map_.del(Key(sessid)))) {
+        LOG_ERROR("fail to free session", K(err), K(sessid), K(proxy_sessid));
+      } else {
+        LOG_DEBUG("free session successfully in create session", K(err),
+            K(sessid), K(proxy_sessid));
+      }
+    }
   } else {
+    LOG_DEBUG("success to set proxy session id map", K(proxy_sessid), K(sessid));
     // create session contains a 'get_session' action implicitly
     const bool v = GCONF._enable_trace_session_leak;
     if (OB_UNLIKELY(v)) {
@@ -422,7 +483,6 @@ int ObSQLSessionMgr::create_session(const uint64_t tenant_id,
     LOG_WARN("fail to init session", K(ret), K(tmp_sess),
         K(sessid), K(proxy_sessid), K(create_time));
     if (FALSE_IT(revert_session(tmp_sess))) {
-      LOG_ERROR("fail to free session", K(err), K(sessid), K(proxy_sessid));
     } else if (OB_SUCCESS != (err = sessinfo_map_.del(Key(sessid)))) {
       LOG_ERROR("fail to free session", K(err), K(sessid), K(proxy_sessid));
     } else {
@@ -435,7 +495,6 @@ int ObSQLSessionMgr::create_session(const uint64_t tenant_id,
     if (OB_FAIL(mgr.init())) {
       LOG_WARN("failed to init full link control info", K(ret));
       if (FALSE_IT(revert_session(tmp_sess))) {
-        LOG_ERROR("fail to free session", K(err), K(sessid), K(proxy_sessid));
       } else if (OB_SUCCESS != (err = sessinfo_map_.del(Key(sessid)))) {
         LOG_ERROR("fail to free session", K(err), K(sessid), K(proxy_sessid));
       } else {
@@ -673,6 +732,7 @@ int ObSQLSessionMgr::kill_tenant(const uint64_t tenant_id)
   KillTenant kt_func(this, tenant_id);
   OZ (for_each_session(kt_func));
   OZ (sessinfo_map_.clean_tenant(tenant_id));
+  // OZ (proxy_sess_map_.clean_tenant(tenant_id));
   return ret;
 }
 

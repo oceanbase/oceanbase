@@ -36,7 +36,8 @@ enum class ConnectionPhaseEnum
 {
   CPE_CONNECTED = 0,//server will send handshake pkt
   CPE_SSL_CONNECT,  //server will do ssl connect
-  CPE_AUTHED        //server will do auth check and send ok pkt
+  CPE_AUTHED,       //server will do auth check and send ok pkt
+  CPE_AUTH_SWITCH,  //server will do auth switch check and send ok pkt
 };
 
 

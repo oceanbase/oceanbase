@@ -55,6 +55,7 @@ int ObOutlineExecutor::generate_outline_info2(ObExecContext &ctx,
   outline_info.set_tenant_id(ctx.get_my_session()->get_effective_tenant_id());
   outline_info.set_outline_content(create_outline_stmt->get_hint());
   outline_info.set_sql_id(create_outline_stmt->get_sql_id());
+  outline_info.set_format_sql_id(create_outline_stmt->get_format_sql_id());
 
   if (create_outline_stmt->get_max_concurrent() >= 0) {
     ObMaxConcurrentParam concurrent_param(&ctx.get_allocator());
@@ -90,13 +91,26 @@ int ObOutlineExecutor::generate_outline_info1(ObExecContext &ctx,
   bool has_questionmark_in_outline_sql = false;
   ObString outline;
   ObString outline_key;
-  ObString &outline_sql = outline_info.get_sql_text_str();
+  ObString outline_key_visable;
+  ObString signature;
+  ObString &outline_sql = outline_info.is_format() ?
+            outline_info.get_format_sql_text_str() : outline_info.get_sql_text_str();
   int64_t max_concurrent = ObGlobalHint::UNSET_MAX_CONCURRENT;
   const ObQueryHint *query_hint = NULL;
+  char* buf = NULL;
+  char* buf2 = NULL;
+  int32_t len = 0;
+  int64_t pos = 0;
+  int64_t pos_s = 0;
+  bool can_format = true;
   ObMaxConcurrentParam concurrent_param(&ctx.get_allocator());
+  buf = (char *)ctx.get_allocator().alloc(outline_sql.length());
   if (OB_ISNULL(ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid ctx", K(ret));
+  } else if (NULL == buf) {
+    SQL_PC_LOG(WARN, "fail to alloc buf", K(outline_sql.length()));
+    ret = OB_ALLOCATE_MEMORY_FAILED;
   } else if (OB_ISNULL(outline_stmt) || OB_ISNULL(outline_stmt->get_query_ctx())
              || OB_ISNULL(query_hint = &outline_stmt->get_query_ctx()->get_query_hint())) {
     ret = OB_ERR_UNEXPECTED;
@@ -107,68 +121,87 @@ int ObOutlineExecutor::generate_outline_info1(ObExecContext &ctx,
                                                  FP_PARAMERIZE_AND_FILTER_HINT_MODE,
                                                  has_questionmark_in_outline_sql))) {
     LOG_WARN("fail to get outline key", "outline_sql", outline_sql, K(ret));
+  } else if (!outline_key.empty() &&
+      OB_FAIL(outline_key_visable.deserialize(outline_key.ptr(), outline_key.length(), pos))) {
+    LOG_WARN("fail to deserialize signature", K(ret), K(outline_key));
+  } else if (FALSE_IT(pos = 0)) {
+    // do nothing
+  } else if (outline_info.is_format() &&
+      OB_FAIL(ObSqlParameterization::try_format_in_expr(outline_key_visable, buf, len, pos, can_format))) {
+    LOG_WARN("fail to format in expr", K(ret));
   } else if (FALSE_IT(max_concurrent = query_hint->get_global_hint().max_concurrent_)) {
-  } else if (OB_UNLIKELY(has_questionmark_in_outline_sql && max_concurrent < 0)) {
+  } else if (OB_UNLIKELY(has_questionmark_in_outline_sql && query_hint->has_hint_exclude_concurrent())) {
     ret = OB_INVALID_OUTLINE;
     LOG_USER_ERROR(OB_INVALID_OUTLINE, "sql text should have no ? when there is no concurrent limit");
     LOG_WARN("outline should have no ? when there is no concurrent limit",
              K(outline_sql), K(ret));
-  } else if (OB_UNLIKELY(max_concurrent > ObGlobalHint::UNSET_MAX_CONCURRENT
-                         && query_hint->has_hint_exclude_concurrent())) {
-    ret = OB_INVALID_OUTLINE;
-    LOG_USER_ERROR(OB_INVALID_OUTLINE, "outline and sql concurrent limit can not be mixed");
-    LOG_WARN("outline and sql concurrent limit can not be mixed",
-             "outline_sql_text", outline_info.get_sql_text_str(), K(ret));
-  } else if (ObGlobalHint::UNSET_MAX_CONCURRENT == max_concurrent
-             && OB_FAIL(get_outline(ctx, outline_stmt, outline))) {
+  } else if (OB_FAIL(get_outline(ctx, outline_stmt, outline))) {
     LOG_WARN("fail to get outline", K(ret));
   } else {
     //to check whether ok
-    outline_info.set_outline_content(outline);
-    outline_info.set_tenant_id(ctx.get_my_session()->get_effective_tenant_id());
-    outline_info.set_signature(outline_key);
-    ObString &target_sql = outline_info.get_outline_target_str();
-    if (!target_sql.empty()) {
-      ObString target_key;
-      ObString target_key_with_hint;
-      ObMaxConcurrentParam target_param(&ctx.get_allocator());
-      ObMaxConcurrentParam target_param_with_hint(&ctx.get_allocator());
-      bool has_questionmark_in_target_sql = false;
-      bool is_same_param = true;
-      //get signature derived from to_clause, then check if equal with signature derived from
-      //on_clause
-      if (OB_FAIL(ObSQLUtils::get_outline_key(ctx.get_allocator(), ctx.get_my_session(),
-                                              target_sql, target_key,
-                                              target_param.fixed_param_store_,
-                                              FP_PARAMERIZE_AND_FILTER_HINT_MODE,
-                                              has_questionmark_in_target_sql))) {
-        LOG_WARN("fail to get outline key", K(target_sql), K(ret));
+    if (outline_info.is_format() && can_format) {
+      // if can do format ouline, replace outline_key as format sql;
+      // otherwise, remain outline_key
+      outline_key_visable.assign_ptr(buf, pos);
+    }
+    int64_t size = outline_key_visable.get_serialize_size();
+    if (0 == size) {
+      // do nothing
+    } else if (OB_ISNULL(buf2 = (char *)ctx.get_allocator().alloc(size))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc mem", K(ret));
+    } else if (OB_FAIL(outline_key_visable.serialize(buf2, size, pos_s))) {
+        LOG_WARN("fail to serialize key", K(ret));
+    } else if (FALSE_IT(signature.assign_ptr(buf2,
+                        static_cast<ObString::obstr_size_t>(pos_s)))) {
+      // do nothing
+    } else {
+      outline_info.set_outline_content(outline);
+      outline_info.set_tenant_id(ctx.get_my_session()->get_effective_tenant_id());
+      outline_info.set_signature(signature);
+      ObString &target_sql = outline_info.get_outline_target_str();
+      if (!target_sql.empty()) {
+        ObString target_key;
+        ObString target_key_with_hint;
+        ObMaxConcurrentParam target_param(&ctx.get_allocator());
+        ObMaxConcurrentParam target_param_with_hint(&ctx.get_allocator());
+        bool has_questionmark_in_target_sql = false;
+        bool is_same_param = true;
+        //get signature derived from to_clause, then check if equal with signature derived from
+        //on_clause
+        if (OB_FAIL(ObSQLUtils::get_outline_key(ctx.get_allocator(), ctx.get_my_session(),
+                                                target_sql, target_key,
+                                                target_param.fixed_param_store_,
+                                                FP_PARAMERIZE_AND_FILTER_HINT_MODE,
+                                                has_questionmark_in_target_sql))) {
+          LOG_WARN("fail to get outline key", K(target_sql), K(ret));
 
-      } else if (target_key != outline_key || has_questionmark_in_target_sql != has_questionmark_in_outline_sql) {
-        ret = OB_INVALID_OUTLINE;
-        LOG_USER_ERROR(OB_INVALID_OUTLINE,
-                       "signature derived from on_clause is not same as signature derived from to_clause");
-        LOG_WARN("outline key is not same with target key", K(outline_sql), K(target_sql),
-                 K(has_questionmark_in_target_sql), K(has_questionmark_in_outline_sql), K(ret));
-      } else if (max_concurrent >= 0
-                 && (OB_FAIL(concurrent_param.same_param_as(target_param, is_same_param)) || !is_same_param)) {
-        if (OB_FAIL(ret)) {
-          LOG_WARN("fail to check if param is same", K(outline_sql), K(target_sql), K(ret));
-        } else {
+        } else if (target_key != outline_key || has_questionmark_in_target_sql != has_questionmark_in_outline_sql) {
           ret = OB_INVALID_OUTLINE;
           LOG_USER_ERROR(OB_INVALID_OUTLINE,
-                         "fixed_param  derived from on_clause is not same as fixed_param derived from to_clause");
-          LOG_WARN("outline fixed_param is not same with target fixed_param", K(outline_sql), K(target_sql), K(ret));
+                         "signature derived from on_clause is not same as signature derived from to_clause");
+          LOG_WARN("outline key is not same with target key", K(outline_sql), K(target_sql),
+                   K(has_questionmark_in_target_sql), K(has_questionmark_in_outline_sql), K(ret));
+        } else if (max_concurrent >= 0
+                   && (OB_FAIL(concurrent_param.same_param_as(target_param, is_same_param)) || !is_same_param)) {
+          if (OB_FAIL(ret)) {
+            LOG_WARN("fail to check if param is same", K(outline_sql), K(target_sql), K(ret));
+          } else {
+            ret = OB_INVALID_OUTLINE;
+            LOG_USER_ERROR(OB_INVALID_OUTLINE,
+                           "fixed_param  derived from on_clause is not same as fixed_param derived from to_clause");
+            LOG_WARN("outline fixed_param is not same with target fixed_param", K(outline_sql), K(target_sql), K(ret));
+          }
+        } else if (OB_FAIL(ObSQLUtils::get_outline_key(ctx.get_allocator(), ctx.get_my_session(),
+                                                       target_sql, target_key_with_hint,
+                                                       target_param_with_hint.fixed_param_store_,
+                                                       FP_MODE,
+                                                       has_questionmark_in_target_sql))) {
+          LOG_WARN("fail to get outline key", K(target_sql), K(ret));
+        } else {
+          //replace outline_key with target_key derived from to_clause with index not filtered
+          outline_info.set_signature(target_key_with_hint);
         }
-      } else if (OB_FAIL(ObSQLUtils::get_outline_key(ctx.get_allocator(), ctx.get_my_session(),
-                                                     target_sql, target_key_with_hint,
-                                                     target_param_with_hint.fixed_param_store_,
-                                                     FP_MODE,
-                                                     has_questionmark_in_target_sql))) {
-        LOG_WARN("fail to get outline key", K(target_sql), K(ret));
-      } else {
-        //replace outline_key with target_key derived from to_clause with index not filtered
-        outline_info.set_signature(target_key_with_hint);
       }
     }
     if (OB_SUCC(ret)) {

@@ -26,9 +26,9 @@ public:
   virtual ~ObCreateOutlineResolver() {}
   virtual int resolve(const ParseNode &parse_tree);
 private:
-  int resolve_sql_id(const ParseNode *node, ObCreateOutlineStmt &create_outline_stmt);
+  int resolve_sql_id(const ParseNode *node, ObCreateOutlineStmt &create_outline_stmt, bool is_format_sql);
   int resolve_hint(const ParseNode *node, ObCreateOutlineStmt &create_outline_stmt);
-  static const int64_t OUTLINE_CHILD_COUNT = 5;
+  static const int64_t OUTLINE_CHILD_COUNT = 6;
   DISALLOW_COPY_AND_ASSIGN(ObCreateOutlineResolver);
 };
 }//namespace sql

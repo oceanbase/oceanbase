@@ -431,26 +431,38 @@ struct ObBaselineKey
   ObBaselineKey()
   : db_id_(common::OB_INVALID_ID),
     constructed_sql_(),
-    sql_id_() {}
-  ObBaselineKey(uint64_t db_id, const ObString &constructed_sql, const ObString &sql_id)
+    sql_id_(),
+    format_sql_id_(),
+    format_sql_() {}
+  ObBaselineKey(uint64_t db_id, const ObString &constructed_sql,
+                const ObString &sql_id, const ObString &format_sql_id,
+                const ObString &format_sql)
   : db_id_(db_id),
     constructed_sql_(constructed_sql),
-    sql_id_(sql_id) {}
+    sql_id_(sql_id),
+    format_sql_id_(format_sql_id),
+    format_sql_(format_sql) {}
 
   inline void reset()
   {
     db_id_ = common::OB_INVALID_ID;
     constructed_sql_.reset();
     sql_id_.reset();
+    format_sql_id_.reset();
+    format_sql_.reset();
   }
 
   TO_STRING_KV(K_(db_id),
                K_(constructed_sql),
-               K_(sql_id));
+               K_(sql_id),
+               K_(format_sql_id),
+               K_(format_sql));
 
   uint64_t  db_id_;
   common::ObString constructed_sql_;
   common::ObString sql_id_;
+  common::ObString format_sql_id_;
+  common::ObString format_sql_;
 };
 
 struct ObSpmCacheCtx
@@ -564,6 +576,7 @@ public:
   bool is_show_trace_stmt_;  // [OUT]
   int64_t retry_times_;
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
+  char format_sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
   ExecType exec_type_;
   bool is_prepare_protocol_;
   bool is_pre_execute_;

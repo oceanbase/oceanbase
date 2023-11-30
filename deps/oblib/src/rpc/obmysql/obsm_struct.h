@@ -149,9 +149,15 @@ public:
     return type;
   }
 
+  bool is_support_plugin_auth() const {
+    return (1 == cap_flags_.cap_flags_.OB_CLIENT_PLUGIN_AUTH);
+  }
+
   inline bool is_in_connected_phase() { return rpc::ConnectionPhaseEnum::CPE_CONNECTED == connection_phase_; }
   inline bool is_in_ssl_connect_phase() { return rpc::ConnectionPhaseEnum::CPE_SSL_CONNECT == connection_phase_; }
   inline bool is_in_authed_phase() { return rpc::ConnectionPhaseEnum::CPE_AUTHED == connection_phase_; }
+  inline bool is_in_auth_switch_phase() { return rpc::ConnectionPhaseEnum::CPE_AUTH_SWITCH == connection_phase_; }
+  inline void set_auth_switch_phase() { connection_phase_ = rpc::ConnectionPhaseEnum::CPE_AUTH_SWITCH; }
   inline void set_ssl_connect_phase() { connection_phase_ = rpc::ConnectionPhaseEnum::CPE_SSL_CONNECT; }
   inline void set_auth_phase() { connection_phase_ = rpc::ConnectionPhaseEnum::CPE_AUTHED; }
   inline void set_connect_phase() { connection_phase_ = rpc::ConnectionPhaseEnum::CPE_CONNECTED; }

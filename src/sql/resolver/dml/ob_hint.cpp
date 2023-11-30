@@ -293,8 +293,14 @@ bool ObGlobalHint::has_hint_exclude_concurrent() const
          || ObParamOption::NOT_SPECIFIED != param_option_
          || !monitoring_ids_.empty()
          || !dops_.empty()
+         || false != disable_transform_
+         || false != disable_cost_based_transform_
+         || false != enable_append_
          || !opt_params_.empty()
          || !ob_ddl_schema_versions_.empty()
+         || has_gather_opt_stat_hint()
+         || false != has_dbms_stats_hint_
+         || -1 != dynamic_sampling_
          || flashback_read_tx_uncommitted_;
 }
 
