@@ -856,9 +856,7 @@ int ObInnerTableSchema::all_ddl_error_message_schema(ObTableSchema &table_schema
   }
 
   if (OB_SUCC(ret)) {
-    ObObj trace_id_default;
-    trace_id_default.set_null();
-    ADD_COLUMN_SCHEMA_T("trace_id", //column_name
+    ADD_COLUMN_SCHEMA("trace_id", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
@@ -869,9 +867,7 @@ int ObInnerTableSchema::all_ddl_error_message_schema(ObTableSchema &table_schema
       -1, //column_precision
       -1, //column_scale
       true, //is_nullable
-      false, //is_autoincrement
-      trace_id_default,
-      trace_id_default); //default_value
+      false); //is_autoincrement
   }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
