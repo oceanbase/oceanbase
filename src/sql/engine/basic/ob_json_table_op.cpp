@@ -591,7 +591,7 @@ int JtFuncHelpler::cast_to_otimstamp(ObIJsonBase *j_base,
   INIT_SUCC(ret);
   int64_t val;
 
-  oceanbase::common::ObTimeConvertCtx cvrt_ctx(NULL, true);
+  oceanbase::common::ObTimeConvertCtx cvrt_ctx(NULL, dst_type == ObTimestampType);
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
@@ -613,12 +613,7 @@ int JtFuncHelpler::cast_to_otimstamp(ObIJsonBase *j_base,
   } else if (OB_FAIL(j_base->to_datetime(val, &cvrt_ctx))) {
     LOG_WARN("wrapper to datetime failed.", K(ret), K(*j_base));
   } else if (dst_type == ObTimestampType) {
-    int64_t t_out_val = 0;
-    ret = ObTimeConverter::datetime_to_timestamp(val,
-                                                cvrt_ctx.tz_info_,
-                                                t_out_val);
-    ret = OB_ERR_UNEXPECTED_TZ_TRANSITION == ret ? OB_INVALID_DATE_VALUE : ret;
-    out_val.time_us_ = t_out_val;
+    out_val.time_us_ = val;
     out_val.time_ctx_.tail_nsec_ = 0;
   } else {
     if (OB_FAIL(ObTimeConverter::odate_to_otimestamp(val, cvrt_ctx.tz_info_, dst_type, out_val))) {
@@ -850,8 +845,7 @@ int JtFuncHelpler::cast_json_to_res(JtScanCtx* ctx, ObIJsonBase* js_val, JtColNo
                                  : ctx->spec_ptr_->value_expr_->datum_meta_.cs_type_;
   ObCollationLevel dst_coll_level = col_info.data_type_.get_collation_level();
 
-  if (OB_ISNULL(js_val)
-      || (lib::is_mysql_mode() && js_val->json_type() == common::ObJsonNodeType::J_NULL)) {
+  if (OB_ISNULL(js_val)) {
     res.set_null();
   } else {
     switch (dst_type) {
@@ -2340,7 +2334,8 @@ int JtColNode::get_next_row(ObIJsonBase* in, JtScanCtx* ctx, bool& is_null_value
     }
   } else if (col_type == COL_TYPE_EXISTS || col_type == COL_TYPE_QUERY || col_type == COL_TYPE_VALUE) {
     if (!need_cast_res) {
-    } else if (is_null_result_ || (curr_ && curr_->json_type() == ObJsonNodeType::J_NULL && !curr_->is_real_json_null(curr_))) {
+    } else if (is_null_result_ || (curr_ && curr_->json_type() == ObJsonNodeType::J_NULL
+                                  && (!curr_->is_real_json_null(curr_) || lib::is_mysql_mode()))) {
       if (!need_pro_emtpy) {
         col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_null();
       } else if (OB_FAIL(set_val_on_empty(ctx, need_cast_res))) {

@@ -1406,7 +1406,7 @@ struct NullAwareAntiJoinInfo {
                                 ObIArray<ObRawExpr*> &subquery_exprs);
 
     int param_json_table_expr(ObRawExpr* &json_table_expr,
-                              ObExecParamRawExpr*& nl_params,
+                              ObIArray<ObExecParamRawExpr *> &nl_params,
                               ObIArray<ObRawExpr*> &subquery_exprs);
     /**
      * 为本节点增加一条路径，代价竞争过程在这里实现
