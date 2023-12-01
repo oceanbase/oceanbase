@@ -177,6 +177,7 @@ private:
                                 ObIArray<ObRawExpr *> &output_pushdown_preds);
 
   int extract_valid_preds(ObSelectStmt *stmt,
+                          ObSelectStmt *child_stmt,
                           ObIArray<ObRawExpr *> &all_preds,
                           ObIArray<ObRawExpr *> &valid_exprs,
                           ObIArray<ObRawExpr *> &invalid_exprs);

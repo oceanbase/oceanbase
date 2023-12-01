@@ -1848,17 +1848,22 @@ public:
                                bool used_in_compare,
                                bool &can_replace);
 
-  static int check_pushdown_into_set_valid(ObRawExpr *expr,
+  static int check_pushdown_into_set_valid(const ObSelectStmt* child_stmt,
+                                           ObRawExpr *expr,
                                            const ObIArray<ObRawExpr *> &set_op_exprs,
                                            bool &is_valid);
 
-  static int recursive_check_pushdown_into_set_valid(ObRawExpr *expr,
+  static int recursive_check_pushdown_into_set_valid(const ObSelectStmt* child_stmt,
+                                                     ObRawExpr *expr,
                                                      const ObIArray<ObRawExpr *> &set_op_exprs,
                                                      ObIArray<ObRawExpr *> &parent_exprs,
                                                      bool &is_valid);
   static int get_explicated_ref_columns(const uint64_t table_id,
                                         ObDMLStmt *stmt,
                                         ObIArray<ObRawExpr*> &table_cols);
+  static int check_child_projection_validity(const ObSelectStmt *child_stmt,
+                                             ObRawExpr *expr,
+                                             bool &is_valid);
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
                                       TableItem *table,
