@@ -130,7 +130,7 @@ extern void obsql_oracle_parse_fatal_error(int32_t errcode, yyscan_t yyscanner, 
 //%nonassoc STRING_VALUE
 %left   '(' ')'
 %nonassoc SQL_CACHE SQL_NO_CACHE CHARSET DATABASE_ID REPLICA_NUM/*for shift/reduce conflict between opt_query_expresion_option_list and SQL_CACHE*/
-%nonassoc HIGHER_PARENS TRANSACTION SIZE AUTO SKEWONLY /*for simple_expr conflict*/
+%nonassoc HIGHER_PARENS TRANSACTION SIZE AUTO SKEWONLY DEFAULT/*for simple_expr conflict*/
 %left   '.'
 %right  NOT NOT2
 %right BINARY COLLATE
@@ -421,7 +421,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_float_precision opt_number_precision
 %type <node> opt_equal_mark opt_default_mark read_only_or_write not not2 opt_disk_alias
 %type <node> int_or_decimal
-%type <node> opt_column_attribute_list column_attribute column_attribute_list
+%type <node> opt_column_attribute_list column_attribute column_attribute_list opt_column_default_value opt_column_default_value_list
 %type <node> show_stmt from_or_in columns_or_fields database_or_schema index_or_indexes_or_keys opt_from_or_in_database_clause opt_show_condition opt_desc_column_option opt_status opt_storage
 %type <node> prepare_stmt stmt_name preparable_stmt
 %type <node> variable_set_stmt var_and_val_list var_and_val to_or_eq set_expr_or_default sys_var_and_val_list sys_var_and_val opt_set_sys_var opt_global_sys_vars_set
@@ -6020,9 +6020,9 @@ not NULLX
   malloc_terminal_node($$, result->malloc_pool_, T_CONSTR_NULL);
   $$->sql_str_off_ = $1->sql_str_off_;
 }
-| DEFAULT now_or_signed_literal
+| opt_column_default_value_list %prec LOWER_PARENS
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CONSTR_DEFAULT, 1, $2);
+  $$ = $1;
 }
 | ORIG_DEFAULT now_or_signed_literal
 {
@@ -6074,6 +6074,23 @@ not NULLX
   $$->sql_str_off_ = $2->sql_str_off_;
 }
 ;
+
+opt_column_default_value_list:
+opt_column_default_value_list opt_column_default_value
+{
+  UNUSED($1);
+  $$ = $2;
+}
+| opt_column_default_value
+{
+  $$ = $1;
+}
+
+opt_column_default_value:
+DEFAULT now_or_signed_literal
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CONSTR_DEFAULT, 1, $2);
+}
 
 now_or_signed_literal:
 cur_timestamp_func
