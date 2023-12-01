@@ -118,6 +118,7 @@ private:
 public:
   ObSqlPlan(common::ObIAllocator &allocator);
   virtual ~ObSqlPlan();
+  void set_session_info(ObSQLSessionInfo *session) { session_ = session; }
   int store_sql_plan(ObLogPlan* log_plan, ObPhysicalPlan* phy_plan);
 
   int store_sql_plan_for_explain(ObExecContext *ctx,
@@ -137,10 +138,14 @@ public:
   int format_sql_plan(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
                       ExplainType type,
                       const ObExplainDisplayOpt& option,
-                      PlanText &plan_text);
+                      PlanText &plan_text,
+                      const bool alloc_buffer = true);
 
   static int get_plan_outline_info_one_line(PlanText &plan_text,
                                             ObLogPlan* plan);
+
+  static int get_plan_used_hint_info_one_line(PlanText &plan_text,
+                                              ObLogPlan* plan);
 
   static int plan_text_to_string(PlanText &plan_text,
                                  common::ObString &plan_str);
@@ -173,8 +178,8 @@ private:
                               ObLogPlan* plan,
                               ObSqlPlanItem* sql_plan_item);
 
-  int get_plan_tree_used_hint(PlanText &plan_text,
-                              ObLogicalOperator* op);
+  static int get_plan_tree_used_hint(PlanText &plan_text,
+                                     ObLogicalOperator* op);
 
   int get_qb_name_trace(PlanText &plan_text,
                         ObLogPlan* plan,
@@ -275,6 +280,8 @@ private:
                       transaction::ObTxDesc *tx_desc,
                       int64_t nested_count);
 
+  const char* get_tree_line(int type);
+
 public:
   static int format_one_output_expr(char *buf,
                                     int64_t buf_len,
@@ -287,6 +294,7 @@ public:
 
 private:
   common::ObIAllocator &allocator_;
+  ObSQLSessionInfo *session_;
 };
 
 } // end of namespace sql

@@ -1451,28 +1451,6 @@ protected:
                                           const ObIArray<TableItem*> &table_items,
                                           const ObIArray<ObRawExpr*> &join_conditions);
 
-  int init_leading_info_from_joined_tables(TableItem *table);
-
-  int init_leading_info_from_tables(const ObIArray<TableItem*> &table_items,
-                                   const ObIArray<SemiInfo*> &semi_infos);
-
-  int find_join_order_pair(uint8_t beg_pos,
-                          uint8_t &end_pos,
-                          uint8_t ignore_beg_pos,
-                          uint8_t &ignore_end_pos,
-                          bool &found);
-
-  int get_table_ids_from_leading(uint8_t pos, ObRelIds& table_ids);
-
-  int init_leading_info_from_leading_pair(uint8_t beg_pos,
-                                        uint8_t end_pos,
-                                        ObRelIds &table_set);
-
-  int init_leading_info_from_leading();
-
-  int init_leading_info(const ObIArray<TableItem*> &table_items,
-                        const ObIArray<SemiInfo*> &semi_infos);
-
   int init_bushy_tree_info(const ObIArray<TableItem*> &table_items);
 
   int init_bushy_tree_info_from_joined_tables(TableItem *table);
