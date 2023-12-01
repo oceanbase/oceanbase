@@ -626,6 +626,12 @@ int ObKVCacheStore::try_flush_washable_mb(
       // sync wash
       if (OB_SUCC(ret) && size_washed < size_need_washed) {
         ret = OB_CACHE_FREE_BLOCK_NOT_ENOUGH;
+        INIT_SUCC(tmp_ret);
+        if (TC_REACH_TIME_INTERVAL(3 * 1000 * 1000/* 3s */)) {
+          if (OB_TMP_FAIL(print_tenant_memblock_info(head))) {
+            COMMON_LOG(WARN, "Fail to print tenant memblock info", K(tmp_ret));
+          }
+        }
         COMMON_LOG(INFO, "can not find enough memory block to wash", K(ret), K(size_washed), K(size_need_washed));
       }
       if (OB_FAIL(ret)) {
