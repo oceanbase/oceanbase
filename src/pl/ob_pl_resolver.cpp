@@ -10215,14 +10215,24 @@ int ObPLResolver::resolve_udf(ObUDFInfo &udf_info,
           && (ObPLBlockNS::BlockType::BLOCK_PACKAGE_BODY == current_block_->get_namespace().get_block_type()
               || ObPLBlockNS::BlockType::BLOCK_OBJECT_BODY == current_block_->get_namespace().get_block_type()
               || ObPLBlockNS::BlockType::BLOCK_ROUTINE == current_block_->get_namespace().get_block_type());
-
+        int64_t cur_pkg_version = current_block_->get_namespace().get_package_version();
+        if (OB_SUCC(ret)
+            && OB_INVALID_ID != package_routine_info->get_pkg_id()
+            && package_routine_info->get_pkg_id() != current_block_->get_namespace().get_package_id()) {
+          share::schema::ObSchemaType schema_type = OB_MAX_SCHEMA;
+          schema_type = package_routine_info->is_udt_routine() ? UDT_SCHEMA : PACKAGE_SCHEMA;
+          OZ (resolve_ctx_.schema_guard_.get_schema_version(schema_type,
+                                                            package_routine_info->get_tenant_id(),
+                                                            package_routine_info->get_pkg_id(),
+                                                            cur_pkg_version));
+        }
         OZ (ObRawExprUtils::resolve_udf_common_info(db_name,
                                                     package_name.empty() ? pkg_name : package_name,
                                                     package_routine_info->get_id(),
                                                     package_routine_info->get_pkg_id(),
                                                     package_routine_info->get_subprogram_path(),
                                                     common::OB_INVALID_VERSION, /*udf_schema_version*/
-                                                    current_block_->get_namespace().get_package_version(),
+                                                    cur_pkg_version,
                                                     package_routine_info->is_deterministic(),
                                                     package_routine_info->is_parallel_enable(),
                                                     is_package_body_udf,
