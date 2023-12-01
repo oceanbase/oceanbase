@@ -402,7 +402,7 @@ public:
   int build_tablet_iter(ObHALSTabletIterator &iter);
 
   // migration section
-  typedef common::ObFunction<int(const obrpc::ObCopyTabletInfo &tablet_info)> HandleTabletMetaFunc;
+  typedef common::ObFunction<int(const obrpc::ObCopyTabletInfo &tablet_info, const ObTabletHandle &tablet_handle)> HandleTabletMetaFunc;
   int ha_scan_all_tablets(const HandleTabletMetaFunc &handle_tablet_meta_f);
   int trim_rebuild_tablet(
       const ObTabletID &tablet_id,

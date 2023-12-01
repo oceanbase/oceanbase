@@ -48,6 +48,7 @@
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/rc/ob_tenant_base.h"
 #include "observer/omt/ob_tenant.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 #include <algorithm>
 
 using namespace oceanbase::blocksstable;
@@ -2865,45 +2866,47 @@ int ObLSBackupDataTask::report_ls_backup_task_info_(const ObLSBackupStat &stat)
   ObMySQLTransaction trans;
   int64_t max_file_id = 0;
   const bool for_update = true;
-  ObBackupLSTaskInfo ls_task_info;
   if (OB_FAIL(trans.start(report_ctx_.sql_proxy_, gen_meta_tenant_id(param_.tenant_id_)))) {
     LOG_WARN("failed to start transaction", K(ret), K(param_));
   } else {
-    ObLSBackupStat new_stat;
-    share::ObBackupStats new_task_stat;
-    share::ObBackupLSTaskAttr ls_task_attr;
-    if (OB_FAIL(share::ObBackupLSTaskOperator::get_ls_task(trans, for_update,
-              param_.job_desc_.task_id_, param_.tenant_id_, param_.ls_id_, ls_task_attr))) {
-        LOG_WARN("failed to get ls task", K(ret), K_(param));
-    } else if (OB_FAIL(ObLSBackupOperator::get_backup_ls_task_info(param_.tenant_id_,
-            param_.job_desc_.task_id_,
-            param_.ls_id_,
-            param_.turn_id_,
-            param_.retry_id_,
-            param_.backup_data_type_,
-            for_update,
-            ls_task_info,
-            trans))) {
+    const int64_t job_id = param_.job_desc_.job_id_;
+    const int64_t task_id = param_.job_desc_.task_id_;
+    const uint64_t tenant_id = param_.tenant_id_;
+    const share::ObLSID &ls_id = param_.ls_id_;
+    const int64_t turn_id = param_.turn_id_;
+    const int64_t retry_id = param_.retry_id_;
+    const share::ObBackupDataType &backup_data_type = param_.backup_data_type_;
+    share::ObBackupSetTaskAttr old_set_task_attr;
+    share::ObBackupLSTaskAttr old_ls_task_attr;
+    ObBackupLSTaskInfo old_ls_task_info;
+    ObLSBackupStat new_ls_task_info_stat;
+    share::ObBackupStats new_ls_task_stat;
+    share::ObBackupStats new_backup_set_stats;
+    if (OB_FAIL(ObBackupTaskOperator::get_backup_task(trans, job_id, tenant_id, for_update, old_set_task_attr))) {
+      LOG_WARN("failed to get backup task", K(ret), K_(param));
+    } else if (OB_FAIL(ObBackupLSTaskOperator::get_ls_task(trans, for_update,
+              task_id, tenant_id, ls_id, old_ls_task_attr))) {
+      LOG_WARN("failed to get ls task", K(ret), K_(param));
+    } else if (OB_FAIL(ObLSBackupOperator::get_backup_ls_task_info(tenant_id,
+        task_id, ls_id, turn_id, retry_id, backup_data_type, for_update, old_ls_task_info, trans))) {
       LOG_WARN("failed to get backup ls task info", K(ret), K(param_));
-    } else if (ls_task_info.is_final_) {
-      LOG_INFO("can not update if final", K(ls_task_info), K(stat));
-    } else if (ls_task_info.max_file_id_ + 1 != stat.file_id_) {
-      LOG_INFO("can not update if file id is not consecutive", K(ls_task_info), K(stat));
-    } else if (OB_FAIL(update_task_stat_(ls_task_attr.stats_, stat, new_task_stat))) {
-      LOG_WARN("failed to update task stat", K(ret), K(ls_task_attr));
-    } else if (OB_FAIL(update_task_info_stat_(ls_task_info, stat, new_stat))) {
-      LOG_WARN("failed to update task info stat", K(ret), K(ls_task_info), K(stat));
-    } else if (OB_FAIL(share::ObBackupLSTaskOperator::update_stats_(trans, param_.job_desc_.task_id_,
-        param_.tenant_id_, param_.ls_id_, new_task_stat))) {
+    } else if (old_ls_task_info.is_final_) {
+      LOG_INFO("can not update if final", K(old_ls_task_info), K(stat));
+    } else if (old_ls_task_info.max_file_id_ + 1 != stat.file_id_) {
+      LOG_INFO("can not update if file id is not consecutive", K(old_ls_task_info), K(stat));
+    } else if (OB_FAIL(update_task_stat_(old_set_task_attr.stats_, stat, new_backup_set_stats))) {
+      LOG_WARN("failed to update task stat", K(ret));
+    } else if (OB_FAIL(update_ls_task_stat_(old_ls_task_attr.stats_, stat, new_ls_task_stat))) {
+      LOG_WARN("failed to update ls task stat", K(ret), K(old_ls_task_attr));
+    } else if (OB_FAIL(update_ls_task_info_stat_(old_ls_task_info, stat, new_ls_task_info_stat))) {
+      LOG_WARN("failed to update ls task info stat", K(ret), K(old_ls_task_info), K(stat));
+    } else if (OB_FAIL(ObBackupLSTaskOperator::update_stats(trans, task_id, tenant_id, ls_id, new_ls_task_stat))) {
       LOG_WARN("failed to update stat", K(ret), K(param_));
-    } else if (OB_FAIL(ObLSBackupOperator::report_ls_backup_task_info(param_.tenant_id_,
-                   param_.job_desc_.task_id_,
-                   param_.turn_id_,
-                   param_.retry_id_,
-                   backup_data_type_,
-                   new_stat,
-                   trans))) {
-      LOG_WARN("failed to report single task info", K_(param), K_(backup_data_type), K(new_stat));
+    } else if (OB_FAIL(ObLSBackupOperator::report_ls_backup_task_info(tenant_id,
+        task_id, turn_id, retry_id, backup_data_type, new_ls_task_info_stat, trans))) {
+      LOG_WARN("failed to report single task info", K_(param), K_(backup_data_type), K(new_ls_task_info_stat));
+    } else if (OB_FAIL(ObBackupTaskOperator::update_stats(trans, task_id, tenant_id, new_backup_set_stats))) {
+      LOG_WARN("failed to update stats", K(ret), K(task_id), K(tenant_id));
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(trans.end(true /*commit*/))) {
@@ -2918,26 +2921,58 @@ int ObLSBackupDataTask::report_ls_backup_task_info_(const ObLSBackupStat &stat)
   return ret;
 }
 
-// TODO(yangyi.yyy): make tablet count accurate
 int ObLSBackupDataTask::update_task_stat_(const share::ObBackupStats &old_backup_stat, const ObLSBackupStat &ls_stat,
     share::ObBackupStats &new_backup_stat)
 {
   int ret = OB_SUCCESS;
   new_backup_stat.input_bytes_ = old_backup_stat.input_bytes_ + ls_stat.input_bytes_;
   new_backup_stat.output_bytes_ = old_backup_stat.output_bytes_ + ls_stat.output_bytes_;
-  new_backup_stat.macro_block_count_ = old_backup_stat.macro_block_count_ + ls_stat.finish_macro_block_count_;
+  new_backup_stat.macro_block_count_ = old_backup_stat.macro_block_count_;
+  new_backup_stat.tablet_count_ = old_backup_stat.tablet_count_;
   new_backup_stat.finish_macro_block_count_ = old_backup_stat.finish_macro_block_count_ + ls_stat.finish_macro_block_count_;
-  if (backup_data_type_.is_minor_backup() || backup_data_type_.is_sys_backup()) {
-    new_backup_stat.tablet_count_ = old_backup_stat.tablet_count_ + ls_stat.finish_tablet_count_;
-    new_backup_stat.finish_tablet_count_ = old_backup_stat.finish_tablet_count_ + ls_stat.finish_tablet_count_;
-  } else {
-    new_backup_stat.tablet_count_ = old_backup_stat.tablet_count_;
+  if (backup_data_type_.is_minor_backup()) {
     new_backup_stat.finish_tablet_count_ = old_backup_stat.finish_tablet_count_;
+  } else {
+    new_backup_stat.finish_tablet_count_ = old_backup_stat.finish_tablet_count_ + ls_stat.finish_tablet_count_;
+  }
+  // calibrate tablet_count and macro_block_count
+  if (new_backup_stat.finish_macro_block_count_ > new_backup_stat.macro_block_count_) {
+    LOG_INFO("calibrate macro block count", "old_macro_block_count", new_backup_stat.macro_block_count_,
+                                           "new_macro_block_count", new_backup_stat.finish_macro_block_count_);
+    new_backup_stat.macro_block_count_ = new_backup_stat.finish_macro_block_count_;
+  }
+  if (new_backup_stat.finish_tablet_count_ > new_backup_stat.tablet_count_) {
+    LOG_INFO("calibrate tablet count", "old_tablet_count", new_backup_stat.tablet_count_,
+                                       "new_tablet_count", new_backup_stat.finish_tablet_count_);
+    new_backup_stat.tablet_count_ = new_backup_stat.finish_tablet_count_;
   }
   return ret;
 }
 
-int ObLSBackupDataTask::update_task_info_stat_(
+int ObLSBackupDataTask::update_ls_task_stat_(const share::ObBackupStats &old_backup_stat, const ObLSBackupStat &ls_stat,
+    share::ObBackupStats &new_backup_stat)
+{
+  int ret = OB_SUCCESS;
+  new_backup_stat.input_bytes_ = old_backup_stat.input_bytes_ + ls_stat.input_bytes_;
+  new_backup_stat.output_bytes_ = old_backup_stat.output_bytes_ + ls_stat.output_bytes_;
+  new_backup_stat.tablet_count_ = old_backup_stat.tablet_count_;
+  new_backup_stat.macro_block_count_ = old_backup_stat.macro_block_count_;
+  new_backup_stat.finish_macro_block_count_ = old_backup_stat.finish_macro_block_count_ + ls_stat.finish_macro_block_count_;
+  if (backup_data_type_.is_minor_backup()) {
+    new_backup_stat.finish_tablet_count_ = old_backup_stat.finish_tablet_count_;
+  } else {
+    new_backup_stat.finish_tablet_count_ = old_backup_stat.finish_tablet_count_ + ls_stat.finish_tablet_count_;
+  }
+  // calibrate tablet_count and macro_block_count
+  if (new_backup_stat.finish_macro_block_count_ > new_backup_stat.macro_block_count_) {
+    LOG_INFO("calibrate macro block count", "old_macro_block_count", new_backup_stat.macro_block_count_,
+                                            "new_macro_block_count", new_backup_stat.finish_macro_block_count_);
+    new_backup_stat.macro_block_count_ = new_backup_stat.finish_macro_block_count_;
+  }
+  return ret;
+}
+
+int ObLSBackupDataTask::update_ls_task_info_stat_(
     const ObBackupLSTaskInfo &task_info, const ObLSBackupStat &stat, ObLSBackupStat &new_stat)
 {
   int ret = OB_SUCCESS;
@@ -3596,6 +3631,8 @@ int ObLSBackupMetaTask::backup_ls_meta_and_tablet_metas_(const uint64_t tenant_i
   ObExternTabletMetaWriter writer;
   ObBackupDest backup_set_dest;
   int64_t backup_tablet_count = 0;
+  int64_t backup_macro_block_count = 0;
+  int64_t calc_macro_block_count_time = 0;
 
   // save max tablet checkpoint scn of all the tablets belong to the same ls.
   SCN max_tablet_checkpoint_scn;
@@ -3615,10 +3652,13 @@ int ObLSBackupMetaTask::backup_ls_meta_and_tablet_metas_(const uint64_t tenant_i
   };
 
   // persist tablet meta
-  auto backup_tablet_meta_f = [&writer, &backup_tablet_count, &max_tablet_checkpoint_scn](const obrpc::ObCopyTabletInfo &tablet_info)->int {
+  auto backup_tablet_meta_f = [&writer, &backup_tablet_count, &max_tablet_checkpoint_scn, &backup_macro_block_count, &calc_macro_block_count_time]
+      (const obrpc::ObCopyTabletInfo &tablet_info, const ObTabletHandle &tablet_handle)->int {
     int ret = OB_SUCCESS;
     blocksstable::ObSelfBufferWriter buffer_writer("LSBackupMetaTask");
     blocksstable::ObBufferReader buffer_reader;
+    int64_t macro_block_count = 0;
+    int64_t start_time = 0;
     if (!tablet_info.is_valid()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("tablet meta is invalid", K(ret), K(tablet_info));
@@ -3626,12 +3666,17 @@ int ObLSBackupMetaTask::backup_ls_meta_and_tablet_metas_(const uint64_t tenant_i
       LOG_WARN("failed to ensure space");
     } else if (OB_FAIL(buffer_writer.write_serialize(tablet_info.param_))) {
       LOG_WARN("failed to writer", K(tablet_info));
+    } else if (FALSE_IT(start_time = ObTimeUtility::current_time())) {
+    } else if (OB_FAIL(ObStorageHAUtils::calc_tablet_sstable_macro_block_cnt(tablet_handle, macro_block_count))) {
+      LOG_WARN("failed to calc tablet sstable macro block count", K(ret), K(tablet_handle));
+    } else if (FALSE_IT(calc_macro_block_count_time += ObTimeUtility::current_time() - start_time)) {
     } else {
       buffer_reader.assign(buffer_writer.data(), buffer_writer.length(), buffer_writer.length());
       if (OB_FAIL(writer.write_meta_data(buffer_reader, tablet_info.param_.tablet_id_))) {
         LOG_WARN("failed to write meta data", K(ret), K(tablet_info));
       } else {
         max_tablet_checkpoint_scn = MAX(max_tablet_checkpoint_scn, tablet_info.param_.get_max_tablet_checkpoint_scn());
+        backup_macro_block_count += macro_block_count;
         LOG_INFO("succeed backup tablet meta", "meta", tablet_info.param_);
       }
     }
@@ -3688,7 +3733,9 @@ int ObLSBackupMetaTask::backup_ls_meta_and_tablet_metas_(const uint64_t tenant_i
         }
       } else {
         cost_ts = ObTimeUtility::current_time() - wait_gc_lock_start_ts;
-        LOG_INFO("succeed to get ls meta package and tablet meta", K(ls_id), K(cost_ts));
+        LOG_INFO("succeed to get ls meta package and tablet meta", K(ls_id), K(cost_ts), K(backup_macro_block_count),
+                                                                   K(calc_macro_block_count_time),
+                                                                   "calc_macro_block_time_ratio", calc_macro_block_count_time * 100.0 / cost_ts);
       }
     } while (OB_TABLET_GC_LOCK_CONFLICT == ret);
 
@@ -3702,6 +3749,8 @@ int ObLSBackupMetaTask::backup_ls_meta_and_tablet_metas_(const uint64_t tenant_i
                        param_.ls_id_,
                        max_tablet_checkpoint_scn))) {
       LOG_WARN("failed to update max tablet checkpoint scn", K(ret), K(param_), K(max_tablet_checkpoint_scn));
+    } else if (OB_FAIL(report_backup_stat_(backup_tablet_count, backup_macro_block_count))) {
+      LOG_WARN("failed to report backup stat", K(ret));
     } else {
       LOG_INFO("succeed backup ls meta and all tablet metas", K(ls_id), K(ls_meta_info), K(backup_tablet_count), K(max_tablet_checkpoint_scn));
     }
@@ -3733,6 +3782,77 @@ int ObLSBackupMetaTask::backup_ls_meta_package_(const ObBackupLSMetaInfo &ls_met
     LOG_WARN("failed to write ls meta info", K(ret), K(ls_meta_info));
   } else {
     LOG_INFO("backup ls meta package", K(ret), K(ls_meta_info));
+  }
+  return ret;
+}
+
+int ObLSBackupMetaTask::report_backup_stat_(const int64_t tablet_count, const int64_t macro_block_count)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
+  if (OB_FAIL(trans.start(report_ctx_.sql_proxy_, gen_meta_tenant_id(param_.tenant_id_)))) {
+    LOG_WARN("failed to start transaction", K(ret), K(param_));
+  } else {
+    const int64_t job_id = param_.job_desc_.job_id_;
+    const int64_t task_id = param_.job_desc_.task_id_;
+    const uint64_t tenant_id = param_.tenant_id_;
+    const share::ObLSID &ls_id = param_.ls_id_;
+    const bool for_update = true;
+    share::ObBackupSetTaskAttr old_set_task_attr;
+    share::ObBackupLSTaskAttr old_ls_task_attr;
+    share::ObBackupStats new_backup_task_stats;
+    share::ObBackupStats new_ls_task_stats;
+    if (OB_FAIL(ObBackupTaskOperator::get_backup_task(trans, job_id, tenant_id, for_update, old_set_task_attr))) {
+      LOG_WARN("failed to get backup task", K(ret), K_(param));
+    } else if (OB_FAIL(ObBackupLSTaskOperator::get_ls_task(trans, for_update, task_id, tenant_id, ls_id, old_ls_task_attr))) {
+      LOG_WARN("failed to get ls task", K(ret), K_(param));
+    } else if (OB_FAIL(calc_backup_stat_(old_set_task_attr, tablet_count, macro_block_count, new_backup_task_stats))) {
+      LOG_WARN("failed to calc backup stat", K(ret), K(old_set_task_attr), K(tablet_count), K(macro_block_count));
+    } else if (OB_FAIL(calc_ls_backup_stat_(old_ls_task_attr.stats_, tablet_count, macro_block_count, new_ls_task_stats))) {
+      LOG_WARN("failed to calc ls backup stat", K(ret), K_(param));
+    } else if (OB_FAIL(ObBackupTaskOperator::update_stats(trans, task_id, tenant_id, new_backup_task_stats))) {
+      LOG_WARN("failed to update stats", K(ret), K_(param));
+    } else if (OB_FAIL(ObBackupLSTaskOperator::update_stats(trans, task_id, tenant_id, ls_id, new_ls_task_stats))) {
+      LOG_WARN("failed to update stat", K(ret), K_(param));
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(trans.end(true /*commit*/))) {
+        LOG_WARN("failed to commit", K(ret));
+      }
+    } else {
+      if (OB_TMP_FAIL(trans.end(false /* commit*/))) {
+        LOG_WARN("failed to rollback trans", K(tmp_ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLSBackupMetaTask::calc_backup_stat_(const ObBackupSetTaskAttr &set_task_attr,
+    const int64_t tablet_count, const int64_t macro_block_count, ObBackupStats &backup_stats)
+{
+  int ret = OB_SUCCESS;
+  const ObBackupStats &orig_stats = set_task_attr.stats_;
+  if (OB_FAIL(backup_stats.assign(orig_stats))) {
+    LOG_WARN("failed to assign backup stats", K(ret), K(orig_stats));
+  } else {
+    backup_stats.tablet_count_ += tablet_count;
+    backup_stats.macro_block_count_ += macro_block_count;
+  }
+  return ret;
+}
+
+int ObLSBackupMetaTask::calc_ls_backup_stat_(const share::ObBackupStats &old_backup_stat, const int64_t tablet_count,
+    const int64_t macro_block_count, ObBackupStats &backup_stats)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(backup_stats.assign(old_backup_stat))) {
+    LOG_WARN("failed to assign backup stats", K(ret), K(old_backup_stat));
+  } else {
+    backup_stats.tablet_count_ = tablet_count;
+    backup_stats.macro_block_count_ = macro_block_count;
   }
   return ret;
 }

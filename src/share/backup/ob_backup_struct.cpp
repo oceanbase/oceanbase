@@ -3058,16 +3058,23 @@ bool ObBackupStats::is_valid() const
       && finish_file_count_ >= 0;
 }
 
-void ObBackupStats::assign(const ObBackupStats &other)
+int ObBackupStats::assign(const ObBackupStats &other)
 {
-  input_bytes_ = other.input_bytes_;
-  output_bytes_ = other.output_bytes_;
-  tablet_count_ = other.tablet_count_;
-  finish_tablet_count_ = other.finish_tablet_count_;
-  macro_block_count_ = other.macro_block_count_;
-  finish_macro_block_count_ = other.finish_macro_block_count_;
-  extra_bytes_ = other.extra_bytes_;
-  finish_file_count_ = other.finish_file_count_;
+  int ret = OB_SUCCESS;
+  if (!other.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arg", K(ret), K(other));
+  } else {
+    input_bytes_ = other.input_bytes_;
+    output_bytes_ = other.output_bytes_;
+    tablet_count_ = other.tablet_count_;
+    finish_tablet_count_ = other.finish_tablet_count_;
+    macro_block_count_ = other.macro_block_count_;
+    finish_macro_block_count_ = other.finish_macro_block_count_;
+    extra_bytes_ = other.extra_bytes_;
+    finish_file_count_ = other.finish_file_count_;
+  }
+  return ret;
 }
 
 void ObBackupStats::cum_with(const ObBackupStats &other)

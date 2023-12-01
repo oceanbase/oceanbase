@@ -15,6 +15,7 @@
 #include "share/config/ob_server_config.h"
 #include "share/location_cache/ob_location_service.h"
 #include "share/ob_zone_merge_info.h"
+#include "storage/tablet/ob_tablet.h"
 #include "share/tablet/ob_tablet_table_operator.h"
 #include "share/ob_global_merge_table_operator.h"
 #include "share/ob_tablet_replica_checksum_operator.h"
@@ -339,6 +340,44 @@ int ObStorageHAUtils::check_disk_space()
   const int64_t required_size = 0;
   if (OB_FAIL(THE_IO_DEVICE->check_space_full(required_size))) {
     LOG_WARN("failed to check is disk full, cannot transfer in", K(ret));
+  }
+  return ret;
+}
+
+int ObStorageHAUtils::calc_tablet_sstable_macro_block_cnt(
+    const ObTabletHandle &tablet_handle, int64_t &data_macro_block_count)
+{
+  int ret = OB_SUCCESS;
+  data_macro_block_count = 0;
+  storage::ObTableStoreIterator table_store_iter;
+  if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle));
+  } else if (OB_FAIL(tablet_handle.get_obj()->get_all_sstables(table_store_iter))) {
+    LOG_WARN("failed to get all tables", K(ret), K(tablet_handle));
+  } else if (0 == table_store_iter.count()) {
+    // do nothing
+  } else {
+    ObITable *table_ptr = NULL;
+    while (OB_SUCC(ret)) {
+      table_ptr = NULL;
+      if (OB_FAIL(table_store_iter.get_next(table_ptr))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          LOG_WARN("failed to get next", K(ret));
+        }
+      } else if (OB_ISNULL(table_ptr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table should not be null", K(ret));
+      } else if (!table_ptr->is_sstable()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table is not sstable", K(ret), KPC(table_ptr));
+      } else {
+        data_macro_block_count += static_cast<blocksstable::ObSSTable *>(table_ptr)->get_data_macro_block_count();
+      }
+    }
   }
   return ret;
 }
