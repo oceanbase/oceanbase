@@ -412,6 +412,13 @@ public:
                         const uint64_t &column_id,
                         const int64_t &autoinc_version,
                         common::ObMySQLTransaction &trans);
+  // for alter table autoinc to recognize old autoincrement value in inner table
+  int try_lock_autoinc_row(const uint64_t &tenant_id,
+                           const uint64_t &table_id,
+                           const uint64_t &column_id,
+                           const int64_t &autoinc_version,
+                           bool &need_update_inner_table,
+                           common::ObMySQLTransaction &trans);
 
 private:
   uint64_t get_max_value(const common::ObObjType type);
