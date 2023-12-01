@@ -73,7 +73,6 @@ ObTabletPointer::~ObTabletPointer()
 
 void ObTabletPointer::reset()
 {
-  ls_handle_.reset();
   {
     ObByteLockGuard guard(ddl_kv_mgr_lock_);
     ddl_kv_mgr_handle_.reset();
@@ -81,11 +80,11 @@ void ObTabletPointer::reset()
   mds_table_handler_.reset();
   memtable_mgr_handle_.reset();
   ddl_info_.reset();
-  initial_state_ = true;
   ATOMIC_STORE(&initial_state_, true);
   old_version_chain_ = nullptr;
 
   ObMetaPointer<ObTablet>::reset();
+  ls_handle_.reset();
 }
 
 int ObTabletPointer::set_attr_for_obj(ObTablet *tablet)

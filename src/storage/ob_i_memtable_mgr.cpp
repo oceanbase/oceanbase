@@ -26,6 +26,18 @@ namespace oceanbase
 namespace storage
 {
 
+ObIMemtableMgr::~ObIMemtableMgr()
+{
+  int ret = OB_SUCCESS;
+  const int64_t ref_cnt = get_ref();
+  if (OB_UNLIKELY(0 != ref_cnt)) {
+    STORAGE_LOG(ERROR, "ref cnt is NOT 0", K(ret), K(ref_cnt), K_(tablet_id), KPC(this));
+  }
+
+  reset_tables();
+  ATOMIC_STORE(&ref_cnt_, 0);
+}
+
 int ObIMemtableMgr::get_active_memtable(ObTableHandleV2 &handle) const
 {
   int ret = OB_SUCCESS;
