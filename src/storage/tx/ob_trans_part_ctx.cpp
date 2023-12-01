@@ -1505,7 +1505,6 @@ int ObPartTransCtx::recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info)
     exec_info_.mds_buffer_ctx_array_.reset();
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (FALSE_IT(ctx_info.exec_info_.mrege_buffer_ctx_array_to_multi_data_source())) {
     } else if (OB_FAIL(deep_copy_mds_array_(ctx_info.exec_info_.multi_data_source_, _unused_))) {
       TRANS_LOG(WARN, "deep copy ctx_info mds_array failed", K(ret));
     } else if (FALSE_IT(mt_ctx_.update_checksum(exec_info_.checksum_,
