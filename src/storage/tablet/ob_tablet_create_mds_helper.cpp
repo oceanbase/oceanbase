@@ -289,7 +289,7 @@ int ObTabletCreateMdsHelper::check_create_arg(
       if (OB_FAIL(check_pure_aux_tablets_info(ls_id, info, valid))) {
         LOG_WARN("failed to check create tablet info", K(ret), K(ls_id), K(info));
       }
-    } else if (is_hidden_tablets(info)) {
+    } else if (is_bind_hidden_tablets(info)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < info.tablet_ids_.count(); ++i) {
         const ObTabletID &tablet_id = info.tablet_ids_.at(i);
         bool has_related_aux_info = find_aux_info_for_hidden_tablets(arg, tablet_id, aux_info_idx);
@@ -334,8 +334,8 @@ int ObTabletCreateMdsHelper::create_tablets(
       if (CLICK_FAIL(build_pure_aux_tablets(arg, info, for_replay, scn, ctx, tablet_id_array))) {
         LOG_WARN("failed to build pure aux tablets", K(ret), K(info));
       }
-    } else if (is_hidden_tablets(info)) {
-      if (CLICK_FAIL(build_hidden_tablets(arg, info, for_replay, scn, ctx, tablet_id_array))) {
+    } else if (is_bind_hidden_tablets(info)) {
+      if (CLICK_FAIL(build_bind_hidden_tablets(arg, info, for_replay, scn, ctx, tablet_id_array))) {
         LOG_WARN("failed to build hidden tablets", K(ret), K(info));
       }
     }
@@ -388,7 +388,7 @@ bool ObTabletCreateMdsHelper::is_pure_aux_tablets(const obrpc::ObCreateTabletInf
   return tablet_ids.count() >= 1 && !is_contain(tablet_ids, data_tablet_id) && !info.is_create_bind_hidden_tablets_;
 }
 
-bool ObTabletCreateMdsHelper::is_hidden_tablets(const obrpc::ObCreateTabletInfo &info)
+bool ObTabletCreateMdsHelper::is_bind_hidden_tablets(const obrpc::ObCreateTabletInfo &info)
 {
   const ObTabletID &data_tablet_id = info.data_tablet_id_;
   const ObSArray<ObTabletID> &tablet_ids = info.tablet_ids_;
@@ -767,7 +767,7 @@ int ObTabletCreateMdsHelper::build_pure_aux_tablets(
   return ret;
 }
 
-int ObTabletCreateMdsHelper::build_hidden_tablets(
+int ObTabletCreateMdsHelper::build_bind_hidden_tablets(
     const obrpc::ObBatchCreateTabletArg &arg,
     const obrpc::ObCreateTabletInfo &info,
     const bool for_replay,
@@ -778,7 +778,7 @@ int ObTabletCreateMdsHelper::build_hidden_tablets(
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = arg.id_;
-  const ObTabletID &data_tablet_id = info.data_tablet_id_;
+  const ObTabletID &orig_tablet_id = info.data_tablet_id_;
   const ObSArray<ObTabletID> &tablet_ids = info.tablet_ids_;
   const ObSArray<ObTableSchema> &table_schemas = arg.table_schemas_;
   const lib::Worker::CompatMode &compat_mode = info.compat_mode_;
@@ -826,7 +826,7 @@ int ObTabletCreateMdsHelper::build_hidden_tablets(
           exist = false;
           ret = OB_SUCCESS;
         } else {
-          LOG_WARN("failed to get tablet", K(ret), K(ls_id), K(data_tablet_id), K(tablet_id));
+          LOG_WARN("failed to get tablet", K(ret), K(ls_id), K(orig_tablet_id), K(tablet_id));
         }
       } else {
         exist = true;
@@ -836,12 +836,12 @@ int ObTabletCreateMdsHelper::build_hidden_tablets(
     if (OB_FAIL(ret)) {
     } else if (for_replay && exist) {
       LOG_INFO("create hidden tablet is already exist, skip it", K(ret), K(for_replay), K(exist),
-          K(ls_id), K(data_tablet_id), K(tablet_id));
+          K(ls_id), K(orig_tablet_id), K(tablet_id));
     } else if (CLICK_FAIL(tablet_id_array.push_back(tablet_id))) {
       LOG_WARN("failed to push back tablet id", K(ret), K(ls_id), K(tablet_id));
-    } else if (CLICK_FAIL(ls->get_tablet_svr()->create_tablet(ls_id, tablet_id, data_tablet_id,
+    } else if (CLICK_FAIL(ls->get_tablet_svr()->create_tablet(ls_id, tablet_id, tablet_id,
         scn, snapshot_version, table_schema, compat_mode, tablet_handle))) {
-      LOG_WARN("failed to do create tablet", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id), "arg", PRETTY_ARG(arg));
+      LOG_WARN("failed to do create tablet", K(ret), K(ls_id), K(tablet_id), K(orig_tablet_id), "arg", PRETTY_ARG(arg));
     }
 
     if (OB_FAIL(ret)) {
