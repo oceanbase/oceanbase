@@ -59,6 +59,7 @@ enum ObDDLType
   DDL_CREATE_FTS_INDEX = 7,
   DDL_CREATE_MLOG = 8,
   DDL_DROP_MLOG = 9,
+  DDL_CREATE_PARTITIONED_LOCAL_INDEX = 10,
   ///< @note Drop schema, and refuse concurrent trans.  
   DDL_DROP_SCHEMA_AVOID_CONCURRENT_TRANS = 500,
   DDL_DROP_DATABASE = 501,
