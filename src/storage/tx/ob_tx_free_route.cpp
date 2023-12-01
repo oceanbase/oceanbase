@@ -1274,8 +1274,8 @@ int ObTransService::txn_free_route__get_##name##_state(ObTxDesc *tx, const ObTxn
   int ret = OB_SUCCESS;                                                 \
   if (OB_FAIL(encode_i64(buf, len, pos, (tx ? tx->tx_id_.get_id() : 0)))) { \
   } else if (OB_NOT_NULL(tx)) {                                         \
-    if (OB_FAIL(encoded_length_bool(tx->in_tx_for_free_route()))) {     \
-    } else if (OB_FAIL(encoded_length_i64(ctx.global_version_))) {      \
+    if (OB_FAIL(encode_bool(buf, len, pos, tx->in_tx_for_free_route()))) { \
+    } else if (OB_FAIL(encode_i64(buf, len, pos, ctx.global_version_))) { \
     } else if (tx->tx_id_.is_valid() && OB_FAIL(tx->encode_##name##_state(buf, len, pos))) { \
     }                                                                   \
   }                                                                     \
