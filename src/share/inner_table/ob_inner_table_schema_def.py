@@ -14145,13 +14145,13 @@ def_table_schema(
                       AS DATETIME_PRECISION,
                       CAST(
                         CASE rp.param_charset
-                        WHEN 1 THEN "binary"
-                        WHEN 2 THEN "utf8mb4"
-                        WHEN 3 THEN "gbk"
-                        WHEN 4 THEN "utf16"
-                        WHEN 5 THEN "gb18030"
-                        WHEN 6 THEN "latin1"
-                        WHEN 7 THEN "gb18030_2022"
+                        WHEN 1 THEN 'binary'
+                        WHEN 2 THEN 'utf8mb4'
+                        WHEN 3 THEN 'gbk'
+                        WHEN 4 THEN 'utf16'
+                        WHEN 5 THEN 'gb18030'
+                        WHEN 6 THEN 'latin1'
+                        WHEN 7 THEN 'gb18030_2022'
                         ELSE NULL
                         END
                           AS CHAR(64)
@@ -26413,9 +26413,9 @@ def_table_schema(
                         CAST(rp.param_position AS signed) AS ORDINAL_POSITION,
                         CAST(CASE rp.param_position WHEN 0 THEN NULL
                           ELSE CASE rp.flag & 0x03
-                          WHEN 1 THEN "IN"
-                          WHEN 2 THEN "OUT"
-                          WHEN 3 THEN "INOUT"
+                          WHEN 1 THEN 'IN'
+                          WHEN 2 THEN 'OUT'
+                          WHEN 3 THEN 'INOUT'
                           ELSE NULL
                           END
                         END AS CHAR(5)) AS PARAMETER_MODE,
@@ -26465,13 +26465,13 @@ def_table_schema(
                           ELSE CAST(NULL AS UNSIGNED)
                         END AS DATETIME_PRECISION,
                         CAST(CASE rp.param_charset
-                          WHEN 1 THEN "binary"
-                          WHEN 2 THEN "utf8mb4"
-                          WHEN 3 THEN "gbk"
-                          WHEN 4 THEN "utf16"
-                          WHEN 5 THEN "gb18030"
-                          WHEN 6 THEN "latin1"
-                          WHEN 7 THEN "gb18030_2022"
+                          WHEN 1 THEN 'binary'
+                          WHEN 2 THEN 'utf8mb4'
+                          WHEN 3 THEN 'gbk'
+                          WHEN 4 THEN 'utf16'
+                          WHEN 5 THEN 'gb18030'
+                          WHEN 6 THEN 'latin1'
+                          WHEN 7 THEN 'gb18030_2022'
                           ELSE NULL
                         END AS CHAR(64)) AS CHARACTER_SET_NAME,
                         CAST(CASE rp.param_coll_type
