@@ -624,12 +624,13 @@ int ObBackupDataScheduler::persist_backup_version_(common::ObISQLClient &sql_pro
   int ret = OB_SUCCESS;
   uint64_t data_version = 0;
   uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
-  if (GCONF.enable_upgrade_mode) {
+  // TODO(wangxiaohui.wxh) 4.3, correct the tenant id to user tenant id in backup info
+  if (GCONF.in_upgrade_mode()) {
     ret = OB_BACKUP_CAN_NOT_START;
     LOG_USER_ERROR(OB_BACKUP_CAN_NOT_START, "cluster upgrading");
     LOG_WARN("cluster upgrade, can't start backup", K(ret), K(tenant_id));
-  } else if (OB_FAIL(ObShareUtil::fetch_current_data_version(sql_proxy, exec_tenant_id, data_version))) {
-    LOG_WARN("failed to get data version", K(ret), K(exec_tenant_id));
+  } else if (OB_FAIL(ObShareUtil::fetch_current_data_version(sql_proxy, tenant_id/*user tenant id*/, data_version))) {
+    LOG_WARN("failed to get data version", K(ret), K(tenant_id));
   } else if (OB_FAIL(ObLSBackupInfoOperator::set_backup_version(sql_proxy, exec_tenant_id, data_version))) {
     LOG_WARN("failed to set backup version", K(ret), K(exec_tenant_id), K(data_version));
   } else if (OB_FAIL(ObLSBackupInfoOperator::set_cluster_version(sql_proxy, exec_tenant_id, cluster_version))) {
@@ -1260,7 +1261,7 @@ int ObUserTenantBackupJobMgr::check_can_backup_()
   uint64_t exec_tenant_id = gen_meta_tenant_id(job_attr_->tenant_id_);
   if (share::ObBackupStatus::CANCELING == job_attr_->status_.status_) {
     // backup job is canceling, no need to check log archive status
-  } else if (GCONF.enable_upgrade_mode) {
+  } else if (GCONF.in_upgrade_mode()) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("cluster is upgrade, backup can't continue", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(share::ObLSBackupInfoOperator::get_backup_version(*sql_proxy_, exec_tenant_id, data_version))) {
@@ -1270,8 +1271,8 @@ int ObUserTenantBackupJobMgr::check_can_backup_()
   } else if (cluster_version != GET_MIN_CLUSTER_VERSION()) {
     ret = OB_VERSION_NOT_MATCH;
     LOG_WARN("cluster version not match, backup can't continue", K(ret), K(cluster_version));
-  } else if (OB_FAIL(ObBackupUtils::check_tenant_data_version_match(exec_tenant_id, data_version))) {
-    LOG_WARN("failed to check tenant data version", K(ret), K(exec_tenant_id), K(data_version));
+  } else if (OB_FAIL(ObBackupUtils::check_tenant_data_version_match(job_attr_->tenant_id_, data_version))) {
+    LOG_WARN("failed to check tenant data version", K(ret), "tenant_id", job_attr_->tenant_id_, K(data_version));
   } else {
     ObTenantArchiveRoundAttr round_attr;
     if (OB_FAIL(ObTenantArchiveMgr::get_tenant_current_round(job_attr_->tenant_id_, job_attr_->incarnation_id_, round_attr))) {
