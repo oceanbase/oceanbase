@@ -37,6 +37,7 @@
 #include "share/backup/ob_backup_data_table_operator.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
 #include "storage/backup/ob_backup_data_store.h"
+#include "storage/ddl/ob_ddl_merge_task.h"
 
 #include <algorithm>
 
@@ -310,29 +311,33 @@ int ObBackupUtils::check_tablet_ddl_sstable_validity_(const storage::ObTabletHan
   int ret = OB_SUCCESS;
   ObTablet *tablet = NULL;
   ObITable *last_table_ptr = NULL;
-  SCN tablet_ddl_checkpoint_scn = SCN::min_scn();
-  if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+  SCN ddl_start_scn = SCN::min_scn();
+  SCN ddl_checkpoint_scn = SCN::min_scn();
+  ObTableStoreIterator ddl_table_iter;
+  bool is_data_complete = false;
+  if (ddl_sstable_array.empty()) {
+    // do nothing
+  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle));
-  } else {
-    const ObTabletMeta &tablet_meta = tablet->get_tablet_meta();
-    tablet_ddl_checkpoint_scn = tablet_meta.ddl_checkpoint_scn_;
-  }
-  if (OB_FAIL(ret)) {
-  } else if (ddl_sstable_array.empty()) {
-    // do nothing
+  } else if (FALSE_IT(ddl_start_scn = tablet->get_tablet_meta().ddl_start_scn_)) {
+  } else if (FALSE_IT(ddl_checkpoint_scn = tablet->get_tablet_meta().ddl_checkpoint_scn_)) {
   } else if (OB_ISNULL(last_table_ptr = ddl_sstable_array.at(ddl_sstable_array.count() - 1))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid table ptr", K(ret), K(ddl_sstable_array));
   } else if (!last_table_ptr->is_ddl_dump_sstable()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table ptr not correct", K(ret), KPC(last_table_ptr));
+  } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_sstables(ddl_table_iter))) {
+    LOG_WARN("failed to get ddl sstables", K(ret), K(tablet_handle));
+  } else if (OB_FAIL(ObTabletDDLUtil::check_data_integrity(ddl_table_iter, ddl_start_scn, ddl_checkpoint_scn, is_data_complete))) {
+    LOG_WARN("failed to check data integrity", K(ret), K(ddl_start_scn), K(ddl_checkpoint_scn));
+  } else if (!is_data_complete) {
+    ret = OB_INVALID_TABLE_STORE;
+    LOG_WARN("get invalid ddl table store", K(ret), K(tablet_handle), K(ddl_sstable_array), K(ddl_table_iter));
   } else {
-    const ObITable::TableKey &table_key = last_table_ptr->get_key();
-    if (table_key.get_end_scn() != tablet_ddl_checkpoint_scn) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("tablet meta is not valid", K(ret), K(table_key), K(tablet_ddl_checkpoint_scn));
-    }
+    LOG_INFO("check data intergirty", K(tablet_handle), K(ddl_start_scn),
+        K(ddl_checkpoint_scn), K(ddl_table_iter), K(is_data_complete));
   }
   return ret;
 }
