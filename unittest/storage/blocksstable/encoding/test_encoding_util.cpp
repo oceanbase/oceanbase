@@ -60,8 +60,9 @@ TEST(ObMultiDimArray_T, timestamp_with_time_zone)
 {
   // for timestamp with time zone, we need use binary_equal to build encoding hash table.
   ObEncodingHashTableBuilder hash_builder;
+  ObArenaAllocator local_arena;
   ASSERT_EQ(OB_SUCCESS, hash_builder.create(8, 8));
-  ObColDatums time_arr;
+  ObColDatums time_arr(local_arena);
   ObStorageDatum t1, t2;
 
   ObTimeZoneInfo time_zone_info1, time_zone_info2;
