@@ -87,11 +87,11 @@ int ObTableDirectInsertService::open_task(const uint64_t table_id,
     if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
       LOG_WARN("fail to get table ctx", KR(ret), K(key));
     } else {
-      ret = OB_NOT_MASTER;
+      ret = OB_EAGAIN; //not master should retry, use eagain
       LOG_WARN("not the master of store", KR(ret), K(key));
     }
   } else if (OB_UNLIKELY(nullptr == table_ctx->store_ctx_)) {
-    ret = OB_NOT_MASTER;
+    ret = OB_EAGAIN; //not master should retry, use eagain
     LOG_WARN("not the master of store", KR(ret), K(key));
   } else {
     table::ObTableLoadTransId trans_id;
