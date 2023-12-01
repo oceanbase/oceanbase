@@ -20,7 +20,7 @@
 #include "common/ob_role.h"                                     // LEADER
 
 #include "share/inner_table/ob_inner_table_schema_constants.h"  // OB_***_TNAME
-#include "share/schema/ob_schema_struct.h"                      // TenantStatus
+#include "share/schema/ob_schema_struct.h"                      // TenantStatus, ObTenantStatus
 #include "ob_log_instance.h"                                    // TCTX
 #include "ob_log_config.h"                                      // ObLogConfig, TCONF
 #include "ob_log_utils.h"

@@ -63,13 +63,13 @@ private:
     {
       total_part_trans_task_count_ = 0;
       ddl_part_trans_task_toal_count_ = 0;
-      ddl_part_trans_task_repalyed_count_ = 0;
+      ddl_part_trans_task_replayed_count_ = 0;
       ls_op_part_trans_task_count_ = 0;
     }
 
     int64_t total_part_trans_task_count_;
     int64_t ddl_part_trans_task_toal_count_;
-    int64_t ddl_part_trans_task_repalyed_count_;
+    int64_t ddl_part_trans_task_replayed_count_;
     int64_t ls_op_part_trans_task_count_;
   };
 
