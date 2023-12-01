@@ -515,7 +515,8 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
                                          ObExecTimestamp &exec_timestamp,
                                          bool has_tenant_resource,
                                          const ObString &ps_sql,
-                                         bool is_from_pl)
+                                         bool is_from_pl,
+                                         ObString *pl_exec_params)
 {
   int ret = OB_SUCCESS;
   const bool enable_perf_event = lib::is_diagnose_info_enabled();
@@ -544,10 +545,9 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
   if (enable_sql_audit) {
     ret = process_audit_record(result_set, sql_ctx, session, last_ret, execution_id,
               ps_stmt_id, has_tenant_resource, ps_sql, is_from_pl);
-    if (is_from_pl && NULL != result_set.get_exec_context().get_physical_plan_ctx()) {
-      ObMPStmtExecute::store_params_value_to_str(alloc, session,
-        &result_set.get_exec_context().get_physical_plan_ctx()->get_param_store_for_update(),
-        audit_record.params_value_, audit_record.params_value_len_);
+    if (NULL != pl_exec_params) {
+      audit_record.params_value_ = pl_exec_params->ptr();
+      audit_record.params_value_len_ = pl_exec_params->length();
     }
   }
   ObSQLUtils::handle_audit_record(false, sql::PSCursor == audit_record.exec_timestamp_.exec_type_
