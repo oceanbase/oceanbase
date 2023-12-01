@@ -754,10 +754,10 @@ int ObDupTableLSHandler::check_redo_sync_completed(const ObTransID &tx_id,
           share::SCN tmp_gts;
           tmp_gts.set_invalid();
           start_us = ObTimeUtility::fast_current_time();
-          const int64_t now = ObTimeUtility::fast_current_time();
-          const MonotonicTs stc = MonotonicTs(now);
+          const MonotonicTs stc = MonotonicTs(ObTimeUtility::fast_current_time());
           MonotonicTs rts(0);
           do {
+            const int64_t now = ObTimeUtility::fast_current_time();
             if (now >= start_us + GET_GTS_TIMEOUT) {
               tmp_ret = OB_TIMEOUT;
               DUP_TABLE_LOG(WARN, "wait gts for too long time", K(now), K(start_us),
