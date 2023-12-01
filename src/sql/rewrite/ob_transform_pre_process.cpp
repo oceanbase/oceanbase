@@ -5881,6 +5881,8 @@ int ObTransformPreProcess::replace_cast_expr_align_date4cmp(ObRawExprFactory &ex
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("align_date4cmp_expr is null.", K(ret));
         } else {
+          align_date4cmp_expr->set_data_type(expr->get_data_type());
+          align_date4cmp_expr->set_accuracy(expr->get_accuracy());
           align_date4cmp_expr->set_func_name("INTERNAL_FUNCTION");
           // Copy cast_mode to facilitate determining the method of handling invalid_time.
           align_date4cmp_expr->set_extra(expr->get_extra());
