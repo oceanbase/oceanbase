@@ -903,10 +903,13 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
     if (OB_INVALID_INDEX != result_idx) {
       ObObjParam &param = ctx->params_->at(result_idx);
       bool is_ref_cursor = param.is_ref_cursor_type();
+      ObAccuracy invalid_accuracy;
       if (!result->is_ext()) {
         bool has_lob_header = result->ObObj::has_lob_header();
         if (param.get_meta().get_scale() != SCALE_UNKNOWN_YET) {
           result->ObObj::set_scale(param.get_meta().get_scale());
+          result->set_accuracy(ctx->params_->at(result_idx).get_accuracy());
+        } else if (result->get_accuracy() == invalid_accuracy) {
           result->set_accuracy(ctx->params_->at(result_idx).get_accuracy());
         }
         if (has_lob_header) {
