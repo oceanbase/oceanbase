@@ -467,6 +467,11 @@ int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
     if (OB_FAIL(create_ls_(common_arg, mig_arg))) {
       LOG_WARN("create ls failed", K(ret), K(arg));
     }
+    if (OB_LS_EXIST == ret) {
+      // new create ls can not be gc because it does not has memberlist.
+      // we need reuse the ls if it exist.
+      ret = OB_SUCCESS;
+    }
   }
   FLOG_INFO("create_ls finish", K(ret), K(arg));
   return ret;
@@ -1043,7 +1048,7 @@ int ObLSService::create_ls_(const ObCreateLSCommonArg &arg,
     } else if (OB_FAIL(check_ls_exist(arg.ls_id_, ls_exist))) {
       LOG_WARN("check ls exist failed", K(ret), K(arg.ls_id_));
     } else if (ls_exist) {
-      ret = OB_ENTRY_EXIST;
+      ret = OB_LS_EXIST;
       LOG_WARN("ls exist, cannot create ls now", K(ret), K(arg.ls_id_));
     } else if (OB_FAIL(check_ls_waiting_safe_destroy(arg.ls_id_,
                                                      waiting_destroy))) {
