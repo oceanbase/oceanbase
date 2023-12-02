@@ -16,6 +16,8 @@ namespace oceanbase {
 namespace transaction {
 #define PRE_STATIC_DECODE
 #define POST_STATIC_DECODE
+// bookkeep the original before update, then after receive the update,
+// recover flags which should not be overwriten
 #define PRE_DYNAMIC_DECODE \
   auto save_flags = flags_;
 #define POST_DYNAMIC_DECODE \
