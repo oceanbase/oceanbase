@@ -40,6 +40,7 @@ public:
                         ObIExprExtraInfo *&copied_info) const = 0;
 public:
   ObExprOperatorType type_;
+  TO_STRING_KV(K(type_));
 };
 
 } // end namespace sql
