@@ -190,9 +190,7 @@ public:
     di_user_type_map_(),
     debug_mode_(session_info_.is_pl_debug_on() && func_ast.is_routine()),
     oracle_mode_(oracle_mode)
-    {
-      goto_label_map_.create(func_ast.get_body()->get_stmts().count(), "PlCodeGen");
-    }
+    { }
 
   virtual ~ObPLCodeGenerator() {}
 
@@ -484,8 +482,28 @@ public:
   }
   inline jit::ObLLVMFunction &get_func() { return func_; }
   inline ObPLSEArray<jit::ObLLVMValue> &get_vars() { return vars_; }
-  typedef common::hash::ObPlacementHashMap<uint64_t, jit::ObLLVMType, 733> ObLLVMTypeMap;
-  typedef common::hash::ObPlacementHashMap<uint64_t, jit::ObLLVMDIType, 733> ObLLVMDITypeMap;
+  typedef common::hash::ObHashMap<
+            uint64_t, jit::ObLLVMType,
+            common::hash::NoPthreadDefendMode,
+            common::hash::hash_func<uint64_t>,
+            common::hash::equal_to<uint64_t>,
+            common::hash::SimpleAllocer<common::hash::ObHashTableNode<
+              common::hash::HashMapPair<uint64_t, jit::ObLLVMType>>>,
+            common::hash::NormalPointer,
+            common::ObMalloc,
+            2>  // EXTEND_RATIO
+      ObLLVMTypeMap;
+  typedef common::hash::ObHashMap<
+            uint64_t, jit::ObLLVMDIType,
+            common::hash::NoPthreadDefendMode,
+            common::hash::hash_func<uint64_t>,
+            common::hash::equal_to<uint64_t>,
+            common::hash::SimpleAllocer<common::hash::ObHashTableNode<
+              common::hash::HashMapPair<uint64_t, jit::ObLLVMDIType>>>,
+            common::hash::NormalPointer,
+            common::ObMalloc,
+            2>  // EXTEND_RATIO
+      ObLLVMDITypeMap;
   inline ObLLVMTypeMap &get_user_type_map() { return user_type_map_; }
   int set_var_addr_to_param_store(int64_t var_index, jit::ObLLVMValue &var, jit::ObLLVMValue &init_value);
   int get_llvm_type(const ObPLDataType &pl_type, jit::ObLLVMType &ir_type);
