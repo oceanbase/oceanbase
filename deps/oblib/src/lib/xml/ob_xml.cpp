@@ -44,6 +44,7 @@ int ObXml::xslt_transform(ObIAllocator *allocator,
                           ObString &output)
 {
   int ret = OB_SUCCESS;
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(common::OB_SERVER_TENANT_ID, "XSLTCache"));
   if (xslt_sheet.empty()) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "xsl sheet is empty", K(xslt_sheet), K(ret));
@@ -134,7 +135,6 @@ int ObXml::xslt_save_to_string(ObIAllocator *allocator,
   int ret = OB_SUCCESS;
   xmlChar *xml_result_buffer = NULL;
   int32_t xml_result_length = 0;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(common::OB_SERVER_TENANT_ID, "XSLTCache"));
   int32_t res = xsltSaveResultToString(&xml_result_buffer, &xml_result_length, result, xslt_ptr);
   if (-1 == res) {
     xmlFree(xml_result_buffer);
