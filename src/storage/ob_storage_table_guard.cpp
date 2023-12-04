@@ -180,7 +180,7 @@ int ObStorageTableGuard::refresh_and_protect_table(ObRelativeTable &relative_tab
     } else {
       // no worry. iter will hold tablet reference and its life cycle is longer than guard
       tablet_ = iter.get_tablet();
-      // TODO: check if seesion is killed
+      // TODO: check if session is killed
       if (store_ctx_.timeout_ > 0) {
         const int64_t query_left_time = store_ctx_.timeout_ - ObTimeUtility::current_time();
         if (query_left_time <= 0) {
