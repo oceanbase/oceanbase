@@ -41,20 +41,15 @@ private:
                                    const ObString &package_name,
                                    obrpc::ObAlterPackageArg &pkg_arg);
   int analyze_package(pl::ObPLCompiler &compiler,
-                      const ObString &source,
                       const pl::ObPLBlockNS *parent_ns,
                       pl::ObPLPackageAST &package_ast,
-                      bool is_for_trigger,
-                      bool is_package,
                       const ObString& db_name, 
-                      const ObString &package_name,
                       const ObPackageInfo *package_info,
                       share::schema::ObErrorInfo &error_info,
                       bool &has_error);
   int compile_package(const ObString& db_name,
                       const ObString &package_name,
-                      bool compile_spec,
-                      bool compile_body,
+                      int16_t compile_flag,
                       obrpc::ObAlterPackageArg &pkg_arg);
 
 private:
