@@ -113,6 +113,9 @@ int ObTableLoadRedefTable::finish(const ObTableLoadRedefTableFinishArg &arg,
       if (OB_FAIL(ObDDLServerClient::finish_redef_table(
             finish_redef_table_arg, build_single_replica_response_arg, session_info))) {
         LOG_WARN("failed to finish redef table", KR(ret), K(finish_redef_table_arg));
+        if (ret == OB_NOT_MASTER) { //sql cannot be retried here, so change errcode
+          ret = OB_DIRECT_LOAD_COMMIT_ERROR;
+        }
       } else {
         LOG_INFO("succeed to finish redef table", KR(ret), K(finish_redef_table_arg));
       }
