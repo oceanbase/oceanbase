@@ -2800,7 +2800,7 @@ int ObSessInfoDiagnosisP::process()
       COMMON_LOG(WARN, "get session failed", KR(ret), K(arg_));
     }
   } else if (OB_FAIL(GCTX.session_mgr_->get_session(server_sessid, session))) {
-    LOG_WARN("fail to get session info", K(server_sessid), K(session->get_proxy_sessid()));
+    LOG_WARN("fail to get session info", K(server_sessid), K(arg_.get_proxy_sess_id()));
   } else {
     // consider 3 scene that no need diagnosis:
     // 1. Broken link reuse session，need diagnosis proxy sess id
