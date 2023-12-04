@@ -25,7 +25,7 @@ void ObTraceInfo::init(const int64_t trace_id,
     const share::ObLSID &ls_id,
     const int64_t checkpoint_start_time)
 {
-  SpinRLockGuard lock(lock_);
+  SpinWLockGuard lock(lock_);
   reset_without_lock_();
   trace_id_ = trace_id;
   ls_id_ = ls_id;
@@ -76,7 +76,7 @@ bool ObTraceInfo::check_trace_id_(const ObCheckpointDiagnoseParam &param)
 void ObTraceInfo::update_freeze_clock(const int64_t trace_id,
     const uint32_t freeze_clock)
 {
-  SpinRLockGuard lock(lock_);
+  SpinWLockGuard lock(lock_);
   if (check_trace_id_(trace_id)) {
     freeze_clock_ = freeze_clock;
   }
@@ -117,7 +117,7 @@ int ObCheckpointDiagnoseMgr::acquire_trace_id(const share::ObLSID &ls_id,
     LOG_WARN("ls_id is invalid", KR(ret));
   } else {
     const int64_t start_time = ObTimeUtility::current_time();
-    SpinRLockGuard lock(pos_lock_);
+    SpinWLockGuard lock(pos_lock_);
     trace_id = ++last_pos_;
     while (last_pos_ - first_pos_ >= max_trace_info_size_) {
       trace_info_arr_[first_pos_++ % MAX_TRACE_INFO_ARR_SIZE].reset();

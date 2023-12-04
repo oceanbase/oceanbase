@@ -204,7 +204,7 @@ public:
       const int64_t checkpoint_start_time);
   void reset()
   {
-    SpinRLockGuard lock(lock_);
+    SpinWLockGuard lock(lock_);
     reset_without_lock_();
   }
   void reset_without_lock_();
@@ -365,7 +365,7 @@ int ObTraceInfo::add_diagnose_info(const ObCheckpointDiagnoseParam &param,
       TRANS_LOG(WARN, "failed to alloc", KR(ret));
     } else {
       T *diagnose_info = new (ptr)T();
-      SpinRLockGuard lock(diagnose_info->lock_);
+      SpinWLockGuard lock(diagnose_info->lock_);
       op(*diagnose_info);
       if (OB_FAIL(get_diagnose_info_map_<T>().set_refactored(param.key_, diagnose_info,
               0 /* not overwrite */ ))) {
@@ -391,7 +391,7 @@ int ObTraceInfo::update_diagnose_info(const ObCheckpointDiagnoseParam &param,
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "diagnose info is NULL", KR(ret), K(param.key_), KPC(this));
     } else {
-      SpinRLockGuard lock(diagnose_info->lock_);
+      SpinWLockGuard lock(diagnose_info->lock_);
       op(*diagnose_info);
     }
   }
