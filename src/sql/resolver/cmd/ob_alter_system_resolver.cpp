@@ -5528,11 +5528,18 @@ int ObRecoverTableResolver::resolve_tenant_(
       LOG_WARN("tenant name node must not be null", K(ret));
     } else {
       ObSchemaGetterGuard schema_guard;
+      ObAllTenantInfo tenant_info;
       ObString tmp_tenant_name(node->children_[0]->str_len_, node->children_[0]->str_value_);
       if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(session_tenant_id, schema_guard))) {
         LOG_WARN("failed to get_tenant_schema_guard", KR(ret));
       } else if (OB_FAIL(schema_guard.get_tenant_id(tmp_tenant_name, tenant_id))) {
         LOG_WARN("failed to get tenant id from schema guard", KR(ret), K(tmp_tenant_name));
+      } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, GCTX.sql_proxy_, false/*for update*/, tenant_info))) {
+        LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
+      } else if (tenant_info.is_standby()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("dest tenant is standby", K(ret), "tenant_name", tmp_tenant_name);
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "recover table to standby tenant is");
       } else {
         tenant_name = tmp_tenant_name;
       }

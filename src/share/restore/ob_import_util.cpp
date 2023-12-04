@@ -43,6 +43,7 @@ bool ObImportTableUtil::can_retrieable_err(const int err_code)
     case OB_TABLEGROUP_NOT_EXIST:
     case OB_TABLESPACE_NOT_EXIST:
     case OB_ERR_TABLE_EXIST:
+    case OB_STANDBY_READ_ONLY:
       bret = false;
       break;
     default:
