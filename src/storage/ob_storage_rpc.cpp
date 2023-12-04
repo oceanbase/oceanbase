@@ -601,7 +601,7 @@ int ObCopySSTableMacroRangeInfoArg::assign(const ObCopySSTableMacroRangeInfoArg 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("copy sstable macro range info arg is invalid", K(ret), K(arg));
   } else if (OB_FAIL(copy_table_key_array_.assign(arg.copy_table_key_array_))) {
-    LOG_WARN("failed to assgin src table array", K(ret), K(arg));
+    LOG_WARN("failed to assign src table array", K(ret), K(arg));
   } else {
     tenant_id_ = arg.tenant_id_;
     ls_id_ = arg.ls_id_;
