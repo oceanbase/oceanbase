@@ -30,9 +30,9 @@ using namespace storage;
 using namespace table;
 
 ObTableLoadInstance::ObTableLoadInstance()
-  : execute_ctx_(nullptr),
+  : table_ctx_(nullptr),
+    execute_ctx_(nullptr),
     allocator_(nullptr),
-    table_ctx_(nullptr),
     job_stat_(nullptr),
     is_committed_(false),
     is_inited_(false)
@@ -46,12 +46,12 @@ void ObTableLoadInstance::destroy()
   int ret = OB_SUCCESS;
   trans_ctx_.reset();
   if (nullptr != table_ctx_) {
-    if (OB_FAIL(ObTableLoadService::remove_ctx(table_ctx_))) {
-      LOG_WARN("table ctx may remove by service", KR(ret), KP(table_ctx_));
-    }
     if (!is_committed_) {
       // must abort here, abort redef table need exec_ctx session_info
       ObTableLoadCoordinator::abort_ctx(table_ctx_);
+    }
+    if (OB_FAIL(ObTableLoadService::remove_ctx(table_ctx_))) {
+      LOG_WARN("table ctx may remove by service", KR(ret), KP(table_ctx_));
     }
     ObTableLoadService::put_ctx(table_ctx_);
     table_ctx_ = nullptr;
@@ -102,6 +102,8 @@ int ObTableLoadInstance::init(ObTableLoadParam &param, const ObIArray<int64_t> &
       is_inited_ = true;
     }
   }
+  LOG_INFO("ObTableLoadInstance::init", K(ret));
+
   return ret;
 }
 
@@ -130,6 +132,7 @@ int ObTableLoadInstance::create_table_ctx(ObTableLoadParam &param,
     ddl_param.schema_version_ = start_res.schema_version_;
     ddl_param.snapshot_version_ = start_res.snapshot_version_;
     ddl_param.data_version_ = data_version;
+    ddl_param.cluster_version_ = GET_MIN_CLUSTER_VERSION();
   }
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(table_ctx = ObTableLoadService::alloc_ctx())) {
@@ -184,11 +187,11 @@ int ObTableLoadInstance::start_trans()
     LOG_WARN("fail to init coordinator", KR(ret));
   } else if (OB_FAIL(coordinator.start_trans(segment_id, trans_ctx_.trans_id_))) {
     LOG_WARN("fail to coordinator start trans", KR(ret));
-  } else if (OB_FAIL(trans_ctx_.next_sequence_no_array_.create(table_ctx_->param_.session_count_,
+  } else if (OB_FAIL(trans_ctx_.next_sequence_no_array_.create(table_ctx_->param_.write_session_count_,
                                                                *allocator_))) {
     LOG_WARN("fail to create next sequence no array", KR(ret));
   } else {
-    for (int64_t i = 0; i < table_ctx_->param_.session_count_; ++i) {
+    for (int64_t i = 0; i < table_ctx_->param_.write_session_count_; ++i) {
       trans_ctx_.next_sequence_no_array_[i] = 1;
     }
   }
@@ -201,7 +204,7 @@ int ObTableLoadInstance::write(int32_t session_id, const table::ObTableLoadObjRo
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadInstance not init", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(session_id < 0 || session_id > table_ctx_->param_.session_count_ ||
+  } else if (OB_UNLIKELY(session_id < 0 || session_id > table_ctx_->param_.write_session_count_ ||
                          obj_rows.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(session_id), K(obj_rows.count()));
@@ -323,6 +326,7 @@ int ObTableLoadInstance::commit(ObTableLoadResultInfo &result_info)
       is_committed_ = true;
     }
   }
+  LOG_INFO("ObTableLoadInstance::commit", K(ret));
   return ret;
 }
 

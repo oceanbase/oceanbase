@@ -47,7 +47,7 @@ int ObTableLoadTransStore::init()
 {
   int ret = OB_SUCCESS;
   const int32_t session_count = trans_ctx_->ctx_->param_.px_mode_?
-                                1 : trans_ctx_->ctx_->param_.session_count_;
+                                1 : trans_ctx_->ctx_->param_.write_session_count_;
   SessionStore *session_store = nullptr;
   for (int32_t i = 0; OB_SUCC(ret) && i < session_count; ++i) {
     if (OB_ISNULL(session_store = OB_NEWx(SessionStore, (&trans_ctx_->allocator_)))) {
@@ -55,7 +55,7 @@ int ObTableLoadTransStore::init()
       LOG_WARN("fail to new SessionStore", KR(ret));
     } else {
       if (trans_ctx_->ctx_->param_.px_mode_) {
-        session_store->session_id_ = (ATOMIC_FAA(&(trans_ctx_->ctx_->store_ctx_->next_session_id_), 1) % trans_ctx_->ctx_->param_.session_count_) + 1;
+        session_store->session_id_ = (ATOMIC_FAA(&(trans_ctx_->ctx_->store_ctx_->next_session_id_), 1) % trans_ctx_->ctx_->param_.write_session_count_) + 1;
       } else {
         session_store->session_id_ = i + 1;
       }
@@ -129,7 +129,7 @@ ObTableLoadTransStoreWriter::ObTableLoadTransStoreWriter(ObTableLoadTransStore *
 ObTableLoadTransStoreWriter::~ObTableLoadTransStoreWriter()
 {
   if (nullptr != session_ctx_array_) {
-    int32_t session_count = param_.px_mode_? 1 : param_.session_count_;
+    int32_t session_count = param_.px_mode_? 1 : param_.write_session_count_;
     for (int64_t i = 0; i < session_count; ++i) {
       SessionContext *session_ctx = session_ctx_array_ + i;
       if (OB_NOT_NULL(session_ctx->extra_buf_)) {
@@ -146,7 +146,7 @@ ObTableLoadTransStoreWriter::~ObTableLoadTransStoreWriter()
 int ObTableLoadTransStoreWriter::init()
 {
   int ret = OB_SUCCESS;
-  int32_t session_count = param_.px_mode_? 1 : param_.session_count_;
+  int32_t session_count = param_.px_mode_? 1 : param_.write_session_count_;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadTransStoreWriter init twice", KR(ret), KP(this));
@@ -191,7 +191,7 @@ int ObTableLoadTransStoreWriter::init_session_ctx_array()
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
-  int32_t session_count = param_.px_mode_? 1 : param_.session_count_;
+  int32_t session_count = param_.px_mode_? 1 : param_.write_session_count_;
   ObDataTypeCastParams cast_params(trans_ctx_->ctx_->session_info_->get_timezone_info());
   if (OB_ISNULL(buf = allocator_.alloc(sizeof(SessionContext) * session_count))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -253,7 +253,7 @@ int ObTableLoadTransStoreWriter::advance_sequence_no(int32_t session_id, uint64_
                                                      ObTableLoadMutexGuard &guard)
 {
   int ret = OB_SUCCESS;
-  int32_t session_count = param_.px_mode_? 1 : param_.session_count_;
+  int32_t session_count = param_.px_mode_? 1 : param_.write_session_count_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadTransStoreWriter not init", KR(ret));
@@ -284,7 +284,7 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadTransStoreWriter not init", KR(ret));
-  } else if (OB_UNLIKELY(session_id < 1 || session_id > param_.session_count_) ||
+  } else if (OB_UNLIKELY(session_id < 1 || session_id > param_.write_session_count_) ||
              row_array.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(session_id), K(row_array.empty()));
@@ -316,7 +316,7 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
     const ObTabletID &tablet_id, const ObIArray<ObNewRow> &row_array)
 {
   int ret = OB_SUCCESS;
-  int32_t session_count = param_.px_mode_? 1 : param_.session_count_;
+  int32_t session_count = param_.px_mode_? 1 : param_.write_session_count_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadTransStoreWriter not init", KR(ret));
@@ -351,7 +351,7 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
 int ObTableLoadTransStoreWriter::flush(int32_t session_id)
 {
   int ret = OB_SUCCESS;
-  int32_t session_count = param_.px_mode_? 1 : param_.session_count_;
+  int32_t session_count = param_.px_mode_? 1 : param_.write_session_count_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadTransStoreWriter not init", KR(ret));
@@ -377,7 +377,7 @@ int ObTableLoadTransStoreWriter::flush(int32_t session_id)
 int ObTableLoadTransStoreWriter::clean_up(int32_t session_id)
 {
   int ret = OB_SUCCESS;
-  int32_t session_count = param_.px_mode_? 1 : param_.session_count_;
+  int32_t session_count = param_.px_mode_? 1 : param_.write_session_count_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadTransStoreWriter not init", KR(ret));

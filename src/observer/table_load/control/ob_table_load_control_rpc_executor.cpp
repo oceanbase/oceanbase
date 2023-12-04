@@ -62,6 +62,9 @@ int ObDirectLoadControlPreBeginExecutor::process()
     param.px_mode_ = arg_.px_mode_;
     param.online_opt_stat_gather_ = arg_.online_opt_stat_gather_;
     param.dup_action_ = arg_.dup_action_;
+    param.avail_memory_ = arg_.avail_memory_;
+    param.write_session_count_ = arg_.write_session_count_;
+    param.exe_mode_ = arg_.exe_mode_;
     ObTableLoadDDLParam ddl_param;
     uint64_t data_version = 0;
     ddl_param.dest_table_id_ = arg_.dest_table_id_;
@@ -69,6 +72,7 @@ int ObDirectLoadControlPreBeginExecutor::process()
     ddl_param.schema_version_ = arg_.schema_version_;
     ddl_param.snapshot_version_ = arg_.snapshot_version_;
     ddl_param.data_version_ = arg_.data_version_;
+    ddl_param.cluster_version_ = arg_.cluster_version_;
     if (OB_FAIL(create_table_ctx(param, ddl_param, table_ctx))) {
       LOG_WARN("fail to create table ctx", KR(ret));
     }
@@ -99,11 +103,16 @@ int ObDirectLoadControlPreBeginExecutor::create_table_ctx(const ObTableLoadParam
     LOG_WARN("fail to alloc table ctx", KR(ret), K(param));
   } else if (OB_FAIL(table_ctx->init(param, ddl_param, arg_.session_info_))) {
     LOG_WARN("fail to init table ctx", KR(ret));
-  } else if (OB_FAIL(ObTableLoadStore::init_ctx(table_ctx, arg_.partition_id_array_,
-                                                arg_.target_partition_id_array_))) {
-    LOG_WARN("fail to store init ctx", KR(ret));
   } else if (OB_FAIL(ObTableLoadService::add_ctx(table_ctx))) {
     LOG_WARN("fail to add ctx", KR(ret));
+  } else if (OB_FAIL(ObTableLoadService::assign_memory(param.need_sort_, param.avail_memory_))) {
+    LOG_WARN("fail to assign_memory", KR(ret));
+  } else {
+    table_ctx->set_assigned_memory();
+    if (OB_FAIL(ObTableLoadStore::init_ctx(table_ctx, arg_.partition_id_array_,
+                                           arg_.target_partition_id_array_))) {
+      LOG_WARN("fail to store init ctx", KR(ret));
+    }
   }
   if (OB_FAIL(ret)) {
     if (nullptr != table_ctx) {

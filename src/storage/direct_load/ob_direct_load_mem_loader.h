@@ -15,6 +15,7 @@
 #include "storage/direct_load/ob_direct_load_i_table.h"
 #include "storage/direct_load/ob_direct_load_mem_context.h"
 #include "storage/direct_load/ob_direct_load_mem_worker.h"
+#include "observer/table_load/ob_table_load_service.h"
 
 namespace oceanbase
 {

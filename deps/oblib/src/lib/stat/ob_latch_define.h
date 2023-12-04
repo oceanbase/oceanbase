@@ -332,8 +332,8 @@ LATCH_DEF(MDS_TABLE_HANDLER_LOCK, 311, "mds table handler lock", LATCH_READ_PREF
 LATCH_DEF(IND_NAME_CACHE_LOCK, 312, "index name cache lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(COMPACTION_DIAGNOSE_LOCK, 313, "compaction diagnose lock", LATCH_READ_PREFER, 2000, 0, true)
 LATCH_DEF(OB_MAJOR_MERGE_INFO_MANAGER_LOCK, 314, "major merge info manager lock", LATCH_FIFO, 2000, 0, true)
-LATCH_DEF(RESOURCE_SERVICE_LOCK, 315, "resource service lock", LATCH_READ_PREFER, 2000, 0, false)
-LATCH_DEF(RESOURCE_SERVICE_SWITCH_LOCK, 316, "resource service switch lock", LATCH_FIFO, 2000, 0, false)
+LATCH_DEF(RESOURCE_SERVICE_LOCK, 315, "resource service lock", LATCH_READ_PREFER, 2000, 0, true)
+LATCH_DEF(RESOURCE_SERVICE_SWITCH_LOCK, 316, "resource service switch lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(ASH_LOCK, 317, "ash lock", LATCH_FIFO, 2000, 0, true)
 
 LATCH_DEF(LATCH_END, 318, "latch end", LATCH_FIFO, 2000, 0, true)

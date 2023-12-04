@@ -24,6 +24,7 @@ namespace storage
 {
 using namespace common;
 using namespace blocksstable;
+using namespace observer;
 
 ObDirectLoadMultipleHeapTableSorter::ObDirectLoadMultipleHeapTableSorter(
   ObDirectLoadMemContext *mem_ctx)
@@ -195,12 +196,23 @@ int ObDirectLoadMultipleHeapTableSorter::work()
           LOG_WARN("some error ocurr", KR(ret));
         }
         if (OB_SUCC(ret)) {
-          chunk = OB_NEW(ChunkType, ObMemAttr(MTL_ID(), "TLD_MemChunkVal"), mem_ctx_->table_data_desc_.heap_table_mem_chunk_size_);
-          if (chunk == nullptr) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("fail to allocate mem", KR(ret));
-          } else if (OB_FAIL(chunk->init())) {
-            LOG_WARN("fail to init external sort", KR(ret));
+          int64_t sort_memory = 0;
+          if (mem_ctx_->table_data_desc_.exe_mode_ == observer::ObTableLoadExeMode::MAX_TYPE) {
+            sort_memory = mem_ctx_->table_data_desc_.heap_table_mem_chunk_size_;
+          } else if (OB_FAIL(ObTableLoadService::get_sort_memory(sort_memory))) {
+            LOG_WARN("fail to get sort memory", KR(ret));
+          } else {
+            sort_memory /= mem_ctx_->table_data_desc_.session_count_;
+          }
+          if (OB_SUCC(ret)) {
+            chunk = OB_NEW(ChunkType, ObMemAttr(MTL_ID(), "TLD_MemChunkVal"), sort_memory);
+            if (chunk == nullptr) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+            } else if (OB_FAIL(chunk->init())) {
+              LOG_WARN("fail to init external sort", KR(ret));
+            } else {
+              LOG_INFO("init heap table chunk size", K(sort_memory));
+            }
           }
         }
       }

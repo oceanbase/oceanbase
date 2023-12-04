@@ -24,6 +24,7 @@
 #include "observer/net/ob_ingress_bw_alloc_service.h"
 #include "observer/ob_srv_network_frame.h"
 #include "observer/report/ob_i_meta_report.h"
+#include "observer/table_load/resource/ob_table_load_resource_service.h"
 #include "rootserver/freeze/ob_major_freeze_service.h"
 #ifdef OB_BUILD_ARBITRATION
 #include "rootserver/ob_arbitration_service.h"
@@ -232,6 +233,11 @@ int ObLS::init(const share::ObLSID &ls_id,
         LOG_INFO("register primary major freeze service complete", KR(ret));
         REGISTER_TO_RESTORESERVICE(logservice::MAJOR_FREEZE_LOG_BASE_TYPE, MTL(rootserver::ObRestoreMajorFreezeService *));
         LOG_INFO("register restore major freeze service complete", KR(ret));
+      }
+
+      if (OB_SUCC(ret) && (ls_id == TABLE_LOAD_RESOURCE_SERVICE_LS)) {
+        REGISTER_TO_LOGSERVICE(logservice::TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, MTL(observer::ObTableLoadResourceService *));
+        LOG_INFO("register resource service complete", KR(ret));
       }
 
       if (ls_id == GAIS_LS && OB_SUCC(ret)) {
@@ -792,6 +798,10 @@ void ObLS::destroy()
     UNREGISTER_FROM_RESTORESERVICE(logservice::MAJOR_FREEZE_LOG_BASE_TYPE, restore_major_freeze_service);
     rootserver::ObPrimaryMajorFreezeService *primary_major_freeze_service = MTL(rootserver::ObPrimaryMajorFreezeService *);
     UNREGISTER_FROM_LOGSERVICE(logservice::MAJOR_FREEZE_LOG_BASE_TYPE, primary_major_freeze_service);
+  }
+  if (ls_meta_.ls_id_ == TABLE_LOAD_RESOURCE_SERVICE_LS) {
+    observer::ObTableLoadResourceService *resource_service = MTL(observer::ObTableLoadResourceService *);
+    UNREGISTER_FROM_LOGSERVICE(logservice::TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, resource_service);
   }
   if (ls_meta_.ls_id_ == GAIS_LS) {
     UNREGISTER_FROM_LOGSERVICE(logservice::GAIS_LOG_BASE_TYPE, MTL(share::ObGlobalAutoIncService *));

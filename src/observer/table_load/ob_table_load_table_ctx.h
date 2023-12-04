@@ -45,10 +45,14 @@ public:
   int64_t get_ref_count() const { return ATOMIC_LOAD(&ref_count_); }
   int64_t inc_ref_count() { return ATOMIC_AAF(&ref_count_, 1); }
   int64_t dec_ref_count() { return ATOMIC_AAF(&ref_count_, -1); }
+  bool is_assigned_resource() const { return is_assigned_resource_; }
+  void set_assigned_resource() { is_assigned_resource_ = true; }
+  bool is_assigned_memory() const { return is_assigned_memory_; }
+  void set_assigned_memory() { is_assigned_memory_ = true; }
   bool is_dirty() const { return is_dirty_; }
   void set_dirty() { is_dirty_ = true; }
   TO_STRING_KV(K_(param), KP_(coordinator_ctx), KP_(store_ctx), "ref_count", get_ref_count(),
-               K_(is_dirty), K_(is_inited));
+               K_(is_assigned_resource), K_(is_assigned_memory), K_(is_dirty), K_(is_inited));
 public:
   int init_coordinator_ctx(const common::ObIArray<int64_t> &idx_array,
                            ObTableLoadExecCtx *exec_ctx);
@@ -79,6 +83,8 @@ private:
   ObTableLoadObjectAllocator<ObTableLoadTask> task_allocator_; // 多线程安全
   ObTableLoadObjectAllocator<ObTableLoadTransCtx> trans_ctx_allocator_; // 多线程安全
   int64_t ref_count_ CACHE_ALIGNED;
+  bool is_assigned_resource_;
+  bool is_assigned_memory_;
   volatile bool is_dirty_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObTableLoadTableCtx);

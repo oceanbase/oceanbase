@@ -35,6 +35,7 @@ public:
   static const int64_t WRS_LS_ID = SYS_LS_ID;            // LS for Weak Read Service
   static const int64_t SCHEDULER_LS_ID = INT64_MAX;      // LS for Trans scheduler
   static const int64_t MAJOR_FREEZE_LS_ID = SYS_LS_ID;   // LS for Major Freeze Service
+  static const int64_t TABLE_LOAD_RESOURCE_SERVICE_LS_ID = SYS_LS_ID;   // LS for Table Load Resource Manager Service
 
   static const int64_t MIN_USER_LS_ID = 1000;
   static const int64_t MIN_USER_LS_GROUP_ID = 1000;
@@ -104,6 +105,7 @@ static const ObLSID LOCK_SERVICE_LS(ObLSID::LOCK_SERVICE_LS_ID);
 static const ObLSID DAS_ID_LS(ObLSID::DAS_ID_LS_ID);
 static const ObLSID MAJOR_FREEZE_LS(ObLSID::MAJOR_FREEZE_LS_ID);
 static const ObLSID WRS_LS_ID(ObLSID::WRS_LS_ID);
+static const ObLSID TABLE_LOAD_RESOURCE_SERVICE_LS(ObLSID::TABLE_LOAD_RESOURCE_SERVICE_LS_ID);
 
 static const int64_t OB_DEFAULT_LS_COUNT = 3;
 typedef common::ObSEArray<share::ObLSID, OB_DEFAULT_LS_COUNT> ObLSArray;

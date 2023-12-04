@@ -52,8 +52,11 @@ public:
   }
   int compare(const ObTableLoadKey &other) const
   {
-    return (tenant_id_ != other.tenant_id_ ? tenant_id_ - other.tenant_id_
-                                           : table_id_ - other.table_id_);
+    if (tenant_id_ != other.tenant_id_) {
+      return (tenant_id_ > other.tenant_id_ ? 1 : -1);
+    } else {
+      return (table_id_ != other.table_id_ ? (table_id_ > other.table_id_ ? 1 : -1) : 0);
+    }
   }
   TO_STRING_KV(K_(tenant_id), K_(table_id));
 public:
@@ -63,11 +66,19 @@ public:
 
 struct ObTableLoadUniqueKey
 {
+  OB_UNIS_VERSION(1);
+
 public:
   ObTableLoadUniqueKey() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
   ObTableLoadUniqueKey(uint64_t table_id, int64_t task_id) : table_id_(table_id), task_id_(task_id)
   {
   }
+  ObTableLoadUniqueKey(const ObTableLoadUniqueKey &key)
+  {
+    table_id_ = key.table_id_;
+    task_id_ = key.task_id_;
+  }
+
   bool is_valid() const { return common::OB_INVALID_ID != table_id_ && 0 != task_id_; }
   bool operator==(const ObTableLoadUniqueKey &other) const
   {
@@ -76,6 +87,16 @@ public:
   bool operator!=(const ObTableLoadUniqueKey &other) const
   {
     return !(*this == other);
+  }
+  ObTableLoadUniqueKey &operator=(const ObTableLoadUniqueKey& other)
+  {
+    if (this == &other)
+    {
+      return *this;
+    }
+    this->table_id_ = other.table_id_;
+    this->task_id_ = other.task_id_;
+    return *this;
   }
   uint64_t hash() const
   {
@@ -88,12 +109,24 @@ public:
   }
   int compare(const ObTableLoadUniqueKey &other) const
   {
-    return (table_id_ != other.table_id_ ? table_id_ - other.table_id_ : task_id_ - other.task_id_);
+    if (table_id_ != other.table_id_) {
+      return (table_id_ > other.table_id_ ? 1 : -1);
+    } else {
+      return (task_id_ != other.task_id_ ? (task_id_ > other.task_id_ ? 1 : -1) : 0);
+    }
   }
   TO_STRING_KV(K_(table_id), K_(task_id));
 public:
   uint64_t table_id_;
   int64_t task_id_;
+};
+
+enum class ObTableLoadExeMode {
+  FAST_HEAP_TABLE = 0,
+  GENERAL_TABLE_COMPACT = 1,
+  MULTIPLE_HEAP_TABLE_COMPACT = 2,
+  MEM_COMPACT = 3,
+  MAX_TYPE
 };
 
 struct ObTableLoadParam
@@ -110,7 +143,10 @@ struct ObTableLoadParam
       need_sort_(false),
       px_mode_(false),
       online_opt_stat_gather_(false),
-      dup_action_(sql::ObLoadDupActionType::LOAD_INVALID_MODE)
+      dup_action_(sql::ObLoadDupActionType::LOAD_INVALID_MODE),
+      avail_memory_(0),
+      write_session_count_(0),
+      exe_mode_(ObTableLoadExeMode::MAX_TYPE)
   {
   }
 
@@ -137,7 +173,7 @@ struct ObTableLoadParam
 
   TO_STRING_KV(K_(tenant_id), K_(table_id), K_(parallel), K_(session_count), K_(batch_size),
                K_(max_error_row_count), K_(sql_mode), K_(column_count), K_(need_sort), K_(px_mode),
-               K_(online_opt_stat_gather), K_(dup_action));
+               K_(online_opt_stat_gather), K_(dup_action), K_(avail_memory), K_(write_session_count), K_(exe_mode));
 public:
   uint64_t tenant_id_;
   uint64_t table_id_;
@@ -151,6 +187,9 @@ public:
   bool px_mode_;
   bool online_opt_stat_gather_;
   sql::ObLoadDupActionType dup_action_;
+  int64_t avail_memory_;
+  int32_t write_session_count_;
+  ObTableLoadExeMode exe_mode_;
 };
 
 struct ObTableLoadDDLParam
@@ -161,7 +200,8 @@ public:
       task_id_(0),
       schema_version_(0),
       snapshot_version_(0),
-      data_version_(0)
+      data_version_(0),
+      cluster_version_(0)
   {
   }
   void reset()
@@ -175,16 +215,17 @@ public:
   bool is_valid() const
   {
     return common::OB_INVALID_ID != dest_table_id_ && 0 != task_id_ && 0 != schema_version_ &&
-           0 != snapshot_version_ && 0 != data_version_;
+           0 != snapshot_version_ && 0 != data_version_ && 0 != cluster_version_;
   }
   TO_STRING_KV(K_(dest_table_id), K_(task_id), K_(schema_version), K_(snapshot_version),
-               K_(data_version));
+               K_(data_version), K(cluster_version_));
 public:
   uint64_t dest_table_id_;
   int64_t task_id_;
   int64_t schema_version_;
   int64_t snapshot_version_;
   int64_t data_version_;
+  uint64_t cluster_version_;
 };
 
 class ObTableLoadMutexGuard

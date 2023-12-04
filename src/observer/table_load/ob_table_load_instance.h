@@ -65,11 +65,12 @@ private:
     table::ObTableLoadTransId trans_id_;
     table::ObTableLoadArray<uint64_t> next_sequence_no_array_;
   };
+public:
+  ObTableLoadTableCtx *table_ctx_;
 private:
   static const int64_t DEFAULT_SEGMENT_ID = 1;
   ObTableLoadExecCtx *execute_ctx_;
   common::ObIAllocator *allocator_;
-  ObTableLoadTableCtx *table_ctx_;
   sql::ObLoadDataStat *job_stat_;
   TransCtx trans_ctx_;
   bool is_committed_;

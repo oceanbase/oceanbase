@@ -1967,9 +1967,6 @@ int ObLoadDataDirectImpl::init_execute_param()
     } else {
       hint_parallel = hint_parallel > 0 ? hint_parallel : DEFAULT_PARALLEL_THREAD_COUNT;
       execute_param_.parallel_ = hint_parallel;
-      execute_param_.thread_count_ = MIN(hint_parallel, (int64_t)tenant->unit_max_cpu() * 2);
-      execute_param_.data_mem_usage_limit_ =
-        MIN(execute_param_.thread_count_ * 2, MAX_DATA_MEM_USAGE_LIMIT);
     }
   }
   // batch_row_count_
@@ -2117,7 +2114,7 @@ int ObLoadDataDirectImpl::init_execute_context()
   load_param.tenant_id_ = execute_param_.tenant_id_;
   load_param.table_id_ = execute_param_.table_id_;
   load_param.parallel_ = execute_param_.parallel_;
-  load_param.session_count_ = execute_param_.thread_count_;
+  load_param.session_count_ = execute_param_.parallel_;
   load_param.batch_size_ = execute_param_.batch_row_count_;
   load_param.max_error_row_count_ = execute_param_.max_error_rows_;
   load_param.column_count_ = execute_param_.store_column_idxs_.count();
@@ -2136,6 +2133,8 @@ int ObLoadDataDirectImpl::init_execute_context()
     execute_ctx_.direct_loader_ = &direct_loader_;
     execute_ctx_.job_stat_ = direct_loader_.get_job_stat();
     execute_ctx_.logger_ = &logger_;
+    execute_param_.thread_count_ = direct_loader_.table_ctx_->param_.write_session_count_;
+    execute_param_.data_mem_usage_limit_ = MIN(execute_param_.thread_count_ * 2, MAX_DATA_MEM_USAGE_LIMIT);
   }
   return ret;
 }

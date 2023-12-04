@@ -283,13 +283,13 @@ int ObTableLoadGeneralTableCompactor::construct_compactors()
   if (OB_FAIL(store_ctx_->get_committed_trans_stores(trans_store_array))) {
     LOG_WARN("fail to get committed trans stores", KR(ret));
   } else if (OB_ISNULL(compactor_task_map_array = static_cast<CompactorTaskMap *>(
-                         allocator.alloc(sizeof(CompactorTaskMap) * param_->session_count_)))) {
+                         allocator.alloc(sizeof(CompactorTaskMap) * param_->write_session_count_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", KR(ret));
   } else {
-    new (compactor_task_map_array) CompactorTaskMap[param_->session_count_];
+    new (compactor_task_map_array) CompactorTaskMap[param_->write_session_count_];
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < param_->session_count_; ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < param_->write_session_count_; ++i) {
     CompactorTaskMap &compactor_map = compactor_task_map_array[i];
     if (OB_FAIL(compactor_map.create(1024, "TLD_CT_Map", "TLD_CT_Map", MTL_ID()))) {
       LOG_WARN("fail to create compactor map", KR(ret));
@@ -313,7 +313,7 @@ int ObTableLoadGeneralTableCompactor::construct_compactors()
     store_ctx_->clear_committed_trans_stores();
   }
   if (nullptr != compactor_task_map_array) {
-    for (int64_t i = 0; i < param_->session_count_; ++i) {
+    for (int64_t i = 0; i < param_->write_session_count_; ++i) {
       CompactorTaskMap *compactor_map = compactor_task_map_array + i;
       compactor_map->~CompactorTaskMap();
     }

@@ -22,6 +22,7 @@ namespace storage
 {
 using namespace common;
 using namespace blocksstable;
+using namespace observer;
 
 /**
  * ObDirectLoadMemLoader
@@ -103,8 +104,20 @@ int ObDirectLoadMemLoader::work()
             LOG_WARN("fail to allocate mem", KR(ret));
           } else {
             ATOMIC_AAF(&(mem_ctx_->fly_mem_chunk_count_), 1);
-            if (OB_FAIL(chunk->init(MTL_ID(), mem_ctx_->table_data_desc_.mem_chunk_size_))) {
-              LOG_WARN("fail to init external sort", KR(ret));
+            int64_t sort_memory = 0;
+            if (mem_ctx_->table_data_desc_.exe_mode_ == observer::ObTableLoadExeMode::MAX_TYPE) {
+              sort_memory = mem_ctx_->table_data_desc_.mem_chunk_size_;
+            } else if (OB_FAIL(ObTableLoadService::get_sort_memory(sort_memory))) {
+              LOG_WARN("fail to get sort memory", KR(ret));
+            } else {
+              sort_memory /= mem_ctx_->table_data_desc_.max_mem_chunk_count_;
+            }
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(chunk->init(MTL_ID(), sort_memory))) {
+                LOG_WARN("fail to init external sort", KR(ret));
+              } else {
+                LOG_INFO("init mem chunk size", K(sort_memory));
+              }
             }
           }
         }

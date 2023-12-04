@@ -145,10 +145,9 @@ void TestDataBlockWriter::SetUp()
   table_data_desc_.extra_buf_size_ = (2LL << 20);
   table_data_desc_.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   table_data_desc_.is_heap_table_ = false;
-  table_data_desc_.mem_chunk_size_ = (64LL << 20);
   table_data_desc_.max_mem_chunk_count_ = 128;
   table_data_desc_.merge_count_per_round_ = 64;
-  table_data_desc_.heap_table_mem_chunk_size_ = (64LL << 20);
+  table_data_desc_.session_count_ = 2;
   file_mgr_ = OB_NEWx(ObDirectLoadTmpFileManager, (&allocator_));
   ASSERT_TRUE(nullptr != file_mgr_);
   ret = file_mgr_->init(table_schema_.get_tenant_id());

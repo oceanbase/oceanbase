@@ -170,12 +170,20 @@ ob_set_subtarget(ob_server table
 )
 
 ob_set_subtarget(ob_server table_load
+  table_load/resource/ob_table_load_resource_manager.cpp
+  table_load/resource/ob_table_load_resource_processor.cpp
+  table_load/resource/ob_table_load_resource_rpc_executor.cpp
+  table_load/resource/ob_table_load_resource_rpc_proxy.cpp
+  table_load/resource/ob_table_load_resource_rpc_struct.cpp
+  table_load/resource/ob_table_load_resource_service.cpp
   table_load/client/ob_table_direct_load_rpc_executor.cpp
   table_load/client/ob_table_direct_load_rpc_proxy.cpp
   table_load/client/ob_table_direct_load_rpc_struct.cpp
   table_load/control/ob_table_load_control_rpc_executor.cpp
   table_load/control/ob_table_load_control_rpc_proxy.cpp
   table_load/control/ob_table_load_control_rpc_struct.cpp
+  table_load/ob_table_load_assigned_memory_manager.cpp
+  table_load/ob_table_load_assigned_task_manager.cpp
   table_load/ob_table_load_autoinc_nextval.cpp
   table_load/ob_table_load_bucket.cpp
   table_load/ob_table_load_client_service.cpp
@@ -198,6 +206,7 @@ ob_set_subtarget(ob_server table_load
   table_load/ob_table_load_store_ctx.cpp
   table_load/ob_table_load_store_trans.cpp
   table_load/ob_table_load_store.cpp
+  table_load/ob_table_load_struct.cpp
   table_load/ob_table_load_table_compactor.cpp
   table_load/ob_table_load_table_ctx.cpp
   table_load/ob_table_load_task_scheduler.cpp

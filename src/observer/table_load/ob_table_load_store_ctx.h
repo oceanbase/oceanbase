@@ -19,6 +19,8 @@
 #include "share/table/ob_table_load_array.h"
 #include "share/table/ob_table_load_define.h"
 #include "storage/direct_load/ob_direct_load_table_data_desc.h"
+#include "observer/table_load/ob_table_load_service.h"
+#include "observer/table_load/ob_table_load_assigned_memory_manager.h"
 
 namespace oceanbase
 {
@@ -128,7 +130,6 @@ public:
 private:
   int alloc_trans_ctx(const table::ObTableLoadTransId &trans_id, ObTableLoadTransCtx *&trans_ctx);
   int alloc_trans(const table::ObTableLoadTransId &trans_id, ObTableLoadStoreTrans *&trans);
-  int get_wa_memory_limit(int64_t &wa_mem_limit);
   int init_session_ctx_array();
   int generate_autoinc_params(share::AutoincParam &autoinc_param);
   int init_sequence();

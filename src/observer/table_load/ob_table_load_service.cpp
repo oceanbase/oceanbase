@@ -474,9 +474,35 @@ int ObTableLoadService::remove_ctx(ObTableLoadTableCtx *table_ctx)
     ret = OB_ERR_SYS;
     LOG_WARN("null table load service", KR(ret));
   } else {
-    ObTableLoadUniqueKey key(table_ctx->param_.table_id_, table_ctx->ddl_param_.task_id_);
-    ret = service->get_manager().remove_table_ctx(key, table_ctx);
+    common::ObAddr leader;
+    ObDirectLoadResourceReleaseArg release_arg;
+    release_arg.tenant_id_ = MTL_ID();
+    release_arg.task_key_ = ObTableLoadUniqueKey(table_ctx->param_.table_id_, table_ctx->ddl_param_.task_id_);
+    bool is_sort = (table_ctx->param_.exe_mode_ == ObTableLoadExeMode::MULTIPLE_HEAP_TABLE_COMPACT ||
+                    table_ctx->param_.exe_mode_ == ObTableLoadExeMode::MEM_COMPACT);
+    if (OB_FAIL(service->get_manager().remove_table_ctx(release_arg.task_key_, table_ctx))) {
+      LOG_WARN("fail to remove_table_ctx", KR(ret), K(release_arg.task_key_));
+    } else if (table_ctx->is_assigned_memory() &&
+               OB_FAIL(service->assigned_memory_manager_.recycle_memory(is_sort, table_ctx->param_.avail_memory_))) {
+      LOG_WARN("fail to recycle_memory", KR(ret), K(release_arg.task_key_));
+    } else if (table_ctx->is_assigned_resource()) {
+      if (OB_FAIL(service->assigned_task_manager_.delete_assigned_task(release_arg.task_key_))) {
+        LOG_WARN("fail to delete_assigned_task", KR(ret), K(release_arg.task_key_));
+      } else if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(GCONF.cluster_id,
+                                                                                     release_arg.tenant_id_,
+                                                                                     share::SYS_LS,
+                                                                                     leader))) {
+        LOG_WARN("fail to get ls location leader", KR(ret), K(release_arg.tenant_id_));
+      } else if (ObTableLoadUtils::is_local_addr(leader)) {
+        if (OB_FAIL(ObTableLoadResourceService::release_resource(release_arg))) {
+          LOG_WARN("fail to release resource", KR(ret));
+        }
+      } else {
+        TABLE_LOAD_RESOURCE_RPC_CALL(release_resource, leader, release_arg);
+      }
+    }
   }
+
   return ret;
 }
 
@@ -538,6 +564,10 @@ int ObTableLoadService::init(uint64_t tenant_id)
     LOG_WARN("ObTableLoadService init twice", KR(ret), KP(this));
   } else if (OB_FAIL(manager_.init())) {
     LOG_WARN("fail to init table ctx manager", KR(ret));
+  } else if (OB_FAIL(assigned_memory_manager_.init())) {
+    LOG_WARN("fail to init assigned memory manager", KR(ret));
+  } else if (OB_FAIL(assigned_task_manager_.init())) {
+    LOG_WARN("fail to init assigned task manager", KR(ret));
   } else if (OB_FAIL(client_service_.init())) {
     LOG_WARN("fail to init client service", KR(ret));
   } else if (OB_FAIL(check_tenant_task_.init(tenant_id))) {
@@ -713,6 +743,96 @@ void ObTableLoadService::release_all_ctx()
       ob_usleep(1 * 1000 * 1000);
     }
   }
+}
+
+int ObTableLoadService::get_memory_limit(int64_t &memory_limit)
+{
+  int ret = OB_SUCCESS;
+  ObObj value;
+  int64_t pctg = 0;
+  int64_t tenant_id = MTL_ID();
+  ObSchemaGetterGuard schema_guard;
+  const ObSysVarSchema *var_schema = NULL;
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null");
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("get schema guard failed", K(ret));
+  } else if (OB_FAIL(schema_guard.get_tenant_system_variable(tenant_id, SYS_VAR_OB_SQL_WORK_AREA_PERCENTAGE, var_schema))) {
+    LOG_WARN("get tenant system variable failed", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(var_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("var_schema is null");
+  } else if (OB_FAIL(var_schema->get_value(NULL, NULL, value))) {
+    LOG_WARN("get value from var_schema failed", K(ret), K(*var_schema));
+  } else if (OB_FAIL(value.get_int(pctg))) {
+    LOG_WARN("get int from value failed", K(ret), K(value));
+  } else {
+    memory_limit = lib::get_tenant_memory_limit(tenant_id) * pctg / 100;
+  }
+
+  return ret;
+}
+
+int ObTableLoadService::add_assigned_task(ObDirectLoadResourceApplyArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObTableLoadService *service = nullptr;
+  if (OB_ISNULL(service = MTL(ObTableLoadService *))) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("null table load service", KR(ret));
+  } else {
+    ret = service->assigned_task_manager_.add_assigned_task(arg);
+  }
+
+  return ret;
+}
+
+int ObTableLoadService::assign_memory(bool is_sort, int64_t assign_memory)
+{
+  int ret = OB_SUCCESS;
+  ObTableLoadService *service = nullptr;
+  if (OB_ISNULL(service = MTL(ObTableLoadService *))) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("null table load service", KR(ret));
+  } else {
+    ret = service->assigned_memory_manager_.assign_memory(is_sort, assign_memory);
+  }
+
+  return ret;
+}
+
+int ObTableLoadService::get_sort_memory(int64_t &sort_memory)
+{
+  int ret = OB_SUCCESS;
+  ObTableLoadService *service = nullptr;
+  if (OB_ISNULL(service = MTL(ObTableLoadService *))) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("null table load service", KR(ret));
+  } else {
+    ret = service->assigned_memory_manager_.get_sort_memory(sort_memory);
+  }
+
+  return ret;
+}
+
+int ObTableLoadService::refresh_and_check_resource(ObDirectLoadResourceCheckArg &arg, ObDirectLoadResourceOpRes &res)
+{
+  int ret = OB_SUCCESS;
+  ObTableLoadService *service = nullptr;
+  if (OB_ISNULL(service = MTL(ObTableLoadService *))) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("null table load service", KR(ret));
+  } else {
+    res.avail_memory_ = service->assigned_memory_manager_.get_avail_memory();
+    if (!arg.first_check_ && OB_FAIL(service->assigned_memory_manager_.refresh_avail_memory(arg.avail_memory_))) {
+      LOG_WARN("fail to refresh_avail_memory", KR(ret));
+    } else if (OB_FAIL(service->assigned_task_manager_.get_assigned_tasks(res.assigned_array_))) {
+      LOG_WARN("fail to get_assigned_tasks", KR(ret));
+    }
+  }
+
+  return ret;
 }
 
 } // namespace observer

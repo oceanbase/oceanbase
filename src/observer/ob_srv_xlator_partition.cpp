@@ -51,6 +51,7 @@
 
 #include "logservice/restoreservice/ob_log_restore_rpc_define.h"
 #include "rootserver/freeze/ob_major_freeze_rpc_define.h"        // ObTenantMajorFreezeP
+#include "observer/table_load/resource/ob_table_load_resource_processor.h"
 #include "storage/tx/ob_xa_rpc.h"
 
 #include "observer/table_load/ob_table_load_rpc_processor.h"
@@ -299,6 +300,9 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
 
   // direct load
   RPC_PROCESSOR(ObDirectLoadControlP, gctx_);
+
+  // direct load resource
+  RPC_PROCESSOR(ObDirectLoadResourceP, gctx_);
 
   // wr
   RPC_PROCESSOR(ObWrAsyncSnapshotTaskP, gctx_);

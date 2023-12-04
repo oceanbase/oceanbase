@@ -138,13 +138,6 @@ int ObTableLoadCoordinatorCtx::init(const ObIArray<int64_t> &idx_array,
     else if (OB_FAIL(segment_ctx_map_.init("TLD_SegCtxMap", ctx_->param_.tenant_id_))) {
       LOG_WARN("fail to init segment ctx map", KR(ret));
     }
-    // init task_scheduler_
-    else if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (&allocator_),
-                                                 ctx_->param_.session_count_,
-                                                 ctx_->param_.table_id_, "Coordinator"))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to new ObTableLoadTaskThreadPoolScheduler", KR(ret));
-    }
     // init error_row_handler_
     else if (OB_ISNULL(error_row_handler_ =
                          OB_NEWx(ObTableLoadErrorRowHandler, (&allocator_)))) {
@@ -153,17 +146,9 @@ int ObTableLoadCoordinatorCtx::init(const ObIArray<int64_t> &idx_array,
     } else if (OB_FAIL(error_row_handler_->init(ctx_->param_, result_info_, ctx_->job_stat_))) {
       LOG_WARN("fail to init error row handler", KR(ret));
     }
-    // init session_ctx_array_
-    else if (OB_FAIL(init_session_ctx_array())) {
-      LOG_WARN("fail to init session ctx array", KR(ret));
-    }
     // init sequence_cache_ and sequence_schema_
     else if (ctx_->schema_.has_identity_column_ && OB_FAIL(init_sequence())) {
       LOG_WARN("fail to init sequence", KR(ret));
-    } else if (OB_FAIL(task_scheduler_->init())) {
-      LOG_WARN("fail to init task scheduler", KR(ret));
-    } else if (OB_FAIL(task_scheduler_->start())) {
-      LOG_WARN("fail to start task scheduler", KR(ret));
     }
     if (OB_SUCC(ret)) {
       exec_ctx_ = exec_ctx;
@@ -210,7 +195,7 @@ void ObTableLoadCoordinatorCtx::destroy()
     ctx_->free_trans_ctx(trans_ctx);
   }
   if (nullptr != session_ctx_array_) {
-    for (int64_t i = 0; i < ctx_->param_.session_count_; ++i) {
+    for (int64_t i = 0; i < ctx_->param_.write_session_count_; ++i) {
       SessionContext *session_ctx = session_ctx_array_ + i;
       session_ctx->~SessionContext();
     }
@@ -333,7 +318,7 @@ int ObTableLoadCoordinatorCtx::alloc_trans(const ObTableLoadSegmentID &segment_i
   trans = nullptr;
   const uint64_t trans_gid = ATOMIC_AAF(&last_trans_gid_, 1);
   const int32_t default_session_id =
-    (ATOMIC_FAA(&next_session_id_, 1) % ctx_->param_.session_count_) + 1;
+    (ATOMIC_FAA(&next_session_id_, 1) % ctx_->param_.write_session_count_) + 1;
   ObTableLoadTransId trans_id(segment_id, trans_gid);
   ObTableLoadTransCtx *trans_ctx = nullptr;
   // 分配trans_ctx
@@ -477,14 +462,14 @@ int ObTableLoadCoordinatorCtx::init_session_ctx_array()
   int ret = OB_SUCCESS;
   void *buf = nullptr;
   AutoincParam autoinc_param;
-  if (OB_ISNULL(buf = allocator_.alloc(sizeof(SessionContext) * ctx_->param_.session_count_))) {
+  if (OB_ISNULL(buf = allocator_.alloc(sizeof(SessionContext) * ctx_->param_.write_session_count_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", KR(ret));
   } else if (ctx_->schema_.has_autoinc_column_ && OB_FAIL(generate_autoinc_params(autoinc_param))) {
     LOG_WARN("fail to init auto increment param", KR(ret));
   } else {
-    session_ctx_array_ = new (buf) SessionContext[ctx_->param_.session_count_];
-    for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->param_.session_count_; ++i) {
+    session_ctx_array_ = new (buf) SessionContext[ctx_->param_.write_session_count_];
+    for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->param_.write_session_count_; ++i) {
       SessionContext *session_ctx = session_ctx_array_ + i;
       session_ctx->autoinc_param_ = autoinc_param;
     }
@@ -775,6 +760,30 @@ int ObTableLoadCoordinatorCtx::check_exist_committed_trans(bool &is_exist) const
     obsys::ObRLockGuard guard(rwlock_);
     is_exist = !commited_trans_ctx_array_.empty();
   }
+  return ret;
+}
+
+int ObTableLoadCoordinatorCtx::init_complete()
+{
+  int ret = OB_SUCCESS;
+  // init task_scheduler_
+  if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler,
+                                          (&allocator_),
+                                          ctx_->param_.write_session_count_,
+                                          ctx_->param_.table_id_,
+                                          "Coordinator"))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to new ObTableLoadTaskThreadPoolScheduler", KR(ret));
+  }
+  // init session_ctx_array_
+  else if (OB_FAIL(init_session_ctx_array())) {
+    LOG_WARN("fail to init session ctx array", KR(ret));
+  } else if (OB_FAIL(task_scheduler_->init())) {
+    LOG_WARN("fail to init task scheduler", KR(ret));
+  } else if (OB_FAIL(task_scheduler_->start())) {
+    LOG_WARN("fail to start task scheduler", KR(ret));
+  }
+
   return ret;
 }
 

@@ -535,7 +535,7 @@ int ObTableLoadStore::clean_up_trans(ObTableLoadStoreTrans *trans)
   if (OB_FAIL(trans->get_store_writer(store_writer))) {
     LOG_WARN("fail to get store writer", KR(ret));
   } else {
-    for (int32_t session_id = 1; OB_SUCC(ret) && session_id <= param_.session_count_;
+    for (int32_t session_id = 1; OB_SUCC(ret) && session_id <= param_.write_session_count_;
          ++session_id) {
       ObTableLoadTask *task = nullptr;
       // 1. 分配task
@@ -840,7 +840,7 @@ int ObTableLoadStore::flush(ObTableLoadStoreTrans *trans)
     else if (OB_FAIL(trans->set_trans_status_frozen())) {
       LOG_WARN("fail to freeze trans", KR(ret));
     } else {
-      for (int32_t session_id = 1; OB_SUCC(ret) && session_id <= param_.session_count_; ++session_id) {
+      for (int32_t session_id = 1; OB_SUCC(ret) && session_id <= param_.write_session_count_; ++session_id) {
         ObTableLoadTask *task = nullptr;
         // 1. 分配task
         if (OB_FAIL(ctx_->alloc_task(task))) {

@@ -122,43 +122,53 @@ int ObTableLoadStoreCtx::init(
       table_data_desc_.extra_buf_size_ = ObDirectLoadTableDataDesc::DEFAULT_EXTRA_BUF_SIZE;
       table_data_desc_.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
       table_data_desc_.is_heap_table_ = ctx_->schema_.is_heap_table_;
+      table_data_desc_.session_count_ = ctx_->param_.session_count_;
+      table_data_desc_.exe_mode_ = ctx_->param_.exe_mode_;
 
       int64_t wa_mem_limit = 0;
-      if (OB_FAIL(get_wa_memory_limit(wa_mem_limit))) {
-        LOG_WARN("failed to get work area memory limit", KR(ret), K(ctx_->param_.tenant_id_));
-      } else if (wa_mem_limit < ObDirectLoadMemContext::MIN_MEM_LIMIT) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("wa_mem_limit is too small", KR(ret), K(wa_mem_limit));
-      } else {
-        table_data_desc_.merge_count_per_round_ = min(wa_mem_limit
-                                                  / table_data_desc_.sstable_data_block_size_
-                                                  / ctx_->param_.session_count_, ObDirectLoadSSTableScanMerge::MAX_SSTABLE_COUNT);
-
-        table_data_desc_.max_mem_chunk_count_ = 128;
-        int64_t mem_chunk_size = wa_mem_limit / table_data_desc_.max_mem_chunk_count_;
-        if (mem_chunk_size <= ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT) {
-          mem_chunk_size = ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT;
-          table_data_desc_.max_mem_chunk_count_ = wa_mem_limit / mem_chunk_size;
-        }
-        table_data_desc_.mem_chunk_size_ = mem_chunk_size;
-        table_data_desc_.heap_table_mem_chunk_size_ = wa_mem_limit / ctx_->param_.session_count_;
-        LOG_INFO("table_data_desc init end", K(table_data_desc_));
-      }
-      if (OB_SUCC(ret)) {
-        if (table_data_desc_.is_heap_table_) {
-          int64_t bucket_cnt = wa_mem_limit / (ctx_->param_.session_count_ * MACRO_BLOCK_WRITER_MEM_SIZE);
-          if (ls_partition_ids_.count() <= bucket_cnt) {
-            is_fast_heap_table_ = true;
-          } else {
-            is_multiple_mode_ = true;
-          }
+      if (table_data_desc_.exe_mode_ == ObTableLoadExeMode::MAX_TYPE) {
+        if (OB_FAIL(ObTableLoadService::get_memory_limit(wa_mem_limit))) {
+          LOG_WARN("failed to get work area memory limit", KR(ret), K(ctx_->param_.tenant_id_));
+        } else if (wa_mem_limit < ObDirectLoadMemContext::MIN_MEM_LIMIT) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("wa_mem_limit is too small", KR(ret), K(wa_mem_limit));
         } else {
-          int64_t bucket_cnt = wa_mem_limit / (ctx_->param_.session_count_ *
-                                               (table_data_desc_.sstable_index_block_size_ +
-                                                table_data_desc_.sstable_data_block_size_));
-          is_multiple_mode_ = ctx_->param_.need_sort_ || ls_partition_ids_.count() > bucket_cnt;
+          table_data_desc_.merge_count_per_round_ = min(wa_mem_limit / table_data_desc_.sstable_data_block_size_ / ctx_->param_.session_count_,
+                                                        ObDirectLoadSSTableScanMerge::MAX_SSTABLE_COUNT);
+          table_data_desc_.max_mem_chunk_count_ = 128;
+          int64_t mem_chunk_size = wa_mem_limit / table_data_desc_.max_mem_chunk_count_;
+          if (mem_chunk_size <= ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT) {
+            mem_chunk_size = ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT;
+            table_data_desc_.max_mem_chunk_count_ = wa_mem_limit / mem_chunk_size;
+          }
+          table_data_desc_.mem_chunk_size_ = mem_chunk_size;
+          table_data_desc_.heap_table_mem_chunk_size_ = wa_mem_limit / ctx_->param_.session_count_;
         }
-        LOG_INFO("multiple_mode is inited", K(is_multiple_mode_), K(is_fast_heap_table_));
+        if (OB_SUCC(ret)) {
+          if (table_data_desc_.is_heap_table_) {
+            int64_t bucket_cnt = wa_mem_limit / (ctx_->param_.session_count_ * MACRO_BLOCK_WRITER_MEM_SIZE);
+            if (ls_partition_ids_.count() <= bucket_cnt) {
+              is_fast_heap_table_ = true;
+            } else {
+              is_multiple_mode_ = true;
+            }
+          } else {
+            int64_t bucket_cnt = wa_mem_limit / ctx_->param_.session_count_ /
+                                 (table_data_desc_.sstable_index_block_size_ + table_data_desc_.sstable_data_block_size_);
+            is_multiple_mode_ = ctx_->param_.need_sort_ || ls_partition_ids_.count() > bucket_cnt;
+          }
+        }
+      } else {
+        wa_mem_limit = ctx_->param_.avail_memory_;
+        if (ctx_->param_.exe_mode_ == ObTableLoadExeMode::FAST_HEAP_TABLE ||
+            ctx_->param_.exe_mode_ == ObTableLoadExeMode::GENERAL_TABLE_COMPACT) {
+          is_fast_heap_table_ = (ctx_->param_.exe_mode_ == ObTableLoadExeMode::FAST_HEAP_TABLE);
+        } else {
+          is_multiple_mode_ = true;
+        }
+        table_data_desc_.merge_count_per_round_ = min(wa_mem_limit / table_data_desc_.sstable_data_block_size_ / ctx_->param_.session_count_,
+                                                      ObDirectLoadSSTableScanMerge::MAX_SSTABLE_COUNT);
+        table_data_desc_.max_mem_chunk_count_ = wa_mem_limit / ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT;
       }
     }
     if (OB_FAIL(ret)) {
@@ -409,36 +419,6 @@ bool ObTableLoadStoreCtx::check_heart_beat_expired(const uint64_t expired_time_u
   return ObTimeUtil::current_time() > (last_heart_beat_ts_ + expired_time_us);
 }
 
-int ObTableLoadStoreCtx::get_wa_memory_limit(int64_t &wa_mem_limit)
-{
-  int ret = OB_SUCCESS;
-  schema::ObSchemaGetterGuard schema_guard;
-  const schema::ObSysVarSchema *var_schema = NULL;
-  ObObj value;
-  int64_t pctg = 0;
-  int64_t tenant_id = MTL_ID();
-  if (OB_ISNULL(GCTX.schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema service is null");
-  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-    LOG_WARN("get schema guard failed", KR(ret));
-  } else if (OB_FAIL(schema_guard.get_tenant_system_variable(tenant_id,
-      SYS_VAR_OB_SQL_WORK_AREA_PERCENTAGE, var_schema))) {
-    LOG_WARN("get tenant system variable failed", KR(ret), K(tenant_id));
-  } else if (OB_ISNULL(var_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("var_schema is null");
-  } else if (OB_FAIL(var_schema->get_value(&allocator_, NULL, value))) {
-    LOG_WARN("get value from var_schema failed", KR(ret), K(*var_schema));
-  } else if (OB_FAIL(value.get_int(pctg))) {
-    LOG_WARN("get int from value failed", KR(ret), K(value));
-  } else {
-    const int64_t tenant_limit = lib::get_tenant_memory_limit(tenant_id);
-    wa_mem_limit = (tenant_limit / 100) * pctg;
-  }
-  return ret;
-}
-
 int ObTableLoadStoreCtx::generate_autoinc_params(AutoincParam &autoinc_param)
 {
   int ret = OB_SUCCESS;
@@ -557,7 +537,7 @@ int ObTableLoadStoreCtx::commit_autoinc_value()
 {
   int ret = OB_SUCCESS;
   ObAutoincrementService &auto_service = ObAutoincrementService::get_instance();
-  for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->param_.session_count_; ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->param_.write_session_count_; ++i) {
     SessionContext *session_ctx = session_ctx_array_ + i;
     if (OB_FAIL(auto_service.sync_insert_value_local(session_ctx->autoinc_param_))) {
       LOG_WARN("fail to sync insert auto increment value local", KR(ret), K(session_ctx->autoinc_param_));
@@ -573,14 +553,14 @@ int ObTableLoadStoreCtx::init_session_ctx_array()
   int ret = OB_SUCCESS;
   void *buf = nullptr;
   AutoincParam autoinc_param;
-  if (OB_ISNULL(buf = allocator_.alloc(sizeof(SessionContext) * ctx_->param_.session_count_))) {
+  if (OB_ISNULL(buf = allocator_.alloc(sizeof(SessionContext) * ctx_->param_.write_session_count_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", KR(ret));
   } else if (ctx_->schema_.has_autoinc_column_ && OB_FAIL(generate_autoinc_params(autoinc_param))) {
     LOG_WARN("fail to init auto increment param", KR(ret));
   } else {
-    session_ctx_array_ = new (buf) SessionContext[ctx_->param_.session_count_];
-    for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->param_.session_count_; ++i) {
+    session_ctx_array_ = new (buf) SessionContext[ctx_->param_.write_session_count_];
+    for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->param_.write_session_count_; ++i) {
       SessionContext *session_ctx = session_ctx_array_ + i;
       session_ctx->autoinc_param_ = autoinc_param;
       if (is_multiple_mode_) {

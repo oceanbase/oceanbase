@@ -273,6 +273,7 @@ int ObTableDirectLoadBeginExecutor::create_table_ctx()
       ddl_param.schema_version_ = start_res.schema_version_;
       ddl_param.snapshot_version_ = start_res.snapshot_version_;
       ddl_param.data_version_ = data_version;
+      ddl_param.cluster_version_ = GET_MIN_CLUSTER_VERSION();
     }
   }
   // init param
@@ -287,7 +288,7 @@ int ObTableDirectLoadBeginExecutor::create_table_ctx()
       param.table_id_ = table_id;
       param.batch_size_ = 100;
       param.parallel_ = arg_.parallel_;
-      param.session_count_ = MIN(arg_.parallel_, (int32_t)tenant->unit_max_cpu() * 2);
+      param.session_count_ = arg_.parallel_;
       param.max_error_row_count_ = arg_.max_error_row_count_;
       param.column_count_ = client_task_->column_names_.count();
       param.need_sort_ = true;
@@ -341,7 +342,7 @@ int ObTableDirectLoadBeginExecutor::do_begin()
     LOG_WARN("fail to coordinator begin", KR(ret));
   }
   // start trans
-  for (int64_t i = 1; OB_SUCC(ret) && i <= table_ctx_->param_.session_count_; ++i) {
+  for (int64_t i = 1; OB_SUCC(ret) && i <= table_ctx_->param_.write_session_count_; ++i) {
     ObTableLoadSegmentID segment_id(i);
     ObTableLoadTransId trans_id;
     if (OB_FAIL(coordinator.start_trans(segment_id, trans_id))) {
