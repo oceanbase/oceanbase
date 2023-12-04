@@ -1303,7 +1303,7 @@ public:
   virtual ~ObStorageStreamRpcReader() {}
   int init(common::ObInOutBandwidthThrottle &bandwidth_throttle);
   int fetch_next_buffer_if_need();
-  int check_need_fetch_next_buffer(bool &need_fectch);
+  int check_need_fetch_next_buffer(bool &need_fetch);
   int fetch_next_buffer();
   template<typename Data>
   int fetch_and_decode(Data &data);
