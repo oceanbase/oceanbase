@@ -418,25 +418,40 @@ int ObStorageHADagUtils::check_self_is_valid_member(
   const uint64_t tenant_id = MTL_ID();
   share::ObLocationService *location_service = nullptr;
   const bool force_renew = true;
-  common::ObAddr leader_addr;
   ObLSService *ls_service = nullptr;
   storage::ObStorageRpc *storage_rpc = nullptr;
   obrpc::ObFetchLSMemberAndLearnerListInfo member_info;
   storage::ObStorageHASrcInfo src_info;
   src_info.cluster_id_ = GCONF.cluster_id;
   const ObAddr &self_addr = GCONF.self_addr_;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+
   if (!ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check self in member list get invalid argument", K(ret), K(ls_id));
   } else if (OB_ISNULL(location_service = GCTX.location_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("location service should not be NULL", K(ret), KP(location_service));
-  } else if (OB_FAIL(location_service->get_leader(src_info.cluster_id_, tenant_id, ls_id, force_renew, leader_addr))) {
-    LOG_WARN("fail to get ls leader server", K(ret), K(tenant_id), K(ls_id));
-  } else if (FALSE_IT(src_info.src_addr_ = leader_addr)) {
   } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service should not be NULL", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    LOG_WARN("failed to get ls", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(ls_id));
+  } else if (OB_FAIL(ls->get_log_handler()->get_election_leader(src_info.src_addr_))) {
+    LOG_WARN("failed to get election leader", K(ret), K(tenant_id), K(ls_id));
+    if (OB_LEADER_NOT_EXIST == ret) {
+      //overwrite ret
+      if (OB_FAIL(location_service->get_leader(src_info.cluster_id_, tenant_id, ls_id, force_renew, src_info.src_addr_))) {
+        LOG_WARN("failed to get ls leader server", K(ret), K(tenant_id), K(ls_id));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(storage_rpc = ls_service->get_storage_rpc())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("storage rpc should not be NULL", K(ret), K(tenant_id), K(ls_id));
