@@ -1643,7 +1643,7 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
   CK (OB_NOT_NULL(ctx.get_my_session()));
   CK (OB_NOT_NULL(block));
   if (OB_SUCC(ret)) {
-    ObArenaAllocator paramerter_alloc("AnonyParam", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObArenaAllocator paramerter_alloc(GET_PL_MOD_STRING(OB_PL_ANONY_PARAMETER), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObString sql(static_cast<int64_t>(block->str_len_), block->str_value_);
     ParseResult parse_result;
     ObPLParser pl_parser(paramerter_alloc,
@@ -1665,6 +1665,7 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
       } else {
         trans_ctx.buf_size_ = sql.length();
         trans_ctx.p_list_ = parse_result.param_nodes_;
+        CK (OB_NOT_NULL(parse_result.result_tree_));
         CK (T_STMT_LIST == parse_result.result_tree_->type_ && 1 == parse_result.result_tree_->num_child_);
         CK (OB_NOT_NULL(block_node = parse_result.result_tree_->children_[0]));
         CK (T_SP_ANONYMOUS_BLOCK == block_node->type_);
