@@ -3025,7 +3025,15 @@ int ObPLCodeGenerateVisitor::visit(const ObPLGotoStmt &s)
             }\
           }\
           if (OB_SUCC(ret)) { \
-            if (OB_SUCC(ret) && OB_FAIL(generator_.get_helper().create_br(goto_dst))) { \
+            ObSEArray<ObLLVMValue, 1> args;    \
+            ObLLVMValue result;                \
+            if (OB_FAIL(args.push_back(generator_.get_vars().at(generator_.CTX_IDX)))) {    \
+              LOG_WARN("fail to push back.", K(ret));               \
+            } else if (OB_FAIL(generator_.get_helper().create_call(ObString("check_early_exit"), generator_.get_spi_service().spi_check_early_exit_, args, result))) { \
+              LOG_WARN("fail to create call check_early_exit", K(ret));      \
+            } else if (OB_FAIL(generator_.check_success(result, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()))) {   \
+              LOG_WARN("fail to check success", K(ret));  \
+            } else if (OB_FAIL(generator_.get_helper().create_br(goto_dst))) { \
               LOG_WARN("failed to create br instr", K(ret)); \
             }\
           }\
