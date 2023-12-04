@@ -45,15 +45,11 @@ void ObAllVirtualTableMgr::reset()
   omt::ObMultiTenantOperator::reset();
   addr_.reset();
   ls_id_ = share::ObLSID::INVALID_LS_ID;
-  table_store_iter_.reset();
 
   if (OB_NOT_NULL(iter_buf_)) {
     allocator_->free(iter_buf_);
     iter_buf_ = nullptr;
   }
-
-  tablet_handle_.reset();
-  tablet_allocator_.reset();
 
   ObVirtualTableScannerIterator::reset();
 }
@@ -88,6 +84,7 @@ int ObAllVirtualTableMgr::inner_get_next_row(ObNewRow *&row)
 
 void ObAllVirtualTableMgr::release_last_tenant()
 {
+  table_store_iter_.reset();
   tablet_handle_.reset();
   if (OB_NOT_NULL(tablet_iter_)) {
     tablet_iter_->~ObTenantTabletIterator();

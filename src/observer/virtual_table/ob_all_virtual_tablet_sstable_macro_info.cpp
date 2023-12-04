@@ -96,27 +96,13 @@ void ObAllVirtualTabletSSTableMacroInfo::reset()
   omt::ObMultiTenantOperator::reset();
   addr_.reset();
   ls_id_ = share::ObLSID::INVALID_LS_ID;
-  table_store_iter_.reset();
-  block_idx_ = 0;
-  tablet_handle_.reset();
-  cols_desc_.reset();
 
   if (OB_NOT_NULL(iter_buf_)) {
     allocator_->free(iter_buf_);
     iter_buf_ = nullptr;
   }
-  curr_sstable_ = nullptr;
-  curr_sstable_meta_handle_.reset();
-  if (OB_NOT_NULL(macro_iter_)) {
-    macro_iter_->~ObIMacroBlockIterator();
-    macro_iter_ = nullptr;
-  }
-  curr_range_.reset();
-  other_blk_iter_.reset();
+
   memset(objs_, 0, sizeof(objs_));
-  iter_allocator_.reset();
-  rowkey_allocator_.reset();
-  tablet_allocator_.reset();
 
   ObVirtualTableScannerIterator::reset();
 }
@@ -467,19 +453,17 @@ int ObAllVirtualTabletSSTableMacroInfo::inner_get_next_row(ObNewRow *&row)
 
 void ObAllVirtualTabletSSTableMacroInfo::release_last_tenant()
 {
+  clean_cur_sstable();
+  cols_desc_.reset();
+  table_store_iter_.reset();
   tablet_handle_.reset();
   if (OB_NOT_NULL(tablet_iter_)) {
     tablet_iter_->~ObTenantTabletIterator();
     tablet_iter_ = nullptr;
   }
-  if (OB_NOT_NULL(macro_iter_)) {
-    macro_iter_->~ObIMacroBlockIterator();
-    macro_iter_ = nullptr;
-  }
-  curr_range_.reset();
-  tablet_allocator_.reset();
   iter_allocator_.reset();
   rowkey_allocator_.reset();
+  tablet_allocator_.reset();
 }
 
 bool ObAllVirtualTabletSSTableMacroInfo::is_need_process(uint64_t tenant_id)
