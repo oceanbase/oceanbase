@@ -431,6 +431,20 @@ public:
     }
   }
 
+  inline static int get_zero_value_byte_precision(int16_t precision, const ObDecimalInt *&decint, int32_t &int_bytes)
+  {
+    int ret = OB_SUCCESS;
+    ObDecimalIntWideType dec_type = get_decimalint_type(precision);
+    if (OB_UNLIKELY(dec_type == DECIMAL_INT_MAX)) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(WARN, "invalid precision", K(precision));
+    } else {
+      decint = ZERO_VALUES[dec_type];
+      int_bytes = ((int32_t(1)) << dec_type) * sizeof(int32_t);
+    }
+    return ret;
+  }
+
   inline static const ObDecimalInt* get_max_upper(ObPrecision prec)
   {
     OB_ASSERT(prec <= OB_MAX_DECIMAL_POSSIBLE_PRECISION);
@@ -463,6 +477,8 @@ private:
   static const ObDecimalInt *MAX_UPPER[OB_MAX_DECIMAL_POSSIBLE_PRECISION + 1];
   // MYSQL_MIN_LOWER
   static const ObDecimalInt *MIN_LOWER[OB_MAX_DECIMAL_POSSIBLE_PRECISION + 1];
+
+  static const ObDecimalInt *ZERO_VALUES[5];
 };
 
 // helper functions

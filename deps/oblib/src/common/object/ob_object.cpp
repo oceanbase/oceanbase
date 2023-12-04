@@ -1050,7 +1050,7 @@ bool ObObj::is_zero() const
   return ret;
 }
 
-int ObObj::build_not_strict_default_value()
+int ObObj::build_not_strict_default_value(int16_t precision)
 {
   int ret = OB_SUCCESS;
   const ObObjType &data_type = meta_.get_type();
@@ -1190,7 +1190,14 @@ int ObObj::build_not_strict_default_value()
       break;
     }
     case ObDecimalIntType: {
-      set_decimal_int(0, 0, nullptr);
+      const ObDecimalInt *decint = nullptr;
+      int32_t int_bytes = 0;
+      if (OB_FAIL(wide::ObDecimalIntConstValue::get_zero_value_byte_precision(precision, decint,
+                                                                              int_bytes))) {
+        _OB_LOG(WARN, "get zero value failed, ret=%u", ret);
+      } else {
+        set_decimal_int(int_bytes, 0, const_cast<ObDecimalInt *>(decint));
+      }
       break;
     }
     default:

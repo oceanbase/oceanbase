@@ -755,7 +755,7 @@ int ObDefaultValueUtils::build_default_expr_not_strict_static(
     default_value.set_null();
   } else {
     default_value.set_type(column_schema->get_data_type());
-    if (OB_FAIL(default_value.build_not_strict_default_value())) {
+    if (OB_FAIL(default_value.build_not_strict_default_value(column_schema->get_accuracy().get_precision()))) {
       LOG_WARN("failed to build not strict default value info", K(column_schema), K(ret));
     } else if (default_value.is_string_type()) {
       default_value.set_collation_level(CS_LEVEL_IMPLICIT);
@@ -810,7 +810,7 @@ int ObDefaultValueUtils::build_default_expr_not_strict(const ColumnItem *column,
     default_value.set_null();
   } else {
     default_value.set_type(column->get_column_type()->get_type());
-    if (OB_FAIL(default_value.build_not_strict_default_value())) {
+    if (OB_FAIL(default_value.build_not_strict_default_value(column->get_column_type()->get_accuracy().get_precision()))) {
       LOG_WARN("failed to build not strict default value info", K(column), K(ret));
     } else if (default_value.is_string_type()) {
       default_value.set_collation_level(CS_LEVEL_IMPLICIT);

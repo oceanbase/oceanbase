@@ -1063,7 +1063,7 @@
         {                                                                                 \
           def_obj.set_type(data_type);                                                    \
           if (is_mysql_mode()) {                                                          \
-            if (OB_FAIL(def_obj.build_not_strict_default_value())) {                      \
+            if (OB_FAIL(def_obj.build_not_strict_default_value(column.get_data_precision()))) {    \
               SQL_LOG(WARN, "failed to build not strict default json value", K(ret));     \
             } else {                                                                      \
               res_obj.set_json_value(data_type,  def_obj.get_string().ptr(),              \
