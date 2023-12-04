@@ -438,13 +438,24 @@ inline void ObTxDesc::FLAG::switch_to_idle_()
   REPLICA_ = sv.REPLICA_;
 }
 
+// this function helper will update current flag with the given
+// and ensure private flags will not be overriden
 ObTxDesc::FLAG ObTxDesc::FLAG::update_with(const ObTxDesc::FLAG &flag)
 {
-  ObTxDesc::FLAG n = flag;
-#define KEEP_(x) n.x = x
-LST_DO(KEEP_, (;), SHADOW_, REPLICA_, TRACING_, INTERRUPTED_, RELEASED_, BLOCK_);
-#undef KEEP_
-  return n;
+  ObTxDesc::FLAG ret = flag;
+#define KEEP_PRIVATE_(x) ret.x = x
+  LST_DO(KEEP_PRIVATE_, (;),
+         SHADOW_,        // private for each scheduler node
+         REPLICA_,       // private for each scheduler node
+         INTERRUPTED_,   // private on original scheduler
+         RELEASED_,      // private on original scheduler
+         BLOCK_);        // private for single stmt scope
+#undef KEEP_PRIVATE_
+  // do merge for some flags, because it may be set asynchorously
+  // PART_ABORTED may be set on original scheduler while stmt executing on remote scheduler
+  // in such case, it should not be override by state update from remote scheduler
+  ret.PART_ABORTED_ |= PART_ABORTED_;
+  return ret;
 }
 
 ObTxDesc::~ObTxDesc()
