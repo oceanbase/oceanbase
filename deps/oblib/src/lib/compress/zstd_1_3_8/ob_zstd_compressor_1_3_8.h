@@ -23,8 +23,9 @@ namespace common
 namespace zstd_1_3_8
 {
 
-class ObZstdCtxAllocator
+class ObZstdCtxAllocator : public ObIAllocator
 {
+static constexpr int64_t ZSTD_ALLOCATOR_BLOCK_SIZE = (1LL << 20) - (17LL << 10);
 public:
   ObZstdCtxAllocator(int64_t tenant_id);
   virtual ~ObZstdCtxAllocator();
@@ -33,10 +34,11 @@ public:
     thread_local ObZstdCtxAllocator allocator(ob_thread_tenant_id());
     return allocator;
   }
-  void *alloc(size_t size);
-  void free(void *addr);
-  void reuse();
-  void reset();
+  void *alloc(const int64_t size) override;
+  void *alloc(const int64_t size, const ObMemAttr &attr) override { return NULL; }
+  void free(void *ptr) override;
+  void reuse() override;
+  void reset() override;
 private:
   ObArenaAllocator allocator_;
 };
@@ -50,12 +52,32 @@ public:
                const int64_t src_data_size,
                char *dst_buffer,
                const int64_t dst_buffer_size,
-               int64_t &dst_data_size);
+               int64_t &dst_data_size,
+               ObIAllocator *allocator) override;
   int decompress(const char *src_buffer,
                  const int64_t src_data_size,
                  char *dst_buffer,
                  const int64_t dst_buffer_size,
-                 int64_t &dst_data_size);
+                 int64_t &dst_data_size,
+                 ObIAllocator *allocator) override;
+  int compress(const char *src_buffer,
+               const int64_t src_data_size,
+               char *dst_buffer,
+               const int64_t dst_buffer_size,
+               int64_t &dst_data_size) override
+  {
+    return compress(src_buffer, src_data_size, dst_buffer,
+                    dst_buffer_size, dst_data_size, NULL);
+  }
+  int decompress(const char *src_buffer,
+                 const int64_t src_data_size,
+                 char *dst_buffer,
+                 const int64_t dst_buffer_size,
+                 int64_t &dst_data_size) override
+  {
+    return decompress(src_buffer, src_data_size, dst_buffer,
+                      dst_buffer_size, dst_data_size, NULL);
+  }
   const char *get_compressor_name() const;
   ObCompressorType get_compressor_type() const;
   int get_max_overflow_size(const int64_t src_data_size,

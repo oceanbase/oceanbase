@@ -34,13 +34,23 @@ public:
                        char *dst_buffer,
                        const int64_t dst_buffer_size,
                        int64_t &dst_data_size,
-                       ObIAllocator *allocator) { return OB_NOT_SUPPORTED; }
+                       ObIAllocator *allocator)
+  {
+    UNUSED(allocator);
+    return compress(src_buffer, src_data_size, dst_buffer, dst_buffer_size,
+                    dst_data_size);
+  }
   virtual int decompress(const char *src_buffer,
                          const int64_t src_data_size,
                          char *dst_buffer,
                          const int64_t dst_buffer_size,
                          int64_t &dst_data_size,
-                         ObIAllocator *allocator) { return OB_NOT_SUPPORTED; }
+                         ObIAllocator *allocator)
+  {
+    UNUSED(allocator);
+    return decompress(src_buffer, src_data_size, dst_buffer, dst_buffer_size,
+                      dst_data_size);
+  }
   virtual int compress(const char *src_buffer,
                        const int64_t src_data_size,
                        char *dst_buffer,
