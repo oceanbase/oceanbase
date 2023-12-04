@@ -1841,6 +1841,7 @@ public:
   static int dba_ob_import_table_tasks_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_import_table_task_history_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_format_outlines_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int user_users_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_instance_schema(share::schema::ObTableSchema &table_schema);
@@ -4389,6 +4390,7 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::dba_ob_import_table_tasks_ora_schema,
   ObInnerTableSchema::dba_ob_import_table_task_history_ora_schema,
   ObInnerTableSchema::dba_ob_format_outlines_ora_schema,
+  ObInnerTableSchema::user_users_schema,
   ObInnerTableSchema::gv_ob_sql_audit_ora_schema,
   ObInnerTableSchema::v_ob_sql_audit_ora_schema,
   ObInnerTableSchema::gv_instance_schema,
@@ -5899,6 +5901,7 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_IMPORT_TABLE_TASKS_ORA_TID,
   OB_DBA_OB_IMPORT_TABLE_TASK_HISTORY_ORA_TID,
   OB_DBA_OB_FORMAT_OUTLINES_ORA_TID,
+  OB_USER_USERS_TID,
   OB_GV_OB_SQL_AUDIT_ORA_TID,
   OB_V_OB_SQL_AUDIT_ORA_TID,
   OB_GV_INSTANCE_TID,
@@ -8235,6 +8238,7 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_IMPORT_TABLE_TASKS_ORA_TNAME,
   OB_DBA_OB_IMPORT_TABLE_TASK_HISTORY_ORA_TNAME,
   OB_DBA_OB_FORMAT_OUTLINES_ORA_TNAME,
+  OB_USER_USERS_TNAME,
   OB_GV_OB_SQL_AUDIT_ORA_TNAME,
   OB_V_OB_SQL_AUDIT_ORA_TNAME,
   OB_GV_INSTANCE_TNAME,
@@ -11677,10 +11681,10 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 260;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 751;
-const int64_t OB_SYS_VIEW_COUNT = 798;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1814;
+const int64_t OB_SYS_VIEW_COUNT = 799;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1815;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1817;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1818;
 
 } // end namespace share
 } // end namespace oceanbase
