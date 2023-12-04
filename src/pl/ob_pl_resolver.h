@@ -264,9 +264,9 @@ public:
                                    GotoRestrictionType &result);
   int check_goto_cursor_stmts(ObPLGotoStmt &goto_stmt,
                               const ObPLStmt &dst_stmt);
-  int check_contain_cursor_loop_stmt(const ObPLStmtBlock *stmt_block,
-                                     const ObPLCursorForLoopStmt *cur_loop_stmt,
-                                     bool &is_contain);
+  int check_contain_goto_block(const ObPLStmt *cur_stmt,
+                               const ObPLStmtBlock *goto_block,
+                               bool &is_contain);
 public:
   inline ObPLExternalNS &get_external_ns() { return external_ns_; }
   inline const ObPLResolveCtx &get_resolve_ctx() const { return resolve_ctx_; }

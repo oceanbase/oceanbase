@@ -16972,32 +16972,19 @@ int ObPLResolver::check_goto_cursor_stmts(ObPLGotoStmt &goto_stmt, const ObPLStm
     // 这里一定是包含关系，dst_block包含了goto_blk，因为前面verify过了。
     parent_blk = goto_block;
     bool exit_flag = false;
-    const ObPLCursorForLoopStmt *cur_level_forloop = NULL;
     int loopcnt = 0;
     do {
       exit_flag = parent_blk == dst_block;
       const ObIArray<ObPLStmt *> &stmts = parent_blk->get_cursor_stmts();
-      for (int64_t i = 0; OB_SUCC(ret) && i < stmts.count(); ++i) {
+      bool is_contain = false;
+      for (int64_t i = 0; OB_SUCC(ret) && !is_contain && i < stmts.count(); ++i) {
         const ObPLCursorForLoopStmt *cfl_stmt = static_cast<ObPLCursorForLoopStmt *>(stmts.at(i));
         CK (OB_NOT_NULL(cfl_stmt));
-        // 这里有一个隐含的不变量就是，多层for loop cursor，每层有且只有1或0个for loop cursor需要关闭cursor
-        if (OB_FAIL(ret)) {
-        } else if (cfl_stmt->is_contain_goto_stmt() || cfl_stmt->get_body()->is_contain_stmt(cur_level_forloop)) {
-          if (OB_FAIL(goto_stmt.push_cursor_stmt(cfl_stmt))) {
-            LOG_WARN("failed to push stmt", K(ret));
-            break;
-          }
-          cur_level_forloop = cfl_stmt;
-          break;
-        } else if (OB_NOT_NULL(cur_level_forloop)) {
-          bool is_contain = false;
-          OZ (check_contain_cursor_loop_stmt(cfl_stmt->get_body(), cur_level_forloop, is_contain));
-          if (OB_SUCC(ret) && is_contain) {
-            if (OB_FAIL(goto_stmt.push_cursor_stmt(cfl_stmt))) {
-              LOG_WARN("failed to push stmt", K(ret));
-              break;
-            }
-          }
+        // There is an implicit invariant here:
+        // in a multi-level for loop cursor structure, each level has at most 1 cursor that requires closing.
+        OZ (check_contain_goto_block(cfl_stmt->get_body(), goto_block, is_contain));
+        if (OB_SUCC(ret) && is_contain) {
+          OZ (goto_stmt.push_cursor_stmt(cfl_stmt));
         }
       }
       if (OB_SUCC(ret)) {
@@ -17011,33 +16998,18 @@ int ObPLResolver::check_goto_cursor_stmts(ObPLGotoStmt &goto_stmt, const ObPLStm
   return ret;
 }
 
-int ObPLResolver::check_contain_cursor_loop_stmt(const ObPLStmtBlock *stmt_block, 
-                                                 const ObPLCursorForLoopStmt *cur_loop_stmt, 
-                                                 bool &is_contain)
+int ObPLResolver::check_contain_goto_block(const ObPLStmt *cur_stmt,
+                                           const ObPLStmtBlock *goto_block,
+                                           bool &is_contain)
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObPLStmt *> &cursor_stmts = stmt_block->get_cursor_stmts();
-  const ObIArray<ObPLStmt*> &stmts = stmt_block->get_stmts();
-  bool stop = false;
-  CK (OB_NOT_NULL(stmt_block));
-  CK (OB_NOT_NULL(cur_loop_stmt));
-  OX (stop = (stmt_block->get_level() == cur_loop_stmt->get_level()));
-  for (int64_t i = 0; OB_SUCC(ret) && !is_contain && i < cursor_stmts.count(); i++) {
-    const ObPLCursorForLoopStmt *cfl_stmt = static_cast<ObPLCursorForLoopStmt *>(cursor_stmts.at(i));
-    CK (OB_NOT_NULL(cfl_stmt));
-    if (OB_SUCC(ret) && cfl_stmt->get_stmt_id() == cur_loop_stmt->get_stmt_id()) {
-      is_contain = true;
-      break;
-    }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && !stop && !is_contain && i < stmts.count(); i++) {
-    CK (OB_NOT_NULL(stmts.at(i)));
-    if (OB_SUCC(ret) && PL_BLOCK == stmts.at(i)->get_type()) {
-      OZ (check_contain_cursor_loop_stmt(static_cast<ObPLStmtBlock *>(stmts.at(i)), cur_loop_stmt, is_contain));
-      if (OB_SUCC(ret) && is_contain) {
-        break;
-      }
-    }
+  is_contain = false;
+  CK (OB_NOT_NULL(cur_stmt));
+  CK (OB_NOT_NULL(goto_block));
+  OX (is_contain = (cur_stmt == goto_block));
+  for (int64_t i = 0; OB_SUCC(ret) && !is_contain && i < cur_stmt->get_child_size(); i++) {
+    const ObPLStmt *child_stmt = cur_stmt->get_child_stmt(i);
+    OZ (SMART_CALL(check_contain_goto_block(child_stmt, goto_block, is_contain)));
   }
   return ret;
 }
