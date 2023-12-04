@@ -791,14 +791,16 @@ int ObPartitionBalance::save_balance_group_stat_()
   int64_t affected_rows = 0;
   ObTimeoutCtx ctx;
   int64_t start_time = ObTimeUtility::current_time();
+  int64_t trans_timeout = OB_INVALID_TIMESTAMP;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPartitionBalance not init", KR(ret), K(this));
   } else if (OB_ISNULL(sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql_proxy is null", KR(ret));
-  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.internal_sql_execute_timeout))) {
-    LOG_WARN("fail to set timeout ctx", KR(ret));
+  } else if (FALSE_IT(trans_timeout = GCONF.internal_sql_execute_timeout + bg_map_.size() * 100_ms)) {
+  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, trans_timeout))) {
+    LOG_WARN("fail to set timeout ctx", KR(ret), K(trans_timeout));
   } else if (!is_user_tenant(tenant_id_)) {
     // do nothing
   } else if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(tenant_id_)))) {
