@@ -434,6 +434,10 @@ struct DistinctObjMeta
   static int replace_cast_expr_align_date4cmp(ObRawExprFactory &expr_factory,
                                               const ObItemType &cmp_type,
                                               ObRawExpr *&expr);
+  static int replace_op_row_expr_align_date4cmp(ObRawExprFactory &expr_factory,
+                                                const ObItemType &cmp_type,
+                                                ObRawExpr *&left_row_expr,
+                                                ObRawExpr *&right_row_expr);
   static int check_and_transform_align_date4cmp(ObRawExprFactory &expr_factory,
                                                 ObRawExpr *&in_expr,
                                                 const ObItemType &cmp_type);
