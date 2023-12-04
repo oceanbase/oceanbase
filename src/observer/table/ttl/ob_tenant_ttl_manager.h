@@ -116,8 +116,6 @@ public:
   void pause();
   void resume();
 private:
-  virtual bool is_enable_ttl();
-
   virtual int delete_task(const uint64_t tenant_id, const uint64_t task_id);
 
   virtual int in_active_time(bool& is_active_time);
@@ -148,7 +146,7 @@ private:
 private:
   int check_all_tablet_finished(bool &all_finished);
   int check_tablet_table_finished(common::ObIArray<share::ObTabletTablePair> &pairs, bool &all_finished);
-  int move_all_task_to_history_table(bool need_cancel);
+  int move_all_task_to_history_table();
   OB_INLINE bool need_skip_run() { return ATOMIC_LOAD(&need_do_for_switch_); }
 private:
   static const int64_t TBALE_CHECK_BATCH_SIZE = 200;

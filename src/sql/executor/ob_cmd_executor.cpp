@@ -1030,7 +1030,8 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
     SERVER_EVENT_ADD("sql", "execute_cmd",
                      "cmd_type", cmd.get_cmd_type(),
                      "sql_text", ObHexEscapeSqlStr(sql_text),
-                     "return_code", ret);
+                     "return_code", ret,
+                     "tenant_id", MTL_ID());
   }
 
   if (is_ddl_or_dcl_stmt) {

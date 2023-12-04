@@ -263,7 +263,8 @@ public:
   obrpc::ObTTLRequestArg::TTLRequestType type_;
 };
 
-class ObTTLUtil {
+class ObTTLUtil
+{
 public:
   static int parse(const char* str, ObTTLDutyDuration& duration);
   static bool current_in_duration(ObTTLDutyDuration& duration);
@@ -317,8 +318,7 @@ public:
 
   static int move_task_to_history_table(uint64_t tenant_id, uint64_t task_id,
                                         common::ObMySQLTransaction& proxy,
-                                        int64_t batch_size, int64_t &move_rows,
-                                        bool need_cancel = false);
+                                        int64_t batch_size, int64_t &move_rows);
 
   static int move_tenant_task_to_history_table(uint64_t tenant_id, uint64_t task_id,
                                                common::ObMySQLTransaction& proxy);
@@ -340,6 +340,8 @@ public:
   static inline bool is_ttl_task_status_end_state(ObTTLTaskStatus status) {
     return status == ObTTLTaskStatus::OB_TTL_TASK_CANCEL || status == ObTTLTaskStatus::OB_TTL_TASK_FINISH;
   }
+  static bool is_enable_ttl(uint64_t tenant_id);
+  static const char *get_ttl_tenant_status_cstr(const ObTTLTaskStatus &status);
   const static uint64_t TTL_TENNAT_TASK_TABLET_ID = -1;
   const static uint64_t TTL_TENNAT_TASK_TABLE_ID = -1;
 private:

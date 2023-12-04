@@ -6447,7 +6447,7 @@ ttl_expr
 ;
 
 ttl_expr:
-simple_expr '+' INTERVAL INTNUM ttl_unit
+column_definition_ref '+' INTERVAL INTNUM ttl_unit
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_TTL_EXPR, 3, $1, $4, $5);
   dup_expr_string($$, result, @1.first_column, @1.last_column);
