@@ -380,9 +380,13 @@ int ObTableApiSessPool::evict_retired_sess()
 {
   int ret = OB_SUCCESS;
   int64 delete_count = 0;
+  int64_t cur_time = ObTimeUtility::current_time();
 
   DLIST_FOREACH_REMOVESAFE_X(node, retired_nodes_, delete_count < BACKCROUND_TASK_DELETE_SESS_NUM) {
-    if (OB_FAIL(node->remove_unused_sess())) {
+    if (cur_time - node->get_last_active_ts() < SESS_RETIRE_TIME) {
+      // do nothing, this node maybe is from ObTableApiSessNodeReplaceOp, some threads maybe is using it.
+      // we remove it next retire task.
+    } else if (OB_FAIL(node->remove_unused_sess())) {
       LOG_WARN("fail to remove unused sess", K(ret), K(*node));
     } else {
       ObLockGuard<ObSpinLock> guard(lock_);
