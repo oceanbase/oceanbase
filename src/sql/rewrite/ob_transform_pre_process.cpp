@@ -5929,6 +5929,48 @@ int ObTransformPreProcess::replace_cast_expr_align_date4cmp(ObRawExprFactory &ex
   return ret;
 }
 
+int ObTransformPreProcess::replace_op_row_expr_align_date4cmp(ObRawExprFactory &expr_factory,
+                                                            const ObItemType &cmp_type,
+                                                            ObRawExpr *&left_row_expr,
+                                                            ObRawExpr *&right_row_expr)
+{
+  int ret = OB_SUCCESS;
+  if (left_row_expr->get_expr_type() == T_OP_ROW &&
+      right_row_expr->get_expr_type() == T_OP_ROW) {
+    int64_t expr_cnt = left_row_expr->get_param_count();
+    if (right_row_expr->get_param_count() != expr_cnt) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid param cnt", K(ret), KPC(left_row_expr),
+                                            KPC(right_row_expr));
+    } else {
+      int64_t last_expr_idx = expr_cnt - 1;
+      ObRawExpr *expr0 = left_row_expr->get_param_expr(last_expr_idx);
+      ObRawExpr *expr1 = right_row_expr->get_param_expr(last_expr_idx);
+      if (OB_ISNULL(expr0) || OB_ISNULL(expr1)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid null params", K(ret), KPC(left_row_expr),
+                                                KPC(right_row_expr));
+      } else {
+        const ObItemType reverse_cmp_type = reverse_cmp_type_of_align_date4cmp(cmp_type);
+        if (OB_FAIL(replace_cast_expr_align_date4cmp(expr_factory, reverse_cmp_type, expr0))) {
+          LOG_WARN("replace left cast_expr fail.", K(ret), KPC(expr0));
+        } else {
+          left_row_expr->get_param_expr(last_expr_idx) = expr0;
+        }
+
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(replace_cast_expr_align_date4cmp(expr_factory, cmp_type, expr1))) {
+            LOG_WARN("replace right cast_expr fail.", K(ret), KPC(expr1));
+          } else {
+            right_row_expr->get_param_expr(last_expr_idx) = expr1;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTransformPreProcess::check_and_transform_align_date4cmp(ObRawExprFactory &expr_factory,
                                                            ObRawExpr *&cmp_expr,
                                                            const ObItemType &cmp_type)
@@ -5944,6 +5986,9 @@ int ObTransformPreProcess::check_and_transform_align_date4cmp(ObRawExprFactory &
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid null params", K(ret), K(cmp_expr->get_param_expr(0)),
               K(cmp_expr->get_param_expr(1)));
+    } else if (OB_FAIL(replace_op_row_expr_align_date4cmp(expr_factory,
+                                        cmp_type, expr0, expr1))){
+      LOG_WARN("fail to replace op_row_expr", K(ret));
     } else {
       // By default, align_date4cmp_expr expects the first parameter to be
       // the value on the right side of the comparison operator.
