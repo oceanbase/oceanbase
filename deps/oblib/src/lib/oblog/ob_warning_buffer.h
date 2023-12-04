@@ -269,6 +269,29 @@ inline void ob_reset_tsi_warning_buffer()
   }
 }
 
+// ignore errors in this scope
+class ObWarningBufferIgnoreScope
+{
+public:
+  ObWarningBufferIgnoreScope()
+      : ignore_scope_warn_buf_(), ori_warn_buf_(ob_get_tsi_warning_buffer()) {
+    ignore_scope_warn_buf_.reset();
+    ob_setup_tsi_warning_buffer(&ignore_scope_warn_buf_);
+  }
+  ~ObWarningBufferIgnoreScope() {
+    ob_setup_tsi_warning_buffer(ori_warn_buf_);
+    ignore_scope_warn_buf_.reset();
+  }
+
+  ObWarningBufferIgnoreScope(const ObWarningBufferIgnoreScope &) = delete;
+  ObWarningBufferIgnoreScope &
+  operator=(const ObWarningBufferIgnoreScope &) = delete;
+
+private:
+  ObWarningBuffer ignore_scope_warn_buf_;
+  ObWarningBuffer *ori_warn_buf_;
+};
+
 }  // end of namespace common
 }
 #endif //OB_WARNING_BUFFER_H_

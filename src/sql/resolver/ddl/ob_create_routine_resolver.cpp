@@ -229,6 +229,20 @@ int ObCreateRoutineResolver::resolve_sp_body(const ParseNode *parse_node,
   return ret;
 }
 
+int ObCreateRoutineResolver::collect_ref_obj_info(int64_t ref_obj_id, int64_t ref_timestamp,
+                                                  ObDependencyTableType dependent_type)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(stmt_));
+  obrpc::ObCreateRoutineArg &crt_routine_arg =
+      static_cast<ObCreateRoutineStmt *>(stmt_)->get_routine_arg();
+  ObObjectType dep_obj_type = crt_routine_arg.routine_info_.get_object_type();
+  OV (ObObjectType::INVALID != dep_obj_type);
+  OZ (ObDependencyInfo::collect_dep_info(crt_routine_arg.dependency_infos_, dep_obj_type,
+                                         ref_obj_id, ref_timestamp, dependent_type));
+  return ret;
+}
+
 int ObCreateRoutineResolver::set_routine_param(const ObIArray<ObObjAccessIdx> &access_idxs,
                                                ObRoutineParam &routine_param)
 {
@@ -240,6 +254,7 @@ int ObCreateRoutineResolver::set_routine_param(const ObIArray<ObObjAccessIdx> &a
       || ObObjAccessIdx::is_udt_type(access_idxs));
   CK (OB_NOT_NULL(params_.session_info_));
   if (ObObjAccessIdx::is_table_column(access_idxs)) {
+    const ObTableSchema *table = nullptr;
     CK (2 == access_idxs.count() || 3 == access_idxs.count()); // table.col or db.table.col
     OX (routine_param.set_param_type(ObExtendType));
     OX (routine_param.set_table_col_type());
@@ -248,13 +263,21 @@ int ObCreateRoutineResolver::set_routine_param(const ObIArray<ObObjAccessIdx> &a
     if (OB_FAIL(ret)) {
     } else if (3 == access_idxs.count()) {
       routine_param.set_type_owner(access_idxs.at(0).var_index_);
-    } else {
-      const ObTableSchema *table = NULL;
       CK (OB_NOT_NULL(params_.schema_checker_));
-      OZ (params_.schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(), access_idxs.at(0).var_index_, table));
+      OZ (params_.schema_checker_->get_table_schema(
+              params_.session_info_->get_effective_tenant_id(),
+              access_idxs.at(1).var_index_, table));
+      CK (OB_NOT_NULL(table));
+    } else {
+      CK (OB_NOT_NULL(params_.schema_checker_));
+      OZ (params_.schema_checker_->get_table_schema(
+              params_.session_info_->get_effective_tenant_id(),
+              access_idxs.at(0).var_index_, table));
       CK (OB_NOT_NULL(table));
       OX (routine_param.set_type_owner(table->get_database_id()));
     }
+    OZ (collect_ref_obj_info(table->get_table_id(), table->get_schema_version(),
+                             ObDependencyTableType::DEPENDENCY_TABLE));
   } else if (ObObjAccessIdx::is_package_variable(access_idxs)) {
     CK (2 == access_idxs.count() || 3 == access_idxs.count()); // pkg.var or db.pkg.var
     OX (routine_param.set_param_type(ObExtendType));
@@ -271,7 +294,22 @@ int ObCreateRoutineResolver::set_routine_param(const ObIArray<ObObjAccessIdx> &a
     } else if (OB_SYS_TENANT_ID == get_tenant_id_by_object_id(access_idxs.at(0).var_index_)) { // 系统包中的var
       OX (routine_param.set_type_owner(OB_SYS_DATABASE_ID));
     }
+    if (OB_SUCC(ret)) {
+      const int64_t package_id = access_idxs.at(access_idxs.count() - 2).var_index_;
+      const ObPackageInfo* package_info = nullptr;
+      ObSchemaGetterGuard* schema_guard = nullptr;
+      CK (OB_NOT_NULL(params_.schema_checker_));
+      OX (schema_guard = schema_checker_->get_schema_guard());
+      CK (OB_NOT_NULL(schema_guard));
+      OZ (schema_guard->get_package_info(get_tenant_id_by_object_id(package_id),
+                                         package_id, package_info),
+          package_id);
+      CK (OB_NOT_NULL(package_info));
+      OZ (collect_ref_obj_info(package_id, package_info->get_schema_version(),
+                               ObDependencyTableType::DEPENDENCY_PACKAGE));
+    }
   } else if (ObObjAccessIdx::is_table(access_idxs)) {
+    const ObTableSchema *table = nullptr;
     CK (1 == access_idxs.count() || 2 == access_idxs.count());
     OX (routine_param.set_param_type(ObExtendType));
     OX (routine_param.set_table_row_type());
@@ -279,13 +317,21 @@ int ObCreateRoutineResolver::set_routine_param(const ObIArray<ObObjAccessIdx> &a
     if (OB_FAIL(ret)) {
     } else if (2 == access_idxs.count()) {
       routine_param.set_type_owner(access_idxs.at(0).var_index_);
-    } else {
-      const ObTableSchema *table = NULL;
       CK (OB_NOT_NULL(params_.schema_checker_));
-      OZ (params_.schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(), access_idxs.at(0).var_index_, table));
+      OZ (params_.schema_checker_->get_table_schema(
+              params_.session_info_->get_effective_tenant_id(),
+              access_idxs.at(1).var_index_, table));
+      CK (OB_NOT_NULL(table));
+    } else {
+      CK (OB_NOT_NULL(params_.schema_checker_));
+      OZ (params_.schema_checker_->get_table_schema(
+              params_.session_info_->get_effective_tenant_id(),
+              access_idxs.at(0).var_index_, table));
       CK (OB_NOT_NULL(table));
       OX (routine_param.set_type_owner(table->get_database_id()));
     }
+    OZ (collect_ref_obj_info(table->get_table_id(), table->get_schema_version(),
+                             ObDependencyTableType::DEPENDENCY_TABLE));
   } else if (ObObjAccessIdx::is_pkg_type(access_idxs)) {
     CK (access_idxs.count() >= 1 && access_idxs.count() <= 3);
     if (OB_FAIL(ret)) {
@@ -338,6 +384,19 @@ int ObCreateRoutineResolver::set_routine_param(const ObIArray<ObObjAccessIdx> &a
           OX (routine_param.set_type_owner(access_idxs.at(0).var_index_));
         }
       }
+      if (OB_SUCC(ret)) {
+        const int64_t package_id = access_idxs.at(access_idxs.count() - 2).var_index_;
+        const ObPackageInfo* package_info = nullptr;
+        ObSchemaGetterGuard* schema_guard = nullptr;
+        CK (OB_NOT_NULL(params_.schema_checker_));
+        OX (schema_guard = schema_checker_->get_schema_guard());
+        CK (OB_NOT_NULL(schema_guard));
+        OZ (schema_guard->get_package_info(get_tenant_id_by_object_id(package_id),
+                                           package_id, package_info), package_id);
+        CK (OB_NOT_NULL(package_info));
+        OZ (collect_ref_obj_info(package_id, package_info->get_schema_version(),
+                                 ObDependencyTableType::DEPENDENCY_PACKAGE));
+      }
     }
   } else if (ObObjAccessIdx::is_udt_type(access_idxs)) {
     CK (access_idxs.count() >= 1 && access_idxs.count() <= 2);
@@ -355,6 +414,16 @@ int ObCreateRoutineResolver::set_routine_param(const ObIArray<ObObjAccessIdx> &a
     } else if (OB_SYS_TENANT_ID == get_tenant_id_by_object_id(access_idxs.at(0).var_index_)) {
       // system type, set owner is oceanbase
       routine_param.set_type_owner(OB_SYS_DATABASE_ID);
+    }
+    if (OB_SUCC(ret)) {
+      const int64_t udt_id = access_idxs.at(access_idxs.count() - 1).var_index_;
+      const ObUDTTypeInfo* udt_info = nullptr;
+      CK (OB_NOT_NULL(params_.schema_checker_));
+      OZ (params_.schema_checker_->get_udt_info(get_tenant_id_by_object_id(udt_id),
+                                                udt_id, udt_info), udt_id);
+      CK (OB_NOT_NULL(udt_info));
+      OZ (collect_ref_obj_info(udt_id, udt_info->get_schema_version(),
+                               ObDependencyTableType::DEPENDENCY_TYPE));
     }
   }
   return ret;

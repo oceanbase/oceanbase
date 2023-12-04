@@ -913,15 +913,19 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
   //----Functions for managing udt----
   virtual int create_udt(share::schema::ObUDTTypeInfo &routine_info,
                          const share::schema::ObUDTTypeInfo *old_routine_info,
-                         bool replace,
                          ObIArray<share::schema::ObRoutineInfo> &public_routine_infos,
                          share::schema::ObErrorInfo &error_info,
                          share::schema::ObSchemaGetterGuard &schema_guard,
                          common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
-                         const common::ObString *ddl_stmt_str);
+                         const common::ObString *ddl_stmt_str,
+                         bool need_replace,
+                         bool exist_valid_udt,
+                         bool specify_force);
   virtual int drop_udt(const share::schema::ObUDTTypeInfo &routine_info,
                        share::schema::ObSchemaGetterGuard &schema_guard,
-                       const common::ObString *ddl_stmt_str);
+                       const common::ObString *ddl_stmt_str,
+                       bool specify_force,
+                       bool exist_valid_udt);
   //----End of functions for managing routine----
 
   //----Functions for managing package----

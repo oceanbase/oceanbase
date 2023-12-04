@@ -6441,10 +6441,13 @@ int ObRootService::create_udt(const ObCreateUDTArg &arg)
     uint64_t tenant_id = udt_info.get_tenant_id();
     ObString database_name = arg.db_name_;
     bool is_or_replace = arg.is_or_replace_;
+    bool exist_valid_udt = arg.exist_valid_udt_;
     ObSchemaGetterGuard schema_guard;
     const ObDatabaseSchema *db_schema = NULL;
     if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
       LOG_WARN("get schema guard in inner table failed", K(ret));
+    } else if (OB_FAIL(check_parallel_ddl_conflict(schema_guard, arg))) {
+      LOG_WARN("check parallel ddl conflict failed", K(ret));
     } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, database_name, db_schema))) {
       LOG_WARN("get database schema failed", K(ret));
     } else if (NULL == db_schema) {
@@ -6465,9 +6468,8 @@ int ObRootService::create_udt(const ObCreateUDTArg &arg)
           udt_info.get_type_name(), UDT_SCHEMA, INVALID_ROUTINE_TYPE, is_or_replace,
           conflict_schema_types))) {
         LOG_WARN("fail to check oracle_object exist", K(ret), K(udt_info.get_type_name()));
-      } else if (1 == conflict_schema_types.count()
-                 && UDT_SCHEMA == conflict_schema_types.at(0) && udt_info.is_object_type()) {
-        // skip
+      } else if (1 == conflict_schema_types.count() && UDT_SCHEMA == conflict_schema_types.at(0)) {
+        // judge later
       } else if (conflict_schema_types.count() > 0) {
         ret = OB_ERR_EXIST_OBJECT;
         LOG_WARN("Name is already used by an existing object", K(ret), K(udt_info.get_type_name()),
@@ -6476,24 +6478,44 @@ int ObRootService::create_udt(const ObCreateUDTArg &arg)
     }
     bool exist = false;
     ObUDTTypeCode type_code = udt_info.is_object_body_ddl()
-      ? UDT_TYPE_OBJECT_BODY : static_cast<ObUDTTypeCode>(udt_info.get_typecode());
+                            ? UDT_TYPE_OBJECT_BODY
+                            : static_cast<ObUDTTypeCode>(udt_info.get_typecode());
     if (OB_SUCC(ret)) {
       if (OB_FAIL(schema_guard.check_udt_exist(tenant_id,
-                                              db_schema->get_database_id(),
-                                              OB_INVALID_ID,
-                                              type_code,
-                                              udt_info.get_type_name(),
-                                              exist))) {
+                                               db_schema->get_database_id(),
+                                               OB_INVALID_ID,
+                                               type_code,
+                                               udt_info.get_type_name(),
+                                               exist))) {
         LOG_WARN("failed to check udt info exist", K(udt_info), K(ret));
-      } else if (exist && !is_or_replace) {
-        if (!udt_info.is_object_type()) {
+      } else if (udt_info.is_object_body_ddl()) {
+        // udt type body do not check validation during resolving
+        if (exist && !is_or_replace) {
           ret = OB_ERR_SP_ALREADY_EXISTS;
           LOG_USER_ERROR(OB_ERR_SP_ALREADY_EXISTS, "UDT",
-                        udt_info.get_type_name().length(), udt_info.get_type_name().ptr());
+                         udt_info.get_type_name().length(), udt_info.get_type_name().ptr());
+        }
+      } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0) {
+        if (!exist && exist_valid_udt) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("valid udt found during resolving can not be found again",
+                   K(ret), K(database_name), K(udt_info.get_type_name()));
+        } else if (exist && exist_valid_udt && !is_or_replace) {
+          ret = OB_ERR_SP_ALREADY_EXISTS;
+          LOG_USER_ERROR(OB_ERR_SP_ALREADY_EXISTS, "UDT",
+                         udt_info.get_type_name().length(), udt_info.get_type_name().ptr());
+        } else {
+          // proceed only if 1)udt does not exist or is invalid or 2)ddl specified `or replace`
         }
       } else {
-        // do nothing
+        // GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_2_0 && not type body
+        if (exist && !is_or_replace) {
+          ret = OB_ERR_SP_ALREADY_EXISTS;
+          LOG_USER_ERROR(OB_ERR_SP_ALREADY_EXISTS, "UDT",
+                         udt_info.get_type_name().length(), udt_info.get_type_name().ptr());
+        }
       }
+
       if (exist && OB_SUCC(ret)) {
         if (OB_FAIL(schema_guard.get_udt_info(tenant_id,
                                               db_schema->get_database_id(),
@@ -6519,31 +6541,33 @@ int ObRootService::create_udt(const ObCreateUDTArg &arg)
           }
         } else {
           CK (OB_NOT_NULL(old_udt_info));
-          OV (old_udt_info->get_type_id() == udt_info.get_type_id(), OB_ERR_UNEXPECTED, KPC(old_udt_info), K(udt_info));
+          OV (old_udt_info->get_type_id() == udt_info.get_type_id(),
+              OB_ERR_UNEXPECTED, KPC(old_udt_info), K(udt_info));
         }
-      }
-      // 这儿检查object是否能插入，当name相同，且不是replace的时候，只有一种情况可以插入
-      // 新的body不为空，但是老的body为空，这说明需要增加body信息
-      if (OB_SUCC(ret) && exist && !is_or_replace) {
-        ret = OB_ERR_SP_ALREADY_EXISTS;
-        LOG_USER_ERROR(OB_ERR_SP_ALREADY_EXISTS, "UDT",
-                    udt_info.get_type_name().length(), udt_info.get_type_name().ptr());
       }
 
       if (OB_SUCC(ret)) {
         ObErrorInfo error_info = arg.error_info_;
         ObSArray<ObRoutineInfo> &public_routine_infos =
-                      const_cast<ObSArray<ObRoutineInfo> &>(arg.public_routine_infos_);
+            const_cast<ObSArray<ObRoutineInfo> &>(arg.public_routine_infos_);
         ObSArray<ObDependencyInfo> &dep_infos =
-                     const_cast<ObSArray<ObDependencyInfo> &>(arg.dependency_infos_);
+            const_cast<ObSArray<ObDependencyInfo> &>(arg.dependency_infos_);
+        // 1) replace an existing udt
+        // 2) name of the created type confilicts with an invalid type (support after 4.2.2)
+        bool need_replace = (exist && is_or_replace);
+        if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0) {
+          need_replace = need_replace || (exist && !is_or_replace && !exist_valid_udt);
+        }
         if (OB_FAIL(ddl_service_.create_udt(udt_info,
                                             old_udt_info,
-                                            (exist && is_or_replace),
                                             public_routine_infos,
                                             error_info,
                                             schema_guard,
                                             dep_infos,
-                                            &arg.ddl_stmt_str_))) {
+                                            &arg.ddl_stmt_str_,
+                                            need_replace,
+                                            exist_valid_udt,
+                                            arg.is_force_))) {
           LOG_WARN("failed to create udt", K(udt_info), K(ret));
         }
       }
@@ -6565,6 +6589,8 @@ int ObRootService::drop_udt(const ObDropUDTArg &arg)
     uint64_t tenant_id = arg.tenant_id_;
     const ObString &db_name = arg.db_name_;
     const ObString &udt_name = arg.udt_name_;
+    const bool is_force = (1 == arg.force_or_validate_); // 0: none, 1: force, 2: valiate
+    const bool exist_valid_udt = arg.exist_valid_udt_;
     ObSchemaGetterGuard schema_guard;
     const ObDatabaseSchema *db_schema = NULL;
     if (db_name.empty()) {
@@ -6586,72 +6612,56 @@ int ObRootService::drop_udt(const ObDropUDTArg &arg)
     }
 
     if (OB_SUCC(ret)) {
-      if (!arg.is_type_body_) {
-        bool exist = false;
-        const ObUDTTypeInfo *udt_info = NULL;
-        ObUDTTypeInfo udt;
-        const ObUDTTypeCode type_code = ObUDTTypeCode::UDT_TYPE_OBJECT;
-        if (OB_FAIL(schema_guard.check_udt_exist(tenant_id,
-                                                db_schema->get_database_id(),
-                                                OB_INVALID_ID, type_code,
-                                                udt_name, exist))) {
-            LOG_WARN("failed to check udt info exist", K(udt_name), K(ret));
-        } else if (exist) {
-          if (OB_FAIL(schema_guard.get_udt_info(tenant_id,
-                                                db_schema->get_database_id(),
-                                                OB_INVALID_ID,
-                                                udt_name, type_code, udt_info))) {
-            LOG_WARN("get udt info failed", K(ret));
-          }
-        } else if (!arg.if_exist_) {
-          ret = OB_ERR_SP_DOES_NOT_EXIST;
-          LOG_USER_ERROR(OB_ERR_SP_DOES_NOT_EXIST, "UDT", db_name.length(), db_name.ptr(),
-                        udt_name.length(), udt_name.ptr());
+      bool exist = false;
+      const ObUDTTypeInfo *udt_info = NULL;
+      ObUDTTypeInfo udt;
+      const ObUDTTypeCode type_code = arg.is_type_body_ ? UDT_TYPE_OBJECT_BODY : UDT_TYPE_OBJECT;
+      if (OB_FAIL(schema_guard.check_udt_exist(tenant_id,
+                                              db_schema->get_database_id(),
+                                              OB_INVALID_ID, type_code,
+                                              udt_name, exist))) {
+          LOG_WARN("failed to check udt info exist", K(udt_name), K(ret));
+      } else if (!exist && exist_valid_udt) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("valid udt can not be found any more", K(ret), K(udt_name));
+      } else if (exist) {
+        if (OB_FAIL(schema_guard.get_udt_info(tenant_id,
+                                              db_schema->get_database_id(),
+                                              OB_INVALID_ID,
+                                              udt_name, type_code, udt_info))) {
+          LOG_WARN("get udt info failed", K(ret));
         }
+      } else if (!arg.if_exist_) {
+        ret = OB_ERR_SP_DOES_NOT_EXIST;
+        LOG_USER_ERROR(OB_ERR_SP_DOES_NOT_EXIST, "UDT", db_name.length(), db_name.ptr(),
+                      udt_name.length(), udt_name.ptr());
+      }
 
+      if (!arg.is_type_body_) {
         if (OB_SUCC(ret) && !OB_ISNULL(udt_info)) {
           if (OB_FAIL(udt.assign(*udt_info))) {
             LOG_WARN("assign udt info failed", K(ret), KPC(udt_info));
           } else if (udt.is_object_type()) {
-              udt.clear_property_flag(ObUDTTypeFlag::UDT_FLAG_OBJECT_TYPE_BODY);
-              udt.set_object_ddl_type(ObUDTTypeFlag::UDT_FLAG_OBJECT_TYPE_SPEC);
+            udt.clear_property_flag(ObUDTTypeFlag::UDT_FLAG_OBJECT_TYPE_BODY);
+            udt.set_object_ddl_type(ObUDTTypeFlag::UDT_FLAG_OBJECT_TYPE_SPEC);
           }
           if (OB_SUCC(ret)
-           && OB_FAIL(ddl_service_.drop_udt(udt, schema_guard, &arg.ddl_stmt_str_))) {
+              && OB_FAIL(ddl_service_.drop_udt(
+                     udt, schema_guard, &arg.ddl_stmt_str_, is_force, exist_valid_udt))) {
             LOG_WARN("drop udt failed", K(ret), K(udt_name), K(*udt_info));
           }
         }
       } else {
-        bool exist = false;
-        const ObUDTTypeInfo *udt_info = NULL;
-        ObUDTTypeInfo udt;
-        const ObUDTTypeCode type_code = ObUDTTypeCode::UDT_TYPE_OBJECT_BODY;
-        if (OB_FAIL(schema_guard.check_udt_exist(tenant_id,
-                                                db_schema->get_database_id(),
-                                                OB_INVALID_ID, type_code,
-                                                udt_name, exist))) {
-            LOG_WARN("failed to check udt info exist", K(udt_name), K(ret));
-        } else if (exist) {
-          if (OB_FAIL(schema_guard.get_udt_info(tenant_id,
-                                                db_schema->get_database_id(),
-                                                OB_INVALID_ID,
-                                                udt_name, type_code, udt_info))) {
-            LOG_WARN("get udt info failed", K(ret));
-          }
-        } else if (!arg.if_exist_) {
-          ret = OB_ERR_SP_DOES_NOT_EXIST;
-          LOG_USER_ERROR(OB_ERR_SP_DOES_NOT_EXIST, "UDT", db_name.length(), db_name.ptr(),
-                        udt_name.length(), udt_name.ptr());
-        }
         if (OB_SUCC(ret) && exist && !OB_ISNULL(udt_info)) {
           if (OB_FAIL(udt.assign(*udt_info))) {
             LOG_WARN("assign udt info failed", K(ret), KPC(udt_info));
           } else if (udt.is_object_type()) {
-              udt.clear_property_flag(ObUDTTypeFlag::UDT_FLAG_OBJECT_TYPE_SPEC);
-              udt.set_object_ddl_type(ObUDTTypeFlag::UDT_FLAG_OBJECT_TYPE_BODY);
+            udt.clear_property_flag(ObUDTTypeFlag::UDT_FLAG_OBJECT_TYPE_SPEC);
+            udt.set_object_ddl_type(ObUDTTypeFlag::UDT_FLAG_OBJECT_TYPE_BODY);
           }
           if (OB_SUCC(ret)
-            && OB_FAIL(ddl_service_.drop_udt(udt, schema_guard, &arg.ddl_stmt_str_))) {
+              && OB_FAIL(ddl_service_.drop_udt(
+                     udt, schema_guard, &arg.ddl_stmt_str_, is_force, exist_valid_udt))) {
             LOG_WARN("drop udt failed", K(ret), K(udt_name), K(*udt_info));
           }
         }

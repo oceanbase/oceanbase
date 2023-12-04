@@ -6038,10 +6038,7 @@ int ObDDLResolver::ob_udt_check_and_add_ddl_dependency(const uint64_t schema_id,
 {
   int ret = OB_SUCCESS;
   if (schema_id == OB_INVALID_ID) { // do nothing
-  } else if (schema_version == OB_INVALID_VERSION
-             || (schema_type != UDT_SCHEMA
-                 && schema_type != PACKAGE_SCHEMA
-                 && schema_type != ROUTINE_SCHEMA)) {
+  } else if (schema_version == OB_INVALID_VERSION) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error default dependency item", K(ret), K(schema_id), K(schema_type), K(schema_version));
   } else {
@@ -6120,10 +6117,15 @@ int ObDDLResolver::add_udt_default_dependency(ObRawExpr *expr,
       int64_t schema_version = obj_version.get_version();
       int64_t schema_check_version = OB_INVALID_VERSION;
       // local validate
-      if (OB_FAIL(schema_checker->get_schema_version(tenant_id,
-                                                     object_id,
-                                                     schema_type,
-                                                     schema_check_version))) {
+      if (schema_type != UDT_SCHEMA
+          && schema_type != PACKAGE_SCHEMA
+          && schema_type != ROUTINE_SCHEMA) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error default dependency item", K(ret), K(object_id), K(schema_type), K(schema_version));
+      } else if (OB_FAIL(schema_checker->get_schema_version(tenant_id,
+                                                            object_id,
+                                                            schema_type,
+                                                            schema_check_version))) {
         LOG_WARN("failed to get_schema_version", K(ret), K(tenant_id), K(object_id), K(schema_type));
       } else if (OB_INVALID_VERSION == schema_check_version) {
         ret = OB_ERR_UNEXPECTED;

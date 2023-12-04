@@ -30502,18 +30502,22 @@ int ObDDLService::drop_routine(const ObRoutineInfo &routine_info,
 
 int ObDDLService::create_udt(ObUDTTypeInfo &udt_info,
                              const ObUDTTypeInfo* old_udt_info,
-                             bool replace,
                              ObIArray<ObRoutineInfo> &public_routine_infos,
                              ObErrorInfo &error_info,
                              ObSchemaGetterGuard &schema_guard,
                              ObIArray<ObDependencyInfo> &dep_infos,
-                             const ObString *ddl_stmt_str)
+                             const ObString *ddl_stmt_str,
+                             bool need_replace,
+                             bool exist_valid_udt,
+                             bool specify_force)
 {
   int ret = OB_SUCCESS;
-  uint64_t tenant_id = udt_info.get_tenant_id();
-  CK((replace && OB_NOT_NULL(old_udt_info)) || (!replace && OB_ISNULL(old_udt_info)));
-  if (OB_FAIL(check_inner_stat())) {
-      LOG_WARN("variable is not init");
+  const uint64_t tenant_id = udt_info.get_tenant_id();
+  if (need_replace == OB_ISNULL(old_udt_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("value contradict", K(ret), K(need_replace), K(old_udt_info));
+  } else if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init", K(ret));
   } else {
     ObDDLSQLTransaction trans(schema_service_);
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
@@ -30523,28 +30527,85 @@ int ObDDLService::create_udt(ObUDTTypeInfo &udt_info,
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
     }
-    if (OB_SUCC(ret)) {
-      if (replace) {
-        if (OB_FAIL(ddl_operator.replace_udt(udt_info,
-                                             old_udt_info,
-                                             trans,
-                                             error_info,
-                                             public_routine_infos,
-                                             schema_guard,
-                                             dep_infos,
-                                             ddl_stmt_str))) {
-          LOG_WARN("replace udt failded", K(udt_info), K(ret));
-        }
-      } else {
-        if (OB_FAIL(ddl_operator.create_udt(udt_info, trans, error_info,
-                                            public_routine_infos,
-                                            schema_guard,
-                                            dep_infos,
-                                            ddl_stmt_str))) {
-          LOG_WARN("create udt failed", K(ret), K(udt_info));
+
+    if (OB_FAIL(ret)) {
+    } else if (need_replace) {
+      if ((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0) && exist_valid_udt) {
+        // check if the udt which is to be replaced has any type or table dependent
+        ObArray<CriticalDepInfo> objs;
+        if (OB_ISNULL(old_udt_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("value contradict", K(ret), K(need_replace), K(old_udt_info));
+        } else if (OB_FAIL(ObDependencyInfo::collect_all_dep_objs(tenant_id,
+                                                                  old_udt_info->get_type_id(),
+                                                                  udt_info.get_object_type(),
+                                                                  trans,
+                                                                  objs))) {
+          // TODO: type body id design flaw
+          // Here we pass `udt_info.get_object_type()` to `collect_all_dep_objs` instead of
+          // `old_udt_info->get_object_type()`, because the type body and type share the same id
+          // (which is a design flaw that needs to be fixed), and the schema cache uses the object
+          // id as the key for storage, which casues retrieving the wrong schema from the cache.
+          LOG_WARN("failed to collect all dependent objects", K(ret));
+        } else {
+          bool has_type_dep_obj = false;
+          bool has_table_dep_obj = false;
+          for (int64_t i = 0; i < objs.count(); i++) {
+            schema::ObObjectType dep_obj_type =
+                static_cast<schema::ObObjectType>(objs.at(i).element<1>());
+            if (schema::ObObjectType::TABLE == dep_obj_type) {
+              has_table_dep_obj = true;
+            } else if (schema::ObObjectType::TYPE == dep_obj_type) {
+              has_type_dep_obj = true;
+            }
+          }
+          if (!has_type_dep_obj && !has_table_dep_obj) {
+            // pass
+          } else if (!specify_force && (has_type_dep_obj || has_table_dep_obj)) {
+            ret = OB_ERR_HAS_TYPE_OR_TABLE_DEPENDENT;
+            LOG_WARN("cannot drop or replace a type with type or table dependents",
+                     K(ret), K(objs));
+          } else if (specify_force && has_table_dep_obj) {
+            // create or replace type force will not replace types with table dependents,
+            // although ob does not support udt column in tables for now.
+            ret = OB_ERR_REPLACE_TYPE_WITH_TABLE_DEPENDENT;
+            LOG_WARN("cannot replace a type with table dependents", K(ret), K(objs));
+          } else if (specify_force && has_type_dep_obj) {
+            // pass
+          }
+          if (OB_SUCC(ret)
+              && OB_FAIL(ObDependencyInfo::batch_invalidate_dependents(
+                     objs, trans, tenant_id, old_udt_info->get_type_id()))) {
+            LOG_WARN("invalidate dependents failed");
+          }
         }
       }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ddl_operator.replace_udt(udt_info,
+                                                  old_udt_info,
+                                                  trans,
+                                                  error_info,
+                                                  public_routine_infos,
+                                                  schema_guard,
+                                                  dep_infos,
+                                                  ddl_stmt_str))) {
+        LOG_WARN("replace udt failded", K(udt_info), K(ret));
+      }
+    } else {
+      if ((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0) && exist_valid_udt) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("value contradict", K(ret), K(need_replace), K(exist_valid_udt));
+      } else if (OB_FAIL(ddl_operator.create_udt(udt_info,
+                                                 trans,
+                                                 error_info,
+                                                 public_routine_infos,
+                                                 schema_guard,
+                                                 dep_infos,
+                                                 ddl_stmt_str))) {
+        LOG_WARN("create udt failed", K(ret), K(udt_info));
+      }
     }
+
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
@@ -30564,7 +30625,9 @@ int ObDDLService::create_udt(ObUDTTypeInfo &udt_info,
 
 int ObDDLService::drop_udt(const ObUDTTypeInfo &udt_info,
                            ObSchemaGetterGuard &schema_guard,
-                           const ObString *ddl_stmt_str)
+                           const ObString *ddl_stmt_str,
+                           bool specify_force,
+                           bool exist_valid_udt)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = udt_info.get_tenant_id();
@@ -30578,12 +30641,56 @@ int ObDDLService::drop_udt(const ObUDTTypeInfo &udt_info,
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
-    } else if (OB_FAIL(ObDependencyInfo::modify_dep_obj_status(trans, tenant_id, udt_info.get_type_id(),
-                                                    ddl_operator, *schema_service_))) {
+    }
+
+    if ((GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_2_0) || !exist_valid_udt) {
+      // 1) compatible with version before 4.2.2
+      // 2) otherwise depednency should have been invalid already
+    } else {
+      // check if the udt which is to be drop has any type or table dependent
+      bool has_type_or_table_dep_obj = false;
+      ObArray<CriticalDepInfo> objs;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObDependencyInfo::collect_all_dep_objs(tenant_id,
+                                                                udt_info.get_type_id(),
+                                                                udt_info.get_object_type(),
+                                                                trans,
+                                                                objs))) {
+        LOG_WARN("failed to collect all dependent objects");
+      } else {
+        for (int64_t i = 0; i < objs.count(); i++) {
+          schema::ObObjectType dep_obj_type =
+              static_cast<schema::ObObjectType>(objs.at(i).element<1>());
+          if (schema::ObObjectType::TABLE == dep_obj_type
+              || schema::ObObjectType::TYPE == dep_obj_type) {
+            has_type_or_table_dep_obj = true;
+            break;
+          }
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (!specify_force && has_type_or_table_dep_obj) {
+        ret = OB_ERR_HAS_TYPE_OR_TABLE_DEPENDENT;
+        LOG_WARN("cannot drop or replace a type with type or table dependents", K(ret));
+      } else if ((specify_force || !has_type_or_table_dep_obj)
+                 && OB_FAIL(ObDependencyInfo::batch_invalidate_dependents(
+                        objs, trans, tenant_id, udt_info.get_type_id()))) {
+        LOG_WARN("invalidate dependents failed");
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObDependencyInfo::modify_dep_obj_status(trans,
+                                                               tenant_id,
+                                                               udt_info.get_type_id(),
+                                                               ddl_operator,
+                                                               *schema_service_))) {
       LOG_WARN("failed to modify obj status", K(ret));
     } else if (OB_FAIL(ddl_operator.drop_udt(udt_info, trans, schema_guard, ddl_stmt_str))) {
       LOG_WARN("drop procedure failed", K(ret), K(udt_info));
     }
+
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {

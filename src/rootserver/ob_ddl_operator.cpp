@@ -9283,7 +9283,7 @@ int ObDDLOperator::create_udt(ObUDTTypeInfo &udt_info,
     }
   }
   if (OB_SUCC(ret) && !is_inner_pl_udt_id(new_udt_id)) {
-    OZ (insert_dependency_infos(trans, dep_infos, tenant_id, new_udt_id,
+    OZ (insert_dependency_infos(trans, dep_infos, tenant_id, udt_info.get_type_id(),
                                 new_schema_version,
                                 udt_info.get_database_id()));
   }
@@ -9360,7 +9360,8 @@ int ObDDLOperator::replace_udt(ObUDTTypeInfo &udt_info,
   OZ (ObDependencyInfo::delete_schema_object_dependency(trans, tenant_id,
                                      old_udt_info->get_type_id(),
                                      new_schema_version,
-                                     old_udt_info->get_object_type()));
+                                     // old_udt_info->get_object_type())); TODO: type body id design flaw
+                                     udt_info.get_object_type()));
   OZ (ObDependencyInfo::delete_schema_object_dependency(trans, tenant_id,
                                      udt_info.get_type_id(),
                                      new_schema_version,
@@ -9427,13 +9428,14 @@ int ObDDLOperator::drop_udt(const ObUDTTypeInfo &udt_info,
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = udt_info.get_tenant_id();
+  const int64_t type_id = udt_info.get_type_id();
   int64_t new_schema_version = OB_INVALID_VERSION;
   ObSchemaService *schema_service = schema_service_.get_schema_service();
 
   if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_SYS;
     LOG_ERROR("schema_service must not null", K(ret));
-  } else if (OB_FAIL(drop_obj_privs(tenant_id, udt_info.get_type_id(),
+  } else if (OB_FAIL(drop_obj_privs(tenant_id, type_id,
                                     static_cast<uint64_t>(ObObjectType::TYPE),
                                     trans))) {
     LOG_WARN("fail to drop_obj_privs", K(ret), K(udt_info), K(tenant_id));
@@ -9441,7 +9443,7 @@ int ObDDLOperator::drop_udt(const ObUDTTypeInfo &udt_info,
     LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
   } else if (udt_info.is_object_spec_ddl() && OB_FAIL(del_routines_in_udt(udt_info,
                                                                       trans, schema_guard))) {
-    LOG_WARN("faile to drop routines in udt", K(ret));
+    LOG_WARN("fail to drop routines in udt", K(ret));
   } else if (OB_FAIL(schema_service->get_udt_sql_service().drop_udt(udt_info,
                                                                     new_schema_version,
                                                                     trans, ddl_stmt_str))) {
@@ -9463,10 +9465,18 @@ int ObDDLOperator::drop_udt(const ObUDTTypeInfo &udt_info,
                     ObUDTObjectType::mask_object_id(udt_info.get_object_body_id(tenant_id))));
     }
   }
-  OZ (ObDependencyInfo::delete_schema_object_dependency(trans, tenant_id,
-                                     udt_info.get_type_id(),
-                                     new_schema_version,
-                                     udt_info.get_object_type()));
+
+  if (OB_FAIL(ret)) {
+  } else if (udt_info.is_object_spec_ddl()
+             && OB_FAIL(ObDependencyInfo::delete_schema_object_dependency(
+                    trans, tenant_id, type_id, new_schema_version, ObObjectType::TYPE_BODY))) {
+    LOG_WARN("delete dependencies of type body related to the type spec failed",
+             K(ret), K(tenant_id), K(type_id));
+  } else if (OB_FAIL(ObDependencyInfo::delete_schema_object_dependency(
+                 trans, tenant_id, type_id, new_schema_version, udt_info.get_object_type()))) {
+    LOG_WARN("delete dependency of the type itself failed", K(ret), K(tenant_id), K(type_id));
+  }
+
   if (OB_SUCC(ret)) {
     ObErrorInfo error_info;
     if (OB_FAIL(error_info.handle_error_info(trans, &udt_info))) {
