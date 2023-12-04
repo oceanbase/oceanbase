@@ -21,6 +21,7 @@
 #include "observer/ob_server_struct.h"
 #include "observer/mysql/ob_query_retry_ctrl.h"
 #include "observer/mysql/ob_sync_cmd_driver.h"
+#include "observer/mysql/obmp_stmt_execute.h"
 #include "sql/parser/ob_parser.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/resolver/ob_stmt_resolver.h"
@@ -1819,7 +1820,8 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
                                                     exec_timestamp,
                                                     true,
                                                     sql != NULL ? sql : ps_sql,
-                                                    true);
+                                                    true,
+                                                    spi_result.get_exec_params_str_ptr());
               session_info->get_raw_audit_record().exec_record_ = record_bk;
               session_info->get_raw_audit_record().try_cnt_ = try_cnt;
               session_info->get_raw_audit_record().pl_trace_id_.reset();
@@ -2044,7 +2046,8 @@ int ObSPIService::dbms_cursor_execute(ObPLExecCtx *ctx,
                                                   exec_timestamp,
                                                   true,
                                                   ps_sql,
-                                                  true);
+                                                  true,
+                                                  spi_result.get_exec_params_str_ptr());
           } else {
             LOG_DEBUG("result set is not inited, do not process record",
                       K(ret), K(ps_sql), K(sql_stmt), K(stmt_type));
@@ -3124,7 +3127,8 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
                                                     exec_timestamp,
                                                     true,
                                                     0 == param_count ? sql_str.string() : ps_sql,
-                                                    true);
+                                                    true,
+                                                    spi_result.get_exec_params_str_ptr());
               session->get_raw_audit_record().exec_record_ = record_bk;
               session->get_raw_audit_record().try_cnt_ = try_cnt;
               session->get_raw_audit_record().pl_trace_id_.reset();
@@ -4010,7 +4014,8 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
                                                         exec_timestamp,
                                                         true,
                                                         sql != NULL ? sql : ps_sql,
-                                                        true);
+                                                        true,
+                                                        spi_result.get_exec_params_str_ptr());
                   session_info->get_raw_audit_record().exec_record_ = record_bk;
                   session_info->get_raw_audit_record().try_cnt_ = try_cnt;
                   session_info->get_raw_audit_record().pl_trace_id_.reset();
@@ -4208,7 +4213,8 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
                                               exec_timestamp,
                                               true,
                                               (exec_params.count() > 0 || cursor.is_ps_cursor()) ? ps_sql : sql_str,
-                                              true);
+                                              true,
+                                              spi_result->get_exec_params_str_ptr());
         session_info->get_raw_audit_record().exec_record_ = record_bk;
         session_info->get_raw_audit_record().try_cnt_ = try_cnt;
       }
@@ -4313,7 +4319,8 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
                                                   exec_timestamp,
                                                   true,
                                                   (exec_params.count() > 0 || cursor.is_ps_cursor()) ? ps_sql : sql_str,
-                                                  true);
+                                                  true,
+                                                  spi_result.get_exec_params_str_ptr());
             session_info->get_raw_audit_record().exec_record_ = record_bk;
             session_info->get_raw_audit_record().try_cnt_ = retry_cnt;
             session_info->get_raw_audit_record().pl_trace_id_.reset();
@@ -4561,7 +4568,8 @@ int ObSPIService::do_cursor_fetch(ObPLExecCtx *ctx,
                                                 exec_timestamp,
                                                 true,
                                                 ObString(),
-                                                true);
+                                                true,
+                                                spi_result->get_exec_params_str_ptr());
           session_info->get_raw_audit_record().exec_record_ = record_bk;
           session_info->get_raw_audit_record().try_cnt_ = try_cnt;
           session_info->get_raw_audit_record().pl_trace_id_.reset();
@@ -6686,6 +6694,20 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
     OZ (construct_exec_params(ctx, param_allocator, param_exprs, param_count,
                               into_exprs, into_count, exec_params, out_params, is_forall),
       K(sql), K(type), K(param_count), K(out_params), K(exec_params));
+    if (OB_SUCC(ret)
+        && OB_NOT_NULL(ctx)
+        && OB_NOT_NULL(ctx->exec_ctx_)
+        && OB_NOT_NULL(ctx->exec_ctx_->get_my_session())) {
+      // add exec_param_info for sql_audit
+      char *tmp_ptr = NULL;
+      int64_t tmp_len = 0;
+      OZ (ObMPStmtExecute::store_params_value_to_str(spi_result.get_allocaor(),
+                                                    *ctx->exec_ctx_->get_my_session(),
+                                                    &exec_params,
+                                                    tmp_ptr,
+                                                    tmp_len));
+      OX (spi_result.get_exec_params_str_ptr()->assign(tmp_ptr, tmp_len));
+    }
   }
 
   if (OB_SUCC(ret) && is_forall) {
