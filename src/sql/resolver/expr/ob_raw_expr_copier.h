@@ -26,6 +26,9 @@ public:
 
   virtual int check_need_copy(const ObRawExpr *old_expr, ObRawExpr *&new_expr) = 0;
 
+  // check if old expr has already been copied, and if it has been copied, takes it directly.
+  virtual int find_in_copy_context(const ObRawExpr *old_expr, ObRawExpr *&new_expr) = 0;
+
   virtual int do_copy_expr(const ObRawExpr *old_expr, ObRawExpr *&new_expr) = 0;
 
   virtual bool deep_copy_attributes() const { return false; }
@@ -76,6 +79,8 @@ public:
   int do_copy_expr(const ObRawExpr *old_expr, ObRawExpr *&new_expr) override;
 
   bool deep_copy_attributes() const { return true; }
+
+  int find_in_copy_context(const ObRawExpr *old_expr, ObRawExpr *&new_expr) override;
 };
 
 /**
@@ -153,6 +158,8 @@ public:
   int do_copy_expr(const ObRawExpr *old_expr, ObRawExpr *&new_expr) override;
 
   int get_copied_exprs(ObIArray<std::pair<ObRawExpr *, ObRawExpr *>> &from_to_exprs);
+
+  int find_in_copy_context(const ObRawExpr *old_expr, ObRawExpr *&new_expr) override;
 
 private:
 
