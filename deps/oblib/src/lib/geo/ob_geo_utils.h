@@ -239,7 +239,6 @@ public:
   static int get_geog_poly_box(const ObWkbGeogPolygon &poly, ObGeogBox &box);
   static int caculate_line_box(ObPoint3d &start, ObPoint3d &end, ObGeogBox &box);
   static void get_box_center(const ObGeogBox &box, ObPoint2d &center);
-  static bool is_float_equal(double left, double right);
   static bool is_same_point3d(const ObPoint3d &p3d1, const ObPoint3d &p3d2);
   static bool is_completely_opposite(const ObPoint3d &p1, const ObPoint3d &p2);
   static void point_box_union(ObPoint3d &point, ObGeogBox &box);
@@ -269,8 +268,16 @@ public:
   static bool boxes_contains(const ObGeogBox &box1, const ObGeogBox &box2);
   template<typename GeometryType>
   static int fast_box(const GeometryType *g, ObGeogBox &box, bool &has_fast_box);
+  static inline bool is_float_equal(double left, double right) { return fabs(left - right) <= OB_GEO_TOLERANCE; }
+  static inline bool is_float_neq(double left, double right) { return fabs(left - right) > OB_GEO_TOLERANCE; }
+  static inline bool is_float_lt(double left, double right) { return (left + OB_GEO_TOLERANCE) < right; }
+  static inline bool is_float_lteq(double left, double right) { return (left - OB_GEO_TOLERANCE) <= right; }
+  static inline bool is_float_gt(double left, double right) { return (left - OB_GEO_TOLERANCE) > right; }
+  static inline bool is_float_gteq(double left, double right) { return (left + OB_GEO_TOLERANCE) >= right; }
+  static inline bool is_float_zero(double ft) { return fabs(ft) <= OB_GEO_TOLERANCE; }
+  static bool is_box_valid(const ObGeogBox &box);
 
-  static constexpr double FP_TOLERANCE = 5e-14;
+  static constexpr double OB_GEO_TOLERANCE = 5e-14;
 };
 
 /*

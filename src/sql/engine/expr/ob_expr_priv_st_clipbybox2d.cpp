@@ -19,6 +19,7 @@
 #include "lib/geo/ob_geo_utils.h"
 #include "share/object/ob_obj_cast_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/expr/ob_geo_expr_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

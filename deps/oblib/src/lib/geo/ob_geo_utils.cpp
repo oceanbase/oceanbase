@@ -1053,11 +1053,6 @@ void ObGeoBoxUtil::vector_minus(const ObPoint3d &p3d1, const ObPoint3d &p3d2, Ob
   res.z = p3d1.z - p3d2.z;
 }
 
-bool ObGeoBoxUtil::is_float_equal(double left, double right)
-{
-  return fabs(left - right) <= FP_TOLERANCE;
-}
-
 bool ObGeoBoxUtil::is_same_point3d(const ObPoint3d &p3d1, const ObPoint3d &p3d2)
 {
   bool res = true;
@@ -1455,12 +1450,8 @@ int ObGeoBoxUtil::clip_by_box(ObGeometry &geo_in, ObIAllocator &allocator, const
     LOG_WARN("fail to alloc memory for geometry", K(ret));
   }
   // calculate 2d box of geo2, then convert the box to a rectangle geo
-  bool is_gbox_invalid = (gbox.xmin == gbox.xmax && gbox.ymin != gbox.ymax)
-                || (gbox.ymin == gbox.ymax && gbox.xmin != gbox.xmax);
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (geo_bin->type() != ObGeoType::POINT && is_gbox_invalid) {
-    geo_out = nullptr;
   } else if (OB_FAIL(box_ctx.append_geo_arg(geo_bin))) {
     LOG_WARN("build gis context failed", K(ret), K(box_ctx.get_geo_count()));
   } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::Box>::geo_func::eval(box_ctx, gbox_in))) {
@@ -1473,6 +1464,8 @@ int ObGeoBoxUtil::clip_by_box(ObGeometry &geo_in, ObIAllocator &allocator, const
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory for geometry", K(ret));
     }
+  } else if (!ObGeoBoxUtil::is_box_valid(gbox)) {
+    geo_out = nullptr;
   } else {
     ObGeoBoxClipVisitor clip_visitor(gbox, allocator);
     if (OB_FAIL(geo_tree->do_visit(clip_visitor))) {
@@ -1490,6 +1483,11 @@ int ObGeoBoxUtil::clip_by_box(ObGeometry &geo_in, ObIAllocator &allocator, const
     }
   }
   return ret;
+}
+
+bool ObGeoBoxUtil::is_box_valid(const ObGeogBox &box)
+{
+  return !is_float_equal(box.xmin, box.xmax) && !is_float_equal(box.ymin, box.ymax);
 }
 
 // 1. geometry类型可以存储所有其他空间类型;
