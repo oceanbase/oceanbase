@@ -273,6 +273,8 @@ private:
   ObTransferWorkerMgr transfer_worker_mgr_;
   int64_t round_;
   share::SCN gts_seq_;
+  common::SpinRWLock transfer_handler_lock_;
+  bool transfer_handler_enabled_;
   DISALLOW_COPY_AND_ASSIGN(ObTransferHandler);
 };
 }
