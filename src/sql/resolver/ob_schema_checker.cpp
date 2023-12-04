@@ -2962,6 +2962,32 @@ bool ObSchemaChecker::is_ora_priv_check()
     return false;
 }
 
+bool ObSchemaChecker::enable_mysql_pl_priv_check(int64_t tenant_id, ObSchemaGetterGuard &schema_guard)
+{
+  bool enable = false;
+  uint64_t compat_version = 0;
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", K(tenant_id));
+  } else if (lib::is_mysql_mode() && compat_version >= DATA_VERSION_4_2_2_0) {
+    const ObSysVarSchema *sys_var = NULL;
+    ObMalloc alloc(ObModIds::OB_TEMP_VARIABLES);
+    ObObj val;
+    if (OB_FAIL(schema_guard.get_tenant_system_variable(tenant_id, share::SYS_VAR__ENABLE_MYSQL_PL_PRIV_CHECK, sys_var))) {
+      LOG_WARN("fail to get tenant var schema", K(ret));
+    } else if (OB_ISNULL(sys_var)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sys variable schema is null", KR(ret));
+    } else if (OB_FAIL(sys_var->get_value(&alloc, NULL, val))) {
+      LOG_WARN("fail to get charset var value", K(ret));
+    } else {
+      enable = val.get_bool();
+    }
+  }
+  LOG_DEBUG("show enabale mysql routine priv enable", K(enable));
+  return enable;
+}
+
 int ObSchemaChecker::flatten_udt_attributes(
     const uint64_t tenant_id,
     const uint64_t udt_id,

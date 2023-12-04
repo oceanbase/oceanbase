@@ -93,6 +93,8 @@ int ObMergeResolver::resolve(const ParseNode &parse_tree)
     LOG_WARN("fail to formalize stmt", K(ret));
   } else if (OB_FAIL(check_stmt_validity())) {
     LOG_WARN("failed to check subquery validity", K(ret));
+  } else {
+    LOG_DEBUG("check merge table info", K(merge_stmt->get_merge_table_info()));
   }
 
   return ret;
@@ -260,6 +262,19 @@ int ObMergeResolver::resolve_target_relation(const ParseNode *target_node)
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected table item type", K(table_item->type_), K(ret));
+  }
+  const ObTableSchema *table_schema = NULL;
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                  table_item->get_base_table_item().ref_id_,
+                                                  table_schema,
+                                                  table_item->is_link_table()))) {
+      LOG_WARN("failed to get table schema", K(ret));
+    } else if (table_schema->is_oracle_tmp_table() && !in_pl_) {
+        session_info_->set_has_temp_table_flag();
+        set_is_oracle_tmp_table(true);
+        set_oracle_tmp_table_type(table_schema->is_oracle_sess_tmp_table() ? 0 : 1);
+    }
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(generate_insert_table_info(*table_item, merge_stmt->get_merge_table_info()))) {
@@ -526,6 +541,10 @@ int ObMergeResolver::resolve_insert_clause(const ParseNode *insert_node)
     } else if (FALSE_IT(resolve_clause_ = INSERT_VALUE_CLAUSE)) {
     } else if (OB_FAIL(resolve_insert_values(value_node, merge_stmt->get_merge_table_info()))) {
       LOG_WARN("fail to resolve values", K(ret));
+    } else if (OB_FAIL(add_column_for_oracle_temp_table(merge_stmt->get_merge_table_info().ref_table_id_,
+                                                        merge_stmt->get_merge_table_info().table_id_,
+                                                        merge_stmt))) {
+      LOG_WARN("failed to add column for oracle temp table", K(ret));
     } else if (OB_FAIL(generate_column_conv_function(merge_stmt->get_merge_table_info()))) {
       LOG_WARN("failed to generate column conv function", K(ret));
     } else if (OB_FAIL(replace_gen_col_dependent_col(merge_stmt->get_merge_table_info()))) {

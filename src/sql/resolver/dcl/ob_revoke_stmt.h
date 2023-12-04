@@ -69,7 +69,8 @@ public:
     return share::schema::OB_PRIV_USER_LEVEL == grant_level_ ? static_cast<obrpc::ObDDLArg &>(user_arg_) 
         : (share::schema::OB_PRIV_DB_LEVEL == grant_level_ ? static_cast<obrpc::ObDDLArg &>(db_arg_)
         : (share::schema::OB_PRIV_TABLE_LEVEL == grant_level_ ?  static_cast<obrpc::ObDDLArg &>(table_arg_)
-        : static_cast<obrpc::ObDDLArg &>(syspriv_arg_))); 
+        : (share::schema::OB_PRIV_ROUTINE_LEVEL == grant_level_ ?  static_cast<obrpc::ObDDLArg &>(routine_arg_)
+        : static_cast<obrpc::ObDDLArg &>(syspriv_arg_))));
   }
   DECLARE_VIRTUAL_TO_STRING;
 private:
@@ -85,6 +86,7 @@ private:
   obrpc::ObRevokeUserArg user_arg_;
   obrpc::ObRevokeDBArg db_arg_;
   obrpc::ObRevokeTableArg table_arg_;
+  obrpc::ObRevokeRoutineArg routine_arg_;
   obrpc::ObRevokeSysPrivArg syspriv_arg_;
   common::hash::ObPlacementHashSet<uint64_t, common::MAX_ENABLED_ROLES> role_id_set_;
   share::schema::ObObjectType object_type_;

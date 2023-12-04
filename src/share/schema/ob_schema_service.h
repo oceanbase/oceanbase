@@ -331,6 +331,10 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_CREATE_RLS_CONTEXT, = 2052)                         \
   ACT(OB_DDL_DROP_RLS_CONTEXT, = 2053)                           \
   ACT(OB_DDL_RLS_CONTEXT_OPERATION_END, = 2060)                  \
+  ACT(OB_DDL_ROUTINE_PRIV_OPERATION_BEGIN, = 2061)               \
+  ACT(OB_DDL_GRANT_ROUTINE_PRIV, = 2062)                         \
+  ACT(OB_DDL_DEL_ROUTINE_PRIV, = 2063)                           \
+  ACT(OB_DDL_ROUTINE_PRIV_OPERATION_END, = 2070)                 \
   ACT(OB_DDL_MAX_OP,)
 
 DECLARE_ENUM(ObSchemaOperationType, op_type, OP_TYPE_DEF);
@@ -348,6 +352,7 @@ IS_DDL_TYPE(DATABASE, database)
 IS_DDL_TYPE(USER, user)
 IS_DDL_TYPE(DB_PRIV, db_priv)
 IS_DDL_TYPE(TABLE_PRIV, table_priv)
+IS_DDL_TYPE(ROUTINE_PRIV, routine_priv)
 IS_DDL_TYPE(OUTLINE, outline)
 IS_DDL_TYPE(ZONE, zone)
 IS_DDL_TYPE(SYNONYM, synonym)
@@ -419,6 +424,7 @@ public:
     uint64_t rls_policy_id_;
     uint64_t rls_group_id_;
     uint64_t rls_context_id_;
+    uint64_t routine_type_;
   };
   union {
     common::ObString table_name_;
@@ -428,6 +434,7 @@ public:
     common::ObString tablespace_name_;
     common::ObString context_name_;
     common::ObString mock_fk_parent_table_name_;
+    common::ObString routine_name_;
   };
   ObSchemaOperationType op_type_;
   common::ObString ddl_stmt_str_;
@@ -480,7 +487,9 @@ public:
       is_no_zero_date_(false),
       next_column_name_(),
       prev_column_name_(),
-      is_first_(false)
+      is_first_(false),
+      column_group_name_(),
+      is_set_comment_(false)
   {}
 
   explicit AlterColumnSchema(common::ObIAllocator *allocator)
@@ -497,7 +506,9 @@ public:
       is_no_zero_date_(false),
       next_column_name_(),
       prev_column_name_(),
-      is_first_(false)
+      is_first_(false),
+      column_group_name_(),
+      is_set_comment_(false)
   {}
   AlterColumnSchema &operator=(const AlterColumnSchema &alter_column_schema);
   int assign(const ObColumnSchemaV2 &other);
@@ -510,7 +521,9 @@ public:
   const common::ObString& get_prev_column_name() const { return prev_column_name_;};
   int set_prev_column_name(const common::ObString& prev_column_name)
     { return deep_copy_str(prev_column_name, prev_column_name_); }
-
+  const common::ObString& get_column_group_name() const { return column_group_name_;};
+  int set_column_group_name(const common::ObString& column_group_name)
+    { return deep_copy_str(column_group_name, column_group_name_); }
   void reset();
 
   ObSchemaOperationType alter_type_;
@@ -526,6 +539,8 @@ public:
   common::ObString next_column_name_;
   common::ObString prev_column_name_;
   bool is_first_;
+  common::ObString column_group_name_;
+  bool is_set_comment_;
 
   DECLARE_VIRTUAL_TO_STRING;
 };
@@ -876,6 +891,7 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(tablegroup, ObSimpleTablegroupSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(db_priv, ObDBPriv);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(table_priv, ObTablePriv);
+  GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(routine_priv, ObRoutinePriv);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(outline, ObSimpleOutlineSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(routine, ObSimpleRoutineSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(synonym, ObSimpleSynonymSchema);
@@ -1000,6 +1016,7 @@ public:
   GET_BATCH_SCHEMAS_WITH_ALLOCATOR_FUNC_DECLARE_PURE_VIRTUAL(table, ObSimpleTableSchemaV2);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(db_priv, ObDBPriv);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(table_priv, ObTablePriv);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(routine_priv, ObRoutinePriv);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(outline, ObSimpleOutlineSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(routine, ObSimpleRoutineSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(synonym, ObSimpleSynonymSchema);

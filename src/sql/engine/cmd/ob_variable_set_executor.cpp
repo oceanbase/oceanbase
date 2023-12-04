@@ -697,6 +697,10 @@ int ObVariableSetExecutor::update_global_variables(ObExecContext &ctx,
       if (OB_FAIL(ObBasicSessionInfo::check_optimizer_features_enable_valid(val))) {
         LOG_WARN("fail check optimizer_features_enable valid", K(val), K(ret));
       }
+    } else if (set_var.var_name_ ==  OB_SV_PRIVILEGE_FEATURES_ENABLE) {
+      if (OB_FAIL(ObBasicSessionInfo::check_optimizer_features_enable_valid(val))) {
+        LOG_WARN("fail check privilege_features_enable valid", K(val), K(ret));
+      }
     }
 
     if (OB_SUCC(ret) && should_update_extra_var) {

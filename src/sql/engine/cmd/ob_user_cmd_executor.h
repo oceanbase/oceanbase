@@ -47,6 +47,13 @@ public:
       const common::ObIArray<int64_t> &index,
       common::ObIArray<common::ObString> &users,
       common::ObIArray<common::ObString> &hosts);
+
+  static int check_user_valid(ObSchemaGetterGuard& schema_guard,
+                              uint64_t priv_set,
+                              int64_t tenant_id,
+                              const ObString &user_name,
+                              const ObString &host_name,
+                              const ObString &opreation_name);
 private:
   int create_user(obrpc::ObCommonRpcProxy *rpc_proxy,
                   const obrpc::ObCreateUserArg &arg) const;

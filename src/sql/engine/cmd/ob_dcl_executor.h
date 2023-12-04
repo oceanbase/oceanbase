@@ -54,6 +54,8 @@ private:
                 ObRevokeStmt &stmt);
   int revoke_table(obrpc::ObCommonRpcProxy *rpc_proxy,
                    ObRevokeStmt &stmt);
+
+  int revoke_routine(obrpc::ObCommonRpcProxy *rpc_proxy, ObRevokeStmt &stmt);
   int revoke_sys_priv(obrpc::ObCommonRpcProxy *rpc_proxy,
                    ObRevokeStmt &stmt);
 private:

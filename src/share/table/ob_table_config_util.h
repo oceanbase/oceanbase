@@ -67,6 +67,58 @@ public:
   static bool is_hotkey_enable();
 };
 
+class ObPrivControlMode final
+{
+public:
+  ObPrivControlMode(): is_valid_(false), value_(0) {}
+  ObPrivControlMode(const uint8_t *values);
+  bool is_valid() { return is_valid_; }
+  bool check_mode_valid(uint8_t mode) { return mode > 2 ? false : true; }
+  void set_value(uint64_t value);
+  u_int64_t get_value() const { return value_; }
+private:
+  bool is_valid_;
+	union {
+    uint64_t value_;
+    struct {
+        uint8_t reserved_check0_ : 2;
+        uint8_t reserved_check1_ : 2;
+        uint8_t reserved_check2_ : 2;
+        uint8_t reserved_check3_ : 2;
+        uint8_t reserved_check4_ : 2;
+        uint8_t reserved_check5_ : 2;
+        uint8_t reserved_check6_ : 2;
+        uint8_t reserved_check7_ : 2;
+        uint8_t reserved_check8_ : 2;
+        uint8_t reserved_check9_ : 2;
+        uint8_t reserved_check10_ : 2;
+        uint8_t reserved_check11_ : 2;
+        uint8_t reserved_check12_ : 2;
+        uint8_t reserved_check13_ : 2;
+        uint8_t reserved_check14_ : 2;
+        uint8_t reserved_check15_ : 2;
+        uint8_t reserved_check16_ : 2;
+        uint8_t reserved_check17_ : 2;
+        uint8_t reserved_check18_ : 2;
+        uint8_t reserved_check19_ : 2;
+        uint8_t reserved_check20_ : 2;
+        uint8_t reserved_check21_ : 2;
+        uint8_t reserved_check22_ : 2;
+        uint8_t reserved_check23_ : 2;
+        uint8_t reserved_check24_ : 2;
+        uint8_t reserved_check25_ : 2;
+        uint8_t reserved_check26_ : 2;
+        uint8_t reserved_check27_ : 2;
+        uint8_t reserved_check28_ : 2;
+        uint8_t reserved_check29_ : 2;
+        uint8_t reserved_check30_ : 2;
+        uint8_t reserved_check31_ : 2;
+      };
+    };
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObPrivControlMode);
+};
+
 class ObKVConfigUtil
 {
 public:

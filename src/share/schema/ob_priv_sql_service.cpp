@@ -281,6 +281,104 @@ int ObPrivSqlService::grant_table(
   return ret;
 }
 
+
+int ObPrivSqlService::grant_routine(
+    const ObRoutinePrivSortKey &routine_priv_key,
+    const ObPrivSet priv_set,
+    const int64_t new_schema_version,
+    const ObString *ddl_stmt_str,
+    ObISQLClient &sql_client,
+    const uint64_t option,
+    const bool is_grant)
+{
+  int ret = OB_SUCCESS;
+  const bool is_deleted = priv_set == 0;
+  const uint64_t tenant_id = routine_priv_key.tenant_id_;
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+  uint64_t compat_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_2_2_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("grant/revoke routine priv is not suppported when tenant's data version is below 4.2.2.0", KR(ret));
+  } else if (!routine_priv_key.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(routine_priv_key), K(ret));
+  } else {
+    int64_t affected_rows = 0;
+    ObDMLExecHelper exec(sql_client, exec_tenant_id);
+    ObDMLSqlSplicer dml;
+    if (OB_FAIL(gen_routine_priv_dml(exec_tenant_id, routine_priv_key, priv_set, dml))) {
+      LOG_WARN("gen_routine_priv_dml failed", K(routine_priv_key), K(priv_set), K(ret));
+    }
+    // insert into __all_routine_privilege
+    if (OB_SUCC(ret)) {
+      if (is_deleted) {
+        if (OB_FAIL(exec.exec_delete(OB_ALL_ROUTINE_PRIVILEGE_TNAME, dml, affected_rows))) {
+          LOG_WARN("exec_delete failed", K(ret));
+        }
+      } else {
+        if (OB_FAIL(exec.exec_replace(OB_ALL_ROUTINE_PRIVILEGE_TNAME, dml, affected_rows))) {
+          LOG_WARN("exec_replace failed", K(ret));
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (!is_single_row(affected_rows) && !is_double_row(affected_rows)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("affected_rows unexpected to be one ", K(affected_rows), K(ret));
+      }
+    }
+
+    // insert into __all_routine_privilege_history
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(dml.add_pk_column("schema_version", new_schema_version))
+          || OB_FAIL(dml.add_column("is_deleted", is_deleted))) {
+        LOG_WARN("add column failed", K(ret));
+      } else if (OB_FAIL(exec.exec_insert(OB_ALL_ROUTINE_PRIVILEGE_HISTORY_TNAME, dml, affected_rows))) {
+        LOG_WARN("exec_replace failed", K(ret));
+      } else if (!is_single_row(affected_rows)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("affected_rows expeccted to be one", K(affected_rows), K(ret));
+      }
+    }
+
+    //log operation
+    if (OB_SUCC(ret)) {
+      ObSchemaOperation priv_operation;
+      priv_operation.tenant_id_ = routine_priv_key.tenant_id_;
+      priv_operation.user_id_ = routine_priv_key.user_id_;
+      priv_operation.database_name_ = routine_priv_key.db_;
+      priv_operation.routine_name_ = routine_priv_key.routine_;
+      priv_operation.routine_type_ = routine_priv_key.routine_type_;
+      priv_operation.op_type_ = (is_deleted ?
+          OB_DDL_DEL_ROUTINE_PRIV : OB_DDL_GRANT_ROUTINE_PRIV);
+      priv_operation.schema_version_ = new_schema_version;
+      priv_operation.ddl_stmt_str_ = ddl_stmt_str ? *ddl_stmt_str : ObString();
+      if (OB_FAIL(log_operation(priv_operation, sql_client))) {
+        LOG_WARN("Failed to log operation", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPrivSqlService::revoke_routine(
+    const ObRoutinePrivSortKey &routine_priv_key,
+    const ObPrivSet priv_set,
+    const int64_t new_schema_version,
+    const ObString *ddl_stmt_str,
+    ObISQLClient &sql_client)
+{
+  return grant_routine(routine_priv_key,
+                     priv_set,
+                     new_schema_version,
+                     ddl_stmt_str,
+                     sql_client,
+                     NO_OPTION,
+                     false);
+}
+
 /*
  * This function should by called when grant only oracle related privs.
  * Only deal with Authorization operations of single object.
@@ -699,14 +797,51 @@ int ObPrivSqlService::gen_table_priv_dml(
   return ret;
 }
 
-int ObPrivSqlService::gen_db_priv_dml(
+int ObPrivSqlService::gen_routine_priv_dml(
     const uint64_t exec_tenant_id,
-    const ObOriginalDBKey &db_priv_key,
+    const ObRoutinePrivSortKey &routine_priv_key,
     const ObPrivSet &priv_set,
     ObDMLSqlSplicer &dml)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
+  int64_t all_priv = 0;
+  uint64_t compat_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(exec_tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(exec_tenant_id));
+  } else if (compat_version < DATA_VERSION_4_2_2_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("all routine priv is not suppported when tenant's data version is below 4.2.2.0", KR(ret));
+  } else {
+    if ((priv_set & OB_PRIV_EXECUTE) != 0) { all_priv |= 1; }
+    if ((priv_set & OB_PRIV_ALTER_ROUTINE) != 0) { all_priv |= 2; }
+    if ((priv_set & OB_PRIV_GRANT) != 0) { all_priv |= 4; }
+    if (OB_FAIL(dml.add_pk_column("tenant_id", 0))
+        || OB_FAIL(dml.add_pk_column("user_id", routine_priv_key.user_id_))
+        || OB_FAIL(dml.add_pk_column("database_name", routine_priv_key.db_))
+        || OB_FAIL(dml.add_pk_column("routine_name", routine_priv_key.routine_))
+        || OB_FAIL(dml.add_pk_column("routine_type", routine_priv_key.routine_type_))
+        || OB_FAIL(dml.add_column("all_priv", all_priv))) {
+      LOG_WARN("add column failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObPrivSqlService::gen_db_priv_dml(
+    const uint64_t exec_tenant_id,
+    const ObOriginalDBKey &db_priv_key,
+  const ObPrivSet &priv_set,
+    ObDMLSqlSplicer &dml)
+{
+  int ret = OB_SUCCESS;
+  ObPrivSet priv_others = 0;
+  priv_others |= (priv_set & OB_PRIV_EXECUTE) != 0 ? 1 : 0;
+  priv_others |= (priv_set & OB_PRIV_ALTER_ROUTINE) != 0 ? 2 : 0;
+  priv_others |= (priv_set & OB_PRIV_CREATE_ROUTINE) != 0 ? 4 : 0;
+  uint64_t compat_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(exec_tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(exec_tenant_id));
+  } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
                                              exec_tenant_id, db_priv_key.tenant_id_)))
       || OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(
                                               exec_tenant_id, db_priv_key.user_id_)))
@@ -723,6 +858,13 @@ int ObPrivSqlService::gen_db_priv_dml(
       || OB_FAIL(dml.add_column("PRIV_CREATE_VIEW", priv_set & OB_PRIV_CREATE_VIEW ? 1 : 0))
       || OB_FAIL(dml.add_column("PRIV_SHOW_VIEW", priv_set & OB_PRIV_SHOW_VIEW ? 1 : 0))
       || OB_FAIL(dml.add_gmt_modified())) {
+    LOG_WARN("add column failed", K(ret));
+  } else if (compat_version < DATA_VERSION_4_2_2_0) {
+    if (priv_others != 0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("priv others is not suppported when tenant's data version is below 4.2.2.0", KR(ret));
+    }
+  } else if (OB_FAIL(dml.add_column("PRIV_OTHERS", priv_others))) {
     LOG_WARN("add column failed", K(ret));
   }
   return ret;

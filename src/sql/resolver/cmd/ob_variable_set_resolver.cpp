@@ -168,6 +168,17 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
                 LOG_WARN("resolve variable value failed", K(ret));
               }
             }
+            if (OB_SUCC(ret)) {
+              if (0 == var_node.variable_name_.case_compare("_enable_mysql_pl_priv_check")) {
+                if (0 == ObString(value_node.str_len_, value_node.str_value_).case_compare("on") ||
+                    0 == ObString(value_node.str_len_, value_node.str_value_).case_compare("1")) {
+                  //do nothing
+                } else {
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "turn _enable_mysql_pl_priv_check without on");
+                }
+              }
+            }
           } else {
             // use WARN_ON_FAIL cast_mode if set user_variable
             const stmt::StmtType session_ori_stmt_type = session_info_->get_stmt_type();

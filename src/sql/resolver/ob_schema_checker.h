@@ -503,6 +503,7 @@ public:
   bool is_lbca_op();
 
   static bool is_ora_priv_check(); 
+  static bool enable_mysql_pl_priv_check(int64_t tenant_id, share::schema::ObSchemaGetterGuard &schema_guard);
 
   // dblink.
   int get_dblink_id(uint64_t tenant_id, const common::ObString &dblink_name, uint64_t &dblink_id);

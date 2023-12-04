@@ -1036,5 +1036,63 @@ bool ObKvFeatureModeParser::parse(const char *str, uint8_t *arr, int64_t len)
   return bret;
 }
 
+bool ObPrivControlParser::parse(const char *str, uint8_t *arr, int64_t len)
+{
+  bool bret = true;
+  if (str ==  NULL || arr == NULL) {
+    bret = false;
+    OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "Get mode config item fail, str or value arr is NULL!");
+  } else if (strlen(str) == 0) {
+    bret = true;
+    OB_LOG_RET(DEBUG, OB_SUCCESS, "strlen is 0");
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    ObSEArray<std::pair<ObString, ObString>, 8> kv_list;
+    int64_t str_len = strlen(str);
+    const int64_t buf_len = 3 * str_len; // need replace ',' to ' , '
+    char buf[buf_len];
+    MEMSET(buf, 0, sizeof(buf));
+    MEMCPY(buf, str, str_len);
+    if (OB_SUCCESS != (tmp_ret = ObModeConfigParserUitl::format_mode_str(str, str_len, buf, buf_len))) {
+      bret = false;
+      OB_LOG_RET(WARN, tmp_ret, "fail to format mode str", K(str));
+    } else if (OB_SUCCESS != (tmp_ret = ObModeConfigParserUitl::get_kv_list(buf, kv_list))) {
+      bret = false;
+      OB_LOG_RET(WARN, tmp_ret, "fail to get kv list", K(str));
+    } else {
+      ObPrivControlMode priv_mode;
+      for (int64_t i = 0; i < kv_list.count() && bret; i++) {
+        uint8_t mode = MODE_DEFAULT;
+        if (kv_list.at(i).second.case_compare(MODE_VAL_ON) == 0) {
+          mode = MODE_ON;
+        } else if (kv_list.at(i).second.case_compare(MODE_VAL_OFF) == 0) {
+          mode = MODE_OFF;
+        } else {
+          bret = false;
+          OB_LOG_RET(WARN, OB_INVALID_CONFIG, "unknown mode type", K(kv_list.at(i).second));
+        }
+        if (!bret) {
+        // } else if (kv_list.at(i).first.case_compare(MYSQL_ROUTINE_PRIV_CHECK) == 0) {
+        //   priv_mode.set_mysql_routine_check_mode(mode);
+        } else {
+          bret = false;
+          OB_LOG_RET(WARN, OB_INVALID_CONFIG, "unknown mode name", K(kv_list.at(i).first));
+        }
+      } // end for
+      if (bret) {
+        arr[0] = priv_mode.get_value() & 0xFF;
+        arr[1] = (priv_mode.get_value() >> 8) & 0XFF;
+        arr[2] = (priv_mode.get_value() >> 16) & 0XFF;
+        arr[3] = (priv_mode.get_value() >> 24) & 0XFF;
+        arr[4] = (priv_mode.get_value() >> 32) & 0XFF;
+        arr[5] = (priv_mode.get_value() >> 40) & 0XFF;
+        arr[6] = (priv_mode.get_value() >> 48) & 0XFF;
+        arr[7] = (priv_mode.get_value() >> 56) & 0XFF;
+      }
+    }
+  }
+  return bret;
+}
+
 } // end of namepace common
 } // end of namespace oceanbase

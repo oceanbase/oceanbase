@@ -166,12 +166,18 @@ int ObRevokeExecutor::execute(ObExecContext &ctx, ObRevokeStmt &stmt)
           LOG_WARN("grant_revoke_user error", K(ret));
         }
         break;
+      }
+      case OB_PRIV_ROUTINE_LEVEL: {
+        if (OB_FAIL(revoke_routine(common_rpc_proxy, stmt))) {
+          LOG_WARN("grant_revoke_user error", K(ret));
+        }
+        break;
+      }
       case OB_PRIV_SYS_ORACLE_LEVEL: { // Oracle revoke role and sys_priv
         if (OB_FAIL(revoke_sys_priv(common_rpc_proxy, stmt))) {
           LOG_WARN("grant_revoke_user error", K(ret));
         }
         break;
-      }
       }
       default: {
         ret = OB_ERR_UNEXPECTED;
@@ -271,6 +277,39 @@ int ObRevokeExecutor::revoke_table(obrpc::ObCommonRpcProxy *rpc_proxy, ObRevokeS
       for (int i = 0; OB_SUCC(ret) && i < user_ids.count(); i++) {
         arg.user_id_ = user_ids.at(i);
         if (OB_FAIL(rpc_proxy->revoke_table(arg))) {
+          LOG_WARN("revoke user error", K(arg), K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRevokeExecutor::revoke_routine(obrpc::ObCommonRpcProxy *rpc_proxy, ObRevokeStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(rpc_proxy)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Input argument error", K(rpc_proxy), K(ret));
+  } else {
+    obrpc::ObRevokeRoutineArg &arg = static_cast<obrpc::ObRevokeRoutineArg &>(stmt.get_ddl_arg());
+    arg.tenant_id_ = stmt.get_tenant_id();
+    arg.priv_set_ = stmt.get_priv_set();
+    arg.db_ = stmt.get_database_name();
+    arg.routine_ = stmt.get_table_name();
+    arg.obj_id_ = stmt.get_obj_id();
+    arg.obj_type_ = static_cast<uint64_t>(stmt.get_object_type());
+    arg.grantor_id_ = stmt.get_grantor_id();
+    arg.revoke_all_ora_ = stmt.get_revoke_all_ora();
+
+    const ObIArray<uint64_t> &user_ids = stmt.get_users();
+    if (0 == user_ids.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("User ids is empty, resolver may be error", K(ret));
+    } else {
+      for (int i = 0; OB_SUCC(ret) && i < user_ids.count(); i++) {
+        arg.user_id_ = user_ids.at(i);
+        if (OB_FAIL(rpc_proxy->revoke_routine(arg))) {
           LOG_WARN("revoke user error", K(arg), K(ret));
         }
       }

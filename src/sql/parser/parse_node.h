@@ -339,6 +339,7 @@ typedef struct
   int connection_collation_;//connection collation
   bool mysql_compatible_comment_; //whether the parser is parsing "/*! xxxx */"
   bool enable_compatible_comment_;
+  int semicolon_start_col_;
 
   InsMultiValuesResult *ins_multi_value_res_;
 

@@ -56,10 +56,14 @@
 #include "sql/resolver/ddl/ob_drop_synonym_stmt.h"
 #include "sql/resolver/cmd/ob_call_procedure_stmt.h"
 #include "sql/resolver/cmd/ob_load_data_stmt.h"
+#include "sql/resolver/ddl/ob_create_routine_stmt.h"
+#include "sql/resolver/ddl/ob_alter_routine_stmt.h"
+#include "sql/resolver/ddl/ob_drop_routine_stmt.h"
 #include "rootserver/ob_ddl_service.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
 #include "pl/ob_pl_stmt.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
 
 namespace oceanbase {
 using namespace share;
@@ -1391,11 +1395,14 @@ int get_grant_stmt_need_privs(
                !(session_priv.user_priv_set_ & OB_PRIV_CREATE_USER)) {
       ret = OB_ERR_CREATE_USER_WITH_GRANT;
       LOG_WARN("Need create user priv", K(ret), "user priv", ObPrintPrivSet(session_priv.user_priv_set_));
+    } else if (is_root_user(session_priv.user_id_)) {
+      //not neccessary
     } else {
       need_priv.db_ = stmt->get_database_name();
       need_priv.table_ = stmt->get_table_name();
       need_priv.priv_set_ = stmt->get_priv_set() | OB_PRIV_GRANT;
       need_priv.priv_level_ = stmt->get_grant_level();
+      need_priv.obj_type_ = stmt->get_object_type();
       ADD_NEED_PRIV(need_priv);
     }
   }
@@ -1427,6 +1434,7 @@ int get_revoke_stmt_need_privs(
       need_priv.table_ = stmt->get_table_name();
       need_priv.priv_set_ = stmt->get_priv_set() | OB_PRIV_GRANT;
       need_priv.priv_level_ = stmt->get_grant_level();
+      need_priv.obj_type_ = stmt->get_object_type();
       ADD_NEED_PRIV(need_priv);
     }
   }
@@ -1565,6 +1573,63 @@ int get_lock_tenant_stmt_need_privs(
     } else {
       need_priv.priv_set_ = OB_PRIV_SUPER;
       need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+      ADD_NEED_PRIV(need_priv);
+    }
+  }
+  return ret;
+}
+
+int get_routine_stmt_need_privs(
+    const ObSessionPrivInfo &session_priv,
+    const ObStmt *basic_stmt,
+    ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(basic_stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Basic stmt should be not be NULL", K(ret));
+  } else if (OB_UNLIKELY(stmt::T_CREATE_ROUTINE != basic_stmt->get_stmt_type()
+                        && stmt::T_DROP_ROUTINE != basic_stmt->get_stmt_type()
+                        && stmt::T_ALTER_ROUTINE != basic_stmt->get_stmt_type())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Stmt type should be routine stmt",
+             K(ret), "stmt type", basic_stmt->get_stmt_type());
+  } else if (lib::is_oracle_mode()) {
+    //do nothing
+  } else if (stmt::T_CREATE_ROUTINE == basic_stmt->get_stmt_type()) {
+    const ObCreateRoutineStmt *stmt = static_cast<const ObCreateRoutineStmt*>(basic_stmt);
+    if (stmt->get_routine_arg().routine_info_.get_routine_type() == ObRoutineType::ROUTINE_PROCEDURE_TYPE
+        || stmt->get_routine_arg().routine_info_.get_routine_type() == ObRoutineType::ROUTINE_FUNCTION_TYPE) {
+      ObNeedPriv need_priv;
+      need_priv.table_ = stmt->get_routine_arg().routine_info_.get_routine_name();
+      need_priv.db_ = stmt->get_routine_arg().db_name_;
+      need_priv.obj_type_ = stmt->get_routine_arg().routine_info_.get_routine_type() == ObRoutineType::ROUTINE_PROCEDURE_TYPE ? ObObjectType::PROCEDURE : ObObjectType::FUNCTION;
+      need_priv.priv_level_ = OB_PRIV_ROUTINE_LEVEL;
+      need_priv.priv_set_ = OB_PRIV_CREATE_ROUTINE;
+      ADD_NEED_PRIV(need_priv);
+    }
+  } else if (stmt::T_ALTER_ROUTINE == basic_stmt->get_stmt_type()) {
+    const ObAlterRoutineStmt *stmt = static_cast<const ObAlterRoutineStmt*>(basic_stmt);
+    if (stmt->get_routine_arg().routine_info_.get_routine_type() == ObRoutineType::ROUTINE_PROCEDURE_TYPE
+        || stmt->get_routine_arg().routine_info_.get_routine_type() == ObRoutineType::ROUTINE_FUNCTION_TYPE) {
+      ObNeedPriv need_priv;
+      need_priv.table_ = stmt->get_routine_arg().routine_info_.get_routine_name();
+      need_priv.db_ = stmt->get_routine_arg().db_name_;
+      need_priv.obj_type_ = stmt->get_routine_arg().routine_info_.get_routine_type() == ObRoutineType::ROUTINE_PROCEDURE_TYPE ? ObObjectType::PROCEDURE : ObObjectType::FUNCTION;
+      need_priv.priv_level_ = OB_PRIV_ROUTINE_LEVEL;
+      need_priv.priv_set_ = OB_PRIV_ALTER_ROUTINE;
+      ADD_NEED_PRIV(need_priv);
+    }
+  } else if (stmt::T_DROP_ROUTINE == basic_stmt->get_stmt_type()) {
+    const ObDropRoutineStmt *stmt = static_cast<const ObDropRoutineStmt*>(basic_stmt);
+    if (stmt->get_routine_arg().routine_type_ == ObRoutineType::ROUTINE_PROCEDURE_TYPE
+        || stmt->get_routine_arg().routine_type_ == ObRoutineType::ROUTINE_FUNCTION_TYPE) {
+      ObNeedPriv need_priv;
+      need_priv.table_ = stmt->get_routine_arg().routine_name_;
+      need_priv.db_ = stmt->get_routine_arg().db_name_;
+      need_priv.obj_type_ = stmt->get_routine_arg().routine_type_ == ObRoutineType::ROUTINE_PROCEDURE_TYPE ? ObObjectType::PROCEDURE : ObObjectType::FUNCTION;
+      need_priv.priv_level_ = OB_PRIV_ROUTINE_LEVEL;
+      need_priv.priv_set_ = OB_PRIV_ALTER_ROUTINE;
       ADD_NEED_PRIV(need_priv);
     }
   }

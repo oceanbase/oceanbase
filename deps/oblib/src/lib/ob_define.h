@@ -253,6 +253,7 @@ const int64_t OB_MAX_USER_TABLE_NAME_LENGTH_MYSQL = 64;  // Compatible with mysq
 const int64_t OB_MAX_USER_TABLE_NAME_LENGTH_ORACLE = 128; // Compatible with Oracle, error is reported when the logic is greater than
 // The actual maximum table name length of table_schema (the index table will have an additional prefix, so the actual length is greater than OB_MAX_USER_TABLE_NAME_LENGTH)
 const int64_t OB_MAX_TABLE_NAME_LENGTH = 256;
+const int64_t OB_MAX_TABLE_NAME_BINARY_LENGTH = 2048; // See OB_MAX_DATABASE_NAME_BINARY_LENGTH explaination
 const int64_t OB_MAX_SCHEMA_REF_INFO = 4096;
 const int64_t OB_MAX_TABLE_NAME_BUF_LENGTH = OB_MAX_TABLE_NAME_LENGTH + 1;
 const int64_t OB_MAX_PLAN_EXPLAIN_NAME_LENGTH= 256;
@@ -293,6 +294,9 @@ const int64_t OB_MAX_QB_NAME_LENGTH = 20;  // Compatible with Oracle, hint speci
 const int64_t OB_MAX_SEQUENCE_NAME_LENGTH = 128; // Compatible with Oracle, error is reported when the logic is greater than
 const int64_t OB_MAX_KEYSTORE_NAME_LENGTH = 128;
 const int64_t OB_MAX_DATABASE_NAME_LENGTH = 128; // Not compatible with mysql (mysql is 64), the logic is greater than when an error is reported
+const int64_t OB_MAX_DATABASE_NAME_BINARY_LENGTH = 2048; // Should be OB_MAX_DATABASE_NAME_LENGTH * 4(max char bytes),
+                                                         // reserve some bytes thus OB_MAX_DATABASE_NAME_LENGTH changes will probably not influence it
+                                                         // it is defined in primary key, and can not change randomly.
 const int64_t OB_MAX_DATABASE_NAME_BUF_LENGTH = OB_MAX_DATABASE_NAME_LENGTH + 1;
 const int64_t OB_MAX_TABLEGROUP_NAME_LENGTH = 128; // OB code logic is greater than or equal to an error, so modify it to 65
 const int64_t OB_MAX_ALIAS_NAME_LENGTH = 255;// Compatible with mysql, 255 visible characters. Plus 256 bytes at the end of 0
@@ -783,7 +787,8 @@ const int64_t MAX_FREEZE_SUBMIT_STATUS_LENGTH = 64;
 const int64_t MAX_REPLAY_LOG_TYPE_LENGTH = 64;
 //columns
 const int64_t MAX_TABLE_CATALOG_LENGTH = 4096;
-const int64_t MAX_COLUMN_COMMENT_LENGTH = 2048;  // Consistent with mysql, changed from 1024 to 2048
+const int64_t MAX_COLUMN_COMMENT_LENGTH = 2048;
+const int64_t MAX_COLUMN_COMMENT_CHAR_LENGTH = 1024;
 const int64_t MAX_COLUMN_KEY_LENGTH = 3;
 const int64_t MAX_NUMERIC_PRECISION_LENGTH = 9;
 const int64_t MAX_NUMERIC_SCALE_LENGTH = 9;

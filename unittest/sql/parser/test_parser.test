@@ -20,11 +20,11 @@ commit;
 commit/*hint+commit*/;
 commit work;
 commit/*hint+commit work*/ work;
-#--sql_mode oracle
-#commit comment 'comment transaction commit';
-#commit work comment 'comment txn commit work';
-#commit/*hint+commit tx hint*/ comment 'comment + hint';
-#commit/*hint+commit tx work hint*/ work comment 'comment + hint';
+--sql_mode oracle
+commit comment 'comment transaction commit';
+commit work comment 'comment txn commit work';
+commit/*hint+commit tx hint*/ comment 'comment + hint';
+commit/*hint+commit tx work hint*/ work comment 'comment + hint';
 --sql_mode mysql
 rollback;
 rollback/*hint+rollback*/;
@@ -293,12 +293,12 @@ select unique distinct(    max(c1)), c2 from t1;
 select unique(*) from t1;
 
 ########################## test for returning ###################################
-#--sql_mode oracle
-#delete from t1 where c1 = 1 returning c1 + 1, c2 * 2;
-#update t1 set c1 = 1 where c2 = 2 returning c1, c2 + 3, c3 * c4;
-#insert into t1 values(1, 2, 3) returning c1, c2, c3;
-#--error 5001
-#replace into t1 values(1, 2) returning c1, c2, c3, c4, c5, c6;
+--sql_mode oracle
+delete from t1 where c1 = 1 returning c1 + 1, c2 * 2;
+update t1 set c1 = 1 where c2 = 2 returning c1, c2 + 3, c3 * c4;
+insert into t1 values(1, 2, 3) returning c1, c2, c3;
+--error 5001
+replace into t1 values(1, 2) returning c1, c2, c3, c4, c5, c6;
 ############# tablegroup ##################
 --sql_mode mysql
 alter tablegroup tg2 add table t1,t2;

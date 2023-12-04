@@ -203,7 +203,6 @@ SELECT_HINT_BEGIN UPDATE_HINT_BEGIN DELETE_HINT_BEGIN INSERT_HINT_BEGIN REPLACE_
 LOAD_DATA_HINT_BEGIN CREATE_HINT_BEGIN
 END_P SET_VAR DELIMITER
 
-/*reserved keyword*/
 %token <reserved_keyword>
 /*
  * MySQL 5.7 Reserved Keywords（mysql5.7一共有235个保留关键字，这里兼容mysql5.7的229个，NULL关键字在
@@ -213,6 +212,7 @@ END_P SET_VAR DELIMITER
  * https://dev.mysql.com/doc/refman/5.7/en/keywords.html
  * 注意！！！非特殊情况，禁止将关键字放到该区域
  * */
+//-----------------------------reserved keyword begin-----------------------------------------------
         ACCESSIBLE ADD ALL ALTER ANALYZE AND AS ASC ASENSITIVE
         BEFORE BETWEEN BIGINT BINARY BLOB BOTH BY
         CALL CASCADE CASE CHANGE CHAR CHARACTER CHECK COLLATE COLUMN CONDITION CONSTRAINT CONTINUE
@@ -249,8 +249,9 @@ END_P SET_VAR DELIMITER
 
 /*OB 特有的保留关键字*/
         TABLEGROUP
-
+//-----------------------------reserved keyword end-------------------------------------------------
 %token <non_reserved_keyword>
+//-----------------------------non_reserved keyword begin-------------------------------------------
         ACCESS ACCOUNT ACTION ACTIVE ADDDATE AFTER AGAINST AGGREGATE ALGORITHM ALL_META ALL_USER ALWAYS ANALYSE ANY
         APPROX_COUNT_DISTINCT APPROX_COUNT_DISTINCT_SYNOPSIS APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE
         ARBITRATION ASCII AT AUTHORS AUTO AUTOEXTEND_SIZE AUTO_INCREMENT AUTO_INCREMENT_MODE AVG AVG_ROW_LENGTH
@@ -362,7 +363,7 @@ END_P SET_VAR DELIMITER
         YEAR
 
         ZONE ZONE_LIST ZONE_TYPE
-
+//-----------------------------non_reserved keyword end---------------------------------------------
 %type <node> sql_stmt stmt_list stmt opt_end_p
 %type <node> select_stmt update_stmt delete_stmt
 %type <node> insert_stmt single_table_insert values_clause dml_table_name
@@ -435,11 +436,11 @@ END_P SET_VAR DELIMITER
 %type <node> rename_table_stmt rename_table_actions rename_table_action
 %type <node> truncate_table_stmt
 %type <node> lock_user_stmt lock_spec_mysql57
-%type <node> grant_stmt grant_privileges priv_type_list priv_type priv_level opt_privilege grant_options
+%type <node> grant_stmt grant_privileges priv_type_list priv_type priv_level opt_privilege grant_options object_type
 %type <node> revoke_stmt
 %type <node> opt_limit opt_for_grant_user
 %type <node> parameterized_trim
-%type <ival> opt_with_consistent_snapshot opt_config_scope opt_index_keyname opt_full
+%type <ival> opt_with_consistent_snapshot opt_config_scope opt_index_keyname opt_full opt_extended opt_extended_or_full
 %type <node> opt_work begin_stmt commit_stmt rollback_stmt opt_ignore xa_begin_stmt xa_end_stmt xa_prepare_stmt xa_commit_stmt xa_rollback_stmt
 %type <node> alter_table_stmt alter_table_actions alter_table_action_list alter_table_action alter_column_option alter_index_option alter_constraint_option standalone_alter_action alter_partition_option opt_to alter_tablegroup_option opt_table opt_tablegroup_option_list alter_tg_partition_option
 %type <node> tablegroup_option_list tablegroup_option alter_tablegroup_actions alter_tablegroup_action tablegroup_option_list_space_seperated
@@ -12176,7 +12177,7 @@ CLASS_ORIGIN
  *
  *****************************************************************************/
 show_stmt:
-SHOW opt_full TABLES opt_from_or_in_database_clause opt_show_condition
+SHOW opt_extended_or_full TABLES opt_from_or_in_database_clause opt_show_condition
 {
   ParseNode *value = NULL;
   malloc_terminal_node(value, result->malloc_pool_, T_INT);
@@ -12189,7 +12190,7 @@ SHOW opt_full TABLES opt_from_or_in_database_clause opt_show_condition
   //(void)$3;
   malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_DATABASES, 2, $4, $3);
 }
-| SHOW opt_full columns_or_fields from_or_in relation_factor opt_from_or_in_database_clause opt_show_condition
+| SHOW opt_extended_or_full columns_or_fields from_or_in relation_factor opt_from_or_in_database_clause opt_show_condition
 {
   (void)$3;
   (void)$4;
@@ -12335,11 +12336,14 @@ SHOW opt_full TABLES opt_from_or_in_database_clause opt_show_condition
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_PARAMETERS, 2, $3, $4);
 }
-| SHOW index_or_indexes_or_keys from_or_in relation_factor opt_from_or_in_database_clause opt_where
+| SHOW opt_extended index_or_indexes_or_keys from_or_in relation_factor opt_from_or_in_database_clause opt_where
 {
-  (void)$2;//useless
   (void)$3;//useless
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_INDEXES, 3, $4, $5, $6);
+  (void)$4;//useless
+  ParseNode *value = NULL;
+  malloc_terminal_node(value, result->malloc_pool_, T_INT);
+  value->value_ = $2[0];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_INDEXES, 4, $5, $6, $7, value);
 }
 | SHOW opt_full PROCESSLIST
 {
@@ -13527,7 +13531,19 @@ GRANT grant_privileges ON priv_level TO user_specification_list grant_options
   merge_nodes(privileges_node, result, T_PRIVILEGES, privileges_list_node);
   merge_nodes(users_node, result, T_USERS, $6);
   malloc_non_terminal_node($$, result->malloc_pool_, T_GRANT,
-                           3, privileges_node, $4, users_node);
+                           4, privileges_node, NULL, $4, users_node);
+}
+| GRANT grant_privileges ON object_type priv_level TO user_specification_list grant_options
+{
+  ParseNode *privileges_list_node = NULL;
+  ParseNode *privileges_node = NULL;
+  ParseNode *users_node = NULL;
+  malloc_non_terminal_node(privileges_list_node, result->malloc_pool_,
+                           T_LINK_NODE, 2, $2, $8);
+  merge_nodes(privileges_node, result, T_PRIVILEGES, privileges_list_node);
+  merge_nodes(users_node, result, T_USERS, $7);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_GRANT,
+                           4, privileges_node, $4, $5, users_node);
 }
 ;
 
@@ -13686,7 +13702,21 @@ ALTER
   malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
   $$->value_ = OB_PRIV_CREATE_DATABASE_LINK;
 }
-
+| EXECUTE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
+  $$->value_ = OB_PRIV_EXECUTE;
+}
+| ALTER ROUTINE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
+  $$->value_ = OB_PRIV_ALTER_ROUTINE;
+}
+| CREATE ROUTINE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
+  $$->value_ = OB_PRIV_CREATE_ROUTINE;
+}
 ;
 
 opt_privilege:
@@ -13697,6 +13727,24 @@ PRIVILEGES
 | /*empty*/
 {
   $$ = NULL;
+}
+;
+
+object_type:
+TABLE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_OBJECT);
+  $$->value_ = 1;
+}
+| PROCEDURE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_OBJECT);
+  $$->value_ = 2;
+}
+| FUNCTION
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_OBJECT);
+  $$->value_ = 3;
 }
 ;
 
@@ -13755,7 +13803,16 @@ REVOKE grant_privileges ON priv_level FROM user_list
   merge_nodes(privileges_node, result, T_PRIVILEGES, $2);
   merge_nodes(users_node, result, T_USERS, $6);
   malloc_non_terminal_node($$, result->malloc_pool_, T_REVOKE,
-                           3, privileges_node, $4, users_node);
+                           4, privileges_node, NULL, $4, users_node);
+}
+| REVOKE grant_privileges ON object_type priv_level FROM user_list
+{
+  ParseNode *privileges_node = NULL;
+  ParseNode *users_node = NULL;
+  merge_nodes(privileges_node, result, T_PRIVILEGES, $2);
+  merge_nodes(users_node, result, T_USERS, $7);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_REVOKE,
+                           4, privileges_node, $4, $5, users_node);
 }
 | REVOKE ALL opt_privilege ',' GRANT OPTION FROM user_list
 {
@@ -17101,6 +17158,24 @@ FULL
 {$$[0]=0;}
 ;
 
+opt_extended:
+EXTENDED
+{$$[0]=1;}
+| /* EMPTY */
+{$$[0]=0;}
+;
+
+opt_extended_or_full:
+FULL
+{$$[0]=1;}
+| EXTENDED
+{$$[0]=2;}
+| EXTENDED FULL
+{$$[0]=3;}
+| /* EMPTY */
+{$$[0]=0;}
+;
+
 opt_config_scope:
 SCOPE COMP_EQ MEMORY
 { $$[0] = 0; }   /* same as ObConfigType */
@@ -18939,6 +19014,7 @@ ACCOUNT
 |       SYSTEM
 |       SYSTEM_USER
 |       SYSDATE
+|       SLOG
 |       TABLE_CHECKSUM
 |       TABLE_MODE
 |       TABLEGROUPS

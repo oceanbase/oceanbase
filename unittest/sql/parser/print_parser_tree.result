@@ -221,13 +221,43 @@ question_mask_size: 0
 		|--[0],[T_HINT], str_value_=[commit work], value=[9223372036854775807]
 
 **************   Case 20   ***************
+commit comment 'comment transaction commit';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_COMMIT], str_value_=[], value=[0]
+
+**************   Case 21   ***************
+commit work comment 'comment txn commit work';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_COMMIT], str_value_=[], value=[0]
+
+**************   Case 22   ***************
+commit/*hint+commit tx hint*/ comment 'comment + hint';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_COMMIT], str_value_=[], value=[0]
+		|--[0],[T_HINT], str_value_=[commit tx hint], value=[9223372036854775807]
+
+**************   Case 23   ***************
+commit/*hint+commit tx work hint*/ work comment 'comment + hint';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_COMMIT], str_value_=[], value=[0]
+		|--[0],[T_HINT], str_value_=[commit tx work hint], value=[9223372036854775807]
+
+**************   Case 24   ***************
 rollback;
 question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
 	|--[0],[T_ROLLBACK], str_value_=[], value=[0]
 
-**************   Case 21   ***************
+**************   Case 25   ***************
 rollback/*hint+rollback*/;
 question_mask_size: 0
 
@@ -235,14 +265,14 @@ question_mask_size: 0
 	|--[0],[T_ROLLBACK], str_value_=[], value=[0]
 		|--[0],[T_HINT], str_value_=[rollback], value=[9223372036854775807]
 
-**************   Case 22   ***************
+**************   Case 26   ***************
 rollback work;
 question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
 	|--[0],[T_ROLLBACK], str_value_=[], value=[0]
 
-**************   Case 23   ***************
+**************   Case 27   ***************
 rollback/*hint+rollback work*/ work;
 question_mask_size: 0
 
@@ -250,7 +280,7 @@ question_mask_size: 0
 	|--[0],[T_ROLLBACK], str_value_=[], value=[0]
 		|--[0],[T_HINT], str_value_=[rollback work], value=[9223372036854775807]
 
-**************   Case 24   ***************
+**************   Case 28   ***************
 alter user 'zdy' account lock;
 question_mask_size: 0
 
@@ -261,7 +291,7 @@ question_mask_size: 0
 				|--[0],[T_VARCHAR], str_value_=[zdy], value=[9223372036854775807]
 		|--[1],[T_BOOL], str_value_=[], value=[1]
 
-**************   Case 25   ***************
+**************   Case 29   ***************
 alter user 'zdy' account unlock;
 question_mask_size: 0
 
@@ -272,7 +302,7 @@ question_mask_size: 0
 				|--[0],[T_VARCHAR], str_value_=[zdy], value=[9223372036854775807]
 		|--[1],[T_BOOL], str_value_=[], value=[0]
 
-**************   Case 26   ***************
+**************   Case 30   ***************
 select d.t1.c1, sum(t1.c2) from d.t1 where d.t1.c1 > 0 and c2 + d.t1.c1 = 100 group by d.t1.c2 order by t.d1.c1 desc limit 0, 1
 question_mask_size: 0
 
@@ -331,7 +361,7 @@ question_mask_size: 0
 			|--[0],[T_INT], str_value_=[0], value=[0]
 			|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 27   ***************
+**************   Case 31   ***************
 select c1, sum(d.t1.c2) from t1 where t1.c1 > 0 and c2 + t1.c1 = 100 group by t1.c2 order by t1.c1 desc limit 0, 1
 question_mask_size: 0
 
@@ -384,7 +414,7 @@ question_mask_size: 0
 			|--[0],[T_INT], str_value_=[0], value=[0]
 			|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 28   ***************
+**************   Case 32   ***************
 select t1.c1, sum(c2) from t1 where c1 > 0 and c2 + c1 = 100 group by c2 order by c1 desc limit 0, 1
 question_mask_size: 0
 
@@ -432,7 +462,7 @@ question_mask_size: 0
 			|--[0],[T_INT], str_value_=[0], value=[0]
 			|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 29   ***************
+**************   Case 33   ***************
 insert into t1 values(1, 2)
 question_mask_size: 0
 
@@ -449,7 +479,7 @@ question_mask_size: 0
 					|--[1],[T_INT], str_value_=[2], value=[2]
 		|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
 
-**************   Case 30   ***************
+**************   Case 34   ***************
 insert into t1.t1 values(1, 2)
 question_mask_size: 0
 
@@ -467,7 +497,7 @@ question_mask_size: 0
 					|--[1],[T_INT], str_value_=[2], value=[2]
 		|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
 
-**************   Case 31   ***************
+**************   Case 35   ***************
 insert into t1(c1) values(1), (2)
 question_mask_size: 0
 
@@ -488,7 +518,7 @@ question_mask_size: 0
 					|--[0],[T_INT], str_value_=[2], value=[2]
 		|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
 
-**************   Case 32   ***************
+**************   Case 36   ***************
 insert into t1(t1.c1) values(1), (2)
 question_mask_size: 0
 
@@ -510,7 +540,7 @@ question_mask_size: 0
 					|--[0],[T_INT], str_value_=[2], value=[2]
 		|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
 
-**************   Case 33   ***************
+**************   Case 37   ***************
 insert into d.t1(d.t1.c1) values(1), (2)
 question_mask_size: 0
 
@@ -534,7 +564,7 @@ question_mask_size: 0
 					|--[0],[T_INT], str_value_=[2], value=[2]
 		|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
 
-**************   Case 34   ***************
+**************   Case 38   ***************
 update t1 set d.t1.c2=t1.c1+1 where d.t1.c1 > 1 order by d.t1.c1 desc limit 0, 10
 question_mask_size: 0
 
@@ -574,7 +604,7 @@ question_mask_size: 0
 			|--[0],[T_INT], str_value_=[0], value=[0]
 			|--[1],[T_INT], str_value_=[10], value=[10]
 
-**************   Case 35   ***************
+**************   Case 39   ***************
 update d.t1 set t1.c2=d.t1c1+1 where t1.c1 > 1 order by c1 desc limit 0, 10
 question_mask_size: 0
 
@@ -611,7 +641,7 @@ question_mask_size: 0
 			|--[0],[T_INT], str_value_=[0], value=[0]
 			|--[1],[T_INT], str_value_=[10], value=[10]
 
-**************   Case 36   ***************
+**************   Case 40   ***************
 delete from d.t1 where d.t1.c2 > 10 order by c1 limit 0, 1
 question_mask_size: 0
 
@@ -640,7 +670,7 @@ question_mask_size: 0
 			|--[0],[T_INT], str_value_=[0], value=[0]
 			|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 37   ***************
+**************   Case 41   ***************
 select t1.c1, t2.c1 from d.t1 join d.t2 on d.t1.c1=t2.c1 where t1.c1>0;
 question_mask_size: 0
 
@@ -681,7 +711,7 @@ question_mask_size: 0
 					|--[2],[T_IDENT], str_value_=[c1], value=[9223372036854775807]
 				|--[1],[T_INT], str_value_=[0], value=[0]
 
-**************   Case 38   ***************
+**************   Case 42   ***************
 select d.t1.c1, t2.c1 from d.t1 join t2 on t1.c1=t2.c1 where t1.c1>0;
 question_mask_size: 0
 
@@ -721,7 +751,7 @@ question_mask_size: 0
 					|--[2],[T_IDENT], str_value_=[c1], value=[9223372036854775807]
 				|--[1],[T_INT], str_value_=[0], value=[0]
 
-**************   Case 39   ***************
+**************   Case 43   ***************
 select d.t1.c1, t2.c1 from d.t1 join t2 on c1=c1 where t1.c1>0;
 question_mask_size: 0
 
@@ -759,7 +789,7 @@ question_mask_size: 0
 					|--[2],[T_IDENT], str_value_=[c1], value=[9223372036854775807]
 				|--[1],[T_INT], str_value_=[0], value=[0]
 
-**************   Case 40   ***************
+**************   Case 44   ***************
 insert into t1 value (1, 2), (3, 4) on duplicate key update d.t.c1 = t.c2 + 1, c2 = c2 + 3;
 question_mask_size: 0
 
@@ -797,7 +827,7 @@ question_mask_size: 0
 						|--[1],[T_INT], str_value_=[3], value=[3]
 		|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
 
-**************   Case 41   ***************
+**************   Case 45   ***************
 insert into d.t1 value (1, 2), (3, 4) on duplicate key update t.c1 = t.c2 + 1, d.t.c2 = t.c2 + 3;
 question_mask_size: 0
 
@@ -838,7 +868,7 @@ question_mask_size: 0
 						|--[1],[T_INT], str_value_=[3], value=[3]
 		|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
 
-**************   Case 42   ***************
+**************   Case 46   ***************
 create table rongxuan(c int primary key, c2 int)
 question_mask_size: 0
 
@@ -858,7 +888,7 @@ question_mask_size: 0
 					|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 				|--[1],[T_INT32], str_value_=[], value=[65535]
 
-**************   Case 43   ***************
+**************   Case 47   ***************
 create table rongxuan(rongxuan.c int primary key, c2 int)
 question_mask_size: 0
 
@@ -879,7 +909,7 @@ question_mask_size: 0
 					|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 				|--[1],[T_INT32], str_value_=[], value=[65535]
 
-**************   Case 44   ***************
+**************   Case 48   ***************
 create table rongxuan(d.rongxuan.c int primary key, c2 int)
 question_mask_size: 0
 
@@ -901,7 +931,7 @@ question_mask_size: 0
 					|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 				|--[1],[T_INT32], str_value_=[], value=[65535]
 
-**************   Case 45   ***************
+**************   Case 49   ***************
 drop table t1
 question_mask_size: 0
 
@@ -911,7 +941,7 @@ question_mask_size: 0
 			|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 				|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 
-**************   Case 46   ***************
+**************   Case 50   ***************
 drop table oceanbase.t, t1
 question_mask_size: 0
 
@@ -924,7 +954,7 @@ question_mask_size: 0
 			|--[1],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 				|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 
-**************   Case 47   ***************
+**************   Case 51   ***************
 alter table rongxuan add c3 int;
 question_mask_size: 0
 
@@ -940,7 +970,7 @@ question_mask_size: 0
 							|--[2],[T_IDENT], str_value_=[c3], value=[9223372036854775807]
 						|--[1],[T_INT32], str_value_=[], value=[65535]
 
-**************   Case 48   ***************
+**************   Case 52   ***************
 alter table rongxuan add rongxuan.c4 int;
 question_mask_size: 0
 
@@ -957,7 +987,7 @@ question_mask_size: 0
 							|--[2],[T_IDENT], str_value_=[c4], value=[9223372036854775807]
 						|--[1],[T_INT32], str_value_=[], value=[65535]
 
-**************   Case 49   ***************
+**************   Case 53   ***************
 alter table rongxuan add test.rongxuan.c5 int;
 question_mask_size: 0
 
@@ -975,7 +1005,7 @@ question_mask_size: 0
 							|--[2],[T_IDENT], str_value_=[c5], value=[9223372036854775807]
 						|--[1],[T_INT32], str_value_=[], value=[65535]
 
-**************   Case 50   ***************
+**************   Case 54   ***************
 drop database rongxuan
 question_mask_size: 0
 
@@ -983,7 +1013,7 @@ question_mask_size: 0
 	|--[0],[T_DROP_DATABASE], str_value_=[], value=[0]
 		|--[1],[T_IDENT], str_value_=[rongxuan], value=[9223372036854775807]
 
-**************   Case 51   ***************
+**************   Case 55   ***************
 create database rongxuan
 question_mask_size: 0
 
@@ -991,7 +1021,7 @@ question_mask_size: 0
 	|--[0],[T_CREATE_DATABASE], str_value_=[], value=[0]
 		|--[1],[T_IDENT], str_value_=[rongxuan], value=[9223372036854775807]
 
-**************   Case 52   ***************
+**************   Case 56   ***************
 create database if not exists rongxuan
 question_mask_size: 0
 
@@ -1000,7 +1030,7 @@ question_mask_size: 0
 		|--[0],[T_IF_NOT_EXISTS], str_value_=[], value=[9223372036854775807]
 		|--[1],[T_IDENT], str_value_=[rongxuan], value=[9223372036854775807]
 
-**************   Case 53   ***************
+**************   Case 57   ***************
 create database if not exists rongxuan default character set = 'utf8'  default collate = 'default_collate'
 question_mask_size: 0
 
@@ -1012,7 +1042,7 @@ question_mask_size: 0
 			|--[0],[T_CHARSET], str_value_=[utf8], value=[9223372036854775807]
 			|--[1],[T_COLLATION], str_value_=[default_collate], value=[9223372036854775807]
 
-**************   Case 54   ***************
+**************   Case 58   ***************
 select * from d.t1 PARTITION(p1, p2);
 question_mask_size: 0
 
@@ -1031,7 +1061,7 @@ question_mask_size: 0
 						|--[0],[T_IDENT], str_value_=[p1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[p2], value=[9223372036854775807]
 
-**************   Case 55   ***************
+**************   Case 59   ***************
 delete from d.t1 PARTITION(p0, p1);
 question_mask_size: 0
 
@@ -1048,7 +1078,7 @@ question_mask_size: 0
 							|--[0],[T_IDENT], str_value_=[p0], value=[9223372036854775807]
 							|--[1],[T_IDENT], str_value_=[p1], value=[9223372036854775807]
 
-**************   Case 56   ***************
+**************   Case 60   ***************
 update d.t1 PARTITION (p2) SET id = 2 WHERE name = 'Jill';
 question_mask_size: 0
 
@@ -1074,7 +1104,7 @@ question_mask_size: 0
 				|--[1],[T_VARCHAR], str_value_=[Jill], value=[9223372036854775807]
 					|--[1],[T_VARCHAR], str_value_=[Jill], value=[9223372036854775807]
 
-**************   Case 57   ***************
+**************   Case 61   ***************
 INSERT INTO d.t1 PARTITION (p3, p4) VALUES (24, 'Tim', 'Greene', 3, 1),  (26, 'Linda', 'Mills', 2, 1);
 question_mask_size: 0
 
@@ -1109,7 +1139,7 @@ question_mask_size: 0
 					|--[4],[T_INT], str_value_=[1], value=[1]
 		|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
 
-**************   Case 58   ***************
+**************   Case 62   ***************
 REPLACE INTO d.t1 PARTITION (p0) VALUES (20, 'Jan', 'Jones', 3, 2);
 question_mask_size: 0
 
@@ -1135,7 +1165,7 @@ question_mask_size: 0
 					|--[4],[T_INT], str_value_=[2], value=[2]
 		|--[1],[T_REPLACE], str_value_=[], value=[9223372036854775807]
 
-**************   Case 59   ***************
+**************   Case 63   ***************
 SELECT e.id, s.city, d.name FROM e JOIN stores PARTITION (p1) ON e.id=s.id JOIN departments PARTITION (p0) ON e.id=d.id;
 question_mask_size: 0
 
@@ -1189,14 +1219,14 @@ question_mask_size: 0
 						|--[1],[T_IDENT], str_value_=[d], value=[9223372036854775807]
 						|--[2],[T_IDENT], str_value_=[id], value=[9223372036854775807]
 
-**************   Case 60   ***************
+**************   Case 64   ***************
 alter system report replica;
 question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
 	|--[0],[T_REPORT_REPLICA], str_value_=[], value=[0]
 
-**************   Case 61   ***************
+**************   Case 65   ***************
 alter system report replica server = '127.0.0.1:80';
 question_mask_size: 0
 
@@ -1205,7 +1235,7 @@ question_mask_size: 0
 		|--[0],[T_IP_PORT], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_VARCHAR], str_value_=["127.0.0.1":80], value=[9223372036854775807]
 
-**************   Case 62   ***************
+**************   Case 66   ***************
 alter system report replica zone = 'z1';
 question_mask_size: 0
 
@@ -1214,14 +1244,14 @@ question_mask_size: 0
 		|--[0],[T_ZONE], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_VARCHAR], str_value_=[z1], value=[9223372036854775807]
 
-**************   Case 63   ***************
+**************   Case 67   ***************
 alter system recycle replica;
 question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
 	|--[0],[T_RECYCLE_REPLICA], str_value_=[], value=[0]
 
-**************   Case 64   ***************
+**************   Case 68   ***************
 alter system recycle replica server = '127.0.0.1:80';
 question_mask_size: 0
 
@@ -1230,7 +1260,7 @@ question_mask_size: 0
 		|--[0],[T_IP_PORT], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_VARCHAR], str_value_=["127.0.0.1":80], value=[9223372036854775807]
 
-**************   Case 65   ***************
+**************   Case 69   ***************
 alter system recycle replica server '127.0.0.1:80';
 question_mask_size: 0
 
@@ -1239,7 +1269,7 @@ question_mask_size: 0
 		|--[0],[T_IP_PORT], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_VARCHAR], str_value_=["127.0.0.1":80], value=[9223372036854775807]
 
-**************   Case 66   ***************
+**************   Case 70   ***************
 alter system recycle replica zone = 'z1';
 question_mask_size: 0
 
@@ -1248,7 +1278,7 @@ question_mask_size: 0
 		|--[0],[T_ZONE], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_VARCHAR], str_value_=[z1], value=[9223372036854775807]
 
-**************   Case 67   ***************
+**************   Case 71   ***************
 alter system recycle replica zone 'z1';
 question_mask_size: 0
 
@@ -1257,7 +1287,7 @@ question_mask_size: 0
 		|--[0],[T_ZONE], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_VARCHAR], str_value_=[z1], value=[9223372036854775807]
 
-**************   Case 68   ***************
+**************   Case 72   ***************
 alter system major freeze;
 question_mask_size: 0
 
@@ -1265,7 +1295,7 @@ question_mask_size: 0
 	|--[0],[T_FREEZE], str_value_=[], value=[0]
 		|--[0],[T_INT], str_value_=[], value=[1]
 
-**************   Case 69   ***************
+**************   Case 73   ***************
 alter system start merge zone = 'z1';
 question_mask_size: 0
 
@@ -1275,7 +1305,7 @@ question_mask_size: 0
 		|--[1],[T_ZONE], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_VARCHAR], str_value_=[z1], value=[9223372036854775807]
 
-**************   Case 70   ***************
+**************   Case 74   ***************
 alter system suspend merge;
 question_mask_size: 0
 
@@ -1283,7 +1313,7 @@ question_mask_size: 0
 	|--[0],[T_MERGE_CONTROL], str_value_=[], value=[0]
 		|--[0],[T_INT], str_value_=[], value=[2]
 
-**************   Case 71   ***************
+**************   Case 75   ***************
 alter system suspend merge tenant = sys;
 question_mask_size: 0
 
@@ -1293,7 +1323,7 @@ question_mask_size: 0
 		|--[1],[T_TENANT_LIST], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_VARCHAR], str_value_=[sys], value=[9223372036854775807]
 
-**************   Case 72   ***************
+**************   Case 76   ***************
 alter system suspend merge tenant = all_user;
 question_mask_size: 0
 
@@ -1303,7 +1333,7 @@ question_mask_size: 0
 		|--[1],[T_TENANT_LIST], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_VARCHAR], str_value_=[all_user], value=[9223372036854775807]
 
-**************   Case 73   ***************
+**************   Case 77   ***************
 alter system suspend merge tenant = all_meta;
 question_mask_size: 0
 
@@ -1313,7 +1343,7 @@ question_mask_size: 0
 		|--[1],[T_TENANT_LIST], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_VARCHAR], str_value_=[all_meta], value=[9223372036854775807]
 
-**************   Case 74   ***************
+**************   Case 78   ***************
 alter system resume merge;
 question_mask_size: 0
 
@@ -1321,7 +1351,7 @@ question_mask_size: 0
 	|--[0],[T_MERGE_CONTROL], str_value_=[], value=[0]
 		|--[0],[T_INT], str_value_=[], value=[3]
 
-**************   Case 75   ***************
+**************   Case 79   ***************
 alter system resume merge tenant = sys;
 question_mask_size: 0
 
@@ -1331,7 +1361,7 @@ question_mask_size: 0
 		|--[1],[T_TENANT_LIST], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_VARCHAR], str_value_=[sys], value=[9223372036854775807]
 
-**************   Case 76   ***************
+**************   Case 80   ***************
 alter system resume merge tenant = all_user;
 question_mask_size: 0
 
@@ -1341,7 +1371,7 @@ question_mask_size: 0
 		|--[1],[T_TENANT_LIST], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_VARCHAR], str_value_=[all_user], value=[9223372036854775807]
 
-**************   Case 77   ***************
+**************   Case 81   ***************
 alter system resume merge tenant = all_meta;
 question_mask_size: 0
 
@@ -1351,14 +1381,14 @@ question_mask_size: 0
 		|--[1],[T_TENANT_LIST], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_VARCHAR], str_value_=[all_meta], value=[9223372036854775807]
 
-**************   Case 78   ***************
+**************   Case 82   ***************
 alter system clear roottable;
 question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
 	|--[0],[T_CLEAR_ROOT_TABLE], str_value_=[], value=[0]
 
-**************   Case 79   ***************
+**************   Case 83   ***************
 alter system clear roottable tenant = 'xxx';
 question_mask_size: 0
 
@@ -1367,7 +1397,7 @@ question_mask_size: 0
 		|--[0],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_VARCHAR], str_value_=[xxx], value=[9223372036854775807]
 
-**************   Case 80   ***************
+**************   Case 84   ***************
 alter system modify zone 'z1' set region 'r1'
 question_mask_size: 0
 
@@ -1378,9 +1408,9 @@ question_mask_size: 0
 		|--[2],[T_LINK_NODE], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_REGION], str_value_=[r1], value=[9223372036854775807]
 
-**************   Case 81   ***************
+**************   Case 85   ***************
 alter system start zone 'z1' region 'r1'
-**************   Case 82   ***************
+**************   Case 86   ***************
 alter system modify zone 'z1' IDC 'idc1'
 question_mask_size: 0
 
@@ -1391,7 +1421,7 @@ question_mask_size: 0
 		|--[2],[T_LINK_NODE], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_IDC], str_value_=[idc1], value=[9223372036854775807]
 
-**************   Case 83   ***************
+**************   Case 87   ***************
 alter system modify zone 'z1' set IDC 'idc1', region 'r1'
 question_mask_size: 0
 
@@ -1403,7 +1433,7 @@ question_mask_size: 0
 			|--[0],[T_IDC], str_value_=[idc1], value=[9223372036854775807]
 			|--[1],[T_REGION], str_value_=[r1], value=[9223372036854775807]
 
-**************   Case 84   ***************
+**************   Case 88   ***************
 alter system add zone 'z1' idc 'idc1', region 'r1'
 question_mask_size: 0
 
@@ -1415,7 +1445,7 @@ question_mask_size: 0
 			|--[0],[T_IDC], str_value_=[idc1], value=[9223372036854775807]
 			|--[1],[T_REGION], str_value_=[r1], value=[9223372036854775807]
 
-**************   Case 85   ***************
+**************   Case 89   ***************
 alter system add zone 'z1' idc 'idc1'
 question_mask_size: 0
 
@@ -1426,7 +1456,7 @@ question_mask_size: 0
 		|--[2],[T_LINK_NODE], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_IDC], str_value_=[idc1], value=[9223372036854775807]
 
-**************   Case 86   ***************
+**************   Case 90   ***************
 alter system modify zone 'z1'
 question_mask_size: 0
 
@@ -1435,11 +1465,11 @@ question_mask_size: 0
 		|--[0],[T_INT], str_value_=[], value=[5]
 		|--[1],[T_VARCHAR], str_value_=[z1], value=[9223372036854775807]
 
-**************   Case 87   ***************
+**************   Case 91   ***************
 alter system start zone 'z1' IDC 'idc1'
-**************   Case 88   ***************
+**************   Case 92   ***************
 alter system start zone 'z1' zone_type 'ReadWrite'
-**************   Case 89   ***************
+**************   Case 93   ***************
 alter system add zone 'z1' zone_type 'ReadWrite', idc 'idc1', region 'r1'
 question_mask_size: 0
 
@@ -1452,7 +1482,7 @@ question_mask_size: 0
 			|--[1],[T_IDC], str_value_=[idc1], value=[9223372036854775807]
 			|--[2],[T_REGION], str_value_=[r1], value=[9223372036854775807]
 
-**************   Case 90   ***************
+**************   Case 94   ***************
 alter system add zone 'z1' zone_type 'ReadWrite', idc 'idc1'
 question_mask_size: 0
 
@@ -1464,7 +1494,7 @@ question_mask_size: 0
 			|--[0],[T_ZONE_TYPE], str_value_=[ReadWrite], value=[9223372036854775807]
 			|--[1],[T_IDC], str_value_=[idc1], value=[9223372036854775807]
 
-**************   Case 91   ***************
+**************   Case 95   ***************
 alter system add zone 'z1' zone_type 'ReadWrite', region 'r1'
 question_mask_size: 0
 
@@ -1476,7 +1506,7 @@ question_mask_size: 0
 			|--[0],[T_ZONE_TYPE], str_value_=[ReadWrite], value=[9223372036854775807]
 			|--[1],[T_REGION], str_value_=[r1], value=[9223372036854775807]
 
-**************   Case 92   ***************
+**************   Case 96   ***************
 alter system add zone 'z1' zone_type 'ReadWrite'
 question_mask_size: 0
 
@@ -1487,7 +1517,7 @@ question_mask_size: 0
 		|--[2],[T_LINK_NODE], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_ZONE_TYPE], str_value_=[ReadWrite], value=[9223372036854775807]
 
-**************   Case 93   ***************
+**************   Case 97   ***************
 alter system modify zone 'z1' zone_type 'ReadWrite', idc 'idc1', region 'r1'
 question_mask_size: 0
 
@@ -1500,7 +1530,7 @@ question_mask_size: 0
 			|--[1],[T_IDC], str_value_=[idc1], value=[9223372036854775807]
 			|--[2],[T_REGION], str_value_=[r1], value=[9223372036854775807]
 
-**************   Case 94   ***************
+**************   Case 98   ***************
 alter system modify zone 'z1' zone_type 'ReadWrite', idc 'idc1'
 question_mask_size: 0
 
@@ -1512,7 +1542,7 @@ question_mask_size: 0
 			|--[0],[T_ZONE_TYPE], str_value_=[ReadWrite], value=[9223372036854775807]
 			|--[1],[T_IDC], str_value_=[idc1], value=[9223372036854775807]
 
-**************   Case 95   ***************
+**************   Case 99   ***************
 alter system modify zone 'z1' zone_type 'ReadWrite', region 'r1'
 question_mask_size: 0
 
@@ -1524,7 +1554,7 @@ question_mask_size: 0
 			|--[0],[T_ZONE_TYPE], str_value_=[ReadWrite], value=[9223372036854775807]
 			|--[1],[T_REGION], str_value_=[r1], value=[9223372036854775807]
 
-**************   Case 96   ***************
+**************   Case 100   ***************
 alter system modify zone 'z1' zone_type 'ReadWrite'
 question_mask_size: 0
 
@@ -1535,7 +1565,7 @@ question_mask_size: 0
 		|--[2],[T_LINK_NODE], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_ZONE_TYPE], str_value_=[ReadWrite], value=[9223372036854775807]
 
-**************   Case 97   ***************
+**************   Case 101   ***************
 select * from t1 where c1>ANY(select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -1568,7 +1598,7 @@ question_mask_size: 0
 									|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 								|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 98   ***************
+**************   Case 102   ***************
 select * from t1 where c1>SOME(select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -1601,7 +1631,7 @@ question_mask_size: 0
 									|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 								|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 99   ***************
+**************   Case 103   ***************
 select * from t1 where c1>ALL(select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -1634,7 +1664,7 @@ question_mask_size: 0
 									|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 								|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 100   ***************
+**************   Case 104   ***************
 select * from t1 where c1>(select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -1666,7 +1696,7 @@ question_mask_size: 0
 								|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 							|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 101   ***************
+**************   Case 105   ***************
 select * from t1 where c1<ANY(select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -1699,7 +1729,7 @@ question_mask_size: 0
 									|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 								|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 102   ***************
+**************   Case 106   ***************
 select * from t1 where c1<SOME(select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -1732,7 +1762,7 @@ question_mask_size: 0
 									|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 								|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 103   ***************
+**************   Case 107   ***************
 select * from t1 where c1<ALL(select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -1765,7 +1795,7 @@ question_mask_size: 0
 									|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 								|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 104   ***************
+**************   Case 108   ***************
 select * from t1 where c1<(select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -1797,7 +1827,7 @@ question_mask_size: 0
 								|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 							|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 105   ***************
+**************   Case 109   ***************
 select * from t1 where c1>=ANY(select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -1830,7 +1860,7 @@ question_mask_size: 0
 									|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 								|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 106   ***************
+**************   Case 110   ***************
 select * from t1 where c1>=SOME(select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -1863,7 +1893,7 @@ question_mask_size: 0
 									|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 								|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 107   ***************
+**************   Case 111   ***************
 select * from t1 where c1>=ALL(select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -1896,7 +1926,7 @@ question_mask_size: 0
 									|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 								|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 108   ***************
+**************   Case 112   ***************
 select * from t1 where c1>=(select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -1928,7 +1958,7 @@ question_mask_size: 0
 								|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 							|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 109   ***************
+**************   Case 113   ***************
 select * from t1 where c1<=ANY(select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -1961,7 +1991,7 @@ question_mask_size: 0
 									|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 								|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 110   ***************
+**************   Case 114   ***************
 select * from t1 where c1<=SOME(select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -1994,7 +2024,7 @@ question_mask_size: 0
 									|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 								|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 111   ***************
+**************   Case 115   ***************
 select * from t1 where c1<=ALL(select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -2027,7 +2057,7 @@ question_mask_size: 0
 									|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 								|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 112   ***************
+**************   Case 116   ***************
 select * from t1 where c1<=(select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -2059,7 +2089,7 @@ question_mask_size: 0
 								|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 							|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 113   ***************
+**************   Case 117   ***************
 select * from t1 where c1=ANY(select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -2092,7 +2122,7 @@ question_mask_size: 0
 									|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 								|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 114   ***************
+**************   Case 118   ***************
 select * from t1 where c1=SOME(select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -2125,7 +2155,7 @@ question_mask_size: 0
 									|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 								|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 115   ***************
+**************   Case 119   ***************
 select * from t1 where c1=ALL(select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -2158,7 +2188,7 @@ question_mask_size: 0
 									|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 								|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 116   ***************
+**************   Case 120   ***************
 select * from t1 where c1=(select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -2190,7 +2220,7 @@ question_mask_size: 0
 								|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 							|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 117   ***************
+**************   Case 121   ***************
 select * from t1 where c1!=ANY(select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -2223,7 +2253,7 @@ question_mask_size: 0
 									|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 								|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 118   ***************
+**************   Case 122   ***************
 select * from t1 where c1!=SOME(select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -2256,7 +2286,7 @@ question_mask_size: 0
 									|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 								|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 119   ***************
+**************   Case 123   ***************
 select * from t1 where c1!=ALL(select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -2289,7 +2319,7 @@ question_mask_size: 0
 									|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 								|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 120   ***************
+**************   Case 124   ***************
 select * from t1 where c1!=(select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -2321,7 +2351,7 @@ question_mask_size: 0
 								|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 							|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 121   ***************
+**************   Case 125   ***************
 select * from t1 where c1 in (select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -2353,7 +2383,7 @@ question_mask_size: 0
 								|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 							|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 122   ***************
+**************   Case 126   ***************
 select * from t1 where c1 not in (select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -2385,7 +2415,7 @@ question_mask_size: 0
 								|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 							|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 123   ***************
+**************   Case 127   ***************
 select * from t1 where exists (select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -2415,7 +2445,7 @@ question_mask_size: 0
 								|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 							|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 124   ***************
+**************   Case 128   ***************
 select * from t1 where not exists (select c1 from t2 where c2>1);
 question_mask_size: 0
 
@@ -2446,7 +2476,7 @@ question_mask_size: 0
 									|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 								|--[1],[T_INT], str_value_=[1], value=[1]
 
-**************   Case 125   ***************
+**************   Case 129   ***************
 select * from t1 where (select c1 from t1) like (select c2 from t2);
 question_mask_size: 0
 
@@ -2480,7 +2510,7 @@ question_mask_size: 0
 							|--[0],[T_RELATION_FACTOR], str_value_=[t2], value=[9223372036854775807]
 								|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
 
-**************   Case 126   ***************
+**************   Case 130   ***************
 select * from t1 where (select c1 from t1) not like (select c2 from t2);
 question_mask_size: 0
 
@@ -2514,7 +2544,7 @@ question_mask_size: 0
 							|--[0],[T_RELATION_FACTOR], str_value_=[t2], value=[9223372036854775807]
 								|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
 
-**************   Case 127   ***************
+**************   Case 131   ***************
 select * from t1 where (c1) in (select c1 from t2);
 question_mask_size: 0
 
@@ -2541,7 +2571,7 @@ question_mask_size: 0
 							|--[0],[T_RELATION_FACTOR], str_value_=[t2], value=[9223372036854775807]
 								|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
 
-**************   Case 128   ***************
+**************   Case 132   ***************
 select * from t1 where (c1, c2) in (select c1, c2 from t2);
 question_mask_size: 0
 
@@ -2574,7 +2604,7 @@ question_mask_size: 0
 							|--[0],[T_RELATION_FACTOR], str_value_=[t2], value=[9223372036854775807]
 								|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
 
-**************   Case 129   ***************
+**************   Case 133   ***************
 select * from t1 where ROW(c1, c2) in (select c1, c2 from t2);
 question_mask_size: 0
 
@@ -2607,7 +2637,7 @@ question_mask_size: 0
 							|--[0],[T_RELATION_FACTOR], str_value_=[t2], value=[9223372036854775807]
 								|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
 
-**************   Case 130   ***************
+**************   Case 134   ***************
 set names latin1;
 question_mask_size: 0
 
@@ -2615,7 +2645,7 @@ question_mask_size: 0
 	|--[0],[T_SET_NAMES], str_value_=[], value=[0]
 		|--[0],[T_CHAR_CHARSET], str_value_=[latin1], value=[9223372036854775807]
 
-**************   Case 131   ***************
+**************   Case 135   ***************
 set names 'latin1';
 question_mask_size: 0
 
@@ -2623,7 +2653,7 @@ question_mask_size: 0
 	|--[0],[T_SET_NAMES], str_value_=[], value=[0]
 		|--[0],[T_VARCHAR], str_value_=[latin1], value=[9223372036854775807]
 
-**************   Case 132   ***************
+**************   Case 136   ***************
 set names utf8 collate 'utf8_general_ci';
 question_mask_size: 0
 
@@ -2632,7 +2662,7 @@ question_mask_size: 0
 		|--[0],[T_CHAR_CHARSET], str_value_=[utf8], value=[9223372036854775807]
 		|--[1],[T_COLLATION], str_value_=[utf8_general_ci], value=[9223372036854775807]
 
-**************   Case 133   ***************
+**************   Case 137   ***************
 set names utf8 collate utf8_general_ci;
 question_mask_size: 0
 
@@ -2641,7 +2671,7 @@ question_mask_size: 0
 		|--[0],[T_CHAR_CHARSET], str_value_=[utf8], value=[9223372036854775807]
 		|--[1],[T_COLLATION], str_value_=[utf8_general_ci], value=[9223372036854775807]
 
-**************   Case 134   ***************
+**************   Case 138   ***************
 set character set utf8;
 question_mask_size: 0
 
@@ -2649,7 +2679,7 @@ question_mask_size: 0
 	|--[0],[T_SET_CHARSET], str_value_=[], value=[0]
 		|--[0],[T_CHAR_CHARSET], str_value_=[utf8], value=[9223372036854775807]
 
-**************   Case 135   ***************
+**************   Case 139   ***************
 set character set 'utf8';
 question_mask_size: 0
 
@@ -2657,7 +2687,7 @@ question_mask_size: 0
 	|--[0],[T_SET_CHARSET], str_value_=[], value=[0]
 		|--[0],[T_VARCHAR], str_value_=[utf8], value=[9223372036854775807]
 
-**************   Case 136   ***************
+**************   Case 140   ***************
 set charset utf8;
 question_mask_size: 0
 
@@ -2665,7 +2695,7 @@ question_mask_size: 0
 	|--[0],[T_SET_CHARSET], str_value_=[], value=[0]
 		|--[0],[T_CHAR_CHARSET], str_value_=[utf8], value=[9223372036854775807]
 
-**************   Case 137   ***************
+**************   Case 141   ***************
 select _utf8 'abc', _utf8mb4 'def' collate utf8mb4_general_ci from t1 where c1 collate utf8_bin = 'xyz' collate utf8_bin;
 question_mask_size: 0
 
@@ -2703,7 +2733,7 @@ question_mask_size: 0
 							|--[1],[T_VARCHAR], str_value_=[xyz], value=[9223372036854775807]
 						|--[1],[T_COLLATION], str_value_=[utf8_bin], value=[9223372036854775807]
 
-**************   Case 138   ***************
+**************   Case 142   ***************
 select * from t1 where c1=?;
 question_mask_size: 1
 
@@ -2722,7 +2752,7 @@ question_mask_size: 1
 					|--[2],[T_IDENT], str_value_=[c1], value=[9223372036854775807]
 				|--[1],[T_QUESTIONMARK], str_value_=[], value=[0]
 
-**************   Case 139   ***************
+**************   Case 143   ***************
 select * from t1 where c1>?;
 question_mask_size: 1
 
@@ -2741,7 +2771,7 @@ question_mask_size: 1
 					|--[2],[T_IDENT], str_value_=[c1], value=[9223372036854775807]
 				|--[1],[T_QUESTIONMARK], str_value_=[], value=[0]
 
-**************   Case 140   ***************
+**************   Case 144   ***************
 select * from t1 where (select c1 from t1 where c1 = ?) not like (select c2 from t2 where c2=?);
 question_mask_size: 2
 
@@ -2785,7 +2815,7 @@ question_mask_size: 2
 								|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
 							|--[1],[T_QUESTIONMARK], str_value_=[], value=[1]
 
-**************   Case 141   ***************
+**************   Case 145   ***************
 select * from t1 join t2;
 question_mask_size: 0
 
@@ -2804,7 +2834,7 @@ question_mask_size: 0
 					|--[0],[T_RELATION_FACTOR], str_value_=[t2], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
 
-**************   Case 142   ***************
+**************   Case 146   ***************
 select * from t1 inner join t2;
 question_mask_size: 0
 
@@ -2823,7 +2853,7 @@ question_mask_size: 0
 					|--[0],[T_RELATION_FACTOR], str_value_=[t2], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
 
-**************   Case 143   ***************
+**************   Case 147   ***************
 select * from t1 cross join t2;
 question_mask_size: 0
 
@@ -2842,7 +2872,7 @@ question_mask_size: 0
 					|--[0],[T_RELATION_FACTOR], str_value_=[t2], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
 
-**************   Case 144   ***************
+**************   Case 148   ***************
 select * from t1 cross join t2 join t3;
 question_mask_size: 0
 
@@ -2866,7 +2896,7 @@ question_mask_size: 0
 					|--[0],[T_RELATION_FACTOR], str_value_=[t3], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t3], value=[9223372036854775807]
 
-**************   Case 145   ***************
+**************   Case 149   ***************
 select "1234";
 question_mask_size: 0
 
@@ -2877,7 +2907,7 @@ question_mask_size: 0
 				|--[0],[T_VARCHAR], str_value_=[1234], value=[9223372036854775807]
 					|--[1],[T_VARCHAR], str_value_=[1234], value=[9223372036854775807]
 
-**************   Case 146   ***************
+**************   Case 150   ***************
 select '1234';
 question_mask_size: 0
 
@@ -2888,7 +2918,7 @@ question_mask_size: 0
 				|--[0],[T_VARCHAR], str_value_=[1234], value=[9223372036854775807]
 					|--[1],[T_VARCHAR], str_value_=[1234], value=[9223372036854775807]
 
-**************   Case 147   ***************
+**************   Case 151   ***************
 create table test(c1 varchar(3) binary charset utf8mb4);
 question_mask_size: 0
 
@@ -2904,7 +2934,7 @@ question_mask_size: 0
 					|--[0],[T_CHARSET], str_value_=[utf8mb4], value=[9223372036854775807]
 					|--[2],[T_BINARY], str_value_=[], value=[1]
 
-**************   Case 148   ***************
+**************   Case 152   ***************
 replace into test values(1,2);
 question_mask_size: 0
 
@@ -2921,7 +2951,7 @@ question_mask_size: 0
 					|--[1],[T_INT], str_value_=[2], value=[2]
 		|--[1],[T_REPLACE], str_value_=[], value=[9223372036854775807]
 
-**************   Case 149   ***************
+**************   Case 153   ***************
 replace ignore into test values(1,2);
 question_mask_size: 0
 
@@ -2939,7 +2969,7 @@ question_mask_size: 0
 		|--[1],[T_REPLACE], str_value_=[], value=[9223372036854775807]
 		|--[3],[T_IGNORE], str_value_=[], value=[9223372036854775807]
 
-**************   Case 150   ***************
+**************   Case 154   ***************
 insert ignore into test values(1,2);
 question_mask_size: 0
 
@@ -2957,7 +2987,7 @@ question_mask_size: 0
 		|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
 		|--[3],[T_IGNORE], str_value_=[], value=[9223372036854775807]
 
-**************   Case 151   ***************
+**************   Case 155   ***************
 insert ignore into test values(1,2) on duplicate key update c2 = c1 + 1;
 question_mask_size: 0
 
@@ -2983,7 +3013,7 @@ question_mask_size: 0
 		|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
 		|--[3],[T_IGNORE], str_value_=[], value=[9223372036854775807]
 
-**************   Case 152   ***************
+**************   Case 156   ***************
 create outline out_name on select * from t1;
 question_mask_size: 0
 
@@ -3002,7 +3032,7 @@ question_mask_size: 0
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 		|--[5],[T_INT], str_value_=[], value=[0]
 
-**************   Case 153   ***************
+**************   Case 157   ***************
 create or replace outline out_name on select * from t1;
 question_mask_size: 0
 
@@ -3022,7 +3052,7 @@ question_mask_size: 0
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 		|--[5],[T_INT], str_value_=[], value=[0]
 
-**************   Case 154   ***************
+**************   Case 158   ***************
 create outline out_name on select * from t1;
 question_mask_size: 0
 
@@ -3041,7 +3071,7 @@ question_mask_size: 0
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 		|--[5],[T_INT], str_value_=[], value=[0]
 
-**************   Case 155   ***************
+**************   Case 159   ***************
 create outline out_name on select /*+ssssss*/* from t1;
 question_mask_size: 0
 
@@ -3060,7 +3090,7 @@ question_mask_size: 0
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 		|--[5],[T_INT], str_value_=[], value=[0]
 
-**************   Case 156   ***************
+**************   Case 160   ***************
 create outline out_name on select /*+ssssss*/* from t1 to select /*+ssssss*/* from t1;
 question_mask_size: 0
 
@@ -3087,7 +3117,7 @@ question_mask_size: 0
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 		|--[5],[T_INT], str_value_=[], value=[0]
 
-**************   Case 157   ***************
+**************   Case 161   ***************
 create outline out_name on select /*+ssssss*/* from t1 to select * from t1;
 question_mask_size: 0
 
@@ -3114,7 +3144,7 @@ question_mask_size: 0
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 		|--[5],[T_INT], str_value_=[], value=[0]
 
-**************   Case 158   ***************
+**************   Case 162   ***************
 create outline out_name on insert /*+ssssss*/ into t1 values(1, 2)  to insert /*+ssssss*/ into t1 values(1, 2);
 question_mask_size: 0
 
@@ -3147,7 +3177,7 @@ question_mask_size: 0
 			|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
 		|--[5],[T_INT], str_value_=[], value=[0]
 
-**************   Case 159   ***************
+**************   Case 163   ***************
 drop outline out_name;
 question_mask_size: 0
 
@@ -3157,7 +3187,7 @@ question_mask_size: 0
 			|--[1],[T_IDENT], str_value_=[out_name], value=[9223372036854775807]
 		|--[1],[T_INT], str_value_=[], value=[0]
 
-**************   Case 160   ***************
+**************   Case 164   ***************
 drop outline db_name.out_name;
 question_mask_size: 0
 
@@ -3168,7 +3198,7 @@ question_mask_size: 0
 			|--[1],[T_IDENT], str_value_=[out_name], value=[9223372036854775807]
 		|--[1],[T_INT], str_value_=[], value=[0]
 
-**************   Case 161   ***************
+**************   Case 165   ***************
 create tenant tt1 replica_num = 1, primary_zone = 'zone1', resource_pool_list = ('zone1') set ob_tcp_invited_nodes='%';
 question_mask_size: 0
 
@@ -3188,7 +3218,7 @@ question_mask_size: 0
 				|--[1],[T_VARCHAR], str_value_=[%], value=[9223372036854775807]
 					|--[1],[T_VARCHAR], str_value_=[%], value=[9223372036854775807]
 
-**************   Case 162   ***************
+**************   Case 166   ***************
 create tenant if not exists tt1 replica_num = 1, primary_zone = 'zone1', resource_pool_list = ('zone1') set ob_tcp_invited_nodes='%';
 question_mask_size: 0
 
@@ -3209,7 +3239,7 @@ question_mask_size: 0
 				|--[1],[T_VARCHAR], str_value_=[%], value=[9223372036854775807]
 					|--[1],[T_VARCHAR], str_value_=[%], value=[9223372036854775807]
 
-**************   Case 163   ***************
+**************   Case 167   ***************
 create tenant tt1 replica_num = 1, primary_zone = 'zone1', resource_pool_list = ('zone1'), locality = 'auto_locality_strategy' set ob_tcp_invited_nodes='%';
 question_mask_size: 0
 
@@ -3231,7 +3261,7 @@ question_mask_size: 0
 				|--[1],[T_VARCHAR], str_value_=[%], value=[9223372036854775807]
 					|--[1],[T_VARCHAR], str_value_=[%], value=[9223372036854775807]
 
-**************   Case 164   ***************
+**************   Case 168   ***************
 create tenant if not exists tt1 replica_num = 1, primary_zone = 'zone1', resource_pool_list = ('zone1'), locality = 'auto_locality_strategy' set ob_tcp_invited_nodes='%';
 question_mask_size: 0
 
@@ -3254,7 +3284,7 @@ question_mask_size: 0
 				|--[1],[T_VARCHAR], str_value_=[%], value=[9223372036854775807]
 					|--[1],[T_VARCHAR], str_value_=[%], value=[9223372036854775807]
 
-**************   Case 165   ***************
+**************   Case 169   ***************
 create tenant tt1 replica_num = 1, primary_zone = 'zone1', resource_pool_list = ('zone1'), logonly_replica_num = 1 set ob_tcp_invited_nodes='%';
 question_mask_size: 0
 
@@ -3276,7 +3306,7 @@ question_mask_size: 0
 				|--[1],[T_VARCHAR], str_value_=[%], value=[9223372036854775807]
 					|--[1],[T_VARCHAR], str_value_=[%], value=[9223372036854775807]
 
-**************   Case 166   ***************
+**************   Case 170   ***************
 create tenant if not exists tt1 replica_num = 1, primary_zone = 'zone1', resource_pool_list = ('zone1'), logonly_replica_num = 1 set ob_tcp_invited_nodes='%';
 question_mask_size: 0
 
@@ -3299,7 +3329,7 @@ question_mask_size: 0
 				|--[1],[T_VARCHAR], str_value_=[%], value=[9223372036854775807]
 					|--[1],[T_VARCHAR], str_value_=[%], value=[9223372036854775807]
 
-**************   Case 167   ***************
+**************   Case 171   ***************
 select /*+max_concurrent(-10)*/* from t1;
 question_mask_size: 0
 
@@ -3314,7 +3344,7 @@ question_mask_size: 0
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 		|--[17],[T_HINT_OPTION_LIST], str_value_=[], value=[9223372036854775807]
 
-**************   Case 168   ***************
+**************   Case 172   ***************
 select /*+max_concurrent(10)*/* from t1;
 question_mask_size: 0
 
@@ -3331,32 +3361,32 @@ question_mask_size: 0
 			|--[0],[T_MAX_CONCURRENT], str_value_=[], value=[9223372036854775807]
 				|--[0],[T_INT], str_value_=[10], value=[10]
 
-**************   Case 169   ***************
+**************   Case 173   ***************
 alter system refresh time_zone_info;
 question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
 	|--[0],[T_REFRESH_TIME_ZONE_INFO], str_value_=[], value=[0]
 
-**************   Case 170   ***************
-merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
-**************   Case 171   ***************
-merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales where t2.id!= t1.id when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
-**************   Case 172   ***************
-merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales where t1.id < 3 delete where t1.id < 5 when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
-**************   Case 173   ***************
-merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales delete where t1.sales =2 when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
 **************   Case 174   ***************
-merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales) where t2.id > 0;
+merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
 **************   Case 175   ***************
-merge into targetTable t1 using sourceTable t2 on (1 = 2) when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales) where t2.id > 0;
+merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales where t2.id!= t1.id when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
 **************   Case 176   ***************
-merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales;
+merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales where t1.id < 3 delete where t1.id < 5 when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
 **************   Case 177   ***************
-merge into targetTable using sourceTable on (targetTable.id = sourceTable.id) when matched then update set targetTable.sales = sourceTable.sales;
+merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales delete where t1.sales =2 when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
 **************   Case 178   ***************
-merge into targetTable using (select * from t1 ) sourceTable on (targetTable.id = sourceTable.id) when matched then update set targetTable.sales = sourceTable.sales;
+merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales) where t2.id > 0;
 **************   Case 179   ***************
+merge into targetTable t1 using sourceTable t2 on (1 = 2) when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales) where t2.id > 0;
+**************   Case 180   ***************
+merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales;
+**************   Case 181   ***************
+merge into targetTable using sourceTable on (targetTable.id = sourceTable.id) when matched then update set targetTable.sales = sourceTable.sales;
+**************   Case 182   ***************
+merge into targetTable using (select * from t1 ) sourceTable on (targetTable.id = sourceTable.id) when matched then update set targetTable.sales = sourceTable.sales;
+**************   Case 183   ***************
 select unique(c1), c2 from t1;
 question_mask_size: 0
 
@@ -3376,7 +3406,7 @@ question_mask_size: 0
 				|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 
-**************   Case 180   ***************
+**************   Case 184   ***************
 select unique(c1+1), c2 from t1;
 question_mask_size: 0
 
@@ -3398,7 +3428,7 @@ question_mask_size: 0
 				|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 
-**************   Case 181   ***************
+**************   Case 185   ***************
 select distinct unique(    max(c1)), c2 from t1;
 question_mask_size: 0
 
@@ -3420,7 +3450,7 @@ question_mask_size: 0
 				|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 
-**************   Case 182   ***************
+**************   Case 186   ***************
 select unique distinct(    max(c1)), c2 from t1;
 question_mask_size: 0
 
@@ -3442,9 +3472,106 @@ question_mask_size: 0
 				|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 
-**************   Case 183   ***************
+**************   Case 187   ***************
 select unique(*) from t1;
-**************   Case 184   ***************
+**************   Case 188   ***************
+delete from t1 where c1 = 1 returning c1 + 1, c2 * 2;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_DELETE], str_value_=[], value=[0]
+		|--[1],[T_DELETE_TABLE_NODE], str_value_=[], value=[9223372036854775807]
+			|--[1],[T_TABLE_REFERENCES], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
+					|--[0],[T_RELATION_FACTOR], str_value_=[T1], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[T1], value=[1]
+		|--[2],[T_WHERE_CLAUSE], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_OP_EQ], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_OBJ_ACCESS_REF], str_value_=[], value=[9223372036854775807]
+					|--[0],[T_IDENT], str_value_=[C1], value=[1]
+				|--[1],[T_INT], str_value_=[1], value=[1]
+		|--[7],[T_RETURNING], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_PROJECT_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_PROJECT_STRING], str_value_=[C1+1], value=[9223372036854775807]
+					|--[0],[T_OP_ADD], str_value_=[], value=[9223372036854775807]
+						|--[0],[T_OBJ_ACCESS_REF], str_value_=[], value=[9223372036854775807]
+							|--[0],[T_IDENT], str_value_=[C1], value=[1]
+						|--[1],[T_INT], str_value_=[1], value=[1]
+				|--[1],[T_PROJECT_STRING], str_value_=[C2*2], value=[9223372036854775807]
+					|--[0],[T_OP_MUL], str_value_=[], value=[9223372036854775807]
+						|--[0],[T_OBJ_ACCESS_REF], str_value_=[], value=[9223372036854775807]
+							|--[0],[T_IDENT], str_value_=[C2], value=[1]
+						|--[1],[T_INT], str_value_=[2], value=[2]
+
+**************   Case 189   ***************
+update t1 set c1 = 1 where c2 = 2 returning c1, c2 + 3, c3 * c4;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_UPDATE], str_value_=[], value=[0]
+		|--[1],[T_TABLE_REFERENCES], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_ALIAS], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_RELATION_FACTOR], str_value_=[T1], value=[9223372036854775807]
+					|--[1],[T_IDENT], str_value_=[T1], value=[1]
+		|--[2],[T_ASSIGN_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_ASSIGN_ITEM], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_COLUMN_REF], str_value_=[C1], value=[9223372036854775807]
+					|--[2],[T_IDENT], str_value_=[C1], value=[1]
+				|--[1],[T_INT], str_value_=[1], value=[1]
+		|--[3],[T_WHERE_CLAUSE], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_OP_EQ], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_OBJ_ACCESS_REF], str_value_=[], value=[9223372036854775807]
+					|--[0],[T_IDENT], str_value_=[C2], value=[1]
+				|--[1],[T_INT], str_value_=[2], value=[2]
+		|--[9],[T_RETURNING], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_PROJECT_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_PROJECT_STRING], str_value_=[C1], value=[9223372036854775807]
+					|--[0],[T_OBJ_ACCESS_REF], str_value_=[], value=[9223372036854775807]
+						|--[0],[T_IDENT], str_value_=[C1], value=[1]
+				|--[1],[T_PROJECT_STRING], str_value_=[C2+3], value=[9223372036854775807]
+					|--[0],[T_OP_ADD], str_value_=[], value=[9223372036854775807]
+						|--[0],[T_OBJ_ACCESS_REF], str_value_=[], value=[9223372036854775807]
+							|--[0],[T_IDENT], str_value_=[C2], value=[1]
+						|--[1],[T_INT], str_value_=[3], value=[3]
+				|--[2],[T_PROJECT_STRING], str_value_=[C3*C4], value=[9223372036854775807]
+					|--[0],[T_OP_MUL], str_value_=[], value=[9223372036854775807]
+						|--[0],[T_OBJ_ACCESS_REF], str_value_=[], value=[9223372036854775807]
+							|--[0],[T_IDENT], str_value_=[C3], value=[1]
+						|--[1],[T_OBJ_ACCESS_REF], str_value_=[], value=[9223372036854775807]
+							|--[0],[T_IDENT], str_value_=[C4], value=[1]
+
+**************   Case 190   ***************
+insert into t1 values(1, 2, 3) returning c1, c2, c3;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_INSERT], str_value_=[], value=[0]
+		|--[0],[T_SINGLE_TABLE_INSERT], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INSERT_INTO_CLAUSE], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_ALIAS], str_value_=[], value=[9223372036854775807]
+					|--[0],[T_RELATION_FACTOR], str_value_=[T1], value=[9223372036854775807]
+						|--[1],[T_IDENT], str_value_=[T1], value=[1]
+			|--[1],[T_VALUE_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_VALUE_VECTOR], str_value_=[], value=[9223372036854775807]
+					|--[0],[T_INT], str_value_=[1], value=[1]
+					|--[1],[T_INT], str_value_=[2], value=[2]
+					|--[2],[T_INT], str_value_=[3], value=[3]
+			|--[2],[T_RETURNING], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_PROJECT_LIST], str_value_=[], value=[9223372036854775807]
+					|--[0],[T_PROJECT_STRING], str_value_=[C1], value=[9223372036854775807]
+						|--[0],[T_OBJ_ACCESS_REF], str_value_=[], value=[9223372036854775807]
+							|--[0],[T_IDENT], str_value_=[C1], value=[1]
+					|--[1],[T_PROJECT_STRING], str_value_=[C2], value=[9223372036854775807]
+						|--[0],[T_OBJ_ACCESS_REF], str_value_=[], value=[9223372036854775807]
+							|--[0],[T_IDENT], str_value_=[C2], value=[1]
+					|--[2],[T_PROJECT_STRING], str_value_=[C3], value=[9223372036854775807]
+						|--[0],[T_OBJ_ACCESS_REF], str_value_=[], value=[9223372036854775807]
+							|--[0],[T_IDENT], str_value_=[C3], value=[1]
+		|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
+
+**************   Case 191   ***************
+replace into t1 values(1, 2) returning c1, c2, c3, c4, c5, c6;
+**************   Case 192   ***************
 alter tablegroup tg2 add table t1,t2;
 question_mask_size: 0
 
@@ -3457,7 +3584,7 @@ question_mask_size: 0
 			|--[1],[T_RELATION_FACTOR], str_value_=[t2], value=[9223372036854775807]
 				|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
 
-**************   Case 185   ***************
+**************   Case 193   ***************
 insert into t1 values(X'');
 question_mask_size: 0
 
@@ -3473,7 +3600,7 @@ question_mask_size: 0
 					|--[0],[T_HEX_STRING], str_value_=[], value=[9223372036854775807]
 		|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
 
-**************   Case 186   ***************
+**************   Case 194   ***************
 create table t1(`thedate` date NOT NULL COMMENT '日期');
 question_mask_size: 0
 
@@ -3491,7 +3618,7 @@ question_mask_size: 0
 					|--[1],[T_COMMENT], str_value_=[], value=[9223372036854775807]
 						|--[0],[T_VARCHAR], str_value_=[日期], value=[9223372036854775807]
 
-**************   Case 187   ***************
+**************   Case 195   ***************
 alter system bootstrap REGION 'sys_region' ZONE 'zone1' SERVER '10.101.74.122:41425';
 question_mask_size: 0
 

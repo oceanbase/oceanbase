@@ -79,8 +79,6 @@ int ObDDLSqlGenerator::get_priv_name(const int64_t priv, const char *&name)
       name = "RENAME"; break;
     case OB_PRIV_REFERENCES:
       name = "REFERENCES"; break;
-    case OB_PRIV_EXECUTE:
-      name = "EXECUTE"; break;
     case OB_PRIV_FLASHBACK:
       name = "FLASHBACK"; break;
     case OB_PRIV_READ:
@@ -105,6 +103,12 @@ int ObDDLSqlGenerator::get_priv_name(const int64_t priv, const char *&name)
       name = "DROP DATABASE LINK"; break;
     case OB_PRIV_CREATE_DATABASE_LINK:
       name = "CREATE DATABASE LINK"; break;
+    case OB_PRIV_EXECUTE:
+      name = "EXECUTE"; break;
+    case OB_PRIV_ALTER_ROUTINE:
+      name = "ALTER ROUTINE"; break;
+    case OB_PRIV_CREATE_ROUTINE:
+      name = "CREATE ROUTINE"; break;
     default: {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid priv", K(ret), K(priv));
@@ -695,6 +699,77 @@ int ObDDLSqlGenerator::gen_table_priv_sql_ora(const obrpc::ObAccountArg &account
 
   LOG_DEBUG("gen table priv sql", K(sql_string.string()), K(priv_string.string()),
             K(revoke_all_flag), K(obj_priv_array), K(account));
+  return ret;
+}
+
+int ObDDLSqlGenerator::gen_routine_priv_sql(const obrpc::ObAccountArg &account,
+                                          const ObNeedPriv &need_priv,
+                                          const bool is_grant,
+                                          ObSqlString &sql_string)
+{
+  int ret = OB_SUCCESS;
+  char GRANT_PROCEDURE_SQL[] = "GRANT %s ON PROCEDURE `%.*s`.`%.*s` TO `%.*s`";
+  char REVOKE_PROCEDURE_SQL[] = "REVOKE %s ON PROCEDURE `%.*s`.`%.*s` FROM `%.*s`";
+  char GRANT_FUNCTION_SQL[] = "GRANT %s ON FUNCTION `%.*s`.`%.*s` TO `%.*s`";
+  char REVOKE_FUNCTION_SQL[] = "REVOKE %s ON FUNCTION `%.*s`.`%.*s` FROM `%.*s`";
+  char NEW_GRANT_PROCEDURE_SQL[] = "GRANT %s ON PROCEDURE `%.*s`.`%.*s` TO `%.*s`@`%.*s`";
+  char NEW_REVOKE_PROCEDURE_SQL[] = "REVOKE %s ON PROCEDURE `%.*s`.`%.*s` FROM `%.*s`@`%.*s`";
+  char NEW_GRANT_FUNCTION_SQL[] = "GRANT %s ON FUNCTION `%.*s`.`%.*s` TO `%.*s`@`%.*s`";
+  char NEW_REVOKE_FUNCTION_SQL[] = "REVOKE %s ON FUNCTION `%.*s`.`%.*s` FROM `%.*s`@`%.*s`";
+  ObSqlString priv_string;
+  if (OB_UNLIKELY(need_priv.db_.empty()) || OB_UNLIKELY(need_priv.table_.empty()) || OB_UNLIKELY(!account.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("db or table or user_name is empty", K(need_priv), K(account), K(ret));
+  } else if (need_priv.priv_level_ != OB_PRIV_ROUTINE_LEVEL) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("priv level is invalid", K(need_priv), K(ret));
+  } else if (need_priv.priv_set_ & (~(OB_PRIV_ROUTINE_ACC | OB_PRIV_GRANT))) {
+    ret = OB_ILLEGAL_GRANT_FOR_TABLE;
+    LOG_WARN("Grant/Revoke privilege than can not be used",
+              "priv_type", ObPrintPrivSet(need_priv.priv_set_), K(ret));
+  } else if (OB_FAIL(priv_to_name(need_priv.priv_set_, priv_string))) {
+    LOG_WARN("get priv to name failed", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (0 == account.host_name_.compare(OB_DEFAULT_HOST_NAME)) {
+      if (OB_FAIL(sql_string.append_fmt(adjust_ddl_format_str(is_grant ? (need_priv.obj_type_ == ObObjectType::PROCEDURE ? GRANT_PROCEDURE_SQL : GRANT_FUNCTION_SQL)
+                                                                       : (need_priv.obj_type_ == ObObjectType::PROCEDURE ? REVOKE_PROCEDURE_SQL : REVOKE_FUNCTION_SQL)),
+                                        priv_string.string().ptr(),
+                                        need_priv.db_.length(),
+                                        need_priv.db_.ptr(),
+                                        need_priv.table_.length(),
+                                        need_priv.table_.ptr(),
+                                        account.user_name_.length(),
+                                        account.user_name_.ptr()))) {
+        LOG_WARN("append sql failed", K(ret));
+      }
+    } else {
+      if (OB_FAIL(sql_string.append_fmt(adjust_ddl_format_str(is_grant ? (need_priv.obj_type_ == ObObjectType::PROCEDURE ? NEW_GRANT_PROCEDURE_SQL : NEW_GRANT_FUNCTION_SQL)
+                                                                       : (need_priv.obj_type_ == ObObjectType::PROCEDURE ? NEW_REVOKE_PROCEDURE_SQL : NEW_REVOKE_FUNCTION_SQL)),
+                                        priv_string.string().ptr(),
+                                        need_priv.db_.length(),
+                                        need_priv.db_.ptr(),
+                                        need_priv.table_.length(),
+                                        need_priv.table_.ptr(),
+                                        account.user_name_.length(),
+                                        account.user_name_.ptr(),
+                                        account.host_name_.length(),
+                                        account.host_name_.ptr()))) {
+        LOG_WARN("append sql failed", K(ret));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && is_grant) {
+    if (need_priv.priv_set_ & OB_PRIV_GRANT) {
+      if (OB_FAIL(sql_string.append(" WITH GRANT OPTION"))) {
+        LOG_WARN("append sql failed", K(ret));
+      }
+    }
+  }
+  LOG_DEBUG("gen routine priv sql", K(sql_string.string()), K(priv_string.string()),
+            K(need_priv), K(is_grant), K(account));
   return ret;
 }
 

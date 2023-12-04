@@ -873,6 +873,21 @@ int ObUserSqlService::gen_user_dml(
   } else if (OB_FAIL(dml.add_column("PRIV_CREATE_DATABASE_LINK", user.get_priv(OB_PRIV_CREATE_DATABASE_LINK) ? 1 : 0))) {
     LOG_WARN("add  PRIV_CREATE_DATABASE_LINK column failed", K(user.get_priv(OB_PRIV_CREATE_DATABASE_LINK)), K(ret));
   }
+  int64_t priv_others = 0;
+  if (OB_SUCC(ret)) {
+    if ((user.get_priv_set() & OB_PRIV_EXECUTE) != 0) { priv_others |= 1; }
+    if ((user.get_priv_set() & OB_PRIV_ALTER_ROUTINE) != 0) { priv_others |= 2; }
+    if ((user.get_priv_set() & OB_PRIV_CREATE_ROUTINE) != 0) { priv_others |= 4; }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (compat_version < DATA_VERSION_4_2_2_0) {
+    if (priv_others != 0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_2_0", K(ret), K(user.get_priv(OB_PRIV_EXECUTE)), K(user.get_priv(OB_PRIV_ALTER_ROUTINE)), K(user.get_priv(OB_PRIV_CREATE_ROUTINE)));
+    }
+  } else if (OB_FAIL(dml.add_column("PRIV_OTHERS", priv_others))) {
+    LOG_WARN("add PRIV_OTHERS column failed", K(priv_others), K(ret));
+  }
   return ret;
 }
 

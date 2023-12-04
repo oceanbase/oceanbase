@@ -52,7 +52,8 @@ public:
                               ObTableSchema &table_schema,
                               common::ObIAllocator &alloc,
                               sql::ObSQLSessionInfo &session_info,
-                              const common::ObIArray<ObString> &column_list);
+                              const common::ObIArray<ObString> &column_list,
+                              const common::ObIArray<ObString> &comment_list);
   static int resolve_column_default_value(const sql::ObSelectStmt *select_stmt,
                                         const sql::SelectItem &select_item,
                                         schema::ObColumnSchemaV2 &column_schema,
@@ -70,7 +71,8 @@ private:
   int check_view_columns(ObSelectStmt &select_stmt,
                          ParseNode *view_columns_node,
                          share::schema::ObErrorInfo &error_info,
-                         const bool is_force_view);
+                         const bool is_force_view,
+                         bool &can_expand_star);
   int check_privilege_needed(ObCreateTableStmt &stmt,
                              ObSelectStmt &select_stmt,
                              const bool is_force_view);
@@ -84,9 +86,12 @@ private:
    * use stmt_print instead of ObSelectStmtPrinter. When do_print return OB_SIZE_OVERFLOW
    * and the buf_len is less than OB_MAX_PACKET_LENGTH, stmt_print will expand buf and try again.
    */
-  int stmt_print(const ObSelectStmt *stmt,
-                 common::ObIArray<common::ObString> *column_list,
-                 common::ObString &expanded_view);
+  int print_rebuilt_view_stmt(const ObSelectStmt *stmt,
+                              common::ObIArray<common::ObString> *column_list,
+                              common::ObString &expanded_view);
+  int print_star_expanded_view_stmt(common::ObString &expanded_view,
+                                    const int64_t view_definition_start_pos,
+                                    const int64_t view_definition_end_pos);
   int collect_dependency_infos(ObQueryCtx *query_ctx,
                                obrpc::ObCreateTableArg &create_arg);
   int get_sel_priv_tables_in_subquery(const ObSelectStmt *child_stmt,

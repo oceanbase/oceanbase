@@ -616,6 +616,17 @@ public:
                            const share::schema::ObObjPrivSortKey &obj_priv_key,
                            const share::ObRawObjPrivArray &obj_priv_array,
                            const bool revoke_all_ora);
+
+  virtual int grant_routine(const ObRoutinePrivSortKey &routine_priv_key,
+                            const ObPrivSet priv_set,
+                            common::ObMySQLTransaction &trans,
+                            const uint64_t option,
+                            const bool gen_ddl_stmt = true);
+  virtual int revoke_routine(const ObRoutinePrivSortKey &routine_priv_key,
+                            const ObPrivSet priv_set,
+                            common::ObMySQLTransaction &trans,
+                            const bool report_error = true,
+                            const bool gen_ddl_stmt = true);
   virtual int grant_revoke_role(const uint64_t tenant_id,
                                 const share::schema::ObUserInfo &user_info,
                                 const common::ObIArray<uint64_t> &role_ids,

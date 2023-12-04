@@ -428,7 +428,7 @@ public:
   OB_INLINE uint64_t get_object_id() const { return routine_id_; }
   OB_INLINE ObObjectType get_object_type() const
   { return ObRoutineType::ROUTINE_PROCEDURE_TYPE == get_routine_type() ?
-           ObObjectType::PROCEDURE : ObRoutineType::ROUTINE_FUNCTION_TYPE ?
+           ObObjectType::PROCEDURE : ObRoutineType::ROUTINE_FUNCTION_TYPE == get_routine_type() ?
            ObObjectType::FUNCTION : ObObjectType::INVALID; }
   OB_INLINE const common::ObString &get_routine_name() const { return routine_name_; }
   OB_INLINE int64_t get_overload() const { return overload_; }

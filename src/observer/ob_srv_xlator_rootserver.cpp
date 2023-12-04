@@ -177,6 +177,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcLockUserP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRevokeDBP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRevokeTableP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcRevokeRoutineP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRevokeSysPrivP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAlterRoleP, *gctx_.root_service_);
 

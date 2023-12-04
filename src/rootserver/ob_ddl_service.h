@@ -843,6 +843,17 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
                           const uint64_t option,
                           const share::schema::ObObjPrivSortKey &obj_key,
                           share::schema::ObSchemaGetterGuard &schema_guard);
+
+  virtual int grant_routine(
+    const share::schema::ObRoutinePrivSortKey &routine_key,
+    const ObPrivSet priv_set,
+    const ObString *ddl_stmt_str,
+    const uint64_t option,
+    share::schema::ObSchemaGetterGuard &schema_guard);
+
+  virtual int revoke_routine(
+    const share::schema::ObRoutinePrivSortKey &routine_key,
+    const ObPrivSet priv_set);
   virtual int revoke_table(const share::schema::ObTablePrivSortKey &table_key,
                            const ObPrivSet priv_set,
                            const share::schema::ObObjPrivSortKey &obj_key,

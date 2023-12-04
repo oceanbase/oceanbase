@@ -5987,6 +5987,26 @@ int ObRootService::revoke_table(const ObRevokeTableArg &arg)
   return ret;
 }
 
+int ObRootService::revoke_routine(const ObRevokeRoutineArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else {
+    ObRoutinePrivSortKey routine_priv_key(arg.tenant_id_, arg.user_id_, arg.db_, arg.routine_,
+                            (arg.obj_type_ == (int64_t)ObObjectType::PROCEDURE) ? ObRoutineType::ROUTINE_PROCEDURE_TYPE
+                           : (arg.obj_type_ == (int64_t)ObObjectType::FUNCTION) ? ObRoutineType::ROUTINE_FUNCTION_TYPE
+                           : ObRoutineType::INVALID_ROUTINE_TYPE);
+    OZ (ddl_service_.revoke_routine(routine_priv_key, arg.priv_set_));
+  }
+  return ret;
+}
+
+
 int ObRootService::revoke_syspriv(const ObRevokeSysPrivArg &arg)
 {
   int ret = OB_SUCCESS;

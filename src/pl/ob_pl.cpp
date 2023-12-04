@@ -2099,8 +2099,22 @@ int ObPL::execute(ObExecContext &ctx,
           }
         }
       }
-      if (OB_SUCC(ret) && !ObUDTObjectType::is_object_id(package_id)) {
-        OZ (check_exec_priv(ctx, routine));
+    }
+    const ObDatabaseSchema *db_schema = NULL;
+    ObString db_name = "";
+    if (OB_SUCC(ret)) {
+      ObSchemaGetterGuard *guard = ctx.get_sql_ctx()->schema_guard_;
+      CK (OB_NOT_NULL(guard));
+      if (lib::is_mysql_mode()) {
+        OZ (guard->get_database_schema(ctx.get_my_session()->get_effective_tenant_id(),
+                                      routine->get_database_id(),
+                                      db_schema));
+        if (OB_SUCC(ret)) {
+          db_name = db_schema->get_database_name_str();
+        }
+      }
+      if (OB_SUCC(ret) && !ObUDTObjectType::is_object_id(package_id) && !is_valid_id(dblink_id)) {
+        OZ (check_exec_priv(ctx, db_name, routine));
       }
     }
     // prepare it ...
@@ -2134,6 +2148,13 @@ int ObPL::execute(ObExecContext &ctx,
         && routine != NULL) { \
       routine = NULL; \
     }
+
+    //check mysql definer has execute priv
+    if (OB_SUCC(ret) && lib::is_mysql_mode() && !ObUDTObjectType::is_object_id(package_id)) {
+      CK (OB_NOT_NULL(db_schema));
+      OZ (check_exec_priv(ctx, db_schema->get_database_name_str(), routine));
+    }
+
     // NOTE: restore stmt type saved before get_pl_function before start execution
     ctx.get_my_session()->set_stmt_type(saved_stmt_type);
     try {
@@ -3630,6 +3651,7 @@ int ObPLExecRecursionCtx::dec_and_check_depth(uint64_t package_id, uint64_t proc
 /* check用户是否有调用存储过程的权限 */
 int ObPL::check_exec_priv(
     ObExecContext &exec_ctx,
+    const ObString &database_name,
     ObPLFunction *routine)
 {
   int ret = OB_SUCCESS;
@@ -3643,19 +3665,15 @@ int ObPL::check_exec_priv(
   OX (func_id = routine->get_routine_id());
   OX (db_id = routine->get_database_id());
 
+  ObSchemaGetterGuard *guard = exec_ctx.get_sql_ctx()->schema_guard_;
+  CK (OB_NOT_NULL(guard));
+  OX (tenant_id = exec_ctx.get_my_session()->get_effective_tenant_id());
   if (OB_SUCC(ret)
      && OB_INVALID_ID != pkg_id && !ObTriggerInfo::is_trigger_package_id(pkg_id)
      && OB_INVALID_ID != db_id && OB_INVALID_ID != func_id) {
-    const ObDatabaseSchema *db_schema = NULL;
 
     CK (exec_ctx.get_my_session() != NULL);
-    OX (tenant_id = exec_ctx.get_my_session()->get_effective_tenant_id());
 
-    ObSchemaGetterGuard *guard = exec_ctx.get_sql_ctx()->schema_guard_;
-    CK (OB_NOT_NULL(guard));
-    OZ (guard->get_database_schema(tenant_id,
-                                  db_id,
-                                  db_schema));
     if (OB_SYS_TENANT_ID == routine->get_tenant_id()) {
       bool need_check = false;
       bool need_only_obj_check = false;
@@ -3666,7 +3684,7 @@ int ObPL::check_exec_priv(
         OZ (ObOraSysChecker::check_ora_obj_priv(*guard,
                           tenant_id,
                           exec_ctx.get_my_session()->get_user_id(),
-                          db_schema->get_database_name(),
+                          database_name,
                           spec_id,
                           OBJ_LEVEL_FOR_TAB_PRIV,
                           need_only_obj_check ?
@@ -3677,6 +3695,33 @@ int ObPL::check_exec_priv(
                           OB_SYS_USER_ID,
                           exec_ctx.get_my_session()->get_enable_role_array()),
                           pkg_id, db_id, func_id, spec_id);
+      }
+    }
+  }
+  if (OB_SUCC(ret) && lib::is_mysql_mode() && pkg_id == OB_INVALID_ID) {
+    if (ObSchemaChecker::enable_mysql_pl_priv_check(tenant_id, *guard)) {
+      share::schema::ObSessionPrivInfo session_priv;
+      if (OB_FAIL(guard->get_session_priv_info(
+                                      exec_ctx.get_my_session()->get_priv_tenant_id(),
+                                      exec_ctx.get_my_session()->get_priv_user_id(),
+                                      exec_ctx.get_my_session()->get_database_name(),
+                                      session_priv))) {
+          LOG_WARN("fail to get_session_priv_info", K(ret));
+      } else if (OB_UNLIKELY(!session_priv.is_valid())) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("Session priv is invalid", "tenant_id", session_priv.tenant_id_,
+                  "user_id", session_priv.user_id_, K(ret));
+      } else {
+        ObNeedPriv need_priv;
+        need_priv.priv_level_ = OB_PRIV_ROUTINE_LEVEL;
+        need_priv.db_ = database_name;
+        need_priv.table_ = routine->get_function_name();
+        need_priv.priv_set_ = OB_PRIV_EXECUTE;
+        const ObRoutineInfo *routine_info = NULL;
+        OZ (guard->get_routine_info(tenant_id, routine->get_routine_id(), routine_info));
+        CK (OB_NOT_NULL(routine_info));
+        OX (need_priv.obj_type_ = routine_info->is_procedure() ? ObObjectType::PROCEDURE : ObObjectType::FUNCTION);
+        OZ (guard->check_routine_priv(session_priv, need_priv));
       }
     }
   }

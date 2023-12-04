@@ -251,6 +251,10 @@ namespace share
   static const char* const OB_SV_OPTIMIZER_FEATURES_ENABLE = "optimizer_features_enable";
   static const char* const OB_SV__OB_PROXY_WEAKREAD_FEEDBACK = "_ob_proxy_weakread_feedback";
   static const char* const OB_SV_NCHARACTER_SET_CONNECTION = "ncharacter_set_connection";
+  static const char* const OB_SV_AUTOMATIC_SP_PRIVILEGES = "automatic_sp_privileges";
+  static const char* const OB_SV_PRIVILEGE_FEATURES_ENABLE = "privilege_features_enable";
+  static const char* const OB_SV__PRIV_CONTROL = "_priv_control";
+  static const char* const OB_SV__ENABLE_MYSQL_PL_PRIV_CHECK = "_enable_mysql_pl_priv_check";
   static const char* const OB_SV_ENABLE_PL_CACHE = "ob_enable_pl_cache";
   static const char* const OB_SV_DEFAULT_LOB_INROW_THRESHOLD = "ob_default_lob_inrow_threshold";
   static const char* const OB_SV__ENABLE_STORAGE_CARDINALITY_ESTIMATION = "_enable_storage_cardinality_estimation";

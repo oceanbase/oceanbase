@@ -74,6 +74,7 @@ int ObShowGrants::inner_get_next_row(common::ObNewRow *&row)
         const ObUserInfo *user_info = NULL;
         ObArray<const ObDBPriv *> db_priv_array;
         ObArray<const ObTablePriv *> table_priv_array;
+        ObArray<const ObRoutinePriv *> routine_priv_array;
         ObArray<const ObObjPriv *>obj_priv_array;
         if (OB_ISNULL(user_info = schema_guard_->get_user_info(tenant_id_, show_user_id))) {
           ret = OB_ERR_USER_NOT_EXIST;
@@ -86,6 +87,10 @@ int ObShowGrants::inner_get_next_row(common::ObNewRow *&row)
                                                                       show_user_id,
                                                                       table_priv_array))) {
           SERVER_LOG(WARN, "Get table priv with user id error", K(ret));
+        } else if (OB_FAIL(schema_guard_->get_routine_priv_with_user_id(tenant_id_,
+                                                                       show_user_id,
+                                                                       routine_priv_array))) {
+          SERVER_LOG(WARN, "Get routine priv with user id error", K(ret));
         } else if (OB_FAIL(schema_guard_->get_obj_priv_with_grantee_id(tenant_id_,
                                                                        show_user_id,
                                                                        obj_priv_array))) {
@@ -134,13 +139,36 @@ int ObShowGrants::inner_get_next_row(common::ObNewRow *&row)
           }
 
           //grants on db.table
-          for (int64_t i = 0; OB_SUCC(ret) && i< table_priv_array.count(); ++i) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < table_priv_array.count(); ++i) {
             pos = 0;
             const ObTablePriv *table_priv = table_priv_array.at(i);
             have_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
             have_priv.priv_set_ = table_priv->get_priv_set();
             have_priv.db_ = table_priv->get_database_name_str();
             have_priv.table_ = table_priv->get_table_name_str();
+            if (OB_FAIL(get_grants_string(buf, PRIV_BUF_LENGTH, pos, have_priv, user_name, host_name))) {
+              SERVER_LOG(WARN, "Fill grants string failed", K(ret));
+            } else {
+              result.reset();
+              result.assign_ptr(buf, static_cast<int32_t>(pos));
+              if (OB_FAIL(fill_row_cells(show_user_id, result))) {
+                SERVER_LOG(WARN, "fail to fill row cells", K(ret));
+              } else if (OB_FAIL(scanner_.add_row(cur_row_))) {
+                SERVER_LOG(WARN, "fail to add row", K(ret), K(cur_row_));
+              }
+            }
+          }
+
+          //grants on db.routine
+          for (int64_t i = 0; OB_SUCC(ret) && i < routine_priv_array.count(); ++i) {
+            pos = 0;
+            const ObRoutinePriv *routine_priv = routine_priv_array.at(i);
+            have_priv.priv_level_ = OB_PRIV_ROUTINE_LEVEL;
+            have_priv.priv_set_ = routine_priv->get_priv_set();
+            have_priv.db_ = routine_priv->get_database_name_str();
+            have_priv.table_ = routine_priv->get_routine_name_str();
+            have_priv.obj_type_ = routine_priv->get_routine_type() == ObRoutineType::ROUTINE_PROCEDURE_TYPE ?
+                                                                      ObObjectType::PROCEDURE : ObObjectType::FUNCTION;
             if (OB_FAIL(get_grants_string(buf, PRIV_BUF_LENGTH, pos, have_priv, user_name, host_name))) {
               SERVER_LOG(WARN, "Fill grants string failed", K(ret));
             } else {
@@ -431,6 +459,8 @@ int ObShowGrants::print_privs_to_buff(
     priv_all = OB_PRIV_DB_ACC;
   } else if (OB_PRIV_TABLE_LEVEL == priv_level) {
     priv_all = OB_PRIV_TABLE_ACC;
+  } else if (OB_PRIV_ROUTINE_LEVEL == priv_level) {
+    priv_all = OB_PRIV_ALL;
   } else if (OB_PRIV_OBJ_ORACLE_LEVEL == priv_level) {
   } else {
     ret = OB_INVALID_ARGUMENT;
@@ -511,9 +541,6 @@ int ObShowGrants::print_privs_to_buff(
         if ((priv_set & OB_PRIV_REFERENCES) && OB_SUCCESS == ret) {
           ret = BUF_PRINTF(" REFERENCES,");
         }
-        if ((priv_set & OB_PRIV_EXECUTE) && OB_SUCCESS == ret) {
-          ret = BUF_PRINTF(" EXECUTE,");
-        }
         if ((priv_set & OB_PRIV_FLASHBACK) && OB_SUCCESS == ret) {
           ret = BUF_PRINTF(" FLASHBACK,");
         }
@@ -549,6 +576,15 @@ int ObShowGrants::print_privs_to_buff(
         }
         if ((priv_set & OB_PRIV_CREATE_DATABASE_LINK) && OB_SUCCESS == ret) {
           ret = BUF_PRINTF(" CREATE DATABASE LINK,");
+        }
+        if ((priv_set & OB_PRIV_EXECUTE) && OB_SUCCESS == ret) {
+          ret = BUF_PRINTF(" EXECUTE,");
+        }
+        if ((priv_set & OB_PRIV_ALTER_ROUTINE) && OB_SUCCESS == ret) {
+          ret = BUF_PRINTF(" ALTER ROUTINE,");
+        }
+        if ((priv_set & OB_PRIV_CREATE_ROUTINE) && OB_SUCCESS == ret) {
+          ret = BUF_PRINTF(" CREATE ROUTINE,");
         }
         if (OB_SUCCESS == ret && pos > 0) {
           pos--; //Delete last ','
@@ -627,6 +663,13 @@ int ObShowGrants::priv_level_printf(
     if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                 lib::is_oracle_mode() ? " ON \"%.*s\".\"%.*s\"" : 
                                                           " ON `%.*s`.`%.*s`",
+                                have_priv.db_.length(), have_priv.db_.ptr(),
+                                have_priv.table_.length(), have_priv.table_.ptr()))) {
+      SERVER_LOG(WARN, "Fill privs to buffer failed", K(ret));
+    }
+  } else if (OB_PRIV_ROUTINE_LEVEL == have_priv.priv_level_) {
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, have_priv.obj_type_ == ObObjectType::PROCEDURE ? " ON PROCEDURE `%.*s`.`%.*s`" :
+                                                                        " ON FUNCTION `%.*s`.`%.*s`",
                                 have_priv.db_.length(), have_priv.db_.ptr(),
                                 have_priv.table_.length(), have_priv.table_.ptr()))) {
       SERVER_LOG(WARN, "Fill privs to buffer failed", K(ret));

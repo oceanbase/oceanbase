@@ -292,6 +292,23 @@ public:
   common::ObSEArray<std::pair<ObRawExpr*, ObConstRawExpr*>, 8> params_;
 };
 
+struct ObStarExpansionInfo{
+  ObStarExpansionInfo()
+      :start_pos_(0),
+       end_pos_(0),
+       column_name_list_()
+  {}
+
+  ~ObStarExpansionInfo() {}
+
+public:
+  int64_t start_pos_;
+  int64_t end_pos_;
+  common::ObArray<ObString> column_name_list_;
+
+  TO_STRING_KV(K_(start_pos), K_(end_pos), K_(column_name_list));
+};
+
 struct ObResolverParams
 {
   ObResolverParams()
@@ -348,6 +365,7 @@ struct ObResolverParams
        enable_res_map_(false),
        need_check_col_dup_(true),
        is_specified_col_name_(false),
+       star_expansion_infos_(),
        is_resolve_lateral_derived_table_(false),
        package_guard_(NULL)
   {}
@@ -416,6 +434,7 @@ public:
   bool need_check_col_dup_;
   bool is_specified_col_name_;//mark if specify the column name in create view or create table as..
   bool is_in_sys_view_;
+  common::ObArray<ObStarExpansionInfo> star_expansion_infos_;
   bool is_resolve_lateral_derived_table_; // used to mark resolve lateral derived table.
   pl::ObPLPackageGuard *package_guard_;
 };

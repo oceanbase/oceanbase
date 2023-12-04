@@ -3884,9 +3884,9 @@ public:
   {
     return params_type_.assign(params_type);
   }
-  inline void set_database_name(const common::ObString &database_name)
+  inline int set_database_name(const common::ObString &database_name)
   {
-    database_name_ = database_name;
+    return ob_write_string(*inner_alloc_, database_name, database_name_);
   }
   inline void set_package_name(const common::ObString &package_name)
   {

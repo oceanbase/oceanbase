@@ -100,7 +100,25 @@ public:
       const ObTablePrivSortKey &table_priv_key,
       const int64_t new_schema_version,
       common::ObISQLClient &sql_client);
-  
+  virtual int grant_routine(
+    const ObRoutinePrivSortKey &routine_priv_key,
+    const ObPrivSet priv_set,
+    const int64_t new_schema_version,
+    const ObString *ddl_stmt_str,
+    ObISQLClient &sql_client,
+    const uint64_t option,
+    const bool is_grant);
+  virtual int revoke_routine(
+    const ObRoutinePrivSortKey &routine_priv_key,
+    const ObPrivSet priv_set,
+    const int64_t new_schema_version,
+    const ObString *ddl_stmt_str,
+    ObISQLClient &sql_client);
+  virtual int gen_routine_priv_dml(
+    const uint64_t exec_tenant_id,
+    const ObRoutinePrivSortKey &routine_priv_key,
+    const ObPrivSet &priv_set,
+    ObDMLSqlSplicer &dml);
   virtual int alter_user_default_role(
       const share::schema::ObUserInfo &user_info,
       const int64_t new_schema_version,

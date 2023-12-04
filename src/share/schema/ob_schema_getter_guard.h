@@ -511,6 +511,10 @@ public:
   int get_db_priv_with_user_id(const uint64_t tenant_id,
                                const uint64_t user_id,
                                common::ObIArray<const ObDBPriv*> &db_privs);
+
+  int get_routine_priv_with_user_id(const uint64_t tenant_id,
+                                    const uint64_t user_id,
+                                    common::ObIArray<const ObRoutinePriv*> &routine_privs);
   int get_table_priv_with_tenant_id(const uint64_t tenant_id,
                                     common::ObIArray<const ObTablePriv *> &table_privs);
   int get_table_priv_with_user_id(const uint64_t tenant_id,
@@ -544,6 +548,7 @@ public:
   // for compatible
   int get_db_priv_set(const ObOriginalDBKey &db_priv_key, ObPrivSet &priv_set, bool is_pattern = false);
   int get_table_priv_set(const ObTablePrivSortKey &table_priv_key, ObPrivSet &priv_set);
+  int get_routine_priv_set(const ObRoutinePrivSortKey &routine_priv_key, ObPrivSet &priv_set);
   int get_obj_privs(
       const ObObjPrivSortKey &obj_priv_key,
       ObPackedObjPriv &obj_privs);
@@ -1059,6 +1064,12 @@ public:
   GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DECLARE(package, ObSimplePackageSchema);
   GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DECLARE(routine, ObSimpleRoutineSchema);
   GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DECLARE(mock_fk_parent_table, ObSimpleMockFKParentTableSchema);
+
+  int check_routine_priv(const ObSessionPrivInfo &session_priv,
+                         const ObNeedPriv &routine_need_priv);
+
+  int check_routine_definer_existed(uint64_t tenant_id, const ObString &user_name, bool &existed);
+
 private:
   int check_ssl_access(const ObUserInfo &user_info,
                        SSL *ssl_st);

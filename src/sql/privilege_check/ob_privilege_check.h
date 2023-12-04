@@ -82,6 +82,7 @@ public:
   static int get_stmt_need_privs(const share::schema::ObSessionPrivInfo &session_priv,
                                  const ObStmt *basic_stmt,
                                  common::ObIArray<share::schema::ObNeedPriv> &stmt_need_priv);
+
 private:
    ///Extract priv info needed by a single stmt, may be sub-query.
    ///called by recursive_stmt_need_priv

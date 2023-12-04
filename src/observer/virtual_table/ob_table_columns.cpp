@@ -34,7 +34,8 @@ ObTableColumns::ObTableColumns()
     : ObVirtualTableScannerIterator(),
       type_str_(),
       column_type_str_(type_str_),
-      column_type_str_len_(OB_MAX_SYS_PARAM_NAME_LENGTH)
+      column_type_str_len_(OB_MAX_SYS_PARAM_NAME_LENGTH),
+      min_data_version_(OB_INVALID_VERSION)
 {
   MEMSET(type_str_, 0, OB_MAX_SYS_PARAM_NAME_LENGTH);
 }
@@ -47,6 +48,15 @@ void ObTableColumns::reset()
 {
   MEMSET(type_str_, 0, OB_MAX_SYS_PARAM_NAME_LENGTH);
   ObVirtualTableScannerIterator::reset();
+  min_data_version_ = OB_INVALID_VERSION;
+}
+
+int ObTableColumns::init(uint64_t tenant_id) {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, min_data_version_))) {
+    LOG_WARN("fail to get min data version", K(ret), K(tenant_id));
+  }
+  return ret;
 }
 
 int ObTableColumns::inner_get_next_row(ObNewRow *&row)
@@ -118,12 +128,12 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
             if (OB_ISNULL(col)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("The column is null", K(ret));
-            } else if (col->is_shadow_column()) { // 忽略掉shadow列
-              // do nothing
+            } else if (min_data_version_ < DATA_VERSION_4_2_2_0 && col->is_hidden()) {
+              // version lower than 4.2.2 does not support SHOW EXTENDED,
+              // should not output hidden columns.
             } else if (col->is_invisible_column()) { // 忽略 invisible 列
-              // do nothing
-            } else if (col->is_hidden()) {
-              // do nothing
+              // mysql 8.0.23 has supported invisivle column, we should not ignore them
+              // for mysql
             } else if (OB_FAIL(fill_row_cells(*table_schema, *col))) {
               LOG_WARN("fail to fill row cells", K(ret), K(col));
             } else if (OB_FAIL(scanner_.add_row(cur_row_))) {
@@ -515,6 +525,11 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
             ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       }
+    case IS_HIDDEN: {
+        const int64_t is_hidden_val = column_schema.is_hidden() ? 1 : 0;
+        cur_row_.cells_[cell_idx].set_int(is_hidden_val);
+        break;
+      }
     default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid column id", K(ret), K(cell_idx),
@@ -625,6 +640,10 @@ int ObTableColumns::fill_row_cells(
           cur_row_.cells_[cell_idx].set_varchar(ObString(""));
           cur_row_.cells_[cell_idx].set_collation_type(
               ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          break;
+        }
+      case IS_HIDDEN: {
+          cur_row_.cells_[cell_idx].set_int(column_attributes.is_hidden_);
           break;
         }
       default: {
@@ -793,6 +812,7 @@ int ObTableColumns::deduce_column_attributes(
     column_attributes.extra_ = ObString::make_string("");
     column_attributes.privileges_ = ObString::make_string("");
     column_attributes.result_type_ = select_item.expr_->get_result_type();
+    column_attributes.is_hidden_ = 0;
     //TODO:
     //ObObj default;
     //view_column.set_cur_default_value(default);
@@ -965,7 +985,7 @@ int ObTableColumns::resolve_view_definition(
             } else if (OB_ISNULL(view_item = select_stmt->get_table_item(0))) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("view item is null");
-            } else if (OB_UNLIKELY(NULL == (select_stmt = static_cast<ObSelectStmt*>(view_item->ref_query_)))) {
+            } else if (OB_ISNULL(select_stmt = static_cast<ObSelectStmt*>(view_item->ref_query_))) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("select_stmt should not NULL", K(ret));
             } else { /*do-nothing*/ }

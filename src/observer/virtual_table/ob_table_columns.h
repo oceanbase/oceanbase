@@ -56,12 +56,14 @@ public:
     common::ObString extra_;
     common::ObString privileges_;
     sql::ObExprResType result_type_;
+    int64_t is_hidden_;
     int64_t get_data_length() const;
   };
   ObTableColumns();
   virtual ~ObTableColumns();
   virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
+  int init(uint64_t tenant_id);
   static int resolve_view_definition(
       common::ObIAllocator* allocator,
       sql::ObSQLSessionInfo *session,
@@ -99,7 +101,8 @@ private:
     DEFAULT,
     EXTRA,
     PRIVILEGES,
-    COMMENT
+    COMMENT,
+    IS_HIDDEN,
   };
   int calc_show_table_id(uint64_t &show_table_id);
   int fill_row_cells(const share::schema::ObTableSchema &table_schema,
@@ -144,6 +147,7 @@ private:
   char type_str_[common::OB_MAX_SYS_PARAM_NAME_LENGTH];
   char *column_type_str_;
   int64_t column_type_str_len_;
+  uint64_t min_data_version_;
   DISALLOW_COPY_AND_ASSIGN(ObTableColumns);
 };
 }//observer

@@ -2646,6 +2646,12 @@ int ObSchemaGetterGuard::verify_read_only(const uint64_t tenant_id,
           }
           break;
         }
+        case OB_PRIV_ROUTINE_LEVEL: {
+          if (OB_FAIL(verify_db_read_only(tenant_id, need_priv))) {
+            LOG_WARN("db is read only, can't not execute this statement", KR(ret));
+          }
+          break;
+        }
         default:{
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unknown privilege level", K(need_priv), KR(ret));
@@ -3128,12 +3134,20 @@ int ObSchemaGetterGuard::check_db_access(
       LOG_WARN("get db priv set failed", KR(ret), K(db_priv_key));
     } else {
       bool is_grant = false;
+      bool is_grant_table = false;
+      bool is_grant_routine = false;
       if (OB_FAIL(priv_mgr.table_grant_in_db(db_priv_key.tenant_id_,
                                             db_priv_key.user_id_,
                                             db_priv_key.db_,
-                                            is_grant))) {
+                                            is_grant_table))) {
         LOG_WARN("check table grant in db failed", K(db_priv_key), KR(ret));
+      } else if (OB_FAIL(priv_mgr.routine_grant_in_db(db_priv_key.tenant_id_,
+                                            db_priv_key.user_id_,
+                                            db_priv_key.db_,
+                                            is_grant_routine))) {
+        LOG_WARN("check routine grant in db failed", K(db_priv_key), KR(ret));
       } else {
+        is_grant = (is_grant_table || is_grant_routine);
         // load db level prvilege from roles
         const ObUserInfo *user_info = NULL;
         if (OB_FAIL(get_user_info(tenant_id, session_priv.user_id_, user_info))) {
@@ -3519,6 +3533,119 @@ int ObSchemaGetterGuard::check_single_table_priv_for_update_(const ObSessionPriv
   return ret;
 }
 
+int ObSchemaGetterGuard::check_routine_priv(const ObSessionPrivInfo &session_priv,
+                                            const ObNeedPriv &routine_need_priv)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = session_priv.tenant_id_;
+  const ObSchemaMgr *mgr = NULL;
+  if (OB_INVALID_ID == session_priv.tenant_id_ || OB_INVALID_ID == session_priv.user_id_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid arguments", "tenant_id", session_priv.tenant_id_,
+        "user_id", session_priv.user_id_,
+        KR(ret));
+  } else if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
+    LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id), K_(tenant_id));
+  } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
+    LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
+  } else {
+    //first:check user and db priv.
+    //second:If user_db_priv_set has no enough privileges, check routine priv.
+    const ObPrivMgr &priv_mgr = mgr->priv_mgr_;
+    if (!OB_TEST_PRIVS(session_priv.user_priv_set_, routine_need_priv.priv_set_)) {
+      ObPrivSet user_db_priv_set = 0;
+      if (OB_SUCCESS != check_db_priv(session_priv, routine_need_priv.db_,
+          routine_need_priv.priv_set_, user_db_priv_set)) {
+        //1. fetch routine priv
+        const ObRoutinePriv *routine_priv = NULL;
+        ObPrivSet routine_priv_set = 0;
+        bool is_routine_priv_empty = true;
+        ObRoutinePrivSortKey routine_priv_key(session_priv.tenant_id_,
+                                          session_priv.user_id_,
+                                          routine_need_priv.db_,
+                                          routine_need_priv.table_,
+                                          routine_need_priv.obj_type_ == ObObjectType::PROCEDURE ? ObRoutineType::ROUTINE_PROCEDURE_TYPE :
+                                          routine_need_priv.obj_type_ == ObObjectType::FUNCTION ? ObRoutineType::ROUTINE_FUNCTION_TYPE :
+                                                                                                     ObRoutineType::INVALID_ROUTINE_TYPE);
+        if (OB_FAIL(priv_mgr.get_routine_priv(routine_priv_key, routine_priv))) {
+          LOG_WARN("get routine priv failed", KR(ret), K(routine_priv_key) );
+        } else if (NULL != routine_priv) {
+          routine_priv_set = routine_priv->get_priv_set();
+          is_routine_priv_empty = false;
+        }
+
+        if (OB_SUCC(ret)) {
+          //2. fetch roles privs
+          const ObUserInfo *user_info = NULL;
+          if (OB_FAIL(get_user_info(tenant_id, session_priv.user_id_, user_info))) {
+            LOG_WARN("failed to get user info", KR(ret), K(tenant_id), K(session_priv.user_id_));
+          } else if (NULL == user_info) {
+            ret = OB_USER_NOT_EXIST;
+            LOG_WARN("user info is null", KR(ret), K(session_priv.user_id_));
+          } else {
+            const ObSEArray<uint64_t, 8> &role_id_array = user_info->get_role_id_array();
+            for (int i = 0; OB_SUCC(ret) && i < role_id_array.count(); ++i) {
+              const ObUserInfo *role_info = NULL;
+              const ObRoutinePriv *role_routine_priv = NULL;
+              if (OB_FAIL(get_user_info(tenant_id, role_id_array.at(i), role_info))) {
+                LOG_WARN("failed to get role ids", KR(ret), K(tenant_id), K(role_id_array.at(i)));
+              } else if (NULL == role_info) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("role info is null", KR(ret), K(role_id_array.at(i)));
+              } else {
+                ObRoutinePrivSortKey role_routine_priv_key(session_priv.tenant_id_,
+                    role_info->get_user_id(),
+                    routine_need_priv.db_,
+                    routine_need_priv.table_,
+                    routine_need_priv.obj_type_ == ObObjectType::PROCEDURE ? ObRoutineType::ROUTINE_PROCEDURE_TYPE :
+                    routine_need_priv.obj_type_ == ObObjectType::FUNCTION ? ObRoutineType::ROUTINE_FUNCTION_TYPE :
+                                                                          ObRoutineType::INVALID_ROUTINE_TYPE);
+                if (OB_FAIL(priv_mgr.get_routine_priv(role_routine_priv_key, role_routine_priv))) {
+                  LOG_WARN("get routine priv failed", KR(ret), K(role_routine_priv_key) );
+                } else if (NULL != role_routine_priv) {
+                  is_routine_priv_empty = false;
+                  // append additional role
+                  routine_priv_set |= role_routine_priv->get_priv_set();
+                }
+              }
+            }
+          }
+        }
+
+        //3. check privs
+        if (OB_SUCC(ret)) {
+          if (is_routine_priv_empty) {
+            ret = OB_ERR_NO_ROUTINE_PRIVILEGE;
+            LOG_WARN("No privilege, cannot find routine priv info",
+                     "tenant_id", session_priv.tenant_id_,
+                     "user_id", session_priv.user_id_, K(routine_need_priv));
+          } else if (!OB_TEST_PRIVS(routine_priv_set | user_db_priv_set, routine_need_priv.priv_set_)) {
+            ret = OB_ERR_NO_ROUTINE_PRIVILEGE;
+            LOG_WARN("No privilege", "tenant_id", session_priv.tenant_id_,
+                "user_id", session_priv.user_id_,
+                K(routine_need_priv),
+                K(routine_priv_set | user_db_priv_set));
+          }
+        }
+        if (OB_ERR_NO_ROUTINE_PRIVILEGE == ret) {
+          ObPrivSet lack_priv_set = routine_need_priv.priv_set_ & (~(routine_priv_set | user_db_priv_set));
+          const char *priv_name = priv_mgr.get_first_priv_name(lack_priv_set);
+          if (OB_ISNULL(priv_name)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("Invalid priv type", "priv_set", routine_need_priv.priv_set_);
+          } else {
+            LOG_USER_ERROR(OB_ERR_NO_ROUTINE_PRIVILEGE, (int)strlen(priv_name), priv_name,
+                           session_priv.user_name_.length(), session_priv.user_name_.ptr(),
+                           session_priv.host_name_.length(), session_priv.host_name_.ptr(),
+                           routine_need_priv.table_.length(), routine_need_priv.table_.ptr());
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSchemaGetterGuard::check_db_priv(const ObSessionPrivInfo &session_priv,
                               const ObString &db,
                               const ObPrivSet need_priv,
@@ -3796,6 +3923,23 @@ int ObSchemaGetterGuard::check_priv(const ObSessionPrivInfo &session_priv,
           }
           break;
         }
+        case OB_PRIV_ROUTINE_LEVEL: {
+          if (OB_ISNULL(this)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("schema guard is null", K(ret));
+          } else if (!ObSchemaChecker::enable_mysql_pl_priv_check(tenant_id, *this)) {
+            //do nothing
+          } else if (OB_FAIL(check_routine_priv(session_priv, need_priv))) {
+            LOG_WARN("No privilege", "tenant_id", session_priv.tenant_id_,
+                "user_id", session_priv.user_id_,
+                "need_priv", need_priv.priv_set_,
+                "table", need_priv.table_,
+                "db", need_priv.db_,
+                "user_priv", session_priv.user_priv_set_,
+                KR(ret));//need print priv
+          }
+          break;
+        }
         case OB_PRIV_DB_ACCESS_LEVEL: {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Privilege checking of database access should not use this function", KR(ret));
@@ -3974,6 +4118,11 @@ int ObSchemaGetterGuard::check_priv_or(const ObSessionPrivInfo &session_priv,
           }
           break;
         }
+        case OB_PRIV_ROUTINE_LEVEL: {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("should not reach here", KR(ret));
+          break;
+        }
         case OB_PRIV_DB_ACCESS_LEVEL: {
           //this should not occur
           ret = OB_INVALID_ARGUMENT;
@@ -3998,6 +4147,10 @@ int ObSchemaGetterGuard::check_priv_or(const ObSessionPrivInfo &session_priv,
       }
       case OB_PRIV_TABLE_LEVEL: {
         ret = OB_ERR_NO_TABLE_PRIVILEGE;
+        break;
+      }
+      case OB_PRIV_ROUTINE_LEVEL: {
+        ret = OB_ERR_NO_ROUTINE_PRIVILEGE;
         break;
       }
       default: {
@@ -4060,6 +4213,22 @@ int ObSchemaGetterGuard::get_table_priv_set(const ObTablePrivSortKey &table_priv
     LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
   } else if (OB_FAIL(mgr->priv_mgr_.get_table_priv_set(table_priv_key, priv_set))) {
     LOG_WARN("fail to get table priv set", KR(ret), K(table_priv_key));
+  }
+  return ret;
+}
+
+int ObSchemaGetterGuard::get_routine_priv_set(const ObRoutinePrivSortKey &routine_priv_key,
+        ObPrivSet &priv_set)
+{
+  int ret = OB_SUCCESS;
+  const ObSchemaMgr *mgr = NULL;
+  uint64_t tenant_id = routine_priv_key.tenant_id_;
+  if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
+    LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id), K_(tenant_id));
+  } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
+    LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(mgr->priv_mgr_.get_routine_priv_set(routine_priv_key, priv_set))) {
+    LOG_WARN("fail to get routine priv set", KR(ret), K(routine_priv_key));
   }
   return ret;
 }
@@ -4207,6 +4376,32 @@ int ObSchemaGetterGuard::get_table_priv_with_user_id(const uint64_t tenant_id,
     LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
   } else if (OB_FAIL(mgr->priv_mgr_.get_table_privs_in_user(tenant_id, user_id, table_privs))) {
     LOG_WARN("get table priv with user_id failed", KR(ret), K(tenant_id), K(user_id));
+  }
+
+  return ret;
+}
+
+int ObSchemaGetterGuard::get_routine_priv_with_user_id(const uint64_t tenant_id,
+                                                      const uint64_t user_id,
+                                                      ObIArray<const ObRoutinePriv *> &routine_privs)
+{
+  int ret = OB_SUCCESS;
+  const ObSchemaMgr *mgr = NULL;
+  routine_privs.reset();
+
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (OB_INVALID_ID == tenant_id
+             || OB_INVALID_ID == user_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(tenant_id), K(user_id));
+  } else if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
+    LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id), K_(tenant_id));
+  } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
+    LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(mgr->priv_mgr_.get_routine_privs_in_user(tenant_id, user_id, routine_privs))) {
+    LOG_WARN("get routine priv with user_id failed", KR(ret), K(tenant_id), K(user_id));
   }
 
   return ret;
@@ -6406,6 +6601,28 @@ int ObSchemaGetterGuard::get_routine_id(uint64_t tenant_id, uint64_t database_id
     } else if (NULL != schema) {
       routine_id = schema->get_routine_id();
     }
+  }
+  return ret;
+}
+
+int ObSchemaGetterGuard::check_routine_definer_existed(uint64_t tenant_id, const ObString &user_name, bool &existed)
+{
+  int ret = OB_SUCCESS;
+  const ObSchemaMgr *mgr = NULL;
+
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (OB_INVALID_ID == tenant_id
+             || user_name.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(user_name));
+  } else if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
+    LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id), K_(tenant_id));
+  } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
+    LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(mgr->routine_mgr_.check_user_reffered_by_definer(user_name, existed))) {
+    LOG_WARN("check routine definer failed", KR(ret), K(tenant_id), K(user_name));
   }
   return ret;
 }

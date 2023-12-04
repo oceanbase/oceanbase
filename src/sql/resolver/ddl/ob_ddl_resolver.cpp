@@ -3367,14 +3367,19 @@ int ObDDLResolver::resolve_normal_column_attribute(ObColumnSchemaV2 &column,
           SQL_RESV_LOG(WARN, "invalid node!", K(ret));
         } else {
           ObString comment(attr_node->children_[0]->str_len_, attr_node->children_[0]->str_value_);
-          if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(
-                  *allocator_, session_info_->get_dtc_params(), comment))) {
+          if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(*allocator_, session_info_->get_dtc_params(), comment))) {
             LOG_WARN("fail to convert comment to utf8", K(ret), K(comment));
-          } else if(comment.length() >= MAX_COLUMN_COMMENT_LENGTH){
-            ret = OB_ERR_TOO_LONG_FIELD_COMMENT;
-            LOG_USER_ERROR(OB_ERR_TOO_LONG_FIELD_COMMENT, MAX_COLUMN_COMMENT_LENGTH);
-          } else{
-            column.set_comment(comment);
+          } else {
+            int64_t comment_length = comment.length();
+            char *comment_ptr = const_cast<char *>(comment.ptr());
+            if(OB_FAIL(ObResolverUtils::check_comment_length(session_info_,
+                                                            comment_ptr,
+                                                            &comment_length,
+                                                            MAX_COLUMN_COMMENT_CHAR_LENGTH))){
+              LOG_WARN("fail to check_comment_length", K(ret));
+            } else {
+              column.set_comment(ObString(comment_length, comment_ptr));
+            }
           }
         }
         break;
@@ -3667,14 +3672,19 @@ int ObDDLResolver::resolve_generated_column_attribute(ObColumnSchemaV2 &column,
         SQL_RESV_LOG(WARN, "invalid node!", K(ret));
       } else {
         ObString comment(attr_node->children_[0]->str_len_, attr_node->children_[0]->str_value_);
-        if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(
-                      *allocator_, session_info_->get_dtc_params(), comment))) {
+        if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(*allocator_, session_info_->get_dtc_params(), comment))) {
           LOG_WARN("fail to convert comment to utf8", K(ret), K(comment));
-        } else if(comment.length() >= MAX_COLUMN_COMMENT_LENGTH){
-          ret = OB_ERR_TOO_LONG_FIELD_COMMENT;
-          LOG_USER_ERROR(OB_ERR_TOO_LONG_FIELD_COMMENT, MAX_COLUMN_COMMENT_LENGTH);
-        } else{
-          column.set_comment(comment);
+        } else {
+          int64_t comment_length = comment.length();
+          char *comment_ptr = const_cast<char *>(comment.ptr());
+          if(OB_FAIL(ObResolverUtils::check_comment_length(session_info_,
+                                                          comment_ptr,
+                                                          &comment_length,
+                                                          MAX_COLUMN_COMMENT_CHAR_LENGTH))){
+            LOG_WARN("fail to check_comment_length", K(ret));
+          } else {
+            column.set_comment(ObString(comment_length, comment_ptr));
+          }
         }
       }
       break;
@@ -4276,11 +4286,13 @@ int ObDDLResolver::resolve_identity_column_attribute(ObColumnSchemaV2 &column,
         SQL_RESV_LOG(WARN, "invalid node!", K(ret));
       } else {
         int64_t comment_length = attr_node->children_[0]->str_len_;
-        const char * comment_ptr = attr_node->children_[0]->str_value_;
-        if(comment_length >= MAX_COLUMN_COMMENT_LENGTH){
-          ret = OB_ERR_TOO_LONG_FIELD_COMMENT;
-          LOG_USER_ERROR(OB_ERR_TOO_LONG_FIELD_COMMENT, MAX_COLUMN_COMMENT_LENGTH);
-        } else{
+        char *comment_ptr = const_cast<char *>(attr_node->children_[0]->str_value_);
+        if(OB_FAIL(ObResolverUtils::check_comment_length(session_info_,
+                                                        comment_ptr,
+                                                        &comment_length,
+                                                        MAX_COLUMN_COMMENT_CHAR_LENGTH))){
+          LOG_WARN("fail to check_comment_length", K(ret));
+        } else {
           column.set_comment(ObString(comment_length, comment_ptr));
         }
       }

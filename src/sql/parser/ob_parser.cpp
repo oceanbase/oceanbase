@@ -1030,6 +1030,7 @@ int ObParser::parse(const ObString &query,
   parse_result.is_not_utf8_connection_ = ObCharset::is_valid_collation(charsets4parser_.string_collation_) ?
         (ObCharset::charset_type_by_coll(charsets4parser_.string_collation_) != CHARSET_UTF8MB4) : false;
   parse_result.malloc_pool_ = allocator_;
+  parse_result.semicolon_start_col_ = INT32_MAX;
   if (lib::is_oracle_mode()) {
     parse_result.sql_mode_ = sql_mode_ | SMO_ORACLE;
   } else {

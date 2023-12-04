@@ -136,6 +136,39 @@ bool ObKVFeatureModeUitl::is_hotkey_enable()
   return is_obkv_feature_enable(ObKVFeatureType::HOTKEY);
 }
 
+ObPrivControlMode::ObPrivControlMode(const uint8_t *values)
+{
+  if (OB_UNLIKELY(values == NULL)) {
+    value_ = 0;
+    is_valid_ = false;
+  } else {
+    value_ = (int64_t)values[0] | ((int64_t)values[1] << 8) | ((int64_t)values[2] << 16) | ((int64_t)values[3] << 24)
+            | ((int64_t)values[4] << 32) | ((int64_t)values[5] << 40) | ((int64_t)values[6] << 48)
+            | ((int64_t)values[7] << 56);
+    is_valid_ = true;
+  }
+}
+
+void ObPrivControlMode::set_value(uint64_t value)
+{
+  if ((value & 0b11) == 0b11 || ((value >> 2) & 0b11) == 0b11 || ((value >> 4) & 0b11) == 0b11
+     || ((value >> 6) & 0b11) == 0b11 || ((value >> 8) & 0b11) == 0b11 || ((value >> 10) & 0b11) == 0b11
+     || ((value >> 12) & 0b11) == 0b11 || ((value >> 14) & 0b11) == 0b11 || ((value >> 16) & 0b11) == 0b11
+     || ((value >> 18) & 0b11) == 0b11 || ((value >> 20) & 0b11) == 0b11 || ((value >> 22) & 0b11) == 0b11
+     || ((value >> 24) & 0b11) == 0b11 || ((value >> 26) & 0b11) == 0b11 || ((value >> 28) & 0b11) == 0b11
+     || ((value >> 30) & 0b11) == 0b11 || ((value >> 32) & 0b11) == 0b11 || ((value >> 34) & 0b11) == 0b11
+     || ((value >> 36) & 0b11) == 0b11 || ((value >> 38) & 0b11) == 0b11 || ((value >> 40) & 0b11) == 0b11
+     || ((value >> 42) & 0b11) == 0b11 || ((value >> 44) & 0b11) == 0b11 || ((value >> 46) & 0b11) == 0b11
+     || ((value >> 48) & 0b11) == 0b11 || ((value >> 50) & 0b11) == 0b11 || ((value >> 52) & 0b11) == 0b11
+     || ((value >> 54) & 0b11) == 0b11 || ((value >> 56) & 0b11) == 0b11 || ((value >> 58) & 0b11) == 0b11
+     || ((value >> 60) & 0b11) == 0b11 || ((value >> 62) & 0b11) == 0b11) {
+    is_valid_ = false;
+  } else {
+    is_valid_ = true;
+    value_ = value;
+  }
+}
+
 int ObKVConfigUtil::get_compress_type(const int64_t tenant_id,
                                       int64_t result_size,
                                       ObCompressorType &compressor_type)

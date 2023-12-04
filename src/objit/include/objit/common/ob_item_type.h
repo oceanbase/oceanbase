@@ -1221,6 +1221,7 @@ typedef enum ObItemType
   T_PRIVILEGES,
   T_PRIV_LEVEL,
   T_PRIV_TYPE,
+  T_PRIV_OBJECT,
   T_USERS,
   T_REVOKE,
   T_REVOKE_ALL,

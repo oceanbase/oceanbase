@@ -724,7 +724,7 @@ int ObRawExprUtils::resolve_udf_common_info(const ObString &db_name,
   int ret = OB_SUCCESS;
   ObUDFRawExpr *udf_raw_expr = udf_info.ref_expr_;
   CK (OB_NOT_NULL(udf_raw_expr));
-  OX (udf_raw_expr->set_database_name(db_name));
+  OZ (udf_raw_expr->set_database_name(db_name));
   OX (udf_raw_expr->set_package_name(package_name));
   OZ (udf_raw_expr->set_subprogram_path(subprogram_path));
   OX (udf_raw_expr->set_udf_id(udf_id));
@@ -1405,7 +1405,7 @@ int ObRawExprUtils::parse_default_expr_from_str(const ObString &expr_str,
   parse_result.is_not_utf8_connection_ = ObCharset::is_valid_collation(expr_str_cs_type.string_collation_) ?
         (ObCharset::charset_type_by_coll(expr_str_cs_type.string_collation_) != CHARSET_UTF8MB4) : false;
   parse_result.connection_collation_ = expr_str_cs_type.string_collation_;
-
+  parse_result.semicolon_start_col_ = INT32_MAX;
   if (OB_FAIL(sql_str.append_fmt("DO %.*s", expr_str.length(), expr_str.ptr()))) {
     LOG_WARN("failed to concat expr str", K(expr_str), K(ret));
   } else if (OB_FAIL(parser.parse(

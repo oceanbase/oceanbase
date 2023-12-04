@@ -101,6 +101,14 @@ protected:
     return common::OB_SUCCESS;
   }
 
+  virtual int mock_values_column_ref(const ObColumnRefRawExpr *column_ref,
+                                     ObInsertTableInfo &table_info)
+  {
+    UNUSED(column_ref);
+    UNUSED(table_info);
+    return common::OB_SUCCESS;
+  }
+
   // add for error logging
   int resolve_error_logging(const ParseNode *node);
   int resolve_err_log_table(const ParseNode *node);
@@ -232,7 +240,14 @@ protected:
   void set_is_oracle_tmp_table(bool is_temp_table) { is_oracle_tmp_table_ = is_temp_table; }
   void set_oracle_tmp_table_type(int64_t type) { oracle_tmp_table_type_ = type; }
   int add_new_sel_item_for_oracle_temp_table(ObSelectStmt &select_stmt);
-  int add_new_column_for_oracle_temp_table(uint64_t ref_table_id, uint64_t table_id = OB_INVALID_ID, ObDMLStmt *stmt = NULL);
+  int get_session_columns_for_oracle_temp_table(uint64_t ref_table_id,
+                                                uint64_t table_id,
+                                                ObDMLStmt *stmt,
+                                                ObColumnRefRawExpr *&session_id_expr,
+                                                ObColumnRefRawExpr *&session_create_time_expr);
+  int add_column_for_oracle_temp_table(uint64_t ref_table_id, uint64_t table_id, ObDMLStmt *stmt);
+  int add_column_for_oracle_temp_table(ObInsertTableInfo &table_info, ObDMLStmt *stmt);
+  int add_new_column_for_oracle_temp_table(uint64_t ref_table_id, uint64_t table_id, ObDMLStmt *stmt);
   int add_new_value_for_oracle_temp_table(ObIArray<ObRawExpr*> &value_row);
   int add_new_column_for_oracle_label_security_table(ObIArray<uint64_t>& the_missing_label_se_columns,
                                                      uint64_t ref_table_id,

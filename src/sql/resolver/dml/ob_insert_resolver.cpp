@@ -129,6 +129,8 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(insert_stmt->formalize_stmt(session_info_))) {
       LOG_WARN("pull stmt all expr relation ids failed", K(ret));
+    } else {
+      LOG_DEBUG("check insert table info", K(insert_stmt->get_insert_table_info()));
     }
   }
 
@@ -191,9 +193,9 @@ int ObInsertResolver::resolve_insert_clause(const ParseNode &node)
 
   //无论哪种插入方式, 都需要向target field中添加列__session_id
   //非赋值方式插入oracle临时表值中的session_id添加在resolve_insert_values已完成
-  if (FAILEDx(add_new_column_for_oracle_temp_table(insert_stmt->get_insert_table_info().ref_table_id_,
-                                                   insert_stmt->get_insert_table_info().table_id_,
-                                                   insert_stmt))) {
+  if (FAILEDx(add_column_for_oracle_temp_table(insert_stmt->get_insert_table_info().ref_table_id_,
+                                               insert_stmt->get_insert_table_info().table_id_,
+                                               insert_stmt))) {
     LOG_WARN("failed to add new column for oracle temp table", K(ret));
   } else if (!has_tg && 
              OB_FAIL(add_new_column_for_oracle_label_security_table(label_se_columns,
@@ -424,25 +426,10 @@ int ObInsertResolver::resolve_insert_field(const ParseNode &insert_into, TableIt
   }
   if (OB_SUCC(ret)) {
     current_scope_ = T_INSERT_SCOPE;
-    const ObTableSchema *table_schema = NULL;
-    uint64_t ref_id = (!OB_ISNULL(table_item->ref_query_) && table_item->ref_query_->is_view_stmt())
-                          ? table_item->ref_query_->get_view_ref_id()
-                          : table_item->get_base_table_item().ref_id_;
-    OZ(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), ref_id, table_schema, table_item->is_link_table()));
-
     if (OB_SUCC(ret) && table_item->is_view_table_ && is_oracle_mode()) {
       bool has_tg = false;
       OZ (has_need_fired_trigger_on_view(table_item, has_tg));
       OX (insert_stmt->set_has_instead_of_trigger(has_tg));
-    }
-
-    if (OB_SUCC(ret)) {
-      if (table_schema->is_oracle_tmp_table()) {
-        //oracle临时表各session不会创建自己的私有对象只能在数据增加时设置标记
-        session_info_->set_has_temp_table_flag();
-        set_is_oracle_tmp_table(true);
-        set_oracle_tmp_table_type(table_schema->is_oracle_sess_tmp_table() ? 0 : 1);
-      }
     }
   }
 
@@ -457,6 +444,22 @@ int ObInsertResolver::resolve_insert_field(const ParseNode &insert_into, TableIt
   if (OB_SUCC(ret) && 2 == insert_into.num_child_ &&
       OB_FAIL(resolve_insert_columns(insert_into.children_[1], insert_stmt->get_insert_table_info()))) {
     LOG_WARN("failed to resolve insert columns", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    const ObTableSchema *table_schema = NULL;
+    OZ(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                         table_item->get_base_table_item().ref_id_,
+                                         table_schema,
+                                         table_item->is_link_table()));
+    if (OB_SUCC(ret)) {
+      if (table_schema->is_oracle_tmp_table() && !in_pl_) {
+        //oracle临时表各session不会创建自己的私有对象只能在数据增加时设置标记
+        session_info_->set_has_temp_table_flag();
+        set_is_oracle_tmp_table(true);
+        set_oracle_tmp_table_type(table_schema->is_oracle_sess_tmp_table() ? 0 : 1);
+      }
+    }
   }
 
   OZ(remove_dup_dep_cols_for_heap_table(insert_stmt->get_insert_table_info().part_generated_col_dep_cols_,

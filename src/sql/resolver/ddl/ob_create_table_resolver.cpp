@@ -370,23 +370,25 @@ int ObCreateTableResolver::set_temp_table_info(ObTableSchema &table_schema, Pars
     meta_int.set_collation_level(CS_LEVEL_NONE);
     meta_int.set_collation_type(CS_TYPE_BINARY);
     stat.reset();
-    column.set_column_name(OB_HIDDEN_SESSION_ID_COLUMN_NAME);
     column.set_meta_type(meta_int);
     column.set_column_id(OB_HIDDEN_SESSION_ID_COLUMN_ID);
     column.set_is_hidden(true);
     stat.column_id_ = column.get_column_id();
-    if (OB_FAIL(table_schema.add_column(column))) {
+    if (OB_FAIL(column.set_column_name(OB_HIDDEN_SESSION_ID_COLUMN_NAME))) {
+      LOG_WARN("failed to set column name", K(ret));
+    } else if (OB_FAIL(table_schema.add_column(column))) {
       SQL_RESV_LOG(WARN, "fail to add column", K(ret));
     } else if (OB_FAIL(stats.push_back(stat))) {
       SQL_RESV_LOG(WARN, "fail to push back stat", K(ret));
     } else {
       stat.reset();
-      column.set_column_name(OB_HIDDEN_SESS_CREATE_TIME_COLUMN_NAME);
       column.set_meta_type(meta_int);
       column.set_column_id(OB_HIDDEN_SESS_CREATE_TIME_COLUMN_ID);
       column.set_is_hidden(true);
       stat.column_id_ = column.get_column_id();
-      if (OB_FAIL(table_schema.add_column(column))) {
+      if (OB_FAIL(column.set_column_name(OB_HIDDEN_SESS_CREATE_TIME_COLUMN_NAME))) {
+        LOG_WARN("failed to set column name", K(ret));
+      } else if (OB_FAIL(table_schema.add_column(column))) {
         SQL_RESV_LOG(WARN, "fail to add column", K(ret));
       } else if (OB_FAIL(stats.push_back(stat))) {
         SQL_RESV_LOG(WARN, "fail to push back stat", K(ret));
@@ -1855,9 +1857,9 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
         } else {
           column.reset();
           if (!select_item.alias_name_.empty()) {
-            column.set_column_name(select_item.alias_name_);
+            OZ(column.set_column_name(select_item.alias_name_));
           } else {
-            column.set_column_name(select_item.expr_name_);
+            OZ(column.set_column_name(select_item.expr_name_));
           }
           if (OB_SUCC(ret) && is_mysql_mode()) {
             if (new_table_item != NULL && new_table_item->is_basic_table()) {

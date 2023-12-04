@@ -1,0 +1,231 @@
+**************   Begin Test Reserved Keyword   ***************
+Reserved Keyword: ACCESS
+Test Table Name and Column Name Sql:create table ACCESS(ACCESS int);
+Reserved Keyword: ADD
+Test Table Name and Column Name Sql:create table ADD(ADD int);
+Reserved Keyword: ALL
+Test Table Name and Column Name Sql:create table ALL(ALL int);
+Reserved Keyword: ALTER
+Test Table Name and Column Name Sql:create table ALTER(ALTER int);
+Reserved Keyword: AND
+Test Table Name and Column Name Sql:create table AND(AND int);
+Reserved Keyword: ANY
+Test Table Name and Column Name Sql:create table ANY(ANY int);
+Reserved Keyword: AS
+Test Table Name and Column Name Sql:create table AS(AS int);
+Reserved Keyword: ASC
+Test Table Name and Column Name Sql:create table ASC(ASC int);
+Reserved Keyword: AUDIT
+Test Table Name and Column Name Sql:create table AUDIT(AUDIT int);
+Reserved Keyword: BETWEEN
+Test Table Name and Column Name Sql:create table BETWEEN(BETWEEN int);
+Reserved Keyword: BY
+Test Table Name and Column Name Sql:create table BY(BY int);
+Reserved Keyword: CHAR
+Test Table Name and Column Name Sql:create table CHAR(CHAR int);
+Reserved Keyword: CHECK
+Test Table Name and Column Name Sql:create table CHECK(CHECK int);
+Reserved Keyword: CLUSTER
+Test Table Name and Column Name Sql:create table CLUSTER(CLUSTER int);
+Reserved Keyword: COLUMN
+Test Table Name and Column Name Sql:create table COLUMN(COLUMN int);
+Reserved Keyword: COMMENT
+Test Table Name and Column Name Sql:create table COMMENT(COMMENT int);
+Reserved Keyword: COMPRESS
+Test Table Name and Column Name Sql:create table COMPRESS(COMPRESS int);
+Reserved Keyword: CONNECT
+Test Table Name and Column Name Sql:create table CONNECT(CONNECT int);
+Reserved Keyword: CREATE
+Test Table Name and Column Name Sql:create table CREATE(CREATE int);
+Reserved Keyword: CURRENT
+Test Table Name and Column Name Sql:create table CURRENT(CURRENT int);
+Reserved Keyword: DATE
+Test Table Name and Column Name Sql:create table DATE(DATE int);
+Reserved Keyword: DECIMAL
+Test Table Name and Column Name Sql:create table DECIMAL(DECIMAL int);
+Reserved Keyword: DEFAULT
+Test Table Name and Column Name Sql:create table DEFAULT(DEFAULT int);
+Reserved Keyword: DELETE
+Test Table Name and Column Name Sql:create table DELETE(DELETE int);
+Reserved Keyword: DESC
+Test Table Name and Column Name Sql:create table DESC(DESC int);
+Reserved Keyword: DISTINCT
+Test Table Name and Column Name Sql:create table DISTINCT(DISTINCT int);
+Reserved Keyword: DROP
+Test Table Name and Column Name Sql:create table DROP(DROP int);
+Reserved Keyword: ELSE
+Test Table Name and Column Name Sql:create table ELSE(ELSE int);
+Reserved Keyword: EXCLUSIVE
+Test Table Name and Column Name Sql:create table EXCLUSIVE(EXCLUSIVE int);
+Reserved Keyword: EXISTS
+Test Table Name and Column Name Sql:create table EXISTS(EXISTS int);
+Reserved Keyword: FILE
+Test Table Name and Column Name Sql:create table FILE(FILE int);
+Reserved Keyword: FLOAT
+Test Table Name and Column Name Sql:create table FLOAT(FLOAT int);
+Reserved Keyword: FOR
+Test Table Name and Column Name Sql:create table FOR(FOR int);
+Reserved Keyword: FROM
+Test Table Name and Column Name Sql:create table FROM(FROM int);
+Reserved Keyword: GRANT
+Test Table Name and Column Name Sql:create table GRANT(GRANT int);
+Reserved Keyword: GROUP
+Test Table Name and Column Name Sql:create table GROUP(GROUP int);
+Reserved Keyword: HAVING
+Test Table Name and Column Name Sql:create table HAVING(HAVING int);
+Reserved Keyword: IDENTIFIED
+Test Table Name and Column Name Sql:create table IDENTIFIED(IDENTIFIED int);
+Reserved Keyword: IMMEDIATE
+Test Table Name and Column Name Sql:create table IMMEDIATE(IMMEDIATE int);
+Reserved Keyword: IN
+Test Table Name and Column Name Sql:create table IN(IN int);
+Reserved Keyword: INCREMENT
+Test Table Name and Column Name Sql:create table INCREMENT(INCREMENT int);
+Reserved Keyword: INDEX
+Test Table Name and Column Name Sql:create table INDEX(INDEX int);
+Reserved Keyword: INITIAL
+Test Table Name and Column Name Sql:create table INITIAL(INITIAL int);
+Reserved Keyword: INSERT
+Test Table Name and Column Name Sql:create table INSERT(INSERT int);
+Reserved Keyword: INTEGER
+Test Table Name and Column Name Sql:create table INTEGER(INTEGER int);
+Reserved Keyword: INTERSECT
+Test Table Name and Column Name Sql:create table INTERSECT(INTERSECT int);
+Reserved Keyword: INTO
+Test Table Name and Column Name Sql:create table INTO(INTO int);
+Reserved Keyword: IS
+Test Table Name and Column Name Sql:create table IS(IS int);
+Reserved Keyword: LEVEL
+Test Table Name and Column Name Sql:create table LEVEL(LEVEL int);
+Reserved Keyword: LIKE
+Test Table Name and Column Name Sql:create table LIKE(LIKE int);
+Reserved Keyword: LOCK
+Test Table Name and Column Name Sql:create table LOCK(LOCK int);
+Reserved Keyword: LONG
+Test Table Name and Column Name Sql:create table LONG(LONG int);
+Reserved Keyword: MAXEXTENTS
+Test Table Name and Column Name Sql:create table MAXEXTENTS(MAXEXTENTS int);
+Reserved Keyword: MINUS
+Test Table Name and Column Name Sql:create table MINUS(MINUS int);
+Reserved Keyword: MODE
+Test Table Name and Column Name Sql:create table MODE(MODE int);
+Reserved Keyword: MODIFY
+Test Table Name and Column Name Sql:create table MODIFY(MODIFY int);
+Reserved Keyword: NOAUDIT
+Test Table Name and Column Name Sql:create table NOAUDIT(NOAUDIT int);
+Reserved Keyword: NOCOMPRESS
+Test Table Name and Column Name Sql:create table NOCOMPRESS(NOCOMPRESS int);
+Reserved Keyword: NOT
+Test Table Name and Column Name Sql:create table NOT(NOT int);
+Reserved Keyword: NOTFOUND
+Test Table Name and Column Name Sql:create table NOTFOUND(NOTFOUND int);
+Reserved Keyword: NOWAIT
+Test Table Name and Column Name Sql:create table NOWAIT(NOWAIT int);
+Reserved Keyword: NUMBER
+Test Table Name and Column Name Sql:create table NUMBER(NUMBER int);
+Reserved Keyword: OF
+Test Table Name and Column Name Sql:create table OF(OF int);
+Reserved Keyword: OFFLINE
+Test Table Name and Column Name Sql:create table OFFLINE(OFFLINE int);
+Reserved Keyword: ON
+Test Table Name and Column Name Sql:create table ON(ON int);
+Reserved Keyword: ONLINE
+Test Table Name and Column Name Sql:create table ONLINE(ONLINE int);
+Reserved Keyword: OPTION
+Test Table Name and Column Name Sql:create table OPTION(OPTION int);
+Reserved Keyword: OR
+Test Table Name and Column Name Sql:create table OR(OR int);
+Reserved Keyword: ORDER
+Test Table Name and Column Name Sql:create table ORDER(ORDER int);
+Reserved Keyword: PCTFREE
+Test Table Name and Column Name Sql:create table PCTFREE(PCTFREE int);
+Reserved Keyword: PRIOR
+Test Table Name and Column Name Sql:create table PRIOR(PRIOR int);
+Reserved Keyword: PRIVILEGES
+Test Table Name and Column Name Sql:create table PRIVILEGES(PRIVILEGES int);
+Reserved Keyword: PUBLIC
+Test Table Name and Column Name Sql:create table PUBLIC(PUBLIC int);
+Reserved Keyword: RAW
+Test Table Name and Column Name Sql:create table RAW(RAW int);
+Reserved Keyword: RENAME
+Test Table Name and Column Name Sql:create table RENAME(RENAME int);
+Reserved Keyword: RESOURCE
+Test Table Name and Column Name Sql:create table RESOURCE(RESOURCE int);
+Reserved Keyword: REVOKE
+Test Table Name and Column Name Sql:create table REVOKE(REVOKE int);
+Reserved Keyword: ROW
+Test Table Name and Column Name Sql:create table ROW(ROW int);
+Reserved Keyword: ROWID
+Test Table Name and Column Name Sql:create table ROWID(ROWID int);
+Reserved Keyword: ROWLABEL
+Test Table Name and Column Name Sql:create table ROWLABEL(ROWLABEL int);
+Reserved Keyword: ROWNUM
+Test Table Name and Column Name Sql:create table ROWNUM(ROWNUM int);
+Reserved Keyword: ROWS
+Test Table Name and Column Name Sql:create table ROWS(ROWS int);
+Reserved Keyword: START
+Test Table Name and Column Name Sql:create table START(START int);
+Reserved Keyword: SELECT
+Test Table Name and Column Name Sql:create table SELECT(SELECT int);
+Reserved Keyword: SESSION
+Test Table Name and Column Name Sql:create table SESSION(SESSION int);
+Reserved Keyword: SET
+Test Table Name and Column Name Sql:create table SET(SET int);
+Reserved Keyword: SHARE
+Test Table Name and Column Name Sql:create table SHARE(SHARE int);
+Reserved Keyword: SIZE
+Test Table Name and Column Name Sql:create table SIZE(SIZE int);
+Reserved Keyword: SMALLINT
+Test Table Name and Column Name Sql:create table SMALLINT(SMALLINT int);
+Reserved Keyword: SUCCESSFUL
+Test Table Name and Column Name Sql:create table SUCCESSFUL(SUCCESSFUL int);
+Reserved Keyword: SYNONYM
+Test Table Name and Column Name Sql:create table SYNONYM(SYNONYM int);
+Reserved Keyword: SYSDATE
+Test Table Name and Column Name Sql:create table SYSDATE(SYSDATE int);
+Reserved Keyword: TABLE
+Test Table Name and Column Name Sql:create table TABLE(TABLE int);
+Reserved Keyword: THEN
+Test Table Name and Column Name Sql:create table THEN(THEN int);
+Reserved Keyword: TO
+Test Table Name and Column Name Sql:create table TO(TO int);
+Reserved Keyword: TRIGGER
+Test Table Name and Column Name Sql:create table TRIGGER(TRIGGER int);
+Reserved Keyword: UID
+Test Table Name and Column Name Sql:create table UID(UID int);
+Reserved Keyword: UNION
+Test Table Name and Column Name Sql:create table UNION(UNION int);
+Reserved Keyword: UNIQUE
+Test Table Name and Column Name Sql:create table UNIQUE(UNIQUE int);
+Reserved Keyword: UPDATE
+Test Table Name and Column Name Sql:create table UPDATE(UPDATE int);
+Reserved Keyword: USER
+Test Table Name and Column Name Sql:create table USER(USER int);
+Reserved Keyword: VALIDATE
+Test Table Name and Column Name Sql:create table VALIDATE(VALIDATE int);
+Reserved Keyword: VALUES
+Test Table Name and Column Name Sql:create table VALUES(VALUES int);
+Reserved Keyword: VARCHAR
+Test Table Name and Column Name Sql:create table VARCHAR(VARCHAR int);
+Reserved Keyword: VARCHAR2
+Test Table Name and Column Name Sql:create table VARCHAR2(VARCHAR2 int);
+Reserved Keyword: VIEW
+Test Table Name and Column Name Sql:create table VIEW(VIEW int);
+Reserved Keyword: WHENEVER
+Test Table Name and Column Name Sql:create table WHENEVER(WHENEVER int);
+Reserved Keyword: WHERE
+Test Table Name and Column Name Sql:create table WHERE(WHERE int);
+Reserved Keyword: WITH
+Test Table Name and Column Name Sql:create table WITH(WITH int);
+Reserved Keyword: CASE
+Test Table Name and Column Name Sql:create table CASE(CASE int);
+Reserved Keyword: CONNECT_BY_ROOT
+Test Table Name and Column Name Sql:create table CONNECT_BY_ROOT(CONNECT_BY_ROOT int);
+Reserved Keyword: DUAL
+Test Table Name and Column Name Sql:create table DUAL(DUAL int);
+Reserved Keyword: SQL_CALC_FOUND_ROWS
+Test Table Name and Column Name Sql:create table SQL_CALC_FOUND_ROWS(SQL_CALC_FOUND_ROWS int);
+************** Total Count of Reserved Keyword:113   ***************
+**************   End Test Reserved Keyword   ***************
+**************   Begin Test Non-Reserved Keyword  ***************
+**************   End Test Non-Reserved Keyword  ***************

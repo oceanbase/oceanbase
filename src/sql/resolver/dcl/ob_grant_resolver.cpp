@@ -1221,7 +1221,7 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                                                           K(ret));
   } else if (node == NULL 
       || (T_GRANT != node->type_ && T_SYSTEM_GRANT != node->type_)
-      || ((1 != node->num_child_) && (3 != node->num_child_))) {
+      || ((1 != node->num_child_) && (4 != node->num_child_))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("Grant ParseNode error", K(ret));
   } else if (OB_ISNULL(grant_stmt = create_stmt<ObGrantStmt>())) {
@@ -1238,8 +1238,9 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
       }
     } else {
       ParseNode *privs_node = node->children_[0];
-      ParseNode *priv_level_node = node->children_[1];
-      ParseNode *users_node = node->children_[2];
+      ParseNode *priv_object_node = node->children_[1];
+      ParseNode *priv_level_node = node->children_[2];
+      ParseNode *users_node = node->children_[3];
       if (privs_node != NULL && priv_level_node != NULL && users_node != NULL) {
         ObPrivLevel grant_level = OB_PRIV_INVALID_LEVEL;
         //resolve priv_level
@@ -1254,17 +1255,70 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                                          table, 
                                          grant_level))) {
             LOG_WARN("Resolve priv_level node error", K(ret));
+          } else if (priv_object_node != NULL) {
+            const uint64_t tenant_id = params_.session_info_->get_effective_tenant_id();
+            uint64_t compat_version = 0;
+            if (grant_level != OB_PRIV_TABLE_LEVEL) {
+              ret = OB_ILLEGAL_GRANT_FOR_TABLE;
+              LOG_WARN("illegal grant", K(ret));
+            } else if (priv_object_node->value_ == 1) {
+              grant_level = OB_PRIV_TABLE_LEVEL;
+            } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+              LOG_WARN("fail to get data version", K(tenant_id));
+            } else if (compat_version < DATA_VERSION_4_2_2_0) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_2_0", K(ret));
+            } else if (priv_object_node->value_ == 2) {
+              grant_level = OB_PRIV_ROUTINE_LEVEL;
+            } else if (priv_object_node->value_ == 3) {
+              grant_level = OB_PRIV_ROUTINE_LEVEL;
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected obj type", K(ret), K(priv_object_node->value_));
+            }
+          }
+
+          if (OB_FAIL(ret)) {
           } else if (OB_FAIL(check_and_convert_name(db, table))) {
             LOG_WARN("Check and convert name error", K(db), K(table), K(ret));
           } else {
+            share::schema::ObObjectType object_type = share::schema::ObObjectType::INVALID;
+            uint64_t object_id = OB_INVALID_ID;
             grant_stmt->set_grant_level(grant_level);
             if (OB_FAIL(grant_stmt->set_database_name(db))) {
-              LOG_WARN("Failed to set database_name to grant_stmt", K(ret));
+            LOG_WARN("Failed to set database_name to grant_stmt", K(ret));
             } else if (OB_FAIL(grant_stmt->set_table_name(table))) {
               LOG_WARN("Failed to set table_name to grant_stmt", K(ret));
+            } else if (priv_object_node != NULL) {
+              if (priv_object_node->value_ == 1) {
+                const share::schema::ObTableSchema *table_schema = NULL;
+                if (OB_FAIL(params_.schema_checker_->get_table_schema(tenant_id, db, table, false, table_schema))) {
+                  LOG_WARN("get table schema failed", K(ret));
+                } else if (table_schema != NULL) {
+                  if (table_schema->is_index_table()) {
+                    object_type = ObObjectType::INDEX;
+                  } else {
+                    object_type = ObObjectType::TABLE;
+                  }
+                  object_id = table_schema->get_table_id();
+                }
+              } else {
+                uint64_t routine_id = 0;
+                bool is_proc = false;
+                if (OB_FAIL(params_.schema_checker_->get_routine_id(tenant_id, db, table, routine_id, is_proc))) {
+                  if (OB_ERR_SP_DOES_NOT_EXIST == ret) {
+                    ret = OB_ERR_SP_DOES_NOT_EXIST;
+                  }
+                } else {
+                  if (is_proc) {
+                    object_type = ObObjectType::PROCEDURE;
+                  } else {
+                    object_type = ObObjectType::FUNCTION;
+                  }
+                  object_id = routine_id;
+                }
+              }
             } else {
-              share::schema::ObObjectType object_type = share::schema::ObObjectType::INVALID;
-              uint64_t object_id = OB_INVALID_ID;
               ObString object_db_name;
               if (db.empty() || table.empty()) {
                 object_type = share::schema::ObObjectType::MAX_TYPE;
@@ -1276,17 +1330,29 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                                                                false, ObString(""),
                                                                synonym_checker);
               }
-              grant_stmt->set_object_type(object_type);
-              grant_stmt->set_object_id(object_id);
             }
+            grant_stmt->set_object_type(object_type);
+            grant_stmt->set_object_id(object_id);
           }
         }
 
         //resolve privileges
         if (OB_SUCC(ret)) {
           ObPrivSet priv_set = 0;
+          uint64_t compat_version = 0;
           if (OB_FAIL(resolve_priv_set(privs_node, grant_level, priv_set))) {
             LOG_WARN("Resolve priv set error", K(ret));
+          } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+            LOG_WARN("fail to get data version", K(tenant_id));
+          } else if (compat_version < DATA_VERSION_4_2_2_0) {
+            if ((priv_set & OB_PRIV_EXECUTE) != 0 ||
+                (priv_set & OB_PRIV_ALTER_ROUTINE) != 0 ||
+                (priv_set & OB_PRIV_CREATE_ROUTINE) != 0) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_2_0", K(ret));
+            }
+          }
+          if (OB_FAIL(ret)) {
           } else {
             grant_stmt->set_priv_set(priv_set);
           }
@@ -1634,6 +1700,16 @@ int ObGrantResolver::resolve_priv_set(
           if (OB_PRIV_ALL == priv_type) {
             priv_set |= OB_PRIV_TABLE_ACC;
           } else if (priv_type & (~(OB_PRIV_TABLE_ACC | OB_PRIV_GRANT))) {
+            ret = OB_ILLEGAL_GRANT_FOR_TABLE;
+            LOG_WARN("Grant/Revoke privilege than can not be used",
+                      "priv_type", ObPrintPrivSet(priv_type), K(ret));
+          } else {
+            priv_set |= priv_type;
+          }
+        } else if (OB_PRIV_ROUTINE_LEVEL == grant_level) {
+          if (OB_PRIV_ALL == priv_type) {
+            priv_set |= OB_PRIV_ROUTINE_ACC;
+          } else if (priv_type & (~(OB_PRIV_ROUTINE_ACC | OB_PRIV_GRANT))) {
             ret = OB_ILLEGAL_GRANT_FOR_TABLE;
             LOG_WARN("Grant/Revoke privilege than can not be used",
                       "priv_type", ObPrintPrivSet(priv_type), K(ret));

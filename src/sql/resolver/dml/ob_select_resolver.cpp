@@ -58,7 +58,8 @@ ObSelectResolver::ObSelectResolver(ObResolverParams &params)
     having_has_self_column_(false),
     has_grouping_(false),
     has_group_by_clause_(false),
-    has_nested_aggr_(false)
+    has_nested_aggr_(false),
+    is_top_stmt_(false)
 {
   params_.is_from_create_view_ = params.is_from_create_view_;
   params_.is_from_create_table_ = params.is_from_create_table_;
@@ -2026,7 +2027,7 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
           if (OB_FAIL(ob_write_string(*allocator_, rowid_name, select_item.alias_name_))) {
             LOG_WARN("failed to ob write string", K(ret));
           }
-        }  else if (T_FUN_SYS_NAME_CONST == sel_expr->get_expr_type()) {
+        } else if (T_FUN_SYS_NAME_CONST == sel_expr->get_expr_type()) {
           const ParseNode *expr_list_node = project_node->children_[1];
           const ObRawExpr *name_expr = nullptr;
           if (2 != expr_list_node->num_child_) {
@@ -2127,7 +2128,8 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
             }
           }
         } else if (is_oracle_mode() && 0 == select_stmt->get_table_size()
-                   && 0 == select_item.expr_name_.case_compare("DUMMY")) {
+                   && (0 == select_item.expr_name_.case_compare("\"DUMMY\"")
+                       || 0 == select_item.expr_name_.case_compare("DUMMY"))) {
           const char *ptr_name = "DUMMY";
           ObString string_name(ptr_name);
           select_item.alias_name_ = string_name;
@@ -2441,12 +2443,13 @@ int ObSelectResolver::find_joined_table_group_for_table(
 // joined table group: tree of joined table in one table group
 // join group: short of joined table group
 //
-int ObSelectResolver::resolve_star_for_table_groups()
+int ObSelectResolver::resolve_star_for_table_groups(ObStarExpansionInfo &star_expansion_info)
 {
   ObSelectStmt *select_stmt = get_select_stmt();
   int ret = OB_SUCCESS;
   int64_t num = 0;
   int64_t jointable_idx = -1;
+  bool oracle_star_expand = lib::is_oracle_mode() && is_top_stmt();
   if (OB_ISNULL(select_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("select stmt is null");
@@ -2526,8 +2529,14 @@ int ObSelectResolver::resolve_star_for_table_groups()
         }
       }
     }
+    if (OB_SUCC(ret) && oracle_star_expand) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < target_list.count(); ++i) {
+        if (OB_FAIL(star_expansion_info.column_name_list_.push_back(target_list.at(i).expr_name_))) {
+          LOG_WARN("failed to push back select item expr name", K(ret));
+        }
+      }
+    }
   }
-
   return ret;
 }
 
@@ -2638,12 +2647,18 @@ int ObSelectResolver::resolve_star(const ParseNode *node)
 {
   int ret = OB_SUCCESS;
   ObSelectStmt *select_stmt = get_select_stmt();
+  bool oracle_star_expand = lib::is_oracle_mode() && is_top_stmt();
   const share::schema::ObTableSchema *table_schema = NULL;
-
+  ObStarExpansionInfo star_expansion_info;
   if (OB_ISNULL(node) || OB_ISNULL(session_info_)
       || OB_ISNULL(select_stmt) || OB_ISNULL(params_.expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid status", K(node), K_(session_info), K(select_stmt), K(params_.expr_factory_));
+  } else {
+    star_expansion_info.start_pos_ = node->stmt_loc_.first_column_;
+    star_expansion_info.end_pos_ = node->stmt_loc_.last_column_;
+  }
+  if (OB_FAIL(ret)) {
   } else if (node->type_ == T_STAR) {
     int64_t num = select_stmt->get_table_size();
     if (num <= 0) {
@@ -2697,11 +2712,14 @@ int ObSelectResolver::resolve_star(const ParseNode *node)
             select_item.is_real_alias_ = true;
             if (OB_FAIL(select_stmt->add_select_item(select_item))) {
               LOG_WARN("failed to add select item", K(ret));
+            } else if (oracle_star_expand
+                       && OB_FAIL(star_expansion_info.column_name_list_.push_back(string_name))) {
+              LOG_WARN("failed to push back dummy", K(ret));
             } else {/*do nothing*/}
           }
         }
       }
-    } else if (OB_FAIL(resolve_star_for_table_groups())) {
+    } else if (OB_FAIL(resolve_star_for_table_groups(star_expansion_info))) {
       LOG_WARN("resolve star for table groups failed", K(ret));
     }
   } else if (node->type_ == T_COLUMN_REF && node->children_[2]->type_ == T_STAR) {
@@ -2762,6 +2780,9 @@ int ObSelectResolver::resolve_star(const ParseNode *node)
           is_column_name_equal = is_json_wildcard_column & (0 != column_ref.tbl_name_.case_compare(target_list.at(j).alias_name_));
           if (!is_column_name_equal && OB_FAIL(select_stmt->add_select_item(target_list.at(j)))) {
             LOG_WARN("add select item to select stmt failed", K(ret));
+          } else if (oracle_star_expand
+                     && OB_FAIL(star_expansion_info.column_name_list_.push_back(target_list.at(j).expr_name_))) {
+            LOG_WARN("failed to push back select item expr name", K(ret));
           } else if (is_only_full_group_by_on(session_info_->get_sql_mode())) {
             //如果是only full group by，所有target list中的列都必须检查是否满足group约束
             if (is_column_name_equal) {    // target column not equal with current column without judge
@@ -2780,6 +2801,10 @@ int ObSelectResolver::resolve_star(const ParseNode *node)
     }
   } else {
     /* won't be here */
+  }
+  if (OB_SUCC(ret) && oracle_star_expand
+      && OB_FAIL(params_.star_expansion_infos_.push_back(star_expansion_info))) {
+    LOG_WARN("failed to push back star expansion info", K(ret));
   }
   return ret;
 }

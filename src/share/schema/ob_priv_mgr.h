@@ -46,6 +46,29 @@ struct ObGetTablePrivKeyV3<ObTablePrivSortKey, ObTablePriv *>
       key;
   }
 };
+
+template<class T, class V>
+struct ObGetRoutinePrivKeyV3
+{
+  void operator()(const T & t, const V &v) const
+  {
+    UNUSED(t);
+    UNUSED(v);
+  }
+};
+
+template<>
+struct ObGetRoutinePrivKeyV3<ObRoutinePrivSortKey, ObRoutinePriv *>
+{
+  ObRoutinePrivSortKey operator()(const ObRoutinePriv *routine_priv) const
+  {
+    ObRoutinePrivSortKey key;
+    return NULL != routine_priv ?
+      routine_priv->get_sort_key() :
+      key;
+  }
+};
+
 template<class T, class V>
 struct ObGetObjPrivKey
 {
@@ -70,14 +93,18 @@ class ObPrivMgr
 {
   typedef common::ObSortedVector<ObDBPriv *> DBPrivInfos;
   typedef common::ObSortedVector<ObTablePriv *> TablePrivInfos;
+  typedef common::ObSortedVector<ObRoutinePriv *> RoutinePrivInfos;
   typedef common::ObSortedVector<ObObjPriv *>ObjPrivInfos;
   typedef common::ObSortedVector<ObSysPriv *>SysPrivInfos;
   typedef common::hash::ObPointerHashMap<ObTablePrivSortKey, ObTablePriv *, ObGetTablePrivKeyV3, 128> TablePrivMap;
+  typedef common::hash::ObPointerHashMap<ObRoutinePrivSortKey, ObRoutinePriv *, ObGetRoutinePrivKeyV3, 128> RoutinePrivMap;
   typedef common::hash::ObPointerHashMap<ObObjPrivSortKey, ObObjPriv *, ObGetObjPrivKey, 128> ObjPrivMap;
   typedef DBPrivInfos::iterator DBPrivIter;
   typedef DBPrivInfos::const_iterator ConstDBPrivIter;
   typedef TablePrivInfos::iterator TablePrivIter;
   typedef TablePrivInfos::const_iterator ConstTablePrivIter;
+  typedef RoutinePrivInfos::iterator RoutinePrivIter;
+  typedef RoutinePrivInfos::const_iterator ConstRoutinePrivIter;
   typedef SysPrivInfos::iterator SysPrivIter;
   typedef SysPrivInfos::const_iterator ConstSysPrivIter;
   typedef ObjPrivInfos::iterator ObjPrivIter;
@@ -114,10 +141,24 @@ public:
                      const ObTablePriv *&table_priv) const;
   int get_table_priv_set(const ObTablePrivSortKey &table_priv_key,
                          ObPrivSet &priv_set) const;
+
+  int add_routine_privs(const common::ObIArray<ObRoutinePriv> &routine_privs);
+  int del_routine_privs(const common::ObIArray<ObRoutinePrivSortKey> &routine_priv_keys);
+  int add_routine_priv(const ObRoutinePriv &routine_priv);
+  int del_routine_priv(const ObRoutinePrivSortKey &routine_priv_key);
+  int get_routine_priv(const ObRoutinePrivSortKey &routine_priv_key,
+                      const ObRoutinePriv *&routine_priv) const;
+
+  int get_routine_priv_set(const ObRoutinePrivSortKey &routine_priv_key,
+                          ObPrivSet &priv_set) const;
   int table_grant_in_db(const uint64_t tenant_id,
                         const uint64_t user_id,
                         const common::ObString &db,
                         bool &is_grant) const;
+  int routine_grant_in_db(const uint64_t tenant_id,
+                          const uint64_t user_id,
+                          const ObString &db,
+                          bool &is_grant) const;
   //obj priv
   int add_obj_privs(const common::ObIArray<ObObjPriv> &obj_privs);
   int del_obj_privs(const common::ObIArray<ObObjPrivSortKey> &obj_priv_keys);
@@ -161,6 +202,10 @@ public:
   int get_table_privs_in_user(const uint64_t tenant_id,
                               const uint64_t user_id,
                               common::ObIArray<const ObTablePriv *> &table_privs) const;
+  int get_routine_privs_in_user(const uint64_t tenant_id,
+                                const uint64_t user_id,
+                                ObIArray<const ObRoutinePriv *> &routine_privs) const;
+
   int get_obj_privs_in_tenant(const uint64_t tenant_id,
                               common::ObIArray<const ObObjPriv *> &obj_privs) const;
   int get_obj_privs_in_grantee(const uint64_t tenant_id,
@@ -190,12 +235,15 @@ private:
                        DBPrivIter &target_db_priv_iter) const;
   int get_sys_priv_iter(const ObSysPrivKey &sys_key,
                         SysPrivIter &target_sys_priv_iter) const;
+  int rebuild_routine_priv_hashmap();
 private:
   common::ObArenaAllocator local_allocator_;
   common::ObIAllocator &allocator_;
   DBPrivInfos db_privs_;
   TablePrivInfos table_privs_;
   TablePrivMap table_priv_map_;
+  RoutinePrivInfos routine_privs_;
+  RoutinePrivMap routine_priv_map_;
   ObjPrivInfos obj_privs_;
   ObjPrivMap obj_priv_map_;
   SysPrivInfos sys_privs_;

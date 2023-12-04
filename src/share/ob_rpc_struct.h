@@ -2027,6 +2027,7 @@ public:
     tz_info_wrap_.set_tz_info_map(tz_info_map);
     tz_info_.set_tz_info_map(tz_info_map);
   }
+  int is_alter_comment(bool &is_alter_comment) const;
   int set_nls_formats(const common::ObString *nls_formats);
   int set_nls_formats(const common::ObString &nls_date_format,
                       const common::ObString &nls_timestamp_format,
@@ -4988,6 +4989,42 @@ public:
   bool revoke_all_ora_;
 };
 
+struct ObRevokeRoutineArg : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  ObRevokeRoutineArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), user_id_(common::OB_INVALID_ID),
+                            priv_set_(0), grant_(true), obj_id_(common::OB_INVALID_ID),
+                            obj_type_(common::OB_INVALID_ID), grantor_id_(common::OB_INVALID_ID),
+                            obj_priv_array_(), revoke_all_ora_(false)
+  { }
+  bool is_valid() const;
+  int assign(const ObRevokeRoutineArg &other);
+  TO_STRING_KV(K_(tenant_id),
+               K_(user_id),
+               K_(db),
+               K_(routine),
+               "priv_set", share::schema::ObPrintPrivSet(priv_set_),
+               K_(grant),
+               K_(obj_id),
+               K_(obj_type),
+               K_(grantor_id),
+               K_(obj_priv_array));
+
+  uint64_t tenant_id_;
+  uint64_t user_id_;
+  common::ObString db_;
+  common::ObString routine_;
+  ObPrivSet priv_set_;
+  bool grant_;
+  uint64_t obj_id_;
+  uint64_t obj_type_;
+  uint64_t grantor_id_;
+  share::ObRawObjPrivArray obj_priv_array_;
+  bool revoke_all_ora_;
+};
+
 struct ObRevokeSysPrivArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
@@ -6222,7 +6259,13 @@ struct ObCreateRoutineArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObCreateRoutineArg(): routine_info_(), db_name_(), is_or_replace_(false), is_need_alter_(false), error_info_() {}
+  ObCreateRoutineArg()
+    : routine_info_(),
+    db_name_(),
+    is_or_replace_(false),
+    is_need_alter_(false),
+    error_info_(),
+    dependency_infos_() {}
   virtual ~ObCreateRoutineArg() {}
   bool is_valid() const;
   int assign(const ObCreateRoutineArg &other);

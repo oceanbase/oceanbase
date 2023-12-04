@@ -2111,7 +2111,7 @@ OB_DEF_SERIALIZE(ObTenantSchema)
               primary_zone_, locked_, comment_, charset_type_,
               collation_type_, name_case_mode_, read_only_,
               locality_str_, previous_locality_str_);
-  if (!OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
     LOG_WARN("func_SERIALIZE failed", K(ret));
   } else if (OB_FAIL(serialize_string_array(buf, buf_len, pos, zone_list_))) {
     LOG_WARN("serialize_string_array failed", K(ret));
@@ -2580,7 +2580,7 @@ OB_DEF_SERIALIZE(ObDatabaseSchema)
               database_id_, schema_version_, database_name_,
               comment_, charset_type_, collation_type_, name_case_mode_, read_only_,
               default_tablegroup_id_, default_tablegroup_name_, in_recyclebin_);
-  if (!OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
     LOG_WARN("func_SERIALIZE failed", K(ret));
   } else {} // no more to do
   return ret;
@@ -2596,7 +2596,7 @@ OB_DEF_DESERIALIZE(ObDatabaseSchema)
               database_id_, schema_version_, database_name,
               comment, charset_type_, collation_type_, name_case_mode_, read_only_,
               default_tablegroup_id_, default_tablegroup_name, in_recyclebin_);
-  if (!OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
     LOG_WARN("Fail to deserialize data", K(ret));
   } else if (OB_FAIL(set_database_name(database_name))) {
     LOG_WARN("set_tenant_name failed", K(ret));
@@ -2895,7 +2895,7 @@ OB_DEF_SERIALIZE(ObLocality)
 {
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_ENCODE, locality_str_);
-  if (!OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
     LOG_WARN("func_SERIALIZE failed", K(ret));
   } else {} // no more to do
   return ret;
@@ -5379,7 +5379,7 @@ OB_DEF_DESERIALIZE(ObPartitionOption)
               part_func_expr, part_num_,
               auto_part_, auto_part_size_);
 
-  if (!OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
     LOG_WARN("Fail to deserialize data, ", K(ret));
   } else if (OB_FAIL(deep_copy_str(part_func_expr, part_func_expr_))) {
     LOG_WARN("Fail to deep copy part_func_expr, ", K(ret));
@@ -8148,7 +8148,7 @@ OB_DEF_DESERIALIZE(ObViewSchema)
               character_set_client_,
               collation_connection_);
 
-  if (!OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
     LOG_WARN("Fail to deserialize data, ", K(ret));
   } else if (OB_FAIL(deep_copy_str(definition, view_definition_))) {
     LOG_WARN("Fail to deep copy view definition, ", K(ret));
@@ -8292,9 +8292,6 @@ DEF_TO_STRING(ObPrintPrivSet)
   if ((priv_set_ & OB_PRIV_REFERENCES) && OB_SUCCESS == ret) {
     ret = BUF_PRINTF("PRIV_REFERENCES,");
   }
-  if ((priv_set_ & OB_PRIV_EXECUTE) && OB_SUCCESS == ret) {
-    ret = BUF_PRINTF("PRIV_EXECUTE,");
-  }
   if ((priv_set_ & OB_PRIV_FLASHBACK) && OB_SUCCESS == ret) {
     ret = BUF_PRINTF("PRIV_FLASHBACK,");
   }
@@ -8330,6 +8327,15 @@ DEF_TO_STRING(ObPrintPrivSet)
   }
   if ((priv_set_ & OB_PRIV_CREATE_DATABASE_LINK) && OB_SUCCESS == ret) {
     ret = BUF_PRINTF(" CREATE DATABASE LINK,");
+  }
+  if ((priv_set_ & OB_PRIV_EXECUTE) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" EXECUTE,");
+  }
+  if ((priv_set_ & OB_PRIV_ALTER_ROUTINE) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" ALTER ROUTINE,");
+  }
+  if ((priv_set_ & OB_PRIV_CREATE_ROUTINE) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" CREATE ROUTINE,");
   }
   if (OB_SUCCESS == ret && pos > 1) {
     pos--; //Delete last ','
@@ -8370,18 +8376,20 @@ DEF_TO_STRING(ObPrintPackedPrivArray)
 }
 
 //ObPriv
-
-ObPriv& ObPriv::operator=(const ObPriv &other)
+int ObPriv::assign(const ObPriv &other)
 {
+  int ret = OB_SUCCESS;
   if (this != &other) {
     reset();
     tenant_id_ = other.tenant_id_;
     user_id_ = other.user_id_;
     schema_version_ = other.schema_version_;
     priv_set_ = other.priv_set_;
-    priv_array_ = other.priv_array_;
+    if (OB_FAIL(set_priv_array(other.priv_array_))) {
+      LOG_WARN("assgin priv array failed", K(ret));
+    }
   }
-  return *this;
+  return ret;
 }
 
 void ObPriv::reset()
@@ -8441,11 +8449,11 @@ ObUserInfo& ObUserInfo::operator=(const ObUserInfo &other)
     reset();
     int ret = OB_SUCCESS;
     error_ret_ = other.error_ret_;
-    ObPriv::operator=(other);
-    locked_ = other.locked_;
-    ssl_type_ = other.ssl_type_;
-
-    if (OB_FAIL(deep_copy_str(other.user_name_, user_name_))) {
+    if (OB_FAIL(ObPriv::assign(other))) {
+      LOG_WARN("assign failed", K(ret));
+    } else if (OB_FALSE_IT(locked_ = other.locked_)) {
+    } else if (OB_FALSE_IT(ssl_type_ = other.ssl_type_)) {
+    } else if (OB_FAIL(deep_copy_str(other.user_name_, user_name_))) {
       LOG_WARN("Fail to deep copy user_name", K(ret));
     } else if (OB_FAIL(deep_copy_str(other.host_name_, host_name_))) {
       LOG_WARN("Fail to deep copy host_name", K(ret));
@@ -8572,7 +8580,7 @@ OB_DEF_DESERIALIZE(ObUserInfo)
               x509_issuer,
               x509_subject);
 
-  if (!OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
     LOG_WARN("Fail to deserialize data", K(ret));
   } else if (OB_FAIL(deep_copy_str(user_name, user_name_))) {
     LOG_WARN("Fail to deep copy", K(user_name), K(ret));
@@ -8696,11 +8704,12 @@ ObDBPriv& ObDBPriv::operator=(const ObDBPriv &other)
     reset();
     int ret = OB_SUCCESS;
     error_ret_ = other.error_ret_;
-    ObPriv::operator=(other);
-    sort_ = other.sort_;
-
-    if (OB_FAIL(deep_copy_str(other.db_, db_))) {
+    if (OB_FAIL(ObPriv::assign(other))) {
+      LOG_WARN("assign failed", K(ret));
+    } else if (OB_FAIL(deep_copy_str(other.db_, db_))) {
       LOG_WARN("Fail to deep copy db", K(ret));
+    } else {
+      sort_ = other.sort_;
     }
     if (OB_FAIL(ret)) {
       error_ret_ = ret;
@@ -8745,7 +8754,7 @@ OB_DEF_DESERIALIZE(ObDBPriv)
   ObString db;
   BASE_DESER((, ObPriv));
   LST_DO_CODE(OB_UNIS_DECODE, db, sort_);
-  if (!OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
     LOG_WARN("Fail to deserialize data", K(ret));
   } else if (OB_FAIL(deep_copy_str(db, db_))) {
     LOG_WARN("Fail to deep copy user_name", K(db), K(ret));
@@ -8767,9 +8776,9 @@ ObTablePriv& ObTablePriv::operator=(const ObTablePriv &other)
     reset();
     int ret = OB_SUCCESS;
     error_ret_ = other.error_ret_;
-    ObPriv::operator=(other);
-
-    if (OB_FAIL(deep_copy_str(other.db_, db_))) {
+    if (OB_FAIL(ObPriv::assign(other))) {
+      LOG_WARN("assign failed", K(ret));
+    } else if (OB_FAIL(deep_copy_str(other.db_, db_))) {
       LOG_WARN("Fail to deep copy db", K(ret));
     } else if (OB_FAIL(deep_copy_str(other.table_, table_))) {
       LOG_WARN("Fail to deep copy table", K(ret));
@@ -8819,7 +8828,7 @@ OB_DEF_DESERIALIZE(ObTablePriv)
   ObString table;
   BASE_DESER((, ObPriv));
   LST_DO_CODE(OB_UNIS_DECODE, db, table);
-  if (!OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
     LOG_WARN("Fail to deserialize data", K(ret));
   } else if (OB_FAIL(deep_copy_str(db, db_))) {
     LOG_WARN("Fail to deep copy user_name", K(db), K(ret));
@@ -8836,19 +8845,107 @@ OB_DEF_SERIALIZE_SIZE(ObTablePriv)
   return len;
 }
 
+//ObRoutinePriv
+
+int ObRoutinePriv::assign(const ObRoutinePriv &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    reset();
+    if (OB_FAIL(ObPriv::assign(other))) {
+      LOG_WARN("assign failed", K(ret));
+    } else if (OB_FAIL(deep_copy_str(other.db_, db_))) {
+      LOG_WARN("Fail to deep copy db", K(ret));
+    } else if (OB_FAIL(deep_copy_str(other.routine_, routine_))) {
+      LOG_WARN("Fail to deep copy table", K(ret));
+    } else {
+      routine_type_ = other.routine_type_;
+      error_ret_ = other.error_ret_;
+    }
+    if (OB_FAIL(ret)) {
+      error_ret_ = ret;
+    }
+  }
+  return ret;
+}
+
+bool ObRoutinePriv::is_valid() const
+{
+  return ObSchema::is_valid() && ObPriv::is_valid() && routine_type_ != 0;
+}
+
+void ObRoutinePriv::reset()
+{
+  db_.reset();
+  routine_.reset();
+  routine_type_ = 0;
+  ObSchema::reset();
+  ObPriv::reset();
+}
+
+int64_t ObRoutinePriv::get_convert_size() const
+{
+  int64_t convert_size = 0;
+  convert_size += ObPriv::get_convert_size();
+  convert_size += sizeof(ObRoutinePriv) - sizeof(ObPriv);
+  convert_size += db_.length() + 1;
+  convert_size += routine_.length() + 1;
+  return convert_size;
+}
+
+OB_DEF_SERIALIZE(ObRoutinePriv)
+{
+  int ret = OB_SUCCESS;
+  BASE_SER((, ObPriv));
+  LST_DO_CODE(OB_UNIS_ENCODE, db_, routine_, routine_type_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObRoutinePriv)
+{
+  int ret = OB_SUCCESS;
+  ObString db;
+  ObString routine;
+  int64_t routine_type;
+  BASE_DESER((, ObPriv));
+  LST_DO_CODE(OB_UNIS_DECODE, db, routine, routine_type);
+  if (OB_FAIL(ret)) {
+    LOG_WARN("Fail to deserialize data", K(ret));
+  } else if (OB_FAIL(deep_copy_str(db, db_))) {
+    LOG_WARN("Fail to deep copy user_name", K(db), K(ret));
+  } else if (OB_FAIL(deep_copy_str(routine, routine_))) {
+    LOG_WARN("Fail to deep copy user_name", K(routine_), K(ret));
+  } else {}
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObRoutinePriv)
+{
+  int64_t len = ObPriv::get_serialize_size();
+  LST_DO_CODE(OB_UNIS_ADD_LEN, db_, routine_, routine_type_);
+  return len;
+}
+
 //ObObjPriv
 ObObjPriv& ObObjPriv::operator=(const ObObjPriv &other)
 {
   if (this != &other) {
     reset();
-    error_ret_ = other.error_ret_;
-    ObPriv::operator=(other);
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(ObPriv::assign(other))) {
+      LOG_WARN("assign failed", K(ret));
+    } else {
+      error_ret_ = other.error_ret_;
+      obj_id_ = other.obj_id_;
+      obj_type_ = other.obj_type_;
+      col_id_ = other.col_id_;
+      grantor_id_ = other.grantor_id_;
+      grantee_id_ = other.grantee_id_;
+    }
 
-    obj_id_ = other.obj_id_;
-    obj_type_ = other.obj_type_;
-    col_id_ = other.col_id_;
-    grantor_id_ = other.grantor_id_;
-    grantee_id_ = other.grantee_id_;
+    if (OB_FAIL(ret)) {
+      error_ret_ = ret;
+    }
   }
   return *this;
 }
@@ -8904,9 +9001,15 @@ ObSysPriv& ObSysPriv::operator=(const ObSysPriv &other)
 {
   if (this != &other) {
     reset();
+    int ret = OB_SUCCESS;
     error_ret_ = other.error_ret_;
     grantee_id_= other.grantee_id_;
-    ObPriv::operator=(other);
+    if (OB_FAIL(ObPriv::assign(other))) {
+      LOG_WARN("assign failed", K(ret));
+    }
+    if (OB_FAIL(ret)) {
+      error_ret_ = ret;
+    }
   }
   return *this;
 }
@@ -8943,7 +9046,7 @@ OB_DEF_DESERIALIZE(ObSysPriv)
   int ret = OB_SUCCESS;
   BASE_DESER((, ObPriv));
   LST_DO_CODE(OB_UNIS_DECODE, grantee_id_);
-  if (!OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
     LOG_WARN("Fail to deserialize data", K(ret));
   }
   return ret;
@@ -8964,6 +9067,7 @@ int ObNeedPriv::deep_copy(const ObNeedPriv &other, common::ObIAllocator &allocat
   is_sys_table_ = other.is_sys_table_;
   is_for_update_ = other.is_for_update_;
   priv_check_type_ = other.priv_check_type_;
+  obj_type_ = other.obj_type_;
   if (OB_FAIL(ob_write_string(allocator, other.db_, db_))) {
     LOG_WARN("Fail to deep copy db", K_(db), K(ret));
   } else if (OB_FAIL(ob_write_string(allocator, other.table_, table_))) {
@@ -9311,6 +9415,8 @@ const char *schema_type_str(const ObSchemaType schema_type)
     str = "database_priv";
   } else if (TABLE_PRIV == schema_type) {
     str = "table_priv";
+  } else if (ROUTINE_PRIV == schema_type) {
+    str = "routine_priv";
   } else if (OUTLINE_SCHEMA == schema_type) {
     str = "outline_schema";
   } else if (SYNONYM_SCHEMA == schema_type) {

@@ -928,6 +928,7 @@ public:
   void reset_partition_schema() override;
   void reset_column_part_key_info();
   int assign(const ObTableSchema &src_schema);
+  int get_view_column_comment(ObIArray<ObString> &column_comments);
   //part splitting filter is needed during physical splitting
   bool need_part_filter() const
   {

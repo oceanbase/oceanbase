@@ -975,6 +975,56 @@ int ObInnerTableSchema::dba_ob_format_outlines_schema(ObTableSchema &table_schem
   return ret;
 }
 
+int ObInnerTableSchema::procs_priv_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_MYSQL_SCHEMA_ID);
+  table_schema.set_table_id(OB_PROCS_PRIV_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_PROCS_PRIV_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT cast(b.host as char(60)) as Host,            cast(a.database_name as char(64)) as Db,            cast(b.user_name as char(32)) as User,            cast(a.routine_name as char(64)) as Routine_name,            case when a.routine_type = 1 then 'PROCEDURE' else 'FUNCTION' end as Routine_type,            cast(c.priv_user as char(93)) as Grantor,            substr(concat(case when (a.all_priv & 1) > 0 then ',Execute' else '' end,                           case when (a.all_priv & 2) > 0 then ',Alter Routine' else '' end,                           case when (a.all_priv & 4) > 0 then ',Grant' else '' end), 2) as Proc_priv,            cast(a.gmt_modified as date) as Timestamp     FROM oceanbase.__all_routine_privilege a, oceanbase.__all_user b, oceanbase.__all_routine c, oceanbase.__all_database d     WHERE a.tenant_id = b.tenant_id AND a.user_id = b.user_id      AND a.tenant_id = d.tenant_id and a.database_name = d.database_name     AND a.tenant_id = c.tenant_id AND a.routine_name = c.routine_name      AND a.routine_type = c.routine_type AND c.database_id = d.database_id AND c.package_id = -1; )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
 
 } // end namespace share
 } // end namespace oceanbase

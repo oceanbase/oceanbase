@@ -1824,6 +1824,26 @@ bool ObAlterTableArg::is_allow_when_upgrade() const
   return bret;
 }
 
+int ObAlterTableArg::is_alter_comment(bool &is_alter_comment) const
+{
+  int ret = OB_SUCCESS;
+  is_alter_comment = alter_table_schema_.alter_option_bitset_.has_member(COMMENT);
+  if (!is_alter_comment && is_alter_columns_) {
+    ObTableSchema::const_column_iterator it_begin = alter_table_schema_.column_begin();
+    ObTableSchema::const_column_iterator it_end = alter_table_schema_.column_end();
+    AlterColumnSchema *alter_column_schema = NULL;
+    for (; OB_SUCC(ret) && !is_alter_comment && it_begin != it_end; it_begin++) {
+      if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*it_begin))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("alter_column_schema is NULL", K(ret));
+      } else {
+        is_alter_comment |= alter_column_schema->is_set_comment_;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObAlterTableArg::set_nls_formats(const common::ObString *nls_formats)
 {
   int ret = OB_SUCCESS;
@@ -4469,6 +4489,47 @@ OB_SERIALIZE_MEMBER((ObRevokeTableArg, ObDDLArg),
                     user_id_,
                     db_,
                     table_,
+                    priv_set_,
+                    grant_,
+                    obj_id_,
+                    obj_type_,
+                    grantor_id_,
+                    obj_priv_array_,
+                    revoke_all_ora_);
+
+bool ObRevokeRoutineArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_ && OB_INVALID_ID != user_id_
+      && !db_.empty() && !routine_.empty();
+}
+
+int ObRevokeRoutineArg::assign(const ObRevokeRoutineArg& other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret));
+  } else if (OB_FAIL(obj_priv_array_.assign(other.obj_priv_array_))) {
+    LOG_WARN("assign failed", K(ret));
+  } else {
+    tenant_id_ = other.tenant_id_;
+    user_id_ = other.user_id_;
+    db_ = other.db_;
+    routine_ = other.routine_;
+    priv_set_ = other.priv_set_;
+    grant_ = other.grant_;
+    obj_id_ = other.obj_id_;
+    obj_type_ = other.obj_type_;
+    grantor_id_ = other.grantor_id_;
+    revoke_all_ora_ = other.revoke_all_ora_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObRevokeRoutineArg, ObDDLArg),
+                    tenant_id_,
+                    user_id_,
+                    db_,
+                    routine_,
                     priv_set_,
                     grant_,
                     obj_id_,

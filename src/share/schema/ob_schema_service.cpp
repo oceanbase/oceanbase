@@ -186,6 +186,8 @@ void AlterColumnSchema::reset()
   next_column_name_.reset();
   prev_column_name_.reset();
   is_first_ = false;
+  column_group_name_.reset();
+  is_set_comment_ = false;
 }
 
 
@@ -202,7 +204,9 @@ OB_SERIALIZE_MEMBER((AlterColumnSchema, ObColumnSchemaV2),
                     is_no_zero_date_,
                     next_column_name_,
                     prev_column_name_,
-                    is_first_);
+                    is_first_,
+                    column_group_name_,
+                    is_set_comment_);
 
 DEFINE_SERIALIZE(AlterTableSchema)
 {
@@ -309,7 +313,9 @@ int64_t AlterColumnSchema::to_string(char* buf, const int64_t buf_len) const
        K_(origin_column_name),
        K_(next_column_name),
        K_(prev_column_name),
-       K_(is_unique_key));
+       K_(is_unique_key),
+       K_(column_group_name),
+       K_(is_set_comment));
   J_COMMA();
   J_NAME(N_ALTER_COLUMN_SCHEMA);
   J_COLON();
@@ -346,8 +352,11 @@ AlterColumnSchema &AlterColumnSchema::operator=(const AlterColumnSchema &src_sch
       SHARE_LOG(WARN, "failed to deep copy next_column_name", K(ret));
     } else if (OB_FAIL(deep_copy_str(src_schema.get_prev_column_name(), prev_column_name_))) {
       SHARE_LOG(WARN, "failed to deep copy prev_column_name", K(ret));
+    } else if (OB_FAIL(deep_copy_str(src_schema.get_column_group_name(), column_group_name_))) {
+      SHARE_LOG(WARN, "failed to deep copy column_group_name", K(ret));
     } else {
       is_first_ = src_schema.is_first_;
+      is_set_comment_ = src_schema.is_set_comment_;
     }
   }
   if (OB_FAIL(ret)) {

@@ -205,6 +205,7 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE(tablegroup, ObSimpleTablegroupSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE(db_priv, ObDBPriv);
   GET_ALL_SCHEMA_FUNC_DECLARE(table_priv, ObTablePriv);
+  GET_ALL_SCHEMA_FUNC_DECLARE(routine_priv, ObRoutinePriv);
   GET_ALL_SCHEMA_FUNC_DECLARE(outline, ObSimpleOutlineSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE(routine, ObSimpleRoutineSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE(synonym, ObSimpleSynonymSchema);
@@ -347,6 +348,7 @@ public:
   GET_BATCH_SCHEMAS_WITH_ALLOCATOR_FUNC_DECLARE(table, ObSimpleTableSchemaV2);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(db_priv, ObDBPriv);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(table_priv, ObTablePriv);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE(routine_priv, ObRoutinePriv);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(outline, ObSimpleOutlineSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(routine, ObSimpleRoutineSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(synonym, ObSimpleSynonymSchema);
@@ -437,6 +439,7 @@ public:
   FETCH_SCHEMAS_FUNC_DECLARE(tablegroup, ObSimpleTablegroupSchema);
   FETCH_SCHEMAS_FUNC_DECLARE(db_priv, ObDBPriv);
   FETCH_SCHEMAS_FUNC_DECLARE(table_priv, ObTablePriv);
+  FETCH_SCHEMAS_FUNC_DECLARE(routine_priv, ObRoutinePriv);
   FETCH_SCHEMAS_FUNC_DECLARE(outline, ObSimpleOutlineSchema);
   FETCH_SCHEMAS_FUNC_DECLARE(routine, ObSimpleRoutineSchema);
   FETCH_SCHEMAS_FUNC_DECLARE(synonym, ObSimpleSynonymSchema);

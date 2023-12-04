@@ -1621,7 +1621,7 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
         column = src_schema.column_array_[i];
         if (NULL == column) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("The column is NULL.");
+          LOG_WARN("The column is NULL.", K(ret));
         } else if (OB_FAIL(add_column(*column))) {
           LOG_WARN("Fail to add column, ", K(*column), K(ret));
         }
@@ -1669,6 +1669,22 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
   return ret;
 }
 
+int ObTableSchema::get_view_column_comment(ObIArray<ObString> &column_comments)
+{
+  int ret = OB_SUCCESS;
+  ObColumnSchemaV2 *column = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; ++i) {
+    column = column_array_[i];
+    if (OB_ISNULL(column)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("The column is NULL.", K(ret));
+    } else if (OB_FAIL(column_comments.push_back(column->get_comment()))) {
+      LOG_WARN("Fail to add column comment, ", K(*column), K(ret));
+    }
+  }
+  return ret;
+}
+
 void ObTableSchema::clear_constraint()
 {
   cst_cnt_ = 0;
@@ -1699,7 +1715,7 @@ int ObTableSchema::assign_constraint(const ObTableSchema &src_schema)
         ObConstraint *constraint = src_schema.cst_array_[i];
         if (NULL == constraint) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("The constraint is NULL.");
+          LOG_WARN("The constraint is NULL.", K(ret));
         } else if (OB_FAIL(add_constraint(*constraint))) {
           LOG_WARN("Fail to add constraint, ", K(*constraint), K(ret));
         }
@@ -4624,7 +4640,7 @@ int ObTableSchema::check_alter_column_is_offline(const ObColumnSchemaV2 *src_col
     LOG_WARN("The column does not belong to this table", K(ret));
   } else if (is_external_table()) {
     is_offline = false;
-  } else if (!is_user_table() && !is_index_table() && !is_tmp_table() && !is_sys_table()) {
+  } else if (!is_user_table() && !is_index_table() && !is_tmp_table() && !is_sys_table() && !is_view_table()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Only NORMAL table and INDEX table and SYSTEM table are allowed", K(ret));
   } else if (OB_FAIL(check_if_oracle_compat_mode(is_oracle_mode))) {
@@ -4804,7 +4820,7 @@ int ObTableSchema::check_column_can_be_altered_online(
     LOG_WARN("The column does not belong to this table", K(ret));
   } else if (is_external_table()) {
     // external table canbe altered
-  } else if (!is_user_table() && !is_index_table() && !is_tmp_table() && !is_sys_table()) {
+  } else if (!is_user_table() && !is_index_table() && !is_tmp_table() && !is_sys_table() && !is_view_table()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Only NORMAL table and INDEX table and SYSTEM table are allowed", K(ret));
   } else {

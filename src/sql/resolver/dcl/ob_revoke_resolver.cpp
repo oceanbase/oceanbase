@@ -239,7 +239,7 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
     LOG_WARN("schema_checker or session info not inited",
         K(ret), "schema checker", params_.schema_checker_, "session info", params_.session_info_);
   } else if (node != NULL 
-      && ((T_REVOKE == node->type_ && 3 == node->num_child_)
+      && ((T_REVOKE == node->type_ && 4 == node->num_child_)
         || (T_REVOKE_ALL == node->type_ && 1 == node->num_child_)
         || (T_SYSTEM_REVOKE == node->type_ && 1 == node->num_child_))) {
     if (OB_ISNULL(revoke_stmt = create_stmt<ObRevokeStmt>())) {
@@ -272,10 +272,11 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
         }
       } else {
         // resolve mysql revoke
-        if (T_REVOKE == node->type_ && 3 == node->num_child_) {
+        if (T_REVOKE == node->type_ && 4 == node->num_child_) {
           privs_node = node->children_[0];
-          ParseNode *priv_level_node = node->children_[1];
-          users_node = node->children_[2];
+          ParseNode *priv_object_node = node->children_[1];
+          ParseNode *priv_level_node = node->children_[2];
+          users_node = node->children_[3];
           //resolve priv_level
           if (OB_ISNULL(priv_level_node)) {
             ret = OB_ERR_PARSE_SQL;
@@ -292,6 +293,31 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
                         table, 
                         grant_level))) {
               LOG_WARN("Resolve priv_level node error", K(ret));
+            } else if (priv_object_node != NULL) {
+              uint64_t compat_version = 0;
+              if (grant_level != OB_PRIV_TABLE_LEVEL) {
+                ret = OB_ILLEGAL_GRANT_FOR_TABLE;
+                LOG_WARN("illegal grant", K(ret));
+              } else if (priv_object_node->value_ == 1) {
+                grant_level = OB_PRIV_TABLE_LEVEL;
+              } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+                LOG_WARN("fail to get data version", K(tenant_id));
+              } else if (compat_version < DATA_VERSION_4_2_2_0) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_2_0", K(ret));
+              } else if (priv_object_node->value_ == 2) {
+                grant_level = OB_PRIV_ROUTINE_LEVEL;
+                revoke_stmt->set_object_type(ObObjectType::PROCEDURE);
+              } else if (priv_object_node->value_ == 3) {
+                grant_level = OB_PRIV_ROUTINE_LEVEL;
+                revoke_stmt->set_object_type(ObObjectType::FUNCTION);
+              } else {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected obj type", K(ret), K(priv_object_node->value_));
+              }
+            }
+
+            if (OB_FAIL(ret)) {
             } else if (OB_FAIL(check_and_convert_name(db, table))) {
               LOG_WARN("Check and convert name error", K(db), K(table), K(ret));
             } else {
@@ -325,8 +351,20 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
         //resolve privileges
         if (OB_SUCC(ret) && (NULL != privs_node)) {
           ObPrivSet priv_set = 0;
+          uint64_t compat_version = 0;
           if (OB_FAIL(ObGrantResolver::resolve_priv_set(privs_node, grant_level, priv_set))) {
             LOG_WARN("Resolve priv set error", K(ret));
+          } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+            LOG_WARN("fail to get data version", K(tenant_id));
+          } else if (compat_version < DATA_VERSION_4_2_2_0) {
+            if ((priv_set & OB_PRIV_EXECUTE) != 0 ||
+                (priv_set & OB_PRIV_ALTER_ROUTINE) != 0 ||
+                (priv_set & OB_PRIV_CREATE_ROUTINE) != 0) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_2_0", K(ret));
+            }
+          }
+          if (OB_FAIL(ret)) {
           } else {
             revoke_stmt->set_priv_set(priv_set);
           }

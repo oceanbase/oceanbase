@@ -3354,6 +3354,58 @@
     "background_cn": "",
     "ref_url": ""
   },
+  "automatic_sp_privileges": {
+    "id": 10153,
+    "name": "automatic_sp_privileges",
+    "default_value": "1",
+    "base_value": "1",
+    "data_type": "int",
+    "info": "the server automatically grants the EXECUTE and ALTER ROUTINE privileges to the creator of a stored routine",
+    "flags": "GLOBAL | MYSQL_ONLY",
+    "publish_version": "422",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "privilege_features_enable": {
+    "id": 10154,
+    "name": "privilege_features_enable",
+    "default_value": "",
+    "base_value": "",
+    "data_type": "varchar",
+    "info": "enabling a series of privilege features based on an OceanBase release number",
+    "flags": "GLOBAL | NEED_SERIALIZE",
+    "publish_version": "422",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "_priv_control": {
+    "id": 10155,
+    "name": "_priv_control",
+    "default_value": "",
+    "base_value": "",
+    "data_type": "varchar",
+    "info": "whether turn on mysql privilege check",
+    "flags": "GLOBAL | NEED_SERIALIZE",
+    "publish_version": "422",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "_enable_mysql_pl_priv_check": {
+    "id": 10156,
+    "name": "_enable_mysql_pl_priv_check",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "bool",
+    "info": "specifies whether check the mysql routine priv",
+    "flags": "GLOBAL | NEED_SERIALIZE",
+    "publish_version": "422",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
   "ob_enable_pl_cache": {
     "id": 10157,
     "name": "ob_enable_pl_cache",

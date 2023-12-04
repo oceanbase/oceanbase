@@ -1115,7 +1115,7 @@ int ObSQLUtils::cvt_db_name_to_org(share::schema::ObSchemaGetterGuard &schema_gu
     ObNameCaseMode case_mode = OB_NAME_CASE_INVALID;
     if (OB_FAIL(session->get_name_case_mode(case_mode))) {
       LOG_WARN("fail to get name case mode", K(ret));
-    } else if (case_mode == OB_ORIGIN_AND_INSENSITIVE) {
+    } else if (case_mode == OB_ORIGIN_AND_INSENSITIVE || case_mode == OB_LOWERCASE_AND_INSENSITIVE) {
       const ObDatabaseSchema *db_schema = NULL;
       if (OB_FAIL(schema_guard.get_database_schema(session->get_effective_tenant_id(),
                                                    name,
@@ -5193,7 +5193,33 @@ int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_vie
   int ret = OB_SUCCESS;
   ObTableSchema new_view_schema(&alloc);
   uint64_t data_version = 0;
-  if (OB_FAIL(new_view_schema.assign(old_view_schema))) {
+  if (reset_column_infos) {
+    // failed to resolve view definition, do nothing
+  } else if (OB_ISNULL(select_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get select stmt", K(ret));
+  } else if (is_oracle_mode()) {
+    // column name in column schema should be the same as select item alias name in view definition
+    // when view definition is not rebuilt and column list grammar is used, overwrite alias name
+    const ObColumnSchemaV2 *column_schema;
+    uint64_t column_id;
+    bool is_column_schema_null = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !is_column_schema_null
+                        && i < select_stmt->get_select_item_size(); ++i) {
+      column_id = i + OB_APP_MIN_COLUMN_ID;
+      column_schema = old_view_schema.get_column_schema(column_id);
+      if (OB_ISNULL(column_schema)) {
+        is_column_schema_null = true; // column schema of sys view can be null
+      } else if (OB_ISNULL(column_schema->get_column_name())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column name is null", K(ret));
+      } else {
+        select_stmt->get_select_item(i).alias_name_ = column_schema->get_column_name();
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(new_view_schema.assign(old_view_schema))) {
     LOG_WARN("failed to assign table schema", K(ret));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(old_view_schema.get_tenant_id(), data_version))) {
     LOG_WARN("failed to get data version", K(ret));
@@ -5205,15 +5231,25 @@ int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_vie
   } else if ((0 == old_view_schema.get_object_status() || 0 == old_view_schema.get_column_count())) {
     if (!reset_column_infos) {
       ObArray<ObString> dummy_column_list;
+      ObArray<ObString> column_comments;
+      bool resolve_succ = true;
       if (OB_ISNULL(select_stmt)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get select stmt", K(ret));
+      } else if (OB_FAIL(new_view_schema.get_view_column_comment(column_comments))) {
+        LOG_WARN("failed to get view column comment", K(ret));
       } else if (OB_FAIL(new_view_schema.delete_all_view_columns())) {
         LOG_WARN("failed to delete all columns", K(ret));
       } else if (OB_ISNULL(select_stmt->get_ref_obj_table())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ref obj is null", K(ret));
-      } else if (OB_FAIL(ObCreateViewResolver::add_column_infos(old_view_schema.get_tenant_id(), *select_stmt, new_view_schema, alloc, session_info, dummy_column_list))) {
+      } else if (OB_FAIL(ObCreateViewResolver::add_column_infos(old_view_schema.get_tenant_id(),
+                                                                *select_stmt,
+                                                                new_view_schema,
+                                                                alloc,
+                                                                session_info,
+                                                                dummy_column_list,
+                                                                column_comments))) {
         LOG_WARN("failed to update view column info", K(ret));
       } else if (!new_view_schema.is_view_table() || new_view_schema.get_column_count() <= 0) {
         ret = OB_ERR_UNEXPECTED;

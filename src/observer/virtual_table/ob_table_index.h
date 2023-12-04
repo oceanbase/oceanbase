@@ -41,7 +41,7 @@ public:
   virtual int inner_open();
   virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
-  inline void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  int init(uint64_t tenant_id);
 private:
 
   int add_table_indexes(const share::schema::ObTableSchema &table_schema,
@@ -59,11 +59,20 @@ private:
                          common::ObObj *cells,
                          int64_t col_count,
                          bool &is_end);
+  int get_rowkey_index_column(const ObTableSchema &table_schema,
+                              const ObColumnSchemaV2 *&column_schema,
+                              bool &is_column_visible,
+                              bool &is_end);
   int add_normal_indexes(const share::schema::ObTableSchema &table_schema,
                          const common::ObString &database_name,
                          common::ObObj *cells,
                          int64_t col_count,
                          bool &is_end);
+  int get_normal_index_column(const ObTableSchema &table_schema,
+                              const ObTableSchema *index_schema,
+                              const ObColumnSchemaV2 *&column_schema,
+                              bool &is_column_visible,
+                              bool &is_end);
   int add_normal_index_column(const common::ObString &database_name,
                               const share::schema::ObTableSchema &table_schema,
                               const share::schema::ObTableSchema *index_schema,
@@ -93,6 +102,7 @@ private:
   bool is_rowkey_end_;
   bool is_normal_end_;
   int64_t ft_dep_col_idx_;
+  uint64_t min_data_version_;
   DISALLOW_COPY_AND_ASSIGN(ObTableIndex);
 };
 }

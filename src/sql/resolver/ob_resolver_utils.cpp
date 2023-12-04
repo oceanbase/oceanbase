@@ -5305,6 +5305,35 @@ int ObResolverUtils::resolve_default_expr_v2_column_expr(ObResolverParams &param
   return ret;
 }
 
+int ObResolverUtils::check_comment_length(
+    ObSQLSessionInfo *session_info,
+    char *str,
+    int64_t *str_len,
+    const int64_t max_len)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session_info) || (NULL == str  && *str_len != 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null pointer", K(session_info), K(str), K(ret));
+  } else {
+    size_t tmp_len = ObCharset::charpos(CS_TYPE_UTF8MB4_GENERAL_CI, str, *str_len, max_len);
+    if (tmp_len < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect error", K(ret));
+    } else if (tmp_len < *str_len) {
+      if (!is_strict_mode(session_info->get_sql_mode())) {
+        ret = OB_SUCCESS;
+        *str_len = tmp_len;
+        LOG_USER_WARN(OB_ERR_TOO_LONG_FIELD_COMMENT, max_len);
+      } else {
+        ret = OB_ERR_TOO_LONG_FIELD_COMMENT;
+        LOG_USER_ERROR(OB_ERR_TOO_LONG_FIELD_COMMENT, max_len);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObResolverUtils::resolve_check_constraint_expr(
     ObResolverParams &params,
     const ParseNode *node,

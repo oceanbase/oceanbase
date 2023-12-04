@@ -37,22 +37,15 @@ ObSimpleRoutineSchema::ObSimpleRoutineSchema(ObIAllocator *allocator)
   reset();
 }
 
-ObSimpleRoutineSchema::ObSimpleRoutineSchema(const ObSimpleRoutineSchema &other)
-  : ObSchema()
-{
-  reset();
-  *this = other;
-}
-
 ObSimpleRoutineSchema::~ObSimpleRoutineSchema()
 {
 }
 
-ObSimpleRoutineSchema &ObSimpleRoutineSchema::operator =(const ObSimpleRoutineSchema &other)
+int ObSimpleRoutineSchema::assign(const ObSimpleRoutineSchema &other)
 {
+  int ret = OB_SUCCESS;
   if (this != &other) {
     reset();
-    int ret = OB_SUCCESS;
     error_ret_ = other.error_ret_;
     tenant_id_ = other.tenant_id_;
     database_id_ = other.database_id_;
@@ -63,19 +56,19 @@ ObSimpleRoutineSchema &ObSimpleRoutineSchema::operator =(const ObSimpleRoutineSc
     routine_type_ = other.routine_type_;
     if (OB_FAIL(deep_copy_str(other.routine_name_, routine_name_))) {
       LOG_WARN("Fail to deep copy routine name", K(ret));
+    } else if (OB_FAIL(deep_copy_str(other.priv_user_, priv_user_))) {
+      LOG_WARN("Fail to deep copy priv user name", K(ret));
     }
     if (OB_FAIL(ret)) {
       error_ret_ = ret;
     }
   }
-
-  return *this;
+  return ret;
 }
 
 bool ObSimpleRoutineSchema::operator ==(const ObSimpleRoutineSchema &other) const
 {
   bool ret = false;
-
   if (tenant_id_ == other.tenant_id_
       && database_id_ == other.database_id_
       && package_id_ == other.package_id_
@@ -83,7 +76,8 @@ bool ObSimpleRoutineSchema::operator ==(const ObSimpleRoutineSchema &other) cons
       && schema_version_ == other.schema_version_
       && overload_ == other.overload_
       && routine_type_ == other.routine_type_
-      && routine_name_ == other.routine_name_) {
+      && routine_name_ == other.routine_name_
+      && priv_user_ == other.priv_user_) {
     ret = true;
   }
 
@@ -96,6 +90,7 @@ int64_t ObSimpleRoutineSchema::get_convert_size() const
 
   convert_size += sizeof(ObSimpleRoutineSchema);
   convert_size += routine_name_.length() + 1;
+  convert_size += priv_user_.length() + 1;
 
   return convert_size;
 }
@@ -341,6 +336,22 @@ int ObRoutineMgr::add_routine(const ObSimpleRoutineSchema &routine_schema)
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = rebuild_routine_hashmap())) {
       LOG_WARN("rebuild routine hashmap failed", K(tmp_ret));
+    }
+  }
+  return ret;
+}
+
+int ObRoutineMgr::check_user_reffered_by_definer(const ObString &user_name, bool &ref) const
+{
+  int ret = OB_SUCCESS;
+  ref = false;
+  for (ConstRoutineIter iter = routine_infos_.begin(); OB_SUCC(ret) && !ref && iter != routine_infos_.end(); iter++) {
+    const ObSimpleRoutineSchema *routine = NULL;
+    if (OB_ISNULL(routine = *iter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("NULL ptr", K(ret), K(routine));
+    } else if (0 == user_name.compare(routine->get_priv_user())) {
+      ref = true;
     }
   }
   return ret;

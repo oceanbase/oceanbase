@@ -102,9 +102,11 @@ struct SchemaKey
     uint64_t rls_policy_id_;
     uint64_t rls_group_id_;
     uint64_t rls_context_id_;
+    uint64_t routine_type_;
   };
   union {
     common::ObString table_name_;
+    common::ObString routine_name_;
     common::ObString udf_name_;
     common::ObString sequence_name_;
     common::ObString keystore_name_;
@@ -122,6 +124,7 @@ struct SchemaKey
                K_(tablegroup_id),
                K_(table_id),
                K_(outline_id),
+               K_(routine_name),
                K_(routine_id),
                K_(database_name),
                K_(table_name),
@@ -153,7 +156,8 @@ struct SchemaKey
                K_(mock_fk_parent_table_id),
                K_(rls_policy_id),
                K_(rls_group_id),
-               K_(rls_context_id));
+               K_(rls_context_id),
+               K_(routine_type));
 
   SchemaKey()
     : tenant_id_(common::OB_INVALID_ID),
@@ -226,6 +230,10 @@ struct SchemaKey
   ObTablePrivSortKey get_table_priv_key() const
   {
     return ObTablePrivSortKey(tenant_id_, user_id_, database_name_, table_name_);
+  }
+  ObRoutinePrivSortKey get_routine_priv_key() const
+  {
+    return ObRoutinePrivSortKey(tenant_id_, user_id_, database_name_, routine_name_, obj_type_);
   }
   ObTenantUDFId get_udf_key() const
   {
@@ -523,6 +531,44 @@ public:
           a.table_name_ == b.table_name_;
     }
   };
+
+  struct routine_priv_hash_func
+  {
+    int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const
+    {
+      common::ObCollationType cs_type = common::CS_TYPE_UTF8MB4_GENERAL_CI;
+      hash_code = 0;
+      hash_code = common::murmurhash(&schema_key.tenant_id_,
+                                     sizeof(schema_key.tenant_id_),
+                                     hash_code);
+      hash_code = common::murmurhash(&schema_key.user_id_,
+                                     sizeof(schema_key.user_id_),
+                                     hash_code);
+      hash_code = common::murmurhash(schema_key.database_name_.ptr(),
+                                     schema_key.database_name_.length(),
+                                     hash_code);
+      hash_code = common::ObCharset::hash(cs_type, schema_key.routine_name_, hash_code);
+      hash_code = common::murmurhash(&schema_key.obj_type_,
+                                     sizeof(schema_key.obj_type_),
+                                     hash_code);
+      return OB_SUCCESS;
+    }
+  };
+
+  //In dcl resolver, ObSQLUtils::cvt_db_name_to_org will make db_name and table_name string user wrotten in the sql the same as the string in the schema.
+  //So in the schema stage, db name can directly binary compare with each other without considering the collation.
+  struct routine_priv_equal_to
+  {
+    bool operator()(const SchemaKey &a, const SchemaKey &b) const
+    {
+      ObCompareNameWithTenantID name_cmp(a.tenant_id_);
+      return a.tenant_id_ == b.tenant_id_ &&
+          a.user_id_ == b.user_id_ &&
+          a.database_name_ == b.database_name_ &&
+          0 == name_cmp.compare(a.routine_name_, b.routine_name_) &&
+          a.obj_type_ == b.obj_type_;
+    }
+  };
   struct obj_priv_hash_func
   {
     int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const
@@ -678,6 +724,8 @@ public:
       db_priv_hash_func, db_priv_equal_to> DBPrivKeys;
   typedef common::hash::ObHashSet<SchemaKey, common::hash::NoPthreadDefendMode,
       table_priv_hash_func, table_priv_equal_to> TablePrivKeys;
+  typedef common::hash::ObHashSet<SchemaKey, common::hash::NoPthreadDefendMode,
+      routine_priv_hash_func, routine_priv_equal_to> RoutinePrivKeys;
 
   typedef common::hash::ObHashSet<SchemaKey, common::hash::NoPthreadDefendMode,
       sys_priv_hash_func, sys_priv_equal_to> SysPrivKeys;
@@ -720,6 +768,9 @@ public:
     // table_priv
     TablePrivKeys new_table_priv_keys_;
     TablePrivKeys del_table_priv_keys_;
+    // routine_priv
+    RoutinePrivKeys new_routine_priv_keys_;
+    RoutinePrivKeys del_routine_priv_keys_;
     // virtual table or sys view
     common::ObArray<uint64_t> non_sys_table_ids_;
     // synonym
@@ -825,6 +876,7 @@ public:
     common::ObArray<ObDbLinkSchema> simple_dblink_schemas_;
     common::ObArray<ObDBPriv> simple_db_priv_schemas_;
     common::ObArray<ObTablePriv> simple_table_priv_schemas_;
+    common::ObArray<ObRoutinePriv> simple_routine_priv_schemas_;
     common::ObArray<ObSimpleUDTSchema> simple_udt_schemas_;
     common::ObArray<ObSimpleSysVariableSchema> simple_sys_variable_schemas_;
     common::ObArray<ObKeystoreSchema> simple_keystore_schemas_;
@@ -944,24 +996,6 @@ private:
     int64_t version_;
     int64_t combined_id_;
   };
-  //not used now
-  struct AllIncrementSchema
-  {
-    common::ObArenaAllocator allocator_;
-    common::ObArray<ObTableSchema *>  table_schema_;
-    common::ObArray<ObDatabaseSchema> db_schema_;
-    common::ObArray<ObTablegroupSchema> tg_schema_;
-    common::ObArray<uint64_t> max_used_tids_;//max used table_id of each tenant
-    //For managing privileges
-    common::ObArray<ObTenantSchema> tenant_info_array_;
-    common::ObArray<ObUserInfo> user_info_array_;
-    common::ObArray<ObDBPriv> db_priv_array_;
-    common::ObArray<ObTablePriv> table_priv_array_;
-
-    AllIncrementSchema(const char *label = common::ObModIds::OB_SCHEMA) : allocator_(label) {}
-    void reset();
-  };
-
 
   enum RefreshSchemaType
   {
@@ -993,6 +1027,7 @@ private:
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(outline);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(db_priv);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(table_priv);
+  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(routine_priv);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(routine);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(synonym);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(package);
@@ -1039,6 +1074,7 @@ private:
   APPLY_SCHEMA_TO_CACHE(trigger, ObTriggerMgr);
   APPLY_SCHEMA_TO_CACHE(db_priv, ObPrivMgr);
   APPLY_SCHEMA_TO_CACHE(table_priv, ObPrivMgr);
+  APPLY_SCHEMA_TO_CACHE(routine_priv, ObPrivMgr);
   APPLY_SCHEMA_TO_CACHE(synonym, ObSynonymMgr);
   APPLY_SCHEMA_TO_CACHE(udf, ObUDFMgr);
   APPLY_SCHEMA_TO_CACHE(udt, ObUDTMgr);

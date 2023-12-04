@@ -12291,6 +12291,7 @@ int ObDDLService::get_and_check_table_schema(
   schema_guard.set_session_id(alter_table_arg.session_id_);
   const ObString &origin_database_name = alter_table_schema.get_origin_database_name();
   const ObString &origin_table_name = alter_table_schema.get_origin_table_name();
+  bool is_alter_comment = false;
   if (origin_database_name.empty() || origin_table_name.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("database name or table name is null", K(alter_table_schema),
@@ -12298,6 +12299,7 @@ int ObDDLService::get_and_check_table_schema(
   } else {
     bool is_index = false;
     bool is_db_in_recyclebin = false;
+    uint64_t compat_version = OB_INVALID_VERSION;
     if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
                 origin_database_name,
                 origin_table_name,
@@ -12325,8 +12327,14 @@ int ObDDLService::get_and_check_table_schema(
       ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
       LOG_WARN("can not alter table in recyclebin",
       K(ret), K(alter_table_arg), K(is_db_in_recyclebin));
+    } else if (OB_FAIL(alter_table_arg.is_alter_comment(is_alter_comment))) {
+      LOG_WARN("failed to get is alter comment", K(ret));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(orig_table_schema->get_tenant_id(), compat_version))) {
+      LOG_WARN("get min data_version failed", K(ret), K(orig_table_schema->get_tenant_id()));
     } else if (!orig_table_schema->is_user_table()
                && !orig_table_schema->is_sys_table()
+               && !(orig_table_schema->is_view_table() && is_alter_comment
+                    && compat_version >= DATA_VERSION_4_2_2_0)
                && !orig_table_schema->is_tmp_table()
                && !orig_table_schema->is_external_table()) {
       ret = OB_ERR_WRONG_OBJECT;
@@ -13352,6 +13360,7 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
   start_usec = ObTimeUtility::current_time();
   bool is_alter_sess_active_time = false;
   bool is_alter_duplicate_scope = false;
+  bool is_alter_comment = false;
   const AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
   const uint64_t tenant_id = alter_table_schema.get_tenant_id();
   int64_t &task_id = res.task_id_;
@@ -13368,6 +13377,8 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
     const ObTableSchema *orig_table_schema =  NULL;
     is_alter_sess_active_time = alter_table_schema.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::SESSION_ACTIVE_TIME);
     is_alter_duplicate_scope = alter_table_schema.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::DUPLICATE_SCOPE);
+    is_alter_comment = alter_table_schema.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::COMMENT);
+    LOG_DEBUG("debug view comment", K(is_alter_comment), K(alter_table_schema));
     ObTZMapWrap tz_map_wrap;
     if (OB_FAIL(ret)) {
     } else if (is_alter_duplicate_scope) {
@@ -28609,7 +28620,7 @@ int ObDDLService::grant(const ObGrantArg &arg)
           }
 
           if (OB_SUCC(ret) && is_user_exist) {
-            ObNeedPriv need_priv(arg.db_, arg.table_, arg.priv_level_, arg.priv_set_, false);
+            ObNeedPriv need_priv(arg.db_, arg.table_, arg.priv_level_, arg.priv_set_, false, arg.object_type_);
             bool is_owner = false;
             // In oracle mode, if it is oracle syntax, it need to determine grantee is obj owner,
             // if yes, return success directly
@@ -28827,6 +28838,23 @@ int ObDDLService::grant_priv_to_user(const uint64_t tenant_id,
         }
         break;
       }
+      case OB_PRIV_ROUTINE_LEVEL: {
+        ObRoutinePrivSortKey routine_key(tenant_id, user_id, need_priv.db_, need_priv.table_,
+                                      obj_priv_key.obj_type_ == (int)ObObjectType::PROCEDURE ? ObRoutineType::ROUTINE_PROCEDURE_TYPE :
+                                      obj_priv_key.obj_type_ == (int)ObObjectType::FUNCTION ? ObRoutineType::ROUTINE_FUNCTION_TYPE :
+                                      ObRoutineType::INVALID_ROUTINE_TYPE);
+        if (OB_FAIL(ObDDLSqlGenerator::gen_routine_priv_sql(ObAccountArg(user_name, host_name), need_priv, true, ddl_stmt_str))) {
+          LOG_WARN("gen_table_priv sql failed", K(need_priv), K(ret));
+        } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
+        } else if (OB_FAIL(grant_routine(routine_key,
+                                       need_priv.priv_set_,
+                                       &ddl_sql,
+                                       option,
+                                       schema_guard))) {
+          LOG_WARN("Grant table error", K(ret));
+        }
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected grant level", "GrantLevel", need_priv.priv_level_);
@@ -28901,16 +28929,28 @@ int ObDDLService::grant_revoke_user(
     share::schema::ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
+  bool is_ora_mode = false;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
   } else if (OB_INVALID_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Tenant id is invalid", K(ret));
+  } else if (ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_ora_mode)) {
+    LOG_WARN("fail to check is oracle mode", K(ret));
   } else {
     ObDDLSQLTransaction trans(schema_service_);
     int64_t refreshed_schema_version = 0;
+    uint64_t compat_version = 0;
     if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+      LOG_WARN("fail to get data version", K(ret), K(tenant_id));
+    } else if (compat_version < DATA_VERSION_4_2_2_0 && !is_ora_mode
+              && (0 != (priv_set & OB_PRIV_EXECUTE) ||
+                  0 != (priv_set & OB_PRIV_ALTER_ROUTINE) ||
+                  0 != (priv_set & OB_PRIV_CREATE_ROUTINE))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_2_0", K(ret), K(priv_set));
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("Start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
     } else {
@@ -29366,11 +29406,23 @@ int ObDDLService::revoke_database(
   const uint64_t tenant_id = db_key.tenant_id_;
   ObSchemaGetterGuard schema_guard;
   int64_t refreshed_schema_version = 0;
+  uint64_t compat_version = 0;
+  bool is_ora_mode = false;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
   } else if (!db_key.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("db_key is invalid", K(db_key), K(ret));
+  } else if (ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_ora_mode)) {
+    LOG_WARN("fail to check is oracle mode", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", K(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_2_2_0 && !is_ora_mode
+            && (0 != (priv_set & OB_PRIV_EXECUTE) ||
+                0 != (priv_set & OB_PRIV_ALTER_ROUTINE) ||
+                0 != (priv_set & OB_PRIV_CREATE_ROUTINE))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_2_0", K(ret), K(priv_set));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
   } else {
@@ -29713,6 +29765,124 @@ int ObDDLService::revoke_table(
       if (OB_FAIL(ddl_operator.revoke_table(table_key, priv_set, trans,
           obj_key, obj_priv_array, revoke_all_ora))) {
         LOG_WARN("fail to revoke table", K(ret), K(table_key), K(priv_set));
+      }
+      if (trans.is_started()) {
+        int temp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
+          ret = (OB_SUCC(ret)) ? temp_ret : ret;
+        }
+      }
+    }
+  }
+
+  // publish schema
+  if (OB_SUCC(ret)) {
+    ret = publish_schema(tenant_id);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("publish schema failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::revoke_routine(
+    const share::schema::ObRoutinePrivSortKey &routine_key,
+    const ObPrivSet priv_set)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = routine_key.tenant_id_;
+  int64_t refreshed_schema_version = 0;
+  ObSchemaGetterGuard schema_guard;
+  uint64_t compat_version = 0;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init");
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", K(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_2_2_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("version lower than 4.2.2 does not support this operation", K(ret));
+  } else if (!routine_key.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("routine_key is invalid", K(routine_key), K(ret));
+  } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+    LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+  } else {
+    ObDDLSQLTransaction trans(schema_service_);
+    if (!is_user_exist(routine_key.tenant_id_, routine_key.user_id_)) {
+      ret = OB_USER_NOT_EXIST;
+      LOG_WARN("User is not exist", "tenant_id", routine_key.tenant_id_,
+                                    "user_id", routine_key.user_id_,
+                                    K(ret));
+    } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
+      LOG_WARN("Start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
+    } else {
+      ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+      if (OB_FAIL(ddl_operator.revoke_routine(routine_key, priv_set, trans))) {
+        LOG_WARN("fail to revoke routine", K(ret), K(routine_key), K(priv_set));
+      }
+      if (trans.is_started()) {
+        int temp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
+          ret = (OB_SUCC(ret)) ? temp_ret : ret;
+        }
+      }
+    }
+  }
+
+  // publish schema
+  if (OB_SUCC(ret)) {
+    ret = publish_schema(tenant_id);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("publish schema failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+
+int ObDDLService::grant_routine(
+    const share::schema::ObRoutinePrivSortKey &routine_key,
+    const ObPrivSet priv_set,
+    const ObString *ddl_stmt_str,
+    const uint64_t option,
+    share::schema::ObSchemaGetterGuard &schema_guard)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = routine_key.tenant_id_;
+  int64_t refreshed_schema_version = 0;
+  uint64_t compat_version = 0;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init", KR(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", K(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_2_2_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("version lower than 4.2.2 does not support this operation", K(ret));
+  } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+    LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+  } else if (!routine_key.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("routine_key is invalid", K(routine_key), K(ret));
+  } else {
+    ObDDLSQLTransaction trans(schema_service_);
+    if (!is_user_exist(routine_key.tenant_id_, routine_key.user_id_)) {
+      ret = OB_USER_NOT_EXIST;
+      LOG_WARN("User is not exist", "tenant_id", routine_key.tenant_id_,
+                                    "user_id", routine_key.user_id_,
+                                    K(ret));
+    } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
+      LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
+    } else {
+      ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+      if (OB_FAIL(ddl_operator.grant_routine(routine_key,
+                                           priv_set,
+                                           trans,
+                                           option))) {
+        LOG_WARN("fail to grant routine", K(ret), K(routine_key), K(priv_set));
       }
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
@@ -30145,6 +30315,54 @@ int ObDDLService::create_routine(ObRoutineInfo &routine_info,
         }
       }
     }
+    lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+    uint64_t data_version = 0;
+    if (OB_FAIL(ret)) {
+    } else if (replace) {
+    } else if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(tenant_id, compat_mode))) {
+      LOG_WARN("failed to get compat mode", K(ret), K(tenant_id));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+      LOG_WARN("fail to get data version", K(tenant_id));
+    } else if (data_version >= DATA_VERSION_4_2_2_0 && lib::Worker::CompatMode::MYSQL == compat_mode) {
+      const ObSysVarSchema *sys_var = NULL;
+      ObMalloc alloc(ObModIds::OB_TEMP_VARIABLES);
+      ObObj val;
+      if (OB_FAIL(schema_guard.get_tenant_system_variable(tenant_id, SYS_VAR_AUTOMATIC_SP_PRIVILEGES, sys_var))) {
+        LOG_WARN("fail to get tenant var schema", K(ret));
+      } else if (OB_ISNULL(sys_var)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sys variable schema is null", KR(ret));
+      } else if (OB_FAIL(sys_var->get_value(&alloc, NULL, val))) {
+        LOG_WARN("fail to get charset var value", K(ret));
+      } else {
+        bool grant_priv = val.get_bool();
+        if (grant_priv) {
+          int64_t db_id = routine_info.get_database_id();
+          const ObDatabaseSchema* database_schema = NULL;
+          if (OB_FAIL(schema_guard.get_database_schema(tenant_id, db_id, database_schema))) {
+            LOG_WARN("get database schema failed", K(ret));
+          } else if (OB_ISNULL(database_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("database schema should not be null", K(ret));
+          } else {
+            ObRoutinePrivSortKey routine_key(tenant_id, routine_info.get_owner_id(),
+                                              database_schema->get_database_name_str(),
+                                              routine_info.get_routine_name(), routine_info.is_procedure() ?
+                                              ObRoutineType::ROUTINE_PROCEDURE_TYPE : ObRoutineType::ROUTINE_FUNCTION_TYPE);
+            ObPrivSet priv_set = (OB_PRIV_EXECUTE | OB_PRIV_ALTER_ROUTINE);
+            int64_t option = 0;
+            const bool gen_ddl_stmt = false;
+            if (OB_FAIL(ddl_operator.grant_routine(routine_key,
+                                                priv_set,
+                                                trans,
+                                                option,
+                                                gen_ddl_stmt))) {
+              LOG_WARN("fail to grant routine", K(ret), K(routine_key), K(priv_set));
+            }
+          }
+        }
+      }
+    }
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
@@ -30152,7 +30370,6 @@ int ObDDLService::create_routine(ObRoutineInfo &routine_info,
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
-
     if (OB_SUCC(ret)) {
       if (OB_FAIL(publish_schema(tenant_id))) {
         LOG_WARN("publish schema failed", K(ret));
@@ -30223,6 +30440,48 @@ int ObDDLService::drop_routine(const ObRoutineInfo &routine_info,
       LOG_WARN("failed to modify obj status", K(ret));
     } else if (OB_FAIL(ddl_operator.drop_routine(routine_info, trans, error_info, ddl_stmt_str))) {
       LOG_WARN("drop procedure failed", K(ret), K(routine_info));
+    } else {
+      lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+      uint64_t data_version = 0;
+      if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(tenant_id, compat_mode))) {
+          LOG_WARN("failed to get compat mode", K(ret), K(tenant_id));
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+        LOG_WARN("fail to get data version", K(tenant_id));
+      } else if (data_version >= DATA_VERSION_4_2_2_0 && lib::Worker::CompatMode::MYSQL == compat_mode) {
+        const ObSysVarSchema *sys_var = NULL;
+        ObMalloc alloc(ObModIds::OB_TEMP_VARIABLES);
+        ObObj val;
+        if (OB_FAIL(schema_guard.get_tenant_system_variable(tenant_id, SYS_VAR_AUTOMATIC_SP_PRIVILEGES, sys_var))) {
+          LOG_WARN("fail to get tenant var schema", K(ret));
+        } else if (OB_ISNULL(sys_var)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("sys variable schema is null", KR(ret));
+        } else if (OB_FAIL(sys_var->get_value(&alloc, NULL, val))) {
+          LOG_WARN("fail to get charset var value", K(ret));
+        } else {
+          bool revoke_priv = val.get_bool();
+          if (revoke_priv) {
+            int64_t db_id = routine_info.get_database_id();
+            const ObDatabaseSchema* database_schema = NULL;
+            if (OB_FAIL(schema_guard.get_database_schema(tenant_id, db_id, database_schema))) {
+              LOG_WARN("get database schema failed", K(ret));
+            } else if (OB_ISNULL(database_schema)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("database schema is null", K(ret));
+            } else {
+              ObRoutinePrivSortKey routine_key(tenant_id, routine_info.get_owner_id(),
+                                            database_schema->get_database_name_str(),
+                                            routine_info.get_routine_name(), routine_info.is_procedure() ?
+                                            ObRoutineType::ROUTINE_PROCEDURE_TYPE : ObRoutineType::ROUTINE_FUNCTION_TYPE);
+              ObPrivSet priv_set = (OB_PRIV_EXECUTE | OB_PRIV_ALTER_ROUTINE);
+              bool gen_ddl_stmt = false;
+              if (OB_FAIL(ddl_operator.revoke_routine(routine_key, priv_set, trans, false, gen_ddl_stmt))) {
+                LOG_WARN("fail to grant routine", K(ret), K(routine_key), K(priv_set));
+              }
+            }
+          }
+        }
+      }
     }
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
@@ -33323,6 +33582,18 @@ int ObDDLService::init_system_variables(
         }
         ObString compat_mode_value = tenant_schema.is_oracle_tenant() ? "1" : "0";
         SET_TENANT_VARIABLE(SYS_VAR_OB_COMPATIBILITY_MODE, compat_mode_value);
+      }
+
+      if (OB_SUCC(ret)) {
+        char version[common::OB_CLUSTER_VERSION_LENGTH] = {0};
+        int64_t len = ObClusterVersion::print_version_str(
+                  version, common::OB_CLUSTER_VERSION_LENGTH, DATA_CURRENT_VERSION);
+        SET_TENANT_VARIABLE(SYS_VAR_PRIVILEGE_FEATURES_ENABLE, ObString(len, version));
+      }
+
+      if (OB_SUCC(ret)) {
+        ObString enable = "1";
+        SET_TENANT_VARIABLE(SYS_VAR__ENABLE_MYSQL_PL_PRIV_CHECK, enable);
       }
 
       // If the user does not specify parallel_servers_target when creating tenant,

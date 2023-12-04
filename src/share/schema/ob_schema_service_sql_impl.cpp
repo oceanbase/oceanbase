@@ -70,6 +70,7 @@
 #define FETCH_ALL_DB_PRIV_HISTORY_SQL           COMMON_SQL_WITH_TENANT
 #define FETCH_ALL_SYS_PRIV_HISTORY_SQL          COMMON_SQL_WITH_TENANT
 #define FETCH_ALL_TABLE_PRIV_HISTORY_SQL        COMMON_SQL_WITH_TENANT
+#define FETCH_ALL_ROUTINE_PRIV_HISTORY_SQL      COMMON_SQL_WITH_TENANT
 #define FETCH_ALL_OBJ_PRIV_HISTORY_SQL          COMMON_SQL_WITH_TENANT
 #define FETCH_ALL_OUTLINE_HISTORY_SQL           COMMON_SQL_WITH_TENANT
 #define FETCH_ALL_SYNONYM_HISTORY_SQL           COMMON_SQL_WITH_TENANT
@@ -1369,6 +1370,25 @@ int ObSchemaServiceSQLImpl::get_all_table_privs(ObISQLClient &client,
   return ret;
 }
 
+int ObSchemaServiceSQLImpl::get_all_routine_privs(ObISQLClient &client,
+    const ObRefreshSchemaStatus &schema_status,
+    const int64_t schema_version,
+    const uint64_t tenant_id,
+    ObIArray<ObRoutinePriv> &schema_array)
+{
+  int ret = OB_SUCCESS;
+  schema_array.reset();
+
+  if (!check_inner_stat()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("check inner stat fail");
+  } else if (OB_FAIL(fetch_routine_privs(client, schema_status, schema_version, tenant_id, schema_array))) {
+    LOG_WARN("fetch tenants failed", K(ret));
+  }
+
+  return ret;
+}
+
 int ObSchemaServiceSQLImpl::get_sys_variable_schema(
     ObISQLClient &sql_client,
     const ObRefreshSchemaStatus &schema_status,
@@ -2393,6 +2413,40 @@ int ObSchemaServiceSQLImpl::fetch_all_tenant_info(
     ret; \
   })
 
+#define SQL_APPEND_ROUTINE_PRIV_ID(schema_keys, tenant_id, schema_key_size, sql) \
+  ({                                                                 \
+    int ret = OB_SUCCESS; \
+    if (OB_FAIL(sql.append("("))) { \
+      LOG_WARN("append sql failed", K(ret)); \
+    } else { \
+      for (int64_t i = 0; OB_SUCC(ret) && i < schema_key_size; ++i) {  \
+        if (OB_FAIL(sql.append_fmt("%s(%lu, %lu, ", 0 == i ? "" : ", ", \
+                                   fill_extract_tenant_id(schema_status, tenant_id), \
+                                   fill_extract_schema_id(schema_status, schema_keys[i].user_id_)))) { \
+          LOG_WARN("append sql failed", K(ret)); \
+        } else if (OB_FAIL(sql_append_hex_escape_str(schema_keys[i].database_name_, sql))) { \
+          LOG_WARN("fail to append database name", K(ret)); \
+        } else if (OB_FAIL(sql.append(", "))) { \
+          LOG_WARN("append sql failed", K(ret)); \
+        } else if (OB_FAIL(sql_append_hex_escape_str(schema_keys[i].routine_name_, sql))) { \
+          LOG_WARN("fail to append database name", K(ret)); \
+        } else if (OB_FAIL(sql.append(", "))) { \
+          LOG_WARN("append sql failed", K(ret)); \
+        } else if (OB_FAIL(sql.append_fmt("%lu ", schema_keys[i].get_routine_priv_key().routine_type_))) { \
+          LOG_WARN("append sql failed", K(ret)); \
+        } else if (OB_FAIL(sql.append(")"))) { \
+          LOG_WARN("append sql failed", K(ret)); \
+        } \
+      } \
+      if (OB_SUCC(ret)) { \
+        if (OB_FAIL(sql.append(")"))) { \
+          LOG_WARN("append sql failed", K(ret)); \
+        } \
+      } \
+    } \
+    ret; \
+  })
+
 #define SQL_APPEND_OBJ_PRIV_ID(schema_keys, tenant_id, schema_key_size, sql) \
   ({                                                                 \
     int ret = OB_SUCCESS; \
@@ -3125,6 +3179,7 @@ GET_BATCH_SCHEMAS_FUNC_DEFINE(database, ObSimpleDatabaseSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(tablegroup, ObSimpleTablegroupSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(db_priv, ObDBPriv);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(table_priv, ObTablePriv);
+GET_BATCH_SCHEMAS_FUNC_DEFINE(routine_priv, ObRoutinePriv);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(outline, ObSimpleOutlineSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(synonym, ObSimpleSynonymSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(routine, ObSimpleRoutineSchema);
@@ -5085,6 +5140,56 @@ int ObSchemaServiceSQLImpl::fetch_table_privs(
         LOG_WARN("fail to get result. ", K(ret));
       } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_table_priv_schema(tenant_id, *result, schema_array))) {
         LOG_WARN("failed to retrieve table priv schema", K(ret));
+      }
+    }
+
+  }
+  return ret;
+}
+
+int ObSchemaServiceSQLImpl::fetch_routine_privs(
+    ObISQLClient &sql_client,
+    const ObRefreshSchemaStatus &schema_status,
+    const int64_t schema_version,
+    const uint64_t tenant_id,
+    ObIArray<ObRoutinePriv> &schema_array,
+    const SchemaKey *schema_keys,
+    const int64_t schema_key_size)
+{
+  int ret = OB_SUCCESS;
+
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = NULL;
+    ObSqlString sql;
+    const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
+    const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
+    if (OB_FAIL(sql.append_fmt(FETCH_ALL_ROUTINE_PRIV_HISTORY_SQL, OB_ALL_ROUTINE_PRIVILEGE_HISTORY_TNAME,
+                               fill_extract_tenant_id(schema_status, tenant_id)))) {
+      LOG_WARN("append sql failed", K(ret));
+    } else if (OB_FAIL(sql.append_fmt(" AND SCHEMA_VERSION <= %ld", schema_version))) {
+      LOG_WARN("append sql failed", K(ret));
+    } else if (NULL != schema_keys && schema_key_size > 0) {
+      // database_name/routine_name is case sensitive
+      if (OB_FAIL(sql.append_fmt(" AND (tenant_id, user_id, BINARY database_name, \
+                                        BINARY routine_name, routine_type) in"))) {
+        LOG_WARN("append failed", K(ret));
+      } else if (OB_FAIL(SQL_APPEND_ROUTINE_PRIV_ID(schema_keys, tenant_id, schema_key_size, sql))) {
+        LOG_WARN("sql append routine priv id failed", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
+      if (OB_FAIL(sql.append(" ORDER BY tenant_id desc, user_id desc," \
+                             "BINARY database_name desc, BINARY routine_name desc, " \
+                             "routine_type desc, schema_version desc"))) {
+        LOG_WARN("sql append failed", K(ret));
+      } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", K(ret), K(tenant_id), K(sql));
+      } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get result. ", K(ret));
+      } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_routine_priv_schema(tenant_id, *result, schema_array))) {
+        LOG_WARN("failed to retrieve routine priv schema", K(ret));
       }
     }
 

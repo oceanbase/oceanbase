@@ -691,6 +691,19 @@ public:
   DISALLOW_COPY_AND_ASSIGN(ObKvFeatureModeParser);
 };
 
+class ObPrivControlParser : public ObConfigParser
+{
+public:
+  ObPrivControlParser() {}
+  virtual ~ObPrivControlParser() {}
+  virtual bool parse(const char *str, uint8_t *arr, int64_t len) override;
+public:
+  static const int8_t MODE_DEFAULT = 0b00;
+  static const int8_t MODE_ON = 0b01;
+  static const int8_t MODE_OFF = 0b10;
+  DISALLOW_COPY_AND_ASSIGN(ObPrivControlParser);
+};
+
 typedef __ObConfigContainer<ObConfigStringKey,
                             ObConfigItem, OB_MAX_CONFIG_NUMBER> ObConfigContainer;
 } // namespace common

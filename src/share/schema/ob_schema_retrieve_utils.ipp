@@ -1699,6 +1699,14 @@ int ObSchemaRetrieveUtils::fill_user_schema(
         ObSchemaService::g_ignore_column_retrieve_error_, 0);
     EXTRACT_PRIV_FROM_MYSQL_RESULT_IGNORE_NULL_AND_IGNORE_COLUMN_ERROR(result, priv_drop_database_link, user_info, PRIV_DROP_DATABASE_LINK);
     EXTRACT_PRIV_FROM_MYSQL_RESULT_IGNORE_NULL_AND_IGNORE_COLUMN_ERROR(result, priv_create_database_link, user_info, PRIV_CREATE_DATABASE_LINK);
+
+    bool ignore_column_error = true;
+    ObPrivSet priv_others = 0;
+    EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "priv_others", priv_others, uint64_t, true /* skip null error*/,
+                                               ignore_column_error, 0);
+    user_info.set_priv((priv_others & 1) != 0 ? OB_PRIV_EXECUTE : 0);
+    user_info.set_priv((priv_others & 2) != 0 ? OB_PRIV_ALTER_ROUTINE : 0);
+    user_info.set_priv((priv_others & 4) != 0 ? OB_PRIV_CREATE_ROUTINE : 0);
   }
   return ret;
 }
@@ -1844,6 +1852,16 @@ int ObSchemaRetrieveUtils::fill_db_priv_schema(
     EXTRACT_PRIV_FROM_MYSQL_RESULT(result, priv_create_view, db_priv, PRIV_CREATE_VIEW);
     EXTRACT_PRIV_FROM_MYSQL_RESULT(result, priv_show_view, db_priv, PRIV_SHOW_VIEW);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, schema_version, db_priv, int64_t);
+    bool ignore_column_error = true;
+    ObPrivSet priv_others = 0;
+    EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "priv_others", priv_others, uint64_t, true /* skip null error*/,
+                                               ignore_column_error, 0);
+    if (OB_FAIL(ret)) {
+    } else {
+      db_priv.set_priv((priv_others & 1) != 0 ? OB_PRIV_EXECUTE : 0);
+      db_priv.set_priv((priv_others & 2) != 0 ? OB_PRIV_ALTER_ROUTINE : 0);
+      db_priv.set_priv((priv_others & 4) != 0 ? OB_PRIV_CREATE_ROUTINE : 0);
+    }
   }
 
   return ret;
@@ -1897,6 +1915,32 @@ int ObSchemaRetrieveUtils::fill_table_priv_schema(
     EXTRACT_PRIV_FROM_MYSQL_RESULT(result, priv_create_view, table_priv, PRIV_CREATE_VIEW);
     EXTRACT_PRIV_FROM_MYSQL_RESULT(result, priv_show_view, table_priv, PRIV_SHOW_VIEW);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, schema_version, table_priv, int64_t);
+  }
+
+  return ret;
+}
+
+template<typename T>
+int ObSchemaRetrieveUtils::fill_routine_priv_schema(
+    const uint64_t tenant_id, T &result, ObRoutinePriv &routine_priv, bool &is_deleted)
+{
+  int ret = common::OB_SUCCESS;
+  routine_priv.reset();
+  is_deleted = false;
+
+  routine_priv.set_tenant_id(tenant_id);
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, user_id, routine_priv, tenant_id);
+  EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, database_name, routine_priv);
+  EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, routine_name, routine_priv);
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, routine_type, routine_priv, int64_t);
+  EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
+  if (!is_deleted) {
+    int64_t all_priv = 0;
+    EXTRACT_INT_FIELD_MYSQL(result, "all_priv", all_priv, int64_t);
+    if ((all_priv & 1) != 0) { routine_priv.set_priv(OB_PRIV_EXECUTE); }
+    if ((all_priv & 2) != 0) { routine_priv.set_priv(OB_PRIV_ALTER_ROUTINE); }
+    if ((all_priv & 4) != 0) { routine_priv.set_priv(OB_PRIV_GRANT); }
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, schema_version, routine_priv, int64_t);
   }
 
   return ret;
@@ -3524,6 +3568,46 @@ int ObSchemaRetrieveUtils::retrieve_table_priv_schema(
 }
 
 template<typename T, typename S>
+int ObSchemaRetrieveUtils::retrieve_routine_priv_schema(
+    const uint64_t tenant_id,
+    T &result,
+    ObIArray<S> &routine_priv_array)
+{
+  int ret = common::OB_SUCCESS;
+  ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
+  ObArenaAllocator tmp_allocator(ObModIds::OB_TEMP_VARIABLES);
+  S routine_priv(&allocator);
+  ObRoutinePrivSortKey pre_routine_sort_key;
+  while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
+    routine_priv.reset();
+    allocator.reuse();
+    bool is_deleted = false;
+    if (OB_FAIL(fill_routine_priv_schema(tenant_id, result, routine_priv, is_deleted))) {
+      LOG_WARN("Fail to fill routine_priv", K(ret));
+    } else if (routine_priv.get_sort_key() == pre_routine_sort_key) {
+      // ignore it
+      ret = common::OB_SUCCESS;
+    } else if (is_deleted) {
+      LOG_TRACE("routine_priv is is_deleted", K(routine_priv));
+    } else if (OB_FAIL(routine_priv_array.push_back(routine_priv))) {
+      LOG_WARN("Failed to push back", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      tmp_allocator.reuse();
+      if (OB_FAIL(pre_routine_sort_key.deep_copy(routine_priv.get_sort_key(), tmp_allocator))) {
+        LOG_WARN("alloc_routine_schema failed", KR(ret));
+      }
+    }
+  }
+  if (ret != common::OB_ITER_END) {
+    LOG_WARN("Fail to get routine privileges. iter quit", K(ret));
+  } else {
+    ret = common::OB_SUCCESS;
+  }
+  return ret;
+}
+
+template<typename T, typename S>
 int ObSchemaRetrieveUtils::retrieve_obj_priv_schema(
     const uint64_t tenant_id,
     T &result,
@@ -4080,6 +4164,9 @@ int ObSchemaRetrieveUtils::fill_routine_schema(const uint64_t tenant_id, T &resu
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, overload, routine_schema, uint64_t);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, routine_type, routine_schema, ObRoutineType);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, schema_version, routine_schema, int64_t);
+    ObString empty_str("");
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+      result, priv_user, routine_schema, true,  false, empty_str);
   }
   return ret;
 }

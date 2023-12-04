@@ -367,7 +367,7 @@ def_table_schema(
 # 101: __all_meta_table is deprecated in 4.0.
 
 all_user_def = dict(
-    owner = 'xinqi.zlm',
+    owner = 'sean.yyj',
     table_name    = '__all_user',
     table_id      = '102',
     table_type = 'SYSTEM_TABLE',
@@ -417,6 +417,7 @@ all_user_def = dict(
       ('priv_repl_client', 'int', 'false', '0'),
       ('priv_drop_database_link', 'int', 'false', '0'),
       ('priv_create_database_link', 'int', 'false', '0'),
+      ('priv_others', 'int', 'false', '0'),
     ],
 )
 
@@ -517,7 +518,7 @@ def_table_schema(**all_tenant_def)
 def_table_schema(**gen_history_table_def(109, all_tenant_def))
 
 all_table_privilege_def = dict(
-    owner = 'xinqi.zlm',
+    owner = 'sean.yyj',
     table_name    = '__all_table_privilege',
     table_id      = '110',
     table_type = 'SYSTEM_TABLE',
@@ -550,7 +551,7 @@ def_table_schema(**all_table_privilege_def)
 def_table_schema(**gen_history_table_def(111, all_table_privilege_def))
 
 all_database_privilege_def = dict(
-    owner = 'xinqi.zlm',
+    owner = 'sean.yyj',
     table_name    = '__all_database_privilege',
     table_id      = '112',
     table_type = 'SYSTEM_TABLE',
@@ -574,6 +575,7 @@ all_database_privilege_def = dict(
       ('priv_index', 'int', 'false', '0'),
       ('priv_create_view', 'int', 'false', '0'),
       ('priv_show_view', 'int', 'false', '0'),
+      ('priv_others', 'int', 'false', '0'),
     ],
 )
 
@@ -952,7 +954,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name = '__all_privilege',
   table_id = '141',
   table_type = 'SYSTEM_TABLE',
@@ -2308,7 +2310,7 @@ def_table_schema(
 # 258: __all_tenant_sstable_column_checksum abandoned on 4.0
 
 all_tenant_security_audit_record_def = dict(
-    owner = 'xinqi.zlm',
+    owner = 'sean.yyj',
     table_name = '__all_tenant_security_audit_record',
     table_id = '259',
     table_type = 'SYSTEM_TABLE',
@@ -6361,7 +6363,33 @@ def_table_schema(
   ],
 )
 
+all_routine_privilege_def = dict(
+    owner = 'mingye.swj',
+    table_name    = '__all_routine_privilege',
+    table_id      = '490',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+        ('tenant_id', 'int'),
+        ('user_id', 'int'),
+        ('database_name', 'varbinary:OB_MAX_DATABASE_NAME_BINARY_LENGTH'),
+        ('routine_name', 'varbinary:OB_MAX_ROUTINE_NAME_BINARY_LENGTH'),
+        ('routine_type', 'int'),
+    ],
+    in_tenant_space = True,
+
+    normal_columns = [
+      ('all_priv', 'int', 'false', '0'),
+    ],
+)
+
+def_table_schema(**all_routine_privilege_def)
+
+def_table_schema(**gen_history_table_def(491, all_routine_privilege_def))
+
+
 # 493 : __all_ncomp_dll
+
 all_ncomp_dll = dict(
   owner = 'hr351303',
   table_name = '__all_ncomp_dll',
@@ -6449,6 +6477,7 @@ def_table_schema(
   ('extra', 'varchar:COLUMN_EXTRA_LENGTH'),
   ('privileges', 'varchar:MAX_COLUMN_PRIVILEGE_LENGTH'),
   ('comment', 'varchar:MAX_COLUMN_COMMENT_LENGTH'),
+  ('is_hidden', 'int', 'false', '0')
   ],
 )
 
@@ -6480,7 +6509,8 @@ def_table_schema(
   ('comment', 'varchar:MAX_TABLE_COMMENT_LENGTH', 'true'),
   ('index_comment', 'varchar:MAX_TABLE_COMMENT_LENGTH', 'false', ''),
   ('is_visible', 'varchar:MAX_COLUMN_YES_NO_LENGTH', 'false', ''),
-  ('expression', 'varchar:OB_MAX_DEFAULT_VALUE_LENGTH', 'true')
+  ('expression', 'varchar:OB_MAX_DEFAULT_VALUE_LENGTH', 'true'),
+  ('is_column_visible', 'int', 'false', '0')
   ],
 )
 
@@ -6537,7 +6567,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name     = '__tenant_virtual_privilege_grant',
   table_id       = '10007',
   table_type = 'VIRTUAL_TABLE',
@@ -8593,7 +8623,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name    = '__all_virtual_audit_operation',
   table_id      = '11097',
   table_type = 'VIRTUAL_TABLE',
@@ -8610,7 +8640,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name    = '__all_virtual_audit_action',
   table_id      = '11098',
   table_type = 'VIRTUAL_TABLE',
@@ -9193,7 +9223,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   database_id    = 'OB_MYSQL_SCHEMA_ID',
   table_name    = 'user',
   table_id      = '12009',
@@ -9254,7 +9284,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   database_id    = 'OB_MYSQL_SCHEMA_ID',
   table_name    = 'db',
   table_id      = '12010',
@@ -10411,6 +10441,7 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
 )
+
 
 ############################ NOTE: Id 12177 is deprecated, do not reuse ############################
 #def_table_schema(
@@ -13319,6 +13350,16 @@ def_table_schema(
 # 12441: __all_virtual_wr_event_name
 # 12442: __all_tenant_scheduler_running_job
 #
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12443',
+  table_name = '__all_virtual_routine_privilege',
+  keywords = all_def_keywords['__all_routine_privilege']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12444',
+  table_name = '__all_virtual_routine_privilege_history',
+  keywords = all_def_keywords['__all_routine_privilege_history']))
 
 def_table_schema(
   owner = 'linzhigang.lzg',
@@ -17187,7 +17228,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   tablegroup_id   = 'OB_INVALID_ID',
   database_id     = 'OB_INFORMATION_SCHEMA_ID',
   table_name      = 'COLUMN_PRIVILEGES',
@@ -26428,7 +26469,10 @@ def_table_schema(
           (CASE WHEN PRIV_REPL_SLAVE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_REPL_SLAVE,
           (CASE WHEN PRIV_REPL_CLIENT = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_REPL_CLIENT,
           (CASE WHEN PRIV_DROP_DATABASE_LINK = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_DROP_DATABASE_LINK,
-          (CASE WHEN PRIV_CREATE_DATABASE_LINK = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE_DATABASE_LINK
+          (CASE WHEN PRIV_CREATE_DATABASE_LINK = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE_DATABASE_LINK,
+          (CASE WHEN (PRIV_OTHERS & (1 << 0)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_EXECUTE,
+          (CASE WHEN (PRIV_OTHERS & (1 << 1)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_ALTER_ROUTINE,
+          (CASE WHEN (PRIV_OTHERS & (1 << 2)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_ROUTINE
   FROM OCEANBASE.__all_user;
   """.replace("\n", " ")
 )
@@ -26482,7 +26526,10 @@ def_table_schema(
           (CASE WHEN PRIV_REPL_SLAVE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_REPL_SLAVE,
           (CASE WHEN PRIV_REPL_CLIENT = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_REPL_CLIENT,
           (CASE WHEN PRIV_DROP_DATABASE_LINK = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_DROP_DATABASE_LINK,
-          (CASE WHEN PRIV_CREATE_DATABASE_LINK = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE_DATABASE_LINK
+          (CASE WHEN PRIV_CREATE_DATABASE_LINK = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE_DATABASE_LINK,
+          (CASE WHEN (PRIV_OTHERS & (1 << 0)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_EXECUTE,
+          (CASE WHEN (PRIV_OTHERS & (1 << 1)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_ALTER_ROUTINE,
+          (CASE WHEN (PRIV_OTHERS & (1 << 2)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_ROUTINE
   FROM OCEANBASE.__all_virtual_user;
   """.replace("\n", " ")
 )
@@ -26514,7 +26561,10 @@ def_table_schema(
           (CASE WHEN A.PRIV_SELECT = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_SELECT,
           (CASE WHEN A.PRIV_INDEX = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_INDEX,
           (CASE WHEN A.PRIV_CREATE_VIEW = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE_VIEW,
-          (CASE WHEN A.PRIV_SHOW_VIEW = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_SHOW_VIEW
+          (CASE WHEN A.PRIV_SHOW_VIEW = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_SHOW_VIEW,
+          (CASE WHEN (A.PRIV_OTHERS & (1 << 0)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_EXECUTE,
+          (CASE WHEN (A.PRIV_OTHERS & (1 << 1)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_ALTER_ROUTINE,
+          (CASE WHEN (A.PRIV_OTHERS & (1 << 2)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_ROUTINE
   FROM OCEANBASE.__all_database_privilege A INNER JOIN OCEANBASE.__all_user B
         ON A.TENANT_ID = B.TENANT_ID AND A.USER_ID = B.USER_ID;
   """.replace("\n", " ")
@@ -26546,7 +26596,10 @@ def_table_schema(
           (CASE WHEN A.PRIV_SELECT = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_SELECT,
           (CASE WHEN A.PRIV_INDEX = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_INDEX,
           (CASE WHEN A.PRIV_CREATE_VIEW = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE_VIEW,
-          (CASE WHEN A.PRIV_SHOW_VIEW = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_SHOW_VIEW
+          (CASE WHEN A.PRIV_SHOW_VIEW = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_SHOW_VIEW,
+          (CASE WHEN (A.PRIV_OTHERS & (1 << 0)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_EXECUTE,
+          (CASE WHEN (A.PRIV_OTHERS & (1 << 1)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_ALTER_ROUTINE,
+          (CASE WHEN (A.PRIV_OTHERS & (1 << 2)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_ROUTINE
   FROM OCEANBASE.__all_virtual_database_privilege A INNER JOIN OCEANBASE.__all_virtual_user B
         ON A.USER_ID = B.USER_ID AND A.TENANT_ID = B.TENANT_ID;
   """.replace("\n", " ")
@@ -26982,6 +27035,12 @@ def_table_schema(
                      AND U.PRIV_DROP_DATABASE_LINK = 1 THEN 'DROP DATABASE LINK'
                 WHEN V1.C1 = 36
                      AND U.PRIV_CREATE_DATABASE_LINK = 1 THEN 'CREATE DATABASE LINK'
+                WHEN V1.C1 = 37
+                     AND (U.PRIV_OTHERS & (1 << 0)) != 0 THEN 'EXECUTE'
+                WHEN V1.C1 = 38
+                     AND (U.PRIV_OTHERS & (1 << 1)) != 0 THEN 'ALTER ROUTINE'
+                WHEN V1.C1 = 39
+                     AND (U.PRIV_OTHERS & (1 << 2)) != 0 THEN 'CREATE ROUTINE'
                 WHEN V1.C1 = 0
                      AND U.PRIV_ALTER = 0
                      AND U.PRIV_CREATE = 0
@@ -27006,7 +27065,8 @@ def_table_schema(
                      AND U.PRIV_REPL_SLAVE = 0
                      AND U.PRIV_REPL_CLIENT = 0
                      AND U.PRIV_DROP_DATABASE_LINK = 0
-                     AND U.PRIV_CREATE_DATABASE_LINK = 0 THEN 'USAGE'
+                     AND U.PRIV_CREATE_DATABASE_LINK = 0
+                     AND U.PRIV_OTHERS = 0 THEN 'USAGE'
             END PRIVILEGE_TYPE ,
             CASE
                 WHEN U.PRIV_GRANT_OPTION = 0 THEN 'NO'
@@ -27033,7 +27093,8 @@ def_table_schema(
                      AND U.PRIV_REPL_SLAVE = 0
                      AND U.PRIV_REPL_CLIENT = 0
                      AND U.PRIV_DROP_DATABASE_LINK = 0
-                     AND U.PRIV_CREATE_DATABASE_LINK = 0 THEN 'NO'
+                     AND U.PRIV_CREATE_DATABASE_LINK = 0
+                     AND U.PRIV_OTHERS = 0 THEN 'NO'
                 WHEN U.PRIV_GRANT_OPTION = 1 THEN 'YES'
             END IS_GRANTABLE
      FROM oceanbase.__all_user U,
@@ -27061,7 +27122,10 @@ def_table_schema(
         UNION ALL SELECT 33 AS C1
         UNION ALL SELECT 34 AS C1
         UNION ALL SELECT 35 AS C1
-        UNION ALL SELECT 36 AS C1) V1,
+        UNION ALL SELECT 36 AS C1
+        UNION ALL SELECT 37 AS C1
+        UNION ALL SELECT 38 AS C1
+        UNION ALL SELECT 39 AS C1) V1,
        (SELECT USER_ID
         FROM oceanbase.__all_user
         WHERE TENANT_ID = 0
@@ -27124,6 +27188,12 @@ def_table_schema(
                      AND DP.PRIV_CREATE_VIEW = 1 THEN 'CREATE VIEW'
                 WHEN V1.C1 = 12
                      AND DP.PRIV_SHOW_VIEW = 1 THEN 'SHOW VIEW'
+                WHEN V1.C1 = 13
+                     AND (U.PRIV_OTHERS & (1 << 0)) != 0 THEN 'EXECUTE'
+                WHEN V1.C1 = 14
+                     AND (U.PRIV_OTHERS & (1 << 1)) != 0 THEN 'ALTER ROUTINE'
+                WHEN V1.C1 = 15
+                     AND (U.PRIV_OTHERS & (1 << 2)) != 0 THEN 'CREATE ROUTINE'
                 ELSE NULL
             END PRIVILEGE_TYPE ,
             CASE
@@ -27141,7 +27211,10 @@ def_table_schema(
         UNION ALL SELECT 9 AS C1
         UNION ALL SELECT 10 AS C1
         UNION ALL SELECT 11 AS C1
-        UNION ALL SELECT 12 AS C1) V1,
+        UNION ALL SELECT 12 AS C1
+        UNION ALL SELECT 13 AS C1
+        UNION ALL SELECT 14 AS C1
+        UNION ALL SELECT 15 AS C1) V1,
        (SELECT USER_ID
         FROM oceanbase.__all_user
         WHERE TENANT_ID= 0
@@ -30428,6 +30501,35 @@ def_table_schema(
 #21499 DBA_OB_INDEX_USAGE
 
 def_table_schema(
+  owner = 'mingye.swj',
+  database_id    = 'OB_MYSQL_SCHEMA_ID',
+  table_name      = 'procs_priv',
+  table_id        = '21486',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT cast(b.host as char(60)) as Host,
+           cast(a.database_name as char(64)) as Db,
+           cast(b.user_name as char(32)) as User,
+           cast(a.routine_name as char(64)) as Routine_name,
+           case when a.routine_type = 1 then 'PROCEDURE' else 'FUNCTION' end as Routine_type,
+           cast(c.priv_user as char(93)) as Grantor,
+           substr(concat(case when (a.all_priv & 1) > 0 then ',Execute' else '' end,
+                          case when (a.all_priv & 2) > 0 then ',Alter Routine' else '' end,
+                          case when (a.all_priv & 4) > 0 then ',Grant' else '' end), 2) as Proc_priv,
+           cast(a.gmt_modified as date) as Timestamp
+    FROM oceanbase.__all_routine_privilege a, oceanbase.__all_user b, oceanbase.__all_routine c, oceanbase.__all_database d
+    WHERE a.tenant_id = b.tenant_id AND a.user_id = b.user_id
+    AND a.tenant_id = d.tenant_id and a.database_name = d.database_name
+    AND a.tenant_id = c.tenant_id AND a.routine_name = c.routine_name
+    AND a.routine_type = c.routine_type AND c.database_id = d.database_id AND c.package_id = -1;
+""".replace("\n", " ")
+)
+
+def_table_schema(
   owner           = 'linzhigang.lzg',
   table_name      = 'DBA_OB_SYS_VARIABLES',
   table_id        = '21500',
@@ -30462,6 +30564,7 @@ def_table_schema(
   where a.name = b.variable_name;
   """.replace("\n", " "),
 )
+
 # 余留位置
 
 
@@ -42036,7 +42139,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'DBA_ROLES',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25121',
@@ -42054,7 +42157,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'DBA_ROLE_PRIVS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25122',
@@ -42080,7 +42183,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'USER_ROLE_PRIVS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25123',
@@ -42105,7 +42208,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'DBA_TAB_PRIVS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25124',
@@ -42192,7 +42295,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'ALL_TAB_PRIVS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25125',
@@ -42282,7 +42385,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'USER_TAB_PRIVS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25126',
@@ -42371,7 +42474,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'DBA_SYS_PRIVS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25127',
@@ -42481,7 +42584,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'USER_SYS_PRIVS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25128',
@@ -42593,7 +42696,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'AUDIT_ACTIONS',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -42611,7 +42714,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'STMT_AUDIT_OPTION_MAP',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -42630,7 +42733,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'ALL_DEF_AUDIT_OPTS',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -42663,7 +42766,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'DBA_STMT_AUDIT_OPTS',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -42700,7 +42803,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'DBA_OBJ_AUDIT_OPTS',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -42843,7 +42946,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'DBA_AUDIT_TRAIL',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -42921,7 +43024,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'USER_AUDIT_TRAIL',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -43003,7 +43106,7 @@ def_table_schema(
 # bugfix:
 # return code refers from: select dbms_metadata.get_ddl('VIEW','DBA_AUDIT_EXISTS') from dual;
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'DBA_AUDIT_EXISTS',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -43066,7 +43169,7 @@ def_table_schema(
 
 # DBA_AUDIT_SESSION displays all audit trail records concerning CONNECT and DISCONNECT.
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'DBA_AUDIT_SESSION',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -43109,7 +43212,7 @@ def_table_schema(
 # USER_AUDIT_SESSION displays the audit trail records concerning connections and disconnections
 # of the current user. Its columns are the same as those in DBA_AUDIT_SESSION.
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'USER_AUDIT_SESSION',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -43153,7 +43256,7 @@ def_table_schema(
 # DBA_AUDIT_STATEMENT displays audit trail records for all GRANT, REVOKE,
 # AUDIT, NOAUDIT, and ALTER SYSTEM statements in the database.
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'DBA_AUDIT_STATEMENT',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -43238,7 +43341,7 @@ def_table_schema(
 # USER_AUDIT_STATEMENT displays audit trail entries for the GRANT, REVOKE,
 # AUDIT, NOAUDIT, and ALTER SYSTEM statements issued by the current user.
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'USER_AUDIT_STATEMENT',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -43323,7 +43426,7 @@ def_table_schema(
 
 # DBA_AUDIT_OBJECT displays audit trail records for all objects in the database.
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'DBA_AUDIT_OBJECT',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -43385,7 +43488,7 @@ def_table_schema(
 # USER_AUDIT_OBJECT displays audit trail records for the objects accessible to the current user.
 # Its columns are the same as those in DBA_AUDIT_OBJECT.
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'USER_AUDIT_OBJECT',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -43446,7 +43549,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'DBA_COL_PRIVS',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -43509,7 +43612,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'USER_COL_PRIVS',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -43576,7 +43679,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'ALL_COL_PRIVS',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -43639,7 +43742,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'ROLE_TAB_PRIVS',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -43728,7 +43831,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'ROLE_SYS_PRIVS',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -43840,7 +43943,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'ROLE_ROLE_PRIVS',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -49168,7 +49271,7 @@ def_table_schema(
 )
 
 def_table_schema(
-    owner = 'xinqi.zlm',
+    owner = 'sean.yyj',
     table_name      = 'GV$INSTANCE',
     database_id     = 'OB_ORA_SYS_DATABASE_ID',
     table_id        = '28004',
@@ -49208,7 +49311,7 @@ def_table_schema(
 )
 
 def_table_schema(
-    owner = 'xinqi.zlm',
+    owner = 'sean.yyj',
     table_name      = 'V$INSTANCE',
     database_id     = 'OB_ORA_SYS_DATABASE_ID',
     table_id        = '28005',

@@ -528,6 +528,10 @@ public:
                                      share::schema::ObTableSchema &tbl_schema,
                                      share::schema::ObConstraint &constraint,
                                      ObRawExpr *&expr);
+  static int check_comment_length(ObSQLSessionInfo *session_info,
+                                  char *str,
+                                  int64_t *str_len,
+                                  const int64_t max_len);
   static int resolve_check_constraint_expr(
              ObResolverParams &params,
              const ParseNode *node,

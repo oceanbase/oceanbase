@@ -516,6 +516,9 @@ const int64_t OB_MAX_ENCRYPTION_MODE_LENGTH = 64;
 const int64_t OB_MAX_CORE_TALBE_NAME_LENGTH = 128;
 const int64_t OB_MAX_OUTLINE_NAME_LENGTH = 128;
 const int64_t OB_MAX_ROUTINE_NAME_LENGTH = 128;
+const int64_t OB_MAX_ROUTINE_NAME_BINARY_LENGTH = 2048; // Should be OB_MAX_ROUTINE_NAME_LENGTH * 4(max char bytes),
+                                                         // reserve some bytes thus OB_MAX_ROUTINE_NAME_LENGTH changes will probably not influence it
+                                                         // it is defined in primary key, and can not change randomly.
 const int64_t OB_MAX_PACKAGE_NAME_LENGTH = 128;
 const int64_t OB_MAX_KVCACHE_NAME_LENGTH = 128;
 const int64_t OB_MAX_SYNONYM_NAME_LENGTH = 128;

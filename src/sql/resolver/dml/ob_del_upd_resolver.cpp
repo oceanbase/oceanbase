@@ -3440,7 +3440,6 @@ int ObDelUpdResolver::resolve_insert_values(const ParseNode *node,
         } else if (OB_FAIL(append(table_info.values_vector_, value_row))) {
           LOG_WARN("failed to append value row", K(ret));
         }
-
       }
     }
     value_row.reset();
@@ -4098,10 +4097,105 @@ int ObDelUpdResolver::add_new_sel_item_for_oracle_temp_table(ObSelectStmt &selec
   return ret;
 }
 
+int ObDelUpdResolver::get_session_columns_for_oracle_temp_table(uint64_t ref_table_id,
+                                                                uint64_t table_id,
+                                                                ObDMLStmt *stmt,
+                                                                ObColumnRefRawExpr *&session_id_expr,
+                                                                ObColumnRefRawExpr *&session_create_time_expr)
+{
+  int ret = OB_SUCCESS;
+  if (is_oracle_tmp_table_) {
+    const share::schema::ObColumnSchemaV2 *column_schema = NULL;
+    const share::schema::ObColumnSchemaV2 *column_schema2 = NULL;
+    const ObTableSchema *table_schema = NULL;
+    common::ObSEArray<ObColumnRefRawExpr*, 8, common::ModulePageAllocator, true> column_exprs;
+    TableItem *table_item = NULL;
+    if (OB_ISNULL(session_info_) || OB_ISNULL(schema_checker_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid session_info_", K(session_info_));
+    } else if (OB_FAIL(get_table_schema(table_id, ref_table_id, stmt, table_schema))) {
+      LOG_WARN("not find table schema", K(ret));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("fail to get tale schema", K(ret), K(table_schema));
+    } else if (OB_ISNULL(column_schema = (table_schema->get_column_schema(OB_HIDDEN_SESSION_ID_COLUMN_ID)))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get column schema", K(ret));
+    } else if (OB_ISNULL(column_schema2 = (table_schema->get_column_schema(OB_HIDDEN_SESS_CREATE_TIME_COLUMN_ID)))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get column schema", K(ret));
+    } else if (OB_ISNULL(table_item = stmt->get_table_item_by_id(table_id))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get table item", K(ret));
+    } else if (OB_FAIL(add_column_to_stmt(*table_item, *column_schema, column_exprs, stmt))) {
+      LOG_WARN("failed get column item", K(ret));
+    } else if (OB_FAIL(add_column_to_stmt(*table_item, *column_schema2, column_exprs, stmt))) {
+      LOG_WARN("failed get column exprs", K(ret));
+    } else if (column_exprs.count() != 2) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get column exprs", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      session_id_expr = column_exprs.at(0);
+      session_create_time_expr = column_exprs.at(1);
+      if (OB_ISNULL(session_id_expr) || OB_ISNULL(session_create_time_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get column exprs", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDelUpdResolver::add_column_for_oracle_temp_table(uint64_t ref_table_id,
+                                                       uint64_t table_id,
+                                                       ObDMLStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  if (is_oracle_tmp_table_) {
+    ObColumnRefRawExpr *session_id_expr = NULL;
+    ObColumnRefRawExpr *session_create_time_expr = NULL;
+    if (OB_FAIL(get_session_columns_for_oracle_temp_table(ref_table_id,
+                                                          table_id,
+                                                          stmt,
+                                                          session_id_expr,
+                                                          session_create_time_expr))) {
+      LOG_WARN("failed to get session columns for oracle temp table", K(ret));
+    } else if (OB_FAIL(mock_values_column_ref(session_id_expr))) {
+      LOG_WARN("mock values column reference failed", K(ret));
+    } else if (OB_FAIL(mock_values_column_ref(session_create_time_expr))) {
+      LOG_WARN("mock values column reference failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDelUpdResolver::add_column_for_oracle_temp_table(ObInsertTableInfo &table_info,
+                                                       ObDMLStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  if (is_oracle_tmp_table_) {
+    ObColumnRefRawExpr *session_id_expr = NULL;
+    ObColumnRefRawExpr *session_create_time_expr = NULL;
+    if (OB_FAIL(get_session_columns_for_oracle_temp_table(table_info.ref_table_id_,
+                                                          table_info.table_id_,
+                                                          stmt,
+                                                          session_id_expr,
+                                                          session_create_time_expr))) {
+      LOG_WARN("failed to get session columns for oracle temp table", K(ret));
+    } else if (OB_FAIL(mock_values_column_ref(session_id_expr, table_info))) {
+      LOG_WARN("mock values column reference failed", K(ret));
+    } else if (OB_FAIL(mock_values_column_ref(session_create_time_expr, table_info))) {
+      LOG_WARN("mock values column reference failed", K(ret));
+    }
+  }
+  return ret;
+}
+
 // 值插入、查询插入对oracle临时表都要添加__session_id和__sess_create_time字段到目标列
 int ObDelUpdResolver::add_new_column_for_oracle_temp_table(uint64_t ref_table_id,
-                                                           uint64_t table_id /* = OB_INVALID_ID */,
-                                                           ObDMLStmt *stmt /* = NULL */)
+                                                           uint64_t table_id,
+                                                           ObDMLStmt *stmt)
 {
   int ret = OB_SUCCESS;
   if (is_oracle_tmp_table_) {
@@ -4143,9 +4237,9 @@ int ObDelUpdResolver::add_new_column_for_oracle_temp_table(uint64_t ref_table_id
     } else if (OB_FAIL(sess_create_time_expr->formalize(session_info_))) {
       LOG_WARN("fail to formalize rowkey", KPC(sess_create_time_expr), K(ret));
     } else {
-      session_id_expr->set_ref_id(table_schema->get_table_id(), column_schema->get_column_id());
+      session_id_expr->set_ref_id(table_id, column_schema->get_column_id());
       session_id_expr->set_column_attr(table_schema->get_table_name(), column_schema->get_column_name_str());
-      sess_create_time_expr->set_ref_id(table_schema->get_table_id(), column_schema2->get_column_id());
+      sess_create_time_expr->set_ref_id(table_id, column_schema2->get_column_id());
       sess_create_time_expr->set_column_attr(table_schema->get_table_name(), column_schema2->get_column_name_str());
       LOG_DEBUG("add __session_id & __sess_create_time to target succeed",
                 K(*session_id_expr), K(*sess_create_time_expr));

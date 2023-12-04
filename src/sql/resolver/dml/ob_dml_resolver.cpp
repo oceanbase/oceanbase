@@ -2670,7 +2670,8 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
       || OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema checker is null", K(stmt), K_(schema_checker), K_(params_.expr_factory));
-  } else if (OB_UNLIKELY(!table_item.is_link_table() && !table_item.is_basic_table() && !table_item.is_fake_cte_table())) {
+  } else if (OB_UNLIKELY(!table_item.is_link_table() && !table_item.is_basic_table()
+                         && !table_item.is_fake_cte_table())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("not base table or alias from base table", K_(table_item.type), K(ret));
   } else if (NULL != (col_item = stmt->get_column_item(table_item.table_id_, column_name))) {
@@ -3577,9 +3578,6 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
         LOG_WARN("resolve table partition expr failed", K(ret), K(table_name));
       } else if (stmt->is_select_stmt() && OB_FAIL(resolve_geo_mbr_column())) {
         LOG_WARN("resolve geo mbr column failed", K(ret), K(table_name));
-      } else if (table_schema->is_oracle_tmp_table() && stmt::T_MERGE == stmt->get_stmt_type()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "MERGE refers to a temporary table");
       } else if (NULL != index_hint_node &&
                  OB_FAIL(resolve_index_hint(*table_item, *index_hint_node))) {
         LOG_WARN("resolve index hint failed", K(ret));
@@ -4353,7 +4351,7 @@ int ObDMLResolver::resolve_table_column_expr(const ObQualifiedName &q_name, ObRa
   } else {
     const TableItem *table_item = NULL;
     if (lib::is_oracle_mode() && 0 == get_stmt()->get_table_size()
-        && q_name.tbl_name_.empty() && 0 == q_name.col_name_.case_compare("DUMMY")) {
+        && q_name.tbl_name_.empty() && 0 == q_name.col_name_.compare("DUMMY")) {
       ObConstRawExpr *c_expr = NULL;
       const char *ptr_value = "X";
       ObString string_value(ptr_value);
@@ -5554,18 +5552,30 @@ int ObDMLResolver::expand_view(TableItem &view_item)
   int ret = OB_SUCCESS;
   bool is_oracle_mode = lib::is_oracle_mode();
   int64_t org_session_id = 0;
-  if (!is_oracle_mode) {
-    if (OB_ISNULL(params_.schema_checker_)
-        || OB_ISNULL(params_.schema_checker_->get_schema_guard())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("null ptr", K(ret), KP(params_.schema_checker_));
-    } else {
-      //bug19839990, MySQL视图解析时需要忽略临时表, 目前不支持视图包含临时表,
-      //这里更新sess id防止将视图定义中表按照临时表解析
-      org_session_id = params_.schema_checker_->get_schema_guard()->get_session_id();
-      params_.schema_checker_->get_schema_guard()->set_session_id(0);
-    }
+  share::schema::ObSchemaGetterGuard *schema_guard = NULL;
+  uint64_t database_id = OB_INVALID_ID;
+  ObString old_database_name;
+  uint64_t old_database_id = OB_INVALID_ID;
+  if (OB_ISNULL(params_.schema_checker_) || OB_ISNULL(session_info_)
+      || OB_ISNULL(schema_guard = params_.schema_checker_->get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null ptr", K(ret), KP(params_.schema_checker_));
+  } else if (OB_FAIL(schema_guard->get_database_id(session_info_->get_effective_tenant_id(),
+                                                   view_item.database_name_,
+                                                   database_id))) {
+    LOG_WARN("failed to get database id", K(ret));
+  } else if (OB_FAIL(ob_write_string(*allocator_, session_info_->get_database_name(), old_database_name))) {
+    LOG_WARN("failed to write string", K(ret));
+  } else {
+    old_database_id = session_info_->get_database_id();
   }
+  if (OB_SUCC(ret) && !is_oracle_mode) {
+    //bug19839990, MySQL视图解析时需要忽略临时表, 目前不支持视图包含临时表,
+    //这里更新sess id防止将视图定义中表按照临时表解析
+    org_session_id = params_.schema_checker_->get_schema_guard()->get_session_id();
+    params_.schema_checker_->get_schema_guard()->set_session_id(0);
+  }
+
   if (OB_SUCC(ret)) {
     ObViewTableResolver view_resolver(params_, get_view_db_name(), get_view_name());
     view_resolver.set_current_level(current_level_);
@@ -5573,11 +5583,26 @@ int ObDMLResolver::expand_view(TableItem &view_item)
     view_resolver.set_view_ref_id(view_item.ref_id_);
     view_resolver.set_current_view_item(view_item);
     view_resolver.set_parent_namespace_resolver(parent_namespace_resolver_);
-    if (OB_FAIL(do_expand_view(view_item, view_resolver))) {
+    if (is_oracle_mode) {
+      if (OB_FAIL(session_info_->set_default_database(view_item.database_name_))) {
+        LOG_WARN("failed to set default database name", K(ret));
+      } else {
+        session_info_->set_database_id(database_id);
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(do_expand_view(view_item, view_resolver))) {
       LOG_WARN("do expand view resolve failed", K(ret));
     }
     if (!is_oracle_mode) {
       params_.schema_checker_->get_schema_guard()->set_session_id(org_session_id);
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = session_info_->set_default_database(old_database_name))) {
+        ret = OB_SUCCESS == ret ? tmp_ret : ret; // 不覆盖错误码
+        LOG_ERROR("failed to reset default database", K(ret), K(tmp_ret), K(old_database_name));
+      } else {
+        session_info_->set_database_id(old_database_id);
+      }
     }
   }
   return ret;
@@ -6447,13 +6472,17 @@ int ObDMLResolver::resolve_all_basic_table_columns(const TableItem &table_item, 
   } else if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session_info_ is null", K(ret));
-  } else if (OB_UNLIKELY(!table_item.is_link_table()) && OB_UNLIKELY(!table_item.is_basic_table()) && OB_UNLIKELY(!table_item.is_fake_cte_table()) ) {
+  } else if (OB_UNLIKELY(!table_item.is_link_table() && !table_item.is_basic_table()
+                         && !table_item.is_fake_cte_table())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table isn't basic table", K_(table_item.type));
   } else {
     const ObTableSchema* table_schema = NULL;
     //如果select table是index table,那么*展开应该是index table的所有列而不是主表的所有列
-    if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), table_item.ref_id_, table_schema, table_item.is_link_table()))) {
+    if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                  table_item.ref_id_,
+                                                  table_schema,
+                                                  table_item.is_link_table()))) {
       LOG_WARN("fail to get table schema", K(ret), K(table_item.ref_id_));
     } else {
       ObColumnIterByPrevNextID iter(*table_schema);
@@ -6496,7 +6525,7 @@ int ObDMLResolver::resolve_all_generated_table_columns(const TableItem &table_it
     ObIArray<ColumnItem> &column_items)
 {
   int ret = OB_SUCCESS;
-  auto stmt = get_stmt();
+  ObDMLStmt *stmt = get_stmt();
   if (OB_ISNULL(schema_checker_) || OB_ISNULL(stmt)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -15455,7 +15484,7 @@ int ObDMLResolver::resolve_basic_table(const ParseNode &parse_tree, TableItem *&
       LOG_WARN("fail to resolve basic table with cte", K(ret));
     }
   } else if (OB_FAIL(resolve_basic_table_without_cte(parse_tree, table_item))) {
-    LOG_WARN("fail to resolve basic table with cte", K(ret));
+    LOG_WARN("fail to resolve basic table without cte", K(ret));
   }
   return ret;
 }

@@ -6408,6 +6408,31 @@ int ObDDLOperator::drop_db_table_privs(
     }
   }
 
+  // delete routine privileges of this user MYSQL
+  if (OB_SUCC(ret)) {
+    ObArray<const ObRoutinePriv *> routine_privs;
+    if (OB_FAIL(schema_guard.get_routine_priv_with_user_id(
+                                 tenant_id, user_id, routine_privs))) {
+      LOG_WARN("Get table privileges of user to be deleted error",
+                K(tenant_id), K(user_id), K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < routine_privs.count(); ++i) {
+        const ObRoutinePriv *routine_priv = routine_privs.at(i);
+        int64_t new_schema_version = OB_INVALID_VERSION;
+        ObPrivSet empty_priv = 0;
+        ObString dcl_stmt;
+        if (OB_ISNULL(routine_priv)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table priv is NULL", K(ret), K(routine_priv));
+        } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+          LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+        } else if (OB_FAIL(schema_sql_service->get_priv_sql_service().grant_routine(
+            routine_priv->get_sort_key(), empty_priv, new_schema_version, &dcl_stmt, trans, 0, false))) {
+          LOG_WARN("Delete table privilege failed", K(routine_priv), K(ret));
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -7163,6 +7188,76 @@ int ObDDLOperator::grant_table(
   return ret;
 }
 
+int ObDDLOperator::grant_routine(
+    const ObRoutinePrivSortKey &routine_priv_key,
+    const ObPrivSet priv_set,
+    common::ObMySQLTransaction &trans,
+    const uint64_t option,
+    const bool gen_ddl_stmt)
+{
+  int ret = OB_SUCCESS;
+  ObRawObjPrivArray new_obj_priv_array;
+  const uint64_t tenant_id = routine_priv_key.tenant_id_;
+  ObSchemaGetterGuard schema_guard;
+  ObSchemaService *schema_sql_service = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_sql_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schama service_impl and schema manage must not null",
+        "schema_service_impl", schema_sql_service, K(ret));
+  } else if (!routine_priv_key.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("routine_priv_key is invalid", K(routine_priv_key), K(ret));
+  } else if (0 == priv_set) {
+    //do nothing
+  } else if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("failed to get schema guard", K(ret));
+  } else {
+    ObPrivSet new_priv = priv_set;
+    ObPrivSet routine_priv_set = OB_PRIV_SET_EMPTY;
+    if (OB_FAIL(schema_guard.get_routine_priv_set(routine_priv_key, routine_priv_set))) {
+      LOG_WARN("get routine priv set failed", K(ret));
+    } else {
+      bool need_flush = true;
+      new_priv |= routine_priv_set;
+      need_flush = (new_priv != routine_priv_set);
+      if (need_flush) {
+        ObSqlString ddl_stmt_str;
+        ObString ddl_sql;
+        const ObUserInfo *user_info = NULL;
+        ObNeedPriv need_priv;
+        need_priv.db_ = routine_priv_key.db_;
+        need_priv.table_ = routine_priv_key.routine_;
+        need_priv.priv_level_ = OB_PRIV_ROUTINE_LEVEL;
+        need_priv.priv_set_ = (~routine_priv_set) & new_priv;
+        need_priv.obj_type_ = routine_priv_key.routine_type_ == ObRoutineType::ROUTINE_PROCEDURE_TYPE ?
+                                                      ObObjectType::PROCEDURE : ObObjectType::FUNCTION;
+        if (OB_FAIL(schema_guard.get_user_info(tenant_id, routine_priv_key.user_id_, user_info))) {
+          LOG_WARN("get user info failed", K(routine_priv_key), K(ret));
+        } else if (OB_ISNULL(user_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("user not exist", K(routine_priv_key), K(ret));
+        } else if (gen_ddl_stmt == true && OB_FAIL(ObDDLSqlGenerator::gen_routine_priv_sql(
+            ObAccountArg(user_info->get_user_name_str(), user_info->get_host_name_str()),
+            need_priv, true, /*is_grant*/ ddl_stmt_str))) {
+          LOG_WARN("gen_routine_priv_sql failed", K(ret), K(need_priv));
+        } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
+        } else {
+          int64_t new_schema_version = OB_INVALID_VERSION;
+          int64_t new_schema_version_ora = OB_INVALID_VERSION;
+          if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+            LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+          } else if (OB_FAIL(schema_sql_service->get_priv_sql_service().grant_routine(
+                routine_priv_key, new_priv, new_schema_version, &ddl_sql, trans, option, true))) {
+            LOG_WARN("priv sql service grant routine failed", K(ret));
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
 /* in: grantor, grantee, obj_type, obj_id
    out: table_packed_privs
         array of col_id which has col privs
@@ -7571,6 +7666,83 @@ int ObDDLOperator::revoke_table(
                   trans, priv_key, option_raw_array));
             }
           }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLOperator::revoke_routine(
+    const ObRoutinePrivSortKey &routine_priv_key,
+    const ObPrivSet priv_set,
+    common::ObMySQLTransaction &trans,
+    bool report_error,
+    const bool gen_ddl_stmt)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = routine_priv_key.tenant_id_;
+  ObSchemaGetterGuard schema_guard;
+  ObSchemaService *schema_sql_service = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_sql_service)) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("schama service_impl and schema manage must not null",
+        "schema_service_impl", schema_sql_service,
+        K(ret));
+  } else if (!routine_priv_key.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("db_priv_key is invalid", K(routine_priv_key), K(ret));
+  } else if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("failed to get schema guard", K(ret));
+  } else {
+    ObPrivSet routine_priv_set = OB_PRIV_SET_EMPTY;
+    if (OB_FAIL(schema_guard.get_routine_priv_set(routine_priv_key, routine_priv_set))) {
+      LOG_WARN("get routine priv set failed", K(ret));
+    } else if (OB_PRIV_SET_EMPTY == routine_priv_set) {
+      if (report_error) {
+        ret = OB_ERR_CANNOT_REVOKE_PRIVILEGES_YOU_DID_NOT_GRANT;
+        LOG_WARN("No such grant to revoke", K(routine_priv_key), K(routine_priv_set), K(ret));
+      }
+    } else if (0 == priv_set) {
+      // do-nothing
+    } else {
+      ObPrivSet new_priv = routine_priv_set & (~priv_set);
+      /* If there is an intersection between the existing permissions and the permissions that require revoke */
+      if ((routine_priv_set & priv_set) != 0) {
+        ObSqlString ddl_stmt_str;
+        ObString ddl_sql;
+        const ObUserInfo *user_info = NULL;
+        ObNeedPriv need_priv;
+        share::ObRawObjPrivArray option_priv_array;
+
+        need_priv.db_ = routine_priv_key.db_;
+        need_priv.table_ = routine_priv_key.routine_;
+        need_priv.priv_level_ = OB_PRIV_ROUTINE_LEVEL;
+        need_priv.priv_set_ = routine_priv_set & priv_set; //priv to revoke
+        need_priv.obj_type_ = routine_priv_key.routine_type_ == ObRoutineType::ROUTINE_PROCEDURE_TYPE ?
+                                                      ObObjectType::PROCEDURE : ObObjectType::FUNCTION;
+        int64_t new_schema_version = OB_INVALID_VERSION;
+        int64_t new_schema_version_ora = OB_INVALID_VERSION;
+        bool is_all = false;
+        bool has_ref_priv = false;
+        if (OB_FAIL(schema_guard.get_user_info(tenant_id, routine_priv_key.user_id_, user_info))) {
+          LOG_WARN("get user info failed", K(routine_priv_key), K(ret));
+        } else if (OB_ISNULL(user_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("user not exist", K(routine_priv_key), K(ret));
+        } else if (gen_ddl_stmt == true && OB_FAIL(ObDDLSqlGenerator::gen_routine_priv_sql(
+            ObAccountArg(user_info->get_user_name_str(), user_info->get_host_name_str()),
+            need_priv,
+            false, /*is_grant*/
+            ddl_stmt_str))) {
+          LOG_WARN("gen_routine_priv_sql failed", K(ret), K(need_priv));
+        } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
+        } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id,
+                           new_schema_version))) {
+          LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+        } else if (OB_FAIL(schema_sql_service->get_priv_sql_service().revoke_routine(
+            routine_priv_key, new_priv, new_schema_version, &ddl_sql, trans))) {
+          LOG_WARN("Failed to revoke routine", K(routine_priv_key), K(ret));
         }
       }
     }

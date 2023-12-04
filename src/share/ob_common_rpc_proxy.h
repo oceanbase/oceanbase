@@ -106,6 +106,7 @@ public:
   RPC_S(PRD lock_user, obrpc::OB_LOCK_USER, (ObLockUserArg), common::ObSArray<int64_t>);
   RPC_S(PRD revoke_database, obrpc::OB_REVOKE_DB, (ObRevokeDBArg));
   RPC_S(PRD revoke_table, obrpc::OB_REVOKE_TABLE, (ObRevokeTableArg));
+  RPC_S(PRD revoke_routine, obrpc::OB_REVOKE_ROUTINE, (ObRevokeRoutineArg));
   RPC_S(PRD revoke_sys_priv, obrpc::OB_REVOKE_SYSPRIV, (ObRevokeSysPrivArg));
   RPC_S(PRD alter_user_profile, obrpc::OB_ALTER_USER_PROFILE, (ObAlterUserProfileArg));
   RPC_S(PRD handle_security_audit, obrpc::OB_SECURITY_AUDIT, (ObSecurityAuditArg));
