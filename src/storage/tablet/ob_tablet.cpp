@@ -4957,14 +4957,14 @@ int ObTablet::build_transfer_tablet_param(
 int64_t ObTablet::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
-  if (OB_ISNULL(buf) || buf_len <= 0) {
-      // do nothing
+  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0)) {
+    // do nothing
   } else {
     J_OBJ_START();
-    J_NAME("ObTablet");
-    J_COLON();
     J_KV(KP(this),
+         K_(is_inited),
          K_(wash_score),
+         K_(hold_ref_cnt),
          K_(ref_cnt),
          K_(version),
          K_(length),
@@ -4973,20 +4973,11 @@ int64_t ObTablet::to_string(char *buf, const int64_t buf_len) const
          K_(tablet_meta),
          K_(table_store_addr),
          K_(storage_schema_addr),
-         K_(next_tablet_guard),
-         K_(pointer_hdl),
-         K_(next_full_tablet_guard),
-         KP_(next_tablet),
-         KP_(memtable_mgr),
-         KP_(log_handler),
-         KPC_(rowkey_read_info),
          K_(mds_data),
-         K_(hold_ref_cnt),
-         K_(is_inited),
-         K_(memtable_count));
+         KP_(ddl_kvs),
+         K_(ddl_kv_count));
     J_COMMA();
-    BUF_PRINTF("memtables");
-    J_COLON();
+    BUF_PRINTF("memtables:");
     J_ARRAY_START();
     for (int64_t i = 0; i < MAX_MEMSTORE_CNT; ++i) {
       if (i > 0) {
@@ -4995,6 +4986,8 @@ int64_t ObTablet::to_string(char *buf, const int64_t buf_len) const
       BUF_PRINTO(OB_P(memtables_[i]));
     }
     J_ARRAY_END();
+    J_COMMA();
+    J_KV(K_(memtable_count));
     J_OBJ_END();
   }
   return pos;
