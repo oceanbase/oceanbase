@@ -2836,13 +2836,6 @@ int ObSql::generate_stmt(ParseResult &parse_result,
         && NULL !=  resolver_ctx.secondary_namespace_->get_external_ns()) {
       resolver_ctx.package_guard_ =
         &resolver_ctx.secondary_namespace_->get_external_ns()->get_resolve_ctx().package_guard_;
-    } else {
-      resolver_ctx.package_guard_ = result.get_exec_context().get_package_guard();
-    }
-    if (OB_SUCC(ret) && OB_ISNULL(resolver_ctx.package_guard_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("package guard is NULL", K(ret), K(resolver_ctx.secondary_namespace_),
-               K(resolver_ctx.secondary_namespace_->get_external_ns()));
     }
   }
   if (OB_SUCC(ret)) {

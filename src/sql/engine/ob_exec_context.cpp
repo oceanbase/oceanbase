@@ -985,6 +985,17 @@ pl::ObPLPackageGuard* ObExecContext::get_package_guard()
   return package_guard_;
 }
 
+int ObExecContext::get_package_guard(pl::ObPLPackageGuard *&package_guard)
+{
+  int ret = OB_SUCCESS;
+  package_guard = get_package_guard();
+  if (OB_ISNULL(package_guard)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get package guard failed", K(ret));
+  }
+  return ret;
+}
+
 DEFINE_SERIALIZE(ObExecContext)
 {
   int ret = OB_SUCCESS;

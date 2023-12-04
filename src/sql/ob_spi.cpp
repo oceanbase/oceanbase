@@ -9034,12 +9034,14 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
   int ret = OB_SUCCESS;
   const ObRoutineInfo *routine_info = NULL;
   const pl::ObPLDbLinkInfo *dblink_info = NULL;
-  OV (OB_NOT_NULL(exec_ctx.get_package_guard()));
-  OZ (exec_ctx.get_package_guard()->dblink_guard_.get_dblink_routine_info(dblink_id, package_id,
+  pl::ObPLPackageGuard *package_guard = NULL;
+  OZ (exec_ctx.get_package_guard(package_guard));
+  CK (OB_NOT_NULL(package_guard));
+  OZ (package_guard->dblink_guard_.get_dblink_routine_info(dblink_id, package_id,
                                                                           proc_id, routine_info),
                                                                           dblink_id, package_id, proc_id);
   CK (OB_NOT_NULL(routine_info));
-  OZ (exec_ctx.get_package_guard()->dblink_guard_.get_dblink_info(dblink_id, dblink_info));
+  OZ (package_guard->dblink_guard_.get_dblink_info(dblink_id, dblink_info));
   CK (OB_NOT_NULL(dblink_info));
   OZ (spi_execute_dblink(exec_ctx, allocator, dblink_info, routine_info, params, result));
   return ret;

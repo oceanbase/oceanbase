@@ -8591,42 +8591,44 @@ int ObTransformPreProcess::add_constructor_to_multiset(ObDMLStmt &stmt,
     LOG_WARN("get null expr", K(ret));
   } else {
     pl::ObPLINS *ns = NULL;
-    pl::ObPLPackageGuard package_guard(session->get_effective_tenant_id());
-    pl::ObPLResolveCtx resolve_ctx(*ctx_->allocator_,
-                                   *session,
-                                   *ctx_->schema_checker_->get_schema_guard(),
-                                   package_guard,
-                                   *ctx_->exec_ctx_->get_sql_proxy(),
-                                   false);
-    if (OB_FAIL(package_guard.init())) {
-      LOG_WARN("failed to init package guard", K(ret));
-    } else if (OB_ISNULL(ns =
-        ((NULL == session->get_pl_context()) ?
-        static_cast<pl::ObPLINS *>(&resolve_ctx) :
-        static_cast<pl::ObPLINS *>(session->get_pl_context()->get_current_ctx())))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
-    } else if (OB_FAIL(object_type->get_size(pl::PL_TYPE_ROW_SIZE, rowsize))) {
-      LOG_WARN("failed to get size", K(ret));
-    } else if (OB_FAIL(object_expr->add_access_name(object_type->get_name()))) {
-      LOG_WARN("failed to add access name", K(ret));
-    } else {
-      object_expr->set_rowsize(rowsize);
-      ObExprResType res_type;
-      res_type.set_type(ObExtendType);
-      res_type.set_extend_type(pl::PL_RECORD_TYPE);
-      res_type.set_udt_id(object_type->get_user_type_id());
-      object_expr->set_udt_id(object_type->get_user_type_id());
-      object_expr->set_result_type(res_type);
-      object_expr->set_func_name(object_type->get_name());
-      object_expr->set_coll_schema_version(elem_info->get_schema_version());
-      // Add udt info to dependency
-      if (object_expr->need_add_dependency()) {
-        ObSchemaObjVersion udt_schema_version;
-        if (OB_FAIL(object_expr->get_schema_object_version(udt_schema_version))) {
-          LOG_WARN("failed to get schema version", K(ret));
-        } else if (OB_FAIL(stmt.add_global_dependency_table(udt_schema_version))) {
-          LOG_WARN("failed to add dependency", K(ret));
+    pl::ObPLPackageGuard *package_guard = NULL;
+    OZ (ctx_->exec_ctx_->get_package_guard(package_guard));
+    CK (OB_NOT_NULL(package_guard));
+    if (OB_SUCC(ret)) {
+      pl::ObPLResolveCtx resolve_ctx(*ctx_->allocator_,
+                                    *session,
+                                    *ctx_->schema_checker_->get_schema_guard(),
+                                    *package_guard,
+                                    *ctx_->exec_ctx_->get_sql_proxy(),
+                                    false);
+      if (OB_ISNULL(ns =
+          ((NULL == session->get_pl_context()) ?
+          static_cast<pl::ObPLINS *>(&resolve_ctx) :
+          static_cast<pl::ObPLINS *>(session->get_pl_context()->get_current_ctx())))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (OB_FAIL(object_type->get_size(pl::PL_TYPE_ROW_SIZE, rowsize))) {
+        LOG_WARN("failed to get size", K(ret));
+      } else if (OB_FAIL(object_expr->add_access_name(object_type->get_name()))) {
+        LOG_WARN("failed to add access name", K(ret));
+      } else {
+        object_expr->set_rowsize(rowsize);
+        ObExprResType res_type;
+        res_type.set_type(ObExtendType);
+        res_type.set_extend_type(pl::PL_RECORD_TYPE);
+        res_type.set_udt_id(object_type->get_user_type_id());
+        object_expr->set_udt_id(object_type->get_user_type_id());
+        object_expr->set_result_type(res_type);
+        object_expr->set_func_name(object_type->get_name());
+        object_expr->set_coll_schema_version(elem_info->get_schema_version());
+        // Add udt info to dependency
+        if (object_expr->need_add_dependency()) {
+          ObSchemaObjVersion udt_schema_version;
+          if (OB_FAIL(object_expr->get_schema_object_version(udt_schema_version))) {
+            LOG_WARN("failed to get schema version", K(ret));
+          } else if (OB_FAIL(stmt.add_global_dependency_table(udt_schema_version))) {
+            LOG_WARN("failed to add dependency", K(ret));
+          }
         }
       }
     }

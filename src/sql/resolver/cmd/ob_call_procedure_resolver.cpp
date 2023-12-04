@@ -339,6 +339,12 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
     // find call procedure info in pl cache.
   } else {
     int64_t compile_start = ObTimeUtility::current_time();
+    if (NULL == params_.package_guard_) {
+      pl::ObPLPackageGuard *package_guard = NULL;
+      OZ (params_.session_info_->get_cur_exec_ctx()->get_package_guard(package_guard));
+      CK (OB_NOT_NULL(package_guard));
+      OX (params_.package_guard_ = package_guard);
+    }
     OZ (ObCacheObjectFactory::alloc(stmt->get_cacheobj_guard(),
                                   ObLibCacheNameSpace::NS_CALLSTMT,
                                   session_info_->get_effective_tenant_id()));
@@ -380,7 +386,6 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
       }
     }
     ObSEArray<ObRawExpr*, 16> expr_params;
-    CK (OB_NOT_NULL(params_.package_guard_));
     // 获取routine schem info
     if (OB_SUCC(ret)) {
       ObSynonymChecker synonym_checker;
