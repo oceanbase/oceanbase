@@ -2995,7 +2995,8 @@ int ObStorageFetchLSViewP::process()
       return ret;
     };
 
-    auto fill_tablet_meta_f = [this, &filled_tablet_count, &total_tablet_count](const obrpc::ObCopyTabletInfo &tablet_info)->int {
+    auto fill_tablet_meta_f = [this, &filled_tablet_count, &total_tablet_count]
+        (const obrpc::ObCopyTabletInfo &tablet_info, const ObTabletHandle &tablet_handle)->int {
       int ret = OB_SUCCESS;
       if (!tablet_info.is_valid()) {
         ret = OB_INVALID_ARGUMENT;

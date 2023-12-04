@@ -6163,7 +6163,7 @@ int ObLSTabletService::ha_scan_all_tablets(const HandleTabletMetaFunc &handle_ta
         } else {
           tablet_info.tablet_id_ = tablet->get_tablet_meta().tablet_id_;
           tablet_info.status_ = ObCopyTabletStatus::TABLET_EXIST;
-          if (OB_FAIL(handle_tablet_meta_f(tablet_info))) {
+          if (OB_FAIL(handle_tablet_meta_f(tablet_info, tablet_handle))) {
            LOG_WARN("fail to handle tablet meta", K(ret), K(tablet_info));
           }
         }

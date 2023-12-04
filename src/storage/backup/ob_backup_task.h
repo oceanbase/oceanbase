@@ -413,6 +413,11 @@ private:
   int advance_checkpoint_by_flush_(const uint64_t tenant_id, const share::ObLSID &ls_id, const share::SCN &start_scn);
   int backup_ls_meta_and_tablet_metas_(const uint64_t tenant_id, const share::ObLSID &ls_id);
   int backup_ls_meta_package_(const ObBackupLSMetaInfo &ls_meta_info);
+  int report_backup_stat_(const int64_t tablet_count, const int64_t macro_block_count);
+  int calc_backup_stat_(const ObBackupSetTaskAttr &set_task_attr,
+      const int64_t tablet_count, const int64_t macro_block_count, ObBackupStats &backup_stats);
+  int calc_ls_backup_stat_(const share::ObBackupStats &old_backup_stat, const int64_t tablet_count,
+      const int64_t macro_block_count, ObBackupStats &backup_stats);
 
 private:
   bool is_inited_;
@@ -533,7 +538,9 @@ private:
   int report_ls_backup_task_info_(const ObLSBackupStat &stat);
   int update_task_stat_(const share::ObBackupStats &old_backup_stat, const ObLSBackupStat &ls_stat,
       share::ObBackupStats &new_backup_stat);
-  int update_task_info_stat_(const ObBackupLSTaskInfo &task_info, const ObLSBackupStat &stat, ObLSBackupStat &new_stat);
+  int update_ls_task_stat_(const share::ObBackupStats &old_backup_stat, const ObLSBackupStat &ls_stat,
+      share::ObBackupStats &new_backup_stat);
+  int update_ls_task_info_stat_(const ObBackupLSTaskInfo &task_info, const ObLSBackupStat &stat, ObLSBackupStat &new_stat);
   int do_generate_next_task_();
   int check_disk_space_();
   int get_macro_block_id_list_(common::ObIArray<ObBackupMacroBlockId> &list);

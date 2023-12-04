@@ -1290,7 +1290,7 @@ public:
   ObBackupStats();
   ~ObBackupStats() {}
   bool is_valid() const;
-  void assign(const ObBackupStats &other);
+  int assign(const ObBackupStats &other);
   void cum_with(const ObBackupStats &other);
   void reset();
   TO_STRING_KV(K_(input_bytes), K_(output_bytes), K_(tablet_count), K_(finish_tablet_count),
