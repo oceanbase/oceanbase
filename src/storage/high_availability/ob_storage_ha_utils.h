@@ -136,6 +136,19 @@ public:
               const uint64_t timestamp,
               const int64_t start_ts,
               const bool is_report);
+
+  static int get_need_check_member(
+      const common::ObIArray<ObAddr> &total_member_addr_list,
+      const common::ObIArray<ObAddr> &finished_member_addr_list,
+      common::ObIArray<ObAddr> &member_addr_list);
+  static int check_ls_replay_scn(
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      const share::SCN &check_scn,
+      const int32_t group_id,
+      const common::ObIArray<ObAddr> &member_addr_list,
+      ObTimeoutCtx &timeout_ctx,
+      common::ObIArray<ObAddr> &finished_addr_list);
 private:
   static int get_ls_(
       ObLSHandle &ls_handle,
