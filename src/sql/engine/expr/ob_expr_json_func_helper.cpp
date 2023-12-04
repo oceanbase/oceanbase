@@ -954,12 +954,29 @@ int ObJsonExprHelper::json_base_replace(ObIJsonBase *json_old, ObIJsonBase *json
                                         ObIJsonBase *&json_doc)
 {
   INIT_SUCC(ret);
-  ObIAllocator *allocator = json_doc->get_allocator();
+  ObIAllocator *allocator = nullptr;
   ObIJsonBase *parent = nullptr;
   ObIJsonBase *new_node = json_new;
 
-  if (json_old == json_doc) {
-    json_doc = json_new;
+  if (OB_ISNULL(json_old) || OB_ISNULL(json_new) || OB_ISNULL(json_doc)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("json_new or json_old or json_doc is null", K(ret), KP(json_old), KP(json_new), KP(json_doc));
+  } else if (OB_ISNULL(allocator = json_doc->get_allocator())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("allocator is null", K(ret), KPC(json_doc));
+  } else if (OB_FAIL(json_old->get_parent(parent))) {
+    LOG_WARN("get old parent fail", K(ret));
+  } else if (json_old == json_doc || OB_ISNULL(parent)) {
+    // for json binary, json_old and json_doc may be at same position,
+    if (OB_FAIL(json_doc->reset())) {
+      LOG_WARN("reset fail", K(ret), KPC(json_doc));
+    } else {
+      json_doc = json_new;
+      // json_new may no allocator, so update
+      if (OB_ISNULL(json_doc->get_allocator())) {
+        json_doc->set_allocator(allocator);
+      }
+    }
   } else {
     if (json_doc->is_bin()) {
       if (OB_NOT_NULL(json_new) && ! json_new->is_bin() && OB_FAIL(ObJsonBaseFactory::transform(allocator, json_new, ObJsonInType::JSON_BIN, new_node))) {
@@ -972,17 +989,9 @@ int ObJsonExprHelper::json_base_replace(ObIJsonBase *json_old, ObIJsonBase *json
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(json_old->get_parent(parent))) {
-      LOG_WARN("get old parent fail", K(ret));
-    } else if(OB_NOT_NULL(parent)) {
-      if (OB_FAIL(parent->replace(json_old, new_node))) {
-        LOG_WARN("json base replace failed", K(ret));
-      }
-    } else if (OB_FAIL(json_doc->replace(json_old, new_node))) {
+    } else if (OB_FAIL(parent->replace(json_old, new_node))) {
       LOG_WARN("json base replace failed", K(ret));
-    }
-
-    if (OB_SUCC(ret) && OB_FAIL(refresh_root_when_bin_rebuild_all(json_doc))) {
+    } else if (OB_FAIL(refresh_root_when_bin_rebuild_all(json_doc))) {
       LOG_WARN("refresh_root_when_bin_rebuild_all fail", K(ret));
     }
   }
