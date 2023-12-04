@@ -185,8 +185,11 @@ int ObExprExtractValue::eval_mysql_extract_value(const ObExpr &expr, ObEvalCtx &
   ObString xml_res;
 
   ObMulModeMemCtx* xml_mem_ctx = nullptr;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "XMLModule"));
-  if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&allocator, xml_mem_ctx))) {
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObXMLExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "XMLModule"));
+  if (OB_ISNULL(ctx.exec_ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get session failed.", K(ret));
+  } else if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&allocator, xml_mem_ctx))) {
     LOG_WARN("fail to create tree memory context", K(ret));
   } else if (expr.arg_cnt_ != 2) {
     ret = OB_ERR_PARAM_SIZE;
@@ -200,9 +203,9 @@ int ObExprExtractValue::eval_mysql_extract_value(const ObExpr &expr, ObEvalCtx &
     // do nothing
   } else if (OB_FAIL(ObXMLExprHelper::get_str_from_expr(expr.args_[1], ctx, xpath_expr, allocator))) {
     LOG_WARN("get xpath expr failed.", K(ret));
-  } else if (OB_FAIL(ObMulModeFactory::get_xml_base(xml_mem_ctx, xml_frag, ObNodeMemType::TREE_TYPE, ObNodeMemType::TREE_TYPE, xml_base, M_DOCUMENT))) {
+  } else if (OB_FAIL(ObMulModeFactory::get_xml_base(xml_mem_ctx, xml_frag, ObNodeMemType::TREE_TYPE, ObNodeMemType::BINARY_TYPE, xml_base, M_DOCUMENT))) {
     ret = OB_SUCCESS;
-    if (OB_FAIL(ObMulModeFactory::get_xml_base(xml_mem_ctx, xml_frag, ObNodeMemType::TREE_TYPE, ObNodeMemType::TREE_TYPE, xml_base, M_CONTENT))) {
+    if (OB_FAIL(ObMulModeFactory::get_xml_base(xml_mem_ctx, xml_frag, ObNodeMemType::TREE_TYPE, ObNodeMemType::BINARY_TYPE, xml_base, M_CONTENT))) {
       LOG_USER_WARN(OB_ERR_XML_PARSE);
       ret = OB_SUCCESS;
       LOG_WARN("parse xml_frag failed.", K(xml_frag));
@@ -274,9 +277,6 @@ int ObExprExtractValue::extract_mysql_xpath_result(ObMulModeMemCtx *xml_mem_ctx,
   ObPathVarObject prefix_ns(*(xml_mem_ctx->allocator_));
   ObString new_xpath = xpath_str;
   bool cal_count = false;
-  // count(xpath)
-  // Regular expression matching
-  // ^\s*count\({1}.*\)
   if (OB_FAIL(get_new_xpath(xpath_str, new_xpath, cal_count))) {
     LOG_WARN("get new xpath failed.", K(ret));
   } else if (OB_FAIL(xpath_iter.init(xml_mem_ctx, new_xpath, default_ns, xml_doc, &prefix_ns))) {

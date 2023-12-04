@@ -123,7 +123,7 @@ ObLibContainerNode* ObLibContainerNode::iterator::operator*()
     res = cur_node_;
   } else if (cur_node_->is_using_child_buffer()) {
     res = cur_node_->child_[0];
-  } else if (OB_NOT_NULL(vector_)) {
+  } else if (OB_NOT_NULL(vector_) && vector_->size() > cur_pos_ && cur_pos_ >= 0) {
     res = static_cast<ObLibContainerNode*>(vector_->at(cur_pos_));
   }
   return res;
