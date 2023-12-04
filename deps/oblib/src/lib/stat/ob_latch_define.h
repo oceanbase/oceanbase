@@ -347,7 +347,10 @@ LATCH_DEF(TSLOG_PROCESSING_MUTEX, 325, "tslog processing mutex", LATCH_FIFO, INT
 LATCH_DEF(TSLOG_CKPT_LOCK, 326, "tslog checkpoint lock", LATCH_FIFO, INT64_MAX, 0, false)
 LATCH_DEF(TIERED_TENANT_BLOCK_LOCK, 327, "tiered tenant block lock", LATCH_FIFO, INT64_MAX, 0, false)
 
-LATCH_DEF(LATCH_END, 328, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TRANS_EXEC_LOCK, 328, "trans exec latch", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TRANS_FLUSH_REDO_LOCK, 329, "trans flush redo latch", LATCH_FIFO, 2000, 0, true)
+
+LATCH_DEF(LATCH_END, 330, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 
