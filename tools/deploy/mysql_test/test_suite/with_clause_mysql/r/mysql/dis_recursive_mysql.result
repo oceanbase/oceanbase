@@ -229,7 +229,7 @@ Query Plan
 |1 |└─RECURSIVE UNION ALL    |    |433     |140         |
 |2 |  ├─TABLE FULL SCAN      |e   |1       |5           |
 |3 |  └─MERGE JOIN           |    |432     |134         |
-|4 |    │ MATERIAL           |    |14      |9           |
+|4 |    ├─MATERIAL           |    |14      |9           |
 |5 |    │ └─SORT             |    |14      |8           |
 |6 |    │   └─TABLE FULL SCAN|e   |14      |5           |
 |7 |    └─SORT               |    |199     |107         |
@@ -402,7 +402,7 @@ Query Plan
 |4 |  │ └─MATERIAL           |    |14      |5           |
 |5 |  │   └─TABLE FULL SCAN  |d   |14      |5           |
 |6 |  └─HASH JOIN            |    |504     |57          |
-|7 |    │ MATERIAL           |    |17      |16          |
+|7 |    ├─MATERIAL           |    |17      |16          |
 |8 |    │ └─HASH JOIN        |    |17      |14          |
 |9 |    │   ├─TABLE FULL SCAN|d   |14      |5           |
 |10|    │   └─TABLE FULL SCAN|e   |14      |5           |
@@ -925,7 +925,7 @@ Query Plan
 |6 |    │ │ └─TABLE FULL SCAN  |n1  |17      |5           |
 |7 |    │ └─TABLE FULL SCAN    |n2  |17      |5           |
 |8 |    └─HASH JOIN            |    |922     |73          |
-|9 |      │ MATERIAL           |    |22      |15          |
+|9 |      ├─MATERIAL           |    |22      |15          |
 |10|      │ └─HASH JOIN        |    |22      |13          |
 |11|      │   ├─TABLE FULL SCAN|e   |5       |5           |
 |12|      │   └─TABLE FULL SCAN|n   |17      |5           |
@@ -1033,7 +1033,7 @@ Query Plan
 |6 |    │ │ └─TABLE FULL SCAN  |n1  |17      |5           |
 |7 |    │ └─TABLE FULL SCAN    |n2  |17      |5           |
 |8 |    └─HASH JOIN            |    |922     |76          |
-|9 |      │ MATERIAL           |    |22      |18          |
+|9 |      ├─MATERIAL           |    |22      |18          |
 |10|      │ └─HASH JOIN        |    |22      |16          |
 |11|      │   ├─TABLE FULL SCAN|n   |17      |5           |
 |12|      │   └─TABLE FULL SCAN|e   |5       |5           |
@@ -1782,7 +1782,7 @@ Query Plan
 |1 |└─RECURSIVE UNION ALL    |    |433     |140         |
 |2 |  ├─TABLE FULL SCAN      |e   |1       |5           |
 |3 |  └─MERGE JOIN           |    |432     |134         |
-|4 |    │ MATERIAL           |    |14      |9           |
+|4 |    ├─MATERIAL           |    |14      |9           |
 |5 |    │ └─SORT             |    |14      |8           |
 |6 |    │   └─TABLE FULL SCAN|e   |14      |5           |
 |7 |    └─SORT               |    |199     |107         |
@@ -1955,7 +1955,7 @@ Query Plan
 |4 |  │ └─MATERIAL           |    |14      |5           |
 |5 |  │   └─TABLE FULL SCAN  |d   |14      |5           |
 |6 |  └─HASH JOIN            |    |504     |57          |
-|7 |    │ MATERIAL           |    |17      |16          |
+|7 |    ├─MATERIAL           |    |17      |16          |
 |8 |    │ └─HASH JOIN        |    |17      |14          |
 |9 |    │   ├─TABLE FULL SCAN|d   |14      |5           |
 |10|    │   └─TABLE FULL SCAN|e   |14      |5           |
@@ -2478,7 +2478,7 @@ Query Plan
 |6 |    │ │ └─TABLE FULL SCAN  |n1  |17      |5           |
 |7 |    │ └─TABLE FULL SCAN    |n2  |17      |5           |
 |8 |    └─HASH JOIN            |    |922     |73          |
-|9 |      │ MATERIAL           |    |22      |15          |
+|9 |      ├─MATERIAL           |    |22      |15          |
 |10|      │ └─HASH JOIN        |    |22      |13          |
 |11|      │   ├─TABLE FULL SCAN|e   |5       |5           |
 |12|      │   └─TABLE FULL SCAN|n   |17      |5           |
@@ -2586,7 +2586,7 @@ Query Plan
 |6 |    │ │ └─TABLE FULL SCAN  |n1  |17      |5           |
 |7 |    │ └─TABLE FULL SCAN    |n2  |17      |5           |
 |8 |    └─HASH JOIN            |    |922     |76          |
-|9 |      │ MATERIAL           |    |22      |18          |
+|9 |      ├─MATERIAL           |    |22      |18          |
 |10|      │ └─HASH JOIN        |    |22      |16          |
 |11|      │   ├─TABLE FULL SCAN|n   |17      |5           |
 |12|      │   └─TABLE FULL SCAN|e   |5       |5           |
@@ -3336,7 +3336,7 @@ Query Plan
 |1 |└─RECURSIVE UNION ALL    |    |433     |140         |
 |2 |  ├─TABLE FULL SCAN      |e   |1       |5           |
 |3 |  └─MERGE JOIN           |    |432     |134         |
-|4 |    │ MATERIAL           |    |14      |9           |
+|4 |    ├─MATERIAL           |    |14      |9           |
 |5 |    │ └─SORT             |    |14      |8           |
 |6 |    │   └─TABLE FULL SCAN|e   |14      |5           |
 |7 |    └─SORT               |    |199     |107         |
@@ -3509,7 +3509,7 @@ Query Plan
 |4 |  │ └─MATERIAL           |    |14      |5           |
 |5 |  │   └─TABLE FULL SCAN  |d   |14      |5           |
 |6 |  └─HASH JOIN            |    |504     |57          |
-|7 |    │ MATERIAL           |    |17      |16          |
+|7 |    ├─MATERIAL           |    |17      |16          |
 |8 |    │ └─HASH JOIN        |    |17      |14          |
 |9 |    │   ├─TABLE FULL SCAN|d   |14      |5           |
 |10|    │   └─TABLE FULL SCAN|e   |14      |5           |
@@ -4032,7 +4032,7 @@ Query Plan
 |6 |    │ │ └─TABLE FULL SCAN  |n1  |17      |5           |
 |7 |    │ └─TABLE FULL SCAN    |n2  |17      |5           |
 |8 |    └─HASH JOIN            |    |922     |73          |
-|9 |      │ MATERIAL           |    |22      |15          |
+|9 |      ├─MATERIAL           |    |22      |15          |
 |10|      │ └─HASH JOIN        |    |22      |13          |
 |11|      │   ├─TABLE FULL SCAN|e   |5       |5           |
 |12|      │   └─TABLE FULL SCAN|n   |17      |5           |
@@ -4140,7 +4140,7 @@ Query Plan
 |6 |    │ │ └─TABLE FULL SCAN  |n1  |17      |5           |
 |7 |    │ └─TABLE FULL SCAN    |n2  |17      |5           |
 |8 |    └─HASH JOIN            |    |922     |76          |
-|9 |      │ MATERIAL           |    |22      |18          |
+|9 |      ├─MATERIAL           |    |22      |18          |
 |10|      │ └─HASH JOIN        |    |22      |16          |
 |11|      │   ├─TABLE FULL SCAN|n   |17      |5           |
 |12|      │   └─TABLE FULL SCAN|e   |5       |5           |
@@ -4814,7 +4814,7 @@ Query Plan
 |7 |    │ └─TABLE FULL SCAN      |n2   |17      |5           |
 |8 |    └─NESTED-LOOP SEMI JOIN  |     |1048    |570         |
 |9 |      ├─HASH JOIN            |     |3142    |155         |
-|10|      │ │ MATERIAL           |     |16      |16          |
+|10|      │ ├─MATERIAL           |     |16      |16          |
 |11|      │ │ └─HASH JOIN        |     |16      |15          |
 |12|      │ │   ├─TABLE FULL SCAN|n    |17      |5           |
 |13|      │ │   └─TABLE FULL SCAN|e    |1       |5           |
@@ -4931,7 +4931,7 @@ Query Plan
 |8 |    └─NESTED-LOOP SEMI JOIN        |       |1048    |661         |
 |9 |      ├─NESTED-LOOP JOIN CARTESIAN |       |3142    |246         |
 |10|      │ ├─HASH JOIN                |       |3142    |155         |
-|11|      │ │ │ MATERIAL               |       |16      |17          |
+|11|      │ │ ├─MATERIAL               |       |16      |17          |
 |12|      │ │ │ └─HASH JOIN            |       |16      |15          |
 |13|      │ │ │   ├─TABLE FULL SCAN    |n      |17      |5           |
 |14|      │ │ │   └─TABLE FULL SCAN    |e      |1       |5           |
