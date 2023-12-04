@@ -473,7 +473,10 @@ public:
   int check_new_mds_with_cache(const int64_t snapshot_version, const int64_t timeout);
   int check_tablet_status_for_read_all_committed();
   int check_schema_version_with_cache(const int64_t schema_version, const int64_t timeout);
-  int check_snapshot_readable_with_cache(const int64_t snapshot_version, const int64_t timeout);
+  int check_snapshot_readable_with_cache(
+      const int64_t snapshot_version,
+      const int64_t schema_version,
+      const int64_t timeout);
   int set_tablet_status(
       const ObTabletCreateDeleteMdsUserData &tablet_status,
       mds::MdsCtx &ctx);
@@ -531,7 +534,7 @@ private:
   int get_memtable_mgr(ObIMemtableMgr *&memtable_mgr) const;
   int get_tablet_memtable_mgr(ObTabletMemtableMgr *&memtable_mgr) const;
   int check_schema_version(const int64_t schema_version);
-  int check_snapshot_readable(const int64_t snapshot_version);
+  int check_snapshot_readable(const int64_t snapshot_version, const int64_t schema_version);
   int check_transfer_seq_equal(const ObTablet &old_tablet, const int64_t transfer_seq);
 
   logservice::ObLogHandler *get_log_handler() const { return log_handler_; } // TODO(bowen.gbw): get log handler from tablet pointer handle

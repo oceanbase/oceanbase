@@ -418,7 +418,7 @@ public:
   virtual int alter_table_constraints(const obrpc::ObAlterTableArg::AlterConstraintType type,
                                       share::schema::ObSchemaGetterGuard &schema_guard,
                                       const share::schema::ObTableSchema &orig_table_schema,
-                                      share::schema::AlterTableSchema &inc_table_schema,
+                                      const share::schema::AlterTableSchema &inc_table_schema,
                                       share::schema::ObTableSchema &new_table_schema,
                                       ObDDLOperator &ddl_operator,
                                       ObMySQLTransaction &trans);
@@ -470,26 +470,31 @@ public:
                                        ObDDLOperator &ddl_operator,
                                        ObMySQLTransaction &trans);
   int get_tablets(
-      const share::schema::ObTableSchema &table_schema,
-      const uint64_t session_id,
+      const uint64_t tenant_id,
+      const ObArray<common::ObTabletID> &tablet_ids,
       common::ObIArray<LSTabletID> &tablets,
       ObDDLSQLTransaction &trans);
   int build_modify_tablet_binding_args(
-      const share::schema::ObTableSchema &table_schema,
+      const uint64_t tenant_id,
+      const ObArray<common::ObTabletID> &tablet_ids,
       const bool is_hidden_tablets,
       const int64_t schema_version,
-      const uint64_t session_id,
       common::ObIArray<storage::ObBatchUnbindTabletArg> &args,
       ObDDLSQLTransaction &trans);
   int unbind_hidden_tablets(
       const share::schema::ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &hidden_table_schema,
       const int64_t schema_version,
-      const uint64_t session_id,
       ObDDLSQLTransaction &trans);
   int write_ddl_barrier(
       const share::schema::ObTableSchema &hidden_table_schema,
-      const uint64_t session_id,
+      ObDDLSQLTransaction &trans);
+  // Register MDS for read and write defense verification after single table ddl
+  // like add column not null default null.
+  int build_single_table_rw_defensive(
+      const uint64_t tenant_id,
+      const ObArray<common::ObTabletID> &tablet_ids,
+      const int64_t schema_version,
       ObDDLSQLTransaction &trans);
   int check_hidden_table_constraint_exist(
       const ObTableSchema *hidden_table_schema,
@@ -1379,12 +1384,33 @@ private:
   // Offline ddl cannot appear at the same time as offline ddl
   int check_is_offline_ddl(obrpc::ObAlterTableArg &alter_table_arg,
                            share::ObDDLType &ddl_type);
+  int check_is_oracle_mode_add_column_not_null_ddl(const obrpc::ObAlterTableArg &alter_table_arg,
+                                                   ObSchemaGetterGuard &schema_guard,
+                                                   bool &is_oracle_mode_add_column_not_null_ddl,
+                                                   bool &is_default_value_null);
   int check_can_bind_tablets(const share::ObDDLType ddl_type,
                              bool &bind_tablets);
   int check_ddl_with_primary_key_operation(const obrpc::ObAlterTableArg &alter_table_arg,
                                            bool &with_primary_key_operation);
   int do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                               obrpc::ObAlterTableRes &res);
+  int add_not_null_column_to_table_schema(
+      obrpc::ObAlterTableArg &alter_table_arg,
+      const ObTableSchema &origin_table_schema,
+      ObTableSchema &new_table_schema,
+      ObSchemaGetterGuard &schema_guard,
+      ObDDLOperator &ddl_operator,
+      ObDDLSQLTransaction &trans);
+  int add_not_null_column_default_null_to_table_schema(
+      obrpc::ObAlterTableArg &alter_table_arg,
+      const ObTableSchema &origin_table_schema,
+      ObTableSchema &new_table_schema,
+      ObSchemaGetterGuard &schema_guard,
+      ObDDLOperator &ddl_operator,
+      ObDDLSQLTransaction &trans);
+  int do_oracle_add_column_not_null_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
+                                             ObSchemaGetterGuard &schema_guard,
+                                             const bool is_default_value_null);
   int gen_new_index_table_name(
       const common::ObString &orig_index_table_name,
       const uint64_t orig_table_id,
