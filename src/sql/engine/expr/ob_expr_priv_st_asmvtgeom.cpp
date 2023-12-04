@@ -342,8 +342,7 @@ int ObExprPrivSTAsMVTGeom::split_geo_to_basic_type(
     split_geo = geo;
   }
   if (OB_SUCC(ret)
-      && OB_FAIL(
-             (ObGeoTypeUtil::simplify_multi_geo<ObCartesianGeometrycollection>(
+      && OB_FAIL((ObGeoFuncUtils::simplify_multi_geo<ObCartesianGeometrycollection>(
                  split_geo, allocator)))) {
     LOG_WARN("fail to simplify multi geometry", K(ret));
   }
@@ -357,8 +356,7 @@ int ObExprPrivSTAsMVTGeom::snap_geometry_to_grid(
   ObGeoGrid grid = {0, 0, 0, 1, 1, 0};
   if (OB_FAIL(ObGeoMVTUtil::snap_to_grid(geo, grid, use_floor))) {
     LOG_WARN("fail to do snap to grid", K(ret));
-  } else if (OB_FAIL((
-                 ObGeoTypeUtil::simplify_multi_geo<ObCartesianGeometrycollection>(
+  } else if (OB_FAIL((ObGeoFuncUtils::simplify_multi_geo<ObCartesianGeometrycollection>(
                      geo, allocator)))) {
     LOG_WARN("fail to simplify multi geometry", K(ret));
   }
@@ -507,8 +505,7 @@ int ObExprPrivSTAsMVTGeom::eval_priv_st_asmvtgeom(const ObExpr &expr, ObEvalCtx 
       res.set_null();
     } else {
       ObGeometry *res_bin = nullptr;
-      if (OB_FAIL(
-              (ObGeoTypeUtil::simplify_multi_geo<ObCartesianGeometrycollection>(
+      if (OB_FAIL((ObGeoFuncUtils::simplify_multi_geo<ObCartesianGeometrycollection>(
                   res_geo, temp_allocator)))) {
         LOG_WARN("fail to simplify multi geometry", K(ret));
       } else if (OB_FAIL(ObGeoTypeUtil::tree_to_bin(temp_allocator, res_geo, res_bin, nullptr))) {

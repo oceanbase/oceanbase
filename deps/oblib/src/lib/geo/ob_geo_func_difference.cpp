@@ -479,7 +479,7 @@ private:
               LOG_WARN("fail to do eval", K(ret));
             } else if (FALSE_IT(iter++)) {
             } else if (iter != geo2->end()) {
-              if (OB_FAIL((ObGeoTypeUtil::simplify_multi_geo<GcTreeType>(result, *allocator)))) {
+              if (OB_FAIL((ObGeoFuncUtils::simplify_multi_geo<GcTreeType>(result, *allocator)))) {
                 // should not do simplify in difference functor, it may affect
                 // ObGeoFuncUtils::ob_geo_gc_union
                 LOG_WARN("fail to simplify result", K(ret));

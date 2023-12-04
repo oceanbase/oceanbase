@@ -288,7 +288,7 @@ static int simplify_and_push_geometry(
     ObIAllocator &allocator, ObGeometry *push_geo, GcTreeType &geo_coll)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL((ObGeoTypeUtil::simplify_multi_geo<GcTreeType>(push_geo, allocator)))) {
+  if (OB_FAIL((ObGeoFuncUtils::simplify_multi_geo<GcTreeType>(push_geo, allocator)))) {
     LOG_WARN("fail to simplify result", K(ret));
   } else if (OB_FAIL(geo_coll.push_back(*push_geo))) {
     LOG_WARN("fail to push back geometry", K(ret));
@@ -613,19 +613,19 @@ private:
         LOG_WARN("fail to convert geometry tree to bin", K(ret));
       } else if (OB_FAIL(eval_wkb_binary(mpy_bin, g2, context, mpy_res))) {
         LOG_WARN("fail to eval wkb binary", K(ret));
-      } else if (OB_FAIL(!mpy_res->is_empty() && (ObGeoTypeUtil::simplify_multi_geo<GcTreeType>(mpy_res, *allocator)))) {
+      } else if (OB_FAIL(!mpy_res->is_empty() && (ObGeoFuncUtils::simplify_multi_geo<GcTreeType>(mpy_res, *allocator)))) {
         LOG_WARN("fail to simplify result", K(ret));
       } else if (OB_FAIL(ObGeoTypeUtil::tree_to_bin(*allocator, mpy_res, mpy_res_bin, srs))) {
         LOG_WARN("fail to convert geometry tree to bin", K(ret));
       } else if (OB_FAIL(eval_wkb_binary(mls_bin, mpy_res_bin, context, mls_res))) {
         LOG_WARN("fail to eval wkb binary", K(ret));
-      } else if (OB_FAIL(!mls_res->is_empty() && (ObGeoTypeUtil::simplify_multi_geo<GcTreeType>(mls_res, *allocator)))) {
+      } else if (OB_FAIL(!mls_res->is_empty() && (ObGeoFuncUtils::simplify_multi_geo<GcTreeType>(mls_res, *allocator)))) {
         LOG_WARN("fail to simplify result", K(ret));
       } else if (OB_FAIL(ObGeoTypeUtil::tree_to_bin(*allocator, mls_res, mls_res_bin, srs))) {
         LOG_WARN("fail to convert geometry tree to bin", K(ret));
       } else if (OB_FAIL(eval_wkb_binary(mpt_bin, mls_res_bin, context, result))) {
         LOG_WARN("fail to eval wkb binary", K(ret));
-      } else if (OB_FAIL(!result->is_empty() && (ObGeoTypeUtil::simplify_multi_geo<GcTreeType>(result, *allocator)))) {
+      } else if (OB_FAIL(!result->is_empty() && (ObGeoFuncUtils::simplify_multi_geo<GcTreeType>(result, *allocator)))) {
         LOG_WARN("fail to simplify result", K(ret));
       }
     }

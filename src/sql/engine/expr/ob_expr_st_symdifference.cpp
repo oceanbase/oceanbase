@@ -20,6 +20,7 @@
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "lib/geo/ob_geo_to_tree_visitor.h"
 #include "lib/geo/ob_geo_elevation_visitor.h"
+#include "lib/geo/ob_geo_func_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -135,6 +136,7 @@ int ObExprSTSymDifference::process_input_geometry(const ObExpr &expr, ObEvalCtx 
   }
   return ret;
 }
+
 int ObExprSTSymDifference::eval_st_symdifference(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
@@ -195,7 +197,13 @@ int ObExprSTSymDifference::eval_st_symdifference(const ObExpr &expr, ObEvalCtx &
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to alloc memory", K(ret));
         }
-      } else if (OB_FAIL((ObGeoTypeUtil::simplify_multi_geo<ObCartesianGeometrycollection>(diff_res, temp_allocator)))) {
+      } else if (geo1->crs() == ObGeoCRS::Cartesian
+         && OB_FAIL(ObGeoFuncUtils::remove_duplicate_multi_geo<ObCartesianGeometrycollection>(diff_res, temp_allocator, srs))) {
+        // should not do simplify in symdifference functor, it may affect
+        // ObGeoFuncUtils::ob_geo_gc_union
+        LOG_WARN("fail to simplify result", K(ret));
+      }  else if (geo1->crs() == ObGeoCRS::Geographic
+         && OB_FAIL(ObGeoFuncUtils::remove_duplicate_multi_geo<ObGeographGeometrycollection>(diff_res, temp_allocator, srs))) {
         // should not do simplify in symdifference functor, it may affect
         // ObGeoFuncUtils::ob_geo_gc_union
         LOG_WARN("fail to simplify result", K(ret));

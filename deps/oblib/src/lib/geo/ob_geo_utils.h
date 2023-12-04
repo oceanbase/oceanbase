@@ -156,8 +156,6 @@ public:
   static int check_empty(ObGeometry *geo, bool &is_empty);
   static int get_st_geo_name_by_type(ObGeoType type, ObString &res);
   static int get_coll_dimension(ObIWkbGeomCollection *geo, int8_t &dimension);
-  template<typename GcType>
-  static int simplify_multi_geo(ObGeometry *&geo, common::ObIAllocator &allocator);
   static int convert_geometry_3D_to_2D(const ObSrsItem *srs, ObIAllocator &allocator, ObGeometry *g3d,
                                       uint8_t build_flag, ObGeometry *&geo);
   static int normalize_geometry(ObGeometry &geo, const ObSrsItem *srs);
@@ -457,69 +455,6 @@ int ObGeoTypeUtil::create_geo_tree_by_type(ObIAllocator &allocator,
     }
   }
 
-  return ret;
-}
-
-template<typename GcType>
-int ObGeoTypeUtil::simplify_multi_geo(ObGeometry *&geo, common::ObIAllocator &allocator)
-{
-  // e.g. MULTILINESTRING((0 0, 1 1)) -> LINESTRING(0 0, 1 1)
-  int ret= OB_SUCCESS;
-  switch (geo->type()) {
-    case ObGeoType::MULTILINESTRING: {
-      typename GcType::sub_ml_type *mp = reinterpret_cast<typename GcType::sub_ml_type *>(geo);
-      if (OB_ISNULL(mp)) {
-        ret = OB_ERR_GIS_INVALID_DATA;
-        OB_LOG(WARN, "invalid null pointer", K(ret));
-      } else if (mp->size() == 1) {
-        geo = &(mp->front());
-      }
-      break;
-    }
-    case ObGeoType::MULTIPOINT: {
-      typename GcType::sub_mpt_type  *mpt = reinterpret_cast<typename GcType::sub_mpt_type  *>(geo);
-      if (OB_ISNULL(mpt)) {
-        ret = OB_ERR_GIS_INVALID_DATA;
-        OB_LOG(WARN, "invalid null pointer", K(ret));
-      } else if (mpt->size() == 1) {
-        typename GcType::sub_pt_type *p = OB_NEWx(typename GcType::sub_pt_type, &allocator);
-        if (OB_ISNULL(p)) {
-          ret = OB_ERR_GIS_INVALID_DATA;
-          OB_LOG(WARN, "invalid null pointer", K(ret));
-        } else {
-          p->set_data(mpt->front());
-          geo = p;
-        }
-      }
-      break;
-    }
-    case ObGeoType::MULTIPOLYGON: {
-      typename GcType::sub_mp_type *mp = reinterpret_cast<typename GcType::sub_mp_type *>(geo);
-      if (OB_ISNULL(mp)) {
-        ret = OB_ERR_GIS_INVALID_DATA;
-        OB_LOG(WARN, "invalid null pointer", K(ret));
-      } else if (mp->size() == 1) {
-        geo = &(mp->front());
-      }
-      break;
-    }
-    case ObGeoType::GEOMETRYCOLLECTION: {
-      GcType *mp = reinterpret_cast<GcType *>(geo);
-      if (OB_ISNULL(mp)) {
-        ret = OB_ERR_GIS_INVALID_DATA;
-        OB_LOG(WARN, "invalid null pointer", K(ret));
-      } else if (mp->size() == 1) {
-        geo = &(mp->front());
-        if (OB_FAIL((simplify_multi_geo<GcType>(geo, allocator)))) {
-          OB_LOG(WARN, "fail to simplify geometry", K(ret));
-        }
-      }
-      break;
-    }
-    default: {
-      break;  // do nothing
-    }
-  }
   return ret;
 }
 
