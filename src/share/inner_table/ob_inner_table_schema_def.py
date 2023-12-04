@@ -30272,6 +30272,8 @@ def_table_schema(
 #21514 mysql.audit_log_filter
 #21515 mysql.audit_log_user
 #21516 mysql.columns_priv
+#21517 GV$OB_LS_SNAPSHOTS
+#21518 V$OB_LS_SNAPSHOTS
 # 余留位置
 
 ################################################################################
@@ -54934,6 +54936,8 @@ def_table_schema(
 # 28212: GV$OB_ACTIVE_SESSION_HISTORY
 # 28213: V$OB_ACTIVE_SESSION_HISTORY
 # 28214: DBA_INDEX_USAGE
+# 28215: GV$OB_LS_SNAPSHOTS
+# 28216: V$OB_LS_SNAPSHOTS
 
 ################################################################################
 # Lob Table (50000, 70000)
