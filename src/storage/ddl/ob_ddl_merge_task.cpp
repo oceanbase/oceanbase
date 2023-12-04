@@ -407,7 +407,7 @@ int ObTabletDDLUtil::check_data_integrity(ObTableStoreIterator &ddl_sstable_iter
   int ret = OB_SUCCESS;
   is_data_complete = false;
   if (OB_UNLIKELY(!start_scn.is_valid_and_not_min() || !prepare_scn.is_valid_and_not_min()
-      || prepare_scn <= start_scn)) {
+      || prepare_scn < start_scn)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ddl_sstable_iter.count()), K(start_scn), K(prepare_scn));
   } else if (0 == ddl_sstable_iter.count()) {
