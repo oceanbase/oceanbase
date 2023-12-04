@@ -874,6 +874,7 @@ public:
   const common::ObIArray<common::ObString>& get_select_columns() const { return properties_names_; };
   static int64_t get_max_packet_buffer_length() { return obrpc::get_max_rpc_packet_size() - (1<<20); }
   static int64_t get_max_buf_block_size() { return get_max_packet_buffer_length() - (1024*1024LL); }
+  TO_STRING_KV(K(properties_names_), K(row_count_), K(buf_.get_position()));
 private:
   static const int64_t DEFAULT_BUF_BLOCK_SIZE = common::OB_MALLOC_BIG_BLOCK_SIZE - (1024*1024LL);
   int alloc_buf_if_need(const int64_t size);

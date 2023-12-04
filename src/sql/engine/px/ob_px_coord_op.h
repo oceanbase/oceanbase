@@ -44,6 +44,7 @@ public:
     bool is_inited() const { return PHY_INVALID != op_type_;  }
     ObPhyOperatorType op_type_;
     int64_t op_id_;
+    TO_STRING_KV(K(op_type_), K(op_id_));
   };
 public:
   virtual int inner_open() override;

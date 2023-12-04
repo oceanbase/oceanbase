@@ -606,6 +606,8 @@ struct ObInnerContextMap {
   ObInnerContextHashMap *context_map_;
   common::ObIAllocator &alloc_;
   OB_UNIS_VERSION(1);
+public:
+  TO_STRING_KV(K(context_name_), K(context_map_->size()));
 };
 typedef common::hash::ObHashMap<common::ObString, ObInnerContextMap *,
                                 common::hash::NoPthreadDefendMode,
