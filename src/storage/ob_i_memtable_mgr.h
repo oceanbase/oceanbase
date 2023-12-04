@@ -341,7 +341,7 @@ public:
 
   int set_memtable_mgr(ObIMemtableMgr *memtable_mgr, ObTabletMemtableMgrPool *pool = nullptr);
 
-  TO_STRING_KV(KPC_(memtable_mgr), KP_(pool));
+  TO_STRING_KV(KP_(memtable_mgr), KP_(pool));
 
 private:
   ObIMemtableMgr *memtable_mgr_;
