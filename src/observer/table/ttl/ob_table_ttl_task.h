@@ -49,7 +49,8 @@ public:
   };
 
 public:
-  common::ObArenaAllocator allocator_;
+  const static int64_t ONE_ITER_EXECUTE_MAX_TIME = 30 * 1000 * 1000; // 30s
+  common::ObArenaAllocator hbase_kq_allocator_;
   bool is_inited_;
   int32_t max_version_;
   int64_t time_to_live_ms_; // ttl in millisecond
@@ -70,6 +71,8 @@ public:
   common::ObSArray<uint64_t> rowkey_cell_ids_;
   // map new row -> normal column
   common::ObSArray<PropertyPair> properties_pairs_;
+  bool hbase_new_cq_;
+  int64_t iter_end_ts_;
 };
 
 

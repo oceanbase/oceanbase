@@ -643,7 +643,7 @@ ObHTableRowIterator::~ObHTableRowIterator()
 int ObHTableRowIterator::next_cell()
 {
   ObNewRow *ob_row = NULL;
-  int ret = child_op_->get_next_row(ob_row, false);
+  int ret = child_op_->get_next_row(ob_row);
   if (OB_SUCCESS == ret) {
     curr_cell_.set_ob_row(ob_row);
     LOG_DEBUG("[yzfdebug] fetch next cell", K_(curr_cell));
@@ -659,7 +659,7 @@ int ObHTableRowIterator::next_cell()
 int ObHTableRowIterator::reverse_next_cell(ObIArray<common::ObNewRow> &same_kq_cells, ObTableQueryResult *&out_result)
 {
   ObNewRow *ob_row = NULL;
-  int ret = child_op_->get_next_row(ob_row, false);
+  int ret = child_op_->get_next_row(ob_row);
   if ((ObQueryFlag::Reverse == scan_order_ && OB_ITER_END == ret) ||
       (ObQueryFlag::Reverse == scan_order_ && OB_SUCCESS == ret &&
       NULL != hfilter_ && hfilter_->filter_all_remaining())) {

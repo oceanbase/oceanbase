@@ -956,7 +956,8 @@ public:
     : ttl_del_rows_(0),
       max_version_del_rows_(0),
       scan_rows_(0),
-      end_rowkey_()
+      end_rowkey_(),
+      iter_end_ts_(0)
     {}
   ~ObTableTTLOperationResult() {}
   uint64_t get_ttl_del_row() { return ttl_del_rows_; }
@@ -964,12 +965,14 @@ public:
   uint64_t get_del_row() { return ttl_del_rows_ + max_version_del_rows_; }
   uint64_t get_scan_row() { return scan_rows_; }
   common::ObString get_end_rowkey() { return end_rowkey_; }
-  TO_STRING_KV(K_(ttl_del_rows), K_(max_version_del_rows), K_(scan_rows), K_(end_rowkey));
+  int64_t get_end_ts() { return iter_end_ts_; }
+  TO_STRING_KV(K_(ttl_del_rows), K_(max_version_del_rows), K_(scan_rows), K_(end_rowkey), K_(iter_end_ts));
 public:
   uint64_t ttl_del_rows_;
   uint64_t max_version_del_rows_;
   uint64_t scan_rows_;
   common::ObString end_rowkey_;
+  int64_t iter_end_ts_;
 };
 
 struct ObTableMoveReplicaInfo final

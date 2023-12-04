@@ -221,7 +221,9 @@ int ObTableTTLDeleteTask::process_one()
   info_.scan_cnt_ += result.get_scan_row();
   info_.err_code_ = ret;
   info_.row_key_ = result.get_end_rowkey();
-  if (OB_SUCC(ret) && result.get_del_row() < PER_TASK_DEL_ROWS) {
+  if (OB_SUCC(ret)
+      && result.get_del_row() < PER_TASK_DEL_ROWS
+      && result.get_end_ts() > ObTimeUtility::current_time()) {
     ret = OB_ITER_END; // finsh task
     info_.err_code_ = ret;
     LOG_DEBUG("finish delete", KR(ret), K_(info));
@@ -420,7 +422,7 @@ int ObTableTTLDag::fill_info_param(compaction::ObIBasicInfoParam *&out_param, Ob
 }
 
 ObTableTTLDeleteRowIterator::ObTableTTLDeleteRowIterator()
-    : allocator_(ObMemAttr(MTL_ID(), "TTLDelRowIter")),
+    : hbase_kq_allocator_(ObMemAttr(MTL_ID(), "TTLHbaseCQAlloc")),
       is_inited_(false),
       max_version_(0),
       time_to_live_ms_(0),
@@ -435,7 +437,9 @@ ObTableTTLDeleteRowIterator::ObTableTTLDeleteRowIterator()
       is_last_row_ttl_(true),
       is_hbase_table_(false),
       last_row_(nullptr),
-      rowkey_cnt_(0)
+      rowkey_cnt_(0),
+      hbase_new_cq_(false),
+      iter_end_ts_(0)
 {
 }
 
@@ -459,6 +463,8 @@ int ObTableTTLDeleteRowIterator::init(const schema::ObTableSchema &table_schema,
     rowkey_cnt_ = table_schema.get_rowkey_column_num();
     ObSArray<uint64_t> rowkey_column_ids;
     ObSArray<uint64_t> full_column_ids;
+    hbase_new_cq_ = is_hbase_table_ ? false : true;
+    iter_end_ts_ = ObTimeUtility::current_time() + ONE_ITER_EXECUTE_MAX_TIME;
     if (OB_FAIL(table_schema.get_rowkey_column_ids(rowkey_column_ids))) {
       LOG_WARN("fail to get rowkey column ids", KR(ret));
     } else if (OB_FAIL(table_schema.get_column_ids(full_column_ids))) {
@@ -513,7 +519,7 @@ int ObTableTTLDeleteRowIterator::get_next_row(ObNewRow*& row)
   } else {
     bool is_expired = false;
     while(OB_SUCC(ret) && !is_expired) {
-      if (OB_FAIL(ObTableApiScanRowIterator::get_next_row(row, false/*need_deep_copy*/))) {
+      if (OB_FAIL(ObTableApiScanRowIterator::get_next_row(row))) {
         if (OB_ITER_END != ret) {
           LOG_WARN("fail to get next row", K(ret));
         }
@@ -530,11 +536,12 @@ int ObTableTTLDeleteRowIterator::get_next_row(ObNewRow*& row)
           ObString cell_qualifier = cell.get_qualifier();
           int64_t cell_ts = -cell.get_timestamp(); // obhtable timestamp is nagative in ms
           if ((cell_rowkey != cur_rowkey_) || (cell_qualifier != cur_qualifier_)) {
+            hbase_new_cq_ = true;
             cur_version_ = 1;
-            allocator_.reuse();
-            if (OB_FAIL(ob_write_string(allocator_, cell_rowkey, cur_rowkey_))) {
+            hbase_kq_allocator_.reuse();
+            if (OB_FAIL(ob_write_string(hbase_kq_allocator_, cell_rowkey, cur_rowkey_))) {
               LOG_WARN("fail to copy cell rowkey", KR(ret), K(cell_rowkey));
-            } else if (OB_FAIL(ob_write_string(allocator_, cell_qualifier, cur_qualifier_))) {
+            } else if (OB_FAIL(ob_write_string(hbase_kq_allocator_, cell_qualifier, cur_qualifier_))) {
               LOG_WARN("fail to copy cell qualifier", KR(ret), K(cell_qualifier));
             }
           } else {
@@ -563,6 +570,9 @@ int ObTableTTLDeleteRowIterator::get_next_row(ObNewRow*& row)
             is_last_row_ttl_ = true;
           }
         }
+      }
+      if (ObTimeUtility::current_time() > iter_end_ts_ && hbase_new_cq_) {
+        ret = OB_ITER_END;
       }
     }
   }
@@ -629,6 +639,7 @@ int ObTableTTLDeleteTask::execute_ttl_delete(ObTableTTLDeleteRowIterator &ttl_ro
       result.ttl_del_rows_ = iter_ttl_cnt;
       result.max_version_del_rows_ = iter_max_version_cnt;
       result.scan_rows_ = ttl_row_iter.scan_cnt_;
+      result.iter_end_ts_ = ttl_row_iter.iter_end_ts_;
     }
   }
 
