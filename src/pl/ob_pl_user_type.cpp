@@ -596,12 +596,14 @@ int ObUserDefinedType::text_protocol_suffix_info_for_each_item(const ObPLDataTyp
     if (len - pos < 3) {
       ret = OB_SIZE_OVERFLOW;
       LOG_WARN("buffer length is not enough. ", K(type_name_), K(type_name_.length()), K(len));
-    } else if (is_last_item) {
+    } else if (!is_null) {
       MEMCPY(buf + pos, ")", 1);
       pos += 1;
-    } else {
-      MEMCPY(buf + pos, "), ", 3);
-      pos += 3;
+    }
+
+    if (OB_SUCC(ret) && !is_last_item) {
+      MEMCPY(buf + pos, ", ", 2);
+      pos += 2;
     }
   } else if (!is_null && NULL != type.get_meta_type() && (type.get_meta_type()->is_string_or_lob_locator_type()
                 || type.get_meta_type()->is_oracle_temporal_type()
