@@ -81,8 +81,6 @@ int ObAlterPackageResolver::resolve_alter_compile_clause(const ParseNode &alter_
                                                          obrpc::ObAlterPackageArg &pkg_arg)
 {
   int ret = OB_SUCCESS;
-  bool compile_spec = false;
-  bool compile_body = false;
   CK (OB_LIKELY(T_PACKAGE_ALTER_OPTIONS == alter_clause.type_));
   CK (OB_LIKELY(PACKAGE_ALTER_COMPILE == alter_clause.int16_values_[0]));
   if (OB_FAIL(ret)) {
@@ -90,64 +88,68 @@ int ObAlterPackageResolver::resolve_alter_compile_clause(const ParseNode &alter_
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("alter package with reuse_setting not supported yet!", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter package with reuse setting");
-  } else if (PACKAGE_UNIT_BODY == alter_clause.int16_values_[2]) {
-    compile_body = true;
-  } else if (PACKAGE_UNIT_SPECIFICATION == alter_clause.int16_values_[2]) {
-    compile_spec = true;
   }
-  OZ (compile_package(db_name, package_name, compile_spec, compile_body, pkg_arg));
+  OZ (compile_package(db_name, package_name, alter_clause.int16_values_[2], pkg_arg));
   return ret;
 }
 
 int ObAlterPackageResolver::analyze_package(ObPLCompiler &compiler,
-                                            const ObString &source,
                                             const ObPLBlockNS *parent_ns,
                                             ObPLPackageAST &package_ast,
-                                            bool is_for_trigger,
-                                            bool is_package,
-                                            const ObString& db_name, 
-                                            const ObString &package_name,
+                                            const ObString& db_name,
                                             const ObPackageInfo *package_info,
                                             share::schema::ObErrorInfo &error_info,
                                             bool &has_error)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  if (OB_FAIL(compiler.analyze_package(source, parent_ns, package_ast, is_for_trigger))) {
+  ObString source;
+  ObString package_name;
+
+  CK (OB_NOT_NULL(package_info));
+  CK (package_info->is_package() || package_info->is_package_body());
+  OX (package_name = package_info->get_package_name());
+  OX (source = package_info->get_source());
+  OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(
+          *allocator_, session_info_->get_dtc_params(), source));
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(compiler.analyze_package(source, parent_ns, package_ast,
+                                              false /* is_for_trigger */))) {
     ObPL::insert_error_msg(ret);
     switch (ret) {
-      case OB_ERR_PACKAGE_DOSE_NOT_EXIST:
-        LOG_USER_WARN(OB_ERR_PACKAGE_DOSE_NOT_EXIST, is_package ? "PACKAGE" : "PACKAGE BODY",
+    case OB_ERR_PACKAGE_DOSE_NOT_EXIST:
+      LOG_USER_WARN(OB_ERR_PACKAGE_DOSE_NOT_EXIST,
+                    package_info->is_package() ? "PACKAGE" : "PACKAGE BODY",
                     db_name.length(), db_name.ptr(), package_name.length(), package_name.ptr());
-        break;
-      case OB_ERR_BAD_DATABASE:
-        LOG_USER_WARN(OB_ERR_BAD_DATABASE, db_name.length(), db_name.ptr());
-        break;
-      default:
-        LOG_USER_WARN(OB_ERR_PACKAGE_COMPILE_ERROR, is_package ? "PACKAGE" : "PACKAGE BODY",
+      break;
+    case OB_ERR_BAD_DATABASE:
+      LOG_USER_WARN(OB_ERR_BAD_DATABASE, db_name.length(), db_name.ptr());
+      break;
+    default:
+      LOG_USER_WARN(OB_ERR_PACKAGE_COMPILE_ERROR,
+                    package_info->is_package() ? "PACKAGE" : "PACKAGE BODY",
                     db_name.length(), db_name.ptr(), package_name.length(), package_name.ptr());
-        has_error = true;
-        ret = OB_SUCCESS;
-        break;
+      has_error = true;
+      ret = OB_SUCCESS;
+      break;
     }
   }
-  tmp_ret = error_info.collect_error_info(package_info);
-  ret = OB_SUCCESS == ret ? tmp_ret : ret;
+  OZ (error_info.collect_error_info(package_info));
   return ret;
 }
 
 int ObAlterPackageResolver::compile_package(const ObString& db_name,
                                             const ObString &package_name,
-                                            bool compile_spec,
-                                            bool compile_body,
+                                            int16_t compile_flag,
                                             obrpc::ObAlterPackageArg &pkg_arg)
 {
   int ret = OB_SUCCESS;
-  const ObPackageInfo *package_spec_info = NULL;
-  const ObPackageInfo *package_body_info = NULL;
+  const ObPackageInfo *package_spec_info = nullptr;
+  const ObPackageInfo *package_body_info = nullptr;
   int64_t compatible_mode = lib::is_oracle_mode() ? COMPATIBLE_ORACLE_MODE
                                                   : COMPATIBLE_MYSQL_MODE;
   share::schema::ObErrorInfo &error_info = pkg_arg.error_info_;
+
   HEAP_VARS_2((ObPLPackageAST, package_spec_ast, *allocator_),
               (ObPLPackageAST, package_body_ast, *allocator_)) {
     ObPLPackageGuard package_guard(session_info_->get_effective_tenant_id());
@@ -156,7 +158,6 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
                           *(schema_checker_->get_schema_guard()),
                           package_guard,
                           *(params_.sql_proxy_));
-    ObString source;
     bool has_error = false;
     OZ (package_guard.init());
     OZ (schema_checker_->get_package_info(session_info_->get_effective_tenant_id(),
@@ -171,78 +172,67 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
                               package_spec_info->get_database_id(),
                               package_spec_info->get_package_id(),
                               package_spec_info->get_schema_version(),
-                              NULL));
-    OX (source = package_spec_info->get_source());
-    OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(
-          *allocator_, session_info_->get_dtc_params(), source));
-    OZ (analyze_package(compiler, source, NULL, package_spec_ast, false, true, 
-          db_name, package_name, package_spec_info, error_info, has_error));
-    if (OB_FAIL(ret)) {
-      // error msg has fixed in analyze_package
-    } else if (1 == package_spec_ast.get_routine_table().get_count()
-               && !compile_body && !compile_spec) {
-      OZ (schema_checker_->get_package_info(session_info_->get_effective_tenant_id(),
-                                            db_name,
-                                            package_name,
-                                            PACKAGE_BODY_TYPE,
-                                            compatible_mode,
-                                            package_body_info),
-                                            package_spec_ast.get_routine_table().get_count(),
-                                            compile_body);
-      if (OB_SUCC(ret)) {
-        ObString source;
+                              nullptr));
+    OZ (analyze_package(compiler, nullptr, package_spec_ast, db_name, package_spec_info,
+                        error_info, has_error));
+
+    bool collect_package_body_info = false;
+    if (OB_SUCC(ret)) {
+      switch (compile_flag) {
+      case PACKAGE_UNIT_SPECIFICATION: {
+        collect_package_body_info = false;  // compile package spec
+      } break;
+      case PACKAGE_UNIT_PACKAGE: {
         OZ (schema_checker_->get_package_info(session_info_->get_effective_tenant_id(),
-                                            db_name,
-                                            package_name,
-                                            PACKAGE_BODY_TYPE,
-                                            compatible_mode,
-                                            package_body_info));
-        OX (source = package_body_info->get_source());
-        OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(
-              *allocator_, session_info_->get_dtc_params(), source));
-        OZ (package_body_ast.init(db_name,
-                                  package_name,
-                                  PL_PACKAGE_BODY,
-                                  OB_INVALID_ID,
-                                  OB_INVALID_ID,
-                                  OB_INVALID_VERSION,
-                                  &package_spec_ast));
-        OZ (analyze_package(compiler, source, &(package_spec_ast.get_body()->get_namespace()), 
-          package_body_ast, false, false, db_name, package_name, package_body_info, error_info, has_error));
-      } else if (OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-        OZ (error_info.delete_error(package_spec_info));
-      }
-    } else if (package_spec_ast.get_routine_table().get_count() > 1 && !compile_body) {
-      // 如果不需要compile body, 仅check body是否存在
-      OZ (schema_checker_->get_package_info(session_info_->get_effective_tenant_id(),
-                                            db_name,
-                                            package_name,
-                                            PACKAGE_BODY_TYPE,
-                                            compatible_mode,
-                                            package_body_info),
-                                            package_spec_ast.get_routine_table().get_count(),
-                                            compile_body);
-      if (OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-        LOG_USER_WARN(OB_ERR_PACKAGE_COMPILE_ERROR, "PACKAGE",
-                      db_name.length(), db_name.ptr(),
-                      package_name.length(), package_name.ptr());
+                                              db_name,
+                                              package_name,
+                                              PACKAGE_BODY_TYPE,
+                                              compatible_mode,
+                                              package_body_info));
+        if (OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+          collect_package_body_info = false;  // compile package spec
+        } else if (OB_SUCC(ret) && OB_NOT_NULL(package_body_info)) {
+          collect_package_body_info = true;  // compile package body
+        } else {
+          LOG_WARN("failed to get package body info", K(ret), K(package_body_info));
+        }
+      } break;
+      case PACKAGE_UNIT_BODY: {
+        OZ (schema_checker_->get_package_info(session_info_->get_effective_tenant_id(),
+                                              db_name,
+                                              package_name,
+                                              PACKAGE_BODY_TYPE,
+                                              compatible_mode,
+                                              package_body_info));
+        if (OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) {
+          LOG_WARN("package body not found", K(ret), K(db_name), K(package_name));
+        } else if (OB_SUCC(ret) && OB_NOT_NULL(package_body_info)) {
+          collect_package_body_info = true;  // compile package body
+        } else {
+          LOG_WARN("failed to get package body info", K(ret), K(package_body_info));
+        }
+      } break;
+      default: {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid alter package compile flag", K(ret), K(compile_flag));
+      } break;
       }
     }
+
+#define COLLECT_PACKAGE_INFO(alt_pkg_arg, package_info)                            \
+  do {                                                                             \
+    OV(OB_NOT_NULL(package_info), OB_INVALID_ARGUMENT);                            \
+    OX(alt_pkg_arg.tenant_id_ = package_info->get_tenant_id());                    \
+    OX(alt_pkg_arg.package_type_ = package_info->get_type());                      \
+    OX(alt_pkg_arg.compatible_mode_ = package_info->get_compatibility_mode());     \
+  } while (0)
+
     if (OB_FAIL(ret)) {
-    } else if (compile_body || (!compile_body && !compile_spec)) {
-      ObString source;
-      has_error = false;
-      OZ (schema_checker_->get_package_info(session_info_->get_effective_tenant_id(),
-                                            db_name,
-                                            package_name,
-                                            PACKAGE_BODY_TYPE,
-                                            compatible_mode,
-                                            package_body_info));
-      OX (source = package_body_info->get_source());
-      OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(
-            *allocator_, session_info_->get_dtc_params(), source));
+    } else if (!collect_package_body_info) {
+      COLLECT_PACKAGE_INFO(pkg_arg, package_spec_info);
+    } else {
+      bool has_error = false;
       OZ (package_body_ast.init(db_name,
                                 package_name,
                                 PL_PACKAGE_BODY,
@@ -250,38 +240,41 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
                                 OB_INVALID_ID,
                                 OB_INVALID_VERSION,
                                 &package_spec_ast));
-      OZ (analyze_package(compiler, source, &(package_spec_ast.get_body()->get_namespace()), 
-        package_body_ast, false, false, db_name, package_name, package_body_info, error_info, has_error));
-      OX (pkg_arg.tenant_id_ = package_body_info->get_tenant_id());
-      OX (pkg_arg.package_type_ = package_body_info->get_type());
-      OX (pkg_arg.compatible_mode_ = package_body_info->get_compatibility_mode());
+      OZ (analyze_package(compiler, &(package_spec_ast.get_body()->get_namespace()),
+                          package_body_ast, db_name, package_body_info, error_info, has_error));
       if (OB_SUCC(ret) && !has_error) {
         // if has_error, don't need to update routine route sql
         ObArray<const ObRoutineInfo *> routine_infos;
+        ObSEArray<ObRoutineInfo, 2> routine_spec_infos;
         ObPLRoutineTable &spec_routine_table = package_spec_ast.get_routine_table();
         ObPLRoutineTable &body_routine_table = package_body_ast.get_routine_table();
         OZ (schema_checker_->get_schema_guard()->get_routine_infos_in_package(
             session_info_->get_effective_tenant_id(),
             package_spec_info->get_package_id(),
             routine_infos));
+        if (OB_SUCC(ret) && routine_infos.empty() && spec_routine_table.get_count() > 1) {
+          OZ (ObCreatePackageResolver::resolve_functions_spec(
+            *package_spec_info, routine_spec_infos, spec_routine_table));
+          CK (routine_spec_infos.count() > 0);
+          for (int64_t i = 0; OB_SUCC(ret) && i < routine_spec_infos.count(); ++i) {
+            OZ (routine_infos.push_back(&routine_spec_infos.at(i)));
+          }
+        }
         OZ (ObCreatePackageBodyResolver::update_routine_route_sql(*allocator_,
                                                                   *session_info_,
                                                                   pkg_arg.public_routine_infos_,
                                                                   spec_routine_table,
                                                                   body_routine_table,
                                                                   routine_infos));
+        if (OB_FAIL(ret)) {
+          pkg_arg.public_routine_infos_.reset();
+        }
       }
+      COLLECT_PACKAGE_INFO(pkg_arg, package_body_info);
     }
-    if (OB_SUCC(ret)) {
-      if (!(compile_body || (!compile_body && !compile_spec))) {
-        OV (OB_NOT_NULL(package_spec_info), OB_INVALID_ARGUMENT);
-        OX (pkg_arg.tenant_id_ = package_spec_info->get_tenant_id());
-        OX (pkg_arg.package_type_ = package_spec_info->get_type());
-        OX (pkg_arg.compatible_mode_ = package_spec_info->get_compatibility_mode());
-      }
-    }
+
+#undef COLLECT_PACKAGE_INFO
   }
-  // TODO: collect error info
   return ret;
 }
 
