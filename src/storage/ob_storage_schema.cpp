@@ -1146,7 +1146,7 @@ int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
       if (ob_is_large_text(col->get_data_type())) {
         col_schema.default_checksum_ = 0;
       } else if (OB_FAIL(datum.from_obj_enhance(col->get_orig_default_value()))) {
-        STORAGE_LOG(WARN, "Failed to transefer obj to datum", K(ret));
+        STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret));
       } else {
         col_schema.default_checksum_ = datum.checksum(0);
       }
@@ -1348,7 +1348,7 @@ int ObStorageSchema::get_encryption_id(int64_t &encrypt_id) const
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret), K_(is_inited));
   } else if (OB_FAIL(share::ObEncryptionUtil::parse_encryption_id(encryption_, encrypt_id))) {
-    STORAGE_LOG(WARN, "failed to parse_encrytion_id", K(ret), K(encryption_));
+    STORAGE_LOG(WARN, "failed to parse_encryption_id", K(ret), K(encryption_));
   }
   return ret;
 }
@@ -1489,7 +1489,7 @@ int ObStorageSchema::get_orig_default_row(
         ret = OB_ERR_SYS;
         STORAGE_LOG(WARN, "column id not found", K(ret), K(column_ids.at(i)));
       } else if (OB_FAIL(default_row.storage_datums_[i].from_obj_enhance(col_schema->get_orig_default_value()))) {
-        STORAGE_LOG(WARN, "Failed to transefer obj to datum", K(ret));
+        STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret));
       }
     }
   }
