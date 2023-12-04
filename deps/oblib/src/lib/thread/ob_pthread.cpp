@@ -35,7 +35,7 @@ int ob_pthread_create(void **ptr, void *(*start_routine) (void *), void *arg)
       OB_DELETE(ObPThread, SET_USE_500("PThread"), thread);
     }
   } else {
-    *ptr = thread;
+    ATOMIC_STORE(ptr, thread);
     OB_LOG(INFO, "ob_pthread_create succeed", KP(thread));
   }
   return ret;
