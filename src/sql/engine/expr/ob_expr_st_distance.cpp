@@ -53,7 +53,8 @@ int ObExprSTDistance::calc_result_typeN(ObExprResType& type,
     if (types_stack[i].get_type() == ObNullType) {
       null_types++;
     } else if (!ob_is_geometry(types_stack[i].get_type())
-        && !ob_is_string_type(types_stack[i].get_type())) { // first 2 params are geometries
+        && !ob_is_string_type(types_stack[i].get_type())
+        && ObDoubleType != types_stack[i].get_type()) { // first 2 params are geometries
       unexpected_types++;
       LOG_WARN("invalid type", K(types_stack[i].get_type()));
     } else if (ob_is_string_type(types_stack[i].get_type())) {
@@ -97,6 +98,8 @@ int ObExprSTDistance::eval_st_distance(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   ObDatum *gis_datum2 = NULL;
   ObExpr *gis_arg1 = expr.args_[0];
   ObExpr *gis_arg2 = expr.args_[1];
+  ObObjType input_type1 = gis_arg1->datum_meta_.type_;
+  ObObjType input_type2 = gis_arg2->datum_meta_.type_;
 
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
@@ -104,7 +107,12 @@ int ObExprSTDistance::eval_st_distance(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     LOG_WARN("eval geo args failed", K(ret));
   } else if (gis_datum1->is_null() || gis_datum2->is_null()) {
     res.set_null();
-  } else {
+  } else if (input_type1 == ObDoubleType || input_type2 == ObDoubleType) {
+    // bugfix 53283098, should allow double type in calc_result_type2
+    ret = OB_ERR_GIS_INVALID_DATA;
+    LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_CROSSES);
+    LOG_WARN("invalid type", K(ret), K(input_type1), K(input_type2));
+  }  else {
     bool is_geo1_empty = false;
     bool is_geo2_empty = false;
     ObGeometry *geo1 = NULL;

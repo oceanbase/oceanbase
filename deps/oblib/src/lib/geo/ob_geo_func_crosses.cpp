@@ -369,10 +369,10 @@ private:
         ObGeometry *geo2 = const_cast<ObGeometry *>(g2);
         bool has_common_interior = false;  // Check that if g1 and g2 has common interior
         ObGeoToTreeVisitor tree_visitor2(allocator);
-        if (OB_FAIL(geo2->do_visit(tree_visitor))) {
+        if (OB_FAIL(geo2->do_visit(tree_visitor2))) {
           LOG_WARN("failed to transform gc to tree", K(ret));
         } else if (OB_FAIL(ObGeoFuncUtils::ob_geo_gc_split(*allocator,
-                    *static_cast<const GcTreeType *>(tree_visitor.get_geometry()),
+                    *static_cast<const GcTreeType *>(tree_visitor2.get_geometry()),
                     mpt2, mls2, mpy2))) {
           LOG_WARN("failed to do gc split", K(ret));
         } else if (!mpt2->is_empty() && mls2->is_empty() && mpy2->is_empty()) {

@@ -36,7 +36,8 @@ int ObExprSTLength::calc_result_typeN(ObExprResType &type, ObExprResType *types_
   UNUSED(type_ctx);
   INIT_SUCC(ret);
   ObObjType geo_tp = types_stack[0].get_type();
-  if (!ob_is_geometry(geo_tp) && !ob_is_string_type(geo_tp) && !ob_is_null(geo_tp)) {
+  if (!ob_is_geometry(geo_tp) && !ob_is_string_type(geo_tp) && !ob_is_null(geo_tp)
+      && ObDoubleType != geo_tp) {
     ret = OB_ERR_GIS_INVALID_DATA;
     LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_LENGTH);
     LOG_WARN("invalid type", K(ret), K(geo_tp));
@@ -72,6 +73,11 @@ int ObExprSTLength::eval_st_length(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     LOG_WARN("fail to eval args", K(ret));
   } else if (datum1->is_null()) {
     is_null_res = true;
+  } else if (type1 == ObIntType) {
+    // bugfix 53283098, should allow double type in calc_result_type2
+    ret = OB_ERR_GIS_INVALID_DATA;
+    LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_CROSSES);
+    LOG_WARN("invalid type", K(ret), K(type1));
   } else {
     // construct geometry
     ObString wkb = datum1->get_string();

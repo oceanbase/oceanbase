@@ -46,13 +46,15 @@ int ObExprSTCrosses::calc_result_type2(ObExprResType &type, ObExprResType &type1
 
   if (type1.get_type() == ObNullType) {
     null_types++;
-  } else if (!ob_is_geometry(type1.get_type()) && !ob_is_string_type(type1.get_type())) {
+  } else if (!ob_is_geometry(type1.get_type()) && !ob_is_string_type(type1.get_type())
+            && ObIntType != type1.get_type()) {
     unexpected_types++;
     LOG_WARN("invalid type", K(type1.get_type()));
   }
   if (type2.get_type() == ObNullType) {
     null_types++;
-  } else if (!ob_is_geometry(type2.get_type()) && !ob_is_string_type(type2.get_type())) {
+  } else if (!ob_is_geometry(type2.get_type()) && !ob_is_string_type(type2.get_type())
+            && ObIntType != type2.get_type()) {
     unexpected_types++;
     LOG_WARN("invalid type", K(type2.get_type()));
   }
@@ -87,6 +89,11 @@ int ObExprSTCrosses::process_input_geometry(const ObExpr &expr, ObEvalCtx &ctx,
     LOG_WARN("eval geo args failed", K(ret));
   } else if (gis_datum1->is_null() || gis_datum2->is_null()) {
     is_null_res = true;
+  } else if (input_type1 == ObIntType || input_type2 == ObIntType) {
+    // bugfix 53283098, should allow int type in calc_result_type2
+    ret = OB_ERR_GIS_INVALID_DATA;
+    LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_CROSSES);
+    LOG_WARN("invalid type", K(ret), K(input_type1), K(input_type2));
   } else {
     ObGeoType type1;
     ObGeoType type2;
