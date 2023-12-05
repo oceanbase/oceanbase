@@ -1234,7 +1234,14 @@ int ObTabletPersister::fetch_and_persist_sstable(
         ObSSTablePersistWrapper wrapper(static_cast<ObSSTable *>(table));
         if (OB_FAIL(fill_write_info(allocator_, &wrapper, write_infos))) {
           LOG_WARN("failed to fill sstable write info", K(ret));
-        } else if (OB_FAIL(tables.push_back(table))) {
+        } else if (OB_UNLIKELY(sstable->has_padding_meta_cache())) {
+          /*
+           * The following defend log used ONLY in 4_2_x upgrade 4_3_x scenario !!!
+           * We should fill invalid fields of SSTable's meta cache when deserialize tablet.
+           */
+          LOG_ERROR_RET(OB_ERR_UNEXPECTED, "meet unexpected padding meta cache", KPC(sstable));
+        }
+        if (FAILEDx(tables.push_back(table))) {
           LOG_WARN("fail to push back sstable address", K(ret), K(tables));
         } else if (OB_FAIL(copy_sstable_macro_info(*sstable, shared_macro_map, block_info_set))) {
           LOG_WARN("fail to call sstable macro info", K(ret));
