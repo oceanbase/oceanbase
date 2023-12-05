@@ -251,6 +251,7 @@ int ObRemoteLogIterator<LogEntryType>::next_entry_(LogEntryType &entry, LSN &lsn
     } else {
       cur_lsn_ = lsn + entry.get_serialize_size();
       cur_scn_ = entry.get_scn();
+      advance_data_gen_lsn_();
       if (lsn < start_lsn_) {
         // do nothing
       } else {
@@ -283,10 +284,6 @@ int ObRemoteLogIterator<LogEntryType>::next_entry_(LogEntryType &entry, LSN &lsn
 
   if (OB_FAIL(ret) && OB_ITER_END != ret && ! is_io_error(ret)) {
     mark_source_error_(ret);
-  }
-
-  if (OB_SUCC(ret)) {
-    advance_data_gen_lsn_();
   }
   return ret;
 }
