@@ -1630,13 +1630,14 @@ int ObRpcChangeLSAccessModeP::process()
   }
   if (OB_SUCC(ret)) {
     ls_svr = MTL(ObLSService*);
+    logservice::ObLogService *log_ls_svr = MTL(logservice::ObLogService*);
     ObLS *ls = nullptr;
     ObLSID ls_id = arg_.get_ls_id();
     ObLSHandle handle;
     logservice::ObLogHandler *log_handler = NULL;
-    if (OB_ISNULL(ls_svr)) {
+    if (OB_ISNULL(ls_svr) || OB_ISNULL(log_ls_svr)) {
       ret = OB_ERR_UNEXPECTED;
-      COMMON_LOG(ERROR, "mtl ObLSService should not be null", K(ret));
+      COMMON_LOG(ERROR, "mtl ObLSService or ObLogService should not be null", KR(ret), KP(ls_svr), KP(log_ls_svr));
     } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD))) {
       COMMON_LOG(WARN, "get ls failed", KR(ret), K(ls_id));
     } else if (OB_ISNULL(ls = handle.get_ls())) {
@@ -1648,11 +1649,13 @@ int ObRpcChangeLSAccessModeP::process()
     } else if (palf::AccessMode::RAW_WRITE == arg_.get_access_mode() && !ls_id.is_sys_ls()) {
       // switchover to standby
       // user ls end scn should be larger than sys ls end scn at first
+      DEBUG_SYNC(BEFORE_WAIT_SYS_LS_END_SCN);
       if (OB_UNLIKELY(!arg_.get_sys_ls_end_scn().is_valid_and_not_min())) {
         FLOG_WARN("invalid sys_ls_end_scn, no need to let user ls wait, "
             "the version might be smaller than V4.2.0", KR(ret), K(arg_.get_sys_ls_end_scn()));
-      } else if (OB_FAIL(share::ObShareUtil::wait_user_ls_sync_scn_locally(
+      } else if (OB_FAIL(ObRootUtils::wait_user_ls_sync_scn_locally(
             arg_.get_sys_ls_end_scn(),
+            log_ls_svr,
             *ls))) {
         LOG_WARN("fail to wait user ls sync scn locally", KR(ret), K(ls_id), K(arg_.get_sys_ls_end_scn()));
       }

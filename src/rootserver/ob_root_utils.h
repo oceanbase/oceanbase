@@ -655,6 +655,18 @@ public:
       const uint64_t tenant_id,
       const int64_t rs_job_id,
       const ObRsJobType rs_job_type);
+  // wait the given ls's end_scn be larger than or equal to sys_ls_target_scn
+  // @params[in]: sys_ls_target_scn
+  // @params[in]: log_ls_svr
+  // @params[in]: ls
+  // @ret OB_SUCCESS user_ls_sync_scn >= sys_ls_sync_scn
+  // @ret OB_NOT_MASTER the current replica is not leader, no need to wait.
+  //                    the rpc sender need to find the new leader and send rpc again
+  // @ret other error code			failure
+  static int wait_user_ls_sync_scn_locally(
+      const share::SCN &sys_ls_target_scn,
+      logservice::ObLogService *log_ls_svr,
+      storage::ObLS &ls);
 
   template<class T>
       static int check_left_f_in_primary_zone(ObZoneManager &zone_mgr,
