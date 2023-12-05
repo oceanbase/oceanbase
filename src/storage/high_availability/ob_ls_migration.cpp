@@ -29,6 +29,7 @@
 #include "share/ls/ob_ls_table_operator.h"
 #include "ob_rebuild_service.h"
 #include "share/ob_cluster_version.h"
+#include "ob_storage_ha_utils.h"
 
 namespace oceanbase
 {
@@ -1042,9 +1043,8 @@ int ObStartMigrationTask::deal_with_local_ls_()
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
-  ObRole role;
-  int64_t proposal_id = 0;
   ObLSMeta local_ls_meta;
+  bool is_leader = false;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start migration task do not init", K(ret));
@@ -1053,18 +1053,19 @@ int ObStartMigrationTask::deal_with_local_ls_()
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("log stream should not be NULL", K(ret), K(*ctx_));
-  } else if (OB_FAIL(ls->get_log_handler()->get_role(role, proposal_id))) {
-    LOG_WARN("failed to get role", K(ret), "arg", ctx_->arg_);
-  } else if (is_strong_leader(role)) {
+  } else if (OB_FAIL(ObStorageHAUtils::check_ls_is_leader(
+        ctx_->tenant_id_, ctx_->arg_.ls_id_, is_leader))) {
+    LOG_WARN("failed to check ls leader", K(ret), KPC(ctx_));
+  } else if (is_leader) {
     if (ObMigrationOpType::REBUILD_LS_OP == ctx_->arg_.type_) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("leader can not as rebuild dst", K(ret), K(role), "myaddr", MYADDR, "arg", ctx_->arg_);
+      LOG_ERROR("leader can not as rebuild dst", K(ret), K(is_leader), "myaddr", MYADDR, "arg", ctx_->arg_);
     } else if (ObMigrationOpType::ADD_LS_OP == ctx_->arg_.type_
         || ObMigrationOpType::MIGRATE_LS_OP == ctx_->arg_.type_
         || ObMigrationOpType::CHANGE_LS_OP == ctx_->arg_.type_) {
       ret = OB_ERR_SYS;
       LOG_WARN("leader cannot as add, migrate, change dst",
-          K(ret), K(role), "myaddr", MYADDR, "arg", ctx_->arg_);
+          K(ret), K(is_leader), "myaddr", MYADDR, "arg", ctx_->arg_);
     }
   } else if (OB_FAIL(ls->offline())) {
     LOG_WARN("failed to disable log", K(ret), KPC(ctx_));
