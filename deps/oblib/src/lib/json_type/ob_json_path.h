@@ -483,6 +483,7 @@ public:
   static bool is_connector_punctuation(unsigned codepoint);
   static bool unicode_combining_mark(unsigned codepoint);
   static bool is_utf8_unicode_charator(const char* ori, uint64_t& start, int64_t len);
+  static bool check_legal_cmp_to_scalar(ObJsonPathNodeType scalar_type, ObJsonPathNodeType cmp_type);
 
   static const uint32_t MAX_LENGTH = 4294967295;
   static const uint16_t MAX_PATH_NODE_CNT = 100;

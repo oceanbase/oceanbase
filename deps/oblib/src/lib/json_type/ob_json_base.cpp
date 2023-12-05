@@ -2196,53 +2196,63 @@ bool ObIJsonBase::is_real_json_null(const ObIJsonBase* ptr) const
   return ret_bool;
 }
 
-int ObIJsonBase::trans_json_node(ObIAllocator* allocator, ObIJsonBase* &left, ObIJsonBase* &right) const
+// left is scalar, right is ans of subpath
+int ObIJsonBase::trans_json_node(ObIAllocator* allocator, ObIJsonBase* &scalar, ObIJsonBase* &path_res) const
 {
   INIT_SUCC(ret);
-  ObJsonNodeType left_type = left->json_type();
-  ObJsonNodeType right_type = right->json_type();
-  // 左边的需要根据右边的类型转换
+  ObJsonNodeType left_type = scalar->json_type();
+  ObJsonNodeType right_type = path_res->json_type();
   if (left_type == ObJsonNodeType::J_STRING) {
-    ObString str(left->get_data_length(), left->get_data());
+    ObString str(scalar->get_data_length(), scalar->get_data());
     if (is_json_number(right_type)) {
       // fail is normal
-      ret = trans_to_json_number(allocator, str, left);
+      ret = trans_to_json_number(allocator, str, scalar);
     } else if (right_type == ObJsonNodeType::J_DATE
             || right_type == ObJsonNodeType::J_DATETIME
             || right_type == ObJsonNodeType::J_TIME
             || right_type == ObJsonNodeType::J_ORACLEDATE) {
-      ret = trans_to_date_timestamp(allocator, str, left, true);
+      ret = trans_to_date_timestamp(allocator, str, scalar, true);
     } else if (right_type == ObJsonNodeType::J_TIMESTAMP
             || right_type == ObJsonNodeType::J_OTIMESTAMP
             || right_type == ObJsonNodeType::J_OTIMESTAMPTZ) {
-      ret = trans_to_date_timestamp(allocator, str, left, false);
+      ret = trans_to_date_timestamp(allocator, str, scalar, false);
     } else if (right_type == ObJsonNodeType::J_BOOLEAN) {
-      ret = trans_to_boolean(allocator, str, left);
+      // when scalar is string, path_res is boolean, case compare
+      if (str.case_compare("true") == 0 || str.case_compare("false") == 0) {
+        ret = trans_to_boolean(allocator, str, scalar);
+      } else {
+        ret = OB_NOT_SUPPORTED;
+      }
     } else if (right_type != ObJsonNodeType::J_ARRAY && right_type != ObJsonNodeType::J_OBJECT) {
       ret = ret = OB_INVALID_ARGUMENT;
       LOG_WARN("CAN'T TRANS", K(ret));
     }
-  // 右边需要根据左边的转换
+  } else if (left_type == ObJsonNodeType::J_NULL) {
+    // return error code, mean can't cast, return false ans directly
+    ret = OB_NOT_SUPPORTED;
   } else if (right_type == ObJsonNodeType::J_STRING) {
-    ObString str(right->get_data_length(), right->get_data());
+    ObString str(path_res->get_data_length(), path_res->get_data());
     if (is_json_number(left_type)) {
       // fail is normal
-      ret = trans_to_json_number(allocator, str, right);
+      ret = trans_to_json_number(allocator, str, path_res);
     } else if (left_type == ObJsonNodeType::J_DATE
             || left_type == ObJsonNodeType::J_DATETIME
             || left_type == ObJsonNodeType::J_TIME
             || left_type == ObJsonNodeType::J_ORACLEDATE) {
-      ret = trans_to_date_timestamp(allocator, str, right, true);
+      ret = trans_to_date_timestamp(allocator, str, path_res, true);
     } else if (left_type == ObJsonNodeType::J_TIMESTAMP
             || left_type == ObJsonNodeType::J_OTIMESTAMP
             || left_type == ObJsonNodeType::J_OTIMESTAMPTZ) {
-      ret = trans_to_date_timestamp(allocator, str, right, false);
+      ret = trans_to_date_timestamp(allocator, str, path_res, false);
     } else if (left_type == ObJsonNodeType::J_BOOLEAN) {
-      ret = trans_to_boolean(allocator, str, right);
+      ret = trans_to_boolean(allocator, str, path_res);
     } else if (left_type != ObJsonNodeType::J_ARRAY && left_type != ObJsonNodeType::J_OBJECT) {
-      ret = ret = OB_INVALID_ARGUMENT;
+      ret = OB_INVALID_ARGUMENT;
       LOG_WARN("CAN'T TRANS", K(ret));
     }
+  } else if (left_type == ObJsonNodeType::J_BOOLEAN || is_json_number(left_type)) {
+    // scalar is boolean or number, and path_res is not string, return false
+    ret = OB_NOT_SUPPORTED;
   } else {
     // do nothing
     LOG_WARN("CAN'T TRANS", K(ret));
@@ -2297,7 +2307,7 @@ int ObIJsonBase::cmp_to_right_recursively(ObIAllocator* allocator, ObJsonSeekRes
           // 但只要有一个找到，且为123或"123"则为true
             ObIJsonBase* left = jb_ptr;
             ObIJsonBase* right = right_arg;
-            if (OB_FAIL(trans_json_node(allocator, left, right))) {
+            if (OB_FAIL(trans_json_node(allocator, right, left))) {
               // fail is normal, it is not an error.
               ret = OB_SUCCESS;
               cmp_result = false;
@@ -2320,7 +2330,7 @@ int ObIJsonBase::cmp_to_right_recursively(ObIAllocator* allocator, ObJsonSeekRes
         // 不相同的类型，同上
           ObIJsonBase* left = hit[i];
           ObIJsonBase* right = right_arg;
-          if (OB_FAIL(trans_json_node(allocator, left, right))) {
+          if (OB_FAIL(trans_json_node(allocator, right, left))) {
             // fail is normal, it is not an error.
             ret = OB_SUCCESS;
             cmp_result = false;
@@ -2360,69 +2370,31 @@ int ObIJsonBase::cmp_to_left_recursively(ObIAllocator* allocator, ObJsonSeekResu
       null_flag = true;
     } else if (hit[i]->json_type() == ObJsonNodeType::J_NULL && !is_real_json_null(hit[i])) {
       cmp_result = false;
+    } else if (hit[i]->json_type() == ObJsonNodeType::J_ARRAY
+            || hit[i]->json_type() == ObJsonNodeType::J_OBJECT) {
+      cmp_result = false;
     } else {
-      // error is ok
-      // if is array, compare with every node
-      // but only autowrap once
-      if (hit[i]->json_type() == ObJsonNodeType::J_ARRAY) {
-        uint64_t size = hit[i]->element_count();
-        ObIJsonBase *jb_ptr = NULL;
-        for (uint32_t array_i = 0; array_i < size && !cmp_result && OB_SUCC(ret); ++array_i) {
-          jb_ptr = &st_json; // reset jb_ptr to stack var
-          ret = hit[i]->get_array_element(array_i, jb_ptr);
-          int cmp_res = -3;
-          // 类型相同可以直接用compare函数比较
-          if(OB_FAIL(ret) || OB_ISNULL(jb_ptr)) {
-            ret = OB_ERR_NULL_VALUE;
-            LOG_WARN("compare value is null.", K(ret));
-          } else if (is_same_type(left_arg, jb_ptr)) {
-            if (OB_SUCC(left_arg->compare((*jb_ptr), cmp_res, true))) {
-              cmp_based_on_node_type(node_type, cmp_res, cmp_result);
-            }
-          } else {
-          // 不相同的类型，oracle会将string类型转换为对应类型再进行比较
-          // 转换或比较失败也正常，并不报错
-          // 例如: [*].a == 123
-          // 里面可能有多个元素无法转换成数字或无法和数字比较甚至找不到.a
-          // 但只要有一个找到，且为123或"123"则为true
-            ObIJsonBase* left = left_arg;
-            ObIJsonBase* right = jb_ptr;
-            if (OB_FAIL(trans_json_node(allocator, left, right))) {
-              // fail is normal, it is not an error.
-              ret = OB_SUCCESS;
-              cmp_result = false;
-            } else if (OB_SUCC(left->compare((*right), cmp_res, true))) {
-                cmp_based_on_node_type(node_type, cmp_res, cmp_result);
-            } else {
-              cmp_result = false;
-            }
-          }
+      int cmp_res = -3;
+      if (is_same_type(left_arg, hit[i])) {
+        if (OB_SUCC(left_arg->compare((*hit[i]), cmp_res, true))) {
+          cmp_based_on_node_type(node_type, cmp_res, cmp_result);
         }
-      } else if (hit[i]->json_type() == ObJsonNodeType::J_OBJECT) {
-        cmp_result = false;
       } else {
-        int cmp_res = -3;
-        if (is_same_type(left_arg, hit[i])) {
-          if (OB_SUCC(left_arg->compare((*hit[i]), cmp_res, true))) {
-            cmp_based_on_node_type(node_type, cmp_res, cmp_result);
-          }
+      // 不相同的类型，同上
+        ObIJsonBase* left = left_arg;
+        ObIJsonBase* right = hit[i];
+        if (OB_FAIL(trans_json_node(allocator, left, right))) {
+          // fail is normal, it is not an error.
+          ret = OB_SUCCESS;
+          cmp_result = false;
+        } else if (OB_SUCC(left->compare((*right), cmp_res, true))) {
+          cmp_based_on_node_type(node_type, cmp_res, cmp_result);
         } else {
-        // 不相同的类型，同上
-          ObIJsonBase* left = left_arg;
-          ObIJsonBase* right = hit[i];
-          if (OB_FAIL(trans_json_node(allocator, left, right))) {
-            // fail is normal, it is not an error.
-            ret = OB_SUCCESS;
-            cmp_result = false;
-          } else if (OB_SUCC(left->compare((*right), cmp_res, true))) {
-              cmp_based_on_node_type(node_type, cmp_res, cmp_result);
-          } else {
-            cmp_result = false;
-          }
+          cmp_result = false;
         }
-      } // need autowrap or not
-    } // hit is null or not
-  }
+      }
+    } // need autowrap or not
+  } // hit is null or not
 
   if (!null_flag) {
     filter_result = cmp_result;
@@ -2462,8 +2434,6 @@ int ObIJsonBase::cmp_to_right_strictly(ObIAllocator* allocator, ObIJsonBase* hit
   if (OB_FAIL(ret) ||  OB_ISNULL(hit)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("compare value is null.", K(ret));
-  } else if (hit->json_type() == ObJsonNodeType::J_NULL && !is_real_json_null(hit)) {
-    cmp_result = false;
   } else {
     switch (last_sub_path_node_type) {
       case JPN_ABS:
@@ -2559,7 +2529,10 @@ int ObIJsonBase::cmp_to_right_strictly(ObIAllocator* allocator, ObIJsonBase* hit
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
+  } else if (hit->json_type() == ObJsonNodeType::J_NULL && !is_real_json_null(hit)) {
+    cmp_result = false;
+  } else {
     filter_result = cmp_result;
   }
   return ret;
@@ -2586,8 +2559,6 @@ int ObIJsonBase::cmp_to_left_strictly(ObIAllocator* allocator, ObIJsonBase* hit,
   if (OB_FAIL(ret) || OB_ISNULL(hit)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("compare value is null.", K(ret));
-  } else if (hit->json_type() == ObJsonNodeType::J_NULL && !is_real_json_null(hit)) {
-    cmp_result = false;
   } else {
     switch (last_sub_path_node_type) {
       case JPN_ABS:
@@ -2683,7 +2654,10 @@ int ObIJsonBase::cmp_to_left_strictly(ObIAllocator* allocator, ObIJsonBase* hit,
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
+  } else if (hit->json_type() == ObJsonNodeType::J_NULL && !is_real_json_null(hit)) {
+    cmp_result = false;
+  } else {
     filter_result = cmp_result;
   }
   return ret;
@@ -2958,16 +2932,16 @@ int ObIJsonBase::get_sign_comp_result(ObIAllocator* allocator, ObSeekParentInfo 
   // 如果右边是scalar则直接将其转变为ObIJsonBase
     if (ObJsonPathUtil::is_scalar(comp_content.right_type_)) {
       ObIJsonBase* scalar = NULL;
-      if (OB_FAIL(get_scalar(allocator, comp_content.right_type_,
+      if (!ObJsonPathUtil::check_legal_cmp_to_scalar(comp_content.right_type_, path_node->get_node_type())) {
+        filter_result = false;
+      } else if (OB_FAIL(get_scalar(allocator, comp_content.right_type_,
                             comp_content.comp_right_.path_scalar_, scalar))
                   || OB_ISNULL(scalar)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("fail to get scalar.", K(ret));
-      } else {
-        if (OB_FAIL(get_sign_result_left_subpath(allocator, parent_info, path_node,
-                                                filter_result, scalar))) {
-          LOG_WARN("fail to compare.", K(ret));
-        }
+      } else if (OB_FAIL(get_sign_result_left_subpath(allocator, parent_info, path_node,
+                                                      filter_result, scalar))) {
+        LOG_WARN("fail to compare.", K(ret));
       }
     } else if (comp_content.right_type_ == ObJsonPathNodeType::JPN_SQL_VAR) {
     // 右边是sql_var，根据var_name得到sql
@@ -2996,16 +2970,16 @@ int ObIJsonBase::get_sign_comp_result(ObIAllocator* allocator, ObSeekParentInfo 
     // 左边是scalar
     if (ObJsonPathUtil::is_scalar(comp_content.left_type_)) {
       ObIJsonBase* scalar = NULL;
-      if (OB_FAIL(get_scalar(allocator, comp_content.left_type_,
+      if (!ObJsonPathUtil::check_legal_cmp_to_scalar(comp_content.left_type_, path_node->get_node_type())) {
+        filter_result = false;
+      } else if (OB_FAIL(get_scalar(allocator, comp_content.left_type_,
                             comp_content.comp_left_.path_scalar_, scalar))
                   || OB_ISNULL(scalar)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("fail to get scalar.", K(ret));
-      } else {
-        if (OB_FAIL(get_sign_result_right_subpath(allocator, parent_info, path_node,
+      } else if (OB_FAIL(get_sign_result_right_subpath(allocator, parent_info, path_node,
                                                   filter_result, scalar))) {
-          LOG_WARN("fail to compare.", K(ret));
-        }
+        LOG_WARN("fail to compare.", K(ret));
       }
     } else if (comp_content.left_type_ == ObJsonPathNodeType::JPN_SQL_VAR) {
     // 左边是sql_var, 根据变量名得到对应ObIJsonBase

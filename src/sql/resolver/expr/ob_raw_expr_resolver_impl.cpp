@@ -5917,7 +5917,7 @@ int ObRawExprResolverImpl::process_json_query_node(const ParseNode *node, ObRawE
   }
   // pre check default returning type with item method
   if (OB_SUCC(ret)) {
-    if (returning_type->type_ == T_NULL) {
+    if (returning_type->type_ == T_NULL || returning_type->int16_values_[OB_NODE_CAST_TYPE_IDX] == T_JSON) {
       ObString path_str(node->children_[1]->text_len_, node->children_[1]->raw_text_);
       if (OB_FAIL(ObJsonPath::change_json_expr_res_type_if_need(ctx_.expr_factory_.get_allocator(), path_str, const_cast<ParseNode&>(*returning_type), OPT_JSON_QUERY))) {
         LOG_WARN("set return type by path item method fail", K(ret), K(path_str));

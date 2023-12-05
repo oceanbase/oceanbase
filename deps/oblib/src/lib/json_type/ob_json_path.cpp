@@ -786,13 +786,16 @@ int ObJsonPath::change_json_expr_res_type_if_need(common::ObIAllocator &allocato
         switch (func_node->get_node_type()) {
           case JPN_BOOLEAN :
           case JPN_BOOL_ONLY : {
-            ret_node.type_ = T_CAST_ARGUMENT;
-            ret_node.value_ = 0;
-            ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] = T_VARCHAR;
-            ret_node.int16_values_[OB_NODE_CAST_COLL_IDX] = 0;
-            ret_node.int32_values_[OB_NODE_CAST_C_LEN_IDX] = 20;
-            ret_node.length_semantics_ = 0;
-            ret_node.is_hidden_const_ = 1;
+            if (json_expr_flag == OPT_JSON_QUERY && ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] == T_JSON) { // do nothing
+            } else {
+              ret_node.type_ = T_CAST_ARGUMENT;
+              ret_node.value_ = 0;
+              ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] = T_VARCHAR;
+              ret_node.int16_values_[OB_NODE_CAST_COLL_IDX] = 0;
+              ret_node.int32_values_[OB_NODE_CAST_C_LEN_IDX] = 20;
+              ret_node.length_semantics_ = 0;
+              ret_node.is_hidden_const_ = 1;
+            }
             break;
           }
           case JPN_DATE : {
@@ -824,14 +827,16 @@ int ObJsonPath::change_json_expr_res_type_if_need(common::ObIAllocator &allocato
           case JPN_NUMBER :
           case JPN_FLOOR :
           case JPN_CEILING : {
-            ret_node.value_ = 0;
-            if (ret_node.type_ == T_NULL) {
+            if (ret_node.type_ == T_NULL
+            || (json_expr_flag == OPT_JSON_QUERY && ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] == T_JSON)) {
+              ret_node.value_ = 0;
               ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] = T_VARCHAR;
               ret_node.int16_values_[OB_NODE_CAST_COLL_IDX] = 0;
               ret_node.int32_values_[OB_NODE_CAST_C_LEN_IDX] = 4000;
               ret_node.length_semantics_ = 0;
               ret_node.is_hidden_const_ = 1;
             } else {
+              ret_node.value_ = 0;
               ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] = T_NUMBER;
               ret_node.int16_values_[OB_NODE_CAST_N_PREC_IDX] = -1;    /* precision */
               ret_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX] = -85;    /* scale */
@@ -855,24 +860,29 @@ int ObJsonPath::change_json_expr_res_type_if_need(common::ObIAllocator &allocato
           case JPN_TYPE:
           case JPN_STR_ONLY :
           case JPN_STRING : {
-            ret_node.type_ = T_CAST_ARGUMENT;
-            ret_node.value_ = 0;
-            ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] = T_VARCHAR;
-            ret_node.int16_values_[OB_NODE_CAST_COLL_IDX] = 0;
-            ret_node.int32_values_[OB_NODE_CAST_C_LEN_IDX] = 4000;
-            ret_node.length_semantics_ = 0;
-            ret_node.is_hidden_const_ = 1;
+            if (json_expr_flag == OPT_JSON_QUERY && ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] == T_JSON) {
+            } else {
+              ret_node.type_ = T_CAST_ARGUMENT;
+              ret_node.value_ = 0;
+              ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] = T_VARCHAR;
+              ret_node.int16_values_[OB_NODE_CAST_COLL_IDX] = 0;
+              ret_node.int32_values_[OB_NODE_CAST_C_LEN_IDX] = 4000;
+              ret_node.length_semantics_ = 0;
+              ret_node.is_hidden_const_ = 1;
+            }
           }
           case JPN_UPPER:
           case JPN_LOWER: {
-            ret_node.type_ = T_CAST_ARGUMENT;
-            ret_node.value_ = 0;
-            ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] = T_VARCHAR;
-            ret_node.int16_values_[OB_NODE_CAST_COLL_IDX] = 0;
-            ret_node.int32_values_[OB_NODE_CAST_C_LEN_IDX] = 75;
-            ret_node.length_semantics_ = 0;
-            ret_node.is_hidden_const_ = 1;
-            break;
+            if (json_expr_flag == OPT_JSON_QUERY && ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] == T_JSON) {
+            } else {
+              ret_node.type_ = T_CAST_ARGUMENT;
+              ret_node.value_ = 0;
+              ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] = T_VARCHAR;
+              ret_node.int16_values_[OB_NODE_CAST_COLL_IDX] = 0;
+              ret_node.int32_values_[OB_NODE_CAST_C_LEN_IDX] = 75;
+              ret_node.length_semantics_ = 0;
+              ret_node.is_hidden_const_ = 1;
+            }
             break;
           }
           default : {
@@ -4680,6 +4690,17 @@ int ObJsonPath::parse_filter_node()
       LOG_WARN("wrong path expression!", K(ret), K(index_), K(expression_));
   }
   return ret;
+}
+
+bool ObJsonPathUtil::check_legal_cmp_to_scalar(ObJsonPathNodeType scalar_type, ObJsonPathNodeType cmp_type)
+{
+  bool ret_bool = true;
+  if (scalar_type == ObJsonPathNodeType::JPN_NULL
+    || scalar_type == ObJsonPathNodeType::JPN_BOOL_TRUE
+    || scalar_type == ObJsonPathNodeType::JPN_BOOL_FALSE) {
+    ret_bool = (cmp_type == ObJsonPathNodeType::JPN_EQUAL || cmp_type == ObJsonPathNodeType::JPN_UNEQUAL);
+  }
+  return ret_bool;
 }
 
 } // namespace common
