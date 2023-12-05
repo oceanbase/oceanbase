@@ -570,7 +570,7 @@ int ObBackupMacroBlockIndexIterator::inner_do_fetch_new_(const int64_t file_id)
     LOG_WARN("file id invalid", K(ret), K(file_id));
   } else if (!cur_index_list_.empty() && cur_idx_ < cur_index_list_.count()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("do not support prepare when prev iteartor not end", K(ret), K(cur_idx_), K(cur_index_list_.count()));
+    LOG_WARN("do not support prepare when prev iterator not end", K(ret), K(cur_idx_), K(cur_index_list_.count()));
   } else if (FALSE_IT(cur_index_list_.reset())) {
   } else if (FALSE_IT(block_desc_list_.reset())) {
   } else if (OB_FAIL(fetch_macro_index_list_(file_id, index_list, block_desc_list))) {
