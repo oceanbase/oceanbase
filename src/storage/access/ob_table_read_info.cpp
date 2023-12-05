@@ -554,7 +554,6 @@ int ObTableReadInfo::deserialize(
       cg_idxs_.reset();
       cols_extend_.reset();
       has_all_column_group_ = true;
-      compat_version_ = READ_INFO_VERSION_V2;
     }
   }
 
