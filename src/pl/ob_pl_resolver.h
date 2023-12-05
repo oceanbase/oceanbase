@@ -1179,6 +1179,24 @@ private:
   ObArray<ObPLStmt *> goto_stmts_; // goto语句的索引，用来二次解析。
   ObItemType item_type_;
 };
+
+class ObPLSwitchDatabaseGuard
+{
+public:
+  ObPLSwitchDatabaseGuard(sql::ObSQLSessionInfo &session_info,
+                          share::schema::ObSchemaGetterGuard &schema_guard,
+                          ObPLCompileUnitAST &func,
+                          int &ret,
+                          bool with_rowid);
+  virtual ~ObPLSwitchDatabaseGuard();
+private:
+  int &ret_;
+  sql::ObSQLSessionInfo &session_info_;
+  uint64_t database_id_;
+  bool need_reset_;
+  ObSqlString database_name_;
+};
+
 }
 }
 
