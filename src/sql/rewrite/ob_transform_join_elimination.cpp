@@ -2003,6 +2003,8 @@ int ObTransformJoinElimination::eliminate_semi_right_child_table(ObDMLStmt *stmt
       LOG_WARN("rebuild table hash failed", K(ret));
     } else if (OB_FAIL(child_stmt->update_column_item_rel_id())) {
       LOG_WARN("failed to update columns' relation id", K(ret));
+    } else if (OB_FAIL(stmt->rebuild_tables_hash())) {
+      LOG_WARN("rebuild table hash failed", K(ret));
     } else if (OB_FAIL(stmt->update_column_item_rel_id())) {
       LOG_WARN("failed to update columns' relation id", K(ret));
     } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
