@@ -34,11 +34,13 @@ namespace share
 {
 void ob_init_create_func()
 {
-  #define TG_DEF(id, name, type, args...)                 \
-    lib::create_funcs_[lib::TGDefIDs::id] = []() {                     \
-      auto ret = OB_NEW(TG_##type, SET_USE_500("tg"), args); \
-      ret->attr_ = {#name, TGType::type};        \
-      return ret;                                                      \
+  #define TG_DEF(id, name, type, args...)                     \
+    lib::create_funcs_[lib::TGDefIDs::id] = []() {            \
+      auto ret = OB_NEW(TG_##type, SET_USE_500("tg"), args);  \
+      if (NULL != ret) {                                      \
+        ret->attr_ = {#name, TGType::type};                   \
+      }                                                       \
+      return ret;                                             \
     };
   #include "share/ob_thread_define.h"
   #undef TG_DEF
