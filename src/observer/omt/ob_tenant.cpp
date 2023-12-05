@@ -944,9 +944,10 @@ int ObTenant::try_wait()
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ATOMIC_LOAD(&gc_thread_))) {
     if (!ATOMIC_BCAS(&has_created_, false, true)) {
-      // try_wait should not return OB_SUCCESS here, but we returned OB_SUCCESS for safety quit in main thread.
+      // there will be double-try_wait when kill -15 or failure of locking,
+      // so we have to tolerate that and return OB_SUCCESS although it is not correct.
       // ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("try_wait again after wait successfully, there may be `kill -15`", K(id_), K(wait_mtl_finished_));
+      LOG_WARN("try_wait again after wait successfully, there may be `kill -15` or failure of locking", K(id_), K(wait_mtl_finished_));
     } else {
       // it may takes too much time for killing session after remove_tenant, we should recalculate.
       ATOMIC_STORE(&stopped_, ObTimeUtility::current_time()); // update, it is not 0 before here.
