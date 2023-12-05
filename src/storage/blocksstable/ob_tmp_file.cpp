@@ -1026,6 +1026,7 @@ int ObTmpFile::aio_write(const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &hand
 {
   // only support append at present.
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpFile has not been inited", K(ret));
@@ -1379,12 +1380,15 @@ int ObTmpFileManager::open(int64_t &fd, int64_t &dir)
 {
   int ret = OB_SUCCESS;
   ObTmpFile file;
+  common::ObIAllocator *allocator = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpFileManager has not been inited", K(ret));
+  } else if (OB_FAIL(OB_TMP_FILE_STORE.get_tenant_extent_allocator(MTL_ID(), allocator))) {
+    STORAGE_LOG(WARN, "fail to get extent allocator", K(ret));
   } else if (OB_FAIL(get_next_fd(fd))) {
     STORAGE_LOG(WARN, "fail to get next fd", K(ret));
-  } else if (OB_FAIL(file.init(fd, dir, files_.get_allocator()))) {
+  } else if (OB_FAIL(file.init(fd, dir, *allocator))) {
     STORAGE_LOG(WARN, "fail to open file", K(ret));
   } else if (OB_FAIL(files_.set(fd, file))) {
     STORAGE_LOG(WARN, "fail to set tmp file", K(ret));

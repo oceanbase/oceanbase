@@ -938,9 +938,10 @@ int ObTmpTenantFileStore::init(const uint64_t tenant_id)
     STORAGE_LOG(WARN, "ObTmpTenantFileStore has not been inited", K(ret));
   } else if (OB_FAIL(allocator_.init(BLOCK_SIZE, ObModIds::OB_TMP_BLOCK_MANAGER, tenant_id, get_memory_limit(tenant_id)))) {
     STORAGE_LOG(WARN, "fail to init allocator", K(ret));
-  } else if (OB_FAIL(io_allocator_.init(lib::ObMallocAllocator::get_instance(),
-                                     OB_MALLOC_MIDDLE_BLOCK_SIZE,
-                                     ObMemAttr(OB_SERVER_TENANT_ID, ObModIds::OB_TMP_PAGE_CACHE, ObCtxIds::DEFAULT_CTX_ID)))) {
+  } else if (OB_FAIL(io_allocator_.init(
+                 lib::ObMallocAllocator::get_instance(),
+                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
+                 ObMemAttr(tenant_id, ObModIds::OB_TMP_PAGE_CACHE, ObCtxIds::DEFAULT_CTX_ID)))) {
     STORAGE_LOG(WARN, "Fail to init io allocator, ", K(ret));
   } else if (OB_ISNULL(page_cache_ = &ObTmpPageCache::get_instance())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1874,6 +1875,7 @@ int ObTmpFileStore::get_all_tenant_id(common::ObIArray<uint64_t> &tenant_ids)
 int ObTmpFileStore::get_store(const uint64_t tenant_id, ObTmpTenantFileStoreHandle &handle)
 {
   int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
   void *buf = NULL;
   handle.reset();
   if (IS_NOT_INIT) {
@@ -1937,6 +1939,21 @@ int64_t ObTmpFileStore::get_next_blk_id()
     old_val = new_val;
   }
   return next_blk_id;
+}
+
+int ObTmpFileStore::get_tenant_extent_allocator(const int64_t tenant_id, common::ObIAllocator *&allocator)
+{
+  int ret = OB_SUCCESS;
+  ObTmpTenantFileStoreHandle store_handle;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObTmpFileStore has not been inited", K(ret), K(tenant_id));
+  } else if (OB_FAIL(get_store(tenant_id, store_handle))) {
+    STORAGE_LOG(WARN, "fail to get tmp tenant file store", K(ret), K(tenant_id));
+  } else {
+    allocator = &(store_handle.get_tenant_store()->get_extent_allocator());
+  }
+  return ret;
 }
 
 void ObTmpFileStore::destroy()
