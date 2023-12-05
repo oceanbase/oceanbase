@@ -920,10 +920,11 @@ int ObGeoExprUtils::make_valid_polygon(ObGeometry *poly, ObIAllocator &allocator
       ObGeometry *valid_inner_poly = nullptr;
       if (OB_FAIL(make_valid_polygon_inner(mpy[i], allocator, valid_inner_poly))) {
         LOG_WARN("fail to make polygon valid", K(ret));
-      } else if (OB_NOT_NULL(valid_inner_poly) && !valid_inner_poly->is_empty()) {
+      } else if (OB_NOT_NULL(valid_inner_poly)) {
         if (OB_ISNULL(valid_poly)) {
           valid_poly = valid_inner_poly;
-        } else if (OB_FAIL(union_polygons(allocator, *valid_inner_poly, valid_poly))) {
+        } else if (!valid_inner_poly->is_empty()
+                   && OB_FAIL(union_polygons(allocator, *valid_inner_poly, valid_poly))) {
           LOG_WARN("fail to union holes", K(ret));
         } else {
           allocator.free(valid_inner_poly);

@@ -99,7 +99,7 @@ int ObExprPrivSTMakeValid::eval_priv_st_makevalid(const ObExpr &expr, ObEvalCtx 
         } else {
           if (OB_FAIL(ObGeoExprUtils::make_valid_polygon(to_tree.get_geometry(), tmp_allocator, valid_geo))) {
             LOG_WARN("make polygon valid failed", K(ret));
-          } else {
+          } else if (OB_NOT_NULL(valid_geo) && !valid_geo->is_empty()) {
             geo = valid_geo;
           }
         }
