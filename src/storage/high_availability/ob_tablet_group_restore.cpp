@@ -396,7 +396,14 @@ int ObTabletGroupRestoreDagNet::start_running_for_restore_()
       LOG_WARN("Fail to add task", K(ret));
       ret = OB_EAGAIN;
     }
+  } else {
+    initial_restore_dag = nullptr;
   }
+
+  if (OB_NOT_NULL(initial_restore_dag) && OB_NOT_NULL(scheduler)) {
+    scheduler->free_dag(*initial_restore_dag);
+  }
+
   return ret;
 }
 
