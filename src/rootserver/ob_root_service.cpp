@@ -1083,7 +1083,7 @@ int ObRootService::start_service()
       FLOG_WARN("lst_operator set as rs leader failed", KR(ret));
     } else if (OB_FAIL(rs_status_.set_rs_status(status::IN_SERVICE))) {
       FLOG_WARN("fail to set rs status", KR(ret));
-    } else if (OB_FAIL(schedule_refresh_server_timer_task(0))) {
+    } else if (OB_FAIL(schedule_restart_timer_task(10*1000*1000))) {
       FLOG_WARN("failed to schedule refresh_server task", KR(ret));
     } else if (OB_FAIL(schedule_restart_timer_task(0))) {
       FLOG_WARN("failed to schedule restart task", KR(ret));
