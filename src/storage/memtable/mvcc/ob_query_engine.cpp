@@ -407,10 +407,11 @@ int ObQueryEngine::sample_rows(Iterator<BtreeRawIterator> *iter, const ObMemtabl
         }
 
         if (blocksstable::ObDmlFlag::DF_NOT_EXIST == value->first_dml_flag_ &&
-            blocksstable::ObDmlFlag::DF_NOT_EXIST == value->last_dml_flag_ &&
-            nullptr != value->list_head_ &&
-            value->list_head_->tx_id_ == tx_id) {
-          ++logical_row_count;
+            blocksstable::ObDmlFlag::DF_NOT_EXIST == value->last_dml_flag_) {
+          ObMvccTransNode *iter = value->get_list_head();
+          if (nullptr != iter && iter->get_tx_id() == tx_id) {
+            ++logical_row_count;
+          }
         } else if (blocksstable::ObDmlFlag::DF_INSERT == value->first_dml_flag_
             && blocksstable::ObDmlFlag::DF_DELETE != value->last_dml_flag_) {
           // insert new row
