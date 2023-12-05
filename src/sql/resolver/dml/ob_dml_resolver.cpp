@@ -1422,6 +1422,7 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
     ctx.is_for_dbms_sql_ = params_.is_dbms_sql_;
     ctx.view_ref_id_ = view_ref_id_;
     ctx.is_variable_allowed_ = !(is_mysql_mode() && params_.is_from_create_view_);
+    ctx.is_expanding_view_ = params_.is_expanding_view_;
     ObRawExprResolverImpl expr_resolver(ctx);
     ObIArray<ObUserVarIdentRawExpr *> &user_var_exprs = get_stmt()->get_user_vars();
     bool is_multi_stmt = session_info_->get_cur_exec_ctx() != NULL &&
@@ -5027,6 +5028,7 @@ int ObDMLResolver::expand_view(TableItem &view_item)
     }
   }
   if (OB_SUCC(ret)) {
+    params_.is_expanding_view_ = true;
     ObViewTableResolver view_resolver(params_, get_view_db_name(), get_view_name());
     view_resolver.set_current_level(current_level_);
     view_resolver.set_current_view_level(current_view_level_ + 1);
@@ -5036,6 +5038,7 @@ int ObDMLResolver::expand_view(TableItem &view_item)
     if (OB_FAIL(do_expand_view(view_item, view_resolver))) {
       LOG_WARN("do expand view resolve failed", K(ret));
     }
+    params_.is_expanding_view_ = false;
     if (!is_oracle_mode) {
       params_.schema_checker_->get_schema_guard()->set_session_id(org_session_id);
     }

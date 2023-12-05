@@ -308,6 +308,26 @@ private:
   static batch_func_ explicit_batch_funcs_[ObMaxTC][ObMaxTC];
 };
 
+struct QuestionmarkDynEvalInfo
+{
+  union
+  {
+    struct
+    {
+      int16_t in_scale_;
+      int16_t in_precision_;
+      int32_t param_idx_;
+    };
+    int64_t extra_;
+  };
+  QuestionmarkDynEvalInfo() : extra_(0){};
+  QuestionmarkDynEvalInfo(int64_t extra): extra_(extra) {}
+  explicit operator int64_t()
+  {
+    return extra_;
+  }
+};
+
 } // namespace sql
 } // namespace oceanbase
 

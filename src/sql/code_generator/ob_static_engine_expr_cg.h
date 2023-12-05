@@ -16,6 +16,7 @@
 #include "sql/engine/expr/ob_expr.h"
 #include "sql/engine/expr/ob_expr_frame_info.h"
 #include "share/ob_cluster_version.h"
+#include "lib/container/ob_fixed_array.h"
 
 namespace oceanbase
 {
@@ -103,7 +104,8 @@ public:
       batch_size_(0),
       rt_question_mark_eval_(false),
       need_flatten_gen_col_(true),
-      cur_cluster_version_(cur_cluster_version)
+      cur_cluster_version_(cur_cluster_version),
+      gen_questionmarks_(allocator, param_cnt)
   {
   }
   virtual ~ObStaticEngineExprCG() {}
@@ -407,6 +409,8 @@ private:
   int divide_probably_local_exprs(common::ObIArray<ObRawExpr *> &exprs);
 
 private:
+  int generate_extra_questionmarks(ObRawExprUniqueSet &flattened_raw_exprs);
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObStaticEngineExprCG);
 
@@ -433,6 +437,7 @@ private:
   //is code generate temp expr witch used in table location
   bool need_flatten_gen_col_;
   uint64_t cur_cluster_version_;
+  common::ObFixedArray<ObRawExpr *, common::ObIAllocator> gen_questionmarks_;
 };
 
 } // end namespace sql
