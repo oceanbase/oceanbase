@@ -7547,14 +7547,16 @@ int ObAggregateProcessor::init_asmvt_result(ObIAllocator &allocator,
         } else if (OB_FAIL(mvt_res.keys_.push_back(key_name))) {
           LOG_WARN("failed to push back col name to keys", K(ret), K(i), K(tmp_obj[i + 1].get_string()));
         }
-        // json type will be expanded
-      } else if (!expr->obj_meta_.is_json() && OB_FAIL(ob_write_string(allocator, tmp_obj[i + 1].get_string(), key_name, true))) {
+      } else if (!mvt_res.feature_id_name_.empty() && mvt_res.feat_id_idx_ == UINT32_MAX
+                 && mvt_res.feature_id_name_.case_compare(tmp_obj[i + 1].get_string()) == 0
+                 && ob_is_numeric_type(expr->obj_meta_.get_type())) {
+        // feature id column name won't add to keys
+        mvt_res.feat_id_idx_ = i;
+      } else if (!expr->obj_meta_.is_json() // json type will be expanded
+                && OB_FAIL(ob_write_string(allocator, tmp_obj[i + 1].get_string(), key_name, true))) {
         LOG_WARN("write string failed", K(ret), K(tmp_obj[i + 1].get_string()));
       } else if (!expr->obj_meta_.is_json() &&OB_FAIL(mvt_res.keys_.push_back(key_name))) {
         LOG_WARN("failed to push back col name to keys", K(ret), K(i), K(tmp_obj[i + 1].get_string()));
-      } else if (!mvt_res.feature_id_name_.empty() && mvt_res.feat_id_idx_ == UINT32_MAX
-                 && mvt_res.feature_id_name_.case_compare(tmp_obj[i + 1].get_string()) == 0) {
-        mvt_res.feat_id_idx_ = i;
       }
     } else if (!is_param_done) {
       if (i == 0
@@ -7577,9 +7579,15 @@ int ObAggregateProcessor::init_asmvt_result(ObIAllocator &allocator,
     }
   }
   if (OB_SUCC(ret)) {
-    mvt_res.column_cnt_ = column_cnt;
-    if (OB_FAIL(mvt_res.init_layer())) {
-      LOG_WARN("failed to init layer", K(ret));
+    if (!mvt_res.feature_id_name_.empty() && mvt_res.feat_id_idx_ == UINT32_MAX) {
+      // can't find feature id column
+      ret = OB_ERR_IDENTITY_COLUMN_MUST_BE_NUMERIC_TYPE;
+      LOG_WARN("invalid column type", K(ret));
+    } else {
+      mvt_res.column_cnt_ = column_cnt;
+      if (OB_FAIL(mvt_res.init_layer())) {
+        LOG_WARN("failed to init layer", K(ret));
+      }
     }
   }
   return ret;

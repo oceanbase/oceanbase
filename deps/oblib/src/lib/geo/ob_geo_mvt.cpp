@@ -366,7 +366,9 @@ int mvt_agg_result::transform_other_column(ObObj *tmp_obj, uint32_t obj_cnt)
         ObCastCtx cast_ctx(&allocator_, NULL, CM_NONE, ObCharset::get_system_collation());
         if (OB_FAIL(ObObjCaster::to_type(ObVarcharType, cast_ctx, tmp_obj[i], obj))) {
           LOG_WARN("failed to cast number to double type", K(ret));
-        } else if (ob_is_geometry(type) && OB_FAIL(ObHexUtils::hex(obj.get_string(), cast_ctx, geo_hex))) {
+        } else if (ob_is_geometry(type) && OB_FAIL(ObHexUtils::hex(ObString(obj.get_string().length() - WKB_GEO_SRID_SIZE,
+                                                                            obj.get_string().ptr() + WKB_GEO_SRID_SIZE),
+                                                                   cast_ctx, geo_hex))) {
           LOG_WARN("failed to cast geo to hex", K(ret));
         } else if (OB_FAIL(ob_write_string(allocator_, ob_is_geometry(type) ? geo_hex.get_string() : obj.get_string(), str, true))) {
           LOG_WARN("failed to copy c string", K(ret));

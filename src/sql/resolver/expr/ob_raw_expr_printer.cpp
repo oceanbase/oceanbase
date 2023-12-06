@@ -1096,8 +1096,6 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
       SET_SYMBOL_IF_EMPTY("approx_count_distinct_synopsis");
     case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE:
       SET_SYMBOL_IF_EMPTY("approx_count_distinct_synopsis_merge");
-    case T_FUN_SYS_ST_ASMVT:
-      SET_SYMBOL_IF_EMPTY("_st_asmvt");
     case T_FUN_PL_AGG_UDF:{
       if (type == T_FUN_PL_AGG_UDF) {
         if (OB_ISNULL(expr->get_pl_agg_udf_expr()) ||
@@ -1174,6 +1172,12 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
         if (OB_SUCC(ret) && OB_FAIL(print_ora_json_objectagg(expr))) {
           LOG_WARN("bool expr have to be inner expr for now", K(ret), K(*expr));
         }
+      }
+      break;
+    }
+    case T_FUN_SYS_ST_ASMVT: {
+      if (OB_FAIL(print_st_asmvt(expr))) {
+        LOG_WARN("fail to print st asmvt.", K(ret));
       }
       break;
     }
@@ -1601,6 +1605,38 @@ int ObRawExprPrinter::print_json_return_type(ObRawExpr *expr)
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObRawExprPrinter::print_st_asmvt(ObAggFunRawExpr *expr)
+{
+  INIT_SUCC(ret);
+  DATA_PRINTF("_st_asmvt(");
+  size_t param_count = expr->get_param_count();
+  if (param_count < 2) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param count", K(param_count), K(ret));
+  } else {
+    size_t col_ref = 0;
+    bool is_col_ref = false;
+    for (size_t i = 0; i < param_count && OB_SUCC(ret) && !is_col_ref; i++) {
+      if (expr->get_param_expr(i)->get_expr_type() == T_REF_COLUMN) {
+        is_col_ref = true;
+        col_ref = i;
+      }
+    }
+    ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(col_ref));
+    PRINT_IDENT_WITH_QUOT(col_expr->get_database_name());
+    DATA_PRINTF(".");
+    PRINT_IDENT_WITH_QUOT(col_expr->get_table_name());
+    DATA_PRINTF(".*");
+
+    for (size_t i = 0; i < col_ref && OB_SUCC(ret); i++) {
+      DATA_PRINTF(" ,");
+      PRINT_EXPR(expr->get_param_expr(i));
+    }
+    DATA_PRINTF(")");
   }
   return ret;
 }

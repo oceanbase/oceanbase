@@ -159,6 +159,7 @@ private:
   int print_xml_serialize_expr(ObSysFunRawExpr *expr);
   int print_sql_udt_attr_access(ObSysFunRawExpr *expr);
   int print_sql_udt_construct(ObSysFunRawExpr *expr);
+  int print_st_asmvt(ObAggFunRawExpr *expr);
 
   int print_type(const ObExprResType &dst_type);
 
