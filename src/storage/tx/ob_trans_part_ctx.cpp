@@ -196,7 +196,7 @@ void ObPartTransCtx::destroy()
     TRANS_LOG(DEBUG, "part_ctx_destroy", K(*this));
 
 #ifdef ENABLE_DEBUG_LOG
-    if (NULL != trans_service_->get_defensive_check_mgr()) {
+    if (trans_service_ != NULL && NULL != trans_service_->get_defensive_check_mgr()) {
       trans_service_->get_defensive_check_mgr()->del(trans_id_);
     }
 #endif
