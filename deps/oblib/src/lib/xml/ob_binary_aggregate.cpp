@@ -63,8 +63,7 @@ struct ObXmlBinAggKeyCompare {
 };
 
 ObBinAggSerializer::ObBinAggSerializer(ObIAllocator* allocator, ObBinAggType type, uint8_t header_type, bool need_merge_unparsed)
-  : key_info_(),
-    value_(allocator),
+  : value_(allocator),
     key_(allocator),
     buff_(allocator),
     last_is_unparsed_text_(false),
@@ -84,7 +83,9 @@ ObBinAggSerializer::ObBinAggSerializer(ObIAllocator* allocator, ObBinAggType typ
     value_entry_start_(0),
     value_entry_size_(0),
     key_start_(0),
-    allocator_(allocator)
+    allocator_(allocator),
+    page_allocator_(*allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
+    key_info_(OB_MALLOC_NORMAL_BLOCK_SIZE, page_allocator_)
 {
   new (&header_) ObMulBinHeaderSerializer();
   if (type_ == AGG_XML) {

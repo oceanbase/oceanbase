@@ -113,7 +113,6 @@ private:
   static int text_deserialize(ObString value, ObStringBuffer &res);
   static int element_serialize(ObIAllocator* allocator_, ObString value, ObStringBuffer &res);
 private:
-  ObAggBinKeyArray key_info_;
   // At present, there is no encapsulated interface for lob's append.
   // Use ObStringBuffer, and replace it with lob after the implementation of subsequent lob placement.
   ObStringBuffer meta_;
@@ -140,8 +139,9 @@ private:
   int64_t value_entry_start_;
   int8_t value_entry_size_;
   int64_t key_start_;
-
   ObIAllocator* allocator_;
+  ModulePageAllocator page_allocator_;
+  ObAggBinKeyArray key_info_;
 };
 
 }; // namespace common
