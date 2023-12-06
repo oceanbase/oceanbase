@@ -444,6 +444,7 @@ int ObQueryEngine::sample_rows(Iterator<BtreeRawIterator> *iter, const ObMemtabl
   if (gap_size >= OB_SKIP_RANGE_LIMIT) {
     physical_row_count -= static_cast<int64_t>(static_cast<double>(gap_size) * ratio);
   }
+  TRANS_LOG(DEBUG, "memtable after sample", KR(ret), K(sample_row_count), K(logical_row_count));
   return ret;
 }
 
