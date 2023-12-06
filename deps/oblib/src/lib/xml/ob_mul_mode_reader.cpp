@@ -108,7 +108,7 @@ void ObMulModeReader::init()
         if (!(cur_->type() == M_ELEMENT || cur_->type() == M_DOCUMENT)) {
           new (&tree_iter_) ObXmlNode::iterator((static_cast<ObXmlNode*>(cur_))->sorted_begin());
           tree_iter_.set_range(0, 0);
-        } else if (OB_ISNULL(handle = static_cast<ObXmlNode*>(((ObXmlElement*)cur_)->get_attribute_handle()))) {
+        } else if (OB_ISNULL(handle = static_cast<ObXmlNode*>(cur_->get_attribute_handle()))) {
           new (&tree_iter_) ObXmlNode::iterator((static_cast<ObXmlNode*>(cur_))->sorted_begin());
           tree_iter_.set_range(0, 0);
         } else {

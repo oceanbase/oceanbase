@@ -689,7 +689,10 @@ int ObMulModeBinMerge::merge(ObIMulModeBase& origin, ObIMulModeBase& patch, ObIM
   INIT_SUCC(ret);
   ObBinMergeCtx ctx(origin.get_allocator());
   // init ctx, and estimating buffer size
-  if (OB_FAIL(init_merge_info(ctx, origin, patch, res))) {
+  if (origin.is_tree() || patch.is_tree()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("must be binary.", K(patch.is_tree()), K(origin.is_tree()), K(ret));
+  } else if (OB_FAIL(init_merge_info(ctx, origin, patch, res))) {
     LOG_WARN("fail to init ctx", K(ret));
   } else if (OB_FAIL(inner_merge(ctx, origin, patch, res))) {
     LOG_WARN("fail to merge", K(ret));

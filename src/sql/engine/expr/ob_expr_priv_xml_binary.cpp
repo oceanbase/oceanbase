@@ -131,12 +131,11 @@ int ObExprPrivXmlBinary::eval_priv_xml_binary(const ObExpr &expr, ObEvalCtx &ctx
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get null xml document.", K(ret));
       } else {
-        xml_root = static_cast<ObIMulModeBase *>(xml_doc);
         ObString res_string;
         if (!xml_doc->get_encoding().empty() || xml_doc->get_encoding_flag()) {
           xml_doc->set_encoding(ObXmlUtil::get_charset_name(ObCollationType::CS_TYPE_UTF8MB4_BIN));
         }
-        if (OB_FAIL(xml_root->get_raw_binary(res_string, &tmp_allocator))) {
+        if (OB_FAIL(xml_doc->get_raw_binary(res_string, &tmp_allocator))) {
           LOG_WARN("failed to get xml binary", K(ret), K(xml_plain_text));
         } else {
           ObTextStringDatumResult str_result(expr.datum_meta_.type_, &expr, &ctx, &res);

@@ -247,10 +247,10 @@ struct ObXmlDocBinHeader {
  * key-entry ： | key_offset | key_len      |
  * value-entry  |   type     | value_offset |
 */
-
 class ObXmlElementSerializer : public ObMulModeContainerSerializer {
 public:
   static const int64_t MAX_RETRY_TIME = 2;
+  // root must be ObXmlElement or ObXmlDocument
   ObXmlElementSerializer(ObIMulModeBase* root, ObStringBuffer* buffer, bool serialize_key = false);
   ObXmlElementSerializer(const char* data, int64_t length, ObMulModeMemCtx* ctx);
   int serialize_value(int idx, int64_t depth);
@@ -684,6 +684,12 @@ public:
 
   ObString get_version();
 
+  uint16_t get_encoding_flag() { return meta_.encoding_val_empty_;}
+
+  uint16_t has_xml_decl() { return meta_.has_xml_decl_;}
+  uint16_t is_unparse() { return meta_.is_unparse_;}
+  ObIMulModeBase* get_attribute_handle() { return nullptr; }
+
   ObString get_encoding();
 
   uint16_t get_standalone();
@@ -935,8 +941,9 @@ public:
   ObXmlElementBinHeader ele_header_;
 };
 
+// use for xml binary merge, make sure is xml binary, checked in function: init_merge_info
 class ObXmlBinMerge : public ObMulModeBinMerge {
-public:
+protected:
   friend class ObXmlBin;
   virtual int init_merge_info(ObBinMergeCtx& ctx, ObIMulModeBase& origin,
                               ObIMulModeBase& patch, ObIMulModeBase& res);

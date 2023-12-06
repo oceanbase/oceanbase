@@ -478,15 +478,15 @@ ObXmlElementSerializer::ObXmlElementSerializer(const char* data, int64_t length,
 {
 }
 
+// root must be xml_element or xml_document
 ObXmlElementSerializer::ObXmlElementSerializer(ObIMulModeBase* root, ObStringBuffer* buffer, bool serialize_key)
   : ObMulModeContainerSerializer(root, buffer),
     child_arr_(),
     serialize_key_(serialize_key),
     serialize_try_time_(0)
 {
-  ObXmlElement* xnode = static_cast<ObXmlElement*>(root);
-  attr_count_ = xnode->get_attribute_node_size();
-  child_count_ = xnode->size();
+  attr_count_ = root->attribute_count();
+  child_count_ = root->size();
   int64_t children_count = size();
 
   if (ObMulModeVar::get_var_type(children_count) != ObMulModeVar::get_var_type(child_count_)) {
@@ -498,9 +498,10 @@ ObXmlElementSerializer::ObXmlElementSerializer(ObIMulModeBase* root, ObStringBuf
 
   int is_has_attr = attr_count_ > 0 ? 1 : 0;
   if (is_has_attr) {
+    // only element node have attribute, so root must be element node
     child_arr_[0].l_start_ = child_arr_[0].g_start_ = 0;
     child_arr_[0].l_last_ = child_arr_[0].g_last_ = attr_count_ - 1;
-    child_arr_[0].entry_ = xnode->get_attribute_handle();
+    child_arr_[0].entry_ = root->get_attribute_handle();
   }
 
   if (child_count_ > 0) {
@@ -509,23 +510,22 @@ ObXmlElementSerializer::ObXmlElementSerializer(ObIMulModeBase* root, ObStringBuf
 
     child_arr_[is_has_attr].g_start_ = attr_count_;
     child_arr_[is_has_attr].g_last_ = attr_count_ + child_count_ - 1;
-    child_arr_[is_has_attr].entry_ = xnode;
+    child_arr_[is_has_attr].entry_ = root;
   }
 
   int64_t header_len = header_.header_size();
   if (type_ == M_DOCUMENT || type_ == M_UNPARSED || type_ == M_CONTENT || type_ == M_UNPARESED_DOC) {
-    ObXmlDocument* doc = static_cast<ObXmlDocument*>(xnode);
-    new (&doc_header_) ObXmlDocBinHeader(doc->get_version(),
-                                         doc->get_encoding(),
-                                         doc->get_encoding_flag(),
-                                         doc->get_standalone(),
-                                         doc->has_xml_decl());
-    new(&doc_header_.elem_header_) ObXmlElementBinHeader(xnode->is_unparse(),
-                                                         xnode->get_prefix());
+    new (&doc_header_) ObXmlDocBinHeader(root->get_version(),
+                                         root->get_encoding(),
+                                         root->get_encoding_flag(),
+                                         root->get_standalone(),
+                                         root->has_xml_decl());
+    new(&doc_header_.elem_header_) ObXmlElementBinHeader(root->is_unparse(),
+                                                         root->get_prefix());
     header_len += doc_header_.header_size();
   } else {
-    new(&ele_header_) ObXmlElementBinHeader(xnode->is_unparse(),
-                                            xnode->get_prefix());
+    new(&ele_header_) ObXmlElementBinHeader(root->is_unparse(),
+                                            root->get_prefix());
     header_len += ele_header_.header_size();
   }
 
@@ -946,7 +946,7 @@ int ObXmlElementSerializer::serialize(int64_t depth)
         LOG_WARN("failed to serialize as meta info not match.", K(ret), K(total_size), K(children_num), K(header_));
       } else {
         int64_t delta = total_size - header_.get_obj_size();
-        static_cast<ObXmlNode*>(root_)->set_delta_serialize_size(delta);
+        ele->set_delta_serialize_size(delta);
         serialize_try_time_++;
         buffer.set_length(start);
         new (this) ObXmlElementSerializer(root_, &buffer);
@@ -1135,7 +1135,7 @@ int ObXmlBin::parse_tree(ObIMulModeBase* root, bool set_alter_member)
   INIT_SUCC(ret);
   ObXmlNode *xml_node = NULL;
 
-  if (OB_ISNULL(root)) {
+  if (OB_ISNULL(root) || root->is_binary()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("failed to parse tree null pointer.", K(ret));
   } else if (OB_ISNULL(xml_node = static_cast<ObXmlNode*>(root))) {
@@ -1145,16 +1145,24 @@ int ObXmlBin::parse_tree(ObIMulModeBase* root, bool set_alter_member)
     LOG_WARN("fail to sort child element", K(ret));
   } else {
     buffer_.reset();
-    if (root->type() == M_TEXT) {
+    if (ObXmlUtil::use_text_serializer(root->type())) {
       ObXmlTextSerializer serializer(root, buffer_);
       if (OB_FAIL(serializer.serialize())) {
         LOG_WARN("failed to serialize.", K(ret), K(root->type()), K(root->get_serialize_size()));
       }
-    } else {
+    } else if (ObXmlUtil::use_element_serializer(root->type())) {
       ObXmlElementSerializer serializer(root, &buffer_);
       if (OB_FAIL(serializer.serialize(0))) {
         LOG_WARN("failed to serialize.", K(ret), K(root->type()), K(root->get_serialize_size()));
       }
+    } else if (ObXmlUtil::use_attribute_serializer(root->type())) {
+      ObXmlAttributeSerializer serializer(root, buffer_);
+      if (OB_FAIL(serializer.serialize())) {
+        LOG_WARN("failed to serialize.", K(ret), K(root->type()), K(root->get_serialize_size()));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error type to serialize.",K(ret), K(root->type()));
     }
 
     if (OB_FAIL(ret)) {
@@ -1319,7 +1327,7 @@ int ObXmlBin::to_tree(ObIMulModeBase*& root)
   } else if (OB_FAIL(parse())) {
     LOG_WARN("failed to parse meta.", K(ret));
   } else if (FALSE_IT(node_type = type())) {
-  } else if (ObXmlUtil::is_container_tc(node_type)) {
+  } else if (ObXmlUtil::use_element_serializer(node_type)) {
     ObXmlElementSerializer deserializer(meta_.data_, meta_.len_, ctx_);
     if (OB_FAIL(deserializer.deserialize(root))) {
       LOG_WARN("failed to deserialize.", K(ret), K(meta_));
@@ -1333,13 +1341,13 @@ int ObXmlBin::to_tree(ObIMulModeBase*& root)
         LOG_WARN("failed to sort member.", K(ret), K(meta_));
       }
     }
-  } else if (node_type == M_TEXT || node_type == M_CDATA || node_type == M_COMMENT) {
+  } else if (ObXmlUtil::use_text_serializer(node_type)) {
     ObXmlTextSerializer serializer(meta_.data_, meta_.len_, ctx_);
 
     if (OB_FAIL(serializer.deserialize(root))) {
       LOG_WARN("fail to deserialize text", K(ret), K(meta_.data_), K(meta_.len_), K(node_type));
     }
-  } else if (node_type == M_ATTRIBUTE || node_type == M_INSTRUCT ||node_type == M_NAMESPACE) {
+  } else if (ObXmlUtil::use_attribute_serializer(node_type)) {
     ObXmlAttributeSerializer serializer(meta_.data_, meta_.len_, ctx_);
     if (OB_FAIL(serializer.deserialize(root))) {
       LOG_WARN("fail to deserialize attrubyte", K(ret), K(meta_.data_), K(meta_.len_), K(node_type));
@@ -2852,43 +2860,49 @@ int ObXmlBinMerge::init_merge_info(ObBinMergeCtx& ctx, ObIMulModeBase& origin,
                                   ObIMulModeBase& patch, ObIMulModeBase& res)
 {
   INIT_SUCC(ret);
-  ObXmlBin* bin_res = static_cast<ObXmlBin*>(&res);
-  ObXmlBin* bin_origin = static_cast<ObXmlBin*>(&origin);
-  ObXmlBin* bin_patch = static_cast<ObXmlBin*>(&patch);
-  if (OB_ISNULL(bin_res) || OB_ISNULL(bin_origin)|| OB_ISNULL(bin_patch)) {
-    ret = OB_BAD_NULL_ERROR;
-    LOG_WARN("should not be null", K(ret));
-  } else if (!bin_origin->meta_.parsed_ && OB_FAIL(bin_origin->parse())) {
-    LOG_WARN("fail to parse", K(ret));
-  } else if (!bin_patch->meta_.parsed_ && OB_FAIL(bin_patch->parse())) {
-    LOG_WARN("fail to parse", K(ret));
-  } else if (OB_FAIL(bin_res->buffer_.reserve(estimated_length(false, ctx, origin, patch)))) {
-    LOG_WARN("fail to reserve", K(ret));
+  // use for xml binary merge, make sure is xml binary
+  if (origin.data_type() != OB_XML_TYPE || patch.data_type() != OB_XML_TYPE ||origin.is_tree() || patch.is_tree()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("should not be binary", K(origin.is_tree()), K(patch.is_tree()), K(ret));
   } else {
-    int64_t ns_num = patch.attribute_size();
-    // if only merge attribute, we only resort attribute key
-    if (patch.size() == 0 && patch.attribute_size() > 0) {
-      ctx.only_merge_ns_ = 1;
-    }
-    ObXmlBin bin_buffer;
-    ObIMulModeBase* cur = nullptr;
-    // init delete vector
-    for (int i = 0; OB_SUCC(ret) && i < ns_num; ++i) {
-      cur = patch.attribute_at(i, &bin_buffer);
-      if (OB_ISNULL(cur)) {
-      } else if (cur->type() != ObMulModeNodeType::M_NAMESPACE) {
-        ctx.only_merge_ns_ = 0;
+    ObXmlBin* bin_res = static_cast<ObXmlBin*>(&res);
+    ObXmlBin* bin_origin = static_cast<ObXmlBin*>(&origin);
+    ObXmlBin* bin_patch = static_cast<ObXmlBin*>(&patch);
+    if (OB_ISNULL(bin_res) || OB_ISNULL(bin_origin)|| OB_ISNULL(bin_patch)) {
+      ret = OB_BAD_NULL_ERROR;
+      LOG_WARN("should not be null", K(ret));
+    } else if (!bin_origin->meta_.parsed_ && OB_FAIL(bin_origin->parse())) {
+      LOG_WARN("fail to parse", K(ret));
+    } else if (!bin_patch->meta_.parsed_ && OB_FAIL(bin_patch->parse())) {
+      LOG_WARN("fail to parse", K(ret));
+    } else if (OB_FAIL(bin_res->buffer_.reserve(estimated_length(false, ctx, origin, patch)))) {
+      LOG_WARN("fail to reserve", K(ret));
+    } else {
+      int64_t ns_num = patch.attribute_size();
+      // if only merge attribute, we only resort attribute key
+      if (patch.size() == 0 && patch.attribute_size() > 0) {
+        ctx.only_merge_ns_ = 1;
       }
+      ObXmlBin bin_buffer;
+      ObIMulModeBase* cur = nullptr;
+      // init delete vector
+      for (int i = 0; OB_SUCC(ret) && i < ns_num; ++i) {
+        cur = patch.attribute_at(i, &bin_buffer);
+        if (OB_ISNULL(cur)) {
+        } else if (cur->type() != ObMulModeNodeType::M_NAMESPACE) {
+          ctx.only_merge_ns_ = 0;
+        }
 
-      if (OB_FAIL(ctx.del_map_.push(false))) {
-        LOG_WARN("failed to init delete map.", K(ret));
+        if (OB_FAIL(ctx.del_map_.push(false))) {
+          LOG_WARN("failed to init delete map.", K(ret));
+        }
       }
+      ctx.buffer_ = &bin_res->buffer_;
+      ctx.reuse_del_map_ = 1;
+      ctx.reserve_ = 0;
+      ctx.retry_count_ = 0;
+      ctx.retry_len_ = 0;
     }
-    ctx.buffer_ = &bin_res->buffer_;
-    ctx.reuse_del_map_ = 1;
-    ctx.reserve_ = 0;
-    ctx.retry_count_ = 0;
-    ctx.retry_len_ = 0;
   }
   return ret;
 }
@@ -3046,12 +3060,11 @@ int ObXmlBinMergeMeta::init_merge_meta(ObBinMergeCtx& ctx, ObIMulModeBase& origi
   int64_t header_len = header_->header_size();
   bool element_header = true;
   if (header.type_ == M_DOCUMENT || header.type_ == M_CONTENT) {
-    ObXmlDocument* doc = static_cast<ObXmlDocument*>(&origin);
-    new (&doc_header_) ObXmlDocBinHeader(doc->get_version(),
-                                         doc->get_encoding(),
-                                         doc->get_encoding_flag(),
-                                         doc->get_standalone(),
-                                         doc->has_xml_decl());
+    new (&doc_header_) ObXmlDocBinHeader(origin.get_version(),
+                                         origin.get_encoding(),
+                                         origin.get_encoding_flag(),
+                                         origin.get_standalone(),
+                                         origin.has_xml_decl());
     new(&doc_header_.elem_header_) ObXmlElementBinHeader(origin.get_unparse(), origin.get_prefix());
     header_len += doc_header_.header_size();
     element_header = false;

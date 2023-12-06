@@ -1065,10 +1065,9 @@ int ObXmlElement::get_namespace_list(ObIArray<ObIMulModeBase*> &value)
 int ObXmlElement::get_ns_value(const ObString& prefix, ObString& ns_value, int& ans_idx)
 {
   INIT_SUCC(ret);
-
-  if (OB_ISNULL(get_attribute_handle())) {
+  ObXmlNode* handle = nullptr;
+  if (OB_ISNULL(handle = static_cast<ObXmlNode*>(get_attribute_handle()))) {
   } else {
-    ObXmlNode* handle = static_cast<ObXmlNode*>(get_attribute_handle());
     iterator iter = handle->begin();
 
     for (int i = 0; OB_SUCC(ret) && !iter.end(); ++iter, ++i) {

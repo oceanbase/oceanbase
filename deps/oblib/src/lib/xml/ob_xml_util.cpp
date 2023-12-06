@@ -119,6 +119,25 @@ bool ObXmlUtil::is_pi(ObMulModeNodeType type)
   return type == ObMulModeNodeType::M_INSTRUCT;
 }
 
+bool ObXmlUtil::use_element_serializer(ObMulModeNodeType type)
+{
+  return is_container_tc(type);
+}
+
+bool ObXmlUtil::use_attribute_serializer(ObMulModeNodeType type)
+{
+  return (type == ObMulModeNodeType::M_ATTRIBUTE
+      ||  type == ObMulModeNodeType::M_NAMESPACE
+      ||  type == ObMulModeNodeType::M_INSTRUCT);
+}
+
+bool ObXmlUtil::use_text_serializer(ObMulModeNodeType type)
+{
+  return (type == ObMulModeNodeType::M_TEXT
+      ||  type == ObMulModeNodeType::M_COMMENT
+      ||  type == ObMulModeNodeType::M_CDATA);
+}
+
 bool ObXmlUtil::is_comment(ObMulModeNodeType type)
 {
   return type == ObMulModeNodeType::M_COMMENT;

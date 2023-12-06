@@ -526,6 +526,10 @@ public:
   virtual ObString get_prefix() = 0;
   virtual uint16_t get_standalone() = 0;
   virtual void set_standalone(uint16_t) = 0;
+  virtual uint16_t get_encoding_flag() = 0;
+  virtual uint16_t has_xml_decl() = 0;
+  virtual uint16_t is_unparse() = 0;
+  virtual ObIMulModeBase* get_attribute_handle() = 0;
 
   virtual bool get_is_empty() = 0;
   virtual bool has_flags(ObMulModeNodeFlag flag) = 0;

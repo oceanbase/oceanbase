@@ -11445,7 +11445,7 @@ int ObPLResolver::resolve_record_construct(const ObQualifiedName &q_name,
   }
   if (OB_SUCC(ret)) {
     int64_t param_cnt = udf_info.ref_expr_->get_param_exprs().count();
-    int64_t member_cnt = object_type->get_member_count();
+    int64_t member_cnt = object_type->is_opaque_type() ?  0 : object_type->get_member_count();
     bool is_opaque_cons_and_no_self_param
       = object_type->is_opaque_type() && (param_cnt - 2) == member_cnt && udf_info.is_udf_udt_cons();
 

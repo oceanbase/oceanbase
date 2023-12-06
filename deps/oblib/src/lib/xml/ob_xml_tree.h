@@ -222,6 +222,10 @@ public:
   virtual ObString get_version()  { return ObString(); }
   virtual ObString get_encoding()  { return ObString(); }
   virtual ObString get_prefix()  { return ObString(); }
+  virtual uint16_t get_encoding_flag() { return 0; }
+  virtual uint16_t has_xml_decl() { return 0; }
+  virtual uint16_t is_unparse() { return 0; }
+  virtual ObIMulModeBase* get_attribute_handle() { return nullptr; }
   uint16_t get_standalone() { return 0; }
   bool get_unparse() { return 0; }
   bool get_is_empty() { return false; }
@@ -277,6 +281,7 @@ public:
   int get_namespace_list(ObIArray<ObIMulModeBase*> &value); // get all namespace
 
   int get_attribute(ObXmlAttribute*& res, int64_t pos);
+  virtual int64_t attribute_count() { return attributes_ == nullptr ? 0 : attributes_->size(); }
   ObIMulModeBase* attribute_at(int64_t pos, ObIMulModeBase* buffer = nullptr);
   int64_t attribute_size() {return is_init_ ? attributes_->size() : 0;}
   int add_attribute(ObXmlNode* xnode, bool ns_check = false, int pos = -1);
@@ -307,13 +312,13 @@ public:
    void set_standalone(uint16_t standalone) { standalone_ = standalone; }
    uint16_t get_standalone() { return standalone_; }
    void set_has_xml_decl(uint16_t has_xml_decl) { has_xml_decl_ = has_xml_decl; }
-   uint16_t has_xml_decl() { return has_xml_decl_; }
+  virtual uint16_t has_xml_decl() { return has_xml_decl_; }
   void set_empty(uint16_t empty) {is_empty_ = empty;}
   uint16_t is_empty() {return is_empty_;}
   void set_unparse(uint16_t unparse) {is_unparse_ = unparse;}
-  uint16_t is_unparse() {return is_unparse_;}
+  virtual uint16_t is_unparse() {return is_unparse_;}
   void set_encoding_flag(uint16_t encoding_val_empty) {encoding_val_empty_ = encoding_val_empty;}
-  uint16_t get_encoding_flag() {return encoding_val_empty_;}
+  virtual uint16_t get_encoding_flag() {return encoding_val_empty_;}
   typedef common::hash::ObHashMap<ObString, ObXmlAttribute*> NsMap;
   typedef ObArray<ObXmlAttribute*> NsArray;
 
@@ -376,8 +381,8 @@ public:
 
   void set_version(ObString version) {version_.assign_ptr(version.ptr(), version.length());}
   void set_encoding(ObString encoding) {encoding_.assign_ptr(encoding.ptr(), encoding.length());}
-  ObString get_version()  { return version_ ; }
-  ObString get_encoding()  { return encoding_; }
+  virtual ObString get_version()  { return version_ ; }
+  virtual ObString get_encoding()  { return encoding_; }
 
   void set_inSubset(ObXmlNode* intSubset) { intSubset_ = intSubset; }
   void set_extSubset(ObXmlNode* extSubset) { extSubset_ = extSubset; }

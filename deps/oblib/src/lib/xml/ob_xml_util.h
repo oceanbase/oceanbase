@@ -196,6 +196,9 @@ public:
   static bool is_element(ObMulModeNodeType type);
   // pi type
   static bool is_pi(ObMulModeNodeType type);
+  static bool use_text_serializer(ObMulModeNodeType type);
+  static bool use_attribute_serializer(ObMulModeNodeType type);
+  static bool use_element_serializer(ObMulModeNodeType type);
 
   static int append_newline_and_indent(ObStringBuffer &j_buf, uint64_t level, uint64_t size);
 

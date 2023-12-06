@@ -141,6 +141,10 @@ public:
 
   virtual int64_t attribute_size() { return 0; }
   virtual int64_t attribute_count() { return 0; }
+  virtual uint16_t get_encoding_flag() {return 0;};
+  virtual uint16_t has_xml_decl() {return 0;};
+  virtual uint16_t is_unparse() {return 0;};
+  virtual ObIMulModeBase* get_attribute_handle() {return nullptr;}
   ObString get_version() { return ObString(); }
   ObString get_prefix() { return ObString(); }
   ObString get_encoding() { return ObString(); }

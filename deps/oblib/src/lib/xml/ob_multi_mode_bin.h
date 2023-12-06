@@ -361,6 +361,7 @@ public:
 };
 class ObMulModeBinMerge {
 public:
+// use for merge binary, make sure base_node is binary
   virtual int merge(ObIMulModeBase& origin, ObIMulModeBase& patch, ObIMulModeBase& res);
 protected:
   virtual int inner_merge(ObBinMergeCtx& ctx, ObIMulModeBase& origin,
