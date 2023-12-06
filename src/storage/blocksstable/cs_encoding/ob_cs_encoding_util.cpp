@@ -107,11 +107,14 @@ int ObCSEncodingUtil::build_cs_column_encoding_ctx(ObEncodingHashTable *ht,
       col_ctx.is_wide_int_ = false;
       decint_cmp_fp cmp = wide::ObDecimalIntCmpSet::get_decint_decint_cmp_func(precision_bytes, sizeof(int64_t));
       const int64_t row_count = ht->get_node_cnt();
-      for (int64_t i = 0; i < row_count; ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < row_count; ++i) {
         const ObDatum &datum = *ht->get_node_list()[i].datum_;
         if (!datum.is_null()) {
-          ob_assert(datum.len_ == precision_bytes);
-          if (cmp(datum.get_decimal_int(), (ObDecimalInt*)&int64_min) < 0 || cmp(datum.get_decimal_int(), (ObDecimalInt*)&int64_max) > 0) {
+          if (OB_UNLIKELY(datum.len_ != precision_bytes)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("datum len is not match with precision bytes",
+                K(ret), K(datum), K(precision_bytes), K(i), K(row_count));
+          } else if (cmp(datum.get_decimal_int(), (ObDecimalInt*)&int64_min) < 0 || cmp(datum.get_decimal_int(), (ObDecimalInt*)&int64_max) > 0) {
             col_ctx.is_wide_int_ = true;
             break;
           } else { // value range is not over int64_t, store as integer
@@ -130,17 +133,19 @@ int ObCSEncodingUtil::build_cs_column_encoding_ctx(ObEncodingHashTable *ht,
           }
         }
       }
-      col_ctx.integer_min_ = static_cast<uint64_t>(int_min);
-      col_ctx.integer_max_ = static_cast<uint64_t>(int_max);
 
-      if (col_ctx.is_wide_int_) { // store as fixed len string
-        col_ctx.fix_data_size_ = precision_bytes;
-        FOREACH(l, *ht)
-        {
-          const int64_t len = l->header_->datum_->len_;
-          ob_assert(len == precision_bytes);
-          col_ctx.var_data_size_ += len * l->size_;
-          col_ctx.dict_var_data_size_ += len;
+      if (OB_SUCC(ret)) {
+        col_ctx.integer_min_ = static_cast<uint64_t>(int_min);
+        col_ctx.integer_max_ = static_cast<uint64_t>(int_max);
+
+        if (col_ctx.is_wide_int_) { // store as fixed len string
+          col_ctx.fix_data_size_ = precision_bytes;
+          FOREACH(l, *ht)
+          {
+            const int64_t len = l->header_->datum_->len_;
+            col_ctx.var_data_size_ += len * l->size_;
+            col_ctx.dict_var_data_size_ += len;
+          }
         }
       }
       break;
