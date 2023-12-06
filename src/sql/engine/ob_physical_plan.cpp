@@ -689,7 +689,9 @@ int ObPhysicalPlan::inc_concurrent_num()
   } else {
     while(OB_SUCC(ret) && false == is_succ) {
       concurrent_num = ATOMIC_LOAD(&concurrent_num_);
-      if (concurrent_num >= max_concurrent_num_) {
+      if (0 == max_concurrent_num_) {
+        ret = OB_REACH_MAX_CONCURRENT_NUM;
+      } else if (concurrent_num >= max_concurrent_num_) {
         ret = OB_REACH_MAX_CONCURRENT_NUM;
       } else {
         new_num = concurrent_num + 1;
