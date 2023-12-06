@@ -5699,6 +5699,7 @@ int ObTablet::set_memtable_clog_checkpoint_scn(
   ObTableHandleV2 handle;
   memtable::ObMemtable *memtable = nullptr;
 
+  ObProtectedMemtableMgrHandle *protected_handle = NULL;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
@@ -5707,7 +5708,9 @@ int ObTablet::set_memtable_clog_checkpoint_scn(
   } else if (tablet_meta->clog_checkpoint_scn_ <= tablet_meta_.clog_checkpoint_scn_) {
     // do nothing
   } else if (is_ls_inner_tablet()) {
-    if (OB_UNLIKELY(has_memtable())) {
+    if (OB_FAIL(get_protected_memtable_mgr_handle(protected_handle))) {
+      LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret), KPC(this));
+    } else if (OB_UNLIKELY(protected_handle->has_memtable())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls inner tablet should not have memtable", K(ret), KPC(tablet_meta));
     }
@@ -5965,7 +5968,10 @@ int ObTablet::pull_memtables_without_ddl()
   int ret = OB_SUCCESS;
   ObTableHandleArray memtable_handles;
 
-  if (!has_memtable()) {
+  ObProtectedMemtableMgrHandle *protected_handle = NULL;
+  if (OB_FAIL(get_protected_memtable_mgr_handle(protected_handle))) {
+    LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret), KPC(this));
+  } else if (!protected_handle->has_memtable()) {
     LOG_TRACE("no memtable in memtable mgr", K(ret));
   } else if (OB_FAIL(get_all_memtables(memtable_handles))) {
     LOG_WARN("failed to get all memtable", K(ret), KPC(this));
@@ -6059,7 +6065,10 @@ int ObTablet::update_memtables()
   int ret = OB_SUCCESS;
   ObTableHandleArray inc_memtables;
 
-  if (!has_memtable()) {
+  ObProtectedMemtableMgrHandle *protected_handle = NULL;
+  if (OB_FAIL(get_protected_memtable_mgr_handle(protected_handle))) {
+    LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret), KPC(this));
+  } else if (!protected_handle->has_memtable()) {
     LOG_INFO("no memtable in memtable mgr", K(ret), "ls_id", tablet_meta_.ls_id_, "tablet_id", tablet_meta_.tablet_id_);
   } else if (OB_FAIL(get_all_memtables(inc_memtables))) {
     LOG_WARN("failed to get all memtable", K(ret), KPC(this));
@@ -7283,19 +7292,6 @@ int ObTablet::set_frozen_for_all_memtables()
     LOG_WARN("failed to set_frozen_for_all_memtables", K(ret), KPC(this));
   }
 
-  return ret;
-}
-
-bool ObTablet::has_memtable() const
-{
-  bool ret = false;
-  int tmp_ret = OB_SUCCESS;
-  ObProtectedMemtableMgrHandle *protected_handle = NULL;
-  if (OB_TMP_FAIL(get_protected_memtable_mgr_handle(protected_handle))) {
-    LOG_WARN("failed to get_protected_memtable_mgr_handle", K(tmp_ret), KPC(this));
-  } else {
-    ret = protected_handle->has_memtable();
-  }
   return ret;
 }
 
