@@ -46,8 +46,10 @@ public:
   void destroy();
   void destroy_sock();
   bool has_error();
-  int peek_data(int64_t limit, const char*& buf, int64_t& sz);
-  int consume_data(int64_t sz);
+  int create_read_handle(void*& read_handle);
+  int release_read_handle(void* read_handle);
+  int peek_data(void* read_handle, int64_t limit, const char*& buf, int64_t& sz);
+  int consume_data(void* read_handle, int64_t sz);
   int write_data(const char* buf, int64_t sz);
   int async_write_data(const char* buf, int64_t sz);
   void on_flushed();

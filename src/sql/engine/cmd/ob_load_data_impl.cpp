@@ -1357,23 +1357,12 @@ int ObLoadDataSPImpl::next_file_buffer(ToolBox &box,
   //从data_trimer中恢复出上次读取剩下的数据
   OZ (box.data_trimer.recover_incomplate_data(data_buffer));
 
-  if (ObLoadFileLocation::SERVER_DISK == box.load_file_storage) {
-    OZ (box.file_reader.pread(data_buffer.current_ptr(),
-                              data_buffer.get_remain_len(),
-                              box.read_cursor.file_offset_,
-                              box.read_cursor.read_size_));
-  } else {
-    OZ (box.device_handle_->pread(box.fd_, box.read_cursor.file_offset_,
-                                data_buffer.get_remain_len(),
-                                data_buffer.current_ptr(),
-                                box.read_cursor.read_size_));
-  }
+  OZ (box.file_reader->readn(data_buffer.current_ptr(),
+                             data_buffer.get_remain_len(),
+                             box.read_cursor.read_size_));
 
   if (OB_SUCC(ret)) {
-    if (OB_UNLIKELY(0 == box.read_cursor.read_size_)) {
-      box.read_cursor.is_end_file_ = true;
-      LOG_DEBUG("LOAD DATA reach file end", K(box.read_cursor));
-    } else {
+    if (box.read_cursor.read_size_ > 0) {
       data_buffer.update_pos(box.read_cursor.read_size_); //更新buffer中数据长度
       int64_t last_proccessed_GBs = box.read_cursor.get_total_read_GBs();
       box.read_cursor.commit_read();
@@ -1382,13 +1371,18 @@ int ObLoadDataSPImpl::next_file_buffer(ToolBox &box,
         LOG_INFO("LOAD DATA file read progress: ", K(processed_GBs));
       }
 
-      box.job_status->read_bytes_ += data_buffer.get_data_len();
+      box.job_status->read_bytes_ += box.read_cursor.read_size_;
+    }
+
+    if (OB_UNLIKELY(box.file_reader->eof())) {
+      box.read_cursor.is_end_file_ = true;
+      LOG_DEBUG("LOAD DATA reach file end", K(box.read_cursor));
     }
   }
 
   //从buffer中找出完整的行，剩下的备份到 data_trimer
   if (OB_SUCC(ret) && OB_LIKELY(data_buffer.is_valid())) {
-    int64_t complete_cnt = limit;
+    int64_t complete_cnt = limit; // line count
     int64_t complete_len = 0;
     if (OB_FAIL(pre_parse_lines(data_buffer, box.parser,
                                 box.read_cursor.is_end_file(),
@@ -2416,12 +2410,10 @@ int ObLoadDataSPImpl::ToolBox::release_resources()
     ob_free(expr_buffer);
   }
 
-  //release fd and device
-  if (NULL != device_handle_) {
-    if (fd_.is_valid()) {
-      device_handle_->close(fd_);
-    }
-    common::ObDeviceManager::get_instance().release_device(device_handle_);
+  //release file reader
+  if (OB_NOT_NULL(file_reader)) {
+    file_reader->~ObFileReader();
+    file_reader = NULL;
   }
 
   return ret;
@@ -2655,12 +2647,6 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
     LOG_WARN("fail to gen insert column names buff", K(ret));
   } else if (OB_FAIL(data_frag_mgr.init(ctx, load_args.table_id_))) {
     LOG_WARN("fail to init data frag mgr", K(ret));
-  } else if (ObLoadFileLocation::SERVER_DISK != load_file_storage) {
-    if (OB_FAIL(util.get_and_init_device(device_handle_, &load_args.access_info_, load_args.file_name_))) {
-      LOG_WARN("fail to get device manager", K(ret), K(load_args.access_info_), K(load_args.file_name_));
-    } else if (OB_FAIL(util.set_access_type(&iod_opts, false, 1))) {
-      LOG_WARN("fail to set access type", K(ret));
-    }
   }
 
   //init server_info_map
@@ -2726,14 +2712,20 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
   }
 
   if (OB_SUCC(ret)) {
-    if (ObLoadFileLocation::SERVER_DISK == load_file_storage) {
-      OZ (file_reader.open(load_args.file_name_, false));
-      OX (file_size = get_file_size(load_args.file_name_.ptr()));
-    } else {
-      int64_t file_length = -1;
-      OZ (device_handle_->open(load_args.file_name_.ptr(), -1, 0, fd_, &iod_opts));
-      OZ (util.get_file_size(device_handle_, fd_, file_length));
-      OX (file_size = file_length);
+    file_read_param.file_location_   = load_file_storage;
+    file_read_param.filename_        = load_args.file_name_;
+    file_read_param.access_info_     = load_args.access_info_;
+    file_read_param.packet_handle_   = &ctx.get_my_session()->get_pl_query_sender()->get_packet_sender();
+    file_read_param.session_         = ctx.get_my_session();
+    file_read_param.timeout_ts_      = THIS_WORKER.get_timeout_ts();
+
+    if (OB_FAIL(ObFileReader::open(file_read_param, ctx.get_allocator(), file_reader))) {
+      LOG_WARN("failed to open file.", KR(ret), K(file_read_param), K(load_args.file_name_));
+
+    } else if (!file_reader->seekable()) {
+      file_size = -1;
+    } else if (OB_FAIL(file_reader->get_file_size(file_size))) {
+      LOG_WARN("fail to get io device file size", KR(ret), K(file_size));
     }
   }
 
@@ -2992,7 +2984,8 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
   }
 
   if (OB_SUCC(ret)) {
-    int64_t max_task_count = (file_size / ObLoadFileBuffer::MAX_BUFFER_SIZE + 1) * 2;
+    const int64_t fake_file_size = (file_size > 0) ? file_size : (2 << 30); // use 2G as default in load local mode
+    int64_t max_task_count = (fake_file_size / ObLoadFileBuffer::MAX_BUFFER_SIZE + 1) * 2;
     if (OB_FAIL(file_buf_row_num.reserve(max_task_count))) {
       LOG_WARN("fail to reserve", K(ret));
     }

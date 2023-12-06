@@ -201,6 +201,15 @@ int ObMPBase::get_conn_id(uint32_t &sessid) const
   return packet_sender_.get_conn_id(sessid);
 }
 
+int ObMPBase::read_packet(obmysql::ObICSMemPool& mem_pool, obmysql::ObMySQLPacket *&pkt)
+{
+  return packet_sender_.read_packet(mem_pool, pkt);
+}
+
+int ObMPBase::release_packet(obmysql::ObMySQLPacket* pkt)
+{
+  return packet_sender_.release_packet(pkt);
+ }
 int ObMPBase::send_error_packet(int err,
                                 const char* errmsg,
                                 bool is_partition_hit /* = true */,

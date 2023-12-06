@@ -206,6 +206,7 @@ int ObSrvNetworkFrame::start()
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("allocate memory for global_sql_nio_server failed", K(ret));
       } else {
+        SQL_REQ_OP.set_sql_sock_processor(obmysql::global_sql_nio_server->get_sql_sock_processor());
         int sql_net_thread_count = (int)GCONF.sql_net_thread_count;
         if (sql_net_thread_count == 0) {
           if (GCONF.net_thread_count == 0) {

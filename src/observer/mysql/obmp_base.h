@@ -55,6 +55,9 @@ protected:
   virtual int update_last_pkt_pos() { return packet_sender_.update_last_pkt_pos(); }
   virtual bool need_send_extra_ok_packet() { return packet_sender_.need_send_extra_ok_packet(); }
 
+  virtual int read_packet(obmysql::ObICSMemPool& mem_pool, obmysql::ObMySQLPacket*& pkt) override;
+  virtual int release_packet(obmysql::ObMySQLPacket* pkt) override;
+
 
   // Response a packet to client peer.
   //

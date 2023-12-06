@@ -556,7 +556,8 @@ inline int ObProto20Utils::fill_proto20_header(ObProtoEncodeParam &param) {
   Ob20ProtocolFlags flag;
   flag.st_flags_.OB_EXTRA_INFO_EXIST = param.proto20_context_->has_extra_info_;
 
-  flag.st_flags_.OB_IS_LAST_PACKET = (ObProto20Utils::is_the_last_packet(param) ? 1 : 0);
+  flag.st_flags_.OB_IS_LAST_PACKET = (ObProto20Utils::is_the_last_packet(param)
+                                      || OB_UNLIKELY(param.proto20_context_->is_filename_packet_) ? 1 : 0);
   flag.st_flags_.OB_IS_NEW_EXTRA_INFO = proto20_context.is_new_extra_info_;
   flag.st_flags_.OB_TXN_FREE_ROUTE = proto20_context.txn_free_route_ ? 1 : 0;
   uint16_t reserved = 0;
