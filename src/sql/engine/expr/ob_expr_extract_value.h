@@ -42,7 +42,7 @@ private:
 static int extract_xpath_result(ObMulModeMemCtx *xml_mem_ctx, ObString& xpath_str, ObString& default_ns,
                          ObIMulModeBase* xml_doc, ObPathVarObject* prefix_ns, ObString &xml_res);
 static int extract_mysql_xpath_result(ObMulModeMemCtx *xml_mem_ctx, ObString& xpath_str,
-                                      ObIMulModeBase* xml_doc, ObString &xml_res);
+                                      ObIMulModeBase* xml_doc, ObStringBuffer &xml_res);
 static int extract_node_value(ObIAllocator &allocator, ObIMulModeBase *node, ObString &xml_res);
 static int has_same_parent_node(ObMulModeMemCtx *xml_mem_ctx, ObString& xpath_str, ObString& default_ns,
                          ObIMulModeBase* xml_doc, ObPathVarObject* prefix_ns, bool &is_same_parent);
@@ -50,7 +50,7 @@ static int merge_text_nodes_with_same_parent(ObIAllocator *allocator, ObIArray<O
                                              ObString &xml_res);
 static int append_text_into_buffer(ObIAllocator *allocator,
                                    ObIArray<ObIMulModeBase *> &result_nodes,
-                                   ObString &xml_res);
+                                   ObStringBuffer &xml_res);
 static int append_text_value(ObStringBuffer &buffer, ObIMulModeBase *node);
 static int get_new_xpath(ObString xpath_str, ObString &new_xpath, bool &cal_count);
 
