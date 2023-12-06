@@ -1674,8 +1674,8 @@ int ObTransformPredicateMoveAround::pushdown_into_set_stmt(ObSelectStmt *stmt,
     ObSEArray<ObRawExpr*, 16> invalid_pushdown_preds;
     ObSEArray<ObRawExpr*, 16> invalid_pullup_preds;
     const int64_t pushdown_preds_cnt = pushdown_preds.count();
-    if (OB_FAIL(extract_valid_preds(parent_stmt, pushdown_preds, valid_preds, invalid_pushdown_preds))
-        || OB_FAIL(extract_valid_preds(parent_stmt, pullup_preds, valid_preds, invalid_pullup_preds))) {
+    if (OB_FAIL(extract_valid_preds(parent_stmt, stmt, pushdown_preds, valid_preds, invalid_pushdown_preds))
+        || OB_FAIL(extract_valid_preds(parent_stmt, stmt, pullup_preds, valid_preds, invalid_pullup_preds))) {
       LOG_WARN("failed to check push down", K(ret));
     } else if (OB_FAIL(rename_preds.assign(valid_preds))) {
       LOG_WARN("failed to assign rename preds", K(ret));
@@ -1726,6 +1726,7 @@ int ObTransformPredicateMoveAround::pushdown_into_set_stmt(ObSelectStmt *stmt,
  * @return int 
  */
 int ObTransformPredicateMoveAround::extract_valid_preds(ObSelectStmt *stmt,
+                                                        ObSelectStmt *child_stmt,
                                                         ObIArray<ObRawExpr *> &all_preds,
                                                         ObIArray<ObRawExpr *> &valid_preds,
                                                         ObIArray<ObRawExpr *> &invalid_preds)
@@ -1749,7 +1750,8 @@ int ObTransformPredicateMoveAround::extract_valid_preds(ObSelectStmt *stmt,
       is_valid = false;
     }
     if (OB_SUCC(ret) && is_valid) {
-      if (OB_FAIL(ObTransformUtils::check_pushdown_into_set_valid(expr,
+      if (OB_FAIL(ObTransformUtils::check_pushdown_into_set_valid(child_stmt,
+                                                                  expr,
                                                                   parent_set_exprs,
                                                                   is_valid))) {
         LOG_WARN("failed to check expr pushdown validity", K(ret));

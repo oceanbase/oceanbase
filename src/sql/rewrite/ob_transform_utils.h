@@ -1853,11 +1853,13 @@ public:
                                bool used_in_compare,
                                bool &can_replace);
 
-  static int check_pushdown_into_set_valid(ObRawExpr *expr,
+  static int check_pushdown_into_set_valid(const ObSelectStmt* child_stmt,
+                                           ObRawExpr *expr,
                                            const ObIArray<ObRawExpr *> &set_op_exprs,
                                            bool &is_valid);
 
-  static int recursive_check_pushdown_into_set_valid(ObRawExpr *expr,
+  static int recursive_check_pushdown_into_set_valid(const ObSelectStmt* child_stmt,
+                                                     ObRawExpr *expr,
                                                      const ObIArray<ObRawExpr *> &set_op_exprs,
                                                      ObIArray<ObRawExpr *> &parent_exprs,
                                                      bool &is_valid);
@@ -1902,6 +1904,9 @@ public:
 
   static int check_contain_correlated_lateral_table(ObDMLStmt *stmt, bool &is_contain);
 
+  static int check_child_projection_validity(const ObSelectStmt *child_stmt,
+                                             ObRawExpr *expr,
+                                             bool &is_valid);
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
                                       TableItem *table,

@@ -14206,13 +14206,15 @@ int ObTransformUtils::is_select_item_correlated(const ObIArray<ObExecParamRawExp
 // Q2: select * from (select * from t1 intersect select * from t2) v where concat(c1,'a') = 'aa';
 // only predicate in Q1 can be pushdown into set stmt
 // TODO: sean.yyj, concat(c1,'a') = 'aa' can be pushdown into UNION after solved collation level bug
-int ObTransformUtils::check_pushdown_into_set_valid(ObRawExpr *expr,
+int ObTransformUtils::check_pushdown_into_set_valid(const ObSelectStmt* child_stmt,
+                                                    ObRawExpr *expr,
                                                     const ObIArray<ObRawExpr *> &set_op_exprs,
                                                     bool &is_valid)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 4> parent_exprs;
-  if (OB_FAIL(recursive_check_pushdown_into_set_valid(expr,
+  if (OB_FAIL(recursive_check_pushdown_into_set_valid(child_stmt,
+                                                      expr,
                                                       set_op_exprs,
                                                       parent_exprs,
                                                       is_valid))) {
@@ -14351,6 +14353,7 @@ int ObTransformUtils::deduce_query_values(ObTransformerCtx &ctx,
 }
 
 int ObTransformUtils::recursive_check_pushdown_into_set_valid(
+    const ObSelectStmt* child_stmt,
     ObRawExpr *expr,
     const ObIArray<ObRawExpr *> &set_op_exprs,
     ObIArray<ObRawExpr *> &parent_exprs,
@@ -14366,6 +14369,8 @@ int ObTransformUtils::recursive_check_pushdown_into_set_valid(
   } else if (ObOptimizerUtil::find_item(set_op_exprs, expr)) {
     if (OB_FAIL(ObTransformUtils::check_can_replace(expr, parent_exprs, false, is_valid))) {
       LOG_WARN("failed to check can replace expr", K(ret));
+    } else if (is_valid && check_child_projection_validity(child_stmt, expr, is_valid)) {
+      LOG_WARN("failed to check push to set child validity", K(ret));
     }
   } else if (OB_UNLIKELY(expr->is_set_op_expr())) {
     ret = OB_ERR_UNEXPECTED;
@@ -14375,7 +14380,8 @@ int ObTransformUtils::recursive_check_pushdown_into_set_valid(
       if (OB_FAIL(parent_exprs.push_back(expr))) {
         LOG_WARN("failed to push back", K(ret));
       }
-      if (OB_FAIL(SMART_CALL(recursive_check_pushdown_into_set_valid(expr->get_param_expr(i),
+      if (OB_FAIL(SMART_CALL(recursive_check_pushdown_into_set_valid(child_stmt,
+                                                                     expr->get_param_expr(i),
                                                                      set_op_exprs,
                                                                      parent_exprs,
                                                                      is_valid)))) {
@@ -14514,6 +14520,41 @@ int ObTransformUtils::check_contain_correlated_lateral_table(ObDMLStmt *stmt, bo
       LOG_WARN("unexpect null table item", K(ret));
     } else if (OB_FAIL(check_contain_correlated_lateral_table(table, is_contain))) {
       LOG_WARN("failed to check contain correlated lateral table", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::check_child_projection_validity(const ObSelectStmt *child_stmt,
+                                                      ObRawExpr *expr,
+                                                      bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = true;
+  ObSetOpRawExpr* set_op_expr = NULL;
+  if (OB_ISNULL(child_stmt) || OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null pointer", K(ret), K(child_stmt), K(expr));
+  } else if (OB_UNLIKELY(!expr->is_set_op_expr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected expr type", K(ret), K(expr->get_expr_type()));
+  } else if (OB_FALSE_IT(set_op_expr = static_cast<ObSetOpRawExpr*>(expr))) {
+  } else {
+    int64_t proj_idx = set_op_expr->get_idx();
+    ObRawExpr *proj_expr = NULL;
+    if (proj_idx < 0 || proj_idx >= child_stmt->get_select_item_size()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected index of select items", K(ret), K(proj_idx), K(child_stmt->get_select_item_size()));
+    } else if (OB_ISNULL(proj_expr = child_stmt->get_select_item(proj_idx).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null pointer", K(ret));
+    } else if (proj_expr->has_flag(CNT_SUB_QUERY)) {
+      /*
+      * disable pushdown predicates that reference a select item containing subquery in set query.
+      * e.g. select * from (select 1 a, exists(select 1 from t2 where t1.c1=t2.c1) b from t1
+      *      union all select c1,c2 from t1) v where b is true;
+      */
+      is_valid = false;
     }
   }
   return ret;

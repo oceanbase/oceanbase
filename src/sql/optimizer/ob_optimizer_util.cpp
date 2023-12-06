@@ -6753,7 +6753,8 @@ int ObOptimizerUtil::check_pushdown_filter_for_set(const ObSelectStmt &parent_st
       LOG_WARN("predicate is null", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::extract_set_op_exprs(pred, set_op_exprs))) {
       LOG_WARN("failed to extract set op exprs", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::check_pushdown_into_set_valid(pred,
+    } else if (OB_FAIL(ObTransformUtils::check_pushdown_into_set_valid(&subquery,
+                                                                       pred,
                                                                        set_op_exprs,
                                                                        is_simple_expr))) {
       LOG_WARN("failed to check pushdown into set", K(ret));
