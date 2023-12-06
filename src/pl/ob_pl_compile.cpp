@@ -186,7 +186,7 @@ int ObPLCompiler::compile(
                func.get_di_helper(),
                lib::is_oracle_mode()) {
   #endif
-        lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "PlCodeGen"));
+        lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN)));
         uint64_t lock_idx = stmt_id != OB_INVALID_ID ? stmt_id : murmurhash(block->str_value_, block->str_len_, 0);
         ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), lock_idx);
         // check session status after get lock
@@ -422,7 +422,7 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
                func.get_di_helper(),
                lib::is_oracle_mode()) {
   #endif
-        lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "PlCodeGen"));
+        lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN)));
         ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), id);
         // check session status after get lock
         if (OB_FAIL(ObPL::check_session_alive(session_info_))) {
@@ -751,7 +751,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
                package.get_di_helper(),
                lib::is_oracle_mode()) {
 #endif
-      lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "PlCodeGen"));
+      lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN)));
       OZ (cg.init());
       OZ (cg.generate(package));
     }
@@ -1249,7 +1249,7 @@ int ObPLCompiler::compile_subprogram_table(common::ObIAllocator &allocator,
                    routine->get_di_helper(),
                    lib::is_oracle_mode()) {
 #endif
-            lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "PlCodeGen"));
+            lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN)));
             if (OB_FAIL(cg.init())) {
               LOG_WARN("init code generator failed", K(ret));
             } else if (OB_FAIL(cg.generate(*routine))) {

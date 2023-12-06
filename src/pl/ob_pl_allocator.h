@@ -21,6 +21,7 @@ PL_MOD_DEF(OB_PL_DEBUG_MOD, "PlDebug")
 PL_MOD_DEF(OB_PL_DEBUG_SYS_MOD, "PlDebugSys")
 PL_MOD_DEF(OB_PL_ANY_DATA, "AnyData")
 PL_MOD_DEF(OB_PL_ANY_TYPE, "AnyType")
+PL_MOD_DEF(OB_PL_CODE_GEN, "PlCodeGen")
 #endif
 
 
@@ -142,8 +143,11 @@ static constexpr const char* OB_PL_MOD_DEF[PL_MOD_IDX_NUM] =
 #undef PL_MOD_DEF
 };
 
-#define GET_PL_MOD_STRING(type)  (type > OB_MOD_INVALID && type < PL_MOD_IDX_NUM) ? OB_PL_MOD_DEF[type] : "PlTemp"
-
+#define GET_PL_MOD_STRING(type)                                                \
+  (type > oceanbase::pl::OB_MOD_INVALID &&                                     \
+    type < oceanbase::pl::PL_MOD_IDX_NUM)                                      \
+      ? oceanbase::pl::OB_PL_MOD_DEF[type]                                     \
+      : "PlTemp"
 }
 }
 
