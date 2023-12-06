@@ -212,6 +212,18 @@ private:
     const uint64_t tenant_id_;
   };
 
+  class ObProxySessMapErase
+  {
+  public:
+    ObProxySessMapErase(const uint32_t sess_id)
+        :sess_id_(sess_id)
+    {}
+    bool operator()(common::hash::HashMapPair<uint64_t, uint32_t> &entry);
+  private:
+    uint32_t sess_id_;
+  };
+
+
 private:
   //注:必须在session_map_之前定义，依赖于析构的顺序。
   //ObNullEndTransCallback null_callback_;

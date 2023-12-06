@@ -255,7 +255,6 @@ void ObSQLSessionMgr::ValueAlloc::free_value(ObSQLSessionInfo *session)
     int64_t free_total_count = 0;
     // delete from hold map, ingore error
     int tmp_ret = OB_SUCCESS;
-    ObSQLSessionInfo *tmp_sess = NULL;
     uint32_t server_sessid = INVALID_SESSID;
     if (OB_SUCCESS != (tmp_ret = GCTX.session_mgr_->get_sess_hold_map().erase_refactored(
                                                     reinterpret_cast<uint64_t>(session)))) {
@@ -270,24 +269,17 @@ void ObSQLSessionMgr::ValueAlloc::free_value(ObSQLSessionInfo *session)
         } else {
           COMMON_LOG(WARN, "get session failed", K(tmp_ret), K(session->get_proxy_sessid()));
         }
-      } else if (OB_FAIL(GCTX.session_mgr_->get_session(server_sessid, tmp_sess))) {
-        ret = OB_SUCCESS;
-      } else if (OB_ISNULL(tmp_sess)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to alloc session info", K(session->get_proxy_sessid()),
-          K(session->get_sessid()), K(tmp_ret));
-      } else if (session->get_sessid() == tmp_sess->get_sessid()) {
-        if (OB_SUCCESS != (tmp_ret = GCTX.session_mgr_->get_proxy_sess_map().erase_refactored(
-                                                      session->get_proxy_sessid()))) {
+      } else if (session->get_sessid() == server_sessid) {
+        ObProxySessMapErase proxy_sess_map_erase(session->get_sessid());
+        bool is_erased = false;
+        if (OB_SUCCESS != (tmp_ret = GCTX.session_mgr_->get_proxy_sess_map().erase_if(
+            session->get_proxy_sessid(), proxy_sess_map_erase, is_erased))) {
           LOG_WARN("fail to erase proxy session", K(session->get_proxy_sessid()),
             K(session->get_sessid()), K(tmp_ret));
         }
       } else {
         LOG_DEBUG("no need to erase proxy session", K(session->get_proxy_sessid()),
-          K(session->get_sessid()), K(tmp_sess->get_sessid()), K(tmp_ret));
-      }
-      if (NULL != tmp_sess) {
-        GCTX.session_mgr_->revert_session(tmp_sess);
+          K(session->get_sessid()), K(server_sessid), K(tmp_ret));
       }
     }
 
@@ -851,6 +843,12 @@ bool ObSQLSessionMgr::KillTenant::operator() (
     }
   }
   return OB_SUCCESS == ret;
+}
+
+bool ObSQLSessionMgr::ObProxySessMapErase::operator() (
+    common::hash::HashMapPair<uint64_t, uint32_t> &entry)
+{
+  return entry.second == sess_id_;
 }
 
 int ObSQLSessionMgr::get_avaiable_local_seq(uint32_t &local_seq)
