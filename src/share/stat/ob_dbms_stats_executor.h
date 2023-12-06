@@ -51,6 +51,13 @@ public:
                                 share::schema::ObSchemaGetterGuard *schema_guard,
                                 const TabStatIndMap &online_table_stats,
                                 const ColStatIndMap &online_column_stats);
+
+  static int gather_system_stats(ObExecContext &ctx, int64_t tenant_id);
+
+  static int delete_system_stats(ObExecContext &ctx, int64_t tenant_id);
+
+  static int set_system_stats(ObExecContext &ctx, const ObSetSystemStatParam &param);
+
 private:
 
   static int do_gather_stats(ObExecContext &ctx,

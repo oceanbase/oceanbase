@@ -113,7 +113,7 @@ int ObLogOptimizerStatsGathering::est_cost()
     if (osg_type_ != OSG_TYPE::MERGE_OSG) {
       //for normal_osg and merge_osg calc the calc_stats cost;
       //TODO: use a more accurate model.
-      op_cost_ += ObOptEstCost::cost_get_rows(child->get_card() / parallel, opt_ctx.get_cost_model_type());
+      op_cost_ += ObOptEstCost::cost_get_rows(child->get_card() / parallel, opt_ctx);
     }
     set_cost(op_cost_ + child->get_cost());
     set_card(child->get_card());

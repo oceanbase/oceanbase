@@ -43,6 +43,7 @@ class OptTableMetas;
 class TableItem;
 class ObSQLSessionInfo;
 struct CandidatePlan;
+class OptSystemStat;
 
 class ObOptimizerTraceImpl;
 
@@ -253,6 +254,7 @@ public:
   int append(const OpParallelRule& rule);
   int append(const ObTableLocationType& type);
   int append(const ObPhyPlanType& type);
+  int append(const OptSystemStat& stat);
 /***********************************************/
 ////print plan info
 /***********************************************/

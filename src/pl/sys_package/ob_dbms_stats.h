@@ -493,6 +493,21 @@ public:
   static int init_column_group_stat_param(const share::schema::ObTableSchema &table_schema,
                                           ObIArray<ObColumnGroupStatParam> &column_group_params);
 
+  static int gather_system_stats(sql::ObExecContext &ctx,
+                                sql::ParamStore &params,
+                                common::ObObj &result);
+
+  static int delete_system_stats(sql::ObExecContext &ctx,
+                                sql::ParamStore &params,
+                                common::ObObj &result);
+
+  static int set_system_stats(sql::ObExecContext &ctx,
+                              sql::ParamStore &params,
+                              common::ObObj &result);
+
+  static int update_system_stats_cache(const uint64_t rpc_tenant_id,
+                                      const uint64_t tenant_id);
+
 private:
   static int check_statistic_table_writeable(sql::ObExecContext &ctx);
 
@@ -577,6 +592,12 @@ private:
   static void decide_modified_part(ObTableStatParam &param, const bool cascade_parts);
 
   static int refresh_tenant_schema_guard(ObExecContext &ctx, const uint64_t tenant_id);
+
+  static int check_system_stats_name_valid(const ObString& name, bool &is_valid);
+
+  static int check_modify_system_stats_pri(const ObSQLSessionInfo& session);
+
+  static int check_system_stat_table_ready(int64_t tenant_id);
 
 };
 

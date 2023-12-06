@@ -22,15 +22,9 @@ namespace sql
 class ObOptEstVectorCostModel : public ObOptEstCostModel {
 
 public:
-    ObOptEstVectorCostModel(
-			const double (&comparison_params)[common::ObMaxTC + 1],
-			const double (&hash_params)[common::ObMaxTC + 1],
-			const double (&project_params)[2][2][ObOptEstCostModel::MAX_PROJECT_TYPE],
-			const ObCostParams &cost_params)
-		:ObOptEstCostModel(comparison_params,
-                          hash_params,
-						  project_params,
-                          cost_params)
+    ObOptEstVectorCostModel(const ObOptCostModelParameter &cost_params,
+                            const OptSystemStat &stat)
+		:ObOptEstCostModel(cost_params, stat)
 	{}
   virtual ~ObOptEstVectorCostModel()=default;
 protected:

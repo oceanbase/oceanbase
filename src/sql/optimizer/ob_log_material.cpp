@@ -38,7 +38,7 @@ int ObLogMaterial::est_cost()
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     op_cost += ObOptEstCost::cost_material(child->get_card() / parallel, 
                                            child->get_width(),
-                                           opt_ctx.get_cost_model_type());
+                                           opt_ctx);
     set_op_cost(op_cost);
     set_cost(child->get_cost() + op_cost);
     set_card(child->get_card());
@@ -67,7 +67,7 @@ int ObLogMaterial::do_re_est_cost(EstimateCostInfo &param, double &card, double 
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     op_cost = ObOptEstCost::cost_material(child_card / parallel,
                                           child->get_width(),
-                                          opt_ctx.get_cost_model_type());
+                                          opt_ctx);
     cost = child_cost + op_cost;
     card = child_card;
   }

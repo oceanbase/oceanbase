@@ -5558,3 +5558,13 @@ COMMENT	longtext	YES
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_IMPORT_TABLE_TASK_HISTORY limit 1);
 cnt
 1
+desc oceanbase.DBA_OB_AUX_STATISTICS;
+Field	Type	Null	Key	Default	Extra
+LAST_ANALYZED	timestamp(6)	NO		NULL	
+CPU_SPEED(MHZ)	bigint(20)	YES			
+DISK_SEQ_READ_SPEED(MB/S)	bigint(20)	YES			
+DISK_RND_READ_SPEED(MB/S)	bigint(20)	YES			
+NETWORK_SPEED(MB/S)	bigint(20)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_AUX_STATISTICS limit 1);
+cnt
+1

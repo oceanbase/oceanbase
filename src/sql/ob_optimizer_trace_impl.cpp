@@ -491,6 +491,27 @@ int ObOptimizerTraceImpl::append(const ObPhyPlanType& type)
   return ret;
 }
 
+int ObOptimizerTraceImpl::append(const OptSystemStat& stat)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(append("cpu speed:", stat.get_cpu_speed(), "MHz"))) {
+    LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_FAIL(new_line())) {
+    LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_FAIL(append("disk seq read speed:", stat.get_disk_seq_read_speed(), "MB/s"))) {
+    LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_FAIL(new_line())) {
+    LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_FAIL(append("disk rnd read speed:", stat.get_disk_rnd_read_speed(), "MB/s"))) {
+    LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_FAIL(new_line())) {
+    LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_FAIL(append("network speed:", stat.get_network_speed(), "MB/s"))) {
+    LOG_WARN("failed to append msg", K(ret));
+  }
+  return ret;
+}
+
 int ObOptimizerTraceImpl::append(const ObLogPlan *log_plan)
 {
   int ret = OB_SUCCESS;
