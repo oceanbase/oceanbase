@@ -1151,6 +1151,8 @@ int ObOperator::get_next_row()
             LOG_WARN("inner get next row failed", K(ret), "type", spec_.type_, "op", op_name(),
               "op_id", spec_.id_);
           }
+        } else if (OB_FAIL(try_check_status())) {
+          LOG_WARN("check status failed", K(ret));
         } else {
           bool filtered = false;
           if (!spec_.filters_.empty()) {
