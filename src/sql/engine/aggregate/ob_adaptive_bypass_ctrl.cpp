@@ -33,14 +33,16 @@ void ObAdaptiveByPassCtrl::gby_process_state(int64_t probe_cnt,
   } else if (0 == probe_cnt) {
   } else if (STATE_L2_INSERT == state_) {
     // insert until exceed l2 cache
-    if (!in_l2_cache(row_cnt, mem_size)) {
+    if (!in_cache_mem_bound(row_cnt, mem_size, INIT_L2_CACHE_SIZE)) {
       state_ = STATE_ANALYZE;
     }
   } else if (STATE_L3_INSERT == state_) {
     // insert until exceed l3 cache
-    if (!in_l3_cache(row_cnt, mem_size)) {
+    if (!in_cache_mem_bound(row_cnt, mem_size, INIT_L3_CACHE_SIZE)) {
       state_ = STATE_ANALYZE;
     }
+  } else if (STATE_MAX_MEM_INSERT == state_) {
+    //do nothing
   } else if (STATE_ANALYZE == state_) {
     double ratio = MIN_RATIO_FOR_L3;
     probe_cnt_for_period_[round_times_ % MAX_REBUILD_TIMES] = probe_cnt;
@@ -51,7 +53,9 @@ void ObAdaptiveByPassCtrl::gby_process_state(int64_t probe_cnt,
                       std::max(ratio, 1 - (1 / static_cast<double> (cut_ratio_)))) {
       // very good distinct rate, can expend hash map to l3 cache
       rebuild_times_ = 0;
-      if (in_l3_cache(row_cnt, mem_size)) {
+      if (rebacked_) {
+        state_ = STATE_PROCESS_HT;
+      } else if (in_cache_mem_bound(row_cnt, mem_size, INIT_L3_CACHE_SIZE)) {
         state_ = STATE_L3_INSERT;
         need_resize_hash_table_ = true;
       } else {
@@ -71,7 +75,9 @@ void ObAdaptiveByPassCtrl::gby_process_state(int64_t probe_cnt,
       if (new_ratio >= std::max(ratio, 1 - (1 / static_cast<double> (cut_ratio_)))) {
         // very good distinct rate, can expend hash map to l3 cache
         rebuild_times_ = 0;
-        if (in_l3_cache(row_cnt, mem_size)) {
+        if (rebacked_) {
+          state_ = STATE_PROCESS_HT;
+        } else if (in_cache_mem_bound(row_cnt, mem_size, INIT_L3_CACHE_SIZE)) {
           state_ = STATE_L3_INSERT;
           need_resize_hash_table_ = true;
         } else {

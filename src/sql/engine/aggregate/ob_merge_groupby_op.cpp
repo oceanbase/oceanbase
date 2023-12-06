@@ -101,6 +101,7 @@ void ObMergeGroupByOp::reset()
   use_sort_data_ = false;
   inner_sort_.reset();
   global_rollup_key_.reset();
+  hp_infras_mgr_.destroy();
 }
 
 int ObMergeGroupByOp::init_rollup_distributor()
@@ -185,6 +186,7 @@ int ObMergeGroupByOp::init_rollup_distributor()
 int ObMergeGroupByOp::init_group_rows()
 {
   int ret = OB_SUCCESS;
+  uint64_t min_cluster_version = MY_SPEC.get_phy_plan()->get_min_cluster_version();
   const int64_t col_count = (MY_SPEC.has_rollup_
       ? (MY_SPEC.group_exprs_.count() + MY_SPEC.rollup_exprs_.count() + 1)
       : 0);
@@ -198,11 +200,29 @@ int ObMergeGroupByOp::init_group_rows()
       OB_FAIL(append(all_groupby_exprs_, MY_SPEC.rollup_exprs_))) {
     LOG_WARN("failed to append group exprs", K(ret));
   } else if (!is_vectorized()) {
-    if (OB_FAIL(aggr_processor_.init_group_rows(col_count))) {
+    if (min_cluster_version >= CLUSTER_VERSION_4_2_2_0) {
+      const int64_t hp_infras_cnt = col_count <= 0 ? 1 : col_count;
+      const int64_t distinct_cnt = aggr_processor_.get_distinct_count();
+      if (aggr_processor_.has_distinct() && distinct_cnt > 0
+        && OB_FAIL(hp_infras_mgr_.reserve_hp_infras(hp_infras_cnt * distinct_cnt))) {
+        LOG_WARN("failed to init hp infras group", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(aggr_processor_.init_group_rows(col_count))) {
       LOG_WARN("failed to initialize init_group_rows", K(ret));
     }
   } else {
-    if (OB_FAIL(aggr_processor_.init_group_rows(col_count - 1))) {
+    if (min_cluster_version >= CLUSTER_VERSION_4_2_2_0) {
+      const int64_t hp_infras_cnt = col_count - 1 <= 0 ? 1 : col_count;
+      const int64_t distinct_cnt = aggr_processor_.get_distinct_count();
+      if (aggr_processor_.has_distinct() && distinct_cnt > 0
+        && OB_FAIL(hp_infras_mgr_.reserve_hp_infras(hp_infras_cnt * distinct_cnt))) {
+        LOG_WARN("failed to init hp infras group", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(aggr_processor_.init_group_rows(col_count - 1))) {
       LOG_WARN("failed to initialize init_group_rows", K(ret));
     } else if (MY_SPEC.has_rollup_) {
       curr_group_rowid_ = all_groupby_exprs_.count();
@@ -222,10 +242,14 @@ int ObMergeGroupByOp::init_group_rows()
 int ObMergeGroupByOp::init()
 {
   int ret = OB_SUCCESS;
+  uint64_t min_cluster_version = MY_SPEC.get_phy_plan()->get_min_cluster_version();
   if (OB_FAIL(ObChunkStoreUtil::alloc_dir_id(dir_id_))) {
     LOG_WARN("failed to alloc dir id", K(ret));
   } else if (FALSE_IT(aggr_processor_.set_dir_id(dir_id_))) {
   } else if (FALSE_IT(aggr_processor_.set_io_event_observer(&io_event_observer_))) {
+  } else if (min_cluster_version >= CLUSTER_VERSION_4_2_2_0
+    && OB_FAIL(init_hp_infras_group_mgr())) {
+    LOG_WARN("failed to init hp infras group manager", K(ret));
   } else if (OB_FAIL(init_group_rows())) {
     LOG_WARN("failed to init group rows", K(ret));
   } else if (!is_vectorized()) {
@@ -294,12 +318,18 @@ int ObMergeGroupByOp::inner_open()
 
 int ObMergeGroupByOp::inner_close()
 {
+  int ret = OB_SUCCESS;
   reset();
-  return ObGroupByOp::inner_close();
+  if (OB_FAIL(ObGroupByOp::inner_close())) {
+    LOG_WARN("failed to inner close", K(ret));
+  }
+  sql_mem_processor_.unregister_profile();
+  return ret;
 }
 
 void ObMergeGroupByOp::destroy()
 {
+  sql_mem_processor_.unregister_profile_if_necessary();
   all_groupby_exprs_.reset();
   distinct_col_idx_in_output_.reset();
   inner_sort_exprs_.reset();
@@ -310,9 +340,13 @@ void ObMergeGroupByOp::destroy()
 int ObMergeGroupByOp::inner_switch_iterator()
 {
   int ret = OB_SUCCESS;
+  uint64_t min_cluster_version = MY_SPEC.get_phy_plan()->get_min_cluster_version();
   reset();
   if (OB_FAIL(ObGroupByOp::inner_switch_iterator())) {
     LOG_WARN("failed to switch_iterator", K(ret));
+  } else if (min_cluster_version >= CLUSTER_VERSION_4_2_2_0
+    && OB_FAIL(init_hp_infras_group_mgr())) {
+    LOG_WARN("failed to init hp infras group manager", K(ret));
   } else if (OB_FAIL(init_group_rows())) {
     LOG_WARN("failed to init group rows", K(ret));
   }
@@ -322,9 +356,13 @@ int ObMergeGroupByOp::inner_switch_iterator()
 int ObMergeGroupByOp::inner_rescan()
 {
   int ret = OB_SUCCESS;
+  uint64_t min_cluster_version = MY_SPEC.get_phy_plan()->get_min_cluster_version();
   reset();
   if (OB_FAIL(ObGroupByOp::inner_rescan())) {
     LOG_WARN("failed to rescan", K(ret));
+  } else if (min_cluster_version >= CLUSTER_VERSION_4_2_2_0
+    && OB_FAIL(init_hp_infras_group_mgr())) {
+    LOG_WARN("failed to init hp infras group manager", K(ret));
   } else if (OB_FAIL(init_group_rows())) {
     LOG_WARN("failed to init group rows", K(ret));
   }
@@ -1928,6 +1966,36 @@ inline int ObMergeGroupByOp::create_groupby_store_row(
       LOG_WARN("failed push back", K(ret));
     }
     (*store_row)->reuse_ = true;
+  }
+  return ret;
+}
+
+int ObMergeGroupByOp::init_hp_infras_group_mgr()
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
+  if (aggr_processor_.has_distinct()) {
+    int64_t est_rows = MY_SPEC.est_rows_per_group_;
+    aggr_processor_.set_io_event_observer(&io_event_observer_);
+    if (OB_FAIL(ObPxEstimateSizeUtil::get_px_size(
+        &ctx_, MY_SPEC.px_est_size_factor_, est_rows, est_rows))) {
+      LOG_WARN("failed to get px size", K(ret));
+    } else if (OB_FAIL(sql_mem_processor_.init(
+                    &ctx_.get_allocator(),
+                    tenant_id,
+                    est_rows * MY_SPEC.width_,
+                    MY_SPEC.type_,
+                    MY_SPEC.id_,
+                    &ctx_))) {
+      LOG_WARN("failed to init sql mem processor", K(ret));
+    } else if (OB_FAIL(hp_infras_mgr_.init(tenant_id,
+      GCONF.is_sql_operator_dump_enabled(), est_rows, MY_SPEC.width_, true/*unique*/, 1/*ways*/,
+      &eval_ctx_, &sql_mem_processor_, &io_event_observer_))) {
+      LOG_WARN("failed to init hash infras group", K(ret));
+    } else {
+      aggr_processor_.set_hp_infras_mgr(&hp_infras_mgr_);
+      aggr_processor_.set_enable_hash_distinct();
+    }
   }
   return ret;
 }

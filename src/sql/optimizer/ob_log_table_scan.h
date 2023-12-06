@@ -17,6 +17,7 @@
 #include "sql/optimizer/ob_join_order.h"
 #include "sql/optimizer/ob_opt_est_cost.h"
 #include "sql/resolver/dml/ob_sql_hint.h"
+#include "sql/optimizer/ob_log_set.h"
 
 namespace oceanbase
 {
@@ -79,6 +80,8 @@ public:
         tablet_id_type_(0),
         calc_part_id_expr_(NULL),
         trans_info_expr_(NULL),
+        rcte_op_(nullptr),
+        identify_seq_expr_(nullptr),
         global_index_back_table_partition_info_(NULL),
         has_index_scan_filter_(false),
         has_index_lookup_filter_(false),
@@ -471,6 +474,8 @@ public:
   int adjust_print_access_info(ObIArray<ObRawExpr*> &access_exprs);
   static int replace_gen_column(ObLogPlan *plan, ObRawExpr *part_expr, ObRawExpr *&new_part_expr);
   int extract_file_column_exprs_recursively(ObRawExpr *expr);
+  inline ObLogSet *get_rcte_op() { return rcte_op_; }
+  inline ObRawExpr *get_identify_seq_expr() { return identify_seq_expr_; }
 private: // member functions
   //called when index_back_ set
   int pick_out_query_range_exprs();
@@ -487,6 +492,7 @@ private: // member functions
   int add_mapping_columns_for_vt(ObIArray<ObRawExpr*> &access_exprs);
   int get_mbr_column_exprs(const uint64_t table_id, ObIArray<ObRawExpr *> &mbr_exprs);
   int allocate_lookup_trans_info_expr();
+  int find_nearest_rcte_op(ObLogSet *&rcte_op);
 protected: // memeber variables
   // basic info
   uint64_t table_id_; //table id or alias table id
@@ -587,6 +593,10 @@ protected: // memeber variables
   int64_t tablet_id_type_;
   ObRawExpr *calc_part_id_expr_;
   ObRawExpr *trans_info_expr_;
+
+  //for batch search recursive cte
+  ObLogSet *rcte_op_;
+  ObRawExpr *identify_seq_expr_;
 
   // begin for global index lookup
   ObTablePartitionInfo *global_index_back_table_partition_info_;

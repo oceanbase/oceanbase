@@ -333,6 +333,25 @@ int ObLogTableScan::copy_filter_before_index_back()
 
   return ret;
 }
+
+int ObLogTableScan::find_nearest_rcte_op(ObLogSet *&log_set)
+{
+  int ret = OB_SUCCESS;
+  log_set = nullptr;
+  ObLogicalOperator *op = this->get_parent();
+  while (OB_NOT_NULL(op)) {
+    if (log_op_def::LOG_SET == op->get_type()) {
+      ObLogSet *set_op = static_cast<ObLogSet *>(op);
+      if (set_op->is_recursive_union()) {
+        log_set = set_op;
+        break;
+      }
+    }
+    op = op->get_parent();
+  }
+  return ret;
+}
+
 int ObLogTableScan::generate_access_exprs()
 {
   int ret = OB_SUCCESS;
@@ -385,6 +404,23 @@ int ObLogTableScan::generate_access_exprs()
       LOG_WARN("failed to append exprs", K(ret));
     } else { /*do nothing*/ }
 
+    if (OB_SUCC(ret) && lib::is_oracle_mode() && get_contains_fake_cte()
+        && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0) {
+      ObLogSet *rcte_op = nullptr;
+      if (OB_FAIL(find_nearest_rcte_op(rcte_op))) {
+        LOG_WARN("fail to find recursive cte op", K(ret));
+      } else if (OB_ISNULL(rcte_op_ = rcte_op)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("recursive cte op is NULL", K(ret));
+      } else if (!rcte_op_->is_breadth_search()) {
+        //search depth do nothing
+      } else if (OB_ISNULL(identify_seq_expr_ = rcte_op->get_identify_seq_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("identify seq expr is NULL", K(ret));
+      } else if (OB_FAIL(access_exprs_.push_back(identify_seq_expr_))) {
+        LOG_WARN("fail to add identify seq expr", K(ret));
+      }
+    }
 
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_pseudo_column_like_exprs().count(); i++) {
       ObRawExpr *expr = stmt->get_pseudo_column_like_exprs().at(i);

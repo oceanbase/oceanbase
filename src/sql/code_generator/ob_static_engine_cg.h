@@ -550,7 +550,7 @@ private:
   // all self_produced exprs of current operator
   ObSEArray<ObRawExpr *, 8> cur_op_self_produced_exprs_;
   //仅供递归cte使用，因为oracle的cte是不允许嵌套的，所以可以采用这种方式
-  common::ObSEArray<uint64_t, 10> fake_cte_tables_;
+  common::ObSEArray<ObOpSpec *, 10> fake_cte_specs_;
   ObDmlCgService dml_cg_service_;
   ObTscCgService tsc_cg_service_;
   uint64_t cur_cluster_version_;

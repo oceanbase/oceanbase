@@ -35,7 +35,9 @@ public:
       aggr_code_idx_(OB_INVALID_INDEX_INT64),
       aggr_code_expr_(nullptr),
       by_pass_enabled_(false),
-      support_fast_single_row_agg_(false)
+      support_fast_single_row_agg_(false),
+      skew_detection_enabled_(false),
+      llc_ndv_est_enabled_(false)
   {
   }
   DECLARE_VIRTUAL_TO_STRING;
@@ -58,6 +60,8 @@ public:
   bool by_pass_enabled_;
   // COUNT/SUM/MIN/MAX can use fast single row agg
   bool support_fast_single_row_agg_;
+  bool skew_detection_enabled_;
+  bool llc_ndv_est_enabled_;
 };
 
 //modifiable

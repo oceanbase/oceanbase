@@ -5724,6 +5724,7 @@ int ObPseudoColumnRawExpr::get_name_internal(char *buf, const int64_t buf_len, i
     case T_PSEUDO_GROUP_ID:
     case T_PSEUDO_STMT_ID:
     case T_PSEUDO_GROUP_PARAM:
+    case T_PSEUDO_IDENTIFY_SEQ:
       if (OB_FAIL(databuff_print_obj(buf, buf_len, pos, expr_name_))) {
         LOG_WARN("failed to print expr name", K(ret));
       }

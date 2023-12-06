@@ -2541,12 +2541,12 @@ FROM rw;
 | JONES  |  7566 | 7839 |
 | MILLER |  7934 | 7782 |
 | JAMES  |  7900 | 7698 |
+| FORD   |  7902 | 7566 |
 | TURNER |  7844 | 7698 |
+| SCOTT  |  7788 | 7566 |
 | MARTIN |  7654 | 7698 |
 | WARD   |  7521 | 7698 |
 | ALLEN  |  7499 | 7698 |
-| FORD   |  7902 | 7566 |
-| SCOTT  |  7788 | 7566 |
 | SMITH  |  7369 | 7902 |
 | ADAMS  |  7876 | 7788 |
 +--------+-------+------+
@@ -2643,7 +2643,7 @@ with RECURSIVE rw (ename, mgr, empno) AS
 )
 SELECT ename, empno, mgr
 FROM rw;
-ERROR HY000: cycle detected while executing recursive WITH query
+ERROR HY000: Recursive query aborted after 1001 iterations. Try increasing @@cte_max_recursion_depth to a larger value.
 
 
 drop table emp1;
@@ -2785,12 +2785,12 @@ FROM rw;
 | JONES  | 6001  | 7839 |
 | MILLER | 5008  | 6003 |
 | JAMES  | 5007  | 6002 |
+| FORD   | 5002  | 6001 |
 | TURNER | 5006  | 6002 |
+| SCOTT  | 5001  | 6001 |
 | MARTIN | 5005  | 6002 |
 | WARD   | 5004  | 6002 |
 | ALLEN  | 5003  | 6002 |
-| FORD   | 5002  | 6001 |
-| SCOTT  | 5001  | 6001 |
 | SMITH  | 4002  | 5002 |
 | ADAMS  | 4001  | 5001 |
 +--------+-------+------+
@@ -2844,12 +2844,12 @@ FROM rw;
 | JONES  | 6001  | 7839 |
 | MILLER | 5008  | 6003 |
 | JAMES  | 5007  | 6002 |
+| FORD   | 5002  | 6001 |
 | TURNER | 5006  | 6002 |
+| SCOTT  | 5001  | 6001 |
 | MARTIN | 5005  | 6002 |
 | WARD   | 5004  | 6002 |
 | ALLEN  | 5003  | 6002 |
-| FORD   | 5002  | 6001 |
-| SCOTT  | 5001  | 6001 |
 | SMITH  | 4002  | 5002 |
 | ADAMS  | 4001  | 5001 |
 +--------+-------+------+

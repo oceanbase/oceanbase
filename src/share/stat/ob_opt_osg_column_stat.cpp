@@ -199,14 +199,13 @@ int ObOptOSGColumnStat::update_column_stat_info(const ObDatum *datum,
     } else if (OB_UNLIKELY(col_stat_->get_llc_bitmap() == NULL || col_stat_->get_llc_bitmap_size() == 0)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("get invalid llc_bitmap", K(ret));
-    } else if (OB_FAIL(ObAggregateProcessor::llc_add_value(hash_value,
-                                                            col_stat_->get_llc_bitmap(),
-                                                            col_stat_->get_llc_bitmap_size()))) {
-      LOG_WARN("fail to calc llc", K(ret));
-    } else if (OB_FAIL(inner_merge_min(*datum, meta, cmp_func))) {
-      LOG_WARN("failed to inner merge min val");
-    } else if (OB_FAIL(inner_merge_max(*datum, meta, cmp_func))) {
-      LOG_WARN("failed to inner merge max val");
+    } else {
+      ObAggregateProcessor::llc_add_value(hash_value,col_stat_->get_llc_bitmap(), col_stat_->get_llc_bitmap_size());
+      if (OB_FAIL(inner_merge_min(*datum, meta, cmp_func))) {
+        LOG_WARN("failed to inner merge min val");
+      } else if (OB_FAIL(inner_merge_max(*datum, meta, cmp_func))) {
+        LOG_WARN("failed to inner merge max val");
+      }
     }
   }
   if (OB_SUCC(ret)) {

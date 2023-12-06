@@ -17,6 +17,7 @@
 #include "sql/engine/aggregate/ob_groupby_op.h"
 #include "lib/utility/ob_hyperloglog.h"
 #include "sql/engine/px/datahub/components/ob_dh_rollup_key.h"
+#include "sql/engine/basic/ob_hp_infrastructure_manager.h"
 
 namespace oceanbase
 {
@@ -40,7 +41,8 @@ public:
       sort_exprs_(alloc),
       sort_collations_(alloc),
       sort_cmp_funcs_(alloc),
-      enable_encode_sort_(false)
+      enable_encode_sort_(false),
+      est_rows_per_group_(0)
     {
     }
 
@@ -79,6 +81,7 @@ public:
   ObSortCollations sort_collations_;
   ObSortFuncs sort_cmp_funcs_;
   bool enable_encode_sort_;
+  int64_t est_rows_per_group_;
 };
 
 // 输入数据已经按照groupby列排序
@@ -109,7 +112,10 @@ public:
       first_batch_from_sort_(true),
       dir_id_(-1),
       group_batch_factor_(8),
-      max_partial_rollup_idx_(INT64_MAX)
+      max_partial_rollup_idx_(INT64_MAX),
+      profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
+      sql_mem_processor_(profile_, op_monitor_info_),
+      hp_infras_mgr_()
   {
   }
   void reset();
@@ -208,6 +214,7 @@ private:
             ObBitVector *skip,
             int64_t count);
   int advance_collect_result(int64_t group_id);
+  int init_hp_infras_group_mgr();
 private:
   bool is_end_;
   // added to support groupby with rollup
@@ -253,6 +260,9 @@ private:
   // default is a magic number 8, may use a sophisticated way
   int64_t group_batch_factor_;
   int64_t max_partial_rollup_idx_;
+  ObSqlWorkAreaProfile profile_;
+  ObSqlMemMgrProcessor sql_mem_processor_;
+  HashPartInfrasMgr hp_infras_mgr_;
 };
 
 OB_INLINE int ObMergeGroupByOp::aggregate_group_rows(const int64_t group_id,

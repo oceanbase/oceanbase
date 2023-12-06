@@ -168,6 +168,7 @@ ob_set_subtarget(ob_sql engine_basic
   engine/basic/ob_topk_op.cpp
   engine/basic/ob_values_op.cpp
   engine/basic/ob_stat_collector_op.cpp
+  engine/basic/ob_hp_infrastructure_manager.ipp
 )
 
 ob_set_subtarget(ob_sql engine_cmd

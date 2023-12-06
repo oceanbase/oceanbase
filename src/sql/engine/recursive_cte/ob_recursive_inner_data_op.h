@@ -40,7 +40,7 @@ public:
   };
   enum SearchStrategyType
   {
-    DEPTH_FRIST, BREADTH_FRIST
+    DEPTH_FRIST, BREADTH_FRIST, BREADTH_FIRST_BULK
   };
 public:
   explicit ObRecursiveInnerDataOp(ObEvalCtx &eval_ctx,
@@ -48,7 +48,8 @@ public:
                                   const ExprFixedArray &left_output,
                                   const common::ObIArray<ObSortFieldCollation> &sort_collations,
                                   const common::ObIArray<uint64_t> &cycle_by_col_lists,
-                                  const common::ObIArray<ObExpr *> &output_union_exprs) :
+                                  const common::ObIArray<ObExpr *> &output_union_exprs,
+                                  const int64_t identify_seq_offset) :
       state_(RecursiveUnionState::R_UNION_READ_LEFT),
       stored_row_buf_(ObModIds::OB_SQL_CTE_ROW),
       pump_operator_(nullptr),
@@ -65,10 +66,12 @@ public:
       ordering_column_(1),
       dfs_pump_(stored_row_buf_, left_output, sort_collations, cycle_by_col_lists),
       bfs_pump_(stored_row_buf_, left_output, sort_collations, cycle_by_col_lists),
+      bfs_bulk_pump_(stored_row_buf_, left_output, sort_collations, cycle_by_col_lists),
       eval_ctx_(eval_ctx),
       ctx_(exec_ctx),
       output_union_exprs_(output_union_exprs),
-      max_recursion_depth_(0)
+      max_recursion_depth_(0),
+      identify_seq_offset_(identify_seq_offset)
   {
   }
   ~ObRecursiveInnerDataOp() = default;
@@ -84,7 +87,7 @@ public:
   int add_cycle_column(uint64_t index);
   int add_cmp_func(ObCmpFunc cmp_func);
   int get_next_row();
-  int get_next_batch(const int64_t max_row_cnt, ObBatchRows &brs);
+  int get_next_batch(const int64_t batch_size, ObBatchRows &brs);
   int rescan();
   int set_fake_cte_table_empty();
   int init(const ObExpr *search_expr, const ObExpr *cycle_expr);
@@ -94,9 +97,10 @@ public:
 private:
   void destroy();
   int add_pseudo_column(bool cycle = false);
-  int try_get_left_rows(bool batch_mode = false);
-  int try_get_right_rows(bool batch_mode = false);
-  int try_format_output_row();
+  int try_get_left_rows(bool batch_mode, int64_t batch_size, int64_t &read_rows);
+  int try_get_right_rows(bool batch_mode, int64_t batch_size, int64_t &read_rows);
+  int try_format_output_row(int64_t &read_rows);
+  int try_format_output_batch(int64_t batch_size, int64_t &read_rows);
   /**
    * recursive union的左儿子被称为plan a，右儿子被称为plan b
    * plan a会产出初始数据，recursive union本身控制递归的进度,
@@ -110,19 +114,26 @@ private:
   int depth_first_union(const bool sort = true);
   // 广度优先递归中，进行行的UNION ALL操作
   int breadth_first_union(bool left_branch, bool &continue_search);
+  // 广度优先批量搜索递归中，进行行的UNION ALL操作
+  int breadth_first_bulk_union(bool left_branch);
   int start_new_level(bool left_branch);
   // 将一行数据吐给fake cte table算子，它将作为下一次plan b的输入
   int fake_cte_table_add_row(ObTreeNode &node);
+  // 将一批数据吐给fake cte table算子，它将作为下一次plan b的输入
+  int fake_cte_table_add_bulk_rows(bool left_branch);
   // 设置cte table column expr的值
   int assign_to_cur_row(ObChunkDatumStore::StoredRow *stored_row);
   ObSearchMethodOp * get_search_method_bump() {
-    if (SearchStrategyType::BREADTH_FRIST == search_type_) {
+    if (SearchStrategyType::BREADTH_FIRST_BULK == search_type_) {
+      return &bfs_bulk_pump_;
+    } else if (SearchStrategyType::BREADTH_FRIST == search_type_) {
       return &bfs_pump_;
-    } else { // SearchStrategyType::DEPTH_FRIST
+    } else {
       return &dfs_pump_;
     }
-  }
+  };
   int check_recursive_depth();
+  bool is_bulk_search() { return SearchStrategyType::BREADTH_FIRST_BULK == search_type_; };
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRecursiveInnerDataOp);
 private:
@@ -157,14 +168,17 @@ private:
    */
   int64_t ordering_column_;
   // 深度优先
-  ObDepthFisrtSearchOp dfs_pump_;
+  ObDepthFirstSearchOp dfs_pump_;
   // 广度优先
-  ObBreadthFisrtSearchOp bfs_pump_;
+  ObBreadthFirstSearchOp bfs_pump_;
+  // 广度优先批量搜索
+  ObBreadthFirstSearchBulkOp bfs_bulk_pump_;
   ObEvalCtx &eval_ctx_;
   ObExecContext &ctx_;
   const common::ObIArray<ObExpr *> &output_union_exprs_;
   int64_t batch_size_ = 1;
   uint64_t max_recursion_depth_;
+  int64_t identify_seq_offset_;
 };
 } // end namespace sql
 } // end namespace oceanbase

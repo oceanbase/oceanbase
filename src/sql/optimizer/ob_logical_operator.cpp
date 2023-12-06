@@ -3455,6 +3455,20 @@ int ObLogicalOperator::set_plan_root_output_exprs()
     bool is_unpivot = (LOG_UNPIVOT == type_ && sel_stmt->is_unpivot_select());
     if (OB_FAIL(sel_stmt->get_select_exprs(output_exprs_, is_unpivot))) {
       LOG_WARN("failed to get select exprs", K(ret));
+    } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0 &&
+               is_oracle_mode() && OB_NOT_NULL(this->parent_) && LOG_SET == this->parent_->type_) {
+      ObLogSet *set_op = static_cast<ObLogSet *>(this->parent_);
+      if (this == this->parent_->child_[1] &&
+              set_op->is_recursive_union() && set_op->is_breadth_search()) {
+        ObRawExpr *identify_seq_expr =  nullptr;
+        if (OB_FAIL(ObOptimizerUtil::allocate_identify_seq_expr(get_plan(), identify_seq_expr))) {
+          LOG_WARN("allocate identify seq expr failed", K(ret));
+        } else if (OB_FAIL(output_exprs_.push_back(identify_seq_expr))) {
+          LOG_WARN("failed to push identify seq expr into output", K(ret));
+        } else {
+          set_op->set_identify_seq_expr(identify_seq_expr);
+        }
+      }
     } else { /*do nothing*/ }
   } else if (stmt->is_returning()) {
     const ObDelUpdStmt *del_upd_stmt = static_cast<const ObDelUpdStmt *>(stmt);

@@ -8153,6 +8153,37 @@ int ObOptimizerUtil::allocate_group_id_expr(ObLogPlan *log_plan, ObRawExpr *&gro
   return ret;
 }
 
+int ObOptimizerUtil::allocate_identify_seq_expr(ObLogPlan *log_plan, ObRawExpr *&identify_seq_expr)
+{
+  int ret = OB_SUCCESS;
+  ObOptimizerContext *opt_ctx = NULL;
+  ObOpPseudoColumnRawExpr *tmp_identify_seq_expr = NULL;
+  identify_seq_expr = NULL;
+  if (OB_ISNULL(log_plan) || OB_ISNULL(opt_ctx = &log_plan->get_optimizer_context())
+      || OB_ISNULL(opt_ctx->get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Get unexpected null", K(ret), K(log_plan), K(opt_ctx));
+  } else {
+    ObExprResType res_type;
+    res_type.set_type(ObUInt64Type);
+    res_type.set_accuracy(ObAccuracy::MAX_ACCURACY[ObUInt64Type]);
+    if (OB_FAIL(ObRawExprUtils::build_op_pseudo_column_expr(opt_ctx->get_expr_factory(),
+                                                            T_PSEUDO_IDENTIFY_SEQ,
+                                                            "IDENTIFY_SEQ",
+                                                            res_type,
+                                                            tmp_identify_seq_expr))) {
+    } else if (OB_ISNULL(tmp_identify_seq_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("identify seq expr is null", K(ret));
+    } else if (OB_FAIL(tmp_identify_seq_expr->formalize(opt_ctx->get_session_info()))) {
+      LOG_WARN("identify seq expr formalize failed", K(ret));
+    } else {
+      identify_seq_expr = tmp_identify_seq_expr;
+    }
+  }
+  return ret;
+}
+
 int ObOptimizerUtil::check_contribute_query_range(ObLogicalOperator *root,
                                                   const ObIArray<ObExecParamRawExpr *> &params,
                                                   bool &is_valid)

@@ -396,7 +396,7 @@ SELECT * FROM all_destinations;
 
 INSERT INTO rockets VALUES ('Saturn', 'Earth', 9);
 
---error 5746
+--error 3636
 WITH RECURSIVE all_destinations AS
 (
 SELECT destination AS planet

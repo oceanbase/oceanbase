@@ -1383,6 +1383,8 @@ public:
 
   static int allocate_group_id_expr(ObLogPlan *log_plan, ObRawExpr *&group_id_expr);
 
+  static int allocate_identify_seq_expr(ObLogPlan *log_plan, ObRawExpr *&identify_seq_expr);
+
   static int check_contribute_query_range(ObLogicalOperator *tsc,
                                           const ObIArray<ObExecParamRawExpr *> &params,
                                           bool &is_valid);

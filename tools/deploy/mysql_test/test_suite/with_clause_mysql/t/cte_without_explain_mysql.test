@@ -1439,7 +1439,7 @@ INSERT INTO emp2 values (5008, 'MILLER', 'CLERK', 6003, str_to_date('1982-01-23'
 --echo ## =======================================================================
 /* add loop from scott back to king  in emp */
 update emp set mgr = 7788 where ename = 'KING';
---error 5746
+--error 3636
 with RECURSIVE rw (ename, mgr, empno) AS
 (
     SELECT ename, mgr, empno

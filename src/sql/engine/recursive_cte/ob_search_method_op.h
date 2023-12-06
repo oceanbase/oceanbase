@@ -19,6 +19,7 @@
 #include "share/datum/ob_datum_funcs.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "sql/engine/sort/ob_sort_basic_info.h"
+#include "lib/rc/context.h"
 
 namespace oceanbase
 {
@@ -186,13 +187,10 @@ public:
   left_output_(left_output), last_node_level_(UINT64_MAX) {};
   virtual ~ObSearchMethodOp() = default;
 
-  virtual int finish_add_row(bool sort) = 0;
-  virtual int get_next_non_cycle_node(common::ObList<ObTreeNode,
-                common::ObIAllocator> &result_output, ObTreeNode &node) = 0;
   virtual int empty() = 0;
   virtual int reuse();
 
-  int add_row(const ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx);
+  virtual int add_row(const ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx);
   int sort_input_rows();
   int sort_rownodes(common::ObArray<ObTreeNode> &sort_array);
 
@@ -215,31 +213,31 @@ protected:
   uint64_t last_node_level_;
 };
 
-class ObDepthFisrtSearchOp : public ObSearchMethodOp
+class ObDepthFirstSearchOp : public ObSearchMethodOp
 {
   typedef common::hash::ObHashSet<ObCycleHash, common::hash::NoPthreadDefendMode> RowMap;
 public:
-  ObDepthFisrtSearchOp(common::ObIAllocator &allocator, const ExprFixedArray &left_output,
+  ObDepthFirstSearchOp(common::ObIAllocator &allocator, const ExprFixedArray &left_output,
       const common::ObIArray<ObSortFieldCollation> &sort_collations,
       const common::ObIArray<uint64_t> &cycle_by_columns) :
     ObSearchMethodOp(allocator, left_output, sort_collations, cycle_by_columns),
     hash_filter_rows_(), hash_col_idx_(),
     current_search_path_(), search_stack_(allocator_)
   { }
-  virtual ~ObDepthFisrtSearchOp() {
+  virtual ~ObDepthFirstSearchOp() {
     if (hash_filter_rows_.created()) {
       hash_filter_rows_.destroy();
     }
   }
 
-  virtual int finish_add_row(bool sort) override;
   virtual int reuse() override;
   virtual int empty() override { return search_stack_.empty() && input_rows_.empty(); }
 
   int init();
+  int finish_add_row(bool sort);
   int adjust_stack(ObTreeNode &node);
-  int get_next_non_cycle_node(common::ObList<ObTreeNode, common::ObIAllocator> &result_output,
-                              ObTreeNode &node) override;
+  int get_next_nocycle_node(common::ObList<ObTreeNode, common::ObIAllocator> &result_output,
+                            ObTreeNode &nocycle_node);
 
 private:
   // 检测一个node是不是环节点
@@ -266,26 +264,26 @@ private:
  * 由于需要判断环的存在，广度优先整个树都会被保存在内存中；
  * 能用深度优先的时候尽量不要使用广度优先。
  */
-class ObBreadthFisrtSearchOp : public ObSearchMethodOp
+class ObBreadthFirstSearchOp : public ObSearchMethodOp
 {
 public:
-  ObBreadthFisrtSearchOp(common::ObIAllocator &allocator, const ExprFixedArray &left_output,
+  ObBreadthFirstSearchOp(common::ObIAllocator &allocator, const ExprFixedArray &left_output,
       const common::ObIArray<ObSortFieldCollation> &sort_collations,
       const common::ObIArray<uint64_t> &cycle_by_columns) :
     ObSearchMethodOp(allocator, left_output, sort_collations, cycle_by_columns), bst_root_(),
     current_parent_node_(&bst_root_), search_queue_(allocator), search_results_() {
       last_node_level_ = 0;
     }
-  virtual ~ObBreadthFisrtSearchOp() = default;
+  virtual ~ObBreadthFirstSearchOp() = default;
 
-  virtual int finish_add_row(bool sort) override;
   virtual int reuse() override;
   virtual int empty() override { return input_rows_.empty() && search_queue_.empty()
                                         && search_results_.empty(); }
 
   int add_result_rows();
-  int get_next_non_cycle_node(common::ObList<ObTreeNode, common::ObIAllocator> &result_output,
-                              ObTreeNode &node) override;
+  int finish_add_row(bool sort);
+  int get_next_nocycle_node(common::ObList<ObTreeNode, common::ObIAllocator> &result_output,
+                            ObTreeNode &nocycle_node);
   int update_parent_node(ObTreeNode &node);
 
 private:
@@ -307,6 +305,53 @@ private:
   ObBFSTreeNode* current_parent_node_;
   common::ObList<ObTreeNode, common::ObIAllocator> search_queue_;
   common::ObArray<ObTreeNode> search_results_;
+};
+
+class ObBreadthFirstSearchBulkOp : public ObSearchMethodOp
+{
+public:
+  ObBreadthFirstSearchBulkOp(common::ObIAllocator &allocator,
+                             const ExprFixedArray &left_output,
+                             const common::ObIArray<ObSortFieldCollation> &sort_collations,
+                             const common::ObIArray<uint64_t> &cycle_by_columns) :
+    ObSearchMethodOp(allocator, left_output, sort_collations, cycle_by_columns), bst_root_(),
+    search_results_(), cur_recursion_depth_(0), cur_iter_groups_(), last_iter_groups_(),
+    max_buffer_cnt_(0), result_output_buffer_(nullptr), mem_context_(nullptr),
+    malloc_allocator_(nullptr) {}
+  virtual ~ObBreadthFirstSearchBulkOp() = default;
+
+  virtual int reuse() override;
+  virtual void destroy();
+  virtual int empty() override { return input_rows_.empty() && search_results_.empty(); }
+
+  int add_result_rows(bool left_branch, int64_t identify_seq_offset);
+  int get_next_nocycle_bulk(ObList<ObTreeNode, common::ObIAllocator> &result_output,
+                          ObArray<ObChunkDatumStore::StoredRow *> &fake_table_bulk_rows,
+                          bool need_sort);
+  int update_search_depth(uint64_t max_recursive_depth);
+  int sort_result_output_nodes(int64_t rows_cnt);
+  int add_row(const ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx);
+  int init_mem_context();
+  void free_last_iter_mem();
+
+private:
+  int is_breadth_cycle_node(ObBFSTreeNode* node, ObChunkDatumStore::StoredRow *row, bool &is_cycle);
+  int save_to_store_row(ObIAllocator &allocator, const ObIArray<ObExpr *> &exprs,
+                        ObEvalCtx &eval_ctx, ObChunkDatumStore::StoredRow *&store_row);
+
+private:
+  // breadth first search的root节点
+  ObBFSTreeNode bst_root_;
+  common::ObArray<ObTreeNode> search_results_;
+  uint64_t cur_recursion_depth_;
+  common::ObArray<ObBFSTreeNode *> cur_iter_groups_;
+  common::ObArray<ObBFSTreeNode *> last_iter_groups_;
+  int64_t max_buffer_cnt_;
+  ObTreeNode ** result_output_buffer_;
+  lib::MemoryContext mem_context_;
+  ObIAllocator *malloc_allocator_;
+  // for mysql mode, free last iter memory because not need check cycle
+  common::ObArray<ObChunkDatumStore::StoredRow *> last_iter_input_rows_;
 };
 
 }

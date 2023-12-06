@@ -277,6 +277,8 @@ _enable_defensive_check
 _enable_easy_keepalive
 _enable_hash_join_hasher
 _enable_hash_join_processor
+_enable_hgby_llc_ndv_adaptive
+_enable_hgby_skew_detection
 _enable_in_range_optimization
 _enable_newsort
 _enable_new_sql_nio

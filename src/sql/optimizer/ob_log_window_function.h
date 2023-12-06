@@ -36,7 +36,9 @@ namespace sql
         role_type_(WindowFunctionRoleType::NORMAL),
         rd_sort_keys_cnt_(0),
         rd_pby_sort_cnt_(0),
-        wf_aggr_status_expr_(NULL)
+        wf_aggr_status_expr_(NULL),
+        input_rows_mem_bound_ratio_(0.0),
+        estimated_part_cnt_(0.0)
     {}
     virtual ~ObLogWindowFunction() {}
     virtual int get_explain_name_internal(char *buf,
@@ -98,6 +100,12 @@ namespace sql
     WinDistAlgo get_win_dist_algo() const { return algo_; }
     void set_use_hash_sort(const bool use_hash_sort)  { use_hash_sort_ = use_hash_sort; }
     bool get_use_hash_sort() const { return use_hash_sort_; }
+    double get_input_rows_mem_bound_ratio() const { return input_rows_mem_bound_ratio_; }
+    double get_estimated_part_cnt() const { return estimated_part_cnt_; }
+    int est_input_rows_mem_bound_ratio();
+    int est_window_function_part_cnt();
+    virtual int compute_property() override;
+
     virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
     virtual int print_outline_data(PlanText &plan_text) override;
@@ -143,6 +151,8 @@ namespace sql
     // for reporting window function adaptive pushdown
     ObOpPseudoColumnRawExpr *wf_aggr_status_expr_;
     common::ObSEArray<bool, 8, common::ModulePageAllocator, true> pushdown_info_;
+    double input_rows_mem_bound_ratio_;
+    double estimated_part_cnt_;
   };
 }
 }

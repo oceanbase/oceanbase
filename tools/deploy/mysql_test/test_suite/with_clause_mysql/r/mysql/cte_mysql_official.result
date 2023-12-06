@@ -383,10 +383,10 @@ SELECT category_id, name FROM cte;
 |           6 | PORTABLE ELECTRONICS |
 |           2 | TELEVISIONS          |
 |          10 | 2 WAY RADIOS         |
-|           9 | CD PLAYERS           |
-|           7 | MP3 PLAYERS          |
 |           5 | PLASMA               |
+|           9 | CD PLAYERS           |
 |           4 | LCD                  |
+|           7 | MP3 PLAYERS          |
 |           3 | TUBE                 |
 |           8 | FLASH                |
 +-------------+----------------------+
@@ -406,10 +406,10 @@ SELECT * FROM cte ORDER BY depth;
 |           6 | PORTABLE ELECTRONICS |     1 |
 |           2 | TELEVISIONS          |     1 |
 |          10 | 2 WAY RADIOS         |     2 |
-|           9 | CD PLAYERS           |     2 |
-|           7 | MP3 PLAYERS          |     2 |
 |           5 | PLASMA               |     2 |
+|           9 | CD PLAYERS           |     2 |
 |           4 | LCD                  |     2 |
+|           7 | MP3 PLAYERS          |     2 |
 |           3 | TUBE                 |     2 |
 |           8 | FLASH                |     3 |
 +-------------+----------------------+-------+
@@ -723,7 +723,7 @@ FROM rockets r, all_destinations d
 WHERE r.origin=d.planet
 )
 SELECT * FROM all_destinations;
-ERROR HY000: cycle detected while executing recursive WITH query
+ERROR HY000: Recursive query aborted after 1001 iterations. Try increasing @@cte_max_recursion_depth to a larger value.
 
 WITH RECURSIVE all_destinations AS
 (

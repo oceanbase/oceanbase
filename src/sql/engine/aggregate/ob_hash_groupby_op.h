@@ -81,7 +81,8 @@ public:
       group_row_(NULL),
       groupby_store_row_(NULL),
       group_row_count_in_batch_(0),
-      group_row_offset_in_selector_(0)
+      group_row_offset_in_selector_(0),
+      cnt_(1)
   {
   }
 
@@ -90,7 +91,7 @@ public:
   inline int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   ObGroupRowItem *&next() { return next_; }
 
-  TO_STRING_KV(KP(next_), K(hash_), KP_(group_row),
+  TO_STRING_KV(KP(next_), K(hash_), K(cnt_), KP_(group_row),
                K_(group_row_count_in_batch), K_(group_row_offset_in_selector));
 
 public:
@@ -109,8 +110,25 @@ public:
 
   uint16_t group_row_count_in_batch_;
   uint16_t group_row_offset_in_selector_;
+  uint32_t cnt_;
 };
 
+struct LlcEstimate
+{
+public:
+  LlcEstimate()
+    : avg_group_mem_(0), llc_map_(), est_cnt_(0), enabled_(false)
+  {}
+  int init_llc_map(common::ObArenaAllocator &allocator);
+  int reset();
+  double avg_group_mem_;
+  ObString llc_map_;
+  uint64_t est_cnt_;
+  bool enabled_;
+  static constexpr const int64_t ESTIMATE_MOD_NUM_ = 4096;
+  static constexpr const double LLC_NDV_RATIO_ = 0.3;
+  static constexpr const double GLOBAL_BOUND_RATIO_ = 0.8;
+};
 
 class ObGroupRowHashTable : public ObExtendHashTable<ObGroupRowItem>
 {
@@ -125,6 +143,7 @@ public:
           ObEvalCtx *eval_ctx,
           const common::ObIArray<ObCmpFunc> *cmp_funcs,
           int64_t initial_size = INITIAL_SIZE);
+  int add_hashval_to_llc_map(LlcEstimate &llc_est);
 private:
   int likely_equal(const ObGroupRowItem &left, const ObGroupRowItem &right, bool &result) const;
 private:
@@ -218,7 +237,11 @@ public:
   static constexpr const double MAX_PART_MEM_RATIO = 0.5;
   static constexpr const double EXTRA_MEM_RATIO = 0.25;
   static const int64_t FIX_SIZE_PER_PART = sizeof(DatumStoreLinkPartition) + ObChunkRowStore::BLOCK_SIZE;
-
+  static const int8_t skew_test_step_size = 5;
+  constexpr static const float skew_popular_max_ratio = 1;
+  constexpr static const float skew_popular_min_ratio = 0.3;
+  const static int8_t skew_heap_size = 15;
+  const static int8_t skew_item_cnt_tolerance = 5;
 
 public:
   ObHashGroupByOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
@@ -270,7 +293,11 @@ public:
       by_pass_nth_group_(0),
       last_child_row_(nullptr),
       by_pass_child_brs_(nullptr),
-      force_by_pass_(false)
+      force_by_pass_(false),
+      by_pass_rows_(0),
+      total_load_rows_(0),
+      popular_map_(),
+      llc_est_()
   {
   }
   void reset();
@@ -282,10 +309,25 @@ public:
   virtual void destroy() override;
   int load_data();
   int load_one_row();
-
-  // for batch
+  int process_popular_value(uint64_t hash_value, oceanbase::sql::ObBatchRows *child_brs,
+                            int64_t batch_idx, const int64_t batch_size, bool &is_popular_value);
+  int init_popular_values(); // Data skew constructs the initial popular map based on the data
+                             // during the loaddata sampling period and use in the bypass phase.
+  int popular_value_detect();
+  int check_popular_values_validity();
+  int bypass_process_popular_value(bool &is_popular_value, uint64_t hash_val);
+  int bypass_process_popular_value_batch();
+  static bool group_row_items_greater(const ObGroupRowItem *a, const ObGroupRowItem *b);
   virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
-
+  void calc_avg_group_mem();
+  OB_INLINE void llc_add_value(int64_t hash_value)
+  {
+    ObAggregateProcessor::llc_add_value(hash_value, llc_est_.llc_map_);
+    ++llc_est_.est_cnt_;
+  }
+  int bypass_add_llc_map(uint64_t hash_val);
+  int bypass_add_llc_map_batch();
+  int check_llc_ndv();
   int check_same_group(int64_t &diff_pos);
   int restore_groupby_datum(const int64_t diff_pos);
   int rollup_and_calc_results(const int64_t group_id);
@@ -604,6 +646,10 @@ private:
   const ObBatchRows *by_pass_child_brs_;
   ObBatchResultHolder by_pass_brs_holder_;
   bool force_by_pass_;
+  uint64_t by_pass_rows_;
+  uint64_t total_load_rows_;
+  common::hash::ObHashMap<uint64_t, uint64_t, hash::NoPthreadDefendMode> popular_map_;
+  LlcEstimate llc_est_;
 };
 
 } // end namespace sql

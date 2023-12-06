@@ -30,8 +30,9 @@ constexpr const double MIN_RATIO_FOR_L3 = 0.80;
 class ObAdaptiveByPassCtrl {
 public:
   typedef enum {
-    STATE_L2_INSERT = 0,
-    STATE_L3_INSERT,
+    STATE_L2_INSERT = 0,  // Use the l2 cache size memory for data deduplication
+    STATE_L3_INSERT,      // Use the l3 cache size memory for data deduplication
+    STATE_MAX_MEM_INSERT, // Use the maximum available memory for data deduplication
     STATE_PROBE,
     STATE_ANALYZE,
     STATE_PROCESS_HT,
@@ -42,10 +43,11 @@ public:
                          period_cnt_(MIN_PERIOD_CNT), probe_cnt_(0), exists_cnt_(0),
                          rebuild_times_(0), cut_ratio_(INIT_CUT_RATIO), by_pass_ctrl_enabled_(false),
                          small_row_cnt_(0), op_id_(-1), need_resize_hash_table_(false),
-                         round_times_(0) {}
+                         round_times_(0), rebacked_(false) {}
   inline void reset() {
     by_pass_ = false;
     processed_cnt_ = 0;
+    rebacked_ = false; // reset rebacked_ before reset_state()
     reset_state();
     period_cnt_ = MIN_PERIOD_CNT;
     probe_cnt_ = 0;
@@ -53,27 +55,31 @@ public:
     rebuild_times_ = 0;
     need_resize_hash_table_ = false;
   }
-  inline void reset_state() { state_ = STATE_L2_INSERT; }
+  inline void reset_state() { state_ = (rebacked_ ? STATE_MAX_MEM_INSERT : STATE_L2_INSERT); }
+  inline void set_max_mem_insert_state() { state_ = STATE_MAX_MEM_INSERT; }
+  inline bool is_max_mem_insert_state() { return  STATE_MAX_MEM_INSERT == state_; }
+  inline void set_analyze_state() { state_ = STATE_ANALYZE; }
+  inline bool is_analyze_state() { return  STATE_ANALYZE == state_; }
   inline void start_process_ht() { state_ = STATE_PROCESS_HT; }
   inline bool processing_ht() { return STATE_PROCESS_HT == state_; }
-  inline bool in_l2_cache(int64_t row_cnt, int64_t mem_size)
+  inline int get_state() { return static_cast<int>(state_); }
+  inline bool in_cache_mem_bound(int64_t row_cnt, int64_t mem_size, int64_t mem_bound)
   {
-    return 0 != small_row_cnt_ ? (row_cnt < small_row_cnt_) : (mem_size < INIT_L2_CACHE_SIZE);
-  }
-  inline bool in_l3_cache(int64_t row_cnt, int64_t mem_size)
-  {
-    return 0 != small_row_cnt_ ? (row_cnt < small_row_cnt_) : (mem_size < INIT_L3_CACHE_SIZE);
+    return 0 != small_row_cnt_ ? (row_cnt < small_row_cnt_) : (mem_size < mem_bound);
   }
   void gby_process_state(int64_t probe_cnt, int64_t row_cnt, int64_t mem_size);
   inline void inc_processed_cnt(int64_t new_processed_cnt) { processed_cnt_ += new_processed_cnt; }
   inline void inc_probe_cnt_() { ++probe_cnt_; }
-  inline void inc_rebuild_times() { ++rebuild_times_; }
+  void inc_rebuild_times() { ++rebuild_times_; }
   inline void inc_exists_cnt() { ++exists_cnt_; }
   inline void set_cut_ratio(uint64_t cut_ratio) { cut_ratio_ = cut_ratio; }
   inline bool by_passing() { return by_pass_; }
   inline void start_by_pass() { by_pass_ = true; }
-  inline void reset_rebuild_times() { rebuild_times_ = 0; }
+  inline void stop_by_pass() { by_pass_ = false; }
+  void reset_rebuild_times() { rebuild_times_ = 0; }
+  void bypass_rebackto_insert() { rebacked_ = true; stop_by_pass(); start_process_ht(); reset_rebuild_times(); round_times_ = 0; need_resize_hash_table_ = false; }
   inline bool rebuild_times_exceeded() { return rebuild_times_ >= MAX_REBUILD_TIMES; }
+  inline int64_t get_rebuild_times() { return rebuild_times_; }
   inline void set_max_rebuild_times() { rebuild_times_ = MAX_REBUILD_TIMES + 1; }
   inline void open_by_pass_ctrl() { by_pass_ctrl_enabled_ = true; }
   inline void set_op_id(int64_t op_id) { op_id_ = op_id; }
@@ -94,6 +100,7 @@ public:
   int64_t probe_cnt_for_period_[MAX_REBUILD_TIMES];
   int64_t ndv_cnt_for_period_[MAX_REBUILD_TIMES];
   int64_t round_times_;
+  bool rebacked_;
 };
 
 } // end namespace sql

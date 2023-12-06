@@ -185,6 +185,73 @@ int ObLogWindowFunction::get_plan_item_info(PlanText &plan_text,
   return ret;
 }
 
+// estimate input_rows_mem_bound_ratio for auto mem management in window function
+int ObLogWindowFunction::est_input_rows_mem_bound_ratio()
+{
+  int ret = OB_SUCCESS;
+  double input_width = 0.0;
+  double wf_res_width = 0.0;
+  ObLogicalOperator *first_child = NULL;
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(first_child = get_child(ObLogicalOperator::first_child))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("first child is null", K(ret), K(first_child));
+  } else {
+    input_width = first_child->get_width();
+    for (int64_t i = 0; i < get_window_exprs().count(); ++i) {
+      wf_res_width += ObOptEstCost::get_estimate_width_from_type(
+                      get_window_exprs().at(i)->get_result_type());
+    }
+    const double input_mem_bound_ratio = input_width / (input_width + wf_res_width);
+    input_rows_mem_bound_ratio_ = input_mem_bound_ratio;
+    LOG_TRACE("est_input_rows_mem_bound_ratio", K(input_width), K(wf_res_width),
+                                                K(input_mem_bound_ratio));
+  }
+  return ret;
+}
+
+int ObLogWindowFunction::est_window_function_part_cnt()
+{
+  int ret = OB_SUCCESS;
+  double estimated_part_cnt = 1.0;
+  ObLogicalOperator *first_child = get_child(ObLogicalOperator::first_child);
+  if (OB_ISNULL(first_child)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected null", K(ret), K(first_child));
+  } else if (get_window_exprs().count() > 0
+             && get_window_exprs().at(0)->get_partition_exprs().count() > 0) {
+    // TODO: @zuojiao.hzj, modify the first partition columns to all the partition columns
+    // after @jiangxiu.wt support more accurate method to calculate NDV with multi columns
+    ObSEArray<ObRawExpr *, 1> partition_exprs;
+    if (OB_FAIL(partition_exprs.push_back(get_window_exprs().at(0)->get_partition_exprs().at(0)))) {
+      LOG_WARN("push_back to partition_exprs failed", K(ret),
+               K(get_window_exprs().at(0)->get_partition_exprs()));
+    } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(get_plan()->get_update_table_metas(),
+                                                            get_plan()->get_selectivity_ctx(),
+                                                            partition_exprs,
+                                                            first_child->get_card(),
+                                                            estimated_part_cnt))) {
+      LOG_WARN("calculate NDV failed", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    estimated_part_cnt_ = MAX(1.0, estimated_part_cnt);
+    LOG_TRACE("est_window_function_part_cnt success", K(ret), K(estimated_part_cnt));
+  }
+  return ret;
+}
+
+int ObLogWindowFunction::compute_property()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(est_window_function_part_cnt())) {
+    LOG_WARN("fail to est_window_function_part_cnt", K(ret));
+  } else if (OB_FAIL(ObLogicalOperator::compute_property())) {
+    LOG_WARN("failed to compute property", K(ret));
+  }
+  return ret;
+}
+
 int ObLogWindowFunction::est_width()
 {
   int ret = OB_SUCCESS;
@@ -201,8 +268,10 @@ int ObLogWindowFunction::est_width()
                                                             output_exprs,
                                                             width))) {
     LOG_WARN("failed to estimate width for output winfunc exprs", K(ret));
+  } else if (FALSE_IT(set_width(width))) {
+  } else if (OB_FAIL(est_input_rows_mem_bound_ratio())) {
+    LOG_WARN("fail to est_input_rows_mem_bound_ratio", K(ret));
   } else {
-    set_width(width);
     LOG_TRACE("est_width for winfunc", K(output_exprs), K(width));
   }
   return ret;

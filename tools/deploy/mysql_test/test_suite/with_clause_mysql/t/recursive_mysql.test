@@ -335,7 +335,7 @@ with RECURSIVE cte( id, val, lev) as (
 select * from cte;
 
 ##   与MySQL结果进行核对，验证正确性，句式3
---error 5746
+--error 3636
 with RECURSIVE cte(a,b,c) as
 (
   select c1,c2,c3 from t1 where t1.c1 < 20
@@ -353,7 +353,7 @@ with RECURSIVE cte (a,b,c) as
 select * from cte;
 
 ##    join hint
---error 5746
+--error 3636
 with RECURSIVE cte(n) as
 (
   select /*+NO_USE_HASH(t1,t2)*/ t1.c1 from t1, t2 where t1.c1 = t2.c1
@@ -363,7 +363,7 @@ with RECURSIVE cte(n) as
 select * from cte;
 
 
---error 5746
+--error 3636
 with RECURSIVE cte(a,b,c) as
 (
   select c1,c2,c3 from t1 where t1.c1 < 20
@@ -381,7 +381,7 @@ with RECURSIVE cte as (select * from t1) select (
 with RECURSIVE cte(col1, col2, col3) as(select * from t2) select count(*) from cte
 ) from t1;
 
---error 5746
+--error 3636
 with RECURSIVE cte(a,b,c) as
 (
 select c1,c2,c3 from t1 where t1.c1 < 20
@@ -391,7 +391,7 @@ select c1,c2,c3 from t1, cte where cte.a = t1.c1 and cte.c < 10
 select a, b, c from cte;
 
 ##   主句含有order + 对伪列排序序
---error 5746
+--error 3636
 with RECURSIVE cte(a,b,c) as
 (
 select c1,c2,c3 from t1 where t1.c1 < 20
@@ -401,7 +401,7 @@ select c1,c2,c3 from t1, cte where cte.a = t1.c1 and cte.c < 10
 select a, b, c from cte order by a;
 
 ##   对主句中的cte取别名后看看能否继续使用+在in中使用+where
---error 5746
+--error 3636
 with RECURSIVE cte(a,b,c) as
 (
 select c1,c2,c3 from t1 where t1.c1 < 20
@@ -411,7 +411,7 @@ select c1,c2,c3 from t1, cte where cte.a = t1.c1 and cte.c < 10
 select z1.a from cte z1, t2 where z1.a in (1,4,7,11) and z1.a = t2.c2;
 
 ##   重命名的列出现在order+where中
---error 5746
+--error 3636
 with RECURSIVE cte(a,b,c) as
 (
 select c1,c2,c3 from t1 where t1.c1 < 20
@@ -434,7 +434,7 @@ select c2 from cte;
 with RECURSIVE cte(n) as (select 1 from dual union all select n+1 from cte where n < 23) select (select count(*) from cte) from cte;
 
 ##   join＋having not＋order by
---error 5746
+--error 3636
 with RECURSIVE cte1(a,b,c) as
 (
 select c1,c2,c3 from t1 where t1.c1 < 20

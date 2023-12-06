@@ -1591,8 +1591,8 @@ with RECURSIVE cte (a,b,c) as  (     select id, name, leaderid from emp where em
 |    3 | AB   |    1 |
 |    2 | AA   |    1 |
 |    6 | ABB  |    3 |
-|    4 | ABA  |    3 |
 |    5 | AAA  |    2 |
+|    4 | ABA  |    3 |
 |   12 | AAAA |    5 |
 |   11 | AAAC |    5 |
 |   10 | AAAB |    5 |
@@ -1627,7 +1627,7 @@ with RECURSIVE cte(a,b,c) as
   union all
   select c1,c2,c3 from t1, cte where cte.a = t1.c1 and cte.c < 10
 ) select * from cte;
-ERROR HY000: cycle detected while executing recursive WITH query
+ERROR HY000: Recursive query aborted after 1001 iterations. Try increasing @@cte_max_recursion_depth to a larger value.
 
 ##   与MySQL结果进行核对，验证正确性，句式4
 with RECURSIVE cte (a,b,c) as
@@ -1644,8 +1644,8 @@ select * from cte;
 |    3 | AB   |    1 |
 |    2 | AA   |    1 |
 |    6 | ABB  |    3 |
-|    4 | ABA  |    3 |
 |    5 | AAA  |    2 |
+|    4 | ABA  |    3 |
 |   12 | AAAA |    5 |
 |   11 | AAAC |    5 |
 |   10 | AAAB |    5 |
@@ -1662,7 +1662,7 @@ with RECURSIVE cte(n) as
   select t1.c1 from cte, t1 where t1.c1 = cte.n
 )
 select * from cte;
-ERROR HY000: cycle detected while executing recursive WITH query
+ERROR HY000: Recursive query aborted after 1001 iterations. Try increasing @@cte_max_recursion_depth to a larger value.
 
 with RECURSIVE cte(a,b,c) as
 (
@@ -1670,7 +1670,7 @@ with RECURSIVE cte(a,b,c) as
   union all
   select c1,c2,c3 from t1, cte where cte.a = t1.c1 and cte.c < 10)
 select count(distinct cte.a), avg(distinct cte.b) from cte where cte.c < 10;
-ERROR HY000: cycle detected while executing recursive WITH query
+ERROR HY000: Recursive query aborted after 1001 iterations. Try increasing @@cte_max_recursion_depth to a larger value.
 
 
 ##   PART 1 cte出现在normal型查询语句中
@@ -1700,7 +1700,7 @@ union all
 select c1,c2,c3 from t1, cte where cte.a = t1.c1 and cte.c < 10
 )
 select a, b, c from cte;
-ERROR HY000: cycle detected while executing recursive WITH query
+ERROR HY000: Recursive query aborted after 1001 iterations. Try increasing @@cte_max_recursion_depth to a larger value.
 
 ##   主句含有order + 对伪列排序序
 with RECURSIVE cte(a,b,c) as
@@ -1710,7 +1710,7 @@ union all
 select c1,c2,c3 from t1, cte where cte.a = t1.c1 and cte.c < 10
 )
 select a, b, c from cte order by a;
-ERROR HY000: cycle detected while executing recursive WITH query
+ERROR HY000: Recursive query aborted after 1001 iterations. Try increasing @@cte_max_recursion_depth to a larger value.
 
 ##   对主句中的cte取别名后看看能否继续使用+在in中使用+where
 with RECURSIVE cte(a,b,c) as
@@ -1720,7 +1720,7 @@ union all
 select c1,c2,c3 from t1, cte where cte.a = t1.c1 and cte.c < 10
 )
 select z1.a from cte z1, t2 where z1.a in (1,4,7,11) and z1.a = t2.c2;
-ERROR HY000: cycle detected while executing recursive WITH query
+ERROR HY000: Recursive query aborted after 1001 iterations. Try increasing @@cte_max_recursion_depth to a larger value.
 
 ##   重命名的列出现在order+where中
 with RECURSIVE cte(a,b,c) as
@@ -1730,7 +1730,7 @@ union all
 select c1,c2,c3 from t1, cte where cte.a = t1.c1 and cte.c < 10
 )
 select a from cte where a in (1,4,11) order by a;
-ERROR HY000: cycle detected while executing recursive WITH query
+ERROR HY000: Recursive query aborted after 1001 iterations. Try increasing @@cte_max_recursion_depth to a larger value.
 
 ##   别名列和原本列的名字一样
 with RECURSIVE cte(c1,c2,c3) as
@@ -1780,7 +1780,7 @@ union all
 select c1,c2,c3 from t1, cte1 cte where cte.a = t1.c1 and cte.c < 10
 )
 select * from cte1 left join t2 on cte1.a=t2.c1 where t2.c1 != cte1.a order by cte1.a;
-ERROR HY000: cycle detected while executing recursive WITH query
+ERROR HY000: Recursive query aborted after 1001 iterations. Try increasing @@cte_max_recursion_depth to a larger value.
 
 
 ##   PART 1.2 最基本用法(多表)
