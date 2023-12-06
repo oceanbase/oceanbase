@@ -440,6 +440,16 @@ int64_t ObMallocAllocator::get_tenant_hold(uint64_t tenant_id)
   return hold;
 }
 
+int64_t ObMallocAllocator::get_tenant_cache_hold(uint64_t tenant_id)
+{
+  int64_t cache_hold = 0;
+  with_resource_handle_invoke(tenant_id, [&cache_hold](ObTenantMemoryMgr *mgr) {
+      cache_hold = mgr->get_cache_hold();
+      return OB_SUCCESS;
+    });
+  return cache_hold;
+}
+
 int64_t ObMallocAllocator::get_tenant_remain(uint64_t tenant_id)
 {
   int64_t remain = 0;
