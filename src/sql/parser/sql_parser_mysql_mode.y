@@ -520,6 +520,7 @@ END_P SET_VAR DELIMITER
 %type <node> json_table_ordinality_column_def json_table_exists_column_def json_table_value_column_def json_table_nested_column_def
 %type <node> opt_value_on_empty_or_error_or_mismatch opt_on_mismatch
 %type <node> table_values_caluse table_values_caluse_with_order_by_and_limit values_row_list row_value
+%type <node> geometry_collection
 
 %type <node> ttl_definition ttl_expr ttl_unit
 %start sql_stmt
@@ -2279,6 +2280,11 @@ ALL {
 | /*empty*/{ $$ = NULL; }
 ;
 
+geometry_collection:
+GEOMETRYCOLLECTION { $$ = NULL; }
+| GEOMCOLLECTION { $$ = NULL; }
+;
+
 func_expr:
 MOD '(' expr ',' expr ')'
 {
@@ -2925,24 +2931,16 @@ MOD '(' expr ',' expr ')'
   merge_nodes(expr_list, result, T_EXPR_LIST, $3);
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_MULTIPOLYGON, 1, expr_list);
 }
-| GEOMETRYCOLLECTION '(' expr_list ')'
+| geometry_collection '(' expr_list ')'
 {
+  UNUSED($1);
   ParseNode *expr_list = NULL;
   merge_nodes(expr_list, result, T_EXPR_LIST, $3);
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_GEOMCOLLECTION, 1, expr_list);
 }
-| GEOMETRYCOLLECTION '(' ')'
+| geometry_collection '(' ')'
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_GEOMCOLLECTION, 1, NULL);
-}
-| GEOMCOLLECTION '(' expr_list ')'
-{
-  ParseNode *expr_list = NULL;
-  merge_nodes(expr_list, result, T_EXPR_LIST, $3);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_GEOMCOLLECTION, 1, expr_list);
-}
-| GEOMCOLLECTION '(' ')'
-{
+  UNUSED($1);
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_GEOMCOLLECTION, 1, NULL);
 }
 | _ST_ASMVT '(' column_ref ')'
@@ -5209,8 +5207,9 @@ BINARY opt_string_length_i_v2
   $$->param_num_ = 0;
   $$->sql_str_off_ = @1.first_column;
 }
-| GEOMETRYCOLLECTION
+| geometry_collection
 {
+  UNUSED($1);
   malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
   $$->value_ = 0;
   $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_GEOMETRY; /* data type */
@@ -5641,8 +5640,9 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[0] = 0; /* length */
   $$->int32_values_[1] = 6; /* multipolygon, geometry uses collation type value convey sub geometry type. */
 }
-| GEOMETRYCOLLECTION
+| geometry_collection
 {
+  UNUSED($1);
   malloc_terminal_node($$, result->malloc_pool_, T_GEOMETRY);
   $$->int32_values_[0] = 0; /* length */
   $$->int32_values_[1] = 7; /* geometrycollection, geometry uses collation type value convey sub geometry type. */

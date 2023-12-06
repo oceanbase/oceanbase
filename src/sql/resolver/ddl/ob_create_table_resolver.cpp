@@ -1950,6 +1950,9 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
                 column.set_sub_data_type(expr->get_result_type().get_udt_id());
               }
             }
+            if (OB_SUCC(ret) && lib::is_mysql_mode() && ob_is_geometry(expr->get_result_type().get_type())) {
+              column.set_geo_type(static_cast<uint64_t>(expr->get_geo_expr_result_type()));
+            }
             OZ (adjust_string_column_length_within_max(column, lib::is_oracle_mode()));
             LOG_DEBUG("column expr debug", K(*expr));
           }

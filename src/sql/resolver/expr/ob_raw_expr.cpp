@@ -614,6 +614,7 @@ ObGeoType ObRawExpr::get_geo_expr_result_type() const
         return geo_type;
       }
       case T_FUN_SYS_POINT:
+      case T_FUN_SYS_ST_CENTROID:
         return ObGeoType::POINT;
       case T_FUN_SYS_LINESTRING:
         return ObGeoType::LINESTRING;
