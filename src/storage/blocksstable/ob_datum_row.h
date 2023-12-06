@@ -276,6 +276,10 @@ public:
   {
     is_shadow_ = is_shadow_row;
   }
+  inline bool is_valid() const
+  {
+    return !is_first_multi_version_row() || is_uncommitted_row() || is_last_multi_version_row() || is_ghost_row() || is_shadow_row();
+  }
   inline bool is_compacted_multi_version_row() const { return is_compacted_; }
   inline bool is_last_multi_version_row() const { return is_last_; }
   inline bool is_first_multi_version_row() const { return is_first_; }
