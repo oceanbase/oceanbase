@@ -47,8 +47,7 @@ bool ObTXStartTransferOutInfo::is_valid() const
 {
   return src_ls_id_.is_valid()
       && dest_ls_id_.is_valid()
-      && !tablet_list_.empty()
-      && task_id_.is_valid();
+      && !tablet_list_.empty();
 }
 
 int ObTXStartTransferOutInfo::assign(const ObTXStartTransferOutInfo &start_transfer_out_info)
@@ -93,8 +92,7 @@ bool ObTXStartTransferInInfo::is_valid() const
   return src_ls_id_.is_valid()
       && dest_ls_id_.is_valid()
       && start_scn_.is_valid()
-      && !tablet_meta_list_.empty()
-      && task_id_.is_valid();
+      && !tablet_meta_list_.empty();
 }
 
 int ObTXStartTransferInInfo::assign(const ObTXStartTransferInInfo &start_transfer_in_info)
@@ -142,8 +140,7 @@ bool ObTXFinishTransferInInfo::is_valid() const
   return src_ls_id_.is_valid()
       && dest_ls_id_.is_valid()
       && start_scn_.is_valid()
-      && !tablet_list_.empty()
-      && task_id_.is_valid();
+      && !tablet_list_.empty();
 }
 
 int ObTXFinishTransferInInfo::assign(const ObTXFinishTransferInInfo &finish_transfer_in_info)
@@ -186,8 +183,7 @@ bool ObTXFinishTransferOutInfo::is_valid() const
   return src_ls_id_.is_valid()
       && dest_ls_id_.is_valid()
       && finish_scn_.is_valid()
-      && !tablet_list_.empty()
-      && task_id_.is_valid();
+      && !tablet_list_.empty();
 }
 
 int ObTXFinishTransferOutInfo::assign(const ObTXFinishTransferOutInfo &finish_transfer_out_info)

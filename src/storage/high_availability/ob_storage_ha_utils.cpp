@@ -588,12 +588,13 @@ void ObTransferUtils::add_transfer_error_diagnose_in_replay(
   int ret = OB_SUCCESS;
   ObTransferHandler *transfer_handler = nullptr;
   ObLSHandle ls_handle;
-  if (!task_id.is_valid()
-      || !dest_ls_id.is_valid()
+  if (!task_id.is_valid()) {
+    // do nothing
+  } else if (!dest_ls_id.is_valid()
       || type < ObStorageHADiagTaskType::TRANSFER_START
       || type >= ObStorageHADiagTaskType::MAX_TYPE) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(task_id), K(dest_ls_id), K(type));
+    LOG_WARN("invalid argument", K(ret), K(dest_ls_id), K(type));
   } else if (OB_FAIL(get_transfer_handler_(ls_handle, dest_ls_id, transfer_handler))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_handle), K(dest_ls_id));
   } else if (OB_FAIL(transfer_handler->record_error_diagnose_info_in_replay(
@@ -842,7 +843,9 @@ void ObTransferUtils::process_start_out_perf_diag_info(
     const bool is_report)
 {
   int ret = OB_SUCCESS;
-  if (!tx_start_transfer_out_info.is_valid()
+  if (!tx_start_transfer_out_info.task_id_.is_valid()) {
+    // do nothing
+  } else if (!tx_start_transfer_out_info.is_valid()
       || item_type >= ObStorageHACostItemType::MAX_TYPE
       || item_type < ObStorageHACostItemType::ACCUM_COST_TYPE
       || name >= ObStorageHACostItemName::MAX_NAME
@@ -879,7 +882,9 @@ void ObTransferUtils::process_start_in_perf_diag_info(
     const bool is_report)
 {
   int ret = OB_SUCCESS;
-  if (!tx_start_transfer_in_info.is_valid()
+  if (!tx_start_transfer_in_info.task_id_.is_valid()) {
+    // do nothing
+  } else if (!tx_start_transfer_in_info.is_valid()
       || item_type >= ObStorageHACostItemType::MAX_TYPE
       || item_type < ObStorageHACostItemType::ACCUM_COST_TYPE
       || name >= ObStorageHACostItemName::MAX_NAME
@@ -916,7 +921,9 @@ void ObTransferUtils::process_finish_in_perf_diag_info(
     const bool is_report)
 {
   int ret = OB_SUCCESS;
-  if (!tx_finish_transfer_in_info.is_valid()
+  if (!tx_finish_transfer_in_info.task_id_.is_valid()) {
+    // do nothing
+  } else if (!tx_finish_transfer_in_info.is_valid()
       || item_type >= ObStorageHACostItemType::MAX_TYPE
       || item_type < ObStorageHACostItemType::ACCUM_COST_TYPE
       || name >= ObStorageHACostItemName::MAX_NAME
@@ -953,7 +960,9 @@ void ObTransferUtils::process_finish_out_perf_diag_info(
     const bool is_report)
 {
   int ret = OB_SUCCESS;
-  if (!tx_finish_transfer_out_info.is_valid()
+  if (!tx_finish_transfer_out_info.task_id_.is_valid()) {
+    // do nothing
+  } else if (!tx_finish_transfer_out_info.is_valid()
       || item_type >= ObStorageHACostItemType::MAX_TYPE
       || item_type < ObStorageHACostItemType::ACCUM_COST_TYPE
       || name >= ObStorageHACostItemName::MAX_NAME

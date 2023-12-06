@@ -6387,9 +6387,6 @@ def_table_schema(**all_routine_privilege_def)
 
 def_table_schema(**gen_history_table_def(491, all_routine_privilege_def))
 
-
-# 493 : __all_ncomp_dll
-
 all_ncomp_dll = dict(
   owner = 'hr351303',
   table_name = '__all_ncomp_dll',
