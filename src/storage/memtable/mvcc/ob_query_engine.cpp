@@ -375,11 +375,12 @@ int ObQueryEngine::sample_rows(Iterator<BtreeRawIterator> *iter,
         ++sample_row_count;
         ++physical_row_count;
         if (blocksstable::ObDmlFlag::DF_NOT_EXIST == value->first_dml_flag_ &&
-            blocksstable::ObDmlFlag::DF_NOT_EXIST == value->last_dml_flag_ &&
-            nullptr != value->list_head_ &&
-            value->list_head_->tx_id_ == tx_id) {
-          // Case1: uncommited row set by myself in the memtable
-          ++logical_row_count;
+            blocksstable::ObDmlFlag::DF_NOT_EXIST == value->last_dml_flag_) {
+          ObMvccTransNode *iter = value->get_list_head();
+          if (nullptr != iter && iter->get_tx_id() == tx_id) {
+            // Case1: uncommited row set by myself in the memtable
+            ++logical_row_count;
+          }
         } else if (blocksstable::ObDmlFlag::DF_INSERT == value->first_dml_flag_
             && blocksstable::ObDmlFlag::DF_DELETE != value->last_dml_flag_) {
           // Case2: insert new row in the memtable
