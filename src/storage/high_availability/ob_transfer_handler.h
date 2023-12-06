@@ -317,6 +317,8 @@ private:
   ObTransferRelatedInfo related_info_;
   ObTransferTaskInfo task_info_;
   share::ObStorageHACostItemName diagnose_result_msg_;
+  common::SpinRWLock transfer_handler_lock_;
+  bool transfer_handler_enabled_;
   DISALLOW_COPY_AND_ASSIGN(ObTransferHandler);
 };
 }
