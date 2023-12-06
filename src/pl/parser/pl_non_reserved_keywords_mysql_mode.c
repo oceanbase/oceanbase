@@ -122,6 +122,7 @@ static const NonReservedKeyword Mysql_pl_none_reserved_keywords[] =
   {"middleint", MEDIUMINT},
   {"integer", INTEGER},
   {"int", INTEGER},
+  {"int1", TINYINT},
   {"int2", SMALLINT},
   {"int3", MEDIUMINT},
   {"int4", INTEGER},
