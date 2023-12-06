@@ -77,7 +77,8 @@ int ObTableCtx::init_sess_info(ObTableApiCredential &credential)
 int ObTableCtx::init_common(ObTableApiCredential &credential,
                             const common::ObTabletID &arg_tablet_id,
                             const uint64_t table_id,
-                            const int64_t &timeout_ts)
+                            const int64_t &timeout_ts,
+                            ObBinlogRowImageType binlog_type)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = credential.tenant_id_;
@@ -92,8 +93,8 @@ int ObTableCtx::init_common(ObTableApiCredential &credential,
   } else if (OB_ISNULL(table_schema_)) {
     ret = OB_ERR_UNKNOWN_TABLE;
     LOG_WARN("fail get table schema by table id", K(ret), K(tenant_id), K(database_id), K(table_id));
-  } else if (OB_FAIL(inner_init_common(credential, arg_tablet_id, table_schema_->get_table_name(), timeout_ts))) {
-    LOG_WARN("fail to inner init common", KR(ret), K(credential), K(arg_tablet_id), K(timeout_ts));
+  } else if (OB_FAIL(inner_init_common(credential, arg_tablet_id, table_schema_->get_table_name(), timeout_ts, binlog_type))) {
+    LOG_WARN("fail to inner init common", KR(ret), K(credential), K(arg_tablet_id), K(timeout_ts), K(binlog_type));
   }
 
   return ret;
@@ -303,7 +304,8 @@ int ObTableCtx::init_physical_plan_ctx(int64_t timeout_ts, int64_t tenant_schema
 int ObTableCtx::init_common(ObTableApiCredential &credential,
                             const common::ObTabletID &arg_tablet_id,
                             const common::ObString &arg_table_name,
-                            const int64_t &timeout_ts)
+                            const int64_t &timeout_ts,
+                            ObBinlogRowImageType binlog_type)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = credential.tenant_id_;
@@ -317,9 +319,9 @@ int ObTableCtx::init_common(ObTableApiCredential &credential,
                                                     false, /* is_index */
                                                     table_schema_))) {
     LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(database_id), K(arg_table_name));
-  } else if (OB_FAIL(inner_init_common(credential, arg_tablet_id, arg_table_name, timeout_ts))) {
+  } else if (OB_FAIL(inner_init_common(credential, arg_tablet_id, arg_table_name, timeout_ts, binlog_type))) {
     LOG_WARN("fail to inner init common", KR(ret), K(credential), K(arg_tablet_id),
-      K(arg_table_name), K(timeout_ts));
+      K(arg_table_name), K(timeout_ts), K(binlog_type));
   }
 
   return ret;
@@ -328,7 +330,8 @@ int ObTableCtx::init_common(ObTableApiCredential &credential,
 int ObTableCtx::inner_init_common(ObTableApiCredential &credential,
                                   const common::ObTabletID &arg_tablet_id,
                                   const common::ObString &table_name,
-                                  const int64_t &timeout_ts)
+                                  const int64_t &timeout_ts,
+                                  ObBinlogRowImageType binlog_type)
 {
   int ret = OB_SUCCESS;
   bool is_cache_hit = false;
@@ -1686,22 +1689,21 @@ int ObTableCtx::get_related_tablet_id(const share::schema::ObTableSchema &index_
 int ObTableCtx::check_insert_up_can_use_put(bool &use_put)
 {
   int ret = OB_SUCCESS;
-  use_put = true;
+  use_put = false;
+  bool can_use_put = true;
 
-  if (!is_htable()) {
-    use_put = false;
-  } else if (is_inc_or_append()) { // increment or append operarion need old value to calculate, can not use put
-    use_put = false;
+  if (is_inc_or_append()) { // increment or append operarion need old value to calculate, can not use put
+    can_use_put = false;
   } else if (ObTableOperationType::INSERT_OR_UPDATE != operation_type_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid operation type", K(ret), K_(operation_type));
   } else if (is_htable()) { // htable has no index and alway full filled.
-    use_put = true;
+    can_use_put = true;
   } else if (is_client_set_put_ && !related_index_ids_.empty()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("client set use_put flag, but has local index is not support", K(ret), K_(related_index_ids));
   } else if (!related_index_ids_.empty()) { // has index, can not use put
-    use_put = false;
+    can_use_put = false;
   } else if (OB_ISNULL(table_schema_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("table schema is null", K(ret));
@@ -1716,10 +1718,14 @@ int ObTableCtx::check_insert_up_can_use_put(bool &use_put)
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("client set use_put flag, but not fill all columns is not support", K(ret), KPC_(table_schema), KPC_(entity));
     } else if (is_client_set_put_ || is_all_columns_filled) {
-      use_put = true;
+      can_use_put = true;
     } else { // some columns are missing
-      use_put = false;
+      can_use_put = false;
     }
+  }
+
+  if (OB_SUCC(ret) && can_use_put && binlog_row_image_type_ != ObBinlogRowImageType::FULL) {
+    use_put = true;
   }
 
   return ret;

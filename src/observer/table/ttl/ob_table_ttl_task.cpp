@@ -247,7 +247,8 @@ int ObTableTTLDeleteTask::init_scan_tb_ctx(ObTableCtx &tb_ctx, ObTableApiCacheGu
   } else if (OB_FAIL(tb_ctx.init_common(credential_,
                                         get_tablet_id(),
                                         get_table_id(),
-                                        get_timeout_ts()))) {
+                                        get_timeout_ts(),
+                                        ObBinlogRowImageType::FULL))) {
     LOG_WARN("fail to init table ctx common part", KR(ret), "table_id", get_table_id(),
       "tablet_id", get_tablet_id(), "timeout_ts", get_timeout_ts());
   } else if (OB_FAIL(tb_ctx.init_ttl_delete(get_start_rowkey()))) {
@@ -305,7 +306,8 @@ int ObTableTTLDeleteTask::init_tb_ctx(const ObITableEntity &entity,
     if (OB_FAIL(ctx.init_common(credential_,
                                 get_tablet_id(),
                                 get_table_id(),
-                                get_timeout_ts()))) {
+                                get_timeout_ts(),
+                                ObBinlogRowImageType::FULL))) {
       LOG_WARN("fail to init table ctx common part", K(ret), "table_id", get_table_id(),
         "tablet_id", get_tablet_id(), "timeout_ts", get_timeout_ts());
     } else if (OB_FAIL(ctx.init_delete())) {

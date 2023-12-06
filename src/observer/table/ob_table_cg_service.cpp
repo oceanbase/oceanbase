@@ -2061,7 +2061,6 @@ int ObTableDmlCgService::generate_das_base_ctdef(uint64_t index_tid,
   base_ctdef.is_ignore_ = false; // insert ignore
   base_ctdef.is_batch_stmt_ = false;
   base_ctdef.is_table_api_ = true;
-  int64_t binlog_row_image = share::ObBinlogRowImage::FULL;
   ObSQLSessionInfo &session = ctx.get_session_info();
 
   if (OB_FAIL(generate_column_info(index_tid, ctx, base_ctdef))) {
@@ -2073,11 +2072,9 @@ int ObTableDmlCgService::generate_das_base_ctdef(uint64_t index_tid,
     LOG_WARN("fail to get table schema version", K(ret));
   } else if (OB_FAIL(convert_table_param(ctx, base_ctdef))) {
     LOG_WARN("fail to convert table dml param", K(ret));
-  } else if (OB_FAIL(session.get_binlog_row_image(binlog_row_image))) {
-    LOG_WARN("fail to get binlog row image", K(ret));
   } else {
     base_ctdef.tz_info_ = *session.get_tz_info_wrap().get_time_zone_info();
-    base_ctdef.is_total_quantity_log_ = (share::ObBinlogRowImage::FULL == binlog_row_image);
+    base_ctdef.is_total_quantity_log_ = ctx.is_total_quantity_log();
     base_ctdef.encrypt_meta_.reset();
   }
 

@@ -802,7 +802,8 @@ int ObTableBatchExecuteP::init_single_op_tb_ctx(table::ObTableCtx &ctx,
   } else if (OB_FAIL(ctx.init_common(credential_,
                                      arg_.tablet_id_,
                                      arg_.table_name_,
-                                     get_timeout_ts()))) {
+                                     get_timeout_ts(),
+                                     arg_.binlog_row_image_type_))) {
     LOG_WARN("fail to init table ctx common part", K(ret), K(arg_.table_name_));
   } else {
     ObTableOperationType::Type op_type = table_operation.type();

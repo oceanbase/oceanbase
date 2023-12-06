@@ -120,7 +120,8 @@ int ObTableApiExecuteP::init_tb_ctx()
   } else if (OB_FAIL(tb_ctx_.init_common(credential_,
                                          arg_.tablet_id_,
                                          arg_.table_name_,
-                                         get_timeout_ts()))) {
+                                         get_timeout_ts(),
+                                         arg_.binlog_row_image_type_))) {
     LOG_WARN("fail to init table ctx common part", K(ret), K(arg_.table_name_));
   } else {
     switch(op_type) {
