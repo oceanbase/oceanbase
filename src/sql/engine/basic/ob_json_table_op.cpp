@@ -1380,7 +1380,7 @@ int JtFuncHelpler::set_error_val_mysql(JtScanCtx* ctx, JtColNode& col_node, int&
     JtColType col_type = col_node.type();
     ObExpr* expr = ctx->spec_ptr_->column_exprs_.at(col_node.col_info_.output_column_idx_);
     if (col_type == COL_TYPE_VALUE || col_type == COL_TYPE_QUERY) {
-      if (info.on_error_ == JSN_VALUE_ERROR || (info.on_error_ == JSN_VALUE_IMPLICIT && info.on_empty_ == JSN_VALUE_ERROR)) {
+      if (info.on_error_ == JSN_VALUE_ERROR) {
         EVAL_COVER_CODE(ctx, ret) ;
         if (OB_SUCC(ret) && ctx->is_need_end_) {
           ret = OB_ITER_END;

@@ -458,6 +458,12 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
       ObTransformRule::add_trans_type(dblink_enable_list, FASTMINMAX);
       disable_list |= (~dblink_enable_list);
     }
+    if (func.contain_json_table_) {
+      // json table ban group by pushdown && join limit pushdown && left join pushdown
+      ObTransformRule::add_trans_type(disable_list, GROUPBY_PUSHDOWN);
+      ObTransformRule::add_trans_type(disable_list, JOIN_LIMIT_PUSHDOWN);
+      ObTransformRule::add_trans_type(disable_list, LEFT_JOIN_TO_ANTI);
+    }
     //dblink trace point
     if ((OB_E(EventTable::EN_GENERATE_PLAN_WITH_RECONSTRUCT_SQL) OB_SUCCESS) != OB_SUCCESS) {
       ObTransformRule::add_trans_type(disable_list, SELECT_EXPR_PULLUP);
@@ -522,6 +528,21 @@ int ObTransformerImpl::check_stmt_functions(ObDMLStmt *stmt, StmtFunc &func)
       LOG_WARN("unexpect null table item", K(ret));
     } else if (table->is_link_table()) {
       func.contain_link_table_ = true;
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !func.contain_json_table_ &&
+                      i < stmt->get_table_items().count(); ++i) {
+    TableItem *table = stmt->get_table_item(i);
+    if (OB_ISNULL(table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null table item", K(ret));
+    } else if (!table->is_json_table()) { // do nothing
+    } else if (OB_ISNULL(table->json_table_def_)
+               || OB_ISNULL(table->json_table_def_->doc_expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (!table->json_table_def_->doc_expr_->get_relation_ids().is_empty()) {
+      func.contain_json_table_ = true;
     }
   }
   if (OB_SUCC(ret) && (stmt->is_delete_stmt() ||
