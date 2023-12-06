@@ -877,7 +877,8 @@ int ObPLResolver::init(ObPLPackageAST &package_ast)
      *   for self pacakge label variable(such as pkg.var), alreays search start at package spec.
      *   public and private variables are all different with names.
      */
-    if (ObPLBlockNS::BLOCK_PACKAGE_SPEC == current_block_->get_namespace().get_block_type()) {
+    if (ObPLBlockNS::BLOCK_PACKAGE_SPEC == current_block_->get_namespace().get_block_type()
+        && !ObTriggerInfo::is_trigger_package_id(package_ast.get_id())) {
       OZ (current_block_->get_namespace().add_label(
         package_ast.get_name(), ObPLLabelTable::ObPLLabelType::LABEL_BLOCK, NULL));
     }
@@ -3009,6 +3010,11 @@ int ObPLResolver::resolve_sp_row_type(const ParseNode *sp_data_type_node,
   CK (obj_access_idents.count() > 0);
   OX (obj_access_idents.at(obj_access_idents.count() - 1).has_brackets_ = false);
   if (OB_SUCC(ret)) {
+    ObPLSwitchDatabaseGuard switch_db_guard(resolve_ctx_.session_info_,
+                                            resolve_ctx_.schema_guard_,
+                                            func,
+                                            ret,
+                                            with_rowid);
     ObArray<ObObjAccessIdx> access_idxs;
     for (int64_t i = 0; OB_SUCC(ret) && i < obj_access_idents.count(); ++i) {
       OZ (resolve_access_ident(obj_access_idents.at(i),
@@ -17644,6 +17650,64 @@ int ObPLResolver::recursive_replace_expr(ObRawExpr *expr,
     }
   }
   return ret;
+}
+
+ObPLSwitchDatabaseGuard::ObPLSwitchDatabaseGuard(sql::ObSQLSessionInfo &session_info,
+                                                 share::schema::ObSchemaGetterGuard &schema_guard,
+                                                 ObPLCompileUnitAST &func,
+                                                 int &ret_val,
+                                                 bool with_rowid)
+  : ret_(ret_val),
+    session_info_(session_info),
+    database_id_(OB_INVALID_ID),
+    need_reset_(false)
+{
+  int ret = OB_SUCCESS;
+  const share::schema::ObDatabaseSchema *db_schema = NULL;
+  if (func.is_package() && with_rowid) {
+    ObPLPackageAST &pkg_ast = static_cast<ObPLPackageAST &>(func);
+    if (ObTriggerInfo::is_trigger_package_id(pkg_ast.get_id())
+        || ObTriggerInfo::is_trigger_body_package_id(pkg_ast.get_id())) {
+      uint64_t tenant_id = session_info_.get_effective_tenant_id();
+      uint64_t trg_id = ObTriggerInfo::get_package_trigger_id(pkg_ast.get_id());
+      const ObTriggerInfo *trg_info = NULL;
+      const ObTableSchema *table_schema = NULL;
+      OZ (schema_guard.get_trigger_info(tenant_id, trg_id, trg_info));
+      OV (OB_NOT_NULL(trg_info), OB_ERR_UNEXPECTED, K(trg_id));
+      OZ (schema_guard.get_table_schema(tenant_id, trg_info->get_base_object_id(), table_schema));
+      OV (OB_NOT_NULL(table_schema), OB_ERR_UNEXPECTED, KPC(trg_info));
+      OX (database_id_ = table_schema->get_database_id());
+    }
+  }
+  if (OB_SUCC(ret)
+      && session_info_.get_database_id() != database_id_
+      && OB_INVALID_ID != database_id_) {
+    OZ (schema_guard.get_database_schema(session_info_.get_effective_tenant_id(),
+                                         database_id_,
+                                         db_schema));
+    OV (OB_NOT_NULL(db_schema), OB_ERR_UNEXPECTED, K(database_id_));
+    OX (database_id_ = session_info_.get_database_id());
+    OZ (database_name_.append(session_info_.get_database_name()));
+    OZ (session_info_.set_default_database(db_schema->get_database_name_str()));
+    OX (session_info_.set_database_id(db_schema->get_database_id()));
+    OX (need_reset_ = true);
+  }
+  ret_ = ret;
+}
+
+ObPLSwitchDatabaseGuard::~ObPLSwitchDatabaseGuard()
+{
+  int ret = OB_SUCCESS;
+  if (need_reset_) {
+    if (OB_FAIL(session_info_.set_default_database(database_name_.string()))) {
+      LOG_ERROR("failed to reset default database", K(ret), K(database_name_.string()));
+    } else {
+      session_info_.set_database_id(database_id_);
+    }
+  }
+  if (OB_SUCCESS == ret_) {
+    ret_ = ret;
+  }
 }
 
 }
