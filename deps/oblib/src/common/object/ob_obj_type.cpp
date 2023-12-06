@@ -151,7 +151,7 @@ const char *ob_sql_type_str(ObObjType type)
       "ROWID",
       "LOB",
       "JSON",
-      "GEOMETRY",
+      "SDO_GEOMETRY",
       "UDT",
       "DECIMAL_INT",
       "COLLECTION",
