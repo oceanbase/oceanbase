@@ -123,11 +123,11 @@ int ObGeometry3D::read_nums_value(ObGeoWkbByteOrder bo, uint32_t &nums)
   return ret;
 }
 
-int ObGeometry3D::to_wkt(ObIAllocator &allocator, ObString &wkt, uint32_t srid)
+int ObGeometry3D::to_wkt(ObIAllocator &allocator, ObString &wkt, uint32_t srid/* = 0*/, int64_t maxdecimaldigits/* = -1*/)
 {
   int ret = OB_SUCCESS;
   ObStringBuffer *buf = NULL;
-  ObGeo3DToWktVisitor visitor;
+  ObGeo3DToWktVisitor visitor(maxdecimaldigits);
   set_pos(0);
   if (OB_ISNULL(buf = OB_NEWx(ObStringBuffer, &allocator, (&allocator)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -749,6 +749,18 @@ int ObGeo3DTo2DVisitor::visit_collectionz_start(ObGeometry3D *geo, uint32_t nums
 
 /**************************************ObGeo3DToWktVisitor**************************************/
 
+ObGeo3DToWktVisitor::ObGeo3DToWktVisitor(int64_t maxdecimaldigits/* = -1*/)
+    : wkt_buf_(NULL), is_oracle_mode_(lib::is_oracle_mode()), is_mpt_visit_(false)
+{
+  if (maxdecimaldigits >= 0 && maxdecimaldigits < ObGeoToWktVisitor::MAX_DIGITS_IN_DOUBLE) {
+    scale_ = maxdecimaldigits;
+    has_scale_ = true;
+  } else {
+    scale_ = ObGeoToWktVisitor::MAX_DIGITS_IN_DOUBLE;
+    has_scale_ = false;
+  }
+}
+
 int ObGeo3DToWktVisitor::visit_header(ObGeoWkbByteOrder bo, ObGeoType geo_type, bool is_sub_type)
 {
   int ret = OB_SUCCESS;
@@ -807,7 +819,6 @@ int ObGeo3DToWktVisitor::visit_pointz_inner(double x, double y, double z)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("wkt_buf_ is NULL", K(ret));
   } else {
-    int16_t scale = ObGeoToWktVisitor::MAX_DIGITS_IN_DOUBLE;
     uint64_t len_x = 0;
     uint64_t len_y = 0;
     uint64_t len_z = 0;
@@ -815,21 +826,21 @@ int ObGeo3DToWktVisitor::visit_pointz_inner(double x, double y, double z)
     if (OB_FAIL(wkt_buf_->reserve(3 * double_buff_size + 2))) {
       LOG_WARN("fail to reserve buffer", K(ret));
     } else if (FALSE_IT(buff_ptr = wkt_buf_->ptr() + wkt_buf_->length())) {
-    } else if (OB_FAIL(ObGeoToWktVisitor::convert_double_to_str(buff_ptr, double_buff_size, x, true, scale, true, len_x))) {
+    } else if (OB_FAIL(ObGeoToWktVisitor::convert_double_to_str(buff_ptr, double_buff_size, x, has_scale_, scale_, is_oracle_mode_, len_x))) {
       LOG_WARN("fail to append x val to buffer", K(ret));
     } else if (OB_FAIL(wkt_buf_->set_length(wkt_buf_->length() + len_x))) {
       LOG_WARN("fail to set buffer x len", K(ret), K(len_x));
     } else if (OB_FAIL(wkt_buf_->append(" "))) {
       LOG_WARN("fail to append space", K(ret));
     } else if (FALSE_IT(buff_ptr = wkt_buf_->ptr() + wkt_buf_->length())) {
-    } else if (OB_FAIL(ObGeoToWktVisitor::convert_double_to_str(buff_ptr, double_buff_size, y, true, scale, true, len_y))) {
+    } else if (OB_FAIL(ObGeoToWktVisitor::convert_double_to_str(buff_ptr, double_buff_size, y, has_scale_, scale_, is_oracle_mode_, len_y))) {
       LOG_WARN("fail to append y val to buffer", K(ret));
     }  else if (OB_FAIL(wkt_buf_->set_length(wkt_buf_->length() + len_y))) {
       LOG_WARN("fail to set buffer y len", K(ret), K(len_y));
     } else if (OB_FAIL(wkt_buf_->append(" "))) {
       LOG_WARN("fail to append space", K(ret));
     } else if (FALSE_IT(buff_ptr = wkt_buf_->ptr() + wkt_buf_->length())) {
-    } else if (OB_FAIL(ObGeoToWktVisitor::convert_double_to_str(buff_ptr, double_buff_size, z, false, scale, false, len_z))) {
+    } else if (OB_FAIL(ObGeoToWktVisitor::convert_double_to_str(buff_ptr, double_buff_size, z, has_scale_, scale_, is_oracle_mode_, len_z))) {
       LOG_WARN("fail to append z val to buffer", K(ret));
     }  else if (OB_FAIL(wkt_buf_->set_length(wkt_buf_->length() + len_z))) {
       LOG_WARN("fail to set buffer x len", K(ret), K(len_z));

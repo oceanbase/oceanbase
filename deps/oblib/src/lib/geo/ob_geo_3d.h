@@ -56,7 +56,7 @@ public:
   ObGeoType type(uint64_t pos) const;
   void set_crs(ObGeoCRS crs) { crs_ = crs; }
   int to_2d_geo(ObIAllocator &allocator, ObGeometry *&res);
-  int to_wkt(ObIAllocator &allocator, ObString &wkt, uint32_t srid = 0);
+  int to_wkt(ObIAllocator &allocator, ObString &wkt, uint32_t srid = 0, int64_t maxdecimaldigits = -1);
   int reverse_coordinate();
   int check_wkb_valid();
   int check_3d_coordinate_range(const ObSrsItem *srs, const bool is_normalized, ObGeoCoordRangeResult &result);
@@ -144,7 +144,7 @@ private:
 class ObGeo3DToWktVisitor : public ObGeo3DVisitor
 {
 public:
-  ObGeo3DToWktVisitor(): wkt_buf_(NULL), is_oracle_mode_(lib::is_oracle_mode()), is_mpt_visit_(false) {}
+  ObGeo3DToWktVisitor(int64_t maxdecimaldigits = -1);
   void set_wkt_buf(ObStringBuffer *wkt_buf) { wkt_buf_ = wkt_buf; }
   virtual int visit_header(ObGeoWkbByteOrder bo, ObGeoType geo_type, bool is_sub_type = false);
   // pointz
@@ -175,6 +175,8 @@ private:
   ObStringBuffer *wkt_buf_;
   bool is_oracle_mode_;
   bool is_mpt_visit_;
+  bool has_scale_;
+  int64_t scale_;
 };
 
 class ObGeo3DReserverCoordinate : public ObGeo3DVisitor
