@@ -9632,23 +9632,23 @@ int ObRlsContextDDLArg::assign(const ObRlsContextDDLArg &other)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObStartTransferTaskArg, tenant_id_, task_id_, dest_ls_);
+OB_SERIALIZE_MEMBER(ObStartTransferTaskArg, tenant_id_, task_id_, src_ls_);
 
 int ObStartTransferTaskArg::init(
     const uint64_t tenant_id,
     const ObTransferTaskID &task_id,
-    const ObLSID &dest_ls)
+    const ObLSID &src_ls)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
       || ! task_id.is_valid())
-      || !dest_ls.is_valid()) {
+      || !src_ls.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(task_id), K(dest_ls));
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(task_id), K(src_ls));
   } else {
     tenant_id_ = tenant_id;
     task_id_ = task_id;
-    dest_ls_ = dest_ls;
+    src_ls_ = src_ls;
   }
   return ret;
 }
@@ -9658,7 +9658,7 @@ int ObStartTransferTaskArg::assign(const ObStartTransferTaskArg &other)
   int ret = OB_SUCCESS;
   tenant_id_ = other.tenant_id_;
   task_id_ = other.task_id_;
-  dest_ls_ = other.dest_ls_;
+  src_ls_ = other.src_ls_;
   return ret;
 }
 

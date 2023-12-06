@@ -73,6 +73,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/session/ob_sess_info_verify.h"
 #include "observer/table/ttl/ob_ttl_service.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 
 namespace oceanbase
 {
@@ -2578,8 +2579,10 @@ int ObRpcStartTransferTaskP::process()
 {
   int ret = OB_SUCCESS;
   ObTransferService *transfer_service = nullptr;
-
-  if (OB_UNLIKELY(arg_.get_tenant_id() != MTL_ID())) {
+  const share::ObLSID &src_ls = arg_.get_src_ls();
+  const uint64_t tenant_id = arg_.get_tenant_id();
+  bool is_leader = false;
+  if (OB_UNLIKELY(tenant_id != MTL_ID())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ObRpcStartTransferTaskP::process tenant not match", KR(ret), K_(arg));
   } else if (OB_UNLIKELY(!arg_.is_valid())) {
@@ -2588,6 +2591,11 @@ int ObRpcStartTransferTaskP::process()
   } else if (OB_ISNULL(transfer_service = MTL(ObTransferService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service should not be null", K(ret), KP(transfer_service));
+  } else if (OB_FAIL(storage::ObStorageHAUtils::check_ls_is_leader(tenant_id, src_ls, is_leader))) {
+    LOG_WARN("fail to check ls is leader", K(ret), K(tenant_id), K(src_ls));
+  } else if (!is_leader) {
+    ret = OB_NOT_MASTER;
+    LOG_WARN("ls is not leader, please retry", K(ret), K(is_leader));
   } else {
     transfer_service->wakeup();
   }

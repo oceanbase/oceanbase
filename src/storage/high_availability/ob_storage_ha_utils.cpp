@@ -36,6 +36,7 @@
 #include "common/errsim_module/ob_errsim_module_type.h"
 #include "ob_storage_ha_diagnose_mgr.h"
 #include "share/ob_storage_ha_diagnose_struct.h"
+#include "common/ob_role.h"
 
 using namespace oceanbase::share;
 
@@ -381,6 +382,38 @@ int ObStorageHAUtils::calc_tablet_sstable_macro_block_cnt(
         data_macro_block_count += static_cast<blocksstable::ObSSTable *>(table_ptr)->get_data_macro_block_count();
       }
     }
+  }
+  return ret;
+}
+
+int ObStorageHAUtils::check_ls_is_leader(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    bool &is_leader)
+{
+  int ret = OB_SUCCESS;
+  ObLSService *ls_srv = NULL;
+  common::ObRole role = common::ObRole::INVALID_ROLE;
+  int64_t proposal_id = 0;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  is_leader = false;
+  if (OB_INVALID_ID == tenant_id || !ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls_srv = MTL_WITH_CHECK_TENANT(ObLSService *, tenant_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("log stream service is NULL", K(ret), K(tenant_id));
+  } else if (OB_FAIL(ls_srv->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    LOG_WARN("failed to get log stream", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    LOG_WARN("ls should not be null", K(ret), KP(ls));
+  } else if (OB_FAIL(ls->get_log_handler()->get_role(role, proposal_id))) {
+    LOG_WARN("failed to get role", K(ret), KP(ls));
+  } else if (is_strong_leader(role)) {
+    is_leader = true;
+  } else {
+    is_leader = false;
   }
   return ret;
 }
