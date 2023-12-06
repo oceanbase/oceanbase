@@ -9573,20 +9573,20 @@ struct ObStartTransferTaskArg final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObStartTransferTaskArg(): tenant_id_(OB_INVALID_TENANT_ID), task_id_(), dest_ls_() {}
+  ObStartTransferTaskArg(): tenant_id_(OB_INVALID_TENANT_ID), task_id_(), src_ls_() {}
   ~ObStartTransferTaskArg() {}
-  int init(const uint64_t tenant_id, const share::ObTransferTaskID &task_id, const share::ObLSID &dest_ls);
+  int init(const uint64_t tenant_id, const share::ObTransferTaskID &task_id, const share::ObLSID &src_ls);
   uint64_t get_tenant_id() const { return tenant_id_; }
   const share::ObTransferTaskID get_task_id() const { return task_id_; }
-  const share::ObLSID &get_dest_ls() { return dest_ls_; }
+  const share::ObLSID &get_src_ls() { return src_ls_; }
   bool is_valid() const { return is_valid_tenant_id(tenant_id_) && task_id_.is_valid(); }
   int assign(const ObStartTransferTaskArg &other);
-  TO_STRING_KV(K_(tenant_id), K_(task_id), K_(dest_ls));
+  TO_STRING_KV(K_(tenant_id), K_(task_id), K_(src_ls));
 
 private:
   uint64_t tenant_id_;
   share::ObTransferTaskID task_id_;
-  share::ObLSID dest_ls_;
+  share::ObLSID src_ls_;
 
   DISALLOW_COPY_AND_ASSIGN(ObStartTransferTaskArg);
 };
