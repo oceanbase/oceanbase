@@ -3,7 +3,7 @@ SOURCE_DIR=$(readlink -f "$(dirname ${BASH_SOURCE[0]})/../..")
 
 if [ $# -lt 1 ]
 then
-  BUILD_DIR=$(find $SOURCE_DIR -maxdepth 1 -name 'build_*' -type d | grep -v 'build_ccls'  | sort | head -1)
+  BUILD_DIR=$(find $SOURCE_DIR -maxdepth 1 -name 'build_*' -type d | grep -v 'build_ccls'  | head -1)
   if [[ "$BUILD_DIR" == "" ]]
   then
     echo "Usage ./copy.sh [oceanbase_dev_dir]"
