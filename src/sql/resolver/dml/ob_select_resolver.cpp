@@ -35,6 +35,7 @@
 #include "sql/rewrite/ob_transform_utils.h"
 #include "common/ob_smart_call.h"
 #include "sql/engine/expr/ob_expr_regexp_context.h"
+#include "sql/engine/expr/ob_json_param_type.h"
 namespace oceanbase
 {
 using namespace common;
@@ -2134,6 +2135,9 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
           ObString string_name(ptr_name);
           select_item.alias_name_ = string_name;
           select_item.is_real_alias_ = true;
+        } else if (T_FUN_SYS_JSON_QUERY == sel_expr->get_expr_type()
+            && OB_FAIL(add_alias_from_dot_notation(sel_expr, select_item))) {  // deal dot notation without alias
+          LOG_WARN("fail to resolve alias in dot notation", K(ret));
         } else {
           if (params_.is_prepare_protocol_
               || !session_info_->get_local_ob_enable_plan_cache()
@@ -2269,6 +2273,44 @@ inline bool ObSelectResolver::is_colum_without_alias(ParseNode *project_node) {
     }
   }
   return bret;
+}
+
+int ObSelectResolver::add_alias_from_dot_notation(ObRawExpr *sel_expr, SelectItem& select_item)
+{
+  INIT_SUCC(ret);
+  int64_t pos = -1;
+  int64_t len = 0;
+  ObString path_str;
+  ObConstRawExpr* path_expr = NULL;
+  // whether is dot notation
+  if (OB_NOT_NULL(sel_expr->get_param_expr(JSN_QUE_MISMATCH))
+      && JSN_QUERY_MISMATCH_DOT == static_cast<ObConstRawExpr*>(sel_expr->get_param_expr(JSN_QUE_MISMATCH))->get_value().get_int()) {
+    if (!select_item.alias_name_.empty()) {
+      select_item.is_real_alias_ = true;
+    } else if (OB_NOT_NULL(sel_expr->get_param_expr(JSN_QUE_PATH))
+               && T_CHAR == sel_expr->get_param_expr(JSN_QUE_PATH)->get_expr_type()) {
+      path_expr = static_cast<ObConstRawExpr*>(sel_expr->get_param_expr(JSN_QUE_PATH));
+      path_str = path_expr->get_value().get_string();
+      pos = path_str.length() - 1;
+      len = 0;
+      char *buf = NULL;
+      while (pos >= 0 && path_str[pos] != '.') {
+        pos --;
+      }
+      len = path_str.length() - (pos + 1);
+      if (pos < 0) {
+      } else if (OB_ISNULL(buf = static_cast<char*>(allocator_->alloc(len)))) {
+        ret = common::OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory", K(ret), K(buf));
+      } else {
+        MEMCPY(buf, path_str.ptr() + (pos + 1), len);
+        ObString alias_name(len, buf);
+        select_item.alias_name_ = alias_name;
+        select_item.is_real_alias_ = true;
+      }
+    }
+  }
+  return ret;
 }
 
 int ObSelectResolver::expand_target_list(

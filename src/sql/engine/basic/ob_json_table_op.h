@@ -26,6 +26,7 @@
 #include "sql/engine/expr/ob_expr_json_utils.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
 #include "deps/oblib/src/lib/xml/ob_xml_util.h"
+#include "sql/engine/expr/ob_json_param_type.h"
 
 namespace oceanbase
 {

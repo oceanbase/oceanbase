@@ -347,6 +347,7 @@ private:
   int is_need_check_col_dup(const ObRawExpr *expr, bool &need_check);
 
   int resolve_shared_order_item(OrderItem &order_item, ObSelectStmt *select_stmt);
+  int add_alias_from_dot_notation(ObRawExpr *sel_expr, SelectItem& select_item);
 protected:
   // data members
   /*these member is only for with clause*/

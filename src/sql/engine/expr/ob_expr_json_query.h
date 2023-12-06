@@ -19,7 +19,7 @@
 #include "lib/json_type/ob_json_base.h"
 #include "ob_expr_json_utils.h"
 #include "ob_expr_json_func_helper.h"
-
+#include "ob_json_param_type.h"
 
 using namespace oceanbase::common;
 
@@ -28,81 +28,6 @@ namespace oceanbase
 
 namespace sql
 {
-
-/* process empty or error */
-typedef enum JsnQueryType {
-  JSN_QUERY_ERROR,              // 0
-  JSN_QUERY_NULL,               // 1
-  JSN_QUERY_EMPTY,              // 2
-  JSN_QUERY_EMPTY_ARRAY,        // 3
-  JSN_QUERY_EMPTY_OBJECT,       // 4
-  JSN_QUERY_IMPLICIT,           // 5
-  JSN_QUERY_RESPONSE_COUNT,     // 6
-} JsnQueryType;
-
-/* process on mismatch { error : 0, null : 1, implicit : 2 }*/
-typedef enum JsnQueryMisMatch {
-  JSN_QUERY_MISMATCH_ERROR,        // 0
-  JSN_QUERY_MISMATCH_NULL,         // 1
-  JSN_QUERY_MISMATCH_IMPLICIT,     // 2
-  JSN_QUERY_MISMATCH_DOT,          // 3
-  JSN_QUERY_MISMATCH_COUNT,        // 4
-} JsnQueryMisMatch;
-
-/* process wrapper type */
-typedef enum JsnQueryWrapper {
-  JSN_QUERY_WITHOUT_WRAPPER,                     // 0
-  JSN_QUERY_WITHOUT_ARRAY_WRAPPER,               // 1
-  JSN_QUERY_WITH_WRAPPER,                        // 2
-  JSN_QUERY_WITH_ARRAY_WRAPPER,                  // 3
-  JSN_QUERY_WITH_UNCONDITIONAL_WRAPPER,          // 4
-  JSN_QUERY_WITH_CONDITIONAL_WRAPPER,            // 5
-  JSN_QUERY_WITH_UNCONDITIONAL_ARRAY_WRAPPER,    // 6
-  JSN_QUERY_WITH_CONDITIONAL_ARRAY_WRAPPER,      // 7
-  JSN_QUERY_WRAPPER_IMPLICIT ,                   // 8
-  JSN_QUERY_WRAPPER_COUNT,                       // 9
-} JsnQueryWrapper;
-
-/* process on scalars { allow : 0, disallow : 1, implicit : 2 }*/
-typedef enum JsnQueryScalar {
-  JSN_QUERY_SCALARS_ALLOW,       // 0
-  JSN_QUERY_SCALARS_DISALLOW,    // 1
-  JSN_QUERY_SCALARS_IMPLICIT,    // 2
-  JSN_QUERY_SCALARS_COUNT       // 3
-} JsnQueryScalar;
-
-/* pretty ascii 0 : null 1 : yes */
-typedef enum JsnQueryAsc {
-  OB_JSON_PRE_ASC_EMPTY,       // 0
-  OB_JSON_PRE_ASC_SET,         // 1
-  OB_JSON_PRE_ASC_COUNT       // 2
-} JsnQueryAsc;
-
-// json query clause position
-typedef enum JsnQueryClause {
-  JSN_QUE_DOC,      // 0
-  JSN_QUE_PATH,     // 1
-  JSN_QUE_RET,      // 2
-  JSN_QUE_TRUNC,      // 3
-  JSN_QUE_SCALAR,     // 4
-  JSN_QUE_PRETTY,    // 5
-  JSN_QUE_ASCII,     // 6
-  JSN_QUE_WRAPPER,    // 7
-  JSN_QUE_ERROR,     // 8
-  JSN_QUE_EMPTY,  // 9
-  JSN_QUE_MISMATCH, //10
-} JsnQueryClause;
-
-typedef enum JsnQueryOpt {
-  JSN_QUE_TRUNC_OPT,      // 0
-  JSN_QUE_SCALAR_OPT,     // 1
-  JSN_QUE_PRETTY_OPT,    // 2
-  JSN_QUE_ASCII_OPT,     // 3
-  JSN_QUE_WRAPPER_OPT,    // 4
-  JSN_QUE_ERROR_OPT,     // 5
-  JSN_QUE_EMPTY_OPT,  // 6
-  JSN_QUE_MISMATCH_OPT, // 7
-} JsnQueryOpt;
 
 class
 ObExprJsonQuery : public ObFuncExprOperator

@@ -19,6 +19,7 @@
 #include "lib/json_type/ob_json_base.h"
 #include "ob_expr_json_utils.h"
 #include "ob_expr_json_func_helper.h"
+#include "ob_json_param_type.h"
 
 using namespace oceanbase::common;
 
@@ -30,34 +31,6 @@ namespace sql
 /* process ascii */
 const static uint8_t OB_JSON_ON_ASCII_IMPLICIT    = 0;
 const static uint8_t OB_JSON_ON_ASCII_USE         = 1;
-
-/* process empty or error */
-typedef enum JsnValueType {
-  JSN_VALUE_ERROR,    // 0
-  JSN_VALUE_NULL,     // 1
-  JSN_VALUE_DEFAULT,  // 2
-  JSN_VALUE_IMPLICIT, // 3
-} JsnValueType;
-/* process mismatch type { MISSING : 4 (1), EXTRA : 5 (2), TYPE : 6 (4), EMPTY : 7 (0)} make diff with mismatch type  */
-typedef enum JsnValueClause {
-  JSN_VAL_DOC,      // 0
-  JSN_VAL_PATH,     // 1
-  JSN_VAL_RET,      // 2
-  JSN_VAL_TRUNC,      // 3
-  JSN_VAL_ASCII,     // 4
-  JSN_VAL_EMPTY,    // 5
-  JSN_VAL_EMPTY_DEF,     // 6
-  JSN_VAL_ERROR,    // 7
-  JSN_VAL_ERROR_DEF,     // 8
-  JSN_VAL_MISMATCH  // 9
-} JsnValueClause;
-
-typedef enum JsnValueOpt {
-  JSN_VAL_TRUNC_OPT,      // 0
-  JSN_VAL_ASCII_OPT,     // 1
-  JSN_VAL_EMPTY_OPT,     // 2
-  JSN_VAL_ERROR_OPT,  // 3
-} JsnValueOpt;
 
 class 
 ObExprJsonValue : public ObFuncExprOperator

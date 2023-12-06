@@ -5899,7 +5899,7 @@ int ObRawExprResolverImpl::process_json_query_node(const ParseNode *node, ObRawE
   ObSysFunRawExpr *func_expr = NULL;
   if (OB_SUCC(ret)) {
     num = node->num_child_;
-    ctx_.expr_factory_.create_raw_expr(T_FUN_SYS, func_expr);
+    ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_JSON_QUERY, func_expr);
     CK(OB_NOT_NULL(func_expr));
     OX(func_expr->set_func_name(ObString::make_string("json_query")));
   }
