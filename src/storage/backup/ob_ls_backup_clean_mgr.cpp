@@ -174,7 +174,7 @@ int ObLSBackupCleanDagNet::start_running()
   int tmp_ret = OB_SUCCESS;
   ObLSBackupCleanDag *clean_dag = nullptr;
   ObTenantDagScheduler *scheduler = nullptr;
-  FLOG_INFO("[BACKUP_CLEAN]satrt running ls backup clean dagnet");
+  FLOG_INFO("[BACKUP_CLEAN]start running ls backup clean dagnet");
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup clean dag net do not init", K(ret));

@@ -274,7 +274,7 @@ protected:
     int start = 0;
     int end = 0;
     int ret = OB_SUCCESS;
-    // Only leaf node try append directly, other scence do nothign with index.
+    // Only leaf node try append directly, other scence do nothing with index.
     if (is_leaf()) {
       index->load(index_);
       end = index->size();
