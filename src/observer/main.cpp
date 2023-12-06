@@ -433,6 +433,9 @@ static void print_all_thread(const char* desc)
 
 int main(int argc, char *argv[])
 {
+  // temporarily unlimited memory before init config
+  set_memory_limit(INT_MAX64);
+
 #ifdef ENABLE_SANITY
   backtrace_symbolize_func = oceanbase::common::backtrace_symbolize;
 #endif
