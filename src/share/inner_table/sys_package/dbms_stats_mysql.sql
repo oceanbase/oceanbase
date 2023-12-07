@@ -338,7 +338,7 @@ create or replace PACKAGE dbms_stats AUTHID CURRENT_USER
 
     FUNCTION get_stats_history_availability() RETURN DATETIME(6);
 
-    FUNCTION get_stats_history_retention() RETURN DECIMAL(20, 10);
+    FUNCTION get_stats_history_retention() RETURN DECIMAL;
 
     PROCEDURE reset_global_pref_defaults();
 

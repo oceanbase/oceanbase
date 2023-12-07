@@ -367,7 +367,7 @@ CREATE OR REPLACE PACKAGE BODY dbms_stats
     FUNCTION get_stats_history_availability() RETURN DATETIME(6);
     PRAGMA INTERFACE(C, GET_STATS_HISTORY_AVAILABILITY);
 
-    FUNCTION get_stats_history_retention() RETURN DECIMAL(20, 10);
+    FUNCTION get_stats_history_retention() RETURN DECIMAL;
     PRAGMA INTERFACE(C, GET_STATS_HISTORY_RETENTION);
 
     PROCEDURE reset_global_pref_defaults();
