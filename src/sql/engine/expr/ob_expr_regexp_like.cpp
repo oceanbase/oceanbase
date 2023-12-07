@@ -175,6 +175,7 @@ int ObExprRegexpLike::eval_regexp_like(
     ObIAllocator &tmp_alloc = alloc_guard.get_allocator();
     ObExprRegexContext local_regex_ctx;
     ObExprRegexContext *regexp_ctx = &local_regex_ctx;
+    ObExprRegexpSessionVariables regexp_vars;
     uint32_t flags = 0;
     int64_t start_pos = 1;
     bool match = false;
@@ -197,9 +198,11 @@ int ObExprRegexpLike::eval_regexp_like(
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObExprRegexContext::get_regexp_flags(match_param, is_case_sensitive, flags))) {
       LOG_WARN("fail to get regexp flags", K(ret), K(match_param));
+    } else if (OB_FAIL(ctx.exec_ctx_.get_my_session()->get_regexp_session_vars(regexp_vars))) {
+      LOG_WARN("fail to get regexp");
     } else if (!pattern->is_null() &&
                OB_FAIL(regexp_ctx->init(reusable ? ctx.exec_ctx_.get_allocator() : tmp_alloc,
-                                        ctx.exec_ctx_.get_my_session(),
+                                        regexp_vars,
                                         pattern->get_string(), flags, reusable,
                                         expr.args_[1]->datum_meta_.cs_type_))) {
       LOG_WARN("fail to init regexp", K(pattern), K(flags), K(ret));

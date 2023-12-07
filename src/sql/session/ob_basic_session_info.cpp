@@ -37,6 +37,7 @@
 #include "pl/sys_package/ob_dbms_sql.h"
 #include "pl/ob_pl_package_state.h"
 #include "rpc/obmysql/ob_sql_sock_session.h"
+#include "sql/engine/expr/ob_expr_regexp_context.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -5378,6 +5379,14 @@ int ObBasicSessionInfo::get_regexp_stack_limit(int64_t &v) const
 int ObBasicSessionInfo::get_regexp_time_limit(int64_t &v) const
 {
   return get_sys_variable(SYS_VAR_REGEXP_TIME_LIMIT, v);
+}
+
+int ObBasicSessionInfo::get_regexp_session_vars(ObExprRegexpSessionVariables &vars) const
+{
+  int ret = OB_SUCCESS;
+  OZ (get_regexp_stack_limit(vars.regexp_stack_limit_));
+  OZ (get_regexp_time_limit(vars.regexp_time_limit_));
+  return ret;
 }
 
 void ObBasicSessionInfo::reset_tx_variable(bool reset_next_scope)
