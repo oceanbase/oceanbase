@@ -2999,12 +2999,9 @@ int ObGroupByCell::extract_distinct()
         int16_t &distinct_projector = distinct_projector_buf_->at(ref);
         if (-1 == distinct_projector) {
           // distinct val is not extracted yet
-          if (ob_is_decimal_int(group_by_col_expr_->datum_meta_.type_)) {
-            group_by_col_datums[distinct_cnt_].set_decimal_int(tmp_group_by_datums[ref].get_decimal_int(), tmp_group_by_datums[ref].len_);
-          } else if (OB_FAIL(group_by_col_datums[distinct_cnt_].from_storage_datum(tmp_group_by_datums[ref], group_by_col_expr_->obj_datum_map_))) {
+          if (OB_FAIL(group_by_col_datums[distinct_cnt_].from_storage_datum(tmp_group_by_datums[ref], group_by_col_expr_->obj_datum_map_))) {
             LOG_WARN("Failed to clone datum", K(ret), K(tmp_group_by_datums[ref]), K(group_by_col_expr_->obj_datum_map_));
-          }
-          if (OB_SUCC(ret)) {
+          } else {
             distinct_projector = distinct_cnt_;
             ref = distinct_cnt_;
             distinct_cnt_++;
