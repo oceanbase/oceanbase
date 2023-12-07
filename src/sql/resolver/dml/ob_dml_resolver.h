@@ -908,6 +908,8 @@ private:
 
   int resolve_table_check_constraint_items(const TableItem *table_item,
                                            const ObTableSchema *table_schema);
+  int resolve_table_constraint_items(const TableItem *table_item,
+                                           const ObTableSchema *table_schema);
   int find_table_index_infos(const ObString &index_name,
                              const TableItem *table_item,
                              bool &find_it,

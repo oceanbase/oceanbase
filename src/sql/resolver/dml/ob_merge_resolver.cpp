@@ -228,8 +228,6 @@ int ObMergeResolver::resolve_target_relation(const ParseNode *target_node)
   } else if (OB_ISNULL(table_item)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table_item is NULL", K(ret));
-  } else if (OB_FAIL(resolve_foreign_key_constraint(table_item))) {
-    LOG_WARN("failed to resolve foreign key constraint", K(ret), K(table_item->ref_id_));
   } else if (OB_FAIL(column_namespace_checker_.add_reference_table(table_item))) {
     LOG_WARN("add reference table to column namespace checker failed", K(ret));
   } else if (table_item->is_generated_table()) {
