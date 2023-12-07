@@ -1347,11 +1347,11 @@ int ObSSTable::assign_meta(ObSSTableMeta *meta) {
   } else if (OB_NOT_NULL(meta_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable meta already assigned", K(ret), KPC(this), KPC(meta));
-  } else {
-    meta_ = meta;
-    if (OB_FAIL(check_valid_for_reading())) {
-      LOG_WARN("fail to check valid for reading", K(ret), KPC(this));
-    }
+  } else if (FALSE_IT(meta_ = meta)) {
+  } else if (has_padding_meta_cache() && OB_FAIL(meta_cache_.init(meta_, is_multi_version_table()))) {
+    LOG_WARN("fail to init meta cache", K(ret), KPC(this));
+  } else if (OB_FAIL(check_valid_for_reading())) {
+    LOG_WARN("fail to check valid for reading", K(ret), KPC(this));
   }
   return ret;
 }

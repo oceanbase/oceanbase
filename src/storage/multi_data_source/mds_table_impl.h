@@ -140,10 +140,8 @@ public:
                                   const int64_t mds_construct_sequence,
                                   const bool for_flush) const override;
   virtual int operate(const ObFunction<int(MdsTableBase &)> &operation) override;
-  int calculate_flush_scn_and_need_dumped_nodes_cnt_(share::SCN need_advanced_rec_scn_lower_limit,
-                                                     share::SCN &flush_scn,
-                                                     int64_t &need_dumped_nodes_cnt);
-  virtual int flush(share::SCN need_advanced_rec_scn_lower_limit) override;
+  int calculate_flush_scn_and_need_dumped_nodes_cnt_(share::SCN &flush_scn, int64_t &need_dumped_nodes_cnt);
+  virtual int flush(share::SCN need_advanced_rec_scn_lower_limit, share::SCN max_decided_scn) override;
   void on_flush_(const share::SCN &flush_scn, const int flush_ret);
   virtual void on_flush(const share::SCN &flush_scn, const int flush_ret) override;
   virtual int try_recycle(const share::SCN recycle_scn) override;

@@ -1578,7 +1578,7 @@ int ObTabletTableStore::build_ddl_sstables(
     }
   }
 
-  if (OB_SUCC(ret) && !ddl_dump_sstables.empty()) {
+  if (OB_SUCC(ret) && !ddl_dump_sstables.empty() && major_tables_.empty()) {
     if (OB_FAIL(ddl_sstables_.init(allocator, ddl_dump_sstables))) {
       LOG_WARN("failed to init ddl_sstables", K(ret));
     }

@@ -84,6 +84,8 @@ const ObDecimalInt *ObDecimalIntConstValue::MAX_DECINT[OB_MAX_DECIMAL_POSSIBLE_P
 const ObDecimalInt *ObDecimalIntConstValue::MAX_UPPER[OB_MAX_DECIMAL_POSSIBLE_PRECISION + 1] = {nullptr};
 const ObDecimalInt *ObDecimalIntConstValue::MIN_LOWER[OB_MAX_DECIMAL_POSSIBLE_PRECISION + 1] = {nullptr};
 
+const ObDecimalInt *ObDecimalIntConstValue::ZERO_VALUES[5] = {nullptr};
+
 // init ObDecimalIntConstValue
 int ObDecimalIntConstValue::init_const_values(ObIAllocator &alloc, const lib::ObMemAttr &attr)
 {
@@ -143,6 +145,20 @@ int ObDecimalIntConstValue::init_const_values(ObIAllocator &alloc, const lib::Ob
       MAX_UPPER[precision] = max_decint;
     }
   } // for end
+  // init zero values
+  char *zero_buf = nullptr;
+  int buf_size = sizeof(int32_t) + sizeof(int64_t) + sizeof(int128_t) + sizeof(int256_t) + sizeof(int512_t);
+  if (OB_ISNULL(zero_buf = (char *)allocator.alloc(buf_size))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    COMMON_LOG(WARN, "allocate memory failed", K(ret));
+  } else {
+    MEMSET(zero_buf, 0, buf_size);
+    ZERO_VALUES[0] = reinterpret_cast<const ObDecimalInt *>(zero_buf);
+    ZERO_VALUES[1] = reinterpret_cast<const ObDecimalInt *>(zero_buf + sizeof(int32_t));
+    ZERO_VALUES[2] = reinterpret_cast<const ObDecimalInt *>(zero_buf + sizeof(int32_t) + sizeof(int64_t));
+    ZERO_VALUES[3] = reinterpret_cast<const ObDecimalInt *>(zero_buf + sizeof(int32_t) + sizeof(int64_t) + sizeof(int128_t));
+    ZERO_VALUES[3] = reinterpret_cast<const ObDecimalInt *>(zero_buf + sizeof(int32_t) + sizeof(int64_t) + sizeof(int128_t) + sizeof(int256_t));
+  }
   return ret;
 }
 

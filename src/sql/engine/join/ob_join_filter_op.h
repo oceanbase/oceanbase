@@ -47,6 +47,8 @@ struct ObJoinFilterShareInfo
   uint64_t filter_ptr_;   //此指针将作为PX JOIN FILTER CREATE算子共享内存.
   uint64_t shared_msgs_;  //sqc-shared dh msgs
   OB_UNIS_VERSION_V(1);
+public:
+  TO_STRING_KV(KP(unfinished_count_ptr_), KP(ch_provider_ptr_), KP(release_ref_ptr_), KP(filter_ptr_), K(shared_msgs_));
 };
 
 struct ObJoinFilterRuntimeConfig

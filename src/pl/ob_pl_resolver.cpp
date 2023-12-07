@@ -873,7 +873,8 @@ int ObPLResolver::init(ObPLPackageAST &package_ast)
      *   for self pacakge label variable(such as pkg.var), alreays search start at package spec.
      *   public and private variables are all different with names.
      */
-    if (ObPLBlockNS::BLOCK_PACKAGE_SPEC == current_block_->get_namespace().get_block_type()) {
+    if (ObPLBlockNS::BLOCK_PACKAGE_SPEC == current_block_->get_namespace().get_block_type()
+        && !ObTriggerInfo::is_trigger_package_id(package_ast.get_id())) {
       OZ (current_block_->get_namespace().add_label(
         package_ast.get_name(), ObPLLabelTable::ObPLLabelType::LABEL_BLOCK, NULL));
     }
@@ -2949,6 +2950,11 @@ int ObPLResolver::resolve_sp_row_type(const ParseNode *sp_data_type_node,
   CK (obj_access_idents.count() > 0);
   OX (obj_access_idents.at(obj_access_idents.count() - 1).has_brackets_ = false);
   if (OB_SUCC(ret)) {
+    ObPLSwitchDatabaseGuard switch_db_guard(resolve_ctx_.session_info_,
+                                            resolve_ctx_.schema_guard_,
+                                            func,
+                                            ret,
+                                            with_rowid);
     ObArray<ObObjAccessIdx> access_idxs;
     for (int64_t i = 0; OB_SUCC(ret) && i < obj_access_idents.count(); ++i) {
       OZ (resolve_access_ident(obj_access_idents.at(i),
@@ -16696,32 +16702,19 @@ int ObPLResolver::check_goto_cursor_stmts(ObPLGotoStmt &goto_stmt, const ObPLStm
     // 这里一定是包含关系，dst_block包含了goto_blk，因为前面verify过了。
     parent_blk = goto_block;
     bool exit_flag = false;
-    const ObPLCursorForLoopStmt *cur_level_forloop = NULL;
     int loopcnt = 0;
     do {
       exit_flag = parent_blk == dst_block;
       const ObIArray<ObPLStmt *> &stmts = parent_blk->get_cursor_stmts();
-      for (int64_t i = 0; OB_SUCC(ret) && i < stmts.count(); ++i) {
+      bool is_contain = false;
+      for (int64_t i = 0; OB_SUCC(ret) && !is_contain && i < stmts.count(); ++i) {
         const ObPLCursorForLoopStmt *cfl_stmt = static_cast<ObPLCursorForLoopStmt *>(stmts.at(i));
         CK (OB_NOT_NULL(cfl_stmt));
-        // 这里有一个隐含的不变量就是，多层for loop cursor，每层有且只有1或0个for loop cursor需要关闭cursor
-        if (OB_FAIL(ret)) {
-        } else if (cfl_stmt->is_contain_goto_stmt() || cfl_stmt->get_body()->is_contain_stmt(cur_level_forloop)) {
-          if (OB_FAIL(goto_stmt.push_cursor_stmt(cfl_stmt))) {
-            LOG_WARN("failed to push stmt", K(ret));
-            break;
-          }
-          cur_level_forloop = cfl_stmt;
-          break;
-        } else if (OB_NOT_NULL(cur_level_forloop)) {
-          bool is_contain = false;
-          OZ (check_contain_cursor_loop_stmt(cfl_stmt->get_body(), cur_level_forloop, is_contain));
-          if (OB_SUCC(ret) && is_contain) {
-            if (OB_FAIL(goto_stmt.push_cursor_stmt(cfl_stmt))) {
-              LOG_WARN("failed to push stmt", K(ret));
-              break;
-            }
-          }
+        // There is an implicit invariant here:
+        // in a multi-level for loop cursor structure, each level has at most 1 cursor that requires closing.
+        OZ (check_contain_goto_block(cfl_stmt->get_body(), goto_block, is_contain));
+        if (OB_SUCC(ret) && is_contain) {
+          OZ (goto_stmt.push_cursor_stmt(cfl_stmt));
         }
       }
       if (OB_SUCC(ret)) {
@@ -16735,33 +16728,18 @@ int ObPLResolver::check_goto_cursor_stmts(ObPLGotoStmt &goto_stmt, const ObPLStm
   return ret;
 }
 
-int ObPLResolver::check_contain_cursor_loop_stmt(const ObPLStmtBlock *stmt_block, 
-                                                 const ObPLCursorForLoopStmt *cur_loop_stmt, 
-                                                 bool &is_contain)
+int ObPLResolver::check_contain_goto_block(const ObPLStmt *cur_stmt,
+                                           const ObPLStmtBlock *goto_block,
+                                           bool &is_contain)
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObPLStmt *> &cursor_stmts = stmt_block->get_cursor_stmts();
-  const ObIArray<ObPLStmt*> &stmts = stmt_block->get_stmts();
-  bool stop = false;
-  CK (OB_NOT_NULL(stmt_block));
-  CK (OB_NOT_NULL(cur_loop_stmt));
-  OX (stop = (stmt_block->get_level() == cur_loop_stmt->get_level()));
-  for (int64_t i = 0; OB_SUCC(ret) && !is_contain && i < cursor_stmts.count(); i++) {
-    const ObPLCursorForLoopStmt *cfl_stmt = static_cast<ObPLCursorForLoopStmt *>(cursor_stmts.at(i));
-    CK (OB_NOT_NULL(cfl_stmt));
-    if (OB_SUCC(ret) && cfl_stmt->get_stmt_id() == cur_loop_stmt->get_stmt_id()) {
-      is_contain = true;
-      break;
-    }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && !stop && !is_contain && i < stmts.count(); i++) {
-    CK (OB_NOT_NULL(stmts.at(i)));
-    if (OB_SUCC(ret) && PL_BLOCK == stmts.at(i)->get_type()) {
-      OZ (check_contain_cursor_loop_stmt(static_cast<ObPLStmtBlock *>(stmts.at(i)), cur_loop_stmt, is_contain));
-      if (OB_SUCC(ret) && is_contain) {
-        break;
-      }
-    }
+  is_contain = false;
+  CK (OB_NOT_NULL(cur_stmt));
+  CK (OB_NOT_NULL(goto_block));
+  OX (is_contain = (cur_stmt == goto_block));
+  for (int64_t i = 0; OB_SUCC(ret) && !is_contain && i < cur_stmt->get_child_size(); i++) {
+    const ObPLStmt *child_stmt = cur_stmt->get_child_stmt(i);
+    OZ (SMART_CALL(check_contain_goto_block(child_stmt, goto_block, is_contain)));
   }
   return ret;
 }
@@ -17396,6 +17374,64 @@ int ObPLResolver::recursive_replace_expr(ObRawExpr *expr,
     }
   }
   return ret;
+}
+
+ObPLSwitchDatabaseGuard::ObPLSwitchDatabaseGuard(sql::ObSQLSessionInfo &session_info,
+                                                 share::schema::ObSchemaGetterGuard &schema_guard,
+                                                 ObPLCompileUnitAST &func,
+                                                 int &ret_val,
+                                                 bool with_rowid)
+  : ret_(ret_val),
+    session_info_(session_info),
+    database_id_(OB_INVALID_ID),
+    need_reset_(false)
+{
+  int ret = OB_SUCCESS;
+  const share::schema::ObDatabaseSchema *db_schema = NULL;
+  if (func.is_package() && with_rowid) {
+    ObPLPackageAST &pkg_ast = static_cast<ObPLPackageAST &>(func);
+    if (ObTriggerInfo::is_trigger_package_id(pkg_ast.get_id())
+        || ObTriggerInfo::is_trigger_body_package_id(pkg_ast.get_id())) {
+      uint64_t tenant_id = session_info_.get_effective_tenant_id();
+      uint64_t trg_id = ObTriggerInfo::get_package_trigger_id(pkg_ast.get_id());
+      const ObTriggerInfo *trg_info = NULL;
+      const ObTableSchema *table_schema = NULL;
+      OZ (schema_guard.get_trigger_info(tenant_id, trg_id, trg_info));
+      OV (OB_NOT_NULL(trg_info), OB_ERR_UNEXPECTED, K(trg_id));
+      OZ (schema_guard.get_table_schema(tenant_id, trg_info->get_base_object_id(), table_schema));
+      OV (OB_NOT_NULL(table_schema), OB_ERR_UNEXPECTED, KPC(trg_info));
+      OX (database_id_ = table_schema->get_database_id());
+    }
+  }
+  if (OB_SUCC(ret)
+      && session_info_.get_database_id() != database_id_
+      && OB_INVALID_ID != database_id_) {
+    OZ (schema_guard.get_database_schema(session_info_.get_effective_tenant_id(),
+                                         database_id_,
+                                         db_schema));
+    OV (OB_NOT_NULL(db_schema), OB_ERR_UNEXPECTED, K(database_id_));
+    OX (database_id_ = session_info_.get_database_id());
+    OZ (database_name_.append(session_info_.get_database_name()));
+    OZ (session_info_.set_default_database(db_schema->get_database_name_str()));
+    OX (session_info_.set_database_id(db_schema->get_database_id()));
+    OX (need_reset_ = true);
+  }
+  ret_ = ret;
+}
+
+ObPLSwitchDatabaseGuard::~ObPLSwitchDatabaseGuard()
+{
+  int ret = OB_SUCCESS;
+  if (need_reset_) {
+    if (OB_FAIL(session_info_.set_default_database(database_name_.string()))) {
+      LOG_ERROR("failed to reset default database", K(ret), K(database_name_.string()));
+    } else {
+      session_info_.set_database_id(database_id_);
+    }
+  }
+  if (OB_SUCCESS == ret_) {
+    ret_ = ret;
+  }
 }
 
 }

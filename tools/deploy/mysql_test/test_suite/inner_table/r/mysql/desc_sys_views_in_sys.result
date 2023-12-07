@@ -2117,6 +2117,7 @@ COMMENT	varchar(4096)	YES
 PATH	varchar(4096)	YES			
 MINOR_TURN_ID	bigint(20)	NO			
 MAJOR_TURN_ID	bigint(20)	NO			
+DATA_PROGRESS	decimal(26,2)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_BACKUP_TASKS limit 1);
 cnt
 1
@@ -7985,5 +7986,26 @@ QUEUE_4	bigint(20)	NO
 QUEUE_5	bigint(20)	NO			
 LARGE_QUEUED	bigint(20)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_TENANT_RUNTIME_INFO limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_AUX_STATISTICS;
+Field	Type	Null	Key	Default	Extra
+LAST_ANALYZED	timestamp(6)	NO		NULL	
+CPU_SPEED(MHZ)	bigint(20)	YES			
+DISK_SEQ_READ_SPEED(MB/S)	bigint(20)	YES			
+DISK_RND_READ_SPEED(MB/S)	bigint(20)	YES			
+NETWORK_SPEED(MB/S)	bigint(20)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_AUX_STATISTICS limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_AUX_STATISTICS;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+LAST_ANALYZED	timestamp(6)	NO		NULL	
+CPU_SPEED(MHZ)	bigint(20)	YES			
+DISK_SEQ_READ_SPEED(MB/S)	bigint(20)	YES			
+DISK_RND_READ_SPEED(MB/S)	bigint(20)	YES			
+NETWORK_SPEED(MB/S)	bigint(20)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_AUX_STATISTICS limit 1);
 cnt
 1

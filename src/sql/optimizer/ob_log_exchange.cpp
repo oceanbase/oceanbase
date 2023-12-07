@@ -493,7 +493,7 @@ int ObLogExchange::inner_est_cost(int64_t parallel, double child_card, double &o
                                     get_in_server_cnt());
     if (OB_FAIL(ObOptEstCost::cost_exchange_out(est_cost_info,
                                                 op_cost,
-                                                opt_ctx.get_cost_model_type()))) {
+                                                opt_ctx))) {
       LOG_WARN("failed to cost exchange out", K(ret));
     }
   } else {
@@ -507,7 +507,7 @@ int ObLogExchange::inner_est_cost(int64_t parallel, double child_card, double &o
                                    sort_keys_);
     if (OB_FAIL(ObOptEstCost::cost_exchange_in(est_cost_info,
                                                op_cost,
-                                               opt_ctx.get_cost_model_type()))) {
+                                               opt_ctx))) {
       LOG_WARN("failed to cost exchange in", K(ret));
     }
   }

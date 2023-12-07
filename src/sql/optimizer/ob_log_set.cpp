@@ -460,22 +460,24 @@ int ObLogSet::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_c
   double tmp_card = 0.0;
   double child_cost = 0.0;
   ObSEArray<ObBasicCostInfo, 4> cost_infos;
-  ObOptEstCost::MODEL_TYPE model_type = ObOptEstCost::MODEL_TYPE::NORMAL_MODEL;
   const ObSelectStmt *stmt = dynamic_cast<const ObSelectStmt*>(get_stmt());
   if (OB_ISNULL(stmt) || OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FALSE_IT(model_type = get_plan()->get_optimizer_context().get_cost_model_type())) {
   } else if (OB_FAIL(get_re_est_cost_infos(param, cost_infos, child_cost, tmp_card))) {
     LOG_WARN("failed to get re est cost infos", K(ret));
   } else if (is_recursive_union() || !is_set_distinct()) {
     ObCostMergeSetInfo cost_info(cost_infos, get_set_op(), stmt->get_select_item_size());
-    if (OB_FAIL(ObOptEstCost::cost_union_all(cost_info, op_cost, model_type))) {
+    if (OB_FAIL(ObOptEstCost::cost_union_all(cost_info,
+                                             op_cost,
+                                             get_plan()->get_optimizer_context()))) {
       LOG_WARN("estimate cost of SET operator failed", K(ret));
     }
   } else if (MERGE_SET == set_algo_) {
     ObCostMergeSetInfo cost_info(cost_infos, get_set_op(), stmt->get_select_item_size());
-    if (OB_FAIL(ObOptEstCost::cost_merge_set(cost_info, op_cost, model_type))) {
+    if (OB_FAIL(ObOptEstCost::cost_merge_set(cost_info,
+                                             op_cost,
+                                             get_plan()->get_optimizer_context()))) {
       LOG_WARN("estimate cost of SET operator failed", K(ret));
     }
   } else if (HASH_SET == set_algo_) {
@@ -490,7 +492,9 @@ int ObLogSet::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_c
                                        cost_infos.at(1).rows_, cost_infos.at(1).width_,
                                        get_set_op(), select_exprs,
                                        NULL, NULL /* no need for hash set*/ );
-      if (OB_FAIL(ObOptEstCost::cost_hash_set(hash_cost_info, op_cost, model_type))) {
+      if (OB_FAIL(ObOptEstCost::cost_hash_set(hash_cost_info,
+                                              op_cost,
+                                              get_plan()->get_optimizer_context()))) {
         LOG_WARN("Fail to calcuate hash set cost", K(ret));
       }
     }

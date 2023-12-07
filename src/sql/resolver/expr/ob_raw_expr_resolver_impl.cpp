@@ -162,10 +162,10 @@ int ObRawExprResolverImpl::try_negate_const(ObRawExpr *&expr,
         ObObj new_val;
         if (const_expr->get_value().is_decimal_int()) {
           ObDecimalInt *neg_dec = nullptr;
-          if (is_odd
-              && OB_FAIL(wide::negate(const_expr->get_value().get_decimal_int(),
-                                      const_expr->get_value().get_int_bytes(), neg_dec,
-                                      ctx_.expr_factory_.get_allocator()))) {
+          if (!is_odd) {// do nothing
+          } else if (OB_FAIL(wide::negate(const_expr->get_value().get_decimal_int(),
+                                          const_expr->get_value().get_int_bytes(), neg_dec,
+                                          ctx_.expr_factory_.get_allocator()))) {
             LOG_WARN("negate decimal int failed", K(ret));
           } else {
             new_val.set_decimal_int(const_expr->get_value().get_int_bytes(),
@@ -2522,6 +2522,9 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
     LOG_WARN("get sys variables failed", K(ret));
   } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(session_info, enable_decimal_int))) {
     LOG_WARN("fail to check enable decimal int", K(ret));
+  } else if (lib::is_oracle_mode() && ctx_.is_expanding_view_) {
+    // numeric constants should parsed with ObNumber in view expansion for oracle mode
+    enable_decimal_int = false;
   }
 
   if (OB_FAIL(ret)) { // do nothing

@@ -1022,6 +1022,7 @@ int ObTenantTabletScheduler::fill_minor_compaction_param(
   compaction_param.add_time_ = create_time;
   compaction_param.sstable_cnt_ = total_sstable_cnt;
   compaction_param.parallel_dag_cnt_ = parallel_dag_cnt;
+  ObProtectedMemtableMgrHandle *protected_handle = NULL;
 
   ObITable *table = nullptr;
   int64_t row_count = 0;
@@ -1041,8 +1042,12 @@ int ObTenantTabletScheduler::fill_minor_compaction_param(
   }
 
   if (OB_SUCC(ret)) {
-    compaction_param.estimate_concurrent_count(MINOR_MERGE);
-    param.need_swap_tablet_flag_ = ObBasicTabletMergeCtx::need_swap_tablet(*tablet_handle.get_obj(), row_count, macro_count);
+    if (OB_FAIL(tablet_handle.get_obj()->get_protected_memtable_mgr_handle(protected_handle))) {
+      LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret), KPC(tablet_handle.get_obj()));
+    } else {
+      compaction_param.estimate_concurrent_count(MINOR_MERGE);
+      param.need_swap_tablet_flag_ = ObBasicTabletMergeCtx::need_swap_tablet(*protected_handle, row_count, macro_count);
+    }
   }
   return ret;
 }

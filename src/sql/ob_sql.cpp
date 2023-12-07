@@ -1199,10 +1199,6 @@ ObSql::TimeoutGuard::TimeoutGuard(ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
   worker_timeout_ = THIS_WORKER.get_timeout_ts();
-  if (OB_FAIL(session_.get_query_timeout(query_timeout_))
-      || OB_FAIL(session_.get_tx_timeout(trx_timeout_))) {
-    LOG_ERROR("get timeout failed", KR(ret), K(query_timeout_), K(trx_timeout_));
-  }
 }
 
 ObSql::TimeoutGuard::~TimeoutGuard()
@@ -1210,24 +1206,6 @@ ObSql::TimeoutGuard::~TimeoutGuard()
   int ret = OB_SUCCESS;
   if (THIS_WORKER.get_timeout_ts() != worker_timeout_) {
     THIS_WORKER.set_timeout_ts(worker_timeout_);
-  }
-  int64_t query_timeout = 0;
-  int64_t trx_timeout = 0;
-  if (OB_FAIL(session_.get_query_timeout(query_timeout))
-      || OB_FAIL(session_.get_tx_timeout(trx_timeout))) {
-    LOG_ERROR("get timeout failed", KR(ret), K(query_timeout), K(trx_timeout));
-  } else {
-    if (query_timeout != query_timeout_ || trx_timeout != trx_timeout_) {
-      ObObj query_val, trx_val;
-      query_val.set_int(query_timeout_);
-      trx_val.set_int(trx_timeout_);
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(session_.update_sys_variable(SYS_VAR_OB_QUERY_TIMEOUT, query_val))) {
-        LOG_WARN("set sys variable failed", K(ret), K(OB_SV_QUERY_TIMEOUT), K(query_val));
-      } else if (OB_FAIL(session_.update_sys_variable(SYS_VAR_OB_TRX_TIMEOUT, trx_val))) {
-        LOG_WARN("set sys variable failed", K(ret), K(OB_SV_TRX_TIMEOUT), K(trx_val));
-      }
-    }
   }
 }
 

@@ -461,7 +461,7 @@ END_P SET_VAR DELIMITER
 %type <node> drop_index_stmt hint_options opt_expr_as_list expr_as_list expr_with_opt_alias substr_params opt_comma substr_or_substring
 %type <node> /*frozen_type*/ opt_binary
 %type <node> ip_port
-%type <node> create_view_stmt view_name opt_column_list opt_table_id opt_tablet_id view_select_stmt opt_check_option
+%type <node> create_view_stmt view_name opt_column_list opt_table_id opt_tablet_id view_select_stmt opt_check_option opt_tablet_id_no_empty
 %type <node> name_list
 %type <node> partition_role ls_role zone_desc opt_zone_desc server_or_zone opt_server_or_zone opt_partitions opt_subpartitions add_or_alter_zone_options alter_or_change_or_modify
 %type <node> ls opt_tenant_list_or_ls_or_tablet_id ls_server_or_server_or_zone_or_tenant add_or_alter_zone_option
@@ -7851,6 +7851,13 @@ TABLET_ID COMP_EQ INTNUM
   malloc_non_terminal_node($$, result->malloc_pool_, T_TABLET_ID, 1, $3);
 }
 | /*EMPTY*/ { $$ = NULL; }
+;
+
+opt_tablet_id_no_empty:
+TABLET_ID COMP_EQ INTNUM
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLET_ID, 1, $3);
+}
 ;
 /*****************************************************************************
  *
@@ -16871,6 +16878,10 @@ tenant_list_tuple opt_tablet_id
 | tenant_list_tuple ls opt_tablet_id
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_TENANT_LS_TABLET, 3, $1, $2, $3);
+}
+| opt_tablet_id_no_empty
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLET_ID, 1, $1);
 }
 | /*EMPTY*/
 {

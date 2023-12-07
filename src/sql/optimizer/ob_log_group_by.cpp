@@ -344,21 +344,21 @@ int ObLogGroupBy::inner_est_cost(const int64_t parallel, double child_card, doub
     if (SCALAR_AGGREGATE == algo_) {
       op_cost = ObOptEstCost::cost_scalar_group(per_dop_card,
                                                 get_aggr_funcs().count(),
-                                                opt_ctx.get_cost_model_type());
+                                                opt_ctx);
     } else if (MERGE_AGGREGATE == algo_) {
       op_cost = ObOptEstCost::cost_merge_group(per_dop_card,
                                               per_dop_ndv,
                                               child->get_width(),
                                               group_rollup_exprs,
                                               get_aggr_funcs().count(),
-                                              opt_ctx.get_cost_model_type());
+                                              opt_ctx);
     } else {
       op_cost = ObOptEstCost::cost_hash_group(per_dop_card,
                                               per_dop_ndv,
                                               child->get_width(),
                                               group_exprs_,
                                               get_aggr_funcs().count(),
-                                              opt_ctx.get_cost_model_type());
+                                              opt_ctx);
     }
     child_ndv = per_dop_ndv * parallel;
   }

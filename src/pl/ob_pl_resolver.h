@@ -264,9 +264,9 @@ public:
                                    GotoRestrictionType &result);
   int check_goto_cursor_stmts(ObPLGotoStmt &goto_stmt,
                               const ObPLStmt &dst_stmt);
-  int check_contain_cursor_loop_stmt(const ObPLStmtBlock *stmt_block,
-                                     const ObPLCursorForLoopStmt *cur_loop_stmt,
-                                     bool &is_contain);
+  int check_contain_goto_block(const ObPLStmt *cur_stmt,
+                               const ObPLStmtBlock *goto_block,
+                               bool &is_contain);
 public:
   inline ObPLExternalNS &get_external_ns() { return external_ns_; }
   inline const ObPLResolveCtx &get_resolve_ctx() const { return resolve_ctx_; }
@@ -1179,6 +1179,24 @@ private:
   ObArray<ObPLStmt *> goto_stmts_; // goto语句的索引，用来二次解析。
   ObItemType item_type_;
 };
+
+class ObPLSwitchDatabaseGuard
+{
+public:
+  ObPLSwitchDatabaseGuard(sql::ObSQLSessionInfo &session_info,
+                          share::schema::ObSchemaGetterGuard &schema_guard,
+                          ObPLCompileUnitAST &func,
+                          int &ret,
+                          bool with_rowid);
+  virtual ~ObPLSwitchDatabaseGuard();
+private:
+  int &ret_;
+  sql::ObSQLSessionInfo &session_info_;
+  uint64_t database_id_;
+  bool need_reset_;
+  ObSqlString database_name_;
+};
+
 }
 }
 

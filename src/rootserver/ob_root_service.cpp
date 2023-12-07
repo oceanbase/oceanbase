@@ -867,7 +867,7 @@ int ObRootService::init(ObServerConfig &config,
     // init ddl service
     FLOG_WARN("init ddl_service_ failed", KR(ret));
   } else if (OB_FAIL(unit_manager_.init(sql_proxy_, *config_, rpc_proxy_, *schema_service,
-                                        root_balancer_))) {
+                                        root_balancer_, *this))) {
     // init unit manager
     FLOG_WARN("init unit_manager failed", KR(ret));
   } else if (OB_FAIL(snapshot_manager_.init(self_addr_))) {
@@ -6152,12 +6152,22 @@ int ObRootService::create_routine(const ObCreateRoutineArg &arg)
     const ObRoutineInfo* old_routine_info = NULL;
     uint64_t tenant_id = routine_info.get_tenant_id();
     ObString database_name = arg.db_name_;
-    bool is_or_replace = lib::is_oracle_mode() ? arg.is_or_replace_ : arg.is_need_alter_;
-    bool is_inner = lib::is_mysql_mode() ? arg.is_or_replace_ : false;
+    bool is_or_replace = false;
+    bool is_inner = false;
     ObSchemaGetterGuard schema_guard;
     const ObDatabaseSchema *db_schema = NULL;
     const ObUserInfo *user_info = NULL;
-    if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+    bool is_oracle_mode = false;
+    if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(
+                tenant_id, is_oracle_mode))) {
+      LOG_WARN("fail to check is oracle mode", K(ret));
+    } else {
+      is_or_replace = is_oracle_mode ? arg.is_or_replace_ : arg.is_need_alter_;
+      is_inner = is_oracle_mode ? false : arg.is_or_replace_;
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
       LOG_WARN("get schema guard in inner table failed", K(ret));
     } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, database_name, db_schema))) {
       LOG_WARN("get database schema failed", K(ret));
@@ -6175,7 +6185,7 @@ int ObRootService::create_routine(const ObCreateRoutineArg &arg)
     }
     if (OB_SUCC(ret)
         && database_name.case_compare(OB_SYS_DATABASE_NAME) != 0
-        && lib::is_oracle_mode()) {
+        && is_oracle_mode) {
       if (OB_FAIL(schema_guard.get_user_info(
           tenant_id, database_name, ObString(OB_DEFAULT_HOST_NAME), user_info))) {
         LOG_WARN("failed to get user info", K(ret), K(database_name));
@@ -6272,8 +6282,12 @@ int ObRootService::alter_routine(const ObCreateRoutineArg &arg)
     ObErrorInfo error_info = arg.error_info_;
     const ObRoutineInfo *routine_info = NULL;
     ObSchemaGetterGuard schema_guard;
+    bool is_oracle_mode = false;
     const uint64_t tenant_id = arg.routine_info_.get_tenant_id();
-    if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(
+    if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(
+                tenant_id, is_oracle_mode))) {
+      LOG_WARN("fail to check is oracle mode", K(ret));
+    } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(
                                   tenant_id, schema_guard))) {
       LOG_WARN("get schema guard in inner table failed", K(ret), K(tenant_id));
     } else if (OB_FAIL(schema_guard.get_routine_info(
@@ -6284,8 +6298,8 @@ int ObRootService::alter_routine(const ObCreateRoutineArg &arg)
       LOG_WARN("routine info is not exist!", K(ret), K(arg.routine_info_));
     }
     if (OB_FAIL(ret)) {
-    } else if ((lib::is_oracle_mode() && arg.is_or_replace_) ||
-               (lib::is_mysql_mode() && arg.is_need_alter_)) {
+    } else if ((is_oracle_mode && arg.is_or_replace_) ||
+               (!is_oracle_mode && arg.is_need_alter_)) {
       if (OB_FAIL(create_routine(arg))) {
         LOG_WARN("failed to alter routine with create", K(ret));
       }
@@ -6879,7 +6893,11 @@ int ObRootService::create_package(const obrpc::ObCreatePackageArg &arg)
     ObSchemaGetterGuard schema_guard;
     const ObDatabaseSchema *db_schema = NULL;
     const ObUserInfo *user_info = NULL;
-    if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+    bool is_oracle_mode = false;
+    if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(
+                tenant_id, is_oracle_mode))) {
+      LOG_WARN("fail to check is oracle mode", K(ret));
+    } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
       LOG_WARN("get schema guard in inner table failed", K(ret));
     } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, database_name, db_schema))) {
       LOG_WARN("get database schema failed", K(ret));
@@ -6897,7 +6915,7 @@ int ObRootService::create_package(const obrpc::ObCreatePackageArg &arg)
     }
     if (OB_SUCC(ret)
         && database_name.case_compare(OB_SYS_DATABASE_NAME) != 0
-        && lib::is_oracle_mode()) {
+        && is_oracle_mode) {
       if (OB_FAIL(schema_guard.get_user_info(
         tenant_id, database_name, ObString(OB_DEFAULT_HOST_NAME), user_info))) {
         LOG_WARN("failed to get user info", K(ret), K(database_name));
@@ -10743,7 +10761,10 @@ int ObRootService::handle_get_root_key(const obrpc::ObRootKeyArg &arg,
 {
   int ret = OB_SUCCESS;
   ObRootKey root_key;
-  if (OB_UNLIKELY(arg.is_set_ || !arg.is_valid())) {
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(arg.is_set_ || !arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else if (OB_FAIL(ObMasterKeyGetter::instance().get_root_key(arg.tenant_id_, root_key))) {
@@ -10751,19 +10772,18 @@ int ObRootService::handle_get_root_key(const obrpc::ObRootKeyArg &arg,
   } else if (obrpc::RootKeyType::INVALID != root_key.key_type_) {
     result.key_type_ = root_key.key_type_;
     result.root_key_ = root_key.key_;
-  } else if (OB_FAIL(get_root_key_from_obs(arg, result))) {
+  } else if (OB_FAIL(get_root_key_from_obs_(arg, result))) {
     LOG_WARN("failed to get root key from obs", K(ret));
   }
   return ret;
 }
 
-int ObRootService::get_root_key_from_obs(const obrpc::ObRootKeyArg &arg,
-                                         obrpc::ObRootKeyResult &result)
+int ObRootService::get_root_key_from_obs_(const obrpc::ObRootKeyArg &arg,
+                                          obrpc::ObRootKeyResult &result)
 {
   int ret = OB_SUCCESS;
   ObZone empty_zone;
   ObArray<ObAddr> active_server_list;
-  ObArray<ObAddr> inactive_server_list;
   const ObSimpleTenantSchema *simple_tenant = NULL;
   ObSchemaGetterGuard guard;
   const uint64_t tenant_id = arg.tenant_id_;
@@ -10779,12 +10799,11 @@ int ObRootService::get_root_key_from_obs(const obrpc::ObRootKeyArg &arg,
     enable_default = true;
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(SVR_TRACER.get_servers_by_status(empty_zone, active_server_list,
-                                                      inactive_server_list))) {
-    LOG_WARN("get alive servers failed", K(ret));
+  } else if (OB_FAIL(SVR_TRACER.get_alive_servers(empty_zone, active_server_list))) {
+    LOG_WARN("get alive servers failed", KR(ret));
   } else if (OB_FAIL(ObDDLService::notify_root_key(rpc_proxy_, arg, active_server_list, result,
-                                                   enable_default))) {
-    LOG_WARN("failed to notify root key");
+                                                   enable_default, true/*skip_call_rs*/))) {
+    LOG_WARN("failed to notify root key", KR(ret));
   }
   return ret;
 }

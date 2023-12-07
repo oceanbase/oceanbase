@@ -18,6 +18,7 @@
 #include "lib/container/ob_array_iterator.h"
 #include "rootserver/ob_unit_manager.h"
 #include "share/ob_all_server_tracer.h"
+#include "share/ob_unit_table_operator.h"
 #include "rootserver/ob_root_utils.h"
 
 namespace oceanbase
@@ -114,72 +115,14 @@ int ObVTableLocationGetter::get_tenant_vtable_location_(
     ObSArray<ObAddr> &servers)
 {
   int ret = OB_SUCCESS;
-  servers.reuse();
-  ObArray<ObAddr> unit_servers;
-  ObArray<uint64_t> pool_ids;
-  bool unit_mgr_check = unit_mgr_.check_inner_stat();
+  const uint64_t tenant_id = vtable_type.get_tenant_id();
   if (OB_UNLIKELY(!vtable_type.is_valid()
       || !vtable_type.is_tenant_distributed()
-      || is_sys_tenant(vtable_type.get_tenant_id()))) { // sys_tenant should get cluster location
+      || is_sys_tenant(tenant_id))) { // sys_tenant should get cluster location
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("vtable_type is invalid", KR(ret), K(vtable_type));
-  } else if (OB_UNLIKELY(!unit_mgr_check)) {
-    ret = OB_SERVER_IS_INIT;
-    LOG_WARN("unit manager hasn't built", "unit_mgr built", unit_mgr_check, KR(ret));
-  } else if (OB_FAIL(unit_mgr_.get_pool_ids_of_tenant(vtable_type.get_tenant_id(), pool_ids))) {
-    LOG_WARN("get_pool_ids_of_tenant failed", KR(ret), K(vtable_type));
-  } else {
-    ObArray<ObUnitInfo> unit_infos;
-    for (int64_t i = 0; OB_SUCC(ret) && i < pool_ids.count(); ++i) {
-      unit_infos.reuse();
-      if (OB_FAIL(unit_mgr_.get_unit_infos_of_pool(pool_ids.at(i), unit_infos))) {
-        LOG_WARN("get_unit_infos_of_pool failed", "pool_id", pool_ids.at(i), KR(ret));
-      } else {
-        for (int64_t j = 0; OB_SUCC(ret) && j < unit_infos.count(); ++j) {
-          bool is_alive = false;
-          const ObUnit &unit = unit_infos.at(j).unit_;
-          if (OB_FAIL(SVR_TRACER.check_server_alive(unit.server_, is_alive))) {
-            LOG_WARN("check_server_alive failed", KR(ret), K(unit.server_));
-          } else if (is_alive) {
-            if (OB_FAIL(unit_servers.push_back(unit.server_))) {
-              LOG_WARN("push_back failed", KR(ret));
-            }
-          }
-
-          if (OB_SUCC(ret)) {
-            if (unit.migrate_from_server_.is_valid()) {
-              if (OB_FAIL(SVR_TRACER.check_server_alive(unit.migrate_from_server_, is_alive))) {
-                LOG_WARN("check_server_alive failed", KR(ret), K(unit.migrate_from_server_));
-              } else if (is_alive) {
-                if (OB_FAIL(unit_servers.push_back(unit.migrate_from_server_))) {
-                  LOG_WARN("push_back failed", KR(ret));
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // filter duplicated servers
-  if (OB_SUCC(ret)) {
-    std::sort(unit_servers.begin(), unit_servers.end());
-    ObAddr pre_server;
-    for (int64_t i = 0; OB_SUCC(ret) && i < unit_servers.count(); ++i) {
-      if (!unit_servers.at(i).is_valid()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("server not expected to be invalid",
-            "server", unit_servers.at(i), K(unit_servers), KR(ret));
-      } else {
-        if (pre_server != unit_servers.at(i)) {
-          if (OB_FAIL(servers.push_back(unit_servers.at(i)))) {
-            LOG_WARN("push_back failed", KR(ret));
-          }
-        }
-        pre_server = unit_servers.at(i);
-      }
-    }
+  } else if (OB_FAIL(unit_mgr_.get_tenant_alive_servers_non_block(tenant_id, servers))) {
+    LOG_WARN("failed to get tenant alive servers", KR(ret), K(tenant_id));
   }
   return ret;
 }

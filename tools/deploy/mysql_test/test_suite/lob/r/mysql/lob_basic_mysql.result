@@ -717,3 +717,27 @@ CREATE TABLE t1 (c1 tinyblob DEFAULT NULL, c2 varchar(161) DEFAULT 's&7dcwZ3nSn~
 (select nvl( c1 , c2 ) as c from t1) union all (select lower(c3) as c from t1);
 c
 drop table t1;
+CREATE TABLE t1 ( Host char(60) binary DEFAULT '' NOT NULL, Db char(64) binary DEFAULT '' NOT NULL, User char(16) binary DEFAULT '' NOT NULL, Select_priv enum('N','Y') COLLATE utf8_general_ci DEFAULT 'N' NOT NULL,  Create_routine_priv enum('N','Y') COLLATE utf8_general_ci DEFAULT 'N' NOT NULL, col_bit bit(64) default 0b010101, date_registered TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY Host (Host,Db,User), KEY User (User) ) CHARACTER SET utf8 COLLATE utf8_bin comment='Database privileges';
+select column_name, column_default from information_schema.columns where table_name='t1' and table_schema='test';
+column_name	column_default
+Host	
+Db	
+User	
+Select_priv	N
+Create_routine_priv	N
+col_bit	b'10101'
+date_registered	CURRENT_TIMESTAMP
+create view t1v1 as select  * from t1;
+drop table t1;
+CREATE TABLE t1 ( Host char(60) binary DEFAULT '' NOT NULL, Db char(64) binary DEFAULT '' NOT NULL, User char(16) binary DEFAULT '' NOT NULL, Select_priv enum('N','Y') COLLATE utf8_general_ci DEFAULT 'N' NOT NULL,  Create_routine_priv enum('N','Y') COLLATE utf8_general_ci DEFAULT 'N' NOT NULL, col_bit bit(64) default 0b010101, date_registered TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY Host (Host,Db,User), KEY User (User) ) CHARACTER SET utf8 COLLATE utf8_bin comment='Database privileges';
+select column_name, column_default from information_schema.columns where table_name = 't1v1';
+column_name	column_default
+Host	
+Db	
+User	
+Select_priv	N
+Create_routine_priv	N
+col_bit	b'10101'
+date_registered	CURRENT_TIMESTAMP
+drop view t1v1;
+drop table t1;

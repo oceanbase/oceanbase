@@ -509,6 +509,8 @@ struct ObInnerContextMap {
   ObInnerContextHashMap *context_map_;
   common::ObIAllocator &alloc_;
   OB_UNIS_VERSION(1);
+public:
+  TO_STRING_KV(K(context_name_), K(context_map_->size()));
 };
 typedef common::hash::ObHashMap<common::ObString, ObInnerContextMap *,
                                 common::hash::NoPthreadDefendMode,
@@ -1183,7 +1185,7 @@ public:
   void set_prelock(bool prelock) { prelock_ = prelock; }
 
   void set_priv_user_id(uint64_t priv_user_id) { priv_user_id_ = priv_user_id; }
-  uint64_t get_priv_user_id() {
+  uint64_t get_priv_user_id() const {
     return (priv_user_id_ == OB_INVALID_ID) ? get_user_id() : priv_user_id_; }
   int64_t get_xa_end_timeout_seconds() const;
   int set_xa_end_timeout_seconds(int64_t seconds);

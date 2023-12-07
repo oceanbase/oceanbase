@@ -388,4 +388,13 @@ create or replace PACKAGE dbms_stats AUTHID CURRENT_USER
       pname          VARCHAR(65535)
     );
 
+    PROCEDURE GATHER_SYSTEM_STATS();
+
+    PROCEDURE DELETE_SYSTEM_STATS();
+
+    PROCEDURE SET_SYSTEM_STATS (
+      pname          VARCHAR(65535),
+      pvalue         DECIMAL
+    );
+
 END dbms_stats;

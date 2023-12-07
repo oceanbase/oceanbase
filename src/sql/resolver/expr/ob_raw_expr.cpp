@@ -1010,7 +1010,9 @@ bool ObConstRawExpr::inner_same_as(
     //what are you doing ?
     if (NULL != check_context) {
       if (expr.is_const_raw_expr()) {
-        if (T_QUESTIONMARK == expr.get_expr_type()) {
+        if (check_context->ora_numeric_compare_ && T_FUN_SYS_CAST == expr.get_expr_type() && lib::is_oracle_mode()) {
+          bool_ret = check_context->compare_ora_numeric_consts(*this, static_cast<const ObSysFunRawExpr&>(expr));
+        } else if (T_QUESTIONMARK == expr.get_expr_type()) {
           bool_ret = true;
           const ObConstRawExpr *c_expr = static_cast<const ObConstRawExpr *>(&expr);
           int64_t param_idx = -1;
@@ -1077,6 +1079,58 @@ bool ObExprEqualCheckContext::compare_const(const ObConstRawExpr &left,
   if (OB_SUCC(ret) && result && right.get_value().is_unknown()) {
     if (OB_FAIL(add_param_pair(right.get_value().get_unknown(), NULL))) {
       LOG_WARN("add param pair failed", K(ret));
+    }
+  }
+  return result;
+}
+
+bool ObExprEqualCheckContext::compare_ora_numeric_consts(const ObConstRawExpr &left,
+                                                         const ObSysFunRawExpr &right)
+{
+  int &ret = err_code_;
+  bool result = false;
+  if (OB_LIKELY(lib::is_oracle_mode() && right.is_const_expr() && right.get_expr_type() == T_FUN_SYS_CAST)) {
+    ObCastMode cm = right.get_extra();
+    const ObRawExpr *real_right = nullptr;
+    bool is_lossless = false;
+    if (CM_IS_IMPLICIT_CAST(cm) && !CM_IS_CONST_TO_DECIMAL_INT(cm)) {
+      if (OB_FAIL(ObOptimizerUtil::is_lossless_column_cast(&right, is_lossless))) {
+        LOG_WARN("check lossless cast failed", K(ret));
+      } else if (is_lossless) {
+        real_right = right.get_param_expr(0);
+        if (OB_ISNULL(real_right)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid null param expr", K(ret));
+        } else {
+          result = left.same_as(*real_right, this);
+        }
+      }
+    }
+  }
+  return result;
+}
+
+bool ObExprEqualCheckContext::compare_ora_numeric_consts(const ObSysFunRawExpr &left, const ObConstRawExpr &right)
+{
+  int &ret = err_code_;
+  LOG_INFO("debug test");
+  bool result = false;
+  if (OB_LIKELY(lib::is_oracle_mode() && left.get_expr_type()== T_FUN_SYS_CAST && left.is_const_expr())) {
+    ObCastMode cm = left.get_extra();
+    const ObRawExpr *real_left = nullptr;
+    bool is_lossless = false;
+    if (CM_IS_IMPLICIT_CAST(cm) && !CM_IS_CONST_TO_DECIMAL_INT(cm)) {
+      if (OB_FAIL(ObOptimizerUtil::is_lossless_column_cast(&left, is_lossless))) {
+        LOG_WARN("check lossless cast failed", K(ret));
+      } else if (is_lossless) {
+        real_left = left.get_param_expr(0);
+        if (OB_ISNULL(real_left)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid null param expr", K(ret));
+        } else {
+          result = real_left->same_as(right, this);
+        }
+      }
     }
   }
   return result;
@@ -1322,7 +1376,11 @@ int ObQueryRefRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
   for (int64_t i = 0; OB_SUCC(ret) && i < exec_params_.count(); ++i) {
     ObRawExpr *exec_param = exec_params_.at(i);
     ObRawExpr *new_expr = NULL;
-    if (OB_FAIL(copier.do_copy_expr(exec_param, new_expr))) {
+    if (OB_FAIL(copier.find_in_copy_context(exec_param, new_expr))) {
+      LOG_WARN("failed to find in copy context", K(ret));
+    } else if (new_expr != NULL) {
+      exec_params_.at(i) = static_cast<ObExecParamRawExpr *>(new_expr);
+    } else if (OB_FAIL(copier.do_copy_expr(exec_param, new_expr))) {
       LOG_WARN("failed to copy exec param", K(ret));
     } else if (OB_ISNULL(new_expr) ||
                OB_UNLIKELY(!new_expr->is_exec_param_expr())) {
@@ -3717,6 +3775,10 @@ bool ObSysFunRawExpr::inner_same_as(
 {
   bool bool_ret = false;
   if (get_expr_type() != expr.get_expr_type()) {
+    if (check_context != NULL && check_context->ora_numeric_compare_ && expr.is_const_raw_expr()
+        && T_FUN_SYS_CAST == get_expr_type() && lib::is_oracle_mode()) {
+      bool_ret = check_context->compare_ora_numeric_consts(*this, static_cast<const ObConstRawExpr &>(expr));
+    }
   } else if (T_FUN_SYS_RAND == get_expr_type() ||
              T_FUN_SYS_RANDOM == get_expr_type() ||
              T_FUN_SYS_GUID == get_expr_type() ||

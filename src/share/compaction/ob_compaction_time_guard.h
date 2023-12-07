@@ -18,7 +18,8 @@ namespace compaction
 class ObCompactionTimeGuard : public common::occam::ObOccamTimeGuard
 {
 public:
-  ObCompactionTimeGuard(const uint64_t warn_threshold = 0, const char *mod = "")
+  const static uint64_t WARN_THRESHOLD = 30L * 1000 * 1000; // 30s
+  ObCompactionTimeGuard(const uint64_t warn_threshold = WARN_THRESHOLD, const char *mod = "")
     : ObOccamTimeGuard(warn_threshold, nullptr, nullptr, mod),
       add_time_(0)
   {}

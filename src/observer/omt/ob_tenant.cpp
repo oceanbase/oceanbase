@@ -66,6 +66,8 @@ using namespace oceanbase::obrpc;
 #define EXPAND_INTERVAL (1 * 1000 * 1000)
 #define SHRINK_INTERVAL (1 * 1000 * 1000)
 
+int64_t FASTSTACK_REQ_QUEUE_SIZE_THRESHOLD = INT64_MAX;
+
 extern "C" {
 int ob_pthread_create(void **ptr, void *(*start_routine) (void *), void *arg);
 int ob_pthread_tryjoin_np(void *ptr);
@@ -867,7 +869,7 @@ void ObTenant::sleep_and_warn(ObTenant* tenant)
 {
   ob_usleep(10_ms);
   const int64_t ts = ObTimeUtility::current_time() - tenant->stopped_;
-  if (ts >= 3_min && TC_REACH_TIME_INTERVAL(3_min)) {
+  if (ts >= 3L * 60 * 1000 * 1000 && TC_REACH_TIME_INTERVAL(3L * 60 * 1000 * 1000)) {
     LOG_ERROR_RET(OB_SUCCESS, "tenant destructed for too long time.", K_(tenant->id), K(ts));
   }
 }
@@ -940,16 +942,19 @@ void* ObTenant::wait(void* t)
 int ObTenant::try_wait()
 {
   int ret = OB_SUCCESS;
-  if (nullptr == gc_thread_) {
-    if (has_created_) {
-      LOG_WARN("try_wait after wait successfully", K(id_), K(wait_mtl_finished_));
+  if (OB_ISNULL(ATOMIC_LOAD(&gc_thread_))) {
+    if (!ATOMIC_BCAS(&has_created_, false, true)) {
+      // there will be double-try_wait when kill -15 or failure of locking,
+      // so we have to tolerate that and return OB_SUCCESS although it is not correct.
+      // ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("try_wait again after wait successfully, there may be `kill -15` or failure of locking", K(id_), K(wait_mtl_finished_));
     } else {
       // it may takes too much time for killing session after remove_tenant, we should recalculate.
-      ATOMIC_STORE(&stopped_, ObTimeUtility::current_time());
+      ATOMIC_STORE(&stopped_, ObTimeUtility::current_time()); // update, it is not 0 before here.
       if (OB_FAIL(ob_pthread_create(&gc_thread_, wait, this))) {
+        ATOMIC_STORE(&has_created_, false);
         LOG_ERROR("tenant gc thread create failed", K(ret), K(errno), K(id_));
       } else {
-        has_created_ = true;
         ret = OB_EAGAIN;
         LOG_INFO("tenant pthread_create gc thread successfully", K(id_), K(gc_thread_));
       }
@@ -958,12 +963,12 @@ int ObTenant::try_wait()
     if (OB_FAIL(ob_pthread_tryjoin_np(gc_thread_))) {
       LOG_WARN("tenant pthread_tryjoin_np failed", K(errno), K(id_));
     } else {
-      gc_thread_ = nullptr; // avoid try_wait again after wait success
+      ATOMIC_STORE(&gc_thread_, nullptr); // avoid try_wait again after wait success
       LOG_INFO("tenant pthread_tryjoin_np successfully", K(id_));
     }
     const int64_t ts = ObTimeUtility::current_time() - stopped_;
     // only warn for one time in all tenant.
-    if (ts >= 3_min && REACH_TIME_INTERVAL(3_min)) {
+    if (ts >= 3L * 60 * 1000 * 1000 && REACH_TIME_INTERVAL(3L * 60 * 1000 * 1000)) {
       LOG_ERROR_RET(OB_SUCCESS, "tenant destructed for too long time.", K_(id), K(ts));
     }
   }
@@ -1344,7 +1349,7 @@ int ObTenant::recv_request(ObRequest &req)
   if (OB_SUCC(ret)) {
     ObTenantStatEstGuard guard(id_);
     EVENT_INC(REQUEST_ENQUEUE_COUNT);
-  } else if (OB_SIZE_OVERFLOW == ret) {
+  } else if (OB_SIZE_OVERFLOW == ret || req_queue_.size() >= FASTSTACK_REQ_QUEUE_SIZE_THRESHOLD) {
     IGNORE_RETURN faststack();
   }
 

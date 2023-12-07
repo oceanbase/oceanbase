@@ -30,6 +30,8 @@ struct ObExprSelPair;
 struct JoinFilterInfo;
 class OptTableMetas;
 class OptSelectivityCtx;
+class ObOptCostModelParameter;
+class OptSystemStat;
 
 enum RowCountEstMethod
 {
@@ -633,171 +635,11 @@ public:
   const static int64_t DEFAULT_LOCAL_ORDER_DEGREE;
   const static int64_t DEFAULT_MAX_STRING_WIDTH;
   const static int64_t DEFAULT_FIXED_OBJ_WIDTH;
-  enum PROJECT_TYPE {
-    PROJECT_INT = 0,
-    PROJECT_NUMBER,
-    PROJECT_CHAR,
-    MAX_PROJECT_TYPE
-  };
 
-  struct ObCostParams
-  {
-    explicit ObCostParams(
-    const double DEFAULT_CPU_TUPLE_COST,
-    const double DEFAULT_TABLE_SCAN_CPU_TUPLE_COST,
-    const double DEFAULT_MICRO_BLOCK_SEQ_COST,
-    const double DEFAULT_MICRO_BLOCK_RND_COST,
-    const double DEFAULT_FETCH_ROW_RND_COST,
-    const double DEFAULT_CMP_GEO_COST,
-    const double DEFAULT_MATERIALIZE_PER_BYTE_WRITE_COST,
-    const double DEFAULT_READ_MATERIALIZED_PER_ROW_COST,
-    const double DEFAULT_PER_AGGR_FUNC_COST,
-    const double DEFAULT_PER_WIN_FUNC_COST,
-    const double DEFAULT_CPU_OPERATOR_COST,
-    const double DEFAULT_JOIN_PER_ROW_COST,
-    const double DEFAULT_BUILD_HASH_PER_ROW_COST,
-    const double DEFAULT_PROBE_HASH_PER_ROW_COST,
-    const double DEFAULT_RESCAN_COST,
-    const double DEFAULT_NETWORK_SER_PER_BYTE_COST,
-    const double DEFAULT_NETWORK_DESER_PER_BYTE_COST,
-    const double DEFAULT_NETWORK_TRANS_PER_BYTE_COST,
-    const double DEFAULT_PX_RESCAN_PER_ROW_COST,
-    const double DEFAULT_PX_BATCH_RESCAN_PER_ROW_COST,
-    const double DEFAULT_NL_SCAN_COST,
-    const double DEFAULT_BATCH_NL_SCAN_COST,
-    const double DEFAULT_NL_GET_COST,
-    const double DEFAULT_BATCH_NL_GET_COST,
-    const double DEFAULT_TABLE_LOOPUP_PER_ROW_RPC_COST,
-    const double DEFAULT_INSERT_PER_ROW_COST,
-    const double DEFAULT_INSERT_INDEX_PER_ROW_COST,
-    const double DEFAULT_INSERT_CHECK_PER_ROW_COST,
-    const double DEFAULT_UPDATE_PER_ROW_COST,
-    const double DEFAULT_UPDATE_INDEX_PER_ROW_COST,
-    const double DEFAULT_UPDATE_CHECK_PER_ROW_COST,
-    const double DEFAULT_DELETE_PER_ROW_COST,
-    const double DEFAULT_DELETE_INDEX_PER_ROW_COST,
-    const double DEFAULT_DELETE_CHECK_PER_ROW_COST,
-    const double DEFAULT_SPATIAL_PER_ROW_COST,
-    const double DEFAULT_RANGE_COST
-    )
-    : CPU_TUPLE_COST(DEFAULT_CPU_TUPLE_COST),
-      TABLE_SCAN_CPU_TUPLE_COST(DEFAULT_TABLE_SCAN_CPU_TUPLE_COST),
-      MICRO_BLOCK_SEQ_COST(DEFAULT_MICRO_BLOCK_SEQ_COST),
-      MICRO_BLOCK_RND_COST(DEFAULT_MICRO_BLOCK_RND_COST),
-      FETCH_ROW_RND_COST(DEFAULT_FETCH_ROW_RND_COST),
-      CMP_SPATIAL_COST(DEFAULT_CMP_GEO_COST),
-      MATERIALIZE_PER_BYTE_WRITE_COST(DEFAULT_MATERIALIZE_PER_BYTE_WRITE_COST),
-      READ_MATERIALIZED_PER_ROW_COST(DEFAULT_READ_MATERIALIZED_PER_ROW_COST),
-      PER_AGGR_FUNC_COST(DEFAULT_PER_AGGR_FUNC_COST),
-      PER_WIN_FUNC_COST(DEFAULT_PER_WIN_FUNC_COST),
-      CPU_OPERATOR_COST(DEFAULT_CPU_OPERATOR_COST),
-      JOIN_PER_ROW_COST(DEFAULT_JOIN_PER_ROW_COST),
-      BUILD_HASH_PER_ROW_COST(DEFAULT_BUILD_HASH_PER_ROW_COST),
-      PROBE_HASH_PER_ROW_COST(DEFAULT_PROBE_HASH_PER_ROW_COST),
-      RESCAN_COST(DEFAULT_RESCAN_COST),
-      NETWORK_SER_PER_BYTE_COST(DEFAULT_NETWORK_SER_PER_BYTE_COST),
-      NETWORK_DESER_PER_BYTE_COST(DEFAULT_NETWORK_DESER_PER_BYTE_COST),
-      NETWORK_TRANS_PER_BYTE_COST(DEFAULT_NETWORK_TRANS_PER_BYTE_COST),
-      PX_RESCAN_PER_ROW_COST(DEFAULT_PX_RESCAN_PER_ROW_COST),
-      PX_BATCH_RESCAN_PER_ROW_COST(DEFAULT_PX_BATCH_RESCAN_PER_ROW_COST),
-      NL_SCAN_COST(DEFAULT_NL_SCAN_COST),
-      BATCH_NL_SCAN_COST(DEFAULT_BATCH_NL_SCAN_COST),
-      NL_GET_COST(DEFAULT_NL_GET_COST),
-      BATCH_NL_GET_COST(DEFAULT_BATCH_NL_GET_COST),
-      TABLE_LOOPUP_PER_ROW_RPC_COST(DEFAULT_TABLE_LOOPUP_PER_ROW_RPC_COST),
-      INSERT_PER_ROW_COST(DEFAULT_INSERT_PER_ROW_COST),
-      INSERT_INDEX_PER_ROW_COST(DEFAULT_INSERT_INDEX_PER_ROW_COST),
-      INSERT_CHECK_PER_ROW_COST(DEFAULT_INSERT_CHECK_PER_ROW_COST),
-      UPDATE_PER_ROW_COST(DEFAULT_UPDATE_PER_ROW_COST),
-      UPDATE_INDEX_PER_ROW_COST(DEFAULT_UPDATE_INDEX_PER_ROW_COST),
-      UPDATE_CHECK_PER_ROW_COST(DEFAULT_UPDATE_CHECK_PER_ROW_COST),
-      DELETE_PER_ROW_COST(DEFAULT_DELETE_PER_ROW_COST),
-      DELETE_INDEX_PER_ROW_COST(DEFAULT_DELETE_INDEX_PER_ROW_COST),
-      DELETE_CHECK_PER_ROW_COST(DEFAULT_DELETE_CHECK_PER_ROW_COST),
-      SPATIAL_PER_ROW_COST(DEFAULT_SPATIAL_PER_ROW_COST),
-      RANGE_COST(DEFAULT_RANGE_COST)
-    {}
-    /** 读取一行的CPU开销，基本上只包括get_next_row()操作 */
-    double CPU_TUPLE_COST;
-    /** 存储层吐出一行的代价 **/
-    double TABLE_SCAN_CPU_TUPLE_COST;
-    /** 顺序读取一个微块并反序列化的开销 */
-    double MICRO_BLOCK_SEQ_COST;
-    /** 随机读取一个微块并反序列化的开销 */
-    double MICRO_BLOCK_RND_COST;
-    /** 随机读取中定位某一行所在位置的开销 */
-    double FETCH_ROW_RND_COST;
-    /** 比较一次空间数据的代价 */
-    double CMP_SPATIAL_COST;
-    /** 物化一个字节的代价 */
-    double MATERIALIZE_PER_BYTE_WRITE_COST;
-    /** 读取物化后的行的代价，即对物化后数据结构的get_next_row() */
-    double READ_MATERIALIZED_PER_ROW_COST;
-    /** 一次聚集函数计算的代价 */
-    double PER_AGGR_FUNC_COST;
-    /** 一次窗口函数计算的代价 */
-    double PER_WIN_FUNC_COST;
-    /** 一次操作的基本代价 */
-    double CPU_OPERATOR_COST;
-    /** 连接两表的一行的基本代价 */
-    double JOIN_PER_ROW_COST;
-    /** 构建hash table时每行的均摊代价 */
-    double BUILD_HASH_PER_ROW_COST;
-    /** 查询hash table时每行的均摊代价 */
-    double PROBE_HASH_PER_ROW_COST;
-    double RESCAN_COST;
-    /*network serialization cost for one byte*/
-    double NETWORK_SER_PER_BYTE_COST;
-    /*network de-serialization cost for one byte*/
-    double NETWORK_DESER_PER_BYTE_COST;
-    /** 网络传输1个字节的代价 */
-    double NETWORK_TRANS_PER_BYTE_COST;
-    /*additional px-rescan cost*/
-    double PX_RESCAN_PER_ROW_COST;
-    double PX_BATCH_RESCAN_PER_ROW_COST;
-    //条件下压nestloop join右表扫一次的代价
-    double NL_SCAN_COST;
-    //条件下压batch nestloop join右表扫一次的代价
-    double BATCH_NL_SCAN_COST;
-    //条件下压nestloop join右表GET一次的代价
-    double NL_GET_COST;
-    //条件下压batch nestloop join右表GET一次的代价
-    double BATCH_NL_GET_COST;
-    //table look up一行的rpc代价
-    double TABLE_LOOPUP_PER_ROW_RPC_COST;
-    //insert一行主表的代价
-    double INSERT_PER_ROW_COST;
-    //insert一行索引表的代价
-    double INSERT_INDEX_PER_ROW_COST;
-    //insert单个约束检查代价
-    double INSERT_CHECK_PER_ROW_COST;
-    //update一行主表的代价
-    double UPDATE_PER_ROW_COST;
-    //update一行索引表的代价
-    double UPDATE_INDEX_PER_ROW_COST;
-    //update单个约束检查代价
-    double UPDATE_CHECK_PER_ROW_COST;
-    //delete一行主表的代价
-    double DELETE_PER_ROW_COST;
-    //delete一行索引表的代价
-    double DELETE_INDEX_PER_ROW_COST;
-    //delete单个约束检查代价
-    double DELETE_CHECK_PER_ROW_COST;
-    //空间索引扫描的线性参数
-    double SPATIAL_PER_ROW_COST;
-    //存储层切换一次range的代价
-    double RANGE_COST;
-  };
-
-	ObOptEstCostModel(
-			const double (&comparison_params)[common::ObMaxTC + 1],
-			const double (&hash_params)[common::ObMaxTC + 1],
-			const double (&project_params)[2][2][MAX_PROJECT_TYPE],
-			const ObCostParams &cost_params)
-		:comparison_params_(comparison_params),
-		hash_params_(hash_params),
-    project_params_(project_params),
-		cost_params_(cost_params)
+	ObOptEstCostModel(const ObOptCostModelParameter &cost_params,
+                    const OptSystemStat &stat)
+		:cost_params_(cost_params),
+    sys_stat_(stat)
 	{}
 
   virtual ~ObOptEstCostModel()=default;
@@ -1040,20 +882,10 @@ protected:
                           double row_count,
                           bool is_get,
                           double &cost);
+
 protected:
-  const double (&comparison_params_)[common::ObMaxTC + 1];
-  const double (&hash_params_)[common::ObMaxTC + 1];
-  /*
-   *                             +-sequence access project
-   *              +-row store----+
-   *              |              +-random access project
-   * project cost-+
-   *              |              +-sequence access project
-   *              +-column store-+
-   *                             +-random access project
-   */
-  const double (&project_params_)[2][2][MAX_PROJECT_TYPE];
-  const ObCostParams &cost_params_;
+  const ObOptCostModelParameter &cost_params_;
+  const OptSystemStat &sys_stat_;
   DISALLOW_COPY_AND_ASSIGN(ObOptEstCostModel);
 };
 

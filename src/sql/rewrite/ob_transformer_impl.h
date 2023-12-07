@@ -117,7 +117,8 @@ public:
       contain_unpivot_query_(false),
       contain_enum_set_values_(false),
       contain_geometry_values_(false),
-      contain_link_table_(false)
+      contain_link_table_(false),
+      contain_json_table_(false)
     {}
 
     bool all_found() const {
@@ -128,7 +129,8 @@ public:
           contain_unpivot_query_ &&
           contain_enum_set_values_ &&
           contain_geometry_values_ &&
-          contain_link_table_;
+          contain_link_table_ &&
+          contain_json_table_;
     }
 
     bool contain_hie_query_;
@@ -139,6 +141,7 @@ public:
     bool contain_enum_set_values_;
     bool contain_geometry_values_;
     bool contain_link_table_;
+    bool contain_json_table_;
   };
   int check_stmt_functions(ObDMLStmt *stmt, StmtFunc &func);
   int check_temp_table_functions(ObDMLStmt *stmt, StmtFunc &func);

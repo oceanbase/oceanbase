@@ -771,6 +771,7 @@ int ObUnitTableOperator::get_units_by_tenant(const uint64_t tenant_id,
   } else {
     ObSqlString sql;
     ObTimeoutCtx ctx;
+    units.reuse();
     if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
       LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
     } else if (OB_FAIL(sql.append_fmt("SELECT * from %s where resource_pool_id in "

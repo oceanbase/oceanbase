@@ -5955,7 +5955,7 @@ last_date	timestamp(6)	YES		NULL
 this_date	timestamp(6)	YES		NULL	
 next_date	timestamp(6)	NO		NULL	
 total	bigint(20)	YES		0	
-interval#	varchar(200)	NO		NULL	
+interval#	varchar(4000)	NO		NULL	
 failures	bigint(20)	YES		0	
 flag	bigint(20)	NO		NULL	
 what	varchar(4000)	YES		NULL	
@@ -5967,10 +5967,10 @@ exec_env	varchar(2048)	YES		NULL
 job_style	varchar(128)	YES		NULL	
 program_name	varchar(128)	YES		NULL	
 job_type	varchar(128)	YES		NULL	
-job_action	varchar(128)	YES		NULL	
+job_action	varchar(4000)	YES		NULL	
 number_of_argument	bigint(20)	YES		NULL	
 start_date	timestamp(6)	YES		NULL	
-repeat_interval	varchar(128)	YES		NULL	
+repeat_interval	varchar(4000)	YES		NULL	
 end_date	timestamp(6)	YES		NULL	
 job_class	varchar(128)	YES		NULL	
 enabled	tinyint(4)	YES		NULL	
@@ -8642,5 +8642,18 @@ failed_trigger_count	bigint(20)	NO		NULL
 result	varchar(64)	YES			
 comment	longtext	YES			
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_import_table_task_history;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_aux_stat;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+last_analyzed	timestamp(6)	NO		NULL	
+cpu_speed	bigint(20)	YES		2500	
+disk_seq_read_speed	bigint(20)	YES		2000	
+disk_rnd_read_speed	bigint(20)	YES		150	
+network_speed	bigint(20)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_aux_stat;
 IF(count(*) >= 0, 1, 0)
 1

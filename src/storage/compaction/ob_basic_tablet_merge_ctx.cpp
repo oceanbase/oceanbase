@@ -526,11 +526,11 @@ int ObBasicTabletMergeCtx::swap_tablet()
   return ret;
 }
 
-bool ObBasicTabletMergeCtx::need_swap_tablet(const ObTablet &tablet,
+bool ObBasicTabletMergeCtx::need_swap_tablet(ObProtectedMemtableMgrHandle &memtable_mgr_handle,
                                              const int64_t row_count,
                                              const int64_t macro_count)
 {
-  bool bret = tablet.has_memtable()
+  bool bret = memtable_mgr_handle.has_memtable()
     && (row_count >= LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD
       || macro_count >= LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD);
 #ifdef ERRSIM
@@ -1031,6 +1031,7 @@ int ObBasicTabletMergeCtx::swap_tablet(ObGetMergeTablesResult &get_merge_table_r
     LOG_WARN("ha status is not allowed major", KR(ret), KPC(this));
   } else {
     ObTablesHandleArray &tables_handle = get_merge_table_result.handle_;
+    ObProtectedMemtableMgrHandle *protected_handle = NULL;
     int64_t row_count = 0;
     int64_t macro_count = 0;
     const ObSSTable *sstable = nullptr;
@@ -1039,7 +1040,9 @@ int ObBasicTabletMergeCtx::swap_tablet(ObGetMergeTablesResult &get_merge_table_r
       row_count += sstable->get_row_count();
       macro_count += sstable->get_data_macro_block_count();
     } // end of for
-    if (need_swap_tablet(*get_tablet(), row_count, macro_count)) {
+    if (OB_FAIL(get_tablet()->get_protected_memtable_mgr_handle(protected_handle))) {
+      LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret), KPC(get_tablet()));
+    } else if (need_swap_tablet(*protected_handle, row_count, macro_count)) {
       tables_handle.reset(); // clear tables array
       if (OB_FAIL(swap_tablet())) {
         LOG_WARN("failed to get alloc tablet handle", KR(ret));

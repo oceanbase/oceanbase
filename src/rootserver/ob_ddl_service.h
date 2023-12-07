@@ -1978,6 +1978,7 @@ public:
              const common::ObIArray<common::ObAddr> &addrs,
              obrpc::ObRootKeyResult &result,
              const bool enable_default = true,
+             const bool skip_call_rs = false,
              const uint64_t &cluster_id = OB_INVALID_CLUSTER_ID,
              common::ObIAllocator *allocator = NULL);
 #endif

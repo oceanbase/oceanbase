@@ -299,6 +299,14 @@
                                             "WHERE %.*s "\
                                             "ORDER BY tenant_id, table_id, partition_id, column_id, endpoint_num;"
 
+#define INSERT_SYSTEM_STAT_SQL "REPLACE INTO %s(tenant_id," \
+                                                "last_analyzed," \
+                                                "cpu_speed," \
+                                                "disk_seq_read_speed," \
+                                                "disk_rnd_read_speed," \
+                                                "network_speed) VALUES "
+
+#define DELETE_SYSTEM_STAT_SQL "DELETE FROM %s WHERE TENANT_ID=%ld"
 
 namespace oceanbase
 {
@@ -2255,6 +2263,155 @@ int ObOptStatSqlService::get_gather_stat_value(const ObOptStatGatherStat &gather
   return ret;
 }
 
+
+int ObOptStatSqlService::update_system_stats(const uint64_t tenant_id,
+                                            const ObOptSystemStat *system_stat)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString system_stat_sql;
+  ObSqlString tmp;
+  int64_t current_time = ObTimeUtility::current_time();
+  int64_t affected_rows = 0;
+  if (OB_ISNULL(system_stat)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table stat is null", K(ret), K(system_stat));
+  } else if (OB_FAIL(system_stat_sql.append_fmt(INSERT_SYSTEM_STAT_SQL, OB_ALL_AUX_STAT_TNAME))) {
+    LOG_WARN("failed to append sql", K(ret));
+  } else if (OB_FAIL(get_system_stat_sql(tenant_id, *system_stat, current_time, tmp))) {
+    LOG_WARN("failed to get table stat sql", K(ret));
+  } else if (OB_FAIL(system_stat_sql.append_fmt("(%s);", tmp.ptr()))) {
+    LOG_WARN("failed to append system stat sql", K(ret));
+  } else {
+    ObMySQLTransaction trans;
+    LOG_TRACE("sql string of system stat update", K(system_stat_sql));
+    if (OB_FAIL(trans.start(mysql_proxy_, tenant_id))) {
+      LOG_WARN("fail to start transaction", K(ret), K(tenant_id));
+    } else if (OB_FAIL(trans.write(tenant_id, system_stat_sql.ptr(), affected_rows))) {
+      LOG_WARN("failed to exec sql", K(ret));
+    } else {/*do nothing*/}
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(trans.end(true))) {
+        LOG_WARN("fail to commit transaction", K(ret));
+      }
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
+        LOG_WARN("fail to roll back transaction", K(tmp_ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOptStatSqlService::get_system_stat_sql(const uint64_t tenant_id,
+                                            const ObOptSystemStat &stat,
+                                            const int64_t current_time,
+                                            ObSqlString &sql_string)
+{
+  int ret = OB_SUCCESS;
+  share::ObDMLSqlSplicer dml_splicer;
+  uint64_t ext_tenant_id = ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id);
+  if (OB_FAIL(dml_splicer.add_pk_column("tenant_id", ext_tenant_id)) ||
+      OB_FAIL(dml_splicer.add_time_column("last_analyzed", stat.get_last_analyzed() == 0 ?
+                                                        current_time : stat.get_last_analyzed())) ||
+      OB_FAIL(dml_splicer.add_column("cpu_speed", stat.get_cpu_speed())) ||
+      OB_FAIL(dml_splicer.add_column("disk_seq_read_speed", stat.get_disk_seq_read_speed())) ||
+      OB_FAIL(dml_splicer.add_column("disk_rnd_read_speed", stat.get_disk_rnd_read_speed())) ||
+      OB_FAIL(dml_splicer.add_column("network_speed", stat.get_network_speed()))) {
+    LOG_WARN("failed to add dml splicer column", K(ret));
+  } else if (OB_FAIL(dml_splicer.splice_values(sql_string))) {
+    LOG_WARN("failed to get sql string", K(ret));
+  } else { /*do nothing*/ }
+  return ret;
+}
+
+int ObOptStatSqlService::fetch_system_stat(const uint64_t tenant_id,
+                                          const ObOptSystemStat::Key &key,
+                                          ObOptSystemStat &stat)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to get data version", K(ret));
+  } else if (data_version >= DATA_VERSION_4_3_0_0) {
+    ObSQLClientRetryWeak sql_client_retry_weak(mysql_proxy_, false, OB_INVALID_TIMESTAMP, false);
+    int64_t ext_tenant_id = ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id);
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = NULL;
+      ObSqlString sql;
+      uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+      if (!inited_) {
+        ret = OB_NOT_INIT;
+        LOG_WARN("sql service has not been initialized.", K(ret));
+      } else if (OB_FAIL(sql.append_fmt("SELECT * FROM %s ", share::OB_ALL_AUX_STAT_TNAME))) {
+        LOG_WARN("fail to append SQL stmt string.", K(sql), K(ret));
+      } else if (OB_FAIL(sql.append_fmt(" WHERE TENANT_ID = %ld", ext_tenant_id))) {
+        LOG_WARN("fail to append SQL where string.", K(ret));
+      } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", "sql", sql.ptr(), K(ret));
+      } else if (NULL == (result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to execute ", "sql", sql.ptr(), K(ret));
+      } else if (OB_FAIL(result->next())) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("get next row failed", K(ret));
+        } else {
+          ret = OB_SUCCESS;
+        }
+      } else if (OB_FAIL(fill_system_stat(*result, stat))) {
+        LOG_WARN("failed to fill system stat", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOptStatSqlService::fill_system_stat(sqlclient::ObMySQLResult &result, ObOptSystemStat &stat)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("sql service has not been initialized.", K(ret));
+  } else {
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, cpu_speed, stat, int64_t, true, true, 0);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, disk_seq_read_speed, stat, int64_t, true, true, 0);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, disk_rnd_read_speed, stat, int64_t, true, true, 0);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, network_speed, stat, int64_t, true, true, 0);
+  }
+  return ret;
+}
+
+int ObOptStatSqlService::delete_system_stats(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString system_stat_sql;
+  int64_t current_time = ObTimeUtility::current_time();
+  int64_t affected_rows = 0;
+  int64_t ext_tenant_id = ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id);
+  if (OB_FAIL(system_stat_sql.append_fmt(DELETE_SYSTEM_STAT_SQL, OB_ALL_AUX_STAT_TNAME, ext_tenant_id))) {
+    LOG_WARN("failed to append sql", K(ret));
+  } else {
+    ObMySQLTransaction trans;
+    LOG_TRACE("sql string of system stat delete", K(system_stat_sql));
+    if (OB_FAIL(trans.start(mysql_proxy_, tenant_id))) {
+      LOG_WARN("fail to start transaction", K(ret), K(tenant_id));
+    } else if (OB_FAIL(trans.write(tenant_id, system_stat_sql.ptr(), affected_rows))) {
+      LOG_WARN("failed to exec sql", K(ret));
+    } else {/*do nothing*/}
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(trans.end(true))) {
+        LOG_WARN("fail to commit transaction", K(ret));
+      }
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
+        LOG_WARN("fail to roll back transaction", K(tmp_ret));
+      }
+    }
+  }
+  return ret;
+}
+
 } // end of namespace common
 } // end of namespace oceanbase
 
@@ -2271,3 +2428,5 @@ int ObOptStatSqlService::get_gather_stat_value(const ObOptStatGatherStat &gather
 #undef INSERT_ONLINE_TABLE_STAT_DUPLICATE
 #undef INSERT_ONLINE_COL_STAT_SQL
 #undef INSERT_ONLINE_COL_STAT_DUPLICATE
+#undef INERT_SYSTEM_STAT_SQL
+#undef DELETE_SYSTEM_STAT_SQL

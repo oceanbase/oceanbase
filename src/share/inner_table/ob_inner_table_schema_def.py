@@ -2804,7 +2804,7 @@ def_table_schema(
       ('user_message', 'longtext', 'true'),
       ('dba_message', 'varchar:OB_MAX_ERROR_MSG_LEN', 'true'),
       ('parent_task_id', 'int', 'false', 0),
-      ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true', 'NULL')
+      ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true')
     ],
 )
 
@@ -4341,7 +4341,7 @@ def_table_schema(
     ('this_date', 'timestamp', 'true'),
     ('next_date', 'timestamp', 'false'),
     ('total', 'int', 'true', '0'),
-    ('interval#', 'varchar:200', 'false'),
+    ('interval#', 'varchar:4000', 'false'),
     ('failures', 'int', 'true', '0'),
     ('flag', 'int', 'false'),
     ('what', 'varchar:4000', 'true'),
@@ -4353,10 +4353,10 @@ def_table_schema(
     ('job_style', 'varchar:128', 'true'),
     ('program_name', 'varchar:128', 'true'),
     ('job_type', 'varchar:128', 'true'),
-    ('job_action', 'varchar:128', 'true'),
+    ('job_action', 'varchar:4000', 'true'),
     ('number_of_argument', 'int', 'true'),
     ('start_date', 'timestamp', 'true'),
-    ('repeat_interval', 'varchar:128', 'true'),
+    ('repeat_interval', 'varchar:4000', 'true'),
     ('end_date', 'timestamp', 'true'),
     ('job_class', 'varchar:128', 'true'),
     ('enabled', 'bool', 'true'),
@@ -6370,7 +6370,26 @@ def_table_schema(
 # 491 : __all_routine_privilege_history
 # 492 : __wr_sqlstat
 # 493 : __all_ncomp_dll
-# 494 : __all_aux_stat
+
+def_table_schema(
+  owner = 'zhenling.zzg',
+  table_name = '__all_aux_stat',
+  table_id = '494',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'bigint'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = False,
+  normal_columns = [
+      ('last_analyzed', 'timestamp'),
+      ('cpu_speed', 'bigint', 'true', '2500'),
+      ('disk_seq_read_speed', 'bigint', 'true', '2000'),
+      ('disk_rnd_read_speed', 'bigint', 'true', '150'),
+      ('network_speed', 'bigint', '1000')
+  ],
+)
 # 495 : __all_index_usage_info
 # 496 : __all_detect_lock_info
 # 497 : __all_client_to_server_session_info
@@ -6386,9 +6405,6 @@ def_table_schema(
 #
 # 余留位置
 ################################################################################
-
-
-
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
 ################################################################################
@@ -13185,7 +13201,10 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12444: __all_virtual_routine_privilege_history
 # 12445: __all_virtual_sqlstat
 # 12446: __all_virtual_wr_sqlstat
-# 12447 : __all_virtual_aux_stat
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12447',
+  table_name = '__all_virtual_aux_stat',
+  keywords = all_def_keywords['__all_aux_stat']))
 # 12448: __all_virtual_detect_lock_info
 # 12449: __all_virtual_client_to_server_session_info
 # 12450: __all_virtual_sys_variable_default_value
@@ -13611,7 +13630,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keyword
 # 15424: __all_virtual_sqlstat
 # 15425: __all_virtual_wr_sqlstat
 # def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15426', all_def_keywords['__tenant_virtual_statname'])))
-# 15427: __all_virtual_aux_stat
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15427', all_def_keywords['__all_aux_stat']))
 # 15428: __all_virtual_sys_variable
 # 15429: __all_virtual_sys_variable_default_value
 # 15430: __all_transfer_partition_task
@@ -13699,7 +13718,8 @@ def_table_schema(
   FROM oceanbase.__all_database a inner join oceanbase.__tenant_virtual_collation b ON a.collation_type = b.collation_type
   WHERE a.tenant_id = 0
     and in_recyclebin = 0
-    and database_name != '__recyclebin'
+    and a.database_name not in ('__recyclebin', '__public')
+    and 0 = sys_privilege_check('db_acc', 0, a.database_name, '')
   ORDER BY a.database_id
 """.replace("\n", " "),
 
@@ -17279,7 +17299,12 @@ def_table_schema(
     COMMENT,
     PATH,
     MINOR_TURN_ID,
-    MAJOR_TURN_ID
+    MAJOR_TURN_ID,
+    CASE
+        WHEN MACRO_BLOCK_COUNT = 0 THEN 0.00
+        WHEN FINISH_MACRO_BLOCK_COUNT > MACRO_BLOCK_COUNT THEN 99.99
+        ELSE ROUND((FINISH_MACRO_BLOCK_COUNT / MACRO_BLOCK_COUNT) * 100, 2)
+    END AS DATA_PROGRESS
     FROM OCEANBASE.__all_virtual_backup_task
 """.replace("\n", " ")
 )
@@ -23852,7 +23877,7 @@ def_table_schema(
     CAST(NULL AS CHAR(5)) AS RESTARTABLE,
     CAST(NULL AS CHAR(128)) AS CONNECT_CREDENTIAL_OWNER,
     CAST(NULL AS CHAR(128)) AS CONNECT_CREDENTIAL_NAME
-  FROM oceanbase.__all_tenant_scheduler_job T WHERE T.JOB_NAME != '__dummy_guard'
+  FROM oceanbase.__all_tenant_scheduler_job T WHERE T.JOB_NAME != '__dummy_guard' and T.JOB > 0
 """.replace("\n", " ")
 )
 
@@ -30247,8 +30272,48 @@ def_table_schema(
 #21494 V$SYS_TIME_MODEL
 #21495 DBA_WR_SYS_TIME_MODEL
 #21496 CDB_WR_SYS_TIME_MODEL
-#21497 DBA_OB_AUX_STATISTICS
-#21498 CDB_OB_AUX_STATISTICS
+
+def_table_schema(
+    owner = 'zhenling.zzg',
+    table_name     = 'DBA_OB_AUX_STATISTICS',
+    table_id       = '21497',
+    table_type = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """
+	select
+      LAST_ANALYZED,
+      CPU_SPEED AS `CPU_SPEED(MHZ)`,
+      DISK_SEQ_READ_SPEED AS `DISK_SEQ_READ_SPEED(MB/S)`,
+      DISK_RND_READ_SPEED AS `DISK_RND_READ_SPEED(MB/S)`,
+      NETWORK_SPEED AS `NETWORK_SPEED(MB/S)`
+    from oceanbase.__all_aux_stat;
+""".replace("\n", " ")
+)
+
+def_table_schema(
+    owner = 'zhenling.zzg',
+    table_name     = 'CDB_OB_AUX_STATISTICS',
+    table_id       = '21498',
+    table_type = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = False,
+    view_definition = """
+    select
+      TENANT_ID,
+      LAST_ANALYZED,
+      CPU_SPEED AS `CPU_SPEED(MHZ)`,
+      DISK_SEQ_READ_SPEED AS `DISK_SEQ_READ_SPEED(MB/S)`,
+      DISK_RND_READ_SPEED AS `DISK_RND_READ_SPEED(MB/S)`,
+      NETWORK_SPEED AS `NETWORK_SPEED(MB/S)`
+    from oceanbase.__all_virtual_aux_stat;
+""".replace("\n", " ")
+)
+
 #21499 DBA_OB_INDEX_USAGE
 #21500 DBA_OB_SYS_VARIABLES
 #21501 DBA_OB_TRANSFER_PARTITION_TASKS
@@ -30267,6 +30332,8 @@ def_table_schema(
 #21514 mysql.audit_log_filter
 #21515 mysql.audit_log_user
 #21516 mysql.columns_priv
+#21517 GV$OB_LS_SNAPSHOTS
+#21518 V$OB_LS_SNAPSHOTS
 # 余留位置
 
 ################################################################################
@@ -31900,7 +31967,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'DBA_USERS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25008',
@@ -31914,16 +31981,32 @@ def_table_schema(
       B.USER_NAME AS USERNAME,
       B.USER_ID AS USERID,
       B.PASSWD AS PASSWORD,
-      CAST(CASE WHEN B.IS_LOCKED = 1 THEN 'LOCKED' ELSE 'OPEN' END as VARCHAR2(30)) AS ACCOUNT_STATUS,
+      CAST(CASE WHEN B.IS_LOCKED = 1 THEN 'LOCKED' ELSE 'OPEN' END as VARCHAR2(32)) AS ACCOUNT_STATUS,
       CAST(NULL as DATE) AS LOCK_DATE,
       CAST(NULL as DATE) AS EXPIRY_DATE,
       CAST(NULL as VARCHAR2(30)) AS DEFAULT_TABLESPACE,
       CAST(NULL as VARCHAR2(30)) AS TEMPORARY_TABLESPACE,
+      CAST(NULL as VARCHAR2(30)) AS LOCAL_TEMP_TABLESPACE,
       CAST(B.GMT_CREATE AS DATE) AS CREATED,
+      CAST(NVL(P.PROFILE_NAME, 'DEFAULT') AS VARCHAR2(128)) AS PROFILE,
       CAST(NULL as VARCHAR2(30)) AS INITIAL_RSRC_CONSUMER_GROUP,
-      CAST(NULL as VARCHAR2(4000)) AS EXTERNAL_NAME
+      CAST(NULL as VARCHAR2(4000)) AS EXTERNAL_NAME,
+      CAST(NULL as VARCHAR2(12)) AS PASSWORD_VERSIONS,
+      CAST('N' as VARCHAR2(1)) AS EDITIONS_ENABLED,
+      CAST('PASSWORD' as VARCHAR2(8)) AS AUTHENTICATION_TYPE,
+      CAST('N' as VARCHAR2(1)) AS PROXY_ONLY_CONNECT,
+      CAST('NO' as VARCHAR2(3)) AS COMMON,
+      CAST(NULL as TIMESTAMP(9) WITH TIME ZONE) AS LAST_LOGIN,
+      CAST('N' as VARCHAR2(1)) AS ORACLE_MAINTAINED,
+      CAST('NO' as VARCHAR2(3)) AS INHERITED,
+      CAST('USING_NLS_COMP' as VARCHAR2(100)) AS DEFAULT_COLLATION,
+      CAST('NO' as VARCHAR2(3)) AS IMPLICIT,
+      CAST('NO' as VARCHAR2(3)) AS ALL_SHARD,
+      CAST(B.PASSWORD_LAST_CHANGED AS DATE) AS PASSWORD_CHANGE_DATE
     FROM
       SYS.ALL_VIRTUAL_USER_REAL_AGENT B
+      LEFT JOIN SYS.ALL_VIRTUAL_TENANT_PROFILE_REAL_AGENT P
+      ON B.TENANT_ID = P.TENANT_ID AND B.PROFILE_ID = P.PROFILE_ID
     WHERE
       B.TYPE = 0
       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -31931,7 +32014,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name      = 'ALL_USERS',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
   table_id        = '25009',
@@ -31944,7 +32027,13 @@ def_table_schema(
     SELECT
       B.USER_NAME AS USERNAME,
       B.USER_ID AS USERID,
-      CAST(B.GMT_CREATE AS DATE) AS CREATED
+      CAST(B.GMT_CREATE AS DATE) AS CREATED,
+      CAST('NO' as VARCHAR2(3)) AS COMMON,
+      CAST('N' as VARCHAR2(1)) AS ORACLE_MAINTAINED,
+      CAST('NO' as VARCHAR2(3)) AS INHERITED,
+      CAST('USING_NLS_COMP' as VARCHAR2(100)) AS DEFAULT_COLLATION,
+      CAST('NO' as VARCHAR2(3)) AS IMPLICIT,
+      CAST('NO' as VARCHAR2(3)) AS ALL_SHARD
     FROM
       SYS.ALL_VIRTUAL_USER_REAL_AGENT B
     WHERE
@@ -46654,7 +46743,7 @@ def_table_schema(
     CAST(NULL AS TIMESTAMP(6) WITH TIME ZONE) AS MANUAL_OPEN_TIME,
     CAST(NULL AS INTERVAL DAY(3) TO SECOND(0)) AS MANUAL_DURATION,
     CAST(T.COMMENTS AS VARCHAR2(4000)) AS COMMENTS
-  FROM SYS.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_REAL_AGENT T WHERE T.JOB_NAME in ('MONDAY_WINDOW',
+  FROM SYS.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_REAL_AGENT T WHERE T.JOB > 0 AND T.JOB_NAME in ('MONDAY_WINDOW',
     'TUESDAY_WINDOW', 'WEDNESDAY_WINDOW', 'THURSDAY_WINDOW', 'FRIDAY_WINDOW', 'SATURDAY_WINDOW', 'SUNDAY_WINDOW')
   """.replace("\n", " "),
 )
@@ -48757,7 +48846,47 @@ def_table_schema(
 # 25275: DBA_OB_TRANSFER_PARTITION_TASKS
 # 25276: DBA_OB_TRANSFER_PARTITION_TASK_HISTORY
 # 25277: DBA_WR_SQLTEXT
-# 25278: USER_USERS
+
+def_table_schema(
+  owner = 'sean.yyj',
+  table_name      = 'USER_USERS',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25278',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      B.USER_NAME AS USERNAME,
+      B.USER_ID AS USERID,
+      CAST(CASE WHEN B.IS_LOCKED = 1 THEN 'LOCKED' ELSE 'OPEN' END as VARCHAR2(32)) AS ACCOUNT_STATUS,
+      CAST(NULL as DATE) AS LOCK_DATE,
+      CAST(NULL as DATE) AS EXPIRY_DATE,
+      CAST(NULL as VARCHAR2(30)) AS DEFAULT_TABLESPACE,
+      CAST(NULL as VARCHAR2(30)) AS TEMPORARY_TABLESPACE,
+      CAST(NULL as VARCHAR2(30)) AS LOCAL_TEMP_TABLESPACE,
+      CAST(B.GMT_CREATE AS DATE) AS CREATED,
+      CAST(NULL as VARCHAR2(30)) AS INITIAL_RSRC_CONSUMER_GROUP,
+      CAST(NULL as VARCHAR2(4000)) AS EXTERNAL_NAME,
+      CAST('N' as VARCHAR2(1)) AS PROXY_ONLY_CONNECT,
+      CAST('NO' as VARCHAR2(3)) AS COMMON,
+      CAST('N' as VARCHAR2(1)) AS ORACLE_MAINTAINED,
+      CAST('NO' as VARCHAR2(3)) AS INHERITED,
+      CAST('USING_NLS_COMP' as VARCHAR2(100)) AS DEFAULT_COLLATION,
+      CAST('NO' as VARCHAR2(3)) AS IMPLICIT,
+      CAST('NO' as VARCHAR2(3)) AS ALL_SHARD,
+      CAST(B.PASSWORD_LAST_CHANGED AS DATE) AS PASSWORD_CHANGE_DATE
+    FROM
+      SYS.ALL_VIRTUAL_USER_REAL_AGENT B
+    WHERE
+      B.TYPE = 0
+      AND B.USER_NAME = SYS_CONTEXT('USERENV','CURRENT_USER')
+      AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
 # 余留位置
 
 #### End Data Dictionary View
@@ -52618,7 +52747,7 @@ def_table_schema(
     CAST(NULL AS VARCHAR2(5)) AS RESTARTABLE,
     CAST(NULL AS VARCHAR2(128)) AS CONNECT_CREDENTIAL_OWNER,
     CAST(NULL AS VARCHAR2(128)) AS CONNECT_CREDENTIAL_NAME
-    FROM SYS.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_REAL_AGENT T WHERE T.JOB_NAME != '__dummy_guard'
+    FROM SYS.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_REAL_AGENT T WHERE T.JOB_NAME != '__dummy_guard' AND T.JOB > 0
 """.replace("\n", " ")
 )
 
@@ -54862,11 +54991,35 @@ def_table_schema(
 # 28207: GV$SYS_TIME_MODEL
 # 28208: V$SYS_TIME_MODEL
 # 28209: V$STATNAME
-# 28210: DBA_OB_AUX_STATISTICS
+
+def_table_schema(
+    owner = 'zhenling.zzg',
+    table_name     = 'DBA_OB_AUX_STATISTICS',
+    name_postfix    = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '28210',
+    table_type = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """
+	SELECT
+      LAST_ANALYZED,
+      CPU_SPEED AS \"CPU_SPEED(MHZ)\",
+      DISK_SEQ_READ_SPEED AS \"DISK_SEQ_READ_SPEED(MB/S)\",
+      DISK_RND_READ_SPEED AS \"DISK_RND_READ_SPEED(MB/S)\",
+      NETWORK_SPEED AS \"NETWORK_SPEED(MB/S)\"
+    FROM SYS.ALL_VIRTUAL_AUX_STAT_REAL_AGENT
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID();
+""".replace("\n", " ")
+)
 # 28211: DBA_OB_SYS_VARIABLES
 # 28212: GV$OB_ACTIVE_SESSION_HISTORY
 # 28213: V$OB_ACTIVE_SESSION_HISTORY
 # 28214: DBA_INDEX_USAGE
+# 28215: GV$OB_LS_SNAPSHOTS
+# 28216: V$OB_LS_SNAPSHOTS
 
 ################################################################################
 # Lob Table (50000, 70000)

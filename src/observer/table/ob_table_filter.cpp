@@ -249,7 +249,7 @@ int ObNormalTableQueryResultIterator::get_aggregate_result(table::ObTableQueryRe
     LOG_WARN("one_result_ should not be null", K(ret));
   } else {
     ObNewRow *row = nullptr;
-    while (OB_SUCC(ret) && OB_SUCC(scan_result_->get_next_row(row, false/*need_deep_copy*/))) {
+    while (OB_SUCC(ret) && OB_SUCC(scan_result_->get_next_row(row))) {
       if (OB_FAIL(agg_calculator_.aggregate(*row))) {
         LOG_WARN("fail to aggregate", K(ret), K(*row));
       }
@@ -293,7 +293,7 @@ int ObNormalTableQueryResultIterator::get_normal_result(table::ObTableQueryResul
   if (OB_SUCC(ret)) {
     next_result = one_result_;
     ObNewRow *row = nullptr;
-    while (OB_SUCC(ret) && OB_SUCC(scan_result_->get_next_row(row, false/*need_deep_copy*/))) {
+    while (OB_SUCC(ret) && OB_SUCC(scan_result_->get_next_row(row))) {
       LOG_DEBUG("[yzfdebug] scan result", "row", *row);
       if (OB_FAIL(one_result_->add_row(*row))) {
         if (OB_SIZE_OVERFLOW == ret) {
@@ -392,7 +392,7 @@ int ObTableFilterOperator::get_aggregate_result(table::ObTableQueryResult *&next
     const ObIArray<ObString> &select_columns = one_result_->get_select_columns();
     const int64_t N = select_columns.count();
     while (OB_SUCC(ret) && (!has_limit || !has_reach_limit) &&
-           OB_SUCC(scan_result_->get_next_row(row, false/*need_deep_copy*/))) {
+           OB_SUCC(scan_result_->get_next_row(row))) {
       if (N != row->get_count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("select column count is not equal to row cells count", K(ret), K(select_columns), K(*row));
@@ -473,7 +473,7 @@ int ObTableFilterOperator::get_normal_result(table::ObTableQueryResult *&next_re
     const int64_t N = select_columns.count();
 
     while (OB_SUCC(ret) && (!has_limit || !has_reach_limit) &&
-           OB_SUCC(scan_result_->get_next_row(row, false/*need_deep_copy*/))) {
+           OB_SUCC(scan_result_->get_next_row(row))) {
       if (N != row->get_count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("select column count is not equal to row cells count", K(ret), K(select_columns), K(*row));

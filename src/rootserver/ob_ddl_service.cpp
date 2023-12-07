@@ -6611,7 +6611,7 @@ int ObDDLService::resolve_orig_default_value(ObColumnSchemaV2 &alter_column_sche
   } else {
     ObObj default_value;
     default_value.set_type(alter_column_schema.get_data_type());
-    if (OB_FAIL(default_value.build_not_strict_default_value())) {
+    if (OB_FAIL(default_value.build_not_strict_default_value(alter_column_schema.get_accuracy().get_precision()))) {
       LOG_WARN("failed to build not strict default value", K(ret));
     } else if (OB_FAIL(alter_column_schema.set_orig_default_value(default_value))) {
       LOG_WARN("failed to set orig default value", K(ret));
@@ -8236,7 +8236,13 @@ int ObDDLService::add_column_group_to_table_schema(
     common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
+  bool is_oracle_mode = false;
   if (alter_table_schema.get_column_group_count() == 0) {
+  } else if (!origin_table_schema.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid table schema", K(ret), K(origin_table_schema));
+  } else if (OB_FAIL(origin_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("fail to check if oracle mode", K(ret), K(origin_table_schema));
   } else {
     uint64_t cur_column_group_id = origin_table_schema.get_max_used_column_group_id();
     new_table_schema.reset_column_group_info();
@@ -8259,7 +8265,7 @@ int ObDDLService::add_column_group_to_table_schema(
         if (OB_LIKELY(tenant_config.is_valid())) {
           storage_encoding_mode = tenant_config->storage_encoding_mode;
         }
-        bool is_flat = lib::is_oracle_mode() ? ((OB_STORE_FORMAT_NOCOMPRESS_ORACLE == store_format)
+        bool is_flat = is_oracle_mode ? ((OB_STORE_FORMAT_NOCOMPRESS_ORACLE == store_format)
                                                 || (OB_STORE_FORMAT_BASIC_ORACLE == store_format)
                                                 || (OB_STORE_FORMAT_OLTP_ORACLE == store_format))
                                              : ((OB_STORE_FORMAT_REDUNDANT_MYSQL == store_format)
@@ -22818,7 +22824,8 @@ int ObDDLService::get_root_key_from_primary(const obrpc::ObCreateTenantArg &arg,
       LOG_WARN("failed to init for get", KR(ret), K(primary_tenant_id));
     }
     if (FAILEDx(notify_root_key(*rpc_proxy_, root_key_arg,
-            addr_list, result, true, cluster_id, &allocator))) {
+            addr_list, result, true/*enable_default*/, true/*skip_call_rs*/,
+            cluster_id, &allocator))) {
       LOG_WARN("failed to get root key from obs", KR(ret), K(cluster_id),
           K(root_key_arg), K(addr_list));
     } else {
@@ -22866,6 +22873,7 @@ int ObDDLService::notify_root_key(
     const common::ObIArray<common::ObAddr> &addrs,
     obrpc::ObRootKeyResult &result,
     const bool enable_default /*=true*/,
+    const bool skip_call_rs /*=false*/,
     const uint64_t &cluster_id /*=OB_INVALID_CLUSTER_ID*/,
     common::ObIAllocator *allocator /*=NULL*/)
 {
@@ -22884,12 +22892,15 @@ int ObDDLService::notify_root_key(
         rpc_proxy, &obrpc::ObSrvRpcProxy::set_root_key);
     int tmp_ret = OB_SUCCESS;
     int return_ret = OB_SUCCESS;
-    bool need_call_rs = OB_INVALID_CLUSTER_ID == cluster_id;
+    // need_to_call_rs is true only if skip_call_rs is false and not notify cross-cluster
+    bool need_call_rs = (!skip_call_rs) && (OB_INVALID_CLUSTER_ID == cluster_id);
     ObAddr rs_addr = GCONF.self_addr_;
     int64_t timeout = ctx.get_timeout();
     for (int64_t i = 0; OB_SUCC(ret) && i < addrs.count(); i++) {
       const ObAddr &addr = addrs.at(i);
-      if (OB_TMP_FAIL(proxy.call(addr, timeout, cluster_id, OB_SYS_TENANT_ID, arg))) {
+      if (rs_addr == addr && !need_call_rs) {
+        // skip rs_addr if need_call_rs is false
+      } else if (OB_TMP_FAIL(proxy.call(addr, timeout, cluster_id, OB_SYS_TENANT_ID, arg))) {
         has_failed = true;
         return_ret= tmp_ret;
         LOG_WARN("send rpc failed", KR(ret), KR(tmp_ret), K(addr), K(timeout), K(cluster_id));

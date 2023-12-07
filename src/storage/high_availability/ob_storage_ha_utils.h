@@ -46,6 +46,10 @@ public:
   static int64_t get_rpc_timeout();
   static int check_is_primary_tenant(const uint64_t tenant_id, bool &is_primary_tenant);
   static int check_disk_space();
+  static int check_ls_is_leader(const uint64_t tenant_id, const share::ObLSID &ls_id, bool &is_leader);
+
+  static int calc_tablet_sstable_macro_block_cnt(
+      const ObTabletHandle &tablet_handle, int64_t &data_macro_block_count);
 
 private:
   static int check_merge_error_(const uint64_t tenant_id, common::ObISQLClient &sql_client);

@@ -1371,7 +1371,8 @@ struct ObExprEqualCheckContext
     err_code_(common::OB_SUCCESS),
     param_expr_(),
     need_check_deterministic_(false),
-    ignore_param_(false)
+    ignore_param_(false),
+    ora_numeric_compare_(false)
   { }
   ObExprEqualCheckContext(bool need_check_deterministic)
   : override_const_compare_(false),
@@ -1383,7 +1384,8 @@ struct ObExprEqualCheckContext
     err_code_(common::OB_SUCCESS),
     param_expr_(),
     need_check_deterministic_(need_check_deterministic),
-    ignore_param_(false)
+    ignore_param_(false),
+    ora_numeric_compare_(false)
   { }
   virtual ~ObExprEqualCheckContext() {}
   struct ParamExprPair
@@ -1419,6 +1421,9 @@ struct ObExprEqualCheckContext
   virtual bool compare_set_op_expr(const ObSetOpRawExpr& left,
                                    const ObSetOpRawExpr& right);
 
+  virtual bool compare_ora_numeric_consts(const ObConstRawExpr &left, const ObSysFunRawExpr &right);
+
+  virtual bool compare_ora_numeric_consts(const ObSysFunRawExpr &right, const ObConstRawExpr &left);
   void reset() {
     override_const_compare_ = false;
     override_column_compare_ = false;
@@ -1442,6 +1447,7 @@ struct ObExprEqualCheckContext
   common::ObSEArray<ParamExprPair, 3, common::ModulePageAllocator, true> param_expr_;
   bool need_check_deterministic_;
   bool ignore_param_; // only compare structure of expr
+  bool ora_numeric_compare_;
 };
 
 struct ObExprParamCheckContext : ObExprEqualCheckContext
@@ -1565,7 +1571,8 @@ struct ObResolveContext
     is_for_dbms_sql_(false),
     tg_timing_event_(TG_TIMING_EVENT_INVALID),
     view_ref_id_(OB_INVALID_ID),
-    is_variable_allowed_(true)
+    is_variable_allowed_(true),
+    is_expanding_view_(false)
   {
   }
 
@@ -1611,6 +1618,7 @@ struct ObResolveContext
   TgTimingEvent tg_timing_event_; // for mysql trigger
   uint64_t view_ref_id_;
   bool is_variable_allowed_;
+  bool is_expanding_view_;
 };
 
 typedef ObResolveContext<ObRawExprFactory> ObExprResolveContext;

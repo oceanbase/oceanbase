@@ -812,10 +812,10 @@ public:
   int try_add_dep_infos_for_synonym_batch(const obrpc::ObTryAddDepInofsForSynonymBatchArg &arg);
 #ifdef OB_BUILD_TDE_SECURITY
   int handle_get_root_key(const obrpc::ObRootKeyArg &arg, obrpc::ObRootKeyResult &result);
-  int get_root_key_from_obs(const obrpc::ObRootKeyArg &arg, obrpc::ObRootKeyResult &result);
 #endif
 private:
 #ifdef OB_BUILD_TDE_SECURITY
+  int get_root_key_from_obs_(const obrpc::ObRootKeyArg &arg, obrpc::ObRootKeyResult &result);
   int try_check_encryption_zone_cond(
       const obrpc::ObAdminZoneArg &arg);
 #endif

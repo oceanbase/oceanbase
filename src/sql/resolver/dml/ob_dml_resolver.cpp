@@ -1422,6 +1422,7 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
     ctx.is_for_dbms_sql_ = params_.is_dbms_sql_;
     ctx.view_ref_id_ = view_ref_id_;
     ctx.is_variable_allowed_ = !(is_mysql_mode() && params_.is_from_create_view_);
+    ctx.is_expanding_view_ = params_.is_expanding_view_;
     ObRawExprResolverImpl expr_resolver(ctx);
     ObIArray<ObUserVarIdentRawExpr *> &user_var_exprs = get_stmt()->get_user_vars();
     bool is_multi_stmt = session_info_->get_cur_exec_ctx() != NULL &&
@@ -1544,7 +1545,8 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
         current_scope_ != T_INSERT_SCOPE &&
         !is_hierarchical_query &&
         !is_multi_stmt &&
-        !params_.is_resolve_table_function_expr_) {
+        !params_.is_resolve_table_function_expr_ &&
+        !expr->has_flag(CNT_OUTER_JOIN_SYMBOL)) {
       bool is_new = false;
       if (OB_FAIL(expr_resv_ctx_.get_shared_instance(expr, expr, is_new))) {
         LOG_WARN("failed to get shared instance", K(ret));
@@ -5026,6 +5028,7 @@ int ObDMLResolver::expand_view(TableItem &view_item)
     }
   }
   if (OB_SUCC(ret)) {
+    params_.is_expanding_view_ = true;
     ObViewTableResolver view_resolver(params_, get_view_db_name(), get_view_name());
     view_resolver.set_current_level(current_level_);
     view_resolver.set_current_view_level(current_view_level_ + 1);
@@ -5035,6 +5038,7 @@ int ObDMLResolver::expand_view(TableItem &view_item)
     if (OB_FAIL(do_expand_view(view_item, view_resolver))) {
       LOG_WARN("do expand view resolve failed", K(ret));
     }
+    params_.is_expanding_view_ = false;
     if (!is_oracle_mode) {
       params_.schema_checker_->get_schema_guard()->set_session_id(org_session_id);
     }
@@ -11817,6 +11821,7 @@ int ObDMLResolver::deliver_outer_join_conditions(ObIArray<ObRawExpr*> &exprs,
                                                   ObIArray<JoinedTable*> &joined_tables)
 {
   int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> where_conditions;
   for (int64_t i = exprs.count() - 1; OB_SUCC(ret) && i >=0; i--) {
     ObArray<uint64_t> left_tables;
     ObArray<uint64_t> right_tables;
@@ -11847,11 +11852,28 @@ int ObDMLResolver::deliver_outer_join_conditions(ObIArray<ObRawExpr*> &exprs,
         OZ(deliver_expr_to_outer_join_table(expr, table_ids, joined_tables.at(j), is_delivered));
       }
 
-      OZ(remove_outer_join_symbol(expr));
-      OZ((expr->extract_info)());
       if (OB_SUCC(ret) && is_delivered) {
-        OZ((exprs.remove)(i));
+        //do nothing
+      } else if (OB_FAIL(where_conditions.push_back(exprs.at(i)))) {
+        LOG_WARN("fail to push back exprs", K(ret));
       }
+    } else if (OB_FAIL(where_conditions.push_back(exprs.at(i)))) {
+      LOG_WARN("fail to push back exprs", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); i++) {
+    if (OB_ISNULL(exprs.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(i), K(ret));
+    } else if (OB_FAIL(remove_outer_join_symbol(exprs.at(i)))) {
+      LOG_WARN("fail to remove outer join symbol", K(i), K(ret));
+    } else if (OB_FAIL(exprs.at(i)->extract_info())) {
+      LOG_WARN("fail to extract expr info", K(i), K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(exprs.assign(where_conditions))) {
+      LOG_WARN("fail to assign exprs", K(ret));
     }
   }
   return ret;

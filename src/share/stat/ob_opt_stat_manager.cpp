@@ -109,7 +109,11 @@ void ObOptStatManager::destroy()
 int ObOptStatManager::add_refresh_stat_task(const obrpc::ObUpdateStatCacheArg &analyze_arg)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(handle_refresh_stat_task(analyze_arg))) {
+  if (analyze_arg.update_system_stats_only_) {
+    if (OB_FAIL(handle_refresh_system_stat_task(analyze_arg))) {
+      LOG_WARN("failed to handle refresh system stat cache", K(ret));
+    }
+  } else if (OB_FAIL(handle_refresh_stat_task(analyze_arg))) {
     LOG_WARN("failed to handld refresh stat task", K(ret));
   }
   return ret;
@@ -419,7 +423,7 @@ int ObOptStatManager::handle_refresh_stat_task(const obrpc::ObUpdateStatCacheArg
 {
   int ret = OB_SUCCESS;
   uint64_t table_id = arg.table_id_;
- for (int64_t i = 0; OB_SUCC(ret) && i < arg.partition_ids_.count(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < arg.partition_ids_.count(); ++i) {
     ObOptTableStat::Key table_key(arg.tenant_id_,
                                   table_id,
                                   arg.partition_ids_.at(i));
@@ -439,6 +443,31 @@ int ObOptStatManager::handle_refresh_stat_task(const obrpc::ObUpdateStatCacheArg
   if (OB_SUCC(ret) && !arg.no_invalidate_) {
     if (OB_FAIL(invalidate_plan(arg.tenant_id_, table_id))) {
       LOG_WARN("failed to invalidate plan", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObOptStatManager::handle_refresh_system_stat_task(const obrpc::ObUpdateStatCacheArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObOptSystemStat::Key key(arg.tenant_id_);
+  if (OB_FAIL(stat_service_.erase_system_stat(key))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("failed to erase system stat", K(ret));
+    } else {
+      ret = OB_SUCCESS;
+      LOG_TRACE("failed to erase system stat", K(key));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    MTL_SWITCH(arg.tenant_id_) {
+      sql::ObPlanCache *pc = MTL(sql::ObPlanCache*);
+      if (OB_FAIL(pc->flush_plan_cache())) {
+        LOG_WARN("failed to evict plan", K(ret));
+        // use OB_SQL_PC_NOT_EXIST represent evict plan failed
+        ret = OB_SQL_PC_NOT_EXIST;
+      }
     }
   }
   return ret;
@@ -556,6 +585,30 @@ int ObOptStatManager::check_opt_stat_validity(sql::ObExecContext &ctx,
     LOG_WARN("failed to push back", K(ret));
   } else if (OB_FAIL(check_opt_stat_validity(ctx, tenant_id, tab_ref_id, part_ids, is_opt_stat_valid))) {
     LOG_WARN("failed to check opt stat validity", K(ret));
+  }
+  return ret;
+}
+
+int ObOptStatManager::check_system_stat_validity(sql::ObExecContext *ctx,
+                                                 const uint64_t tenant_id,
+                                                 bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  const share::schema::ObTableSchema *table_schema = NULL;
+  is_valid = false;
+  if (OB_ISNULL(ctx) ||
+      OB_ISNULL(ctx->get_virtual_table_ctx().schema_guard_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(ctx->get_virtual_table_ctx().schema_guard_->get_table_schema(
+                                            tenant_id,
+                                            share::OB_ALL_AUX_STAT_TID,
+                                            table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret), K(table_schema));
+  } else if (OB_ISNULL(table_schema)) {
+    //do nothing
+  } else {
+    is_valid = true;
   }
   return ret;
 }
@@ -771,6 +824,46 @@ int ObOptStatManager::update_opt_stat_gather_stat(const ObOptStatGatherStat &gat
 int ObOptStatManager::update_opt_stat_task_stat(const ObOptStatTaskInfo &task_info)
 {
   return stat_service_.get_sql_service().update_opt_stat_task_stat(task_info);
+}
+
+int ObOptStatManager::get_system_stat(const uint64_t tenant_id,
+                                     ObOptSystemStat &stat)
+{
+  int ret = OB_SUCCESS;
+  ObOptSystemStat::Key key(tenant_id);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("optimizer statistics manager has not been initialized.", K(ret), K(inited_));
+  } else if (OB_FAIL(stat_service_.get_system_stat(tenant_id, key, stat))) {
+    LOG_WARN("get system stat failed", K(ret));
+  }
+  return ret;
+}
+
+int ObOptStatManager::update_system_stats(const uint64_t tenant_id,
+                                         const ObOptSystemStat *system_stats)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_FAIL(stat_service_.get_sql_service().update_system_stats(tenant_id,
+                                                                        system_stats))) {
+    LOG_WARN("failed to update system stats", K(ret));
+  }
+  return ret;
+}
+
+int ObOptStatManager::delete_system_stats(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("optimizer statistics manager has not been initialized.", K(ret), K(inited_));
+  } else if (OB_FAIL(stat_service_.get_sql_service().delete_system_stats(tenant_id))) {
+    LOG_WARN("delete system stat failed", K(ret));
+  }
+  return ret;
 }
 
 }

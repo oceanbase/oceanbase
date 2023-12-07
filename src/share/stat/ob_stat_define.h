@@ -667,6 +667,24 @@ struct ObSetColumnStatParam
 
 };
 
+struct ObSetSystemStatParam
+{
+  ObSetSystemStatParam()
+  :tenant_id_(OB_INVALID_ID),
+  name_(),
+  value_(0)
+  { }
+
+  int64_t tenant_id_;
+  ObString name_;
+  int64_t value_;
+
+  TO_STRING_KV(K(tenant_id_),
+               K(name_),
+               K(value_)
+    );
+};
+
 struct ObPartitionStatInfo
 {
   ObPartitionStatInfo():

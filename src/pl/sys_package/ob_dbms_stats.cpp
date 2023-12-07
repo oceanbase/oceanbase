@@ -31,6 +31,7 @@
 #include "storage/ob_locality_manager.h"
 #include "share/stat/ob_opt_stat_gather_stat.h"
 #include "sql/engine/expr/ob_expr_uuid.h"
+#include "sql/privilege_check/ob_ora_priv_check.h"
 
 namespace oceanbase
 {
@@ -6274,6 +6275,7 @@ int ObDbmsStats::init_column_group_stat_param(const share::schema::ObTableSchema
   return ret;
 }
 
+
 //Avoid holding schema guard for a long time to caused dynamic leakage of schema memory, we need refresh tenant schema guard
 int ObDbmsStats::refresh_tenant_schema_guard(ObExecContext &ctx, const uint64_t tenant_id)
 {
@@ -6288,6 +6290,217 @@ int ObDbmsStats::refresh_tenant_schema_guard(ObExecContext &ctx, const uint64_t 
     } else {
       ctx.get_sql_ctx()->schema_guard_ = &(cached_schema_info.get_schema_guard());
     }
+  }
+  return ret;
+}
+
+/**
+ * @brief ObDbmsStats::gather_system_stats
+ * @param ctx
+ * @param params
+ * @param result
+ * @return
+ */
+int ObDbmsStats::gather_system_stats(sql::ObExecContext &ctx,
+                                    sql::ParamStore &params,
+                                    common::ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(result);
+  ObSQLSessionInfo *session = ctx.get_my_session();
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params have null", K(ret), K(session));
+  } else if (OB_FAIL(check_modify_system_stats_pri(*session))) {
+    LOG_WARN("failed to check is unix connection", K(ret));
+  } else if (OB_FAIL(check_statistic_table_writeable(ctx))) {
+    LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(check_system_stat_table_ready(session->get_effective_tenant_id()))) {
+    LOG_WARN("failed to check system stat table ready", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsExecutor::gather_system_stats(ctx, session->get_effective_tenant_id()))) {
+    LOG_WARN("failed to gather system stats", K(ret));
+  } else if (OB_FAIL(update_system_stats_cache(session->get_rpc_tenant_id(),
+                                              session->get_effective_tenant_id()))) {
+    LOG_WARN("failed to update system stat cache", K(ret));
+  }
+  return ret;
+}
+
+/**
+ * @brief ObDbmsStats::delete_system_stats
+ * @param ctx
+ * @param params
+ * @param result
+ * @return
+ */
+int ObDbmsStats::delete_system_stats(sql::ObExecContext &ctx,
+                                    sql::ParamStore &params,
+                                    common::ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(result);
+  ObSQLSessionInfo *session = ctx.get_my_session();
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params have null", K(ret), K(session));
+  } else if (OB_FAIL(check_modify_system_stats_pri(*session))) {
+    LOG_WARN("failed to check is unix connection", K(ret));
+  } else if (OB_FAIL(check_statistic_table_writeable(ctx))) {
+    LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(check_system_stat_table_ready(session->get_effective_tenant_id()))) {
+    LOG_WARN("failed to check system stat table ready", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsExecutor::delete_system_stats(ctx, session->get_effective_tenant_id()))) {
+    LOG_WARN("failed to delete system stats", K(ret));
+  } else if (OB_FAIL(update_system_stats_cache(session->get_rpc_tenant_id(),
+                                              session->get_effective_tenant_id()))) {
+    LOG_WARN("failed to update system stat cache", K(ret));
+  }
+  return ret;
+}
+
+/**
+ * @brief ObDbmsStats::set_system_stats
+ * @param ctx
+ * @param params
+ *  pname        VARCHAR2,
+ *  pvalue       NUMBER,
+ * @param result
+ * @return
+ */
+int ObDbmsStats::set_system_stats(sql::ObExecContext &ctx,
+                                  sql::ParamStore &params,
+                                  common::ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(result);
+  ObString name;
+  bool is_valid = false;
+  number::ObNumber num_value;
+  ObSQLSessionInfo *session = ctx.get_my_session();
+  ObSetSystemStatParam param;
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params have null", K(ret), K(session));
+  } else if (OB_FAIL(check_modify_system_stats_pri(*session))) {
+    LOG_WARN("failed to check is unix connection", K(ret));
+  } else if (OB_FAIL(check_statistic_table_writeable(ctx))) {
+    LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(check_system_stat_table_ready(session->get_effective_tenant_id()))) {
+    LOG_WARN("failed to check system stat table ready", K(ret));
+  } else if (2 != params.count()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("unexpect argument count", K(ret));
+  } else if (params.at(0).is_null()) {
+    ret = OB_ERR_DBMS_STATS_PL;
+    LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "unknown system stats name");
+  } else if (OB_FAIL(params.at(0).get_string(name))) {
+    LOG_WARN("failed to get string", K(ret));
+  } else if (OB_FAIL(check_system_stats_name_valid(name, is_valid))) {
+    LOG_WARN("failed to check system stats name valid", K(ret));
+  } else if (!is_valid) {
+    ret = OB_ERR_DBMS_STATS_PL;
+    LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "unknown system stats name");
+  } else if (OB_FAIL(ob_write_string(ctx.get_allocator(),
+                                     name,
+                                     param.name_))) {
+    LOG_WARN("failed to write stats name", K(ret));
+  } else if (!params.at(1).is_null() &&
+             OB_FAIL(params.at(1).get_number(num_value))) {
+    LOG_WARN("failed to get number", K(ret));
+  } else if (OB_FAIL(num_value.extract_valid_int64_with_trunc(param.value_))) {
+    LOG_WARN("failed to cast number to double" , K(ret));
+  } else if (OB_FALSE_IT(param.tenant_id_ = session->get_effective_tenant_id())) {
+  } else if (OB_FAIL(ObDbmsStatsExecutor::set_system_stats(ctx,
+                                                           param))) {
+    LOG_WARN("failed to set system stats", K(param), K(ret));
+  } else if (OB_FAIL(update_system_stats_cache(session->get_rpc_tenant_id(),
+                                              session->get_effective_tenant_id()))) {
+    LOG_WARN("failed to update system stat cache", K(ret));
+  }
+  return ret;
+}
+
+int ObDbmsStats::update_system_stats_cache(const uint64_t rpc_tenant_id,
+                                          const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  obrpc::ObUpdateStatCacheArg stat_arg;
+  stat_arg.tenant_id_ = tenant_id;
+  stat_arg.update_system_stats_only_ = true;
+  int64_t timeout = -1;
+  bool has_read_only_zone = false; // UNUSED;
+  ObSEArray<ObServerLocality, 4> all_server_arr;
+  ObSEArray<ObServerLocality, 4> failed_server_arr;
+  LOG_TRACE("update system stat cache", K(stat_arg));
+  if (OB_ISNULL(GCTX.srv_rpc_proxy_) || OB_ISNULL(GCTX.locality_manager_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("rpc_proxy or session is null", K(ret), K(GCTX.srv_rpc_proxy_), K(GCTX.locality_manager_));
+  } else if (OB_FAIL(GCTX.locality_manager_->get_server_locality_array(all_server_arr,
+                                                                        has_read_only_zone))) {
+    LOG_WARN("fail to get server locality", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < all_server_arr.count(); i++) {
+    if (!all_server_arr.at(i).is_active()
+        || ObServerStatus::OB_SERVER_ACTIVE != all_server_arr.at(i).get_server_status()
+        || 0 == all_server_arr.at(i).get_start_service_time()
+        || 0 != all_server_arr.at(i).get_server_stop_time()) {
+    //server may not serving
+    } else if (0 >= (timeout = THIS_WORKER.get_timeout_remain())) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("query timeout is reached", K(ret), K(timeout));
+    } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(all_server_arr.at(i).get_addr())
+                                              .timeout(timeout)
+                                              .by(rpc_tenant_id)
+                                              .update_local_stat_cache(stat_arg))) {
+      LOG_WARN("failed to update local stat cache caused by unknow error",
+                                        K(ret), K(all_server_arr.at(i).get_addr()), K(stat_arg));
+      if (OB_FAIL(failed_server_arr.push_back(all_server_arr.at(i)))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+  }
+  LOG_TRACE("update stat cache", K(stat_arg), K(failed_server_arr), K(all_server_arr));
+  return ret;
+}
+
+int ObDbmsStats::check_system_stats_name_valid(const ObString& name, bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = false;
+  static const char* system_stats_names[] = {
+    "cpu_speed",
+    "disk_seq_read_speed",
+    "disk_rnd_read_speed",
+    "network_speed"
+  };
+  for (int64_t i = 0; OB_SUCC(ret) && !is_valid && i < 4; ++i) {
+    if (ObCharset::case_insensitive_equal(name, system_stats_names[i])) {
+      is_valid = true;
+    }
+  }
+  return ret;
+}
+
+int ObDbmsStats::check_modify_system_stats_pri(const ObSQLSessionInfo& session)
+{
+  int ret = OB_SUCCESS;
+  if (!ObOraSysChecker::is_super_user(session.get_user_id())) {
+    ret = OB_ERR_DBMS_STATS_PL;
+    LOG_WARN("current user has no privilege to modify system stats", K(ret));
+    LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "current user has no privilege to modify system stats");
+  }
+  return ret;
+}
+
+int ObDbmsStats::check_system_stat_table_ready(int64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to get data version", K(ret));
+  } else if (data_version < DATA_VERSION_4_3_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "aux stat table not ready for system stats");
   }
   return ret;
 }

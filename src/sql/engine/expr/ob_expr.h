@@ -1235,6 +1235,7 @@ struct ObSerCArray
   ObSerCArray(T &data, U &cnt) : data_(data), cnt_(cnt) {}
   T &data_;
   U &cnt_;
+  TO_STRING_KV(K(cnt_));
 };
 
 template <typename T, typename U>

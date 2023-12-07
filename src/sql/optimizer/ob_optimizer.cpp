@@ -26,6 +26,10 @@
 #include "sql/dblink/ob_dblink_utils.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
 #include "sql/optimizer/ob_log_temp_table_insert.h"
+#include "share/stat/ob_opt_system_stat.h"
+#include "sql/optimizer/ob_opt_cost_model_parameter.h"
+#include "src/share/stat/ob_opt_stat_manager.h"
+
 using namespace oceanbase;
 using namespace sql;
 using namespace oceanbase::common;
@@ -557,6 +561,8 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("fail to get force_serial_set_order", K(ret));
   } else if (OB_FAIL(check_force_default_stat())) {
     LOG_WARN("failed to check force default stat", K(ret));
+  } else if (OB_FAIL(init_system_stat())) {
+    LOG_WARN("failed to init system stat", K(ret));
   } else if (OB_FAIL(calc_link_stmt_count(stmt, link_stmt_count))) {
     LOG_WARN("calc link stmt count failed", K(ret));
   } else if (OB_FAIL(ObDblinkUtils::has_reverse_link_or_any_dblink(&stmt, has_dblink, true))) {
@@ -1026,6 +1032,49 @@ int ObOptimizer::check_force_default_stat()
     LOG_WARN("fail to check use default opt stat", K(ret));
   } else if (is_exists_opt && use_default_opt_stat) {
     ctx_.set_use_default_stat();
+  }
+  return ret;
+}
+
+int ObOptimizer::init_system_stat()
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = false;
+  OptSystemStat &meta = ctx_.get_system_stat();
+  ObOptStatManager *opt_stat_manager = ctx_.get_opt_stat_manager();
+  ObSQLSessionInfo* session = ctx_.get_session_info();
+  if (OB_ISNULL(opt_stat_manager) || OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null param", K(ret));
+  } else if (OB_FAIL(opt_stat_manager->check_system_stat_validity(ctx_.get_exec_ctx(),
+                                                                  session->get_effective_tenant_id(),
+                                                                  is_valid))) {
+    LOG_WARN("failed to check system stat is valid", K(ret));
+  } else if (!ctx_.use_default_stat() && is_valid) {
+    ObOptSystemStat stat;
+    if (OB_FAIL(opt_stat_manager->get_system_stat(session->get_effective_tenant_id(), stat))) {
+      LOG_WARN("failed to get system stat", K(ret));
+    } else {
+      meta.set_cpu_speed(stat.get_cpu_speed());
+      meta.set_disk_seq_read_speed(stat.get_disk_seq_read_speed());
+      meta.set_disk_rnd_read_speed(stat.get_disk_rnd_read_speed());
+      meta.set_network_speed(stat.get_network_speed());
+    }
+  }
+  if (OB_SUCC(ret)) {
+    //refine default stat
+    if (meta.get_cpu_speed() <= 0) {
+      meta.set_cpu_speed(DEFAULT_CPU_SPEED);
+    }
+    if (meta.get_disk_seq_read_speed() <= 0) {
+      meta.set_disk_seq_read_speed(DEFAULT_DISK_SEQ_READ_SPEED);
+    }
+    if (meta.get_disk_rnd_read_speed() <= 0) {
+      meta.set_disk_rnd_read_speed(DEFAULT_DISK_RND_READ_SPEED);
+    }
+    if (meta.get_network_speed() <= 0) {
+      meta.set_network_speed(DEFAULT_NETWORK_SPEED);
+    }
   }
   return ret;
 }

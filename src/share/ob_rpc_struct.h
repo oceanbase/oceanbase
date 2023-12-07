@@ -5750,19 +5750,21 @@ public:
     status_(share::schema::INDEX_STATUS_MAX),
     convert_status_(true),
     in_offline_ddl_white_list_(false),
-    data_table_id_(common::OB_INVALID_ID)
+    data_table_id_(common::OB_INVALID_ID),
+    database_name_()
   {}
   bool is_valid() const;
   virtual bool is_allow_when_disable_ddl() const;
   virtual bool is_allow_when_upgrade() const { return true; }
   virtual bool is_in_offline_ddl_white_list() const { return in_offline_ddl_white_list_; }
-  TO_STRING_KV(K_(index_table_id), K_(status), K_(convert_status), K_(in_offline_ddl_white_list), K_(data_table_id));
+  TO_STRING_KV(K_(index_table_id), K_(status), K_(convert_status), K_(in_offline_ddl_white_list), K_(data_table_id), K_(database_name));
 
   uint64_t index_table_id_;
   share::schema::ObIndexStatus status_;
   bool convert_status_;
   bool in_offline_ddl_white_list_;
   uint64_t data_table_id_;
+  ObString database_name_;
 };
 
 struct ObMergeFinishArg
@@ -6100,15 +6102,16 @@ struct ObDropOutlineArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObDropOutlineArg(): ObDDLArg(), tenant_id_(common::OB_INVALID_ID), db_name_(), outline_name_() {}
+  ObDropOutlineArg(): ObDDLArg(), tenant_id_(common::OB_INVALID_ID), db_name_(), outline_name_(), is_format_(false) {}
   virtual ~ObDropOutlineArg() {}
   bool is_valid() const;
   virtual bool is_allow_when_upgrade() const { return true; }
-  TO_STRING_KV(K_(tenant_id), K_(db_name), K_(outline_name));
+  TO_STRING_KV(K_(tenant_id), K_(db_name), K_(outline_name), K_(is_format));
 
   uint64_t tenant_id_;
   common::ObString db_name_;
   common::ObString outline_name_;
+  bool is_format_;
 };
 
 struct ObCreateDbLinkArg : public ObDDLArg
@@ -7355,43 +7358,6 @@ struct ObEstPartRes
   OB_UNIS_VERSION(1);
 };
 
-struct TenantServerUnitConfig
-{
-public:
-  TenantServerUnitConfig()
-    : tenant_id_(common::OB_INVALID_ID),
-      unit_id_(common::OB_INVALID_ID),
-      compat_mode_(lib::Worker::CompatMode::INVALID),
-      unit_config_(),
-      replica_type_(common::ObReplicaType::REPLICA_TYPE_MAX),
-      if_not_grant_(false),
-      is_delete_(false) {}
-  int init(const uint64_t tenant_id,
-           const uint64_t unit_id,
-           const lib::Worker::CompatMode compat_mode,
-           const share::ObUnitConfig &unit_config,
-           const common::ObReplicaType replica_type,
-           const bool if_not_grant,
-           const bool is_delete);
-  uint64_t tenant_id_;
-  uint64_t unit_id_;
-  lib::Worker::CompatMode compat_mode_;
-  share::ObUnitConfig unit_config_;
-  common::ObReplicaType replica_type_;
-  bool if_not_grant_;
-  bool is_delete_;
-  bool is_valid() const;
-  TO_STRING_KV(K_(tenant_id),
-               K_(unit_id),
-               K_(unit_config),
-               K_(compat_mode),
-               K_(replica_type),
-               K_(if_not_grant),
-               K_(is_delete));
-public:
-  OB_UNIS_VERSION(1);
-};
-
 struct ObGetWRSArg
 {
   OB_UNIS_VERSION(1);
@@ -8616,6 +8582,7 @@ public:
   {}
   ~ObRootKeyResult() {}
   int assign(const ObRootKeyResult &other);
+  void reset();
   TO_STRING_KV(K_(key_type), K_(root_key));
   enum RootKeyType key_type_;
   common::ObString root_key_;
@@ -8623,6 +8590,65 @@ private:
   common::ObArenaAllocator allocator_;
 };
 #endif
+
+struct TenantServerUnitConfig
+{
+public:
+  TenantServerUnitConfig()
+    : tenant_id_(common::OB_INVALID_ID),
+      unit_id_(common::OB_INVALID_ID),
+      compat_mode_(lib::Worker::CompatMode::INVALID),
+      unit_config_(),
+      replica_type_(common::ObReplicaType::REPLICA_TYPE_MAX),
+      if_not_grant_(false),
+      is_delete_(false)
+#ifdef OB_BUILD_TDE_SECURITY
+      , with_root_key_(false),
+      root_key_()
+#endif
+      {}
+  int assign(const TenantServerUnitConfig &other);
+  int init(const uint64_t tenant_id,
+           const uint64_t unit_id,
+           const lib::Worker::CompatMode compat_mode,
+           const share::ObUnitConfig &unit_config,
+           const common::ObReplicaType replica_type,
+           const bool if_not_grant,
+           const bool is_delete
+#ifdef OB_BUILD_TDE_SECURITY
+           , const ObRootKeyResult &root_key
+#endif
+           );
+  int init_for_dropping(const uint64_t tenant_id,
+                        const bool is_delete);
+  void reset();
+  uint64_t tenant_id_;
+  uint64_t unit_id_;
+  lib::Worker::CompatMode compat_mode_;
+  share::ObUnitConfig unit_config_;
+  common::ObReplicaType replica_type_;
+  bool if_not_grant_;
+  bool is_delete_;
+#ifdef OB_BUILD_TDE_SECURITY
+  bool with_root_key_;  // true if root_key_ is explicitly assigned
+  ObRootKeyResult root_key_;
+#endif
+  bool is_valid() const;
+  TO_STRING_KV(K_(tenant_id),
+               K_(unit_id),
+               K_(unit_config),
+               K_(compat_mode),
+               K_(replica_type),
+               K_(if_not_grant),
+               K_(is_delete)
+#ifdef OB_BUILD_TDE_SECURITY
+               , K_(with_root_key)
+               , K_(root_key)
+#endif
+               );
+public:
+  OB_UNIS_VERSION(1);
+};
 
 enum TransToolCmd
 {
@@ -9683,20 +9709,20 @@ struct ObStartTransferTaskArg final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObStartTransferTaskArg(): tenant_id_(OB_INVALID_TENANT_ID), task_id_(), dest_ls_() {}
+  ObStartTransferTaskArg(): tenant_id_(OB_INVALID_TENANT_ID), task_id_(), src_ls_() {}
   ~ObStartTransferTaskArg() {}
-  int init(const uint64_t tenant_id, const share::ObTransferTaskID &task_id, const share::ObLSID &dest_ls);
+  int init(const uint64_t tenant_id, const share::ObTransferTaskID &task_id, const share::ObLSID &src_ls);
   uint64_t get_tenant_id() const { return tenant_id_; }
   const share::ObTransferTaskID get_task_id() const { return task_id_; }
-  const share::ObLSID &get_dest_ls() { return dest_ls_; }
+  const share::ObLSID &get_src_ls() { return src_ls_; }
   bool is_valid() const { return is_valid_tenant_id(tenant_id_) && task_id_.is_valid(); }
   int assign(const ObStartTransferTaskArg &other);
-  TO_STRING_KV(K_(tenant_id), K_(task_id), K_(dest_ls));
+  TO_STRING_KV(K_(tenant_id), K_(task_id), K_(src_ls));
 
 private:
   uint64_t tenant_id_;
   share::ObTransferTaskID task_id_;
-  share::ObLSID dest_ls_;
+  share::ObLSID src_ls_;
 
   DISALLOW_COPY_AND_ASSIGN(ObStartTransferTaskArg);
 };

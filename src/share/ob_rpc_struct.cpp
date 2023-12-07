@@ -4999,7 +4999,8 @@ OB_SERIALIZE_MEMBER((ObUpdateIndexStatusArg, ObDDLArg),
                     status_,
                     convert_status_,
                     in_offline_ddl_white_list_,
-		    data_table_id_);
+		                data_table_id_,
+                    database_name_);
 
 OB_SERIALIZE_MEMBER(ObMergeFinishArg, server_, frozen_version_);
 
@@ -5862,15 +5863,6 @@ OB_SERIALIZE_MEMBER(ObEstPartResElement, logical_row_count_,
 
 OB_SERIALIZE_MEMBER(ObEstPartRes, index_param_res_);
 
-OB_SERIALIZE_MEMBER(TenantServerUnitConfig,
-                    tenant_id_,
-                    compat_mode_,
-                    unit_config_,
-                    replica_type_,
-                    is_delete_,
-                    if_not_grant_,
-                    unit_id_);
-
 int ObForceSetLSAsSingleReplicaArg::init(const uint64_t tenant_id, const share::ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
@@ -6248,12 +6240,38 @@ OB_SERIALIZE_MEMBER((ObDDLNopOpreatorArg, ObDDLArg),
                      schema_operation_);
 OB_SERIALIZE_MEMBER(ObTenantSchemaVersions, tenant_schema_versions_);
 
+int TenantServerUnitConfig::assign(const TenantServerUnitConfig &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+    // do nothing
+#ifdef OB_BUILD_TDE_SECURITY
+  } else if (OB_FAIL(root_key_.assign(other.root_key_))) {
+    LOG_WARN("failed to assign root_key_", KR(ret));
+  } else if (FALSE_IT(with_root_key_ = other.with_root_key_)) {
+    // should not be here
+#endif
+  } else {
+    tenant_id_ = other.tenant_id_;
+    unit_id_ = other.unit_id_;
+    compat_mode_ = other.compat_mode_;
+    unit_config_ = other.unit_config_;
+    replica_type_ = other.replica_type_;
+    if_not_grant_ = other.if_not_grant_;
+    is_delete_ = other.is_delete_;
+  }
+  return ret;
+}
+
 bool TenantServerUnitConfig::is_valid() const
 {
   return common::OB_INVALID_ID != tenant_id_
          && ((lib::Worker::CompatMode::INVALID != compat_mode_
                && unit_config_.is_valid()
                && replica_type_ != common::ObReplicaType::REPLICA_TYPE_MAX)
+#ifdef OB_BUILD_TDE_SECURITY
+               // root_key can be invalid
+#endif
              || (is_delete_));
 }
 
@@ -6264,13 +6282,24 @@ int TenantServerUnitConfig::init(
     const share::ObUnitConfig &unit_config,
     const common::ObReplicaType replica_type,
     const bool if_not_grant,
-    const bool is_delete)
+    const bool is_delete
+#ifdef OB_BUILD_TDE_SECURITY
+    , const ObRootKeyResult &root_key
+#endif
+    )
 {
   int ret = OB_SUCCESS;
+  reset();
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant_id", K(ret), K(tenant_id));
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
     // do not check others validation, since their validations vary
+#ifdef OB_BUILD_TDE_SECURITY
+  } else if (OB_FAIL(root_key_.assign(root_key))) {
+    LOG_WARN("failed to assign root_key", KR(ret));
+  } else if (FALSE_IT(with_root_key_ = true)) {
+    // should not be here
+#endif
   } else {
     tenant_id_ = tenant_id;
     unit_id_ = unit_id;
@@ -6282,6 +6311,53 @@ int TenantServerUnitConfig::init(
   }
   return ret;
 }
+
+int TenantServerUnitConfig::init_for_dropping(const uint64_t tenant_id,
+    const bool is_delete)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(!is_delete)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("is_delete should be true, while false is given", KR(ret), K(tenant_id), K(is_delete));
+  } else {
+    tenant_id_ = tenant_id;
+    is_delete_ = true;
+  }
+  return ret;
+}
+
+void TenantServerUnitConfig::reset()
+{
+  tenant_id_ = OB_INVALID_ID;
+  unit_id_ = OB_INVALID_ID;
+  compat_mode_ = lib::Worker::CompatMode::INVALID;
+  unit_config_.reset();
+  replica_type_ = common::ObReplicaType::REPLICA_TYPE_MAX;
+  if_not_grant_ = false;
+  is_delete_ = false;
+#ifdef OB_BUILD_TDE_SECURITY
+  with_root_key_ = false;
+  root_key_.reset();
+#endif
+}
+
+OB_SERIALIZE_MEMBER(TenantServerUnitConfig,
+                    tenant_id_,
+                    compat_mode_,
+                    unit_config_,
+                    replica_type_,
+                    is_delete_,
+                    if_not_grant_,
+                    unit_id_
+#ifdef OB_BUILD_TDE_SECURITY
+                    , with_root_key_
+                    , root_key_
+#endif
+		                );
 
 int ObTenantSchemaVersions::add(const int64_t tenant_id, const int64_t schema_version)
 {
@@ -7097,7 +7173,7 @@ OB_SERIALIZE_MEMBER(ObRootKeyArg, tenant_id_, is_set_, key_type_, root_key_);
 int ObRootKeyArg::init_for_get(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  if (!is_user_tenant(tenant_id)) {
+  if (!(is_sys_tenant(tenant_id) || is_user_tenant(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
   } else {
@@ -7111,7 +7187,7 @@ int ObRootKeyArg::init(const uint64_t tenant_id, RootKeyType key_type,
             ObString &root_key)
 {
   int ret = OB_SUCCESS;
-  if (!is_user_tenant(tenant_id)
+  if (!(is_sys_tenant(tenant_id) || is_user_tenant(tenant_id))
       || RootKeyType::INVALID == key_type) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(key_type), K(root_key));
@@ -7173,6 +7249,12 @@ int ObRootKeyResult::assign(const ObRootKeyResult &other)
     LOG_WARN("failed to write string", K(ret));
   }
   return ret;
+}
+
+void ObRootKeyResult::reset()
+{
+  key_type_ = RootKeyType::INVALID;
+  root_key_.reset();
 }
 #endif
 OB_SERIALIZE_MEMBER(ObTrxToolArg, trans_id_, status_,
@@ -9604,23 +9686,23 @@ int ObRlsContextDDLArg::assign(const ObRlsContextDDLArg &other)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObStartTransferTaskArg, tenant_id_, task_id_, dest_ls_);
+OB_SERIALIZE_MEMBER(ObStartTransferTaskArg, tenant_id_, task_id_, src_ls_);
 
 int ObStartTransferTaskArg::init(
     const uint64_t tenant_id,
     const ObTransferTaskID &task_id,
-    const ObLSID &dest_ls)
+    const ObLSID &src_ls)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
       || ! task_id.is_valid())
-      || !dest_ls.is_valid()) {
+      || !src_ls.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(task_id), K(dest_ls));
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(task_id), K(src_ls));
   } else {
     tenant_id_ = tenant_id;
     task_id_ = task_id;
-    dest_ls_ = dest_ls;
+    src_ls_ = src_ls;
   }
   return ret;
 }
@@ -9630,7 +9712,7 @@ int ObStartTransferTaskArg::assign(const ObStartTransferTaskArg &other)
   int ret = OB_SUCCESS;
   tenant_id_ = other.tenant_id_;
   task_id_ = other.task_id_;
-  dest_ls_ = other.dest_ls_;
+  src_ls_ = other.src_ls_;
   return ret;
 }
 

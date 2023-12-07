@@ -224,6 +224,7 @@ public:
   share::schema::ObMultiVersionSchemaService &get_schema_service() { return schema_service_; }
   ObInOutBandwidthThrottle &get_bandwidth_throttle() { return bandwidth_throttle_; }
   uint64_t get_cpu_frequency_khz() { return cpu_frequency_; }
+  int64_t get_network_speed() const { return ethernet_speed_; }
   const common::ObAddr &get_self() const { return self_addr_; }
   const ObGlobalContext &get_gctx() const { return gctx_; }
   ObGlobalContext &get_gctx() { return gctx_; }

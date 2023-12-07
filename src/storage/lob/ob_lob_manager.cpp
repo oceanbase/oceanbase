@@ -3687,6 +3687,9 @@ int ObLobQueryRemoteReader::open(ObLobAccessParam& param, common::ObDataBuffer &
   int ret = OB_SUCCESS;
   char *buf = NULL;
   int64_t buf_len = ObLobQueryArg::OB_LOB_QUERY_BUFFER_LEN;
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) {
+    buf_len *= ObLobQueryArg::OB_LOB_QUERY_OLD_LEN_REFACTOR; // compat with old vesion
+  }
   if (NULL == (buf = reinterpret_cast<char*>(param.allocator_->alloc(buf_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret));
@@ -3694,6 +3697,7 @@ int ObLobQueryRemoteReader::open(ObLobAccessParam& param, common::ObDataBuffer &
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to set rpc buffer", K(ret));
   } else if (NULL == (buf = reinterpret_cast<char*>(param.allocator_->alloc(buf_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret));
   } else {
     data_buffer_.assign_buffer(buf, buf_len);

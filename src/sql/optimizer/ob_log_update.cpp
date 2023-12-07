@@ -167,7 +167,7 @@ int ObLogUpdate::inner_est_cost(double child_card, double &op_cost)
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     cost_info.constraint_count_ = update_dml_info->ck_cst_exprs_.count();
     if (OB_FAIL(ObOptEstCost::cost_update(cost_info, op_cost,
-                                          opt_ctx.get_cost_model_type()))) {
+                                          opt_ctx))) {
       LOG_WARN("failed to get update cost", K(ret));
     }
   }

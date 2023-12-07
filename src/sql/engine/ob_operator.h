@@ -681,6 +681,7 @@ public:
 
   ObPhyOperatorType get_type() const { return spec_.type_; }
   const ObOpSpec &get_spec() const { return spec_; }
+  TO_STRING_KV(K(spec_));
 protected:
   ObExecContext &exec_ctx_;
   const ObOpSpec &spec_;

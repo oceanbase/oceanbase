@@ -2210,9 +2210,6 @@ int PushdownFilterInfo::init(const storage::ObTableIterParam &iter_param, common
     LOG_WARN("Invalid argument to init store pushdown filter", K(ret), K(iter_param));
   } else if (nullptr == iter_param.pushdown_filter_) {
     // nothing to do without filter exprs
-  } else if (OB_ISNULL((buf = alloc.alloc(sizeof(ObObj) * out_col_cnt)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("Fail to allocate memory for pushdown filter col buf", K(ret), K(out_col_cnt));
   } else if (OB_ISNULL((buf = alloc.alloc(sizeof(blocksstable::ObStorageDatum) * out_col_cnt)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Fail to allocate memory for pushdown filter col buf", K(ret), K(out_col_cnt));

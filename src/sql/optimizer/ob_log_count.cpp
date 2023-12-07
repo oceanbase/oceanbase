@@ -146,7 +146,7 @@ int ObLogCount::inner_est_cost(double &child_card,
       }
     }
     op_cost = ObOptEstCost::cost_filter_rows(child_card, get_filter_exprs(),
-                                             opt_ctx.get_cost_model_type());
+                                             opt_ctx);
   }
   return ret;
 }

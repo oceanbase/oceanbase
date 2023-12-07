@@ -887,7 +887,7 @@ int ObQueryDriver::convert_text_value_charset(ObObj& value,
                 }
               }
               if (OB_SUCC(ret)) {
-                LOG_INFO("Lob: new temp convert_text_value_charset in convert_text_value",
+                LOG_DEBUG("Lob: new temp convert_text_value_charset in convert_text_value",
                 K(ret), K(raw_str), K(type), K(to_collation_type), K(from_collation_type),
                 K(from_charset_info->csname), K(to_charset_info->csname));
                 value.set_lob_value(type, buf, offset_len + result_len);
@@ -933,7 +933,7 @@ int ObQueryDriver::convert_text_value_charset(ObObj& value,
           } else {
             ObString lob_loc_str;
             new_tmp_lob.get_result_buffer(lob_loc_str);
-            LOG_INFO("Lob: new temp convert_text_value_charset in convert_text_value",
+            LOG_DEBUG("Lob: new temp convert_text_value_charset in convert_text_value",
                 K(ret), K(raw_str), K(type), K(to_collation_type), K(from_collation_type),
                 K(from_charset_info->csname), K(to_charset_info->csname));
             value.set_lob_value(type, lob_loc_str.ptr(), lob_loc_str.length());

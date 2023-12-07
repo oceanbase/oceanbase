@@ -84,35 +84,37 @@ int ObPLParser::fast_parse(const ObString &query,
     parse_ctx.no_param_sql_ = buf;
     parse_ctx.no_param_sql_buf_len_ = new_length;
   }
-  ret = parse_stmt_block(parse_ctx, parse_result.result_tree_);
-  if (OB_ERR_PARSE_SQL == ret) {
-    int err_len = 0;
-    const char *err_str = "", *global_errmsg = "";
-    int err_line = 0;
-    if (parse_ctx.cur_error_info_ != NULL) {
-      int first_column = parse_ctx.cur_error_info_->stmt_loc_.first_column_;
-      int last_column = parse_ctx.cur_error_info_->stmt_loc_.last_column_;
-      err_len = last_column - first_column + 1;
-      err_str = parse_ctx.stmt_str_ + first_column;
-      err_line = parse_ctx.cur_error_info_->stmt_loc_.last_line_ + 1;
-      global_errmsg = parse_ctx.global_errmsg_;
+  if (OB_SUCC(ret)) {
+    ret = parse_stmt_block(parse_ctx, parse_result.result_tree_);
+    if (OB_ERR_PARSE_SQL == ret) {
+      int err_len = 0;
+      const char *err_str = "", *global_errmsg = "";
+      int err_line = 0;
+      if (parse_ctx.cur_error_info_ != NULL) {
+        int first_column = parse_ctx.cur_error_info_->stmt_loc_.first_column_;
+        int last_column = parse_ctx.cur_error_info_->stmt_loc_.last_column_;
+        err_len = last_column - first_column + 1;
+        err_str = parse_ctx.stmt_str_ + first_column;
+        err_line = parse_ctx.cur_error_info_->stmt_loc_.last_line_ + 1;
+        global_errmsg = parse_ctx.global_errmsg_;
+      }
+      ObString stmt(parse_ctx.stmt_len_, parse_ctx.stmt_str_);
+      LOG_WARN("failed to parser pl stmt",
+              K(ret), K(err_line), K(global_errmsg), K(stmt));
+      LOG_USER_ERROR(OB_ERR_PARSE_SQL, ob_errpkt_strerror(OB_ERR_PARSER_SYNTAX, false),
+                    err_len, err_str, err_line);
+    } else {
+      memmove(parse_ctx.no_param_sql_ + parse_ctx.no_param_sql_len_,
+                      parse_ctx.stmt_str_ + parse_ctx.copied_pos_,
+                      parse_ctx.stmt_len_ - parse_ctx.copied_pos_);
+      parse_ctx.no_param_sql_len_ += parse_ctx.stmt_len_ - parse_ctx.copied_pos_;
+      parse_result.no_param_sql_ = parse_ctx.no_param_sql_;
+      parse_result.no_param_sql_len_ = parse_ctx.no_param_sql_len_;
+      parse_result.no_param_sql_buf_len_ = parse_ctx.no_param_sql_buf_len_;
+      parse_result.param_node_num_ = parse_ctx.param_node_num_;
+      parse_result.param_nodes_ = parse_ctx.param_nodes_;
+      parse_result.tail_param_node_ = parse_ctx.tail_param_node_;
     }
-    ObString stmt(parse_ctx.stmt_len_, parse_ctx.stmt_str_);
-    LOG_WARN("failed to parser pl stmt",
-             K(ret), K(err_line), K(global_errmsg), K(stmt));
-    LOG_USER_ERROR(OB_ERR_PARSE_SQL, ob_errpkt_strerror(OB_ERR_PARSER_SYNTAX, false),
-                   err_len, err_str, err_line);
-  } else {
-    memmove(parse_ctx.no_param_sql_ + parse_ctx.no_param_sql_len_,
-                    parse_ctx.stmt_str_ + parse_ctx.copied_pos_,
-                    parse_ctx.stmt_len_ - parse_ctx.copied_pos_);
-    parse_ctx.no_param_sql_len_ += parse_ctx.stmt_len_ - parse_ctx.copied_pos_;
-    parse_result.no_param_sql_ = parse_ctx.no_param_sql_;
-    parse_result.no_param_sql_len_ = parse_ctx.no_param_sql_len_;
-    parse_result.no_param_sql_buf_len_ = parse_ctx.no_param_sql_buf_len_;
-    parse_result.param_node_num_ = parse_ctx.param_node_num_;
-    parse_result.param_nodes_ = parse_ctx.param_nodes_;
-    parse_result.tail_param_node_ = parse_ctx.tail_param_node_;
   }
   return ret;
 }

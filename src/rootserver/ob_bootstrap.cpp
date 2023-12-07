@@ -337,7 +337,11 @@ int ObPreBootstrap::notify_sys_tenant_server_unit_resource()
               unit_config,
               ObReplicaType::REPLICA_TYPE_FULL,
               false/*if not grant*/,
-              false/*create new*/))) {
+              false/*is_delete*/
+#ifdef OB_BUILD_TDE_SECURITY
+              , obrpc::ObRootKeyResult()/*invalid root_key*/
+#endif
+              ))) {
         LOG_WARN("fail to init tenant unit server config", KR(ret));
       } else if (OB_FAIL(notify_proxy.call(
               rs_list_[i].server_, rpc_timeout, tenant_unit_server_config))) {

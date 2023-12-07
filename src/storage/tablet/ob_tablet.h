@@ -176,7 +176,7 @@ public:
   inline common::ObRowStoreType get_last_major_latest_row_store_type() const { return table_store_cache_.last_major_latest_row_store_type_; }
   inline bool is_row_store() const { return table_store_cache_.is_row_store_; }
   int get_mds_table_rec_log_scn(share::SCN &rec_scn);
-  int mds_table_flush(const share::SCN &recycle_scn);
+  int mds_table_flush(const share::SCN &decided_scn);
 
 public:
   // first time create tablet
@@ -372,7 +372,6 @@ public:
   int update_upper_trans_version(ObLS &ls, bool &is_updated);
 
   // memtable operation
-  bool has_memtable() const;
   int get_all_memtables(ObTableHdlArray &handle) const;
   int get_boundary_memtable(ObTableHandleV2 &handle) const;
   int get_protected_memtable_mgr_handle(ObProtectedMemtableMgrHandle *&handle) const;

@@ -217,6 +217,11 @@ public:
   {
     return meta_cache_.filled_tx_scn_;
   }
+  OB_INLINE bool has_padding_meta_cache() const
+  {
+    return ObSSTableMetaCache::PADDING == meta_cache_.status_;
+  }
+
   bool is_empty() const
   {
     return 0 == meta_cache_.data_macro_block_count_;

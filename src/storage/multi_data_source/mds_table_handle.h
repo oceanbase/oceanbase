@@ -102,7 +102,7 @@ public:
   int for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(DUMP_OP &&for_each_op,
                                                                        const int64_t mds_construct_sequence,
                                                                        const bool for_flush) const;
-  int flush(share::SCN need_advanced_rec_scn_lower_limit);
+  int flush(share::SCN need_advanced_rec_scn_lower_limit, share::SCN max_decided_scn);
   int is_flushing(bool &is_flushing) const;
   void on_flush(const share::SCN &flush_scn, const int flush_ret);
   int try_recycle(const share::SCN &recycle_scn);// release nodes
