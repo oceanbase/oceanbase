@@ -12138,11 +12138,16 @@ int datetime_scale_check_only(const ObAccuracy &accuracy, const ObObj &obj)
   if (OB_UNLIKELY(scale > MAX_SCALE_FOR_TEMPORAL)) {
     ret = OB_ERR_TOO_BIG_PRECISION;
     LOG_USER_ERROR(OB_ERR_TOO_BIG_PRECISION, scale, "CAST", static_cast<int64_t>(MAX_SCALE_FOR_TEMPORAL));
-  } else if (OB_UNLIKELY(0 <= scale && scale < MAX_SCALE_FOR_TEMPORAL)) {
+  } else {
     int64_t value = obj.get_datetime();
-    if (!ObTimeConverter::is_valid_datetime(value)) {
-      ret = OB_INVALID_DATA;
-      LOG_WARN("invalid datetime value", K(ret), K(value));
+    ObCastMode cast_mode = CM_ERROR_ON_SCALE_OVER;
+    if (OB_FAIL(time_usec_scale_check(cast_mode, accuracy, value))) {
+      LOG_WARN("check usec scale fail.", K(ret), K(value), K(accuracy));
+    } else if (OB_UNLIKELY(0 <= scale && scale < MAX_SCALE_FOR_TEMPORAL)) {
+      if (!ObTimeConverter::is_valid_datetime(value)) {
+        ret = OB_INVALID_DATA;
+        LOG_WARN("invalid datetime value", K(ret), K(value));
+      }
     }
   }
   return ret;

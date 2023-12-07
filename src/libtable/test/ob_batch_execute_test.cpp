@@ -845,6 +845,7 @@ TEST_F(TestBatchExecute, column_type_check)
     ASSERT_EQ(OB_SUCCESS, entity->set_property(ObString::make_string("cblob"), value));
 
     int64_t now = ObTimeUtility::current_time();
+    ObTimeConverter::round_datetime(0, now);
     value.set_timestamp(now);
     ASSERT_EQ(OB_SUCCESS, entity->set_property(ObString::make_string("ctimestamp"), value));
     value.set_datetime(now);
