@@ -4069,6 +4069,8 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
   ObExecTimestamp exec_timestamp;
   ObSPITimeRecord time_record;
   exec_timestamp.exec_type_ = cursor.is_ps_cursor() ? sql::PSCursor : sql::DbmsCursor;
+  ObArenaAllocator exec_param_alloc;
+  ObString exec_param_str;
   ObWaitEventDesc max_wait_desc;
   ObWaitEventStat total_wait_desc;
   const bool enable_perf_event = lib::is_diagnose_info_enabled();
@@ -4101,6 +4103,17 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
         cursor.set_spi_cursor(NULL);
       }
     }
+  }
+
+  if (OB_SUCC(ret) && exec_params.count() > 0) {
+    char *tmp_ptr = NULL;
+    int64_t tmp_len = 0;
+    OZ (ObMPStmtExecute::store_params_value_to_str(exec_param_alloc,
+                                                  *session,
+                                                  &exec_params,
+                                                  tmp_ptr,
+                                                  tmp_len));
+    OX (exec_param_str.assign(tmp_ptr, tmp_len));
   }
 
   if (OB_FAIL(ret)) {
@@ -4214,7 +4227,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
                                               true,
                                               (exec_params.count() > 0 || cursor.is_ps_cursor()) ? ps_sql : sql_str,
                                               true,
-                                              spi_result->get_exec_params_str_ptr());
+                                              &exec_param_str);
         session_info->get_raw_audit_record().exec_record_ = record_bk;
         session_info->get_raw_audit_record().try_cnt_ = try_cnt;
       }
@@ -4320,7 +4333,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
                                                   true,
                                                   (exec_params.count() > 0 || cursor.is_ps_cursor()) ? ps_sql : sql_str,
                                                   true,
-                                                  spi_result.get_exec_params_str_ptr());
+                                                  &exec_param_str);
             session_info->get_raw_audit_record().exec_record_ = record_bk;
             session_info->get_raw_audit_record().try_cnt_ = retry_cnt;
             session_info->get_raw_audit_record().pl_trace_id_.reset();
