@@ -24,7 +24,7 @@ devdeps-apr-1.6.5-32022090616.el7.x86_64.rpm
 devdeps-xz-5.2.2-42022090615.el7.x86_64.rpm
 devdeps-lua-5.4.6-22023082916.el7.x86_64.rpm
 devdeps-oss-c-sdk-3.9.2-182022100412.el7.x86_64.rpm
-devdeps-zlib-static-1.2.7-132022100815.el7.x86_64.rpm
+devdeps-zlib-static-1.2.13-32023061421.el7.x86_64.rpm
 devdeps-ncurses-static-6.2-72022100815.el7.x86_64.rpm
 devdeps-boost-1.74.0-22022110914.el7.x86_64.rpm
 devdeps-s2geometry-0.9.0-12023092021.el7.x86_64.rpm
