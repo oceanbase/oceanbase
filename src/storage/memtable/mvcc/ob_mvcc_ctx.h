@@ -269,7 +269,7 @@ public:
    * accomplish with transaction ctx's state
    * so, must acquire transaction ctx at first
    *
-   * for detail of authorization see transaction ctx's wirte_auth.
+   * for detail of authorization see transaction ctx's write_auth.
    */
   int write_auth(storage::ObStoreCtx &store_ctx);
 private:
