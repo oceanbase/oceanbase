@@ -2324,7 +2324,7 @@ int ObTablet::inc_macro_ref_with_macro_info(const ObTabletMacroInfo &tablet_macr
       K(auto_inc_seq_addr.addr_), K(storage_schema_addr_.addr_), K(medium_info_list_addr.addr_),
       K(tablet_status_uncommitted_kv_addr.addr_), K(tablet_status_committed_kv_addr.addr_),
       K(aux_tablet_info_uncommitted_kv_addr.addr_), K(aux_tablet_info_committed_kv_addr.addr_),
-      K(tablet_addr_), KP(this), K(lbt()));
+      K(tablet_addr_), KP(this), K(tablet_macro_info), K(lbt()));
   return ret;
 }
 
@@ -2361,7 +2361,7 @@ int ObTablet::inner_inc_macro_ref_cnt()
       K(auto_inc_seq_addr.addr_), K(storage_schema_addr_.addr_), K(medium_info_list_addr.addr_),
       K(tablet_status_uncommitted_kv_addr.addr_), K(tablet_status_committed_kv_addr.addr_),
       K(aux_tablet_info_uncommitted_kv_addr.addr_), K(aux_tablet_info_committed_kv_addr.addr_),
-      K(tablet_addr_), KP(this), K(lbt()));
+      K(tablet_addr_), KP(this), KPC(macro_info_addr_.ptr_), K(lbt()));
 
   return ret;
 }
@@ -2441,12 +2441,6 @@ int ObTablet::inc_ref_without_aggregated_info()
   } else if (OB_FAIL(inc_table_store_ref_cnt(inc_table_store_member_ref))) {
     LOG_WARN("fail to increase macro blocks' ref cnt for sstable meta", K(ret));
   }
-  FLOG_INFO("the tablet that inner increases ref cnt is", K(ret),
-      K(is_inited_), K(tablet_meta_.ls_id_), K(tablet_meta_.tablet_id_), K(table_store_addr_.addr_),
-      K(auto_inc_seq_addr.addr_), K(storage_schema_addr_.addr_), K(medium_info_list_addr.addr_),
-      K(tablet_status_uncommitted_kv_addr.addr_), K(tablet_status_committed_kv_addr.addr_),
-      K(aux_tablet_info_uncommitted_kv_addr.addr_), K(aux_tablet_info_committed_kv_addr.addr_),
-      K(tablet_addr_), KP(this), K(lbt()));
 
   if (OB_FAIL(ret)) {
     if (inc_medium_info_list_ref) {
@@ -2515,7 +2509,7 @@ void ObTablet::dec_macro_ref_cnt()
       K(auto_inc_seq_addr.addr_), K(storage_schema_addr_.addr_), K(medium_info_list_addr.addr_),
       K(tablet_status_uncommitted_kv_addr.addr_), K(tablet_status_committed_kv_addr.addr_),
       K(aux_tablet_info_uncommitted_kv_addr.addr_), K(aux_tablet_info_committed_kv_addr.addr_),
-      K(tablet_addr_), KP(this), K(lbt()));
+      K(tablet_addr_), KP(this), KPC(macro_info_addr_.ptr_), K(lbt()));
 }
 
 void ObTablet::dec_ref_without_aggregated_info()

@@ -88,7 +88,7 @@ int ObBlockInfoSet::init(
  */
 template <typename T>
 ObBlockInfoArray<T>::ObBlockInfoArray()
-  : cnt_(0), arr_(nullptr), capacity_(0), is_inited_(false)
+  : cnt_(0), arr_(nullptr), capacity_(0)
 {
 }
 
@@ -104,17 +104,13 @@ void ObBlockInfoArray<T>::reset()
   cnt_ = 0;
   capacity_ = 0;
   arr_ = nullptr;
-  is_inited_ = false;
 }
 
 template <typename T>
-int ObBlockInfoArray<T>::init(const int64_t cnt, ObArenaAllocator &allocator)
+int ObBlockInfoArray<T>::reserve(const int64_t cnt, ObArenaAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(is_inited_)) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("ObBlockInfoArray has been inited", K(ret));
-  } else if (0 == cnt) {
+  if (0 == cnt) {
     // no macro id
     arr_ = nullptr;
   } else if (OB_ISNULL(arr_ = reinterpret_cast<T *>(allocator.alloc(sizeof(T) * cnt)))) {
@@ -124,7 +120,6 @@ int ObBlockInfoArray<T>::init(const int64_t cnt, ObArenaAllocator &allocator)
   if (OB_SUCC(ret)) {
     cnt_ = cnt;
     capacity_ = cnt;
-    is_inited_ = true;
   }
   return ret;
 }
@@ -133,10 +128,7 @@ template <typename T>
 int ObBlockInfoArray<T>::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObBlockInfoArray hasn't been inited", K(ret));
-  } else if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0 || pos < 0)) {
+  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0 || pos < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(buf), K(buf_len), K(pos));
   } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, cnt_))) {
@@ -157,16 +149,14 @@ template <typename T>
 int ObBlockInfoArray<T>::deserialize(ObArenaAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(is_inited_)) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("ObBlockInfoArray has been inited", K(ret));
-  } else if (OB_ISNULL(buf) || OB_UNLIKELY(pos < 0 || data_len <= 0)) {
+  if (OB_ISNULL(buf) || OB_UNLIKELY(pos < 0 || data_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(buf), K(data_len), K(pos));
   } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &cnt_))) {
     LOG_WARN("fail to decode count", K(ret), K(data_len), K(pos));
   } else if (0 == cnt_) {
     // no macro id
+    arr_ = nullptr;
   } else if (OB_UNLIKELY(cnt_ < 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("array count shouldn't be less than 0", K(ret), K_(cnt));
@@ -187,7 +177,6 @@ int ObBlockInfoArray<T>::deserialize(ObArenaAllocator &allocator, const char *bu
     allocator.free(arr_);
     reset();
   } else if (OB_SUCC(ret)) {
-    is_inited_ = true;
     capacity_ = cnt_;
   }
   return ret;
@@ -211,10 +200,7 @@ int ObBlockInfoArray<T>::deep_copy(char *buf, const int64_t buf_len, int64_t &po
 {
   int ret = OB_SUCCESS;
   const int64_t memory_size = get_deep_copy_size();
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObBlockInfoArray hasn't been inited", K(ret));
-  } else if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0 || pos < 0 || buf_len - pos < memory_size)) {
+  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0 || pos < 0 || buf_len - pos < memory_size)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(buf), K(buf_len), K(pos), K(memory_size));
   } else if (OB_NOT_NULL(arr_) && 0 != cnt_) {
@@ -227,7 +213,6 @@ int ObBlockInfoArray<T>::deep_copy(char *buf, const int64_t buf_len, int64_t &po
     dest_obj.cnt_ = cnt_;
     dest_obj.capacity_ = capacity_;
     pos += memory_size;
-    dest_obj.is_inited_ = is_inited_;
   }
   return ret;
 }
@@ -259,15 +244,15 @@ void ObTabletMacroInfo::reset()
 
 int ObTabletMacroInfo::init(
     ObArenaAllocator &allocator,
-    ObBlockInfoSet &info_set,
+    const ObBlockInfoSet &info_set,
     ObLinkedMacroBlockItemWriter &linked_writer)
 {
   int ret = OB_SUCCESS;
-  ObBlockInfoSet::TabletMacroSet &meta_block_info_set = info_set.meta_block_info_set_;
-  ObBlockInfoSet::TabletMacroSet &data_block_info_set = info_set.data_block_info_set_;
-  ObBlockInfoSet::TabletMacroSet &shared_meta_block_info_set = info_set.shared_meta_block_info_set_;
-  ObBlockInfoSet::TabletMacroMap &shared_data_block_info_map = info_set.shared_data_block_info_map_;
-  int64_t total_macro_cnt = meta_block_info_set.size()
+  const ObBlockInfoSet::TabletMacroSet &meta_block_info_set = info_set.meta_block_info_set_;
+  const ObBlockInfoSet::TabletMacroSet &data_block_info_set = info_set.data_block_info_set_;
+  const ObBlockInfoSet::TabletMacroSet &shared_meta_block_info_set = info_set.shared_meta_block_info_set_;
+  const ObBlockInfoSet::TabletMacroMap &shared_data_block_info_map = info_set.shared_data_block_info_map_;
+  const int64_t total_macro_cnt = meta_block_info_set.size()
                             + data_block_info_set.size()
                             + shared_meta_block_info_set.size()
                             + shared_data_block_info_map.size();
@@ -275,13 +260,13 @@ int ObTabletMacroInfo::init(
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTabletMacroInfo has been inited", K(ret));
-  } else if (OB_FAIL(meta_block_info_arr_.init(meta_block_info_set.size(), allocator))) {
+  } else if (OB_FAIL(meta_block_info_arr_.reserve(meta_block_info_set.size(), allocator))) {
     LOG_WARN("fail to init meta block id arr", K(ret));
-  } else if (OB_FAIL(data_block_info_arr_.init(data_block_info_set.size(), allocator))) {
+  } else if (OB_FAIL(data_block_info_arr_.reserve(data_block_info_set.size(), allocator))) {
     LOG_WARN("fail to init data block id arr", K(ret));
-  } else if (OB_FAIL(shared_meta_block_info_arr_.init(shared_meta_block_info_set.size(), allocator))) {
+  } else if (OB_FAIL(shared_meta_block_info_arr_.reserve(shared_meta_block_info_set.size(), allocator))) {
     LOG_WARN("fail to init shared meta block info arr", K(ret));
-  } else if (OB_FAIL(shared_data_block_info_arr_.init(shared_data_block_info_map.size(), allocator))) {
+  } else if (OB_FAIL(shared_data_block_info_arr_.reserve(shared_data_block_info_map.size(), allocator))) {
     LOG_WARN("fail to init shared data block info arr", K(ret));
   } else if (OB_FAIL(construct_block_id_arr(meta_block_info_set, meta_block_info_arr_))) {
     LOG_WARN("fail to construct meta block id arr", K(ret));
@@ -303,7 +288,7 @@ int ObTabletMacroInfo::init(
 }
 
 int ObTabletMacroInfo::construct_block_id_arr(
-    ObBlockInfoSet::TabletMacroSet &id_set,
+    const ObBlockInfoSet::TabletMacroSet &id_set,
     ObBlockInfoArray<MacroBlockId> &block_id_arr)
 {
   int ret = OB_SUCCESS;
@@ -322,7 +307,7 @@ int ObTabletMacroInfo::construct_block_id_arr(
 }
 
 int ObTabletMacroInfo::construct_block_info_arr(
-    ObBlockInfoSet::TabletMacroMap &block_info_map,
+    const ObBlockInfoSet::TabletMacroMap &block_info_map,
     ObBlockInfoArray<ObSharedBlockInfo> &block_info_arr)
 {
   int ret = OB_SUCCESS;
@@ -360,6 +345,11 @@ int ObTabletMacroInfo::persist_macro_ids(
     LOG_WARN("fail to close linked writer", K(ret));
   } else if (OB_FAIL(linked_writer.get_entry_block(entry_block_))) {
     LOG_WARN("fail to get entry block", K(ret));
+  } else {
+    meta_block_info_arr_.reset();
+    data_block_info_arr_.reset();
+    shared_meta_block_info_arr_.reset();
+    shared_data_block_info_arr_.reset();
   }
   return ret;
 }
@@ -564,13 +554,13 @@ int ObTabletMacroInfo::deep_copy(char *buf, const int64_t buf_len, ObTabletMacro
       }
     } else {
       ObArenaAllocator dummy_allocator;
-      if (OB_FAIL(tablet_macro_info->meta_block_info_arr_.init(0, dummy_allocator))) {
+      if (OB_FAIL(tablet_macro_info->meta_block_info_arr_.reserve(0, dummy_allocator))) {
         LOG_WARN("fail to init empty meta block info arr", K(ret));
-      } else if (OB_FAIL(tablet_macro_info->data_block_info_arr_.init(0, dummy_allocator))) {
+      } else if (OB_FAIL(tablet_macro_info->data_block_info_arr_.reserve(0, dummy_allocator))) {
         LOG_WARN("fail to init empty data block info arr", K(ret));
-      } else if (OB_FAIL(tablet_macro_info->shared_meta_block_info_arr_.init(0, dummy_allocator))) {
+      } else if (OB_FAIL(tablet_macro_info->shared_meta_block_info_arr_.reserve(0, dummy_allocator))) {
         LOG_WARN("fail to init empty shared meta block info arr", K(ret));
-      } else if (OB_FAIL(tablet_macro_info->shared_data_block_info_arr_.init(0, dummy_allocator))) {
+      } else if (OB_FAIL(tablet_macro_info->shared_data_block_info_arr_.reserve(0, dummy_allocator))) {
         LOG_WARN("fail to init empty shared data block info arr", K(ret));
       }
     }
@@ -801,25 +791,26 @@ void ObTabletMacroInfo::dec_macro_ref_with_io() const
       block_reader.reset();
       if (OB_FAIL(block_reader.init(entry_block_))) {
         LOG_WARN("fail to init linked block item reader", K(ret), K(entry_block_));
-      } else if (OB_FAIL(block_reader.get_next_item(meta_id_buf, meta_id_len, addr))) {
-        LOG_WARN("fail to get next item", K(ret));
-      } else if (OB_FAIL(block_reader.get_next_item(data_id_buf, data_id_len, addr))) {
-        LOG_WARN("fail to get next item", K(ret));
-      } else if (OB_FAIL(block_reader.get_next_item(shared_meta_id_buf, shared_meta_id_len, addr))) {
-        LOG_WARN("fail to get next item", K(ret));
-      } else if (OB_FAIL(block_reader.get_next_item(shared_data_info_buf, shared_data_info_len, addr))) {
-        LOG_WARN("fail to get next item", K(ret));
       }
-    } while(ignore_ret(ret));
-    if (OB_FAIL(ret)) {
-      LOG_ERROR("fail to read macro id from disk, macro blocks may leak", K(ret));
-    } else {
-      deserialize_and_dec_macro_ref(meta_id_buf, meta_id_len);
-      deserialize_and_dec_macro_ref(data_id_buf, data_id_len);
-      deserialize_and_dec_macro_ref(shared_meta_id_buf, shared_meta_id_len);
-      deserialize_and_dec_shared_macro_ref(shared_data_info_buf, shared_data_info_len);
-      dec_linked_block_ref_cnt(block_reader.get_meta_block_list());
-    }
+    } while (ignore_ret(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(block_reader.get_next_item(meta_id_buf, meta_id_len, addr))) {
+    LOG_WARN("fail to get next item", K(ret));
+  } else if (FALSE_IT(deserialize_and_dec_macro_ref(meta_id_buf, meta_id_len))) {
+  } else if (OB_FAIL(block_reader.get_next_item(data_id_buf, data_id_len, addr))) {
+    LOG_WARN("fail to get next item", K(ret));
+  } else if (FALSE_IT(deserialize_and_dec_macro_ref(data_id_buf, data_id_len))) {
+  } else if (OB_FAIL(block_reader.get_next_item(shared_meta_id_buf, shared_meta_id_len, addr))) {
+    LOG_WARN("fail to get next item", K(ret));
+  } else if (FALSE_IT(deserialize_and_dec_macro_ref(shared_meta_id_buf, shared_meta_id_len))) {
+  } else if (OB_FAIL(block_reader.get_next_item(shared_data_info_buf, shared_data_info_len, addr))) {
+    LOG_WARN("fail to get next item", K(ret));
+  } else {
+    deserialize_and_dec_shared_macro_ref(shared_data_info_buf, shared_data_info_len);
+    dec_linked_block_ref_cnt(block_reader.get_meta_block_list());
   }
 }
 

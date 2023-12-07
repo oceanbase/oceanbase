@@ -709,11 +709,12 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
   ObTabletPersister persister;
+  ObSArray<MacroBlockId> shared_meta_id_arr;
 
   ObTabletHandle new_handle;
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
-      *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info));
+      *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info, shared_meta_id_arr));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(tablet_macro_info, new_handle, space_usage));
 
   ObMetaDiskAddr addr = new_handle.get_obj()->get_tablet_addr();
@@ -805,9 +806,10 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
 
   ObTabletHandle new_handle;
   ObTabletPersister persister;
+  ObSArray<MacroBlockId> shared_meta_id_arr;
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
-      *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info));
+      *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info, shared_meta_id_arr));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(tablet_macro_info, new_handle, space_usage));
 
   ObMetaDiskAddr addr = new_handle.get_obj()->get_tablet_addr();
@@ -911,9 +913,10 @@ TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
 
   ObTabletHandle new_handle;
   ObTabletPersister persister;
+  ObSArray<MacroBlockId> shared_meta_id_arr;
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
-      *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info));
+      *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info, shared_meta_id_arr));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(tablet_macro_info, new_handle, space_usage));
 
   ret = t3m_.compare_and_swap_tablet(key, new_handle, new_handle);
@@ -1003,9 +1006,10 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
 
   ObTabletHandle new_handle;
   ObTabletPersister persister;
+  ObSArray<MacroBlockId> shared_meta_id_arr;
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
-      *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info));
+      *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info, shared_meta_id_arr));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(tablet_macro_info, new_handle, space_usage));
 
   ret = t3m_.compare_and_swap_tablet(key, new_handle, new_handle);

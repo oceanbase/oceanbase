@@ -313,7 +313,7 @@ int ObMacroInfoIterator::reuse_info_arr(const int64_t cnt)
   } else {
     block_info_arr_.reset();
     allocator_.reuse();
-    if (OB_FAIL(block_info_arr_.init(cnt, allocator_))) {
+    if (OB_FAIL(block_info_arr_.reserve(cnt, allocator_))) {
       LOG_WARN("fail to init block_info_arr_", K(ret), K(cnt));
     }
   }

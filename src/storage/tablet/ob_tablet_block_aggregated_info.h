@@ -95,8 +95,8 @@ public:
                                           common::hash::NormalPointer,
                                           oceanbase::common::ObMalloc,
                                           MAP_EXTEND_RATIO> TabletMacroMap;
-  typedef typename TabletMacroSet::iterator SetIterator;
-  typedef typename TabletMacroMap::iterator MapIterator;
+  typedef typename TabletMacroSet::const_iterator SetIterator;
+  typedef typename TabletMacroMap::const_iterator MapIterator;
 public:
   ObBlockInfoSet()
     : meta_block_info_set_(), data_block_info_set_(), shared_meta_block_info_set_(), shared_data_block_info_map_()
@@ -129,7 +129,7 @@ public:
   ObBlockInfoArray();
   ~ObBlockInfoArray();
   void reset();
-  int init(const int64_t cnt, ObArenaAllocator &allocator);
+  int reserve(const int64_t cnt, ObArenaAllocator &allocator);
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(ObArenaAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_serialize_size() const;
@@ -139,15 +139,14 @@ public:
   {
     return (0 == cnt_ && nullptr == arr_) || (0 < cnt_ && nullptr != arr_);
   }
-  TO_STRING_KV(K_(cnt), KP_(arr), K_(capacity), K_(is_inited));
+  TO_STRING_KV(K_(cnt), KP_(arr), K_(capacity));
 
 public:
   int64_t cnt_;
   T *arr_;
 
-  // no need to be persisted
+  // no need to be persisted and only used by iterator
   int64_t capacity_;
-  bool is_inited_;
 };
 
 class ObTabletMacroInfo final
@@ -156,7 +155,7 @@ public:
   ObTabletMacroInfo();
   ~ObTabletMacroInfo();
   void reset();
-  int init(ObArenaAllocator &allocator, ObBlockInfoSet &id_set, ObLinkedMacroBlockItemWriter &linked_writer);
+  int init(ObArenaAllocator &allocator, const ObBlockInfoSet &id_set, ObLinkedMacroBlockItemWriter &linked_writer);
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(ObArenaAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_serialize_size() const;
@@ -209,8 +208,8 @@ private:
       const ObIArray<blocksstable::MacroBlockId> &linked_block_list,
       bool &inc_macro_id_success) const;
   void dec_linked_block_ref_cnt(const ObIArray<blocksstable::MacroBlockId> &linked_block_list) const;
-  int construct_block_id_arr(ObBlockInfoSet::TabletMacroSet &id_set, ObBlockInfoArray<blocksstable::MacroBlockId> &block_id_arr);
-  int construct_block_info_arr(ObBlockInfoSet::TabletMacroMap &block_info_map, ObBlockInfoArray<ObSharedBlockInfo> &block_info_arr);
+  int construct_block_id_arr(const ObBlockInfoSet::TabletMacroSet &id_set, ObBlockInfoArray<blocksstable::MacroBlockId> &block_id_arr);
+  int construct_block_info_arr(const ObBlockInfoSet::TabletMacroMap &block_info_map, ObBlockInfoArray<ObSharedBlockInfo> &block_info_arr);
   int persist_macro_ids(ObArenaAllocator &allocator, ObLinkedMacroBlockItemWriter &linked_writer);
   int do_flush_ids(
       const ObTabletMacroType macro_type,
