@@ -1812,16 +1812,6 @@ static int easy_ssl_dhparam(easy_ssl_ctx_t *ssl, char *file)
             return EASY_ERROR;
         }
 
-#ifndef OB_USE_BABASSL
-        dh->p = BN_bin2bn(dh1024_p, sizeof(dh1024_p), NULL);
-        dh->g = BN_bin2bn(dh1024_g, sizeof(dh1024_g), NULL);
-
-        if (NULL == dh->p || NULL == dh->g) {
-            easy_ssl_error(EASY_LOG_ERROR, "BN_bin2bn() failed");
-            DH_free(dh);
-            return EASY_ERROR;
-        }
-#else
         if (1 != DH_set0_pqg(dh, BN_bin2bn(dh1024_p, sizeof(dh1024_p), NULL), NULL, NULL)) {
           easy_ssl_error(EASY_LOG_ERROR, "BN_bin2bn() failed");
           DH_free(dh);
@@ -1832,7 +1822,7 @@ static int easy_ssl_dhparam(easy_ssl_ctx_t *ssl, char *file)
           DH_free(dh);
           return EASY_ERROR;
         }
-#endif
+
         SSL_CTX_set_tmp_dh(ssl->ctx, dh);
 
         DH_free(dh);

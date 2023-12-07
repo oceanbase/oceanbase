@@ -11,12 +11,12 @@ repo=http://mirrors.aliyun.com/oceanbase/community/stable/el/8/x86_64/
 [deps]
 devdeps-gtest-1.8.0-132022101316.el8.x86_64.rpm
 devdeps-isa-l-static-2.22.0-22022092915.el8.x86_64.rpm
-devdeps-libcurl-static-7.29.0-32022093010.el8.x86_64.rpm
+devdeps-libcurl-static-8.2.1-172023092015.el8.x86_64.rpm
 devdeps-libunwind-static-1.6.2-222022100410.el8.x86_64.rpm
 devdeps-mariadb-connector-c-3.1.12-12022100422.el8.x86_64.rpm
 devdeps-libaio-0.3.112-12022092915.el8.x86_64.rpm
 devdeps-relaxed-rapidjson-1.0.0-52023011719.el8.x86_64.rpm
-devdeps-openssl-static-1.0.1e-12022100422.el8.x86_64.rpm
+devdeps-openssl-static-1.1.1u-22023100710.el8.x86_64.rpm
 devdeps-libxml2-2.10.4-42023082915.el8.x86_64.rpm
 devdeps-mxml-2.12.0-12022090616.el8.x86_64.rpm
 devdeps-apr-1.6.5-32022090616.el8.x86_64.rpm
@@ -26,7 +26,7 @@ devdeps-oss-c-sdk-3.9.2-182022100412.el8.x86_64.rpm
 devdeps-zlib-static-1.2.13-32023061421.el8.x86_64.rpm
 devdeps-ncurses-static-6.2-72022100815.el8.x86_64.rpm
 devdeps-boost-1.74.0-22022110914.el8.x86_64.rpm
-devdeps-s2geometry-0.9.0-42022111116.el8.x86_64.rpm
+devdeps-s2geometry-0.9.0-12023092021.el8.x86_64.rpm
 devdeps-icu-69.1-72022112416.el8.x86_64.rpm
 devdeps-cos-c-sdk-5.0.16-52023070517.el8.x86_64.rpm
 devdeps-protobuf-c-1.4.1-100000062023102016.el8.x86_64.rpm
