@@ -631,7 +631,7 @@ int ObIndexBlockAggregator::init(const ObDataStoreDesc &store_desc, ObIAllocator
     ret = OB_INIT_TWICE;
     LOG_WARN("Already inited", K(ret));
   } else {
-    need_data_aggregate_ = store_desc.get_agg_meta_array().count() != 0 && store_desc.is_major_merge_type();
+    need_data_aggregate_ = store_desc.get_agg_meta_array().count() != 0 && store_desc.is_major_or_meta_merge_type();
     if (!need_data_aggregate_) {
     } else if (OB_FAIL(aggregated_row_.init(allocator, store_desc.get_agg_meta_array().count()))) {
       LOG_WARN("Fail to init aggregated row", K(ret));
