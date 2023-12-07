@@ -308,7 +308,7 @@ int ObTabletMergeInfo::create_sstable(
   if (OB_SUCC(ret)) {
     // if base sstable is small sstable and was reused, we disable the small sstable optimization
     const ObSSTable *sstable = static_cast<const ObSSTable*>(tables_handle.get_table(0));
-    const bool is_reused_small_sst = is_major_merge_type(ctx.get_merge_type())
+    const bool is_reused_small_sst = is_major_or_meta_merge_type(ctx.get_merge_type())
                                    && nullptr == cg_schema //row store mode
                                    && sstable->is_small_sstable()
                                    && 1 == sstable_merge_info_.macro_block_count_

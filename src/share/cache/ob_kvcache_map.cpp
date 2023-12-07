@@ -273,8 +273,8 @@ int ObKVCacheMap::get(
       iter = bucket_ptr;
       bool is_equal = false;
       while (NULL != iter && OB_SUCC(ret)) {
-        if (store_->add_handle_ref(iter->mb_handle_, iter->seq_num_)) {
-          if (hash_code == iter->hash_code_) {
+        if (hash_code == iter->hash_code_) {
+          if (store_->add_handle_ref(iter->mb_handle_, iter->seq_num_)) {
             if (OB_FAIL(key.equal(*iter->key_, is_equal))) {
               COMMON_LOG(WARN, "Failed to check kvcache key equal", K(ret));
             } else if (is_equal) {
@@ -290,8 +290,8 @@ int ObKVCacheMap::get(
 
               break;
             }
+            store_->de_handle_ref(iter->mb_handle_);
           }
-          store_->de_handle_ref(iter->mb_handle_);
         }
         iter = iter->next_;
       }
@@ -310,8 +310,8 @@ int ObKVCacheMap::get(
             iter = bucket_ptr;
             bool is_equal = false;
             while (NULL != iter && OB_LIKELY(OB_SUCCESS == tmp_ret)) {
-              if (store_->add_handle_ref(iter->mb_handle_, iter->seq_num_)) {
-                if (hash_code == iter->hash_code_) {
+              if (hash_code == iter->hash_code_) {
+                if (store_->add_handle_ref(iter->mb_handle_, iter->seq_num_)) {
                   if (OB_TMP_FAIL(key.equal(*iter->key_, is_equal))) {
                     COMMON_LOG(WARN, "Failed to check kvcache key equal", K(tmp_ret));
                   } else if (is_equal) {
@@ -322,8 +322,8 @@ int ObKVCacheMap::get(
                     store_->de_handle_ref(old_handle);
                     break;
                   }
+                  store_->de_handle_ref(iter->mb_handle_);
                 }
-                store_->de_handle_ref(iter->mb_handle_);
               }
               prev = iter;
               iter = iter->next_;
