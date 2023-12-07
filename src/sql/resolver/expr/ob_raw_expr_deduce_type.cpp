@@ -3772,7 +3772,7 @@ int ObRawExprDeduceType::try_replace_casts_with_questionmarks_ora(ObRawExpr *row
   return ret;
 }
 
-int ObRawExprDeduceType::try_replace_cast_with_questionmark_ora(ObRawExpr &parent, ObRawExpr *cast_expr, int param_idx)
+int ObRawExprDeduceType::try_replace_cast_with_questionmark_ora(ObRawExpr &parent, ObRawExpr *cast_expr, int child_idx)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(cast_expr)) {
@@ -3791,14 +3791,24 @@ int ObRawExprDeduceType::try_replace_cast_with_questionmark_ora(ObRawExpr &paren
       bool is_nmb2decint = param_expr->get_result_type().is_number() && cast_expr->get_result_type().is_decimal_int();
       bool is_decint2decint = param_expr->get_result_type().is_decimal_int() && cast_expr->get_result_type().is_decimal_int();
       if (param_expr->is_static_const_expr() && param_expr->get_expr_type() == T_QUESTIONMARK
+          && !static_cast<ObConstRawExpr *>(param_expr)->is_dynamic_eval_questionmark() // already replaced
           && (is_decint2nmb || is_nmb2decint || is_decint2decint)) {
+        ObConstRawExpr *c_expr = static_cast<ObConstRawExpr *>(param_expr);
         ObExprResType res_type = cast_expr->get_result_type();
         res_type.add_cast_mode(cast_expr->get_extra());
-        ret = static_cast<ObConstRawExpr *>(param_expr)->set_dynamic_eval_questionmark(res_type);
-        if (OB_FAIL(ret)) {
+        int64_t param_idx = 0;
+        if (OB_ISNULL(expr_factory_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null raw expr", K(ret));
+        } else if (OB_FAIL(c_expr->get_value().get_unknown(param_idx))) {
+          LOG_WARN("get param idx failed", K(ret));
+        } else if (OB_FAIL(ObRawExprUtils::create_param_expr(*expr_factory_, param_idx, param_expr))) {
+          // create new param store to avoid unexpected problem
+          LOG_WARN("create param expr failed", K(ret));
+        } else if (OB_FAIL(static_cast<ObConstRawExpr *>(param_expr)->set_dynamic_eval_questionmark(res_type))){
           LOG_WARN("set dynamic eval question mark failed", K(ret));
         } else {
-          parent.get_param_expr(param_idx) = param_expr;
+          parent.get_param_expr(child_idx) = param_expr;
         }
       }
       LOG_DEBUG("replace cast with questionmark", K(*cast_expr), K(is_decint2nmb), K(is_nmb2decint),

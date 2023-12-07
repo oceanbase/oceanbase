@@ -1225,10 +1225,10 @@ int eval_questionmark_decint2nmb(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &ex
   int ret = OB_SUCCESS;
   // child is questionmark, do not need evaluation.
   const ObDatum &child = expr.args_[0]->locate_expr_datum(ctx);
-  QuestionmarkDynEvalInfo dyn_info(expr.extra_);
+  ObScale in_scale = expr.args_[0]->datum_meta_.scale_;
   ObNumStackOnceAlloc tmp_alloc;
   number::ObNumber out_nmb;
-  if (OB_FAIL(wide::to_number(child.get_decimal_int(), child.get_int_bytes(), dyn_info.in_scale_,
+  if (OB_FAIL(wide::to_number(child.get_decimal_int(), child.get_int_bytes(), in_scale,
                               tmp_alloc, out_nmb))) {
     LOG_WARN("to_number failed", K(ret));
   } else {
@@ -1266,8 +1266,7 @@ static int _eval_questionmark_decint2decint(const ObExpr &expr, ObEvalCtx &ctx, 
   int ret = OB_SUCCESS;
   ObScale out_scale = expr.datum_meta_.scale_;
   ObPrecision out_prec = expr.datum_meta_.precision_;
-  QuestionmarkDynEvalInfo dyn_info(expr.extra_);
-  ObScale in_scale = dyn_info.in_scale_;
+  ObScale in_scale = expr.args_[0]->datum_meta_.scale_;
   ObDecimalIntBuilder res_val;
   const ObDatum &child = expr.args_[0]->locate_expr_datum(ctx);
   if (OB_FAIL(ObDatumCast::common_scale_decimalint(child.get_decimal_int(), child.get_int_bytes(),
