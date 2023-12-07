@@ -565,6 +565,7 @@ private:
 
   int errism_dup_table_redo_sync_();
   int errism_submit_prepare_log_();
+  int errsim_notify_mds_();
 protected:
   virtual int get_gts_(share::SCN &gts);
   virtual int wait_gts_elapse_commit_version_(bool &need_wait);
