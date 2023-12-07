@@ -3133,10 +3133,20 @@ int ObHashGroupByOp::check_llc_ndv()
   ObTenantSqlMemoryManager * tenant_sql_mem_manager = NULL;
   tenant_sql_mem_manager = MTL(ObTenantSqlMemoryManager*);
   ObExprEstimateNdv::llc_estimate_ndv(ndv, llc_est_.llc_map_);
-  ndv_ratio_is_small_enough = (ndv * 1.0 / llc_est_.est_cnt_) < LlcEstimate::LLC_NDV_RATIO_;
-  if (OB_ISNULL(tenant_sql_mem_manager)) {
+
+  if (0 == llc_est_.est_cnt_) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null ptr", K(ret));
+    LOG_WARN("unexpect zero cnt", K(llc_est_.est_cnt_), K(ret));
+  } else if (FALSE_IT(ndv_ratio_is_small_enough = (ndv * 1.0 / llc_est_.est_cnt_) < LlcEstimate::LLC_NDV_RATIO_)) {
+  } else if (OB_ISNULL(tenant_sql_mem_manager)) {
+     uint64_t tenant_id  = MTL_ID();
+     if (OB_MAX_RESERVED_TENANT_ID <  tenant_id) {
+       ret = OB_ERR_UNEXPECTED;
+       LOG_WARN("unexpect null ptr", K(ret));
+     } else if (ndv_ratio_is_small_enough) {
+       bypass_ctrl_.bypass_rebackto_insert();
+       llc_est_.enabled_  = false;
+     }
   } else {
     global_bound_size = tenant_sql_mem_manager->get_global_bound_size();
     has_enough_mem_for_deduplication = (global_bound_size * LlcEstimate::GLOBAL_BOUND_RATIO_) > (llc_est_.avg_group_mem_ * ndv);
