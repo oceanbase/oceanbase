@@ -513,9 +513,7 @@ ObITable *ObSSTableArray::get_boundary_table(const bool is_last) const
   return sstable;
 }
 
-int ObSSTableArray::get_all_tables(
-    ObIArray<ObITable *> &tables,
-    const bool need_unpack) const
+int ObSSTableArray::get_all_tables(ObIArray<ObITable *> &tables) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid())) {
@@ -527,10 +525,6 @@ int ObSSTableArray::get_all_tables(
       if (OB_ISNULL(table = sstable_array_[i])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null table", K(ret));
-      } else if (table->is_co_sstable() && need_unpack) {
-        if (OB_FAIL(static_cast<ObCOSSTableV2 *>(table)->get_all_tables(tables))) {
-          LOG_WARN("failed to get all cg tables from co table", K(ret), KPC(table));
-        }
       } else if (OB_FAIL(tables.push_back(table))) {
         LOG_WARN("fail to push sstable address into array", K(ret), K(i), K(tables));
       }
@@ -539,10 +533,42 @@ int ObSSTableArray::get_all_tables(
   return ret;
 }
 
-int ObSSTableArray::get_table(const ObITable::TableKey &table_key, ObITable *&table) const
+int ObSSTableArray::get_all_table_wrappers(
+    ObIArray<ObSSTableWrapper> &table_wrappers,
+    const bool need_unpack) const
 {
   int ret = OB_SUCCESS;
-  table = nullptr;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    ObSSTable *table = nullptr;
+    for (int64_t i = 0; OB_SUCC(ret) && i < cnt_; ++i) {
+      ObSSTableWrapper wrapper;
+      if (OB_ISNULL(table = sstable_array_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null table", K(ret));
+      } else if (table->is_co_sstable() && need_unpack) {
+        if (OB_FAIL(static_cast<ObCOSSTableV2 *>(table)->get_all_tables(table_wrappers))) {
+          LOG_WARN("failed to get all cg tables from co table", K(ret), KPC(table));
+        }
+      } else if (OB_FAIL(wrapper.set_sstable(table))) {
+        LOG_WARN("failed to set sstable", K(ret), KPC(table));
+      } else if (OB_FAIL(table_wrappers.push_back(wrapper))) {
+        LOG_WARN("fail to push sstable address into array", K(ret), K(i), K(table_wrappers));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSSTableArray::get_table(
+    const ObITable::TableKey &table_key,
+    ObSSTableWrapper &wrapper) const
+{
+  int ret = OB_SUCCESS;
+  wrapper.reset();
+
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(table_key));
@@ -551,14 +577,13 @@ int ObSSTableArray::get_table(const ObITable::TableKey &table_key, ObITable *&ta
     LOG_WARN("invalid table key", K(ret), K(table_key));
   }
 
-  ObITable *cur_table = nullptr;
+  ObSSTable *cur_table = nullptr;
   for (int64_t i = 0; OB_SUCC(ret) && i < cnt_; ++i) {
     if (OB_ISNULL(cur_table = sstable_array_[i])) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null sstable pointer", K(ret), KPC(this));
     } else if (table_key.is_cg_sstable()) { // should get cg table from co sstable
       ObCOSSTableV2 *co_sstable = nullptr;
-      ObSSTable *cg_sstable = nullptr;
       if (table_key.get_snapshot_version() != cur_table->get_snapshot_version()) {
         // do nothing
       } else if (OB_UNLIKELY(!cur_table->is_co_sstable())) {
@@ -569,14 +594,15 @@ int ObSSTableArray::get_table(const ObITable::TableKey &table_key, ObITable *&ta
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("empty co table has no cg table", K(ret), K(table_key), KPC(co_sstable), KPC(this));
         ob_abort(); // tmp debug code
-      } else if (OB_FAIL(co_sstable->get_cg_sstable(table_key.get_column_group_id(), cg_sstable))) {
+      } else if (OB_FAIL(co_sstable->get_cg_sstable(table_key.get_column_group_id(), wrapper))) {
         LOG_WARN("failed to get cg table from co sstable", K(ret), K(table_key), KPC(co_sstable));
       } else {
-        table = cg_sstable;
         break;
       }
     } else if (table_key == cur_table->get_key()) {
-      table = cur_table;
+      if (OB_FAIL(wrapper.set_sstable(cur_table))) {
+        LOG_WARN("failed to set sstable", K(ret), KPC(cur_table));
+      }
       break;
     }
   }

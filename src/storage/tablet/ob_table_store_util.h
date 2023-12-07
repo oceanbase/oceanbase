@@ -28,6 +28,7 @@ class ObTabletTableStore;
 class ObTabletTablesSet;
 class ObTenantMetaMemMgr;
 class ObITableArray;
+class ObSSTableWrapper;
 
 class ObSSTableArray
 {
@@ -70,8 +71,9 @@ public:
   blocksstable::ObSSTable *operator[](const int64_t pos) const;
   blocksstable::ObSSTable *at(const int64_t pos) const;
   ObITable *get_boundary_table(const bool is_last) const;
-  int get_all_tables(ObIArray<ObITable *> &tables, const bool need_unpack = false) const;
-  int get_table(const ObITable::TableKey &table_key, ObITable *&table) const;
+  int get_all_tables(ObIArray<ObITable *> &tables) const;
+  int get_all_table_wrappers(ObIArray<ObSSTableWrapper> &tables, const bool need_unpack = false) const;
+  int get_table(const ObITable::TableKey &table_key, ObSSTableWrapper &wrapper) const;
   int inc_macro_ref(bool &is_success) const;
   void dec_macro_ref() const;
 

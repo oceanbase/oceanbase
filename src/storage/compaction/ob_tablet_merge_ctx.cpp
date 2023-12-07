@@ -353,17 +353,17 @@ int ObTabletExeMergeCtx::get_tables_by_key(ObGetMergeTablesResult &get_merge_tab
     LOG_WARN("failed to assign result", KR(ret));
   } else {
     const ObIArray<ObITable::TableKey> &table_key_array = exe_dag->get_table_key_array();
-    ObITable *table = nullptr;
+    ObSSTableWrapper sstable_wrapper;
     for (int64_t i = 0; OB_SUCC(ret) && i < table_key_array.count(); ++i) {
       const ObITable::TableKey &table_key = table_key_array.at(i);
-      if (OB_FAIL(table_store_wrapper.get_member()->get_table(table_key, table))) {
+      if (OB_FAIL(table_store_wrapper.get_member()->get_sstable(table_key, sstable_wrapper))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
           ret = OB_NO_NEED_MERGE;
         } else {
           LOG_WARN("failed to get table from new table_store", KR(ret));
         }
-      } else if (OB_FAIL(get_merge_table_result.handle_.add_sstable(table, table_store_wrapper.get_meta_handle()))) {
-        LOG_WARN("failed to add sstable into result", KR(ret), KPC(table));
+      } else if (OB_FAIL(get_merge_table_result.handle_.add_sstable(sstable_wrapper.get_sstable(), table_store_wrapper.get_meta_handle()))) {
+        LOG_WARN("failed to add sstable into result", KR(ret), K(sstable_wrapper));
       }
     } // end of for
     if (OB_SUCC(ret) && get_merge_table_result.handle_.get_count() != table_key_array.count()) {

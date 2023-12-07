@@ -50,7 +50,7 @@ void ObVirtualCGScanner::reuse()
 int ObVirtualCGScanner::init(
     const ObTableIterParam &iter_param,
     ObTableAccessContext &access_ctx,
-    ObCGTableWrapper &wrapper)
+    ObSSTableWrapper &wrapper)
 {
   UNUSED(wrapper);
   int ret = OB_SUCCESS;
@@ -73,7 +73,7 @@ int ObVirtualCGScanner::init(
 int ObVirtualCGScanner::switch_context(
     const ObTableIterParam &iter_param,
     ObTableAccessContext &access_ctx,
-    ObCGTableWrapper &wrapper)
+    ObSSTableWrapper &wrapper)
 {
   UNUSEDx(wrapper);
   int ret = OB_SUCCESS;
@@ -231,7 +231,7 @@ void ObDefaultCGScanner::reuse()
 int ObDefaultCGScanner::init(
     const ObTableIterParam &iter_param,
     ObTableAccessContext &access_ctx,
-    ObCGTableWrapper &wrapper)
+    ObSSTableWrapper &wrapper)
 {
   int ret = OB_SUCCESS;
 
@@ -249,7 +249,7 @@ int ObDefaultCGScanner::init(
   } else if (OB_FAIL(init_cg_agg_cells(iter_param, access_ctx))) {
     STORAGE_LOG(WARN, "failed to init cg_add_cells", K(ret), K(iter_param), K(access_ctx));
   } else {
-    total_row_count_ = wrapper.cg_sstable_->get_row_count();
+    total_row_count_ = wrapper.get_sstable()->get_row_count();
     query_range_valid_row_count_ = 0;
     iter_param_ = &iter_param;
     filter_ = nullptr;
@@ -353,7 +353,7 @@ int ObDefaultCGScanner::init_datum_infos_and_default_row(const ObTableIterParam 
 int ObDefaultCGScanner::switch_context(
     const ObTableIterParam &iter_param,
     ObTableAccessContext &access_ctx,
-    ObCGTableWrapper &wrapper)
+    ObSSTableWrapper &wrapper)
 {
   int ret = OB_SUCCESS;
 
@@ -367,7 +367,7 @@ int ObDefaultCGScanner::switch_context(
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "unexpected argument", K(ret), K(wrapper), K(iter_param), K(access_ctx));
   } else {
-    total_row_count_ = wrapper.cg_sstable_->get_row_count();
+    total_row_count_ = wrapper.get_sstable()->get_row_count();
     query_range_valid_row_count_ = 0;
     iter_param_ = &iter_param;
     stmt_allocator_ = access_ctx.stmt_allocator_;
@@ -565,7 +565,7 @@ void ObDefaultCGGroupByScanner::reset()
 int ObDefaultCGGroupByScanner::init(
     const ObTableIterParam &iter_param,
     ObTableAccessContext &access_ctx,
-    ObCGTableWrapper &wrapper)
+    ObSSTableWrapper &wrapper)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObDefaultCGScanner::init(iter_param, access_ctx, wrapper))) {

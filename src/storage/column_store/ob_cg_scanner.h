@@ -43,11 +43,11 @@ public:
   virtual int init(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObCGTableWrapper &wrapper) override;
+      ObSSTableWrapper &wrapper) override;
   virtual int switch_context(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObCGTableWrapper &wrapper) override final;
+      ObSSTableWrapper &wrapper) override final;
   virtual void reset() override;
   virtual void reuse() override;
   virtual int locate(
@@ -103,7 +103,7 @@ protected:
   ObCSRowId current_;
   ObCSRange query_index_range_;
   ObSSTable *sstable_;
-  ObCGTableWrapper table_wrapper_;
+  ObSSTableWrapper table_wrapper_;
   const ObTableIterParam *iter_param_;
   ObTableAccessContext *access_ctx_;
   ObCGPrefetcher prefetcher_;
@@ -128,7 +128,7 @@ public:
   virtual int init(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObCGTableWrapper &wrapper) override;
+      ObSSTableWrapper &wrapper) override;
   virtual int get_next_rows(uint64_t &count, const uint64_t capacity) override;
   virtual int locate(
       const ObCSRange &range,

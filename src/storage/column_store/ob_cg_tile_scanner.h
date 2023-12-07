@@ -35,12 +35,12 @@ public:
   virtual int init(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObCGTableWrapper &wrapper) override
+      ObSSTableWrapper &wrapper) override
   { return OB_NOT_SUPPORTED; }
   int switch_context(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObCGTableWrapper &wrapper) override
+      ObSSTableWrapper &wrapper) override
   { return OB_NOT_SUPPORTED; }
   int init(
       const ObIArray<ObTableIterParam*> &iter_params,

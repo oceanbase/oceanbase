@@ -5829,12 +5829,12 @@ int ObLSTabletService::estimate_block_count_and_row_count(
     }
     if (OB_SUCC(ret) && table->is_co_sstable()) {
       ObCOSSTableV2 *co_sstable = static_cast<ObCOSSTableV2 *>(table);
-      common::ObArray<ObITable *> tables;
-      if (OB_FAIL(co_sstable->get_all_tables(tables))) {
+      common::ObArray<ObSSTableWrapper> table_wrappers;
+      if (OB_FAIL(co_sstable->get_all_tables(table_wrappers))) {
         LOG_WARN("fail to get all tables", K(ret), KPC(co_sstable));
       } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); i++) {
-          ObITable *cg_table = tables.at(i);
+        for (int64_t i = 0; OB_SUCC(ret) && i < table_wrappers.count(); i++) {
+          ObITable *cg_table = table_wrappers.at(i).get_sstable();
           ObSSTableMetaHandle co_sst_meta_hdl;
           if (OB_UNLIKELY(cg_table == nullptr || !cg_table->is_sstable())) {
             ret = OB_ERR_UNEXPECTED;

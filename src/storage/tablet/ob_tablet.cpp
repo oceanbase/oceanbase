@@ -7155,18 +7155,17 @@ int ObTablet::get_column_store_sstable_checksum(common::ObIArray<int64_t> &colum
 
     if (OB_FAIL(ret)) {
     } else if (!co_sstable.is_empty_co_table()) {
-      ObSSTable *cg_sstable = nullptr;
-      common::ObArray<ObITable *> cg_tables;
+      common::ObArray<ObSSTableWrapper> cg_tables;
       if (OB_FAIL(co_sstable.get_all_tables(cg_tables))) {
         LOG_WARN("fail to get_all_tables", K(ret));
       } else {
         ObSSTableMetaHandle cg_table_meta_hdl;
         for (int64_t i = 0; i < cg_tables.count() && OB_SUCC(ret); i++) {
-          if (OB_UNLIKELY(nullptr == cg_tables.at(i) || !cg_tables.at(i)->is_sstable())) {
+          const ObSSTable *cg_sstable = cg_tables.at(i).get_sstable();
+          if (OB_UNLIKELY(nullptr == cg_sstable || !cg_sstable->is_sstable())) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected cg table", K(ret), K(cg_tables.at(i)));
+            LOG_WARN("unexpected cg table", K(ret), KPC(cg_sstable));
           } else {
-            const ObSSTable *cg_sstable = static_cast<ObSSTable *>(cg_tables.at(i));
             const uint32_t cg_idx = cg_sstable->get_key().get_column_group_id();
             const ObStorageColumnGroupSchema &column_group = column_groups.at(cg_idx);
             if (OB_FAIL(cg_sstable->get_meta(cg_table_meta_hdl))) {
