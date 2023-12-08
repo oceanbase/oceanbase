@@ -131,7 +131,7 @@ int ObDDLHeartBeatTaskContainer::send_task_status_to_rs()
       if (OB_FAIL(all_reg_task_guard.get_ret())) {
         if (OB_EAGAIN == ret) {
           cnt++;
-          LOG_INFO("all reg task guard failed, plase try again, retry count: ", K(cnt));
+          LOG_INFO("all reg task guard failed, please try again, retry count: ", K(cnt));
           ret = OB_SUCCESS;
           sleep(RETRY_TIME_INTERVAL);
         }
