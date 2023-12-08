@@ -948,6 +948,11 @@ struct ObPhyLocationGetter
 {
 public:
   // used for getting plan
+  // In this interface, we first process the table locations that were marked select_leader, the tablet
+  // locations of them will be added to das_ctx directly, without the need to construct candi_table_locs.
+  // For the remaining table locations that are not marked select_leader, continue to use the previous
+  // logic where a candi_table_loc is generated for each table location. These candi_table_locs will be
+  // added to das_ctx by @build_candi_table_locs().
   static int get_phy_locations(const ObIArray<ObTableLocation> &table_locations,
                                const ObPlanCacheCtx &pc_ctx,
                                ObIArray<ObCandiTableLoc> &phy_location_infos);
@@ -966,6 +971,9 @@ public:
   static int build_table_locs(ObDASCtx &das_ctx,
                               const common::ObIArray<ObTableLocation> &table_locations,
                               const common::ObIArray<ObCandiTableLoc> &candi_table_locs);
+  static int build_candi_table_locs(ObDASCtx &das_ctx,
+                                    const common::ObIArray<ObTableLocation> &table_locations,
+                                    const common::ObIArray<ObCandiTableLoc> &candi_table_locs);
   static int build_related_tablet_info(const ObTableLocation &table_location,
                                        ObExecContext &exec_ctx,
                                        DASRelatedTabletMap *&related_map);

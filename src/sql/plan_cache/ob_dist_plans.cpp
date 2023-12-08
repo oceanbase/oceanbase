@@ -80,9 +80,9 @@ int ObDistPlans::get_plan(ObPlanCacheCtx &pc_ctx,
         LOG_WARN("failed to get physical table locations", K(ret));
       } else if (candi_table_locs.empty()) {
         // do nothing.
-      } else if (OB_FAIL(ObPhyLocationGetter::build_table_locs(pc_ctx.exec_ctx_.get_das_ctx(),
-                                                               plan->get_table_locations(),
-                                                               candi_table_locs))) {
+      } else if (OB_FAIL(ObPhyLocationGetter::build_candi_table_locs(pc_ctx.exec_ctx_.get_das_ctx(),
+                                                                     plan->get_table_locations(),
+                                                                     candi_table_locs))) {
         LOG_WARN("fail to init table locs", K(ret));
       }
     }

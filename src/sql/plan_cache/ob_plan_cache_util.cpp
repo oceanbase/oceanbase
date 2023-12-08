@@ -440,6 +440,24 @@ int ObPhyLocationGetter::build_table_locs(ObDASCtx &das_ctx,
                                           const ObIArray<ObCandiTableLoc> &candi_table_locs)
 {
   int ret = OB_SUCCESS;
+  CK(table_locations.count() == candi_table_locs.count());
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_locations.count(); i++) {
+    if (OB_FAIL(das_ctx.add_candi_table_loc(table_locations.at(i).get_loc_meta(), candi_table_locs.at(i)))) {
+      LOG_WARN("add candi table location failed", K(ret), K(table_locations.at(i).get_loc_meta()));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    das_ctx.clear_all_location_info();
+  }
+
+  return ret;
+}
+
+int ObPhyLocationGetter::build_candi_table_locs(ObDASCtx &das_ctx,
+                                                const ObIArray<ObTableLocation> &table_locations,
+                                                const ObIArray<ObCandiTableLoc> &candi_table_locs)
+{
+  int ret = OB_SUCCESS;
   CK(table_locations.count() >= candi_table_locs.count());
   for (int64_t i = 0, j = 0; OB_SUCC(ret) && i < table_locations.count() && j < candi_table_locs.count(); i++) {
     if (!table_locations.at(i).get_loc_meta().select_leader_) {
