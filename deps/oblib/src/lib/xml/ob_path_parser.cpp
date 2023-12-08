@@ -56,6 +56,17 @@ bool ObPathParserUtil::is_xpath_ident_terminator(const char ch) {
   return ret_bool;
 }
 
+//use for xmltable transfrom xpath special in resolve
+bool ObPathParserUtil::is_xpath_transform_terminator(const char ch) {
+  int ret_bool = false;
+  if (ObXPathUtil::is_whitespace(ch)
+      || ch == ObPathItem::SLASH
+      || ch == ObPathItem::BEGIN_ARRAY) {
+    ret_bool = true;
+  }
+  return ret_bool;
+}
+
 bool ObPathParserUtil::is_boolean_ans(ObFilterType type)
 {
   bool ret_bool = false;

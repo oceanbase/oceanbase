@@ -794,8 +794,9 @@ int ObXMLExprHelper::check_xpath_valid(ObPathExprIter &xpath_iter, bool is_root)
         if (is_root && first_type != ObSeekType::TEXT && first_type != ObSeekType::NODES) {
           ret = OB_ERR_XPATH_INVALID_NODE; // ORA-19276: XPST0005 - XPath step specifies an invalid element/attribute name:
           LOG_USER_ERROR(OB_ERR_TOO_MANY_PREFIX_DECLARE, xpath_iter.get_path_str().length(), xpath_iter.get_path_str().ptr());
-        } else if (xpath_iter.get_path_str()[0] == '.') {
-             // '.' in first will not report error
+        } else if (is_root) {
+        } else if (xpath_iter.get_path_str()[0] == '.' || xpath_iter.get_path_str()[0] == '/') {
+             // '.' or '/' in first will not report error
         } else {
           ret = OB_ERR_XQUERY_UNSUPPORTED; // ORA-19110: unsupported XQuery expression
           LOG_WARN("xquery unsupported", K(ret));

@@ -175,12 +175,14 @@ private:
 typedef common::ObArray<ObJsonObjectPair> ObJsonObjectArray;
 class ObJsonObject : public ObJsonContainer
 {
+private:
+  static const int64_t DEFAULT_PAGE_SIZE = 512L; // 8kb -> 512
 public:
   explicit ObJsonObject(ObIAllocator *allocator)
       : ObJsonContainer(allocator),
         serialize_size_(0),
         page_allocator_(*allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
-        object_array_(OB_MALLOC_NORMAL_BLOCK_SIZE, page_allocator_)
+        object_array_(DEFAULT_PAGE_SIZE, page_allocator_)
   {
     set_parent(NULL);
   }
@@ -319,7 +321,7 @@ typedef common::ObVector<ObJsonNode *, JsonNodeModuleArena> ObJsonNodeVector;
 class ObJsonArray : public ObJsonContainer
 {
 private:
-  static const int64_t DEFAULT_PAGE_SIZE = 8192L; // 8kb
+  static const int64_t DEFAULT_PAGE_SIZE = 512L; // 8kb -> 512
 public:
   explicit ObJsonArray(ObIAllocator *allocator)
       : ObJsonContainer(allocator),

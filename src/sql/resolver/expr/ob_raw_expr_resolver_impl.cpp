@@ -5583,8 +5583,6 @@ int ObRawExprResolverImpl::remove_format_json_opt_in_pl(ParseNode *node, int8_t 
   if (expr_flag == OPT_JSON_OBJECT) {
     for (int64_t i = 2; i < num; i += 3) {
       if (OB_ISNULL(node->children_[i]) || OB_ISNULL(node->children_[i - 1])) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("should not null", K(ret), K(i));
       } else if (node->children_[i]->type_ != T_INT) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("type is't int", K(ret), K(node->children_[i]->type_));

@@ -63,6 +63,7 @@
 #include "share/stat/ob_opt_ds_stat.h"
 #include "lib/udt/ob_udt_type.h"
 #include "sql/resolver/dml/ob_insert_resolver.h"
+#include "lib/xml/ob_path_parser.h"
 
 namespace oceanbase
 {
@@ -9307,16 +9308,23 @@ int ObDMLResolver::resolve_table_func_path(ObIAllocator* allocator,
 
 bool check_xpath_need_transform(ObString& path)
 {
-  bool res= true;
+  bool res = true;
   size_t len = path.length();
   size_t l = 0;
-  while(res && l < len && path[l] != '/') {
-    if (path[l] == '(' || path[l] == ':') {   // exist item method, not transform
+  if ((path[0] >= 'a' && path[0] <= 'z')
+        || (path[0] >= 'A' && path[0] <= 'Z')
+        || path[0] >= '_') {
+  } else {
+    res = false;
+  }
+  while(res && l < len
+        && !ObPathParserUtil::is_xpath_transform_terminator(path[l])) {
+    if (path[l] == ObPathItem::BRACE_START || path[l] == ObPathItem::COLON) {   // exist item method, not transform
       res = false;
     }
     l ++;
   }
-  if (l == 0) { // first char is '/', ignore
+  if (res && l == 0) { // first char is '/', ignore
     res = false;
   }
   return res;
