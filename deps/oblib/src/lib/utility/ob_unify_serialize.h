@@ -69,14 +69,6 @@ void finish_check_serialization();
     }                                                                    \
   }
 
-#define OB_UNIS_DECODEx(obj)                                             \
-  if (OB_SUCC(ret)) {                                                    \
-    if (OB_FAIL(NS_::decode(buf, data_len, pos, obj))) {                 \
-      RPC_WARN("decode object fail",                                     \
-               "name", MSTR(obj), K(data_len), K(pos), K(ret));          \
-    }                                                                    \
-  }
-
 #define OB_UNIS_DECODE(obj)                                              \
   if (OB_SUCC(ret) && pos < data_len) {                                  \
     if (OB_FAIL(NS_::decode(buf, data_len, pos, obj))) {                 \
@@ -219,8 +211,8 @@ struct EmptyUnisStruct
     int64_t version = 0;                                                 \
     int64_t len = 0;                                                     \
     if (OB_SUCC(ret)) {                                                 \
-      OB_UNIS_DECODEx(version);                                         \
-      OB_UNIS_DECODEx(len);                                             \
+      OB_UNIS_DECODE(version);                                         \
+      OB_UNIS_DECODE(len);                                             \
       CHECK_VERSION_LENGTH(CLS, version, len);                          \
     }                                                                   \
     if (OB_SUCC(ret)) {                                                 \

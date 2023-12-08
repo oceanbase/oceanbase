@@ -318,8 +318,8 @@ int ObTenantSuperBlock::deserialize(const char *buf, const int64_t data_len, int
 {
   int ret = OB_SUCCESS;
   int64_t len = 0;
-  OB_UNIS_DECODEx(version_);
-  OB_UNIS_DECODEx(len);
+  OB_UNIS_DECODE(version_);
+  OB_UNIS_DECODE(len);
   if (OB_SUCC(ret)) {
     if (UNIS_VERSION < version_) {
       ret = ::oceanbase::common::OB_NOT_SUPPORTED;

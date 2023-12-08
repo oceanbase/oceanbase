@@ -282,8 +282,8 @@ int ObTabletAutoincSeq::deserialize(
 {
   int ret = OB_SUCCESS;
   int64_t len = 0;
-  OB_UNIS_DECODEx(version_);
-  OB_UNIS_DECODEx(len);
+  OB_UNIS_DECODE(version_);
+  OB_UNIS_DECODE(len);
   if (OB_SUCC(ret)) {
     int64_t tmp_pos = 0;
     if (OB_FAIL(deserialize_(allocator, buf + pos, len, tmp_pos))) {

@@ -8289,8 +8289,8 @@ int ObBatchCreateTabletArg::skip_unis_array_len(const char *buf,
     for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
       int64_t version = 0;
       int64_t len = 0;
-      OB_UNIS_DECODEx(version);
-      OB_UNIS_DECODEx(len);
+      OB_UNIS_DECODE(version);
+      OB_UNIS_DECODE(len);
       CHECK_VERSION_LENGTH(1, version, len);
       pos += len;
     }
