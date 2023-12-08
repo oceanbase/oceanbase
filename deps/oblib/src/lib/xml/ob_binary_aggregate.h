@@ -33,6 +33,12 @@ enum ObBinAggType {
   AGG_MAX
 };
 
+enum ObBinAggAllocFlag {
+  AGG_ALLOC_A,
+  AGG_ALLOC_B,
+  AGG_ALLOC_MAX
+};
+
 struct ObAggBinKeyInfo {
   uint8_t type_;
   bool unparsed_; // special for xml
@@ -52,11 +58,16 @@ struct ObAggBinKeyInfo {
 typedef common::ObArray<ObAggBinKeyInfo*> ObAggBinKeyArray;
 class ObBinAggSerializer {
 public:
-  ObBinAggSerializer(ObIAllocator* allocator_, ObBinAggType type, uint8_t header_type, bool need_merge_unparsed = false);
+  ObBinAggSerializer(ObIAllocator* allocator_,
+                     ObBinAggType type,
+                     uint8_t header_type,
+                     bool need_merge_unparsed = false,
+                     ObIAllocator* tmp_allocator = nullptr,
+                     ObIAllocator* arr_allocator = nullptr);
 
   // finaly serialize
   int serialize();
-  int append_key_and_value(ObString key, ObJsonBin *json_val);
+  int append_key_and_value(ObString key, ObStringBuffer &value, ObJsonBin *json_val);
   int append_key_and_value(ObXmlBin *xml_bin);
   void set_header_type(uint8_t header_type) { header_type_ = header_type; }
   void set_xml_decl(ObString version, ObString encoding, uint16_t standalone);
@@ -71,6 +82,8 @@ public:
   void close_merge_text() { merge_text_ = false; }
   void open_merge_text() { merge_text_ = true; }
   int64_t get_approximate_length() { return key_.length() + value_.length(); }
+  int64_t get_key_length() { return key_.length(); }
+  int64_t get_value_length() { return value_.length(); }
 
 private:
   int construct_meta();
@@ -104,6 +117,15 @@ private:
   void set_index_entry(int64_t origin_index, int64_t sort_index);
   void set_value_entry(int64_t entry_idx,  uint8_t type, int64_t value_offset);
   bool need_to_add_node(int64_t key_count, ObMulModeNodeType type);
+  int copy_and_reset(ObIAllocator* new_allocator,
+                     ObIAllocator* old_allocator,
+                     ObStringBuffer &add_value);
+  bool first_alloc_flag() { return alloc_flag_ == ObBinAggAllocFlag::AGG_ALLOC_A; }
+  void set_first_alloc() { alloc_flag_ = ObBinAggAllocFlag::AGG_ALLOC_A;}
+  void set_second_alloc() { alloc_flag_ = ObBinAggAllocFlag::AGG_ALLOC_B;}
+  bool check_three_allocator() { return back_allocator_ == nullptr || arr_allocator_ == nullptr; }
+  bool is_json_array() { return header_type_ == static_cast<uint8_t>(ObJsonNodeType::J_ARRAY); }
+  ObIAllocator* get_array_allocator() { return arr_allocator_ == nullptr ? allocator_ : arr_allocator_; }
 
   void set_value_entry_for_json(int64_t entry_idx,  uint8_t type, int64_t value_offset);
   void set_key(int64_t key_offset, int64_t key_len);
@@ -112,6 +134,7 @@ private:
   static int text_serialize(ObString value, ObStringBuffer &res);
   static int text_deserialize(ObString value, ObStringBuffer &res);
   static int element_serialize(ObIAllocator* allocator_, ObString value, ObStringBuffer &res);
+  static constexpr int REPLACE_MEMORY_SIZE_THRESHOLD = 8 << 20; // 8M
 private:
   // At present, there is no encapsulated interface for lob's append.
   // Use ObStringBuffer, and replace it with lob after the implementation of subsequent lob placement.
@@ -127,6 +150,7 @@ private:
   bool sort_and_unique_;
   bool merge_text_;
   uint8_t header_type_;
+  uint8_t alloc_flag_;
 
   int32_t type_; // ObBinAggType 0:json 1:xml
   int64_t key_len_;
@@ -140,6 +164,8 @@ private:
   int8_t value_entry_size_;
   int64_t key_start_;
   ObIAllocator* allocator_;
+  ObIAllocator* back_allocator_;
+  ObIAllocator* arr_allocator_;
   ModulePageAllocator page_allocator_;
   ObAggBinKeyArray key_info_;
 };

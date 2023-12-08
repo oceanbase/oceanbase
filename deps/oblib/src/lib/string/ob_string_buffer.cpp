@@ -163,6 +163,22 @@ int ObStringBuffer::set_length(const uint64_t len)
   return ret;
 }
 
+int ObStringBuffer::deep_copy(ObIAllocator *allocator, ObStringBuffer &input)
+{
+  INIT_SUCC(ret);
+  char *new_data = NULL;
+  if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("allocator is null.", K(ret));
+  } else {
+    set_allocator(allocator);
+    len_ = input.length();
+    cap_ = input.capacity();
+    data_ = input.ptr();
+  }
+  return ret;
+}
+
 const ObString ObStringBuffer::string() const
 {
   return ObString(0, static_cast<int32_t>(len_), data_);

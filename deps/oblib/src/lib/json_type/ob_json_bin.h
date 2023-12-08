@@ -538,7 +538,7 @@ public:
   {
     return meta_.field_type_;
   }
-  int get_total_value(ObIAllocator* allocator, ObString &res) const;
+  int get_total_value(ObStringBuffer &res) const;
 
   int get_array_element(uint64_t index, ObIJsonBase *&value) const override;
   int get_object_value(uint64_t index, ObIJsonBase *&value) const override;

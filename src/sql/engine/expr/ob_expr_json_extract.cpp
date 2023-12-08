@@ -178,6 +178,7 @@ int ObExprJsonExtract::eval_json_extract(const ObExpr &expr, ObEvalCtx &ctx, ObD
 
     int32_t hit_size = hits.size();
     ObJsonArray j_arr_res(&allocator);
+    ObStringBuffer value(&allocator);
     ObIJsonBase *jb_res = NULL;
     if (OB_UNLIKELY(OB_FAIL(ret))) {
       LOG_WARN("json seek failed", K(ret));
@@ -204,7 +205,7 @@ int ObExprJsonExtract::eval_json_extract(const ObExpr &expr, ObEvalCtx &ctx, ObD
           } else {
             j_node = static_cast<ObJsonBin *>(jb_node);
             ObString key;
-            if (OB_FAIL(bin_agg.append_key_and_value(key, j_node))) {
+            if (OB_FAIL(bin_agg.append_key_and_value(key, value, j_node))) {
               LOG_WARN("failed to append key and value", K(ret));
             }
           }

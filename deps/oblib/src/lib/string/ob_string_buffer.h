@@ -53,6 +53,7 @@ public:
   int set_length(const uint64_t len);
   char back() { return data_[len_ - 1]; };
   const ObString string() const;
+  int deep_copy(common::ObIAllocator *allocator, ObStringBuffer &input);
   int64_t to_string(char *buf, const int64_t buf_len) const
   {
     int64_t pos = 0;

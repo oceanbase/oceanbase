@@ -341,6 +341,7 @@ int ObExprJsonQuery::append_binary_node_into_res(ObIJsonBase*& jb_res,
   size_t hit_size = hits.size();
   ObJsonBin *j_node = NULL;
   ObIJsonBase *jb_node = NULL;
+  ObStringBuffer value(allocator);
   ObBinAggSerializer bin_agg(allocator, AGG_JSON, static_cast<uint8_t>(ObJsonNodeType::J_ARRAY));
   for (size_t i = 0; OB_SUCC(ret) && i < hit_size; i++) {
     bool is_null_res = false;
@@ -364,7 +365,7 @@ int ObExprJsonQuery::append_binary_node_into_res(ObIJsonBase*& jb_res,
       if (OB_ISNULL(j_node)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("json node input is null", K(ret), K(i), K(is_null_res), K(hits[i]));
-      } else if (OB_FAIL(bin_agg.append_key_and_value(key, j_node))) {
+      } else if (OB_FAIL(bin_agg.append_key_and_value(key, value, j_node))) {
         LOG_WARN("failed to append key and value", K(ret));
       }
     }

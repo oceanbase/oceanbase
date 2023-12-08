@@ -354,11 +354,10 @@ int ObJsonBin::serialize_number_to_json_decimal(number::ObNumber number, ObJsonB
   return ret;
 }
 
-int ObJsonBin::get_total_value(ObIAllocator* allocator, ObString &res) const
+int ObJsonBin::get_total_value(ObStringBuffer &result) const
 {
   INIT_SUCC(ret);
   ObJBVerType j_type = get_vertype();
-  ObStringBuffer result(allocator);
   if (ObJsonVerType::is_scalar(j_type)) {
     if (OB_FAIL(rebuild_json_value(result))) {
       LOG_WARN("rebuild_json_value fail", K(ret), K(pos_), KPC(this));
@@ -378,10 +377,6 @@ int ObJsonBin::get_total_value(ObIAllocator* allocator, ObString &res) const
     } else if (OB_FAIL(result.append(value.ptr(), value.length()))) {
       LOG_WARN("failed to append null json obj", K(ret));
     }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(result.get_result_string(res))) {
-    LOG_WARN("get_result_string fail", K(ret), K(result));
   }
   return ret;
 }
