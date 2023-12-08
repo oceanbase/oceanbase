@@ -1825,6 +1825,12 @@ private:
   int check_modify_column_when_upgrade(
       const share::schema::ObColumnSchemaV2 &new_column,
       const share::schema::ObColumnSchemaV2 &orig_column);
+  int alter_shadow_column_for_index(
+    const ObArray<ObTableSchema> &idx_schema_array,
+    const AlterColumnSchema *alter_column_schema,
+    const ObColumnSchemaV2 &new_column_schema,
+    ObDDLOperator &ddl_operator,
+    common::ObMySQLTransaction &trans);
   int check_new_column_for_index(
       ObIArray<share::schema::ObTableSchema> &idx_schemas,
       const share::schema::ObColumnSchemaV2 &new_column_schema);
