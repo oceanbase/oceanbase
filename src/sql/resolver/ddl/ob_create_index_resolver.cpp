@@ -602,6 +602,8 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
       SQL_RESV_LOG(WARN, "failed to add based_schema_object_info to arg",
                    K(ret), K(tbl_schema->get_table_id()),
                    K(tbl_schema->get_schema_version()));
+    } else if (OB_FAIL(add_based_udt_info(*tbl_schema))) {
+      SQL_RESV_LOG(WARN, "failed to add based_schema_object_info to arg", KR(ret));
     }
   }
   DEBUG_SYNC(HANG_BEFORE_RESOLVER_FINISH);
@@ -698,5 +700,45 @@ int ObCreateIndexResolver::set_table_option_to_stmt(bool is_partitioned)
   }
   return ret;
 }
+
+int ObCreateIndexResolver::add_based_udt_info(const share::schema::ObTableSchema &tbl_schema)
+{
+  int ret = OB_SUCCESS;
+  ObCreateIndexStmt *create_index_stmt = static_cast<ObCreateIndexStmt*>(stmt_);
+  if (OB_ISNULL(create_index_stmt) || OB_ISNULL(schema_checker_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("create index stmt is nullptr", KR(ret));
+  } else {
+    ObTableSchema::const_column_iterator begin = tbl_schema.column_begin();
+    ObTableSchema::const_column_iterator end = tbl_schema.column_end();
+    ObCreateIndexArg &arg = create_index_stmt->get_create_index_arg();
+    for (; OB_SUCC(ret) && begin != end; begin++) {
+      ObColumnSchemaV2 *col = (*begin);
+      if (OB_ISNULL(col)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get column schema failed", KR(ret));
+      } else if (col->is_extend()) {
+        const ObUDTTypeInfo *udt_info = nullptr;
+        const uint64_t udt_id = col->get_sub_data_type();
+        const uint64_t tenant_id = pl::get_tenant_id_by_object_id(udt_id);
+        if (OB_FAIL(schema_checker_->get_udt_info(tenant_id,
+                                                  udt_id,
+                                                  udt_info))) {
+          LOG_WARN("fail to get udt info", KR(ret), K(tenant_id), K(udt_id));
+        } else if (OB_ISNULL(udt_info)) {
+          ret = OB_ERR_OBJECT_NOT_EXIST;
+          LOG_WARN("udt not exist", KR(ret), K(tenant_id), K(udt_id));
+        } else if (OB_FAIL(ob_udt_check_and_add_ddl_dependency(udt_id, UDT_SCHEMA,
+                                                               udt_info->get_schema_version(),
+                                                               udt_info->get_tenant_id(),
+                                                               arg))) {
+          LOG_WARN("fail to push back udt info", KR(ret), K(udt_id), K(tenant_id));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 }  // namespace sql
 }  // namespace oceanbase

@@ -289,6 +289,16 @@ public:
       const ObRoutineType &routine_type,
       const bool is_or_replace);
 
+  // get index info by index name, database_id, data_table_id in mysql mode
+  // index name should be encoded and will be compared with CS_TYPE_UTF8MB4_GENERAL_CI (case insensitive)
+  // @param [out] index_info: invalid means index not exist
+  int get_coded_index_name_info_mysql(
+      common::ObIAllocator &allocator,
+      const uint64_t database_id,
+      const uint64_t data_table_id,
+      const ObString &index_name,
+      ObIndexSchemaInfo &index_info);
+
   /* -------------- interfaces without cache end ---------------*/
 
   /* -------------- interfaces with cache ---------------*/

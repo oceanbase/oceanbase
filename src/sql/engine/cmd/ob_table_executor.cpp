@@ -2038,6 +2038,102 @@ int ObAlterTableExecutor::set_index_arg_list(ObExecContext &ctx, ObAlterTableStm
   return ret;
 }
 
+ObCommentExecutor::ObCommentExecutor()
+{
+}
+
+ObCommentExecutor::~ObCommentExecutor()
+{
+}
+
+int ObCommentExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  ObTaskExecutorCtx *task_exec_ctx = nullptr;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = nullptr;
+  obrpc::ObAlterTableArg &alter_table_arg = stmt.get_alter_table_arg();
+  LOG_TRACE("start of comment execute", K(alter_table_arg));
+  ObString first_stmt;
+  if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
+    LOG_WARN("fail to get first stmt", KR(ret));
+  } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("task_exec_ctx is null", KR(ret));
+  } else if (OB_FAIL(task_exec_ctx->get_common_rpc(common_rpc_proxy))) {
+    LOG_WARN("fail to get common rpc", KR(ret));
+  } else if (OB_ISNULL(common_rpc_proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("common_rpc_proxy is nullptr", KR(ret));
+  } else {
+    ObSQLSessionInfo *my_session = nullptr;
+    obrpc::ObSetCommentArg set_comment_arg;
+    obrpc::ObParallelDDLRes set_comment_res;
+    const int64_t tenant_id = alter_table_arg.alter_table_schema_.get_tenant_id();
+    alter_table_arg.ddl_stmt_str_ = first_stmt;
+    my_session = ctx.get_my_session();
+    int64_t start_time = ObTimeUtility::current_time();
+    ObTimeoutCtx tctx;
+    if (OB_ISNULL(my_session)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get my session", KR(ret));
+    } else if (OB_INVALID_ID == alter_table_arg.session_id_
+               && FALSE_IT(alter_table_arg.session_id_ = my_session->get_sessid_for_table())) {
+      // should not in this field
+    } else if (OB_FAIL(tctx.set_timeout(common_rpc_proxy->get_timeout()))) {
+      LOG_WARN("fail to set timeout ctx", KR(ret));
+    } else if (OB_FAIL(assign_alter_to_comment_(alter_table_arg, set_comment_arg))) {
+      LOG_WARN("fail to assign alter table arg to set comment arg", KR(ret));
+    } else if (OB_FAIL(common_rpc_proxy->set_comment(set_comment_arg, set_comment_res))) {
+      LOG_WARN("rpc proxy set comment failed", KR(ret), K(common_rpc_proxy->get_server()), K(set_comment_arg));
+    } else {
+      int64_t refresh_time = ObTimeUtility::current_time();
+      if (OB_FAIL(ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
+          tctx, tenant_id, set_comment_res.schema_version_))) {
+        LOG_WARN("fail to check paralleld ddl schema in sync", KR(ret), K(set_comment_res));
+      }
+      int64_t end_time = ObTimeUtility::current_time();
+      LOG_INFO("[parallel_comment_table]", KR(ret),
+               "tenant_id", tenant_id,
+               "cost", end_time - start_time,
+               "execute_time", refresh_time - start_time,
+               "wait_schema", end_time - refresh_time,
+               "table_name", set_comment_arg.table_name_);
+    }
+  }
+  return ret;
+}
+
+int ObCommentExecutor::assign_alter_to_comment_(const obrpc::ObAlterTableArg &alter_table_arg, obrpc::ObSetCommentArg &set_comment_arg)
+{
+  int ret = OB_SUCCESS;
+  const AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
+  set_comment_arg.session_id_ = alter_table_arg.session_id_;
+  set_comment_arg.database_name_ = alter_table_schema.get_origin_database_name();
+  set_comment_arg.table_name_ = alter_table_schema.get_origin_table_name();
+  if (OB_FAIL(set_comment_arg.ObDDLArg::assign(alter_table_arg))) {
+    LOG_WARN("fail to assign ob ddl arg", KR(ret));
+  } else if (alter_table_arg.alter_table_schema_.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::COMMENT)) {
+    set_comment_arg.op_type_ = ObSetCommentArg::COMMENT_TABLE;
+    set_comment_arg.table_comment_ = alter_table_schema.get_comment();
+  } else {
+    set_comment_arg.op_type_ = ObSetCommentArg::COMMENT_COLUMN;
+    ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
+    ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
+    for(; OB_SUCC(ret) && it_begin != it_end; it_begin++) {
+      ObColumnSchemaV2 *column_schema = static_cast<ObColumnSchemaV2 *>(*it_begin);
+      if (OB_ISNULL(column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column schema is null ptr", KR(ret));
+      } else if (OB_FAIL(set_comment_arg.column_name_list_.push_back(column_schema->get_column_name()))) {
+        LOG_WARN("fail to push back column name", KR(ret));
+      } else if (OB_FAIL(set_comment_arg.column_comment_list_.push_back(column_schema->get_comment()))) {
+        LOG_WARN("fail to push back column comment", KR(ret));
+      }
+    }
+  }
+
+  return ret;
+}
 /**
  *
  */

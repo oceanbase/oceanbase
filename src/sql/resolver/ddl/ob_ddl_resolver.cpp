@@ -2746,6 +2746,9 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
             if (OB_ISNULL(ddl_arg)) {
             } else if (OB_FAIL(schema_checker_->get_udt_info(tenant_id, udt_id, udt_info))) {
               LOG_WARN("failed to get udt info", K(ret));
+            } else if (OB_ISNULL(udt_info)) {
+              ret = OB_ERR_OBJECT_NOT_EXIST;
+              LOG_WARN("udt not exist", KR(ret), K(tenant_id), K(udt_id));
             } else if (OB_FAIL(ob_udt_check_and_add_ddl_dependency(udt_id,
                                                                    UDT_SCHEMA,
                                                                    udt_info->get_schema_version(),

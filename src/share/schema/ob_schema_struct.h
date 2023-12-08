@@ -427,6 +427,26 @@ public:
 
 };
 
+class ObIndexSchemaInfo
+{
+public:
+  ObIndexSchemaInfo()
+    : index_name_(), index_id_(common::OB_INVALID_ID), schema_version_(common::OB_INVALID_VERSION) {}
+  ~ObIndexSchemaInfo() {}
+  int init(const ObString &index_name, const uint64_t index_id, const int64_t schema_version);
+  void reset();
+  bool is_valid() const;
+  int assign(const ObIndexSchemaInfo &other);
+  const ObString &get_index_name() const { return index_name_; }
+  uint64_t get_index_id() const { return index_id_; }
+  int64_t get_schema_version() const {return schema_version_; }
+  TO_STRING_KV(K_(index_name), K_(index_id), K_(schema_version));
+private:
+  ObString index_name_;
+  uint64_t index_id_;
+  int64_t schema_version_;
+};
+
 class ObSchemaIdVersion
 {
 public:

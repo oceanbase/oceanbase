@@ -799,6 +799,19 @@ public:
               const uint64_t owner_id,
               common::ObIArray<ObSAuditSchema> &audit_schemas) override;
 
+  virtual int get_table_index_infos(
+              common::ObIAllocator &allocator,
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t database_id,
+              const uint64_t data_table_id,
+              common::ObIArray<ObIndexSchemaInfo> &index_infos) override;
+
+  virtual bool schema_name_is_equal(
+               const ObString &src,
+               const ObString &dst,
+               const bool case_compare,
+               const bool compare_with_collation) override;
   /*----------- interfaces for latest schema end -------------*/
 
 private:
@@ -1183,11 +1196,6 @@ private:
       const bool compare_with_collation,
       uint64_t &schema_id);
 
-  bool schema_name_is_equal_(
-       const ObString &src,
-       const ObString &dst,
-       const bool case_compare,
-       const bool compare_with_collation);
 
   int fetch_table_latest_schema_versions_(
       common::ObISQLClient &sql_client,

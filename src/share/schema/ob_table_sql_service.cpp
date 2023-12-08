@@ -2030,33 +2030,8 @@ int ObTableSqlService::update_table_options(ObISQLClient &sql_client,
   bool is_oracle_mode = false;
   const uint64_t tenant_id = table_schema.get_tenant_id();
   uint64_t table_id = table_schema.get_table_id();
-  ObDMLSqlSplicer dml;
-  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-  const bool update_object_status_ignore_version = false;
-  if (OB_FAIL(check_ddl_allowed(new_table_schema))) {
-    LOG_WARN("check ddl allowd failed", K(ret), K(new_table_schema));
-  } else if (OB_FAIL(gen_table_options_dml(exec_tenant_id, new_table_schema, update_object_status_ignore_version, dml))) {
-    LOG_WARN("gen table options dml failed", K(ret));
-  } else {
-    int64_t affected_rows = 0;
-    const char *table_name = NULL;
-    if (OB_FAIL(ObSchemaUtils::get_all_table_name(exec_tenant_id, table_name))) {
-      LOG_WARN("fail to get all table name", K(ret), K(exec_tenant_id));
-    } else if (OB_FAIL(exec_update(sql_client, tenant_id, table_id,
-                                   table_name, dml, affected_rows))) {
-      LOG_WARN("exec update failed", K(ret));
-    } else if (affected_rows > 1) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected value", K(ret), K(affected_rows));
-    }
-  }
-
-  // add to __all_table_history table
-  if (OB_SUCC(ret)) {
-    const bool only_history = true;
-    if (OB_FAIL(add_table(sql_client, new_table_schema, update_object_status_ignore_version, only_history))) {
-      LOG_WARN("add_table failed", K(new_table_schema), K(only_history), K(ret));
-    }
+  if (OB_FAIL(inner_update_table_options_(sql_client, new_table_schema))) {
+    LOG_WARN("fail to do inner update table option", KR(ret), KPC(ddl_stmt_str));
   }
 
   if (OB_SUCC(ret)) {
@@ -2143,6 +2118,70 @@ int ObTableSqlService::update_table_options(ObISQLClient &sql_client,
     }
   }
 
+  return ret;
+}
+// for now, this interface is just used for parallel_set_comment
+// since parallel ddl have to allocate schema version previously
+// any modification of this interface should think the times of generate schema version carefully
+int ObTableSqlService::only_update_table_options(ObISQLClient &sql_client,
+                                                 ObTableSchema &new_table_schema,
+                                                 share::schema::ObSchemaOperationType operation_type,
+                                                 const common::ObString *ddl_stmt_str)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(inner_update_table_options_(sql_client, new_table_schema))) {
+    LOG_WARN("fail to do inner update table", KR(ret), KPC(ddl_stmt_str));
+  } else {
+    ObSchemaOperation opt;
+    if (nullptr != ddl_stmt_str) {
+      opt.ddl_stmt_str_ = *ddl_stmt_str;
+    }
+    opt.tenant_id_ = new_table_schema.get_tenant_id();
+    opt.database_id_ = new_table_schema.get_database_id();
+    opt.tablegroup_id_ = new_table_schema.get_tablegroup_id();
+    opt.table_id_ = new_table_schema.get_table_id();
+    opt.op_type_ = operation_type;
+    opt.schema_version_ = new_table_schema.get_schema_version();
+    if (OB_FAIL(log_operation_wrapper(opt, sql_client))) {
+      LOG_WARN("log operation failed", KR(ret), K(opt));
+    }
+  }
+  return ret;
+}
+
+int ObTableSqlService::inner_update_table_options_(ObISQLClient &sql_client,
+                                       const ObTableSchema &new_table_schema)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = new_table_schema.get_tenant_id();
+  uint64_t table_id = new_table_schema.get_table_id();
+  ObDMLSqlSplicer dml;
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+  const bool update_object_status_ignore_version = false;
+  if (OB_FAIL(check_ddl_allowed(new_table_schema))) {
+    LOG_WARN("check ddl allowd failed", K(ret), K(new_table_schema));
+  } else if (OB_FAIL(gen_table_options_dml(exec_tenant_id, new_table_schema, update_object_status_ignore_version, dml))) {
+    LOG_WARN("gen table options dml failed", K(ret));
+  } else {
+    int64_t affected_rows = 0;
+    const char *table_name = nullptr;
+    if (OB_FAIL(ObSchemaUtils::get_all_table_name(exec_tenant_id, table_name))) {
+      LOG_WARN("fail to get all table name", KR(ret), K(exec_tenant_id));
+    } else if (OB_FAIL(exec_update(sql_client, tenant_id, table_id,
+                                   table_name, dml, affected_rows))) {
+      LOG_WARN("exec update failed", KR(ret));
+    } else if (affected_rows > 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected value", KR(ret), K(affected_rows));
+    }
+  }
+  // add to __all_table_history table
+  if (OB_SUCC(ret)) {
+    const bool only_history = true;
+    if (OB_FAIL(add_table(sql_client, new_table_schema, update_object_status_ignore_version, only_history))) {
+      LOG_WARN("add table failed", KR(ret), K(new_table_schema), K(only_history));
+    }
+  }
   return ret;
 }
 

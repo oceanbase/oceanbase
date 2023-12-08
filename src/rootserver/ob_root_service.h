@@ -480,6 +480,7 @@ public:
   int parallel_create_table(const obrpc::ObCreateTableArg &arg, obrpc::ObCreateTableRes &res);
   int create_table(const obrpc::ObCreateTableArg &arg, obrpc::ObCreateTableRes &res);
   int alter_database(const obrpc::ObAlterDatabaseArg &arg);
+  int set_comment(const obrpc::ObSetCommentArg &arg, obrpc::ObParallelDDLRes &res);
   int alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlterTableRes &res);
   int start_redef_table(const obrpc::ObStartRedefTableArg &arg, obrpc::ObStartRedefTableRes &res);
   int copy_table_dependents(const obrpc::ObCopyTableDependentsArg &arg);
@@ -503,6 +504,7 @@ public:
   int truncate_table(const obrpc::ObTruncateTableArg &arg, obrpc::ObDDLRes &res);
   int truncate_table_v2(const obrpc::ObTruncateTableArg &arg, obrpc::ObDDLRes &res);
   int create_index(const obrpc::ObCreateIndexArg &arg, obrpc::ObAlterTableRes &res);
+  int parallel_create_index(const obrpc::ObCreateIndexArg &arg, obrpc::ObAlterTableRes &res);
   int drop_table(const obrpc::ObDropTableArg &arg, obrpc::ObDDLRes &res);
   int drop_database(const obrpc::ObDropDatabaseArg &arg, obrpc::ObDropDatabaseRes &drop_database_res);
   int drop_tablegroup(const obrpc::ObDropTablegroupArg &arg);
@@ -515,6 +517,7 @@ public:
   int refresh_config();
   int root_minor_freeze(const obrpc::ObRootMinorFreezeArg &arg);
   int update_index_status(const obrpc::ObUpdateIndexStatusArg &arg);
+  int parallel_update_index_status(const obrpc::ObUpdateIndexStatusArg &arg, obrpc::ObParallelDDLRes &res);
   int purge_table(const obrpc::ObPurgeTableArg &arg);
   int flashback_table_from_recyclebin(const obrpc::ObFlashBackTableFromRecyclebinArg &arg);
   int flashback_table_to_time_point(const obrpc::ObFlashBackTableToScnArg &arg);

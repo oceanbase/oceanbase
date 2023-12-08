@@ -156,11 +156,14 @@ private:
 class ObNewTableTabletAllocator
 {
 public:
+  // when doing prepare() during parallel create local index, the data table should be the latest.
+  // thus, need the data_table_schema from the latest_schema_guard.
   ObNewTableTabletAllocator(
       const uint64_t tenant_id,
       share::schema::ObSchemaGetterGuard &schema_guard,
       common::ObMySQLProxy *sql_proxy,
-      const bool use_parallel_ddl = false);
+      const bool use_parallel_ddl = false,
+      const share::schema::ObTableSchema *data_table_schema = nullptr);
   virtual ~ObNewTableTabletAllocator();
 public:
   int init();
@@ -274,6 +277,7 @@ private:
   bool is_add_partition_;
   static int64_t alloc_tablet_ls_offset_;
   bool use_parallel_ddl_;
+  const share::schema::ObTableSchema *data_table_schema_;
 };
 
 }//end namespace rootserver

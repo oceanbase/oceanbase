@@ -441,7 +441,8 @@ public:
                                  common::ObArray<const ObTableSchema*> &table_schemas,
                                  ObArenaAllocator &allocator,
                                  ObMySQLTransaction &trans);
-  int check_table_schema_is_legal(const ObDatabaseSchema & databae_schema,
+  int check_table_schema_is_legal(const obrpc::ObTruncateTableArg &arg,
+                                  const ObDatabaseSchema & databae_schema,
                                   const ObTableSchema &table_schema,
                                   const bool check_foreign_key,
                                   ObMySQLTransaction &trans);

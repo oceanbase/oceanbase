@@ -955,6 +955,8 @@ int ObDDLTask::convert_to_record(
   task_record.task_version_ = get_task_version();
   task_record.execution_id_ = get_execution_id();
   task_record.ret_code_ = get_ret_code();
+  task_record.is_global_index_ = is_global_index();
+  task_record.is_unique_index_ = is_unique_index();
   const ObString &ddl_stmt_str = get_ddl_stmt_str();
   if (serialize_param_size > 0) {
     char *buf = nullptr;
@@ -2605,6 +2607,8 @@ void ObDDLTaskRecord::reset()
   task_version_ = 0;
   ret_code_ = OB_SUCCESS;
   execution_id_ = -1;  // -1 is invalid
+  is_unique_index_ = false;
+  is_global_index_ = false;
 }
 
 

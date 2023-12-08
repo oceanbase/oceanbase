@@ -9,8 +9,9 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#ifndef OCEANBASE_ROOTSERVER_OB_CREATE_VIEW_HELPER_H_
-#define OCEANBASE_ROOTSERVER_OB_CREATE_VIEW_HELPER_H_
+
+#ifndef OCEANBASE_ROOTSERVER_OB_UPDATE_INDEX_STATUS_HELPER_H_
+#define OCEANBASE_ROOTSERVER_OB_UPDATE_INDEX_STATUS_HELPER_H_
 
 #include "rootserver/parallel_ddl/ob_ddl_helper.h"
 
@@ -25,36 +26,35 @@ class ObMultiVersionSchemaService;
 }
 namespace obrpc
 {
-class ObCreateTableArg;
-class ObCreateTableRes;
+class ObUpdateIndexStatusArg;
 }
 namespace rootserver
 {
-class ObCreateViewHelper : public ObDDLHelper
+class ObUpdateIndexStatusHelper : public ObDDLHelper
 {
 public:
-  ObCreateViewHelper(
+  ObUpdateIndexStatusHelper(
     share::schema::ObMultiVersionSchemaService *schema_service,
     const uint64_t tenant_id,
-    const obrpc::ObCreateTableArg &arg,
-    obrpc::ObCreateTableRes &res);
-  virtual ~ObCreateViewHelper();
-
+    const obrpc::ObUpdateIndexStatusArg &arg,
+    obrpc::ObParallelDDLRes &res);
+  virtual ~ObUpdateIndexStatusHelper();
   virtual int execute() override;
 private:
   int lock_objects_();
-  int generate_schemas_();
-  virtual int calc_schema_version_cnt_() override;
-  int create_schemas_();
+  int check_and_set_schema_();
+  int calc_schema_version_cnt_();
+  int update_status_();
+  int lock_database_by_obj_name_();
 private:
-  const obrpc::ObCreateTableArg &arg_;
-  obrpc::ObCreateTableRes &res_;
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObCreateViewHelper);
+  const obrpc::ObUpdateIndexStatusArg &arg_;
+  obrpc::ObParallelDDLRes &res_;
+  const ObTableSchema *orig_index_table_schema_;
+  ObTableSchema* new_data_table_schema_;
+  share::schema::ObIndexStatus new_status_;
+  bool index_table_exist_;
+  uint64_t database_id_;
 };
-
-} // end namespace rootserver
-} // end namespace oceanbase
-
-
-#endif//OCEANBASE_ROOTSERVER_OB_CREATE_VIEW_HELPER_H_
+}
+}
+#endif

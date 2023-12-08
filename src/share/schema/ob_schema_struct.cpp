@@ -85,6 +85,46 @@ lib::Worker::CompatMode get_worker_compat_mode(const ObCompatibilityMode &mode)
   return worker_mode;
 }
 
+int ObIndexSchemaInfo::init(
+    const ObString &index_name,
+    const uint64_t index_id,
+    const int64_t schema_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(index_name.empty()
+      || OB_INVALID_ID == index_id
+      || schema_version <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("index_name, index_id, schema_version invalid", KR(ret), K(index_name), K(index_id), K(schema_version));
+  } else {
+    index_name_ = index_name;
+    index_id_ = index_id;
+    schema_version_ = schema_version;
+  }
+  return ret;
+}
+
+void ObIndexSchemaInfo::reset()
+{
+  index_name_.reset();
+  index_id_ = OB_INVALID_ID;
+  schema_version_ = OB_INVALID_VERSION;
+}
+
+bool ObIndexSchemaInfo::is_valid() const
+{
+  return !index_name_.empty() && OB_INVALID_ID != index_id_ && schema_version_ > 0;
+}
+
+int ObIndexSchemaInfo::assign(const ObIndexSchemaInfo &other)
+{
+  int ret = OB_SUCCESS;
+  index_name_ = other.get_index_name();
+  index_id_ = other.get_index_id();
+  schema_version_ = other.get_schema_version();
+  return ret;
+}
+
 int ObSchemaIdVersion::init(
     const uint64_t schema_id,
     const int64_t schema_version)

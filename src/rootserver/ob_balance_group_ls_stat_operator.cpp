@@ -485,7 +485,8 @@ ObNewTableTabletAllocator::ObNewTableTabletAllocator(
     const uint64_t tenant_id,
     share::schema::ObSchemaGetterGuard &schema_guard,
     common::ObMySQLProxy *sql_proxy,
-    const bool use_parallel_ddl /*= false*/)
+    const bool use_parallel_ddl /*= false*/,
+    const share::schema::ObTableSchema *data_table_schema /*nullptr*/)
   : tenant_id_(tenant_id),
     schema_guard_(schema_guard),
     sql_proxy_(sql_proxy),
@@ -494,7 +495,8 @@ ObNewTableTabletAllocator::ObNewTableTabletAllocator(
     ls_id_array_(),
     inited_(false),
     is_add_partition_(false),
-    use_parallel_ddl_(use_parallel_ddl)
+    use_parallel_ddl_(use_parallel_ddl),
+    data_table_schema_(data_table_schema)
 {
 }
 
@@ -1209,9 +1211,24 @@ int ObNewTableTabletAllocator::alloc_ls_for_local_index_tablet(
     const uint64_t tenant_id = index_schema.get_tenant_id();
     const uint64_t data_table_id = index_schema.get_data_table_id();
     const share::schema::ObTableSchema *table_schema = nullptr;
-    if (OB_FAIL(schema_guard_.get_table_schema(
-        tenant_id, data_table_id, table_schema))) {
-      LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(data_table_id));
+    if (use_parallel_ddl_) {
+      if (OB_ISNULL(data_table_schema_)) {
+        ret = OB_NOT_INIT;
+        LOG_WARN("should use cached data_table_schema when alloc ls for local index tablet when doing parallel ddl", KR(ret));
+      } else if (OB_UNLIKELY(data_table_schema_->get_table_id() != data_table_id)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("data_table_schema_'s table_id != index_schema's data_table_id",
+                 KR(ret), K(data_table_schema_->get_table_id()) ,K(data_table_id));
+      } else {
+        table_schema = data_table_schema_;
+      }
+    } else {
+      if (OB_FAIL(schema_guard_.get_table_schema(
+          tenant_id, data_table_id, table_schema))) {
+        LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(data_table_id));
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(nullptr == table_schema)) {
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("table not exist", KR(ret), K(data_table_id));

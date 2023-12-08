@@ -116,7 +116,7 @@
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
-
+#include "rootserver/parallel_ddl/ob_ddl_helper.h"
 
 namespace oceanbase
 {
@@ -18505,17 +18505,26 @@ int ObDDLService::check_is_foreign_key_parent_table(const ObTableSchema &table_s
   return ret;
 }
 
-int ObDDLService::check_table_schema_is_legal(const ObDatabaseSchema & database_schema,
+int ObDDLService::check_table_schema_is_legal(const obrpc::ObTruncateTableArg &arg,
+                                              const ObDatabaseSchema & database_schema,
                                               const ObTableSchema &table_schema,
                                               const bool check_foreign_key,
                                               ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  int64_t table_id = table_schema.get_table_id();
+  const uint64_t table_id = table_schema.get_table_id();
   ObString table_name = table_schema.get_table_name();
   ObString database_name = database_schema.get_database_name();
 
-  if (table_schema.is_in_recyclebin() || database_schema.is_in_recyclebin()) {
+  if (OB_UNLIKELY(table_schema.get_database_id() != database_schema.get_database_id())) {
+    ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+    LOG_WARN("table databse id not equal to database schema", KR(ret),
+                                                              K(table_schema.get_database_id()),
+                                                              K(database_schema.get_database_id()));
+  } else if (OB_UNLIKELY(database_schema.get_database_name_str() != arg.database_name_)) {
+    ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+    LOG_WARN("database_schema's database name not equal to arg", KR(ret), K(database_schema.get_database_name_str()), K_(arg.database_name));
+  } else if (table_schema.is_in_recyclebin() || database_schema.is_in_recyclebin()) {
     ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
     LOG_WARN("can not truncate table in recyclebin",
             KR(ret), K(table_name), K(table_id), K(database_name));
@@ -18577,8 +18586,14 @@ int ObDDLService::new_truncate_table(const obrpc::ObTruncateTableArg &arg,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("trans conn is NULL", KR(ret), K(arg));
   // To verify the existence of database and table
+  } else if (OB_FAIL(ObDDLHelper::obj_lock_database_name(trans, tenant_id, arg.database_name_, transaction::tablelock::SHARE))) {
+    LOG_WARN("fail to lock database name", KR(ret), K(tenant_id), K_(arg.database_name));
+  } else if (OB_FAIL(ObDDLHelper::obj_lock_obj_name(trans, tenant_id, arg.database_name_, arg.table_name_, transaction::tablelock::EXCLUSIVE))) {
+    LOG_WARN("fail to lock table name", KR(ret), K(tenant_id), K_(arg.database_name), K_(arg.table_name));
   } else if (OB_FAIL(check_db_and_table_is_exist(arg, trans, database_id, table_id))) {
     LOG_WARN("failed to check database and table exist", KR(ret), K(arg.database_name_), K(arg.table_name_));
+  } else if (OB_FAIL(ObDDLHelper::obj_lock_obj_id(trans, tenant_id, database_id, transaction::tablelock::SHARE))) {
+    LOG_WARN("fail to lock databse id", KR(ret), K(tenant_id), K(database_id));
   } else {
     // table lock
     ObTableSchema orig_table_schema;
@@ -18589,9 +18604,11 @@ int ObDDLService::new_truncate_table(const obrpc::ObTruncateTableArg &arg,
     schema_status.tenant_id_ = tenant_id;
     int64_t before_table_lock = ObTimeUtility::current_time();
     bool lock_table_not_allow = false;
-    LOG_INFO("truncate cost after trans start and check_db_table_is_exist", KR(ret), "cost_ts", before_table_lock - start_time);
+    LOG_INFO("truncate cost after trans start, lock database name, lock table name, and check_db_table_is_exist", KR(ret), "cost_ts", before_table_lock - start_time);
     // try lock
-    if (OB_FAIL(ObInnerConnectionLockUtil::lock_table(tenant_id,
+    if (OB_FAIL(ObDDLHelper::obj_lock_obj_id(trans, tenant_id, table_id, transaction::tablelock::EXCLUSIVE))) {
+      LOG_WARN("fail to lock table id", KR(ret), K(tenant_id), K(table_id));
+    } else if (OB_FAIL(ObInnerConnectionLockUtil::lock_table(tenant_id,
                                                       table_id,
                                                       EXCLUSIVE,
                                                       0,
@@ -18603,29 +18620,14 @@ int ObDDLService::new_truncate_table(const obrpc::ObTruncateTableArg &arg,
         lock_table_not_allow = true;
       }
     }
-    uint64_t compat_version = 0;
     int64_t after_table_lock = ObTimeUtility::current_time();
-    LOG_INFO("truncate cost after lock table", KR(ret), "cost_ts", after_table_lock - before_table_lock);
+    LOG_INFO("truncate cost after lock table id and lock table", KR(ret), "cost_ts", after_table_lock - before_table_lock);
     if (FAILEDx(schema_service->get_db_schema_from_inner_table(schema_status, database_id, database_schema_array, trans))){
       LOG_WARN("fail to get database schema", KR(ret), K(arg.database_name_), K(database_id));
     // get table full scehma
     } else if (OB_FAIL(schema_service->get_full_table_schema_from_inner_table(schema_status, table_id, orig_table_schema, allocator, trans))) {
       LOG_WARN("fail to get table schema", KR(ret), K(arg.table_name_), K(table_id));
-    // in upgrade, check the data_version to prevent from executing wrong logical
-    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
-      LOG_WARN("get min data_version failed", KR(ret), K(tenant_id));
-    } else if (compat_version < DATA_VERSION_4_1_0_0) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("server state is not suppported when tenant's data version is below 4.1.0.0", KR(ret), K(compat_version));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is below 4.1.0.0, truncate table is ");
-    } else if (orig_table_schema.get_autoinc_column_id() != 0
-              && compat_version < DATA_VERSION_4_2_0_0) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("server state is not suppported to use_parallel_truncate when tenant's data version is below 4.2.0.0 "
-                "and table has autoinc column", KR(ret), K(compat_version), K(tenant_id), K(arg.table_name_));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is below 4.2.0.0, truncate table with autoinc column is ");
-    // To verify the args are legal
-    } else if (OB_FAIL(check_table_schema_is_legal(database_schema_array.at(0), orig_table_schema, arg.foreign_key_checks_, trans))) {
+    } else if (OB_FAIL(check_table_schema_is_legal(arg, database_schema_array.at(0), orig_table_schema, arg.foreign_key_checks_, trans))) {
       LOG_WARN("failed to check table schema is legal",
               KR(ret), K(arg.table_name_), K(table_id), K(orig_table_schema.get_schema_version()));
     } else if (lock_table_not_allow) {

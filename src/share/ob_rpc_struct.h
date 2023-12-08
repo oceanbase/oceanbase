@@ -1892,6 +1892,52 @@ public:
   share::ObTaskId trace_id_;
 };
 
+struct ObSetCommentArg : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum OP_TYPE {
+    MIN_OP_TYPE = 1,
+    COMMENT_TABLE,
+    COMMENT_COLUMN,
+    MAX_OP_TYPE = 1000
+  };
+  ObSetCommentArg():
+    ObDDLArg(),
+    session_id_(common::OB_INVALID_ID),
+    database_name_(),
+    table_name_(),
+    table_comment_(),
+    column_name_list_(),
+    column_comment_list_(),
+    op_type_(MIN_OP_TYPE)
+  {
+  }
+  virtual ~ObSetCommentArg() {
+  }
+  void reset();
+  bool is_valid() const;
+  int assign(const ObSetCommentArg &other);
+  TO_STRING_KV(K(ObDDLArg()),
+               K_(session_id),
+               K_(database_name),
+               K_(table_name),
+               K_(column_name_list),
+               K_(column_comment_list),
+               K_(table_comment),
+               K_(op_type));
+public:
+  uint64_t session_id_;
+  common::ObString database_name_;
+  common::ObString table_name_;
+  common::ObString table_comment_;
+  common::ObSArray<common::ObString> column_name_list_;
+  common::ObSArray<common::ObString> column_comment_list_;
+  OP_TYPE op_type_;
+private:
+   DISALLOW_COPY_AND_ASSIGN(ObSetCommentArg);
+};
+
 struct ObAlterTableArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
@@ -5768,6 +5814,7 @@ public:
     database_name_()
   {}
   bool is_valid() const;
+  int assign(ObUpdateIndexStatusArg &other);
   virtual bool is_allow_when_disable_ddl() const;
   virtual bool is_allow_when_upgrade() const { return true; }
   virtual bool is_in_offline_ddl_white_list() const { return in_offline_ddl_white_list_; }
@@ -7959,6 +8006,24 @@ public:
   uint64_t tenant_id_;
   uint64_t schema_id_;
   int64_t task_id_;
+};
+
+struct ObParallelDDLRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObParallelDDLRes():
+  schema_version_(common::OB_INVALID_VERSION)
+  {}
+  void reset();
+  int assign(const ObParallelDDLRes &other) {
+    int ret = common::OB_SUCCESS;
+    schema_version_ = other.schema_version_;
+    return ret;
+  }
+public:
+  TO_STRING_KV(K_(schema_version));
+  int64_t schema_version_;
 };
 
 struct ObAlterTableRes

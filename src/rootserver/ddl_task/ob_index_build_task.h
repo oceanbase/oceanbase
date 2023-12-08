@@ -140,7 +140,8 @@ private:
   int release_snapshot(const int64_t snapshot);
   int update_index_status_in_schema(
       const share::schema::ObTableSchema &index_schema,
-      const share::schema::ObIndexStatus new_status);
+      const share::schema::ObIndexStatus new_status,
+      ObSchemaGetterGuard &schema_guard);
   int check_health();
   int reap_old_replica_build_task(bool &need_exec_new_inner_sql);
   int send_build_single_replica_request(const bool &is_partitioned_local_index_task,
@@ -167,8 +168,6 @@ private:
   using ObDDLTask::schema_version_;
   using ObDDLTask::snapshot_version_;
   uint64_t &index_table_id_;
-  bool is_unique_index_;
-  bool is_global_index_;
   ObRootService *root_service_;
   ObDDLWaitTransEndCtx wait_trans_ctx_;
   bool snapshot_held_;

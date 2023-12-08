@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_EXE
 
+#include "share/ob_cluster_version.h"
 #include "sql/resolver/ob_cmd.h"
 #include "sql/executor/ob_cmd_executor.h"
 #include "lib/ob_name_def.h"
@@ -823,7 +824,16 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_SET_TABLE_COMMENT:
       case stmt::T_SET_COLUMN_COMMENT: {
-        DEFINE_EXECUTE_CMD(ObAlterTableStmt, ObAlterTableExecutor);
+        ObAlterTableStmt &stmt = *(static_cast<ObAlterTableStmt*>(&cmd));
+        const uint64_t tenant_id = stmt.get_tenant_id();
+        uint64_t data_version = OB_INVALID_VERSION;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+          LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+        } else if (data_version < DATA_VERSION_4_2_2_0) {
+          DEFINE_EXECUTE_CMD(ObAlterTableStmt, ObAlterTableExecutor);
+        } else {
+          DEFINE_EXECUTE_CMD(ObAlterTableStmt, ObCommentExecutor);
+        }
         break;
       }
       case stmt::T_XA_START: {
