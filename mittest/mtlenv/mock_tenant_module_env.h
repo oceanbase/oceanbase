@@ -656,6 +656,8 @@ int MockTenantModuleEnv::init()
     if (inited_) {
       ret = OB_INIT_TWICE;
       STORAGE_LOG(ERROR, "init twice", K(ret));
+    } else if (OB_FAIL(ObClockGenerator::init())) {
+      STORAGE_LOG(ERROR, "init ClockGenerator failed", K(ret));
     } else if (FALSE_IT(init_gctx_gconf())) {
     } else if (OB_FAIL(init_before_start_mtl())) {
       STORAGE_LOG(ERROR, "init_before_start_mtl failed", K(ret));

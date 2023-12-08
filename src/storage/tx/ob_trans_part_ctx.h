@@ -54,7 +54,7 @@ class ObTxPrepareLog;
 class ObTxCommitLog;
 class ObTxAbortLog;
 class ObTxClearLog;
-class ObIRetainCtxCheckFunctor; 
+class ObIRetainCtxCheckFunctor;
 struct ObTxMsg;
 }
 namespace palf
@@ -86,6 +86,62 @@ const static int64_t OB_TX_MAX_LOG_CBS = 15;
 const static int64_t PREALLOC_LOG_CALLBACK_COUNT = 3;
 const static int64_t RESERVE_LOG_CALLBACK_COUNT_FOR_FREEZING = 1;
 
+template<typename T, typename fn>
+int64_t search(const ObIArray<T> &array, fn &equal_func)
+{
+  int ret = OB_SUCCESS;
+  int64_t search_index = -1;
+
+  ARRAY_FOREACH_X(array, i, cnt, search_index == -1) {
+    if (equal_func(array.at(i))) {
+      search_index = i;
+    }
+  }
+
+  return search_index;
+}
+template<typename T>
+class EqualToTransferPartFunctor
+{
+public:
+  EqualToTransferPartFunctor(const ObStandbyCheckInfo &tmp_info) :
+                            tmp_info_(tmp_info)
+  {}
+  bool operator()(const T& item) {
+    bool bool_ret = false;
+    if (item.check_info_ == tmp_info_) {
+      bool_ret = true;
+    }
+    return bool_ret;
+  }
+private:
+  const ObStandbyCheckInfo &tmp_info_;
+};
+
+template<typename T>
+class EqualToStateInfoFunctor
+{
+public:
+  EqualToStateInfoFunctor(const T &tmp_info) :
+                          tmp_info_(tmp_info)
+  {}
+  bool operator()(const T& item) {
+    bool bool_ret = false;
+    if (tmp_info_.ls_id_ == item.ls_id_) {
+      if (tmp_info_.check_info_.is_valid()) {
+        if (tmp_info_.check_info_ == item.check_info_) {
+          bool_ret = true;
+        }
+      } else { // for old version msg compat
+        bool_ret = true;
+      }
+    }
+    return bool_ret;
+  }
+private:
+  const T &tmp_info_;
+};
+
 // participant transaction context
 class ObPartTransCtx : public ObTransCtx,
                        public ObTsCbTask,
@@ -109,7 +165,8 @@ public:
         role_state_(TxCtxRoleState::FOLLOWER),
         coord_prepare_info_arr_(OB_MALLOC_NORMAL_BLOCK_SIZE,
                                 ModulePageAllocator(reserve_allocator_, "PREPARE_INFO")),
-        standby_part_collected_(), ask_state_info_interval_(100 * 1000), refresh_state_info_interval_(100 * 1000)
+        standby_part_collected_(), ask_state_info_interval_(100 * 1000), refresh_state_info_interval_(100 * 1000),
+        transfer_deleted_(false)
   { /*reset();*/ }
   ~ObPartTransCtx() { destroy(); }
   void destroy();
@@ -124,7 +181,8 @@ public:
            const uint64_t cluster_id,
            const int64_t epoch,
            ObLSTxCtxMgr *ls_ctx_mgr,
-           const bool for_replay);
+           const bool for_replay,
+           ObXATransID xid);
   void reset() { }
   int construct_context(const ObTransMsg &msg);
 public:
@@ -136,7 +194,7 @@ public:
    */
   int kill(const KillTransArg &arg, ObIArray<ObTxCommitCallback> &cb_array);
   memtable::ObMemtableCtx *get_memtable_ctx() { return &mt_ctx_; }
-  int commit(const share::ObLSArray &parts,
+  int commit(const ObTxCommitParts &parts,
              const MonotonicTs &commit_time,
              const int64_t &expire_ts,
              const common::ObString &app_trace_info,
@@ -153,7 +211,7 @@ public:
   uint64_t get_tenant_id() const { return tenant_id_; }
   int64_t get_role_state() const { return role_state_; }
   // for xa
-  int sub_prepare(const share::ObLSArray &parts,
+  int sub_prepare(const ObTxCommitParts &parts,
                   const MonotonicTs &commit_time,
                   const int64_t &expire_ts,
                   const common::ObString &app_trace_info,
@@ -165,7 +223,7 @@ public:
                  const bool is_rollback);
 
   int dump_2_text(FILE *fd);
-
+  int init_for_transfer_move(const ObTxCtxMoveArg &arg);
 public:
   int replay_start_working_log(const share::SCN start_working_ts);
   int set_trans_app_trace_id_str(const ObString &app_trace_id_str);
@@ -212,11 +270,10 @@ public:
 
   int check_for_standby(const share::SCN &snapshot,
                         bool &can_read,
-                        share::SCN &trans_version,
-                        bool &is_determined_state);
-  int handle_trans_ask_state(const share::SCN &snapshot, ObAskStateRespMsg &resp);
+                        share::SCN &trans_version);
+  int handle_trans_ask_state(const ObAskStateMsg &req, ObAskStateRespMsg &resp);
   int handle_trans_ask_state_resp(const ObAskStateRespMsg &msg);
-  int handle_trans_collect_state(ObStateInfo &state_info, const SCN &snapshot);
+  int handle_trans_collect_state(ObCollectStateRespMsg &resp, const ObCollectStateMsg &req);
   int handle_trans_collect_state_resp(const ObCollectStateRespMsg &msg);
 
   // tx state check for 4377
@@ -241,6 +298,7 @@ private:
                 K(start_replay_ts_),
                 K(start_recover_ts_),
                 K(is_incomplete_replay_ctx_),
+                K(epoch_),
                 K(mt_ctx_),
                 K(coord_prepare_info_arr_),
                 K_(upstream_state),
@@ -294,8 +352,9 @@ private:
   int common_on_success_(ObTxLogCb * log_cb);
   int on_success_ops_(ObTxLogCb * log_cb);
   void check_and_register_timeout_task_();
+  int recover_ls_transfer_status_();
 
-  // bool need_commit_barrier(); 
+  // bool need_commit_barrier();
 
 public:
   // ========================================================
@@ -419,7 +478,7 @@ public:
                static_cast<int16_t>(cause));
   }
   RetainCause get_retain_cause() { return static_cast<RetainCause>(ATOMIC_LOAD(&retain_cause_)); };
-  
+
   int del_retain_ctx();
 
   // ========================================================
@@ -631,7 +690,7 @@ protected:
 private:
   int apply_2pc_msg_(const ObTwoPhaseCommitMsgType msg_type);
   int set_2pc_upstream_(const share::ObLSID&upstream);
-  int set_2pc_participants_(const share::ObLSArray &participants);
+  int set_2pc_participants_(const ObTxCommitParts &participants);
   int set_2pc_incremental_participants_(const share::ObLSArray &participants);
   int set_2pc_request_id_(const int64_t request_id);
   int update_2pc_prepare_version_(const share::SCN &prepare_version);
@@ -668,6 +727,41 @@ private:
   int post_tx_sub_prepare_resp_(const int status);
   int post_tx_sub_commit_resp_(const int status);
   int post_tx_sub_rollback_resp_(const int status);
+
+  int submit_log_if_allow(const char *buf,
+                          const int64_t size,
+                          const share::SCN &base_ts,
+                          ObTxBaseLogCb *cb,
+                          const bool need_nonblock,
+                          const ObTxCbArgArray &cb_arg_array);
+  virtual bool is_2pc_blocking() const override {
+    return sub_state_.is_transfer_blocking();
+  }
+
+// ======================= for transfer ===============================
+public:
+  int do_transfer_out_tx_op(const share::SCN data_end_scn,
+                            const share::SCN op_scn,
+                            const NotifyType op_type,
+                            const bool is_replay,
+                            const ObLSID dest_ls_id,
+                            const int64_t transfer_epoch,
+                            bool &is_operated);
+  int collect_tx_ctx(const share::ObLSID dest_ls_id,
+                     const SCN data_end_scn,
+                     const ObIArray<ObTabletID> &tablet_list,
+                     ObTxCtxMoveArg &arg,
+                     bool &is_collected);
+  int wait_tx_write_end();
+  int move_tx_op(const ObTransferMoveTxParam &move_tx_param,
+                 const ObTxCtxMoveArg &arg,
+                 const bool is_new_created);
+  bool is_exec_complete(ObLSID ls_id, int64_t epoch, int64_t transfer_epoch);
+  bool is_exec_complete_without_lock(ObLSID ls_id, int64_t epoch, int64_t transfer_epoch);
+private:
+  int transfer_op_log_cb_(share::SCN op_scn, NotifyType op_type);
+  int update_tx_data_end_scn_(const share::SCN end_scn, const share::SCN transfer_scn);
+
 protected:
   virtual int post_msg_(const share::ObLSID&receiver, ObTxMsg &msg);
   virtual int post_msg_(const ObAddr &server, ObTxMsg &msg);
@@ -678,10 +772,7 @@ private:
   // ========================== TX COMMITTER BEGIN ==========================
 protected:
   virtual Ob2PCRole get_2pc_role() const  override;
-  virtual int64_t get_downstream_size() const override
-  {
-    return exec_info_.participants_.count();
-  };
+  virtual int64_t get_downstream_size() const override;
   virtual int64_t get_self_id();
 
   virtual bool is_2pc_logging() const override;
@@ -689,7 +780,7 @@ protected:
   { return exec_info_.state_; }
   virtual int set_downstream_state(const ObTxState state) override
   { set_durable_state_(state); return OB_SUCCESS; }
-  virtual ObTxState get_upstream_state() const override 
+  virtual ObTxState get_upstream_state() const override
   { return upstream_state_; }
   virtual int set_upstream_state(const ObTxState state) override
   {
@@ -740,11 +831,12 @@ public:
    * end_access - end of txn protected resources access
    */
   int end_access();
-  int rollback_to_savepoint(const int64_t op_sn, const ObTxSEQ from_scn, const ObTxSEQ to_scn);
+  int rollback_to_savepoint(const int64_t op_sn, const ObTxSEQ from_scn, const ObTxSEQ to_scn, ObIArray<ObTxLSEpochPair> &downstream_parts);
   int set_block_frozen_memtable(memtable::ObMemtable *memtable);
   void clear_block_frozen_memtable();
   bool is_logging_blocked();
   bool is_xa_trans() const { return !exec_info_.xid_.empty(); }
+  bool is_transfer_deleted() const { return transfer_deleted_; }
 private:
   int check_status_();
   int tx_keepalive_response_(const int64_t status);
@@ -753,18 +845,45 @@ private:
   int rollback_to_savepoint_(const ObTxSEQ from_scn, const ObTxSEQ to_scn);
   int submit_rollback_to_log_(const ObTxSEQ from_scn, const ObTxSEQ to_scn, ObTxData *tx_data);
   int set_state_info_array_();
+  int update_state_info_array_(const ObStateInfo& state_info);
+  int update_state_info_array_with_transfer_parts_(const ObTxCommitParts &parts, const ObLSID &ls_id);
   void build_and_post_collect_state_msg_(const share::SCN &snapshot);
-  int build_and_post_ask_state_msg_(const share::SCN &snapshot);
-  void handle_trans_ask_state_(const SCN &snapshot);
-  int check_ls_state_(const SCN &snapshot, const ObLSID &ls_id);
+  int build_and_post_ask_state_msg_(const share::SCN &snapshot,
+                                    const share::ObLSID &ori_ls_id, const ObAddr &ori_addr);
+  int check_ls_state_(const SCN &snapshot, const ObLSID &ls_id, const ObStandbyCheckInfo &check_info);
   int get_ls_replica_readable_scn_(const ObLSID &ls_id, SCN &snapshot_version);
   int check_and_submit_redo_log_(bool &try_submit);
   int submit_redo_log_for_freeze_(bool &try_submit);
   void print_first_mvcc_callback_();
+  int assign_commit_parts(const share::ObLSArray &log_participants,
+                          const ObTxCommitParts &log_commit_parts);
 protected:
   // for xa
   virtual bool is_sub2pc() const override
   { return exec_info_.is_sub2pc_; }
+
+  // =========================== TREE COMMITTER START ===========================
+public:
+  // merge the intermediate_participants into participants during 2pc state transfer
+  virtual int merge_intermediate_participants() override;
+  // is_real_upstream presents whether we are handling requests from the real
+  // upstream:
+  // - If the sender equals to the upstream, it means we that are handling the
+  //   real leader and we need collect all responses from the downstream before
+  //   responsing to the upstream
+  // - If the sender is different from the upstream, it means we are handling
+  //   requests from the upstream other than the real upstream. To prevent from
+  //   the deadlock in the cycle commit, we only need consider the situation of
+  //   myself before responsing to the upstream
+  // - It may be no sender during handle_timeout, it means we are retransmitting
+  //   the requests and responses, so we only need pay attention to the upstream
+  //   and all downstreams for retransmitting
+  virtual bool is_real_upstream() override;
+  // add_intermediate_participants means add participant into intermediate_participants,
+  // which is important to ensure the consistency of participants during tree commit
+  int add_intermediate_participants(const ObLSID ls_id, int64_t transfer_epoch);
+private:
+  bool is_real_upstream_(const ObLSID upstream);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPartTransCtx);
@@ -844,7 +963,7 @@ private:
   bool is_ctx_table_merged_;
   // trace_info_
   int64_t role_state_;
- 
+
   // +-------------------+                   +---------------------------------+                      +-------+     +-----------------+     +----------------------+
   // | tx_ctx A exiting  |                   |                                 |                      |       |     |   replay from   |     |                      |
   // | start_log_ts = n  |  recover_ts = n   | remove from tx_ctx_table & dump |  recover_ts = n+10   | crash |     | min_ckpt_ts n+m |     | tx_ctx is incomplete |
@@ -878,6 +997,9 @@ private:
   // this is a tempoary variable which is set to now by default
   // therefore, if a follower switchs to leader, the variable is set to now
   int64_t last_request_ts_;
+
+  // for transfer move tx ctx to clean for abort
+  bool transfer_deleted_;
   // ========================================================
 };
 

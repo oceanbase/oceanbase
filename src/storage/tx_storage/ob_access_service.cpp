@@ -412,7 +412,6 @@ int ObAccessService::get_source_ls_tx_table_guard_(
     } else {
       ObStoreCtx &ctx = ctx_guard.get_store_ctx();
       ctx.mvcc_acc_ctx_.set_src_tx_table_guard(src_tx_table_guard);
-      ctx.mvcc_acc_ctx_.set_transfer_scn(user_data.transfer_scn_);
       LOG_DEBUG("succ get src tx table guard", K(ret), K(src_ls->get_ls_id()), K(src_tx_table_guard), K(user_data));
     }
   }

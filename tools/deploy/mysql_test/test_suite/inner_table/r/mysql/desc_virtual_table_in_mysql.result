@@ -632,6 +632,10 @@ last_request_time	timestamp(6)	YES		NULL
 gtrid	varbinary(128)	NO		NULL	
 bqual	varbinary(128)	NO		NULL	
 format_id	bigint(20)	NO		1	
+start_scn	bigint(20) unsigned	NO		NULL	
+end_scn	bigint(20) unsigned	NO		NULL	
+rec_scn	bigint(20) unsigned	NO		NULL	
+transfer_blocking	tinyint(4)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_trans_stat;
 IF(count(*) >= 0, 1, 0)
 1

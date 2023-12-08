@@ -32,6 +32,8 @@ class SCN;
 namespace storage
 {
 class ObLS;
+struct ObTxCtxMoveArg;
+struct ObTransferMoveTxParam;
 }
 
 namespace transaction
@@ -165,6 +167,24 @@ public:
   int get_common_checkpoint_info(
     ObIArray<checkpoint::ObCommonCheckpointVTInfo> &common_checkpoint_array);
 
+  int transfer_out_tx_op(int64_t except_tx_id,
+                         const share::SCN data_end_scn,
+                         const share::SCN op_scn,
+                         transaction::NotifyType op_type,
+                         bool is_replay,
+                         share::ObLSID dest_ls_id,
+                         int64_t transfer_epoch,
+                         int64_t &active_tx_count,
+                         int64_t &op_tx_count);
+  int wait_tx_write_end(ObTimeoutCtx &timeout_ctx);
+  int collect_tx_ctx(const share::ObLSID dest_ls_id,
+                     const share::SCN log_scn,
+                     const ObIArray<ObTabletID> &tablet_list,
+                     int64_t &tx_count,
+                     int64_t &collect_count,
+                     ObIArray<ObTxCtxMoveArg> &args);
+  int move_tx_op(const ObTransferMoveTxParam &move_tx_param,
+                 const ObIArray<ObTxCtxMoveArg> &arg);
 public:
   transaction::ObTransService *get_trans_service() { return trans_service_; }
 

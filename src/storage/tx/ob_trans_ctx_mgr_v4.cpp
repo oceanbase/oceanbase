@@ -23,6 +23,7 @@
 #include "storage/ls/ob_ls_tx_service.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/tx/ob_trans_ctx_mgr_v4.h"
+#include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {
@@ -434,8 +435,18 @@ int ObLSTxCtxMgr::create_tx_ctx_(const ObTxCreateArg &arg,
     TRANS_LOG(WARN, "alloc transaction context error", K(arg));
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
-    // pack `epoch(15bit) | ts_ns(48bit)` into int64_t, set most significant bit to zero
-    int64_t epoch_v = ~(1UL << 63) & ((epoch << 48) | (ObTimeUtility::current_time_ns() & ~(0xFFFFUL << 48)));
+    int64_t epoch_v = 0;
+    if (arg.epoch_ > 0) {
+      epoch_v = arg.epoch_;
+    } else {
+      // for transfer compatibility, we need old version follower's epoch be 0, so we need not check it
+      if (!arg.for_replay_) {
+        // pack `epoch(15bit) | ts_ns(48bit)` into int64_t, set most significant bit to zero
+        epoch_v = ~(1UL << 63) & ((epoch << 48) | (ObTimeUtility::current_time_ns() & ~(0xFFFFUL << 48)));
+      } else {
+        epoch_v = -1;
+      }
+    }
     CtxLockGuard ctx_lock_guard;
     ObPartTransCtx *tmp = static_cast<ObPartTransCtx *>(tmp_ctx);
     if (OB_FAIL(tmp->init(arg.tenant_id_,
@@ -449,7 +460,12 @@ int ObLSTxCtxMgr::create_tx_ctx_(const ObTxCreateArg &arg,
                           arg.cluster_id_,
                           epoch_v,
                           this,
-                          arg.for_replay_))) {
+                          arg.for_replay_,
+                          arg.xid_))) {
+    // when transfer move active tx ctx, we will create tx ctx when dest_ls has no this tx
+    // we want to promise the created ctx state new enouth before insert to dest_ls ctx_map
+    } else if (OB_NOT_NULL(arg.move_arg_) && OB_FAIL(tmp->init_for_transfer_move(*arg.move_arg_))) {
+      TRANS_LOG(WARN, "init tx ctx for transfer failed", KR(ret), K(*arg.move_arg_));
     } else if (FALSE_IT(inc_total_tx_ctx_count())) {
     } else if (FALSE_IT(tmp_ctx->get_ctx_guard(ctx_lock_guard))) {
     } else if (OB_FAIL(ls_tx_ctx_map_.insert_and_get(arg.tx_id_, tmp_ctx, &exist_ctx))) {
@@ -2468,6 +2484,191 @@ int ObLSTxCtxMgr::do_standby_cleanup()
 
   return ret;
 }
+
+int ObLSTxCtxMgr::transfer_out_tx_op(int64_t except_tx_id,
+                                     const SCN data_end_scn,
+                                     const SCN op_scn,
+                                     NotifyType op_type,
+                                     bool is_replay,
+                                     ObLSID dest_ls_id,
+                                     int64_t transfer_epoch,
+                                     int64_t& active_tx_count,
+                                     int64_t &op_tx_count)
+{
+  int ret = OB_SUCCESS;
+  const int64_t abs_expired_time = INT64_MAX;
+  TransferOutTxOpFunctor fn(abs_expired_time, except_tx_id,
+                                              data_end_scn,
+                                              op_scn,
+                                              op_type,
+                                              is_replay,
+                                              dest_ls_id,
+                                              transfer_epoch);
+  if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
+    TRANS_LOG(WARN, "for each tx ctx error", KR(ret), "manager", *this);
+    ret = fn.get_ret();
+  } else {
+    active_tx_count = fn.get_count();
+    op_tx_count = fn.get_op_tx_count();
+  }
+  TRANS_LOG(INFO, "[TRANSFER] transfer_out_tx_op", KR(ret), K(data_end_scn), K(op_scn), K(op_type), K(is_replay), K(dest_ls_id),
+      K(transfer_epoch), K(active_tx_count), K(op_tx_count), K(ls_tx_ctx_map_.count()), K(tenant_id_), K(ls_id_));
+  return ret;
+}
+
+int ObLSTxCtxMgr::wait_tx_write_end(ObTimeoutCtx &timeout_ctx)
+{
+  int ret = OB_SUCCESS;
+  int64_t active_tx_count = 0;
+  int64_t abs_expired_time = INT64_MAX;
+  if (timeout_ctx.get_abs_timeout() > 0) {
+    abs_expired_time = timeout_ctx.get_abs_timeout();
+  }
+  WaitTxWriteEndFunctor fn(abs_expired_time);
+  if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
+    TRANS_LOG(WARN, "for each tx ctx error", KR(ret), "manager", *this);
+    ret = fn.get_ret();
+  } else {
+    active_tx_count = fn.get_count();
+  }
+  TRANS_LOG(INFO, "wait_tx_write_end", KR(ret), K(active_tx_count));
+  return ret;
+}
+
+int ObLSTxCtxMgr::collect_tx_ctx(const ObLSID dest_ls_id,
+                                 const SCN log_scn,
+                                 const ObIArray<ObTabletID> &tablet_list,
+                                 int64_t &tx_count,
+                                 int64_t &collect_count,
+                                 ObIArray<ObTxCtxMoveArg> &res)
+{
+  int ret = OB_SUCCESS;
+
+  const int64_t abs_expired_time = INT64_MAX;
+  CollectTxCtxFunctor fn(abs_expired_time, dest_ls_id, log_scn, tablet_list, tx_count, collect_count, res);
+  if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
+    TRANS_LOG(WARN, "for each tx ctx error", KR(ret), "manager", *this);
+    ret = fn.get_ret();
+  } else {
+    tx_count = fn.get_tx_count();
+    collect_count = fn.get_collect_count();
+  }
+
+  TRANS_LOG(INFO, "collect_tx_ctx", KR(ret), K(tx_count), K(collect_count), K(tenant_id_), K(ls_id_));
+  return ret;
+}
+
+int ObLSTxCtxMgr::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
+                             const ObIArray<ObTxCtxMoveArg> &args)
+{
+  int ret = OB_SUCCESS;
+  bool is_replay = move_tx_param.is_replay_;
+  if (!is_replay && is_follower_()) {
+    is_replay = true;
+  }
+  ObLSHandle ls_handle;
+  // get weak read ts for check
+  share::SCN weak_read_ts;
+  bool need_check_wrs = true;
+  //only check wrs for register and redo phase
+  if (move_tx_param.op_type_ != NotifyType::REGISTER_SUCC && move_tx_param.op_type_ != NotifyType::ON_REDO) {
+    need_check_wrs = false;
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    TRANS_LOG(WARN, "get_ls failed", KR(ret), K(ls_id_));
+  } else {
+    weak_read_ts = ls_handle.get_ls()->get_ls_wrs_handler()->get_ls_weak_read_ts();
+    if (is_replay) {
+      const SCN checkpoint_scn = ls_handle.get_ls()->get_clog_checkpoint_scn();
+      const bool transfer_prepare = ls_handle.get_ls()->get_transfer_status().get_transfer_prepare_enable();
+      if (!transfer_prepare) {
+        // recover no this MDS operation so checkpoint is complete
+        // replay from middle and incomplete when migrate happen
+        if (!move_tx_param.is_incomplete_replay_) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(ERROR, "move_tx_op replay unexpected", K(ret), K(ls_id_), K(move_tx_param), K(checkpoint_scn));
+        } else {
+          TRANS_LOG(WARN, "move_tx_op replay incomplete", K(ls_id_), K(move_tx_param), K(checkpoint_scn));
+        }
+      }
+    }
+  }
+
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < args.count(); idx++) {
+    const ObTxCtxMoveArg &arg = args.at(idx);
+    ObPartTransCtx *ctx = nullptr;
+    ObTransCtx *tmp_ctx = nullptr, *exist_ctx = nullptr;
+    bool is_exist = false;
+    bool is_created = false;
+    if (OB_SUCC(ls_tx_ctx_map_.get(arg.tx_id_, tmp_ctx))) {
+      if (OB_ISNULL(tmp_ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "ctx is NULL", KR(ret), "ctx", OB_P(tmp_ctx));
+      } else if (FALSE_IT(ctx = static_cast<ObPartTransCtx*>(tmp_ctx))) {
+      } else {
+        is_exist = true;
+      }
+    } else if (OB_ENTRY_NOT_EXIST != ret) {
+      TRANS_LOG(WARN, "get tx ctx failed", KR(ret), K(arg));
+    } else {
+      ret = OB_SUCCESS;
+    }
+
+    // check to create
+    if (OB_FAIL(ret)) {
+    } else if (move_tx_param.op_type_ == NotifyType::ON_ABORT && !is_exist) {
+      // a. transfer abort log now not impl STRICT_BARRIER
+      // b. when on_register part failure do abort allow no this ctx
+      TRANS_LOG(WARN, "tx.ctx not exist when transfer on abort can skip", K(arg));
+      continue;
+    } else if (move_tx_param.is_incomplete_replay_ && !is_exist) {
+      TRANS_LOG(WARN, "tx.ctx not exist may incomplete replay can skip", K(arg));
+      continue;
+    } else if (!is_exist) {
+      if (!is_replay && (move_tx_param.op_type_ == NotifyType::ON_REDO || move_tx_param.op_type_ == NotifyType::ON_COMMIT)) {
+        TRANS_LOG(WARN, "tx ctx not exist", K(ls_id_), K(move_tx_param), K(arg));
+      }
+      ObTxCreateArg create_arg(!is_master(),
+                               false,
+                               tenant_id_,
+                               arg.tx_id_,
+                               ls_id_,
+                               arg.cluster_id_,
+                               arg.cluster_version_,
+                               arg.session_id_,
+                               arg.scheduler_,
+                               INT64_MAX, // tx expired time
+                               txs_,
+                               arg.xid_,
+                               arg.epoch_,
+                               &arg);
+      if (need_check_wrs && arg.tx_state_ >= ObTxState::PREPARE && arg.prepare_version_ <= weak_read_ts) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(ERROR, "move tx prepare_version less than dest_ls weak_read_ts", KR(ret), K(arg), K(weak_read_ts), K(ls_id_), K(move_tx_param));
+      } else if (OB_FAIL(create_tx_ctx(create_arg, is_exist, ctx))) {
+        TRANS_LOG(WARN, "create tx ctx failed", KR(ret), K(create_arg));
+      } else if (!is_exist) {
+        is_exist = true;
+        is_created = true;
+      }
+    }
+    // do move
+    if (OB_FAIL(ret)) {
+    } else if (!is_exist || OB_ISNULL(ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "ctx not found", KR(ret), K(is_exist), KP(ctx));
+    } else if (OB_FAIL(ctx->move_tx_op(move_tx_param,
+                                       arg,
+                                       is_created))) {
+      TRANS_LOG(WARN, "move tx op failed", KR(ret), K(move_tx_param), K(arg));
+    }
+    if (OB_NOT_NULL(ctx)) {
+      revert_tx_ctx(ctx);
+    }
+    TRANS_LOG(INFO, "move_tx_op", KR(ret), K(arg.tx_id_), K(ls_id_), K(is_replay), K(is_created));
+  }
+  return ret;
+}
+
 
 }
 }

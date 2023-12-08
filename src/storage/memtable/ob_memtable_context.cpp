@@ -226,6 +226,11 @@ void ObMemtableCtx::wait_pending_write()
   WRLockGuard wrguard(rwlock_);
 }
 
+void ObMemtableCtx::wait_write_end()
+{
+  WRLockGuard wrguard(rwlock_);
+}
+
 SCN ObMemtableCtx::get_tx_end_scn() const
 {
   return ctx_->get_tx_end_log_ts();
@@ -984,6 +989,15 @@ int ObMemtableCtx::get_table_lock_store_info(ObTableLockInfo &table_lock_info)
   int ret = OB_SUCCESS;
   if (OB_FAIL(lock_mem_ctx_.get_table_lock_store_info(table_lock_info))) {
     TRANS_LOG(WARN, "get_table_lock_store_info failed", K(ret));
+  }
+  return ret;
+}
+
+int ObMemtableCtx::get_table_lock_for_transfer(ObTableLockInfo &table_lock_info, const ObIArray<ObTabletID> &tablet_list)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(lock_mem_ctx_.get_table_lock_for_transfer(table_lock_info, tablet_list))) {
+    TRANS_LOG(WARN, "get tablet lock for transfer failed", K(ret));
   }
   return ret;
 }

@@ -1,1 +1,2 @@
 storage_unittest(test_tx_ctx_table)
+storage_unittest(test_tx_table_guards)

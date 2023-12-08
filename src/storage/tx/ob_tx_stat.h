@@ -38,7 +38,8 @@ struct ObTxStat
            const int64_t role_state,
            const int64_t session_id, const common::ObAddr &scheduler,
            const bool is_exiting, const ObXATransID &xid,
-           const share::ObLSID &coord, const int64_t last_request_ts);
+           const share::ObLSID &coord, const int64_t last_request_ts,
+           share::SCN start_scn, share::SCN end_scn, share::SCN rec_scn, bool transfer_blocking);
   TO_STRING_KV(K_(addr), K_(tx_id), K_(tenant_id),
       K_(has_decided), K_(ls_id), K_(participants),
       K_(tx_ctx_create_time), K_(tx_expired_time), K_(ref_cnt),
@@ -47,7 +48,7 @@ struct ObTxStat
       K_(pending_log_size), K_(flushed_log_size),
       K_(role_state), K_(session_id),
       K_(scheduler_addr), K_(is_exiting),
-      K_(xid), K_(coord), K_(last_request_ts));
+      K_(xid), K_(coord), K_(last_request_ts), K_(start_scn), K_(end_scn), K_(rec_scn), K_(transfer_blocking));
 public:
   bool is_inited_;
   common::ObAddr addr_;
@@ -74,6 +75,10 @@ public:
   ObXATransID xid_;
   share::ObLSID coord_;
   int64_t last_request_ts_;
+  share::SCN start_scn_;
+  share::SCN end_scn_;
+  share::SCN rec_scn_;
+  bool transfer_blocking_;
 };
 
 class ObTxLockStat

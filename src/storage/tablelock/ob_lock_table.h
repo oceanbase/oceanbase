@@ -150,6 +150,8 @@ public:
   int switch_to_follower_gracefully() override { return OB_SUCCESS; }
   int resume_leader() override { return OB_SUCCESS; }
 
+  int enable_check_tablet_status(const bool need_check);
+
 private:
   // We use the method to recover the lock_table for reboot.
   int restore_lock_table_(storage::ObITable &sstable);

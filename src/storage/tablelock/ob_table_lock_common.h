@@ -469,6 +469,10 @@ public:
             is_in_trans_common_lock_op_type(op_type_));
   }
   bool need_replay_or_recover(const ObTableLockOp &lock_op) const;
+
+  bool is_tablet_lock(const ObTabletID &tablet_id) {
+    return lock_id_.is_tablet_lock() && lock_id_.obj_id_ == tablet_id.id();
+  }
 private:
   bool is_need_record_lock_mode_() const
   {

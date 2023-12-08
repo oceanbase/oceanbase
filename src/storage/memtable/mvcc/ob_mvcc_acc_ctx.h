@@ -173,10 +173,6 @@ public:
   {
     tx_table_guards_.src_tx_table_guard_ = tx_table_guard;
   }
-  void set_transfer_scn(const share::SCN transfer_scn)
-  {
-    tx_table_guards_.transfer_start_scn_ = transfer_scn;
-  }
   void init_replay(transaction::ObPartTransCtx &tx_ctx,
                    ObMemtableCtx &mem_ctx,
                    const transaction::ObTransID &tx_id)

@@ -39,6 +39,8 @@
 #define NEED_MDS_REGISTER_DEFINE
 #include "storage/multi_data_source/compile_utility/mds_register.h"
 #undef NEED_MDS_REGISTER_DEFINE
+#include "storage/tablet/ob_tablet_transfer_tx_ctx.h"
+#include "storage/tx/ob_ctx_tx_data.h"
 
 namespace oceanbase {
 
@@ -82,7 +84,8 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
                          const uint64_t cluster_id,
                          const int64_t epoch,
                          ObLSTxCtxMgr *ls_ctx_mgr,
-                         const bool for_replay)
+                         const bool for_replay,
+                         ObXATransID xid)
 {
   int ret = OB_SUCCESS;
 
@@ -145,6 +148,10 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
     set_role_state(for_replay);
     block_frozen_memtable_ = nullptr;
 
+    if (!xid.empty()) {
+      exec_info_.xid_ = xid;
+    }
+
     if (is_follower_()) {
       mt_ctx_.trans_replay_begin();
     } else {
@@ -173,6 +180,21 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
                        OB_ID(ref), get_ref());
   TRANS_LOG(TRACE, "part trans ctx init", K(ret), K(tenant_id), K(trans_id), K(trans_expired_time),
             K(ls_id), K(cluster_version), KP(trans_service), K(cluster_id), K(epoch));
+  return ret;
+}
+
+int ObPartTransCtx::init_for_transfer_move(const ObTxCtxMoveArg &arg)
+{
+  int ret = OB_SUCCESS;
+  CtxLockGuard guard(lock_);
+  exec_info_.is_sub2pc_ = arg.is_sub2pc_;
+  mt_ctx_.set_trans_version(arg.trans_version_);
+  exec_info_.trans_type_ = TransType::DIST_TRANS;
+  if (arg.tx_state_ >= ObTxState::PREPARE) {
+    exec_info_.prepare_version_ = arg.prepare_version_;
+    ctx_tx_data_.set_commit_version(arg.commit_version_);
+  }
+  exec_info_.state_ = arg.tx_state_;
   return ret;
 }
 
@@ -344,6 +366,7 @@ void ObPartTransCtx::default_init_()
   lastest_snapshot_.reset();
   standby_part_collected_.reset();
   trace_log_.reset();
+  transfer_deleted_ = false;
 }
 
 int ObPartTransCtx::init_log_cbs_(const ObLSID &ls_id, const ObTransID &tx_id)
@@ -642,7 +665,7 @@ int ObPartTransCtx::handle_timeout(const int64_t delay)
 
       // register timeout task again if need
       if (!is_follower_() && !is_exiting_) {
-        const int64_t timeout_left = is_committing_() ? trans_2pc_timeout_ : 
+        const int64_t timeout_left = is_committing_() ? trans_2pc_timeout_ :
             MIN(MAX_TRANS_2PC_TIMEOUT_US, MAX(trans_expired_time_ - now, 1000 * 1000));
         if (OB_FAIL(register_timeout_task_(timeout_left))) {
           TRANS_LOG(WARN, "register timeout task failed", KR(ret), KPC(this));
@@ -769,12 +792,13 @@ int ObPartTransCtx::kill(const KillTransArg &arg, ObIArray<ObTxCommitCallback> &
  * OB_ERR_XXX - the request was rejected, can not be handle
  *              caller can retry commit or choice to abort txn
  */
-int ObPartTransCtx::commit(const ObLSArray &parts,
+int ObPartTransCtx::commit(const ObTxCommitParts &parts,
                            const MonotonicTs &commit_time,
                            const int64_t &expire_ts,
                            const common::ObString &app_trace_info,
                            const int64_t &request_id)
 {
+  TRANS_LOG(DEBUG, "tx.commit", K(parts), K(trans_id_), K(ls_id_));
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
@@ -790,7 +814,10 @@ int ObPartTransCtx::commit(const ObLSArray &parts,
     TRANS_LOG(WARN, "transaction is replaying", KR(ret), KPC(this));
   } else if (OB_UNLIKELY(is_2pc_logging_())) {
     ret = OB_EAGAIN;
-    TRANS_LOG(WARN, "tx is 2pc logging", KPC(this));
+    TRANS_LOG(WARN, "tx is 2pc logging", KR(ret), KPC(this));
+  } else if (OB_UNLIKELY(is_2pc_blocking())) {
+    ret = OB_EAGAIN;
+    TRANS_LOG(WARN, "tx is 2pc blocking", KR(ret), KPC(this));
   } else if (!(ObTxState::INIT == get_downstream_state() ||
       (ObTxState::REDO_COMPLETE == get_downstream_state() && part_trans_action_ < ObPartTransAction::COMMIT))) {
     ObTxState state = get_downstream_state();
@@ -827,10 +854,13 @@ int ObPartTransCtx::commit(const ObLSArray &parts,
     } else {
       set_stc_by_now_();
     }
-    if (parts.count() <= 0) {
+    if (exec_info_.participants_.count() <= 0) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "the size of participant is 0 when commit", KPC(this));
-    } else if (parts.count() == 1 && parts[0] == ls_id_ && !exec_info_.is_dup_tx_) {
+    } else if (exec_info_.participants_.count() == 1 &&
+               exec_info_.participants_[0] == ls_id_ &&
+               0 == exec_info_.intermediate_participants_.count() &&
+               !exec_info_.is_dup_tx_) {
       exec_info_.trans_type_ = TransType::SP_TRANS;
       can_elr_ = (trans_service_->get_tx_elr_util().is_can_tenant_elr() ? true : false);
       if (OB_FAIL(one_phase_commit_())) {
@@ -1180,6 +1210,13 @@ int ObPartTransCtx::get_gts_callback(const MonotonicTs srr,
         } else if (sub_state_.is_state_log_submitted()) {
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(WARN, "the commit log has been submitted", K(ret), KPC(this));
+        } else if (is_2pc_blocking()) {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(restart_2pc_trans_timer_())) {
+            TRANS_LOG(WARN, "fail to restart 2pc trans timer", K(tmp_ret), KPC(this));
+          } else {
+            TRANS_LOG(WARN, "need not drive 2pc phase when 2pc blocking", K(ret), KPC(this));
+          }
         } else if (OB_FAIL(submit_log_impl_(ObTxLogType::TX_COMMIT_LOG))) {
           TRANS_LOG(WARN, "submit commit log in gts callback failed", K(ret), KPC(this));
         }
@@ -1188,8 +1225,15 @@ int ObPartTransCtx::get_gts_callback(const MonotonicTs srr,
         // should not overwrite the prepare verison of other participants
         exec_info_.prepare_version_ = SCN::max(local_prepare_version, exec_info_.prepare_version_);
 
-        if (get_upstream_state() <= ObTxState::PREPARE
-            && OB_FAIL(drive_self_2pc_phase(ObTxState::PREPARE))) {
+        if (is_2pc_blocking()) {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(restart_2pc_trans_timer_())) {
+            TRANS_LOG(WARN, "fail to restart 2pc trans timer", K(tmp_ret), KPC(this));
+          } else {
+            TRANS_LOG(WARN, "need not drive 2pc phase when 2pc blocking", K(ret), KPC(this));
+          }
+        } else if (get_upstream_state() <= ObTxState::PREPARE
+                   && OB_FAIL(drive_self_2pc_phase(ObTxState::PREPARE))) {
           TRANS_LOG(WARN, "drive into prepare phase failed in gts callback", K(ret), KPC(this));
         }
       }
@@ -1493,16 +1537,6 @@ int ObPartTransCtx::recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info)
   } else {
     trans_id_ = ctx_info.tx_id_;
     ls_id_ = ctx_info.ls_id_;
-    if (!exec_info_.upstream_.is_valid() &&
-        !is_local_tx_() &&
-       (ObTxState::REDO_COMPLETE == exec_info_.state_ ||
-        ObTxState::PREPARE == exec_info_.state_ ||
-        ObTxState::PRE_COMMIT == exec_info_.state_ ||
-        ObTxState::COMMIT == exec_info_.state_ ||
-        ObTxState::CLEAR == exec_info_.state_)) {
-      set_2pc_upstream_(ls_id_);
-      TRANS_LOG(INFO, "set upstream to self", K(*this));
-    }
     // set upstream state when recover tx ctx table
     set_upstream_state(get_downstream_state());
 
@@ -1511,6 +1545,9 @@ int ObPartTransCtx::recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info)
     }
     if (exec_info_.prepare_version_.is_valid()) {
       mt_ctx_.set_trans_version(exec_info_.prepare_version_);
+    }
+    if (exec_info_.is_transfer_blocking_) {
+      sub_state_.set_transfer_blocking();
     }
     exec_info_.multi_data_source_.reset();
     exec_info_.mds_buffer_ctx_array_.reset();
@@ -1526,6 +1563,16 @@ int ObPartTransCtx::recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info)
     } else {
       is_ctx_table_merged_ = true;
     }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(recover_ls_transfer_status_())) {
+      TRANS_LOG(WARN, "recover ls transfer status failed", KR(ret));
+    } else {
+      if (exec_info_.exec_epoch_ > 0) {
+        epoch_ = exec_info_.exec_epoch_;
+      }
+    }
+
 
     // insert into retain ctx mgr if it will not replay commit or abort log
     if (OB_FAIL(ret)) {
@@ -2764,8 +2811,8 @@ int ObPartTransCtx::submit_redo_log_(ObTxLogBlock &log_block,
     if (need_submit_log) {
       if (OB_FAIL(acquire_ctx_ref_())) {
         TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
-      } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->submit_log(
-              log_block.get_buf(), log_block.get_size(), SCN::min_scn(), log_cb, false))) {
+      } else if (OB_FAIL(submit_log_if_allow(
+              log_block.get_buf(), log_block.get_size(), SCN::min_scn(), log_cb, false, log_block.get_cb_arg_array()))) {
         TRANS_LOG(WARN, "submit log failed", KR(ret), K(*this));
         return_log_cb_(log_cb);
         log_cb = NULL;
@@ -2825,8 +2872,8 @@ int ObPartTransCtx::submit_redo_log_()
     log_cb = NULL;
   } else if (OB_FAIL(acquire_ctx_ref_())) {
     TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
-  } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->submit_log(
-                 log_block.get_buf(), log_block.get_size(), SCN::min_scn(), log_cb, false))) {
+  } else if (OB_FAIL(submit_log_if_allow(
+                 log_block.get_buf(), log_block.get_size(), SCN::min_scn(), log_cb, false, log_block.get_cb_arg_array()))) {
     TRANS_LOG(WARN, "submit log to clog adapter failed", KR(ret), K(*this));
     return_log_cb_(log_cb);
     log_cb = NULL;
@@ -2874,8 +2921,8 @@ int ObPartTransCtx::submit_redo_commit_info_log_()
     log_cb = NULL;
   } else if (OB_FAIL(acquire_ctx_ref_())) {
     TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
-  } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->submit_log(
-                 log_block.get_buf(), log_block.get_size(), SCN::min_scn(), log_cb, false))) {
+  } else if (OB_FAIL(submit_log_if_allow(
+                 log_block.get_buf(), log_block.get_size(), SCN::min_scn(), log_cb, false, log_block.get_cb_arg_array()))) {
     TRANS_LOG(WARN, "submit log to clog adapter failed", KR(ret), K(*this));
     return_log_cb_(log_cb);
     log_cb = NULL;
@@ -2910,31 +2957,36 @@ int ObPartTransCtx::submit_redo_commit_info_log_(ObTxLogBlock &log_block,
   int ret = OB_SUCCESS;
   ObTxLogCb *log_cb = NULL;
 
+  logservice::ObReplayBarrierType commit_info_log_barrier_type =
+      logservice::ObReplayBarrierType::NO_NEED_BARRIER;
+
   if (sub_state_.is_info_log_submitted()) {
     // state log already submitted, do nothing
   } else if (OB_FAIL(submit_redo_log_(log_block, has_redo, helper))) {
     TRANS_LOG(WARN, "submit redo log failed", KR(ret), K(*this));
   } else if (OB_FAIL(check_dup_trx_with_submitting_all_redo(log_block, helper))) {
     TRANS_LOG(WARN, "check dup trx with submitting all redo failed", K(ret));
+  } else if (OB_FAIL(decide_state_log_barrier_type_(ObTxLogType::TX_COMMIT_INFO_LOG,
+                                                    commit_info_log_barrier_type))) {
+    TRANS_LOG(WARN, "decide commit info log barrier failed", K(ret),
+              K(commit_info_log_barrier_type), KPC(this));
   } else {
     ObTxCommitInfoLog commit_info_log(
         exec_info_.scheduler_, exec_info_.participants_, exec_info_.upstream_,
-        exec_info_.is_sub2pc_,
-        exec_info_.is_dup_tx_, can_elr_, trace_info_.get_app_trace_id(),
+        exec_info_.is_sub2pc_, exec_info_.is_dup_tx_, can_elr_, trace_info_.get_app_trace_id(),
         trace_info_.get_app_trace_info(), exec_info_.prev_record_lsn_, exec_info_.redo_lsns_,
-        exec_info_.incremental_participants_, cluster_version_, exec_info_.xid_);
+        exec_info_.incremental_participants_, cluster_version_, exec_info_.xid_, exec_info_.commit_parts_, epoch_);
 
     if (OB_SUCC(ret)) {
       if (exec_info_.is_dup_tx_) {
         if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->add_commiting_dup_trx(trans_id_))) {
-          TRANS_LOG(WARN, "add committing dup table trx failed", K(ret),
-                    KPC(this));
+          TRANS_LOG(WARN, "add committing dup table trx failed", K(ret), KPC(this));
         }
       }
     }
 
     if (OB_FAIL(ret)) {
-      //do nothing
+      // do nothing
     } else if (OB_FAIL(validate_commit_info_log_(commit_info_log))) {
       TRANS_LOG(WARN, "invalid commit info log", K(ret), K(commit_info_log), K(trans_id_),
                 K(ls_id_));
@@ -2953,8 +3005,8 @@ int ObPartTransCtx::submit_redo_commit_info_log_(ObTxLogBlock &log_block,
           // acquire ctx ref before submit log
         } else if (OB_FAIL(acquire_ctx_ref_())) {
           TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
-        } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->submit_log(
-                       log_block.get_buf(), log_block.get_size(), SCN::min_scn(), log_cb, false))) {
+        } else if (OB_FAIL(submit_log_if_allow(
+                       log_block.get_buf(), log_block.get_size(), SCN::min_scn(), log_cb, false, log_block.get_cb_arg_array()))) {
           TRANS_LOG(WARN, "submit log failed", KR(ret), K(*this));
           return_log_cb_(log_cb);
           log_cb = NULL;
@@ -2967,12 +3019,23 @@ int ObPartTransCtx::submit_redo_commit_info_log_(ObTxLogBlock &log_block,
                       K(ls_id_));
           } else if (OB_FAIL(log_block.add_new_log(commit_info_log))) {
             TRANS_LOG(WARN, "add new log failed", KR(ret), K(*this));
+          } else if (commit_info_log_barrier_type
+                         != logservice::ObReplayBarrierType::NO_NEED_BARRIER
+                     && OB_FAIL(log_block.rewrite_barrier_log_block(
+                         trans_id_.get_id(), commit_info_log_barrier_type))) {
+            TRANS_LOG(WARN, "rewrite commit info log barrier type failed", K(ret),
+                      K(commit_info_log_barrier_type), KPC(this));
           }
           has_redo = false;
         }
       } else {
         TRANS_LOG(WARN, "add new log failed", KR(ret), K(this));
       }
+    } else if (commit_info_log_barrier_type != logservice::ObReplayBarrierType::NO_NEED_BARRIER
+               && OB_FAIL(log_block.rewrite_barrier_log_block(trans_id_.get_id(),
+                                                              commit_info_log_barrier_type))) {
+      TRANS_LOG(WARN, "rewrite commit info log barrier type failed", K(ret),
+                K(commit_info_log_barrier_type), KPC(this));
     }
   }
 
@@ -3022,8 +3085,8 @@ int ObPartTransCtx::submit_redo_active_info_log_()
           log_cb = NULL;
         } else if (OB_FAIL(acquire_ctx_ref_())) {
           TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
-        } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->submit_log(
-                log_block.get_buf(), log_block.get_size(), SCN::min_scn(), log_cb, false))) {
+        } else if (OB_FAIL(submit_log_if_allow(
+                log_block.get_buf(), log_block.get_size(), SCN::min_scn(), log_cb, false, log_block.get_cb_arg_array()))) {
           TRANS_LOG(WARN, "submit log to clog adapter failed", KR(ret), K(*this));
           return_log_cb_(log_cb);
           log_cb = nullptr;
@@ -3046,8 +3109,8 @@ int ObPartTransCtx::submit_redo_active_info_log_()
             log_cb = NULL;
           } else if (OB_FAIL(acquire_ctx_ref_())) {
             TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
-          } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->submit_log(
-                         log_block.get_buf(), log_block.get_size(), SCN::min_scn(), log_cb, false))) {
+          } else if (OB_FAIL(submit_log_if_allow(
+                         log_block.get_buf(), log_block.get_size(), SCN::min_scn(), log_cb, false, log_block.get_cb_arg_array()))) {
             TRANS_LOG(WARN, "submit log to clog adapter failed", KR(ret), K(*this));
             return_log_cb_(log_cb);
             log_cb = nullptr;
@@ -3070,8 +3133,8 @@ int ObPartTransCtx::submit_redo_active_info_log_()
       log_cb = NULL;
     } else if (OB_FAIL(acquire_ctx_ref_())) {
       TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
-    } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->submit_log(
-                   log_block.get_buf(), log_block.get_size(), SCN::min_scn(), log_cb, false))) {
+    } else if (OB_FAIL(submit_log_if_allow(
+                   log_block.get_buf(), log_block.get_size(), SCN::min_scn(), log_cb, false, log_block.get_cb_arg_array()))) {
       TRANS_LOG(WARN, "submit log to clog adapter failed", KR(ret), K(*this));
       return_log_cb_(log_cb);
       log_cb = nullptr;
@@ -3144,7 +3207,7 @@ int ObPartTransCtx::submit_prepare_log_()
 
     if (OB_FAIL(get_prev_log_lsn_(log_block, ObTxLogType::TX_COMMIT_INFO_LOG, prev_lsn))) {
       TRANS_LOG(WARN, "get prev log lsn failed", K(ret), K(*this));
-    } 
+    }
 
     ObTxPrepareLog prepare_log(exec_info_.incremental_participants_, prev_lsn);
 
@@ -3164,8 +3227,8 @@ int ObPartTransCtx::submit_prepare_log_()
           log_cb = NULL;
         } else if (OB_FAIL(acquire_ctx_ref_())) {
           TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
-        } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->submit_log(
-                log_block.get_buf(), log_block.get_size(), SCN::min_scn(), log_cb, false))) {
+        } else if (OB_FAIL(submit_log_if_allow(
+                log_block.get_buf(), log_block.get_size(), SCN::min_scn(), log_cb, false, log_block.get_cb_arg_array()))) {
           TRANS_LOG(WARN, "submit log to clog adapter failed", KR(ret), K(*this));
           return_log_cb_(log_cb);
           log_cb = NULL;
@@ -3191,9 +3254,9 @@ int ObPartTransCtx::submit_prepare_log_()
             log_cb = NULL;
           } else if (OB_FAIL(acquire_ctx_ref_())) {
             TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
-          } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->submit_log(
+          } else if (OB_FAIL(submit_log_if_allow(
                          log_block.get_buf(), log_block.get_size(), exec_info_.prepare_version_,
-                         log_cb, false))) {
+                         log_cb, false, log_block.get_cb_arg_array()))) {
             TRANS_LOG(WARN, "submit log to clog adapter failed", KR(ret), K(*this));
             return_log_cb_(log_cb);
             log_cb = NULL;
@@ -3216,9 +3279,9 @@ int ObPartTransCtx::submit_prepare_log_()
       log_cb = NULL;
     } else if (OB_FAIL(acquire_ctx_ref_())) {
       TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
-    } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->submit_log(
+    } else if (OB_FAIL(submit_log_if_allow(
                    log_block.get_buf(), log_block.get_size(), exec_info_.prepare_version_, log_cb,
-                   false))) {
+                   false, log_block.get_cb_arg_array()))) {
       TRANS_LOG(WARN, "submit log to clog adapter failed", KR(ret), K(*this));
       return_log_cb_(log_cb);
       log_cb = NULL;
@@ -3350,8 +3413,8 @@ int ObPartTransCtx::submit_commit_log_()
           // acquire ctx ref before submit log
         } else if (OB_FAIL(acquire_ctx_ref_())) {
           TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
-        } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->submit_log(
-                       log_block.get_buf(), log_block.get_size(), SCN::min_scn(), log_cb, false))) {
+        } else if (OB_FAIL(submit_log_if_allow(
+                       log_block.get_buf(), log_block.get_size(), SCN::min_scn(), log_cb, false, log_block.get_cb_arg_array()))) {
           TRANS_LOG(WARN, "submit log to clog adapter failed", KR(ret), K(*this));
           return_log_cb_(log_cb);
           log_cb = NULL;
@@ -3391,9 +3454,9 @@ int ObPartTransCtx::submit_commit_log_()
             log_cb = NULL;
           } else if (OB_FAIL(acquire_ctx_ref_())) {
             TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
-          } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->submit_log(
+          } else if (OB_FAIL(submit_log_if_allow(
                          log_block.get_buf(), log_block.get_size(),
-                         ctx_tx_data_.get_commit_version(), log_cb, false))) {
+                         ctx_tx_data_.get_commit_version(), log_cb, false, log_block.get_cb_arg_array()))) {
             TRANS_LOG(WARN, "submit log to clog adapter failed", KR(ret), K(*this));
             return_log_cb_(log_cb);
             log_cb = NULL;
@@ -3433,9 +3496,9 @@ int ObPartTransCtx::submit_commit_log_()
       }
     } else if (OB_FAIL(acquire_ctx_ref_())) {
       TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
-    } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->submit_log(
+    } else if (OB_FAIL(submit_log_if_allow(
                    log_block.get_buf(), log_block.get_size(), ctx_tx_data_.get_commit_version(),
-                   log_cb, false))) {
+                   log_cb, false, log_block.get_cb_arg_array()))) {
       TRANS_LOG(WARN, "submit log to clog adapter failed", KR(ret), K(*this));
       release_ctx_ref_();
       return_log_cb_(log_cb);
@@ -3466,9 +3529,11 @@ int ObPartTransCtx::submit_abort_log_()
   ObTxLogBlock log_block;
   ObTxBufferNodeArray tmp_array;
 
+  logservice::ObReplayBarrierType abort_log_barrier_type =
+      logservice::ObReplayBarrierType::NO_NEED_BARRIER;
   const int64_t replay_hint = static_cast<int64_t>(trans_id_.get_id());
-  ObTxLogBlockHeader
-    log_block_header(cluster_id_, exec_info_.next_log_entry_no_, trans_id_, exec_info_.scheduler_);
+  ObTxLogBlockHeader log_block_header(cluster_id_, exec_info_.next_log_entry_no_, trans_id_,
+                                      exec_info_.scheduler_);
 
   if (OB_FAIL(gen_final_mds_array_(tmp_array, false))) {
     TRANS_LOG(WARN, "gen abort mds array failed", K(ret));
@@ -3477,9 +3542,19 @@ int ObPartTransCtx::submit_abort_log_()
   ObTxAbortLog abort_log(tmp_array);
 
   if (OB_SUCC(ret)) {
-    if ((exec_info_.multi_data_source_.count() > 0 || mds_cache_.count() > 0)
-        && OB_FAIL(try_alloc_retain_ctx_func_())) {
-      TRANS_LOG(WARN, "alloc retain ctx func for mds trans failed", K(ret), K(mds_cache_), KPC(this));
+    if ((exec_info_.multi_data_source_.count() > 0 || mds_cache_.count() > 0)) {
+      if (OB_FAIL(try_alloc_retain_ctx_func_())) {
+        TRANS_LOG(WARN, "alloc retain ctx func for mds trans failed", K(ret), K(mds_cache_),
+                  KPC(this));
+      } else if (OB_FAIL(decide_state_log_barrier_type_(ObTxLogType::TX_ABORT_LOG,
+                                                        abort_log_barrier_type))) {
+        TRANS_LOG(WARN, "decide abort log barrier type failed", K(ret), K(abort_log_barrier_type),
+                  KPC(this));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
     } else if (OB_FAIL(abort_log.init_tx_data_backup(ctx_tx_data_.get_start_log_ts()))) {
       TRANS_LOG(WARN, "init tx data backup failed", K(ret));
     } else if (exec_info_.redo_lsns_.count() > 0 || exec_info_.max_applying_log_ts_.is_valid()) {
@@ -3495,6 +3570,11 @@ int ObPartTransCtx::submit_abort_log_()
     TRANS_LOG(WARN, "init log block failed", KR(ret), K(*this));
   } else if (OB_FAIL(log_block.add_new_log(abort_log))) {
     TRANS_LOG(WARN, "add new log failed", KR(ret), K(*this));
+  } else if (abort_log_barrier_type != logservice::ObReplayBarrierType::NO_NEED_BARRIER
+             && OB_FAIL(
+                 log_block.rewrite_barrier_log_block(trans_id_.get_id(), abort_log_barrier_type))) {
+    TRANS_LOG(WARN, "rewrite barrier log block failed", K(ret), K(abort_log_barrier_type),
+              KPC(this));
   } else if (log_block.get_cb_arg_array().count() == 0) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "cb arg array is empty", K(ret), K(log_block));
@@ -3506,8 +3586,8 @@ int ObPartTransCtx::submit_abort_log_()
     }
   } else if (OB_FAIL(acquire_ctx_ref_())) {
     TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
-  } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->submit_log(
-                 log_block.get_buf(), log_block.get_size(), SCN::min_scn(), log_cb, false))) {
+  } else if (OB_FAIL(submit_log_if_allow(
+                 log_block.get_buf(), log_block.get_size(), SCN::min_scn(), log_cb, false, log_block.get_cb_arg_array()))) {
     TRANS_LOG(WARN, "submit log to clog adapter failed", KR(ret), K(*this));
     return_log_cb_(log_cb);
     log_cb = NULL;
@@ -3548,10 +3628,10 @@ int ObPartTransCtx::submit_clear_log_()
     log_cb = NULL;
   } else if (OB_FAIL(acquire_ctx_ref_())) {
     TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
-  } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->submit_log(
+  } else if (OB_FAIL(submit_log_if_allow(
                  log_block.get_buf(), log_block.get_size(),
                  share::SCN::max(ctx_tx_data_.get_end_log_ts(), max_2pc_commit_scn_), log_cb,
-                 false))) {
+                 false, log_block.get_cb_arg_array()))) {
     TRANS_LOG(WARN, "submit log to clog adapter failed", KR(ret), K(*this));
     return_log_cb_(log_cb);
     log_cb = NULL;
@@ -3592,8 +3672,8 @@ int ObPartTransCtx::submit_record_log_()
     log_cb = NULL;
   } else if (OB_FAIL(acquire_ctx_ref_())) {
     TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
-  } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->submit_log(
-                 log_block.get_buf(), log_block.get_size(), SCN::min_scn(), log_cb, false))) {
+  } else if (OB_FAIL(submit_log_if_allow(
+                 log_block.get_buf(), log_block.get_size(), SCN::min_scn(), log_cb, false, log_block.get_cb_arg_array()))) {
     TRANS_LOG(WARN, "submit log to clog adapter failed", KR(ret), K(*this));
     return_log_cb_(log_cb);
     log_cb = NULL;
@@ -3652,9 +3732,9 @@ int ObPartTransCtx::submit_big_segment_log_()
       log_cb = NULL;
     } else if (OB_FAIL(acquire_ctx_ref_())) {
       TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
-    } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->submit_log(
+    } else if (OB_FAIL(submit_log_if_allow(
                    submit_buf, submit_buf_len, big_segment_info_.submit_base_scn_, log_cb,
-                   false))) {
+                   false, log_block.get_cb_arg_array()))) {
       TRANS_LOG(WARN, "submit log to clog adapter failed", KR(ret), K(*this));
       return_log_cb_(log_cb);
       log_cb = NULL;
@@ -4265,7 +4345,7 @@ int ObPartTransCtx::find_participant_id_(const ObLSID &participant, int64_t &par
 {
   int ret = OB_SUCCESS;
   bool found = false;
-  participant_id = INT64_MAX;
+  participant_id = -1;
 
   for (int64_t i = 0; !found && i < exec_info_.participants_.count(); i++) {
     if (participant == exec_info_.participants_[i]) {
@@ -4332,7 +4412,11 @@ int ObPartTransCtx::push_repalying_log_ts(const SCN log_ts_ns)
 
   CtxLockGuard guard(lock_);
 
-  if (log_ts_ns < exec_info_.max_applying_log_ts_) {
+  if (transfer_deleted_) {
+    // just for check
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "tx ctx is transfer deleted", KR(ret), K(trans_id_));
+  } else if (log_ts_ns < exec_info_.max_applying_log_ts_) {
     TRANS_LOG(WARN,
               "[Replay Tx] replay a log with a older ts than part_ctx state, it will be ignored",
               K(exec_info_.max_applying_log_ts_), K(log_ts_ns));
@@ -4567,8 +4651,7 @@ int ObPartTransCtx::validate_replay_log_entry_no(bool first_created_ctx,
 
   CtxLockGuard guard(lock_);
 
-  if (first_created_ctx) {
-
+  if (first_created_ctx || exec_info_.is_empty_ctx_created_by_transfer_) {
     if (0 == log_entry_no) {
       if (OB_FAIL(ctx_tx_data_.set_start_log_ts(log_ts))) {
         TRANS_LOG(WARN, "set start ts failed", K(ret));
@@ -4578,6 +4661,7 @@ int ObPartTransCtx::validate_replay_log_entry_no(bool first_created_ctx,
       exec_info_.next_log_entry_no_ = log_entry_no + 1;
       if (exec_info_.next_log_entry_no_ > 1) {
         is_incomplete_replay_ctx_ = true;
+        exec_info_.is_empty_ctx_created_by_transfer_ = false;
         exec_info_.need_checksum_ = false;
         if (OB_FAIL(supplement_undo_actions_if_exist_())) {
           TRANS_LOG(WARN,
@@ -4595,6 +4679,8 @@ int ObPartTransCtx::validate_replay_log_entry_no(bool first_created_ctx,
                   K(exec_info_.next_log_entry_no_),
                   K(is_incomplete_replay_ctx_),
                   K(ctx_tx_data_));
+      } else {
+        exec_info_.is_empty_ctx_created_by_transfer_ = false;
       }
     }
   } else if (log_entry_no > exec_info_.next_log_entry_no_) {
@@ -4609,8 +4695,10 @@ int ObPartTransCtx::validate_replay_log_entry_no(bool first_created_ctx,
               K(exec_info_.next_log_entry_no_));
   } else if (log_entry_no < exec_info_.next_log_entry_no_) {
     // do nothing, filtered by max_applying_log_ts_
+    exec_info_.is_empty_ctx_created_by_transfer_ = false;
   } else {
     exec_info_.next_log_entry_no_ = log_entry_no + 1;
+    exec_info_.is_empty_ctx_created_by_transfer_ = false;
   }
 
   return ret;
@@ -4792,6 +4880,34 @@ int ObPartTransCtx::replay_active_info(const ObTxActiveInfoLog &log,
   return ret;
 }
 
+int ObPartTransCtx::assign_commit_parts(const share::ObLSArray &log_participants,
+                                        const ObTxCommitParts &log_commit_parts)
+{
+  int ret = OB_SUCCESS;
+
+  if (log_participants.count() != log_commit_parts.count()) {
+    // replay old version log, we need mock the commit parts
+    for (int64_t i = 0; OB_SUCC(ret) && i < log_participants.count(); i++) {
+      if (OB_FAIL(exec_info_.commit_parts_.push_back(ObTxExecPart(log_participants[i],
+                                                                  -1, /*exec_epoch*/
+                                                                  -1  /*transfer_epoch*/)))) {
+        TRANS_LOG(WARN, "set commit parts error", K(ret), K(*this));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      // reset on failure to ensure atomicity
+      exec_info_.commit_parts_.reset();
+    }
+  } else {
+    if (OB_FAIL(exec_info_.commit_parts_.assign(log_commit_parts))) {
+      TRANS_LOG(WARN, "set commit parts error", K(ret), K(*this));
+    }
+  }
+
+  return ret;
+}
+
 int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
                                        const palf::LSN &offset,
                                        const SCN &timestamp,
@@ -4819,6 +4935,9 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
   } else if (OB_FAIL(exec_info_.incremental_participants_.assign(
                  commit_info_log.get_incremental_participants()))) {
     TRANS_LOG(WARN, "set incremental_participants error", K(ret), K(commit_info_log), K(*this));
+  } else if (OB_FAIL(assign_commit_parts(commit_info_log.get_participants(),
+                                         commit_info_log.get_commit_parts()))) {
+    TRANS_LOG(WARN, "set commit parts error", K(ret), K(commit_info_log), K(*this));
   } else if (OB_FAIL(set_app_trace_info_(commit_info_log.get_app_trace_info()))) {
     TRANS_LOG(WARN, "set app trace info error", K(ret), K(commit_info_log), K(*this));
   } else if (OB_FAIL(set_app_trace_id_(commit_info_log.get_app_trace_id()))) {
@@ -4841,13 +4960,10 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
       exec_info_.trans_type_ = TransType::SP_TRANS;
     }
 
-    if (!is_local_tx_() && !commit_info_log.get_upstream().is_valid()) {
-      set_2pc_upstream_(ls_id_);
-      TRANS_LOG(INFO, "set upstream to self", K(*this), K(commit_info_log));
-    }
     can_elr_ = commit_info_log.is_elr();
     cluster_version_ = commit_info_log.get_cluster_version();
     sub_state_.set_info_log_submitted();
+    epoch_ = commit_info_log.get_epoch();
     reset_redo_lsns_();
     ObTwoPhaseCommitLogType two_phase_log_type = ObTwoPhaseCommitLogType::OB_LOG_TX_MAX;
     if (OB_FAIL(ret)) {
@@ -5252,7 +5368,7 @@ int ObPartTransCtx::replay_abort(const ObTxAbortLog &abort_log,
     }
   }
   if (OB_SUCC(ret)) {
-    // we must notify mds tx_end before invoking trans_replay_abort_ for clearing tablet lock 
+    // we must notify mds tx_end before invoking trans_replay_abort_ for clearing tablet lock
     ObTxBufferNodeArray tmp_array;
     if (OB_FAIL(gen_total_mds_array_(tmp_array))) {
       TRANS_LOG(WARN, "gen total mds array failed", K(ret));
@@ -5475,8 +5591,10 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
     TRANS_LOG(WARN, "switch role state error", KR(ret), K(*this));
   } else {
     const bool contain_mds_table_lock = is_contain_mds_type_(ObTxDataSourceType::TABLE_LOCK);
-    const bool contain_mds_transfer_out =
-        is_contain_mds_type_(ObTxDataSourceType::START_TRANSFER_OUT);
+    const bool contain_mds_transfer_out = is_contain_mds_type_(ObTxDataSourceType::START_TRANSFER_OUT)
+                           || is_contain_mds_type_(ObTxDataSourceType::START_TRANSFER_OUT_PREPARE)
+                           || is_contain_mds_type_(ObTxDataSourceType::START_TRANSFER_OUT_V2);
+    const bool need_kill_tx = contain_mds_table_lock || contain_mds_transfer_out;
     bool kill_by_append_mode_initial_scn = false;
     if (append_mode_initial_scn.is_valid()) {
       kill_by_append_mode_initial_scn = exec_info_.max_applying_log_ts_ <= append_mode_initial_scn;
@@ -5497,7 +5615,7 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
               || get_upstream_state() >= ObTxState::REDO_COMPLETE) {
 
             TRANS_LOG(WARN, "abort self instantly with a tx_commit request",
-                      K(contain_mds_table_lock), K(contain_mds_transfer_out),
+                      K(contain_mds_table_lock), K(contain_mds_transfer_out), K(need_kill_tx),
                       K(kill_by_append_mode_initial_scn), K(append_mode_initial_scn), KPC(this));
             if (OB_FAIL(do_local_tx_end_(TxEndAction::ABORT_TX))) {
               TRANS_LOG(WARN, "abort tx failed", KR(ret), KPC(this));
@@ -5542,6 +5660,7 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
       }
     }
     if (OB_SUCC(ret)) {
+      exec_info_.is_empty_ctx_created_by_transfer_ = false;
       exec_info_.data_complete_ = false;
       start_working_log_ts_ = start_working_ts;
     } else {
@@ -6001,6 +6120,7 @@ int ObPartTransCtx::get_tx_ctx_table_info_(ObTxCtxTableInfo &info)
 {
   int ret = OB_SUCCESS;
 
+  exec_info_.exec_epoch_ = epoch_;
   if (OB_FAIL(ctx_tx_data_.get_tx_data(info.tx_data_guard_))) {
     TRANS_LOG(WARN, "get tx data failed", K(ret));
   } else if (OB_FAIL(mt_ctx_.calc_checksum_before_scn(
@@ -6014,6 +6134,7 @@ int ObPartTransCtx::get_tx_ctx_table_info_(ObTxCtxTableInfo &info)
     info.tx_id_ = trans_id_;
     info.ls_id_ = ls_id_;
     info.cluster_id_ = cluster_id_;
+    info.cluster_version_ = cluster_version_;
     if (OB_FAIL(mt_ctx_.get_table_lock_store_info(info.table_lock_info_))) {
       TRANS_LOG(WARN, "get_table_lock_store_info failed", K(ret), K(info));
     } else {
@@ -6410,8 +6531,8 @@ int ObPartTransCtx::submit_multi_data_source_(ObTxLogBlock &log_block)
         log_cb = nullptr;
       } else if ((mds_base_scn.is_valid() ? OB_FALSE_IT(mds_base_scn = share::SCN::scn_inc(mds_base_scn)) : OB_FALSE_IT(mds_base_scn.set_min()))) {
         // do nothing
-      } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->submit_log(
-                     log_block.get_buf(), log_block.get_size(), mds_base_scn, log_cb, false))) {
+      } else if (OB_FAIL(submit_log_if_allow(
+                     log_block.get_buf(), log_block.get_size(), mds_base_scn, log_cb, false, log_block.get_cb_arg_array()))) {
         TRANS_LOG(WARN, "submit log to clog adapter failed", KR(ret), K(*this));
         release_ctx_ref_();
       } else if (OB_FAIL(after_submit_log_(log_block, log_cb, NULL))) {
@@ -6570,6 +6691,7 @@ int ObPartTransCtx::notify_data_source_(const NotifyType notify_type,
     arg.for_replay_ = for_replay;
     arg.notify_type_ = notify_type;
     arg.is_force_kill_ = is_force_kill;
+    arg.is_incomplete_replay_ = is_incomplete_replay_ctx_;
 
     int64_t total_time = 0;
 
@@ -6753,7 +6875,7 @@ int ObPartTransCtx::del_retain_ctx()
       // +-----------------------------------------------+
       // | need clear memtable_ctx even if it is exiting |
       // +-----------------------------------------------+
-      trans_kill_();  // clear memtable calliback for replay 
+      trans_kill_();  // clear memtable calliback for replay
 
       clean_retain_cause_();
       print_trace_log_if_necessary_();
@@ -6878,9 +7000,9 @@ int ObPartTransCtx::submit_pending_log_block_(ObTxLogBlock &log_block,
       log_cb = NULL;
     } else if (OB_FAIL(acquire_ctx_ref_())) {
       TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
-    } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->submit_log(
+    } else if (OB_FAIL(submit_log_if_allow(
                    log_block.get_buf(), log_block.get_size(), share::SCN::min_scn(), log_cb,
-                   false))) {
+                   false, log_block.get_cb_arg_array()))) {
       TRANS_LOG(WARN, "submit log to clog adapter failed", KR(ret), K(*this));
       return_log_cb_(log_cb);
       log_cb = NULL;
@@ -7093,7 +7215,7 @@ int ObPartTransCtx::retry_dup_trx_before_prepare(const share::SCN &before_prepar
 //   return ret;
 // }
 
-int ObPartTransCtx::sub_prepare(const ObLSArray &parts,
+int ObPartTransCtx::sub_prepare(const ObTxCommitParts &parts,
                                 const MonotonicTs &commit_time,
                                 const int64_t &expire_ts,
                                 const common::ObString &app_trace_info,
@@ -7308,8 +7430,13 @@ int ObPartTransCtx::check_status_()
   } else if (OB_UNLIKELY(is_follower_())) {
     ret =  OB_NOT_MASTER;
   } else if (OB_UNLIKELY(is_exiting_)) {
-    ret = OB_TRANS_IS_EXITING;
-    TRANS_LOG(WARN, "tx is exiting", K(ret), KPC(this));
+    if (OB_UNLIKELY(transfer_deleted_)) {
+      ret = OB_NEED_RETRY;
+      TRANS_LOG(WARN, "tx is transfer removing need retry", K(ret), KPC(this));
+    } else {
+      ret = OB_TRANS_IS_EXITING;
+      TRANS_LOG(WARN, "tx is exiting", K(ret), KPC(this));
+    }
   }
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "check trx status", K(ret), KPC(this));
@@ -7412,7 +7539,8 @@ int ObPartTransCtx::end_access()
  */
 int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn,
                                           const ObTxSEQ from_scn,
-                                          const ObTxSEQ to_scn)
+                                          const ObTxSEQ to_scn,
+                                          ObIArray<ObTxLSEpochPair> &downstream_parts)
 {
   int ret = OB_SUCCESS;
   bool need_write_log = false;
@@ -7429,6 +7557,9 @@ int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn,
     }
     TRANS_LOG(WARN, "rollback_to need retry because of logging", K(ret),
               K(trans_id_), K(ls_id_), K(busy_cbs_.get_size()));
+  } else if (is_2pc_blocking()) {
+    ret = OB_NEED_RETRY;
+    TRANS_LOG(WARN, "rollback_to need retry because of 2pc blocking", K(trans_id_), K(ls_id_), KP(this), K(ret));
   } else if (op_sn < last_op_sn_) {
     ret = OB_TRANS_SQL_SEQUENCE_ILLEGAL;
   } else if (FALSE_IT(last_op_sn_ = op_sn)) {
@@ -7437,12 +7568,19 @@ int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn,
     TRANS_LOG(WARN, "has pending write, rollback blocked",
               K(ret), K(pending_write_), KPC(this));
   } else if (last_scn_ <= to_scn) {
-    TRANS_LOG(INFO, "rollback succeed trivially", K(op_sn), K(to_scn), K_(last_scn));
+    TRANS_LOG(INFO, "rollback succeed trivially", K(trans_id_), K(ls_id_), K(op_sn), K(to_scn), K_(last_scn));
   } else if (OB_FAIL(rollback_to_savepoint_(from_scn, to_scn))) {
     TRANS_LOG(WARN, "rollback_to_savepoint fail", K(ret),
               K(from_scn), K(to_scn), K(op_sn), KPC(this));
   } else {
     last_scn_ = to_scn;
+  }
+  // must add downstream parts when return success
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < exec_info_.intermediate_participants_.count(); idx++) {
+    if (OB_FAIL(downstream_parts.push_back(ObTxLSEpochPair(exec_info_.intermediate_participants_.at(idx).ls_id_,
+                                                           exec_info_.intermediate_participants_.at(idx).transfer_epoch_)))) {
+      TRANS_LOG(WARN, "push parts to array failed", K(ret), KPC(this));
+    }
   }
   REC_TRANS_TRACE_EXT(tlog_, rollback_savepoint,
                       OB_ID(ret), ret,
@@ -7540,8 +7678,8 @@ int ObPartTransCtx::submit_rollback_to_log_(const ObTxSEQ from_scn,
     TRANS_LOG(ERROR, "cb arg array is empty", K(ret), K(log_block));
     return_log_cb_(log_cb);
     log_cb = NULL;
-  } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->submit_log(
-                 log_block.get_buf(), log_block.get_size(), SCN::min_scn(), log_cb, false /*nonblock on EAGAIN*/
+  } else if (OB_FAIL(submit_log_if_allow(
+                 log_block.get_buf(), log_block.get_size(), SCN::min_scn(), log_cb, false, log_block.get_cb_arg_array()
                  ))) {
     TRANS_LOG(WARN, "submit log fail", K(ret), K(log_block), KPC(this));
     return_log_cb_(log_cb);
@@ -7568,6 +7706,9 @@ int ObPartTransCtx::abort(const int reason)
   if (OB_UNLIKELY(is_follower_())) {
     ret = OB_NOT_MASTER;
     TRANS_LOG(WARN, "not master", KR(ret), KPC(this));
+  } else if (OB_UNLIKELY(is_2pc_blocking())) {
+    ret = OB_EAGAIN;
+    TRANS_LOG(WARN, "2pc blocking", KR(ret), KPC(this));
   } else if (OB_UNLIKELY(is_committing_())) {
     if (part_trans_action_ == ObPartTransAction::ABORT) {
       TRANS_LOG(INFO, "tx already aborting", KPC(this));
@@ -7910,7 +8051,7 @@ int ObPartTransCtx::on_local_abort_tx_()
 int ObPartTransCtx::dump_2_text(FILE *fd)
 {
   int ret = OB_SUCCESS;
-  
+
   const ObTxData *tx_data_ptr = NULL;
   const int64_t buf_len = 4096;
   char buf[buf_len];
@@ -7935,8 +8076,7 @@ int ObPartTransCtx::dump_2_text(FILE *fd)
 
 int ObPartTransCtx::check_for_standby(const SCN &snapshot,
                                       bool &can_read,
-                                      SCN &trans_version,
-                                      bool &is_determined_state)
+                                      SCN &trans_version)
 {
   int ret = OB_ERR_SHARED_LOCK_CONFLICT;
   int tmp_ret = OB_SUCCESS;
@@ -7967,7 +8107,6 @@ int ObPartTransCtx::check_for_standby(const SCN &snapshot,
           ret = OB_SUCCESS;
         }
         trans_version.set_min();
-        is_determined_state = false;
         break;
       case ObTxData::COMMIT:
         if (commit_version.is_valid()) {
@@ -7977,7 +8116,6 @@ int ObPartTransCtx::check_for_standby(const SCN &snapshot,
             can_read = true;
           }
           trans_version = commit_version;
-          is_determined_state = true;
           ret = OB_SUCCESS;
         } else {
           ret = OB_ERR_UNEXPECTED;
@@ -7987,7 +8125,6 @@ int ObPartTransCtx::check_for_standby(const SCN &snapshot,
       case ObTxData::ABORT:
         can_read = false;
         trans_version.set_min();
-        is_determined_state = true;
         ret = OB_SUCCESS;
         break;
       default:
@@ -8027,11 +8164,10 @@ int ObPartTransCtx::check_for_standby(const SCN &snapshot,
               if (ObTxState::PREPARE == exec_info_.state_) {
                 can_read = false;
                 trans_version.set_min();
-                is_determined_state = false;
                 ret = OB_SUCCESS;
               }
             }
-            TRANS_LOG(INFO, "check for standby for unknown", K(ret), K(snapshot), K(can_read), K(trans_version), K(is_determined_state), K(tmp_state_info), K(readable_scn));
+            TRANS_LOG(INFO, "check for standby for unknown", K(ret), K(snapshot), K(can_read), K(trans_version), K(tmp_state_info), K(readable_scn));
           }
           break;
         }
@@ -8042,7 +8178,6 @@ int ObPartTransCtx::check_for_standby(const SCN &snapshot,
           } else if (tmp_state_info.version_ >= snapshot) {
             can_read = false;
             trans_version.set_min();
-            is_determined_state = false;
             ret = OB_SUCCESS;
           }
           break;
@@ -8051,7 +8186,6 @@ int ObPartTransCtx::check_for_standby(const SCN &snapshot,
           if (tmp_state_info.version_ > snapshot) {
             can_read = false;
             trans_version.set_min();
-            is_determined_state = false;
             ret = OB_SUCCESS;
           } else {
             version = MAX(version, tmp_state_info.version_);
@@ -8061,7 +8195,6 @@ int ObPartTransCtx::check_for_standby(const SCN &snapshot,
         case ObTxState::ABORT: {
           can_read = false;
           trans_version.set_min();
-          is_determined_state = true;
           ret = OB_SUCCESS;
           break;
         }
@@ -8074,7 +8207,6 @@ int ObPartTransCtx::check_for_standby(const SCN &snapshot,
             can_read = false;
           }
           trans_version = tmp_state_info.version_;
-          is_determined_state = true;
           ret = OB_SUCCESS;
           break;
         }
@@ -8085,27 +8217,27 @@ int ObPartTransCtx::check_for_standby(const SCN &snapshot,
     if (count != 0 && OB_ERR_SHARED_LOCK_CONFLICT == ret && state == ObTxState::PREPARE && version <= snapshot) {
       can_read = true;
       trans_version = version;
-      is_determined_state = true;
       ret = OB_SUCCESS;
     }
     if (count == 0 || (OB_ERR_SHARED_LOCK_CONFLICT == ret && min_snapshot <= snapshot)) {
       if (ask_state_info_interval_.reach()) {
-        if (OB_SUCCESS != (tmp_ret = build_and_post_ask_state_msg_(snapshot))) {
+        if (OB_SUCCESS != (tmp_ret = build_and_post_ask_state_msg_(snapshot, ls_id_, addr_))) {
           TRANS_LOG(WARN, "ask state from coord fail", K(ret), K(snapshot), KPC(this));
         }
       }
     }
   }
-  TRANS_LOG(INFO, "check for standby", K(ret), K(snapshot), K(can_read), K(trans_version), K(is_determined_state), KPC(this));
+  TRANS_LOG(INFO, "check for standby", K(ret), K(snapshot), K(can_read), K(trans_version), KPC(this));
   return ret;
 }
 
-int ObPartTransCtx::build_and_post_ask_state_msg_(const SCN &snapshot)
+int ObPartTransCtx::build_and_post_ask_state_msg_(const SCN &snapshot,
+                                                  const share::ObLSID &ori_ls_id, const ObAddr &ori_addr)
 {
   int ret = OB_SUCCESS;
   if (is_root()) {
     if (!exec_info_.participants_.empty()) {
-      handle_trans_ask_state_(snapshot);
+      build_and_post_collect_state_msg_(snapshot);
     }
   } else {
     ObAskStateMsg msg;
@@ -8118,10 +8250,13 @@ int ObPartTransCtx::build_and_post_ask_state_msg_(const SCN &snapshot)
     msg.request_id_ = ObTimeUtility::current_time();
     msg.cluster_id_ = cluster_id_;
     msg.receiver_ = exec_info_.upstream_;
+    msg.ori_ls_id_ = ori_ls_id;
+    msg.ori_addr_ = ori_addr;
     if (OB_FAIL(rpc_->post_msg(msg.receiver_, msg))) {
       TRANS_LOG(WARN, "post ask state msg fail", K(ret), K(msg), KPC(this));
       if (OB_LS_NOT_EXIST == ret) {
-        ret = check_ls_state_(snapshot, msg.receiver_);
+        ObStandbyCheckInfo tmp_check_info; // construct invalid check info
+        ret = check_ls_state_(snapshot, msg.receiver_, tmp_check_info);
       }
     }
   }
@@ -8129,7 +8264,7 @@ int ObPartTransCtx::build_and_post_ask_state_msg_(const SCN &snapshot)
   return ret;
 }
 
-int ObPartTransCtx::check_ls_state_(const SCN &snapshot, const ObLSID &ls_id)
+int ObPartTransCtx::check_ls_state_(const SCN &snapshot, const ObLSID &ls_id, const ObStandbyCheckInfo &check_info)
 {
   int ret = OB_SUCCESS;
   ObLSExistState ls_state;
@@ -8141,74 +8276,56 @@ int ObPartTransCtx::check_ls_state_(const SCN &snapshot, const ObLSID &ls_id)
     state_info.snapshot_version_ = snapshot;
     state_info.state_ = ObTxState::INIT;
     state_info.version_ = snapshot;
-    if (state_info_array_.empty()) {
-      if (OB_FAIL(state_info_array_.push_back(state_info))) {
-        TRANS_LOG(WARN, "push buck state info array fail", K(ret), K(state_info));
-      }
-    } else {
-      bool is_contain = false;
-      for (int j = 0; j<state_info_array_.count() && !is_contain; j++) {
-        is_contain = state_info.ls_id_ == state_info_array_.at(j).ls_id_;
-      }
-      if (!is_contain) {
-        if (OB_FAIL(state_info_array_.push_back(state_info))) {
-          TRANS_LOG(WARN, "push back state info array fail", K(ret));
-        }
-      }
+    state_info.check_info_ = check_info;
+    if (OB_FAIL(update_state_info_array_(state_info))) {
+      TRANS_LOG(WARN, "update state info array failed when ls not exsit", K(state_info), KPC(this));
     }
   } else {
     ret = OB_TRANS_CTX_NOT_EXIST;
   }
+  TRANS_LOG(INFO, "check ls state for standby read", K(ret), K(snapshot), K(ls_id), K(check_info));
   return ret;
 }
 
-int ObPartTransCtx::handle_trans_ask_state(const SCN &snapshot, ObAskStateRespMsg &resp)
+int ObPartTransCtx::handle_trans_ask_state(const ObAskStateMsg &req, ObAskStateRespMsg &resp)
 {
   int ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
+  const share::SCN snapshot = req.snapshot_;
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartTransCtx not inited");
     ret = OB_NOT_INIT;
-  } else if (exec_info_.participants_.empty()) {
-    // if coord not know any participants(before replay commit info log),
-    // fill self state to resp
-    ObStateInfo state_info;
-    state_info.ls_id_ = ls_id_;
-    state_info.state_ = exec_info_.state_;
-    state_info.snapshot_version_ = snapshot;
-    if (ObTxState::INIT == state_info.state_) {
-      if (OB_FAIL(get_ls_replica_readable_scn_(state_info.ls_id_, state_info.version_))) {
-        TRANS_LOG(WARN, "get replica readable scn failed", K(ret), K(state_info), K(snapshot));
-      } else if (OB_FAIL(resp.state_info_array_.push_back(state_info))) {
-        TRANS_LOG(WARN, "push back state info to resp msg failed", K(ret), K(snapshot), KPC(this));
+  } else if (is_root()) {
+    if (exec_info_.participants_.empty()) {
+      // if coord not know any participants(before replay commit info log),
+      // fill self state to resp
+      ObStateInfo state_info;
+      state_info.ls_id_ = ls_id_;
+      state_info.state_ = exec_info_.state_;
+      state_info.snapshot_version_ = snapshot;
+      if (ObTxState::INIT == state_info.state_) {
+        if (OB_FAIL(get_ls_replica_readable_scn_(state_info.ls_id_, state_info.version_))) {
+          TRANS_LOG(WARN, "get replica readable scn failed", K(ret), K(state_info), K(snapshot));
+        } else if (OB_FAIL(resp.state_info_array_.push_back(state_info))) {
+          TRANS_LOG(WARN, "push back state info to resp msg failed", K(ret), K(snapshot), KPC(this));
+        }
+      } else {
+        ret = OB_STATE_NOT_MATCH;
+        TRANS_LOG(ERROR, "coord should not in other state befroe replay commit info log", K(ret),
+                  KPC(this));
       }
+      TRANS_LOG(INFO, "coord not know any participants", K(ret), K(state_info), KPC(this));
     } else {
-      ret = OB_STATE_NOT_MATCH;
-      TRANS_LOG(ERROR, "coord should not in other state befroe replay commit info log", K(ret),
-                KPC(this));
-    }
-    TRANS_LOG(INFO, "coord not know any participants", K(ret), K(state_info), KPC(this));
-  } else {
-    handle_trans_ask_state_(snapshot);
-    if (OB_FAIL(resp.state_info_array_.assign(state_info_array_))) {
-      TRANS_LOG(WARN, "build ObAskStateRespMsg fail", K(ret), K(snapshot), KPC(this));
-    }
-  }
-  TRANS_LOG(INFO, "handle ask state msg", K(ret), K(snapshot), KPC(this));
-  return ret;
-}
-
-void ObPartTransCtx::handle_trans_ask_state_(const SCN &snapshot)
-{
-  if (snapshot > lastest_snapshot_) {
-    build_and_post_collect_state_msg_(snapshot);
-  } else if (snapshot <= lastest_snapshot_ && standby_part_collected_.num_members() != state_info_array_.count()) {
-    if (refresh_state_info_interval_.reach()) {
       build_and_post_collect_state_msg_(snapshot);
+      if (OB_FAIL(resp.state_info_array_.assign(state_info_array_))) {
+        TRANS_LOG(WARN, "build ObAskStateRespMsg fail", K(ret), K(snapshot), KPC(this));
+      }
     }
   } else {
-    // do nothing
+    build_and_post_ask_state_msg_(snapshot, req.ori_ls_id_, req.ori_addr_);
   }
+  TRANS_LOG(INFO, "handle ask state msg", K(ret), K(req), K(resp));
+  return ret;
 }
 
 void ObPartTransCtx::build_and_post_collect_state_msg_(const SCN &snapshot)
@@ -8228,16 +8345,19 @@ void ObPartTransCtx::build_and_post_collect_state_msg_(const SCN &snapshot)
   }
   ARRAY_FOREACH(state_info_array_, i) {
     msg.receiver_ = state_info_array_.at(i).ls_id_;
+    msg.check_info_ = state_info_array_.at(i).check_info_;
     if (OB_FAIL(rpc_->post_msg(msg.receiver_, msg))) {
       TRANS_LOG(WARN, "post collect state msg fail", K(ret), K(msg), KPC(this));
       if (OB_LS_NOT_EXIST == ret) {
-        ret = check_ls_state_(snapshot, msg.receiver_);
+        ret = check_ls_state_(snapshot, msg.receiver_, msg.check_info_);
       }
     }
   }
   if (OB_SUCC(ret)) {
-    lastest_snapshot_ = snapshot;
-    standby_part_collected_.clear_all();
+    // receive a larger ask state req
+    if (snapshot > lastest_snapshot_) {
+      lastest_snapshot_ = snapshot;
+    }
   }
   TRANS_LOG(INFO, "build and post collect state msg", K(ret), K(snapshot), KPC(this));
 }
@@ -8253,15 +8373,73 @@ int ObPartTransCtx::set_state_info_array_()
     TRANS_LOG(WARN, "participants array is empty", K(ret), KPC(this));
   } else {
     ObStateInfo state_info;
-    ARRAY_FOREACH(exec_info_.participants_, i) {
-      state_info.ls_id_ = exec_info_.participants_.at(i);
+    ARRAY_FOREACH(exec_info_.commit_parts_, i) {
+      state_info.check_info_.check_info_ori_ls_id_ = ls_id_;
+      state_info.check_info_.check_part_ = exec_info_.commit_parts_.at(i);
+      state_info.ls_id_ = state_info.check_info_.check_part_.ls_id_;
       if (OB_FAIL(state_info_array_.push_back(state_info))) {
         TRANS_LOG(WARN, "state info array push back fail", K(ret), K(state_info), KPC(this));
         break;
       }
     }
+    // clean state info array to avoid check_for_standby induce wrong result
+    if (OB_FAIL(ret)) {
+      state_info_array_.reset();
+    }
   }
   TRANS_LOG(INFO, "set state info array", K(ret), KPC(this));
+  return ret;
+}
+
+int ObPartTransCtx::update_state_info_array_(const ObStateInfo& state_info)
+{
+  int ret = OB_SUCCESS;
+  bool is_contain = false;
+
+  EqualToStateInfoFunctor<ObStateInfo> fn(state_info);
+  int64_t search_index = search(state_info_array_, fn);
+  if (search_index <= -1) {
+    if (OB_FAIL(state_info_array_.push_back(state_info))) {
+      TRANS_LOG(WARN, "push new state info array failed", K(ret), K(state_info));
+    }
+  } else {
+    if (state_info_array_.at(search_index).need_update(state_info)) {
+      state_info_array_.at(search_index) = state_info;
+    }
+  }
+
+  TRANS_LOG(INFO, "update state info", K(ret), K(search_index), K(state_info), K(state_info_array_));
+  return ret;
+}
+// push back new transfer parts with invalid state
+int ObPartTransCtx::update_state_info_array_with_transfer_parts_(const ObTxCommitParts &parts,
+                                                                 const ObLSID &ls_id) // collect resp sender id
+{
+  int ret = OB_SUCCESS;
+  bool is_contain = false;
+
+  ARRAY_FOREACH(parts, i) {
+    // conver exec_part to check_info
+    ObStandbyCheckInfo tmp_info;
+    tmp_info.check_part_ = parts.at(i);
+    tmp_info.check_info_ori_ls_id_ = ls_id;
+    EqualToTransferPartFunctor<ObStateInfo> fn(tmp_info);
+
+    int64_t search_index = search(state_info_array_, fn);
+
+    if (search_index <= -1) {
+      ObStateInfo tmp_state;
+      tmp_state.ls_id_ = tmp_info.check_part_.ls_id_; // set with transfer in id
+      tmp_state.check_info_ = tmp_info;               // set check info
+      if (OB_FAIL(state_info_array_.push_back(tmp_state))) {
+        TRANS_LOG(WARN, "push back into state info array failed", K(ret),
+                  K(state_info_array_), KPC(this));
+      }
+    }
+  }
+
+  TRANS_LOG(WARN, "update transfer parts in state info array", K(ret),
+            K(state_info_array_), K(parts), K(ls_id));
   return ret;
 }
 
@@ -8272,39 +8450,33 @@ int ObPartTransCtx::handle_trans_ask_state_resp(const ObAskStateRespMsg &msg)
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartTransCtx not inited");
     ret = OB_NOT_INIT;
-  } else if (state_info_array_.empty()) {
-    if (OB_FAIL(state_info_array_.assign(msg.state_info_array_))) {
-      TRANS_LOG(WARN, "assign state info array fail", K(ret));
-    }
   } else {
-    bool is_contain = false;
-    int j = 0;
-    ARRAY_FOREACH(msg.state_info_array_, i) {
-      for (j = 0, is_contain = false; j<state_info_array_.count() && !is_contain; j++) {
-        is_contain = msg.state_info_array_.at(i).ls_id_ == state_info_array_.at(j).ls_id_;
-      }
-      if (!is_contain) {
-        // maybe wrong
-        if (OB_FAIL(state_info_array_.push_back(msg.state_info_array_.at(i)))) {
-          TRANS_LOG(WARN, "push back state info array fail", K(ret));
-        }
-      } else if (state_info_array_.at(j-1).need_update(msg.state_info_array_.at(i))) {
-        state_info_array_.at(j-1) = msg.state_info_array_.at(i);
-      }
+    // force assign all state info from msg
+    // to avoid a read node post rpc failed and construct an state_info with invalid check_info,
+    // we should clean it when receive ask_state_resp
+    state_info_array_.reuse();
+    if (OB_FAIL(state_info_array_.assign(msg.state_info_array_))) {
+      state_info_array_.reuse();
+      TRANS_LOG(INFO, "assign state info array failed", K(ret), K(msg), KPC(this));
     }
   }
   TRANS_LOG(INFO, "handle trans ask state resp", K(ret), K(msg), KPC(this));
   return ret;
 }
 
-int ObPartTransCtx::handle_trans_collect_state(ObStateInfo &state_info, const SCN &snapshot)
+int ObPartTransCtx::handle_trans_collect_state(ObCollectStateRespMsg &resp,
+                                               const ObCollectStateMsg &req)
 {
   int ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
+  SCN snapshot = req.snapshot_;
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartTransCtx not inited");
     ret = OB_NOT_INIT;
   } else {
+    ObStateInfo &state_info = resp.state_info_;
+    const ObStandbyCheckInfo &check_info = req.check_info_;
+    state_info.check_info_ = check_info;
     state_info.ls_id_ = ls_id_;
     bool need_loop = false;
     do {
@@ -8338,6 +8510,26 @@ int ObPartTransCtx::handle_trans_collect_state(ObStateInfo &state_info, const SC
         }
         case ObTxState::PREPARE: {
           state_info.version_ = exec_info_.prepare_version_;
+          // info check
+          if (OB_FAIL(resp.transfer_parts_.assign(exec_info_.commit_parts_))) {
+            TRANS_LOG(WARN, "assign transfer part in resp failed", K(ret), K(state_info), K(req), K(resp));
+          } else if (!is_exec_complete_without_lock(check_info.check_info_ori_ls_id_,
+                                                    check_info.check_part_.exec_epoch_,
+                                                    check_info.check_part_.transfer_epoch_)) {
+            // exec_epoch invalid and transfer_epoch invalid can not go to this
+            if (check_info.check_part_.exec_epoch_ > 0) {
+              state_info.state_ = ObTxState::ABORT;
+            } else if (check_info.check_part_.transfer_epoch_ > 0) {
+              // transfer epoch check failed, get readable scn
+              state_info.state_ = ObTxState::UNKNOWN;
+              if (OB_FAIL(get_ls_replica_readable_scn_(state_info.ls_id_, state_info.version_))) {
+                TRANS_LOG(WARN, "get replica readable scn failed", K(ret), K(state_info), K(req), K(resp));
+              }
+            } else {
+              TRANS_LOG(ERROR, "receive invalid check info but not pass complete check", K(ret),
+                        K(state_info), K(req), K(resp));
+            }
+          }
           need_loop = false;
           break;
         }
@@ -8346,7 +8538,7 @@ int ObPartTransCtx::handle_trans_collect_state(ObStateInfo &state_info, const SC
       }
     } while(need_loop);
   }
-  TRANS_LOG(INFO, "handle trans collect state", K(ret), K(state_info), K(snapshot), KPC(this));
+  TRANS_LOG(INFO, "handle trans collect state", K(ret), K(req), K(resp), KPC(this));
   return ret;
 }
 
@@ -8381,22 +8573,12 @@ int ObPartTransCtx::handle_trans_collect_state_resp(const ObCollectStateRespMsg 
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartTransCtx not inited");
     ret = OB_NOT_INIT;
-  } else {
-    bool is_contain = false;
-    int i = 0;
-    for (; i<state_info_array_.count() && !is_contain; i++) {
-      is_contain = state_info_array_.at(i).ls_id_ == msg.state_info_.ls_id_;
-    }
-    if (!is_contain) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "state info array has wrong participiants", K(ret), K(msg), KPC(this));
-    } else if (state_info_array_.at(i-1).need_update(msg.state_info_)) {
-      state_info_array_.at(i-1) = msg.state_info_;
-    }
-    if (OB_SUCC(ret)) {
-      standby_part_collected_.add_member(i-1);
-    }
+  } else if (OB_FAIL(update_state_info_array_with_transfer_parts_(msg.transfer_parts_, msg.sender_))) {
+    TRANS_LOG(WARN, "insert transfer parts into state info array failed", K(ret), K(msg), KPC(this));
+  } else if (OB_FAIL(update_state_info_array_(msg.state_info_))) {
+    TRANS_LOG(WARN, "update state info failed", K(ret), K(msg), KPC(this));
   }
+
   TRANS_LOG(INFO, "handle trans collect state resp", K(ret), K(msg), KPC(this));
   return ret;
 }
@@ -8425,9 +8607,509 @@ int ObPartTransCtx::handle_ask_tx_state_for_4377(bool &is_alive)
   return ret;
 }
 
+int ObPartTransCtx::transfer_op_log_cb_(share::SCN op_scn, NotifyType op_type)
+{
+  int ret = OB_SUCCESS;
+  if (!ctx_tx_data_.get_start_log_ts().is_valid()) {
+    if (OB_FAIL(ctx_tx_data_.set_start_log_ts(op_scn))) {
+      TRANS_LOG(WARN, "set start log ts failed", KR(ret), K(op_scn));
+    }
+  }
+  if ((!ctx_tx_data_.get_end_log_ts().is_valid() ||
+      ctx_tx_data_.get_end_log_ts() < op_scn) &&
+      !ctx_tx_data_.is_read_only()) {
+    if (OB_FAIL(ctx_tx_data_.set_end_log_ts(op_scn))) {
+      TRANS_LOG(WARN, "set end log ts failed", KR(ret), K(op_scn));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (!exec_info_.max_applying_log_ts_.is_valid() || op_scn > exec_info_.max_applying_log_ts_) {
+      exec_info_.max_applying_log_ts_ = op_scn;
+      exec_info_.max_applying_part_log_no_ = 0;
+      exec_info_.max_applied_log_ts_ = op_scn;
+      update_rec_log_ts_(true/*for_replay*/, op_scn);
+    }
+  }
+  return ret;
+}
+
+int ObPartTransCtx::do_transfer_out_tx_op(const SCN data_end_scn,
+                                          const SCN op_scn,
+                                          const NotifyType op_type,
+                                          bool is_replay,
+                                          const ObLSID dest_ls_id,
+                                          const int64_t transfer_epoch,
+                                          bool &is_operated)
+{
+  int ret = OB_SUCCESS;
+  SCN start_scn;
+  is_operated = false;
+  CtxLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "ObPartTransCtx not inited", KR(ret));
+  } else if (FALSE_IT(start_scn = get_start_log_ts())) {
+  } else if (!data_end_scn.is_valid() || (NotifyType::REGISTER_SUCC != op_type &&
+                                          NotifyType::ON_ABORT != op_type &&
+                                          !op_scn.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid args", KR(ret), K(data_end_scn), K(op_scn), K(op_type));
+  } else if (!start_scn.is_valid() || start_scn > data_end_scn) {
+    // do nothing skip tx which start_scn > data_end_scn
+  } else if (NotifyType::REGISTER_SUCC == op_type) {
+    // blocking active tx which start_scn <= data_end_scn
+    // when register modify memory state only
+    sub_state_.set_transfer_blocking();
+    is_operated = true;
+  } else if (NotifyType::ON_REDO == op_type) {
+    if (exec_info_.max_applying_log_ts_.is_valid() && exec_info_.max_applying_log_ts_ >= op_scn) {
+      // do nothing
+    } else if (FALSE_IT(sub_state_.set_transfer_blocking())) {
+    } else if (FALSE_IT(exec_info_.is_transfer_blocking_ = true)) {
+    } else if (OB_FAIL(transfer_op_log_cb_(op_scn, op_type))) {
+      TRANS_LOG(WARN, "transfer op loc_cb failed", KR(ret), K(op_scn));
+    } else {
+      is_operated = true;
+    }
+  } else if (NotifyType::ON_COMMIT == op_type) {
+    if (exec_info_.max_applying_log_ts_.is_valid() && exec_info_.max_applying_log_ts_ >= op_scn) {
+      // do nothing
+    } else {
+      // just for check
+      if (!sub_state_.is_transfer_blocking()) {
+        TRANS_LOG(ERROR, "tx should in transfer blocking state", KPC(this), K(op_scn), K(op_type));
+      }
+      // add downstream for uncommit tx
+      // In the current implementation, we hope to definitively confirm that the
+      // number of objects targeted by the following operations in the transfer is
+      // in line with our expectations:
+      // 1. Blocking the corresponding txns
+      // 2. Adding downstream for the corresponding txns
+      // 3. Relocating the corresponding txns from src ls
+      // (We use OpX to represents the above operations)
+      //
+      // In order to ensure idempotence during replay and restart scenarios, we
+      // need ensure that the effectted objects of the Op2 equals to the Op3, and
+      // the number is smaller than the Op1. Otherwise:
+      // 1. If the effectted objects of the Op2 is not equal to the Op3, the tree
+      // styled 2pc will, either there are participants without the participant
+      // list, leading to txn ctx timeouts and death, or there is the participant
+      // list without participants, causing the txn to die because the ctx cannot
+      // be found.
+      // 2. If the effectted number of the Op2 and Op3 is bigger than the Op1, the
+      // relocated txns will not be blocked and generate an inconsistency snapshot
+      // of src ls.
+      //
+      // Overall, in otder to guarantee the above rules, we then choose to use the
+      // decisive log_scn to decide on the same objects for the Op1, Op2 and Op3.
+      //
+      // NB: We need also notice that the nature of high-concurrency txns donot
+      // allow we use the transfer_scn as the log_scn to decide on the Operations.
+      // So we decide to use an seperate scn(max consequent scn) to meet the above
+      // requirements. While the scn which decides the state of the relocation of
+      // the tree styled 2pc still is transfer_scn.
+      if (get_upstream_state() < ObTxState::COMMIT) {
+        if (OB_FAIL(add_intermediate_participants(dest_ls_id, transfer_epoch))) {
+          TRANS_LOG(WARN, "fail to add intermediate participants", K(ret), KPC(this));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (FALSE_IT(sub_state_.clear_transfer_blocking())) {
+      } else if (FALSE_IT(exec_info_.is_transfer_blocking_ = false)) {
+      } else if (OB_FAIL(transfer_op_log_cb_(op_scn, op_type))) {
+        TRANS_LOG(WARN, "transfer op loc_cb failed", KR(ret), K(op_scn));
+      } else {
+        is_operated = true;
+      }
+    }
+  } else if (NotifyType::ON_ABORT == op_type) {
+    if (!op_scn.is_valid()) {
+      // leader on_register fail to clean
+      sub_state_.clear_transfer_blocking();
+      exec_info_.is_transfer_blocking_ = false;
+    } else if (exec_info_.max_applying_log_ts_.is_valid() && exec_info_.max_applying_log_ts_ >= op_scn) {
+      // replay filter
+    } else {
+      sub_state_.clear_transfer_blocking();
+      exec_info_.is_transfer_blocking_ = false;
+      if (OB_FAIL(transfer_op_log_cb_(op_scn, op_type))) {
+        TRANS_LOG(WARN, "transfer op loc_cb failed", KR(ret), K(op_scn));
+      }
+      is_operated = true;
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "undefine transfer_out_tx_op", KR(ret), K(op_type), K(is_replay));
+  }
+  LOG_INFO("transfer out op", KR(ret), K(op_type), K(op_scn), KPC(this));
+  return ret;
+}
+
+int ObPartTransCtx::submit_log_if_allow(const char *buf,
+                                        const int64_t size,
+                                        const share::SCN &base_ts,
+                                        ObTxBaseLogCb *cb,
+                                        const bool need_nonblock,
+                                        const ObTxCbArgArray &cb_arg_array)
+{
+  int ret = OB_SUCCESS;
+  bool is_2pc_state_log = false;
+  if (OB_UNLIKELY(is_2pc_blocking())) {
+    ret = OB_EAGAIN;
+    TRANS_LOG(WARN, "tx submit log failed because of 2pc blocking", K(ret), KPC(this));
+    // It is safe to merge the intermediate_participants because we will block
+    // the persistent state machine with is_2pc_blocking. The detailed design
+    // can be found in the implementation of the merge_intermediate_participants.
+  } else if (is_contain_stat_log(cb_arg_array) && FALSE_IT(is_2pc_state_log = true)) {
+  } else if (is_2pc_state_log && OB_FAIL(merge_intermediate_participants())) {
+    TRANS_LOG(WARN, "fail to merge intermediate participants", K(ret), KPC(this));
+  } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->submit_log(buf,
+                                                                      size,
+                                                                      base_ts,
+                                                                      cb,
+                                                                      need_nonblock))) {
+    TRANS_LOG(WARN, "submit log fail", KR(ret), KPC(this));
+  }
+  return ret;
+}
+
+int ObPartTransCtx::wait_tx_write_end()
+{
+  int ret = OB_SUCCESS;
+  // promise without flying write
+  mt_ctx_.wait_write_end();
+  return ret;
+}
+
+int ObPartTransCtx::collect_tx_ctx(const ObLSID dest_ls_id,
+                                   const SCN data_end_scn,
+                                   const ObIArray<ObTabletID> &tablet_list,
+                                   ObTxCtxMoveArg &arg,
+                                   bool &is_collected)
+{
+  int ret = OB_SUCCESS;
+  SCN start_scn;
+  is_collected = false;
+  CtxLockGuard guard(lock_);
+
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObPartTransCtx not inited");
+    ret = OB_NOT_INIT;
+  } else if (is_exiting_) {
+    // we should ignore exiting participants
+    TRANS_LOG(INFO, "collect_tx_ctx tx skip ctx exiting", K(trans_id_), K(ls_id_));
+  } else if (FALSE_IT(start_scn = get_start_log_ts())) {
+  } else if (!start_scn.is_valid() || start_scn > data_end_scn) {
+    // just for check
+    if (sub_state_.is_transfer_blocking()) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "tx has transfer_blocking state unexpected", KR(ret), KPC(this), K(start_scn), K(data_end_scn));
+    } else {
+      TRANS_LOG(INFO, "collect_tx_ctx tx skip for start_scn", K(trans_id_), K(ls_id_), K(start_scn.is_valid()), K(start_scn > data_end_scn));
+    }
+  } else if (!sub_state_.is_transfer_blocking()) {
+    // just for check
+    if (!is_contain_mds_type_(ObTxDataSourceType::START_TRANSFER_OUT_V2)) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "tx has no transfer_blocking state unexpected", KR(ret), KPC(this), K(start_scn), K(data_end_scn));
+    } else {
+      TRANS_LOG(INFO, "collect_tx_ctx tx skip transfer self", K(trans_id_), K(ls_id_), K(start_scn), K(start_scn > data_end_scn),
+          K(is_contain_mds_type_(ObTxDataSourceType::START_TRANSFER_OUT_V2)));
+    }
+  } else if (exec_info_.state_ >= ObTxState::COMMIT) {
+    TRANS_LOG(INFO, "collect_tx_ctx tx skip ctx has commit", K(trans_id_), K(ls_id_), K(exec_info_.state_));
+    // filter
+  } else if (sub_state_.is_state_log_submitting()) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "tx is driving when transfer move", KR(ret), KPC(this),
+      K(sub_state_.is_state_log_submitting()), K(sub_state_.is_gts_waiting()));
+  } else {
+    // start_scn <= log_scn && transfer_blocking
+    arg.tx_id_ = trans_id_;
+    arg.tx_state_ = exec_info_.state_;
+    // must differ with src epoch bacause of may transfer back
+    arg.epoch_ = epoch_ | (ObTimeUtility::current_time_ns() & ~(0xFFFFUL << 48));
+    arg.session_id_ = session_id_;
+    arg.trans_version_ = mt_ctx_.get_trans_version();
+    arg.prepare_version_ = exec_info_.prepare_version_;
+    arg.commit_version_ = get_commit_version();
+    arg.cluster_id_ = cluster_id_;
+    arg.cluster_version_ = cluster_version_;
+    arg.scheduler_ = exec_info_.scheduler_;
+    arg.tx_expired_time_ = trans_expired_time_;
+    arg.last_seq_no_ = last_scn_;
+    arg.max_submitted_seq_no_ = exec_info_.max_submitted_seq_no_;
+    arg.tx_start_scn_ = get_start_log_ts();
+    arg.tx_end_scn_ = get_tx_end_log_ts();
+    arg.is_sub2pc_ = exec_info_.is_sub2pc_;
+    arg.happened_before_ = false;
+    for (int64_t idx = 0; idx < exec_info_.commit_parts_.count(); idx++) {
+      if (exec_info_.commit_parts_.at(idx).ls_id_ == dest_ls_id) {
+        if (exec_info_.commit_parts_.at(idx).transfer_epoch_ > 0) {
+          arg.happened_before_ = true;
+        }
+        break;
+      }
+    }
+    if (!arg.happened_before_) {
+      for (int64_t idx = 0; idx < exec_info_.intermediate_participants_.count(); idx++) {
+        if (exec_info_.intermediate_participants_.at(idx).ls_id_ == dest_ls_id) {
+          if (exec_info_.intermediate_participants_.at(idx).transfer_epoch_ > 0) {
+            arg.happened_before_ = true;
+          }
+          break;
+        }
+      }
+    }
+    // move table lock
+    if (FAILEDx(mt_ctx_.get_table_lock_for_transfer(arg.table_lock_info_, tablet_list))) {
+      TRANS_LOG(WARN, "get table lock info failed", KR(ret));
+    }
+    if (OB_SUCC(ret)) {
+      is_collected = true;
+      TRANS_LOG(INFO, "collect_tx_ctx", KR(ret), KP(this), K(trans_id_), K(ls_id_), K(arg));
+    }
+  }
+  return ret;
+}
+
+int ObPartTransCtx::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
+                               const ObTxCtxMoveArg &arg,
+                               const bool is_new_created)
+{
+  int ret = OB_SUCCESS;
+
+  CtxLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObPartTransCtx not inited");
+    ret = OB_NOT_INIT;
+  } else if (sub_state_.is_state_log_submitting()) {
+    // retry if has stat log cb
+    ret = OB_NEED_RETRY;
+    TRANS_LOG(WARN, "has state log submitting need retry", KR(ret), K(trans_id_), K(sub_state_));
+  } else if (NotifyType::REGISTER_SUCC == move_tx_param.op_type_) {
+    if (exec_info_.state_ >= ObTxState::ABORT) {
+      // this ctx may be recycled soon
+      // a. RetainCtx recycle
+      // b. get_tx_ctx and abort/clear log callback concurrent
+      if (ctx_tx_data_.get_state() != ObTxData::ABORT) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(ERROR, "tx trans state unexpected", KR(ret), KPC(this));
+      } else if (exec_info_.multi_data_source_.empty()) {
+        // ctx will be deleted soon
+        ret = OB_NEED_RETRY;
+        TRANS_LOG(WARN, "tx ctx has end need retry", KR(ret), KPC(this));
+      } else {
+        // ctx enter retain
+        // TODO when ctx entery retain, it will be recycled delay
+        // leader and follower will see different state
+        ret = OB_OP_NOT_ALLOW;
+        TRANS_LOG(WARN, "tx ctx has end", KR(ret), KPC(this));
+      }
+    } else if (epoch_ != arg.epoch_ && exec_info_.next_log_entry_no_ == 0 && get_redo_log_no_() == 0 && busy_cbs_.is_empty()) {
+      // promise tx log before move log
+      if (exec_info_.state_ == ObTxState::INIT) {
+        // promise redo log before move log
+        if (OB_FAIL(submit_redo_log_())) {
+          TRANS_LOG(WARN, "submit log failed", KR(ret), KPC(this));
+        } else {
+          sub_state_.set_transfer_blocking();
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(ERROR, "tx state is advance but no tx log", KR(ret), KPC(this));
+      }
+    } else {
+      sub_state_.set_transfer_blocking();
+    }
+  } else if (NotifyType::ON_REDO == move_tx_param.op_type_) {
+    if (exec_info_.max_applying_log_ts_.is_valid() && exec_info_.max_applying_log_ts_ >=move_tx_param.op_scn_) {
+      // do nothing
+    } else {
+      if (is_new_created && is_follower_()) {
+        exec_info_.is_empty_ctx_created_by_transfer_ = true;
+        TRANS_LOG(INFO, "empty tx ctx created by transfer", KPC(this));
+      }
+
+      sub_state_.set_transfer_blocking();
+      exec_info_.is_transfer_blocking_ = true;
+      if (OB_FAIL(transfer_op_log_cb_(move_tx_param.op_scn_, move_tx_param.op_type_))) {
+        TRANS_LOG(WARN, "transfer op loc_cb failed", KR(ret), K(move_tx_param));
+      }
+    }
+  } else if (NotifyType::ON_COMMIT == move_tx_param.op_type_) {
+    if (exec_info_.max_applying_log_ts_.is_valid() && exec_info_.max_applying_log_ts_ >= move_tx_param.op_scn_) {
+      // do nothing
+    } else {
+      if (is_new_created && is_follower_()) {
+        exec_info_.is_empty_ctx_created_by_transfer_ = true;
+        TRANS_LOG(INFO, "empty tx ctx created by transfer", KPC(this));
+      }
+
+      // if ctx.epoch_ equals arg.epoch_ ctx is created by transfer
+      // if ctx.epoch_ not equals arg.epoch_ ctx has exist we just merge
+      if (epoch_ == arg.epoch_) {
+        trans_expired_time_ = arg.tx_expired_time_;
+      }
+      update_max_submitted_seq_no(arg.max_submitted_seq_no_);
+      if (arg.last_seq_no_ > last_scn_) {
+        last_scn_.atomic_store(arg.last_seq_no_);
+      }
+      if (!ctx_tx_data_.get_start_log_ts().is_valid() || arg.tx_start_scn_ < ctx_tx_data_.get_start_log_ts()) {
+        // TODO fix start_scn back
+        if (!ctx_tx_data_.is_read_only()) {
+          ctx_tx_data_.set_start_log_ts(arg.tx_start_scn_);
+        }
+      }
+      if (!arg.happened_before_) {
+        bool epoch_exist = false;
+        for (int64_t idx = 0; idx < exec_info_.transfer_parts_.count(); idx++) {
+          if (exec_info_.transfer_parts_.at(idx).ls_id_ == move_tx_param.src_ls_id_ &&
+              exec_info_.transfer_parts_.at(idx).transfer_epoch_ == move_tx_param.transfer_epoch_) {
+            epoch_exist = true;
+            break;
+          }
+        }
+        if (!epoch_exist) {
+          if (OB_FAIL(exec_info_.transfer_parts_.push_back(ObTxExecPart(move_tx_param.src_ls_id_, -1, move_tx_param.transfer_epoch_)))) {
+            TRANS_LOG(WARN, "epochs push failed", K(ret));
+          }
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (exec_info_.state_ < ObTxState::COMMIT && OB_FAIL(mt_ctx_.recover_from_table_lock_durable_info(arg.table_lock_info_))) {
+        TRANS_LOG(WARN, "recover table lock failed", KR(ret), K(arg));
+      } else {
+        sub_state_.clear_transfer_blocking();
+        exec_info_.is_transfer_blocking_ = false;
+        if (OB_FAIL(transfer_op_log_cb_(move_tx_param.op_scn_, move_tx_param.op_type_))) {
+          TRANS_LOG(WARN, "transfer op loc_cb failed", KR(ret), K(move_tx_param));
+        }
+      }
+    }
+    // tx_ctx and tx_data checkpoint independent
+    // dest_ls may recycle tx_data, need promote tx_data end_scn after transfer in tablet make it bigger than transfer_scn
+    // log sequence move_tx --> transfer_in --> commit
+    // so when recycle tx_data on dest_ls, we can see transfer in tablet, not to recycle tx_data which end_scn > transfer_scn
+    if (OB_SUCC(ret) && exec_info_.state_ >= ObTxState::COMMIT) {
+      if (OB_FAIL(update_tx_data_end_scn_(move_tx_param.op_scn_, move_tx_param.transfer_scn_))) {
+        TRANS_LOG(WARN, "update tx data failed", KR(ret), KPC(this));
+      }
+    }
+  } else if (NotifyType::ON_ABORT == move_tx_param.op_type_) {
+    bool need_del = false;
+    // del if no query write and replay
+    if (epoch_ == arg.epoch_
+        && // for leader, we will remove those who never takes effects
+        (!first_scn_.is_valid()
+         && pending_write_ == 0)) {
+      need_del = true;
+    }
+
+    if (!move_tx_param.op_scn_.is_valid()) {
+      // leader register fail to clean
+      sub_state_.clear_transfer_blocking();
+      exec_info_.is_transfer_blocking_ = false;
+    } else if (exec_info_.max_applying_log_ts_.is_valid() &&
+               exec_info_.max_applying_log_ts_ >= move_tx_param.op_scn_) {
+      // replay filter
+    } else {
+      sub_state_.clear_transfer_blocking();
+      exec_info_.is_transfer_blocking_ = false;
+      if (OB_FAIL(transfer_op_log_cb_(move_tx_param.op_scn_, move_tx_param.op_type_))) {
+        TRANS_LOG(WARN, "transfer op loc_cb failed", KR(ret), K(move_tx_param));
+      }
+    }
+    if (need_del) {
+      // stop ctx write
+      transfer_deleted_ = true;
+      // remove tx ctx from map
+      set_exiting_();
+      // here we need replay abort_log to delete tx ctx
+      // so we need record rec_scn for this log
+      if (move_tx_param.op_scn_.is_valid()) {
+        ls_tx_ctx_mgr_->update_aggre_log_ts_wo_lock(move_tx_param.op_scn_);
+      }
+      TRANS_LOG(INFO, "move_tx_op delete ctx", K(trans_id_), K(ls_id_), K(move_tx_param), KP(this));
+    }
+  }
+  TRANS_LOG(INFO, "move_tx_op", KR(ret), K(arg.epoch_), K(move_tx_param), K(epoch_), KPC(this));
+  return ret;
+}
+
 void ObPartTransCtx::print_first_mvcc_callback_()
 {
   mt_ctx_.print_first_mvcc_callback();
+}
+
+bool ObPartTransCtx::is_exec_complete(ObLSID ls_id, int64_t epoch, int64_t transfer_epoch)
+{
+  bool is_complete = true;
+  // if no transfer epoch just compare epoch without ctx lock
+  if (transfer_epoch <= 0) {
+    if (epoch > 0 && epoch != epoch_) {
+      is_complete = false;
+    }
+  } else {
+    CtxLockGuard guard(lock_);
+    is_complete = is_exec_complete_without_lock(ls_id, epoch, transfer_epoch);
+  }
+  return is_complete;
+}
+
+bool ObPartTransCtx::is_exec_complete_without_lock(ObLSID ls_id,
+                                                   int64_t epoch,
+                                                   int64_t transfer_epoch)
+{
+  bool is_complete = true;
+
+  // TODO(handora.qc): fix compatibilty of epoch
+
+  // Case1: the execution epoch is not equal
+  if (epoch > 0 && epoch != epoch_) {
+    is_complete = false;
+  // Case2: the transfer epoch is not equal
+  } else if (transfer_epoch > 0) {
+    is_complete = false;
+    for (int64_t idx = 0; idx < exec_info_.transfer_parts_.count(); idx++) {
+      if (ls_id == exec_info_.transfer_parts_.at(idx).ls_id_ &&
+          transfer_epoch == exec_info_.transfer_parts_.at(idx).transfer_epoch_) {
+        is_complete = true;
+        break;
+      }
+    }
+  }
+
+  if (!is_complete) {
+    TRANS_LOG_RET(WARN, OB_SUCCESS, "ctx exec not complete", K(trans_id_), K(epoch_),
+              K(exec_info_.transfer_parts_), K(ls_id), K(epoch), K(transfer_epoch));
+  }
+
+  return is_complete;
+}
+
+int ObPartTransCtx::update_tx_data_end_scn_(const SCN end_scn, const SCN transfer_scn)
+{
+  int ret = OB_SUCCESS;
+  ObTxTable *tx_table = NULL;
+  ctx_tx_data_.get_tx_table(tx_table);
+  ObTxDataGuard tx_data_guard;
+  ObTxDataGuard tmp_tx_data_guard;
+  if (OB_ISNULL(tx_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "tx table is null", KR(ret), KPC(this));
+  } else if (OB_FAIL(ctx_tx_data_.get_tx_data(tx_data_guard))) {
+    TRANS_LOG(WARN, "get tx_data failed", KR(ret));
+  } else if (OB_FAIL(tx_table->deep_copy_tx_data(tx_data_guard, tmp_tx_data_guard))) {
+    TRANS_LOG(WARN, "copy tx data failed", KR(ret), KPC(this));
+  } else {
+    ObTxData *tx_data = tmp_tx_data_guard.tx_data();
+    tx_data->end_scn_.atomic_store(end_scn);
+    if (OB_FAIL(tx_table->insert(tx_data))) {
+      TRANS_LOG(WARN, "insert tx data failed", KR(ret), KPC(this));
+    }
+  }
+  return ret;
 }
 
 void ObPartTransCtx::post_keepalive_msg_(const int status)
@@ -8452,6 +9134,56 @@ void ObPartTransCtx::post_keepalive_msg_(const int status)
 void ObPartTransCtx::notify_scheduler_tx_killed_(const int kill_reason)
 {
   post_keepalive_msg_(kill_reason);
+}
+
+int ObPartTransCtx::recover_ls_transfer_status_()
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  share::SCN op_scn;
+  bool need_recover = false;
+  if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    LOG_WARN("get ls failed", KR(ret), K(ls_id_));
+  } else {
+     // recover mds type transfer_dest_prepare and move_tx_ctx
+     // when MDS replay from middle and not end we need recover this mds operation
+     /*                    replay form middle
+      *                            |
+      *                            |
+      *                            |
+      *           redo            \|/          redo                    commit
+      * [transfer_dest_prepare]  ------->  [move_tx_ctx] ---------->  [commit]
+      *           SCN:100                    SCN:150                   SCN:200
+      */
+    const share::SCN start_replay_scn = ls_handle.get_ls()->get_clog_checkpoint_scn();
+    for (int64_t i = 0; OB_SUCC(ret) && i < exec_info_.multi_data_source_.count(); i++) {
+      bool contain_transfer_mds = false;
+      ObTxDataSourceType mds_type = exec_info_.multi_data_source_[i].get_data_source_type();
+      if (mds_type == ObTxDataSourceType::TRANSFER_DEST_PREPARE) {
+        const ObTransferDestPrepareTxCtx &user_ctx = static_cast<const ObTransferDestPrepareTxCtx&>(*exec_info_.multi_data_source_[i].get_buffer_ctx_node().get_ctx());
+        op_scn = user_ctx.get_op_scn();
+        contain_transfer_mds = true;
+      } else if (mds_type == ObTxDataSourceType::TRANSFER_MOVE_TX_CTX) {
+        const ObTransferMoveTxCtx &user_ctx = static_cast<const ObTransferMoveTxCtx&>(*exec_info_.multi_data_source_[i].get_buffer_ctx_node().get_ctx());
+        op_scn = user_ctx.get_op_scn();
+        contain_transfer_mds = true;
+      }
+      if (OB_FAIL(ret)) {
+      } else if (!contain_transfer_mds) {
+        // skip
+      } else if (start_replay_scn < op_scn) {
+        // skip replay will do this mds operation
+      } else if (exec_info_.state_ >= ObTxState::COMMIT && ctx_tx_data_.get_end_log_ts().is_valid() && start_replay_scn > ctx_tx_data_.get_end_log_ts()) {
+        // skip not replay this mds operation
+      } else if (OB_FAIL(ls_handle.get_ls()->get_transfer_status().update_status(trans_id_, 0, op_scn,
+              transaction::NotifyType::ON_REDO, mds_type))) {
+        LOG_WARN("update transfer status failed", KR(ret), K(trans_id_), K(op_scn), K(mds_type));
+      } else {
+        FLOG_INFO("recover ls transfer status", KR(ret), K(trans_id_), K(op_scn), K(mds_type), KPC(this));
+      }
+    }
+  }
+  return ret;
 }
 
 } // namespace transaction

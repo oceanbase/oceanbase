@@ -113,6 +113,8 @@ int ObTxCtxTableInfo::serialize_(char *buf,
     TRANS_LOG(WARN, "serialize exec_info fail.", KR(ret), K(pos), K(buf_len));
   } else if (OB_FAIL(table_lock_info_.serialize(buf, buf_len, pos))) {
     TRANS_LOG(WARN, "serialize exec_info fail.", KR(ret), K(pos), K(buf_len));
+  } else if (OB_FAIL(serialization::encode(buf, buf_len, pos, cluster_version_))) {
+    TRANS_LOG(WARN, "encode cluster version failed", K(cluster_version_), K(buf_len), K(pos), K(ret));
   }
 
   return ret;
@@ -142,6 +144,7 @@ int ObTxCtxTableInfo::deserialize_(const char *buf,
                                    ObTxDataTable &tx_data_table)
 {
   int ret = OB_SUCCESS;
+
   if (OB_FAIL(tx_id_.deserialize(buf, buf_len, pos))) {
     TRANS_LOG(WARN, "deserialize tx_id fail.", KR(ret), K(pos), K(buf_len));
   } else if (OB_FAIL(ls_id_.deserialize(buf, buf_len, pos))) {
@@ -154,6 +157,13 @@ int ObTxCtxTableInfo::deserialize_(const char *buf,
     TRANS_LOG(WARN, "deserialize exec_info fail.", KR(ret), K(pos), K(buf_len));
   } else if (OB_FAIL(table_lock_info_.deserialize(buf, buf_len, pos))) {
     TRANS_LOG(WARN, "deserialize exec_info fail.", KR(ret), K(pos), K(buf_len));
+  } else if (pos >= buf_len) {
+    // for compatibility
+    if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), cluster_version_))) {
+      TRANS_LOG(INFO, "get min data version failed", K(ret));
+    }
+  } else if (OB_FAIL(serialization::decode(buf, buf_len, pos, cluster_version_))) {
+    TRANS_LOG(WARN, "encode cluster_version fail", K(cluster_version_), K(buf_len), K(pos), K(ret));
   }
 
   return ret;
@@ -180,6 +190,7 @@ int64_t ObTxCtxTableInfo::get_serialize_size_(void) const
   len += (OB_NOT_NULL(tx_data_guard_.tx_data()) ? tx_data_guard_.tx_data()->get_serialize_size() : 0);
   len += exec_info_.get_serialize_size();
   len += table_lock_info_.get_serialize_size();
+  len += serialization::encoded_length(cluster_version_);
   return len;
 }
 
@@ -418,6 +429,23 @@ bool ObCommitVersionsArray::is_valid()
     }
   }
   return bool_ret;
+}
+
+bool ObITxDataCheckFunctor::is_decided() const
+{
+  return tx_data_check_data_.is_rollback_ ||
+    ObTxData::ABORT == tx_data_check_data_.state_;
+}
+
+void ObITxDataCheckFunctor::resolve_tx_data_check_data_(const int32_t state,
+                                                        const share::SCN commit_version,
+                                                        const share::SCN end_scn,
+                                                        const bool is_rollback)
+{
+  tx_data_check_data_.state_ = state;
+  tx_data_check_data_.commit_version_ = commit_version;
+  tx_data_check_data_.end_scn_ = end_scn;
+  tx_data_check_data_.is_rollback_ = is_rollback;
 }
 
 } // end namespace transaction

@@ -287,6 +287,18 @@ int ObGVTxStat::inner_get_next_row(ObNewRow *&row)
             cur_row_.cells_[i].set_int(-1);
           }
           break;
+        case START_SCN:
+          cur_row_.cells_[i].set_uint64(tx_stat.start_scn_.get_val_for_inner_table_field());
+          break;
+        case END_SCN:
+          cur_row_.cells_[i].set_uint64(tx_stat.end_scn_.get_val_for_inner_table_field());
+          break;
+        case REC_SCN:
+          cur_row_.cells_[i].set_uint64(tx_stat.rec_scn_.get_val_for_inner_table_field());
+          break;
+        case TRANSFER_BLOCKING:
+          cur_row_.cells_[i].set_bool(tx_stat.transfer_blocking_);
+          break;
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid coloum_id", K(ret), K(col_id));

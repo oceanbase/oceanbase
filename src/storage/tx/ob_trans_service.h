@@ -146,6 +146,44 @@ public:
   ObThreadLocalTransCtxState state_;
 } CACHE_ALIGNED;
 
+class ObRollbackSPMsgGuard final : public ObTransHashLink<ObRollbackSPMsgGuard>
+{
+public:
+  ObRollbackSPMsgGuard(ObCommonID tx_msg_id, ObTxDesc &tx_desc, ObTxDescMgr &tx_desc_mgr)
+  : tx_msg_id_(tx_msg_id), tx_desc_(tx_desc), tx_desc_mgr_(tx_desc_mgr) {
+    tx_desc_.inc_ref(1);
+  }
+  ~ObRollbackSPMsgGuard() {
+    if (0 == tx_desc_.dec_ref(1)) {
+      tx_desc_mgr_.free(&tx_desc_);
+    }
+    tx_msg_id_.reset();
+  }
+  ObTxDesc &get_tx_desc() { return tx_desc_; }
+  bool contain(ObCommonID tx_msg_id) { return tx_msg_id == tx_msg_id_; }
+private:
+  ObCommonID tx_msg_id_;
+  ObTxDesc &tx_desc_;
+  ObTxDescMgr &tx_desc_mgr_;
+};
+
+class ObRollbackSPMsgGuardAlloc
+{
+public:
+  static ObRollbackSPMsgGuard* alloc_value()
+  {
+    return (ObRollbackSPMsgGuard*)ob_malloc(sizeof(ObRollbackSPMsgGuard), "RollbackSPMsg");
+  }
+  static void free_value(ObRollbackSPMsgGuard *p)
+  {
+    if (NULL != p) {
+      p->~ObRollbackSPMsgGuard();
+      ob_free(p);
+      p = NULL;
+    }
+  }
+};
+
 class ObTransService : public common::ObSimpleThreadPool
 {
 public:
@@ -225,6 +263,7 @@ private:
       const int64_t stmt_expired_time,
       const uint64_t tenant_id);
   int handle_batch_msg_(const int type, const char *buf, const int32_t size);
+  int64_t fetch_rollback_sp_sequence_() { return ATOMIC_AAF(&rollback_sp_msg_sequence_, 1); }
 public:
   int check_dup_table_ls_readable();
   int check_dup_table_tablet_readable();
@@ -296,6 +335,10 @@ private:
 
   obrpc::ObSrvRpcProxy *rpc_proxy_;
   ObTxELRUtil elr_util_;
+  // for rollback-savepoint request-id
+  int64_t rollback_sp_msg_sequence_;
+  // for rollback-savepoint msg resp callback to find tx_desc
+  ObTransHashMap<ObCommonID, ObRollbackSPMsgGuard, ObRollbackSPMsgGuardAlloc, common::SpinRWLock, 1 << 16 /*bucket_num*/> rollback_sp_msg_mgr_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransService);
 };

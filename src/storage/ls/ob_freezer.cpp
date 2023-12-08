@@ -1062,7 +1062,7 @@ int ObFreezer::batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids, ObFut
   int ret = OB_SUCCESS;
   share::ObLSID ls_id = get_ls_id();
   SCN freeze_snapshot_version;
-  FLOG_INFO("[Freezer] batch_tablet_freeze start", K(ret), K(ls_id), K(tablet_ids));
+  FLOG_INFO("[Freezer] batch_tablet_freeze start", K(ls_id), K(tablet_ids));
   int64_t start_time = ObTimeUtility::current_time();
   bool need_freeze = true;
 

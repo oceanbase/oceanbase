@@ -79,6 +79,7 @@ enum class ObTxState : uint8_t
 };
 
 const int64_t OB_C2PC_UPSTREAM_ID = INT64_MAX - 1;
+const int64_t OB_C2PC_SENDER_ID = INT64_MAX - 2;
 
 /* // ObITxCommitter provides method to commit the transaction with user provided callbacks. */
 /* // The interface need guarantee the atomicity of the transaction. */

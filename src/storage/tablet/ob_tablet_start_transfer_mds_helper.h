@@ -26,6 +26,9 @@ class SCN;
 class ObLSID;
 struct ObTransferTabletInfo;
 }
+namespace transaction {
+enum class ObTxDataSourceType : int64_t;
+}
 namespace storage
 {
 
@@ -41,6 +44,34 @@ class ObTabletCreateDeleteMdsUserData;
 class ObTXStartTransferOutInfo;
 class ObTXStartTransferInInfo;
 class ObMigrationTabletParam;
+
+class ObTabletStartTransferOutCommonHelper
+{
+public:
+  ObTabletStartTransferOutCommonHelper(transaction::ObTxDataSourceType &mds_op_type)
+    : mds_op_type_(mds_op_type) {}
+  ~ObTabletStartTransferOutCommonHelper() {}
+  int update_tablets_transfer_out_(
+      const ObTXStartTransferOutInfo &tx_start_transfer_out_info,
+      ObLS *ls,
+      mds::BufferCtx &ctx);
+  int update_tablet_transfer_out_(
+      const share::ObLSID &dest_ls_id,
+      const share::ObTransferTabletInfo &tablet_info,
+      ObLS *ls,
+      mds::BufferCtx &ctx);
+  int set_transfer_tablets_freeze_flag_(const ObTXStartTransferOutInfo &tx_start_transfer_out_info);
+  int try_enable_dest_ls_clog_replay(
+      const share::SCN &scn,
+      const share::ObLSID &dest_ls_id);
+  int on_replay_success_(
+      const share::SCN &scn,
+      const ObTXStartTransferOutInfo &tx_start_transfer_out_info,
+      mds::BufferCtx &ctx);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObTabletStartTransferOutCommonHelper);
+  transaction::ObTxDataSourceType &mds_op_type_;
+};
 
 class ObTabletStartTransferOutHelper
 {
@@ -68,26 +99,38 @@ private:
       const share::ObLSID &ls_id,
       const share::ObTransferTabletInfo &tablet_info,
       ObTablet *tablet);
-  static int update_tablets_transfer_out_(
-      const ObTXStartTransferOutInfo &tx_start_transfer_out_info,
-      ObLS *ls,
-      mds::BufferCtx &ctx);
-  static int update_tablet_transfer_out_(
-      const share::ObLSID &dest_ls_id,
-      const share::ObTransferTabletInfo &tablet_info,
-      ObLS *ls,
-      mds::BufferCtx &ctx);
-  static int set_transfer_tablets_freeze_flag_(const ObTXStartTransferOutInfo &tx_start_transfer_out_info);
-  static int on_replay_success_(
-      const share::SCN &scn,
-      const ObTXStartTransferOutInfo &tx_start_transfer_out_info,
-      mds::BufferCtx &ctx);
-  static int try_enable_dest_ls_clog_replay(
-      const share::SCN &scn,
-      const share::ObLSID &dest_ls_id);
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletStartTransferOutHelper);
+};
+
+class ObTabletStartTransferOutPrepareHelper
+{
+public:
+  static int on_register(
+      const char* buf,
+      const int64_t len,
+      mds::BufferCtx &ctx);
+  static int on_replay(
+      const char* buf,
+      const int64_t len,
+      const share::SCN &scn,
+      mds::BufferCtx &ctx);
+};
+
+class ObTabletStartTransferOutV2Helper
+{
+public:
+  static int on_register(
+      const char* buf,
+      const int64_t len,
+      mds::BufferCtx &ctx);
+  static int on_replay(
+      const char* buf,
+      const int64_t len,
+      const share::SCN &scn,
+      mds::BufferCtx &ctx);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObTabletStartTransferOutV2Helper);
 };
 
 class ObTabletStartTransferInHelper

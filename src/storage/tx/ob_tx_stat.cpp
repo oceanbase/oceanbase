@@ -60,7 +60,8 @@ int ObTxStat::init(const common::ObAddr &addr, const ObTransID &tx_id,
                    const int64_t role_state,
                    const int64_t session_id, const common::ObAddr &scheduler,
                    const bool is_exiting, const ObXATransID &xid,
-                   const share::ObLSID &coord, const int64_t last_request_ts)
+                   const share::ObLSID &coord, const int64_t last_request_ts,
+                   SCN start_scn, SCN end_scn, SCN rec_scn, bool transfer_blocking)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -97,6 +98,10 @@ int ObTxStat::init(const common::ObAddr &addr, const ObTransID &tx_id,
       coord_ = coord;
     }
     last_request_ts_ = last_request_ts;
+    start_scn_ = start_scn;
+    end_scn_ = end_scn;
+    rec_scn_ = rec_scn;
+    transfer_blocking_ = transfer_blocking;
   }
   return ret;
 }

@@ -187,6 +187,38 @@ int ObLockMemCtx::get_table_lock_store_info(ObTableLockInfo &table_lock_info)
   return ret;
 }
 
+int ObLockMemCtx::get_table_lock_for_transfer(ObTableLockInfo &table_lock_info, const ObIArray<ObTabletID> &tablet_list)
+{
+  int ret = OB_SUCCESS;
+  RDLockGuard guard(list_rwlock_);
+  DLIST_FOREACH(curr, lock_list_) {
+    if (OB_UNLIKELY(!curr->is_valid())) {
+      // no need dump to avoid been restored even if rollback
+      LOG_WARN("the table lock op no should not dump", K(curr->lock_op_));
+    } else {
+      bool is_hit = false;
+      for (int64_t idx = 0; OB_SUCC(ret) && idx < tablet_list.count(); idx++) {
+        if (curr->lock_op_.is_tablet_lock(tablet_list.at(idx))) {
+          is_hit = true;
+          break;
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (!is_hit) {
+      } else if (!curr->is_logged()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("lock op is not logged", KR(ret), K(curr));
+        break;
+      } else if (OB_FAIL(table_lock_info.table_lock_ops_.push_back(curr->lock_op_))) {
+        LOG_WARN("fail to push back table_lock store info", K(ret));
+        break;
+      }
+    }
+  }
+  table_lock_info.max_durable_scn_ = max_durable_scn_;
+  return ret;
+}
+
 int ObLockMemCtx::clear_table_lock(
     const bool is_committed,
     const SCN &commit_version,
