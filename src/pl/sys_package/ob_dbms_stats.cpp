@@ -6271,6 +6271,8 @@ int ObDbmsStats::copy_table_stats(sql::ObExecContext &ctx,
     LOG_WARN("failed to extract copy table stats params", K(ret));
   } else if (OB_FAIL(ObDbmsStatsCopyTableStats::check_parts_valid(ctx, copy_stat_helper, table_stat_param, copy_level))) {
     LOG_WARN("failed to check part valid", K(ret));
+  } else if (params.at(4).is_null()) {
+    //scale_factor is null, do nothing
   } else if (OB_FAIL(parse_partition_name(ctx,
                                           table_schema,
                                           params.at(3),
@@ -6355,7 +6357,7 @@ int ObDbmsStats::extract_copy_stat_helper(sql::ParamStore &params,
     LOG_WARN("failed to extract flags", K(ret));
   } else if (!params.at(6).is_null() && OB_FAIL(params.at(6).get_bool(copy_stat_helper.force_copy_))) {
     LOG_WARN("failed to extract force", K(ret));
-  } else if (OB_FAIL(ObDbmsStatsUtils::cast_number_to_double(scale_factor_num, copy_stat_helper.scale_factor_))) {
+  } else if (!params.at(4).is_null() && OB_FAIL(ObDbmsStatsUtils::cast_number_to_double(scale_factor_num, copy_stat_helper.scale_factor_))) {
     LOG_WARN("failed to cast number to double" , K(ret), K(scale_factor_num));
   } else if (copy_stat_helper.scale_factor_ < 0) {
     ret = OB_ERR_DBMS_STATS_PL;
