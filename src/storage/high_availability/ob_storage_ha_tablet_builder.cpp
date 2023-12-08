@@ -2551,6 +2551,10 @@ int ObStorageHATabletBuilderUtil::check_need_merge_tablet_meta_(
     need_merge = true;
   } else if (tablet->get_tablet_meta().clog_checkpoint_scn_ >= src_tablet_meta->clog_checkpoint_scn_) {
     need_merge = false;
+  } else if (OB_FAIL(check_remote_logical_sstable_exist(tablet, is_exist))) {
+    LOG_WARN("failed to check remote logical sstable exist", K(ret), KPC(tablet));
+  } else if (!is_exist) {
+    need_merge = false;
   } else {
     need_merge = true;
   }
