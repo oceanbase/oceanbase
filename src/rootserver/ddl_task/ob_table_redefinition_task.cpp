@@ -262,8 +262,8 @@ int ObTableRedefinitionTask::send_build_replica_request_by_sql()
     if (OB_FAIL(ObDDLUtil::get_sys_ls_leader_addr(GCONF.cluster_id, tenant_id_, alter_table_arg_.inner_sql_exec_addr_))) {
       LOG_WARN("get sys ls leader addr fail", K(ret), K(tenant_id_));
       ret = OB_SUCCESS; // ignore ret
-    } else {
-      set_sql_exec_addr(alter_table_arg_.inner_sql_exec_addr_); // set to switch_status, if task cancel, we should kill session with inner_sql_exec_addr_
+    } else if (OB_FAIL(set_sql_exec_addr(alter_table_arg_.inner_sql_exec_addr_))) {
+      LOG_WARN("failed to set sql execute addr", K(ret), K(alter_table_arg_.inner_sql_exec_addr_));
     }
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *orig_table_schema = nullptr;
@@ -516,7 +516,7 @@ int ObTableRedefinitionTask::copy_table_indexes()
             } else {
               create_index_arg.index_type_ = index_schema->get_index_type();
               ObCreateDDLTaskParam param(dst_tenant_id_,
-                                         ObDDLType::DDL_CREATE_INDEX,
+                                         (data_format_version_ >= DATA_VERSION_4_2_2_0) && index_schema->is_storage_local_index_table() && index_schema->is_partitioned_table() ? ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX : ObDDLType::DDL_CREATE_INDEX,
                                          table_schema,
                                          index_schema,
                                          0/*object_id*/,

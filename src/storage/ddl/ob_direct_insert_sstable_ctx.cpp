@@ -830,7 +830,7 @@ int ObSSTableInsertTabletContext::create_sstable_with_clog(
   } else {
     DEBUG_SYNC(AFTER_REMOTE_WRITE_DDL_PREPARE_LOG);
     if (OB_FAIL(data_sstable_redo_writer_.end_ddl_redo_and_create_ddl_sstable(
-        build_param_.ls_id_, table_key, table_id, build_param_.execution_id_, build_param_.ddl_task_id_))) {
+        build_param_.ls_id_, table_key, table_id, build_param_.execution_id_, build_param_.ddl_task_id_, build_param_.data_format_version_))) {
       LOG_WARN("fail create ddl sstable", K(ret), K(table_key));
     }
   }

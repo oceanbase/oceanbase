@@ -56,6 +56,10 @@ enum ObDDLType
   DDL_MODIFY_AUTO_INCREMENT = 4,
   DDL_CREATE_INDEX = 5,
   DDL_DROP_INDEX = 6,
+  DDL_CREATE_FTS_INDEX = 7,
+  DDL_CREATE_MLOG = 8,
+  DDL_DROP_MLOG = 9,
+  DDL_CREATE_PARTITIONED_LOCAL_INDEX = 10,
   ///< @note Drop schema, and refuse concurrent trans.  
   DDL_DROP_SCHEMA_AVOID_CONCURRENT_TRANS = 500,
   DDL_DROP_DATABASE = 501,
@@ -231,6 +235,10 @@ static inline bool is_invalid_ddl_type(const ObDDLType type)
   return DDL_INVALID == type;
 }
 
+static inline bool is_create_index(const ObDDLType type)
+{
+ return ObDDLType::DDL_CREATE_INDEX == type || ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX == type;
+}
 // ddl stmt or rs ddl trans has rollbacked and can retry
 static inline bool is_ddl_stmt_packet_retry_err(const int ret)
 {
@@ -355,6 +363,7 @@ public:
       const bool use_heap_table_ddl_plan,
       const bool use_schema_version_hint_for_src_table,
       const ObColumnNameMap *col_name_map,
+      const ObString &partition_names,
       ObSqlString &sql_string);
 
   static int get_tablet_leader_addr(
@@ -413,6 +422,42 @@ public:
     const uint64_t tenant_id,
     const common::ObTabletID &tablet_id,
     ObLSLocation &location);
+  static int construct_ls_tablet_id_map(
+    const uint64_t &tenant_id,
+    const share::ObLSID &ls_id,
+    const common::ObTabletID &tablet_id,
+    hash::ObHashMap<ObLSID, ObArray<ObTabletID>> &ls_tablet_id_map);
+  static int get_index_table_batch_partition_names(
+    const uint64_t &tenant_id,
+    const int64_t &data_table_id,
+    const int64_t &index_table_id,
+    const ObIArray<ObTabletID> &tablets,
+    common::ObIAllocator &allocator,
+    ObIArray<ObString> &partition_names);
+  static int get_tablet_data_size(
+    const uint64_t &tenant_id,
+    const common::ObTabletID &tablet_id,
+    const share::ObLSID &ls_id,
+    int64_t &data_size);
+  static int get_tablet_data_row_cnt(
+    const uint64_t &tenant_id,
+    const common::ObTabletID &tablet_id,
+    const share::ObLSID &ls_id,
+    int64_t &data_row_cnt);
+  static int get_ls_host_left_disk_space(
+    const uint64_t &tenant_id,
+    const share::ObLSID &ls_id,
+    const common::ObAddr &leader_addr,
+    uint64_t &left_space_size);
+  static int generate_partition_names(
+   const ObIArray<ObString> &partition_names_array,
+   common::ObIAllocator &allocator,
+   ObString &partition_names);
+  static int check_target_partition_is_running(
+   const ObString &running_sql_info,
+   const ObString &partition_name,
+   common::ObIAllocator &allocator,
+   bool &is_running_status);
 
   static int check_table_exist(
      const uint64_t tenant_id,
@@ -528,6 +573,13 @@ public:
       const uint64_t index_table_id,
       const int64_t execution_id,
       const uint64_t ddl_task_id);
+  static int check_tablet_checksum_update_status(
+      const uint64_t tenant_id,
+      const uint64_t index_table_id,
+      const uint64_t ddl_task_id,
+      const int64_t execution_id,
+      ObIArray<ObTabletID> &tablet_ids,
+      bool &tablet_checksum_status);
 
 private:
 
@@ -583,15 +635,6 @@ private:
       const uint64_t tenant_id,
       const ObTabletID &tablet_id,
       hash::ObHashMap<ObAddr, ObArray<ObTabletID>> &ip_tablets_map);
-
-  static int check_tablet_checksum_update_status(
-      const uint64_t tenant_id,
-      const uint64_t index_table_id,
-      const uint64_t ddl_task_id,
-      const int64_t execution_id,
-      ObIArray<ObTabletID> &tablet_ids,
-      bool &tablet_checksum_status);
-
 };
 
 typedef common::ObCurTraceId::TraceId DDLTraceId;

@@ -1223,7 +1223,8 @@ int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
     const ObITable::TableKey &table_key,
     const uint64_t table_id,
     const int64_t execution_id,
-    const int64_t ddl_task_id)
+    const int64_t ddl_task_id,
+    const int64_t data_format_version)
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
@@ -1246,7 +1247,7 @@ int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
     LOG_WARN("get ddl kv manager failed", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_FAIL(write_commit_log(tablet_handle, ddl_kv_mgr_handle, true, table_key, commit_scn, is_remote_write))) {
     if (OB_TASK_EXPIRED == ret) {
-      LOG_INFO("ddl task expired", K(ret), K(table_key), K(table_id), K(execution_id), K(ddl_task_id));
+      LOG_INFO("ddl task expired", K(ret), K(table_key), K(table_id), K(execution_id), K(ddl_task_id), K(data_format_version));
     } else {
       LOG_WARN("fail write ddl commit log", K(ret), K(table_key));
     }
@@ -1324,8 +1325,9 @@ int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
                                                          execution_id,
                                                          ddl_task_id,
                                                          sst_meta_hdl.get_sstable_meta().get_col_checksum(),
-                                                         sst_meta_hdl.get_sstable_meta().get_col_checksum_cnt()))) {
-          LOG_WARN("report ddl column checksum failed", K(ret), K(ls_id), K(tablet_id), K(execution_id), K(ddl_task_id));
+                                                         sst_meta_hdl.get_sstable_meta().get_col_checksum_cnt(),
+                                                         data_format_version))) {
+          LOG_WARN("report ddl column checksum failed", K(ret), K(ls_id), K(tablet_id), K(execution_id), K(ddl_task_id), K(data_format_version));
         } else {
           break;
         }

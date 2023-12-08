@@ -298,7 +298,8 @@ public:
                                           const ObITable::TableKey &table_key,
                                           const uint64_t table_id,
                                           const int64_t execution_id,
-                                          const int64_t ddl_task_id);
+                                          const int64_t ddl_task_id,
+                                          const int64_t data_format_version);
   int write_redo_log(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
                      const blocksstable::MacroBlockId &macro_block_id,
                      const bool allow_remote_write,

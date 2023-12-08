@@ -2686,6 +2686,7 @@ int ObTableScanOp::report_ddl_column_checksum()
       item.execution_id_ = MY_SPEC.plan_->get_ddl_execution_id();
       item.tenant_id_ = MTL_ID();
       item.table_id_ = table_id;
+      item.tablet_id_ = tablet_id.id();
       item.ddl_task_id_ = MY_SPEC.plan_->get_ddl_task_id();
       item.column_id_ = MY_SPEC.ddl_output_cids_.at(i) & VIRTUAL_GEN_FIXED_LEN_MASK;
       item.task_id_ = ctx_.get_px_sqc_id() << ObDDLChecksumItem::PX_SQC_ID_OFFSET | ctx_.get_px_task_id() << ObDDLChecksumItem::PX_TASK_ID_OFFSET | curr_scan_task_id;
@@ -2705,7 +2706,10 @@ int ObTableScanOp::report_ddl_column_checksum()
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObDDLChecksumOperator::update_checksum(checksum_items, *GCTX.sql_proxy_))) {
+      int64_t data_format_version = 0;
+      if (OB_FAIL(ObDDLUtil::get_data_format_version(MTL_ID(), MY_SPEC.plan_->get_ddl_task_id(), data_format_version))) {
+        LOG_WARN("get ddl cluster version failed", K(ret));
+      } else if (OB_FAIL(ObDDLChecksumOperator::update_checksum(data_format_version, checksum_items, *GCTX.sql_proxy_))) {
         LOG_WARN("fail to update checksum", K(ret));
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.ddl_output_cids_.count(); ++i) {

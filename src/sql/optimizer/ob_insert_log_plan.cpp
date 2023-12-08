@@ -162,6 +162,73 @@ int ObInsertLogPlan::generate_normal_raw_plan()
   return ret;
 }
 
+int ObInsertLogPlan::get_index_part_ids(const ObInsertTableInfo& table_info, const ObTableSchema *&data_table_schema, const ObTableSchema *&index_schema, ObIArray<uint64_t> &index_part_ids)
+{
+  int ret = OB_SUCCESS;
+  common::hash::ObHashSet<int64_t> data_part_id_set;
+  index_part_ids.reset();
+  if (OB_UNLIKELY(OB_ISNULL(data_table_schema) || OB_ISNULL(index_schema))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("the parameters is invalid", K(ret), K(table_info));
+  } else if (table_info.part_ids_.count() > 0) {
+    const ObPartitionOption &data_part_option = data_table_schema->get_part_option();
+    ObPartition **data_partitions  = data_table_schema->get_part_array();
+    ObPartition **index_partitions = index_schema->get_part_array();
+    const ObPartitionLevel part_level = data_table_schema->get_part_level();
+    if (OB_ISNULL(data_partitions)) {
+      ret = OB_PARTITION_NOT_EXIST;
+      LOG_WARN("data table part array is null", K(ret));
+    } else if (OB_ISNULL(index_partitions)) {
+      ret = OB_PARTITION_NOT_EXIST;
+      LOG_WARN("index table part array is null", K(ret));
+    } else {
+      uint64_t part_ids_count = table_info.part_ids_.count();
+      if (OB_FAIL(data_part_id_set.create(part_ids_count))) {
+        LOG_WARN("fail to create data part id set", K(ret), K(part_ids_count));
+      }
+      for (int64_t i = 0; i < part_ids_count && OB_SUCC(ret); i++) {
+        if (OB_FAIL(data_part_id_set.set_refactored(table_info.part_ids_.at(i), true/*overwrite*/))) {
+          LOG_WARN("fail to set refactored", K(ret), K(table_info.part_ids_.at(i)), K(table_info.part_ids_));
+        }
+      }
+      for (int64_t i = 0; i < data_part_option.get_part_num() && OB_SUCC(ret); ++i) {
+        if (OB_ISNULL(data_partitions[i]) || OB_ISNULL(index_partitions[i])) {
+          ret = OB_PARTITION_NOT_EXIST;
+          LOG_WARN("NULL ptr", K(ret), K(i));
+        } else if (PARTITION_LEVEL_ONE == part_level) {
+          int64_t data_part_id = data_partitions[i]->get_part_id();
+          if (OB_UNLIKELY(OB_HASH_EXIST == data_part_id_set.exist_refactored(data_part_id))) {
+            if (OB_FAIL(index_part_ids.push_back(index_partitions[i]->get_part_id()))) {
+              LOG_WARN("push back error", K(ret), K(index_partitions[i]->get_part_id()));
+            }
+          }
+        } else if (PARTITION_LEVEL_TWO == part_level) {
+          ObSubPartition **data_subpart_array = data_partitions[i]->get_subpart_array();
+          ObSubPartition **index_subpart_array = index_partitions[i]->get_subpart_array();
+          int64_t subpart_num = index_partitions[i]->get_subpartition_num();
+          if (OB_ISNULL(data_subpart_array) || OB_ISNULL(index_subpart_array)) {
+            ret = OB_PARTITION_NOT_EXIST;
+            LOG_WARN("part array is null", K(ret), K(i));
+          } else if (OB_UNLIKELY(subpart_num < 1)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("sub part num less than 1", K(ret), K(subpart_num));
+          } else {
+            for (int64_t j = 0; j < subpart_num && OB_SUCC(ret); j++) {
+              int64_t data_part_id = data_subpart_array[j]->get_sub_part_id();
+              if (OB_UNLIKELY(OB_HASH_EXIST == data_part_id_set.exist_refactored(data_part_id))) {
+                if (OB_FAIL(index_part_ids.push_back(index_subpart_array[j]->get_sub_part_id()))) {
+                  LOG_WARN("push back error", K(ret), K(index_subpart_array[j]->get_sub_part_id()));
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObInsertLogPlan::generate_osg_share_info(OSGShareInfo *&info)
 {
   int ret = OB_SUCCESS;
@@ -1196,20 +1263,26 @@ int ObInsertLogPlan::prepare_table_dml_info_for_ddl(const ObInsertTableInfo& tab
       LOG_WARN("failed to get table schema", K(table_info), K(ret));
     } else if (index_schema->is_index_table() && !index_schema->is_global_index_table()) {
       // local index
+      ObArray<uint64_t> index_part_ids;
       if (OB_FAIL(schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
-                                                 index_schema->get_data_table_id(),
-                                                 data_table_schema))) {
-        LOG_WARN("get table schema failed", K(ret));
+                                                index_schema->get_data_table_id(),
+                                                data_table_schema))) {
+        LOG_WARN("get table schema failed", K(ret), K(session_info->get_effective_tenant_id()), K(index_schema->get_data_table_id()));
       } else if (OB_ISNULL(data_table_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to get table schema", K(index_schema->get_data_table_id()), K(ret));
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("failed to get table schema", K(ret), K(index_schema->get_data_table_id()));
+      } else if (OB_FAIL(get_index_part_ids(table_info, data_table_schema, index_schema, index_part_ids))) {
+        LOG_WARN("fail to get index part ids", K(ret), K(table_info), K(table_item->ddl_table_id_), K(index_schema->get_data_table_id()), K(index_part_ids));
+      } else if (OB_FAIL(index_dml_info->part_ids_.assign(index_part_ids))) {
+          LOG_WARN("fail to assign part ids", K(ret), K(index_part_ids));
       } else {
-        index_dml_info->table_id_ = table_info.table_id_;
-        index_dml_info->loc_table_id_ = table_info.loc_table_id_;
-        index_dml_info->ref_table_id_ = index_schema->get_data_table_id();
-        index_dml_info->rowkey_cnt_ = index_schema->get_rowkey_column_num();
-        index_dml_info->spk_cnt_ = index_schema->get_shadow_rowkey_column_num();
-        index_dml_info->index_name_ = data_table_schema->get_table_name_str();
+          index_dml_info->table_id_ = table_info.table_id_;
+          index_dml_info->loc_table_id_ = table_info.loc_table_id_;
+          index_dml_info->ref_table_id_ = index_schema->get_data_table_id();
+          index_dml_info->rowkey_cnt_ = index_schema->get_rowkey_column_num();
+          index_dml_info->spk_cnt_ = index_schema->get_shadow_rowkey_column_num();
+          index_dml_info->index_name_ = data_table_schema->get_table_name_str();
+          LOG_INFO("index dml info contains part ids: ", K(ret), K(index_dml_info->part_ids_)); //在局部索引表补数据场景下，对主表part ids和索引表part ids做了关系映射
       }
     } else {
       // global index or primary table

@@ -1501,6 +1501,7 @@ def_table_schema(
 
   normal_columns = [
   ('checksum', 'int'),
+  ('tablet_id', 'int', 'false', 0),
   ],
 )
 

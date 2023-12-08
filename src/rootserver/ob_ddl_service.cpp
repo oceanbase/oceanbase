@@ -10007,6 +10007,8 @@ const char* ObDDLService::ddl_type_str(const ObDDLType ddl_type)
   const char *str = "";
   if (DDL_CREATE_INDEX == ddl_type) {
     str = "create index";
+  } else if (DDL_CREATE_PARTITIONED_LOCAL_INDEX == ddl_type) {
+    str = "create partitioned local index";
   } else if (DDL_MODIFY_COLUMN == ddl_type) {
     str = "alter column";
   } else if (DDL_CHECK_CONSTRAINT == ddl_type) {
@@ -11270,7 +11272,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
         }
 
         if (OB_FAIL(ret)) {
-        } else if (DDL_CREATE_INDEX == ddl_type || DDL_NORMAL_TYPE == ddl_type) {
+        } else if (DDL_CREATE_INDEX == ddl_type || DDL_CREATE_PARTITIONED_LOCAL_INDEX == ddl_type || DDL_NORMAL_TYPE == ddl_type) {
           ObIndexBuilder index_builder(*this);
           const ObSArray<ObIndexArg *> &index_arg_list = alter_table_arg.index_arg_list_;
           int tmp_ret = OB_SUCCESS;
