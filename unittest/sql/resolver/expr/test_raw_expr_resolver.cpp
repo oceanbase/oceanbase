@@ -95,6 +95,7 @@ void TestRawExprResolver::resolve(const char* expr, const char *&json_expr)
 
 TEST_F(TestRawExprResolver, all)
 {
+  set_compat_mode(Worker::CompatMode::MYSQL);
   static const char* test_file = "./expr/test_raw_expr_resolver.test";
   static const char* tmp_file = "./expr/test_raw_expr_resolver.tmp";
   static const char* result_file = "./expr/test_raw_expr_resolver.result";

@@ -685,6 +685,7 @@ TEST_F(TestJsonPath, test_member_node)
 TEST_F(TestJsonPath, test_ellipsis_node)
 {
   int ret = OB_SUCCESS;
+  set_compat_mode(oceanbase::lib::Worker::CompatMode::MYSQL);
   ObArenaAllocator allocator(ObModIds::TEST);
   ObJsonPath test_path("$**[10]", &allocator);
   ret = test_path.parse_path();
