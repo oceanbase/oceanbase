@@ -498,7 +498,9 @@ protected:
 
   int build_padding_expr(const ObSQLMode sql_mode,
                         const share::schema::ObColumnSchemaV2 *column_schema,
-                        ObRawExpr *&expr);
+                        ObRawExpr *&expr,
+                        const ObLocalSessionVar *local_vars = NULL,
+                        int64_t local_var_id = OB_INVALID_INDEX_INT64);
 
   virtual int check_need_use_sys_tenant(bool &use_sys_tenant) const;
   // check in sys view or show statement

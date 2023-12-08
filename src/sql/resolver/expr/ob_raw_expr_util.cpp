@@ -3096,7 +3096,9 @@ int ObRawExprUtils::build_pad_expr_recursively(ObRawExprFactory &expr_factory,
                                                const ObSQLSessionInfo &session,
                                                const ObTableSchema &table_schema,
                                                const ObColumnSchemaV2 &gen_col_schema,
-                                               ObRawExpr *&expr)
+                                               ObRawExpr *&expr,
+                                               const ObLocalSessionVar *local_vars,
+                                               int64_t local_var_id)
 {
   int ret = OB_SUCCESS;
   CK(OB_NOT_NULL(expr));
@@ -3107,7 +3109,9 @@ int ObRawExprUtils::build_pad_expr_recursively(ObRawExprFactory &expr_factory,
                                                 session,
                                                 table_schema,
                                                 gen_col_schema,
-                                                expr->get_param_expr(i))));
+                                                expr->get_param_expr(i),
+                                                local_vars,
+                                                local_var_id)));
     }
   }
   if (OB_SUCC(ret) && expr->is_column_ref_expr()) {
@@ -3119,17 +3123,17 @@ int ObRawExprUtils::build_pad_expr_recursively(ObRawExprFactory &expr_factory,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get column schema fail", K(column_schema));
       } else if (ObObjMeta::is_binary(column_schema->get_data_type(), column_schema->get_collation_type())) {
-        if (OB_FAIL(build_pad_expr(expr_factory, false, column_schema, expr, &session))) {
+        if (OB_FAIL(build_pad_expr(expr_factory, false, column_schema, expr, &session, local_vars, local_var_id))) {
           LOG_WARN("fail to build pading expr for binary", K(ret));
         }
       } else if (ObCharType == column_schema->get_data_type()
                 || ObNCharType == column_schema->get_data_type()) {
         if (gen_col_schema.has_column_flag(PAD_WHEN_CALC_GENERATED_COLUMN_FLAG)) {
-          if (OB_FAIL(build_pad_expr(expr_factory, true, column_schema, expr, &session))) {
+          if (OB_FAIL(build_pad_expr(expr_factory, true, column_schema, expr, &session, local_vars, local_var_id))) {
             LOG_WARN("fail to build pading expr for char", K(ret));
           }
         } else {
-          if (OB_FAIL(build_trim_expr(column_schema, expr_factory, &session, expr))) {
+          if (OB_FAIL(build_trim_expr(column_schema, expr_factory, &session, expr, local_vars, local_var_id))) {
             LOG_WARN("fail to build trime expr for char", K(ret));
           }
         }
@@ -3855,7 +3859,9 @@ int ObRawExprUtils::try_add_cast_expr_above(ObRawExprFactory *expr_factory,
                                             ObRawExpr &expr,
                                             const ObExprResType &dst_type,
                                             const ObCastMode &cm,
-                                            ObRawExpr *&new_expr)
+                                            ObRawExpr *&new_expr,
+                                            const ObLocalSessionVar *local_vars,
+                                            int64_t local_var_id)
 {
   int ret = OB_SUCCESS;
   new_expr = &expr;
@@ -3905,7 +3911,7 @@ int ObRawExprUtils::try_add_cast_expr_above(ObRawExprFactory *expr_factory,
       }
       ObSysFunRawExpr *cast_expr = NULL;
       OZ(ObRawExprUtils::create_cast_expr(*expr_factory, &expr, dst_type, cast_expr,
-                                          session, false, cm_zf));
+                                          session, false, cm_zf, local_vars, local_var_id));
       CK(OB_NOT_NULL(new_expr = dynamic_cast<ObRawExpr*>(cast_expr)));
     }
     LOG_DEBUG("in try_add_cast", K(ret), K(dst_type), K(cm));
@@ -4039,7 +4045,9 @@ int ObRawExprUtils::create_cast_expr(ObRawExprFactory &expr_factory,
                                      ObSysFunRawExpr *&func_expr,
                                      const ObSQLSessionInfo *session,
                                      bool use_def_cm,
-                                     ObCastMode cm)
+                                     ObCastMode cm,
+                                     const ObLocalSessionVar *local_vars,
+                                     int64_t local_var_id)
 {
   int ret = OB_SUCCESS;
   CK(OB_NOT_NULL(src_expr));
@@ -4090,8 +4098,11 @@ int ObRawExprUtils::create_cast_expr(ObRawExprFactory &expr_factory,
     CK(OB_NOT_NULL(func_expr));
     OX(func_expr->set_extra(cm));
     OZ(func_expr->add_flag(IS_INNER_ADDED_EXPR));
-
-    OZ(func_expr->formalize(session));
+    if (NULL != local_vars) {
+      OZ(func_expr->formalize_with_local_vars(session, local_vars, local_var_id));
+    } else {
+      OZ(func_expr->formalize(session));
+    }
   }
   return ret;
 }
@@ -5546,7 +5557,9 @@ int ObRawExprUtils::build_null_expr(ObRawExprFactory &expr_factory, ObRawExpr *&
 int ObRawExprUtils::build_trim_expr(const ObColumnSchemaV2 *column_schema,
                                     ObRawExprFactory &expr_factory,
                                     const ObSQLSessionInfo *session_info,
-                                    ObRawExpr *&expr)
+                                    ObRawExpr *&expr,
+                                    const ObLocalSessionVar *local_vars,
+                                    int64_t local_var_id)
 {
   int ret = OB_SUCCESS;
   ObSysFunRawExpr *trim_expr = NULL;
@@ -5593,7 +5606,11 @@ int ObRawExprUtils::build_trim_expr(const ObColumnSchemaV2 *column_schema,
       trim_expr->set_for_generated_column();
     }
     expr = trim_expr;
-    if (OB_FAIL(expr->formalize(session_info))) {
+    if (NULL != local_vars) {
+      if (OB_FAIL(expr->formalize_with_local_vars(session_info, local_vars, local_var_id))) {
+        LOG_WARN("fail to formalize expr", K(ret));
+      }
+    } else if (OB_FAIL(expr->formalize(session_info))) {
       LOG_WARN("fail to extract info", K(ret));
     }
   }
@@ -5604,7 +5621,9 @@ int ObRawExprUtils::build_pad_expr(ObRawExprFactory &expr_factory,
                                    bool is_char,
                                    const ObColumnSchemaV2 *column_schema,
                                    ObRawExpr *&expr,
-                                   const sql::ObSQLSessionInfo *session_info)
+                                   const sql::ObSQLSessionInfo *session_info,
+                                   const ObLocalSessionVar *local_vars,
+                                   int64_t local_var_id)
 {
   int ret = OB_SUCCESS;
   ObSysFunRawExpr *pad_expr = NULL;
@@ -5660,7 +5679,11 @@ int ObRawExprUtils::build_pad_expr(ObRawExprFactory &expr_factory,
     }
     pad_expr->set_extra(1); //mark for column convert
     expr = pad_expr;
-    if (OB_FAIL(expr->formalize(session_info))) {
+    if (NULL != local_vars) {
+      if (OB_FAIL(expr->formalize_with_local_vars(session_info, local_vars, local_var_id))) {
+        LOG_WARN("fail to formalize expr", K(ret));
+      }
+    } else if (OB_FAIL(expr->formalize(session_info))) {
       LOG_WARN("fail to extract info", K(ret));
     }
     LOG_DEBUG("build pad expr", KPC(pading_word_expr), KPC(pad_expr));

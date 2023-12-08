@@ -334,7 +334,9 @@ public:
                                         const ObSQLSessionInfo &session,
                                         const share::schema::ObTableSchema &table_schema,
                                         const share::schema::ObColumnSchemaV2 &gen_col_schema,
-                                        ObRawExpr *&expr);
+                                        ObRawExpr *&expr,
+                                        const ObLocalSessionVar *local_vars = NULL,
+                                        int64_t local_var_id = OB_INVALID_INDEX_INT64);
   static int build_rls_predicate_expr(const common::ObString &expr_str,
                                       ObRawExprFactory &expr_factory,
                                       const ObSQLSessionInfo &session_info,
@@ -462,7 +464,9 @@ public:
                                      ObRawExpr &expr,
                                      const ObExprResType &dst_type,
                                      const ObCastMode &cm,
-                                     ObRawExpr *&new_expr);
+                                     ObRawExpr *&new_expr,
+                                     const ObLocalSessionVar *local_vars = NULL,
+                                     int64_t local_var_id = OB_INVALID_INDEX_INT64);
 
   static int implict_cast_pl_udt_to_sql_udt(ObRawExprFactory *expr_factory,
                                             const ObSQLSessionInfo *session,
@@ -482,7 +486,9 @@ public:
                               ObSysFunRawExpr *&func_expr,
                               const ObSQLSessionInfo *session_info,
                               bool use_def_cm = true,
-                              ObCastMode cm = CM_NONE);
+                              ObCastMode cm = CM_NONE,
+                              const ObLocalSessionVar *local_vars = NULL,
+                              int64_t local_var_id = OB_INVALID_INDEX_INT64);
   static void need_extra_cast(const ObExprResType &src_type,
                               const ObExprResType &dst_type,
                               bool &need_extra_cast_for_src_type,
@@ -565,13 +571,17 @@ public:
   static int build_trim_expr(const share::schema::ObColumnSchemaV2 *column_schema,
                              ObRawExprFactory &expr_factory,
                              const ObSQLSessionInfo *session_info,
-                             ObRawExpr *&expr);
+                             ObRawExpr *&expr,
+                             const ObLocalSessionVar *local_vars = NULL,
+                             int64_t local_var_id = OB_INVALID_INDEX_INT64);
   static bool need_column_conv(const ColumnItem &column, ObRawExpr &expr);
   static int build_pad_expr(ObRawExprFactory &expr_factory,
                             bool is_char,
                             const share::schema::ObColumnSchemaV2 *column_schema,
                             ObRawExpr *&expr,
-                            const sql::ObSQLSessionInfo *session_info);
+                            const sql::ObSQLSessionInfo *session_info,
+                            const ObLocalSessionVar *local_vars = NULL,
+                            int64_t local_var_id = OB_INVALID_INDEX_INT64);
   static bool need_column_conv(const ObExprResType &expected_type, const ObRawExpr &expr);
   // 此方法请谨慎使用,会丢失enum类型的 enum_set_values
   static int build_column_conv_expr(ObRawExprFactory &expr_factory,

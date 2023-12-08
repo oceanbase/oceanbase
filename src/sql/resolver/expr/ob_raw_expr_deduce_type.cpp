@@ -3544,7 +3544,7 @@ int ObRawExprDeduceType::try_add_cast_expr_above_for_deduce_type(ObRawExpr &expr
     cast_dst_type.set_length(child_res_type.get_length());
   }
   OZ(ObRawExprUtils::try_add_cast_expr_above(expr_factory_, my_session_, expr,
-                                             cast_dst_type, cm, new_expr));
+                                             cast_dst_type, cm, new_expr, my_local_vars_, local_vars_id_));
   ObRawExpr *e = new_expr;
   while (OB_SUCC(ret) && NULL != e &&
          e != &expr && T_FUN_SYS_CAST == e->get_expr_type()) {

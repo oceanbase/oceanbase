@@ -7579,7 +7579,9 @@ int ObDMLResolver::build_padding_expr(const ObSQLSessionInfo *session,
 
 int ObDMLResolver::build_padding_expr(const ObSQLMode sql_mode,
                                       const share::schema::ObColumnSchemaV2 *column_schema,
-                                      ObRawExpr *&expr)
+                                      ObRawExpr *&expr,
+                                      const ObLocalSessionVar *local_vars,
+                                      int64_t local_var_id)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(column_schema) || OB_ISNULL(expr) || OB_ISNULL(params_.expr_factory_)) {
@@ -7590,7 +7592,9 @@ int ObDMLResolver::build_padding_expr(const ObSQLMode sql_mode,
                                                false,
                                                column_schema,
                                                expr,
-                                               this->session_info_))) {
+                                               this->session_info_,
+                                               local_vars,
+                                               local_var_id))) {
       LOG_WARN("fail to build pading expr for binary", K(ret));
     }
   } else if (ObCharType == column_schema->get_data_type()
@@ -7600,11 +7604,13 @@ int ObDMLResolver::build_padding_expr(const ObSQLMode sql_mode,
                                                  true,
                                                  column_schema,
                                                  expr,
-                                                 this->session_info_))) {
+                                                 this->session_info_,
+                                                 local_vars,
+                                                 local_var_id))) {
         LOG_WARN("fail to build pading expr for char", K(ret));
       }
     } else {
-      if (OB_FAIL(ObRawExprUtils::build_trim_expr(column_schema, *params_.expr_factory_, session_info_, expr))) {
+      if (OB_FAIL(ObRawExprUtils::build_trim_expr(column_schema, *params_.expr_factory_, session_info_, expr, local_vars, local_var_id))) {
         LOG_WARN("fail to build trime expr for char", K(ret));
       }
     }
@@ -8137,9 +8143,9 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
     if (OB_FAIL(check_pad_generated_column(sql_mode, *table_schema, *column_schema))) {
       LOG_WARN("check pad generated column failed", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::build_pad_expr_recursively(*expr_factory, *session_info,
-        *table_schema, *column_schema, ref_expr))) {
+        *table_schema, *column_schema, ref_expr, &local_vars, var_array_idx))) {
       LOG_WARN("build padding expr for column_ref failed", K(ret));
-    } else if (OB_FAIL(build_padding_expr(sql_mode, column_schema, ref_expr))) {
+    } else if (OB_FAIL(build_padding_expr(sql_mode, column_schema, ref_expr, &local_vars, var_array_idx))) {
       LOG_WARN("build padding expr for self failed", K(ret));
     } else if (OB_FAIL(ref_expr->formalize_with_local_vars(session_info, &local_vars, var_array_idx))) {
       LOG_WARN("formailize column reference expr failed", K(ret));
