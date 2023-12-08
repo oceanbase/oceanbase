@@ -1808,7 +1808,8 @@ private:
   int check_can_alter_column_type(
       const share::schema::ObColumnSchemaV2 &src_column,
       const share::schema::ObColumnSchemaV2 &dst_column,
-      const share::schema::ObTableSchema &table_schema);
+      const share::schema::ObTableSchema &table_schema,
+      const bool is_oracle_mode);
   int check_is_change_column_type(
       const share::schema::ObColumnSchemaV2 &src_column,
       const share::schema::ObColumnSchemaV2 &dst_column,

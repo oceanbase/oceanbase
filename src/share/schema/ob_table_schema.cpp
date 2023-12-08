@@ -4476,6 +4476,7 @@ int ObTableSchema::check_ddl_type_change_rules(const ObColumnSchemaV2 &src_colum
   bool is_rowkey = false;
   bool is_index = false;
   bool is_same = false;
+  uint64_t data_version = 0;
   const ColumnType src_col_type = src_column.get_data_type();
   const ColumnType dst_col_type = dst_column.get_data_type();
   const ObObjMeta &src_meta = src_column.get_meta_type();
@@ -4488,7 +4489,9 @@ int ObTableSchema::check_ddl_type_change_rules(const ObColumnSchemaV2 &src_colum
   } else if (is_same) {
     // do nothing
   } else if (!is_offline) {
-    if (is_oracle_mode) {
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+        LOG_WARN("failed to get min data version", K(ret), K(tenant_id_), K(data_version));
+    } else if (is_oracle_mode) {
       if (!ob_is_number_tc(src_col_type) &&
         ((!src_meta.is_varying_len_char_type() &&
         !src_meta.is_timestamp_tz() &&
@@ -4522,8 +4525,16 @@ int ObTableSchema::check_ddl_type_change_rules(const ObColumnSchemaV2 &src_colum
           src_col_type != dst_col_type) &&
           (!src_meta.is_timestamp() &&
           !dst_meta.is_datetime()) &&
-          !(ob_is_integer_type(src_meta.get_type()) &&
-          ob_is_integer_type(dst_meta.get_type()))) { // if match rules has been check in check_alter_column_type()
+          !(src_meta.is_integer_type() && dst_meta.is_integer_type() && data_version >= DATA_VERSION_4_2_2_0)) {
+        /*
+          Note of the judge of data_version:
+            Determine data_version to avoid mixed deployment problems during the upgrade process.
+            During the upgrade process, the memtable_key.h of the old version of the observer will not have different types of defense rules (common::is_match_alter_integer_column_online_ddl_rules).
+            And, the type dismatch may cause 4016 problems;
+              1. This issue only needs to consider the primary key, index and part_key columns, so put the check here.
+              2. In the online ddl conversion released in 4.2.2, only the column type conversion of integer will involve this issue.
+            Therefore, we make a special case where the integer column is used as the primary key or index column.
+        */
         if (is_rowkey || src_column.is_tbl_part_key_column()) {
           is_offline = true;
         }
