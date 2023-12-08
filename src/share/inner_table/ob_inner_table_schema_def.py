@@ -6402,6 +6402,7 @@ def_table_schema(
 # 504 : __all_audit_log_user
 # 505 : __all_column_privilege
 # 506 : __all_column_privilege_history
+# 507 : __all_tenant_snapshot_ls_replica_history
 #
 # 余留位置
 ################################################################################
@@ -13221,6 +13222,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12461: __all_virtual_audit_log_user
 # 12462: __all_virtual_column_privilege
 # 12463: __all_virtual_column_privilege_history
+# 12464: __all_virtual_tenant_snapshot_ls_replica_history
 # 余留位置
 #
 
@@ -30325,7 +30327,7 @@ def_table_schema(
 #21507 GV$OB_ACTIVE_SESSION_HISTORY
 #21508 V$OB_ACTIVE_SESSION_HISTORY
 #21509 GV$OB_TRUSTED_ROOT_CERTIFICATE
-#21510 DBA_OB_CLONE_JOBS
+#21510 DBA_OB_CLONE_PROGRESS
 #21511 mysql.role_edges
 #21512 mysql.default_roles
 #21513 CDB_INDEX_USAGE
@@ -30334,6 +30336,7 @@ def_table_schema(
 #21516 mysql.columns_priv
 #21517 GV$OB_LS_SNAPSHOTS
 #21518 V$OB_LS_SNAPSHOTS
+#21519 DBA_OB_CLONE_HISTORY
 # 余留位置
 
 ################################################################################
