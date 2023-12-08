@@ -17,59 +17,83 @@
 namespace oceanbase {
 namespace common {
 
-static double ob_normalize_latitude(double lat)
+double ObGeoLatlongCheckVisitor::ob_normalize_latitude(double lat)
 {
-  if (lat > 360.0) {
-    lat = remainder(lat, 360.0);
+  bool modified = false;
+  const double TOLERANCE = 1e-10; // according to pg
+  if (lat > 90.0 && (lat - 90) <= TOLERANCE) {
+    lat = 90.0;
+    modified = true;
+  } else if (lat < -90.0 && (-90 - lat) <= TOLERANCE) {
+    lat = -90.0;
+    modified = true;
   }
 
-  if (lat < -360.0) {
-    lat = remainder(lat, -360.0);
-  }
+  if (!modified) {
+    if (lat > 360.0) {
+      lat = remainder(lat, 360.0);
+    }
 
-  if (lat > 180.0) {
-    lat = 180.0 - lat;
-  }
+    if (lat < -360.0) {
+      lat = remainder(lat, -360.0);
+    }
 
-  if (lat < -180.0) {
-    lat = -180.0 - lat;
-  }
+    if (lat > 180.0) {
+      lat = 180.0 - lat;
+    }
 
-  if (lat > 90.0) {
-    lat = 180.0 - lat;
-  }
+    if (lat < -180.0) {
+      lat = -180.0 - lat;
+    }
 
-  if (lat < -90.0) {
-    lat = -180.0 - lat;
+    if (lat > 90.0) {
+      lat = 180.0 - lat;
+    }
+
+    if (lat < -90.0) {
+      lat = -180.0 - lat;
+    }
   }
 
   return lat;
 }
 
-static double ob_normalize_longitude(double lon)
+double ObGeoLatlongCheckVisitor::ob_normalize_longitude(double lon)
 {
-  if (lon > 360.0) {
-    lon = remainder(lon, 360.0);
-  }
-
-  if (lon < -360.0) {
-    lon = remainder(lon, -360.0);
-  }
-
-  if (lon > 180.0) {
-    lon = -360.0 + lon;
-  }
-
-  if (lon < -180.0) {
-    lon = 360 + lon;
-  }
-
-  if (lon == -180.0) {
+  bool modified = false;
+  const double TOLERANCE = 1e-10; // according to pg
+  if (lon > 180.0 && (lon - 180) <= TOLERANCE) {
     lon = 180.0;
+    modified = true;
+  } else if (lon < -180.0 && (-180 - lon) <= TOLERANCE) {
+    lon = -180.0;
+    modified = true;
   }
 
-  if (lon == -360.0) {
-    lon = 0.0;
+  if (!modified) {
+    if (lon > 360.0) {
+      lon = remainder(lon, 360.0);
+    }
+
+    if (lon < -360.0) {
+      lon = remainder(lon, -360.0);
+    }
+
+    if (lon > 180.0) {
+      lon = -360.0 + lon;
+    }
+
+    if (lon < -180.0) {
+      lon = 360 + lon;
+    }
+
+    if (lon == -180.0) {
+      lon = 180.0;
+    }
+
+    if (lon == -360.0) {
+      lon = 0.0;
+    }
   }
 
   return lon;

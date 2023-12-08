@@ -65,6 +65,7 @@ public:
   int create_elevation_extent(ObGeoElevationExtent &extent);
   int normalize(const ObSrsItem *srs, uint32_t &zoom_in_value);
   int check_empty(bool &is_empty);
+  int correct_lon_lat(const ObSrsItem *srs);
 private:
   int visit_wkb_inner(ObGeo3DVisitor &visitor);
   bool is_end() { return cur_pos_ >= data_.length(); }
@@ -306,6 +307,16 @@ public:
 private:
   bool is_empty_;
   DISALLOW_COPY_AND_ASSIGN(ObGeo3DEmptyVisitor);
+};
+
+class ObGeo3DLonLatChecker : public ObGeo3DVisitor
+{
+public:
+  explicit ObGeo3DLonLatChecker(const ObSrsItem *srs) : srs_(srs) {}
+  virtual int visit_pointz_start(ObGeometry3D *geo, bool is_inner = false);
+private:
+  const ObSrsItem *srs_;
+  DISALLOW_COPY_AND_ASSIGN(ObGeo3DLonLatChecker);
 };
 
 } // namespace common

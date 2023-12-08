@@ -129,7 +129,6 @@ int ObExprPrivSTGeogFromText::eval_priv_st_geogfromtext_common(const ObExpr &exp
     } else if (OB_ISNULL(geo)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null geo after parse_wkt", K(ret), K(wkt));
-    } else if (ObGeoTypeUtil::is_3d_geo_type(geo->type())) {
     } else if (OB_FAIL(ObGeoExprUtils::correct_coordinate_range(srs_item, geo, func_name))) {
       LOG_WARN("check geo coordinate range failed", K(ret));
     }

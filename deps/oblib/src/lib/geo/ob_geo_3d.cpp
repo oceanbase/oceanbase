@@ -15,6 +15,7 @@
 #include "common/ob_smart_call.h"
 #include "ob_geo_to_wkt_visitor.h"
 #include "lib/utility/ob_fast_convert.h"
+#include "lib/geo/ob_geo_latlong_check_visitor.h"
 namespace oceanbase
 {
 namespace common
@@ -611,6 +612,20 @@ int ObGeo3DVisitor::visit_collectionz_end(ObGeometry3D *geo, uint32_t nums)
 {
   UNUSED(geo);
   return OB_SUCCESS;
+}
+
+int ObGeometry3D::correct_lon_lat(const ObSrsItem *srs)
+{
+  int ret = OB_SUCCESS;
+  ObGeo3DLonLatChecker checker(srs);
+  set_pos(0);
+  if (OB_FAIL(visit_wkb_inner(checker))) {
+    LOG_WARN("fail to check wkb valid", K(ret));
+  } else if (!is_end()) {
+    ret = OB_ERR_GIS_INVALID_DATA;
+    LOG_WARN("has extra buffer in wkb", K(ret), K(cur_pos_), K(length()));
+  }
+  return ret;
 }
 
 /**************************************ObGeo3DChecker**************************************/
@@ -1558,6 +1573,41 @@ int ObGeo3DEmptyVisitor::visit_pointz_start(ObGeometry3D *geo, bool is_inner)
       double y = ObGeoWkbByteOrderUtil::read<double>(ptr + cur_pos + WKB_GEO_DOUBLE_STORED_SIZE, bo);
       double z = ObGeoWkbByteOrderUtil::read<double>(ptr + cur_pos + 2 * WKB_GEO_DOUBLE_STORED_SIZE, bo);
       is_empty_ = std::isnan(x) || std::isnan(y) || std::isnan(z);
+    }
+  }
+  return ret;
+}
+
+int ObGeo3DLonLatChecker::visit_pointz_start(ObGeometry3D *geo, bool is_inner)
+{
+  UNUSED(is_inner);
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(geo)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("geo is NULL", K(ret));
+  } else if (OB_ISNULL(srs_)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("srs is null", K(ret));
+  } else if (srs_->srs_type() == ObSrsType::PROJECTED_SRS) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("srs is projected type", K(srs_));
+  } else {
+    uint32_t cur_pos = geo->get_pos();
+    uint64_t pointz_len = WKB_POINT_DATA_SIZE + WKB_GEO_DOUBLE_STORED_SIZE;
+    char *ptr = const_cast<char *>(geo->val());
+    if (OB_ISNULL(ptr) || (cur_pos + pointz_len > geo->length())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("3D geometry position is wrong", K(ret));
+    } else {
+      ObGeoWkbByteOrder bo = geo->byteorder();
+      double lon = ObGeoWkbByteOrderUtil::read<double>(ptr + cur_pos, bo);
+      lon = ObGeoLatlongCheckVisitor::ob_normalize_longitude(lon);
+      double lat = ObGeoWkbByteOrderUtil::read<double>(ptr + cur_pos + WKB_GEO_DOUBLE_STORED_SIZE, bo);
+      lat = ObGeoLatlongCheckVisitor::ob_normalize_latitude(lat);
+      if (OB_SUCC(ret)) {
+        ObGeoWkbByteOrderUtil::write<double>(ptr + cur_pos, lon, bo);
+        ObGeoWkbByteOrderUtil::write<double>(ptr + cur_pos + WKB_GEO_DOUBLE_STORED_SIZE, lat, bo);
+      }
     }
   }
   return ret;

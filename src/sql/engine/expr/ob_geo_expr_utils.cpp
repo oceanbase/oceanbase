@@ -235,14 +235,21 @@ int ObGeoExprUtils::correct_coordinate_range(const ObSrsItem *srs_item,
                                              const char *func_name)
 {
   int ret = OB_SUCCESS;
-  ObGeoLatlongCheckVisitor range_visitor(srs_item);
+  if (ObGeoTypeUtil::is_3d_geo_type(geo->type())) {
+    ObGeometry3D *geo_3d = reinterpret_cast<ObGeometry3D *>(geo);
+    if (OB_FAIL(geo_3d->correct_lon_lat(srs_item))) {
+      LOG_WARN("fail to correct lon lat of 3D geometry", K(ret));
+    }
+  } else {
+    ObGeoLatlongCheckVisitor range_visitor(srs_item);
 
-  if (OB_FAIL(geo->do_visit(range_visitor))) {
-    ret = OB_ERR_GIS_INVALID_DATA;
-    LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, func_name);
-    LOG_WARN("failed to reverse geometry coordinate", K(ret));
-  } else if (range_visitor.has_changed()) {
-    LOG_WARN("Coordinate values were coerced into range [-180 -90, 180 90] for GEOGRAPHY");
+    if (OB_FAIL(geo->do_visit(range_visitor))) {
+      ret = OB_ERR_GIS_INVALID_DATA;
+      LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, func_name);
+      LOG_WARN("failed to reverse geometry coordinate", K(ret));
+    } else if (range_visitor.has_changed()) {
+      LOG_WARN("Coordinate values were coerced into range [-180 -90, 180 90] for GEOGRAPHY");
+    }
   }
 
   return ret;
