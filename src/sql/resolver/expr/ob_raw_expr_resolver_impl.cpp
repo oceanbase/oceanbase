@@ -1577,21 +1577,39 @@ int ObRawExprResolverImpl::process_dblink_udf_node(const ParseNode *node, ObRawE
     ObUDFInfo &udf_info = access_ident.udf_info_;
     ObUDFRawExpr *func_expr = NULL;
     access_ident.type_ = PL_UDF;
-    // resolve param list
-    if (NULL != node->children_[4]) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < node->children_[4]->num_child_; i++) {
-        ObRawExpr *param_expr = NULL;
-        CK (OB_NOT_NULL(node->children_[4]->children_[i]));
-        OZ (recursive_resolve(node->children_[4]->children_[i], param_expr));
-        OZ (access_ident.params_.push_back(std::make_pair(param_expr, 0)), KPC(param_expr), K(i));
-      }
-    }
     OX (udf_info.udf_name_.assign_ptr(access_ident.access_name_.ptr(), access_ident.access_name_.length()));
     OZ (ctx_.expr_factory_.create_raw_expr(T_FUN_UDF, func_expr));
     CK (OB_NOT_NULL(func_expr));
-    for (int64_t i = 0; OB_SUCC(ret) && i < access_ident.params_.count(); i++) {
-      udf_info.udf_param_num_++;
-      OZ (func_expr->add_param_expr(access_ident.params_.at(i).first));
+    // resolve param list
+    if (OB_SUCC(ret) && NULL != node->children_[4]) {
+      bool has_assign_expr = false;
+      for (int64_t i = 0; OB_SUCC(ret) && i < node->children_[4]->num_child_; i++) {
+        ObRawExpr *param_expr = NULL;
+        const ParseNode *param_node = node->children_[4]->children_[i];
+        CK (OB_NOT_NULL(param_node));
+        if (OB_SUCC(ret) && T_SP_CPARAM == param_node->type_) {
+          if (T_IDENT != param_node->children_[0]->type_) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid param name node", K(ret), K(param_node->children_[0]->type_));
+          } else {
+            has_assign_expr = true;
+            ObString param_name(static_cast<int32_t>(param_node->children_[0]->str_len_),
+                                param_node->children_[0]->str_value_);
+            OV (!param_name.empty(), OB_INVALID_ARGUMENT);
+            OZ (udf_info.param_names_.push_back(param_name));
+            OZ (SMART_CALL(recursive_resolve(param_node->children_[1], param_expr)));
+            OZ (udf_info.param_exprs_.push_back(param_expr));
+          }
+        } else if (has_assign_expr) {
+          ret = OB_ERR_POSITIONAL_FOLLOW_NAME;
+          LOG_WARN("a positional parameter association may not follow a named", K(ret));
+        } else {
+          OZ (SMART_CALL(recursive_resolve(node->children_[4]->children_[i], param_expr)));
+          OX (udf_info.udf_param_num_++);
+          OZ (access_ident.params_.push_back(std::make_pair(param_expr, 0)), KPC(param_expr), K(i));
+          OZ (func_expr->add_param_expr(access_ident.params_.at(i).first));
+        }
+      }
     }
     if (OB_SUCC(ret) && NULL != ctx_.query_ctx_) {
       ctx_.query_ctx_->has_udf_ = true;
