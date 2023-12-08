@@ -7161,6 +7161,18 @@ static const _error _error_OB_ERR_NO_PRIVILEGE = {
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -5036, Access denied",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5036, Access denied; you need (at least one of) the %s privilege(s) for this operation"
 };
+static const _error _error_OB_ERR_NO_PRIVILEGE_SECURE_FILE = {
+      .error_name            = "OB_ERR_NO_PRIVILEGE_SECURE_FILE",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = ER_SPECIFIC_ACCESS_DENIED_ERROR,
+      .sqlstate              = "42501",
+      .str_error             = "Access denied, please set suitable variable 'secure-file-priv' first, such as: SET GLOBAL secure_file_priv = '/'",
+      .str_user_error        = "Access denied, please set suitable variable 'secure-file-priv' first, such as: SET GLOBAL secure_file_priv = '/'",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -6007, Access denied",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -6007, Access denied; you need (at least one of) the %s privilege(s) for this operation"
+};
 static const _error _error_OB_ERR_NO_AVAILABLE_PRIVILEGE_ENTRY = {
       .error_name            = "OB_ERR_NO_AVAILABLE_PRIVILEGE_ENTRY",
       .error_cause           = "Internal Error",
@@ -26891,6 +26903,7 @@ struct ObStrErrorInit
     _errors[-OB_ERR_USER_EMPTY] = &_error_OB_ERR_USER_EMPTY;
     _errors[-OB_ERR_USER_NOT_EXIST] = &_error_OB_ERR_USER_NOT_EXIST;
     _errors[-OB_ERR_NO_PRIVILEGE] = &_error_OB_ERR_NO_PRIVILEGE;
+    _errors[-OB_ERR_NO_PRIVILEGE_SECURE_FILE] = &_error_OB_ERR_NO_PRIVILEGE_SECURE_FILE;
     _errors[-OB_ERR_NO_AVAILABLE_PRIVILEGE_ENTRY] = &_error_OB_ERR_NO_AVAILABLE_PRIVILEGE_ENTRY;
     _errors[-OB_ERR_WRONG_PASSWORD] = &_error_OB_ERR_WRONG_PASSWORD;
     _errors[-OB_ERR_USER_IS_LOCKED] = &_error_OB_ERR_USER_IS_LOCKED;
