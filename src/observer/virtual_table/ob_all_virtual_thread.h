@@ -47,6 +47,7 @@ public:
 private:
   static const int32_t PATH_BUFSIZE = 512;
   bool is_inited_;
+  bool is_config_cgroup_;
   char ip_buf_[common::OB_IP_STR_BUFF];
   char tname_[16];
   char wait_event_[64];
