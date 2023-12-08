@@ -391,9 +391,9 @@ public:
   // m_seg_sz and s_seg_sz are the sizes of micro-segment and standard-segment.
   // Set m_seg_sz = 0 to disable micro-segment.
   // dir_init_sz is the initial size of directory, it doubles when overflows.
+  int init(const ObMemAttr &mem_attr);
   int init(const lib::ObLabel &label = LABEL, uint64_t tenant_id = TENANT_ID);
-  int init(uint64_t m_seg_sz, uint64_t s_seg_sz, uint64_t dir_init_sz,
-      const lib::ObLabel &label = LABEL, uint64_t tenant_id = TENANT_ID);
+  int init(uint64_t m_seg_sz, uint64_t s_seg_sz, uint64_t dir_init_sz, const ObMemAttr &mem_attr);
   int destroy();
   // Load factor control.
   int set_load_factor_lmt(double lower_lmt, double upper_lmt);
@@ -857,27 +857,31 @@ void ObLinearHashMap<Key, Value, MemMgrTag>::BlurredIterator::rewind()
 
 // Public functions.
 template <typename Key, typename Value, typename MemMgrTag>
-int ObLinearHashMap<Key, Value, MemMgrTag>::init(const lib::ObLabel &label /*= LABEL*/,
-                                                 uint64_t tenant_id /*=TENANT_ID*/)
+int ObLinearHashMap<Key, Value, MemMgrTag>::init(const ObMemAttr &mem_attr)
 {
   return init(OB_MALLOC_NORMAL_BLOCK_SIZE, /* Small segment. */
               OB_MALLOC_BIG_BLOCK_SIZE, /* Large segment. */
               DIR_SZ_L_LMT, /* Dir size, small when init, expand * 2. */
-              label,
-              tenant_id);
+              mem_attr);
+}
+
+template <typename Key, typename Value, typename MemMgrTag>
+int ObLinearHashMap<Key, Value, MemMgrTag>::init(const lib::ObLabel &label /*= LABEL*/,
+                                                 uint64_t tenant_id /*=TENANT_ID*/)
+{
+  return init(ObMemAttr(tenant_id, label));
 }
 
 template <typename Key, typename Value, typename MemMgrTag>
 int ObLinearHashMap<Key, Value, MemMgrTag>::init(uint64_t m_seg_sz, uint64_t s_seg_sz, uint64_t dir_init_sz,
-    const lib::ObLabel &label /*= LABEL*/, uint64_t tenant_id /*=TENANT_ID*/)
+    const ObMemAttr &mem_attr)
 {
   const double LOAD_FCT_DEF_U_LMT = 1;
   const double LOAD_FCT_DEF_L_LMT = 0.01;
 
   int ret = OB_SUCCESS;
   /* Memory alloc from MemMgr, and its static, so label and tenant_id no longer used. */
-  memattr_.tenant_id_ = tenant_id;
-  memattr_.label_ = label;
+  memattr_= mem_attr;
   load_factor_u_limit_ = LOAD_FCT_DEF_U_LMT;
   load_factor_l_limit_ = LOAD_FCT_DEF_L_LMT;
   load_factor_ = 0.0;

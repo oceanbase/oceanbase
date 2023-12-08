@@ -166,7 +166,7 @@ int ObBlockManager::init(
     LOG_WARN("fail to init timer", K(ret));
   } else if (OB_FAIL(bucket_lock_.init(DEFAULT_LOCK_BUCKET_COUNT, ObLatchIds::BLOCK_MANAGER_LOCK))) {
     LOG_WARN("fail to init bucket lock", K(ret));
-  } else if (OB_FAIL(block_map_.init("BlockMap", OB_SYS_TENANT_ID))) {
+  } else if (OB_FAIL(block_map_.init(SET_USE_UNEXPECTED_500(ObMemAttr(OB_SERVER_TENANT_ID, "BlockMap"))))) {
     LOG_WARN("fail to init block map", K(ret));
   } else if (OB_FAIL(super_block_buf_holder_.init(ObServerSuperBlockHeader::OB_MAX_SUPER_BLOCK_SIZE))) {
     LOG_WARN("fail to init super block buffer holder, ", K(ret));
