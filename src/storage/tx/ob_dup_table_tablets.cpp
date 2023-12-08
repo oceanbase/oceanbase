@@ -1119,7 +1119,7 @@ int ObLSDupTabletsMgr::prepare_serialize(int64_t &max_ser_size,
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 
-  SpinRLockGuard guard(dup_tablets_lock_);
+  SpinWLockGuard guard(dup_tablets_lock_);
 
   unique_id_array.reuse();
 
@@ -2939,12 +2939,12 @@ int ObLSDupTabletsMgr::get_tablets_stat(ObDupLSTabletsStatIterator &collect_iter
         if (0 == need_confirm_set->size()) {
           // do nothing
         } else {
-          CollectTabletsHandler changing_new_handler(
+          CollectTabletsHandler need_confirm_handler(
               collect_ts, ls_id, tenant_id, addr, is_master(),
               need_confirm_set->get_common_header().get_unique_id(), TabletSetAttr::DATA_SYNCING,
               // tablet_gc_window_,
               collect_iter);
-          if (OB_FAIL(hash_for_each_update(*need_confirm_set, changing_new_handler))) {
+          if (OB_FAIL(hash_for_each_update(*need_confirm_set, need_confirm_handler))) {
             DUP_TABLE_LOG(WARN, "push into iter failed", KPC(this));
           }
         }
@@ -2962,12 +2962,12 @@ int ObLSDupTabletsMgr::get_tablets_stat(ObDupLSTabletsStatIterator &collect_iter
         if (0 == readable_set->size()) {
           // do nothing
         } else {
-          CollectTabletsHandler changing_new_handler(
+          CollectTabletsHandler readable_handler(
               collect_ts, ls_id, tenant_id, addr, is_master(),
               readable_set->get_common_header().get_unique_id(), TabletSetAttr::READABLE,
               // tablet_gc_window_,
               collect_iter);
-          if (OB_FAIL(hash_for_each_update(*readable_set, changing_new_handler))) {
+          if (OB_FAIL(hash_for_each_update(*readable_set, readable_handler))) {
             DUP_TABLE_LOG(WARN, "push into iter failed", KPC(this));
           }
         }
@@ -2982,18 +2982,17 @@ int ObLSDupTabletsMgr::get_tablets_stat(ObDupLSTabletsStatIterator &collect_iter
     if (0 == removing_old_set_->size()) {
       // do nothing
     } else {
-      CollectTabletsHandler changing_new_handler(
+      CollectTabletsHandler old_handler(
           collect_ts, ls_id, tenant_id, addr, is_master(),
           removing_old_set_->get_common_header().get_unique_id(), TabletSetAttr::DELETING,
           // tablet_gc_window_,
           collect_iter);
-      if (OB_FAIL(hash_for_each_update(*removing_old_set_, changing_new_handler))) {
+      if (OB_FAIL(hash_for_each_update(*removing_old_set_, old_handler))) {
         DUP_TABLE_LOG(WARN, "push into iter failed", KPC(this));
       }
     }
   }
-  // TODO siyu: for debug
-  DUP_TABLE_LOG(WARN, "collect all", K(ret), KPC(this));
+
   return ret;
 }
 
@@ -3002,14 +3001,12 @@ int ObLSDupTabletsMgr::get_tablet_set_stat(ObDupLSTabletSetStatIterator &collect
 {
   int ret = OB_SUCCESS;
   // iter changing new
-  // const ObAddr addr = GCTX.self_addr();
   const int64_t tenant_id = MTL_ID();
   SpinRLockGuard rlock(dup_tablets_lock_);
 
   if (OB_NOT_NULL(changing_new_set_)) {
     DupTabletSetChangeStatus *tmp_status = changing_new_set_->get_change_status();
     if (OB_NOT_NULL(tmp_status)) {
-      // share::SCN not_used = share::SCN::min_scn();
       ObDupTableLSTabletSetStat tmp_stat;
       tmp_stat.set_basic_info(tenant_id, ls_id, is_master());
 
@@ -3031,7 +3028,6 @@ int ObLSDupTabletsMgr::get_tablet_set_stat(ObDupLSTabletSetStatIterator &collect
     DLIST_FOREACH(need_confirm_set, need_confirm_new_queue_)
     {
       if (OB_NOT_NULL(need_confirm_set)) {
-        DUP_TABLE_LOG(WARN, "need confirm  tablets ", KPC(need_confirm_set));
         DupTabletSetChangeStatus *tmp_status = need_confirm_set->get_change_status();
         if (OB_NOT_NULL(tmp_status)) {
           ObDupTableLSTabletSetStat tmp_stat;
@@ -3082,7 +3078,6 @@ int ObLSDupTabletsMgr::get_tablet_set_stat(ObDupLSTabletSetStatIterator &collect
   if (OB_SUCC(ret) && OB_NOT_NULL(removing_old_set_)) {
     share::SCN not_used = share::SCN::min_scn();
     DupTabletSetChangeStatus *tmp_status = removing_old_set_->get_change_status();
-    DUP_TABLE_LOG(WARN, "old tablets ", KPC(removing_old_set_), KPC(tmp_status));
     if (OB_NOT_NULL(tmp_status)) {
       ObDupTableLSTabletSetStat tmp_stat;
       tmp_stat.set_basic_info(tenant_id, ls_id, is_master());
@@ -3099,8 +3094,7 @@ int ObLSDupTabletsMgr::get_tablet_set_stat(ObDupLSTabletSetStatIterator &collect
       DUP_TABLE_LOG(WARN, "change status is null", KPC(this), KP(tmp_status));
     }
   }
-  // TODO siyu: for debug
-  DUP_TABLE_LOG(WARN, "collect all", K(ret), KPC(this));
+
   return ret;
 }
 
