@@ -64,20 +64,21 @@ int ObExprJsonQueryParamInfo::deep_copy(common::ObIAllocator &allocator,
     other.pretty_type_ = pretty_type_;
     other.ascii_type_ = ascii_type_;
     other.scalars_type_ = scalars_type_;
+    other.j_path_ = NULL;
     if (OB_FAIL(ob_write_string(allocator, path_str_, other.path_str_, true))) {
       LOG_WARN("fail to deep copy path str", K(ret));
     } else if (OB_FAIL(other.on_mismatch_.assign(on_mismatch_))) {
       LOG_WARN("fail to assign mismatch array", K(ret));
     } else if (OB_FAIL(other.on_mismatch_type_.assign(on_mismatch_type_))) {
       LOG_WARN("fail to assgin mismatch type", K(ret));
-    } else {
-      other.j_path_ = j_path_;
+    } else if (OB_FAIL(other.parse_json_path(path_str_, other.j_path_))) {
+      LOG_WARN("fail to resolve json path", K(ret));
     }
   }
   return ret;
 }
 
-int ObExprJsonQueryParamInfo::parse_json_path(ObString path_str, ObJsonPath* j_path_)
+int ObExprJsonQueryParamInfo::parse_json_path(ObString path_str, ObJsonPath*& j_path_)
 {
   INIT_SUCC(ret);
   j_path_ = NULL;

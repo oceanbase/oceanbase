@@ -1390,7 +1390,7 @@ int ObRawExprResolverImpl::process_xml_element_node(const ParseNode *node, ObRaw
   }
   ObSysFunRawExpr *func_expr = NULL;
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS, func_expr))) {
+    if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_XML_ELEMENT, func_expr))) {
       LOG_WARN("create raw expr failed", K(node->num_child_), K(ret));
     } else if (OB_ISNULL(func_expr)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1631,7 +1631,7 @@ int ObRawExprResolverImpl::process_xml_attributes_node(const ParseNode *node, Ob
   }
   ObSysFunRawExpr *func_expr = NULL;
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS, func_expr))) {
+    if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_XML_ATTRIBUTES, func_expr))) {
       LOG_WARN("create raw expr failed", K(node->num_child_), K(ret));
     } else if (OB_ISNULL(func_expr)) {
       ret = OB_ERR_UNEXPECTED;
@@ -4989,7 +4989,7 @@ int ObRawExprResolverImpl::process_xmlparse_node(const ParseNode *node, ObRawExp
   ObSysFunRawExpr *func_expr = NULL;
   if (OB_SUCC(ret)) {
     child_num = node->num_child_;
-    ctx_.expr_factory_.create_raw_expr(T_FUN_SYS, func_expr);
+    ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_XMLPARSE, func_expr);
     CK(OB_NOT_NULL(func_expr));
     OX(func_expr->set_func_name(ObString::make_string("xmlparse")));
   }
@@ -5689,7 +5689,7 @@ int ObRawExprResolverImpl::process_ora_json_object_star_node(const ParseNode *no
 {
   INIT_SUCC(ret);
   ObSysFunRawExpr *func_expr = NULL;
-  if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS, func_expr))) {
+  if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_JSON_OBJECT_WILD_STAR, func_expr))) {
     LOG_WARN("fail to create func_expr");
   } else {
     CK(OB_NOT_NULL(func_expr));
@@ -5729,7 +5729,7 @@ int ObRawExprResolverImpl::process_ora_json_object_node(const ParseNode *node, O
   }
 
   ObSysFunRawExpr *func_expr = NULL;
-  if (OB_SUCC(ret) && OB_SUCC(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS, func_expr))) {
+  if (OB_SUCC(ret) && OB_SUCC(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_JSON_OBJECT, func_expr))) {
     CK(OB_NOT_NULL(func_expr));
     OX(func_expr->set_func_name(ObString::make_string("json_object")));
   } else {
@@ -6033,7 +6033,7 @@ int ObRawExprResolverImpl::process_json_value_node(const ParseNode *node, ObRawE
   ObSysFunRawExpr *func_expr = NULL;
   if (OB_SUCC(ret)) {
     num = node->num_child_;
-    OZ(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS, func_expr));
+    OZ(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_JSON_VALUE, func_expr));
     CK(OB_NOT_NULL(func_expr));
     OX(func_expr->set_func_name(ObString::make_string("json_value")));
   }
@@ -6203,7 +6203,7 @@ int ObRawExprResolverImpl::process_json_equal_node(const ParseNode *node, ObRawE
   CK(3 == node->num_child_);
   int32_t num = node->num_child_;
   ObSysFunRawExpr *func_expr = NULL;
-  OZ(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS, func_expr));
+  OZ(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_JSON_EQUAL, func_expr));
   CK(OB_NOT_NULL(func_expr));
   OX(func_expr->set_func_name(ObString::make_string("json_equal")));
 
@@ -6225,7 +6225,7 @@ int ObRawExprResolverImpl::process_json_array_node(const ParseNode *node, ObRawE
   CK(4 == node->num_child_);
   int32_t num = node->num_child_;
   ObSysFunRawExpr *func_expr = NULL;
-  OZ(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS, func_expr));
+  OZ(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_JSON_ARRAY, func_expr));
   CK(OB_NOT_NULL(func_expr));
   OX(func_expr->set_func_name(ObString::make_string("json_array")));
 
@@ -6266,7 +6266,7 @@ int ObRawExprResolverImpl::process_json_mergepatch_node(const ParseNode *node, O
   CK(7 == node->num_child_);
   int32_t num = node->num_child_;
   ObSysFunRawExpr *func_expr = NULL;
-  OZ(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS, func_expr));
+  OZ(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_JSON_MERGE_PATCH, func_expr));
   CK(OB_NOT_NULL(func_expr));
   OX(func_expr->set_func_name(ObString::make_string("json_merge_patch")));
 
@@ -6299,7 +6299,7 @@ int ObRawExprResolverImpl::process_is_json_node(const ParseNode *node, ObRawExpr
   CK(5 == node->num_child_);
   int32_t num = node->num_child_;
   ObSysFunRawExpr *func_expr = NULL;
-  OZ(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS, func_expr));
+  OZ(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_IS_JSON, func_expr));
   CK(OB_NOT_NULL(func_expr));
   OX(func_expr->set_func_name(ObString::make_string("is_json")));
 

@@ -101,7 +101,7 @@ public:
   int get_int_val_from_raw(ObIAllocator &alloc, ObExecContext *exec_ctx, const ObRawExpr* raw_expr, ObObj &const_data);
   int init_mismatch_array(const ObRawExpr* raw_expr,
                           ObExecContext *exec_ctx);
-  int parse_json_path(ObString path_str, ObJsonPath* j_path_);
+  int parse_json_path(ObString path_str, ObJsonPath*& j_path_);
 
   common::ObIAllocator &allocator_;
   int8_t truncate_;
