@@ -45,7 +45,7 @@ public:
   int wait_ddl_merge_success(ObTablet &tablet, const share::SCN &start_scn, const share::SCN &commit_scn);
   int get_ddl_param(ObTabletDDLParam &ddl_param);
   int get_or_create_ddl_kv(ObTablet &tablet, const share::SCN &start_scn, const share::SCN &scn, ObTableHandleV2 &kv_handle); // used in active ddl kv guard
-  int get_freezed_ddl_kv(const share::SCN &freeze_scn, ObTableHandleV2 &kv_handle); // locate ddl kv with exeact freeze log ts
+  int get_freezed_ddl_kv(const share::SCN &freeze_scn, ObTableHandleV2 &kv_handle); // locate ddl kv with exact freeze log ts
   int get_ddl_kvs(const bool frozen_only, ObTablesHandleArray &kv_handle_array); // get all freeze ddl kvs
   int get_ddl_kvs_for_query(ObTablet &tablet, ObTablesHandleArray &kv_handle_array);
   int freeze_ddl_kv(ObTablet &tablet, const share::SCN &freeze_scn = share::SCN::min_scn()); // freeze the active ddl kv, when memtable freeze or ddl commit
