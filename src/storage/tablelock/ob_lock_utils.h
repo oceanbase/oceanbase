@@ -36,7 +36,8 @@ public:
   static bool in_inner_table_lock_white_list(const uint64_t inner_table_id)
   {
     bool b_ret = share::OB_ALL_BALANCE_JOB_TID == inner_table_id
-              || share::OB_ALL_RECOVER_TABLE_JOB_TID == inner_table_id;
+              || share::OB_ALL_RECOVER_TABLE_JOB_TID == inner_table_id
+              || share::OB_ALL_TRANSFER_PARTITION_TASK_TID == inner_table_id;
     return b_ret;
   }
   /*

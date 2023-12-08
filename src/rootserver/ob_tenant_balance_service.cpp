@@ -22,6 +22,7 @@
 #include "share/rc/ob_tenant_base.h"//MTL
 #include "rootserver/ob_ls_balance_helper.h"//ObLSBalanceTaskHelper
 #include "rootserver/ob_ls_service_helper.h"//ObLSServiceHelper
+#include "rootserver/ob_transfer_partition_task.h"//ObTransferPartitionHelper
 #include "rootserver/ob_balance_ls_primary_zone.h"//ObBalanceLSPrimaryZone
 #include "observer/ob_server_struct.h"//GCTX
 #include "rootserver/ob_partition_balance.h" // partition balance
@@ -96,15 +97,21 @@ void ObTenantBalanceService::do_work()
         LOG_WARN("failed to gather stat", KR(ret));
       } else if (OB_FAIL(try_process_current_job(job_cnt))) {
         LOG_WARN("failed to process current job", KR(ret));
-      } else if (0 == job_cnt && ObShareUtil::is_tenant_enable_rebalance(tenant_id_)) {
-        //check ls status is match with __all_ls
-        //TODO
+      } else if (0 == job_cnt) {
+        if (OB_FAIL(transfer_partition_(job_cnt))) {
+          LOG_WARN("failed to transfer partition", KR(ret));
+        }
+      }
+      if (OB_SUCC(ret) && 0 == job_cnt
+          && ObShareUtil::is_tenant_enable_rebalance(tenant_id_)) {
         if (ObShareUtil::is_tenant_enable_transfer(tenant_id_)) {
           if (OB_FAIL(gather_ls_status_stat(tenant_id_, ls_array_))) {
-            LOG_WARN("failed to gather ls status", KR(ret), K(tenant_id_), K(ls_array_));
+            LOG_WARN("failed to gather ls status stat", KR(ret), K(tenant_id_));
           } else if (OB_FAIL(ls_balance_(job_cnt))) {
             LOG_WARN("failed to do ls balance", KR(ret));
-          } else if (0 == job_cnt) {
+          }
+
+          if (OB_SUCC(ret) && 0 == job_cnt) {
             if (OB_FAIL(try_do_partition_balance_(last_partition_balance_time))) {
               LOG_WARN("try do partition balance failed", KR(ret), K(last_partition_balance_time));
             }
@@ -531,7 +538,9 @@ int ObTenantBalanceService::try_finish_current_job_(const share::ObBalanceJob &j
     ObBalanceJobStatus new_status;
     can_clean_job = true;
     ObString comment;
-    if (job.get_job_status().is_doing()) {
+    START_TRANSACTION(GCTX.sql_proxy_, tenant_id_)
+    if (OB_FAIL(ret)) {
+    } else if (job.get_job_status().is_doing()) {
       new_status = ObBalanceJobStatus(share::ObBalanceJobStatus::BALANCE_JOB_STATUS_COMPLETED);
     } else if (job.get_job_status().is_canceling()) {
       new_status = ObBalanceJobStatus(share::ObBalanceJobStatus::BALANCE_JOB_STATUS_CANCELED);
@@ -539,11 +548,18 @@ int ObTenantBalanceService::try_finish_current_job_(const share::ObBalanceJob &j
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("job status not expected", KR(ret), K(job));
     }
+    if (OB_SUCC(ret) && job.get_job_type().is_transfer_partition()) {
+    //不管job是以什么状态结束的，校验transfer_partition_task没有这个job_id的任务
+      if (OB_FAIL(try_finish_transfer_partition_(job, trans))) {
+        LOG_WARN("try finish transfer partition task", KR(ret), K(job));
+      }
+    }
     if (FAILEDx(ObBalanceJobTableOperator::update_job_status(tenant_id_, job.get_job_id(),
                          job.get_job_status(), new_status, false, comment,
-                         *GCTX.sql_proxy_))) {
+                         trans))) {
       LOG_WARN("failed to update job status", KR(ret), K(tenant_id_), K(job), K(new_status));
     }
+    END_TRANSACTION(trans)
   }
   if (OB_SUCC(ret)) {
     if (!can_clean_job) {
@@ -554,6 +570,58 @@ int ObTenantBalanceService::try_finish_current_job_(const share::ObBalanceJob &j
       ISTAT("clean the job", K(task_cnt), K(job));
       job_cnt = 0;
     }
+  }
+  return ret;
+}
+//在balance_job结束时，可能存在transfer partition任务的残留，这里残留有两种情况：
+//1. cancel 时，需要一把把没有处理完成的任务全都回滚掉。
+//2. complete时，可能也会有残留的任务，例如生成了LS_SPLIT + ALTER + MERGE任务
+//用户在split任务执行成功后，就把对应的分区删除掉了，后续的merge任务的part_list中就看不到这个分区了，所以在整个balance_job结束掉后，就会存在transfer_partition任务的残留，这种我们也回滚成WAITING状态，等待下一轮结束掉:
+int ObTenantBalanceService::try_finish_transfer_partition_(
+    const share::ObBalanceJob &job, common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_ || ! ATOMIC_LOAD(&loaded_))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(inited_), K(loaded_));
+  } else if (OB_UNLIKELY(!job.is_valid() || !job.get_job_type().is_transfer_partition())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("job is invalid", KR(ret), K(job));
+  } else if (job.get_job_status().is_canceling()) {
+    //取消所有的关联的transfer partition任务
+    if (OB_FAIL(ObTransferPartitionTaskTableOperator::rollback_all_to_waitting(
+            tenant_id_, job.get_job_id(), trans))) {
+      LOG_WARN("failed to rollback task", KR(ret), K(tenant_id_), K(job));
+    }
+  } else if (job.get_job_status().is_doing()) {
+    ObArray<ObTransferPartitionTask> task_array;
+    if (OB_FAIL(ObTransferPartitionTaskTableOperator::load_all_balance_job_task(
+            tenant_id_, job.get_job_id(), task_array, trans))) {
+      LOG_WARN("failed to load balance job task", KR(ret), K(tenant_id_), K(job));
+    } else if (task_array.count() > 0) {
+      ObString comment("Need retry, partition may be dropped");
+      ISTAT("Job is finish, has transfer task doing, rollback such task",
+          K(task_array), K(job));
+      ObTransferPartList part_list;
+      //通过分析，这部分遗留下来的transfer partition任务一定是doing状态的
+      for (int64_t i = 0; OB_SUCC(ret) && i < task_array.count(); ++i) {
+        const ObTransferPartitionTask &task = task_array.at(i);
+        if (OB_UNLIKELY(!task.get_task_status().is_doing())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("task must be doing", KR(ret), K(task));
+        } else if (OB_FAIL(part_list.push_back(task.get_part_info()))) {
+          LOG_WARN("failed to push back", KR(ret), K(i), K(task));
+        }
+      }
+      if (FAILEDx(ObTransferPartitionTaskTableOperator::
+                      rollback_from_doing_to_waiting(tenant_id_,
+                      job.get_job_id(), part_list, comment, trans))) {
+        LOG_WARN("failed to rollback balance job", KR(ret), K(job), K(part_list));
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("job status is not expected", KR(ret), K(job));
   }
   return ret;
 }
@@ -590,9 +658,22 @@ int ObTenantBalanceService::check_ls_job_need_cancel_(const share::ObBalanceJob 
   } else if (OB_UNLIKELY(!job.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("job is invalid", KR(ret), K(job));
+  } else if (job.get_job_type().is_transfer_partition()) {
+    //手动transfer partition任务只需要看enable_transfer即可
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+    if (OB_UNLIKELY(!tenant_config.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tenant config is invalid", K(tenant_id_));
+    } else if (!tenant_config->enable_transfer) {
+      need_cancel = true;
+      if (OB_TMP_FAIL(comment.assign("Canceled due to tenant transfer being disabled"))) {
+        LOG_WARN("failed to assign fmt", KR(tmp_ret), K(job));
+      }
+      ISTAT("tenant transfer is disabled, need cancel current job", K(job), K(comment));
+    }
   } else if (!ObShareUtil::is_tenant_enable_transfer(tenant_id_)) {
     need_cancel = true;
-    if (OB_TMP_FAIL(comment.assign_fmt("Canceled due to tenant balance or transfer is disabled"))) {
+    if (OB_TMP_FAIL(comment.assign_fmt("Canceled due to tenant balance or transfer being disabled"))) {
       LOG_WARN("failed to assign fmt", KR(tmp_ret), K(job));
     }
     ISTAT("tenant balance or transfer is disabled, need cancel current job", K(job), K(comment),
@@ -600,7 +681,7 @@ int ObTenantBalanceService::check_ls_job_need_cancel_(const share::ObBalanceJob 
         "enable_transfer", ObShareUtil::is_tenant_enable_transfer(tenant_id_));
   } else if (job.get_primary_zone_num() != primary_zone_num_) {
     need_cancel = true;
-    if (OB_TMP_FAIL(comment.assign_fmt("Canceled due to primary zone num change from %ld to %ld",
+    if (OB_TMP_FAIL(comment.assign_fmt("Canceled due to primary zone num changing from %ld to %ld",
                       job.get_primary_zone_num(), primary_zone_num_))) {
       LOG_WARN("failed to assign fmt", KR(tmp_ret), K(job), K(primary_zone_num_));
     }
@@ -611,7 +692,7 @@ int ObTenantBalanceService::check_ls_job_need_cancel_(const share::ObBalanceJob 
       LOG_WARN("failed to get active unit num", KR(ret));
     } else if (job.get_unit_group_num() != active_unit_num) {
       need_cancel = true;
-      if (OB_TMP_FAIL(comment.assign_fmt("Canceled due to unit num change from %ld to %ld",
+      if (OB_TMP_FAIL(comment.assign_fmt("Canceled due to unit num changing from %ld to %ld",
               job.get_unit_group_num(), active_unit_num))) {
         LOG_WARN("failed to assign fmt", KR(tmp_ret), K(job), K(active_unit_num));
       }
@@ -644,22 +725,12 @@ int ObTenantBalanceService::persist_job_and_task_(const share::ObBalanceJob &job
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ptr is null", KR(ret), KP(GCTX.sql_proxy_));
-  } else if (OB_FAIL(construct_dependency_of_each_task_(tasks))) {
-    LOG_WARN("failed to generate dependency task", KR(ret), K(tasks));
   } else {
     common::ObMySQLTransaction trans;
     if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id_))) {
       LOG_WARN("failed to start trans", KR(ret), K(tenant_id_));
-    } else if (OB_FAIL(lock_and_check_balance_job_(trans, tenant_id_))) {
-      LOG_WARN("lock and check balance job failed", KR(ret), K_(tenant_id));
-    } else if (OB_FAIL(ObBalanceJobTableOperator::insert_new_job(job, trans))) {
-      LOG_WARN("failed to insert new job", KR(ret), K(job));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < tasks.count(); ++i) {
-      if (OB_FAIL(ObBalanceTaskTableOperator::insert_new_task(tasks.at(i),
-                                                              trans))) {
-        LOG_WARN("failed to insert new task", KR(ret), K(i), K(tasks));
-      }
+    } else if (OB_FAIL(persist_job_and_task_in_trans_(job, tasks, trans))) {
+      LOG_WARN("failed to persist job and task in trans", KR(ret), K(job), K(tasks));
     }
     if (trans.is_started()) {
       int tmp_ret = OB_SUCCESS;
@@ -672,6 +743,53 @@ int ObTenantBalanceService::persist_job_and_task_(const share::ObBalanceJob &job
   return ret;
 }
 
+int ObTenantBalanceService::persist_job_and_task_in_trans_(const share::ObBalanceJob &job,
+                                                  ObArray<share::ObBalanceTask> &tasks,
+                                                  common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_ || ! ATOMIC_LOAD(&loaded_))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(inited_), K(loaded_));
+  } else if (OB_UNLIKELY(!job.is_valid() || 0 == tasks.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("job or task is invalid", KR(ret), K(job), K(tasks));
+  } else if (OB_FAIL(construct_dependency_of_each_task_(tasks))) {
+    LOG_WARN("failed to generate dependency task", KR(ret), K(tasks));
+  } else if (OB_FAIL(lock_and_check_balance_job_(trans, tenant_id_))) {
+    LOG_WARN("lock and check balance job failed", KR(ret), K_(tenant_id));
+  } else {
+    //由于ls_array_是在锁外获取，所以可能会存在没有获取到最新状态的问题，在锁内做二次校验
+    //TODO 是否需要检验primary_zone和unit_num，目前看不需要，这些随时都有可能被修改
+    //只能保证最终一致性
+    share::ObLSStatusInfoArray tmp_ls_array;
+    if (OB_FAIL(gather_ls_status_stat(tenant_id_, tmp_ls_array))) {
+      LOG_WARN("failed to get ls status array", KR(ret), K(tenant_id_));
+    } else if (tmp_ls_array.count() != ls_array_.count()) {
+      ret = OB_NEED_RETRY;
+      LOG_WARN("ls status info change, need retry", KR(ret), K(tmp_ls_array),
+      K(ls_array_));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < tmp_ls_array.count(); ++i) {
+        if (ls_array_.at(i) != tmp_ls_array.at(i)) {
+          ret = OB_NEED_RETRY;
+          LOG_WARN("ls status info change, need retry", KR(ret),
+          "ls_status", ls_array_.at(i), "ls_status_new", tmp_ls_array.at(i));
+        }
+      }//end for
+    }
+  }
+  if (FAILEDx(ObBalanceJobTableOperator::insert_new_job(job, trans))) {
+    LOG_WARN("failed to insert new job", KR(ret), K(job));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < tasks.count(); ++i) {
+    if (OB_FAIL(ObBalanceTaskTableOperator::insert_new_task(tasks.at(i),
+                                                            trans))) {
+      LOG_WARN("failed to insert new task", KR(ret), K(i), K(tasks));
+    }
+  }
+  return ret;
+}
 int ObTenantBalanceService::lock_and_check_balance_job_(
     common::ObMySQLTransaction &trans,
     const uint64_t tenant_id)
@@ -847,7 +965,66 @@ int ObTenantBalanceService::try_statistic_balance_group_status_(
   }
   return ret;
 }
+int ObTenantBalanceService::transfer_partition_(int64_t &job_cnt)
+{
+  int ret = OB_SUCCESS;
+  job_cnt = 0;
+  uint64_t data_version = 0;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+  if (OB_UNLIKELY(!inited_ || !ATOMIC_LOAD(&loaded_))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(inited_), K(loaded_));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+    LOG_WARN("failed to get min data version", KR(ret), K(tenant_id_));
+  } else if (DATA_VERSION_4_2_1_2 > data_version) {
+    LOG_TRACE("no need do transfer partition", K(data_version));
+  } else if (OB_UNLIKELY(!tenant_config.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant config is invalid", K(tenant_id_));
+  } else if (!tenant_config->enable_transfer) {
+    LOG_TRACE("can not transfer partition while can not transfer");
+  } else {
+    ObTransferPartitionHelper tp_help(tenant_id_, GCTX.sql_proxy_);
+    int64_t unit_num = 0;
+    bool has_job = true;
 
+    if (OB_FAIL(tp_help.build(has_job))) {
+      LOG_WARN("failed to build transfer task info", KR(ret));
+    } else if (!has_job) {
+      LOG_INFO("no transfer partition job");
+    } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ptr is null", KR(ret), KP(GCTX.sql_proxy_));
+    } else if (OB_FAIL(get_active_unit_num_(unit_num))) {
+      LOG_WARN("failed to get unit num", KR(ret));
+    } else if (OB_FAIL(gather_ls_status_stat(tenant_id_, ls_array_))) {
+      LOG_WARN("failed to gather ls status stat", KR(ret), K(tenant_id_));
+    } else {
+      START_TRANSACTION(GCTX.sql_proxy_, tenant_id_)
+      if (FAILEDx(tp_help.process_in_trans(ls_array_, unit_num,
+                                primary_zone_num_, trans))) {
+        LOG_WARN("failed to process transfer partition", KR(ret),
+        K(ls_array_), K(unit_num), K(primary_zone_num_));
+      } else if (0 == tp_help.get_balance_tasks().count()) {
+        job_cnt = 0;
+      } else if (OB_FAIL(persist_job_and_task_in_trans_(tp_help.get_balance_job(),
+                                               tp_help.get_balance_tasks(),
+                                               trans))) {
+        LOG_WARN("failed to persist job and task", KR(ret), "job",
+                 tp_help.get_balance_job(), "tasks",
+                 tp_help.get_balance_tasks());
+      } else {
+        job_cnt = 1;
+      }
+      END_TRANSACTION(trans)
+    }
+  }
+
+  ISTAT("finish transfer partition", KR(ret), K(job_cnt),
+        "enable transfer", tenant_config->enable_transfer);
+  return ret;
+
+}
 #undef SET_TASK_DEPENDENCY
 #undef ISTAT
 #undef WSTAT

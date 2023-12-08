@@ -204,13 +204,14 @@ TEST_F(TestTenantTransferService, test_service)
   // try cancel transfer task
   ObTransferTask init_task;
   ObTransferTask aborted_task;
+  ObTransferTask tmp_task;
   ObTransferTaskID init_task_id(222);
   ObTransferTaskID aborted_task_id(333);
   ASSERT_EQ(OB_SUCCESS, gen_mock_data(init_task_id, ObTransferStatus(ObTransferStatus::INIT), init_task));
   ASSERT_EQ(OB_SUCCESS, gen_mock_data(aborted_task_id, ObTransferStatus(ObTransferStatus::ABORTED), aborted_task));
   ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::insert(inner_sql_proxy, g_tenant_id, init_task));
   ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::insert(inner_sql_proxy, g_tenant_id, aborted_task));
-  ASSERT_EQ(OB_SUCCESS, tenant_transfer->try_cancel_transfer_task(ObTransferTaskID(555))); // task which does not exist will be canceled successfully
+  ASSERT_EQ(OB_SUCCESS, tenant_transfer->try_cancel_transfer_task(ObTransferTaskID(555)));
   ASSERT_EQ(OB_OP_NOT_ALLOW, tenant_transfer->try_cancel_transfer_task(aborted_task_id));
   ASSERT_EQ(OB_SUCCESS, tenant_transfer->try_cancel_transfer_task(init_task_id));
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, ObTransferTaskOperator::get(inner_sql_proxy, g_tenant_id, init_task_id, false, init_task, 0/*group_id*/));
@@ -225,9 +226,9 @@ TEST_F(TestTenantTransferService, test_service)
 
   ObTransferPartList all_part_list;
   ObTransferPartList finished_part_list;
-  ASSERT_EQ(OB_NEED_RETRY, tenant_transfer->try_clear_transfer_task(aborted_task_id, all_part_list, finished_part_list));
+  ASSERT_EQ(OB_NEED_RETRY, tenant_transfer->try_clear_transfer_task(aborted_task_id, tmp_task, all_part_list, finished_part_list));
   ASSERT_TRUE(all_part_list.empty() && finished_part_list.empty());
-  ASSERT_EQ(OB_SUCCESS, tenant_transfer->try_clear_transfer_task(task_id, all_part_list, finished_part_list));
+  ASSERT_EQ(OB_SUCCESS, tenant_transfer->try_clear_transfer_task(task_id, tmp_task, all_part_list, finished_part_list));
   ObString all_part_list_str;
   ASSERT_TRUE(all_part_list.count() == g_part_list.count());
   ARRAY_FOREACH(g_part_list, idx) {

@@ -343,7 +343,7 @@ int ObStandbyService::recover_tenant(const obrpc::ObRecoverTenantArg &arg)
   return ret;
 }
 
-int ObStandbyService::get_tenant_status_(
+int ObStandbyService::get_tenant_status(
     const uint64_t tenant_id,
     ObTenantStatus &status)
 {
@@ -399,7 +399,7 @@ int ObStandbyService::check_if_tenant_status_is_normal_(const uint64_t tenant_id
 {
   int ret = OB_SUCCESS;
   ObTenantStatus tenant_status = TENANT_STATUS_MAX;
-  if (OB_FAIL(get_tenant_status_(tenant_id, tenant_status))) {
+  if (OB_FAIL(get_tenant_status(tenant_id, tenant_status))) {
     LOG_WARN("failed to get tenant status", KR(ret), K(tenant_id));
   } else if (OB_UNLIKELY(!is_tenant_normal(tenant_status))) {
     ret = OB_OP_NOT_ALLOW;
@@ -435,7 +435,7 @@ int ObStandbyService::do_recover_tenant(
   } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(get_tenant_status_(tenant_id, tenant_status))) {
+  } else if (OB_FAIL(get_tenant_status(tenant_id, tenant_status))) {
     LOG_WARN("failed to get tenant status", KR(ret), K(tenant_id));
   } else if (OB_FAIL(trans.start(sql_proxy_, exec_tenant_id))) {
     LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id), K(tenant_id));

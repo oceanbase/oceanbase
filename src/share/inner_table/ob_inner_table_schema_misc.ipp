@@ -1846,6 +1846,8 @@ case OB_ALL_VIRTUAL_TIME_ZONE_TID:
 case OB_ALL_VIRTUAL_TIME_ZONE_NAME_TID:
 case OB_ALL_VIRTUAL_TIME_ZONE_TRANSITION_TID:
 case OB_ALL_VIRTUAL_TIME_ZONE_TRANSITION_TYPE_TID:
+case OB_ALL_VIRTUAL_TRANSFER_PARTITION_TASK_TID:
+case OB_ALL_VIRTUAL_TRANSFER_PARTITION_TASK_HISTORY_TID:
 case OB_ALL_VIRTUAL_TRANSFER_TASK_TID:
 case OB_ALL_VIRTUAL_TRANSFER_TASK_HISTORY_TID:
 case OB_ALL_VIRTUAL_TRIGGER_TID:
@@ -4007,6 +4009,36 @@ case OB_ALL_VIRTUAL_USER_HISTORY_TID:
       break;
     }
 
+    case OB_ALL_VIRTUAL_TRANSFER_PARTITION_TASK_TID: {
+      ObIterateVirtualTable *iter = NULL;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_TRANSFER_PARTITION_TASK_TID, index_schema, params))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        iter->~ObIterateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_TRANSFER_PARTITION_TASK_HISTORY_TID: {
+      ObIterateVirtualTable *iter = NULL;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_TRANSFER_PARTITION_TASK_HISTORY_TID, index_schema, params))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        iter->~ObIterateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
     case OB_ALL_VIRTUAL_TRANSFER_TASK_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4506,6 +4538,7 @@ case OB_ALL_DBMS_LOCK_ALLOCATED_IDX_DBMS_LOCK_ALLOCATED_LOCKHANDLE_TID:
 case OB_ALL_DBMS_LOCK_ALLOCATED_IDX_DBMS_LOCK_ALLOCATED_EXPIRATION_TID:
 case OB_ALL_KV_TTL_TASK_IDX_KV_TTL_TASK_TABLE_ID_TID:
 case OB_ALL_KV_TTL_TASK_HISTORY_IDX_KV_TTL_TASK_HISTORY_UPD_TIME_TID:
+case OB_ALL_TRANSFER_PARTITION_TASK_IDX_TRANSFER_PARTITION_KEY_TID:
 
 #endif
 
@@ -4563,6 +4596,7 @@ case OB_ALL_JOB_TID:
 case OB_ALL_TENANT_DEPENDENCY_TID:
 case OB_ALL_TABLEGROUP_TID:
 case OB_ALL_TENANT_HISTORY_TID:
+case OB_ALL_TRANSFER_PARTITION_TASK_TID:
 case OB_ALL_SUB_PART_TID:
 case OB_ALL_ROUTINE_TID:
 case OB_ALL_TENANT_DIRECTORY_TID:
@@ -4955,6 +4989,12 @@ case OB_ALL_TABLEGROUP_TID: {
 }
 case OB_ALL_TENANT_HISTORY_TID: {
   if (FAILEDx(index_tids.push_back(OB_ALL_TENANT_HISTORY_IDX_TENANT_DELETED_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_TRANSFER_PARTITION_TASK_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_TRANSFER_PARTITION_TASK_IDX_TRANSFER_PARTITION_KEY_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   break;
@@ -5685,6 +5725,15 @@ case OB_ALL_TENANT_HISTORY_TID: {
   }
   break;
 }
+case OB_ALL_TRANSFER_PARTITION_TASK_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_transfer_partition_task_idx_transfer_partition_key_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
 case OB_ALL_SUB_PART_TID: {
   index_schema.reset();
   if (FAILEDx(ObInnerTableSchema::all_sub_part_idx_sub_part_name_schema(index_schema))) {
@@ -6090,6 +6139,8 @@ case OB_ALL_FOREIGN_KEY_TID: {
   } else if (OB_FAIL(table_ids.push_back(OB_ALL_KV_TTL_TASK_IDX_KV_TTL_TASK_TABLE_ID_TID))) {
     LOG_WARN("add index id failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(table_ids.push_back(OB_ALL_KV_TTL_TASK_HISTORY_IDX_KV_TTL_TASK_HISTORY_UPD_TIME_TID))) {
+    LOG_WARN("add index id failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(table_ids.push_back(OB_ALL_TRANSFER_PARTITION_TASK_IDX_TRANSFER_PARTITION_KEY_TID))) {
     LOG_WARN("add index id failed", KR(ret), K(tenant_id));
 
 #endif

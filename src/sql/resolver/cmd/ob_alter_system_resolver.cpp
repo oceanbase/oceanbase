@@ -5684,5 +5684,178 @@ int resolve_restore_until(const ParseNode &time_node,
   return ret;
 }
 
+int resolve_part_info(const ParseNode &parse_node, uint64_t &table_id, ObObjectID &object_id)
+{
+  int ret = OB_SUCCESS;
+  table_id = OB_INVALID_ID;
+  object_id = OB_INVALID_OBJECT_ID;
+  if (OB_UNLIKELY(T_PARTITION_INFO != parse_node.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse node, type is not T_PARTITION_INFO", KR(ret), "type",
+        get_type_name(parse_node.type_));
+  } else if (2 != parse_node.num_child_
+        || OB_ISNULL(parse_node.children_[0])
+        || OB_ISNULL(parse_node.children_[1])) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid parse node", KR(ret), "num_child", parse_node.num_child_,
+        KP(parse_node.children_[0]), KP(parse_node.children_[1]));
+  } else {
+    table_id = parse_node.children_[0]->value_;
+    object_id = parse_node.children_[1]->value_;
+  }
+  return ret;
+}
+
+
+int resolve_transfer_partition_to_ls(
+    const ParseNode &parse_node,
+    const uint64_t target_tenant_id,
+    const uint64_t exec_tenant_id,
+    ObTransferPartitionStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  uint64_t table_id = OB_INVALID_ID;
+  ObObjectID object_id = OB_INVALID_OBJECT_ID;
+  if (OB_UNLIKELY(T_TRANSFER_PARTITION_TO_LS != parse_node.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse node, type is not T_TRANSFER_PARTITION_TO_LS", KR(ret), "type",
+        get_type_name(parse_node.type_));
+  } else if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", KR(ret), KP(stmt));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(exec_tenant_id) || !is_valid_tenant_id(target_tenant_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid exec_tenant_id or target_tenant_id", KR(ret), K(exec_tenant_id), K(target_tenant_id));
+  } else if (2 != parse_node.num_child_
+        || OB_ISNULL(parse_node.children_[0])
+        || OB_ISNULL(parse_node.children_[1])) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid parse node", KR(ret), "num_child", parse_node.num_child_,
+        KP(parse_node.children_[0]), KP(parse_node.children_[1]));
+  } else if (OB_FAIL(resolve_part_info(*parse_node.children_[0], table_id, object_id))) {
+    LOG_WARN("fail to resolve partition info", KR(ret), KP(parse_node.children_[0]));
+  } else {
+    int64_t id = parse_node.children_[1]->value_;
+    ObLSID ls_id(id);
+    if (OB_FAIL(stmt->get_arg().init_for_transfer_partition_to_ls(
+        target_tenant_id,
+        table_id,
+        object_id,
+        ls_id))) {
+      LOG_WARN("fail to init stmt rpc arg", KR(ret), K(target_tenant_id),
+          K(table_id), K(object_id), K(ls_id));
+    }
+  }
+  return ret;
+}
+
+int get_and_verify_tenant_name_for_transfer_partition(
+    const ParseNode *parse_node,
+    const uint64_t exec_tenant_id,
+    uint64_t &target_tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObString tenant_name;
+  ObSchemaGetterGuard schema_guard;
+  if (OB_UNLIKELY(!is_valid_tenant_id(exec_tenant_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec tenant id is invalid", KR(ret), K(exec_tenant_id));
+  } else if (NULL == parse_node) {
+    if (OB_SYS_TENANT_ID != exec_tenant_id) {
+      target_tenant_id = exec_tenant_id;
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("no specified tenant in the sys tenant's session", KR(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Transfer partition of SYS tenant is");
+    }
+  } else if (OB_FAIL(resolve_tenant_name(parse_node, exec_tenant_id, tenant_name))) {
+    LOG_WARN("fail to resolve target tenant id", KR(ret));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.schema_service_ is null", KR(ret), KP(GCTX.schema_service_));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
+    LOG_WARN("failed to get_tenant_schema_guard", KR(ret));
+  } else if (OB_FAIL(schema_guard.get_tenant_id(tenant_name, target_tenant_id))) {
+    LOG_WARN("failed to get tenant id from schema guard", KR(ret), K(tenant_name));
+    if (OB_TENANT_NOT_EXIST == ret || OB_ERR_INVALID_TENANT_NAME == ret) {
+      ret = OB_TENANT_NOT_EXIST;
+      LOG_USER_ERROR(OB_TENANT_NOT_EXIST, tenant_name.length(), tenant_name.ptr());
+    }
+  } else if (OB_UNLIKELY(!is_user_tenant(target_tenant_id))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only support user tenant", KR(ret), K(target_tenant_id));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Transfer partition of META or SYS tenant is");
+  } else if (OB_SYS_TENANT_ID != exec_tenant_id && target_tenant_id != exec_tenant_id) {
+    ret = OB_ERR_NO_PRIVILEGE;
+    LOG_WARN("no support operating other user tenants", KR(ret), K(target_tenant_id), K(exec_tenant_id));
+  }
+  return ret;
+}
+
+int ObTransferPartitionResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  ObTransferPartitionStmt *stmt = create_stmt<ObTransferPartitionStmt>();
+  uint64_t target_tenant_id = OB_INVALID_TENANT_ID;
+  if (OB_UNLIKELY(T_TRANSFER_PARTITION != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse node, type is not T_TRANSFER_PARTITION", KR(ret), "type",
+        get_type_name(parse_tree.type_));
+  } else if (OB_ISNULL(stmt)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("create stmt fail", KR(ret));
+  } else if (2 != parse_tree.num_child_
+        || OB_ISNULL(parse_tree.children_[0])
+        ||OB_ISNULL(session_info_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid parse tree or session info", KR(ret), "num_child", parse_tree.num_child_,
+        KP(parse_tree.children_[0]), KP(session_info_));
+  } else if (OB_FAIL(get_and_verify_tenant_name_for_transfer_partition(
+      parse_tree.children_[1],
+      session_info_->get_effective_tenant_id(),
+      target_tenant_id))) {
+    LOG_WARN("fail to execute get_and_verify_tenant_name_for_transfer_partition", KR(ret),
+        K(session_info_->get_effective_tenant_id()), KP(parse_tree.children_[1]));
+  } else {
+    ParseNode *transfer_partition_node = parse_tree.children_[0];
+    switch(transfer_partition_node->type_) {
+      case T_TRANSFER_PARTITION_TO_LS:
+        if (OB_FAIL(resolve_transfer_partition_to_ls(
+            *transfer_partition_node,
+            target_tenant_id,
+            session_info_->get_effective_tenant_id(),
+            stmt))) {
+          LOG_WARN("fail to resolve transfer_partition_to_ls", KR(ret), K(target_tenant_id), K(session_info_->get_effective_tenant_id()));
+        }
+        break;
+      default:
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid transfer partition node type", KR(ret), "type", get_type_name(transfer_partition_node->type_));
+    }
+    if (OB_SUCC(ret)) {
+      stmt_ = stmt;
+    }
+    if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
+      if (OB_ISNULL(schema_checker_)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret));
+      } else if (OB_FAIL(schema_checker_->check_ora_ddl_priv(
+        session_info_->get_effective_tenant_id(),
+        session_info_->get_priv_user_id(),
+        ObString(""),
+        // why use T_ALTER_SYSTEM_SET_PARAMETER?
+        // because T_ALTER_SYSTEM_SET_PARAMETER has following traits:
+        // T_ALTER_SYSTEM_SET_PARAMETER can allow dba to do an operation
+        // and prohibit other user to do this operation
+        // so we reuse this.
+        stmt::T_ALTER_SYSTEM_SET_PARAMETER,
+        session_info_->get_enable_role_array()))) {
+        LOG_WARN("failed to check privilege", K(session_info_->get_effective_tenant_id()), K(session_info_->get_user_id()));
+      }
+    }
+  }
+  return ret;
+}
+
 } // end namespace sql
 } // end namespace oceanbase

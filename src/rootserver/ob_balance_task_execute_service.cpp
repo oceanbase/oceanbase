@@ -18,11 +18,13 @@
 #include "share/schema/ob_part_mgr_util.h"//ObPartitionSchemaIter
 #include "share/ob_unit_table_operator.h" //ObUnitTableOperator
 #include "share/balance/ob_balance_job_table_operator.h"//ObBalanceJob
+#include "share/balance/ob_transfer_partition_task_table_operator.h"//set transfer
 #include "share/ob_primary_zone_util.h"//get_primary_zone
 #include "share/rc/ob_tenant_base.h"//MTL
 #include "share/ls/ob_ls_operator.h"//ls_op
 #include "share/ls/ob_ls_status_operator.h"//status_op
 #include "share/ls/ob_ls_table_operator.h"//lst_operator->get
+#include "share/transfer/ob_transfer_task_operator.h"//get_history_task
 #include "rootserver/ob_tenant_transfer_service.h"//transfer
 #include "rootserver/balance/ob_ls_all_part_builder.h"   // ObLSAllPartBuilder
 #include "rootserver/ob_root_utils.h"//get_rs_default_timeout_ctx
@@ -251,7 +253,8 @@ int ObBalanceTaskExecuteService::update_task_status_(
 }
 
 int ObBalanceTaskExecuteService::process_current_task_status_(
-    const share::ObBalanceTask &task, ObMySQLTransaction &trans,
+    const share::ObBalanceTask &task, const share::ObBalanceJob &job,
+    ObMySQLTransaction &trans,
     bool &skip_next_status)
 {
   int ret = OB_SUCCESS;
@@ -277,9 +280,8 @@ int ObBalanceTaskExecuteService::process_current_task_status_(
     } else if (task.get_task_status().is_transfer()) {
       DEBUG_SYNC(BEFORE_PROCESS_BALANCE_TASK_TRANSFER);
       bool all_part_transfered = false;
-      if (OB_FAIL(
-              execute_transfer_in_trans_(task, trans, all_part_transfered))) {
-        LOG_WARN("failed to execute transfer in trans", KR(ret), K(task));
+      if (OB_FAIL(execute_transfer_in_trans_(task, job, trans, all_part_transfered))) {
+        LOG_WARN("failed to execute transfer in trans", KR(ret), K(task), K(job));
       } else if (!all_part_transfered) {
         skip_next_status = true;
       } else if (task.get_task_type().is_merge_task()) {
@@ -347,11 +349,11 @@ int ObBalanceTaskExecuteService::execute_task_()
       } else if (task_in_trans.get_task_status().is_finish_status()) {
       } else {
         if (job.get_job_status().is_doing()) {
-          if (OB_FAIL(process_current_task_status_(task_in_trans, trans, skip_next_status))) {
+          if (OB_FAIL(process_current_task_status_(task_in_trans, job, trans, skip_next_status))) {
             LOG_WARN("failed to process current task status", KR(ret), K(task_in_trans));
           }
         } else if (job.get_job_status().is_canceling()) {
-          if (OB_FAIL(cancel_current_task_status_(task_in_trans, trans, skip_next_status))) {
+          if (OB_FAIL(cancel_current_task_status_(task_in_trans, job, trans, skip_next_status))) {
             LOG_WARN("failed to cancel current task", KR(ret), K(task_in_trans));
           }
         } else {
@@ -424,7 +426,8 @@ int ObBalanceTaskExecuteService::get_balance_job_task_for_update_(
 }
 
 int ObBalanceTaskExecuteService::cancel_current_task_status_(
-    const share::ObBalanceTask &task, ObMySQLTransaction &trans, bool &skip_next_status)
+    const share::ObBalanceTask &task, const share::ObBalanceJob &job,
+    ObMySQLTransaction &trans, bool &skip_next_status)
 {
   int ret = OB_SUCCESS;
   skip_next_status = false;
@@ -454,6 +457,17 @@ int ObBalanceTaskExecuteService::cancel_current_task_status_(
           if (OB_FAIL(task_comment_.assign_fmt("Fail to cancel transfer task %ld, result is %d",
                 task.get_current_transfer_task_id().id(), tmp_ret))) {
             LOG_WARN("failed to assign fmt", KR(ret), KR(tmp_ret), K(task));
+          }
+        } else if (job.get_job_type().is_transfer_partition()) {
+          ObTransferTask transfer_task;
+          int64_t create_time = 0, finish_time = 0;//no use
+          if (OB_FAIL(ObTransferTaskOperator::get_history_task(trans, tenant_id_,
+                  task.get_current_transfer_task_id(), transfer_task,
+                  create_time, finish_time))) {
+            LOG_WARN("failed to get history task", KR(ret), K(tenant_id_), K(task));
+          } else if (OB_FAIL(finish_transfer_partition_task_(transfer_task, job, trans))) {
+            LOG_WARN("failed to finish transfer partition task", KR(ret),
+               K(transfer_task), K(job));
           }
         }
       }
@@ -524,7 +538,7 @@ int ObBalanceTaskExecuteService::cancel_other_init_task_(
         LOG_WARN("task parent not empty, must be init", KR(ret), K(other_task));
       } else {
         //set task status to failed
-        if (OB_FAIL(comment.assign_fmt("Canceled due to parent task %ld was canceled",
+        if (OB_FAIL(comment.assign_fmt("Canceled due to parent task %ld being canceled",
                 task.get_balance_task_id().id()))) {
           LOG_WARN("failed to assign fmt", KR(tmp_ret), K(task), K(other_task));
         } else if (OB_FAIL(try_update_task_comment_(other_task, comment, trans))) {
@@ -675,7 +689,8 @@ int ObBalanceTaskExecuteService::wait_alter_ls_(const share::ObBalanceTask &task
   return ret;
 }
 
-int ObBalanceTaskExecuteService::execute_transfer_in_trans_(const ObBalanceTask &task,
+int ObBalanceTaskExecuteService::execute_transfer_in_trans_(
+    const ObBalanceTask &task, const share::ObBalanceJob &job,
     ObMySQLTransaction &trans,
     bool &all_part_transferred)
 {
@@ -686,14 +701,17 @@ int ObBalanceTaskExecuteService::execute_transfer_in_trans_(const ObBalanceTask 
   ObTransferPartList transfer_all_part_list;
   ObTransferPartList transfer_finished_part_list;
   ObTransferPartList to_do_part_list;
+  ObTransferTask transfer_task;
   all_part_transferred = false;
 
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_UNLIKELY(!task.is_valid() || !task.get_task_status().is_transfer())) {
+  } else if (OB_UNLIKELY(!task.is_valid()
+                         || !task.get_task_status().is_transfer()
+                         || !job.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("task is invalid", KR(ret), K(task));
+    LOG_WARN("task is invalid", KR(ret), K(task), K(job));
   } else if (OB_ISNULL(transfer_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("transfer service is null", KR(ret));
@@ -704,9 +722,8 @@ int ObBalanceTaskExecuteService::execute_transfer_in_trans_(const ObBalanceTask 
     // NEED new task when transfer is finished
     all_part_transferred = (task.get_part_list().count() == 0);
   } else if (OB_FAIL(transfer_service->try_clear_transfer_task(
-      cur_transfer_task_id,
-      transfer_all_part_list,
-      transfer_finished_part_list))) {
+                 cur_transfer_task_id, transfer_task,
+                 transfer_all_part_list, transfer_finished_part_list))) {
     if (OB_NEED_RETRY != ret) {
       LOG_WARN("failed to clear transfer task", KR(ret), K(task));
     } else {
@@ -718,14 +735,15 @@ int ObBalanceTaskExecuteService::execute_transfer_in_trans_(const ObBalanceTask 
   }
   // Finish current Transfer Task of Balance Task
   else if (OB_FAIL(ObBalanceTaskTableOperator::finish_transfer_task(
-      task,
-      cur_transfer_task_id,
-      transfer_finished_part_list,
-      trans,
-      to_do_part_list,
-      all_part_transferred))) {
+               task, cur_transfer_task_id, transfer_finished_part_list, trans,
+               to_do_part_list, all_part_transferred))) {
     LOG_WARN("failed to finish tranfer task", KR(ret),
         K(task), K(cur_transfer_task_id), K(transfer_finished_part_list));
+  } else if (job.get_job_type().is_transfer_partition()) {
+    if (OB_FAIL(finish_transfer_partition_task_(transfer_task, job, trans))) {
+      LOG_WARN("failed to finish transfer partition task", KR(ret),
+               K(transfer_task), K(job));
+    }
   }
 
   // if transfer is not finished and transfer task not executing, generate new task
@@ -747,6 +765,13 @@ int ObBalanceTaskExecuteService::execute_transfer_in_trans_(const ObBalanceTask 
       LOG_WARN("failed to generate new transfer task", KR(ret), K(tenant_id_), K(task), K(transfer_id));
     } else {
       transfer_service->wakeup();
+      if (job.get_job_type().is_transfer_partition()) {
+        if (OB_FAIL(try_start_transfer_partition_task_(job, to_do_part_list,
+                 transfer_id, task.get_dest_ls_id(), trans))) {
+          LOG_WARN("failed to start transfer partition task", KR(ret),
+           K(transfer_id), K(to_do_part_list), K(task), K(job));
+        }
+      }
     }
     ISTAT("generate new transfer task", KR(ret), K(transfer_id), K(to_do_part_list), K(task), K(task_comment_));
   }
@@ -852,6 +877,139 @@ int ObBalanceTaskExecuteService::set_ls_to_dropping_(const ObLSID &ls_id, ObMySQ
                                                      share::NORMAL_SWITCHOVER_STATUS,
                                                      trans))) {
     LOG_WARN("failed to update ls status", KR(ret), K(ls_id));
+  }
+  return ret;
+}
+
+//finish transfer partition task 只有在目的端匹配的情况下才可以
+int ObBalanceTaskExecuteService::finish_transfer_partition_task_(
+    const ObTransferTask &transfer_task, const share::ObBalanceJob &job,
+    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!transfer_task.is_valid()
+        || !transfer_task.get_status().is_finish_status()
+        || !job.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(transfer_task), K(job));
+  }
+  const ObTransferPartList &not_exist_list = transfer_task.get_not_exist_part_list();
+  const ObTransferPartList &finish_list = transfer_task.get_part_list();
+
+  if (OB_SUCC(ret) && not_exist_list.count() > 0) {
+    //这里的分区不存在不一定是分区真的不存在，可能仅是不在源端日志流上
+    //这里需要double check
+    ObString comment("Need retry, partition may be dropped or be transferred");
+    ISTAT("Part not exist during transfer, try again", K(not_exist_list));
+    if (OB_FAIL(ObTransferPartitionTaskTableOperator::rollback_from_doing_to_waiting(
+            tenant_id_, job.get_job_id(), not_exist_list, comment, trans))) {
+      LOG_WARN("failed to finish task", KR(ret), K(tenant_id_),
+          K(not_exist_list), K(transfer_task), K(job), K(comment));
+    }
+  }
+  if (OB_SUCC(ret) && transfer_task.get_status().is_completed_status()
+      && finish_list.count() > 0) {
+    ObString comment("Partition transfer to dest LS");
+    ObTransferPartitionTaskStatus status =
+      ObTransferPartitionTaskStatus::TRP_TASK_STATUS_COMPLETED;
+    ObLSID task_dest_ls;
+    ObTransferPartList new_finish_list;
+    ObTransferPartitionTaskID max_task_id;
+    if (OB_FAIL(load_finish_transfer_part_tasks_(transfer_task, job,
+            new_finish_list, max_task_id, task_dest_ls, trans))) {
+      LOG_WARN("failed to get finish tranfer part task", KR(ret), K(transfer_task), K(job));
+    } else if (0 == new_finish_list.count()) {
+      ISTAT("all transfer partition may be dropped", K(transfer_task));
+    } else if (transfer_task.get_dest_ls() != task_dest_ls) {
+      // 一个transfer partition任务可能会有多次transfer
+      // 任务可以执行成功，一定是transfer到目的端
+      LOG_INFO("dest ls not match, no need finish transfer task", KR(ret),
+          K(task_dest_ls), K(transfer_task));
+    } else if (OB_FAIL(ObTransferPartitionTaskTableOperator::finish_task(
+            tenant_id_, new_finish_list, max_task_id, status, comment, trans))) {
+      LOG_WARN("failed to finish task", KR(ret), K(tenant_id_),
+          K(new_finish_list), K(max_task_id));
+    }
+  } else {
+    //other status no need finish task
+  }
+  return ret;
+}
+
+int ObBalanceTaskExecuteService::load_finish_transfer_part_tasks_(
+    const ObTransferTask &transfer_task,
+    const share::ObBalanceJob &job,
+    ObTransferPartList &new_finish_list,
+    ObTransferPartitionTaskID &max_task_id,
+    ObLSID &dest_ls, ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  new_finish_list.reset();
+  max_task_id.reset();
+  dest_ls.reset();
+  ObArray<ObTransferPartitionTask> task_array;
+  const ObTransferPartList &finish_list = transfer_task.get_part_list();
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!transfer_task.is_valid()
+        || !transfer_task.get_status().is_completed_status()
+        || !job.is_valid() || !job.get_job_type().is_transfer_partition()
+        || 0 >= finish_list.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(transfer_task), K(job));
+  } else if (OB_FAIL(ObTransferPartitionTaskTableOperator::load_part_list_task(
+          tenant_id_, job.get_job_id(), finish_list, task_array, trans))) {
+    LOG_WARN("failed to get part list task", KR(ret), K(tenant_id_),
+        K(finish_list));
+  } else if (0 == task_array.count()) {
+    //可能所有相关的任务的分区都已经被删除，不需要在处理transfer_partition表
+  } else {
+    //检查所有的分区目的端是否一致
+    for (int64_t i = 0; OB_SUCC(ret) && i < task_array.count(); ++i) {
+      const ObTransferPartitionTask &task = task_array.at(i);
+      if (dest_ls.is_valid() && task.get_dest_ls() != dest_ls) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("task need have same dest ls", KR(ret), K(task),
+            K(dest_ls), K(task_array));
+      } else if (OB_FAIL(new_finish_list.push_back(task.get_part_info()))) {
+        LOG_WARN("failed to push back", KR(ret), K(task));
+      } else {
+        dest_ls = task.get_dest_ls();
+        if (!max_task_id.is_valid() || max_task_id < task.get_task_id()) {
+          max_task_id = task.get_task_id();
+        }
+      }
+    }//end for
+  }
+  return ret;
+}
+
+//start可以有多次
+int ObBalanceTaskExecuteService::try_start_transfer_partition_task_(
+    const share::ObBalanceJob &job,
+    const ObTransferPartList &part_list,
+    const ObTransferTaskID &transfer_id,
+    const ObLSID &dest_ls,
+    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!transfer_id.is_valid() || 0 >= part_list.count()
+        || !dest_ls.is_valid() || !job.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("transfer task is invalid", KR(ret), K(transfer_id),
+        K(dest_ls), K(part_list), K(job));
+  } else if (OB_FAIL(
+        ObTransferPartitionTaskTableOperator::start_transfer_task(
+          tenant_id_, job.get_job_id(), part_list, transfer_id, trans))) {
+    LOG_WARN("failed to start transfer task", KR(ret), K(tenant_id_),
+          K(part_list), K(transfer_id), K(job));
   }
   return ret;
 }

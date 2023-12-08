@@ -316,6 +316,7 @@ END_P SET_VAR DELIMITER
 
         OBSOLETE OCCUR OF OFF OFFSET OLD OLD_PASSWORD ONE ONE_SHOT ONLY OPEN OPTIONS ORDINALITY ORIG_DEFAULT OWNER OLD_KEY OVER
         OBCONFIG_URL OJ
+        OBJECT_ID
 
         PACK_KEYS PAGE PARALLEL PARAMETERS PARSER PARTIAL PARTITION_ID PARTITIONING PARTITIONS PASSWORD PATH PAUSE PERCENTAGE
         PERCENT_RANK PHASE PLAN PHYSICAL PLANREGRESS PLUGIN PLUGIN_DIR PLUGINS POINT POLYGON PERFORMANCE
@@ -349,6 +350,7 @@ END_P SET_VAR DELIMITER
         TEMPLATE TEMPORARY TEMPTABLE TENANT TEXT THAN TIME TIMESTAMP TIMESTAMPADD TIMESTAMPDIFF TP_NO
         TP_NAME TRACE TRADITIONAL TRANSACTION TRIGGERS TRIM TRUNCATE TYPE TYPES TASK TABLET_SIZE
         TABLEGROUP_ID TENANT_ID THROTTLE TIME_ZONE_INFO TOP_K_FRE_HIST TIMES TRIM_SPACE TTL
+        TRANSFER
 
         UNCOMMITTED UNDEFINED UNDO_BUFFER_SIZE UNDOFILE UNICODE UNINSTALL UNIT UNIT_GROUP UNIT_NUM UNLOCKED UNTIL
         UNUSUAL UPGRADE USE_BLOOM_FILTER UNKNOWN USE_FRM USER USER_RESOURCES UNBOUNDED UP UNLIMITED
@@ -520,6 +522,7 @@ END_P SET_VAR DELIMITER
 %type <node> json_table_ordinality_column_def json_table_exists_column_def json_table_value_column_def json_table_nested_column_def
 %type <node> opt_value_on_empty_or_error_or_mismatch opt_on_mismatch
 %type <node> table_values_caluse table_values_caluse_with_order_by_and_limit values_row_list row_value
+%type <node> transfer_partition_stmt transfer_partition_clause part_info
 %type <node> geometry_collection
 
 %type <node> ttl_definition ttl_expr ttl_unit
@@ -688,6 +691,7 @@ stmt:
   | method_opt              { $$ = $1; check_question_mark($$, result); }
   | switchover_tenant_stmt   { $$ = $1; check_question_mark($$, result); }
   | recover_tenant_stmt   { $$ = $1; check_question_mark($$, result); }
+  | transfer_partition_stmt { $$ = $1; check_question_mark($$, result); }
   ;
 
 /*****************************************************************************
@@ -17696,7 +17700,33 @@ opt_restore_until
 {
   malloc_terminal_node($$, result->malloc_pool_, T_RECOVER_CANCEL);
 };
-
+/*===========================================================
+ *
+ * 手动transfer命令
+ *
+ *===========================================================*/
+transfer_partition_stmt:
+ALTER SYSTEM transfer_partition_clause opt_tenant_name
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TRANSFER_PARTITION, 2, $3, $4);
+}
+;
+transfer_partition_clause:
+TRANSFER PARTITION part_info TO LS INTNUM
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TRANSFER_PARTITION_TO_LS, 2, $3, $6);
+}
+;
+part_info:
+TABLE_ID opt_equal_mark INTNUM ',' OBJECT_ID opt_equal_mark INTNUM
+{
+  (void) ($2);
+  (void) ($6);
+   malloc_non_terminal_node($$, result->malloc_pool_, T_PARTITION_INFO, 2, $3, $7);
+}
+;
 /*===========================================================
  *
  *	Name classification
@@ -19137,6 +19167,8 @@ ACCOUNT
 |       CONNECT
 |       STATEMENT_ID
 |       KV_ATTRIBUTES
+|       OBJECT_ID
+|       TRANSFER
 ;
 
 unreserved_keyword_special:

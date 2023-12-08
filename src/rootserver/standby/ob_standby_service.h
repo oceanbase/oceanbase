@@ -125,6 +125,16 @@ public:
    * @return return code
    */
   int wait_create_standby_tenant_end(const uint64_t tenant_id);
+  /**
+   * @description:
+   *    get tenant status from all_tenant
+   * @param[in] tenant_id
+   * @param[out] status tenant status from all_tenant
+   * @return return code
+   */
+  int get_tenant_status(
+      const uint64_t tenant_id,
+      ObTenantStatus &status);
 
 private:
   int check_inner_stat_();
@@ -246,16 +256,6 @@ private:
    * @return return code
    */
   int check_ls_restore_status_(const uint64_t tenant_id);
-  /**
-   * @description:
-   *    get tenant status from all_tenant
-   * @param[in] tenant_id
-   * @param[out] status tenant status from all_tenant
-   * @return return code
-   */
-  int get_tenant_status_(
-      const uint64_t tenant_id,
-      ObTenantStatus &status);
   int check_if_tenant_status_is_normal_(const uint64_t tenant_id, const RoleTransType op_type);
   void tenant_event_start_(const uint64_t switch_tenant_id, const obrpc::ObSwitchTenantArg &arg,
       int ret, int64_t begin_ts, const share::ObAllTenantInfo &tenant_info);

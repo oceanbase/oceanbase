@@ -1149,6 +1149,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(TableTTL);
         break;
       }
+      case T_TRANSFER_PARTITION: {
+        REGISTER_STMT_RESOLVER(TransferPartition);
+        break;
+      }
       default: {
         ret = OB_NOT_SUPPORTED;
         const char *type_name = get_type_name(parse_tree.type_);

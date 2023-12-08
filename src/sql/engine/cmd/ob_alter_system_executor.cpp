@@ -2666,5 +2666,18 @@ int ObTableTTLExecutor::execute(ObExecContext& ctx, ObTableTTLStmt& stmt)
   return ret;
 }
 
+int ObTransferPartitionExecutor::execute(ObExecContext& ctx, ObTransferPartitionStmt& stmt)
+{
+  int ret = OB_SUCCESS;
+  const rootserver::ObTransferPartitionArg &arg = stmt.get_arg();
+  rootserver::ObTransferPartitionCommand command;
+  if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invaid argument", KR(ret), K(arg));
+  } else if (OB_FAIL(command.execute(arg))) {
+    LOG_WARN("fail to execute command", KR(ret), K(arg));
+  }
+  return ret;
+}
 } // end namespace sql
 } // end namespace oceanbase

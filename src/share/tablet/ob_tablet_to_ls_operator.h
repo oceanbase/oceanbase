@@ -139,7 +139,8 @@ public:
   // @param [in] tenant_id, tenant for query
   // @param [in] tablet_ids, ObTabletIDs for query
   //             (should exist in __all_tablet_to_ls and have no duplicate values)
-  // @param [out] infos, ObTabletToLSInfo corresponding to tablet_ids (same order)
+  // @param [out] infos, ObTabletToLSInfo corresponding to tablet_ids (not same order)
+  //              not same order, not same order, not same order
   // @return OB_SUCCESS if success;
   //         OB_ITEM_NOT_MATCH if tablet_ids have duplicates or nonexistent tablets;
   //         Other error according to unexpected situation

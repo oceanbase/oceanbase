@@ -91,6 +91,7 @@ public:
    * if task is already cleared, return OB_SUCCESS and related info recorded in history
    *
    * @param[in] task_id:               transfer task id
+   * @param[out] task:                 transfer task
    * @param[out] all_part_list:        all partitons of the transfer task
    * @param[out] finished_part_list:   successfully transferred partitions + needless transferred (not exist or not in src LS) partitions
    * @return
@@ -101,6 +102,7 @@ public:
    */
   int try_clear_transfer_task(
       const share::ObTransferTaskID task_id,
+      share::ObTransferTask &transfer_task,
       share::ObTransferPartList &all_part_list,
       share::ObTransferPartList &finished_part_list);
 

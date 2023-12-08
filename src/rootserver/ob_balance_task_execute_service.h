@@ -82,9 +82,14 @@ private:
   int update_task_status_(const share::ObBalanceTask &task,
                    const share::ObBalanceJobStatus &job_status,
                    ObMySQLTransaction &trans);
-  int process_current_task_status_(const share::ObBalanceTask &task, ObMySQLTransaction &trans,
+  int process_current_task_status_(const share::ObBalanceTask &task,
+                                   const share::ObBalanceJob &job,
+                                   ObMySQLTransaction &trans,
                                    bool &skip_next_status);
-  int cancel_current_task_status_(const share::ObBalanceTask &task, ObMySQLTransaction &trans, bool &skip_next_status);
+  int cancel_current_task_status_(const share::ObBalanceTask &task,
+                                  const share::ObBalanceJob &job,
+                                  ObMySQLTransaction &trans,
+                                  bool &skip_next_status);
   int cancel_other_init_task_(const share::ObBalanceTask &task, ObMySQLTransaction &trans);
   int process_init_task_(const share::ObBalanceTask &task, ObMySQLTransaction &trans);
   int wait_ls_to_target_status_(const share::ObLSID &ls_id, const share::ObLSStatus ls_status, bool &skip_next_status);
@@ -92,6 +97,7 @@ private:
   int set_ls_to_merge_(const share::ObBalanceTask &task, ObMySQLTransaction &trans);
   int set_ls_to_dropping_(const share::ObLSID &ls_id, ObMySQLTransaction &trans);
   int execute_transfer_in_trans_(const share::ObBalanceTask &task,
+                                 const share::ObBalanceJob &job,
                                  ObMySQLTransaction &trans,
                                  bool &all_part_transferred);
   int get_and_update_merge_ls_part_list_(
@@ -101,6 +107,21 @@ private:
   int wait_tenant_ready_();
   int try_update_task_comment_(const share::ObBalanceTask &task,
   const common::ObSqlString &comment, ObISQLClient &sql_client);
+  int finish_transfer_partition_task_(const share::ObTransferTask &transfer_task,
+                                      const share::ObBalanceJob &job,
+                                     ObMySQLTransaction &trans);
+  int load_finish_transfer_part_tasks_(const share::ObTransferTask &transfer_task,
+                                       const share::ObBalanceJob &job,
+                                       share::ObTransferPartList &new_finish_list,
+                                       share::ObTransferPartitionTaskID &max_task_id,
+                                       share::ObLSID &dest_ls,
+                                       ObMySQLTransaction &trans);
+  int try_start_transfer_partition_task_(
+       const share::ObBalanceJob &job,
+       const share::ObTransferPartList &part_list,
+       const share::ObTransferTaskID &transfer_id,
+       const share::ObLSID &dest_ls,
+       ObMySQLTransaction &trans);
 private:
   bool inited_;
   uint64_t tenant_id_;
