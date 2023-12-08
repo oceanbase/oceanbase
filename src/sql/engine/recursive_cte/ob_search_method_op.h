@@ -230,6 +230,7 @@ public:
     }
   }
 
+  virtual void destroy();
   virtual int reuse() override;
   virtual int empty() override { return search_stack_.empty() && input_rows_.empty(); }
 
