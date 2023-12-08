@@ -161,7 +161,7 @@ public:
       ObExecContext &ctx,
       uint64_t table_id,
       uint64_t ref_table_id,
-      const ObQueryRange &pre_query_range,
+      const ObQueryRangeProvider &pre_query_range,
       ObDfo &dfo,
       ObDASTableLoc *&table_loc);
 

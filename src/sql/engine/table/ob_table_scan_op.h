@@ -139,7 +139,8 @@ public:
       das_dppr_tbl_(nullptr),
       allocator_(allocator),
       calc_part_id_expr_(NULL),
-      global_index_rowkey_exprs_(allocator)
+      global_index_rowkey_exprs_(allocator),
+      pre_range_graph_(allocator)
   { }
   const ExprFixedArray &get_das_output_exprs() const
   {
@@ -150,6 +151,11 @@ public:
     return lookup_ctdef_ != nullptr ?
         lookup_ctdef_->access_column_ids_ :
         scan_ctdef_.access_column_ids_;
+  }
+  const ObQueryRangeProvider& get_query_range_provider() const
+  {
+    return scan_flags_.is_new_query_range() ? static_cast<const ObQueryRangeProvider&>(pre_range_graph_)
+                                            : static_cast<const ObQueryRangeProvider&>(pre_query_range_);
   }
   int allocate_dppr_table_loc();
   TO_STRING_KV(K_(pre_query_range),
@@ -188,6 +194,7 @@ public:
   ObExpr *calc_part_id_expr_;
   ExprFixedArray global_index_rowkey_exprs_;
   // end for Global Index Lookup
+  ObPreRangeGraph pre_range_graph_;
 };
 
 struct ObTableScanRtDef
@@ -288,7 +295,7 @@ public:
   int explain_index_selection_info(char *buf, int64_t buf_len, int64_t &pos) const;
 
   virtual bool is_table_scan() const override { return true; }
-  inline const ObQueryRange &get_query_range() const { return tsc_ctdef_.pre_query_range_; }
+  inline const ObQueryRangeProvider &get_query_range_provider() const { return tsc_ctdef_.get_query_range_provider(); }
   inline uint64_t get_table_loc_id() const { return table_loc_id_; }
   bool use_dist_das() const { return use_dist_das_; }
   int64_t get_rowkey_cnt() const {
@@ -448,7 +455,7 @@ protected:
   int prepare_batch_scan_range();
   int build_bnlj_params();
   int single_equal_scan_check_type(const ParamStore &param_store, bool& is_same_type);
-  bool need_extract_range() const { return MY_SPEC.tsc_ctdef_.pre_query_range_.has_range(); }
+  bool need_extract_range() const { return MY_SPEC.tsc_ctdef_.get_query_range_provider().has_range(); }
   int prepare_single_scan_range(int64_t group_idx = 0);
 
   int reuse_table_rescan_allocator();

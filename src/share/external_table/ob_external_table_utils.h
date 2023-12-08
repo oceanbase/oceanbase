@@ -29,7 +29,6 @@ namespace sql
 class ObDASTabletLoc;
 class ObExecContext;
 class ObExternalTableAccessService;
-class ObQueryRange;
 }
 
 namespace share

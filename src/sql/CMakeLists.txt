@@ -168,6 +168,7 @@ ob_set_subtarget(ob_sql engine_basic
   engine/basic/ob_topk_op.cpp
   engine/basic/ob_values_op.cpp
   engine/basic/ob_stat_collector_op.cpp
+  engine/basic/ob_values_table_access_op.cpp
   engine/basic/ob_hp_infrastructure_manager.ipp
 )
 
@@ -357,6 +358,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_in.cpp
   engine/expr/ob_expr_inet.cpp
   engine/expr/ob_expr_initcap.cpp
+  engine/expr/ob_expr_inner_decode_like.cpp
   engine/expr/ob_expr_inner_trim.cpp
   engine/expr/ob_expr_insert.cpp
   engine/expr/ob_expr_instr.cpp
@@ -930,6 +932,7 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/ob_log_stat_collector.cpp
   optimizer/ob_log_optimizer_stats_gathering.cpp
   optimizer/ob_dynamic_sampling.cpp
+  optimizer/ob_log_values_table_access.cpp
 )
 
 ob_set_subtarget(ob_sql plan_cache
@@ -1148,6 +1151,7 @@ ob_set_subtarget(ob_sql resolver_dml
   resolver/dml/ob_update_resolver.cpp
   resolver/dml/ob_update_stmt.cpp
   resolver/dml/ob_view_table_resolver.cpp
+  resolver/dml/ob_inlist_resolver.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_expr
@@ -1185,6 +1189,10 @@ ob_set_subtarget(ob_sql rewrite
   rewrite/ob_key_part.cpp
   rewrite/ob_predicate_deduce.cpp
   rewrite/ob_query_range.cpp
+  rewrite/ob_expr_range_converter.cpp
+  rewrite/ob_query_range_define.cpp
+  rewrite/ob_range_generator.cpp
+  rewrite/ob_range_graph_generator.cpp
   rewrite/ob_stmt_comparer.cpp
   rewrite/ob_transform_count_to_exists.cpp
   rewrite/ob_transform_aggr_subquery.cpp

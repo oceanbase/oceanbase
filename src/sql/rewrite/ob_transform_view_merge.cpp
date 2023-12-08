@@ -533,8 +533,7 @@ int ObTransformViewMerge::check_basic_validity(ObDMLStmt *parent_stmt,
              || child_stmt->get_aggr_item_size() != 0
              || child_stmt->has_window_function()
              || child_stmt->has_sequence()
-             || child_stmt->has_ora_rowscn()
-             || child_stmt->is_values_table_query()) {
+             || child_stmt->has_ora_rowscn()) {
     can_be = false;
     OPT_TRACE("not a valid view");
   } else if (!force_merge && parent_stmt->get_table_size() > 1 && child_stmt->get_table_size() > 1 &&

@@ -63,6 +63,9 @@
 #include "share/stat/ob_opt_ds_stat.h"
 #include "lib/udt/ob_udt_type.h"
 #include "sql/resolver/dml/ob_insert_resolver.h"
+#include "sql/resolver/dml/ob_inlist_resolver.h"
+#include "sql/engine/aggregate/ob_aggregate_processor.h"
+#include "sql/optimizer/ob_opt_selectivity.h"
 #include "lib/xml/ob_path_parser.h"
 
 namespace oceanbase
@@ -1648,6 +1651,7 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
   ObArray<ObWinFunRawExpr*> win_exprs;
   ObArray<ObUDFInfo> udf_info;
   ObArray<ObOpRawExpr*> op_exprs;
+  ObArray<ObInListInfo> inlist_infos;
   ObCollationType collation_connection = CS_TYPE_INVALID;
   ObCharsetType character_set_connection = CHARSET_INVALID;
   CK( OB_NOT_NULL(params_.expr_factory_),
@@ -1678,6 +1682,7 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
     ctx.is_for_dbms_sql_ = params_.is_dbms_sql_;
     ctx.view_ref_id_ = view_ref_id_;
     ctx.is_variable_allowed_ = !(is_mysql_mode() && params_.is_from_create_view_);
+    ctx.is_need_print_ = params_.is_from_create_view_ || params_.is_from_create_table_;
     ObRawExprResolverImpl expr_resolver(ctx);
     ObIArray<ObUserVarIdentRawExpr *> &user_var_exprs = get_stmt()->get_user_vars();
     bool is_multi_stmt = session_info_->get_cur_exec_ctx() != NULL &&
@@ -1695,20 +1700,22 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
     }
     if (OB_SUCC(ret)) {
       OC( (expr_resolver.resolve)(&node,
-                                expr,
-                                *output_columns,
-                                sys_vars,
-                                sub_query_info,
-                                aggr_exprs,
-                                win_exprs,
-                                udf_info,
-                                op_exprs,
-                                user_var_exprs));
+                                  expr,
+                                  *output_columns,
+                                  sys_vars,
+                                  sub_query_info,
+                                  aggr_exprs,
+                                  win_exprs,
+                                  udf_info,
+                                  op_exprs,
+                                  user_var_exprs,
+                                  inlist_infos));
     }
 
     if (OB_SUCC(ret)) {
       params_.prepare_param_count_ = ctx.prepare_param_count_; //prepare param count
     }
+    OZ(resolve_inlist_info(inlist_infos));
     OC( (resolve_subquery_info)(sub_query_info));
     if (OB_SUCC(ret)) {
       //are there any user variable assignments?
@@ -6201,6 +6208,7 @@ int ObDMLResolver::resolve_partition_expr(const ParseNode &part_expr_node, ObRaw
   ObArray<ObUDFInfo> udf_info;
   ObArray<ObOpRawExpr*> op_exprs;
   ObSEArray<ObUserVarIdentRawExpr*, 1> user_var_exprs;
+  ObArray<ObInListInfo> inlist_infos;
   ObCollationType collation_connection = CS_TYPE_INVALID;
   ObCharsetType character_set_connection = CHARSET_INVALID;
   if (OB_ISNULL(params_.expr_factory_) || OB_ISNULL(params_.session_info_)) {
@@ -6224,10 +6232,11 @@ int ObDMLResolver::resolve_partition_expr(const ParseNode &part_expr_node, ObRaw
       LOG_WARN("fail to get name case mode", K(ret));
     } else if (OB_FAIL(expr_resolver.resolve(&part_expr_node, expr, columns, sys_vars,
                                              sub_query_info, aggr_exprs, win_exprs, udf_info,
-                                             op_exprs, user_var_exprs))) {
+                                             op_exprs, user_var_exprs, inlist_infos))) {
       LOG_WARN("resolve expr failed", K(ret));
     } else if (sub_query_info.count() > 0 || sys_vars.count() > 0 || aggr_exprs.count() > 0 ||
-               columns.count() <= 0 || udf_info.count() > 0 || op_exprs.count() > 0) {
+               columns.count() <= 0 || udf_info.count() > 0 || op_exprs.count() > 0 ||
+               inlist_infos.count() > 0) {
       ret = OB_ERR_UNEXPECTED; //TODO Molly not allow type cast in part expr?
       LOG_WARN("part expr is invalid", K(sub_query_info.count()), K(sys_vars.count()),
                 K(aggr_exprs.count()), K(columns.count()), K(udf_info.count()));
@@ -7225,6 +7234,22 @@ int ObDMLResolver::check_stmt_order_by(const ObSelectStmt *stmt)
         if (OB_FAIL(SMART_CALL(check_stmt_order_by(sub_stmt)))) {
           LOG_WARN("fail to check sub stmt order by", K(ret));
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDMLResolver::resolve_inlist_info(ObIArray<ObInListInfo> &inlist_infos)
+{
+  int ret = OB_SUCCESS;
+  if (inlist_infos.empty()) {
+    /* do nothing */
+  } else {
+    ObInListResolver inlist_resolver(this);
+    for (int64_t i = 0; OB_SUCC(ret) && i < inlist_infos.count(); i++) {
+      if (OB_FAIL(inlist_resolver.resolve_inlist(inlist_infos.at(i)))) {
+        LOG_WARN("failed to resolve inlist");
       }
     }
   }
@@ -16112,32 +16137,35 @@ int ObDMLResolver::resolve_values_table_item(const ParseNode &table_node, TableI
     }
   }
   if (OB_SUCC(ret)) {
-    int64_t column_cnt = 0;
     //common values table: values row(...), row(...),...
-    if (upper_insert_resolver_ == NULL &&
-        OB_FAIL(resolve_table_values_for_select(table_node,
-                                                new_table_item->table_values_,
-                                                column_cnt))) {
-      LOG_WARN("failed to resolve table values for select", K(ret));
-    //insert values table: insert into ....values row(...), row(...),...
-    } else if (upper_insert_resolver_ != NULL &&
-               OB_FAIL(resolve_table_values_for_insert(table_node,
-                                                       new_table_item->table_values_,
-                                                       column_cnt))) {
-      LOG_WARN("failed to resolve table values for insert", K(ret));
+    void *buf = NULL;
+    if (OB_ISNULL(buf = allocator_->alloc(sizeof(ObValuesTableDef)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("faield to allocate memory table def buffer", K(ret));
     } else {
-      new_table_item->table_id_ = generate_table_id();
-      new_table_item->table_name_ = alias_name;
-      new_table_item->alias_name_ = alias_name;
-      new_table_item->type_ = TableItem::VALUES_TABLE;
-      new_table_item->is_view_table_ = false;
-      if (OB_FAIL(dml_stmt->add_table_item(session_info_, new_table_item))) {
-        LOG_WARN("add table item failed", K(ret));
-      } else if (OB_FAIL(gen_values_table_column_items(column_cnt, *new_table_item))) {
-        LOG_WARN("failed to gen values table column items", K(ret));
+      new_table_item->values_table_def_ = new (buf) ObValuesTableDef();
+      if (upper_insert_resolver_ == NULL &&
+          OB_FAIL(resolve_table_values_for_select(table_node, *new_table_item->values_table_def_))) {
+        LOG_WARN("failed to resolve table values for select", K(ret));
+      //insert values table: insert into ....values row(...), row(...),...
+      } else if (upper_insert_resolver_ != NULL &&
+                 OB_FAIL(resolve_table_values_for_insert(table_node, *new_table_item->values_table_def_))) {
+        LOG_WARN("failed to resolve table values for insert", K(ret));
       } else {
-        table_item = new_table_item;
-        LOG_TRACE("succeed to resolve values table item", KPC(table_item));
+        new_table_item->table_id_ = generate_table_id();
+        new_table_item->table_name_ = alias_name;
+        new_table_item->alias_name_ = alias_name;
+        new_table_item->type_ = TableItem::VALUES_TABLE;
+        new_table_item->is_view_table_ = false;
+        if (OB_FAIL(dml_stmt->add_table_item(session_info_, new_table_item))) {
+          LOG_WARN("add table item failed", K(ret));
+        } else if (OB_FAIL(gen_values_table_column_items(
+                                new_table_item->values_table_def_->column_cnt_, *new_table_item))) {
+          LOG_WARN("failed to gen values table column items", K(ret));
+        } else {
+          table_item = new_table_item;
+          LOG_TRACE("succeed to resolve values table item", KPC(table_item));
+        }
       }
     }
   }
@@ -16145,22 +16173,20 @@ int ObDMLResolver::resolve_values_table_item(const ParseNode &table_node, TableI
 }
 
 int ObDMLResolver::resolve_table_values_for_select(const ParseNode &table_node,
-                                                   ObIArray<ObRawExpr*> &table_values,
-                                                   int64_t &column_cnt)
+                                                   ObValuesTableDef &table_def)
 {
   int ret = OB_SUCCESS;
   const ParseNode *values_node = NULL;
-  ObSEArray<int64_t, 8> value_idxs;
-  column_cnt = 0;
   if (OB_UNLIKELY(T_VALUES_TABLE_EXPRESSION != table_node.type_ || 1 != table_node.num_child_) ||
       OB_ISNULL(table_node.children_) || OB_ISNULL(values_node = table_node.children_[0]) ||
       OB_UNLIKELY(T_VALUES_ROW_LIST != values_node->type_) ||
       OB_ISNULL(params_.expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(values_node), K(table_node.type_),
-                                    K(table_node.num_child_), K(params_.expr_factory_));
+             K(table_node.num_child_), KP(params_.expr_factory_));
   } else {
     ObSEArray<ObExprResType, 8> res_types;
+    int64_t column_cnt = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < values_node->num_child_; i++) {
       ParseNode *vector_node = values_node->children_[i];
       if (OB_ISNULL(vector_node) ||
@@ -16216,7 +16242,7 @@ int ObDMLResolver::resolve_table_values_for_select(const ParseNode &table_node,
             }
           }
           if (OB_SUCC(ret)) {
-            if (OB_FAIL(append(table_values, cur_values_vector))) {
+            if (OB_FAIL(append(table_def.access_exprs_, cur_values_vector))) {
               LOG_WARN("failed to append", K(ret));
             } else if (i == 0) {
               if (OB_FAIL(append(res_types, cur_values_types))) {
@@ -16227,17 +16253,22 @@ int ObDMLResolver::resolve_table_values_for_select(const ParseNode &table_node,
                 LOG_WARN("failed to get values res types", K(ret));
               }
             }
-            LOG_TRACE("succeed to resolve table values", K(table_values), K(res_types),
+            LOG_TRACE("succeed to resolve table values", K(table_def.access_exprs_), K(res_types),
                       K(cur_values_vector), K(cur_values_types));
           }
         }
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(try_add_cast_to_values(res_types, table_values))) {
+      table_def.column_cnt_ = column_cnt;
+      if (OB_FAIL(try_add_cast_to_values(res_types, table_def.access_exprs_))) {
         LOG_WARN("failed to try add cast to values", K(ret));
+      } else if (OB_FAIL(compute_values_table_row_count(table_def))) {
+        LOG_WARN("failed to compute row");
+      } else if (OB_FAIL(estimate_values_table_stats(table_def))) {
+        LOG_WARN("failed to estimate values table stats", K(ret));
       } else {
-        LOG_TRACE("succeed to resolve table values", K(table_values), K(res_types));
+        LOG_TRACE("succeed to resolve table values", K(table_def.access_exprs_), K(res_types), K(table_def));
       }
     }
   }
@@ -16245,15 +16276,13 @@ int ObDMLResolver::resolve_table_values_for_select(const ParseNode &table_node,
 }
 
 int ObDMLResolver::resolve_table_values_for_insert(const ParseNode &table_node,
-                                                   ObIArray<ObRawExpr*> &table_values,
-                                                   int64_t &column_cnt)
+                                                   ObValuesTableDef &table_def)
 {
   int ret = OB_SUCCESS;
   const ParseNode *values_node = NULL;
   ObSEArray<int64_t, 8> value_idxs;
   ObInsertStmt *insert_stmt = NULL;
   bool is_all_default = false;
-  column_cnt = 0;
   if (OB_UNLIKELY(T_VALUES_TABLE_EXPRESSION != table_node.type_ || 1 != table_node.num_child_) ||
       OB_ISNULL(table_node.children_) || OB_ISNULL(values_node = table_node.children_[0]) ||
       OB_UNLIKELY(T_VALUE_LIST != values_node->type_) ||
@@ -16269,6 +16298,7 @@ int ObDMLResolver::resolve_table_values_for_insert(const ParseNode &table_node,
     LOG_WARN("failed to adjust values desc position", K(ret));
   } else {
     bool is_all_default = false;
+    int64_t column_cnt = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < values_node->num_child_; i++) {
       ParseNode *vector_node = values_node->children_[i];
       if (OB_ISNULL(vector_node) ||
@@ -16377,12 +16407,22 @@ int ObDMLResolver::resolve_table_values_for_insert(const ParseNode &table_node,
           }
         }
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(append(table_values, cur_values_vector))) {
+          if (OB_FAIL(append(table_def.access_exprs_, cur_values_vector))) {
             LOG_WARN("failed to append", K(ret));
           } else {
-            LOG_TRACE("succeed to resolve one row", K(cur_values_vector), K(table_values));
+            LOG_TRACE("succeed to resolve one row", K(cur_values_vector), K(table_def.access_exprs_));
           }
         }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      table_def.column_cnt_ = column_cnt;
+      if (OB_FAIL(compute_values_table_row_count(table_def))) {
+        LOG_WARN("failed to compute row");
+      } else if (OB_FAIL(estimate_values_table_stats(table_def))) {
+        LOG_WARN("failed to estimate values table stats", K(ret));
+      } else {
+        LOG_TRACE("success resolve table def", K(table_def));
       }
     }
   }
@@ -16463,23 +16503,25 @@ int ObDMLResolver::try_add_cast_to_values(const ObIArray<ObExprResType> &res_typ
 int ObDMLResolver::gen_values_table_column_items(const int64_t column_cnt, TableItem &table_item)
 {
   int ret = OB_SUCCESS;
+  int64_t column_cnt_ = 0;
+  ObValuesTableDef *table_def = table_item.values_table_def_;
   if (OB_ISNULL(params_.expr_factory_) || OB_ISNULL(allocator_) || OB_ISNULL(get_stmt()) ||
-      OB_UNLIKELY(column_cnt <= 0 || table_item.table_values_.empty() ||
-                  table_item.table_values_.count() % column_cnt != 0)) {
+      OB_ISNULL(table_def) ||
+      OB_UNLIKELY(column_cnt <= 0 || table_def->access_exprs_.empty() ||
+                  table_def->access_exprs_.count() % column_cnt != 0)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(column_cnt), K(params_.expr_factory_),
-                                     K(table_item.table_values_), K(ret));
+    LOG_WARN("get unexpected error", K(column_cnt), K(params_.expr_factory_),  K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
       ObColumnRefRawExpr *column_expr = NULL;
       if (OB_FAIL(params_.expr_factory_->create_raw_expr(T_REF_COLUMN, column_expr))) {
         LOG_WARN("create column ref raw expr failed", K(ret));
-      } else if (OB_ISNULL(column_expr) || OB_ISNULL(table_item.table_values_.at(i))) {
+      } else if (OB_ISNULL(column_expr) || OB_ISNULL(table_def->access_exprs_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN(("value desc is null"));
       } else {
-        column_expr->set_result_type(table_item.table_values_.at(i)->get_result_type());
-        column_expr->set_result_flag(table_item.table_values_.at(i)->get_result_flag());
+        column_expr->set_result_type(table_def->access_exprs_.at(i)->get_result_type());
+        column_expr->set_result_flag(table_def->access_exprs_.at(i)->get_result_flag());
         column_expr->set_ref_id(table_item.table_id_, i + OB_APP_MIN_COLUMN_ID);
         // compatible Mysql8.0, column name is column_0, column_1, ...
         ObSqlString tmp_col_name;
@@ -16493,11 +16535,12 @@ int ObDMLResolver::gen_values_table_column_items(const int64_t column_cnt, Table
           MEMCPY(buf, tmp_col_name.ptr(), tmp_col_name.length());
           ObString column_name(tmp_col_name.length(), buf);
           column_expr->set_column_attr(table_item.table_name_, column_name);
-          if (ob_is_enumset_tc(table_item.table_values_.at(i)->get_result_type().get_type())
-              && OB_FAIL(column_expr->set_enum_set_values(table_item.table_values_.at(i)->get_enum_set_values()))) {
-            LOG_WARN("failed to set_enum_set_values", K(ret));
-          }
-          if (OB_SUCC(ret)) {
+          if (ob_is_enumset_tc(column_expr->get_result_type().get_type()) ||
+              column_expr->get_result_type().is_lob_storage()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("values stmt not support such column type", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "type of column in values table");
+          } else {
             if (OB_FAIL(column_expr->add_flag(IS_COLUMN))) {
               LOG_WARN("failed to add flag IS_COLUMN", K(ret));
             } else {
@@ -16508,12 +16551,163 @@ int ObDMLResolver::gen_values_table_column_items(const int64_t column_cnt, Table
               column_item.column_name_ = column_expr->get_column_name();
               if (OB_FAIL(get_stmt()->add_column_item(column_item))) {
                 LOG_WARN("failed to add column item", K(ret));
-              } else {
-                LOG_TRACE("succeed to gen table values desc", K(column_name), KPC(column_expr));
               }
             }
           }
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDMLResolver::compute_values_table_row_count(ObValuesTableDef &table_def)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *expr1 = NULL;
+  ObRawExpr *expr2 = NULL;
+  bool is_dynamic = false;
+  int64_t row_cnt = 0;
+  int64_t expr_count = table_def.access_exprs_.count();
+  if (OB_UNLIKELY(table_def.column_cnt_ == 0 || expr_count == 0) ||
+      OB_ISNULL(expr1 = table_def.access_exprs_.at(0)) ||
+      OB_ISNULL(expr2 = table_def.access_exprs_.at(expr_count - 1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected NULL ptr", K(ret), KP(expr1), KP(expr2));
+  } else if (T_QUESTIONMARK == expr1->get_expr_type() && expr1->is_static_scalar_const_expr() &&
+             T_QUESTIONMARK == expr2->get_expr_type() && expr2->is_static_scalar_const_expr()) {
+    ObConstRawExpr *param_expr = static_cast<ObConstRawExpr *>(expr1);
+    int64_t param_idx = param_expr->get_value().get_unknown();
+    if (OB_ISNULL(params_.param_list_) ||
+        OB_UNLIKELY(param_idx < 0 || param_idx >= params_.param_list_->count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("param_idx is invalid", K(ret), K(param_idx));
+    } else if (params_.param_list_->at(param_idx).is_ext_sql_array()) {
+      if (OB_FAIL(params_.param_list_->at(param_idx).get_real_param_count(row_cnt))) {
+        LOG_WARN("failed to get real param count", K(ret));
+      } else {
+        is_dynamic = true;
+        table_def.access_type_ = ObValuesTableDef::FOLD_ACCESS_EXPR;
+        table_def.row_cnt_ = row_cnt;
+        table_def.start_param_idx_ = param_idx;
+        param_expr = static_cast<ObConstRawExpr *>(expr2);
+        table_def.end_param_idx_ = param_expr->get_value().get_unknown();
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !is_dynamic) {
+    table_def.row_cnt_ = expr_count / table_def.column_cnt_;
+    table_def.access_type_ = ObValuesTableDef::ACCESS_EXPR;
+  }
+  return ret;
+}
+
+int ObDMLResolver::add_obj_to_llc_bitmap(const ObObj &obj, char *llc_bitmap, double &num_null)
+{
+  int ret = OB_SUCCESS;
+  uint64_t hash_value = 0;
+  if (OB_ISNULL(llc_bitmap)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected", K(ret), KP(llc_bitmap));
+  } else if (obj.is_null()) {
+    num_null += 1.0;
+  } else {
+    if (obj.is_string_type()) {
+      hash_value = obj.varchar_hash(obj.get_collation_type(), hash_value);
+    } else if (OB_FAIL(obj.hash(hash_value, hash_value))) {
+      LOG_WARN("fail to do hash", K(ret), K(obj));
+    }
+    if (OB_SUCC(ret)) {
+      ObAggregateProcessor::llc_add_value(hash_value, llc_bitmap, ObOptColumnStat::NUM_LLC_BUCKET);
+    }
+  }
+  return ret;
+}
+
+/*
+  row_cnt <= compute_ndv_thredhold(2000), do accurate estimate stats
+  row_cnt > compute_ndv_thredhold(2000), do accurate sampling 2000 rows record at head
+*/
+int ObDMLResolver::estimate_values_table_stats(ObValuesTableDef &table_def)
+{
+  int ret = OB_SUCCESS;
+  const int64_t compute_ndv_thredhold = 2000;
+  char *llc_bitmap = NULL;
+  const int64_t llc_bitmap_size = ObOptColumnStat::NUM_LLC_BUCKET;
+  ObArenaAllocator alloc("ValuesTableStat");
+  const ParamStore *param_store = params_.param_list_;
+  table_def.column_ndvs_.reset();
+  table_def.column_nnvs_.reset();
+  for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < table_def.column_cnt_; col_idx++) {
+    double ndv = table_def.row_cnt_;
+    double num_null = 0.0;
+    if (ObValuesTableDef::ACCESS_EXPR == table_def.access_type_) {
+      /* ndv = table_def.row_cnt_, num_null = 0.0 */
+    } else if (OB_ISNULL(llc_bitmap = static_cast<char*>(alloc.alloc(llc_bitmap_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("allocate memory for uncompressed data failed.", K(ret), K(llc_bitmap_size));
+    } else {
+      MEMSET(llc_bitmap, 0, llc_bitmap_size);
+      if (ObValuesTableDef::FOLD_ACCESS_EXPR == table_def.access_type_) {
+        ObRawExpr *access_expr = NULL;
+        if (OB_UNLIKELY(col_idx >= table_def.access_exprs_.count()) ||
+            OB_ISNULL(access_expr = table_def.access_exprs_.at(col_idx))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpect param", K(ret), K(col_idx), KP(access_expr));
+        } else if (T_QUESTIONMARK == access_expr->get_expr_type()) {
+          ObConstRawExpr *param_expr = static_cast<ObConstRawExpr *>(access_expr);
+          int64_t param_idx = param_expr->get_value().get_unknown();
+          if (OB_ISNULL(param_store) ||
+              OB_UNLIKELY(param_idx < 0 || param_idx >= param_store->count())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("param_idx is invalid", K(ret), K(param_idx));
+          } else if (param_store->at(param_idx).is_ext_sql_array()) {
+            const ObSqlArrayObj *array_obj =
+                      reinterpret_cast<const ObSqlArrayObj*>(param_store->at(param_idx).get_ext());
+            if (OB_ISNULL(array_obj)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected nullptr", K(ret), K(param_idx));
+            } else {
+              for (int64_t i = 0; OB_SUCC(ret) && i < array_obj->count_ && i < compute_ndv_thredhold; i++) {
+                const ObObjParam &obj_param = array_obj->data_[i];
+                if (OB_FAIL(add_obj_to_llc_bitmap(obj_param, llc_bitmap, num_null))) {
+                  LOG_WARN("failed to add obj to bitmap", K(ret));
+                }
+              }
+            }
+          }
+        }
+      } else if (ObValuesTableDef::ACCESS_PARAM == table_def.access_type_) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < table_def.row_cnt_ && i < compute_ndv_thredhold; i++) {
+          int64_t param_idx = table_def.start_param_idx_ + i * table_def.column_cnt_ + col_idx;
+          if (OB_UNLIKELY(param_idx < 0 || param_idx >= param_store->count())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("param_idx is invalid", K(ret), K(param_idx));
+          } else if (OB_FAIL(add_obj_to_llc_bitmap(param_store->at(param_idx), llc_bitmap, num_null))) {
+            LOG_WARN("failed to add obj to bitmap", K(ret));
+          }
+        }
+      } else if (ObValuesTableDef::ACCESS_OBJ == table_def.access_type_) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < table_def.row_cnt_ && i < compute_ndv_thredhold; i++) {
+          int64_t param_idx = i * table_def.column_cnt_ + col_idx;
+          if (OB_FAIL(add_obj_to_llc_bitmap(table_def.access_objs_.at(param_idx), llc_bitmap, num_null))) {
+            LOG_WARN("failed to add obj to bitmap", K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ndv = MIN(ObGlobalNdvEval::get_ndv_from_llc(llc_bitmap), ndv);
+        ndv = table_def.row_cnt_ <= compute_ndv_thredhold ? ndv :
+                  ObOptSelectivity::scale_distinct(table_def.row_cnt_, compute_ndv_thredhold, ndv);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(table_def.column_ndvs_.push_back(ndv))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else if (OB_FAIL(table_def.column_nnvs_.push_back(num_null))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else {
+        LOG_TRACE("print stats", K(ndv), K(num_null));
       }
     }
   }

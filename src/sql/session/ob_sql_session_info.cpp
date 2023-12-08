@@ -495,6 +495,17 @@ bool ObSQLSessionInfo::is_in_range_optimization_enabled() const
   return bret;
 }
 
+int64_t ObSQLSessionInfo::get_inlist_rewrite_threshold() const
+{
+  int64_t thredhold = INT64_MAX;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    thredhold = tenant_config->_inlist_rewrite_threshold;
+  }
+  return thredhold;
+}
+
 int ObSQLSessionInfo::is_better_inlist_enabled(bool &enabled) const
 {
   int ret = OB_SUCCESS;
@@ -523,6 +534,17 @@ bool ObSQLSessionInfo::is_index_skip_scan_enabled() const
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
   if (tenant_config.is_valid()) {
     bret = tenant_config->_optimizer_skip_scan_enabled;
+  }
+  return bret;
+}
+
+bool ObSQLSessionInfo::is_enable_new_query_range() const
+{
+  bool bret = false;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    bret = tenant_config->_enable_new_query_range_extraction;
   }
   return bret;
 }

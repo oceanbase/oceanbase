@@ -51,7 +51,8 @@ struct ObQueryFlag
 #define OBSF_BIT_SKIP_READ_LOB        1
 #define OBSF_BIT_IS_LOOKUP_FOR_4377   1
 #define OBSF_BIT_FOR_FOREING_KEY_CHECK 1
-#define OBSF_BIT_RESERVED             31
+#define OBSF_BIT_IS_NEW_QUERY_RANGE   1
+#define OBSF_BIT_RESERVED             30
 
   static const uint64_t OBSF_MASK_SCAN_ORDER = (0x1UL << OBSF_BIT_SCAN_ORDER) - 1;
   static const uint64_t OBSF_MASK_DAILY_MERGE =  (0x1UL << OBSF_BIT_DAILY_MERGE) - 1;
@@ -76,6 +77,7 @@ struct ObQueryFlag
   static const uint64_t OBSF_MASK_IS_SSTABLE_CUT = (0x1UL << OBSF_BIT_IS_SSTABLE_CUT) - 1;
   static const uint64_t OBSF_MASK_SKIP_READ_LOB = (0x1UL << OBSF_BIT_SKIP_READ_LOB) - 1;
   static const uint64_t OBSF_MASK_FOR_FOREING_KEY_CHECK = (0x1UL << OBSF_BIT_FOR_FOREING_KEY_CHECK) - 1;
+  static const uint64_t OBSF_MASK_IS_NEW_QUERY_RANGE = (0x1UL << OBSF_BIT_IS_NEW_QUERY_RANGE) - 1;
 
   enum ScanOrder
   {
@@ -137,6 +139,7 @@ struct ObQueryFlag
       uint64_t skip_read_lob_   : OBSF_BIT_SKIP_READ_LOB;
       uint64_t is_lookup_for_4377_ : OBSF_BIT_IS_LOOKUP_FOR_4377;
       uint64_t for_foreign_key_check_ : OBSF_BIT_FOR_FOREING_KEY_CHECK;
+      uint64_t is_new_query_range_ : OBSF_BIT_IS_NEW_QUERY_RANGE;
       uint64_t reserved_       : OBSF_BIT_RESERVED;
     };
   };
@@ -230,6 +233,8 @@ struct ObQueryFlag
     set_not_use_block_cache();
     set_not_use_bloomfilter_cache();
   }
+  inline void set_is_new_query_range() { is_new_query_range_ = true; }
+  inline bool is_new_query_range() const { return is_new_query_range_; }
 
   TO_STRING_KV("scan_order", scan_order_,
                "daily_merge", daily_merge_,

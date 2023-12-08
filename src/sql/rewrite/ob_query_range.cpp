@@ -1055,13 +1055,6 @@ int ObQueryRange::compute_range_size(const ObIArray<ObKeyPart*> &key_parts,
   return ret;
 }
 
-int ObQueryRange::is_at_most_one_row(bool &is_one_row) const
-{
-  int ret = OB_SUCCESS;
-  is_one_row = table_graph_.is_precise_get_;
-  return ret;
-}
-
 int ObQueryRange::is_get(bool &is_range_get) const
 {
   return is_get(column_count_, is_range_get);
@@ -9170,6 +9163,52 @@ int ObQueryRange::set_columnId_map(uint64_t columnId, const ObGeoColumnInfo &col
     LOG_WARN("set columnId map failed", K(ret), K(columnId));
   }
   return ret;
+}
+
+int ObQueryRange::get_prefix_info(int64_t &equal_prefix_count,
+                                  int64_t &range_prefix_count,
+                                  bool &contain_always_false) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(get_table_grapth().key_part_head_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("table_graph.key_part_head_ is not inited.", K(ret));
+  } else {
+    inner_get_prefix_info(get_table_grapth().key_part_head_,
+                          equal_prefix_count,
+                          range_prefix_count,
+                          contain_always_false);
+  }
+  return ret;
+}
+
+void ObQueryRange::inner_get_prefix_info(const ObKeyPart *key_part,
+                                         int64_t &equal_prefix_count,
+                                         int64_t &range_prefix_count,
+                                         bool &contain_always_false) const
+{
+  if (OB_NOT_NULL(key_part)) {
+    equal_prefix_count = OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
+    range_prefix_count = OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
+    for ( /*do nothing*/ ; NULL != key_part; key_part = key_part->or_next_) {
+      int64_t cur_equal_prefix_count = 0;
+      int64_t cur_range_prefix_count = 0;
+      if (key_part->is_equal_condition()) {
+        inner_get_prefix_info(key_part->and_next_,
+                              cur_equal_prefix_count,
+                              cur_range_prefix_count,
+                              contain_always_false);
+        ++cur_equal_prefix_count;
+        ++cur_range_prefix_count;
+      } else if (key_part->is_range_condition()) {
+        ++cur_range_prefix_count;
+      } else if (key_part->is_always_false()) {
+        contain_always_false = true;
+      }
+      equal_prefix_count = std::min(cur_equal_prefix_count, equal_prefix_count);
+      range_prefix_count = std::min(cur_range_prefix_count, range_prefix_count);
+    }
+  }
 }
 
 }  // namespace sql

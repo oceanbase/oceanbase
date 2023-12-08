@@ -24,6 +24,7 @@
 #include "sql/optimizer/ob_fd_item.h"
 #include "sql/optimizer/ob_logical_operator.h"
 #include "sql/optimizer/ob_log_plan.h"
+#include "sql/rewrite/ob_query_range_define.h"
 
 using oceanbase::common::ObString;
 namespace test
@@ -586,6 +587,7 @@ struct EstimateCostInfo {
         table_partition_info_(NULL),
         index_keys_(),
         pre_query_range_(NULL),
+        pre_range_graph_(NULL),
         is_get_(false),
         order_direction_(direction),
         is_hash_index_(false),
@@ -676,6 +678,16 @@ struct EstimateCostInfo {
       }
       return ret;
     }
+    ObQueryRangeProvider *get_query_range_provider()
+    {
+      return pre_range_graph_ != nullptr ? static_cast<ObQueryRangeProvider *>(pre_range_graph_)
+                                        : static_cast<ObQueryRangeProvider *>(pre_query_range_);
+    }
+    const ObQueryRangeProvider *get_query_range_provider() const
+    {
+      return pre_range_graph_ != nullptr ? static_cast<const ObQueryRangeProvider *>(pre_range_graph_)
+                                        : static_cast<const ObQueryRangeProvider *>(pre_query_range_);
+    }
 
     TO_STRING_KV(K_(table_id),
                  K_(ref_table_id),
@@ -709,6 +721,7 @@ struct EstimateCostInfo {
     ObTablePartitionInfo *table_partition_info_;
     common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> index_keys_; // index keys
     ObQueryRange* pre_query_range_; // pre_query_range for each access path
+    ObPreRangeGraph* pre_range_graph_; // pre_query_graph for each access path
     bool is_get_;
     ObOrderDirection order_direction_;//序的方向（升序or倒序）
     bool is_hash_index_;  // is hash index (virtual table and is index)
@@ -1174,10 +1187,12 @@ struct EstimateCostInfo {
   public:
     ValuesTablePath()
       : Path(NULL),
-        table_id_(OB_INVALID_ID) {}
+        table_id_(OB_INVALID_ID),
+        table_def_(NULL) {}
     virtual ~ValuesTablePath() { }
     int assign(const ValuesTablePath &other, common::ObIAllocator *allocator);
     virtual int estimate_cost() override;
+    virtual int estimate_row_count();
     virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
     {
       int ret = OB_SUCCESS;
@@ -1188,6 +1203,7 @@ struct EstimateCostInfo {
     }
   public:
     uint64_t table_id_;
+    ObValuesTableDef *table_def_;
   private:
       DISALLOW_COPY_AND_ASSIGN(ValuesTablePath);
   };
@@ -1414,7 +1430,7 @@ struct NullAwareAntiJoinInfo {
      * @param path
      * @return
      */
-    int add_path(Path* path);
+    int add_path(ObLogPlan &plan, Path* path);
     int add_recycled_paths(Path* path);
     int compute_path_relationship(const Path &first_path,
                                   const Path &second_path,
@@ -1603,7 +1619,7 @@ struct NullAwareAntiJoinInfo {
                                         const common::ObIArray<ObRawExpr*> &predicates,
                                         ObIArray<ObExprConstraint> &expr_constraints,
                                         int64_t table_id,
-                                        ObQueryRange* &range);
+                                        ObQueryRangeProvider* &range);
 
     int check_enable_better_inlist(int64_t table_id, bool &enable);
 
@@ -1634,7 +1650,7 @@ struct NullAwareAntiJoinInfo {
     int extract_geo_preliminary_query_range(const ObIArray<ColumnItem> &range_columns,
                                               const ObIArray<ObRawExpr*> &predicates,
                                               const ColumnIdInfoMap &column_schema_info,
-                                              ObQueryRange *&query_range);
+                                              ObQueryRangeProvider *&query_range);
 
     int extract_geo_schema_info(const uint64_t table_id,
                                 const uint64_t index_id,
@@ -2159,7 +2175,7 @@ struct NullAwareAntiJoinInfo {
   private:
     int add_access_filters(AccessPath *path,
                            const common::ObIArray<ObRawExpr*> &index_keys,
-                           const common::ObIArray<ObRawExpr*> &range_exprs,
+                           const common::ObIArray<ObRawExpr*> *range_exprs,
                            PathHelper &helper);
 
     int set_nl_filters(JoinPath *join_path,
@@ -2186,15 +2202,10 @@ struct NullAwareAntiJoinInfo {
                              QueryRangeInfo &range_info,
                              PathHelper &helper);
 
-    int check_has_exec_param(ObQueryRange &query_range,
+    int check_has_exec_param(ObQueryRangeProvider &query_range,
                              bool &has_exec_param);
 
-    int get_preliminary_prefix_info(ObQueryRange &query_range,QueryRangeInfo &range_info);
-
-    void get_prefix_info(const ObKeyPart *key_part,
-                         int64_t &equal_prefix_count,
-                         int64_t &range_prefix_count,
-                         bool &contain_always_false);
+    int get_preliminary_prefix_info(ObQueryRangeProvider &query_range,QueryRangeInfo &range_info);
 
     // @brief  check if an index is relevant to the conditions
     int is_relevant_index(const uint64_t table_id,
@@ -2335,7 +2346,7 @@ struct NullAwareAntiJoinInfo {
     int revise_output_rows_after_creating_path(PathHelper &helper,
                                                ObIArray<AccessPath *> &access_paths);
     int fill_filters(const common::ObIArray<ObRawExpr *> &all_filters,
-                     const ObQueryRange* query_range,
+                     const ObQueryRangeProvider* query_range,
                      ObCostTableScanInfo &est_scan_cost_info,
                      bool &is_nl_with_extended_range,
                      bool is_link = false,

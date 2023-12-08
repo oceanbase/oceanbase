@@ -145,6 +145,8 @@
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
+#include "sql/optimizer/ob_log_values_table_access.h"
+#include "sql/engine/basic/ob_values_table_access_op.h"
 
 namespace oceanbase
 {
@@ -1993,6 +1995,81 @@ int ObStaticEngineCG::generate_spec(ObLogExprValues &op,
 
   } else if (OB_FAIL(dml_cg_service_.generate_err_log_ctdef(op.get_err_log_define(), spec.err_log_ct_def_))) {
     LOG_WARN("fail to cg err_log_ins_ctdef", K(ret));
+  }
+  return ret;
+}
+
+int ObStaticEngineCG::generate_spec(ObLogValuesTableAccess &op,
+                                    ObValuesTableAccessSpec &spec,
+                                    const bool in_root_job)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(in_root_job);
+  const ObValuesTableDef *table_def = NULL;
+  if (OB_ISNULL(table_def = op.get_values_table_def()) ||
+      OB_UNLIKELY(op.get_output_exprs().empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param", K(ret), KP(table_def), K(op.get_output_exprs()));
+  } else {
+    spec.access_type_ = table_def->access_type_;
+    spec.start_param_idx_ = table_def->start_param_idx_;
+    spec.end_param_idx_ = table_def->end_param_idx_;
+    ObIAllocator &allocator = phy_plan_->get_allocator();
+    if (OB_FAIL(spec.column_exprs_.prepare_allocate(op.get_column_exprs().count()))) {
+      LOG_WARN("init fixed array failed", K(ret), K(op.get_column_exprs().count()));
+    } else if (OB_FAIL(spec.value_exprs_.prepare_allocate(table_def->access_exprs_.count()))) {
+      LOG_WARN("init fixed array failed", K(ret), K(table_def->access_exprs_.count()));
+    } else if (OB_FAIL(spec.obj_params_.prepare_allocate(table_def->access_objs_.count()))) {
+      LOG_WARN("init fixed array failed", K(ret), K(table_def->access_objs_.count()));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < op.get_column_exprs().count(); i++) {
+        ObColumnRefRawExpr *col_expr = op.get_column_exprs().at(i);
+        ObExpr *expr = NULL;
+        if (OB_ISNULL(col_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("raw_expr is null", K(ret), K(i), K(col_expr));
+        } else if (OB_FAIL(mark_expr_self_produced(col_expr))) {
+          LOG_WARN("mark expr self produced failed", K(ret), KPC(col_expr));
+        } else if (OB_FAIL(generate_rt_expr(*col_expr, expr))) {
+          LOG_WARN("fail to generate_rt_expr", K(ret), K(i), KPC(col_expr));
+        } else if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("value_info.expr_ is null", K(ret), K(i), KPC(expr));
+        } else {
+          spec.column_exprs_.at(i) = expr;
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < table_def->access_exprs_.count(); i++) {
+        ObRawExpr *raw_expr = table_def->access_exprs_.at(i);
+        ObExpr *expr = NULL;
+        if (OB_ISNULL(raw_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("raw_expr is null", K(ret), K(i), K(raw_expr));
+        } else if (OB_FAIL(mark_expr_self_produced(raw_expr))) {
+          LOG_WARN("mark expr self produced failed", K(ret), KPC(raw_expr));
+        } else if (OB_FAIL(generate_rt_expr(*raw_expr, expr))) {
+          LOG_WARN("fail to generate_rt_expr", K(ret), K(i), KPC(raw_expr));
+        } else if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("value_info.expr_ is null", K(ret), K(i), KPC(raw_expr));
+        } else {
+          spec.value_exprs_.at(i) = expr;
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < table_def->access_objs_.count(); i++) {
+        if (OB_FAIL(ob_write_obj(allocator,
+                                 table_def->access_objs_.at(i),
+                                 spec.obj_params_.at(i)))) {
+          LOG_WARN("failed to write obj", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(mark_expr_self_produced(op.get_output_exprs()))) {
+        LOG_WARN("mark expr self produced failed", K(ret));
+      } else {
+        spec.rows_ = table_def->row_cnt_;
+      }
+    }
   }
   return ret;
 }
@@ -4000,49 +4077,57 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
       ? NULL
       : op.get_plan()->get_optimizer_context().get_sql_schema_guard();
   CK(OB_NOT_NULL(schema_guard));
-  if (OB_SUCC(ret) && NULL != op.get_pre_query_range()) {
-    OZ(spec.tsc_ctdef_.pre_query_range_.deep_copy(*op.get_pre_query_range()));
+  if (OB_SUCC(ret) && NULL != op.get_pre_graph()) {
+    if (op.is_new_query_range()) {
+      OZ(spec.tsc_ctdef_.pre_range_graph_.deep_copy(*op.get_pre_range_graph()));
+      if (!op.is_skip_scan()) {
+        OZ(spec.tsc_ctdef_.pre_range_graph_.reset_skip_scan_range());
+      }
+    } else {
+      OZ(spec.tsc_ctdef_.pre_query_range_.deep_copy(*op.get_pre_query_range()));
+      if (!op.is_skip_scan()) {
+        OZ(spec.tsc_ctdef_.pre_query_range_.reset_skip_scan_range());
+      }
+    }
     if (OB_FAIL(ret)) {
-    } else if (!op.is_skip_scan() && OB_FAIL(spec.tsc_ctdef_.pre_query_range_.reset_skip_scan_range())) {
-      LOG_WARN("reset skip scan range failed", K(ret));
-    } else if (OB_FAIL(spec.tsc_ctdef_.pre_query_range_.is_get(spec.tsc_ctdef_.scan_ctdef_.is_get_))) {
+    } else if (OB_FAIL(op.get_pre_graph()->is_get(spec.tsc_ctdef_.scan_ctdef_.is_get_))) {
       LOG_WARN("extract the query range whether get failed", K(ret));
     }
   }
 
-  bool is_equal_and = true;
-  ObKeyPart* root = spec.tsc_ctdef_.pre_query_range_.get_table_grapth().key_part_head_;
-  ObSEArray<ObQueryRange::ObEqualOff, 1> equal_offs;
-  while (OB_SUCC(ret) && NULL != root && is_equal_and) {
-    is_equal_and = is_equal_and & root->is_equal_condition();
-    if (NULL != root->item_next_ || NULL != root->or_next_) {
-      is_equal_and = false;
-    } else if (root->is_normal_key()) {
-      int64_t param_idx = OB_INVALID_ID;
-      ObObj& cur = root->normal_keypart_->start_;
-      ObQueryRange::ObEqualOff equal_off;
-      if (cur.is_ext() || root->null_safe_) {
-        is_equal_and = false; //rollback old version
-      } else if (root->is_rowid_key_part()) {
-        is_equal_and = false; //not deal with rowid
-      } else if (cur.is_unknown()) {
-        if (OB_FAIL(cur.get_unknown(param_idx))) {
-          LOG_WARN("get question mark value failed", K(ret), K(cur));
-        } else {
-          equal_off.param_idx_ = param_idx;
-          equal_off.pos_off_ = root->pos_.offset_;
-          equal_off.pos_type_ = root->pos_.column_type_.get_type();
-          equal_offs.push_back(equal_off);
-        }
-      } else {
-        equal_off.only_pos_ = true;
-        equal_off.pos_off_ = root->pos_.offset_;
-        equal_off.pos_value_ = root->normal_keypart_->start_;
-        equal_offs.push_back(equal_off);
-      }
-    }
-    root = root->and_next_;
-  }
+  // bool is_equal_and = true;
+  // ObKeyPart* root = spec.tsc_ctdef_.pre_query_range_.get_table_grapth().key_part_head_;
+  // ObSEArray<ObQueryRange::ObEqualOff, 1> equal_offs;
+  // while (OB_SUCC(ret) && NULL != root && is_equal_and) {
+  //   is_equal_and = is_equal_and & root->is_equal_condition();
+  //   if (NULL != root->item_next_ || NULL != root->or_next_) {
+  //     is_equal_and = false;
+  //   } else if (root->is_normal_key()) {
+  //     int64_t param_idx = OB_INVALID_ID;
+  //     ObObj& cur = root->normal_keypart_->start_;
+  //     ObQueryRange::ObEqualOff equal_off;
+  //     if (cur.is_ext() || root->null_safe_) {
+  //       is_equal_and = false; //rollback old version
+  //     } else if (root->is_rowid_key_part()) {
+  //       is_equal_and = false; //not deal with rowid
+  //     } else if (cur.is_unknown()) {
+  //       if (OB_FAIL(cur.get_unknown(param_idx))) {
+  //         LOG_WARN("get question mark value failed", K(ret), K(cur));
+  //       } else {
+  //         equal_off.param_idx_ = param_idx;
+  //         equal_off.pos_off_ = root->pos_.offset_;
+  //         equal_off.pos_type_ = root->pos_.column_type_.get_type();
+  //         equal_offs.push_back(equal_off);
+  //       }
+  //     } else {
+  //       equal_off.only_pos_ = true;
+  //       equal_off.pos_off_ = root->pos_.offset_;
+  //       equal_off.pos_value_ = root->normal_keypart_->start_;
+  //       equal_offs.push_back(equal_off);
+  //     }
+  //   }
+  //   root = root->and_next_;
+  // }
   // TODO the above optimization is overrode by ObTscCgService::generate_tsc_ctdef before this commit
   // but after the deep copy of pre_query_range_ is removed in ObTscCgService::generate_tsc_ctdef,
   // error is returned in such sql 'set global x=y', should fix this;
@@ -7487,6 +7572,10 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
     }
     case log_op_def::LOG_OPTIMIZER_STATS_GATHERING: {
       type = PHY_OPTIMIZER_STATS_GATHERING;
+      break;
+    }
+    case log_op_def::LOG_VALUES_TABLE_ACCESS: {
+      type = PHY_VALUES_TABLE_ACCESS;
       break;
     }
     default:

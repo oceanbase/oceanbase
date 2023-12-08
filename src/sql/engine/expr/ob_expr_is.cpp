@@ -483,6 +483,102 @@ int ObExprIsNot::calc_is_not_nan(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &ex
   return ret;
 }
 
+int ObExprInnerIsTrue::calc_result_type2(ObExprResType &type,
+                                         ObExprResType &type1,
+                                         ObExprResType &type2,
+                                         ObExprTypeCtx &type_ctx) const
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *raw_expr = get_raw_expr();
+  if (OB_ISNULL(raw_expr) || OB_UNLIKELY(raw_expr->get_param_count() != 2)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("op raw expr is null", K(ret), K(raw_expr));
+  } else if (OB_UNLIKELY(type1.is_ext())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected type", K(type1));
+  } else {
+    type.set_type(ObExtendType);
+    type.set_precision(DEFAULT_PRECISION_FOR_TEMPORAL);
+    type.set_scale(SCALE_UNKNOWN_YET);
+    type.set_result_flag(NOT_NULL_FLAG);
+    type2.set_calc_type(type2.get_type());
+    if (ob_is_numeric_type(type1.get_type())) {
+      type1.set_calc_meta(type1.get_obj_meta());
+      type1.set_calc_accuracy(type1.get_accuracy());
+    } else {
+      type1.set_calc_type(ObNumberType);
+      const ObAccuracy &calc_acc = ObAccuracy::DDL_DEFAULT_ACCURACY2[0][ObNumberType];
+      type1.set_calc_accuracy(calc_acc);
+    }
+  }
+  type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_NO_RANGE_CHECK);
+
+  return ret;
+}
+
+int ObExprInnerIsTrue::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const
+{
+  int ret = OB_SUCCESS;
+  const ObConstRawExpr *param2 = NULL;
+  ObObjType param1_type = ObMaxType;
+  if (rt_expr.arg_cnt_ != 2) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("inner is true expr should have 2 params", K(ret), K(rt_expr.arg_cnt_));
+  } else if (OB_ISNULL(rt_expr.args_) || OB_ISNULL(rt_expr.args_[0]) || OB_ISNULL(rt_expr.args_[1])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children of inner is true expr is null", K(ret), K(rt_expr.args_));
+  } else if (OB_ISNULL(param2 = static_cast<const ObConstRawExpr *>(raw_expr.get_param_expr(1)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("const raw expr param is null", K(param2));
+  } else if (OB_UNLIKELY(!param2->get_value().is_int())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("const value is not int type", KPC(param2));
+  } else {
+    param1_type = rt_expr.args_[0]->datum_meta_.type_;
+    bool is_start = param2->get_value().get_int() > 0;
+    switch (param1_type) {
+      case ObTinyIntType:
+      case ObSmallIntType:
+      case ObMediumIntType:
+      case ObInt32Type:
+      case ObIntType:
+      case ObUTinyIntType:
+      case ObUSmallIntType:
+      case ObUMediumIntType:
+      case ObUInt32Type:
+      case ObUInt64Type:
+      case ObBitType: {
+          rt_expr.eval_func_ = is_start ? ObExprInnerIsTrue::int_is_true_start
+                                        : ObExprInnerIsTrue::int_is_true_end;
+          break;
+      }
+      case ObFloatType:
+      case ObUFloatType:{
+          rt_expr.eval_func_ = is_start ? ObExprInnerIsTrue::float_is_true_start
+                                        : ObExprInnerIsTrue::float_is_true_end;
+          break;
+      }
+      case ObDoubleType:
+      case ObUDoubleType: {
+          rt_expr.eval_func_ = is_start ? ObExprInnerIsTrue::double_is_true_start
+                                        : ObExprInnerIsTrue::double_is_true_end;
+          break;
+      }
+      case ObMaxType: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("is expr got unexpected type param", K(ret), K(param1_type));
+          break;
+      }
+      default: {
+          rt_expr.eval_func_ = is_start ? ObExprInnerIsTrue::number_is_true_start
+                                        : ObExprInnerIsTrue::number_is_true_end;
+          break;
+      }
+    }
+  }
+  return ret;
+}
+
 template <typename T>
 int ObExprIsBase::is_zero(T number)
 {
@@ -535,5 +631,48 @@ NUMERIC_CALC_FUNC(int, ObExprIs, false, false, is)
 NUMERIC_CALC_FUNC(float, ObExprIs, false, false, is)
 NUMERIC_CALC_FUNC(double, ObExprIs, false, false, is)
 NUMERIC_CALC_FUNC(number, ObExprIs, false, false, is)
+
+#define INNER_NUMERIC_CALC_FUNC(type, is_start, str_pos)                          \
+  int ObExprInnerIsTrue::type##_##is_true##_##str_pos(const ObExpr &expr, ObEvalCtx &ctx,     \
+                                                      ObDatum &expr_datum)        \
+  {                                                                               \
+    int ret = OB_SUCCESS;                                                         \
+    ObDatum *param1 = NULL;                                                       \
+    void *ptr = NULL;                                                             \
+    bool ret_bool = false;                                                        \
+    if (OB_FAIL(expr.args_[0]->eval(ctx, param1))) {                              \
+      LOG_WARN("eval first param failed", K(ret));                                \
+    } else if (param1->is_null()) {                                               \
+      ret_bool = false;                                                           \
+    } else {                                                                      \
+      ret_bool = !is_zero(param1->get_##type());                                  \
+    }                                                                             \
+    if (OB_SUCC(ret)) {                                                           \
+      if (OB_ISNULL(ptr = ctx.get_expr_res_alloc().alloc(sizeof(ObObj)))) {       \
+        ret = OB_ALLOCATE_MEMORY_FAILED;                                          \
+        LOG_WARN("failed to allocate expr result memory");                        \
+      } else {                                                                    \
+        ObObj *res_obj = new(ptr)ObObj();                                         \
+        if ((ret_bool && is_start) || (!ret_bool && !is_start)) {                 \
+          res_obj->set_min_value();                                               \
+        } else {                                                                  \
+          res_obj->set_max_value();                                               \
+        }                                                                         \
+        ret = expr_datum.from_obj(*res_obj);                                      \
+      }                                                                           \
+    }                                                                             \
+    return ret;                                                                   \
+  }
+
+INNER_NUMERIC_CALC_FUNC(int, true, start)
+INNER_NUMERIC_CALC_FUNC(float, true, start)
+INNER_NUMERIC_CALC_FUNC(double, true, start)
+INNER_NUMERIC_CALC_FUNC(number, true, start)
+
+INNER_NUMERIC_CALC_FUNC(int, false, end)
+INNER_NUMERIC_CALC_FUNC(float, false, end)
+INNER_NUMERIC_CALC_FUNC(double, false, end)
+INNER_NUMERIC_CALC_FUNC(number, false, end)
+
 }
 }

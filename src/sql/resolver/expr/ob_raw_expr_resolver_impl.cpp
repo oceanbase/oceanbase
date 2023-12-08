@@ -35,6 +35,7 @@
 #include "sql/resolver/dml/ob_del_upd_stmt.h"
 #include "deps/oblib/src/lib/json_type/ob_json_path.h"
 #include "share/resource_manager/ob_resource_manager.h"
+#include "sql/resolver/dml/ob_inlist_resolver.h"
 
 namespace oceanbase
 {
@@ -56,7 +57,8 @@ int ObRawExprResolverImpl::resolve(const ParseNode *node,
                                    ObIArray<ObWinFunRawExpr*> &win_exprs,
                                    ObIArray<ObUDFInfo> &udf_info,
                                    ObIArray<ObOpRawExpr*> &op_exprs,
-                                   ObIArray<ObUserVarIdentRawExpr*> &user_var_exprs)
+                                   ObIArray<ObUserVarIdentRawExpr*> &user_var_exprs,
+                                   ObIArray<ObInListInfo> &inlist_infos)
 {
   ctx_.columns_ = &columns;
   ctx_.op_exprs_ = &op_exprs;
@@ -66,7 +68,8 @@ int ObRawExprResolverImpl::resolve(const ParseNode *node,
   ctx_.win_exprs_ = &win_exprs;
   ctx_.udf_info_ = &udf_info;
   ctx_.user_var_exprs_ = &user_var_exprs;
-  int ret = recursive_resolve(node, expr);
+  ctx_.inlist_infos_ = &inlist_infos;
+  int ret = recursive_resolve(node, expr, true);
   if (OB_SUCC(ret)) {
     if (OB_FAIL(expr->extract_info())) {
       LOG_WARN("failed to extract info", K(ret), K(*expr));
@@ -228,12 +231,14 @@ int ObRawExprResolverImpl::try_negate_const(ObRawExpr *&expr,
   return ret;
 }
 
-int ObRawExprResolverImpl::recursive_resolve(const ParseNode *node, ObRawExpr *&expr)
+int ObRawExprResolverImpl::recursive_resolve(const ParseNode *node, ObRawExpr *&expr, bool is_root_expr)
 {
-  return SMART_CALL(do_recursive_resolve(node, expr));
+  return SMART_CALL(do_recursive_resolve(node, expr, is_root_expr));
 }
 
-int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr *&expr)
+int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
+                                                ObRawExpr *&expr,
+                                                bool is_root_expr)
 {
   int ret = OB_SUCCESS;
   bool is_stack_overflow = false;
@@ -518,7 +523,8 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
       case T_OP_XOR: {
         ObOpRawExpr *m_expr = NULL;
         int64_t num_child = 2;
-        if (OB_FAIL(process_node_with_children(node, num_child, m_expr))) {
+        if (OB_FAIL(process_node_with_children(node, num_child, m_expr,
+                                               node->type_ == T_OP_XOR ? false : is_root_expr))) {
           LOG_WARN("fail to process node with children", K(ret), K(node));
         } else if (OB_ISNULL(ctx_.session_info_)) {
           ret = OB_ERR_UNEXPECTED;
@@ -625,7 +631,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
       case T_OP_IN:
         // get through
       case T_OP_NOT_IN: {
-        if (OB_FAIL(process_in_or_not_in_node(node, expr))) {
+        if (OB_FAIL(process_in_or_not_in_node(node, is_root_expr, expr))) {
           LOG_WARN("fail to process any or all node", K(ret), K(node));
         }
         break;
@@ -4024,7 +4030,9 @@ int ObRawExprResolverImpl::process_like_node(const ParseNode *node, ObRawExpr *&
   return ret;
 }
 
-int ObRawExprResolverImpl::process_in_or_not_in_node(const ParseNode *node, ObRawExpr *&expr)
+int ObRawExprResolverImpl::process_in_or_not_in_node(const ParseNode *node,
+                                                     const bool is_root_expr,
+                                                     ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
   ObOpRawExpr *in_expr = NULL;
@@ -4042,8 +4050,9 @@ int ObRawExprResolverImpl::process_in_or_not_in_node(const ParseNode *node, ObRa
     LOG_WARN("create ObOpRawExpr failed", K(ret));
   } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[0], sub_expr1)))) {
     LOG_WARN("resolve left raw expr failed", K(ret));
-  } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[1], sub_expr2)))) {
-    LOG_WARN("resolve right child failed", K(ret));
+  } else if (OB_FAIL(resolve_right_branch_of_in_op(node->children_[1], node->type_, sub_expr1,
+                                                   is_root_expr, sub_expr2))) {
+    LOG_WARN("failed to convert", K(ret));
   } else if (OB_ISNULL(sub_expr1) || OB_ISNULL(sub_expr2)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("resolve get invalid expr", K(ret), K(sub_expr1), K(sub_expr2));
@@ -4107,6 +4116,53 @@ int ObRawExprResolverImpl::process_in_or_not_in_node(const ParseNode *node, ObRa
       }
     }
   }
+  return ret;
+}
+
+int ObRawExprResolverImpl::resolve_right_branch_of_in_op(const ParseNode *node,
+                                                         const ObItemType op_type,
+                                                         const ObRawExpr *left_expr,
+                                                         const bool is_root_condition,
+                                                         ObRawExpr *&right_expr)
+{
+  int ret = OB_SUCCESS;
+  bool is_enable_rewrite = false;
+  bool is_question_mark = true;
+  if (OB_ISNULL(node)|| OB_ISNULL(left_expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else if (OB_FAIL(ObInListResolver::check_inlist_rewrite_enable(*node, op_type, *left_expr,
+                     ctx_.current_scope_, is_root_condition, ctx_.is_need_print_,
+                     !ctx_.is_extract_param_type_,  /* equal to is_prepare_protocol*/
+                     NULL != ctx_.secondary_namespace_ ||
+                     ctx_.is_for_dynamic_sql_ || ctx_.is_for_dbms_sql_,
+                     ctx_.session_info_, ctx_.param_list_, ctx_.stmt_, is_question_mark,
+                     is_enable_rewrite))) {
+    LOG_WARN("failed to check inlist rewrite enable", K(ret));
+  } else if (is_enable_rewrite) {
+    ObQueryRefRawExpr *sub_query_expr = NULL;
+    if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_REF_QUERY, sub_query_expr))) {
+      LOG_WARN("create ObOpRawExpr failed", K(ret));
+    } else if (OB_ISNULL(sub_query_expr) || OB_ISNULL(ctx_.inlist_infos_) ) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid argument", K(ret), KP(sub_query_expr), KP(ctx_.session_info_), K(ret));
+    } else {
+      ObInListInfo inlist_info;
+      inlist_info.in_list_expr_ = sub_query_expr;
+      inlist_info.in_list_ = node;
+      inlist_info.column_cnt_ = left_expr->get_expr_type() == T_OP_ROW ? left_expr->get_param_count() : 1;
+      inlist_info.row_cnt_ = node->num_child_;
+      inlist_info.is_question_mark_ = is_question_mark;
+      if (OB_FAIL(ctx_.inlist_infos_->push_back(inlist_info))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else {
+        right_expr = sub_query_expr;
+      }
+    }
+  /* do as normal process */
+  } else if (OB_FAIL(SMART_CALL(recursive_resolve(node, right_expr)))) {
+    LOG_WARN("resolve left raw expr failed", K(ret));
+  } else {/* do nothing */}
   return ret;
 }
 

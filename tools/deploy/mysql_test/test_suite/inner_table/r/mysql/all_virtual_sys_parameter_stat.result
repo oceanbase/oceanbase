@@ -282,6 +282,7 @@ _enable_hgby_skew_detection
 _enable_inner_session_mgr
 _enable_in_range_optimization
 _enable_newsort
+_enable_new_query_range_extraction
 _enable_new_sql_nio
 _enable_oracle_priv_check
 _enable_parallel_minor_merge
@@ -319,6 +320,7 @@ _ha_rpc_timeout
 _ha_tablet_info_batch_count
 _hidden_sys_tenant_memory
 _ignore_system_memory_over_limit_error
+_inlist_rewrite_threshold
 _io_callback_thread_count
 _lcl_op_interval
 _load_tde_encrypt_engine

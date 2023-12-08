@@ -209,16 +209,24 @@ int ObLogExprValues::est_cost()
 int ObLogExprValues::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(get_plan()) ||
-      OB_ISNULL(get_stmt())) {
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (get_stmt()->is_insert_stmt() || is_values_table_) {
+  } else if (get_stmt()->is_insert_stmt()) {
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-    card = get_stmt()->is_insert_stmt() ? static_cast<const ObInsertStmt*>(get_stmt())->get_insert_row_count() :
-                                          get_values_row_count();
+    card = static_cast<const ObInsertStmt*>(get_stmt())->get_insert_row_count();
     op_cost = ObOptEstCost::cost_get_rows(get_card(), opt_ctx.get_cost_model_type());
     cost = op_cost;
+  } else if (is_values_table_) {
+    if (OB_ISNULL(table_def_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else {
+      ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
+      card = get_card();
+      op_cost = ObOptEstCost::cost_filter_rows(table_def_->row_cnt_, filter_exprs_, opt_ctx.get_cost_model_type());
+      cost = op_cost;
+    }
   } else {
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     card = 1.0;
@@ -246,9 +254,18 @@ int ObLogExprValues::compute_one_row_info()
   if (OB_ISNULL(get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (!get_stmt()->is_insert_stmt()) {
-    is_at_most_one_row_ = get_values_row_count() <= 1;
-  } else { /*do nothing*/ }
+  } else if (get_stmt()->is_insert_stmt()) {
+    /* do nothing */
+  } else if (is_values_table_) {
+    if (OB_ISNULL(table_def_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else {
+      is_at_most_one_row_ = table_def_->row_cnt_ <= 1;
+    }
+  } else {
+    is_at_most_one_row_ = true;
+  }
 
   return ret;
 }
@@ -308,7 +325,20 @@ int ObLogExprValues::allocate_expr_post(ObAllocExprContext &ctx)
     LOG_WARN("failed to construct sequence values", K(ret));
   } else if (OB_FAIL(mark_probably_local_exprs())) {
     LOG_WARN("failed to mark local exprs", K(ret));
-  } else { /*do nothing*/ }
+  } else if (is_values_table_) {
+    // defence code for 4_2_1 values table
+    if (OB_UNLIKELY(output_exprs_.count() != value_desc_.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("values table should output is same as value_desc", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < output_exprs_.count(); i++) {
+        if (OB_UNLIKELY(output_exprs_.at(i) != value_desc_.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("values table should output is same as value_desc", K(ret));
+        }
+      }
+    }
+  }
 
   return ret;
 }

@@ -68,6 +68,7 @@ class ObIRawExprCopier;
 class ObSelectStmt;
 class ObRTDatumArith;
 class ObLogicalOperator;
+class ObInListInfo;
 extern ObRawExpr *USELESS_POINTER;
 
 // If is_stack_overflow is true, the printing will not continue
@@ -1553,6 +1554,7 @@ class ObPseudoColumnRawExpr;
 class ObOpRawExpr;
 class ObWinFunRawExpr;
 class ObUserVarIdentRawExpr;
+class ObDMLResolver;
 struct ObUDFInfo;
 template <typename ExprFactoryT>
 struct ObResolveContext
@@ -1580,6 +1582,7 @@ struct ObResolveContext
     udf_info_(NULL),
     op_exprs_(NULL),
     user_var_exprs_(nullptr),
+    inlist_infos_(NULL),
     is_extract_param_type_(true),
     param_list_(NULL),
     prepare_param_count_(0),
@@ -1595,7 +1598,8 @@ struct ObResolveContext
     is_for_dbms_sql_(false),
     tg_timing_event_(TG_TIMING_EVENT_INVALID),
     view_ref_id_(OB_INVALID_ID),
-    is_variable_allowed_(true)
+    is_variable_allowed_(true),
+    is_need_print_(false)
   {
   }
 
@@ -1616,6 +1620,7 @@ struct ObResolveContext
   common::ObIArray<ObUDFInfo> *udf_info_;
   common::ObIArray<ObOpRawExpr*> *op_exprs_;
   common::ObIArray<ObUserVarIdentRawExpr*> *user_var_exprs_;
+  common::ObIArray<ObInListInfo> *inlist_infos_;
   //由于单测expr resolver中包含一些带？的表达式case，
   //所以为expr resolver ctx增添一个配置变量isextract_param_type
   //如果配置该参数为true，那么遇到？将为其填上真实的参数类型，
@@ -1641,6 +1646,7 @@ struct ObResolveContext
   TgTimingEvent tg_timing_event_; // for mysql trigger
   uint64_t view_ref_id_;
   bool is_variable_allowed_;
+  bool is_need_print_;
 };
 
 typedef ObResolveContext<ObRawExprFactory> ObExprResolveContext;

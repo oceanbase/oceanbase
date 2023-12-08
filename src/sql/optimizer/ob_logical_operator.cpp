@@ -3306,8 +3306,10 @@ int ObLogicalOperator::project_pruning_pre()
   int ret = OB_SUCCESS;
   // delete exprs who appeared in current op's output_exprs
   // but not used by it's parent's output_exprs_
-  if (NULL != parent_ && !is_plan_root() && (LOG_EXPR_VALUES != type_) &&
-      !(LOG_EXCHANGE == type_ && static_cast<ObLogExchange*>(this)->get_is_remote())) {
+  if (NULL != parent_ && !is_plan_root() &&
+      LOG_EXPR_VALUES != type_ &&
+      !(LOG_EXCHANGE == type_ && static_cast<ObLogExchange*>(this)->get_is_remote()) &&
+      LOG_VALUES_TABLE_ACCESS != type_) {
     PPDeps deps;
     if (OB_FAIL(parent_->check_output_dependance(get_output_exprs(), deps))) {
       LOG_WARN("parent_->check_output_dep() fails", K(ret));
@@ -3353,8 +3355,7 @@ int ObLogicalOperator::project_pruning_pre()
   return ret;
 }
 
-void ObLogicalOperator::do_project_pruning(ObIArray<ObRawExpr *> &exprs,
-                                           PPDeps &deps)
+void ObLogicalOperator::do_project_pruning(ObIArray<ObRawExpr *> &exprs, PPDeps &deps)
 {
   int64_t i = 0;
   int64_t j = 0;

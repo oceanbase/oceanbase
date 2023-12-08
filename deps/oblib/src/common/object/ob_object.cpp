@@ -2198,6 +2198,25 @@ int ObObj::convert_string_value_charset(ObCharsetType charset_type, ObIAllocator
   return ret;
 }
 
+int ObObj::get_real_param_count(int64_t &count) const
+{
+  int ret = OB_SUCCESS;
+  count = 1;
+  if (ObExtendType == meta_.get_type()) {
+    const ObSqlArrayObj *array_obj = NULL;
+    if (OB_ISNULL(array_obj = reinterpret_cast<const ObSqlArrayObj*>(v_.ext_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr", K(ret), K(v_.ext_));
+    } else if (array_obj->count_ < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected group_idx", K(ret), K(array_obj->count_));
+    } else {
+      count = array_obj->count_;
+    }
+  }
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////////
 DEFINE_SERIALIZE(ObObj)
 {

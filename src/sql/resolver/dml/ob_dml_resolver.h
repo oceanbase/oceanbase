@@ -337,6 +337,7 @@ public:
   ObDMLStmt *get_stmt();
   void set_upper_insert_resolver(ObInsertResolver *insert_resolver) {
     upper_insert_resolver_ = insert_resolver; }
+  int estimate_values_table_stats(ObValuesTableDef &table_def);
 protected:
   int generate_pl_data_type(ObRawExpr *expr, pl::ObPLDataType &pl_data_type);
   int resolve_into_variables(const ParseNode *node,
@@ -449,6 +450,7 @@ protected:
                                  const ObString autoinc_column_name);
   int build_partid_expr(ObRawExpr *&expr, const uint64_t table_id);
   virtual int resolve_subquery_info(const common::ObIArray<ObSubQueryInfo> &subquery_info);
+  virtual int resolve_inlist_info(common::ObIArray<ObInListInfo> &inlist_infos);
   virtual int resolve_aggr_exprs(ObRawExpr *&expr, common::ObIArray<ObAggFunRawExpr*> &aggr_exprs,
                                  const bool need_analyze = true);
   virtual int resolve_win_func_exprs(ObRawExpr *&expr, common::ObIArray<ObWinFunRawExpr*> &win_exprs);
@@ -833,6 +835,7 @@ protected:
                                       const share::schema::ObTableSchema *table_schema,
                                       common::ObIArray<ObRawExpr*> &check_exprs,
                                       ObIArray<int64_t> *check_flags = NULL);
+  int gen_values_table_column_items(const int64_t column_cnt, TableItem &table_item);
 private:
   int resolve_function_table_column_item_udf(const TableItem &table_item,
                                              common::ObIArray<ColumnItem> &col_items);
@@ -957,12 +960,9 @@ private:
 
   int resolve_values_table_item(const ParseNode &table_node, TableItem *&table_item);
   int resolve_table_values_for_select(const ParseNode &table_node,
-                                      ObIArray<ObRawExpr*> &table_values,
-                                      int64_t &column_cnt);
+                                      ObValuesTableDef &table_values);
   int resolve_table_values_for_insert(const ParseNode &table_node,
-                                      ObIArray<ObRawExpr*> &table_values,
-                                      int64_t &column_cnt);
-  int gen_values_table_column_items(const int64_t column_cnt, TableItem &table_item);
+                                      ObValuesTableDef &table_values);
   int get_values_res_types(const ObIArray<ObExprResType> &cur_values_types,
                            ObIArray<ObExprResType> &res_types);
   int try_add_cast_to_values(const ObIArray<ObExprResType> &res_types,
@@ -973,6 +973,8 @@ private:
                          ObIArray<ObColumnRefRawExpr*> &values_desc,
                          ObRawExpr *&expr);
   int build_row_for_empty_values(ObIArray<ObRawExpr*> &values_vector);
+  int add_obj_to_llc_bitmap(const ObObj &obj, char *llc_bitmap, double &num_null);
+  int compute_values_table_row_count(ObValuesTableDef &table_def);
 protected:
   struct GenColumnExprInfo {
     GenColumnExprInfo():

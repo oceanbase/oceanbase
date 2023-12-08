@@ -254,8 +254,7 @@ int ObTransformQueryPushDown::check_transform_validity(ObSelectStmt *select_stmt
              (view_stmt->is_recursive_union() && !select_stmt->is_spj()) ||
              select_stmt->is_set_stmt() ||
              (select_stmt->has_sequence() && !view_stmt->is_spj()) ||
-             view_stmt->has_ora_rowscn() ||
-             view_stmt->is_values_table_query()) {//判断1, 2
+             view_stmt->has_ora_rowscn()) {//判断1, 2
     can_transform = false;
     OPT_TRACE("stmt is not spj");
   } else if (OB_FAIL(check_rownum_push_down(select_stmt, view_stmt, check_status))) {//判断3

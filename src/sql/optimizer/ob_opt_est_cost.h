@@ -222,6 +222,7 @@ public:
                                            double &count);
 
   static double get_estimate_width_from_type(const ObExprResType &type);
+  static double cost_values_table(double rows, ObIArray<ObRawExpr*> &filters, MODEL_TYPE model_type);
 private:
   static ObOptEstCostModel &get_model(MODEL_TYPE model_type);
   // static ObOptEstCostModel normal_model_;

@@ -1445,7 +1445,12 @@ int ObTransformConstPropagate::check_cast_const_expr(ExprConstInfo &const_info,
                                                         const_info.column_expr_->get_result_type(),
                                                         need_cast,
                                                         is_scale_adjust_cast))) {
-    LOG_WARN("failed to check need cast expr", K(ret));
+    if (OB_ERR_INVALID_TYPE_FOR_OP == ret) {  // rewrite should not happened instead of failed a error
+      ret = OB_SUCCESS;
+      is_valid = false;
+    } else {
+      LOG_WARN("failed to check need cast expr", K(ret));
+    }
   } else if (!need_cast) {
     // do nothing
   } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx_->exec_ctx_,
@@ -1468,7 +1473,12 @@ int ObTransformConstPropagate::check_cast_const_expr(ExprConstInfo &const_info,
     ObObjType cmp_type = ObMaxType;
     int64_t eq_cmp = 0;
     if (OB_FAIL(ret)) {
-      LOG_WARN("failed to cast obj to dest type", K(ret), K(value), K(dst_type.get_type()));
+      if (OB_ERR_INVALID_DATATYPE == ret) {  // rewrite should not happened instead of failed a error
+        ret = OB_SUCCESS;
+        is_valid = false;
+      } else {
+        LOG_WARN("failed to cast obj to dest type", K(ret), K(value), K(dst_type.get_type()));
+      }
     } else if (OB_FAIL(ObExprResultTypeUtil::get_relational_cmp_type(cmp_type,
                                                                       value.get_type(),
                                                                       dest_val->get_type()))) {

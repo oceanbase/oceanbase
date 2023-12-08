@@ -30,6 +30,7 @@
 #include "sql/optimizer/ob_phy_table_location_info.h"
 #include "sql/engine/expr/ob_expr_frame_info.h"
 #include "sql/monitor/flt/ob_flt_span_mgr.h"
+#include "sql/rewrite/ob_query_range_provider.h"
 namespace oceanbase
 {
 namespace share {
@@ -435,7 +436,7 @@ public:
                            common::ObExprCtx &expr_ctx);
 
   // use get_tablet_ranges instead.
-  static int extract_pre_query_range(const ObQueryRange &pre_query_range,
+  static int extract_pre_query_range(const ObQueryRangeProvider &query_range_provider,
                                      common::ObIAllocator &allocator,
                                      ObExecContext &exec_ctx,
                                      ObQueryRangeArray &key_ranges,
@@ -445,7 +446,7 @@ public:
                                            void *range_buffer,
                                            const ParamStore &param_store,
                                            ObQueryRangeArray &key_ranges);
-  static int extract_geo_query_range(const ObQueryRange &pre_query_range,
+  static int extract_geo_query_range(const ObQueryRangeProvider &query_range_provider,
                                        ObIAllocator &allocator,
                                        ObExecContext &exec_ctx,
                                        ObQueryRangeArray &key_ranges,

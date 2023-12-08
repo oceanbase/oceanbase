@@ -846,6 +846,8 @@ typedef enum ObItemType
   T_FUN_SYS_UNIFORM = 1805,
   T_FUN_SYS_RANDOM = 1806,
   T_FUN_SYS_RANDSTR = 1807,
+  T_FUNC_SYS_INNER_IS_TRUE = 1808,
+  T_FUN_SYS_INNER_DECODE_LIKE = 1809,
   T_FUN_SYS_END = 2000,
   T_FUN_SYS_ALIGN_DATE4CMP = 2010,
 
@@ -2399,7 +2401,8 @@ typedef enum ObOutlineType
     || ((op) == T_OP_OUTPUT_PACK) \
     || ((op) == T_FUN_SYS_JSON_OBJECT) \
     || ((op) == T_FUN_SYS_JSON_ARRAY) \
-    || ((op) == T_OP_TO_OUTFILE_ROW)) \
+    || ((op) == T_OP_TO_OUTFILE_ROW) \
+    || ((op) == T_FUNC_SYS_INNER_IS_TRUE)) \
 
 
 

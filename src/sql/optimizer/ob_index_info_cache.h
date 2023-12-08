@@ -14,6 +14,7 @@
 #define OCEANBASE_SQL_OPTIMIZER_OB_INDEX_INFO_CACHE_H 1
 
 #include "sql/rewrite/ob_query_range.h"
+#include "sql/rewrite/ob_query_range_define.h"
 #include "sql/ob_sql_define.h"
 
 namespace oceanbase
@@ -27,6 +28,7 @@ public:
   QueryRangeInfo() : is_valid_(false),
       contain_always_false_(false),
       query_range_(NULL),
+      pre_range_graph_(NULL),
       ranges_(),
       ss_ranges_(),
       equal_prefix_count_(0),
@@ -36,6 +38,12 @@ public:
       range_columns_(),
       expr_constraints_() {}
   const ObQueryRange* get_query_range() const { return query_range_; }
+  const ObPreRangeGraph* get_pre_range_graph() const { return pre_range_graph_; }
+  const ObQueryRangeProvider *get_query_range_provider() const
+  {
+    return pre_range_graph_ != nullptr ? static_cast<const ObQueryRangeProvider *>(pre_range_graph_)
+                                       : static_cast<const ObQueryRangeProvider *>(query_range_);
+  }
   const ObQueryRangeArray& get_ranges() const { return ranges_; }
   const common::ObIArray<ColumnItem> &get_range_columns() const { return range_columns_; }
   const common::ObIArray<ObExprConstraint> &get_expr_constraints() const
@@ -52,6 +60,7 @@ public:
   ObQueryRangeArray& get_ss_ranges() { return ss_ranges_; }
   const ObQueryRangeArray& get_ss_ranges() const { return ss_ranges_; }
   void set_query_range(ObQueryRange *query_range) { query_range_ = query_range; }
+  void set_pre_range_graph(ObPreRangeGraph *pre_range_graph) { pre_range_graph_ = pre_range_graph; }
   common::ObIArray<ColumnItem> &get_range_columns() { return range_columns_; }
   common::ObIArray<ObExprConstraint> &get_expr_constraints() { return expr_constraints_; }
   void set_valid() { is_valid_ = true; }
@@ -94,6 +103,7 @@ private:
   bool is_valid_;
   bool contain_always_false_;
   ObQueryRange *query_range_;
+  ObPreRangeGraph *pre_range_graph_;
   ObQueryRangeArray ranges_;
   ObQueryRangeArray ss_ranges_; // for index skip scan, postfix range
   int64_t equal_prefix_count_;

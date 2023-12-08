@@ -197,6 +197,49 @@ int ObDMLStmtPrinter::print_table_with_subquery(const TableItem *table_item)
   return ret;
 }
 
+int ObDMLStmtPrinter::print_values_table(const TableItem &table_item, bool no_print_alias)
+{
+  int ret = OB_SUCCESS;
+  ObValuesTableDef *table_def = table_item.values_table_def_;
+  if (OB_UNLIKELY(!table_item.is_values_table()) ||
+      OB_ISNULL(table_def)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("values table def should not be NULL", K(ret), KP(table_def));
+  } else {
+    const int64_t column_cnt = table_def->column_cnt_;
+    if (ObValuesTableDef::ACCESS_EXPR == table_def->access_type_ ||
+        ObValuesTableDef::FOLD_ACCESS_EXPR == table_def->access_type_) {
+      const ObIArray<ObRawExpr *> &values = table_def->access_exprs_;
+      if (OB_UNLIKELY(column_cnt <= 0 || values.empty() || values.count() % column_cnt != 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), K(column_cnt), K(values));
+      } else {
+        DATA_PRINTF("(VALUES ");
+        for (int64_t i = 0; OB_SUCC(ret) && i < values.count(); ++i) {
+          if (i % column_cnt == 0) {
+            if (i == 0) {
+              DATA_PRINTF("ROW(");  // first row
+            } else {
+              DATA_PRINTF("), ROW("); // next row
+            }
+          }
+          if (OB_SUCC(ret)) {
+            OZ (expr_printer_.do_print(values.at(i), T_FROM_SCOPE));
+            if (OB_SUCC(ret) && (i + 1) % column_cnt != 0) {
+              DATA_PRINTF(", ");
+            }
+          }
+        }
+        DATA_PRINTF("))");
+        DATA_PRINTF(" %.*s", LEN_AND_PTR(table_item.alias_name_));
+      }
+    } else {
+      DATA_PRINTF("%.*s", LEN_AND_PTR(table_item.get_table_name()));
+    }
+  }
+  return ret;
+}
+
 int ObDMLStmtPrinter::print_table(const TableItem *table_item,
                                   bool no_print_alias/*default false*/)
 {
@@ -207,7 +250,7 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
   } else if (is_stack_overflow) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
-  } else if (OB_ISNULL(stmt_) || OB_ISNULL(buf_) || OB_ISNULL(pos_)) {
+  } else if (OB_ISNULL(stmt_) || OB_ISNULL(buf_) || OB_ISNULL(pos_) || OB_ISNULL(table_item)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt_ is NULL or buf_ is NULL or pos_ is NULL", K(ret));
   } else {
@@ -402,30 +445,8 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
       break;
     }
     case TableItem::VALUES_TABLE: {
-      int64_t column_cnt = stmt_->get_column_size(table_item->table_id_);
-      const ObIArray<ObRawExpr *> &values = table_item->table_values_;
-      if (OB_UNLIKELY(column_cnt <= 0 || values.empty() || values.count() % column_cnt != 0)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(column_cnt), K(values));
-      } else {
-        DATA_PRINTF("(VALUES ");
-        for (int64_t i = 0; OB_SUCC(ret) && i < values.count(); ++i) {
-          if (i % column_cnt == 0) {
-            if (i == 0) {
-              DATA_PRINTF("ROW(");
-            } else {
-              DATA_PRINTF("), ROW(");
-            }
-          }
-          if (OB_SUCC(ret)) {
-            OZ (expr_printer_.do_print(values.at(i), T_FROM_SCOPE));
-            if (OB_SUCC(ret) && (i + 1) % column_cnt != 0) {
-              DATA_PRINTF(", ");
-            }
-          }
-        }
-        DATA_PRINTF("))");
-        DATA_PRINTF(" %.*s", LEN_AND_PTR(table_item->alias_name_));
+      if (OB_FAIL(print_values_table(*table_item, no_print_alias))) {
+        LOG_WARN("failed to print values table", K(ret));
       }
       break;
     }

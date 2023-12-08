@@ -195,7 +195,7 @@ public :
   virtual ~ObGranuleSplitter() = default;
 
   static int get_query_range(ObExecContext &ctx,
-                             const ObQueryRange &tsc_pre_query_range,
+                             const ObQueryRangeProvider &tsc_pre_query_range,
                              ObIArray<ObNewRange> &ranges,
                              ObIArray<ObNewRange> &ss_ranges,
                              int64_t table_id,

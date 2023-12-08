@@ -211,6 +211,31 @@ typedef struct ObJsonTableDef {
   common::ObSEArray<ObString, 16, common::ModulePageAllocator, true> namespace_arr_;
 } ObJsonTableDef;
 
+struct ObValuesTableDef {
+  ObValuesTableDef() : start_param_idx_(-1), end_param_idx_(-1), column_cnt_(0), row_cnt_(0) , access_type_(ACCESS_EXPR) {}
+  enum TableAccessType {
+    ACCESS_EXPR = 0,  // expr, one by one
+    FOLD_ACCESS_EXPR, // expr, one expr->ObSqlArray
+    ACCESS_PARAM,     // by a continuous space of param_store
+    ACCESS_OBJ,       // ObObj one by one, used for non-parametric
+  };
+  int deep_copy(const ObValuesTableDef &other,
+                ObIRawExprCopier &expr_copier,
+                ObIAllocator* allocator);
+  common::ObArray<ObRawExpr*, common::ModulePageAllocator, true> access_exprs_;
+  int64_t start_param_idx_;
+  int64_t end_param_idx_;
+  common::ObArray<ObObj, common::ModulePageAllocator, true> access_objs_;
+  common::ObArray<int64_t, common::ModulePageAllocator, true> column_ndvs_;  // column num distinct
+  common::ObArray<int64_t, common::ModulePageAllocator, true> column_nnvs_;  // column num null
+  int64_t column_cnt_;
+  int64_t row_cnt_;
+  TableAccessType access_type_;
+  virtual TO_STRING_KV(K(column_cnt_), K(row_cnt_), K(access_exprs_), K(start_param_idx_),
+                       K(end_param_idx_), K(access_objs_), K(column_ndvs_), K(column_nnvs_),
+                       K(access_type_));
+};
+
 struct TableItem
 {
   TableItem()
@@ -239,6 +264,7 @@ struct TableItem
     ddl_table_id_ = common::OB_INVALID_ID;
     json_table_def_ = nullptr;
     table_type_ = MAX_TABLE_TYPE;
+    values_table_def_ = NULL;
   }
 
   virtual TO_STRING_KV(N_TID, table_id_,
@@ -262,7 +288,6 @@ struct TableItem
                K_(is_view_table), K_(part_ids), K_(part_names), K_(cte_type),
                KPC_(function_table_expr),
                K_(flashback_query_type), KPC_(flashback_query_expr), K_(table_type),
-               K(table_values_),
                K_(exec_params));
 
   enum TableType
@@ -348,7 +373,9 @@ struct TableItem
 
   ObJsonTableDef* get_json_table_def() { return json_table_def_; }
   int deep_copy_json_table_def(const ObJsonTableDef& jt_def, ObIRawExprCopier &expr_copier, ObIAllocator* allocator);
-
+  int deep_copy_values_table_def(const ObValuesTableDef& table_def,
+                                 ObIRawExprCopier &expr_copier,
+                                 ObIAllocator* allocator);
   virtual bool has_for_update() const { return for_update_; }
   // if real table id, it is valid for all threads,
   // else if generated id, it is unique just during the thread session
@@ -403,7 +430,7 @@ struct TableItem
   // json table
   ObJsonTableDef* json_table_def_;
   // values table
-  common::ObArray<ObRawExpr*, common::ModulePageAllocator, true> table_values_;
+  ObValuesTableDef *values_table_def_;
 };
 
 struct ColumnItem

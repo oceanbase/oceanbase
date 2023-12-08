@@ -415,6 +415,7 @@
 #include "sql/engine/expr/ob_expr_priv_st_equals.h"
 #include "sql/engine/expr/ob_expr_priv_st_touches.h"
 #include "sql/engine/expr/ob_expr_align_date4cmp.h"
+#include "sql/engine/expr/ob_expr_inner_decode_like.h"
 #include "sql/engine/expr/ob_expr_priv_st_makeenvelope.h"
 #include "sql/engine/expr/ob_expr_priv_st_clipbybox2d.h"
 #include "sql/engine/expr/ob_expr_priv_st_pointonsurface.h"
@@ -1034,6 +1035,8 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprPrivSTEquals);
     REG_OP(ObExprPrivSTTouches);
     REG_OP(ObExprAlignDate4Cmp);
+    REG_OP(ObExprInnerIsTrue);
+    REG_OP(ObExprInnerDecodeLike);
     REG_OP(ObExprPrivSTMakeEnvelope);
     REG_OP(ObExprPrivSTClipByBox2D);
     REG_OP(ObExprPrivSTPointOnSurface);
@@ -1363,6 +1366,8 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprDeleteXml);
   REG_OP_ORCL(ObExprXmlSequence);
   REG_OP_ORCL(ObExprTempTableSSID);
+  REG_OP_ORCL(ObExprInnerIsTrue);
+  REG_OP_ORCL(ObExprInnerDecodeLike);
   REG_OP_ORCL(ObExprJsonObjectStar);
 }
 

@@ -109,6 +109,7 @@ public:
   int print_fetch();
   int print_returning();
   int print_json_table(const TableItem *table_item);
+  int print_values_table(const TableItem &table_item, bool no_print_alias);
   int print_xml_table(const TableItem *table_item);
   int print_table(const TableItem *table_item,
                   bool no_print_alias = false);

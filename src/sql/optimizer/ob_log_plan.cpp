@@ -77,6 +77,7 @@
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_define.h"
 #endif
+#include "sql/optimizer/ob_log_values_table_access.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -4317,6 +4318,7 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
     scan->set_query_range_row_count(ap->query_range_row_count_);
     scan->set_index_back_row_count(ap->index_back_row_count_);
     scan->set_pre_query_range(ap->pre_query_range_);
+    scan->set_pre_range_graph(ap->pre_range_graph_);
     scan->set_skip_scan(OptSkipScanState::SS_DISABLE != ap->use_skip_scan_);
     scan->set_table_type(table_schema->get_table_type());
     if (!ap->is_inner_path_ &&
@@ -5630,6 +5632,16 @@ int ObLogPlan::init_candidate_plans(ObIArray<CandidatePlan> &candi_plans)
   int ret = OB_SUCCESS;
   if (OB_FAIL(candidates_.candidate_plans_.assign(candi_plans))) {
     LOG_WARN("failed to push back candi plans", K(ret));
+  } else if (OB_UNLIKELY(get_optimizer_context().generate_random_plan())) {
+    candidates_.is_final_sort_ = false;
+    int64_t idx = ObRandom::rand(0, candi_plans.count() - 1);
+    if (OB_ISNULL(candi_plans.at(idx).plan_tree_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else {
+      candidates_.plain_plan_.second = idx;
+      candidates_.plain_plan_.first = candi_plans.at(idx).plan_tree_->get_cost();
+    }
   } else {
     candidates_.is_final_sort_ = false;
     candidates_.plain_plan_.first = 0;
@@ -7659,14 +7671,18 @@ int ObLogPlan::get_minimal_cost_candidate(const ObIArray<CandidatePlan> &candida
                                           CandidatePlan &candidate)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < candidates.count(); i++) {
-    if (OB_ISNULL(candidates.at(i).plan_tree_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (NULL == candidate.plan_tree_ ||
-               candidates.at(i).plan_tree_->get_cost() < candidate.plan_tree_->get_cost()) {
-      candidate = candidates.at(i);
-    } else { /*do nothing*/ }
+  if (OB_UNLIKELY(get_optimizer_context().generate_random_plan())) {
+    candidate = candidates.at(ObRandom::rand(0, candidates.count() - 1));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < candidates.count(); i++) {
+      if (OB_ISNULL(candidates.at(i).plan_tree_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (NULL == candidate.plan_tree_ ||
+                candidates.at(i).plan_tree_->get_cost() < candidate.plan_tree_->get_cost()) {
+        candidate = candidates.at(i);
+      } else { /*do nothing*/ }
+    }
   }
   return ret;
 }
@@ -9699,8 +9715,8 @@ int ObLogPlan::get_subplan_filter_correlated_equal_keys(const ObLogicalOperator 
     LOG_WARN("failed to append filter exprs", K(ret));
   } else if (log_op_def::LOG_TABLE_SCAN == top->get_type()) {
     const ObLogTableScan *table_scan = static_cast<const ObLogTableScan *>(top);
-    if (NULL != table_scan->get_pre_query_range() &&
-        OB_FAIL(append(filters, table_scan->get_pre_query_range()->get_range_exprs()))) {
+    if (NULL != table_scan->get_pre_graph() &&
+        OB_FAIL(append(filters, table_scan->get_pre_graph()->get_range_exprs()))) {
       LOG_WARN("failed to append conditions", K(ret));
     }
   }
@@ -10521,11 +10537,24 @@ int ObLogPlan::prune_and_keep_best_plans(ObIArray<CandidatePlan> &candidate_plan
   int ret = OB_SUCCESS;
   ObSEArray<CandidatePlan, 8> best_plans;
   OPT_TRACE_TITLE("prune and keep best plans");
-  for (int64_t i = 0; OB_SUCC(ret) && i < candidate_plans.count(); i++) {
-    CandidatePlan &candidate_plan = candidate_plans.at(i);
-    if (OB_FAIL(add_candidate_plan(best_plans, candidate_plan))) {
-      LOG_WARN("failed to add candidate plan", K(ret));
-    } else { /*do nothing*/ }
+  if (OB_UNLIKELY(get_optimizer_context().generate_random_plan())) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < candidate_plans.count(); i++) {
+      if (ObRandom::rand(0,1) == 1 && OB_FAIL(best_plans.push_back(candidate_plans.at(i)))) {
+        LOG_WARN("failed to push back random candi plan", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && best_plans.empty() && !candidate_plans.empty()) {
+      if (OB_FAIL(best_plans.push_back(candidate_plans.at(0)))) {
+        LOG_WARN("failed to push back random candi plan", K(ret));
+      }
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < candidate_plans.count(); i++) {
+      CandidatePlan &candidate_plan = candidate_plans.at(i);
+      if (OB_FAIL(add_candidate_plan(best_plans, candidate_plan))) {
+        LOG_WARN("failed to add candidate plan", K(ret));
+      } else { /*do nothing*/ }
+    }
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(init_candidate_plans(best_plans))) {
@@ -14115,12 +14144,39 @@ int ObLogPlan::allocate_values_table_path(ValuesTablePath *values_table_path,
                                           ObLogicalOperator *&out_access_path_op)
 {
   int ret = OB_SUCCESS;
-  ObLogExprValues *values_op = NULL;
-  const TableItem *table_item = NULL;
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_2_0) {
+    ObLogExprValues *values_op = NULL;
+    if (OB_FAIL(do_alloc_values_table_path(values_table_path, values_op))) {
+      LOG_WARN("failed to allocate values table access op", K(ret));
+    } else {
+      out_access_path_op = values_op;
+    }
+  } else {
+    ObLogValuesTableAccess *values_op = NULL;
+    if (OB_FAIL(do_alloc_values_table_path(values_table_path, values_op))) {
+      LOG_WARN("failed to allocate values table access op", K(ret));
+    } else {
+      out_access_path_op = values_op;
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::do_alloc_values_table_path(ValuesTablePath *values_table_path,
+                                          ObLogExprValues *&values_op)
+{
+  int ret = OB_SUCCESS;
+  TableItem *table_item = NULL;
+  ObValuesTableDef *table_def = NULL;
   if (OB_ISNULL(values_table_path) || OB_ISNULL(get_stmt()) ||
       OB_ISNULL(table_item = get_stmt()->get_table_item_by_id(values_table_path->table_id_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(values_table_path), K(get_stmt()), K(ret));
+  } else if (OB_UNLIKELY(!table_item->is_values_table()) ||
+             OB_ISNULL(table_def = values_table_path->table_def_) ||
+             OB_UNLIKELY(0 == table_def->column_cnt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed. get unexpect param", K(ret), K(*table_item), KP(table_def));
   } else if (OB_ISNULL(values_op = static_cast<ObLogExprValues*>(get_log_op_factory().
                                    allocate(*this, LOG_EXPR_VALUES)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -14128,8 +14184,10 @@ int ObLogPlan::allocate_values_table_path(ValuesTablePath *values_table_path,
   } else {
     values_op->set_table_name(table_item->get_table_name());
     values_op->set_is_values_table(true);
+    values_op->set_table_id(values_table_path->table_id_);
+    values_op->set_values_table_def(table_def);
     ObSEArray<ObColumnRefRawExpr *, 4> values_desc;
-    if (OB_FAIL(values_op->add_values_expr(table_item->table_values_))) {
+    if (OB_FAIL(values_op->add_values_expr(table_def->access_exprs_))) {
       LOG_WARN("failed to add values expr", K(ret));
     } else if (OB_FAIL(get_stmt()->get_column_exprs(values_table_path->table_id_, values_desc))) {
       LOG_WARN("failed to get column exprs");
@@ -14139,8 +14197,47 @@ int ObLogPlan::allocate_values_table_path(ValuesTablePath *values_table_path,
       LOG_WARN("failed to append expr", K(ret));
     } else if (OB_FAIL(values_op->compute_property(values_table_path))) {
       LOG_WARN("failed to compute propery", K(ret));
-    } else {
-      out_access_path_op = values_op;
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::do_alloc_values_table_path(ValuesTablePath *values_table_path,
+                                          ObLogValuesTableAccess *&values_op)
+{
+  int ret = OB_SUCCESS;
+  TableItem *table_item = NULL;
+  ObValuesTableDef *table_def = NULL;
+  if (OB_ISNULL(values_table_path) || OB_ISNULL(get_stmt()) ||
+      OB_ISNULL(table_item = get_stmt()->get_table_item_by_id(values_table_path->table_id_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(values_table_path), K(get_stmt()), K(ret));
+  } else if (OB_UNLIKELY(!table_item->is_values_table()) ||
+             OB_ISNULL(table_def = values_table_path->table_def_) ||
+             OB_UNLIKELY(0 == table_def->column_cnt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed. get unexpect param", K(ret), K(*table_item), KP(table_def));
+  } else if (OB_ISNULL(values_op = static_cast<ObLogValuesTableAccess*>(get_log_op_factory().
+                                   allocate(*this, LOG_VALUES_TABLE_ACCESS)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate values op", K(ret));
+  } else {
+    values_op->set_table_name(table_item->get_table_name());
+    values_op->set_table_id(values_table_path->table_id_);
+    values_op->set_values_table_def(table_def);
+    values_op->set_values_path(values_table_path);
+    ObSEArray<ObColumnRefRawExpr *, 4> column_exprs;
+    if (OB_FAIL(get_stmt()->get_column_exprs(values_table_path->table_id_, column_exprs))) {
+      LOG_WARN("failed to get column exprs");
+    } else if (OB_UNLIKELY(column_exprs.count() != table_def->column_cnt_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("not allow to do project pruning now", K(ret));
+    } else if (OB_FAIL(values_op->get_column_exprs().assign(column_exprs))) {
+      LOG_WARN("failed to add values desc", K(ret));
+    } else if (OB_FAIL(append(values_op->get_filter_exprs(), values_table_path->filter_))) {
+      LOG_WARN("failed to append expr", K(ret));
+    } else if (OB_FAIL(values_op->compute_property(values_table_path))) {
+      LOG_WARN("failed to compute propery", K(ret));
     }
   }
   return ret;

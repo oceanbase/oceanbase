@@ -447,6 +447,7 @@ public:
   bool is_ps_protocol() const { return is_ps_protocol_; }
   void set_original_param_cnt(const int64_t cnt) { original_param_cnt_ = cnt; }
   int64_t get_original_param_cnt() const { return original_param_cnt_; }
+  bool is_exec_param_readable() const { return param_store_.count() > original_param_cnt_; }
   void set_orig_question_mark_cnt(const int64_t cnt) { orig_question_mark_cnt_ = cnt; }
   int64_t get_orig_question_mark_cnt() const { return orig_question_mark_cnt_; }
   void set_is_ps_rewrite_sql() { is_ps_rewrite_sql_ = true; }

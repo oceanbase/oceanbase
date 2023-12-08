@@ -174,6 +174,7 @@ private:
 
   static int estimate_prefix_range_rowcount(
       const obrpc::ObEstPartResElement &result,
+      bool new_range_with_exec_param,
       ObCostTableScanInfo &est_cost_info,
       double &logical_row_count,
       double &physical_row_count);

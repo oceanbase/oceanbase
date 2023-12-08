@@ -445,6 +445,33 @@ public:
     return cmp;
   }
 
+  /**
+   * compare endkey of current range with startkey of other range
+   * if endkey is equal to startkey, return value follows these rules:
+   *  1. if last obj of endkey is max_value or min value, compare result is 0
+   *  2. if last obj of endkey is not max_value or min_value, check inclusive_end
+   *     of current range and inclusive_start of other range. current range only
+   *     less than other range when inclusive_end and inclusive_start are both false.
+  */
+  inline int compare_endkey_with_startkey(const ObNewRange &r) const
+  {
+    int cmp = 0;
+    if (end_key_.is_max_row()) {
+      cmp = 1;
+    } else {
+      cmp = end_key_.compare(r.start_key_);
+      if (0 == cmp) {
+        if (end_key_.get_obj_ptr()[end_key_.get_obj_cnt() - 1].is_max_value() ||
+            end_key_.get_obj_ptr()[end_key_.get_obj_cnt() - 1].is_min_value()) {
+          // do nothing
+        } else if (!border_flag_.inclusive_end() && !r.border_flag_.inclusive_start()) {
+          cmp = -1;
+        }
+      }
+    }
+    return cmp;
+  }
+
   inline bool is_valid() const { return !empty(); }
 
   inline bool empty() const

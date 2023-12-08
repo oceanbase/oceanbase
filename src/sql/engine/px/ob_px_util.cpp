@@ -127,7 +127,7 @@ int ObPXServerAddrUtil::get_external_table_loc(
     ObExecContext &ctx,
     uint64_t table_id,
     uint64_t ref_table_id,
-    const ObQueryRange &pre_query_range,
+    const ObQueryRangeProvider &pre_query_range,
     ObDfo &dfo,
     ObDASTableLoc *&table_loc)
 {
@@ -344,7 +344,7 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
     } else {
       if (OB_NOT_NULL(scan_op) && scan_op->is_external_table_) {
         // create new table loc for a random dfo distribution for external table
-        OZ (get_external_table_loc(ctx, table_location_key, ref_table_id, scan_op->get_query_range(), dfo, table_loc));
+        OZ (get_external_table_loc(ctx, table_location_key, ref_table_id, scan_op->get_query_range_provider(), dfo, table_loc));
       } else
       // 通过TSC或者DML获得当前的DFO的partition对应的location信息
       // 后续利用location信息构建对应的SQC meta
@@ -1028,7 +1028,7 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get phy table location", K(ret));
     } else if (scan_op->is_external_table_
-               && OB_FAIL(get_external_table_loc(ctx, table_location_key, ref_table_id, scan_op->get_query_range(), dfo, table_loc))) {
+               && OB_FAIL(get_external_table_loc(ctx, table_location_key, ref_table_id, scan_op->get_query_range_provider(), dfo, table_loc))) {
       LOG_WARN("fail to get external table loc", K(ret));
     } else if (OB_FAIL(set_sqcs_accessed_location(ctx,
           // dml op has already set sqc.get_location information,

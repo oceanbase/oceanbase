@@ -15,6 +15,7 @@
 
 #include "lib/hash/ob_pointer_hashmap.h"
 #include "sql/rewrite/ob_query_range.h"
+#include "sql/rewrite/ob_query_range_define.h"
 #include "sql/das/ob_das_define.h"
 #include "sql/engine/expr/ob_sql_expression.h"
 #include "sql/engine/expr/ob_sql_expression_factory.h"
@@ -128,6 +129,7 @@ public:
     QUERY_RANGE,
     FUNC_VALUE,
     COLUMN_VALUE,
+    PRE_RANGE_GRAPH
   };
 
   ObPartLocCalcNode (common::ObIAllocator &allocator): node_type_(INVALID), allocator_(allocator)
@@ -142,6 +144,7 @@ public:
   inline bool is_query_range_node() const { return QUERY_RANGE == node_type_; }
   inline bool is_func_value_node() const { return FUNC_VALUE == node_type_; }
   inline bool is_column_value_node() const { return COLUMN_VALUE == node_type_; }
+  inline bool is_pre_range_graph_node() const { return PRE_RANGE_GRAPH == node_type_; }
 
   static ObPartLocCalcNode *create_part_calc_node(common::ObIAllocator &allocator,
                                                   common::ObIArray<ObPartLocCalcNode*> &calc_nodes,
@@ -217,6 +220,22 @@ public:
                         ObPartLocCalcNode *&other) const;
   virtual int add_part_calc_node(common::ObIArray<ObPartLocCalcNode*> &calc_nodes);
   ObQueryRange pre_query_range_;
+};
+
+struct ObPLPreRangeGraphNode : public ObPartLocCalcNode
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObPLPreRangeGraphNode(common::ObIAllocator &allocator)
+    : ObPartLocCalcNode(allocator), pre_range_graph_(allocator)
+  { set_node_type(PRE_RANGE_GRAPH); }
+  virtual ~ObPLPreRangeGraphNode()
+  { pre_range_graph_.reset(); }
+  virtual int deep_copy(common::ObIAllocator &allocator,
+                        common::ObIArray<ObPartLocCalcNode*> &calc_nodes,
+                        ObPartLocCalcNode *&other) const;
+  virtual int add_part_calc_node(common::ObIArray<ObPartLocCalcNode*> &calc_nodes);
+  ObPreRangeGraph pre_range_graph_;
 };
 
 struct ObPLFuncValueNode : public ObPartLocCalcNode
@@ -853,6 +872,17 @@ private:
                                      const common::ObIArray<common::ObObjectID> *part_ids,
                                      const ObTempExpr *temp_expr) const;
 
+  int calc_pre_range_graph_partition_ids(ObExecContext &exec_ctx,
+                                         ObDASTabletMapper &tablet_mapper,
+                                         const ParamStore &params,
+                                         const ObPLPreRangeGraphNode *calc_node,
+                                         ObIArray<ObTabletID> &tablet_ids,
+                                         ObIArray<ObObjectID> &partition_ids,
+                                         bool &all_part,
+                                         const ObDataTypeCastParams &dtc_params,
+                                         const ObIArray<ObObjectID> *part_ids,
+                                         const ObTempExpr *se_gen_col_expr) const;
+
   int calc_func_value_partition_ids(ObExecContext &exec_ctx,
                                     ObDASTabletMapper &tablet_mapper,
                                     const ParamStore &params,
@@ -944,7 +974,8 @@ private:
                                            const share::schema::ObTableSchema *table_schema,
                                            const common::ObIArray<ObRawExpr*> &filter_exprs,
                                            const common::ObDataTypeCastParams &dtc_params,
-                                           const bool is_in_range_optimization_enabled);
+                                           const bool is_in_range_optimization_enabled,
+                                           const bool use_new_query_range);
 
   int add_se_value_expr(const ObRawExpr *value_expr,
                         RowDesc &value_row_desc,
@@ -973,7 +1004,8 @@ private:
                              bool &is_range_get,
                              const common::ObDataTypeCastParams &dtc_params,
                              ObExecContext *exec_ctx,
-                             const bool is_in_range_optimization_enabled);
+                             const bool is_in_range_optimization_enabled,
+                             const bool use_new_query_range);
 
   int analyze_filter(const common::ObIArray<ColumnItem> &partition_columns,
                      const ObRawExpr *partition_expr,
@@ -993,6 +1025,13 @@ private:
                            const common::ObDataTypeCastParams &dtc_params,
                            ObExecContext *exec_ctx,
                            const bool is_in_range_optimization_enabled);
+
+  int get_pre_range_graph_node(const ObPartitionLevel part_level,
+                               const ColumnIArray &partition_columns,
+                               const ObIArray<ObRawExpr*> &filter_exprs,
+                               bool &always_true,
+                               ObPartLocCalcNode *&calc_node,
+                               ObExecContext *exec_ctx);
 
   int extract_eq_op(ObExecContext *exec_ctx,
                     const ObRawExpr *l_expr,
@@ -1080,7 +1119,8 @@ private:
                              ObPartLocCalcNode *&gen_col_node,
                              bool &get_all,
                              bool &is_range_get,
-                             const bool is_in_range_optimization_enabled);
+                             const bool is_in_range_optimization_enabled,
+                             const bool use_new_query_range);
 
   int calc_partition_ids_by_in_expr(
                    ObExecContext &exec_ctx,
@@ -1162,7 +1202,6 @@ private:
   ObTempExpr *se_sub_gen_col_expr_;
 
   common::ObFixedArray<common::ObObjectID, common::ObIAllocator> part_hint_ids_;
-  ObQueryRange pre_query_range_; // query range for the table scan
   ObObjType part_col_type_;
   ObCollationType part_collation_type_;
   ObObjType subpart_col_type_;

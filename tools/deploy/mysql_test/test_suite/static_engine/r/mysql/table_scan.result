@@ -257,7 +257,7 @@ Outputs & filters:
   0 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c1 < 4]), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[true], 
-      range_key([t1.c2], [t1.c1]), range(1,MAX ; MAX,4), 
+      range_key([t1.c2], [t1.c1]), range(1,MAX ; MAX,MAX), 
       range_cond([t1.c2 > 1])
 select /*+index(t1 idx)*/ c1, c2, c3 from t1 where c2 > 1 and  c1 <  4;
 +----+------+------+

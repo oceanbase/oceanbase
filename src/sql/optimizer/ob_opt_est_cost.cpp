@@ -717,3 +717,8 @@ ObOptEstCostModel &ObOptEstCost::get_model(MODEL_TYPE model_type)
     return normal_model_;
   }
 }
+
+double ObOptEstCost::cost_values_table(double rows, ObIArray<ObRawExpr*> &filters, MODEL_TYPE model_type)
+{
+  return get_model(model_type).cost_get_rows(rows) + get_model(model_type).cost_quals(rows, filters);
+}

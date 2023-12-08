@@ -2262,27 +2262,7 @@ int ObTransformUtils::is_column_expr_not_null(ObNotNullContext &ctx,
       LOG_WARN("failed to check expr not null", K(ret));
     }
   } else if (table->is_values_table()) {
-    int64_t idx = expr->get_column_id() - OB_APP_MIN_COLUMN_ID;
-    int64_t column_cnt = ctx.stmt_->get_column_size(table->table_id_);
-    if (OB_UNLIKELY(idx >= column_cnt || column_cnt == 0 || table->table_values_.empty() ||
-                    table->table_values_.count() % column_cnt != 0)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected error", K(ret), K(idx), KPC(table), K(column_cnt));
-    } else {
-      is_not_null = true;
-      int64_t row_count = table->table_values_.count() / column_cnt;
-      for (int64_t i = 0; OB_SUCC(ret) && is_not_null && i < row_count; ++i) {
-        if (OB_UNLIKELY(column_cnt * i + idx >= table->table_values_.count())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected error", K(ret), K(i), K(idx), KPC(table), K(column_cnt));
-        } else if (OB_FAIL(is_expr_not_null(ctx,
-                                            table->table_values_.at(column_cnt * i + idx),
-                                            is_not_null,
-                                            constraints))) {
-          LOG_WARN("failed to check expr not null", K(ret));
-        } else {/*do nothing*/}
-      }
-    }
+    // It is temporarily considered that the values table is not satisfied.
   } else {
     // do nothing
   }
@@ -11135,9 +11115,17 @@ int ObTransformUtils::is_table_item_correlated(
         LOG_WARN("failed to check function table expr correlated", K(ret));
       }
     } else if (table->is_values_table()) {
-      for (int64_t j = 0; OB_SUCC(ret) && !contains && j < table->table_values_.count(); ++j) {
-        if (OB_FAIL(is_correlated_expr(exec_params, table->table_values_.at(j), contains))) {
-          LOG_WARN("failed to check values table expr correlated", K(ret));
+      if (OB_ISNULL(table->values_table_def_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret));
+      } else {
+        ObIArray<ObRawExpr*> &access_exprs = table->values_table_def_->access_exprs_;
+        for (int64_t j = 0; OB_SUCC(ret) && !contains && j < access_exprs.count(); ++j) {
+          if (OB_FAIL(is_correlated_expr(exec_params,
+                                         access_exprs.at(j),
+                                         contains))) {
+            LOG_WARN("failed to check values table expr correlated", K(ret));
+          }
         }
       }
     }

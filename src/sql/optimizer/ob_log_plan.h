@@ -1760,6 +1760,10 @@ public:
                                                  ObIArray<ObRelIds> &connect_infos,
                                                  ObIArray<ObRelIds> &single_table_ids,
                                                  ObIArray<ObRawExpr*> &redundancy_quals);
+  int do_alloc_values_table_path(ValuesTablePath *values_table_path,
+                                 ObLogExprValues *&out_access_path_op);
+  int do_alloc_values_table_path(ValuesTablePath *values_table_path,
+                                 ObLogValuesTableAccess *&out_access_path_op);
 private:
   static const int64_t IDP_PATHNUM_THRESHOLD = 5000;
 protected: // member variable

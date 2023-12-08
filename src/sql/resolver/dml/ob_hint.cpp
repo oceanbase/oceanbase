@@ -748,6 +748,10 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
                                       || 0 == val.get_varchar().case_compare("false"));
       break;
     }
+    case INLIST_REWRITE_THRESHOLD: {
+      is_valid = val.is_int() && (0 < val.get_int());
+      break;
+    }
     default:
       LOG_TRACE("invalid opt param val", K(param_type), K(val));
       break;

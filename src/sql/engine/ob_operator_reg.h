@@ -324,6 +324,11 @@ class ObExprValuesSpec;
 class ObExprValuesOp;
 REGISTER_OPERATOR(ObLogExprValues, PHY_EXPR_VALUES, ObExprValuesSpec, ObExprValuesOp, NOINPUT);
 
+class ObLogValuesTableAccess;
+class ObValuesTableAccessSpec;
+class ObValuesTableAccessOp;
+REGISTER_OPERATOR(ObLogValuesTableAccess, PHY_VALUES_TABLE_ACCESS, ObValuesTableAccessSpec, ObValuesTableAccessOp, NOINPUT);
+
 class ObLogDelete;
 class ObTableDeleteSpec;
 class ObTableDeleteOp;

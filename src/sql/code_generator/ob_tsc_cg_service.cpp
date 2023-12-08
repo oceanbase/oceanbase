@@ -42,6 +42,9 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
   } else {
     query_flag.scan_order_ = ObQueryFlag::Forward;
   }
+  if (op.is_new_query_range()) {
+    query_flag.set_is_new_query_range();
+  }
   tsc_ctdef.scan_flags_ = query_flag;
 
   if (OB_SUCC(ret) && op.get_table_type() == share::schema::EXTERNAL_TABLE) {

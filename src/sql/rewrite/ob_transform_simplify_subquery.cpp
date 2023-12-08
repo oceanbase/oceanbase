@@ -1269,7 +1269,7 @@ int ObTransformSimplifySubquery::eliminate_subquery(ObDMLStmt *stmt,
       } else if (OB_ISNULL(subquery = subq_expr->get_ref_stmt())) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("Subquery stmt is NULL", K(ret));
-      } else if (subquery->is_contains_assignment() || subquery->is_values_table_query()) {
+      } else if (subquery->is_contains_assignment()) {
         // do nothing
       } else if (OB_FAIL(subquery_can_be_eliminated_in_exists(expr->get_expr_type(),
                                                               subquery,
@@ -1458,8 +1458,7 @@ int ObTransformSimplifySubquery::groupby_can_be_eliminated_in_any_all(const ObSe
   } else if (stmt->has_group_by()
              && !stmt->has_having()
              && !stmt->has_limit()
-             && 0 == stmt->get_aggr_item_size()
-             && !stmt->is_values_table_query()) {
+             && 0 == stmt->get_aggr_item_size()) {
     // Check if select list is involved in group exprs
     ObRawExpr *s_expr = NULL;
     bool all_in_group_exprs = true;
@@ -1500,7 +1499,6 @@ int ObTransformSimplifySubquery::eliminate_subquery_in_exists(ObDMLStmt *stmt,
     } else if (OB_ISNULL(subquery = subq_expr->get_ref_stmt())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("Subquery stmt is NULL", K(ret));
-    } else if (subquery->is_values_table_query()) { /* do nothing */
       //Just in case different parameters hit same plan, firstly we need add const param constraint
     } else if (OB_FAIL(need_add_limit_constraint(expr->get_expr_type(), subquery, add_limit_constraint))){
       LOG_WARN("failed to check limit constraints", K(ret));
@@ -2255,8 +2253,7 @@ int ObTransformSimplifySubquery::check_stmt_can_trans_as_exists(ObSelectStmt *st
   } else if (stmt->is_contains_assignment() ||
              stmt->is_hierarchical_query() ||
              stmt->has_window_function() ||
-             stmt->has_rollup() ||
-             stmt->is_values_table_query()) {
+             stmt->has_rollup()) {
     LOG_TRACE("stmt not support trans in as exists", K(stmt->is_contains_assignment()),
               K(stmt->is_hierarchical_query()), K(stmt->has_window_function()),
               K(stmt->has_rollup()), K(stmt->is_values_table_query()));

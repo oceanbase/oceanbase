@@ -18,6 +18,7 @@
 #include "sql/optimizer/ob_log_join.h"
 #include "sql/optimizer/ob_log_function_table.h"
 #include "common/ob_smart_call.h"
+#include "sql/optimizer/ob_log_values_table_access.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
@@ -1576,6 +1577,11 @@ int ObTransformSemiToInner::find_operator(ObLogicalOperator* root,
     }
   } else if (log_op_def::LOG_FUNCTION_TABLE == root->get_type()) {
     ObLogFunctionTable *scan = static_cast<ObLogFunctionTable *>(root);
+    if (scan->get_table_id() == table_id) {
+      table_op = scan;
+    }
+  } else if (log_op_def::LOG_VALUES_TABLE_ACCESS == root->get_type()) {
+    ObLogValuesTableAccess *scan = static_cast<ObLogValuesTableAccess *>(root);
     if (scan->get_table_id() == table_id) {
       table_op = scan;
     }

@@ -381,7 +381,10 @@ public:
                                    const OptTableMetas &child_table_metas,
                                    const OptSelectivityCtx &child_ctx,
                                    const double child_rows);
-
+  int add_values_table_meta_info(const ObDMLStmt *stmt,
+                                 const uint64_t table_id,
+                                 const OptSelectivityCtx &ctx,
+                                 ObValuesTableDef *table_def);
   int get_set_stmt_output_statistics(const ObSelectStmt &stmt,
                                      const OptTableMetas &child_table_metas,
                                      const int64_t idx,
@@ -637,7 +640,7 @@ public:
                                     const uint64_t column_id,
                                     const ObIArray<ObRawExpr *> &quals,
                                     ObIArray<ColumnItem> &column_items,
-                                    ObQueryRange &query_range,
+                                    ObIAllocator &alloc,
                                     ObQueryRangeArray &ranges);
 
   // @brief 检测OR中 expr 对于第 index 个子表达式的互斥性, 只检测 c1 = v 的情况,

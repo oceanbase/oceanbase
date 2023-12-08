@@ -66,7 +66,8 @@ struct ObTransformerCtx
     outline_trans_hints_(),
     used_trans_hints_(),
     groupby_pushdown_stmts_(),
-    is_spm_outline_(false)
+    is_spm_outline_(false),
+    in_accept_transform_(false)
   { }
   virtual ~ObTransformerCtx() {}
 
@@ -126,6 +127,7 @@ struct ObTransformerCtx
   ObSEArray<uint64_t, 4> groupby_pushdown_stmts_;
   /* end used for hint and outline below */
   bool is_spm_outline_;
+  bool in_accept_transform_;
 };
 
 enum TransMethod
@@ -257,7 +259,8 @@ public:
       (1L << JOIN_LIMIT_PUSHDOWN) |
       (1L << CONST_PROPAGATE) |
       (1L << LEFT_JOIN_TO_ANTI) |
-      (1L << COUNT_TO_EXISTS);
+      (1L << COUNT_TO_EXISTS) |
+      (1L << SEMI_TO_INNER);
   static const uint64_t ALL_COST_BASED_RULES =
       (1L << OR_EXPANSION) |
       (1L << WIN_MAGIC) |

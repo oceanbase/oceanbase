@@ -1637,6 +1637,7 @@ public:
 
   OB_INLINE bool get_bool() const { return (0 != v_.int64_); }
   inline int64_t get_ext() const;
+  int get_real_param_count(int64_t &count) const;
   OB_INLINE int64_t get_unknown() const { return v_.unknown_; }
   OB_INLINE uint64_t get_bit() const { return v_.uint64_; }
   OB_INLINE uint64_t get_enum() const { return v_.uint64_; }

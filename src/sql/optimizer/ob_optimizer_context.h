@@ -193,7 +193,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     hash_join_enabled_(true),
     optimizer_sortmerge_join_enabled_(true),
     nested_loop_join_enabled_(true),
-    storage_estimation_enabled_(false)
+    storage_estimation_enabled_(false),
+    enable_random_plan_(false)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -562,6 +563,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_merge_join_enabled(bool enabled) { optimizer_sortmerge_join_enabled_ = enabled; }
   inline bool is_nested_join_enabled() const { return nested_loop_join_enabled_; }
   inline void set_nested_join_enabled(bool enabled) { nested_loop_join_enabled_ = enabled; }
+  inline void set_generate_random_plan(bool v) { enable_random_plan_ = v; }
+  inline bool generate_random_plan() const { return enable_random_plan_; }
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -645,6 +648,7 @@ private:
   bool optimizer_sortmerge_join_enabled_;
   bool nested_loop_join_enabled_;
   bool storage_estimation_enabled_;
+  bool enable_random_plan_;
 };
 }
 }

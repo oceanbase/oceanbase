@@ -268,22 +268,20 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
   ddl_schema_version_ = other.ddl_schema_version_;
   ddl_table_id_ = other.ddl_table_id_;
   ref_query_ = other.ref_query_;
-
   if (is_json_table()
       && OB_FAIL(deep_copy_json_table_def(*other.json_table_def_, expr_copier, allocator))) {
     LOG_WARN("failed to deep copy json table define", K(ret));
-  } else if (OB_FAIL(expr_copier.copy(other.flashback_query_expr_,
-                               flashback_query_expr_))) {
+  } else if (OB_FAIL(expr_copier.copy(other.flashback_query_expr_, flashback_query_expr_))) {
     LOG_WARN("failed to deep copy raw expr", K(ret));
-  } else if (OB_FAIL(expr_copier.copy(other.function_table_expr_,
-                                      function_table_expr_))) {
+  } else if (OB_FAIL(expr_copier.copy(other.function_table_expr_, function_table_expr_))) {
     LOG_WARN("failed to copy function table expr", K(ret));
   } else if (OB_FAIL(part_ids_.assign(other.part_ids_))) {
     LOG_WARN("failed to assign part ids", K(ret));
   } else if (OB_FAIL(part_names_.assign(other.part_names_))) {
     LOG_WARN("failed to assign part names", K(ret));
-  } else if (OB_FAIL(expr_copier.copy(other.table_values_, table_values_))) {
-    LOG_WARN("failed to deep copy table values", K(ret));
+  } else if (is_values_table() &&
+            OB_FAIL(deep_copy_values_table_def(*other.values_table_def_, expr_copier, allocator))) {
+    LOG_WARN("failed to deep copy values table def", K(ret));
   } else {
     exec_params_.reuse();
     for (int64_t i = 0; OB_SUCC(ret) && i < other.exec_params_.count(); ++i) {
@@ -573,9 +571,9 @@ int ObDMLStmt::deep_copy(ObStmtFactory &stmt_factory,
 }
 
 int deep_copy_stmt_tableItem(ObIAllocator &allocator,
-                           ObIRawExprCopier &expr_copier,
-                           const ObIArray<TableItem *> &objs,
-                           ObIArray<TableItem *> &new_objs)
+                             ObIRawExprCopier &expr_copier,
+                             const ObIArray<TableItem *> &objs,
+                             ObIArray<TableItem *> &new_objs)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < objs.count(); ++i) {
@@ -879,8 +877,9 @@ int ObDMLStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
                OB_FAIL(visitor.visit(table_items_.at(i)->json_table_def_->doc_expr_,
                                      SCOPE_FROM))) {
       LOG_WARN("failed to add json table doc expr", K(ret));
-    } else if (OB_FAIL(visitor.visit(table_items_.at(i)->table_values_,
-                                     SCOPE_FROM))) {
+    } else if (table_items_.at(i)->is_values_table() &&
+               NULL != table_items_.at(i)->values_table_def_ &&
+               OB_FAIL(visitor.visit(table_items_.at(i)->values_table_def_->access_exprs_, SCOPE_FROM))) {
       LOG_WARN("failed to visit table values", K(ret));
     } else if (table_items_.at(i)->is_lateral_table()) {
       TableItem *table_item = table_items_.at(i);
@@ -1771,6 +1770,7 @@ int ObDMLStmt::formalize_stmt_expr_reference()
       } else if (table_item->is_function_table() ||
                  table_item->is_json_table() ||
                  table_item->for_update_ ||
+                 table_item->is_values_table() ||
                  is_hierarchical_query()) {
         if (OB_FAIL(set_sharable_expr_reference(*column_item.expr_, ExplicitedRefType::REF_BY_NORMAL))) {
           LOG_WARN("failed to set sharable exprs reference", K(ret));
@@ -4895,5 +4895,59 @@ int ObJsonTableDef::assign(const ObJsonTableDef& src)
     }
   }
 
+  return ret;
+}
+
+int TableItem::deep_copy_values_table_def(const ObValuesTableDef& table_def,
+                                          ObIRawExprCopier &expr_copier,
+                                          ObIAllocator* allocator)
+{
+  int ret = OB_SUCCESS;
+  void* tmp = nullptr;
+  if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param, invalid param.", K(ret));
+  } else if (OB_ISNULL(tmp = allocator->alloc(sizeof(ObValuesTableDef)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory table define strunct failed.", K(ret));
+  } else {
+    values_table_def_ = new (tmp) ObValuesTableDef();
+    if (OB_FAIL(values_table_def_->deep_copy(table_def, expr_copier, allocator))) {
+      LOG_WARN("deep copy json table define failed.", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObValuesTableDef::deep_copy(const ObValuesTableDef &other,
+                                ObIRawExprCopier &expr_copier,
+                                ObIAllocator* allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param, invalid param.", K(ret));
+  } else if (OB_FAIL(expr_copier.copy(other.access_exprs_, access_exprs_))) {
+    LOG_WARN("failed to copy semi condition exprs", K(ret));
+  } else if (OB_FAIL(column_ndvs_.assign(other.column_ndvs_))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else if (OB_FAIL(column_nnvs_.assign(other.column_nnvs_))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else {
+    access_type_ = other.access_type_;
+    start_param_idx_ = other.start_param_idx_;
+    end_param_idx_ = other.end_param_idx_;
+    column_cnt_ = other.column_cnt_;
+    row_cnt_ = other.row_cnt_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < other.access_objs_.count(); ++i) {
+      const ObObj &obj = other.access_objs_.at(i);
+      ObObj tmp_obj;
+      if (OB_FAIL(ob_write_obj(*allocator, obj, tmp_obj))) {
+        LOG_WARN("failed to write obj", K(ret));
+      } else if (OB_FAIL(access_objs_.push_back(tmp_obj))) {
+        LOG_WARN("failed to push back obj", K(ret));
+      }
+    }
+  }
   return ret;
 }
