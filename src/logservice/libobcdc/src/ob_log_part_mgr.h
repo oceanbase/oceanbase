@@ -624,6 +624,14 @@ private:
       const char *&table_name,
       uint64_t &database_id,
       bool &is_user_table);
+  int try_add_hbase_table_(const uint64_t table_id,
+      const char *table_name,
+      const int64_t schema_version,
+      const int64_t timeout);
+  template<class TABLE_SCHEMA>
+  int try_add_hbase_table_(const TABLE_SCHEMA *table_schema,
+      const char *table_name,
+      const int64_t timeout);
 
 private:
   ObLogTenant        &host_;
