@@ -51,7 +51,7 @@ int ObTxDesc::encode_##name##_state(char *buf, const int64_t buf_len, int64_t &p
 int ObTxDesc::encode_##name##_state_for_verify(char *buf, const int64_t buf_len, int64_t &pos) \
 {                                                                       \
    int ret = OB_SUCCESS;                                                \
-   PRE_ENCODE_FOR_VERIFY_HANDLER;                                          \
+   PRE_ENCODE_FOR_VERIFY_HANDLER;                                       \
    LST_DO_CODE(OB_UNIS_ENCODE, ##__VA_ARGS__);                          \
    return ret;                                                          \
 }                                                                       \
