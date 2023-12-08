@@ -83,10 +83,10 @@ public:
                      layer_(),
                      tile_(nullptr),
                      column_cnt_(UINT32_MAX),
-                     extent_(UINT32_MAX),
+                     extent_(4096),
                      feature_capacity_(FEATURE_CAPACITY_INIT),
                      column_offset_(0) {}
-  ~mvt_agg_result() {}
+  virtual ~mvt_agg_result() { values_map_.destroy(); }
   int init(const ObString &lay_name, const ObString &geom_name,
            const ObString &feat_id, const uint32_t extent);
   inline bool is_inited() { return inited_; }

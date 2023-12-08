@@ -43,6 +43,7 @@ int mvt_agg_result::init_layer()
   layer_.version = 2;
   layer_.name = lay_name_.ptr();
   values_map_.create(DEFAULT_BUCKET_NUM, "MvtValues", "MvtValues", MTL_ID());
+  layer_.extent = extent_;
   return ret;
 }
 
@@ -79,6 +80,9 @@ int mvt_agg_result::generate_feature(ObObj *tmp_obj, uint32_t obj_cnt)
           LOG_WARN("Lob: str iter get full data failed ", K(ret), K(str_iter));
         } else if (OB_FAIL(ObGeoTypeUtil::construct_geometry(allocator_, str, NULL, geo, true))) {
           LOG_WARN("failed to construct geometry", K(ret));
+        } else if (ObGeoTypeUtil::is_3d_geo_type(geo->type())
+                  && OB_FAIL(ObGeoTypeUtil::convert_geometry_3D_to_2D(NULL, allocator_, geo, ObGeoBuildFlag::GEO_ALL_DISABLE, geo))) {
+          LOG_WARN("failed to convert 3d to 2d", K(ret));
         } else if (OB_FAIL(transform_geom(*geo))) {
           LOG_WARN("failed to transform geometry", K(ret));
         } else if (OB_FAIL(transform_other_column(tmp_obj, obj_cnt))) {
@@ -300,13 +304,17 @@ int mvt_agg_result::transform_other_column(ObObj *tmp_obj, uint32_t obj_cnt)
       // do nothing
     } else if (i == feat_id_idx_) {
       // feature id
-      if (!ob_is_int_tc(type) && !ob_is_uint_tc(type)) {
+      if (ob_is_null(type)) {
+        // do nothing, ignore null
+      } else if (!ob_is_int_tc(type) && !ob_is_uint_tc(type)) {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("invalid type for feature id", K(ret), K(type));
       } else {
         int64_t v = tmp_obj[i].get_int();
-        feature_->has_id = true;
-        feature_->id = v;
+        if (v >= 0) {
+          feature_->has_id = true;
+          feature_->id = v;
+        }
       }
     } else if (ob_is_json(type)) {
       if (OB_FAIL(transform_json_column(tmp_obj[i]))) {

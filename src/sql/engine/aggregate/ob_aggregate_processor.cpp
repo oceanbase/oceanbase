@@ -8094,11 +8094,16 @@ int ObAggregateProcessor::init_asmvt_result(ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   uint32_t column_cnt = 0;
   bool is_param_done = false;
+  int param_cnt = 0;
   mvt_res.inited_ = true;
   // try get first geom column and column number
   for (uint32_t i = 0; i < aggr_info.param_exprs_.count() && OB_SUCC(ret); i++) {
+    if (i == 0) {
+      param_cnt = tmp_obj[i].get_int();
+      mvt_res.column_offset_ = param_cnt + 1;
+    }
     ObExpr *expr = aggr_info.param_exprs_.at(i);
-    if (expr->type_ == T_REF_COLUMN) {
+    if (i >= mvt_res.column_offset_ && expr->type_ == T_REF_COLUMN) {
       ObString key_name;
       is_param_done = true;
       column_cnt++;
@@ -8120,8 +8125,8 @@ int ObAggregateProcessor::init_asmvt_result(ObIAllocator &allocator,
           LOG_WARN("failed to push back col name to keys", K(ret), K(i), K(tmp_obj[i + 1].get_string()));
         }
       } else if (!mvt_res.feature_id_name_.empty() && mvt_res.feat_id_idx_ == UINT32_MAX
-                 && mvt_res.feature_id_name_.case_compare(tmp_obj[i + 1].get_string()) == 0
-                 && ob_is_numeric_type(expr->obj_meta_.get_type())) {
+                && mvt_res.feature_id_name_.case_compare(tmp_obj[i + 1].get_string()) == 0
+                && ob_is_numeric_type(expr->obj_meta_.get_type())) {
         // feature id column name won't add to keys
         mvt_res.feat_id_idx_ = i;
       } else if (!expr->obj_meta_.is_json() // json type will be expanded
@@ -8131,23 +8136,45 @@ int ObAggregateProcessor::init_asmvt_result(ObIAllocator &allocator,
         LOG_WARN("failed to push back col name to keys", K(ret), K(i), K(tmp_obj[i + 1].get_string()));
       }
     } else if (!is_param_done) {
-      if (i == 0
-          && OB_FAIL(ob_write_string(allocator, tmp_obj[i].get_string(), mvt_res.lay_name_, true))) {
-        // layer name
-        LOG_WARN("write string failed", K(ret), K(tmp_obj[i].get_string()));
+      ObObjType type = tmp_obj[i].get_type();
+      if (ob_is_null(type)) {
+        // do nothing, use default value
       } else if (i == 1) {
+        // layer name
+        if (!ob_is_string_tc(type)) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_WARN("invalid type for layer name", K(ret), K(type));
+        } else if (OB_FAIL(ob_write_string(allocator, tmp_obj[i].get_string(), mvt_res.lay_name_, true))) {
+          LOG_WARN("write string failed", K(ret), K(tmp_obj[i].get_string()));
+        }
+      } else if (i == 2) {
         // extent
-        mvt_res.extent_ = tmp_obj[i].get_int();
-      } else if (i == 2
-                 && OB_FAIL(ob_write_string(allocator, tmp_obj[i].get_string(), mvt_res.geom_name_))) {
+        if (!ob_is_int_tc(type) && !ob_is_uint_tc(type)) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_WARN("invalid type for layer name", K(ret), K(type));
+        } else if (tmp_obj[i].get_int() == 0) {
+          ret = OB_ERR_INVALID_INPUT_VALUE;
+          LOG_WARN("extent value can't be 0", K(ret));
+        } else {
+          mvt_res.extent_ = tmp_obj[i].get_int();
+        }
+      } else if (i == 3) {
         // geo_name
-        LOG_WARN("write string failed", K(ret), K(tmp_obj[i].get_string()));
-      } else if (i == 3
-                 && OB_FAIL(ob_write_string(allocator, tmp_obj[i].get_string(), mvt_res.feature_id_name_))) {
+        if (!ob_is_string_tc(type)) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_WARN("invalid type for layer name", K(ret), K(type));
+        } else if (OB_FAIL(ob_write_string(allocator, tmp_obj[i].get_string(), mvt_res.geom_name_))) {
+          LOG_WARN("write string failed", K(ret), K(tmp_obj[i].get_string()));
+        }
+      } else if (i == 4) {
         // feature id name
-        LOG_WARN("write string failed", K(ret), K(tmp_obj[i].get_string()));
+        if (!ob_is_string_tc(type)) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_WARN("invalid type for layer name", K(ret), K(type));
+        } else if (OB_FAIL(ob_write_string(allocator, tmp_obj[i].get_string(), mvt_res.feature_id_name_))) {
+          LOG_WARN("write string failed", K(ret), K(tmp_obj[i].get_string()));
+        }
       }
-      mvt_res.column_offset_ = i + 1;
     }
   }
   if (OB_SUCC(ret)) {

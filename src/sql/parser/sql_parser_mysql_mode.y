@@ -512,7 +512,7 @@ END_P SET_VAR DELIMITER
 %type <node> on_empty on_error json_on_response opt_returning_type opt_on_empty_or_error json_value_expr opt_ascii opt_truncate_clause
 %type <node> ws_nweights opt_ws_as_char opt_ws_levels ws_level_flag_desc ws_level_flag_reverse ws_level_flags ws_level_list ws_level_list_item ws_level_number ws_level_range ws_level_list_or_range
 %type <node> get_diagnostics_stmt get_statement_diagnostics_stmt get_condition_diagnostics_stmt statement_information_item_list condition_information_item_list statement_information_item condition_information_item statement_information_item_name condition_information_item_name condition_arg
-%type <node> method_opt method_list method extension
+%type <node> method_opt method_list method extension mvt_param
 %type <node> opt_storage_name opt_calibration_list calibration_info_list
 %type <node> switchover_tenant_stmt switchover_clause opt_verify
 %type <node> recover_tenant_stmt recover_point_clause
@@ -2951,21 +2951,32 @@ MOD '(' expr ',' expr ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_ST_ASMVT, 1, $3);
 }
-| _ST_ASMVT '(' column_ref ',' text_string ')'
+| _ST_ASMVT '(' column_ref ',' mvt_param ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_ST_ASMVT, 2, $3, $5);
 }
-| _ST_ASMVT '(' column_ref ',' text_string ',' INTNUM ')'
+| _ST_ASMVT '(' column_ref ',' mvt_param ',' mvt_param ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_ST_ASMVT, 3, $3, $5, $7);
 }
-| _ST_ASMVT '(' column_ref ',' text_string ',' INTNUM ',' text_string ')'
+| _ST_ASMVT '(' column_ref ',' mvt_param ',' mvt_param ',' mvt_param ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_ST_ASMVT, 4, $3, $5, $7, $9);
 }
-| _ST_ASMVT '(' column_ref ',' text_string ',' INTNUM ',' text_string ',' text_string ')'
+| _ST_ASMVT '(' column_ref ',' mvt_param ',' mvt_param ',' mvt_param ',' mvt_param ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_ST_ASMVT, 5, $3, $5, $7, $9, $11);
+}
+;
+
+mvt_param:
+STRING_VALUE { $$ = $1; }
+| INTNUM { $$ = $1; }
+| NULLX { $$ = $1; }
+| NAME_OB { $$ = $1; }
+| unreserved_keyword
+{
+  get_non_reserved_node($$, result->malloc_pool_, @1.first_column, @1.last_column);
 }
 ;
 

@@ -1325,7 +1325,10 @@ int ObDMLResolver::pre_process_mvt_agg(ParseNode &node)
   INIT_SUCC(ret);
   if (node.type_ == T_FUN_SYS_ST_ASMVT) {
     int ori_param_num = node.num_child_;
-    if (OB_ISNULL(node.children_[0])) {
+    if (ori_param_num < 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected param number", K(ret), K(ori_param_num));
+    } else if (OB_ISNULL(node.children_[0])) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr param is null", K(ret));
     } else if (node.children_[0]->type_ != T_COLUMN_REF) {
@@ -1355,13 +1358,17 @@ int ObDMLResolver::pre_process_mvt_agg(ParseNode &node)
       }
       ParseNode **param_vec = NULL;
       uint32_t para_idx = 0;
-      // *(row) + other params = column_ref + column_name + other params
-      uint32_t param_count =  columns_list.count() * 2 + ori_param_num - 1;
+      // *(row) + other params = column_ref + column_name + other params + other params cnt
+      uint32_t param_count =  columns_list.count() * 2 + ori_param_num;
+      ParseNode* param_cnt_node = NULL;
       if (OB_FAIL(ret)) {
       } else if (OB_ISNULL(param_vec = static_cast<ParseNode **>(allocator_->alloc(param_count * sizeof(ParseNode *))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to allocate memory", K(ret), K(columns_list.count()));
+      } else if (OB_FAIL(create_int_val_node(NULL, ori_param_num - 1, param_cnt_node))) {
+        LOG_WARN("fail to create int val node", K(ret));
       } else {
+        param_vec[para_idx++] = param_cnt_node;
         for (int i = 1; i < ori_param_num; i++) {
           param_vec[para_idx++] = node.children_[i];
         }

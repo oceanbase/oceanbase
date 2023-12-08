@@ -1614,25 +1614,25 @@ int ObRawExprPrinter::print_st_asmvt(ObAggFunRawExpr *expr)
   INIT_SUCC(ret);
   DATA_PRINTF("_st_asmvt(");
   size_t param_count = expr->get_param_count();
-  if (param_count < 2) {
+  if (param_count < 3) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param count", K(param_count), K(ret));
   } else {
-    size_t col_ref = 0;
-    bool is_col_ref = false;
-    for (size_t i = 0; i < param_count && OB_SUCC(ret) && !is_col_ref; i++) {
-      if (expr->get_param_expr(i)->get_expr_type() == T_REF_COLUMN) {
-        is_col_ref = true;
-        col_ref = i;
-      }
+    int64_t extra_param_cnt = static_cast<ObConstRawExpr*>(expr->get_param_expr(0))->get_value().get_int() + 1;
+    if (extra_param_cnt >= param_count) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected extra param cnt", K(param_count), K(ret), K(extra_param_cnt));
+    } else if (expr->get_param_expr(extra_param_cnt)->get_expr_type() != T_REF_COLUMN) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected param type", K(param_count), K(ret), K(extra_param_cnt), K(expr->get_param_expr(extra_param_cnt)->get_expr_type()));
+    } else {
+      ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(extra_param_cnt));
+      PRINT_IDENT_WITH_QUOT(col_expr->get_database_name());
+      DATA_PRINTF(".");
+      PRINT_IDENT_WITH_QUOT(col_expr->get_table_name());
+      DATA_PRINTF(".*");
     }
-    ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(col_ref));
-    PRINT_IDENT_WITH_QUOT(col_expr->get_database_name());
-    DATA_PRINTF(".");
-    PRINT_IDENT_WITH_QUOT(col_expr->get_table_name());
-    DATA_PRINTF(".*");
-
-    for (size_t i = 0; i < col_ref && OB_SUCC(ret); i++) {
+    for (size_t i = 1; i < extra_param_cnt && OB_SUCC(ret); i++) {
       DATA_PRINTF(" ,");
       PRINT_EXPR(expr->get_param_expr(i));
     }
