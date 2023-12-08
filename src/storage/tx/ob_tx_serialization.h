@@ -212,13 +212,6 @@ private:
     }                                                                                \
   }
 
-#define OB_TX_UNIS_DECODEx(obj, IDX, arg)                                             \
-  if (OB_SUCC(ret) && TX_IS_NEED_SER_OR_DE(arg, IDX)) {                               \
-    if (OB_FAIL(NS_::decode(buf, data_len, pos, obj))) {                              \
-      RPC_WARN("decode object fail", "name", MSTR(obj), K(data_len), K(pos), K(ret)); \
-    }                                                                                 \
-  }
-
 #define OB_TX_UNIS_DECODE(obj, IDX, arg)                                              \
   if (OB_SUCC(ret) && TX_IS_NEED_SER_OR_DE(arg, IDX) && pos < data_len) {             \
     if (OB_FAIL(NS_::decode(buf, data_len, pos, obj))) {                              \

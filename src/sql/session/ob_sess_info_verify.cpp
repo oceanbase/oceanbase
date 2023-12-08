@@ -183,8 +183,8 @@ int ObSessInfoVerify::display_sys_var_diagnosis_session_info(sql::ObSQLSessionIn
               ret = OB_SUCCESS;
               int64_t sys_var_version = 0;
               int64_t sys_var_len = 0;
-              OB_UNIS_DECODEx(sys_var_version);
-              OB_UNIS_DECODEx(sys_var_len);
+              OB_UNIS_DECODE(sys_var_version);
+              OB_UNIS_DECODE(sys_var_len);
               if (OB_SUCC(ret)) {
                 pos += sys_var_len; // skip
                 LOG_WARN("invalid sys var id, maybe version is different, skip it", K(sys_var_id));
