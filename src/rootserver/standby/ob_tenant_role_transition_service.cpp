@@ -783,6 +783,7 @@ int ObTenantRoleTransitionService::do_switch_access_mode_to_raw_rw(
     int64_t change_access_mode = log_mode_change - cost_detail_->get_wait_log_end();
     (void) cost_detail_->add_cost(ObTenantRoleTransCostDetail::CHANGE_ACCESS_MODE, change_access_mode);
   }
+  DEBUG_SYNC(AFTER_CHANGE_ACCESS_MODE);
   return ret;
 }
 

@@ -27,6 +27,7 @@
 #include "share/schema/ob_multi_version_schema_service.h" // for GSCHEMASERVICE
 #include "share/ob_standby_upgrade.h"  // ObStandbyUpgrade
 #include "share/ob_global_stat_proxy.h"//ObGlobalStatProxy
+//#include "share/resource_manager/ob_group_list.h"//group id
 #include "share/backup/ob_backup_config.h" // ObBackupConfigParserMgr
 #include "observer/ob_inner_sql_connection.h"//ObInnerSQLConnection
 #include "storage/tx/ob_trans_service.h" //ObTransService
@@ -546,7 +547,8 @@ int ObStandbyService::switch_to_standby(
     ObTenantRoleTransAllLSInfo &all_ls)
 {
   int ret = OB_SUCCESS;
-  const int32_t group_id = 0;
+  const int32_t group_id = share::OBCG_DBA_COMMAND;
+
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(inited));
   } else if (OB_ISNULL(GCTX.srv_rpc_proxy_)) {
