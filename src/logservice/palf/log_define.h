@@ -123,6 +123,7 @@ constexpr int64_t PALF_MAX_PROPOSAL_ID = INT64_MAX - 1;
 constexpr int64_t PALF_INITIAL_PROPOSAL_ID = 0;
 constexpr char PADDING_LOG_CONTENT_CHAR = '\0';
 const int64_t MIN_WRITING_THTOTTLING_TRIGGER_PERCENTAGE = 40;
+constexpr int64_t PALF_IO_WAIT_EVENT_TIMEOUT_MS = 100;
 const int64_t PALF_UPDATE_REGION_INTERVAL_US = 10 * 1000 * 1000L;                // 10s
 
 inline int64_t max_proposal_id(const int64_t a, const int64_t b)

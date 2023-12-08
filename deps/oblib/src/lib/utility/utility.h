@@ -176,13 +176,45 @@ inline double max(const double x, const double y)
 template <class T>
 void max(T, T) = delete;
 
-template<oceanbase::common::ObWaitEventIds::ObWaitEventIdEnum event_id = oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>
+template <oceanbase::common::ObWaitEventIds::ObWaitEventIdEnum event_id =
+              oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>
 inline void ob_usleep(const useconds_t v)
 {
-  oceanbase::common::ObSleepEventGuard wait_guard(event_id, 0, (int64_t)v);
+  oceanbase::common::ObSleepEventGuard<event_id> wait_guard((int64_t)v);
+  ::usleep(v);
+}
+template <oceanbase::common::ObWaitEventIds::ObWaitEventIdEnum event_id =
+              oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>
+inline void ob_usleep(const useconds_t v, const bool is_idle_sleep)
+{
+  if (is_idle_sleep) {
+    ObBKGDSessInActiveGuard inactive_guard;
+    ob_usleep(v);
+  } else {
+    ob_usleep(v);
+  }
+
+}
+
+template <oceanbase::common::ObWaitEventIds::ObWaitEventIdEnum event_id =
+              oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>
+inline void ob_usleep(const useconds_t v, const int64_t p1, const int64_t p2, const int64_t p3)
+{
+  oceanbase::common::ObSleepEventGuard<event_id> wait_guard((int64_t)v, p1, p2, p3);
   ::usleep(v);
 }
 
+template <oceanbase::common::ObWaitEventIds::ObWaitEventIdEnum event_id =
+              oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>
+inline void ob_usleep(const useconds_t v, const int64_t p1, const int64_t p2, const int64_t p3, const bool is_idle_sleep)
+{
+  if (is_idle_sleep) {
+    ObBKGDSessInActiveGuard inactive_guard;
+    ob_usleep(v, p1, p2, p3);
+  } else {
+    ob_usleep(v, p1, p2, p3);
+  }
+}
 int get_double_expand_size(int64_t &new_size, const int64_t limit_size);
 /**
  * allocate new memory that twice larger to store %oldp

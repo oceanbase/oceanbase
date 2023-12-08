@@ -27,6 +27,7 @@
 #include "ob_archive_util.h"                  // GET_LS_TASK_CTX
 #include "ob_archive_round_mgr.h"             // ObArchiveRoundMgr
 #include <stdint.h>
+#include "lib/ash/ob_active_session_guard.h"
 
 namespace oceanbase
 {
@@ -328,6 +329,7 @@ void ObArchiveLSMgr::run1()
       int64_t end_tstamp = ObTimeUtility::current_time();
       int64_t wait_interval = THREAD_RUN_INTERVAL - (end_tstamp - begin_tstamp);
       if (wait_interval > 0) {
+        ObBKGDSessInActiveGuard inactive_guard;
         cond_.timedwait(wait_interval);
       }
     }

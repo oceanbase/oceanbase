@@ -305,6 +305,7 @@ const int64_t OB_MAX_CONSTRAINT_NAME_LENGTH_MYSQL = 64; // Compatible with mysql
 const int64_t OB_MAX_CONSTRAINT_EXPR_LENGTH = 2048;
 const int64_t OB_MAX_TABLESPACE_NAME_LENGTH = 128;
 const int64_t OB_MAX_UDF_NAME_LENGTH = 64;
+const int64_t OB_MAX_ASH_PL_NAME_LENGTH = 32;
 const int64_t OB_MAX_DL_NAME_LENGTH = 128;
 const int64_t OB_MAX_USER_NAME_LENGTH = 64; // Not compatible with Oracle (Oracle is 128), the logic is greater than when an error is reported
 const int64_t OB_MAX_USER_NAME_BUF_LENGTH = OB_MAX_USER_NAME_LENGTH + 1;

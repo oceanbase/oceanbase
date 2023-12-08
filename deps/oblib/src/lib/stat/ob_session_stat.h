@@ -44,6 +44,7 @@ public:
   int switch_session(const uint64_t session_id, const bool is_multi_thread_plan = false);
   int switch_tenant(const uint64_t tenant_id);
   uint64_t get_tenant_id();
+  uint64_t get_session_id();
   void reset_session();
   inline ObDISessionCollect *get_curr_session() {return session_collect_;}
   inline ObDITenantCollect *get_curr_tenant() {return curr_tenant_collect_;}
@@ -157,6 +158,15 @@ inline uint64_t ObSessionDIBuffer::get_tenant_id()
     tenant_id = curr_tenant_collect_->tenant_id_;
   }
   return tenant_id;
+}
+
+inline uint64_t ObSessionDIBuffer::get_session_id()
+{
+  uint64_t sess_id = 0;
+  if (NULL != session_collect_) {
+    sess_id = session_collect_->session_id_;
+  }
+  return sess_id;
 }
 
 inline void ObSessionDIBuffer::reset_session()

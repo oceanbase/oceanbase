@@ -148,6 +148,7 @@ int ObMPStmtFetch::set_session_active(ObSQLSessionInfo &session) const
   if (OB_FAIL(session.set_session_state(QUERY_ACTIVE))) {
     LOG_WARN("fail to set session state", K(ret));
   } else {
+    session.setup_ash();
     session.set_query_start_time(get_receive_timestamp());
     session.set_mysql_cmd(obmysql::COM_STMT_FETCH);
     session.update_last_active_time();
@@ -159,10 +160,12 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session,
 {
   int ret = OB_SUCCESS;
   ObAuditRecordData &audit_record = session.get_raw_audit_record();
+  ObExecutingSqlStatRecord sqlstat_record;
   audit_record.try_cnt_++;
   const bool enable_perf_event = lib::is_diagnose_info_enabled();
   const bool enable_sql_audit = GCONF.enable_sql_audit
                                 && session.get_local_ob_enable_sql_audit();
+  const bool enable_sqlstat = session.is_sqlstat_enabled();
   single_process_timestamp_ = ObTimeUtility::current_time();
   ObPLCursorInfo *cursor = session.get_cursor(cursor_id_);
   if (OB_ISNULL(cursor)) {
@@ -181,6 +184,12 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session,
     int64_t true_row_num = 0;
     if (enable_perf_event) {
       audit_record.exec_record_.record_start(di);
+    }
+    if (enable_sqlstat && OB_NOT_NULL(session.get_cur_exec_ctx()) &&
+        OB_NOT_NULL(session.get_cur_exec_ctx()->get_sql_ctx())) {
+      sqlstat_record.record_sqlstat_start_value(di);
+      sqlstat_record.set_is_in_retry(session.get_is_in_retry());
+      session.sql_sess_record_sql_stat_start_value(sqlstat_record);
     }
     if (OB_ISNULL(gctx_.sql_engine_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -231,6 +240,27 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session,
       audit_record.update_event_stage_state();
     }
 
+    if (enable_sqlstat && OB_NOT_NULL(session.get_cur_exec_ctx()) &&
+        OB_NOT_NULL(session.get_cur_exec_ctx()->get_sql_ctx())) {
+      ObSqlCtx *sql_ctx = session.get_cur_exec_ctx()->get_sql_ctx();
+      sqlstat_record.record_sqlstat_end_value(di);
+      sqlstat_record.inc_fetch_cnt();
+      ObString sql = ObString::make_empty_string();
+      if (OB_NOT_NULL(cursor)
+          && cursor->is_ps_cursor()) {
+        ObPsStmtInfoGuard guard;
+        ObPsStmtInfo *ps_info = NULL;
+        ObPsStmtId inner_stmt_id = OB_INVALID_ID;
+        if (OB_SUCC(session.get_inner_ps_stmt_id(cursor_id_, inner_stmt_id))
+              && OB_SUCC(session.get_ps_cache()->get_stmt_info_guard(inner_stmt_id, guard))
+              && OB_NOT_NULL(ps_info = guard.get_stmt_info())) {
+          sql = ps_info->get_ps_sql();
+        } else {
+          LOG_WARN("get sql fail in fetch", K(ret), K(cursor_id_), K(cursor->get_id()));
+        }
+      }
+      sqlstat_record.move_to_sqlstat_cache(session, sql);
+    }
     if (enable_sql_audit) {
       audit_record.affected_rows_ = fetch_limit;
       audit_record.return_rows_ = true_row_num;

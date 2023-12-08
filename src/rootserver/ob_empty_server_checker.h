@@ -44,7 +44,6 @@ class ObEmptyServerChecker : public ObRsReentrantThread
 {
 public:
   ObEmptyServerChecker(): inited_(false),
-                          cond_(),
                           need_check_(true),
                           empty_servers_(),
                           server_mgr_(NULL),
@@ -88,7 +87,6 @@ private:
 
 private:
   bool inited_;
-  common::ObThreadCond cond_;
   bool need_check_;
   common::ObArray<common::ObAddr> empty_servers_;
   ObServerManager *server_mgr_;

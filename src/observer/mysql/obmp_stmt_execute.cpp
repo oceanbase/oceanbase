@@ -1013,6 +1013,7 @@ int ObMPStmtExecute::set_session_active(ObSQLSessionInfo &session) const
   if (OB_FAIL(session.set_session_state(QUERY_ACTIVE))) {
     LOG_WARN("fail to set session state", K(ret));
   } else {
+    session.setup_ash();
     session.set_query_start_time(get_receive_timestamp());
     session.set_mysql_cmd(obmysql::COM_STMT_EXECUTE);
     session.update_last_active_time();
@@ -1183,6 +1184,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
 {
   int ret = OB_SUCCESS;
   ObAuditRecordData &audit_record = session.get_raw_audit_record();
+  ObExecutingSqlStatRecord sqlstat_record;
   audit_record.try_cnt_++;
   bool is_diagnostics_stmt = false;
   ObPsStmtId inner_stmt_id = OB_INVALID_ID;
@@ -1190,6 +1192,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
   const bool enable_perf_event = lib::is_diagnose_info_enabled();
   const bool enable_sql_audit =
     GCONF.enable_sql_audit && session.get_local_ob_enable_sql_audit();
+  const bool enable_sqlstat = session.is_sqlstat_enabled();
 
   single_process_timestamp_ = ObTimeUtility::current_time();
 
@@ -1210,6 +1213,11 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
         audit_record.exec_record_.record_start(di);
       }
 
+      if (enable_sqlstat) {
+        sqlstat_record.record_sqlstat_start_value(di);
+        sqlstat_record.set_is_in_retry(session.get_is_in_retry());
+        session.sql_sess_record_sql_stat_start_value(sqlstat_record);
+      }
       result.set_has_more_result(has_more_result);
       result.set_ps_protocol();
       ObTaskExecutorCtx *task_ctx = result.get_exec_context().get_task_executor_ctx();
@@ -1281,10 +1289,19 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
 
       if (enable_perf_event) {
         audit_record.exec_record_.record_end(di);
-        record_stat(result.get_stmt_type(), exec_end_timestamp_);
+        record_stat(result.get_stmt_type(), exec_end_timestamp_, session, ret);
         audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
         audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
         audit_record.update_event_stage_state();
+      }
+      if (enable_sqlstat) {
+        sqlstat_record.record_sqlstat_end_value(di);
+        sqlstat_record.set_rows_processed(result.get_affected_rows() + result.get_return_rows());
+        sqlstat_record.set_partition_cnt(result.get_exec_context().get_das_ctx().get_related_tablet_cnt());
+        ObString sql_id = ObString::make_string(ctx_.sql_id_);
+        sqlstat_record.move_to_sqlstat_cache(result.get_session(),
+                                                   ctx_.cur_sql_,
+                                                   result.get_physical_plan());
       }
 
       if (enable_perf_event && !THIS_THWORKER.need_retry()
@@ -1831,6 +1848,7 @@ int ObMPStmtExecute::process()
           session.get_raw_audit_record().request_memory_used_);
     lib::ObMallocCallbackGuard guard(pmcb);
     session.set_thread_id(GETTID());
+    session.set_thread_name(GETTNAME());
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     int64_t packet_len = pkt.get_clen();
     if (OB_UNLIKELY(!session.is_valid())) {
@@ -3043,11 +3061,18 @@ int ObMPStmtExecute::parse_oracle_interval_ym_value(const char *&data, ObObj &pa
   return ret;
 }
 
-void ObMPStmtExecute::record_stat(const stmt::StmtType type, const int64_t end_time) const
+void ObMPStmtExecute::record_stat(const stmt::StmtType type, const int64_t end_time,
+                                  const sql::ObSQLSessionInfo& session,
+                                  const int64_t ret) const
 {
 #define ADD_STMT_STAT(type)                     \
   case stmt::T_##type:                          \
-    EVENT_INC(SQL_##type##_COUNT);              \
+    if (!session.get_is_in_retry()) {           \
+      EVENT_INC(SQL_##type##_COUNT);            \
+      if (OB_SUCCESS != ret) {                  \
+        EVENT_INC(SQL_FAIL_COUNT);              \
+      }                                         \
+    }                                           \
     EVENT_ADD(SQL_##type##_TIME, time_cost);    \
     break
   if (lib::is_diagnose_info_enabled()) {
@@ -3061,8 +3086,13 @@ void ObMPStmtExecute::record_stat(const stmt::StmtType type, const int64_t end_t
         ADD_STMT_STAT(UPDATE);
         ADD_STMT_STAT(DELETE);
         default: {
-          EVENT_INC(SQL_OTHER_COUNT);
           EVENT_ADD(SQL_OTHER_TIME, time_cost);
+          if (!session.get_is_in_retry()) {
+            EVENT_INC(SQL_OTHER_COUNT);
+            if (OB_SUCCESS != ret) {
+              EVENT_INC(SQL_FAIL_COUNT);
+            }
+          }
         }
       }
     }

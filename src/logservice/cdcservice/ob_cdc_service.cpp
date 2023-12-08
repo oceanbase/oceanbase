@@ -203,7 +203,7 @@ void ObCdcService::run1()
         }
         last_check_cdc_read_archive_ts = current_ts;
       }
-      ob_usleep(static_cast<uint32_t>(BASE_INTERVAL));
+      ob_usleep(static_cast<uint32_t>(BASE_INTERVAL), true/*is_idle_sleep*/);
     }
   }
 }

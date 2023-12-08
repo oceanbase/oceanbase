@@ -232,6 +232,7 @@ void ObPhysicalPlan::reset()
   is_enable_px_fast_reclaim_ = false;
   subschema_ctx_.reset();
   all_local_session_vars_.reset();
+  sql_stat_record_value_.reset();
 }
 
 void ObPhysicalPlan::destroy()

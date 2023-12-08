@@ -847,6 +847,7 @@ ob_set_subtarget(ob_sql monitor
   monitor/flt/ob_flt_utils.cpp
   monitor/ob_sql_plan.cpp
   monitor/ob_plan_info_manager.cpp
+  monitor/ob_sql_stat_record.cpp
 )
 
 ob_set_subtarget(ob_sql optimizer

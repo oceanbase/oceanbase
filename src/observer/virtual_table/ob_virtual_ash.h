@@ -38,7 +38,7 @@ public:
 private:
   int set_ip(const common::ObAddr &addr);
 protected:
-  int convert_node_to_row(const common::ActiveSessionStat &node, ObNewRow *&row);
+  int convert_node_to_row(const common::ObActiveSessionStatItem &node, ObNewRow *&row);
 protected:
   enum COLUMN_ID
   {
@@ -76,6 +76,21 @@ protected:
     IN_STORAGE_READ,
     IN_STORAGE_WRITE,
     IN_REMOTE_DAS_EXECUTION,
+    PROGRAM,
+    TM_DELTA_TIME,
+    TM_DELTA_CPU_TIME,
+    TM_DELTA_DB_TIME,
+    TOP_LEVEL_SQL_ID,
+    IN_PLSQL_COMPILATION,
+    IN_PLSQL_EXECUTION,
+    PLSQL_ENTRY_OBJECT_ID,
+    PLSQL_ENTRY_SUBPROGRAM_ID,
+    PLSQL_ENTRY_SUBPROGRAM_NAME,
+    PLSQL_OBJECT_ID,
+    PLSQL_SUBPROGRAM_ID,
+    PLSQL_SUBPROGRAM_NAME,
+    EVENT_ID,
+    IN_FILTER_ROWS,
   };
   DISALLOW_COPY_AND_ASSIGN(ObVirtualASH);
   share::ObActiveSessHistList::Iterator iterator_;

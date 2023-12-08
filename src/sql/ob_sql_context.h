@@ -25,6 +25,7 @@
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "share/client_feedback/ob_feedback_partition_struct.h"
 #include "sql/dblink/ob_dblink_utils.h"
+#include "sql/monitor/ob_sql_stat_record.h"
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_define.h"
 #endif

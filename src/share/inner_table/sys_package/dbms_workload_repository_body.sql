@@ -47,11 +47,14 @@ FUNCTION ASH_REPORT_TEXT(L_BTIME       IN DATE,
 RETURN awrrpt_text_type_table
 IS
   DYN_SQL          VARCHAR2(15000);
+  SUB_DYN_SQL      VARCHAR2(15000);
+  SUB_PLSQL_CNT    NUMBER;
   NULL_NUM         NUMBER := NULL;
   NULL_CHAR        VARCHAR2(10) := NULL;
 
   TYPE TopEventCursor IS REF CURSOR;
   top_event_cv        TopEventCursor;
+  sub_event_cv        TopEventCursor;
 
   TYPE SummaryRecord IS RECORD (
     SAMPLE_CNT        NUMBER,
@@ -107,6 +110,17 @@ IS
     QUERY_SQL      SYS.V$OB_PLAN_CACHE_PLAN_STAT.QUERY_SQL%TYPE
   );
   complete_sql_rec   CompleteSQLRecord;
+
+  TYPE TopPLSQLRecord IS RECORD (
+    OBJ_OWNER                     VARCHAR(64),
+    OBJ_NAME                      VARCHAR(64),
+    PL_SUBPROGRAM_NAME            VARCHAR(64),
+    PL_OBJECT_ID         NUMBER,
+    PL_SUBPROGRAM_ID     NUMBER,
+    RECORD_CNT           NUMBER
+  );
+  top_plsql_rec   TopPLSQLRecord;
+  sub_plsql_rec   TopPLSQLRecord;
 
 
   TYPE TopSessionRecord IS RECORD (
@@ -215,7 +229,7 @@ BEGIN
 
   APPEND_ROW(' ');
   APPEND_ROW('## Top User Events:');
-  column_widths := COLUMN_WIDTH_ARRAY(40, 20, 9);
+  column_widths := COLUMN_WIDTH_ARRAY(64, 20, 9);
   column_content := COLUMN_CONTENT_ARRAY('-', '-', '-');
   APPEND_ROW(FORMAT_ROW(column_content, column_widths, '-', '+'));
   column_content := COLUMN_CONTENT_ARRAY('Event', 'WAIT_CLASS', '% Event');
@@ -248,7 +262,7 @@ BEGIN
 
   APPEND_ROW(' ');
   APPEND_ROW('## Top Events P1/P2/P3 Value:');
-  column_widths := COLUMN_WIDTH_ARRAY(40, 10, 12, 50, 20, 20, 20);
+  column_widths := COLUMN_WIDTH_ARRAY(64, 10, 12, 50, 20, 20, 20);
   column_content := COLUMN_CONTENT_ARRAY('-', '-', '-', '-', '-', '-', '-');
   APPEND_ROW(FORMAT_ROW(column_content, column_widths, '-', '+'));
   column_content := COLUMN_CONTENT_ARRAY('Event', '% Event', '% Activity', 'Max P1/P2/P3', 'Parameter 1', 'Parameter 2', 'Parameter 3');
@@ -293,7 +307,7 @@ BEGIN
   -- Not implemented yet
   -- APPEND_ROW(' ');
   -- APPEND_ROW('## Top Service/Module:');
-  -- column_widths := COLUMN_WIDTH_ARRAY(40, 40, 12, 40, 12);
+  -- column_widths := COLUMN_WIDTH_ARRAY(64, 40, 12, 40, 12);
   -- column_content := COLUMN_CONTENT_ARRAY('-', '-', '-', '-', '-');
   -- APPEND_ROW(FORMAT_ROW(column_content, column_widths, '-', '+'));
   -- column_content := COLUMN_CONTENT_ARRAY('Service', 'Module', '% Activity', 'Action', '% Action');
@@ -380,7 +394,7 @@ BEGIN
             top_phase_rec.EXECUTION_PHASE,
             TO_CHAR(ROUND(100 * top_phase_rec.SAMPLE_CNT/NUM_SAMPLES, 3), DIG_3_FM) || '%',
             TO_CHAR(top_phase_rec.SAMPLE_CNT),
-            TO_CHAR(ROUND(top_phase_rec.SAMPLE_CNT/DUR_ELAPSED,2), DIG_2_FM)
+            TO_CHAR(ROUND(top_phase_rec.SAMPLE_CNT/NUM_SAMPLES,2), DIG_2_FM)
           ),
           column_widths, ' ', '|'
         )
@@ -396,7 +410,7 @@ BEGIN
   APPEND_ROW('## Top SQL with Top Events');
   APPEND_ROW(' - All events included.');
   APPEND_ROW(' - Empty ''SQL Text'' if it is PL/SQL query');
-  column_widths := COLUMN_WIDTH_ARRAY(40, 12, 25, 40, 12, 60);
+  column_widths := COLUMN_WIDTH_ARRAY(40, 12, 25, 64, 12, 60);
   column_content := COLUMN_CONTENT_ARRAY('-', '-', '-', '-', '-', '-');
   APPEND_ROW(FORMAT_ROW(column_content, column_widths, '-', '+'));
   column_content := COLUMN_CONTENT_ARRAY('SQL ID', 'PLAN ID', 'Sampled # of Executions', 'Event', '% Event', 'SQL Text');
@@ -440,7 +454,7 @@ BEGIN
   APPEND_ROW('## Top SQL with Top Blocking Events');
   APPEND_ROW(' - Empty result if no event other than On CPU sampled');
   APPEND_ROW(' - Empty ''SQL Text'' if it is PL/SQL query');
-  column_widths := COLUMN_WIDTH_ARRAY(40, 12, 25, 40, 12, 60);
+  column_widths := COLUMN_WIDTH_ARRAY(40, 12, 25, 64, 12, 60);
   column_content := COLUMN_CONTENT_ARRAY('-', '-', '-', '-', '-', '-');
   APPEND_ROW(FORMAT_ROW(column_content, column_widths, '-', '+'));
   column_content := COLUMN_CONTENT_ARRAY('SQL ID', 'PLAN ID', 'Sampled # of Executions', 'Event', '% Event', 'SQL Text');
@@ -466,7 +480,7 @@ BEGIN
     FETCH top_event_cv INTO top_sql_rec;
     EXIT WHEN top_event_cv%NOTFOUND;
     APPEND_ROW(FORMAT_ROW(COLUMN_CONTENT_ARRAY(
-          top_sql_rec.SQL_ID,
+          NVL(top_sql_rec.SQL_ID, 'NULL'),
           TO_CHAR(top_sql_rec.PLAN_ID),
           TO_CHAR(top_sql_rec.EVENT_CNT),
           top_sql_rec.EVENT,
@@ -503,11 +517,123 @@ BEGIN
   END LOOP;
   CLOSE top_event_cv;
 
+  APPEND_ROW(' ');
+  APPEND_ROW('## Top PL/SQL Procedures');
+  APPEND_ROW('-> ''PL/SQL entry subprogram'' represents the application''s top-level ');
+  APPEND_ROW('      entry-point(procedure, function, trigger, package initialization) into PL/SQL.');
+  APPEND_ROW('-> ''PL/SQL current subprogram'' is the pl/sql subprogram being executed ');
+  APPEND_ROW('      at the point of sampling . If the value is ''SQL'', it represents ');
+  APPEND_ROW('	   the percentage of time spent executing SQL for the particular ');
+  APPEND_ROW('      plsql entry subprogram');
+  APPEND_ROW('-> ''PL/SQL entry subprogram'' represents the application''s top-level ');
+  column_widths := COLUMN_WIDTH_ARRAY(60, 60, 20);
+  column_content := COLUMN_CONTENT_ARRAY('-', '-', '-');
+  APPEND_ROW(FORMAT_ROW(column_content, column_widths, '-', '+'));
+  column_content := COLUMN_CONTENT_ARRAY('PLSQL Entry Subprogram', 'PLSQL Current Subprogram', '% Activity');
+  APPEND_ROW(FORMAT_ROW(column_content, column_widths, ' ', '|'));
+  column_content := COLUMN_CONTENT_ARRAY('-', '-', '-');
+  APPEND_ROW(FORMAT_ROW(column_content, column_widths, '-', '+'));
+  DYN_SQL := 'SELECT OBJ_OWNER, OBJ_NAME, PLSQL_ENTRY_SUBPROGRAM_NAME, PLSQL_ENTRY_OBJECT_ID, PLSQL_ENTRY_SUBPROGRAM_ID, ENTRY_CNT ' ||
+             'FROM (SELECT ash.*, obj.OWNER OBJ_OWNER, obj.OBJECT_NAME OBJ_NAME ' ||
+               'FROM (SELECT PLSQL_ENTRY_OBJECT_ID, PLSQL_ENTRY_SUBPROGRAM_ID, PLSQL_ENTRY_SUBPROGRAM_NAME, COUNT(1) ENTRY_CNT ' ||
+                 'FROM (SELECT * FROM (' || DBMS_ASH_INTERNAL.ASH_VIEW_SQL || ') WHERE PLSQL_ENTRY_OBJECT_ID > 0 ) top_event ' ||
+                   'GROUP BY PLSQL_ENTRY_OBJECT_ID, PLSQL_ENTRY_SUBPROGRAM_ID, PLSQL_ENTRY_SUBPROGRAM_NAME) ash ' ||
+                  'LEFT JOIN ALL_OBJECTS obj ON ash.plsql_entry_object_id = obj.object_id ORDER BY ENTRY_CNT DESC) v1 WHERE ROWNUM < 100';
+  OPEN top_event_cv FOR DYN_SQL
+  USING   ASH_BEGIN_TIME, ASH_END_TIME,
+          ASH_BEGIN_TIME, ASH_END_TIME,
+          NULL_CHAR, NULL_CHAR,
+          NULL_CHAR, NULL_CHAR,
+          NULL_CHAR, NULL_CHAR,
+          NULL_CHAR, NULL_CHAR,
+          NULL_CHAR, NULL_CHAR,
+          NULL_CHAR, NULL_CHAR;
+  LOOP
+    FETCH top_event_cv INTO top_plsql_rec;
+    EXIT WHEN top_event_cv%NOTFOUND;
+    IF top_plsql_rec.PL_SUBPROGRAM_NAME is NULL THEN
+      APPEND_ROW(FORMAT_ROW(COLUMN_CONTENT_ARRAY(
+            top_plsql_rec.OBJ_OWNER || '.' || top_plsql_rec.OBJ_NAME,
+            '--',
+            TO_CHAR(ROUND(100 * top_plsql_rec.RECORD_CNT/NUM_SAMPLES, 2), DIG_2_FM) || '%'
+      ), column_widths, ' ', '|'));
+    ELSE
+      APPEND_ROW(FORMAT_ROW(COLUMN_CONTENT_ARRAY(
+            top_plsql_rec.OBJ_OWNER || '.' || top_plsql_rec.OBJ_NAME || '.' || top_plsql_rec.PL_SUBPROGRAM_NAME,
+            '--',
+            TO_CHAR(ROUND(100 * top_plsql_rec.RECORD_CNT/NUM_SAMPLES, 2), DIG_2_FM) || '%'
+      ), column_widths, ' ', '|'));
+    END IF;
+
+    SUB_DYN_SQL := 'SELECT OBJ_OWNER, OBJ_NAME, PLSQL_SUBPROGRAM_NAME, PLSQL_OBJECT_ID, PLSQL_SUBPROGRAM_ID, SUB_CNT ' ||
+          'FROM (SELECT ash.*, obj.OWNER OBJ_OWNER, obj.OBJECT_NAME OBJ_NAME ' ||
+            'FROM (SELECT PLSQL_OBJECT_ID, PLSQL_SUBPROGRAM_ID, PLSQL_SUBPROGRAM_NAME, COUNT(1) SUB_CNT ' ||
+              'FROM (SELECT * FROM (' || DBMS_ASH_INTERNAL.ASH_VIEW_SQL || ') WHERE PLSQL_ENTRY_OBJECT_ID = :PLSQL_ENTRY_OBJECT_ID AND PLSQL_ENTRY_SUBPROGRAM_ID = :PLSQL_ENTRY_SUBPROGRAM_ID ' ||
+                ' AND PLSQL_OBJECT_ID > 0 AND (IN_PLSQL_EXECUTION =  ''Y'' OR IN_PLSQL_COMPILATION = ''Y'')) top_event GROUP BY PLSQL_OBJECT_ID, PLSQL_SUBPROGRAM_ID, PLSQL_SUBPROGRAM_NAME) ash ' ||
+             'LEFT JOIN ALL_OBJECTS obj ON ash.plsql_object_id = obj.object_id ORDER BY SUB_CNT DESC) v1 WHERE ROWNUM < 100';
+    OPEN sub_event_cv FOR SUB_DYN_SQL
+    USING   ASH_BEGIN_TIME, ASH_END_TIME,
+            ASH_BEGIN_TIME, ASH_END_TIME,
+            NULL_CHAR, NULL_CHAR,
+            NULL_CHAR, NULL_CHAR,
+            NULL_CHAR, NULL_CHAR,
+            NULL_CHAR, NULL_CHAR,
+            NULL_CHAR, NULL_CHAR,
+            NULL_CHAR, NULL_CHAR,
+            top_plsql_rec.PL_OBJECT_ID, top_plsql_rec.PL_SUBPROGRAM_ID;
+    LOOP
+      FETCH sub_event_cv INTO sub_plsql_rec;
+      EXIT WHEN sub_event_cv%NOTFOUND;
+      IF sub_plsql_rec.PL_SUBPROGRAM_NAME is NULL THEN
+        APPEND_ROW(FORMAT_ROW(COLUMN_CONTENT_ARRAY(
+              '--',
+              sub_plsql_rec.OBJ_OWNER || '.' || sub_plsql_rec.OBJ_NAME,
+              TO_CHAR(ROUND(100 * sub_plsql_rec.RECORD_CNT/NUM_SAMPLES, 2), DIG_2_FM) || '%'
+        ), column_widths, ' ', '|'));
+      ELSE
+        APPEND_ROW(FORMAT_ROW(COLUMN_CONTENT_ARRAY(
+              '--',
+              sub_plsql_rec.OBJ_OWNER || '.' || sub_plsql_rec.OBJ_NAME || '.' || sub_plsql_rec.PL_SUBPROGRAM_NAME,
+              TO_CHAR(ROUND(100 * sub_plsql_rec.RECORD_CNT/NUM_SAMPLES, 2), DIG_2_FM) || '%'
+        ), column_widths, ' ', '|'));
+      END IF;
+
+    END LOOP;
+    CLOSE sub_event_cv;
+
+    SUB_PLSQL_CNT := 0;
+    SUB_DYN_SQL := 'SELECT COUNT(1) SQL_CNT FROM (' ||
+             ' SELECT * FROM (' ||   DBMS_ASH_INTERNAL.ASH_VIEW_SQL ||
+             ') WHERE PLSQL_ENTRY_OBJECT_ID = :PLSQL_ENTRY_OBJECT_ID AND PLSQL_ENTRY_SUBPROGRAM_ID = :PLSQL_ENTRY_SUBPROGRAM_ID' ||
+             ' AND IN_SQL_EXECUTION = ''Y'' AND IN_PLSQL_EXECUTION =  ''N'' AND IN_PLSQL_COMPILATION =  ''N'')';
+    EXECUTE IMMEDIATE SUB_DYN_SQL
+    INTO  SUB_PLSQL_CNT
+    USING   ASH_BEGIN_TIME, ASH_END_TIME,
+            ASH_BEGIN_TIME, ASH_END_TIME,
+            NULL_CHAR, NULL_CHAR,
+            NULL_CHAR, NULL_CHAR,
+            NULL_CHAR, NULL_CHAR,
+            NULL_CHAR, NULL_CHAR,
+            NULL_CHAR, NULL_CHAR,
+            NULL_CHAR, NULL_CHAR,
+            top_plsql_rec.PL_OBJECT_ID, top_plsql_rec.PL_SUBPROGRAM_ID;
+    IF SUB_PLSQL_CNT > 0 THEN
+      APPEND_ROW(FORMAT_ROW(COLUMN_CONTENT_ARRAY(
+            '--',
+            'SQL',
+            TO_CHAR(ROUND(100 * SUB_PLSQL_CNT/NUM_SAMPLES, 2), DIG_2_FM) || '%'
+      ), column_widths, ' ', '|'));
+    END if;
+
+  END LOOP;
+  CLOSE top_event_cv;
+  column_content := COLUMN_CONTENT_ARRAY('-', '-', '-');
+  APPEND_ROW(FORMAT_ROW(column_content, column_widths, '-', '+'));
 
   APPEND_ROW(' ');
   APPEND_ROW('## Top Sessions:');
   APPEND_ROW(' - ''# Samples Active'' shows the number of ASH samples in which the session was found waiting for that particular event. The percentage shown in this column is calculated with respect to wall time.');
-  column_widths := COLUMN_WIDTH_ARRAY(20, 22, 40, 12, 12, 20, '20');
+  column_widths := COLUMN_WIDTH_ARRAY(20, 22, 64, 12, 12, 20, '20');
   column_content := COLUMN_CONTENT_ARRAY('-', '-', '-', '-', '-', '-', '-');
   APPEND_ROW(FORMAT_ROW(column_content, column_widths, '-', '+'));
   column_content := COLUMN_CONTENT_ARRAY('Sid', '% Activity', 'Event', 'Event Count', '% Event', 'User', '# Samples Active');
@@ -592,7 +718,7 @@ BEGIN
 
   APPEND_ROW(' ');
   APPEND_ROW('## Top latches:');
-  column_widths := COLUMN_WIDTH_ARRAY(40, 20, 20);
+  column_widths := COLUMN_WIDTH_ARRAY(64, 20, 20);
   column_content := COLUMN_CONTENT_ARRAY('-', '-', '-');
   APPEND_ROW(FORMAT_ROW(column_content, column_widths, '-', '+'));
   column_content := COLUMN_CONTENT_ARRAY('Latch', 'Sampled Count', '% Activity');

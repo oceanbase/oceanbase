@@ -14,6 +14,7 @@
 #include "lib/thread_local/thread_buffer.h"
 #include "share/ob_cluster_version.h"
 #include "lib/utility/serialization.h"
+#include "lib/ash/ob_active_session_guard.h"
 
 namespace oceanbase
 {
@@ -337,8 +338,9 @@ void ObBatchRpcBase::do_work()
       sleep_ts = 0;
     }
     if (delay_us_ > 0) {
-      ob_usleep((int32_t)sleep_ts);
+      ob_usleep((int32_t)sleep_ts, true/*is_idle_sleep*/);
     } else {
+      common::ObBKGDSessInActiveGuard inactive_guard;
       cond_.wait(sleep_ts);
     }
   }

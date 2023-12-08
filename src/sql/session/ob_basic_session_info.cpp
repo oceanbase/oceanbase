@@ -37,6 +37,7 @@
 #include "pl/sys_package/ob_dbms_sql.h"
 #include "pl/ob_pl_package_state.h"
 #include "rpc/obmysql/ob_sql_sock_session.h"
+#include "share/ash/ob_active_sess_hist_task.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -113,6 +114,7 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       cur_phy_plan_(NULL),
       plan_id_(0),
       last_plan_id_(0),
+      plan_hash_(0),
       flt_vars_(),
       capability_(),
       proxy_capability_(),
@@ -163,6 +165,7 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
   inc_sys_var_alloc_[0] = &inc_sys_var_alloc1_;
   inc_sys_var_alloc_[1] = &inc_sys_var_alloc2_;
   influence_plan_var_indexs_.set_attr(ObMemAttr(orig_tenant_id_, "PlanVaIdx"));
+  thread_name_[0] = '\0';
 }
 
 ObBasicSessionInfo::~ObBasicSessionInfo()
@@ -389,6 +392,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   cur_phy_plan_ = NULL;
   plan_id_ = 0;
   last_plan_id_ = 0;
+  plan_hash_ = 0;
   capability_.capability_ = 0;
   proxy_capability_.capability_ = 0;
   client_attribute_capability_.capability_ = 0;
@@ -2042,6 +2046,7 @@ int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan)
   } else {
     cur_phy_plan_ = cur_phy_plan;
     plan_id_ = cur_phy_plan->get_plan_id();
+    plan_hash_ = cur_phy_plan->get_plan_hash_value();
     int64_t len = cur_phy_plan->stat_.sql_id_.length();
     MEMCPY(sql_id_, cur_phy_plan->stat_.sql_id_.ptr(), len);
     sql_id_[len] = '\0';
@@ -5808,13 +5813,12 @@ int ObBasicSessionInfo::set_session_active(const ObString &sql,
   LockGuard lock_guard(thread_data_mutex_);
   if (OB_FAIL(store_query_string_(sql))) {
     LOG_WARN("store query string fail", K(ret));
-  } else if (OB_FAIL(set_session_state_(QUERY_ACTIVE))) {
-    LOG_WARN("fail to set session state", K(ret));
+  } else if (OB_FAIL(set_session_active())) {
+    LOG_WARN("fail to set session active", K(ret));
   } else {
     thread_data_.cur_query_start_time_ = query_receive_ts;
     thread_data_.mysql_cmd_ = cmd;
     thread_data_.last_active_time_ = last_active_time_ts;
-    ObActiveSessionGuard::setup_ash(ash_stat_);
   }
   return ret;
 }
@@ -5826,17 +5830,38 @@ int ObBasicSessionInfo::set_session_active(const ObString &label,
   LockGuard lock_guard(thread_data_mutex_);
   if (OB_FAIL(store_query_string_(label))) {
     LOG_WARN("store query string fail", K(ret));
-  } else if (OB_FAIL(set_session_state_(QUERY_ACTIVE))) {
-    LOG_WARN("fail to set session state", K(ret));
+  } else if (OB_FAIL(set_session_active())) {
+    LOG_WARN("fail to set session active", K(ret));
   } else {
     thread_data_.mysql_cmd_ = cmd;
-    ObActiveSessionGuard::setup_ash(ash_stat_);
+  }
+  return ret;
+}
+
+void ObBasicSessionInfo::setup_ash()
+{
+  ash_stat_.tenant_id_ = get_priv_tenant_id();
+  ash_stat_.user_id_ = get_user_id();
+  ash_stat_.session_id_ = get_sessid();
+  ash_stat_.trace_id_ = get_current_trace_id();
+  ash_stat_.tid_ = GETTID();
+  ObActiveSessionGuard::setup_ash(ash_stat_);
+}
+
+int ObBasicSessionInfo::set_session_active()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(set_session_state_(QUERY_ACTIVE))) {
+    LOG_WARN("fail to set session state", K(ret));
+  } else {
+    setup_ash();
   }
   return ret;
 }
 
 void ObBasicSessionInfo::set_session_sleep()
 {
+  ObActiveSessionStat::calc_db_time(ash_stat_, ObTimeUtility::current_time());
   LockGuard lock_guard(thread_data_mutex_);
   set_session_state_(SESSION_SLEEP);
   thread_data_.mysql_cmd_ = obmysql::COM_SLEEP;

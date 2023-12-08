@@ -1102,10 +1102,10 @@ bool WorkloadRepositoryTask::check_tenant_can_do_wr_task(uint64_t tenant_id)
   const ObSimpleTenantSchema *tenant_schema = nullptr;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("get min data_version failed", KR(ret), K(tenant_id));
-  } else if (data_version < DATA_VERSION_4_2_1_0) {
+  } else if (data_version < DATA_VERSION_4_2_2_0) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("tenant data version is too low for wr", K(tenant_id), K(data_version));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.2.1, workload repository not supported");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.2.2, workload repository not supported");
   } else if (OB_FAIL(schema_service->get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
   } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {

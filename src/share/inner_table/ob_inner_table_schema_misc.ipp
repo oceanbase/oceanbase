@@ -493,9 +493,13 @@ case OB_ALL_VIRTUAL_TENANT_PARAMETER_TID:
 case OB_ALL_VIRTUAL_TENANT_USER_FAILED_LOGIN_STAT_TID:
 case OB_ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY_TID:
 case OB_ALL_VIRTUAL_WR_CONTROL_TID:
+case OB_ALL_VIRTUAL_WR_EVENT_NAME_TID:
 case OB_ALL_VIRTUAL_WR_SNAPSHOT_TID:
+case OB_ALL_VIRTUAL_WR_SQLSTAT_TID:
+case OB_ALL_VIRTUAL_WR_SQLTEXT_TID:
 case OB_ALL_VIRTUAL_WR_STATNAME_TID:
 case OB_ALL_VIRTUAL_WR_SYSSTAT_TID:
+case OB_ALL_VIRTUAL_WR_SYSTEM_EVENT_TID:
 case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
 
 #endif
@@ -1566,12 +1570,60 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       break;
     }
 
+    case OB_ALL_VIRTUAL_WR_EVENT_NAME_TID: {
+      ObIteratePrivateVirtualTable *iter = NULL;
+      const bool meta_record_in_sys = false;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIteratePrivateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create iterate private virtual table iterator failed", KR(ret));
+      } else if (OB_FAIL(iter->init(OB_WR_EVENT_NAME_TID, meta_record_in_sys, index_schema, params))) {
+        SERVER_LOG(WARN, "iterate private virtual table iter init failed", KR(ret));
+        iter->~ObIteratePrivateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
     case OB_ALL_VIRTUAL_WR_SNAPSHOT_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIteratePrivateVirtualTable, iter))) {
         SERVER_LOG(WARN, "create iterate private virtual table iterator failed", KR(ret));
       } else if (OB_FAIL(iter->init(OB_WR_SNAPSHOT_TID, meta_record_in_sys, index_schema, params))) {
+        SERVER_LOG(WARN, "iterate private virtual table iter init failed", KR(ret));
+        iter->~ObIteratePrivateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_WR_SQLSTAT_TID: {
+      ObIteratePrivateVirtualTable *iter = NULL;
+      const bool meta_record_in_sys = false;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIteratePrivateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create iterate private virtual table iterator failed", KR(ret));
+      } else if (OB_FAIL(iter->init(OB_WR_SQLSTAT_TID, meta_record_in_sys, index_schema, params))) {
+        SERVER_LOG(WARN, "iterate private virtual table iter init failed", KR(ret));
+        iter->~ObIteratePrivateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_WR_SQLTEXT_TID: {
+      ObIteratePrivateVirtualTable *iter = NULL;
+      const bool meta_record_in_sys = false;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIteratePrivateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create iterate private virtual table iterator failed", KR(ret));
+      } else if (OB_FAIL(iter->init(OB_WR_SQLTEXT_TID, meta_record_in_sys, index_schema, params))) {
         SERVER_LOG(WARN, "iterate private virtual table iter init failed", KR(ret));
         iter->~ObIteratePrivateVirtualTable();
         allocator.free(iter);
@@ -1604,6 +1656,22 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIteratePrivateVirtualTable, iter))) {
         SERVER_LOG(WARN, "create iterate private virtual table iterator failed", KR(ret));
       } else if (OB_FAIL(iter->init(OB_WR_SYSSTAT_TID, meta_record_in_sys, index_schema, params))) {
+        SERVER_LOG(WARN, "iterate private virtual table iter init failed", KR(ret));
+        iter->~ObIteratePrivateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_WR_SYSTEM_EVENT_TID: {
+      ObIteratePrivateVirtualTable *iter = NULL;
+      const bool meta_record_in_sys = false;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIteratePrivateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create iterate private virtual table iterator failed", KR(ret));
+      } else if (OB_FAIL(iter->init(OB_WR_SYSTEM_EVENT_TID, meta_record_in_sys, index_schema, params))) {
         SERVER_LOG(WARN, "iterate private virtual table iter init failed", KR(ret));
         iter->~ObIteratePrivateVirtualTable();
         allocator.free(iter);
@@ -4313,15 +4381,27 @@ case OB_WR_ACTIVE_SESSION_HISTORY_AUX_LOB_PIECE_TID:
 case OB_WR_CONTROL_TID:
 case OB_WR_CONTROL_AUX_LOB_META_TID:
 case OB_WR_CONTROL_AUX_LOB_PIECE_TID:
+case OB_WR_EVENT_NAME_TID:
+case OB_WR_EVENT_NAME_AUX_LOB_META_TID:
+case OB_WR_EVENT_NAME_AUX_LOB_PIECE_TID:
 case OB_WR_SNAPSHOT_TID:
 case OB_WR_SNAPSHOT_AUX_LOB_META_TID:
 case OB_WR_SNAPSHOT_AUX_LOB_PIECE_TID:
+case OB_WR_SQLSTAT_TID:
+case OB_WR_SQLSTAT_AUX_LOB_META_TID:
+case OB_WR_SQLSTAT_AUX_LOB_PIECE_TID:
+case OB_WR_SQLTEXT_TID:
+case OB_WR_SQLTEXT_AUX_LOB_META_TID:
+case OB_WR_SQLTEXT_AUX_LOB_PIECE_TID:
 case OB_WR_STATNAME_TID:
 case OB_WR_STATNAME_AUX_LOB_META_TID:
 case OB_WR_STATNAME_AUX_LOB_PIECE_TID:
 case OB_WR_SYSSTAT_TID:
 case OB_WR_SYSSTAT_AUX_LOB_META_TID:
 case OB_WR_SYSSTAT_AUX_LOB_PIECE_TID:
+case OB_WR_SYSTEM_EVENT_TID:
+case OB_WR_SYSTEM_EVENT_AUX_LOB_META_TID:
+case OB_WR_SYSTEM_EVENT_AUX_LOB_PIECE_TID:
 
 #endif
 

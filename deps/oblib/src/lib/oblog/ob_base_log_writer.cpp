@@ -28,6 +28,7 @@
 #include "lib/thread/ob_thread_name.h"
 #include "lib/thread/thread.h"
 #include "lib/thread/protected_stack_allocator.h"
+#include "lib/ash/ob_active_session_guard.h"
 
 using namespace oceanbase::lib;
 extern "C" {
@@ -265,6 +266,7 @@ void ObBaseLogWriter::do_flush_log()
   int64_t item_cnt = 0;
   const uint32_t key = log_flush_cond_->get_key();
   if (!need_flush()) {
+    common::ObBKGDSessInActiveGuard inactive_guard;
     log_flush_cond_->wait(key, log_cfg_.group_commit_max_wait_us_);
   }
   while (OB_LIKELY(need_flush() && !has_stopped_)) {

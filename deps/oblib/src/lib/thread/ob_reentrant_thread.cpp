@@ -37,7 +37,8 @@ ObReentrantThread::~ObReentrantThread()
   }
 }
 
-int ObReentrantThread::create(const int64_t thread_cnt, const char* thread_name)
+int ObReentrantThread::create(const int64_t thread_cnt, const char* thread_name,
+                              const int64_t wait_event_id)
 {
   int ret = OB_SUCCESS;
   if (created_) {
@@ -46,7 +47,7 @@ int ObReentrantThread::create(const int64_t thread_cnt, const char* thread_name)
   }  else if (thread_cnt <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(thread_cnt));
-  } else if (OB_FAIL(cond_.init(ObWaitEventIds::REENTRANT_THREAD_COND_WAIT))) {
+  } else if (OB_FAIL(cond_.init(wait_event_id))) {
     LOG_WARN("fail to init cond, ", K(ret));
   } else {
     thread_name_ = thread_name;
@@ -123,6 +124,7 @@ void ObReentrantThread::logical_wait()
       LOG_WARN("inner status error", K(ret), K_(running_cnt));
     } else {
       while (running_cnt_ > 0) {
+        ObBKGDSessInActiveGuard inactive_guard;
         cond_.wait();
       }
     }
@@ -181,6 +183,7 @@ int ObReentrantThread::blocking_run()
         if (ThreadPool::has_set_stop()) {
           break;
         }
+        ObBKGDSessInActiveGuard inactive_guard;
         cond_.wait(WAIT_TIME_MS);
       } else {
         need_run = true;
@@ -202,6 +205,22 @@ int ObReentrantThread::blocking_run()
 
 void ObReentrantThread::nothing()
 {
+}
+
+int ObReentrantThread::idle_wait(const int64_t idle_time_ms)
+{
+  int ret = OB_SUCCESS;
+  ObBKGDSessInActiveGuard inactive_guard;
+  ret = get_cond().wait(idle_time_ms);
+  return ret;
+}
+
+int ObReentrantThread::idle_wait_us(const int64_t idle_time_us)
+{
+  int ret = OB_SUCCESS;
+  ObBKGDSessInActiveGuard inactive_guard;
+  ret = get_cond().wait_us(idle_time_us);
+  return ret;
 }
 
 } // end namespace share

@@ -401,7 +401,7 @@ int LogBlockMgr::check_after_truncate_(const char *block_path, const offset_t of
     while (OB_FAIL(ret)) {
       PALF_LOG(ERROR, "after truncate, data is not zero", KPC(this), K(fd), K(offset),
           KP(buf), KP(expected_data), K(in_read_size), K(backoff));
-      usleep(1000*1000);
+      ob_usleep(1000*1000);
     }
   } else {
     PALF_LOG(INFO, "check_after_truncate_ success", KPC(this), K(block_path), K(offset));

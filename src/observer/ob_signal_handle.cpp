@@ -29,6 +29,7 @@
 #include "sql/ob_sql_init.h"
 #include "lib/allocator/ob_pcounter.h"
 #include "storage/tx_storage/ob_tenant_memory_printer.h"
+#include "lib/ash/ob_active_session_guard.h"
 
 namespace oceanbase
 {
@@ -53,6 +54,7 @@ void ObSignalHandle::run1()
     while (!has_set_stop()) {//need not to check ret
       {
         oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT);
+        common::ObBKGDSessInActiveGuard inactive_guard;
         signum = sigtimedwait(&waitset, NULL, &timeout);
       }
       if (-1 == signum) {

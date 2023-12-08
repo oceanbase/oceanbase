@@ -131,6 +131,7 @@ int ObPxTaskProcess::process()
   enqueue_timestamp_ = ObTimeUtility::current_time();
   process_timestamp_ = enqueue_timestamp_;
   ObExecRecord exec_record;
+  ObExecutingSqlStatRecord sqlstat_record;
   ObExecTimestamp exec_timestamp;
   ObWaitEventDesc max_wait_desc;
   ObWaitEventStat total_wait_desc;
@@ -147,6 +148,7 @@ int ObPxTaskProcess::process()
     const bool enable_perf_event = lib::is_diagnose_info_enabled();
     const bool enable_sql_audit =
         GCONF.enable_sql_audit && session->get_local_ob_enable_sql_audit();
+    const bool enable_sqlstat = session->is_sqlstat_enabled();
     ObAuditRecordData &audit_record = session->get_raw_audit_record();
     ObWorkerSessionGuard worker_session_guard(session);
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
@@ -159,6 +161,7 @@ int ObPxTaskProcess::process()
     session->set_peer_addr(arg_.task_.get_sqc_addr());
     session->set_cur_phy_plan(arg_.des_phy_plan_);
     session->set_thread_id(GETTID());
+    session->set_thread_name(GETTNAME());
     arg_.exec_ctx_->reference_my_plan(arg_.des_phy_plan_);
     arg_.exec_ctx_->set_sqc_handler(arg_.sqc_handler_);
     arg_.exec_ctx_->set_px_task_id(arg_.task_.get_task_id());
@@ -168,6 +171,11 @@ int ObPxTaskProcess::process()
 
     if (enable_perf_event) {
       exec_record.record_start();
+    }
+    if (enable_sqlstat && OB_NOT_NULL(arg_.exec_ctx_->get_sql_ctx())) {
+      sqlstat_record.record_sqlstat_start_value();
+      sqlstat_record.set_is_in_retry(session->get_is_in_retry());
+      session->sql_sess_record_sql_stat_start_value(sqlstat_record);
     }
 
     //监控项统计开始
@@ -192,6 +200,13 @@ int ObPxTaskProcess::process()
       exec_record.wait_count_end_ = total_wait_desc.total_waits_;
       audit_record.exec_record_ = exec_record;
       audit_record.update_event_stage_state();
+    }
+    if (enable_sqlstat && OB_NOT_NULL(arg_.exec_ctx_->get_sql_ctx())) {
+      sqlstat_record.record_sqlstat_end_value();
+      ObPhysicalPlan *phy_plan = arg_.des_phy_plan_;
+      ObString sql = ObString::make_string("PX DFO EXECUTING");
+      sqlstat_record.move_to_sqlstat_cache(*session,
+                            sql, phy_plan, true/*is_px_remote_exec*/);
     }
 
     if (enable_sql_audit) {

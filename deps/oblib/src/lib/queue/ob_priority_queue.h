@@ -15,6 +15,7 @@
 
 #include "lib/queue/ob_link_queue.h"
 #include "lib/lock/ob_scond.h"
+#include "lib/ash/ob_active_session_guard.h"
 
 namespace oceanbase
 {
@@ -84,7 +85,10 @@ public:
       }
       if (OB_FAIL(ret)) {
         auto key = sem_.get_key();
-        sem_.wait(key, timeout_us);
+        {
+          common::ObBKGDSessInActiveGuard inactive_guard;
+          sem_.wait(key, timeout_us);
+        }
         data = NULL;
       } else {
         (void)ATOMIC_FAA(&size_, -1);

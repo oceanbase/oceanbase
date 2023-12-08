@@ -228,7 +228,7 @@ int ObRpcProxy::send_request(
     this_worker().sched_wait();
 
     {
-      ObWaitEventGuard wait_guard(ObWaitEventIds::SYNC_RPC, timeout_ms, pcode, size, 0);
+      ObBaseWaitEventGuard<ObWaitEventIds::SYNC_RPC> wait_guard(timeout_ms, pcode, size, 0);
       ret = transport_->send(req, result);
     }
 

@@ -180,7 +180,7 @@ void ObLSRecoveryReportor::idle_some_time_()
     } else if (!is_primary_normal_status) {
       idle_target_cnt = 1;
     }
-    get_cond().wait_us(IDLE_TIME);
+    idle_wait_us(IDLE_TIME);
   }
 }
 

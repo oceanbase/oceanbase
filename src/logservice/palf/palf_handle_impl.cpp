@@ -4635,7 +4635,7 @@ int PalfHandleImpl::flashback(const int64_t mode_version,
         plugins_.record_flashback_event(palf_id_, mode_version, flashback_scn, curr_end_scn, curr_max_scn);
         break;
       } else {
-        usleep(100*1000);
+        ob_usleep(100*1000);
         PALF_LOG(INFO, "flashback not finished", K(ret), KPC(this), K(flashback_scn), K(log_engine_));
       }
     }
@@ -4898,7 +4898,7 @@ int PalfHandleImpl::read_and_append_log_group_entry_before_ts_(
       while (NULL ==
           (last_log_buf = static_cast<char*>(mtl_malloc(last_log_buf_len, "PalfHandleImpl")))) {
         PALF_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "alloc memory for last_log_buf in flashback failed", K(last_log_buf_len));
-        usleep(1000);
+        ob_usleep(1000);
       };
     };
     // step2. construct new palf base info.

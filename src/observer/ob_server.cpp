@@ -1487,6 +1487,7 @@ int ObServer::wait()
 
   FLOG_INFO("begin to wait observer setted to stop");
   while (!stop_) {
+    common::ObBKGDSessInActiveGuard inactive_guard;
     SLEEP(3);
   }
 

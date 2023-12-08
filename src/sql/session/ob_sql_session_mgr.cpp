@@ -242,7 +242,7 @@ ObSQLSessionInfo *ObSQLSessionMgr::ValueAlloc::alloc_value(uint64_t tenant_id)
       LOG_INFO("alloc_session_count", K(alloc_total_count));
     }
   } else {
-    LOG_ERROR("switch tenant failed", K(ret), K(tenant_id));
+    LOG_WARN("switch tenant failed", K(ret), K(tenant_id));
   }
   return session;
 }

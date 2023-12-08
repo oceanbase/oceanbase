@@ -123,6 +123,8 @@ int ObDesExecContext::create_my_session(uint64_t tenant_id)
     }
   }
   if (OB_SUCC(ret)) {
+    my_session_->set_thread_id(GETTID());
+    my_session_->set_thread_name(GETTNAME());
     //notice: can't unlink exec context and session info here
     typedef ObSQLSessionInfo::ExecCtxSessionRegister MyExecCtxSessionRegister;
     MyExecCtxSessionRegister ctx_register(*my_session_, *this);

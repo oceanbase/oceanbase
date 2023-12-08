@@ -89,12 +89,12 @@ DEF_TO_STRING(ObWrUserModifySettingsArg)
   J_COLON();
   pos += ObWrSnapshotArg::to_string(buf + pos, buf_len - pos);
   J_COMMA();
-  J_KV(K_(tenant_id), K_(retention), K_(interval));
+  J_KV(K_(tenant_id), K_(retention), K_(interval), K_(topnsql));
   J_OBJ_END();
   return pos;
 }
 OB_SERIALIZE_MEMBER(
-    (ObWrUserModifySettingsArg, ObWrSnapshotArg), tenant_id_, retention_, interval_);
+    (ObWrUserModifySettingsArg, ObWrSnapshotArg), tenant_id_, retention_, interval_, topnsql_);
 
 template <obrpc::ObRpcPacketCode pcode>
 int ObWrBaseSnapshotTaskP<pcode>::init()
@@ -142,7 +142,10 @@ int ObWrAsyncSnapshotTaskP::process()
   ObWrSnapshotArg &arg = ObWrAsyncSnapshotTaskP::arg_;
   LOG_DEBUG("wr snapshot task", K(MTL_ID()), K(arg));
   // gather inner table data
-  if (WrTaskType::TAKE_SNAPSHOT == arg.get_task_type()) {
+  if (GCONF.in_upgrade_mode()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("in upgrade, can not do wr snapshot", KR(ret));
+  } else if (WrTaskType::TAKE_SNAPSHOT == arg.get_task_type()) {
     ObWrSnapshotStatus status;
     ObWrCreateSnapshotArg &snapshot_arg = static_cast<ObWrCreateSnapshotArg &>(arg);
     int64_t origin_worker_timeout = THIS_WORKER.get_timeout_ts();
@@ -187,7 +190,10 @@ int ObWrAsyncPurgeSnapshotTaskP::process()
   ObWrSnapshotArg &arg = ObWrAsyncPurgeSnapshotTaskP::arg_;
   LOG_DEBUG("wr snapshot task", K(MTL_ID()), K(arg));
   // gather inner table data
-  if (WrTaskType::PURGE == arg.get_task_type()) {
+  if (GCONF.in_upgrade_mode()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("in upgrade, can not do wr snapshot", KR(ret));
+  } else if (WrTaskType::PURGE == arg.get_task_type()) {
     ObWrSnapshotStatus status;
     ObWrPurgeSnapshotArg &purge_arg = static_cast<ObWrPurgeSnapshotArg &>(arg);
     int64_t origin_worker_timeout = THIS_WORKER.get_timeout_ts();
@@ -283,6 +289,7 @@ const char *RETENTION_NUM_COLUMN_NAME = "retention_num";
 const char *RETENTION_COLUMN_NAME = "retention";
 const char *INTERVAL_NUM_COLUMN_NAME = "snapint_num";
 const char *INTERVAL_COLUMN_NAME = "snap_interval";
+const char *TOPN_SQL_COLUMN_NAME = "topnsql";
 
 int ObWrSyncUserModifySettingsTaskP::process()
 {
@@ -293,6 +300,9 @@ int ObWrSyncUserModifySettingsTaskP::process()
   if (OB_ISNULL(GCTX.wr_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("wr service is nullptr", K(ret),K(GCTX.wr_service_));
+  } else if (GCONF.in_upgrade_mode()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("in upgrade, can not do wr snapshot", KR(ret));
   } else if (OB_FAIL(WorkloadRepositoryTask::fetch_interval_num_from_wr_control(tmp_interval))) {
     LOG_WARN("failed to fetch interval num from wr control", K(ret));
   } else if (WrTaskType::USER_MODIFY_SETTINGS == arg.get_task_type()) {
@@ -314,6 +324,28 @@ int ObWrSyncUserModifySettingsTaskP::process()
       } else if (OB_FAIL(GCTX.wr_service_->get_wr_timer_task().modify_snapshot_interval(
                      arg.get_interval()))) {
         LOG_WARN("failed to take snapshot", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (-1 == arg.get_topnsql()) {
+        // keep the value of topnsql , do nothing
+      } else {
+        ObSqlString sql;
+        int64_t affected_rows = 0;
+        if (OB_ISNULL(GCTX.sql_proxy_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("GCTX.sql_proxy_ is null", K(ret));
+        } else if (OB_FAIL(sql.assign_fmt("update /*+ WORKLOAD_REPOSITORY */ %s set %s=%ld  "
+                                          "where tenant_id=%ld",
+                      OB_WR_CONTROL_TNAME, TOPN_SQL_COLUMN_NAME, arg.get_topnsql(), arg.get_tenant_id()))) {
+          LOG_WARN("failed to format update snapshot info sql", KR(ret));
+        } else if (OB_FAIL(
+                      GCTX.sql_proxy_->write(gen_meta_tenant_id(arg.get_tenant_id()), sql.ptr(), affected_rows))) {
+          LOG_WARN("failed to write snapshot_info", KR(ret), K(sql), K(gen_meta_tenant_id( arg.get_tenant_id())));
+        } else if (affected_rows != 1) {
+          LOG_TRACE("affected rows is not 1", KR(ret), K(affected_rows), K(sql));
+        }
       }
     }
   } else {

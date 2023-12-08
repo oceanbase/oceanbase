@@ -150,7 +150,7 @@ void ObThWorker::resume()
 }
 
 
-RLOCAL(uint64_t, serving_tenant_id);
+thread_local uint64_t ObThWorker::serving_tenant_id_;
 
 // Check only before user request starts
 ObThWorker::Status ObThWorker::check_qtime_throttle()
@@ -294,8 +294,9 @@ inline void ObThWorker::process_request(rpc::ObRequest &req)
 void ObThWorker::set_th_worker_thread_name()
 {
   char buf[32];
-  if (serving_tenant_id != tenant_->id()) {
-    serving_tenant_id = tenant_->id();
+  if (serving_tenant_id_ != tenant_->id()) {
+    ObActiveSessionGuard::get_stat().is_bkgd_active_ = false;
+    serving_tenant_id_ = tenant_->id();
     snprintf(buf, 32, "L%d_G%d", get_worker_level(), get_group_id());
     lib::set_thread_name(buf);
   }
@@ -372,7 +373,7 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
             wait_start_time = ObTimeUtility::current_time();
             /// get request from tenant
             {
-              ObWaitEventGuard wait_guard(ObWaitEventIds::OMT_IDLE, 0, wait_start_time, 0, 0);
+              ObBaseWaitEventGuard<ObWaitEventIds::OMT_IDLE> wait_guard(0, wait_start_time, 0, 0);
               ret = tenant_->get_new_request(*this, is_level_worker() ? NESTING_REQUEST_WAIT_TIME : REQUEST_WAIT_TIME, req);
               wait_end_time = ObTimeUtility::current_time();
             }

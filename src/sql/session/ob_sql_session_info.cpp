@@ -201,7 +201,8 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       in_bytes_(0),
       out_bytes_(0),
       current_dblink_sequence_id_(0),
-      client_non_standard_(false)
+      client_non_standard_(false),
+      executing_sql_stat_record_()
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
@@ -387,6 +388,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
   current_dblink_sequence_id_ = 0;
   dblink_sequence_schemas_.reset();
   MEMSET(sess_diag_info_index_, 0, SESSION_SYNC_MAX_TYPE * sizeof(int16_t));
+  executing_sql_stat_record_.reset();
 }
 
 void ObSQLSessionInfo::clean_status()
@@ -560,6 +562,21 @@ int ObSQLSessionInfo::is_adj_index_cost_enabled(bool &enabled, int64_t &stats_co
     enabled = (0 != stats_cost_percent);
   }
   return ret;
+}
+
+
+bool ObSQLSessionInfo::is_sqlstat_enabled() const
+{
+  bool bret = false;
+  if (lib::is_diagnose_info_enabled()) {
+    int64_t tenant_id = get_effective_tenant_id();
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      bret = tenant_config->_ob_sqlstat_enable;
+      // sqlstat has a dependency on the statistics mechanism, so turning off perf event will turn off sqlstat at the same time.
+    }
+  }
+  return bret;
 }
 
 void ObSQLSessionInfo::destroy(bool skip_sys_var)
@@ -4589,5 +4606,14 @@ int ObSQLSessionInfo::get_dblink_sequence_schema(int64_t sequence_id, const ObSe
     }
   }
   LOG_TRACE("get dblink sequence schema", K(sequence_id), K(dblink_sequence_schemas_));
+  return ret;
+}
+
+int ObSQLSessionInfo::sql_sess_record_sql_stat_start_value(ObExecutingSqlStatRecord& executing_sqlstat)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(executing_sql_stat_record_.assign(executing_sqlstat))) {
+    LOG_WARN("failed to assign executing sql stat record");
+  }
   return ret;
 }

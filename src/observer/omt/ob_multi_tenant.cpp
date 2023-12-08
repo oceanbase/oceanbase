@@ -2301,7 +2301,8 @@ void ObMultiTenant::run1()
         }
       }
     }
-    ob_usleep(TIME_SLICE_PERIOD);
+    ob_usleep(TIME_SLICE_PERIOD, true/*is_idle_sleep*/);
+
 
     if (REACH_TIME_INTERVAL(10000000L)) {  // every 10s
       SpinRLockGuard guard(lock_);

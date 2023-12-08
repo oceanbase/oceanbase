@@ -620,6 +620,7 @@ int ObTabletToLSTableOperator::batch_get_tablet_ls_cache(
     const common::ObIArray<common::ObTabletID> &tablet_ids,
     common::ObIArray<ObTabletLSCache> &tablet_ls_caches)
 {
+  ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::GET_TABLET_LOCATION);
   int ret = OB_SUCCESS;
   BATCH_GET(sql_proxy, tenant_id, tablet_ids, tablet_ls_caches);
   return ret;

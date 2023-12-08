@@ -103,7 +103,8 @@ public:
                 }
               }
             }
-            ob_usleep(static_cast<uint32_t>(500_ms));
+            ob_usleep(static_cast<uint32_t>(500_ms), true/*is_idle_sleep*/);
+
           } else {
             OCCAM_LOG(INFO, "thread hung detect thread is stopped");
             break;

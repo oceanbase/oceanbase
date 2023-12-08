@@ -65,9 +65,9 @@ void ObEndTransAsyncCallback::callback(int cb_param)
   // In the start of async commit in func named ` ObSqlTransControl::do_end_trans_() `,
   // set the ash flag named  `in_committing_` to true.
   if (NULL != session_info) {
-    ObActiveSessionGuard::setup_ash(session_info->get_ash_stat());
-    ObActiveSessionGuard::get_stat().in_committing_ = false;
     ObActiveSessionGuard::get_stat().in_sql_execution_ = true;
+    ObActiveSessionGuard::resetup_ash(session_info->get_ash_stat());
+    ObActiveSessionGuard::get_stat().finish_async_commiting();
   }
   bool need_disconnect = false;
   if (OB_UNLIKELY(!has_set_need_rollback_)) {

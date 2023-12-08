@@ -442,6 +442,10 @@ int main(int argc, char *argv[])
   if (0 != pthread_getname_np(pthread_self(), ob_get_tname(), OB_THREAD_NAME_BUF_LEN)) {
     snprintf(ob_get_tname(), OB_THREAD_NAME_BUF_LEN, "observer");
   }
+  ObActiveSessionGuard::setup_thread_local_ash();
+  ObActiveSessionGuard::get_stat().tenant_id_    = (0 == ob_get_tenant_id() ? OB_SERVER_TENANT_ID : ob_get_tenant_id());
+  ObActiveSessionGuard::get_stat().user_id_      = 0;
+  ObActiveSessionGuard::get_stat().session_type_ = ObActiveSessionStatItem::SessionType::BACKGROUND;
   ObStackHeaderGuard stack_header_guard;
   // just take effect in observer
 #ifndef OB_USE_ASAN
@@ -596,6 +600,7 @@ int main(int argc, char *argv[])
     unlink(PID_FILE_NAME);
   }
 
+  ObActiveSessionGuard::setup_default_ash();
   LOG_INFO("observer exits", "observer_version", PACKAGE_STRING);
   print_all_thread("AFTER_DESTROY");
   return ret;

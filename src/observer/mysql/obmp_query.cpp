@@ -159,6 +159,7 @@ int ObMPQuery::process()
       int64_t tenant_version = 0;
       int64_t sys_version = 0;
       session.set_thread_id(GETTID());
+      session.set_thread_name(GETTNAME());
       const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
       int64_t packet_len = pkt.get_clen();
       req_->set_trace_point(ObRequest::OB_EASY_REQUEST_MPQUERY_PROCESS);
@@ -677,6 +678,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
 {
   int ret = OB_SUCCESS;
   ObAuditRecordData &audit_record = session.get_raw_audit_record();
+  ObExecutingSqlStatRecord sqlstat_record;
   audit_record.try_cnt_++;
   bool is_diagnostics_stmt = false;
   bool need_response_error = true;
@@ -684,6 +686,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
   const bool enable_perf_event = lib::is_diagnose_info_enabled();
   const bool enable_sql_audit =
     GCONF.enable_sql_audit && session.get_local_ob_enable_sql_audit();
+  const bool enable_sqlstat = session.is_sqlstat_enabled();
   single_process_timestamp_ = ObTimeUtility::current_time();
   /* !!!
    * 注意req_timeinfo_guard一定要放在result前面
@@ -734,6 +737,11 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL, di);
       if (enable_perf_event) {
         audit_record.exec_record_.record_start(di);
+      }
+      if (enable_sqlstat) {
+        sqlstat_record.record_sqlstat_start_value(di);
+        sqlstat_record.set_is_in_retry(session.get_is_in_retry());
+        session.sql_sess_record_sql_stat_start_value(sqlstat_record);
       }
       result.set_has_more_result(has_more_result);
       ObTaskExecutorCtx &task_ctx = result.get_exec_context().get_task_exec_ctx();
@@ -839,10 +847,18 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
 
       if (enable_perf_event) {
         audit_record.exec_record_.record_end(di);
-        record_stat(result.get_stmt_type(), exec_end_timestamp_);
+        record_stat(result.get_stmt_type(), exec_end_timestamp_, result.get_session(), ret);
         audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
         audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
         audit_record.update_event_stage_state();
+      }
+      if (enable_sqlstat) {
+        sqlstat_record.record_sqlstat_end_value(di);
+        sqlstat_record.set_rows_processed(result.get_affected_rows() + result.get_return_rows());
+        sqlstat_record.set_partition_cnt(result.get_exec_context().get_das_ctx().get_related_tablet_cnt());
+        sqlstat_record.move_to_sqlstat_cache(result.get_session(),
+                                                   ctx_.cur_sql_,
+                                                   result.get_physical_plan());
       }
 
       if (enable_perf_event && !THIS_THWORKER.need_retry()
@@ -1320,11 +1336,19 @@ OB_INLINE int ObMPQuery::response_result(ObMySQLResultSet &result,
   return ret;
 }
 
-inline void ObMPQuery::record_stat(const stmt::StmtType type, const int64_t end_time) const
+inline void ObMPQuery::record_stat(const stmt::StmtType type,
+                                   const int64_t end_time,
+                                   const sql::ObSQLSessionInfo& session,
+                                   const int64_t ret) const
 {
 #define ADD_STMT_STAT(type)                     \
   case stmt::T_##type:                          \
-    EVENT_INC(SQL_##type##_COUNT);              \
+    if (!session.get_is_in_retry()) {           \
+      EVENT_INC(SQL_##type##_COUNT);            \
+      if (OB_SUCCESS != ret) {                  \
+        EVENT_INC(SQL_FAIL_COUNT);              \
+      }                                         \
+    }                                           \
     EVENT_ADD(SQL_##type##_TIME, time_cost);    \
     break
   const int64_t time_cost = end_time - get_receive_timestamp();
@@ -1339,8 +1363,13 @@ inline void ObMPQuery::record_stat(const stmt::StmtType type, const int64_t end_
       ADD_STMT_STAT(DELETE);
     default:
     {
-      EVENT_INC(SQL_OTHER_COUNT);
       EVENT_ADD(SQL_OTHER_TIME, time_cost);
+      if (!session.get_is_in_retry()) {
+        EVENT_INC(SQL_OTHER_COUNT);
+        if (OB_SUCCESS != ret) {
+          EVENT_INC(SQL_FAIL_COUNT);
+        }
+      }
     }
     }
   }

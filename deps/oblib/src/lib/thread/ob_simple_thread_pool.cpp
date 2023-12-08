@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX COMMON
 #include "lib/thread/ob_thread_name.h"
 #include "lib/thread/ob_simple_thread_pool.h"
+#include "lib/ash/ob_active_session_guard.h"
 
 namespace oceanbase
 {
@@ -113,6 +114,7 @@ void ObSimpleThreadPool::run1()
         handle(task);
       }
     } else if (thread_idx >= old_thread_num) {
+      ObBKGDSessInActiveGuard inactive_guard;
       usleep((10 + thread_idx - old_thread_num) * 1000);
     } else {
       void *task = NULL;
@@ -123,7 +125,11 @@ void ObSimpleThreadPool::run1()
       const int64_t shrink_ts =
           adaptive_strategy_.get_estimate_ts() * adaptive_strategy_.get_shrink_rate() / 100;
       start_ts = ObTimeUtility::current_time();
-      if (OB_SUCC(queue_.pop(task, QUEUE_WAIT_TIME))) {
+      {
+        ObBKGDSessInActiveGuard inactive_guard;
+        ret = queue_.pop(task, QUEUE_WAIT_TIME);
+      }
+      if (OB_SUCC(ret)) {
         wakeup_ts = ObTimeUtility::current_time();
         handle(task);
         handle_ts = ObTimeUtility::current_time();

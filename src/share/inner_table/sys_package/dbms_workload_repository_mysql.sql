@@ -12,7 +12,8 @@ CREATE OR REPLACE PACKAGE dbms_workload_repository AUTHID CURRENT_USER
 
   PROCEDURE MODIFY_SNAPSHOT_SETTINGS(
     retention     INT    DEFAULT  NULL,
-    interval      INT    DEFAULT  NULL);
+    interval      INT    DEFAULT  NULL,
+    topnsql       INT    DEFAULT  NULL);
 
   FUNCTION ASH_REPORT_TEXT(BTIME         DATETIME,
                            ETIME         DATETIME,

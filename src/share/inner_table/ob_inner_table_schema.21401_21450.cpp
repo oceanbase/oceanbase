@@ -1360,7 +1360,7 @@ int ObInnerTableSchema::dba_wr_control_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT        SETTING.TENANT_ID AS TENANT_ID,        SETTING.SNAP_INTERVAL AS SNAP_INTERVAL,        SETTING.RETENTION AS RETENTION,        SETTING.TOPNSQL AS TOPNSQL   FROM      OCEANBASE.__ALL_VIRTUAL_WR_CONTROL SETTING    WHERE      SETTING.TENANT_ID = EFFECTIVE_TENANT_ID()   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT        SETTING.TENANT_ID AS TENANT_ID,        SETTING.SNAP_INTERVAL AS SNAP_INTERVAL,        SETTING.RETENTION AS RETENTION,        SETTING.TOPNSQL AS TOPNSQL   FROM      oceanbase.__all_virtual_wr_control SETTING    WHERE      SETTING.TENANT_ID = EFFECTIVE_TENANT_ID()   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1410,7 +1410,7 @@ int ObInnerTableSchema::cdb_wr_control_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT        SETTING.TENANT_ID AS TENANT_ID,        SETTING.SNAP_INTERVAL AS SNAP_INTERVAL,        SETTING.RETENTION AS RETENTION,        SETTING.TOPNSQL AS TOPNSQL   FROM      OCEANBASE.__ALL_VIRTUAL_WR_CONTROL SETTING   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT        SETTING.TENANT_ID AS TENANT_ID,        SETTING.SNAP_INTERVAL AS SNAP_INTERVAL,        SETTING.RETENTION AS RETENTION,        SETTING.TOPNSQL AS TOPNSQL   FROM      oceanbase.__all_virtual_wr_control SETTING   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

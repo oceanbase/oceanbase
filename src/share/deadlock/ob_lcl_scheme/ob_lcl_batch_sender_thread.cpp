@@ -23,6 +23,7 @@
 #include <cstdlib>
 #include <exception>
 
+
 namespace oceanbase
 {
 namespace share
@@ -258,7 +259,7 @@ void ObLCLBatchSenderThread::run1()
     record_summary_info_and_logout_when_necessary_(begin_ts, end_ts, diff);
 
     if (diff < _lcl_op_interval) {
-      ob_usleep(static_cast<uint32_t>(_lcl_op_interval - diff));
+      ob_usleep(static_cast<uint32_t>(_lcl_op_interval - diff), true/*is_idle_sleep*/);
       // DETECT_LOG(DEBUG, "scan done", K(diff), K(*this));
     }
   }

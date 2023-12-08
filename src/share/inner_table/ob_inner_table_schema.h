@@ -554,9 +554,13 @@ public:
   static int all_import_table_task_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_storage_ha_error_diagnose_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_storage_ha_perf_diagnose_history_schema(share::schema::ObTableSchema &table_schema);
+  static int wr_system_event_schema(share::schema::ObTableSchema &table_schema);
+  static int wr_event_name_schema(share::schema::ObTableSchema &table_schema);
   static int all_routine_privilege_schema(share::schema::ObTableSchema &table_schema);
   static int all_routine_privilege_history_schema(share::schema::ObTableSchema &table_schema);
+  static int wr_sqlstat_schema(share::schema::ObTableSchema &table_schema);
   static int all_ncomp_dll_schema(share::schema::ObTableSchema &table_schema);
+  static int wr_sqltext_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_all_table_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_table_column_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_table_index_schema(share::schema::ObTableSchema &table_schema);
@@ -965,9 +969,14 @@ public:
   static int all_virtual_checkpoint_diagnose_memtable_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_checkpoint_diagnose_checkpoint_unit_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_checkpoint_diagnose_info_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_wr_system_event_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_wr_event_name_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_routine_privilege_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_routine_privilege_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_sqlstat_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_wr_sqlstat_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sys_variable_default_value_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_wr_sqltext_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_stat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_cache_plan_explain_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -1217,8 +1226,14 @@ public:
   static int all_virtual_import_table_task_history_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ls_info_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_cgroup_config_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_wr_system_event_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_wr_event_name_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_sqlstat_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_wr_sqlstat_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int tenant_virtual_statname_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sys_variable_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sys_variable_default_value_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_wr_sqltext_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_plan_cache_stat_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_plan_cache_plan_stat_schema(share::schema::ObTableSchema &table_schema);
   static int schemata_schema(share::schema::ObTableSchema &table_schema);
@@ -1588,9 +1603,27 @@ public:
   static int v_ob_tenant_runtime_info_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_cgroup_config_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_cgroup_config_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_wr_system_event_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_wr_system_event_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_wr_event_name_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_wr_event_name_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_format_outlines_schema(share::schema::ObTableSchema &table_schema);
   static int procs_priv_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_sqlstat_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_sqlstat_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_wr_sqlstat_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_wr_sqlstat_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_sess_time_model_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_sess_time_model_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_sys_time_model_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_sys_time_model_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_wr_sys_time_model_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_wr_sys_time_model_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_sys_variables_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_wr_sqltext_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_wr_sqltext_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_active_session_history_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_active_session_history_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
   static int dba_objects_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_objects_schema(share::schema::ObTableSchema &table_schema);
@@ -1845,7 +1878,12 @@ public:
   static int dba_ob_import_table_job_history_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_import_table_tasks_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_import_table_task_history_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_wr_system_event_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_wr_event_name_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_format_outlines_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_wr_sqlstat_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_wr_sys_time_model_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_wr_sqltext_ora_schema(share::schema::ObTableSchema &table_schema);
   static int user_users_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -2018,7 +2056,16 @@ public:
   static int v_ob_pl_cache_object_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_cgroup_config_ora_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_cgroup_config_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_sqlstat_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_sqlstat_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_sess_time_model_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_sess_time_model_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_sys_time_model_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_sys_time_model_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int v_statname_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_sys_variables_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_active_session_history_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_active_session_history_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_ddl_operation_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
@@ -2281,9 +2328,13 @@ public:
   static int all_import_table_task_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_storage_ha_error_diagnose_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_storage_ha_perf_diagnose_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int wr_system_event_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int wr_event_name_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_routine_privilege_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_routine_privilege_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int wr_sqlstat_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_ncomp_dll_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int wr_sqltext_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_ddl_operation_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
@@ -2546,9 +2597,13 @@ public:
   static int all_import_table_task_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_storage_ha_error_diagnose_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_storage_ha_perf_diagnose_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int wr_system_event_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int wr_event_name_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_routine_privilege_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_routine_privilege_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int wr_sqlstat_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_ncomp_dll_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int wr_sqltext_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ash_all_virtual_ash_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_plan_monitor_all_virtual_sql_plan_monitor_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(share::schema::ObTableSchema &table_schema);
@@ -3015,9 +3070,13 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::all_import_table_task_history_schema,
   ObInnerTableSchema::all_storage_ha_error_diagnose_history_schema,
   ObInnerTableSchema::all_storage_ha_perf_diagnose_history_schema,
+  ObInnerTableSchema::wr_system_event_schema,
+  ObInnerTableSchema::wr_event_name_schema,
   ObInnerTableSchema::all_routine_privilege_schema,
   ObInnerTableSchema::all_routine_privilege_history_schema,
+  ObInnerTableSchema::wr_sqlstat_schema,
   ObInnerTableSchema::all_ncomp_dll_schema,
+  ObInnerTableSchema::wr_sqltext_schema,
   NULL,};
 
 const schema_create_func virtual_table_schema_creators [] = {
@@ -3429,9 +3488,14 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_checkpoint_diagnose_memtable_info_schema,
   ObInnerTableSchema::all_virtual_checkpoint_diagnose_checkpoint_unit_info_schema,
   ObInnerTableSchema::all_virtual_checkpoint_diagnose_info_schema,
+  ObInnerTableSchema::all_virtual_wr_system_event_schema,
+  ObInnerTableSchema::all_virtual_wr_event_name_schema,
   ObInnerTableSchema::all_virtual_routine_privilege_schema,
   ObInnerTableSchema::all_virtual_routine_privilege_history_schema,
+  ObInnerTableSchema::all_virtual_sqlstat_schema,
+  ObInnerTableSchema::all_virtual_wr_sqlstat_schema,
   ObInnerTableSchema::all_virtual_sys_variable_default_value_schema,
+  ObInnerTableSchema::all_virtual_wr_sqltext_schema,
   ObInnerTableSchema::all_virtual_ash_all_virtual_ash_i1_schema,
   ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monitor_i1_schema,
   ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema,
@@ -3691,8 +3755,14 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_import_table_task_history_ora_schema,
   ObInnerTableSchema::all_virtual_ls_info_ora_schema,
   ObInnerTableSchema::all_virtual_cgroup_config_ora_schema,
+  ObInnerTableSchema::all_virtual_wr_system_event_ora_schema,
+  ObInnerTableSchema::all_virtual_wr_event_name_ora_schema,
+  ObInnerTableSchema::all_virtual_sqlstat_ora_schema,
+  ObInnerTableSchema::all_virtual_wr_sqlstat_ora_schema,
+  ObInnerTableSchema::tenant_virtual_statname_ora_schema,
   ObInnerTableSchema::all_virtual_sys_variable_real_agent_ora_schema,
   ObInnerTableSchema::all_virtual_sys_variable_default_value_ora_schema,
+  ObInnerTableSchema::all_virtual_wr_sqltext_ora_schema,
   ObInnerTableSchema::all_virtual_table_real_agent_ora_idx_data_table_id_real_agent_schema,
   ObInnerTableSchema::all_virtual_table_real_agent_ora_idx_db_tb_name_real_agent_schema,
   ObInnerTableSchema::all_virtual_table_real_agent_ora_idx_tb_name_real_agent_schema,
@@ -4146,9 +4216,27 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::v_ob_tenant_runtime_info_schema,
   ObInnerTableSchema::gv_ob_cgroup_config_schema,
   ObInnerTableSchema::v_ob_cgroup_config_schema,
+  ObInnerTableSchema::dba_wr_system_event_schema,
+  ObInnerTableSchema::cdb_wr_system_event_schema,
+  ObInnerTableSchema::dba_wr_event_name_schema,
+  ObInnerTableSchema::cdb_wr_event_name_schema,
   ObInnerTableSchema::dba_ob_format_outlines_schema,
   ObInnerTableSchema::procs_priv_schema,
+  ObInnerTableSchema::gv_ob_sqlstat_schema,
+  ObInnerTableSchema::v_ob_sqlstat_schema,
+  ObInnerTableSchema::dba_wr_sqlstat_schema,
+  ObInnerTableSchema::cdb_wr_sqlstat_schema,
+  ObInnerTableSchema::gv_ob_sess_time_model_schema,
+  ObInnerTableSchema::v_ob_sess_time_model_schema,
+  ObInnerTableSchema::gv_ob_sys_time_model_schema,
+  ObInnerTableSchema::v_ob_sys_time_model_schema,
+  ObInnerTableSchema::dba_wr_sys_time_model_schema,
+  ObInnerTableSchema::cdb_wr_sys_time_model_schema,
   ObInnerTableSchema::dba_ob_sys_variables_schema,
+  ObInnerTableSchema::dba_wr_sqltext_schema,
+  ObInnerTableSchema::cdb_wr_sqltext_schema,
+  ObInnerTableSchema::gv_ob_active_session_history_schema,
+  ObInnerTableSchema::v_ob_active_session_history_schema,
   ObInnerTableSchema::dba_synonyms_schema,
   ObInnerTableSchema::dba_objects_ora_schema,
   ObInnerTableSchema::all_objects_schema,
@@ -4403,7 +4491,12 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::dba_ob_import_table_job_history_ora_schema,
   ObInnerTableSchema::dba_ob_import_table_tasks_ora_schema,
   ObInnerTableSchema::dba_ob_import_table_task_history_ora_schema,
+  ObInnerTableSchema::dba_wr_system_event_ora_schema,
+  ObInnerTableSchema::dba_wr_event_name_ora_schema,
   ObInnerTableSchema::dba_ob_format_outlines_ora_schema,
+  ObInnerTableSchema::dba_wr_sqlstat_ora_schema,
+  ObInnerTableSchema::dba_wr_sys_time_model_ora_schema,
+  ObInnerTableSchema::dba_wr_sqltext_ora_schema,
   ObInnerTableSchema::user_users_schema,
   ObInnerTableSchema::gv_ob_sql_audit_ora_schema,
   ObInnerTableSchema::v_ob_sql_audit_ora_schema,
@@ -4576,7 +4669,16 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::v_ob_pl_cache_object_ora_schema,
   ObInnerTableSchema::gv_ob_cgroup_config_ora_schema,
   ObInnerTableSchema::v_ob_cgroup_config_ora_schema,
+  ObInnerTableSchema::gv_ob_sqlstat_ora_schema,
+  ObInnerTableSchema::v_ob_sqlstat_ora_schema,
+  ObInnerTableSchema::gv_ob_sess_time_model_ora_schema,
+  ObInnerTableSchema::v_ob_sess_time_model_ora_schema,
+  ObInnerTableSchema::gv_ob_sys_time_model_ora_schema,
+  ObInnerTableSchema::v_ob_sys_time_model_ora_schema,
+  ObInnerTableSchema::v_statname_ora_schema,
   ObInnerTableSchema::dba_ob_sys_variables_ora_schema,
+  ObInnerTableSchema::gv_ob_active_session_history_ora_schema,
+  ObInnerTableSchema::v_ob_active_session_history_ora_schema,
   NULL,};
 
 const schema_create_func core_index_table_schema_creators [] = {
@@ -4930,9 +5032,13 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_IMPORT_TABLE_JOB_HISTORY_TID,
   OB_ALL_IMPORT_TABLE_TASK_TID,
   OB_ALL_IMPORT_TABLE_TASK_HISTORY_TID,
+  OB_WR_SYSTEM_EVENT_TID,
+  OB_WR_EVENT_NAME_TID,
   OB_ALL_ROUTINE_PRIVILEGE_TID,
   OB_ALL_ROUTINE_PRIVILEGE_HISTORY_TID,
+  OB_WR_SQLSTAT_TID,
   OB_ALL_NCOMP_DLL_TID,
+  OB_WR_SQLTEXT_TID,
   OB_TENANT_VIRTUAL_ALL_TABLE_TID,
   OB_TENANT_VIRTUAL_TABLE_COLUMN_TID,
   OB_TENANT_VIRTUAL_TABLE_INDEX_TID,
@@ -5134,7 +5240,12 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_MEMTABLE_INFO_TID,
   OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_CHECKPOINT_UNIT_INFO_TID,
   OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_INFO_TID,
+  OB_ALL_VIRTUAL_WR_SYSTEM_EVENT_TID,
+  OB_ALL_VIRTUAL_WR_EVENT_NAME_TID,
+  OB_ALL_VIRTUAL_SQLSTAT_TID,
+  OB_ALL_VIRTUAL_WR_SQLSTAT_TID,
   OB_ALL_VIRTUAL_SYS_VARIABLE_DEFAULT_VALUE_TID,
+  OB_ALL_VIRTUAL_WR_SQLTEXT_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID,
@@ -5393,8 +5504,14 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_IMPORT_TABLE_TASK_HISTORY_ORA_TID,
   OB_ALL_VIRTUAL_LS_INFO_ORA_TID,
   OB_ALL_VIRTUAL_CGROUP_CONFIG_ORA_TID,
+  OB_ALL_VIRTUAL_WR_SYSTEM_EVENT_ORA_TID,
+  OB_ALL_VIRTUAL_WR_EVENT_NAME_ORA_TID,
+  OB_ALL_VIRTUAL_SQLSTAT_ORA_TID,
+  OB_ALL_VIRTUAL_WR_SQLSTAT_ORA_TID,
+  OB_TENANT_VIRTUAL_STATNAME_ORA_TID,
   OB_ALL_VIRTUAL_SYS_VARIABLE_REAL_AGENT_ORA_TID,
   OB_ALL_VIRTUAL_SYS_VARIABLE_DEFAULT_VALUE_ORA_TID,
+  OB_ALL_VIRTUAL_WR_SQLTEXT_ORA_TID,
   OB_GV_OB_PLAN_CACHE_STAT_TID,
   OB_GV_OB_PLAN_CACHE_PLAN_STAT_TID,
   OB_SCHEMATA_TID,
@@ -5660,9 +5777,22 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_IMPORT_TABLE_TASK_HISTORY_TID,
   OB_GV_OB_CGROUP_CONFIG_TID,
   OB_V_OB_CGROUP_CONFIG_TID,
+  OB_DBA_WR_SYSTEM_EVENT_TID,
+  OB_DBA_WR_EVENT_NAME_TID,
   OB_DBA_OB_FORMAT_OUTLINES_TID,
   OB_PROCS_PRIV_TID,
+  OB_GV_OB_SQLSTAT_TID,
+  OB_V_OB_SQLSTAT_TID,
+  OB_DBA_WR_SQLSTAT_TID,
+  OB_GV_OB_SESS_TIME_MODEL_TID,
+  OB_V_OB_SESS_TIME_MODEL_TID,
+  OB_GV_OB_SYS_TIME_MODEL_TID,
+  OB_V_OB_SYS_TIME_MODEL_TID,
+  OB_DBA_WR_SYS_TIME_MODEL_TID,
   OB_DBA_OB_SYS_VARIABLES_TID,
+  OB_DBA_WR_SQLTEXT_TID,
+  OB_GV_OB_ACTIVE_SESSION_HISTORY_TID,
+  OB_V_OB_ACTIVE_SESSION_HISTORY_TID,
   OB_DBA_SYNONYMS_TID,
   OB_DBA_OBJECTS_ORA_TID,
   OB_ALL_OBJECTS_TID,
@@ -5917,7 +6047,12 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_IMPORT_TABLE_JOB_HISTORY_ORA_TID,
   OB_DBA_OB_IMPORT_TABLE_TASKS_ORA_TID,
   OB_DBA_OB_IMPORT_TABLE_TASK_HISTORY_ORA_TID,
+  OB_DBA_WR_SYSTEM_EVENT_ORA_TID,
+  OB_DBA_WR_EVENT_NAME_ORA_TID,
   OB_DBA_OB_FORMAT_OUTLINES_ORA_TID,
+  OB_DBA_WR_SQLSTAT_ORA_TID,
+  OB_DBA_WR_SYS_TIME_MODEL_ORA_TID,
+  OB_DBA_WR_SQLTEXT_ORA_TID,
   OB_USER_USERS_TID,
   OB_GV_OB_SQL_AUDIT_ORA_TID,
   OB_V_OB_SQL_AUDIT_ORA_TID,
@@ -6090,7 +6225,16 @@ const uint64_t tenant_space_tables [] = {
   OB_V_OB_PL_CACHE_OBJECT_ORA_TID,
   OB_GV_OB_CGROUP_CONFIG_ORA_TID,
   OB_V_OB_CGROUP_CONFIG_ORA_TID,
+  OB_GV_OB_SQLSTAT_ORA_TID,
+  OB_V_OB_SQLSTAT_ORA_TID,
+  OB_GV_OB_SESS_TIME_MODEL_ORA_TID,
+  OB_V_OB_SESS_TIME_MODEL_ORA_TID,
+  OB_GV_OB_SYS_TIME_MODEL_ORA_TID,
+  OB_V_OB_SYS_TIME_MODEL_ORA_TID,
+  OB_V_STATNAME_ORA_TID,
   OB_DBA_OB_SYS_VARIABLES_ORA_TID,
+  OB_GV_OB_ACTIVE_SESSION_HISTORY_ORA_TID,
+  OB_V_OB_ACTIVE_SESSION_HISTORY_ORA_TID,
   OB_ALL_TABLE_IDX_DATA_TABLE_ID_TID,
   OB_ALL_TABLE_IDX_DB_TB_NAME_TID,
   OB_ALL_TABLE_IDX_TB_NAME_TID,
@@ -6494,9 +6638,13 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_IMPORT_TABLE_JOB_HISTORY_AUX_LOB_META_TID,
   OB_ALL_IMPORT_TABLE_TASK_AUX_LOB_META_TID,
   OB_ALL_IMPORT_TABLE_TASK_HISTORY_AUX_LOB_META_TID,
+  OB_WR_SYSTEM_EVENT_AUX_LOB_META_TID,
+  OB_WR_EVENT_NAME_AUX_LOB_META_TID,
   OB_ALL_ROUTINE_PRIVILEGE_AUX_LOB_META_TID,
   OB_ALL_ROUTINE_PRIVILEGE_HISTORY_AUX_LOB_META_TID,
+  OB_WR_SQLSTAT_AUX_LOB_META_TID,
   OB_ALL_NCOMP_DLL_AUX_LOB_META_TID,
+  OB_WR_SQLTEXT_AUX_LOB_META_TID,
   OB_ALL_TABLE_AUX_LOB_PIECE_TID,
   OB_ALL_COLUMN_AUX_LOB_PIECE_TID,
   OB_ALL_DDL_OPERATION_AUX_LOB_PIECE_TID,
@@ -6736,9 +6884,13 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_IMPORT_TABLE_JOB_HISTORY_AUX_LOB_PIECE_TID,
   OB_ALL_IMPORT_TABLE_TASK_AUX_LOB_PIECE_TID,
   OB_ALL_IMPORT_TABLE_TASK_HISTORY_AUX_LOB_PIECE_TID,
+  OB_WR_SYSTEM_EVENT_AUX_LOB_PIECE_TID,
+  OB_WR_EVENT_NAME_AUX_LOB_PIECE_TID,
   OB_ALL_ROUTINE_PRIVILEGE_AUX_LOB_PIECE_TID,
   OB_ALL_ROUTINE_PRIVILEGE_HISTORY_AUX_LOB_PIECE_TID,
-  OB_ALL_NCOMP_DLL_AUX_LOB_PIECE_TID,  };
+  OB_WR_SQLSTAT_AUX_LOB_PIECE_TID,
+  OB_ALL_NCOMP_DLL_AUX_LOB_PIECE_TID,
+  OB_WR_SQLTEXT_AUX_LOB_PIECE_TID,  };
 
 const uint64_t all_ora_mapping_virtual_table_org_tables [] = {
   OB_ALL_VIRTUAL_SQL_AUDIT_TID,
@@ -6879,7 +7031,13 @@ const uint64_t all_ora_mapping_virtual_table_org_tables [] = {
   OB_ALL_VIRTUAL_IMPORT_TABLE_TASK_HISTORY_TID,
   OB_ALL_VIRTUAL_LS_INFO_TID,
   OB_ALL_VIRTUAL_CGROUP_CONFIG_TID,
-  OB_ALL_VIRTUAL_SYS_VARIABLE_DEFAULT_VALUE_TID,  };
+  OB_ALL_VIRTUAL_WR_SYSTEM_EVENT_TID,
+  OB_ALL_VIRTUAL_WR_EVENT_NAME_TID,
+  OB_ALL_VIRTUAL_SQLSTAT_TID,
+  OB_ALL_VIRTUAL_WR_SQLSTAT_TID,
+  OB_TENANT_VIRTUAL_STATNAME_TID,
+  OB_ALL_VIRTUAL_SYS_VARIABLE_DEFAULT_VALUE_TID,
+  OB_ALL_VIRTUAL_WR_SQLTEXT_TID,  };
 
 const uint64_t all_ora_mapping_virtual_tables [] = {  OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID
 ,  OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID
@@ -7019,7 +7177,13 @@ const uint64_t all_ora_mapping_virtual_tables [] = {  OB_ALL_VIRTUAL_SQL_AUDIT_O
 ,  OB_ALL_VIRTUAL_IMPORT_TABLE_TASK_HISTORY_ORA_TID
 ,  OB_ALL_VIRTUAL_LS_INFO_ORA_TID
 ,  OB_ALL_VIRTUAL_CGROUP_CONFIG_ORA_TID
+,  OB_ALL_VIRTUAL_WR_SYSTEM_EVENT_ORA_TID
+,  OB_ALL_VIRTUAL_WR_EVENT_NAME_ORA_TID
+,  OB_ALL_VIRTUAL_SQLSTAT_ORA_TID
+,  OB_ALL_VIRTUAL_WR_SQLSTAT_ORA_TID
+,  OB_TENANT_VIRTUAL_STATNAME_ORA_TID
 ,  OB_ALL_VIRTUAL_SYS_VARIABLE_DEFAULT_VALUE_ORA_TID
+,  OB_ALL_VIRTUAL_WR_SQLTEXT_ORA_TID
 ,  };
 
 /* start/end_pos is start/end postition for column with tenant id */
@@ -7274,9 +7438,13 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_IMPORT_TABLE_JOB_HISTORY_TNAME,
   OB_ALL_IMPORT_TABLE_TASK_TNAME,
   OB_ALL_IMPORT_TABLE_TASK_HISTORY_TNAME,
+  OB_WR_SYSTEM_EVENT_TNAME,
+  OB_WR_EVENT_NAME_TNAME,
   OB_ALL_ROUTINE_PRIVILEGE_TNAME,
   OB_ALL_ROUTINE_PRIVILEGE_HISTORY_TNAME,
+  OB_WR_SQLSTAT_TNAME,
   OB_ALL_NCOMP_DLL_TNAME,
+  OB_WR_SQLTEXT_TNAME,
   OB_TENANT_VIRTUAL_ALL_TABLE_TNAME,
   OB_TENANT_VIRTUAL_TABLE_COLUMN_TNAME,
   OB_TENANT_VIRTUAL_TABLE_INDEX_TNAME,
@@ -7478,7 +7646,12 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_MEMTABLE_INFO_TNAME,
   OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_CHECKPOINT_UNIT_INFO_TNAME,
   OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_INFO_TNAME,
+  OB_ALL_VIRTUAL_WR_SYSTEM_EVENT_TNAME,
+  OB_ALL_VIRTUAL_WR_EVENT_NAME_TNAME,
+  OB_ALL_VIRTUAL_SQLSTAT_TNAME,
+  OB_ALL_VIRTUAL_WR_SQLSTAT_TNAME,
   OB_ALL_VIRTUAL_SYS_VARIABLE_DEFAULT_VALUE_TNAME,
+  OB_ALL_VIRTUAL_WR_SQLTEXT_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TNAME,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TNAME,
@@ -7737,8 +7910,14 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_IMPORT_TABLE_TASK_HISTORY_ORA_TNAME,
   OB_ALL_VIRTUAL_LS_INFO_ORA_TNAME,
   OB_ALL_VIRTUAL_CGROUP_CONFIG_ORA_TNAME,
+  OB_ALL_VIRTUAL_WR_SYSTEM_EVENT_ORA_TNAME,
+  OB_ALL_VIRTUAL_WR_EVENT_NAME_ORA_TNAME,
+  OB_ALL_VIRTUAL_SQLSTAT_ORA_TNAME,
+  OB_ALL_VIRTUAL_WR_SQLSTAT_ORA_TNAME,
+  OB_TENANT_VIRTUAL_STATNAME_ORA_TNAME,
   OB_ALL_VIRTUAL_SYS_VARIABLE_REAL_AGENT_ORA_TNAME,
   OB_ALL_VIRTUAL_SYS_VARIABLE_DEFAULT_VALUE_ORA_TNAME,
+  OB_ALL_VIRTUAL_WR_SQLTEXT_ORA_TNAME,
   OB_GV_OB_PLAN_CACHE_STAT_TNAME,
   OB_GV_OB_PLAN_CACHE_PLAN_STAT_TNAME,
   OB_SCHEMATA_TNAME,
@@ -8004,9 +8183,22 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_IMPORT_TABLE_TASK_HISTORY_TNAME,
   OB_GV_OB_CGROUP_CONFIG_TNAME,
   OB_V_OB_CGROUP_CONFIG_TNAME,
+  OB_DBA_WR_SYSTEM_EVENT_TNAME,
+  OB_DBA_WR_EVENT_NAME_TNAME,
   OB_DBA_OB_FORMAT_OUTLINES_TNAME,
   OB_PROCS_PRIV_TNAME,
+  OB_GV_OB_SQLSTAT_TNAME,
+  OB_V_OB_SQLSTAT_TNAME,
+  OB_DBA_WR_SQLSTAT_TNAME,
+  OB_GV_OB_SESS_TIME_MODEL_TNAME,
+  OB_V_OB_SESS_TIME_MODEL_TNAME,
+  OB_GV_OB_SYS_TIME_MODEL_TNAME,
+  OB_V_OB_SYS_TIME_MODEL_TNAME,
+  OB_DBA_WR_SYS_TIME_MODEL_TNAME,
   OB_DBA_OB_SYS_VARIABLES_TNAME,
+  OB_DBA_WR_SQLTEXT_TNAME,
+  OB_GV_OB_ACTIVE_SESSION_HISTORY_TNAME,
+  OB_V_OB_ACTIVE_SESSION_HISTORY_TNAME,
   OB_DBA_SYNONYMS_TNAME,
   OB_DBA_OBJECTS_ORA_TNAME,
   OB_ALL_OBJECTS_TNAME,
@@ -8261,7 +8453,12 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_IMPORT_TABLE_JOB_HISTORY_ORA_TNAME,
   OB_DBA_OB_IMPORT_TABLE_TASKS_ORA_TNAME,
   OB_DBA_OB_IMPORT_TABLE_TASK_HISTORY_ORA_TNAME,
+  OB_DBA_WR_SYSTEM_EVENT_ORA_TNAME,
+  OB_DBA_WR_EVENT_NAME_ORA_TNAME,
   OB_DBA_OB_FORMAT_OUTLINES_ORA_TNAME,
+  OB_DBA_WR_SQLSTAT_ORA_TNAME,
+  OB_DBA_WR_SYS_TIME_MODEL_ORA_TNAME,
+  OB_DBA_WR_SQLTEXT_ORA_TNAME,
   OB_USER_USERS_TNAME,
   OB_GV_OB_SQL_AUDIT_ORA_TNAME,
   OB_V_OB_SQL_AUDIT_ORA_TNAME,
@@ -8434,7 +8631,16 @@ const char* const tenant_space_table_names [] = {
   OB_V_OB_PL_CACHE_OBJECT_ORA_TNAME,
   OB_GV_OB_CGROUP_CONFIG_ORA_TNAME,
   OB_V_OB_CGROUP_CONFIG_ORA_TNAME,
+  OB_GV_OB_SQLSTAT_ORA_TNAME,
+  OB_V_OB_SQLSTAT_ORA_TNAME,
+  OB_GV_OB_SESS_TIME_MODEL_ORA_TNAME,
+  OB_V_OB_SESS_TIME_MODEL_ORA_TNAME,
+  OB_GV_OB_SYS_TIME_MODEL_ORA_TNAME,
+  OB_V_OB_SYS_TIME_MODEL_ORA_TNAME,
+  OB_V_STATNAME_ORA_TNAME,
   OB_DBA_OB_SYS_VARIABLES_ORA_TNAME,
+  OB_GV_OB_ACTIVE_SESSION_HISTORY_ORA_TNAME,
+  OB_V_OB_ACTIVE_SESSION_HISTORY_ORA_TNAME,
   OB_ALL_TABLE_IDX_DATA_TABLE_ID_TNAME,
   OB_ALL_TABLE_IDX_DB_TB_NAME_TNAME,
   OB_ALL_TABLE_IDX_TB_NAME_TNAME,
@@ -8838,9 +9044,13 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_IMPORT_TABLE_JOB_HISTORY_AUX_LOB_META_TNAME,
   OB_ALL_IMPORT_TABLE_TASK_AUX_LOB_META_TNAME,
   OB_ALL_IMPORT_TABLE_TASK_HISTORY_AUX_LOB_META_TNAME,
+  OB_WR_SYSTEM_EVENT_AUX_LOB_META_TNAME,
+  OB_WR_EVENT_NAME_AUX_LOB_META_TNAME,
   OB_ALL_ROUTINE_PRIVILEGE_AUX_LOB_META_TNAME,
   OB_ALL_ROUTINE_PRIVILEGE_HISTORY_AUX_LOB_META_TNAME,
+  OB_WR_SQLSTAT_AUX_LOB_META_TNAME,
   OB_ALL_NCOMP_DLL_AUX_LOB_META_TNAME,
+  OB_WR_SQLTEXT_AUX_LOB_META_TNAME,
   OB_ALL_TABLE_AUX_LOB_PIECE_TNAME,
   OB_ALL_COLUMN_AUX_LOB_PIECE_TNAME,
   OB_ALL_DDL_OPERATION_AUX_LOB_PIECE_TNAME,
@@ -9080,9 +9290,13 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_IMPORT_TABLE_JOB_HISTORY_AUX_LOB_PIECE_TNAME,
   OB_ALL_IMPORT_TABLE_TASK_AUX_LOB_PIECE_TNAME,
   OB_ALL_IMPORT_TABLE_TASK_HISTORY_AUX_LOB_PIECE_TNAME,
+  OB_WR_SYSTEM_EVENT_AUX_LOB_PIECE_TNAME,
+  OB_WR_EVENT_NAME_AUX_LOB_PIECE_TNAME,
   OB_ALL_ROUTINE_PRIVILEGE_AUX_LOB_PIECE_TNAME,
   OB_ALL_ROUTINE_PRIVILEGE_HISTORY_AUX_LOB_PIECE_TNAME,
-  OB_ALL_NCOMP_DLL_AUX_LOB_PIECE_TNAME,  };
+  OB_WR_SQLSTAT_AUX_LOB_PIECE_TNAME,
+  OB_ALL_NCOMP_DLL_AUX_LOB_PIECE_TNAME,
+  OB_WR_SQLTEXT_AUX_LOB_PIECE_TNAME,  };
 
 const uint64_t only_rs_vtables [] = {
   OB_ALL_VIRTUAL_CORE_META_TABLE_TID,
@@ -9233,6 +9447,7 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_MEMTABLE_INFO_TID,
   OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_CHECKPOINT_UNIT_INFO_TID,
   OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_INFO_TID,
+  OB_ALL_VIRTUAL_SQLSTAT_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID,
@@ -9300,7 +9515,8 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_TIMESTAMP_SERVICE_ORA_TID,
   OB_ALL_VIRTUAL_LS_LOG_RESTORE_STATUS_ORA_TID,
   OB_ALL_VIRTUAL_LS_INFO_ORA_TID,
-  OB_ALL_VIRTUAL_CGROUP_CONFIG_ORA_TID,  };
+  OB_ALL_VIRTUAL_CGROUP_CONFIG_ORA_TID,
+  OB_ALL_VIRTUAL_SQLSTAT_ORA_TID,  };
 
 const uint64_t restrict_access_virtual_tables[] = {
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
@@ -9419,7 +9635,13 @@ const uint64_t restrict_access_virtual_tables[] = {
   OB_ALL_VIRTUAL_IMPORT_TABLE_JOB_HISTORY_ORA_TID,
   OB_ALL_VIRTUAL_IMPORT_TABLE_TASK_ORA_TID,
   OB_ALL_VIRTUAL_IMPORT_TABLE_TASK_HISTORY_ORA_TID,
-  OB_ALL_VIRTUAL_CGROUP_CONFIG_ORA_TID  };
+  OB_ALL_VIRTUAL_CGROUP_CONFIG_ORA_TID,
+  OB_ALL_VIRTUAL_WR_SYSTEM_EVENT_ORA_TID,
+  OB_ALL_VIRTUAL_WR_EVENT_NAME_ORA_TID,
+  OB_ALL_VIRTUAL_SQLSTAT_ORA_TID,
+  OB_ALL_VIRTUAL_WR_SQLSTAT_ORA_TID,
+  OB_TENANT_VIRTUAL_STATNAME_ORA_TID,
+  OB_ALL_VIRTUAL_WR_SQLTEXT_ORA_TID  };
 
 
 static inline bool is_restrict_access_virtual_table(const uint64_t tid)
@@ -11663,6 +11885,22 @@ LOBMapping const lob_aux_table_mappings [] = {
   },
 
   {
+    OB_WR_SYSTEM_EVENT_TID,
+    OB_WR_SYSTEM_EVENT_AUX_LOB_META_TID,
+    OB_WR_SYSTEM_EVENT_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::wr_system_event_aux_lob_meta_schema,
+    ObInnerTableSchema::wr_system_event_aux_lob_piece_schema
+  },
+
+  {
+    OB_WR_EVENT_NAME_TID,
+    OB_WR_EVENT_NAME_AUX_LOB_META_TID,
+    OB_WR_EVENT_NAME_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::wr_event_name_aux_lob_meta_schema,
+    ObInnerTableSchema::wr_event_name_aux_lob_piece_schema
+  },
+
+  {
     OB_ALL_ROUTINE_PRIVILEGE_TID,
     OB_ALL_ROUTINE_PRIVILEGE_AUX_LOB_META_TID,
     OB_ALL_ROUTINE_PRIVILEGE_AUX_LOB_PIECE_TID,
@@ -11679,11 +11917,27 @@ LOBMapping const lob_aux_table_mappings [] = {
   },
 
   {
+    OB_WR_SQLSTAT_TID,
+    OB_WR_SQLSTAT_AUX_LOB_META_TID,
+    OB_WR_SQLSTAT_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::wr_sqlstat_aux_lob_meta_schema,
+    ObInnerTableSchema::wr_sqlstat_aux_lob_piece_schema
+  },
+
+  {
     OB_ALL_NCOMP_DLL_TID,
     OB_ALL_NCOMP_DLL_AUX_LOB_META_TID,
     OB_ALL_NCOMP_DLL_AUX_LOB_PIECE_TID,
     ObInnerTableSchema::all_ncomp_dll_aux_lob_meta_schema,
     ObInnerTableSchema::all_ncomp_dll_aux_lob_piece_schema
+  },
+
+  {
+    OB_WR_SQLTEXT_TID,
+    OB_WR_SQLTEXT_AUX_LOB_META_TID,
+    OB_WR_SQLTEXT_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::wr_sqltext_aux_lob_meta_schema,
+    ObInnerTableSchema::wr_sqltext_aux_lob_piece_schema
   },
 
 };
@@ -11723,12 +11977,12 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 }
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
-const int64_t OB_SYS_TABLE_COUNT = 262;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 753;
-const int64_t OB_SYS_VIEW_COUNT = 800;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1820;
+const int64_t OB_SYS_TABLE_COUNT = 266;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 764;
+const int64_t OB_SYS_VIEW_COUNT = 832;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1867;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1823;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1870;
 
 } // end namespace share
 } // end namespace oceanbase

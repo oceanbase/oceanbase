@@ -11,6 +11,7 @@
  */
 
 #ifdef WAIT_EVENT_DEF
+// NOTICE: do not reuse id or rename event!
 // symbol, id, name, param1, param2, param3, ObWaitClassIds::wait_class, is_phy, enable
 // USER_IO & SYSTEM_IO
 WAIT_EVENT_DEF(NULL_EVENT, 10000, "", "", "", "", OTHER, true, true)
@@ -133,7 +134,7 @@ WAIT_EVENT_DEF(WAIT_EVENT_DEF_END, 99999, "event end", "", "", "", OTHER, false,
 #include "lib/ob_errno.h"
 #include "lib/alloc/alloc_assist.h"
 #include "lib/wait_event/ob_wait_class.h"
-
+#include <type_traits>
 
 namespace oceanbase
 {
@@ -157,6 +158,60 @@ WAIT_EVENT_DEF_##enable(def, id, name, param1, param2, param3, wait_class, is_ph
   };
 };
 
+#undef WAIT_EVENT_DEF_true
+#undef WAIT_EVENT_DEF_false
+
+template <ObWaitEventIds::ObWaitEventIdEnum event_id>
+struct is_idle_wait_event
+{
+  static constexpr bool value = false;
+};
+
+template <ObWaitClassIds::ObWaitClassIdEnum class_id>
+inline constexpr typename std::enable_if<class_id != ObWaitClassIds::IDLE, bool>::type
+    is_idle_class()
+{
+  return false;
+};
+
+template <ObWaitClassIds::ObWaitClassIdEnum class_id>
+inline constexpr typename std::enable_if<class_id == ObWaitClassIds::IDLE, bool>::type
+    is_idle_class()
+{
+  return true;
+};
+
+#define WAIT_EVENT_DEF_true(def, id, name, param1, param2, param3, wait_class, is_phy) \
+  template <>                                                                          \
+  struct is_idle_wait_event<ObWaitEventIds::def>                                       \
+  {                                                                                    \
+    static constexpr bool value = is_idle_class<ObWaitClassIds::wait_class>();         \
+  };
+#define WAIT_EVENT_DEF_false(def, id, name, param1, param2, param3, wait_class, is_phy)
+#define WAIT_EVENT_DEF(def, id, name, param1, param2, param3, wait_class, is_phy, enable) \
+WAIT_EVENT_DEF_##enable(def, id, name, param1, param2, param3, wait_class, is_phy)
+#include "lib/wait_event/ob_wait_event.h"
+#undef WAIT_EVENT_DEF
+#undef WAIT_EVENT_DEF_true
+#undef WAIT_EVENT_DEF_false
+
+template <ObWaitEventIds::ObWaitEventIdEnum event_id>
+struct is_physical_wait_event
+{
+  static constexpr bool value = false;
+};
+
+#define WAIT_EVENT_DEF_true(def, id, name, param1, param2, param3, wait_class, is_phy) \
+  template <>                                                                          \
+  struct is_physical_wait_event<ObWaitEventIds::def>                                   \
+  {                                                                                    \
+    static constexpr bool value = is_phy;                                              \
+  };
+#define WAIT_EVENT_DEF_false(def, id, name, param1, param2, param3, wait_class, is_phy)
+#define WAIT_EVENT_DEF(def, id, name, param1, param2, param3, wait_class, is_phy, enable) \
+WAIT_EVENT_DEF_##enable(def, id, name, param1, param2, param3, wait_class, is_phy)
+#include "lib/wait_event/ob_wait_event.h"
+#undef WAIT_EVENT_DEF
 #undef WAIT_EVENT_DEF_true
 #undef WAIT_EVENT_DEF_false
 
@@ -189,6 +244,7 @@ struct ObWaitEventDesc
   inline bool operator==(const ObWaitEventDesc &other) const;
   inline bool operator!=(const ObWaitEventDesc &other) const;
   inline int add(const ObWaitEventDesc &other);
+  bool is_valid();
   void reset()
   {
     event_no_ = 0;
@@ -246,7 +302,7 @@ struct ObWaitEventDef
 };
 
 
-extern ObWaitEventDef OB_WAIT_EVENTS[];
+const extern ObWaitEventDef OB_WAIT_EVENTS[];
 
 #define EVENT_NO_TO_CLASS_ID(event_no) OB_WAIT_CLASSES[OB_WAIT_EVENTS[event_no].wait_class_].wait_class_id_
 #define EVENT_NO_TO_CLASS(event_no) OB_WAIT_CLASSES[OB_WAIT_EVENTS[event_no].wait_class_].wait_class_

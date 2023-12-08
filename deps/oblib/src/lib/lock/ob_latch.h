@@ -102,7 +102,8 @@ public:
   ~ObLatchMutex();
   int lock(
       const uint32_t latch_id,
-      const int64_t abs_timeout_us = INT64_MAX);
+      const int64_t abs_timeout_us = INT64_MAX,
+      const bool is_atomic = true);
   int try_lock(
       const uint32_t latch_id,
       const uint32_t *puid = NULL);
@@ -183,7 +184,10 @@ private:
 
   inline void lock_bucket(ObLatchBucket &bucket)
   {
-    bucket.lock_.lock(ObLatchIds::LATCH_WAIT_QUEUE_LOCK);
+    bucket.lock_.lock(ObLatchIds::LATCH_WAIT_QUEUE_LOCK, INT64_MAX/*abs_timeout_us*/, false/*is_atomic*/);
+    // ObLatchWaitQueue is called by ObLatch and nesting of wait_event occurs.
+    // Therefore we consider the wait event of ObLatchWaitQueue to be not atomic.
+    // The implementation of wait event here will be modified later.
   }
 
   inline void unlock_bucket(ObLatchBucket &bucket)

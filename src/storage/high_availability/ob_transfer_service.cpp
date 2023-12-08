@@ -148,6 +148,7 @@ void ObTransferService::run1()
       if (tenant_config.is_valid()) {
         wait_time_ms = tenant_config->_transfer_service_wakeup_interval / 1000;
       }
+      ObBKGDSessInActiveGuard inactive_guard;
       thread_cond_.wait(wait_time_ms);
     }
   }

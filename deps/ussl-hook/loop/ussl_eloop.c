@@ -11,6 +11,8 @@
  */
 
 int64_t ob_update_loop_ts();
+void ob_set_bkgd_session_active();
+void ob_set_bkgd_session_inactive();
 struct epoll_event *ussl_make_epoll_event(struct epoll_event *event, uint32_t event_flag, void *val)
 {
   event->events = event_flag;
@@ -54,7 +56,9 @@ static void ussl_eloop_refire(ussl_eloop_t *ep, int64_t epoll_timeout)
 {
   const int maxevents = 512;
   struct epoll_event events[maxevents];
+  ob_set_bkgd_session_inactive();
   int cnt = ob_epoll_wait(ep->fd, events, maxevents, epoll_timeout);
+  ob_set_bkgd_session_active();
   for (int i = 0; i < cnt; i++) {
     ussl_sock_t *s = (ussl_sock_t *)events[i].data.ptr;
     s->mask |= events[i].events;

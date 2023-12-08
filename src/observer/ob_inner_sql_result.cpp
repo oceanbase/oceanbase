@@ -179,6 +179,10 @@ int ObInnerSQLResult::open()
 int ObInnerSQLResult::close()
 {
   int ret = OB_SUCCESS;
+  ObWaitEventGuard wait_guard(ObWaitEventIds::INNER_SQL_EXEC_WAIT,
+                              0, /* timeout */
+                              ObActiveSessionGuard::get_stat().inner_sql_wait_type_id_,
+                              session_.get_sessid());
   // close can be executed too if result set not open.
   if (opened_) {
     // opened=true imply is_inited=true
@@ -230,6 +234,10 @@ int ObInnerSQLResult::inner_close()
 int ObInnerSQLResult::next()
 {
   int ret = OB_SUCCESS;
+  ObWaitEventGuard wait_guard(ObWaitEventIds::INNER_SQL_EXEC_WAIT,
+                              0, /* timeout */
+                              ObActiveSessionGuard::get_stat().inner_sql_wait_type_id_,
+                              session_.get_sessid());
   MAKE_TENANT_SWITCH_SCOPE_GUARD(tenant_guard);
   LOG_DEBUG("compat_mode_", K(ret), K(compat_mode_), K(lbt()));
   if (!opened_) {

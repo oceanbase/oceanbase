@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/wait_event/ob_wait_event.h"
+#include "lib/stat/ob_latch_define.h"
 #include "lib/utility/ob_print_utils.h"
 
 namespace oceanbase
@@ -18,38 +18,27 @@ namespace oceanbase
 namespace common
 {
 
+const ObWaitEventDef OB_WAIT_EVENTS[WAIT_EVENTS_TOTAL] = {
 #define WAIT_EVENT_DEF_true(def, id, name, param1, param2, param3, wait_class, is_phy) \
   {id, name, param1, param2, param3, ObWaitClassIds::wait_class, is_phy},
 #define WAIT_EVENT_DEF_false(def, id, name, param1, param2, param3, wait_class, is_phy)
-
-ObWaitEventDef OB_WAIT_EVENTS[ObWaitEventIds::WAIT_EVENT_DEF_END + ObLatchIds::LATCH_END] = {
 #define WAIT_EVENT_DEF(def, id, name, param1, param2, param3, wait_class, is_phy, enable) \
 WAIT_EVENT_DEF_##enable(def, id, name, param1, param2, param3, wait_class, is_phy)
 #include "lib/wait_event/ob_wait_event.h"
 #undef WAIT_EVENT_DEF
-};
-
 #undef WAIT_EVENT_DEF_true
 #undef WAIT_EVENT_DEF_false
 
-// would called after OB_LATCHES have been initialized
-static __attribute__ ((constructor(103))) void init_latch_wait_events()
-{
-  // For every latch, there is a wait event to measure the lock wait time.
-  // There is no need to explicitly define a wait event for every latch.
-  // We automatically allocate one latch wait event after all the explicit
-  // defined wait events.
-  for (int32_t i = 0; i < ObLatchIds::LATCH_END; ++i) {
-    ObWaitEventDef &event_def = OB_WAIT_EVENTS[ObWaitEventIds::WAIT_EVENT_DEF_END+i];
-    event_def.event_id_ = ObLatchDesc::wait_event_id(OB_LATCHES[i].latch_id_);
-    snprintf(event_def.event_name_, MAX_WAIT_EVENT_NAME_LENGTH, "latch: %s wait", OB_LATCHES[i].latch_name_);
-    strcpy(event_def.param1_, "address");
-    strcpy(event_def.param2_, "number");
-    strcpy(event_def.param3_, "tries");
-    event_def.wait_class_ = ObWaitClassIds::CONCURRENCY;
-    event_def.is_phy_ = true;  // latch wait is atomic
-  }
-}
+#define LATCH_DEF_true(def, id, name, policy, max_spin_cnt, max_yield_cnt)  \
+{id, "latch: " name " wait", "address", "number", "tries", ObWaitClassIds::CONCURRENCY, true},
+#define LATCH_DEF_false(def, id, name, policy, max_spin_cnt, max_yield_cnt)
+#define LATCH_DEF(def, id, name, policy, max_spin_cnt, max_yield_cnt, enable)  \
+LATCH_DEF_##enable(def, id, name, policy, max_spin_cnt, max_yield_cnt)
+#include "lib/stat/ob_latch_define.h"
+#undef LATCH_DEF
+#undef LATCH_DEF_true
+#undef LATCH_DEF_false
+};
 
 int64_t ObWaitEventDesc::to_string(char *buf, const int64_t buf_len) const
 {
@@ -67,6 +56,10 @@ int64_t ObWaitEventDesc::to_string(char *buf, const int64_t buf_len) const
   return pos;
 }
 
+bool ObWaitEventDesc::is_valid()
+{
+  return event_no_>=0 && event_no_ < WAIT_EVENTS_TOTAL;
+}
 int ObWaitEventStat::add(const ObWaitEventStat &other)
 {
   int ret = OB_SUCCESS;

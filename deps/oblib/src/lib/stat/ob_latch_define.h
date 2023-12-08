@@ -385,13 +385,13 @@ struct ObLatchDesc
   uint64_t max_spin_cnt_;
   uint64_t max_yield_cnt_;
   // every latch has a lock wait event
-  static int64_t wait_event_idx(const int64_t latch_idx) { return latch_idx + ObWaitEventIds::WAIT_EVENT_DEF_END; }
+  static int64_t wait_event_idx(const int64_t latch_idx) { return latch_idx + ObWaitEventIds::WAIT_EVENT_DEF_END + 1; }
   static int64_t wait_event_id(const int64_t latch_id) { return LatchWaitEventBegin + latch_id; /*explicit defined latch id is always less than 100000*/}
 };
 
 extern const ObLatchDesc OB_LATCHES[];
 
-static constexpr int32_t WAIT_EVENTS_TOTAL = ObWaitEventIds::WAIT_EVENT_DEF_END + ObLatchIds::LATCH_END;
+static constexpr int32_t WAIT_EVENTS_TOTAL = ObWaitEventIds::WAIT_EVENT_DEF_END + ObLatchIds::LATCH_END + 2;
 }//common
 }//oceanbase
 #endif /* OB_LATCH_DEFINE_H_ */

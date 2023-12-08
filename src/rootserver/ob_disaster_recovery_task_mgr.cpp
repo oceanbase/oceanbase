@@ -617,9 +617,7 @@ int ObDRTaskMgr::init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(server), KP(rpc_proxy),
              KP(sql_proxy), KP(schema_service));
-  } else if (OB_FAIL(cond_.init(ObWaitEventIds::REBALANCE_TASK_MGR_COND_WAIT))) {
-    LOG_WARN("fail to init cond", KR(ret));
-  } else if (OB_FAIL(create(thread_count, "DRTaskMgr"))) {
+  } else if (OB_FAIL(create(thread_count, "DRTaskMgr", ObWaitEventIds::REBALANCE_TASK_MGR_COND_WAIT))) {
     LOG_WARN("fail to create disaster recovery task mgr", KR(ret));
   } else {
     config_ = &config;
@@ -672,8 +670,8 @@ void ObDRTaskMgr::stop()
   stopped_ = true;
   ObRsReentrantThread::stop();
   disaster_recovery_task_table_updater_.stop();
-  ObThreadCondGuard guard(cond_);
-  cond_.broadcast();
+  ObThreadCondGuard guard(get_cond());
+  get_cond().broadcast();
   for (int64_t i = 0; i < static_cast<int64_t>(ObDRTaskPriority::MAX_PRI); ++i) {
     queues_[i].reuse();
   }
@@ -725,7 +723,7 @@ void ObDRTaskMgr::run3()
           } else if (server_info.is_permanent_offline()) {
             // dest server permanent offline, do not execute this task, just clean it
             LOG_INFO("[DRTASK_NOTICE] dest server is permanent offline, task can not execute", K(dst_server), K(server_info));
-            ObThreadCondGuard guard(cond_);
+            ObThreadCondGuard guard(get_cond());
             if (OB_SUCCESS != (tmp_ret = async_add_cleaning_task_to_updater(
                                   task->get_task_id(),
                                   task->get_task_key(),
@@ -774,7 +772,7 @@ int ObDRTaskMgr::check_task_in_executing(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(priority));
   } else {
-    ObThreadCondGuard guard(cond_);
+    ObThreadCondGuard guard(get_cond());
     ObDRTaskQueue &queue = ObDRTaskPriority::LOW_PRI == priority
                            ? low_task_queue_
                            : high_task_queue_;
@@ -798,7 +796,7 @@ int ObDRTaskMgr::check_task_exist(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(priority));
   } else {
-    ObThreadCondGuard guard(cond_);
+    ObThreadCondGuard guard(get_cond());
     ObDRTaskQueue &queue = ObDRTaskPriority::LOW_PRI == priority
                            ? low_task_queue_
                            : high_task_queue_;
@@ -820,7 +818,7 @@ int ObDRTaskMgr::add_task(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid dr task", KR(ret), K(task));
   } else {
-    ObThreadCondGuard guard(cond_);
+    ObThreadCondGuard guard(get_cond());
     ObDRTaskQueue &queue = task.is_high_priority_task()
                            ? high_task_queue_
                            : low_task_queue_;
@@ -845,8 +843,8 @@ int ObDRTaskMgr::add_task(
         LOG_WARN("fail to get task cnt", KR(ret));
       } else if (!has_task_in_schedule
                  && 0 == get_reach_concurrency_limit()) {
-        cond_.broadcast();
-        LOG_INFO("success to broad cast cond_", K(wait_cnt), K(schedule_cnt));
+        get_cond().broadcast();
+        LOG_INFO("success to broad cast get_cond()", K(wait_cnt), K(schedule_cnt));
       }
       clear_reach_concurrency_limit();
       LOG_INFO("[DRTASK_NOTICE] add task to disaster recovery task mgr finish", KR(ret), K(task));
@@ -873,7 +871,7 @@ int ObDRTaskMgr::deal_with_task_reply(
   } else {
     int tmp_ret = OB_SUCCESS;
     ObDRTask *task = nullptr;
-    ObThreadCondGuard guard(cond_);
+    ObThreadCondGuard guard(get_cond());
     if (OB_SUCCESS != (tmp_ret = get_task_by_id_(reply.task_id_, task_key, task))) {
       if (OB_ENTRY_NOT_EXIST == tmp_ret) {
         // task not exist, try record this reply result
@@ -950,7 +948,7 @@ int ObDRTaskMgr::do_cleaning(
     const ObDRTaskRetComment &ret_comment)
 {
   int ret = OB_SUCCESS;
-  ObThreadCondGuard guard(cond_);
+  ObThreadCondGuard guard(get_cond());
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
   } else {
@@ -1000,7 +998,7 @@ int ObDRTaskMgr::get_all_task_count(
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K_(inited), K_(loaded), K_(stopped));
   } else {
-    ObThreadCondGuard guard(cond_);
+    ObThreadCondGuard guard(get_cond());
     high_wait_cnt = get_high_priority_queue_().get_wait_list().get_size();
     high_schedule_cnt = get_high_priority_queue_().get_schedule_list().get_size();
     low_wait_cnt = get_low_priority_queue_().get_wait_list().get_size();
@@ -1061,7 +1059,7 @@ int ObDRTaskMgr::load_task_to_schedule_list_()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObThreadCondGuard guard(cond_);
+  ObThreadCondGuard guard(get_cond());
   ObArray<uint64_t> tenant_id_array;
 
   if (OB_UNLIKELY(!inited_ || stopped_)) {
@@ -1221,13 +1219,13 @@ int ObDRTaskMgr::persist_task_info_(
 }
 
 int ObDRTaskMgr::try_dump_statistic_(
-    int64_t &last_dump_ts) const
+    int64_t &last_dump_ts)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
   } else {
-    ObThreadCondGuard guard(cond_);
+    ObThreadCondGuard guard(get_cond());
     const int64_t now = ObTimeUtility::current_time();
     if (now > last_dump_ts + config_->balancer_log_interval) {
       last_dump_ts = now;
@@ -1270,7 +1268,7 @@ int ObDRTaskMgr::try_clean_not_in_schedule_task_in_schedule_list_(
   } else {
     int64_t wait = 0;
     int64_t schedule = 0;
-    ObThreadCondGuard guard(cond_);
+    ObThreadCondGuard guard(get_cond());
     if (OB_FAIL(inner_get_task_cnt_(wait, schedule))) {
       LOG_WARN("fail to get task cnt", KR(ret));
     } else if (schedule <= 0) {
@@ -1330,7 +1328,7 @@ int ObDRTaskMgr::try_pop_task(
     ObDRTask *&task)
 {
   int ret = OB_SUCCESS;
-  ObThreadCondGuard guard(cond_);
+  ObThreadCondGuard guard(get_cond());
   int64_t wait_cnt = 0;
   int64_t in_schedule_cnt = 0;
   ObDRTask *my_task = nullptr;
@@ -1367,7 +1365,8 @@ int ObDRTaskMgr::try_pop_task(
     }
   } else {
     int64_t now = ObTimeUtility::current_time();
-    cond_.wait(get_schedule_interval());
+    idle_wait(get_schedule_interval());
+
     if (get_reach_concurrency_limit() + CONCURRENCY_LIMIT_INTERVAL < now) {
       clear_reach_concurrency_limit();
       LOG_TRACE("success to clear concurrency limit");
@@ -1435,7 +1434,7 @@ int ObDRTaskMgr::execute_task(
     // (1) use rwlock instead of threadcond
     // (2) deal with block in status
     (void)log_task_result(task, ret, ret_comment);
-    ObThreadCondGuard guard(cond_);
+    ObThreadCondGuard guard(get_cond());
     const bool data_in_limit = (OB_REACH_SERVER_DATA_COPY_IN_CONCURRENCY_LIMIT == ret);
     if (OB_SUCCESS != async_add_cleaning_task_to_updater(
           task.get_task_id(),

@@ -409,6 +409,14 @@ OB_DEF_DESERIALIZE(ObRemoteTask)
       ObSQLSessionInfo::LockGuard data_guard(session_info_->get_thread_data_lock());
       OB_UNIS_DECODE(*session_info_);
       OB_UNIS_DECODE(remote_sql_info_->is_batched_stmt_);
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(session_info_->set_session_active(
+            ObString::make_string("REMOTE/DISTRIBUTE SQL EXECUTING"),
+            obmysql::COM_QUERY))) {
+          LOG_WARN("set remote session active failed", K(ret));
+        }
+        EVENT_INC(ACTIVE_SESSIONS);
+      }
     }
     dependency_tables_.set_allocator(&(exec_ctx_->get_allocator()));
     OB_UNIS_DECODE(dependency_tables_);

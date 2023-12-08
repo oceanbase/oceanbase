@@ -218,6 +218,7 @@
 #include "observer/virtual_table/ob_all_virtual_storage_ha_error_diagnose.h"
 #include "observer/virtual_table/ob_all_virtual_storage_ha_perf_diagnose.h"
 #include "observer/virtual_table/ob_tenant_show_restore_preview.h"
+#include "observer/virtual_table/ob_all_virtual_sql_stat.h"
 #include "observer/virtual_table/ob_all_virtual_kv_connection.h"
 #include "observer/virtual_table/ob_all_virtual_sys_variable_default_value.h"
 
@@ -2625,6 +2626,14 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
 	        }
+          case OB_ALL_VIRTUAL_SQLSTAT_TID: {
+            ObAllVirtualSqlStat *all_virtual_sqlstat = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualSqlStat, all_virtual_sqlstat))) {
+              all_virtual_sqlstat->set_allocator(&allocator);
+              vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_sqlstat);
+            }
+            break;
+          }
         END_CREATE_VT_ITER_SWITCH_LAMBDA
 
 #define AGENT_VIRTUAL_TABLE_CREATE_ITER

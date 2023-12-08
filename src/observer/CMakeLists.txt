@@ -416,6 +416,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_checkpoint_diagnose_memtable_info.cpp
   virtual_table/ob_all_virtual_storage_ha_error_diagnose.cpp
   virtual_table/ob_all_virtual_storage_ha_perf_diagnose.cpp
+  virtual_table/ob_all_virtual_sql_stat.cpp
 )
 
 ob_server_add_target(ob_server)

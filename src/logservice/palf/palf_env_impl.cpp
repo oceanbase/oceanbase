@@ -593,7 +593,7 @@ int PalfEnvImpl::remove_directory(const char *log_dir)
       }
       if (OB_FAIL(ret) && true == result) {
         PALF_LOG(WARN, "remove directory failed, may be physical disk full", K(ret), KPC(this));
-        usleep(100*1000);
+        ob_usleep(100*1000);
       }
     } while (OB_FAIL(ret));
   }

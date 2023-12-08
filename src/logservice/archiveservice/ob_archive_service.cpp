@@ -22,6 +22,7 @@
 #include "share/scn.h"                    // LSN
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/ob_debug_sync.h"
+#include "lib/ash/ob_active_session_guard.h"
 
 namespace oceanbase
 {
@@ -221,6 +222,7 @@ void ObArchiveService::run1()
       int64_t end_tstamp = ObTimeUtility::current_time();
       int64_t wait_interval = THREAD_RUN_INTERVAL - (end_tstamp - begin_tstamp);
       if (wait_interval > 0) {
+        common::ObBKGDSessInActiveGuard inactive_guard;
         cond_.timedwait(wait_interval);
       }
     }

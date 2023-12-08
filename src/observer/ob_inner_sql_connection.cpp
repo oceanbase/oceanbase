@@ -51,6 +51,7 @@
 #endif
 #include "sql/plan_cache/ob_ps_cache.h"
 #include "observer/mysql/obmp_stmt_execute.h"
+#include "lib/stat/ob_diagnose_info.h"
 
 namespace oceanbase
 {
@@ -136,7 +137,7 @@ ObInnerSQLConnection::TimeoutGuard::~TimeoutGuard()
 }
 
 ObInnerSQLConnection::ObInnerSQLConnection()
-    : inited_(false), inner_session_(), extern_session_(NULL),
+    : inited_(false), extern_session_(NULL), inner_session_(NULL),
       is_spi_conn_(false),
       ref_cnt_(0), pool_(NULL), schema_service_(NULL), ob_sql_(NULL), vt_iter_creator_(NULL),
       ref_ctx_(NULL),
@@ -160,7 +161,9 @@ ObInnerSQLConnection::ObInnerSQLConnection()
       use_external_session_(false),
       group_id_(0),
       user_timeout_(0)
+
 {
+  free_session_ctx_.sessid_ = ObSQLSessionInfo::INVALID_SESSID;
 }
 
 ObInnerSQLConnection::~ObInnerSQLConnection()
@@ -168,15 +171,15 @@ ObInnerSQLConnection::~ObInnerSQLConnection()
   if (0 < ref_cnt_) {
     LOG_ERROR_RET(OB_ERROR, "connection be referenced while destruct", K_(ref_cnt));
   }
-  if (OB_NOT_NULL(inner_session_.get_tx_desc())) {
+  if (OB_NOT_NULL(inner_session_) && OB_NOT_NULL(inner_session_->get_tx_desc())) {
     int ret = OB_SUCCESS;
     MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
-    if (OB_SUCC(guard.switch_to(inner_session_.get_tx_desc()->get_tenant_id(), false))) {
-      MTL(transaction::ObTransService*)->release_tx(*inner_session_.get_tx_desc());
+    if (OB_SUCC(guard.switch_to(inner_session_->get_tx_desc()->get_tenant_id(), false))) {
+      MTL(transaction::ObTransService*)->release_tx(*inner_session_->get_tx_desc());
     }
     {
-      ObSQLSessionInfo::LockGuard guard(inner_session_.get_thread_data_lock());
-      inner_session_.get_tx_desc() = NULL;
+      ObSQLSessionInfo::LockGuard guard(inner_session_->get_thread_data_lock());
+      inner_session_->get_tx_desc() = NULL;
     }
   }
 }
@@ -248,7 +251,24 @@ int ObInnerSQLConnection::destroy()
     ref_cnt_ = 0;
     pool_ = NULL;
     schema_service_ = NULL;
-    inner_session_.destroy();
+    if (NULL != inner_session_) {
+      if (INNER_SQL_SESS_ID == free_session_ctx_.sessid_) {
+        inner_session_->~ObSQLSessionInfo();
+        ob_free(inner_session_);
+      } else {
+        inner_session_->set_session_sleep();
+        if (OB_ISNULL(GCTX.session_mgr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("session mgr is null", K(ret));
+        } else {
+          GCTX.session_mgr_->revert_session(inner_session_);
+          GCTX.session_mgr_->free_session(free_session_ctx_);
+          GCTX.session_mgr_->mark_sessid_unused(free_session_ctx_.sessid_);
+        }
+      }
+      inner_session_ = NULL;
+    }
+    free_session_ctx_.sessid_ = ObSQLSessionInfo::INVALID_SESSID;
     extern_session_ = NULL;
     config_ = NULL;
     associated_client_ = NULL;
@@ -365,6 +385,7 @@ int ObInnerSQLConnection::init_session_info(
         } else {
           session->set_user_priv_set(OB_PRIV_ALL | OB_PRIV_GRANT);
           session->set_database_id(OB_SYS_DATABASE_ID);
+          session->set_shadow(true); // inner session will not be show
         }
       }
       if (OB_SUCC(ret)) {
@@ -406,13 +427,35 @@ int ObInnerSQLConnection::init_session(sql::ObSQLSessionInfo* extern_session, co
 {
   int ret = OB_SUCCESS;
   if (NULL == extern_session) {
-    sql::ObSQLSessionInfo * inner_session = &inner_session_;
-    ObArenaAllocator *allocator = NULL;
     const bool is_extern_session = false;
-    if (OB_FAIL(inner_session->init(INNER_SQL_SESS_ID, INNER_SQL_PROXY_SESS_ID, allocator))) {
-      LOG_WARN("init session failed", K(ret));
-    } else if (OB_FAIL(init_session_info(inner_session, is_extern_session, oracle_mode_, is_ddl))) {
-      LOG_WARN("fail to init session info", K(ret), KPC(inner_session));
+    bool is_create_session_mgr = OB_NOT_NULL(GCTX.session_mgr_) && OB_NOT_NULL(GCTX.omt_);
+    if (OB_NOT_NULL(GCTX.omt_)) {
+      ObTenantSQLSessionMgr *t_session_mgr =  nullptr;
+      t_session_mgr = MTL(ObTenantSQLSessionMgr*);
+      is_create_session_mgr = is_create_session_mgr && (nullptr != t_session_mgr);
+    }
+    if (is_create_session_mgr && is_inner_session_mgr_enable()) {
+      if (OB_FAIL(create_session_by_mgr())) {
+        LOG_WARN("failed to create inner session by GCTX.session_mgr, will create default session", K(ret));
+      }
+
+      if (OB_FAIL(ret)) {
+        if (OB_FAIL(create_default_session())) {
+          LOG_WARN("failed to create default session", K(ret));
+        } else {
+          ret = OB_SUCCESS;
+        }
+      }
+    } else {
+      if (OB_FAIL(create_default_session())) {
+        LOG_WARN("failed to create default session", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(init_session_info(inner_session_, is_extern_session, oracle_mode_, is_ddl))) {
+        LOG_WARN("fail to init session info", K(ret), KPC(inner_session_));
+      }
     }
   } else {
     extern_session_ = extern_session;
@@ -520,6 +563,8 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
                                          ObString *pl_exec_params)
 {
   int ret = OB_SUCCESS;
+  ObPhysicalPlan *plan = result_set.get_physical_plan();
+
   const bool enable_perf_event = lib::is_diagnose_info_enabled();
   const bool enable_sql_audit = GCONF.enable_sql_audit && session.get_local_ob_enable_sql_audit();
   ObAuditRecordData &audit_record = session.get_raw_audit_record();
@@ -539,7 +584,6 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
   session.update_pure_sql_exec_time(audit_record.exec_timestamp_.elapsed_t_);
 
   if (enable_perf_event) {
-    record_stat(session, result_set.get_stmt_type(), is_from_pl);
     exec_record.max_wait_event_ = max_wait_desc;
     exec_record.wait_time_end_ = total_wait_desc.time_waited_;
     exec_record.wait_count_end_ = total_wait_desc.total_waits_;
@@ -718,6 +762,7 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
   lib::CompatModeGuard g(get_compat_mode());
   ObExecRecord exec_record;
   ObExecTimestamp exec_timestamp;
+  ObExecutingSqlStatRecord sqlstat_record;
 
   exec_timestamp.exec_type_ = sql::InnerSql;
   const ObGlobalContext &gctx = ObServer::get_instance().get_gctx();
@@ -794,12 +839,21 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
         const bool enable_perf_event = lib::is_diagnose_info_enabled();
         const bool enable_sql_audit =
           GCONF.enable_sql_audit && get_session().get_local_ob_enable_sql_audit();
+        const bool enable_sqlstat = get_session().is_sqlstat_enabled();
         {
           ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : NULL);
           ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL);
 
           if (enable_perf_event) {
             exec_record.record_start();
+          }
+
+          if (enable_sqlstat) {
+            sqlstat_record.record_sqlstat_start_value();
+            sqlstat_record.set_is_in_retry(retry_cnt > 0);
+            if (is_inner_session()) {
+              get_session().sql_sess_record_sql_stat_start_value(sqlstat_record);
+            }
           }
 
           const uint64_t tenant_id = get_session().get_effective_tenant_id();
@@ -862,6 +916,15 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
           time_record.set_execute_end_timestamp(execute_end_timestamp_);
           if (enable_perf_event) {
             exec_record.record_end();
+            record_stat(get_session(), res.result_set().get_stmt_type(), ret_code);
+          }
+          if (enable_sqlstat) {
+            sqlstat_record.record_sqlstat_end_value();
+            sqlstat_record.set_rows_processed(res.result_set().get_affected_rows() + res.result_set().get_return_rows());
+            sqlstat_record.set_partition_cnt(res.result_set().get_exec_context().get_das_ctx().get_related_tablet_cnt());
+            sqlstat_record.move_to_sqlstat_cache(get_session(),
+                                                 res.sql_ctx().cur_sql_,
+                                                 res.result_set().get_physical_plan());
           }
         }
 
@@ -935,6 +998,7 @@ int ObInnerSQLConnection::retry_while_no_tenant_resource(const int64_t cluster_i
   if (OB_FAIL(set_timeout(abs_timeout_us))) {
     LOG_WARN("set timeout failed", K(ret));
   } else {
+    ObInnerSqlWaitGuard guard(is_inner_session(), inner_session_);
     do {
       int64_t now = ObTimeUtility::current_time();
       if (now >= abs_timeout_us) {
@@ -1202,7 +1266,7 @@ int ObInnerSQLConnection::forward_request_(const uint64_t tenant_id,
                                            ObInnerSQLResult &res)
 {
   int ret = OB_SUCCESS;
-
+  ObInnerSqlWaitGuard guard(is_inner_session(), inner_session_);
   TimeoutGuard timeout_guard(*this); // backup && restore worker/session timeout
   common::ObAddr resource_server_addr; // MYADDR
   share::ObLSID ls_id(share::ObLSID::SYS_LS_ID);
@@ -1262,6 +1326,7 @@ int ObInnerSQLConnection::rollback()
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(inner_rollback);
+  ObInnerSqlWaitGuard guard(is_inner_session(), inner_session_);
   ObSqlQueryExecutor executor("ROLLBACK");
   bool has_tenant_resource = is_resource_conn() || OB_INVALID_ID == get_resource_conn_id();
   if (!is_in_trans()) {
@@ -1334,6 +1399,7 @@ int ObInnerSQLConnection::commit()
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(inner_commit);
+  ObInnerSqlWaitGuard guard(is_inner_session(), inner_session_);
   DEBUG_SYNC(BEFORE_INNER_SQL_COMMIT);
   ObSqlQueryExecutor executor("COMMIT");
   bool has_tenant_resource = is_resource_conn() || OB_INVALID_ID == get_resource_conn_id();
@@ -1987,14 +2053,22 @@ void ObInnerSQLConnection::dump_conn_bt_info()
 
 void ObInnerSQLConnection::record_stat(sql::ObSQLSessionInfo& session,
                                        const stmt::StmtType type,
+                                       const int64_t ret,
                                        bool is_from_pl)
 {
 #define ADD_STMT_STAT(type)                           \
   if (is_from_pl) {                                   \
-    EVENT_INC(SQL_##type##_COUNT);                    \
+    if (!session.get_is_in_retry()) {                 \
+      EVENT_INC(SQL_##type##_COUNT);                  \
+      if (OB_SUCCESS != ret) {                        \
+        EVENT_INC(SQL_FAIL_COUNT);                    \
+      }                                               \
+    }                                                 \
     EVENT_ADD(SQL_##type##_TIME, time_cost);          \
   } else {                                            \
-    EVENT_INC(SQL_INNER_##type##_COUNT);              \
+    if (!session.get_is_in_retry()) {                 \
+      EVENT_INC(SQL_INNER_##type##_COUNT);            \
+    }                                                 \
     EVENT_ADD(SQL_INNER_##type##_TIME, time_cost);    \
   }
 
@@ -2147,6 +2221,120 @@ int ObInnerSQLConnection::get_foreign_key_check_exist(bool &is_check_exist) cons
   OV (is_extern_session());
   OX (is_check_exist = extern_session_->is_foreign_key_check_exist());
   return ret;
+}
+
+int ObInnerSQLConnection::create_session_by_mgr()
+{
+  int ret = OB_SUCCESS;
+  uint32_t sid = sql::ObSQLSessionInfo::INVALID_SESSID;
+  uint64_t proxy_sid = 0;
+  uint64_t tenant_id = MTL_ID();
+  if (OB_ISNULL(GCTX.session_mgr_) || OB_ISNULL(GCTX.omt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session_mgr_ or omt_ is NULL", K(ret));
+  } else if (OB_FAIL(GCTX.session_mgr_->create_sessid(sid))) {
+    LOG_WARN("alloc session id failed", K(ret));
+  } else if (OB_FAIL(GCTX.session_mgr_->create_session(tenant_id, sid, proxy_sid,
+                                                      ObTimeUtility::current_time(),
+                                                      inner_session_))) {
+    GCTX.session_mgr_->mark_sessid_unused(sid);
+    inner_session_ = NULL;
+    LOG_WARN("create session failed", K(ret), K(sid));
+  } else {
+    free_session_ctx_.sessid_ = sid;
+    free_session_ctx_.proxy_sessid_ = proxy_sid;
+    free_session_ctx_.tenant_id_ = tenant_id;
+    EVENT_INC(ACTIVE_SESSIONS);
+    free_session_ctx_.has_inc_active_num_ = true;
+  }
+  return ret;
+}
+
+int ObInnerSQLConnection::create_default_session()
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator *allocator = NULL;
+  void *buf = ob_malloc(sizeof(ObSQLSessionInfo), ObModIds::OB_SQL_SESSION_SBLOCK);
+  if (OB_ISNULL(buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("default session buf allocated failed", K(ret));
+  } else if (FALSE_IT(inner_session_ = new(buf) ObSQLSessionInfo())) {
+  } else if (OB_FAIL(inner_session_->init(INNER_SQL_SESS_ID, INNER_SQL_PROXY_SESS_ID, allocator))) {
+    LOG_WARN("init session failed", K(ret));
+  } else {
+    free_session_ctx_.sessid_ = INNER_SQL_SESS_ID;
+    free_session_ctx_.proxy_sessid_ = INNER_SQL_PROXY_SESS_ID;
+  }
+  return ret;
+}
+
+bool ObInnerSQLConnection::is_inner_session_mgr_enable()
+{
+  bool bret = false;
+  int64_t tenant_id = MTL_ID();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    bret = tenant_config->_enable_inner_session_mgr;
+  }
+  return bret;
+}
+
+ObInnerSqlWaitGuard::ObInnerSqlWaitGuard(const bool is_inner_session, sql::ObSQLSessionInfo *inner_session) {
+  is_inner_session_ = is_inner_session;
+  inner_session_ = inner_session;
+
+  di_buffer_ = nullptr;
+  prev_tenant_id_ = OB_SYS_TENANT_ID;
+  prev_session_id_ = 0;
+  if (is_inner_session_ && OB_NOT_NULL(inner_session_) &&
+      ObInnerSQLConnection::INNER_SQL_SESS_ID != inner_session_->get_sessid()) {
+    WAIT_BEGIN(ObWaitEventIds::INNER_SQL_EXEC_WAIT,
+                                        0 /*timeout_ms*/,
+                                        ObActiveSessionGuard::get_stat().inner_sql_wait_type_id_ /*p1*/,
+                                        inner_session_->get_sessid() /*p2*/,
+                                        0 /*p3*/,
+                                        false /* is_atomic*/);
+    ObActiveSessionStat * tmp_ptr = &(ObActiveSessionGuard::get_stat());
+    inner_session_->set_session_active(); /*will call setup_ash*/
+    ObActiveSessionGuard::get_stat().set_prev_stat(tmp_ptr);
+    if (oceanbase::lib::is_diagnose_info_enabled()) {
+      di_buffer_ = GET_TSI(ObSessionDIBuffer);
+      if (NULL != di_buffer_) {
+        prev_tenant_id_ = di_buffer_->get_tenant_id();
+        if (NULL != (di_buffer_->get_curr_session())) {
+          prev_session_id_ = di_buffer_->get_curr_session()->session_id_;
+        }
+        if (0 < inner_session_->get_sessid()) {
+          di_buffer_->switch_both(inner_session_->get_priv_tenant_id(), inner_session_->get_sessid(), false/*is_multi_thread_plan*/);
+        }
+      }
+    }
+
+  }
+}
+ObInnerSqlWaitGuard::~ObInnerSqlWaitGuard()
+{
+  if (is_inner_session_ && OB_NOT_NULL(inner_session_) &&
+      ObInnerSQLConnection::INNER_SQL_SESS_ID != inner_session_->get_sessid()) {
+
+    if (NULL != di_buffer_) {
+      di_buffer_->switch_tenant(prev_tenant_id_);
+      if (0 != prev_session_id_) {
+        di_buffer_->switch_session(prev_session_id_);
+      } else {
+        di_buffer_->reset_session();
+      }
+    }
+    if (OB_NOT_NULL(ObActiveSessionGuard::get_stat().get_prev_stat())) {
+      /* resetup ash stat to previous ash stat */
+      ObActiveSessionStat *ash_stat = ObActiveSessionGuard::get_stat().get_prev_stat();
+      ObActiveSessionGuard::resetup_ash(*ash_stat);
+    } else {
+      ObActiveSessionGuard::setup_default_ash();
+      LOG_INFO("previous stat ptr is null");
+    }
+    WAIT_END(ObWaitEventIds::INNER_SQL_EXEC_WAIT);
+  }
 }
 } // end of namespace observer
 } // end of namespace oceanbase

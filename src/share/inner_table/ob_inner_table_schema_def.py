@@ -5778,6 +5778,18 @@ def_table_schema(
     ('client_id', 'varchar:64', 'true'),
     ('backtrace', 'varchar:512', 'true'),
     ('plan_id', 'int', 'true'),
+    ('program', 'varchar:64', 'true'),
+    ('tm_delta_time', 'int', 'true'),
+    ('tm_delta_cpu_time', 'int', 'true'),
+    ('tm_delta_db_time', 'int', 'true'),
+    ('top_level_sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH', 'true'),
+    ('plsql_entry_object_id', 'int', 'true'),
+    ('plsql_entry_subprogram_id', 'int', 'true'),
+    ('plsql_entry_subprogram_name', 'varchar:32', 'true'),
+    ('plsql_object_id', 'int', 'true'),
+    ('plsql_subprogram_id', 'int', 'true'),
+    ('plsql_subprogram_name', 'varchar:32', 'true'),
+    ('event_id', 'int', 'true'),
   ],
 )
 
@@ -6363,6 +6375,58 @@ def_table_schema(
   ],
 )
 
+def_table_schema(
+    owner = 'roland.qk',
+    table_id = 487,
+    table_name = '__wr_system_event',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = [],
+    rowkey_columns = [
+        ('tenant_id', 'int'),
+        ('cluster_id', 'int'),
+        ('snap_id', 'int'),
+        ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+        ('svr_port', 'int'),
+        ('event_id', 'int'),
+    ],
+
+    in_tenant_space=True,
+    is_cluster_private=True,
+    meta_record_in_sys = False,
+
+    normal_columns = [
+        ('total_waits', 'int','true'),
+        ('total_timeouts', 'int','true'),
+        ('time_waited_micro', 'int','true'),
+    ],
+)
+
+def_table_schema(
+    owner = 'roland.qk',
+    table_id = 488,
+    table_name = '__wr_event_name',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = [],
+    rowkey_columns = [
+        ('tenant_id', 'int'),
+        ('cluster_id', 'int'),
+        ('event_id', 'int'),
+    ],
+
+    in_tenant_space=True,
+    is_cluster_private=True,
+    meta_record_in_sys = False,
+
+    normal_columns = [
+        ('event_name', 'varchar:64', 'true'),
+        ('parameter1', 'varchar:64', 'true'),
+        ('parameter2', 'varchar:64', 'true'),
+        ('parameter3', 'varchar:64', 'true'),
+        ('wait_class_id', 'int', 'true'),
+        ('wait_class', 'varchar:64', 'true'),
+    ],
+)
+
 all_routine_privilege_def = dict(
     owner = 'mingye.swj',
     table_name    = '__all_routine_privilege',
@@ -6387,6 +6451,78 @@ def_table_schema(**all_routine_privilege_def)
 
 def_table_schema(**gen_history_table_def(491, all_routine_privilege_def))
 
+def_table_schema(
+    owner = 'yuchen.wyc',
+    table_id = 492,
+    table_name = '__wr_sqlstat',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = [],
+    rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('cluster_id', 'int'),
+      ('snap_id', 'int'),
+      ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+      ('svr_port', 'int'),
+      ('sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH'),
+      ('plan_hash', 'uint'),
+      ('source_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+      ('source_port', 'int'),
+    ],
+    in_tenant_space=True,
+    is_cluster_private=True,
+    meta_record_in_sys = False,
+    normal_columns = [
+
+        ('plan_id', 'int'),
+        ('plan_type', 'int'),
+        ('module', 'varchar:64', 'true'),
+        ('action', 'varchar:64', 'true'),
+        ('parsing_db_id', 'int'),
+        ('parsing_db_name', 'varchar:OB_MAX_DATABASE_NAME_LENGTH'),
+        ('parsing_user_id', 'int'),
+        ('executions_total', 'bigint', 'false', '0'),
+        ('executions_delta', 'bigint', 'false', '0'),
+        ('disk_reads_total', 'bigint', 'false', '0'),
+        ('disk_reads_delta', 'bigint', 'false', '0'),
+        ('buffer_gets_total', 'bigint', 'false', '0'),
+        ('buffer_gets_delta', 'bigint', 'false', '0'),
+        ('elapsed_time_total', 'bigint', 'false', '0'),
+        ('elapsed_time_delta', 'bigint', 'false', '0'),
+        ('cpu_time_total', 'bigint', 'false', '0'),
+        ('cpu_time_delta', 'bigint', 'false', '0'),
+        ('ccwait_total', 'bigint', 'false', '0'),
+        ('ccwait_delta', 'bigint', 'false', '0'),
+        ('userio_wait_total', 'bigint', 'false', '0'),
+        ('userio_wait_delta', 'bigint', 'false', '0'),
+        ('apwait_total', 'bigint', 'false', '0'),
+        ('apwait_delta', 'bigint', 'false', '0'),
+        ('physical_read_requests_total', 'bigint', 'false', '0'),
+        ('physical_read_requests_delta', 'bigint', 'false', '0'),
+        ('physical_read_bytes_total', 'bigint', 'false', '0'),
+        ('physical_read_bytes_delta', 'bigint', 'false', '0'),
+        ('write_throttle_total', 'bigint', 'false', '0'),
+        ('write_throttle_delta', 'bigint', 'false', '0'),
+        ('rows_processed_total', 'bigint', 'false', '0'),
+        ('rows_processed_delta', 'bigint', 'false', '0'),
+        ('memstore_read_rows_total', 'bigint', 'false', '0'),
+        ('memstore_read_rows_delta', 'bigint', 'false', '0'),
+        ('minor_ssstore_read_rows_total', 'bigint', 'false', '0'),
+        ('minor_ssstore_read_rows_delta', 'bigint', 'false', '0'),
+        ('major_ssstore_read_rows_total', 'bigint', 'false', '0'),
+        ('major_ssstore_read_rows_delta', 'bigint', 'false', '0'),
+        ('rpc_total', 'bigint', 'false', '0'),
+        ('rpc_delta', 'bigint', 'false', '0'),
+        ('fetches_total', 'bigint', 'false', '0'),
+        ('fetches_delta', 'bigint', 'false', '0'),
+        ('retry_total', 'bigint', 'false', '0'),
+        ('retry_delta', 'bigint', 'false', '0'),
+        ('partition_total', 'bigint', 'false', '0'),
+        ('partition_delta', 'bigint', 'false', '0'),
+        ('nested_sql_total', 'bigint', 'false', '0'),
+        ('nested_sql_delta', 'bigint', 'false', '0'),
+    ],
+)
+
 all_ncomp_dll = dict(
   owner = 'hr351303',
   table_name = '__all_ncomp_dll',
@@ -6409,6 +6545,27 @@ all_ncomp_dll = dict(
 def_table_schema(**all_ncomp_dll)
 
 # 495 : __all_index_usage_info
+
+def_table_schema(
+    owner = 'yuchen.wyc',
+    table_id = 501,
+    table_name = '__wr_sqltext',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = [],
+    rowkey_columns = [
+        ('tenant_id', 'int'),
+        ('cluster_id', 'int'),
+        ('snap_id', 'int'),
+        ('sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH'),
+    ],
+    in_tenant_space=True,
+    is_cluster_private=True,
+    meta_record_in_sys = False,
+    normal_columns = [
+        ('query_sql', 'longtext'),
+        ('sql_type', 'int'),
+    ],
+)
 
 #
 # 余留位置
@@ -11823,6 +11980,21 @@ def_table_schema(
     ('IN_STORAGE_READ', 'bool'),
     ('IN_STORAGE_WRITE', 'bool'),
     ('IN_REMOTE_DAS_EXECUTION', 'bool'),
+    ('PROGRAM','varchar:64', 'true'),
+    ('TM_DELTA_TIME', 'int', 'true'),
+    ('TM_DELTA_CPU_TIME', 'int', 'true'),
+    ('TM_DELTA_DB_TIME', 'int', 'true'),
+    ('TOP_LEVEL_SQL_ID', 'varchar:OB_MAX_SQL_ID_LENGTH', 'true'),
+    ('IN_PLSQL_COMPILATION', 'bool', 'false', 'false'),
+    ('IN_PLSQL_EXECUTION', 'bool', 'false', 'false'),
+    ('PLSQL_ENTRY_OBJECT_ID', 'int', 'true'),
+    ('PLSQL_ENTRY_SUBPROGRAM_ID', 'int', 'true'),
+    ('PLSQL_ENTRY_SUBPROGRAM_NAME', 'varchar:32', 'true'),
+    ('PLSQL_OBJECT_ID', 'int', 'true'),
+    ('PLSQL_SUBPROGRAM_ID', 'int', 'true'),
+    ('PLSQL_SUBPROGRAM_NAME', 'varchar:32', 'true'),
+    ('EVENT_ID', 'int', 'true'),
+    ('IN_FILTER_ROWS', 'bool', 'false', 'false'),
   ],
   partition_columns = ['SVR_IP', 'SVR_PORT'],
   vtable_route_policy = 'distributed',
@@ -13343,8 +13515,17 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 12440: __all_virtual_wr_system_event
-# 12441: __all_virtual_wr_event_name
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12440',
+  table_name = '__all_virtual_wr_system_event',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__wr_system_event']))
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12441',
+  table_name = '__all_virtual_wr_event_name',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__wr_event_name']))
 # 12442: __all_tenant_scheduler_running_job
 #
 
@@ -13359,6 +13540,81 @@ def_table_schema(**gen_iterate_virtual_table_def(
   keywords = all_def_keywords['__all_routine_privilege_history']))
 
 def_table_schema(
+  owner = 'yuchen.wyc',
+  table_name    = '__all_virtual_sqlstat',
+  table_id      = '12445',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns    = [],
+  rowkey_columns = [],
+  in_tenant_space=True,
+  normal_columns = [
+    ('SVR_IP', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('SVR_PORT', 'int'),
+    ('TENANT_ID', 'int'),
+    ('SQL_ID', 'varchar:OB_MAX_SQL_ID_LENGTH'),
+    ('PLAN_ID', 'int'),
+    ('PLAN_HASH', 'uint'),
+    ('PLAN_TYPE', 'int'),
+    ('QUERY_SQL', 'longtext'),
+    ("SQL_TYPE", 'int'),
+    ('MODULE', 'varchar:64', 'true'),
+    ('ACTION', 'varchar:64', 'true'),
+    ('PARSING_DB_ID', 'int'),
+    ('PARSING_DB_NAME', 'varchar:OB_MAX_DATABASE_NAME_LENGTH'),
+    ('PARSING_USER_ID', 'int'),
+    ('EXECUTIONS_TOTAL', 'bigint', 'false',  '0'),
+    ('EXECUTIONS_DELTA', 'bigint', 'false',  '0'),
+    ('DISK_READS_TOTAL', 'bigint', 'false',  '0'),
+    ('DISK_READS_DELTA', 'bigint', 'false',  '0'),
+    ('BUFFER_GETS_TOTAL', 'bigint', 'false',  '0'),
+    ('BUFFER_GETS_DELTA', 'bigint', 'false',  '0'),
+    ('ELAPSED_TIME_TOTAL', 'bigint', 'false',  '0'),
+    ('ELAPSED_TIME_DELTA', 'bigint', 'false',  '0'),
+    ('CPU_TIME_TOTAL', 'bigint', 'false',  '0'),
+    ('CPU_TIME_DELTA', 'bigint', 'false',  '0'),
+    ('CCWAIT_TOTAL', 'bigint', 'false',  '0'),
+    ('CCWAIT_DELTA', 'bigint', 'false',  '0'),
+    ('USERIO_WAIT_TOTAL', 'bigint', 'false',  '0'),
+    ('USERIO_WAIT_DELTA', 'bigint', 'false',  '0'),
+    ('APWAIT_TOTAL', 'bigint', 'false',  '0'),
+    ('APWAIT_DELTA', 'bigint', 'false',  '0'),
+    ('PHYSICAL_READ_REQUESTS_TOTAL', 'bigint', 'false',  '0'),
+    ('PHYSICAL_READ_REQUESTS_DELTA', 'bigint', 'false',  '0'),
+    ('PHYSICAL_READ_BYTES_TOTAL', 'bigint', 'false',  '0'),
+    ('PHYSICAL_READ_BYTES_DELTA', 'bigint', 'false',  '0'),
+    ('WRITE_THROTTLE_TOTAL', 'bigint', 'false',  '0'),
+    ('WRITE_THROTTLE_DELTA', 'bigint', 'false',  '0'),
+    ('ROWS_PROCESSED_TOTAL', 'bigint', 'false',  '0'),
+    ('ROWS_PROCESSED_DELTA', 'bigint', 'false',  '0'),
+    ('MEMSTORE_READ_ROWS_TOTAL', 'bigint', 'false',  '0'),
+    ('MEMSTORE_READ_ROWS_DELTA', 'bigint', 'false',  '0'),
+    ('MINOR_SSSTORE_READ_ROWS_TOTAL', 'bigint', 'false',  '0'),
+    ('MINOR_SSSTORE_READ_ROWS_DELTA', 'bigint', 'false',  '0'),
+    ('MAJOR_SSSTORE_READ_ROWS_TOTAL', 'bigint', 'false',  '0'),
+    ('MAJOR_SSSTORE_READ_ROWS_DELTA', 'bigint', 'false',  '0'),
+    ('RPC_TOTAL', 'bigint', 'false',  '0'),
+    ('RPC_DELTA', 'bigint', 'false',  '0'),
+    ('FETCHES_TOTAL', 'bigint', 'false',  '0'),
+    ('FETCHES_DELTA', 'bigint', 'false',  '0'),
+    ('RETRY_TOTAL', 'bigint', 'false',  '0'),
+    ('RETRY_DELTA', 'bigint', 'false',  '0'),
+    ('PARTITION_TOTAL', 'bigint', 'false',  '0'),
+    ('PARTITION_DELTA', 'bigint', 'false',  '0'),
+    ('NESTED_SQL_TOTAL', 'bigint', 'false',  '0'),
+    ('NESTED_SQL_DELTA', 'bigint', 'false',  '0'),
+    ('SOURCE_IP', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('SOURCE_PORT', 'int'),
+  ],
+  partition_columns = ['SVR_IP', 'SVR_PORT'],
+  vtable_route_policy = 'distributed',
+)
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12446',
+  table_name = '__all_virtual_wr_sqlstat',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__wr_sqlstat']))
+
+def_table_schema(
   owner = 'linzhigang.lzg',
   table_name     = '__all_virtual_sys_variable_default_value',
   table_id       = '12450',
@@ -13371,6 +13627,13 @@ def_table_schema(
   ('default_value', 'varchar:OB_MAX_CONFIG_VALUE_LEN', 'true')
   ],
 )
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12454',
+  table_name = '__all_virtual_wr_sqltext',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__wr_sqltext']))
+#
 # 余留位置
 #
 
@@ -13777,9 +14040,16 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15418'
 
 # 15419: __all_virutal_column_group_history
 # 15420: __all_virutal_column_group_maping_history
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15421', all_def_keywords['__all_virtual_wr_system_event'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15422', all_def_keywords['__all_virtual_wr_event_name'])))
+# 15423: __all_tenant_scheduler_running_job
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15424', all_def_keywords['__all_virtual_sqlstat'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15425', all_def_keywords['__all_virtual_wr_sqlstat'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15426', all_def_keywords['__tenant_virtual_statname'])))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15428', all_def_keywords['__all_sys_variable']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15429', all_def_keywords['__all_virtual_sys_variable_default_value']))
 
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15432', all_def_keywords['__all_virtual_wr_sqltext'])))
 # 余留位置
 
 
@@ -15385,6 +15655,10 @@ SELECT
     *
 FROM
     oceanbase.GV$OB_RPC_INCOMING
+WHERE
+        SVR_IP=HOST_IP()
+    AND
+        SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 
 )
@@ -23775,47 +24049,7 @@ def_table_schema(
   rowkey_columns  = [],
   table_type      = 'SYSTEM_VIEW',
   in_tenant_space = True,
-  view_definition = """SELECT
-      CAST(SVR_IP AS CHAR(46)) AS SVR_IP,
-      CAST(SVR_PORT AS SIGNED) AS SVR_PORT,
-      CAST(SAMPLE_ID AS SIGNED) AS SAMPLE_ID,
-      CAST(SAMPLE_TIME AS DATETIME) AS SAMPLE_TIME,
-      CAST(TENANT_ID AS SIGNED) AS CON_ID,
-      CAST(USER_ID AS SIGNED) AS USER_ID,
-      CAST(SESSION_ID AS SIGNED) AS SESSION_ID,
-      CAST(IF (SESSION_TYPE = 0, 'FOREGROUND', 'BACKGROUND') AS CHAR(10)) AS SESSION_TYPE,
-      CAST(IF (EVENT_NO = 0, 'ON CPU', 'WAITING') AS CHAR(7)) AS SESSION_STATE,
-      CAST(SQL_ID AS CHAR(32)) AS SQL_ID,
-      CAST(PLAN_ID AS SIGNED) AS PLAN_ID,
-      CAST(TRACE_ID AS CHAR(64)) AS TRACE_ID,
-      CAST(NAME AS CHAR(64)) AS EVENT,
-      CAST(EVENT_NO AS SIGNED) AS EVENT_NO,
-      CAST(PARAMETER1 AS CHAR(64)) AS P1TEXT,
-      CAST(P1 AS SIGNED) AS P1,
-      CAST(PARAMETER2 AS CHAR(64)) AS P2TEXT,
-      CAST(P2 AS SIGNED) AS P2,
-      CAST(PARAMETER3 AS CHAR(64)) AS P3TEXT,
-      CAST(P3 AS SIGNED) AS P3,
-      CAST(WAIT_CLASS AS CHAR(64)) AS WAIT_CLASS,
-      CAST(WAIT_CLASS_ID AS SIGNED) AS WAIT_CLASS_ID,
-      CAST(TIME_WAITED AS SIGNED) AS TIME_WAITED,
-      CAST(SQL_PLAN_LINE_ID AS SIGNED) SQL_PLAN_LINE_ID,
-      CAST(IF (IN_PARSE = 1, 'Y', 'N') AS CHAR(1)) AS IN_PARSE,
-      CAST(IF (IN_PL_PARSE = 1, 'Y', 'N') AS CHAR(1)) AS IN_PL_PARSE,
-      CAST(IF (IN_PLAN_CACHE = 1, 'Y', 'N') AS CHAR(1)) AS IN_PLAN_CACHE,
-      CAST(IF (IN_SQL_OPTIMIZE = 1, 'Y', 'N') AS CHAR(1)) AS IN_SQL_OPTIMIZE,
-      CAST(IF (IN_SQL_EXECUTION = 1, 'Y', 'N') AS CHAR(1)) AS IN_SQL_EXECUTION,
-      CAST(IF (IN_PX_EXECUTION = 1, 'Y', 'N') AS CHAR(1)) AS IN_PX_EXECUTION,
-      CAST(IF (IN_SEQUENCE_LOAD = 1, 'Y', 'N') AS CHAR(1)) AS IN_SEQUENCE_LOAD,
-      CAST(IF (IN_COMMITTING = 1, 'Y', 'N') AS CHAR(1)) AS IN_COMMITTING,
-      CAST(IF (IN_STORAGE_READ = 1, 'Y', 'N') AS CHAR(1)) AS IN_STORAGE_READ,
-      CAST(IF (IN_STORAGE_WRITE = 1, 'Y', 'N') AS CHAR(1)) AS IN_STORAGE_WRITE,
-      CAST(IF (IN_REMOTE_DAS_EXECUTION = 1, 'Y', 'N') AS CHAR(1)) AS IN_REMOTE_DAS_EXECUTION,
-      CAST(MODULE AS CHAR(64)) AS MODULE,
-      CAST(ACTION AS CHAR(64)) AS ACTION,
-      CAST(CLIENT_ID AS CHAR(64)) AS CLIENT_ID,
-      CAST(BACKTRACE AS CHAR(512)) AS BACKTRACE
-  FROM oceanbase.__all_virtual_ash LEFT JOIN oceanbase.v$event_name on EVENT_NO = `event#`
+  view_definition = """SELECT * FROM oceanbase.GV$OB_ACTIVE_SESSION_HISTORY
 """.replace("\n", " "),
   normal_columns  = [],
 )
@@ -23829,7 +24063,7 @@ def_table_schema(
   rowkey_columns  = [],
   table_type      = 'SYSTEM_VIEW',
   in_tenant_space = True,
-  view_definition = """SELECT * FROM oceanbase.gv$active_session_history WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+  view_definition = """SELECT * FROM oceanbase.GV$OB_ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
   normal_columns  = [],
 )
@@ -28312,6 +28546,7 @@ def_table_schema(
       ASH.SQL_ID AS SQL_ID,
       ASH.TRACE_ID AS TRACE_ID,
       ASH.EVENT_NO AS EVENT_NO,
+      ASH.EVENT_ID AS EVENT_ID,
       ASH.TIME_WAITED AS TIME_WAITED,
       ASH.P1 AS P1,
       ASH.P2 AS P2,
@@ -28329,15 +28564,29 @@ def_table_schema(
       CAST(CASE WHEN (ASH.TIME_MODEL & 256) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_STORAGE_READ,
       CAST(CASE WHEN (ASH.TIME_MODEL & 512) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_STORAGE_WRITE,
       CAST(CASE WHEN (ASH.TIME_MODEL & 1024) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_REMOTE_DAS_EXECUTION,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 2048) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_FILTER_ROWS,
+      ASH.PROGRAM AS PROGRAM,
       ASH.MODULE AS MODULE,
       ASH.ACTION AS ACTION,
       ASH.CLIENT_ID AS CLIENT_ID,
       ASH.BACKTRACE AS BACKTRACE,
-      ASH.PLAN_ID AS PLAN_ID
+      ASH.PLAN_ID AS PLAN_ID,
+      ASH.TM_DELTA_TIME AS TM_DELTA_TIME,
+      ASH.TM_DELTA_CPU_TIME AS TM_DELTA_CPU_TIME,
+      ASH.TM_DELTA_DB_TIME AS TM_DELTA_DB_TIME,
+      ASH.TOP_LEVEL_SQL_ID AS TOP_LEVEL_SQL_ID,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 2048) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_PLSQL_COMPILATION,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 4096) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_PLSQL_EXECUTION,
+      ASH.PLSQL_ENTRY_OBJECT_ID AS PLSQL_ENTRY_OBJECT_ID,
+      ASH.PLSQL_ENTRY_SUBPROGRAM_ID AS PLSQL_ENTRY_SUBPROGRAM_ID,
+      ASH.PLSQL_ENTRY_SUBPROGRAM_NAME AS PLSQL_ENTRY_SUBPROGRAM_NAME,
+      ASH.PLSQL_OBJECT_ID AS PLSQL_OBJECT_ID,
+      ASH.PLSQL_SUBPROGRAM_ID AS PLSQL_SUBPROGRAM_ID,
+      ASH.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME
   FROM
     (
-      OCEANBASE.__ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY ASH
-      JOIN OCEANBASE.__ALL_VIRTUAL_WR_SNAPSHOT SNAP
+      oceanbase.__all_virtual_wr_active_session_history ASH
+      JOIN oceanbase.__all_virtual_wr_snapshot SNAP
       ON ASH.CLUSTER_ID = SNAP.CLUSTER_ID
       AND ASH.TENANT_ID = SNAP.TENANT_ID
       AND ASH.SNAP_ID = SNAP.SNAP_ID
@@ -28375,6 +28624,7 @@ def_table_schema(
       ASH.SQL_ID AS SQL_ID,
       ASH.TRACE_ID AS TRACE_ID,
       ASH.EVENT_NO AS EVENT_NO,
+      ASH.EVENT_ID AS EVENT_ID,
       ASH.TIME_WAITED AS TIME_WAITED,
       ASH.P1 AS P1,
       ASH.P2 AS P2,
@@ -28392,15 +28642,29 @@ def_table_schema(
       CAST(CASE WHEN (ASH.TIME_MODEL & 256) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_STORAGE_READ,
       CAST(CASE WHEN (ASH.TIME_MODEL & 512) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_STORAGE_WRITE,
       CAST(CASE WHEN (ASH.TIME_MODEL & 1024) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_REMOTE_DAS_EXECUTION,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 2048) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_FILTER_ROWS,
+      ASH.PROGRAM AS PROGRAM,
       ASH.MODULE AS MODULE,
       ASH.ACTION AS ACTION,
       ASH.CLIENT_ID AS CLIENT_ID,
       ASH.BACKTRACE AS BACKTRACE,
-      ASH.PLAN_ID AS PLAN_ID
+      ASH.PLAN_ID AS PLAN_ID,
+      ASH.TM_DELTA_TIME AS TM_DELTA_TIME,
+      ASH.TM_DELTA_CPU_TIME AS TM_DELTA_CPU_TIME,
+      ASH.TM_DELTA_DB_TIME AS TM_DELTA_DB_TIME,
+      ASH.TOP_LEVEL_SQL_ID AS TOP_LEVEL_SQL_ID,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 2048) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_PLSQL_COMPILATION,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 4096) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_PLSQL_EXECUTION,
+      ASH.PLSQL_ENTRY_OBJECT_ID AS PLSQL_ENTRY_OBJECT_ID,
+      ASH.PLSQL_ENTRY_SUBPROGRAM_ID AS PLSQL_ENTRY_SUBPROGRAM_ID,
+      ASH.PLSQL_ENTRY_SUBPROGRAM_NAME AS PLSQL_ENTRY_SUBPROGRAM_NAME,
+      ASH.PLSQL_OBJECT_ID AS PLSQL_OBJECT_ID,
+      ASH.PLSQL_SUBPROGRAM_ID AS PLSQL_SUBPROGRAM_ID,
+      ASH.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME
   FROM
     (
-      OCEANBASE.__ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY ASH
-      JOIN OCEANBASE.__ALL_VIRTUAL_WR_SNAPSHOT SNAP
+      oceanbase.__all_virtual_wr_active_session_history ASH
+      JOIN oceanbase.__all_virtual_wr_snapshot SNAP
       ON ASH.CLUSTER_ID = SNAP.CLUSTER_ID
       AND ASH.TENANT_ID = SNAP.TENANT_ID
       AND ASH.SNAP_ID = SNAP.SNAP_ID
@@ -28432,7 +28696,7 @@ def_table_schema(
          END_INTERVAL_TIME,
          SNAP_FLAG,
          STARTUP_TIME
-  FROM OCEANBASE.__ALL_VIRTUAL_WR_SNAPSHOT
+  FROM oceanbase.__all_virtual_wr_snapshot
   WHERE STATUS = 0
         AND TENANT_ID=EFFECTIVE_TENANT_ID();
   """.replace("\n", " ")
@@ -28457,7 +28721,7 @@ def_table_schema(
          END_INTERVAL_TIME,
          SNAP_FLAG,
          STARTUP_TIME
-  FROM OCEANBASE.__ALL_VIRTUAL_WR_SNAPSHOT
+  FROM oceanbase.__all_virtual_wr_snapshot
   WHERE STATUS = 0;
   """.replace("\n", " ")
 )
@@ -28477,7 +28741,7 @@ def_table_schema(
          TENANT_ID,
          STAT_ID,
          STAT_NAME
-  FROM OCEANBASE.__ALL_VIRTUAL_WR_STATNAME
+  FROM oceanbase.__all_virtual_wr_statname
   WHERE TENANT_ID=EFFECTIVE_TENANT_ID();
   """.replace("\n", " ")
 )
@@ -28496,7 +28760,7 @@ def_table_schema(
          TENANT_ID,
          STAT_ID,
          STAT_NAME
-  FROM OCEANBASE.__ALL_VIRTUAL_WR_STATNAME;
+  FROM oceanbase.__all_virtual_wr_statname;
   """.replace("\n", " ")
 )
 
@@ -28522,8 +28786,8 @@ def_table_schema(
       STAT.VALUE AS VALUE
   FROM
     (
-      OCEANBASE.__ALL_VIRTUAL_WR_SYSSTAT STAT
-      JOIN OCEANBASE.__ALL_VIRTUAL_WR_SNAPSHOT SNAP
+      oceanbase.__all_virtual_wr_sysstat STAT
+      JOIN oceanbase.__all_virtual_wr_snapshot SNAP
       ON STAT.CLUSTER_ID = SNAP.CLUSTER_ID
       AND STAT.TENANT_ID = SNAP.TENANT_ID
       AND STAT.SNAP_ID = SNAP.SNAP_ID
@@ -28556,8 +28820,8 @@ def_table_schema(
       STAT.VALUE AS VALUE
   FROM
     (
-      OCEANBASE.__ALL_VIRTUAL_WR_SYSSTAT STAT
-      JOIN OCEANBASE.__ALL_VIRTUAL_WR_SNAPSHOT SNAP
+      oceanbase.__all_virtual_wr_sysstat STAT
+      JOIN oceanbase.__all_virtual_wr_snapshot SNAP
       ON STAT.CLUSTER_ID = SNAP.CLUSTER_ID
       AND STAT.TENANT_ID = SNAP.TENANT_ID
       AND STAT.SNAP_ID = SNAP.SNAP_ID
@@ -29603,7 +29867,7 @@ def_table_schema(
       SETTING.RETENTION AS RETENTION,
       SETTING.TOPNSQL AS TOPNSQL
   FROM
-    OCEANBASE.__ALL_VIRTUAL_WR_CONTROL SETTING
+    oceanbase.__all_virtual_wr_control SETTING
   WHERE
     SETTING.TENANT_ID = EFFECTIVE_TENANT_ID()
   """.replace("\n", " ")
@@ -29625,7 +29889,7 @@ def_table_schema(
       SETTING.RETENTION AS RETENTION,
       SETTING.TOPNSQL AS TOPNSQL
   FROM
-    OCEANBASE.__ALL_VIRTUAL_WR_CONTROL SETTING
+    oceanbase.__all_virtual_wr_control SETTING
   """.replace("\n", " ")
 )
 def_table_schema(
@@ -30470,6 +30734,119 @@ FROM oceanbase.GV$OB_CGROUP_CONFIG
 WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )
+
+def_table_schema(
+  owner           = 'roland.qk',
+  table_name      = 'DBA_WR_SYSTEM_EVENT',
+  table_id        = '21481',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+      SETTING.SNAP_ID AS SNAP_ID,
+      SETTING.SVR_IP AS SVR_IP,
+      SETTING.SVR_PORT AS SVR_PORT,
+      SETTING.EVENT_ID AS EVENT_ID,
+      EN.EVENT_NAME AS EVENT_NAME,
+      EN.WAIT_CLASS_ID AS WAIT_CLASS_ID,
+      EN.WAIT_CLASS AS WAIT_CLASS,
+      SETTING.TOTAL_WAITS AS TOTAL_WAITS,
+      SETTING.TOTAL_TIMEOUTS AS TOTAL_TIMEOUTS,
+      SETTING.TIME_WAITED_MICRO AS TIME_WAITED_MICRO
+  FROM
+    oceanbase.__all_virtual_wr_system_event SETTING,
+    oceanbase.__all_virtual_wr_event_name EN
+  WHERE
+    SETTING.TENANT_ID = EFFECTIVE_TENANT_ID()
+    AND EN.EVENT_ID = SETTING.EVENT_ID
+    AND EN.TENANT_ID = SETTING.TENANT_ID
+  """.replace("\n", " ")
+)
+def_table_schema(
+  owner           = 'roland.qk',
+  table_name      = 'CDB_WR_SYSTEM_EVENT',
+  table_id        = '21482',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT
+      SETTING.TENANT_ID AS TENANT_ID,
+      SETTING.CLUSTER_ID AS CLUSTER_ID,
+      SETTING.SNAP_ID AS SNAP_ID,
+      SETTING.SVR_IP AS SVR_IP,
+      SETTING.SVR_PORT AS SVR_PORT,
+      SETTING.EVENT_ID AS EVENT_ID,
+      EN.EVENT_NAME AS EVENT_NAME,
+      EN.WAIT_CLASS_ID AS WAIT_CLASS_ID,
+      EN.WAIT_CLASS AS WAIT_CLASS,
+      SETTING.TOTAL_WAITS AS TOTAL_WAITS,
+      SETTING.TOTAL_TIMEOUTS AS TOTAL_TIMEOUTS,
+      SETTING.TIME_WAITED_MICRO AS TIME_WAITED_MICRO
+  FROM
+    oceanbase.__all_virtual_wr_system_event SETTING,
+    oceanbase.__all_virtual_wr_event_name EN
+  WHERE
+    EN.EVENT_ID = SETTING.EVENT_ID
+    AND EN.TENANT_ID = SETTING.TENANT_ID
+  """.replace("\n", " ")
+)
+def_table_schema(
+  owner           = 'roland.qk',
+  table_name      = 'DBA_WR_EVENT_NAME',
+  table_id        = '21483',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+      SETTING.EVENT_ID AS EVENT_ID,
+      SETTING.EVENT_NAME AS EVENT_NAME,
+      SETTING.PARAMETER1 AS PARAMETER1,
+      SETTING.PARAMETER2 AS PARAMETER2,
+      SETTING.PARAMETER3 AS PARAMETER3,
+      SETTING.WAIT_CLASS_ID AS WAIT_CLASS_ID,
+      SETTING.WAIT_CLASS AS WAIT_CLASS
+  FROM
+    oceanbase.__all_virtual_wr_event_name SETTING
+  WHERE
+    SETTING.TENANT_ID = EFFECTIVE_TENANT_ID()
+  """.replace("\n", " ")
+)
+def_table_schema(
+  owner           = 'roland.qk',
+  table_name      = 'CDB_WR_EVENT_NAME',
+  table_id        = '21484',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT
+      SETTING.TENANT_ID AS TENANT_ID,
+      SETTING.CLUSTER_ID AS CLUSTER_ID,
+      SETTING.EVENT_ID AS EVENT_ID,
+      SETTING.EVENT_NAME AS EVENT_NAME,
+      SETTING.PARAMETER1 AS PARAMETER1,
+      SETTING.PARAMETER2 AS PARAMETER2,
+      SETTING.PARAMETER3 AS PARAMETER3,
+      SETTING.WAIT_CLASS_ID AS WAIT_CLASS_ID,
+      SETTING.WAIT_CLASS AS WAIT_CLASS
+  FROM
+    oceanbase.__all_virtual_wr_event_name SETTING
+  """.replace("\n", " ")
+)
+
 def_table_schema(
     owner = 'guoyun.lgy',
     table_name     = 'DBA_OB_FORMAT_OUTLINES',
@@ -30500,8 +30877,6 @@ def_table_schema(
     normal_columns = [
     ],
 )
-#21486 mysql.procs_priv
-#21499 DBA_OB_INDEX_USAGE
 
 def_table_schema(
   owner = 'mingye.swj',
@@ -30531,6 +30906,394 @@ def_table_schema(
     AND a.routine_type = c.routine_type AND c.database_id = d.database_id AND c.package_id = -1;
 """.replace("\n", " ")
 )
+
+def_table_schema(
+  owner = 'yuchen.wyc',
+  tablegroup_id   = 'OB_INVALID_ID',
+  table_name      = 'GV$OB_SQLSTAT',
+  table_id        = '21487',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  table_type      = 'SYSTEM_VIEW',
+  in_tenant_space = True,
+  view_definition = """SELECT
+      SVR_IP AS SVR_IP,
+      SVR_PORT AS SVR_PORT,
+      TENANT_ID AS TENANT_ID,
+      SQL_ID AS SQL_ID,
+      PLAN_ID AS PLAN_ID,
+      PLAN_HASH AS PLAN_HASH,
+      PLAN_TYPE AS PLAN_TYPE,
+      QUERY_SQL AS QUERY_SQL,
+      SQL_TYPE AS SQL_TYPE,
+      MODULE AS MODULE,
+      ACTION AS ACTION,
+      PARSING_DB_ID AS PARSING_DB_ID,
+      PARSING_DB_NAME AS PARSING_DB_NAME,
+      PARSING_USER_ID AS PARSING_USER_ID,
+      EXECUTIONS_TOTAL AS EXECUTIONS_TOTAL,
+      EXECUTIONS_DELTA AS EXECUTIONS_DELTA,
+      DISK_READS_TOTAL AS DISK_READS_TOTAL,
+      DISK_READS_DELTA AS DISK_READS_DELTA,
+      BUFFER_GETS_TOTAL AS BUFFER_GETS_TOTAL,
+      BUFFER_GETS_DELTA AS BUFFER_GETS_DELTA,
+      ELAPSED_TIME_TOTAL AS ELAPSED_TIME_TOTAL,
+      ELAPSED_TIME_DELTA AS ELAPSED_TIME_DELTA,
+      CPU_TIME_TOTAL AS CPU_TIME_TOTAL,
+      CPU_TIME_DELTA AS CPU_TIME_DELTA,
+      CCWAIT_TOTAL AS CCWAIT_TOTAL,
+      CCWAIT_DELTA AS CCWAIT_DELTA,
+      USERIO_WAIT_TOTAL AS USERIO_WAIT_TOTAL,
+      USERIO_WAIT_DELTA AS USERIO_WAIT_DELTA,
+      APWAIT_TOTAL AS APWAIT_TOTAL,
+      APWAIT_DELTA AS APWAIT_DELTA,
+      PHYSICAL_READ_REQUESTS_TOTAL AS PHYSICAL_READ_REQUESTS_TOTAL,
+      PHYSICAL_READ_REQUESTS_DELTA AS PHYSICAL_READ_REQUESTS_DELTA,
+      PHYSICAL_READ_BYTES_TOTAL AS PHYSICAL_READ_BYTES_TOTAL,
+      PHYSICAL_READ_BYTES_DELTA AS PHYSICAL_READ_BYTES_DELTA,
+      WRITE_THROTTLE_TOTAL AS WRITE_THROTTLE_TOTAL,
+      WRITE_THROTTLE_DELTA AS WRITE_THROTTLE_DELTA,
+      ROWS_PROCESSED_TOTAL AS ROWS_PROCESSED_TOTAL,
+      ROWS_PROCESSED_DELTA AS ROWS_PROCESSED_DELTA,
+      MEMSTORE_READ_ROWS_TOTAL AS MEMSTORE_READ_ROWS_TOTAL,
+      MEMSTORE_READ_ROWS_DELTA AS MEMSTORE_READ_ROWS_DELTA,
+      MINOR_SSSTORE_READ_ROWS_TOTAL AS MINOR_SSSTORE_READ_ROWS_TOTAL,
+      MINOR_SSSTORE_READ_ROWS_DELTA AS MINOR_SSSTORE_READ_ROWS_DELTA,
+      MAJOR_SSSTORE_READ_ROWS_TOTAL AS MAJOR_SSSTORE_READ_ROWS_TOTAL,
+      MAJOR_SSSTORE_READ_ROWS_DELTA AS MAJOR_SSSTORE_READ_ROWS_DELTA,
+      RPC_TOTAL AS RPC_TOTAL,
+      RPC_DELTA AS RPC_DELTA,
+      FETCHES_TOTAL AS FETCHES_TOTAL,
+      FETCHES_DELTA AS FETCHES_DELTA,
+      RETRY_TOTAL AS RETRY_TOTAL,
+      RETRY_DELTA AS RETRY_DELTA,
+      PARTITION_TOTAL AS PARTITION_TOTAL,
+      PARTITION_DELTA AS PARTITION_DELTA,
+      NESTED_SQL_TOTAL AS NESTED_SQL_TOTAL,
+      NESTED_SQL_DELTA AS NESTED_SQL_DELTA,
+      SOURCE_IP AS SOURCE_IP,
+      SOURCE_PORT AS SOURCE_PORT
+  FROM oceanbase.__all_virtual_sqlstat
+""".replace("\n", " "),
+  normal_columns  = [],
+)
+def_table_schema(
+  owner = 'yuchen.wyc',
+  tablegroup_id   = 'OB_INVALID_ID',
+  table_name      = 'V$OB_SQLSTAT',
+  table_id        = '21488',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  table_type      = 'SYSTEM_VIEW',
+  in_tenant_space = True,
+  view_definition = """SELECT * FROM oceanbase.gv$ob_sqlstat WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+  normal_columns  = [],
+)
+def_table_schema(
+  owner           = 'jiajingzhe.jjz',
+  table_name      = 'DBA_WR_SQLSTAT',
+  table_id        = '21489',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+      STAT.SNAP_ID AS SNAP_ID,
+      STAT.SVR_IP AS SVR_IP,
+      STAT.SVR_PORT AS SVR_PORT,
+      STAT.SQL_ID AS SQL_ID,
+      STAT.PLAN_HASH AS PLAN_HASH,
+      STAT.PLAN_ID AS PLAN_ID,
+      STAT.PLAN_TYPE AS PLAN_TYPE,
+      STAT.MODULE AS MODULE,
+      STAT.ACTION AS ACTION,
+      STAT.PARSING_DB_ID AS PARSING_DB_ID,
+      STAT.PARSING_DB_NAME AS PARSING_DB_NAME,
+      STAT.PARSING_USER_ID AS PARSING_USER_ID,
+      STAT.EXECUTIONS_TOTAL AS EXECUTIONS_TOTAL,
+      STAT.EXECUTIONS_DELTA AS EXECUTIONS_DELTA,
+      STAT.DISK_READS_TOTAL AS DISK_READS_TOTAL,
+      STAT.DISK_READS_DELTA AS DISK_READS_DELTA,
+      STAT.BUFFER_GETS_TOTAL AS BUFFER_GETS_TOTAL,
+      STAT.BUFFER_GETS_DELTA AS BUFFER_GETS_DELTA,
+      STAT.ELAPSED_TIME_TOTAL AS ELAPSED_TIME_TOTAL,
+      STAT.ELAPSED_TIME_DELTA AS ELAPSED_TIME_DELTA,
+      STAT.CPU_TIME_TOTAL AS CPU_TIME_TOTAL,
+      STAT.CPU_TIME_DELTA AS CPU_TIME_DELTA,
+      STAT.CCWAIT_TOTAL AS CCWAIT_TOTAL,
+      STAT.CCWAIT_DELTA AS CCWAIT_DELTA,
+      STAT.USERIO_WAIT_TOTAL AS USERIO_WAIT_TOTAL,
+      STAT.USERIO_WAIT_DELTA AS USERIO_WAIT_DELTA,
+      STAT.APWAIT_TOTAL AS APWAIT_TOTAL,
+      STAT.APWAIT_DELTA AS APWAIT_DELTA,
+      STAT.PHYSICAL_READ_REQUESTS_TOTAL AS PHYSICAL_READ_REQUESTS_TOTAL,
+      STAT.PHYSICAL_READ_REQUESTS_DELTA AS PHYSICAL_READ_REQUESTS_DELTA,
+      STAT.PHYSICAL_READ_BYTES_TOTAL AS PHYSICAL_READ_BYTES_TOTAL,
+      STAT.PHYSICAL_READ_BYTES_DELTA AS PHYSICAL_READ_BYTES_DELTA,
+      STAT.WRITE_THROTTLE_TOTAL AS WRITE_THROTTLE_TOTAL,
+      STAT.WRITE_THROTTLE_DELTA AS WRITE_THROTTLE_DELTA,
+      STAT.ROWS_PROCESSED_TOTAL AS ROWS_PROCESSED_TOTAL,
+      STAT.ROWS_PROCESSED_DELTA AS ROWS_PROCESSED_DELTA,
+      STAT.MEMSTORE_READ_ROWS_TOTAL AS MEMSTORE_READ_ROWS_TOTAL,
+      STAT.MEMSTORE_READ_ROWS_DELTA AS MEMSTORE_READ_ROWS_DELTA,
+      STAT.MINOR_SSSTORE_READ_ROWS_TOTAL AS MINOR_SSSTORE_READ_ROWS_TOTAL,
+      STAT.MINOR_SSSTORE_READ_ROWS_DELTA AS MINOR_SSSTORE_READ_ROWS_DELTA,
+      STAT.MAJOR_SSSTORE_READ_ROWS_TOTAL AS MAJOR_SSSTORE_READ_ROWS_TOTAL,
+      STAT.MAJOR_SSSTORE_READ_ROWS_DELTA AS MAJOR_SSSTORE_READ_ROWS_DELTA,
+      STAT.RPC_TOTAL AS RPC_TOTAL,
+      STAT.RPC_DELTA AS RPC_DELTA,
+      STAT.FETCHES_TOTAL AS FETCHES_TOTAL,
+      STAT.FETCHES_DELTA AS FETCHES_DELTA,
+      STAT.RETRY_TOTAL AS RETRY_TOTAL,
+      STAT.RETRY_DELTA AS RETRY_DELTA,
+      STAT.PARTITION_TOTAL AS PARTITION_TOTAL,
+      STAT.PARTITION_DELTA AS PARTITION_DELTA,
+      STAT.NESTED_SQL_TOTAL AS NESTED_SQL_TOTAL,
+      STAT.NESTED_SQL_DELTA AS NESTED_SQL_DELTA,
+      STAT.SOURCE_IP AS SOURCE_IP,
+      STAT.SOURCE_PORT AS SOURCE_PORT
+    FROM
+    (
+      oceanbase.__all_virtual_wr_sqlstat STAT
+      JOIN oceanbase.__all_virtual_wr_snapshot SNAP
+      ON STAT.CLUSTER_ID = SNAP.CLUSTER_ID
+      AND STAT.TENANT_ID = SNAP.TENANT_ID
+      AND STAT.SNAP_ID = SNAP.SNAP_ID
+      AND STAT.SVR_IP = SNAP.SVR_IP
+      AND STAT.SVR_PORT = SNAP.SVR_PORT
+    )
+    WHERE
+      STAT.TENANT_ID = EFFECTIVE_TENANT_ID()
+      AND SNAP.STATUS = 0
+  """.replace("\n", " ")
+)
+def_table_schema(
+  owner           = 'jiajingzhe.jjz',
+  table_name      = 'CDB_WR_SQLSTAT',
+  table_id        = '21490',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT
+      STAT.TENANT_ID AS TENANT_ID,
+      STAT.SNAP_ID AS SNAP_ID,
+      STAT.SVR_IP AS SVR_IP,
+      STAT.SVR_PORT AS SVR_PORT,
+      STAT.SQL_ID AS SQL_ID,
+      STAT.PLAN_HASH AS PLAN_HASH,
+      STAT.PLAN_ID AS PLAN_ID,
+      STAT.PLAN_TYPE AS PLAN_TYPE,
+      STAT.MODULE AS MODULE,
+      STAT.ACTION AS ACTION,
+      STAT.PARSING_DB_ID AS PARSING_DB_ID,
+      STAT.PARSING_DB_NAME AS PARSING_DB_NAME,
+      STAT.PARSING_USER_ID AS PARSING_USER_ID,
+      STAT.EXECUTIONS_TOTAL AS EXECUTIONS_TOTAL,
+      STAT.EXECUTIONS_DELTA AS EXECUTIONS_DELTA,
+      STAT.DISK_READS_TOTAL AS DISK_READS_TOTAL,
+      STAT.DISK_READS_DELTA AS DISK_READS_DELTA,
+      STAT.BUFFER_GETS_TOTAL AS BUFFER_GETS_TOTAL,
+      STAT.BUFFER_GETS_DELTA AS BUFFER_GETS_DELTA,
+      STAT.ELAPSED_TIME_TOTAL AS ELAPSED_TIME_TOTAL,
+      STAT.ELAPSED_TIME_DELTA AS ELAPSED_TIME_DELTA,
+      STAT.CPU_TIME_TOTAL AS CPU_TIME_TOTAL,
+      STAT.CPU_TIME_DELTA AS CPU_TIME_DELTA,
+      STAT.CCWAIT_TOTAL AS CCWAIT_TOTAL,
+      STAT.CCWAIT_DELTA AS CCWAIT_DELTA,
+      STAT.USERIO_WAIT_TOTAL AS USERIO_WAIT_TOTAL,
+      STAT.USERIO_WAIT_DELTA AS USERIO_WAIT_DELTA,
+      STAT.APWAIT_TOTAL AS APWAIT_TOTAL,
+      STAT.APWAIT_DELTA AS APWAIT_DELTA,
+      STAT.PHYSICAL_READ_REQUESTS_TOTAL AS PHYSICAL_READ_REQUESTS_TOTAL,
+      STAT.PHYSICAL_READ_REQUESTS_DELTA AS PHYSICAL_READ_REQUESTS_DELTA,
+      STAT.PHYSICAL_READ_BYTES_TOTAL AS PHYSICAL_READ_BYTES_TOTAL,
+      STAT.PHYSICAL_READ_BYTES_DELTA AS PHYSICAL_READ_BYTES_DELTA,
+      STAT.WRITE_THROTTLE_TOTAL AS WRITE_THROTTLE_TOTAL,
+      STAT.WRITE_THROTTLE_DELTA AS WRITE_THROTTLE_DELTA,
+      STAT.ROWS_PROCESSED_TOTAL AS ROWS_PROCESSED_TOTAL,
+      STAT.ROWS_PROCESSED_DELTA AS ROWS_PROCESSED_DELTA,
+      STAT.MEMSTORE_READ_ROWS_TOTAL AS MEMSTORE_READ_ROWS_TOTAL,
+      STAT.MEMSTORE_READ_ROWS_DELTA AS MEMSTORE_READ_ROWS_DELTA,
+      STAT.MINOR_SSSTORE_READ_ROWS_TOTAL AS MINOR_SSSTORE_READ_ROWS_TOTAL,
+      STAT.MINOR_SSSTORE_READ_ROWS_DELTA AS MINOR_SSSTORE_READ_ROWS_DELTA,
+      STAT.MAJOR_SSSTORE_READ_ROWS_TOTAL AS MAJOR_SSSTORE_READ_ROWS_TOTAL,
+      STAT.MAJOR_SSSTORE_READ_ROWS_DELTA AS MAJOR_SSSTORE_READ_ROWS_DELTA,
+      STAT.RPC_TOTAL AS RPC_TOTAL,
+      STAT.RPC_DELTA AS RPC_DELTA,
+      STAT.FETCHES_TOTAL AS FETCHES_TOTAL,
+      STAT.FETCHES_DELTA AS FETCHES_DELTA,
+      STAT.RETRY_TOTAL AS RETRY_TOTAL,
+      STAT.RETRY_DELTA AS RETRY_DELTA,
+      STAT.PARTITION_TOTAL AS PARTITION_TOTAL,
+      STAT.PARTITION_DELTA AS PARTITION_DELTA,
+      STAT.NESTED_SQL_TOTAL AS NESTED_SQL_TOTAL,
+      STAT.NESTED_SQL_DELTA AS NESTED_SQL_DELTA,
+      STAT.SOURCE_IP AS SOURCE_IP,
+      STAT.SOURCE_PORT AS SOURCE_PORT
+    FROM
+    (
+      oceanbase.__all_virtual_wr_sqlstat STAT
+      JOIN oceanbase.__all_virtual_wr_snapshot SNAP
+      ON STAT.CLUSTER_ID = SNAP.CLUSTER_ID
+      AND STAT.TENANT_ID = SNAP.TENANT_ID
+      AND STAT.SNAP_ID = SNAP.SNAP_ID
+      AND STAT.SVR_IP = SNAP.SVR_IP
+      AND STAT.SVR_PORT = SNAP.SVR_PORT
+    )
+    WHERE
+      SNAP.STATUS = 0
+  """.replace("\n", " ")
+)
+def_table_schema(
+  owner = 'roland.qk',
+  table_name      = 'GV$OB_SESS_TIME_MODEL',
+  table_id        = '21491',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SID AS SID,
+    gv$sesstat.CON_ID AS TENANT_ID,
+    SVR_IP AS SVR_IP,
+    SVR_PORT AS SVR_PORT,
+    STAT_ID AS STAT_ID,
+    NAME AS STAT_NAME,
+    VALUE AS VALUE
+  FROM
+    oceanbase.GV$SESSTAT
+  left join
+    oceanbase.v$statname
+  on gv$sesstat.`statistic#`=v$statname.`statistic#`
+  WHERE
+    STAT_ID in (200001, 200002, 200010, 200011, 200005, 200006);
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'roland.qk',
+  table_name      = 'V$OB_SESS_TIME_MODEL',
+  table_id        = '21492',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT *
+  FROM
+    oceanbase.GV$OB_SESS_TIME_MODEL
+  WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'roland.qk',
+  table_name      = 'GV$OB_SYS_TIME_MODEL',
+  table_id        = '21493',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    GV$SYSSTAT.CON_ID AS TENANT_ID,
+    SVR_IP AS SVR_IP,
+    SVR_PORT AS SVR_PORT,
+    STAT_ID AS STAT_ID,
+    NAME AS STAT_NAME,
+    VALUE AS VALUE
+  FROM
+    oceanbase.GV$SYSSTAT
+  WHERE
+    STAT_ID in (200001, 200002, 200010, 200011, 200005, 200006);
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'roland.qk',
+  table_name      = 'V$OB_SYS_TIME_MODEL',
+  table_id        = '21494',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    *
+  FROM
+    oceanbase.GV$OB_SYS_TIME_MODEL
+  WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT();
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'roland.qk',
+  table_name      = 'DBA_WR_SYS_TIME_MODEL',
+  table_id        = '21495',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SNAP_ID AS SNAP_ID,
+    SVR_IP AS SVR_IP,
+    SVR_PORT AS SVR_PORT,
+    oceanbase.DBA_WR_SYSSTAT.STAT_ID AS STAT_ID,
+    STAT_NAME AS STAT_NAME,
+    VALUE AS VALUE
+  FROM
+    oceanbase.DBA_WR_SYSSTAT
+  left join
+    oceanbase.DBA_WR_STATNAME
+  on oceanbase.DBA_WR_SYSSTAT.STAT_ID=oceanbase.DBA_WR_STATNAME.STAT_ID
+  WHERE
+    oceanbase.DBA_WR_SYSSTAT.STAT_ID in (200001, 200002, 200010, 200011, 200005, 200006);
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'roland.qk',
+  table_name      = 'CDB_WR_SYS_TIME_MODEL',
+  table_id        = '21496',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition = """
+  SELECT
+    oceanbase.CDB_WR_SYSSTAT.CLUSTER_ID AS CLUSTER_ID,
+    oceanbase.CDB_WR_SYSSTAT.TENANT_ID AS TENANT_ID,
+    SNAP_ID AS SNAP_ID,
+    SVR_IP AS SVR_IP,
+    SVR_PORT AS SVR_PORT,
+    oceanbase.CDB_WR_SYSSTAT.STAT_ID AS STAT_ID,
+    STAT_NAME AS STAT_NAME,
+    VALUE AS VALUE
+  FROM
+    oceanbase.CDB_WR_SYSSTAT
+  left join
+    oceanbase.DBA_WR_STATNAME
+  on oceanbase.CDB_WR_SYSSTAT.STAT_ID=oceanbase.DBA_WR_STATNAME.STAT_ID
+  WHERE
+    oceanbase.CDB_WR_SYSSTAT.STAT_ID in (200001, 200002, 200010, 200011, 200005, 200006);
+""".replace("\n", " "),
+)
+
+#21499 DBA_OB_INDEX_USAGE
 
 def_table_schema(
   owner           = 'linzhigang.lzg',
@@ -30566,6 +31329,149 @@ def_table_schema(
   join oceanbase.__all_virtual_sys_variable_default_value b
   where a.name = b.variable_name;
   """.replace("\n", " "),
+)
+
+
+def_table_schema(
+  owner           = 'jiajingzhe.jjz',
+  table_name      = 'DBA_WR_SQLTEXT',
+  table_id        = '21505',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+      STAT.SNAP_ID AS SNAP_ID,
+      STAT.SQL_ID AS SQL_ID,
+      STAT.QUERY_SQL AS QUERY_SQL,
+      STAT.SQL_TYPE AS SQL_TYPE
+    FROM
+    (
+      oceanbase.__all_virtual_wr_sqltext STAT
+      JOIN oceanbase.__all_virtual_wr_snapshot SNAP
+      ON STAT.CLUSTER_ID = SNAP.CLUSTER_ID
+      AND STAT.TENANT_ID = SNAP.TENANT_ID
+      AND STAT.SNAP_ID = SNAP.SNAP_ID
+    )
+    WHERE
+      STAT.TENANT_ID = EFFECTIVE_TENANT_ID()
+      AND SNAP.STATUS = 0
+  """.replace("\n", " ")
+)
+def_table_schema(
+  owner           = 'jiajingzhe.jjz',
+  table_name      = 'CDB_WR_SQLTEXT',
+  table_id        = '21506',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT
+      STAT.TENANT_ID AS TENANT_ID,
+      STAT.SNAP_ID AS SNAP_ID,
+      STAT.SQL_ID AS SQL_ID,
+      STAT.QUERY_SQL AS QUERY_SQL,
+      STAT.SQL_TYPE AS SQL_TYPE
+    FROM
+    (
+      oceanbase.__all_virtual_wr_sqltext STAT
+      JOIN oceanbase.__all_virtual_wr_snapshot SNAP
+      ON STAT.CLUSTER_ID = SNAP.CLUSTER_ID
+      AND STAT.TENANT_ID = SNAP.TENANT_ID
+      AND STAT.SNAP_ID = SNAP.SNAP_ID
+    )
+    WHERE
+      SNAP.STATUS = 0
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'xiaochu.yh',
+  tablegroup_id   = 'OB_INVALID_ID',
+  table_name      = 'GV$OB_ACTIVE_SESSION_HISTORY',
+  table_id        = '21507',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  table_type      = 'SYSTEM_VIEW',
+  in_tenant_space = True,
+  view_definition = """SELECT
+      CAST(SVR_IP AS CHAR(46)) AS SVR_IP,
+      CAST(SVR_PORT AS SIGNED) AS SVR_PORT,
+      CAST(SAMPLE_ID AS SIGNED) AS SAMPLE_ID,
+      CAST(SAMPLE_TIME AS DATETIME) AS SAMPLE_TIME,
+      CAST(TENANT_ID AS SIGNED) AS CON_ID,
+      CAST(USER_ID AS SIGNED) AS USER_ID,
+      CAST(SESSION_ID AS SIGNED) AS SESSION_ID,
+      CAST(IF (SESSION_TYPE = 0, 'FOREGROUND', 'BACKGROUND') AS CHAR(10)) AS SESSION_TYPE,
+      CAST(IF (EVENT_NO = 0, 'ON CPU', 'WAITING') AS CHAR(7)) AS SESSION_STATE,
+      CAST(SQL_ID AS CHAR(32)) AS SQL_ID,
+      CAST(PLAN_ID AS SIGNED) AS PLAN_ID,
+      CAST(TRACE_ID AS CHAR(64)) AS TRACE_ID,
+      CAST(NAME AS CHAR(64)) AS EVENT,
+      CAST(EVENT_NO AS SIGNED) AS EVENT_NO,
+      CAST(ASH.EVENT_ID AS SIGNED) AS EVENT_ID,
+      CAST(PARAMETER1 AS CHAR(64)) AS P1TEXT,
+      CAST(P1 AS SIGNED) AS P1,
+      CAST(PARAMETER2 AS CHAR(64)) AS P2TEXT,
+      CAST(P2 AS SIGNED) AS P2,
+      CAST(PARAMETER3 AS CHAR(64)) AS P3TEXT,
+      CAST(P3 AS SIGNED) AS P3,
+      CAST(WAIT_CLASS AS CHAR(64)) AS WAIT_CLASS,
+      CAST(WAIT_CLASS_ID AS SIGNED) AS WAIT_CLASS_ID,
+      CAST(TIME_WAITED AS SIGNED) AS TIME_WAITED,
+      CAST(SQL_PLAN_LINE_ID AS SIGNED) SQL_PLAN_LINE_ID,
+      CAST(IF (IN_PARSE = 1, 'Y', 'N') AS CHAR(1)) AS IN_PARSE,
+      CAST(IF (IN_PL_PARSE = 1, 'Y', 'N') AS CHAR(1)) AS IN_PL_PARSE,
+      CAST(IF (IN_PLAN_CACHE = 1, 'Y', 'N') AS CHAR(1)) AS IN_PLAN_CACHE,
+      CAST(IF (IN_SQL_OPTIMIZE = 1, 'Y', 'N') AS CHAR(1)) AS IN_SQL_OPTIMIZE,
+      CAST(IF (IN_SQL_EXECUTION = 1, 'Y', 'N') AS CHAR(1)) AS IN_SQL_EXECUTION,
+      CAST(IF (IN_PX_EXECUTION = 1, 'Y', 'N') AS CHAR(1)) AS IN_PX_EXECUTION,
+      CAST(IF (IN_SEQUENCE_LOAD = 1, 'Y', 'N') AS CHAR(1)) AS IN_SEQUENCE_LOAD,
+      CAST(IF (IN_COMMITTING = 1, 'Y', 'N') AS CHAR(1)) AS IN_COMMITTING,
+      CAST(IF (IN_STORAGE_READ = 1, 'Y', 'N') AS CHAR(1)) AS IN_STORAGE_READ,
+      CAST(IF (IN_STORAGE_WRITE = 1, 'Y', 'N') AS CHAR(1)) AS IN_STORAGE_WRITE,
+      CAST(IF (IN_REMOTE_DAS_EXECUTION = 1, 'Y', 'N') AS CHAR(1)) AS IN_REMOTE_DAS_EXECUTION,
+      CAST(IF (IN_FILTER_ROWS = 1, 'Y', 'N') AS CHAR(1)) AS IN_FILTER_ROWS,
+      CAST(PROGRAM AS CHAR(64)) AS PROGRAM,
+      CAST(MODULE AS CHAR(64)) AS MODULE,
+      CAST(ACTION AS CHAR(64)) AS ACTION,
+      CAST(CLIENT_ID AS CHAR(64)) AS CLIENT_ID,
+      CAST(BACKTRACE AS CHAR(512)) AS BACKTRACE,
+      CAST(TM_DELTA_TIME AS SIGNED) AS TM_DELTA_TIME,
+      CAST(TM_DELTA_CPU_TIME AS SIGNED) AS TM_DELTA_CPU_TIME,
+      CAST(TM_DELTA_DB_TIME AS SIGNED) AS TM_DELTA_DB_TIME,
+      CAST(TOP_LEVEL_SQL_ID AS CHAR(32)) AS TOP_LEVEL_SQL_ID,
+      CAST(IF (IN_PLSQL_COMPILATION = 1, 'Y', 'N') AS CHAR(1)) AS IN_PLSQL_COMPILATION,
+      CAST(IF (IN_PLSQL_EXECUTION = 1, 'Y', 'N') AS CHAR(1)) AS IN_PLSQL_EXECUTION,
+      CAST(PLSQL_ENTRY_OBJECT_ID AS SIGNED) AS PLSQL_ENTRY_OBJECT_ID,
+      CAST(PLSQL_ENTRY_SUBPROGRAM_ID AS SIGNED) AS PLSQL_ENTRY_SUBPROGRAM_ID,
+      CAST(PLSQL_ENTRY_SUBPROGRAM_NAME AS CHAR(32)) AS PLSQL_ENTRY_SUBPROGRAM_NAME,
+      CAST(PLSQL_OBJECT_ID AS SIGNED) AS PLSQL_OBJECT_ID,
+      CAST(PLSQL_SUBPROGRAM_ID AS SIGNED) AS PLSQL_SUBPROGRAM_ID,
+      CAST(PLSQL_SUBPROGRAM_NAME AS CHAR(32)) AS PLSQL_SUBPROGRAM_NAME
+  FROM oceanbase.__all_virtual_ash ASH LEFT JOIN oceanbase.v$event_name on EVENT_NO = `event#`
+""".replace("\n", " "),
+  normal_columns  = [],
+)
+
+
+def_table_schema(
+  owner = 'xiaochu.yh',
+  tablegroup_id   = 'OB_INVALID_ID',
+  table_name      = 'V$OB_ACTIVE_SESSION_HISTORY',
+  table_id        = '21508',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  table_type      = 'SYSTEM_VIEW',
+  in_tenant_space = True,
+  view_definition = """SELECT * FROM oceanbase.GV$OB_ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+  normal_columns  = [],
 )
 
 # 余留位置
@@ -47981,6 +48887,7 @@ def_table_schema(
       ASH.SQL_ID AS SQL_ID,
       ASH.TRACE_ID AS TRACE_ID,
       ASH.EVENT_NO AS EVENT_NO,
+      ASH.EVENT_ID AS EVENT_ID,
       ASH.TIME_WAITED AS TIME_WAITED,
       ASH.P1 AS P1,
       ASH.P2 AS P2,
@@ -47998,11 +48905,25 @@ def_table_schema(
       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 256) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_STORAGE_READ,
       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 512) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_STORAGE_WRITE,
       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 1024) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_REMOTE_DAS_EXECUTION,
+      CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 2048) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_FILTER_ROWS,
+      ASH.PROGRAM AS PROGRAM,
       ASH.MODULE AS MODULE,
       ASH.ACTION AS ACTION,
       ASH.CLIENT_ID AS CLIENT_ID,
       ASH.BACKTRACE AS BACKTRACE,
-      ASH.PLAN_ID AS PLAN_ID
+      ASH.PLAN_ID AS PLAN_ID,
+      ASH.TM_DELTA_TIME AS TM_DELTA_TIME,
+      ASH.TM_DELTA_CPU_TIME AS TM_DELTA_CPU_TIME,
+      ASH.TM_DELTA_DB_TIME AS TM_DELTA_DB_TIME,
+      ASH.TOP_LEVEL_SQL_ID AS TOP_LEVEL_SQL_ID,
+      CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 2048) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_PLSQL_COMPILATION,
+      CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 4096) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_PLSQL_EXECUTION,
+      ASH.PLSQL_ENTRY_OBJECT_ID AS PLSQL_ENTRY_OBJECT_ID,
+      ASH.PLSQL_ENTRY_SUBPROGRAM_ID AS PLSQL_ENTRY_SUBPROGRAM_ID,
+      ASH.PLSQL_ENTRY_SUBPROGRAM_NAME AS PLSQL_ENTRY_SUBPROGRAM_NAME,
+      ASH.PLSQL_OBJECT_ID AS PLSQL_OBJECT_ID,
+      ASH.PLSQL_SUBPROGRAM_ID AS PLSQL_SUBPROGRAM_ID,
+      ASH.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME
   FROM
     SYS.ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY ASH,
     SYS.ALL_VIRTUAL_WR_SNAPSHOT SNAP
@@ -49068,6 +49989,67 @@ def_table_schema(
 """.replace("\n", " ")
 )
 # 25268: DBA_OB_IMPORT_STMT_EXEC_HISTORY
+
+def_table_schema(
+  owner           = 'roland.qk',
+  table_name      = 'DBA_WR_SYSTEM_EVENT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25269',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+      SETTING.SNAP_ID AS SNAP_ID,
+      SETTING.SVR_IP AS SVR_IP,
+      SETTING.SVR_PORT AS SVR_PORT,
+      SETTING.EVENT_ID AS EVENT_ID,
+      EN.EVENT_NAME AS EVENT_NAME,
+      EN.WAIT_CLASS_ID AS WAIT_CLASS_ID,
+      EN.WAIT_CLASS AS WAIT_CLASS,
+      SETTING.TOTAL_WAITS AS TOTAL_WAITS,
+      SETTING.TOTAL_TIMEOUTS AS TOTAL_TIMEOUTS,
+      SETTING.TIME_WAITED_MICRO AS TIME_WAITED_MICRO
+  FROM
+    SYS.ALL_VIRTUAL_WR_SYSTEM_EVENT SETTING,
+    SYS.ALL_VIRTUAL_WR_EVENT_NAME EN
+  WHERE
+    SETTING.TENANT_ID = EFFECTIVE_TENANT_ID()
+    AND EN.EVENT_ID = SETTING.EVENT_ID
+    AND EN.TENANT_ID = SETTING.TENANT_ID
+  """.replace("\n", " ")
+)
+def_table_schema(
+  owner           = 'roland.qk',
+  table_name      = 'DBA_WR_EVENT_NAME',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25270',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+      SETTING.EVENT_ID AS EVENT_ID,
+      SETTING.EVENT_NAME AS EVENT_NAME,
+      SETTING.PARAMETER1 AS PARAMETER1,
+      SETTING.PARAMETER2 AS PARAMETER2,
+      SETTING.PARAMETER3 AS PARAMETER3,
+      SETTING.WAIT_CLASS_ID AS WAIT_CLASS_ID,
+      SETTING.WAIT_CLASS AS WAIT_CLASS
+  FROM
+    SYS.ALL_VIRTUAL_WR_EVENT_NAME SETTING
+  WHERE
+    SETTING.TENANT_ID = EFFECTIVE_TENANT_ID()
+  """.replace("\n", " ")
+)
+
+# 25271: DBA_SCHEDULER_RUNNING_JOBS
 def_table_schema(
     owner = 'guoyun.lgy',
     table_name     = 'DBA_OB_FORMAT_OUTLINES',
@@ -49099,6 +50081,146 @@ def_table_schema(
 
     normal_columns = [
     ],
+)
+
+
+def_table_schema(
+  owner           = 'jiajingzhe.jjz',
+  table_name      = 'DBA_WR_SQLSTAT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25273',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+      STAT.SNAP_ID AS SNAP_ID,
+      STAT.SVR_IP AS SVR_IP,
+      STAT.SVR_PORT AS SVR_PORT,
+      STAT.SQL_ID AS SQL_ID,
+      STAT.PLAN_HASH AS PLAN_HASH,
+      STAT.PLAN_ID AS PLAN_ID,
+      STAT.PLAN_TYPE AS PLAN_TYPE,
+      STAT.MODULE AS MODULE,
+      STAT.ACTION AS ACTION,
+      STAT.PARSING_DB_ID AS PARSING_DB_ID,
+      STAT.PARSING_DB_NAME AS PARSING_DB_NAME,
+      STAT.PARSING_USER_ID AS PARSING_USER_ID,
+      STAT.EXECUTIONS_TOTAL AS EXECUTIONS_TOTAL,
+      STAT.EXECUTIONS_DELTA AS EXECUTIONS_DELTA,
+      STAT.DISK_READS_TOTAL AS DISK_READS_TOTAL,
+      STAT.DISK_READS_DELTA AS DISK_READS_DELTA,
+      STAT.BUFFER_GETS_TOTAL AS BUFFER_GETS_TOTAL,
+      STAT.BUFFER_GETS_DELTA AS BUFFER_GETS_DELTA,
+      STAT.ELAPSED_TIME_TOTAL AS ELAPSED_TIME_TOTAL,
+      STAT.ELAPSED_TIME_DELTA AS ELAPSED_TIME_DELTA,
+      STAT.CPU_TIME_TOTAL AS CPU_TIME_TOTAL,
+      STAT.CPU_TIME_DELTA AS CPU_TIME_DELTA,
+      STAT.CCWAIT_TOTAL AS CCWAIT_TOTAL,
+      STAT.CCWAIT_DELTA AS CCWAIT_DELTA,
+      STAT.USERIO_WAIT_TOTAL AS USERIO_WAIT_TOTAL,
+      STAT.USERIO_WAIT_DELTA AS USERIO_WAIT_DELTA,
+      STAT.APWAIT_TOTAL AS APWAIT_TOTAL,
+      STAT.APWAIT_DELTA AS APWAIT_DELTA,
+      STAT.PHYSICAL_READ_REQUESTS_TOTAL AS PHYSICAL_READ_REQUESTS_TOTAL,
+      STAT.PHYSICAL_READ_REQUESTS_DELTA AS PHYSICAL_READ_REQUESTS_DELTA,
+      STAT.PHYSICAL_READ_BYTES_TOTAL AS PHYSICAL_READ_BYTES_TOTAL,
+      STAT.PHYSICAL_READ_BYTES_DELTA AS PHYSICAL_READ_BYTES_DELTA,
+      STAT.WRITE_THROTTLE_TOTAL AS WRITE_THROTTLE_TOTAL,
+      STAT.WRITE_THROTTLE_DELTA AS WRITE_THROTTLE_DELTA,
+      STAT.ROWS_PROCESSED_TOTAL AS ROWS_PROCESSED_TOTAL,
+      STAT.ROWS_PROCESSED_DELTA AS ROWS_PROCESSED_DELTA,
+      STAT.MEMSTORE_READ_ROWS_TOTAL AS MEMSTORE_READ_ROWS_TOTAL,
+      STAT.MEMSTORE_READ_ROWS_DELTA AS MEMSTORE_READ_ROWS_DELTA,
+      STAT.MINOR_SSSTORE_READ_ROWS_TOTAL AS MINOR_SSSTORE_READ_ROWS_TOTAL,
+      STAT.MINOR_SSSTORE_READ_ROWS_DELTA AS MINOR_SSSTORE_READ_ROWS_DELTA,
+      STAT.MAJOR_SSSTORE_READ_ROWS_TOTAL AS MAJOR_SSSTORE_READ_ROWS_TOTAL,
+      STAT.MAJOR_SSSTORE_READ_ROWS_DELTA AS MAJOR_SSSTORE_READ_ROWS_DELTA,
+      STAT.RPC_TOTAL AS RPC_TOTAL,
+      STAT.RPC_DELTA AS RPC_DELTA,
+      STAT.FETCHES_TOTAL AS FETCHES_TOTAL,
+      STAT.FETCHES_DELTA AS FETCHES_DELTA,
+      STAT.RETRY_TOTAL AS RETRY_TOTAL,
+      STAT.RETRY_DELTA AS RETRY_DELTA,
+      STAT.PARTITION_TOTAL AS PARTITION_TOTAL,
+      STAT.PARTITION_DELTA AS PARTITION_DELTA,
+      STAT.NESTED_SQL_TOTAL AS NESTED_SQL_TOTAL,
+      STAT.NESTED_SQL_DELTA AS NESTED_SQL_DELTA,
+      STAT.SOURCE_IP AS SOURCE_IP,
+      STAT.SOURCE_PORT AS SOURCE_PORT
+  FROM
+    SYS.ALL_VIRTUAL_WR_SQLSTAT STAT,
+    SYS.ALL_VIRTUAL_WR_SNAPSHOT SNAP
+  WHERE
+    STAT.TENANT_ID = EFFECTIVE_TENANT_ID()
+    AND STAT.CLUSTER_ID = SNAP.CLUSTER_ID
+    AND STAT.TENANT_ID = SNAP.TENANT_ID
+    AND STAT.SNAP_ID = SNAP.SNAP_ID
+    AND STAT.SVR_IP = SNAP.SVR_IP
+    AND STAT.SVR_PORT = SNAP.SVR_PORT
+    AND SNAP.STATUS = 0
+  """.replace("\n", " ")
+)
+def_table_schema(
+  owner = 'roland.qk',
+  table_name      = 'DBA_WR_SYS_TIME_MODEL',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25274',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SNAP_ID AS SNAP_ID,
+    SVR_IP AS SVR_IP,
+    SVR_PORT AS SVR_PORT,
+    SYS.DBA_WR_SYSSTAT.STAT_ID AS STAT_ID,
+    STAT_NAME AS STAT_NAME,
+    VALUE AS VALUE
+  FROM
+    SYS.DBA_WR_SYSSTAT
+  left join
+    SYS.DBA_WR_STATNAME
+  on SYS.DBA_WR_SYSSTAT.STAT_ID=SYS.DBA_WR_STATNAME.STAT_ID
+  WHERE
+    SYS.DBA_WR_SYSSTAT.STAT_ID in (200001, 200002, 200010, 200011, 200005, 200006);
+""".replace("\n", " ")
+)
+def_table_schema(
+  owner           = 'jiajingzhe.jjz',
+  table_name      = 'DBA_WR_SQLTEXT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25277',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+      STAT.SNAP_ID AS SNAP_ID,
+      STAT.SQL_ID AS SQL_ID,
+      STAT.QUERY_SQL AS QUERY_SQL,
+      STAT.SQL_TYPE AS SQL_TYPE
+  FROM
+    SYS.ALL_VIRTUAL_WR_SQLTEXT STAT,
+    SYS.ALL_VIRTUAL_WR_SNAPSHOT SNAP
+  WHERE
+    STAT.TENANT_ID = EFFECTIVE_TENANT_ID()
+    AND STAT.CLUSTER_ID = SNAP.CLUSTER_ID
+    AND STAT.TENANT_ID = SNAP.TENANT_ID
+    AND STAT.SNAP_ID = SNAP.SNAP_ID
+    AND SNAP.STATUS = 0
+  """.replace("\n", " ")
 )
 
 def_table_schema(
@@ -53820,47 +54942,7 @@ def_table_schema(
   normal_columns  = [],
   gm_columns      = [],
   in_tenant_space = True,
-  view_definition = """SELECT
-      CAST(SVR_IP AS VARCHAR2(46)) AS SVR_IP,
-      CAST(SVR_PORT AS NUMBER) AS SVR_PORT,
-      CAST(SAMPLE_ID AS NUMBER) AS SAMPLE_ID,
-      CAST(SAMPLE_TIME AS TIMESTAMP) AS SAMPLE_TIME,
-      CAST(TENANT_ID AS NUMBER) AS CON_ID,
-      CAST(USER_ID AS NUMBER) AS USER_ID,
-      CAST(SESSION_ID AS NUMBER) AS SESSION_ID,
-      CAST(DECODE(SESSION_TYPE, 0, 'FOREGROUND', 'BACKGROUND') AS VARCHAR2(10)) AS SESSION_TYPE,
-      CAST(DECODE(EVENT_NO, 0, 'ON CPU', 'WAITING') AS VARCHAR2(7)) AS SESSION_STATE,
-      CAST(SQL_ID AS VARCHAR(32)) AS SQL_ID,
-      CAST(PLAN_ID AS NUMBER) AS PLAN_ID,
-      CAST(TRACE_ID AS VARCHAR(64)) AS TRACE_ID,
-      CAST(NAME AS VARCHAR2(64)) AS EVENT,
-      CAST(EVENT_NO AS NUMBER) AS EVENT_NO,
-      CAST(PARAMETER1 AS VARCHAR2(64)) AS P1TEXT,
-      CAST(P1 AS NUMBER) AS P1,
-      CAST(PARAMETER2 AS VARCHAR2(64)) AS P2TEXT,
-      CAST(P2 AS NUMBER) AS P2,
-      CAST(PARAMETER3 AS VARCHAR2(64)) AS P3TEXT,
-      CAST(P3 AS NUMBER) AS P3,
-      CAST(WAIT_CLASS AS VARCHAR2(64)) AS WAIT_CLASS,
-      CAST(WAIT_CLASS_ID AS NUMBER) AS WAIT_CLASS_ID,
-      CAST(TIME_WAITED AS NUMBER) AS TIME_WAITED,
-      CAST(SQL_PLAN_LINE_ID AS NUMBER) SQL_PLAN_LINE_ID,
-      CAST(DECODE(IN_PARSE, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_PARSE,
-      CAST(DECODE(IN_PL_PARSE, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_PL_PARSE,
-      CAST(DECODE(IN_PLAN_CACHE, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_PLAN_CACHE,
-      CAST(DECODE(IN_SQL_OPTIMIZE, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_SQL_OPTIMIZE,
-      CAST(DECODE(IN_SQL_EXECUTION, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_SQL_EXECUTION,
-      CAST(DECODE(IN_PX_EXECUTION, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_PX_EXECUTION,
-      CAST(DECODE(IN_SEQUENCE_LOAD, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_SEQUENCE_LOAD,
-      CAST(DECODE(IN_COMMITTING, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_COMMITTING,
-      CAST(DECODE(IN_STORAGE_READ, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_STORAGE_READ,
-      CAST(DECODE(IN_STORAGE_WRITE, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_STORAGE_WRITE,
-      CAST(DECODE(IN_REMOTE_DAS_EXECUTION, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_REMOTE_DAS_EXECUTION,
-      CAST(MODULE AS VARCHAR2(64)) AS MODULE,
-      CAST(ACTION AS VARCHAR2(64)) AS ACTION,
-      CAST(CLIENT_ID AS VARCHAR2(64)) AS CLIENT_ID,
-      CAST(BACKTRACE AS VARCHAR2(512)) AS BACKTRACE
-    FROM SYS.ALL_VIRTUAL_ASH LEFT JOIN SYS.V$EVENT_NAME on EVENT_NO = "EVENT#"
+  view_definition = """SELECT * FROM SYS.GV$OB_ACTIVE_SESSION_HISTORY
 """.replace("\n", " "),
 )
 
@@ -53875,7 +54957,7 @@ def_table_schema(
   normal_columns  = [],
   gm_columns      = [],
   in_tenant_space = True,
-  view_definition = """SELECT * FROM SYS.GV$ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+  view_definition = """SELECT * FROM SYS.GV$OB_ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )
 
@@ -55335,6 +56417,210 @@ WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )
 
+# 28202: DBA_OB_FORMAT_OUTLINES
+def_table_schema(
+  owner           = 'yuchen.wyc',
+  table_name      = 'GV$OB_SQLSTAT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28203',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT
+      CAST(SVR_IP AS VARCHAR2(46)) AS SVR_IP,
+      CAST(SVR_PORT AS NUMBER) AS SVR_PORT,
+      CAST(TENANT_ID AS NUMBER) AS TENANT_ID,
+      CAST(SQL_ID AS VARCHAR(32)) AS SQL_ID,
+      CAST(PLAN_ID AS NUMBER) AS PLAN_ID,
+      CAST(PLAN_HASH AS NUMBER) AS PLAN_HASH,
+      CAST(PLAN_TYPE AS NUMBER) AS PLAN_TYPE,
+      TO_CLOB(QUERY_SQL) AS QUERY_SQL,
+      CAST(MODULE AS VARCHAR(64)) AS MODULE,
+      CAST(ACTION AS VARCHAR(64)) AS ACTION,
+      CAST(PARSING_DB_ID AS NUMBER) AS PARSING_DB_ID,
+      CAST(PARSING_DB_NAME AS VARCHAR(128)) AS PARSING_DB_NAME,
+      CAST(PARSING_USER_ID AS NUMBER) AS PARSING_USER_ID,
+      CAST(EXECUTIONS_TOTAL AS NUMBER) AS EXECUTIONS_TOTAL,
+      CAST(EXECUTIONS_DELTA AS NUMBER) AS EXECUTIONS_DELTA,
+      CAST(DISK_READS_TOTAL AS NUMBER) AS DISK_READS_TOTAL,
+      CAST(DISK_READS_DELTA AS NUMBER) AS DISK_READS_DELTA,
+      CAST(BUFFER_GETS_TOTAL AS NUMBER) AS BUFFER_GETS_TOTAL,
+      CAST(BUFFER_GETS_DELTA AS NUMBER) AS BUFFER_GETS_DELTA,
+      CAST(ELAPSED_TIME_TOTAL AS NUMBER) AS ELAPSED_TIME_TOTAL,
+      CAST(ELAPSED_TIME_DELTA AS NUMBER) AS ELAPSED_TIME_DELTA,
+      CAST(CPU_TIME_TOTAL AS NUMBER) AS CPU_TIME_TOTAL,
+      CAST(CPU_TIME_DELTA AS NUMBER) AS CPU_TIME_DELTA,
+      CAST(CCWAIT_TOTAL AS NUMBER) AS CCWAIT_TOTAL,
+      CAST(CCWAIT_DELTA AS NUMBER) AS CCWAIT_DELTA,
+      CAST(USERIO_WAIT_TOTAL AS NUMBER) AS USERIO_WAIT_TOTAL,
+      CAST(USERIO_WAIT_DELTA AS NUMBER) AS USERIO_WAIT_DELTA,
+      CAST(APWAIT_TOTAL AS NUMBER) AS APWAIT_TOTAL,
+      CAST(APWAIT_DELTA AS NUMBER) AS APWAIT_DELTA,
+      CAST(PHYSICAL_READ_REQUESTS_TOTAL AS NUMBER) AS PHYSICAL_READ_REQUESTS_TOTAL,
+      CAST(PHYSICAL_READ_REQUESTS_DELTA AS NUMBER) AS PHYSICAL_READ_REQUESTS_DELTA,
+      CAST(PHYSICAL_READ_BYTES_TOTAL AS NUMBER) AS PHYSICAL_READ_BYTES_TOTAL,
+      CAST(PHYSICAL_READ_BYTES_DELTA AS NUMBER) AS PHYSICAL_READ_BYTES_DELTA,
+      CAST(WRITE_THROTTLE_TOTAL AS NUMBER) AS WRITE_THROTTLE_TOTAL,
+      CAST(WRITE_THROTTLE_DELTA AS NUMBER) AS WRITE_THROTTLE_DELTA,
+      CAST(ROWS_PROCESSED_TOTAL AS NUMBER) AS ROWS_PROCESSED_TOTAL,
+      CAST(ROWS_PROCESSED_DELTA AS NUMBER) AS ROWS_PROCESSED_DELTA,
+      CAST(MEMSTORE_READ_ROWS_TOTAL AS NUMBER) AS MEMSTORE_READ_ROWS_TOTAL,
+      CAST(MEMSTORE_READ_ROWS_DELTA AS NUMBER) AS MEMSTORE_READ_ROWS_DELTA,
+      CAST(MINOR_SSSTORE_READ_ROWS_TOTAL AS NUMBER) AS MINOR_SSSTORE_READ_ROWS_TOTAL,
+      CAST(MINOR_SSSTORE_READ_ROWS_DELTA AS NUMBER) AS MINOR_SSSTORE_READ_ROWS_DELTA,
+      CAST(MAJOR_SSSTORE_READ_ROWS_TOTAL AS NUMBER) AS MAJOR_SSSTORE_READ_ROWS_TOTAL,
+      CAST(MAJOR_SSSTORE_READ_ROWS_DELTA AS NUMBER) AS MAJOR_SSSTORE_READ_ROWS_DELTA,
+      CAST(RPC_TOTAL AS NUMBER) AS RPC_TOTAL,
+      CAST(RPC_DELTA AS NUMBER) AS RPC_DELTA,
+      CAST(FETCHES_TOTAL AS NUMBER) AS FETCHES_TOTAL,
+      CAST(FETCHES_DELTA AS NUMBER) AS FETCHES_DELTA,
+      CAST(RETRY_TOTAL AS NUMBER) AS RETRY_TOTAL,
+      CAST(RETRY_DELTA AS NUMBER) AS RETRY_DELTA,
+      CAST(PARTITION_TOTAL AS NUMBER) AS PARTITION_TOTAL,
+      CAST(PARTITION_DELTA AS NUMBER) AS PARTITION_DELTA,
+      CAST(NESTED_SQL_TOTAL AS NUMBER) AS NESTED_SQL_TOTAL,
+      CAST(NESTED_SQL_DELTA AS NUMBER) AS NESTED_SQL_DELTA,
+      CAST(SOURCE_IP AS CHAR(46)) AS SOURCE_IP,
+      CAST(SOURCE_PORT AS NUMBER) AS SOURCE_PORT
+    FROM SYS.ALL_VIRTUAL_SQLSTAT
+""".replace("\n", " "),
+)
+def_table_schema(
+  owner           = 'yuchen.wyc',
+  table_name      = 'V$OB_SQLSTAT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28204',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT * FROM SYS.GV$OB_SQLSTAT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'roland.qk',
+  table_name      = 'GV$OB_SESS_TIME_MODEL',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28205',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+    SID,
+    CAST(GV$SESSTAT.CON_ID AS NUMBER) AS TENANT_ID,
+    SVR_IP,
+    SVR_PORT,
+    STAT_ID,
+    CAST(NAME AS VARCHAR2(64)) AS STAT_NAME,
+    VALUE
+  FROM
+    SYS.GV$SESSTAT
+  left join
+    SYS.v$statname
+  on SYS.GV$SESSTAT.statistic#=SYS.v$statname.statistic#
+  WHERE
+    STAT_ID in (200001, 200002, 200010, 200011, 200005, 200006);
+  """.replace("\n", " ")
+)
+def_table_schema(
+  owner           = 'roland.qk',
+  table_name      = 'V$OB_SESS_TIME_MODEL',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28206',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+    *
+  FROM
+    SYS.GV$OB_SESS_TIME_MODEL
+  WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT();
+  """.replace("\n", " ")
+)
+def_table_schema(
+  owner           = 'roland.qk',
+  table_name      = 'GV$OB_SYS_TIME_MODEL',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28207',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+    CON_ID AS TENANT_ID,
+    SVR_IP,
+    SVR_PORT,
+    STAT_ID,
+    CAST(NAME AS VARCHAR2(64)) AS STAT_NAME,
+    VALUE
+  FROM
+    SYS.GV$SYSSTAT
+  WHERE
+    STAT_ID in (200001, 200002, 200010, 200011, 200005, 200006);
+  """.replace("\n", " ")
+)
+def_table_schema(
+  owner           = 'roland.qk',
+  table_name      = 'V$OB_SYS_TIME_MODEL',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28208',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+    *
+  FROM
+    SYS.GV$OB_SYS_TIME_MODEL
+  WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT();
+  """.replace("\n", " ")
+)
+def_table_schema(
+  owner           = 'roland.qk',
+  table_name      = 'V$STATNAME',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28209',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  select CAST(TENANT_ID AS NUMBER) AS CON_ID,
+         CAST(STAT_ID AS NUMBER) as STAT_ID,
+         CAST("STATISTIC#" AS NUMBER) as "STATISTIC#",
+         CAST(NAME AS VARCHAR2(64)) AS NAME,
+         CAST(DISPLAY_NAME AS VARCHAR2(64)) AS DISPLAY_NAME,
+         CAST(CLASS AS NUMBER) AS CLASS
+  from SYS.TENANT_VIRTUAL_STATNAME
+  """.replace("\n", " ")
+)
 
 def_table_schema(
   owner           = 'linzhigang.lzg',
@@ -55371,6 +56657,91 @@ def_table_schema(
   FROM SYS.ALL_VIRTUAL_SYS_VARIABLE_REAL_AGENT A, SYS.ALL_VIRTUAL_SYS_VARIABLE_DEFAULT_VALUE B
   WHERE A.NAME = B.VARIABLE_NAME;
   """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'xiaochu.yh',
+  table_name      = 'GV$OB_ACTIVE_SESSION_HISTORY',
+  name_postfix = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28212',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT
+      CAST(SVR_IP AS VARCHAR2(46)) AS SVR_IP,
+      CAST(SVR_PORT AS NUMBER) AS SVR_PORT,
+      CAST(SAMPLE_ID AS NUMBER) AS SAMPLE_ID,
+      CAST(SAMPLE_TIME AS TIMESTAMP) AS SAMPLE_TIME,
+      CAST(TENANT_ID AS NUMBER) AS CON_ID,
+      CAST(USER_ID AS NUMBER) AS USER_ID,
+      CAST(SESSION_ID AS NUMBER) AS SESSION_ID,
+      CAST(DECODE(SESSION_TYPE, 0, 'FOREGROUND', 'BACKGROUND') AS VARCHAR2(10)) AS SESSION_TYPE,
+      CAST(DECODE(EVENT_NO, 0, 'ON CPU', 'WAITING') AS VARCHAR2(7)) AS SESSION_STATE,
+      CAST(SQL_ID AS VARCHAR(32)) AS SQL_ID,
+      CAST(PLAN_ID AS NUMBER) AS PLAN_ID,
+      CAST(TRACE_ID AS VARCHAR(64)) AS TRACE_ID,
+      CAST(NAME AS VARCHAR2(64)) AS EVENT,
+      CAST(EVENT_NO AS NUMBER) AS EVENT_NO,
+      CAST(SYS.ALL_VIRTUAL_ASH.EVENT_ID AS NUMBER) AS EVENT_ID,
+      CAST(PARAMETER1 AS VARCHAR2(64)) AS P1TEXT,
+      CAST(P1 AS NUMBER) AS P1,
+      CAST(PARAMETER2 AS VARCHAR2(64)) AS P2TEXT,
+      CAST(P2 AS NUMBER) AS P2,
+      CAST(PARAMETER3 AS VARCHAR2(64)) AS P3TEXT,
+      CAST(P3 AS NUMBER) AS P3,
+      CAST(WAIT_CLASS AS VARCHAR2(64)) AS WAIT_CLASS,
+      CAST(WAIT_CLASS_ID AS NUMBER) AS WAIT_CLASS_ID,
+      CAST(TIME_WAITED AS NUMBER) AS TIME_WAITED,
+      CAST(SQL_PLAN_LINE_ID AS NUMBER) SQL_PLAN_LINE_ID,
+      CAST(DECODE(IN_PARSE, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_PARSE,
+      CAST(DECODE(IN_PL_PARSE, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_PL_PARSE,
+      CAST(DECODE(IN_PLAN_CACHE, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_PLAN_CACHE,
+      CAST(DECODE(IN_SQL_OPTIMIZE, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_SQL_OPTIMIZE,
+      CAST(DECODE(IN_SQL_EXECUTION, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_SQL_EXECUTION,
+      CAST(DECODE(IN_PX_EXECUTION, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_PX_EXECUTION,
+      CAST(DECODE(IN_SEQUENCE_LOAD, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_SEQUENCE_LOAD,
+      CAST(DECODE(IN_COMMITTING, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_COMMITTING,
+      CAST(DECODE(IN_STORAGE_READ, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_STORAGE_READ,
+      CAST(DECODE(IN_STORAGE_WRITE, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_STORAGE_WRITE,
+      CAST(DECODE(IN_REMOTE_DAS_EXECUTION, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_REMOTE_DAS_EXECUTION,
+      CAST(DECODE(IN_FILTER_ROWS, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_FILTER_ROWS,
+      CAST(PROGRAM AS VARCHAR2(64)) AS PROGRAM,
+      CAST(MODULE AS VARCHAR2(64)) AS MODULE,
+      CAST(ACTION AS VARCHAR2(64)) AS ACTION,
+      CAST(CLIENT_ID AS VARCHAR2(64)) AS CLIENT_ID,
+      CAST(BACKTRACE AS VARCHAR2(512)) AS BACKTRACE,
+      CAST(TM_DELTA_TIME AS NUMBER) AS TM_DELTA_TIME,
+      CAST(TM_DELTA_CPU_TIME AS NUMBER) AS TM_DELTA_CPU_TIME,
+      CAST(TM_DELTA_DB_TIME AS NUMBER) AS TM_DELTA_DB_TIME,
+      CAST(TOP_LEVEL_SQL_ID AS CHAR(32)) AS TOP_LEVEL_SQL_ID,
+      CAST(DECODE(IN_PLSQL_COMPILATION, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_PLSQL_COMPILATION,
+      CAST(DECODE(IN_PLSQL_EXECUTION, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_PLSQL_EXECUTION,
+      CAST(PLSQL_ENTRY_OBJECT_ID AS NUMBER) AS PLSQL_ENTRY_OBJECT_ID,
+      CAST(PLSQL_ENTRY_SUBPROGRAM_ID AS NUMBER) AS PLSQL_ENTRY_SUBPROGRAM_ID,
+      CAST(PLSQL_ENTRY_SUBPROGRAM_NAME AS VARCHAR2(32)) AS PLSQL_ENTRY_SUBPROGRAM_NAME,
+      CAST(PLSQL_OBJECT_ID AS NUMBER) AS PLSQL_OBJECT_ID,
+      CAST(PLSQL_SUBPROGRAM_ID AS NUMBER) AS PLSQL_SUBPROGRAM_ID,
+      CAST(PLSQL_SUBPROGRAM_NAME AS VARCHAR2(32)) AS PLSQL_SUBPROGRAM_NAME
+    FROM SYS.ALL_VIRTUAL_ASH LEFT JOIN SYS.V$EVENT_NAME on EVENT_NO = "EVENT#"
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'xiaochu.yh',
+  table_name      = 'V$OB_ACTIVE_SESSION_HISTORY',
+  name_postfix = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28213',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT * FROM SYS.GV$OB_ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
 )
 # 余留位置
 

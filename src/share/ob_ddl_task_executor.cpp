@@ -274,7 +274,10 @@ void ObDDLTaskExecutor::run1()
       }
     }
     cond_.lock();
-    cond_.wait(CHECK_TASK_INTERVAL);
+    {
+      ObBKGDSessInActiveGuard inactive_guard;
+      cond_.wait(CHECK_TASK_INTERVAL);
+    }
     cond_.unlock();
     executed_task_count = 0;
     first_retry_task = NULL;

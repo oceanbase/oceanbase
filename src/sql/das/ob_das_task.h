@@ -55,7 +55,8 @@ public:
       flags_(0),
       user_id_(0),
       session_id_(0),
-      plan_id_(0)
+      plan_id_(0),
+      plan_hash_(0)
   {
     sql_id_[0] = '\0';
   }
@@ -88,6 +89,7 @@ public:
   uint64_t user_id_;
   uint64_t session_id_;
   uint64_t plan_id_;
+  uint64_t plan_hash_;
 };
 
 class ObIDASTaskOp

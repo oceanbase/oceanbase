@@ -50,6 +50,7 @@ ObWorkerSessionGuard::ObWorkerSessionGuard(ObSQLSessionInfo *session)
   THIS_WORKER.set_session(session);
   if (nullptr != session) {
     session->set_thread_id(GETTID());
+    session->set_thread_name(GETTNAME());
   }
 }
 

@@ -18,6 +18,7 @@
 #include "lib/thread/ob_thread_name.h"
 #include "lib/thread/protected_stack_allocator.h"
 #include "lib/stat/ob_diagnose_info.h"
+#include "lib/ash/ob_active_session_guard.h"
 #include <dlfcn.h>
 #include <poll.h>
 #include <sys/epoll.h>
@@ -173,10 +174,10 @@ int ob_pthread_cond_timedwait(pthread_cond_t *__restrict __cond,
   return ret;
 }
 
+// ob_usleep wrapper function for C file
 void ob_usleep(const useconds_t v)
 {
-  oceanbase::common::ObSleepEventGuard wait_guard((int64_t)v);
-  ::usleep(v);
+  oceanbase::common::ob_usleep<oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>(v);
 }
 
 int futex_hook(uint32_t *uaddr, int futex_op, uint32_t val, const struct timespec* timeout)
@@ -200,6 +201,17 @@ int64_t ob_update_loop_ts()
 {
   return ::oceanbase::lib::Thread::update_loop_ts();
 }
+
+void ob_set_bkgd_session_active()
+{
+  ::oceanbase::common::ObActiveSessionGuard::set_bkgd_sess_active();
+}
+
+void ob_set_bkgd_session_inactive()
+{
+  ::oceanbase::common::ObActiveSessionGuard::set_bkgd_sess_inactive();
+}
+
 
 } /* extern "C" */
 

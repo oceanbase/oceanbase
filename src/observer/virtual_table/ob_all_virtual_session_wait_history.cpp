@@ -153,7 +153,7 @@ int ObAllVirtualSessionWaitHistory::inner_get_next_row(ObNewRow *&row)
     if (OB_SUCCESS == ret && session_status_.count() != 0) {
       if (OB_ISNULL(event_desc) || OB_ISNULL(collect_)) {
         ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "event_desc or collect_ is NULL", K(ret), KP(event_desc), KP(collect_));
+        SERVER_LOG(WARN, "event_desc or collect_ is NULL" , K(ret), KPC(event_desc), KP(collect_));
       }
       uint64_t cell_idx = 0;
       double value = 0;

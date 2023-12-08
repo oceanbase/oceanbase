@@ -36,6 +36,7 @@
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "lib/ash/ob_active_session_guard.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
@@ -131,8 +132,10 @@ void ObTenantNodeBalancer::run1()
 
     FLOG_INFO("refresh tenant config", K(tenants), K(ret));
 
-
-    USLEEP(refresh_interval_);  // sleep 10s
+    {
+      common::ObBKGDSessInActiveGuard inactive_guard;
+      USLEEP(refresh_interval_);  // sleep 10s
+    }
   }
 }
 

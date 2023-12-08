@@ -342,7 +342,7 @@ void ObBGThreadMonitor::run_loop_()
     if (sleep_time < 0) {
       sleep_time = 0;
     }
-    ob_usleep(sleep_time);
+    ob_usleep(sleep_time, true/*is_idle_sleep*/);
   }
 }
 

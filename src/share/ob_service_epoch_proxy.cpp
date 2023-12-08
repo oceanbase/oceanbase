@@ -215,6 +215,7 @@ int ObServiceEpochProxy::inner_get_service_epoch_(
     const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
     ObSqlString sql;
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::RS_GET_SERVICE_EPOCH);
       ObMySQLResult *result = nullptr;
       if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE tenant_id = '%lu' AND name = '%s' %s", 
           OB_ALL_SERVICE_EPOCH_TNAME, tenant_id, name, (is_for_update ? "FOR UPDATE" : "")))) {

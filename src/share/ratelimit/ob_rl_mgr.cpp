@@ -13,6 +13,8 @@
 #include "lib/mysqlclient/ob_mysql_result.h"
 #include "share/ob_thread_mgr.h"
 #include "ob_rl_mgr.h"
+#include "lib/ash/ob_active_session_guard.h"
+
 
 namespace oceanbase {
 namespace share {
@@ -700,7 +702,10 @@ void ObRatelimitMgr::do_work()
     }
   }
   bool ready = false;
-  ready = swc_.wait(stat_period_);
+  {
+    common::ObBKGDSessInActiveGuard inactive_guard;
+    ready = swc_.wait(stat_period_);
+  }
   OB_LOG(INFO, "swc wakeup.", K(stat_period_), K(ready));
 }
 

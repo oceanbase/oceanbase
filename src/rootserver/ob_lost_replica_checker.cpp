@@ -26,6 +26,7 @@
 #include "share/ob_all_server_tracer.h"
 #include "observer/ob_server_struct.h"
 #include "rootserver/ob_root_service.h"
+
 namespace oceanbase
 {
 using namespace common;
@@ -36,7 +37,7 @@ namespace rootserver
 {
 
 ObLostReplicaChecker::ObLostReplicaChecker()
-  : inited_(false), cond_(),
+  : inited_(false),
     lst_operator_(NULL),
     schema_service_(NULL)
 {
@@ -71,9 +72,7 @@ int ObLostReplicaChecker::init(ObLSTableOperator &lst_operator, ObMultiVersionSc
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_FAIL(cond_.init(ObWaitEventIds::THREAD_IDLING_COND_WAIT))) {
-    LOG_WARN("fail to init thread cond, ", K(ret));
-  } else if (OB_FAIL(create(thread_cnt, "LostRepCheck"))) {
+  } else if (OB_FAIL(create(thread_cnt, "LostRepCheck", ObWaitEventIds::THREAD_IDLING_COND_WAIT))) {
     LOG_WARN("create empty server checker thread failed", K(ret), K(thread_cnt));
   } else {
     lst_operator_ = &lst_operator;
@@ -94,11 +93,11 @@ void ObLostReplicaChecker::run3()
     const int64_t wait_time_ms = 10 * 1000;//10s;
     while (!stop_) {
       ret = OB_SUCCESS;
-      ObThreadCondGuard guard(cond_);
+      ObThreadCondGuard guard(get_cond());
       if (OB_FAIL(check_lost_replicas())) {
         LOG_WARN("failed to check lost replica", KR(ret));
       }
-      if (OB_SUCCESS != cond_.wait(wait_time_ms)) {
+      if (OB_SUCCESS != idle_wait(wait_time_ms)) {
           LOG_DEBUG("wait timeout", K(wait_time_ms));
       }
     }
@@ -299,7 +298,7 @@ void ObLostReplicaChecker::wakeup()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
-    cond_.broadcast();
+    get_cond().broadcast();
   }
 }
 
@@ -311,8 +310,8 @@ void ObLostReplicaChecker::stop()
     LOG_WARN("not init", K(ret));
   } else {
     ObRsReentrantThread::stop();
-    ObThreadCondGuard guard(cond_);
-    cond_.broadcast();
+    ObThreadCondGuard guard(get_cond());
+    get_cond().broadcast();
   }
 }
 

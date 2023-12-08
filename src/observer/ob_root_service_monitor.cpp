@@ -76,7 +76,7 @@ void ObRootServiceMonitor::run1()
         FLOG_WARN("monitor root service failed", KR(ret));
       }
       if (!has_set_stop()) {
-        ob_usleep(MONITOR_ROOT_SERVICE_INTERVAL_US);
+        ob_usleep(MONITOR_ROOT_SERVICE_INTERVAL_US, true/*is_idle_sleep*/);
       }
     }
     FLOG_INFO("root service monitor thread exit");

@@ -282,6 +282,7 @@ void ObSqlCtx::clear()
   cur_stmt_ = nullptr;
   is_text_ps_mode_ = false;
   ins_opt_ctx_.clear();
+  cur_plan_ = nullptr;
 }
 
 OB_SERIALIZE_MEMBER(ObSqlCtx, stmt_type_);

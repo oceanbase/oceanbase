@@ -160,6 +160,7 @@ public:
   static const char *ANONYMOUS_ARG;
   static const char *ANONYMOUS_SQL_ARG;
   static const char *ANONYMOUS_INOUT_ARG;
+  static const uint64_t ANONYMOUS_VIRTUAL_OBJECT_ID = 1;
 
 public:
   class HandlerAnalyzer

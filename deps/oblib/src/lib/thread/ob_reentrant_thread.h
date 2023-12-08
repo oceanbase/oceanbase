@@ -31,7 +31,8 @@ public:
   virtual ~ObReentrantThread();
 
   // create thread, task will not run before start() called.
-  int create(const int64_t thread_cnt, const char* thread_name = nullptr);
+  int create(const int64_t thread_cnt, const char* thread_name = nullptr,
+             const int64_t wait_event_id = ObWaitEventIds::REENTRANT_THREAD_COND_WAIT);
 
   // start and stop run task, can be called repeatedly, if created.
   int start() override;
@@ -73,6 +74,8 @@ protected:
   void nothing();
   common::ObThreadCond &get_cond()
   { return cond_; }
+  int idle_wait(const int64_t idle_time_ms);
+  int idle_wait_us(const int64_t idle_time_us);
 private:
   void run1() final;
 

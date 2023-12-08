@@ -92,14 +92,38 @@ int ObAllVirtualSessionEvent::inner_get_next_row(ObNewRow *&row)
         SERVER_LOG(WARN, "can't get session status", K(ret));
       }
     }
-    if (0 == event_iter_) {
+    if (0 != event_iter_) {
+      for (; event_iter_ < WAIT_EVENTS_TOTAL; event_iter_++) {
+        if (collect_->base_value_.get_event_stats().get(event_iter_)->total_waits_ != 0) {
+          break;
+        }
+      }
+      if (event_iter_ >= WAIT_EVENTS_TOTAL) {
+        event_iter_ = 0;
+        session_iter_++;
+        collect_->lock_.unlock();
+      }
+    }
+    while (0 == event_iter_ && session_iter_ < session_status_.count()) {
       while (OB_SUCCESS == ret && session_iter_ < session_status_.count()) {
         collect_ = session_status_.at(session_iter_).second;
         if (NULL != collect_ && OB_SUCCESS == collect_->lock_.try_rdlock()) {
           const uint64_t tenant_id = collect_->base_value_.get_tenant_id();
           if (session_status_.at(session_iter_).first == collect_->session_id_
               && (is_sys_tenant(effective_tenant_id_) || tenant_id == effective_tenant_id_)) {
-            break;
+            for (; event_iter_ < WAIT_EVENTS_TOTAL; event_iter_++) {
+              if (collect_->base_value_.get_event_stats().get(event_iter_)->total_waits_ != 0) {
+                // event_iter_ 0 means NULL_EVENT which cannot have actual wait.
+                break;
+              }
+            }
+            if (event_iter_ >= WAIT_EVENTS_TOTAL) {
+              event_iter_ = 0;
+              session_iter_++;
+              collect_->lock_.unlock();
+            } else {
+              break;
+            }
           } else {
             session_iter_++;
             collect_->lock_.unlock();

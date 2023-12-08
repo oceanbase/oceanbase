@@ -124,7 +124,7 @@ void ObTxLoopWorker::run1()
     time_used = ObTimeUtility::current_time() - start_time_us;
 
     if (time_used < LOOP_INTERVAL) {
-      ob_usleep(LOOP_INTERVAL- time_used);
+      ob_usleep(LOOP_INTERVAL- time_used, true/*is_idle_sleep*/);
     }
     can_gc_tx = false;
     can_gc_retain_ctx = false;
@@ -248,7 +248,7 @@ void ObTxLoopWorker::update_max_commit_ts_()
       ret = OB_TIMEOUT;
     } else if (OB_FAIL(OB_TS_MGR.get_gts(MTL_ID(), NULL, snapshot))) {
       if (OB_EAGAIN == ret) {
-        ob_usleep(500);
+        ob_usleep(500, true/*is_idle_sleep*/);
       } else {
         TRANS_LOG(WARN, "get gts fail", "tenant_id", MTL_ID());
       }

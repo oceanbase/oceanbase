@@ -124,6 +124,7 @@ void ObDDLTransController::run1()
       }
     }
     if (tenant_ids.empty()) {
+      common::ObBKGDSessInActiveGuard inactive_guard;
       wait_cond_.timedwait(100 * 1000);
     }
   }

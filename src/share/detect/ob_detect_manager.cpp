@@ -703,7 +703,7 @@ int ObDetectManagerThread::detect() {
     if (sleep_time < 0) {
       sleep_time = 0;
     } else {
-      ob_usleep(sleep_time);
+      ob_usleep(sleep_time, true/*is_idle_sleep*/);
     }
     ++loop_time;
     LIB_LOG(DEBUG, "[DM] detect has execute ", K(loop_time));

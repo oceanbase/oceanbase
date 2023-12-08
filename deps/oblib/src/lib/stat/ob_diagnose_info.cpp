@@ -15,6 +15,7 @@
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/stat/ob_session_stat.h"
 #include "lib/ash/ob_active_session_guard.h"
+#include "share/ash/ob_active_sess_hist_list.h"
 
 namespace oceanbase
 {
@@ -189,11 +190,20 @@ int ObWaitEventHistoryIter::init(ObWaitEventDesc *items, const int64_t start_pos
 int ObWaitEventHistoryIter::get_next(ObWaitEventDesc *&item)
 {
   int ret = OB_SUCCESS;
-  if (curr_ >= item_cnt_) {
+  if (curr_ >= item_cnt_ || curr_ >= SESSION_WAIT_HISTORY_CNT) {
     ret = OB_ITER_END;
   } else {
     item = &items_[(start_pos_ - curr_ + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT];
     curr_++;
+    if (!item->is_valid()) {
+      LOG_WARN("wait event desc is invalid", K(ret), K(item->event_no_));
+      if (OB_FAIL(get_next(item))) {
+        if (ret != OB_ITER_END) {
+          LOG_WARN("failed to get next wait event desc");
+        }
+      }
+    }
+
   }
   return ret;
 }
@@ -491,15 +501,32 @@ ObWaitEventDesc &ObDiagnoseSessionInfo::get_curr_wait()
   return *event_desc;
 }
 
-int ObDiagnoseSessionInfo::notify_wait_begin(const int64_t event_no, const uint64_t timeout_ms, const uint64_t p1, const uint64_t p2, const uint64_t p3, const bool is_atomic)
+int ObDiagnoseSessionInfo::notify_wait_begin(const int64_t event_no, const uint64_t timeout_ms,
+    const uint64_t p1, const uint64_t p2, const uint64_t p3, const bool is_atomic)
 {
   int ret = OB_SUCCESS;
   if (event_no < 0) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    if (!is_atomic) {
-      ObActiveSessionGuard::get_stat().event_no_ = event_no;
-      ObActiveSessionGuard::get_stat().id_++;
+    if (is_atomic) {
+      // time model only record physical wait(including idle and non-idle wait)
+      if (OB_UNLIKELY(ObActiveSessionGuard::get_stat().event_no_ != 0 &&
+                      OB_WAIT_EVENTS[ObActiveSessionGuard::get_stat().event_no_].is_phy_ &&
+                      ObWaitEventIds::ASYNC_COMMITTING_WAIT != event_no &&
+                      ObWaitEventIds::INNER_SQL_EXEC_WAIT != event_no)) {
+        LOG_WARN("nested physical wait event! ", "prev event no",
+            ObActiveSessionGuard::get_stat().event_no_, "cur event no", event_no,
+            K(ObActiveSessionGuard::get_stat()));
+      }
+      // backgorund wait event is dummy stat.
+      // if (OB_UNLIKELY(&ObActiveSessionGuard::get_stat() == &ObActiveSessionGuard::dummy_stat_)) {
+      //   LOG_INFO("failed to setup ash in this case");
+      // }
+    }
+    // ash only sample first wait event.
+    if (ObActiveSessionGuard::get_stat().event_no_ == 0 && ObActiveSessionGuard::get_stat().is_bkgd_active_) {
+      ObActiveSessionGuard::get_stat().wait_event_begin_ts_ = ObTimeUtility::current_time();
+      ObActiveSessionGuard::get_stat().set_event(event_no, p1, p2, p3);
     }
     if (OB_FAIL(event_history_.push(event_no, timeout_ms, p1, p2, p3))) {
     }
@@ -507,7 +534,9 @@ int ObDiagnoseSessionInfo::notify_wait_begin(const int64_t event_no, const uint6
   return ret;
 }
 
-int ObDiagnoseSessionInfo::notify_wait_end(ObDiagnoseTenantInfo *tenant_info, const bool is_atomic)
+// TODO: reconsider this implementation for async wait event.
+int ObDiagnoseSessionInfo::notify_wait_end(
+    ObDiagnoseTenantInfo *tenant_info, const bool is_atomic, const bool is_idle)
 {
   int ret = OB_SUCCESS;
   lock_.wrlock();
@@ -531,29 +560,54 @@ int ObDiagnoseSessionInfo::notify_wait_end(ObDiagnoseTenantInfo *tenant_info, co
         ++total_wait_->total_waits_;
       }
       ObWaitEventStat *event_stat = event_stats_.get(event_desc->event_no_);
-      ObWaitEventStat *tenant_event_stat = tenant_info->get_event_stats().get(event_desc->event_no_);
-      if (NULL != event_stat && NULL != tenant_event_stat) {
-        event_stat->total_waits_++;
-        tenant_event_stat->total_waits_++;
-        event_stat->time_waited_ += event_desc->wait_time_;
-        tenant_event_stat->time_waited_ += event_desc->wait_time_;
-        if (event_desc->timeout_ms_ > 0 && event_desc->wait_time_ > static_cast<int64_t>(event_desc->timeout_ms_) * 1000) {
-          event_stat->total_timeouts_++;
-          tenant_event_stat->total_timeouts_++;
-        }
-        if (event_desc->wait_time_ > static_cast<int64_t>(event_stat->max_wait_)) {
-          event_stat->max_wait_ = event_desc->wait_time_;
-        }
-        if (event_desc->wait_time_ > static_cast<int64_t>(tenant_event_stat->max_wait_)) {
-          tenant_event_stat->max_wait_ = event_desc->wait_time_;
+      if (OB_NOT_NULL(tenant_info)) {
+        ObWaitEventStat *tenant_event_stat = tenant_info->get_event_stats().get(event_desc->event_no_);
+        if (NULL != event_stat && NULL != tenant_event_stat) {
+          event_stat->total_waits_++;
+          tenant_event_stat->total_waits_++;
+          event_stat->time_waited_ += event_desc->wait_time_;
+          tenant_event_stat->time_waited_ += event_desc->wait_time_;
+          if (event_desc->timeout_ms_ > 0 && event_desc->wait_time_ > static_cast<int64_t>(event_desc->timeout_ms_) * 1000) {
+            event_stat->total_timeouts_++;
+            tenant_event_stat->total_timeouts_++;
+          }
+          if (event_desc->wait_time_ > static_cast<int64_t>(event_stat->max_wait_)) {
+            event_stat->max_wait_ = event_desc->wait_time_;
+          }
+          if (event_desc->wait_time_ > static_cast<int64_t>(tenant_event_stat->max_wait_)) {
+            tenant_event_stat->max_wait_ = event_desc->wait_time_;
+          }
         }
       }
+
+      switch (OB_WAIT_EVENTS[event_desc->event_no_].wait_class_) {
+        case ObWaitClassIds::CONCURRENCY:{
+          EVENT_ADD(ObStatEventIds::CCWAIT_TIME, event_desc->wait_time_);
+          break;
+        }
+        case ObWaitClassIds::USER_IO:{
+          EVENT_ADD(ObStatEventIds::USER_IO_WAIT_TIME, event_desc->wait_time_);
+          break;
+        }
+        case ObWaitClassIds::APPLICATION:{
+          EVENT_ADD(ObStatEventIds::APWAIT_TIME, event_desc->wait_time_);
+          break;
+        }
+        default:
+          break;
+      }
     }
-    if (!is_atomic) {
-      //LOG_ERROR("XXXX: end wait", "id", ObActiveSessionGuard::get_stat().id_,
-      //          K(event_desc->wait_time_), K(event_desc->event_no_));
+    if (ObActiveSessionGuard::get_stat().event_no_ == event_desc->event_no_) {
+      ObActiveSessionGuard::get_stat().reset_event();
+      const int64_t cur_wait_time =
+          ObTimeUtility::current_time() - ObActiveSessionGuard::get_stat().wait_event_begin_ts_;
+      ObActiveSessionGuard::get_stat().wait_event_begin_ts_ = 0;
+      if (!is_idle) {
+        ObActiveSessionGuard::get_stat().total_non_idle_wait_time_ += cur_wait_time;
+      } else {
+        ObActiveSessionGuard::get_stat().total_idle_wait_time_ += cur_wait_time;
+      }
       ObActiveSessionGuard::get_stat().fixup_last_stat(*event_desc);
-      ObActiveSessionGuard::get_stat().event_no_ = 0;
     }
   }
   lock_.unlock();
@@ -766,7 +820,7 @@ ObWaitEventGuard::~ObWaitEventGuard()
   if (need_record_) {
     ObDiagnoseTenantInfo *tenant_di = ObDiagnoseTenantInfo::get_local_diagnose_info();
     if (NULL != di_ && NULL != tenant_di) {
-      di_->notify_wait_end(tenant_di, is_atomic_);
+      di_->notify_wait_end(tenant_di, is_atomic_, OB_WAIT_EVENTS[event_no_].wait_class_ == ObWaitClassIds::IDLE);
     } else if (NULL == di_ && NULL != tenant_di && 0 != wait_begin_time_) {
       ObWaitEventStat *tenant_event_stat = tenant_di->get_event_stats().get(event_no_);
       tenant_event_stat->total_waits_++;

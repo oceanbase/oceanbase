@@ -85,7 +85,8 @@ int ObLatchMutex::try_lock(
 
 int ObLatchMutex::lock(
     const uint32_t latch_id,
-    const int64_t abs_timeout_us)
+    const int64_t abs_timeout_us,
+    const bool is_atomic)
 {
   int ret = OB_SUCCESS;
   uint64_t i = 0;
@@ -125,7 +126,7 @@ int ObLatchMutex::lock(
               reinterpret_cast<uint64_t>(this),
               (uint32_t*)&lock_.val(),
               0,
-              true /*is_atomic*/);
+              is_atomic);
           if (OB_FAIL(wait(abs_timeout_us, uid))) {
             if (OB_TIMEOUT != ret) {
               COMMON_LOG(WARN, "Fail to wait the latch, ", K(ret));
@@ -274,13 +275,14 @@ int ObLatchWaitQueue::wait(
         }
 
         {
-          ObLatchWaitEventGuard wait_guard(
-              ObWaitEventIds::LATCH_WAIT_QUEUE_LOCK_WAIT,
-              abs_timeout_us / 1000,
-              reinterpret_cast<uint64_t>(this),
-              (uint32_t*)&latch.lock_,
-              0,
-              true /*is_atomic*/);
+          // only record physical wait event from caller function
+          // ObLatchWaitEventGuard wait_guard(
+          //     ObWaitEventIds::LATCH_WAIT_QUEUE_LOCK_WAIT,
+          //     abs_timeout_us / 1000,
+          //     reinterpret_cast<uint64_t>(this),
+          //     (uint32_t*)&latch.lock_,
+          //     0,
+          //     true /*is_atomic*/);
           ts.tv_sec = timeout / 1000000;
           ts.tv_nsec = 1000 * (timeout % 1000000);
           // futex_wait is an atomic wait event

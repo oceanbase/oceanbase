@@ -279,6 +279,7 @@ _enable_hash_join_hasher
 _enable_hash_join_processor
 _enable_hgby_llc_ndv_adaptive
 _enable_hgby_skew_detection
+_enable_inner_session_mgr
 _enable_in_range_optimization
 _enable_newsort
 _enable_new_sql_nio
@@ -337,6 +338,8 @@ _min_malloc_sample_interval
 _mvcc_gc_using_min_txn_snapshot
 _nested_loop_join_enabled
 _obkv_feature_mode
+_ob_ash_enable
+_ob_ash_size
 _ob_ddl_timeout
 _ob_elr_fast_freeze_threshold
 _ob_enable_direct_load
@@ -350,6 +353,7 @@ _ob_obj_dep_maint_task_interval
 _ob_plan_cache_auto_flush_interval
 _ob_plan_cache_gc_strategy
 _ob_query_rate_limit
+_ob_sqlstat_enable
 _ob_ssl_invited_nodes
 _ob_trans_rpc_timeout
 _optimizer_ads_time_limit

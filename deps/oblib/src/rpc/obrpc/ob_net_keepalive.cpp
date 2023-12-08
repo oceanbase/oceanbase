@@ -34,6 +34,7 @@
 #include "rpc/frame/ob_net_easy.h"
 #include "rpc/frame/ob_req_transport.h"
 #include "io/easy_negotiation.h"
+#include "lib/ash/ob_active_session_guard.h"
 
 extern "C" {
 extern int ob_epoll_wait(int __epfd, struct epoll_event *__events,
@@ -419,7 +420,11 @@ void ObNetKeepAlive::do_server_loop()
     ob_abort();
   }
   while (!has_set_stop()) {
-    int cnt = ob_epoll_wait(epfd, events, sizeof events/sizeof events[0], 1000);
+    int cnt = 0;
+    {
+      common::ObBKGDSessInActiveGuard inactive_guard;
+      cnt = ob_epoll_wait(epfd, events, sizeof events/sizeof events[0], 1000);
+    }
     ObTimeGuard timeguard_server("net_keepalive_server_loop", 100 * 1000);
     for (int i = 0; i < cnt; i++) {
       struct server *s = (struct server *)events[i].data.ptr;
@@ -624,7 +629,7 @@ int ret = OB_SUCCESS;
     int64_t now = get_usec();
     int64_t past = now - last_check_ts;
     if (past < KEEPALIVE_INTERVAL) {
-      ob_usleep(KEEPALIVE_INTERVAL - past);
+      ob_usleep(KEEPALIVE_INTERVAL - past, true/*is_idle_sleep*/);
     }
     last_check_ts = get_usec();
     // traverse all registed dest, send keepalive data, try to receive response and check if the dest is available

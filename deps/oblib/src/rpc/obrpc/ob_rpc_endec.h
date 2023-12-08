@@ -87,6 +87,8 @@ template <typename T>
     bool need_compressed = ObCompressorPool::get_instance().need_common_compress(compressor_type);
     if (need_compressed) {
       // compress
+      EVENT_INC(RPC_COMPRESS_ORIGINAL_PACKET_CNT);
+      EVENT_ADD(RPC_COMPRESS_ORIGINAL_SIZE, payload_sz);
       int tmp_ret = OB_SUCCESS;
       common::ObCompressor *compressor = NULL;
       char *compressed_buf = NULL;
@@ -112,6 +114,8 @@ template <typename T>
         pkt.set_original_len(static_cast<int32_t>(payload_sz));
         memcpy(payload_buf, compressed_buf, dst_data_size);
         payload_sz = dst_data_size;
+        EVENT_INC(RPC_COMPRESS_COMPRESSED_PACKET_CNT);
+        EVENT_ADD(RPC_COMPRESS_COMPRESSED_SIZE, dst_data_size);
       }
       if (NULL != compressed_buf) {
         ob_free(compressed_buf);

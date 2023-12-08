@@ -1481,14 +1481,6 @@ void ObTenantDagWorker::run1()
         }
       }
 
-      {
-        const int64_t curr_time = ObTimeUtility::fast_current_time();
-        const int64_t elapsed_time = curr_time - last_check_time_;
-        EVENT_ADD(SYS_TIME_MODEL_DB_TIME, elapsed_time);
-        EVENT_ADD(SYS_TIME_MODEL_DB_CPU, elapsed_time);
-        EVENT_ADD(SYS_TIME_MODEL_BKGD_TIME, elapsed_time);
-        EVENT_ADD(SYS_TIME_MODEL_BKGD_CPU, elapsed_time);
-      }
       status_ = DWS_FREE;
       if (OB_FAIL(MTL(ObTenantDagScheduler*)->deal_with_finish_task(*task_, *this, ret/*task error_code*/))) {
         COMMON_LOG(WARN, "failed to finish task", K(ret), K(*task_));
@@ -1498,6 +1490,7 @@ void ObTenantDagWorker::run1()
     } else {
       ObThreadCondGuard guard(cond_);
       while (NULL == task_ && DWS_FREE == status_ && !has_set_stop()) {
+        ObBKGDSessInActiveGuard guard;
         cond_.wait(SLEEP_TIME_MS);
       }
     }
@@ -1511,24 +1504,17 @@ void ObTenantDagWorker::yield()
   if (!((++counter) & CHECK_INTERVAL)) {
     int64_t curr_time = ObTimeUtility::fast_current_time();
     if (last_check_time_ + check_period_ <= curr_time) {
-      int64_t elapsed_time = curr_time - last_check_time_;
-      EVENT_ADD(SYS_TIME_MODEL_DB_TIME, elapsed_time);
-      EVENT_ADD(SYS_TIME_MODEL_DB_CPU, elapsed_time);
-      EVENT_ADD(SYS_TIME_MODEL_BKGD_TIME, elapsed_time);
-      EVENT_ADD(SYS_TIME_MODEL_BKGD_CPU, elapsed_time);
       last_check_time_ = curr_time;
       ObThreadCondGuard guard(cond_);
       if (DWS_RUNNING == status_ && MTL(ObTenantDagScheduler*)->try_switch(*this)) {
         status_ = DWS_WAITING;
         while (DWS_WAITING == status_) {
+          ObBKGDSessInActiveGuard guard;
           cond_.wait(SLEEP_TIME_MS);
         }
         ObCurTraceId::set(task_->get_dag()->get_dag_id());
         COMMON_LOG(INFO, "worker continues to run", K(*task_));
         curr_time = ObTimeUtility::fast_current_time();
-        elapsed_time = curr_time - last_check_time_;
-        EVENT_ADD(SYS_TIME_MODEL_DB_TIME, elapsed_time);
-        EVENT_ADD(SYS_TIME_MODEL_BKGD_TIME, elapsed_time);
         last_check_time_ = curr_time;
         if (DWS_RUNNABLE == status_) {
           status_ = DWS_RUNNING;
@@ -2417,6 +2403,7 @@ void ObTenantDagScheduler::run1()
         if (OB_FAIL(schedule())) {
           if (OB_ENTRY_NOT_EXIST == ret) {
             try_reclaim_threads();
+            ObBKGDSessInActiveGuard inactive_guard;
             scheduler_sync_.wait(SCHEDULER_WAIT_TIME_MS);
           } else {
             COMMON_LOG(WARN, "failed to schedule", K(ret));

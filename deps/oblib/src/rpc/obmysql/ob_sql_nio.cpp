@@ -32,6 +32,7 @@
 #include <netinet/tcp.h>
 #include "rpc/obrpc/ob_listener.h"
 #include "common/ob_clock_generator.h"
+#include "lib/ash/ob_active_session_guard.h"
 
 using namespace oceanbase::common;
 
@@ -867,7 +868,13 @@ private:
   void handle_epoll_event() {
     const int maxevents = 512;
     struct epoll_event events[maxevents];
-    int cnt = ob_epoll_wait(epfd_, events, maxevents, 1000);
+    int cnt = 0;
+    {
+      common::ObBKGDSessInActiveGuard inactive_guard;
+      cnt = ob_epoll_wait(epfd_, events, maxevents, 1000);
+    }
+
+
     for(int i = 0; i < cnt; i++) {
       ObSqlSock* s = (ObSqlSock*)events[i].data.ptr;
       if (OB_UNLIKELY(NULL == s)) {

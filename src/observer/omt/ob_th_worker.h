@@ -107,6 +107,7 @@ public:
   OB_INLINE void set_last_wakeup_ts(int64_t last_wakeup_ts) { last_wakeup_ts_ = last_wakeup_ts; }
   OB_INLINE int64_t blocking_ts() const { return OB_NOT_NULL(blocking_ts_) ? (*blocking_ts_) : 0; }
 
+  static thread_local uint64_t serving_tenant_id_;
 private:
   void set_th_worker_thread_name();
   void update_ru_cputime();

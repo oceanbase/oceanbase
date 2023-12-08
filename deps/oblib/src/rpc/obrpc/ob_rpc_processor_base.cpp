@@ -72,6 +72,7 @@ int ObRpcProcessorBase::run()
   bool deseri_succ = true;
 
   run_timestamp_ = ObTimeUtility::current_time();
+  ObRPCActiveGuard active_guard(m_get_pcode());
   if (OB_FAIL(check_timeout())) {
     LOG_WARN("req timeout", K(ret));
   } else if (OB_FAIL(check_cluster_id())) {

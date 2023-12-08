@@ -424,6 +424,10 @@ public:
   int update_max_packet_size();
   int64_t get_thread_id() const { return thread_id_; }
   void set_thread_id(int64_t t) { thread_id_ = t; }
+  const char* get_thread_name() const { return thread_name_; }
+  void set_thread_name(const char* thread_name) {
+    MEMCPY(thread_name_, thread_name, OB_THREAD_NAME_BUF_LEN);
+  }
   void set_valid(const bool valid) {is_valid_ = valid;};
   int set_client_version(const common::ObString &client_version);
   int set_driver_version(const common::ObString &driver_version);
@@ -780,6 +784,9 @@ public:
   bool get_is_in_retry() {
     return SESS_NOT_IN_RETRY != thread_data_.is_in_retry_;
   }
+  bool get_is_in_retry() const {
+    return SESS_NOT_IN_RETRY != thread_data_.is_in_retry_;
+  }
   bool get_is_in_retry_for_dup_tbl() {
     return SESS_IN_RETRY_FOR_DUP_TBL == thread_data_.is_in_retry_;
   }
@@ -796,6 +803,8 @@ public:
   // for remote / px task
   int set_session_active(const ObString &label,
                          obmysql::ObMySQLCmd cmd);
+  int set_session_active();
+  void setup_ash();
   const common::ObString get_current_query_string() const;
   uint64_t get_current_statement_id() const { return thread_data_.cur_statement_id_; }
   int update_session_timeout();
@@ -1173,6 +1182,7 @@ public:
   const common::ObCurTraceId::TraceId &get_last_trace_id() const { return last_trace_id_; }
   const common::ObCurTraceId::TraceId &get_current_trace_id() const { return curr_trace_id_; }
   uint64_t get_current_plan_id() const { return plan_id_; }
+  uint64_t get_current_plan_hash() const { return plan_hash_; }
   uint64_t get_last_plan_id() const { return last_plan_id_; }
   void set_last_plan_id(uint64_t plan_id) { last_plan_id_ = plan_id; }
   void set_current_execution_id(int64_t execution_id) { current_execution_id_ = execution_id; }
@@ -1307,7 +1317,7 @@ public:
   int set_session_temp_table_used(const bool is_used);
   int get_session_temp_table_used(bool &is_used) const;
   int get_enable_optimizer_null_aware_antijoin(bool &is_enabled) const;
-  common::ActiveSessionStat &get_ash_stat() {  return ash_stat_; }
+  common::ObActiveSessionStat &get_ash_stat() { return ash_stat_; }
   void update_tenant_config_version(int64_t v) { cached_tenant_config_version_ = v; };
   static int check_optimizer_features_enable_valid(const ObObj &val);
 protected:
@@ -2133,6 +2143,7 @@ private:
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
   uint64_t plan_id_; // for ASH sampling, get current SQL's sql_id & plan_id
   uint64_t last_plan_id_;
+  uint64_t plan_hash_;
 
   ObFLTVars flt_vars_;
   //=======================ObProxy && OCJ related============================
@@ -2246,7 +2257,7 @@ private:
   // 构造当前 session 的线程 id，用于 all_virtual_processlist 中的 THREAD_ID 字段
   // 通过本 id 可以快速对 worker 做 `pstack THREADID` 操作
   int64_t thread_id_;
-  common::ActiveSessionStat ash_stat_;
+  common::ObActiveSessionStat ash_stat_;
   // indicate whether user password is expired, is set when session is established.
   // will not be changed during whole session lifetime unless user changes password
   // in this session.
@@ -2254,6 +2265,7 @@ private:
   // timestamp of processing current query. refresh when retry.
   int64_t process_query_time_;
   int64_t last_update_tz_time_; //timestamp of last attempt to update timezone info
+  char thread_name_[OB_THREAD_NAME_BUF_LEN];
 };
 
 

@@ -20,6 +20,7 @@
 #include "share/ob_resource_limit.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/slog/ob_storage_logger_manager.h"
+#include "lib/ash/ob_active_session_guard.h"
 
 using namespace oceanbase::common;
 
@@ -1217,6 +1218,7 @@ int ObLocalDevice::io_getevents(
     int sys_ret = 0;
     {
       oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_IO_EVENT);
+      common::ObBKGDSessInActiveGuard inactive_guard;
       while ((sys_ret = ::io_getevents(
           local_io_context->io_context_,
           min_nr,

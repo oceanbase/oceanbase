@@ -25,6 +25,7 @@ using namespace oceanbase::share;
 
 ObVirtualASH::ObVirtualASH() :
     ObVirtualTableScannerIterator(),
+    iterator_(),
     addr_(),
     ipstr_(),
     port_(0),
@@ -83,7 +84,7 @@ int ObVirtualASH::inner_get_next_row(common::ObNewRow *&row)
 
   do {
     if (iterator_.has_next()) {
-      const ActiveSessionStat &node = iterator_.next();
+      const ObActiveSessionStatItem &node = iterator_.next();
       if (OB_SYS_TENANT_ID == effective_tenant_id_ || node.tenant_id_ == effective_tenant_id_) {
         if (OB_FAIL(convert_node_to_row(node, row))) {
           LOG_WARN("fail convert row", K(ret));
@@ -98,7 +99,7 @@ int ObVirtualASH::inner_get_next_row(common::ObNewRow *&row)
   return ret;
 }
 
-int ObVirtualASH::convert_node_to_row(const ActiveSessionStat &node, ObNewRow *&row)
+int ObVirtualASH::convert_node_to_row(const ObActiveSessionStatItem &node, ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   ObObj *cells = cur_row_.cells_;
@@ -217,7 +218,12 @@ int ObVirtualASH::convert_node_to_row(const ActiveSessionStat &node, ObNewRow *&
         break;
       }
       case MODULE: {
-        cells[cell_idx].set_null(); // impl. later
+        if (node.module_[0] == '\0') {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_varchar(node.module_, static_cast<ObString::obstr_size_t>(STRLEN(node.module_)));
+        }
+        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       }
       case ACTION: {
@@ -231,7 +237,7 @@ int ObVirtualASH::convert_node_to_row(const ActiveSessionStat &node, ObNewRow *&
       case BACKTRACE: {
 #ifndef NDEBUG
         if (node.bt_[0] == '\0') {
-          cells[cell_idx].set_varchar("");
+          cells[cell_idx].set_null();
         } else {
           cells[cell_idx].set_varchar(node.bt_);
         }
@@ -269,6 +275,106 @@ int ObVirtualASH::convert_node_to_row(const ActiveSessionStat &node, ObNewRow *&
         cells[cell_idx].set_bool(node.in_das_remote_exec_);
         break;
       }
+      case PROGRAM: {
+        if ('\0' == node.program_[0]) {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_varchar(node.program_, static_cast<ObString::obstr_size_t>(STRLEN(node.program_)));
+        }
+        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        break;
+      }
+      case TM_DELTA_TIME: {
+        cells[cell_idx].set_int(node.delta_time_);
+        break;
+      }
+      case TM_DELTA_CPU_TIME: {
+        cells[cell_idx].set_int(node.delta_cpu_time_);
+        break;
+      }
+      case TM_DELTA_DB_TIME: {
+        cells[cell_idx].set_int(node.delta_db_time_);
+        break;
+      }
+      case TOP_LEVEL_SQL_ID: {
+        if ('\0' == node.top_level_sql_id_[0]) {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_varchar(node.top_level_sql_id_);
+        }
+        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        break;
+      }
+      case IN_PLSQL_COMPILATION: {
+        cells[cell_idx].set_bool(node.in_plsql_compilation_);
+        break;
+      }
+      case IN_PLSQL_EXECUTION: {
+        cells[cell_idx].set_bool(node.in_plsql_execution_);
+        break;
+      }
+      case PLSQL_ENTRY_OBJECT_ID: {
+        if (OB_INVALID_ID == node.plsql_entry_object_id_) {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_int(node.plsql_entry_object_id_);
+        }
+        break;
+      }
+      case PLSQL_ENTRY_SUBPROGRAM_ID: {
+        if (OB_INVALID_ID == node.plsql_entry_subprogram_id_) {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_int(node.plsql_entry_subprogram_id_);
+        }
+        break;
+      }
+      case PLSQL_ENTRY_SUBPROGRAM_NAME: {
+        if ('\0' == node.plsql_entry_subprogram_name_[0]) {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_varchar(node.plsql_entry_subprogram_name_);
+        }
+        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        break;
+      }
+      case PLSQL_OBJECT_ID: {
+        if (OB_INVALID_ID == node.plsql_object_id_) {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_int(node.plsql_object_id_);
+        }
+        break;
+      }
+      case PLSQL_SUBPROGRAM_ID: {
+        if (OB_INVALID_ID == node.plsql_subprogram_id_) {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_int(node.plsql_subprogram_id_);
+        }
+        break;
+      }
+      case PLSQL_SUBPROGRAM_NAME: {
+        if ('\0' == node.plsql_subprogram_name_[0]) {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_varchar(node.plsql_subprogram_name_);
+        }
+        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        break;
+      }
+      case EVENT_ID: {
+        if (OB_LIKELY(node.event_no_ == 0)) {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_int(OB_WAIT_EVENTS[node.event_no_].event_id_);
+        }
+        break;
+      }
+      case IN_FILTER_ROWS: {
+        cells[cell_idx].set_bool(node.in_filter_rows_);
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "invalid column id", K(column_id), K(cell_idx),
@@ -288,7 +394,7 @@ int ObVirtualASHI1::inner_get_next_row(common::ObNewRow *&row)
   int ret = OB_SUCCESS;
   do {
     if (iterator_.has_next()) {
-      const ActiveSessionStat &node = iterator_.next();
+      const ObActiveSessionStatItem &node = iterator_.next();
       if (OB_SYS_TENANT_ID == effective_tenant_id_ || node.tenant_id_ == effective_tenant_id_) {
         if (OB_FAIL(convert_node_to_row(node, row))) {
           LOG_WARN("fail convert row", K(ret));

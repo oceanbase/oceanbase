@@ -19,6 +19,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/charset/ob_mysql_global.h"
 #include "lib/signal/ob_libunwind.h"
+#include "lib/ash/ob_active_session_guard.h"
 
 extern "C" {
 extern int ob_poll(struct pollfd *__fds, nfds_t __nfds, int __timeout);
@@ -174,7 +175,12 @@ int wait_readable(int fd, int64_t timeout)
   bzero(&pfd, sizeof(pfd));
   pfd.fd = fd;
   pfd.events = POLLIN;
-  int n = ob_poll(&pfd, 1, timeout);
+
+  int n = 0;
+  {
+    common::ObBKGDSessInActiveGuard inactive_guard;
+    n = ob_poll(&pfd, 1, timeout);
+  }
   if (-1 == n) {
     ret = OB_ERR_SYS;
     DLOG(WARN, "poll failed, errno=%d", errno);

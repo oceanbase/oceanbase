@@ -462,13 +462,11 @@ int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
         LOG_WARN("fail to inc session ref", K(ret));
       } else {
         callback->handout();
-        // Add ASH flags to async commit of transactions
-        // In the end of async commit in func named ` ObEndTransAsyncCallback::callback() `,
-        // set the ash flag named  `in_committing_` to false.
-        ObActiveSessionGuard::get_stat().in_committing_ = true;
+        ObActiveSessionGuard::get_stat().set_async_committing();
         if(OB_FAIL(txs->submit_commit_tx(*tx_ptr, expire_ts, *callback, &trace_info))) {
           LOG_WARN("submit commit tx fail", K(ret), KP(callback), K(expire_ts), KPC(tx_ptr));
           GCTX.session_mgr_->revert_session(session);
+          ObActiveSessionGuard::get_stat().finish_async_commiting();
           callback->handin();
         }
       }

@@ -616,6 +616,7 @@ public:
   int64_t tx_id_; //for dblink recover xa tx
   int64_t tm_sessid_; //for dblink get connection attached on tm session
   ExprFixedArray var_init_exprs_;
+  sql::ObExecutedSqlStatRecord sql_stat_record_value_;
 private:
   bool is_returning_; //是否设置了returning
 

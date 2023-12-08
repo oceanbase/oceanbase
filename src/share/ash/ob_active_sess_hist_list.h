@@ -13,7 +13,6 @@
 #ifndef _OB_SHARE_ASH_ACTIVE_SESSION_LIST_H_
 #define _OB_SHARE_ASH_ACTIVE_SESSION_LIST_H_
 
-#include "lib/container/ob_array.h"
 #include "lib/lock/ob_tc_rwlock.h"
 #include "lib/ash/ob_active_session_guard.h"
 
@@ -21,19 +20,19 @@ namespace oceanbase
 {
 namespace share
 {
-
-#define WR_ASH_SAMPLE_INTERVAL 10
+typedef lib::ObLockGuard<lib::ObMutex> LockGuard;
 
 class ObActiveSessHistList
 {
 public:
-  ObActiveSessHistList() : write_pos_(0) {}
+  ObActiveSessHistList();
   ~ObActiveSessHistList() = default;
 
   static ObActiveSessHistList &get_instance();
   int init();
-  int extend_list(int64_t new_size);
-  TO_STRING_KV(K(size()), K_(write_pos));
+  int64_t get_ash_size() const { return ash_size_; }
+  int resize_ash_size();
+  TO_STRING_KV(K(size()), K_(ash_size), K_(ash_buffer));
 
   /*                    * -> write_idx
    * +------------------+--------------------+
@@ -43,66 +42,66 @@ public:
    *
    * we don't regard it as a circular buffer,
    * instead, regard it as an unlimited array goes to one direction forever
-   * i.e. write_pos_ will increase for ever
+   * i.e. write_pos will increase for ever
    *
-   * Note: no concurrent access to list_
+   * NOTICE: below function must be called with mutex_ or shared_ptr protection.
    */
-  void add(ActiveSessionStat &stat)
+  void add(ObActiveSessionStat &stat)
   {
-    // TODO: optimize performance, eliminate '%'
-    int64_t idx = (write_pos_++ + list_.size()) % list_.size();
-    stat.id_ = write_pos_;
-    MEMCPY(&list_[idx], &stat, sizeof(ActiveSessionStat));
-    if (0 == write_pos_ % WR_ASH_SAMPLE_INTERVAL) {
-      list_[idx].is_wr_sample_ = true;
-    }
-    stat.wait_time_ = 0;
-    if (list_[idx].event_no_) {
-      stat.set_last_stat(&list_[idx]); // for wait event time fixup
+    int64_t idx = ash_buffer_->append(stat);
+    if (stat.event_no_) {
+      // Once session can see fixup index, it surely can see fixup_buffer.
+      stat.set_fixup_buffer(ash_buffer_);
+      stat.set_fixup_index(idx);
     } else {
-      stat.set_last_stat(nullptr); // for wait event time fixup
+      // we cannot reset fixup buffer here. Because user thread would reset fixup buffer too. Causing a race condition.
+      // Bottom line is that we cannot introduce any lock in worker thread.
+      // Worst case is the fixup buffer never got release because user thread's wait event never ends.
     }
   }
-  int64_t write_pos() const { return write_pos_; }
-  inline int64_t size() const { return list_.size(); }
-  const ActiveSessionStat &get(int64_t pos) const {
-    return list_[pos];
+  int64_t write_pos() const { return ash_buffer_->write_pos(); }
+  inline int64_t size() const { return ash_buffer_->size(); }
+  const ObActiveSessionStatItem &get(int64_t pos) const {
+    return ash_buffer_->get(pos);
   }
 public:
   class Iterator
   {
   public:
-    Iterator() : list_(nullptr), curr_(0), end_(0) {}
-    Iterator(ObActiveSessHistList *list,
+    Iterator() : ash_buffer_(), curr_(0), end_(0) {}
+    explicit Iterator(const common::ObSharedGuard<ObAshBuffer> &ash_buffer,
              int64_t start,
              int64_t end)
-        : list_(list),
+        : ash_buffer_(),
           curr_(start),
           end_(end)
-    {}
+    {
+      ash_buffer_ = ash_buffer;
+    }
     Iterator(const Iterator &other)
-       : list_(other.list_),
-         curr_(other.curr_),
+       : curr_(other.curr_),
          end_(other.end_)
-    {}
-    TO_STRING_KV(K_(list), K_(curr), K_(end));
+    {
+      ash_buffer_ = other.ash_buffer_;
+    }
+    TO_STRING_KV(K_(ash_buffer), K_(curr), K_(end));
     bool has_next() const
     {
       bool bret = true;
-      if (OB_UNLIKELY(nullptr == list_ || list_->write_pos() == 0 || curr_ < 0)) {
+      if (OB_UNLIKELY(nullptr == ash_buffer_.get_ptr() || ash_buffer_->write_pos() == 0 || curr_ < 0)) {
         bret = false;
-      } else if (list_->write_pos() - curr_ > list_->size()) {  // write_pos is the next valid write position which is not written
+      } else if (ash_buffer_->write_pos() - curr_ > ash_buffer_->size()) {  // write_pos is the next valid write position which is not written
         bret = false;
       } else if (curr_ < end_) {
         bret = false;
       }
       return bret;
     }
-    const ActiveSessionStat &next()
+    const ObActiveSessionStatItem &next()
     {
-      int64_t pos = curr_ % list_->size();
+      int64_t pos = curr_ % ash_buffer_->size();
       curr_--;
-      return list_->get(pos);
+      return ash_buffer_->get(pos);
     }
     void init_with_sample_time_index(const int64_t &start, const int64_t &end)
     {
@@ -131,7 +130,7 @@ public:
       int64_t middle = -1;
       while (begin < end) {
         middle = begin + ((end - begin) >> 1);
-        const int64_t val = list_->get(middle % list_->size()).sample_time_;
+        const int64_t val = ash_buffer_->get(middle % ash_buffer_->size()).sample_time_;
         if (OB_LIKELY(is_valid(middle))) {
           if (val >= left) {
             end = middle;
@@ -148,10 +147,10 @@ public:
            * ended in constant time.
            */
           LOG_DEBUG("ash overwrite happened during binary search", K(begin),
-                    K(middle), K(end), K(val), KPC(list_));
+                    K(middle), K(end), K(val), K(ash_buffer_->size()));
           // TODO(roland.qk): Adding sysstat counter to track this corner case.
           end = curr_ + 1;
-          begin = list_->write_pos() - list_->size();
+          begin = ash_buffer_->write_pos() - ash_buffer_->size();
           OB_ASSERT(begin >= 0);
         }
       }
@@ -164,7 +163,7 @@ public:
       int64_t middle = -1;
       while (begin <= end) {
         middle = begin + ((end - begin) >> 1);
-        const int64_t val = list_->get(middle % list_->size()).sample_time_;
+        const int64_t val = ash_buffer_->get(middle % ash_buffer_->size()).sample_time_;
         if (OB_LIKELY(is_valid(middle))) {
           if (val > right) {
             end = middle - 1;
@@ -174,7 +173,7 @@ public:
         } else {
           // ash ring buffer overwrite happened.
           LOG_DEBUG("ash overwrite happened during binary search", K(begin),
-                    K(middle), K(end), K(val), KPC(list_));
+                    K(middle), K(end), K(val), K(ash_buffer_->size()));
           // TODO(roland.qk): Adding sysstat counter to track this corner case.
           end = curr_ + 1;
           begin = sample_time_search_left_most(right);
@@ -186,9 +185,9 @@ public:
     bool is_valid(int64_t pos)
     {
       bool bret = true;
-      if (OB_UNLIKELY(nullptr == list_ || list_->write_pos() == 0 || curr_ < 0)) {
+      if (OB_UNLIKELY(nullptr == ash_buffer_.get_ptr() || ash_buffer_->write_pos() == 0 || curr_ < 0)) {
         bret = false;
-      } else if (list_->write_pos() - pos > list_->size()) {
+      } else if (ash_buffer_->write_pos() - pos > ash_buffer_->size()) {
         bret = false;
       } else if (pos < end_ || pos > curr_) {
         bret = false;
@@ -196,28 +195,100 @@ public:
       return bret;
     }
   private:
-    ObActiveSessHistList *list_;
+    common::ObSharedGuard<ObAshBuffer> ash_buffer_;
+    int64_t curr_;
+    int64_t end_;
+  };
+
+  class ReverseIterator
+  {
+  public:
+    ReverseIterator() : ash_buffer_(), curr_(0), end_(0) {}
+    explicit ReverseIterator(const common::ObSharedGuard<ObAshBuffer> &ash_buffer,
+              int64_t start,
+              int64_t end)
+        : ash_buffer_(),
+          curr_(start),
+          end_(end)
+    {
+      ash_buffer_ = ash_buffer;
+    }
+    ReverseIterator(const ReverseIterator &other)
+       : curr_(other.curr_),
+         end_(other.end_)
+    {
+      ash_buffer_ = other.ash_buffer_;
+    }
+    bool has_next() const
+    {
+      bool bret = true;
+      if (OB_UNLIKELY(nullptr == ash_buffer_.get_ptr() || ash_buffer_->write_pos() == 0 || curr_ < 0)) {
+        bret = false;
+      } else if (curr_ >= ash_buffer_->write_pos()) {  // write_pos is the next valid write position which is not written
+        bret = false;
+      } else if (curr_ > end_) {
+        bret = false;
+      }
+      return bret;
+    }
+    const ObActiveSessionStatItem &next()
+    {
+      int64_t pos = curr_ % ash_buffer_->size();
+      curr_++;
+      return ash_buffer_->get(pos);
+    }
+    int64_t distance() const
+    {
+      return end_ - curr_ + 1;
+    }
+    TO_STRING_KV(K_(ash_buffer), K(ash_buffer_->write_pos()), K_(curr), K_(end));
+  private:
+    common::ObSharedGuard<ObAshBuffer> ash_buffer_;
     int64_t curr_;
     int64_t end_;
   };
 
   Iterator create_iterator()
   {
+    // get hold of ash buffer.
+    LockGuard lock(mutex_);
+    common::ObSharedGuard<ObAshBuffer> ash_buffer = ash_buffer_;
     int64_t read_start = 0;
     int64_t read_end = 0;
-    if (write_pos_ < list_.size()) {
+    if (ash_buffer->write_pos() < ash_buffer->size()) {
       // buffer not full
-      read_start = write_pos_ - 1;
+      read_start = ash_buffer->write_pos() - 1;
       read_end = 0;
     } else {
-      read_start = write_pos_ - 1;
-      read_end = write_pos_ - list_.size();
+      read_start = ash_buffer->write_pos() - 1;
+      read_end = ash_buffer->write_pos() - ash_buffer->size();
     }
-    return Iterator(this, read_start, read_end);
+    return Iterator(ash_buffer, read_start, read_end);
   }
+
+  ReverseIterator create_reverse_iterator_no_lock()
+  {
+    // get hold of ash buffer.
+    common::ObSharedGuard<ObAshBuffer> ash_buffer = ash_buffer_;
+    int64_t read_start = 0;
+    int64_t read_end = 0;
+    if (ash_buffer->write_pos() < ash_buffer->size()) {
+      // buffer not full
+      read_start = 0;
+      read_end = ash_buffer->write_pos() - 1;
+    } else {
+      read_start = ash_buffer->write_pos() - ash_buffer->size();
+      read_end = ash_buffer->write_pos() - 1;
+    }
+    return ReverseIterator(ash_buffer, read_start, read_end);
+  }
+  void lock() { mutex_.lock(); };
+  void unlock() { mutex_.unlock(); };
 private:
-  common::ObArray<ActiveSessionStat> list_;
-  int64_t write_pos_; // where can write to when add an element
+  int allocate_ash_buffer(int64_t ash_size, common::ObSharedGuard<ObAshBuffer> &ash_buffer);
+  int64_t ash_size_;
+  lib::ObMutex mutex_;
+  common::ObSharedGuard<ObAshBuffer> ash_buffer_;
 };
 
 }

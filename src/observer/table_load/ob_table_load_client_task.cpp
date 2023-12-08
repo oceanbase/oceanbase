@@ -176,6 +176,7 @@ int ObTableLoadClientTask::create_session_info(uint64_t user_id, uint64_t databa
     OX(session_info->set_client_addr(ObServer::get_instance().get_self()));
     OX(session_info->set_peer_addr(ObServer::get_instance().get_self()));
     OX(session_info->set_thread_id(GETTID()));
+    OX(session_info->set_thread_name(GETTNAME()));
   }
   if (OB_FAIL(ret)) {
     if (session_info != nullptr) {

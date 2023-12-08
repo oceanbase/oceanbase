@@ -417,6 +417,7 @@ void ObUniqTaskQueue<Task, Process>::run1()
             }
           }
         } else {
+          common::ObBKGDSessInActiveGuard inactive_guard;
           cond_.wait(QUEUE_WAIT_INTERVAL_MS);
         }
       } else {//end cond_

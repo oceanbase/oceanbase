@@ -1610,7 +1610,7 @@ int ObInnerTableSchema::v_ob_rpc_incoming_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT     * FROM     oceanbase.GV$OB_RPC_INCOMING )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT     * FROM     oceanbase.GV$OB_RPC_INCOMING WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

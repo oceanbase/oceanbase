@@ -305,15 +305,6 @@ struct ObAuditRecordData {
 
   void update_event_stage_state() {
     exec_record_.update_stat();
-    const int64_t cpu_time = MAX(exec_timestamp_.elapsed_t_ - exec_record_.wait_time_, 0);
-    const int64_t elapsed_time = MAX(exec_timestamp_.elapsed_t_, 0);
-    if(is_inner_sql_) {
-      EVENT_ADD(SYS_TIME_MODEL_DB_INNER_TIME, elapsed_time);
-      EVENT_ADD(SYS_TIME_MODEL_DB_INNER_CPU, cpu_time);
-    } else {
-      EVENT_ADD(SYS_TIME_MODEL_DB_TIME, elapsed_time);
-      EVENT_ADD(SYS_TIME_MODEL_DB_CPU, cpu_time);
-    }
   }
 
   bool is_timeout() const {

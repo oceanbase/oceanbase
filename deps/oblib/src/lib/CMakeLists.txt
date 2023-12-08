@@ -283,6 +283,7 @@ ob_set_subtarget(oblib_lib utility
 
 ob_set_subtarget(oblib_lib ash
   ash/ob_active_session_guard.cpp
+  ash/ob_ash_bkgd_sess_inactive_guard.cpp
 )
 
 ob_set_subtarget(oblib_lib ssl

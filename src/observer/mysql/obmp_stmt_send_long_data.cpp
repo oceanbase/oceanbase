@@ -225,11 +225,13 @@ int ObMPStmtSendLongData::process_send_long_data_stmt(ObSQLSessionInfo &session)
 int ObMPStmtSendLongData::do_process(ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
+  ObExecutingSqlStatRecord sqlstat_record;
   ObAuditRecordData &audit_record = session.get_raw_audit_record();
   audit_record.try_cnt_++;
   const bool enable_perf_event = lib::is_diagnose_info_enabled();
   const bool enable_sql_audit = GCONF.enable_sql_audit
                                 && session.get_local_ob_enable_sql_audit();
+  const bool enable_sqlstat = session.is_sqlstat_enabled();
   single_process_timestamp_ = ObTimeUtility::current_time();
   bool is_diagnostics_stmt = false;
 
@@ -241,6 +243,11 @@ int ObMPStmtSendLongData::do_process(ObSQLSessionInfo &session)
     ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL, di);
     if (enable_perf_event) {
       audit_record.exec_record_.record_start(di);
+    }
+    if (enable_sqlstat) {
+      sqlstat_record.record_sqlstat_start_value(di);
+      sqlstat_record.set_is_in_retry(session.get_is_in_retry());
+      session.sql_sess_record_sql_stat_start_value(sqlstat_record);
     }
     int64_t execution_id = 0;
     ObString sql = "send long data";
@@ -273,6 +280,10 @@ int ObMPStmtSendLongData::do_process(ObSQLSessionInfo &session)
         const int64_t time_cost = exec_end_timestamp_ - get_receive_timestamp();
         EVENT_INC(SQL_PS_PREPARE_COUNT);
         EVENT_ADD(SQL_PS_PREPARE_TIME, time_cost);
+      }
+      if (enable_sqlstat) {
+        sqlstat_record.record_sqlstat_end_value(di);
+
       }
     }
   } // diagnose end

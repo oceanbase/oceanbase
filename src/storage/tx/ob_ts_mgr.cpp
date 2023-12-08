@@ -494,7 +494,7 @@ void ObTsMgr::run1()
   lib::set_thread_name("TsMgr");
   while (!has_set_stop()) {
     // sleep 100 * 1000 us
-    ob_usleep(REFRESH_GTS_INTERVEL_US);
+    ob_usleep(REFRESH_GTS_INTERVEL_US, true/*is_idle_sleep*/);
     ts_source_info_map_.for_each(gts_refresh_funtor);
     ts_source_info_map_.for_each(get_obsolete_tenant_functor);
     ts_source_info_map_.for_each(check_tenant_functor);

@@ -273,7 +273,7 @@ void ObMemoryDump::run1()
         generate_mod_stat_task();
         last_dump_ts = current_ts;
       } else {
-        ob_usleep(1000);
+        ob_usleep(1000, true/*is_idle_sleep*/);
       }
     }
   }

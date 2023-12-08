@@ -15,6 +15,7 @@
 #include "observer/omt/ob_multi_tenant.h"
 #include "observer/ob_server.h"
 #include "share/rc/ob_tenant_base.h"
+#include "lib/ash/ob_active_session_guard.h"
 
 namespace oceanbase
 {
@@ -67,8 +68,11 @@ void ObXAInnerTableGCWorker::run1()
 
   // use start delay avoid diffient thread do gc on the same time
   lib::set_thread_name("ObXAGCWorker");
-  for (int64_t i = 0; i < start_delay && !has_set_stop(); ++i) {
-    sleep(1);
+  {
+    ObBKGDSessInActiveGuard inactive_guard;
+    for (int64_t i = 0; i < start_delay && !has_set_stop(); ++i) {
+      sleep(1);
+    }
   }
 
   constexpr int64_t gc_interval_upper_bound = 24L * (3600L * 1000L * 1000L); //upper bound is 24h
@@ -100,7 +104,10 @@ void ObXAInnerTableGCWorker::run1()
       }
     }
     //sleep 20 secnd whether gc succ or not
-    SLEEP(20);
+    {
+      ObBKGDSessInActiveGuard inactive_guard;
+      SLEEP(20);
+    }
     // try refresh gc_interval,
     // if gc falied, and not update last_scan_ts, update gc_interval can be effective
     // gc_interval ～ [20s, 24h]

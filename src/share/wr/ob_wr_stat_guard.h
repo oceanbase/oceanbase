@@ -23,7 +23,7 @@ namespace share
 #define WR_STAT_GUARD(STAT_PREFIX)                                            \
   WrStatGuard<::oceanbase::common::ObStatEventIds::STAT_PREFIX##_ELAPSE_TIME, \
       ::oceanbase::common::ObStatEventIds::STAT_PREFIX##_CPU_TIME>            \
-      guard;
+      wr_stat_guard;
 
 template <ObStatEventIds::ObStatEventIdEnum elapse_time_id,
     ObStatEventIds::ObStatEventIdEnum cpu_time_id>

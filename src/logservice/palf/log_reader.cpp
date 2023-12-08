@@ -122,6 +122,8 @@ int LogReader::inner_pread_(const int read_io_fd,
   offset_t backoff = start_offset - aligned_start_offset;
   int64_t aligned_in_read_size = upper_align(in_read_size + backoff, LOG_DIO_ALIGN_SIZE);
   int64_t limited_and_aligned_in_read_size = 0;
+  ObBaseWaitEventGuard<ObWaitEventIds::PALF_READ> wait_event(
+      PALF_IO_WAIT_EVENT_TIMEOUT_MS, read_io_fd, start_offset, aligned_in_read_size);
   if (OB_FAIL(limit_and_align_in_read_size_by_block_size_(
           aligned_start_offset, aligned_in_read_size,  limited_and_aligned_in_read_size))) {
     PALF_LOG(WARN, "limited_and_aligned_in_read_size failed, maybe read offset exceed block size",

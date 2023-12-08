@@ -72,7 +72,7 @@ ObStorageTableGuard::~ObStorageTableGuard()
       need_sleep = memtable_->is_active_memtable();
     }
     uint64_t timeout = 10000;//10s
-    common::ObWaitEventGuard wait_guard(common::ObWaitEventIds::MEMSTORE_MEM_PAGE_ALLOC_WAIT, timeout, 0, 0, left_interval);
+    common::ObBaseWaitEventGuard<common::ObWaitEventIds::MEMSTORE_MEM_PAGE_ALLOC_WAIT> wait_guard(timeout, 0, 0, left_interval);
 
     reset();
     int ret = OB_SUCCESS;
@@ -109,7 +109,6 @@ ObStorageTableGuard::~ObStorageTableGuard()
           break;
         }
         int64_t sleep_interval = min(min(left_interval, SLEEP_INTERVAL_PER_TIME), expected_wait_time);
-        // don't use ob_usleep, as we are already in the scope of 'wait_guard'
         if (sleep_interval < 0) {
           LOG_ERROR("sleep interval should not smaller than 0", K(expected_wait_time), K(seq), K(clock), K(left_interval));
         }
@@ -119,7 +118,7 @@ ObStorageTableGuard::~ObStorageTableGuard()
         if (sleep_interval <= 0) {
           break;
         }
-        ::usleep(sleep_interval);
+        ob_usleep<ObWaitEventIds::STORAGE_WRITING_THROTTLE_SLEEP>(sleep_interval, sleep_interval, sleep_time, 0);
         sleep_time += sleep_interval;
         time++;
         left_interval -= sleep_interval;
@@ -131,6 +130,7 @@ ObStorageTableGuard::~ObStorageTableGuard()
         const int64_t skip_clock = MIN(seq - finish_clock, get_thread_alloc_stat());
         memstore_allocator->skip_clock(skip_clock);
       }
+      EVENT_ADD(ObStatEventIds::STORAGE_WRITING_THROTTLE_TIME, sleep_time);
     }
 
     if (REACH_TIME_INTERVAL(100 * 1000L) &&

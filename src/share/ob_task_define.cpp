@@ -95,7 +95,7 @@ private:
     {
       lib::set_thread_name("LogLimiterRefresh");
       while (!has_set_stop()) {
-        ob_usleep(100000);
+        ob_usleep(100000, true/*is_idle_sleep*/);
         limiter_.refresh();
       }
     }

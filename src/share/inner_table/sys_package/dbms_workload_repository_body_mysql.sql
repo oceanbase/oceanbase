@@ -15,7 +15,8 @@ CREATE OR REPLACE PACKAGE BODY dbms_workload_repository
 
   PROCEDURE MODIFY_SNAPSHOT_SETTINGS(
     retention     INT    DEFAULT  NULL,
-    interval      INT    DEFAULT  NULL);
+    interval      INT    DEFAULT  NULL,
+    topnsql       INT    DEFAULT  NULL);
   PRAGMA INTERFACE(C, WR_MODIFY_SNAPSHOT_SETTINGS);
 
   FUNCTION ASH_REPORT_TEXT(BTIME         DATETIME,

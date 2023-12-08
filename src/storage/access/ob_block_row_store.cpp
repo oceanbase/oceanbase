@@ -116,6 +116,7 @@ int ObBlockRowStore::apply_blockscan(
     const bool can_pushdown,
     ObTableStoreStat &table_store_stat)
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_filter_rows);
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;

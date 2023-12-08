@@ -1268,6 +1268,7 @@ public:
   bool is_var_assign_use_das_enabled() const;
   int is_enable_range_extraction_for_not_in(bool &enabled) const;
   int is_adj_index_cost_enabled(bool &enabled, int64_t &stats_cost_percent) const;
+  bool is_sqlstat_enabled() const;
 
   ObSessionDDLInfo &get_ddl_info() { return ddl_info_; }
   void set_ddl_info(const ObSessionDDLInfo &ddl_info) { ddl_info_ = ddl_info; }
@@ -1610,6 +1611,8 @@ public:
   inline int64_t get_out_bytes() const { return ATOMIC_LOAD(&out_bytes_); }
   inline void inc_out_bytes(int64_t out_bytes) { IGNORE_RETURN ATOMIC_FAA(&out_bytes_, out_bytes); }
   bool is_pl_prepare_stage() const;
+  inline ObExecutingSqlStatRecord& get_executing_sql_stat_record() {return executing_sql_stat_record_; }
+  int sql_sess_record_sql_stat_start_value(ObExecutingSqlStatRecord& executing_sqlstat);
 private:
   transaction::ObTxnFreeRouteCtx txn_free_route_ctx_;
   //save the current sql exec context in session
@@ -1640,6 +1643,7 @@ private:
   common::ObSEArray<ObSequenceSchema*, 2> dblink_sequence_schemas_;
   bool client_non_standard_;
   share::schema::ObUserLoginInfo login_info_;
+  ObExecutingSqlStatRecord executing_sql_stat_record_;
 };
 
 inline bool ObSQLSessionInfo::is_terminate(int &ret) const

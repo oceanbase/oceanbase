@@ -287,7 +287,7 @@ int ObMySQLRequestUtils::flush_buffer_internal(easy_buf_t *send_buf,
 
       // wait for wake up by IO thread in `process' callback
       {
-        ObWaitEventGuard guard(ObWaitEventIds::MYSQL_RESPONSE_WAIT_CLIENT, 0, 0, 0);
+        ObBaseWaitEventGuard<ObWaitEventIds::MYSQL_RESPONSE_WAIT_CLIENT> guard(0);
         easy_client_wait(&wait_obj, 1);
       }
 

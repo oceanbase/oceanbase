@@ -1437,6 +1437,7 @@ int ObRootInspection::check_sys_view_(
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       common::sqlclient::ObMySQLResult *result = NULL;
       ObSqlString sql;
+      ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::RS_CHECK_SYS_VIEW_EXPANSION);
       // case 0: check expansion of sys view definition
       if (is_oracle) {
         if (OB_FAIL(sql.assign_fmt("SELECT FIELD FROM \"%s\".\"%s\" WHERE TABLE_ID = %lu",

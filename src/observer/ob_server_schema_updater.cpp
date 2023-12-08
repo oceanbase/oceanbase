@@ -247,6 +247,7 @@ int ObServerSchemaUpdater::batch_process_tasks(
 
 int ObServerSchemaUpdater::process_refresh_task(const ObServerSchemaTask &task)
 {
+  ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::REFRESH_SCHEMA);
   int ret = OB_SUCCESS;
   const ObRefreshSchemaInfo &schema_info = task.schema_info_;
   ObTaskController::get().switch_task(share::ObTaskType::SCHEMA);
@@ -349,6 +350,7 @@ int ObServerSchemaUpdater::process_release_task()
 int ObServerSchemaUpdater::process_async_refresh_tasks(
     const ObIArray<ObServerSchemaTask> &tasks)
 {
+  ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::ASYNC_REFRESH_SCHEMA);
   int ret = OB_SUCCESS;
   ObTaskController::get().switch_task(share::ObTaskType::SCHEMA);
   THIS_WORKER.set_timeout_ts(INT64_MAX);

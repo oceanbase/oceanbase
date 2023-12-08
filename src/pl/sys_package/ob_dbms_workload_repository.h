@@ -73,6 +73,8 @@ public:
       const AshReportParams &ash_report_params, const int64_t num_events, ObStringBuffer &buff);
   static int print_ash_sql_text_list(
       const AshReportParams &ash_report_params, ObStringBuffer &buff);
+  static int print_ash_top_plsql(
+    const AshReportParams &ash_report_params, const int64_t num_events, ObStringBuffer &buff);
   static int print_ash_top_session_info(const AshReportParams &ash_report_params,
       const int64_t num_samples, const int64_t num_events, const int64_t dur_elapsed_time,
       ObStringBuffer &buff);

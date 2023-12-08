@@ -89,7 +89,7 @@ int LogWritingThrottle::throttling(const int64_t throttling_size,
       lock_.unlock();
       while (OB_SUCC(ret) && remain_interval_us > 0) {
         const int64_t real_interval = MIN(remain_interval_us, DETECT_INTERVAL_US);
-        usleep(real_interval);
+        ob_usleep<ObWaitEventIds::PALF_THROTTLING>(real_interval);
         remain_interval_us -= real_interval;
         if (remain_interval_us <= 0) {
           //do nothing

@@ -30,7 +30,7 @@
 #include "share/scn.h"//SCN
 
 #include "ob_tenant_info_loader.h"  // ObTenantInfoLoader
-
+#include "lib/ash/ob_active_session_guard.h"
 
 namespace oceanbase
 {
@@ -248,6 +248,7 @@ void ObTenantThreadHelper::run1() {
 void ObTenantThreadHelper::idle(const int64_t idle_time_us)
 {
   ObThreadCondGuard guard(thread_cond_);
+  ObBKGDSessInActiveGuard inactive_guard;
   thread_cond_.wait_us(idle_time_us);
 }
 

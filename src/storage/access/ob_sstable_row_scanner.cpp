@@ -247,6 +247,13 @@ int ObSSTableRowScanner<PrefetchType>::inner_get_next_row(const ObDatumRow *&sto
         LOG_WARN("failed to set row scn", K(ret));
       }
       EVENT_INC(ObStatEventIds::SSSTORE_READ_ROW_COUNT);
+      if (OB_NOT_NULL(sstable_)) {
+        if (sstable_->is_minor_sstable()) {
+          EVENT_INC(ObStatEventIds::MINOR_SSSTORE_READ_ROW_COUNT);
+        } else if (sstable_->is_major_sstable()) {
+          EVENT_INC(ObStatEventIds::MAJOR_SSSTORE_READ_ROW_COUNT);
+        }
+      }
       LOG_DEBUG("[INDEX BLOCK] inner get next row", KPC(store_row));
     }
   }

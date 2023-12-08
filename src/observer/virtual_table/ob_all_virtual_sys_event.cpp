@@ -125,7 +125,11 @@ int ObAllVirtualSysEvent::process_curr_tenant(ObNewRow *&row)
         event_iter_ = 0;
       }
     }
-
+    for (; event_iter_ < WAIT_EVENTS_TOTAL; event_iter_++) {
+      if (diag_info_.get_event_stats().get(event_iter_)->total_waits_ > 0) {
+        break;
+      }
+    }
     if (event_iter_ >= WAIT_EVENTS_TOTAL) {
       ret = OB_ITER_END;
     }

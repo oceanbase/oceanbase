@@ -1664,6 +1664,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
   OX (wb = common::ob_get_tsi_warning_buffer());
 
   ObExecRecord exec_record;
+  ObExecutingSqlStatRecord sqlstat_record;
   ObExecTimestamp exec_timestamp;
   ObSPITimeRecord time_record;
   exec_timestamp.exec_type_ = sql::PLSql;
@@ -1703,11 +1704,17 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
           const bool enable_perf_event = lib::is_diagnose_info_enabled();
           const bool enable_sql_audit =
             GCONF.enable_sql_audit && ctx->exec_ctx_->get_my_session()->get_local_ob_enable_sql_audit();
+          const bool enable_sqlstat =  ctx->exec_ctx_->get_my_session()->is_sqlstat_enabled();
           {
             ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : NULL);
             ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL);
             if (enable_perf_event) {
               exec_record.record_start();
+            }
+            if (enable_sqlstat && OB_NOT_NULL(ctx->exec_ctx_->get_sql_ctx())) {
+             sqlstat_record.record_sqlstat_start_value();
+             sqlstat_record.set_is_in_retry(ctx->exec_ctx_->get_my_session()->get_is_in_retry());
+              ctx->exec_ctx_->get_my_session()->sql_sess_record_sql_stat_start_value(sqlstat_record);
             }
             //监控项统计开始
             time_record.set_send_timestamp(ObTimeUtility::current_time());
@@ -1796,6 +1803,11 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
             time_record.set_exec_end_timestamp(ObTimeUtility::current_time());
             if (enable_perf_event) {
               exec_record.record_end();
+            }
+            if (enable_sqlstat && OB_NOT_NULL(ctx->exec_ctx_->get_sql_ctx())) {
+             sqlstat_record.record_sqlstat_end_value();
+             sqlstat_record.move_to_sqlstat_cache(*(ctx->exec_ctx_->get_my_session()),
+                    ctx->exec_ctx_->get_sql_ctx()->cur_sql_, spi_result.get_result_set()->get_physical_plan());
             }
           }
           LOG_DEBUG("start process record", K(ret), K(ps_sql), K(sql), K(type), K(enable_sql_audit));
@@ -1899,6 +1911,7 @@ int ObSPIService::dbms_cursor_execute(ObPLExecCtx *ctx,
   // OV (OB_NOT_NULL(pl_ctx->func_));
 
   ObExecRecord exec_record;
+  ObExecutingSqlStatRecord sqlstat_record;
   ObExecTimestamp exec_timestamp;
   ObSPITimeRecord time_record;
   ObString &sql_stmt = cursor.get_sql_stmt();
@@ -1927,11 +1940,17 @@ int ObSPIService::dbms_cursor_execute(ObPLExecCtx *ctx,
         const bool enable_perf_event = lib::is_diagnose_info_enabled();
         const bool enable_sql_audit =
           GCONF.enable_sql_audit && session->get_local_ob_enable_sql_audit();
+        const bool enable_sqlstat =  ctx->exec_ctx_->get_my_session()->is_sqlstat_enabled();
         {
           ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : NULL);
           ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL);
           if (enable_perf_event) {
             exec_record.record_start();
+          }
+          if (enable_sqlstat && OB_NOT_NULL(ctx->exec_ctx_->get_sql_ctx())) {
+           sqlstat_record.record_sqlstat_start_value();
+           sqlstat_record.set_is_in_retry(ctx->exec_ctx_->get_my_session()->get_is_in_retry());
+            ctx->exec_ctx_->get_my_session()->sql_sess_record_sql_stat_start_value(sqlstat_record);
           }
           // 监控项统计开始
           time_record.set_send_timestamp(ObTimeUtility::current_time());
@@ -2026,6 +2045,11 @@ int ObSPIService::dbms_cursor_execute(ObPLExecCtx *ctx,
           time_record.set_exec_end_timestamp(ObTimeUtility::current_time());
           if (enable_perf_event) {
             exec_record.record_end();
+          }
+          if (enable_sqlstat && OB_NOT_NULL(ctx->exec_ctx_->get_sql_ctx())) {
+           sqlstat_record.record_sqlstat_end_value();
+           sqlstat_record.move_to_sqlstat_cache(*(ctx->exec_ctx_->get_my_session()),
+                    ctx->exec_ctx_->get_sql_ctx()->cur_sql_, spi_result.get_result_set()->get_physical_plan());
           }
         }
         LOG_DEBUG("start process record",
@@ -2957,6 +2981,7 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
       if (OB_FAIL(ret)) {
       } else if (need_execute_sql) {
         ObExecRecord exec_record;
+        ObExecutingSqlStatRecord sqlstat_record;
         ObExecTimestamp exec_timestamp;
         ObSPITimeRecord time_record;
         exec_timestamp.exec_type_ = sql::PLSql;
@@ -2972,11 +2997,17 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
           const bool enable_perf_event = lib::is_diagnose_info_enabled();
           const bool enable_sql_audit =
             GCONF.enable_sql_audit && session->get_local_ob_enable_sql_audit();
+          const bool enable_sqlstat =  ctx->exec_ctx_->get_my_session()->is_sqlstat_enabled();
           {
             ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : NULL);
             ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL);
             if (enable_perf_event) {
               exec_record.record_start();
+            }
+            if (enable_sqlstat && OB_NOT_NULL(ctx->exec_ctx_->get_sql_ctx())) {
+             sqlstat_record.record_sqlstat_start_value();
+             sqlstat_record.set_is_in_retry(ctx->exec_ctx_->get_my_session()->get_is_in_retry());
+              ctx->exec_ctx_->get_my_session()->sql_sess_record_sql_stat_start_value(sqlstat_record);
             }
             //监控项统计开始
             time_record.set_send_timestamp(ObTimeUtility::current_time());
@@ -3105,6 +3136,11 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
             time_record.set_exec_end_timestamp(ObTimeUtility::current_time());
             if (enable_perf_event) {
               exec_record.record_end();
+            }
+            if (enable_sqlstat && OB_NOT_NULL(ctx->exec_ctx_->get_sql_ctx())) {
+             sqlstat_record.record_sqlstat_end_value();
+             sqlstat_record.move_to_sqlstat_cache(*(ctx->exec_ctx_->get_my_session()),
+                    ctx->exec_ctx_->get_sql_ctx()->cur_sql_, spi_result.get_result_set()->get_physical_plan());
             }
           }
           // 处理监控统计项
@@ -4066,6 +4102,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
     (exec_params.count() > 0 || cursor.get_into_names().count() > 0) ? ObString() : sql_stmt;
   bool use_stream = false;
   ObExecRecord exec_record;
+  ObExecutingSqlStatRecord sqlstat_record;
   ObExecTimestamp exec_timestamp;
   ObSPITimeRecord time_record;
   exec_timestamp.exec_type_ = cursor.is_ps_cursor() ? sql::PSCursor : sql::DbmsCursor;
@@ -4076,6 +4113,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
   const bool enable_perf_event = lib::is_diagnose_info_enabled();
   const bool enable_sql_audit = GCONF.enable_sql_audit
                               && ctx->exec_ctx_->get_my_session()->get_local_ob_enable_sql_audit();
+  const bool enable_sqlstat =  ctx->exec_ctx_->get_my_session()->is_sqlstat_enabled();
   ObPLSubPLSqlTimeGuard guard(ctx);
   OV (OB_NOT_NULL(ctx) &&
       OB_NOT_NULL(ctx->exec_ctx_) &&
@@ -4087,6 +4125,11 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
 
   if (enable_perf_event) {
     exec_record.record_start();
+  }
+  if (enable_sqlstat && OB_NOT_NULL(ctx->exec_ctx_->get_sql_ctx())) {
+   sqlstat_record.record_sqlstat_start_value();
+   sqlstat_record.set_is_in_retry(ctx->exec_ctx_->get_my_session()->get_is_in_retry());
+    ctx->exec_ctx_->get_my_session()->sql_sess_record_sql_stat_start_value(sqlstat_record);
   }
   //监控项统计开始
 	time_record.set_send_timestamp(ObTimeUtility::current_time());
@@ -4206,6 +4249,11 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
       if (enable_perf_event) {
         exec_record.record_end();
       }
+      if (enable_sqlstat && OB_NOT_NULL(ctx->exec_ctx_->get_sql_ctx())) {
+       sqlstat_record.record_sqlstat_end_value();
+       sqlstat_record.move_to_sqlstat_cache(*(ctx->exec_ctx_->get_my_session()),
+                    ctx->exec_ctx_->get_sql_ctx()->cur_sql_, spi_result->get_result_set()->get_physical_plan());
+      }
 
       if (OB_NOT_NULL(spi_result->get_result_set()) && spi_result->get_result_set()->is_inited()) {
         ObSQLSessionInfo *session_info = ctx->exec_ctx_->get_my_session();
@@ -4310,6 +4358,11 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
           if (enable_perf_event) {
             exec_record.record_end();
           }
+          if (enable_sqlstat && OB_NOT_NULL(ctx->exec_ctx_->get_sql_ctx())) {
+           sqlstat_record.record_sqlstat_end_value();
+           sqlstat_record.move_to_sqlstat_cache(*(ctx->exec_ctx_->get_my_session()),
+                    ctx->exec_ctx_->get_sql_ctx()->cur_sql_, spi_result.get_result_set()->get_physical_plan());
+          }
           ObResultSet* result_set = spi_result.get_result_set();
           if (OB_NOT_NULL(result_set) && result_set->is_inited()) {
             ObSQLSessionInfo *session_info = ctx->exec_ctx_->get_my_session();
@@ -4389,6 +4442,7 @@ int ObSPIService::do_cursor_fetch(ObPLExecCtx *ctx,
   ObSPIResultSet *spi_result = NULL;
   ObSQLSessionInfo *session = ctx->exec_ctx_->get_my_session();
   ObExecRecord exec_record;
+  ObExecutingSqlStatRecord sqlstat_record;
   ObExecTimestamp exec_timestamp;
   ObSPITimeRecord time_record;
   exec_timestamp.exec_type_ = sql::CursorFetch;
@@ -4397,6 +4451,7 @@ int ObSPIService::do_cursor_fetch(ObPLExecCtx *ctx,
   const bool enable_perf_event = lib::is_diagnose_info_enabled();
   const bool enable_sql_audit = GCONF.enable_sql_audit
                               && ctx->exec_ctx_->get_my_session()->get_local_ob_enable_sql_audit();
+  const bool enable_sqlstat =  ctx->exec_ctx_->get_my_session()->is_sqlstat_enabled();
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(session = ctx->exec_ctx_->get_my_session()));
@@ -4426,6 +4481,11 @@ int ObSPIService::do_cursor_fetch(ObPLExecCtx *ctx,
   }
   if (enable_perf_event) {
     exec_record.record_start();
+  }
+  if (enable_sqlstat && OB_NOT_NULL(ctx->exec_ctx_->get_sql_ctx())) {
+   sqlstat_record.record_sqlstat_start_value();
+   sqlstat_record.set_is_in_retry(ctx->exec_ctx_->get_my_session()->get_is_in_retry());
+    ctx->exec_ctx_->get_my_session()->sql_sess_record_sql_stat_start_value(sqlstat_record);
   }
   //监控项统计开始
   time_record.set_send_timestamp(ObTimeUtility::current_time());
@@ -4561,6 +4621,11 @@ int ObSPIService::do_cursor_fetch(ObPLExecCtx *ctx,
         time_record.set_exec_end_timestamp(ObTimeUtility::current_time());
         if (enable_perf_event) {
           exec_record.record_end();
+        }
+        if (enable_sqlstat && OB_NOT_NULL(ctx->exec_ctx_->get_sql_ctx())) {
+         sqlstat_record.record_sqlstat_end_value();
+         sqlstat_record.move_to_sqlstat_cache(*(ctx->exec_ctx_->get_my_session()),
+                    ctx->exec_ctx_->get_sql_ctx()->cur_sql_, spi_result->get_result_set()->get_physical_plan());
         }
         ObResultSet* result_set = spi_result->get_result_set();
         if (OB_NOT_NULL(result_set) && result_set->is_inited()) {
@@ -6812,6 +6877,7 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Argument in pl context is NULL", K(session), K(ret));
     } else {
+      ObPLASHGuard guard(ObPLASHGuard::ObPLASHStatus::IS_SQL_EXECUTION);
       bool old_client_return_rowid = session->is_client_return_rowid();
       bool is_inner_session = session->is_inner();
       ObSQLSessionInfo::SessionType old_session_type = session->get_session_type();
@@ -7602,6 +7668,7 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
   } else if (!for_cursor) { //虽然不需要存储结果，但是也需要把get_next调一遍
     ObResultSet *ob_result_set = static_cast<ObResultSet*>(result_set);
     if (ob_result_set->is_with_rows()) { // SELECT或DML RETURNING
+      ObPLASHGuard guard(ObPLASHGuard::ObPLASHStatus::IS_SQL_EXECUTION);
       if (lib::is_oracle_mode()) { // ORACLE Mode: only iterate to end
         const ObNewRow *row = NULL;
         while (OB_SUCC(ob_result_set->get_next_row(row))) {
@@ -8519,6 +8586,7 @@ int ObSPIService::fetch_row(void *result_set,
                             ObNewRow &cur_row)
 {
   int ret = OB_SUCCESS;
+  ObPLASHGuard guard(ObPLASHGuard::ObPLASHStatus::IS_SQL_EXECUTION);
   if (OB_ISNULL(result_set)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Argument passed in is NULL", K(result_set), K(ret));

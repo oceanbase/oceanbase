@@ -17,6 +17,7 @@
 #include "lib/string/ob_string.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "common/ob_clock_generator.h"
+#include "lib/ash/ob_active_session_guard.h"
 
 namespace oceanbase
 {
@@ -367,6 +368,7 @@ void ObTimer::run1()
     IGNORE_RETURN lib::Thread::update_loop_ts();
     {
       ObMonitor<Mutex>::Lock guard(monitor_);
+      ObBKGDSessInActiveGuard inactive_guard;
       static const int64_t STATISTICS_INTERVAL_US = 600L * 1000 * 1000; // 10m
       if (REACH_TIME_INTERVAL(STATISTICS_INTERVAL_US)) {
         OB_LOG(INFO, "dump timer info", KP(this), K_(tasks_num), K_(wakeup_time));
@@ -462,10 +464,6 @@ void ObTimer::run1()
 
       const int64_t end_time = ::oceanbase::common::ObTimeUtility::current_time();
       const int64_t elapsed_time = end_time - start_time;
-      EVENT_ADD(SYS_TIME_MODEL_DB_TIME, elapsed_time);
-      EVENT_ADD(SYS_TIME_MODEL_DB_CPU, elapsed_time);
-      EVENT_ADD(SYS_TIME_MODEL_BKGD_TIME, elapsed_time);
-      EVENT_ADD(SYS_TIME_MODEL_BKGD_CPU, elapsed_time);
       if (timeout_check) {
         ObTimerMonitor::get_instance().end_task(thread_id_, end_time);
       }

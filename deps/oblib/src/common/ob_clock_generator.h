@@ -22,6 +22,7 @@
 #include "lib/lock/mutex.h"
 #include "lib/time/ob_time_utility.h"
 #include "lib/thread/thread_pool.h"
+#include "lib/ash/ob_ash_bkgd_sess_inactive_guard.h"
 
 namespace oceanbase
 {
@@ -112,6 +113,7 @@ inline void ObClockGenerator::usleep(const int64_t us)
 {
   if (us > 0) {
     obutil::ObMonitor<obutil::Mutex> monitor_;
+    ObBKGDSessInActiveGuard inactive_guard;
     (void)monitor_.timed_wait(obutil::ObSysTime(us));
   }
 }

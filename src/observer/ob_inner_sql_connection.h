@@ -25,6 +25,7 @@
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "share/location_cache/ob_location_service.h"
 #include "storage/tablelock/ob_table_lock_common.h"   //ObTableLockMode
+#include "sql/session/ob_sql_session_mgr.h"
 
 namespace oceanbase
 {
@@ -175,8 +176,8 @@ public:
   virtual sqlclient::ObCommonServerConnectionPool *get_common_server_pool() override;
   virtual int rollback() override;
   virtual int commit() override;
-  sql::ObSQLSessionInfo &get_session() { return NULL == extern_session_ ? inner_session_ : *extern_session_; }
-  const sql::ObSQLSessionInfo &get_session() const { return NULL == extern_session_ ? inner_session_ : *extern_session_; }
+  sql::ObSQLSessionInfo &get_session() { return NULL == extern_session_ ? *inner_session_ : *extern_session_; }
+  const sql::ObSQLSessionInfo &get_session() const { return NULL == extern_session_ ? *inner_session_ : *extern_session_; }
   const sql::ObSQLSessionInfo *get_extern_session() const { return extern_session_; }
   // session environment
   virtual int get_session_variable(const ObString &name, int64_t &val) override;
@@ -300,6 +301,7 @@ public:
                                   bool is_from_pl = false);
   static void record_stat(sql::ObSQLSessionInfo &session,
                           const sql::stmt::StmtType type,
+                          const int64_t ret,
                           bool is_from_pl = false);
 
   static int init_session_info(sql::ObSQLSessionInfo *session,
@@ -369,11 +371,14 @@ private:
                        const ObString &sql,
                        ObInnerSQLResult &res);
   int get_session_timeout_for_rpc(int64_t &query_timeout, int64_t &trx_timeout);
+  int create_session_by_mgr();
+  int create_default_session();
+  bool is_inner_session_mgr_enable();
 private:
   bool inited_;
   observer::ObQueryRetryCtrl retry_ctrl_;
-  sql::ObSQLSessionInfo inner_session_;
   sql::ObSQLSessionInfo *extern_session_;   // nested sql and spi both use it, rename to extern.
+  sql::ObSQLSessionInfo *inner_session_;
   bool is_spi_conn_;
   int64_t ref_cnt_;
   ObInnerSQLConnectionPool *pool_;
@@ -421,9 +426,22 @@ private:
   int32_t group_id_;
   //support set user timeout of stream rpc but not depend on internal_sql_execute_timeout
   int64_t user_timeout_;
+  sql::ObFreeSessionCtx free_session_ctx_;
   DISABLE_COPY_ASSIGN(ObInnerSQLConnection);
 };
 
+class ObInnerSqlWaitGuard
+{
+public:
+  ObInnerSqlWaitGuard(const bool is_inner_session, sql::ObSQLSessionInfo *inner_session);
+  ~ObInnerSqlWaitGuard();
+private:
+  bool is_inner_session_;
+  sql::ObSQLSessionInfo *inner_session_;
+  ObSessionDIBuffer *di_buffer_;
+  int64_t prev_tenant_id_;
+  int64_t prev_session_id_;
+};
 } // end of namespace observer
 } // end of namespace oceanbase
 

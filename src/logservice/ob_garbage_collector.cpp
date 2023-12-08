@@ -1351,7 +1351,7 @@ void ObGarbageCollector::run1()
     // safe destroy handler keep running even if ObServerCheckpointSlogHandler is not started,
     // because ls still need to be safe destroy when observer fail to start.
     (void) safe_destroy_handler_.handle();
-    ob_usleep(gc_interval);
+    ob_usleep(gc_interval, true/*is_idle_sleep*/);
   }
 }
 

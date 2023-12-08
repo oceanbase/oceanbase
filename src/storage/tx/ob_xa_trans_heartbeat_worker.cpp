@@ -86,7 +86,7 @@ void ObXATransHeartbeatWorker::run1()
     }
 
     if (time_used < INTERVAL_US) {
-      ob_usleep((uint32_t)(INTERVAL_US - time_used));
+      ob_usleep((uint32_t)(INTERVAL_US - time_used), true/*is_idle_sleep*/);
     }
   }
 }

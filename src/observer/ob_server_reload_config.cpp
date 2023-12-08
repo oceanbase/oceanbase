@@ -32,6 +32,7 @@
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/slog/ob_storage_logger_manager.h"
 #include "share/ob_ddl_sim_point.h"
+#include "share/ash/ob_active_sess_hist_list.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -136,6 +137,10 @@ int ObServerReloadConfig::operator()()
     if (OB_FAIL(ObSrvNetworkFrame::reload_rpc_auth_method())) {
       real_ret = ret;
       LOG_WARN("reload config for rpc auth method fail", K(ret));
+    }
+    if (OB_FAIL(ObActiveSessHistList::get_instance().resize_ash_size())) {
+      real_ret = ret;
+      LOG_WARN("failed to change ash size", KR(ret));
     }
   }
   {

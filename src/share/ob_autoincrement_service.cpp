@@ -31,6 +31,8 @@
 #include "share/ob_schema_status_proxy.h"
 #include "observer/ob_server_struct.h"
 #include "observer/ob_sql_client_decorator.h"
+#include "lib/ash/ob_active_session_guard.h"
+#include "lib/wait_event/ob_inner_sql_wait_type.h"
 
 using namespace oceanbase::obrpc;
 using namespace oceanbase::common;
@@ -631,6 +633,7 @@ int ObAutoincrementService::lock_autoinc_row(const uint64_t &tenant_id,
   int ret = OB_SUCCESS;
   ObSqlString lock_sql;
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::SEQUENCE_LOAD);
     ObMySQLResult *result = NULL;
     ObISQLClient *sql_client = &trans;
     if (OB_FAIL(lock_sql.assign_fmt("SELECT sequence_key, sequence_value, sync_value "
@@ -667,6 +670,7 @@ int ObAutoincrementService::reset_autoinc_row(const uint64_t &tenant_id,
   int ret = OB_SUCCESS;
   ObSqlString update_sql;
   int64_t affected_rows = 0;
+  ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::SEQUENCE_SAVE);
   if (OB_FAIL(update_sql.assign_fmt("UPDATE %s SET sequence_value = 1, sync_value = 0, truncate_version = %ld",
                                     OB_ALL_AUTO_INCREMENT_TNAME,
                                     autoinc_version))) {
@@ -1860,6 +1864,7 @@ int ObAutoIncInnerTableProxy::next_autoinc_value(const AutoincKey &key,
                                                  uint64_t &sync_value)
 {
   int ret = OB_SUCCESS;
+
   ObMySQLTransaction trans;
   bool with_snap_shot = true;
   const uint64_t tenant_id = key.tenant_id_;
@@ -1894,6 +1899,7 @@ int ObAutoIncInnerTableProxy::next_autoinc_value(const AutoincKey &key,
             ObMySQLResult *result = NULL;
             ObISQLClient *sql_client = &trans;
             uint64_t sequence_table_id = OB_ALL_AUTO_INCREMENT_TID;
+            ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::SEQUENCE_LOAD);
             ObSQLClientRetryWeak sql_client_retry_weak(sql_client,
                                                        exec_tenant_id,
                                                        sequence_table_id);
@@ -1980,6 +1986,7 @@ int ObAutoIncInnerTableProxy::next_autoinc_value(const AutoincKey &key,
                               column_id,
                               inner_autoinc_version);
             int64_t affected_rows = 0;
+            ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::SEQUENCE_SAVE);
             if (sql_len >= OB_MAX_SQL_LENGTH || sql_len <= 0) {
               ret = OB_SIZE_OVERFLOW;
               LOG_WARN("failed to format sql. size not enough");
@@ -2022,6 +2029,7 @@ int ObAutoIncInnerTableProxy::get_autoinc_value(const AutoincKey &key,
   const uint64_t tenant_id = key.tenant_id_;
   const int64_t tmp_autoinc_version = get_modify_autoinc_version(autoinc_version);
   SMART_VARS_2((ObMySQLProxy::MySQLResult, res), (char[OB_MAX_SQL_LENGTH], sql)) {
+    ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::SEQUENCE_LOAD);
     ObMySQLResult *result = NULL;
     int sql_len = 0;
     const uint64_t exec_tenant_id = tenant_id;
@@ -2131,6 +2139,7 @@ int ObAutoIncInnerTableProxy::get_autoinc_value_in_batch(
 
     if (OB_SUCC(ret)) {
       SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::SEQUENCE_LOAD);
         ObMySQLResult *result = NULL;
         int64_t table_id  = 0;
         int64_t column_id = 0;
@@ -2214,6 +2223,7 @@ int ObAutoIncInnerTableProxy::sync_autoinc_value(const AutoincKey &key,
     }
     if (OB_SUCC(ret)) {
       SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::SEQUENCE_LOAD);
         ObMySQLResult *result = NULL;
         ObISQLClient *sql_client = &trans;
         uint64_t sequence_table_id = OB_ALL_AUTO_INCREMENT_TID;
@@ -2283,6 +2293,7 @@ int ObAutoIncInnerTableProxy::sync_autoinc_value(const AutoincKey &key,
         //       Why don't we calculate AUTO_INCREMENT in real time when we execute the SHOW
         //       statement?
         //       > I can't get MAX_VALUE in DDL context. auto inc column type is needed.
+        ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::SEQUENCE_SAVE);
         if (OB_FAIL(sql.assign_fmt(
                     "UPDATE %s SET sync_value = %lu, sequence_value = %lu, gmt_modified = now(6) "
                     "WHERE tenant_id=%lu AND sequence_key=%lu AND column_id=%lu AND truncate_version=%ld",

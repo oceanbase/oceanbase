@@ -427,7 +427,10 @@ int ObDataAccessService::do_async_remote_das_task(
   session->get_cur_sql_id(remote_info.sql_id_, sizeof(remote_info.sql_id_));
   remote_info.user_id_ = session->get_user_id();
   remote_info.session_id_ = session->get_sessid();
-  remote_info.plan_id_ = session->get_current_plan_id();
+  if (OB_NOT_NULL(plan_ctx->get_phy_plan())) {
+    remote_info.plan_id_ = plan_ctx->get_phy_plan()->get_plan_id();
+    remote_info.plan_hash_ = plan_ctx->get_phy_plan()->get_plan_hash_value();
+  }
 
   task_arg.set_remote_info(&remote_info);
   ObDASRemoteInfo::get_remote_info() = &remote_info;
@@ -521,7 +524,11 @@ int ObDataAccessService::do_sync_remote_das_task(
   session->get_cur_sql_id(remote_info.sql_id_, sizeof(remote_info.sql_id_));
   remote_info.user_id_ = session->get_user_id();
   remote_info.session_id_ = session->get_sessid();
-  remote_info.plan_id_ = session->get_current_plan_id();
+  if (OB_NOT_NULL(plan_ctx->get_phy_plan())) {
+    remote_info.plan_id_ = plan_ctx->get_phy_plan()->get_plan_id();
+    remote_info.plan_hash_ = plan_ctx->get_phy_plan()->get_plan_hash_value();
+  }
+
 
   task_arg.set_remote_info(&remote_info);
   ObDASRemoteInfo::get_remote_info() = &remote_info;

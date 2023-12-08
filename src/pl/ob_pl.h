@@ -1244,6 +1244,33 @@ private:
   sql::ObExecContext &exec_ctx_;
   ObPLContext *parent_stack_;
 };
+
+class ObPLASHGuard
+{
+public:
+  enum ObPLASHStatus {
+    INVALID_ASH_STATUS,
+    IS_PLSQL_COMPILATION,
+    IS_PLSQL_EXECUTION,
+    IS_SQL_EXECUTION,
+  };
+  ObPLASHGuard(ObPLASHStatus status);
+  ObPLASHGuard(int64_t package_id, int64_t routine_id);
+  ObPLASHGuard(int64_t package_id, int64_t routine_id, const ObString &routine_name);
+  ~ObPLASHGuard();
+private:
+  char plsql_current_subprogram_name_[common::OB_MAX_ASH_PL_NAME_LENGTH + 1];
+  bool in_plsql_compilation_;
+  bool in_plsql_execution_;
+  int64_t plsql_entry_object_id_;
+  int64_t plsql_entry_subprogram_id_;
+  int64_t plsql_current_object_id_;
+  int64_t plsql_current_subprogram_id_;
+  bool set_entry_info_;
+  bool set_entry_name_;
+  bool set_current_name_;
+  ObPLASHStatus pl_ash_status_;
+};
 }
 }
 #endif /* OCEANBASE_SRC_PL_OB_PL_H_ */

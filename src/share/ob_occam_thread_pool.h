@@ -35,6 +35,8 @@
 #include "lib/thread/ob_thread_name.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/ob_thread_pool.h"
+#include "lib/ash/ob_active_session_guard.h"
+
 
 namespace oceanbase
 {
@@ -395,6 +397,7 @@ private:
         } else if (ret == OB_EAGAIN) { // all queue empty, waiting for someone commit task
           // OCCAM_LOG(DEBUG, "no task in queue, waiting...", K(thread_id));
           ObThreadCondGuard guard(cv_);
+          common::ObBKGDSessInActiveGuard inactive_guard;
           while (total_task_count_ == 0 && !is_stopped_) {
             if (OB_FAIL(cv_.wait())) {
               OCCAM_LOG(ERROR, "cv_ wait return err code", K(ret));

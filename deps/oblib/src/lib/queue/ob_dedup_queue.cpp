@@ -397,6 +397,7 @@ void ObDedupQueue::run1()
       } else {
         ObThreadCondGuard guard(task_queue_sync_);
         if (0 == task_queue_.get_total()) {
+          ObBKGDSessInActiveGuard inactive_guard;
           if (OB_SUCCESS != (tmp_ret = task_queue_sync_.wait(QUEUE_WAIT_TIME_MS))) {
             if (OB_TIMEOUT != tmp_ret) {
               COMMON_LOG_RET(WARN, tmp_ret, "Fail to wait task queue sync, ", K(tmp_ret));

@@ -24,6 +24,8 @@
 #include "logservice/palf_handle_guard.h" // PalfHandleGuard
 #include "share/backup/ob_archive_struct.h"
 #include <cstdint>
+#include "lib/ash/ob_active_session_guard.h"
+
 
 namespace oceanbase
 {
@@ -143,6 +145,7 @@ void ObArchiveSequencer::run1()
       int64_t end_tstamp = ObTimeUtility::current_time();
       int64_t wait_interval = THREAD_RUN_INTERVAL - (end_tstamp - begin_tstamp);
       if (wait_interval > 0) {
+        common::ObBKGDSessInActiveGuard inactive_guard;
         seq_cond_.timedwait(wait_interval);
       }
     }

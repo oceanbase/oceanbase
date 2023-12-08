@@ -248,6 +248,7 @@ void ObTabletAutoincrementService::release_mgr(ObTabletAutoincMgr *autoinc_mgr)
 
 int ObTabletAutoincrementService::get_autoinc_seq(const uint64_t tenant_id, const common::ObTabletID &tablet_id, uint64_t &autoinc_seq)
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sequence_load);
   int ret = OB_SUCCESS;
   const int64_t auto_increment_cache_size = 10000; //TODO(shuangcan): fix me
   ObTabletAutoincParam param;
