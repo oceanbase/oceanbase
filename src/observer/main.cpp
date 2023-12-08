@@ -394,6 +394,9 @@ void reasy_pool_set_allocator(reasy_pool_realloc_pt alloc);
 }
 int main(int argc, char *argv[])
 {
+  // temporarily unlimited memory before init config
+  set_memory_limit(INT_MAX64);
+
 #ifndef OB_USE_ASAN
   init_malloc_hook();
 #endif
