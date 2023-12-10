@@ -523,9 +523,6 @@ void ObMallocAllocator::print_tenant_memory_usage(uint64_t tenant_id) const
                 get_global_ctx_info().get_ctx_name(i), ctx_hold_bytes[i], limit);
           }
         }
-        if (OB_SUCC(ret)) {
-          ObPageManagerCenter::get_instance().print_tenant_stat(tenant_id, buf, BUFLEN, ctx_pos);
-        }
         buf[std::min(ctx_pos, BUFLEN - 1)] = '\0';
         allow_next_syslog();
         _LOG_INFO("[MEMORY] tenant: %lu, limit: %'lu hold: %'lu rpc_hold: %'lu cache_hold: %'lu "
@@ -679,6 +676,7 @@ int ObMallocAllocator::recycle_tenant_allocator(uint64_t tenant_id)
     // wash idle chunks
     for (int64_t ctx_id = 0; ctx_id < ObCtxIds::MAX_CTX_ID; ctx_id++) {
       ta[ctx_id].set_idle(0);
+      ta[ctx_id].reset_req_chunk_mgr();
     }
 
     ObTenantCtxAllocator *tas[ObCtxIds::MAX_CTX_ID] = {NULL};

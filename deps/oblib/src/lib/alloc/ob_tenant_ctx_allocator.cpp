@@ -162,7 +162,8 @@ void ObTenantCtxAllocator::print_usage() const
       allow_next_syslog();
       _LOG_INFO("\n[MEMORY] tenant_id=%5ld ctx_id=%25s hold=% '15ld used=% '15ld limit=% '15ld"
                 "\n[MEMORY] idle_size=% '10ld free_size=% '10ld"
-                "\n[MEMORY] wash_related_chunks=% '10ld washed_blocks=% '10ld washed_size=% '10ld\n%s",
+                "\n[MEMORY] wash_related_chunks=% '10ld washed_blocks=% '10ld washed_size=% '10ld"
+                "\n[MEMORY] request_cached_chunk_cnt=% '5ld\n%s",
           tenant_id_,
           get_global_ctx_info().get_ctx_name(ctx_id_),
           ctx_hold_bytes,
@@ -173,6 +174,7 @@ void ObTenantCtxAllocator::print_usage() const
           ATOMIC_LOAD(&wash_related_chunks_),
           ATOMIC_LOAD(&washed_blocks_),
           ATOMIC_LOAD(&washed_size_),
+          req_chunk_mgr_.n_chunks(),
           buf);
     }
   }
@@ -220,11 +222,7 @@ AChunk *ObTenantCtxAllocator::alloc_chunk(const int64_t size, const ObMemAttr &a
     }
   }
 
-  if (OB_ISNULL(chunk)) {
-    if (INTACT_ACHUNK_SIZE == AChunkMgr::hold(size) && get_ctx_id() != ObCtxIds::CO_STACK) {
-      chunk = ObPageManagerCenter::get_instance().alloc_from_thread_local_cache(tenant_id_, ctx_id_);
-    }
-  } else {
+  if (OB_NOT_NULL(chunk)) {
     ObDisableDiagnoseGuard disable_diagnose_guard;
     lib::ObMutexGuard guard(using_list_mutex_);
     chunk->prev2_ = &using_list_head_;
