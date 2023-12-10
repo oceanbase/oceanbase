@@ -821,11 +821,11 @@ int ObDDLOperator::drop_database(const ObDatabaseSchema &db_schema,
                    public_sql_string))) {
                  LOG_WARN("drop audit_schema failed",  KPC(audit_schema), K(ret));
                } else {
-                 LOG_INFO("succ to delete audit_schema from drop packege", KPC(audit_schema));
+                 LOG_INFO("succ to delete audit_schema from drop package", KPC(audit_schema));
                }
              }
            } else {
-             LOG_DEBUG("no need to delete audit_schema from drop packege", K(audits), KPC(package_info));
+             LOG_DEBUG("no need to delete audit_schema from drop package", K(audits), KPC(package_info));
            }
          }
        }
@@ -878,11 +878,11 @@ int ObDDLOperator::drop_database(const ObDatabaseSchema &db_schema,
                   public_sql_string))) {
                 LOG_WARN("drop audit_schema failed",  KPC(audit_schema), K(ret));
               } else {
-                LOG_INFO("succ to delete audit_schema from drop packege", KPC(audit_schema));
+                LOG_INFO("succ to delete audit_schema from drop package", KPC(audit_schema));
               }
             }
           } else {
-            LOG_DEBUG("no need to delete audit_schema from drop packege", K(audits), KPC(routine_info));
+            LOG_DEBUG("no need to delete audit_schema from drop package", K(audits), KPC(routine_info));
           }
          }
       }
@@ -8618,11 +8618,11 @@ int ObDDLOperator::drop_package(const ObPackageInfo &package_info,
             public_sql_string))) {
           LOG_WARN("drop audit_schema failed",  KPC(audit_schema), K(ret));
         } else {
-          LOG_INFO("succ to delete audit_schema from drop packege", KPC(audit_schema));
+          LOG_INFO("succ to delete audit_schema from drop package", KPC(audit_schema));
         }
       }
     } else {
-      LOG_DEBUG("no need to delete audit_schema from drop packege", K(audits), K(package_info));
+      LOG_DEBUG("no need to delete audit_schema from drop package", K(audits), K(package_info));
     }
   }
   return ret;
