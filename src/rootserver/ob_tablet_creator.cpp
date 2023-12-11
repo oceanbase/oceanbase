@@ -319,7 +319,7 @@ int ObTabletCreator::add_create_tablet_arg(const ObTabletCreatorArg &arg)
             need_check_tablet_cnt_))) {
       LOG_WARN("failed to init batch arg helper", KR(ret), K(arg));
     } else if (FALSE_IT(new_arg->next_ = batch_arg)) {
-    } else if (OB_FAIL(args_map_.set_refactored(arg.ls_key_, new_arg, 1/*not overwrite*/))) {
+    } else if (OB_FAIL(args_map_.set_refactored(arg.ls_key_, new_arg, 1/*overwrite*/))) {
       LOG_WARN("fail to set refactored", KR(ret), K(arg));
     } else {
       batch_arg = new_arg;
