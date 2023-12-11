@@ -265,7 +265,7 @@ TEST_F(TestGeo3D, test_to_3d_wkt)
   wkt_3d = ObString::make_string("POLYGON Z ((0 0 1,10 0 2,10 10 2,0 10 2,0 0 1),(2 2 5,2 5 4,5 5 3,5 2 3,2 2 5))");
   compare_to_3d_wkt_result(ObGeoType::POLYGONZ, wkt_3d, wkt_3d);
 
-  wkt_3d = ObString::make_string("MULTIPOINT Z (0 0 0,2 0 1)");
+  wkt_3d = ObString::make_string("MULTIPOINT Z ((0 0 0),(2 0 1))");
   compare_to_3d_wkt_result(ObGeoType::MULTIPOINTZ, wkt_3d, wkt_3d);
 
   wkt_3d = ObString::make_string("MULTILINESTRING Z ((0 0 1,2 0 2),(1 1 3,2 2 4))");
@@ -277,7 +277,7 @@ TEST_F(TestGeo3D, test_to_3d_wkt)
 
   wkt_3d = ObString::make_string("GEOMETRYCOLLECTION Z (POINT Z (1 1 1),LINESTRING Z (0 0 2,1 1 3),POLYGON Z ((0 0 1"
                                 ",10 0 2,10 10 2,0 10 2,0 0 1),(2 2 5,2 5 4,5 5 3,5 2 3,2 2 5)),GEOMETRYCOLLECTION Z"
-                                " (MULTIPOINT Z (0 0 0,2 0 1),MULTILINESTRING Z ((0 0 1,2 0 2),(1 1 3,2 2 4)),MULTIP"
+                                " (MULTIPOINT Z ((0 0 0),(2 0 1)),MULTILINESTRING Z ((0 0 1,2 0 2),(1 1 3,2 2 4)),MULTIP"
                                 "OLYGON Z (((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3),(2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))))");
   compare_to_3d_wkt_result(ObGeoType::GEOMETRYCOLLECTIONZ, wkt_3d, wkt_3d);
   wkt_3d = ObString::make_string("GEOMETRYCOLLECTION Z ()");
@@ -360,7 +360,7 @@ TEST_F(TestGeo3D, test_check_wkb_1)
   // collectionz
   wkt_3d = ObString::make_string("GEOMETRYCOLLECTION Z (POINT Z (1 1 1),LINESTRING Z (0 0 2,1 1 3),POLYGON Z ((0 0 1"
                                 ",10 0 2,10 10 2,0 10 2,0 0 1),(2 2 5,2 5 4,5 5 3,5 2 3,2 2 5)),GEOMETRYCOLLECTION Z"
-                                " (MULTIPOINT Z (0 0 0,2 0 1),MULTILINESTRING Z ((0 0 1,2 0 2),(1 1 3,2 2 4)),MULTIP"
+                                " (MULTIPOINT Z ((0 0 0),(2 0 1)),MULTILINESTRING Z ((0 0 1,2 0 2),(1 1 3,2 2 4)),MULTIP"
                                 "OLYGON Z (((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3),(2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))))");
   check_wkb_is_valid_3d(wkt_3d, true);
   wkt_2d = ObString::make_string("GEOMETRYCOLLECTION(POINT(1 1),LINESTRING(0 0,1 1),POLYGON((0 0"

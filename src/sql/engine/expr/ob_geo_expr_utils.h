@@ -187,6 +187,7 @@ public:
   static int union_polygons(
     ObIAllocator &allocator, const ObGeometry &poly, ObGeometry *&polygons_union);
   static int make_valid_polygon(ObGeometry *poly, ObIAllocator &allocator, ObGeometry *&valid_poly);
+  static int create_3D_empty_collection(ObIAllocator &allocator, uint32_t srid, bool is_3d, bool is_geog, ObGeometry *&geo);
 private:
   static int ob_geo_find_unit(const ObGeoUnit *units, const ObString &name, double &factor);
 };

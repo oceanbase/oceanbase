@@ -200,13 +200,10 @@ int ObExprSTUnion::eval_st_union(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
     }
     if (OB_FAIL(ret)) {
     } else if (is_empty_res) {
-      // return GEOMETRYCOLLECTION EMPTY
-      if (OB_ISNULL(union_res = OB_NEWx(ObCartesianGeometrycollection,
-                        &temp_allocator,
-                        geo1->get_srid(),
-                        temp_allocator))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to alloc memory", K(ret));
+      // 2D return GEOMETRYCOLLECTION EMPTY, 3D return GEOMETRYCOLLECTION Z EMPTY
+      if (OB_FAIL(ObGeoExprUtils::create_3D_empty_collection(temp_allocator, geo1->get_srid(), is_3d_geo1,
+                    geo1->crs() == ObGeoCRS::Geographic, union_res))) {
+        LOG_WARN("fail to create 3D empty collection", K(ret));
       }
     } else {
       if (geo1->crs() == ObGeoCRS::Cartesian

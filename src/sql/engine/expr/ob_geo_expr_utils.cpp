@@ -1063,5 +1063,19 @@ int ObGeoExprUtils::make_valid_polygon_inner(
   }
   return ret;
 }
+
+int ObGeoExprUtils::create_3D_empty_collection(ObIAllocator &allocator, uint32_t srid, bool is_3d, bool is_geog, ObGeometry *&geo)
+{
+  int ret = OB_SUCCESS;
+  ObString empty_wkt = is_3d ? "GEOMETRYCOLLECTION Z EMPTY" : "GEOMETRYCOLLECTION EMPTY";
+  if (OB_FAIL(ObWktParser::parse_wkt(allocator, empty_wkt, geo, true, is_geog))) {
+    LOG_WARN("failed to parse wkt", K(ret));
+  } else {
+    geo->set_srid(srid);
+  }
+  return ret;
+}
+
+
 } // sql
 } // oceanbase

@@ -811,7 +811,7 @@ int ObGeo3DToWktVisitor::append_paren(bool is_left)
 int ObGeo3DToWktVisitor::visit_pointz_start(ObGeometry3D *geo, bool is_inner)
 {
   bool ret = OB_SUCCESS;
-  if ((is_mpt_visit_ && is_oracle_mode_) || (!is_multi() && !is_inner)) {
+  if (is_mpt_visit_ || (!is_multi() && !is_inner)) {
     ret = append_paren(true);
   }
   return ret;
@@ -820,7 +820,7 @@ int ObGeo3DToWktVisitor::visit_pointz_start(ObGeometry3D *geo, bool is_inner)
 int ObGeo3DToWktVisitor::visit_pointz_end(ObGeometry3D *geo, bool is_inner)
 {
   bool ret = OB_SUCCESS;
-  if ((is_mpt_visit_ && is_oracle_mode_) || (!is_multi() && !is_inner)) {
+  if (is_mpt_visit_ || (!is_multi() && !is_inner)) {
     ret = append_paren(false);
   }
   return ret;
