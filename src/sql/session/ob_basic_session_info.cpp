@@ -3971,8 +3971,8 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
           ret = OB_SUCCESS;
           int64_t sys_var_version = 0;
           int64_t sys_var_len = 0;
-          OB_UNIS_DECODEx(sys_var_version);
-          OB_UNIS_DECODEx(sys_var_len);
+          OB_UNIS_DECODE(sys_var_version);
+          OB_UNIS_DECODE(sys_var_len);
           if (OB_SUCC(ret)) {
             pos += sys_var_len; // skip
             LOG_WARN("invalid sys var id, maybe version is different, skip it", K(sys_var_id));
@@ -4499,8 +4499,8 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
             ret = OB_SUCCESS;
             int64_t sys_var_version = 0;
             int64_t sys_var_len = 0;
-            OB_UNIS_DECODEx(sys_var_version);
-            OB_UNIS_DECODEx(sys_var_len);
+            OB_UNIS_DECODE(sys_var_version);
+            OB_UNIS_DECODE(sys_var_len);
             if (OB_SUCC(ret)) {
               pos += sys_var_len; // 跳过这段数据
               LOG_WARN("invalid sys var id, maybe version is different, skip it", K(sys_var_id));
