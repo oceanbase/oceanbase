@@ -13,13 +13,14 @@
 #ifndef OCEANBASE_OB_LOG_META_SQL_QUERYER_H_
 #define OCEANBASE_OB_LOG_META_SQL_QUERYER_H_
 
-#include "lib/mysqlclient/ob_isql_client.h"    // ObISQLClient
+#include "ob_cdc_tenant_query.h"
 #include "logservice/logfetcher/ob_log_data_dictionary_in_log_table.h"
 
 namespace oceanbase
 {
 namespace common
 {
+class ObMySQLProxy;
 namespace sqlclient
 {
 class ObMySQLResult;
@@ -28,50 +29,26 @@ class ObMySQLResult;
 
 namespace libobcdc
 {
-class ObLogMetaDataSQLQueryer
+
+// query OB_SYS_TENANT_ID in tenant_sync_mode and query specific tenant_id in cluster_sync_mode
+class ObLogMetaDataSQLQueryer : public ObCDCTenantQuery<logfetcher::DataDictionaryInLogInfo>
 {
 public:
-  ObLogMetaDataSQLQueryer();
-  virtual ~ObLogMetaDataSQLQueryer();
-  int init(
-      const int64_t cluster_id,
-      const bool is_across_cluster,
-      common::ObISQLClient &sql_proxy);
-  bool is_inited() const { return is_inited_; }
-  void destroy();
-
+  ObLogMetaDataSQLQueryer(const int64_t start_timstamp_ns, common::ObMySQLProxy &sql_proxy)
+    : ObCDCTenantQuery(sql_proxy), start_timstamp_ns_(start_timstamp_ns) {}
+  ~ObLogMetaDataSQLQueryer() { start_timstamp_ns_ = OB_INVALID_TIMESTAMP; }
 public:
   int get_data_dict_in_log_info(
       const uint64_t tenant_id,
-      const int64_t start_timstamp_ns,
-      int64_t &record_count,
+      const int64_t start_timestamp_ns,
       logfetcher::DataDictionaryInLogInfo &data_dict_in_log_info);
-
 private:
-  int do_query_(const uint64_t tenant_id,
-      ObSqlString &sql,
-      ObISQLClient::ReadResult &result);
-
-  template <typename RecordsType>
-  int get_records_template_(
-      common::sqlclient::ObMySQLResult &res,
-      RecordsType &records,
-      const char *event,
-      int64_t &record_count);
-
-  // logfetcher::DataDictionaryInLogInfo
-  // @param [in] res, result read from __all_virtual_data_dictionary_in_log
-  // @param [out] data_dict_in_log_info
-  int parse_record_from_row_(
-      common::sqlclient::ObMySQLResult &res,
-      logfetcher::DataDictionaryInLogInfo &data_dict_in_log_info);
-
+  int build_sql_statement_(const uint64_t tenant_id, ObSqlString &sql) override;
+  int parse_row_(common::sqlclient::ObMySQLResult &sql_result, ObCDCQueryResult<logfetcher::DataDictionaryInLogInfo> &result) override;
 private:
-  bool is_inited_;                     // whether this class is inited
-  bool is_across_cluster_;             // whether the SQL query across cluster
-  int64_t cluster_id_;                 // ClusterID
-  common::ObISQLClient *sql_proxy_;    // sql_proxy to use
-
+  static const char* QUERY_SQL_FORMAT;
+private:
+  int64_t start_timstamp_ns_;
   DISALLOW_COPY_AND_ASSIGN(ObLogMetaDataSQLQueryer);
 };
 

@@ -1278,6 +1278,10 @@ int ObLogInstance::config_tenant_mgr_(const int64_t start_tstamp_ns,
           GET_SCHEMA_TIMEOUT_ON_START_UP,
           add_tenant_succ))) {
         LOG_ERROR("add_tenant fail", KR(ret), K(start_tstamp_ns), K(sys_schema_version));
+      } else if (! add_tenant_succ) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("[FATAL] [LAUNCH] ADD_TENANT WITH NO ALIVE SERVER MODE FAILED", KR(ret),
+            K(start_tstamp_ns), K_(refresh_mode), K_(fetching_mode));
       }
     } else {
       if (OB_FAIL(tenant_mgr_->add_all_tenants(

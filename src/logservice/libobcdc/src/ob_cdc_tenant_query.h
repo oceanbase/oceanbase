@@ -28,6 +28,7 @@ public:
   virtual ~ObCDCQueryResult() { affect_rows_ = 0; }
 public:
   OB_INLINE void inc_affect_rows() { affect_rows_++; }
+  OB_INLINE int64_t get_affect_rows() const { return affect_rows_; }
   OB_INLINE bool has_data() const { return affect_rows_ > 0; }
   OB_INLINE bool is_empty() const { return ! has_data(); }
   OB_INLINE T& get_data() const { return data_; }
@@ -81,7 +82,7 @@ int ObCDCTenantQuery<T>::query(const uint64_t tenant_id, ObCDCQueryResult<T> &qu
   } else {
     bool query_done = false;
     int retry_cnt = 0;
-    const int64_t retry_fail_sleep_time = 1 * _MSEC_;
+    const int64_t retry_fail_sleep_time = 100 * _MSEC_;
     const int64_t retry_warn_interval = 5 * _SEC_;
     const int64_t start_time = get_timestamp();
     const int64_t end_time = start_time + retry_timeout;
