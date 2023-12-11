@@ -1259,25 +1259,30 @@ int ObTransService::tx_free_route_handle_check_alive(const ObTxFreeRouteCheckAli
 #define SESSION_VERIFY_TXN_STATE_IMPL_(name)                            \
 int64_t ObTransService::txn_free_route__get_##name##_state_size(ObTxDesc *tx) \
 {                                                                       \
-  int64_t l = encoded_length_i64(100);                                  \
-  if (OB_NOT_NULL(tx)) {                                                \
-    l += encoded_length_bool(true);                                     \
-    l += encoded_length_i64(1024);                                      \
-    if (tx->tx_id_.is_valid()) {                                        \
-      ObSpinLockGuard guard(tx->lock_);                                 \
-      l += tx->name##_state_encoded_length_for_verify();                \
-    }                                                                   \
+  const bool IS_EXTRA = strcmp(#name,"extra") == 0;                     \
+  const bool in_tx_route = tx &&                                        \
+    (IS_EXTRA ? tx->in_tx_for_free_route() : tx->is_in_tx());           \
+  int64_t l = encoded_length_i64(100);   /*trans id*/                   \
+  l += encoded_length_bool(in_tx_route);                                \
+  if (in_tx_route) {                                                    \
+    l += encoded_length_i64(1024);  /*global version*/                  \
+    ObSpinLockGuard guard(tx->lock_);                                   \
+    l += tx->name##_state_encoded_length_for_verify();                  \
   }                                                                     \
   return l;                                                             \
 }                                                                       \
-int ObTransService::txn_free_route__get_##name##_state(ObTxDesc *tx, const ObTxnFreeRouteCtx &ctx, char *buf, const int64_t len, int64_t &pos) \
+int ObTransService::txn_free_route__get_##name##_state(ObTxDesc *tx,   \
+   const ObTxnFreeRouteCtx &ctx, char *buf, const int64_t len, int64_t &pos) \
 {                                                                       \
   int ret = OB_SUCCESS;                                                 \
+  const bool IS_EXTRA = strcmp(#name,"extra") == 0;                     \
+  const bool in_tx_route = tx &&                                        \
+    (IS_EXTRA ? tx->in_tx_for_free_route() : tx->is_in_tx());           \
   if (OB_FAIL(encode_i64(buf, len, pos, (tx ? tx->tx_id_.get_id() : 0)))) { \
-  } else if (OB_NOT_NULL(tx)) {                                         \
-    if (OB_FAIL(encode_bool(buf, len, pos, tx->in_tx_for_free_route()))) { \
-    } else if (OB_FAIL(encode_i64(buf, len, pos, ctx.global_version_))) { \
-    } else if (tx->tx_id_.is_valid()) {                                 \
+  } else if (OB_FAIL(encode_bool(buf, len, pos, in_tx_route))) {        \
+  } else if (in_tx_route) {                                             \
+    if (OB_FAIL(encode_i64(buf, len, pos, ctx.global_version_))) {      \
+    } else {                                                            \
       ObSpinLockGuard guard(tx->lock_);                                 \
       ret = tx->encode_##name##_state_for_verify(buf, len, pos);        \
     }                                                                   \
@@ -1289,6 +1294,7 @@ int ObTransService::txn_free_route__cmp_##name##_state(const char* cur_buf, int6
   int ret = OB_SUCCESS;                                                 \
   int64_t cur_pos = 0, last_pos = 0;                                    \
   ObTransID cur_tx_id, last_tx_id;                                      \
+  bool cur_in_tx_route = false, last_in_tx_route = false;               \
   {                                                                     \
     int64_t tx_id = 0;                                                  \
     if (OB_FAIL(decode_i64(cur_buf, cur_len, cur_pos, &tx_id))) {       \
@@ -1296,12 +1302,19 @@ int ObTransService::txn_free_route__cmp_##name##_state(const char* cur_buf, int6
     if (OB_SUCC(ret) && OB_FAIL(decode_i64(last_buf, last_len, last_pos, &tx_id))) { \
     } else { last_tx_id = ObTransID(tx_id); }                           \
   }                                                                     \
-  if (OB_SUCC(ret) && cur_tx_id != last_tx_id && last_tx_id.is_valid()) { \
-    ret = OB_ERR_UNEXPECTED;                                            \
-    TRANS_LOG(WARN, "tx_id not equals", K(cur_tx_id), K(last_tx_id));   \
+  if (OB_SUCC(ret)) {                                                   \
+    if (OB_FAIL(decode_bool(cur_buf, cur_len, cur_pos, &cur_in_tx_route))) { \
+    } else if (OB_FAIL(decode_bool(last_buf, last_len, last_pos, &last_in_tx_route))) {} \
   }                                                                     \
-  if (OB_SUCC(ret) && cur_tx_id == last_tx_id && cur_tx_id.is_valid()) { \
-    if (cur_len != last_len) {                                          \
+  if (OB_SUCC(ret) && cur_in_tx_route != last_in_tx_route) {            \
+    ret = OB_ERR_UNEXPECTED;                                            \
+    TRANS_LOG(WARN, "`in tx route` is different");                      \
+  }                                                                     \
+  if (OB_SUCC(ret) && cur_in_tx_route) {                                \
+    if (cur_tx_id != last_tx_id) {                                      \
+      ret = OB_ERR_UNEXPECTED;                                          \
+      TRANS_LOG(WARN, "tx_id not equals");                              \
+    } else if (cur_len != last_len) {                                   \
       ret = OB_ERR_UNEXPECTED;                                          \
       TRANS_LOG(WARN, "state len not equals", K(cur_len), K(last_len)); \
     } else if (0 != MEMCMP(cur_buf + cur_pos, last_buf + last_pos, cur_len - cur_pos)) { \
@@ -1325,12 +1338,12 @@ int ObTransService::txn_free_route__display_##name##_state(const char* sname, co
     _TRANS_LOG(INFO, "[dump %s state] @%s : no txn exist", #name, sname); \
   }                                                                     \
   int64_t global_version = 0;                                           \
-  bool in_txn_for_free_route = false;                                   \
+  bool in_txn_route = false;                                            \
   if (OB_SUCC(ret) && OB_FAIL(decode_i64(buf, len, pos, &global_version))) { \
-  } else if (OB_FAIL(decode_bool(buf, len, pos, &in_txn_for_free_route))) { \
+  } else if (OB_FAIL(decode_bool(buf, len, pos, &in_txn_route))) { \
   } else {                                                              \
-    _TRANS_LOG(INFO, "[dump %s state] @%s : tx_id=%ld in_txn_for_free_route=%d global_version=%ld", \
-                     #name, sname, tx_id.get_id(), in_txn_for_free_route, global_version); \
+    _TRANS_LOG(INFO, "[dump %s state] @%s : tx_id=%ld in_txn_route=%d global_version=%ld", \
+               #name, sname, tx_id.get_id(), in_txn_route, global_version); \
     return ObTxDesc::display_##name##_state(buf, len, pos);             \
   }                                                                     \
   return ret;                                                           \
