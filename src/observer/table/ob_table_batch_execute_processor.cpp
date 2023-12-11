@@ -438,7 +438,9 @@ int ObTableBatchExecuteP::multi_get()
       op_result.set_entity(*result_entity);
       op_result.set_errno(ret);
       op_result.set_type(tb_ctx_.get_opertion_type());
-      if (OB_FAIL(result_.push_back(op_result))) {
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_FAIL(result_.push_back(op_result))) {
         LOG_WARN("fail to push back op result", K(ret), K(i));
       } else if (batch_ops_atomic_ && OB_FAIL(op_result.get_errno())) {
         LOG_WARN("fail to execute one operation when batch execute as atomic", K(ret), K(table_operation));

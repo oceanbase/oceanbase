@@ -668,6 +668,7 @@ void ObTableApiProcessorBase::end_audit()
     }
 
     { // set user name, ignore ret
+      ret = OB_SUCCESS;
       const share::schema::ObUserInfo *user_info = NULL;
       if(OB_FAIL(schema_guard.get_user_info(credential_.tenant_id_, credential_.user_id_, user_info))) {
         SERVER_LOG(WARN, "fail to get user info", K(ret), K(credential_));
@@ -681,6 +682,7 @@ void ObTableApiProcessorBase::end_audit()
     }
 
     { // set database name, ignore ret
+      ret = OB_SUCCESS;
       const share::schema::ObSimpleDatabaseSchema *database_info = NULL;
       if(OB_FAIL(schema_guard.get_database_schema(credential_.tenant_id_, credential_.database_id_, database_info))) {
         SERVER_LOG(WARN, "fail to get database info", K(ret), K(credential_));
@@ -734,6 +736,7 @@ void ObTableApiProcessorBase::end_audit()
     FORCE_PRINT_TRACE(THE_TRACE, "[table api][slow query]");
   }
 
+  ret = OB_SUCCESS;
   MTL_SWITCH(credential_.tenant_id_) {
     obmysql::ObMySQLRequestManager *req_manager = MTL(obmysql::ObMySQLRequestManager*);
     if (nullptr == req_manager) {

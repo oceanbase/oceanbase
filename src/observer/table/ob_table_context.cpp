@@ -1530,7 +1530,7 @@ int ObTableCtx::init_dml_related_tid()
               found = true;
             }
           }
-          if (found && OB_FAIL(related_index_ids_.push_back(index_schema->get_table_id()))) {
+          if (OB_SUCC(ret) && found && OB_FAIL(related_index_ids_.push_back(index_schema->get_table_id()))) {
             LOG_WARN("fail to add related index ids", K(ret), K(index_schema->get_table_id()));
           }
         } else if (OB_FAIL(related_index_ids_.push_back(index_schema->get_table_id()))) {

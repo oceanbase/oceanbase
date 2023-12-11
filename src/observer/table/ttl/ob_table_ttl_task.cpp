@@ -571,7 +571,7 @@ int ObTableTTLDeleteRowIterator::get_next_row(ObNewRow*& row)
           }
         }
       }
-      if (ObTimeUtility::current_time() > iter_end_ts_ && hbase_new_cq_) {
+      if (OB_SUCC(ret) && ObTimeUtility::current_time() > iter_end_ts_ && hbase_new_cq_) {
         ret = OB_ITER_END;
       }
     }
