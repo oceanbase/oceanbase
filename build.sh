@@ -1,7 +1,9 @@
 #!/bin/bash
 
+
 TOPDIR=`readlink -f \`dirname $0\``
 BUILD_SH=$TOPDIR/build.sh
+
 
 DEP_DIR=${TOPDIR}/deps/3rd/usr/local/oceanbase/deps/devel
 TOOLS_DIR=${TOPDIR}/deps/3rd/usr/local/oceanbase/devtools
