@@ -4677,7 +4677,9 @@ int ObDMLResolver::resolve_function_table_item(const ParseNode &parse_tree,
           LOG_WARN("ORA-22905: cannot access rows from a non-nested table item",
                    K(ret), K(function_table_expr->get_result_type()));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "access rows from a non-nested table item");
-        } else { /*do nothing*/ }
+        } else if (OB_FAIL(add_udt_dependency(*user_type))) {
+          LOG_WARN("failed to add udt dependency", K(ret), KPC(user_type));
+        }
       }
     }
   }
@@ -15917,6 +15919,95 @@ int ObDMLResolver::adjust_values_desc_position(ObInsertTableInfo& table_info,
       LOG_WARN("fail to append new values_desc");
     }
   }
+  return ret;
+}
+
+int ObDMLResolver::add_udt_dependency(const pl::ObUserDefinedType &udt_type)
+{
+  int ret = OB_SUCCESS;
+
+  ObStmt *stmt = get_stmt();
+  const uint64_t udt_id = udt_type.get_user_type_id();
+
+  if (OB_ISNULL(stmt) || OB_ISNULL(allocator_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("resolver isn't init", K(ret), K(stmt), K(allocator_));
+  } else if (udt_id == OB_INVALID_ID) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid udt id", K(udt_type));
+  } else if (OB_ISNULL(params_.schema_checker_) || OB_ISNULL(params_.schema_checker_->get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null schema checker or schema guard", K(params_.schema_checker_));
+  } else {
+    ObSchemaGetterGuard &schema_guard = *params_.schema_checker_->get_schema_guard();
+    ObSchemaObjVersion version;
+    switch (udt_type.get_type_from()) {
+    case PL_TYPE_PACKAGE: {
+      const ObPackageInfo *pkg_info = nullptr;
+      const uint64_t pkg_id = extract_package_id(udt_id);
+      const uint64_t tenant_id = get_tenant_id_by_object_id(pkg_id);
+      if (OB_FAIL(schema_guard.get_package_info(tenant_id, pkg_id, pkg_info))) {
+        LOG_WARN("failed to get package info", K(tenant_id), K(pkg_id), K(udt_type));
+      } else if (OB_ISNULL(pkg_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpaceted NULL pkg_info", K(tenant_id), K(pkg_id), K(udt_type));
+      } else if (FALSE_IT(version = ObSchemaObjVersion(pkg_id,
+                                                       pkg_info->get_schema_version(),
+                                                       DEPENDENCY_PACKAGE))) {
+        // unreachable
+      } else if (OB_FAIL(stmt->add_global_dependency_table(version))) {
+        LOG_WARN("failed to add package dependency", K(ret), K(udt_type), KPC(pkg_info), K(version));
+      }
+      break;
+    }
+    case PL_TYPE_UDT: {
+      const uint64_t tenant_id = get_tenant_id_by_object_id(udt_id);
+      const ObUDTTypeInfo *udt_info = nullptr;
+      if (OB_FAIL(schema_guard.get_udt_info(tenant_id, udt_id, udt_info))) {
+        LOG_WARN("failed to get udt info", K(tenant_id), K(udt_id), K(udt_type));
+      } else if (OB_ISNULL(udt_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpaceted NULL udt_info", K(tenant_id), K(udt_id), K(udt_type));
+      } else if (FALSE_IT(version = ObSchemaObjVersion(udt_id,
+                                                       udt_info->get_schema_version(),
+                                                       DEPENDENCY_TYPE))) {
+        // unreachable
+      } else if (OB_FAIL(stmt->add_global_dependency_table(version))) {
+        LOG_WARN("failed to add udt dependency", K(ret), K(udt_type), KPC(udt_info), K(version));
+      }
+      break;
+    }
+    case PL_TYPE_ATTR_TYPE:
+    case PL_TYPE_ATTR_ROWTYPE: {
+      const ObTableSchema* table_schema = nullptr;
+
+      // table id is independent of tenant id, so get real tenant id from session_info
+      uint64_t tenant_id = OB_INVALID_ID;
+      if (OB_ISNULL(params_.session_info_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null session info", K(params_.session_info_));
+      } else if (FALSE_IT(tenant_id = params_.session_info_->get_effective_tenant_id())) {
+        // unreachable
+      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, udt_id, table_schema))) {
+        LOG_WARN("failed to get table schema", K(tenant_id), K(udt_id), K(udt_type));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpaceted NULL table_schema", K(tenant_id), K(udt_id), K(udt_type));
+      } else if (FALSE_IT(version = ObSchemaObjVersion(udt_id,
+                                                       table_schema->get_schema_version(),
+                                                       DEPENDENCY_TABLE))) {
+        // unreachable
+      } else if (OB_FAIL(stmt->add_global_dependency_table(version))) {
+        LOG_WARN("failed to add table dependency", K(ret), K(udt_type), KPC(table_schema), K(version));
+      }
+      break;
+    }
+    default: {
+      // do nothing
+    }
+    }
+  }
+
   return ret;
 }
 
