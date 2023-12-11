@@ -1056,7 +1056,7 @@ int ObLobManager::check_need_out_row(
     bool &need_out_row)
 {
   int ret = OB_SUCCESS;
-  need_out_row = (param.byte_size_ + add_len) > LOB_IN_ROW_MAX_LENGTH;
+  need_out_row = (param.byte_size_ + add_len) > param.get_inrow_threshold();
   if (param.lob_locator_ != nullptr) {
     // TODO @lhd remove after tmp lob support outrow
     if (!param.lob_locator_->is_persist_lob()) {
@@ -1758,7 +1758,7 @@ int ObLobManager::prepare_for_write(
     modified_end *= max_bytes_in_char;
   }
   uint64_t total_size = param.byte_size_ > modified_end ? param.byte_size_ : modified_end;
-  need_out_row = (total_size > LOB_IN_ROW_MAX_LENGTH);
+  need_out_row = (total_size > param.get_inrow_threshold());
   if (param.lob_common_->in_row_) {
     old_data.assign_ptr(param.lob_common_->get_inrow_data_ptr(), param.byte_size_);
   }

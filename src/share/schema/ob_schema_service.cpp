@@ -402,6 +402,7 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
       index_attributes_set_ = src_schema.index_attributes_set_;
       session_id_ = src_schema.session_id_;
       compressor_type_ = src_schema.compressor_type_;
+      lob_inrow_threshold_ = src_schema.lob_inrow_threshold_;
       is_column_store_supported_ = src_schema.is_column_store_supported_;
       max_used_column_group_id_ = src_schema.max_used_column_group_id_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {

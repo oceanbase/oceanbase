@@ -49,6 +49,16 @@ int ObLobAccessParam::set_lob_locator(common::ObLobLocatorV2 *lob_locator)
   return ret;
 }
 
+int64_t ObLobAccessParam::get_inrow_threshold()
+{
+  int64_t res = inrow_threshold_;
+  if (res < OB_MIN_LOB_INROW_THRESHOLD || res > OB_MAX_LOB_INROW_THRESHOLD) {
+    LIB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "invalid inrow threshold, use default inrow threshold", K(res));
+    res = OB_DEFAULT_LOB_INROW_THRESHOLD;
+  }
+  return res;
+}
+
 int ObInsertLobColumnHelper::start_trans(const share::ObLSID &ls_id,
                                          const bool is_for_read,
                                          const int64_t timeout_ts,
@@ -107,6 +117,7 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
                                                const share::ObLSID ls_id,
                                                const common::ObTabletID tablet_id,
                                                const ObColDesc &column,
+                                               const ObLobStorageParam &lob_storage_param,
                                                blocksstable::ObStorageDatum &datum,
                                                const int64_t timeout_ts,
                                                const bool has_lob_header,
@@ -130,7 +141,7 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
     // datum with null ptr and zero len should treat as no lob header
     bool set_has_lob_header = has_lob_header && data.length() > 0;
     ObLobLocatorV2 src(data, set_has_lob_header);
-    if (src.has_inrow_data() && lob_mngr->can_write_inrow(data.length())) {
+    if (src.has_inrow_data() && lob_mngr->can_write_inrow(data.length(), lob_storage_param.inrow_threshold_)) {
       // fast path for inrow data
       if (OB_FAIL(src.get_inrow_data(data))) {
         LOG_WARN("fail to get inrow data", K(ret), K(src));
@@ -165,6 +176,8 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
         lob_param.timeout_ = timeout_ts;
         lob_param.scan_backward_ = false;
         lob_param.offset_ = 0;
+        lob_param.inrow_threshold_ = lob_storage_param.inrow_threshold_;
+        LOG_DEBUG("lob storage param", K(lob_storage_param), K(column));
         if (!src.is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid src lob locator.", K(ret));
@@ -187,13 +200,14 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
                                                const share::ObLSID ls_id,
                                                const common::ObTabletID tablet_id,
                                                const ObColDesc &column,
+                                               const ObLobStorageParam &lob_storage_param,
                                                ObObj &obj,
                                                const int64_t timeout_ts)
 {
   int ret = OB_SUCCESS;
   ObStorageDatum datum;
   datum.from_obj(obj);
-  if (OB_SUCC(insert_lob_column(allocator, ls_id, tablet_id, column, datum, timeout_ts, obj.has_lob_header(), MTL_ID()))) {
+  if (OB_SUCC(insert_lob_column(allocator, ls_id, tablet_id, column, lob_storage_param, datum, timeout_ts, obj.has_lob_header(), MTL_ID()))) {
     obj.set_lob_value(obj.get_type(), datum.get_string().ptr(), datum.get_string().length());
   }
   return ret;

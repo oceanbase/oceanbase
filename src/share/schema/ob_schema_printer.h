@@ -483,6 +483,12 @@ public:
                             int64_t& pos,
                             bool is_oracle_mode,
                             const ObString &sql) const;
+
+  int print_table_definition_lob_params(const ObTableSchema &table_schema,
+                                        char* buf,
+                                        const int64_t& buf_len,
+                                        int64_t& pos) const;
+
 private:
   static bool is_subpartition_valid_in_mysql(const ObTableSchema &table_schema)
   {

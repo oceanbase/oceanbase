@@ -144,7 +144,7 @@ public:
   OB_INLINE int64_t get_snapshot_version() const { return snapshot_version_; }
   TO_STRING_KV(K_(tablet_id), K_(ls_id), K_(rowkey_column_num), K_(is_index_table), KP_(col_descs),
                K_(snapshot_version), K_(data_desc), K_(lob_cnt), K_(sql_mode_for_ddl_reshape),
-               KP_(reshape_ptr));
+               KP_(reshape_ptr), K_(lob_inrow_threshold));
 private:
   int prepare_reshape(
     const common::ObTabletID &tablet_id,
@@ -177,6 +177,7 @@ private:
   blocksstable::ObDatumRow datum_row_;
   bool is_inited_;
   blocksstable::ObNewRowBuilder new_row_builder_;
+  int64_t lob_inrow_threshold_;
 };
 
 class ObSSTableInsertTabletContext final

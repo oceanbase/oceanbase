@@ -4012,7 +4012,9 @@ int ObLSTabletService::insert_lob_col(
     // for not strict sql mode, will insert empty string without lob header
     bool has_lob_header = obj.has_lob_header() && raw_data.length() > 0;
     ObLobLocatorV2 loc(raw_data, has_lob_header);
-    if (OB_FAIL(lob_mngr->append(lob_param, loc))) {
+    if (OB_FAIL(set_lob_storage_params(run_ctx, column, lob_param))) {
+      LOG_WARN("set_lob_storage_params fail", K(ret), K(column));
+    } else if (OB_FAIL(lob_mngr->append(lob_param, loc))) {
       LOG_WARN("[STORAGE_LOB]lob append failed.", K(ret));
     } else {
       ObLobCommon *res_lob_common = lob_param.lob_common_;
@@ -4335,7 +4337,9 @@ int ObLSTabletService::process_delta_lob(
     // should use old obj lob
     ObLobLocatorV2 old_lob;
     ObString old_disk_lob;
-    if (OB_FAIL(old_obj.get_lob_locatorv2(old_lob))) {
+    if (OB_FAIL(set_lob_storage_params(run_ctx, column, lob_param))) {
+      LOG_WARN("set_lob_storage_params fail", K(ret), K(column));
+    } else if (OB_FAIL(old_obj.get_lob_locatorv2(old_lob))) {
       LOG_WARN("get old lob locator failed.", K(ret), K(old_obj));
     } else if (!old_lob.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
@@ -4357,6 +4361,26 @@ int ObLSTabletService::process_delta_lob(
         obj.set_lob_value(obj.get_type(), lob_param.lob_common_, lob_param.handle_size_);
       }
     }
+  }
+  return ret;
+}
+
+int ObLSTabletService::set_lob_storage_params(
+    ObDMLRunningCtx &run_ctx,
+    const ObColDesc &column,
+    ObLobAccessParam &lob_param)
+{
+  int ret = OB_SUCCESS;
+  const ObTableDMLParam *table_param = run_ctx.dml_param_.table_param_;
+  const ObColumnParam *column_param = nullptr;
+  if (OB_ISNULL(table_param)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table_param is null", K(ret));
+  } else if (OB_ISNULL(column_param = table_param->get_data_table().get_column(column.col_id_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column_param is null", K(ret), K(table_param));
+  } else {
+    lob_param.inrow_threshold_ = table_param->get_data_table().get_lob_inrow_threshold();
   }
   return ret;
 }
@@ -5346,6 +5370,8 @@ int ObLSTabletService::delete_lob_col(
     if (data.length() < sizeof(ObLobCommon)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("[STORAGE_LOB]Invalid Lob data.", K(ret), K(obj), K(data));
+    } else if (OB_FAIL(set_lob_storage_params(run_ctx, column, lob_param))) {
+      LOG_WARN("set_lob_storage_params fail", K(ret), K(column));
     } else {
       void *buf = run_ctx.lob_allocator_.alloc(data.length());
       if (OB_ISNULL(buf)) {
