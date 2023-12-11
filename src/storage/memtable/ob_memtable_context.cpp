@@ -183,7 +183,7 @@ int64_t ObMemtableCtx::to_string(char *buf, const int64_t buf_len) const
                           "unsynced_cnt=%ld unsubmitted_cnt_=%ld "
                           "cb_statistics:[main=%ld, slave=%ld, merge=%ld, "
                           "tx_end=%ld, rollback_to=%ld, "
-                          "fast_commit=%ld, remove_memtable=%ld]",
+                          "fast_commit=%ld, remove_memtable=%ld, ext_info_log_cb=%ld]",
                           end_code_, tx_status_, STR_BOOL(is_read_only_), ref_,
                           NULL == ctx_ ? "" : S(ctx_->get_trans_id()),
                           NULL == ctx_ ? -1 : ctx_->get_ls_id().id(),
@@ -202,7 +202,8 @@ int64_t ObMemtableCtx::to_string(char *buf, const int64_t buf_len) const
                           trans_mgr_.get_callback_remove_for_trans_end_count(),
                           trans_mgr_.get_callback_remove_for_rollback_to_count(),
                           trans_mgr_.get_callback_remove_for_fast_commit_count(),
-                          trans_mgr_.get_callback_remove_for_remove_memtable_count());
+                          trans_mgr_.get_callback_remove_for_remove_memtable_count(),
+                          trans_mgr_.get_callback_ext_info_log_count());
   common::databuff_printf(buf, buf_len, pos, "}");
   return pos;
 }
@@ -387,6 +388,8 @@ storage::ObExtInfoCallback *ObMemtableCtx::alloc_ext_info_callback()
   } else if (nullptr == (cb = new(cb_buffer) storage::ObExtInfoCallback())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     TRANS_LOG(WARN, "construct ObExtInfoCallback object fail", K(ret), "cb_buffer", cb_buffer);
+  } else {
+    trans_mgr_.add_callback_ext_info_log_count(1);
   }
   return cb;
 }
@@ -402,6 +405,7 @@ void ObMemtableCtx::free_ext_info_callback(ObITransCallback *cb)
     ext_cb->~ObExtInfoCallback();
     mem_ctx_obj_pool_.free<storage::ObExtInfoCallback>(cb);
     TRANS_LOG(DEBUG, "callback release succ", KP(cb), K(*this), K(lbt()));
+    trans_mgr_.add_callback_ext_info_log_count(-1);
     cb = NULL;
   }
 }

@@ -224,6 +224,8 @@ int ObExtInfoCbRegister::register_cb(
     memtable::ObIMvccCtx *ctx,
     const int64_t timeout,
     const blocksstable::ObDmlFlag dml_flag,
+    transaction::ObTxDesc *tx_desc,
+    transaction::ObTxSEQ &parent_seq_no,
     ObObj &index_data,
     ObObj &ext_info_data)
 {
@@ -234,6 +236,9 @@ int ObExtInfoCbRegister::register_cb(
   if (OB_ISNULL(lob_mngr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[STORAGE_LOB]get lob manager instance failed.", K(ret));
+  } else if (OB_ISNULL(tx_desc)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tx_desc is null", K(ret));
   } else if (ext_info_data.is_null()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data is empty", K(ret), K(ext_info_data));
@@ -246,7 +251,7 @@ int ObExtInfoCbRegister::register_cb(
     LOG_WARN("build data iter fail", K(ret));
   } else {
     seq_no_cnt_ = data_size_/OB_EXT_INFO_LOG_BLOCK_MAX_SIZE + 1;
-    seq_no_st_ = transaction::ObTxSEQ::cast_from_int(ObSequence::get_and_inc_max_seq_no(seq_no_cnt_));
+    seq_no_st_ = tx_desc->get_and_inc_tx_seq(parent_seq_no.get_branch(), seq_no_cnt_);
     transaction::ObTxSEQ seq_no_cur = seq_no_st_;
     ObString data;
     ObIAllocator &allocator = lob_mngr->get_ext_info_log_allocator();

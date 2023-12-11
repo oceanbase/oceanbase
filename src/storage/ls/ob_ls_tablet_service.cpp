@@ -4202,12 +4202,18 @@ int ObLSTabletService::process_delta_lob(
 {
   int ret = OB_SUCCESS;
   ObLobManager *lob_mngr = MTL(ObLobManager*);
+  bool has_diff = false;
   if (OB_ISNULL(lob_mngr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[STORAGE_LOB]failed to get lob manager handle.", K(ret));
   } else if (!delta_lob.is_delta_temp_lob()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[STORAGE_LOB] invalid lob type", K(ret), K(delta_lob));
+  } else if (OB_FAIL(ObDeltaLob::has_diff(delta_lob, has_diff))) {
+    LOG_WARN("delata lob has_diff fail", K(ret), K(delta_lob), K(column));
+  } else if (! has_diff) {
+    LOG_DEBUG("no diff means no update, so set nop", K(delta_lob), K(column));
+    obj.set_nop_value();
   } else {
     ObLobAccessParam lob_param;
     // init lob param
@@ -4252,9 +4258,12 @@ int ObLSTabletService::process_delta_lob(
       } else {
         // update obj with new disk locator
         obj.set_lob_value(obj.get_type(), lob_param.lob_common_, lob_param.handle_size_);
-        if (! lob_param.ext_info_log_.is_null() && OB_FAIL(run_ctx.store_ctx_.mvcc_acc_ctx_.mem_ctx_->register_ext_info_commit_cb(
+        if (! lob_param.ext_info_log_.is_null()
+          && OB_FAIL(run_ctx.store_ctx_.mvcc_acc_ctx_.mem_ctx_->register_ext_info_commit_cb(
             run_ctx.dml_param_.timeout_,
             run_ctx.dml_flag_,
+            lob_param.tx_desc_,
+            lob_param.parent_seq_no_,
             obj,
             lob_param.ext_info_log_))) {
           LOG_WARN("register_ext_info_commit_cb fail", K(ret), K(lob_param));

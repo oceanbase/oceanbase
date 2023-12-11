@@ -242,6 +242,7 @@ void ObTransCallbackMgr::reset()
   callback_remove_for_remove_memtable_count_ = 0;
   callback_remove_for_fast_commit_count_ = 0;
   callback_remove_for_rollback_to_count_ = 0;
+  callback_ext_info_log_count_ = 0;
   pending_log_size_ = 0;
   flushed_log_size_ = 0;
 }

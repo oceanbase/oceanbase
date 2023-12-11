@@ -184,6 +184,8 @@ public:
   int register_ext_info_commit_cb(
       const int64_t timeout,
       const blocksstable::ObDmlFlag dml_flag,
+      transaction::ObTxDesc *tx_desc,
+      transaction::ObTxSEQ &parent_seq_no,
       ObObj &index_data,
       ObObj &ext_info_data);
 
