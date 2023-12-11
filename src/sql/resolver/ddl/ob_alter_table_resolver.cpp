@@ -4594,6 +4594,52 @@ int ObAlterTableResolver::process_timestamp_column(ObColumnResolveStat &stat,
   return ret;
 }
 
+int ObAlterTableResolver::check_sdo_geom_default_value(ObAlterTableStmt *alter_table_stmt,
+                                                       AlterColumnSchema &column_schema)
+{
+  int ret = OB_SUCCESS;
+  if (lib::is_oracle_mode() && column_schema.is_geometry()) {
+    ObObj orig_default_value;
+    uint64_t tenant_data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+      LOG_WARN("get tenant data version failed", K(ret));
+    } else if (tenant_data_version < DATA_VERSION_4_2_2_0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("tenant data version is less than 4.2.2, sdo_geometry type is not supported", K(ret), K(tenant_data_version), K(column_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.2, sdo_geometry");
+    } else if (OB_ISNULL(alter_table_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("alter table stmt not exist", K(ret));
+    } else if (column_schema.get_cur_default_value().is_null()) {
+    } else if (OB_FAIL(get_udt_column_default_values(column_schema.get_cur_default_value(),
+                                                     session_info_->get_tz_info_wrap(),
+                                                     *allocator_,
+                                                     column_schema,
+                                                     session_info_->get_sql_mode(),
+                                                     session_info_,
+                                                     schema_checker_,
+                                                     orig_default_value,
+                                                     alter_table_stmt->get_ddl_arg()))) {
+      LOG_WARN("fail to calc xmltype default value expr", K(ret));
+    } else if (orig_default_value.is_null()) {
+    } else {
+      // get rid of lob header
+      ObObj default_val;
+      ObString swkb;
+      if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator_, orig_default_value, swkb))) {
+        LOG_WARN("fail to get real data.", K(ret));
+      } else {
+        default_val.set_common_value(swkb);
+        default_val.set_meta_type(column_schema.get_meta_type());
+        if (OB_FAIL(column_schema.set_orig_default_value(default_val))) {
+          LOG_WARN("fail to set orig default value", K(default_val), K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObAlterTableResolver::add_udt_hidden_column(ObAlterTableStmt *alter_table_stmt,
                                                 AlterColumnSchema &column_schema)
 {
@@ -4693,30 +4739,6 @@ int ObAlterTableResolver::add_udt_hidden_column(ObAlterTableStmt *alter_table_st
     } else if (OB_FAIL(alter_table_stmt->add_column(hidden_blob))) {
       SQL_RESV_LOG(WARN, "add column to table_schema failed", K(ret), K(hidden_blob));
     }
-  } else if (lib::is_oracle_mode() && column_schema.is_geometry()) {
-    ObObj orig_default_value;
-    uint64_t tenant_data_version = 0;
-    if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
-      LOG_WARN("get tenant data version failed", K(ret));
-    } else if (tenant_data_version < DATA_VERSION_4_2_2_0) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("tenant data version is less than 4.2.2, sdo_geometry type is not supported", K(ret), K(tenant_data_version), K(column_schema));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.2, sdo_geometry");
-    } else if (OB_ISNULL(alter_table_stmt)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("alter table stmt not exist", K(ret));
-    } else if (column_schema.get_cur_default_value().is_null()) {
-    } else if (OB_FAIL(get_udt_column_default_values(column_schema.get_cur_default_value(),
-                                                     session_info_->get_tz_info_wrap(),
-                                                     *allocator_,
-                                                     column_schema,
-                                                     session_info_->get_sql_mode(),
-                                                     session_info_,
-                                                     schema_checker_,
-                                                     orig_default_value,
-                                                     alter_table_stmt->get_ddl_arg()))) {
-      LOG_WARN("fail to calc xmltype default value expr", K(ret));
-    }
   }
   return ret;
 }
@@ -4794,7 +4816,9 @@ int ObAlterTableResolver::resolve_add_column(const ParseNode &node)
         }
         //add column
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(alter_table_stmt->add_column(alter_column_schema))) {
+          if (OB_FAIL(check_sdo_geom_default_value(alter_table_stmt, alter_column_schema))) {
+            SQL_RESV_LOG(WARN, "check sdo geometry default value failed!", K(ret));
+          } else if (OB_FAIL(alter_table_stmt->add_column(alter_column_schema))) {
             SQL_RESV_LOG(WARN, "Add alter column schema failed!", K(ret));
           } else if (OB_FAIL(add_udt_hidden_column(alter_table_stmt, alter_column_schema))) {
             SQL_RESV_LOG(WARN, "Add alter udt hidden column schema failed!", K(ret));

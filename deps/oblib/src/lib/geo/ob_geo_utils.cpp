@@ -2255,10 +2255,17 @@ int ObGeoTypeUtil::wkb_to_sdo_geo(const ObString &swkb, ObSdoGeoObject &sdo_geo,
   uint32_t srid_offset = with_srid ? WKB_GEO_SRID_SIZE : 0;
   ObString wkb = swkb;
   if (with_srid) {
-    wkb.assign_ptr(wkb.ptr() + srid_offset, wkb.length() - srid_offset);
+    if (wkb.length() < (WKB_GEO_SRID_SIZE + WKB_GEO_BO_SIZE + WKB_GEO_TYPE_SIZE)) {
+      ret = OB_ERR_GIS_INVALID_DATA;
+      LOG_WARN("invalid wkb length", K(wkb.length()));
+    } else {
+      wkb.assign_ptr(wkb.ptr() + srid_offset, wkb.length() - srid_offset);
+    }
   }
   // read bo and gtype
-  if (wkb.length() < (WKB_GEO_SRID_SIZE + WKB_GEO_BO_SIZE + WKB_GEO_TYPE_SIZE)) {
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (wkb.length() < (WKB_GEO_BO_SIZE + WKB_GEO_TYPE_SIZE)) {
     ret = OB_ERR_GIS_INVALID_DATA;
     LOG_WARN("invalid wkb length", K(wkb.length()));
   } else if (FALSE_IT(bo = static_cast<ObGeoWkbByteOrder>(*(wkb.ptr())))) {
