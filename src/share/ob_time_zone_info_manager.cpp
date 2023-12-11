@@ -52,7 +52,7 @@ const char *ObTimeZoneInfoManager::FETCH_TZ_INFO_SQL =
     "ORDER BY tz_info.time_zone_id, tz_info.transition_time ";
 
 const char *ObTimeZoneInfoManager::FETCH_TENANT_TZ_INFO_SQL =
-    "SELECT /*+ query_timeout(30000000) */ * "
+    "SELECT /*+ query_timeout(100000000) */ * "
     "FROM ("
     "SELECT t1.time_zone_id, t1.inner_tz_id, t1.name, t3.transition_time, t2.offset, t2.is_dst, "
     "t2.transition_type_id, t2.abbreviation, "
