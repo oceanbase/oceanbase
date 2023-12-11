@@ -43,11 +43,11 @@ public:
                          period_cnt_(MIN_PERIOD_CNT), probe_cnt_(0), exists_cnt_(0),
                          rebuild_times_(0), cut_ratio_(INIT_CUT_RATIO), by_pass_ctrl_enabled_(false),
                          small_row_cnt_(0), op_id_(-1), need_resize_hash_table_(false),
-                         round_times_(0), rebacked_(false) {}
+                         round_times_(0), scaled_llc_est_ndv_(0) {}
   inline void reset() {
     by_pass_ = false;
     processed_cnt_ = 0;
-    rebacked_ = false; // reset rebacked_ before reset_state()
+    scaled_llc_est_ndv_ = 0; // reset scaled_llc_est_ndv_ before reset_state()
     reset_state();
     period_cnt_ = MIN_PERIOD_CNT;
     probe_cnt_ = 0;
@@ -55,7 +55,7 @@ public:
     rebuild_times_ = 0;
     need_resize_hash_table_ = false;
   }
-  inline void reset_state() { state_ = (rebacked_ ? STATE_MAX_MEM_INSERT : STATE_L2_INSERT); }
+  inline void reset_state() { state_ = (scaled_llc_est_ndv_ ? STATE_MAX_MEM_INSERT : STATE_L2_INSERT); }
   inline void set_max_mem_insert_state() { state_ = STATE_MAX_MEM_INSERT; }
   inline bool is_max_mem_insert_state() { return  STATE_MAX_MEM_INSERT == state_; }
   inline void set_analyze_state() { state_ = STATE_ANALYZE; }
@@ -77,7 +77,7 @@ public:
   inline void start_by_pass() { by_pass_ = true; }
   inline void stop_by_pass() { by_pass_ = false; }
   void reset_rebuild_times() { rebuild_times_ = 0; }
-  void bypass_rebackto_insert() { rebacked_ = true; stop_by_pass(); start_process_ht(); reset_rebuild_times(); round_times_ = 0; need_resize_hash_table_ = false; }
+  void bypass_rebackto_insert(uint64_t llc_est_ndv) { scaled_llc_est_ndv_ = llc_est_ndv / 2 * 3; stop_by_pass(); start_process_ht(); reset_rebuild_times(); round_times_ = 0; need_resize_hash_table_ = false; }
   inline bool rebuild_times_exceeded() { return rebuild_times_ >= MAX_REBUILD_TIMES; }
   inline int64_t get_rebuild_times() { return rebuild_times_; }
   inline void set_max_rebuild_times() { rebuild_times_ = MAX_REBUILD_TIMES + 1; }
@@ -100,7 +100,7 @@ public:
   int64_t probe_cnt_for_period_[MAX_REBUILD_TIMES];
   int64_t ndv_cnt_for_period_[MAX_REBUILD_TIMES];
   int64_t round_times_;
-  bool rebacked_;
+  uint64_t scaled_llc_est_ndv_;
 };
 
 } // end namespace sql

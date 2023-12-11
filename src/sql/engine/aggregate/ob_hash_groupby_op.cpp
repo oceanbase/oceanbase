@@ -1486,7 +1486,7 @@ bool ObHashGroupByOp::need_start_dump(const int64_t input_rows, int64_t &est_par
   }
   if ((need_dump || force_dump_)) {
     actual_need_dump = true;
-    if (bypass_ctrl_.rebacked_) {
+    if (bypass_ctrl_.scaled_llc_est_ndv_) {
       if (bypass_ctrl_.is_max_mem_insert_state()) {
         bypass_ctrl_.set_analyze_state();
       } else {
@@ -3144,7 +3144,7 @@ int ObHashGroupByOp::check_llc_ndv()
        ret = OB_ERR_UNEXPECTED;
        LOG_WARN("unexpect null ptr", K(ret));
      } else if (ndv_ratio_is_small_enough) {
-       bypass_ctrl_.bypass_rebackto_insert();
+       bypass_ctrl_.bypass_rebackto_insert(ndv);
        llc_est_.enabled_  = false;
      }
   } else {
@@ -3157,7 +3157,7 @@ int ObHashGroupByOp::check_llc_ndv()
       LOG_TRACE("stop check llc ndv and continue bypass", K(ndv_ratio_is_small_enough), K(ndv), K(llc_est_.est_cnt_), K(has_enough_mem_for_deduplication), K(llc_est_.avg_group_mem_), K(global_bound_size), K(get_actual_mem_used_size()));
     } else if (ndv_ratio_is_small_enough) {
       // go to llc_insert_state and stop bypass and stop estimating llc ndv
-      bypass_ctrl_.bypass_rebackto_insert();
+      bypass_ctrl_.bypass_rebackto_insert(ndv);
       llc_est_.enabled_  = false;
       LOG_TRACE("reback into deduplication state and stop bypass and stop estimating llc ndv", K(ndv_ratio_is_small_enough), K(ndv), K(llc_est_.est_cnt_), K(has_enough_mem_for_deduplication), K(llc_est_.avg_group_mem_), K(global_bound_size), K(get_actual_mem_used_size()));
     } else {
