@@ -26,7 +26,7 @@ class ObTransformConstPropagate : public ObTransformRule
 public:
   explicit ObTransformConstPropagate(ObTransformerCtx *ctx) : 
     ObTransformRule(ctx, TransMethod::POST_ORDER, T_REPLACE_CONST),
-    allocator_("ConstPropagate") {}
+    allocator_("ConstPropagate"), true_expr_(NULL) {}
 
   virtual ~ObTransformConstPropagate();
 
@@ -94,6 +94,8 @@ private:
                      bool hint_allowed_trans) : active_const_infos_(),
                          expired_const_infos_(),
                          extra_excluded_exprs_(),
+                         propagate_exprs_(),
+                         need_propagate_exprs_(true),
                          hint_allowed_trans_(hint_allowed_trans),
                          shared_expr_checker_(shared_expr_checker)
     {
@@ -102,19 +104,24 @@ private:
 
     int add_const_infos(ObIArray<ExprConstInfo> &const_infos);
     int add_const_info(ExprConstInfo &const_info);
+    int add_expr_info(ObRawExpr *expr);
     int merge_expired_const_infos(ConstInfoContext &other, bool is_null_side);
     int find_exclude_expr(const ObRawExpr *expr, bool &found);
     int expire_const_infos();
+    bool is_empty() const;
 
     common::ObSEArray<ExprConstInfo, 4> active_const_infos_;
     common::ObSEArray<ExprConstInfo, 4> expired_const_infos_;
     common::ObSEArray<ObRawExpr *, 4> extra_excluded_exprs_;
+    common::ObSEArray<ObRawExpr *, 4> propagate_exprs_;
+    bool need_propagate_exprs_;
     bool hint_allowed_trans_;
     const ObSharedExprChecker &shared_expr_checker_;
 
     TO_STRING_KV(K_(active_const_infos),
                  K_(expired_const_infos),
                  K_(extra_excluded_exprs),
+                 K_(propagate_exprs),
                  K_(hint_allowed_trans));
   };
 
@@ -252,6 +259,19 @@ private:
                        bool used_in_compare,
                        bool &trans_happened);
 
+  int recursive_replace_case_when_expr(ObRawExpr *&cur_expr, 
+                                       ConstInfoContext &const_ctx,
+                                       bool &trans_happended);
+  int replace_case_when_expr_internal(ObRawExpr *&cur_expr,
+                                      ConstInfoContext &const_ctx,
+                                      bool &trans_happended);
+  int recursive_replace_when_expr(ObRawExpr *&when_expr, 
+                                  ConstInfoContext &const_ctx,
+                                  bool &trans_happended);
+  int replace_when_expr_internal(ObRawExpr *&when_expr,
+                                ObIArray<ObRawExpr *> &propagate_exprs,
+                                bool &trans_happended);
+
   int prepare_new_expr(ExprConstInfo &const_info);
 
   int check_set_op_expr_const(ObSelectStmt *stmt,
@@ -356,11 +376,13 @@ private:
                                       ObRawExpr *expr,
                                       ExprConstInfo &equal_info);
 
+  int replace_with_true_expr(ObRawExpr *&expr);
 private:
   typedef ObSEArray<PullupConstInfo, 2> PullupConstInfos;
   ObArenaAllocator allocator_;
   hash::ObHashMap<uint64_t, int64_t> stmt_map_;
   ObSEArray<PullupConstInfos *, 4> stmt_pullup_const_infos_;
+  ObRawExpr *true_expr_;
 };
 
 } //namespace sql
