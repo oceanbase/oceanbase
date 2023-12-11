@@ -1826,11 +1826,9 @@ int ObDupTableLoopWorker::iterate_dup_ls(ObDupLSTabletSetStatIterator &collect_i
           DUP_TABLE_LOG(WARN, "dup ls handler not init", K(ret), K(cur_ls_id),
                         KPC(cur_dup_ls_handler));
         } else if (OB_FAIL(cur_dup_ls_handler->get_ls_tablet_set_stat(collect_iter))) {
-          DUP_TABLE_LOG(WARN, "collect lease mgr stat failed", K(ret), K(cur_ls_id),
+          DUP_TABLE_LOG(WARN, "collect tablet set stat failed", K(ret), K(cur_ls_id),
                         KPC(cur_dup_ls_handler));
         }
-        DUP_TABLE_LOG(WARN, "iter dup ls handler", K(ret), K(cur_ls_id),
-              KPC(cur_dup_ls_handler));
       }
     }
   }
@@ -1865,7 +1863,7 @@ int ObDupTableLoopWorker::iterate_dup_ls(ObDupLSTabletsStatIterator &collect_ite
           DUP_TABLE_LOG(WARN, "dup ls handler not init", K(ret), K(cur_ls_id),
                         KPC(cur_dup_ls_handler));
         } else if (OB_FAIL(cur_dup_ls_handler->get_ls_tablets_stat(collect_iter))) {
-          DUP_TABLE_LOG(WARN, "collect lease mgr stat failed", K(ret), K(cur_ls_id),
+          DUP_TABLE_LOG(WARN, "collect tablets stat failed", K(ret), K(cur_ls_id),
                         KPC(cur_dup_ls_handler));
         }
       }
