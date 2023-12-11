@@ -1561,66 +1561,70 @@ int ObQueryRange::get_rowid_key_part(const ObRawExpr *l_expr,
           LOG_WARN("failed to get final expr idx", K(ret));
         }
       }
-      for (int64_t i = 0; OB_SUCC(ret) && i < pk_column_items.count(); ++i) {
-        const ObColumnRefRawExpr *column_item = pk_column_items.at(i);
-        ObKeyPartId key_part_id(column_item->get_table_id(), column_item->get_column_id());
-        ObKeyPartPos *key_part_pos = nullptr;
-        bool b_is_key_part = false;
-        tmp_key_part = NULL;
-        if (OB_FAIL(is_key_part(key_part_id, key_part_pos, b_is_key_part))) {
-          LOG_WARN("is_key_part failed", K(ret));
-        } else if (!b_is_key_part) {
-          if (is_physical_rowid &&
-              query_range_ctx_->phy_rowid_for_table_loc_ &&
-              table_id != common::OB_INVALID_ID &&
-              part_column_id != common::OB_INVALID_ID) {
-            key_part_id.table_id_ = table_id;
-            key_part_id.column_id_ = part_column_id;
-          }
+      if (is_physical_rowid && column_count_ != 1 && !query_range_ctx_->phy_rowid_for_table_loc_) {
+        GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < pk_column_items.count(); ++i) {
+          const ObColumnRefRawExpr *column_item = pk_column_items.at(i);
+          ObKeyPartId key_part_id(column_item->get_table_id(), column_item->get_column_id());
+          ObKeyPartPos *key_part_pos = nullptr;
+          bool b_is_key_part = false;
+          tmp_key_part = NULL;
           if (OB_FAIL(is_key_part(key_part_id, key_part_pos, b_is_key_part))) {
             LOG_WARN("is_key_part failed", K(ret));
+          } else if (!b_is_key_part) {
+            if (is_physical_rowid &&
+                query_range_ctx_->phy_rowid_for_table_loc_ &&
+                table_id != common::OB_INVALID_ID &&
+                part_column_id != common::OB_INVALID_ID) {
+              key_part_id.table_id_ = table_id;
+              key_part_id.column_id_ = part_column_id;
+            }
+            if (OB_FAIL(is_key_part(key_part_id, key_part_pos, b_is_key_part))) {
+              LOG_WARN("is_key_part failed", K(ret));
+            }
           }
-        }
-        if (OB_FAIL(ret) || !b_is_key_part) {
-          GET_ALWAYS_TRUE_OR_FALSE(true, tmp_key_part);
-        } else if (OB_ISNULL(key_part_pos)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get null key part pos");
-        } else if (OB_ISNULL((tmp_key_part = create_new_key_part()))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_ERROR("alloc memory failed", K(ret));
-        } else {
-          ObObj tmp_val = val;
-          tmp_key_part->rowid_column_idx_ = i;
-          tmp_key_part->is_phy_rowid_key_part_ = is_physical_rowid;
-          tmp_key_part->id_ = key_part_id;
-          tmp_key_part->pos_ = *key_part_pos;
-          tmp_key_part->null_safe_ = false;
-          //if current expr can be extracted to range, just store the expr
-          if (c_type != T_OP_LIKE) {
-            bool is_inconsistent_rowid = false;
-            if (tmp_val.is_urowid()) {
-              if (OB_FAIL(get_result_value_with_rowid(*tmp_key_part,
-                                                      tmp_val,
-                                                      *query_range_ctx_->exec_ctx_,
-                                                      is_inconsistent_rowid))) {
-                LOG_WARN("failed to get result value", K(ret));
-              } else if (is_inconsistent_rowid) {
-                GET_ALWAYS_TRUE_OR_FALSE(false, tmp_key_part);
+          if (OB_FAIL(ret) || !b_is_key_part) {
+            GET_ALWAYS_TRUE_OR_FALSE(true, tmp_key_part);
+          } else if (OB_ISNULL(key_part_pos)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get null key part pos");
+          } else if (OB_ISNULL((tmp_key_part = create_new_key_part()))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_ERROR("alloc memory failed", K(ret));
+          } else {
+            ObObj tmp_val = val;
+            tmp_key_part->rowid_column_idx_ = i;
+            tmp_key_part->is_phy_rowid_key_part_ = is_physical_rowid;
+            tmp_key_part->id_ = key_part_id;
+            tmp_key_part->pos_ = *key_part_pos;
+            tmp_key_part->null_safe_ = false;
+            //if current expr can be extracted to range, just store the expr
+            if (c_type != T_OP_LIKE) {
+              bool is_inconsistent_rowid = false;
+              if (tmp_val.is_urowid()) {
+                if (OB_FAIL(get_result_value_with_rowid(*tmp_key_part,
+                                                        tmp_val,
+                                                        *query_range_ctx_->exec_ctx_,
+                                                        is_inconsistent_rowid))) {
+                  LOG_WARN("failed to get result value", K(ret));
+                } else if (is_inconsistent_rowid) {
+                  GET_ALWAYS_TRUE_OR_FALSE(false, tmp_key_part);
+                }
+              }
+              if (OB_FAIL(ret) || is_inconsistent_rowid) {
+              } else if (OB_FAIL(get_normal_cmp_keypart(c_type, tmp_val, *tmp_key_part))) {
+                LOG_WARN("get normal cmp keypart failed", K(ret));
               }
             }
-            if (OB_FAIL(ret) || is_inconsistent_rowid) {
-            } else if (OB_FAIL(get_normal_cmp_keypart(c_type, tmp_val, *tmp_key_part))) {
-              LOG_WARN("get normal cmp keypart failed", K(ret));
-            }
           }
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(add_and_item(key_part_list, tmp_key_part))) {
-          LOG_WARN("Add basic query key part failed", K(ret));
-        } else if (pk_column_items.count() - 1 == i &&
-                   OB_FAIL(and_range_graph(key_part_list, out_key_part))) {
-          LOG_WARN("and basic query key part failed", K(ret));
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(add_and_item(key_part_list, tmp_key_part))) {
+            LOG_WARN("Add basic query key part failed", K(ret));
+          } else if (pk_column_items.count() - 1 == i &&
+                    OB_FAIL(and_range_graph(key_part_list, out_key_part))) {
+            LOG_WARN("and basic query key part failed", K(ret));
+          }
         }
       }
     }
