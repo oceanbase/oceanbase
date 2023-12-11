@@ -2803,7 +2803,11 @@ int ObJsonSchemaValidator::check_all_schema_def(ObIJsonBase *json_doc, ObIArray<
           break;
         }
         default: {
-          ret = OB_ERR_INVALID_TYPE_FOR_JSON;
+          // not one of type definition, check only public keywords,
+          // other type-related keywords return default ans——true
+          if (OB_FAIL(check_public_key_words(json_doc, schema_def, valid_type, is_valid))) {
+            LOG_WARN("fail in check public key words.", K(valid_type), K(ret));
+          }
           break;
         }
       }
@@ -2976,7 +2980,23 @@ int ObJsonSchemaValidator::check_all_composition_def(ObIJsonBase *json_doc, ObIA
         break;
       }
       default: {
-        ret = OB_ERR_INVALID_TYPE_FOR_JSON;
+        // not one of type definition, check only public keywords,
+        // ObJsonSchemaType set 0
+        ObJsonSchemaType comp_type;
+        comp_type.flags_ = 0;
+        for (int i = 0; i < size && OB_SUCC(ret); ++i) {
+          ObIJsonBase *tmp_comp = composition_def.at(i);
+          is_valid = true;
+          if (OB_FAIL(get_composition_schema_def(i, tmp_comp, comp_schema, ans_map, def_id))) {
+            if (ret == OB_ITER_END) { // already checked, and ans is false, escape
+              ret = OB_SUCCESS;
+            }
+          } else if (OB_FAIL(check_public_key_words(json_doc, comp_schema, comp_type, is_valid))) {
+            LOG_WARN("fail to check null.", K(ret));
+          } else if (OB_FAIL(record_comp_ans(def_id, is_valid, ans_map))) {
+            LOG_WARN("fail to deal with ans.", K(ret));
+          }
+        }
         break;
       }
     }
@@ -2985,16 +3005,10 @@ int ObJsonSchemaValidator::check_all_composition_def(ObIJsonBase *json_doc, ObIA
 }
 
 // only check one of them: type, enum
-int ObJsonSchemaValidator::check_null_or_boolean(ObIJsonBase *json_doc, ObIJsonBase *schema, bool is_null, bool& is_valid)
+
+int ObJsonSchemaValidator::check_public_key_words(ObIJsonBase *json_doc, ObIJsonBase *schema, const ObJsonSchemaType& valid_type, bool& is_valid)
 {
   INIT_SUCC(ret);
-  ObJsonSchemaType valid_type;
-  valid_type.flags_ = 0;
-  if (is_null) {
-    valid_type.null_ = 1;
-  } else {
-    valid_type.boolean_ = 1;
-  }
   ObIJsonBase* value = nullptr;
   ObString key_word;
   if (OB_FAIL(ObJsonSchemaUtils::get_single_key_value(schema, key_word, value))) {
@@ -3015,6 +3029,22 @@ int ObJsonSchemaValidator::check_null_or_boolean(ObIJsonBase *json_doc, ObIJsonB
       }
     }
   } // no other key words need to check
+  return ret;
+}
+
+int ObJsonSchemaValidator::check_null_or_boolean(ObIJsonBase *json_doc, ObIJsonBase *schema, bool is_null, bool& is_valid)
+{
+  INIT_SUCC(ret);
+  ObJsonSchemaType valid_type;
+  valid_type.flags_ = 0;
+  if (is_null) {
+    valid_type.null_ = 1;
+  } else {
+    valid_type.boolean_ = 1;
+  }
+  if (OB_FAIL(check_public_key_words(json_doc, schema, valid_type, is_valid))) {
+    LOG_WARN("fail to check type/enum.", K(ret));
+  }
   return ret;
 }
 

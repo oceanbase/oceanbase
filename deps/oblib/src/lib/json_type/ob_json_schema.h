@@ -311,6 +311,9 @@ private:
   int record_comp_ans(const int& def_id, const bool& ans, ObIArray<ObJsonSchemaAns> &ans_map);
   int check_single_schema(ObIJsonBase *json_doc, ObIJsonBase *schema, bool& is_valid);
   int check_null_or_boolean(ObIJsonBase *json_doc, ObIJsonBase *schema, bool is_null, bool& is_valid);
+  // keywords in composition
+  int check_public_key_words(ObIJsonBase *json_doc, ObIJsonBase *schema, const ObJsonSchemaType& valid_type, bool& is_valid);
+  // key_words_in_schema
   int check_public_key_words(ObIJsonBase *json_doc, ObIArray<ObIJsonBase*> &schema_vec, ObJsonSchemaType valid_type, bool& is_valid);
   int check_public_key_words(const char key_start, ObJsonSchemaType &valid_type, ObIJsonBase *json_doc, ObIJsonBase *schema, bool& is_valid);
   int check_number_and_integer(ObIJsonBase *json_doc, ObIJsonBase *schema, bool& is_valid);
