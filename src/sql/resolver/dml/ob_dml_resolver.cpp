@@ -1353,42 +1353,42 @@ int ObDMLResolver::pre_process_mvt_agg(ParseNode &node)
       } else if (OB_FAIL(get_target_column_list(columns_list, column_ref.tbl_name_, false, tab_has_alias, table_item))) {
         LOG_WARN("parse column fail");
       } else if (columns_list.count() < 1) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to get table column", K(ret), K(column_ref.tbl_name_));
-      }
-      ParseNode **param_vec = NULL;
-      uint32_t para_idx = 0;
-      // *(row) + other params = column_ref + column_name + other params + other params cnt
-      uint32_t param_count =  columns_list.count() * 2 + ori_param_num;
-      ParseNode* param_cnt_node = NULL;
-      if (OB_FAIL(ret)) {
-      } else if (OB_ISNULL(param_vec = static_cast<ParseNode **>(allocator_->alloc(param_count * sizeof(ParseNode *))))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to allocate memory", K(ret), K(columns_list.count()));
-      } else if (OB_FAIL(create_int_val_node(NULL, ori_param_num - 1, param_cnt_node))) {
-        LOG_WARN("fail to create int val node", K(ret));
+        // do nothing, as_mvt might be in sub_stmt
       } else {
-        param_vec[para_idx++] = param_cnt_node;
-        for (int i = 1; i < ori_param_num; i++) {
-          param_vec[para_idx++] = node.children_[i];
-        }
-      }
-
-      for (int i = 0; i < columns_list.count() && OB_SUCC(ret); i++) {
-        ParseNode* column_node = NULL;
-        ParseNode* column_name = NULL;
-        if (OB_FAIL(create_col_ref_node(node.children_[0]->children_[1], columns_list.at(i).column_name_, column_node))) {
-          LOG_WARN("fail to create column parse node", K(ret));
-        } else if (OB_FAIL(create_char_node(columns_list.at(i).column_name_, column_name))) {
-          LOG_WARN("fail to create column name parse node", K(ret));
+        ParseNode **param_vec = NULL;
+        uint32_t para_idx = 0;
+        // *(row) + other params = column_ref + column_name + other params + other params cnt
+        uint32_t param_count =  columns_list.count() * 2 + ori_param_num;
+        ParseNode* param_cnt_node = NULL;
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(param_vec = static_cast<ParseNode **>(allocator_->alloc(param_count * sizeof(ParseNode *))))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate memory", K(ret), K(columns_list.count()));
+        } else if (OB_FAIL(create_int_val_node(NULL, ori_param_num - 1, param_cnt_node))) {
+          LOG_WARN("fail to create int val node", K(ret));
         } else {
-          param_vec[para_idx++] = column_node;
-          param_vec[para_idx++] = column_name;
+          param_vec[para_idx++] = param_cnt_node;
+          for (int i = 1; i < ori_param_num; i++) {
+            param_vec[para_idx++] = node.children_[i];
+          }
         }
-      }
-      if (OB_SUCC(ret)) {
-        node.num_child_ = param_count;
-        node.children_ = param_vec;
+
+        for (int i = 0; i < columns_list.count() && OB_SUCC(ret); i++) {
+          ParseNode* column_node = NULL;
+          ParseNode* column_name = NULL;
+          if (OB_FAIL(create_col_ref_node(node.children_[0]->children_[1], columns_list.at(i).column_name_, column_node))) {
+            LOG_WARN("fail to create column parse node", K(ret));
+          } else if (OB_FAIL(create_char_node(columns_list.at(i).column_name_, column_name))) {
+            LOG_WARN("fail to create column name parse node", K(ret));
+          } else {
+            param_vec[para_idx++] = column_node;
+            param_vec[para_idx++] = column_name;
+          }
+        }
+        if (OB_SUCC(ret)) {
+          node.num_child_ = param_count;
+          node.children_ = param_vec;
+        }
       }
     }
   }

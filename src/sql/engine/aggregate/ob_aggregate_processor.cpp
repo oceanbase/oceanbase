@@ -8162,7 +8162,10 @@ int ObAggregateProcessor::init_asmvt_result(ObIAllocator &allocator,
         // geo_name
         if (!ob_is_string_tc(type)) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
-          LOG_WARN("invalid type for layer name", K(ret), K(type));
+          LOG_WARN("invalid type for geom name", K(ret), K(type));
+        } else if (tmp_obj[i].get_string().empty()) {
+          ret = OB_ERR_BAD_FIELD_ERROR;
+          LOG_WARN("invalid column name", K(ret), K(type));
         } else if (OB_FAIL(ob_write_string(allocator, tmp_obj[i].get_string(), mvt_res.geom_name_))) {
           LOG_WARN("write string failed", K(ret), K(tmp_obj[i].get_string()));
         }

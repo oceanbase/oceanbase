@@ -51,8 +51,8 @@ int mvt_agg_result::generate_feature(ObObj *tmp_obj, uint32_t obj_cnt)
 {
   int ret = OB_SUCCESS;
   if (geom_idx_ >= obj_cnt) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid geo index", K(ret), K(column_offset_), K(geom_idx_));
+    ret = OB_ERR_GIS_UNSUPPORTED_ARGUMENT;
+    LOG_WARN("can't find geom column in feature", K(ret), K(column_offset_), K(geom_idx_));
   } else if (tmp_obj[geom_idx_].is_null()) {
     // geometry column is null. do nothing
   } else if (!tmp_obj[geom_idx_].is_geometry()) {
@@ -123,8 +123,10 @@ int mvt_agg_result::transform_geom(const ObGeometry &geo)
       feature_->type = VECTOR_TILE__TILE__GEOM_TYPE__POLYGON;
       break;
     default :
-      ret = OB_ERR_GIS_INVALID_DATA;
-      LOG_WARN("invalid geo type", K(ret), K(geo.type()));
+      ret = OB_ERR_UNEXPECTED_GEOMETRY_TYPE;
+        LOG_WARN("unexpected geometry type for st_area", K(ret));
+        LOG_USER_ERROR(OB_ERR_UNEXPECTED_GEOMETRY_TYPE, ObGeoTypeUtil::get_geo_name_by_type(geo.type()),
+          ObGeoTypeUtil::get_geo_name_by_type(geo.type()), "_st_asmvt");
   }
   if (OB_SUCC(ret)) {
     ObGeoMvtEncodeVisitor visitor;
@@ -374,8 +376,7 @@ int mvt_agg_result::transform_other_column(ObObj *tmp_obj, uint32_t obj_cnt)
         ObCastCtx cast_ctx(&allocator_, NULL, CM_NONE, ObCharset::get_system_collation());
         if (OB_FAIL(ObObjCaster::to_type(ObVarcharType, cast_ctx, tmp_obj[i], obj))) {
           LOG_WARN("failed to cast number to double type", K(ret));
-        } else if (ob_is_geometry(type) && OB_FAIL(ObHexUtils::hex(ObString(obj.get_string().length() - WKB_GEO_SRID_SIZE,
-                                                                            obj.get_string().ptr() + WKB_GEO_SRID_SIZE),
+        } else if (ob_is_geometry(type) && OB_FAIL(ObHexUtils::hex(ObString(obj.get_string().length(), obj.get_string().ptr()),
                                                                    cast_ctx, geo_hex))) {
           LOG_WARN("failed to cast geo to hex", K(ret));
         } else if (OB_FAIL(ob_write_string(allocator_, ob_is_geometry(type) ? geo_hex.get_string() : obj.get_string(), str, true))) {
