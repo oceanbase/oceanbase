@@ -162,14 +162,16 @@ int ObRawExprResolverImpl::try_negate_const(ObRawExpr *&expr,
         ObObj new_val;
         if (const_expr->get_value().is_decimal_int()) {
           ObDecimalInt *neg_dec = nullptr;
+          int32_t out_prec =
+            const_expr->get_accuracy().get_precision() + (lib::is_oracle_mode() ? 0 : 1);
+          int32_t out_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(out_prec);
           if (!is_odd) {// do nothing
           } else if (OB_FAIL(wide::negate(const_expr->get_value().get_decimal_int(),
                                           const_expr->get_value().get_int_bytes(), neg_dec,
-                                          ctx_.expr_factory_.get_allocator()))) {
+                                          out_bytes, ctx_.expr_factory_.get_allocator()))) {
             LOG_WARN("negate decimal int failed", K(ret));
           } else {
-            new_val.set_decimal_int(const_expr->get_value().get_int_bytes(),
-                                    const_expr->get_value().get_scale(), neg_dec);
+            new_val.set_decimal_int(out_bytes, const_expr->get_value().get_scale(), neg_dec);
             negated = true;
           }
         } else {
