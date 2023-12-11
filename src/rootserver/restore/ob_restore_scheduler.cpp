@@ -730,6 +730,26 @@ int ObRestoreScheduler::tenant_restore_finish(const ObPhysicalRestoreJob &job_in
     LOG_WARN("failed to reset restore concurrency", K(ret), K(job_info));
   } else if (share::PHYSICAL_RESTORE_SUCCESS == job_info.get_status()) {
     //restore success
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    ObRestoreFailureChecker checker;
+    bool is_concurrent_with_clean = false;
+    if (OB_TMP_FAIL(checker.init(job_info))) {
+      LOG_WARN("failed to init restore failure checker", K(tmp_ret), K(job_info));
+    } else if (OB_TMP_FAIL(checker.check_is_concurrent_with_clean(is_concurrent_with_clean))) {
+      LOG_WARN("failed to check is clean concurrency failure", K(tmp_ret));
+    }
+    if (OB_SUCC(ret) && is_concurrent_with_clean) {
+      int64_t pos = 0;
+      if (OB_FAIL(databuff_printf(history_info.comment_.ptr(), history_info.comment_.capacity(), pos,
+                                  "%s;", "physical restore run concurrently with backup data clean, please check backup and archive jobs"))) {
+        if (OB_SIZE_OVERFLOW == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to databuff printf comment", K(ret));
+        }
+      }
+    }
   }
 
   if (FAILEDx(ObRestoreUtil::recycle_restore_job(*sql_proxy_,
