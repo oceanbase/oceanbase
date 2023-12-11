@@ -13227,6 +13227,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12462: __all_virtual_column_privilege
 # 12463: __all_virtual_column_privilege_history
 # 12464: __all_virtual_tenant_snapshot_ls_replica_history
+# 12465: __all_virtual_share_storage_quota_assignment
 # 余留位置
 #
 
@@ -13651,7 +13652,7 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15427', all_def_ke
 # 15438: __all_virtual_tenant_snapshot_create_job
 # 15439: __all_virtual_ls_snapshot_in_storage_node
 # 15440: __all_virtual_index_usage_info
-
+# 15441: __all_virtual_share_storage_quota_assignment
 # 余留位置
 
 ################################################################################
@@ -30341,6 +30342,8 @@ def_table_schema(
 #21517 GV$OB_LS_SNAPSHOTS
 #21518 V$OB_LS_SNAPSHOTS
 #21519 DBA_OB_CLONE_HISTORY
+#21520 GV$OB_SHARE_STORAGE_QUOTA_ASSIGNMENT
+#21521 V$OB_SHARE_STORAGE_QUOTA_ASSIGNMENT
 # 余留位置
 
 ################################################################################
@@ -55027,6 +55030,8 @@ def_table_schema(
 # 28214: DBA_INDEX_USAGE
 # 28215: GV$OB_LS_SNAPSHOTS
 # 28216: V$OB_LS_SNAPSHOTS
+# 28217: GV$OB_SHARE_STORAGE_QUOTA_ASSIGNMENT
+# 28218: V$OB_SHARE_STORAGE_QUOTA_ASSIGNMENT
 
 ################################################################################
 # Lob Table (50000, 70000)
