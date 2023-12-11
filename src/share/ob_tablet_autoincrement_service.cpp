@@ -144,6 +144,7 @@ int ObTabletAutoincMgr::fetch_new_range(const ObTabletAutoincParam &param,
 
     bool finish = false;
     for (int64_t retry_times = 0; OB_SUCC(ret) && !finish; retry_times++) {
+      const int64_t rpc_timeout = THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_remain() : obrpc::ObRpcProxy::MAX_RPC_TIMEOUT;
       if (OB_FAIL(location_service->get(param.tenant_id_, tablet_id, 0/*expire_renew_time*/, is_cache_hit, arg.ls_id_))) {
         LOG_WARN("fail to get log stream id", K(ret), K(tablet_id));
       } else if (OB_FAIL(location_service->get_leader(GCONF.cluster_id,
@@ -152,8 +153,8 @@ int ObTabletAutoincMgr::fetch_new_range(const ObTabletAutoincParam &param,
                                                       false,/*force_renew*/
                                                       leader_addr))) {
         LOG_WARN("get leader failed", K(ret), K(arg.ls_id_));
-      } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr).timeout(THIS_WORKER.get_timeout_remain()).fetch_tablet_autoinc_seq_cache(arg, res))) {
-        LOG_WARN("fail to fetch autoinc cache for tablets", K(ret), K(retry_times), K(arg));
+      } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr).timeout(rpc_timeout).fetch_tablet_autoinc_seq_cache(arg, res))) {
+        LOG_WARN("fail to fetch autoinc cache for tablets", K(ret), K(retry_times), K(arg), K(rpc_timeout));
       } else {
         finish = true;
       }
