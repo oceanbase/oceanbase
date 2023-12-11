@@ -669,6 +669,27 @@ int ObStaticEngineCG::check_vectorize_supported(bool &support,
                   type == PHY_NESTED_LOOP_CONNECT_BY_WITH_INDEX) {
         // TODO qubin.qb: support vectorization for connect by with index
         disable_vectorize = true;
+      } else if (log_op_def::LOG_GROUP_BY == op->get_type()) {
+        ObLogGroupBy *groupby_op = static_cast<ObLogGroupBy *>(op);
+        if (lib::is_oracle_mode() && groupby_op->has_rollup()) {
+          for (int64_t i = 0; OB_SUCC(ret) && !disable_vectorize && i < groupby_op->get_aggr_funcs().count(); ++i) {
+            ObAggFunRawExpr *aggr_expr = static_cast<ObAggFunRawExpr*>(groupby_op->get_aggr_funcs().at(i));
+            if (OB_ISNULL(aggr_expr)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("get unexpected null", K(ret));
+            } else if (aggr_expr->get_expr_type() == T_FUN_GROUP_CONCAT &&
+                       aggr_expr->get_real_param_count() > 1 &&
+                       aggr_expr->get_real_param_exprs().at(aggr_expr->get_real_param_count() - 1) != NULL &&
+                       !aggr_expr->get_real_param_exprs().at(aggr_expr->get_real_param_count() - 1)->is_const_expr()) {
+              //as following listagg aggr can't use vectorize:
+              //  create table t1(c1 int, c2 varchar2(2), c3 varchar2(2), c4 int, primary key(c1));
+              //  select c3, listagg(c1,c3) within group (order by c1) from t1 group by rollup(c3);
+              //because the rollup need recalc the separator value, but current rollup vector isn't support,
+              //so, we need disable vectorize.
+              disable_vectorize = true;
+            }
+          }
+        }
       }
       if (OB_SUCC(ret) && !disable_vectorize) {
         const ObDMLStmt *stmt = NULL;
@@ -5793,6 +5814,11 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
           LOG_WARN("expr node is null", K(ret), KPC(expr));
         } else {
           aggr_info.separator_expr_ = expr;
+          if (!param_raw_expr->is_const_expr()) {
+            if (OB_FAIL(all_param_exprs.push_back(expr))) {
+              LOG_WARN("failed to push_back param_expr", K(ret));
+            }
+          }
         }
       }
 

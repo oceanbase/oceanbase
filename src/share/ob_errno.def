@@ -2360,6 +2360,8 @@ DEFINE_ERROR(OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES, -11001, ER_VALUES_C
 DEFINE_ERROR_EXT(OB_WRONG_PARTITION_NAME, -11002, ER_WRONG_PARTITION_NAME, "HY000", "Incorrect partition name", "Incorrect partition name '%.*s'");
 DEFINE_ERROR_EXT(OB_ERR_PLUGIN_IS_NOT_LOADED, -11003, ER_PLUGIN_IS_NOT_LOADED, "HY000", "Plugin is not loaded", "Plugin '%.*s' is not loaded");
 
+DEFINE_ORACLE_ERROR(OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR, -11010, -1, "HY000", "Argument should be a constant or a function of expressions in GROUP BY.", 30497, "Argument should be a constant or a function of expressions in GROUP BY.");
+
 ////////////////////////////////////////////////////////////////
 // !!! text/blob || clob/blob erro code
 // for compat we cant not remove this errno!!!!

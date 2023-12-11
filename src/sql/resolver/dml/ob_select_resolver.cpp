@@ -5613,6 +5613,10 @@ int ObSelectResolver::add_aggr_expr(ObAggFunRawExpr *&final_aggr_expr)
     LOG_WARN("failed to check and get same aggr item.", K(ret));
   } else if (same_aggr_expr != NULL) {
     final_aggr_expr = same_aggr_expr;
+  } else if (lib::is_oracle_mode() &&
+             final_aggr_expr->get_expr_type() == T_FUN_GROUP_CONCAT &&
+             OB_FAIL(check_listagg_aggr_param_valid(final_aggr_expr))) {
+    LOG_WARN("failed to check list agg param valid", K(ret));
   } else if (OB_FAIL(select_stmt->add_agg_item(*final_aggr_expr))) {
     LOG_WARN("add new aggregate function failed", K(ret));
   }
@@ -5952,7 +5956,7 @@ int ObSelectResolver::check_window_exprs()
         //do nothing...
       } else if (T_FUN_GROUP_CONCAT == win_expr->get_func_type() && NULL != win_expr->get_agg_expr() && is_oracle_mode()) {
         if (win_expr->get_agg_expr()->get_real_param_exprs().count() > 2) {
-          ret = OB_INVALID_ARGUMENT_NUM;
+          ret = OB_ERR_PARAM_SIZE;
           LOG_WARN("incorrect argument number to call listagg", K(win_expr->get_agg_expr()->get_real_param_exprs().count()));
         } else if (win_expr->get_agg_expr()->get_real_param_exprs().count() == 2) {
           if (OB_FAIL(arg_exprs.push_back(win_expr->get_agg_expr()->get_real_param_exprs().at(1)))) {
@@ -6646,6 +6650,38 @@ int ObSelectResolver::resolve_shared_order_item(OrderItem &order_item, ObSelectS
     } else {
       order_item.expr_ = expr;
       find = true;
+    }
+  }
+  return ret;
+}
+
+int ObSelectResolver::check_listagg_aggr_param_valid(ObAggFunRawExpr *aggr_expr)
+{
+  int ret = OB_SUCCESS;
+  if (lib::is_oracle_mode()) {
+    ObSEArray<ObRawExpr*, 4> check_separator_exprs;
+    ObSEArray<ObRawExpr*, 4> all_group_by_exprs;
+    if (OB_ISNULL(aggr_expr) || OB_ISNULL(get_select_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (aggr_expr->get_expr_type() != T_FUN_GROUP_CONCAT ||
+               aggr_expr->get_real_param_count() < 2) {
+      //do nothing
+    } else if (OB_UNLIKELY(aggr_expr->get_real_param_count() > 2)) {
+      ret = OB_ERR_PARAM_SIZE;
+      LOG_WARN("invalid number of arguments", K(ret), KPC(aggr_expr));
+    } else if (aggr_expr->get_real_param_exprs().at(aggr_expr->get_real_param_count() - 1)->is_const_expr()) {
+      //do nothing
+    } else if (OB_FAIL(check_separator_exprs.push_back(aggr_expr->get_real_param_exprs().at(aggr_expr->get_real_param_count() - 1)))) {
+      LOG_WARN("failed to push back", K(ret));
+    } else if (get_select_stmt()->get_all_group_by_exprs(all_group_by_exprs)) {
+      LOG_WARN("failed to get all group by exprs", K(ret));
+    } else if (OB_FAIL(ObGroupByChecker::check_by_expr(params_.param_list_,
+                                                       get_select_stmt(),
+                                                       all_group_by_exprs,
+                                                       check_separator_exprs,
+                                                       OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR))) {
+      LOG_WARN("fail to check by expr", K(ret));
     }
   }
   return ret;

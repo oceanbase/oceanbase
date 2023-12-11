@@ -1793,6 +1793,7 @@ constexpr int OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN = -11000;
 constexpr int OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES = -11001;
 constexpr int OB_WRONG_PARTITION_NAME = -11002;
 constexpr int OB_ERR_PLUGIN_IS_NOT_LOADED = -11003;
+constexpr int OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR = -11010;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -3937,6 +3938,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES__USER_ERROR_MSG "A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement."
 #define OB_WRONG_PARTITION_NAME__USER_ERROR_MSG "Incorrect partition name '%.*s'"
 #define OB_ERR_PLUGIN_IS_NOT_LOADED__USER_ERROR_MSG "Plugin '%.*s' is not loaded"
+#define OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR__USER_ERROR_MSG "Argument should be a constant or a function of expressions in GROUP BY."
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -6081,6 +6083,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11001, A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement."
 #define OB_WRONG_PARTITION_NAME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11002, Incorrect partition name '%.*s'"
 #define OB_ERR_PLUGIN_IS_NOT_LOADED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11003, Plugin '%.*s' is not loaded"
+#define OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR__ORA_USER_ERROR_MSG "ORA-30497: Argument should be a constant or a function of expressions in GROUP BY."
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__ORA_USER_ERROR_MSG "ORA-22998: CLOB or NCLOB in multibyte character set not supported"
@@ -6091,7 +6094,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2140];
+extern int g_all_ob_errnos[2141];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
