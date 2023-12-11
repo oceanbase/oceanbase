@@ -446,8 +446,9 @@ private:
   int transformer_aggr_expr(ObDMLStmt *stmt, bool &trans_happened);
   int transform_rownum_as_limit_offset(const ObIArray<ObParentDMLStmt> &parent_stmts,
                                        ObDMLStmt *&stmt,
+                                       ObDMLStmt *&limit_stmt,
                                        bool &trans_happened);
-  int transform_common_rownum_as_limit(ObDMLStmt *&stmt, bool &trans_happened);
+  int transform_common_rownum_as_limit(ObDMLStmt *&stmt, ObDMLStmt *&limit_stmt, bool &trans_happened);
   int try_transform_common_rownum_as_limit_or_false(ObDMLStmt *stmt, ObRawExpr *&limit_expr, bool& is_valid);
   int transform_generated_rownum_as_limit(const ObIArray<ObParentDMLStmt> &parent_stmts,
                                           ObDMLStmt *stmt,
@@ -619,6 +620,25 @@ private:
   int check_exec_param_correlated(const ObRawExpr *expr, bool &is_correlated);
   int check_is_correlated_cte(ObSelectStmt *stmt, ObIArray<ObSelectStmt *> &visited_cte, bool &is_correlated);
   int convert_join_preds_vector_to_scalar(JoinedTable &joined_table, bool &trans_happened);
+  int preserve_order_for_pagination(ObDMLStmt *stmt,
+                                    bool &trans_happened);
+  int check_stmt_need_preserve_order(ObDMLStmt *stmt,
+                                     ObIArray<ObSelectStmt*> &preserve_order_stmts,
+                                     bool &is_valid);
+
+  int check_view_need_preserve_order(ObSelectStmt* stmt,
+                                     ObIArray<ObSelectStmt*> &preserve_order_stmts,
+                                     bool &need_preserve);
+
+  int check_set_stmt_need_preserve_order(ObSelectStmt* stmt,
+                                         ObIArray<ObSelectStmt*> &preserve_order_stmts,
+                                         bool &need_preserve);
+
+  int add_order_by_for_stmt(ObSelectStmt* stmt, bool &trans_happened);
+
+  int get_rowkey_for_single_table(ObSelectStmt* stmt,
+                                  ObIArray<ObRawExpr*> &unique_keys,
+                                  bool &is_valid);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransformPreProcess);
 };

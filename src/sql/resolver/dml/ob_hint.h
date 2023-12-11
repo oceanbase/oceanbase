@@ -94,6 +94,7 @@ struct ObOptParamHint
     DEF(XSOLAPI_GENERATE_WITH_CLAUSE,)    \
     DEF(STORAGE_CARD_ESTIMATION,)         \
     DEF(INLIST_REWRITE_THRESHOLD,)        \
+    DEF(PRESERVE_ORDER_FOR_PAGINATION,)   \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 

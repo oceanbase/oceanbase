@@ -1766,3 +1766,6 @@ DEF_INT(optimizer_index_cost_adj, OB_TENANT_PARAMETER, "0", "[0,100]",
 DEF_BOOL(_enable_new_query_range_extraction, OB_TENANT_PARAMETER, "True",
     "decide whether use new algorithm to extract query range.",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_preserve_order_for_pagination, OB_TENANT_PARAMETER, "False",
+        "enable preserver order for limit",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
