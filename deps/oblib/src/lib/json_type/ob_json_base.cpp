@@ -5858,8 +5858,13 @@ int ObJsonBaseFactory::get_json_base(ObIAllocator *allocator, const char *ptr, u
 {
   INIT_SUCC(ret);
   void *buf = NULL;
+  ObArenaAllocator tmp_allocator;
+  ObIAllocator* t_allocator = allocator;
 
-  if (OB_ISNULL(allocator)) { // check allocator
+  if (in_type != expect_type) {
+    t_allocator = &tmp_allocator;
+  }
+  if (OB_ISNULL(allocator) || OB_ISNULL(t_allocator)) { // check allocator
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("param allocator is NULL", K(ret), KP(allocator), KP(ptr));
   } else if (OB_ISNULL(ptr) || length == 0) {
@@ -5873,7 +5878,7 @@ int ObJsonBaseFactory::get_json_base(ObIAllocator *allocator, const char *ptr, u
     LOG_WARN("param expect_type is invalid", K(ret), K(expect_type));
   } else if (in_type == ObJsonInType::JSON_TREE) {
     ObJsonNode *j_tree = NULL;
-    if (OB_FAIL(ObJsonParser::get_tree(allocator, ptr, length, j_tree, parse_flag))) {
+    if (OB_FAIL(ObJsonParser::get_tree(t_allocator, ptr, length, j_tree, parse_flag))) {
       LOG_WARN("fail to get json tree", K(ret), K(length), K(in_type), K(expect_type));
     } else if (expect_type == ObJsonInType::JSON_TREE) {
       out = j_tree;
