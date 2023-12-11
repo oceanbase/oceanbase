@@ -6390,7 +6390,39 @@ def_table_schema(
       ('network_speed', 'bigint', '1000')
   ],
 )
-# 495 : __all_index_usage_info
+
+def_table_schema(
+  owner = 'yangjiali.yjl',
+  table_name     = '__all_index_usage_info',
+  table_id       = '495',
+  table_type     = 'SYSTEM_TABLE',
+  gm_columns     = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'bigint'),
+      ('object_id', 'bigint')
+  ],
+  in_tenant_space = True,
+  normal_columns = [
+      ('name', 'varchar:128'),
+      ('owner', 'varchar:128'),
+      ('total_access_count', 'bigint'),
+      ('total_exec_count', 'bigint'),
+      ('total_rows_returned', 'bigint'),
+      ('bucket_0_access_count', 'bigint'),
+      ('bucket_1_access_count', 'bigint'),
+      ('bucket_2_10_access_count', 'bigint'),
+      ('bucket_2_10_rows_returned', 'bigint'),
+      ('bucket_11_100_access_count', 'bigint'),
+      ('bucket_11_100_rows_returned', 'bigint'),
+      ('bucket_101_1000_access_count', 'bigint'),
+      ('bucket_101_1000_rows_returned', 'bigint'),
+      ('bucket_1000_plus_access_count', 'bigint'),
+      ('bucket_1000_plus_rows_returned', 'bigint'),
+      ('last_used','timestamp'),
+      ('last_flush_time', 'timestamp'),
+  ],
+)
+
 # 496 : __all_detect_lock_info
 # 497 : __all_client_to_server_session_info
 # 498 :__all_transfer_partition_task
@@ -13221,7 +13253,12 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12456: __all_virtual_dbms_lock_allocated
 # 12457: __all_virtual_sharing_storage_compaction_info
 # 12458: __all_virtual_ls_snapshot_in_storage_node
-# 12459: __all_virtual_index_usage_info
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12459',
+  table_name = '__all_virtual_index_usage_info',
+  keywords = all_def_keywords['__all_index_usage_info']))
+
 # 12460: __all_virtual_audit_log_filter
 # 12461: __all_virtual_audit_log_user
 # 12462: __all_virtual_column_privilege
@@ -13651,7 +13688,9 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15427', all_def_ke
 # 15437: __all_virtual_clone_job_history
 # 15438: __all_virtual_tenant_snapshot_create_job
 # 15439: __all_virtual_ls_snapshot_in_storage_node
-# 15440: __all_virtual_index_usage_info
+
+def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15440', all_def_keywords['__all_index_usage_info'])))
+
 # 15441: __all_virtual_share_storage_quota_assignment
 # 余留位置
 
@@ -30263,6 +30302,7 @@ def_table_schema(
 
 #21479 GV$OB_CGROUP_CONFIG
 #21480 V$OB_CGROUP_CONFIG
+
 #21481 DBA_WR_SYSTEM_EVENT
 #21482 CDB_WR_SYSTEM_EVENT
 #21483 DBA_WR_EVENT_NAME
@@ -30321,7 +30361,42 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-#21499 DBA_OB_INDEX_USAGE
+def_table_schema(
+  owner = 'yangjiali.yjl',
+  table_name     = 'DBA_INDEX_USAGE',
+  table_id       = '21499',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [],
+  normal_columns = [],
+  view_definition = """
+    SELECT
+      CAST(IUT.OBJECT_ID AS SIGNED) AS OBJECT_ID,
+      CAST(T.TABLE_NAME AS CHAR(128)) AS NAME,
+      CAST(DB.DATABASE_NAME AS CHAR(128)) AS OWNER,
+      CAST(IUT.TOTAL_ACCESS_COUNT AS SIGNED) AS TOTAL_ACCESS_COUNT,
+      CAST(IUT.TOTAL_EXEC_COUNT AS SIGNED) AS TOTAL_EXEC_COUNT,
+      CAST(IUT.TOTAL_ROWS_RETURNED AS SIGNED) AS TOTAL_ROWS_RETURNED,
+      CAST(IUT.BUCKET_0_ACCESS_COUNT AS SIGNED) AS BUCKET_0_ACCESS_COUNT,
+      CAST(IUT.BUCKET_1_ACCESS_COUNT AS SIGNED) AS BUCKET_1_ACCESS_COUNT,
+      CAST(IUT.BUCKET_2_10_ACCESS_COUNT AS SIGNED) AS BUCKET_2_10_ACCESS_COUNT,
+      CAST(IUT.BUCKET_2_10_ROWS_RETURNED AS SIGNED) AS BUCKET_2_10_ROWS_RETURNED,
+      CAST(IUT.BUCKET_11_100_ACCESS_COUNT AS SIGNED) AS BUCKET_11_100_ACCESS_COUNT,
+      CAST(IUT.BUCKET_11_100_ROWS_RETURNED AS SIGNED) AS BUCKET_11_100_ROWS_RETURNED,
+      CAST(IUT.BUCKET_101_1000_ACCESS_COUNT AS SIGNED) AS BUCKET_101_1000_ACCESS_COUNT,
+      CAST(IUT.BUCKET_101_1000_ROWS_RETURNED AS SIGNED) AS BUCKET_101_1000_ROWS_RETURNED,
+      CAST(IUT.BUCKET_1000_PLUS_ACCESS_COUNT AS SIGNED) AS BUCKET_1000_PLUS_ACCESS_COUNT,
+      CAST(IUT.BUCKET_1000_PLUS_ROWS_RETURNED AS SIGNED) AS BUCKET_1000_PLUS_ROWS_RETURNED,
+      CAST(IUT.LAST_USED AS CHAR(128)) AS LAST_USED
+    FROM
+      oceanbase.__all_index_usage_info IUT
+      JOIN oceanbase.__all_table T ON IUT.OBJECT_ID = T.TABLE_ID
+      JOIN oceanbase.__all_database DB ON T.DATABASE_ID = DB.DATABASE_ID
+    WHERE T.TABLE_ID = IUT.OBJECT_ID
+""".replace("\n", " "),
+)
+
 #21500 DBA_OB_SYS_VARIABLES
 #21501 DBA_OB_TRANSFER_PARTITION_TASKS
 #21502 CDB_OB_TRANSFER_PARTITION_TASKS
@@ -30335,7 +30410,45 @@ def_table_schema(
 #21510 DBA_OB_CLONE_PROGRESS
 #21511 mysql.role_edges
 #21512 mysql.default_roles
-#21513 CDB_INDEX_USAGE
+
+def_table_schema(
+  owner = 'yangjiali.yjl',
+  table_name     = 'CDB_INDEX_USAGE',
+  table_id       = '21513',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [],
+  view_definition = """
+    SELECT
+      IUT.TENANT_ID AS CON_ID,
+      CAST(IUT.OBJECT_ID AS SIGNED) AS OBJECT_ID,
+      CAST(T.TABLE_NAME AS CHAR(128)) AS NAME,
+      CAST(DB.DATABASE_NAME AS CHAR(128)) AS OWNER,
+      CAST(IUT.TOTAL_ACCESS_COUNT AS SIGNED) AS TOTAL_ACCESS_COUNT,
+      CAST(IUT.TOTAL_EXEC_COUNT AS SIGNED) AS TOTAL_EXEC_COUNT,
+      CAST(IUT.TOTAL_ROWS_RETURNED AS SIGNED) AS TOTAL_ROWS_RETURNED,
+      CAST(IUT.BUCKET_0_ACCESS_COUNT AS SIGNED) AS BUCKET_0_ACCESS_COUNT,
+      CAST(IUT.BUCKET_1_ACCESS_COUNT AS SIGNED) AS BUCKET_1_ACCESS_COUNT,
+      CAST(IUT.BUCKET_2_10_ACCESS_COUNT AS SIGNED) AS BUCKET_2_10_ACCESS_COUNT,
+      CAST(IUT.BUCKET_2_10_ROWS_RETURNED AS SIGNED) AS BUCKET_2_10_ROWS_RETURNED,
+      CAST(IUT.BUCKET_11_100_ACCESS_COUNT AS SIGNED) AS BUCKET_11_100_ACCESS_COUNT,
+      CAST(IUT.BUCKET_11_100_ROWS_RETURNED AS SIGNED) AS BUCKET_11_100_ROWS_RETURNED,
+      CAST(IUT.BUCKET_101_1000_ACCESS_COUNT AS SIGNED) AS BUCKET_101_1000_ACCESS_COUNT,
+      CAST(IUT.BUCKET_101_1000_ROWS_RETURNED AS SIGNED) AS BUCKET_101_1000_ROWS_RETURNED,
+      CAST(IUT.BUCKET_1000_PLUS_ACCESS_COUNT AS SIGNED) AS BUCKET_1000_PLUS_ACCESS_COUNT,
+      CAST(IUT.BUCKET_1000_PLUS_ROWS_RETURNED AS SIGNED) AS BUCKET_1000_PLUS_ROWS_RETURNED,
+      CAST(IUT.LAST_USED AS CHAR(128)) AS LAST_USED
+    FROM
+      oceanbase.__all_virtual_index_usage_info IUT
+      JOIN oceanbase.__all_virtual_table T
+      ON IUT.TENANT_ID = T.TENANT_ID AND IUT.OBJECT_ID = T.TABLE_ID
+      JOIN oceanbase.__all_virtual_database DB
+      ON IUT.TENANT_ID = DB.TENANT_ID AND t.DATABASE_ID = DB.DATABASE_ID
+    WHERE T.TABLE_ID = IUT.OBJECT_ID
+""".replace("\n", " "),
+)
+
 #21514 mysql.audit_log_filter
 #21515 mysql.audit_log_user
 #21516 mysql.columns_priv
@@ -55027,7 +55140,45 @@ def_table_schema(
 # 28211: DBA_OB_SYS_VARIABLES
 # 28212: GV$OB_ACTIVE_SESSION_HISTORY
 # 28213: V$OB_ACTIVE_SESSION_HISTORY
-# 28214: DBA_INDEX_USAGE
+
+def_table_schema(
+  owner = 'yangjiali.yjl',
+  table_name      = 'DBA_INDEX_USAGE',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28214',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      CAST(IUT.OBJECT_ID AS NUMBER) AS OBJECT_ID,
+      CAST(T.TABLE_NAME AS VARCHAR2(128)) AS NAME,
+      CAST(DB.DATABASE_NAME AS VARCHAR2(128)) AS OWNER,
+      CAST(IUT.TOTAL_ACCESS_COUNT AS NUMBER) AS TOTAL_ACCESS_COUNT,
+      CAST(IUT.TOTAL_EXEC_COUNT AS NUMBER) AS TOTAL_EXEC_COUNT,
+      CAST(IUT.TOTAL_ROWS_RETURNED AS NUMBER) AS TOTAL_ROWS_RETURNED,
+      CAST(IUT.BUCKET_0_ACCESS_COUNT AS NUMBER) AS BUCKET_0_ACCESS_COUNT,
+      CAST(IUT.BUCKET_1_ACCESS_COUNT AS NUMBER) AS BUCKET_1_ACCESS_COUNT,
+      CAST(IUT.BUCKET_2_10_ACCESS_COUNT AS NUMBER) AS BUCKET_2_10_ACCESS_COUNT,
+      CAST(IUT.BUCKET_2_10_ROWS_RETURNED AS NUMBER) AS BUCKET_2_10_ROWS_RETURNED,
+      CAST(IUT.BUCKET_11_100_ACCESS_COUNT AS NUMBER) AS BUCKET_11_100_ACCESS_COUNT,
+      CAST(IUT.BUCKET_11_100_ROWS_RETURNED AS NUMBER) AS BUCKET_11_100_ROWS_RETURNED,
+      CAST(IUT.BUCKET_101_1000_ACCESS_COUNT AS NUMBER) AS BUCKET_101_1000_ACCESS_COUNT,
+      CAST(IUT.BUCKET_101_1000_ROWS_RETURNED AS NUMBER) AS BUCKET_101_1000_ROWS_RETURNED,
+      CAST(IUT.BUCKET_1000_PLUS_ACCESS_COUNT AS NUMBER) AS BUCKET_1000_PLUS_ACCESS_COUNT,
+      CAST(IUT.BUCKET_1000_PLUS_ROWS_RETURNED AS NUMBER) AS BUCKET_1000_PLUS_ROWS_RETURNED,
+      CAST(IUT.LAST_USED AS VARCHAR2(128)) AS LAST_USED
+    FROM
+      SYS.ALL_VIRTUAL_INDEX_USAGE_INFO_REAL_AGENT IUT
+      JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T ON IUT.OBJECT_ID = T.TABLE_ID
+      JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB ON T.DATABASE_ID = DB.DATABASE_ID
+    WHERE T.TABLE_ID = IUT.OBJECT_ID
+""".replace("\n", " ")
+)
+
 # 28215: GV$OB_LS_SNAPSHOTS
 # 28216: V$OB_LS_SNAPSHOTS
 # 28217: GV$OB_SHARE_STORAGE_QUOTA_ASSIGNMENT
