@@ -1732,7 +1732,7 @@ int ObAlterTableResolver::resolve_add_partition(const ParseNode &node,
       alter_table_schema.get_sub_part_option() = orig_table_schema.get_sub_part_option();
       alter_table_schema.get_part_option() = orig_table_schema.get_part_option();
       /* set subpartition key info */
-      OZ (alter_table_schema.assign_subpartiton_key_info(
+      OZ (alter_table_schema.assign_subpartition_key_info(
                             orig_table_schema.get_subpartition_key_info()));
       OZ (mock_part_func_node(orig_table_schema, true/*is_sub_part*/, subpart_func_node));
       OZ (resolve_part_func(params_, subpart_func_node,

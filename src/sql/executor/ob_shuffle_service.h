@@ -63,7 +63,7 @@ public:
                         const ObIArray<ObTransmitRepartColumn> &repart_sub_columns,
                         int64_t &part_idx,
                         int64_t &subpart_idx,
-                        bool &no_match_partiton);
+                        bool &no_match_partition);
 
   // 这个接口仅在px框架下使用, 非px请使用上面接口.
   int get_partition_ids(ObExecContext &exec_ctx,
@@ -76,7 +76,7 @@ public:
                         const ObPxPartChMap &ch_map,
                         int64_t &part_id,
                         int64_t &subpart_id,
-                        bool &no_match_partiton,
+                        bool &no_match_partition,
                         ObRepartitionType part_type);
 private:
   int init_expr_ctx(ObExecContext &exec_ctx);

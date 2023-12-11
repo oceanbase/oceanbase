@@ -10277,7 +10277,7 @@ int ObDDLResolver::resolve_list_partition_elements(ObPartitionedStmt *stmt,
       } else if (OB_FAIL(resolve_list_partition_value_node(*expr_list_node, partition_name,
                                                            part_type, part_func_exprs,
                                                            list_value_exprs, in_tablegroup))) {
-        LOG_WARN("failed to resolve list partiton value node", K(ret));
+        LOG_WARN("failed to resolve list partition value node", K(ret));
       } else if (OB_NOT_NULL(element_node->children_[PART_ID_NODE])) {
         // PART_ID is deprecated in 4.0, we just ignore and show warnings here.
         LOG_USER_WARN_ONCE(OB_NOT_SUPPORTED, "specify part_id");
@@ -10357,7 +10357,7 @@ int ObDDLResolver::resolve_list_subpartition_elements(ObPartitionedStmt *stmt,
       } else if (OB_FAIL(resolve_list_partition_value_node(*expr_list_node, partition_name,
                                                            part_type, part_func_exprs,
                                                            list_value_exprs, in_tablegroup))) {
-        LOG_WARN("failed to resolve list partiton value node", K(ret));
+        LOG_WARN("failed to resolve list partition value node", K(ret));
       } else if (OB_NOT_NULL(element_node->children_[PART_ID_NODE])) {
         // PART_ID is deprecated in 4.0, we just ignore and show warnings here.
         LOG_USER_WARN_ONCE(OB_NOT_SUPPORTED, "specify part_id");

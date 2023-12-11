@@ -554,7 +554,7 @@ int ObLogDelUpd::find_pdml_part_id_producer(ObLogicalOperator *op,
   } else {
     if (OB_SUCC(ret) && NULL == producer && op->get_type() == log_op_def::LOG_EXCHANGE
         && static_cast<ObLogExchange*>(op)->is_producer()) {
-      // find the first exchange below dml, use this exchange generate partiton id for pdml insert
+      // find the first exchange below dml, use this exchange generate partition id for pdml insert
       producer = static_cast<ObLogExchange*>(op);
     }
     for (int64_t i = 0; OB_SUCC(ret) && NULL == src_tsc && i < op->get_num_of_child(); i++) {
@@ -564,7 +564,7 @@ int ObLogDelUpd::find_pdml_part_id_producer(ObLogicalOperator *op,
     }
     if (OB_SUCC(ret) && NULL != src_tsc && op->get_type() == log_op_def::LOG_EXCHANGE
         && static_cast<ObLogExchange*>(op)->is_producer()) {
-      // generate partiton id by exchange above dml target table scan
+      // generate partition id by exchange above dml target table scan
       producer = static_cast<ObLogExchange*>(op);
     }
   }

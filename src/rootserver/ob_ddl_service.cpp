@@ -10985,7 +10985,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
         ObArray<AlterTableSchema*> inc_table_schemas;
         ObArray<AlterTableSchema*> del_table_schemas;
         ObArenaAllocator allocator("ModifyPart");
-        //table partitons
+        //table partitions
         ObArray<int64_t> new_partition_ids;
         if (OB_SUCC(ret) && alter_table_arg.is_alter_partitions_) {
           if (OB_FAIL(check_restore_point_allow(tenant_id, *orig_table_schema))) {
@@ -12535,7 +12535,7 @@ int ObDDLService::check_alter_partitions(const ObTableSchema &orig_table_schema,
   } else if (obrpc::ObAlterTableArg::TRUNCATE_PARTITION == alter_part_type) {
     bool is_truncate = true;
     if (OB_FAIL(check_alter_drop_partitions(orig_table_schema, alter_table_arg, is_truncate))) {
-      LOG_WARN("failed to check truncate partitons", K(ret), K(orig_table_schema), K(alter_table_arg));
+      LOG_WARN("failed to check truncate partitions", K(ret), K(orig_table_schema), K(alter_table_arg));
     }
     is_drop_or_truncate = true;
   } else if (obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == alter_part_type) {
