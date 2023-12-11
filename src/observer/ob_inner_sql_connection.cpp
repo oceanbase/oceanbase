@@ -2297,6 +2297,7 @@ ObInnerSqlWaitGuard::ObInnerSqlWaitGuard(const bool is_inner_session, sql::ObSQL
     ObActiveSessionStat * tmp_ptr = &(ObActiveSessionGuard::get_stat());
     inner_session_->set_session_active(); /*will call setup_ash*/
     ObActiveSessionGuard::get_stat().set_prev_stat(tmp_ptr);
+    ObActiveSessionGuard::get_stat().prev_inner_sql_wait_type_id_ = tmp_ptr->inner_sql_wait_type_id_;
     if (oceanbase::lib::is_diagnose_info_enabled()) {
       di_buffer_ = GET_TSI(ObSessionDIBuffer);
       if (NULL != di_buffer_) {
@@ -2325,6 +2326,7 @@ ObInnerSqlWaitGuard::~ObInnerSqlWaitGuard()
         di_buffer_->reset_session();
       }
     }
+    ObActiveSessionGuard::get_stat().prev_inner_sql_wait_type_id_ = ObInnerSqlWaitTypeId::NULL_INNER_SQL;
     if (OB_NOT_NULL(ObActiveSessionGuard::get_stat().get_prev_stat())) {
       /* resetup ash stat to previous ash stat */
       ObActiveSessionStat *ash_stat = ObActiveSessionGuard::get_stat().get_prev_stat();

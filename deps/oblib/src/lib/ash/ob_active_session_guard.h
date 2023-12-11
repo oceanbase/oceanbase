@@ -179,6 +179,7 @@ public:
         is_remote_inner_sql_(false),
         pcode_(0),
         bkgd_elapse_time_(0),
+        prev_inner_sql_wait_type_id_(ObInnerSqlWaitTypeId::NULL_INNER_SQL),
         last_stat_(nullptr),
         fixup_index_(-1),
         fixup_ash_buffer_(),
@@ -203,6 +204,8 @@ public:
     return ret;
   }
 
+  // WARNING!!!
+  // The member variables of prev_stat_ need to be accessed with care and are not concurrency safe in ASH threads.
   ObActiveSessionStat* get_prev_stat() {
     return prev_stat_;
   }
@@ -266,6 +269,7 @@ public:
   bool is_remote_inner_sql_;
   int pcode_;
   int64_t bkgd_elapse_time_; // for backgorund elapse time.
+  ObInnerSqlWaitTypeId prev_inner_sql_wait_type_id_;
 
   INHERIT_TO_STRING_KV("ObActiveSessionStatItem", ObActiveSessionStatItem, K_(last_ts),
       K_(wait_event_begin_ts), K_(total_idle_wait_time), K_(total_non_idle_wait_time),
@@ -280,6 +284,8 @@ private:
   int64_t fixup_index_;
   common::ObSharedGuard<ObAshBuffer> fixup_ash_buffer_;
   // `prev_stat_` is for inner session nesting
+  // WARNING!!!
+  // The member variables of prev_stat_ need to be accessed with care and are not concurrency safe in ASH threads.
   ObActiveSessionStat *prev_stat_;
 };
 
