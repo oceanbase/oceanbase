@@ -5060,16 +5060,16 @@ int ObPartTransCtx::replay_commit(const ObTxCommitLog &commit_log,
                                    exec_info_.multi_data_source_,
                                    false /* not a force kill */))) {
       TRANS_LOG(WARN, "notify table lock failed", KR(ret), "context", *this);
+    } else if (OB_FAIL(notify_data_source_(NotifyType::ON_COMMIT,
+                                           timestamp,
+                                           true,
+                                           exec_info_.multi_data_source_))) {
+      TRANS_LOG(WARN, "notify data source failed", KR(ret), K(commit_log));
     } else if (OB_FAIL(trans_replay_commit_(ctx_tx_data_.get_commit_version(),
                                             timestamp,
                                             cluster_version_,
                                             checksum))) {
       TRANS_LOG(WARN, "trans replay commit failed", KR(ret), "context", *this);
-    } else if (OB_FAIL(notify_data_source_(NotifyType::ON_COMMIT,
-                                         timestamp,
-                                         true,
-                                         exec_info_.multi_data_source_))) {
-      TRANS_LOG(WARN, "notify data source failed", KR(ret), K(commit_log));
     } else if ((!ctx_tx_data_.is_read_only()) && OB_FAIL(ctx_tx_data_.insert_into_tx_table())) {
       TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
     } else if (is_local_tx_()) {
