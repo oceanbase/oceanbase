@@ -3047,10 +3047,12 @@ int ObPLBlockNS::resolve_routine(const ObPLResolveCtx &resolve_ctx,
     }
     if (OB_SUCC(ret) && routine_infos.empty()) {
       if (OB_NOT_NULL(external_ns_)) {
-        bool need_clear = false;
-        if (OB_ISNULL(external_ns_->get_resolve_ctx().params_.secondary_namespace_)
-            && OB_NOT_NULL(resolve_ctx.params_.secondary_namespace_)) {
-          need_clear = true;
+        bool need_restore = false;
+        pl::ObPLBlockNS *second_ns = nullptr;
+        if (OB_NOT_NULL(resolve_ctx.params_.secondary_namespace_) &&
+            external_ns_->get_resolve_ctx().params_.secondary_namespace_ != resolve_ctx.params_.secondary_namespace_) {
+          need_restore = true;
+          second_ns = external_ns_->get_resolve_ctx().params_.secondary_namespace_;
           (const_cast<ObPLResolveCtx &>(external_ns_->get_resolve_ctx())).params_.secondary_namespace_
           = resolve_ctx.params_.secondary_namespace_;
         }
@@ -3064,8 +3066,8 @@ int ObPLBlockNS::resolve_routine(const ObPLResolveCtx &resolve_ctx,
           LOG_WARN("resolve routine failed", K(db_name), K(package_name), K(routine_name),
                    K(expr_params), K(ret));
         }
-        if (need_clear) {
-          (const_cast<ObPLResolveCtx &>(external_ns_->get_resolve_ctx())).params_.secondary_namespace_ = NULL;
+        if (need_restore) {
+          (const_cast<ObPLResolveCtx &>(external_ns_->get_resolve_ctx())).params_.secondary_namespace_ = second_ns;
         }
       }
     }
