@@ -114,7 +114,7 @@ public:
   };
 
   common::ObCurTraceId::TraceId trace_id_;
-  int32_t plan_line_id_; // which SQL operater the session is processing when sampling
+  int32_t plan_line_id_; // which SQL operator the session is processing when sampling
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
   bool session_type_; // false=0, FOREGROUND, true=1, BACKGROUND
   bool is_wr_sample_;  // true represents this node should be sampled into wr.

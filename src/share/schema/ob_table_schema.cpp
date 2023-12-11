@@ -2695,7 +2695,7 @@ int ObTableSchema::add_partition_key(const common::ObString &column_name)
     ret = OB_ERR_BAD_FIELD_ERROR;
     LOG_WARN("fail to get column schema, return NULL", K(column_name), K(ret));
   } else if (column->is_part_key_column()) {
-    LOG_INFO("already partiton key", K(column_name), K(ret));
+    LOG_INFO("already partition key", K(column_name), K(ret));
   } else if (FALSE_IT(construct_partition_key_column(*column, partition_key_column))) {
   } else if (OB_FAIL(column->set_part_key_pos(partition_key_info_.get_size() + 1))) {
     LOG_WARN("Failed to set partition key position", K(ret));
@@ -2717,7 +2717,7 @@ int ObTableSchema::add_subpartition_key(const common::ObString &column_name)
     ret = OB_ERR_BAD_FIELD_ERROR;
     LOG_WARN("fail to get column schema, return NULL", K(column_name), K(ret));
   } else if (column->is_subpart_key_column()) {
-    LOG_INFO("already partiton key", K(column_name), K(ret));
+    LOG_INFO("already partition key", K(column_name), K(ret));
   } else if (FALSE_IT(construct_partition_key_column(*column, partition_key_column))) {
   } else if (OB_FAIL(column->set_subpart_key_pos(subpartition_key_info_.get_size() + 1))) {
     LOG_WARN("Failed to set partition key position", K(ret));
@@ -7208,7 +7208,7 @@ int ObTableSchema::check_primary_key_cover_partition_column()
   } else if (OB_FAIL(check_rowkey_cover_partition_keys(partition_key_info_))) {
     LOG_WARN("Check rowkey cover partition key failed", K(ret));
   } else if (OB_FAIL(check_rowkey_cover_partition_keys(subpartition_key_info_))) {
-    LOG_WARN("Check rowkey cover subpartiton key failed", K(ret));
+    LOG_WARN("Check rowkey cover subpartition key failed", K(ret));
   }
 
   return ret;
@@ -7432,7 +7432,7 @@ int ObTableSchema::get_subpart_ids(
   for (int64_t i = 0; OB_SUCC(ret) && i < subpart_num; i++) {
     if (OB_ISNULL(subpart_array[i])) {
       ret = OB_SCHEMA_ERROR;
-      LOG_WARN("get invalid partiton array", K(ret), K(i), K(subpart_num));
+      LOG_WARN("get invalid partition array", K(ret), K(i), K(subpart_num));
     } else if (OB_FAIL(subpart_ids.push_back(subpart_array[i]->get_sub_part_id()))) {
       LOG_WARN("push back failed", K(ret));
     }
