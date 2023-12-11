@@ -628,7 +628,8 @@ int ObJoinOrder::get_base_path_table_dop(uint64_t index_id, int64_t &parallel)
 
 // just generate random parallel for access paths when enable trace point test path
 // alter system set_tp tp_no = 552, error_code = 4016, frequency = 1;
-int ObJoinOrder::get_random_parallel(const ObIArray<AccessPath *> &access_paths,
+// When trace point is enabled, parallel is only limited by parallel_degree_limit.
+int ObJoinOrder::get_random_parallel(const int64_t parallel_degree_limit,
                                      int64_t &parallel)
 {
   int ret = OB_SUCCESS;
@@ -636,13 +637,17 @@ int ObJoinOrder::get_random_parallel(const ObIArray<AccessPath *> &access_paths,
   if (OB_ISNULL(table_partition_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected params", K(ret), K(table_partition_info_));
-  } else if (is_virtual_table(table_partition_info_->get_ref_table_id())) {
+  } else if (ObGlobalHint::DEFAULT_PARALLEL == parallel_degree_limit
+             || is_virtual_table(table_partition_info_->get_ref_table_id())) {
     /* do nothing */
-    LOG_TRACE("Auto DOP get_random_parallel", K(table_partition_info_->get_ref_table_id()),
+    LOG_TRACE("Auto DOP get_random_parallel", K(parallel_degree_limit),
+                                    K(table_partition_info_->get_ref_table_id()),
                                     K(is_virtual_table(table_partition_info_->get_ref_table_id())));
   } else {
     const int64_t part_cnt = table_partition_info_->get_phy_tbl_location_info().get_partition_cnt();
-    int64_t parallel_type = ObRandom::rand(0, 2);
+    const bool limit_beyond_part_cnt = ObGlobalHint::UNSET_PARALLEL == parallel_degree_limit
+                                       || parallel_degree_limit > part_cnt;
+    int64_t parallel_type = ObRandom::rand(0, limit_beyond_part_cnt ? 2 : 1);
     switch (parallel_type) {
       case 0: {
         parallel = 1;
@@ -650,7 +655,11 @@ int ObJoinOrder::get_random_parallel(const ObIArray<AccessPath *> &access_paths,
       }
       case 1: {
         if (part_cnt > 1) {
-          parallel = ObRandom::rand(2, part_cnt);
+          if (limit_beyond_part_cnt) {
+            parallel = ObRandom::rand(2, part_cnt);
+          } else {
+            parallel = ObRandom::rand(2, parallel_degree_limit);
+          }
           break;
         }
       }
@@ -659,7 +668,8 @@ int ObJoinOrder::get_random_parallel(const ObIArray<AccessPath *> &access_paths,
         break;
       }
     }
-    LOG_TRACE("Auto DOP get_random_parallel", K(parallel_type), K(parallel));
+    LOG_TRACE("Auto DOP get_random_parallel", K(parallel_degree_limit), K(part_cnt),
+                                            K(parallel_type), K(parallel));
   }
   return ret;
 }
@@ -701,7 +711,7 @@ int ObJoinOrder::compute_access_path_parallel(ObIArray<AccessPath *> &access_pat
     ret = OB_SUCCESS;
     if (!session_info->is_user_session()) {
       parallel = ObGlobalHint::DEFAULT_PARALLEL;
-    } else if (OB_FAIL(get_random_parallel(access_paths, parallel))) {
+    } else if (OB_FAIL(get_random_parallel(opt_ctx->get_session_parallel_degree_limit(), parallel))) {
       LOG_WARN("failed to get random parallel", K(ret));
     }
     LOG_TRACE("Auto DOP trace point", K(session_info->is_user_session()), K(parallel));
