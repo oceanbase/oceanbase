@@ -1441,8 +1441,11 @@ int ObSqlParameterization::try_format_in_expr(const common::ObString &con_sql,
       } else {
         // do nothing
       }
+
       if (OB_FAIL(ret)) {
         // do nothing
+      } else if (!can_format) {
+        need_break = true;
       } else {
         int64_t old_pos = pos;
         MEMCPY(buf + pos, con_sql.ptr() + old_in_pos, (in_pos - old_in_pos));
