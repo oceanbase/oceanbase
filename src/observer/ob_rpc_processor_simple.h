@@ -260,6 +260,8 @@ OB_DEFINE_PROCESSOR_S(Srv, OB_TABLET_MAJOR_FREEZE, ObRpcTabletMajorFreezeP);
 // OB_DEFINE_PROCESSOR_S(Srv, OB_CLIENT_SESSION_CONNECT_TIME, ObClientSessionConnectTimeP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_TABLET_LOCATION_BROADCAST, ObTabletLocationReceiveP);
 
+OB_DEFINE_PROCESSOR_S(Srv, OB_KILL_CLIENT_SESSION, ObKillClientSessionP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_CLIENT_SESSION_CONNECT_TIME, ObClientSessionConnectTimeP);
 } // end of namespace observer
 } // end of namespace oceanbase
 

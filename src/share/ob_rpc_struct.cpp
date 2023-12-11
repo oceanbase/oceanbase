@@ -9582,6 +9582,22 @@ OB_DEF_SERIALIZE_SIZE(ObSessionInfoVeriRes)
   return len;
 }
 
+bool ObKillClientSessionArg::is_valid() const
+{
+  return true;
+}
+
+bool ObKillClientSessionRes::is_valid() const
+{
+  return true;
+}
+
+OB_SERIALIZE_MEMBER(ObKillClientSessionArg, create_time_, client_sess_id_);
+OB_SERIALIZE_MEMBER(ObKillClientSessionRes, can_kill_client_sess_);
+
+OB_SERIALIZE_MEMBER(ObClientSessionCreateTimeAndAuthArg, client_sess_id_, tenant_id_, user_id_, has_user_super_privilege_);
+OB_SERIALIZE_MEMBER(ObClientSessionCreateTimeAndAuthRes, client_sess_create_time_, have_kill_auth_);
+
 OB_SERIALIZE_MEMBER(ObGetLeaderLocationsArg, addr_);
 OB_SERIALIZE_MEMBER(ObGetLeaderLocationsResult, addr_, leader_replicas_);
 

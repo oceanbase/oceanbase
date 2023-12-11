@@ -218,8 +218,15 @@ public:
     if (v.session_.is_terminate(ret)) {
       v.no_more_test_ = true;
       v.retry_type_ = RETRY_TYPE_NONE;
-      v.client_ret_ = ret; // session terminated
-      LOG_WARN("execution was terminated", K(ret));
+      // In the kill client session scenario, the server session will be marked
+      // with the SESSION_KILLED mark. In the retry scenario, there will be an error
+      // code covering 5066, so the judgment logic is added here.
+      if (ret == OB_ERR_SESSION_INTERRUPTED && v.err_ == OB_ERR_KILL_CLIENT_SESSION) {
+        v.client_ret_ = v.err_;
+      } else{
+        v.client_ret_ = ret; // session terminated
+      }
+      LOG_WARN("execution was terminated", K(ret), K(v.client_ret_), K(v.err_));
     } else if (THIS_WORKER.is_timeout()) {
       v.no_more_test_ = true;
       v.retry_type_ = RETRY_TYPE_NONE;
@@ -597,8 +604,15 @@ public:
     } else if (v.session_.is_terminate(ret)) {
       v.no_more_test_ = true;
       v.retry_type_ = RETRY_TYPE_NONE;
-      v.client_ret_ = ret; // session terminated
-      LOG_WARN("execution was terminated", K(ret));
+      // In the kill client session scenario, the server session will be marked
+      // with the SESSION_KILLED mark. In the retry scenario, there will be an error
+      // code covering 5066, so the judgment logic is added here.
+      if (ret == OB_ERR_SESSION_INTERRUPTED && v.err_ == OB_ERR_KILL_CLIENT_SESSION) {
+        v.client_ret_ = v.err_;
+      } else{
+        v.client_ret_ = ret; // session terminated
+      }
+      LOG_WARN("execution was terminated", K(ret), K(v.client_ret_), K(v.err_));
     } else if (THIS_WORKER.is_timeout()) {
       v.no_more_test_ = true;
       v.retry_type_ = RETRY_TYPE_NONE;

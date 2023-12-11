@@ -161,6 +161,7 @@ union ObProxyCapabilityFlags
   bool is_weak_stale_feedback() const { return 1 == cap_flags_.OB_CAP_PROXY_WEAK_STALE_FEEDBACK; }
   bool is_flt_show_trace_support() const { return 1 == cap_flags_.OB_CAP_PROXY_FULL_LINK_TRACING_EXT
                                                         && is_ob_protocol_v2_support(); }
+  bool is_client_sessid_support() const { return 1 == cap_flags_.OB_CAP_PROXY_CLIENT_SESSION_ID; }
 
   uint64_t capability_;
   struct CapabilityFlags
@@ -194,8 +195,8 @@ union ObProxyCapabilityFlags
     uint64_t OB_CAP_PROXY_FULL_LINK_TRACING_EXT:       1;
     // duplicate session_info sync of transaction type
     uint64_t OB_CAP_SERVER_DUP_SESS_INFO_SYNC:         1;
-
     uint64_t OB_CAP_LOCAL_FILES:                       1;
+    // client session id consultation
     uint64_t OB_CAP_PROXY_CLIENT_SESSION_ID:           1;
     uint64_t OB_CAP_OB_PROTOCOL_V2_COMPRESS:           1;
     uint64_t OB_CAP_RESERVED_NOT_USE:                 41;
