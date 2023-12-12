@@ -107,6 +107,7 @@ class ObTabletCreateDeleteMdsUserData;
 class ObTabletBindingMdsUserData;
 class ObMemtableArray;
 class ObCOSSTableV2;
+class ObMacroInfoIterator;
 
 struct ObTableStoreCache
 {
@@ -238,12 +239,6 @@ public:
   bool is_valid() const;
   // refresh memtable and update tablet_addr_ and table_store_addr_ sequence, only used by slog ckpt
   int refresh_memtable_and_update_seq(const uint64_t seq);
-  // TODO(zhouxinlan.zxl): replace ObIArray with iterator
-  int get_all_macro_ids(
-      ObIArray<blocksstable::MacroBlockId> &meta_block_arr,
-      ObIArray<blocksstable::MacroBlockId> &data_block_arr,
-      ObIArray<blocksstable::MacroBlockId> &shared_meta_block_arr,
-      ObIArray<blocksstable::MacroBlockId> &shared_data_block_arr) const;
   bool is_old_tablet() { return version_ < ObTabletBlockHeader::TABLET_VERSION_V3; }
   void dec_macro_ref_cnt();
   int inc_macro_ref_cnt();
@@ -607,11 +602,11 @@ private:
   static int parse_meta_addr(const ObMetaDiskAddr &addr, ObIArray<blocksstable::MacroBlockId> &meta_ids);
   void dec_ref_with_aggregated_info();
   void dec_ref_without_aggregated_info();
+  void dec_ref_with_macro_iter(ObMacroInfoIterator &macro_iter) const;
   int inner_inc_macro_ref_cnt();
-  // inc ref with existed ObTabletMacroInfo
-  int inc_macro_ref_with_macro_info(const ObTabletMacroInfo &tablet_macro_info);
   int inc_ref_with_aggregated_info();
   int inc_ref_without_aggregated_info();
+  int inc_ref_with_macro_iter(ObMacroInfoIterator &macro_iter, bool &inc_success) const;
   void dec_table_store_ref_cnt();
   int inc_table_store_ref_cnt(bool &inc_success);
   static int inc_addr_ref_cnt(const ObMetaDiskAddr &addr, bool &inc_success);

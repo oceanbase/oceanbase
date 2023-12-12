@@ -24,6 +24,7 @@
 #include "storage/tablet/ob_tablet_common.h"
 #include "storage/tablet/ob_tablet_block_header.h"
 #include "storage/tablet/ob_tablet_slog_helper.h"
+#include "storage/tablet/ob_tablet_macro_info_iterator.h"
 
 using namespace std::placeholders;
 using namespace oceanbase::common;
@@ -326,6 +327,7 @@ int ObTabletPersister::persist_and_transform_tablet(
   return ret;
 }
 
+// !!!attention shouldn't be called by empty shell
 /*static*/ int ObTabletPersister::persist_and_transform_only_tablet_meta(
     const ObTablet &old_tablet,
     ObITabletMetaModifier &modifier,
@@ -739,6 +741,8 @@ int ObTabletPersister::persist_aggregated_meta(
     ObTabletSpaceUsage &space_usage)
 {
   int ret = OB_SUCCESS;
+  ObMacroInfoIterator macro_iter;
+  bool inc_success = false;
   ObTablet *new_tablet = new_handle.get_obj();
   ObTenantCheckpointSlogHandler *ckpt_slog_handler = MTL(ObTenantCheckpointSlogHandler*);
   ObSharedBlockWriteInfo write_info;
@@ -748,6 +752,7 @@ int ObTabletPersister::persist_aggregated_meta(
   MacroBlockId macro_id;
   int64_t offset = 0;
   int64_t size = 0;
+
   if (OB_FAIL(fill_tablet_write_info(allocator_, new_tablet, tablet_macro_info, write_info))) {
     LOG_WARN("fail to fill write info", K(ret), KPC(new_tablet));
   } else if (OB_FAIL(ckpt_slog_handler->get_shared_block_raw_reader_writer().async_write(write_info, handle))) {
@@ -759,11 +764,43 @@ int ObTabletPersister::persist_aggregated_meta(
     LOG_WARN("fail to get block addr", K(ret), K(write_ctx));
   } else if (OB_FAIL(new_tablet->set_macro_info_addr(macro_id, offset + (size - secondary_meta_size), secondary_meta_size, ObMetaDiskAddr::DiskType::RAW_BLOCK))) {
     LOG_WARN("fail to set macro info addr", K(ret), K(macro_id), K(offset), K(size), K(secondary_meta_size));
-  } else if (OB_FAIL(new_tablet->inc_macro_ref_with_macro_info(tablet_macro_info))) {
-    LOG_WARN("fail to increase macro ref cnt for new tablet", K(ret), KPC(new_tablet));
+  } else if (OB_FAIL(macro_iter.init(ObTabletMacroType::MAX, tablet_macro_info))) {
+    LOG_WARN("fail to init macro info iter", K(ret), K(tablet_macro_info));
+  } else if (OB_FAIL(inc_ref_with_macro_iter(*new_tablet, macro_iter))) {
+    LOG_WARN("fail to increase macro ref cnt", K(ret));
   } else {
     space_usage.shared_meta_size_ += upper_align(write_ctx.addr_.size(), DIO_READ_ALIGN_SIZE);
     new_tablet->tablet_meta_.space_usage_ = space_usage;
+  }
+  return ret;
+}
+
+int ObTabletPersister::inc_ref_with_macro_iter(ObTablet &tablet, ObMacroInfoIterator &macro_iter)
+{
+  int ret = OB_SUCCESS;
+  bool inc_tablet_macro_ref_success = false;
+  bool inc_other_macro_ref_success = false;
+  const ObMetaDiskAddr &tablet_addr = tablet.tablet_addr_;
+
+  if (OB_FAIL(ObTablet::inc_addr_ref_cnt(tablet_addr, inc_tablet_macro_ref_success))) {
+    LOG_WARN("fail to increase tablet macro ref", K(ret), K(tablet_addr));
+  } else if (OB_FAIL(tablet.inc_ref_with_macro_iter(macro_iter, inc_other_macro_ref_success))) {
+    LOG_WARN("fail to increase ref cnt from macro iter", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+    if (inc_tablet_macro_ref_success) {
+      ObTablet::dec_addr_ref_cnt(tablet_addr);
+    }
+    if (inc_other_macro_ref_success) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(macro_iter.reuse())) {
+        LOG_WARN("fail to reuse macro info iterator", K(tmp_ret));
+      } else {
+        tablet.dec_ref_with_macro_iter(macro_iter);
+      }
+    }
+  } else {
+    tablet.hold_ref_cnt_ = true;
   }
   return ret;
 }

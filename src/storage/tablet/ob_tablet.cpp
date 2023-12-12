@@ -81,6 +81,8 @@
 #include "storage/tablet/ob_tablet_binding_info.h"
 #include "storage/tablet/ob_tablet_persister.h"
 #include "src/storage/slog_ckpt/ob_linked_macro_block_writer.h"
+#include "storage/tablet/ob_tablet_macro_info_iterator.h"
+#include "storage/blocksstable/ob_shared_macro_block_manager.h"
 
 namespace oceanbase
 {
@@ -2209,39 +2211,14 @@ int ObTablet::parse_meta_addr(const ObMetaDiskAddr &addr, ObIArray<MacroBlockId>
   return ret;
 }
 
-int ObTablet::get_all_macro_ids(
-    ObIArray<blocksstable::MacroBlockId> &meta_block_arr,
-    ObIArray<blocksstable::MacroBlockId> &data_block_arr,
-    ObIArray<blocksstable::MacroBlockId> &shared_meta_block_arr,
-    ObIArray<blocksstable::MacroBlockId> &shared_data_block_arr) const
-{
-  int ret = OB_SUCCESS;
-  ObArenaAllocator allocator;
-  ObTabletMacroInfo *tablet_macro_info = nullptr;
-  bool in_memory = false;
-  if (is_empty_shell()) {
-    // no macro info
-  } else if (OB_FAIL(load_macro_info(allocator, tablet_macro_info, in_memory))) {
-    LOG_WARN("fail to fetch tablet macro info", K(ret));
-  } else if (OB_FAIL(tablet_macro_info->get_all_macro_ids(
-      meta_block_arr,
-      data_block_arr,
-      shared_meta_block_arr,
-      shared_data_block_arr))) {
-    LOG_WARN("fail to get tablet's macro ids", K(ret));
-  }
-  if (OB_NOT_NULL(tablet_macro_info) && !in_memory) {
-    tablet_macro_info->~ObTabletMacroInfo();
-    allocator.free(tablet_macro_info);
-  }
-  return ret;
-}
-
 int ObTablet::load_macro_info(ObArenaAllocator &allocator, ObTabletMacroInfo *&tablet_macro_info, bool &in_memory) const
 {
   int ret = OB_SUCCESS;
   in_memory = false;
-  if (OB_UNLIKELY(!macro_info_addr_.is_valid() || macro_info_addr_.is_none_object())) {
+  if (OB_UNLIKELY(is_empty_shell())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("empty shell may don't have macro info", K(ret));
+  } else if (OB_UNLIKELY(!macro_info_addr_.is_valid() || macro_info_addr_.is_none_object())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("macro info addr is invalid", K(ret), K_(macro_info_addr));
   } else if (macro_info_addr_.is_memory_object()) {
@@ -2287,47 +2264,6 @@ int ObTablet::inc_macro_ref_cnt()
   return ret;
 }
 
-int ObTablet::inc_macro_ref_with_macro_info(const ObTabletMacroInfo &tablet_macro_info)
-{
-  int ret = OB_SUCCESS;
-  bool inc_tablet_ref = false;
-  bool inc_other_ref = false;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("tablet hasn't been inited", K(ret), K(is_inited_));
-  } else if (OB_FAIL(inc_addr_ref_cnt(tablet_addr_, inc_tablet_ref))) {
-    LOG_WARN("fail to increase macro blocks' ref cnt for 4k tablet", K(ret), K(tablet_addr_));
-  } else if (OB_FAIL(tablet_macro_info.inc_macro_ref(inc_other_ref))) {
-    LOG_WARN("fail to inc macro ref", K(ret));
-  }
-  if (OB_FAIL(ret)) {
-    if (inc_tablet_ref) {
-      dec_addr_ref_cnt(tablet_addr_);
-    }
-    if (inc_other_ref) {
-      tablet_macro_info.dec_macro_ref();
-    }
-  }
-  if (OB_SUCC(ret)) {
-    hold_ref_cnt_ = true;
-  }
-
-  // for issue track
-  const ObTabletComplexAddr<mds::MdsDumpKV> &tablet_status_uncommitted_kv_addr = mds_data_.tablet_status_.uncommitted_kv_;
-  const ObTabletComplexAddr<mds::MdsDumpKV> &tablet_status_committed_kv_addr = mds_data_.tablet_status_.committed_kv_;
-  const ObTabletComplexAddr<mds::MdsDumpKV> &aux_tablet_info_uncommitted_kv_addr = mds_data_.aux_tablet_info_.uncommitted_kv_;
-  const ObTabletComplexAddr<mds::MdsDumpKV> &aux_tablet_info_committed_kv_addr = mds_data_.aux_tablet_info_.committed_kv_;
-  const ObTabletComplexAddr<ObTabletDumpedMediumInfo> &medium_info_list_addr = mds_data_.medium_info_list_;
-  const ObTabletComplexAddr<share::ObTabletAutoincSeq> &auto_inc_seq_addr = mds_data_.auto_inc_seq_;
-  FLOG_INFO("the tablet that inner increases ref cnt is",
-      K(ret), K(hold_ref_cnt_), K(tablet_meta_.ls_id_), K(tablet_meta_.tablet_id_), K(table_store_addr_.addr_),
-      K(auto_inc_seq_addr.addr_), K(storage_schema_addr_.addr_), K(medium_info_list_addr.addr_),
-      K(tablet_status_uncommitted_kv_addr.addr_), K(tablet_status_committed_kv_addr.addr_),
-      K(aux_tablet_info_uncommitted_kv_addr.addr_), K(aux_tablet_info_committed_kv_addr.addr_),
-      K(tablet_addr_), KP(this), K(tablet_macro_info), K(lbt()));
-  return ret;
-}
-
 int ObTablet::inner_inc_macro_ref_cnt()
 {
   int ret = OB_SUCCESS;
@@ -2336,7 +2272,7 @@ int ObTablet::inner_inc_macro_ref_cnt()
   } else if (OB_UNLIKELY(ObTabletBlockHeader::TABLET_VERSION_V3 == version_ && !is_empty_shell() && macro_info_addr_.is_none_object())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("v3 normal tablet's macro_info_addr_ shouldn't be none object", K(ret), KPC(this));
-  } else if (macro_info_addr_.is_none_object()) {
+  } else if (macro_info_addr_.is_none_object() || is_empty_shell()) {
     if (OB_FAIL(inc_ref_without_aggregated_info())) {
       LOG_WARN("fail to inc macro ref without fetch", K(ret));
     }
@@ -2348,6 +2284,90 @@ int ObTablet::inner_inc_macro_ref_cnt()
   if (OB_SUCC(ret)) {
     hold_ref_cnt_ = true;
   }
+  return ret;
+}
+
+int ObTablet::inc_ref_with_aggregated_info()
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator("IncMacroRef", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObTabletMacroInfo *macro_info = nullptr;
+  bool in_memory = true;
+  bool inc_tablet_ref = false;
+  bool inc_other_ref = false;
+  ObMacroInfoIterator info_iter;
+
+  if (OB_FAIL(load_macro_info(allocator, macro_info, in_memory))) {
+    LOG_WARN("fail to load macro info", K(ret));
+  } else if (OB_FAIL(info_iter.init(ObTabletMacroType::MAX, *macro_info))) {
+    LOG_WARN("fail to init macro info iterator", K(ret), KPC(macro_info));
+  } else if (OB_FAIL(inc_addr_ref_cnt(tablet_addr_, inc_tablet_ref))) {
+    LOG_WARN("fail to increase macro blocks' ref cnt for 4k tablet", K(ret), K(tablet_addr_));
+  } else if (OB_FAIL(inc_ref_with_macro_iter(info_iter, inc_other_ref))) {
+    LOG_WARN("fail to increase other blocks' ref cnt", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+    if (inc_tablet_ref) {
+      dec_addr_ref_cnt(tablet_addr_);
+    }
+    if (inc_other_ref) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(info_iter.reuse())) {
+        LOG_WARN("fail to reuse macro info iterator", K(tmp_ret));
+      } else {
+        dec_ref_with_macro_iter(info_iter);
+      }
+    }
+  }
+  if (OB_NOT_NULL(macro_info) && !in_memory) {
+    macro_info->reset();
+  }
+
+  return ret;
+}
+
+int ObTablet::inc_ref_with_macro_iter(ObMacroInfoIterator &macro_iter, bool &inc_success) const
+{
+  int ret = OB_SUCCESS;
+  int inc_other_ref_cnt = 0;
+  ObTabletBlockInfo block_info;
+  inc_success = false;
+  while (OB_SUCC(ret)) {
+    block_info.reset();
+    if (OB_FAIL(macro_iter.get_next(block_info))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("fail to get next block info", K(ret));
+      }
+    } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.inc_ref(block_info.macro_id_))) {
+      LOG_ERROR("fail to increase macro block's ref cnt", K(ret), K(block_info));
+    } else if (FALSE_IT(inc_other_ref_cnt++)) {
+    } else if (ObTabletMacroType::SHARED_DATA_BLOCK == block_info.block_type_
+        && OB_FAIL(MTL(ObSharedMacroBlockMgr*)->add_block(block_info.macro_id_, block_info.occupy_size_))) {
+      LOG_WARN("fail to add block", K(ret), K(block_info));
+    }
+  }
+
+  if (OB_LIKELY(OB_ITER_END == ret) || OB_SUCC(ret)) {
+    inc_success = true;
+    ret = OB_SUCCESS;
+  } else if (inc_other_ref_cnt > 0) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(macro_iter.reuse())) {
+      LOG_WARN("fail to reuse macro info iterator", K(tmp_ret));
+    } else {
+      for (int64_t i = 0; i < inc_other_ref_cnt; i++) {
+        block_info.reset();
+        if (OB_TMP_FAIL(macro_iter.get_next(block_info))) {
+          LOG_ERROR("fail to get next block info, macro block may leak", K(tmp_ret));
+        } else if (OB_TMP_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(block_info.macro_id_))) {
+          LOG_ERROR("fail to increase macro block's ref cnt, macro block may leak", K(tmp_ret), K(block_info));
+        } else if (ObTabletMacroType::SHARED_DATA_BLOCK == block_info.block_type_
+            && OB_TMP_FAIL(MTL(ObSharedMacroBlockMgr*)->free_block(block_info.macro_id_, block_info.occupy_size_))) {
+          LOG_WARN("fail to free block", K(ret), K(block_info));
+        }
+      }
+    }
+  }
 
   // for issue track
   const ObTabletComplexAddr<mds::MdsDumpKV> &tablet_status_uncommitted_kv_addr = mds_data_.tablet_status_.uncommitted_kv_;
@@ -2361,42 +2381,9 @@ int ObTablet::inner_inc_macro_ref_cnt()
       K(auto_inc_seq_addr.addr_), K(storage_schema_addr_.addr_), K(medium_info_list_addr.addr_),
       K(tablet_status_uncommitted_kv_addr.addr_), K(tablet_status_committed_kv_addr.addr_),
       K(aux_tablet_info_uncommitted_kv_addr.addr_), K(aux_tablet_info_committed_kv_addr.addr_),
-      K(tablet_addr_), KP(this), KPC(macro_info_addr_.ptr_), K(lbt()));
-
+      K(tablet_addr_), KP(this), K(macro_iter), K(lbt()));
   return ret;
 }
-
-int ObTablet::inc_ref_with_aggregated_info()
-{
-  int ret = OB_SUCCESS;
-  bool inc_tablet_ref = false;
-  bool inc_other_ref = false;
-  bool in_memory = false;
-  ObArenaAllocator allocator("IncMacroRef", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-  ObTabletMacroInfo *tablet_macro_info = nullptr;
-  if (OB_FAIL(load_macro_info(allocator, tablet_macro_info, in_memory))) {
-    LOG_WARN("fail to fetch tablet macro info", K(ret));
-  } else if (OB_FAIL(inc_addr_ref_cnt(tablet_addr_, inc_tablet_ref))) {
-    LOG_WARN("fail to increase macro blocks' ref cnt for 4k tablet", K(ret), K(tablet_addr_));
-  } else if (OB_FAIL(tablet_macro_info->inc_macro_ref(inc_other_ref))) {
-    LOG_WARN("fail to increase other macro ref cnt", K(ret));
-  }
-  if (OB_FAIL(ret)) {
-    if (inc_tablet_ref) {
-      dec_addr_ref_cnt(tablet_addr_);
-    }
-    if (inc_other_ref) {
-      tablet_macro_info->dec_macro_ref();
-    }
-  }
-  if (OB_NOT_NULL(tablet_macro_info) && !in_memory) {
-    tablet_macro_info->~ObTabletMacroInfo();
-    allocator.free(tablet_macro_info);
-  }
-
-  return ret;
-}
-
 
 int ObTablet::inc_ref_without_aggregated_info()
 {
@@ -2480,36 +2467,20 @@ int ObTablet::inc_ref_without_aggregated_info()
 void ObTablet::dec_macro_ref_cnt()
 {
   int ret = OB_SUCCESS;
-  // for issue track
-  const ObTabletComplexAddr<mds::MdsDumpKV> &tablet_status_uncommitted_kv_addr = mds_data_.tablet_status_.uncommitted_kv_;
-  const ObTabletComplexAddr<mds::MdsDumpKV> &tablet_status_committed_kv_addr = mds_data_.tablet_status_.committed_kv_;
-  const ObTabletComplexAddr<mds::MdsDumpKV> &aux_tablet_info_uncommitted_kv_addr = mds_data_.aux_tablet_info_.uncommitted_kv_;
-  const ObTabletComplexAddr<mds::MdsDumpKV> &aux_tablet_info_committed_kv_addr = mds_data_.aux_tablet_info_.committed_kv_;
-  const ObTabletComplexAddr<ObTabletDumpedMediumInfo> &medium_info_list_addr = mds_data_.medium_info_list_;
-  const ObTabletComplexAddr<share::ObTabletAutoincSeq> &auto_inc_seq_addr = mds_data_.auto_inc_seq_;
   if (OB_UNLIKELY(!hold_ref_cnt_)) {
     FLOG_INFO("tablet doesn't hold ref cnt, no need to dec ref cnt",
-      K(is_inited_), K(tablet_meta_.ls_id_), K(tablet_meta_.tablet_id_), K(table_store_addr_.addr_.is_valid()),
-      K(auto_inc_seq_addr.addr_), K(storage_schema_addr_.addr_), K(medium_info_list_addr.addr_),
-      K(tablet_status_uncommitted_kv_addr.addr_), K(tablet_status_committed_kv_addr.addr_),
-      K(aux_tablet_info_uncommitted_kv_addr.addr_), K(aux_tablet_info_committed_kv_addr.addr_),
-      K(tablet_addr_), KP(this), K(lbt()));
+      K(is_inited_), K(tablet_meta_.ls_id_), K(tablet_meta_.tablet_id_),
+      K(table_store_addr_.addr_), K(tablet_addr_), KP(this), K(lbt()));
   } else if (OB_FAIL(check_meta_addr())) {
     LOG_ERROR("fail to check meta addrs", K(ret));
   } else if (OB_UNLIKELY(ObTabletBlockHeader::TABLET_VERSION_V3 == version_ && !is_empty_shell() && macro_info_addr_.is_none_object())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("v3 normal tablet's macro_info_addr_ shouldn't be none object", K(ret), KPC(this));
-  } else if (macro_info_addr_.is_none_object()) {
+  } else if (macro_info_addr_.is_none_object() || is_empty_shell()) {
     dec_ref_without_aggregated_info();
   } else {
     dec_ref_with_aggregated_info();
   }
-  FLOG_INFO("the tablet that decreases ref cnt is",
-      K(is_inited_), K(tablet_meta_.ls_id_), K(tablet_meta_.tablet_id_), K(table_store_addr_.addr_),
-      K(auto_inc_seq_addr.addr_), K(storage_schema_addr_.addr_), K(medium_info_list_addr.addr_),
-      K(tablet_status_uncommitted_kv_addr.addr_), K(tablet_status_committed_kv_addr.addr_),
-      K(aux_tablet_info_uncommitted_kv_addr.addr_), K(aux_tablet_info_committed_kv_addr.addr_),
-      K(tablet_addr_), KP(this), KPC(macro_info_addr_.ptr_), K(lbt()));
 }
 
 void ObTablet::dec_ref_without_aggregated_info()
@@ -2539,25 +2510,58 @@ void ObTablet::dec_ref_with_aggregated_info()
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator("DecMacroRef", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-  ObTabletMacroInfo *tablet_macro_info = nullptr;
-  bool in_memory = false;
-  do {
-    if (nullptr != tablet_macro_info) {
-      tablet_macro_info->reset();
-      tablet_macro_info = nullptr;
-    }
-    allocator.reuse();
-    ret = load_macro_info(allocator, tablet_macro_info, in_memory);
-  } while (ignore_ret(ret));
-  if (OB_FAIL(ret)) {
-    LOG_ERROR("fail to fetch macro info, macro blocks may leak", K(ret));
+  ObTabletMacroInfo *macro_info = nullptr;
+  bool in_memory = true;
+  ObMacroInfoIterator info_iter;
+  if (OB_FAIL(load_macro_info(allocator, macro_info, in_memory))) {
+    LOG_WARN("fail to load macro info", K(ret));
+  } else if (OB_FAIL(info_iter.init(ObTabletMacroType::MAX, *macro_info))) {
+    LOG_WARN("fail to init macro info iterator", K(ret), KPC(macro_info));
   } else {
     dec_addr_ref_cnt(tablet_addr_);
-    tablet_macro_info->dec_macro_ref();
+    dec_ref_with_macro_iter(info_iter);
   }
-  if (OB_NOT_NULL(tablet_macro_info) && !in_memory) {
-    tablet_macro_info->~ObTabletMacroInfo();
-    allocator.free(tablet_macro_info);
+  if (OB_NOT_NULL(macro_info) && !in_memory) {
+    macro_info->reset();
+  }
+
+  // for issue track
+  const ObTabletComplexAddr<mds::MdsDumpKV> &tablet_status_uncommitted_kv_addr = mds_data_.tablet_status_.uncommitted_kv_;
+  const ObTabletComplexAddr<mds::MdsDumpKV> &tablet_status_committed_kv_addr = mds_data_.tablet_status_.committed_kv_;
+  const ObTabletComplexAddr<mds::MdsDumpKV> &aux_tablet_info_uncommitted_kv_addr = mds_data_.aux_tablet_info_.uncommitted_kv_;
+  const ObTabletComplexAddr<mds::MdsDumpKV> &aux_tablet_info_committed_kv_addr = mds_data_.aux_tablet_info_.committed_kv_;
+  const ObTabletComplexAddr<ObTabletDumpedMediumInfo> &medium_info_list_addr = mds_data_.medium_info_list_;
+  const ObTabletComplexAddr<share::ObTabletAutoincSeq> &auto_inc_seq_addr = mds_data_.auto_inc_seq_;
+  FLOG_INFO("the tablet that decreases ref cnt is",
+      K(is_inited_), K(tablet_meta_.ls_id_), K(tablet_meta_.tablet_id_), K(table_store_addr_.addr_),
+      K(auto_inc_seq_addr.addr_), K(storage_schema_addr_.addr_), K(medium_info_list_addr.addr_),
+      K(tablet_status_uncommitted_kv_addr.addr_), K(tablet_status_committed_kv_addr.addr_),
+      K(aux_tablet_info_uncommitted_kv_addr.addr_), K(aux_tablet_info_committed_kv_addr.addr_),
+      K(tablet_addr_), KP(this), K(info_iter), K(lbt()));
+}
+
+void ObTablet::dec_ref_with_macro_iter(ObMacroInfoIterator &macro_iter) const
+{
+  int ret = OB_SUCCESS;
+  ObTabletBlockInfo block_info;
+  while (OB_SUCC(ret)) {
+    block_info.reset();
+    if (OB_FAIL(macro_iter.get_next(block_info))) {
+      if (OB_ITER_END != ret) {
+        LOG_ERROR("fail to get next block info, macro block may leak", K(ret));
+      }
+    } else {
+      if (OB_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(block_info.macro_id_))) {
+        LOG_ERROR("fail to decrease macro block's ref cnt, macro block may leak", K(ret), K(block_info));
+      } else if (ObTabletMacroType::SHARED_DATA_BLOCK == block_info.block_type_
+          && OB_FAIL(MTL(ObSharedMacroBlockMgr*)->free_block(block_info.macro_id_, block_info.occupy_size_))) {
+        LOG_WARN("fail to add block", K(ret), K(block_info));
+      }
+      if (OB_FAIL(ret)) {
+        ret = OB_SUCCESS;
+        // ignore ret, continue
+      }
+    }
   }
 }
 
