@@ -496,7 +496,7 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
           "table_info", table_info_buffer,
           "schema_version", create_table_res.schema_version_);
       }
-      SQL_ENG_LOG(INFO, "finish create table execute.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(create_table_arg), K(alter_table_arg));
+      SQL_ENG_LOG(INFO, "finish create table execute.", K(ret), "ddl_event_info", ObDDLEventInfo());
     }
     OZ(my_session->store_query_string(cur_query));
   }
@@ -621,7 +621,7 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
         "table_info", res.table_id_,
         "schema_version", res.schema_version_);
     }
-    SQL_ENG_LOG(INFO, "finish create table execute.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(create_table_arg));
+    SQL_ENG_LOG(INFO, "finish create table execute.", K(ret), "ddl_event_info", ObDDLEventInfo());
 
     // only CTAS or create temporary table will make session_id != 0. If such table detected, set
     // need ctas cleanup task anyway to do some cleanup jobs
@@ -1321,7 +1321,7 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
       "table_info", table_info_buffer,
       "schema_version", res.schema_version_,
       alter_table_arg.inner_sql_exec_addr_);
-    SQL_ENG_LOG(INFO, "finish alter table execute.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(alter_table_arg), K(first_stmt));
+    SQL_ENG_LOG(INFO, "finish alter table execute.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(first_stmt));
   }
   return ret;
 }
@@ -2167,7 +2167,7 @@ int ObDropTableExecutor::execute(ObExecContext &ctx, ObDropTableStmt &stmt)
     "trace_id", *ObCurTraceId::get_trace_id(),
     "task_id", res.task_id_,
     "schema_id", res.schema_id_);
-    SQL_ENG_LOG(INFO, "finish drop table execute.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(drop_table_arg));
+    SQL_ENG_LOG(INFO, "finish drop table execute.", K(ret), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -2367,7 +2367,7 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
       "task_id", res.task_id_,
       "table_info", truncate_table_arg.table_name_,
       "schema_id", res.schema_id_);
-    SQL_ENG_LOG(INFO, "finish truncate table execute.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(truncate_table_arg));
+    SQL_ENG_LOG(INFO, "finish truncate table execute.", K(ret), "ddl_event_info", ObDDLEventInfo());
   }
   return ret;
 }

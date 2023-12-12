@@ -149,7 +149,7 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
     "task_id", res.task_id_,
     "table_id", res.index_table_id_,
     "schema_version", res.schema_version_);
-  SQL_ENG_LOG(INFO, "finish create index execute.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(create_index_arg));
+  SQL_ENG_LOG(INFO, "finish create index execute.", K(ret), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -424,7 +424,7 @@ int ObDropIndexExecutor::execute(ObExecContext &ctx, ObDropIndexStmt &stmt)
     "task_id", res.task_id_,
     "table_id", res.index_table_id_,
     "schema_version", res.schema_version_);
-  SQL_ENG_LOG(INFO, "finish drop index execute.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(drop_index_arg));
+  SQL_ENG_LOG(INFO, "finish drop index execute.", K(ret), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -461,7 +461,7 @@ int ObFlashBackIndexExecutor::execute(ObExecContext &ctx, ObFlashBackIndexStmt &
       "new_table_name", flashback_index_arg.new_table_name_,
       flashback_index_arg.new_db_name_);
   }
-  SQL_ENG_LOG(INFO, "finish flashback index execute.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(flashback_index_arg));
+  SQL_ENG_LOG(INFO, "finish flashback index execute.", K(ret), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -498,7 +498,7 @@ int ObPurgeIndexExecutor::execute(ObExecContext &ctx, ObPurgeIndexStmt &stmt) {
       "database_id", purge_index_arg.database_id_,
       purge_index_arg.table_name_);
   }
-  SQL_ENG_LOG(INFO, "finish purge database.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(purge_index_arg));
+  SQL_ENG_LOG(INFO, "finish purge database.", K(ret), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
