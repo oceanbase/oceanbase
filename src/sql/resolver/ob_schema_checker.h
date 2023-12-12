@@ -511,6 +511,8 @@ public:
   int get_directory_id(const uint64_t tenant_id,
                        const common::ObString &directory_name,
                        uint64_t &directory_id);
+
+  int remove_tmp_cte_schemas(const ObString& cte_table_name);
 private:
   int get_link_table_schema_inner(uint64_t table_id,
                              const share::schema::ObTableSchema *&table_schema) const;
