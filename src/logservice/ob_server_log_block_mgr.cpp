@@ -1126,8 +1126,10 @@ int ObServerLogBlockMgr::allocate_block_at_tmp_dir_(const FileDesc &dir_fd,
     CLOG_LOG(ERROR, "::fallocate failed", K(ret), KPC(this), K(dir_fd), K(block_id),
              K(errno));
   } else {
-    CLOG_LOG(INFO, "allocate_block_at_ success", K(ret), KPC(this), K(dir_fd),
-             K(block_id));
+    if (REACH_TIME_INTERVAL(PRINT_INTERVAL)) {
+      CLOG_LOG(INFO, "allocate_block_at_ success", K(ret), KPC(this), K(dir_fd),
+               K(block_id));
+    }
   }
   if (-1 != fd && -1 == ::close(fd)) {
     int tmp_ret = convert_sys_errno();
@@ -1169,8 +1171,10 @@ int ObServerLogBlockMgr::free_block_at_(const FileDesc &src_dir_fd,
     CLOG_LOG(ERROR, "unlinkat_until_success_i failed", K(ret), KPC(this), K(src_dir_fd),
              K(src_block_id));
   } else {
-    CLOG_LOG(INFO, "free_block_at_ success", K(ret), KPC(this), K(src_dir_fd),
-             K(src_block_id));
+    if (REACH_TIME_INTERVAL(PRINT_INTERVAL)) {
+      CLOG_LOG(INFO, "free_block_at_ success", K(ret), KPC(this), K(src_dir_fd),
+               K(src_block_id));
+    }
   }
   return ret;
 }

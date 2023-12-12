@@ -50,6 +50,7 @@ private:
       S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IROTH;
   static const int CREATE_FILE_MODE = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
   static const int64_t RUN_INTERVAL = 1 * 1000 * 1000;
+  static const int64_t PRINT_INTERVAL = 3 * 1000 * 1000;
 
 private:
   typedef common::RWLock RWLock;
