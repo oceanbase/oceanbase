@@ -6243,11 +6243,14 @@ static int string_geometry(const ObObjType expect_type, ObObjCastParams &params,
       LOG_WARN("fail to parse geometry", K(ret), K(in_str), K(dst_geo_type));
     } else if (ObGeoType::GEOMETRY == dst_geo_type) {
       ObString res_wkb;
+      ObLength res_length = -1;
       if (OB_FAIL(ObGeoTypeUtil::add_geo_version(temp_allocator, in_str, res_wkb))) {
         LOG_WARN("fail to add version", K(ret), K(dst_geo_type));
+      } else if (OB_FAIL(set_geo_res(&params, &out, res_wkb))) {
+        LOG_WARN("set geo result failed", K(ret));
       } else {
-        out.set_string(expect_type, res_wkb.ptr(), res_wkb.length());
-        SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_wkb.length());
+        res_length = static_cast<ObLength>(out.get_string_len());
+        SET_RES_ACCURACY_STRING(expect_type, DEFAULT_PRECISION_FOR_STRING, res_length);
       }
     } else if (OB_FAIL(geometry_geometry(expect_type, params, in, out, cast_mode))) {
       LOG_WARN("fail to cast geometry", K(ret), K(dst_geo_type));
