@@ -3198,7 +3198,7 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
       LOG_WARN("failed to allocate memory for pre range graph", K(ret));
     } else {
       pre_range_graph = new(ptr)ObPreRangeGraph(*allocator_);
-      if (OB_FAIL(pre_range_graph->preliminary_extract_query_range(range_columns, predicates,
+      if (OB_FAIL(pre_range_graph->preliminary_extract_query_range(range_columns, range_predicates,
                                                                    opt_ctx->get_exec_ctx(),
                                                                    &expr_constraints,
                                                                    params, false, true))) {
