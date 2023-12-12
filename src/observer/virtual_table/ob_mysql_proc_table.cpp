@@ -17,6 +17,7 @@
 #include "share/schema/ob_schema_printer.h"
 #include "common/sql_mode/ob_sql_mode_utils.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "observer/ob_server_struct.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
@@ -229,6 +230,14 @@ int ObMySQLProcTable::inner_get_next_row(common::ObNewRow *&row)
                     cells[col_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
                     break;
                   }
+                  case (CREATED):
+                  case (MODIFIED): {
+                    int64_t routine_time = OB_INVALID_TIMESTAMP;
+                    get_info_from_all_routine(col_id, routine_info, routine_time);
+                    cells[col_idx].set_timestamp(routine_time);
+                    cells[col_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+                    break;
+                  }
 
 #define COLUMN_SET_WITH_TYPE(COL_NAME, TYPE, VALUE) \
 case (COL_NAME): {    \
@@ -245,8 +254,6 @@ case (COL_NAME): {    \
                   COLUMN_SET_WITH_TYPE(IS_DETERMINISTIC, varchar, routine_info->is_deterministic() ? "YES" : "NO")
                   COLUMN_SET_WITH_TYPE(SECURITY_TYPE, varchar, routine_info->is_invoker_right() ? "INVOKER" : "DEFINER")
                   COLUMN_SET_WITH_TYPE(BODY, varchar, routine_info->get_routine_body())
-                  COLUMN_SET_WITH_TYPE(CREATED, timestamp, OB_INVALID_TIMESTAMP)
-                  COLUMN_SET_WITH_TYPE(MODIFIED, timestamp, OB_INVALID_TIMESTAMP)
                   COLUMN_SET_WITH_TYPE(COMMENT, varchar, routine_info->get_comment())
                   COLUMN_SET_WITH_TYPE(BODY_UTF8, varchar, routine_info->get_routine_body())
 
@@ -283,6 +290,53 @@ case (COL_NAME): {    \
         }
       } else {
         //do nothing
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMySQLProcTable::get_info_from_all_routine(const uint64_t col_id,
+                                                const ObRoutineInfo *routine_info,
+                                                int64_t &routine_time)
+{
+  int ret = OB_SUCCESS;
+  common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+  if (OB_NOT_NULL(routine_info)) {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      common::sqlclient::ObMySQLResult *result = NULL;
+      const uint64_t exec_tenant_id = tenant_id_;
+      ObString col_name = col_id == CREATED ? "GMT_CREATE" : "GMT_MODIFIED";
+      const char *sql_str = "select %.*s from oceanbase.__all_routine where "
+                            " database_id = %ld and package_id = %ld "
+                            " and routine_id = %lu and subprogram_id = %ld";
+      ObSqlString sql;
+      if (OB_FAIL(sql.append_fmt(sql_str, col_name.length(), col_name.ptr(),
+                                routine_info->get_database_id() & 0xFFFFFFFF,
+                                routine_info->get_package_id(),
+                                routine_info->get_routine_id() & 0xFFFFFFFF,
+                                routine_info->get_subprogram_id()))) {
+        SERVER_LOG(WARN, "fail to append sql", K(sql_str), K(routine_info->get_database_id()),
+          K(routine_info->get_routine_id()), K(ret));
+      } else if (OB_ISNULL(sql_proxy)) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "data member is not init", K(ret));
+      } else if (OB_FAIL(sql_proxy->read(res, exec_tenant_id, sql.ptr()))) {
+        SERVER_LOG(WARN, "fail to read result", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "result set from read is NULL", K(ret));
+      } else if (OB_SUCC(result->next())) {
+        const int64_t col_idx = 0;
+        const common::ObTimeZoneInfo *time_info = NULL;
+        ret = result->get_timestamp(col_idx, time_info, routine_time);
+      }
+
+      if (OB_LIKELY(OB_ITER_END == ret)) {
+        ret = OB_SUCCESS;
+        SERVER_LOG(INFO, "get null info from all_routine", K(col_name));
+      } else {
+        SERVER_LOG(WARN, "fail to fill table statstistics", K(ret));
       }
     }
   }
