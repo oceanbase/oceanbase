@@ -23,6 +23,7 @@
 #include "sql/ob_sql_utils.h"
 #include "sql/rewrite/ob_query_range.h"
 #include "share/backup/ob_backup_io_adapter.h"
+#include "deps/oblib/src/lib/net/ob_addr.h"
 
 namespace oceanbase
 {
@@ -416,6 +417,26 @@ int ObExternalTableUtils::calc_assigned_files_to_sqcs(
     assigned_idx.at(sorted_files.at(i).file_idx_) = cur_min_set.sqc_idx_;
     OZ (heap.pop());
     OZ (heap.push(cur_min_set));
+  }
+  return ret;
+}
+
+int ObExternalTableUtils::filter_files_in_locations(common::ObIArray<share::ObExternalFileInfo> &files,
+                                    common::ObIArray<common::ObAddr> &locations,
+                                    common::ObIArray<share::ObExternalFileInfo> &res)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < files.count(); i++) {
+    ObExternalFileInfo &table_info = files.at(i);
+    bool found = false;
+    for (int64_t j = 0; OB_SUCC(ret) && !found && j < locations.count(); j++) {
+      if (table_info.file_addr_ == locations.at(j)) {
+        found = true;
+      }
+    }
+    if (OB_SUCC(ret) && found) {
+      ret = res.push_back(table_info);
+    }
   }
   return ret;
 }
