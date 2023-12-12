@@ -6463,6 +6463,7 @@ int ObExecEnv::store(ObBasicSessionInfo &session)
 
 void ObBasicSessionInfo::on_get_session()
 {
+  LockGuard lock_guard(thread_data_mutex_);
   const char *str = lbt();
   int len = STRLEN(str);
   if (sess_bt_buff_pos_ + len + 2 < MAX_SESS_BT_BUFF_SIZE) {
@@ -6480,6 +6481,7 @@ void ObBasicSessionInfo::on_get_session()
 
 void ObBasicSessionInfo::on_revert_session()
 {
+  LockGuard lock_guard(thread_data_mutex_);
   int32_t v = ATOMIC_AAF(&sess_ref_cnt_, -1);
   if (v <= 0) {
     sess_bt_buff_pos_ = 0;
