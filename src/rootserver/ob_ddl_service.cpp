@@ -7758,6 +7758,8 @@ int ObDDLService::check_column_in_index(
             const ObColumnSchemaV2 *column_schema = NULL;
             if (column_id == column_ids.at(j).col_id_) {
               is_in_index = true;
+            } else if (column_ids.at(j).col_id_ > common::OB_MIN_SHADOW_COLUMN_ID) {
+              // table schema get column_schema by shadow_column_id, the result is nullptr;
             } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(column_ids.at(j).col_id_))) {
               ret = OB_SCHEMA_ERROR;
               LOG_WARN("column schema must not be NULL", K(ret), K(column_ids.at(j)));
@@ -7766,6 +7768,10 @@ int ObDDLService::check_column_in_index(
               if (OB_FAIL(column_schema->get_cascaded_column_ids(ref_column_ids))) {
                 LOG_WARN("fail to get cascade column ids", K(ret));
               } else {
+                /*
+                  If the column (namely A) is depended by a generated column, and users build an index on the generated column.
+                  We consider the column (A) is in index.
+                */
                 is_in_index = has_exist_in_array(ref_column_ids, column_id);
               }
             }
