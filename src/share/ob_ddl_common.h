@@ -537,6 +537,12 @@ public:
       share::schema::ObSchemaGetterGuard *&src_tenant_schema_guard,
       share::schema::ObSchemaGetterGuard *&dst_tenant_schema_guard);
 
+  static int check_table_empty_in_oracle_mode(
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      bool &is_table_empty);
+
   static int check_tenant_status_normal(
       ObISQLClient *proxy,
       const uint64_t check_tenant_id);
