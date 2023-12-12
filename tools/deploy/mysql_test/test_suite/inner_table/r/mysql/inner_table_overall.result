@@ -266,6 +266,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 480	__all_import_table_task_history	0	201001	1
 494	__all_aux_stat	0	201001	1
 495	__all_index_usage_info	0	201001	1
+502	__all_trusted_root_certificate	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -1041,6 +1042,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21497	DBA_OB_AUX_STATISTICS	1	201001	1
 21498	CDB_OB_AUX_STATISTICS	1	201001	1
 21499	DBA_INDEX_USAGE	1	201001	1
+21509	DBA_OB_TRUSTED_ROOT_CERTIFICATE	1	201001	1
 21513	CDB_INDEX_USAGE	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success

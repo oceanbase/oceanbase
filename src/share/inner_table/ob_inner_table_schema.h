@@ -558,6 +558,7 @@ public:
   static int all_import_table_task_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_aux_stat_schema(share::schema::ObTableSchema &table_schema);
   static int all_index_usage_info_schema(share::schema::ObTableSchema &table_schema);
+  static int all_trusted_root_certificate_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_all_table_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_table_column_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_table_index_schema(share::schema::ObTableSchema &table_schema);
@@ -1583,6 +1584,7 @@ public:
   static int dba_ob_aux_statistics_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_aux_statistics_schema(share::schema::ObTableSchema &table_schema);
   static int dba_index_usage_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_trusted_root_certificate_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_index_usage_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
   static int dba_objects_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -2274,6 +2276,7 @@ public:
   static int all_import_table_task_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_aux_stat_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_index_usage_info_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_trusted_root_certificate_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_ddl_operation_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
@@ -2540,6 +2543,7 @@ public:
   static int all_import_table_task_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_aux_stat_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_index_usage_info_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_trusted_root_certificate_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ash_all_virtual_ash_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_plan_monitor_all_virtual_sql_plan_monitor_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(share::schema::ObTableSchema &table_schema);
@@ -3010,6 +3014,7 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::all_import_table_task_history_schema,
   ObInnerTableSchema::all_aux_stat_schema,
   ObInnerTableSchema::all_index_usage_info_schema,
+  ObInnerTableSchema::all_trusted_root_certificate_schema,
   NULL,};
 
 const schema_create_func virtual_table_schema_creators [] = {
@@ -4132,6 +4137,7 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::dba_ob_aux_statistics_schema,
   ObInnerTableSchema::cdb_ob_aux_statistics_schema,
   ObInnerTableSchema::dba_index_usage_schema,
+  ObInnerTableSchema::dba_ob_trusted_root_certificate_schema,
   ObInnerTableSchema::cdb_index_usage_schema,
   ObInnerTableSchema::dba_synonyms_schema,
   ObInnerTableSchema::dba_objects_ora_schema,
@@ -11658,6 +11664,14 @@ LOBMapping const lob_aux_table_mappings [] = {
     ObInnerTableSchema::all_index_usage_info_aux_lob_piece_schema
   },
 
+  {
+    OB_ALL_TRUSTED_ROOT_CERTIFICATE_TID,
+    OB_ALL_TRUSTED_ROOT_CERTIFICATE_AUX_LOB_META_TID,
+    OB_ALL_TRUSTED_ROOT_CERTIFICATE_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_trusted_root_certificate_aux_lob_meta_schema,
+    ObInnerTableSchema::all_trusted_root_certificate_aux_lob_piece_schema
+  },
+
 };
 
 static inline bool get_sys_table_lob_aux_table_id(const uint64_t tid, uint64_t& meta_tid, uint64_t& piece_tid)
@@ -11695,12 +11709,12 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 }
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
-const int64_t OB_SYS_TABLE_COUNT = 263;
+const int64_t OB_SYS_TABLE_COUNT = 264;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 746;
-const int64_t OB_SYS_VIEW_COUNT = 795;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1809;
+const int64_t OB_SYS_VIEW_COUNT = 796;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1811;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1812;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1814;
 
 } // end namespace share
 } // end namespace oceanbase

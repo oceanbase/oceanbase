@@ -1310,6 +1310,8 @@ void call_dtor(T *&ptr)
 //      OB_IO_ERROR Error executing system call
 //      OB_SUCCESS successfully executed
 int is_dir_empty(const char *dirname, bool &is_empty);
+
+int extract_cert_expired_time(const char* cert, const int64_t cert_len, int64_t &expired_time);
 } // end namespace common
 } // end namespace oceanbase
 

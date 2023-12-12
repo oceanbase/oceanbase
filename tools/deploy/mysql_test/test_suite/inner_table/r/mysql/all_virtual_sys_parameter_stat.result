@@ -90,6 +90,7 @@ enable_record_trace_id
 enable_record_trace_log
 enable_rereplication
 enable_rich_error_msg
+enable_rpc_authentication_bypass
 enable_sql_audit
 enable_sql_extension
 enable_sql_operator_dump

@@ -273,7 +273,8 @@ static ObSysPackageFile mysql_sys_package_file_table[] = {
   {"dbms_spm", "dbms_spm_mysql.sql", "dbms_spm_body_mysql.sql"},
 #endif
   {"dbms_udr", "dbms_udr_mysql.sql", "dbms_udr_body_mysql.sql"},
-  {"dbms_workload_repository", "dbms_workload_repository_mysql.sql", "dbms_workload_repository_body_mysql.sql"}
+  {"dbms_workload_repository", "dbms_workload_repository_mysql.sql", "dbms_workload_repository_body_mysql.sql"},
+  {"dbms_trusted_certificate_manager", "dbms_trusted_certificate_manager_mysql.sql", "dbms_trusted_certificate_manager_body_mysql.sql"},
 };
 
 int ObPLPackageManager::load_sys_package(ObMySQLProxy &sql_proxy, ObString &package_name, ObCompatibilityMode compa_mode)

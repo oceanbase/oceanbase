@@ -228,6 +228,7 @@ static int ob_ssl_set_verify_mode_and_load_CA(SSL_CTX *ctx, const ssl_config_ite
     } else {
       SSL_CTX_set_cert_store(ctx, x509_store);
     }
+
     if (NULL != bio) {
       BIO_free(bio);
     }
@@ -850,4 +851,13 @@ ssize_t writev_regard_ssl(int fildes, const struct iovec *iov, int iovcnt)
     }
   }
   return wbytes;
+}
+
+SSL_CTX* ussl_get_server_ctx(int ctx_id)
+{
+  SSL_CTX *ctx = NULL;
+  pthread_rwlock_rdlock(&g_ssl_ctx_rwlock);
+  ctx = gs_ssl_ctx_array[ctx_id][SSL_ROLE_SERVER];
+  pthread_rwlock_unlock(&g_ssl_ctx_rwlock);
+  return ctx;
 }
