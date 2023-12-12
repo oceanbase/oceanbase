@@ -205,13 +205,15 @@ int ObLockMemCtx::get_table_lock_for_transfer(ObTableLockInfo &table_lock_info, 
       }
       if (OB_FAIL(ret)) {
       } else if (!is_hit) {
-      } else if (!curr->is_logged()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("lock op is not logged", KR(ret), K(curr));
-        break;
-      } else if (OB_FAIL(table_lock_info.table_lock_ops_.push_back(curr->lock_op_))) {
-        LOG_WARN("fail to push back table_lock store info", K(ret));
-        break;
+      } else {
+        // table lock MDS not impl on_redo phase
+        if (!curr->is_logged()) {
+          LOG_WARN("lock op is not logged", K(*curr), K(tablet_list));
+        }
+        if (OB_FAIL(table_lock_info.table_lock_ops_.push_back(curr->lock_op_))) {
+          LOG_WARN("fail to push back table_lock store info", K(ret));
+          break;
+        }
       }
     }
   }
