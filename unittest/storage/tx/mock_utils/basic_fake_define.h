@@ -36,6 +36,10 @@ namespace transaction {
 
 class ObFakeTxDataTable : public ObTxDataTable {
 public:
+  ObSliceAlloc slice_allocator_;
+  ObTenantTxDataAllocator *FAKE_ALLOCATOR = (ObTenantTxDataAllocator *)0x1;
+
+public:
   ObFakeTxDataTable() : arena_allocator_(), map_(arena_allocator_, 1 << 20 /*2097152*/)
   {
     IGNORE_RETURN map_.init();
@@ -46,7 +50,7 @@ public:
     ObMemtableMgrHandle memtable_mgr_handle;
     OB_ASSERT(OB_SUCCESS == slice_allocator_.init(
                                 sizeof(ObTxData), OB_MALLOC_NORMAL_BLOCK_SIZE, common::default_blk_alloc, mem_attr));
-    slice_allocator_.set_nway(ObTxDataTable::TX_DATA_MAX_CONCURRENCY);
+    slice_allocator_.set_nway(32);
     is_inited_ = true;
   }
   virtual int init(ObLS *ls, ObTxCtxTable *tx_ctx_table) override
@@ -57,12 +61,15 @@ public:
   virtual void stop() override {}
   virtual void reset() override {}
   virtual void destroy() override {}
-  virtual int alloc_tx_data(ObTxDataGuard &tx_data_guard) override
+  virtual int alloc_tx_data(ObTxDataGuard &tx_data_guard,
+                            const bool enable_throttle,
+                            const int64_t abs_expire_time)
   {
-    void *ptr = slice_allocator_.alloc();
+    ObMemAttr attr;
+    void *ptr = ob_malloc(TX_DATA_SLICE_SIZE, attr);
     ObTxData *tx_data = new (ptr) ObTxData();
     tx_data->ref_cnt_ = 100;
-    tx_data->slice_allocator_ = &slice_allocator_;
+    tx_data->tx_data_allocator_ = FAKE_ALLOCATOR;
     tx_data->flag_ = 269381;
     tx_data_guard.init(tx_data);
     return OB_ISNULL(tx_data) ? OB_ALLOCATE_MEMORY_FAILED : OB_SUCCESS;
@@ -74,7 +81,7 @@ public:
     ObTxData *to = new (ptr) ObTxData();
     ObTxData *from = (ObTxData*)from_guard.tx_data();
     to->ref_cnt_ = 100;
-    to->slice_allocator_ = &slice_allocator_;
+    to->tx_data_allocator_ = FAKE_ALLOCATOR;
     to->flag_ = 269381;
     to_guard.init(to);
     OX (*to = *from);

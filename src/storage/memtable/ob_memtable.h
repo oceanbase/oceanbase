@@ -12,7 +12,7 @@
 
 #ifndef OCEANBASE_MEMTABLE_OB_MEMTABLE_
 #define OCEANBASE_MEMTABLE_OB_MEMTABLE_
-#include "share/allocator/ob_gmemstore_allocator.h"
+#include "share/allocator/ob_memstore_allocator.h"
 
 #include "share/ob_tenant_mgr.h"
 #include "share/ob_cluster_version.h"
@@ -182,8 +182,8 @@ enum class MemtableRefOp
 class ObMemtable : public ObIMemtable, public storage::checkpoint::ObFreezeCheckpoint
 {
 public:
-  typedef common::ObGMemstoreAllocator::AllocHandle ObMemstoreAllocator;
   using ObMvccRowAndWriteResults = common::ObSEArray<ObMvccRowAndWriteResult, 16>;
+  typedef share::ObMemstoreAllocator::AllocHandle ObSingleMemstoreAllocator;
   ObMemtable();
   virtual ~ObMemtable();
 public:
@@ -630,7 +630,7 @@ private:
   storage::ObFreezer *freezer_;
   storage::ObTabletMemtableMgr *memtable_mgr_;
   mutable uint32_t freeze_clock_;
-  ObMemstoreAllocator local_allocator_;
+  ObSingleMemstoreAllocator local_allocator_;
   ObMTKVBuilder kv_builder_;
   ObQueryEngine query_engine_;
   ObMvccEngine mvcc_engine_;

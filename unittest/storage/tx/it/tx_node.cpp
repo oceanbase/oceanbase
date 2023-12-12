@@ -22,9 +22,9 @@
 } while(0);
 
 namespace oceanbase {
-namespace common
+namespace share
 {
-void* ObGMemstoreAllocator::alloc(AllocHandle& handle, int64_t size)
+void* ObMemstoreAllocator::alloc(AllocHandle& handle, int64_t size, const int64_t expire_ts)
 {
   int ret = OB_SUCCESS;
   int64_t align_size = upper_align(size, sizeof(int64_t));

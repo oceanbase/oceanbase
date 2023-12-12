@@ -34,14 +34,14 @@ public:
   void reset();
   void destroy();
 
-  int init(ObLSTxCtxMgr *ctx_mgr, int64_t tx_id);
+  int init(const int64_t abs_expire_time, ObLSTxCtxMgr *ctx_mgr, int64_t tx_id);
 
   bool is_read_only() const { return read_only_; }
   int insert_into_tx_table();
   int recover_tx_data(storage::ObTxDataGuard &rhs);
   int replace_tx_data(storage::ObTxData *tmp_tx_data);
   int deep_copy_tx_data_out(storage::ObTxDataGuard &tmp_tx_data_guard);
-  int alloc_tmp_tx_data(storage::ObTxDataGuard &tmp_tx_data);
+  // int alloc_tmp_tx_data(storage::ObTxDataGuard &tmp_tx_data);
   int free_tmp_tx_data(storage::ObTxData *&tmp_tx_data);
   int insert_tmp_tx_data(storage::ObTxData *tmp_tx_data);
 

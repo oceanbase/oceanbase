@@ -57,16 +57,16 @@ int check_sequence_set_violation(const concurrent_control::ObWriteFlag ,
 }
 } // concurrent_control
 
-namespace common
+namespace share
 {
 // override the function
-int ObGMemstoreAllocator::set_memstore_threshold_without_lock(uint64_t tenant_id)
+int ObMemstoreAllocator::set_memstore_threshold_without_lock()
 {
   int64_t memstore_threshold = INT64_MAX;
   arena_.set_memstore_threshold(memstore_threshold);
   return OB_SUCCESS;
 }
-void* ObGMemstoreAllocator::alloc(AllocHandle& handle, int64_t size)
+void* ObMemstoreAllocator::alloc(AllocHandle& handle, int64_t size)
 {
   int64_t align_size = upper_align(size, sizeof(int64_t));
   if (!handle.is_id_valid()) {
@@ -78,7 +78,7 @@ void* ObGMemstoreAllocator::alloc(AllocHandle& handle, int64_t size)
     }
   }
   if (arena_.allocator_ == nullptr) {
-    if (arena_.init(OB_SERVER_TENANT_ID) != OB_SUCCESS) {
+    if (arena_.init() != OB_SUCCESS) {
       abort();
     }
   }

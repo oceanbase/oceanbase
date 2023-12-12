@@ -128,7 +128,7 @@ int ObTxCtxTableInfo::deserialize(const char *buf,
   int ret = OB_SUCCESS;
   ObTxCtxTableCommonHeader header(MAGIC_VERSION, 0);
 
-  if (OB_FAIL(tx_data_table.alloc_tx_data(tx_data_guard_))) {
+  if (OB_FAIL(tx_data_table.alloc_tx_data(tx_data_guard_, false/* enable_throttle */))) {
       STORAGE_LOG(WARN, "alloc tx data failed", KR(ret));
   } else if (OB_FAIL(header.deserialize(buf, buf_len, pos))) {
     TRANS_LOG(WARN, "deserialize header fail", K(buf_len), K(pos), K(ret));
@@ -151,7 +151,7 @@ int ObTxCtxTableInfo::deserialize_(const char *buf,
     TRANS_LOG(WARN, "deserialize ls_id fail.", KR(ret), K(pos), K(buf_len));
   } else if (OB_FAIL(serialization::decode_vi64(buf, buf_len, pos, &cluster_id_))) {
     TRANS_LOG(WARN, "encode cluster_id fail", K(cluster_id_), K(buf_len), K(pos), K(ret));
-  } else if (OB_FAIL(tx_data_guard_.tx_data()->deserialize(buf, buf_len, pos, *tx_data_table.get_slice_allocator()))) {
+  } else if (OB_FAIL(tx_data_guard_.tx_data()->deserialize(buf, buf_len, pos, *tx_data_table.get_tx_data_allocator()))) {
     TRANS_LOG(WARN, "deserialize state_info fail.", KR(ret), K(pos), K(buf_len));
   } else if (OB_FAIL(exec_info_.deserialize(buf, buf_len, pos))) {
     TRANS_LOG(WARN, "deserialize exec_info fail.", KR(ret), K(pos), K(buf_len));

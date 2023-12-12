@@ -15,9 +15,10 @@
 #include "storage/tx_table/ob_tx_table.h"
 #include "share/rc/ob_tenant_base.h"
 
+using namespace oceanbase::share;
+
 namespace oceanbase
 {
-
 namespace storage
 {
 
@@ -69,7 +70,7 @@ int ObUndoStatusList::serialize_(char *buf, const int64_t buf_len, int64_t &pos)
 int ObUndoStatusList::deserialize(const char *buf,
                                   const int64_t data_len,
                                   int64_t &pos,
-                                  ObSliceAlloc &slice_allocator)
+                                  ObTenantTxDataAllocator &tx_data_allocator)
 {
   int ret = OB_SUCCESS;
   int64_t version = 0;
@@ -92,7 +93,7 @@ int ObUndoStatusList::deserialize(const char *buf,
   } else {
     int64_t original_pos = pos;
     pos = 0;
-    if (OB_FAIL(deserialize_(buf + original_pos, undo_status_list_len, pos, slice_allocator))) {
+    if (OB_FAIL(deserialize_(buf + original_pos, undo_status_list_len, pos, tx_data_allocator))) {
       STORAGE_LOG(WARN, "deserialize_ fail", "slen", undo_status_list_len, K(pos), K(ret));
     }
     pos += original_pos;
@@ -104,7 +105,7 @@ int ObUndoStatusList::deserialize(const char *buf,
 int ObUndoStatusList::deserialize_(const char *buf,
                                    const int64_t data_len,
                                    int64_t &pos,
-                                   ObSliceAlloc &slice_allocator)
+                                   ObTenantTxDataAllocator &tx_data_allocator)
 {
   int ret = OB_SUCCESS;
   ObUndoStatusNode *cur_node = nullptr;
@@ -115,11 +116,7 @@ int ObUndoStatusList::deserialize_(const char *buf,
     // allcate new undo status node if needed
     if (OB_ISNULL(cur_node) || cur_node->size_ >= TX_DATA_UNDO_ACT_MAX_NUM_PER_NODE) {
       void *undo_node_buf = nullptr;
-#ifdef OB_ENABLE_SLICE_ALLOC_LEAK_DEBUG
-      if (OB_ISNULL(undo_node_buf = slice_allocator.alloc(true /*record_alloc_lbt*/))) {
-#else
-      if (OB_ISNULL(undo_node_buf = slice_allocator.alloc())) {
-#endif
+      if (OB_ISNULL(undo_node_buf = tx_data_allocator.alloc(false/* enable_throttle */))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "allocate memory when deserialize ObTxData failed.", KR(ret));
       } else {
@@ -337,7 +334,7 @@ int64_t ObTxData::size() const
 int ObTxData::deserialize(const char *buf,
                           const int64_t data_len,
                           int64_t &pos,
-                          ObSliceAlloc &slice_allocator)
+                          ObTenantTxDataAllocator &slice_allocator)
 {
   int ret = OB_SUCCESS;
   int64_t version = 0;
@@ -366,7 +363,7 @@ int ObTxData::deserialize(const char *buf,
 int ObTxData::deserialize_(const char *buf,
                            const int64_t data_len,
                            int64_t &pos,
-                           ObSliceAlloc &slice_allocator)
+                           ObTenantTxDataAllocator &tx_data_allocator)
 {
   int ret = OB_SUCCESS;
 
@@ -380,7 +377,7 @@ int ObTxData::deserialize_(const char *buf,
     STORAGE_LOG(WARN, "deserialize start_scn fail.", KR(ret), K(pos), K(data_len));
   } else if (OB_FAIL(end_scn_.deserialize(buf, data_len, pos))) {
     STORAGE_LOG(WARN, "deserialize end_scn fail.", KR(ret), K(pos), K(data_len));
-  } else if (OB_FAIL(undo_status_list_.deserialize(buf, data_len, pos, slice_allocator))) {
+  } else if (OB_FAIL(undo_status_list_.deserialize(buf, data_len, pos, tx_data_allocator))) {
     STORAGE_LOG(WARN, "deserialize undo_status_list fail.", KR(ret), K(pos), K(data_len));
   }
 
@@ -389,14 +386,14 @@ int ObTxData::deserialize_(const char *buf,
 
 void ObTxData::reset()
 {
-  if (OB_NOT_NULL(slice_allocator_) || ref_cnt_ != 0) {
+  if (OB_NOT_NULL(tx_data_allocator_) || ref_cnt_ != 0) {
     int ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "this tx data should not be reset", KR(ret), KP(this), KP(slice_allocator_), K(ref_cnt_));
+    STORAGE_LOG(WARN, "this tx data should not be reset", KR(ret), KP(this), KP(tx_data_allocator_), K(ref_cnt_));
     // TODO : @gengli remove ob_abort
     ob_abort();
   }
   ObTxCommitData::reset();
-  slice_allocator_ = nullptr;
+  tx_data_allocator_ = nullptr;
   ref_cnt_ = 0;
   undo_status_list_.reset();
 }

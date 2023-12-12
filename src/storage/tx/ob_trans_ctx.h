@@ -33,7 +33,7 @@
 #include "storage/memtable/ob_memtable_context.h"
 #include "ob_xa_define.h"
 #include "share/rc/ob_context.h"
-#include "ob_trans_hashmap.h"
+#include "share/ob_light_hashmap.h"
 #include "ob_tx_elr_handler.h"
 
 namespace oceanbase
@@ -93,7 +93,7 @@ static inline void protocol_error(const int64_t state, const int64_t msg_type)
 // For Example: If you change the signature of the function `commit` in
 // `ObTransCtx`, you should also modify the signatore of function `commit` in
 // `ObPartTransCtx`, `ObScheTransCtx`
-class ObTransCtx: public ObTransHashLink<ObTransCtx>
+class ObTransCtx: public share::ObLightHashLink<ObTransCtx>
 {
   friend class CtxLock;
 public:
@@ -202,13 +202,13 @@ protected:
   }
   int acquire_ctx_ref_()
   {
-    ObTransHashLink::inc_ref(1);
+    ObLightHashLink::inc_ref(1);
     TRANS_LOG(DEBUG, "inc tx ctx ref", KPC(this));
     return OB_SUCCESS;
   }
   void release_ctx_ref_()
   {
-    ObTransHashLink::dec_ref(1);
+    ObLightHashLink::dec_ref(1);
     TRANS_LOG(DEBUG, "dec tx ctx ref", KPC(this));
   }
 

@@ -26,7 +26,7 @@
 #include "common/ob_role.h"
 #include "share/ob_cluster_version.h"
 #include "share/ob_ls_id.h"
-#include "ob_trans_hashmap.h"
+#include "share/ob_light_hashmap.h"
 #include "storage/tx/ob_trans_define.h"
 #include "common/ob_simple_iterator.h"
 #include "share/ob_common_id.h"
@@ -411,7 +411,7 @@ private:
   common::ObMaskSet2<ObTxExecPart> mask_set_;
 };
 
-class ObTxDesc final : public ObTransHashLink<ObTxDesc>
+class ObTxDesc final : public share::ObLightHashLink<ObTxDesc>
 {
   static constexpr const char *OP_LABEL = "TX_DESC_VALUE";
   static constexpr int64_t MAX_RESERVED_CONFLICT_TX_NUM = 30;
@@ -871,7 +871,7 @@ public:
       ObTxDesc::DLink list_;
   #endif
   };
-  ObTransHashMap<ObTransID, ObTxDesc, ObTxDescAlloc, common::SpinRWLock, 1 << 16 /*bucket_num*/> map_;
+  share::ObLightHashMap<ObTransID, ObTxDesc, ObTxDescAlloc, common::SpinRWLock, 1 << 16 /*bucket_num*/> map_;
   std::function<int(ObTransID&)> tx_id_allocator_;
   ObTransService &txs_;
 };

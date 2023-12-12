@@ -109,14 +109,14 @@ public:
   int offline();
   int online();
 
-  // In OB4 .0, transaction contexts are divided into exec_data and tx_data. Where exec_data
-  // indicates the data required when the transaction is running,and tx_data indicates the data that
-  // may still be required after the transaction commits. To avoid memory copying, the entire life
-  // cycle of tx_data is maintained by tx data table.Therefore, when a transaction is started, the
-  // memory of tx_data needs to be allocated by this function
-  //
-  // @param [out] tx_data, a tx data allocated by slice allocator
-  int alloc_tx_data(ObTxDataGuard &tx_data_guard);
+  /**
+   * @brief In OB4 .0, transaction contexts are divided into exec_data and tx_data. Where exec_data indicates the data required when the transaction is running,and tx_data indicates the data that may still be required after the transaction commits. To avoid memory copying, the entire life cycle of tx_data is maintained by tx data table.Therefore, when a transaction is started, the memory of tx_data needs to be allocated by this function
+   *
+   * @param [out] tx_data a guard with tx data allocated by allocator
+   * @param [in] abs_expire_time indicate the absolute transaction's timetout point
+   * @param [in] enable_throttle if this allocation need be throttled, true as the default value
+   */
+  int alloc_tx_data(ObTxDataGuard &tx_data, const bool enable_throttle = true, const int64_t abs_expire_time = 0);
 
   int deep_copy_tx_data(const ObTxDataGuard &in_tx_data_guard, ObTxDataGuard &out_tx_data_guard);
 

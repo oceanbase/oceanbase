@@ -167,7 +167,6 @@ public:  // ObTxDataMemtable
       arena_allocator_(),
       sort_list_head_(),
       tx_data_map_(nullptr),
-      slice_allocator_(nullptr),
       memtable_mgr_(nullptr),
       freezer_(nullptr),
       buf_(arena_allocator_),
@@ -175,7 +174,6 @@ public:  // ObTxDataMemtable
   ~ObTxDataMemtable() { reset(); }
   void reset();
   int init(const ObITable::TableKey &table_key,
-           SliceAllocator *slice_allocator,
            ObTxDataMemtableMgr *memtable_mgr,
            storage::ObFreezer *freezer,
            const int64_t buckets_cnt);
@@ -474,10 +472,6 @@ private:  // ObTxDataMemtable
 
   // the hash map sotres tx data
   TxDataMap *tx_data_map_;
-
-  // the link hash map of tx data need the slice allocator of tx data table to construct because the
-  // destruct of link hash map will free all tx data
-  SliceAllocator *slice_allocator_;
 
   // used for freeze
   ObTxDataMemtableMgr *memtable_mgr_;

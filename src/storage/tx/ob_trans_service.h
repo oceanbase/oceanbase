@@ -21,6 +21,7 @@
 #include "storage/memtable/ob_memtable_context.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/ob_common_rpc_proxy.h"
+#include "share/ob_light_hashmap.h"
 #include "sql/ob_end_trans_callback.h"
 #include "lib/utility/utility.h"
 #include "ob_trans_define.h"
@@ -146,7 +147,7 @@ public:
   ObThreadLocalTransCtxState state_;
 } CACHE_ALIGNED;
 
-class ObRollbackSPMsgGuard final : public ObTransHashLink<ObRollbackSPMsgGuard>
+class ObRollbackSPMsgGuard final : public share::ObLightHashLink<ObRollbackSPMsgGuard>
 {
 public:
   ObRollbackSPMsgGuard(ObCommonID tx_msg_id, ObTxDesc &tx_desc, ObTxDescMgr &tx_desc_mgr)
@@ -338,7 +339,7 @@ private:
   // for rollback-savepoint request-id
   int64_t rollback_sp_msg_sequence_;
   // for rollback-savepoint msg resp callback to find tx_desc
-  ObTransHashMap<ObCommonID, ObRollbackSPMsgGuard, ObRollbackSPMsgGuardAlloc, common::SpinRWLock, 1 << 16 /*bucket_num*/> rollback_sp_msg_mgr_;
+  share::ObLightHashMap<ObCommonID, ObRollbackSPMsgGuard, ObRollbackSPMsgGuardAlloc, common::SpinRWLock, 1 << 16 /*bucket_num*/> rollback_sp_msg_mgr_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransService);
 };

@@ -15,6 +15,7 @@
 #include "ob_handle_list.h"
 #include "ob_fifo_arena.h"
 #include "lib/lock/ob_spin_lock.h"
+#include "share/throttle/ob_share_throttle_define.h"
 
 namespace oceanbase
 {
@@ -22,8 +23,17 @@ namespace memtable
 {
 class ObMemtable;
 };
-namespace common
+
+namespace share
 {
+
+// record the throttled alloc size of memstore in this thread
+OB_INLINE int64_t &memstore_throttled_alloc()
+{
+  RLOCAL_INLINE(int64_t, throttled_alloc);
+  return throttled_alloc;
+}
+
 struct FrozenMemstoreInfoLogger
 {
   FrozenMemstoreInfoLogger(char* buf, int64_t limit): buf_(buf), limit_(limit), pos_(0) {}
@@ -44,12 +54,15 @@ struct ActiveMemstoreInfoLogger
   int64_t pos_;
 };
 
-class ObGMemstoreAllocator
+
+class ObMemstoreAllocator
 {
 public:
+  DEFINE_CUSTOM_FUNC_FOR_THROTTLE(Memstore);
+
   typedef ObSpinLock Lock;
   typedef ObSpinLockGuard LockGuard;
-  typedef ObGMemstoreAllocator GAlloc;
+  typedef ObMemstoreAllocator GAlloc;
   typedef ObFifoArena Arena;
   typedef ObHandleList HandleList;
   typedef HandleList::Handle ListHandle;
@@ -70,7 +83,7 @@ public:
       host_ = NULL;
     }
     int64_t get_group_id() const { return id_ < 0? INT64_MAX: (id_ % Arena::MAX_CACHED_GROUP_COUNT); }
-    int init(uint64_t tenant_id);
+    int init();
     void set_host(GAlloc* host) { host_ = host; }
     void destroy() {
       if (NULL != host_) {
@@ -109,19 +122,18 @@ public:
   };
 
 public:
-  ObGMemstoreAllocator():
-      lock_(common::ObLatchIds::MEMSTORE_ALLOCATOR_LOCK),
-      hlist_(),
-      arena_() {}
-  ~ObGMemstoreAllocator() {}
+  ObMemstoreAllocator()
+      : throttle_tool_(nullptr), lock_(common::ObLatchIds::MEMSTORE_ALLOCATOR_LOCK), hlist_(), arena_() {}
+  ~ObMemstoreAllocator() {}
 public:
-  int init(uint64_t tenant_id)
-  {
-    return arena_.init(tenant_id);
-  }
-  void init_handle(AllocHandle& handle, uint64_t tenant_id);
+  int init();
+  int start() { return OB_SUCCESS; }
+  void stop() {}
+  void wait() {}
+  void destroy() {}
+  void init_handle(AllocHandle& handle);
   void destroy_handle(AllocHandle& handle);
-  void* alloc(AllocHandle& handle, int64_t size);
+  void* alloc(AllocHandle& handle, int64_t size, const int64_t expire_ts = 0);
   void set_frozen(AllocHandle& handle);
   template<typename Func>
   int for_each(Func& f, const bool reverse=false) {
@@ -145,6 +157,7 @@ public:
   int64_t get_max_cached_memstore_size() const {
     return arena_.get_max_cached_memstore_size();
   }
+  int64_t hold() const { return arena_.hold(); }
   int64_t get_total_memstore_used() const { return arena_.hold(); }
   int64_t get_frozen_memstore_pos() const {
     int64_t hazard = hlist_.hazard();
@@ -167,34 +180,21 @@ public:
       (void)for_each(logger, true /* reverse */);
     }
   }
+
 public:
-  int set_memstore_threshold(uint64_t tenant_id);
-  bool need_do_writing_throttle() const {return arena_.need_do_writing_throttle();}
-  bool check_clock_over_seq(const int64_t seq)
-  {
-    return arena_.check_clock_over_seq(seq);
-  }
-  int64_t get_clock()
-  {
-    return arena_.get_clock();
-  }
-  int64_t expected_wait_time(int64_t seq) const
-  {
-    return arena_.expected_wait_time(seq);
-  }
-  void skip_clock(const int64_t skip_size)
-  {
-    arena_.skip_clock(skip_size);
-  }
+  int set_memstore_threshold();
+
 private:
   int64_t nway_per_group();
-  int set_memstore_threshold_without_lock(uint64_t tenant_id);
+  int set_memstore_threshold_without_lock();
 private:
+  share::TxShareThrottleTool *throttle_tool_;
   Lock lock_;
   HandleList hlist_;
   Arena arena_;
 };
 
-}; // end namespace common
-}; // end namespace oceanbase
+};     // namespace share
+};     // namespace oceanbase
+
 #endif /* OCEANBASE_ALLOCATOR_OB_GMEMSTORE_ALLOCATOR_H_ */

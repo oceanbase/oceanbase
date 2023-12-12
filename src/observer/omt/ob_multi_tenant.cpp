@@ -42,6 +42,7 @@
 #include "sql/engine/px/ob_px_admission.h"
 #include "share/ob_get_compat_mode.h"
 #include "storage/tx/wrs/ob_tenant_weak_read_service.h"   // ObTenantWeakReadService
+#include "share/allocator/ob_shared_memory_allocator_mgr.h"   // ObSharedMemAllocMgr
 #include "share/allocator/ob_tenant_mutil_allocator.h"
 #include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
 #include "share/stat/ob_opt_stat_monitor_manager.h"
@@ -438,6 +439,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, storage::mds::ObTenantMdsService::mtl_init, storage::mds::ObTenantMdsService::mtl_start, storage::mds::ObTenantMdsService::mtl_stop, storage::mds::ObTenantMdsService::mtl_wait, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObStorageLogger::mtl_init, ObStorageLogger::mtl_start, ObStorageLogger::mtl_stop, ObStorageLogger::mtl_wait, mtl_destroy_default);
     MTL_BIND2(ObTenantMetaMemMgr::mtl_new, mtl_init_default, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, share::ObSharedMemAllocMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTransService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObLogService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, ObLogService::mtl_destroy);
     MTL_BIND2(mtl_new_default, logservice::ObGarbageCollector::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
@@ -1297,6 +1299,9 @@ int ObMultiTenant::update_tenant_config(uint64_t tenant_id)
       if (OB_TMP_FAIL(update_tenant_freezer_config_())) {
         LOG_WARN("failed to update tenant tenant freezer config", K(tmp_ret), K(tenant_id));
       }
+      if (OB_TMP_FAIL(update_throttle_config_())) {
+
+      }
     }
   }
   LOG_INFO("update_tenant_config success", K(tenant_id));
@@ -1357,6 +1362,20 @@ int ObMultiTenant::update_tenant_freezer_config_()
     LOG_ERROR("tenant freezer should not be null", K(ret));
   } else if (OB_FAIL(freezer->reload_config())) {
     LOG_WARN("tenant freezer config update failed", K(ret));
+  }
+  return ret;
+}
+
+int ObMultiTenant::update_throttle_config_()
+{
+  int ret = OB_SUCCESS;
+  ObSharedMemAllocMgr *share_mem_alloc_mgr = MTL(ObSharedMemAllocMgr *);
+
+  if (OB_ISNULL(share_mem_alloc_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("share mem alloc mgr should not be null", K(ret));
+  } else {
+    (void)share_mem_alloc_mgr->update_throttle_config();
   }
   return ret;
 }

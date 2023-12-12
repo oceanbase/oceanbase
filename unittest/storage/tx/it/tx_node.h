@@ -33,11 +33,13 @@
 #include "../mock_utils/msg_bus.h"
 #include "../mock_utils/basic_fake_define.h"
 #include "../mock_utils/ob_fake_tx_rpc.h"
+#include "share/allocator/ob_shared_memory_allocator_mgr.h"
 
 namespace oceanbase {
 using namespace transaction;
 using namespace share;
 using namespace common;
+
 
 namespace transaction {
 template<class T>

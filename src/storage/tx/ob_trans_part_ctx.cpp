@@ -120,7 +120,7 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
       TRANS_LOG(WARN, "ObPartTransCtx init memtable context error", KR(ret), K(trans_id), K(ls_id));
     } else if (OB_FAIL(init_log_cbs_(ls_id, trans_id))) {
       TRANS_LOG(WARN, "init log cbs failed", KR(ret), K(trans_id), K(ls_id));
-    } else if (OB_FAIL(ctx_tx_data_.init(ls_ctx_mgr, trans_id))) {
+    } else if (OB_FAIL(ctx_tx_data_.init(trans_expired_time, ls_ctx_mgr, trans_id))) {
       TRANS_LOG(WARN, "init ctx tx data failed",K(ret), K(trans_id), K(ls_id));
     } else if (OB_FAIL(mds_cache_.init(tenant_id))) {
       TRANS_LOG(WARN, "init mds cache failed", K(ret), K(trans_id), K(ls_id));
