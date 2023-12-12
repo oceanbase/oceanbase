@@ -1372,9 +1372,7 @@ int ObLoadDataSPImpl::next_file_buffer(ToolBox &box,
       }
 
       box.job_status->read_bytes_ += box.read_cursor.read_size_;
-    }
-
-    if (OB_UNLIKELY(box.file_reader->eof())) {
+    } else if (OB_UNLIKELY(box.file_reader->eof())) {
       box.read_cursor.is_end_file_ = true;
       LOG_DEBUG("LOAD DATA reach file end", K(box.read_cursor));
     }

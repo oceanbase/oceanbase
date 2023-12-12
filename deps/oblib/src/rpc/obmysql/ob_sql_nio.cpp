@@ -410,7 +410,13 @@ public:
 
   int peek_data(void* read_handle, int64_t limit, const char*& buf, int64_t& sz)
   {
-    ReadBuffer *read_buffer = (OB_ISNULL(read_handle)) ? &read_buffer_ : static_cast<ReadBuffer *>(read_handle);
+    ReadBuffer *read_buffer = &read_buffer_;
+    if (OB_UNLIKELY(OB_NOT_NULL(read_handle))) {
+      read_buffer = static_cast<ReadBuffer *>(read_handle);
+      // The application layer try to read packet but it may failed as the
+      // EAGAIN flag is set.
+      read_buffer->clear_EAGAIN();
+    }
     return read_buffer->peek_data(limit, buf, sz);
   }
 
