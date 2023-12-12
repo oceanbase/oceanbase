@@ -1004,6 +1004,11 @@ bool ObTenantLogArchiveStatus::is_compatible_valid(COMPATIBLE compatible)
   return compatible >= COMPATIBLE::NONE && compatible < COMPATIBLE::MAX;
 }
 
+bool ObTenantLogArchiveStatus::is_piece_open() const
+{
+  return 0 < start_piece_id_;
+}
+
 // archive log state machine
 // STOP->STOP
 // BEGINNING -> BEGINNING\DOING\STOPPING\INERRUPTED
