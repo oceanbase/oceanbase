@@ -9325,7 +9325,11 @@ READ_CONSISTENCY '(' consistency_level ')'
 }
 | LOAD_BATCH_SIZE '(' INTNUM ')'
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LOAD_BATCH_SIZE, 1, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LOAD_BATCH_SIZE, 2, $3, NULL);
+}
+| LOAD_BATCH_SIZE '(' INTNUM ',' STRING_VALUE ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LOAD_BATCH_SIZE, 2, $3, $5);
 }
 | DIRECT '(' BOOL_VALUE ',' INTNUM ')'
 {
