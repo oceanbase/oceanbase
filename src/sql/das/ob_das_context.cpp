@@ -339,7 +339,7 @@ OB_INLINE int ObDASCtx::build_related_tablet_loc(ObDASTabletLoc &tablet_loc)
       related_tablet_loc->partition_id_ = rv->part_id_;
       related_tablet_loc->first_level_part_id_ = rv->first_level_part_id_;
       tablet_loc.next_ = related_tablet_loc;
-#ifdef DENABLE_DEBUG_LOG
+#ifdef ENABLE_DEBUG_LOG
       // This is a defensive check, it is not expected that a tablet would already exist in the table loc.
       ObDASTabletLoc *tmp_tablet_loc = nullptr;
       if (OB_FAIL(related_table_loc->get_tablet_loc_by_id(related_tablet_loc->tablet_id_, tmp_tablet_loc))) {
@@ -349,7 +349,8 @@ OB_INLINE int ObDASCtx::build_related_tablet_loc(ObDASTabletLoc &tablet_loc)
         LOG_ERROR("unexpected duplicate tablet loc", K(ret), K(tablet_loc), KPC(related_table_loc), KPC(related_tablet_loc));
       }
 #endif
-      if (OB_FAIL(location_router_.save_touched_tablet_id(related_tablet_loc->tablet_id_))) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(location_router_.save_touched_tablet_id(related_tablet_loc->tablet_id_))) {
         LOG_WARN("save touched tablet id failed", K(ret), KPC(related_tablet_loc));
       } else if (OB_FAIL(related_table_loc->add_tablet_loc(related_tablet_loc))) {
         LOG_WARN("add related tablet location failed", K(ret));
