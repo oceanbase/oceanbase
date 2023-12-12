@@ -13706,6 +13706,7 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15427', all_def_ke
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15440', all_def_keywords['__all_index_usage_info'])))
 
 # 15441: __all_virtual_share_storage_quota_assignment
+# 15442: __all_virtual_column_group
 # 余留位置
 
 ################################################################################
