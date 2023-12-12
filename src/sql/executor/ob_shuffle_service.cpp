@@ -52,7 +52,7 @@ int ObShuffleService::get_partition_ids(ObExecContext &exec_ctx,
                                         const ObIArray<ObTransmitRepartColumn> &repart_sub_columns,
                                         int64_t &part_id,
                                         int64_t &subpart_id,
-                                        bool &no_match_partiton)
+                                        bool &no_match_partition)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(init_expr_ctx(exec_ctx))) {
@@ -69,10 +69,10 @@ int ObShuffleService::get_partition_ids(ObExecContext &exec_ctx,
   }
   if (OB_SUCC(ret)) {
     if (part_id == NO_MATCH_PARTITION || subpart_id == NO_MATCH_PARTITION) {
-      no_match_partiton = true;
+      no_match_partition = true;
     }
   }
-  LOG_DEBUG("get part id and subpart id", K(part_id), K(subpart_id), K(no_match_partiton));
+  LOG_DEBUG("get part id and subpart id", K(part_id), K(subpart_id), K(no_match_partition));
   return ret;
 }
 

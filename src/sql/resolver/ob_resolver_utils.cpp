@@ -3787,7 +3787,7 @@ int ObResolverUtils::check_expr_valid_for_partition(ObRawExpr &expr,
       part_expr = &expr;
     }
   } else if (is_range_part(part_type) || is_list_part(part_type) || is_key_part(part_type)) {
-    //对于partiton by range(xx) 这里的expr是xx
+    //对于partition by range(xx) 这里的expr是xx
     part_expr = &expr;
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -4325,7 +4325,7 @@ int ObResolverUtils::resolve_partition_expr(ObResolverParams &params,
       ret = OB_ERR_PARTITION_FUNCTION_IS_NOT_ALLOWED;
 
     } else if (columns.size() <= 0) {
-      //处理partiton中为常量表达式的情况 partition by hash(1+1+1) /partition by range (1+1+1)
+      //处理partition中为常量表达式的情况 partition by hash(1+1+1) /partition by range (1+1+1)
       //用于限制 partition by hash(1)
       ret = OB_ERR_WRONG_EXPR_IN_PARTITION_FUNC_ERROR;
       LOG_WARN("const expr is invalid for thie type of partitioning", K(ret));

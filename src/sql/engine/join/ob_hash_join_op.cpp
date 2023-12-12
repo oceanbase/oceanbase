@@ -2045,7 +2045,7 @@ int ObHashJoinOp::asyn_dump_partition(
   LOG_TRACE("debug dump partition", K(is_left), K(start_dumped_part_idx),
     K(last_dumped_partition_idx), K(cur_dumped_partition_),
     K(pre_total_dumped_size), K(dumped_size), K(dump_all), K(lbt()));
-  // secondly dump one buffer per partiton one by one
+  // secondly dump one buffer per partition one by one
   bool finish_dump = false;
   while (OB_SUCC(ret) && !finish_dump) {
     finish_dump = true;
@@ -3991,7 +3991,7 @@ int ObHashJoinOp::insert_batch_row(const int64_t cur_partition_in_memory)
 {
   int ret = OB_SUCCESS;
   bool need_material = true;
-  bool dumped_partiton = false;
+  bool dumped_partition = false;
   ObHashJoinStoredJoinRow *stored_row = nullptr;
   const int64_t part_idx = get_part_idx(cur_right_hash_value_);
   if (part_idx < cur_partition_in_memory) {
@@ -4003,14 +4003,14 @@ int ObHashJoinOp::insert_batch_row(const int64_t cur_partition_in_memory)
       }
     }
   } else {
-    dumped_partiton = true;
+    dumped_partition = true;
   }
   if (!need_material) {
   } else if (nullptr != right_read_row_) {
     if (OB_FAIL(right_hj_part_array_[part_idx].add_row(right_read_row_, stored_row))) {
       LOG_WARN("fail to add row", K(ret));
     } else {
-      if (!dumped_partiton && right_hj_part_array_[part_idx].has_switch_block()) {
+      if (!dumped_partition && right_hj_part_array_[part_idx].has_switch_block()) {
         cur_full_right_partition_ = part_idx;
         cur_left_hist_ = &part_histograms_[cur_full_right_partition_];
       }
@@ -4021,7 +4021,7 @@ int ObHashJoinOp::insert_batch_row(const int64_t cur_partition_in_memory)
       LOG_WARN("fail to add row", K(ret));
     } else {
       stored_row->set_hash_value(cur_right_hash_value_);
-      if (!dumped_partiton && right_hj_part_array_[part_idx].has_switch_block()) {
+      if (!dumped_partition && right_hj_part_array_[part_idx].has_switch_block()) {
         cur_full_right_partition_ = part_idx;
         cur_left_hist_ = &part_histograms_[cur_full_right_partition_];
         // need right to probe, it may return left and right data, so it need save temporarily
@@ -4163,7 +4163,7 @@ int ObHashJoinOp::get_next_batch_right_rows()
   has_fill_left_row_ = false;
   if (OB_ITER_END == ret) {
     ret = OB_SUCCESS;
-    // probe left all right rows from 0 partition to last partiton
+    // probe left all right rows from 0 partition to last partition
     cur_full_right_partition_ = -1;
     LOG_DEBUG("debug partition start", K(cur_full_right_partition_));
     if (!enable_batch_) {

@@ -3022,7 +3022,7 @@ private:
   uint64_t invoker_id_;
   uint64_t package_id_;
   uint64_t proc_id_;
-  uint64_t is_object_udf_; // 1: true, why use uint64_t but not bool, for the convinence with llvm cg
+  uint64_t is_object_udf_; // 1: true, why use uint64_t but not bool, for the convenience with llvm cg
   ObPLSEArray<int64_t> subprogram_path_;
   ObPLSEArray<InOutParam> params_;
   ObPLSEArray<int64_t> nocopy_params_;
