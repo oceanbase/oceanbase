@@ -1121,7 +1121,8 @@ int ObCreateViewResolver::add_column_infos(const uint64_t tenant_id,
     LOG_WARN("failed to get data version", K(ret));
   } else if (data_version >= DATA_VERSION_4_1_0_0) {
     if ((!column_list.empty() && OB_UNLIKELY(column_list.count() != select_items.count()))
-        || (!comment_list.empty() && OB_UNLIKELY(comment_list.count() != select_items.count()))) {
+        || (!table_schema.is_sys_view() && !comment_list.empty()
+             && OB_UNLIKELY(comment_list.count() != select_items.count()))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get wrong column count", K(ret), K(column_list.count()), K(comment_list.count()),
                                            K(select_items.count()), K(table_schema), K(select_stmt));
@@ -1141,7 +1142,9 @@ int ObCreateViewResolver::add_column_infos(const uint64_t tenant_id,
         } else {
           OZ(column.set_column_name(select_item.expr_name_));
         }
-        if (OB_SUCC(ret) && !comment_list.empty()) {
+        if (OB_SUCC(ret) && !comment_list.empty() && !table_schema.is_sys_view()) {
+          // System view recompilation may have definition changes,
+          // so previous comments can only be discarded.
           OZ(column.set_comment(comment_list.at(i)));
         }
         if (OB_SUCC(ret)) {

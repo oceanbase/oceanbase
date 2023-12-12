@@ -5237,8 +5237,13 @@ int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_vie
   } else if (OB_ISNULL(GCTX.sql_engine_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get sql engine", K(ret));
-  } else if ((0 == old_view_schema.get_object_status() || 0 == old_view_schema.get_column_count())) {
-    if (!reset_column_infos) {
+  } else if ((0 == old_view_schema.get_object_status()
+             || 0 == old_view_schema.get_column_count()
+             || (old_view_schema.is_sys_view()
+                 && old_view_schema.get_schema_version() <= GCTX.start_time_))) {
+    if (old_view_schema.is_sys_view() && GCONF.in_upgrade_mode()) {
+      //do not recompile sys view until upgrade finish
+    } else if (!reset_column_infos) {
       ObArray<ObString> dummy_column_list;
       ObArray<ObString> column_comments;
       bool resolve_succ = true;
