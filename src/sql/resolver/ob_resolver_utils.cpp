@@ -285,10 +285,13 @@ int ObResolverUtils::collect_schema_version(share::schema::ObSchemaGetterGuard &
           }
         }
       }
-      OZ (udf_expr->get_schema_object_version(ver));
-      OZ (dependency_objects.push_back(ver));
-      if (OB_NOT_NULL(dep_db_array)) {
-        OZ (dep_db_array->push_back(database_id));
+      ObArray<ObSchemaObjVersion> vers;
+      OZ (udf_expr->get_schema_object_version(schema_guard, vers));
+      for (int64_t i = 0; OB_SUCC(ret) && i < vers.count(); ++i) {
+        OZ (dependency_objects.push_back(vers.at(i)));
+        if (OB_NOT_NULL(dep_db_array)) {
+          OZ (dep_db_array->push_back(database_id));
+        }
       }
     }
     OX (expr->set_is_called_in_sql(is_called_in_sql));

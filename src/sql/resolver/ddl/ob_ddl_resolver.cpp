@@ -6086,34 +6086,38 @@ int ObDDLResolver::add_udt_default_dependency(ObRawExpr *expr,
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr)) {
-  } else if (OB_ISNULL(schema_checker)) {
+  } else if (OB_ISNULL(schema_checker) || OB_ISNULL(schema_checker->get_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("need schema checker to validate udt dependency", K(ret));
   } else {
     bool need_dependency = false;
     ObSchemaObjVersion obj_version;
+    ObArray<ObSchemaObjVersion> obj_versions;
 
     if (expr->get_expr_type() == T_FUN_PL_OBJECT_CONSTRUCT) {
       ObObjectConstructRawExpr *obj_cons_expr = static_cast<ObObjectConstructRawExpr *>(expr);
       // refer to ObDMLResolver::resolve_external_name
       need_dependency = obj_cons_expr->need_add_dependency();
       if (need_dependency) {
-        ret = obj_cons_expr->get_schema_object_version(obj_version);
+        OZ(obj_cons_expr->get_schema_object_version(obj_version));
+        OZ(obj_versions.push_back(obj_version));
       }
     } else if (expr->get_expr_type() == T_FUN_PL_COLLECTION_CONSTRUCT) {
       ObCollectionConstructRawExpr *obj_coll_expr = static_cast<ObCollectionConstructRawExpr *>(expr);
       need_dependency = obj_coll_expr->need_add_dependency();
       if (need_dependency) {
-        ret = obj_coll_expr->get_schema_object_version(obj_version);
+        OZ(obj_coll_expr->get_schema_object_version(obj_version));
+        OZ(obj_versions.push_back(obj_version));
       }
     } else if (expr->is_udf_expr()) {
       ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr *>(expr);
       need_dependency = udf_expr->need_add_dependency();
       if (need_dependency) {
-        ret = udf_expr->get_schema_object_version(obj_version);
+        OZ(udf_expr->get_schema_object_version(*schema_checker->get_schema_guard(), obj_versions));
       }
     }
-    if (need_dependency && OB_SUCC(ret)) {
+    for (int64_t i = 0; need_dependency && OB_SUCC(ret) && i < obj_versions.count(); ++i) {
+      obj_version = obj_versions.at(i);
       uint64_t object_id = obj_version.get_object_id();
       uint64_t tenant_id = pl::get_tenant_id_by_object_id(object_id);
       ObSchemaType schema_type = obj_version.get_schema_type();
