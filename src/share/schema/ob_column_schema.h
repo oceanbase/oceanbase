@@ -325,6 +325,9 @@ int assign(const ObColumnSchemaV2 &other);
     return ret;
   }
 
+  inline ObLocalSessionVar &get_local_session_var() { return local_session_vars_; }
+  inline const ObLocalSessionVar &get_local_session_var() const { return local_session_vars_; }
+
   DECLARE_VIRTUAL_TO_STRING;
 private:
   int alloc_column_ref_set();

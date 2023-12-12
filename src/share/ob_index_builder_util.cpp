@@ -776,15 +776,17 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
             LOG_WARN("session load system variable failed", K(ret));
           } else if (OB_FAIL(session.load_default_configs_in_pc())) {
             LOG_WARN("session load default configs failed", K(ret));
-          } else if (OB_FAIL(ObRawExprUtils::
-                            build_generated_column_expr(&arg,
+          } else if (OB_FAIL(arg.local_session_var_.update_session_vars_with_local(session))) {
+            LOG_WARN("fail to update session vars", K(ret));
+          } else if (OB_FAIL(ObRawExprUtils::build_generated_column_expr(&arg,
                                                         index_expr_def,
                                                         expr_factory,
                                                         session,
                                                         data_schema,
                                                         expr,
                                                         &schema_checker,
-                                                        ObResolverUtils::CHECK_FOR_FUNCTION_INDEX))) {
+                                                        ObResolverUtils::CHECK_FOR_FUNCTION_INDEX,
+                                                        NULL))) {
             LOG_WARN("build generated column expr failed", K(ret));
           } else if (!expr->is_deterministic()) {
             ret = OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED;
@@ -1010,6 +1012,7 @@ int ObIndexBuilderUtil::generate_ordinary_generated_column(
 {
   int ret = OB_SUCCESS;
   ObColumnSchemaV2 tmp_gen_col;
+  uint64_t tenant_data_version = 0;
   SMART_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH], expr_def_buf) {
     MEMSET(expr_def_buf, 0, sizeof(expr_def_buf));
     int64_t pos = 0;
@@ -1017,7 +1020,17 @@ int ObIndexBuilderUtil::generate_ordinary_generated_column(
     const bool is_invalid = (index_id < OB_APP_MIN_COLUMN_ID || index_id > OB_MIN_SHADOW_COLUMN_ID);
     if (OB_FAIL(expr_printer.do_print(&expr, T_NONE_SCOPE, true))) {
       LOG_WARN("print expr definition failed", K(ret));
-    } else {
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(GET_MIN_DATA_VERSION(data_schema.get_tenant_id(), tenant_data_version))) {
+        LOG_WARN("get tenant data version failed", K(ret));
+      } else if (tenant_data_version < DATA_VERSION_4_2_2_0) {
+        //do nothing
+      } else if (OB_FAIL(ObRawExprUtils::extract_local_vars_for_gencol(&expr, sql_mode, tmp_gen_col))) {
+        LOG_WARN("fail to extract sysvar from expr", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
       // add check
       ObString expr_def(pos, expr_def_buf);
       ObColumnSchemaV2 *old_gen_col = NULL;
@@ -1025,7 +1038,8 @@ int ObIndexBuilderUtil::generate_ordinary_generated_column(
                                                              true/*only hidden column*/,
                                                              old_gen_col))) {
         LOG_WARN("get generated column by define failed", K(ret), K(expr_def));
-      } else if (old_gen_col != NULL) {
+      } else if (old_gen_col != NULL
+                && tmp_gen_col.get_local_session_var() == old_gen_col->get_local_session_var()) {
         //got it
         gen_col = old_gen_col;
       } else {

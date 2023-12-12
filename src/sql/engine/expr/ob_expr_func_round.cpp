@@ -137,13 +137,9 @@ int ObExprFuncRound::set_res_scale_prec(ObExprTypeCtx &type_ctx, ObExprResType *
       ObArenaAllocator oballocator(ObModIds::BLOCK_ALLOC);
       ObCastMode cast_mode = CM_NONE;
       ObCollationType cast_coll_type = type_ctx.get_coll_type();
-      const ObDataTypeCastParams dtc_params =
-        ObBasicSessionInfo::create_dtc_params(type_ctx.get_session());
-      if (OB_FAIL(ObSQLUtils::get_default_cast_mode(type_ctx.get_session(), cast_mode))) {
-        LOG_WARN("failed to get default cast mode", K(ret));
-      } else {
-        cast_mode |= CM_WARN_ON_FAIL;
-      }
+      const ObDataTypeCastParams dtc_params = type_ctx.get_dtc_params();
+      ObSQLUtils::get_default_cast_mode(type_ctx.get_sql_mode(), cast_mode);
+      cast_mode |= CM_WARN_ON_FAIL;
       ObCastCtx cast_ctx(&oballocator, &dtc_params, 0, cast_mode, cast_coll_type);
       int64_t scale = 0;
       EXPR_GET_INT64_V2(obj, scale);
@@ -735,8 +731,11 @@ int calc_round_expr_datetime_inner(const ObDatum &x_datum, const ObString &fmt_s
 {
   int ret = OB_SUCCESS;
   ObTime ob_time;
-  const ObTimeZoneInfo *tz_info = get_timezone_info(ctx.exec_ctx_.get_my_session());
-  if (OB_FAIL(ob_datum_to_ob_time_with_date(x_datum, ObDateTimeType, NUMBER_SCALE_UNKNOWN_YET,
+  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+  const common::ObTimeZoneInfo *tz_info = NULL;
+  if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
+    LOG_WARN("get tz info failed", K(ret));
+  } else if (OB_FAIL(ob_datum_to_ob_time_with_date(x_datum, ObDateTimeType, NUMBER_SCALE_UNKNOWN_YET,
                               tz_info, ob_time,
                               get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), 0, false))) {
     LOG_WARN("ob_datum_to_ob_time_with_date failed", K(ret));
@@ -920,6 +919,24 @@ int ObExprFuncRound::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr
         rt_expr.eval_batch_func_ = calc_round_expr_numeric1_batch;
       }
     }
+  }
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprFuncRound, raw_expr) {
+  int ret = OB_SUCCESS;
+  if (is_mysql_mode()) {
+    SET_LOCAL_SYSVAR_CAPACITY(3);
+    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_SQL_MODE);
+    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_TIME_ZONE);
+    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_COLLATION_CONNECTION);
+  } else {
+    SET_LOCAL_SYSVAR_CAPACITY(5);
+    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_NLS_DATE_FORMAT);
+    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_NLS_TIMESTAMP_FORMAT);
+    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT);
+    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_TIME_ZONE);
+    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_COLLATION_CONNECTION);
   }
   return ret;
 }

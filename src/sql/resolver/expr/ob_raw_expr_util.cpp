@@ -1699,10 +1699,46 @@ int ObRawExprUtils::build_generated_column_expr(const ObString &expr_str,
                                                 const bool need_check_simple_column)
 {
   int ret = OB_SUCCESS;
+  if (OB_FAIL(build_generated_column_expr(expr_str,
+                                          expr_factory,
+                                          session_info,
+                                          session_info.get_sql_mode(),
+                                          session_info.get_local_collation_connection(),
+                                          expr,
+                                          columns,
+                                          table_schema,
+                                          sequence_allowed,
+                                          dml_resolver,
+                                          schema_checker,
+                                          check_status,
+                                          need_check_simple_column))) {
+    LOG_WARN("build generated column expr failed", K(ret));
+  }
+  return ret;
+}
+
+int ObRawExprUtils::build_generated_column_expr(const ObString &expr_str,
+                                                ObRawExprFactory &expr_factory,
+                                                const ObSQLSessionInfo &session_info,
+                                                ObSQLMode def_sql_mode,
+                                                ObCollationType def_cs_type,
+                                                ObRawExpr *&expr,
+                                                ObIArray<ObQualifiedName> &columns,
+                                                const ObTableSchema * table_schema,
+                                                const bool sequence_allowed,
+                                                ObDMLResolver *dml_resolver,
+                                                const ObSchemaChecker *schema_checker,
+                                                const ObResolverUtils::PureFunctionCheckStatus
+                                                  check_status,
+                                                const bool need_check_simple_column)
+{
+  int ret = OB_SUCCESS;
   const ParseNode *node = NULL;
+   ObCharsets4Parser charsets4parser = session_info.get_charsets4parser();
+   charsets4parser.string_collation_ = def_cs_type;
   if (OB_FAIL(parse_expr_node_from_str(expr_str,
-      session_info.get_charsets4parser(),
-      expr_factory.get_allocator(), node, session_info.get_sql_mode()))) {
+      charsets4parser,
+      expr_factory.get_allocator(), node, def_sql_mode))) {
     LOG_WARN("parse expr node from string failed", K(ret), K(expr_str));
   } else if (OB_ISNULL(node)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1711,7 +1747,9 @@ int ObRawExprUtils::build_generated_column_expr(const ObString &expr_str,
                                                  expr, columns, table_schema, sequence_allowed,
                                                  dml_resolver,
                                                  schema_checker, check_status,
-                                                 need_check_simple_column))) {
+                                                 need_check_simple_column,
+                                                 true,
+                                                 def_cs_type))) {
     LOG_WARN("build generated column expr failed", K(ret));
   }
   return ret;
@@ -2089,7 +2127,7 @@ int ObRawExprUtils::build_generated_column_expr(const obrpc::ObCreateIndexArg *a
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(expr->formalize(&session_info))) {
+    if (OB_FAIL(expr->formalize(&session_info, true))) {
       LOG_WARN("formalize expr failed", K(ret), KPC(expr));
     }
   }
@@ -2114,7 +2152,7 @@ int ObRawExprUtils::build_generated_column_expr(const obrpc::ObCreateIndexArg *a
     }
     // 只在必要的时候才会在做一次 formalize
     if (OB_SUCC(ret)) {
-      OZ (expr->formalize(&session_info));
+      OZ (expr->formalize(&session_info, true));
     }
   }
   if (OB_SUCC(ret) &&
@@ -2205,7 +2243,9 @@ int ObRawExprUtils::build_generated_column_expr(ObRawExprFactory &expr_factory,
                                                 const ObSchemaChecker *schema_checker,
                                                 const ObResolverUtils::PureFunctionCheckStatus
                                                   check_status,
-                                                const bool need_check_simple_column)
+                                                const bool need_check_simple_column,
+                                                bool use_def_collation,
+                                                ObCollationType def_collation)
 {
   int ret = OB_SUCCESS;
   ObArray<ObVarInfo> sys_vars;
@@ -2232,7 +2272,10 @@ int ObRawExprUtils::build_generated_column_expr(ObRawExprFactory &expr_factory,
                              sub_query_info,
                              udf_info,
                              op_exprs,
-                             false))) {
+                             false,
+                             TgTimingEvent::TG_TIMING_EVENT_INVALID,
+                             use_def_collation,
+                             def_collation))) {
     LOG_WARN("fail to get collation_connection", K(ret));
   } else if (OB_UNLIKELY(sys_vars.count() > 0)) {
     //todo:yuming:mysql ERROR 3102 (HY000): Expression of generated column 'column' contains a disallowed function.
@@ -2896,7 +2939,9 @@ int ObRawExprUtils::build_raw_expr(ObRawExprFactory &expr_factory,
                                    ObIArray<ObUDFInfo> &udf_info,
                                    ObIArray<ObOpRawExpr*> &op_exprs,
                                    bool is_prepare_protocol/*= false*/,
-                                   TgTimingEvent tg_timing_event)
+                                   TgTimingEvent tg_timing_event,
+                                   bool use_def_collation,
+                                   ObCollationType def_collation)
 {
   int ret = OB_SUCCESS;
   ObCollationType collation_connection = CS_TYPE_INVALID;
@@ -2907,7 +2952,11 @@ int ObRawExprUtils::build_raw_expr(ObRawExprFactory &expr_factory,
     LOG_WARN("fail to get character_set_connection", K(ret));
   } else {
     ObExprResolveContext ctx(expr_factory, session_info.get_timezone_info(), OB_NAME_CASE_INVALID);
-    ctx.dest_collation_ = collation_connection;
+    if (use_def_collation) {
+      ctx.dest_collation_ = def_collation;
+    } else {
+      ctx.dest_collation_ = collation_connection;
+    }
     ctx.connection_charset_ = character_set_connection;
     ctx.param_list_ = param_list;
     ctx.is_extract_param_type_ = !is_prepare_protocol; //when prepare do not extract
@@ -2948,7 +2997,15 @@ int ObRawExprUtils::build_generated_column_expr(const ObString &expr_str,
   ObArray<ObQualifiedName> columns;
   ObSEArray<ObRawExpr *, 6> real_exprs;
   const ObColumnSchemaV2 *col_schema = NULL;
-  if (OB_FAIL(build_generated_column_expr(expr_str, expr_factory, session_info,
+  ObSQLMode sql_mode = session_info.get_sql_mode();
+  ObCollationType cs_type = session_info.get_local_collation_connection();
+  if (OB_FAIL(ObSQLUtils::merge_solidified_var_into_collation(
+        gen_col_schema.get_local_session_var(), cs_type))) {
+    LOG_WARN("get sql mode failed", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::merge_solidified_var_into_sql_mode(
+              &gen_col_schema.get_local_session_var(), sql_mode))) {
+    LOG_WARN("get sql mode failed", K(ret));
+  } else if (OB_FAIL(build_generated_column_expr(expr_str, expr_factory, session_info, sql_mode, cs_type,
                                           expr, columns, &table_schema, sequence_allowed, dml_resolver,
                                           schema_checker, check_status))) {
     LOG_WARN("build generated column expr failed", K(ret));
@@ -2985,8 +3042,9 @@ int ObRawExprUtils::build_generated_column_expr(const ObString &expr_str,
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(expr->formalize(&session_info))) {
-      LOG_WARN("formalize expr failed", K(ret));
+    //set local session info for generate columns
+    if (OB_FAIL(expr->formalize_with_local_vars(&session_info, &gen_col_schema.get_local_session_var(), OB_INVALID_INDEX_INT64))) {
+      LOG_WARN("fail to formalize real dependant expr", K(ret));
     }
   }
   if (OB_SUCC(ret) && !gen_col_schema.is_hidden()) {
@@ -2996,7 +3054,8 @@ int ObRawExprUtils::build_generated_column_expr(const ObString &expr_str,
     expected_type.set_accuracy(gen_col_schema.get_accuracy());
     expected_type.set_result_flag(calc_column_result_flag(gen_col_schema));
     if (ObRawExprUtils::need_column_conv(expected_type, *expr)) {
-      if (OB_FAIL(build_column_conv_expr(expr_factory, &gen_col_schema, expr, &session_info))) {
+      if (OB_FAIL(build_column_conv_expr(expr_factory, &gen_col_schema, expr, &session_info,
+                                        &gen_col_schema.get_local_session_var()))) {
         LOG_WARN("create cast expr failed", K(ret));
       }
     }
@@ -3094,7 +3153,9 @@ int ObRawExprUtils::build_pad_expr_recursively(ObRawExprFactory &expr_factory,
                                                const ObSQLSessionInfo &session,
                                                const ObTableSchema &table_schema,
                                                const ObColumnSchemaV2 &gen_col_schema,
-                                               ObRawExpr *&expr)
+                                               ObRawExpr *&expr,
+                                               const ObLocalSessionVar *local_vars,
+                                               int64_t local_var_id)
 {
   int ret = OB_SUCCESS;
   CK(OB_NOT_NULL(expr));
@@ -3105,7 +3166,9 @@ int ObRawExprUtils::build_pad_expr_recursively(ObRawExprFactory &expr_factory,
                                                 session,
                                                 table_schema,
                                                 gen_col_schema,
-                                                expr->get_param_expr(i))));
+                                                expr->get_param_expr(i),
+                                                local_vars,
+                                                local_var_id)));
     }
   }
   if (OB_SUCC(ret) && expr->is_column_ref_expr()) {
@@ -3117,17 +3180,17 @@ int ObRawExprUtils::build_pad_expr_recursively(ObRawExprFactory &expr_factory,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get column schema fail", K(column_schema));
       } else if (ObObjMeta::is_binary(column_schema->get_data_type(), column_schema->get_collation_type())) {
-        if (OB_FAIL(build_pad_expr(expr_factory, false, column_schema, expr, &session))) {
+        if (OB_FAIL(build_pad_expr(expr_factory, false, column_schema, expr, &session, local_vars, local_var_id))) {
           LOG_WARN("fail to build pading expr for binary", K(ret));
         }
       } else if (ObCharType == column_schema->get_data_type()
                 || ObNCharType == column_schema->get_data_type()) {
         if (gen_col_schema.has_column_flag(PAD_WHEN_CALC_GENERATED_COLUMN_FLAG)) {
-          if (OB_FAIL(build_pad_expr(expr_factory, true, column_schema, expr, &session))) {
+          if (OB_FAIL(build_pad_expr(expr_factory, true, column_schema, expr, &session, local_vars, local_var_id))) {
             LOG_WARN("fail to build pading expr for char", K(ret));
           }
         } else {
-          if (OB_FAIL(build_trim_expr(column_schema, expr_factory, &session, expr))) {
+          if (OB_FAIL(build_trim_expr(column_schema, expr_factory, &session, expr, local_vars, local_var_id))) {
             LOG_WARN("fail to build trime expr for char", K(ret));
           }
         }
@@ -3853,7 +3916,9 @@ int ObRawExprUtils::try_add_cast_expr_above(ObRawExprFactory *expr_factory,
                                             ObRawExpr &expr,
                                             const ObExprResType &dst_type,
                                             const ObCastMode &cm,
-                                            ObRawExpr *&new_expr)
+                                            ObRawExpr *&new_expr,
+                                            const ObLocalSessionVar *local_vars,
+                                            int64_t local_var_id)
 {
   int ret = OB_SUCCESS;
   new_expr = &expr;
@@ -3905,7 +3970,7 @@ int ObRawExprUtils::try_add_cast_expr_above(ObRawExprFactory *expr_factory,
 
       ObSysFunRawExpr *cast_expr = NULL;
       OZ(ObRawExprUtils::create_cast_expr(*expr_factory, &expr, dst_type, cast_expr,
-                                          session, false, cm_zf));
+                                          session, false, cm_zf, local_vars, local_var_id));
       CK(OB_NOT_NULL(new_expr = dynamic_cast<ObRawExpr*>(cast_expr)));
     }
     LOG_DEBUG("in try_add_cast", K(ret), K(dst_type), K(cm));
@@ -3985,7 +4050,9 @@ int ObRawExprUtils::create_cast_expr(ObRawExprFactory &expr_factory,
                                      ObSysFunRawExpr *&func_expr,
                                      const ObSQLSessionInfo *session,
                                      bool use_def_cm,
-                                     ObCastMode cm)
+                                     ObCastMode cm,
+                                     const ObLocalSessionVar *local_vars,
+                                     int64_t local_var_id)
 {
   int ret = OB_SUCCESS;
   CK(OB_NOT_NULL(src_expr));
@@ -4035,8 +4102,11 @@ int ObRawExprUtils::create_cast_expr(ObRawExprFactory &expr_factory,
     CK(OB_NOT_NULL(func_expr));
     OX(func_expr->set_extra(cm));
     OZ(func_expr->add_flag(IS_INNER_ADDED_EXPR));
-
-    OZ(func_expr->formalize(session));
+    if (NULL != local_vars) {
+      OZ(func_expr->formalize_with_local_vars(session, local_vars, local_var_id));
+    } else {
+      OZ(func_expr->formalize(session));
+    }
   }
   return ret;
 }
@@ -4631,7 +4701,8 @@ bool ObRawExprUtils::need_column_conv(const ColumnItem &column, ObRawExpr &expr)
 int ObRawExprUtils::build_column_conv_expr(ObRawExprFactory &expr_factory,
                                            const share::schema::ObColumnSchemaV2 *column_schema,
                                            ObRawExpr *&expr,
-                                           const ObSQLSessionInfo *session_info)
+                                           const ObSQLSessionInfo *session_info,
+                                           const ObLocalSessionVar *local_vars)
 {
   int ret = OB_SUCCESS;
   CK(OB_NOT_NULL(session_info));
@@ -4648,7 +4719,10 @@ int ObRawExprUtils::build_column_conv_expr(ObRawExprFactory &expr_factory,
                                               !column_schema->is_not_null_for_write(),
                                               NULL,
                                               NULL,
-                                              expr))) {
+                                              expr,
+                                              false,
+                                              false,
+                                              local_vars))) {
       LOG_WARN("failed to build column convert expr", K(ret));
     }
   }
@@ -4660,7 +4734,9 @@ int ObRawExprUtils::build_column_conv_expr(ObRawExprFactory &expr_factory,
                                            const ObColumnRefRawExpr &col_ref,
                                            ObRawExpr *&expr,
                                            const ObSQLSessionInfo *session_info,
-                                           bool is_generated_column)
+                                           bool is_generated_column,
+                                           const ObLocalSessionVar *local_vars,
+                                           int64_t local_var_id)
 {
   int ret = OB_SUCCESS;
   ObString column_conv_info;
@@ -4697,7 +4773,9 @@ int ObRawExprUtils::build_column_conv_expr(ObRawExprFactory &expr_factory,
                                               !col_ref.is_not_null_for_write(),
                                               &column_conv_info,
                                               &col_ref.get_enum_set_values(),
-                                              expr, false, is_generated_column))) {
+                                              expr, false, is_generated_column,
+                                              local_vars,
+                                              local_var_id))) {
       LOG_WARN("fail to build column convert expr", K(ret));
     }
   }
@@ -4714,7 +4792,9 @@ int ObRawExprUtils::build_column_conv_expr(const ObSQLSessionInfo *session_info,
                                            const ObIArray<ObString> *type_infos,
                                            ObRawExpr *&expr,
                                            bool is_in_pl,
-                                           bool is_generated_column)
+                                           bool is_generated_column,
+                                           const ObLocalSessionVar *local_vars,
+                                           int64_t local_var_id)
 {
   int ret = OB_SUCCESS;
   ObObjType dest_type = type;
@@ -4728,6 +4808,7 @@ int ObRawExprUtils::build_column_conv_expr(const ObSQLSessionInfo *session_info,
   ObConstRawExpr  *accuracy_expr = NULL;
   ObConstRawExpr  *column_info_expr = NULL;
   uint64_t def_cast_mode = 0;
+  ObSQLMode sql_mode = 0;
   CK(OB_NOT_NULL(session_info));
   CK(OB_NOT_NULL(expr));
   ObString column_info;
@@ -4791,21 +4872,26 @@ int ObRawExprUtils::build_column_conv_expr(const ObSQLSessionInfo *session_info,
     LOG_WARN("fail to add param expr", K(ret));
   } else if (OB_FAIL(f_expr->add_param_expr(column_info_expr))) {
     LOG_WARN("fail to add param expr", K(ret));
+  } else if (FALSE_IT(sql_mode = session_info->get_sql_mode())) {
+  } else if (NULL != local_vars
+            && OB_FAIL(ObSQLUtils::merge_solidified_var_into_sql_mode(local_vars, sql_mode))) {
+    LOG_WARN("try get local sql mode failed", K(ret));
   }
   stmt::StmtType stmt_type_bak = stmt::T_NONE;
   if (OB_SUCC(ret)) {
     stmt_type_bak = session_info->get_stmt_type();
     bool is_ddl = const_cast<sql::ObSQLSessionInfo *>(session_info)->get_ddl_info().is_ddl();
-    bool is_strict = lib::is_mysql_mode() && is_strict_mode(session_info->get_sql_mode());
+    bool is_strict = lib::is_mysql_mode() && is_strict_mode(sql_mode);
     bool ignore_charset_error = is_generated_column && stmt_type_bak==stmt::T_SELECT;
     (const_cast<ObSQLSessionInfo *>(session_info))->set_stmt_type(stmt::T_NONE);
-    if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false,/* explicit_cast */
-                                                  0,    /* result_flag */
-                                                  session_info,
-                                                  def_cast_mode))) {
-      LOG_WARN("fail to get_default_cast_mode", K(ret));
-    } else if ((!is_ddl && !is_strict) || ignore_charset_error ) {
-        def_cast_mode |= CM_CHARSET_CONVERT_IGNORE_ERR;
+    ObSQLUtils::get_default_cast_mode(false,/* explicit_cast */
+                                      0,    /* result_flag */
+                                      session_info->get_stmt_type(),
+                                      session_info->is_ignore_stmt(),
+                                      sql_mode,
+                                      def_cast_mode);
+    if ((!is_ddl && !is_strict) || ignore_charset_error ) {
+      def_cast_mode |= CM_CHARSET_CONVERT_IGNORE_ERR;
     }
   }
   if (OB_SUCC(ret)) {
@@ -4832,7 +4918,11 @@ int ObRawExprUtils::build_column_conv_expr(const ObSQLSessionInfo *session_info,
         f_expr->set_for_generated_column();
       }
       expr = f_expr;
-      if (OB_FAIL(expr->formalize(session_info))) {
+      if (NULL != local_vars) {
+        if (OB_FAIL(expr->formalize_with_local_vars(session_info, local_vars, local_var_id))) {
+          LOG_WARN("fail to extract info", K(ret));
+        }
+      } else if (OB_FAIL(expr->formalize(session_info))) {
         LOG_WARN("fail to extract info", K(ret));
       }
     }
@@ -5427,7 +5517,9 @@ int ObRawExprUtils::build_null_expr(ObRawExprFactory &expr_factory, ObRawExpr *&
 int ObRawExprUtils::build_trim_expr(const ObColumnSchemaV2 *column_schema,
                                     ObRawExprFactory &expr_factory,
                                     const ObSQLSessionInfo *session_info,
-                                    ObRawExpr *&expr)
+                                    ObRawExpr *&expr,
+                                    const ObLocalSessionVar *local_vars,
+                                    int64_t local_var_id)
 {
   int ret = OB_SUCCESS;
   ObSysFunRawExpr *trim_expr = NULL;
@@ -5474,7 +5566,11 @@ int ObRawExprUtils::build_trim_expr(const ObColumnSchemaV2 *column_schema,
       trim_expr->set_for_generated_column();
     }
     expr = trim_expr;
-    if (OB_FAIL(expr->formalize(session_info))) {
+    if (NULL != local_vars) {
+      if (OB_FAIL(expr->formalize_with_local_vars(session_info, local_vars, local_var_id))) {
+        LOG_WARN("fail to formalize expr", K(ret));
+      }
+    } else if (OB_FAIL(expr->formalize(session_info))) {
       LOG_WARN("fail to extract info", K(ret));
     }
   }
@@ -5485,7 +5581,9 @@ int ObRawExprUtils::build_pad_expr(ObRawExprFactory &expr_factory,
                                    bool is_char,
                                    const ObColumnSchemaV2 *column_schema,
                                    ObRawExpr *&expr,
-                                   const sql::ObSQLSessionInfo *session_info)
+                                   const sql::ObSQLSessionInfo *session_info,
+                                   const ObLocalSessionVar *local_vars,
+                                   int64_t local_var_id)
 {
   int ret = OB_SUCCESS;
   ObSysFunRawExpr *pad_expr = NULL;
@@ -5541,7 +5639,11 @@ int ObRawExprUtils::build_pad_expr(ObRawExprFactory &expr_factory,
     }
     pad_expr->set_extra(1); //mark for column convert
     expr = pad_expr;
-    if (OB_FAIL(expr->formalize(session_info))) {
+    if (NULL != local_vars) {
+      if (OB_FAIL(expr->formalize_with_local_vars(session_info, local_vars, local_var_id))) {
+        LOG_WARN("fail to formalize expr", K(ret));
+      }
+    } else if (OB_FAIL(expr->formalize(session_info))) {
       LOG_WARN("fail to extract info", K(ret));
     }
     LOG_DEBUG("build pad expr", KPC(pading_word_expr), KPC(pad_expr));
@@ -8822,6 +8924,48 @@ int ObRawExprUtils::build_dummy_count_expr(ObRawExprFactory &expr_factory,
     LOG_WARN("failed to extract expr info", K(ret));
   } else {
     expr = count_expr;
+  }
+  return ret;
+}
+
+int ObRawExprUtils::extract_local_vars_for_gencol(ObRawExpr *expr,
+                                         const ObSQLMode sql_mode,
+                                         ObColumnSchemaV2 &gen_col)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> dep_columns;
+  ObSEArray<const share::schema::ObSessionSysVar *, 4> var_array;
+  if (OB_FAIL(expr->extract_local_session_vars_recursively(var_array))) {
+    LOG_WARN("extract sysvars failed", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, dep_columns))) {
+    LOG_WARN("extract column exprs failed", K(ret), K(expr));
+  } else {
+    bool has_char_dep_col = false;
+    ObSessionSysVar local_sql_mode;
+    for (int64_t i = 0; !has_char_dep_col && i < dep_columns.count(); ++i) {
+      if (ObCharType == dep_columns.at(i)->get_result_type().get_type()
+          || ObNCharType == dep_columns.at(i)->get_result_type().get_type()) {
+        has_char_dep_col = true;
+      }
+    }
+    if (has_char_dep_col) {
+      //add sql mode
+      ObSessionSysVar *local_var = NULL;
+      if (OB_FAIL(gen_col.get_local_session_var().get_local_var(SYS_VAR_SQL_MODE, local_var))) {
+        LOG_WARN("get local var failed", K(ret));
+      } else if (NULL == local_var) {
+        local_sql_mode.type_ = SYS_VAR_SQL_MODE;
+        local_sql_mode.val_.set_uint64(sql_mode);
+        if (OB_FAIL(var_array.push_back(&local_sql_mode))) {
+          LOG_WARN("push back local var failed", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(gen_col.get_local_session_var().set_local_vars(var_array))) {
+        LOG_WARN("set local vars failed", K(ret), KPC(expr));
+      }
+    }
   }
   return ret;
 }

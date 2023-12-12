@@ -14193,6 +14193,11 @@ int ObLocalSessionVar::remove_vars_same_with_session(const sql::ObBasicSessionIn
       if (OB_ISNULL(local_var)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret), KP(local_var));
+      } else if (SYS_VAR_SQL_MODE == local_var->type_) {
+        if (local_var->val_.get_uint64() != session->get_sql_mode()
+            && OB_FAIL(new_var_array.push_back(local_var))) {
+          LOG_WARN("fail to push into new var array", K(ret));
+        }
       } else if (OB_FAIL(session->get_sys_variable(local_var->type_, session_val))) {
         LOG_WARN("fail to get session variable", K(ret));
       } else if (!local_var->is_equal(session_val) &&

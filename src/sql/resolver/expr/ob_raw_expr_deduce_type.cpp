@@ -70,6 +70,18 @@ int ObRawExprDeduceType::visit(ObConstRawExpr &expr)
     break;
   }
   }
+  //add local vars to expr
+  if (OB_SUCC(ret)) {
+    if (solidify_session_vars_) {
+      if (OB_FAIL(expr.set_local_session_vars(NULL, my_session_, local_vars_id_))) {
+        LOG_WARN("fail to set session vars", K(ret), K(expr));
+      }
+    } else if (NULL != my_local_vars_) {
+      if (OB_FAIL(expr.set_local_session_vars(my_local_vars_, NULL, local_vars_id_))) {
+        LOG_WARN("fail to set local vars", K(ret), K(expr));
+      }
+    }
+  }
   return ret;
 }
 
@@ -399,9 +411,6 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
     ret = OB_ERR_UNEXPECTED;
     LOG_INFO("not implemented in sql static typing engine, ",
              K(ret), K(op->get_type()), K(op->get_name()));
-  } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(is_explicit_cast, 0,
-                                                       my_session_, cast_mode))) {
-    LOG_WARN("get_default_cast_mode failed", K(ret));
   } else if (expr.get_expr_type() == T_FUN_NORMAL_UDF
              && OB_FAIL(init_normal_udf_expr(expr, op))) {
     LOG_WARN("failed to init normal udf", K(ret));
@@ -434,6 +443,24 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
     op->set_real_param_num(static_cast<int32_t>(types.count()));
     op->set_is_called_in_sql(expr.is_called_in_sql());
     ObSQLUtils::init_type_ctx(my_session_, type_ctx);
+    if (OB_SUCC(ret) && !solidify_session_vars_) {
+      if (NULL != my_local_vars_) {
+        if (OB_FAIL(ObSQLUtils::merge_solidified_vars_into_type_ctx(type_ctx,
+                                                                    *my_local_vars_))) {
+          LOG_WARN("fail to merge_solidified_vars_into_type_ctx", K(ret));
+        }
+      } else if (OB_FAIL(ObSQLUtils::merge_solidified_vars_into_type_ctx(type_ctx,
+                                                                  expr.get_local_session_var()))) {
+        LOG_WARN("fail to merge_solidified_vars_into_type_ctx", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ObSQLUtils::get_default_cast_mode(is_explicit_cast, 0,
+                                        my_session_->get_stmt_type(),
+                                        my_session_->is_ignore_stmt(),
+                                        type_ctx.get_sql_mode(),
+                                        cast_mode);
+    }
     type_ctx.set_cast_mode(cast_mode);
 //    type_ctx.my_session_ = this->my_session_;
     ObExprResType result_type(alloc_);
@@ -2379,6 +2406,18 @@ int ObRawExprDeduceType::visit(ObSysFunRawExpr &expr)
         LOG_WARN("add_implicit_cast failed", K(ret));
       }
     }
+    //add local vars to expr
+    if (OB_SUCC(ret)) {
+      if (solidify_session_vars_) {
+        if (OB_FAIL(expr.set_local_session_vars(NULL, my_session_, local_vars_id_))) {
+          LOG_WARN("fail to set session vars", K(ret), K(expr));
+        }
+      } else if (NULL != my_local_vars_) {
+        if (OB_FAIL(expr.set_local_session_vars(my_local_vars_, NULL, local_vars_id_))) {
+          LOG_WARN("fail to set local vars", K(ret), K(expr));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -2584,8 +2623,7 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
                                                                   types.count(),
                                                                   coll_type,
                                                                   false,
-                                                                  default_ls,
-                                                                  my_session_))) {
+                                                                  default_ls))) {
         LOG_WARN("fail to aggregate_result_type_for_merge", K(ret), K(types));
       } else {
         if (res_type.is_json()) {
@@ -3567,6 +3605,18 @@ int ObRawExprDeduceType::try_add_cast_expr(RawExprType &parent,
         ret = OB_SUCCESS;
         LOG_DEBUG("ps prepare phase ignores type deduce error");
       }
+      //add local vars to cast expr
+      if (OB_SUCC(ret)) {
+        if (solidify_session_vars_) {
+          if (OB_FAIL(new_expr->set_local_session_vars(NULL, my_session_, local_vars_id_))) {
+            LOG_WARN("fail to set session vars", K(ret), KPC(new_expr));
+          }
+        } else if (NULL != my_local_vars_) {
+          if (OB_FAIL(new_expr->set_local_session_vars(my_local_vars_, NULL, local_vars_id_))) {
+            LOG_WARN("fail to set local vars", K(ret), KPC(new_expr));
+          }
+        }
+      }
     }
   }
   return ret;
@@ -3636,7 +3686,7 @@ int ObRawExprDeduceType::try_add_cast_expr_above_for_deduce_type(ObRawExpr &expr
     cast_dst_type.set_length(child_res_type.get_length());
   }
   OZ(ObRawExprUtils::try_add_cast_expr_above(expr_factory_, my_session_, expr,
-                                             cast_dst_type, cm, new_expr));
+                                             cast_dst_type, cm, new_expr, my_local_vars_, local_vars_id_));
   ObRawExpr *e = new_expr;
   while (OB_SUCC(ret) && NULL != e &&
          e != &expr && T_FUN_SYS_CAST == e->get_expr_type()) {

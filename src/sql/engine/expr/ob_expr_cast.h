@@ -136,6 +136,7 @@ public:
                                 sql::ObEvalCtx &ctx,
                                 sql::ObDatum &res_datum);
   virtual int is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const;
+  DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   int get_cast_type(const bool enable_decimal_int,
                     const ObExprResType param_type2,
@@ -144,6 +145,7 @@ private:
   int get_explicit_cast_cm(const ObExprResType &src_type,
                            const ObExprResType &dst_type,
                            const ObSQLSessionInfo &session,
+                           ObSQLMode sql_mode,
                            const ObRawExpr &cast_raw_expr,
                            common::ObCastMode &cast_mode) const;
   bool check_cast_allowed(const common::ObObjType orig_type,

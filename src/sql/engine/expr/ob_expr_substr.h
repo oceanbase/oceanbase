@@ -51,6 +51,7 @@ public:
   static int eval_substr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int eval_substr_batch(
              const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t batch_size);
+  DECLARE_SET_LOCAL_SESSION_VARS;
 
 private:
   int calc_result_length(ObExprResType *types_array,

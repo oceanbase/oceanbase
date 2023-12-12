@@ -2784,6 +2784,7 @@ int ObSql::generate_stmt(ParseResult &parse_result,
       context.all_expr_constraints_ = &(resolver_ctx.query_ctx_->all_expr_constraints_);
       context.all_priv_constraints_ = &(resolver_ctx.query_ctx_->all_priv_constraints_);
       context.need_match_all_params_ = resolver_ctx.query_ctx_->need_match_all_params_;
+      context.all_local_session_vars_ = &(resolver_ctx.query_ctx_->all_local_session_vars_);
       context.cur_stmt_ = stmt;
       context.res_map_rule_id_ = resolver_ctx.query_ctx_->res_map_rule_id_;
       context.res_map_rule_param_idx_ = resolver_ctx.query_ctx_->res_map_rule_param_idx_;
@@ -3593,6 +3594,12 @@ int ObSql::code_generate(
                                    && !insert_stmt->is_replace());
       }
       last_mem_usage = phy_plan->get_mem_size();
+    }
+  }
+  //add local_session_var array to phy_plan_ctx
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(phy_plan->set_all_local_session_vars(sql_ctx.all_local_session_vars_))) {
+      LOG_WARN("set all local sesson vars failed", K(ret));
     }
   }
   NG_TRACE(cg_end);
@@ -4584,6 +4591,11 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
                                                phy_plan->get_gtt_trans_scope_ids()))) {
           LOG_WARN("fail to append array", K(ret));
         }
+      }
+    }
+    if (OB_SUCC(ret) && NULL != phy_plan && !phy_plan->is_remote_plan()) {
+      if (OB_FAIL(pctx->set_all_local_session_vars(phy_plan->get_all_local_session_vars()))) {
+        LOG_WARN("fail to set all local session vars", K(ret));
       }
     }
   } else {

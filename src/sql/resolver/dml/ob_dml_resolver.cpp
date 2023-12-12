@@ -6914,7 +6914,7 @@ int ObDMLResolver::check_basic_column_generated(const ObColumnRefRawExpr *col_ex
 // Check the pad flag on generated_column is consistent with the sql_mode on session.
 // For the upgraded cluster, the flag is not set, so only returns error if the dependent column
 // is char type and the generated column is stored or used by an index
-int ObDMLResolver::check_pad_generated_column(const ObSQLSessionInfo &session_info,
+int ObDMLResolver::check_pad_generated_column(const ObSQLMode sql_mode,
                                               const ObTableSchema &table_schema,
                                               const ObColumnSchemaV2 &column_schema,
                                               bool is_link)
@@ -6923,7 +6923,7 @@ int ObDMLResolver::check_pad_generated_column(const ObSQLSessionInfo &session_in
   int ret = OB_SUCCESS;
   if (!column_schema.is_generated_column()) {
     // do nothing
-  } else if (is_pad_char_to_full_length(session_info.get_sql_mode())
+  } else if (is_pad_char_to_full_length(sql_mode)
              == column_schema.has_column_flag(PAD_WHEN_CALC_GENERATED_COLUMN_FLAG)) {
     // do nothing
   } else {
@@ -6962,7 +6962,7 @@ int ObDMLResolver::check_pad_generated_column(const ObSQLSessionInfo &session_in
     } else if (has_char_dep_column && is_stored_column) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("change PAD_CHAR option after created generated column",
-          K(session_info.get_sql_mode()), K(column_schema), K(ret));
+          K(sql_mode), K(column_schema), K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "change PAD_CHAR option after created generated column");
     }
   }
@@ -7003,29 +7003,49 @@ int ObDMLResolver::build_padding_expr(const ObSQLSessionInfo *session,
                                       ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(session) || OB_ISNULL(column_schema) || OB_ISNULL(expr) || OB_ISNULL(params_.expr_factory_)) {
+  if (OB_ISNULL(session)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(session), K(column_schema), K(expr), K_(params_.expr_factory));
+    LOG_WARN("invalid argument", K(session));
+  } else if (OB_FAIL(build_padding_expr(session->get_sql_mode(), column_schema, expr))) {
+    LOG_WARN("build padding expr failed", K(ret));
+  }
+  return ret;
+}
+
+int ObDMLResolver::build_padding_expr(const ObSQLMode sql_mode,
+                                      const share::schema::ObColumnSchemaV2 *column_schema,
+                                      ObRawExpr *&expr,
+                                      const ObLocalSessionVar *local_vars,
+                                      int64_t local_var_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(column_schema) || OB_ISNULL(expr) || OB_ISNULL(params_.expr_factory_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(column_schema), K(expr), K_(params_.expr_factory));
   } else if (ObObjMeta::is_binary(column_schema->get_data_type(), column_schema->get_collation_type())) {
     if (OB_FAIL(ObRawExprUtils::build_pad_expr(*params_.expr_factory_,
                                                false,
                                                column_schema,
                                                expr,
-                                               this->session_info_))) {
+                                               this->session_info_,
+                                               local_vars,
+                                               local_var_id))) {
       LOG_WARN("fail to build pading expr for binary", K(ret));
     }
   } else if (ObCharType == column_schema->get_data_type()
              || ObNCharType == column_schema->get_data_type()) {
-    if (is_pad_char_to_full_length(session->get_sql_mode())) {
+    if (is_pad_char_to_full_length(sql_mode)) {
       if (OB_FAIL(ObRawExprUtils::build_pad_expr(*params_.expr_factory_,
                                                  true,
                                                  column_schema,
                                                  expr,
-                                                 this->session_info_))) {
+                                                 this->session_info_,
+                                                 local_vars,
+                                                 local_var_id))) {
         LOG_WARN("fail to build pading expr for char", K(ret));
       }
     } else {
-      if (OB_FAIL(ObRawExprUtils::build_trim_expr(column_schema, *params_.expr_factory_, session_info_, expr))) {
+      if (OB_FAIL(ObRawExprUtils::build_trim_expr(column_schema, *params_.expr_factory_, session_info_, expr, local_vars, local_var_id))) {
         LOG_WARN("fail to build trime expr for char", K(ret));
       }
     }
@@ -7358,6 +7378,8 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
   ObSQLSessionInfo *session_info = NULL;
   const ObTableSchema *table_schema = NULL;
   const bool allow_sequence = !used_for_generated_column;
+  ObSQLMode sql_mode = 0;
+  ObCollationType cs_type = CS_TYPE_INVALID;
   if (OB_ISNULL(expr_factory = params_.expr_factory_)
      || OB_ISNULL(session_info = params_.session_info_)
      || OB_ISNULL(schema_checker_)) {
@@ -7367,8 +7389,25 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
              OB_FAIL(schema_checker_->get_table_schema(session_info->get_effective_tenant_id(), column_schema->get_table_id(),
                                                        table_schema))) {
     LOG_WARN("get table schema error", K(ret));
+  } else {
+    sql_mode = session_info->get_sql_mode();
+    cs_type = session_info->get_local_collation_connection();
+    if (OB_NOT_NULL(column_schema)) {
+      //prefer using the solidified vars
+      if (OB_FAIL(ObSQLUtils::merge_solidified_var_into_collation(
+            column_schema->get_local_session_var(), cs_type))) {
+        LOG_WARN("get sql mode failed", K(ret));
+      } else if (OB_FAIL(ObSQLUtils::merge_solidified_var_into_sql_mode(
+                  &column_schema->get_local_session_var(), sql_mode))) {
+        LOG_WARN("get sql mode failed", K(ret));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    //do nothing
   } else if (OB_FAIL(ObRawExprUtils::build_generated_column_expr(expr_str,
                                                                  *expr_factory, *session_info,
+                                                                 sql_mode, cs_type,
                                                                  ref_expr, columns,
                                                                  table_schema,
                                                                  allow_sequence,
@@ -7458,24 +7497,74 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
       } else { /*do nothing*/ }
     }
   }
-
+  int64_t var_array_idx = OB_INVALID_INDEX_INT64;
+  ObLocalSessionVar local_vars(allocator_);
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(check_pad_generated_column(*session_info, *table_schema, *column_schema))) {
+    //set local session info for generate columns
+    if (OB_ISNULL(params_.query_ctx_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret), KP(params_.query_ctx_));
+    } else if (0 == column_schema->get_local_session_var().get_var_count()) {
+      //do nothing
+    } else if (OB_FAIL(local_vars.assign(column_schema->get_local_session_var()))) {
+      LOG_WARN("assign local vars failed", K(ret));
+    } else if (local_vars.remove_vars_same_with_session(session_info)) {
+      LOG_WARN("remove vars same with session failed", K(ret));
+    } else if (0 == local_vars.get_var_count()) {
+      //do nothing if all local vars are same with cur session vars
+    } else if (OB_FAIL(params_.query_ctx_->add_local_session_vars(allocator_, local_vars, var_array_idx))) {
+      LOG_WARN("add local session var failed", K(ret));
+    } else if (!session_info->is_inner() && lib::is_mysql_mode()) {
+      //print user warnings
+      ObSEArray<const share::schema::ObSessionSysVar *, 4> var_array;
+      if (OB_FAIL(local_vars.get_local_vars(var_array))) {
+        LOG_WARN("extract sysvars failed", K(ret));
+      } else {
+        SMART_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH],val_buf) {
+          for (int64_t i = 0; i < var_array.count(); ++i) {
+            ObString var_name;
+            int64_t pos = 0;
+            if (OB_ISNULL(var_array.at(i))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected null", K(ret));
+            } else if (OB_FAIL(ObSysVarFactory::get_sys_var_name_by_id(var_array.at(i)->type_, var_name))) {
+              LOG_WARN("get sysvar name failed", K(ret));
+            } else if (OB_FAIL(var_array.at(i)->val_.print_sql_literal(val_buf, 100, pos))) {
+              LOG_WARN("print value failed", K(ret));
+            } else {
+              LOG_WARN("session vars are different with the old vars which were solidified when creating generated columns",
+                       K(ret), KPC(column_schema), K(var_name));
+              LOG_USER_WARN(OB_ERR_SESSION_VAR_CHANGED,
+                            var_name.length(), var_name.ptr(),
+                            column_schema->get_column_name_str().length(), column_schema->get_column_name_str().ptr(),
+                            static_cast<int>(pos), &val_buf[0]);
+            }
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(check_pad_generated_column(sql_mode, *table_schema, *column_schema))) {
       LOG_WARN("check pad generated column failed", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::build_pad_expr_recursively(*expr_factory, *session_info,
-        *table_schema, *column_schema, ref_expr))) {
+        *table_schema, *column_schema, ref_expr, &local_vars, var_array_idx))) {
       LOG_WARN("build padding expr for column_ref failed", K(ret));
-    } else if (OB_FAIL(build_padding_expr(session_info, column_schema, ref_expr))) {
+    } else if (OB_FAIL(build_padding_expr(sql_mode, column_schema, ref_expr, &local_vars, var_array_idx))) {
       LOG_WARN("build padding expr for self failed", K(ret));
-    } else if (OB_FAIL(ref_expr->formalize(session_info))) {
+    } else if (OB_FAIL(ref_expr->formalize_with_local_vars(session_info, &local_vars, var_array_idx))) {
       LOG_WARN("formailize column reference expr failed", K(ret));
     } else if (ObRawExprUtils::need_column_conv(column.get_result_type(), *ref_expr)) {
       if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(*expr_factory, *allocator_,
-                                                         column, ref_expr, session_info, used_for_generated_column))) {
+                                                         column, ref_expr, session_info,
+                                                         used_for_generated_column,
+                                                         &local_vars,
+                                                         var_array_idx))) {
         LOG_WARN("build column convert expr failed", K(ret));
       }
     }
   }
+
   return ret;
 }
 
@@ -15679,7 +15768,7 @@ int ObDMLResolver::get_values_res_types(const ObIArray<ObExprResType> &cur_value
         LOG_WARN("fail to get_collation_connection", K(ret));
       } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(new_res_type, &tmp_types.at(0),
                                                                   tmp_types.count(), coll_type, false,
-                                                                  length_semantics, session_info_))) {
+                                                                  length_semantics))) {
         LOG_WARN("failed to aggregate result type for merge", K(ret));
       } else {
         res_types.at(i) = new_res_type;

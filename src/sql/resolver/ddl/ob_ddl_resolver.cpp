@@ -5381,6 +5381,7 @@ int ObDDLResolver::check_dup_gen_col(const ObString &expr,
 // construct an empty session
 int ObDDLResolver::init_empty_session(const common::ObTimeZoneInfoWrap &tz_info_wrap,
                                       const common::ObString *nls_formats,
+                                      const share::schema::ObLocalSessionVar *local_session_var,
                                       ObIAllocator &allocator,
                                       ObTableSchema &table_schema,
                                       const ObSQLMode sql_mode,
@@ -5424,12 +5425,18 @@ int ObDDLResolver::init_empty_session(const common::ObTimeZoneInfoWrap &tz_info_
     empty_session.set_sql_mode(sql_mode);
     empty_session.set_default_database(db_schema->get_database_name_str());
   }
+  if (OB_SUCC(ret) && NULL != local_session_var) {
+    if (OB_FAIL(local_session_var->update_session_vars_with_local(empty_session))) {
+      LOG_WARN("fail to update session vars", K(ret));
+    }
+  }
   return ret;
 }
 
 int ObDDLResolver::reformat_generated_column_expr(ObObj &default_value,
                                                   const common::ObTimeZoneInfoWrap &tz_info_wrap,
                                                   const common::ObString *nls_formats,
+                                                  const share::schema::ObLocalSessionVar &local_session_var,
                                                   ObIAllocator &allocator,
                                                   ObTableSchema &table_schema,
                                                   ObColumnSchemaV2 &column,
@@ -5442,7 +5449,14 @@ int ObDDLResolver::reformat_generated_column_expr(ObObj &default_value,
   ObRawExpr *expr = NULL;
   ObRawExprFactory expr_factory(allocator);
   SMART_VAR(ObSQLSessionInfo, empty_session) {
-    if (OB_FAIL(init_empty_session(tz_info_wrap, nls_formats, allocator, table_schema, sql_mode, schema_checker, empty_session))) {
+    if (OB_FAIL(init_empty_session(tz_info_wrap,
+                                   nls_formats,
+                                   &local_session_var,
+                                   allocator,
+                                   table_schema,
+                                   sql_mode,
+                                   schema_checker,
+                                   empty_session))) {
       LOG_WARN("failed to init empty session", K(ret));
     } else if (OB_FAIL(default_value.get_string(expr_str))) {
       LOG_WARN("failed to get expr str", K(ret));
@@ -5463,7 +5477,8 @@ int ObDDLResolver::resolve_generated_column_expr(ObString &expr_str,
                                        ObSQLSessionInfo *session_info,
                                        ObSchemaChecker *schema_checker,
                                        ObRawExpr *&expr,
-                                       ObRawExprFactory &expr_factory)
+                                       ObRawExprFactory &expr_factory,
+                                       bool coltype_not_defined)
 {
   int ret = OB_SUCCESS;
   ObResolverParams params;
@@ -5480,7 +5495,8 @@ int ObDDLResolver::resolve_generated_column_expr(ObString &expr_str,
                                                                     resolved_cols,
                                                                     column,
                                                                     expr,
-                                                ObResolverUtils::CHECK_FOR_GENERATED_COLUMN))) {
+                                                ObResolverUtils::CHECK_FOR_GENERATED_COLUMN,
+                                                                    coltype_not_defined))) {
     LOG_WARN("resolve generated column expr failed", K(ret));
   }
   return ret;
@@ -5491,6 +5507,7 @@ int ObDDLResolver::resolve_generated_column_expr(ObString &expr_str,
 int ObDDLResolver::check_default_value(ObObj &default_value,
                                        const common::ObTimeZoneInfoWrap &tz_info_wrap,
                                        const common::ObString *nls_formats,
+                                       const ObLocalSessionVar *local_session_var,
                                        ObIAllocator &allocator,
                                        ObTableSchema &table_schema,
                                        ObColumnSchemaV2 &column,
@@ -5503,7 +5520,14 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
   int ret = OB_SUCCESS;
   ObArray<ObColumnSchemaV2 *> dummy_array;
   SMART_VAR(ObSQLSessionInfo, empty_session) {
-    if (OB_FAIL(init_empty_session(tz_info_wrap, nls_formats, allocator, table_schema, sql_mode, schema_checker, empty_session))) {
+    if (OB_FAIL(init_empty_session(tz_info_wrap,
+                                   nls_formats,
+                                   local_session_var,
+                                   allocator,
+                                   table_schema,
+                                   sql_mode,
+                                   schema_checker,
+                                   empty_session))) {
       LOG_WARN("failed to init empty session", K(ret));
     } else if (FALSE_IT(empty_session.set_stmt_type(stmt::T_CREATE_TABLE))) { // set a fake ddl stmt type to specifiy ddl stmt type
     } else if (OB_FAIL(check_default_value(default_value, tz_info_wrap, nls_formats, allocator,
@@ -5527,7 +5551,8 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
                                        const ObSQLMode sql_mode,
                                        ObSQLSessionInfo *session_info,
                                        bool allow_sequence,
-                                       ObSchemaChecker *schema_checker)
+                                       ObSchemaChecker *schema_checker,
+                                       bool coltype_not_defined)
 {
   int ret = OB_SUCCESS;
   const ObObj input_default_value = default_value;
@@ -5544,7 +5569,7 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
     if (OB_FAIL(input_default_value.get_string(expr_str))) {
       LOG_WARN("get expr string from default value failed", K(ret), K(input_default_value));
     } else if (OB_FAIL(resolve_generated_column_expr(expr_str, allocator, table_schema, resolved_cols,
-            column, session_info, schema_checker, expr, expr_factory))) {
+            column, session_info, schema_checker, expr, expr_factory, coltype_not_defined))) {
       LOG_WARN("resolve generated column expr failed", K(ret));
     } else {
       if (true == lib::is_oracle_mode()) {
@@ -5661,6 +5686,7 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
 int ObDDLResolver::check_default_value(ObObj &default_value,
                                        const common::ObTimeZoneInfoWrap &tz_info_wrap,
                                        const common::ObString *nls_formats,
+                                       const ObLocalSessionVar *local_session_var,
                                        ObIAllocator &allocator,
                                        ObTableSchema &table_schema,
                                        ObIArray<ObColumnSchemaV2> &resolved_cols,
@@ -5669,7 +5695,8 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
                                        const ObSQLMode sql_mode,
                                       ObSQLSessionInfo *session_info,
                                        bool allow_sequence,
-                                       ObSchemaChecker *schema_checker)
+                                       ObSchemaChecker *schema_checker,
+                                       bool coltype_not_defined)
 {
   int ret = OB_SUCCESS;
   ObArray<ObColumnSchemaV2 *> resolved_col_ptrs;
@@ -5678,7 +5705,7 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
   }
   OZ (check_default_value(default_value, tz_info_wrap, nls_formats, allocator, table_schema,
                           resolved_col_ptrs, column, gen_col_expr_arr, sql_mode,
-                          session_info, allow_sequence, schema_checker));
+                          session_info, allow_sequence, schema_checker, coltype_not_defined));
   return ret;
 }
 

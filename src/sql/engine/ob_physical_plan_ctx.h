@@ -461,6 +461,8 @@ public:
   void set_spm_timeout_timestamp(const int64_t timeout) { spm_ts_timeout_us_ = timeout; }
   const ObIArray<ObArrayParamGroup> &get_array_param_groups() const { return array_param_groups_; }
   ObIArray<ObArrayParamGroup> &get_array_param_groups() { return array_param_groups_; }
+  int set_all_local_session_vars(ObIArray<ObLocalSessionVar> &all_local_session_vars);
+  int get_local_session_vars(int64_t idx, const ObLocalSessionVar *&local_vars);
 private:
   void reset_datum_frame(char *frame, int64_t expr_cnt);
   int extend_param_frame(const int64_t old_size);
@@ -596,6 +598,8 @@ private:
   // timeout use by spm, don't need to serialize
   int64_t spm_ts_timeout_us_;
   ObSubSchemaCtx subschema_ctx_;
+  // for dependant exprs of generated columns
+  common::ObFixedArray<ObLocalSessionVar *, common::ObIAllocator> all_local_session_vars_;
 };
 
 }

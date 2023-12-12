@@ -31,6 +31,7 @@ public:
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                            ObExpr &rt_expr) const override;
   virtual common::ObCastMode get_cast_mode() const override { return CM_CHARSET_CONVERT_IGNORE_ERR; }; 
+  DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprConvert);
 };

@@ -431,6 +431,14 @@ int ObCreateIndexResolver::fill_session_info_into_arg(const sql::ObSQLSessionInf
     arg.nls_date_format_ = session->get_local_nls_date_format();
     arg.nls_timestamp_format_ = session->get_local_nls_timestamp_format();
     arg.nls_timestamp_tz_format_ = session->get_local_nls_timestamp_tz_format();
+    uint64_t tenant_data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(session->get_effective_tenant_id(), tenant_data_version))) {
+      LOG_WARN("get tenant data version failed", K(ret));
+    } else if (tenant_data_version < DATA_VERSION_4_2_2_0) {
+      //do nothing
+    } else if (OB_FAIL(arg.local_session_var_.load_session_vars(session))) {
+      LOG_WARN("fail to fill session info into local_session_var", K(ret));
+    }
   }
   return ret;
 }
