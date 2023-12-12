@@ -280,10 +280,20 @@ int ObTableApiUtil::construct_entity_from_row(ObIAllocator &allocator,
                                               ObITableEntity *entity)
 {
   int ret = OB_SUCCESS;
-  const int64_t N = cnames.count();
+  int64_t N = cnames.count();
   const ObColumnSchemaV2 *column_schema = NULL;
+  ObSEArray<ObString, 32> all_columns;
+  const ObIArray<ObString>* arr_col = &cnames;
+  if (N == 0) {
+    if(OB_FAIL(expand_all_columns(table_schema, all_columns))) {
+      LOG_WARN("fail to expand all column to cnames", K(ret));
+    } else {
+      N = all_columns.count();
+      arr_col = &all_columns;
+    }
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-    const ObString &name = cnames.at(i);
+    const ObString &name = arr_col->at(i);
     if (OB_ISNULL(column_schema = table_schema->get_column_schema(name))) {
       ret = OB_ERR_COLUMN_NOT_FOUND;
       LOG_WARN("column not exist", K(ret), K(name));
@@ -297,6 +307,25 @@ int ObTableApiUtil::construct_entity_from_row(ObIAllocator &allocator,
       }
     }
   } // end for
+  return ret;
+}
+
+int ObTableApiUtil::expand_all_columns(const ObTableSchema *table_schema,
+                                       ObIArray<ObString> &cnames)
+{
+  int ret = OB_SUCCESS;
+  const ObColumnSchemaV2 *column_schema = NULL;
+  ObTableSchema::const_column_iterator iter = table_schema->column_begin();
+  ObTableSchema::const_column_iterator end = table_schema->column_end();
+  for (; OB_SUCC(ret) && iter != end; iter++) {
+    column_schema = *iter;
+    if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column schema is NULL", K(ret));
+    } else if (OB_FAIL(cnames.push_back(column_schema->get_column_name_str()))) {
+      LOG_WARN("fail to push back column name", K(ret));
+    }
+  }
   return ret;
 }
 

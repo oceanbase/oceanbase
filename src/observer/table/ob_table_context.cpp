@@ -790,12 +790,22 @@ int ObTableCtx::generate_key_range(const ObIArray<ObNewRange> &scan_ranges)
             }
             if (0 == j) {  // padding for startkey
               for (int64_t k = 0; k < padding_num; ++k) {
-                new_objs[k+old_objs_num] = ObObj::make_min_obj();
+                // if inclusive start, should padding min value. else padding max value
+                if (index_key_range.border_flag_.inclusive_start()) {
+                  new_objs[k+old_objs_num] = ObObj::make_min_obj();
+                } else {
+                  new_objs[k+old_objs_num] = ObObj::make_max_obj();
+                }
               }
               index_key_range.start_key_.assign(new_objs, new_objs_num);
             } else {  // padding for endkey
               for (int64_t k = 0; k < padding_num; ++k) {
-                new_objs[k+old_objs_num] = ObObj::make_max_obj();
+                // if inclusive end, should padding max value. else padding min value
+                if (index_key_range.border_flag_.inclusive_end()) {
+                  new_objs[k+old_objs_num] = ObObj::make_max_obj();
+                } else {
+                  new_objs[k+old_objs_num] = ObObj::make_min_obj();
+                }
               }
               index_key_range.end_key_.assign(new_objs, new_objs_num);
             }
