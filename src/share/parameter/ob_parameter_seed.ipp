@@ -1740,10 +1740,13 @@ ERRSIM_DEF_DBL(errsim_module_error_percentage, OB_TENANT_PARAMETER, "0", "[0,100
         "Range: [0, 100] in percentage",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE))
 
-
 ERRSIM_DEF_BOOL(block_transfer_out_replay, OB_TENANT_PARAMETER, "False",
          "errsim to block transfer out clog replay",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+ERRSIM_DEF_BOOL(allow_transfer_backfill, OB_TENANT_PARAMETER, "True",
+          "errsim to allow transfer backfill",
+          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // ttl
 DEF_STR_WITH_CHECKER(kv_ttl_duty_duration, OB_TENANT_PARAMETER, "", common::ObTTLDutyDurationChecker,
