@@ -59,6 +59,9 @@ int ObExprExtractValue::calc_result_typeN(ObExprResType &type,
         ObObjType param_type = types[i].get_type();
         if (param_type == ObNullType) {
         } else if (ob_is_string_type(param_type)) {
+          if (ob_is_string_tc(param_type)) {
+            types[i].set_calc_type(ObVarcharType);
+          }
           if (types[i].get_charset_type() != CHARSET_UTF8MB4) {
             types[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
           }

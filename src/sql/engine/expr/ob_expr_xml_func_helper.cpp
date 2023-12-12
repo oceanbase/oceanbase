@@ -898,7 +898,7 @@ int ObXMLExprHelper::binary_agg_xpath_result(ObPathExprIter &xpath_iter,
   xpath_iter.set_add_ns(add_ns);
   ObBinAggSerializer bin_agg(mem_ctx->allocator_, ObBinAggType::AGG_XML, static_cast<uint8_t>(M_CONTENT));
   bin_agg.close_merge_text();
-  if (add_ns && OB_FAIL(ns_map.create(10, lib::ObMemAttr(MTL_ID(), "XMLCodeGen")))) {
+  if (add_ns && OB_FAIL(ns_map.create(10, lib::ObMemAttr(MTL_ID(), "XMLModule")))) {
     LOG_WARN("ns map create failed", K(ret));
   }
   while (OB_SUCC(ret)) {

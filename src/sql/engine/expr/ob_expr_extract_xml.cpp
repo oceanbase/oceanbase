@@ -160,7 +160,7 @@ int ObExprExtractXml::concat_xpath_result(const ObExpr &expr,
   if (OB_FAIL(xpath_iter.open())) {
     LOG_WARN("fail to open xpath iterator", K(ret));
     ObXMLExprHelper::replace_xpath_ret_code(ret);
-  } else if (OB_FAIL(ns_map.create(10, lib::ObMemAttr(MTL_ID(), "XMLCodeGen")))) {
+  } else if (OB_FAIL(ns_map.create(10, lib::ObMemAttr(MTL_ID(), "XMLModule")))) {
     LOG_WARN("ns map create failed", K(ret));
   }
 
