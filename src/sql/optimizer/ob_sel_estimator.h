@@ -872,7 +872,7 @@ private:
     return bound1 > bound2 || (bound1 == bound2 && include1 && !include2);
   }
   // c1 in [min1, max1], c2 in [min2, max2]
-  // calc the sel of `c2 - c1 > offset`;
+  // calc the sel of `c1 + c2 > offset`;
   static double get_gt_sel(double min1,
                            double max1,
                            double min2,
@@ -880,7 +880,7 @@ private:
                            double offset);
 
   // c1 in [min1, max1], c2 in [min2, max2]
-  // calc the sel of `c2 - c1 = offset`;
+  // calc the sel of `c1 + c2 = offset`;
   static double get_equal_sel(double min1,
                               double max1,
                               double ndv1,

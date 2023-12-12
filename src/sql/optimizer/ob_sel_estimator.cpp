@@ -2468,9 +2468,9 @@ double ObInequalJoinSelEstimator::get_gt_sel(double min1,
     selectivity = 1.0;
   } else if (offset < max1 + min2 && offset < min1 + max2 && total > OB_DOUBLE_EPSINON) {
     selectivity = 1 - (offset - min1  - min2) * (offset - min1  - min2) / (2 * total);
-  } else if (offset > max1 + min2 && offset < min1 + max2 && max1 - min1 > OB_DOUBLE_EPSINON) {
+  } else if (offset >= max1 + min2 && offset < min1 + max2 && max1 - min1 > OB_DOUBLE_EPSINON) {
     selectivity = (2 * max2 + min1 + max1 - 2 * offset) / (2 * (max2 - min2));
-  } else if (offset > min1 + max2 && offset < max1 + min2 && max2 - min2 > OB_DOUBLE_EPSINON) {
+  } else if (offset >= min1 + max2 && offset < max1 + min2 && max2 - min2 > OB_DOUBLE_EPSINON) {
     selectivity = (min2 + max2 + 2 * max1 - 2 * offset) / (2 * (max1 - min1));
   } else if (offset < max1 + max2 && total > OB_DOUBLE_EPSINON) {
     selectivity = (max1 + max2 - offset) * (max1 + max2 - offset) / (2 * total);
