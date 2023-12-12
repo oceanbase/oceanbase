@@ -10055,5 +10055,14 @@ int ObTabletLocationSendResult::get_ret() const
 
 OB_SERIALIZE_MEMBER(ObTabletLocationSendResult, ret_);
 
+int ObCancelGatherStatsArg::assign(const ObCancelGatherStatsArg &other)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = other.tenant_id_;
+  task_id_ = other.task_id_;
+  return ret;
+}
+OB_SERIALIZE_MEMBER(ObCancelGatherStatsArg, tenant_id_, task_id_);
+
 }//end namespace obrpc
 }//end namepsace oceanbase

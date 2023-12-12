@@ -231,7 +231,7 @@ int ObDbmsStatsMaintenanceWindow::get_stats_history_manager_job_sql(const bool i
   OZ (dml.add_column("credential_name", ObHexEscapeSqlStr(ObString(""))));
   OZ (dml.add_column("destination_name", ObHexEscapeSqlStr(ObString(""))));
   OZ (dml.add_column("interval_ts", interval_ts));
-  OZ (dml.add_column(true, "max_run_duration")); // add null column.
+  OZ (dml.add_column("max_run_duration", DEFAULT_HISTORY_MANAGER_DURATION_SEC));
   OZ (dml.splice_values(raw_sql));
   return ret;
 }

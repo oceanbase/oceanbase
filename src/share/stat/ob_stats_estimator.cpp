@@ -63,8 +63,8 @@ int ObStatsEstimator::pack(ObSqlString &raw_sql_str)
   if (OB_FAIL(gen_select_filed())) {
     LOG_WARN("failed to generate select filed", K(ret));
   } else if (OB_FAIL(raw_sql_str.append_fmt(is_oracle_mode() ?
-                                            "SELECT %.*s %.*s FROM \"%.*s\".\"%.*s\" %.*s %.*s %.*s %.*s" :
-                                            "SELECT %.*s %.*s FROM `%.*s`.`%.*s` %.*s %.*s %.*s %.*s" ,
+                                            "SELECT %.*s %.*s FROM \"%.*s\".\"%.*s\" %.*s %.*s %.*s %.*s %.*s" :
+                                            "SELECT %.*s %.*s FROM `%.*s`.`%.*s` %.*s %.*s %.*s %.*s %.*s" ,
                                             other_hints_.length(),
                                             other_hints_.ptr(),
                                             static_cast<int32_t>(select_fields_.length()),
@@ -77,6 +77,8 @@ int ObStatsEstimator::pack(ObSqlString &raw_sql_str)
                                             partition_string_.ptr(),
                                             sample_hint_.length(),
                                             sample_hint_.ptr(),
+                                            current_scn_string_.length(),
+                                            current_scn_string_.ptr(),
                                             where_string_.length(),
                                             where_string_.ptr(),
                                             group_by_string_.length(),
@@ -90,8 +92,7 @@ int ObStatsEstimator::pack(ObSqlString &raw_sql_str)
 
 int ObStatsEstimator::fill_sample_info(common::ObIAllocator &alloc,
                                        double est_percent,
-                                       bool block_sample,
-                                       ObString &sample_hint)
+                                       bool block_sample)
 {
   int ret = OB_SUCCESS;
   if (est_percent>= 0.000001 && est_percent <= 100.0) {
@@ -111,7 +112,7 @@ int ObStatsEstimator::fill_sample_info(common::ObIAllocator &alloc,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected error", K(ret), K(real_len));
       } else {
-        sample_hint.assign_ptr(buf, real_len);
+        sample_hint_.assign_ptr(buf, real_len);
         LOG_TRACE("succeed to add sample string", K(buf), K(real_len));
       }
     }
@@ -131,11 +132,36 @@ int ObStatsEstimator::fill_sample_info(common::ObIAllocator &alloc,
     //do nothing
   } else if (OB_FAIL(fill_sample_info(alloc,
                                       sample_info.sample_value_,
-                                      sample_info.is_block_sample_,
-                                      sample_hint_))) {
+                                      sample_info.is_block_sample_))) {
     LOG_WARN("failed to fill sample info", K(ret));
   } else {
     sample_value_ = sample_info.sample_value_;
+  }
+  return ret;
+}
+
+int ObStatsEstimator::fill_specify_scn_info(common::ObIAllocator &alloc,
+                                            uint64_t sepcify_scn)
+{
+  int ret = OB_SUCCESS;
+  if (sepcify_scn > 0) {
+    const char* fmt_str = lib::is_oracle_mode() ? "as of scn %lu" : "as of snapshot %lu";
+    char *buf = NULL;
+    int64_t buf_len = strlen(fmt_str) + 30;//uint64_t:0 ~ 18446744073709551615,length no more than 20
+    int64_t real_len = -1;
+    if (OB_ISNULL(buf = static_cast<char *>(alloc.alloc(buf_len)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory", K(ret), K(buf), K(buf_len));
+    } else {
+      real_len = sprintf(buf, fmt_str, sepcify_scn);
+      if (OB_UNLIKELY(real_len <= 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), K(real_len));
+      } else {
+        current_scn_string_.assign_ptr(buf, real_len);
+        LOG_TRACE("succeed to fill specify scn info", K(current_scn_string_));
+      }
+    }
   }
   return ret;
 }
@@ -238,20 +264,49 @@ int ObStatsEstimator::add_hint(const ObString &hint_str,
 }
 
 int ObStatsEstimator::fill_partition_info(ObIAllocator &allocator,
-                                          const ObTableStatParam &param,
-                                          const ObExtraParam &extra)
+                                          const ObIArray<PartInfo> &partition_infos)
 {
   int ret = OB_SUCCESS;
-  PartInfo part_info;
-  if (extra.type_ == TABLE_LEVEL) {
-    // do nothing
-  } else if (OB_FAIL(ObDbmsStatsUtils::get_part_info(param, extra, part_info))) {
-    LOG_WARN("failed to get part info", K(ret));
-  } else if (OB_UNLIKELY(part_info.part_name_.empty())) {
+  ObSqlString tmp_part_str;
+  if (OB_UNLIKELY(partition_infos.count() <= 1)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("partition name is empty", K(ret), K(part_info));
+    LOG_WARN("get unexpected error", K(ret), K(partition_infos));
   } else {
-    const ObString &part_name = part_info.part_name_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < partition_infos.count(); ++i) {
+      if (OB_UNLIKELY(partition_infos.at(i).part_name_.empty())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("partition name is empty", K(ret), K(partition_infos), K(i));
+      } else if (OB_FAIL(tmp_part_str.append_fmt(lib::is_oracle_mode() ? "%s\"%.*s\"%s" : "%s`%.*s`%s",
+                                                i == 0 ? "PARTITION(" : " ",
+                                                partition_infos.at(i).part_name_.length(),
+                                                partition_infos.at(i).part_name_.ptr(),
+                                                i == partition_infos.count() - 1 ? ")" : ", "))) {
+        LOG_WARN("failed to append", K(ret));
+      } else {/*do nothing*/}
+    }
+    if (OB_SUCC(ret)) {
+      char *buf = NULL;
+      int64_t buf_len = tmp_part_str.length();
+      if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(tmp_part_str.length())))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc memory", K(ret), K(tmp_part_str.length()));
+      } else {
+        MEMCPY(buf, tmp_part_str.ptr(), tmp_part_str.length());
+        partition_string_.assign(buf, tmp_part_str.length());
+      }
+    }
+  }
+  return ret;
+}
+
+int ObStatsEstimator::fill_partition_info(ObIAllocator &allocator,
+                                          const ObString &part_name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(part_name.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("partition name is empty", K(ret), K(part_name));
+  } else {
     const char *fmt_str = lib::is_oracle_mode() ? "PARTITION (\"%.*s\")" : "PARTITION (`%.*s`)";
     char *buf = NULL;
     const int64_t len = strlen(fmt_str) + part_name.length();
@@ -274,8 +329,7 @@ int ObStatsEstimator::fill_partition_info(ObIAllocator &allocator,
 
 //Specify the partition name or non-partition table don't use group by.
 int ObStatsEstimator::fill_group_by_info(ObIAllocator &allocator,
-                                         const ObTableStatParam &param,
-                                         const ObExtraParam &extra,
+                                         const ObOptStatGatherParam &param,
                                          ObString &calc_part_id_str)
 {
   int ret = OB_SUCCESS;
@@ -283,27 +337,22 @@ int ObStatsEstimator::fill_group_by_info(ObIAllocator &allocator,
                                                 : "GROUP BY CALC_PARTITION_ID(`%.*s`, %.*s)";
   char *buf = NULL;
   ObString type_str;
-  if (extra.type_ == PARTITION_LEVEL) {
+  if (param.stat_level_ == PARTITION_LEVEL) {
     type_str = ObString(4, "PART");
-  } else if (extra.type_ == SUBPARTITION_LEVEL) {
+  } else if (param.stat_level_ == SUBPARTITION_LEVEL) {
     type_str = ObString(7, "SUBPART");
   } else {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected type", K(extra.type_), K(ret));
+    LOG_WARN("get unexpected type", K(param.stat_level_), K(ret));
   }
   if (OB_SUCC(ret)) {
-    const int64_t len = strlen(fmt_str) +
-                        (param.is_index_stat_ ? param.data_table_name_.length() : param.tab_name_.length()) +
-                        type_str.length();
+    const int64_t len = strlen(fmt_str) + param.tab_name_.length() + type_str.length();
     int32_t real_len = -1;
     if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory", K(ret), K(len));
     } else {
-      real_len = sprintf(buf, fmt_str, param.is_index_stat_ ? param.data_table_name_.length() : param.tab_name_.length(),
-                                       param.is_index_stat_ ? param.data_table_name_.ptr() : param.tab_name_.ptr(),
-                                       type_str.length(),
-                                       type_str.ptr());
+      real_len = sprintf(buf, fmt_str, param.tab_name_.length(), param.tab_name_.ptr(), type_str.length(), type_str.ptr());
       if (OB_UNLIKELY(real_len < 0 || real_len >= len)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to print partition hint", K(ret), K(real_len), K(len));
@@ -322,7 +371,7 @@ int ObStatsEstimator::fill_group_by_info(ObIAllocator &allocator,
 
 int ObStatsEstimator::do_estimate(uint64_t tenant_id,
                                   const ObString &raw_sql,
-                                  CopyStatType copy_type,
+                                  bool need_copy_basic_stat,
                                   ObOptStat &src_opt_stat,
                                   ObIArray<ObOptStat> &dst_opt_stats)
 {
@@ -386,11 +435,8 @@ int ObStatsEstimator::do_estimate(uint64_t tenant_id,
           if (OB_SUCC(ret)) {
             if (OB_FAIL(decode(allocator_))) {
               LOG_WARN("failed to decode results", K(ret));
-            } else if (copy_type == COPY_ALL_STAT &&
-                       OB_FAIL(copy_opt_stat(src_opt_stat, dst_opt_stats))) {
-              LOG_WARN("failed to copy stat to target opt stat", K(ret));
-            } else if (copy_type == COPY_HYBRID_HIST_STAT &&
-                       OB_FAIL(copy_hybrid_hist_stat(src_opt_stat, dst_opt_stats))) {
+            } else if (need_copy_basic_stat &&
+                       OB_FAIL(copy_basic_opt_stat(src_opt_stat, dst_opt_stats))) {
               LOG_WARN("failed to copy stat to target opt stat", K(ret));
             } else {
               results_.reset();
@@ -433,8 +479,8 @@ int ObStatsEstimator::decode(ObIAllocator &allocator)
   return ret;
 }
 
-int ObStatsEstimator::copy_opt_stat(ObOptStat &src_opt_stat,
-                                    ObIArray<ObOptStat> &dst_opt_stats)
+int ObStatsEstimator::copy_basic_opt_stat(ObOptStat &src_opt_stat,
+                                          ObIArray<ObOptStat> &dst_opt_stats)
 {
   int ret = OB_SUCCESS;
   ObOptTableStat *tmp_tab_stat = src_opt_stat.table_stat_;
@@ -458,23 +504,22 @@ int ObStatsEstimator::copy_opt_stat(ObOptStat &src_opt_stat,
         dst_opt_stats.at(i).table_stat_->set_row_count(row_cnt);
         dst_opt_stats.at(i).table_stat_->set_avg_row_size(tmp_tab_stat->get_avg_row_size());
         dst_opt_stats.at(i).table_stat_->set_sample_size(tmp_tab_stat->get_row_count());
-        if (OB_FAIL(copy_col_stats(tmp_tab_stat->get_row_count(), row_cnt, tmp_col_stats, dst_opt_stats.at(i).column_stats_))) {
+        if (OB_FAIL(copy_basic_col_stats(tmp_tab_stat->get_row_count(), row_cnt, tmp_col_stats, dst_opt_stats.at(i).column_stats_))) {
           LOG_WARN("failed to copy col stat", K(ret));
         } else {/*do nothing*/}
       } else {/*do nothing*/}
     }
     if (OB_SUCC(ret) && !find_it) {
-      LOG_TRACE("this partition id isn't in needed partition ids, no need gather stats",
-                                                                                   K(partition_id));
+      LOG_TRACE("this partition id isn't in needed partition ids, no need gather stats",K(partition_id));
     }
   }
   return ret;
 }
 
-int ObStatsEstimator::copy_col_stats(const int64_t cur_row_cnt,
-                                     const int64_t total_row_cnt,
-                                     ObIArray<ObOptColumnStat *> &src_col_stats,
-                                     ObIArray<ObOptColumnStat *> &dst_col_stats)
+int ObStatsEstimator::copy_basic_col_stats(const int64_t cur_row_cnt,
+                                           const int64_t total_row_cnt,
+                                           ObIArray<ObOptColumnStat *> &src_col_stats,
+                                           ObIArray<ObOptColumnStat *> &dst_col_stats)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(src_col_stats.count() != dst_col_stats.count())) {
@@ -497,6 +542,7 @@ int ObStatsEstimator::copy_col_stats(const int64_t cur_row_cnt,
         dst_col_stats.at(i)->set_max_value(src_col_stats.at(i)->get_max_value());
         dst_col_stats.at(i)->set_min_value(src_col_stats.at(i)->get_min_value());
         dst_col_stats.at(i)->set_num_not_null(num_not_null);
+        dst_col_stats.at(i)->get_histogram().set_sample_size(src_col_stats.at(i)->get_num_not_null());
         dst_col_stats.at(i)->set_num_null(num_null);
         dst_col_stats.at(i)->set_num_distinct(num_distinct);
         dst_col_stats.at(i)->set_avg_len(src_col_stats.at(i)->get_avg_len());
@@ -514,87 +560,10 @@ int ObStatsEstimator::copy_col_stats(const int64_t cur_row_cnt,
                  src_col_stats.at(i)->get_llc_bitmap(),
                  src_col_stats.at(i)->get_llc_bitmap_size());
           dst_col_stats.at(i)->set_llc_bitmap_size(src_col_stats.at(i)->get_llc_bitmap_size());
-          ObHistogram &src_hist = src_col_stats.at(i)->get_histogram();
-          dst_col_stats.at(i)->get_histogram().set_type(src_hist.get_type());
-          dst_col_stats.at(i)->get_histogram().set_sample_size(src_col_stats.at(i)->get_num_not_null());
-          dst_col_stats.at(i)->get_histogram().set_density(src_hist.get_density());
-          dst_col_stats.at(i)->get_histogram().set_bucket_cnt(src_hist.get_bucket_cnt());
-          if (OB_FAIL(dst_col_stats.at(i)->get_histogram().get_buckets().assign(src_hist.get_buckets()))) {
-            LOG_WARN("failed to assign buckets", K(ret));
-          } else {
-            LOG_TRACE("Succeed to copy col stat", K(*dst_col_stats.at(i)), K(*src_col_stats.at(i)));
-          }
+          LOG_TRACE("Succeed to copy basic col stats", K(*dst_col_stats.at(i)), K(*src_col_stats.at(i)));
         }
       }
     }
-  }
-  return ret;
-}
-
-int ObStatsEstimator::copy_hybrid_hist_stat(ObOptStat &src_opt_stat,
-                                            ObIArray<ObOptStat> &dst_opt_stats)
-{
-  int ret = OB_SUCCESS;
-  bool find_it = false;
-  if (OB_ISNULL(src_opt_stat.table_stat_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(src_opt_stat.table_stat_));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && !find_it && i < dst_opt_stats.count(); ++i) {
-    if (OB_ISNULL(dst_opt_stats.at(i).table_stat_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), K(dst_opt_stats.at(i).table_stat_));
-    } else if (dst_opt_stats.at(i).table_stat_->get_partition_id() ==
-               src_opt_stat.table_stat_->get_partition_id()) {
-      find_it = true;
-      if (OB_UNLIKELY(dst_opt_stats.at(i).column_stats_.count() !=
-                      src_opt_stat.column_stats_.count())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(dst_opt_stats.at(i).column_stats_.count()),
-                                         K(src_opt_stat.column_stats_.count()));
-      } else {
-        for (int64_t j = 0; OB_SUCC(ret) && j < src_opt_stat.column_stats_.count(); ++j) {
-          ObOptColumnStat *src_col_stat = NULL;
-          ObOptColumnStat *dst_col_stat = NULL;
-          bool is_skewed = false;
-          if (OB_ISNULL(src_col_stat = src_opt_stat.column_stats_.at(j)) ||
-              OB_ISNULL(dst_col_stat = dst_opt_stats.at(i).column_stats_.at(j))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected null", K(ret), K(src_col_stat), K(dst_col_stat), K(j));
-          } else if (!dst_col_stat->get_histogram().is_hybrid() ||
-                     dst_col_stat->get_histogram().is_valid() ||
-                     !src_col_stat->get_histogram().is_valid()) {
-            LOG_TRACE("no need copy histogram", K(src_col_stat->get_histogram()),
-                                                K(dst_col_stat->get_histogram()), K(i), K(j));
-            if (!src_col_stat->get_histogram().is_valid() &&
-                !dst_col_stat->get_histogram().is_valid()) {
-              dst_col_stat->get_histogram().reset();
-              dst_col_stat->get_histogram().set_sample_size(dst_col_stat->get_num_not_null());
-            }
-          } else {
-            ObHistogram &src_hist = src_col_stat->get_histogram();
-            dst_col_stat->get_histogram().set_type(src_hist.get_type());
-            dst_col_stat->get_histogram().set_sample_size(src_hist.get_sample_size());
-            dst_col_stat->get_histogram().set_bucket_cnt(src_hist.get_bucket_cnt());
-            dst_col_stat->get_histogram().calc_density(ObHistType::HYBIRD,
-                                                       src_hist.get_sample_size(),
-                                                       src_hist.get_pop_frequency(),
-                                                       dst_col_stat->get_num_distinct(),
-                                                       src_hist.get_pop_count());
-            if (OB_FAIL(dst_col_stat->get_histogram().get_buckets().assign(src_hist.get_buckets()))) {
-              LOG_WARN("failed to assign buckets", K(ret));
-            } else {
-              LOG_TRACE("Succeed to copy histogram", K(*dst_col_stat), K(i), K(j));
-            }
-          }
-        }
-      }
-    } else {/*do nothing*/}
-  }
-  if (OB_SUCC(ret) && !find_it) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error, can't find specify partition id", K(ret), K(find_it),
-                                                                      K(*src_opt_stat.table_stat_));
   }
   return ret;
 }

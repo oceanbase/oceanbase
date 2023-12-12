@@ -2955,5 +2955,18 @@ int ObTabletLocationReceiveP::process()
   return OB_SUCCESS;
 }
 
+int ObCancelGatherStatsP::process()
+{
+  int ret = OB_SUCCESS;
+  if (!arg_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg_), K(ret));
+  } else if (OB_FAIL(ObOptStatGatherStatList::instance().cancel_gather_stats(arg_.tenant_id_,
+                                                                             arg_.task_id_))) {
+    LOG_WARN("failed to cancel gather stats", K(ret));
+  }
+  return ret;
+}
+
 } // end of namespace observer
 } // end of namespace oceanbase

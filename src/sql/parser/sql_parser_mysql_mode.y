@@ -1986,10 +1986,10 @@ COUNT '(' opt_all '*' ')' OVER new_generalized_window_clause
   malloc_non_terminal_node($$, result->malloc_pool_, T_WIN_FUN_NTH_VALUE, 4, $3, $5, $7, $8);
   malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $10);
 }
-| TOP_K_FRE_HIST '(' DECIMAL_VAL ',' bit_expr  ','  INTNUM ')' OVER new_generalized_window_clause
+|  TOP_K_FRE_HIST '(' DECIMAL_VAL ',' bit_expr  ','  INTNUM ',' expr_const ')' OVER new_generalized_window_clause
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_TOP_FRE_HIST, 3, $3, $5, $7);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $10);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_TOP_FRE_HIST, 4, $3, $5, $7, $9);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $12);
 }
 | HYBRID_HIST '(' bit_expr ',' INTNUM ')' OVER new_generalized_window_clause
 {
@@ -2404,9 +2404,9 @@ MOD '(' expr ',' expr ')'
   merge_nodes(group_concat_exprs, result, T_EXPR_LIST, $4);
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_GROUP_CONCAT, 4, $3, group_concat_exprs, $5, $6);
 }
-| TOP_K_FRE_HIST '(' DECIMAL_VAL ',' bit_expr  ','  INTNUM ')'
+| TOP_K_FRE_HIST '(' DECIMAL_VAL ',' bit_expr  ','  INTNUM ','  expr_const ')'
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_TOP_FRE_HIST, 3, $3, $5, $7);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_TOP_FRE_HIST, 4, $3, $5, $7, $9);
 }
 | HYBRID_HIST '(' bit_expr ',' INTNUM ')'
 {
@@ -11772,6 +11772,12 @@ ANALYZE TABLE relation_factor UPDATE HISTOGRAM ON column_name_list WITH INTNUM B
   }
   malloc_non_terminal_node($$, result->malloc_pool_, T_MYSQL_UPDATE_HISTOGRAM, 3, $3, column_name_list, $9);
 }
+| ANALYZE TABLE relation_factor UPDATE HISTOGRAM ON column_name_list
+{
+  ParseNode *column_name_list = NULL;
+  merge_nodes(column_name_list, result, T_ANALYZE_MYSQL_COLUMN_LIST, $7);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MYSQL_UPDATE_HISTOGRAM, 3, $3, column_name_list, NULL);
+}
 | ANALYZE TABLE relation_factor DROP HISTOGRAM ON column_name_list
 {
   ParseNode *column_name_list = NULL;
@@ -11785,6 +11791,12 @@ ANALYZE TABLE relation_factor UPDATE HISTOGRAM ON column_name_list WITH INTNUM B
 | ANALYZE TABLE relation_factor use_partition analyze_statistics_clause
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ANALYZE, 3, $3, $4, $5);
+}
+| ANALYZE TABLE table_list
+{
+  ParseNode *compute_statictic = NULL;
+  malloc_non_terminal_node(compute_statictic, result->malloc_pool_, T_ANALYZE_STATISTICS, 2, NULL, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MYSQL_ANALYZE, 3, $3, NULL, compute_statictic);
 }
 ;
 

@@ -4683,6 +4683,18 @@ bool ObSQLUtils::is_fk_nested_sql(ObExecContext *cur_ctx)
   return bret;
 }
 
+//this sql is triggered by online stat gathering
+bool ObSQLUtils::is_online_stat_gathering_nested_sql(ObExecContext *cur_ctx)
+{
+  bool bret = false;
+  if (cur_ctx != nullptr &&
+      cur_ctx->get_parent_ctx() != nullptr &&
+      cur_ctx->get_parent_ctx()->is_online_stats_gathering()) {
+    bret = true;
+  }
+  return bret;
+}
+
 bool ObSQLUtils::is_iter_uncommitted_row(ObExecContext *cur_ctx)
 {
   bool bret = false;
@@ -4698,7 +4710,7 @@ bool ObSQLUtils::is_iter_uncommitted_row(ObExecContext *cur_ctx)
 //then it is not nested sql, nor is it restricted by the constraints of nested sql
 bool ObSQLUtils::is_nested_sql(ObExecContext *cur_ctx)
 {
-  return is_pl_nested_sql(cur_ctx) || is_fk_nested_sql(cur_ctx);
+  return is_pl_nested_sql(cur_ctx) || is_fk_nested_sql(cur_ctx) || is_online_stat_gathering_nested_sql(cur_ctx);
 }
 
 bool ObSQLUtils::is_in_autonomous_block(ObExecContext *cur_ctx)
