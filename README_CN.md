@@ -109,7 +109,7 @@ obd demo
 
 # 案例
 
-OceanBase 已服务超过 400 家来自不同行业的客户，包括金融服务、电信、零售、互联网等。
+OceanBase 已服务超过 1000 家来自不同行业的客户，包括金融服务、电信、零售、互联网等。
 
 更详细的信息请参考[客户案例](https://www.oceanbase.com/customer/home)和[谁在使用 OceanBase](https://github.com/oceanbase/oceanbase/issues/1301)。
 
