@@ -1150,8 +1150,7 @@ int ObExprOperator::aggregate_result_type_for_merge(
       } else if (ob_is_extend(res_type)) {
         OZ (aggregate_extend_accuracy_for_merge(type, types, param_num));
       } else if (ob_is_json(res_type)) {
-        type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-        type.set_collation_level(CS_LEVEL_IMPLICIT);
+        type.set_json();
       } else if (ob_is_geometry(res_type)) {
         type.set_geometry();
         type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObGeometryType]).get_length());

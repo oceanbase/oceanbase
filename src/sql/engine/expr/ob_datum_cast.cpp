@@ -3022,6 +3022,7 @@ static int common_string_json(const ObExpr &expr,
         is_null_res = true;
       } else if (!is_oracle
                   && (is_enumset_to_str
+                      || (CM_IS_SQL_AS_JSON_SCALAR(expr.extra_) && ob_is_string_type(in_type))
                       || (CM_IS_IMPLICIT_CAST(expr.extra_)
                           && !CM_IS_COLUMN_CONVERT(expr.extra_)
                           && !CM_IS_JSON_VALUE(expr.extra_)
