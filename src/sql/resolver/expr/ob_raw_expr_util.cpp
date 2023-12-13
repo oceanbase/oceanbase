@@ -1094,10 +1094,33 @@ do {                                                                            
                 ObUDFParamDesc(ObUDFParamDesc::OBJ_ACCESS_OUT, var_id, OB_INVALID_ID, pkg_id)));
           } else if (T_QUESTIONMARK == iexpr->get_expr_type()) {
             ObConstRawExpr *c_expr = static_cast<ObConstRawExpr*>(iexpr);
+            pl::ObPLDataType param_type;
             CK (OB_NOT_NULL(c_expr));
             CK (c_expr->get_value().is_unknown());
             OZ (udf_raw_expr->add_param_desc(
               ObUDFParamDesc(ObUDFParamDesc::LOCAL_OUT, c_expr->get_value().get_unknown())));
+            if (OB_FAIL(ret) || !pl::ObPLResolver::is_question_mark_value(iexpr, params.secondary_namespace_)) {
+              // do nothing ...
+            } else {
+              if (iparam->is_schema_routine_param()) {
+                ObRoutineParam *param = static_cast<ObRoutineParam*>(iparam);
+                CK (OB_NOT_NULL(param));
+                CK (OB_NOT_NULL(params.schema_checker_));
+                CK (OB_NOT_NULL(params.schema_checker_->get_schema_guard()));
+                CK (OB_NOT_NULL(params.session_info_));
+                CK (OB_NOT_NULL(params.allocator_));
+                CK (OB_NOT_NULL(params.sql_proxy_));
+                OZ (pl::ObPLDataType::transform_from_iparam(param,
+                                                          *(params.schema_checker_->get_schema_guard()),
+                                                          *(params.session_info_),
+                                                          *(params.allocator_),
+                                                          *(params.sql_proxy_),
+                                                          param_type));
+              } else {
+                param_type = iparam->get_pl_data_type();
+              }
+              OZ (pl::ObPLResolver::set_question_mark_type(iexpr, params.secondary_namespace_, &param_type));
+            }
           } else if (T_OP_GET_PACKAGE_VAR == iexpr->get_expr_type()) {
             const ObSysFunRawExpr *f_expr = static_cast<const ObSysFunRawExpr *>(iexpr);
             uint64_t pkg_id = OB_INVALID_ID;

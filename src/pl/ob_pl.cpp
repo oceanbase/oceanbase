@@ -3266,6 +3266,7 @@ do {                                                                  \
               get_params().at(i).set_is_ref_cursor_type(true);
             } else if (pl_type.is_collection_type() && OB_INVALID_ID == params->at(i).get_udt_id()) {
               ObPLComposite *composite = NULL;
+              get_params().at(i) = params->at(i);
               get_params().at(i).set_udt_id(pl_type.get_user_type_id());
               composite = reinterpret_cast<ObPLComposite *>(params->at(i).get_ext());
               if (OB_NOT_NULL(composite) && composite->is_collection() && OB_INVALID_ID == composite->get_id()) {
