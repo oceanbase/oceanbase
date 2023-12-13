@@ -165,7 +165,8 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
               // before we finally find the reason and resolve the bug. otherwise we cannot
               // use this command in on-line cluster.
               // see
-              cur_row_->cells_[cell_idx].set_null();
+              cur_row_->cells_[cell_idx].set_varchar("");
+              cur_row_->cells_[cell_idx].set_collation_type(default_collation);
             } else {
               cur_row_->cells_[cell_idx].set_varchar(sess_info->get_user_name());
               cur_row_->cells_[cell_idx].set_collation_type(default_collation);
