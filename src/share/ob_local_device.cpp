@@ -645,6 +645,39 @@ int ObLocalDevice::fstat(const ObIOFd &fd, ObIODFileStat &statbuf)
   return ret;
 }
 
+int ObLocalDevice::del_unmerged_parts(const char *pathname)
+{
+  UNUSED(pathname);
+  return OB_NOT_SUPPORTED;
+}
+
+int ObLocalDevice::adaptive_exist(const char *pathname, bool &is_exist)
+{
+  UNUSED(pathname);
+  UNUSED(is_exist);
+  return OB_NOT_SUPPORTED;
+}
+
+int ObLocalDevice::adaptive_stat(const char *pathname, ObIODFileStat &statbuf)
+{
+  UNUSED(pathname);
+  UNUSED(statbuf);
+  return OB_NOT_SUPPORTED;
+}
+
+int ObLocalDevice::adaptive_unlink(const char *pathname)
+{
+  UNUSED(pathname);
+  return OB_NOT_SUPPORTED;
+}
+
+int ObLocalDevice::adaptive_scan_dir(const char *dir_name, ObBaseDirEntryOperator &op)
+{
+  UNUSED(dir_name);
+  UNUSED(op);
+  return OB_NOT_SUPPORTED;
+}
+
 //block interfaces
 int ObLocalDevice::mark_blocks(ObIBlockIterator &block_iter)
 {

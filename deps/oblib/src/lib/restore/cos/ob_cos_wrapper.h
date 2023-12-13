@@ -132,6 +132,30 @@ struct OB_PUBLIC_API CosStringBuffer
     }
     return match;
   }
+
+  int32_t get_data_size() const
+  {
+    return (!empty() && '\0' == data_[size_ - 1]) ? size_ - 1 : size_;
+  }
+
+  bool is_prefix_of(const char *str, const int32_t str_len) const
+  {
+    bool match = false;
+    const int32_t data_size = get_data_size();
+    if (str == data_) {
+      match = (data_size <= str_len) ? true : false;
+    } else if (data_size > str_len) {
+      match = false;
+    } else if (0 == memcmp(data_, str, data_size)) {
+      match = true;
+    }
+    return match;
+  }
+
+  bool is_end_with_slash_and_null() const
+  {
+    return (NULL != data_ && size_ >= 2 && data_[size_ - 1] == '\0' && data_[size_ - 2] == '/');
+  }
 };
 
 
@@ -263,29 +287,40 @@ public:
     const CosStringBuffer &object_name,
     bool &is_tagging);
 
-  struct CosListObjPara {
+  struct CosListObjPara
+  {
     enum class CosListType
     {
       COS_LIST_INVALID,
-      COS_LIST_CB_ARG
+      COS_LIST_CB_ARG,
+      COS_PART_LIST_CTX
     };
 
     CosListObjPara()
-      : arg_(NULL), cur_full_path_slice_name_(NULL),
-        full_path_size_(0), cur_object_size_(0),
-        next_flag_(false), type_(CosListType::COS_LIST_INVALID)
+      : arg_(NULL), cur_obj_full_path_(NULL),
+        full_path_size_(0), cur_object_size_str_(NULL),
+        next_flag_(false), type_(CosListType::COS_LIST_INVALID),
+        next_token_(NULL), next_token_size_(0), finish_part_list_(false)
     {
       last_container_name_.d_name[0] = '\0';
       last_container_name_.d_type = DT_REG;
     }
 
-    void* arg_;
-    char* cur_full_path_slice_name_;
+    int set_cur_obj_meta(
+        char *obj_full_path,
+        const int64_t full_path_size,
+        char *object_size_str);
+
+    void *arg_;
+    char *cur_obj_full_path_;
     struct dirent last_container_name_;
     int64_t full_path_size_;
-    int64_t cur_object_size_;
+    char *cur_object_size_str_;
     bool next_flag_;
     CosListType type_;
+    char *next_token_;
+    int64_t next_token_size_;
+    bool finish_part_list_;
   };
 
   typedef int (*handleObjectNameFunc)(CosListObjPara&);
@@ -294,6 +329,14 @@ public:
   // in the inner sub directories.
   // dir_name must be end with "/\0".
   static int list_objects(
+    Handle *h,
+    const CosStringBuffer &bucket_name,
+    const CosStringBuffer &dir_name,
+    handleObjectNameFunc handle_object_name_f,
+    void *arg);
+
+  // Only list up-to 1000 objects
+  static int list_part_objects(
     Handle *h,
     const CosStringBuffer &bucket_name,
     const CosStringBuffer &dir_name,
@@ -315,8 +358,39 @@ public:
     const CosStringBuffer &bucket_name,
     const CosStringBuffer &dir_name,
     bool &is_empty_dir);
-};
 
+  static int init_multipart_upload(
+    Handle *h,
+    const CosStringBuffer &bucket_name,
+    const CosStringBuffer &object_name,
+    char *&upload_id_str);
+
+  static int upload_part_from_buffer(
+    Handle *h,
+    const CosStringBuffer &bucket_name,
+    const CosStringBuffer &object_name,
+    const CosStringBuffer &upload_id_str,
+    const int part_num, /*the sequence number of this part, [1, 10000]*/
+    const char *buf,
+    const int64_t buf_size);
+
+  static int complete_multipart_upload(
+    Handle *h,
+    const CosStringBuffer &bucket_name,
+    const CosStringBuffer &object_name,
+    const CosStringBuffer &upload_id_str);
+
+  static int abort_multipart_upload(
+    Handle *h,
+    const CosStringBuffer &bucket_name,
+    const CosStringBuffer &object_name,
+    const CosStringBuffer &upload_id_str);
+
+  static int del_unmerged_parts(
+    Handle *h,
+    const CosStringBuffer &bucket_name,
+    const CosStringBuffer &object_name);
+};
 
 #undef OB_PUBLIC_API
 }

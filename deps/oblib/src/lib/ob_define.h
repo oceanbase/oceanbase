@@ -695,6 +695,11 @@ const char *const OB_LOCAL_PREFIX = "local://";
 const char *const OB_OSS_PREFIX = "oss://";
 const char *const OB_FILE_PREFIX = "file://";
 const char *const OB_COS_PREFIX = "cos://";
+const char *const OB_S3_PREFIX = "s3://";
+const char *const OB_S3_APPENDABLE_FORMAT_META = "FORMAT_META";
+const char *const OB_S3_APPENDABLE_SEAL_META = "SEAL_META";
+const char *const OB_S3_APPENDABLE_FRAGMENT_PREFIX = "@APD_PART@";
+const int64_t OB_STORAGE_LIST_MAX_NUM = 1000;
 const char *const OB_RESOURCE_UNIT_DEFINITION = "resource_unit_definition";
 const char *const OB_RESOURCE_POOL_DEFINITION = "resource_pool_definition";
 const char *const OB_CREATE_TENANT_DEFINITION = "create_tenant_definition";
@@ -2523,7 +2528,7 @@ inline bool is_x86() {
 #endif
 }
 #define __maybe_unused  __attribute__((unused))
-#define DO_PRAGMA(x) _Pragma (#x)
+#define DO_PRAGMA(x) _Pragma(#x)
 #define DISABLE_WARNING_GCC_PUSH _Pragma("GCC diagnostic push")
 #define DISABLE_WARNING_GCC(option) DO_PRAGMA(GCC diagnostic ignored option)
 #define DISABLE_WARNING_GCC_POP _Pragma("GCC diagnostic pop")
