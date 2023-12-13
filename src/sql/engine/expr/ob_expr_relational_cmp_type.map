@@ -1235,7 +1235,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNVarchar2Type,          /* ObNCharType */
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
-    ObJsonType,       /* ObJsonType */
+    ObVarcharType,       /* ObJsonType */
     ObHexStringType,        /* ObGeometryType */
   },
 

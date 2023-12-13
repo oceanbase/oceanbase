@@ -6012,11 +6012,12 @@ static int string_json(const ObObjType expect_type, ObObjCastParams &params,
       j_base = &j_null;
     } else if (!is_oracle && CS_TYPE_BINARY == in.get_collation_type()) {
       j_base = &j_opaque;
-    } else if (!is_oracle
-                && CM_IS_IMPLICIT_CAST(cast_mode)
-                && !CM_IS_COLUMN_CONVERT(cast_mode)
-                && !CM_IS_JSON_VALUE(cast_mode)
-                && is_convert_jstr_type) {
+    } else if (!is_oracle  && (
+                (CM_IS_SQL_AS_JSON_SCALAR(cast_mode) && ob_is_string_type(in_type))
+                || (CM_IS_IMPLICIT_CAST(cast_mode)
+                    && !CM_IS_COLUMN_CONVERT(cast_mode)
+                    && !CM_IS_JSON_VALUE(cast_mode)
+                    && is_convert_jstr_type))) {
       // consistent with mysql: TINYTEXT, TEXT, MEDIUMTEXT, and LONGTEXT. We want to treat them like strings
       ret = OB_SUCCESS;
       j_base = &j_string;
