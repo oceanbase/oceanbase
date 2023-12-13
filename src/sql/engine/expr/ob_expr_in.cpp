@@ -167,11 +167,16 @@ int ObExprInHashMap<T>::set_refactored(const Row<T> &row)
   tmp_row_key.meta_ = &meta_;
   if (OB_ISNULL(arr_ptr = const_cast<ObArray<Row<T>> *> (map_.get(tmp_row_key)))) {
     ObArray<Row<T>> arr;
-    arr.set_tenant_id(MTL_ID());
-    if (OB_FAIL(arr.push_back(row))) {
-      LOG_WARN("failed to load row", K(ret));
-    } else {
-      ret = map_.set_refactored(tmp_row_key, arr);
+    ret = map_.set_refactored(tmp_row_key, arr);
+    if (OB_SUCC(ret)) {
+      arr_ptr = const_cast<ObArray<Row<T>> *> (map_.get(tmp_row_key));
+      CK (OB_NOT_NULL(arr_ptr));
+      if (OB_SUCC(ret)) {
+        arr_ptr->set_tenant_id(MTL_ID());
+        if (OB_FAIL(arr_ptr->push_back(row))) {
+          LOG_WARN("failed to push row", K(ret));
+        }
+      }
     }
   } else {
     int exist = ObExprInHashMap<T>::HASH_CMP_FALSE;
