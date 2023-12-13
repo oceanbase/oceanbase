@@ -1685,6 +1685,10 @@ int ObTenantTabletScheduler::update_major_progress(const int64_t merge_version)
   if (major_merged_scn > merged_version_) {
     FLOG_INFO("last major merge finish", K(merge_version), K(major_merged_scn), K(merged_version_));
     merged_version_ = major_merged_scn;
+    if (OB_FAIL(MTL(ObTenantCompactionProgressMgr *)->update_progress_status(
+        merged_version_, share::ObIDag::DAG_STATUS_FINISH))) {
+      LOG_WARN("failed to finish progress", KR(ret), K(merge_version));
+    }
   }
   if (OB_FAIL(MTL(ObTenantCompactionProgressMgr *)->update_progress_status(
       merge_version, share::ObIDag::DAG_STATUS_NODE_RUNNING))) {
