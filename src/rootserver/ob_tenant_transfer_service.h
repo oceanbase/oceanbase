@@ -230,6 +230,9 @@ private:
       const share::ObTransferTaskID &task_id,
       const share::ObTransferTaskComment &result_comment);
   int64_t get_tablet_count_threshold_() const;
+  int construct_ls_member_list_(
+      common::sqlclient::ObMySQLResult &res,
+      share::ObLSReplica::MemberList &ls_member_list);
 private:
   static const int64_t IDLE_TIME_US = 10 * 1000 * 1000L; // 10s
   static const int64_t BUSY_IDLE_TIME_US = 100 * 1000L; // 100ms
