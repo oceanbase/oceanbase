@@ -1499,9 +1499,7 @@ int ObTransService::rollback_savepoint_(ObTxDesc &tx,
      ret = OB_TRANS_TIMEOUT;
   }
   if (OB_SUCC(ret)) {
-    ARRAY_FOREACH(parts, i) {
-      parts[i].last_scn_ = savepoint;
-    }
+    tx.post_rb_savepoint_(parts, savepoint);
   }
   return ret;
 }
