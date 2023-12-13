@@ -1,6 +1,6 @@
 The development guide is located under the [docs](docs/README.md) folder.
 
-# Contribution guidelines 
+# Contribution Guidelines 
 
 Welcome to [oceanbase]! We're thrilled that you'd like to contribute. Your help is essential for making it better.
 
@@ -17,7 +17,7 @@ First, fork the [oceanbase repository](https://github.com/oceanbase/oceanbase) t
 ```bash
 git clone https://github.com/`your-github-name`/oceanbase
 ```
-### Navigate to the project directory 📁
+### Navigate to the Project Directory 📁
 ```bash
 cd oceanbase
 ```
