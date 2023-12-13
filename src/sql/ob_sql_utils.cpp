@@ -5207,9 +5207,10 @@ int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_vie
   } else if (OB_ISNULL(select_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get select stmt", K(ret));
-  } else if (is_oracle_mode()) {
+  } else if (is_oracle_mode() && !old_view_schema.is_sys_view()) {
     // column name in column schema should be the same as select item alias name in view definition
     // when view definition is not rebuilt and column list grammar is used, overwrite alias name
+    // sys view can not use column list grammar and column count of sys view may be changed
     const ObColumnSchemaV2 *column_schema;
     uint64_t column_id;
     bool is_column_schema_null = false;
