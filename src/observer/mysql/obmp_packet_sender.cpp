@@ -107,15 +107,16 @@ int ObMPPacketSender::init(rpc::ObRequest *req)
     bool is_conn_valid = true;
     bool req_has_wokenup = false;
     int64_t receive_ts = req->get_receive_timestamp();
-    ret = do_init(req, pkt_seq + 1, is_conn_valid, req_has_wokenup, receive_ts);
+    ret = do_init(req, pkt_seq + 1, pkt_seq + 1, is_conn_valid, req_has_wokenup, receive_ts);
   }
   return ret;
 }
 
-int ObMPPacketSender::clone_from(ObMPPacketSender& that)
+int ObMPPacketSender::clone_from(ObMPPacketSender& that, int64_t com_offset)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(do_init(that.req_, that.seq_, that.conn_valid_, that.req_has_wokenup_, that.query_receive_ts_))) {
+  if (OB_FAIL(do_init(that.req_, that.seq_, that.comp_context_.seq_ + com_offset,
+                      that.conn_valid_, that.req_has_wokenup_, that.query_receive_ts_))) {
     SERVER_LOG(ERROR, "clone packet sender fail", K(ret));
   } else {
     comp_context_.is_checksum_off_ = that.comp_context_.is_checksum_off_;
@@ -126,6 +127,7 @@ int ObMPPacketSender::clone_from(ObMPPacketSender& that)
 
 int ObMPPacketSender::do_init(rpc::ObRequest *req,
                            uint8_t packet_seq,
+                           uint8_t comp_seq,
                            bool conn_status,
                            bool req_has_wokenup,
                            int64_t query_receive_ts)
@@ -149,7 +151,7 @@ int ObMPPacketSender::do_init(rpc::ObRequest *req,
     // init comp_context
     comp_context_.reset();
     comp_context_.type_ = conn->get_compress_type();
-    comp_context_.seq_ = seq_;
+    comp_context_.seq_ = comp_seq;
     comp_context_.sessid_ = sessid_;
     comp_context_.conn_ = conn;
 
@@ -158,7 +160,7 @@ int ObMPPacketSender::do_init(rpc::ObRequest *req,
     if (is_proto20_supported) {
       proto20_context_.reset();
       proto20_context_.is_proto20_used_ = is_proto20_supported;
-      proto20_context_.comp_seq_ = seq_;
+      proto20_context_.comp_seq_ = comp_seq;
       proto20_context_.request_id_ = conn->proto20_pkt_context_.proto20_last_request_id_;
       proto20_context_.proto20_seq_ = static_cast<uint8_t>(conn->proto20_pkt_context_.proto20_last_pkt_seq_ + 1);
       proto20_context_.header_len_ = OB20_PROTOCOL_HEADER_LENGTH + OB_MYSQL_COMPRESSED_HEADER_SIZE;
