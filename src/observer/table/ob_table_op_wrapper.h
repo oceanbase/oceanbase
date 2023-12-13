@@ -84,6 +84,8 @@ public:
                                        const ObTableSchema *table_schema,
                                        const ObIArray<ObString> &cnames,
                                        ObITableEntity *entity);
+  static int expand_all_columns(const ObTableSchema *table_schema,
+                                ObIArray<ObString> &cnames);
   static void replace_ret_code(int &ret)
   {
     if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret
