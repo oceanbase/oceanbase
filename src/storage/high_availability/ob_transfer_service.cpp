@@ -226,6 +226,8 @@ int ObTransferService::do_transfer_handler_(const share::ObLSID &ls_id)
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(ls_id));
+  } else if (ls->is_offline()) {
+    LOG_INFO("ls is during offline, cannot schedule transfer handler", K(ls_id));
   } else if (OB_FAIL(ls->get_transfer_handler()->process())) {
     LOG_WARN("failed to process transfer", K(ret), KP(ls));
   } else {
