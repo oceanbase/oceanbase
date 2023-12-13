@@ -6063,34 +6063,34 @@ int ObPartTransCtx::gen_total_mds_array_(ObTxBufferNodeArray &mds_array) const
 }
 
 int ObPartTransCtx::deep_copy_mds_array_(const ObTxBufferNodeArray &mds_array,
-                                        ObTxBufferNodeArray &incremental_array,
-                                        bool need_replace)
+                                         ObTxBufferNodeArray &incremental_array,
+                                         bool need_replace)
 {
   auto process_with_buffer_ctx = [this](const ObTxBufferNode &old_node,
                                         mds::BufferCtx *&new_ctx) -> int {
     int ret = OB_SUCCESS;
-    if (old_node.get_data_source_type() <= ObTxDataSourceType::UNKNOWN ||
-        old_node.get_data_source_type() >= ObTxDataSourceType::MAX_TYPE) {
+    if (old_node.get_data_source_type() <= ObTxDataSourceType::UNKNOWN
+        || old_node.get_data_source_type() >= ObTxDataSourceType::MAX_TYPE) {
       ret = OB_ERR_UNDEFINED;
       TRANS_LOG(ERROR, "unexpected mds type", KR(ret), K(*this));
     } else if (old_node.get_data_source_type() <= ObTxDataSourceType::BEFORE_VERSION_4_1
-                && ObTxDataSourceType::CREATE_TABLET_NEW_MDS != old_node.get_data_source_type()
-                && ObTxDataSourceType::DELETE_TABLET_NEW_MDS != old_node.get_data_source_type()
-                && ObTxDataSourceType::UNBIND_TABLET_NEW_MDS != old_node.get_data_source_type()) {
+               && ObTxDataSourceType::CREATE_TABLET_NEW_MDS != old_node.get_data_source_type()
+               && ObTxDataSourceType::DELETE_TABLET_NEW_MDS != old_node.get_data_source_type()
+               && ObTxDataSourceType::UNBIND_TABLET_NEW_MDS != old_node.get_data_source_type()) {
       TRANS_LOG(INFO, "old mds type, no need process with buffer ctx",
-                      K(old_node.get_data_source_type()), K(*this));
+                K(old_node.get_data_source_type()), K(*this));
     } else {
-      if (OB_ISNULL(old_node.get_buffer_ctx_node().get_ctx())) {// this is replay path, create ctx
-        if (OB_FAIL(mds::MdsFactory::create_buffer_ctx(old_node.get_data_source_type(),
-                                                       trans_id_,
+      if (OB_ISNULL(old_node.get_buffer_ctx_node().get_ctx())) { // this is replay path, create ctx
+        if (OB_FAIL(mds::MdsFactory::create_buffer_ctx(old_node.get_data_source_type(), trans_id_,
                                                        new_ctx))) {
-          TRANS_LOG(WARN, "fail to create buffer ctx", KR(ret), KPC(new_ctx), K(*this), K(old_node));
+          TRANS_LOG(WARN, "fail to create buffer ctx", KR(ret), KPC(new_ctx), K(*this),
+                    K(old_node));
         }
-      } else {// this is recover path, copy ctx
-        if (OB_FAIL(mds::MdsFactory::deep_copy_buffer_ctx(trans_id_,
-                                                          *(old_node.buffer_ctx_node_.get_ctx()),
-                                                          new_ctx))) {
-          TRANS_LOG(WARN, "fail to deep copy buffer ctx", KR(ret), KPC(new_ctx), K(*this), K(old_node));
+      } else { // this is recover path, copy ctx
+        if (OB_FAIL(mds::MdsFactory::deep_copy_buffer_ctx(
+                trans_id_, *(old_node.buffer_ctx_node_.get_ctx()), new_ctx))) {
+          TRANS_LOG(WARN, "fail to deep copy buffer ctx", KR(ret), KPC(new_ctx), K(*this),
+                    K(old_node));
         }
       }
     }
@@ -6132,20 +6132,26 @@ int ObPartTransCtx::deep_copy_mds_array_(const ObTxBufferNodeArray &mds_array,
         mds::BufferCtx *new_ctx = nullptr;
         if (OB_FAIL(process_with_buffer_ctx(node, new_ctx))) {
           TRANS_LOG(WARN, "process_with_buffer_ctx failed", KR(ret), K(*this));
-        } else if (OB_FAIL(new_node.init(node.get_data_source_type(),
-                                         data,
-                                         node.mds_base_scn_,
+        } else if (OB_FAIL(new_node.init(node.get_data_source_type(), data, node.mds_base_scn_,
                                          new_ctx))) {
           MultiTxDataFactory::free(data.ptr());
           if (OB_NOT_NULL(new_ctx)) {
-            MTL(mds::ObTenantMdsService*)->get_buffer_ctx_allocator().free(new_ctx);
+            MTL(mds::ObTenantMdsService *)->get_buffer_ctx_allocator().free(new_ctx);
             new_ctx = nullptr;
           }
           TRANS_LOG(WARN, "init new node failed", KR(ret), K(*this));
+        } else if (ObTxBufferNode::is_valid_register_no(node.get_register_no())
+                   && OB_FAIL(new_node.set_mds_register_no(node.get_register_no()))) {
+          mtl_free(data.ptr());
+          if (OB_NOT_NULL(new_ctx)) {
+            MTL(mds::ObTenantMdsService *)->get_buffer_ctx_allocator().free(new_ctx);
+            new_ctx = nullptr;
+          }
+          TRANS_LOG(WARN, "set mds register_no failed", KR(ret), K(*this));
         } else if (OB_FAIL(tmp_buf_arr.push_back(new_node))) {
           MultiTxDataFactory::free(data.ptr());
           if (OB_NOT_NULL(new_ctx)) {
-            MTL(mds::ObTenantMdsService*)->get_buffer_ctx_allocator().free(new_ctx);
+            MTL(mds::ObTenantMdsService *)->get_buffer_ctx_allocator().free(new_ctx);
             new_ctx = nullptr;
           }
           TRANS_LOG(WARN, "push multi source data failed", KR(ret), K(*this));
@@ -6179,15 +6185,55 @@ int ObPartTransCtx::deep_copy_mds_array_(const ObTxBufferNodeArray &mds_array,
 
   } else {
 
-    for (int64_t i = 0; OB_SUCC(ret) && i < tmp_buf_arr.count(); ++i) {
+    const int64_t tmp_buf_array_cnt = tmp_buf_arr.count();
+    const int64_t ctx_mds_array_cnt = exec_info_.multi_data_source_.count();
+    int64_t max_register_no_in_ctx = 0;
+    if (exec_info_.multi_data_source_.count() > 0) {
+      max_register_no_in_ctx =
+          exec_info_.multi_data_source_[ctx_mds_array_cnt - 1].get_register_no();
+    }
+    int64_t ctx_array_start_index = 0;
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < tmp_buf_array_cnt; ++i) {
       if (is_follower_()) {
         tmp_buf_arr[i].set_submitted();
         tmp_buf_arr[i].set_synced();
       }
-      if (OB_FAIL(exec_info_.multi_data_source_.push_back(tmp_buf_arr[i]))) {
-        TRANS_LOG(WARN, "push back exec_info_.multi_data_source_ failed", K(ret));
-      } else if (OB_FAIL(incremental_array.push_back(tmp_buf_arr[i]))) {
-        TRANS_LOG(WARN, "push back incremental_array failed", K(ret));
+      if (ObTxBufferNode::is_valid_register_no(max_register_no_in_ctx)
+          && ObTxBufferNode::is_valid_register_no(tmp_buf_arr[i].get_register_no())
+          && tmp_buf_arr[i].get_register_no() <= max_register_no_in_ctx) {
+        while ((!ObTxBufferNode::is_valid_register_no(
+                    exec_info_.multi_data_source_[ctx_array_start_index].get_register_no())
+                || tmp_buf_arr[i].get_register_no()
+                       > exec_info_.multi_data_source_[ctx_array_start_index].get_register_no())
+               && ctx_array_start_index < ctx_mds_array_cnt) {
+          ctx_array_start_index++;
+        }
+        if (tmp_buf_arr[i].get_register_no()
+            == exec_info_.multi_data_source_[ctx_array_start_index].get_register_no()) {
+
+          mtl_free(tmp_buf_arr[i].data_.ptr());
+          tmp_buf_arr[i].buffer_ctx_node_.destroy_ctx();
+          if (OB_FAIL(incremental_array.push_back(
+                  exec_info_.multi_data_source_[ctx_array_start_index]))) {
+            TRANS_LOG(WARN, "push back incremental_array failed", K(ret));
+          }
+          TRANS_LOG(INFO, "filter mds node replay by the register_no", K(ret), K(trans_id_),
+                    K(ls_id_), K(i), K(ctx_array_start_index), K(tmp_buf_arr[i].get_register_no()),
+                    K(exec_info_.multi_data_source_[ctx_array_start_index]));
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(ERROR, "we can not find a mds node in ctx with the same register_no", K(ret),
+                    K(i), K(ctx_array_start_index), K(tmp_buf_arr[i].get_register_no()),
+                    K(exec_info_.multi_data_source_[ctx_array_start_index]), KPC(this));
+        }
+
+      } else {
+        if (OB_FAIL(exec_info_.multi_data_source_.push_back(tmp_buf_arr[i]))) {
+          TRANS_LOG(WARN, "push back exec_info_.multi_data_source_ failed", K(ret));
+        } else if (OB_FAIL(incremental_array.push_back(tmp_buf_arr[i]))) {
+          TRANS_LOG(WARN, "push back incremental_array failed", K(ret));
+        }
       }
     }
   }
@@ -6568,6 +6614,8 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
         ret = OB_LOG_TOO_LARGE;
         TRANS_LOG(WARN, "too large mds buf node", K(ret), K(tmp_array.get_serialize_size()));
 //#endif
+      } else if (OB_FAIL(mds_cache_.try_recover_max_register_no(exec_info_.multi_data_source_))) {
+        TRANS_LOG(WARN, "recover max register no failed", K(ret), K(mds_cache_), KPC(this));
       } else if (OB_FAIL(mds_cache_.insert_mds_node(node))) {
         TRANS_LOG(WARN, "register multi source data failed", KR(ret), K(data_source_type),
                   K(*this));
