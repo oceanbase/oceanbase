@@ -154,6 +154,8 @@ int ObExprOracleDecode::calc_result_typeN(ObExprResType &type,
         type.set_calc_type(ObVarcharType);
       } else if (lib::is_oracle_mode() && ob_is_nchar(calc_type.get_type())) {
         type.set_calc_type(ObNVarchar2Type);
+      } else if (ob_is_decimal_int_tc(calc_type.get_type())) {
+        type.set_calc_type(ObNumberType);
       } else {
         // 保留原mysql下的行为
         type.set_calc_type(calc_type.get_type());
