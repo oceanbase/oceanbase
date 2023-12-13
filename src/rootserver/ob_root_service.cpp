@@ -10619,7 +10619,7 @@ int ObRootService::get_root_key_from_obs_(const obrpc::ObRootKeyArg &arg,
   } else if (OB_FAIL(SVR_TRACER.get_alive_servers(empty_zone, active_server_list))) {
     LOG_WARN("get alive servers failed", KR(ret));
   } else if (OB_FAIL(ObDDLService::notify_root_key(rpc_proxy_, arg, active_server_list, result,
-                                                   enable_default, false/*need_call_rs*/))) {
+                                                   enable_default, true/*skip_call_rs*/))) {
     LOG_WARN("failed to notify root key", KR(ret));
   }
   return ret;

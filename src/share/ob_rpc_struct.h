@@ -8489,39 +8489,41 @@ public:
     : tenant_id_(common::OB_INVALID_ID),
       unit_id_(common::OB_INVALID_ID),
       compat_mode_(lib::Worker::CompatMode::INVALID),
-#ifdef OB_BUILD_TDE_SECURITY
-      with_root_key_(false),
-      root_key_(),
-#endif
       unit_config_(),
       replica_type_(common::ObReplicaType::REPLICA_TYPE_MAX),
       if_not_grant_(false),
-      is_delete_(false) {}
+      is_delete_(false)
+#ifdef OB_BUILD_TDE_SECURITY
+      , with_root_key_(false),
+      root_key_()
+#endif
+      {}
   int assign(const TenantServerUnitConfig &other);
   int init(const uint64_t tenant_id,
            const uint64_t unit_id,
            const lib::Worker::CompatMode compat_mode,
-#ifdef OB_BUILD_TDE_SECURITY
-           const ObRootKeyResult &root_key,
-#endif
            const share::ObUnitConfig &unit_config,
            const common::ObReplicaType replica_type,
            const bool if_not_grant,
-           const bool is_delete);
+           const bool is_delete
+#ifdef OB_BUILD_TDE_SECURITY
+           , const ObRootKeyResult &root_key
+#endif
+           );
   int init_for_dropping(const uint64_t tenant_id,
                         const bool is_delete);
   void reset();
   uint64_t tenant_id_;
   uint64_t unit_id_;
   lib::Worker::CompatMode compat_mode_;
-#ifdef OB_BUILD_TDE_SECURITY
-  bool with_root_key_;  // true if root_key_ is explicitly assigned
-  ObRootKeyResult root_key_;
-#endif
   share::ObUnitConfig unit_config_;
   common::ObReplicaType replica_type_;
   bool if_not_grant_;
   bool is_delete_;
+#ifdef OB_BUILD_TDE_SECURITY
+  bool with_root_key_;  // true if root_key_ is explicitly assigned
+  ObRootKeyResult root_key_;
+#endif
   bool is_valid() const;
   TO_STRING_KV(K_(tenant_id),
                K_(unit_id),
