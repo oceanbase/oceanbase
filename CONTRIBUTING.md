@@ -37,7 +37,7 @@ Push your changes to your fork:
 ```bash
 git push origin feature-branch
 ```
-Finally Click on Create Pull request to contribute on this repository.
+Finally Click on `Compare & Pull request` to contribute on this repository.
 
 ### The Flow After You Create the Pull Request
 After you create the pull request, a member of the Oceanbase team will review your changes and provide feedback. Once satisfied, they will merge your pull request.
