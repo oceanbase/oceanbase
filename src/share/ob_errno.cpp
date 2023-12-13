@@ -17619,11 +17619,11 @@ static const _error _error_OB_ERR_DBLINK_NO_LIB = {
       .error_solution        = "Contact OceanBase Support",
       .mysql_errno           = -1,
       .sqlstate              = "HY000",
-      .str_error             = "oci lib not founded",
-      .str_user_error        = "oci lib not founded",
+      .str_error             = "can not find the expected version of OCI LIB: %.*s",
+      .str_user_error        = "can not find the expected version of OCI LIB: %.*s",
       .oracle_errno          = 600,
-      .oracle_str_error      = "ORA-00600: internal error code, arguments: -5976, oci lib not founded",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5976, oci lib not founded"
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -5976, can not find the expected version of OCI LIB: %.*s",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5976, can not find the expected version of OCI LIB: %.*s"
 };
 static const _error _error_OB_ERR_PARTITION_EXTENDED_ON_VIEW = {
       .error_name            = "OB_ERR_PARTITION_EXTENDED_ON_VIEW",

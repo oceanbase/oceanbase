@@ -1615,7 +1615,7 @@ DEFINE_ERROR_EXT(OB_ERR_CHECK_OPTION_ON_NONUPDATABLE_VIEW, -5972, ER_VIEW_NONUPD
 DEFINE_ORACLE_ERROR(OB_ERR_NO_DESC_FOR_POS, -5973, -1, "HY000", "no descriptor for this position", 24334, "no descriptor for this position");
 DEFINE_ORACLE_ERROR(OB_ERR_ILL_OBJ_FLAG, -5974, -1, "HY000", "object specified is incompatible with the flag specified", 4047, "object specified is incompatible with the flag specified");
 DEFINE_ERROR_DEP(OB_ERR_DBLINK_REMOTE_ECODE, -5975, -1, "HY000", "\ndblink remote error code: %d,\nremote error msg: %.*s", "\ndblink remote error code: %d,\nremote error msg: %.*s");
-DEFINE_ERROR_DEP(OB_ERR_DBLINK_NO_LIB, -5976, -1, "HY000", "oci lib not founded");
+DEFINE_ERROR_DEP(OB_ERR_DBLINK_NO_LIB, -5976, -1, "HY000", "can not find the expected version of OCI LIB: %.*s", "can not find the expected version of OCI LIB: %.*s");
 DEFINE_ORACLE_ERROR(OB_ERR_PARTITION_EXTENDED_ON_VIEW, -5977, -1, "HY000", "partition-extended object names may only be used with tables and editioning views", 14109, "partition-extended object names may only be used with tables and editioning views");
 DEFINE_ORACLE_ERROR(OB_ERR_NOT_ALL_VARIABLE_BIND, -5978, -1, "HY000", "not all variables bound", 1008, "not all variables bound");
 DEFINE_ORACLE_ERROR(OB_ERR_BIND_VARIABLE_NOT_EXIST, -5979, -1, "HY000", "bind variable does not exist", 1006, "bind variable does not exist");
