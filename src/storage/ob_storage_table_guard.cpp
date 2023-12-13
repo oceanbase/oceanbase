@@ -123,7 +123,7 @@ void ObStorageTableGuard::do_throttle_(TxShareThrottleTool &throttle_tool,
   int64_t left_interval = INT64_MAX;
 
   if (!for_replay_) {
-    left_interval = min(left_interval, store_ctx_.timeout_ - ObClockGenerator::getCurrentTime());
+    left_interval = min(left_interval, store_ctx_.timeout_ - ObClockGenerator::getClock());
   }
 
   while (throttle_tool.still_throttling<ObMemstoreAllocator>(share_ti_guard, module_ti_guard) && (left_interval > 0)) {

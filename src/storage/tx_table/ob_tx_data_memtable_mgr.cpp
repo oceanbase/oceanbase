@@ -138,7 +138,7 @@ int ObTxDataMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable
       memtable->set_state(ObTxDataMemtable::State::RELEASED);
       memtable->set_release_time();
       if (true == memtable->do_recycled()) {
-        mini_merge_recycle_commit_versions_ts_ = ObClockGenerator::getCurrentTime();
+        mini_merge_recycle_commit_versions_ts_ = ObClockGenerator::getClock();
       }
       STORAGE_LOG(INFO, "[TX DATA MERGE]tx data memtable mgr release head memtable", K(ls_id_), KP(memtable), KPC(memtable));
       release_head_memtable();

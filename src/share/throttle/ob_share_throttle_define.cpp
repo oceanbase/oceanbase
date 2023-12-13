@@ -69,11 +69,11 @@ void FakeAllocatorForTxShare::adaptive_update_limit(const int64_t holding_size,
                                                     int64_t &last_update_limit_ts,
                                                     bool &is_updated)
 {
-  static const int64_t UPDATE_LIMIT_INTERVAL = 50LL * 1000LL; // 50 ms
+  static const int64_t UPDATE_LIMIT_INTERVAL = 100LL * 1000LL; // 100 ms
   static const int64_t USABLE_REMAIN_MEMORY_PERCETAGE = 60;
   static const int64_t MAX_UNUSABLE_MEMORY = 2LL * 1024LL * 1024LL * 1024LL; // 2 GB
 
-  int64_t cur_ts = ObClockGenerator::getCurrentTime();
+  int64_t cur_ts = ObClockGenerator::getClock();
   int64_t old_ts = last_update_limit_ts;
   if ((cur_ts - old_ts > UPDATE_LIMIT_INTERVAL) && ATOMIC_BCAS(&last_update_limit_ts, old_ts, cur_ts)) {
     int64_t remain_memory = lib::get_tenant_memory_remain(MTL_ID());
