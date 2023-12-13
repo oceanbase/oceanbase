@@ -521,13 +521,16 @@ int ObTenantSqlMemoryManager::get_work_area_size(
     increase(profile.get_cache_size());
     LOG_TRACE("trace drift size", K(drift_size_), K(global_bound_size_));
     if (need_manual_calc_bound()) {
-      ++manual_calc_cnt_;
-      if (OB_FAIL(calculate_global_bound_size(allocator, false))) {
-        LOG_WARN("failed to calculate global bound size", K(global_bound_size_));
-      } else {
-        profile.inc_calc_count();
-        LOG_TRACE("trace manual calc global bound size", K(global_bound_size_),
-          K(profile.get_one_pass_size()), K(drift_size_), K(mem_target_));
+      if (OB_SUCCESS == global_bound_update_lock_.try_wrlock(common::ObLatchIds::SQL_MEMORY_MGR_MUTEX_LOCK)) {
+        ++manual_calc_cnt_;
+        if (OB_FAIL(calculate_global_bound_size(allocator, false))) {
+          LOG_WARN("failed to calculate global bound size", K(global_bound_size_));
+        } else {
+          profile.inc_calc_count();
+          LOG_TRACE("trace manual calc global bound size", K(global_bound_size_),
+            K(profile.get_one_pass_size()), K(drift_size_), K(mem_target_));
+        }
+        global_bound_update_lock_.unlock();
       }
     }
     if (OB_FAIL(ret)) {
@@ -566,6 +569,7 @@ int ObTenantSqlMemoryManager::register_work_area_profile(ObSqlWorkAreaProfile &p
       } else if (OB_FAIL(profile_lists_[hash_val].register_work_area_profile(profile))) {
         LOG_WARN("failed to register work area profile", K(hash_val), K(profile));
       } else {
+        increase_profile_cnt();
         profile.active_time_ = ObTimeUtility::current_time();
       }
     }
@@ -584,17 +588,20 @@ int ObTenantSqlMemoryManager::update_work_area_profile(
     // delta_size maybe negative integer
     (ATOMIC_AAF(&drift_size_, delta_size));
     if (need_manual_by_drift()) {
-      int64_t pre_drift_size = drift_size_;
-      ++manual_calc_cnt_;
-      if (OB_ISNULL(allocator)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("allocator is null", K(lbt()));
-      } else if (OB_FAIL(calculate_global_bound_size(allocator, false))) {
-        LOG_WARN("failed to calculate global bound size", K(global_bound_size_));
-      } else {
-        profile.inc_calc_count();
-        LOG_TRACE("trace manual calc global bound size by drift", K(global_bound_size_),
-          K(profile.get_one_pass_size()), K(drift_size_), K(mem_target_), K(pre_drift_size));
+      if (OB_SUCCESS == global_bound_update_lock_.try_wrlock(common::ObLatchIds::SQL_MEMORY_MGR_MUTEX_LOCK)) {
+        int64_t pre_drift_size = drift_size_;
+        ++manual_calc_cnt_;
+        if (OB_ISNULL(allocator)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("allocator is null", K(lbt()));
+        } else if (OB_FAIL(calculate_global_bound_size(allocator, false))) {
+          LOG_WARN("failed to calculate global bound size", K(global_bound_size_));
+        } else {
+          profile.inc_calc_count();
+          LOG_TRACE("trace manual calc global bound size by drift", K(global_bound_size_),
+            K(profile.get_one_pass_size()), K(drift_size_), K(mem_target_), K(pre_drift_size));
+        }
+        global_bound_update_lock_.unlock();
       }
     }
   }
@@ -807,6 +814,7 @@ int ObTenantSqlMemoryManager::unregister_work_area_profile(ObSqlWorkAreaProfile 
     } else if (OB_FAIL(profile_lists_[hash_val].unregister_work_area_profile(profile))) {
       LOG_WARN("failed to register work area profile", K(hash_val), K(profile));
     } else {
+      decrease_profile_cnt();
       if (enable_auto_memory_mgr_ && profile.get_auto_policy()) {
         decrease(profile.get_cache_size());
       }
@@ -1060,7 +1068,7 @@ int ObTenantSqlMemoryManager::count_profile_into_work_area_intervals(
       ObDList<ObSqlWorkAreaProfile> &profile_list = profile_lists_[i].get_profile_list();
       DLIST_FOREACH_X(profile, profile_list, OB_SUCC(ret)) {
         if (!profile->get_auto_policy()) {
-          // 没有使用auto的不作为统计之内
+          ++cur_profile_cnt;
         } else if (OB_FAIL(find_interval_index(profile->get_cache_size(), interval_idx, cache_size))) {
           LOG_WARN("failed to find interval index", K(*profile));
         } else {
