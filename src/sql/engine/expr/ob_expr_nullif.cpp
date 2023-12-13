@@ -200,6 +200,7 @@ int ObExprNullif::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
           // assign null type means can compare directly.
           info->cmp_meta_.type_ = ObNullType;
         } else {
+          bool has_lob_header = is_lob_storage(cmp_meta.get_type()) && expr_cg_ctx.cur_cluster_version_ >= CLUSTER_VERSION_4_1_0_0;
           if (OB_ISNULL(cmp_func = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
                                                             cmp_meta.get_type(),
                                                             cmp_meta.get_type(),
@@ -207,7 +208,7 @@ int ObExprNullif::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                                                             cmp_meta.get_scale(),
                                                             lib::is_oracle_mode(),
                                                             cmp_meta.get_collation_type(),
-                                                            cmp_meta.has_lob_header()))){
+                                                            has_lob_header))){
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("cmp func is null", K(ret), K(cmp_meta));
           } else {
