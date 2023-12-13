@@ -189,11 +189,12 @@ public:
       freeze_clock_(0),
       ls_id_(),
       checkpoint_start_time_(0),
-      allocator_("CkpDgn", MALLOC_BLOCK_SIZE
+      arena_("CkpDgn", MALLOC_BLOCK_SIZE
 #ifndef UNITTEST
           , MTL_ID()
 #endif
           ),
+      allocator_(arena_),
       checkpoint_unit_diagnose_info_map_(),
       memtable_diagnose_info_map_(),
       lock_()
@@ -246,7 +247,8 @@ public:
   share::ObLSID ls_id_;
   char thread_name_[oceanbase::OB_THREAD_NAME_BUF_LEN];
   int64_t checkpoint_start_time_;
-  ObArenaAllocator allocator_;
+  ObArenaAllocator arena_;
+  ObSafeArenaAllocator allocator_;
   ObCheckpointUnitDiagnoseInfoMap checkpoint_unit_diagnose_info_map_;
   ObMemtableDiagnoseInfoMap memtable_diagnose_info_map_;
   common::SpinRWLock lock_;

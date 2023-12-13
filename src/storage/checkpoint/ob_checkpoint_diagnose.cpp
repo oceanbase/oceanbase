@@ -42,7 +42,7 @@ void ObTraceInfo::reset_without_lock_()
   memtable_diagnose_info_map_.reuse();
   checkpoint_start_time_ = 0;
   memset(thread_name_, 0, oceanbase::OB_THREAD_NAME_BUF_LEN);
-  allocator_.reset();
+  allocator_.clear();
 }
 
 bool ObTraceInfo::check_trace_id_(const int64_t trace_id)
