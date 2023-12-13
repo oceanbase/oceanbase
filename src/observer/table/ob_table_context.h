@@ -361,6 +361,7 @@ public:
   static int convert_lob(common::ObIAllocator &allocator, ObObj &obj);
   // read lob的allocator需要保证obj序列化到rpc buffer后才能析构
   static int read_real_lob(common::ObIAllocator &allocator, ObObj &obj);
+  int adjust_entity();
 private:
   // for common
   int get_tablet_by_rowkey(const common::ObRowkey &rowkey,
@@ -397,7 +398,6 @@ private:
   int adjust_column(const ObColumnSchemaV2 &col_schema, ObObj &obj);
   int adjust_rowkey();
   int adjust_properties();
-  int adjust_entity();
   bool has_exist_in_columns(const common::ObIArray<common::ObString>& columns,
                             const common::ObString &name,
                             int64_t *idx = nullptr) const;
