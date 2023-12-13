@@ -636,6 +636,8 @@ OB_INLINE int64_t ObResourceGroup::max_worker_cnt() const
     cnt = 2;  // one for take snapshot, one for purge
   } else if (share::OBCG_DBA_COMMAND == group_id_) {
     cnt = 1;
+  } else if (share::OBCG_DIRECT_LOAD_HIGH_PRIO == group_id_) {
+    cnt = 1;
   }
   return cnt;
 }

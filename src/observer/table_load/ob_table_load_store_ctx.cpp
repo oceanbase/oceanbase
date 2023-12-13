@@ -391,7 +391,7 @@ int ObTableLoadStoreCtx::check_status(ObTableLoadStatusType status) const
     if (ObTableLoadStatusType::ERROR == status_) {
       ret = error_code_;
     } else if (ObTableLoadStatusType::ABORT == status_) {
-      ret = OB_CANCELED;
+      ret = OB_SUCCESS != error_code_ ? error_code_ : OB_CANCELED;
     } else {
       ret = OB_STATE_NOT_MATCH;
     }

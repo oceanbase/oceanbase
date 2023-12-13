@@ -21,6 +21,12 @@ namespace oceanbase
 {
 namespace observer
 {
+enum class ObTableLoadRpcPriority
+{
+  NORMAL_PRIO = 0,
+  HIGH_PRIO = 1,
+};
+
 // template <typename pcode, typename IGNORE = void>
 // struct ObTableLoadRpc
 // {
