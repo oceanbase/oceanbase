@@ -55,7 +55,7 @@ int ObBalanceGroup::init_by_tablegroup(const ObSimpleTablegroupSchema &tg,
     if (OB_FAIL(bg_name_str.append_fmt("TABLEGROUP_%s_PART_GROUP_%ld", tg_name.ptr(), part_group_index))) {
       LOG_WARN("fail to append fmt", KR(ret), K(tg));
     } else {
-      id_ = ObBalanceGroupID(tg.get_tablegroup_id(), 0);
+      id_ = ObBalanceGroupID(tg.get_tablegroup_id(), part_group_index);
     }
   }
 
