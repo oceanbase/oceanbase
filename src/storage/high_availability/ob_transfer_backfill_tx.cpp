@@ -326,21 +326,20 @@ int ObTransferWorkerMgr::process()
   int ret = OB_SUCCESS;
   bool is_exist = false;
   ObTransferBackfillTXParam param;
+  bool allow_transfer_backfill = true;
 
 #ifdef ERRSIM
-    if (OB_SUCC(ret)) {
-      ret = OB_E(EventTable::EN_CHECK_TRANSFER_TASK_EXSIT) OB_SUCCESS;
-      if (OB_FAIL(ret)) {
-        STORAGE_LOG(ERROR, "fake EN_CHECK_TRANSFER_TASK_EXSIT", K(ret));
-        is_exist = true;
-        ret = OB_SUCCESS;
-      }
-    }
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    allow_transfer_backfill = tenant_config->allow_transfer_backfill;
+  }
 #endif
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer work not init", K(ret));
+  } else if (!allow_transfer_backfill) {
+    LOG_INFO("do not allow transfer backfill, need check errsim config", K(allow_transfer_backfill));
   } else if (task_id_.is_valid() && OB_FAIL(check_task_exist_(task_id_, is_exist))) {
     LOG_WARN("failed to check task exist", K(ret), "ls_id", dest_ls_->get_ls_id(), K(*this));
   } else if (is_exist) {
