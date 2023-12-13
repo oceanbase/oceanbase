@@ -152,7 +152,7 @@ public:
     is_ttl_table_ = false;
     is_skip_scan_ = false;
     is_client_set_put_ = false;
-    binlog_row_image_type_ = ObBinlogRowImageType::FULL;
+    binlog_row_image_type_ = ObBinlogRowImage::FULL;
   }
   virtual ~ObTableCtx()
   {}
@@ -244,7 +244,7 @@ public:
   OB_INLINE const common::ObIArray<uint64_t>& get_select_col_ids() const { return select_col_ids_; }
   OB_INLINE const common::ObIArray<uint64_t>& get_query_col_ids() const { return query_col_ids_; }
   OB_INLINE const common::ObIArray<common::ObString>& get_query_col_names() const { return query_col_names_; }
-  OB_INLINE bool is_total_quantity_log() const { return binlog_row_image_type_ == ObBinlogRowImageType::FULL; }
+  OB_INLINE bool is_total_quantity_log() const { return binlog_row_image_type_ == ObBinlogRowImage::FULL; }
   // for update
   OB_INLINE bool is_for_update() const { return is_for_update_; }
   OB_INLINE bool is_inc_or_append() const
@@ -311,15 +311,13 @@ public:
   int init_common(ObTableApiCredential &credential,
                   const common::ObTabletID &arg_tablet_id,
                   const common::ObString &arg_table_name,
-                  const int64_t &timeout_ts,
-                  ObBinlogRowImageType binlog_type = ObBinlogRowImageType::FULL);
+                  const int64_t &timeout_ts);
 
   // 基于 table id 初始化common部分(不包括expr_info_, exec_ctx_)
   int init_common(ObTableApiCredential &credential,
                   const common::ObTabletID &arg_tablet_id,
                   const uint64_t table_id,
-                  const int64_t &timeout_ts,
-                  ObBinlogRowImageType binlog_type = ObBinlogRowImageType::FULL);
+                  const int64_t &timeout_ts);
   // 初始化 insert 相关
   int init_insert();
   // 初始化scan相关(不包括表达分类)
@@ -415,8 +413,7 @@ private:
   int inner_init_common(ObTableApiCredential &credential,
                         const common::ObTabletID &arg_tablet_id,
                         const common::ObString &table_name,
-                        const int64_t &timeout_ts,
-                        ObBinlogRowImageType binlog_type);
+                        const int64_t &timeout_ts);
 private:
   bool is_init_;
   common::ObIAllocator &allocator_; // processor allocator
@@ -485,7 +482,7 @@ private:
   bool is_skip_scan_;
   // for put
   bool is_client_set_put_;
-  ObBinlogRowImageType binlog_row_image_type_;
+  int64_t binlog_row_image_type_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableCtx);
 };

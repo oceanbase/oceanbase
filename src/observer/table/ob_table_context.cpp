@@ -77,8 +77,7 @@ int ObTableCtx::init_sess_info(ObTableApiCredential &credential)
 int ObTableCtx::init_common(ObTableApiCredential &credential,
                             const common::ObTabletID &arg_tablet_id,
                             const uint64_t table_id,
-                            const int64_t &timeout_ts,
-                            ObBinlogRowImageType binlog_type)
+                            const int64_t &timeout_ts)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = credential.tenant_id_;
@@ -93,8 +92,8 @@ int ObTableCtx::init_common(ObTableApiCredential &credential,
   } else if (OB_ISNULL(table_schema_)) {
     ret = OB_ERR_UNKNOWN_TABLE;
     LOG_WARN("fail get table schema by table id", K(ret), K(tenant_id), K(database_id), K(table_id));
-  } else if (OB_FAIL(inner_init_common(credential, arg_tablet_id, table_schema_->get_table_name(), timeout_ts, binlog_type))) {
-    LOG_WARN("fail to inner init common", KR(ret), K(credential), K(arg_tablet_id), K(timeout_ts), K(binlog_type));
+  } else if (OB_FAIL(inner_init_common(credential, arg_tablet_id, table_schema_->get_table_name(), timeout_ts))) {
+    LOG_WARN("fail to inner init common", KR(ret), K(credential), K(arg_tablet_id), K(timeout_ts));
   }
 
   return ret;
@@ -304,8 +303,7 @@ int ObTableCtx::init_physical_plan_ctx(int64_t timeout_ts, int64_t tenant_schema
 int ObTableCtx::init_common(ObTableApiCredential &credential,
                             const common::ObTabletID &arg_tablet_id,
                             const common::ObString &arg_table_name,
-                            const int64_t &timeout_ts,
-                            ObBinlogRowImageType binlog_type)
+                            const int64_t &timeout_ts)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = credential.tenant_id_;
@@ -319,9 +317,9 @@ int ObTableCtx::init_common(ObTableApiCredential &credential,
                                                     false, /* is_index */
                                                     table_schema_))) {
     LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(database_id), K(arg_table_name));
-  } else if (OB_FAIL(inner_init_common(credential, arg_tablet_id, arg_table_name, timeout_ts, binlog_type))) {
+  } else if (OB_FAIL(inner_init_common(credential, arg_tablet_id, arg_table_name, timeout_ts))) {
     LOG_WARN("fail to inner init common", KR(ret), K(credential), K(arg_tablet_id),
-      K(arg_table_name), K(timeout_ts), K(binlog_type));
+      K(arg_table_name), K(timeout_ts));
   }
 
   return ret;
@@ -330,8 +328,7 @@ int ObTableCtx::init_common(ObTableApiCredential &credential,
 int ObTableCtx::inner_init_common(ObTableApiCredential &credential,
                                   const common::ObTabletID &arg_tablet_id,
                                   const common::ObString &table_name,
-                                  const int64_t &timeout_ts,
-                                  ObBinlogRowImageType binlog_type)
+                                  const int64_t &timeout_ts)
 {
   int ret = OB_SUCCESS;
   bool is_cache_hit = false;
@@ -383,6 +380,8 @@ int ObTableCtx::inner_init_common(ObTableApiCredential &credential,
     LOG_WARN("fail to construct column items", K(ret));
   } else if (!is_scan_ && OB_FAIL(adjust_entity())) {
     LOG_WARN("fail to adjust entity", K(ret));
+  } else if (OB_FAIL(sess_guard_.get_sess_info().get_binlog_row_image(binlog_row_image_type_))) {
+    LOG_WARN("fail to get binlog row image", K(ret));
   } else {
     table_name_ = table_name;
     ref_table_id_ = table_schema_->get_table_id();
@@ -1734,7 +1733,7 @@ int ObTableCtx::check_insert_up_can_use_put(bool &use_put)
     }
   }
 
-  if (OB_SUCC(ret) && can_use_put && binlog_row_image_type_ != ObBinlogRowImageType::FULL) {
+  if (OB_SUCC(ret) && can_use_put && !is_total_quantity_log()) {
     use_put = true;
   }
 

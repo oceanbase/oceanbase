@@ -1499,6 +1499,7 @@ int ObTableQueryResult::add_row(const ObNewRow &row)
               LOG_WARN("unexpected index count", K(ret), K(lob_cell_idx), K(lob_storage_count));
             } else {
               lob_cells[lob_cell_idx].set_lob_value(type, real_data.ptr(), real_data.length());
+              lob_cells[lob_cell_idx].set_collation_type(cell.get_collation_type());
               new_row.get_cell(i) = lob_cells[lob_cell_idx]; // switch lob cell
               lob_cell_idx++;
             }

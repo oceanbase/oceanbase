@@ -141,8 +141,7 @@ int ObTableQueryAndMutateP::init_tb_ctx(table::ObTableCtx &ctx,
     if (OB_FAIL(ctx.init_common(credential_,
                                 arg_.tablet_id_,
                                 arg_.table_name_,
-                                get_timeout_ts(),
-                                arg_.binlog_row_image_type_))) {
+                                get_timeout_ts()))) {
       LOG_WARN("fail to init table ctx common part", K(ret), K(arg_.table_name_));
     } else {
       switch (op_type) {
@@ -227,8 +226,7 @@ int ObTableQueryAndMutateP::init_scan_tb_ctx(ObTableApiCacheGuard &cache_guard)
   } else if (OB_FAIL(tb_ctx_.init_common(credential_,
                                          arg_.tablet_id_,
                                          arg_.table_name_,
-                                         get_timeout_ts(),
-                                         arg_.binlog_row_image_type_))) {
+                                         get_timeout_ts()))) {
     LOG_WARN("fail to init table ctx common part", K(ret), K(arg_.table_name_));
   } else if (OB_FAIL(tb_ctx_.init_scan(query, is_weak_read))) {
     LOG_WARN("fail to init table ctx scan part", K(ret), K(arg_.table_name_));
