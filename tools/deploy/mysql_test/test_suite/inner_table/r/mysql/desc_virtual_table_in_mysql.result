@@ -1563,8 +1563,8 @@ language	varchar(4)	NO		SQL
 sql_data_access	varchar(32)	NO		CONTAINS_SQL	
 is_deterministic	varchar(4)	NO		NO	
 security_type	varchar(10)	NO		DEFINER	
-param_list	varchar(1048576)	NO			
-returns	varchar(1048576)	NO			
+param_list	longblob	YES		NULL	
+returns	longblob	YES		NULL	
 body	varchar(1048576)	NO			
 definer	varchar(77)	NO			
 created	timestamp(6)	NO		NULL	
