@@ -91,10 +91,10 @@ private:
 
   struct ConstInfoContext {
     ConstInfoContext(const ObSharedExprChecker &shared_expr_checker,
-                     bool hint_allowed_trans) : active_const_infos_(),
+                     bool allow_trans) : active_const_infos_(),
                          expired_const_infos_(),
                          extra_excluded_exprs_(),
-                         hint_allowed_trans_(hint_allowed_trans),
+                         allow_trans_(allow_trans),
                          shared_expr_checker_(shared_expr_checker)
     {
     }
@@ -109,13 +109,13 @@ private:
     common::ObSEArray<ExprConstInfo, 4> active_const_infos_;
     common::ObSEArray<ExprConstInfo, 4> expired_const_infos_;
     common::ObSEArray<ObRawExpr *, 4> extra_excluded_exprs_;
-    bool hint_allowed_trans_;
+    bool allow_trans_;
     const ObSharedExprChecker &shared_expr_checker_;
 
     TO_STRING_KV(K_(active_const_infos),
                  K_(expired_const_infos),
                  K_(extra_excluded_exprs),
-                 K_(hint_allowed_trans));
+                 K_(allow_trans));
   };
 
   struct PullupConstInfo {
@@ -138,6 +138,8 @@ private:
                  K_(equal_infos),
                  K_(need_add_constraint));
   };
+
+  int check_allow_trans(ObDMLStmt *stmt, bool &allow_trans);
 
   int recursive_collect_const_info_from_table(ObDMLStmt *stmt,
                                               TableItem *table_item,
