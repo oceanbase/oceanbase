@@ -227,16 +227,16 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
 {
   int ret = OB_SUCCESS;
   ObSharedExprChecker shared_expr_checker;
-  bool hint_allowed_trans = false;
+  bool allow_trans = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parameter", K(ret));
-  } else if (OB_FAIL(ObTransformRule::check_hint_status(*stmt, hint_allowed_trans))) {
-    LOG_WARN("failed to check_hint_status", K(ret));
+  } else if (OB_FAIL(check_allow_trans(stmt, allow_trans))) {
+    LOG_WARN("failed to check trans allowed", K(ret));
   } else if (!stmt->is_insert_stmt() && OB_FAIL(shared_expr_checker.init(*stmt))) {
     LOG_WARN("failed to init shared expr checker", K(ret));
   } else {
-    ConstInfoContext const_ctx(shared_expr_checker, hint_allowed_trans);
+    ConstInfoContext const_ctx(shared_expr_checker, allow_trans);
     bool has_rollup_or_groupingsets = false;
     bool is_happened = false;
     if (OB_SUCC(ret)) {
@@ -487,6 +487,22 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
   return ret;
 }
 
+// const info is always collected even if transform is not allowed
+int ObTransformConstPropagate::check_allow_trans(ObDMLStmt *stmt, bool &allow_trans)
+{
+  int ret = OB_SUCCESS;
+  bool hint_allowed_trans = false;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parameter", K(ret));
+  } else if (OB_FAIL(ObTransformRule::check_hint_status(*stmt, hint_allowed_trans))) {
+    LOG_WARN("failed to check_hint_status", K(ret));
+  } else {
+    allow_trans = hint_allowed_trans && !stmt->is_contains_assignment();
+  }
+  return ret;
+}
+
 int ObTransformConstPropagate::exclude_redundancy_join_cond(ObIArray<ObRawExpr*> &condition_exprs,
                                                             ObIArray<ExprConstInfo> &expr_const_infos,
                                                             ObIArray<ObRawExpr*> &excluded_exprs)
@@ -644,7 +660,7 @@ int ObTransformConstPropagate::recursive_collect_const_info_from_table(ObDMLStmt
     if (LEFT_OUTER_JOIN == joined_table->joined_type_ ||
         RIGHT_OUTER_JOIN == joined_table->joined_type_) {
       // FULL_OUT_JOIN is not transformed because may eliminate all equal join conditions
-      ConstInfoContext tmp_ctx(const_ctx.shared_expr_checker_, const_ctx.hint_allowed_trans_);
+      ConstInfoContext tmp_ctx(const_ctx.shared_expr_checker_, const_ctx.allow_trans_);
       bool left_happened = false;
       bool right_happened = false;
       bool condition_happened = false;
@@ -1058,7 +1074,7 @@ int ObTransformConstPropagate::replace_expr_internal(ObRawExpr *&cur_expr,
                                                      bool used_in_compare)
 {
   int ret = OB_SUCCESS;
-  if (const_ctx.hint_allowed_trans_) {
+  if (const_ctx.allow_trans_) {
     ObSEArray<ObRawExpr *, 8> parent_exprs;
     if (OB_FAIL(recursive_replace_expr(cur_expr,
                                       parent_exprs,
@@ -1860,7 +1876,7 @@ int ObTransformConstPropagate::recursive_collect_equal_pair_from_condition(ObDML
   } else if (T_OP_OR == expr->get_expr_type()) {
     ObArray<ExprConstInfo> complex_infos;
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      ConstInfoContext tmp_ctx(const_ctx.shared_expr_checker_, const_ctx.hint_allowed_trans_);
+      ConstInfoContext tmp_ctx(const_ctx.shared_expr_checker_, const_ctx.allow_trans_);
       bool child_happened = false;
       bool current_happened = false;
       if (OB_FAIL(SMART_CALL(recursive_collect_equal_pair_from_condition(stmt,
@@ -1972,7 +1988,7 @@ int ObTransformConstPropagate::replace_check_constraint_exprs(ObDMLStmt *stmt,
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(stmt));
-  } else if (!const_ctx.hint_allowed_trans_) {
+  } else if (!const_ctx.allow_trans_) {
     /* do nothing */
   } else {
     LOG_TRACE("begin replace check constraint exprs", K(const_ctx), K(stmt->get_check_constraint_items()));
