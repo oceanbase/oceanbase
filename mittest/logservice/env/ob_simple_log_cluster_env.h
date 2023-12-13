@@ -258,16 +258,48 @@ private:
 
 class IOTaskCond : public LogIOTask {
 public:
-	IOTaskCond(const int64_t palf_id, const int64_t palf_epoch) : LogIOTask(palf_id, palf_epoch) {}
-  virtual int do_task_(int tg_id, IPalfEnvImpl *palf_env_impl) override final
+	IOTaskCond(const int64_t palf_id, const int64_t palf_epoch) : LogIOTask(palf_id, palf_epoch), count_(0) {}
+  virtual int do_task_(int tg_id, IPalfHandleImplGuard &guard) override final
   {
     PALF_LOG(INFO, "before cond_wait");
     cond_.wait();
     PALF_LOG(INFO, "after cond_wait");
     return OB_SUCCESS;
   };
-  virtual int after_consume_(IPalfEnvImpl *palf_env_impl) override final
+  virtual int after_consume_(IPalfHandleImplGuard &guard) override final
   {
+    return OB_SUCCESS;
+  }
+  virtual LogIOTaskType get_io_task_type_() const { return LogIOTaskType::FLUSH_META_TYPE; }
+  int init(int64_t palf_id)
+  {
+    palf_id_ = palf_id;
+    return OB_SUCCESS;
+  };
+  virtual void free_this_(IPalfEnvImpl *impl) {UNUSED(impl);}
+  virtual int64_t get_io_size_() const {return 0;}
+  bool need_purge_throttling_() const {return true;}
+  ObCond cond_;
+  int64_t count_;
+};
+
+class IOTaskConsumeCond : public LogIOTask {
+public:
+	IOTaskConsumeCond(const int64_t palf_id, const int64_t palf_epoch) : LogIOTask(palf_id, palf_epoch) {}
+  virtual int do_task_(int tg_id, IPalfHandleImplGuard &guard) override final
+  {
+    int ret = OB_SUCCESS;
+    PALF_LOG(INFO, "do_task_ success");
+    if (OB_FAIL(push_task_into_cb_thread_pool_(tg_id, this))) {
+      PALF_LOG(WARN, "push_task_into_cb_thread_pool failed", K(ret), K(tg_id), KP(this));
+    }
+    return ret;
+  };
+  virtual int after_consume_(IPalfHandleImplGuard &guard) override final
+  {
+    PALF_LOG(INFO, "before cond_wait");
+    cond_.wait();
+    PALF_LOG(INFO, "after cond_wait");
     return OB_SUCCESS;
   }
   virtual LogIOTaskType get_io_task_type_() const { return LogIOTaskType::FLUSH_META_TYPE; }
@@ -282,35 +314,26 @@ public:
   ObCond cond_;
 };
 
-class IOTaskConsumeCond : public LogIOTask {
+class IOTaskVerify : public LogIOTask {
 public:
-	IOTaskConsumeCond(const int64_t palf_id, const int64_t palf_epoch) : LogIOTask(palf_id, palf_epoch) {}
-  virtual int do_task_(int tg_id, IPalfEnvImpl *palf_env_impl) override final
+  IOTaskVerify(const int64_t palf_id, const int64_t palf_epoch) : LogIOTask(palf_id, palf_epoch), count_(0), after_consume_count_(0) {}
+  virtual int do_task_(int tg_id, IPalfHandleImplGuard &guard)
   {
-    int ret = OB_SUCCESS;
-    PALF_LOG(INFO, "do_task_ success");
-    if (OB_FAIL(push_task_into_cb_thread_pool_(tg_id, this))) {
-      PALF_LOG(WARN, "push_task_into_cb_thread_pool failed", K(ret), K(tg_id), KP(this));
-    }
-    return ret;
-  };
-  virtual int after_consume_(IPalfEnvImpl *palf_env_impl) override final
-  {
-    PALF_LOG(INFO, "before cond_wait");
-    cond_.wait();
-    PALF_LOG(INFO, "after cond_wait");
+    count_ ++;
     return OB_SUCCESS;
-  }
+  };
+  virtual int after_consume_(IPalfHandleImplGuard &guard) { return OB_SUCCESS; }
   virtual LogIOTaskType get_io_task_type_() const { return LogIOTaskType::FLUSH_META_TYPE; }
+  virtual void free_this_(IPalfEnvImpl *impl) {UNUSED(impl);}
+  int64_t get_io_size_() const {return 0;}
+  bool need_purge_throttling_() const {return true;}
   int init(int64_t palf_id)
   {
     palf_id_ = palf_id;
     return OB_SUCCESS;
   };
-  virtual void free_this_(IPalfEnvImpl *impl) {UNUSED(impl);}
-  virtual int64_t get_io_size_() const {return 0;}
-  bool need_purge_throttling_() const {return true;}
-  ObCond cond_;
+  int64_t count_;
+  int64_t after_consume_count_;
 };
 } // end namespace unittest
 } // end namespace oceanbase

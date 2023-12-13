@@ -324,7 +324,6 @@ int LogIOWorker::reduce_io_task_(void *task)
   }
 
   if (false == last_io_task_has_been_reduced && OB_NOT_NULL(io_task)) {
-    io_task = reinterpret_cast<LogIOFlushLogTask *>(io_task);
     ret = handle_io_task_(io_task);
   }
   PALF_LOG(TRACE, "reduce_io_task_ finished", K(ret), K(tmp_ret), KPC(this));
