@@ -1599,7 +1599,7 @@ int ObRecordType::deserialize(
   int ret = OB_SUCCESS;
   ObPLRecord *record = reinterpret_cast<ObPLRecord *>(dst);
   CK (OB_NOT_NULL(record));
-  int64_t count = OB_INVALID_COUNT;
+  int32_t count = OB_INVALID_COUNT;
   // when record be delete , type will be PL_INVALID_TYPE
   OX (record->deserialize(src, src_len, src_pos));
   if (OB_SUCC(ret) && record->get_type() != PL_INVALID_TYPE) {
@@ -2476,6 +2476,9 @@ int ObCollectionType::deserialize(
           ObPLComposite* composite = reinterpret_cast<ObPLComposite*>(obj->get_ext());
           CK (OB_NOT_NULL(composite));
           if (OB_SUCC(ret) && composite->get_type() == PL_INVALID_TYPE) {
+            composite->set_type(element_type_.get_type());
+            composite->set_is_null(!element_type_.get_not_null());
+            composite->set_id(element_type_.get_user_type_id());
             obj->set_extend(obj->get_ext(), PL_INVALID_TYPE);
             obj->set_type(ObMaxType);
           }
