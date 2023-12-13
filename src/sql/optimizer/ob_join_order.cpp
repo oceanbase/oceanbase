@@ -1635,7 +1635,7 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
                                           range_info.get_query_range()->get_range_exprs(),
                                           helper))) {
       LOG_WARN("failed to add access filters", K(*ap), K(ordering_info.get_index_keys()), K(ret));
-    } else if (get_plan()->get_stmt()->get_column_items(table_id, ap->est_cost_info_.access_column_items_)) {
+    } else if (OB_FAIL(get_plan()->get_stmt()->get_column_items(table_id, ap->est_cost_info_.access_column_items_))) {
       LOG_WARN("failed to get column items", K(ret));
     } else if ((!ap->is_global_index_ || !index_info_entry->is_index_back()) &&
                 OB_FAIL(ObOptimizerUtil::make_sort_keys(ordering_info.get_ordering(),
