@@ -293,7 +293,19 @@ int ObClusterVersion::get_tenant_data_version(
     } else {
       // For user tenant
       ret = OB_ENTRY_NOT_EXIST;
-      COMMON_LOG(WARN, "tenant compatible version is not refreshed", KR(ret), K(tenant_id));
+      if (tenant_config.is_valid()) {
+        COMMON_LOG(WARN, "[COMPATIBLE] data_version is not refreshed",
+                  KR(ret), K(tenant_id),
+                  "version", tenant_config->compatible.version(),
+                  "value", tenant_config->compatible.str(),
+                  "value_updated", tenant_config->compatible.value_updated(),
+                  "dump_version", tenant_config->compatible.dumped_version(),
+                  "dump_value", tenant_config->compatible.spfile_str(),
+                  "dump_value_updated", tenant_config->compatible.dump_value_updated());
+      } else {
+        COMMON_LOG(WARN, "[COMPATIBLE] data_version is not refreshed",
+                   KR(ret), K(tenant_id), "valid", tenant_config.is_valid());
+      }
     }
   }
   return ret;

@@ -91,7 +91,7 @@ int ObTenantConfig::read_config()
         OB_LOG(ERROR, "config item is null", "name", it->first.str(), K(ret));
       } else {
         key.set_version(it->second->version());
-        int temp_ret = system_config_.read_config(key, *(it->second));
+        int temp_ret = system_config_.read_config(get_tenant_id(), key, *(it->second));
         if (OB_SUCCESS != temp_ret) {
           OB_LOG(DEBUG, "Read config error", "name", it->first.str(), K(temp_ret));
         }
@@ -326,7 +326,14 @@ int ObTenantConfig::publish_special_config_after_dump()
     ret = OB_INVALID_CONFIG;
     LOG_WARN("Invalid config value", K(tenant_id_), K((*pp_item)->spfile_str()), K(ret));
   } else {
-    LOG_INFO("publish special config after dump succ", K(tenant_id_), K((*pp_item)->spfile_str()), K((*pp_item)->str()));
+    FLOG_INFO("[COMPATIBLE] read data_version after dump",
+              KR(ret), K_(tenant_id),
+              "version", (*pp_item)->version(),
+              "value", (*pp_item)->str(),
+              "value_updated", (*pp_item)->value_updated(),
+              "dump_version", (*pp_item)->dumped_version(),
+              "dump_value", (*pp_item)->spfile_str(),
+              "dump_value_updated", (*pp_item)->dump_value_updated());
   }
   return ret;
 }
@@ -404,7 +411,14 @@ int ObTenantConfig::add_extra_config(const char *config_str,
               } else {
                 (*pp_item)->set_dump_value_updated();
                 (*pp_item)->set_version(version);
-                LOG_INFO("Load tenant config dump value succ", K(name), K((*pp_item)->spfile_str()), K((*pp_item)->str()));
+                FLOG_INFO("[COMPATIBLE] init data_version before dump",
+                          KR(ret), K_(tenant_id),
+                          "version", (*pp_item)->version(),
+                          "value", (*pp_item)->str(),
+                          "value_updated", (*pp_item)->value_updated(),
+                          "dump_version", (*pp_item)->dumped_version(),
+                          "dump_value", (*pp_item)->spfile_str(),
+                          "dump_value_updated", (*pp_item)->dump_value_updated());
               }
             } else if (!(*pp_item)->set_value(value)) {
               ret = OB_INVALID_CONFIG;
