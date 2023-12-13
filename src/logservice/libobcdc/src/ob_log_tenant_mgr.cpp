@@ -437,8 +437,8 @@ int ObLogTenantMgr::start_tenant_service_(
       } else if (OB_SYS_TENANT_ID == tenant_id) {
         // sys tenant, do nothing
       } else if (! is_normal_new_created_tenant) {
-        if (OB_FAIL(ls_getter_.get_ls_ids(tenant_id, ls_id_array))) {
-          LOG_ERROR("ls_getter_ get_ls_ids failed", KR(ret), K(tenant_id), K(ls_id_array));
+        if (OB_FAIL(ls_getter_.get_ls_ids(tenant_id, start_tstamp_ns, ls_id_array))) {
+          LOG_ERROR("ls_getter_ get_ls_ids failed", KR(ret), K(tenant_id), K(ls_id_array), K(start_tstamp_ns));
         }
       }
     } else if (is_data_dict_refresh_mode(refresh_mode_)) {
@@ -1338,8 +1338,8 @@ int ObLogTenantMgr::get_tenant_ids_(
     // get available tenant id list
     else if (OB_FAIL(sys_schema_guard.get_available_tenant_ids(tenant_id_list, timeout))) {
       LOG_ERROR("get_available_tenant_ids fail", KR(ret), K(tenant_id_list), K(timeout));
-    } else if (OB_FAIL(ls_getter_.init(tenant_id_list))) {
-      LOG_ERROR("ObLogLsGetter init fail", KR(ret), K(tenant_id_list));
+    } else if (OB_FAIL(ls_getter_.init(tenant_id_list, start_tstamp_ns))) {
+      LOG_ERROR("ObLogLsGetter init fail", KR(ret), K(tenant_id_list), K(start_tstamp_ns));
     }
   } else if (is_data_dict_refresh_mode(refresh_mode_)) {
     IObLogSysTableHelper *systable_helper = TCTX.systable_helper_;
