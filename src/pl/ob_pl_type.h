@@ -283,6 +283,7 @@ public:
       not_null_(other.not_null_),
       pls_type_(other.pls_type_)
   {
+    type_info_.set_tenant_id(MTL_ID());
     type_info_ = other.type_info_;
   }
 
