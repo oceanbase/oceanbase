@@ -384,6 +384,9 @@ int ObTableLoadSchema::prepare_col_desc(const ObTableSchema *table_schema, commo
         LOG_ERROR("invalid column schema", K(column_schema));
       } else {
         col_desc.col_type_.set_scale(column_schema->get_data_scale());
+        if (col_desc.col_type_.is_lob_storage() && (!IS_CLUSTER_VERSION_BEFORE_4_1_0_0)) {
+          col_desc.col_type_.set_has_lob_header();
+        }
       }
     }
   }
