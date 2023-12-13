@@ -5781,7 +5781,12 @@ OB_SERIALIZE_MEMBER(TenantServerUnitConfig,
                     replica_type_,
                     is_delete_,
                     if_not_grant_,
-                    unit_id_);
+                    unit_id_
+#ifdef OB_BUILD_TDE_SECURITY
+                    , with_root_key_
+                    , root_key_
+#endif
+		                );
 
 int ObForceSetLSAsSingleReplicaArg::init(const uint64_t tenant_id, const share::ObLSID &ls_id)
 {
@@ -6153,12 +6158,38 @@ OB_SERIALIZE_MEMBER((ObDDLNopOpreatorArg, ObDDLArg),
                      schema_operation_);
 OB_SERIALIZE_MEMBER(ObTenantSchemaVersions, tenant_schema_versions_);
 
+int TenantServerUnitConfig::assign(const TenantServerUnitConfig &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+    // do nothing
+#ifdef OB_BUILD_TDE_SECURITY
+  } else if (OB_FAIL(root_key_.assign(other.root_key_))) {
+    LOG_WARN("failed to assign root_key_", KR(ret));
+  } else if (FALSE_IT(with_root_key_ = other.with_root_key_)) {
+    // should not be here
+#endif
+  } else {
+    tenant_id_ = other.tenant_id_;
+    unit_id_ = other.unit_id_;
+    compat_mode_ = other.compat_mode_;
+    unit_config_ = other.unit_config_;
+    replica_type_ = other.replica_type_;
+    if_not_grant_ = other.if_not_grant_;
+    is_delete_ = other.is_delete_;
+  }
+  return ret;
+}
+
 bool TenantServerUnitConfig::is_valid() const
 {
   return common::OB_INVALID_ID != tenant_id_
          && ((lib::Worker::CompatMode::INVALID != compat_mode_
                && unit_config_.is_valid()
                && replica_type_ != common::ObReplicaType::REPLICA_TYPE_MAX)
+#ifdef OB_BUILD_TDE_SECURITY
+               // root_key can be invalid
+#endif
              || (is_delete_));
 }
 
@@ -6166,16 +6197,26 @@ int TenantServerUnitConfig::init(
     const uint64_t tenant_id,
     const uint64_t unit_id,
     const lib::Worker::CompatMode compat_mode,
+#ifdef OB_BUILD_TDE_SECURITY
+    const ObRootKeyResult &root_key,
+#endif
     const share::ObUnitConfig &unit_config,
     const common::ObReplicaType replica_type,
     const bool if_not_grant,
     const bool is_delete)
 {
   int ret = OB_SUCCESS;
+  reset();
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant_id", K(ret), K(tenant_id));
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
     // do not check others validation, since their validations vary
+#ifdef OB_BUILD_TDE_SECURITY
+  } else if (OB_FAIL(root_key_.assign(root_key))) {
+    LOG_WARN("failed to assign root_key", KR(ret));
+  } else if (FALSE_IT(with_root_key_ = true)) {
+    // should not be here
+#endif
   } else {
     tenant_id_ = tenant_id;
     unit_id_ = unit_id;
@@ -6186,6 +6227,39 @@ int TenantServerUnitConfig::init(
     is_delete_ = is_delete;
   }
   return ret;
+}
+
+int TenantServerUnitConfig::init_for_dropping(const uint64_t tenant_id,
+    const bool is_delete)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(!is_delete)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("is_delete should be true, while false is given", KR(ret), K(tenant_id), K(is_delete));
+  } else {
+    tenant_id_ = tenant_id;
+    is_delete_ = true;
+  }
+  return ret;
+}
+
+void TenantServerUnitConfig::reset()
+{
+  tenant_id_ = OB_INVALID_ID;
+  unit_id_ = OB_INVALID_ID;
+  compat_mode_ = lib::Worker::CompatMode::INVALID;
+#ifdef OB_BUILD_TDE_SECURITY
+  with_root_key_ = false;
+  root_key_.reset();
+#endif
+  unit_config_.reset();
+  replica_type_ = common::ObReplicaType::REPLICA_TYPE_MAX;
+  if_not_grant_ = false;
+  is_delete_ = false;
 }
 
 int ObTenantSchemaVersions::add(const int64_t tenant_id, const int64_t schema_version)
@@ -7078,6 +7152,12 @@ int ObRootKeyResult::assign(const ObRootKeyResult &other)
     LOG_WARN("failed to write string", K(ret));
   }
   return ret;
+}
+
+void ObRootKeyResult::reset()
+{
+  key_type_ = RootKeyType::INVALID;
+  root_key_.reset();
 }
 #endif
 OB_SERIALIZE_MEMBER(ObTrxToolArg, trans_id_, status_,
