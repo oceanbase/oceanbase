@@ -803,7 +803,7 @@ inline int ObExprOperator::calc_result_typeN(ObExprResType &type,
   UNUSED(param_num);
   UNUSED(type_ctx);
   UNUSED(arg_arrs);
-  SQL_LOG_RET(ERROR, common::OB_NOT_IMPLEMENT, "not implement", K(type_), K(get_type_name(type_)));
+  SQL_LOG_RET(WARN, common::OB_NOT_IMPLEMENT, "not implement", K(type_), K(get_type_name(type_)));
   return common::OB_NOT_IMPLEMENT;
 }
 
