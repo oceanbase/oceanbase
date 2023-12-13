@@ -220,10 +220,10 @@ int ObIndexBlockRowBuilder::calc_data_size(
     LOG_WARN("Invalid index block row description", K(ret), K(desc));
   } else if (desc.is_secondary_meta_) {
     size = sizeof(ObIndexBlockRowHeader);
-    if (desc.data_store_desc_->is_major_merge_type()) {
+    if (desc.data_store_desc_->is_major_or_meta_merge_type()) {
       size += sizeof(int64_t); // add row offset for major sstable
     }
-  } else if (desc.data_store_desc_->is_major_merge_type()) {
+  } else if (desc.data_store_desc_->is_major_or_meta_merge_type()) {
     size = sizeof(ObIndexBlockRowHeader);
     size += sizeof(int64_t); // add row offset for major sstable
     if (nullptr != desc.aggregated_row_) {
