@@ -251,6 +251,7 @@ void ObTenantTabletTTLMgr::check_ttl_tenant_state()
           !tenant_dirty && iter != local_tenant_task_.tablet_task_map_.end(); ++iter) {
     ctx = iter->second;
     if (OB_ISNULL(ctx)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fatal err, ttl ctx in map is null", K(local_tenant_task_.tenant_id_));
     } else if (ctx->is_dirty_) {
       tenant_dirty = true;

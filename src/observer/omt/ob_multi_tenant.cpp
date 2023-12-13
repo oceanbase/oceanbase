@@ -1886,8 +1886,8 @@ int ObMultiTenant::convert_real_to_hidden_sys_tenant()
   }
 
   if (OB_FAIL(ret)) {
-  } else if (ObServerCheckpointSlogHandler::get_instance()
-      .write_tenant_super_block_slog(tenant_meta.super_block_)) {
+  } else if (OB_FAIL(ObServerCheckpointSlogHandler::get_instance()
+      .write_tenant_super_block_slog(tenant_meta.super_block_))) {
     LOG_WARN("fail to write_tenant_super_block_slog", K(ret), K(tenant_meta));
   } else {
     tenant->set_tenant_super_block(tenant_meta.super_block_);

@@ -2164,7 +2164,7 @@ int ObServer::init_io()
         int64_t data_disk_percentage = 0;
         int64_t log_disk_percentage = 0;
 
-        if (OB_FAIL(log_block_mgr_.init(storage_env_.clog_dir_))) {
+        if (OB_SUCC(ret) && OB_FAIL(log_block_mgr_.init(storage_env_.clog_dir_))) {
           LOG_ERROR("log block mgr init failed", KR(ret));
         } else if (OB_FAIL(ObServerUtils::check_slog_data_binding(storage_env_.sstable_dir_,
             storage_env_.log_spec_.log_dir_))) {

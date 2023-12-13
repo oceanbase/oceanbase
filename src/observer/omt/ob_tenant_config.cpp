@@ -543,7 +543,7 @@ int ObTenantConfig::build_errsim_module_()
   if (OB_SUCC(ret)) {
     const int64_t percentage = this->errsim_module_error_percentage;
 
-    if (build_tenant_errsim_moulde(tenant_id_, current_version_, module_array, percentage)) {
+    if (OB_FAIL(build_tenant_errsim_moulde(tenant_id_, current_version_, module_array, percentage))) {
       LOG_WARN("failed to build tenant module", K(ret), K(tenant_id_));
     }
   }

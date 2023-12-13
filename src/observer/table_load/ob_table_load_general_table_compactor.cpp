@@ -414,6 +414,7 @@ int ObTableLoadGeneralTableCompactor::create_tablet_compactor_task(int32_t sessi
   if (OB_FAIL(create_tablet_table_compactor(session_id, tablet_id, table_compactor))) {
     LOG_WARN("fail to create tablet table compactor", KR(ret));
   } else if (OB_ISNULL(compactor_task = OB_NEWx(CompactorTask, (&allocator_), table_compactor))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to new CompactorTask", KR(ret));
   } else if (OB_FAIL(compactor_task_iter_.add(compactor_task))) {
     LOG_WARN("fail to add compactor task", KR(ret));

@@ -243,14 +243,14 @@ int ObMPConnect::init_process_single_stmt(const ObMultiStmtItem &multi_stmt_item
       } else if (OB_FAIL(gctx_.sql_engine_->stmt_query(sql, ctx, result))) {
         LOG_WARN("sql execute failed", K(multi_stmt_item), K(sql), K(ret));
       } else {
-        if (OB_FAIL(result.open())) {
-          LOG_WARN("failed to do result set open", K(ret));
+        int open_ret = result.open();
+        if (open_ret) {
+          LOG_WARN("failed to do result set open", K(open_ret));
         }
-        int save_ret = ret;
         if (OB_FAIL(result.close())) {
           LOG_WARN("result close failed, disconnect.", K(ret));
         }
-        ret = (save_ret != OB_SUCCESS) ? save_ret : ret;
+        ret = (open_ret != OB_SUCCESS) ? open_ret : ret;
       }
       if (enable_trace_log) {
         ObThreadLogLevelUtils::clear();

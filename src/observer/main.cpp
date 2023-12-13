@@ -515,7 +515,7 @@ int main(int argc, char *argv[])
   opts.log_level_ = OB_LOG_LEVEL_WARN;
   parse_opts(argc, argv, opts);
 
-  if (OB_FAIL(check_uid_before_start(CONF_DIR))) {
+  if (OB_SUCC(ret) && OB_FAIL(check_uid_before_start(CONF_DIR))) {
     MPRINT("Fail check_uid_before_start, please use the initial user to start observer!");
   } else if (OB_FAIL(FileDirectoryUtils::create_full_path(PID_DIR))) {
     MPRINT("create pid dir fail: ./run/");
