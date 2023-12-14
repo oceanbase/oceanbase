@@ -1311,6 +1311,9 @@ DEF_INT(open_cursors, OB_TENANT_PARAMETER, "50", "[0,65535]",
 DEF_BOOL(_enable_px_batch_rescan, OB_TENANT_PARAMETER, "True",
          "enable px batch rescan for nlj or subplan filter",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_spf_batch_rescan, OB_TENANT_PARAMETER, "False",
+         "enable das batch rescan for subplan filter",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(_parallel_max_active_sessions, OB_TENANT_PARAMETER, "0", "[0,]",
         "max active parallel sessions allowed for tenant. Range: [0,+∞)",
