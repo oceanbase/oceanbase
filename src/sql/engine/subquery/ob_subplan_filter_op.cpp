@@ -535,6 +535,7 @@ int ObSubPlanFilterOp::rescan()
     //We do not need alloc memory again in rescan.
     //das_batch_params_.reset();
     current_group_ = 0;
+    brs_holder_.reset();
   }
 
   if (OB_SUCC(ret) && enable_left_px_batch_) {
