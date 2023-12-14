@@ -49,7 +49,7 @@ const char *ObPrivMgr::priv_names_[] = {
     "INDEX",
     "CREATE VIEW",
     "SHOW VIEW",
-    "SHOW DB",
+    "SHOW DATABASES",
     "SUPER",
     "PROCESS",
     "BOOTSTRAP",

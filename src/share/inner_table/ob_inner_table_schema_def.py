@@ -27406,7 +27406,7 @@ def_table_schema(
                 WHEN V1.C1 = 12
                      AND U.PRIV_SHOW_VIEW = 1 THEN 'SHOW VIEW'
                 WHEN V1.C1 = 13
-                     AND U.PRIV_SHOW_DB = 1 THEN 'SHOW DB'
+                     AND U.PRIV_SHOW_DB = 1 THEN 'SHOW DATABASES'
                 WHEN V1.C1 = 14
                      AND U.PRIV_SUPER = 1 THEN 'SUPER'
                 WHEN V1.C1 = 15
