@@ -273,7 +273,8 @@ public:
         failed_keyword_(ObString::make_empty_string()),
         json_pointer_(allocator_),
         schema_pointer_(allocator_),
-        str_buf_(allocator)
+        str_buf_(allocator),
+        composition_ans_recorded_(false)
   {
   }
   virtual ~ObJsonSchemaValidator() {}
@@ -344,6 +345,9 @@ public:
   ObStack<ObString> json_pointer_;
   ObStack<ObString> schema_pointer_;
   ObJsonBuffer str_buf_;
+  // if did't record any composition ans, don't need check anyOf, oneOf, allOf and dependent schema, their default ans is true
+  // but need check not, which default ans if false
+  bool composition_ans_recorded_;
 };
 
 // ObJsonSchemaCache
@@ -434,6 +438,9 @@ public:
   static bool is_legal_json_pointer_name(const ObString& name);
   static bool is_legal_json_pointer_start(const char& ch);
   static bool is_legal_json_pointer_char(const char& ch);
+  // for array, recursive checking is only required if there are keywords: ITEMS, TUPLE_ITEMS, ADDITIONAL_ITEMS
+  // for object, recursive checking is only required if there are keywords: PROPERTIES, PATTERN_PRO, ADDITIONAL_PRO
+  static int need_check_recursive(ObIArray<ObIJsonBase*> &schema_vec, bool& need_recursive, bool is_array_keywords);
 };
 
 } // namespace common

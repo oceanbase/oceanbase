@@ -254,13 +254,12 @@ int ObJsonBin::create_new_binary(ObIJsonBase *value, ObJsonBin *&new_bin) const
 {
   INIT_SUCC(ret);
   ObString sub;
-  bool is_seek_only = false;
+  bool is_seek_only = get_seek_flag();
   common::ObIAllocator *allocator = NULL;
   void *buf = NULL;
   if (value != NULL) { // use stack memory
     buf = value;
     allocator = value->get_allocator();
-    is_seek_only = get_seek_flag();
   } else if (OB_ISNULL(allocator_)) { // check allocator_
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("json bin allocator is null", K(ret));
@@ -294,11 +293,10 @@ int ObJsonBin::clone_new_node(ObJsonBin*& res, common::ObIAllocator *allocator) 
 {
   INIT_SUCC(ret);
   void *buf = NULL;
-  bool is_seek_only = false;
+  bool is_seek_only = get_seek_flag();
   if (res != NULL) { // use stack memory
     buf = res;
     allocator = res->get_allocator();
-    is_seek_only = get_seek_flag();
   } else if (OB_ISNULL(allocator)) { // check allocator_
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("json bin allocator is null", K(ret));
@@ -2036,7 +2034,12 @@ int ObJsonBin::get_parent(ObIJsonBase *& parent) const
 {
   INIT_SUCC(ret);
   ObJsonBin *parent_bin = nullptr;
-  if (node_stack_.size() <= 0) {
+  // if not root, parent stack should not be null
+  // Otherwise, cann't get the correct return value by get_parent()
+  if (!is_at_root() && node_stack_.size() <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("non-root node, but node_stack is empty", K(ret), K(meta_), K(pos_), KPC(this));
+  } else if (node_stack_.size() <= 0) {
   } else if (OB_FAIL(create_new_binary(nullptr, parent_bin))) {
     LOG_WARN("create_new_binary fail", K(ret));
   } else if (parent_bin->node_stack_.copy(this->node_stack_)) {

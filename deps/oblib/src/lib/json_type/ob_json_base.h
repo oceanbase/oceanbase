@@ -205,6 +205,10 @@ public:
   // @return see ObObjType.
   virtual ObObjType field_type() const = 0;
 
+  // for json binary, if need to get_parent, must set_seek_flag = false
+  // Otherwise, the parent stack will not be saved
+  // Currently only json patial update will use json bin get_parent,
+  // unify settings in this interface: ObJsonExprHelper::get_partial_json_bin
   virtual int get_parent(ObIJsonBase *& parent) const = 0;
 
   // Gey key by index from json node array.

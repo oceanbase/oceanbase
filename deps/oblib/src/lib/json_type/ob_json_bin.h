@@ -408,7 +408,7 @@ public:
         int_val_(0),
         ctx_(nullptr),
         is_alloc_ctx_(false),
-        is_seek_only_(false),
+        is_seek_only_(true),
         is_schema_(false)
   {
     cursor_ = &local_cursor_;
@@ -425,7 +425,7 @@ public:
         int_val_(0),
         ctx_(nullptr),
         is_alloc_ctx_(false),
-        is_seek_only_(false),
+        is_seek_only_(true),
         is_schema_(false)
   {
     cursor_ = &local_cursor_;
@@ -443,7 +443,7 @@ public:
         int_val_(0),
         ctx_(ctx),
         is_alloc_ctx_(is_alloc_ctx),
-        is_seek_only_(false),
+        is_seek_only_(true),
         is_schema_(false)
   {
     cursor_ = &local_cursor_;
@@ -461,7 +461,7 @@ public:
         int_val_(0),
         ctx_(0),
         is_alloc_ctx_(false),
-        is_seek_only_(false),
+        is_seek_only_(true),
         is_schema_(false)
   {
     cursor_ = &local_cursor_;
@@ -479,7 +479,7 @@ public:
         int_val_(0),
         ctx_(ctx),
         is_alloc_ctx_(false),
-        is_seek_only_(false),
+        is_seek_only_(true),
         is_schema_(false)
   {
     cursor_ = &local_cursor_;

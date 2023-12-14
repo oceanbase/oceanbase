@@ -3721,12 +3721,14 @@ TEST_F(TestJsonBase, test_replace)
       ObJsonInType::JSON_BIN, j_bin));
   ObJsonBin *bin2 = static_cast<ObJsonBin *>(j_bin);
   ASSERT_EQ(OB_SUCCESS, init_update_ctx(allocator, bin2));
+  bin2->set_seek_flag(false);
   ObJsonBinUpdateCtx &update_ctx2 = *bin2->get_update_ctx();
   ASSERT_EQ(OB_SUCCESS, j_bin->get_array_element(0, jb_bin_old_ptr));
   ObIJsonBase *j_bin_new_ptr = NULL;
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::transform(&allocator, &j_uint0,
       ObJsonInType::JSON_BIN, j_bin_new_ptr));
   ObJsonBin *bin = static_cast<ObJsonBin *>(j_bin);
+  bin->set_seek_flag(false);
   ASSERT_EQ(OB_SUCCESS, j_bin->replace(jb_bin_old_ptr, j_bin_new_ptr));
   j_buf.reset();
   ASSERT_EQ(OB_SUCCESS, j_bin->print(j_buf, false));
@@ -3737,6 +3739,7 @@ TEST_F(TestJsonBase, test_replace)
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::transform(&allocator, j_tree,
       ObJsonInType::JSON_BIN, j_bin));
   bin = static_cast<ObJsonBin *>(j_bin);
+  bin->set_seek_flag(false);
   ASSERT_EQ(OB_SUCCESS, init_update_ctx(allocator, bin));
   ObJsonBinUpdateCtx &update_ctx = *bin->get_update_ctx();
   ASSERT_EQ(OB_SUCCESS, j_bin->get_object_value(key0, jb_bin_old_ptr));

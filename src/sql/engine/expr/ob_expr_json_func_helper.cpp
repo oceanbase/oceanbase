@@ -294,6 +294,7 @@ int ObJsonExprHelper::get_partial_json_bin(
     LOG_WARN("alloc update ctx fail", K(ret));
   } else if (OB_FAIL(j_bin->reset_iter())) {
     LOG_WARN("fail to reset iter", K(ret));
+  } else if (OB_FALSE_IT(j_bin->set_seek_flag(false))) {
   } else {
     j_base = j_bin;
   }
