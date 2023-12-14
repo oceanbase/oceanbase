@@ -827,6 +827,7 @@ private:
   static const int64_t DDL_KV_ARRAY_SIZE = 64;
   static const int64_t ON_DEMAND_LOAD_SIZE = 4096; //4k
   static const int64_t SHARED_MACRO_BUCKET_CNT = 100;
+  static const int64_t MAX_PRINT_COUNT = 100;
 private:
   int32_t version_;
   int32_t length_;
