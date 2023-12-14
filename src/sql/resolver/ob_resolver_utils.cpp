@@ -2547,7 +2547,9 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
       int16_t len = 0;
       ObString tmp_string(static_cast<int32_t>(node->str_len_), node->str_value_);
       bool use_decimalint_as_result = false;
-      if (enable_decimal_int_type && !is_from_pl) {
+      int tmp_ret = OB_E(EventTable::EN_ENABLE_ORA_DECINT_CONST) OB_SUCCESS;
+
+      if (enable_decimal_int_type && !is_from_pl && OB_SUCC(tmp_ret)) {
         // 如果开启decimal int类型，T_NUMBER解析成decimal int
         int32_t val_len = 0;
         ret = wide::from_string(node->str_value_, node->str_len_, allocator, scale, precision,

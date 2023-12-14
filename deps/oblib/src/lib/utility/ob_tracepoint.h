@@ -781,6 +781,7 @@ class EventTable
       EN_CHEN = 2101,
       EN_ENABLE_TABLE_LOCK = 2102,
       EN_ENABLE_ROWKEY_CONFLICT_CHECK = 2103,
+      EN_ENABLE_ORA_DECINT_CONST = 2104,
 
       // WR && ASH
       EN_CLOSE_ASH = 2201,

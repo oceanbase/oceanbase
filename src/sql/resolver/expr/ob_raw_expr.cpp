@@ -1057,9 +1057,29 @@ bool ObConstRawExpr::inner_same_as(
     ObExprEqualCheckContext *check_context) const
 {
   bool bool_ret = false;
-  if ((T_QUESTIONMARK == get_expr_type() && is_dynamic_eval_questionmark())
-      || (T_QUESTIONMARK == expr.get_expr_type() && expr.is_static_const_expr()
-          && static_cast<const ObConstRawExpr &>(expr).is_dynamic_eval_questionmark())) {
+  bool left_dyn_const = (T_QUESTIONMARK == get_expr_type() && is_dynamic_eval_questionmark());
+  bool right_dyn_const = (T_QUESTIONMARK == expr.get_expr_type() && expr.is_static_const_expr()
+                          && static_cast<const ObConstRawExpr &>(expr).is_dynamic_eval_questionmark());
+  if (left_dyn_const && right_dyn_const) {
+    // if following conditions are matched, two dynamic evaluated question_marks are same:
+    // 1. param_idxes are same
+    // 2. result_types are same
+    // 3. cast modes are same
+    const ObConstRawExpr &r_expr = static_cast<const ObConstRawExpr &>(expr);
+    if (check_context != NULL) {
+      int64_t l_param_idx = -1, r_param_idx = -1;
+      int &ret = check_context->err_code_;
+      if (OB_FAIL(get_value().get_unknown(l_param_idx))) {
+        LOG_WARN("get param idx failed", K(ret));
+      } else if (OB_FAIL(r_expr.get_value().get_unknown(r_param_idx))) {
+        LOG_WARN("get param idx failed", K(ret));
+      } else if (l_param_idx == r_param_idx) {
+        bool_ret =
+          (get_result_type() == r_expr.get_result_type()
+           && get_result_type().get_cast_mode() == r_expr.get_result_type().get_cast_mode());
+      }
+    }
+  } else if (left_dyn_const || right_dyn_const) {
     // for simplicity's sake, if question is evaluated during runtime, just return false
     // do nothing
   } else if (check_context != NULL && check_context->override_const_compare_) {
