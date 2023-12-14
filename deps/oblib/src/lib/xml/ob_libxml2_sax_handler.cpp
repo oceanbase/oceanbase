@@ -832,8 +832,6 @@ int ObLibXml2SaxParser::add_element_attr(ObXmlElement& element, const char* src_
         qname.assign_ptr(attr_name, attr_name_length);
         if (OB_FAIL(ObXmlParserUtils::get_prefix_and_localname(qname, prefix, localname))) {
           LOG_WARN("get_prefix_and_localname failed", K(ret), K(attr_name_length), KCSTRING(src_attr_name));
-        } else if (OB_FAIL(ObXmlParserUtils::check_local_name_legality(localname))) {
-          LOG_WARN("ns is invalid", K(ret), KPC(attr), K(localname));
         } else {
           attr->set_prefix(prefix);
           attr->set_xml_key(localname);
