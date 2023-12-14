@@ -1929,7 +1929,12 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
       if (T_FUN_SUM == expr.get_expr_type() && result_type.get_calc_meta().is_decimal_int()
           && (!ob_is_integer_type(child_type) && !ob_is_decimal_int(child_type))) {
         // set calc precision as child precision for types other than integers
-        result_type.set_calc_precision(expr.get_param_expr(0)->get_result_type().get_precision());
+        ObPrecision child_prec = expr.get_param_expr(0)->get_result_type().get_precision();
+        if (child_prec == PRECISION_UNKNOWN_YET) {
+          // unknown precision, use default precision
+          child_prec = ObAccuracy::DDL_DEFAULT_ACCURACY2[lib::is_oracle_mode()][child_type].get_precision();
+        }
+        result_type.set_calc_precision(child_prec);
       }
       expr.set_result_type(result_type);
       ObCastMode def_cast_mode = CM_NONE;
