@@ -1704,6 +1704,7 @@ int ObSQLUtils::get_default_cast_mode(const bool is_explicit_cast,
 }
 
 int ObSQLUtils::get_cast_mode_for_replace(const ObRawExpr *expr,
+                                          const ObExprResType &dst_type,
                                           const ObSQLSessionInfo *session,
                                           ObCastMode &cast_mode)
 {
@@ -1717,7 +1718,8 @@ int ObSQLUtils::get_cast_mode_for_replace(const ObRawExpr *expr,
     LOG_WARN("failed to get default cast mode", K(ret));
   } else if (OB_FAIL(ObSQLUtils::set_cs_level_cast_mode(expr->get_collation_level(), cast_mode))) {
     LOG_WARN("failed to set cs level cast mode", K(ret));
-  } else if (expr->get_result_type().has_result_flag(ZEROFILL_FLAG)) {
+  } else if (lib::is_mysql_mode() && dst_type.is_string_type() &&
+             expr->get_result_type().has_result_flag(ZEROFILL_FLAG)) {
     cast_mode |= CM_ADD_ZEROFILL;
   }
   return ret;
