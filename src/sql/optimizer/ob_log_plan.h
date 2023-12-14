@@ -1305,7 +1305,7 @@ public:
 
   int candi_allocate_for_update_material();
 
-  int allocate_material_for_recursive_cte_plan(ObIArray<ObLogicalOperator*> &child_ops);
+  int allocate_material_for_recursive_cte_plan(ObLogicalOperator &op);
 
   int find_possible_join_filter_tables(ObLogicalOperator *op,
                                       const JoinFilterPushdownHintInfo &hint_info,

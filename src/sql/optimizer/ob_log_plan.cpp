@@ -11873,7 +11873,7 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
           OB_ISNULL(right_child = op->get_child(ObLogicalOperator::second_child))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(op->get_name()));
-      } else if (OB_FAIL(allocate_material_for_recursive_cte_plan(right_child->get_child_list()))) {
+      } else if (OB_FAIL(allocate_material_for_recursive_cte_plan(*right_child))) {
         LOG_WARN("faile to allocate material for recursive cte plan", K(ret));
       }
     }
@@ -13603,11 +13603,12 @@ int ObLogPlan::init_onetime_replaced_exprs_if_needed()
   return ret;
 }
 
-int ObLogPlan::allocate_material_for_recursive_cte_plan(ObIArray<ObLogicalOperator*> &child_ops)
+int ObLogPlan::allocate_material_for_recursive_cte_plan(ObLogicalOperator &op)
 {
   int ret = OB_SUCCESS;
   ObLogPlan *log_plan = NULL;
   int64_t fake_cte_pos = -1;
+  ObIArray<ObLogicalOperator*> &child_ops = op.get_child_list();
   for (int64_t i = 0; OB_SUCC(ret) && fake_cte_pos == -1 && i < child_ops.count(); i++) {
     if (OB_ISNULL(child_ops.at(i))) {
       ret = OB_ERR_UNEXPECTED;
@@ -13621,8 +13622,16 @@ int ObLogPlan::allocate_material_for_recursive_cte_plan(ObIArray<ObLogicalOperat
       if (OB_ISNULL(child_ops.at(i)) || OB_ISNULL(log_plan = child_ops.at(i)->get_plan())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
+      } else if (op.get_type() == log_op_def::LOG_JOIN &&
+                 static_cast<ObLogJoin&>(op).is_nlj_with_param_down() &&
+                 1 == i) {
+        // do nothing
+      } else if (op.get_type() == log_op_def::LOG_SUBPLAN_FILTER &&
+                 static_cast<ObLogSubPlanFilter&>(op).has_exec_params() &&
+                 i > 0) {
+        // do nothing
       } else if (i == fake_cte_pos) {
-        if (OB_FAIL(SMART_CALL(allocate_material_for_recursive_cte_plan(child_ops.at(i)->get_child_list())))) {
+        if (OB_FAIL(SMART_CALL(allocate_material_for_recursive_cte_plan(*child_ops.at(i))))) {
           LOG_WARN("failed to adjust recursive cte plan", K(ret));
         } else { /*do nothing*/ }
       } else if (log_op_def::LOG_MATERIAL != child_ops.at(i)->get_type() &&
@@ -13630,9 +13639,12 @@ int ObLogPlan::allocate_material_for_recursive_cte_plan(ObIArray<ObLogicalOperat
                  log_op_def::LOG_EXPR_VALUES != child_ops.at(i)->get_type()) {
         bool is_plan_root = child_ops.at(i)->is_plan_root();
         ObLogicalOperator *orig_op = child_ops.at(i);
+        ObLogicalOperator *parent_op = orig_op->get_parent();
         child_ops.at(i)->set_is_plan_root(false);
         if (OB_FAIL(log_plan->allocate_material_as_top(child_ops.at(i)))) {
           LOG_WARN("failed to allocate materialize as top", K(ret));
+        } else if (OB_FALSE_IT(child_ops.at(i)->set_parent(parent_op))) {
+          // do nothing
         } else if (is_plan_root) {
           child_ops.at(i)->mark_is_plan_root();
           child_ops.at(i)->get_plan()->set_plan_root(child_ops.at(i));
