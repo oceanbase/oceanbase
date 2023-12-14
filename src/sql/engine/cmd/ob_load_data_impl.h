@@ -31,6 +31,7 @@
 #include "sql/engine/cmd/ob_load_data_rpc.h"
 #include "sql/engine/ob_des_exec_context.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
+#include "sql/engine/cmd/ob_load_data_file_reader.h"
 #include "common/storage/ob_io_device.h"
 
 namespace oceanbase
@@ -684,7 +685,7 @@ public:
     InsertTask,
   };
   struct ToolBox {
-    ToolBox() : device_handle_(NULL), fd_(), expr_buffer(nullptr) {}
+    ToolBox() : expr_buffer(nullptr) {}
     int init(ObExecContext &ctx, ObLoadDataStmt &load_stmt);
     int build_calc_partid_expr(ObExecContext &ctx,
                                ObLoadDataStmt &load_stmt,
@@ -692,14 +693,13 @@ public:
     int release_resources();
 
     //modules
-    ObFileReader file_reader;
-    ObIODevice* device_handle_;
-    ObIOFd fd_;
+    ObFileReader * file_reader;
     ObFileAppender file_appender;
     ObFileReadCursor read_cursor;
     ObLoadFileDataTrimer data_trimer;
     ObInsertValueGenerator generator;
     ObDataFragMgr data_frag_mgr;
+    ObFileReadParam file_read_param;
 
     //running control
     ObParallelTaskController shuffle_task_controller;

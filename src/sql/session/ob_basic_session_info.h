@@ -1031,6 +1031,7 @@ public:
 
   // client mode related
   void set_client_mode(const common::ObClientMode mode) { client_mode_ = mode; }
+  common::ObClientMode get_client_mode() const { return client_mode_; }
   bool is_java_client_mode() const { return common::OB_JAVA_CLIENT_MODE == client_mode_; }
   bool is_obproxy_mode() const { return common::OB_PROXY_CLIENT_MODE == client_mode_; }
 

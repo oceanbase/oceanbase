@@ -38,6 +38,7 @@ int ObLoadDataExecutor::check_is_direct_load(ObTableDirectInsertCtx &ctx, const 
   } else {
     ctx.set_is_direct(false);
   }
+  LOG_INFO("check load data is direct done.", K(ctx.get_is_direct()));
   return ret;
 }
 
@@ -70,6 +71,8 @@ int ObLoadDataExecutor::execute(ObExecContext &ctx, ObLoadDataStmt &stmt)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(load_impl->execute(ctx, stmt))) {
       LOG_WARN("failed to execute load data stmt", K(ret));
+    } else {
+      LOG_TRACE("load data success");
     }
     load_impl->~ObLoadDataBase();
   }

@@ -37,7 +37,10 @@ static int processor_do_decode(ObVirtualCSProtocolProcessor& processor, ObSMConn
   return ret;
 }
 
-int ObSqlSockProcessor::decode_sql_packet(ObSqlSockSession& sess, rpc::ObPacket*& ret_pkt)
+int ObSqlSockProcessor::decode_sql_packet(ObICSMemPool& mem_pool,
+                                          ObSqlSockSession& sess,
+                                          void* read_handle,
+                                          rpc::ObPacket*& ret_pkt)
 {
   int ret = OB_SUCCESS;
   ObSMConnection& conn = sess.conn_;
@@ -46,17 +49,17 @@ int ObSqlSockProcessor::decode_sql_packet(ObSqlSockSession& sess, rpc::ObPacket*
   const char* start = NULL;
   int64_t limit = 1;
   int64_t read_sz = 0;
+  char* buf = NULL;
   ret_pkt = NULL;
 
   while(OB_SUCCESS == ret && NULL == ret_pkt) {
     bool need_read_more = false;
     int64_t consume_sz = 0;
-    
-    if (OB_FAIL(sess.peek_data(limit, start, read_sz))) {
+    if (OB_FAIL(sess.peek_data(read_handle, limit, start, read_sz))) {
       LOG_WARN("peed data fail", K(ret));
     } else if (read_sz < limit) {
       break;
-    } else if (OB_FAIL(processor_do_decode(*processor, conn, sess.pool_, start, read_sz, pkt, limit, consume_sz))) {
+    } else if (OB_FAIL(processor_do_decode(*processor, conn, mem_pool, start, read_sz, pkt, limit, consume_sz))) {
       LOG_WARN("do_decode fail", K(ret));
     } else if (NULL == pkt) {
       // try read more
@@ -70,13 +73,18 @@ int ObSqlSockProcessor::decode_sql_packet(ObSqlSockSession& sess, rpc::ObPacket*
     } else if (!conn.is_in_authed_phase()) {
       ret_pkt = pkt;
       sess.set_last_pkt_sz(consume_sz);
-    } else if (OB_FAIL(processor->do_splice(conn, sess.pool_, (void*&)pkt, need_read_more))) {
+    } else if (OB_FAIL(processor->do_splice(conn, mem_pool, (void*&)pkt, need_read_more))) {
       LOG_WARN("do_splice fail");
     } else if (!need_read_more) {
       ret_pkt = pkt;
-      sess.set_last_pkt_sz(consume_sz);
+      if (NULL == read_handle) {
+        sess.set_last_pkt_sz(consume_sz);
+      } else if (OB_LIKELY(ret_pkt != NULL)) {
+        ObMySQLRawPacket *raw_packet = static_cast<ObMySQLRawPacket *>(ret_pkt);
+        raw_packet->set_consume_size(consume_sz);
+      }
     } else {
-      sess.consume_data(consume_sz);
+      sess.consume_data(read_handle, consume_sz); // assert read_handle == NULL
       limit = 1; // new pkt need more data
     }
   }

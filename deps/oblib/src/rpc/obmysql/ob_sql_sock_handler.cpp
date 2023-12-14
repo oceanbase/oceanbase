@@ -130,7 +130,7 @@ int ObSqlSockHandler::on_readable(void* udata)
   if (NULL == sess) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("sess is null!", K(ret));
-  } else if (OB_FAIL(sock_processor_.decode_sql_packet(*sess, pkt))) {
+  } else if (OB_FAIL(sock_processor_.decode_sql_packet(sess->pool_, *sess, NULL, pkt))) {
     LOG_WARN("decode sql req fail", K(ret));
   } else if (NULL == pkt) {
     sess->revert_sock();
