@@ -254,6 +254,7 @@ private:
   int init_pre_setting();
   int init_network();
   int init_interrupt();
+  int init_zlib_lite_compressor();
   int init_multi_tenant();
   int init_sql_proxy();
   int init_io();
@@ -301,6 +302,7 @@ private:
   void check_log_replay_over(const common::ObIArray<uint64_t> &tenant_ids, const int64_t expire_time);
   int try_update_hidden_sys();
   int parse_mode();
+  void deinit_zlib_lite_compressor();
 
   // ------------------------------- arb server start ------------------------------------
   int start_sig_worker_and_handle();
