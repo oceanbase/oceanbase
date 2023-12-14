@@ -3557,10 +3557,20 @@ int ObPLCollection::deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool
         } else if (ignore_del_element && !is_associative_array()) {
           set_first(1);
           set_last(k);
+#ifdef OB_BUILD_ORACLE_PL
+        } else if (PL_ASSOCIATIVE_ARRAY_TYPE == src->get_type()) {
+          set_first(static_cast<ObPLAssocArray *>(src)->get_first());
+          set_last(static_cast<ObPLAssocArray *>(src)->get_last());
+#endif
         } else {
           set_first(src->get_first());
           set_last(src->get_last());
         }
+#ifdef OB_BUILD_ORACLE_PL
+      } else if (PL_ASSOCIATIVE_ARRAY_TYPE == src->get_type()) {
+        set_first(static_cast<ObPLAssocArray *>(src)->get_first());
+        set_last(static_cast<ObPLAssocArray *>(src)->get_last());
+#endif
       } else {
         set_first(src->get_first());
         set_last(src->get_last());
