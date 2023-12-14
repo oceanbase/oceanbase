@@ -6103,7 +6103,11 @@ int ObRawExprResolverImpl::process_json_value_node(const ParseNode *node, ObRawE
   bool mismatch_vec = false;
   int32_t num = 0;
   ObSysFunRawExpr *func_expr = NULL;
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_2_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("json value raw expr number has change in 4.2.2 version", K(ret)); // 12 -> 10
+  } else {
     num = node->num_child_;
     OZ(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_JSON_VALUE, func_expr));
     CK(OB_NOT_NULL(func_expr));
