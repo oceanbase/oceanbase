@@ -362,7 +362,7 @@ int ObMigrationStatusHelper::check_transfer_dest_ls_status_for_ls_gc(
   ObLSHandle ls_handle;
   allow_gc = false;
   ObMigrationStatus dest_ls_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
-  if (!transfer_ls_id.is_valid() || !tablet_id.is_valid() || !transfer_scn.is_valid()) {
+  if (!transfer_ls_id.is_valid() || !tablet_id.is_valid() || !transfer_scn.is_valid() || transfer_scn.is_min()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls id is invalid", K(ret), K(transfer_ls_id), K(tablet_id), K(transfer_scn));
   } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
@@ -490,7 +490,7 @@ int ObMigrationStatusHelper::check_ls_transfer_tablet_(
         // do nothing
       } else if (OB_FAIL(check_transfer_dest_ls_status_for_ls_gc(
           user_data.transfer_ls_id_, tablet->get_tablet_meta().tablet_id_,
-          tablet->get_tablet_meta().transfer_info_.transfer_start_scn_, need_wait_dest_ls_replay, allow_gc))) {
+          user_data.transfer_scn_, need_wait_dest_ls_replay, allow_gc))) {
         LOG_WARN("failed to check ls transfer tablet", K(ret), K(ls), K(user_data));
       } else if (!allow_gc) {
         LOG_INFO("The ls is not allowed to be GC because it is also dependent on other ls", K(user_data),
