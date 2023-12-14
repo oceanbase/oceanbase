@@ -2831,6 +2831,12 @@ int ObTableSqlService::gen_table_dml(
                  ObStoreFormatType::OB_STORE_FORMAT_ARCHIVE_HIGH_ORACLE == table.get_store_format())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("CS_ENCODING_ROW_STORE and OB_STORE_FORMAT_ARCHIVE_HIGH_ORACLE not support before 4.3", K(ret), K(table));
+
+  } else if (data_version < DATA_VERSION_4_3_0_0
+             && (table.get_compressor_type() == ObCompressorType::ZLIB_LITE_COMPRESSOR
+                 || 0 == strcasecmp(table.get_compress_func_name(), all_compressor_name[ObCompressorType::ZLIB_LITE_COMPRESSOR]))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("zlib_lite_1.0 not support before 4.3", K(ret), K(table));
   } else {
   if (data_version < DATA_VERSION_4_2_1_0
       && (!table.get_ttl_definition().empty() || !table.get_kv_attributes().empty())) {
@@ -3001,6 +3007,11 @@ int ObTableSqlService::gen_table_options_dml(
     LOG_WARN("ttl definition and kv attributes is not supported in version less than 4.2.1",
         "ttl_definition", table.get_ttl_definition().empty(),
         "kv_attributes", table.get_kv_attributes().empty());
+  } else if (data_version < DATA_VERSION_4_3_0_0
+             && (table.get_compressor_type() == ObCompressorType::ZLIB_LITE_COMPRESSOR
+                 || 0 == strcasecmp(table.get_compress_func_name(), all_compressor_name[ObCompressorType::ZLIB_LITE_COMPRESSOR]))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("zlib_lite_1.0 not support before 4.3", K(ret), K(table));
   } else if (data_version < DATA_VERSION_4_2_1_2
              && OB_UNLIKELY(OB_DEFAULT_LOB_INROW_THRESHOLD != table.get_lob_inrow_threshold())) {
     ret = OB_NOT_SUPPORTED;
@@ -5298,6 +5309,7 @@ int ObTableSqlService::exec_insert_column_group(
     bool is_history)
 {
   int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
 
   const int64_t cg_cnt = table.get_column_group_count();
   if (cg_cnt > 0) {
@@ -5313,11 +5325,19 @@ int ObTableSqlService::exec_insert_column_group(
     ObTableSchema::const_column_group_iterator it_end = table.column_group_end();
     const ObColumnGroupSchema *column_group = NULL;
 
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+      LOG_WARN("failed to get data version", K(ret));
+    }
+
     for (; OB_SUCC(ret) && (it_begin != it_end); ++it_begin) {
       column_group = *it_begin;
       if (OB_ISNULL(column_group)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("column_group schema should not be null", KR(ret));
+      } else if (data_version < DATA_VERSION_4_3_0_0
+                 && column_group->get_compressor_type() == ObCompressorType::ZLIB_LITE_COMPRESSOR) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("zlib_lite_1.0 not support before 4.3", K(ret), K(table));
       } else {
         const int64_t IS_DELETED = 0;
         const uint64_t tmp_tenant_id = ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id);
