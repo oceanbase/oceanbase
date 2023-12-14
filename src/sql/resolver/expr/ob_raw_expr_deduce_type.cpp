@@ -1522,6 +1522,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
                 MIN(OB_MAX_DOUBLE_FLOAT_SCALE, result_type.get_scale() + scale_increment)));
             }
             result_type.set_precision(static_cast<ObPrecision>(result_type.get_precision() + scale_increment));
+            result_type.unset_result_flag(ZEROFILL_FLAG);
           }
           expr.set_result_type(result_type);
           ObObjTypeClass from_tc = expr.get_param_expr(0)->get_type_class();
@@ -1815,12 +1816,14 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
           // keep same with default path
           expr.set_result_type(child_expr->get_result_type());
           expr.unset_result_flag(NOT_NULL_FLAG);
+          expr.unset_result_flag(ZEROFILL_FLAG);
         }
         break;
       }
       default: {
         expr.set_result_type(expr.get_param_expr(0)->get_result_type());
         expr.unset_result_flag(NOT_NULL_FLAG);
+        expr.unset_result_flag(ZEROFILL_FLAG);
       }
     }
 
@@ -2253,6 +2256,7 @@ int ObRawExprDeduceType::visit(ObSysFunRawExpr &expr)
           LOG_WARN("failed to set enum_set_values", K(enum_set_values), K(expr), K(ret));
         } else {/*do nothing*/}
       }
+      expr.unset_result_flag(ZEROFILL_FLAG);
     }
     if (OB_SUCC(ret) && T_FUN_SYS_FROM_UNIX_TIME == expr.get_expr_type()
         && expr.get_param_count() == 2) {
