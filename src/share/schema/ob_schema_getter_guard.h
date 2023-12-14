@@ -282,25 +282,15 @@ public:
   int get_table_ids_in_tablegroup(const uint64_t tenant_id,
                                   const uint64_t tablegroup_id,
                                   common::ObIArray<uint64_t> &table_id_array);
-  int get_outline_infos_in_database(const uint64_t tenant_id,
-                                    const uint64_t database_id,
-                                    common::ObIArray<const ObOutlineInfo *> &outline_infos);
-  int get_trigger_infos_in_database(const uint64_t tenant_id,
-                                    const uint64_t database_id,
-                                    common::ObIArray<const ObTriggerInfo *> &tg_infos);
-  int get_synonym_infos_in_database(const uint64_t tenant_id,
-                                    const uint64_t database_id,
-                                    common::ObIArray<const ObSynonymInfo *> &synonym_infos);
-
-  int get_package_infos_in_database(const uint64_t tenant_id,
-                                    const uint64_t database_id,
-                                    common::ObIArray<const ObPackageInfo *> &package_infos);
-  int get_routine_infos_in_database(const uint64_t tenant_id,
-                                    const uint64_t database_id,
-                                    common::ObIArray<const ObRoutineInfo *> &routine_infos);
-  int get_udt_infos_in_database(const uint64_t tenant_id,
-                                const uint64_t database_id,
-                                common::ObIArray<const ObUDTTypeInfo *> &udt_infos);
+  int get_trigger_ids_in_database(const uint64_t tenant_id,
+                                  const uint64_t database_id,
+                                  common::ObIArray<uint64_t> &trigger_ids);
+  int get_routine_ids_in_database(const uint64_t tenant_id,
+                                  const uint64_t database_id,
+                                  common::ObIArray<uint64_t> &routine_ids);
+  int get_udt_ids_in_database(const uint64_t tenant_id,
+                              const uint64_t database_id,
+                              common::ObIArray<uint64_t> &udt_ids);
   int get_routine_info_in_udt(const uint64_t tenant_id,
                               const uint64_t udt_id,
                               const uint64_t subprogram_id,
@@ -315,9 +305,9 @@ public:
   int get_routine_infos_in_package(const uint64_t tenant_id,
                                    const uint64_t package_id,
                                    common::ObIArray<const ObRoutineInfo *> &routine_infos);
-  int get_sequence_infos_in_database(const uint64_t tenant_id,
-                                   const uint64_t database_id,
-                                   common::ObIArray<const ObSequenceSchema *> &sequence_infos);
+  int get_sequence_schemas_in_database(const uint64_t tenant_id,
+                                       const uint64_t database_id,
+                                       common::ObIArray<const ObSequenceSchema*> &sequence_schemas);
   int get_label_se_policy_infos_in_tenant(const uint64_t tenant_id,
                                           common::ObIArray<const ObLabelSePolicySchema *> &label_se_policy_infos);
   int get_label_se_component_infos_in_tenant(const uint64_t tenant_id,
@@ -801,9 +791,9 @@ public:
                                    const ObContextSchema *&context_schema);
 
   // mock_fk_parent_table begin
-  int get_mock_fk_parent_table_schemas_in_database(const uint64_t tenant_id,
-                                                   const uint64_t database_id,
-                                                   ObIArray<const ObMockFKParentTableSchema *> &schemas);
+  int get_mock_fk_parent_table_ids_in_database(const uint64_t tenant_id,
+                                               const uint64_t database_id,
+                                               ObIArray<uint64_t> &mock_fk_parent_table_ids);
   int get_simple_mock_fk_parent_table_schema(const uint64_t tenant_id,
                                              const uint64_t database_id,
                                              const common::ObString &name,

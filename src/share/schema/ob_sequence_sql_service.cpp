@@ -283,7 +283,9 @@ int ObSequenceSqlService::delete_sequence(const uint64_t tenant_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid sql client is NULL", K(ret));
   } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id
-                         || OB_INVALID_ID == sequence_id)) {
+                         || OB_INVALID_ID == sequence_id
+                         || OB_INVALID_ID == database_id
+                         || new_schema_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid sequence info in drop sequence", K(tenant_id), K(database_id),
              K(sequence_id), K(ret));
