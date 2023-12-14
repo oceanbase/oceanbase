@@ -451,12 +451,9 @@ int ObUpdateResolver::resolve_table_list(const ParseNode &parse_tree)
         LOG_WARN("add reference table to namespace checker failed", K(ret));
       } else if (OB_FAIL(update_stmt->add_from_item(table_item->table_id_, table_item->is_joined_table()))) {
         LOG_WARN("failed to add from item", K(ret));
+      } else if (check_need_fired_trigger(table_item)) {
+        LOG_WARN("failed to check need fired trigger", K(ret));
       } else {
-        if (is_oracle_mode() && table_item->is_view_table_) {
-          bool has_tg = false;
-          OZ (has_need_fired_trigger_on_view(table_item, has_tg));
-          OX (update_stmt->set_has_instead_of_trigger(has_tg));
-        }
       /*
         In order to share the same logic with 'select' to generate access path costly, we
         add the table in the udpate stmt in the from_item list as well.
