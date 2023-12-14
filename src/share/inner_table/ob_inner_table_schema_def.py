@@ -13735,11 +13735,6 @@ def_table_schema(
   vtable_route_policy = 'distributed'
 )
 
-# 12454: __all_virtual_wr_sqltext
-# 12456: __all_virtual_dbms_lock_allocated
-# 12457: __all_virtual_sharing_storage_compaction_info
-# 12458: __all_virtual_ls_snapshot_in_storage_node
-
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12459',
   table_name = '__all_virtual_index_usage_info',
@@ -14173,14 +14168,13 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15427', all_def_ke
 # 15431: __all_transfer_partition_task_history
 # 15432: __all_virtual_wr_sqltext
 
-# 15433: __all_virtual_tenant_snapshot
-# 15434: __all_virtual_tenant_snapshot_ls
-# 15435: __all_virtual_tenant_snapshot_ls_replica
-# 15436: __all_virtual_clone_job
-# 15437: __all_virtual_clone_job_history
-# 15438: __all_virtual_tenant_snapshot_create_job
+# 15433: __all_virtual_tenant_snapshot is abandoned
+# 15434: __all_virtual_tenant_snapshot_ls is abandoned
+# 15435: __all_virtual_tenant_snapshot_ls_replica is abandoned
+# 15436: __all_virtual_clone_job is abandoned
+# 15437: __all_virtual_clone_job_history is abandoned
+# 15438: __all_virtual_tenant_snapshot_create_job is abandoned
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15439', all_def_keywords['__all_virtual_ls_snapshot'])))
-# 15440: __all_virtual_index_usage_info
 
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15440', all_def_keywords['__all_index_usage_info'])))
 
@@ -56694,11 +56688,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 28215: GV$OB_LS_SNAPSHOTS
-# 28216: V$OB_LS_SNAPSHOTS
-# 28217: GV$OB_SHARE_STORAGE_QUOTA_ASSIGNMENT
-# 28218: V$OB_SHARE_STORAGE_QUOTA_ASSIGNMENT
-
 def_table_schema(
   owner = 'wendongbodongbo.wd',
   table_name      = 'GV$OB_LS_SNAPSHOTS',
@@ -56767,6 +56756,9 @@ def_table_schema(
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " "),
 )
+
+# 28217: GV$OB_SHARE_STORAGE_QUOTA_ASSIGNMENT
+# 28218: V$OB_SHARE_STORAGE_QUOTA_ASSIGNMENT
 
 ################################################################################
 # Lob Table (50000, 70000)
