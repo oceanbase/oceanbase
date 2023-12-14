@@ -368,24 +368,23 @@ int ObPiece::piece_init(ObSQLSessionInfo &session,
   lib::ContextParam param;
   param.set_mem_attr(session.get_effective_tenant_id(),
                       ObModIds::OB_PL_TEMP, ObCtxIds::DEFAULT_CTX_ID);
-  param.set_page_size(OB_MALLOC_BIG_BLOCK_SIZE);
+  param.set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
   if (OB_FAIL((static_cast<ObPieceCache*>(session.get_piece_cache()))
-                    ->mem_context_->CREATE_CONTEXT(entity, param))) {
+                    ->mem_context_->CREATE_CONTEXT(entity_, param))) {
     LOG_WARN("failed to create ref cursor entity", K(ret));
-  } else if (OB_ISNULL(entity)) {
+  } else if (OB_ISNULL(entity_)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc ref cursor entity", K(ret));
   } else {
     void *buf = NULL;
     ObPieceBufferArray *buf_array = NULL;
-    ObIAllocator *alloc = &entity->get_arena_allocator();
+    ObIAllocator *alloc = &entity_->get_arena_allocator();
     OV (OB_NOT_NULL(buf = alloc->alloc(sizeof(ObPieceBufferArray))),
         OB_ALLOCATE_MEMORY_FAILED, sizeof(ObPieceBufferArray));
     OX (MEMSET(buf, 0, sizeof(ObPieceBufferArray)));
     OV (OB_NOT_NULL(buf_array = new (buf) ObPieceBufferArray(alloc)));
     OZ (buf_array->reserve(OB_MAX_PIECE_COUNT));
     if (OB_SUCC(ret)) {
-        set_allocator(alloc);
         set_buffer_array(buf_array);
     } else {
       ret = OB_ERR_UNEXPECTED;
