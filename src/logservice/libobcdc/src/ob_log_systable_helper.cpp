@@ -196,7 +196,7 @@ int QueryAllTenantStrategy::build_sql_statement(
       LOG_ERROR("build_sql_statement failed for query all_tenant_info in tenant_sync_mode", KR(ret), K(pos), KCSTRING(sql_buf));
     }
   } else if (OB_FAIL(databuff_printf(sql_buf, mul_statement_buf_len, pos,
-      "SELECT DISTINCT TENANT_ID, TENANT_NAME FROM %s WHERE TENANT_TYPE != 'META'", OB_DBA_OB_TENANTS_TNAME))) {
+      "SELECT DISTINCT TENANT_ID, TENANT_NAME FROM %s WHERE TENANT_TYPE != 'META' AND STATUS = 'NORMAL'", OB_DBA_OB_TENANTS_TNAME))) {
     LOG_ERROR("build_sql_statement failed for query all_tenant_info", KR(ret), K(pos), KCSTRING(sql_buf));
   }
 
