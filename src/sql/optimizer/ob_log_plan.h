@@ -838,6 +838,7 @@ public:
 
   int get_order_by_topn_expr(int64_t input_card,
                              ObRawExpr *&topn_expr,
+                             ObRawExpr *&offset_expr,
                              bool &is_fetch_with_ties,
                              bool &need_limit);
 
@@ -860,6 +861,7 @@ public:
   int create_order_by_plan(ObLogicalOperator *&top,
                            const ObIArray<OrderItem> &order_items,
                            ObRawExpr *topn_expr,
+                           ObRawExpr *offset_expr,
                            bool is_fetch_with_ties);
 
   int allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
@@ -869,6 +871,7 @@ public:
                                         const int64_t prefix_pos,
                                         const bool is_local_order,
                                         ObRawExpr *topn_expr = NULL,
+                                        ObRawExpr *offset_expr = NULL,
                                         bool is_fetch_with_ties = false,
                                         const OrderItem *hash_sortkey = NULL);
 
@@ -888,6 +891,7 @@ public:
                            const int64_t prefix_pos = 0,
                            const bool is_local_merge_sort = false,
                            ObRawExpr *topn_expr = NULL,
+                           ObRawExpr *offset_expr = NULL,
                            bool is_fetch_with_ties = false,
                            const OrderItem *hash_sortkey = NULL);
 

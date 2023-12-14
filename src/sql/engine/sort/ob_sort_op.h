@@ -31,11 +31,12 @@ public:
   ObSortSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type);
 
   INHERIT_TO_STRING_KV("op_spec", ObOpSpec,
-    K_(topn_expr), K_(topk_limit_expr), K_(topk_offset_expr), K_(prefix_pos),
+    K_(topn_expr), K_(topn_offset_expr), K_(topk_limit_expr), K_(topk_offset_expr), K_(prefix_pos),
     K_(minimum_row_count), K_(topk_precision), K_(prefix_pos), K_(is_local_merge_sort),
     K_(prescan_enabled), K_(enable_encode_sortkey_opt), K_(part_cnt));
 public:
   ObExpr *topn_expr_;
+  ObExpr *topn_offset_expr_;
   ObExpr *topk_limit_expr_;
   ObExpr *topk_offset_expr_;
   // sort exprs + output_exprs
@@ -114,7 +115,7 @@ private:
   }
 
   int get_int_value(const ObExpr *in_val, int64_t &out_val);
-  int get_topn_count(int64_t &topn_cnt);
+  int get_topn_count(int64_t &topn_cnt, int64_t &topn_offset);
   int process_sort();
   int process_sort_batch();
   int scan_all_then_sort();
@@ -126,7 +127,8 @@ private:
   int init_sort(int64_t tenant_id,
                 int64_t row_count,
                 bool is_batch,
-                int64_t topn_cnt = INT64_MAX);
+                int64_t topn_cnt = INT64_MAX,
+                int64_t offset = 0);
 private:
   ObSortOpImpl sort_impl_;
   ObPrefixSortImpl prefix_sort_impl_;

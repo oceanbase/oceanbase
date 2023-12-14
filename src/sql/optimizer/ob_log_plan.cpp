@@ -6387,7 +6387,8 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
                                                   0 < rollup_exprs.count() ? true: false,
                                                   true,
                                                   false,
-                                                  0,
+                                                  NULL,
+                                                  NULL,
                                                   top->get_is_local_order()))) {
       LOG_WARN("failed to allocate sort and exchange as top", K(ret));
     } else if (OB_FAIL(allocate_group_by_as_top(top,
@@ -7812,6 +7813,7 @@ int ObLogPlan::candi_allocate_order_by(bool &need_limit,
   ObSEArray<OrderItem, 8> candi_order_items;
   ObSEArray<ObRawExpr*, 4> candi_subquery_exprs;
   ObRawExpr *topn_expr = NULL;
+  ObRawExpr *offset_expr = NULL;
   bool is_fetch_with_ties = false;
   need_limit = false;
   OPT_TRACE_TITLE("start generate order by");
@@ -7846,6 +7848,7 @@ int ObLogPlan::candi_allocate_order_by(bool &need_limit,
     OPT_TRACE("this plan has interesting order, no need allocate order by");
   } else if (OB_FAIL(get_order_by_topn_expr(best_plan->get_card(),
                                             topn_expr,
+                                            offset_expr,
                                             is_fetch_with_ties,
                                             need_limit))) {
     LOG_WARN("failed to get order by top-n expr", K(ret));
@@ -7857,6 +7860,7 @@ int ObLogPlan::candi_allocate_order_by(bool &need_limit,
       if (OB_FAIL(create_order_by_plan(candidate_plan.plan_tree_,
                                        order_items,
                                        topn_expr,
+                                       offset_expr,
                                        is_fetch_with_ties))) {
         LOG_WARN("failed to create order by plan", K(ret));
       } else if (NULL != topn_expr && OB_FAIL(is_plan_reliable(candidate_plan.plan_tree_,
@@ -7886,6 +7890,7 @@ int ObLogPlan::candi_allocate_order_by(bool &need_limit,
 int ObLogPlan::create_order_by_plan(ObLogicalOperator *&top,
                                     const ObIArray<OrderItem> &order_items,
                                     ObRawExpr *topn_expr,
+                                    ObRawExpr *offset_expr,
                                     bool is_fetch_with_ties)
 {
   int ret = OB_SUCCESS;
@@ -7914,6 +7919,7 @@ int ObLogPlan::create_order_by_plan(ObLogicalOperator *&top,
                                                        prefix_pos,
                                                        top->get_is_local_order(),
                                                        topn_expr,
+                                                       offset_expr,
                                                        is_fetch_with_ties))) {
     LOG_WARN("failed to allocate sort as top", K(ret));
   } else { /*do nothing*/ }
@@ -8039,6 +8045,7 @@ int ObLogPlan::make_order_items(const ObIArray<ObRawExpr *> &exprs,
 
 int ObLogPlan::get_order_by_topn_expr(int64_t input_card,
                                       ObRawExpr *&topn_expr,
+                                      ObRawExpr *&offset_expr,
                                       bool &is_fetch_with_ties,
                                       bool &need_limit)
 {
@@ -8049,6 +8056,7 @@ int ObLogPlan::get_order_by_topn_expr(int64_t input_card,
   bool is_null_value = false;
   need_limit = true;
   topn_expr = NULL;
+  offset_expr = NULL;
   is_fetch_with_ties = false;
   if (OB_ISNULL(stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
@@ -8086,15 +8094,13 @@ int ObLogPlan::get_order_by_topn_expr(int64_t input_card,
       } else if (OB_ISNULL(topn_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
-      } else {
-        need_limit = true;
-        is_fetch_with_ties = stmt->is_fetch_with_ties();
       }
     } else {
       topn_expr = stmt->get_limit_expr();
-      is_fetch_with_ties = stmt->is_fetch_with_ties();
-      need_limit = false;
     }
+    offset_expr = stmt->get_offset_expr();
+    is_fetch_with_ties = stmt->is_fetch_with_ties();
+    need_limit = false;
   }
   return ret;
 }
@@ -8304,6 +8310,7 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
                                                  const int64_t prefix_pos,
                                                  const bool is_local_order,
                                                  ObRawExpr *topn_expr,
+                                                 ObRawExpr *offset_expr,
                                                  bool is_fetch_with_ties,
                                                  const OrderItem *hash_sortkey)
 {
@@ -8345,6 +8352,7 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
                                        real_prefix_pos,
                                        real_local_order,
                                        topn_expr,
+                                       offset_expr,
                                        is_fetch_with_ties,
                                        hash_sortkey))) {
         LOG_WARN("failed to allocate sort as top", K(ret));
@@ -8396,6 +8404,7 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
                                        sort_keys,
                                        real_prefix_pos,
                                        real_local_order,
+                                       NULL,
                                        NULL,
                                        false,
                                        hash_sortkey))) {
@@ -8488,6 +8497,7 @@ int ObLogPlan::try_allocate_sort_as_top(ObLogicalOperator *&top,
                                                   prefix_pos,
                                                   is_local_order,
                                                   NULL,
+                                                  NULL,
                                                   false,
                                                   (need_sort && part_cnt > 0) ? &hash_sortkey : NULL))) {
       LOG_WARN("failed to allocate exchange as top", K(ret));
@@ -8501,6 +8511,7 @@ int ObLogPlan::allocate_sort_as_top(ObLogicalOperator *&top,
                                     const int64_t prefix_pos,
                                     const bool is_local_merge_sort,
                                     ObRawExpr *topn_expr,
+                                    ObRawExpr *offset_expr,
                                     bool is_fetch_with_ties,
                                     const OrderItem *hash_sortkey)
 {
@@ -8518,6 +8529,7 @@ int ObLogPlan::allocate_sort_as_top(ObLogicalOperator *&top,
     sort->set_prefix_pos(prefix_pos);
     sort->set_local_merge_sort(is_local_merge_sort);
     sort->set_topn_expr(topn_expr);
+    sort->set_topn_offset_expr(offset_expr);
     sort->set_fetch_with_ties(is_fetch_with_ties);
     if (hash_sortkey != NULL &&
         hash_sortkey->expr_ != NULL &&

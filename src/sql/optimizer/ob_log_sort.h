@@ -30,6 +30,7 @@ namespace sql
           sort_keys_(),
           encode_sortkeys_(),
           topn_expr_(NULL),
+          topn_offset_expr_(NULL),
           minimum_row_count_(0),
           topk_precision_(0),
           prefix_pos_(0),
@@ -57,6 +58,7 @@ namespace sql
     int get_sort_exprs(common::ObIArray<ObRawExpr*> &sort_exprs);
 
     inline void set_topn_expr(ObRawExpr *expr) { topn_expr_ = expr; }
+    inline void set_topn_offset_expr(ObRawExpr *expr) { topn_offset_expr_ = expr; }
     inline void set_prefix_pos(int64_t prefix_pos) { prefix_pos_ = prefix_pos; }
     inline void set_local_merge_sort(bool is_local_merge_sort) { is_local_merge_sort_ = is_local_merge_sort; }
     inline void set_fetch_with_ties(bool is_fetch_with_ties) { is_fetch_with_ties_ = is_fetch_with_ties; }
@@ -71,6 +73,7 @@ namespace sql
     inline int64_t get_part_cnt() const { return part_cnt_; }
     inline int64_t get_prefix_pos() const { return prefix_pos_; }
     inline ObRawExpr *get_topn_expr() const { return topn_expr_; }
+    inline ObRawExpr *get_topn_offset_expr() const { return topn_offset_expr_; }
     inline void set_topk_limit_expr(ObRawExpr *top_limit_expr)
     {
       topk_limit_expr_ = top_limit_expr;
@@ -107,6 +110,7 @@ namespace sql
     common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> sort_keys_;
     common::ObSEArray<OrderItem, 1, common::ModulePageAllocator, true> encode_sortkeys_;
     ObRawExpr *topn_expr_;
+    ObRawExpr *topn_offset_expr_;
     int64_t minimum_row_count_;
     int64_t topk_precision_;
     int64_t prefix_pos_; //  for prefix_sort

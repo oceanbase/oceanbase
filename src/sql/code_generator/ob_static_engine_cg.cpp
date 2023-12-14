@@ -1760,6 +1760,13 @@ int ObStaticEngineCG::generate_spec(ObLogSort &op, ObSortSpec &spec, const bool 
       if (OB_NOT_NULL(spec.topn_expr_) && !ob_is_integer_type(spec.topn_expr_->datum_meta_.type_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("topn must be int", K(ret), K(*spec.topn_expr_));
+      } else if (OB_NOT_NULL(op.get_topn_offset_expr())) {
+        OZ(generate_rt_expr(*op.get_topn_offset_expr(), spec.topn_offset_expr_));
+        if (OB_NOT_NULL(spec.topn_offset_expr_)
+            && !ob_is_integer_type(spec.topn_offset_expr_->datum_meta_.type_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("offset must be int", K(ret), K(*spec.topn_offset_expr_));
+        }
       }
     }
     if (OB_NOT_NULL(op.get_topk_limit_expr())) {

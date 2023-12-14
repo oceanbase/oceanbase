@@ -87,6 +87,7 @@ public:
       const bool need_rewind = false,
       const int64_t part_cnt = 0,
       const int64_t topn_cnt = INT64_MAX,
+      const int64_t offset = 0,
       const bool is_fetch_with_ties = false,
       const int64_t default_block_size = ObChunkDatumStore::BLOCK_SIZE);
 
@@ -436,6 +437,36 @@ protected:
     { get_extra_info().max_size_ = max_size; }
   };
 
+  class ZoneMap
+  {
+  public:
+    struct ZoneMapItem
+    {
+      uint64_t cnt_;
+      ObSortOpChunk *chunk_;
+      ObChunkDatumStore::StoredRow *min_;
+      ObChunkDatumStore::StoredRow *max_;
+
+      ZoneMapItem(uint64_t cnt, ObSortOpChunk *chunk, ObChunkDatumStore::StoredRow *min,
+                  ObChunkDatumStore::StoredRow *max)
+                  : cnt_(cnt), chunk_(chunk), min_(min), max_(max) {}
+
+      TO_STRING_KV(K_(cnt));
+    };
+
+    int pruning(common::ObDList<ObSortOpChunk> &sort_chunks, Compare &comp,
+                const int64_t &offset, int64_t &outputted_cnt, lib::MemoryContext &mem_context);
+
+    int append(uint64_t cnt, ObSortOpChunk *chunk, ObChunkDatumStore::StoredRow *min,
+               ObChunkDatumStore::StoredRow *max, lib::MemoryContext &mem_context);
+
+    void reuse(lib::MemoryContext &mem_context, ObSqlMemMgrProcessor &sql_mem_processor);
+    void reset(lib::MemoryContext &mem_context);
+
+  private:
+    common::ObArray<ZoneMapItem *> items_;
+  };
+
   int get_next_row(const common::ObIArray<ObExpr*> &exprs, const ObChunkDatumStore::StoredRow *&sr)
   {
     int ret = common::OB_SUCCESS;
@@ -466,6 +497,8 @@ protected:
 
   template <typename Input>
     int build_chunk(const int64_t level, Input &input, int64_t extra_size = 0);
+  template <typename Input>
+    int build_chunk(const int64_t level, Input &input, ObSortOpChunk *&chunk, int64_t extra_size = 0);
 
   int build_ems_heap(int64_t &merge_ways);
   template <typename Heap, typename NextFunc, typename Item>
@@ -541,6 +574,10 @@ protected:
   int generate_new_row(SortStoredRow *orign_row,
                        ObIAllocator &alloc,
                        SortStoredRow *&new_row);
+  int generate_new_row(ObChunkDatumStore::StoredRow *orign_row,
+                       ObIAllocator &alloc,
+                       ObChunkDatumStore::StoredRow *&new_row,
+                       uint32_t row_extend_size);
   int generate_last_ties_row(const ObChunkDatumStore::StoredRow *orign_row);
   int adjust_topn_read_rows(ObChunkDatumStore::StoredRow **stored_rows, int64_t &read_cnt);
 
@@ -607,6 +644,9 @@ protected:
   ObChunkDatumStore::StoredRow *last_ties_row_;
   common::ObIArray<ObChunkDatumStore::StoredRow *> *rows_;
   ObChunkDatumStore::IteratedBlockHolder blk_holder_;
+  // for limit offset, N
+  int64_t offset_;
+  ZoneMap zone_map_;
 };
 
 class ObInMemoryTopnSortImpl;
@@ -722,6 +762,7 @@ public:
         need_rewind,
         0, /* part_cnt */
         INT64_MAX, /* topn_cnt */
+        0, /* offset_ */
         false, /* is_fetch_with_ties */
         default_block_size);
   }
