@@ -2961,6 +2961,7 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
         ret = OB_ERR_PRIVATE_UDF_USE_IN_SQL;
         LOG_WARN("function 'string' may not be used in SQL", K(ret), KPC(udf));
       } else {
+        OX (stmt_->get_query_ctx()->has_pl_udf_ = true);
         OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= !udf->is_parallel_enable());
       }
     } else if (T_FUN_PL_COLLECTION_CONSTRUCT == real_ref_expr->get_expr_type()) {
@@ -3107,6 +3108,7 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("failed cast udf raw expr", K(ret));
           } else {
+            stmt_->get_query_ctx()->has_pl_udf_ = true;
             stmt_->get_query_ctx()->disable_udf_parallel_ |= !udf->is_parallel_enable();
           }
         }
@@ -5269,6 +5271,7 @@ int ObDMLResolver::resolve_function_table_item(const ParseNode &parse_tree,
           OZ (stmt->add_ref_obj_version(dep_obj_id, dep_db_id, ObObjectType::VIEW, table_version, *allocator_));
         }
       }
+      OX (stmt_->get_query_ctx()->has_pl_udf_ = true);
       OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= !udf->is_parallel_enable());
     } else if (OB_SUCC(ret) && function_table_expr->is_sys_func_expr()) {
       // xxx
@@ -11960,6 +11963,7 @@ int ObDMLResolver::check_disable_parallel_state(ObRawExpr *expr)
                                             *expr,
                                             stmt->get_query_ctx()->udf_has_select_stmt_,
                                             return_value_version));
+    OX (stmt->get_query_ctx()->has_pl_udf_ = true);
     OX (stmt->get_query_ctx()->disable_udf_parallel_ |= !udf_expr->is_parallel_enable());
     OX (stmt->get_query_ctx()->disable_udf_parallel_ |= is_valid_id(udf_expr->get_dblink_id()));
     OX (stmt->get_query_ctx()->has_dblink_udf_ |= is_valid_id(udf_expr->get_dblink_id()));

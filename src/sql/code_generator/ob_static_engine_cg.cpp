@@ -7260,10 +7260,10 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
         //为了支持触发器/UDF支持异常捕获，要求含有pl udf的涉及修改表数据的dml串行执行
         phy_plan_->set_need_serial_exec(true);
       }
-      phy_plan_->set_contain_pl_udf_or_trigger(true);
       phy_plan_->set_has_nested_sql(true);
     } else {/*do nothing*/}
     if (OB_SUCC(ret)) {
+      phy_plan_->set_contain_pl_udf_or_trigger(log_plan.get_stmt()->get_query_ctx()->has_pl_udf_);
       phy_plan_->set_has_link_udf(log_plan.get_stmt()->get_query_ctx()->has_dblink_udf_);
     }
   }

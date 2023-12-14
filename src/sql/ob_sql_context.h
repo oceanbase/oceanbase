@@ -699,7 +699,8 @@ public:
       res_map_rule_param_idx_(common::OB_INVALID_INDEX),
       root_stmt_(NULL),
       udf_has_select_stmt_(false),
-      has_dblink_udf_(false)
+      has_dblink_udf_(false),
+      has_pl_udf_(false)
   {
   }
   TO_STRING_KV(N_PARAM_NUM, question_marks_count_,
@@ -745,6 +746,7 @@ public:
     root_stmt_ = NULL;
     udf_has_select_stmt_ = false;
     has_dblink_udf_ = false;
+    has_pl_udf_ = false;
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -829,6 +831,7 @@ public:
   ObDMLStmt *root_stmt_;
   bool udf_has_select_stmt_; // udf has select stmt, not contain other dml stmt
   bool has_dblink_udf_;
+  bool has_pl_udf_; // //used to mark sql contain pl udf
 };
 } /* ns sql*/
 } /* ns oceanbase */
