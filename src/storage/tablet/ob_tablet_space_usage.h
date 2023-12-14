@@ -19,8 +19,6 @@ namespace oceanbase
 {
 namespace storage
 {
-
-class ObTabletMacroInfo;
 struct ObTabletSpaceUsage final
 {
 public:

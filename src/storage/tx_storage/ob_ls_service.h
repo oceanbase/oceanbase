@@ -200,9 +200,12 @@ private:
 
   int alloc_ls_(ObLS *&ls);
   bool is_ls_to_restore_(const obrpc::ObCreateLSArg &arg) const;
+  bool is_ls_to_clone_(const obrpc::ObCreateLSArg &arg) const;
   bool need_create_inner_tablets_(const obrpc::ObCreateLSArg &arg) const;
   int get_restore_status_(
       share::ObLSRestoreStatus &restore_status);
+  ObLSRestoreStatus get_restore_status_by_tenant_role_(const ObTenantRole& tenant_role);
+  int64_t get_create_type_by_tenant_role_(const ObTenantRole& tenant_role);
 
 private:
   bool is_inited_;

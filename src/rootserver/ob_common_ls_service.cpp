@@ -146,7 +146,7 @@ int ObCommonLSService::try_create_ls_(const share::schema::ObTenantSchema &tenan
                      K(status_info));
         } else if (OB_FAIL(do_create_user_ls(tenant_schema, status_info,
                                              recovery_stat.get_create_scn(),
-                                             false, palf_base_info))) {
+                                             false, palf_base_info, OB_INVALID_TENANT_ID/*source_tenant_id*/))) {
           LOG_WARN("failed to create new ls", KR(ret), K(status_info),
                      K(recovery_stat));
         }
@@ -208,7 +208,8 @@ int ObCommonLSService::try_modify_ls_unit_group_(
 int ObCommonLSService::do_create_user_ls(
     const share::schema::ObTenantSchema &tenant_schema,
     const share::ObLSStatusInfo &info, const SCN &create_scn,
-    bool create_with_palf, const palf::PalfBaseInfo &palf_base_info)
+    bool create_with_palf, const palf::PalfBaseInfo &palf_base_info,
+    const uint64_t source_tenant_id)
 {
   int ret = OB_SUCCESS;
   LOG_INFO("[COMMON_LS_SERVICE] start to create ls", K(info), K(create_scn));
@@ -234,9 +235,10 @@ int ObCommonLSService::do_create_user_ls(
                                          locality_array, create_scn,
                                          tenant_schema.get_compatibility_mode(),
                                          create_with_palf,
-                                         palf_base_info))) {
+                                         palf_base_info,
+                                         source_tenant_id))) {
         LOG_WARN("failed to create user ls", KR(ret), K(info), K(locality_array), K(create_scn),
-                                             K(palf_base_info), K(create_with_palf));
+                                             K(palf_base_info), K(create_with_palf), K(source_tenant_id));
       }
     }
   }

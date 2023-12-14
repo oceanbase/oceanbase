@@ -195,7 +195,7 @@ public:
     common::ObAddr leader;
     OZ(get_leader(cluster_id, tenant_id, ls_id, leader));
     ObLSReplicaLocation rep_loc;
-    ObLSRestoreStatus restore_status(ObLSRestoreStatus::Status::RESTORE_NONE);
+    ObLSRestoreStatus restore_status(ObLSRestoreStatus::Status::NONE);
     auto p = ObReplicaProperty::create_property(100);
     OZ(rep_loc.init(leader, ObRole::LEADER, 10000, ObReplicaType::REPLICA_TYPE_FULL, p, restore_status, 1));
     OZ(location.add_replica_location(rep_loc));
@@ -272,6 +272,8 @@ public:
   }
   int get_ts_sync(const uint64_t tenant_id, const int64_t timeout_ts,
                   share::SCN &scn, bool &is_external_consistent) { return OB_SUCCESS; }
+  int get_ts_sync(const uint64_t tenant_id, const int64_t timeout_ts,
+                  share::SCN &scn) { return OB_SUCCESS; }
   int wait_gts_elapse(const uint64_t tenant_id, const share::SCN &scn, ObTsCbTask *task,
                       bool &need_wait)
   {

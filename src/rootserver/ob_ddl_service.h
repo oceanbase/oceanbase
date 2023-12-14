@@ -2052,7 +2052,7 @@ private:
       const obrpc::ObCreateTenantArg &arg,
       share::schema::ObTenantSchema &tenant_schema,
       share::schema::ObSysVariableSchema &sys_variable_schema);
-  int create_tenant(
+  int inner_create_tenant_(
       const obrpc::ObCreateTenantArg &arg,
       share::schema::ObSchemaGetterGuard &schema_guard,
       obrpc::UInt64 &tenant_id);
@@ -2073,13 +2073,15 @@ private:
       const palf::PalfBaseInfo &palf_base_info,
       const common::ObIArray<common::ObConfigPairs> &init_configs,
       bool is_creating_standby,
-      const common::ObString &log_restore_source);
+      const common::ObString &log_restore_source,
+      const uint64_t source_tenant_id);
   int set_sys_ls_status(const uint64_t tenant_id);
   int create_tenant_sys_ls(
       const share::schema::ObTenantSchema &tenant_schema,
       const common::ObIArray<share::ObResourcePoolName> &pool_list,
       const bool create_ls_with_palf,
-      const palf::PalfBaseInfo &palf_base_info);
+      const palf::PalfBaseInfo &palf_base_info,
+      const uint64_t source_tenant_id);
   int create_tenant_user_ls(const uint64_t tenant_id);
   int broadcast_sys_table_schemas(
       const uint64_t tenant_id,
@@ -2101,10 +2103,11 @@ private:
       const uint64_t tenant_id,
       const common::ObString &log_restore_source,
       common::ObMySQLTransaction &trans);
-  int insert_restore_tenant_job(
+  int insert_restore_or_clone_tenant_job_(
       const uint64_t tenant_id,
       const ObString &tenant_name,
-      const share::ObTenantRole &tenant_role);
+      const share::ObTenantRole &tenant_role,
+      const uint64_t source_tenant_id);
   int create_sys_table_schemas(
       ObDDLOperator &ddl_operator,
       ObMySQLTransaction &trans,

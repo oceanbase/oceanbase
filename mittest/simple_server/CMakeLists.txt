@@ -102,6 +102,7 @@ ob_unittest_observer(test_transfer_lock_info_operator storage_ha/test_transfer_l
 ob_unittest_observer(test_mds_recover test_mds_recover.cpp)
 ob_unittest_observer(test_keep_alive_min_start_scn test_keep_alive_min_start_scn.cpp)
 ob_unittest_observer(test_ls_replica test_ls_replica.cpp)
+ob_unittest_observer(test_create_clone_tenant_resource_pool test_create_clone_tenant_resource_pool.cpp)
 ob_unittest_observer(test_tablet_autoinc_mgr test_tablet_autoinc_mgr.cpp)
 # TODO(muwei.ym): open later
 ob_ha_unittest_observer(test_transfer_handler storage_ha/test_transfer_handler.cpp)

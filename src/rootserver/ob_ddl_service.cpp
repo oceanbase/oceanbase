@@ -116,6 +116,7 @@
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
+#include "rootserver/restore/ob_tenant_clone_util.h"
 
 
 namespace oceanbase
@@ -22429,9 +22430,20 @@ int ObDDLService::create_tenant(
     bool tenant_exist = false;
     if (OB_NOT_NULL(schema_guard.get_tenant_info(tenant_name))) {
       tenant_exist = true;
-    } else if (!arg.is_restore_) {
-      if (OB_FAIL(ObRestoreUtil::check_has_physical_restore_job(*sql_proxy_, tenant_name, tenant_exist))) {
-        LOG_WARN("failed to check has physical restore job", KR(ret), K(tenant_name));
+    } else {
+      if (!arg.is_restore_tenant()) {
+        if (OB_FAIL(ObRestoreUtil::check_has_physical_restore_job(*sql_proxy_, tenant_name, tenant_exist))) {
+          LOG_WARN("failed to check has physical restore job", KR(ret), K(tenant_name));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (tenant_exist) {
+        // do nothing
+      } else if (!arg.is_clone_tenant()) {
+        // check whether has clone job, if has clone job then tenant_exist should be true
+        if (OB_FAIL(ObTenantCloneUtil::check_clone_tenant_exist(*sql_proxy_, tenant_name, tenant_exist))) {
+          LOG_WARN("failed to check clone tenant exist", KR(ret), K(tenant_name));
+        }
       }
     }
     if (OB_FAIL(ret)) {
@@ -22445,7 +22457,7 @@ int ObDDLService::create_tenant(
         LOG_USER_ERROR(OB_TENANT_EXIST, to_cstring(tenant_name));
         LOG_WARN("tenant already exists", KR(ret), K(tenant_name));
       }
-    } else if (OB_FAIL(create_tenant(arg, schema_guard, tenant_id))) {
+    } else if (OB_FAIL(inner_create_tenant_(arg, schema_guard, tenant_id))) {
       LOG_WARN("fail to create tenant", KR(ret), K(arg));
     }
   }
@@ -22491,7 +22503,7 @@ int ObDDLService::generate_tenant_schema(
       user_tenant_schema.set_tenant_id(user_tenant_id);
       if (!tenant_role.is_primary()) {
         //standby cluster and restore tenant no need init user tenant system variables
-        if (tenant_role.is_restore()) {
+        if (tenant_role.is_restore() || tenant_role.is_clone()) {
           user_tenant_schema.set_status(TENANT_STATUS_RESTORE);
         } else if (arg.is_creating_standby_) {
           user_tenant_schema.set_status(TENANT_STATUS_CREATING_STANDBY);
@@ -22543,7 +22555,9 @@ int ObDDLService::generate_tenant_schema(
         * standby tenant so that it can be upgraded from 0 to ensure that the compatible_version matches
         * the internal table. and it also prevent loss of the upgrade action.
         */
-        uint64_t compatible_version = arg.is_restore_ ? arg.compatible_version_ : DATA_CURRENT_VERSION;
+        uint64_t compatible_version = (arg.is_restore_tenant() || arg.is_clone_tenant())
+                                    ? arg.compatible_version_
+                                    : DATA_CURRENT_VERSION;
         if (OB_FAIL(gen_tenant_init_config(user_tenant_id, compatible_version, config))) {
           LOG_WARN("fail to gen tenant init config", KR(ret), K(user_tenant_id), K(compatible_version));
         } else if (OB_FAIL(init_configs.push_back(config))) {
@@ -22619,7 +22633,7 @@ int ObDDLService::init_schema_status(
   return ret;
 }
 
-int ObDDLService::create_tenant(
+int ObDDLService::inner_create_tenant_(
     const ObCreateTenantArg &arg,
     share::schema::ObSchemaGetterGuard &schema_guard,
     UInt64 &tenant_id)
@@ -22641,12 +22655,12 @@ int ObDDLService::create_tenant(
               (ObSysVariableSchema, meta_sys_variable)) {
     if (OB_FAIL(check_inner_stat())) {
       LOG_WARN("fail to check inner stat", KR(ret));
-    } else if (arg.is_restore_) {
-      tenant_role = share::RESTORE_TENANT_ROLE;
+    } else if (arg.is_restore_tenant() || arg.is_clone_tenant()) {
+      tenant_role = arg.is_restore_tenant() ? share::RESTORE_TENANT_ROLE : share::CLONE_TENANT_ROLE;
       recovery_until_scn = arg.recovery_until_scn_;
       user_palf_base_info = arg.palf_base_info_;
       create_ls_with_palf = true;
-    } else if (arg.is_creating_standby_) {
+    } else if (arg.is_standby_tenant()) {
       tenant_role = share::STANDBY_TENANT_ROLE;
     } else {
       tenant_role = share::PRIMARY_TENANT_ROLE;
@@ -22678,22 +22692,23 @@ int ObDDLService::create_tenant(
     } else {
       DEBUG_SYNC(BEFORE_CREATE_META_TENANT);
       // create ls/tablet/schema in tenant space
+      // TODO@jingyu.cr: need to support create clone tenant from lower version, mark compatible version for unit
       ObArray<ObResourcePoolName> pools;
       if (OB_FAIL(get_pools(arg.pool_list_, pools))) {
         LOG_WARN("get_pools failed", KR(ret), K(arg));
       } else if (OB_FAIL(create_normal_tenant(meta_tenant_id, pools, meta_tenant_schema, tenant_role,
         recovery_until_scn, meta_sys_variable, false/*create_ls_with_palf*/, meta_palf_base_info, init_configs,
-        arg.is_creating_standby_, arg.log_restore_source_))) {
+        arg.is_standby_tenant(), arg.log_restore_source_, arg.source_tenant_id_))) {
         LOG_WARN("fail to create meta tenant", KR(ret), K(meta_tenant_id), K(pools), K(meta_sys_variable),
-            K(tenant_role), K(recovery_until_scn), K(meta_palf_base_info), K(init_configs));
+            K(tenant_role), K(recovery_until_scn), K(meta_palf_base_info), K(init_configs), K(arg));
       } else {
         ObString empty_str;
         DEBUG_SYNC(BEFORE_CREATE_USER_TENANT);
         if (OB_FAIL(create_normal_tenant(user_tenant_id, pools, user_tenant_schema, tenant_role,
               recovery_until_scn, user_sys_variable, create_ls_with_palf, user_palf_base_info, init_configs,
-              false /* is_creating_standby */, empty_str))) {
+              false /* is_creating_standby */, empty_str, arg.source_tenant_id_))) {
           LOG_WARN("fail to create user tenant", KR(ret), K(user_tenant_id), K(pools), K(user_sys_variable),
-              K(tenant_role), K(recovery_until_scn), K(user_palf_base_info));
+              K(tenant_role), K(recovery_until_scn), K(user_palf_base_info), K(arg));
         }
       }
       // drop tenant if create tenant failed.
@@ -22856,8 +22871,9 @@ int ObDDLService::create_tenant_schema(
                          trans, new_ug_id_array,
                          compat_mode,
                          pools, user_tenant_id,
-                         false/*is_bootstrap*/))) {
-        LOG_WARN("grant_pools_to_tenant failed", KR(ret), K(pools), K(user_tenant_id));
+                         false/*is_bootstrap*/,
+                         arg.source_tenant_id_))) {
+        LOG_WARN("grant_pools_to_tenant failed", KR(ret), K(arg), K(pools), K(user_tenant_id));
       }
       LOG_INFO("[CREATE_TENANT] STEP 1.2. finish grant pools", KR(ret), K(user_tenant_id),
                "cost", ObTimeUtility::fast_current_time() - tmp_start_time);
@@ -23010,7 +23026,7 @@ int ObDDLService::check_need_create_root_key(const ObCreateTenantArg &arg, bool 
   need_create = false;
   if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_0_0) {
     need_create = false;
-  } else if (arg.is_restore_) {
+  } else if (arg.is_restore_tenant() || arg.is_clone_tenant()) {
     need_create = false;
   } else {
     need_create = true;
@@ -23275,10 +23291,11 @@ int ObDDLService::create_normal_tenant(
     const palf::PalfBaseInfo &palf_base_info,
     const common::ObIArray<common::ObConfigPairs> &init_configs,
     bool is_creating_standby,
-    const common::ObString &log_restore_source)
+    const common::ObString &log_restore_source,
+    const uint64_t source_tenant_id)
 {
   const int64_t start_time = ObTimeUtility::fast_current_time();
-  LOG_INFO("[CREATE_TENANT] STEP 2. start create tenant", K(tenant_id), K(tenant_schema));
+  LOG_INFO("[CREATE_TENANT] STEP 2. start create tenant", K(tenant_id), K(tenant_schema), K(source_tenant_id));
   int ret = OB_SUCCESS;
   ObSArray<ObTableSchema> tables;
   if (OB_FAIL(check_inner_stat())) {
@@ -23289,10 +23306,10 @@ int ObDDLService::create_normal_tenant(
   } else if (is_sys_tenant(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant_id is invalid", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(insert_restore_tenant_job(tenant_id, tenant_schema.get_tenant_name(), tenant_role))) {
-    LOG_WARN("failed to insert restore tenant job", KR(ret), K(tenant_id), K(tenant_role), K(tenant_schema));
-  } else if (OB_FAIL(create_tenant_sys_ls(tenant_schema, pool_list, create_ls_with_palf, palf_base_info))) {
-    LOG_WARN("fail to create tenant sys log stream", KR(ret), K(tenant_schema), K(pool_list), K(palf_base_info));
+  } else if (OB_FAIL(insert_restore_or_clone_tenant_job_(tenant_id, tenant_schema.get_tenant_name(), tenant_role, source_tenant_id))) {
+    LOG_WARN("failed to insert restore or clone tenant job", KR(ret), K(tenant_id), K(tenant_role), K(tenant_schema), K(source_tenant_id));
+  } else if (OB_FAIL(create_tenant_sys_ls(tenant_schema, pool_list, create_ls_with_palf, palf_base_info, source_tenant_id))) {
+    LOG_WARN("fail to create tenant sys log stream", KR(ret), K(tenant_schema), K(pool_list), K(palf_base_info), K(source_tenant_id));
   } else if (is_user_tenant(tenant_id) && !tenant_role.is_primary()) {
     //standby cluster no need create sys tablet and init tenant schema
   } else if (OB_FAIL(ObSchemaUtils::construct_inner_table_schemas(tenant_id, tables))) {
@@ -23311,15 +23328,16 @@ int ObDDLService::create_normal_tenant(
     //create user ls
     LOG_WARN("failed to create tenant user ls", KR(ret), K(tenant_id));
   }
-  LOG_INFO("[CREATE_TENANT] STEP 2. finish create tenant", KR(ret), K(tenant_id),
+  LOG_INFO("[CREATE_TENANT] STEP 2. finish create tenant", KR(ret), K(tenant_id), K(source_tenant_id),
            "cost", ObTimeUtility::fast_current_time() - start_time);
   return ret;
 }
 
-int ObDDLService::insert_restore_tenant_job(
+int ObDDLService::insert_restore_or_clone_tenant_job_(
       const uint64_t tenant_id,
       const ObString &tenant_name,
-      const share::ObTenantRole &tenant_role)
+      const share::ObTenantRole &tenant_role,
+      const uint64_t source_tenant_id)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
@@ -23330,8 +23348,16 @@ int ObDDLService::insert_restore_tenant_job(
   } else if (OB_ISNULL(sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ptr is null", KR(ret), KP_(sql_proxy));
-  } else if (is_meta_tenant(tenant_id) || !tenant_role.is_restore()) {
-    //no need to insert retore job;
+  } else if (is_meta_tenant(tenant_id)) {
+    // no need to insert job for meta tenant
+  } else if (!tenant_role.is_restore() && !tenant_role.is_clone()) {
+    // no need to insert restore/clone job
+  } else if (tenant_role.is_clone()) {
+    // insert clone job
+    if (OB_FAIL(ObTenantCloneUtil::insert_user_tenant_clone_job(*sql_proxy_, tenant_name,
+                                                                    tenant_id))) {
+      LOG_WARN("failed to insert user tenant clone job", KR(ret), K(tenant_name), K(tenant_id));
+    }
   } else if (OB_FAIL(ObRestoreUtil::insert_user_tenant_restore_job(*sql_proxy_, tenant_name,
                                                                    tenant_id))) {
     LOG_WARN("failed to insert user tenant restore job", KR(ret), K(tenant_id), K(tenant_name));
@@ -23386,12 +23412,15 @@ int ObDDLService::create_tenant_sys_ls(
     const ObTenantSchema &tenant_schema,
     const ObIArray<share::ObResourcePoolName> &pool_list,
     const bool create_ls_with_palf,
-    const palf::PalfBaseInfo &palf_base_info)
+    const palf::PalfBaseInfo &palf_base_info,
+    const uint64_t source_tenant_id)
 {
   const int64_t start_time = ObTimeUtility::fast_current_time();
-  LOG_INFO("[CREATE_TENANT] STEP 2.1. start create sys log stream", K(tenant_schema));
+  LOG_INFO("[CREATE_TENANT] STEP 2.1. start create sys log stream", K(tenant_schema), K(source_tenant_id));
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = tenant_schema.get_tenant_id();
+  // meta tenant do not have to reference source tenant id
+  const uint64_t source_tenant_id_to_use = is_user_tenant(tenant_id) ? source_tenant_id : OB_INVALID_TENANT_ID;
   int64_t wait_leader = 0;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", KR(ret));
@@ -23425,9 +23454,9 @@ int ObDDLService::create_tenant_sys_ls(
     } else if (OB_FAIL(ls_creator.create_tenant_sys_ls(
                primary_zone_list.at(0), locality, pool_list, paxos_replica_num,
                tenant_schema.get_compatibility_mode(), zone_priority.string(),
-               create_ls_with_palf, palf_base_info))) {
+               create_ls_with_palf, palf_base_info, source_tenant_id_to_use))) {
       LOG_WARN("fail to create tenant sys ls", KR(ret), K(pool_list), K(palf_base_info),
-               K(locality), K(paxos_replica_num), K(tenant_schema), K(zone_priority));
+               K(locality), K(paxos_replica_num), K(tenant_schema), K(zone_priority), K(source_tenant_id_to_use));
     } else {
       share::ObLSLeaderElectionWaiter ls_leader_waiter(*lst_operator_, stopped_);
       int64_t timeout = GCONF.rpc_timeout;
@@ -24828,7 +24857,8 @@ int ObDDLService::modify_and_cal_resource_pool_diff(
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("fail to grant pool", K(ret), K(diff_pools));
         } else if (OB_FAIL(unit_mgr_->grant_pools(
-                trans, new_ug_id_array, compat_mode, diff_pools, tenant_id))) {
+                trans, new_ug_id_array, compat_mode, diff_pools, tenant_id,
+                OB_INVALID_TENANT_ID/*source_tenant_id*/))) {
           LOG_WARN("fail to grant pools", K(ret));
         }
       } else if (new_pool_name_list.count() + 1 == old_pool_name_list.count()) {

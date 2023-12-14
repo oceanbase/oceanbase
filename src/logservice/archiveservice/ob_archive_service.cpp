@@ -201,6 +201,11 @@ void ObArchiveService::wakeup()
   cond_.signal();
 }
 
+void ObArchiveService::flush_all()
+{
+  ls_mgr_.flush_all();
+}
+
 int ObArchiveService::iterate_ls(const std::function<int (const ObLSArchiveTask &)> &func)
 {
   return ls_mgr_.iterate_ls(func);

@@ -1447,7 +1447,7 @@ int ObStartMigrationTask::check_before_ls_migrate_(const ObLSMeta &ls_meta)
     LOG_WARN("start migration task do not init", K(ret));
   } else if (OB_FAIL(ls_meta.get_restore_status(ls_restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), KPC(ctx_));
-  } else if (ls_restore_status.is_restore_failed()) {
+  } else if (ls_restore_status.is_failed()) {
     ret = OB_LS_RESTORE_FAILED;
     LOG_WARN("ls restore failed, cannot migrate", K(ret), KPC(ctx_), K(ls_restore_status));
   } else if (!ls_restore_status.can_migrate()) {

@@ -124,6 +124,7 @@ class ObTableService;
 class ObSrvNetworkFrame;
 class ObIDiskReport;
 class ObResourceInnerSQLConnectionPool;
+class ObStartupAccelTaskHandler;
 
 class ObServerOptions
 {
@@ -288,6 +289,7 @@ struct ObGlobalContext
   storage::ObLocalityManager *locality_manager_;
   obrpc::ObExtenralTableRpcProxy *external_table_proxy_;
   share::ObWorkloadRepositoryService *wr_service_;
+  ObStartupAccelTaskHandler* startup_accel_handler_;
 
   ObGlobalContext() { MEMSET(this, 0, sizeof(*this)); init(); }
   ObGlobalContext &operator = (const ObGlobalContext &other);

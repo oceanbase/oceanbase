@@ -1351,6 +1351,20 @@ private:
   obrpc::ObAdminSetConfigArg rpc_arg_;
 };
 
+class ObCancelCloneStmt : public ObSystemCmdStmt
+{
+public:
+  ObCancelCloneStmt()
+    : ObSystemCmdStmt(stmt::T_CANCEL_CLONE),
+      clone_tenant_name_() {}
+  virtual ~ObCancelCloneStmt() {}
+  int set_clone_tenant_name(const ObString &tenant_name) { return clone_tenant_name_.assign(tenant_name); }
+  const ObString get_clone_tenant_name() { return clone_tenant_name_.str(); }
+	TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(clone_tenant_name));
+private:
+  common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> clone_tenant_name_;
+};
+
 } // end namespace sql
 } // end namespace oceanbase
 

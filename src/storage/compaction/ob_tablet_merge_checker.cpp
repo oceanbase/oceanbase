@@ -110,7 +110,7 @@ int ObTabletMergeChecker::check_ls_state_in_major(ObLS &ls, bool &need_merge)
     // do nothing
   } else if (OB_FAIL(ls.get_ls_meta().get_restore_status(restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), K(ls));
-  } else if (OB_UNLIKELY(!restore_status.is_restore_none())) {
+  } else if (OB_UNLIKELY(!restore_status.is_none())) {
     if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
       LOG_INFO("ls is in restore status, should not loop tablet to schedule", K(ret), "ls_id", ls.get_ls_id());
     }

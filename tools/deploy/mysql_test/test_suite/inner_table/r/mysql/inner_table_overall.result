@@ -254,6 +254,9 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 457	__wr_statname	0	201001	1
 458	__wr_sysstat	0	201001	1
 459	__all_balance_task_helper	0	201001	1
+460	__all_tenant_snapshot	0	201001	1
+461	__all_tenant_snapshot_ls	0	201001	1
+462	__all_tenant_snapshot_ls_replica	0	201001	1
 471	__all_dbms_lock_allocated	0	201001	1
 472	__wr_control	0	201001	1
 473	__all_tenant_event_history	0	201001	1
@@ -264,9 +267,13 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 478	__all_import_table_job_history	0	201001	1
 479	__all_import_table_task	0	201001	1
 480	__all_import_table_task_history	0	201001	1
+485	__all_clone_job	0	201001	1
+486	__all_clone_job_history	0	201001	1
 494	__all_aux_stat	0	201001	1
 495	__all_index_usage_info	0	201001	1
+500	__all_tenant_snapshot_job	0	201001	1
 502	__all_trusted_root_certificate	0	201001	1
+507	__all_tenant_snapshot_ls_replica_history	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -657,6 +664,9 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12399	__all_virtual_storage_leak_info	2	201001	1
 12400	__all_virtual_ls_log_restore_status	2	201001	1
 12401	__all_virtual_tenant_parameter	2	201001	1
+12402	__all_virtual_tenant_snapshot	2	201001	1
+12403	__all_virtual_tenant_snapshot_ls	2	201001	1
+12404	__all_virtual_tenant_snapshot_ls_replica	2	201001	1
 12405	__all_virtual_tablet_buffer_info	2	201001	1
 12414	__all_virtual_wr_control	2	201001	1
 12415	__all_virtual_tenant_event_history	2	201001	1
@@ -670,8 +680,13 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12425	__all_virtual_import_table_job_history	2	201001	1
 12426	__all_virtual_import_table_task	2	201001	1
 12427	__all_virtual_import_table_task_history	2	201001	1
+12435	__all_virtual_clone_job	2	201001	1
+12436	__all_virtual_clone_job_history	2	201001	1
 12447	__all_virtual_aux_stat	2	201001	1
+12453	__all_virtual_tenant_snapshot_job	2	201001	1
+12458	__all_virtual_ls_snapshot	2	201001	1
 12459	__all_virtual_index_usage_info	2	201001	1
+12464	__all_virtual_tenant_snapshot_ls_replica_history	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -1043,7 +1058,11 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21498	CDB_OB_AUX_STATISTICS	1	201001	1
 21499	DBA_INDEX_USAGE	1	201001	1
 21509	DBA_OB_TRUSTED_ROOT_CERTIFICATE	1	201001	1
+21510	DBA_OB_CLONE_PROGRESS	1	201001	1
 21513	CDB_INDEX_USAGE	1	201001	1
+21517	GV$OB_LS_SNAPSHOTS	1	201001	1
+21518	V$OB_LS_SNAPSHOTS	1	201001	1
+21519	DBA_OB_CLONE_HISTORY	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

@@ -295,7 +295,12 @@ public:
       const char *buf,
       const int64_t len,
       int64_t &pos);
-  int rollback_ref_cnt(
+  int release_ref_cnt(
+      common::ObArenaAllocator &allocator,
+      const char *buf,
+      const int64_t len,
+      int64_t &pos);
+  int inc_snapshot_ref_cnt(
       common::ObArenaAllocator &allocator,
       const char *buf,
       const int64_t len,
@@ -589,6 +594,12 @@ protected:// for MDS use
     return static_cast<ObTabletPointer*>(pointer_hdl_.get_resource_ptr());
   }
 private:
+  int partial_deserialize(
+      common::ObArenaAllocator &allocator,
+      const char *buf,
+      const int64_t len,
+      int64_t &pos);
+  int get_sstables_size(const bool ignore_shared_block, int64_t &used_size) const;
   static int deserialize_macro_info(
       common::ObArenaAllocator &allocator,
       const char *buf,
@@ -596,7 +607,6 @@ private:
       int64_t &pos,
       ObTabletMacroInfo *&tablet_macro_info);
   int init_aggregated_info(common::ObArenaAllocator &allocator, ObLinkedMacroBlockItemWriter &linked_writer);
-  int get_sstables_size(int64_t &used_size, const bool ignore_shared_block = false) const;
   void set_initial_addr();
   int check_meta_addr() const;
   static int parse_meta_addr(const ObMetaDiskAddr &addr, ObIArray<blocksstable::MacroBlockId> &meta_ids);

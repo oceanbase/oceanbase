@@ -27,6 +27,7 @@
 #include "share/ls/ob_ls_operator.h"
 #include "share/scn.h"
 #include "share/ob_debug_sync.h"
+#include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h"
 
 using namespace oceanbase;
 using namespace rootserver;
@@ -458,6 +459,7 @@ int ObArchiveHandler::close_archive_mode()
 {
   int ret = OB_SUCCESS;
   ObArchiveMode archive_mode;
+  bool has_tenant_snapshot = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tenant archive scheduler not init", K(ret));
@@ -470,6 +472,13 @@ int ObArchiveHandler::close_archive_mode()
     ret = OB_ALREADY_IN_NOARCHIVE_MODE;
     LOG_USER_ERROR(OB_ALREADY_IN_NOARCHIVE_MODE);
     LOG_WARN("already in noarchive mode", K(ret), K_(tenant_id));
+  } else if (OB_FAIL(ObTenantSnapshotUtil::check_tenant_has_snapshot(*sql_proxy_,
+                                        tenant_id_, has_tenant_snapshot))) {
+    LOG_WARN("failed to check whether tenant has snapshot", K(ret));
+  } else if (has_tenant_snapshot) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("can not close log archive while tenant snapshots exist", KR(ret));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "tenant snapshots exist, close log archive");
   } else if (OB_FAIL(archive_table_op_.close_archive_mode(*sql_proxy_))) {
     LOG_WARN("failed to close archive mode", K(ret), K_(tenant_id));
   } else {
@@ -589,10 +598,18 @@ int ObArchiveHandler::disable_archive(const int64_t dest_no)
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObTenantArchiveRoundAttr new_round_attr;
+  bool has_tenant_snapshot = false;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tenant archive scheduler not init", K(ret));
+  } else if (OB_FAIL(ObTenantSnapshotUtil::check_tenant_has_snapshot(*sql_proxy_,
+                                        tenant_id_, has_tenant_snapshot))) {
+    LOG_WARN("failed to check whether tenant has snapshot", K(ret));
+  } else if (has_tenant_snapshot) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("can not disable archive while tenant snapshots exist", KR(ret));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "tenant snapshots exist, disable log archive");
   } else if (OB_FAIL(round_handler_.disable_archive(dest_no, new_round_attr))) {
     LOG_WARN("failed to disable archive", K(ret), K_(tenant_id), K(dest_no));
   } else {

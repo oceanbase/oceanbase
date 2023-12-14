@@ -29,6 +29,7 @@ namespace oceanbase
 namespace share
 {
 class ObLSID;
+class ObTenantSnapshotID;
 }
 namespace storage
 {
@@ -47,6 +48,7 @@ public:
   DISALLOW_COPY_AND_ASSIGN(ObLSCkptMember);
   void reset();
 
+  bool is_valid() const;
   int serialize(char *buf, const int64_t len, int64_t &pos) const;
   int deserialize(
       const char *buf,
@@ -86,8 +88,6 @@ public:
     ObTenantCheckpointSlogHandler *handler_;
   };
 
-
-
   ObTenantCheckpointSlogHandler();
   ~ObTenantCheckpointSlogHandler() = default;
   ObTenantCheckpointSlogHandler(const ObTenantCheckpointSlogHandler &) = delete;
@@ -99,6 +99,13 @@ public:
   void stop();
   void wait();
   void destroy();
+
+  int add_macro_blocks(
+      const common::ObIArray<blocksstable::MacroBlockId> &ls_block_list,
+      const common::ObIArray<blocksstable::MacroBlockId> &tablet_block_list);
+  int add_snapshot(const ObTenantSnapshotMeta &tenant_snapshot);
+  int delete_snapshot(const share::ObTenantSnapshotID &snapshot_id);
+  int swap_snapshot(const ObTenantSnapshotMeta &tenant_snapshot);
   int report_slog(const ObTabletMapKey &tablet_key, const ObMetaDiskAddr &slog_addr);
   int check_slog(const ObTabletMapKey &tablet_key, bool &has_slog);
   int read_tablet_checkpoint_by_addr(
@@ -117,22 +124,33 @@ public:
       common::ObArenaAllocator &allocator,
       char *&buf,
       int64_t &buf_len);
-
+  int clone_ls(
+      observer::ObStartupAccelTaskHandler* startup_accel_handler,
+      const blocksstable::MacroBlockId &tablet_meta_entry);
 private:
+  int clone_tablet(const ObMetaDiskAddr &addr, const char *buf, const int64_t buf_len);
   int read_from_share_blk(const ObMetaDiskAddr &addr, common::ObArenaAllocator &allocator, char *&buf, int64_t &buf_len);
-  int concurrent_replay_load_tablets();
   int get_cur_cursor();
   void clean_copy_status();
   virtual int parse(const int32_t cmd, const char *buf, const int64_t len, FILE *stream) override;
   int replay_checkpoint_and_slog(const ObTenantSuperBlock &super_block);
   int replay_checkpoint(const ObTenantSuperBlock &super_block);
+  int replay_snapshot(const ObTenantSuperBlock &super_block);
+  int do_replay_single_snapshot(const blocksstable::MacroBlockId &ls_meta_entry);
   int replay_new_checkpoint(const ObTenantSuperBlock &super_block);
   int replay_old_checkpoint(const ObTenantSuperBlock &super_block);
-  int replay_new_tablet_checkpoint(
-      const blocksstable::MacroBlockId &tablet_entry_block,
-      common::ObIArray<blocksstable::MacroBlockId> &tablet_block_list);
   int replay_ls_meta(const ObMetaDiskAddr &addr, const char *buf, const int64_t buf_len);
   int replay_tablet(const ObMetaDiskAddr &addr, const char *buf, const int64_t buf_len);
+  int replay_snapshot_ls(
+      const ObMetaDiskAddr &addr,
+      const char *buf,
+      const int64_t buf_len);
+  int replay_new_ls(
+      const ObMetaDiskAddr &addr,
+      const char *buf,
+      const int64_t buf_len,
+      ObIArray<blocksstable::MacroBlockId> &tablet_block_list);
+  int replay_new_tablet(const ObMetaDiskAddr &addr, const char *buf, const int64_t buf_len);
   int update_tablet_meta_addr_and_block_list(
       const bool is_replay_old, ObTenantStorageCheckpointWriter &ckpt_writer);
   int replay_dup_table_ls_meta(const transaction::ObDupTableLSCheckpoint::ObLSDupTableMeta &dup_ls_meta);
@@ -185,6 +203,8 @@ private:
   ObWriteCheckpointTask write_ckpt_task_;
   ReplayTabletDiskAddrMap replay_tablet_disk_addr_map_;
   ObSharedBlockReaderWriter shared_block_rwriter_;
+  lib::ObMutex super_block_mutex_;
+  bool is_trivial_version_;
   ObSharedBlockReaderWriter shared_block_raw_rwriter_;
 };
 

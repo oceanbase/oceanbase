@@ -458,6 +458,7 @@ public:
   int create_resource_unit(const obrpc::ObCreateResourceUnitArg &arg);
   int alter_resource_unit(const obrpc::ObAlterResourceUnitArg &arg);
   int drop_resource_unit(const obrpc::ObDropResourceUnitArg &arg);
+  int clone_resource_pool(const obrpc::ObCloneResourcePoolArg &arg);
   int create_resource_pool(const obrpc::ObCreateResourcePoolArg &arg);
   int alter_resource_pool(const obrpc::ObAlterResourcePoolArg &arg);
   int drop_resource_pool(const obrpc::ObDropResourcePoolArg &arg);
@@ -508,6 +509,7 @@ public:
   int drop_tablegroup(const obrpc::ObDropTablegroupArg &arg);
   int drop_index(const obrpc::ObDropIndexArg &arg, obrpc::ObDropIndexRes &res);
   int rebuild_index(const obrpc::ObRebuildIndexArg &arg, obrpc::ObAlterTableRes &res);
+  int clone_tenant(const obrpc::ObCloneTenantArg &arg, obrpc::ObCloneTenantRes &res);
   //the interface only for switchover: execute skip check enable_ddl
   int flashback_index(const obrpc::ObFlashBackIndexArg &arg);
   int purge_index(const obrpc::ObPurgeIndexArg &arg);

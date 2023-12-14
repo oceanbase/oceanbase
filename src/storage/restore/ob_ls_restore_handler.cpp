@@ -133,7 +133,7 @@ int ObLSRestoreHandler::online()
     LOG_INFO("ls restore handler is already online");
   } else if (OB_FAIL(ls_->get_restore_status(new_status))) {
     LOG_WARN("fail to get_restore_status", K(ret), KPC(ls_));
-  } else if (new_status.is_restore_none()) {
+  } else if (!new_status.is_in_restore()) {
     is_online_ = true;
   } else {
     lib::ObMutexGuard guard(mtx_);
@@ -323,14 +323,14 @@ int ObLSRestoreHandler::check_before_do_restore_(bool &can_do_restore)
   } else if (!is_normal) {
   } else if (OB_FAIL(ls_->get_restore_status(restore_status))) {
     LOG_WARN("fail to get_restore_status", K(ret), KPC(ls_));
-  } else if (restore_status.is_restore_none()) {
+  } else if (!restore_status.is_in_restore()) {
     lib::ObMutexGuard guard(mtx_);
     if (OB_NOT_NULL(state_handler_)) {
       state_handler_->~ObILSRestoreState();
       allocator_.free(state_handler_);
       state_handler_ = nullptr;
     }
-  } else if (restore_status.is_restore_failed()) {
+  } else if (restore_status.is_failed()) {
   } else if (OB_FAIL(check_restore_job_exist_(is_exist))) {
   } else if (!is_exist) {
     if (OB_FAIL(ls_->set_restore_status(ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_FAILED), get_rebuild_seq()))) {
@@ -524,7 +524,7 @@ int ObLSRestoreHandler::get_restore_state_handler_(const share::ObLSRestoreStatu
       }
       break;
     }
-    case ObLSRestoreStatus::Status::RESTORE_NONE: {
+    case ObLSRestoreStatus::Status::NONE: {
       ObLSRestoreFinishState *tmp_ptr = nullptr;
       if (OB_FAIL(construct_state_handler_(tmp_ptr))) {
         LOG_WARN("fail to construct ObLSRestoreFinishState", K(ret), K(new_status));
@@ -1221,7 +1221,7 @@ int ObILSRestoreState::check_follower_restore_finish(const share::ObLSRestoreSta
         K(ret), K(leader_status));
   } else if (leader_status == follower_status) {
     is_finish = true;
-  } else if (leader_status.is_wait_restore_major_data() && follower_status.is_restore_none()) {
+  } else if (leader_status.is_wait_restore_major_data() && follower_status.is_none()) {
     is_finish = true;
   } else if (leader_status.get_status() < follower_status.get_status()) {
     // when switch leader, follower state may ahead leader
@@ -1235,9 +1235,9 @@ bool ObILSRestoreState::check_leader_restore_finish_(
     const share::ObLSRestoreStatus &follower_status) const
 {
   bool ret = false;
-  if (!leader_status.is_valid() || leader_status.is_restore_failed()) {
+  if (!leader_status.is_in_restore_or_none() || leader_status.is_failed()) {
     // leader may restore failed or switch leader
-  } else if (leader_status.is_restore_none()) {
+  } else if (leader_status.is_none()) {
     ret= true;
   } else if (leader_status.get_status() > follower_status.get_status()) {
     ret = true;
@@ -1600,7 +1600,7 @@ int ObLSRestoreStartState::do_with_uncreated_ls_()
 {
   int ret = OB_SUCCESS;
   bool restore_finish = false;
-  ObLSRestoreStatus next_status(ObLSRestoreStatus::Status::RESTORE_NONE);
+  ObLSRestoreStatus next_status(ObLSRestoreStatus::Status::NONE);
   bool is_created = false;
   if (OB_FAIL(check_sys_ls_restore_finished_(restore_finish))) {
     LOG_WARN("fail to check sys ls restore finished", K(ret), KPC(this));
@@ -1762,7 +1762,7 @@ int ObLSRestoreStartState::check_sys_ls_restore_finished_(bool &restore_finish)
     const ObIArray<share::ObLSReplicaLocation> &replica_locations = location.get_replica_locations();
     for (int64_t i = 0; OB_SUCC(ret) && i < replica_locations.count(); ++i) {
       const ObLSReplicaLocation &replica = replica_locations.at(i);
-      if (replica.get_restore_status().is_restore_none()) {
+      if (replica.get_restore_status().is_none()) {
       } else {
         tmp_finish = false;
       }
@@ -2654,7 +2654,7 @@ int ObLSRestoreMajorState::do_restore_major_(
 
 //================================ObLSRestoreFinishState=======================================
 ObLSRestoreFinishState::ObLSRestoreFinishState()
-  : ObILSRestoreState(ObLSRestoreStatus::Status::RESTORE_NONE)
+  : ObILSRestoreState(ObLSRestoreStatus::Status::NONE)
 {
 }
 
@@ -2770,7 +2770,7 @@ int ObLSRestoreWaitState::leader_wait_follower_()
     next_status = ObLSRestoreStatus::Status::QUICK_RESTORE_FINISH;
   } else if (ls_restore_status_.is_wait_restore_major_data()) {
     DEBUG_SYNC(BEFORE_WAIT_MAJOR_RESTORE);
-    next_status = ObLSRestoreStatus::Status::RESTORE_NONE;
+    next_status = ObLSRestoreStatus::Status::NONE;
   }
   LOG_INFO("leader is wait follower", "leader current status", ls_restore_status_, "next status", next_status, KPC(ls_));
   if (OB_FAIL(check_all_follower_restore_finish_(all_finish))) {
@@ -2801,7 +2801,7 @@ int ObLSRestoreWaitState::follower_wait_leader_()
   } else if (ls_restore_status_.is_wait_quick_restore()) {
     next_status = ObLSRestoreStatus::Status::QUICK_RESTORE_FINISH;
   } else if (ls_restore_status_.is_wait_restore_major_data()) {
-    next_status = ObLSRestoreStatus::Status::RESTORE_NONE;
+    next_status = ObLSRestoreStatus::Status::NONE;
   }
 
   LOG_INFO("follower is wait leader", "follower current status", ls_restore_status_, "next status", next_status, KPC(ls_));

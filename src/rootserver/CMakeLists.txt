@@ -158,6 +158,9 @@ ob_set_subtarget(ob_rootserver restore
   restore/ob_restore_service.cpp
   restore/ob_restore_scheduler.cpp
   restore/ob_restore_util.cpp
+  restore/ob_tenant_clone_util.cpp
+  restore/ob_clone_scheduler.cpp
+  restore/ob_restore_common_util.cpp
 )
 
 ob_set_subtarget(ob_rootserver virtual_table
@@ -165,6 +168,11 @@ ob_set_subtarget(ob_rootserver virtual_table
   virtual_table/ob_virtual_core_inner_table.cpp
   virtual_table/ob_all_virtual_backup_task_scheduler_stat.cpp
   virtual_table/ob_all_virtual_ls_replica_task_plan.cpp
+)
+
+ob_set_subtarget(ob_rootserver tenant_snapshot
+  tenant_snapshot/ob_tenant_snapshot_scheduler.cpp
+  tenant_snapshot/ob_tenant_snapshot_util.cpp
 )
 
 ob_server_add_target(ob_rootserver)

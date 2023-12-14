@@ -142,7 +142,8 @@ ObLinkedMacroBlockItemWriter::ObLinkedMacroBlockItemWriter()
   : is_inited_(false), is_closed_(false), written_items_cnt_(0),
     need_disk_addr_(false), first_inflight_item_idx_(0),
     pre_block_inflight_items_cnt_(0), curr_block_inflight_items_cnt_(0),
-    allocator_(ObModIds::OB_CHECKPOINT), block_writer_(), io_buf_(nullptr), io_buf_size_(0),
+    allocator_(ObModIds::OB_CHECKPOINT, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    block_writer_(), io_buf_(nullptr), io_buf_size_(0),
     io_buf_pos_(0), common_header_(nullptr), linked_header_(nullptr)
 {
 }

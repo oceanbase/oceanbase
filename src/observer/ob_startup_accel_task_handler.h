@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEABASE_SERVER_OB_SERVER_STARTUP_TASK_HANDLER_H_
-#define OCEABASE_SERVER_OB_SERVER_STARTUP_TASK_HANDLER_H_
+#ifndef OCEABASE_SERVER_OB_STARTUP_ACCEL_TASK_HANDLER_H_
+#define OCEABASE_SERVER_OB_STARTUP_ACCEL_TASK_HANDLER_H_
 
 #include "lib/ob_define.h"
 #include "lib/thread/thread_mgr.h"
@@ -22,49 +22,45 @@ namespace oceanbase
 {
 namespace observer
 {
-class ObServerStartupTask
+class ObStartupAccelTask
 {
 public:
-  ObServerStartupTask() {}
-  virtual ~ObServerStartupTask() {}
+  ObStartupAccelTask() {}
+  virtual ~ObStartupAccelTask() {}
   virtual int execute() = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
 };
 
-// This handler is only used to process tasks during startup. it can speed up the startup process.
-// If you have tasks that need to be processed in parallel, you can use this handler,
-// but please note that this handler will be destroyed after obsever startup.
-class ObServerStartupTaskHandler : public lib::TGTaskHandler
+enum ObStartupAccelType
+{
+  SERVER_ACCEL = 1,
+  TENANT_ACCEL = 2,
+};
+
+class ObStartupAccelTaskHandler : public lib::TGTaskHandler
 {
 public:
   static const int64_t MAX_QUEUED_TASK_NUM;
   static const int64_t MAX_THREAD_NUM;
-  ObServerStartupTaskHandler();
-  ~ObServerStartupTaskHandler();
-  int init();
+
+  ObStartupAccelTaskHandler();
+  ~ObStartupAccelTaskHandler();
+  int init(ObStartupAccelType accel_type);
   int start();
   void stop();
   void wait();
   void destroy();
   void handle(void *task) override;
   ObIAllocator &get_task_allocator() { return task_allocator_; }
-  int push_task(ObServerStartupTask *task);
-  static int64_t get_thread_num() { return std::min(MAX_THREAD_NUM, common::get_cpu_count()); }
-  static OB_INLINE ObServerStartupTaskHandler &get_instance();
+  int push_task(ObStartupAccelTask *task);
+  int64_t get_thread_cnt();
 
 private:
   bool is_inited_;
+  ObStartupAccelType accel_type_;
   int tg_id_;
   common::ObFIFOAllocator task_allocator_;
 };
-
-OB_INLINE ObServerStartupTaskHandler &ObServerStartupTaskHandler::get_instance()
-{
-  static ObServerStartupTaskHandler instance;
-  return instance;
-}
-
-#define SERVER_STARTUP_TASK_HANDLER (::oceanbase::observer::ObServerStartupTaskHandler::get_instance())
 
 } // observer
 } // oceanbase

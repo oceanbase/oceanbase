@@ -1033,7 +1033,7 @@ OB_SERIALIZE_MEMBER((ObAlterResourcePoolArg, ObDDLArg),
 
 bool ObDropResourcePoolArg::is_valid() const
 {
-  return !pool_name_.empty();
+  return !pool_name_.empty() || pool_id_ != OB_INVALID_ID;
 }
 
 int ObDropResourcePoolArg::assign(const ObDropResourcePoolArg &other)
@@ -1044,6 +1044,7 @@ int ObDropResourcePoolArg::assign(const ObDropResourcePoolArg &other)
   } else {
     pool_name_ = other.pool_name_;
     if_exist_ = other.if_exist_;
+    pool_id_ = other.pool_id_;
   }
   return ret;
 }
@@ -1052,7 +1053,8 @@ DEF_TO_STRING(ObDropResourcePoolArg)
 {
   int64_t pos = 0;
   J_KV(K_(pool_name),
-       K_(if_exist));
+       K_(if_exist),
+       K_(pool_id));
   return pos;
 }
 
@@ -1139,6 +1141,7 @@ int ObCreateTenantArg::assign(const ObCreateTenantArg &other)
     is_creating_standby_ = other.is_creating_standby_;
     log_restore_source_ = other.log_restore_source_;
     is_tmp_tenant_for_recover_ = other.is_tmp_tenant_for_recover_;
+    source_tenant_id_ = other.source_tenant_id_;
   }
   return ret;
 }
@@ -1157,6 +1160,7 @@ void ObCreateTenantArg::reset()
   is_creating_standby_ = false;
   log_restore_source_.reset();
   is_tmp_tenant_for_recover_ = false;
+  source_tenant_id_ = OB_INVALID_TENANT_ID;
 }
 
 int ObCreateTenantArg::init(const share::schema::ObTenantSchema &tenant_schema,
@@ -1195,7 +1199,8 @@ DEF_TO_STRING(ObCreateTenantArg)
        K_(compatible_version),
        K_(is_creating_standby),
        K_(log_restore_source),
-       K_(is_tmp_tenant_for_recover));
+       K_(is_tmp_tenant_for_recover),
+       K_(source_tenant_id));
   return pos;
 }
 
@@ -1211,7 +1216,8 @@ OB_SERIALIZE_MEMBER((ObCreateTenantArg, ObDDLArg),
                     recovery_until_scn_,
                     is_creating_standby_,
                     log_restore_source_,
-                    is_tmp_tenant_for_recover_);
+                    is_tmp_tenant_for_recover_,
+                    source_tenant_id_);
 
 bool ObCreateTenantEndArg::is_valid() const
 {
@@ -5479,6 +5485,117 @@ int ObAlterTriggerArg::assign(const ObAlterTriggerArg &other)
 
 OB_SERIALIZE_MEMBER((ObAlterTriggerArg, ObDDLArg), trigger_database_,
                     trigger_info_, trigger_infos_, is_set_status_, is_alter_compile_);
+
+bool ObNotifyTenantSnapshotSchedulerArg::is_valid() const
+{
+  return is_user_tenant(tenant_id_);
+}
+
+int ObNotifyTenantSnapshotSchedulerArg::assign(const ObNotifyTenantSnapshotSchedulerArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    tenant_id_ = other.tenant_id_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObNotifyTenantSnapshotSchedulerArg, tenant_id_);
+
+bool ObFlushLSArchiveArg::is_valid() const
+{
+  return tenant_id_ != OB_INVALID_TENANT_ID;
+}
+
+int ObFlushLSArchiveArg::assign(const ObFlushLSArchiveArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    tenant_id_ = other.tenant_id_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObFlushLSArchiveArg, tenant_id_);
+
+int ObNotifyTenantSnapshotSchedulerResult::assign(const ObNotifyTenantSnapshotSchedulerResult &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    ret_ = other.ret_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObNotifyTenantSnapshotSchedulerResult, ret_);
+
+bool ObInnerCreateTenantSnapshotArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_ && tenant_snapshot_id_.is_valid();
+}
+
+int ObInnerCreateTenantSnapshotArg::assign(const ObInnerCreateTenantSnapshotArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    tenant_id_ = other.tenant_id_;
+    tenant_snapshot_id_ = other.tenant_snapshot_id_;
+  }
+  return ret;
+}
+OB_SERIALIZE_MEMBER(ObInnerCreateTenantSnapshotArg, tenant_id_, tenant_snapshot_id_);
+
+bool ObInnerCreateTenantSnapshotResult::is_valid() const
+{
+  return true;
+}
+
+int ObInnerCreateTenantSnapshotResult::assign(const ObInnerCreateTenantSnapshotResult &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    ret_ = other.ret_;
+  }
+  return ret;
+}
+OB_SERIALIZE_MEMBER(ObInnerCreateTenantSnapshotResult, ret_);
+
+bool ObInnerDropTenantSnapshotArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_ && tenant_snapshot_id_.is_valid();
+}
+
+int ObInnerDropTenantSnapshotArg::assign(const ObInnerDropTenantSnapshotArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    tenant_id_ = other.tenant_id_;
+    tenant_snapshot_id_ = other.tenant_snapshot_id_;
+  }
+  return ret;
+}
+OB_SERIALIZE_MEMBER(ObInnerDropTenantSnapshotArg, tenant_id_, tenant_snapshot_id_);
+
+bool ObInnerDropTenantSnapshotResult::is_valid() const
+{
+  return true;
+}
+
+int ObInnerDropTenantSnapshotResult::assign(const ObInnerDropTenantSnapshotResult &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    ret_ = other.ret_;
+  }
+  return ret;
+}
+OB_SERIALIZE_MEMBER(ObInnerDropTenantSnapshotResult, ret_);
 
 bool ObCreateUDTArg::is_valid() const
 {
@@ -9974,9 +10091,85 @@ int ObAdminUnlockMemberListOpArg::set(
   }
   return ret;
 }
-
 OB_SERIALIZE_MEMBER(ObAdminUnlockMemberListOpArg, tenant_id_, ls_id_, lock_id_);
 
+int ObCloneResourcePoolArg::init(
+    const ObString &pool_name,
+    const ObString &unit_config_name,
+    const uint64_t source_tenant_id,
+    const uint64_t resource_pool_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(pool_name.length() > MAX_RESOURCE_POOL_LENGTH)
+      || OB_UNLIKELY(unit_config_name.length() > MAX_UNIT_CONFIG_LENGTH)
+      || OB_UNLIKELY(OB_INVALID_TENANT_ID == source_tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(pool_name), K(unit_config_name), K(source_tenant_id));
+  } else if (OB_FAIL(pool_name_.assign(pool_name))) {
+    LOG_WARN("fail to assign resource pool name", KR(ret), K(pool_name));
+  } else if (OB_FAIL(unit_config_name_.assign(unit_config_name))) {
+    LOG_WARN("fail to assign unit config name", KR(ret), K(unit_config_name));
+  } else {
+    source_tenant_id_ = source_tenant_id;
+    resource_pool_id_ = resource_pool_id;
+  }
+  return ret;
+}
+
+int ObCloneResourcePoolArg::assign(const ObCloneResourcePoolArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(pool_name_.assign(other.pool_name_))) {
+    LOG_WARN("fail to assign resource pool name", KR(ret), K(other));
+  } else if (OB_FAIL(unit_config_name_.assign(other.unit_config_name_))) {
+    LOG_WARN("fail to assign unit config name", KR(ret), K(other));
+  } else {
+    source_tenant_id_ = other.source_tenant_id_;
+    resource_pool_id_ = other.resource_pool_id_;
+  }
+  return ret;
+}
+
+DEF_TO_STRING(ObCloneResourcePoolArg)
+{
+  int64_t pos = 0;
+  J_KV(K_(pool_name),
+       K_(unit_config_name),
+       K_(source_tenant_id),
+       K_(resource_pool_id));
+  return pos;
+}
+
+OB_SERIALIZE_MEMBER((ObCloneResourcePoolArg, ObDDLArg),
+                    pool_name_,
+                    unit_config_name_,
+                    source_tenant_id_,
+                    resource_pool_id_);
+
+bool ObCloneTenantArg::is_valid() const
+{
+  return !new_tenant_name_.is_empty()
+         && !source_tenant_name_.is_empty()
+         && !resource_pool_name_.is_empty()
+         && !unit_config_name_.is_empty();
+}
+
+int ObCloneTenantArg::assign(const ObCloneTenantArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(new_tenant_name_.assign(other.new_tenant_name_))) {
+    LOG_WARN("fail to assign", KR(ret), K(other.new_tenant_name_));
+  } else if (OB_FAIL(source_tenant_name_.assign(other.source_tenant_name_))) {
+    LOG_WARN("fail to assign", KR(ret), K(other.source_tenant_name_));
+  } else if (OB_FAIL(tenant_snapshot_name_.assign(other.tenant_snapshot_name_))) {
+    LOG_WARN("fail to assign", KR(ret), K(other.tenant_snapshot_name_));
+  } else if (OB_FAIL(resource_pool_name_.assign(other.resource_pool_name_))) {
+    LOG_WARN("fail to assign", KR(ret), K(other.resource_pool_name_));
+  } else if (OB_FAIL(unit_config_name_.assign(other.unit_config_name_))) {
+    LOG_WARN("fail to assign", KR(ret), K(other.unit_config_name_));
+  }
+  return ret;
+}
 ObTabletLocationSendArg::ObTabletLocationSendArg()
   : tasks_()
 {
@@ -9997,6 +10190,43 @@ int ObTabletLocationSendArg::assign(const ObTabletLocationSendArg &other)
   return ret;
 }
 
+int ObCloneTenantArg::init(const ObString &new_tenant_name,
+                           const ObString &source_tenant_name,
+                           const ObString &tenant_snapshot_name,
+                           const ObString &resource_pool_name,
+                           const ObString &unit_config_name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(new_tenant_name.empty()
+                  || new_tenant_name.length() > OB_MAX_TENANT_NAME_LENGTH)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(new_tenant_name));
+  } else if (OB_UNLIKELY(source_tenant_name.empty()
+                         || source_tenant_name.length() > OB_MAX_TENANT_NAME_LENGTH)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(source_tenant_name));
+  } else if (OB_UNLIKELY(resource_pool_name.empty()
+                         || resource_pool_name.length() > MAX_RESOURCE_POOL_LENGTH)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(resource_pool_name));
+  } else if (OB_UNLIKELY(unit_config_name.empty()
+                         || unit_config_name.length() > MAX_UNIT_CONFIG_LENGTH)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(unit_config_name));
+  } else if (OB_FAIL(new_tenant_name_.assign(new_tenant_name))) {
+    LOG_WARN("fail to assign", KR(ret), K(new_tenant_name));
+  } else if (OB_FAIL(source_tenant_name_.assign(source_tenant_name))) {
+    LOG_WARN("fail to assign", KR(ret), K(source_tenant_name));
+  } else if (OB_FAIL(tenant_snapshot_name_.assign(tenant_snapshot_name))) {
+    LOG_WARN("fail to assign", KR(ret), K(tenant_snapshot_name));
+  } else if (OB_FAIL(resource_pool_name_.assign(resource_pool_name))) {
+    LOG_WARN("fail to assign", KR(ret), K(resource_pool_name));
+  } else if (OB_FAIL(unit_config_name_.assign(unit_config_name))) {
+    LOG_WARN("fail to assign", KR(ret), K(unit_config_name));
+  }
+  return ret;
+}
+
 int ObTabletLocationSendArg::set(
     const ObIArray<share::ObTabletLocationBroadcastTask> &tasks)
 {
@@ -10010,6 +10240,53 @@ int ObTabletLocationSendArg::set(
   return ret;
 }
 
+OB_SERIALIZE_MEMBER((ObCloneTenantArg, ObCmdArg), new_tenant_name_, source_tenant_name_, tenant_snapshot_name_, resource_pool_name_, unit_config_name_);
+
+int ObCloneTenantRes::assign(const ObCloneTenantRes &other)
+{
+  int ret = OB_SUCCESS;
+  job_id_ = other.job_id_;
+  return ret;
+}
+
+void ObCloneTenantRes::reset()
+{
+  job_id_ = OB_INVALID_ID;
+}
+
+OB_SERIALIZE_MEMBER(ObCloneTenantRes, job_id_);
+
+bool ObNotifyCloneSchedulerArg::is_valid() const
+{
+  return is_sys_tenant(tenant_id_);
+}
+
+int ObNotifyCloneSchedulerArg::assign(const ObNotifyCloneSchedulerArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    tenant_id_ = other.tenant_id_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObNotifyCloneSchedulerArg, tenant_id_);
+
+bool ObNotifyCloneSchedulerResult::is_valid() const
+{
+  return true;
+}
+
+int ObNotifyCloneSchedulerResult::assign(const ObNotifyCloneSchedulerResult &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    ret_ = other.ret_;
+  }
+  return ret;
+}
 bool ObTabletLocationSendArg::is_valid() const
 {
   return !tasks_.empty();
@@ -10038,6 +10315,46 @@ int ObTabletLocationSendResult::assign(const ObTabletLocationSendResult &other)
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObNotifyCloneSchedulerResult, ret_);
+
+int ObCloneKeyArg::assign(const ObCloneKeyArg &other)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = other.tenant_id_;
+  source_tenant_id_ = other.source_tenant_id_;
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObCloneKeyArg, tenant_id_, source_tenant_id_);
+
+int ObCloneKeyResult::assign(const ObCloneKeyResult &other)
+{
+  int ret = OB_SUCCESS;
+  ret_ = other.ret_;
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObCloneKeyResult, ret_);
+
+int ObTrimKeyListArg::assign(const ObTrimKeyListArg &other)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = other.tenant_id_;
+  latest_master_key_id_ = other.latest_master_key_id_;
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObTrimKeyListArg, tenant_id_, latest_master_key_id_);
+
+int ObTrimKeyListResult::assign(const ObTrimKeyListResult &other)
+{
+  int ret = OB_SUCCESS;
+  ret_ = other.ret_;
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObTrimKeyListResult, ret_);
+
 void ObTabletLocationSendResult::reset()
 {
   ret_ = common::OB_ERROR;
@@ -10065,4 +10382,4 @@ int ObCancelGatherStatsArg::assign(const ObCancelGatherStatsArg &other)
 OB_SERIALIZE_MEMBER(ObCancelGatherStatsArg, tenant_id_, task_id_);
 
 }//end namespace obrpc
-}//end namepsace oceanbase
+}//end namespace oceanbase

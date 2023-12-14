@@ -234,6 +234,10 @@ int log_base_type_to_string(const ObLogBaseType log_type,
     strncpy(str ,"WORKLOAD_REPOSITORY_SERVICE", str_len);
   } else if (log_type == TTL_LOG_BASE_TYPE) {
     strncpy(str ,"TTL_SERVICE", str_len);
+  } else if (log_type == SNAPSHOT_SCHEDULER_LOG_BASE_TYPE) {
+    strncpy(str ,"SNAPSHOT_SCHEDULER", str_len);
+  } else if (log_type == CLONE_SCHEDULER_LOG_BASE_TYPE) {
+    strncpy(str ,"CLONE_SCHEDULER", str_len);
   } else if (log_type == TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE) {
     strncpy(str ,"TABLE_LOAD_RESOURCE_SERVICE", str_len);
   } else if (log_type == MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE) {

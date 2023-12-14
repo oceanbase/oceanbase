@@ -78,6 +78,12 @@ public:
   static int check_compat_version_for_arbitration_service(
       const uint64_t tenant_id,
       bool &is_compatible);
+  // data version must up to 4.3 with clone tenant
+  // params[in]  tenant_id, which tenant to check
+  // params[out] is_compatible, whether it is up to 4.3
+  static int check_compat_version_for_clone_tenant(
+      const uint64_t tenant_id,
+      bool &is_compatible);
   // generate the count of arb replica of a log stream
   // @params[in]  tenant_id, which tenant to check
   // @params[in]  ls_id, which log stream to check

@@ -46,6 +46,7 @@
 #include "sql/plan_cache/ob_plan_cache.h"
 #include "sql/plan_cache/ob_ps_cache.h"
 #include "share/table/ob_ttl_util.h"
+#include "rootserver/restore/ob_tenant_clone_util.h"
 namespace oceanbase
 {
 using namespace common;
@@ -2696,6 +2697,53 @@ int ObResetConfigExecutor::execute(ObExecContext &ctx, ObResetConfigStmt &stmt)
   } else if (OB_FAIL(common_rpc->admin_set_config(stmt.get_rpc_arg()))) {
     LOG_WARN("set config rpc failed", K(ret), "rpc_arg", stmt.get_rpc_arg());
   }
+  return ret;
+}
+
+int ObCancelCloneExecutor::execute(ObExecContext &ctx, ObCancelCloneStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  ObTaskExecutorCtx *task_exec_ctx = NULL;
+  common::ObMySQLProxy *sql_proxy = nullptr;
+  const ObString &clone_tenant_name = stmt.get_clone_tenant_name();
+  bool clone_already_finish = false;
+
+  if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("get task executor context failed", KR(ret));
+  } else if (OB_ISNULL(sql_proxy = ctx.get_sql_proxy())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy must not be null", KR(ret));
+  } else {
+    ObSchemaGetterGuard guard;
+    const ObTenantSchema *tenant_schema = nullptr;
+    if (OB_FAIL(GSCHEMASERVICE.get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+      LOG_WARN("failed to get sys tenant schema guard", KR(ret));
+    } else if (OB_FAIL(guard.get_tenant_info(clone_tenant_name, tenant_schema))) {
+      LOG_WARN("failed to get tenant info", KR(ret), K(stmt));
+    } else if (OB_ISNULL(tenant_schema)) {
+      LOG_INFO("tenant not exist", KR(ret), K(clone_tenant_name));
+    } else if (tenant_schema->is_normal()) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("the new tenant has completed the cloning operation", KR(ret), K(clone_tenant_name));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "The new tenant has completed the cloning operation, "
+                                      "or this is not the name of a cloning tenant. "
+                                      "Cancel cloning");
+    }
+  }
+
+  if (FAILEDx(rootserver::ObTenantCloneUtil::cancel_clone_job(*sql_proxy,
+                                                              clone_tenant_name,
+                                                              clone_already_finish))) {
+    LOG_WARN("cancel clone job failed", KR(ret), K(clone_tenant_name));
+  } else if (clone_already_finish) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("the new tenant has completed the cloning operation", KR(ret), K(clone_tenant_name));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "The new tenant has completed the cloning operation, "
+                                     "or this is not the name of a cloning tenant. "
+                                     "Cancel cloning");
+  }
+
   return ret;
 }
 

@@ -31,14 +31,20 @@
 #include "share/ob_share_util.h"                     // for ObShareUtil
 #include "lib/lock/ob_tc_rwlock.h"                   // for common::RWLock
 #include "rootserver/ob_disaster_recovery_task.h"
+#include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h" // for ObTenantSnapshotUtil
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/ob_all_server_tracer.h"
+#include "storage/tablelock/ob_lock_inner_connection_util.h" // for ObInnerConnectionLockUtil
+#include "observer/ob_inner_sql_connection.h"
 
 namespace oceanbase
 {
 using namespace common;
 using namespace lib;
 using namespace obrpc;
+using namespace transaction::tablelock;
+using namespace share;
+
 namespace rootserver
 {
 ObDRTaskQueue::ObDRTaskQueue() : inited_(false),
@@ -1196,27 +1202,54 @@ int ObDRTaskMgr::load_task_info_(
 }
 
 int ObDRTaskMgr::persist_task_info_(
-    const ObDRTask &task)
+    const ObDRTask &task,
+    ObDRTaskRetComment &ret_comment)
 {
   int ret = OB_SUCCESS;
+  ret_comment = ObDRTaskRetComment::MAX;
   share::ObDMLSqlSplicer dml;
   ObSqlString sql;
   int64_t affected_rows = 0;
   const uint64_t sql_tenant_id = gen_meta_tenant_id(task.get_tenant_id());
+  ObMySQLTransaction trans;
+  const int64_t timeout = GCONF.internal_sql_execute_timeout;
+  observer::ObInnerSQLConnection *conn = NULL;
+  ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::MODIFY_REPLICA);
+
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
   } else if (OB_ISNULL(sql_proxy_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret));
+  } else if (OB_FAIL(trans.start(sql_proxy_, sql_tenant_id))) {
+    LOG_WARN("failed to start trans", KR(ret), K(sql_tenant_id));
   } else if (OB_FAIL(task.fill_dml_splicer(dml))) {
     LOG_WARN("fill dml splicer failed", KR(ret));
   } else if (OB_FAIL(dml.splice_insert_sql(share::OB_ALL_LS_REPLICA_TASK_TNAME, sql))) {
     LOG_WARN("fail to splice batch insert update sql", KR(ret), K(sql));
-  } else if (OB_FAIL(sql_proxy_->write(sql_tenant_id, sql.ptr(), affected_rows))) {
+  } else if (OB_ISNULL(conn = static_cast<observer::ObInnerSQLConnection *>(trans.get_connection()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("conn_ is NULL", KR(ret));
+  } else if (OB_FAIL(ObInnerConnectionLockUtil::lock_table(sql_tenant_id,
+                                                           OB_ALL_LS_REPLICA_TASK_TID,
+                                                           EXCLUSIVE,
+                                                           timeout,
+                                                           conn))) {
+    LOG_WARN("lock dest table failed", KR(ret), K(sql_tenant_id));
+  } else if (OB_FAIL(ObTenantSnapshotUtil::check_tenant_not_in_cloning_procedure(task.get_tenant_id(), case_to_check))) {
+    LOG_WARN("fail to check whether tenant is in cloning procedure", KR(ret));
+    ret_comment = CANNOT_PERSIST_TASK_DUE_TO_CLONE_CONFLICT;
+  } else if (OB_FAIL(trans.write(sql_tenant_id, sql.ptr(), affected_rows))) {
     LOG_WARN("execute sql failed", KR(ret), "tenant_id",task.get_tenant_id(), K(sql_tenant_id), K(sql));
-  } else {
-    FLOG_INFO("[DRTASK_NOTICE] persist task into inner table succeed", K(task));
   }
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("trans end failed", KR(tmp_ret), KR(ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
+  }
+  FLOG_INFO("[DRTASK_NOTICE] finish persist task into inner table", KR(ret), K(task));
   return ret;
 }
 
@@ -1425,7 +1458,7 @@ int ObDRTaskMgr::execute_task(
   ObDRTaskRetComment ret_comment = ObDRTaskRetComment::MAX;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
-  } else if (OB_FAIL(persist_task_info_(task))) {
+  } else if (OB_FAIL(persist_task_info_(task, ret_comment))) {
     LOG_WARN("fail to persist task info into table", KR(ret));
   } else if (OB_FAIL(task_executor_->execute(task, dummy_ret, ret_comment))) {
     LOG_WARN("fail to execute disaster recovery task", KR(ret));

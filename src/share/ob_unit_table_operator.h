@@ -41,7 +41,8 @@ public:
   virtual int get_units(const common::ObIArray<uint64_t> &pool_ids,
                         common::ObIArray<ObUnit> &units) const;
   virtual int update_unit(common::ObISQLClient &client,
-                          const ObUnit &unit);
+                          const ObUnit &unit,
+                          const bool need_check_conflict_with_clone);
   virtual int remove_units(common::ObISQLClient &client,
                            const uint64_t resource_pool_id);
   virtual int remove_unit(common::ObISQLClient &client,
@@ -60,7 +61,8 @@ public:
                         const bool select_for_update,
                         ObResourcePool &resource_pool) const;
   virtual int update_resource_pool(common::ObISQLClient &client,
-                                   const ObResourcePool &resource_pool);
+                                   const ObResourcePool &resource_pool,
+                                   const bool need_check_conflict_with_clone);
   virtual int remove_resource_pool(common::ObISQLClient &client,
                                    const uint64_t resource_pool_id);
 
@@ -86,13 +88,13 @@ public:
 
 
   virtual int get_unit_stats(common::ObIArray<ObUnitStat> &unit_stats) const;
+  static int read_unit(const common::sqlclient::ObMySQLResult &result, ObUnit &unit);
 private:
   static int zone_list2str(const common::ObIArray<common::ObZone> &zone_list,
                            char *str, const int64_t buf_size);
   static int str2zone_list(const char *str,
                            common::ObIArray<common::ObZone> &zone_list);
 
-  int read_unit(const common::sqlclient::ObMySQLResult &result, ObUnit &unit) const;
   int read_units(common::ObSqlString &sql,
                  common::ObIArray<ObUnit> &units) const;
   int read_unit_config(const common::sqlclient::ObMySQLResult &result,

@@ -262,7 +262,7 @@ END_P SET_VAR DELIMITER
         BADFILE
 
         CACHE CALIBRATION CALIBRATION_INFO CANCEL CASCADED CAST CATALOG_NAME CHAIN CHANGED CHARSET CHECKSUM CHECKPOINT CHUNK CIPHER
-        CLASS_ORIGIN CLEAN CLEAR CLIENT CLOG CLOSE CLUSTER CLUSTER_ID CLUSTER_NAME COALESCE COLUMN_STAT
+        CLASS_ORIGIN CLEAN CLEAR CLIENT CLONE CLOG CLOSE CLUSTER CLUSTER_ID CLUSTER_NAME COALESCE COLUMN_STAT
         CODE COLLATION COLUMN_FORMAT COLUMN_NAME COLUMNS COMMENT COMMIT COMMITTED COMPACT COMPLETION
         COMPRESSED COMPRESSION COMPUTE CONCURRENT CONDENSED CONNECTION CONSISTENT CONSISTENT_MODE CONSTRAINT_CATALOG
         CONSTRAINT_NAME CONSTRAINT_SCHEMA CONTAINS CONTEXT CONTRIBUTORS COPY COUNT CPU CREATE_TIMESTAMP
@@ -326,7 +326,7 @@ END_P SET_VAR DELIMITER
 
         REBUILD RECOVER RECOVERY_WINDOW RECYCLE REDO_BUFFER_SIZE REDOFILE REDUNDANCY REDUNDANT REFRESH REGION RELAY RELAYLOG
         RELAY_LOG_FILE RELAY_LOG_POS RELAY_THREAD RELOAD REMAP REMOVE REORGANIZE REPAIR REPEATABLE REPLICA
-        REPLICA_NUM REPLICA_TYPE REPLICATION REPORT RESET RESOURCE RESOURCE_POOL_LIST RESPECT RESTART
+        REPLICA_NUM REPLICA_TYPE REPLICATION REPORT RESET RESOURCE RESOURCE_POOL RESOURCE_POOL_LIST RESPECT RESTART
         RESTORE RESUME RETURNED_SQLSTATE RETURNS RETURNING REVERSE ROLLBACK ROLLUP ROOT
         ROOTTABLE ROOTSERVICE ROOTSERVICE_LIST ROUTINE ROW ROLLING ROW_COUNT ROW_FORMAT ROWS RTREE RUN
         RECYCLEBIN ROTATE ROW_NUMBER RUDUNDANT RECURSIVE RANDOM REDO_TRANSPORT_OPTIONS REMOTE_OSS RT
@@ -522,6 +522,7 @@ END_P SET_VAR DELIMITER
 %type <node> json_table_ordinality_column_def json_table_exists_column_def json_table_value_column_def json_table_nested_column_def
 %type <node> opt_value_on_empty_or_error_or_mismatch opt_on_mismatch
 %type <node> table_values_caluse table_values_caluse_with_order_by_and_limit values_row_list row_value
+%type <node> create_tenant_snapshot_stmt snapshot_name drop_tenant_snapshot_stmt clone_tenant_stmt clone_snapshot_option clone_tenant_option clone_tenant_option_list
 
 %type <node> ttl_definition ttl_expr ttl_unit
 %start sql_stmt
@@ -689,6 +690,9 @@ stmt:
   | method_opt              { $$ = $1; check_question_mark($$, result); }
   | switchover_tenant_stmt   { $$ = $1; check_question_mark($$, result); }
   | recover_tenant_stmt   { $$ = $1; check_question_mark($$, result); }
+  | create_tenant_snapshot_stmt   { $$ = $1; check_question_mark($$, result); }
+  | drop_tenant_snapshot_stmt   { $$ = $1; check_question_mark($$, result); }
+  | clone_tenant_stmt   { $$ = $1; check_question_mark($$, result); }
   ;
 
 /*****************************************************************************
@@ -3984,6 +3988,88 @@ ALTER TENANT relation_name opt_set opt_tenant_option_list opt_global_sys_vars_se
   malloc_non_terminal_node($$, result->malloc_pool_, T_LOCK_TENANT, 2,
                            $3,                   /* tenant name */
                            $4);                  /* lock opt */
+}
+;
+
+create_tenant_snapshot_stmt:
+CREATE SNAPSHOT snapshot_name FOR TENANT relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TENANT_SNAPSHOT, 2,
+                           $3,                   /* snapshot name */
+                           $6);                  /* tenant name */
+}
+| CREATE SNAPSHOT snapshot_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TENANT_SNAPSHOT, 2,
+                           $3,                   /* snapshot name */
+                           NULL);
+}
+;
+
+snapshot_name:
+relation_name
+{ $$ = $1; }
+| /* EMPTY */
+{ $$ = NULL; }
+;
+
+drop_tenant_snapshot_stmt:
+DROP SNAPSHOT relation_name FOR TENANT relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_TENANT_SNAPSHOT, 2,
+                           $3,                   /* snapshot name */
+                           $6);                  /* tenant name */
+}
+| DROP SNAPSHOT relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_TENANT_SNAPSHOT, 2,
+                           $3,                   /* snapshot name */
+                           NULL);
+}
+;
+
+clone_tenant_stmt:
+create_with_opt_hint TENANT opt_if_not_exists relation_name FROM relation_name
+clone_snapshot_option WITH clone_tenant_option_list
+{
+  (void)($1);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CLONE_TENANT, 5,
+                           $3,                   /* if not exist */
+                           $4,                   /* cloned tenant name */
+                           $6,                   /* source tenant name */
+                           $7,                   /* tenant snapshot name */
+                           $9);                  /* clone option list */
+}
+;
+
+clone_snapshot_option:
+USING SNAPSHOT relation_name
+{
+  $$ = $3;
+}
+| /*EMPTY*/
+{
+  $$ = NULL;
+}
+;
+
+clone_tenant_option:
+RESOURCE_POOL opt_equal_mark relation_name_or_string
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RESOURCE_POOL_LIST, 1, $3);
+}
+| UNIT opt_equal_mark relation_name_or_string
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_UNIT, 1, $3);
+}
+;
+
+clone_tenant_option_list:
+clone_tenant_option ',' clone_tenant_option
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
 }
 ;
 
@@ -16207,6 +16293,10 @@ ALTER SYSTEM RESET alter_system_reset_parameter_actions
   merge_nodes($$, result, T_SYTEM_ACTION_LIST, $4);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_SYSTEM_RESET_PARAMETER, 1, $$);
 }
+| ALTER SYSTEM CANCEL CLONE relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CANCEL_CLONE, 1, $5);
+}
 ;
 
 opt_sql_throttle_for_priority:
@@ -18577,6 +18667,7 @@ ACCOUNT
 |       CLEAN
 |       CLEAR
 |       CLIENT
+|       CLONE
 |       CLOSE
 |       CLOG
 |       CLUSTER
@@ -19002,6 +19093,7 @@ ACCOUNT
 |       REPORT
 |       RESET
 |       RESOURCE
+|       RESOURCE_POOL
 |       RESOURCE_POOL_LIST
 |       RESPECT
 |       RESTART

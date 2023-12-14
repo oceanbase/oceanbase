@@ -85,6 +85,7 @@ public:
  bool is_standby() const { return tenant_role_.is_standby(); }
  bool is_primary() const { return tenant_role_.is_primary(); }
  bool is_restore() const { return tenant_role_.is_restore(); }
+ bool is_clone() const { return tenant_role_.is_clone(); }
 
  /**
   * @description:

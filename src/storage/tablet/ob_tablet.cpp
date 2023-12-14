@@ -1400,7 +1400,38 @@ int ObTablet::self_serialize(char *buf, const int64_t len, int64_t &pos) const
   return ret;
 }
 
-int ObTablet::rollback_ref_cnt(
+int ObTablet::release_ref_cnt(
+    common::ObArenaAllocator &allocator,
+    const char *buf,
+    const int64_t len,
+    int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(partial_deserialize(allocator, buf, len, pos))) {
+    LOG_WARN("fail to deserialize partial tablet", K(ret));
+  } else {
+    hold_ref_cnt_ = true;
+    dec_macro_ref_cnt();
+  }
+  return ret;
+}
+
+int ObTablet::inc_snapshot_ref_cnt(
+    common::ObArenaAllocator &allocator,
+    const char *buf,
+    const int64_t len,
+    int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(partial_deserialize(allocator, buf, len, pos))) {
+    LOG_WARN("fail to deserialize partial tablet", K(ret));
+  } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
+    LOG_WARN("fail to increase macro ref cnt", K(ret));
+  }
+  return ret;
+}
+
+int ObTablet::partial_deserialize(
     common::ObArenaAllocator &allocator,
     const char *buf,
     const int64_t len,
@@ -1438,14 +1469,11 @@ int ObTablet::rollback_ref_cnt(
   } else if (tablet_meta_.has_next_tablet_) {
     ObTablet next_tablet;
     next_tablet.set_tablet_addr(tablet_addr_);
-    if (OB_FAIL(next_tablet.rollback_ref_cnt(allocator, buf, len, new_pos))) {
+    if (OB_FAIL(next_tablet.partial_deserialize(allocator, buf, len, new_pos))) {
       LOG_WARN("fail to deserialize next tablet for rollback", K(ret), KP(buf), K(len), K(new_pos));
     }
   }
-
   if (OB_SUCC(ret)) {
-    hold_ref_cnt_ = true;
-    dec_macro_ref_cnt();
     pos = new_pos;
   }
   return ret;
@@ -3466,7 +3494,7 @@ int ObTablet::inner_get_all_sstables(ObTableStoreIterator &iter, const bool need
   return ret;
 }
 
-int ObTablet::get_sstables_size(int64_t &used_size, const bool ignore_shared_block) const
+int ObTablet::get_sstables_size(const bool ignore_shared_block, int64_t &used_size) const
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -3503,10 +3531,8 @@ int ObTablet::get_sstables_size(int64_t &used_size, const bool ignore_shared_blo
         used_size += sstable_meta_hdl.get_sstable_meta().get_total_macro_block_count() * sstable->get_macro_read_size();
       }
     }
-    if (OB_FAIL(ret)) {
-      // do nothing
-    } else if (tablet_meta_.has_next_tablet_ && OB_FAIL(
-        next_tablet_guard_.get_obj()->get_sstables_size(used_size, ignore_shared_block/*ignore shared block*/))) {
+    if (OB_SUCC(ret) && tablet_meta_.has_next_tablet_ && OB_FAIL(
+        next_tablet_guard_.get_obj()->get_sstables_size(ignore_shared_block, used_size))) {
       LOG_WARN("failed to get size of tablets on the list", K(ret), K(used_size));
     } else {
       used_size += mem_block_cnt * common::OB_DEFAULT_MACRO_BLOCK_SIZE;
@@ -3531,7 +3557,7 @@ int ObTablet::get_tablet_size(const bool ignore_shared_block, int64_t &meta_size
       if (!ignore_shared_block) {
         data_size += space_usage.shared_data_size_;
       }
-    } else if (OB_FAIL(get_sstables_size(data_size, ignore_shared_block))) {
+    } else if (OB_FAIL(get_sstables_size(ignore_shared_block, data_size))) {
       LOG_WARN("fail to get all sstables' size", K(ret), K(ignore_shared_block));
     }
   }

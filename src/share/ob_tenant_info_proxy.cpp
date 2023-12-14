@@ -29,10 +29,12 @@
 #include "common/ob_timeout_ctx.h"//ObTimeoutCtx
 #include "rootserver/ob_root_utils.h"//ObRootUtils
 #include "rootserver/ob_rs_event_history_table_operator.h" // ROOTSERVICE_EVENT_ADD
+#include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h" // ObTenantSnapshotUtil
 #include "share/restore/ob_log_restore_source_mgr.h"  // ObLogRestoreSourceMgr
 
 using namespace oceanbase;
 using namespace oceanbase::common;
+using namespace rootserver;
 namespace oceanbase
 {
 namespace share
@@ -592,6 +594,7 @@ int ObAllTenantInfoProxy::update_tenant_role(
   ObSqlString sql;
   int64_t affected_rows = 0;
   ObTimeoutCtx ctx;
+  ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::SWITCHOVER);
 
   if (OB_UNLIKELY(!is_user_tenant(tenant_id)
     || OB_INVALID_VERSION == old_switchover_epoch
@@ -604,6 +607,8 @@ int ObAllTenantInfoProxy::update_tenant_role(
   } else if (OB_ISNULL(proxy)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("proxy is null", KR(ret), KP(proxy));
+  } else if (OB_FAIL(ObTenantSnapshotUtil::check_tenant_not_in_cloning_procedure(tenant_id, case_to_check))) {
+    LOG_WARN("fail to check whether tenant is in cloning procedure", KR(ret), K(tenant_id));
   } else if (OB_FAIL(get_new_switchover_epoch_(old_switchover_epoch, old_status, new_status,
                                                new_switchover_ts))) {
     LOG_WARN("fail to get_new_switchover_epoch_", KR(ret), K(old_switchover_epoch), K(old_status),
@@ -770,6 +775,7 @@ int ObAllTenantInfoProxy::update_tenant_status(
   ObTimeoutCtx ctx;
   int64_t new_switchover_epoch = OB_INVALID_VERSION;
   ObLogRestoreSourceMgr restore_source_mgr;
+  ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::SWITCHOVER);
 
   if (OB_UNLIKELY(!is_user_tenant(tenant_id)
     || !new_role.is_valid()
@@ -785,6 +791,8 @@ int ObAllTenantInfoProxy::update_tenant_status(
     LOG_WARN("tenant_info is invalid", KR(ret), K(tenant_id), K(new_role), K(old_status),
                 K(new_status), K(sync_scn), K(replayable_scn), K(readable_scn), K(recovery_until_scn),
                 K(old_switchover_epoch));
+  } else if (OB_FAIL(ObTenantSnapshotUtil::check_tenant_not_in_cloning_procedure(tenant_id, case_to_check))) {
+    LOG_WARN("fail to check whether tenant is in cloning procedure", KR(ret), K(tenant_id));
   } else if (OB_FAIL(get_new_switchover_epoch_(old_switchover_epoch, old_status, new_status,
                                                new_switchover_epoch))) {
     LOG_WARN("fail to get_new_switchover_epoch_", KR(ret), K(old_switchover_epoch), K(old_status),

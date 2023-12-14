@@ -265,7 +265,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_without_disk)
   LOG_INFO("create_ls", K(arg), K(id_100));
   ASSERT_EQ(OB_SUCCESS, ls_svr->inner_create_ls_(arg.get_ls_id(),
                                                  migration_status,
-                                                 ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_NONE),
+                                                 ObLSRestoreStatus(ObLSRestoreStatus::NONE),
                                                  arg.get_create_scn(),
                                                  ls));
   ObLSLockGuard lock_ls(ls);
@@ -293,7 +293,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_disk)
   LOG_INFO("create_ls", K(arg), K(id_101));
   ASSERT_EQ(OB_SUCCESS, ls_svr->inner_create_ls_(arg.get_ls_id(),
                                                  migration_status,
-                                                 ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_NONE),
+                                                 ObLSRestoreStatus(ObLSRestoreStatus::NONE),
                                                  arg.get_create_scn(),
                                                  ls));
   const bool unused_allow_log_sync = true;
@@ -327,7 +327,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_inner_tablet)
   LOG_INFO("create_ls", K(arg), K(id_102));
   ASSERT_EQ(OB_SUCCESS, ls_svr->inner_create_ls_(arg.get_ls_id(),
                                                  migration_status,
-                                                 ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_NONE),
+                                                 ObLSRestoreStatus(ObLSRestoreStatus::NONE),
                                                  arg.get_create_scn(),
                                                  ls));
   const bool unused_allow_log_sync = true;
@@ -364,7 +364,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_commit_slog)
   LOG_INFO("create_ls", K(arg), K(id_103));
   ASSERT_EQ(OB_SUCCESS, ls_svr->inner_create_ls_(arg.get_ls_id(),
                                                  migration_status,
-                                                 ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_NONE),
+                                                 ObLSRestoreStatus(ObLSRestoreStatus::NONE),
                                                  arg.get_create_scn(),
                                                  ls));
   const bool unused_allow_log_sync = true;
@@ -447,7 +447,7 @@ TEST_F(ObLSBeforeRestartTest, create_rebuild_ls)
   LOG_INFO("create_ls", K(arg), K(id_105));
   ASSERT_EQ(OB_SUCCESS, ls_svr->inner_create_ls_(arg.get_ls_id(),
                                                  migration_status,
-                                                 ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_NONE),
+                                                 ObLSRestoreStatus(ObLSRestoreStatus::NONE),
                                                  arg.get_create_scn(),
                                                  ls));
   const bool unused_allow_log_sync = true;

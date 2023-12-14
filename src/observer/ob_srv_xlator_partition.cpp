@@ -101,6 +101,8 @@ void oceanbase::observer::init_srv_xlator_for_partition(ObSrvRpcXlator *xlator) 
   RPC_PROCESSOR(ObGetMasterKeyP, gctx_);
   RPC_PROCESSOR(ObRestoreKeyP, gctx_);
   RPC_PROCESSOR(ObSetRootKeyP, gctx_);
+  RPC_PROCESSOR(ObCloneKeyP, gctx_);
+  RPC_PROCESSOR(ObTrimKeyListP, gctx_);
 #endif
   RPC_PROCESSOR(ObHandlePartTransCtxP, gctx_);
 #ifdef OB_BUILD_TDE_SECURITY

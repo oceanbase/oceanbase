@@ -120,6 +120,11 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
 #endif
     RPC_PROCESSOR(ObRpcDDLCheckTabletMergeStatusP, gctx_);
     RPC_PROCESSOR(ObRpcCreateDuplicateLSP, gctx_);
+    RPC_PROCESSOR(ObRpcNotifyTenantSnapshotSchedulerP, gctx_);
+    RPC_PROCESSOR(ObRpcInnerCreateTenantSnapshotP, gctx_);
+    RPC_PROCESSOR(ObRpcInnerDropTenantSnapshotP, gctx_);
+    RPC_PROCESSOR(ObRpcFlushLSArchiveP, gctx_);
+    RPC_PROCESSOR(ObRpcNotifyCloneSchedulerP, gctx_);
     RPC_PROCESSOR(ObRpcTabletMajorFreezeP, gctx_);
     RPC_PROCESSOR(ObCancelGatherStatsP, gctx_);
 }

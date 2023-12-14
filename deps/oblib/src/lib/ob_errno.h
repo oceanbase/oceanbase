@@ -400,6 +400,13 @@ constexpr int OB_RESTORE_TENANT_FAILED = -9099;
 constexpr int OB_S3_ERROR = -9105;
 constexpr int OB_ERR_XML_PARSE = -9549;
 constexpr int OB_ERR_XSLT_PARSE = -9574;
+constexpr int OB_TENANT_SNAPSHOT_NOT_EXIST = -12000;
+constexpr int OB_TENANT_SNAPSHOT_EXIST = -12001;
+constexpr int OB_TENANT_SNAPSHOT_TIMEOUT = -12002;
+constexpr int OB_CLONE_TENANT_TIMEOUT = -12003;
+constexpr int OB_ERR_CLONE_TENANT = -12004;
+constexpr int OB_ERR_TENANT_SNAPSHOT = -12005;
+constexpr int OB_TENANT_SNAPSHOT_LOCK_CONFLICT = -12006;
 constexpr int OB_MAX_RAISE_APPLICATION_ERROR         = -20000;
 constexpr int OB_MIN_RAISE_APPLICATION_ERROR         = -20999;
 

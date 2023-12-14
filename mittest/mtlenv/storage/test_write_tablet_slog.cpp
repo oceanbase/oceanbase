@@ -27,7 +27,7 @@
 #include "storage/init_basic_struct.h"
 #include "storage/test_tablet_helper.h"
 #include "storage/test_dml_common.h"
-#include "observer/ob_server_startup_task_handler.h"
+#include "storage/slog_ckpt/ob_tablet_replay_create_handler.h"
 
 #include "lib/oblog/ob_log.h"
 #include "share/ob_force_print_log.h"
@@ -52,7 +52,9 @@ public:
   blocksstable::ObLogFileSpec log_file_spec_;
   share::ObLSID ls_id_;
   common::ObArenaAllocator allocator_;
+  static observer::ObStartupAccelTaskHandler startup_accel_handler_;
 };
+observer::ObStartupAccelTaskHandler TestWriteTabletSlog::startup_accel_handler_;
 
 TestWriteTabletSlog::TestWriteTabletSlog()
   : ls_id_(TEST_LS_ID)
@@ -66,8 +68,8 @@ void TestWriteTabletSlog::SetUpTestCase()
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
-  ASSERT_EQ(OB_SUCCESS, SERVER_STARTUP_TASK_HANDLER.init());
-  ASSERT_EQ(OB_SUCCESS, SERVER_STARTUP_TASK_HANDLER.start());
+  ASSERT_EQ(OB_SUCCESS, startup_accel_handler_.init(observer::SERVER_ACCEL));
+  ASSERT_EQ(OB_SUCCESS, startup_accel_handler_.start());
 
   // create ls
   ObLSHandle ls_handle;
@@ -81,7 +83,7 @@ void TestWriteTabletSlog::TearDownTestCase()
   ret = MTL(ObLSService*)->remove_ls(ObLSID(TEST_LS_ID), false);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  SERVER_STARTUP_TASK_HANDLER.destroy();
+  startup_accel_handler_.destroy();
   MockTenantModuleEnv::get_instance().destroy();
 }
 
@@ -156,7 +158,9 @@ TEST_F(TestWriteTabletSlog, basic)
   ASSERT_EQ(OB_SUCCESS, log_replayer.register_redo_module(
       ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE, slog_handler));
   ASSERT_EQ(OB_SUCCESS, log_replayer.replay(replay_start_cursor, replay_finish_cursor, OB_SERVER_TENANT_ID));
-  ASSERT_EQ(OB_SUCCESS, slog_handler->concurrent_replay_load_tablets());
+  ObTabletReplayCreateHandler handler;
+  ASSERT_EQ(OB_SUCCESS, handler.init(slog_handler->replay_tablet_disk_addr_map_, ObTabletRepalyOperationType::REPLAY_CREATE_TABLET));
+  ASSERT_EQ(OB_SUCCESS, handler.concurrent_replay(&startup_accel_handler_));
 
   // check the result of replay
   ObTabletHandle replay_tablet_handle;

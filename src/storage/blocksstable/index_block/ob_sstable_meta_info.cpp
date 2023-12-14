@@ -1118,15 +1118,14 @@ int ObSSTableMacroInfo::write_block_ids(
     MacroBlockId &entry_id) const
 {
   int ret = OB_SUCCESS;
-  const bool need_disk_addr = false;
   const int64_t data_blk_cnt = data_ids.count();
   const int64_t other_blk_cnt = other_ids.count();
   if (OB_UNLIKELY(0 == data_blk_cnt && 0 == other_blk_cnt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data_blk_cnt and other_blk_cnt shouldn't be both 0", K(ret), K(data_blk_cnt),
         K(other_blk_cnt));
-  } else if (OB_FAIL(writer.init(need_disk_addr))) {
-    LOG_WARN("fail to initialize item writer", K(ret), K(need_disk_addr));
+  } else if (OB_FAIL(writer.init(false /*whether need addr*/))) {
+    LOG_WARN("fail to initialize item writer", K(ret));
   } else if (OB_FAIL(flush_ids(data_ids, writer))) {
     LOG_WARN("fail to flush data block ids", K(ret), K(data_blk_cnt));
   } else if (OB_FAIL(flush_ids(other_ids, writer))) {
