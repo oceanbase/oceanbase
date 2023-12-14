@@ -9136,6 +9136,7 @@ public:
            const int64_t sys_schema_version,
            const common::ObIArray<share::schema::ObTableSchema> &tables);
   int assign(const ObBatchBroadcastSchemaArg &other);
+  int deep_copy_tables(const common::ObIArray<share::schema::ObTableSchema> &tables);
   void reset();
   bool is_valid() const;
 
@@ -9147,6 +9148,8 @@ private:
   uint64_t tenant_id_;
   int64_t sys_schema_version_;
   common::ObSArray<share::schema::ObTableSchema> tables_;
+public:
+  common::ObArenaAllocator allocator_;
 };
 
 struct ObBatchBroadcastSchemaResult

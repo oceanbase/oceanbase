@@ -8846,7 +8846,8 @@ const ObLSInfo &ObDetectMasterRsLSResult::get_ls_info() const
 ObBatchBroadcastSchemaArg::ObBatchBroadcastSchemaArg()
   : tenant_id_(common::OB_INVALID_TENANT_ID),
     sys_schema_version_(common::OB_INVALID_VERSION),
-    tables_()
+    tables_(),
+    allocator_("BroadcastSchema", OB_MALLOC_MIDDLE_BLOCK_SIZE)
 {}
 
 ObBatchBroadcastSchemaArg::~ObBatchBroadcastSchemaArg()
@@ -8858,8 +8859,8 @@ int ObBatchBroadcastSchemaArg::init(
   const common::ObIArray<share::schema::ObTableSchema> &tables)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(tables_.assign(tables))) {
-    LOG_WARN("fail to assign tables", KR(ret), K(tenant_id), K(sys_schema_version));
+  if (OB_FAIL(deep_copy_tables(tables))) {
+    LOG_WARN("fail to assign tables", KR(ret), K(tables));
   } else {
     tenant_id_ = tenant_id;
     sys_schema_version_ = sys_schema_version;
@@ -8871,7 +8872,7 @@ int ObBatchBroadcastSchemaArg::assign(const ObBatchBroadcastSchemaArg &other)
 {
   int ret = OB_SUCCESS;
   if (this == &other) {
-  } else if (OB_FAIL(tables_.assign(other.tables_))) {
+  } else if (OB_FAIL(deep_copy_tables(other.tables_))) {
     LOG_WARN("fail to assign tables", KR(ret), K(other));
   } else {
     tenant_id_ = other.tenant_id_;
@@ -8880,6 +8881,21 @@ int ObBatchBroadcastSchemaArg::assign(const ObBatchBroadcastSchemaArg &other)
   return ret;
 }
 
+int ObBatchBroadcastSchemaArg::deep_copy_tables(const common::ObIArray<share::schema::ObTableSchema> &tables)
+{
+  int ret = OB_SUCCESS;
+  int64_t count = tables.count();
+  tables_.reset();
+  if (OB_FAIL(tables_.prepare_allocate_and_keep_count(count, &allocator_))) {
+    LOG_WARN("fail to prepare allocate table schemas", KR(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+    if (OB_FAIL(tables_.push_back(tables.at(i)))) {
+      LOG_WARN("fail to push back table schema", KR(ret));
+    }
+  }
+  return ret;
+}
 void ObBatchBroadcastSchemaArg::reset()
 {
   tenant_id_ = common::OB_INVALID_TENANT_ID;
