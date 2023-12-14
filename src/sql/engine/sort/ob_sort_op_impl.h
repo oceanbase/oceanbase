@@ -262,6 +262,11 @@ public:
         const ObChunkDatumStore::StoredRow *r,
         ObEvalCtx &eval_ctx);
 
+    bool operator()(
+        const ObChunkDatumStore::StoredRow *l,
+        const common::ObIArray<ObExpr*> *r,
+        ObEvalCtx &eval_ctx);
+
     int with_ties_cmp(const common::ObIArray<ObExpr*> *l,
                       const ObChunkDatumStore::StoredRow *r,
                       ObEvalCtx &eval_ctx);
@@ -436,6 +441,39 @@ protected:
     { get_extra_info().max_size_ = max_size; }
   };
 
+  class EagerInputFilter
+  {
+  public:
+    static const int64_t MAX_BUCKET_NUM = 100;
+    static const int64_t MIN_BUCKET_NUM = 10;
+    static constexpr double FILTER_MEM_RATIO  = 0.05; // limit the ratio of memory used
+
+    typedef common::ObBinaryHeap<ObChunkDatumStore::StoredRow *, Compare, MAX_BUCKET_NUM> BucketHeap;
+
+    EagerInputFilter();
+
+    int init(lib::MemoryContext &mem_context, Compare &comp);
+    void cal_hyper_params(const uint64_t rows_limit, const int64_t topn_cnt);
+    bool is_inited() const { return heap_ != NULL && per_bucket_num_ != 0 && bucket_num_ != 0; }
+    // filter single data
+    int filter(const common::ObIArray<ObExpr*> *exprs, Compare &comp, ObEvalCtx &eval_ctx, bool &ignore);
+    // filter batch data
+    int filter(const common::ObIArray<ObExpr*> *exprs, ObBitVector *skip, const int64_t batch_size,
+               const int64_t start_pos, Compare &comp, ObEvalCtx &eval_ctx, lib::MemoryContext &mem_context);
+    int update_filter(ObChunkDatumStore::StoredRow *new_row, lib::MemoryContext &mem_context,
+                      ObSqlMemMgrProcessor &sql_mem_processor, Compare &comp,
+                      int64_t &inmem_row_size, bool use_heap_sort);
+
+    void reset(lib::MemoryContext &mem_context);
+    void reuse(lib::MemoryContext &mem_context, ObSqlMemMgrProcessor &sql_mem_processor);
+    inline uint64_t per_bucket_num() { return per_bucket_num_; }
+
+  private:
+    BucketHeap *heap_;        // heap stored statistics info
+    uint64_t per_bucket_num_; // numb of rows in each bucket
+    uint64_t bucket_num_;     // num of buckets
+  };
+
   int get_next_row(const common::ObIArray<ObExpr*> &exprs, const ObChunkDatumStore::StoredRow *&sr)
   {
     int ret = common::OB_SUCCESS;
@@ -538,9 +576,19 @@ protected:
   int copy_to_row(const common::ObIArray<ObExpr*> &exprs,
                   ObIAllocator &alloc,
                   SortStoredRow *&row);
-  int generate_new_row(SortStoredRow *orign_row,
-                       ObIAllocator &alloc,
-                       SortStoredRow *&new_row);
+  // deep copy from orign_row to new_row
+  // expand it if new_row does not have enough memory
+  static int copy_to_row(ObChunkDatumStore::StoredRow *orign_row,
+                         ObIAllocator &alloc,
+                         SortStoredRow *&new_row,
+                         int64_t &inmem_row_size,
+                         ObSqlMemMgrProcessor &sql_mem_processor,
+                         int64_t extend_size);
+  static int generate_new_row(SortStoredRow *orign_row,
+                              ObIAllocator &alloc,
+                              SortStoredRow *&new_row,
+                              int64_t &inmem_row_size,
+                              ObSqlMemMgrProcessor &sql_mem_processor);
   int generate_last_ties_row(const ObChunkDatumStore::StoredRow *orign_row);
   int adjust_topn_read_rows(ObChunkDatumStore::StoredRow **stored_rows, int64_t &read_cnt);
 
@@ -607,6 +655,7 @@ protected:
   ObChunkDatumStore::StoredRow *last_ties_row_;
   common::ObIArray<ObChunkDatumStore::StoredRow *> *rows_;
   ObChunkDatumStore::IteratedBlockHolder blk_holder_;
+  EagerInputFilter topn_filter_;
 };
 
 class ObInMemoryTopnSortImpl;
