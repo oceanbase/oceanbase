@@ -596,6 +596,10 @@ private:
       ObObj &old_obj,
       ObLobLocatorV2 &delta_lob,
       ObObj &obj);
+  static int register_ext_info_commit_cb(
+      ObDMLRunningCtx &run_ctx,
+      ObObj &col_data,
+      ObObj &ext_info_data);
   static int set_lob_storage_params(
       ObDMLRunningCtx &run_ctx,
       const ObColDesc &column,

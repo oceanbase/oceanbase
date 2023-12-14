@@ -4259,17 +4259,35 @@ int ObLSTabletService::process_delta_lob(
         // update obj with new disk locator
         obj.set_lob_value(obj.get_type(), lob_param.lob_common_, lob_param.handle_size_);
         if (! lob_param.ext_info_log_.is_null()
-          && OB_FAIL(run_ctx.store_ctx_.mvcc_acc_ctx_.mem_ctx_->register_ext_info_commit_cb(
-            run_ctx.dml_param_.timeout_,
-            run_ctx.dml_flag_,
-            lob_param.tx_desc_,
-            lob_param.parent_seq_no_,
-            obj,
-            lob_param.ext_info_log_))) {
+          && OB_FAIL(register_ext_info_commit_cb(run_ctx, obj, lob_param.ext_info_log_))) {
           LOG_WARN("register_ext_info_commit_cb fail", K(ret), K(lob_param));
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObLSTabletService::register_ext_info_commit_cb(
+    ObDMLRunningCtx &run_ctx,
+    ObObj &col_data,
+    ObObj &ext_info_data)
+{
+  int ret = OB_SUCCESS;
+  memtable::ObMvccWriteGuard guard(false);
+  if (ext_info_data.is_null()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ext_info_log is null", K(ret), K(ext_info_data));
+  } else if (OB_FAIL(guard.write_auth(run_ctx.store_ctx_))) {
+    LOG_WARN("write_auth fail", K(ret), K(run_ctx.store_ctx_));
+  } else if (OB_FAIL(run_ctx.store_ctx_.mvcc_acc_ctx_.mem_ctx_->register_ext_info_commit_cb(
+      run_ctx.dml_param_.timeout_,
+      run_ctx.dml_flag_,
+      run_ctx.store_ctx_.mvcc_acc_ctx_.tx_desc_,
+      run_ctx.store_ctx_.mvcc_acc_ctx_.tx_scn_,
+      col_data,
+      ext_info_data))) {
+    LOG_WARN("register_ext_info_commit_cb fail", K(ret), K(run_ctx.store_ctx_), K(col_data), K(ext_info_data));
   }
   return ret;
 }
