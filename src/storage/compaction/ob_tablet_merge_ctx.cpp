@@ -156,24 +156,29 @@ int ObTabletMiniMergeCtx::update_tablet(
 void ObTabletMiniMergeCtx::try_schedule_compaction_after_mini(ObTabletHandle &tablet_handle)
 {
   int tmp_ret = OB_SUCCESS;
+  bool is_restore = false;
   bool create_meta_dag = false;
+  // when restoring, some log stream may be not ready,
+  // thus the inner sql in ObTenantFreezeInfoMgr::try_update_info may timeout
+  if (!MTL(ObTenantTabletScheduler *)->is_restore()) {
+    if (get_tablet_id().is_ls_inner_tablet() ||
+        0 == get_merge_info().get_sstable_merge_info().macro_block_count_) {
+      // do nothing
+    } else if (OB_TMP_FAIL(try_schedule_meta_merge(tablet_handle, create_meta_dag))) {
+      LOG_WARN_RET(tmp_ret, "failed to schedule meta merge", K(get_dag_param()));
+    }
 
-  if (get_tablet_id().is_ls_inner_tablet() ||
-      0 == get_merge_info().get_sstable_merge_info().macro_block_count_) {
-    // do nothing
-  } else if (OB_TMP_FAIL(try_schedule_meta_merge(tablet_handle, create_meta_dag))) {
-    LOG_WARN_RET(tmp_ret, "failed to schedule meta merge", K(get_dag_param()));
-  }
-
-  if (create_meta_dag || 0 == get_merge_info().get_sstable_merge_info().macro_block_count_) {
-    // no need to schedule minor merge
-  } else if (OB_TMP_FAIL(ObTenantTabletScheduler::schedule_tablet_minor_merge<ObTabletMergeExecuteDag>(
-      static_param_.ls_handle_, tablet_handle))) {
-    if (OB_SIZE_OVERFLOW != tmp_ret) {
-      LOG_WARN_RET(tmp_ret, "failed to schedule special tablet minor merge",
-          "ls_id", get_ls_id(), "tablet_id", get_tablet_id());
+    if (create_meta_dag || 0 == get_merge_info().get_sstable_merge_info().macro_block_count_) {
+      // no need to schedule minor merge
+    } else if (OB_TMP_FAIL(ObTenantTabletScheduler::schedule_tablet_minor_merge<ObTabletMergeExecuteDag>(
+        static_param_.ls_handle_, tablet_handle))) {
+      if (OB_SIZE_OVERFLOW != tmp_ret) {
+        LOG_WARN_RET(tmp_ret, "failed to schedule special tablet minor merge",
+            "ls_id", get_ls_id(), "tablet_id", get_tablet_id());
+      }
     }
   }
+
   time_guard_click(ObStorageCompactionTimeGuard::SCHEDULE_OTHER_COMPACTION);
 }
 

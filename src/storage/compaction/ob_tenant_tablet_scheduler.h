@@ -152,6 +152,7 @@ public:
   void stop_major_merge();
   void resume_major_merge();
   OB_INLINE bool could_major_merge_start() const { return ATOMIC_LOAD(&major_merge_status_); }
+  OB_INLINE bool is_restore() const { return ATOMIC_LOAD(&is_restore_); }
   // The transfer task sets the flag that prohibits the scheduling of medium when the log stream is src_ls of transfer
   int stop_tablets_schedule_medium(const ObIArray<ObTabletID> &tablet_ids, const ObProhibitScheduleMediumMap::ProhibitFlag &input_flag);
   int clear_tablets_prohibit_medium_flag(const ObIArray<ObTabletID> &tablet_ids, const ObProhibitScheduleMediumMap::ProhibitFlag &input_flag);
@@ -179,6 +180,7 @@ public:
   int gc_info();
   int set_max();
 
+  int refresh_tenant_status();
   // Schedule an async task to build bloomfilter for the given macro block.
   // The bloomfilter build task will be ignored if a same build task exists in the queue.
   int schedule_build_bloomfilter(
@@ -305,11 +307,13 @@ private:
   static const int64_t ADD_LOOP_EVENT_INTERVAL = 120 * 1000 * 1000L; // 120s
   static const int64_t PRINT_LOG_INVERVAL = 2 * 60 * 1000 * 1000L; // 2m
   static const int64_t WAIT_MEDIUM_CHECK_THRESHOLD = 10 * 60 * 1000 * 1000 * 1000L; // 10m
+  static const int64_t REFRESH_TENANT_STATUS_INTERVAL = 30 * 1000 * 1000L; // 30s
   static const int64_t MERGE_BACTH_FREEZE_CNT = 100L;
 private:
   bool is_inited_;
   bool major_merge_status_;
   bool is_stop_;
+  bool is_restore_;
   bool enable_adaptive_compaction_;
   bool enable_adaptive_merge_schedule_;
   common::ObDedupQueue bf_queue_;
