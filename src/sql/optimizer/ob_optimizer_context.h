@@ -269,6 +269,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline int64_t get_parallel() const { return parallel_; }
   inline int64_t get_max_parallel() const { return max_parallel_; }
   inline int64_t get_parallel_degree_limit(const int64_t server_cnt) const { return auto_dop_params_.get_parallel_degree_limit(server_cnt); }
+  inline int64_t get_session_parallel_degree_limit() const { return auto_dop_params_.parallel_degree_limit_; }
   inline int64_t get_parallel_min_scan_time_threshold() const { return auto_dop_params_.parallel_min_scan_time_threshold_; }
   inline bool force_disable_parallel() const  { return px_parallel_rule_ >= PL_UDF_DAS_FORCE_SERIALIZE
                                                         && px_parallel_rule_ < MAX_OPTION; }
