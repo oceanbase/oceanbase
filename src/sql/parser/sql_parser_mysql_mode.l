@@ -95,10 +95,8 @@ mysql_compatible_comment_with_version \/\*\![0-9]{5}
 mysql_compatible_comment_without_version \/\*\!
 mysql_compatible_comment_end \*\/
 
-rowidPattern  (WITH{whitespace}ROWID)
 
 %%
-{rowidPattern}                { REPUT_TOKEN_NEG_SIGN(WITH_ROWID); }
 INTERVAL { 
   ParseResult *p = (ParseResult *)yyextra;
   REPUT_NEG_SIGN(p); 

@@ -67,7 +67,8 @@ int ObTableCreator::add_create_tablets_of_local_aux_tables_arg(
     LOG_WARN("data_table_schema must be null, when table_schema is not local index", KR(ret));
   } else if (!data_table_schema->has_tablet() ||
       data_table_schema->is_index_table() ||
-      data_table_schema->is_aux_lob_table()) {
+      data_table_schema->is_aux_lob_table() ||
+      data_table_schema->is_mlog_table()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("data_table_schema must be data table", KR(ret), KPC(data_table_schema));
   }
@@ -76,7 +77,9 @@ int ObTableCreator::add_create_tablets_of_local_aux_tables_arg(
     if (OB_ISNULL(aux_schema)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("ptr is null", KR(ret), K(schemas));
-    } else if (!aux_schema->is_index_local_storage() && !aux_schema->is_aux_lob_table()) {
+    } else if (!aux_schema->is_index_local_storage()
+        && !aux_schema->is_aux_lob_table()
+        && !aux_schema->is_mlog_table()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("aux_schema must be local aux table", KR(ret), K(schemas), KPC(aux_schema));
     }
@@ -99,6 +102,8 @@ int ObTableCreator::add_create_bind_tablets_of_hidden_table_arg(
   if (OB_UNLIKELY(!orig_table_schema.has_tablet()
       || orig_table_schema.is_index_table()
       || hidden_table_schema.is_index_table()
+      || orig_table_schema.is_mlog_table()
+      || hidden_table_schema.is_mlog_table()
       || !hidden_table_schema.is_user_hidden_table())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("both orig and hidden table must be data table", K(ret), K(orig_table_schema), K(hidden_table_schema));
@@ -117,7 +122,10 @@ int ObTableCreator::add_create_tablets_of_table_arg(
 {
   int ret = OB_SUCCESS;
   ObSEArray<const share::schema::ObTableSchema*, 1> schemas;
-  if (!table_schema.has_tablet() || table_schema.is_index_local_storage() || table_schema.is_aux_lob_table()) {
+  if (!table_schema.has_tablet()
+      || table_schema.is_index_local_storage()
+      || table_schema.is_aux_lob_table()
+      || table_schema.is_mlog_table()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("table_schema must be data table or global indexes", KR(ret), K(table_schema));
   } else if (OB_FAIL(schemas.push_back(&table_schema))) {
@@ -140,12 +148,17 @@ int ObTableCreator::add_create_tablets_of_tables_arg(
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("ptr is null", KR(ret), K(schemas));
     } else if (0 == i) {
-      if (!table_schema->has_tablet() || table_schema->is_index_table() || table_schema->is_aux_lob_table()) {
+      if (!table_schema->has_tablet()
+          || table_schema->is_index_table()
+          || table_schema->is_aux_lob_table()
+          || table_schema->is_mlog_table()) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("data_table_schema must be data table", KR(ret), KPC(table_schema));
       }
     } else {
-      if (!table_schema->is_index_local_storage() && !table_schema->is_aux_lob_table()) {
+      if (!table_schema->is_index_local_storage()
+          && !table_schema->is_aux_lob_table()
+          && !table_schema->is_mlog_table()) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("table_schema must be local index", KR(ret), K(schemas), KPC(table_schema));
       }
@@ -181,7 +194,9 @@ int ObTableCreator::add_create_tablets_of_tables_arg_(
     common::ObArray<share::ObTabletTablePair> pairs;
     bool is_oracle_mode = false;
     bool is_create_bind_hidden_tablets = false;
-    if (table_schema.is_index_local_storage() || table_schema.is_aux_lob_table()) {
+    if (table_schema.is_index_local_storage()
+        || table_schema.is_aux_lob_table()
+        || table_schema.is_mlog_table()) {
       if (OB_ISNULL(data_table_schema)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("data_table_schema is NULL when create local_index", KR(ret));

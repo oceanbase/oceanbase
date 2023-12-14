@@ -90,7 +90,6 @@ bool ObTenantUtils::is_balance_target_schema(
 {
   return USER_TABLE == table_schema.get_table_type()
          || TMP_TABLE == table_schema.get_table_type()
-         || MATERIALIZED_VIEW == table_schema.get_table_type()
          || TMP_TABLE_ORA_SESS == table_schema.get_table_type()
          || TMP_TABLE_ORA_TRX == table_schema.get_table_type()
          || TMP_TABLE_ALL == table_schema.get_table_type()

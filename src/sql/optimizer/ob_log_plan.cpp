@@ -4401,12 +4401,8 @@ int ObLogPlan::store_index_column_ids(
     ret = OB_SCHEMA_ERROR;
     LOG_WARN("set index name error", K(ret), K(index_id), K(index_schema));
   } else {
-    if (index_schema->is_materialized_view()) {
-      index_name = index_schema->get_table_name_str();
-    } else {
-      if (OB_FAIL(index_schema->get_index_name(index_name))) {
-        LOG_WARN("fail to get index name", K(index_name), K(ret));
-      }
+    if (OB_FAIL(index_schema->get_index_name(index_name))) {
+      LOG_WARN("fail to get index name", K(index_name), KR(ret));
     }
   }
   if (OB_SUCC(ret)) {

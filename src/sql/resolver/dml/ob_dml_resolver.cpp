@@ -3284,6 +3284,9 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
       } else if (params_.is_from_create_view_ && table_schema->is_mysql_tmp_table()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "View/Table's column refers to a temporary table");
+      } else if (params_.is_from_create_mview_
+                 && OB_FAIL(check_is_table_supported_for_mview(*table_item, *table_schema))) {
+        LOG_WARN("failed to check is table supported for mview", K(ret));
       } else if (OB_FAIL(resolve_table_partition_expr(*table_item, *table_schema))) {
         LOG_WARN("resolve table partition expr failed", K(ret), K(table_name));
       } else if (OB_FAIL(resolve_generated_column_expr_temp(table_item))) {
@@ -3362,6 +3365,36 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
     }
   }
   LOG_DEBUG("finish resolve_basic_table", K(ret), KPC(table_item));
+  return ret;
+}
+
+int ObDMLResolver::check_is_table_supported_for_mview(const TableItem &table_item,
+                                                      const ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!table_item.synonym_name_.empty())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unsupported synonym in materialized view", K(ret), K(table_schema), K(table_item));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "synonym in materialized view is");
+  } else if (OB_UNLIKELY(!table_schema.is_user_table()
+                         || table_schema.mv_container_table())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unsupported table type in materialized view", K(ret), K(table_schema), K(table_item));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-user table in materialized view is");
+  }
+  return ret;
+}
+
+int ObDMLResolver::check_is_table_supported_for_mview(const ObItemType table_node_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(T_RELATION_FACTOR != table_node_type
+                  && T_SELECT != table_node_type
+                  && T_JOINED_TABLE != table_node_type)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unsupported table type in materialized view", K(ret), K(get_type_name(table_node_type)));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-user table in materialized view is");
+  }
   return ret;
 }
 
@@ -3603,6 +3636,8 @@ int ObDMLResolver::resolve_table(const ParseNode &parse_tree,
     if (!stmt->is_select_stmt() && OB_NOT_NULL(time_node)) {
       ret = OB_ERR_FLASHBACK_QUERY_WITH_UPDATE;
       LOG_WARN("snapshot expression not allowed here", K(ret));
+    } else if (params_.is_from_create_mview_ && OB_FAIL(check_is_table_supported_for_mview(table_node->type_))) {
+      LOG_WARN("failed to check is table supported for mview", K(ret));
     } else {
       switch (table_node->type_) {
       case T_RELATION_FACTOR: {
@@ -4815,7 +4850,6 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
           item->table_id_ = tschema->get_table_id();
           item->is_system_table_ = tschema->is_sys_table();
           item->is_view_table_ = tschema->is_view_table();
-          item->type_ = TableItem::BASE_TABLE;
           item->table_name_ = tschema->get_table_name_str();
           item->alias_name_ = tschema->get_table_name_str();
           item->ddl_schema_version_ = tschema->get_schema_version();
@@ -4830,7 +4864,6 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
             item->table_id_ = tab_schema->get_table_id();
             item->is_system_table_ = tab_schema->is_sys_table();
             item->is_view_table_ = tab_schema->is_view_table();
-            item->type_ = TableItem::BASE_TABLE;
             item->table_name_ = tab_schema->get_table_name_str();
             item->alias_name_ = tab_schema->get_table_name_str();
             item->ddl_schema_version_ = tschema->get_schema_version();
@@ -4871,9 +4904,14 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
         //feature: select * from index_name where... rewrite to select index_col1, index_col2... from data_table_name where...
         //the feature only use in mysqtest case, not open for user
         const ObTableSchema *tab_schema = NULL;
-        item->is_index_table_ = true;
+        item->is_index_table_ = tschema->is_index_table();
 
-        item->ref_id_ = tschema->get_table_id();
+        if (tschema->is_materialized_view()) {
+          item->ref_id_ = tschema->get_data_table_id();
+          item->table_type_ = tschema->get_table_type();
+        } else {
+          item->ref_id_ = tschema->get_table_id();
+        }
         item->table_id_ = generate_table_id();
         item->type_ = TableItem::ALIAS_TABLE;
         //主表schema
@@ -4881,7 +4919,19 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
           LOG_WARN("get data table schema failed", K(ret), K_(item->ref_id));
         } else {
           item->table_name_ = tab_schema->get_table_name_str(); //主表的名字
-          item->alias_name_ = tschema->get_table_name_str(); //将索引名作为主表的alias name
+          if (alias_name.length() == 0) {
+            if (tschema->is_materialized_view()) {
+              if (!synonym_name.empty()) {
+                item->alias_name_ = synonym_name; //mv可能有同义词，需要考虑同义词
+              } else {
+                item->alias_name_ = tschema->get_table_name_str(); //将mv作为主表的alias name
+              }
+            } else {
+              item->alias_name_ = tschema->get_table_name_str(); //将索引名作为主表的alias name
+            }
+          } else {
+            item->alias_name_ = alias_name;
+          }
           //如果是查索引表，需要将主表的依赖也要加入到plan中
           ObSchemaObjVersion table_version;
           table_version.object_id_ = tab_schema->get_table_id();
@@ -4981,6 +5031,10 @@ int ObDMLResolver::resolve_base_or_alias_table_item_dblink(uint64_t dblink_id,
   } else if (OB_FAIL(schema_checker_->get_link_table_schema(dblink_id, database_name,
                                                             table_name, table_schema, session_info_, dblink_name, is_reverse_link))) {
     LOG_WARN("get link table info failed", K(ret));
+  } else if (OB_UNLIKELY(params_.is_from_create_mview_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unsupported link table in materialized view", K(ret), K(dblink_name), K(table_name));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "unsupported link table in materialized view");
   } else {
     // common info.
     if (0 == alias_name.length()) {
@@ -5218,7 +5272,7 @@ int ObDMLResolver::resolve_table_partition_expr(const TableItem &table_item, con
   //resolve global index table partition expr
   if (OB_SUCC(ret)) {
     ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
-    if (OB_FAIL(table_schema.get_simple_index_infos(simple_index_infos, false))) {
+    if (OB_FAIL(table_schema.get_simple_index_infos(simple_index_infos))) {
       LOG_WARN("get simple_index_infos failed", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
@@ -10609,20 +10663,30 @@ int ObDMLResolver::get_target_sql_for_pivot(const ObIArray<ColumnItem> &column_i
             }
 
             int64_t pos = 0;
-            int32_t expr_name_length = strlen(ob_aggr_func_str(aggr_pair.expr_->get_expr_type())) + 1;
-            if ((static_cast<const ObAggFunRawExpr *>(aggr_pair.expr_))->is_param_distinct()) {
-              expr_name_length += DISTINCT_LENGTH;
-            }
-            ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos,
-                                          schema_checker_->get_schema_guard(),
-                                          TZ_INFO(params_.session_info_));
-            if (OB_FAIL(expr_printer.do_print(aggr_pair.expr_, T_NONE_SCOPE, true))) {
-              LOG_WARN("print expr definition failed", KPC(aggr_pair.expr_), K(ret));
-            } else if (OB_FAIL(sql.append_fmt(" THEN %.*s END) AS \"",
-                                              static_cast<int32_t>(pos - expr_name_length - 1),
-                                              expr_str_buf + expr_name_length))) {
-              LOG_WARN("fail to append_fmt", K(aggr_pair.alias_name_), K(ret));
+            if (OB_FAIL(ret)) {
+            } else if (0 == static_cast<const ObAggFunRawExpr *>(aggr_pair.expr_)->get_param_count()
+                       && T_FUN_COUNT == aggr_pair.expr_->get_expr_type()) {
+              // for count(*), just use 0 as then value
+              if (OB_FAIL(sql.append_fmt(" THEN 0 END) AS \""))) {
+                LOG_WARN("fail to append_fmt", K(aggr_pair.alias_name_), K(ret));
+              }
             } else {
+              int32_t expr_name_length = strlen(ob_aggr_func_str(aggr_pair.expr_->get_expr_type())) + 1;
+              if ((static_cast<const ObAggFunRawExpr *>(aggr_pair.expr_))->is_param_distinct()) {
+                expr_name_length += DISTINCT_LENGTH;
+              }
+              ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos,
+                                            schema_checker_->get_schema_guard(),
+                                            TZ_INFO(params_.session_info_));
+              if (OB_FAIL(expr_printer.do_print(aggr_pair.expr_, T_NONE_SCOPE, true))) {
+                LOG_WARN("print expr definition failed", KPC(aggr_pair.expr_), K(ret));
+              } else if (OB_FAIL(sql.append_fmt(" THEN %.*s END) AS \"",
+                                                static_cast<int32_t>(pos - expr_name_length - 1),
+                                                expr_str_buf + expr_name_length))) {
+                LOG_WARN("fail to append_fmt", K(aggr_pair.alias_name_), K(ret));
+              }
+            }
+            if (OB_SUCC(ret)) {
               ObString tmp(pos, expr_str_buf);
               int64_t sql_length = sql.length();
               if (in_pair.pivot_expr_alias_.empty()) {
@@ -14459,7 +14523,7 @@ int ObDMLResolver::find_table_index_infos(const ObString &dst_index_name,
     LOG_WARN("table not exists", K(*table_item));
   } else {
     ObSEArray<ObAuxTableMetaInfo, 16> index_infos;
-    if (OB_FAIL(data_table_schema->get_simple_index_infos(index_infos, false))) {
+    if (OB_FAIL(data_table_schema->get_simple_index_infos(index_infos))) {
       LOG_WARN("get simple index infos failed", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && !find_it && i < index_infos.count(); ++i) {

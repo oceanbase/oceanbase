@@ -296,7 +296,8 @@ public:
   OB_INLINE bool is_virtual_generated_column() const { return column_flags_ & VIRTUAL_GENERATED_COLUMN_FLAG; }
   OB_INLINE bool is_stored_generated_column() const { return column_flags_ & STORED_GENERATED_COLUMN_FLAG; }
   OB_INLINE bool is_generated_column() const { return is_virtual_generated_column() || is_stored_generated_column(); }
-  OB_INLINE bool is_shadow_column() const { return column_id_ > common::OB_MIN_SHADOW_COLUMN_ID; }
+  OB_INLINE bool is_shadow_column() const { return (column_id_ > common::OB_MIN_SHADOW_COLUMN_ID)
+                                                    && !is_mlog_special_column(column_id_); }
   OB_INLINE bool has_generated_column_deps() const { return column_flags_ & GENERATED_DEPS_CASCADE_FLAG; }
   int get_cascaded_column_ids(ObIArray<uint64_t> &column_ids) const;
 

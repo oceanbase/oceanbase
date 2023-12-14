@@ -280,13 +280,15 @@ int ObTableRedefinitionTask::send_build_replica_request_by_sql()
         trace_id_,
         parallelism_,
         use_heap_table_ddl_plan,
+        alter_table_arg_.mview_refresh_info_.is_mview_complete_refresh_,
+        alter_table_arg_.mview_refresh_info_.mview_table_id_,
         GCTX.root_service_,
         alter_table_arg_.inner_sql_exec_addr_);
     if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(tenant_id_, schema_guard))) {
       LOG_WARN("get schema guard failed", K(ret));
     } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, orig_table_schema))) {
       LOG_WARN("failed to get orig table schema", K(ret));
-    } else if (OB_FAIL(task.init(*orig_table_schema, alter_table_arg_.alter_table_schema_, alter_table_arg_.tz_info_wrap_))) {
+    } else if (OB_FAIL(task.init(*orig_table_schema, alter_table_arg_.alter_table_schema_, alter_table_arg_.tz_info_wrap_, alter_table_arg_.based_schema_object_infos_))) {
       LOG_WARN("fail to init table redefinition sstable build task", K(ret));
     } else if (OB_FAIL(root_service->submit_ddl_single_replica_build_task(task))) {
       LOG_WARN("fail to submit ddl build single replica", K(ret));
@@ -339,8 +341,9 @@ int ObTableRedefinitionTask::check_use_heap_table_ddl_plan(bool &use_heap_table_
   } else if (OB_ISNULL(target_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, table schema must not be nullptr", K(ret), K(target_object_id_));
-  } else if (target_table_schema->is_heap_table() && 
-    (DDL_ALTER_PARTITION_BY == task_type_ || DDL_DROP_PRIMARY_KEY == task_type_)) {
+  } else if (target_table_schema->is_heap_table() &&
+             (DDL_ALTER_PARTITION_BY == task_type_ || DDL_DROP_PRIMARY_KEY == task_type_ ||
+              DDL_MVIEW_COMPLETE_REFRESH == task_type_)) {
     use_heap_table_ddl_plan = true;
   }
   return ret;
@@ -408,7 +411,8 @@ int ObTableRedefinitionTask::replica_end_check(const int ret_code)
   int ret = OB_SUCCESS;
   switch(task_type_) {
     case DDL_DIRECT_LOAD :
-    case DDL_DIRECT_LOAD_INSERT : {
+    case DDL_DIRECT_LOAD_INSERT :
+    case DDL_MVIEW_COMPLETE_REFRESH: {
       break;
     }
     default : {
@@ -848,6 +852,9 @@ int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
              ObDDLType::DDL_DIRECT_LOAD_INSERT != task_type_ &&
              OB_FAIL(sync_stats_info())) {//direct load no need sync stats info, because the stats have been regather
     LOG_WARN("fail to sync stats info", K(ret), K(object_id_), K(target_object_id_));
+  } else if (alter_table_arg_.mview_refresh_info_.is_mview_complete_refresh_ &&
+             OB_FAIL(alter_table_arg_.mview_refresh_info_.refresh_scn_.convert_for_inner_table_field(snapshot_version_))) {
+    LOG_WARN("fail to convert scn", K(ret), K(snapshot_version_));
   } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(dst_tenant_id_, target_object_id_, ddl_rpc_timeout))) {
             LOG_WARN("get ddl rpc timeout fail", K(ret));
   } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ddl_rpc_timeout).
@@ -924,8 +931,20 @@ int ObTableRedefinitionTask::process()
     ddl_tracing_.restore_span_hierarchy();
     switch(task_status_) {
       case ObDDLTaskStatus::PREPARE:
-        if (OB_FAIL(prepare(ObDDLTaskStatus::WAIT_TRANS_END))) {
-          LOG_WARN("fail to prepare table redefinition task", K(ret));
+        if (alter_table_arg_.mview_refresh_info_.is_mview_complete_refresh_ && parent_task_id_ > 0) {
+          const ObDDLTaskID parent_task_id(tenant_id_, parent_task_id_);
+          ObRootService *root_service = GCTX.root_service_;
+          if (OB_ISNULL(root_service)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("error unexpected, root service must not be nullptr", K(ret));
+          } else if (OB_FAIL(root_service->get_ddl_task_scheduler().on_ddl_task_prepare(parent_task_id, task_id_, trace_id_))) {
+            LOG_WARN("fail to do parent task callback", KR(ret));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(prepare(ObDDLTaskStatus::WAIT_TRANS_END))) {
+            LOG_WARN("fail to prepare table redefinition task", K(ret));
+          }
         }
         break;
       case ObDDLTaskStatus::WAIT_TRANS_END:

@@ -4151,7 +4151,7 @@ Field	Type	Null	Key	Default	Extra
 DATABASE_NAME	varchar(128)	NO			
 TABLE_NAME	varchar(256)	NO			
 TABLE_ID	bigint(20)	NO			
-TABLE_TYPE	varchar(13)	NO			
+TABLE_TYPE	varchar(21)	NO			
 PARTITION_NAME	varchar(64)	NO			
 SUBPARTITION_NAME	varchar(64)	NO			
 INDEX_NAME	varchar(256)	NO			
@@ -5318,6 +5318,141 @@ REVERSE_HOST	text	YES		NULL
 REVERSE_PORT	bigint(20)	YES		NULL	
 REVERSE_USERNAME	varchar(128)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_DB_LINKS limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_MLOGS;
+Field	Type	Null	Key	Default	Extra
+MLOG_ID	bigint(20)	NO		NULL	
+PURGE_MODE	varchar(22)	NO		NULL	
+PURGE_START	timestamp(6)	YES		NULL	
+PURGE_NEXT	varchar(128)	YES		NULL	
+PURGE_JOB	varchar(128)	YES		NULL	
+LAST_PURGE_SCN	bigint(20) unsigned	YES		NULL	
+LAST_PURGE_DATE	timestamp(6)	YES		NULL	
+LAST_PURGE_TIME	bigint(20)	YES		NULL	
+LAST_PURGE_ROWS	bigint(20)	YES		NULL	
+LAST_PURGE_TRACE_ID	varchar(64)	YES		NULL	
+CREATE_TIME	timestamp(6)	YES			
+MODIFY_TIME	timestamp(6)	YES			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_MLOGS limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_MVIEWS;
+Field	Type	Null	Key	Default	Extra
+MVIEW_ID	bigint(20)	NO		NULL	
+BUILD_MODE	varchar(9)	NO		NULL	
+REFRESH_MODE	varchar(11)	NO		NULL	
+REFRESH_METHOD	varchar(8)	NO		NULL	
+REFRESH_START	timestamp(6)	YES		NULL	
+REFRESH_NEXT	varchar(128)	YES		NULL	
+REFRESH_JOB	varchar(128)	YES		NULL	
+LAST_REFRESH_SCN	bigint(20) unsigned	YES		NULL	
+LAST_REFRESH_TYPE	varchar(8)	YES		NULL	
+LAST_REFRESH_DATE	timestamp(6)	YES		NULL	
+LAST_REFRESH_TIME	bigint(20)	YES		NULL	
+LAST_REFRESH_TRACE_ID	varchar(64)	YES		NULL	
+CREATE_TIME	timestamp(6)	YES			
+MODIFY_TIME	timestamp(6)	YES			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_MVIEWS limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_MVIEW_REFRESH_STATS_SYS_DEFAULTS;
+Field	Type	Null	Key	Default	Extra
+COLLECTION_LEVEL	varchar(8)	NO		NULL	
+RETENTION_PERIOD	bigint(20)	NO		NULL	
+CREATE_TIME	timestamp(6)	YES			
+MODIFY_TIME	timestamp(6)	YES			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_MVIEW_REFRESH_STATS_SYS_DEFAULTS limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_MVIEW_REFRESH_STATS_PARAMS;
+Field	Type	Null	Key	Default	Extra
+MVIEW_ID	bigint(20)	NO		NULL	
+COLLECTION_LEVEL	varchar(8)	NO		NULL	
+RETENTION_PERIOD	bigint(20)	NO		NULL	
+CREATE_TIME	timestamp(6)	YES			
+MODIFY_TIME	timestamp(6)	YES			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_MVIEW_REFRESH_STATS_PARAMS limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_MVIEW_REFRESH_RUN_STATS;
+Field	Type	Null	Key	Default	Extra
+REFRESH_ID	bigint(20)	NO		NULL	
+RUN_USER_ID	bigint(20)	NO		NULL	
+NUM_MVS_TOTAL	bigint(20)	NO		NULL	
+NUM_MVS_CURRENT	bigint(20)	NO		NULL	
+MVIEWS	varchar(4000)	NO		NULL	
+BASE_TABLES	varchar(4000)	YES		NULL	
+METHOD	varchar(4000)	YES		NULL	
+ROLLBACK_SEG	varchar(4000)	YES		NULL	
+PUSH_DEFERRED_RPC	varchar(3)	NO		NULL	
+REFRESH_AFTER_ERRORS	varchar(3)	NO		NULL	
+PURGE_OPTION	bigint(20)	NO		NULL	
+PARALLELISM	bigint(20)	NO		NULL	
+HEAP_SIZE	bigint(20)	NO		NULL	
+ATOMIC_REFRESH	varchar(3)	NO		NULL	
+NESTED	varchar(3)	NO		NULL	
+OUT_OF_PLACE	varchar(3)	NO		NULL	
+NUMBER_OF_FAILURES	bigint(20)	NO		NULL	
+START_TIME	timestamp(6)	NO		NULL	
+END_TIME	timestamp(6)	NO		NULL	
+ELAPSED_TIME	bigint(20)	NO		NULL	
+LOG_PURGE_TIME	bigint(20)	NO		NULL	
+COMPLETE_STATS_AVALIABLE	varchar(3)	NO		NULL	
+TRACE_ID	varchar(64)	YES		NULL	
+CREATE_TIME	timestamp(6)	YES			
+MODIFY_TIME	timestamp(6)	YES			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_MVIEW_REFRESH_RUN_STATS limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_MVIEW_REFRESH_STATS;
+Field	Type	Null	Key	Default	Extra
+REFRESH_ID	bigint(20)	NO		NULL	
+MVIEW_ID	bigint(20)	NO		NULL	
+RETRY_ID	bigint(20)	NO		NULL	
+REFRESH_TYPE	varchar(8)	NO		NULL	
+START_TIME	timestamp(6)	NO		NULL	
+END_TIME	timestamp(6)	NO		NULL	
+ELAPSED_TIME	bigint(20)	NO		NULL	
+LOG_PURGE_TIME	bigint(20)	NO		NULL	
+INITIAL_NUM_ROWS	bigint(20)	NO		NULL	
+FINAL_NUM_ROWS	bigint(20)	NO		NULL	
+NUM_STEPS	bigint(20)	NO		NULL	
+RESULT	varchar(28)	NO		NULL	
+CREATE_TIME	timestamp(6)	YES			
+MODIFY_TIME	timestamp(6)	YES			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_MVIEW_REFRESH_STATS limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_MVIEW_REFRESH_CHANGE_STATS;
+Field	Type	Null	Key	Default	Extra
+REFRESH_ID	bigint(20)	NO		NULL	
+MVIEW_ID	bigint(20)	NO		NULL	
+RETRY_ID	bigint(20)	NO		NULL	
+DETAIL_TABLE_ID	bigint(20)	NO		NULL	
+NUM_ROWS_INS	bigint(20)	YES		NULL	
+NUM_ROWS_UPD	bigint(20)	YES		NULL	
+NUM_ROWS_DEL	bigint(20)	YES		NULL	
+NUM_ROWS	bigint(20)	YES		NULL	
+CREATE_TIME	timestamp(6)	YES			
+MODIFY_TIME	timestamp(6)	YES			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_MVIEW_REFRESH_CHANGE_STATS limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_MVIEW_REFRESH_STMT_STATS;
+Field	Type	Null	Key	Default	Extra
+REFRESH_ID	bigint(20)	NO		NULL	
+MVIEW_ID	bigint(20)	NO		NULL	
+RETRY_ID	bigint(20)	NO		NULL	
+STEP	bigint(20)	NO		NULL	
+SQLID	varchar(32)	YES		NULL	
+STMT	longtext	NO		NULL	
+EXECUTION_TIME	bigint(20)	NO		NULL	
+EXECUTION_PLAN	longtext	YES		NULL	
+RESULT	varchar(28)	NO		NULL	
+CREATE_TIME	timestamp(6)	YES			
+MODIFY_TIME	timestamp(6)	YES			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_MVIEW_REFRESH_STMT_STATS limit 1);
 cnt
 1
 desc oceanbase.DBA_WR_CONTROL;

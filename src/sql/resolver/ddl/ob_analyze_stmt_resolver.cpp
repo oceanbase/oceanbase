@@ -274,7 +274,8 @@ int ObAnalyzeStmtResolver::resolve_table_info(const ParseNode *table_node,
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("null table schema", K(ret));
-  } else if (OB_FAIL(analyze_stmt.add_table(database_name, database_id, table_name, table_schema->get_table_id(),
+  } else if (OB_FAIL(analyze_stmt.add_table(database_name, database_id, table_name,
+                           table_schema->is_materialized_view() ? table_schema->get_data_table_id() : table_schema->get_table_id(),
                            table_schema->get_table_type()))) {
     LOG_WARN("add table failed", K(ret));
   } else {

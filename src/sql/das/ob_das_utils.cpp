@@ -23,6 +23,8 @@
 #include "observer/omt/ob_tenant_srs.h"
 #include "lib/geo/ob_s2adapter.h"
 #include "lib/geo/ob_geo_utils.h"
+#include "share/ob_tablet_autoincrement_service.h"
+#include "storage/access/ob_dml_param.h"
 namespace oceanbase
 {
 using namespace common;
@@ -407,5 +409,62 @@ int ObDASUtils::wait_das_retry(int64_t retry_cnt)
   return ret;
 }
 
+int ObDASUtils::generate_mlog_row(const ObTabletID &tablet_id,
+                                  const storage::ObDMLBaseParam &dml_param,
+                                  ObNewRow &row,
+                                  ObDASOpType op_type,
+                                  bool is_old_row)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  uint64_t autoinc_seq = 0;
+  ObTabletAutoincrementService &auto_inc = ObTabletAutoincrementService::get_instance();
+  if (OB_ISNULL(dml_param.table_param_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table param is null", KR(ret));
+  } else if (!dml_param.table_param_->get_data_table().is_mlog_table()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("data table is not materialized view log",
+        KR(ret), K(dml_param.table_param_->get_data_table()));
+  } else if (row.count_ < 4) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("each mlog row should at least contain 4 columns", KR(ret), K(row.count_));
+  } else if (OB_FAIL(auto_inc.get_autoinc_seq(tenant_id, tablet_id, autoinc_seq))) {
+    LOG_WARN("get_autoinc_seq fail", K(ret), K(tenant_id), K(tablet_id));
+  } else {
+    // sequence_col is the first primary key
+    int sequence_col = 0;
+    int dmltype_col = row.count_ - 2;
+    int old_new_col = row.count_ - 1;
+    const ObTableDMLParam::ObColDescArray &col_descs = dml_param.table_param_->get_col_descs();
+    bool is_heap_base_table = (OB_MLOG_ROWID_COLUMN_ID == col_descs.at(row.count_ - 1).col_id_);
+    // if the base table is heap table, then the last column is mlog_rowid,
+    // therefore, row = | sequence_col | partition key cols | ... | dmltype_col | old_new_col | rowid_col |
+    // otherwise, row = | sequence_col | partition key cols | ... | dmltype_col | old_new_col |
+    if (is_heap_base_table) {
+      dmltype_col = dmltype_col - 1;
+      old_new_col = old_new_col - 1;
+    }
+
+    row.cells_[sequence_col].set_int(ObObjType::ObIntType, static_cast<int64_t>(autoinc_seq));
+    if (sql::DAS_OP_TABLE_DELETE == op_type) {
+      row.cells_[dmltype_col].set_varchar("D");
+      row.cells_[old_new_col].set_varchar("O");
+    } else if (sql::DAS_OP_TABLE_UPDATE == op_type) {
+      row.cells_[dmltype_col].set_varchar("U");
+      if (is_old_row) {
+        row.cells_[old_new_col].set_varchar("O");
+      } else {
+        row.cells_[old_new_col].set_varchar("N");
+      }
+    } else {
+      row.cells_[dmltype_col].set_varchar("I");
+      row.cells_[old_new_col].set_varchar("N");
+    }
+    row.cells_[dmltype_col].set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI);
+    row.cells_[old_new_col].set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI);
+  }
+  return ret;
+}
 }  // namespace sql
 }  // namespace oceanbase

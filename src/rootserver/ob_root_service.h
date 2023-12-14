@@ -500,6 +500,7 @@ public:
   int cancel_ddl_task(const obrpc::ObCancelDDLTaskArg &arg);
   int alter_tablegroup(const obrpc::ObAlterTablegroupArg &arg);
   int maintain_obj_dependency_info(const obrpc::ObDependencyObjDDLArg &arg);
+  int mview_complete_refresh(const obrpc::ObMViewCompleteRefreshArg &arg, obrpc::ObMViewCompleteRefreshRes &res);
   int rename_table(const obrpc::ObRenameTableArg &arg);
   int truncate_table(const obrpc::ObTruncateTableArg &arg, obrpc::ObDDLRes &res);
   int truncate_table_v2(const obrpc::ObTruncateTableArg &arg, obrpc::ObDDLRes &res);
@@ -508,6 +509,7 @@ public:
   int drop_database(const obrpc::ObDropDatabaseArg &arg, obrpc::ObDropDatabaseRes &drop_database_res);
   int drop_tablegroup(const obrpc::ObDropTablegroupArg &arg);
   int drop_index(const obrpc::ObDropIndexArg &arg, obrpc::ObDropIndexRes &res);
+  int create_mlog(const obrpc::ObCreateMLogArg &arg, obrpc::ObCreateMLogRes &res);
   int rebuild_index(const obrpc::ObRebuildIndexArg &arg, obrpc::ObAlterTableRes &res);
   int clone_tenant(const obrpc::ObCloneTenantArg &arg, obrpc::ObCloneTenantRes &res);
   //the interface only for switchover: execute skip check enable_ddl
@@ -517,6 +519,7 @@ public:
   int refresh_config();
   int root_minor_freeze(const obrpc::ObRootMinorFreezeArg &arg);
   int update_index_status(const obrpc::ObUpdateIndexStatusArg &arg);
+  int update_mview_status(const obrpc::ObUpdateMViewStatusArg &arg);
   int purge_table(const obrpc::ObPurgeTableArg &arg);
   int flashback_table_from_recyclebin(const obrpc::ObFlashBackTableFromRecyclebinArg &arg);
   int flashback_table_to_time_point(const obrpc::ObFlashBackTableToScnArg &arg);
@@ -895,6 +898,11 @@ private:
   int old_cancel_delete_server(const obrpc::ObAdminServerArg &arg);
 
   int parallel_ddl_pre_check_(const uint64_t tenant_id);
+  int gen_container_table_schema_(const obrpc::ObCreateTableArg &arg,
+                                  share::schema::ObSchemaGetterGuard &schema_guard,
+                                  share::schema::ObTableSchema &mv_table_schema,
+                                  common::ObArray<share::schema::ObTableSchema> &table_schemas);
+
   int check_tx_share_memory_limit_(obrpc::ObAdminSetConfigItem &item);
   int check_memstore_limit_(obrpc::ObAdminSetConfigItem &item);
   int check_tx_data_memory_limit_(obrpc::ObAdminSetConfigItem &item);

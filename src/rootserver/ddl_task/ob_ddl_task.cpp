@@ -784,6 +784,18 @@ int ObDDLTask::get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_st
     case DDL_DROP_INDEX:
       ddl_type_str = "drop index";
       break;
+    case DDL_MVIEW_COMPLETE_REFRESH:
+      ddl_type_str = "mview complete refresh";
+      break;
+    case DDL_CREATE_MVIEW:
+      ddl_type_str = "create mview";
+      break;
+    case DDL_CREATE_MLOG:
+      ddl_type_str = "create materialized view log";
+      break;
+    case DDL_DROP_MLOG:
+      ddl_type_str = "drop materialized view log";
+      break;
     default:
       ret = OB_ERR_UNEXPECTED;
   }
@@ -2964,7 +2976,8 @@ int ObDDLTaskRecordOperator::check_has_conflict_ddl(
             case ObDDLType::DDL_COLUMN_REDEFINITION:
             case ObDDLType::DDL_TABLE_REDEFINITION:
             case ObDDLType::DDL_DIRECT_LOAD:
-            case ObDDLType::DDL_DIRECT_LOAD_INSERT: {
+            case ObDDLType::DDL_DIRECT_LOAD_INSERT:
+            case ObDDLType::DDL_MVIEW_COMPLETE_REFRESH: {
               has_conflict_ddl = true;
               break;
             }

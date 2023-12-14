@@ -454,6 +454,10 @@ ob_set_subtarget(ob_share schema
   schema/ob_server_schema_service.cpp
   schema/ob_table_schema.cpp
   schema/ob_latest_schema_guard.cpp
+  schema/ob_mlog_info.cpp
+  schema/ob_mview_info.cpp
+  schema/ob_mview_refresh_stats_params.cpp
+  schema/ob_mview_refresh_stats.cpp
 )
 
 ob_set_subtarget(ob_share stat

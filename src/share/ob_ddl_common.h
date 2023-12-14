@@ -375,6 +375,19 @@ public:
       const ObColumnNameMap *col_name_map,
       ObSqlString &sql_string);
 
+  static int generate_build_mview_replica_sql(
+      const uint64_t tenant_id,
+      const int64_t mview_table_id,
+      const int64_t container_table_id,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const int64_t snapshot_version,
+      const int64_t execution_id,
+      const int64_t task_id,
+      const int64_t parallelism,
+      const bool use_schema_version_hint_for_src_table,
+      const common::ObIArray<share::schema::ObBasedSchemaObjectInfo> &based_schema_object_infos,
+      ObSqlString &sql_string);
+
   static int get_tablet_leader_addr(
       share::ObLocationService *location_service,
       const uint64_t tenant_id,
@@ -392,6 +405,14 @@ public:
   static int generate_ddl_schema_hint_str(
       const ObString &table_name,
       const int64_t schema_version,
+      const bool is_oracle_mode,
+      ObSqlString &sql_string);
+
+  static int generate_mview_ddl_schema_hint_str(
+      const uint64_t tenant_id,
+      const uint64_t mview_table_id,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const common::ObIArray<share::schema::ObBasedSchemaObjectInfo> &based_schema_object_infos,
       const bool is_oracle_mode,
       ObSqlString &sql_string);
 

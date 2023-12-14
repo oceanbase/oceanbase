@@ -4059,7 +4059,9 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
   }
 
   if (OB_SUCC(ret)) {
-    if (opt_ctx_->is_online_ddl() && stmt::T_INSERT == opt_ctx_->get_session_info()->get_stmt_type()) {
+    if (opt_ctx_->is_online_ddl() &&
+        stmt::T_INSERT == opt_ctx_->get_session_info()->get_stmt_type() &&
+        !opt_ctx_->get_session_info()->get_ddl_info().is_mview_complete_refresh()) {
       spec.report_col_checksum_ = true;
     }
   }

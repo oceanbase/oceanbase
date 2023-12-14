@@ -6483,6 +6483,9 @@ int ObPartitionUtils::check_param_valid_(
               index_exist = true;
             }
           } // end for simple_index_infos
+          if (OB_SUCC(ret) && !finded && table_schema.has_mlog_table()) {
+            finded = (related_tid == table_schema.get_mlog_tid());
+          }
           if (OB_SUCC(ret) && !finded && related_tid != data_table_id) {
             ret = OB_TABLE_NOT_EXIST;
             LOG_WARN("local index not exist", KR(ret), K(table_id));
@@ -8015,6 +8018,13 @@ int ObPartitionUtils::check_interval_partition_table(
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObMVRefreshInfo,
+    refresh_method_,
+    refresh_mode_,
+    start_time_,
+    next_time_expr_,
+    exec_env_);
+
 /*-------------------------------------------------------------------------------------------------
  * ------------------------------ObViewSchema-------------------------------------------
  ----------------------------------------------------------------------------------------------------*/
@@ -8025,7 +8035,8 @@ ObViewSchema::ObViewSchema()
       view_is_updatable_(false),
       materialized_(false),
       character_set_client_(CHARSET_INVALID),
-      collation_connection_(CS_TYPE_INVALID)
+      collation_connection_(CS_TYPE_INVALID),
+      container_table_id_(OB_INVALID_ID)
 {
 }
 
@@ -8036,7 +8047,8 @@ ObViewSchema::ObViewSchema(ObIAllocator *allocator)
       view_is_updatable_(false),
       materialized_(false),
       character_set_client_(CHARSET_INVALID),
-      collation_connection_(CS_TYPE_INVALID)
+      collation_connection_(CS_TYPE_INVALID),
+      container_table_id_(OB_INVALID_ID)
 {
 }
 
@@ -8051,7 +8063,9 @@ ObViewSchema::ObViewSchema(const ObViewSchema &src_schema)
       view_is_updatable_(false),
       materialized_(false),
       character_set_client_(CHARSET_INVALID),
-      collation_connection_(CS_TYPE_INVALID)
+      collation_connection_(CS_TYPE_INVALID),
+      container_table_id_(OB_INVALID_ID),
+      mv_refresh_info_(nullptr)
 {
   *this = src_schema;
 }
@@ -8067,6 +8081,8 @@ ObViewSchema &ObViewSchema::operator =(const ObViewSchema &src_schema)
     materialized_ = src_schema.materialized_;
     character_set_client_ = src_schema.character_set_client_;
     collation_connection_ = src_schema.collation_connection_;
+    container_table_id_ = src_schema.container_table_id_;
+    mv_refresh_info_ = src_schema.mv_refresh_info_;
 
     if (OB_FAIL(deep_copy_str(src_schema.view_definition_, view_definition_))) {
       LOG_WARN("Fail to deep copy view definition, ", K(ret));
@@ -8087,7 +8103,9 @@ bool ObViewSchema::operator==(const ObViewSchema &other) const
       && view_is_updatable_ == other.view_is_updatable_
       && materialized_ == other.materialized_
       && character_set_client_ == other.character_set_client_
-      && collation_connection_ == other.collation_connection_;
+      && collation_connection_ == other.collation_connection_
+      && container_table_id_ == other.container_table_id_
+      && mv_refresh_info_ == other.mv_refresh_info_;
 }
 
 bool ObViewSchema::operator!=(const ObViewSchema &other) const
@@ -8118,6 +8136,8 @@ void ObViewSchema::reset()
   materialized_ = false;
   character_set_client_ = CHARSET_INVALID;
   collation_connection_ = CS_TYPE_INVALID;
+  container_table_id_ = OB_INVALID_ID;
+  mv_refresh_info_ = nullptr;
   ObSchema::reset();
 }
 
@@ -8131,7 +8151,8 @@ OB_DEF_SERIALIZE(ObViewSchema)
               view_is_updatable_,
               materialized_,
               character_set_client_,
-              collation_connection_);
+              collation_connection_,
+              container_table_id_);
   return ret;
 }
 
@@ -8146,7 +8167,8 @@ OB_DEF_DESERIALIZE(ObViewSchema)
               view_is_updatable_,
               materialized_,
               character_set_client_,
-              collation_connection_);
+              collation_connection_,
+              container_table_id_);
 
   if (!OB_SUCC(ret)) {
     LOG_WARN("Fail to deserialize data, ", K(ret));
@@ -8166,7 +8188,8 @@ OB_DEF_SERIALIZE_SIZE(ObViewSchema)
               view_is_updatable_,
               materialized_,
               character_set_client_,
-              collation_connection_);
+              collation_connection_,
+              container_table_id_);
   return len;
 }
 
@@ -9206,6 +9229,10 @@ const char *ob_table_type_str(ObTableType type)
       type_ptr = "EXTERNAL TABLE";
       break;
     }
+  case MATERIALIZED_VIEW_LOG: {
+      type_ptr = "MATERIALIZED VIEW LOG";
+      break;
+    }
   default: {
       LOG_WARN_RET(OB_ERR_UNEXPECTED, "unkonw table type", K(type));
       break;
@@ -9292,6 +9319,11 @@ bool is_aux_lob_piece_table(const ObTableType table_type)
 bool is_aux_lob_table(const ObTableType table_type)
 {
   return is_aux_lob_meta_table(table_type) || is_aux_lob_piece_table(table_type);
+}
+
+bool is_mlog_table(const ObTableType table_type)
+{
+  return (ObTableType::MATERIALIZED_VIEW_LOG == table_type);
 }
 
 const char *schema_type_str(const ObSchemaType schema_type)

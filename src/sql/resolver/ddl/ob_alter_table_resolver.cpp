@@ -231,6 +231,12 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
         LOG_USER_ERROR(OB_OP_NOT_ALLOW, "alter table localiy and tablegroup at the same time");
       } else if (OB_FAIL(set_table_options())) {
         SQL_RESV_LOG(WARN, "failed to set table options.", K(ret));
+      } else if ((table_schema_->has_mlog_table() || table_schema_->is_mlog_table())
+          && OB_FAIL(ObResolverUtils::check_allowed_alter_operations_for_mlog(
+              alter_table_stmt->get_tenant_id(),
+              alter_table_stmt->get_alter_table_arg(),
+              *table_schema_))) {
+        LOG_WARN("failed to check allowed alter operations for mlog", KR(ret));
       } else {
         // deal with alter table rename to mock_fk_parent_table_name
         if (is_mysql_mode()
@@ -1519,7 +1525,7 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
             }
             if (OB_SUCC(ret) && is_mysql_mode()) {
               if (NULL != index_partition_option) {
-                if (2 != index_partition_option->num_child_ || T_PARTITION_OPTION != index_partition_option->type_) {
+                if (1 != index_partition_option->num_child_ || T_PARTITION_OPTION != index_partition_option->type_) {
                   ret = OB_NOT_SUPPORTED;
                   LOG_WARN("column vectical partition for index not supported", K(ret));
                   LOG_USER_ERROR(OB_NOT_SUPPORTED, "Column vertical partition for index");

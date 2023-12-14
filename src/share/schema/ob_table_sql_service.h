@@ -134,6 +134,8 @@ public:
                                   common::ObISQLClient &sql_client,
                                   const common::ObString *ddl_stmt_str);
 
+  virtual int update_mview_status(const ObTableSchema &mview_table_schema,
+                                 common::ObISQLClient &sql_client);
   // TODO: merge these two API
   int sync_aux_schema_version_for_history(common::ObISQLClient &sql_client,
                                           const ObTableSchema &index_schema1,
@@ -307,6 +309,8 @@ private:
                                const ObTableSchema &table);
   int add_interval_range_val(share::ObDMLSqlSplicer &dml,
                                const ObTableSchema &table);
+  int gen_mview_dml(const uint64_t exec_tenant_id, const ObTableSchema &table,
+                    share::ObDMLSqlSplicer &dml);
   int gen_table_dml(const uint64_t exec_tenant_id, const ObTableSchema &table,
                     const bool update_object_status_ignore_version, share::ObDMLSqlSplicer &dml);
   int gen_table_options_dml(const uint64_t exec_tenant_id,

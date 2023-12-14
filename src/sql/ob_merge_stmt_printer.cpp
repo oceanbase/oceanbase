@@ -100,6 +100,9 @@ int ObMergeStmtPrinter::print()
 int ObMergeStmtPrinter::print_conds(const ObIArray<ObRawExpr *> &conds)
 {
   int ret = OB_SUCCESS;
+  if (conds.empty()) {
+    DATA_PRINTF("1=1");
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < conds.count(); ++i) {
     if (OB_FAIL(expr_printer_.do_print(conds.at(i), T_NONE_SCOPE))) {
       LOG_WARN("failed to print match condition", K(ret));

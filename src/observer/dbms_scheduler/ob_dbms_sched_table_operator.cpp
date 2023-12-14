@@ -32,7 +32,7 @@
 #include "observer/ob_server_struct.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
 #include "share/schema/ob_multi_version_schema_service.h"
-
+#include "storage/mview/ob_mview_sched_job_utils.h"
 
 #define TO_TS(second) 1000000L * second
 
@@ -43,6 +43,7 @@ using namespace common;
 using namespace share;
 using namespace share::schema;
 using namespace sqlclient;
+using namespace storage;
 
 namespace dbms_scheduler
 {
@@ -95,6 +96,7 @@ int ObDBMSSchedTableOperator::update_nextdate(
   OZ (dml.add_gmt_modified(now));
   OZ (dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
   OZ (dml.add_pk_column("job", job_info.job_));
+  OZ (dml.add_column("interval_ts", job_info.interval_ts_));
   OZ (dml.add_time_column("next_date", job_info.next_date_));
   OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
   OZ (sql_proxy_->write(tenant_id, sql.ptr(), affected_rows));
@@ -134,7 +136,7 @@ int ObDBMSSchedTableOperator::update_for_end(
   }
 
   ObDBMSSchedJobClassInfo job_class_info;
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator("DBMSSchedTmp");
   if (MOCK_DATA_VERSION <= data_version) {
     OZ (get_dbms_sched_job_class_info(tenant_id, job_info.is_oracle_tenant(), job_info.get_job_class(), allocator, job_class_info));
   }
@@ -540,7 +542,8 @@ int ObDBMSSchedTableOperator::calc_execute_at(
     delay = -1;
   }
 
-  if (delay < 0 && job_info.get_interval_ts() != 0) {
+  if (delay < 0 && (job_info.get_interval_ts() != 0
+                    || (!interval.empty() && (0 != interval.case_compare("null"))))) {
     ObSqlString sql;
     common::ObISQLClient *sql_proxy = sql_proxy_;
     ObOracleSqlProxy oracle_proxy(*(static_cast<ObMySQLProxy *>(sql_proxy_)));
@@ -563,6 +566,14 @@ int ObDBMSSchedTableOperator::calc_execute_at(
           int64_t sysdate = 0;
           int64_t col_idx = 0;
           OZ (result.get_result()->get_datetime(col_idx, sysdate));
+          if (OB_SUCC(ret) && job_info.is_date_expression_job_class()) {
+            int64_t next_date_utc_ts = 0;
+            if (OB_FAIL(ObMViewSchedJobUtils::calc_date_expression(job_info, next_date_utc_ts))) {
+              LOG_WARN("failed to calc date expression", KR(ret), K(job_info));
+            } else {
+              job_info.interval_ts_ = next_date_utc_ts - sysdate;
+            }
+          }
           if (OB_SUCC(ret)) {
             execute_at = sysdate + job_info.get_interval_ts();
           }

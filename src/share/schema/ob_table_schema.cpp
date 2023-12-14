@@ -564,7 +564,10 @@ bool ObSimpleTableSchemaV2::is_valid() const
                  K(tenant_id_), K(table_id_), K(schema_version_), K(database_id_), K(table_name_),
                  K(dblink_id_), K(link_table_id_), K(link_schema_version_), K(link_database_name_));
       }
-    } else if (is_index_table() || is_materialized_view() || is_aux_vp_table() || is_aux_lob_table()) {
+    } else if (is_index_table()
+        || is_aux_vp_table()
+        || is_aux_lob_table()
+        || is_mlog_table()) {
       if (OB_INVALID_ID == data_table_id_) {
         ret = false;
         LOG_WARN("invalid data table_id", K(ret), K(data_table_id_));
@@ -1832,7 +1835,8 @@ bool ObTableSchema::is_valid() const
         } else {
           if (column->get_rowkey_position() > 0) {
             ++def_rowkey_col;
-            if (column->get_column_id() > max_used_column_id_) {
+            if ((column->get_column_id() > max_used_column_id_)
+                && (column->get_column_id() <= common::OB_MAX_TMP_COLUMN_ID)) {
               valid_ret = false;
               LOG_WARN_RET(OB_INVALID_ERROR, "column id is greater than max_used_column_id, ",
                         "column_name", column->get_column_name(),
@@ -2409,46 +2413,6 @@ int ObTableSchema::reorder_column(const ObString &column_name, const bool is_fir
   return ret;
 }
 
-int ObTableSchema::add_mv_tid(const uint64_t mv_tid)
-{
-  int ret = OB_SUCCESS;
-  bool need_add = true;
-  // we are sure that index_tid are added in sorted order
-  if (OB_ISNULL(get_allocator())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("allocator is null", KR(ret));
-  } else if (mv_cnt_ > 0) {
-    if (mv_tid < mv_tid_array_[mv_cnt_ - 1]) {
-      if (!std::binary_search(mv_tid_array_, mv_tid_array_ + mv_cnt_, mv_tid)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("mv_tid are expected to be added in sorted order", K(mv_tid), K(ret));
-      } else {
-        need_add = false;
-      }
-    } else if (mv_tid == mv_tid_array_[mv_cnt_ - 1]) {
-      need_add = false;
-    }
-  } else {
-    mv_tid_array_ = static_cast<uint64_t *>(get_allocator()->alloc(
-                    sizeof(uint64_t) * common::OB_MAX_INDEX_PER_TABLE));
-    if (OB_ISNULL(mv_tid_array_)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc array", KR(ret));
-    } else {
-      MEMSET(mv_tid_array_, 0, sizeof(uint64_t) * common::OB_MAX_INDEX_PER_TABLE);
-    }
-  }
-
-  if (OB_SUCCESS == ret && need_add) {
-    if (mv_cnt_ >= common::OB_MAX_INDEX_PER_TABLE) {
-      ret = OB_SIZE_OVERFLOW;
-    } else {
-      mv_tid_array_[mv_cnt_++] = mv_tid;
-    }
-  }
-  return ret;
-}
-
 int ObTableSchema::add_aux_vp_tid(const uint64_t aux_vp_tid)
 {
   int ret = OB_SUCCESS;
@@ -2736,15 +2700,12 @@ int ObTableSchema::set_view_definition(const common::ObString &view_definition)
 }
 
 int ObTableSchema::get_simple_index_infos(
-    common::ObIArray<ObAuxTableMetaInfo> &simple_index_infos_array,
-    bool with_mv) const
+    common::ObIArray<ObAuxTableMetaInfo> &simple_index_infos_array) const
 {
   int ret = OB_SUCCESS;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos_.count(); ++i) {
-    if (!with_mv && MATERIALIZED_VIEW == simple_index_infos_.at(i).table_type_) {
-      continue;
-    } else if (OB_FAIL(simple_index_infos_array.push_back(simple_index_infos_[i]))) {
+    if (OB_FAIL(simple_index_infos_array.push_back(simple_index_infos_[i]))) {
       LOG_WARN("fail to push back simple_index_infos_array", K(simple_index_infos_[i]));
     }
   }
@@ -3056,6 +3017,24 @@ uint64_t ObTableSchema::get_materialized_view_column_id(uint64_t column_id)
   return mv_col_id;
 }
 
+uint64_t ObTableSchema::gen_mlog_col_id_from_ref_col_id(const uint64_t column_id)
+{
+  uint64_t mlog_col_id = column_id;
+  if (OB_HIDDEN_PK_INCREMENT_COLUMN_ID == column_id) {
+    mlog_col_id = OB_MLOG_ROWID_COLUMN_ID;
+  }
+  return mlog_col_id;
+}
+
+uint64_t ObTableSchema::gen_ref_col_id_from_mlog_col_id(const uint64_t column_id)
+{
+  uint64_t ref_col_id = column_id;
+  if (OB_MLOG_ROWID_COLUMN_ID == column_id) {
+    ref_col_id = OB_HIDDEN_PK_INCREMENT_COLUMN_ID;
+  }
+  return ref_col_id;
+}
+
 //
 //  for mv, check it contains tabile_id in it's view define
 //
@@ -3202,10 +3181,6 @@ int64_t ObTableSchema::get_convert_size() const
   convert_size += get_name_hash_array_mem_size(column_cnt_);
   convert_size += label_se_column_ids_.get_data_size();
 
-  if (mv_cnt_ > 0) {
-    convert_size += common::OB_MAX_INDEX_PER_TABLE * sizeof(uint64_t);
-  }
-
   convert_size += column_cnt_ * sizeof(ObColumnSchemaV2*);
   for (int64_t i = 0; i < column_cnt_ && NULL != column_array_[i];  ++i) {
     convert_size += column_array_[i]->get_convert_size();
@@ -3287,9 +3262,6 @@ void ObTableSchema::reset()
   reset_string(expire_info_);
   reset_string(parser_name_);
   view_schema_.reset();
-
-  mv_cnt_ = 0;
-  mv_tid_array_ = NULL;
 
   aux_vp_tid_array_.reset();
 
@@ -6230,6 +6202,18 @@ int ObSimpleTableSchemaV2::generate_origin_index_name()
   return ret;
 }
 
+int ObSimpleTableSchemaV2::get_mlog_name(ObString &mlog_name) const
+{
+  int ret = OB_SUCCESS;
+  if (!is_mlog_table()) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("table is not materialized view log", KR(ret));
+  } else {
+    mlog_name = table_name_;
+  }
+  return ret;
+}
+
 int ObSimpleTableSchemaV2::check_if_oracle_compat_mode(bool &is_oracle_mode) const
 {
   int ret = OB_SUCCESS;
@@ -6323,7 +6307,6 @@ int64_t ObTableSchema::to_string(char *buf, const int64_t buf_len) const
     K_(auto_increment),
     K_(read_only),
     K_(simple_index_infos),
-    "mv_tid_array", ObArrayWrap<uint64_t>(mv_tid_array_, mv_cnt_),
     K_(base_table_ids),
     //K_(depend_table_ids),
     //K_(join_types),
@@ -6503,13 +6486,9 @@ OB_DEF_SERIALIZE(ObTableSchema)
               depend_table_ids_);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, mv_cnt_))) {
+    // mv_cnt_ is removed, encode 0 for compatibility
+    if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, 0))) {
       LOG_WARN("Fail to encode mv table count", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < mv_cnt_; ++i) {
-      if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, mv_tid_array_[i]))) {
-        LOG_WARN("Fail to encode mv tid, ", K(i), K(ret));
-      }
     }
   }
 
@@ -6883,8 +6862,6 @@ OB_DEF_DESERIALIZE(ObTableSchema)
         mv_tid = 0;
         if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &mv_tid))) {
           LOG_WARN("Fail to deserialize mv tid", K(ret));
-        } else if (OB_FAIL(add_mv_tid(mv_tid))) {
-          LOG_WARN("Fail to add mv tid", K(ret));
         }
       }
     }
@@ -7147,10 +7124,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(index_attributes_set_);
   OB_UNIS_ADD_LEN(parser_name_);
 
-  len += serialization::encoded_length_vi64(mv_cnt_);
-  for (int64_t i = 0; i < mv_cnt_; ++i) {
-    len += serialization::encoded_length_vi64(mv_tid_array_[i]);
-  }
+  len += serialization::encoded_length_vi64(0); //mv_tid compatiable
 
   len += depend_table_ids_.get_serialize_size();
   len += depend_mock_fk_parent_table_ids_.get_serialize_size();
@@ -7876,9 +7850,6 @@ int ObTableSchema::add_simple_index_info(const ObAuxTableMetaInfo &simple_index_
       LOG_WARN("new table id must bigger than last one", K(ret));
     } else if (OB_FAIL(simple_index_infos_.push_back(simple_index_info))) {
       LOG_WARN("failed to push back simple_index_info", K(ret), K(simple_index_info));
-    } else if (MATERIALIZED_VIEW == simple_index_info.table_type_
-               && OB_FAIL(add_mv_tid(simple_index_info.table_id_))) {
-      LOG_WARN("failed to add mv tid", K(ret), K(simple_index_info));
     }
   }
 
@@ -8833,7 +8804,6 @@ int64_t ObPrintableTableSchema::to_string(char *buf, const int64_t buf_len) cons
     K_(autoinc_column_id),
     K_(auto_increment),
     K_(read_only),
-    "mv_tid_array", ObArrayWrap<uint64_t>(mv_tid_array_, mv_cnt_),
     "aux_vp_tid_array", aux_vp_tid_array_,
     K_(base_table_ids),
     K_(aux_lob_meta_tid),

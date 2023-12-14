@@ -3766,7 +3766,11 @@ int ObDbmsStats::parse_table_info(ObExecContext &ctx,
                                                  is_index,
                                                  table_schema))) {
         LOG_WARN("failed to get table schema", K(ret), K(param.db_name_), K(param.tab_name_));
-      } else {/*do nothing*/}
+      } else if (nullptr != table_schema && table_schema->is_materialized_view()) {
+        if (OB_FAIL(schema_guard->get_table_schema(param.tenant_id_, table_schema->get_data_table_id(), table_schema))) {
+          LOG_WARN("fail to get mview container table schema", KR(ret), K(param.tenant_id_), K(table_schema->get_data_table_id()));
+        }
+      }
     } else {
       if (OB_FAIL(schema_guard->get_idx_schema_by_origin_idx_name(param.tenant_id_, param.db_id_,
                                                                   param.tab_name_, table_schema))) {
@@ -5927,7 +5931,7 @@ int ObDbmsStats::get_table_index_infos(sql::ObExecContext &ctx,
     LOG_WARN("get unexpected null", K(ret), K(table_schema));
   } else if (share::is_oracle_mapping_real_virtual_table(table_schema->get_table_id())) {
     // do not gather stat for oracle inner table index
-  } else if (OB_FAIL(table_schema->get_simple_index_infos(index_infos, false))) {
+  } else if (OB_FAIL(table_schema->get_simple_index_infos(index_infos))) {
     LOG_WARN("failed to get simple index infos", K(ret));
   } else {
     LOG_TRACE("Succeed to get table index infos", K(table_id), K(index_infos));

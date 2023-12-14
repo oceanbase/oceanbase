@@ -64,6 +64,11 @@ public:
                                          const ObDASWriteBuffer::DmlRow &dml_row,
                                          ObSpatIndexRow &spat_rows);
   static int wait_das_retry(int64_t retry_cnt);
+  static int generate_mlog_row(const common::ObTabletID &tablet_id,
+                               const storage::ObDMLBaseParam &dml_param,
+                               common::ObNewRow &row,
+                               ObDASOpType op_type,
+                               bool is_old_row);
 };
 }  // namespace sql
 }  // namespace oceanbase

@@ -990,6 +990,8 @@ int ObSchemaServiceSQLImpl::get_full_table_schema_from_inner_table(
         tmp_table_schema->set_aux_lob_meta_tid(aux_table_meta.table_id_);
       } else if (AUX_LOB_PIECE == aux_table_meta.table_type_) {
         tmp_table_schema->set_aux_lob_piece_tid(aux_table_meta.table_id_);
+      } else if (MATERIALIZED_VIEW_LOG == aux_table_meta.table_type_) {
+        tmp_table_schema->set_mlog_tid(aux_table_meta.table_id_);
       }
     }
     if (OB_SUCC(ret)) {

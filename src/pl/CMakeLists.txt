@@ -51,6 +51,8 @@ ob_set_subtarget(ob_pl sys_package
   sys_package/ob_dbms_upgrade.cpp
   sys_package/ob_dbms_sql.cpp
   sys_package/ob_dbms_user_define_rule.cpp
+  sys_package/ob_dbms_mview_mysql.cpp
+  sys_package/ob_dbms_mview_stats_mysql.cpp
   sys_package/ob_dbms_workload_repository.cpp
   sys_package/ob_pl_dbms_resource_manager.cpp
   sys_package/ob_pl_dbms_trusted_certificate_manager.cpp

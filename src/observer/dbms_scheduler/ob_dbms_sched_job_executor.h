@@ -16,13 +16,10 @@
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "lib/allocator/ob_mod_define.h"
 #include "share/schema/ob_multi_version_schema_service.h"
+#include "observer/dbms_scheduler/ob_dbms_sched_table_operator.h"
 
 namespace oceanbase
 {
-namespace sql
-{
-class ObExecEnv;
-}
 namespace dbms_scheduler
 {
 class ObDBMSSchedJobInfo;
@@ -38,13 +35,6 @@ public:
   int run_dbms_sched_job(uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id, const ObString &job_name);
 
 private:
-  static int init_session(
-    sql::ObSQLSessionInfo &session,
-    share::schema::ObSchemaGetterGuard &schema_guard,
-    const common::ObString &tenant_name, uint64_t tenant_id,
-    const common::ObString &database_name, uint64_t database_id,
-    const share::schema::ObUserInfo* user_info);
-  int init_env(ObDBMSSchedJobInfo &job_info, sql::ObSQLSessionInfo &session);
   int run_dbms_sched_job(uint64_t tenant_id, ObDBMSSchedJobInfo &job_info);
 
   bool inited_;

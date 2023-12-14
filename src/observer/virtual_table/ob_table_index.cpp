@@ -216,7 +216,9 @@ int ObTableIndex::add_database_indexes(const ObDatabaseSchema &database_schema,
         if (OB_UNLIKELY(NULL == table_schema)) {
           ret = OB_TABLE_NOT_EXIST;
           SERVER_LOG(WARN, "table schema not exist", K(ret));
-        } else if(table_schema->is_index_table() || table_schema->is_aux_lob_table()) {
+        } else if(table_schema->is_index_table()
+            || table_schema->is_aux_lob_table()
+            || table_schema->is_mlog_table()) {
           is_sub_end = true;
         } else if (OB_FAIL(add_table_indexes(*table_schema,
                                              database_schema.get_database_name_str(),
@@ -463,12 +465,31 @@ int ObTableIndex::add_normal_indexes(const ObTableSchema &table_schema,
 {
   int ret = OB_SUCCESS;
   bool is_sub_end = false;
-  if (OB_INVALID_ID == static_cast<uint64_t>(index_tid_array_idx_)) {
+  if (OB_ISNULL(schema_guard_)) {
+    ret = OB_NOT_INIT;
+    SERVER_LOG(WARN, "schema guard is not init", KR(ret), KP(schema_guard_));
+  } else if (OB_INVALID_ID == static_cast<uint64_t>(index_tid_array_idx_)) {
     simple_index_infos_.reset();
-    if (OB_FAIL(table_schema.get_simple_index_infos(
-        simple_index_infos_, false))) {
-      SERVER_LOG(WARN, "cannot get index list", K(ret));
-    } else {
+    if (table_schema.mv_container_table()) {
+      // bypass
+    } else if (table_schema.is_materialized_view()) {
+      // a mview's indexes are built upon its container table
+      const ObTableSchema *container_table_schema = nullptr;
+      if (OB_FAIL(schema_guard_->get_table_schema(table_schema.get_tenant_id(),
+          table_schema.get_data_table_id(), container_table_schema))) {
+        SERVER_LOG(WARN, "failed to get table schema", KR(ret), K(table_schema));
+      } else if (OB_ISNULL(container_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "invalid container table id", KR(ret),
+            "container table id", table_schema.get_data_table_id());
+      } else if (OB_FAIL(container_table_schema->get_simple_index_infos(simple_index_infos_))) {
+        SERVER_LOG(WARN, "cannot get index list", KR(ret));
+      }
+    } else if (OB_FAIL(table_schema.get_simple_index_infos(simple_index_infos_))) {
+      SERVER_LOG(WARN, "cannot get index list", KR(ret));
+    }
+
+    if (OB_SUCC(ret)) {
       index_tid_array_idx_ = 0;
     }
   }
@@ -485,13 +506,10 @@ int ObTableIndex::add_normal_indexes(const ObTableSchema &table_schema,
       } else {
         is_end = false;
         const ObTableSchema *index_schema = NULL;
-        if (OB_ISNULL(schema_guard_)) {
-          ret = OB_NOT_INIT;
-          SERVER_LOG(WARN, "schema guard is not init", K(ret), K(schema_guard_));
-        } else if (OB_UNLIKELY(OB_FAIL(schema_guard_->get_table_schema(
+        if (OB_FAIL(schema_guard_->get_table_schema(
                   table_schema.get_tenant_id(),
                   simple_index_infos_.at(index_tid_array_idx_).table_id_,
-                  index_schema)))) {
+                  index_schema))) {
           SERVER_LOG(WARN, "fail to get index table", K(ret),
                      "index_table_id",
                      simple_index_infos_.at(index_tid_array_idx_).table_id_);

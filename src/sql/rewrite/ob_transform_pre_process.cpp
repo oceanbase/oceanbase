@@ -6046,30 +6046,31 @@ int ObTransformPreProcess::transformer_aggr_expr(ObDMLStmt *stmt,
   //之前的逻辑保证了两者嵌套聚合及普通函数的改写顺序，传进来的trans_happened包含了是否发生嵌套聚合函数改写的信息
   bool is_trans_nested_aggr_happened = trans_happened;
   trans_happened = false;
-  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid null allocator", K(ret));
-  } else if (OB_FAIL(ObExpandAggregateUtils::expand_aggr_expr(stmt, ctx_, is_expand_aggr))) {
-    LOG_WARN("failed to expand aggr expr", K(ret));
-  } else if (OB_FAIL(ObExpandAggregateUtils::expand_window_aggr_expr(stmt,
-                                                                     ctx_,
-                                                                     is_expand_window_aggr))) {
-    LOG_WARN("failed to expand window aggr expr", K(ret));
-  //如果发生了嵌套聚合函数改写：
-  // select max(avg(c1)) from t1 group by c2;
-  // ==>
-  // select max(a) from (select avg(c1) as a from t1 group by c2);
-  // 需要改写view里面的聚合函数，同时需要注释的是嵌套聚合函数只有内外两层，不会生成超过2层的结构
-  } else if (is_trans_nested_aggr_happened) {
-    TableItem *table_item = NULL;
-    if (OB_UNLIKELY(stmt->get_table_items().count() != 1) ||
-        OB_ISNULL(table_item = stmt->get_table_item(0)) ||
-        OB_UNLIKELY(!table_item->is_generated_table())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected error", K(table_item), K(stmt->get_table_items().count()), K(ret));
-    } else if (OB_FAIL(transformer_aggr_expr(table_item->ref_query_, is_happened))) {
-      LOG_WARN("failed to transformer aggr expr", K(ret));
-    } else {/*do nothing*/}
+  } else {
+    ObExpandAggregateUtils expand_aggr_utils(*ctx_->expr_factory_,  ctx_->session_info_);
+    if (OB_FAIL(expand_aggr_utils.expand_aggr_expr(stmt, is_expand_aggr))) {
+      LOG_WARN("failed to expand aggr expr", K(ret));
+    } else if (OB_FAIL(expand_aggr_utils.expand_window_aggr_expr(stmt, is_expand_window_aggr))) {
+      LOG_WARN("failed to expand window aggr expr", K(ret));
+    //如果发生了嵌套聚合函数改写：
+    // select max(avg(c1)) from t1 group by c2;
+    // ==>
+    // select max(a) from (select avg(c1) as a from t1 group by c2);
+    // 需要改写view里面的聚合函数，同时需要注释的是嵌套聚合函数只有内外两层，不会生成超过2层的结构
+    } else if (is_trans_nested_aggr_happened) {
+      TableItem *table_item = NULL;
+      if (OB_UNLIKELY(stmt->get_table_items().count() != 1) ||
+          OB_ISNULL(table_item = stmt->get_table_item(0)) ||
+          OB_UNLIKELY(!table_item->is_generated_table())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(table_item), K(stmt->get_table_items().count()), K(ret));
+      } else if (OB_FAIL(transformer_aggr_expr(table_item->ref_query_, is_happened))) {
+        LOG_WARN("failed to transformer aggr expr", K(ret));
+      } else {/*do nothing*/}
+    }
   }
   if (OB_SUCC(ret)) {
     trans_happened = is_expand_aggr | is_expand_window_aggr | is_happened;

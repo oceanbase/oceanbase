@@ -4148,7 +4148,7 @@ int ObLSTabletService::extract_rowkey(
       if (OB_FAIL(table.get_rowkey_col_id_by_idx(i, column_id))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Failed to get rowkey column description", K(i), K(ret));
-      } else if (column_id <= OB_MIN_SHADOW_COLUMN_ID) {
+      } else if (!is_shadow_column(column_id)) {
         valid_rowkey_size ++;
       }
     }
@@ -4243,7 +4243,7 @@ int ObLSTabletService::check_rowkey_change(
       for (int64_t j = 0; OB_SUCC(ret) && j < relative_table.get_rowkey_column_num() && !rowkey_change; ++j) {
         if (OB_FAIL(relative_table.get_rowkey_col_id_by_idx(j, cid))) {
           LOG_WARN("get rowkey column id fail", K(ret), K(j));
-        } else if (cid > OB_MIN_SHADOW_COLUMN_ID) {
+        } else if (is_shadow_column(cid)) {
           if (innullable) {
             break; // other_change
           } else {

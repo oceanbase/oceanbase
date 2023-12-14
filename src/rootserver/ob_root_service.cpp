@@ -76,6 +76,7 @@
 #include "rootserver/ob_bootstrap.h"
 #include "rootserver/ob_schema2ddl_sql.h"
 #include "rootserver/ob_index_builder.h"
+#include "rootserver/ob_mlog_builder.h"
 #include "rootserver/ob_update_rs_list_task.h"
 #include "rootserver/ob_resource_weight_parser.h"
 #include "rootserver/ob_rs_job_table_operator.h"
@@ -3107,6 +3108,94 @@ int ObRootService::parallel_create_table(const ObCreateTableArg &arg, ObCreateTa
   return ret;
 }
 
+int ObRootService::gen_container_table_schema_(const ObCreateTableArg &arg,
+                                               ObSchemaGetterGuard &schema_guard,
+                                               ObTableSchema &mv_table_schema,
+                                               ObArray<ObTableSchema> &table_schemas)
+{
+  int ret = OB_SUCCESS;
+  SMART_VAR(ObTableSchema, container_table_schema) {
+    if (arg.mv_ainfo_.count() >= 2) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("container table should be less than two", KR(ret), K(arg.mv_ainfo_.count()));
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < arg.mv_ainfo_.count(); i ++) {
+      container_table_schema.reset();
+      char buf[OB_MAX_TABLE_NAME_LENGTH];
+      memset(buf, 0, OB_MAX_TABLE_NAME_LENGTH);
+
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(container_table_schema.assign(arg.mv_ainfo_.at(i).container_table_schema_))) {
+          LOG_WARN("fail to assign index schema", KR(ret));
+        } else if (OB_FAIL(databuff_printf(buf, OB_MAX_TABLE_NAME_LENGTH, "__mv_container_%ld", mv_table_schema.get_table_id()))) {
+          LOG_WARN("fail to print table name", KR(ret));
+        } else if (OB_FAIL(container_table_schema.set_table_name(buf))) {
+          LOG_WARN("fail to set table_name", KR(ret));
+        } else {
+          container_table_schema.set_database_id(mv_table_schema.get_database_id());
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        ObArray<ObSchemaType> conflict_schema_types;
+        if (!arg.is_alter_view_
+            && OB_FAIL(schema_guard.check_oracle_object_exist(container_table_schema.get_tenant_id(),
+                   container_table_schema.get_database_id(), container_table_schema.get_table_name_str(),
+                   TABLE_SCHEMA, INVALID_ROUTINE_TYPE, arg.if_not_exist_, conflict_schema_types))) {
+          LOG_WARN("fail to check oracle_object exist", K(ret), K(container_table_schema));
+        } else if (conflict_schema_types.count() > 0) {
+          ret = OB_ERR_EXIST_OBJECT;
+          LOG_WARN("Name is already used by an existing object",
+                   K(ret), K(container_table_schema), K(conflict_schema_types));
+        }
+      }
+      if (OB_SUCC(ret)) { // check same table_name
+        bool table_exist = false;
+        bool object_exist = false;
+        uint64_t synonym_id = OB_INVALID_ID;
+        ObSchemaGetterGuard::CheckTableType check_type = ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES;
+
+        if (FAILEDx(schema_guard.check_synonym_exist_with_name(container_table_schema.get_tenant_id(),
+                container_table_schema.get_database_id(),
+                container_table_schema.get_table_name_str(),
+                object_exist,
+                synonym_id))) {
+          LOG_WARN("fail to check synonym exist", K(container_table_schema), KR(ret));
+        } else if (object_exist) {
+          ret = OB_ERR_EXIST_OBJECT;
+          LOG_WARN("Name is already used by an existing object", K(container_table_schema), KR(ret));
+        } else if (OB_FAIL(schema_guard.check_table_exist(container_table_schema.get_tenant_id(),
+                container_table_schema.get_database_id(),
+                container_table_schema.get_table_name_str(),
+                false, /*is index*/
+                check_type,
+                table_exist))) {
+          LOG_WARN("check table exist failed", KR(ret), K(container_table_schema));
+        } else if (table_exist) {
+          ret = OB_ERR_TABLE_EXIST;
+          LOG_WARN("table exist", KR(ret), K(container_table_schema), K(arg.if_not_exist_));
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(ddl_service_.generate_schema(arg, container_table_schema))) {
+          LOG_WARN("fail to generate container table schema", KR(ret));
+        } else {
+          //table_schema.get_view_schema().set_container_table_id(container_table_schema.get_table_id());
+          mv_table_schema.set_data_table_id(container_table_schema.get_table_id());
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(table_schemas.push_back(container_table_schema))) {
+          LOG_WARN("push_back failed", KR(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &res)
 {
   LOG_DEBUG("receive create table arg", K(arg));
@@ -3128,6 +3217,7 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
     ObSchemaService *schema_service = schema_service_->get_schema_service();
     ObTableSchema table_schema;
     bool is_oracle_mode = false;
+    int64_t ddl_task_id = 0;
     // generate base table schema
     if (OB_FAIL(table_schema.assign(arg.schema_))) {
       LOG_WARN("fail to assign schema", K(ret));
@@ -3292,7 +3382,11 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
       //  LOG_WARN("reach rs's limits, rootserver can only hold limited replicas");
     } else if (OB_FAIL(table_schemas.push_back(table_schema))) {
       LOG_WARN("push_back failed", K(ret));
-    } else {
+    } else if (OB_FAIL(gen_container_table_schema_(arg, schema_guard, table_schema, table_schemas))) {
+      LOG_WARN("fail to gen container table schema", KR(ret));
+    }
+
+    if (OB_SUCC(ret)) {
       RS_TRACE(generate_schema_index);
       res.table_id_ = table_schema.get_table_id();
       // generate index schemas
@@ -3629,7 +3723,8 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
                                       arg.sequence_ddl_arg_,
                                       arg.last_replay_log_id_,
                                       &arg.dep_infos_,
-                                      mock_fk_parent_table_schema_array))) {
+                                      mock_fk_parent_table_schema_array,
+                                      ddl_task_id))) {
         LOG_WARN("create_user_tables failed", "if_not_exist", arg.if_not_exist_,
                  "ddl_stmt_str", arg.ddl_stmt_str_, K(ret));
       }
@@ -3791,6 +3886,8 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
       uint64_t tenant_id = table_schema.get_tenant_id();
       if (OB_FAIL(schema_service_->get_tenant_schema_version(tenant_id, res.schema_version_))) {
         LOG_WARN("failed to get tenant schema version", K(ret));
+      } else {
+        res.task_id_ = ddl_task_id;
       }
     }
   }
@@ -3877,6 +3974,38 @@ int ObRootService::maintain_obj_dependency_info(const obrpc::ObDependencyObjDDLA
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else if (OB_FAIL(ddl_service_.maintain_obj_dependency_info(arg))) {
     LOG_WARN("failed to maintain obj dependency info", K(ret), K(arg));
+  }
+  return ret;
+}
+
+int ObRootService::mview_complete_refresh(const obrpc::ObMViewCompleteRefreshArg &arg,
+                                          obrpc::ObMViewCompleteRefreshRes &res)
+{
+  LOG_DEBUG("receive mview complete refresh arg", K(arg));
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg.tenant_id_;
+  uint64_t compat_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_3_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("version lower than 4.3 does not support this operation", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is below 4.3.0.0, mview complete refresh is ");
+  } else if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else {
+    ObSchemaGetterGuard schema_guard;
+    if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+      LOG_WARN("get schema guard in inner table failed", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(check_parallel_ddl_conflict(schema_guard, arg))) {
+      LOG_WARN("check parallel ddl conflict failed", KR(ret), K(arg));
+    } else if (OB_FAIL(ddl_service_.mview_complete_refresh(arg, res, schema_guard))) {
+      LOG_WARN("failed to mview complete refresh", KR(ret), K(arg));
+    }
   }
   return ret;
 }
@@ -4432,6 +4561,32 @@ int ObRootService::create_index(const ObCreateIndexArg &arg, obrpc::ObAlterTable
                         "table_id", table_id_buffer,
                         "schema_version", res.schema_version_);
   LOG_INFO("finish create index ddl", K(ret), K(arg), K(res), "ddl_event_info", ObDDLEventInfo());
+  return ret;
+}
+
+int ObRootService::create_mlog(const obrpc::ObCreateMLogArg &arg, obrpc::ObCreateMLogRes &res)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else {
+    ObSchemaGetterGuard schema_guard;
+    ObMLogBuilder mlog_builder(ddl_service_);
+    if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(
+        arg.tenant_id_, schema_guard))) {
+      LOG_WARN("get schema guard in inner table failed", K(ret));
+    } else if (OB_FAIL(check_parallel_ddl_conflict(schema_guard, arg))) {
+      LOG_WARN("check parallel ddl conflict failed", K(ret));
+    } else if (OB_FAIL(mlog_builder.init())) {
+      LOG_WARN("failed to init mlog builder", KR(ret));
+    } else if (OB_FAIL(mlog_builder.create_mlog(schema_guard, arg, res))) {
+      LOG_WARN("failed to create mlog", KR(ret), K(arg));
+    }
+  }
   return ret;
 }
 
@@ -5094,6 +5249,29 @@ int ObRootService::update_index_status(const obrpc::ObUpdateIndexStatusArg &arg)
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else if (OB_FAIL(ddl_service_.update_index_status(arg))) {
     LOG_WARN("update index table status failed", K(ret), K(arg));
+  }
+  return ret;
+}
+
+int ObRootService::update_mview_status(const obrpc::ObUpdateMViewStatusArg &arg)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg.exec_tenant_id_;
+  uint64_t compat_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_3_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("version lower than 4.3 does not support this operation", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is below 4.3.0.0, update mview status is ");
+  } else if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(ddl_service_.update_mview_status(arg))) {
+    LOG_WARN("update mview table status failed", KR(ret), K(arg));
   }
   return ret;
 }
@@ -9677,6 +9855,10 @@ int ObRootService::table_allow_ddl_operation(const obrpc::ObAlterTableArg &arg)
       LOG_WARN("try to alter invisible table schema", K(schema->get_session_id()), K(arg));
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "try to alter invisible table");
     }
+  } else if (OB_FAIL(ObResolverUtils::check_allowed_alter_operations_for_mlog(
+      tenant_id, arg, *schema))) {
+    LOG_WARN("failed to check allowed alter operation for mlog",
+        KR(ret), K(tenant_id), K(arg));
   }
   return ret;
 }

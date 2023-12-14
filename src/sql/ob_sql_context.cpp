@@ -482,6 +482,17 @@ int ObSqlSchemaGuard::get_table_schema(uint64_t table_id,
   return ret;
 }
 
+int ObSqlSchemaGuard::get_database_schema(const uint64_t database_id,
+                                          const ObDatabaseSchema *&database_schema)
+{
+  int ret = OB_SUCCESS;
+  database_schema = NULL;
+  const uint64_t tenant_id = MTL_ID();
+  OV (OB_NOT_NULL(schema_guard_));
+  OZ (schema_guard_->get_database_schema(tenant_id, database_id, database_schema), tenant_id, database_id);
+  return ret;
+}
+
 int ObSqlSchemaGuard::get_column_schema(uint64_t table_id, const ObString &column_name,
                                           const ObColumnSchemaV2 *&column_schema,
                                           bool is_link /* = false */) const
@@ -541,6 +552,16 @@ int ObSqlSchemaGuard::get_can_read_index_array(uint64_t table_id,
                                               index_tid_array, size, with_mv,
                                               with_global_index, with_domain_index,
                                               with_spatial_index));
+  return ret;
+}
+
+int ObSqlSchemaGuard::get_table_mlog_schema(const uint64_t table_id,
+                                            const ObTableSchema *&mlog_schema)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  OV (OB_NOT_NULL(schema_guard_));
+  OZ (schema_guard_->get_table_mlog_schema(tenant_id, table_id, mlog_schema));
   return ret;
 }
 

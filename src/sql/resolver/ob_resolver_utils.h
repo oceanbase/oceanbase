@@ -782,6 +782,10 @@ public:
   static int check_keystore_status(const uint64_t tenant_id, ObSchemaChecker &schema_checker);
   static int check_encryption_name(common::ObString &encryption_name, bool &need_encrypt);
   static int check_not_supported_tenant_name(const common::ObString &tenant_name);
+  static int check_allowed_alter_operations_for_mlog(
+      const uint64_t tenant_id,
+      const obrpc::ObAlterTableArg &arg,
+      const share::schema::ObTableSchema &table_schema);
 private:
   static int try_convert_to_unsiged(const ObExprResType restype,
                                     ObRawExpr& src_expr,

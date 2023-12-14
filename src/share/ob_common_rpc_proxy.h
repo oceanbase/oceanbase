@@ -78,6 +78,7 @@ public:
   RPC_S(PRD truncate_table_v2, obrpc::OB_TRUNCATE_TABLE_V2, (ObTruncateTableArg), ObDDLRes);
   RPC_S(PRD create_index, obrpc::OB_CREATE_INDEX, (ObCreateIndexArg), ObAlterTableRes);
   RPC_S(PRD drop_index, obrpc::OB_DROP_INDEX, (ObDropIndexArg), ObDropIndexRes);
+  RPC_S(PRD create_mlog, obrpc::OB_CREATE_MLOG, (ObCreateMLogArg), ObCreateMLogRes);
   RPC_S(PRD flashback_index, obrpc::OB_FLASHBACK_INDEX, (ObFlashBackIndexArg));
   RPC_S(PRD purge_index, obrpc::OB_PURGE_INDEX, (ObPurgeIndexArg));
   RPC_S(PRD create_table_like, obrpc::OB_CREATE_TABLE_LIKE, (ObCreateTableLikeArg));
@@ -93,6 +94,7 @@ public:
   RPC_S(PRD schema_revise, obrpc::OB_SCHEMA_REVISE, (ObSchemaReviseArg));
   RPC_S(PRD execute_ddl_task, obrpc::OB_EXECUTE_DDL_TASK, (ObAlterTableArg), common::ObSArray<uint64_t>);
   RPC_S(PRD maintain_obj_dependency_info, obrpc::OB_MAINTAIN_OBJ_DEPENDENCY_INFO, (ObDependencyObjDDLArg));
+  RPC_S(PRD mview_complete_refresh, obrpc::OB_MVIEW_COMPLETE_REFRESH, (obrpc::ObMViewCompleteRefreshArg), obrpc::ObMViewCompleteRefreshRes);
 
   //----Definitions for managing privileges----
   RPC_S(PRD create_user, obrpc::OB_CREATE_USER, (ObCreateUserArg), common::ObSArray<int64_t>);
@@ -193,6 +195,7 @@ public:
   RPC_S(PRD merge_resource_pool, obrpc::OB_MERGE_RESOURCE_POOL, (ObMergeResourcePoolArg));
   RPC_S(PRD alter_resource_tenant, obrpc::OB_ALTER_RESOURCE_TENANT, (ObAlterResourceTenantArg));
   RPC_S(PRD update_index_status, obrpc::OB_UPDATE_INDEX_TABLE_STATUS, (ObUpdateIndexStatusArg));
+  RPC_S(PRD update_mview_status, obrpc::OB_UPDATE_MVIEW_TABLE_STATUS, (ObUpdateMViewStatusArg));
 
   // define system admin rpc (alter system ...)
   RPC_S(PR5 root_minor_freeze, obrpc::OB_ROOT_MINOR_FREEZE, (ObRootMinorFreezeArg));

@@ -753,6 +753,9 @@ int ObSchemaChecker::get_table_schema(const uint64_t tenant_id, const ObString &
              && OB_INVALID_ID != schema_mgr_->get_session_id()) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(database_name), to_cstring(table_name));
+  } else if (table->is_materialized_view() && !(table->mv_available())) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(database_name), to_cstring(table_name));
   } else {
     table_schema = table;
   }
@@ -951,7 +954,8 @@ int ObSchemaChecker::get_can_write_index_array(const uint64_t tenant_id,
                                                uint64_t table_id,
                                                uint64_t *index_tid_array,
                                                int64_t &size,
-                                               bool only_global) const
+                                               bool only_global,
+                                               bool with_mlog) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -960,7 +964,7 @@ int ObSchemaChecker::get_can_write_index_array(const uint64_t tenant_id,
   } else if (OB_UNLIKELY(OB_INVALID_ID == table_id || size <= 0) || OB_ISNULL(index_tid_array)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(table_id), K(size), K(index_tid_array), K(ret));
-  } else if (OB_FAIL(schema_mgr_->get_can_write_index_array(tenant_id, table_id, index_tid_array, size, only_global))) {
+  } else if (OB_FAIL(schema_mgr_->get_can_write_index_array(tenant_id, table_id, index_tid_array, size, only_global, with_mlog))) {
     LOG_WARN("failed to get_can_write_index_array", K(tenant_id), K(table_id), K(ret));
   } else {}
   return ret;
@@ -2852,6 +2856,18 @@ int ObSchemaChecker::check_access_to_obj(
                                                     database_name,
                                                     role_id_array,
                                                     accessible),
+              K(tenant_id), K(user_id), K(stmt_type), K(role_id_array));
+            break;
+          }
+          case stmt::T_CREATE_MLOG: {
+            OZ (ObOraSysChecker::check_access_to_mlog_base_table(
+                *schema_mgr_,
+                tenant_id,
+                user_id,
+                obj_id,
+                database_name,
+                role_id_array,
+                accessible),
               K(tenant_id), K(user_id), K(stmt_type), K(role_id_array));
             break;
           }

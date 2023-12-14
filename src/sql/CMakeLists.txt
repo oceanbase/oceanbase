@@ -180,6 +180,7 @@ ob_set_subtarget(ob_sql engine_cmd
   engine/cmd/ob_empty_query_executor.cpp
   engine/cmd/ob_get_diagnostics_executor.cpp
   engine/cmd/ob_index_executor.cpp
+  engine/cmd/ob_mlog_executor.cpp
   engine/cmd/ob_kill_executor.cpp
   engine/cmd/ob_kill_session_arg.cpp
   engine/cmd/ob_load_data_direct_impl.cpp
@@ -1027,6 +1028,8 @@ ob_set_subtarget(ob_sql resolver_ddl
   resolver/ddl/ob_create_func_resolver.cpp
   resolver/ddl/ob_create_index_resolver.cpp
   resolver/ddl/ob_create_index_stmt.cpp
+  resolver/ddl/ob_create_mlog_resolver.cpp
+  resolver/ddl/ob_create_mlog_stmt.cpp
   resolver/ddl/ob_create_outline_resolver.cpp
   resolver/ddl/ob_create_package_resolver.cpp
   resolver/ddl/ob_create_profile_resolver.cpp
@@ -1038,6 +1041,7 @@ ob_set_subtarget(ob_sql resolver_ddl
   resolver/ddl/ob_create_table_like_resolver.cpp
   resolver/ddl/ob_create_table_like_stmt.cpp
   resolver/ddl/ob_create_table_resolver.cpp
+  resolver/ddl/ob_create_table_resolver_base.cpp
   resolver/ddl/ob_create_table_stmt.cpp
   resolver/ddl/ob_create_tablegroup_resolver.cpp
   resolver/ddl/ob_create_tablegroup_stmt.cpp
@@ -1055,6 +1059,8 @@ ob_set_subtarget(ob_sql resolver_ddl
   resolver/ddl/ob_drop_func_resolver.cpp
   resolver/ddl/ob_drop_index_resolver.cpp
   resolver/ddl/ob_drop_index_stmt.cpp
+  resolver/ddl/ob_drop_mlog_resolver.cpp
+  resolver/ddl/ob_drop_mlog_stmt.cpp
   resolver/ddl/ob_drop_outline_resolver.cpp
   resolver/ddl/ob_drop_package_resolver.cpp
   resolver/ddl/ob_drop_routine_resolver.cpp
@@ -1119,6 +1125,12 @@ ob_set_subtarget(ob_sql resolver_dml
   resolver/dml/ob_update_resolver.cpp
   resolver/dml/ob_update_stmt.cpp
   resolver/dml/ob_view_table_resolver.cpp
+)
+
+ob_set_subtarget(ob_sql resolver_mv
+  resolver/mv/ob_mv_checker.cpp
+  resolver/mv/ob_mv_provider.cpp
+  resolver/mv/ob_mv_printer.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_expr

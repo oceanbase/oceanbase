@@ -388,6 +388,8 @@ public:
   int get_table_schema(uint64_t table_id,
                        const share::schema::ObTableSchema *&table_schema,
                        bool is_link = false) const;
+  int get_database_schema(const uint64_t database_id,
+                          const ObDatabaseSchema *&database_schema);
   int get_column_schema(uint64_t table_id, const common::ObString &column_name,
                         const share::schema::ObColumnSchemaV2 *&column_schema,
                         bool is_link = false) const;
@@ -402,6 +404,7 @@ public:
                                bool with_global_index = true,
                                bool with_domain_index = true,
                                bool with_spatial_index = true);
+  int get_table_mlog_schema(const uint64_t table_id, const ObTableSchema *&mlog_schema);
   int get_link_table_schema(uint64_t table_id,
                             const share::schema::ObTableSchema *&table_schema) const;
   int get_link_column_schema(uint64_t table_id, const common::ObString &column_name,

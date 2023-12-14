@@ -24,9 +24,11 @@
 #include "rootserver/ddl_task/ob_drop_index_task.h"
 #include "rootserver/ddl_task/ob_drop_primary_key_task.h"
 #include "rootserver/ddl_task/ob_index_build_task.h"
+#include "rootserver/ddl_task/ob_build_mview_task.h"
 #include "rootserver/ddl_task/ob_modify_autoinc_task.h"
 #include "rootserver/ddl_task/ob_table_redefinition_task.h"
 #include "rootserver/ddl_task/ob_recover_restore_table_task.h"
+#include "rootserver/ddl_task/ob_build_mview_task.h"
 #include "share/ob_ddl_common.h"
 #include "share/ob_rpc_struct.h"
 #include "share/longops_mgr/ob_longops_mgr.h"
@@ -679,7 +681,8 @@ int ObUpdateSSTableCompleteStatusCallback::update_task_info_in_queue(ObTableRede
   return ret;
 }
 
-int ObPrepareAlterTableArgParam::init(const uint64_t session_id,
+int ObPrepareAlterTableArgParam::init(const int64_t consumer_group_id,
+                                      const uint64_t session_id,
                                       const ObSQLMode &sql_mode,
                                       const ObString &ddl_stmt_str,
                                       const ObString &orig_table_name,
@@ -690,7 +693,9 @@ int ObPrepareAlterTableArgParam::init(const uint64_t session_id,
                                       const ObString *nls_formats)
 {
   int ret = OB_SUCCESS;
-  if (FALSE_IT(session_id_ = session_id)) {
+  if (FALSE_IT(consumer_group_id_ = consumer_group_id)) {
+    // do nothing
+  } else if (FALSE_IT(session_id_ = session_id)) {
     // do nothing
   } else if (FALSE_IT(sql_mode_ = sql_mode)) {
     // do nothing
@@ -940,6 +945,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
   const obrpc::ObAlterTableArg *alter_table_arg = nullptr;
   const obrpc::ObCreateIndexArg *create_index_arg = nullptr;
   const obrpc::ObDropIndexArg *drop_index_arg = nullptr;
+  const obrpc::ObMViewCompleteRefreshArg *mview_complete_refresh_arg = nullptr;
   ObRootService *root_service = GCTX.root_service_;
   uint64_t tenant_id = param.tenant_id_;
   uint64_t compat_version = 0;
@@ -961,8 +967,10 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
   } else {
     switch (param.type_) {
       case DDL_CREATE_INDEX:
+      case DDL_CREATE_MLOG:
         create_index_arg = static_cast<const obrpc::ObCreateIndexArg *>(param.ddl_arg_);
         if (OB_FAIL(create_build_index_task(proxy,
+                                            param.type_,
                                             param.src_table_schema_,
                                             param.dest_table_schema_,
                                             param.parallelism_,
@@ -976,9 +984,11 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
         }
         break;
       case DDL_DROP_INDEX:
+      case DDL_DROP_MLOG:
         // in this case, src_table_schema is data table, dest_table_schema is index table
         drop_index_arg = static_cast<const obrpc::ObDropIndexArg *>(param.ddl_arg_);
         if (OB_FAIL(create_drop_index_task(proxy,
+                                           param.type_,
                                            param.src_table_schema_,
                                            param.parent_task_id_,
                                            param.consumer_group_id_,
@@ -997,6 +1007,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
       case DDL_TABLE_REDEFINITION:
       case DDL_DIRECT_LOAD:
       case DDL_DIRECT_LOAD_INSERT:
+      case DDL_MVIEW_COMPLETE_REFRESH:
         if (OB_FAIL(create_table_redefinition_task(proxy,
                                                    param.type_,
                                                    param.src_table_schema_,
@@ -1009,6 +1020,19 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                                    *param.allocator_,
                                                    task_record))) {
           LOG_WARN("fail to create table redefinition task", K(ret));
+        }
+        break;
+      case DDL_CREATE_MVIEW:
+        mview_complete_refresh_arg = static_cast<const obrpc::ObMViewCompleteRefreshArg *>(param.ddl_arg_);
+        if (OB_FAIL(create_build_mview_task(proxy,
+                                            param.src_table_schema_,
+                                            param.parallelism_,
+                                            param.parent_task_id_,
+                                            param.consumer_group_id_,
+                                            mview_complete_refresh_arg,
+                                            *param.allocator_,
+                                            task_record))) {
+          LOG_WARN("fail to create build mview task", K(ret));
         }
         break;
       case DDL_TABLE_RESTORE:
@@ -1177,7 +1201,7 @@ int ObDDLScheduler::prepare_alter_table_arg(const ObPrepareAlterTableArgParam &p
     // do nothing
   } else if (FALSE_IT(alter_table_arg.sql_mode_ = param.sql_mode_)) {
     // do nothing
-  } else if (FALSE_IT(alter_table_arg.consumer_group_id_ = param.sql_mode_)) {
+  } else if (FALSE_IT(alter_table_arg.consumer_group_id_ = param.consumer_group_id_)) {
     // do nothing
   } else if (FALSE_IT(alter_table_arg.ddl_stmt_str_.assign_ptr(ddl_stmt_str.ptr(), ddl_stmt_str.length()))) {
     // do nothing
@@ -1408,7 +1432,8 @@ int ObDDLScheduler::start_redef_table(const obrpc::ObStartRedefTableArg &arg, ob
   } else {
     HEAP_VAR(obrpc::ObAlterTableArg, alter_table_arg) {
       ObPrepareAlterTableArgParam param;
-      if (OB_FAIL(param.init(arg.session_id_,
+      if (OB_FAIL(param.init(THIS_WORKER.get_group_id(),
+                             arg.session_id_,
                              arg.sql_mode_,
                              arg.ddl_stmt_str_,
                              orig_table_schema->get_table_name_str(),
@@ -1453,6 +1478,7 @@ int ObDDLScheduler::start_redef_table(const obrpc::ObStartRedefTableArg &arg, ob
 
 int ObDDLScheduler::create_build_index_task(
     common::ObISQLClient &proxy,
+    const share::ObDDLType &ddl_type,
     const ObTableSchema *data_table_schema,
     const ObTableSchema *index_schema,
     const int64_t parallelism,
@@ -1476,6 +1502,7 @@ int ObDDLScheduler::create_build_index_task(
       LOG_WARN("fetch new task id failed", K(ret));
     } else if (OB_FAIL(index_task.init(data_table_schema->get_tenant_id(),
                                       task_id,
+                                      ddl_type,
                                       data_table_schema,
                                       index_schema,
                                       index_schema->get_schema_version(),
@@ -1497,6 +1524,7 @@ int ObDDLScheduler::create_build_index_task(
 
 int ObDDLScheduler::create_drop_index_task(
     common::ObISQLClient &proxy,
+    const share::ObDDLType &ddl_type,
     const share::schema::ObTableSchema *index_schema,
     const int64_t parent_task_id,
     const int64_t consumer_group_id,
@@ -1524,6 +1552,7 @@ int ObDDLScheduler::create_drop_index_task(
     const uint64_t index_table_id = index_schema->get_table_id();
     if (OB_FAIL(index_task.init(index_schema->get_tenant_id(),
                                 task_id,
+                                ddl_type,
                                 data_table_id,
                                 index_table_id,
                                 index_schema->get_schema_version(),
@@ -1986,9 +2015,11 @@ int ObDDLScheduler::schedule_ddl_task(const ObDDLTaskRecord &record)
   } else {
     switch (record.ddl_type_) {
       case ObDDLType::DDL_CREATE_INDEX:
+      case ObDDLType::DDL_CREATE_MLOG:
         ret = schedule_build_index_task(record);
         break;
       case ObDDLType::DDL_DROP_INDEX:
+      case ObDDLType::DDL_DROP_MLOG:
         ret = schedule_drop_index_task(record);
         break;
       case DDL_DROP_PRIMARY_KEY:
@@ -2002,7 +2033,11 @@ int ObDDLScheduler::schedule_ddl_task(const ObDDLTaskRecord &record)
       case DDL_TABLE_REDEFINITION:
       case DDL_DIRECT_LOAD:
       case DDL_DIRECT_LOAD_INSERT:
+      case DDL_MVIEW_COMPLETE_REFRESH:
         ret = schedule_table_redefinition_task(record);
+        break;
+      case DDL_CREATE_MVIEW:
+        ret = schedule_build_mview_task(record);
         break;
       case DDL_DROP_COLUMN:
       case DDL_ADD_COLUMN_OFFLINE:
@@ -2307,6 +2342,76 @@ int ObDDLScheduler::schedule_recover_restore_table_task(const ObDDLTaskRecord &t
   return ret;
 }
 
+int ObDDLScheduler::create_build_mview_task(
+    common::ObISQLClient &proxy,
+    const ObTableSchema *mview_schema,
+    const int64_t parallelism,
+    const int64_t parent_task_id,
+    const int64_t consumer_group_id,
+    const obrpc::ObMViewCompleteRefreshArg *mview_complete_refresh_arg,
+    ObIAllocator &allocator,
+    ObDDLTaskRecord &task_record)
+{
+  int ret = OB_SUCCESS;
+  int64_t task_id = 0;
+  SMART_VAR(ObBuildMViewTask, mview_task) {
+    if (OB_UNLIKELY(!is_inited_)) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("not init", KR(ret));
+    } else if (OB_ISNULL(mview_complete_refresh_arg)
+               || OB_ISNULL(mview_schema)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), K(mview_complete_refresh_arg),
+          K(mview_schema));
+    } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service_->get_sql_proxy(),
+        mview_schema->get_tenant_id(), task_id))) {
+      LOG_WARN("failed to fetch new task id", KR(ret));
+    } else if (OB_FAIL(mview_task.init(mview_schema->get_tenant_id(),
+                                      task_id,
+                                      mview_schema,
+                                      mview_schema->get_schema_version(),
+                                      parallelism,
+                                      consumer_group_id,
+                                      *mview_complete_refresh_arg,
+                                      parent_task_id))) {
+      LOG_WARN("failed to init mview task", KR(ret));
+    } else if (OB_FAIL(mview_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
+      LOG_WARN("failed to set trace id", KR(ret));
+    } else if (OB_FAIL(insert_task_record(proxy, mview_task, allocator, task_record))) {
+      LOG_WARN("failed to insert task record", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLScheduler::schedule_build_mview_task(const ObDDLTaskRecord &task_record)
+{
+  int ret = OB_SUCCESS;
+  ObBuildMViewTask *build_mview_task = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(alloc_ddl_task(build_mview_task))) {
+    LOG_WARN("failed to alloc dll task", KR(ret));
+  } else {
+    if (OB_FAIL(build_mview_task->init(task_record))) {
+      LOG_WARN("failed to init build mview task", KR(ret), K(task_record));
+    } else if (OB_FAIL(build_mview_task->set_trace_id(task_record.trace_id_))) {
+      LOG_WARN("failed to set trace id", KR(ret), K(task_record));
+    } else if (OB_FAIL(inner_schedule_ddl_task(build_mview_task, task_record))) {
+      if (OB_ENTRY_EXIST != ret) {
+        LOG_WARN("failed to inner schedule task", KR(ret), KPC(build_mview_task));
+      }
+    }
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(build_mview_task)) {
+    build_mview_task->~ObBuildMViewTask();
+    allocator_.free(build_mview_task);
+    build_mview_task = nullptr;
+  }
+  return ret;
+}
+
 int ObDDLScheduler::add_task_to_longops_mgr(ObDDLTask *ddl_task)
 {
   int ret = OB_SUCCESS;
@@ -2497,6 +2602,7 @@ int ObDDLScheduler::on_sstable_complement_job_reply(
           case ObDDLType::DDL_MODIFY_COLUMN:
           case ObDDLType::DDL_CONVERT_TO_CHARACTER:
           case ObDDLType::DDL_TABLE_REDEFINITION:
+          case ObDDLType::DDL_MVIEW_COMPLETE_REFRESH:
             if (OB_FAIL(static_cast<ObTableRedefinitionTask *>(&task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code, addition_info))) {
               LOG_WARN("update complete sstable job status", K(ret));
             }
@@ -2534,6 +2640,50 @@ int ObDDLScheduler::on_sstable_complement_job_reply(
     ret = OB_NEED_RETRY;
   }
   LOG_INFO("ddl sstable complement job reply", K(ret), "ddl_event_info", ObDDLEventInfo(), K(tablet_id), K(task_key), K(ret_code));
+  return ret;
+}
+
+int ObDDLScheduler::on_ddl_task_prepare(
+    const ObDDLTaskID &parent_task_id,
+    const int64_t task_id,
+    const ObCurTraceId::TraceId &parent_task_trace_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDDLScheduler has not been inited", K(ret));
+  } else if (OB_UNLIKELY(!parent_task_id.is_valid()) || task_id <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(parent_task_id), K(task_id));
+  } else {
+    ObDDLTask *ddl_task = nullptr;
+    struct Func {
+      Func(const int64_t task_id) :task_id_(task_id) {}
+      int operator()(ObDDLTask &task) {
+        ObBuildMViewTask *build_mv_task = static_cast<ObBuildMViewTask *>(&task);
+        return build_mv_task->on_child_task_prepare(task_id_);
+      }
+      int64_t task_id_;
+    } func(task_id);
+
+    ret = task_queue_.modify_task(parent_task_id, func);
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      bool exist = false;
+      if (OB_FAIL(ObDDLTaskRecordOperator::check_task_id_exist(*GCTX.sql_proxy_, parent_task_id.tenant_id_, parent_task_id.task_id_, exist))) {
+        LOG_WARN("check task id exist fail", K(ret), K(parent_task_id));
+      } else {
+        if (exist) {
+          ret = OB_EAGAIN;
+          LOG_INFO("entry exist, the ddl scheduler hasn't recovered the task yet", K(ret), K(parent_task_id));
+        } else {
+          LOG_WARN("this task does not exist int hash table", K(ret), K(parent_task_id));
+        }
+      }
+    } else if (OB_FAIL(ret)) {
+      LOG_WARN("failed to modify task", K(ret));
+    }
+  }
+  LOG_INFO("ddl task on prepare", K(ret), "ddl_event_info", ObDDLEventInfo(), K(parent_task_id), K(task_id), K(parent_task_trace_id));
   return ret;
 }
 
@@ -2584,6 +2734,7 @@ int ObDDLScheduler::notify_update_autoinc_end(const ObDDLTaskKey &task_key,
           case ObDDLType::DDL_TABLE_REDEFINITION:
           case ObDDLType::DDL_DIRECT_LOAD:
           case ObDDLType::DDL_DIRECT_LOAD_INSERT:
+          case ObDDLType::DDL_MVIEW_COMPLETE_REFRESH:
             if (OB_FAIL(static_cast<ObTableRedefinitionTask *>(&task)->notify_update_autoinc_finish(autoinc_val, ret_code))) {
               LOG_WARN("update complete sstable job status", K(ret));
             }
