@@ -207,7 +207,7 @@ int ObCreatePackageResolver::resolve(const ParseNode &parse_tree)
         }
       }
       // resolve package body to obtain analyze result again if it exists
-      if (OB_SUCC(ret)) {
+      if (OB_SUCC(ret) && package_ast.is_inited()) {
         HEAP_VAR(ObPLPackageAST, package_body_ast, *allocator_) {
           ObPLPackageGuard package_guard(params_.session_info_->get_effective_tenant_id());
           ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_mgr();
