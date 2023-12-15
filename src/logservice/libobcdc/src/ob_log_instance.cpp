@@ -2996,6 +2996,8 @@ int ObLogInstance::init_ob_cluster_version_()
     LOG_ERROR("ObClusterVersion init fail", KR(ret), K(min_observer_version));
   } else {
     LOG_INFO("OceanBase cluster version init succ", "cluster_version", ObClusterVersion::get_instance());
+    global_info_.update_min_cluster_version(min_observer_version);
+
     if (min_observer_version < CLUSTER_VERSION_4_1_0_0) {
       // OB 4.0 only support online schema
       refresh_mode_ = RefreshMode::ONLINE;

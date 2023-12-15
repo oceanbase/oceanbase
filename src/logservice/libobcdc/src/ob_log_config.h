@@ -427,8 +427,18 @@ public:
   T_DEF_INT(msg_sorter_thread_num, OB_CLUSTER_PARAMETER, 1, 1, 32, "trans msg sorter thread num");
   // sorter thread
   T_DEF_INT_INFT(msg_sorter_task_count_upper_limit, OB_CLUSTER_PARAMETER, 0, 0, "trans msg sorter task count per thread");
+
+  // ------------------------------------------------------------------------
+  // Emergency Mode, used to handle unexpected behavior of observer.
+  // NOTICE: Most configurations of emergency mode may have some side effects:
+  //    for example, increased memory usage by OBCDC, reduced data synchronization efficiency, and even unknown risks to data correctness.
+
   // ignore delete tablets
   T_DEF_BOOL(skip_delete_tablet_op, OB_CLUSTER_PARAMETER, 0, "0:disabled 1:enabled");
+  // lsn black list, using vertical line separation
+  DEF_STR(lsn_black_list, OB_CLUSTER_PARAMETER, "|", "lsn black list");
+  // ignore check if update of outrow lob is actually empty update to empty.
+  T_DEF_BOOL(skip_empty_outrow_lob_update, OB_CLUSTER_PARAMETER, 0, "0:disabled 1:enabled");
 
   // ------------------------------------------------------------------------
   // Test mode, used only in obtest and other test tool scenarios
