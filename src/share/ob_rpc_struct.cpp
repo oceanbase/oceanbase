@@ -2481,7 +2481,8 @@ OB_DEF_SERIALIZE(ObAlterTableArg)
       is_add_to_scheduler_,
       inner_sql_exec_addr_,
       local_session_var_,
-      mview_refresh_info_);
+      mview_refresh_info_,
+      alter_algorithm_);
 
   return ret;
 }
@@ -2572,7 +2573,8 @@ OB_DEF_DESERIALIZE(ObAlterTableArg)
       is_add_to_scheduler_,
       inner_sql_exec_addr_,
       local_session_var_,
-      mview_refresh_info_);
+      mview_refresh_info_,
+      alter_algorithm_);
   return ret;
 }
 
@@ -2616,7 +2618,8 @@ OB_DEF_SERIALIZE_SIZE(ObAlterTableArg)
         is_add_to_scheduler_,
         inner_sql_exec_addr_,
         local_session_var_,
-        mview_refresh_info_);
+        mview_refresh_info_,
+        alter_algorithm_);
   }
 
   if (OB_FAIL(ret)) {
