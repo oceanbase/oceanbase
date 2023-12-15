@@ -164,7 +164,7 @@ void ObThrottleUnit<ALLOCATOR>::print_throttle_info_(const int64_t holding_size,
     pre_clock_ = cur_clock;
 
     SHARE_LOG(INFO,
-              "[Throttling] Size Info",
+              "[Throttling] (report write throttle info) Size Info",
               "Throttle Unit Name",         unit_name_,
               "Allocating Resource Size",   alloc_size,
               "Holding Resource Size",      holding_size,

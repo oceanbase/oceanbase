@@ -204,7 +204,7 @@ int64_t ObShareResourceThrottleTool<FakeAllocator, Args...>::expected_wait_time(
     const int64_t MEMSTORE_THROTTLE_LOG_INTERVAL = 1L * 1000L * 1000L; /*one seconds*/ \
     if (sleep_time > 0 && REACH_TIME_INTERVAL(MEMSTORE_THROTTLE_LOG_INTERVAL)) {       \
       SHARE_LOG(INFO,                                                                  \
-                "[Throttling] Time Info",                                              \
+                "[Throttling] (report write throttle info) Time Info",                 \
                 "Throttle Unit Name",                                                  \
                 ALLOCATOR::throttle_unit_name(),                                       \
                 "Throttle Sleep Time(us)",                                             \
