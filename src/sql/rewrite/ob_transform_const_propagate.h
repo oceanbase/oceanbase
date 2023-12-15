@@ -335,14 +335,17 @@ private:
                                        ObRawExpr *part_column_expr,
                                        ObIArray<ObRawExpr*> &old_column_exprs,
                                        ObIArray<ObRawExpr*> &new_const_exprs,
-                                       int64_t &complex_cst_info_idx);
+                                       int64_t &complex_cst_info_idx,
+                                       bool &trans_happened);
 
   int build_new_in_condition_expr(ObRawExpr *check_constraint_expr,
                                   ExprConstInfo &expr_const_info,
                                   ObRawExpr *part_column_expr,
                                   ObIArray<ObRawExpr*> &old_column_exprs,
                                   ObIArray<ObRawExpr*> &new_const_exprs,
-                                  ObRawExpr *&new_condititon_expr);
+                                  ObRawExpr *&new_condititon_expr,
+                                  ObIArray<ObRawExpr*> &not_null_values,
+                                  bool &reject);
 
   int batch_mark_expr_const_infos_used(ObIArray<ObRawExpr*> &column_exprs,
                                        ObIArray<ExprConstInfo> &expr_const_infos);
@@ -357,6 +360,8 @@ private:
   int collect_from_pullup_const_infos(ObDMLStmt *stmt,
                                       ObRawExpr *expr,
                                       ExprConstInfo &equal_info);
+
+  int check_constraint_value_validity(ObRawExpr *value_expr, bool &reject);
 
 private:
   typedef ObSEArray<PullupConstInfo, 2> PullupConstInfos;
