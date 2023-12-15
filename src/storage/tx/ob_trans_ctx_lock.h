@@ -57,7 +57,7 @@ public:
 class CtxLock
 {
 public:
-  CtxLock() : lock_(), ctx_(NULL), lock_start_ts_(0) {}
+  CtxLock() : lock_(), ctx_(NULL), lock_start_ts_(0), waiting_lock_cnt_(0) {}
   ~CtxLock() {}
   int init(ObTransCtx *ctx);
   void reset();
@@ -69,6 +69,7 @@ public:
   void after_unlock(CtxLockArg &arg);
   ObTransCtx *get_ctx() { return ctx_; }
   bool is_locked_by_self() const { return lock_.is_wrlocked_by(); }
+  int64_t get_waiting_lock_cnt() const { return ATOMIC_LOAD(&waiting_lock_cnt_); }
 private:
   static const int64_t WARN_LOCK_TS = 1 * 1000 * 1000;
   DISALLOW_COPY_AND_ASSIGN(CtxLock);
@@ -76,6 +77,7 @@ private:
   common::ObLatch lock_;
   ObTransCtx *ctx_;
   int64_t lock_start_ts_;
+  int64_t waiting_lock_cnt_;
 };
 
 class CtxLockGuard
