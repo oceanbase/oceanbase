@@ -75,6 +75,14 @@ int ObPLCacheObject::set_params_info(const ParamStore &params)
           LOG_WARN("nested table is null", K(ret));
         } else {
           param_info.udt_id_ = composite->get_id();
+          if (OB_INVALID_ID == param_info.udt_id_) { // anonymous array
+            if (OB_FAIL(sql::ObSQLUtils::get_ext_obj_data_type(params.at(i), data_type))) {
+              LOG_WARN("fail to get ext obj data type", K(ret));
+            } else {
+              param_info.ext_real_type_ = data_type.get_obj_type();
+              param_info.scale_ = data_type.get_scale();
+            }
+          }
         }
       } else {
         if (OB_FAIL(sql::ObSQLUtils::get_ext_obj_data_type(params.at(i), data_type))) {
