@@ -813,7 +813,8 @@ int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
     } else {
       LOG_WARN("sync auto increment position failed", K(ret), K(object_id_), K(target_object_id_));
     }
-  } else if (OB_FAIL(sync_stats_info())) {
+  } else if (!is_direct_load_task(task_type_) &&
+             OB_FAIL(sync_stats_info())) {//direct load no need sync stats info, because the stats have been regather
     LOG_WARN("fail to sync stats info", K(ret), K(object_id_), K(target_object_id_));
   } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(dst_tenant_id_, target_object_id_, ddl_rpc_timeout))) {
             LOG_WARN("get ddl rpc timeout fail", K(ret));
