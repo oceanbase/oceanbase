@@ -7260,8 +7260,13 @@ int ObPartTransCtx::check_status_()
     }
     TRANS_LOG(WARN, "tx has decided", K(ret), KPC(this));
   } else if (OB_UNLIKELY(sub_state_.is_force_abort())) {
-    ret = OB_TRANS_KILLED;
-    TRANS_LOG(WARN, "tx force aborted due to data incomplete", K(ret), KPC(this));
+    if (is_trans_expired_()) {
+      ret = OB_TRANS_TIMEOUT;
+      TRANS_LOG(WARN, "tx has decided", K(ret), KPC(this));
+    } else {
+      ret = OB_TRANS_KILLED;
+      TRANS_LOG(WARN, "tx force aborted due to data incomplete", K(ret), KPC(this));
+    }
   } else if (OB_UNLIKELY(is_follower_())) {
     ret =  OB_NOT_MASTER;
   } else if (OB_UNLIKELY(is_exiting_)) {
