@@ -1234,7 +1234,7 @@ int ObLogInstance::start_tenant_service_()
       LOG_ERROR("update_data_start_schema_on_split_mode_ fail", KR(ret));
     }
   }
-  LOG_INFO("start_tenant_service_ success", K_(start_tstamp_ns), K_(sys_start_schema_version));
+  LOG_INFO("start_tenant_service_ done", KR(ret), K_(start_tstamp_ns), K_(sys_start_schema_version));
   return ret;
 }
 

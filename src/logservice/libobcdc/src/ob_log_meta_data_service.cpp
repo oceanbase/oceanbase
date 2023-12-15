@@ -381,7 +381,8 @@ int ObLogMetaDataService::get_data_dict_in_log_info_(
       if (OB_SUCC(ret) || done) {
       } else if (OB_ENTRY_NOT_EXIST == ret) {
         done = true;
-        LOG_ERROR("[FATAL][DATA_DICT] Can't find suitable data_dict to launch OBCDC", KR(ret), K(start_timestamp_ns));
+        LOG_ERROR("[FATAL][DATA_DICT] Can't find suitable data_dict to launch OBCDC, please try use online schema(refresh_mode=online && skip_ob_version_compat_check=1)",
+            KR(ret), K(tenant_id), K(start_timestamp_ns));
       } else {
         const static int64_t RETRY_FUNC_PRINT_INTERVAL = 10 * _SEC_;
         const int64_t sleep_usec_on_error = 100 * _MSEC_;
