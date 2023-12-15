@@ -34,6 +34,7 @@ struct ObTableColumnItem : public sql::ColumnItem
         is_stored_generated_column_(false),
         is_virtual_generated_column_(false),
         is_auto_increment_(false),
+        is_nullable_(true),
         rowkey_position_(-1)
   {}
   TO_STRING_KV("ColumnItem", static_cast<const sql::ColumnItem &>(*this),
@@ -45,6 +46,7 @@ struct ObTableColumnItem : public sql::ColumnItem
                K_(generated_expr_str),
                K_(dependant_exprs),
                K_(is_auto_increment),
+               K_(is_nullable),
                K_(rowkey_position));
   sql::ObRawExpr *raw_expr_; // column ref expr or calculate expr
   bool is_generated_column_;
@@ -56,7 +58,33 @@ struct ObTableColumnItem : public sql::ColumnItem
   common::ObString generated_expr_str_;
   common::ObSEArray<sql::ObRawExpr*, 8, common::ModulePageAllocator, true> dependant_exprs_;
   bool is_auto_increment_;
+  bool is_nullable_;
   int64_t rowkey_position_; // greater than zero if this is rowkey column, 0 if this is common column
+};
+
+struct ObTableColumnInfo
+{
+  ObTableColumnInfo()
+      : type_(),
+        is_auto_inc_(false),
+        is_nullable_(true)
+  {
+  }
+  ObTableColumnInfo(sql::ObExprResType type, const common::ObString &column_name, bool is_auto_inc = false, bool is_nullable = true)
+      : type_(type),
+        column_name_(column_name),
+        is_auto_inc_(is_auto_inc),
+        is_nullable_(is_nullable)
+  {
+  }
+  sql::ObExprResType type_;
+  common::ObString column_name_;
+  bool is_auto_inc_;
+  bool is_nullable_;
+  TO_STRING_KV(K_(type),
+               K_(column_name),
+               K_(is_auto_inc),
+               K_(is_nullable));
 };
 
 struct ObTableAssignment : public sql::ObAssignment
@@ -372,7 +400,7 @@ private:
   int init_sess_info(ObTableApiCredential &credential);
   // for scan
   int init_index_info(const common::ObString &index_name);
-  int generate_columns_type(common::ObIArray<sql::ObExprResType> &columns_type);
+  int generate_column_infos(common::ObIArray<ObTableColumnInfo> &columns_infos);
   int generate_key_range(const common::ObIArray<common::ObNewRange> &scan_ranges);
   // for dml
   int init_dml_related_tid();
@@ -395,9 +423,9 @@ private:
 
 private:
   int construct_column_items();
-  int cons_column_type(const share::schema::ObColumnSchemaV2 &column_schema,
-                       sql::ObExprResType &column_type);
-  int adjust_column_type(const ObExprResType &column_type, ObObj &obj, bool is_autoincrement = false);
+  int cons_column_info(const share::schema::ObColumnSchemaV2 &column_schema,
+                       ObTableColumnInfo &column_info);
+  int adjust_column_type(const ObTableColumnInfo &column_info, ObObj &ob);
   int adjust_column(const ObColumnSchemaV2 &col_schema, ObObj &obj);
   int adjust_rowkey();
   int adjust_properties();

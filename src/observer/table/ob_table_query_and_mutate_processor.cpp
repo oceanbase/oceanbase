@@ -75,6 +75,7 @@ int ObTableQueryAndMutateP::check_arg()
     LOG_WARN("invalid table query request", K(ret), K(query));
   } else if ((ObTableEntityType::ET_HKV == arg_.entity_type_) && !hfilter.is_valid()) {
     ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "QueryAndMutate hbase model not set hfilter");
     LOG_WARN("QueryAndMutate hbase model should set hfilter", K(ret));
   } else if ((ObTableEntityType::ET_KV == arg_.entity_type_) && (1 != mutations.count())) {
     ret = OB_ERR_UNEXPECTED;
@@ -704,6 +705,7 @@ int ObTableQueryAndMutateP::execute_htable_mutation(ObTableQueryResultIterator *
         }
         default: {
           ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "mutation type");
           LOG_WARN("not supported mutation type", K(ret), "type", mutation.type());
           break;
         }
@@ -863,6 +865,7 @@ int ObTableQueryAndMutateP::execute_one_mutation(ObTableQueryResult &one_result,
           }
           default: {
             ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "mutation type");
             LOG_WARN("not supported mutation type", K(ret), "type", mutation.type());
             break;
           }

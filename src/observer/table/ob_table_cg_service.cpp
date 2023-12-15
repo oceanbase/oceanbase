@@ -447,6 +447,7 @@ int ObTableExprCgService::generate_assign_expr(ObTableCtx &ctx, ObTableAssignmen
   } else if (item->is_generated_column_) {
     if (!item->is_stored_generated_column_) {
       ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "assign virtual generated column");
       LOG_WARN("assign virtual generated column is not supported", K(ret));
     } else {
       if (OB_FAIL(build_generated_column_expr(ctx, *item, item->generated_expr_str_, tmp_expr))) {
@@ -1043,8 +1044,9 @@ int ObTableExprCgService::refresh_properties_exprs_frame(ObTableCtx &ctx,
           bool not_found = (OB_SEARCH_NOT_FOUND == entity.get_property(item.column_name_, prop_value));
           if (not_found) {
             obj = &item.default_value_;
-            if (item.is_not_null_for_write() && !item.is_auto_increment_ && obj->is_null()) {
+            if (!item.is_nullable_ && !item.is_auto_increment_ && obj->is_null()) {
               ret = OB_ERR_NO_DEFAULT_FOR_FIELD;
+              LOG_USER_ERROR(OB_ERR_NO_DEFAULT_FOR_FIELD, to_cstring(item.column_name_));
               LOG_WARN("column can not be null", K(ret), K(item));
             }
           } else {
@@ -1150,6 +1152,7 @@ int ObTableExprCgService::refresh_assign_exprs_frame(ObTableCtx &ctx,
       LOG_WARN("unexpected assign projector_index_", K(ret), K(new_row), K(assign.column_item_));
     } else if (assign.column_item_->is_virtual_generated_column_) {
       ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "update virtual generated column");
       LOG_WARN("virtual generated column not support to update", K(ret), K(assign));
     } else {
       // on update current timestamp will not find value

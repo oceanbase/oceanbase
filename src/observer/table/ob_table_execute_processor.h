@@ -68,7 +68,7 @@ private:
       SERVER_LOG(WARN, "fail to process op", K(ret));
     }
 
-    result_.set_errno(ret);
+    result_.set_err(ret);
     table::ObTableApiUtil::replace_ret_code(ret);
     int tmp_ret = ret;
     if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, get_timeout_ts()))) {

@@ -128,6 +128,7 @@ int ObTableApiSessPoolMgr::get_sess_info(ObTableApiCredential &credential, ObTab
 
   if (credential.tenant_id_ != MTL_ID()) {
     ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "access wrong tenant");
     LOG_WARN("access wrong tenant", K(ret), K(credential.tenant_id_), K(MTL_ID()));
   } else if (OB_UNLIKELY(OB_ISNULL(pool_)) && OB_FAIL(create_session_pool_safe())) {
     LOG_WARN("fail to create session pool", K(ret), K(credential));

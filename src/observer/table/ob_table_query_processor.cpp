@@ -55,6 +55,7 @@ int ObTableQueryP::check_arg()
   } else if (!(arg_.consistency_level_ == ObTableConsistencyLevel::STRONG ||
                 arg_.consistency_level_ == ObTableConsistencyLevel::EVENTUAL)) {
     ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "consistency level");
     LOG_WARN("some options not supported yet", K(ret),
              "consistency_level", arg_.consistency_level_);
   }

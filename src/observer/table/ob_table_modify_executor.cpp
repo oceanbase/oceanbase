@@ -42,6 +42,7 @@ int ObTableApiModifyExecutor::check_row_null(const ObExprPtrIArray &row, const C
     } else if (!is_nullable && datum->is_null()) {
       const ObString &column_name = column_infos.at(i).column_name_;
       ret = OB_BAD_NULL_ERROR;
+      LOG_USER_ERROR(OB_BAD_NULL_ERROR, column_name.length(), column_name.ptr());
       LOG_WARN("bad null error", K(ret), K(row), K(column_name));
     }
   }
@@ -456,6 +457,7 @@ int ObTableApiModifyExecutor::check_rowkey_change(const ObChunkDatumStore::Store
         // do nothing
       } else if (!ObDatum::binary_equal(upd_old_row.cells()[i], upd_new_row.cells()[i])) {
         ret = OB_ERR_UPDATE_ROWKEY_COLUMN;
+        LOG_USER_ERROR(OB_ERR_UPDATE_ROWKEY_COLUMN);
         LOG_WARN("can not update rowkey column", K(ret));
       }
     }
@@ -497,6 +499,7 @@ int ObTableApiModifyExecutor::to_expr_skip_old(const ObChunkDatumStore::StoredRo
         LOG_WARN("unexpected assign projector_index_", K(ret), K(new_row), K(assign.column_item_));
       } else if (assign.column_item_->is_virtual_generated_column_) {
         ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "update virtual generated column");
         LOG_WARN("virtual generated column not support to update", K(ret), K(assign));
       } else {
         ObExpr *expr = new_row.at(assign.column_item_->col_idx_);

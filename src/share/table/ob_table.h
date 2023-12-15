@@ -30,6 +30,7 @@
 #include "common/rowkey/ob_rowkey.h"
 #include "common/ob_role.h"
 #include "common/row/ob_row.h"
+#include "lib/oblog/ob_warning_buffer.h"
 namespace oceanbase
 {
 namespace common
@@ -381,6 +382,16 @@ public:
     msg_[0] = '\0';
   }
   ~ObTableResult() = default;
+  void set_err(int err)
+  {
+    errno_ = err;
+    if (err != common::OB_SUCCESS) {
+      common::ObWarningBuffer *wb = common::ob_get_tsi_warning_buffer();
+      if (OB_NOT_NULL(wb)) {
+        (void)snprintf(msg_, common::OB_MAX_ERROR_MSG_LEN, "%s", wb->get_err_msg());
+      }
+    }
+  }
   void set_errno(int err) { errno_ = err; }
   int get_errno() const { return errno_; }
   int assign(const ObTableResult &other);

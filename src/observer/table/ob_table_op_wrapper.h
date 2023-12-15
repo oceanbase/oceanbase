@@ -95,7 +95,9 @@ public:
     if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret
         || OB_BAD_NULL_ERROR == ret
         || OB_OBJ_TYPE_ERROR == ret
+        || OB_KV_COLUMN_TYPE_NOT_MATCH == ret
         || OB_ERR_COLLATION_MISMATCH == ret
+        || OB_KV_COLLATION_MISMATCH == ret
         || OB_ERR_DATA_TOO_LONG == ret
         || OB_DATA_OUT_OF_RANGE == ret) {
       ret = OB_SUCCESS;

@@ -714,7 +714,7 @@ TEST_F(TestBatchExecute, column_type_check)
     ASSERT_EQ(OB_SUCCESS, entity->set_property(CTINYINT, value));
     ObTableOperation table_operation = ObTableOperation::insert(*entity);
     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-    ASSERT_EQ(OB_ERR_COLLATION_MISMATCH, r.get_errno());
+    ASSERT_EQ(OB_KV_COLLATION_MISMATCH, r.get_errno());
   }
   {
     // case: insert + rowkey + int
@@ -728,7 +728,7 @@ TEST_F(TestBatchExecute, column_type_check)
     ASSERT_EQ(OB_SUCCESS, entity->set_property(CTINYINT, value));
     ObTableOperation table_operation = ObTableOperation::insert(*entity);
     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-    ASSERT_EQ(OB_OBJ_TYPE_ERROR, r.get_errno());
+    ASSERT_EQ(OB_KV_COLUMN_TYPE_NOT_MATCH, r.get_errno());
   }
   {
     // case: insert + rowkey + too long
@@ -878,7 +878,7 @@ TEST_F(TestBatchExecute, column_type_check)
     ASSERT_EQ(OB_SUCCESS, entity->add_rowkey_value(pk2));
     ObTableOperation table_operation = ObTableOperation::retrieve(*entity);
     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-    ASSERT_EQ(OB_ERR_COLLATION_MISMATCH, r.get_errno());
+    ASSERT_EQ(OB_KV_COLLATION_MISMATCH, r.get_errno());
   }
   {
     // case: replace + rowkey + collation
@@ -892,7 +892,7 @@ TEST_F(TestBatchExecute, column_type_check)
     ASSERT_EQ(OB_SUCCESS, entity->set_property(CTINYINT, value));
     ObTableOperation table_operation = ObTableOperation::replace(*entity);
     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-    ASSERT_EQ(OB_ERR_COLLATION_MISMATCH, r.get_errno());
+    ASSERT_EQ(OB_KV_COLLATION_MISMATCH, r.get_errno());
   }
 
   {
@@ -922,7 +922,7 @@ TEST_F(TestBatchExecute, column_type_check)
     ASSERT_EQ(OB_SUCCESS, entity->set_property(CTINYINT, value));
     ObTableOperation table_operation = ObTableOperation::insert_or_update(*entity);
     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-    ASSERT_EQ(OB_ERR_COLLATION_MISMATCH, r.get_errno());
+    ASSERT_EQ(OB_KV_COLLATION_MISMATCH, r.get_errno());
   }
 
   {
@@ -952,7 +952,7 @@ TEST_F(TestBatchExecute, column_type_check)
     ASSERT_EQ(OB_SUCCESS, entity->set_property(CTINYINT, value));
     ObTableOperation table_operation = ObTableOperation::del(*entity);
     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-    ASSERT_EQ(OB_ERR_COLLATION_MISMATCH, r.get_errno());
+    ASSERT_EQ(OB_KV_COLLATION_MISMATCH, r.get_errno());
   }
   {
     // case: update + rowkey + collation
@@ -966,7 +966,7 @@ TEST_F(TestBatchExecute, column_type_check)
     ASSERT_EQ(OB_SUCCESS, entity->set_property(CTINYINT, value));
     ObTableOperation table_operation = ObTableOperation::update(*entity);
     ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
-    ASSERT_EQ(OB_ERR_COLLATION_MISMATCH, r.get_errno());
+    ASSERT_EQ(OB_KV_COLLATION_MISMATCH, r.get_errno());
   }
 
   {
@@ -5097,7 +5097,7 @@ TEST_F(TestBatchExecute, check_scan_range)
 
     ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
     ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
-    ASSERT_EQ(OB_ERR_UNEXPECTED, the_table->execute_query(query, iter)); // wrong rowkey size
+    ASSERT_EQ(OB_KV_SCAN_RANGE_MISSING, the_table->execute_query(query, iter)); // wrong rowkey size
   }
 
   // case 2: scan by primary key, but key objs type is invalid
@@ -5120,7 +5120,7 @@ TEST_F(TestBatchExecute, check_scan_range)
 
     ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
     ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
-    ASSERT_EQ(OB_OBJ_TYPE_ERROR, the_table->execute_query(query, iter)); // wrong rowkey type
+    ASSERT_EQ(OB_KV_COLUMN_TYPE_NOT_MATCH, the_table->execute_query(query, iter)); // wrong rowkey type
   }
 
   // case 3: scan by primary key, but collation type is invalid
@@ -5144,7 +5144,7 @@ TEST_F(TestBatchExecute, check_scan_range)
 
     ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
     ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
-    ASSERT_EQ(OB_ERR_COLLATION_MISMATCH, the_table->execute_query(query, iter)); // wrong collation type
+    ASSERT_EQ(OB_KV_COLLATION_MISMATCH, the_table->execute_query(query, iter)); // wrong collation type
   }
 
   // case 4: scan by primary key, but accuracy is invalid

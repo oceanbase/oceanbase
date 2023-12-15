@@ -171,6 +171,10 @@ int ObTableAggCalculator::aggregate_sum(uint64_t idx, const ObNewRow &row)
           int64_t res = 0;
           if (sql::ObExprAdd::is_add_out_of_range(sum_val.get_int(), cur_value.get_int(), res)) {
             ret = OB_DATA_OUT_OF_RANGE;
+            if (idx < agg_columns_.count()) {
+              int64_t row_num = 0;
+              LOG_USER_ERROR(OB_DATA_OUT_OF_RANGE, agg_columns_.at(idx).length(), agg_columns_.at(idx).ptr(), row_num);
+            }
             LOG_WARN("data out of range", K(ret), K(sum_val), K(cur_value));
           } else {
             sum_val.set_int(res);
@@ -190,6 +194,10 @@ int ObTableAggCalculator::aggregate_sum(uint64_t idx, const ObNewRow &row)
           uint64_t res = 0;
           if (sql::ObExprAdd::is_add_out_of_range(sum_val.get_uint64(), cur_value.get_uint64(), res)) {
             ret = OB_DATA_OUT_OF_RANGE;
+            if (idx < agg_columns_.count()) {
+              int64_t row_num = 0;
+              LOG_USER_ERROR(OB_DATA_OUT_OF_RANGE, agg_columns_.at(idx).length(), agg_columns_.at(idx).ptr(), row_num);
+            }
             LOG_WARN("data out of range", K(ret), K(sum_val), K(cur_value));
           } else {
             sum_val.set_uint64(res);
@@ -206,6 +214,10 @@ int ObTableAggCalculator::aggregate_sum(uint64_t idx, const ObNewRow &row)
           double res = sum_val.get_double() + (double)cur_value.get_float();
           if (INFINITY == res) {
             ret = OB_DATA_OUT_OF_RANGE;
+            if (idx < agg_columns_.count()) {
+              int64_t row_num = 0;
+              LOG_USER_ERROR(OB_DATA_OUT_OF_RANGE, agg_columns_.at(idx).length(), agg_columns_.at(idx).ptr(), row_num);
+            }
             LOG_WARN("data out of range", K(ret), K(sum_val), K(cur_value));
           } else {
             sum_val.set_double(res);
@@ -222,6 +234,10 @@ int ObTableAggCalculator::aggregate_sum(uint64_t idx, const ObNewRow &row)
           double res = sum_val.get_double() + cur_value.get_double();
           if (INFINITY == res) {
             ret = OB_DATA_OUT_OF_RANGE;
+            if (idx < agg_columns_.count()) {
+              int64_t row_num = 0;
+              LOG_USER_ERROR(OB_DATA_OUT_OF_RANGE, agg_columns_.at(idx).length(), agg_columns_.at(idx).ptr(), row_num);
+            }
             LOG_WARN("data out of range", K(ret), K(sum_val), K(cur_value));
           } else {
             sum_val.set_double(res);
@@ -231,6 +247,10 @@ int ObTableAggCalculator::aggregate_sum(uint64_t idx, const ObNewRow &row)
       }
       default: {
         ret = OB_NOT_SUPPORTED;
+        char err_msg[128];
+        const char *type_str = ob_obj_type_str(sum_type);
+        (void)sprintf(err_msg, "%s type for sum aggregation", type_str);
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
         LOG_WARN("this data type does not support aggregate sum operation", K(ret), K(sum_type));
       }
     }
@@ -257,6 +277,10 @@ int ObTableAggCalculator::aggregate_avg(uint64_t idx, const ObNewRow &row)
         double res = sum + (double)cur_value.get_int();
         if (INFINITY == res) {
           ret = OB_DATA_OUT_OF_RANGE;
+          if (idx < agg_columns_.count()) {
+              int64_t row_num = 0;
+              LOG_USER_ERROR(OB_DATA_OUT_OF_RANGE, agg_columns_.at(idx).length(), agg_columns_.at(idx).ptr(), row_num);
+            }
           LOG_WARN("data out of range", K(ret), K(sum), K(cur_value));
         } else {
           sum = res;
@@ -272,6 +296,10 @@ int ObTableAggCalculator::aggregate_avg(uint64_t idx, const ObNewRow &row)
         double res = sum + (double)cur_value.get_uint64();
         if (INFINITY == res) {
           ret = OB_DATA_OUT_OF_RANGE;
+          if (idx < agg_columns_.count()) {
+              int64_t row_num = 0;
+              LOG_USER_ERROR(OB_DATA_OUT_OF_RANGE, agg_columns_.at(idx).length(), agg_columns_.at(idx).ptr(), row_num);
+            }
           LOG_WARN("data out of range", K(ret), K(sum), K(cur_value));
         } else {
           sum = res;
@@ -284,6 +312,10 @@ int ObTableAggCalculator::aggregate_avg(uint64_t idx, const ObNewRow &row)
         double res = sum + (double)cur_value.get_float();
         if (INFINITY == res) {
           ret = OB_DATA_OUT_OF_RANGE;
+          if (idx < agg_columns_.count()) {
+              int64_t row_num = 0;
+              LOG_USER_ERROR(OB_DATA_OUT_OF_RANGE, agg_columns_.at(idx).length(), agg_columns_.at(idx).ptr(), row_num);
+            }
           LOG_WARN("data out of range", K(ret), K(sum), K(cur_value));
         } else {
           sum = res;
@@ -296,6 +328,10 @@ int ObTableAggCalculator::aggregate_avg(uint64_t idx, const ObNewRow &row)
         double res = sum + cur_value.get_double();
         if (INFINITY == res) {
           ret = OB_DATA_OUT_OF_RANGE;
+          if (idx < agg_columns_.count()) {
+              int64_t row_num = 0;
+              LOG_USER_ERROR(OB_DATA_OUT_OF_RANGE, agg_columns_.at(idx).length(), agg_columns_.at(idx).ptr(), row_num);
+            }
           LOG_WARN("data out of range", K(ret), K(sum), K(cur_value));
         } else {
           sum = res;
@@ -304,6 +340,10 @@ int ObTableAggCalculator::aggregate_avg(uint64_t idx, const ObNewRow &row)
       }
       default: {
         ret = OB_NOT_SUPPORTED;
+        char err_msg[128];
+        const char *type_str = ob_obj_type_str(avg_type);
+        (void)sprintf(err_msg, "%s type for avg aggregation", type_str);
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
         LOG_WARN("this data type does not support aggregate avg operation", K(ret), K(avg_type));
       }
     }
@@ -352,6 +392,7 @@ int ObTableAggCalculator::aggregate(const ObNewRow &row) {
         }
         default: {
           ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid aggregation type");
           LOG_WARN("unexpected agg type", K(ret), K(agg_type));
           break;
         }

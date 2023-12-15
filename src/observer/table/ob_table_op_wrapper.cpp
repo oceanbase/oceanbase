@@ -62,7 +62,7 @@ int ObTableOpWrapper::process_op_with_spec(ObTableCtx &tb_ctx,
     ret = COVER_SUCC(tmp_ret);
   }
 
-  op_result.set_errno(ret);
+  op_result.set_err(ret);
   op_result.set_type(tb_ctx.get_opertion_type());
   spec->destroy_executor(executor);
   return ret;
@@ -295,7 +295,9 @@ int ObTableApiUtil::construct_entity_from_row(ObIAllocator &allocator,
   for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
     const ObString &name = arr_col->at(i);
     if (OB_ISNULL(column_schema = table_schema->get_column_schema(name))) {
-      ret = OB_ERR_COLUMN_NOT_FOUND;
+      ret = OB_ERR_BAD_FIELD_ERROR;
+      const ObString &table = table_schema->get_table_name_str();
+      LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, name.length(), name.ptr(), table.length(), table.ptr());
       LOG_WARN("column not exist", K(ret), K(name));
     } else {
       int64_t column_idx = table_schema->get_column_idx(column_schema->get_column_id());
