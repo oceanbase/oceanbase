@@ -285,7 +285,7 @@ int ObTableApiUtil::construct_entity_from_row(ObIAllocator &allocator,
   ObSEArray<ObString, 32> all_columns;
   const ObIArray<ObString>* arr_col = &cnames;
   if (N == 0) {
-    if(OB_FAIL(expand_all_columns(table_schema, all_columns))) {
+    if (OB_FAIL(expand_all_columns(table_schema, all_columns))) {
       LOG_WARN("fail to expand all column to cnames", K(ret));
     } else {
       N = all_columns.count();

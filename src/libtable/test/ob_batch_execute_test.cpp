@@ -3501,7 +3501,7 @@ TEST_F(TestBatchExecute, update_table_with_index_by_lowercase_rowkey)
     ASSERT_EQ(OB_SUCCESS, update_entity->add_rowkey_value(rk_obj));
     ASSERT_EQ(OB_SUCCESS, update_entity->set_property(T, v_obj));
     ObTableOperation table_operation = ObTableOperation::insert_or_update(*update_entity);
-    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_ERR_UPDATE_ROWKEY_COLUMN, the_table->execute(table_operation, r));
     ASSERT_EQ(OB_SUCCESS, r.get_errno());
   }
   {
@@ -3523,7 +3523,7 @@ TEST_F(TestBatchExecute, update_table_with_index_by_lowercase_rowkey)
       ASSERT_EQ(1, result_entity->get_properties_count());
       ASSERT_EQ(OB_SUCCESS, result_entity->get_property(K, obj1));
       ASSERT_EQ(OB_SUCCESS, obj1.get_varchar(str));
-      ASSERT_TRUE(str == ObString::make_string("test"));
+      ASSERT_TRUE(str == ObString::make_string("TEST"));
     }
     ASSERT_EQ(OB_ITER_END, iter->get_next_entity(result_entity));
   }
@@ -4693,9 +4693,9 @@ TEST_F(TestBatchExecute, single_insert_up)
     value.set_double(c2_value);
     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
     ObTableOperation table_operation = ObTableOperation::insert_or_update(*entity);
-    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_ERR_UPDATE_ROWKEY_COLUMN, the_table->execute(table_operation, r));
     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-    ASSERT_EQ(1, r.get_affected_rows());
+    ASSERT_EQ(0, r.get_affected_rows());
     ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, r.type());
     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
     ASSERT_TRUE(result_entity->is_empty());
@@ -4738,9 +4738,9 @@ TEST_F(TestBatchExecute, single_insert_up)
     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
     ObTableOperation table_operation = ObTableOperation::insert_or_update(*entity);
     // TODO:@linjing 和sql行为不一致
-    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, r));
+    ASSERT_EQ(OB_ERR_UPDATE_ROWKEY_COLUMN, the_table->execute(table_operation, r));
     ASSERT_EQ(OB_SUCCESS, r.get_errno());
-    ASSERT_EQ(1, r.get_affected_rows());
+    ASSERT_EQ(0, r.get_affected_rows());
     ASSERT_EQ(ObTableOperationType::INSERT_OR_UPDATE, r.type());
     ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
     ASSERT_TRUE(result_entity->is_empty());

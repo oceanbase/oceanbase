@@ -438,6 +438,31 @@ int ObTableApiModifyExecutor::check_whether_row_change(const ObChunkDatumStore::
   return ret;
 }
 
+// if common column equal, check rowkey column, if not equal then report error
+int ObTableApiModifyExecutor::check_rowkey_change(const ObChunkDatumStore::StoredRow &upd_old_row,
+                                                  const ObChunkDatumStore::StoredRow &upd_new_row)
+{
+  int ret = OB_SUCCESS;
+  if (lib::is_mysql_mode()) {
+    if (OB_UNLIKELY(upd_old_row.cnt_ != upd_new_row.cnt_)
+        || OB_UNLIKELY(upd_old_row.cnt_ != tb_ctx_.get_column_items().count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("check column size failed", K(ret), K(upd_old_row.cnt_),
+                K(upd_new_row.cnt_), K(tb_ctx_.get_column_items().count()));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < tb_ctx_.get_column_items().count(); i++) {
+      ObTableColumnItem &item = tb_ctx_.get_column_items().at(i);
+      if (item.rowkey_position_ <= 0) {
+        // do nothing
+      } else if (!ObDatum::binary_equal(upd_old_row.cells()[i], upd_new_row.cells()[i])) {
+        ret = OB_ERR_UPDATE_ROWKEY_COLUMN;
+        LOG_WARN("can not update rowkey column", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableApiModifyExecutor::to_expr_skip_old(const ObChunkDatumStore::StoredRow &store_row,
                                                const ObTableUpdCtDef &upd_ctdef)
 {
