@@ -305,6 +305,30 @@ public:
   const common::ObStoreRowkey *rowkey_;
 };
 
+
+// this is for multi_set pre alloc memory to generate memtable key
+class ObMemtableKeyGenerator {// RAII
+  static constexpr int64_t STACK_BUFFER_SIZE = 32;
+public:
+  ObMemtableKeyGenerator() : p_extra_store_row_keys_(nullptr), p_extra_memtable_keys_(nullptr), size_(0) {}
+  ~ObMemtableKeyGenerator();
+  int init(const storage::ObStoreRow *rows,
+           const int64_t row_count,
+           const int64_t schema_rowkey_count,
+           const common::ObIArray<share::schema::ObColDesc> &columns);
+  void reset();
+  int64_t count() const { return size_; }
+  ObMemtableKey &operator[](int64_t idx);
+  const ObMemtableKey &operator[](int64_t idx) const;
+private:
+  // this is for avoid memory allocation when rows not so much
+  ObStoreRowkey store_row_key_buffer_[STACK_BUFFER_SIZE];
+  ObMemtableKey memtable_key_buffer_[STACK_BUFFER_SIZE];
+  ObStoreRowkey *p_extra_store_row_keys_;
+  ObMemtableKey *p_extra_memtable_keys_;
+  int64_t size_;
+};
+
 }
 }
 
