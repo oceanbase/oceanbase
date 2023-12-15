@@ -1687,11 +1687,6 @@ int ObCopySSTableInfoObProducer::init(
   } else if (OB_ISNULL(tablet = tablet_handle_.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_sstable_info));
-  } else if (!tablet_sstable_info.minor_sstable_scn_range_.is_empty()
-      && tablet->get_tablet_meta().clog_checkpoint_scn_ < tablet_sstable_info.minor_sstable_scn_range_.end_scn_) {
-    ret = OB_SSTABLE_NOT_EXIST;
-    LOG_WARN("src tablet clog_checkpoint_scn is smaller than dest needed log ts",
-        K(ret), K(tablet_sstable_info), KPC(tablet));
   } else if (!tablet_sstable_info.ddl_sstable_scn_range_.is_empty()) {
     if (tablet->get_tablet_meta().get_ddl_sstable_start_scn() < tablet_sstable_info.ddl_sstable_scn_range_.start_scn_) {
       ret = OB_ERR_UNEXPECTED;
@@ -1786,13 +1781,7 @@ int ObCopySSTableInfoObProducer::check_need_copy_sstable_(
       need_copy_sstable = sstable->get_key().get_snapshot_version()
           > tablet_sstable_info_.max_major_sstable_snapshot_;
     } else if (sstable->is_minor_sstable()) {
-      if (tablet_sstable_info_.minor_sstable_scn_range_.is_empty()) {
-        need_copy_sstable = false;
-      } else if (sstable->get_key().scn_range_.end_scn_ <= tablet_sstable_info_.minor_sstable_scn_range_.start_scn_) {
-        need_copy_sstable = false;
-      } else {
-        need_copy_sstable = true;
-      }
+      need_copy_sstable = true;
     } else if (sstable->is_ddl_dump_sstable()) {
       const SCN ddl_sstable_start_scn = tablet_sstable_info_.ddl_sstable_scn_range_.start_scn_;
       const SCN ddl_sstable_end_scn = tablet_sstable_info_.ddl_sstable_scn_range_.end_scn_;
