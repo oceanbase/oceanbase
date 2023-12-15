@@ -3628,7 +3628,7 @@ int ObBasicSessionInfo::replace_user_variables(const ObSessionValMap &user_var_m
   return ret;
 }
 
-int ObBasicSessionInfo::replace_user_variable(const ObString &var, const ObSessionVariable &val)
+int ObBasicSessionInfo::replace_user_variable(const ObString &var, const ObSessionVariable &val, bool need_track)
 {
   int ret = OB_SUCCESS;
   if (var.empty()) {
@@ -3637,7 +3637,7 @@ int ObBasicSessionInfo::replace_user_variable(const ObString &var, const ObSessi
   } else if (OB_FAIL(user_var_val_map_.set_refactored(var, val))) {
     LOG_ERROR("fail to add variable", K(var), K(ret));
   } else {
-    if (is_track_session_info()) {
+    if (need_track && is_track_session_info()) {
       if (OB_FAIL(track_user_var(var))) {
         LOG_WARN("fail to track user var", K(var), K(ret));
       }
