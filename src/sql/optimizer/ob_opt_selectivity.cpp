@@ -2426,8 +2426,7 @@ int ObOptSelectivity::calculate_special_ndv(const OptTableMetas &table_metas,
                                                               ctx.get_allocator()))) {
           LOG_WARN("fail to calc_const_or_calculable_expr", K(ret));
         } else if (!got_result || result.is_null() || !ob_is_numeric_type(result.get_type())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("ntile param is uncalculable", K(got_result), K(result.get_type()), K(ret));
+          special_ndv = origin_rows/part_ndv;
         } else {
           double n = (double)ObOptEstObjToScalar::convert_obj_to_scalar(&result);
           special_ndv = std::min(origin_rows/part_ndv, n);
@@ -2464,6 +2463,7 @@ int ObOptSelectivity::calculate_special_ndv(const OptTableMetas &table_metas,
     }
     LOG_TRACE("calculate win expr ndv",  K(win_expr->get_func_type()), K(part_exprs.count()), K(order_exprs.count()));
   }
+  special_ndv = revise_ndv(special_ndv);
   return ret;
 }
 
