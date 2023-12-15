@@ -155,18 +155,18 @@ public:
   //prepare allocate can avoid declaring local data
   int prepare_allocate(int64_t capacity)
   {
-    int ret = OB_SUCCESS;
-    ret = reserve(capacity);
-    if (OB_SUCC(ret)) {
-      for (int64_t index = valid_count_; index < capacity; ++index) {
-        new(&data_[index]) T();
-      }
-      count_ = (capacity > count_) ? capacity : count_;
-      valid_count_ = (capacity > valid_count_) ? capacity : valid_count_;
-    } else {
-      OB_LOG(WARN, "Reserve capacity error", K(ret));
-    }
-    return ret;
+    return inner_prepare_allocate(capacity, false);
+  }
+  template<typename ... Args>
+  inline int prepare_allocate(int64_t capacity, Args && ... args)
+  {
+    return inner_prepare_allocate(capacity, false, args...);
+  }
+
+  template<typename ... Args>
+  inline int prepare_allocate_and_keep_count(int64_t capacity, Args && ... args)
+  {
+    return inner_prepare_allocate(capacity, true, args...);
   }
   int64_t to_string(char *buffer, int64_t length) const;
   inline int64_t get_data_size() const {return data_size_;}
@@ -213,6 +213,26 @@ protected:
   using ObIArray<T>::count_;
 
 private:
+  template<typename ... Args>
+  inline int inner_prepare_allocate(int64_t capacity,
+                                    const bool keep_count,
+                                    Args && ... args)
+  {
+    int ret = OB_SUCCESS;
+    ret = reserve(capacity);
+    if (OB_SUCC(ret)) {
+      for (int64_t index = valid_count_; index < capacity; ++index) {
+        new(&data_[index]) T(args...);
+      }
+      if (!keep_count) {
+        count_ = (capacity > count_) ? capacity : count_;
+      }
+      valid_count_ = (capacity > valid_count_) ? capacity : valid_count_;
+    } else {
+      OB_LOG(WARN, "Reserve capacity error", K(ret));
+    }
+    return ret;
+  }
   inline int extend_buf()
   {
     int64_t new_size = MAX(2 * data_size_, block_size_);
