@@ -132,6 +132,7 @@ public:
 private:
   typedef common::RWLock::RLockGuard RLockGuard;
   typedef common::RWLock::WLockGuard WLockGuard;
+  typedef common::RWLock::RLockGuardWithTimeout RLockGuardWithTimeout;
 
   static const int64_t RELOAD_INTERVAL = 3L * 1000L * 1000L;
   static const int64_t UPDATE_LS_RESERVED_SNAPSHOT_INTERVAL = 10L * 1000L * 1000L;
@@ -139,6 +140,7 @@ private:
   static const int64_t FLUSH_GC_SNAPSHOT_TS_REFRESH_TS =
       common::MODIFY_GC_SNAPSHOT_INTERVAL + 10L * 1000L * 1000L;
   static const int64_t MIN_DEPENDENT_FREEZE_INFO_GAP = 2;
+  static const int64_t RLOCK_TIMEOUT_US = 2L * 1000L * 1000L; // 2s
 
   int get_latest_freeze_version(int64_t &freeze_version);
   int64_t get_next_idx() { return 1L - cur_idx_; }
@@ -216,6 +218,10 @@ private:
     }                                                                              \
     ret;                                                                           \
   })
+
+#define FREEZE_RLOCK_GUARD_WITH_TIMEOUT \
+  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + RLOCK_TIMEOUT_US; \
+  RLockGuardWithTimeout lock_guard(lock_, abs_timeout_us, ret); \
 
 }
 }
