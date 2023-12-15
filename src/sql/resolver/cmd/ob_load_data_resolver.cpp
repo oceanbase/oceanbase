@@ -543,7 +543,7 @@ int ObLoadDataResolver::resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *n
           }
 
           //security check for mysql mode
-          if (OB_SUCC(ret) && lib::is_mysql_mode() && ObLoadFileLocation::SERVER_DISK == load_args.load_file_storage_) {
+          if (OB_SUCC(ret) && ObLoadFileLocation::SERVER_DISK == load_args.load_file_storage_) {
             ObString secure_file_priv;
             if (OB_FAIL(session_info_->get_secure_file_priv(secure_file_priv))) {
               LOG_WARN("failed to get secure file priv", K(ret));
