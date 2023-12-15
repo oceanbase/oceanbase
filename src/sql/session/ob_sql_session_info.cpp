@@ -1862,7 +1862,8 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
         || EXECUTE_PS_SEND_PIECE == mode
         || EXECUTE_PS_GET_PIECE == mode
         || EXECUTE_PS_SEND_LONG_DATA == mode
-        || EXECUTE_PS_FETCH == mode) {
+        || EXECUTE_PS_FETCH == mode
+        || (EXECUTE_PL_EXECUTE == mode && audit_record_.sql_len_ > 0)) {
       //ps模式对应的sql在协议层中设置, session的current_query_中没值
       // do nothing
     } else {
