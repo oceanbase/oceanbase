@@ -6482,18 +6482,19 @@ int ObSelectResolver::check_auto_gen_column_names() {
   if (OB_ISNULL(select_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("select stmt is null", K(ret));
-  } else if (OB_FAIL(recursive_check_auto_gen_column_names(select_stmt))) {
+  } else if (OB_FAIL(recursive_check_auto_gen_column_names(select_stmt, true))) {
     LOG_WARN("fail to check auto gen column names", K(ret));
   }
   return ret;
 }
 
-int ObSelectResolver::recursive_check_auto_gen_column_names(ObSelectStmt *select_stmt) {
+int ObSelectResolver::recursive_check_auto_gen_column_names(ObSelectStmt *select_stmt,
+                                                            bool in_outer_stmt) {
   int ret = OB_SUCCESS;
   ObSEArray<ObSelectStmt*, 4> child_stmts;
-  if (OB_ISNULL(select_stmt)) {
+  if (OB_ISNULL(select_stmt) || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("select stmt is null", K(ret));
+    LOG_WARN("get unexpected null", K(ret), K(select_stmt), K(allocator_));
   } else if (OB_FAIL(select_stmt->get_child_stmts(child_stmts))) {
     LOG_WARN("fail to get child stmts", K(ret));
   }
@@ -6502,7 +6503,7 @@ int ObSelectResolver::recursive_check_auto_gen_column_names(ObSelectStmt *select
     if (OB_ISNULL(child_stmt)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("child select stmt is null", K(ret), K(i));
-    } else if (OB_FAIL(SMART_CALL(recursive_check_auto_gen_column_names(child_stmt)))) {
+    } else if (OB_FAIL(SMART_CALL(recursive_check_auto_gen_column_names(child_stmt, false)))) {
       LOG_WARN("fail to check child stmt", K(ret), K(i));
     }
   }
@@ -6512,8 +6513,10 @@ int ObSelectResolver::recursive_check_auto_gen_column_names(ObSelectStmt *select
     if (OB_ISNULL(select_item) || OB_ISNULL(select_item->expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("select item expr is null", K(ret), K(select_item));
+    } else if (OB_FAIL(recursive_update_column_name(select_stmt, select_item->expr_))) {
+      LOG_WARN("fail to update column name", K(ret), KPC(select_item));
     } else if (select_item->alias_name_.length() > static_cast<size_t>(OB_MAX_COLUMN_NAME_LENGTH)) {
-      if (lib::is_oracle_mode()) {
+      if (lib::is_oracle_mode() && in_outer_stmt) {
         ret = OB_ERR_TOO_LONG_IDENT;
         LOG_WARN("auto generated alias is too long", K(ret), K(select_item->alias_name_.length()), K(select_item->alias_name_));
       } else {
@@ -6526,28 +6529,48 @@ int ObSelectResolver::recursive_check_auto_gen_column_names(ObSelectStmt *select
           ObString col_name;
           if (OB_FAIL(ob_write_string(*allocator_, tmp_col_name, col_name))) {
             LOG_WARN("Can not malloc space for constraint name", K(ret));
-          } else if (OB_FALSE_IT(select_item->alias_name_.assign_ptr(col_name.ptr(), col_name.length()))) {
-          } else if (select_item->expr_->is_column_ref_expr()) {
-            ObColumnRefRawExpr *col_ref_expr = static_cast<ObColumnRefRawExpr*>(select_item->expr_);
-            TableItem *table_item = NULL;
-            ObSelectStmt *ref_stmt = NULL;
-            SelectItem *ref_select_item = NULL;
-            if (OB_ISNULL(table_item = select_stmt->get_table_item_by_id(col_ref_expr->get_table_id()))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("table item is null", K(ret));
-            } else if (OB_ISNULL(ref_stmt = table_item->ref_query_)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("ref query stmt is null", K(ret));
-            } else if (OB_ISNULL(ref_select_item = &ref_stmt->get_select_item(col_ref_expr->get_column_id() - OB_APP_MIN_COLUMN_ID))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("select item is null", K(ret));
-            } else if (OB_FAIL(ob_write_string(*allocator_, ref_select_item->alias_name_, col_name))) {
-              LOG_WARN("Can not malloc space for constraint name", K(ret));
-            } else {
-              col_ref_expr->get_column_name().assign_ptr(col_name.ptr(), col_name.length());
-            }
+          } else {
+            select_item->alias_name_.assign_ptr(col_name.ptr(), col_name.length());
           }
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSelectResolver::recursive_update_column_name(ObSelectStmt *select_stmt,
+                                                   ObRawExpr *expr) {
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(select_stmt) || OB_ISNULL(expr) || OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(select_stmt), K(expr), K(allocator_));
+  } else if (expr->is_column_ref_expr()) {
+    ObColumnRefRawExpr *col_ref_expr = static_cast<ObColumnRefRawExpr*>(expr);
+    TableItem *table_item = NULL;
+    ObSelectStmt *ref_stmt = NULL;
+    SelectItem *ref_select_item = NULL;
+    ObString col_name;
+    if (OB_ISNULL(table_item = select_stmt->get_table_item_by_id(col_ref_expr->get_table_id()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table item is null", K(ret));
+    } else if (!table_item->is_generated_table()) {
+      // do nothing
+    } else if (OB_ISNULL(ref_stmt = table_item->ref_query_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ref query stmt is null", K(ret));
+    } else if (OB_ISNULL(ref_select_item = &ref_stmt->get_select_item(col_ref_expr->get_column_id() - OB_APP_MIN_COLUMN_ID))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("select item is null", K(ret));
+    } else if (OB_FAIL(ob_write_string(*allocator_, ref_select_item->alias_name_, col_name))) {
+      LOG_WARN("Can not malloc space for constraint name", K(ret));
+    } else {
+      col_ref_expr->get_column_name().assign_ptr(col_name.ptr(), col_name.length());
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(recursive_update_column_name(select_stmt, expr->get_param_expr(i))))) {
+        LOG_WARN("fail to update child column name", K(ret), K(i), KPC(expr));
       }
     }
   }
