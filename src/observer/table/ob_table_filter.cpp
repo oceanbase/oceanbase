@@ -296,7 +296,7 @@ int ObNormalTableQueryResultIterator::get_normal_result(table::ObTableQueryResul
     while (OB_SUCC(ret) && OB_SUCC(scan_result_->get_next_row(row))) {
       LOG_DEBUG("[yzfdebug] scan result", "row", *row);
       if (OB_FAIL(one_result_->add_row(*row))) {
-        if (OB_SIZE_OVERFLOW == ret) {
+        if (OB_BUF_NOT_ENOUGH == ret) {
           ret = OB_SUCCESS;
           last_row_ = row;
           break;
@@ -491,7 +491,7 @@ int ObTableFilterOperator::get_normal_result(table::ObTableQueryResult *&next_re
       if (has_limit && row_idx_ < offset) {
         row_idx_++;
       } else if (OB_FAIL(one_result_->add_row(*row))) {
-        if (OB_SIZE_OVERFLOW == ret) {
+        if (OB_BUF_NOT_ENOUGH == ret) {
           ret = OB_SUCCESS;
           last_row_ = row;
           break;
