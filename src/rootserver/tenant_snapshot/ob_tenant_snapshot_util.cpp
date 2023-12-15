@@ -36,7 +36,8 @@ static const char* conflict_case_with_clone_strs[] = {
   "MODIFY_UNIT",
   "MODIFY_LS",
   "MODIFY_REPLICA",
-  "SWITCHOVER"
+  "MODIFY_TENANT_ROLE_OR_SWITCHOVER_STATUS",
+  "DELAY_DROP_TENANT"
 };
 
 const char* ObConflictCaseWithClone::get_case_name_str() const
@@ -1291,6 +1292,8 @@ int ObTenantSnapshotUtil::check_tenant_has_no_conflict_tasks(
   } else if (is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("sys or meta tenant can not in clone procedure, clone not allowed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(check_tenant_is_in_dropping_procedure_(tenant_id))) {
+    LOG_WARN("fail to check tenant in dropping procedure", KR(ret), K(tenant_id));
   } else if (OB_FAIL(check_tenant_is_in_upgrading_procedure_(tenant_id, data_version))) {
     LOG_WARN("fail to check tenant in upgrading procedure", KR(ret), K(tenant_id));
   } else if (OB_FAIL(check_tenant_is_in_transfer_procedure_(tenant_id))) {
@@ -1314,13 +1317,40 @@ int ObTenantSnapshotUtil::check_tenant_has_no_conflict_tasks(
   return ret;
 }
 
+int ObTenantSnapshotUtil::check_tenant_is_in_dropping_procedure_(
+    const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  int64_t check_begin_time = ObTimeUtility::current_time();
+  ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::DELAY_DROP_TENANT);
+  schema::ObTenantStatus tenant_status = ObTenantStatus::TENANT_STATUS_MAX;
+  LOG_INFO("begin to check whether tenant is dropping", K(tenant_id));
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret));
+  } else if (OB_FAIL(inner_lock_line_for_all_tenant_table_(tenant_id, *GCTX.sql_proxy_, tenant_status))) {
+    LOG_WARN("fail to lock line in __all_table table", KR(ret), K(tenant_id));
+  } else if (!is_tenant_normal(tenant_status)) {
+    ret = OB_CONFLICT_WITH_CLONE;
+    LOG_WARN("source tenant is in dropping procedure, can not do clone",
+             KR(ret), K(tenant_id), K(tenant_status));
+    LOG_USER_ERROR(OB_CONFLICT_WITH_CLONE, tenant_id, case_to_check.get_case_name_str(), CLONE_PROCEDURE_STR);
+  }
+  int64_t cost = ObTimeUtility::current_time() - check_begin_time;
+  LOG_INFO("finish check whether tenant is dropping", KR(ret), K(tenant_id), K(check_begin_time), K(cost));
+  return ret;
+}
+
 int ObTenantSnapshotUtil::check_tenant_is_in_upgrading_procedure_(
     const uint64_t tenant_id,
     uint64_t &data_version)
 {
   int ret = OB_SUCCESS;
   data_version = 0;
-  int check_begin_time = ObTimeUtility::current_time();
+  int64_t check_begin_time = ObTimeUtility::current_time();
   ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::UPGRADE);
   LOG_INFO("begin to check whether tenant is upgrading", K(tenant_id));
   common::ObMySQLTransaction trans;
@@ -1349,11 +1379,6 @@ int ObTenantSnapshotUtil::check_tenant_is_in_upgrading_procedure_(
       data_version = target_data_version;
     }
   }
-  // TODO@jingyu.cr: need to solve problems below
-  //   1. after current_data_version==target_data_version in upgrade procedure, make sure whether check conflict in steps remained
-  //   2. clone tenant need target_tenant initialize data_version
-  //      source tenant baseline + memdump's data_version need same
-  //      make sure whether to double check tenant's data_version is same
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
@@ -1370,7 +1395,7 @@ int ObTenantSnapshotUtil::check_tenant_is_in_transfer_procedure_(
     const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  int check_begin_time = ObTimeUtility::current_time();
+  int64_t check_begin_time = ObTimeUtility::current_time();
   ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::TRANSFER);
   LOG_INFO("begin to check whether tenant is transfer", K(tenant_id));
   common::ObMySQLTransaction trans;
@@ -1428,7 +1453,7 @@ int ObTenantSnapshotUtil::check_tenant_is_in_modify_resource_pool_procedure_(
     const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  int check_begin_time = ObTimeUtility::current_time();
+  int64_t check_begin_time = ObTimeUtility::current_time();
   LOG_INFO("begin to check whether tenant is transfer", K(tenant_id));
   ObSqlString sql("FetchPool");
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
@@ -1472,7 +1497,7 @@ int ObTenantSnapshotUtil::check_tenant_is_in_modify_ls_procedure_(
 {
   int ret = OB_SUCCESS;
   common::ObMySQLTransaction trans;
-  int check_begin_time = ObTimeUtility::current_time();
+  int64_t check_begin_time = ObTimeUtility::current_time();
   ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::MODIFY_LS);
   LOG_INFO("begin to check whether tenant is modifing ls", K(tenant_id));
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
@@ -1530,7 +1555,7 @@ int ObTenantSnapshotUtil::check_tenant_is_in_modify_replica_procedure_(
   observer::ObInnerSQLConnection *conn = NULL;
   ObSqlString sql("FetchDRTask");
   int64_t task_cnt = 0;
-  int check_begin_time = ObTimeUtility::current_time();
+  int64_t check_begin_time = ObTimeUtility::current_time();
   ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::MODIFY_REPLICA);
   LOG_INFO("begin to check whether tenant is modifing ls", K(tenant_id));
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
@@ -1593,8 +1618,8 @@ int ObTenantSnapshotUtil::check_tenant_is_in_switchover_procedure_(
   int ret = OB_SUCCESS;
   common::ObMySQLTransaction trans;
   ObAllTenantInfo tenant_info;
-  int check_begin_time = ObTimeUtility::current_time();
-  ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::SWITCHOVER);
+  int64_t check_begin_time = ObTimeUtility::current_time();
+  ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::MODIFY_TENANT_ROLE_OR_SWITCHOVER_STATUS);
   LOG_INFO("begin to check whether tenant is switchover", K(tenant_id));
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
@@ -1634,7 +1659,7 @@ int ObTenantSnapshotUtil::check_tenant_is_in_modify_unit_procedure_(
   int ret = OB_SUCCESS;
   common::ObMySQLTransaction trans;
   ObSqlString sql("FetchUnit");
-  int check_begin_time = ObTimeUtility::current_time();
+  int64_t check_begin_time = ObTimeUtility::current_time();
   LOG_INFO("begin to check whether tenant is modifing unit", K(tenant_id));
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
@@ -1797,6 +1822,68 @@ int ObTenantSnapshotUtil::lock_resource_pool_for_tenant(
       const uint64_t exec_tenant_id = OB_SYS_TENANT_ID;
       if (OB_FAIL(client.read(res, exec_tenant_id, lock_sql.ptr()))) {
         LOG_WARN("failed to read", KR(ret), K(exec_tenant_id), K(lock_sql));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTenantSnapshotUtil::lock_status_for_tenant(
+    ObMySQLTransaction &trans,
+    const uint64_t tenant_id_to_check)
+{
+  int ret = OB_SUCCESS;
+  schema::ObTenantStatus tenant_status = ObTenantStatus::TENANT_STATUS_MAX; // not used
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id_to_check))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id_to_check));
+  } else if (!is_user_tenant(tenant_id_to_check)) {
+    // do nothing
+  } else if (OB_FAIL(inner_lock_line_for_all_tenant_table_(tenant_id_to_check, trans, tenant_status))) {
+    LOG_WARN("fail to lock line in __all_table table", KR(ret), K(tenant_id_to_check));
+  }
+  return ret;
+}
+
+int ObTenantSnapshotUtil::inner_lock_line_for_all_tenant_table_(
+    const uint64_t tenant_id_to_lock,
+    ObISQLClient &sql_proxy,
+    share::schema::ObTenantStatus &tenant_status)
+{
+  int ret = OB_SUCCESS;
+  tenant_status = ObTenantStatus::TENANT_STATUS_MAX;
+  ObSqlString sql("TenantLock");
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id_to_lock))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id_to_lock));
+  } else if (OB_FAIL(sql.append_fmt("SELECT status FROM %s WHERE tenant_id = %lu FOR UPDATE",
+                                   OB_ALL_TENANT_TNAME, tenant_id_to_lock))) {
+    LOG_WARN("append_fmt failed", KR(ret), K(tenant_id_to_lock));
+  } else {
+    SMART_VAR(ObISQLClient::ReadResult, result) {
+      common::sqlclient::ObMySQLResult *res = NULL;
+      if (OB_FAIL(sql_proxy.read(result, GCONF.cluster_id, OB_SYS_TENANT_ID, sql.ptr()))) {
+        LOG_WARN("execute sql failed", KR(ret), "sql", sql.ptr());
+      } else if (OB_ISNULL(res = result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get mysql result failed", KR(ret));
+      } else if (OB_FAIL(res->next())) {
+        if (OB_ITER_END == ret) {
+          // rewrite error code
+          ret = OB_STATE_NOT_MATCH;
+          LOG_WARN("expect at least one row in __all_tenant", KR(ret), K(sql));
+        } else {
+          LOG_WARN("iterate next result fail", KR(ret), K(sql));
+        }
+      } else {
+        ObString status_str;
+        schema::ObTenantStatus tenant_status;
+        EXTRACT_VARCHAR_FIELD_MYSQL(*res, "status", status_str);
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(schema::get_tenant_status(status_str, tenant_status))) {
+            LOG_WARN("get tenant status failed", KR(ret), K(status_str));
+          }
+        }
       }
     }
   }

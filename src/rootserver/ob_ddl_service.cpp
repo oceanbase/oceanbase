@@ -25786,7 +25786,7 @@ int ObDDLService::modify_and_cal_resource_pool_diff(
           LOG_WARN("fail to grant pool", K(ret), K(diff_pools));
         } else if (OB_FAIL(unit_mgr_->grant_pools(
                 trans, new_ug_id_array, compat_mode, diff_pools, tenant_id,
-                OB_INVALID_TENANT_ID/*source_tenant_id*/))) {
+                false/*is_bootstrap*/, OB_INVALID_TENANT_ID/*source_tenant_id*/))) {
           LOG_WARN("fail to grant pools", K(ret));
         }
       } else if (new_pool_name_list.count() + 1 == old_pool_name_list.count()) {
@@ -26596,6 +26596,11 @@ int ObDDLService::drop_tenant(const ObDropTenantArg &arg)
     if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(
           user_tenant_id, sql_proxy_, false, tenant_info))) {
       LOG_WARN("failed to load tenant info", KR(ret), K(arg), K(user_tenant_id));
+    } else if (!tenant_info.is_primary() && !tenant_info.is_standby()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("drop tenant not in primary or standby role is not supported",
+               KR(ret), K(arg), K(tenant_info));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "should drop tenant force, drop tenant");
     } else if (tenant_info.is_standby() && !open_recyclebin) {
       //if standby tenant and no recyclebin, need drop force
       drop_force = true;

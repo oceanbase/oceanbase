@@ -1972,31 +1972,29 @@ int ObDRWorker::try_disaster_recovery()
 int ObDRWorker::check_whether_the_tenant_role_can_exec_dr_(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
+  ObAllTenantInfo tenant_info;
 
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)) {
+  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)
+             || OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) {
+    // good, sys tenant and meta tenant can not in clone procedure
+  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(
+                         tenant_id,
+                         GCTX.sql_proxy_,
+                         false,
+                         tenant_info))) {
+    LOG_WARN("fail to load tenant info", KR(ret), K(tenant_id));
+  } else if (tenant_info.is_clone()) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_INFO("the tenant is currently in the clone processing and disaster recovery will"
+             " not be executed for the time being", KR(ret), K(tenant_id));
   } else {
-    if (is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) {
-      ret = OB_SUCCESS;
-    } else {
-      ObAllTenantInfo tenant_info;
-      if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id,
-                                             GCTX.sql_proxy_,
-                                             false,
-                                             tenant_info))) {
-        LOG_WARN("fail to load tenant info", KR(ret), K(tenant_id));
-      } else if (tenant_info.is_clone()) {
-        ret = OB_STATE_NOT_MATCH;
-        LOG_INFO("the tenant is currently in the clone processing and disaster recovery will"
-                 " not be executed for the time being", KR(ret), K(tenant_id));
-      } else {
-        ret = OB_SUCCESS;
-      }
-    }
+    // good, can do dr-task
   }
   return ret;
 }

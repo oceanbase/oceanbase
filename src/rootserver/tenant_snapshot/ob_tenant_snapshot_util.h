@@ -44,7 +44,8 @@ public:
     MODIFY_UNIT = 3,
     MODIFY_LS = 4,
     MODIFY_REPLICA = 5,
-    SWITCHOVER = 6,
+    MODIFY_TENANT_ROLE_OR_SWITCHOVER_STATUS = 6,
+    DELAY_DROP_TENANT = 7,
     MAX_CASE_NAME
   };
 public:
@@ -65,7 +66,8 @@ public:
   bool is_modify_unit() const { return MODIFY_UNIT == case_name_; }
   bool is_modify_ls() const { return MODIFY_LS == case_name_; }
   bool is_modify_replica() const { return MODIFY_REPLICA == case_name_; }
-  bool is_switchover() const { return SWITCHOVER == case_name_; }
+  bool is_switchover() const { return MODIFY_TENANT_ROLE_OR_SWITCHOVER_STATUS == case_name_; }
+  bool is_delay_drop_tenant() const { return DELAY_DROP_TENANT == case_name_; }
   const ConflictCaseWithClone &get_case_name() const { return case_name_; }
   const char* get_case_name_str() const;
 private:
@@ -162,17 +164,47 @@ public:
                                                  const uint64_t tenant_id,
                                                  const share::ObTenantSnapshotID &tenant_snapshot_id);
   // functions to check conflict conditions between clone and other operations
+  // some procedure need to conflict with clone, so need to check whether in clone procedure
+  //   1. ObDRTaskMgr::persist_task_info_                    (can not do dr-task)
+  //   2. ObTenantBalanceService::persist_job_and_task_      (can not do transfer)
+  //   3. ObUpgradeExecutor::run_upgrade_begin_action_       (can not do upgrade)
+  //   4. ObTenantSqlService::delay_to_drop_tenant           (can not do delay drop tenant)
+  //   5. ObAllTenantInfoProxy::update_tenant_role_in_trans  (can not do switchover)
+  //      ObAllTenantInfoProxy::update_tenant_status         (can not do switchover)
+  //   6. ObUnitTableOperator::update_unit                   (can not modify unit)
+  //   7. ObUnitTableOperator::update_resource_pool          (can not modify resource pool)
+  //   8. ObLSAttrOperator::operator_ls_in_trans_            (can not modify ls)
+  //      ObLSAttrOperator::alter_ls_group_in_trans          (can not modify ls)
+  //      ObLSAttrOperator::update_ls_flag_in_trans          (can not modify ls)
   static int check_tenant_not_in_cloning_procedure(
          const uint64_t tenant_id,
          const ObConflictCaseWithClone &case_to_check);
   static int check_tenant_has_no_conflict_tasks(const uint64_t tenant_id);
+
+  // when update __all_unit, in some case we have to lock __all_unit first and then check clone
+  // called by ObUnitTableOperator::update_unit
   static int lock_unit_for_tenant(
              common::ObISQLClient &client,
              const share::ObUnit &unit,
              uint64_t &tenant_id_to_lock);
+
+  // when update __all_resource_pool, in some case we have to lock __all_resource_pool first and then check clone
+  // called by ObUnitTableOperator::update_resource_pool
   static int lock_resource_pool_for_tenant(
              common::ObISQLClient &client,
              const share::ObResourcePool &resource_pool);
+
+  // when update __all_tenant, inn some case we have to lock __all_tenant first and then check clone
+  // called by ObTenantSqlService::delay_to_drop_tenant
+  static int lock_status_for_tenant(
+             ObMySQLTransaction &trans,
+             const uint64_t tenant_id_to_check);
+
+  // inner lock __all_tenant for lock_status_for_tenant and check_tenant_is_in_dropping_procedure_
+  static int inner_lock_line_for_all_tenant_table_(
+             const uint64_t tenant_id_to_lock,
+             ObISQLClient &sql_proxy,
+             share::schema::ObTenantStatus &tenant_status);
 private:
   static int check_tenant_snapshot_simulated_mutex_(ObMySQLTransaction &trans,
                                                     const uint64_t tenant_id,
@@ -204,6 +236,7 @@ private:
   // @params[in]  tenant_id, tenant to check
   static int check_tenant_is_in_upgrading_procedure_(const uint64_t tenant_id,
                                                      uint64_t &data_version);
+  static int check_tenant_is_in_dropping_procedure_(const uint64_t tenant_id);
   static int check_tenant_is_in_transfer_procedure_(const uint64_t tenant_id);
   static int check_tenant_is_in_modify_resource_pool_procedure_(const uint64_t tenant_id);
   static int check_tenant_is_in_modify_unit_procedure_(const uint64_t tenant_id);
