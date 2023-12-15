@@ -228,6 +228,7 @@ public:
   OB_INLINE bool could_major_merge_start() const { return major_merge_status_; }
   int check_tablet_could_schedule_by_status(const ObTablet &tablet, bool &could_schedule_merge);
   // The transfer task sets the flag that prohibits the scheduling of medium when the log stream is src_ls of transfer
+  OB_INLINE bool is_restore() const { return ATOMIC_LOAD(&is_restore_); }
   int stop_ls_schedule_medium(const share::ObLSID &ls_id);
   int clear_prohibit_medium_flag(const share::ObLSID &ls_id, const ObProhibitScheduleMediumMap::ProhibitFlag &input_flag)
   {
@@ -253,6 +254,7 @@ public:
   int gc_info();
   int set_max();
 
+  int refresh_tenant_status();
   // Schedule an async task to build bloomfilter for the given macro block.
   // The bloomfilter build task will be ignored if a same build task exists in the queue.
   int schedule_build_bloomfilter(
@@ -371,10 +373,12 @@ private:
   static const int64_t PRINT_LOG_INVERVAL = 2 * 60 * 1000 * 1000L; // 2m
   static const int64_t SCHEDULE_TABLET_BATCH_CNT = 50 * 1000L; // 5w
   static const int64_t CHECK_LS_LOCALITY_INTERVAL = 5 * 60 * 1000 * 1000L; // 5m
+  static const int64_t REFRESH_TENANT_STATUS_INTERVAL = 30 * 1000 * 1000L; // 30s
 private:
   bool is_inited_;
   bool major_merge_status_;
   bool is_stop_;
+  bool is_restore_;
   int merge_loop_tg_id_; // thread
   int medium_loop_tg_id_; // thread
   int sstable_gc_tg_id_; // thread

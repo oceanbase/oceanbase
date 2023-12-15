@@ -185,6 +185,9 @@ void ObTenantTabletScheduler::InfoPoolResizeTask::runTimerTask()
   if (OB_FAIL(MTL(ObTenantTabletScheduler *)->gc_info())) {
     LOG_WARN("Fail to gc info", K(ret));
   }
+  if (OB_FAIL(MTL(ObTenantTabletScheduler *)->refresh_tenant_status())) {
+    LOG_WARN("Fail to refresh tenant status", K(ret));
+  }
   cost_ts = ObTimeUtility::fast_current_time() - cost_ts;
   LOG_INFO("InfoPoolResizeTask", K(cost_ts));
 }
@@ -195,6 +198,7 @@ ObTenantTabletScheduler::ObTenantTabletScheduler()
  : is_inited_(false),
    major_merge_status_(false),
    is_stop_(false),
+   is_restore_(false),
    merge_loop_tg_id_(0),
    medium_loop_tg_id_(0),
    sstable_gc_tg_id_(0),
@@ -573,6 +577,36 @@ int ObTenantTabletScheduler::set_max()
     LOG_WARN("failed to set_max in ObDagWarningHistoryManager", K(ret));
   } else if (OB_FAIL(MTL(ObTenantSSTableMergeInfoMgr *)->set_max(ObTenantSSTableMergeInfoMgr::cal_max()))) {
     LOG_WARN("failed to set_max int ObTenantSSTableMergeInfoMgr", K(ret));
+  }
+  return ret;
+}
+
+int ObTenantTabletScheduler::refresh_tenant_status()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("The ObTenantTabletScheduler has not been inited", K(ret));
+  } else {
+    // refresh is_restore
+    if (REACH_TENANT_TIME_INTERVAL(REFRESH_TENANT_STATUS_INTERVAL)) {
+      ObSchemaGetterGuard schema_guard;
+      const ObSimpleTenantSchema *tenant_schema = nullptr;
+      const int64_t tenant_id = MTL_ID();
+      if (OB_TMP_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+        LOG_WARN("fail to get schema guard", K(tmp_ret), K(tenant_id));
+      } else if (OB_TMP_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
+        LOG_WARN("fail to get tenant schema", K(tmp_ret), K(tenant_id));
+      } else if (OB_ISNULL(tenant_schema)) {
+        tmp_ret = OB_SCHEMA_ERROR;
+        LOG_WARN("tenant schema is null", K(tmp_ret));
+      } else if (tenant_schema->is_restore()) {
+        ATOMIC_SET(&is_restore_, true);
+      } else {
+        ATOMIC_SET(&is_restore_, false);
+      }
+    }
   }
   return ret;
 }
