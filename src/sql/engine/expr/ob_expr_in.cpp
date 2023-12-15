@@ -55,6 +55,8 @@ bool Row<ObDatum>::equal_key(const Row<ObDatum> &other, void **cmp_funcs, const 
 {
   bool equal_ret = false;
   if (OB_ISNULL(other.elems_) || OB_ISNULL(elems_)) {
+  } else if (other.elems_ == elems_) {
+    equal_ret = true;
   } else {
     bool is_equal = true;
     int curr_idx = idx;
