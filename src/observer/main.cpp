@@ -446,6 +446,8 @@ int main(int argc, char *argv[])
   ObActiveSessionGuard::get_stat().tenant_id_    = (0 == ob_get_tenant_id() ? OB_SERVER_TENANT_ID : ob_get_tenant_id());
   ObActiveSessionGuard::get_stat().user_id_      = 0;
   ObActiveSessionGuard::get_stat().session_type_ = ObActiveSessionStatItem::SessionType::BACKGROUND;
+  ObActiveSessionGuard::get_stat().session_id_   = ObBackgroundSessionIdGenerator::get_instance().get_next_sess_id();
+  ObSessionStatEstGuard stat_est_guard(ObActiveSessionGuard::get_stat().tenant_id_, ObActiveSessionGuard::get_stat().session_id_);
   ObStackHeaderGuard stack_header_guard;
   // just take effect in observer
 #ifndef OB_USE_ASAN

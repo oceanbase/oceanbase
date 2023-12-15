@@ -6473,8 +6473,6 @@ def_table_schema(
     is_cluster_private=True,
     meta_record_in_sys = False,
     normal_columns = [
-
-        ('plan_id', 'int'),
         ('plan_type', 'int'),
         ('module', 'varchar:64', 'true'),
         ('action', 'varchar:64', 'true'),
@@ -31042,7 +31040,6 @@ def_table_schema(
       STAT.SVR_PORT AS SVR_PORT,
       STAT.SQL_ID AS SQL_ID,
       STAT.PLAN_HASH AS PLAN_HASH,
-      STAT.PLAN_ID AS PLAN_ID,
       STAT.PLAN_TYPE AS PLAN_TYPE,
       STAT.MODULE AS MODULE,
       STAT.ACTION AS ACTION,
@@ -31123,7 +31120,6 @@ def_table_schema(
       STAT.SVR_PORT AS SVR_PORT,
       STAT.SQL_ID AS SQL_ID,
       STAT.PLAN_HASH AS PLAN_HASH,
-      STAT.PLAN_ID AS PLAN_ID,
       STAT.PLAN_TYPE AS PLAN_TYPE,
       STAT.MODULE AS MODULE,
       STAT.ACTION AS ACTION,
@@ -50234,7 +50230,6 @@ def_table_schema(
       STAT.SVR_PORT AS SVR_PORT,
       STAT.SQL_ID AS SQL_ID,
       STAT.PLAN_HASH AS PLAN_HASH,
-      STAT.PLAN_ID AS PLAN_ID,
       STAT.PLAN_TYPE AS PLAN_TYPE,
       STAT.MODULE AS MODULE,
       STAT.ACTION AS ACTION,

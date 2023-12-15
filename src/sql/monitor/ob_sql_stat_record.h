@@ -55,7 +55,7 @@ public:
   void set_sql_id(const ObString& sql_id) { sql_id.to_string(sql_id_, OB_MAX_SQL_ID_LENGTH); }
   void set_plan_hash(const uint64_t plan_hash_val) { ATOMIC_STORE(&plan_hash_,plan_hash_val); }
   void set_source_addr(const ObAddr &source_addr) { source_addr_ = source_addr; }
-  TO_STRING_KV(K_(sql_id), K_(plan_hash));
+  TO_STRING_KV(K_(sql_id), K_(plan_hash), K_(source_addr));
 public:
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
   uint64_t plan_hash_;

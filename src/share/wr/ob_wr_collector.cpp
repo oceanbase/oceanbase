@@ -664,27 +664,42 @@ int ObWrCollector::collect_sqlstat()
         LOG_WARN("wr snapshot timeout", KR(ret), K_(timeout_ts));
       } else if (OB_FAIL(sql.assign_fmt(
                   " select /*+ workload_repository_snapshot query_timeout(%ld) */ svr_ip,svr_port,tenant_id,     "
-                  "    sql_id, plan_id, plan_hash, plan_type, module, action, parsing_db_id,      "
-                  "    parsing_db_name, parsing_user_id, executions_total, executions_delta, disk_reads_total,     "
-                  "    disk_reads_delta, buffer_gets_total, buffer_gets_delta, elapsed_time_total,     "
-                  "    elapsed_time_delta, cpu_time_total, cpu_time_delta, ccwait_total, ccwait_delta,     "
-                  "    userio_wait_total, userio_wait_delta, apwait_total, apwait_delta, physical_read_requests_total,     "
-                  "    physical_read_requests_delta, physical_read_bytes_total, physical_read_bytes_delta,     "
-                  "    write_throttle_total, write_throttle_delta, rows_processed_total, rows_processed_delta,     "
-                  "    memstore_read_rows_total, memstore_read_rows_delta, minor_ssstore_read_rows_total,     "
-                  "    minor_ssstore_read_rows_delta, major_ssstore_read_rows_total, major_ssstore_read_rows_delta,     "
-                  "    rpc_total, rpc_delta, fetches_total, fetches_delta, retry_total, retry_delta, partition_total,     "
-                  "    partition_delta, nested_sql_total, nested_sql_delta ,source_ip, source_port   "
+                  "    sql_id, plan_hash, plan_type, module, action, parsing_db_id,      "
+                  "    parsing_db_name, parsing_user_id, cast(sum(executions_total) as SIGNED INTEGER ) as executions_total, "
+                  "    cast(sum(executions_delta) as SIGNED INTEGER ) as executions_delta, cast(sum(disk_reads_total) as SIGNED INTEGER ) as disk_reads_total,     "
+                  "    cast(sum(disk_reads_delta) as SIGNED INTEGER ) as disk_reads_delta, cast(sum(buffer_gets_total) as SIGNED INTEGER ) as buffer_gets_total, "
+                  "    cast(sum(buffer_gets_delta) as SIGNED INTEGER ) as buffer_gets_delta, cast(sum(elapsed_time_total) as SIGNED INTEGER ) as elapsed_time_total, "
+                  "    cast(sum(elapsed_time_delta) as SIGNED INTEGER ) as elapsed_time_delta, cast(sum(cpu_time_total) as SIGNED INTEGER ) as cpu_time_total, "
+                  "    cast(sum(cpu_time_delta) as SIGNED INTEGER ) as cpu_time_delta, cast(sum(ccwait_total) as SIGNED INTEGER ) as ccwait_total, "
+                  "    cast(sum(ccwait_delta) as SIGNED INTEGER ) as ccwait_delta, "
+                  "    cast(sum(userio_wait_total) as SIGNED INTEGER ) as userio_wait_total, cast(sum(userio_wait_delta) as SIGNED INTEGER ) as userio_wait_delta, "
+                  "    cast(sum(apwait_total) as SIGNED INTEGER ) as apwait_total, cast(sum(apwait_delta) as SIGNED INTEGER ) as apwait_delta, "
+                  "    cast(sum(physical_read_requests_total) as SIGNED INTEGER ) as physical_read_requests_total, "
+                  "    cast(sum(physical_read_requests_delta) as SIGNED INTEGER ) as physical_read_requests_delta, cast(sum(physical_read_bytes_total) as SIGNED INTEGER ) as physical_read_bytes_total, "
+                  "    cast(sum(physical_read_bytes_delta) as SIGNED INTEGER ) as physical_read_bytes_delta, "
+                  "    cast(sum(write_throttle_total) as SIGNED INTEGER ) as write_throttle_total, cast(sum(write_throttle_delta) as SIGNED INTEGER ) as write_throttle_delta, "
+                  "    cast(sum(rows_processed_total) as SIGNED INTEGER ) as rows_processed_total, cast(sum(rows_processed_delta) as SIGNED INTEGER ) as rows_processed_delta, "
+                  "    cast(sum(memstore_read_rows_total) as SIGNED INTEGER ) as memstore_read_rows_total, cast(sum(memstore_read_rows_delta) as SIGNED INTEGER ) as memstore_read_rows_delta, "
+                  "    cast(sum(minor_ssstore_read_rows_total) as SIGNED INTEGER ) as minor_ssstore_read_rows_total, "
+                  "    cast(sum(minor_ssstore_read_rows_delta) as SIGNED INTEGER ) as minor_ssstore_read_rows_delta, "
+                  "    cast(sum(major_ssstore_read_rows_total) as SIGNED INTEGER ) as major_ssstore_read_rows_total, "
+                  "    cast(sum(major_ssstore_read_rows_delta) as SIGNED INTEGER ) as major_ssstore_read_rows_delta, "
+                  "    cast(sum(rpc_total) as SIGNED INTEGER ) as rpc_total, cast(sum(rpc_delta) as SIGNED INTEGER ) as rpc_delta, "
+                  "    cast(sum(fetches_total) as SIGNED INTEGER ) as fetches_total, cast(sum(fetches_delta) as SIGNED INTEGER ) as fetches_delta, "
+                  "    cast(sum(retry_total) as SIGNED INTEGER ) as retry_total, cast(sum(retry_delta) as SIGNED INTEGER ) as retry_delta, "
+                  "    cast(sum(partition_total) as SIGNED INTEGER ) as partition_total, "
+                  "    cast(sum(partition_delta) as SIGNED INTEGER ) as partition_delta, cast(sum(nested_sql_total) as SIGNED INTEGER ) as nested_sql_total, "
+                  "    cast(sum(nested_sql_delta) as SIGNED INTEGER ) as nested_sql_delta ,source_ip, source_port   "
                   "from oceanbase.__all_virtual_sqlstat   "
                   "where tenant_id = %ld and (sql_id,plan_hash) in  (   "
                   "select sql_id, plan_hash   "
                   "from     "
                   "    (  select  sql_id ,plan_hash,     "
-                  "        rank() over( order by sum(elapsed_time_delta) desc ) elapsed_time_delta_rank,     "
-                  "        rank() over( order by sum(cpu_time_delta) desc) cpu_time_delta_rank,     "
-                  "        rank() over( order by sum(userio_wait_delta) desc) userio_wait_delta_rank,     "
-                  "        rank() over( order by sum(physical_read_requests_delta) desc) physical_read_requests_delta_rank,     "
-                  "        rank() over( order by sum(executions_delta) desc) executions_delta_rank     "
+                  "        row_number() over( order by sum(elapsed_time_delta) desc ) elapsed_time_delta_rank,     "
+                  "        row_number() over( order by sum(cpu_time_delta) desc) cpu_time_delta_rank,     "
+                  "        row_number() over( order by sum(userio_wait_delta) desc) userio_wait_delta_rank,     "
+                  "        row_number() over( order by sum(physical_read_requests_delta) desc) physical_read_requests_delta_rank,     "
+                  "        row_number() over( order by sum(executions_delta) desc) executions_delta_rank     "
                   "    from oceanbase.__all_virtual_sqlstat where tenant_id = %ld group by sql_id, plan_hash   "
                   "    )     "
                   "where     "
@@ -692,7 +707,8 @@ int ObWrCollector::collect_sqlstat()
                   "    or cpu_time_delta_rank <= %ld     "
                   "    or userio_wait_delta_rank <= %ld       "
                   "    or physical_read_requests_delta_rank <= %ld       "
-                  "    or executions_delta_rank <= %ld  ) ",
+                  "    or executions_delta_rank <= %ld  ) "
+                  "group by tenant_id, svr_ip, svr_port, sql_id, plan_hash, source_ip, source_port",
                   query_timeout, tenant_id, tenant_id, topnsql, topnsql, topnsql, topnsql, topnsql ))) {
         LOG_WARN("failed to assign ash query string", KR(ret));
       } else if (OB_FAIL(sql_proxy->read(res, tenant_id, sql.ptr()))) {
@@ -720,7 +736,6 @@ int ObWrCollector::collect_sqlstat()
             EXTRACT_STRBUF_FIELD_MYSQL(
                 *result, "sql_id", sqlstat.sql_id_, sizeof(sqlstat.sql_id_), tmp_real_str_len);
             EXTRACT_UINT_FIELD_MYSQL(*result, "plan_hash", sqlstat.plan_hash_, uint64_t);
-            EXTRACT_INT_FIELD_MYSQL(*result, "plan_id", sqlstat.plan_id_, int64_t);
             EXTRACT_INT_FIELD_MYSQL(*result, "plan_type", sqlstat.plan_type_, int64_t);
             EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "module", sqlstat.module_, sizeof(sqlstat.module_), tmp_real_str_len);
             EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "action", sqlstat.action_, sizeof(sqlstat.action_), tmp_real_str_len);
@@ -790,8 +805,6 @@ int ObWrCollector::collect_sqlstat()
                 LOG_WARN("failed to add column source_port", KR(ret), K(sqlstat));
               } else if (OB_FAIL(dml_splicer.add_uint64_pk_column("plan_hash", sqlstat.plan_hash_))) {
                 LOG_WARN("failed to add column plan_hash", KR(ret), K(sqlstat));
-              } else if (OB_FAIL(dml_splicer.add_column("plan_id", sqlstat.plan_id_))) {
-                LOG_WARN("failed to add column plan_id", KR(ret), K(sqlstat));
               } else if (OB_FAIL(dml_splicer.add_column("plan_type", sqlstat.plan_type_))) {
                 LOG_WARN("failed to add column plan_type", KR(ret), K(sqlstat));
               } else if (OB_FAIL(dml_splicer.add_column(true, "module"))) { // 没有设置为null
@@ -954,7 +967,7 @@ int ObWrCollector::collect_sqltext()
                     " sql_id, query_sql , "
                     " sql_type from oceanbase.__all_virtual_sqlstat "
                     "where tenant_id = %ld and sql_id in (select distinct sql_id from oceanbase.__all_virtual_wr_sqlstat where "
-                    "tenant_id = %ld and snap_id = %ld and query_sql <> '' )",
+                    "tenant_id = %ld and snap_id = %ld and query_sql <> '')  group by sql_id ",
                   query_timeout, tenant_id, tenant_id, snap_id_))) {
         LOG_WARN("failed to assign ash query string", KR(ret));
       } else if (OB_FAIL(sql_proxy->read(res, tenant_id, sql.ptr()))) {
