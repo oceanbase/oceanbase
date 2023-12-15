@@ -12580,6 +12580,8 @@ int ObDDLService::recover_restore_table_ddl_task(
         } else if (OB_FAIL(create_user_hidden_table(*src_table_schema, dst_table_schema, nullptr/*sequence_ddl_arg*/,
           false/*bind_tablets*/, *src_tenant_schema_guard, *dst_tenant_schema_guard, ddl_operator, dst_tenant_trans, allocator))) {
           LOG_WARN("create user hidden table failed", K(ret), K(arg));
+        } else if (OB_FAIL(ddl_operator.update_table_attribute(dst_table_schema, dst_tenant_trans, OB_DDL_ALTER_TABLE))) {
+          LOG_WARN("failed to update data table schema attribute", K(ret), K(arg));
         } else {
           ObPrepareAlterTableArgParam param;
           if (OB_FAIL(param.init(session_id, 0/*sql_mode, unused*/, arg.ddl_stmt_str_,
@@ -12589,6 +12591,7 @@ int ObDDLService::recover_restore_table_ddl_task(
           } else if (OB_FAIL(root_service->get_ddl_scheduler().prepare_alter_table_arg(param, &dst_table_schema, alter_table_arg))) {
             LOG_WARN("prepare alter table arg failed", K(ret), K(param));
           } else {
+            alter_table_arg.alter_table_schema_.set_schema_version(dst_table_schema.get_schema_version());
             alter_table_arg.alter_table_schema_.set_table_name(arg.target_schema_.get_table_name_str());
             alter_table_arg.consumer_group_id_ = arg.consumer_group_id_;
             ObCreateDDLTaskParam param(dst_table_schema.get_tenant_id(),
@@ -15296,11 +15299,11 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
   // to prevent other action to effect table partition info in tablegroup
   } else if (OB_FAIL(check_alter_partition_with_tablegroup(&orig_table_schema, hidden_table_schema, dst_tenant_schema_guard))) {
     LOG_WARN("fail to check alter partition with tablegroup", KR(ret));
+  } else if (OB_FAIL(schemas.push_back(&hidden_table_schema))) {
+    LOG_WARN("push back schema failed", K(ret));
   } else {
-    if (OB_FAIL(schemas.push_back(&hidden_table_schema))) {
-      LOG_WARN("fail to push back hidden table schema" , K(ret));
-    }
-    for (int64_t i  = 0; OB_SUCC(ret) && i < aux_table_schemas.count(); i++) {
+    // to make main table's schema version > auxiliary tables by creating aux table first.
+    for (int64_t i = aux_table_schemas.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
       ObTableSchema &table_schema = aux_table_schemas.at(i);
       // allow offline ddl execute if there's no offline ddl doing
       table_schema.set_in_offline_ddl_white_list(orig_table_schema.check_can_do_ddl());
@@ -17564,6 +17567,21 @@ int ObDDLService::check_and_replace_dup_constraint_name_on_demand(
                 tmp_schema, new_constraint.get_constraint_name(), false/*is_foreign_key*/, is_constraint_name_exist))) {
               LOG_WARN("check constraint name is exist failed", K(ret));
             } else if (is_constraint_name_exist) {
+              if (CONSTRAINT_TYPE_PRIMARY_KEY == new_constraint.get_constraint_type()) {
+                // duplicated primary key name, the recover restore table task should fail finally.
+                ret = OB_ERR_CONSTRAINT_NAME_DUPLICATE;
+              } else if (CONSTRAINT_TYPE_NOT_NULL == new_constraint.get_constraint_type()) {
+                // duplicated not null cst name, should delete the not null flag, and ignore to rebuild the cst.
+                const uint64_t column_id = *(new_constraint.cst_col_begin());
+                ObColumnSchemaV2 *not_null_column = hidden_data_schema.get_column_schema(column_id);
+                if (OB_ISNULL(not_null_column) || OB_UNLIKELY(!not_null_column->has_not_null_constraint())) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("unexpected status", K(ret), KPC(not_null_column), K(new_constraint), K(hidden_data_schema));
+                } else if (OB_FALSE_IT(not_null_column->drop_not_null_cst())) {
+                } else if (OB_FAIL(ddl_operator.update_single_column(trans, hidden_data_schema, hidden_data_schema, *not_null_column))) {
+                  LOG_WARN("update single column failed", K(ret), KPC(not_null_column), K(hidden_data_schema));
+                }
+              }
               LOG_INFO("duplicated constraint, can ignore", K(ret), K(new_constraint));
             } else if (OB_FAIL(hidden_data_schema.add_constraint(new_constraint))) {
               LOG_WARN("failed to add constraint", K(ret));
