@@ -112,6 +112,15 @@ int ObTransformSimplifyExpr::transform_one_stmt(common::ObIArray<ObParentDMLStmt
       LOG_TRACE("succeed to remove subquery when filter is false", K(is_happened));
     }
   }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(convert_case_when_predicate(stmt, is_happened))) {
+      LOG_WARN("failed to convert case when predicate", K(ret));
+    } else {
+      trans_happened |= is_happened;
+      OPT_TRACE("convert case when predicate", is_happened);
+      LOG_TRACE("succeed to convert case when predicate", K(is_happened));
+    }
+  }
   if (OB_SUCC(ret) && trans_happened) {
     if (OB_FAIL(add_transform_hint(*stmt))) {
       LOG_WARN("failed to add transform hint", K(ret));
@@ -2517,6 +2526,644 @@ int ObTransformSimplifyExpr::try_remove_ora_decode(ObRawExpr *&expr,
                                                             expr, new_expr, ctx_->session_info_))) {
       LOG_WARN("try add cast expr above failed", K(ret));
     }
+  }
+  return ret;
+}
+
+/***
+ * EXPLANATION:
+ * Rewrite case_when predicate recursively for all relation exprs
+ * Focus on two transformer format:
+ *
+ * 1. According to when exprs (Priori false/null exprs can be removed)
+    // Note(kongfanhao.kfh): for all relation exprs in the stmt
+    expr = case when 2 > 3 then c1
+                when 2 > 1 then c2
+                else c3
+           end > 1;
+    ==> expr = c2 > 1
+ * 2. According to then exprs (at most one true/uncalc then_expr)
+    // Note(kongfanhao.kfh): just rewrite exprs at the root of where/having
+    expr = case when c1 > 1 then 1
+                when c2 > 1 then 2
+                else c3
+           end > 2;
+    ==> 
+    expr = lnnvl(c1 > 1) and lnnvl(c2 > 1) and c3 > 2
+ **/
+int ObTransformSimplifyExpr::convert_case_when_predicate(ObDMLStmt *stmt, 
+                                                         bool &trans_happended) 
+{
+  int ret = OB_SUCCESS;
+  trans_happended = false;
+  ObStmtExprGetter visitor;
+  visitor.set_relation_scope();
+  ObSEArray<ObRawExprPointer, 8> all_relation_exprs;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is NULL", K(ret));
+  } else if (OB_FAIL(stmt->get_relation_exprs(all_relation_exprs, visitor))) {
+    LOG_WARN("failed to get relation exprs", K(ret));
+  } else {
+    bool where_happended = false;
+    bool having_happended = false;
+    bool is_scala_group_by = stmt->is_select_stmt() && static_cast<ObSelectStmt *>(stmt)->is_scala_group_by();
+    if (OB_FAIL(convert_case_when_predicate_by_then_expr(stmt->get_condition_exprs(),
+                                                          is_scala_group_by,
+                                                          where_happended))) {
+      LOG_WARN("failed to convert case when expr at where", K(ret));
+    } else if (stmt->is_select_stmt() &&
+        OB_FAIL(convert_case_when_predicate_by_then_expr(static_cast<ObSelectStmt *>(stmt)->get_having_exprs(),
+                                                          is_scala_group_by,
+                                                          having_happended))) {
+      LOG_WARN("failed to convert case when expr at having", K(ret));
+    } else {
+      trans_happended |= where_happended || having_happended;
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_relation_exprs.count(); ++i) {
+      bool is_happended = false;
+      ObRawExpr *expr = NULL;
+      if (OB_FAIL(all_relation_exprs.at(i).get(expr))) {
+        LOG_WARN("failed to get expr",K(ret));
+      } else if (OB_FAIL(recursive_convert_case_when_predicate_by_when_expr(
+                                                            expr, 
+                                                            is_scala_group_by, 
+                                                            is_happended))) {
+        LOG_WARN("failed to convert case when predicate", K(ret));
+      } else if (OB_FAIL(all_relation_exprs.at(i).set(expr))) {
+        LOG_WARN("failed to set expr", K(ret));
+      } else {
+        trans_happended |= is_happended;
+      }
+    }
+  }
+  return ret;
+}
+
+
+/**
+ * @brief convert case when predicate according to then exprs at the parent expr
+ * @param[in][out] expr: current expr 
+ * @param[in] is_sacla_group_by: this stmt is scala group by or not
+ * @param[in][out] trans_happened: whether rewrite is happened
+ */
+int ObTransformSimplifyExpr::recursive_convert_case_when_predicate_by_when_expr(
+                                    ObRawExpr *&expr,
+                                    const bool is_scala_group_by,
+                                    bool &trans_happened) 
+{
+  int ret = OB_SUCCESS;
+  trans_happened = false;
+  bool is_happened = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(expr), K(ret));
+  } else if (T_OP_CASE == expr->get_expr_type()) {
+    if (is_scala_group_by && expr->has_flag(CNT_AGG)) {
+      /* do nothing for scala group by */
+    } else if (OB_FAIL(inner_convert_case_when_predicate_by_when_expr(expr, is_happened))) {
+      LOG_WARN("failed to inner convert case when expr", K(ret));
+    } else {
+      trans_happened |= is_happened;
+    }
+  } else { /* do nothing */}
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+    bool param_trans_happended = false;
+    if (OB_FAIL(SMART_CALL(recursive_convert_case_when_predicate_by_when_expr(
+                                                       expr->get_param_expr(i), 
+                                                       is_scala_group_by, 
+                                                       param_trans_happended)))) {
+      LOG_WARN("failed to call convert func recursively", K(ret));
+    } else {
+      trans_happened |= param_trans_happended;
+    }
+  }
+  return ret;
+}
+
+/**
+ * @brief inner convert the case when predicate of expr
+ * @param[in][out] expr: case when expr
+ * @param[in][out] trans_happened: whether convert is happened
+ * @discription: according to the results of when exprs
+ *  1. cond1 ... cond(k-1) is FALSE/NULL
+ *  2. condk is TRUE/UNCALCULABLE
+ *    2.1 if condk is TRUE, then rewrite case_expr to exprk
+ *    2.2 if condk is UNCALCULABLE, then remove cond1...cond(k-1)
+ *    2.3 if k > when_cnt, then rewrite case_expr to default_expr
+ */
+int ObTransformSimplifyExpr::inner_convert_case_when_predicate_by_when_expr(
+                                                      ObRawExpr *&expr, 
+                                                      bool &trans_happended) 
+{
+  int ret = OB_SUCCESS;
+  trans_happended = false;
+  ObCaseOpRawExpr *case_expr = NULL;
+  if (OB_ISNULL(expr) || OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("param is NULL", K(ret));
+  } else if (T_OP_CASE != expr->get_expr_type()) {
+  } else if (OB_FALSE_IT(case_expr = static_cast<ObCaseOpRawExpr *>(expr))) {
+  } else if (OB_UNLIKELY(case_expr->get_when_expr_size() != case_expr->get_then_expr_size())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("incorrect case when params", K(ret));
+  } else if (OB_UNLIKELY(case_expr->get_when_expr_size() < 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("case when size is less than 1", K(ret));
+  } else {
+    int64_t idx = 0; // first non false idx
+    bool is_blocked = false;
+    ObRawExpr *rewrite_expr = NULL;
+    const int64_t when_cnt = case_expr->get_when_expr_size();
+
+    for (idx = 0; OB_SUCC(ret) && idx < when_cnt; ++idx) {
+      if (OB_FAIL(check_when_expr_validity(case_expr, idx, rewrite_expr, is_blocked))) {
+        LOG_WARN("failed to check when exprs", K(ret));
+      } else if (is_blocked) {
+        break;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(idx < 0 || idx > when_cnt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("index is out of range", K(ret), K(ret), K(when_cnt));
+    } else if (idx == when_cnt && 
+               OB_ISNULL(rewrite_expr = case_expr->get_default_param_expr())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected default expr is NULL", K(ret));
+    } else if (OB_ISNULL(rewrite_expr)) {
+      if (OB_LIKELY(idx == 0)) {
+      } else if (OB_FAIL(assign_array_at_idx(case_expr->get_when_param_exprs(), idx))) {
+        LOG_WARN("failed to assign when exprs from idx", K(ret), K(idx));
+      } else if (OB_FAIL(assign_array_at_idx(case_expr->get_then_param_exprs(), idx))) {
+        LOG_WARN("failed to assign then exprs from idx", K(ret), K(idx));
+      } else if (OB_FAIL(case_expr->formalize(ctx_->session_info_))) {
+        LOG_WARN("failed to formalize expr", K(ret), KPC(case_expr));
+      } else {
+        trans_happended = true;
+      }
+    } else {
+      expr = rewrite_expr;
+      trans_happended = true;
+    }
+  }
+  return ret;
+}
+
+int ObTransformSimplifyExpr::check_when_expr_validity(
+                                      ObCaseOpRawExpr *case_expr,
+                                      const int64_t idx,
+                                      ObRawExpr *&rewrite_expr,
+                                      bool &is_blocked) {
+  int ret = OB_SUCCESS;
+  rewrite_expr = NULL;
+  is_blocked = false;
+  ObRawExpr *when_expr = NULL;
+  if (OB_ISNULL(case_expr) || OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param is NULL", K(ret));
+  } else if (OB_UNLIKELY(idx < 0 || idx > case_expr->get_when_expr_size())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("index is out of range", K(ret), K(idx));
+  } else if (OB_ISNULL(when_expr = case_expr->get_when_param_expr(idx))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param is NULL", K(ret));
+  } else if (when_expr->is_static_scalar_const_expr()) {
+    ObObj result;
+    bool got_result = false;
+    if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx_->exec_ctx_,
+                                                          when_expr,
+                                                          result,
+                                                          got_result,
+                                                          *ctx_->allocator_))) {
+      LOG_WARN("failed to calc const or calculable expr", K(ret), K(*when_expr));
+    } else if (got_result && (result.is_true() || result.is_false() || result.is_null())) {
+      if (result.is_true()) {
+        if (OB_ISNULL(rewrite_expr = case_expr->get_then_param_expr(idx))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected then expr is NULL", K(ret));
+        } else {
+          ObExprConstraint true_cons{when_expr, PreCalcExprExpectResult::PRE_CALC_RESULT_TRUE};
+          if (OB_FAIL(ctx_->expr_constraints_.push_back(true_cons))) {
+            LOG_WARN("failed to push back expr constraints", K(ret));
+          }
+        }
+        is_blocked = true;
+      } else {
+        ObRawExpr *nvl_false_expr = NULL;
+        if (OB_FAIL(build_nvl_bool_expr(when_expr, false, nvl_false_expr))) {
+          LOG_WARN("failed to build nvl bool expr", K(ret));
+        } else if (OB_ISNULL(nvl_false_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected nvl_false_expr is NULL", K(ret));
+        } else {
+          ObExprConstraint false_cons {nvl_false_expr, PreCalcExprExpectResult::PRE_CALC_RESULT_FALSE};
+          if (OB_FAIL(ctx_->expr_constraints_.push_back(false_cons))) {
+            LOG_WARN("failed to push back expr constraints", K(ret));
+          } 
+        }
+      }
+    } else {
+      LOG_TRACE("The result of when_expr is not in {true, false, null}");
+      is_blocked = true;
+    }
+  } else {
+    is_blocked = true;
+  }
+  return ret;
+}
+
+int ObTransformSimplifyExpr::convert_case_when_predicate_by_then_expr(
+                                          ObIArray<ObRawExpr *> &exprs,
+                                          const bool is_scala_group_by,
+                                          bool &trans_happended) 
+{
+  int ret = OB_SUCCESS;
+  trans_happended = false;
+  bool is_happended = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+    ObRawExpr *&expr = exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(expr), K(ret));
+    } else if (IS_COMMON_COMPARISON_OP(expr->get_expr_type())) {
+      ObRawExpr *child_0 = NULL;
+      ObRawExpr *child_1 = NULL;
+      ObOpRawExpr *op_expr = static_cast<ObOpRawExpr*>(expr);
+      if (OB_UNLIKELY(2 != op_expr->get_param_count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected param count", K(op_expr->get_param_count()), K(ret));
+      } else if (OB_ISNULL(child_0 = op_expr->get_param_expr(0)) 
+              || OB_ISNULL(child_1 = op_expr->get_param_expr(1))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null expr", K(ret));
+      } else {
+        bool is_case_at_left = false;
+        bool is_case_cmp_const = false;
+        ObCaseOpRawExpr *case_expr = NULL;
+        ObRawExpr *sibling_expr = NULL;
+        if ((T_OP_CASE == child_0->get_expr_type()) 
+            && child_1->is_static_const_expr()) {
+          is_case_at_left = true;
+          is_case_cmp_const = true;
+          case_expr = static_cast<ObCaseOpRawExpr *>(child_0);
+          sibling_expr = child_1;
+        } else if ((T_OP_CASE == child_1->get_expr_type())
+                  && child_0->is_static_const_expr()) {
+          is_case_at_left = false;
+          is_case_cmp_const = true;
+          case_expr = static_cast<ObCaseOpRawExpr *>(child_1);
+          sibling_expr = child_0;
+        } 
+        if (OB_FAIL(ret) || !is_case_cmp_const) {
+        } else if (is_scala_group_by && case_expr->has_flag(CNT_AGG)) {
+          /* do nothing for scala group by */
+        } else if (OB_FAIL(inner_convert_case_when_predicate_by_then_expr(
+                                                expr,
+                                                case_expr,
+                                                sibling_expr,
+                                                is_case_at_left,
+                                                is_happended))) {
+          LOG_WARN("failed to convert case when predicate", K(ret));
+        } else {
+          trans_happended |= is_happended;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+
+// IF case_at_left is true, parent_expr := case_when_expr op sibling_expr 
+// IF case_at_left is false, parent_expr := sibling_expr op case_when_expr
+int ObTransformSimplifyExpr::inner_convert_case_when_predicate_by_then_expr(
+                                   ObRawExpr *&parent_expr,
+                                   ObCaseOpRawExpr *case_expr,
+                                   ObRawExpr *sibling_expr,
+                                   const bool case_at_left,
+                                   bool &trans_happened) 
+{
+  int ret = OB_SUCCESS;
+  trans_happened = false;
+  ObRawExpr *rewrite_expr = NULL;
+  if (OB_ISNULL(parent_expr) || OB_ISNULL(case_expr) || 
+      OB_ISNULL(sibling_expr) || OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param null", K(ret));
+  } else {
+    bool is_valid = false; // Only at most one {true, uncalc} is allowed.
+    bool is_true = false; // Check expr is true or not
+    int64_t true_uncalc_idx = -1;  // The index of non-false expr
+    ObRawExpr* true_uncalc_expr = NULL; // The expr of non-false expr
+    ObSEArray<ObRawExpr*, 4> false_null_exprs;  
+    if (OB_FAIL(check_then_exprs_validity(
+                                        parent_expr, case_expr, 
+                                        sibling_expr, case_at_left, 
+                                        is_true,
+                                        true_uncalc_idx, 
+                                        true_uncalc_expr, 
+                                        false_null_exprs, 
+                                        is_valid))) {
+      LOG_WARN("failed to check convert case when validity", K(ret));
+    } else if (!is_valid) {
+      /* do nothing */
+    } else if (OB_FAIL(add_constraint_for_convert_case_when(
+                                                      false_null_exprs,
+                                                      is_true,
+                                                      true_uncalc_expr))) {
+      LOG_WARN("failed to add false and true constraint", K(ret));
+    } else if (OB_FAIL(build_rewrite_expr(
+                                  case_expr,
+                                  true_uncalc_idx,
+                                  true_uncalc_expr,
+                                  rewrite_expr))) { 
+      LOG_WARN("failed to build rewrite_expr", K(ret));
+    } else {
+      parent_expr = rewrite_expr;
+      trans_happened = true;
+    }
+  }
+  return ret;
+}
+
+/***
+ * check one case when can be rewrite or not 
+ * Rewrite Condition:
+ *  1. Let enum_exprs = then_exprs + default_expr
+ *  2. At most one of enum_exprs is in {true, null, non_static}, others are all false (cmp sibling_expr)
+ *    2.1 The result of them cmp sibling_expr are all false, ==> false
+ *    2.2 Only one of them is {true, null, non_static}, record its index
+ *  3. Otherwise, is_valid = false
+*/ 
+int ObTransformSimplifyExpr::check_then_exprs_validity(
+                                      ObRawExpr *parent_expr,
+                                      ObCaseOpRawExpr *case_expr,
+                                      ObRawExpr *sibling_expr,
+                                      const bool case_at_left,
+                                      bool &is_true,
+                                      int64_t &true_uncalc_idx,
+                                      ObRawExpr *&true_uncalc_expr,
+                                      ObIArray<ObRawExpr*> &false_null_exprs,
+                                      bool &is_valid) {
+  int ret = OB_SUCCESS;
+
+  is_true = false;
+  true_uncalc_idx = -1;
+  true_uncalc_expr = NULL;
+  false_null_exprs.reset();
+  is_valid = false;
+  ObSEArray<ObRawExpr*, 4> enum_exprs; // includes then_exprs and default_expr
+  if (OB_ISNULL(parent_expr) || OB_ISNULL(case_expr) || OB_ISNULL(sibling_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param is NULL", K(ret));
+  } else if (OB_UNLIKELY(case_expr->get_when_expr_size() != case_expr->get_then_expr_size())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("incorrect params of case expr", K(ret));
+  } else if (OB_UNLIKELY(case_expr->get_when_expr_size() < 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("incorrect params of case expr", K(ret));
+  } else if (OB_FAIL(enum_exprs.assign(case_expr->get_then_param_exprs()))) {
+      LOG_WARN("failed to assign enum exprs", K(ret));
+  } else if (OB_FAIL(enum_exprs.push_back(case_expr->get_default_param_expr()))) {
+    LOG_WARN("failed to push back enum exprs", K(ret));
+  } else {
+    // check enum_exprs cmp sibling_expr is valid or not
+    int64_t static_const_expr_cnt = 0;
+    // do precheck 
+    for (int64_t i = 0; OB_SUCC(ret) && i < enum_exprs.count(); ++i) {
+      ObRawExpr *expr = NULL;
+      if (OB_ISNULL(expr = enum_exprs.at(i))) { 
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is NULL", K(ret), K(expr));
+      } else if (expr->is_static_const_expr()) { // static const expr, i.e. "abc", 1, 2, NULL
+        static_const_expr_cnt += 1;
+      }
+    }
+    // only one non-static-const expr is allowed. 
+    if (OB_SUCC(ret) && static_const_expr_cnt + 1 >= enum_exprs.count()) {
+      int64_t false_null_expr_cnt = 0;
+      int64_t other_expr_cnt = 0; // The types of {true, non_static}
+      for (int64_t i = 0; OB_SUCC(ret) && other_expr_cnt < 2 && i < enum_exprs.count(); ++i) {
+        ObRawExpr *expr = NULL;
+        ObRawExpr *op_expr = NULL;
+        if (OB_ISNULL(expr = enum_exprs.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("expr is NULL", K(ret), K(expr));
+        } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(
+                                            *(ctx_->expr_factory_), 
+                                            ctx_->session_info_,
+                                            parent_expr->get_expr_type(),
+                                            op_expr,
+                                            case_at_left ? expr : sibling_expr,
+                                            case_at_left ? sibling_expr : expr))) {
+            LOG_WARN("failed to build cmp expr", K(ret));
+        } else if (op_expr->is_static_const_expr()) {
+          bool got_result = false;
+          ObObj result;
+          if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(
+                                                  ctx_->exec_ctx_,
+                                                  op_expr,
+                                                  result,
+                                                  got_result,
+                                                  *ctx_->allocator_))) {
+            LOG_WARN("failed to calc cosnt or calculable expr", K(ret));
+          } else if (got_result && (result.is_true() || result.is_false() || result.is_null())) {
+            if (result.is_false() || result.is_null()) {
+              false_null_expr_cnt += 1;
+              if (OB_FAIL(false_null_exprs.push_back(op_expr))) {
+                LOG_WARN("failed to push back to false exprs", K(ret));
+              }
+            } else {
+              other_expr_cnt += 1;
+              is_true = true;
+              true_uncalc_idx = i;
+              true_uncalc_expr = op_expr;
+            }
+          } else { break; }
+        } else { // non-static-const expr
+          other_expr_cnt += 1;
+          true_uncalc_idx = i;
+          true_uncalc_expr = op_expr;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        is_valid |= false_null_expr_cnt == case_expr->get_when_expr_size() && 1 == other_expr_cnt;
+        is_valid |= false_null_expr_cnt == case_expr->get_when_expr_size() + 1 && 0 == other_expr_cnt;
+      }
+    } /* endif collect false_exprs */
+  } /* endif check validity */
+  return ret;
+}
+
+int ObTransformSimplifyExpr::build_rewrite_expr(
+                    ObCaseOpRawExpr *case_expr,
+                    const int64_t true_uncalc_idx,
+                    ObRawExpr *true_uncalc_expr,
+                    ObRawExpr *&rewrite_expr) 
+{
+  int ret = OB_SUCCESS;
+  rewrite_expr = NULL;
+  if (OB_ISNULL(case_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected case_expr is NULL", K(ret));
+  } else if (OB_LIKELY(-1 == true_uncalc_idx)) { /* build rewrite_expr = false */
+    if (OB_FAIL(ObRawExprUtils::build_const_bool_expr(ctx_->expr_factory_, 
+                                                        rewrite_expr, false))) {
+      LOG_WARN("failed to build const bool expr", K(ret));
+    }
+  } else if (OB_ISNULL(true_uncalc_expr) || 
+      OB_UNLIKELY(true_uncalc_idx > case_expr->get_then_expr_size() || true_uncalc_idx < 0)) { 
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected params", K(ret));
+  } else {
+    ObSEArray<ObRawExpr*, 4> build_exprs;
+    for (int64_t i = 0; OB_SUCC(ret) && i < true_uncalc_idx; ++i) {
+      ObRawExpr *when_expr = NULL;
+      ObRawExpr *lnnvl_when_expr = NULL;
+      if (OB_ISNULL(when_expr = case_expr->get_when_param_expr(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected when is NULL", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::build_lnnvl_expr(*(ctx_->expr_factory_), 
+                                                          when_expr,
+                                                          lnnvl_when_expr))) {
+        LOG_WARN("failed to build lnnvl expr", K(ret));
+      } else if (OB_FAIL(build_exprs.push_back(lnnvl_when_expr))) {
+        LOG_WARN("failed to push back build_exprs", K(ret));
+      }
+    }
+    // push back condk, if k != n
+    if (OB_SUCC(ret) && true_uncalc_idx < case_expr->get_then_expr_size()) {
+      ObRawExpr *when_expr = NULL;
+      if (OB_ISNULL(when_expr = case_expr->get_when_param_expr(true_uncalc_idx))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected when is NULL", K(ret));
+      } else if (OB_FAIL(build_exprs.push_back(when_expr))) {
+        LOG_WARN("failed to push back build_exprs", K(ret));
+      }
+    }
+    // push back true_null_non_static expr
+    // build rewrite_expr to lnnvl(cond1) and ... and lnnvl(condk-1) and condk and exprk
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(build_exprs.push_back(true_uncalc_expr))) {
+      LOG_WARN("failed to push back build_exprs", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_and_expr(*ctx_->expr_factory_, 
+                                                      build_exprs, rewrite_expr))) {
+      LOG_WARN("failed to build and exprs", K(ret));
+    } else if (OB_ISNULL(rewrite_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected param is NULL", K(ret));
+    } else if (OB_FAIL(rewrite_expr->formalize(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize expr", K(ret));
+    }
+  } /* endif build rewrite_expr */
+  return ret;
+}
+
+// add false and true constraint for convert case when expr, if it is needed.
+// 1. false_exprs.count() > 0
+// 2. true_expr != NULL 
+int ObTransformSimplifyExpr::add_constraint_for_convert_case_when(
+                              ObIArray<ObRawExpr *> &false_null_exprs,
+                              const bool need_add_true_cons,
+                              ObRawExpr *true_expr) {
+  int ret = OB_SUCCESS;
+  ObRawExpr *false_cons_expr = NULL;
+  if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param is NULL",K(ret));
+  } else if (need_add_true_cons && OB_ISNULL(true_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param is NULL",K(ret));
+  } else if (OB_FAIL(build_nvl_bool_exprs(false_null_exprs, false))) {
+    LOG_WARN("failed to build nvl bool exprs",K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::build_or_exprs(
+                                          *ctx_->expr_factory_, 
+                                          false_null_exprs, 
+                                          false_cons_expr))) {
+    LOG_WARN("failed to build or expr", K(ret));
+  } else if (OB_ISNULL(false_cons_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr", K(ret));
+  } else if (OB_FAIL(false_cons_expr->formalize(ctx_->session_info_))) {
+    LOG_WARN("failed to formalize expr", K(ret), K(false_cons_expr));
+  } else {
+    ObExprConstraint false_cons{false_cons_expr, PreCalcExprExpectResult::PRE_CALC_RESULT_FALSE};
+    if (OB_FAIL(ctx_->expr_constraints_.push_back(false_cons))) {
+      LOG_WARN("failed to push back constraints");
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_LIKELY(!need_add_true_cons)) {
+  } else {
+    ObExprConstraint true_cons {true_expr, PreCalcExprExpectResult::PRE_CALC_RESULT_TRUE};
+    if (OB_FAIL(ctx_->expr_constraints_.push_back(true_cons))) {
+      LOG_WARN("failed to push back expr constraints", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformSimplifyExpr::assign_array_at_idx(ObIArray<ObRawExpr *> &exprs, 
+                                                 const int64_t idx) {
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 2> arr;
+  for (int64_t i = idx; OB_SUCC(ret) && i < exprs.count(); ++i) {
+    if (OB_FAIL(arr.push_back(exprs.at(i)))) {
+      LOG_WARN("failed to push back expr", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(exprs.assign(arr))) {
+    LOG_WARN("failed to assign exprs", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformSimplifyExpr::build_nvl_bool_exprs(ObIArray<ObRawExpr*> &exprs, 
+                                            const bool boolean) {
+  int ret = OB_SUCCESS;
+  ObRawExpr *nvl_bool_expr = NULL;
+  ObSEArray<ObRawExpr *, 4> tmp_exprs;
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+    if (OB_FAIL(build_nvl_bool_expr(exprs.at(i), boolean, nvl_bool_expr))) {
+      LOG_WARN("failed to build nvl bool expr", K(ret));
+    } else if (OB_FAIL(tmp_exprs.push_back(nvl_bool_expr))) {
+      LOG_WARN("failed to push back nvl bool expr", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(exprs.assign(tmp_exprs))) {
+    LOG_WARN("failed to assign exprs", K(ret));
+  }
+  return ret;
+}
+// IF is_true nvl_expr = nvl(expr, TRUE)
+// ELSE       nvl_expr = nvl(expr, FALSE)
+int ObTransformSimplifyExpr::build_nvl_bool_expr(ObRawExpr *expr, 
+                                            const bool is_true,
+                                            ObRawExpr *&nvl_expr) {
+  int ret = OB_SUCCESS;
+  ObRawExpr *true_false_expr = NULL;
+  nvl_expr = NULL;
+  if (OB_ISNULL(expr) || OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param is NULL", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::build_const_bool_expr(
+                                    ctx_->expr_factory_, 
+                                    true_false_expr, is_true))) {
+    LOG_WARN("failed to build const bool expr", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::build_nvl_expr(*ctx_->expr_factory_,
+                                                    expr, 
+                                                    true_false_expr,
+                                                    nvl_expr))) {
+    LOG_WARN("failed to build nvl expr", K(ret));
+  } else if (OB_ISNULL(nvl_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nvl expr is NULL", K(ret));
+  } else if (OB_FAIL(nvl_expr->formalize(ctx_->session_info_))) {
+    LOG_WARN("failed to formalize nvl expr", K(ret));
   }
   return ret;
 }
