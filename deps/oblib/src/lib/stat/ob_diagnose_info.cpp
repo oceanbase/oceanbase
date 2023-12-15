@@ -369,6 +369,7 @@ int ObWaitEventHistory::get_last_wait(ObWaitEventDesc *&item)
       item = &items_[(curr_pos_ - cnt - 1 + N) % N];
     } else {
       ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get last wait failed", K(cnt), K_(item_cnt), K_(curr_pos), K_(nest_cnt), K_(current_wait));
     }
   }
   return ret;
@@ -516,7 +517,7 @@ int ObDiagnoseSessionInfo::notify_wait_begin(const int64_t event_no, const uint6
                       ObWaitEventIds::INNER_SQL_EXEC_WAIT != event_no)) {
         LOG_WARN("nested physical wait event! ", "prev event no",
             ObActiveSessionGuard::get_stat().event_no_, "cur event no", event_no,
-            K(ObActiveSessionGuard::get_stat()));
+            K(ObActiveSessionGuard::get_stat()), K(lbt()));
       }
       // backgorund wait event is dummy stat.
       // if (OB_UNLIKELY(&ObActiveSessionGuard::get_stat() == &ObActiveSessionGuard::dummy_stat_)) {
