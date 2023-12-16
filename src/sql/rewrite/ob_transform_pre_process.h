@@ -636,6 +636,10 @@ struct DistinctObjMeta
   int check_exec_param_correlated(const ObRawExpr *expr, bool &is_correlated);
   int check_is_correlated_cte(ObSelectStmt *stmt, ObIArray<ObSelectStmt *> &visited_cte, bool &is_correlated);
   int convert_join_preds_vector_to_scalar(JoinedTable &joined_table, bool &trans_happened);
+
+  int flatten_conditions(ObDMLStmt *stmt, bool &trans_happened);
+  int recursive_flatten_join_conditions(ObDMLStmt *stmt, TableItem *table, bool &trans_happened);
+  int do_flatten_conditions(ObDMLStmt *stmt, ObIArray<ObRawExpr*> &conditions, bool &trans_happened);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransformPreProcess);
 };

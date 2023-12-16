@@ -39,6 +39,7 @@ void ObStmtMapInfo::reset()
   select_item_map_.reset();
   is_select_item_equal_ = false;
   is_distinct_equal_ = false;
+  is_qualify_filter_equal_ = false;
   equal_param_map_.reset();
   view_select_item_map_.reset();
 }
@@ -74,6 +75,7 @@ int ObStmtMapInfo::assign(const ObStmtMapInfo& other)
     is_order_equal_ = other.is_order_equal_;
     is_select_item_equal_ = other.is_select_item_equal_;
     is_distinct_equal_ = other.is_distinct_equal_;
+    is_qualify_filter_equal_ = other.is_qualify_filter_equal_;
   }
   return ret;
 }
@@ -587,6 +589,21 @@ int ObStmtComparer::check_stmt_containment(const ObDMLStmt *first,
         LOG_TRACE("succeed to check window function map", K(relation), K(map_info));
       } else {
        LOG_TRACE("succeed to check window function map", K(relation), K(map_info));
+      }
+    }
+
+    // check qualify filters
+    if (OB_SUCC(ret) && QueryRelation::QUERY_UNCOMPARABLE != relation) {
+      first_count = first_sel->get_qualify_filters_count();
+      second_count = second_sel->get_qualify_filters_count();
+      if (0 == first_count && 0 == second_count) {
+        map_info.is_qualify_filter_equal_ = true;
+      } else if (!ObOptimizerUtil::same_exprs(first_sel->get_qualify_filters(),
+                                              second_sel->get_qualify_filters())) {
+        relation = QueryRelation::QUERY_UNCOMPARABLE;
+        LOG_TRACE("succeed to check qualify filters", K(relation), K(map_info));
+      } else {
+        map_info.is_qualify_filter_equal_ = true;
       }
     }
 

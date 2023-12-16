@@ -735,6 +735,7 @@ public:
   static int build_null_expr(ObRawExprFactory &expr_factory, ObRawExpr *&expr);
   static int build_nvl_expr(ObRawExprFactory &expr_factory, const ColumnItem *column_item, ObRawExpr *&expr);
   static int build_nvl_expr(ObRawExprFactory &expr_factory, const ColumnItem *column_item, ObRawExpr *&expr1, ObRawExpr *&expr2);
+  static int build_nvl_expr(ObRawExprFactory &expr_factory, ObRawExpr *param_expr1, ObRawExpr *param_expr2, ObRawExpr *&expr);
   static int build_lnnvl_expr(ObRawExprFactory &expr_factory,
                               ObRawExpr *param_expr,
                               ObRawExpr *&lnnvl_expr);

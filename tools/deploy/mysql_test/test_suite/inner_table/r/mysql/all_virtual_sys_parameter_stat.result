@@ -287,6 +287,7 @@ _enable_hash_join_processor
 _enable_in_range_optimization
 _enable_newsort
 _enable_new_sql_nio
+_enable_optimizer_qualify_filter
 _enable_oracle_priv_check
 _enable_parallel_minor_merge
 _enable_parallel_redo_logging

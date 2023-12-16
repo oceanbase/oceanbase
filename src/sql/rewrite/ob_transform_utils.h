@@ -431,7 +431,8 @@ public:
 
   static int flatten_expr(ObRawExpr *expr,
                           common::ObIArray<ObRawExpr*> &flattened_exprs);
-
+  static int flatten_and_or_xor(ObTransformerCtx *ctx, ObIArray<ObRawExpr*> &conditions, bool *trans_happened = NULL);
+  static int flatten_and_or_xor(ObRawExpr* expr, bool *trans_happened = NULL);
   static int find_not_null_expr(const ObDMLStmt &stmt,
                                 ObRawExpr *&not_null_expr,
                                 bool &is_valid,
@@ -1255,6 +1256,18 @@ public:
                                   ObRawExpr *default_expr,
                                   ObRawExpr *&out_expr,
                                   ObTransformerCtx *ctx);
+  static int build_case_when_expr(ObTransformerCtx *ctx,
+                                  ObIArray<ObRawExpr*> &when_exprs,
+                                  ObIArray<ObRawExpr*> &then_exprs,
+                                  ObRawExpr *default_expr,
+                                  ObCaseOpRawExpr *&case_expr);
+  /**
+   * @brief check_error_free_expr
+   * Judging whether an expression has a high risk of reporting errors during execution.
+   * @note The rules are mainly based on historical experience, results are not guaranteed to be accurate.
+   *       Please use with care.
+   */
+  static int check_error_free_expr(ObRawExpr *expr, bool &is_error_free);
   static int build_row_expr(ObRawExprFactory& expr_factory,
                             common::ObIArray<ObRawExpr*>& param_exprs,
                             ObOpRawExpr*& row_expr);
@@ -1871,6 +1884,14 @@ public:
   static int check_child_projection_validity(const ObSelectStmt *child_stmt,
                                              ObRawExpr *expr,
                                              bool &is_valid);
+  static int is_winfunc_topn_filter(const ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
+                                    ObRawExpr *filter,
+                                    bool &is_topn_filter,
+                                    ObRawExpr * &topn_const_expr,
+                                    bool &is_fetch_with_ties,
+                                    ObWinFunRawExpr *&win_expr);
+  static int pushdown_qualify_filters(ObSelectStmt *stmt);
+
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
                                       TableItem *table,

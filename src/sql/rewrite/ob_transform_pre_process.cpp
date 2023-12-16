@@ -69,6 +69,15 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
               OB_FAIL(formalize_limit_expr(*stmt))) {
     LOG_WARN("formalize stmt fialed", K(ret));
   } else {
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(flatten_conditions(stmt, is_happened))) {
+        LOG_WARN("failed to flatten_condition", K(ret));
+      } else {
+        trans_happened |= is_happened;
+        OPT_TRACE("flatten condition:", is_happened);
+        LOG_TRACE("succeed to flatten_condition", K(is_happened));
+      }
+    }
     if (OB_SUCC(ret) && parent_stmts.empty()) {
       if (OB_FAIL(expand_correlated_cte(stmt, is_happened))) {
         LOG_WARN("failed to expand correlated cte", K(ret));
@@ -10121,6 +10130,122 @@ int ObTransformPreProcess::check_is_correlated_cte(ObSelectStmt *stmt, ObIArray<
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::flatten_conditions(ObDMLStmt *stmt, bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  bool flatten_where = false;
+  bool flatten_having = false;
+  bool flatten_semi_info = false;
+  bool flatten_join  = false;
+  bool flatten_start_with = false;
+  bool flatten_match_condition = false;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null pointer error", K(stmt), K(ret));
+  } else {
+    if (OB_FAIL(do_flatten_conditions(stmt, stmt->get_condition_exprs(), flatten_where))) {
+      LOG_WARN("flatten_where_condition_expr failed", K(ret));
+    } else {
+      //simplify having expr
+      if (!stmt->is_select_stmt()) {
+        //do nothing
+      } else if (OB_FAIL(do_flatten_conditions(stmt, static_cast<ObSelectStmt*>(stmt)->get_having_exprs(), flatten_having))) {
+        LOG_WARN("flatten_having_condition_expr failed", K(ret));
+      } else if (stmt->is_hierarchical_query()) {
+        if (OB_FAIL(do_flatten_conditions(stmt, static_cast<ObSelectStmt*>(stmt)->get_start_with_exprs(), flatten_start_with))) {
+          LOG_WARN("flatten_start_with failed", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && stmt->is_merge_stmt()) {
+        if (OB_FAIL(do_flatten_conditions(stmt, static_cast<ObMergeStmt*>(stmt)->get_match_condition_exprs(), flatten_match_condition))) {
+          LOG_WARN("flatten_match_condition failed", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+        //do nothing
+      } else if (stmt->is_insert_stmt()) {
+        //do nothing
+      } else {
+        //simplify semi info
+        for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_semi_infos().count(); ++i) {
+          if (OB_ISNULL(stmt->get_semi_infos().at(i))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpect null semi info", K(stmt->get_semi_infos().at(i)), K(ret));
+          } else if (OB_FAIL(do_flatten_conditions(stmt, stmt->get_semi_infos().at(i)->semi_conditions_, flatten_semi_info))) {
+            LOG_WARN("flatten_semi_info failed", K(ret));
+          }
+        }
+        //simplify join condition expr
+        for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_joined_tables().count(); i++) {
+          if (OB_ISNULL(stmt->get_joined_tables().at(i))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpect null joined table item", K(stmt->get_joined_tables().at(i)), K(ret));
+          } else if (OB_FAIL(recursive_flatten_join_conditions(stmt, stmt->get_joined_tables().at(i), flatten_join))) {
+            LOG_WARN("flatten_join_condition_expr failed", K(ret));
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      trans_happened = flatten_where | flatten_having | flatten_start_with |
+                       flatten_match_condition | flatten_semi_info| flatten_join;
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::recursive_flatten_join_conditions(ObDMLStmt *stmt, TableItem *table, bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  JoinedTable *join_table = NULL;
+  trans_happened = false;
+  bool cur_happened = false;
+  bool left_happened = false;
+  bool right_happened = false;
+  if (OB_ISNULL(stmt) || OB_ISNULL(table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null pointer", K(stmt), K(table), K(ret));
+  } else if (!table->is_joined_table()) {
+    /*do nothing*/
+  } else if (OB_ISNULL(join_table = static_cast<JoinedTable*>(table)) ||
+             OB_ISNULL(join_table->left_table_) || OB_ISNULL(join_table->right_table_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(join_table), K(join_table->left_table_), K(join_table));
+  } else if (OB_FAIL(do_flatten_conditions(stmt, join_table->join_conditions_, cur_happened))) {
+    LOG_WARN("failed to flatten join conditions", K(ret));
+  } else if (OB_FAIL(SMART_CALL(recursive_flatten_join_conditions(stmt,
+                                                                      join_table->left_table_,
+                                                                      left_happened)))) {
+    LOG_WARN("failed to flatten left child join condition exprs", K(ret));
+  } else if (OB_FAIL(SMART_CALL(recursive_flatten_join_conditions(stmt,
+                                                                      join_table->right_table_,
+                                                                      right_happened)))) {
+    LOG_WARN("failed to flatten right child join condition exprs", K(ret));
+  } else {
+    trans_happened = cur_happened | left_happened | right_happened;
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::do_flatten_conditions(ObDMLStmt *stmt, ObIArray<ObRawExpr*> &conditions, bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  trans_happened = false;
+  bool flatten_happend = false;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null pointer error", K(stmt), K(ret));
+  } else if (conditions.count() == 0) {
+    //do nothing
+  } else if (OB_FAIL(ObTransformUtils::flatten_and_or_xor(ctx_, conditions, &flatten_happend))) {
+    LOG_WARN("flatten_and_or_xor failed", K(ret));
+  } else if (trans_happened) {
+    trans_happened =  flatten_happend ;
+    OPT_TRACE("   flatten_happend:", flatten_happend);
   }
   return ret;
 }

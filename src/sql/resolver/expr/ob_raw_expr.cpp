@@ -660,19 +660,24 @@ bool ObRawExpr::same_as(const ObRawExpr &expr,
                         ObExprEqualCheckContext *check_context) const
 {
   bool bret = false;
+  int ret = OB_SUCCESS;
   if (this == &expr) {
     bret = true;
   } else {
     if (NULL != check_context) {
       check_context->recursion_level_ += 1;
     }
-
     const ObRawExpr *l = get_same_identify(this, check_context);
     const ObRawExpr *r = get_same_identify(&expr, check_context);
-    bret = l->inner_same_as(*r, check_context);
-
+    ret = SMART_CALL(bret = l->inner_same_as(*r, check_context));
     if (NULL != check_context) {
-      check_context->recursion_level_ -= 1;
+      if (OB_SIZE_OVERFLOW == ret) {
+        bret = false;
+        check_context->error_code_ = ret;
+        LOG_WARN("check smart call fail", K(ret));
+      } else {
+        check_context->recursion_level_ -= 1;
+      }
     }
 
     if (bret) {

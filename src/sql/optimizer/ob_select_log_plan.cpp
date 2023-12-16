@@ -1287,15 +1287,18 @@ int ObSelectLogPlan::allocate_window_function_as_top(const WinDistAlgo dist_algo
                                                      const bool match_parallel,
                                                      const bool is_partition_wise,
                                                      const bool use_hash_sort,
+                                                     const bool use_topn_sort,
                                                      const ObIArray<OrderItem> &sort_keys,
-                                                     ObLogicalOperator *&top)
+                                                     ObLogicalOperator *&top,
+                                                     const ObIArray<ObRawExpr *> *qualify_filters,
+                                                     double origin_sort_card)
 {
   const int32_t role_type = ObLogWindowFunction::WindowFunctionRoleType::NORMAL;
   const int64_t range_dist_keys_cnt = 0;
   const int64_t range_dist_pby_prefix = 0;
   return allocate_window_function_as_top(dist_algo, win_exprs, match_parallel, is_partition_wise,
-                                         use_hash_sort, role_type, sort_keys, range_dist_keys_cnt,
-                                         range_dist_pby_prefix, top, NULL, NULL);
+                                         use_hash_sort, use_topn_sort, role_type, sort_keys, range_dist_keys_cnt,
+                                         range_dist_pby_prefix, top, qualify_filters, origin_sort_card, NULL, NULL);
 }
 
 int ObSelectLogPlan::allocate_window_function_as_top(const WinDistAlgo dist_algo,
@@ -1303,11 +1306,14 @@ int ObSelectLogPlan::allocate_window_function_as_top(const WinDistAlgo dist_algo
                                                      const bool match_parallel,
                                                      const bool is_partition_wise,
                                                      const bool use_hash_sort,
+                                                     const bool use_topn_sort,
                                                      const int32_t role_type,
                                                      const ObIArray<OrderItem> &sort_keys,
                                                      const int64_t range_dist_keys_cnt,
                                                      const int64_t range_dist_pby_prefix,
                                                      ObLogicalOperator *&top,
+                                                     const ObIArray<ObRawExpr *> *qualify_filters,
+                                                     double origin_sort_card,
                                                      ObOpPseudoColumnRawExpr *wf_aggr_status_expr,  /* default null */
                                                      const ObIArray<bool> *pushdown_info /* default null */)
 {
@@ -1332,6 +1338,7 @@ int ObSelectLogPlan::allocate_window_function_as_top(const WinDistAlgo dist_algo
     window_function->set_child(ObLogicalOperator::first_child, top);
     window_function->set_role_type(ObLogWindowFunction::WindowFunctionRoleType(role_type));
     window_function->set_use_hash_sort(use_hash_sort);
+    window_function->set_use_topn_sort(use_topn_sort);
     if (range_dist_keys_cnt > 0) {
       window_function->set_ragne_dist_parallel(true);
       window_function->set_rd_pby_sort_cnt(range_dist_pby_prefix);
@@ -1345,6 +1352,13 @@ int ObSelectLogPlan::allocate_window_function_as_top(const WinDistAlgo dist_algo
       } else {
         // use the value of wf_aggr_status_expr to decide how to compute in consilidator wf op
         window_function->set_aggr_status_expr(wf_aggr_status_expr);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (NULL != qualify_filters && OB_FAIL(window_function->get_filter_exprs().assign(*qualify_filters))) {
+        LOG_WARN("assign win filters failed", K(ret));
+      } else if (use_topn_sort) {
+        window_function->set_origin_sort_card(origin_sort_card);
       }
     }
     if (OB_FAIL(ret)) {
@@ -4737,6 +4751,7 @@ int ObSelectLogPlan::candi_allocate_window_function()
   } else if (OB_FAIL(candi_allocate_subplan_filter_for_exprs(candi_subquery_exprs))) {
     LOG_WARN("failed to do allocate subplan filter", K(ret));
   } else if (OB_FAIL(candi_allocate_window_function_with_hint(stmt->get_window_func_exprs(),
+                                                              stmt->get_qualify_filters(),
                                                               win_func_plans))) {
     LOG_WARN("failed to allocate window function with hint", K(ret));
   } else if (!win_func_plans.empty()) {
@@ -4744,6 +4759,7 @@ int ObSelectLogPlan::candi_allocate_window_function()
   } else if (OB_FAIL(get_log_plan_hint().check_status())) {
     LOG_WARN("failed to generate plans with hint", K(ret));
   } else if (OB_FAIL(candi_allocate_window_function(stmt->get_window_func_exprs(),
+                                                    stmt->get_qualify_filters(),
                                                     win_func_plans))) {
     LOG_WARN("failed to allocate window function", K(ret));
   } else {
@@ -4773,6 +4789,7 @@ int ObSelectLogPlan::candi_allocate_window_function()
 // 4. method matched
 // window functions in win_func_exprs must keep the same ordering with win_func_exprs_ in stmt
 int ObSelectLogPlan::candi_allocate_window_function_with_hint(const ObIArray<ObWinFunRawExpr*> &win_func_exprs,
+                                                              const ObIArray<ObRawExpr*> &qualify_filters,
                                                               common::ObIArray<CandidatePlan> &total_plans)
 {
   int ret = OB_SUCCESS;
@@ -4802,7 +4819,8 @@ int ObSelectLogPlan::candi_allocate_window_function_with_hint(const ObIArray<ObW
                                     orig_top->get_output_equal_sets(),
                                     orig_top->get_output_const_exprs(),
                                     orig_top->get_card(),
-                                    orig_top->get_is_at_most_one_row());
+                                    orig_top->get_is_at_most_one_row(),
+                                    qualify_filters);
     while (OB_SUCC(ret) && !candi_plans.empty() && !remaining_exprs.empty()) {
       tmp_plans.reuse();
       if (OB_FAIL(init_win_func_helper_with_hint(candi_plans,
@@ -4834,8 +4852,10 @@ int ObSelectLogPlan::candi_allocate_window_function_with_hint(const ObIArray<ObW
         }
       }
     }
-    if (OB_SUCC(ret) && OB_FAIL(total_plans.assign(candi_plans))) {
-      LOG_WARN("failed to assign candidate plans", K(ret));
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(total_plans.assign(candi_plans))) {
+        LOG_WARN("failed to assign candidate plans", K(ret));
+      }
     }
   }
   return ret;
@@ -4944,6 +4964,9 @@ int ObSelectLogPlan::init_win_func_helper_with_hint(const ObIArray<CandidatePlan
                                             win_func_helper.wf_aggr_status_expr_))) {
       LOG_WARN("failed to build inner wf aggr status expr", K(ret));
     }
+    if (OB_SUCC(ret) && is_valid) {
+      win_func_helper.need_qualify_filter_ = remaining_exprs.empty();
+    }
     LOG_TRACE("finish init win_func_helper with hint. ", K(is_valid), K(win_func_helper));
   }
   return ret;
@@ -4968,6 +4991,20 @@ int ObSelectLogPlan::calc_win_func_helper_with_hint(const ObLogicalOperator *op,
     LOG_WARN("failed to calc ndvs and pby oby prefix", K(ret));
   } else if (OB_FAIL(calc_partition_count(win_func_helper))) {
     LOG_WARN("failed to get partition count", K(ret));
+  } else if (OB_ISNULL(win_func_helper.win_dist_hint_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else {
+    const ObWindowDistHint *hint = win_func_helper.win_dist_hint_;
+    const ObWindowDistHint::WinDistOption &option = hint->get_win_dist_options().at(win_func_helper.win_op_idx_);
+    if (!option.use_topn_sort_) {
+      win_func_helper.enable_topn_ = false;
+      win_func_helper.topn_const_ = NULL;
+    } else if (OB_FAIL(init_wf_topn_option(win_func_helper, true))) {
+      LOG_WARN("choose topn filter failed", K(ret));
+    } else if (!win_func_helper.enable_topn_) {
+      is_valid = false;
+    }
   }
   return ret;
 }
@@ -5017,6 +5054,7 @@ int ObSelectLogPlan::check_win_dist_method_valid(const WinFuncOpHelper &win_func
 }
 
 int ObSelectLogPlan::candi_allocate_window_function(const ObIArray<ObWinFunRawExpr*> &win_func_exprs,
+                                                    const ObIArray<ObRawExpr*> &qualify_filters,
                                                     ObIArray<CandidatePlan> &total_plans)
 {
   int ret = OB_SUCCESS;
@@ -5036,13 +5074,15 @@ int ObSelectLogPlan::candi_allocate_window_function(const ObIArray<ObWinFunRawEx
                                     orig_top->get_output_equal_sets(),
                                     orig_top->get_output_const_exprs(),
                                     orig_top->get_card(),
-                                    orig_top->get_is_at_most_one_row());
+                                    orig_top->get_is_at_most_one_row(),
+                                    qualify_filters);
     for (int64_t i = 0; OB_SUCC(ret) && i < candi_plans.count(); ++i) {
       OPT_TRACE("generate window function for plan:", candi_plans.at(i));
       if (OB_FAIL(generate_window_functions_plan(win_func_helper,
                                                  status_exprs,
                                                  total_plans,
-                                                 candi_plans.at(i)))) {
+                                                 candi_plans.at(i)
+                                                 ))) {
         LOG_WARN("failed to allocate window functions", K(ret));
       } else { /*do nothing*/ }
     }
@@ -5095,6 +5135,7 @@ int ObSelectLogPlan::generate_window_functions_plan(WinFuncOpHelper &win_func_he
                                          methods,
                                          si,
                                          status_exprs,
+                                         remaining_exprs.empty(),
                                          win_func_helper))) {
           LOG_WARN("failed to init win func helper", K(ret));
         } else {
@@ -5151,9 +5192,9 @@ int ObSelectLogPlan::create_one_window_function(CandidatePlan &candidate_plan,
                                               part_cnt))) {
     LOG_WARN("failed to check win func need sort", K(ret));
   } else if (OB_FAIL(create_range_list_dist_win_func(top,
-                                                     win_func_helper,
-                                                     part_cnt,
-                                                     all_plans))) {
+                                                      win_func_helper,
+                                                      part_cnt,
+                                                      all_plans))) {
     LOG_WARN("failed to create range list dist window functions", K(ret));
   } else if (OB_FAIL(create_none_dist_win_func(top,
                                                win_func_helper,
@@ -5275,6 +5316,7 @@ int ObSelectLogPlan::init_win_func_helper(const ObIArray<ObWinFunRawExpr*> &orde
                                           const ObIArray<WinDistAlgo> &methods,
                                           const int64_t splict_idx,
                                           ObIArray<ObOpPseudoColumnRawExpr*> &status_exprs,
+                                          bool is_last_group,
                                           WinFuncOpHelper &win_func_helper)
 {
   int ret = OB_SUCCESS;
@@ -5294,6 +5336,12 @@ int ObSelectLogPlan::init_win_func_helper(const ObIArray<ObWinFunRawExpr*> &orde
     ObOpPseudoColumnRawExpr *status_expr = NULL;
     const int64_t start = 0 == splict_idx ? 0 : split.at(splict_idx - 1);
     const int64_t end = split.at(splict_idx);
+    if (!is_last_group || splict_idx != split.count() - 1) {
+      //only alloc qualify filter on the top win func op
+      win_func_helper.need_qualify_filter_ = false;
+    } else {
+      win_func_helper.need_qualify_filter_ = true;
+    }
     for (int64_t i = start; OB_SUCC(ret) && i < end; ++i) {
       if (OB_FAIL(win_func_helper.ordered_win_func_exprs_.push_back(ordered_win_func_exprs.at(i)))
           || OB_FAIL(win_func_helper.pby_oby_prefixes_.push_back(pby_oby_prefixes.at(i)))) {
@@ -5324,6 +5372,11 @@ int ObSelectLogPlan::init_win_func_helper(const ObIArray<ObWinFunRawExpr*> &orde
       LOG_WARN("failed to build inner wf aggr status expr", K(ret));
     } else {
       status_exprs.at(win_func_helper.win_op_idx_) = win_func_helper.wf_aggr_status_expr_;
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(init_wf_topn_option(win_func_helper, false))) {
+        LOG_WARN("choose topn filter failed", K(ret));
+      }
     }
     LOG_TRACE("finish init win_func_helper. ", K(win_func_helper));
   }
@@ -5936,6 +5989,8 @@ int ObSelectLogPlan::create_none_dist_win_func(ObLogicalOperator *top,
   const ObIArray<ObWinFunRawExpr*> &win_func_exprs = win_func_helper.ordered_win_func_exprs_;
   const ObIArray<OrderItem> &sort_keys = win_func_helper.sort_keys_;
   bool is_local_order = false;
+  ObRawExpr *topn_const = NULL;
+  bool is_with_ties = false;
   if (OB_ISNULL(top)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -5965,17 +6020,25 @@ int ObSelectLogPlan::create_none_dist_win_func(ObLogicalOperator *top,
   }
 
   if (OB_SUCC(ret) && need_normal_sort) {
-    ObLogicalOperator *normal_sort_top= top;
+    ObLogicalOperator *normal_sort_top = top;
+    bool use_topn = win_func_helper.enable_topn_
+                    && win_func_helper.partition_exprs_.empty()
+                    && NULL != win_func_helper.topn_const_;
     if (OB_FAIL(allocate_sort_and_exchange_as_top(normal_sort_top, exch_info, sort_keys, need_sort,
-                                                  prefix_pos, is_local_order))) {
+                                                  prefix_pos, is_local_order,
+                                                  use_topn ? win_func_helper.topn_const_ : NULL, /* topn_expr */
+                                                  use_topn ?  win_func_helper.is_fetch_with_ties_ : false /* is_fetch_with_ties */))) {
       LOG_WARN("failed to allocate sort and exchange as top", K(ret));
     } else if (OB_FAIL(allocate_window_function_as_top(WinDistAlgo::WIN_DIST_NONE,
                                                        win_func_exprs,
                                                        single_part_parallel,
                                                        is_partition_wise,
                                                        false, /* use hash sort */
+                                                       use_topn, /* use topn sort */
                                                        sort_keys,
-                                                       normal_sort_top))) {
+                                                       normal_sort_top,
+                                                       win_func_helper.need_qualify_filter_ ? &win_func_helper.qualify_filters_ : NULL,
+                                                       use_topn ? win_func_helper.origin_sort_card_ : 0))) {
       LOG_WARN("failed to allocate window function as top", K(ret));
     } else if (OB_FAIL(all_plans.push_back(CandidatePlan(normal_sort_top)))) {
       LOG_WARN("failed to push back", K(ret));
@@ -5985,12 +6048,15 @@ int ObSelectLogPlan::create_none_dist_win_func(ObLogicalOperator *top,
   if (OB_SUCC(ret) && need_hash_sort) {
     ObLogicalOperator *hash_sort_top= top;
     OrderItem hash_sortkey;
+     bool use_part_topn = win_func_helper.enable_topn_
+                          && prefix_pos == 0
+                          && NULL != win_func_helper.topn_const_;
     if (OB_FAIL(create_hash_sortkey(part_cnt, sort_keys, hash_sortkey))) {
       LOG_WARN("failed to create hash sort key", K(ret), K(part_cnt), K(sort_keys));
     } else if (OB_FAIL(allocate_sort_and_exchange_as_top(hash_sort_top, exch_info, sort_keys, need_sort,
                                                          prefix_pos, is_local_order,
-                                                         NULL, /* topn_expr */
-                                                         false, /* is_fetch_with_ties */
+                                                         use_part_topn ? win_func_helper.topn_const_ : NULL, /* topn_expr */
+                                                         use_part_topn ? win_func_helper.is_fetch_with_ties_ : false, /* is_fetch_with_ties */
                                                          &hash_sortkey))) {
       LOG_WARN("failed to allocate sort and exchange as top", K(ret));
     } else if (OB_FAIL(allocate_window_function_as_top(WinDistAlgo::WIN_DIST_NONE,
@@ -5998,8 +6064,11 @@ int ObSelectLogPlan::create_none_dist_win_func(ObLogicalOperator *top,
                                                        single_part_parallel,
                                                        is_partition_wise,
                                                        true, /* use hash sort */
+                                                       use_part_topn, /* use partition topn sort */
                                                        sort_keys,
-                                                       hash_sort_top))) {
+                                                       hash_sort_top,
+                                                       win_func_helper.need_qualify_filter_ ? &win_func_helper.qualify_filters_ : NULL,
+                                                       use_part_topn ? win_func_helper.origin_sort_card_ : 0))) {
       LOG_WARN("failed to allocate window function as top", K(ret));
     } else if (OB_FAIL(all_plans.push_back(CandidatePlan(hash_sort_top)))) {
       LOG_WARN("failed to push back", K(ret));
@@ -6064,11 +6133,14 @@ int ObSelectLogPlan::create_range_list_dist_win_func(ObLogicalOperator *top,
                                                     single_part_parallel,
                                                     is_partition_wise,
                                                     false, /* use hash sort */
+                                                    false, /* use hash topn sort */
                                                     ObLogWindowFunction::WindowFunctionRoleType::NORMAL,
                                                     sort_keys,
                                                     range_dist_keys.count(),
                                                     pby_prefix,
-                                                    top))) {
+                                                    top,
+                                                    win_func_helper.need_qualify_filter_ ? &win_func_helper.qualify_filters_ : NULL,
+                                                    0))) {
     LOG_WARN("failed to allocate window function as top", K(ret));
   } else if (OB_FAIL(all_plans.push_back(CandidatePlan(top)))) {
     LOG_WARN("failed to push back", K(ret));
@@ -6169,6 +6241,8 @@ int ObSelectLogPlan::create_hash_dist_win_func(ObLogicalOperator *top,
   bool is_partition_wise = false;
   const ObIArray<ObWinFunRawExpr*> &win_func_exprs = win_func_helper.ordered_win_func_exprs_;
   const ObIArray<OrderItem> &sort_keys = win_func_helper.sort_keys_;
+  ObRawExpr *topn_const = NULL;
+  bool is_with_ties = false;
   if (OB_ISNULL(top)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -6195,6 +6269,9 @@ int ObSelectLogPlan::create_hash_dist_win_func(ObLogicalOperator *top,
   }
   if (OB_SUCC(ret) && need_normal_sort) {
     ObLogicalOperator *normal_sort_top= top;
+    bool use_topn = win_func_helper.enable_topn_
+                    && win_func_helper.partition_exprs_.empty()
+                    && NULL != win_func_helper.topn_const_;
     if (!need_pushdown &&
         OB_FAIL(create_normal_hash_dist_win_func(normal_sort_top,
                                                 win_func_exprs,
@@ -6202,7 +6279,11 @@ int ObSelectLogPlan::create_hash_dist_win_func(ObLogicalOperator *top,
                                                 sort_keys,
                                                 need_sort,
                                                 prefix_pos,
-                                                NULL))) {
+                                                NULL,
+                                                use_topn ?  win_func_helper.topn_const_ : NULL,
+                                                use_topn ?  win_func_helper.is_fetch_with_ties_ : false,
+                                                win_func_helper.need_qualify_filter_ ? &win_func_helper.qualify_filters_ : NULL,
+                                                use_topn ? win_func_helper.origin_sort_card_ : 0))) {
       LOG_WARN("failed to create normal hash dist window function", K(ret));
     } else if (need_pushdown &&
                OB_FAIL(create_pushdown_hash_dist_win_func(normal_sort_top,
@@ -6212,7 +6293,8 @@ int ObSelectLogPlan::create_hash_dist_win_func(ObLogicalOperator *top,
                                                           win_func_helper.wf_aggr_status_expr_,
                                                           need_sort,
                                                           prefix_pos,
-                                                          NULL))) {
+                                                          NULL,
+                                                          win_func_helper.need_qualify_filter_ ? &win_func_helper.qualify_filters_ : NULL))) {
       LOG_WARN("failed to create push down hash dist window function", K(ret));
     } else if (OB_FAIL(all_plans.push_back(CandidatePlan(normal_sort_top)))) {
       LOG_WARN("failed to push back", K(ret));
@@ -6222,6 +6304,9 @@ int ObSelectLogPlan::create_hash_dist_win_func(ObLogicalOperator *top,
   if (OB_SUCC(ret) && need_hash_sort) {
     ObLogicalOperator *hash_sort_top= top;
     OrderItem hash_sortkey;
+    bool use_part_topn = win_func_helper.enable_topn_
+                         && prefix_pos == 0
+                         && NULL != win_func_helper.topn_const_;
     if (OB_FAIL(create_hash_sortkey(part_cnt, sort_keys, hash_sortkey))) {
       LOG_WARN("failed to create hash sort key", K(ret), K(part_cnt), K(sort_keys));
     } else if (!need_pushdown &&
@@ -6231,7 +6316,11 @@ int ObSelectLogPlan::create_hash_dist_win_func(ObLogicalOperator *top,
                                                         sort_keys,
                                                         need_sort,
                                                         prefix_pos,
-                                                        &hash_sortkey))) {
+                                                        &hash_sortkey,
+                                                        use_part_topn ? win_func_helper.topn_const_ : NULL,
+                                                        use_part_topn ? win_func_helper.is_fetch_with_ties_ : false,
+                                                        win_func_helper.need_qualify_filter_ ? &win_func_helper.qualify_filters_ : NULL,
+                                                        use_part_topn ? win_func_helper.origin_sort_card_ : 0))) {
       LOG_WARN("failed to create normal hash dist window function", K(ret));
     } else if (need_pushdown &&
                OB_FAIL(create_pushdown_hash_dist_win_func(hash_sort_top,
@@ -6241,7 +6330,8 @@ int ObSelectLogPlan::create_hash_dist_win_func(ObLogicalOperator *top,
                                                         win_func_helper.wf_aggr_status_expr_,
                                                         need_sort,
                                                         prefix_pos,
-                                                        &hash_sortkey))) {
+                                                        &hash_sortkey,
+                                                        win_func_helper.need_qualify_filter_ ? &win_func_helper.qualify_filters_ : NULL))) {
       LOG_WARN("failed to create push down hash dist window function", K(ret));
     } else if (OB_FAIL(all_plans.push_back(CandidatePlan(hash_sort_top)))) {
       LOG_WARN("failed to push back", K(ret));
@@ -6256,7 +6346,11 @@ int ObSelectLogPlan::create_normal_hash_dist_win_func(ObLogicalOperator *&top,
                                                       const ObIArray<OrderItem> &sort_keys,
                                                       const int64_t need_sort,
                                                       const int64_t prefix_pos,
-                                                      OrderItem *hash_sortkey)
+                                                      OrderItem *hash_sortkey,
+                                                      ObRawExpr *topn_const,
+                                                      bool is_fetch_with_ties,
+                                                      const ObIArray<ObRawExpr*> *qualify_filters,
+                                                      double origin_sort_card)
 {
   int ret = OB_SUCCESS;
   ObExchangeInfo exch_info;
@@ -6270,8 +6364,8 @@ int ObSelectLogPlan::create_normal_hash_dist_win_func(ObLogicalOperator *&top,
                                                       need_sort,
                                                       prefix_pos,
                                                       top->get_is_local_order(),
-                                                      NULL, /* topn_expr */
-                                                      false, /* is_fetch_with_ties */
+                                                      topn_const, /* topn_expr */
+                                                      is_fetch_with_ties, /* is_fetch_with_ties */
                                                       hash_sortkey))) {
     LOG_WARN("failed to allocate sort and exchange as top", K(ret));
   } else if (OB_FAIL(allocate_window_function_as_top(WinDistAlgo::WIN_DIST_HASH,
@@ -6279,8 +6373,11 @@ int ObSelectLogPlan::create_normal_hash_dist_win_func(ObLogicalOperator *&top,
                                                     false, /* match_parallel */
                                                     false, /*is_partition_wise*/
                                                     NULL != hash_sortkey, /* use hash sort */
+                                                    NULL != topn_const, /* use topn sort */
                                                     sort_keys,
-                                                    top))) {
+                                                    top,
+                                                    qualify_filters,
+                                                    origin_sort_card))) {
     LOG_WARN("failed to allocate window function as top", K(ret));
   }
   return ret;
@@ -6293,7 +6390,8 @@ int ObSelectLogPlan::create_pushdown_hash_dist_win_func(ObLogicalOperator *&top,
                                                         ObOpPseudoColumnRawExpr *wf_aggr_status_expr,
                                                         const int64_t need_sort,
                                                         const int64_t prefix_pos,
-                                                        OrderItem *hash_sortkey)
+                                                        OrderItem *hash_sortkey,
+                                                        const ObIArray<ObRawExpr*> *qualify_filters)
 {
   int ret = OB_SUCCESS;
   ObExchangeInfo exch_info;
@@ -6319,11 +6417,14 @@ int ObSelectLogPlan::create_pushdown_hash_dist_win_func(ObLogicalOperator *&top,
                                                      false, /* match_parallel */
                                                      false, /* is_partition_wise */
                                                      NULL != hash_sortkey, /* use hash sort */
+                                                     false, /* use hash topn sort */
                                                      ObLogWindowFunction::WindowFunctionRoleType::PARTICIPATOR,
                                                      sort_keys,
                                                      range_dist_keys_cnt,
                                                      range_dist_pby_prefix,
                                                      top,
+                                                     NULL,
+                                                     0.0,
                                                      wf_aggr_status_expr,
                                                      &pushdown_info))) {
     LOG_WARN("failed to allocate window function as top", K(ret));
@@ -6348,11 +6449,14 @@ int ObSelectLogPlan::create_pushdown_hash_dist_win_func(ObLogicalOperator *&top,
                                                      false, /* match_parallel */
                                                      false, /* is_partition_wise */
                                                      NULL != hash_sortkey, /* use hash sort */
+                                                     false, /* use hash topn sort */
                                                      ObLogWindowFunction::WindowFunctionRoleType::CONSOLIDATOR,
                                                      sort_keys,
                                                      range_dist_keys_cnt,
                                                      range_dist_pby_prefix,
                                                      top,
+                                                     qualify_filters,
+                                                     0.0,
                                                      wf_aggr_status_expr,
                                                      &pushdown_info))) {
     LOG_WARN("failed to allocate window function as top", K(ret));
@@ -6493,6 +6597,33 @@ int ObSelectLogPlan::check_wf_range_dist_supported(ObWinFunRawExpr *win_expr,
   return ret;
 }
 
+int ObSelectLogPlan::check_wf_part_topn_supported(const common::ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
+                                                  const ObIArray<ObRawExpr*> &partition_exprs,
+                                                  bool &can_wf_topn)
+{
+  int ret = OB_SUCCESS;
+  int64_t part_cnt = partition_exprs.count();
+  can_wf_topn = true;
+  for (int64 i = 0; OB_SUCC(ret) && can_wf_topn && i < winfunc_exprs.count(); ++i) {
+    ObWinFunRawExpr *win_expr = winfunc_exprs.at(i);
+    if (OB_ISNULL(win_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (win_expr->get_partition_exprs().count() != part_cnt) {
+      can_wf_topn = false;
+    } else if (win_expr->get_upper().type_ != BoundType::BOUND_UNBOUNDED
+              || win_expr->get_lower().type_ != BoundType::BOUND_UNBOUNDED) {
+      can_wf_topn = false;
+    } else {
+      ObItemType wf_type = win_expr->get_func_type();
+      can_wf_topn = T_WIN_FUN_ROW_NUMBER == wf_type
+                    || T_WIN_FUN_RANK == wf_type
+                    || T_WIN_FUN_DENSE_RANK == wf_type;
+    }
+  }
+  return ret;
+}
+
 int ObSelectLogPlan::check_wf_pushdown_supported(ObWinFunRawExpr *win_expr,
                                                  bool &can_wf_pushdown)
 {
@@ -6529,6 +6660,112 @@ int ObSelectLogPlan::check_wf_pushdown_supported(ObWinFunRawExpr *win_expr,
       default: {
         can_wf_pushdown = false;
       }
+    }
+  }
+  return ret;
+}
+
+//topn option should be inited after sort keys are inited
+int ObSelectLogPlan::init_wf_topn_option(WinFuncOpHelper &win_func_helper, bool wf_topn_hint)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<ObWinFunRawExpr *> &winfunc_exprs = win_func_helper.ordered_win_func_exprs_;
+  const ObIArray<ObRawExpr *> &filter_exprs = win_func_helper.qualify_filters_;
+  win_func_helper.is_fetch_with_ties_ = false;
+  win_func_helper.topn_const_ = NULL;
+  if (winfunc_exprs.count() != win_func_helper.all_win_func_exprs_.count()) {
+    //not only one group
+     win_func_helper.enable_topn_ = false;
+  } else if (wf_topn_hint) {
+    win_func_helper.enable_topn_ = true;
+  } else if (OB_ISNULL(get_optimizer_context().get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(get_optimizer_context().get_session_info()));
+  } else {
+    win_func_helper.enable_topn_ = get_optimizer_context().get_session_info()->is_qualify_filter_enabled();
+  }
+  if (OB_FAIL(ret) || !win_func_helper.enable_topn_) {
+    //do nothing
+  } else if (check_wf_part_topn_supported(winfunc_exprs,
+                                          win_func_helper.partition_exprs_,
+                                          win_func_helper.enable_topn_)) {
+    LOG_WARN("check partition topn supported failed", K(ret));
+  } else if (win_func_helper.enable_topn_) {
+    for (int64_t i = 0; OB_SUCC(ret) && NULL == win_func_helper.topn_const_ && i < filter_exprs.count(); ++i) {
+      ObRawExpr *const_expr = NULL;
+      bool ties_flag = false;
+      bool is_topn_filter = false;
+      ObWinFunRawExpr *win_expr = NULL;
+      if (OB_FAIL(ObTransformUtils::is_winfunc_topn_filter(winfunc_exprs, filter_exprs.at(i), is_topn_filter,
+                                                            const_expr, ties_flag, win_expr))) {
+        LOG_WARN("check whether the filter is a winfunc topn filter failed", K(ret));
+      } else if (is_topn_filter) {
+        //order by must be the same as the sort keys
+        if (OB_ISNULL(win_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        } else {
+          const common::ObIArray<OrderItem> &order_items = win_expr->get_order_items();
+          if (order_items.count() + win_func_helper.part_cnt_ != win_func_helper.sort_keys_.count()) {
+            is_topn_filter = false;
+          } else {
+            for (int64_t j = 0; is_topn_filter && j < order_items.count(); ++j) {
+              if (order_items.at(j) != win_func_helper.sort_keys_.at(j + win_func_helper.part_cnt_)) {
+                is_topn_filter = false;
+              }
+            }
+          }
+          if (is_topn_filter) {
+            win_func_helper.topn_const_ = const_expr;
+            win_func_helper.is_fetch_with_ties_ = ties_flag;
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)
+        && NULL == win_func_helper.topn_const_) {
+      win_func_helper.enable_topn_ = false;
+    }
+  }
+  if (OB_SUCC(ret)
+      && NULL != win_func_helper.topn_const_
+      && !ob_is_integer_type(win_func_helper.topn_const_->get_result_type().get_type())) {
+    //cast topn expr to int
+    ObRawExpr *topn_with_cast = NULL;
+    ObRawExpr *topn_without_cast = NULL;
+    ObExprResType res_type;
+    bool need_cast = false;
+    bool ignore_err = false;
+    const ObExprResType &src_type = win_func_helper.topn_const_->get_result_type();
+    res_type.set_int();
+    res_type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].precision_);
+    res_type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
+    if (OB_FAIL(ObRawExprUtils::check_need_cast_expr(src_type, res_type, need_cast, ignore_err))) {
+      LOG_WARN("failed to check need cast expr", K(ret), K(src_type), K(res_type));
+    } else if (!need_cast) {
+      // do nothing
+    } else if (OB_ISNULL((topn_without_cast = ObRawExprUtils::skip_implicit_cast(win_func_helper.topn_const_)))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(&get_optimizer_context().get_expr_factory(),
+                                                               get_optimizer_context().get_session_info(),
+                                                               *topn_without_cast,
+                                                               res_type,
+                                                               topn_with_cast))) {
+      LOG_WARN("create cast expr for stmt failed", K(ret));
+    } else {
+      win_func_helper.topn_const_ = topn_with_cast;
+    }
+  }
+  if (OB_SUCC(ret) && win_func_helper.enable_topn_) {
+    ObLogicalOperator *best_plan = NULL;
+    if (OB_FAIL(candidates_.get_best_plan(best_plan))) {
+      LOG_WARN("failed to get best plan", K(ret));
+    } else if (OB_ISNULL(best_plan)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else {
+      win_func_helper.origin_sort_card_ = best_plan->get_card();
     }
   }
   return ret;

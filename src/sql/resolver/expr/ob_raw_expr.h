@@ -1372,7 +1372,8 @@ struct ObExprEqualCheckContext
     param_expr_(),
     need_check_deterministic_(false),
     ignore_param_(false),
-    ora_numeric_compare_(false)
+    ora_numeric_compare_(false),
+    error_code_(0)
   { }
   ObExprEqualCheckContext(bool need_check_deterministic)
   : override_const_compare_(false),
@@ -1385,7 +1386,8 @@ struct ObExprEqualCheckContext
     param_expr_(),
     need_check_deterministic_(need_check_deterministic),
     ignore_param_(false),
-    ora_numeric_compare_(false)
+    ora_numeric_compare_(false),
+    error_code_(0)
   { }
   virtual ~ObExprEqualCheckContext() {}
   struct ParamExprPair
@@ -1435,6 +1437,7 @@ struct ObExprEqualCheckContext
     param_expr_.reset();
     need_check_deterministic_ = false;
     ignore_param_ = false;
+    error_code_ = 0;
   }
   bool override_const_compare_;
   bool override_column_compare_;
@@ -1448,6 +1451,7 @@ struct ObExprEqualCheckContext
   bool need_check_deterministic_;
   bool ignore_param_; // only compare structure of expr
   bool ora_numeric_compare_;
+  int64_t error_code_; //error code to return
 };
 
 struct ObExprParamCheckContext : ObExprEqualCheckContext

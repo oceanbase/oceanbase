@@ -2644,7 +2644,8 @@ int ObWindowDistHint::add_win_dist_option(const ObIArray<ObWinFunRawExpr*> &all_
                                           const ObIArray<ObWinFunRawExpr*> &cur_win_funcs,
                                           const WinDistAlgo algo,
                                           const bool is_push_down,
-                                          const bool use_hash_sort)
+                                          const bool use_hash_sort,
+                                          const bool use_topn_sort)
 {
   int ret = OB_SUCCESS;
   ObSEArray<int64_t, 4> win_func_idxs;
@@ -2657,7 +2658,7 @@ int ObWindowDistHint::add_win_dist_option(const ObIArray<ObWinFunRawExpr*> &all_
       LOG_WARN("failed to push back", K(ret));
     }
   }
-  if (OB_SUCC(ret) && add_win_dist_option(win_func_idxs, algo, is_push_down, use_hash_sort)) {
+  if (OB_SUCC(ret) && add_win_dist_option(win_func_idxs, algo, is_push_down, use_hash_sort, use_topn_sort)) {
     LOG_WARN("failed to add win dist option", K(ret));
   }
   return ret;
@@ -2666,7 +2667,8 @@ int ObWindowDistHint::add_win_dist_option(const ObIArray<ObWinFunRawExpr*> &all_
 int ObWindowDistHint::add_win_dist_option(const ObIArray<int64_t> &win_func_idxs,
                                           const WinDistAlgo algo,
                                           const bool is_push_down,
-                                          const bool use_hash_sort)
+                                          const bool use_hash_sort,
+                                          const bool use_topn_sort)
 {
   int ret = OB_SUCCESS;
   int64_t idx = win_dist_options_.count();
@@ -2677,6 +2679,7 @@ int ObWindowDistHint::add_win_dist_option(const ObIArray<int64_t> &win_func_idxs
     win_dist_option.algo_ = algo;
     win_dist_option.is_push_down_ = is_push_down;
     win_dist_option.use_hash_sort_ = use_hash_sort;
+    win_dist_option.use_topn_sort_ = use_topn_sort;
     if (win_dist_option.win_func_idxs_.assign(win_func_idxs)) {
       LOG_WARN("failed to add win dist option", K(ret));
     }
@@ -2715,6 +2718,8 @@ int ObWindowDistHint::WinDistOption::print_win_dist_option(PlanText &plan_text) 
     LOG_WARN("failed to print win func sort", K(ret));
   } else if (is_push_down_ && OB_FAIL(BUF_PRINTF(" PUSHDOWN"))) {
     LOG_WARN("failed to print win func push down", K(ret));
+  } else if (use_topn_sort_ && OB_FAIL(BUF_PRINTF(" WF_TOPN"))) {
+    LOG_WARN("failed to print win func sort", K(ret));
   }
   return ret;
 }
@@ -2726,7 +2731,8 @@ bool ObWindowDistHint::WinDistOption::is_valid() const
     bret = false;
   } else if (WinDistAlgo::WIN_DIST_HASH != algo_ && is_push_down_) {
     bret = false;
-  } else if (WinDistAlgo::WIN_DIST_HASH != algo_ && WinDistAlgo::WIN_DIST_NONE != algo_ && use_hash_sort_) {
+  } else if (WinDistAlgo::WIN_DIST_HASH != algo_ && WinDistAlgo::WIN_DIST_NONE != algo_
+            && (use_hash_sort_ || use_topn_sort_)) {
     bret = false;
   } else {
     for (int64_t i = 0; bret && i < win_func_idxs_.count(); ++i) {
@@ -2741,6 +2747,7 @@ int ObWindowDistHint::WinDistOption::assign(const WinDistOption& other)
   int ret = OB_SUCCESS;
   algo_ = other.algo_;
   use_hash_sort_ = other.use_hash_sort_;
+  use_topn_sort_ = other.use_topn_sort_;
   is_push_down_ = other.is_push_down_;
   if (OB_FAIL(win_func_idxs_.assign(other.win_func_idxs_))) {
     LOG_WARN("failed to assign", K(ret));
@@ -2752,6 +2759,7 @@ void ObWindowDistHint::WinDistOption::reset()
 {
   algo_ = WinDistAlgo::WIN_DIST_INVALID;
   use_hash_sort_ = false;
+  use_topn_sort_ = false;
   is_push_down_ = false;
   win_func_idxs_.reuse();
 }

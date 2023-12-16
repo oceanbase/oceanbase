@@ -53,6 +53,7 @@ enum QueryRelation
   bool is_order_equal_;
   bool is_select_item_equal_;
   bool is_distinct_equal_;
+  bool is_qualify_filter_equal_;
   
   //如果from item是generated table，需要记录ref query的select item map关系
   //如果是set stmt，每个set query对应的映射关系也记录在view_select_item_map_
@@ -65,7 +66,8 @@ enum QueryRelation
     is_having_equal_(false),
     is_order_equal_(false),
     is_select_item_equal_(false),
-    is_distinct_equal_(false)
+    is_distinct_equal_(false),
+    is_qualify_filter_equal_(false)
     {}
 
   void reset();

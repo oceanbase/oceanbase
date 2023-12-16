@@ -804,6 +804,10 @@ protected:
 											const ObIArray<ObRawExpr *> &order_exprs,
 											const ObIArray<ObExprResType> &order_col_types,
 											double &cost);
+  int cost_part_topn_sort(const ObSortCostInfo &cost_info,
+                          const ObIArray<ObRawExpr *> &order_exprs,
+                          const ObIArray<ObExprResType> &order_col_types,
+                          double &cost);
 
   int cost_prefix_sort(const ObSortCostInfo &cost_info,
 											const ObIArray<ObRawExpr *> &order_exprs,

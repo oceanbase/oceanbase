@@ -119,6 +119,15 @@ int ObSelectStmt::add_window_func_expr(ObWinFunRawExpr *expr)
   return ret;
 }
 
+int ObSelectStmt::set_qualify_filters(common::ObIArray<ObRawExpr *> &exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(qualify_filters_.assign(exprs))) {
+    LOG_WARN("failed to add expr", K(ret));
+  }
+  return ret;
+}
+
 int ObSelectStmt::remove_window_func_expr(ObWinFunRawExpr *expr)
 {
   int ret = OB_SUCCESS;
@@ -179,6 +188,8 @@ int ObSelectStmt::assign(const ObSelectStmt &other)
     LOG_WARN("assign other start with failed", K(ret));
   } else if (OB_FAIL(win_func_exprs_.assign(other.win_func_exprs_))) {
     LOG_WARN("assign window function exprs failed", K(ret));
+  } else if (OB_FAIL(qualify_filters_.assign(other.qualify_filters_))) {
+    LOG_WARN("assign window function filter exprs failed", K(ret));
   } else if (OB_FAIL(connect_by_exprs_.assign(other.connect_by_exprs_))) {
     LOG_WARN("assign other connect by failed", K(ret));
   } else if (OB_FAIL(connect_by_prior_exprs_.assign(other.connect_by_prior_exprs_))) {
@@ -246,6 +257,8 @@ int ObSelectStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
   } else if (OB_FAIL(expr_copier.copy(other.agg_items_, agg_items_))) {
     LOG_WARN("deep copy agg item failed", K(ret));
   } else if (OB_FAIL(expr_copier.copy(other.win_func_exprs_, win_func_exprs_))) {
+    LOG_WARN("deep copy window function expr failed", K(ret));
+  } else if (OB_FAIL(expr_copier.copy(other.qualify_filters_, qualify_filters_))) {
     LOG_WARN("deep copy window function expr failed", K(ret));
   } else if (OB_FAIL(expr_copier.copy(other.start_with_exprs_, start_with_exprs_))) {
     LOG_WARN("deep copy start with exprs failed", K(ret));
@@ -438,6 +451,11 @@ int ObSelectStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
       if (OB_FAIL(visitor.visit(search_by_items_.at(i).expr_, SCOPE_DICT_FIELDS))) {
         LOG_WARN("failed to visit search by items", K(ret));
       } else { /* do nothing*/ }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(visitor.visit(qualify_filters_, SCOPE_QUALIFY_FILTER))) {
+      LOG_WARN("failed to visit winfunc exprs", K(ret));
     }
   }
   if (OB_SUCC(ret) && NULL != into_item_) {
