@@ -222,7 +222,7 @@ int64_t ObMvccTransNode::to_string(char *buf, const int64_t buf_len) const
                           "snapshot_barrier=%ld "
                           "snapshot_barrier_flag=%ld "
                           "mtd=%s "
-                          "seq_no=%ld",
+                          "seq_no=%s",
                           this,
                           to_cstring(trans_version_),
                           to_cstring(scn_),
@@ -238,7 +238,7 @@ int64_t ObMvccTransNode::to_string(char *buf, const int64_t buf_len) const
                           & (~SNAPSHOT_VERSION_BARRIER_BIT),
                           snapshot_version_barrier_ >> 62,
                           to_cstring(*mtd),
-                          seq_no_.cast_to_int());
+                          to_cstring(seq_no_));
   return pos;
 }
 
@@ -573,6 +573,11 @@ int ObMvccRow::insert_trans_node(ObIMvccCtx &ctx,
             ret = OB_ERR_UNEXPECTED;
             TRANS_LOG(ERROR, "meet unexpected index_node", KR(ret), K(*prev), K(node), K(*index_node), K(*this));
             abort_unless(0);
+          } else if (prev->tx_id_ == node.tx_id_ && OB_UNLIKELY(prev->seq_no_ > node.seq_no_)) {
+            ret = OB_ERR_UNEXPECTED;
+            TRANS_LOG(ERROR, "prev node seq_no > this node", KR(ret), KPC(prev), K(node), KPC(this));
+            usleep(1000);
+            ob_abort();
           } else {
             next_node = next;
             ATOMIC_STORE(&(node.next_), next);
@@ -607,6 +612,14 @@ int ObMvccRow::insert_trans_node(ObIMvccCtx &ctx,
           next_node = tmp;
           prev = &(tmp->prev_);
           tmp = ATOMIC_LOAD(prev);
+        }
+      }
+      if (OB_SUCC(ret) && OB_NOT_NULL(tmp) && tmp->tx_id_ == node.tx_id_) {
+        if (OB_UNLIKELY(tmp->seq_no_ > node.seq_no_)) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(ERROR, "prev node seq_no > this node", KR(ret), "prev", PC(tmp), K(node), KPC(this));
+          usleep(1000);
+          ob_abort();
         }
       }
       if (OB_SUCC(ret)) {
@@ -952,6 +965,7 @@ int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
   return ret;
 }
 
+__attribute__((noinline))
 int ObMvccRow::check_double_insert_(const SCN snapshot_version,
                                     ObMvccTransNode &node,
                                     ObMvccTransNode *prev)
@@ -996,7 +1010,6 @@ int ObMvccRow::mvcc_write(ObIMemtableCtx &ctx,
 {
   int ret = OB_SUCCESS;
   const SCN snapshot_version = snapshot.version_;
-
   if (max_trans_version_.atomic_load() > snapshot_version
       || max_elr_trans_version_.atomic_load() > snapshot_version) {
     // Case 3. successfully locked while tsc
@@ -1026,7 +1039,6 @@ int ObMvccRow::mvcc_write(ObIMemtableCtx &ctx,
       (void)mvcc_undo();
     }
   }
-
   return ret;
 }
 

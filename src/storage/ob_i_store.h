@@ -427,23 +427,23 @@ struct ObStoreCtx
   TO_STRING_KV(KP(this),
                K_(ls_id),
                KP_(ls),
+               K_(branch),
                K_(timeout),
                K_(tablet_id),
                KP_(table_iter),
                K_(table_version),
                K_(mvcc_acc_ctx),
                K_(tablet_stat),
-               K_(replay_log_scn),
                K_(is_read_store_ctx));
   share::ObLSID ls_id_;
   storage::ObLS *ls_;                              // for performance opt
+  int16_t branch_;                                 // parallel write id
   common::ObTabletID tablet_id_;
   mutable ObTableStoreIterator *table_iter_;
   int64_t table_version_;                          // used to update memtable's max_schema_version
   int64_t timeout_;
   memtable::ObMvccAccessCtx mvcc_acc_ctx_;         // all txn relative context
   storage::ObTabletStat tablet_stat_;              // used for collecting query statistics
-  share::SCN replay_log_scn_;                         // used in replay pass log_ts
   bool is_read_store_ctx_;
 };
 

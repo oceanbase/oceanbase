@@ -291,7 +291,8 @@ public:
   bool has_non_trivial_expr_op_ctx() const { return has_non_trivial_expr_op_ctx_; }
   void set_non_trivial_expr_op_ctx(bool v) { has_non_trivial_expr_op_ctx_ = v; }
   inline bool &get_tmp_alloc_used() { return tmp_alloc_used_; }
-
+  // set write branch id for DML write
+  void set_branch_id(const int16_t branch_id) { das_ctx_.set_write_branch_id(branch_id); }
   VIRTUAL_NEED_SERIALIZE_AND_DESERIALIZE;
 protected:
   uint64_t get_ser_version() const;

@@ -533,9 +533,11 @@ int64_t ObLogReplayTask::to_string(char* buf, const int64_t buf_len) const
 //---------------ObReplayFsCb---------------//
 int ObReplayFsCb::update_end_lsn(int64_t id,
                                  const LSN &end_offset,
+                                 const SCN &end_scn,
                                  const int64_t proposal_id)
 {
   UNUSED(id);
+  UNUSED(end_scn);
   UNUSED(proposal_id);
   return replay_status_->update_end_offset(end_offset);
 }

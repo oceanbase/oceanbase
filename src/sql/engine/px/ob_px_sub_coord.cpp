@@ -526,6 +526,9 @@ int ObPxSubCoord::create_tasks(ObPxRpcInitSqcArgs &sqc_arg, ObSqcCtx &sqc_ctx, b
     const ObAddr &task_exec_addr = sqc.get_exec_addr();
     const ObAddr &qc_exec_addr = sqc.get_qc_addr();
     task.set_task_id(i);
+    if (sqc.get_branch_id_base()) {
+      task.set_branch_id(sqc.get_branch_id_base() + i);
+    }
     task.set_sqc_addr(sqc_exec_addr);
     task.set_exec_addr(task_exec_addr);
     task.set_qc_addr(qc_exec_addr);

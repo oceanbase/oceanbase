@@ -282,7 +282,7 @@ int ObTxRPCCB<PC>::process()
       }
     }
   }
-  if (OB_SUCCESS != ret || (OB_SUCCESS != status && status != -1)) {
+  if (OB_SUCCESS != ret || (OB_SUCCESS != status && status != -1 && status != OB_NEED_RETRY)) {
     TRANS_LOG(WARN, "trx rpc callback", K(ret), K(status), K(dst), K(result));
   }
   return ret;
@@ -338,7 +338,8 @@ void ObTxRPCCB<PC>::on_timeout()
       if (transaction::ObTxMsgTypeChecker::is_2pc_msg_type(msg_type_)) {
         // do nothing
       } else {
-        if (receiver_ls_id_.is_valid()) {
+        if (receiver_ls_id_.is_scheduler_ls()) {
+        } else if (receiver_ls_id_.is_valid()) {
           if (OB_FAIL(refresh_location_cache(receiver_ls_id_))) {
             TRANS_LOG(WARN, "refresh location cache error", KR(ret), K_(trans_id), K_(receiver_ls_id), K(dst), K_(tenant_id));
           } else {

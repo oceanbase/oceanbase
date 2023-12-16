@@ -289,6 +289,7 @@ _enable_newsort
 _enable_new_sql_nio
 _enable_oracle_priv_check
 _enable_parallel_minor_merge
+_enable_parallel_redo_logging
 _enable_parallel_table_creation
 _enable_partition_level_retry
 _enable_pkt_nio
@@ -370,7 +371,9 @@ _optimizer_skip_scan_enabled
 _optimizer_sortmerge_join_enabled
 _parallel_max_active_sessions
 _parallel_min_message_pool
+_parallel_redo_logging_trigger
 _parallel_server_sleep_time
+_pdml_thread_cache_size
 _pipelined_table_function_memory_limit
 _print_sample_ppm
 _private_buffer_size

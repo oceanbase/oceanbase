@@ -455,7 +455,7 @@ int main(int argc, char **argv)
 {
   system("rm -rf test_trans.log*");
   OB_LOGGER.set_file_name("test_trans.log",true, false, "test_trans.log", "test_trans.log");
-  OB_LOGGER.set_log_level("INFO");
+  OB_LOGGER.set_log_level("DEBUG");
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

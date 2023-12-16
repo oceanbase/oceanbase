@@ -195,7 +195,7 @@ TO_STRING_KV(K(is_inited_), K(tenant_id_), KP(this));
 
 private:
 int check_ls_status_(const share::ObLSID &ls_id, bool &leader);
-void init_tx_(ObTxDesc &tx, const uint32_t session_id);
+int init_tx_(ObTxDesc &tx, const uint32_t session_id);
 int start_tx_(ObTxDesc &tx);
 int abort_tx_(ObTxDesc &tx, const int cause, bool cleanup = true);
 void abort_tx__(ObTxDesc &tx, const bool cleanup);
@@ -353,6 +353,7 @@ int ls_rollback_to_savepoint_(const ObTransID &tx_id,
                               const int64_t verify_epoch,
                               const int64_t op_sn,
                               const ObTxSEQ savepoint,
+                              const int64_t tx_seq_base,
                               int64_t &ctx_born_epoch,
                               const ObTxDesc *tx,
                               const bool for_transfer,
@@ -382,6 +383,7 @@ int rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
 int ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
                                  const ObTxSEQ savepoint,
                                  const int64_t op_sn,
+                                 const int64_t tx_seq_base,
                                  const int64_t expire_ts,
                                  const ObTxSEQ specified_from_scn,
                                  ObIArray<ObTxLSEpochPair> &downstream_parts);

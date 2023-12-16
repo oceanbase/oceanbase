@@ -39,7 +39,7 @@ void PalfFSCbWrapper::del_cb_impl(PalfFSCbNode *cb_impl)
   (void)list_.remove(cb_impl);
 }
 
-int PalfFSCbWrapper::update_end_lsn(int64_t id, const LSN &end_lsn, const int64_t proposal_id)
+int PalfFSCbWrapper::update_end_lsn(int64_t id, const LSN &end_lsn, const share::SCN &end_scn, const int64_t proposal_id)
 {
   int ret = common::OB_SUCCESS;
   if (OB_UNLIKELY(true == list_.is_empty())) {
@@ -52,8 +52,8 @@ int PalfFSCbWrapper::update_end_lsn(int64_t id, const LSN &end_lsn, const int64_
       if (NULL == cb) {
         ret = OB_ERR_UNEXPECTED;
         PALF_LOG(ERROR, "PalfFSCb is NULL, unexpect error", KPC(node));
-      } else if (OB_SUCCESS != (tmp_ret = cb->update_end_lsn(id, end_lsn, proposal_id))) {
-        PALF_LOG(ERROR, "update_end_lsn failed", K(tmp_ret), K(id), K(end_lsn), K(proposal_id), KPC(node));
+      } else if (OB_SUCCESS != (tmp_ret = cb->update_end_lsn(id, end_lsn, end_scn, proposal_id))) {
+        PALF_LOG(ERROR, "update_end_lsn failed", K(tmp_ret), K(id), K(end_lsn), K(end_scn), K(proposal_id), KPC(node));
       }
     }
   }

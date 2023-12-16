@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX OBLOG
+#define USING_LOG_PREFIX OBLOG_PARSER
 
 #include "ob_log_rollback_section.h"
 
@@ -39,8 +39,21 @@ bool RollbackNode::is_valid() const
 
 bool RollbackNode::should_rollback_stmt(const transaction::ObTxSEQ &stmt_seq_no) const
 {
-  // note: from_seq is large than to_seq
-  return from_seq_ >= stmt_seq_no && to_seq_ < stmt_seq_no;
+  bool need_rollback = false;
+  const int64_t rollback_branch_id = from_seq_.get_branch();
+  const int64_t stmt_branch_id = stmt_seq_no.get_branch();
+  const bool is_branch_rollback = (rollback_branch_id != 0); // branch_id should large than 0 if rollback in branch
+  const bool need_check_rollback = (! is_branch_rollback) || rollback_branch_id == stmt_branch_id;
+
+  if (need_check_rollback) {
+    // note: from_seq is large than to_seq
+    need_rollback = from_seq_ >= stmt_seq_no && to_seq_ < stmt_seq_no;
+    if (need_rollback) {
+      LOG_DEBUG("ROLLBACK_STMT", K(is_branch_rollback), K(stmt_seq_no), K_(from_seq), K_(to_seq));
+    }
+  }
+
+  return need_rollback;
 }
 
 }

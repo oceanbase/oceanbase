@@ -68,6 +68,7 @@ void ObCtxTxData::reset()
   ctx_mgr_ = nullptr;
   tx_data_guard_.reset();
   read_only_ = false;
+  recovered_from_tx_table_ = false;
 }
 
 void ObCtxTxData::destroy()
@@ -98,27 +99,7 @@ int ObCtxTxData::insert_into_tx_table()
   return ret;
 }
 
-int ObCtxTxData::recover_tx_data(ObTxDataGuard &rhs)
-{
-  int ret = OB_SUCCESS;
-  WLockGuard guard(lock_);
-  ObTxTable *tx_table = nullptr;
-  GET_TX_TABLE_(tx_table);
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(check_tx_data_writable_())) {
-    TRANS_LOG(WARN, "tx data is not writeable", K(ret), KPC(this));
-  } else if (OB_ISNULL(rhs.tx_data())) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "input tx data guard is unexpected nullptr", K(ret), KPC(this));
-  } else if (OB_FAIL(tx_data_guard_.init(rhs.tx_data()))) {
-    TRANS_LOG(WARN, "init tx data guard failed", K(ret), KPC(this));
-  }
-
-  return ret;
-}
-
-int ObCtxTxData::replace_tx_data(ObTxData *tmp_tx_data)
+int ObCtxTxData::recover_tx_data(ObTxData *tmp_tx_data)
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(lock_);
@@ -135,6 +116,8 @@ int ObCtxTxData::replace_tx_data(ObTxData *tmp_tx_data)
     tx_data_guard_.reset();
     if (OB_FAIL(tx_data_guard_.init(tmp_tx_data))) {
       TRANS_LOG(WARN, "init tx data guard failed", KR(ret), KPC(tmp_tx_data));
+    } else {
+      recovered_from_tx_table_ = true;
     }
   }
   return ret;

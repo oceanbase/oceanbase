@@ -391,7 +391,7 @@ public:
     replay_status_ = NULL;
   }
   // 回调接口,调用replay status的update_end_offset接口
-  int update_end_lsn(int64_t id, const palf::LSN &end_offset, const int64_t proposal_id);
+  int update_end_lsn(int64_t id, const palf::LSN &end_offset, const share::SCN &end_scn, const int64_t proposal_id);
 private:
   ObReplayStatus *replay_status_;
 };

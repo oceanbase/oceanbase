@@ -524,10 +524,11 @@ int ObLockTable::lock(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid argument", K(ret), K(ctx), K(param), K(ctx.mvcc_acc_ctx_));
     ob_abort();
-  } else if (OB_FAIL(get_lock_memtable(handle))) {
+  } else if (OB_FAIL(ctx.mvcc_acc_ctx_.mem_ctx_->get_lock_mem_ctx().get_lock_memtable(memtable))) {
     LOG_WARN("get lock memtable failed", K(ret));
-  } else if (OB_FAIL(handle.get_lock_memtable(memtable))) {
-    LOG_ERROR("get lock memtable from lock handle failed", K(ret));
+  } else if (OB_ISNULL(memtable)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("lock memtable is null", K(ret), K(ctx));
   } else {
     const int64_t lock_timestamp = ObTimeUtility::current_time();
     ObTableLockOp lock_op(param.lock_id_,

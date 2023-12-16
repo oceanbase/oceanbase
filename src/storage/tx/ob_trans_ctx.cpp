@@ -27,21 +27,14 @@ using namespace share;
 namespace transaction
 {
 
-void ObTransCtx::get_ctx_guard(CtxLockGuard &guard)
+void ObTransCtx::get_ctx_guard(CtxLockGuard &guard, uint8_t mode)
 {
-  guard.set(lock_);
+  guard.set(lock_, mode);
 }
 
 void ObTransCtx::print_trace_log()
 {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(lock_.try_lock())) {
-    TRANS_LOG(WARN, "print trace log trylock error", K(ret));
-  } else {
-    print_trace_log_();
-    lock_.unlock();
-  }
-  UNUSED(ret);
+  print_trace_log_();
 }
 
 void ObTransCtx::print_trace_log_()
@@ -219,21 +212,6 @@ int ObTransCtx::defer_callback_scheduler_(const int retcode, const SCN &commit_v
     has_pending_callback_ = true;
   }
   return ret;
-}
-
-void ObTransCtx::test_lock(ObTxLogCb *log_cb)
-{
-  const int64_t before_lock_time = ObClockGenerator::getRealClock();
-  CtxLockGuard guard(lock_);
-  const int64_t after_lock_time = ObClockGenerator::getRealClock();
-  const int64_t log_sync_used_time = before_lock_time - log_cb->get_submit_ts();
-  const int64_t ctx_lock_wait_time = after_lock_time - before_lock_time;
-
-  if (log_sync_used_time + ctx_lock_wait_time
-      >= ObServerConfig::get_instance().clog_sync_time_warn_threshold) {
-    TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "transaction log sync use too much time", KPC(log_cb),
-                  K(log_sync_used_time), K(ctx_lock_wait_time));
-  }
 }
 
 void ObTransCtx::generate_request_id_()

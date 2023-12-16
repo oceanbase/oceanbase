@@ -712,13 +712,13 @@ int InjectTxFaultHelper::submit_log(const char *buf, const int64_t size, const s
 {
 
   int ret = OB_SUCCESS;
-  ObTxLogBlockHeader log_block_header;
   ObSEArray<ObTxLogType, 1> log_list;
   ObTxLogBlock log_block;
   int64_t replay_hint = 0;
+  ObTxLogBlockHeader &log_block_header = log_block.get_header();
   if (OB_ISNULL(mgr_)) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(log_block.init_with_header(buf, size, replay_hint, log_block_header))) {
+  } else if (OB_FAIL(log_block.init_for_replay(buf, size))) {
     LOG_WARN("log_block init failed", K(ret), KP(buf), K(size));
   } else {
     while (OB_SUCC(ret)) {

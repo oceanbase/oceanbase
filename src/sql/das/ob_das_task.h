@@ -111,6 +111,7 @@ public:
       task_flag_(0),
       trans_desc_(nullptr),
       snapshot_(nullptr),
+      write_branch_id_(0),
       tablet_loc_(nullptr),
       op_alloc_(op_alloc),
       related_ctdefs_(op_alloc),
@@ -192,6 +193,8 @@ public:
   transaction::ObTxDesc *get_trans_desc() { return trans_desc_; }
   void set_snapshot(transaction::ObTxReadSnapshot *snapshot) { snapshot_ = snapshot; }
   transaction::ObTxReadSnapshot *get_snapshot() { return snapshot_; }
+  int16_t get_write_branch_id() const { return write_branch_id_; }
+  void set_write_branch_id(const int16_t branch_id) { write_branch_id_ = branch_id; }
   bool is_local_task() const { return task_started_; }
   void set_can_part_retry(const bool flag) { can_part_retry_ = flag; }
   bool can_part_retry() const { return can_part_retry_; }
@@ -245,6 +248,7 @@ protected:
   };
   transaction::ObTxDesc *trans_desc_; //trans desc，事务是全局信息，由RPC框架管理，这里不维护其内存
   transaction::ObTxReadSnapshot *snapshot_; // Mvcc snapshot
+  int16_t write_branch_id_;  // branch id for parallel write, required for partially rollback
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
   const ObDASTabletLoc *tablet_loc_; //does not need serialize it

@@ -582,7 +582,7 @@ end_scn	bigint(20) unsigned	NO		NULL
 logging_blocked	varchar(3)	NO		NULL	
 freeze_clock	bigint(20)	NO		NULL	
 unsubmitted_count	bigint(20)	NO		NULL	
-unsynced_count	bigint(20)	NO		NULL	
+max_end_scn	bigint(20) unsigned	NO		NULL	
 write_ref_count	bigint(20)	NO		NULL	
 mem_used	bigint(20)	NO		NULL	
 hash_item_count	bigint(20)	NO		NULL	
@@ -636,6 +636,10 @@ start_scn	bigint(20) unsigned	NO		NULL
 end_scn	bigint(20) unsigned	NO		NULL	
 rec_scn	bigint(20) unsigned	NO		NULL	
 transfer_blocking	tinyint(4)	NO		NULL	
+busy_cbs	bigint(20)	NO		NULL	
+replay_complete	bigint(20)	NO		NULL	
+serial_log_final_scn	bigint(20)	NO		NULL	
+callback_list_stats	longtext	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_trans_stat;
 IF(count(*) >= 0, 1, 0)
 1

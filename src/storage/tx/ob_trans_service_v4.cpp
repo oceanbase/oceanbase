@@ -1099,6 +1099,7 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = store_ctx.ls_id_;
   ObPartTransCtx *tx_ctx = NULL;
+  const int16_t branch = store_ctx.branch_;
   ObTxSEQ data_scn = spec_seq_no; // for LOB aux table, spec_seq_no is valid
   ObTxSnapshot snap = snapshot.core_;
   ObTxTableGuard tx_table_guard;
@@ -1122,7 +1123,7 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
     TRANS_LOG(WARN, "use ls snapshot access another ls", K(ret), K(snapshot), K(ls_id));
   } else if (OB_FAIL(acquire_tx_ctx(ls_id, tx, tx_ctx, store_ctx.ls_, special))) {
     TRANS_LOG(WARN, "acquire tx ctx fail", K(ret), K(tx), K(ls_id), KPC(this));
-  } else if (OB_FAIL(tx_ctx->start_access(tx, data_scn))) {
+  } else if (OB_FAIL(tx_ctx->start_access(tx, data_scn, branch))) {
     TRANS_LOG(WARN, "tx ctx start access fail", K(ret), K(tx_ctx), K(ls_id), KPC(this));
     // when transfer move_tx phase we put src_ls tx_ctx into dest_ls ctx_mgr when transfer abort we need remove it
     // when access tx_ctx first get ctx from mgr, second increase pending_write
@@ -1133,7 +1134,7 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
       ob_usleep(10 * 1000);
       if (OB_FAIL(acquire_tx_ctx(ls_id, tx, tx_ctx, store_ctx.ls_, special))) {
         TRANS_LOG(WARN, "acquire tx ctx fail", K(ret), K(tx), K(ls_id), KPC(this));
-      } else if (OB_FAIL(tx_ctx->start_access(tx, data_scn))) {
+      } else if (OB_FAIL(tx_ctx->start_access(tx, data_scn, branch))) {
         TRANS_LOG(WARN, "tx ctx start access fail", K(ret), K(tx_ctx), K(ls_id), KPC(this));
       }
     }
@@ -2057,6 +2058,7 @@ int ObTransService::handle_sp_rollback_request(ObTxRollbackSPMsg &msg,
                                   msg.epoch_,
                                   msg.op_sn_,
                                   msg.savepoint_,
+                                  msg.tx_seq_base_,
                                   ctx_born_epoch,
                                   msg.tx_ptr_,
                                   msg.for_transfer(),
@@ -2747,6 +2749,7 @@ int ObTransService::recover_tx(const ObTxInfo &tx_info, ObTxDesc *&tx)
     tx->flags_.EXPLICIT_ = true;
     tx->tenant_id_ = tx_info.tenant_id_;
     tx->cluster_id_ = tx_info.cluster_id_;
+    tx->seq_base_ = tx_info.seq_base_;
     tx->cluster_version_ = tx_info.cluster_version_;
     tx->addr_ = tx_info.addr_; /*origin scheduler addr*/
     tx->tx_id_ = tx_info.tx_id_;
@@ -2779,6 +2782,7 @@ int ObTransService::get_tx_info(ObTxDesc &tx, ObTxInfo &tx_info)
     tx_info.tenant_id_ = tx.tenant_id_;
     tx_info.cluster_id_ = tx.cluster_id_;
     tx_info.cluster_version_ = tx.cluster_version_;
+    tx_info.seq_base_ = tx.seq_base_;
     tx_info.addr_ = tx.addr_;
     tx_info.tx_id_ = tx.tx_id_;
     tx_info.isolation_ = tx.isolation_;

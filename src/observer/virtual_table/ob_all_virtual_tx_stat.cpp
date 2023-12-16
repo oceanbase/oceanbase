@@ -299,6 +299,23 @@ int ObGVTxStat::inner_get_next_row(ObNewRow *&row)
         case TRANSFER_BLOCKING:
           cur_row_.cells_[i].set_bool(tx_stat.transfer_blocking_);
           break;
+        case BUSY_CBS_CNT:
+          cur_row_.cells_[i].set_int(tx_stat.busy_cbs_cnt_);
+          break;
+        case REPLAY_COMPLETE:
+          cur_row_.cells_[i].set_int(tx_stat.replay_completeness_);
+          break;
+        case SERIAL_LOG_FINAL_SCN:
+          cur_row_.cells_[i].set_int(tx_stat.serial_final_scn_.get_val_for_inner_table_field());
+          break;
+        case CALLBACK_LIST_STATS:
+          {
+            const char *buf = to_cstring(tx_stat.get_callback_list_stats_displayer());
+            const int32_t buf_len = static_cast<int32_t>(strlen(buf));
+            cur_row_.cells_[i].set_lob_value(ObLongTextType, buf, buf_len);
+            cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          }
+          break;
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid coloum_id", K(ret), K(col_id));

@@ -430,7 +430,7 @@ protected:
   int64_t cluster_id_;
   ObTraceInfo trace_info_;
   uint64_t cluster_version_;  // compatible handle when upgrade
-
+  int64_t seq_base_;          // tx_seq's base value, use to calculate absolute value of tx_seq
   ObTxConsistencyType tx_consistency_type_; // transaction level consistency_type : strong or bounded read
 
   common::ObAddr addr_;                // where we site
@@ -531,6 +531,7 @@ protected:
 
   ObTxSEQ active_scn_;               // logical time of ACTIVE | IMPLICIT_ACTIVE
   ObTxSEQ min_implicit_savepoint_;   // mininum of implicit savepoints
+  int16_t last_branch_id_;           // branch_id allocator, reset when stmt start
   ObTxPartList parts_;               // participant list
   ObTxSavePointList savepoints_;     // savepoints established
   // cflict_txs_ is used to store conflict trans id when try acquire row lock failed(meet lock conflict)
@@ -582,6 +583,7 @@ private:
     DLink *prev_;
   } alloc_link_;
 #endif
+  static constexpr int16_t MAX_BRANCH_ID_VALUE = ~(1 << 15) & 0xFFFF; // 15bits
 private:
   /* these routine should be called by txn-service only to avoid corrupted state */
   void reset();
@@ -643,6 +645,7 @@ public:
                KP_(commit_cb),
                K_(cluster_id),
                K_(cluster_version),
+               K_(seq_base),
                K_(flags_.SHADOW),
                K_(flags_.INTERRUPTED),
                K_(flags_.BLOCK),
@@ -653,7 +656,11 @@ public:
                K_(commit_expire_ts),
                K(commit_task_.is_registered()),
                K_(ref));
-
+  bool support_branch() const { return seq_base_ > 0; }
+  // used by SQL alloc branch_id refer the min branch_id allowed
+  // because branch_id bellow this is reserved for internal use
+  int branch_id_offset() const { return MAX_CALLBACK_LIST_COUNT; }
+  int alloc_branch_id(const int64_t count, int16_t &branch_id);
   int fetch_conflict_txs(ObIArray<ObTransIDAndAddr> &array);
   void reset_conflict_txs()
   { ObSpinLockGuard guard(lock_); cflict_txs_.reset(); }
@@ -786,6 +793,7 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   ObTxSEQ get_and_inc_tx_seq(int16_t branch, int N) const;
   ObTxSEQ inc_and_get_tx_seq(int16_t branch) const;
   ObTxSEQ get_tx_seq(int64_t seq_abs = 0) const;
+  ObTxSEQ get_min_tx_seq() const;
 };
 
 // Is used to store and travserse all TxScheduler's Stat information;
@@ -886,6 +894,7 @@ protected:
   uint64_t tenant_id_;
   int64_t cluster_id_;
   uint64_t cluster_version_;
+  int64_t seq_base_;
   common::ObAddr addr_;
   ObTransID tx_id_;
   ObTxIsolationLevel isolation_;
@@ -903,6 +912,7 @@ protected:
   uint32_t session_id_ = 0;
   ObTxSavePointList savepoints_;
 public:
+  ObTxInfo(): seq_base_(0) {}
   TO_STRING_KV(K_(tenant_id),
                K_(session_id),
                K_(tx_id),
@@ -915,6 +925,7 @@ public:
                K_(active_ts),
                K_(timeout_us),
                K_(expire_ts),
+               K_(seq_base),
                K_(parts),
                K_(cluster_id),
                K_(cluster_version),
@@ -1006,6 +1017,48 @@ typedef lib::ObLockGuardWithTimeout<ObSpinLock> ObSpinLockGuardWithTimeout;
   }                                                                    \
 } while (0)
 
+inline ObTxSEQ ObTxDesc::get_tx_seq(int64_t seq_abs) const
+{
+  int64_t seq = seq_abs > 0 ? seq_abs : ObSequence::get_max_seq_no();
+  if (OB_LIKELY(support_branch())) {
+    if (seq < seq_base_) {
+      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "seq_abs is less seq_base_", K(seq_abs), K(tx_id_), K(seq_base_));
+      return ObTxSEQ::INVL();
+    }
+    return ObTxSEQ(seq - seq_base_, 0);
+  } else {
+    return ObTxSEQ::mk_v0(seq);
+  }
+}
+
+inline ObTxSEQ ObTxDesc::get_min_tx_seq() const
+{
+  if (OB_LIKELY(support_branch())) {
+    return ObTxSEQ(1, 0);
+  } else {
+    return ObTxSEQ::mk_v0(1);
+  }
+}
+
+inline ObTxSEQ ObTxDesc::get_and_inc_tx_seq(int16_t branch, int N) const
+{
+  int64_t seq = ObSequence::get_and_inc_max_seq_no(N);
+  if (OB_LIKELY(support_branch())) {
+    return ObTxSEQ(seq - seq_base_, branch);
+  } else {
+    return ObTxSEQ::mk_v0(seq);
+  }
+}
+
+inline ObTxSEQ ObTxDesc::inc_and_get_tx_seq(int16_t branch) const
+{
+  int64_t seq = ObSequence::inc_and_get_max_seq_no();
+  if (OB_LIKELY(support_branch())) {
+    return ObTxSEQ(seq - seq_base_, branch);
+  } else {
+    return ObTxSEQ::mk_v0(seq);
+  }
+}
 } // transaction
 } // oceanbase
 

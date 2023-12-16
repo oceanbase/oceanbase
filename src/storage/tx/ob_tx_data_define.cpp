@@ -478,8 +478,11 @@ int ObTxData::add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &ne
   } else if (OB_ISNULL(tx_data_table = tx_table->get_tx_data_table())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "tx data table in tx table is nullptr.", KR(ret));
+  } else if (OB_FAIL(merge_undo_actions_(tx_data_table, node, new_undo_action))) {
+    STORAGE_LOG(WARN, "merge undo actions fail.", KR(ret), K(new_undo_action));
+  } else if (!new_undo_action.is_valid()) {
+    // if new_undo_action is merged, it will be set to invalid and skip insert
   } else {
-    merge_undo_actions_(tx_data_table, node, new_undo_action);
     // generate new node if current node cannot be inserted
     if (OB_ISNULL(node) || node->size_ >= TX_DATA_UNDO_ACT_MAX_NUM_PER_NODE) {
       ObUndoStatusNode *new_node = nullptr;
@@ -521,10 +524,12 @@ int ObTxData::merge_undo_actions_(ObTxDataTable *tx_data_table,
   int ret = OB_SUCCESS;
   while (OB_SUCC(ret) && OB_NOT_NULL(node)) {
     for (int i = node->size_ - 1; i >= 0; i--) {
-      if (new_undo_action.is_contain(node->undo_actions_[i])
-          || node->undo_actions_[i].is_contain(new_undo_action)) {
-        new_undo_action.merge(node->undo_actions_[i]);
-        node->size_--;
+      if (new_undo_action.is_contain(node->undo_actions_[i])) {
+        node->size_--; // pop merged
+      } else if (node->undo_actions_[i].is_contain(new_undo_action)) {
+        // new undo is merged, reset it
+        new_undo_action.reset();
+        break;
       } else {
         break;
       }
@@ -553,7 +558,6 @@ int ObTxData::merge_undo_actions_(ObTxDataTable *tx_data_table,
 
   return ret;
 }
-  
 
 bool ObTxData::equals_(ObTxData &rhs)
 {

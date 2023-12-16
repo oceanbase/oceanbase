@@ -130,7 +130,7 @@ TEST_F(ObTestTxCtx, DelayAbort)
     ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr->get_tx_ctx(tx.tx_id_, false /*for_replay*/, tx_ctx));
     GCONF._private_buffer_size = 1;
     // ASSERT_EQ(OB_SUCCESS, tx_ctx->submit_log_impl_(ObTxLogType::TX_REDO_LOG));
-    ASSERT_EQ(OB_SUCCESS, tx_ctx->submit_redo_log(false /*is_freeze*/));
+    ASSERT_EQ(OB_SUCCESS, tx_ctx->submit_redo_after_write(false, ObTxSEQ()));
     TRANS_LOG(INFO, "[TEST] after submit redo", K(tx_ctx->trans_id_),
               K(tx_ctx->exec_info_.max_applied_log_ts_));
     n1->wait_all_redolog_applied();

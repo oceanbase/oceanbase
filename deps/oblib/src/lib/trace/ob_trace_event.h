@@ -91,20 +91,20 @@ public:
     }
     return pos;
   }
-  void check_lock()
+  void check_lock() const
   {
     if (need_lock_) {
       (void)lock_.lock();
     }
   }
-  void check_unlock()
+  void check_unlock() const
   {
     if (need_lock_) {
       (void)lock_.unlock();
     }
   }
 private:
-  lib::ObMutex lock_;
+  mutable lib::ObMutex lock_;
   bool need_lock_;
 };
 

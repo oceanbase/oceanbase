@@ -166,6 +166,48 @@ int ObTabletMemtableMgr::reset_storage_recorder()
   return ret;
 }
 
+inline int ObTabletMemtableMgr::try_resolve_boundary_on_create_memtable_(
+  memtable::ObMemtable *last_frozen_memtable,
+  memtable::ObMemtable *new_memtable)
+{
+  int ret = OB_SUCCESS;
+  bool double_check = false;
+  bool can_resolve = false;
+  int64_t write_ref = 0;
+  int64_t unsubmitted_cnt = 0;
+  do {
+    write_ref = last_frozen_memtable->get_write_ref();
+    unsubmitted_cnt = last_frozen_memtable->get_unsubmitted_cnt();
+    if (0 == write_ref && 0 == unsubmitted_cnt) {
+      share::SCN max_decided_scn;
+      if (OB_FAIL(freezer_->get_max_consequent_callbacked_scn(max_decided_scn))) {
+        TRANS_LOG(WARN, "get max decided scn fail", K(ret), K(freezer_->get_ls_id()));
+      } else if (max_decided_scn >= last_frozen_memtable->get_end_scn()) {
+        // logstream's continous apply has pass frozen memtable's right boundary
+        can_resolve = true;
+      }
+    }
+    if (!can_resolve && !double_check) {
+      last_frozen_memtable->set_resolved_active_memtable_left_boundary(false);
+    }
+    double_check = !double_check;
+  } while (!can_resolve && double_check);
+
+  if (can_resolve) {
+    last_frozen_memtable->set_resolved_active_memtable_left_boundary(true);
+    last_frozen_memtable->resolve_right_boundary();
+    TRANS_LOG(INFO, "[resolve_right_boundary] in create_memtable on leader", KPC(last_frozen_memtable));
+    if (new_memtable != last_frozen_memtable) {
+      const SCN &new_start_scn = MAX(last_frozen_memtable->get_end_scn(), last_frozen_memtable->get_migration_clog_checkpoint_scn());
+      new_memtable->resolve_left_boundary(new_start_scn);
+    }
+  } else if (unsubmitted_cnt > 0 || write_ref > 0) {
+    new_memtable->set_logging_blocked();
+    TRANS_LOG(INFO, "set new memtable logging blocked", KPC(last_frozen_memtable), KPC(new_memtable));
+  }
+  return ret;
+}
+
 // There are two cases:
 // 1. create the first memtable for tablet
 // 2. create the new memtable after freezing the old memtable
@@ -258,33 +300,24 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
 
       if (OB_FAIL(ret)) {
       } else if (OB_NOT_NULL(last_frozen_memtable)) {
-        // keep the check order: is_frozen, write_ref_cnt, then unsubmitted_cnt and unsynced_cnt
-        int64_t write_ref = last_frozen_memtable->get_write_ref();
-        int64_t unsubmitted_cnt = last_frozen_memtable->get_unsubmitted_cnt();
-        int64_t unsynced_cnt = last_frozen_memtable->get_unsynced_cnt();
-        if (write_ref > 0 || unsubmitted_cnt > 0) {
-          memtable->set_logging_blocked();
-          TRANS_LOG(INFO, "set logging_block", KPC(last_frozen_memtable), KPC(memtable));
-        }
-        if (write_ref > 0 || unsynced_cnt > 0) {
-          last_frozen_memtable->set_resolve_active_memtable_left_boundary(false);
-        }
         // for follower, must decide the boundary of frozen memtable
-        // for leader, decide the boundary of frozen memtable that meets ready_for_flush
-        if (for_replay || (0 == write_ref &&
-                           0 == unsubmitted_cnt &&
-                           0 == unsynced_cnt)) {
+        if (for_replay) {
           last_frozen_memtable->resolve_right_boundary();
-          TRANS_LOG(INFO, "[resolve_right_boundary] last_frozen_memtable in create_memtable", K(for_replay), K(ls_id), KPC(last_frozen_memtable));
+          TRANS_LOG(INFO, "[resolve_right_boundary] in create_memtable on replay", KPC(last_frozen_memtable));
           if (memtable != last_frozen_memtable) {
-            const SCN &new_start_scn = MAX(last_frozen_memtable->get_end_scn(), last_frozen_memtable->get_migration_clog_checkpoint_scn());
-            memtable->resolve_left_boundary(new_start_scn);
+            const SCN start_scn = MAX(last_frozen_memtable->get_end_scn(),
+                                      last_frozen_memtable->get_migration_clog_checkpoint_scn());
+            memtable->resolve_left_boundary(start_scn);
           }
         }
-      // there is no frozen memtable and new sstable will not be generated,
-      // meaning that clog_checkpoint_scn will not be updated now,
-      // so get newest clog_checkpoint_scn to set left boundary
+        // for leader, decide the right boundary of frozen memtable
+        else if (OB_FAIL(try_resolve_boundary_on_create_memtable_(last_frozen_memtable, memtable))) {
+          TRANS_LOG(WARN, "try resolve boundary fail", K(ret));
+        }
       } else {
+        // there is no frozen memtable and new sstable will not be generated,
+        // meaning that clog_checkpoint_scn will not be updated now,
+        // so get newest clog_checkpoint_scn to set left boundary
         memtable->resolve_left_boundary(new_clog_checkpoint_scn);
       }
 
@@ -464,7 +497,9 @@ int ObTabletMemtableMgr::resolve_left_boundary_for_active_memtable(memtable::ObI
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else if (OB_FAIL(get_active_memtable(handle))) {
-    LOG_WARN( "fail to get active memtable", K(ret));
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN( "fail to get active memtable", K(ret));
+    }
   } else if (OB_FAIL(handle.get_memtable(active_memtable))) {
     LOG_WARN("fail to get active memtable", K(ret));
   } else {
@@ -475,7 +510,7 @@ int ObTabletMemtableMgr::resolve_left_boundary_for_active_memtable(memtable::ObI
     ret = OB_SUCCESS;
   }
   if (OB_SUCC(ret)) {
-    static_cast<ObMemtable*>(memtable)->set_resolve_active_memtable_left_boundary(true);
+    static_cast<ObMemtable*>(memtable)->set_resolved_active_memtable_left_boundary(true);
   }
 
   return ret;

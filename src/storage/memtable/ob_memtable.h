@@ -318,6 +318,7 @@ public:
   // decrypt_buf is used for decryption
   virtual int replay_row(
       storage::ObStoreCtx &ctx,
+      const share::SCN &scn,
       ObMemtableMutatorIterator *mmi);
   virtual int replay_schema_version_change_log(
       const int64_t schema_version);
@@ -366,7 +367,7 @@ public:
   int64_t get_freeze_state() const { return freeze_state_; }
   int64_t get_protection_clock() const { return local_allocator_.get_protection_clock(); }
   int64_t get_retire_clock() const { return local_allocator_.get_retire_clock(); }
-  int get_current_right_boundary(share::SCN &current_right_boundary);
+  int get_ls_current_right_boundary(share::SCN &current_right_boundary);
 
   inline bool& get_read_barrier() { return read_barrier_; }
   inline void set_write_barrier() { write_barrier_ = true; }
@@ -380,8 +381,8 @@ public:
   inline void set_is_flushed() { is_flushed_ = true; }
   inline bool get_is_flushed() { return is_flushed_; }
   inline void unset_active_memtable_logging_blocked() { ATOMIC_STORE(&unset_active_memtable_logging_blocked_, true); }
-  inline void set_resolve_active_memtable_left_boundary(bool flag) { ATOMIC_STORE(&resolve_active_memtable_left_boundary_, flag); }
-  inline bool get_resolve_active_memtable_left_boundary() { return ATOMIC_LOAD(&resolve_active_memtable_left_boundary_); }
+  inline void set_resolved_active_memtable_left_boundary(bool flag) { ATOMIC_STORE(&resolved_active_memtable_left_boundary_, flag); }
+  inline bool get_resolved_active_memtable_left_boundary() { return ATOMIC_LOAD(&resolved_active_memtable_left_boundary_); }
   void set_freeze_state(const int64_t state);
   void set_minor_merged();
   int64_t get_minor_merged_time() const { return minor_merged_time_; }
@@ -442,7 +443,7 @@ public:
   int set_rec_scn(share::SCN rec_scn);
   int set_start_scn(const share::SCN start_ts);
   int set_end_scn(const share::SCN freeze_ts);
-  int set_max_end_scn(const share::SCN scn);
+  int set_max_end_scn(const share::SCN scn, bool allow_backoff = false);
   int set_max_end_scn_to_inc_start_scn();
   inline int set_logging_blocked()
   {
@@ -472,11 +473,6 @@ public:
   int64_t get_unsubmitted_cnt() const { return ATOMIC_LOAD(&unsubmitted_cnt_); }
   int inc_unsubmitted_cnt();
   int dec_unsubmitted_cnt();
-  int64_t get_unsynced_cnt() { return ATOMIC_LOAD(&unsynced_cnt_); }
-  void inc_unsynced_cnt();
-  int dec_unsynced_cnt();
-  void inc_unsubmitted_and_unsynced_cnt();
-  void dec_unsubmitted_and_unsynced_cnt();
   virtual uint32_t get_freeze_flag() override;
   virtual OB_INLINE int64_t get_timestamp() const override { return timestamp_; }
   void inc_timestamp(const int64_t timestamp) { timestamp_ = MAX(timestamp_, timestamp + 1); }
@@ -510,8 +506,8 @@ public:
   bool is_can_flush() { return ObMemtableFreezeState::READY_FOR_FLUSH == freeze_state_ && share::SCN::max_scn() != get_end_scn(); }
   INHERIT_TO_STRING_KV("ObITable", ObITable, KP(this), KP_(memtable_mgr), K_(timestamp), K_(state),
                        K_(freeze_clock), K_(max_schema_version), K_(max_data_schema_version), K_(max_column_cnt),
-                       K_(write_ref_cnt), K_(local_allocator), K_(unsubmitted_cnt), K_(unsynced_cnt),
-                       K_(logging_blocked), K_(unset_active_memtable_logging_blocked), K_(resolve_active_memtable_left_boundary),
+                       K_(write_ref_cnt), K_(local_allocator), K_(unsubmitted_cnt),
+                       K_(logging_blocked), K_(unset_active_memtable_logging_blocked), K_(resolved_active_memtable_left_boundary),
                        K_(contain_hotspot_row), K_(max_end_scn), K_(rec_scn), K_(snapshot_version), K_(migration_clog_checkpoint_scn),
                        K_(is_tablet_freeze), K_(contain_hotspot_row),
                        K_(read_barrier), K_(is_flushed), K_(freeze_state), K_(allow_freeze),
@@ -619,8 +615,6 @@ private:
   int64_t dec_write_ref_();
   int64_t inc_unsubmitted_cnt_();
   int64_t dec_unsubmitted_cnt_();
-  int64_t inc_unsynced_cnt_();
-  int64_t dec_unsynced_cnt_();
   int64_t try_split_range_for_sample_(const ObStoreRowkey &start_key,
                                       const ObStoreRowkey &end_key,
                                       const int64_t range_count,
@@ -643,12 +637,11 @@ private:
   int64_t max_data_schema_version_;  // to record the max schema version of write data
   int64_t pending_cb_cnt_; // number of transactions have to sync log
   int64_t unsubmitted_cnt_; // number of trans node to be submitted logs
-  int64_t unsynced_cnt_; // number of trans node to be synced logs
   int64_t memtable_mgr_op_cnt_; // number of operations for memtable_mgr
   bool logging_blocked_; // flag whether the memtable can submit log, cannot submit if true
   int64_t logging_blocked_start_time; // record the start time of logging blocked
   bool unset_active_memtable_logging_blocked_;
-  bool resolve_active_memtable_left_boundary_;
+  bool resolved_active_memtable_left_boundary_;
   // TODO(handora.qc): remove it as soon as possible
   // only used for decide special right boundary of memtable
   bool transfer_freeze_flag_;

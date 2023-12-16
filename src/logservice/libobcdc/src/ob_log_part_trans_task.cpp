@@ -2435,11 +2435,24 @@ int PartTransTask::push_rollback_to_info(const palf::LSN &lsn, const ObTxSEQ &ro
   int ret = OB_SUCCESS;
   RollbackNode *rollback_node = static_cast<RollbackNode*>(allocator_.alloc(sizeof(RollbackNode)));
 
-  if (OB_ISNULL(rollback_node)) {
+  if (OB_UNLIKELY(! rollback_from.is_valid() || ! rollback_to.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("rollback_from_seq and rollback_to_seq should be valid", KR(ret),
+        K_(tls_id), K_(trans_id), K(lsn), K(rollback_from), K(rollback_to), K_(rollback_list));
+  } else if (OB_UNLIKELY(rollback_from.get_branch() != rollback_to.get_branch())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("expect same rollback branch between rollback_from_seq and rollback_to_seq", KR(ret),
+        K_(tls_id), K_(trans_id), K(lsn), K(rollback_from), K(rollback_to), K_(rollback_list));
+  } else if (OB_UNLIKELY(rollback_from <= rollback_to)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("expect rollback_from_seq larger than rollback_to_seq", KR(ret),
+        K_(tls_id), K_(trans_id), K(lsn), K(rollback_from), K(rollback_to), K_(rollback_list));
+  } else if (OB_ISNULL(rollback_node)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("rollback node is null", KR(ret), K_(tls_id), K_(trans_id), K(rollback_from), K(rollback_to));
   } else {
     new(rollback_node) RollbackNode(rollback_from, rollback_to);
+
     if (OB_FAIL(rollback_list_.add(rollback_node))) {
       LOG_ERROR("rollback_list_ add fail", KR(ret), K_(tls_id), K_(trans_id), K_(rollback_list), KPC(rollback_node));
     } else {
