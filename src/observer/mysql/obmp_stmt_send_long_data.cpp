@@ -169,7 +169,7 @@ int ObMPStmtSendLongData::process()
 
       if (!need_disconnect_) {
         ObPiece *piece = NULL;
-        ObPieceCache *piece_cache = static_cast<ObPieceCache*>(session.get_piece_cache(false));
+        ObPieceCache *piece_cache = session.get_piece_cache(false);
         if (OB_ISNULL(piece_cache)) {
           need_disconnect_ = true;
           LOG_WARN("piece cache is null.", K(ret), K(stmt_id_), K(param_id_));
@@ -327,7 +327,7 @@ int ObMPStmtSendLongData::do_process(ObSQLSessionInfo &session)
 int ObMPStmtSendLongData::store_piece(ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
-  ObPieceCache *piece_cache = static_cast<ObPieceCache*>(session.get_piece_cache(true));
+  ObPieceCache *piece_cache = session.get_piece_cache(true);
   if (OB_ISNULL(piece_cache)) {
     ret = OB_ERR_UNEXPECTED;
     need_disconnect_ = true;

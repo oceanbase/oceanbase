@@ -54,6 +54,7 @@ namespace observer
 {
 class ObQueryDriver;
 class ObSqlEndTransCb;
+class ObPieceCache;
 }
 namespace pl
 {
@@ -1374,7 +1375,7 @@ public:
   bool is_ignore_stmt() const { return is_ignore_stmt_; }
 
   // piece
-  void *get_piece_cache(bool need_init = false);
+  observer::ObPieceCache *get_piece_cache(bool need_init = false);
   share::schema::ObUserLoginInfo get_login_info () { return login_info_; }
   int set_login_info(const share::schema::ObUserLoginInfo &login_info);
   int set_login_auth_data(const ObString &auth_data);
@@ -1533,7 +1534,7 @@ private:
   bool is_ignore_stmt_;
   ObSessionDDLInfo ddl_info_;
   bool is_table_name_hidden_;
-  void *piece_cache_;
+  observer::ObPieceCache* piece_cache_;
   bool is_load_data_exec_session_;
   ObSqlString pl_exact_err_msg_;
   bool is_varparams_sql_prepare_;

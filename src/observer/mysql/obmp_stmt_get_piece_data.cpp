@@ -319,7 +319,7 @@ int ObMPStmtGetPieceData::response_result(ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
   ObPieceBuffer piece_buf;
-  ObPieceCache *piece_cache = static_cast<ObPieceCache*>(session.get_piece_cache());
+  ObPieceCache *piece_cache = session.get_piece_cache();
   if (OB_ISNULL(piece_cache)) {
     // must be init in fetch
     ret = OB_ERR_UNEXPECTED;
