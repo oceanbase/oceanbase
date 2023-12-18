@@ -4170,7 +4170,7 @@ int ObTabletGroupMigrationTask::try_remove_tablets_info_()
     LOG_WARN("failed to check is in retry", K(ret), KPC(ctx_), KP(dag));
   } else if (!is_in_retry) {
     //do nothing
-  } else if (OB_FAIL(try_remove_tablets_info_())) {
+  } else if (OB_FAIL(remove_tablets_info_())) {
     LOG_WARN("failed to try remove tablets info", K(ret), KPC(ctx_));
   }
   return ret;
