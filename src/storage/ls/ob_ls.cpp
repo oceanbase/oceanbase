@@ -576,7 +576,7 @@ bool ObLS::is_need_gc() const
   return bool_ret;
 }
 
-bool ObLS::is_required_to_switch_state_for_restore_() const
+bool ObLS::is_clone_first_step() const
 {
   int ret = OB_SUCCESS;
   bool bool_ret = false;
@@ -584,12 +584,12 @@ bool ObLS::is_required_to_switch_state_for_restore_() const
   if (OB_FAIL(ls_meta_.get_restore_status(restore_status))) {
     LOG_WARN("fail to get restore status", K(ret), K(ls_meta_.ls_id_));
   } else {
-    bool_ret = restore_status.is_required_to_switch_ls_state_for_restore();
+    bool_ret = restore_status.is_clone_first_step();
   }
   return bool_ret;
 }
 
-bool ObLS::is_required_to_switch_state_for_clone_() const
+bool ObLS::is_restore_first_step() const
 {
   int ret = OB_SUCCESS;
   bool bool_ret = false;
@@ -597,7 +597,7 @@ bool ObLS::is_required_to_switch_state_for_clone_() const
   if (OB_FAIL(ls_meta_.get_restore_status(restore_status))) {
     LOG_WARN("fail to get restore status", K(ret), K(ls_meta_.ls_id_));
   } else {
-    bool_ret = restore_status.is_required_to_switch_ls_state_for_clone();
+    bool_ret = restore_status.is_restore_first_step();
   }
   return bool_ret;
 }
@@ -2096,47 +2096,16 @@ int ObLS::enable_replay()
   return ret;
 }
 
-int ObLS::check_can_online(bool &can_online)
+int ObLS::check_ls_need_online(bool &need_online)
 {
   int ret = OB_SUCCESS;
-  can_online = true;
-  if (is_need_gc()) {
-    // this ls will be gc later, should not enable replay
-    can_online = false;
-  } else if (startup_transfer_info_.is_valid()) {
-    // There is a tablet has_transfer_table=true in the log stream
-    can_online = false;
-    LOG_INFO("ls need to wait for dependency to be removed", "ls_id", get_ls_id(),
-             K_(startup_transfer_info));
-  }
-  return ret;
-}
-
-int ObLS::check_can_replay_clog(bool &can_replay)
-{
-  int ret = OB_SUCCESS;
-  share::ObLSRestoreStatus restore_status;
-  ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
-  can_replay = true;
-  if (is_need_gc()) {
-    // this ls will be gc later, should not enable replay
-    can_replay = false;
-  } else if (OB_FAIL(get_migration_status(migration_status))) {
-    LOG_WARN("failed to get ls migration status", K(ret));
-  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD == migration_status) {
-    // ls will online in rebuild process, ls online will enable clog replay
-    can_replay = false;
-    LOG_INFO("ls is in rebuild process, cannot replay clog", "ls_id", get_ls_id(), K(migration_status));
-  } else if (OB_FAIL(get_restore_status(restore_status))) {
-    LOG_WARN("fail to get ls restore status", K(ret));
-  } else if (!restore_status.can_replay_log()) {
-    // while downtime, if ls's restore status is in [restore_start, wait_restore_tablet_meta], clog can't replay
-    can_replay = false;
-    LOG_INFO("restore status not as expected, can not replay clog", "ls_id", get_ls_id(), K(restore_status));
-  } else if (startup_transfer_info_.is_valid()) {
-    // There is a tablet has_transfer_table=true in the log stream, clog can't replay
-    can_replay = false;
-    LOG_INFO("ls not enable clog replay, need to wait for dependency to be removed", "ls_id", get_ls_id(), K_(startup_transfer_info));
+  need_online = true;
+  if (startup_transfer_info_.is_valid()) {
+    // There is a tablet has_transfer_table=true in the log stream, ls can't online
+    need_online = false;
+    LOG_INFO("ls not online, need to wait dependency to be removed", "ls_id", get_ls_id(), K_(startup_transfer_info));
+  } else if (OB_FAIL(ls_meta_.check_ls_need_online(need_online))) {
+    LOG_WARN("fail to check ls need online", K(ret));
   }
   return ret;
 }

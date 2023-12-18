@@ -310,6 +310,8 @@ public:
   bool is_create_committed() const;
   bool is_need_gc() const;
   bool is_in_gc();
+  bool is_restore_first_step() const;
+  bool is_clone_first_step() const;
   // for rebuild
   // remove inner tablet, the memtable and minor sstable of data tablet, disable replay
   // int prepare_rebuild();
@@ -383,7 +385,7 @@ public:
   int flush_if_need(const bool need_flush);
   int try_sync_reserved_snapshot(const int64_t new_reserved_snapshot, const bool update_flag);
   int check_can_replay_clog(bool &can_replay);
-  int check_can_online(bool &can_online);
+  int check_ls_need_online(bool &need_online);
 
   TO_STRING_KV(K_(running_state), K_(ls_meta), K_(switch_epoch), K_(log_handler), K_(restore_handler), K_(is_inited), K_(tablet_gc_handler), K_(startup_transfer_info));
 private:
@@ -405,8 +407,6 @@ private:
       ObTabletHandle &handle);
   int offline_advance_epoch_();
   int online_advance_epoch_();
-  bool is_required_to_switch_state_for_restore_() const;
-  bool is_required_to_switch_state_for_clone_() const;
 public:
   // ObLSMeta interface:
   int update_ls_meta(const bool update_restore_status,

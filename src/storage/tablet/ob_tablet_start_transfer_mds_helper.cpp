@@ -516,7 +516,7 @@ int ObTabletStartTransferOutCommonHelper::try_enable_dest_ls_clog_replay(
   ObLSHandle dest_ls_handle;
   ObLS *dest_ls = NULL;
   SCN max_decided_scn;
-  bool can_online = true;
+  bool need_online = true;
   ObLSTransferInfo transfer_info;
   static const int64_t SLEEP_TS = 100_ms;
   if (!scn.is_valid() || !dest_ls_id.is_valid()) {
@@ -543,9 +543,9 @@ int ObTabletStartTransferOutCommonHelper::try_enable_dest_ls_clog_replay(
   } else {
     transfer_info = dest_ls->get_ls_startup_transfer_info();
     dest_ls->get_ls_startup_transfer_info().reset();
-    if (OB_FAIL(dest_ls->check_can_online(can_online))) {
+    if (OB_FAIL(dest_ls->check_ls_need_online(need_online))) {
       LOG_WARN("failed to check can online", KR(ret), K(dest_ls));
-    } else if (!can_online) {
+    } else if (!need_online) {
       // do nothing
     } else if (CLICK_FAIL(dest_ls->online())) {
       LOG_ERROR("fail to online ls", K(ret), K(scn), K(dest_ls_id), "ls_startup_transfer_info", dest_ls->get_ls_startup_transfer_info());

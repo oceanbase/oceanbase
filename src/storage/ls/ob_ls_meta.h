@@ -108,6 +108,7 @@ public:
   int set_rebuild_info(const ObLSRebuildInfo &rebuild_info);
   int get_rebuild_info(ObLSRebuildInfo &rebuild_info) const;
   int get_create_type(int64_t &create_type) const;
+  int check_ls_need_online(bool &need_online) const;
 
   int init(
       const uint64_t tenant_id,

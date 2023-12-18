@@ -594,6 +594,11 @@ bool ObMigrationStatusHelper::check_migration_status_is_fail_(const ObMigrationS
   return is_fail;
 }
 
+bool ObMigrationStatusHelper::need_online(const ObMigrationStatus &cur_status)
+{
+  return (OB_MIGRATION_STATUS_NONE == cur_status);
+}
+
 bool ObMigrationStatusHelper::check_allow_gc_abandoned_ls(const ObMigrationStatus &cur_status)
 {
   bool allow_gc = false;

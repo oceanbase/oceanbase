@@ -480,47 +480,58 @@ int ObLSService::post_create_ls_(const int64_t create_type,
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  switch(create_type) {
-  case ObLSCreateType::NORMAL: {
-    if (OB_FAIL(ls->online_without_lock())) {
-      LOG_ERROR("ls start failed", K(ret));
-    } else if (OB_FAIL(ls->set_start_work_state())) {
-      LOG_ERROR("ls set start work state failed", KR(ret), KPC(ls));
-    } else {
+  bool need_online = false;
+  if (OB_FAIL(ls->check_ls_need_online(need_online))) {
+    LOG_WARN("check ls need online failed", K(ret));
+  } else if (need_online &&
+             OB_FAIL(ls->online_without_lock())) {
+    LOG_ERROR("ls start failed", K(ret));
+  } else {
+    switch(create_type) {
+    case ObLSCreateType::NORMAL: {
+      if (OB_FAIL(ls->set_start_work_state())) {
+        LOG_ERROR("ls set start work state failed", KR(ret), KPC(ls));
+      }
+      break;
     }
-    break;
-  }
-  case ObLSCreateType::RESTORE: {
-    if (OB_FAIL(ls->get_log_handler()->enable_sync())) {
-      LOG_WARN("failed to enable sync", K(ret));
-    } else if (OB_FAIL(ls->get_ls_restore_handler()->online())) {
-      LOG_WARN("failed to online restore handler", K(ret));
-    } else if (OB_FAIL(ls->set_start_ha_state())) {
-      LOG_ERROR("ls set start ha state failed", KR(ret), KPC(ls));
-    } else {
+    case ObLSCreateType::RESTORE: {
+      if (!need_online && ls->is_restore_first_step()) {
+        if (OB_FAIL(ls->get_log_handler()->enable_sync())) {
+          LOG_WARN("failed to enable sync", K(ret));
+        } else if (OB_FAIL(ls->get_ls_restore_handler()->online())) {
+          LOG_WARN("failed to online restore handler", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ls->set_start_ha_state())) {
+        LOG_ERROR("ls set start ha state failed", KR(ret), KPC(ls));
+      }
+      break;
     }
-    break;
-  }
-  case ObLSCreateType::MIGRATE: {
-    if (OB_FAIL(ls->set_start_ha_state())) {
-      LOG_ERROR("ls set start ha state failed", KR(ret), KPC(ls));
+    case ObLSCreateType::MIGRATE: {
+      if (OB_FAIL(ls->set_start_ha_state())) {
+        LOG_ERROR("ls set start ha state failed", KR(ret), KPC(ls));
+      }
+      break;
     }
-    break;
-  }
-  case ObLSCreateType::CLONE: {
-    if (OB_FAIL(ls->get_log_handler()->enable_sync())) {
-      LOG_WARN("failed to enable sync", K(ret));
-    } else if (OB_FAIL(ls->set_start_ha_state())) {
-      LOG_ERROR("ls set start ha state failed", KR(ret), KPC(ls));
-    } else {
+    case ObLSCreateType::CLONE: {
+      if (!need_online && ls->is_clone_first_step()) {
+        if (OB_FAIL(ls->get_log_handler()->enable_sync())) {
+          LOG_WARN("failed to enable sync", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ls->set_start_ha_state())) {
+        LOG_ERROR("ls set start ha state failed", KR(ret), KPC(ls));
+      }
+      break;
     }
-    break;
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("should not be here.", KR(ret));
+    } // default
+    } // switch
   }
-  default: {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("should not be here.", KR(ret));
-  } // default
-  } // switch
 
   if (OB_SUCCESS != (tmp_ret = ls->report_replica_info())) {
     LOG_WARN("fail to report ls", KR(tmp_ret), KPC(ls));
@@ -740,7 +751,6 @@ int ObLSService::online_ls()
   int tmp_ret = OB_SUCCESS;
   common::ObSharedGuard<ObLSIterator> ls_iter;
   ObLS *ls = nullptr;
-  bool can_online = true;
   int64_t create_type = ObLSCreateType::NORMAL;
   if (OB_FAIL(get_ls_iter(ls_iter, ObLSGetMod::TXSTORAGE_MOD))) {
     LOG_WARN("failed to get ls iter", K(ret));
@@ -755,11 +765,7 @@ int ObLSService::online_ls()
         LOG_ERROR("ls is null", K(ret));
       } else {
         ObLSLockGuard lock_ls(ls);
-        if (OB_FAIL(ls->check_can_online(can_online))) {
-          LOG_WARN("check ls can online failed", K(ret));
-        } else if (!can_online) {
-          // ls can not online, do nothing
-        } else if (OB_FAIL(ls->get_create_type(create_type))) {
+        if (OB_FAIL(ls->get_create_type(create_type))) {
           LOG_WARN("get ls create type failed", K(ret));
         } else if (OB_FAIL(post_create_ls_(create_type, ls))) {
           LOG_WARN("post create ls failed", K(ret));

@@ -713,7 +713,7 @@ int ObLSService::online_ls()
   int tmp_ret = OB_SUCCESS;
   common::ObSharedGuard<ObLSIterator> ls_iter;
   ObLS *ls = nullptr;
-  bool can_replay = true;
+  int64_t create_type = ObLSCreateType::NORMAL;
   if (OB_FAIL(get_ls_iter(ls_iter, ObLSGetMod::TXSTORAGE_MOD))) {
     LOG_WARN("failed to get ls iter", K(ret));
   } else {
@@ -725,12 +725,13 @@ int ObLSService::online_ls()
       } else if (nullptr == ls) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("ls is null", K(ret));
-      } else if (OB_FAIL(ls->check_can_replay_clog(can_replay))) {
-        LOG_WARN("failed to check ls can replay clog", K(ret), KPC(ls));
-      } else if (!can_replay) {
-        // ls can not enable replay
-      } else if (OB_FAIL(ls->enable_replay())) {
-        LOG_ERROR("fail to enable replay", K(ret));
+      } else {
+        ObLSLockGuard lock_ls(ls);
+        if (OB_FAIL(ls->get_create_type(create_type))) {
+          LOG_WARN("get ls create type failed", K(ret));
+        } else if (OB_FAIL(post_create_ls_(create_type, ls))) {
+          LOG_WARN("post create ls failed", K(ret));
+        }
       }
     }
     if (OB_ITER_END == ret) {
