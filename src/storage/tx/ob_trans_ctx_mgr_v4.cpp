@@ -1555,6 +1555,19 @@ int ObLSTxCtxMgr::start_readonly_request()
     TRANS_LOG(WARN, "ObLSTxCtxMgr not inited", K(this));
     ret = OB_NOT_INIT;
   } else if (is_all_blocked_()) {
+    // blocked ls add to black list
+    ObAddr server = txs_->get_server();
+    ObBLKey bl_key;
+    if(OB_FAIL(bl_key.init(server, tenant_id_, ls_id_))) {
+      TRANS_LOG(WARN, "bl_key init fail, add block ls to black list fail", K(server), K(tenant_id_), K(ls_id_), K(ret));
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(ObBLService::get_instance().add(bl_key))) {
+        TRANS_LOG(WARN, "add block ls to black list fail", K(bl_key), K(tmp_ret));
+      } else {
+        TRANS_LOG(INFO, "add block ls to black list success", K(bl_key));
+      }
+    }
     ret = OB_PARTITION_IS_BLOCKED;
     // readonly read must be blocked, because trx may be killed forcely
     TRANS_LOG(WARN, "logstream is blocked", K(ret));
@@ -2429,6 +2442,33 @@ int ObTxCtxMgr::check_scheduler_status(share::ObLSID ls_id)
     revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr);
   }
 
+  return ret;
+}
+
+// check ls status in trans layer
+int ObTxCtxMgr::check_ls_status(const share::ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "ObTxCtxMgr not inited", K(ret), K(ls_id));
+  } else if (OB_UNLIKELY(!ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(ls_id));
+  } else if (OB_FAIL(get_ls_tx_ctx_mgr(ls_id, ls_tx_ctx_mgr))) {
+    ret = OB_PARTITION_NOT_EXIST;
+    TRANS_LOG(WARN, "get ls_tx_ctx_mgr failed", K(ret), K(ls_id));
+  } else if(ls_tx_ctx_mgr->is_stopped()) {
+    ret = OB_PARTITION_IS_BLOCKED;
+    TRANS_LOG(WARN, "ls_tx_ctx_mgr is stopped", K(ret), K(ls_id));
+  } else if (ls_tx_ctx_mgr->is_all_blocked()) {
+    ret = OB_PARTITION_IS_BLOCKED;
+    TRANS_LOG(WARN, "logstream is blocked", K(ret), K(ls_id));
+  }
+  if (OB_NOT_NULL(ls_tx_ctx_mgr)) {
+    revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr);
+  }
   return ret;
 }
 

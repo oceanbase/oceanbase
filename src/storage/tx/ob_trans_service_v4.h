@@ -189,6 +189,8 @@ int ask_tx_state_for_4377(const ObLSID ls_id,
 int handle_ask_tx_state_for_4377(const ObAskTxStateFor4377Msg &msg,
                                  bool &is_alive);
 
+int check_ls_status(const share::ObLSID &ls_id);
+
 TO_STRING_KV(K(is_inited_), K(tenant_id_), KP(this));
 
 private:

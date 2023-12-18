@@ -2080,6 +2080,29 @@ int ObTransService::handle_sp_rollback_response(ObTxRollbackSPRespMsg &msg,
   result.init(ret, msg.get_timestamp());
   return ret;
 }
+
+// check ls status in trans layer
+int ObTransService::check_ls_status(const share::ObLSID &ls_id){
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObTransService not inited");
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(!is_running_)) {
+    TRANS_LOG(WARN, "ObTransService is not running");
+    ret = OB_NOT_RUNNING;
+  } else if (!ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", KR(ret), K(ls_id));
+  } else if (OB_FAIL(tx_ctx_mgr_.check_ls_status(ls_id))) {
+    TRANS_LOG(WARN, "check_ls_status error", KR(ret), K(ls_id));
+  } else {
+    TRANS_LOG(DEBUG, "check_ls_status success", K(ls_id));
+  }
+
+  return ret;
+}
+
 int ObTransService::check_ls_status_(const share::ObLSID &ls_id, bool &leader)
 {
   int ret = OB_SUCCESS;
