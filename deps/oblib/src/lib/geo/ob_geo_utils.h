@@ -24,6 +24,7 @@
 #include "lib/hash/ob_hashmap.h"
 #include "lib/number/ob_number_v2.h"
 #include "common/object/ob_object.h"
+#include "lib/geo/ob_geo_to_tree_visitor.h"
 
 namespace oceanbase
 {
@@ -162,6 +163,9 @@ public:
   static double round_double(double x, int32_t dec, bool truncate);
   static double distance_point_squre(const ObWkbGeomInnerPoint& p1, const ObWkbGeomInnerPoint& p2);
   static int add_geo_version(ObIAllocator &allocator, const ObString &src, ObString &res_wkb);
+  // only check if polygon is a line or it's valid points are lesser than 4.
+  template<typename PyTree, typename MpyTree, typename CollTree>
+  static int is_polygon_valid_simple(const ObGeometry *geo, bool &res);
 private:
   template<typename PT, typename LN, typename PY, typename MPT, typename MLN, typename MPY, typename GC>
   static int create_geo_bin_by_type(ObIAllocator &allocator,
@@ -188,6 +192,8 @@ private:
   static int get_varry_obj_from_map(const QualifiedMap &map, const common::ObString &key,
                                     const common::ObObjMeta &num_meta, NumberObjType type, ArrayType &array);
   static int append_point(double x, double y, ObWkbBuffer &wkb_buf);
+  template<typename RingTree>
+  static bool is_valid_ring_simple(const RingTree &ring);
   DISALLOW_COPY_AND_ASSIGN(ObGeoTypeUtil);
 };
 
@@ -561,6 +567,109 @@ int ObGeoBoxUtil::get_geom_line_box(const GeometryType &line, ObGeogBox &box)
 
   return ret;
 }
+
+template<typename RingTree>
+bool ObGeoTypeUtil::is_valid_ring_simple(const RingTree &ring)
+{
+  // const ObCartesianLinearring &ring
+  bool is_valid = true;
+  int64_t sz = ring.size();
+  if (sz < 3) {
+    is_valid = false;
+  } else {
+    int32_t min_pos = 0;
+    // find the point closest to the bottom left
+    for (uint32_t i = 1; i < sz; ++i) {
+      if (ring[i].template get<0>() < ring[min_pos].template get<0>()) {
+        min_pos = i;
+      } else if (ring[i].template get<0>() == ring[min_pos].template get<0>()
+                && ring[i].template get<1>() < ring[min_pos].template get<1>()) {
+        min_pos = i;
+      }
+    }
+    int64_t prev_pos = min_pos - 1;
+    if (min_pos == sz - 1) {
+      is_valid = false;
+    } else if (min_pos == 0) {
+      if (ring[sz - 1].template get<0>() == ring[min_pos].template get<0>()
+          && ring[sz - 1].template get<1>() == ring[min_pos].template get<1>()) {
+        prev_pos = sz - 2;
+        while (prev_pos >= 0 && ring[prev_pos].template get<0>() == ring[min_pos].template get<0>()
+          && ring[prev_pos].template get<1>() == ring[min_pos].template get<1>()) {
+          --prev_pos;
+        }
+        if (prev_pos < 0) {
+          is_valid = false;
+        }
+      }
+    }
+    if (is_valid) {
+      int64_t post_pos = min_pos + 1;
+      while (post_pos < sz && ring[post_pos].template get<0>() == ring[min_pos].template get<0>()
+        && ring[post_pos].template get<1>() == ring[min_pos].template get<1>()) {
+        ++post_pos;
+      }
+      if (post_pos == sz) {
+        is_valid = false;
+      } else {
+        double x1 = ring[min_pos].template get<0>() - ring[prev_pos].template get<0>();
+        double y1 = ring[min_pos].template get<1>() - ring[prev_pos].template get<1>();
+        double x2 = ring[post_pos].template get<0>() - ring[min_pos].template get<0>();
+        double y2 = ring[post_pos].template get<1>() - ring[min_pos].template get<1>();
+        double sign = x1 * y2 - x2 * y1;
+        if (sign == 0) {
+          is_valid = false;
+        }
+      }
+    }
+  }
+
+  return is_valid;
+}
+
+template<typename PyTree, typename MpyTree, typename CollTree>
+int ObGeoTypeUtil::is_polygon_valid_simple(const ObGeometry *geo, bool &res)
+{
+  int ret = OB_SUCCESS;
+  res = true;
+  const ObGeometry *geo_tree = nullptr;
+  if (!geo->is_tree()) {
+    ObArenaAllocator tmp_allocator;
+    ObGeoToTreeVisitor tree_visit(&tmp_allocator);
+    if (OB_FAIL(const_cast<ObGeometry *>(geo)->do_visit(tree_visit))) {
+      OB_LOG(WARN, "fail to do tree visitor", K(ret));
+    } else {
+      geo_tree = tree_visit.get_geometry();
+    }
+  } else {
+    geo_tree = geo;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (geo_tree->type() == ObGeoType::POLYGON) {
+    const PyTree &poly = reinterpret_cast<const PyTree &>(*geo_tree);
+    res = is_valid_ring_simple(poly.exterior_ring());
+    for (int32_t i = 0; res && i < poly.inner_ring_size(); ++i) {
+      res = is_valid_ring_simple(poly.inner_ring(i));
+    }
+  } else if (geo_tree->type() == ObGeoType::MULTIPOLYGON) {
+    const MpyTree &mpy = *reinterpret_cast<const MpyTree *>(geo_tree);
+    for (int32_t i = 0; i < mpy.size() && res; ++i) {
+      res = is_valid_ring_simple(mpy[i].exterior_ring());
+      for (int32_t j = 0; res && j < mpy[i].inner_ring_size(); ++j) {
+        res = is_valid_ring_simple(mpy[i].inner_ring(j));
+      }
+    }
+  } else if (geo_tree->type() == ObGeoType::GEOMETRYCOLLECTION) {
+    const CollTree &coll = reinterpret_cast<const CollTree &>(*geo_tree);
+    for (int32_t i = 0; i < coll.size() && OB_SUCC(ret) && res; i++) {
+      if (OB_FAIL((is_polygon_valid_simple<PyTree, MpyTree, CollTree>(&coll[i], res)))) {
+        OB_LOG(WARN, "failed to do tree item visit", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 
 } // namespace common
 } // namespace oceanbase

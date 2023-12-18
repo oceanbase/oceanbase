@@ -31,7 +31,6 @@
 #include "lib/geo/ob_geo_normalize_visitor.h"
 #include "lib/geo/ob_geo_coordinate_range_visitor.h"
 #include "lib/geo/ob_sdo_geo_object.h"
-#include "lib/geo/ob_geo_to_tree_visitor.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/udt/ob_udt_type.h"
 #include "lib/geo/ob_sdo_geo_func_to_wkb.h"

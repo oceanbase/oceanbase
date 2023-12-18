@@ -19,6 +19,7 @@
 #include "lib/geo/ob_srs_info.h"
 #include "observer/omt/ob_tenant_srs.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
+#include "lib/geo/ob_geo_to_tree_visitor.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -84,22 +85,31 @@ int ObExprSTCentroid::eval_st_centroid(const ObExpr &expr, ObEvalCtx &ctx, ObDat
                    geo,
                    srs,
                    N_ST_CENTROID,
-                   ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT))) {
+                   ObGeoBuildFlag::GEO_NORMALIZE | ObGeoBuildFlag::GEO_CHECK_RANGE))) {
       LOG_WARN("failed to parse wkb", K(ret));
-    } else if (OB_NOT_NULL(srs) && srs->is_geographical_srs()) {
-      ret = OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS;
-      LOG_USER_ERROR(OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS,
-          N_ST_CENTROID,
-          ObGeoTypeUtil::get_geo_name_by_type(geo->type()));
-      LOG_WARN("st_centroid do not support geographic srs", K(ret));
     } else if (OB_FAIL(ObGeoExprUtils::check_empty(geo, is_null_result))) {
       LOG_WARN("fail to check is geometry empty", K(ret));
     } else if (!is_null_result) {
+      bool is_valid = true;
+      if (geo->crs() == ObGeoCRS::Cartesian
+        && OB_FAIL((ObGeoTypeUtil::is_polygon_valid_simple<ObCartesianPolygon, ObCartesianMultipolygon, ObCartesianGeometrycollection>(geo, is_valid)))) {
+        LOG_WARN("fail to check if geometry contain polygon", K(ret));
+      } else if (geo->crs() == ObGeoCRS::Geographic
+        && OB_FAIL((ObGeoTypeUtil::is_polygon_valid_simple<ObGeographPolygon, ObGeographMultipolygon, ObGeographGeometrycollection>(geo, is_valid)))) {
+        LOG_WARN("fail to check if geometry contain polygon", K(ret));
+      } else if (!is_valid) {
+        ret = OB_ERR_GIS_INVALID_DATA;
+        LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_CENTROID);
+        LOG_WARN("input geometry is invalid", K(ret));
+      }
       ObGeoEvalCtx gis_context(&tmp_allocator, srs);
-      if (OB_FAIL(gis_context.append_geo_arg(geo))) {
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_FAIL(ObGeoTypeUtil::correct_polygon(tmp_allocator, srs, true, *geo))) {
+        LOG_WARN("correct geo failed", K(ret), K(geo));
+      } else if (OB_FAIL(gis_context.append_geo_arg(geo))) {
         LOG_WARN("build geo gis context failed", K(ret));
-      } else if (OB_FAIL(
-                     ObGeoFunc<ObGeoFuncType::Centroid>::geo_func::eval(gis_context, res_geo))) {
+      } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::Centroid>::geo_func::eval(gis_context, res_geo))) {
         LOG_WARN("eval geo func centroid failed", K(ret), K(geo->type()));
         if (ret == OB_ERR_BOOST_GEOMETRY_CENTROID_EXCEPTION) {
           ret = OB_SUCCESS;
