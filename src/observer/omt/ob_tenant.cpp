@@ -1112,20 +1112,8 @@ int64_t ObTenant::min_worker_cnt() const
 
 int64_t ObTenant::max_worker_cnt() const
 {
-  // All max_cpu in unit won't beyond this node's cpu count, so worker
-  // bound of all tenant in this node wont't exceeds number of the
-  // node's workers too.
-  int64_t bound = 0;
-  if (OB_UNLIKELY(id_ == OB_DATA_TENANT_ID)) {
-    bound = 128;
-  } else {
-    // memory_size * 0.05 / 4M
-    bound =
-        static_cast<int64_t>(std::max(tenant_meta_.unit_.config_.memory_size() *
-                                          0.05 / (GCONF.stack_size + (3 << 20) + (512 << 10)),
-                                      150.0));
-  }
-  return bound;
+  return std::max(tenant_meta_.unit_.config_.memory_size() / 20 / (GCONF.stack_size + (3 << 20) + (512 << 10)),
+                  150L);
 }
 
 int ObTenant::get_new_request(

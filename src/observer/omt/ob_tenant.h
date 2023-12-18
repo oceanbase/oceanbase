@@ -613,31 +613,25 @@ public:
 OB_INLINE int64_t ObResourceGroup::min_worker_cnt() const
 {
   const uint64_t worker_concurrency = share::ObCgSet::instance().get_worker_concurrency(group_id_);
-  int64_t cnt = worker_concurrency * (int64_t)ceil(tenant_->unit_min_cpu());
+  int64_t cnt = std::max(worker_concurrency * (int64_t)ceil(tenant_->unit_min_cpu()), 1UL);
   if (share::OBCG_CLOG == group_id_ || share::OBCG_LQ == group_id_) {
-    cnt =  std::max(cnt, 8L);
+    cnt = std::max(cnt, 8L);
   } else if (share::OBCG_WR == group_id_) {
-    cnt = 2;  // one for take snapshot, one for purge
-  } else if (share::OBCG_DBA_COMMAND == group_id_) {
-    cnt = 1;
+    cnt = 2; // one for take snapshot, one for purge
   }
   return cnt;
 }
 
 OB_INLINE int64_t ObResourceGroup::max_worker_cnt() const
 {
-  const uint64_t worker_concurrency = share::ObCgSet::instance().get_worker_concurrency(group_id_);
-  int64_t cnt = worker_concurrency * (int64_t)ceil(tenant_->unit_max_cpu());
+  int64_t cnt = 0;
   if (share::OBCG_CLOG == group_id_) {
-    cnt = std::max(cnt, 8L);
-  } else if (share::OBCG_LQ == group_id_) {
-    cnt = std::max(cnt, tenant_->max_worker_cnt());
-  } else if (share::OBCG_WR == group_id_) {
-    cnt = 2;  // one for take snapshot, one for purge
-  } else if (share::OBCG_DBA_COMMAND == group_id_) {
-    cnt = 1;
-  } else if (share::OBCG_DIRECT_LOAD_HIGH_PRIO == group_id_) {
-    cnt = 1;
+    const int64_t worker_concurrency = share::ObCgSet::instance().get_worker_concurrency(group_id_);
+    cnt = std::max(worker_concurrency * (int64_t)ceil(tenant_->unit_max_cpu()), 8L);
+  } else if (OB_UNLIKELY(share::OBCG_WR == group_id_)) {
+    cnt = 2;
+  } else {
+    cnt = tenant_->max_worker_cnt();
   }
   return cnt;
 }
