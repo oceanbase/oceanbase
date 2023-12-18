@@ -925,14 +925,17 @@ int ObLogRestoreHandler::check_restore_to_newest_from_archive_(
   palf::LSN archive_lsn;
   if (OB_FAIL(piece_context.get_max_archive_log(archive_lsn, archive_scn))) {
     CLOG_LOG(WARN, "get max archive log failed", K(id_));
-  } else if (archive_lsn == end_lsn && archive_scn == SCN::min_scn()) {
+  } else if (archive_lsn <= end_lsn && archive_scn == SCN::min_scn()) {
     archive_scn = end_scn;
     CLOG_LOG(INFO, "rewrite archive_scn while end_lsn equals to archive_lsn and archive_scn not got",
         K(id_), K(archive_lsn), K(archive_scn), K(end_lsn), K(end_scn));
   } else if (end_scn < archive_scn) {
     CLOG_LOG(INFO, "end_scn smaller than archive_scn", K(id_), K(archive_scn), K(end_scn));
+  } else if (end_lsn < archive_lsn) {
+    ret = OB_EAGAIN;
+    CLOG_LOG(INFO, "end_lsn smaller than archive_lsn", K(id_), K(archive_lsn), K(end_lsn));
   } else {
-    CLOG_LOG(INFO, "check_restore_to_newest succ", K(id_), K(archive_scn), K(end_scn));
+    CLOG_LOG(INFO, "check_restore_to_newest succ", K(id_), K(archive_scn), K(end_scn), K(archive_lsn), K(end_lsn));
   }
   return ret;
 }
