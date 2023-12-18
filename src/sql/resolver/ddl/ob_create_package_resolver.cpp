@@ -797,6 +797,8 @@ int ObCreatePackageBodyResolver::update_routine_route_sql(ObIAllocator &allocato
         OZ (ObSQLUtils::convert_sql_text_to_schema_for_storing(allocator, session_info.get_dtc_params(), routine_body));
         OX (routine_info.set_routine_body(routine_body));
         if (OB_SUCC(ret)) {
+          // reset flag attr
+          routine_info.reset_analyze_flag();
           if (pl_routine_info->is_modifies_sql_data()) {
             routine_info.set_modifies_sql_data();
           } else if (pl_routine_info->is_reads_sql_data()) {
