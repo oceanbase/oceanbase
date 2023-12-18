@@ -754,6 +754,7 @@ class EventTable
       // sql parameterization 1170-1180
       EN_SQL_PARAM_FP_NP_NOT_SAME_ERROR = 1170,
       EN_FLUSH_PC_NOT_CLEANUP_LEAK_MEM_ERROR = 1171,
+      EN_PC_NOT_SWALLOW_ERROR = 1172,
       // END OF sql parameterization 1170-1180
 
       // session info verification
