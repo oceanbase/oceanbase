@@ -522,10 +522,20 @@ void ObTenantSysLoadShedder::refresh_sys_load()
     // do nothing
   } else if (REACH_TENANT_TIME_INTERVAL(CPU_TIME_SAMPLING_INTERVAL)) {
     load_shedding_factor_ = 1;
-    (void) refresh_cpu_utility();
 
-    if (1 >= load_shedding_factor_) {
-      (void) refresh_cpu_usage();
+    int tmp_ret = OB_SUCCESS;
+    double max_cpu_cnt = 0;
+    double min_cpu_cnt = 0;
+
+    if (OB_TMP_FAIL(GCTX.omt_->get_tenant_cpu(MTL_ID(), min_cpu_cnt, max_cpu_cnt))) {
+      LOG_WARN_RET(tmp_ret, "failed to get tennant cpu cnt", "tenant_id", MTL_ID());
+    } else {
+      min_cpu_cnt_ = min_cpu_cnt;
+      max_cpu_cnt_ = max_cpu_cnt;
+    }
+
+    if (min_cpu_cnt_ > 0 && max_cpu_cnt_ > 0) {
+      (void) refresh_cpu_utility();
     }
   }
 }
@@ -536,30 +546,31 @@ int ObTenantSysLoadShedder::refresh_cpu_utility()
   int64_t curr_cpu_time = last_cpu_time_;
   int64_t inc_cpu_time = 0;
   int64_t physical_cpu_utility = 0;
-  double max_cpu_cnt = 0; // placeholder
 
-  if (OB_FAIL(GCTX.omt_->get_tenant_cpu(MTL_ID(), min_cpu_cnt_, max_cpu_cnt))) {
-    LOG_WARN("failed to get tennant cpu cnt", K(ret));
-  } else if (OB_FAIL(GCTX.omt_->get_tenant_cpu_time(MTL_ID(), curr_cpu_time))) {
+  if (OB_FAIL(GCTX.omt_->get_tenant_cpu_time(MTL_ID(), curr_cpu_time))) {
     LOG_WARN("failed to get tennant cpu cnt", K(ret));
   } else {
     const int64_t curr_sample_time = ObTimeUtility::fast_current_time();
-    if (0 == last_sample_time_) {
+    if (0 == last_sample_time_ || 0 == last_cpu_time_) {
       // first time sample, no need to calculate cpu utility
     } else {
       inc_cpu_time = curr_cpu_time - last_cpu_time_;
       physical_cpu_utility = inc_cpu_time * 100 / (curr_sample_time - last_sample_time_);
     }
     last_sample_time_ = curr_sample_time;
+    last_cpu_time_ = curr_cpu_time;
 
-    if (physical_cpu_utility >= min_cpu_cnt_ * CPU_UTIL_THRESHOLD) {
+    if (physical_cpu_utility > max_cpu_cnt_ * 100) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cpu utility unexpected bigger than cpu cnt", K(ret), K(max_cpu_cnt_),
+          K(physical_cpu_utility), K(inc_cpu_time), K(curr_sample_time), K(last_sample_time_));
+    } else if (physical_cpu_utility >= max_cpu_cnt_ * 100 * CPU_TIME_THRESHOLD) {
       ATOMIC_STORE(&load_shedding_factor_, DEFAULT_LOAD_SHEDDING_FACTOR);
       effect_time_ = ObTimeUtility::fast_current_time();
+      FLOG_INFO("[ADAPTIVE_SCHED] refresh cpu utility", K(ret), K(load_shedding_factor_), K(min_cpu_cnt_),
+          K(physical_cpu_utility), K(inc_cpu_time), K(curr_sample_time), K(last_sample_time_));
     }
   }
-
-  // debug log, remove later
-  FLOG_INFO("BatMan refresh cpu utility", K(ret), K(load_shedding_factor_), K(min_cpu_cnt_), K(inc_cpu_time), K(physical_cpu_utility));
   return ret;
 }
 
@@ -567,15 +578,15 @@ int ObTenantSysLoadShedder::refresh_cpu_usage()
 {
   int ret = OB_SUCCESS;
 
+  // tenant_cpu_usage is a relatively large value, it includes the wait_time on lock, RPC, IO and so on.
   if (OB_FAIL(GCTX.omt_->get_tenant_cpu_usage(MTL_ID(), cpu_usage_))) {
     LOG_WARN("failed to get tenant cpu usage", K(ret));
-  } else if (cpu_usage_ * 100 >= CPU_UTIL_THRESHOLD) {
+  } else if (cpu_usage_ * 100 >= max_cpu_cnt_ * CPU_USAGE_THRESHOLD) {
     effect_time_ = ObTimeUtility::fast_current_time();
     ATOMIC_STORE(&load_shedding_factor_, DEFAULT_LOAD_SHEDDING_FACTOR);
-  }
 
-  // debug log, remove later
-  FLOG_INFO("BatMan refresh cpu usage", K(ret), K(load_shedding_factor_), "cpu_usage_percent", cpu_usage_ * 100 * 100);
+    FLOG_INFO("[ADAPTIVE_SCHED] refresh cpu usage", K(ret), K(load_shedding_factor_), "cpu_usage_percent", cpu_usage_ * 100 * 100);
+  }
   return ret;
 }
 

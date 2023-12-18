@@ -2402,16 +2402,7 @@ void ObMemtable::fill_compaction_param_(
   compaction_param.replay_interval_ = get_start_scn().get_val_for_tx() - ls_handle_.get_ls()->get_ls_meta().get_clog_checkpoint_scn().get_val_for_tx();
   compaction_param.last_end_scn_ = get_end_scn();
   compaction_param.add_time_ = current_time;
-
-  int ret = OB_SUCCESS;
-  int64_t total_bytes = 0;
-  int64_t total_rows = 0;
-  if (OB_FAIL(estimate_phy_size(nullptr, nullptr, total_bytes, total_rows))) {
-    compaction_param.estimate_phy_size_ = get_occupied_size();
-    TRANS_LOG(WARN, "failed to estimate memtable phy size", K(ret));
-  } else {
-    compaction_param.estimate_phy_size_ = total_bytes;
-  }
+  compaction_param.estimate_phy_size_ = mt_stat_.row_size_;
 }
 
 bool ObMemtable::is_active_memtable() const
