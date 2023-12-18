@@ -215,6 +215,7 @@ private:
     int read_buffer(ObLoadFileBuffer &file_buffer);
 
   private:
+    ObArenaAllocator allocator_;
     LoadExecuteContext *execute_ctx_;
     ObCSVGeneralParser csv_parser_; // 用来计算完整行
     ObLoadFileDataTrimer data_trimer_; // 缓存不完整行的数据
