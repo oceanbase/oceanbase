@@ -278,6 +278,7 @@ public:
   virtual ~ObBreadthFirstSearchOp() = default;
 
   virtual int reuse() override;
+  virtual void destroy();
   virtual int empty() override { return input_rows_.empty() && search_queue_.empty()
                                         && search_results_.empty(); }
 

@@ -341,6 +341,11 @@ int ObDepthFirstSearchOp::get_next_nocycle_node(ObList<ObTreeNode,
   return ret;
 }
 
+void ObBreadthFirstSearchOp::destroy()
+{
+  search_queue_.reset();
+}
+
 int ObBreadthFirstSearchOp::add_new_level()
 {
   int ret = OB_SUCCESS;

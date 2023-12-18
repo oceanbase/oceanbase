@@ -702,6 +702,7 @@ void ObRecursiveInnerDataOp::destroy()
   left_op_ = nullptr;
   right_op_ = nullptr;
   dfs_pump_.destroy();
+  bfs_pump_.destroy();
   bfs_bulk_pump_.destroy();
   if (OB_NOT_NULL(pump_operator_)) {
     pump_operator_->destroy();
