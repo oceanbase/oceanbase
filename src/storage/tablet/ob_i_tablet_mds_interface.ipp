@@ -194,20 +194,16 @@ inline int ObITabletMdsInterface::get_mds_data_from_tablet<ObTabletBindingMdsUse
   #define PRINT_WRAPPER KR(ret), K(aux_tablet_info_addr), K(*this)
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
-  ObTabletBindingMdsUserData *aux_tablet_info = nullptr;
-  ObArenaAllocator allocator("mds_reader");
+  ObTabletBindingMdsUserData aux_tablet_info;
   const ObTabletComplexAddr<mds::MdsDumpKV> &aux_tablet_info_addr = get_mds_data_().aux_tablet_info_.committed_kv_;
 
-  if (CLICK_FAIL(ObTabletMdsData::load_aux_tablet_info(allocator, aux_tablet_info_addr, aux_tablet_info))) {
+  if (CLICK_FAIL(ObTabletMdsData::load_aux_tablet_info(aux_tablet_info_addr, aux_tablet_info))) {
     MDS_LOG_GET(WARN, "failed to load auto inc seq");
-  } else if (nullptr == aux_tablet_info) {
+  } else if (!aux_tablet_info.is_valid()) {
     ret = OB_EMPTY_RESULT;
-  } else if (CLICK_FAIL(read_op(*aux_tablet_info))) {
+  } else if (CLICK_FAIL(read_op(aux_tablet_info))) {
     MDS_LOG_GET(WARN, "failed to read_op");
   }
-
-  ObTabletObjLoadHelper::free(allocator, aux_tablet_info);
-
   return ret;
   #undef PRINT_WRAPPER
 }
