@@ -15217,13 +15217,16 @@ int ObPLResolver::resolve_cursor(ObPLCompileUnitAST &func,
   }
   if (OB_SUCC(ret) && OB_ISNULL(package_info)) {
     ObSchemaChecker checker;
-    ObSEArray<uint64_t, 4> syn_id_array;
+    ObSynonymChecker synonym_checker;
     ObString new_package_name;
+    bool is_exist = false;
     OZ (checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_sessid()));
-    OZ (checker.get_obj_info_recursively_with_synonym(
-      tenant_id, database_id, package_name, database_id, new_package_name, syn_id_array, true));
-    OZ (resolve_ctx_.schema_guard_.get_package_info(
-      tenant_id, database_id, new_package_name, PACKAGE_TYPE, compatible_mode, package_info));
+    OZ (ObResolverUtils::resolve_synonym_object_recursively(
+      checker, synonym_checker, tenant_id, database_id, package_name, database_id, new_package_name, is_exist));
+    if (OB_SUCC(ret) && is_exist) {
+      OZ (resolve_ctx_.schema_guard_.get_package_info(
+        tenant_id, database_id, new_package_name, PACKAGE_TYPE, compatible_mode, package_info));
+    }
     if (OB_SUCC(ret)
         && OB_ISNULL(package_info) && OB_SYS_DATABASE_ID == database_id) {
       OZ (resolve_ctx_.schema_guard_.get_package_info(

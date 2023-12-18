@@ -1631,7 +1631,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
                                     out_params,
                                     &retry_ctrl,
                                     is_forall))) {
-                LOG_WARN("failed to open", K(type), K(ret));
+                LOG_WARN("failed to open", K(ret), K(sql), K(ps_sql));
               } else if (OB_FAIL(inner_fetch(ctx,
                                             retry_ctrl,
                                             spi_result,
@@ -5203,7 +5203,7 @@ int ObSPIService::spi_delete_collection(pl::ObPLExecCtx *ctx,
               if (*key1 <= *key2) {
                 for (int64_t i = 0; OB_SUCC(ret) && i < atable->get_count(); ++i) {
                   bool flag = key!=NULL ? (key[i] >= *key1 && key[i] <= *key2)
-                                        : (i >= key1->get_int32() && i <= key2->get_int32());
+                                        : (i+1 >= key1->get_int32() && i+1 <= key2->get_int32());
                   if (flag) {
                     OZ (atable->delete_collection_elem(i));
                     if (atable->get_first() - 1 == i) {
@@ -6303,7 +6303,7 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
   if (NULL == sql) {
     OZ (construct_exec_params(ctx, param_allocator, param_exprs, param_count,
                               into_exprs, into_count, exec_params, out_params, is_forall),
-      K(sql), K(type), K(param_count), K(out_params), K(exec_params));
+      K(sql), K(ps_sql), K(type), K(param_count), K(out_params), K(exec_params));
     if (OB_SUCC(ret)
         && OB_NOT_NULL(ctx)
         && OB_NOT_NULL(ctx->exec_ctx_)

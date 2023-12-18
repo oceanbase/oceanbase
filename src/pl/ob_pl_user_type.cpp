@@ -51,7 +51,7 @@ const ObPLDataType *ObUserDefinedType::get_member(int64_t i) const
 
 int ObUserDefinedType::generate_assign_with_null(
   ObPLCodeGenerator &generator,
-  const ObPLBlockNS &ns, jit::ObLLVMValue &allocator, jit::ObLLVMValue &dest) const
+  const ObPLINS &ns, jit::ObLLVMValue &allocator, jit::ObLLVMValue &dest) const
 {
   UNUSEDx(generator, ns, allocator, dest); return OB_SUCCESS;
 }
@@ -1016,7 +1016,7 @@ int ObRecordType::deep_copy(
 }
 
 int ObRecordType::generate_assign_with_null(ObPLCodeGenerator &generator,
-                                            const ObPLBlockNS &ns,
+                                            const ObPLINS &ns,
                                             jit::ObLLVMValue &allocator,
                                             jit::ObLLVMValue &dest) const
 {
@@ -1194,27 +1194,58 @@ int ObRecordType::generate_default_value(ObPLCodeGenerator &generator,
       }
       if (OB_SUCC(ret)) {
         ptr_elem.reset();
-        if (member->member_type_.is_obj_type() || OB_INVALID_INDEX != member->get_default()) {
+        OZ (generator.extract_element_ptr_from_record(value,
+                                                      get_record_member_count(),
+                                                      i,
+                                                      ptr_elem));
+        if (OB_FAIL(ret)) {
+        } else if (member->member_type_.is_obj_type() || OB_INVALID_INDEX != member->get_default()) {
           //不论基础类型还是复杂类型，如果有default，直接把default值存入即可
-          OZ (generator.extract_element_ptr_from_record(value,
-                                                        get_record_member_count(),
-                                                        i,
-                                                        ptr_elem));
           OZ (generator.get_helper().create_store(obobj_res, ptr_elem));
           OZ (generator.generate_check_not_null(*stmt,
                                                 member->member_type_.get_not_null(),
                                                 result));
-        } else { //复杂类型如果没有default，调用generate_construct
+          if (OB_SUCC(ret) && !member->member_type_.is_obj_type()) { // process complex null value
+            ObLLVMBasicBlock null_branch;
+            ObLLVMBasicBlock final_branch;
+            ObLLVMValue p_type_value;
+            ObLLVMValue type_value;
+            ObLLVMValue is_null;
+            ObLLVMValue allocator;
+            ObLLVMValue extend_value;
+            ObLLVMValue init_value;
+            ObLLVMValue composite_value;
+            ObLLVMType ir_type;
+            ObLLVMType ir_pointer_type;
+            int64_t init_size = OB_INVALID_SIZE;
+            OZ (generator.get_helper().create_block(ObString("null_branch"), generator.get_func(), null_branch));
+            OZ (generator.get_helper().create_block(ObString("final_branch"), generator.get_func(), final_branch));
+            OZ (generator.extract_type_ptr_from_objparam(result, p_type_value));
+            OZ (generator.get_helper().create_load(ObString("load_type"), p_type_value, type_value));
+            OZ (generator.get_helper().create_icmp_eq(type_value, ObNullType, is_null));
+            OZ (generator.get_helper().create_cond_br(is_null, null_branch, final_branch));
+            // null branch
+            OZ (generator.set_current(null_branch));
+            OZ (SMART_CALL(member->member_type_.generate_new(generator, ns, extend_value, stmt)));
+            OZ (generator.get_helper().get_int8(member->member_type_.get_type(), type_value));
+            OZ (member->member_type_.get_size(ns, PL_TYPE_INIT_SIZE, init_size));
+            OZ (generator.get_helper().get_int32(init_size, init_value));
+            OZ (generator.generate_set_extend(ptr_elem, type_value, init_value, extend_value));
+            OZ (generator.generate_null(ObIntType, allocator));
+            OZ (generator.get_llvm_type(member->member_type_, ir_type));
+            OZ (ir_type.get_pointer_to(ir_pointer_type));
+            OZ (generator.get_helper().create_int_to_ptr(ObString("cast_extend_to_ptr"), extend_value, ir_pointer_type, composite_value));
+            OZ (member->member_type_.generate_assign_with_null(generator, ns, allocator, composite_value));
+            OZ (generator.get_helper().create_br(final_branch));
+            // final branch
+            OZ (generator.set_current(final_branch));
+          }
+        } else { //复杂类型如果没有default，调用generate_new
           ObLLVMValue extend_value;
           ObLLVMValue type_value;
           ObLLVMValue init_value;
           int64_t init_size = OB_INVALID_SIZE;
-          OZ (generator.extract_element_ptr_from_record(value,
-                                                    get_record_member_count(),
-                                                    i,
-                                                    ptr_elem));
           OZ (SMART_CALL(member->member_type_.generate_new(generator, ns, extend_value, stmt)));
-
           OZ (generator.get_helper().get_int8(member->member_type_.get_type(), type_value));
           OZ (member->member_type_.get_size(ns, PL_TYPE_INIT_SIZE, init_size));
           OZ (generator.get_helper().get_int32(init_size, init_value));
@@ -1939,7 +1970,7 @@ int ObCollectionType::get_size(const ObPLINS &ns, ObPLTypeSize type, int64_t &si
 }
 
 int ObCollectionType::generate_assign_with_null(ObPLCodeGenerator &generator,
-                                                const ObPLBlockNS &ns,
+                                                const ObPLINS &ns,
                                                 jit::ObLLVMValue &allocator,
                                                 jit::ObLLVMValue &dest) const
 {
@@ -1951,7 +1982,7 @@ int ObCollectionType::generate_assign_with_null(ObPLCodeGenerator &generator,
   ObLLVMType int_type;
   ObLLVMValue int_value;
 
-  if (generator.get_helper().get_llvm_type(ObIntType, int_type)) {
+  if (OB_FAIL(generator.get_helper().get_llvm_type(ObIntType, int_type))) {
     LOG_WARN("failed to get_llvm_type", K(ret));
   } else if (OB_FAIL(generator.get_helper().create_ptr_to_int(ObString("cast_ptr_to_int64"), dest,
                                                               int_type, int_value))) {
@@ -2246,6 +2277,7 @@ int ObCollectionType::deserialize(
       OZ (ObSPIService::spi_extend_assoc_array(
         OB_INVALID_ID, &resolve_ctx, *(table->get_allocator()), *assoc_table, count));
     } else {
+      table->set_count(0);
       OZ (ObSPIService::spi_set_collection(
         OB_INVALID_ID, &resolve_ctx, *table->get_allocator(), *table, count, true));
     }
