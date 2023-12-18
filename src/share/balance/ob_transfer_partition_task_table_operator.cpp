@@ -173,7 +173,7 @@ int ObTransferPartitionTaskTableOperator::insert_new_task(
       trans,
       tenant_id,
       OB_ALL_TRANSFER_PARTITION_TASK_TID,
-      tablelock::EXCLUSIVE))) {
+      tablelock::EXCLUSIVE, true))) {
     LOG_WARN("lock inner table failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(fetch_new_task_id_(tenant_id, trans, task_id))) {
     LOG_WARN("failed to get max task id", KR(ret), K(tenant_id));
