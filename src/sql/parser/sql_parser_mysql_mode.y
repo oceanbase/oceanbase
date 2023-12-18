@@ -5201,6 +5201,26 @@ BINARY opt_string_length_i_v2
   $$->param_num_ = 0;
   $$->sql_str_off_ = @1.first_column;
 }
+| NCHAR opt_string_length_i_v2
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
+  $$->value_ = 0;
+  $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_CHAR; /* data type */
+  $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = $2[0];        /* length */
+  $$->param_num_ = $2[1];
+  $$->str_value_ = parse_strdup("utf8mb4", result->malloc_pool_, &($$->str_len_));
+  $$->sql_str_off_ = @1.first_column;
+}
+| NATIONAL CHARACTER opt_string_length_i_v2
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
+  $$->value_ = 0;
+  $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_CHAR; /* data type */
+  $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = $3[0];        /* length */
+  $$->param_num_ = $3[1];
+  $$->str_value_ = parse_strdup("utf8mb4", result->malloc_pool_, &($$->str_len_));
+  $$->sql_str_off_ = @1.first_column;
+}
 ;
 
 opt_integer:
