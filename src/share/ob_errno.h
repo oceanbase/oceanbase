@@ -1837,6 +1837,7 @@ constexpr int OB_ERR_UNKNOWN_AUTHID = -11007;
 constexpr int OB_ERR_NO_GRANT_DEFINED_FOR_USER = -11008;
 constexpr int OB_ERR_USER_ALREADY_EXISTS = -11009;
 constexpr int OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR = -11010;
+constexpr int OB_ERR_QUERY_RANGE_MEMORY_EXHAUSTED = -11011;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -4040,6 +4041,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_NO_GRANT_DEFINED_FOR_USER__USER_ERROR_MSG "There is no such grant defined for user '%.*s' on host '%.*s'"
 #define OB_ERR_USER_ALREADY_EXISTS__USER_ERROR_MSG "Authorization ID '%.*s'@'%.*s' already exists"
 #define OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR__USER_ERROR_MSG "Argument should be a constant or a function of expressions in GROUP BY."
+#define OB_ERR_QUERY_RANGE_MEMORY_EXHAUSTED__USER_ERROR_MSG "query range memory exhausted"
 #define OB_TENANT_SNAPSHOT_NOT_EXIST__USER_ERROR_MSG "Tenant snapshot \'%.*s\' does not exist"
 #define OB_TENANT_SNAPSHOT_EXIST__USER_ERROR_MSG "Tenant snapshot \'%.*s\' already exist"
 #define OB_TENANT_SNAPSHOT_TIMEOUT__USER_ERROR_MSG "Tenant snapshot task timeout. %.*s"
@@ -6250,6 +6252,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_NO_GRANT_DEFINED_FOR_USER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11008, There is no such grant defined for user '%.*s' on host '%.*s'"
 #define OB_ERR_USER_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11009, Authorization ID '%.*s'@'%.*s' already exists"
 #define OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR__ORA_USER_ERROR_MSG "ORA-30497: Argument should be a constant or a function of expressions in GROUP BY."
+#define OB_ERR_QUERY_RANGE_MEMORY_EXHAUSTED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11011, query range memory exhausted"
 #define OB_TENANT_SNAPSHOT_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12000, Tenant snapshot \'%.*s\' does not exist"
 #define OB_TENANT_SNAPSHOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12001, Tenant snapshot \'%.*s\' already exist"
 #define OB_TENANT_SNAPSHOT_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12002, Tenant snapshot task timeout. %.*s"
@@ -6267,7 +6270,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2206];
+extern int g_all_ob_errnos[2207];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

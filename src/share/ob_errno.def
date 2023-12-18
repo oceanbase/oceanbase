@@ -2425,6 +2425,7 @@ DEFINE_ERROR_EXT(OB_ERR_UNKNOWN_AUTHID, -11007, ER_UNKNOWN_AUTHID, "HY000", "Unk
 DEFINE_ERROR_EXT(OB_ERR_NO_GRANT_DEFINED_FOR_USER, -11008, ER_NONEXISTING_GRANT, "42000", "There is no such grant defined for user", "There is no such grant defined for user '%.*s' on host '%.*s'");
 DEFINE_ERROR_EXT(OB_ERR_USER_ALREADY_EXISTS, -11009, ER_USER_ALREADY_EXISTS, "HY000", "Authorization ID already exists", "Authorization ID '%.*s'@'%.*s' already exists");
 DEFINE_ORACLE_ERROR(OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR, -11010, -1, "HY000", "Argument should be a constant or a function of expressions in GROUP BY.", 30497, "Argument should be a constant or a function of expressions in GROUP BY.");
+DEFINE_ERROR(OB_ERR_QUERY_RANGE_MEMORY_EXHAUSTED, -11011, -1, "HY000", "query range memory exhausted");
 
 ////////////////////////////////////////////////////////////////
 // tenant snapshot and tenant clone error codes [-12000 ~ -12100)
