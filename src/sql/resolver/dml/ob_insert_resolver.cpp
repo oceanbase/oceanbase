@@ -165,7 +165,9 @@ int ObInsertResolver::resolve_insert_clause(const ParseNode &node)
     LOG_WARN("failed to resolve insert filed", K(ret));
   } else if (OB_FAIL(get_label_se_columns(insert_stmt->get_insert_table_info(), label_se_columns))) {
     LOG_WARN("failed to get label se columns", K(ret));
-  } else if (OB_FAIL(resolve_values(*values_node, label_se_columns))) {
+  } else if (OB_FAIL(resolve_values(*values_node,
+                                    label_se_columns,
+                                    table_item, node.children_[DUPLICATE_NODE]))) {
     LOG_WARN("failed to resolve values", K(ret));
   } else {
     has_tg = insert_stmt->has_instead_of_trigger();
@@ -539,7 +541,10 @@ int ObInsertResolver::resolve_insert_assign(const ParseNode &assign_list)
   return ret;
 }
 
-int ObInsertResolver::resolve_values(const ParseNode &value_node, ObIArray<uint64_t>& label_se_columns)
+int ObInsertResolver::resolve_values(const ParseNode &value_node,
+                                     ObIArray<uint64_t>& label_se_columns,
+                                     TableItem* table_item,
+                                     const ParseNode *duplicate_node)
 {
   int ret = OB_SUCCESS;
   ObInsertStmt *insert_stmt = get_insert_stmt();
@@ -566,6 +571,7 @@ int ObInsertResolver::resolve_values(const ParseNode &value_node, ObIArray<uint6
     LOG_WARN("allocate select buffer failed", K(ret), "size", sizeof(ObSelectResolver));
   } else {
     // value from sub-query(insert into table select ..)
+    bool is_mock = lib::is_mysql_mode() && value_node.reserved_;
     ObSelectStmt *select_stmt = NULL;
     sub_select_resolver_ = new(select_buffer) ObSelectResolver(params_);
     //insert clause and select clause in insert into select belong to the same namespace level
@@ -579,6 +585,20 @@ int ObInsertResolver::resolve_values(const ParseNode &value_node, ObIArray<uint6
     TableItem *sub_select_table = NULL;
     ObString view_name;
     ObSEArray<ColumnItem, 4> column_items;
+    ParseNode *alias_node = NULL;
+    ParseNode *table_alias_node = NULL;
+    if (is_mock &&
+        value_node.children_[PARSE_SELECT_FROM] != NULL &&
+        value_node.children_[PARSE_SELECT_FROM]->num_child_ == 1 &&
+        value_node.children_[PARSE_SELECT_FROM]->children_[0]->type_ == T_ALIAS &&
+        value_node.children_[PARSE_SELECT_FROM]->children_[0]->num_child_ == 2) {
+        alias_node = value_node.children_[PARSE_SELECT_FROM]->children_[0]->children_[1];
+        if (T_LINK_NODE == alias_node->type_ && alias_node->num_child_ == 2) {
+          table_alias_node = alias_node->children_[0];
+        } else {
+          table_alias_node = alias_node;
+        }
+    }
     if (OB_UNLIKELY(T_SELECT != value_node.type_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid value node", K(value_node.type_));
@@ -587,7 +607,8 @@ int ObInsertResolver::resolve_values(const ParseNode &value_node, ObIArray<uint6
     } else if (OB_ISNULL(select_stmt = sub_select_resolver_->get_select_stmt())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid select stmt", K(select_stmt));
-    } else if (!session_info_->get_ddl_info().is_ddl() && OB_FAIL(check_insert_select_field(*insert_stmt, *select_stmt))) {
+    } else if (!session_info_->get_ddl_info().is_ddl() &&
+                OB_FAIL(check_insert_select_field(*insert_stmt, *select_stmt, is_mock))) {
       LOG_WARN("check insert select field failed", K(ret), KPC(insert_stmt), KPC(select_stmt));
     } else if (!session_info_->get_ddl_info().is_ddl() && OB_FAIL(add_new_sel_item_for_oracle_temp_table(*select_stmt))) {
       LOG_WARN("add session id value to select item failed", K(ret));
@@ -595,8 +616,43 @@ int ObInsertResolver::resolve_values(const ParseNode &value_node, ObIArray<uint6
                                                                         label_se_columns,
                                                                         *select_stmt))) {
       LOG_WARN("add label security columns to select item failed", K(ret));
+    } else if (NULL != table_alias_node) {
+      view_name.assign_ptr(const_cast<char*>(table_alias_node->str_value_),
+                          static_cast<int32_t>(table_alias_node->str_len_));
     } else if (OB_FAIL(insert_stmt->generate_anonymous_view_name(*allocator_, view_name))) {
       LOG_WARN("failed to generate view name", K(ret));
+    }
+
+    if (OB_SUCC(ret) && is_mock) {
+    ObString ori_table_name = table_item->table_name_;
+    ObSEArray<ObString, 4> ori_column_names;
+    ObString row_alias_table_name = view_name;
+    ObSEArray<ObString, 4> row_alias_column_names;
+    ParseNode **row_alias_values_nodes = NULL;
+    //1. check_table_and_column_name
+    if (OB_FAIL(check_table_and_column_name(insert_stmt->get_values_desc(),
+                                            select_stmt,
+                                            ori_table_name,
+                                            ori_column_names,
+                                            row_alias_table_name,
+                                            row_alias_column_names))) {
+      LOG_WARN("fail to get table and column name", K(ret));
+    }
+    //2.check_validity_of_duplicate_node
+    if (OB_FAIL(ret)) {
+      //do nothing
+    } else if (duplicate_node != NULL) {
+        if (OB_FAIL(check_validity_of_duplicate_node(duplicate_node,
+                                                    ori_table_name,
+                                                    ori_column_names,
+                                                    row_alias_table_name,
+                                                    row_alias_column_names))) {
+            LOG_WARN("fail to check validity of duplicate node", K(ret));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+      //do nothing
     } else if (OB_FAIL(resolve_generate_table_item(select_stmt, view_name, sub_select_table))) {
       LOG_WARN("failed to resolve generate table item", K(ret));
     } else if (OB_FAIL(resolve_all_generated_table_columns(*sub_select_table,
@@ -609,12 +665,235 @@ int ObInsertResolver::resolve_values(const ParseNode &value_node, ObIArray<uint6
   return ret;
 }
 
+int ObInsertResolver::check_table_and_column_name(const ObIArray<ObColumnRefRawExpr*> & value_desc,
+                                                  ObSelectStmt *select_stmt,
+                                                  ObString &ori_table_name,
+                                                  ObIArray<ObString> &ori_column_names,
+                                                  ObString &row_alias_table_name,
+                                                  ObIArray<ObString> &row_alias_column_names)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(select_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret));
+  }
+  //get original table name and column name,row alias table name and column name
+  for (int64_t i = 0; OB_SUCC(ret) && i < value_desc.count(); i++) {
+    //column name comparsion is case insensitive
+    const ObColumnRefRawExpr* column = value_desc.at(i);
+    if (OB_ISNULL(column)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column is NULL", K(ret));
+    } else if (OB_FAIL(ori_column_names.push_back(column->get_column_name()))) {
+      LOG_WARN("fail to push column name");
+    } else if (OB_FAIL(row_alias_column_names.push_back(select_stmt->get_select_item(i).alias_name_))){
+      LOG_WARN("fail to push column name");
+    }
+  }
+  if (OB_SUCC(ret)) {
+  //check validity
+    ObNameCaseMode mode = OB_NAME_CASE_INVALID;
+    bool perserve_lettercase = true;
+    ObCollationType cs_type = CS_TYPE_INVALID;
+    if (OB_FAIL(session_info_->get_name_case_mode(mode))) {
+      LOG_WARN("fail to get name case mode", K(mode), K(ret));
+    } else if (OB_FAIL(session_info_->get_collation_connection(cs_type))) {
+      LOG_WARN("fail to get collation_connection", K(ret));
+    } else {
+      perserve_lettercase = lib::is_oracle_mode() ?
+      true : (mode != OB_LOWERCASE_AND_INSENSITIVE);
+    }
+    if (OB_FAIL(ret)) {
+      //do nothing
+    } else if (!perserve_lettercase) {
+      ObCharset::casedn(cs_type, ori_table_name);
+      ObCharset::casedn(cs_type, row_alias_table_name);
+    }
+    if (0 == ori_table_name.compare(row_alias_table_name)) {
+      //case: insert into t1(a,b) values (4,5) as t1(a,b) on duplicate key update a = t1.a;
+      ret = OB_ERR_NONUNIQ_TABLE;
+      LOG_USER_ERROR(OB_ERR_NONUNIQ_TABLE, row_alias_table_name.length(), row_alias_table_name.ptr());
+    } else if (row_alias_column_names.count() == 0 ||
+              ori_column_names.count() == 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected column column", K(ret));
+    } else if (row_alias_column_names.count() != ori_column_names.count()) {
+      //case: insert into t1(a,b) values (4,5) as new(a,b,c) on duplicate key update a = t1.a;
+      ret = OB_ERR_VIEW_WRONG_LIST;
+      LOG_WARN("unexpect different count between row_alias_column_names and ori_column_names", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObInsertResolver::check_validity_of_duplicate_node(const ParseNode* node,
+                                                       ObString &ori_table_name,
+                                                       ObIArray<ObString> &ori_column_names,
+                                                       ObString &row_alias_table_name,
+                                                       ObIArray<ObString> &row_alias_column_names)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = true;
+  if (OB_ISNULL(node)) {
+    is_valid = false;
+  } else if (T_ASSIGN_ITEM == node->type_) {
+    ObString table_name;
+    ObString column_name;
+    ParseNode* table_name_node = NULL;
+    ParseNode* column_name_node = NULL;
+    ParseNode* col_ref_node = node->children_[0];
+    if (col_ref_node->num_child_ != 3) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(ret));
+    } else if (OB_ISNULL(table_name_node = col_ref_node->children_[1])) {
+      //do nothing
+    } else if (OB_ISNULL(column_name_node = col_ref_node->children_[2])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(ret));
+    } else {
+      table_name.assign_ptr(table_name_node->str_value_,
+                                static_cast<int32_t>(table_name_node->str_len_));
+      if (0 == (row_alias_table_name.compare(ori_table_name)) ) {
+        column_name.assign_ptr(column_name_node->str_value_,
+                               static_cast<int32_t>(column_name_node->str_len_));
+        /*
+        * INSERT INTO t1 VALUES (4,5,7) AS t1(m,n,p) ON DUPLICATE KEY UPDATE NEW.m = m+n+1;
+        * NEW.m is not allowed to set
+        */
+        ret = OB_ERR_BAD_FIELD_ERROR;
+        ObString scope_name = ObString::make_string(get_scope_name(current_scope_));
+        LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(),
+                                              scope_name.length(), scope_name.ptr());
+      } else if (OB_FAIL(check_ambiguous_column(column_name, ori_column_names, row_alias_column_names))) {
+        LOG_WARN("fail to check ambiguous columns", K(ret));
+      }
+    }
+  } else if (T_FUN_SYS == node->type_) {
+    if (node->num_child_ != 2) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(node->num_child_), K(ret));
+    } else {
+      ObString node_name;
+      ObString node_column_name;
+      node_name.assign_ptr(node->children_[0]->str_value_,
+                           static_cast<int32_t>(node->children_[0]->str_len_));
+      if (0 == node_name.case_compare("values")) {
+        //do nothing, do not replace column under values expr
+        if (node->children_[1]->type_ == T_EXPR_LIST) {
+          ParseNode* expr_list_node = node->children_[1];
+          for (int64_t i = 0; OB_SUCC(ret) && i < expr_list_node->num_child_; ++i) {
+            ObString node_table_name;
+            if (OB_ISNULL(expr_list_node->children_[i])) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected error", K(ret));
+            } else {
+              //case: insert into t1(a,b) values (4,5) as new(a,b) on duplicate key update a = value(new.a)+new.a;
+              //new.a under values is not allowed
+              ParseNode* col_ref_node = expr_list_node->children_[i];
+              if (col_ref_node->num_child_ != 3) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected error", K(ret));
+              } else if (col_ref_node->children_[1] == NULL) {
+                //do nothing
+              } else {
+                node_table_name.assign_ptr(col_ref_node->children_[1]->str_value_,
+                                          static_cast<int32_t>(col_ref_node->children_[1]->str_len_));
+                if (0 == (node_table_name.compare(row_alias_table_name))) {
+                  node_column_name.assign_ptr(col_ref_node->children_[2]->str_value_,
+                                              static_cast<int32_t>(col_ref_node->children_[2]->str_len_));
+                  ret = OB_ERR_BAD_FIELD_ERROR;
+                  ObString scope_name = ObString::make_string(get_scope_name(current_scope_));
+                  LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, node_column_name.length(), node_column_name.ptr(),
+                                                        scope_name.length(), scope_name.ptr());
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    is_valid = false;
+  } else if (T_COLUMN_REF == node->type_) {
+    ObString table_name;
+    ObString column_name;
+    if (node->num_child_ != 3) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect column ref child node", K(node->num_child_), K(ret));
+    } else {
+      if ((node->children_[1]) != NULL) {
+        table_name.assign_ptr(node->children_[1]->str_value_,
+                                   static_cast<int32_t>(node->children_[1]->str_len_));
+      }
+      if ((node->children_[2]) != NULL) {
+        column_name.assign_ptr(node->children_[2]->str_value_,
+                                    static_cast<int32_t>(node->children_[2]->str_len_));
+      }
+      if (node->children_[1] == NULL ||
+         (0 == (table_name.compare(ori_table_name)) &&
+          0 == (table_name.compare(row_alias_table_name)))) {
+          //case: insert into t1(a,b) values (4,5) as new(a,b) on duplicate key update a = value(a)+a;
+          //update a[0] = value(a[1])+a[2], a[2] is ambiguous
+          if (OB_FAIL(check_ambiguous_column(column_name, ori_column_names, row_alias_column_names))) {
+            LOG_WARN("fail to check ambiguous columns", K(ret));
+          }
+      }
+    }
+    is_valid = false;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < node->num_child_; i++) {
+    if (T_ASSIGN_ITEM == node->type_ && 0 == i) {
+      //ON DUPLICATE KEY UPDATE c = new.a+values(b), only deal with value list [new.a+values(b)]
+    } else if (OB_FAIL(SMART_CALL(check_validity_of_duplicate_node(node->children_[i],
+                                                            ori_table_name,
+                                                            ori_column_names,
+                                                            row_alias_table_name,
+                                                            row_alias_column_names)))) {
+      LOG_WARN("refine_insert_update_assignment fail", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObInsertResolver::check_ambiguous_column(ObString &column_name,
+                                             ObIArray<ObString> &ori_column_names,
+                                             ObIArray<ObString> &row_alias_column_names)
+{
+  int ret = OB_SUCCESS;
+  bool find_in_ori = false;
+  bool find_in_row_alias = false;
+  if (row_alias_column_names.count() != ori_column_names.count()) {
+    ret = OB_ERR_VIEW_WRONG_LIST;
+    LOG_WARN("unexpect different count between row_alias_column_names and ori_column_names", K(ret));
+  }
+  for (int i = 0; OB_SUCC(ret) && (!find_in_row_alias || !find_in_ori)
+                              && i < row_alias_column_names.count(); i++) {
+    ObString row_alias_col_name = row_alias_column_names.at(i);
+    ObString ori_col_name = ori_column_names.at(i);
+    if (0 == (column_name.case_compare(row_alias_col_name))) {
+      find_in_row_alias = true;
+    }
+    if (0 == (column_name.case_compare(ori_col_name))) {
+      find_in_ori = true;
+    }
+  }
+  if (OB_FAIL(ret)) {
+    //do nothing
+  } else if (find_in_row_alias && find_in_ori) {
+    ret = OB_NON_UNIQ_ERROR;
+    ObString scope_name = ObString::make_string(get_scope_name(current_scope_));
+    LOG_USER_ERROR(OB_NON_UNIQ_ERROR, column_name.length(), column_name.ptr(),
+                                          scope_name.length(), scope_name.ptr());
+  }
+  return ret;
+}
 int ObInsertResolver::check_insert_select_field(ObInsertStmt &insert_stmt,
-                                                ObSelectStmt &select_stmt)
+                                                ObSelectStmt &select_stmt,
+                                                bool is_mock)
 {
   int ret = OB_SUCCESS;
   bool is_generated_column = false;
   const ObIArray<ObColumnRefRawExpr*> &values_desc = insert_stmt.get_values_desc();
+  ObSelectStmt *ref_stmt = NULL;
   if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid session_info_", K(ret));
@@ -622,6 +901,15 @@ int ObInsertResolver::check_insert_select_field(ObInsertStmt &insert_stmt,
     ret = OB_ERR_COULUMN_VALUE_NOT_MATCH;
     LOG_WARN("column count mismatch", K(values_desc.count()), K(select_stmt.get_select_item_size()));
     LOG_USER_ERROR(OB_ERR_COULUMN_VALUE_NOT_MATCH, 1l);
+  } else if (is_mock && select_stmt.is_single_table_stmt()) {
+    const TableItem *table_item = select_stmt.get_table_item(0);
+    if (table_item->is_generated_table()) {
+      ref_stmt = table_item->ref_query_;
+      if (ref_stmt->get_select_item_size() != select_stmt.get_select_item_size()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("item size is unexpected", K(ret), K(ref_stmt->get_select_item_size()), K(select_stmt.get_select_item_size()));
+      }
+    }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < values_desc.count(); ++i) {
     const ObColumnRefRawExpr *value_desc = values_desc.at(i);
@@ -656,6 +944,19 @@ int ObInsertResolver::check_insert_select_field(ObInsertStmt &insert_stmt,
       // create table as select not need check here
       ret = OB_ERR_INSERT_INTO_GENERATED_ALWAYS_IDENTITY_COLUMN;
       LOG_USER_ERROR(OB_ERR_INSERT_INTO_GENERATED_ALWAYS_IDENTITY_COLUMN);
+    }
+    if (OB_FAIL(ret)) {
+      //do nothing
+    } else if (is_mock &&
+               ref_stmt != NULL) {
+      if (!ref_stmt->get_select_item(i).is_real_alias_) {
+        ref_stmt->get_select_item(i).alias_name_ = value_desc->get_column_name();
+        ref_stmt->get_select_item(i).is_real_alias_ = true;
+      }
+      if (!select_stmt.get_select_item(i).is_real_alias_) {
+        select_stmt.get_select_item(i).alias_name_ = ref_stmt->get_select_item(i).alias_name_;
+        select_stmt.get_select_item(i).is_real_alias_ = true;
+      }
     }
   }
   return ret;
