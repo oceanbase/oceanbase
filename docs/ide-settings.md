@@ -18,14 +18,9 @@ In the C/C++ LSP domain, the famous tools are clangd and ccls. Here we recommend
 1. The speed of building index of ccls is slower than that of clangd, but after building, the speed of accessing index of ccls is faster than that of clangd. 
 2. Unity building doesn't be supported by clangd, but OceanBase is being built by unity, failed to build index through compile_commands.json by clangd. 
 
-**NOTE**:
-
-1. Here are how to setup ccls in CentOS7, please refer to [ccls build wiki](https://github.com/MaskRay/ccls/wiki/Build) for more details.
-2. If there are no special version, please do as the following instructions. 
-
 # ccls Installation
 
-## Install ccls on centos
+## Install ccls on CentOS
 
 > NOTE: if you don't have the permission for `yum`, please use `sudo yum ...` instead.
 
@@ -50,7 +45,7 @@ source ~/.bashrc   # or
 source ~/.bash_profile
 ```
 
-## Install ccls on ubuntu
+## Install ccls on Ubuntu
 
 ```bash
 apt-get -y install ccls
