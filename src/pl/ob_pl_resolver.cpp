@@ -666,15 +666,6 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
         }
       }
         break;
-      case T_SET_PASSWORD: {
-        if ((resolve_ctx_.session_info_.is_for_trigger_package() || func.is_function())) {
-          ret = OB_ER_SP_CANT_SET_AUTOCOMMIT;
-          LOG_WARN("Not allowed to set autocommit from a stored function or trigger", K(ret));
-        } else {
-          NOT_SUPPORT_IN_ROUTINE
-        }
-      }
-        break;
       default:
         NOT_SUPPORT_IN_ROUTINE
         break;
@@ -5643,15 +5634,10 @@ int ObPLResolver::resolve_static_sql(const ObStmtNodeTree *parse_tree, ObPLSql &
                  && is_oracle_mode()) {
         ret = OB_ERR_INTO_CLAUSE_EXPECTED;
         LOG_WARN("PLS-00428: an INTO clause is expected in this SELECT statement", K(ret));
-      } else if (is_mysql_mode() && stmt::T_END_TRANS == prepare_result.type_ 
-                                 && func.is_function()) {
-        name.assign_ptr("COMMIT", 6);
-        if (0 != name.case_compare(parse_tree->str_value_)) {
-          name.assign_ptr("ROLLBACK", 8);
-        }
-        ret = OB_ERR_STMT_NOT_ALLOW_IN_MYSQL_PROCEDRUE;
-        LOG_WARN("%s is not allowed in stored procedure. ", K(name), K(ret));
-        LOG_USER_ERROR(OB_ERR_STMT_NOT_ALLOW_IN_MYSQL_PROCEDRUE, name.length(), name.ptr());
+      } else if (stmt::T_SET_PASSWORD == prepare_result.type_) {
+          ret = OB_ERR_STMT_NOT_ALLOW_IN_MYSQL_PROCEDRUE;
+          LOG_WARN("set password in PL not allow", K(ret), K(get_type_name(parse_tree->type_)));
+          LOG_USER_ERROR(OB_ERR_STMT_NOT_ALLOW_IN_MYSQL_PROCEDRUE, 12, "set PASSWORD");
       } else if (is_mysql_mode() && stmt::T_LOAD_DATA == prepare_result.type_) {
         name.assign_ptr("LOAD DATA", 9);
         ret = OB_ERR_STMT_NOT_ALLOW_IN_MYSQL_PROCEDRUE;
@@ -13709,9 +13695,6 @@ int ObPLResolver::resolve_routine(ObObjAccessIdent &access_ident,
                               expr_params,
                               routine_type,
                               routine_info));
-        if (OB_SUCC(ret) && OB_INVALID_ID != routine_info->get_dblink_id()) {
-          func.set_can_cached(false);
-        }
       } else {
         OZ (ObPLResolver::resolve_dblink_routine_with_synonym(resolve_ctx_,
                                 static_cast<uint64_t>(access_idxs.at(access_idxs.count()-1).var_index_),
