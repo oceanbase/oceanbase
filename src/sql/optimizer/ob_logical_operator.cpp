@@ -3205,6 +3205,8 @@ int ObLogicalOperator::px_rescan_pre()
         nested_rescan = false;
         if (0 == i) {
           enable_px_batch_rescans.push_back(false);
+        } else if (static_cast<ObLogSubPlanFilter*>(this)->get_onetime_idxs().has_member(i)) {
+          find_px = false;
         } else if (OB_FAIL(get_child(i)->find_nested_dis_rescan(nested_rescan, false))) {
           LOG_WARN("fail to find nested rescan", K(ret));
         } else if (nested_rescan) {
