@@ -497,7 +497,7 @@ void ObTableLoadResourceManager::check_assigned_task(common::ObArray<ObDirectLoa
         if (OB_FAIL(assigned_tasks_.get_refactored(check_res[i].assigned_array_[j].task_key_, assigned_arg))) {
           if (ret == OB_HASH_NOT_EXIST) {
             ret = OB_SUCCESS;
-            if (OB_FAIL(need_track_array.push_back(i)) && OB_FAIL(need_track_array.push_back(j))) {
+            if (OB_FAIL(need_track_array.push_back(i)) || OB_FAIL(need_track_array.push_back(j))) {
               LOG_WARN("fail to push back", K(i), K(j));
             }
           }
@@ -534,19 +534,30 @@ void ObTableLoadResourceManager::check_assigned_task(common::ObArray<ObDirectLoa
   ObDirectLoadResourceReleaseArg release_arg;
   release_arg.tenant_id_ = MTL_ID();
   if (need_release_array.count()) {
+    LOG_INFO("need release assigned tasks", K(need_release_array));
     for (int64_t i = 0; i < need_release_array.count(); i++) {
       release_arg.task_key_ = need_release_array[i];
       release_resource(release_arg);
     }
-    LOG_INFO("need release assigned tasks", K(need_release_array));
   }
 
   ObDirectLoadResourceOpRes res;
   if (need_track_array.count()) {
-    for (int64_t i = 0; i < need_track_array.count(); i += 2) {
-      apply_resource(check_res[need_track_array[i]].assigned_array_[need_track_array[i + 1]], res);
-    }
     LOG_INFO("need track assigned tasks", K(need_track_array));
+    for (int64_t i = 0; i < need_track_array.count(); i += 2) {
+      if(OB_UNLIKELY(i + 1 >= need_track_array.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("need_track_array is error", KR(ret));
+      } else if (OB_UNLIKELY(need_track_array[i] < 0 ||
+                             need_track_array[i] >= check_res.count() ||
+                             need_track_array[i + 1] < 0 ||
+                             need_track_array[i + 1] >= check_res[i].assigned_array_.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("need_track_array value overflow", KR(ret), K(need_track_array[i]), K(need_track_array[i + 1]));
+      } else {
+        apply_resource(check_res[need_track_array[i]].assigned_array_[need_track_array[i + 1]], res);
+      }
+    }
   }
 }
 
