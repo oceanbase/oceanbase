@@ -4092,6 +4092,21 @@ int ObBasicSessionInfo::calc_need_serialize_vars(ObIArray<ObSysVarClassType> &sy
     }
   }
 
+  if (OB_SUCC(ret) && OB_NOT_NULL(cur_phy_plan_) && cur_phy_plan_->contain_pl_udf_or_trigger()) {
+    // 如果该语句包含PL UDF/TRIGGER, 将该Sesssion上变化的Package变量进行同步
+    // TODO: 当前做的不够精细, 后续应该做到仅同步需要的变量
+    ObSessionValMap::VarNameValMap::const_iterator iter = user_var_val_map_.get_val_map().begin();
+    for (; OB_SUCC(ret) && iter != user_var_val_map_.get_val_map().end(); ++iter) {
+      const ObString name = iter->first;
+      if (name.prefix_match("pkg.")) {
+        if (OB_FAIL(user_var_names.push_back(name))) {
+          LOG_WARN("failed push back package var name", K(name));
+        }
+      }
+    }
+    LOG_DEBUG("sync package variables", K(user_var_names), K(cur_phy_plan_), K(lbt()));
+  }
+
   if (OB_SUCC(ret) && cur_phy_plan_ != nullptr) {
     // 处理该语句用到的需要序列化的用户变量和系统变量
     const ObIArray<ObVarInfo> &extra_serialize_vars = cur_phy_plan_->get_vars();
