@@ -890,28 +890,35 @@ int ObCloneScheduler::get_tenant_snap_ls_replica_simple_items_(
   return ret;
 }
 
-int ObCloneScheduler::check_one_ls_replica_restore_finish_(
+int ObCloneScheduler::check_one_ls_restore_finish_(
     const share::ObCloneJob& job,
-    const ObLSInfo& ls_info,
-    const ObLSStatusInfoArray& ls_array,
+    const ObLSStatusInfo& ls_status_info,
+    const ObArray<ObLSInfo>& ls_info_array,
     const ObArray<ObTenantSnapLSReplicaSimpleItem>& ls_snapshot_array,
     TenantRestoreStatus &tenant_restore_status) /*a valid value in the outer func, do not reset it*/
 {
   int ret = OB_SUCCESS;
 
-  bool found_in_ls_status = false;
-  for (int64_t i = 0; i < ls_array.count(); ++i) {
-    if (ls_array.at(i).get_ls_id() == ls_info.get_ls_id()) {
-      found_in_ls_status = true;
+  bool found_in_ls_meta_table = false;
+  const ObLSInfo *ls_info_ptr = nullptr;
+  for (int64_t i = 0; i < ls_info_array.count(); ++i) {
+    if (ls_info_array.at(i).get_ls_id() == ls_status_info.get_ls_id()) {
+      ls_info_ptr = &ls_info_array.at(i);
+      found_in_ls_meta_table = true;
       break;
     }
   }
 
-  if (!found_in_ls_status) {
-    LOG_INFO("ls in __all_ls_meta_table does not appear in __all_ls_status", K(ls_info), K(ls_array));
+  if (!found_in_ls_meta_table) {
+    ret = OB_NEED_WAIT;
+    LOG_WARN("ls in __all_ls_status does not appear in __all_ls_meta_table", KR(ret),
+                                                        K(ls_status_info), K(ls_info_array));
+  } else if (OB_ISNULL(ls_info_ptr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ls_info_ptr", KR(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && !tenant_restore_status.is_failed() && i < ls_info.get_replicas().count(); ++i) {
-      const ObLSReplica &replica = ls_info.get_replicas().at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && !tenant_restore_status.is_failed() && i < ls_info_ptr->get_replicas().count(); ++i) {
+      const ObLSReplica &replica = ls_info_ptr->get_replicas().at(i);
 
       bool found_in_ls_snapshot = false;
       share::ObLSRestoreStatus ls_restore_status;
@@ -979,15 +986,15 @@ int ObCloneScheduler::check_all_ls_restore_finish_(const share::ObCloneJob &job,
   } else if (OB_FAIL(get_tenant_snap_ls_replica_simple_items_(job, ls_snapshot_array))) {
     LOG_WARN("fail to get_tenant_snap_ls_replica_simple_items_", KR(ret), K(job));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && !tenant_restore_status.is_failed() && i < ls_info_array.count(); ++i) {
-      const ObLSInfo& ls_info = ls_info_array.at(i);
-      if (OB_FAIL(check_one_ls_replica_restore_finish_(job,
-                                                       ls_info,
-                                                       ls_array,
-                                                       ls_snapshot_array,
-                                                       tenant_restore_status))) {
-        LOG_WARN("fail to check_one_ls_replica_restore_finish_",
-            KR(ret), K(ls_info), K(ls_array), K(ls_snapshot_array), K(tenant_restore_status), K(job));
+    for (int64_t i = 0; OB_SUCC(ret) && !tenant_restore_status.is_failed() && i < ls_array.count(); ++i) {
+      const ObLSStatusInfo& ls_status_info = ls_array.at(i);
+      if (OB_FAIL(check_one_ls_restore_finish_(job,
+                                               ls_status_info,
+                                               ls_info_array,
+                                               ls_snapshot_array,
+                                               tenant_restore_status))) {
+        LOG_WARN("fail to check_one_ls_restore_finish_",
+            KR(ret), K(ls_status_info), K(ls_info_array), K(ls_snapshot_array), K(tenant_restore_status), K(job));
       }
     }
     if (!tenant_restore_status.is_success()) {
