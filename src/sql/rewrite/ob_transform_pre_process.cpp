@@ -3773,9 +3773,11 @@ int ObTransformPreProcess::calc_policy_function(ObDMLStmt &stmt,
       policy_expr = udf_expr;
     }
     if (OB_SUCC(ret) && udf_expr->need_add_dependency()) {
-      ObSchemaObjVersion udf_version;
-      OZ (udf_expr->get_schema_object_version(udf_version));
-      OZ (stmt.add_global_dependency_table(udf_version));
+      ObArray<ObSchemaObjVersion> vers;
+      OZ (udf_expr->get_schema_object_version(*schema_checker->get_schema_guard(), vers));
+      for (int64_t i = 0; OB_SUCC(ret) && i < vers.count(); ++i) {
+        OZ (stmt.add_global_dependency_table(vers.at(i)));
+      }
     }
   }
   return ret;
