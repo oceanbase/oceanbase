@@ -578,6 +578,7 @@ public:
   int record_if_need();
   void reset() {ancestor_record_.reset(); bin_pool_.reset();}
   int reinit(ObIMulModeBase* doc, ObIAllocator *tmp_alloc);
+  common::ObIAllocator* get_tmp_alloc() { return tmp_alloc_; }
   ObMulModeMemCtx* ctx_;
   common::ObIAllocator *alloc_;
   common::ObIAllocator *tmp_alloc_;
@@ -836,7 +837,7 @@ public:
   static int get_arg_type(ObArgType& arg_type, ObPathNode *path_node);
   static int release_seek_vector(ObPathCtx &ctx, ObSeekVector& seek_vector);
   static int add_ns_if_need(ObPathCtx &ctx, ObIMulModeBase*& res);
-  static int collect_ancestor_ns(ObIMulModeBase* extend, ObStack<ObIMulModeBase*> &ancestor_record, ObXmlElement::NsMap &ns_map, ObArray<ObXmlAttribute> &ns_vec);
+  static int collect_ancestor_ns(ObIMulModeBase* extend, ObStack<ObIMulModeBase*> &ancestor_record, ObXmlElement::NsMap &ns_map, ObArray<ObXmlAttribute*> &ns_vec, common::ObIAllocator* tmp_alloc);
 };
 
 class ObXmlPathFilter : public ObMulModeFilter

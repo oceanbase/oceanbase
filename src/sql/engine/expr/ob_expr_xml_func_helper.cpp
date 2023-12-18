@@ -1308,7 +1308,7 @@ int ObXMLExprHelper::extract_xml_text_node(ObMulModeMemCtx* mem_ctx, ObIMulModeB
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("xml doc node is NULL", K(ret));
   } else if (FALSE_IT(is_xml_document = xml_doc->type() == M_DOCUMENT)) {
-  } else if (OB_FAIL(xpath_iter.init(mem_ctx, xpath_str, default_ns, xml_doc, NULL))) {
+  } else if (OB_FAIL(xpath_iter.init(mem_ctx, xpath_str, default_ns, xml_doc, NULL, false))) {
     LOG_WARN("fail to init xpath iterator", K(xpath_str), K(default_ns), K(ret));
   } else if (OB_FAIL(xpath_iter.open())) {
     LOG_WARN("fail to open xpath iterator", K(ret));

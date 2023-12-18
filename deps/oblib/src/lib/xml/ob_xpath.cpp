@@ -3194,56 +3194,66 @@ int ObPathUtil::release_seek_vector(ObPathCtx &ctx, ObSeekVector& seek_vector)
 int ObPathUtil::collect_ancestor_ns(ObIMulModeBase* extend,
                                     ObStack<ObIMulModeBase*> &ancestor_record,
                                     ObXmlElement::NsMap &ns_map,
-                                    ObArray<ObXmlAttribute> &ns_vec)
+                                    ObArray<ObXmlAttribute*> &ns_vec,
+                                    common::ObIAllocator* tmp_alloc)
 {
   INIT_SUCC(ret);
-  int size = ancestor_record.size();
-  for (int64_t pos = -1; OB_SUCC(ret) && pos < size; ++pos) {
-    // get parent node
-    ObXmlBin* current = nullptr;
-    int64_t attribute_num = 0;
-    if (pos == -1) {
-      if (OB_ISNULL(extend)) { // normal, means without extend
+  if (OB_ISNULL(tmp_alloc)) {
+  } else {
+    int size = ancestor_record.size();
+    for (int64_t pos = -1; OB_SUCC(ret) && pos < size; ++pos) {
+      // get parent node
+      ObXmlBin* current = nullptr;
+      int64_t attribute_num = 0;
+      if (pos == -1) {
+        if (OB_ISNULL(extend)) { // normal, means without extend
+        } else {
+          current = static_cast<ObXmlBin*>(extend);
+          attribute_num = current->attribute_size();
+        }
       } else {
-        current = static_cast<ObXmlBin*>(extend);
+        current = static_cast<ObXmlBin*>(ancestor_record.at(pos));
         attribute_num = current->attribute_size();
       }
-    } else {
-      current = static_cast<ObXmlBin*>(ancestor_record.at(pos));
-      attribute_num = current->attribute_size();
-    }
-    bool found = false;
-    for (int pos = 0; OB_SUCC(ret) && pos < attribute_num; ++pos) {
-      ObXmlBin buff(*current);
-      ObXmlBin* tmp = &buff;
-      if (OB_FAIL(current->construct(tmp, nullptr))) {
-        LOG_WARN("failed to dup bin.", K(ret));
-      } else if (OB_FAIL(tmp->set_at(pos))) {
-        LOG_WARN("failed to set at child.", K(ret));
-      } else if (tmp->type() == M_NAMESPACE) {
-        // get ns info
-        ObXmlAttribute ns_node(ObMulModeNodeType::M_NAMESPACE, current->ctx_);
-        ObString key;
-        ObString value;
-        // init ns node
-        if (OB_FAIL(tmp->get_key(key))) {
-          LOG_WARN("failed to eval key.", K(ret));
-        } else if (OB_FAIL(tmp->get_value(value))) {
-          LOG_WARN("failed to eval value.", K(ret));
-        } else if (OB_SUCC(ns_vec.push_back(ns_node))) {
-          ns_vec[ns_vec.size() - 1].set_xml_key(key);
-          ns_vec[ns_vec.size() - 1].set_value(value);
+      bool not_att_or_ns = false;
+      for (int pos = 0; OB_SUCC(ret) && pos < attribute_num && !not_att_or_ns; ++pos) {
+        ObXmlBin buff(*current);
+        ObXmlBin* tmp = &buff;
+        if (OB_FAIL(current->construct(tmp, nullptr))) {
+          LOG_WARN("failed to dup bin.", K(ret));
+        } else if (OB_FAIL(tmp->set_at(pos))) {
+          LOG_WARN("failed to set at child.", K(ret));
+        } else if (tmp->type() == M_NAMESPACE) {
+          // get ns info
+          ObXmlAttribute* ns_node = nullptr;
+          ObString key;
+          ObString value;
+          // init ns node
+          if (OB_FAIL(tmp->get_key(key))) {
+            LOG_WARN("failed to eval key.", K(ret));
+          } else if (OB_FAIL(tmp->get_value(value))) {
+            LOG_WARN("failed to eval value.", K(ret));
+          } else if (OB_ISNULL(ns_node = static_cast<ObXmlAttribute*>(tmp_alloc->alloc(sizeof(ObXmlAttribute))))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to allocate attribute node.", K(ret));
+          } else {
+            ns_node = new(ns_node) ObXmlAttribute(ObMulModeNodeType::M_NAMESPACE, current->ctx_);
+            ns_node->set_xml_key(key);
+            ns_node->set_value(value);
+            ret = ns_vec.push_back(ns_node);
+          }
+
+          // if found duplicate key, overwrite
+          if (OB_FAIL(ret)) {
+          } else if (OB_NOT_NULL(ns_map.get(key)) && OB_FAIL(ns_map.erase_refactored(key))) {
+            LOG_WARN("fail to delete ns from map", K(ret), K(key));
+          } else if (OB_FAIL(ns_map.set_refactored(key, ns_vec[ns_vec.size() - 1]))) {
+            LOG_WARN("fail to add ns from map", K(ret), K(key));
+          }
+        } else if (tmp->type() == M_ATTRIBUTE) {
+        } else {
+          not_att_or_ns = true;  // neither ns nor attribute, stop searching
         }
-        // if found duplicate key, overwrite
-        if (OB_FAIL(ret)) {
-        } else if (OB_NOT_NULL(ns_map.get(key)) && OB_FAIL(ns_map.erase_refactored(key))) {
-          LOG_WARN("fail to delete ns from map", K(ret), K(key));
-        } else if (OB_FAIL(ns_map.set_refactored(key, &ns_vec[ns_vec.size() - 1]))) {
-          LOG_WARN("fail to add ns from map", K(ret), K(key));
-        }
-      } else if (tmp->type() == M_ATTRIBUTE) {
-      } else {
-        break;  // neither ns nor attribute, stop searching
       }
     }
   }
@@ -3262,11 +3272,12 @@ int ObPathUtil::add_ns_if_need(ObPathCtx &ctx, ObIMulModeBase*& res)
     ObXmlElement::NsMap ns_map;
     ObXmlElement::NsMap::iterator ns_map_iter;
     // be used as ns node buffer pool
-    ObArray<ObXmlAttribute> ns_vec;
+    ObArray<ObXmlAttribute*> ns_vec;
+    ns_vec.set_block_size(PATH_DEFAULT_PAGE_SIZE);
     int map_size = (ctx.ancestor_record_.size() > 0 ) ? 4 * ctx.ancestor_record_.size() : ctx.extend_->attribute_size();
     if (OB_FAIL(ns_map.create(map_size, "PATH_PARENT_NS"))) {
       LOG_WARN("ns map create failed", K(ret));
-    } else if (OB_FAIL(collect_ancestor_ns(ctx.extend_, ctx.ancestor_record_, ns_map, ns_vec))) {
+    } else if (OB_FAIL(collect_ancestor_ns(ctx.extend_, ctx.ancestor_record_, ns_map, ns_vec, ctx.get_tmp_alloc()))) {
       LOG_WARN("ns map init failed", K(ret));
     } else {
       ObXmlElement element_ns(ObMulModeNodeType::M_ELEMENT, ctx.doc_root_->get_mem_ctx());
