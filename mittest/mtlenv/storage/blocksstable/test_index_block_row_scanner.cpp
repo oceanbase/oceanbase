@@ -204,7 +204,6 @@ TEST_F(TestIndexBlockRowScanner, prefetch_and_scan)
       ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID,
       *raw_block,
       root_blk_header->rowkey_array_[root_row_id]));
-  ASSERT_EQ(idx_scanner.current_, raw_idx_scanner.current_);
 
   idx_scanner.reuse();
   raw_idx_scanner.reuse();
@@ -224,7 +223,6 @@ TEST_F(TestIndexBlockRowScanner, prefetch_and_scan)
 
   int tmp_ret = OB_SUCCESS;
   while (OB_SUCCESS == tmp_ret) {
-    ASSERT_EQ(idx_scanner.current_, raw_idx_scanner.current_);
     tmp_ret = idx_scanner.get_next(read_idx_info);
     if (OB_SUCCESS == tmp_ret) {
       ASSERT_EQ(tmp_ret, raw_idx_scanner.get_next(raw_read_idx_info));

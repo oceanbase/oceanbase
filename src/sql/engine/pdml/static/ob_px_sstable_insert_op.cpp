@@ -15,7 +15,7 @@
 #include "sql/engine/pdml/static/ob_px_sstable_insert_op.h"
 #include "common/ob_tablet_id.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
-#include "storage/ddl/ob_direct_insert_sstable_ctx.h"
+#include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -79,24 +79,33 @@ const ObPxMultiPartSSTableInsertSpec &ObPxMultiPartSSTableInsertOp::get_spec() c
 int ObPxMultiPartSSTableInsertOp::inner_open()
 {
   int ret = OB_SUCCESS;
+  ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
   if (OB_FAIL(ObPxMultiPartInsertOp::inner_open())) {
     LOG_WARN("inner open failed", K(ret));
+  } else if (OB_ISNULL(tenant_direct_load_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected err", K(ret), K(MTL_ID()));
+  } else if (OB_FAIL(tablet_store_map_.create(MAP_HASH_BUCKET_NUM, "SSTABLE_INS"))) {
+    LOG_WARN("fail to create row cnt map", K(ret));
   } else {
-    int64_t snapshot_version = 0;
-    const int64_t context_id = ctx_.get_sqc_handler()->get_ddl_context_id();
-    if (OB_FAIL(MY_SPEC.get_snapshot_version(eval_ctx_, snapshot_version))) {
+    const int64_t ddl_table_id = MY_SPEC.plan_->get_ddl_table_id();
+    if (OB_FAIL(ctx_.get_sqc_handler()->get_sub_coord().get_participants(
+          ctx_.get_sqc_handler()->get_sqc_init_arg().sqc_,
+          ddl_table_id,
+          participants_))) {
+      LOG_WARN("get participants failed", K(ret));
+    } else if (OB_FAIL(MY_SPEC.get_snapshot_version(eval_ctx_, snapshot_version_))) {
       LOG_WARN("get snapshot version failed", K(ret));
-    } else if (OB_FAIL(ObSSTableInsertManager::get_instance().update_table_context(
-        context_id, snapshot_version))) {
-      LOG_WARN("update table context failed", K(ret));
-    } else if (OB_FAIL(tablet_store_map_.create(MAP_HASH_BUCKET_NUM, "SSTABLE_INS"))) {
-      LOG_WARN("fail to create row cnt map", K(ret));
     } else {
-      op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::SSTABLE_INSERT_ROW_COUNT;
+      // sort in ASC order by tablet id.
+      std::sort(participants_.begin(), participants_.end(), ObLSTabletIDPairCmp());
+      op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::SSTABLE_INSERT_CG_ROW_COUNT;
       op_monitor_info_.otherstat_1_value_ = 0;
+      op_monitor_info_.otherstat_2_id_ = ObSqlMonitorStatIds::SSTABLE_INSERT_ROW_COUNT;
+      op_monitor_info_.otherstat_2_value_ = 0;
       op_monitor_info_.otherstat_5_id_ = ObSqlMonitorStatIds::DDL_TASK_ID;
       op_monitor_info_.otherstat_5_value_ = MY_SPEC.plan_->get_ddl_task_id();
-      LOG_INFO("update table context", K(context_id), K(snapshot_version),
+      LOG_INFO("update table context", K(snapshot_version_),
                K(MY_SPEC.ins_ctdef_.das_ctdef_.table_id_), K(MY_SPEC.ins_ctdef_.das_ctdef_.index_tid_));
     }
   }
@@ -105,6 +114,7 @@ int ObPxMultiPartSSTableInsertOp::inner_open()
 
 void ObPxMultiPartSSTableInsertOp::destroy()
 {
+  participants_.reset();
   curr_tablet_store_iter_.reset();
   tablet_seq_caches_.reset();
   if (tablet_store_map_.created()) {
@@ -117,52 +127,24 @@ void ObPxMultiPartSSTableInsertOp::destroy()
   allocator_.reset();
 }
 
-static int notify_tablet_end(const int64_t context_id, const ObTabletID &tablet_id, const int64_t tablets_count, int64_t &notify_idx, bool emergent_finish = false)
-{
-  int ret = OB_SUCCESS;
-  ObSSTableInsertManager &sstable_context_mgr = ObSSTableInsertManager::get_instance();
-  if (OB_UNLIKELY(context_id < 0 || !tablet_id.is_valid() || tablets_count <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(context_id), K(tablet_id), K(tablets_count));
-  } else if (OB_FAIL(sstable_context_mgr.notify_tablet_end(context_id, tablet_id))) {
-    LOG_WARN("notify partition end failed", K(ret), K(context_id), K(tablet_id));
-  }
-  ++notify_idx; // ignore ret
-  if (0 == notify_idx % 1000 || tablets_count == notify_idx || emergent_finish) { // batch 1000 or reach the end
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = sstable_context_mgr.finish_ready_tablets(context_id, notify_idx))) {
-      LOG_WARN("finsh ready partitions failed", K(tmp_ret), K(context_id), K(notify_idx));
-      ret = OB_SUCC(ret) ? tmp_ret : ret;
-    }
-  }
-  return ret;
-}
-
 int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *my_session = nullptr;
   const ObTableSchema *table_schema = nullptr; // TODO(shuangcan): remove this
   ObSqlCtx *sql_ctx = NULL;
-  ObArray<ObTabletID> tablet_ids;
   int64_t notify_idx = 0;
-  int64_t context_id = -1;
-  ObSSTableInsertManager &sstable_context_mgr = ObSSTableInsertManager::get_instance();
-  if (OB_ISNULL(child_)) {
+  ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
+  ObInsertMonitor insert_monitor(op_monitor_info_.otherstat_2_value_, op_monitor_info_.otherstat_1_value_);
+  if (OB_UNLIKELY(nullptr == child_ || nullptr == tenant_direct_load_mgr)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("the child op is null", K(ret));
+    LOG_WARN("the child op is null", K(ret), K(MTL_ID()), KP(child_), KP(tenant_direct_load_mgr));
   } else if (get_spec().is_returning_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable insert op should not return rows", K(ret));
   } else if (OB_ISNULL(my_session = GET_MY_SESSION(ctx_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, session must not be nullptr", K(ret));
-  } else if (OB_ISNULL(ctx_.get_sqc_handler())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sqc handler is null", K(ret));
-  } else if (FALSE_IT(context_id = ctx_.get_sqc_handler()->get_ddl_context_id())) {
-  } else if (OB_FAIL(sstable_context_mgr.get_tablet_ids(context_id, tablet_ids))) {
-    LOG_WARN("get tablet ids failed", K(ret), K(context_id));
   } else if (OB_ISNULL(sql_ctx = ctx_.get_sql_ctx()) || OB_ISNULL(sql_ctx->schema_guard_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, schema guard not be nullptr", K(ret));
@@ -173,81 +155,86 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("Table not exist", K(MY_SPEC.plan_->get_ddl_table_id()), K(ret));
-  } else {
-    std::sort(tablet_ids.begin(), tablet_ids.end()); // sort in ASC order
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (need_count_rows()) {
-    if (OB_FAIL(get_all_rows_and_count())) {
-      LOG_WARN("fail to get all rows and count", K(ret));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(get_next_row_with_cache())) {// get one row first for calc part_id
-    if (OB_UNLIKELY(OB_ITER_END != ret)) {
-      LOG_WARN("fail get next row from child", K(ret));
-    }
+  } else if (need_count_rows() && OB_FAIL(get_all_rows_and_count())) {
+    LOG_WARN("fail to get all rows and count", K(ret));
   } else {
     const ObPhysicalPlan *phy_plan = NULL;
-    ObSSTableInsertTabletParam write_sstable_param;
     ObMacroDataSeq block_start_seq;
     int64_t schema_version = 0;
+    bool all_slices_empty = false; // all slices empty.
     const uint64_t index_tid = MY_SPEC.plan_->get_ddl_table_id();
     if (OB_ISNULL(ctx_.get_physical_plan_ctx()) || OB_ISNULL(phy_plan = ctx_.get_physical_plan_ctx()->get_phy_plan())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get phy_plan failed", K(ret), KP(ctx_.get_physical_plan_ctx()), KP(phy_plan));
-    } else {
-      write_sstable_param.context_id_ = context_id;
-      write_sstable_param.table_id_ = index_tid;
-      write_sstable_param.write_major_ = true;
-      write_sstable_param.task_cnt_ = ctx_.get_sqc_handler()->get_sqc_ctx().get_task_count();
-      write_sstable_param.schema_version_ = MY_SPEC.plan_->get_ddl_schema_version();
-      write_sstable_param.execution_id_ = MY_SPEC.plan_->get_ddl_execution_id();
-    }
-    while (OB_SUCC(ret) && notify_idx < tablet_ids.count()) {
-      ObTabletID &notify_tablet_id = tablet_ids.at(notify_idx);
-      clear_evaluated_flag();
-      const ObExprPtrIArray *row = &child_->get_spec().output_;
-      ObTabletID row_tablet_id;
-      if (OB_FAIL(get_tablet_id_from_row(*row, get_spec().row_desc_.get_part_id_index(), row_tablet_id))) {
-        LOG_WARN("get part id failed", K(ret));
-      } else if (row_tablet_id != notify_tablet_id) {
-        notify_tablet_end(context_id, notify_tablet_id, tablet_ids.count(), notify_idx);
+    } else if (OB_FAIL(get_next_row_with_cache())) {// get one row first for calc part_id
+      if (OB_UNLIKELY(OB_ITER_END != ret)) {
+        LOG_WARN("fail get next row from child", K(ret));
       } else {
-        write_sstable_param.tablet_id_ = row_tablet_id;
-        int64_t affected_rows = 0;
-        ObSSTableInsertRowIterator row_iter(ctx_, this);
-        const ObTabletCacheInterval *curr_tablet_seq_cache =
-          count_rows_finish_ && curr_tablet_idx_ < tablet_seq_caches_.count() ? &tablet_seq_caches_.at(curr_tablet_idx_) : nullptr;
-        int64_t parallel_idx = curr_tablet_seq_cache ? curr_tablet_seq_cache->task_id_ : ctx_.get_px_task_id();
-        FLOG_INFO("update ddl parallel id", K(ret), K(parallel_idx), K(ctx_.get_px_task_id()),
-            K(count_rows_finish_), K(curr_tablet_idx_), K(tablet_seq_caches_.count()), KPC(curr_tablet_seq_cache));
-        if (OB_FAIL(block_start_seq.set_parallel_degree(parallel_idx))) {
-          LOG_WARN("set parallel index failed", K(ret), K(parallel_idx));
-        } else if (OB_FAIL(ObSSTableInsertManager::get_instance().add_sstable_slice(
-                write_sstable_param, block_start_seq, row_iter, affected_rows))) {
-          if (OB_ITER_END != ret) {
-            LOG_WARN("failed to write sstable rows to storage layer", K(ret),
-                K(row_tablet_id), K(block_start_seq), K(write_sstable_param));
-          }
+        all_slices_empty = true;
+        ret = OB_SUCCESS;
+      }
+    }
+    for (notify_idx = 0; OB_SUCC(ret) && notify_idx < participants_.count(); notify_idx++) {
+      clear_evaluated_flag();
+      bool is_current_slice_empty = false;
+      const share::ObLSID &notify_ls_id = participants_.at(notify_idx).first;
+      const ObTabletID &notify_tablet_id = participants_.at(notify_idx).second;
+      ObDirectLoadSliceInfo slice_info;
+      slice_info.is_full_direct_load_ = true;
+      slice_info.is_lob_slice_ = false;
+      slice_info.ls_id_ = notify_ls_id;
+      slice_info.data_tablet_id_ = notify_tablet_id;
+      slice_info.context_id_ = ctx_.get_sqc_handler()->get_ddl_context_id();
+      int64_t affected_rows = 0;
+      ObTabletID row_tablet_id;
+      const ObTabletCacheInterval *curr_tablet_seq_cache =
+        count_rows_finish_ && curr_tablet_idx_ < tablet_seq_caches_.count() && curr_tablet_idx_ >= 0 ?
+          &tablet_seq_caches_.at(curr_tablet_idx_) : nullptr;
+      int64_t parallel_idx = curr_tablet_seq_cache ? curr_tablet_seq_cache->task_id_ : ctx_.get_px_task_id();
+      if (all_slices_empty || is_all_partition_finished_) {
+        is_current_slice_empty = true;
+      } else {
+        const ObExprPtrIArray *row = &child_->get_spec().output_;
+        if (OB_FAIL(get_tablet_id_from_row(*row, get_spec().row_desc_.get_part_id_index(), row_tablet_id))) {
+          LOG_WARN("get part id failed", K(ret));
+        } else if (notify_tablet_id != row_tablet_id) {
+          is_current_slice_empty = true;
         }
-        if (OB_SUCC(ret) || OB_ITER_END == ret) {
-          ctx_.get_physical_plan_ctx()->add_affected_rows(affected_rows);
-          notify_tablet_end(context_id, row_tablet_id, tablet_ids.count(), notify_idx, affected_rows > 0);
-          if (row_iter.get_current_tablet_id() == row_tablet_id) {
-            ret = OB_ITER_END; // continue to next partition
-          }
+      }
+      FLOG_INFO("update ddl parallel id", K(ret), K(notify_tablet_id), K(slice_info), K(parallel_idx), K(ctx_.get_px_task_id()), K(is_current_slice_empty),
+          K(row_tablet_id), K(is_all_partition_finished_), K(count_rows_finish_), K(curr_tablet_idx_), K(tablet_seq_caches_.count()), KPC(curr_tablet_seq_cache));
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(block_start_seq.set_parallel_degree(parallel_idx))) {
+        LOG_WARN("set parallel index failed", K(ret), K(parallel_idx));
+      } else if (OB_FAIL(tenant_direct_load_mgr->open_sstable_slice(block_start_seq,
+                                                                    slice_info))) {
+        LOG_WARN("create sstable slice writer failed", K(ret), K(block_start_seq), K(slice_info));
+      } else {
+        ObDDLInsertRowIterator row_iter(this, is_current_slice_empty /*is_slice_empty*/,
+          notify_ls_id, notify_tablet_id, table_schema->get_rowkey_column_num(), snapshot_version_, slice_info.context_id_);
+        if (OB_FAIL(tenant_direct_load_mgr->fill_sstable_slice(slice_info,
+                                                              &row_iter,
+                                                              affected_rows,
+                                                              &insert_monitor))) {
+          LOG_WARN("fill data into sstable slice failed", K(ret), K(slice_info));
         }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(tenant_direct_load_mgr->close_sstable_slice(slice_info, &insert_monitor))) {
+          LOG_WARN("close sstable slice failed", K(ret), K(slice_info));
+        }
+        ctx_.get_physical_plan_ctx()->add_affected_rows(affected_rows);
       }
     }
   }
-  if (OB_ITER_END == ret) {
-    // try flush sstable, ignore ret
-    while (OB_ITER_END == ret && notify_idx < tablet_ids.count()) {
-      ObTabletID &notify_tablet_id = tablet_ids.at(notify_idx);
-      notify_tablet_end(context_id, notify_tablet_id, tablet_ids.count(), notify_idx);
+  if (OB_SUCC(ret)) {
+    if (notify_idx < participants_.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(ret), K(notify_idx), K(participants_));
+    } else {
+      ret = OB_ITER_END;
+      LOG_INFO("all partitions is end", K(notify_idx), K(participants_));
     }
   }
   return ret;
@@ -317,7 +304,10 @@ int ObPxMultiPartSSTableInsertOp::get_next_row_with_cache()
   }
   if (OB_SUCC(ret)) {
     op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::SSTABLE_INSERT_ROW_COUNT;
-    op_monitor_info_.otherstat_1_value_++;
+  }
+  if (OB_ITER_END == ret) {
+    is_all_partition_finished_ = true;
+    LOG_INFO("scan all partition finished");
   }
   return ret;
 }
@@ -325,11 +315,16 @@ int ObPxMultiPartSSTableInsertOp::get_next_row_with_cache()
 int ObPxMultiPartSSTableInsertOp::get_all_rows_and_count()
 {
   int ret = OB_SUCCESS;
+  ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
   if (OB_UNLIKELY(!tablet_store_map_.created())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cache row store or row_cnt_map is not inited", K(ret));
+  } else if (OB_ISNULL(tenant_direct_load_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected err", K(ret), K(MTL_ID()));
   } else {
     int64_t curr_tablet_row_cnt = 0;
+    const int64_t context_id = ctx_.get_sqc_handler()->get_ddl_context_id();
     while (OB_SUCC(ret)) {
       const ObExprPtrIArray *row = &child_->get_spec().output_;
       ObTabletID row_tablet_id;
@@ -367,11 +362,8 @@ int ObPxMultiPartSSTableInsertOp::get_all_rows_and_count()
       TabletStoreMap::const_iterator iter;
       for (iter = tablet_store_map_.begin(); OB_SUCC(ret) && iter != tablet_store_map_.end(); ++iter) {
         ObTabletCacheInterval interval(iter->first, iter->second->get_row_cnt());
-        if (OB_FAIL(ObSSTableInsertManager::get_instance().get_tablet_cache_interval(
-                                                                 ctx_.get_sqc_handler()->get_ddl_context_id(),
-                                                                 iter->first,
-                                                                 interval))) {
-          LOG_WARN("failed to get tablet cache intervals", K(ret));
+        if (OB_FAIL(tenant_direct_load_mgr->get_tablet_cache_interval(context_id, iter->first, interval))) {
+          LOG_WARN("failed to get tablet cache intervals", K(ret), "tablet_id", iter->first);
         } else if (OB_FAIL(tablet_seq_caches_.push_back(interval))) {
           LOG_WARN("failed to add tablet cache interval", K(ret), K(interval));
         }

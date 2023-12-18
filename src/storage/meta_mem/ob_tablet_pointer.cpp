@@ -415,7 +415,10 @@ void ObTabletPointer::set_initial_state(const bool initial_state)
   ATOMIC_STORE(&initial_state_, initial_state);
 }
 
-int ObTabletPointer::create_ddl_kv_mgr(const share::ObLSID &ls_id, const ObTabletID &tablet_id, ObDDLKvMgrHandle &ddl_kv_mgr_handle)
+int ObTabletPointer::create_ddl_kv_mgr(
+    const share::ObLSID &ls_id,
+    const ObTabletID &tablet_id,
+    ObDDLKvMgrHandle &ddl_kv_mgr_handle)
 {
   int ret = OB_SUCCESS;
   ddl_kv_mgr_handle.reset();

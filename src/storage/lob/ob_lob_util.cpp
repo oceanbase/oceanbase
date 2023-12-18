@@ -16,6 +16,7 @@
 #include "ob_lob_manager.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/blocksstable/ob_datum_row.h"
+#include "ob_lob_meta.h"
 
 namespace oceanbase
 {
@@ -116,7 +117,7 @@ int ObInsertLobColumnHelper::end_trans(transaction::ObTxDesc *tx_desc,
 int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
                                                const share::ObLSID ls_id,
                                                const common::ObTabletID tablet_id,
-                                               const ObColDesc &column,
+                                               const ObCollationType &cs_type,
                                                const ObLobStorageParam &lob_storage_param,
                                                blocksstable::ObStorageDatum &datum,
                                                const int64_t timeout_ts,
@@ -133,9 +134,6 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
   if (OB_ISNULL(lob_mngr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get lob manager handle.", K(ret));
-  } else if (!column.col_type_.is_lob_storage()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(column));
   } else {
     ObString data = datum.get_string();
     // datum with null ptr and zero len should treat as no lob header
@@ -158,7 +156,7 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
       }
     } else {
       if (OB_FAIL(start_trans(ls_id, false/*is_for_read*/, timeout_ts, tx_desc))) {
-        LOG_WARN("fail to get tx_desc", K(ret), K(column));
+        LOG_WARN("fail to get tx_desc", K(ret));
       } else if (OB_FAIL(txs->get_ls_read_snapshot(*tx_desc, transaction::ObTxIsolationLevel::RC, ls_id, timeout_ts, snapshot))) {
         LOG_WARN("fail to get snapshot", K(ret));
       } else {
@@ -170,14 +168,14 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
         lob_param.sql_mode_ = SMO_DEFAULT;
         lob_param.ls_id_ = ls_id;
         lob_param.tablet_id_ = tablet_id;
-        lob_param.coll_type_ = column.col_type_.get_collation_type();
+        lob_param.coll_type_ = cs_type;
         lob_param.allocator_ = &allocator;
         lob_param.lob_common_ = nullptr;
         lob_param.timeout_ = timeout_ts;
         lob_param.scan_backward_ = false;
         lob_param.offset_ = 0;
         lob_param.inrow_threshold_ = lob_storage_param.inrow_threshold_;
-        LOG_DEBUG("lob storage param", K(lob_storage_param), K(column));
+        LOG_DEBUG("lob storage param", K(lob_storage_param), K(cs_type));
         if (!src.is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid src lob locator.", K(ret));
@@ -199,7 +197,7 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
 int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
                                                const share::ObLSID ls_id,
                                                const common::ObTabletID tablet_id,
-                                               const ObColDesc &column,
+                                               const ObCollationType &cs_type,
                                                const ObLobStorageParam &lob_storage_param,
                                                ObObj &obj,
                                                const int64_t timeout_ts)
@@ -207,8 +205,82 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   ObStorageDatum datum;
   datum.from_obj(obj);
-  if (OB_SUCC(insert_lob_column(allocator, ls_id, tablet_id, column, lob_storage_param, datum, timeout_ts, obj.has_lob_header(), MTL_ID()))) {
+  if (OB_SUCC(insert_lob_column(allocator, ls_id, tablet_id, cs_type, lob_storage_param, datum, timeout_ts, obj.has_lob_header(), MTL_ID()))) {
     obj.set_lob_value(obj.get_type(), datum.get_string().ptr(), datum.get_string().length());
+  }
+  return ret;
+}
+
+int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
+                                               transaction::ObTxDesc *tx_desc,
+                                               const share::ObLSID ls_id,
+                                               const common::ObTabletID tablet_id,
+                                               const ObLobId &lob_id,
+                                               const ObCollationType collation_type,
+                                               const ObLobStorageParam &lob_storage_param,
+                                               blocksstable::ObStorageDatum &datum,
+                                               const int64_t timeout_ts,
+                                               const bool has_lob_header,
+                                               ObLobMetaWriteIter &iter)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+
+  ObLobManager *lob_mngr = MTL(ObLobManager*);
+  if (OB_ISNULL(lob_mngr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get lob manager handle.", K(ret));
+  } else {
+    ObString data = datum.get_string();
+    // datum with null ptr and zero len should treat as no lob header
+    bool set_has_lob_header = has_lob_header && data.length() > 0;
+    ObLobLocatorV2 src(data, set_has_lob_header);
+    int64_t byte_len = 0;
+    if (OB_FAIL(src.get_lob_data_byte_len(byte_len))) {
+      LOG_WARN("fail to get lob data byte len", K(ret), K(src));
+    } else if (src.has_inrow_data() && byte_len <= ObLobManager::LOB_IN_ROW_MAX_LENGTH) {
+      // do fast inrow
+      if (OB_FAIL(src.get_inrow_data(data))) {
+        LOG_WARN("fail to get inrow data", K(ret), K(src));
+      } else {
+        void *buf = allocator.alloc(data.length() + sizeof(ObLobCommon));
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("alloc buffer failed", K(ret), K(data.length()));
+        } else {
+          ObLobCommon *lob_comm = new(buf)ObLobCommon();
+          MEMCPY(lob_comm->buffer_, data.ptr(), data.length());
+          datum.set_lob_data(*lob_comm, data.length() + sizeof(ObLobCommon));
+          iter.set_end();
+        }
+      }
+    } else {
+      ObTransService *txs = MTL(transaction::ObTransService*);
+      ObTxReadSnapshot snapshot;
+      // 4.0 text tc compatiable
+      ObLobAccessParam lob_param;
+      // lob_param.tx_desc_ = tx_desc;
+      // lob_param.snapshot_ = snapshot;
+      lob_param.sql_mode_ = SMO_DEFAULT;
+      lob_param.ls_id_ = ls_id;
+      lob_param.tablet_id_ = tablet_id;
+      lob_param.coll_type_ = collation_type;
+      lob_param.allocator_ = &allocator;
+      lob_param.lob_common_ = nullptr;
+      lob_param.timeout_ = timeout_ts;
+      lob_param.scan_backward_ = false;
+      lob_param.offset_ = 0;
+      lob_param.spec_lob_id_ = lob_id;
+      lob_param.inrow_threshold_ = lob_storage_param.inrow_threshold_;
+      if (!src.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid src lob locator.", K(ret));
+      } else if (OB_FAIL(lob_mngr->append(lob_param, src, iter))) {
+        LOG_WARN("lob append failed.", K(ret));
+      } else {
+        datum.set_lob_data(*lob_param.lob_common_, lob_param.handle_size_);
+      }
+    }
   }
   return ret;
 }

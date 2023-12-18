@@ -213,13 +213,9 @@ int ObDirectLoadOriginTableScanner::init(ObDirectLoadOriginTable *origin_table,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", KR(ret), KPC(origin_table), K(query_range));
   } else {
-    blocksstable::ObSSTable *major_sstable = origin_table->get_major_sstable();
     origin_table_ = origin_table;
     allocator_.set_tenant_id(MTL_ID());
-    if (major_sstable != nullptr && major_sstable->is_co_sstable() && !major_sstable->is_empty()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not supported scan co sstable", K(ret), KPC(major_sstable));
-    } else if (OB_FAIL((init_table_access_param()))) {
+    if (OB_FAIL((init_table_access_param()))) {
       LOG_WARN("fail to init query range", KR(ret));
     } else if (OB_FAIL(init_table_access_ctx())) {
       LOG_WARN("fail to init table access param", KR(ret));
@@ -300,7 +296,7 @@ int ObDirectLoadOriginTableScanner::init_table_access_ctx()
   share::SCN snapshot_scn;
   if (OB_FAIL(snapshot_scn.convert_for_tx(snapshot_version))) {
     LOG_WARN("fail to convert scn", KR(ret));
-  } else if (OB_FAIL(store_ctx_.init_for_read(origin_table_->get_meta().ls_id_, INT64_MAX, -1,
+  } else if (OB_FAIL(store_ctx_.init_for_read(origin_table_->get_meta().ls_id_, tablet_id, INT64_MAX, -1,
                                        snapshot_scn))) {
     LOG_WARN("fail to init for read", KR(ret));
   } else if (OB_FAIL(table_access_ctx_.init(query_flag, store_ctx_, allocator_, allocator_,

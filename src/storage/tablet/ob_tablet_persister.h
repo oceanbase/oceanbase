@@ -100,7 +100,7 @@ public:
   ObMetaDiskAddr tablet_macro_info_addr_;
   ObTabletCreateDeleteMdsUserData tablet_status_cache_;
   bool is_row_store_;
-  ObITable **ddl_kvs_;
+  ObDDLKV **ddl_kvs_;
   int64_t ddl_kv_count_;
   memtable::ObIMemtable *memtables_[MAX_MEMSTORE_CNT];
   int64_t memtable_count_;

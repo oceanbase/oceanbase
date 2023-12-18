@@ -416,6 +416,7 @@ struct ObStoreCtx
   bool is_replay() const { return mvcc_acc_ctx_.is_replay(); }
   bool is_read_store_ctx() const { return is_read_store_ctx_; }
   int init_for_read(const share::ObLSID &ls_id,
+                    const common::ObTabletID tablet_id,
                     const int64_t timeout,
                     const int64_t lock_timeout_us,
                     const share::SCN &snapshot_version);

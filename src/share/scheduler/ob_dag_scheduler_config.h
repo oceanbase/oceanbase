@@ -61,14 +61,14 @@ DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_WRITE_CKPT, ObDagPrio::DAG_PRIO_COMPACTION_L
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MDS_TABLE_MERGE, ObDagPrio::DAG_PRIO_COMPACTION_HIGH, ObSysTaskType::MDS_TABLE_MERGE_TASK, "MDS_TABLE_MERGE", "COMPACTION",
     false, 3, {"ls_id", "tablet_id", "flush_scn"})
 
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_DDL, ObDagPrio::DAG_PRIO_DDL, ObSysTaskType::DDL_TASK, "DDL", "DDL",
-    false, 7, {"ls_id", "source_tablet_id", "dest_tablet_id", "data_table_id", "target_table_id", "schema_version", "snapshot_version"})
+DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_DDL, ObDagPrio::DAG_PRIO_DDL, ObSysTaskType::DDL_TASK, "DDL_COMPLEMENT", "DDL",
+    true, 7, {"ls_id", "source_tablet_id", "dest_tablet_id", "data_table_id", "target_table_id", "schema_version", "snapshot_version"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_UNIQUE_CHECKING, ObDagPrio::DAG_PRIO_DDL, ObSysTaskType::DDL_TASK, "UNIQUE_CHECK", "DDL",
-    false, 2, {"tablet_id", "index_id"})
+    true, 2, {"tablet_id", "index_id"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_SQL_BUILD_INDEX, ObDagPrio::DAG_PRIO_DDL, ObSysTaskType::DDL_TASK, "SQL_BUILD_INDEX", "DDL",
-    false, 0, {})
+    true, 0, {})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_DDL_KV_MERGE, ObDagPrio::DAG_PRIO_DDL_HIGH, ObSysTaskType::DDL_KV_MERGE_TASK, "DDL_KV_MERGE", "DDL",
-    false, 3, {"ls_id", "tablet_id", "rec_scn"})
+    true, 3, {"ls_id", "tablet_id", "rec_scn"})
 
 // DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MIGRATE, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::MIGRATION_TASK, "MIGRATE", "MIGRATE")
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_INITIAL_COMPLETE_MIGRATION, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::MIGRATION_TASK, "INITIAL_COMPLETE_MIGRATION", "MIGRATE",

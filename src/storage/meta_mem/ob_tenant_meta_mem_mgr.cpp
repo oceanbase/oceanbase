@@ -226,7 +226,6 @@ void ObTenantMetaMemMgr::init_pool_arr()
   pool_arr_[static_cast<int>(ObITable::TableType::TX_DATA_MEMTABLE)] = &tx_data_memtable_pool_;
   pool_arr_[static_cast<int>(ObITable::TableType::TX_CTX_MEMTABLE)] = &tx_ctx_memtable_pool_;
   pool_arr_[static_cast<int>(ObITable::TableType::LOCK_MEMTABLE)] = &lock_memtable_pool_;
-  pool_arr_[static_cast<int>(ObITable::TableType::DDL_MEM_SSTABLE)] = &ddl_kv_pool_;
 }
 
 int ObTenantMetaMemMgr::start()
@@ -364,7 +363,7 @@ int ObTenantMetaMemMgr::push_table_into_gc_queue(ObITable *table, const ObITable
   } else if (OB_UNLIKELY(!ObITable::is_table_type_valid(table_type))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid table key", K(ret), K(table_type), KPC(table));
-  } else if (OB_UNLIKELY(ObITable::is_sstable(table_type) && ObITable::DDL_MEM_SSTABLE != table_type)) {
+  } else if (OB_UNLIKELY(ObITable::is_sstable(table_type))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("should not recycle sstable", K(ret), K(table_type), KPC(table));
   } else if (OB_ISNULL(item = (TableGCItem *)ob_malloc(size, attr))) {
@@ -972,7 +971,7 @@ int ObTenantMetaMemMgr::get_min_mds_ckpt_scn(const ObTabletMapKey &key, share::S
   return ret;
 }
 
-int ObTenantMetaMemMgr::acquire_ddl_kv(ObTableHandleV2 &handle)
+int ObTenantMetaMemMgr::acquire_ddl_kv(ObDDLKVHandle &handle)
 {
   int ret = OB_SUCCESS;
   ObDDLKV *ddl_kv = nullptr;
@@ -982,7 +981,7 @@ int ObTenantMetaMemMgr::acquire_ddl_kv(ObTableHandleV2 &handle)
     LOG_WARN("ObTenantMetaMemMgr hasn't been initialized", K(ret));
   } else if (OB_FAIL(ddl_kv_pool_.acquire(ddl_kv))) {
     LOG_WARN("fail to acquire ddl kv object", K(ret));
-  } else if (OB_FAIL(handle.set_table(ddl_kv, this, ObITable::TableType::DDL_MEM_SSTABLE))) {
+  } else if (OB_FAIL(handle.set_obj(ddl_kv))) {
     LOG_WARN("fail to set table", K(ret), KP(ddl_kv));
   } else {
     ddl_kv = nullptr;

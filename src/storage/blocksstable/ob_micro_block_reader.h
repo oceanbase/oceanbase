@@ -127,10 +127,6 @@ public:
       const int32_t col_offset,
       const int64_t row_index,
       ObStorageDatum &datum) override;
-  virtual int compare_rowkey(
-      const ObDatumRowkey &rowkey,
-      const int64_t index,
-      int32_t &compare_result) override;
   virtual int find_bound(
       const ObDatumRowkey &key,
       const bool lower_bound,

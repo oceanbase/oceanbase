@@ -162,6 +162,11 @@ struct ObDatumDesc {
   bool is_ext() const { return flag_ == FlagType::EXT; }
   void set_outrow() { null_ = 0; flag_ = FlagType::OUTROW; }
   bool is_outrow() const { return flag_ == FlagType::OUTROW; }
+
+  void set_flag(const FlagType &flag_type) { flag_ = flag_type; }
+  void set_has_lob_header() { flag_ = FlagType::HAS_LOB_HEADER; }
+  bool has_lob_header() const { return flag_ == FlagType::HAS_LOB_HEADER; }
+  void set_flag_none() { flag_ = FlagType::NONE; }
 } __attribute__ ((packed)) ;
 
 // Datum structure, multiple inheritance from ObDatumPtr and ObDatumDesc makes

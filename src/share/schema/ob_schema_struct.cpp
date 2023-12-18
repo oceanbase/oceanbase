@@ -13911,6 +13911,30 @@ int ObColumnGroupSchema::remove_column_id(const uint64_t column_id)
   return ret;
 }
 
+void ObColumnGroupSchema::remove_all_cols() {
+  column_id_cnt_ = 0;
+  MEMSET(column_id_arr_, 0, sizeof(uint64_t) * column_id_arr_capacity_);
+}
+
+int ObColumnGroupSchema::get_column_group_type_name(ObString &readable_cg_name) const
+{
+  int ret = OB_SUCCESS;
+  if (column_group_type_ > ObColumnGroupType::NORMAL_COLUMN_GROUP ||
+      column_group_type_ < ObColumnGroupType::DEFAULT_COLUMN_GROUP) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("receive not suppoted column group type", K(ret), K(column_group_type_));
+  } else {
+    /* use column group type as index, and check whether out of range*/
+    const char* readable_name = OB_COLUMN_GROUP_TYPE_NAME[column_group_type_];
+    const int32_t readable_name_len = static_cast<int32_t>(strlen(readable_name));
+    if (readable_name_len != readable_cg_name.write(readable_name, readable_name_len)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to wriet column group name, check whether buffer size enough", K(ret), K(readable_cg_name));
+    }
+  }
+  return ret;
+}
+
 OB_DEF_SERIALIZE(ObSkipIndexColumnAttr)
 {
   int ret = OB_SUCCESS;

@@ -92,6 +92,13 @@ int ObIndexBlockScanEstimator::estimate_row_count(ObPartitionEst &part_est)
     STORAGE_LOG(WARN, "Failed to init index block row scanner", K(ret), K(agg_projector), K(agg_column_schema));
   } else if (OB_FAIL(context_.sstable_.get_index_tree_root(root_index_block_))) {
     STORAGE_LOG(WARN, "Failed to get index tree root", K(ret));
+  } else if (context_.sstable_.is_ddl_merge_sstable()) {
+    index_block_row_scanner_.set_iter_param(&context_.sstable_,
+                                            context_.tablet_handle_.get_obj()->get_ls_id(),
+                                            context_.tablet_handle_.get_obj()->get_tablet_id(),
+                                            context_.tablet_handle_.get_obj());
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(cal_total_row_count(result))) {
     STORAGE_LOG(WARN, "Failed to get total_row_count_delta", K(ret), K(root_index_block_));
   } else if (result.total_row_count_ > 0) {

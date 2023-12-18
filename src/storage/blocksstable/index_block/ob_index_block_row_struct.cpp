@@ -14,6 +14,7 @@
 
 #include "common/row/ob_row.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
+#include "storage/blocksstable/ob_data_store_desc.h"
 #include "ob_index_block_row_struct.h"
 
 

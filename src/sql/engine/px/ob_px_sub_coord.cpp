@@ -39,7 +39,7 @@
 #include "observer/ob_server_struct.h"
 #include "observer/ob_server.h"
 #include "sql/ob_sql_trans_control.h"
-#include "storage/ddl/ob_direct_insert_sstable_ctx.h"
+#include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
 #include "sql/engine/px/ob_granule_pump.h"
 #include "sql/das/ob_das_utils.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
@@ -820,16 +820,18 @@ int ObPxSubCoord::check_need_start_ddl(bool &need_start_ddl)
   return ret;
 }
 
+typedef std::pair<oceanbase::share::ObLSID, oceanbase::common::ObTabletID> LSTabletIDPair;
+
 int ObPxSubCoord::start_ddl()
 {
   int ret = OB_SUCCESS;
   ObExecContext *exec_ctx = sqc_arg_.exec_ctx_;
-  int64_t schema_version = 0;
   ObSQLSessionInfo *my_session = nullptr;
-  ObPhysicalPlanCtx *plan_ctx = NULL;
+  ObPhysicalPlanCtx *plan_ctx = nullptr;
   const ObPhysicalPlan *phy_plan = nullptr;
   ObIArray<ObSqcTableLocationKey> &location_keys = sqc_arg_.sqc_.get_access_table_location_keys();
-  if (OB_UNLIKELY(ddl_ctrl_.is_valid())) {
+  ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
+  if (OB_UNLIKELY(ddl_ctrl_.is_in_progress())) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ddl ctrl has already been inited", K(ret), K(ddl_ctrl_));
   } else if (OB_ISNULL(exec_ctx)) {
@@ -847,43 +849,111 @@ int ObPxSubCoord::start_ddl()
   } else if (OB_UNLIKELY(location_keys.count() == 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("there is no location key", K(ret));
+  } else if (OB_ISNULL(tenant_direct_load_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected err", K(ret), K(MTL_ID()));
   } else {
-    ObSSTableInsertTableParam param;
+    common::ObArray<LSTabletIDPair> ls_tablet_ids;
+    uint64_t data_format_version = 0;
+    int64_t snapshot_version = 0;
+    share::ObDDLTaskStatus unused_task_status = share::ObDDLTaskStatus::PREPARE;
+    const int64_t tenant_id = my_session->get_effective_tenant_id();
     const int64_t ref_table_id = location_keys.at(0).ref_table_id_;
     const int64_t ddl_table_id = phy_plan->get_ddl_table_id();
-    const int64_t tenant_id = my_session->get_effective_tenant_id();
-    if (OB_FAIL(get_participants(sqc_arg_.sqc_, ddl_table_id, param.ls_tablet_ids_))) {
+    const int64_t ddl_task_id = phy_plan->get_ddl_task_id();
+    const int64_t schema_version = phy_plan->get_ddl_schema_version();
+    const int64_t ddl_execution_id = phy_plan->get_ddl_execution_id();
+    if (OB_FAIL(ObDDLUtil::get_data_information(tenant_id, ddl_task_id, data_format_version, snapshot_version, unused_task_status))) {
+      LOG_WARN("get ddl cluster version failed", K(ret));
+    } else if (OB_UNLIKELY(snapshot_version <= 0)) {
+      ret = OB_NEED_RETRY;
+      LOG_WARN("invalid snapshot version", K(ret),K(tenant_id), K(ddl_task_id), K(ddl_execution_id),
+          K(ddl_table_id), K(schema_version), K(snapshot_version));
+    } else if (OB_FAIL(get_participants(sqc_arg_.sqc_, ddl_table_id, ls_tablet_ids))) {
       LOG_WARN("fail to get tablet ids", K(ret));
     } else {
-      param.dest_table_id_ = phy_plan->get_ddl_table_id();
-      param.snapshot_version_ = 0L;
-      param.schema_version_ = phy_plan->get_ddl_schema_version();
-      param.task_cnt_ = sqc_arg_.sqc_.get_task_count();
-      param.write_major_ = true;
-      param.exec_ctx_ = exec_ctx;
-      param.execution_id_ = phy_plan->get_ddl_execution_id();
-      param.ddl_task_id_ = phy_plan->get_ddl_task_id();
-      if (OB_FAIL(ObDDLUtil::get_data_format_version(tenant_id, param.ddl_task_id_, param.data_format_version_))) {
-        LOG_WARN("get ddl cluster version failed", K(ret));
-      } else if (OB_FAIL(ObSSTableInsertManager::get_instance().create_table_context(param, ddl_ctrl_.context_id_))) {
-        LOG_WARN("create table context failed", K(ret));
-      } else {
-        FLOG_INFO("start ddl", "context_id", ddl_ctrl_.context_id_, K(param));
+      ObTabletDirectLoadInsertParam direct_load_param;
+      direct_load_param.is_replay_ = false;
+      direct_load_param.common_param_.direct_load_type_ = ObDirectLoadType::DIRECT_LOAD_DDL;
+      direct_load_param.common_param_.data_format_version_ = data_format_version;
+      direct_load_param.common_param_.read_snapshot_ = snapshot_version;
+      direct_load_param.runtime_only_param_.exec_ctx_ = exec_ctx;
+      direct_load_param.runtime_only_param_.task_id_ = ddl_task_id;
+      direct_load_param.runtime_only_param_.table_id_ = ddl_table_id;
+      direct_load_param.runtime_only_param_.schema_version_ = schema_version;
+      direct_load_param.runtime_only_param_.task_cnt_ = sqc_arg_.sqc_.get_task_count();
+      SCN unused_scn;
+      ObTabletDirectLoadMgrHandle unsued_handle;
+      if (OB_FAIL(tenant_direct_load_mgr->alloc_execution_context_id(ddl_ctrl_.context_id_))) {
+        LOG_WARN("alloc execution context id failed", K(ret));
       }
+      for (int64_t i = 0; OB_SUCC(ret) && i < ls_tablet_ids.count(); ++i) {
+        direct_load_param.common_param_.ls_id_ = ls_tablet_ids.at(i).first;
+        direct_load_param.common_param_.tablet_id_ = ls_tablet_ids.at(i).second;
+        if (OB_FAIL(tenant_direct_load_mgr->create_tablet_direct_load(ddl_ctrl_.context_id_,
+            ddl_execution_id, direct_load_param))) {
+          LOG_WARN("create tablet manager failed", K(ret));
+        } else if (OB_FAIL(tenant_direct_load_mgr->open_tablet_direct_load(true,
+            direct_load_param.common_param_.ls_id_, direct_load_param.common_param_.tablet_id_, ddl_ctrl_.context_id_, unused_scn, unsued_handle))) {
+          LOG_WARN("write ddl start log failed", K(ret), K(direct_load_param));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ddl_ctrl_.in_progress_ = true;
+      }
+      FLOG_INFO("start ddl", K(ret), K(direct_load_param), K(ls_tablet_ids));
     }
   }
   return ret;
 }
 
+// TODO yiren, end ddl in table level, and create sstable in parallel.
 int ObPxSubCoord::end_ddl(const bool need_commit)
 {
   int ret = OB_SUCCESS;
-  if (ddl_ctrl_.is_valid()) {
-    ObSSTableInsertManager &ddl_ctx_mgr = ObSSTableInsertManager::get_instance();
-    if (OB_FAIL(ddl_ctx_mgr.finish_table_context(ddl_ctrl_.context_id_, need_commit))) {
-      LOG_WARN("ddl manager finish contex failed", K(ret), K(ddl_ctrl_));
+  if (ddl_ctrl_.is_in_progress()) {
+    ObExecContext *exec_ctx = sqc_arg_.exec_ctx_;
+    ObSQLSessionInfo *my_session = nullptr;
+    ObPhysicalPlanCtx *plan_ctx = nullptr;
+    const ObPhysicalPlan *phy_plan = nullptr;
+    common::ObArray<LSTabletIDPair> ls_tablet_ids;
+    ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
+    if (OB_ISNULL(exec_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected, exec ctx must not be nullptr", K(ret));
+    } else if (OB_ISNULL(my_session = GET_MY_SESSION(*exec_ctx))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected, session must not be nullptr", K(ret));
+    } else if (OB_ISNULL(plan_ctx = GET_PHY_PLAN_CTX(*exec_ctx))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("deserialized exec ctx without phy plan ctx set. Unexpected", K(ret));
+    } else if (OB_ISNULL(phy_plan = plan_ctx->get_phy_plan())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected, phy plan must not be nullptr", K(ret));
+    } else if (OB_ISNULL(tenant_direct_load_mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected err", K(ret), K(MTL_ID()));
+    } else {
+      const int64_t ddl_table_id = phy_plan->get_ddl_table_id();
+      const int64_t ddl_task_id = phy_plan->get_ddl_task_id();
+      const int64_t ddl_execution_id = phy_plan->get_ddl_execution_id();
+      if (OB_FAIL(get_participants(sqc_arg_.sqc_, ddl_table_id, ls_tablet_ids))) {
+        LOG_WARN("fail to get tablet ids", K(ret));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < ls_tablet_ids.count(); ++i) {
+          if (OB_FAIL(tenant_direct_load_mgr->close_tablet_direct_load(ddl_ctrl_.context_id_, true, /*is_full_direct_load*/
+            ls_tablet_ids.at(i).first, ls_tablet_ids.at(i).second, need_commit, true /*emergent_finish*/,
+            ddl_task_id, ddl_table_id, ddl_execution_id))) {
+            LOG_WARN("close tablet direct load failed", K(ret), "tablet_id", ls_tablet_ids.at(i).second);
+          }
+        }
+        if (OB_SUCC(ret)) {
+          // finish this execution.
+          ddl_ctrl_.in_progress_ = false;
+        }
+      }
     }
-    LOG_INFO("end ddl sstable", K(ret), K(need_commit));
+    FLOG_INFO("end ddl sstable", K(ret), K(need_commit), K(ls_tablet_ids));
     DEBUG_SYNC(END_DDL_IN_PX_SUBCOORD);
   }
   if (OB_EAGAIN == ret) {

@@ -67,6 +67,7 @@ void ObIndexTreeRootCtx::reset()
   meta_block_offset_ = 0;
   meta_block_size_ = 0;
   last_macro_size_ = 0;
+  use_absolute_offset_ = false;
 }
 
 int ObIndexTreeRootCtx::init(common::ObIAllocator &allocator)
@@ -608,6 +609,7 @@ int ObSSTableIndexBuilder::trim_empty_roots()
   } else if (OB_FAIL(tmp_roots.reserve(root_count))) {
     STORAGE_LOG(WARN, "fail to reserve tmp roots", K(ret), K(root_count));
   } else {
+    bool use_absolute_offset = false;
     for (int64_t i = 0; i < root_count && OB_SUCC(ret); ++i) {
       if (nullptr == roots_[i]) {
         // skip
@@ -616,6 +618,11 @@ int ObSSTableIndexBuilder::trim_empty_roots()
       } else {
         if (OB_FAIL(tmp_roots.push_back(roots_[i]))) {
           STORAGE_LOG(WARN, "fail to push back root", K(ret), KPC(roots_[i]));
+        } else if (tmp_roots.count() == 1) {
+          use_absolute_offset = tmp_roots.at(0)->use_absolute_offset_;
+        } else if (OB_UNLIKELY(roots_[i]->use_absolute_offset_ != use_absolute_offset)) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN, "unexpected row offset", K(ret), KPC(roots_[i]), K(use_absolute_offset));
         }
       }
     }
@@ -730,6 +737,7 @@ int ObSSTableIndexBuilder::merge_index_tree(ObSSTableMergeRes &res)
     ObIndexBlockRowDesc row_desc(data_desc.get_desc());
     int64_t row_idx = -1;
     ObLogicMacroBlockId prev_logic_id;
+    const bool need_rewrite = index_store_desc_.get_desc().is_cg() && !roots_[0]->use_absolute_offset_;
     for (int64_t i = 0; OB_SUCC(ret) && i < roots_.count(); ++i) {
       ObMacroMetasArray *macro_metas = roots_[i]->macro_metas_;
       for (int64_t j = 0; OB_SUCC(ret) && j < macro_metas->count(); ++j) {
@@ -742,8 +750,8 @@ int ObSSTableIndexBuilder::merge_index_tree(ObSSTableMergeRes &res)
           // and we don't want more additional memory/time consumption, we only check continuous ids here
           ret = OB_ERR_UNEXPECTED;
           STORAGE_LOG(ERROR, "unexpected duplicate logic macro id", K(ret), KPC(macro_meta), K(prev_logic_id));
-        } else if (index_store_desc_.get_desc().is_cg()) {
-          // use row_idx to rewrite endkey
+        } else if (need_rewrite) {
+          // use row_idx to rewrite endkey unless absolute offset has been used
           macro_meta->end_key_.datums_[0].set_int(
               macro_meta->val_.row_count_ + row_idx);
         }
@@ -1285,7 +1293,13 @@ int ObBaseIndexBlockBuilder::check_order(const ObIndexBlockRowDesc &row_desc)
   if (OB_UNLIKELY(!row_desc.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid row desc", K(ret), K(row_desc));
-  } else if (last_rowkey_.is_valid() && !index_store_desc_->is_cg()) {
+  } else if (!last_rowkey_.is_valid()) { // skip
+  } else if (index_store_desc_->is_cg()) { // datum_utils is lacked for cg
+    if (row_desc.row_key_.get_datum(0).get_int() <= last_rowkey_.get_datum(0).get_int()) {
+      ret = OB_ROWKEY_ORDER_ERROR;
+      STORAGE_LOG(ERROR, "input rowkey is less then last rowkey.", K(row_desc.row_key_), K(last_rowkey_), K(ret));
+    }
+  } else {
     const ObDatumRowkey &cur_rowkey = row_desc.row_key_;
     int32_t compare_result = 0;
     const ObStorageDatumUtils &datum_utils = index_store_desc_->get_datum_utils();
@@ -2491,7 +2505,7 @@ void ObIndexBlockRebuilder::reset()
   sstable_builder_ = nullptr;
 }
 
-int ObIndexBlockRebuilder::init(ObSSTableIndexBuilder &sstable_builder, bool need_sort, const int64_t *task_idx)
+int ObIndexBlockRebuilder::init(ObSSTableIndexBuilder &sstable_builder, bool need_sort, const int64_t *task_idx, const bool use_absolute_offset)
 {
   int ret = OB_SUCCESS;
   const int64_t bucket_num = 109;
@@ -2513,6 +2527,7 @@ int ObIndexBlockRebuilder::init(ObSSTableIndexBuilder &sstable_builder, bool nee
     }
     if (OB_SUCC(ret)) {
       need_sort_ = need_sort;
+      index_tree_root_ctx_->use_absolute_offset_ = use_absolute_offset;
       is_inited_ = true;
     }
   }

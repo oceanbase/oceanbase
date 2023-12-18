@@ -1664,10 +1664,9 @@ int ObSchemaServiceSQLImpl::fetch_all_column_group_schema(
       LOG_WARN("fail to append sql", KR(ret), K(schema_version));
     } else if (OB_FAIL(sql.append_fmt(" ORDER BY TENANT_ID DESC, TABLE_ID DESC, COLUMN_GROUP_ID ASC"))) {
       LOG_WARN("fail to append sql", KR(ret));
-    } else if (is_history && OB_FAIL(sql.append_fmt(", SCHEMA_VERSION DESC"))) {
+    } else if (is_history && OB_FAIL(sql.append_fmt(", SCHEMA_VERSION ASC"))) {
       LOG_WARN("fail to append sql", KR(ret));
     }
-
     if (OB_SUCC(ret)) {
       SMART_VAR(ObMySQLProxy::MySQLResult, res) {
         ObMySQLResult *result = NULL;

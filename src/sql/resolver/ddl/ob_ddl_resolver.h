@@ -467,6 +467,9 @@ protected:
       const common::ObIArray<uint64_t> &column_ids,
       const uint64_t cg_id,
       share::schema::ObColumnGroupSchema &column_group);
+  int parse_cg_node(const ParseNode &cg_node, bool &exist_all_column_group) const;
+  int resolve_index_column_group(const ParseNode *node, obrpc::ObCreateIndexArg &create_index_arg);
+  bool need_column_group(const ObTableSchema &table_schema);
   int resolve_hints(const ParseNode *parse_node, ObDDLStmt &stmt, const ObTableSchema &table_schema);
   int calc_ddl_parallelism(const uint64_t hint_parallelism, const uint64_t table_dop, uint64_t &parallelism);
   int deep_copy_str(const common::ObString &src, common::ObString &dest);

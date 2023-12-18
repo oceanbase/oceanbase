@@ -310,7 +310,7 @@ int ObInnerTableSchema::gv_ob_sstables_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT  M.SVR_IP,  M.SVR_PORT,   (case M.TABLE_TYPE     when 0 then 'MEMTABLE' when 1 then 'TX_DATA_MEMTABLE' when 2 then 'TX_CTX_MEMTABLE'     when 3 then 'LOCK_MEMTABLE' when 10 then 'MAJOR' when 11 then 'MINOR'     when 12 then 'MINI' when 13 then 'META'     when 14 then 'DDL_DUMP' when 15 then 'REMOTE_LOGICAL_MINOR' when 16 then 'IMC_SEGMENT'     else 'INVALID'   end) as TABLE_TYPE,  M.LS_ID,  M.TABLET_ID,  M.START_LOG_SCN,  M.END_LOG_SCN,  M."SIZE",  M.REF,  M.UPPER_TRANS_VERSION,  M.IS_ACTIVE,  M.CONTAIN_UNCOMMITTED_ROW FROM  SYS.ALL_VIRTUAL_TABLE_MGR M )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT  M.SVR_IP,  M.SVR_PORT,   (case M.TABLE_TYPE     when 0 then 'MEMTABLE' when 1 then 'TX_DATA_MEMTABLE' when 2 then 'TX_CTX_MEMTABLE'     when 3 then 'LOCK_MEMTABLE' when 10 then 'MAJOR' when 11 then 'MINOR'     when 12 then 'MINI' when 13 then 'META'     when 14 then 'DDL_DUMP' when 15 then 'REMOTE_LOGICAL_MINOR' when 16 then 'IMC_SEGMENT' when 20 then 'DDL_MERGE'     else 'INVALID'   end) as TABLE_TYPE,  M.LS_ID,  M.TABLET_ID,  M.START_LOG_SCN,  M.END_LOG_SCN,  M."SIZE",  M.REF,  M.UPPER_TRANS_VERSION,  M.IS_ACTIVE,  M.CONTAIN_UNCOMMITTED_ROW FROM  SYS.ALL_VIRTUAL_TABLE_MGR M )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

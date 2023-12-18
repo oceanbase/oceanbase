@@ -2241,9 +2241,14 @@ int ObTableSchema::alter_column(ObColumnSchemaV2 &column_schema, ObColumnCheckMo
     if (src_schema->is_autoincrement() && !column_schema.is_autoincrement()) {
       autoinc_column_id_ = 0;
     }
-    if (src_schema->get_column_name_str() != dst_name) {
+    if (src_schema->get_column_name_str() != dst_name && is_column_store_supported()) {
       bool is_oracle_mode = false;
-      if (OB_FAIL(check_if_oracle_compat_mode(is_oracle_mode))) {
+      char cg_name[OB_MAX_COLUMN_GROUP_NAME_LENGTH] = {'\0'};
+      ObString cg_name_str(OB_MAX_COLUMN_GROUP_NAME_LENGTH, 0, cg_name);
+
+      if (OB_FAIL(src_schema->get_each_column_group_name(cg_name_str))) {
+        LOG_WARN("fail to get each column group name", K(ret));
+      } else if (OB_FAIL(check_if_oracle_compat_mode(is_oracle_mode))) {
         LOG_WARN("fail to check oracle mode", KR(ret));
       } else if (OB_FAIL(remove_col_from_name_hash_array(is_oracle_mode, src_schema))) {
         LOG_WARN("Failed to remove old column name from name_hash_array", K(ret));
@@ -2251,6 +2256,33 @@ int ObTableSchema::alter_column(ObColumnSchemaV2 &column_schema, ObColumnCheckMo
         LOG_WARN("failed to change column name", K(ret));
       } else if (OB_FAIL(add_col_to_name_hash_array(is_oracle_mode, src_schema))) {
         LOG_WARN("Failed to add new column name to name_hash_array", K(ret));
+      }
+
+      /*alter relavent column group name*/
+      ObColumnGroupSchema *column_group = nullptr;
+      if (OB_FAIL(ret)){
+      } else if (OB_FAIL(get_column_group_by_name(cg_name_str, column_group))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to check column group exist", K(ret), K(cg_name_str));
+        }
+      } else if(OB_ISNULL(column_group)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column group should no be null", K(ret));
+      } else if (OB_FAIL(cg_name_hash_arr_->erase_refactored(ObColumnGroupSchemaHashWrapper(
+                                                             column_group->get_column_group_name())))) {
+        LOG_WARN("fail to remove from cg name arr", K(ret));
+      } else {
+        cg_name_str.set_length(0);
+        if (OB_FAIL(src_schema->get_each_column_group_name(cg_name_str))) { /* src_schema column name has been changed*/
+          LOG_WARN("fail to get column group name", K(ret));
+        } else if (OB_FAIL(column_group->set_column_group_name(cg_name_str))) {
+          LOG_WARN("fail to set column group name", K(ret));
+        } else if (OB_FAIL((add_column_group_to_hash_array<ObColumnGroupSchemaHashWrapper, CgNameHashArray>(
+          column_group, ObColumnGroupSchemaHashWrapper(column_group->get_column_group_name()), cg_name_hash_arr_)))) {
+          LOG_WARN("fail to set cg_name _hash_arr", K(ret));
+        }
       }
     }
     if (OB_FAIL(ret)) {
@@ -8338,7 +8370,7 @@ int ObTableSchema::has_all_column_group(bool &has_all_column_group) const
 
 int ObTableSchema::get_column_group_by_id(
     const uint64_t column_group_id,
-    ObColumnGroupSchema *&column_group)
+    ObColumnGroupSchema *&column_group) const
 {
   int ret = OB_SUCCESS;
   column_group = NULL;
@@ -8355,9 +8387,7 @@ int ObTableSchema::get_column_group_by_id(
   return ret;
 }
 
-int ObTableSchema::get_column_group_by_name(
-    const ObString &cg_name,
-    ObColumnGroupSchema *&column_group)
+int ObTableSchema::get_column_group_by_name(const ObString &cg_name, ObColumnGroupSchema *&column_group) const
 {
   int ret = OB_SUCCESS;
   column_group = nullptr;
@@ -8366,10 +8396,12 @@ int ObTableSchema::get_column_group_by_name(
     LOG_WARN("invalid argument", K(ret), K(cg_name));
   } else if (OB_NOT_NULL(cg_name_hash_arr_)) {
     if (OB_FAIL(cg_name_hash_arr_->get_refactored(ObColumnGroupSchemaHashWrapper(cg_name), column_group))) {
-      LOG_WARN("fail to get column_group from hash array", K(ret), K(cg_name));
-    } else if (OB_ISNULL(column_group)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("column_group should not be null", K(ret), K(cg_name));
+      column_group = nullptr;
+      if (OB_HASH_NOT_EXIST == ret) {
+        /* skip, hash not exist normal situation no warn*/
+      } else {
+        LOG_WARN("fail to get column_group from hash array", K(ret), K(cg_name));
+      }
     }
   }
   return ret;
@@ -8520,7 +8552,43 @@ int ObTableSchema::add_column_group_to_array(ObColumnGroupSchema *column_group)
   return ret;
 }
 
-int ObTableSchema::is_column_group_exist(const ObString &cg_name, bool &exist)
+int ObTableSchema::remove_column_group(const uint64_t column_group_id)
+{
+  int ret = OB_SUCCESS;
+  bool is_cg_exist = false;
+  ObColumnGroupSchema *column_group = nullptr;
+  if (OB_FAIL(get_column_group_by_id(column_group_id, column_group))) {
+    LOG_WARN("fail to get column group by id", K(ret), K(column_group_id));
+  } else if (OB_ISNULL(column_group)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column group should be null", K(ret));
+  } else if (OB_ISNULL(cg_id_hash_arr_) || OB_ISNULL(cg_name_hash_arr_) ||
+             OB_ISNULL(column_group_arr_) || column_cnt_ <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column array and cnt should not be none or zero", K(ret), KP(column_group_arr_),
+             KP(cg_id_hash_arr_), KP(cg_name_hash_arr_), K(column_cnt_));
+  } else if (OB_FAIL(cg_id_hash_arr_->erase_refactored(ObColumnGroupIdKey(column_group->get_column_group_id())))) {
+    LOG_WARN("faile to erase column group id from table schema", K(ret));
+  } else if (OB_FAIL(cg_name_hash_arr_->erase_refactored(ObColumnGroupSchemaHashWrapper(
+                                                             column_group->get_column_group_name())))){
+    LOG_WARN("faile to erase column group name from table scheam", K(ret));
+  } else {
+    int new_loc = 0;
+    for (int64_t i = 0; i < column_group_arr_capacity_ && i < column_group_cnt_; i++) {
+      if (column_group_arr_[i] != column_group) {
+        column_group_arr_[new_loc] = column_group_arr_[i];
+        new_loc += 1;
+      } else {
+        /* skip column group need to be delete*/
+      }
+    }
+    column_group_cnt_--;
+  }
+  return ret;
+}
+
+
+int ObTableSchema::is_column_group_exist(const ObString &cg_name, bool &exist) const
 {
   int ret = OB_SUCCESS;
   exist = false;
@@ -8531,10 +8599,27 @@ int ObTableSchema::is_column_group_exist(const ObString &cg_name, bool &exist)
     if (OB_ISNULL(cg_name_hash_arr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("cg_name_hash_array should not be null", KR(ret));
+    } else if (cg_name == OB_EACH_COLUMN_GROUP_NAME) {
+      ObTableSchema::const_column_group_iterator iter_begin = column_group_begin();
+      ObTableSchema::const_column_group_iterator iter_end = column_group_end();
+      for (; OB_SUCC(ret) && iter_begin != iter_end; iter_begin++) {
+        const ObColumnGroupSchema *cg = *iter_begin;
+        if (ObColumnGroupType::SINGLE_COLUMN_GROUP == cg->get_column_group_type()) {
+          exist = true;
+          break;
+        }
+      }
     } else {
       ObColumnGroupSchema *column_group = NULL;
-      if (OB_SUCC(cg_name_hash_arr_->get_refactored(
-          ObColumnGroupSchemaHashWrapper(cg_name), column_group))) {
+      if (OB_FAIL(cg_name_hash_arr_->get_refactored(ObColumnGroupSchemaHashWrapper(cg_name), column_group))) {
+        exist = false;
+        if (OB_HASH_NOT_EXIST == ret) {
+          /* hash no exist is sucess situation */
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to get refactored from cg_name_hash_arr ", K(ret));
+        }
+      } else{
         exist = true;
       }
     }
@@ -8639,6 +8724,53 @@ int ObTableSchema::get_base_rowkey_column_group_index(int32_t &cg_idx) const
   return ret;
 }
 
+int ObTableSchema::get_each_column_group(ObIArray<ObColumnGroupSchema*> &each_cgs) const
+{
+  int ret = OB_SUCCESS;
+  each_cgs.reset();
+  ObTableSchema::const_column_group_iterator iter_begin = column_group_begin();
+  ObTableSchema::const_column_group_iterator iter_end = column_group_end();
+
+  for (;OB_SUCC(ret) && iter_begin != iter_end; iter_begin++ ) {
+    ObColumnGroupSchema *cg = *iter_begin;
+    if (OB_ISNULL(cg)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column group should not be null", K(ret), KP(cg));
+    } else if (cg->get_column_group_type() == ObColumnGroupType::SINGLE_COLUMN_GROUP) {
+      if (OB_FAIL(each_cgs.push_back(cg))) {
+        LOG_WARN("fail to add column group pointer to the array", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableSchema::get_all_column_ids(ObIArray<uint64_t> &column_ids) const
+{
+  int ret = OB_SUCCESS;
+  column_ids.reset();
+  if (get_column_count() == 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table has no columns", K(ret));
+  } else {
+    ObArray<ObColDesc> col_desc;
+    col_desc.reset();
+
+    if (OB_FAIL(get_column_ids(col_desc, true /*no virtual columns*/))) {
+      LOG_WARN("fail to get not virtual columns", K(ret));
+    } else {
+      ObArray<ObColDesc>::iterator iter_begin = col_desc.begin();
+      ObArray<ObColDesc>::iterator iter_end = col_desc.end();
+      for (; OB_SUCC(ret) && iter_begin != iter_end; iter_begin++) {
+        if (OB_FAIL(column_ids.push_back(iter_begin->col_id_))) {
+          LOG_WARN("fail to push column id to array", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 // convert column_udt_set_id
 int ObTableSchema::convert_column_udt_set_ids(const ObHashMap<uint64_t, uint64_t> &column_id_map)
 {
@@ -8702,6 +8834,30 @@ int ObTableSchema::convert_column_udt_set_ids(const ObHashMap<uint64_t, uint64_t
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObTableSchema::get_is_row_store(bool &is_row_store) const
+{
+  int ret = OB_SUCCESS;
+  int64_t not_empty_cg_cnt = 0;
+  if (OB_FAIL(get_store_column_group_count(not_empty_cg_cnt))) {
+    LOG_WARN("fail to get column group count", K(ret));
+  } else {
+    is_row_store = not_empty_cg_cnt <= 1;
+  }
+  return ret;
+}
+
+
+int ObTableSchema::get_is_column_store(bool &is_column_store) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_is_row_store(is_column_store))) {
+    LOG_WARN("fail to get is row store");
+  } else {
+    is_column_store = !is_column_store;
   }
   return ret;
 }

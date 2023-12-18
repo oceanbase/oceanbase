@@ -4485,6 +4485,47 @@ comment	longtext	YES
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_import_table_task_history;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_column_group_mapping;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+table_id	bigint(20)	NO	PRI	NULL	
+column_group_id	bigint(20)	NO	PRI	NULL	
+column_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_column_group_mapping;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_column_group_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+table_id	bigint(20)	NO	PRI	NULL	
+column_group_id	bigint(20)	NO	PRI	NULL	
+schema_version	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+is_deleted	bigint(20)	NO		NULL	
+column_group_name	varchar(256)	YES			
+column_group_type	bigint(20)	YES		NULL	
+block_size	bigint(20)	YES		NULL	
+compressor_type	bigint(20)	YES		NULL	
+row_store_type	bigint(20)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_column_group_history;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_column_group_mapping_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+table_id	bigint(20)	NO	PRI	NULL	
+column_group_id	bigint(20)	NO	PRI	NULL	
+column_id	bigint(20)	NO	PRI	NULL	
+schema_version	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+is_deleted	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_column_group_mapping_history;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_clone_job;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	

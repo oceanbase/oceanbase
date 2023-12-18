@@ -796,6 +796,9 @@ int ObSchemaHistoryRecycler::try_recycle_schema_history(
     RECYCLE_FIRST_SCHEMA(RECYCLE_ONLY, tablet, OB_ALL_TABLET_TO_TABLE_HISTORY_TNAME, tablet_id);
     ret = OB_SUCCESS; // overwrite ret
 
+    RECYCLE_SECOND_SCHEMA(column_group, OB_ALL_COLUMN_GROUP_HISTORY_TNAME, table_id, column_group_id);
+    RECYCLE_SECOND_SCHEMA(column_group_mapping, OB_ALL_COLUMN_GROUP_MAPPING_HISTORY_TNAME, table_id, column_group_id);
+    ret = OB_SUCCESS; // overwrite ret
     // ----------------------------- database ----------------------------------------
     RECYCLE_FIRST_SCHEMA(RECYCLE_AND_COMPRESS, database, OB_ALL_DATABASE_HISTORY_TNAME,
                          database_id);

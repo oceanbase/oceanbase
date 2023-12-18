@@ -1261,7 +1261,7 @@ public:
   inline void reset_column_count() { column_cnt_ = 0; }
   void reset_column_group_info();
   inline int64_t get_column_group_count() const { return column_group_cnt_; }
-  inline bool is_row_store() const { return column_group_cnt_ <= 1; }
+  int get_is_row_store(bool &is_row_store) const;
   inline void reset_column_group_count() { column_group_cnt_ = 0; }
   inline int64_t get_constraint_count() const { return cst_cnt_; }
   inline int64_t get_virtual_column_cnt() const { return virtual_column_cnt_; }
@@ -1371,7 +1371,7 @@ public:
   //
   bool is_column_store_supported() const { return is_column_store_supported_; }
   void set_column_store(const bool support_column_store) { is_column_store_supported_ = support_column_store; }
-  bool is_normal_column_store_table() const { return column_group_cnt_ > 1; }
+  int get_is_column_store(bool &is_column_store) const;
   uint64_t get_max_used_column_group_id() const { return max_used_column_group_id_; }
   void set_max_used_column_group_id(const uint64_t id) { max_used_column_group_id_ = id; }
   int add_column_group(const ObColumnGroupSchema &other);
@@ -1383,6 +1383,7 @@ public:
                                    const bool filter_empty_cg = true) const;
   int get_store_column_groups(ObIArray<const ObColumnGroupSchema *> &column_groups,
                               const bool filter_empty_cg = true) const;
+  int remove_column_group(const uint64_t column_group_id);
   int has_all_column_group(bool &has_all_column_group) const;
   // materialized view log related
   template <typename Allocator>
@@ -1497,12 +1498,16 @@ public:
   int set_column_encodings(const common::ObIArray<int64_t> &col_encodings);
   virtual int get_column_encodings(common::ObIArray<int64_t> &col_encodings) const override;
 
-  int get_column_group_by_id(const uint64_t column_group_id, ObColumnGroupSchema *&column_group);
-  int get_column_group_by_name(const ObString &cg_name, ObColumnGroupSchema *&column_group);
+  int get_column_group_by_id(const uint64_t column_group_id, ObColumnGroupSchema *&column_group) const;
+  int get_column_group_by_name(const ObString &cg_name, ObColumnGroupSchema *&column_group) const;
   int get_all_cg_type_column_group(const ObColumnGroupSchema *&column_group) const;
+  int get_each_column_group(ObIArray<ObColumnGroupSchema*> &each_cgs) const;
   int is_partition_key_match_rowkey_prefix(bool &is_prefix) const;
   int get_column_group_index(const share::schema::ObColumnParam &param, int32_t &cg_idx) const;
 
+  int is_column_group_exist(const common::ObString &cg_name, bool &exist) const;
+
+  int get_all_column_ids(ObIArray<uint64_t> &column_ids) const;
   int generate_partition_key_from_rowkey(const common::ObRowkey &rowkey,
                                          common::ObRowkey &hign_bound_value) const;
   virtual int init_column_meta_array(
@@ -1630,7 +1635,6 @@ protected:
   int add_column_group_to_hash_array(ObColumnGroupSchema *column_group,
                                      const KeyType &key,
                                      ArrayType *&array);
-  int is_column_group_exist(const common::ObString &cg_name, bool &exist);
 
 protected:
   // constraint related

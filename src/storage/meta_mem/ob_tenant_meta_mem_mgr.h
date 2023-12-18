@@ -202,7 +202,8 @@ public:
   int gc_tablets_in_queue(bool &all_tablet_cleaned); // trigger to gc tablets
 
   // ddl kv interface
-  int acquire_ddl_kv(ObTableHandleV2 &handle);
+  int acquire_ddl_kv(ObDDLKVHandle &handle);
+  void release_ddl_kv(ObDDLKV *ddl_kv);
 
   // memtable interfaces
   int acquire_memtable(ObTableHandleV2 &handle);
@@ -451,7 +452,6 @@ private:
   void *recycle_tablet(ObTablet *tablet, TabletBufferList *header = nullptr);
   void release_memtable(memtable::ObMemtable *memtable);
   void release_tablet(ObTablet *tablet);
-  void release_ddl_kv(ObDDLKV *ddl_kv);
   void release_tablet_ddl_kv_mgr(ObTabletDDLKvMgr *ddl_kv_mgr);
   void release_tx_data_memtable_(ObTxDataMemtable *memtable);
   void release_tx_ctx_memtable_(ObTxCtxMemtable *memtable);

@@ -52,7 +52,7 @@ int ObCGAggregatedScanner::init(
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("The ObCGAggregatedScanner has been inited", K(ret));
-  } else if (OB_UNLIKELY(!wrapper.is_valid() || !wrapper.get_sstable()->is_major_sstable() ||
+  } else if (OB_UNLIKELY(!wrapper.is_valid() || !wrapper.get_sstable()->is_major_or_ddl_merge_sstable() ||
                          !iter_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(wrapper), K(iter_param));

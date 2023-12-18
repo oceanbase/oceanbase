@@ -2658,8 +2658,8 @@ int ObJoinOrder::will_use_skip_scan(const uint64_t table_id,
     for (int64_t i = 0; OB_SUCC(ret) && i < ss_offset; ++i) {
       if (OB_FAIL(table_meta->add_column_meta_no_dup(column_items.at(i).column_id_ , ctx))) {
         LOG_WARN("failed to add column meta no duplicate", K(ret));
-      }
-    }
+	  }
+	}
   }
   LOG_TRACE("check use skip scan", K(helper.is_inner_path_),
                           K(hint_force_skip_scan), K(hint_force_no_skip_scan), K(use_skip_scan));

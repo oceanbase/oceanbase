@@ -14057,7 +14057,8 @@ int ObLogPlan::will_use_column_store(const uint64_t table_id,
     LOG_WARN("unexpect null table schema", K(ret));
   } else if (OB_FAIL(schema->has_all_column_group(has_all_column_group))) {
     LOG_WARN("failed to check has row store", K(ret));
-  } else if (OB_FALSE_IT(has_normal_column_group = schema->is_normal_column_store_table())) {
+  } else if (OB_FAIL(schema->get_is_column_store(has_normal_column_group))) {
+    LOG_WARN("failed to get is column store", K(ret));
   } else if (OB_FAIL(get_log_plan_hint().check_use_column_store(table_id,
                                                                 hint_force_use_column_store,
                                                                 hint_force_no_use_column_store))) {

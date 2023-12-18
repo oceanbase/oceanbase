@@ -218,13 +218,10 @@ int ObTableDirectLoadBeginExecutor::create_table_ctx()
   if (OB_SUCC(ret)) {
     ObTableLoadRedefTableStartArg start_arg;
     ObTableLoadRedefTableStartRes start_res;
-    uint64_t data_version = 0;
     start_arg.tenant_id_ = tenant_id;
     start_arg.table_id_ = table_id;
     start_arg.parallelism_ = arg_.parallel_;
-    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
-      LOG_WARN("fail to get tenant data version", KR(ret));
-    } else if (OB_FAIL(ObTableLoadRedefTable::start(start_arg, start_res,
+    if (OB_FAIL(ObTableLoadRedefTable::start(start_arg, start_res,
                                                     *client_task_->get_session_info()))) {
       LOG_WARN("fail to start redef table", KR(ret), K(start_arg));
     } else {
@@ -232,7 +229,7 @@ int ObTableDirectLoadBeginExecutor::create_table_ctx()
       ddl_param.task_id_ = start_res.task_id_;
       ddl_param.schema_version_ = start_res.schema_version_;
       ddl_param.snapshot_version_ = start_res.snapshot_version_;
-      ddl_param.data_version_ = data_version;
+      ddl_param.data_version_ = start_res.data_format_version_;
     }
   }
   // init param

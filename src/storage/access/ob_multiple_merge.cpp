@@ -1152,7 +1152,7 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
       }
     }
     if (OB_SUCC(ret) && need_table) {
-      if (table_ptr->is_empty()) {
+      if (table_ptr->no_data_to_read()) {
         LOG_DEBUG("cur table is empty", K(ret), KPC(table_ptr));
         continue;
       } else if (table_ptr->is_memtable()) {

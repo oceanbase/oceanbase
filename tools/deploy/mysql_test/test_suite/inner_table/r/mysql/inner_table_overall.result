@@ -696,6 +696,9 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12425	__all_virtual_import_table_job_history	2	201001	1
 12426	__all_virtual_import_table_task	2	201001	1
 12427	__all_virtual_import_table_task_history	2	201001	1
+12430	__all_virtual_column_group_mapping	2	201001	1
+12431	__all_virtual_column_group_history	2	201001	1
+12432	__all_virtual_column_group_mapping_history	2	201001	1
 12435	__all_virtual_clone_job	2	201001	1
 12436	__all_virtual_clone_job_history	2	201001	1
 12447	__all_virtual_aux_stat	2	201001	1

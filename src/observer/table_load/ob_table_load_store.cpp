@@ -311,8 +311,6 @@ int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info)
     ObTableLoadSqlStatistics sql_statistics;
     if (OB_FAIL(store_ctx_->check_status(ObTableLoadStatusType::MERGED))) {
       LOG_WARN("fail to check store status", KR(ret));
-    } else if (OB_FAIL(store_ctx_->insert_table_ctx_->commit())) {
-      LOG_WARN("fail to commit insert table", KR(ret));
     } else if (ctx_->schema_.has_autoinc_column_ && OB_FAIL(store_ctx_->commit_autoinc_value())) {
       LOG_WARN("fail to commit sync auto increment value", KR(ret));
     } else if (param_.online_opt_stat_gather_ &&

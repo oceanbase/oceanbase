@@ -38,7 +38,6 @@ int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
     const int64_t origin_timeout_ts = THIS_WORKER.get_timeout_ts();
     ObCreateHiddenTableArg create_table_arg;
     ObCreateHiddenTableRes create_table_res;
-    int64_t snapshot_version = OB_INVALID_VERSION;
     create_table_arg.reset();
     create_table_arg.exec_tenant_id_ = arg.tenant_id_;
     create_table_arg.tenant_id_ = arg.tenant_id_;
@@ -55,16 +54,16 @@ int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
     create_table_arg.consumer_group_id_ = THIS_WORKER.get_group_id();
     if (OB_FAIL(create_table_arg.tz_info_wrap_.deep_copy(session_info.get_tz_info_wrap()))) {
       LOG_WARN("failed to deep copy tz_info_wrap", KR(ret));
-    } else if (OB_FAIL(ObDDLServerClient::create_hidden_table(create_table_arg, create_table_res, snapshot_version, session_info))) {
+    } else if (OB_FAIL(ObDDLServerClient::create_hidden_table(create_table_arg, create_table_res,
+        res.snapshot_version_, res.data_format_version_, session_info))) {
       LOG_WARN("failed to create hidden table", KR(ret), K(create_table_arg));
-    } else if (OB_UNLIKELY(snapshot_version <= 0)) {
+    } else if (OB_UNLIKELY(res.snapshot_version_ <= 0 || res.data_format_version_ <= 0)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid snapshot version", K(ret));
+      LOG_WARN("invalid snapshot version", K(ret), K(res));
     } else {
       res.dest_table_id_ = create_table_res.dest_table_id_;
       res.task_id_ = create_table_res.task_id_;
       res.schema_version_ = create_table_res.schema_version_;
-      res.snapshot_version_ = snapshot_version;
       LOG_INFO("succeed to create hidden table", K(arg), K(res));
     }
     THIS_WORKER.set_timeout_ts(origin_timeout_ts);

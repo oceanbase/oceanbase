@@ -53,6 +53,7 @@
 #include "logservice/data_dictionary/ob_data_dict_service.h" // ObDataDictService
 #include "ob_tenant_mtl_helper.h"
 #include "storage/blocksstable/ob_decode_resource_pool.h"
+#include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
 #include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_access_service.h"
@@ -540,6 +541,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, ObPsCache::mtl_init, nullptr, ObPsCache::mtl_stop, nullptr, mtl_destroy_default);
     MTL_BIND2(server_obj_pool_mtl_new<ObPartTransCtx>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<ObPartTransCtx>);
     MTL_BIND2(server_obj_pool_mtl_new<ObTableScanIterator>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<ObTableScanIterator>);
+    MTL_BIND2(mtl_new_default, ObTenantDirectLoadMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND(ObDetectManager::mtl_init, ObDetectManager::mtl_destroy);
     MTL_BIND(ObTenantSQLSessionMgr::mtl_init, ObTenantSQLSessionMgr::mtl_destroy);
     MTL_BIND2(mtl_new_default, ObDTLIntermResultManager::mtl_init, ObDTLIntermResultManager::mtl_start,

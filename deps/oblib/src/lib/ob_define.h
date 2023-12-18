@@ -826,8 +826,10 @@ const int64_t MAX_COLUMN_YES_NO_LENGTH = 3;
 const int64_t MAX_COLUMN_VARCHAR_LENGTH = 262143;
 const int64_t MAX_COLUMN_CHAR_LENGTH = 255;
 //column group
+const uint64_t INVALID_COLUMN_GROUP_ID = 0;
 const uint64_t DEFAULT_TYPE_COLUMN_GROUP_ID = 1; // reserve 2~999
 const uint64_t COLUMN_GROUP_START_ID = 1000;
+const uint64_t DEFAULT_CUSTOMIZED_CG_NUM = 2;
 
 //Oracle
 const int64_t MAX_ORACLE_COMMENT_LENGTH = 4000;

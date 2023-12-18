@@ -141,7 +141,7 @@ public:
       scan_backward_(false),
       kv_queue_() {}
   ~BtreeIterator() { reset(); }
-  int init(ObKeyBtree &btree);
+  int init(const ObKeyBtree &btree);
   void reset();
   int set_key_range(const BtreeKey min_key, const bool start_exclude,
                     const BtreeKey max_key, const bool end_exclude, int64_t version);
@@ -176,7 +176,7 @@ private:
 public:
   explicit BtreeRawIterator(): iter_(NULL) {}
   ~BtreeRawIterator() { reset(); }
-  int init(ObKeyBtree &btree);
+  int init(const ObKeyBtree &btree);
   void reset();
   int set_key_range(const BtreeKey min_key, const bool start_exclude,
                     const BtreeKey max_key, const bool end_exclude, int64_t version);
@@ -228,9 +228,9 @@ public:
   int insert(const BtreeKey key, BtreeVal &value);
   int get(const BtreeKey key, BtreeVal &value);
   int set_key_range(BtreeIterator &iter, const BtreeKey min_key, const bool start_exclude,
-                    const BtreeKey max_key, const bool end_exclude, int64_t version);
+                    const BtreeKey max_key, const bool end_exclude, int64_t version) const;
   int set_key_range(BtreeRawIterator &handle, const BtreeKey min_key, const bool start_exclude,
-                    const BtreeKey max_key, bool end_exclude, int64_t version);
+                    const BtreeKey max_key, bool end_exclude, int64_t version) const;
   BtreeNode *alloc_node(const bool is_emergency);
   static void free_node(BtreeNode *p);
   void retire(common::HazardList &retire_list);

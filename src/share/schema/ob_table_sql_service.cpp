@@ -798,6 +798,14 @@ int ObTableSqlService::drop_table(const ObTableSchema &table_schema,
     }
   }
 
+  // delete column group
+  if (OB_SUCC(ret)) {
+    if (!table_schema.is_column_store_supported()) {
+    } else if (OB_FAIL(delete_column_group(sql_client, table_schema, new_schema_version))) {
+      LOG_WARN("fail to delete column group", K(ret));
+    }
+  }
+
   // log operations
   if (OB_SUCC(ret)) {
     ObSchemaOperation opt;
@@ -5269,7 +5277,10 @@ int ObTableSqlService::insert_column_ids_into_column_group(
 {
   int ret = OB_SUCCESS;
   uint64_t data_version = 0;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(table.get_tenant_id(), data_version))) {
+  if (!table.is_column_store_supported()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table not support column store", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(table.get_tenant_id(), data_version))) {
     LOG_WARN("fail to get min data version", KR(ret), K(table));
   } else if (OB_FAIL(check_column_store_valid(table, data_version))) {
     LOG_WARN("fail to check column store valid", KR(ret));
@@ -5318,7 +5329,6 @@ int ObTableSqlService::exec_insert_column_group(
     const char* tname = is_history ? OB_ALL_COLUMN_GROUP_HISTORY_TNAME : OB_ALL_COLUMN_GROUP_TNAME;
 
     const uint64_t tenant_id = table.get_tenant_id();
-    const uint64_t table_id = table.get_table_id();
     const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
     ObDMLExecHelper exec(sql_client, exec_tenant_id);
     ObTableSchema::const_column_group_iterator it_begin = table.column_group_begin();
@@ -5338,25 +5348,9 @@ int ObTableSqlService::exec_insert_column_group(
                  && column_group->get_compressor_type() == ObCompressorType::ZLIB_LITE_COMPRESSOR) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("zlib_lite_1.0 not support before 4.3", K(ret), K(table));
-      } else {
-        const int64_t IS_DELETED = 0;
-        const uint64_t tmp_tenant_id = ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id);
-        const uint64_t tmp_table_id = ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id);
-        const uint64_t tmp_cg_id = ObSchemaUtils::get_extract_schema_id(exec_tenant_id, column_group->get_column_group_id());
-        if (OB_FAIL(dml.add_pk_column("tenant_id", tmp_tenant_id))
-            || OB_FAIL(dml.add_pk_column("table_id", tmp_table_id))
-            || OB_FAIL(dml.add_pk_column("column_group_id", tmp_cg_id))
-            || OB_FAIL(dml.add_column("column_group_name", column_group->get_column_group_name().ptr()))
-            || OB_FAIL(dml.add_column("column_group_type", column_group->get_column_group_type()))
-            || OB_FAIL(dml.add_column("block_size", column_group->get_block_size()))
-            || OB_FAIL(dml.add_column("compressor_type", column_group->get_compressor_type()))
-            || OB_FAIL(dml.add_column("row_store_type", column_group->get_row_store_type()))
-            || (is_history && OB_FAIL(dml.add_column("is_deleted", IS_DELETED)))
-            || (is_history && OB_FAIL(dml.add_column("schema_version", schema_version)))) {
-          LOG_WARN("fail to add column group mapping", KR(ret), KPC(column_group));
-        } else if (OB_FAIL(dml.finish_row())) {
-          LOG_WARN("fail to finish row", KR(ret), KPC(column_group));
-        }
+      } else if (OB_FAIL(gen_column_group_dml(table, *column_group, is_history,
+                                              false /*not deleted*/, schema_version, dml))){
+        LOG_WARN("fail to gen column_group_dml", K(ret));
       }
     }
 
@@ -5396,14 +5390,8 @@ int ObTableSqlService::exec_insert_column_group_mapping(
   for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); i++) {
     const int64_t IS_DELETED = 0;
     uint64_t tmp_column_id = column_ids.at(i);
-    if (OB_FAIL(dml.add_pk_column("tenant_id", tmp_tenant_id))
-        || OB_FAIL(dml.add_pk_column("table_id", tmp_table_id))
-        || OB_FAIL(dml.add_pk_column("column_group_id", tmp_cg_id))
-        || OB_FAIL(dml.add_pk_column("column_id", tmp_column_id))
-        || (is_history && OB_FAIL(dml.add_column("is_deleted", IS_DELETED)))
-        || (is_history && OB_FAIL(dml.add_column("schema_version", schema_version)))) {
-      LOG_WARN("fail to add column group mapping", KR(ret), K(column_group));
-    } else if (OB_FAIL(dml.finish_row())) {
+    if (OB_FAIL(gen_column_group_mapping_dml(table, column_group, tmp_column_id, is_history,
+                                             false /*not delete*/, schema_version, dml))) {
       LOG_WARN("fail to finish row", K(ret), K(i), K(column_group));
     }
   }
@@ -5462,6 +5450,271 @@ int ObTableSqlService::exec_insert_column_group_mapping(
     }
   }
 
+  return ret;
+}
+
+int ObTableSqlService::gen_column_group_dml(const ObTableSchema &table_schema,
+                                            const ObColumnGroupSchema &column_group_schema,
+                                            const bool is_history,
+                                            const bool is_deleted,
+                                            const int64_t schema_version,
+                                            ObDMLSqlSplicer &dml)
+{
+  int ret = OB_SUCCESS;
+  if (!table_schema.is_valid() || !column_group_schema.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(table_schema), K(column_group_schema));
+  } else {
+    const uint64_t tenant_id = table_schema.get_tenant_id();
+    const uint64_t table_id = table_schema.get_table_id();
+    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+    const uint64_t tmp_tenant_id = ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id);
+    const uint64_t tmp_table_id = ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id);
+    const uint64_t tmp_cg_id = ObSchemaUtils::get_extract_schema_id(exec_tenant_id, column_group_schema.get_column_group_id());
+
+    if (OB_FAIL(dml.add_pk_column("tenant_id", tmp_tenant_id))
+      || OB_FAIL(dml.add_pk_column("table_id", tmp_table_id))
+      || OB_FAIL(dml.add_pk_column("column_group_id", tmp_cg_id))
+      || (!(is_history && is_deleted) && OB_FAIL(dml.add_column("column_group_name", column_group_schema.get_column_group_name().ptr())))
+      || OB_FAIL(dml.add_column("column_group_type", column_group_schema.get_column_group_type()))
+      || OB_FAIL(dml.add_column("block_size", column_group_schema.get_block_size()))
+      || OB_FAIL(dml.add_column("compressor_type", column_group_schema.get_compressor_type()))
+      || OB_FAIL(dml.add_column("row_store_type", column_group_schema.get_row_store_type()))
+      || (is_history && OB_FAIL(dml.add_column("is_deleted", is_deleted)))
+      || (is_history && OB_FAIL(dml.add_column("schema_version", schema_version)))) {
+    LOG_WARN("fail to build column column dml", K(ret));
+    } else if (OB_FAIL(dml.finish_row())) {
+      LOG_WARN("fail to finish column group dml row", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTableSqlService::gen_column_group_mapping_dml(const ObTableSchema &table_schema,
+                                                    const ObColumnGroupSchema &column_group_schema,
+                                                    const int64_t column_id,
+                                                    const bool is_history,
+                                                    const bool is_deleted,
+                                                    const int64_t schema_version,
+                                                    ObDMLSqlSplicer &dml)
+{
+  int ret = OB_SUCCESS;
+  if (!table_schema.is_valid() || !column_group_schema.is_valid() || schema_version == OB_INVALID_SCHEMA_VERSION) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(table_schema), K(column_group_schema), K(schema_version));
+  } else {
+    const uint64_t tenant_id = table_schema.get_tenant_id();
+    const uint64_t table_id = table_schema.get_table_id();
+    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+
+    const uint64_t tmp_tenant_id = ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id);
+    const uint64_t tmp_table_id = ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id);
+    const uint64_t tmp_cg_id = ObSchemaUtils::get_extract_schema_id(exec_tenant_id, column_group_schema.get_column_group_id());
+    if (OB_FAIL(dml.add_pk_column("tenant_id", tmp_tenant_id))
+        || OB_FAIL(dml.add_pk_column("table_id", tmp_table_id))
+        || OB_FAIL(dml.add_pk_column("column_group_id", tmp_cg_id))
+        || OB_FAIL(dml.add_pk_column("column_id", column_id))
+        || (is_history && OB_FAIL(dml.add_column("is_deleted", is_deleted ? 1: 0)))
+        || (is_history && OB_FAIL(dml.add_column("schema_version", schema_version)))) {
+      LOG_WARN("fail to add info to column group mapping dml", K(ret), K(table_schema), K(column_group_schema));
+    } else if (OB_FAIL(dml.finish_row())) {
+      LOG_WARN("dml splicer fail to finish row", K(ret));
+    }
+  }
+  return ret;
+}
+
+
+int ObTableSqlService::delete_from_column_group(ObISQLClient &sql_client,
+                                                const ObTableSchema &table_schema,
+                                                const int64_t new_schema_version,
+                                                const bool is_history)
+{
+  int ret = OB_SUCCESS;
+  if (!table_schema.is_valid() || new_schema_version == OB_INVALID_SCHEMA_VERSION) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid table schema", K(ret), K(table_schema), K(new_schema_version));
+  } else {
+    ObDMLSqlSplicer dml;
+    int64_t affect_rows = 0;
+    ObSqlString sql;
+    const uint64_t tenant_id = table_schema.get_tenant_id();
+    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(table_schema.get_tenant_id());
+    ObDMLExecHelper exec(sql_client, exec_tenant_id);
+    ObTableSchema::const_column_group_iterator iter_begin = table_schema.column_group_begin();
+    ObTableSchema::const_column_group_iterator iter_end = table_schema.column_group_end();
+    if (table_schema.get_column_group_count() == 0) {
+      /* skip table has not column*/
+    } else if (is_history) { /* remove from __all_column_group_history*/
+      for (; OB_SUCC(ret) && iter_begin != iter_end; iter_begin++) {
+        const ObColumnGroupSchema *column_group = *iter_begin;
+        if (OB_ISNULL(column_group)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column group should not be null", K(ret), K(table_schema));
+        } else if (OB_FAIL(gen_column_group_dml(table_schema, *column_group, is_history,
+                                              true /* is_delete */, new_schema_version, dml))) {
+          LOG_WARN("fail to write dml for __all_column_group", K(ret));
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(dml.splice_batch_insert_sql(OB_ALL_COLUMN_GROUP_HISTORY_TNAME, sql))) {
+        LOG_WARN("fail to splice batch insert sql", K(ret), K(sql), K(table_schema));
+      } else if (OB_FAIL(sql_client.write(exec_tenant_id, sql.ptr(), affect_rows))) {
+        LOG_WARN("fail to insert deleted record to all column group history", K(ret));
+      } else if (table_schema.get_column_group_count() != affect_rows){
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to drop all column group columns", K(ret), K(affect_rows), K(table_schema));
+      }
+    } else {
+      if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
+                                               exec_tenant_id, table_schema.get_tenant_id())))
+          || OB_FAIL(dml.add_pk_column("table_id", table_schema.get_table_id()))) {
+        LOG_WARN("fail to gen dml to delete from __all_column_group", K(ret));
+      } else if (OB_FAIL(exec.exec_delete(OB_ALL_COLUMN_GROUP_TNAME, dml, affect_rows))) {
+        LOG_WARN("fail to insert deleted record to all column group history", K(ret));
+      } else if (table_schema.get_column_group_count() != affect_rows && affect_rows != 0) {
+        /*the table upgrade from 4.2 or less has not record in inner table, allow 0 row affected*/
+        ret = OB_ERR_UNDEFINED;
+        LOG_WARN("fail to drop all column group columns", K(ret), K(affect_rows), K(table_schema));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableSqlService::delete_from_column_group_mapping(ObISQLClient &sql_client,
+                                                        const ObTableSchema &table_schema,
+                                                        const int64_t schema_version,
+                                                        const bool is_history)
+{
+  int ret = OB_SUCCESS;
+  if (!table_schema.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid table schema", K(ret), K(table_schema));
+  } else {
+    ObDMLSqlSplicer dml;
+    int64_t cg_mapping_cnt = 0;
+    int64_t affect_rows = 0;
+    ObSqlString sql;
+    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(table_schema.get_tenant_id());
+    ObDMLExecHelper exec(sql_client, exec_tenant_id);
+    ObTableSchema::const_column_group_iterator iter_begin = table_schema.column_group_begin();
+    ObTableSchema::const_column_group_iterator iter_end = table_schema.column_group_end();
+    /* count affect rows & form dml for history table*/
+    for (; OB_SUCC(ret) && iter_begin != iter_end; iter_begin++) {
+      const ObColumnGroupSchema *column_group = *iter_begin;
+      cg_mapping_cnt += column_group->get_column_id_count();
+      if (OB_ISNULL(column_group)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column group should not be null", K(ret), K(table_schema));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && is_history && i < column_group->get_column_id_count(); i++) {
+          if (OB_FAIL(gen_column_group_mapping_dml(table_schema, *column_group, column_group->get_column_ids()[i],
+                                                  is_history, true /* is_deleted*/, schema_version, dml))) {
+            LOG_WARN("fail to write column group mapping dml", K(ret));
+          }
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (cg_mapping_cnt == 0) {
+        /*skip table don't have column group like view*/
+    } else if (is_history) {
+      if (OB_FAIL(dml.splice_batch_insert_sql(OB_ALL_COLUMN_GROUP_MAPPING_HISTORY_TNAME, sql))) {
+        LOG_WARN("fail to splice batch insert_sql", K(ret), K(sql), K(table_schema));
+      } else if (OB_FAIL(sql_client.write(exec_tenant_id, sql.ptr(), affect_rows))) {
+        LOG_WARN("fail to wirte rows into __all_column_group_mapping_history", K(ret), K(sql));
+      } else if (cg_mapping_cnt != affect_rows){
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to drop in __all_column_group_mapping_history", K(ret), K(affect_rows), K(table_schema));
+      }
+    } else {
+      if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
+                                                 exec_tenant_id, table_schema.get_tenant_id())))
+          || OB_FAIL(dml.add_pk_column("table_id", table_schema.get_table_id()))) {
+        LOG_WARN("fail to gen dml to delete from __all_column_group", K(ret));
+      } else if (OB_FAIL(exec.exec_delete(OB_ALL_COLUMN_GROUP_MAPPING_TNAME, dml, affect_rows))) {
+        LOG_WARN("fail to insert deleted record to all column group", K(ret));
+      } else if (cg_mapping_cnt != affect_rows  && 0 != affect_rows) {
+        /*the table upgrade from 4.2 or less has not record in inner table, allow 0 row affected*/
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to drop in __all_column_group_mapping", K(ret), K(affect_rows), K(table_schema));
+      }
+    }
+  }
+  return ret;
+}
+
+
+int ObTableSqlService::delete_column_group(ObISQLClient &sql_client,
+                                           const ObTableSchema &table_schema,
+                                           const int64_t schema_version)
+{
+
+  int ret = OB_SUCCESS;
+  if (!table_schema.is_valid() || !table_schema.is_column_store_supported()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid table", K(ret), K(table_schema));
+  } else if (OB_FAIL(delete_from_column_group(sql_client, table_schema, schema_version))) {
+    LOG_WARN("fail to delete from table __all_column_group", K(ret));
+  } else if (OB_FAIL(delete_from_column_group(sql_client, table_schema, schema_version, true /*history table*/))) {
+    LOG_WARN("fail to delete from table __all_column_group_history", K(ret));
+  } else if (OB_FAIL(delete_from_column_group_mapping(sql_client, table_schema, schema_version))) {
+    LOG_WARN("fail to delete from table __all_column_group_mapping", K(ret));
+  } else if (OB_FAIL(delete_from_column_group_mapping(sql_client, table_schema, schema_version, true /*history*/))) {
+    LOG_WARN("fail to delete from talbe __all_column_group_mapping_history", K(ret));
+  }
+  return ret;
+}
+
+int ObTableSqlService::update_single_column_group(ObISQLClient &sql_client,
+                                                  const ObTableSchema &new_table_schema,
+                                                  const ObColumnGroupSchema &ori_cg_schema,
+                                                  const ObColumnGroupSchema &new_cg_schema)
+{
+  int ret = OB_SUCCESS;
+  ObDMLSqlSplicer dml;
+  int64_t affect_rows = 0;
+  uint64_t compat_version = 0;
+  if (!sql_client.is_active() || !new_table_schema.is_valid() ||
+      !ori_cg_schema.is_valid() || !new_cg_schema.is_valid() || !new_table_schema.is_column_store_supported()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(new_table_schema), K(ori_cg_schema), K(new_cg_schema));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(new_table_schema.get_tenant_id(), compat_version))) {
+    LOG_WARN("fail to check min data_version", K(ret), K(new_table_schema));
+  } else if (OB_FAIL(check_column_store_valid(new_table_schema, compat_version))) {
+    LOG_WARN("fail to check column store valid", KR(ret), K(new_table_schema), K(compat_version));
+  } else {
+    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(new_table_schema.get_tenant_id());
+    ObDMLExecHelper exec(sql_client, exec_tenant_id);
+    /* write into __all_column_group*/
+    if (OB_FAIL(gen_column_group_dml(new_table_schema, new_cg_schema, false, /* not history*/
+                                     false /* not deleted*/, new_cg_schema.get_schema_version(), dml))) {
+      LOG_WARN("fail to gen column group dml", K(ret));
+    } else if (OB_FAIL(exec.exec_update(OB_ALL_COLUMN_GROUP_TNAME, dml, affect_rows))) {
+      LOG_WARN("fail to update all column group", K(ret));
+    } else if (affect_rows != (ori_cg_schema.get_column_group_name() != new_cg_schema.get_column_group_name())) {
+      /* for some ddl don't change propertype, affect rows should be 0, since all_column_group has no schema version*/
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to update single row in all column group ", K(ret), K(affect_rows), K(ori_cg_schema), K(new_cg_schema));
+    }
+
+    /* write into __all_column_group_history*/
+    dml.reset();
+    affect_rows = 0;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(gen_column_group_dml(new_table_schema, new_cg_schema, true, /* history table*/
+                                            false/*not delete*/, new_cg_schema.get_schema_version(), dml))) {
+      LOG_WARN("fail to gen column group dml", K(ret));
+    } else if (OB_FAIL(exec.exec_insert(OB_ALL_COLUMN_GROUP_HISTORY_TNAME, dml, affect_rows))) {
+      LOG_WARN("fail to exec dml on history table", K(ret));
+    } else if (1 != affect_rows) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("affect row not equal to 1", K(ret), K(affect_rows), K(ori_cg_schema), K(new_cg_schema));
+    }
+  }
   return ret;
 }
 

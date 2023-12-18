@@ -7583,6 +7583,15 @@ enum ObSAuditOperationType : uint64_t
   //privilege ....
   AUDIT_OP_MAX
 };
+
+enum ObStorageEncodingMode : uint64_t
+{
+  ROW_ENCODING_COL_CSENCODIGN = 0,
+  ALL_ENCODING,
+  ALL_CSENCODING,
+  MAX_ENCODING
+};
+
 const char *get_audit_operation_type_str(const ObSAuditOperationType type);
 
 int get_operation_type_from_item_type(const bool is_stmt_audit,
@@ -8345,12 +8354,19 @@ enum ObColumnGroupType : uint8_t
   NORMAL_COLUMN_GROUP,
   MAX_COLUMN_GROUP
 };
-
+const char OB_COLUMN_GROUP_TYPE_NAME[][OB_MAX_COLUMN_NAME_LENGTH] =
+{
+  "default column group",
+  "all column group",
+  "rowkey column group",
+  "each column group"
+};
 const char *const OB_COLUMN_GROUP_NAME_PREFIX = "__cg";
 const char *const OB_ROWKEY_COLUMN_GROUP_NAME = "__co_rowkey";
 const char *const OB_DEFAULT_COLUMN_GROUP_NAME = "__co_default";
 const char *const OB_ALL_COLUMN_GROUP_NAME = "__co_all";
 
+const char *const OB_EACH_COLUMN_GROUP_NAME = "__cg_each"; /* cannot be used on single column group name*/
 class ObColumnGroupSchemaHashWrapper
 {
 public:
@@ -8390,6 +8406,7 @@ public:
   int64_t get_convert_size() const;
   void reset();
   bool is_valid() const;
+  void remove_all_cols();
 
   inline void set_column_group_id(const uint64_t id) { column_group_id_ = id; }
   inline void set_column_group_type(const ObColumnGroupType &type) { column_group_type_ = type; }
@@ -8416,6 +8433,7 @@ public:
   int add_column_id(const uint64_t column_id);
   int get_column_id(const int64_t idx, uint64_t &column_id) const;
   int remove_column_id(const uint64_t column_id);
+  int get_column_group_type_name(ObString &readable_cg_name) const;
 
   VIRTUAL_TO_STRING_KV(K_(column_group_id),
                        K_(column_group_name),

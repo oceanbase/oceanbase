@@ -471,28 +471,6 @@ int ObMicroBlockReader::find_bound(
   return ret;
 }
 
-int ObMicroBlockReader::compare_rowkey(
-    const ObDatumRowkey &rowkey,
-    const int64_t idx,
-    int32_t &compare_result)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("Not inited", K(ret));
-  } else if (OB_UNLIKELY(!rowkey.is_valid() || idx < 0 || idx >= row_count_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), K(rowkey), K(idx), K_(row_count));
-  } else if (OB_FAIL(flat_row_reader_.compare_meta_rowkey(rowkey,
-                                                          *datum_utils_,
-                                                          data_begin_ + index_data_[idx],
-                                                          index_data_[idx + 1] - index_data_[idx],
-                                                          compare_result))) {
-    LOG_WARN("Failed to compare rowkey", K(ret), K(rowkey), K_(row_count), K(idx));
-  }
-  return ret;
-}
-
 int ObMicroBlockReader::find_bound(
     const ObDatumRowkey &key,
     const bool lower_bound,

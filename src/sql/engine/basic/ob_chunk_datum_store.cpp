@@ -377,6 +377,45 @@ int ObChunkDatumStore::Block::copy_datums(const ObDatum *datums, const int64_t c
   return ret;
 }
 
+int ObChunkDatumStore::Block::copy_storage_datums(const blocksstable::ObStorageDatum *storage_datums, const int64_t cnt,
+                                                  const int64_t extra_size, StoredRow **dst_sr)
+{
+  int ret = OB_SUCCESS;
+  BlockBuffer *buf = get_buffer();
+  int64_t head_size = sizeof(StoredRow);
+  int64_t datum_size = sizeof(ObDatum) * cnt;
+  int64_t row_size = head_size + sizeof(ObDatum) * cnt + extra_size;
+  if (!buf->is_inited()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(buf), K(row_size));
+  } else {
+    StoredRow *sr = new (buf->head())StoredRow;
+    sr->cnt_ = cnt;
+    for (int64_t i = 0; i < cnt; ++i) {
+      const ObDatum *tmp_datum = static_cast<const ObDatum *>(&storage_datums[i]);
+      MEMCPY(sr->payload_ + i * sizeof(ObDatum), tmp_datum, sizeof(ObDatum));
+    }
+    char* data_start = sr->payload_ + datum_size + extra_size;
+    int64_t pos = 0;
+    for (int64_t i = 0; i < cnt; ++i) {
+      MEMCPY(data_start + pos, storage_datums[i].ptr_, storage_datums[i].len_);
+      sr->cells()[i].ptr_ = data_start + pos;
+      pos += storage_datums[i].len_;
+      row_size += storage_datums[i].len_;
+    }
+    sr->row_size_ = row_size;
+    if (OB_FAIL(buf->advance(row_size))) {
+      LOG_WARN("fill buffer head failed", K(ret), K(buf), K(row_size));
+    } else {
+      rows_++;
+      if (nullptr != dst_sr) {
+        *dst_sr = sr;
+      }
+    }
+  }
+  return ret;
+}
+
 //the memory of shadow stored row is not continuous,
 //so you cannot directly copy the memory of the entire stored row,
 //and you should make a deep copy of each datum in turn
@@ -1220,6 +1259,35 @@ int ObChunkDatumStore::add_row(const ObDatum *datums, const int64_t cnt,
   return ret;
 }
 
+int ObChunkDatumStore::add_row(const blocksstable::ObStorageDatum *storage_datums, const int64_t cnt,
+                               const int64_t extra_size, StoredRow **stored_row)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    int64_t head_size = sizeof(StoredRow);
+    int64_t datum_size = sizeof(ObDatum) * cnt;
+    int64_t data_size = 0;
+    for (int64_t i = 0; i < cnt; ++i) {
+      data_size += storage_datums[i].len_;
+    }
+    const int64_t row_size = head_size + datum_size + extra_size + data_size;
+    if (OB_FAIL(ensure_write_blk(row_size))) {
+      LOG_WARN("ensure write block failed", K(ret));
+    } else if (OB_FAIL(cur_blk_->copy_storage_datums(storage_datums, cnt, extra_size, stored_row))) {
+      LOG_WARN("add row to block failed", K(ret), K(storage_datums), K(cnt), K(extra_size), K(row_size));
+    } else {
+      row_cnt_++;
+      if (col_count_ < 0) {
+        col_count_ = cnt;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObChunkDatumStore::add_row(const ShadowStoredRow &sr, StoredRow **stored_row)
 {
   int ret = OB_SUCCESS;
@@ -1320,40 +1388,6 @@ int ObChunkDatumStore::add_batch(const common::ObIArray<ObExpr *> &exprs, ObEval
   }
   return ret;
 }
-
-template <uint32_t LEN>
-struct AssignFixedLenDatumValue
-{
-  static void assign_datum_value(void *dst, const char *src, uint32_t len)
-  {
-    UNUSED(len);
-    MEMCPY(dst, src, LEN);
-  }
-};
-
-struct AssignNumberDatumValue
-{
-  static void assign_datum_value(void *dst, const char *src, uint32_t len)
-  {
-    if (4 == len) {
-      MEMCPY(dst, src, 4);
-    } else if (8 == len) {
-      MEMCPY(dst, src, 8);
-    } else if (12 == len){
-      MEMCPY(dst, src, 12);
-    } else {
-      MEMCPY(dst, src, len);
-    }
-  }
-};
-
-struct AssignDefaultDatumValue
-{
-  static void assign_datum_value(void *dst, const char *src, uint32_t len)
-  {
-    MEMCPY(dst, src, len);
-  }
-};
 
 template <typename T>
 static void assign_datums(const ObDatum **datums, const uint16_t selector[], const int64_t size,

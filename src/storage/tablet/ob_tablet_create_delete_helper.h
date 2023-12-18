@@ -123,9 +123,6 @@ public:
       const ObTabletPoolType &type,
       const ObTabletMapKey &key,
       ObTabletHandle &handle);
-  static int check_need_create_empty_major_sstable(
-      const ObCreateTabletSchema &create_tablet_schema,
-      bool &need_create_sstable);
   // Attention !!! only used when first creating tablet
   static int create_empty_sstable(
       common::ObArenaAllocator &allocator,

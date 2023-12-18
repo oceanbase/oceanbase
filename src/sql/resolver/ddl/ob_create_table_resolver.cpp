@@ -2632,6 +2632,24 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
           is_index_part_specified = true;
         }
       }
+
+      // index column_group
+      if (OB_SUCC(ret) && lib::is_mysql_mode()) { //only mysql support create table with index
+        if (node->num_child_ < 6) {
+          // no cg, ignore
+        } else if (ObItemType::T_INDEX == node->type_ && NULL != node->children_[5]) {
+          if (T_COLUMN_GROUP != node->children_[5]->type_ || node->children_[5]->num_child_ <= 0) {
+            ret = OB_INVALID_ARGUMENT;
+            SQL_RESV_LOG(WARN, "invalid argument", KR(ret), K(node->type_), K(node->num_child_));
+          } else if (OB_ISNULL(node->children_[5]->children_[0])) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("node is null", K(ret));
+          } else if (OB_FAIL(resolve_index_column_group(node->children_[5], index_arg_))) {
+            SQL_RESV_LOG(WARN, "resolve index column group failed", K(ret));
+          }
+        }
+      }
+
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(generate_index_arg())) {
         SQL_RESV_LOG(WARN, "generate index arg failed", K(ret));
@@ -2953,65 +2971,6 @@ uint64_t ObCreateTableResolver::gen_column_group_id()
   return ++cur_column_group_id_;
 }
 
-// TEMP: if use sql 'create table xxx with column group for yyy', single_type must exist.
-int ObCreateTableResolver::parse_cg_node(const ParseNode &cg_node, bool &exist_all_column_group) const
-{
-  int ret = OB_SUCCESS;
-  exist_all_column_group = false;
-
-  if (OB_UNLIKELY(T_COLUMN_GROUP != cg_node.type_ || cg_node.num_child_ <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    SQL_RESV_LOG(WARN, "invalid argument", KR(ret), K(cg_node.type_), K(cg_node.num_child_));
-  } else {
-    const int64_t num_child = cg_node.num_child_;
-    bool exist_single_type = false;
-    bool already_exist_all_column_group = false;
-    bool already_exist_single_column_group = false;
-    // handle all_type column_group & single_type column_group
-    for (int64_t i = 0; OB_SUCC(ret) && (i < num_child); ++i) {
-      ParseNode *node = cg_node.children_[i];
-      if (OB_ISNULL(node)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("children of column_group_list should not be null", KR(ret));
-      } else if (T_ALL_COLUMN_GROUP == node->type_) {
-        if (already_exist_all_column_group) {
-          ret = OB_ERR_COLUMN_GROUP_DUPLICATE;
-          SQL_RESV_LOG(WARN, "all column group already exist in sql",
-                        K(ret), K(node->children_[i]->type_));
-          const ObString error_msg = "all columns";
-          LOG_USER_ERROR(OB_ERR_COLUMN_GROUP_DUPLICATE, error_msg.length(), error_msg.ptr());
-        } else {
-          already_exist_all_column_group = true;
-          exist_all_column_group = true;
-        }
-      } else if (T_SINGLE_COLUMN_GROUP == node->type_) {
-        if (already_exist_single_column_group) {
-          ret = OB_ERR_COLUMN_GROUP_DUPLICATE;
-          SQL_RESV_LOG(WARN, "single column group already exist in sql",
-                        K(ret), K(node->type_));
-          const ObString error_msg = "each column";
-          LOG_USER_ERROR(OB_ERR_COLUMN_GROUP_DUPLICATE, error_msg.length(), error_msg.ptr());
-        } else {
-          already_exist_single_column_group = true;
-          exist_single_type = true;
-        }
-      } else if (T_NORMAL_COLUMN_GROUP == node->type_) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("column store table with customized column group are not supported", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "column store tables with customized column group are");
-      }
-    }
-
-    if (OB_SUCC(ret) && exist_single_type == false) {
-      ret = OB_NOT_SUPPORTED;
-      SQL_RESV_LOG(WARN, "each column not exist", KR(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "column store tables without each column group are");
-    }
-  }
-
-  return ret;
-}
-
 int ObCreateTableResolver::resolve_column_group(const ParseNode *cg_node)
 {
   int ret = OB_SUCCESS;
@@ -3040,7 +2999,7 @@ int ObCreateTableResolver::resolve_column_group(const ParseNode *cg_node)
       // handle all_type column_group & single_type column_group
       if (OB_NOT_NULL(cg_node)) {
         bool exist_all_column_group = false;
-
+        bool exist_each_column_group = false;
         if (OB_FAIL(parse_cg_node(*cg_node, exist_all_column_group))) {
           LOG_WARN("fail to parse cg node", KR(ret));
         } else {
@@ -3049,31 +3008,20 @@ int ObCreateTableResolver::resolve_column_group(const ParseNode *cg_node)
           ObTableSchema::const_column_iterator tmp_begin = table_schema.column_begin();
           ObTableSchema::const_column_iterator tmp_end = table_schema.column_end();
           for (; OB_SUCC(ret) && (tmp_begin != tmp_end); tmp_begin++) {
-            tmp_cg.reset();
-            tmp_column_ids.reset();
-            char tmp_cg_name[OB_MAX_COLUMN_GROUP_NAME_LENGTH];
-            MEMSET(tmp_cg_name, '\0', OB_MAX_COLUMN_GROUP_NAME_LENGTH);
-
             ObColumnSchemaV2 *column = (*tmp_begin);
-            if (OB_ISNULL(column)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("column should not be null", KR(ret));
-            } else if (column->is_virtual_generated_column()) {
-              // skip virtual column
-            } else if (OB_FAIL(tmp_column_ids.push_back(column->get_column_id()))) {
-              LOG_WARN("fail to push back", KR(ret), "column_id", column->get_column_id());
-            } else if (0 >= snprintf(tmp_cg_name, OB_MAX_COLUMN_GROUP_NAME_LENGTH, "%s_%s",
-                OB_COLUMN_GROUP_NAME_PREFIX, column->get_column_name_str().ptr())) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("fail to snprintf", KR(ret), KPC(column));
-            } else if (OB_FAIL(build_column_group(table_schema, ObColumnGroupType::SINGLE_COLUMN_GROUP,
-                tmp_cg_name, tmp_column_ids, gen_column_group_id(), tmp_cg))) {
-              LOG_WARN("fail to build single type column_group", KR(ret));
-            } else if (OB_FAIL(table_schema.add_column_group(tmp_cg))) {
-              LOG_WARN("fail to add single type column group", KR(ret), K(tmp_cg));
-            } else if (column->is_rowkey_column() || exist_all_column_group) {//if not exist all cg, build rowkey cg
-              if (OB_FAIL(column_ids.push_back(column->get_column_id()))) {
-                LOG_WARN("fail to push back", KR(ret), "column_id", column->get_column_id());
+            if (column->is_virtual_generated_column()){
+              /*skip virtual generated column group*/
+            } else if (OB_FAIL(ObSchemaUtils::build_single_column_group(
+                                       table_schema, column, session_info_->get_effective_tenant_id(),
+                                       gen_column_group_id(), tmp_cg))) {
+              LOG_WARN("fail to build single column group");
+            } else if (tmp_cg.is_valid()) {
+              if (OB_FAIL(table_schema.add_column_group(tmp_cg))) {
+                LOG_WARN("fail to add single type column group", KR(ret), K(tmp_cg));
+              } else if (column->is_rowkey_column() || exist_all_column_group) {//if not exist all cg, build rowkey cg
+                if (OB_FAIL(column_ids.push_back(column->get_column_id()))) {
+                  LOG_WARN("fail to push back", KR(ret), "column_id", column->get_column_id());
+                }
               }
             }
           }
@@ -3112,32 +3060,19 @@ int ObCreateTableResolver::resolve_column_group(const ParseNode *cg_node)
           ObTableSchema::const_column_iterator tmp_begin = table_schema.column_begin();
           ObTableSchema::const_column_iterator tmp_end = table_schema.column_end();
           for (; OB_SUCC(ret) && (tmp_begin != tmp_end); tmp_begin++) {
-            tmp_cg.reset();
-            tmp_column_ids.reset();
-            char tmp_cg_name[OB_MAX_COLUMN_GROUP_NAME_LENGTH];
-            MEMSET(tmp_cg_name, '\0', OB_MAX_COLUMN_GROUP_NAME_LENGTH);
-
             ObColumnSchemaV2 *column = (*tmp_begin);
-            if (OB_ISNULL(column)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("column should not be null", KR(ret));
-            } else if (column->is_virtual_generated_column()) {
-              // skip virtual column
-              LOG_WARN("fail to push back", KR(ret), "column_id", column->get_column_id());
-            } else if (OB_FAIL(tmp_column_ids.push_back(column->get_column_id()))) {
-              LOG_WARN("fail to push back", KR(ret), "column_id", column->get_column_id());
-            } else if (0 >= snprintf(tmp_cg_name, OB_MAX_COLUMN_GROUP_NAME_LENGTH, "%s_%s",
-                OB_COLUMN_GROUP_NAME_PREFIX, column->get_column_name_str().ptr())) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("fail to snprintf", KR(ret), KPC(column));
-            } else if (OB_FAIL(build_column_group(table_schema, ObColumnGroupType::SINGLE_COLUMN_GROUP,
-                tmp_cg_name, tmp_column_ids, gen_column_group_id(), tmp_cg))) {
-              LOG_WARN("fail to build single type column_group", KR(ret));
-            } else if (OB_FAIL(table_schema.add_column_group(tmp_cg))) {
-              LOG_WARN("fail to add single type column group", KR(ret), K(tmp_cg));
-            } else if (column->is_rowkey_column() || exist_all_type) {//if not exist all cg, build rowkey cg
-              if (OB_FAIL(column_ids.push_back(column->get_column_id()))) {
-                LOG_WARN("fail to push back", KR(ret), "column_id", column->get_column_id());
+            if (column->is_virtual_generated_column()){
+              /*skip virtual generated column group*/
+            } else if(OB_FAIL(ObSchemaUtils::build_single_column_group(table_schema, column, session_info_->get_effective_tenant_id(),
+                                                                gen_column_group_id(), tmp_cg))) {
+              LOG_WARN("fail to build single column group", K(ret));
+            } else if (tmp_cg.is_valid()) {
+              if (OB_FAIL(table_schema.add_column_group(tmp_cg))) {
+                LOG_WARN("fail to add single type column group", KR(ret), K(tmp_cg));
+              } else if (column->is_rowkey_column() || exist_all_type) {//if not exist all cg, build rowkey cg
+                if (OB_FAIL(column_ids.push_back(column->get_column_id()))) {
+                  LOG_WARN("fail to push back", KR(ret), "column_id", column->get_column_id());
+                }
               }
             }
           }

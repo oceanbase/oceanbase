@@ -2718,6 +2718,7 @@ int ObTableScanOp::report_ddl_column_checksum()
     }
 
     if (OB_SUCC(ret)) {
+      LOG_INFO("report ddl checksum table scan", K(tablet_id), K(checksum_items));
       if (OB_FAIL(ObDDLChecksumOperator::update_checksum(checksum_items, *GCTX.sql_proxy_))) {
         LOG_WARN("fail to update checksum", K(ret));
       } else {

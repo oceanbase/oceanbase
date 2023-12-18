@@ -1108,13 +1108,18 @@ public:
   ObDDLMacroBlockRedoInfo();
   ~ObDDLMacroBlockRedoInfo() = default;
   bool is_valid() const;
-  TO_STRING_KV(K_(table_key),  K_(data_buffer), K_(block_type), K_(logic_id), K_(start_scn));
+  bool is_column_group_info_valid() const;
+  void reset();
+  TO_STRING_KV(K_(table_key),  K_(data_buffer), K_(block_type), K_(logic_id),
+      K_(start_scn), K_(data_format_version), K_(end_row_id));
 public:
   storage::ObITable::TableKey table_key_;
   ObString data_buffer_;
   ObDDLMacroBlockType block_type_;
   ObLogicMacroBlockId logic_id_;
   share::SCN start_scn_;
+  uint64_t data_format_version_;
+  int64_t end_row_id_;
 };
 
 }//end namespace blocksstable

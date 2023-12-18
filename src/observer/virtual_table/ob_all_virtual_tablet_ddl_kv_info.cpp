@@ -122,7 +122,7 @@ int ObAllVirtualTabletDDLKVInfo::get_next_ddl_kv(ObDDLKV *&ddl_kv)
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
   while (OB_SUCC(ret)) {
-    if (ddl_kv_idx_ < 0 || ddl_kv_idx_ >= ddl_kvs_handle_.get_count()) {
+    if (ddl_kv_idx_ < 0 || ddl_kv_idx_ >= ddl_kvs_handle_.count()) {
       ObDDLKvMgrHandle ddl_kv_mgr_handle;
       if (OB_FAIL(get_next_ddl_kv_mgr(ddl_kv_mgr_handle))) {
         if (OB_ITER_END != ret) {
@@ -130,13 +130,13 @@ int ObAllVirtualTabletDDLKVInfo::get_next_ddl_kv(ObDDLKV *&ddl_kv)
         }
       } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_ddl_kvs(false/*frozen_only*/, ddl_kvs_handle_))) {
         SERVER_LOG(WARN, "fail to get ddl kvs", K(ret));
-      } else if (ddl_kvs_handle_.get_count() > 0) {
+      } else if (ddl_kvs_handle_.count() > 0) {
         ddl_kv_idx_ = 0;
       }
     }
 
-    if (OB_SUCC(ret) && ddl_kv_idx_ >= 0 && ddl_kv_idx_ < ddl_kvs_handle_.get_count()) {
-      ddl_kv = static_cast<ObDDLKV *>(ddl_kvs_handle_.get_table(ddl_kv_idx_));
+    if (OB_SUCC(ret) && ddl_kv_idx_ >= 0 && ddl_kv_idx_ < ddl_kvs_handle_.count()) {
+      ddl_kv = ddl_kvs_handle_.at(ddl_kv_idx_).get_obj();
       if (OB_ISNULL(ddl_kv)) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "fail to get ddl kv", K(ret), K(ddl_kv_idx_));

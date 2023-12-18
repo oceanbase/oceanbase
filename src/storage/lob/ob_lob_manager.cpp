@@ -1047,6 +1047,13 @@ int ObLobManager::erase_one_piece(ObLobAccessParam& param,
   return ret;
 }
 
+void ObLobManager::transform_lob_id(uint64_t src, uint64_t &dst)
+{
+  dst = htonll(src << 1);
+  char *bytes = reinterpret_cast<char*>(&dst);
+  bytes[7] |= 0x01;
+}
+
 int ObLobManager::check_need_out_row(
     ObLobAccessParam& param,
     int64_t add_len,
@@ -1123,9 +1130,13 @@ int ObLobManager::check_need_out_row(
           // init lob data and alloc lob id(when not init)
           ObLobData *new_lob_data = new(new_lob_common->buffer_)ObLobData();
           new_lob_data->id_.tablet_id_ = param.tablet_id_.id();
-          if (OB_FAIL(lob_ctx_.lob_meta_mngr_->fetch_lob_id(param, new_lob_data->id_.lob_id_))) {
+          if (param.spec_lob_id_.is_valid()) {
+            new_lob_data->id_ = param.spec_lob_id_;
+          } else if (OB_FAIL(lob_ctx_.lob_meta_mngr_->fetch_lob_id(param, new_lob_data->id_.lob_id_))) {
             LOG_WARN("get lob id failed.", K(ret), K(param));
-          } else {
+          }
+          if (OB_SUCC(ret)) {
+            transform_lob_id(new_lob_data->id_.lob_id_, new_lob_data->id_.lob_id_);
             new_lob_common->is_init_ = true;
           }
         }
@@ -1164,7 +1175,12 @@ int ObLobManager::init_out_row_ctx(
     // for append, most oper len/256K + 1
     // for sql update, calc erase+insert
     int64_t N = ((len + param.update_len_) / (ObLobMetaUtil::LOB_OPER_PIECE_DATA_SIZE / 2) + 2) * 2;
-    param.seq_no_st_ = param.tx_desc_->get_and_inc_tx_seq(param.parent_seq_no_.get_branch(), N);
+    if (nullptr != param.tx_desc_) {
+      param.seq_no_st_ = param.tx_desc_->get_and_inc_tx_seq(param.parent_seq_no_.get_branch(), N);
+    } else {
+      int tmp_seq = ObSequence::get_and_inc_max_seq_no(N);
+      param.seq_no_st_ = transaction::ObTxSEQ::mk_v0(tmp_seq);
+    }
     param.used_seq_cnt_ = 0;
     param.total_seq_cnt_ = N;
   }
@@ -1582,6 +1598,148 @@ int ObLobManager::append(
   return ret;
 }
 
+int ObLobManager::append(ObLobAccessParam& param, ObLobLocatorV2& lob, ObLobMetaWriteIter &iter)
+{
+  int ret = OB_SUCCESS;
+  bool is_char = param.coll_type_ != common::ObCollationType::CS_TYPE_BINARY;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObLobManager is not initialized", K(ret));
+  } else if (OB_FAIL(param.set_lob_locator(param.lob_locator_))) {
+    LOG_WARN("failed to set lob locator for param", K(ret), K(param));
+  } else if (!lob.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid lob locator", K(ret));
+  } else if (lob.is_delta_temp_lob()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid lob locator", K(ret));
+  } else {
+    bool alloc_inside = false;
+    bool need_out_row = false;
+    if (OB_FAIL(prepare_lob_common(param, alloc_inside))) {
+      LOG_WARN("fail to prepare lob common", K(ret), K(param));
+    }
+    ObLobCommon *lob_common = param.lob_common_;
+    ObLobData *lob_data = param.lob_data_;
+    bool is_remote_lob = false;
+    common::ObAddr dst_addr;
+    int64_t append_lob_len = 0;
+    ObString ori_inrow_data;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(check_handle_size(param))) {
+      LOG_WARN("check handle size failed.", K(ret));
+    } else if (OB_FAIL(is_remote(param, is_remote_lob, dst_addr))) {
+      LOG_WARN("check is remote failed.", K(ret), K(param));
+    } else if (is_remote_lob) {
+      ret = OB_NOT_IMPLEMENT;
+      LOG_WARN("Unsupport remote append", K(ret), K(param));
+    } else if (OB_FAIL(lob.get_lob_data_byte_len(append_lob_len))) {
+      LOG_WARN("fail to get append lob byte len", K(ret), K(lob));
+    } else if (OB_FAIL(check_need_out_row(param, append_lob_len, ori_inrow_data, false, alloc_inside, need_out_row))) {
+      LOG_WARN("process out row check failed.", K(ret), K(param), KPC(lob_common), KPC(lob_data), K(lob));
+    } else if (!need_out_row) {
+      // do inrow append
+      int32_t cur_handle_size = lob_common->get_handle_size(param.byte_size_);
+      int32_t ptr_offset = 0;
+      if (OB_NOT_NULL(param.lob_locator_)) {
+        ptr_offset = reinterpret_cast<char*>(param.lob_common_) - reinterpret_cast<char*>(param.lob_locator_->ptr_);
+        cur_handle_size += ptr_offset;
+      }
+      uint64_t total_size = cur_handle_size + append_lob_len;
+      char *buf = static_cast<char*>(param.allocator_->alloc(total_size));
+      if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc buf failed.", K(ret), K(total_size));
+      } else {
+        if (OB_NOT_NULL(param.lob_locator_)) {
+          MEMCPY(buf, param.lob_locator_->ptr_, ptr_offset);
+        }
+        ObLobCommon *new_lob_common = reinterpret_cast<ObLobCommon*>(buf + ptr_offset);
+        MEMCPY(new_lob_common, lob_common, cur_handle_size - ptr_offset);
+        ObString data;
+        data.assign_buffer(buf + cur_handle_size, append_lob_len);
+        SMART_VAR(ObLobAccessParam, read_param) {
+          read_param.tx_desc_ = param.tx_desc_;
+          if (OB_FAIL(build_lob_param(read_param, *param.allocator_, param.coll_type_,
+                      0, UINT64_MAX, param.timeout_, lob))) {
+            LOG_WARN("fail to build read param", K(ret), K(lob));
+          } else if (OB_FAIL(query(read_param, data))) {
+            LOG_WARN("fail to read src lob", K(ret), K(read_param));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          // refresh lob info
+          param.byte_size_ += data.length();
+          if (new_lob_common->is_init_) {
+            ObLobData *new_lob_data = reinterpret_cast<ObLobData*>(new_lob_common->buffer_);
+            new_lob_data->byte_size_ += data.length();
+          }
+          if (alloc_inside) {
+            param.allocator_->free(param.lob_common_);
+          }
+          param.lob_common_ = new_lob_common;
+          param.handle_size_ = total_size;
+          if (OB_NOT_NULL(param.lob_locator_)) {
+            param.lob_locator_->ptr_ = buf;
+            param.lob_locator_->size_ = total_size;
+            if (OB_FAIL(fill_lob_locator_extern(param))) {
+              LOG_WARN("fail to fill lob locator extern", K(ret), KPC(param.lob_locator_));
+            }
+          }
+        }
+        iter.set_end();
+      }
+    } else if (!lob.has_lob_header()) {
+      ObString data;
+      data.assign_ptr(lob.ptr_, lob.size_);
+      ObLobCtx lob_ctx = lob_ctx_;
+      if (OB_FAIL(lob_ctx.lob_meta_mngr_->append(param, iter))) {
+        LOG_WARN("Failed to open lob meta write iter.", K(ret), K(param));
+      }
+    } else {
+      // prepare out row ctx
+      ObLobCtx lob_ctx = lob_ctx_;
+      if (OB_FAIL(init_out_row_ctx(param, append_lob_len, param.op_type_))) {
+        LOG_WARN("init lob data out row ctx failed", K(ret));
+      }
+      // prepare read buffer
+      ObString read_buffer;
+      uint64_t read_buff_size = LOB_READ_BUFFER_LEN;
+      char *read_buff = static_cast<char*>(param.allocator_->alloc(read_buff_size));
+      if (OB_ISNULL(read_buff)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc read buffer failed.", K(ret), K(read_buff_size));
+      } else {
+        read_buffer.assign_buffer(read_buff, read_buff_size);
+      }
+
+      // prepare read full lob
+      if (OB_SUCC(ret)) {
+        ObLobAccessParam *read_param = reinterpret_cast<ObLobAccessParam*>(param.allocator_->alloc(sizeof(ObLobAccessParam)));
+        if (OB_ISNULL(read_param)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("alloc read param failed.", K(ret), K(sizeof(ObLobAccessParam)));
+        } else {
+          read_param = new(read_param)ObLobAccessParam();
+          read_param->tx_desc_ = param.tx_desc_;
+          if (OB_FAIL(build_lob_param(*read_param, *param.allocator_, param.coll_type_,
+                      0, UINT64_MAX, param.timeout_, lob))) {
+            LOG_WARN("fail to build read param", K(ret), K(lob));
+          } else {
+            ObLobQueryIter *qiter = nullptr;
+            if (OB_FAIL(query(*read_param, qiter))) {
+              LOG_WARN("do query src by iter failed.", K(ret), K(read_param));
+            } else if (OB_FAIL(iter.open(param, qiter, read_param, read_buffer))) {
+              LOG_WARN("open lob meta write iter failed.", K(ret));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLobManager::prepare_lob_common(ObLobAccessParam& param, bool &alloc_inside)
 {
   int ret = OB_SUCCESS;
@@ -1597,6 +1755,9 @@ int ObLobManager::prepare_lob_common(ObLobAccessParam& param, bool &alloc_inside
       param.lob_common_ = new(tbuf)ObLobCommon();
       param.lob_data_ = new(param.lob_common_->buffer_)ObLobData();
       param.lob_data_->id_.tablet_id_ = param.tablet_id_.id();
+      if (param.spec_lob_id_.is_valid()) {
+        param.lob_data_->id_ = param.spec_lob_id_;
+      }
       ObLobDataOutRowCtx *outrow_ctx = new(param.lob_data_->buffer_)ObLobDataOutRowCtx();
       // init char len
       uint64_t *char_len = reinterpret_cast<uint64_t*>(outrow_ctx + 1);
@@ -1796,9 +1957,13 @@ int ObLobManager::prepare_for_write(
           // init lob data and alloc lob id(when not init)
           ObLobData *new_lob_data = new(new_lob_common->buffer_)ObLobData();
           new_lob_data->id_.tablet_id_ = param.tablet_id_.id();
-          if (OB_FAIL(lob_ctx_.lob_meta_mngr_->fetch_lob_id(param, new_lob_data->id_.lob_id_))) {
+          if (param.spec_lob_id_.is_valid()) {
+            new_lob_data->id_ = param.spec_lob_id_;
+          } else if (OB_FAIL(lob_ctx_.lob_meta_mngr_->fetch_lob_id(param, new_lob_data->id_.lob_id_))) {
             LOG_WARN("get lob id failed.", K(ret), K(param));
-          } else {
+          }
+          if (OB_SUCC(ret)) {
+            transform_lob_id(new_lob_data->id_.lob_id_, new_lob_data->id_.lob_id_);
             new_lob_common->is_init_ = true;
           }
         }

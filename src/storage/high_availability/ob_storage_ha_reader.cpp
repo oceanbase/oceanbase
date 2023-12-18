@@ -779,6 +779,7 @@ int ObCopyMacroBlockObProducer::prefetch_()
       read_info.io_desc_.set_group_id(ObIOModule::HA_COPY_MACRO_BLOCK_IO);
       read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
       read_info.buf_ = io_buf_[handle_idx_];
+      read_info.io_desc_.set_group_id(ObIOModule::HA_COPY_MACRO_BLOCK_IO);
       if (OB_FAIL(ObBlockManager::async_read_block(read_info, copy_macro_block_handle_[handle_idx_].read_handle_))) {
         STORAGE_LOG(WARN, "Fail to async read block, ", K(ret), K(read_info));
       }

@@ -1924,10 +1924,10 @@ static const _error _error_OB_COLUMN_GROUP_NOT_FOUND = {
       .mysql_errno           = -1,
       .sqlstate              = "HY000",
       .str_error             = "Column group not found",
-      .str_user_error        = "Column group not found",
+      .str_user_error        = "Column group \'%.*s\' not found",
       .oracle_errno          = 600,
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -4185, Column group not found",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4185, Column group not found"
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4185, Column grou \'%.*s\' not found"
 };
 static const _error _error_OB_CS_COMPRESS_LIB_ERROR = {
       .error_name            = "OB_CS_COMPRESS_LIB_ERROR",

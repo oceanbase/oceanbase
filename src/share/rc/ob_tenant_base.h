@@ -91,6 +91,7 @@ class ObTenantMdsService;
   class ObTableScanIterator;
   class ObTenantSnapshotService;
   class ObTenantCGReadInfoMgr;
+  class ObTenantDirectLoadMgr;
   class ObEmptyReadBucket;
   class ObTabletMemtableMgrPool;
 } // namespace storage
@@ -339,6 +340,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       TenantErrsimModule                            \
       TenantErrsimEvent                             \
       oceanbase::sql::ObTenantSQLSessionMgr*,       \
+      storage::ObTenantDirectLoadMgr*,              \
       oceanbase::common::ObOptStatMonitorManager*,  \
       omt::ObTenantSrs*,                            \
       table::ObHTableLockMgr*,                      \

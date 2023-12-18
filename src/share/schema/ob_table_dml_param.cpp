@@ -88,8 +88,12 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
     table_id_ = schema->get_table_id();
     schema_version_ = schema->get_schema_version();
     table_type_ = schema->get_table_type();
-    use_cs = !schema->is_row_store();
     lob_inrow_threshold_ = schema->get_lob_inrow_threshold();
+    if (OB_FAIL(schema->get_is_row_store(use_cs))) {
+      LOG_WARN("fail to get is row store", K(ret));
+    } else {
+      use_cs = !use_cs;
+    }
   }
 
   if (OB_SUCC(ret) && schema->is_user_table() && !schema->is_heap_table()) {

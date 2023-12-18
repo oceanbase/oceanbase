@@ -396,6 +396,7 @@ int ObMLogBuilder::create_mlog(
     } else if (OB_FAIL(do_create_mlog(schema_guard,
                                       create_mlog_arg,
                                       *base_table_schema,
+                                      compat_version,
                                       create_mlog_res))) {
       LOG_WARN("failed to do create mlog", KR(ret), K(create_mlog_arg));
     }
@@ -407,6 +408,7 @@ int ObMLogBuilder::do_create_mlog(
     ObSchemaGetterGuard &schema_guard,
     const ObCreateMLogArg &create_mlog_arg,
     const ObTableSchema &base_table_schema,
+    const uint64_t tenant_data_version,
     ObCreateMLogRes &create_mlog_res)
 {
   int ret = OB_SUCCESS;
@@ -431,7 +433,7 @@ int ObMLogBuilder::do_create_mlog(
       LOG_WARN("failed to copy table schema", KR(ret));
     } else if (OB_FAIL(generate_mlog_schema(schema_guard, create_mlog_arg, src_table_schema, mlog_schema))) {
       LOG_WARN("failed to generate schema", KR(ret), K(create_mlog_arg), K(src_table_schema));
-    } else if (OB_FAIL(ddl_service_.create_mlog_table(trans, create_mlog_arg, schema_guard, mlog_schema))) {
+    } else if (OB_FAIL(ddl_service_.create_mlog_table(trans, create_mlog_arg, tenant_data_version, schema_guard, mlog_schema))) {
       LOG_WARN("failed to create mlog table", KR(ret), K(create_mlog_arg), K(mlog_schema));
     } else {
       // submit build mlog task
@@ -451,6 +453,7 @@ int ObMLogBuilder::do_create_mlog(
                                   create_mlog_arg.consumer_group_id_,
                                   &allocator,
                                   &create_index_arg);
+      param.tenant_data_version_ = tenant_data_version;
       if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, trans, task_record))) {
         LOG_WARN("failed to submit create mlog task", KR(ret));
       } else if (OB_FAIL(ObDDLLock::lock_for_add_drop_index(
