@@ -3915,7 +3915,8 @@ public:
            || pkg_schema_version_ != common::OB_INVALID_VERSION;
   }
 
-  int get_schema_object_version(share::schema::ObSchemaObjVersion &obj_version);
+  int get_schema_object_version(share::schema::ObSchemaGetterGuard &schema_guard,
+                                ObIArray<share::schema::ObSchemaObjVersion> &obj_versions);
 
   inline void set_pkg_body_udf(bool v) { is_pkg_body_udf_ = v; }
   inline bool is_pkg_body_udf() const { return is_pkg_body_udf_; }

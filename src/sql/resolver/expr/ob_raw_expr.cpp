@@ -4695,9 +4695,11 @@ bool ObUDFRawExpr::inner_same_as(const ObRawExpr &expr,
   return bool_ret;
 }
 
-int ObUDFRawExpr::get_schema_object_version(share::schema::ObSchemaObjVersion &obj_version)
+int ObUDFRawExpr::get_schema_object_version(share::schema::ObSchemaGetterGuard &schema_guard,
+                                            ObIArray<share::schema::ObSchemaObjVersion> &obj_versions)
 {
   int ret = OB_SUCCESS;
+  share::schema::ObSchemaObjVersion obj_version;
   /*!
    * schema_version will be set when call ObRawExprUtils::resolve_udf_common_info
    *
@@ -4731,6 +4733,27 @@ int ObUDFRawExpr::get_schema_object_version(share::schema::ObSchemaObjVersion &o
   } else {
     CK (udf_schema_version_ == OB_INVALID_VERSION && pkg_schema_version_ == OB_INVALID_VERSION);
     // do nothing ...
+  }
+  if (OB_FAIL(ret)) {
+  } else if (common::OB_INVALID_ID != pkg_id_ && !is_udt_udf_) {
+    const ObPackageInfo *spec_info = NULL;
+    const ObPackageInfo *body_info = NULL;
+    ObSchemaObjVersion ver;
+    OZ (pl::ObPLPackageManager::get_package_schema_info(schema_guard, pkg_id_, spec_info, body_info));
+    if (OB_NOT_NULL(spec_info)) {
+      OX (ver.object_id_ = spec_info->get_package_id());
+      OX (ver.version_ = spec_info->get_schema_version());
+      OX (ver.object_type_ = DEPENDENCY_PACKAGE);
+      OZ (obj_versions.push_back(ver));
+    }
+    if (OB_NOT_NULL(body_info)) {
+      OX (ver.object_id_ = body_info->get_package_id());
+      OX (ver.version_ = body_info->get_schema_version());
+      OX (ver.object_type_ = DEPENDENCY_PACKAGE_BODY);
+      OZ (obj_versions.push_back(ver));
+    }
+  } else {
+    OZ (obj_versions.push_back(obj_version));
   }
   return ret;
 }
