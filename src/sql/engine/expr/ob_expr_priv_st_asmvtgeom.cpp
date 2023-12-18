@@ -59,8 +59,8 @@ int ObExprPrivSTAsMVTGeom::calc_result_typeN(ObExprResType &type, ObExprResType 
   // integer extent
   if (OB_SUCC(ret) && param_num >= 3) {
     ObObjType extent_type = types_stack[2].get_type();
-    if (!ob_is_integer_type(extent_type) && !ob_is_string_type(extent_type)
-        && !ob_is_null(extent_type)) {
+    if (extent_type == ObTinyIntType
+        || (!ob_is_integer_type(extent_type) && !ob_is_string_type(extent_type) && !ob_is_null(extent_type))) {
       ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
       LOG_WARN("invalid input type extent", K(ret), K(extent_type));
     } else if (ob_is_string_type(extent_type)) {
@@ -70,8 +70,8 @@ int ObExprPrivSTAsMVTGeom::calc_result_typeN(ObExprResType &type, ObExprResType 
   // integer buffer
   if (OB_SUCC(ret) && param_num >= 4) {
     ObObjType extent_type = types_stack[3].get_type();
-    if (!ob_is_integer_type(extent_type) && !ob_is_string_type(extent_type)
-        && !ob_is_null(extent_type)) {
+    if (extent_type == ObTinyIntType
+        || (!ob_is_integer_type(extent_type) && !ob_is_string_type(extent_type) && !ob_is_null(extent_type))) {
       ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
       LOG_WARN("invalid input type extent", K(ret), K(extent_type));
     } else if (ob_is_string_type(extent_type)) {
@@ -176,7 +176,7 @@ int ObExprPrivSTAsMVTGeom::process_input_geometry(const ObExpr &expr, ObEvalCtx 
                    geo2,
                    srs2,
                    N_PRIV_ST_ASMVTGEOM,
-                   ObGeoBuildFlag::GEO_DEFAULT))) {
+                   ObGeoBuildFlag::GEO_DEFAULT | ObGeoBuildFlag::GEO_CHECK_RING))) {
       LOG_WARN("get second geo by wkb failed", K(ret));
     } else if (OB_FAIL(box_ctx.append_geo_arg(geo2))) {
       LOG_WARN("build gis context failed", K(ret), K(box_ctx.get_geo_count()));
@@ -198,10 +198,7 @@ int ObExprPrivSTAsMVTGeom::process_input_geometry(const ObExpr &expr, ObEvalCtx 
   extent = 4096;  // default
   if (OB_SUCC(ret) && num_args >= 3) {
     ObDatum *datum = nullptr;
-    if (expr.args_[2]->is_boolean_) {
-      ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
-      LOG_WARN("invalid type", K(ret));
-    } else if (OB_FAIL(expr.args_[2]->eval(ctx, datum))) {
+    if (OB_FAIL(expr.args_[2]->eval(ctx, datum))) {
       LOG_WARN("fail to eval second argument", K(ret));
     } else if (datum->is_null()) {
       // use default value
@@ -217,10 +214,7 @@ int ObExprPrivSTAsMVTGeom::process_input_geometry(const ObExpr &expr, ObEvalCtx 
   buffer = 256;  // default
   if (OB_SUCC(ret) && num_args >= 4) {
     ObDatum *datum = nullptr;
-    if (expr.args_[3]->is_boolean_) {
-      ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
-      LOG_WARN("invalid type", K(ret));
-    } else if (OB_FAIL(expr.args_[3]->eval(ctx, datum))) {
+    if (OB_FAIL(expr.args_[3]->eval(ctx, datum))) {
       LOG_WARN("fail to eval second argument", K(ret));
     } else if (datum->is_null()) {
       // use default value
@@ -236,15 +230,12 @@ int ObExprPrivSTAsMVTGeom::process_input_geometry(const ObExpr &expr, ObEvalCtx 
   clip_geom = true;  // default
   if (OB_SUCC(ret) && num_args >= 5) {
     ObDatum *datum = nullptr;
-    if (!expr.args_[4]->is_boolean_) {
-      ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
-      LOG_WARN("invalid type", K(ret));
-    } else if (OB_FAIL(expr.args_[4]->eval(ctx, datum))) {
+    if (OB_FAIL(expr.args_[4]->eval(ctx, datum))) {
       LOG_WARN("fail to eval second argument", K(ret));
     } else if (datum->is_null()) {
       // use default value
     } else {
-      clip_geom = datum->get_bool();
+      clip_geom = datum->get_tinyint();
     }
   }
   return ret;
