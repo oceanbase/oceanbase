@@ -144,13 +144,14 @@ int ObExprPrivSTClipByBox2D::eval_priv_st_clipbybox2d(
     res_geo = geo1;
   } else {
     ObGeoEvalCtx box_ctx(&temp_allocator);
+    box_ctx.set_is_called_in_pg_expr(true);
     ObGeogBox *gbox = nullptr;
     // calculate 2d box of geo2, then convert the box to a rectangle geo
     if (OB_FAIL(box_ctx.append_geo_arg(geo2))) {
       LOG_WARN("build gis context failed", K(ret), K(box_ctx.get_geo_count()));
     } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::Box>::geo_func::eval(box_ctx, gbox))) {
       LOG_WARN("failed to do box functor failed", K(ret));
-    } else if (OB_FAIL(ObGeoBoxUtil::clip_by_box(*geo1, temp_allocator, *gbox, res_geo))) {
+    } else if (OB_FAIL(ObGeoBoxUtil::clip_by_box(*geo1, temp_allocator, *gbox, res_geo, true))) {
       LOG_WARN("fail to do clip by box", K(ret));
     } else if (OB_ISNULL(res_geo)) {
       is_null_res = true;

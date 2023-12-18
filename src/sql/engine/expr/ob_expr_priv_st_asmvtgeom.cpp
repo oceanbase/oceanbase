@@ -139,6 +139,7 @@ int ObExprPrivSTAsMVTGeom::process_input_geometry(const ObExpr &expr, ObEvalCtx 
     ObString wkb2 = datum2->get_string();
     omt::ObSrsCacheGuard srs_guard;
     ObGeoEvalCtx box_ctx(&ctx_allocator);
+    box_ctx.set_is_called_in_pg_expr(true);
 
     if (OB_FAIL(ObTextStringHelper::read_real_string_data(
             ctx_allocator, *datum1, arg1->datum_meta_, arg1->obj_meta_.has_lob_header(), wkb1))) {
@@ -388,7 +389,7 @@ int ObExprPrivSTAsMVTGeom::clip_geometry(ObGeometry *geo, ObIAllocator &allocato
       } else {
         clip_box->xmax = clip_box->ymax = extent + static_cast<double>(buffer);
         clip_box->xmin = clip_box->ymin = -static_cast<double>(buffer);
-        if (OB_FAIL(ObGeoBoxUtil::clip_by_box(*basic_geo, allocator, *clip_box, res_geo))) {
+        if (OB_FAIL(ObGeoBoxUtil::clip_by_box(*basic_geo, allocator, *clip_box, res_geo, true))) {
           LOG_WARN("fail to do clip by box", K(ret));
         } else if (OB_ISNULL(res_geo)) {
           is_null_res = true;

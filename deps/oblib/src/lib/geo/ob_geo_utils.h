@@ -263,7 +263,7 @@ public:
   static void get_point2d_from_geom_point(const ObWkbGeomInnerPoint &point, ObPoint2d &p2d);
   template<typename GeometryType>
   static int get_geom_line_box(const GeometryType &line, ObGeogBox &box);
-  static int clip_by_box(ObGeometry &geo_in, ObIAllocator &allocator, const ObGeogBox &box, ObGeometry *&geo_out);
+  static int clip_by_box(ObGeometry &geo_in, ObIAllocator &allocator, const ObGeogBox &box, ObGeometry *&geo_out, bool is_called_in_pg_expr);
   static bool boxes_overlaps(const ObGeogBox &box1, const ObGeogBox &box2);
   static bool boxes_contains(const ObGeogBox &box1, const ObGeogBox &box2);
   template<typename GeometryType>

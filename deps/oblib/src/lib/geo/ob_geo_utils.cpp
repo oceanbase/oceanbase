@@ -1423,11 +1423,12 @@ void ObGeoBoxUtil::get_point2d_from_geom_point(const ObWkbGeomInnerPoint &point,
   p2d.y = point.get<1>();
 }
 
-int ObGeoBoxUtil::clip_by_box(ObGeometry &geo_in, ObIAllocator &allocator, const ObGeogBox &gbox, ObGeometry *&geo_out)
+int ObGeoBoxUtil::clip_by_box(ObGeometry &geo_in, ObIAllocator &allocator, const ObGeogBox &gbox, ObGeometry *&geo_out, bool is_called_in_pg_expr)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator tmp_allocator;
   ObGeoEvalCtx box_ctx(&tmp_allocator);
+  box_ctx.set_is_called_in_pg_expr(is_called_in_pg_expr); // clip only used in PG expr currently
   ObGeogBox *gbox_in = nullptr;
   ObGeometry *geo_tree = nullptr;
   ObGeometry *geo_bin = nullptr;

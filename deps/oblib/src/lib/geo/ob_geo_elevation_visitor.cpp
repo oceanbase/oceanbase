@@ -140,6 +140,7 @@ int ObGeoElevationVisitor::add_geometry(
     } else if (!is_geo_empty) {
       ObGeometry *geo_2D = nullptr;
       ObGeoEvalCtx geo_ctx(allocator_, srs_);
+      geo_ctx.set_is_called_in_pg_expr(true);
       ObGeogBox *box = nullptr;
       if (OB_FAIL(geo_3D.to_2d_geo(tmp_allocator, geo_2D))) {
         LOG_WARN("fail to transfer to 2D geometry", K(ret));

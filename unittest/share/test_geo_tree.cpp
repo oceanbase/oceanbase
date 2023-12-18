@@ -26,6 +26,7 @@
 #include "lib/geo/ob_geo_to_wkt_visitor.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
 #include "lib/geo/ob_wkt_parser.h"
+#include "lib/geo/ob_geo_common.h"
 #undef private
 
 #include <sys/time.h>
@@ -910,6 +911,23 @@ TEST_F(TestGeoTree, simplify_visitor)
 	    "(20 20, 20 40, 40 40, 40 20, 20 20),"
 	    "(1 1, 1 5, 5 5, 5 1, 1 1)"
 	    ")", "EMPTY", 100, false);
+}
+
+TEST_F(TestGeoTree, ewkt_with_null)
+{
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ObGeometry *geo_tree = nullptr;
+  wkt_to_tree_geo("POINT(1 1)", allocator, geo_tree);
+  geo_tree->set_srid(UINT32_MAX);
+  ObGeometry *geo_bin = NULL;
+  ASSERT_EQ(ObGeoTypeUtil::tree_to_bin(allocator, geo_tree, geo_bin, nullptr), OB_SUCCESS);
+  ObWkbBuffer buffer(allocator);
+  ASSERT_EQ(buffer.append(static_cast<uint32_t>(UINT32_MAX)), OB_SUCCESS);
+  ASSERT_EQ(buffer.append(geo_bin->val(), geo_bin->length()), OB_SUCCESS);
+  ObString wkt_cal;
+  ASSERT_EQ(ObGeoTypeUtil::geo_to_ewkt(buffer.string(), wkt_cal, allocator, 14), OB_SUCCESS);
+  ObString wkt_res = "SRID=NULL;POINT(1 1)";
+  ASSERT_EQ(wkt_cal == wkt_res, true);
 }
 
 } // namespace common

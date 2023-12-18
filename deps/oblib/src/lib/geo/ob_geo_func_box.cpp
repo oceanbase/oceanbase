@@ -284,7 +284,19 @@ OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncBoxImpl, ObWkbGeomPolygon, ObGeogBox *)
       LOG_WARN("empty polygon has not box", K(ret), K(poly->size()));
     } else if (OB_FAIL(ObGeoBoxUtil::get_geom_line_box(poly->exterior_ring(), *res))) {
       LOG_WARN("fail to get poly box", K(ret));
-    } else {
+    } else if (!context.get_is_called_in_pg_expr()) {
+      const ObWkbGeomPolygonInnerRings &inners = poly->inner_rings();
+      ObWkbGeomPolygonInnerRings::const_iterator iter = inners.begin();
+      for (; OB_SUCC(ret) && iter != inners.end(); ++iter) {
+        ObGeogBox tmp_box;
+        if (OB_FAIL(ObGeoBoxUtil::get_geom_line_box(*iter, tmp_box))) {
+          LOG_WARN("fail to get poly box", K(ret));
+        } else {
+          ObGeoBoxUtil::box_union(tmp_box, *res);
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
       result = res;
     }
   }

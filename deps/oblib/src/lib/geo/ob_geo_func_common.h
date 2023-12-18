@@ -50,11 +50,11 @@ union ObGeoNormalVal {
 class ObGeoEvalCtx
 {
 public:
-  ObGeoEvalCtx() : allocator_(NULL), srs_(NULL), g_arg_c_(0), v_arg_c_(0){};
+  ObGeoEvalCtx() : allocator_(NULL), srs_(NULL), g_arg_c_(0), v_arg_c_(0), is_called_in_pg_expr_(false){};
   ObGeoEvalCtx(common::ObIAllocator * allocator) :
-    allocator_(allocator), srs_(NULL), g_arg_c_(0), v_arg_c_(0) {};
+    allocator_(allocator), srs_(NULL), g_arg_c_(0), v_arg_c_(0), is_called_in_pg_expr_(false) {};
   ObGeoEvalCtx(common::ObIAllocator * allocator, const common::ObSrsItem *srs_item) :
-    allocator_(allocator), srs_(srs_item), g_arg_c_(0), v_arg_c_(0) {};
+    allocator_(allocator), srs_(srs_item), g_arg_c_(0), v_arg_c_(0), is_called_in_pg_expr_(false) {};
   ~ObGeoEvalCtx() = default;
 
   inline int append_geo_arg(const common::ObGeometry *g)
@@ -154,6 +154,9 @@ public:
   inline common::ObIAllocator * get_allocator() const { return allocator_; }
   inline const common::ObSrsItem *get_srs() const { return srs_; }
 
+  inline void set_is_called_in_pg_expr(bool in) { is_called_in_pg_expr_ = in; }
+  inline bool get_is_called_in_pg_expr() const { return is_called_in_pg_expr_; }
+
   // interfaces for unittest only
   inline void ut_set_geo_count(int count)
   {
@@ -176,6 +179,7 @@ private:
   int v_arg_c_; // num of other arguments, e.g. distance_sphere
   const common::ObGeometry *gis_args_[MAX_ARG_COUNT]; // geo arguments
   ObGeoNormalVal val_args_[MAX_ARG_COUNT]; // other arguments
+  bool is_called_in_pg_expr_; // distinguish pg/mysql expr call
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObGeoEvalCtx);

@@ -642,7 +642,9 @@ int ObGeoToWktVisitor::init(uint32_t srid, int64_t maxdecimaldigits)
       LOG_WARN("fail to reserve memory for buffer_", K(ret), K(reserve_len));
     } else if (OB_FAIL(buffer_.append("SRID="))) {
       LOG_WARN("fail to append buffer_", K(ret));
-    } else if (OB_FAIL(buffer_.append(ffi.ptr(), ffi.length()))) {
+    } else if (srid == UINT32_MAX && OB_FAIL(buffer_.append("NULL"))) {
+      LOG_WARN("fail to append buffer_", K(ret));
+    } else if (srid != UINT32_MAX && OB_FAIL(buffer_.append(ffi.ptr(), ffi.length()))) {
       LOG_WARN("fail to append buffer_", K(ret), K(ffi.length()));
     } else if (OB_FAIL(buffer_.append(";"))) {
       LOG_WARN("fail to append buffer_", K(ret));
