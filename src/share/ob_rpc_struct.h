@@ -9634,9 +9634,8 @@ public:
 private:
   uint64_t tenant_id_;
   int64_t sys_schema_version_;
-  common::ObSArray<share::schema::ObTableSchema> tables_;
-public:
   common::ObArenaAllocator allocator_;
+  common::ObSArray<share::schema::ObTableSchema> tables_;
 };
 
 struct ObBatchBroadcastSchemaResult
