@@ -128,8 +128,8 @@ int build_bucket_and_object_name(ObIAllocator &allocator,
   ObString::obstr_size_t bucket_start = 0;
   ObString::obstr_size_t bucket_end = 0;
   ObString::obstr_size_t object_start = 0;
-  char *bucket_name_buff = NULL;
-  char *object_name_buff = NULL;
+  char *bucket_name_buff = nullptr;
+  char *object_name_buff = nullptr;
 
   const char *prefix = "UNKNOWN";
   if (OB_FAIL(get_storage_prefix_from_path(uri, prefix))) {
@@ -138,14 +138,7 @@ int build_bucket_and_object_name(ObIAllocator &allocator,
     bucket_start = static_cast<ObString::obstr_size_t>(strlen(prefix));
     if (OB_UNLIKELY(bucket_start >= uri.length())) {
       ret = OB_INVALID_ARGUMENT;
-      OB_LOG(WARN, "bucket name is empty", K(uri), K(ret), K(bucket_start));
-    }
-    for (int64_t i = bucket_start; OB_SUCC(ret) && i < uri.length() - 1; i++) {
-      if ('/' == *(uri.ptr() + i) && '/' == *(uri.ptr() + i + 1)) {
-        ret = OB_INVALID_ARGUMENT;
-        OB_LOG(WARN, "uri has two // ", K(uri), K(ret), K(i));
-        break;
-      }
+      OB_LOG(WARN, "bucket and object are empty", K(uri), K(ret), K(bucket_start));
     }
   }
 
@@ -156,6 +149,14 @@ int build_bucket_and_object_name(ObIAllocator &allocator,
       OB_LOG(WARN, "fail to deep copy object", K(uri), K(bucket_start), K(ret));
     }
   } else {
+    for (int64_t i = bucket_start; OB_SUCC(ret) && i < uri.length() - 1; i++) {
+      if ('/' == *(uri.ptr() + i) && '/' == *(uri.ptr() + i + 1)) {
+        ret = OB_INVALID_ARGUMENT;
+        OB_LOG(WARN, "uri has two // ", K(uri), K(ret), K(i));
+        break;
+      }
+    }
+
     for (bucket_end = bucket_start; OB_SUCC(ret) && bucket_end < uri.length(); ++bucket_end) {
       if ('/' == *(uri.ptr() + bucket_end)) {
         ObString::obstr_size_t bucket_length = bucket_end - bucket_start;
@@ -216,7 +217,16 @@ int construct_fragment_full_name(const ObString &logical_appendable_object_name,
     OB_LOG(WARN, "failed to construct formatted mock append object fragment name",
         K(ret), K(logical_appendable_object_name), K(fragment_name));
   } else {
-    suffix = logical_appendable_object_name.reverse_find('.');
+    // Fixed the logic to correctly identify the object name's suffix.
+    // Now it only considers the string after the last '.' following the final '/' as the suffix,
+    // ignoring any '.' in the path.
+    // For example: if the object name is "a/b.c/d", the original logic treats "c/d" as the suffix.
+    const char *object_name = logical_appendable_object_name.reverse_find(SLASH);
+    if (OB_NOT_NULL(object_name)) {
+      suffix = ObString(object_name).reverse_find('.');
+    } else {
+      suffix = logical_appendable_object_name.reverse_find('.');
+    }
     if (OB_NOT_NULL(suffix)) {
       if (OB_UNLIKELY(strlen(suffix) <= 1 || strlen(suffix) >= MAX_APPENDABLE_FRAGMENT_SUFFIX_LENGTH)) {
         ret = OB_INVALID_ARGUMENT;

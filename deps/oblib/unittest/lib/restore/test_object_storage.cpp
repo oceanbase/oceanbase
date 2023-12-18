@@ -471,6 +471,27 @@ TEST_F(TestObjectStorage, test_check_storage_obj_meta)
   }
 }
 
+TEST_F(TestObjectStorage, test_util_list_files_with_consecutive_slash)
+{
+  int ret = OB_SUCCESS;
+  if (enable_test) {
+    ObStorageUtil util;
+    ASSERT_EQ(OB_SUCCESS, util.open(&info_base));
+
+    // uri has two '//;
+    TestObjectStorageListOp op;
+    if (info_base.get_type() == ObStorageType::OB_STORAGE_FILE) {
+      ASSERT_EQ(OB_SUCCESS,
+          databuff_printf(uri, sizeof(uri), "%s%s//", OB_FILE_PREFIX ,get_current_dir_name()));
+      ASSERT_EQ(OB_SUCCESS, util.list_files(uri, true/*is_adaptive*/, op));
+    } else {
+      ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/%s//test",
+                                            bucket, dir_name));
+      ASSERT_EQ(OB_INVALID_ARGUMENT, util.list_files(uri, true/*is_adaptive*/, op));
+    }
+  }
+}
+
 TEST_F(TestObjectStorage, test_util_list_files)
 {
   int ret = OB_SUCCESS;
