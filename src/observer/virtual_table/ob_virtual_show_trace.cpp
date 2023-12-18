@@ -84,7 +84,6 @@ int ObVirtualShowTrace::retrive_all_span_info()
 {
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
-  bool with_snap_shot = true;
   ObMySQLProxy *mysql_proxy = GCTX.sql_proxy_;
   ObString trace_id;
   if (OB_ISNULL(mysql_proxy)) {
@@ -93,8 +92,6 @@ int ObVirtualShowTrace::retrive_all_span_info()
   } else if (OB_ISNULL(session_)) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "session is null", K(ret));
-  } else if (OB_FAIL(trans.start(mysql_proxy, effective_tenant_id_, with_snap_shot))) {
-    SERVER_LOG(WARN, "failed to start transaction", K(ret), K(effective_tenant_id_));
   } else {
     int sql_len = 0;
     is_row_format_ = session_->is_row_traceformat();
@@ -123,7 +120,7 @@ int ObVirtualShowTrace::retrive_all_span_info()
         { // make sure %res destructed before execute other sql in the same transaction
           SMART_VAR(ObMySQLProxy::MySQLResult, res) {
             ObMySQLResult *result = NULL;
-            ObISQLClient *sql_client = &trans;
+            ObISQLClient *sql_client = mysql_proxy;
             uint64_t table_id = OB_ALL_VIRTUAL_TRACE_SPAN_INFO_TID;
             ObSQLClientRetryWeak sql_client_retry_weak(sql_client,
                                                      exec_tenant_id,
@@ -646,7 +643,9 @@ int ObVirtualShowTrace::find_child_span_info(sql::ObFLTShowTraceRec::trace_forma
       } else if (OB_ISNULL(tmp_arr.at(i))) {
          // do nothing
       } else {
-        if (arr.at(arr.count() - 1)->data_.start_ts_ > tmp_arr.at(i)->data_.start_ts_) {
+        // There is a 2s clock error between machines
+        if (arr.at(arr.count() - 1)->data_.start_ts_ - tmp_arr.at(i)->data_.start_ts_ > 10000000 &&
+           arr.at(arr.count() - 1)->data_.span_id_ == tmp_arr.at(i)->data_.parent_span_id_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid trace span", K(arr.at(arr.count() - 1)->data_), K(tmp_arr.at(i)->data_));
         }
