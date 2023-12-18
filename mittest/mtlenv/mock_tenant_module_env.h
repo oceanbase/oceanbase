@@ -845,7 +845,9 @@ void MockTenantModuleEnv::destroy()
   TG_WAIT(lib::TGDefIDs::MemDumpTimer);
   TG_DESTROY(lib::TGDefIDs::MemDumpTimer);
 
-  THE_IO_DEVICE->destroy();
+  if (OB_NOT_NULL(THE_IO_DEVICE)) {
+    THE_IO_DEVICE->destroy();
+  }
 
 
   destroyed_ = true;

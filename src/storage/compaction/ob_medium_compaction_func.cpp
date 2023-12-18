@@ -78,7 +78,7 @@ int ObMediumCompactionScheduleFunc::choose_medium_snapshot(
       || medium_info.medium_snapshot_ > tablet.get_snapshot_version()) {
     // chosen medium snapshot is far too old
     if (OB_FAIL(choose_new_medium_snapshot(max_reserved_snapshot, medium_info, result, schema_version))) {
-      LOG_WARN("failed to choose new medium snapshot", KR(ret), K(medium_info));
+      LOG_WARN("failed to choose new medium snapshot", KR(ret), K(medium_info), K(max_reserved_snapshot));
     }
   } else if (OB_FAIL(tablet.get_schema_version_from_storage_schema(schema_version))) {
     LOG_WARN("failed to get schema version from tablet", KR(ret), K(tablet));
@@ -458,7 +458,7 @@ int ObMediumCompactionScheduleFunc::check_frequency(
       LOG_WARN("major sstable should not be empty", K(ret), K(last_major_snapshot_version));
     } else if (last_major_snapshot_version + time_interval > medium_snapshot) {
       ret = OB_NO_NEED_MERGE;
-      LOG_DEBUG("schedule medium frequently", K(ret), K(last_major_snapshot_version), K(medium_snapshot),
+      LOG_TRACE("schedule medium frequently", K(ret), K(last_major_snapshot_version), K(medium_snapshot),
                 K(time_interval));
     }
   }

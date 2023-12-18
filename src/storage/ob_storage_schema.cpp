@@ -149,6 +149,18 @@ int ObStorageColumnSchema::legacy_serialize(char *buf, const int64_t buf_len, in
   return ret;
 }
 
+int64_t ObStorageColumnSchema::legacy_serialize_len() const
+{
+  // For schema version before 4_2_0_0
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+      info_,
+      default_checksum_,
+      meta_type_,
+      orig_default_value_);
+  return len;
+}
+
 /*
  * ObStorageColumnGroupSchema
  */
@@ -869,6 +881,21 @@ int ObStorageSchema::deserialize_rowkey_column_array(
   return ret;
 }
 
+int64_t ObStorageSchema::get_column_array_serialize_length(
+  const common::ObIArray<ObStorageColumnSchema> &array) const
+{
+  int64_t len = 0;
+  len += serialization::encoded_length_vi64(array.count());
+  for (int64_t i = 0; i < array.count(); ++i) {
+    if (STORAGE_SCHEMA_VERSION_V3 > storage_schema_version_) {
+      len += array.at(i).legacy_serialize_len();
+    } else {
+      len += array.at(i).get_serialize_size();
+    }
+  }
+  return len;
+}
+
 int ObStorageSchema::deserialize_column_array(
     ObIAllocator &allocator,
     const char *buf,
@@ -1078,7 +1105,7 @@ int64_t ObStorageSchema::get_serialize_size() const
       compressor_type_,
       encryption_,
       encrypt_key_);
-  len += get_column_array_serialize_length(rowkey_array_);
+  len += get_array_serialize_length(rowkey_array_);
   //get columms size
   if (!column_info_simplified_) {
     len += get_column_array_serialize_length(column_array_);
@@ -1087,8 +1114,8 @@ int64_t ObStorageSchema::get_serialize_size() const
     len += serialization::encoded_length_i64(store_column_cnt_);
   }
   if (storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V3) {
-    len += get_column_array_serialize_length(column_group_array_);
-    len += get_column_array_serialize_length(skip_idx_attr_array_);
+    len += get_array_serialize_length(column_group_array_);
+    len += get_array_serialize_length(skip_idx_attr_array_);
   }
   return len;
 }
