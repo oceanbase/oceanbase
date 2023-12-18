@@ -1582,7 +1582,7 @@ TEST_F(TestDagScheduler, test_cancel_dag_func)
     scheduler->cancel_dag(dag_array[i]);
   }
 
-  EXPECT_EQ(true, scheduler->is_empty());
+  wait_scheduler();
   EXPECT_EQ(0, MTL(ObDagWarningHistoryManager *)->size());
 }
 
@@ -1614,9 +1614,7 @@ TEST_F(TestDagScheduler, test_cancel_dag_net_func)
   }
 
   EXPECT_EQ(OB_SUCCESS, ret);
-  ob_usleep(5000 * 1000);
-
-  EXPECT_EQ(true, scheduler->is_empty());
+  wait_scheduler();
   EXPECT_EQ(0, MTL(ObDagWarningHistoryManager *)->size());
 }
 
