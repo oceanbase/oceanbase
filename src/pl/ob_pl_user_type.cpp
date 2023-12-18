@@ -1419,7 +1419,7 @@ int ObRecordType::deserialize(
   int ret = OB_SUCCESS;
   ObPLRecord *record = reinterpret_cast<ObPLRecord *>(dst);
   CK (OB_NOT_NULL(record));
-  int64_t count = OB_INVALID_COUNT;
+  int32_t count = OB_INVALID_COUNT;
   // when record be delete , type will be PL_INVALID_TYPE
   OX (record->deserialize(src, src_len, src_pos));
   if (OB_SUCC(ret) && record->get_type() != PL_INVALID_TYPE) {
@@ -2261,7 +2261,9 @@ int ObCollectionType::deserialize(
           ObPLComposite* composite = reinterpret_cast<ObPLComposite*>(obj->get_ext());
           CK (OB_NOT_NULL(composite));
           if (OB_SUCC(ret) && composite->get_type() == PL_INVALID_TYPE) {
-            obj->set_extend(obj->get_ext(), PL_INVALID_TYPE);
+            composite->set_type(element_type_.get_type());
+            composite->set_is_null(!element_type_.get_not_null());
+            composite->set_id(element_type_.get_user_type_id());
             obj->set_type(ObMaxType);
           }
         }
@@ -3511,22 +3513,21 @@ int ObPLCollection::deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool
         } else {
           if (old_objs[i].is_invalid_type() && src->is_of_composite()) {
             old_obj.set_type(ObExtendType);
+            CK (old_obj.is_pl_extend());
           }
           OX (new (&new_objs[k])ObObj());
-          if (OB_SUCC(ret) && ((src->is_of_composite() && old_obj.is_pl_extend()) || !src->is_of_composite())) {
-            OZ (ObPLComposite::copy_element(old_obj,
-                                            new_objs[k],
-                                            *coll_allocator,
-                                            NULL, /*ns*/
-                                            NULL, /*session*/
-                                            NULL, /*dest_type*/
-                                            true, /*need_new_allocator*/
-                                            ignore_del_element));
+          OZ (ObPLComposite::copy_element(old_obj,
+                                          new_objs[k],
+                                          *coll_allocator,
+                                          NULL, /*ns*/
+                                          NULL, /*session*/
+                                          NULL, /*dest_type*/
+                                          true, /*need_new_allocator*/
+                                          ignore_del_element));
+          if (old_objs[i].is_invalid_type() && src->is_of_composite()) {
+            new_objs[k].set_type(ObMaxType);
           }
           OX (++k);
-          if (old_objs[i].is_invalid_type() && src->is_of_composite()) {
-            new_objs[i].set_type(ObMaxType);
-          }
         }
       }
       // 对于已经copy成功的new obj释放内存
