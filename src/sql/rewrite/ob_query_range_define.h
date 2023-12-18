@@ -165,7 +165,8 @@ struct ObQueryRangeCtx
       expr_constraints_(nullptr),
       params_(nullptr),
       expr_factory_(nullptr),
-      session_info_(nullptr) {}
+      session_info_(nullptr),
+      max_mem_size_(128*1024*1024) {}
   ~ObQueryRangeCtx() {}
   int init(ObPreRangeGraph *pre_range_graph,
            const ObIArray<ColumnItem> &range_columns,
@@ -192,6 +193,7 @@ struct ObQueryRangeCtx
   common::ObSEArray<int64_t, 16> null_safe_value_idxs_;
   common::ObSEArray<ObRangeColumnMeta*, 4> column_metas_;
   common::ObSEArray<std::pair<int64_t, int64_t>, 16> rowid_idxs_;
+  int64_t max_mem_size_;
 };
 
 class ObPreRangeGraph : public ObQueryRangeProvider

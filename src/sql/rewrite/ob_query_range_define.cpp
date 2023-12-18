@@ -322,7 +322,7 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
                           const bool ignore_calc_failure)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(pre_range_graph)  || OB_ISNULL(exec_ctx_) ||
+  if (OB_ISNULL(pre_range_graph)  || OB_ISNULL(exec_ctx_) || OB_ISNULL(exec_ctx_->get_my_session()) ||
       OB_UNLIKELY(range_columns.count() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected param", K(pre_range_graph), K(exec_ctx_));
@@ -336,6 +336,7 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
     ignore_calc_failure_ = ignore_calc_failure;
     expr_factory_ = expr_factory;
     session_info_ = exec_ctx_->get_my_session();
+    max_mem_size_ = exec_ctx_->get_my_session()->get_range_optimizer_max_mem_size();
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < range_columns.count(); ++i) {
     const ColumnItem &col = range_columns.at(i);

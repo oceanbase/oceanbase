@@ -106,8 +106,11 @@ int ObExprRangeConverter::alloc_range_node(ObRangeNode *&range_node)
   int ret = OB_SUCCESS;
   void *ptr = NULL;
   void *key_ptr = NULL;
-  if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObRangeNode))) ||
-      OB_ISNULL(key_ptr = allocator_.alloc(sizeof(int64_t) * ctx_.column_cnt_ * 2))) {
+  if (OB_UNLIKELY(allocator_.used() - mem_used_ > ctx_.max_mem_size_)) {
+    ret = OB_ERR_QUERY_RANGE_MEMORY_EXHAUSTED;
+    LOG_INFO("use too much memory when extract query range", K(ctx_.max_mem_size_));
+  } else if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObRangeNode))) ||
+             OB_ISNULL(key_ptr = allocator_.alloc(sizeof(int64_t) * ctx_.column_cnt_ * 2))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory for range node");
   } else {
@@ -149,9 +152,17 @@ int ObExprRangeConverter::convert_const_expr(const ObRawExpr *expr,
   int ret = OB_SUCCESS;
   int64_t start_val = 0;
   int64_t end_val = 0;
+  bool is_valid = false;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null expr", K(expr));
+  } else if (OB_FAIL(check_calculable_expr_valid(expr, is_valid))) {
+    LOG_WARN("failed to get calculable expr val");
+  } else if (!is_valid) {
+    ctx_.cur_is_precise_ = false;
+    if (OB_FAIL(generate_always_true_or_false_node(true, range_node))) {
+      LOG_WARN("failed to generate always true node");
+    }
   } else if (OB_FAIL(alloc_range_node(range_node))) {
     LOG_WARN("failed to alloc const range node");
   } else if (OB_FAIL(generate_deduce_const_expr(const_cast<ObRawExpr*>(expr), start_val, end_val))) {
@@ -309,6 +320,7 @@ int ObExprRangeConverter::gen_column_cmp_node(const ObRawExpr &l_expr,
   ObRangeColumnMeta *column_meta = nullptr;
   int64_t key_idx;
   int64_t const_val;
+  bool is_valid = false;
   if (OB_LIKELY(l_expr.has_flag(IS_COLUMN))) {
     column_expr = static_cast<const ObColumnRefRawExpr *>(&l_expr);
     const_expr = &r_expr;
@@ -328,6 +340,10 @@ int ObExprRangeConverter::gen_column_cmp_node(const ObRawExpr &l_expr,
   } else if (!ObQueryRange::can_be_extract_range(cmp_type, column_meta->column_type_,
                                                  calc_type, const_expr->get_result_type().get_type(),
                                                  always_true)) {
+    // do nothing
+  } else if (OB_FAIL(check_calculable_expr_valid(const_expr, is_valid))) {
+    LOG_WARN("failed to get calculable expr val");
+  } else if (!is_valid) {
     // do nothing
   } else if (OB_FAIL(get_final_expr_idx(const_expr, const_val))) {
     LOG_WARN("failed to get final expr idx");
@@ -367,6 +383,9 @@ int ObExprRangeConverter::gen_row_column_cmp_node(const ObRawExpr &l_expr,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected param count", K(l_expr), K(r_expr));
   } else if (T_OP_EQ == cmp_type || T_OP_NSEQ == cmp_type) {
+    ObSEArray<int64_t, 4> ordered_key_idxs;
+    ObSEArray<const ObRawExpr *, 4> const_exprs;
+    int64_t min_offset = ctx_.column_cnt_;
     for (int64_t i = 0; OB_SUCC(ret) && i < l_expr.get_param_count(); ++i) {
       const ObRawExpr* l_param = l_expr.get_param_expr(i);
       const ObRawExpr* r_param = r_expr.get_param_expr(i);
@@ -374,6 +393,7 @@ int ObExprRangeConverter::gen_row_column_cmp_node(const ObRawExpr &l_expr,
       const ObColumnRefRawExpr* column_expr = nullptr;
       const ObRawExpr* const_expr = nullptr;
       bool cur_always_true = true;
+      bool is_valid = false;
       if (OB_ISNULL(l_param) || OB_ISNULL(r_param)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get null expr", K(l_param), K(r_param));
@@ -390,7 +410,6 @@ int ObExprRangeConverter::gen_row_column_cmp_node(const ObRawExpr &l_expr,
       }
       if (OB_SUCC(ret) && OB_NOT_NULL(column_expr) && OB_NOT_NULL(const_expr)) {
         int64_t key_idx = -1;
-        int64_t const_val = -1;
         ObRangeColumnMeta *column_meta = nullptr;
         if (!is_range_key(column_expr->get_column_id(), key_idx)) {
           // do nothing
@@ -405,28 +424,49 @@ int ObExprRangeConverter::gen_row_column_cmp_node(const ObRawExpr &l_expr,
           if (!cur_always_true) {
             always_true = false;
           }
+        } else if (OB_FAIL(check_calculable_expr_valid(const_expr, is_valid))) {
+          LOG_WARN("failed to get calculable expr val");
+        } else if (!is_valid) {
+          // do nothing
         } else if (OB_FAIL(check_expr_precise(*const_expr, calc_type, column_meta->column_type_))) {
           LOG_WARN("failed to check expr precise", K(ret));
-        } else if (OB_FAIL(get_final_expr_idx(const_expr, const_val))) {
-          LOG_WARN("failed to get final expr idx");
         } else if (OB_FAIL(key_idxs.push_back(key_idx))) {
           LOG_WARN("failed to push back key idx", K(key_idx));
+        } else if (OB_FAIL(const_exprs.push_back(const_expr))) {
+          LOG_WARN("failed to push back const expr", KPC(const_expr));
+        } else if (key_idx < min_offset) {
+          min_offset = key_idx;
+        }
+      }
+    }
+    for (int64_t i = min_offset; OB_SUCC(ret) && i < ctx_.column_cnt_; ++i) {
+      int64_t idx = -1;
+      if (ObOptimizerUtil::find_item(key_idxs, i, &idx)) {
+        int64_t const_val = -1;
+        const ObRawExpr* const_expr = const_exprs.at(idx);
+        if (OB_FAIL(get_final_expr_idx(const_expr, const_val))) {
+          LOG_WARN("failed to get final expr idx");
+        } else if (OB_FAIL(ordered_key_idxs.push_back(i))) {
+          LOG_WARN("failed to push back key idx", K(key_idxs));
         } else if (OB_FAIL(val_idxs.push_back(const_val))) {
           LOG_WARN("failed to push back key idx", K(const_val));
         } else if (T_OP_NSEQ == cmp_type && OB_FAIL(ctx_.null_safe_value_idxs_.push_back(const_val))) {
           LOG_WARN("failed to push back null safe value index", K(const_val));
         }
+      } else {
+        // only extract consistent column for row compare
+        break;
       }
     }
     if (OB_SUCC(ret)) {
-      if (key_idxs.count() < l_expr.get_param_count()) {
+      if (ordered_key_idxs.count() < l_expr.get_param_count()) {
         // part of row can't extract range.
         ctx_.cur_is_precise_ = false;
       }
       if (!key_idxs.empty()) {
         if (OB_FAIL(alloc_range_node(range_node))) {
           LOG_WARN("failed to alloc common range node");
-        } else if (OB_FAIL(fill_range_node_for_basic_row_cmp(cmp_type, key_idxs, val_idxs, *range_node))) {
+        } else if (OB_FAIL(fill_range_node_for_basic_row_cmp(cmp_type, ordered_key_idxs, val_idxs, *range_node))) {
           LOG_WARN("failed to fill range node for basic row cmp");
         }
       }
@@ -443,6 +483,7 @@ int ObExprRangeConverter::gen_row_column_cmp_node(const ObRawExpr &l_expr,
       const ObColumnRefRawExpr* column_expr = nullptr;
       const ObRawExpr* const_expr = nullptr;
       bool cur_always_true = true;
+      bool is_valid = false;
       check_next = false;
       if (OB_ISNULL(l_param) || OB_ISNULL(r_param)) {
         ret = OB_ERR_UNEXPECTED;
@@ -478,7 +519,7 @@ int ObExprRangeConverter::gen_row_column_cmp_node(const ObRawExpr &l_expr,
         ObRangeColumnMeta *column_meta = nullptr;
         if (!is_range_key(column_expr->get_column_id(), key_idx)) {
           // do nothing
-        } else if (key_idx != last_key_idx + 1) {
+        } else if (last_key_idx != -1 && key_idx != last_key_idx + 1) {
           // do nothing
         } else if (OB_ISNULL(column_meta = get_column_meta(key_idx))) {
           ret = OB_ERR_UNEXPECTED;
@@ -489,6 +530,10 @@ int ObExprRangeConverter::gen_row_column_cmp_node(const ObRawExpr &l_expr,
           if (i == 0 && !cur_always_true) {
             always_true = false;
           }
+        } else if (OB_FAIL(check_calculable_expr_valid(const_expr, is_valid))) {
+          LOG_WARN("failed to get calculable expr val");
+        } else if (!is_valid) {
+          // do nothing
         } else if (OB_FAIL(check_expr_precise(*const_expr, calc_type, column_meta->column_type_))) {
           LOG_WARN("failed to check expr precise", K(ret));
         } else if (OB_FAIL(get_final_expr_idx(const_expr, const_val))) {
@@ -717,6 +762,10 @@ int ObExprRangeConverter::convert_like_expr(const ObRawExpr *expr, ObRangeNode *
                                                    calc_type, pattern_expr->get_result_type().get_type(),
                                                    always_true)) {
       // do nothing
+    } else if (OB_FAIL(check_calculable_expr_valid(pattern_expr, is_valid))) {
+      LOG_WARN("failed to get calculable expr val");
+    } else if (!is_valid) {
+      // do nothing
     } else if (OB_FAIL(check_escape_valid(escape_expr, escape_ch, is_valid))) {
       LOG_WARN("failed to check escape is valid", KPC(escape_expr));
     } else if (!is_valid) {
@@ -907,7 +956,7 @@ int ObExprRangeConverter::convert_in_expr(const ObRawExpr *expr, ObRangeNode *&r
       LOG_WARN("failed to get single in range node");
     }
   } else if (l_expr->has_flag(IS_ROWID)) {
-    if (OB_FAIL(get_single_row_in_range_node(*l_expr, *r_expr, range_node))) {
+    if (OB_FAIL(get_single_rowid_in_range_node(*l_expr, *r_expr, range_node))) {
       LOG_WARN("failed to get single row in range node", K(ret));
     }
   }
@@ -944,7 +993,7 @@ int ObExprRangeConverter::get_single_in_range_node(const ObColumnRefRawExpr *col
       const ObRawExpr *const_expr = r_expr->get_param_expr(i);
       bool cur_can_be_extract = true;
       bool cur_always_true = true;
-      bool is_val_valid = true;
+      bool is_valid = true;
       int64_t val_idx = -1;
       if (OB_ISNULL(const_expr)) {
         ret = OB_ERR_UNEXPECTED;
@@ -957,6 +1006,11 @@ int ObExprRangeConverter::get_single_in_range_node(const ObColumnRefRawExpr *col
                                                      const_expr->get_result_type().get_type(),
                                                      cur_always_true)) {
         cur_can_be_extract = false;
+      } else if (OB_FAIL(check_calculable_expr_valid(const_expr, is_valid))) {
+        LOG_WARN("failed to get calculable expr val");
+      } else if (!is_valid) {
+        cur_can_be_extract = false;
+        cur_always_true = true;
       } else if (OB_FAIL(get_final_expr_idx(const_expr, val_idx))) {
         LOG_WARN("failed to get final expr idx", K(ret));
       } else if (OB_FAIL(check_expr_precise(*const_expr, res_type.get_row_calc_cmp_types().at(i),
@@ -1007,6 +1061,10 @@ int ObExprRangeConverter::get_row_in_range_ndoe(const ObRawExpr &l_expr,
   ObSEArray<int64_t, 4> val_idxs;
   ObSEArray<int64_t, 4> key_offsets;
   ObSEArray<ObRangeColumnMeta*, 4> column_metas;
+  ObSEArray<int64_t, 4> tmp_key_idxs;
+  ObSEArray<int64_t, 4> tmp_key_offsets;
+  ObSEArray<ObRangeColumnMeta*, 4> tmp_column_metas;
+  int64_t min_offset = ctx_.column_cnt_;
   bool always_true_or_false = true;
   // 1. get all valid key and offset
   for (int64_t i = 0; OB_SUCC(ret) && i < l_expr.get_param_count(); ++i) {
@@ -1029,24 +1087,44 @@ int ObExprRangeConverter::get_row_in_range_ndoe(const ObRawExpr &l_expr,
       } else if (OB_ISNULL(column_meta = get_column_meta(key_idx))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get null column meta");
-      } else if (OB_FAIL(key_idxs.push_back(key_idx))) {
+      } else if (OB_FAIL(tmp_key_idxs.push_back(key_idx))) {
         LOG_WARN("failed to push back key idx", K(key_idx));
-      } else if (OB_FAIL(key_offsets.push_back(i))) {
+      } else if (OB_FAIL(tmp_key_offsets.push_back(i))) {
         LOG_WARN("failed to add member to bitmap", K(i));
-      } else if (OB_FAIL(column_metas.push_back(column_meta))) {
+      } else if (OB_FAIL(tmp_column_metas.push_back(column_meta))) {
         LOG_WARN("failed to push back column meta");
+      } else if (key_idx < min_offset) {
+        min_offset = key_idx;
       }
     }
   }
 
-  // 2. get all valid in param
+  // 2. get consistent column idx
+  if (OB_SUCC(ret) && tmp_key_idxs.count() > 0) {
+    for (int64_t i = min_offset; OB_SUCC(ret) && i < ctx_.column_cnt_; ++i) {
+      int64_t idx = -1;
+      if (ObOptimizerUtil::find_item(tmp_key_idxs, i, &idx)) {
+        if (OB_FAIL(key_idxs.push_back(i))) {
+          LOG_WARN("failed to push back key idx", K(tmp_key_idxs));
+        } else if (OB_FAIL(key_offsets.push_back(tmp_key_offsets.at(idx)))) {
+          LOG_WARN("failed to push back key idx", K(tmp_key_offsets), K(idx));
+        } else if (OB_FAIL(column_metas.push_back(tmp_column_metas.at(idx)))) {
+          LOG_WARN("failed to push back key idx", K(tmp_column_metas), K(idx));
+        }
+      } else {
+        // only extract consistent column for row compare
+        break;
+      }
+    }
+  }
+
+  // 3. get all valid in param
   if (OB_SUCC(ret) && key_idxs.count() > 0) {
     ObArenaAllocator alloc("ExprRangeAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObSEArray<const ObRawExpr*, 4> cur_val_exprs;
     ObSEArray<TmpExprArray*, 4> all_val_exprs;
     const int64_t row_dimension = l_expr.get_param_count();
     int64_t in_param_count = 0;
-
     for (int64_t i = 0; i < key_idxs.count(); ++i) {
       void *ptr = alloc.alloc(sizeof(TmpExprArray));
       if (OB_ISNULL(ptr)) {
@@ -1073,6 +1151,7 @@ int ObExprRangeConverter::get_row_in_range_ndoe(const ObRawExpr &l_expr,
         ObRangeColumnMeta* column_meta = column_metas.at(j);
         bool cur_can_be_extract = true;
         bool cur_always_true = true;
+        bool is_valid = false;
         const ObExprCalcType &calc_type = res_type.get_row_calc_cmp_types().at(row_dimension * i + val_offset);
         if (OB_UNLIKELY(val_offset >= row_expr->get_param_count()) ||
             OB_ISNULL(const_expr = row_expr->get_param_expr(val_offset))) {
@@ -1087,6 +1166,11 @@ int ObExprRangeConverter::get_row_in_range_ndoe(const ObRawExpr &l_expr,
                                                        const_expr->get_result_type().get_type(),
                                                        cur_always_true)) {
           cur_can_be_extract = false;
+        } else if (OB_FAIL(check_calculable_expr_valid(const_expr, is_valid))) {
+          LOG_WARN("failed to get calculable expr val");
+        } else if (!is_valid) {
+          cur_can_be_extract = false;
+          cur_always_true = true;
         } else if (OB_FAIL(OB_FAIL(cur_val_exprs.push_back(const_expr)))) {
           LOG_WARN("failed to push back expr");
         } else if (OB_FAIL(check_expr_precise(*const_expr, calc_type, column_meta->column_type_))) {
@@ -1095,19 +1179,21 @@ int ObExprRangeConverter::get_row_in_range_ndoe(const ObRawExpr &l_expr,
 
         if (OB_SUCC(ret) && !cur_can_be_extract) {
           if (cur_always_true) {
-            // current key cannot extract range
-            TmpExprArray *val_exprs = all_val_exprs.at(j);
-            if (OB_FAIL(key_idxs.remove(j))) {
-              LOG_WARN("failed to remove key idx");
-            } else if (OB_FAIL(key_offsets.remove(j))) {
-              LOG_WARN("failed to remove key offset");
-            } else if (OB_FAIL(column_metas.remove(j))) {
-              LOG_WARN("failed to remove column meta");
-            } else if (OB_FAIL(all_val_exprs.remove(j))) {
-              LOG_WARN("failed to remove val exprs");
-            } else {
-              val_exprs->destroy();
-              alloc.free(val_exprs);
+            // current key cannot extract range, remove current and subsequent keys
+            for (int64_t k = key_offsets.count() - 1; OB_SUCC(ret) && k >= j; --k) {
+              TmpExprArray *val_exprs = all_val_exprs.at(k);
+              if (OB_FAIL(key_idxs.remove(k))) {
+                LOG_WARN("failed to remove key idx");
+              } else if (OB_FAIL(key_offsets.remove(k))) {
+                LOG_WARN("failed to remove key offset");
+              } else if (OB_FAIL(column_metas.remove(k))) {
+                LOG_WARN("failed to remove column meta");
+              } else if (OB_FAIL(all_val_exprs.remove(k))) {
+                LOG_WARN("failed to remove val exprs");
+              } else {
+                val_exprs->destroy();
+                alloc.free(val_exprs);
+              }
             }
           } else {
             need_add = false;
@@ -1140,7 +1226,7 @@ int ObExprRangeConverter::get_row_in_range_ndoe(const ObRawExpr &l_expr,
           TmpExprArray *val_exprs = all_val_exprs.at(i);
           if (OB_ISNULL(val_exprs) || OB_UNLIKELY(in_param_count != val_exprs->count())) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get null val exprs", K(val_exprs), K(in_param_count));
+            LOG_WARN("get null val exprs", KPC(val_exprs), K(in_param_count));
           } else if (OB_FAIL(get_final_in_array_idx(in_param, param_idx))) {
             LOG_WARN("failed to get final in array idx");
           } else if (OB_FAIL(val_idxs.push_back(param_idx))) {
@@ -1197,7 +1283,7 @@ int ObExprRangeConverter::get_row_in_range_ndoe(const ObRawExpr &l_expr,
   return ret;
 }
 
-int ObExprRangeConverter::get_single_row_in_range_node(const ObRawExpr &rowid_expr,
+int ObExprRangeConverter::get_single_rowid_in_range_node(const ObRawExpr &rowid_expr,
                                                        const ObRawExpr &row_expr,
                                                        ObRangeNode *&range_node)
 {
@@ -1214,25 +1300,51 @@ int ObExprRangeConverter::get_single_row_in_range_node(const ObRawExpr &rowid_ex
   } else if (!is_physical_rowid) {
     ObSEArray<int64_t, 4> key_idxs;
     ObSEArray<int64_t, 4> pk_offsets;
+    ObSEArray<int64_t, 4> tmp_key_idxs;
+    ObSEArray<int64_t, 4> tmp_pk_offsets;
     TmpExprArray all_valid_exprs;
+    int64_t min_offset = ctx_.column_cnt_;
     for (int64_t i = 0; OB_SUCC(ret) && i < pk_column_items.count(); ++i) {
       const ObColumnRefRawExpr *column_expr = pk_column_items.at(i);
       int64_t key_idx = 0;
-      if (is_range_key(column_expr->get_column_id(), key_idx)) {
+      if (!is_range_key(column_expr->get_column_id(), key_idx)) {
         // do nothing
-      } else if (OB_FAIL(key_idxs.push_back(key_idx))) {
+      } else if (OB_FAIL(tmp_key_idxs.push_back(key_idx))) {
         LOG_WARN("failed to push back key idx");
-      } else if (OB_FAIL(pk_offsets.push_back(i))) {
+      } else if (OB_FAIL(tmp_pk_offsets.push_back(i))) {
         LOG_WARN("failed to push back key idx");
+      } else if (key_idx < min_offset) {
+        min_offset = key_idx;
+      }
+    }
+
+    if (OB_SUCC(ret) && tmp_key_idxs.count() > 0) {
+      for (int64_t i = min_offset; OB_SUCC(ret) && i < ctx_.column_cnt_; ++i) {
+        int64_t idx = -1;
+        if (ObOptimizerUtil::find_item(tmp_key_idxs, i, &idx)) {
+          if (OB_FAIL(key_idxs.push_back(i))) {
+            LOG_WARN("failed to push back key idx", K(key_idxs));
+          } else if (OB_FAIL(pk_offsets.push_back(tmp_pk_offsets.at(idx)))) {
+            LOG_WARN("failed to push back key idx", K(tmp_pk_offsets), K(idx));
+          }
+        } else {
+          // only extract consistent column for row compare
+          break;
+        }
       }
     }
 
     for (int64_t i = 0; OB_SUCC(ret) && !always_true && i < row_expr.get_param_count(); ++i) {
       const ObRawExpr *const_expr = row_expr.get_param_expr(i);
+      bool is_valid = false;
       if (OB_ISNULL(const_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get null expr");
       } else if (OB_UNLIKELY(!const_expr->is_const_expr())) {
+        always_true = true;
+      } else if (OB_FAIL(check_calculable_expr_valid(const_expr, is_valid))) {
+        LOG_WARN("failed to get calculable expr val");
+      } else if (!is_valid) {
         always_true = true;
       } else if (OB_FAIL(all_valid_exprs.push_back(const_expr))) {
         LOG_WARN("failed to push back const expr");
@@ -1301,11 +1413,16 @@ int ObExprRangeConverter::get_single_row_in_range_node(const ObRawExpr &rowid_ex
 
     for (int64_t i = 0; OB_SUCC(ret) && !always_true && i < row_expr.get_param_count(); ++i) {
       const ObRawExpr *const_expr = row_expr.get_param_expr(i);
+      bool is_valid = false;
       int64_t val_idx = -1;
       if (OB_ISNULL(const_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get null expr");
       } else if (OB_UNLIKELY(!const_expr->is_const_expr())) {
+        always_true = true;
+      } else if (OB_FAIL(check_calculable_expr_valid(const_expr, is_valid))) {
+        LOG_WARN("failed to get calculable expr val");
+      } else if (!is_valid) {
         always_true = true;
       } else if (OB_FAIL(get_final_expr_idx(const_expr, val_idx))) {
         LOG_WARN("failed to get final expr idx", K(ret));
@@ -1420,8 +1537,26 @@ int ObExprRangeConverter::get_calculable_expr_val(const ObRawExpr *expr,
                                           const bool ignore_error/*default true*/)
 {
   int ret = OB_SUCCESS;
-  ParamStore dummy_params;
-  const ParamStore *params = NULL;
+  if (expr->has_flag(CNT_DYNAMIC_PARAM)) {
+    is_valid = true;
+  } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx_.exec_ctx_,
+                                                               expr,
+                                                               val,
+                                                               is_valid,
+                                                               allocator_,
+                                                               ignore_error && ctx_.ignore_calc_failure_,
+                                                               ctx_.expr_constraints_))) {
+    LOG_WARN("failed to calc const or calculable expr", K(ret));
+  }
+  return ret;
+}
+
+int ObExprRangeConverter::check_calculable_expr_valid(const ObRawExpr *expr,
+                                                      bool &is_valid,
+                                                      const bool ignore_error/*default true*/)
+{
+  int ret = OB_SUCCESS;
+  ObObj val;
   if (expr->has_flag(CNT_DYNAMIC_PARAM)) {
     is_valid = true;
   } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx_.exec_ctx_,
@@ -1772,6 +1907,7 @@ int ObExprRangeConverter::get_rowid_node(const ObRawExpr &l_expr,
   uint64_t part_column_id = OB_INVALID_ID;
   ObSEArray<const ObColumnRefRawExpr *, 4> pk_column_items;
   bool is_physical_rowid = false;
+  bool is_valid = false;
 
   if (OB_LIKELY(r_expr.is_const_expr())) {
     rowid_expr = &l_expr;
@@ -1785,15 +1921,58 @@ int ObExprRangeConverter::get_rowid_node(const ObRawExpr &l_expr,
   if (OB_FAIL(get_extract_rowid_range_infos(*rowid_expr, pk_column_items,
                                             is_physical_rowid, part_column_id))) {
     LOG_WARN("failed to get extract rowid range infos");
+  } else if (OB_FAIL(check_calculable_expr_valid(const_expr, is_valid))) {
+    LOG_WARN("failed to get calculable expr val");
+  } else if (!is_valid) {
+    // do nothing
   } else if (!is_physical_rowid) {
     ObSEArray<int64_t, 4> key_idxs;
     ObSEArray<int64_t, 4> val_idxs;
-    for (int64_t i = 0; OB_SUCC(ret) && i < pk_column_items.count(); ++i) {
-      const ObColumnRefRawExpr *column_expr = pk_column_items.at(i);
-      int64_t key_idx = 0;
-      int64_t const_idx = 0;
-      if (is_range_key(column_expr->get_column_id(), key_idx)) {
-        if (OB_FAIL(get_final_expr_idx(const_expr, const_idx))) {
+    if (T_OP_EQ == cmp_type || T_OP_NSEQ == cmp_type) {
+      ObSEArray<int64_t, 4> tmp_key_idxs;
+      int64_t min_offset = ctx_.column_cnt_;
+      for (int64_t i = 0; OB_SUCC(ret) && i < pk_column_items.count(); ++i) {
+        const ObColumnRefRawExpr *column_expr = pk_column_items.at(i);
+        int64_t key_idx = 0;
+        if (is_range_key(column_expr->get_column_id(), key_idx)) {;
+          if (OB_FAIL(tmp_key_idxs.push_back(key_idx))) {
+            LOG_WARN("failed to push back key idx");
+          } else if (key_idx < min_offset) {
+            min_offset = key_idx;
+          }
+        }
+      }
+      for (int64_t i = min_offset; OB_SUCC(ret) && i < ctx_.column_cnt_; ++i) {
+        int64_t idx = -1;
+        int64_t const_idx = 0;
+        if (ObOptimizerUtil::find_item(tmp_key_idxs, i, &idx)) {
+          if (OB_FAIL(key_idxs.push_back(i))) {
+            LOG_WARN("failed to push back key idx", K(key_idxs));
+          } else if (OB_FAIL(get_final_expr_idx(const_expr, const_idx))) {
+            LOG_WARN("failed to get final expr idx");
+          } else if (OB_FAIL(val_idxs.push_back(const_idx))) {
+            LOG_WARN("failed to push back val idx");
+          } else if (OB_FAIL(ctx_.rowid_idxs_.push_back(std::pair<int64_t, int64_t>(const_idx, idx)))) {
+            LOG_WARN("failed to push back rowid idxs", K(const_idx), K(idx));
+          }
+        } else {
+          // only extract consistent column for row compare
+          break;
+        }
+      }
+    } else {
+      int64_t last_key_idx = -1;
+      bool check_next = true;
+      for (int64_t i = 0; OB_SUCC(ret) && check_next && i < pk_column_items.count(); ++i) {
+        const ObColumnRefRawExpr *column_expr = pk_column_items.at(i);
+        int64_t key_idx = 0;
+        int64_t const_idx = 0;
+        check_next = false;
+        if (!is_range_key(column_expr->get_column_id(), key_idx)) {
+          // do nothing
+        } else if (last_key_idx != -1 && last_key_idx + 1 != key_idx) {
+          // do nothing
+        } else if (OB_FAIL(get_final_expr_idx(const_expr, const_idx))) {
           LOG_WARN("failed to get final expr idx");
         } else if (OB_FAIL(key_idxs.push_back(key_idx))) {
           LOG_WARN("failed to push back key idx");
@@ -1801,6 +1980,9 @@ int ObExprRangeConverter::get_rowid_node(const ObRawExpr &l_expr,
           LOG_WARN("failed to push back val idx");
         } else if (OB_FAIL(ctx_.rowid_idxs_.push_back(std::pair<int64_t, int64_t>(const_idx, i)))) {
           LOG_WARN("failed to push back rowid idxs", K(const_idx), K(i));
+        } else {
+          check_next = true;
+          last_key_idx = key_idx;
         }
       }
     }
@@ -1922,7 +2104,10 @@ int ObExprRangeConverter::get_final_in_array_idx(InParam *&in_param, int64_t &id
   int ret = OB_SUCCESS;
   idx = -(ctx_.in_params_.count() + 1);
   void *ptr = nullptr;
-  if (OB_ISNULL(ptr = allocator_.alloc(sizeof(InParam)))) {
+  if (OB_UNLIKELY(allocator_.used() - mem_used_ > ctx_.max_mem_size_)) {
+    ret = OB_ERR_QUERY_RANGE_MEMORY_EXHAUSTED;
+    LOG_INFO("use too much memory when extract query range", K(ctx_.max_mem_size_));
+  } else if (OB_ISNULL(ptr = allocator_.alloc(sizeof(InParam)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory for InParam failed");
   } else {

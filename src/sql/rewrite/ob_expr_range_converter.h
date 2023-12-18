@@ -28,7 +28,8 @@ class ObExprRangeConverter
 public:
   ObExprRangeConverter(ObIAllocator &allocator, ObQueryRangeCtx &ctx)
     : allocator_(allocator),
-      ctx_(ctx)
+      ctx_(ctx),
+      mem_used_(allocator.used())
   {}
 
   int convert_expr_to_range_node(const ObRawExpr *expr,
@@ -69,6 +70,8 @@ public:
                          const ObExprCalcType &calc_type,
                          const ObExprResType &column_res_type);
 
+  inline int64_t get_mem_used() const { return mem_used_; }
+
 private:
   ObExprRangeConverter();
   int alloc_range_node(ObRangeNode *&range_node);
@@ -99,7 +102,7 @@ private:
                             const ObRawExpr &r_expr,
                             const ObExprResType &res_type,
                             ObRangeNode *&range_node);
-  int get_single_row_in_range_node(const ObRawExpr &rowid_expr,
+  int get_single_rowid_in_range_node(const ObRawExpr &rowid_expr,
                                    const ObRawExpr &row_expr,
                                    ObRangeNode *&range_node);
   int convert_not_in_expr(const ObRawExpr *expr, ObRangeNode *&range_node);
@@ -107,6 +110,7 @@ private:
   int build_decode_like_expr(ObRawExpr *pattern, ObRawExpr *escape, char escape_ch,
                              ObRangeColumnMeta *column_meta, int64_t &start_val_idx, int64_t &end_val_idx);
   int get_calculable_expr_val(const ObRawExpr *expr, ObObj &val, bool &is_valid, const bool ignore_error = true);
+  int check_calculable_expr_valid(const ObRawExpr *expr, bool &is_valid, const bool ignore_error = true);
   int add_precise_constraint(const ObRawExpr *expr, bool is_precise);
   int add_prefix_pattern_constraint(const ObRawExpr *expr);
   int get_final_expr_idx(const ObRawExpr *expr, int64_t &idx);
@@ -116,6 +120,7 @@ private:
 private:
   ObIAllocator &allocator_;
   ObQueryRangeCtx &ctx_;
+  const int64_t mem_used_;
 };
 
 } // namespace sql

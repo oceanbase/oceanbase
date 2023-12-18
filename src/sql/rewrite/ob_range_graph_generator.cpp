@@ -48,6 +48,16 @@ int ObRangeGraphGenerator::generate_range_graph(const ObIArray<ObRawExpr*> &expr
       LOG_WARN("failed to push back pricise expr item");
     }
   }
+  LOG_DEBUG("total memory used to get pre range graph",
+      "total_size", allocator_.used() - range_node_generator.get_mem_used());
+
+  if (OB_FAIL(ret) && OB_ERR_QUERY_RANGE_MEMORY_EXHAUSTED == ret) {
+    // use too much memory when extract query range, generate whole range.
+    ret = OB_SUCCESS;
+    range_nodes.reset();
+    LOG_INFO("use too much memory during extract query range, fall back to whole range",
+        K(ctx_.max_mem_size_));
+  }
   if (OB_SUCC(ret)) {
     ObRangeNode *final_range_node = nullptr;
     if (range_nodes.empty()) {
