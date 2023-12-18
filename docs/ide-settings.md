@@ -71,7 +71,7 @@ Once the source code has been located in the remote machine, it is easy to setup
 
 Download and install the Remote plugin from the VSCode extension store.
 
-![remote plugin](images/ide-settings-remote-plugin.md)
+![remote plugin](images/ide-settings-remote-plugin.png)
 
 ### Usage
 
