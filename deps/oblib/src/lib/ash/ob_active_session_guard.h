@@ -154,8 +154,10 @@ public:
   char bt_[256];
 #endif
   TO_STRING_KV(K_(tenant_id), K_(session_id), "event id", OB_WAIT_EVENTS[event_no_].event_id_,
-      "event", OB_WAIT_EVENTS[event_no_].event_name_, K_(wait_time), K_(time_model), K_(trace_id), K_(delta_time),
-      K_(delta_cpu_time), K_(delta_db_time), K_(program));
+      "event", OB_WAIT_EVENTS[event_no_].event_name_, K_(wait_time), K_(time_model), K_(trace_id),
+      K_(plan_line_id), K_(sql_id), K_(top_level_sql_id), K_(plsql_entry_subprogram_name),
+      K_(plsql_subprogram_name), K_(session_type), K_(is_wr_sample), K_(delta_time),
+      K_(delta_cpu_time), K_(delta_db_time), K_(program), K_(module));
 };
 
 // record run-time stat for each OB session
@@ -173,7 +175,6 @@ public:
         total_cpu_time_(0),
         tid_(0),
         di_(nullptr),
-        is_background_(false),
         is_bkgd_active_(true),
         inner_sql_wait_type_id_(ObInnerSqlWaitTypeId::NULL_INNER_SQL),
         is_remote_inner_sql_(false),
@@ -262,7 +263,6 @@ public:
   uint64_t total_cpu_time_;  // total cpu time since last ash sample. for cpu-time verification.
   int64_t tid_;  // record current tid for cpu time verification
   common::ObDiagnoseSessionInfo *di_;
-  bool is_background_;
   bool is_bkgd_active_; // Identifies whether the status of the background session is active.
                         // Inactive background thread session will not be collected in ASH.
   ObInnerSqlWaitTypeId inner_sql_wait_type_id_;
@@ -273,8 +273,9 @@ public:
 
   INHERIT_TO_STRING_KV("ObActiveSessionStatItem", ObActiveSessionStatItem, K_(last_ts),
       K_(wait_event_begin_ts), K_(total_idle_wait_time), K_(total_non_idle_wait_time),
-      K_(prev_idle_wait_time), K_(prev_non_idle_wait_time), K_(total_cpu_time), K_(is_background),
-      K_(is_bkgd_active), K_(inner_sql_wait_type_id), K_(is_remote_inner_sql));
+      K_(prev_idle_wait_time), K_(prev_non_idle_wait_time), K_(total_cpu_time),
+      K_(is_bkgd_active), K_(inner_sql_wait_type_id), K_(is_remote_inner_sql), K_(pcode),
+      K_(bkgd_elapse_time), K_(prev_inner_sql_wait_type_id), K_(fixup_index), K_(fixup_ash_buffer));
 
 private:
   // for wait time fix-up.
