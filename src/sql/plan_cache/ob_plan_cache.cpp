@@ -1707,7 +1707,7 @@ int ObPlanCache::ref_cache_obj(const ObCacheObjID obj_id, ObCacheObjGuard& guard
   int ret = OB_SUCCESS;
   ObCacheObjAtomicOp op(guard.ref_handle_);
   ObGlobalReqTimeService::check_req_timeinfo();
-  if (OB_FAIL(co_mgr_.atomic_get_alloc_cache_obj(obj_id, op))) {
+  if (OB_FAIL(co_mgr_.atomic_get_cache_obj(obj_id, op))) {
     SQL_PC_LOG(WARN, "failed to get update plan statistic", K(obj_id), K(ret));
   } else if (NULL == op.get_value()) {
     ret = OB_HASH_NOT_EXIST;
@@ -1723,6 +1723,40 @@ int ObPlanCache::ref_plan(const ObCacheObjID plan_id, ObCacheObjGuard& guard)
   ObILibCacheObject *cache_obj = NULL;
   ObGlobalReqTimeService::check_req_timeinfo();
   if (OB_FAIL(ref_cache_obj(plan_id, guard))) { // inc ref count by 1
+    LOG_WARN("failed to ref cache obj", K(ret));
+  } else if (FALSE_IT(cache_obj = guard.cache_obj_)) {
+    // do nothing
+  } else if (OB_ISNULL(cache_obj)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null cache object", K(ret));
+  } else if (ObLibCacheNameSpace::NS_CRSR != cache_obj->get_ns()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("this cache object is not a plan.", K(ret), K(cache_obj->get_ns()));
+  }
+  return ret;
+}
+
+int ObPlanCache::ref_alloc_obj(const ObCacheObjID obj_id, ObCacheObjGuard& guard)
+{
+  int ret = OB_SUCCESS;
+  ObCacheObjAtomicOp op(guard.ref_handle_);
+  ObGlobalReqTimeService::check_req_timeinfo();
+  if (OB_FAIL(co_mgr_.atomic_get_alloc_cache_obj(obj_id, op))) {
+    SQL_PC_LOG(WARN, "failed to get update plan statistic", K(obj_id), K(ret));
+  } else if (NULL == op.get_value()) {
+    ret = OB_HASH_NOT_EXIST;
+  } else {
+    guard.cache_obj_ = op.get_value();
+  }
+  return ret;
+}
+
+int ObPlanCache::ref_alloc_plan(const ObCacheObjID plan_id, ObCacheObjGuard& guard)
+{
+  int ret = OB_SUCCESS;
+  ObILibCacheObject *cache_obj = NULL;
+  ObGlobalReqTimeService::check_req_timeinfo();
+  if (OB_FAIL(ref_alloc_obj(plan_id, guard))) { // inc ref count by 1
     LOG_WARN("failed to ref cache obj", K(ret));
   } else if (FALSE_IT(cache_obj = guard.cache_obj_)) {
     // do nothing
