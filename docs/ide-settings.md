@@ -6,7 +6,7 @@ This document introduce how to setup `VSCode + ccls`, which is very convenient t
 
 The number of OceanBase code is pretty huge and OceanBase can't be compiled under Mac or Windows, so we recommend that download the code on the remote server, and start VSCode to access the code under the remote server. 
 
-# config ccls on remote server
+# Config ccls on Remote Server
 
 **Attention**
 The following `/path/to` just means the path example, please replace it with your real path. 
@@ -25,7 +25,7 @@ In the C/C++ LSP domain, the famous tools are clangd and ccls. Here we recommend
 
 # ccls Installation
 
-Install ccls on centos
+## Install ccls on centos
 
 > NOTE: if you don't have the permission for `yum`, please use `sudo yum ...` instead.
 
@@ -50,11 +50,7 @@ source ~/.bashrc   # or
 source ~/.bash_profile
 ```
 
-Install ccls on centos8
-
-TODO
-
-Install ccls on ubuntu
+## Install ccls on ubuntu
 
 ```bash
 apt-get -y install ccls
@@ -62,7 +58,7 @@ apt-get -y install ccls
 
 > NOTE: If you don't have the permission, please use `sudo` as the command prefix.
 
-check the installation
+## Check the Installation
 
 You can run the command below to check whether the installation was success.
 
@@ -70,70 +66,70 @@ You can run the command below to check whether the installation was success.
 ccls --version
 ```
 
-# VSCode configuration
+# VSCode Configuration
 
 ## Remote Plugin
 
 Once the source code has been located in the remote machine, it is easy to setup debugging environment in remote machine. At the same time, the application can be run faster because remote machine is more powerful.  User can easily access the source code on the remote machine even when something is wrong with the network, just wait reload after reconnect the remote server. 
 
-### installation
+### Installation
 
 Download and install the Remote plugin from the VSCode extension store.
 
-![image.png](https://cdn.nlark.com/yuque/0/2022/png/106206/1672226833170-8961a1e0-f3e0-46c4-9f06-43cb9c2f77ca.png)
+![remote plugin](images/ide-settings-remote-plugin.md)
 
 ### Usage
 
 **NOTE**：Make sure the connection between the local machine and the remote machine is fine. 
 After installation the plugin, there is one icon in the left bottom corner of VSCode. 
 
-![image.png](https://cdn.nlark.com/yuque/0/2022/png/106206/1672226909238-32d44036-7899-4657-a4b7-beedd8ae5ca4.png)
+![remote plugin usage](images/ide-settings-remote-plugin-usage.png)
 
 Press the icon and select `Connect to Host`, or press shortkey `ctrl+shift+p` and select `Remote-SSH:Connect to Host`:
 
-![image.png](https://cdn.nlark.com/yuque/0/2022/png/106206/1672226980519-43e24803-1339-4f74-8535-17f74745aa66.png)
+![connec to remote ](images/ide-settings-connect-to-remote-server.png)
 
 Input user@remote_ip in the input frame, VSCode will create one new window, please input password in the new window:
 
-![image.png](https://cdn.nlark.com/yuque/0/2022/png/106206/1672370147275-84803eae-af92-4fbd-98c6-109874d9c976.png)
+![input password](images/ide-settings-input-password.png)
 
 After input the password, VSCode will connect to the remote server, and it is ready to open the remote machine's file or directory. 
 
 If you want to use the specific port, please choose `Add New SSH Host`, then input ssh command, then choose one configuration file to store the ssh configuration. 
 
-![image.png](https://cdn.nlark.com/yuque/0/2022/png/106206/1672370296656-9e259c94-e273-4c0b-ab8d-b4e5ab81e4fd.png)
+![ssh port](images/ide-settings-use-different-ssh-port.png)
 
-![image.png](https://cdn.nlark.com/yuque/0/2022/png/106206/1672370232586-90efcd62-03d8-4465-b18c-cc8c009f98cf.png)
+![ssh config file](images/ide-settings-choose-ssh-config.png)
 After that, the configured machines can be found in the `Connect to Host`. 
 
 Password need to be input everytime. If you want to skip this action, please configure SSH security login with credential. 
 
-## C/C++ plugin
+## C/C++ Plugin
 
 C/C++ plugin can be download and installed in VSCode extension store in the case of simple scenarios:
 
-![image.png](https://cdn.nlark.com/yuque/0/2022/png/106206/1672370378234-b1d264f7-f34a-47e0-b7aa-5b352af9e3dd.png)
+![cpp plugins](images/ide-settings-cpp-plugins.png)
 C/C++ plugin can automatically code completion and syntax highlighting, but this plugin failed to build index for OceanBase, it is hard to jump the symbol of OceanBase. 
 
-## ccls plugin
+## ccls Plugin
 
-### Install ccls plugin
+### Install ccls Plugin
 
-![image.png](https://cdn.nlark.com/yuque/0/2022/png/106206/1672370482529-0007fae8-8e24-42ed-b14b-e163f89d40a0.png)
+![ccls plugin](images/ide-settings-ccls-plugin.png)
 
 > if ccls will be used, it suggest to uninstall C/C++ plugin. 
 
-### Configure ccls plugin
+### Configure ccls Plugin
 
 1. press the setting icond and choose **Extension Settings**
 
-![image.png](https://cdn.nlark.com/yuque/0/2022/png/106206/1672370602812-710cb0aa-dc18-44f2-8b65-7291412758b8.png)
+![ccls plugin settings](images/ide-settings-ccls-plugin-settings.png)
 
 2. Set config ccls.index.threads. CCLS uses 80% of the system cpu cores as the parallelism in default. We can search `threads` in vscode config page and set the number like below.
 
 > As default, oceanbase built in unity mode and it costs more memory than usual case. The system maybe hangs if the parallelism is too high such as 8C 16G system.
 
-![image](https://github.com/oceanbase/oceanbase/assets/5187215/b9fb4dff-79e8-4785-902b-dea8436f2f64)
+![ccls threads config](images/ide-settings-ccls-threads-config.png)
 
 ## Usage
 
@@ -144,18 +140,18 @@ C/C++ plugin can automatically code completion and syntax highlighting, but this
    bash build.sh ccls --init
    ```
 
-After that, compile_commands.json can be found in the directory of code_path_of_oceanbase.
+After that, compile_commands.json can be found in the directory of `code_path_of_oceanbase`.
 
 After finish previous steps, please restart VSCode, the building index precedure can be found at the bottom of VSCode:
 
-![image.png](https://cdn.nlark.com/yuque/0/2022/png/106206/1672370872215-a995a681-7720-43bb-b690-dab8a11d7fc7.png)
+![ccls-indexing](images/ide-settings-ccls-indexing.png)
 
 After finish building index, the function's reference and class member can be easily found for any opened file as the following example:
 
-![image.png](https://cdn.nlark.com/yuque/0/2022/png/106206/1672370997746-11beb619-56c5-46ad-88a3-12ead1780109.png?x-oss-process=image%2Fresize%2Cw_674%2Climit_0)
+![ccls index example](images/ide-settings-ccls-index-example.png)
 
 Recommend ccls shortkey settings:
 
-![image](https://cdn.nlark.com/yuque/0/2022/png/106206/1672371098121-0ab7249c-a492-4031-a665-15c0e4e53539.png?x-oss-process=image%2Fresize%2Cw_674%2Climit_0)
+![ccls shortkey](images/ide-settings-ccls-keyboard-settings.png)
 
-![image](https://cdn.nlark.com/yuque/0/2022/png/106206/1672371282152-9295a833-b8b4-4a40-ac60-9a88490007b8.png)
+![ccls shortkey](images/ide-settings-ccls-keyboard-settings2.png)
