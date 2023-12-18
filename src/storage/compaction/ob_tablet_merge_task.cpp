@@ -1339,7 +1339,8 @@ int ObTabletMergeFinishTask::add_sstable_for_merge(ObTabletMergeCtx &ctx)
 
     // get info from inner table and save medium info
     // try schedule minor or major merge after mini
-    if (OB_SUCC(ret) && is_mini_merge(merge_type) && new_tablet_handle.is_valid()) {
+    if (OB_SUCC(ret) && is_mini_merge(merge_type) && new_tablet_handle.is_valid()
+        && !MTL(ObTenantTabletScheduler *)->is_restore()) {
       int tmp_ret = OB_SUCCESS;
       if (!ctx.param_.tablet_id_.is_special_merge_tablet()) {
         if (OB_TMP_FAIL(try_schedule_compaction_after_mini(ctx, new_tablet_handle))) {
