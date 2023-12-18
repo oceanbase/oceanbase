@@ -130,7 +130,7 @@ extern void obsql_oracle_parse_fatal_error(int32_t errcode, yyscan_t yyscanner, 
 //%nonassoc STRING_VALUE
 %left   '(' ')'
 %nonassoc SQL_CACHE SQL_NO_CACHE CHARSET DATABASE_ID REPLICA_NUM/*for shift/reduce conflict between opt_query_expresion_option_list and SQL_CACHE*/
-%nonassoc HIGHER_PARENS TRANSACTION SIZE AUTO SKEWONLY DEFAULT/*for simple_expr conflict*/
+%nonassoc HIGHER_PARENS TRANSACTION SIZE AUTO SKEWONLY DEFAULT AS/*for simple_expr conflict*/
 %left   '.'
 %right  NOT NOT2
 %right BINARY COLLATE
@@ -399,7 +399,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_generated_keyname opt_generated_option_list opt_generated_column_attribute_list generated_column_attribute opt_storage_type
 %type <node> data_type special_table_type opt_if_not_exists opt_if_exists opt_charset collation opt_collation cast_data_type
 %type <node> replace_with_opt_hint insert_with_opt_hint column_list opt_on_duplicate_key_clause opt_into opt_replace opt_temporary opt_algorithm opt_sql_security opt_definer view_algorithm no_param_column_ref
-%type <node> insert_vals_list insert_vals value_or_values
+%type <node> insert_vals_list insert_vals value_or_values opt_insert_row_alias
 %type <node> select_with_parens select_no_parens select_clause select_into no_table_select_with_order_and_limit simple_select_with_order_and_limit select_with_parens_with_order_and_limit select_clause_set select_clause_set_left select_clause_set_right  select_clause_set_with_order_and_limit
 %type <node> simple_select no_table_select limit_clause select_expr_list
 %type <node> with_select with_clause with_list common_table_expr opt_column_alias_name_list alias_name_list column_alias_name
@@ -8103,12 +8103,39 @@ dml_table_name values_clause
                            NULL, /*duplicate key node*/
                            NULL /*error logging caluse*/);
 }
-| dml_table_name SET update_asgn_list
+| dml_table_name SET update_asgn_list opt_insert_row_alias
 {
   ParseNode *val_list = NULL;
   ParseNode *into_node = NULL;
   merge_nodes(val_list, result, T_ASSIGN_LIST, $3);
-  malloc_non_terminal_node(into_node, result->malloc_pool_, T_INSERT_INTO_CLAUSE, 1, $1);
+  if ($4 != NULL) {
+    ParseNode *subquery_node = NULL;
+    ParseNode *values_node = NULL;
+    ParseNode *values_list_node = NULL;
+    ParseNode *select_node = NULL;
+    ParseNode *column_list_node = new_node(result->malloc_pool_, T_COLUMN_LIST, val_list->num_child_);
+    ParseNode *value_vector_node = new_node(result->malloc_pool_, T_VALUE_VECTOR, val_list->num_child_);
+    for (int32_t i = 0; i < val_list->num_child_; i++) {
+      ParseNode *assign_item = val_list->children_[i];
+      if (assign_item->num_child_ != 2) {
+        yyerror(&@3, result, "assign_item child num is invalid\n");
+        YYERROR;
+      } else {
+        column_list_node->children_[i]=assign_item->children_[0];
+        value_vector_node->children_[i]=assign_item->children_[1];
+      }
+    }
+    malloc_non_terminal_node(into_node, result->malloc_pool_, T_INSERT_INTO_CLAUSE, 2, $1, column_list_node);
+    malloc_non_terminal_node(values_list_node, result->malloc_pool_, T_VALUES_ROW_LIST, 1, value_vector_node);
+    malloc_non_terminal_node(values_node, result->malloc_pool_, T_VALUES_TABLE_EXPRESSION, 1, values_list_node);
+    malloc_select_values_stmt(subquery_node, result, values_node, NULL, NULL);
+    malloc_select_values_stmt(select_node, result, subquery_node, NULL, NULL);
+    select_node->children_[PARSE_SELECT_FROM]->children_[0]->children_[1] = $4;
+    val_list = select_node;
+    val_list->reserved_ = 1;
+  } else {
+    malloc_non_terminal_node(into_node, result->malloc_pool_, T_INSERT_INTO_CLAUSE, 1, $1);
+  }
   malloc_non_terminal_node($$, result->malloc_pool_, T_SINGLE_TABLE_INSERT, 4,
                            into_node, /*insert_into_clause*/
                            val_list, /*values_list*/
@@ -8118,16 +8145,46 @@ dml_table_name values_clause
 ;
 
 values_clause:
-value_or_values insert_vals_list
+value_or_values insert_vals_list opt_insert_row_alias
 {
   (void)($1);
-  merge_nodes($$, result, T_VALUE_LIST, $2);
+  if ($3 != NULL) {
+    ParseNode *subquery_node = NULL;
+    ParseNode *values_node = NULL;
+    ParseNode *values_list_node = NULL;
+    if ($2->type_ == T_LINK_NODE) {
+      $2->type_ = T_VALUES_ROW_LIST;
+      values_list_node = $2;
+    } else {
+      malloc_non_terminal_node(values_list_node, result->malloc_pool_, T_VALUES_ROW_LIST, 1, $2);
+    }
+    malloc_non_terminal_node(values_node, result->malloc_pool_, T_VALUES_TABLE_EXPRESSION, 1, values_list_node);
+    malloc_select_values_stmt(subquery_node, result, values_node, NULL, NULL);
+    malloc_select_values_stmt($$, result, subquery_node, NULL, NULL);
+    $$->children_[PARSE_SELECT_FROM]->children_[0]->children_[1] = $3;
+    $$->reserved_ = 1;
+  } else {
+    merge_nodes($$, result, T_VALUE_LIST, $2);
+  }
 }
 | select_stmt
 {
   $$ = $1;
 }
 ;
+
+opt_insert_row_alias:
+AS table_subquery_alias
+{
+  (void)($1);
+  if (OB_UNLIKELY(T_STAR == $2->type_)) {
+    yyerror(&@2, result, "table.* as label is invalid\n");
+    YYERROR;
+  } else {
+    $$ = $2;
+  }
+}
+| /*emtpy*/ {$$ = NULL;};
 
 value_or_values:
 VALUE

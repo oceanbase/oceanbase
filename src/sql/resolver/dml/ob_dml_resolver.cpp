@@ -15791,7 +15791,7 @@ int ObDMLResolver::refine_generate_table_column_name(const ParseNode &column_ali
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(column_alias_node.type_), K(ret));
   } else if (OB_UNLIKELY(column_alias_node.num_child_ != select_stmt.get_select_item_size())) {
-    ret = OB_ERR_COULUMN_VALUE_NOT_MATCH;
+    ret = OB_ERR_VIEW_WRONG_LIST;
     LOG_WARN("column count does not match value count", K(column_alias_node.num_child_), K(ret),
                                                         K(select_stmt.get_select_item_size()));
   } else {
