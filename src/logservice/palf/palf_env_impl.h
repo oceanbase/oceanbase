@@ -201,6 +201,7 @@ public:
   // should be removed in version 4.2.0.0
   virtual int update_replayable_point(const SCN &replayable_scn) = 0;
   virtual int get_throttling_options(PalfThrottleOptions &option) = 0;
+  virtual void period_calc_disk_usage() = 0;
   VIRTUAL_TO_STRING_KV("IPalfEnvImpl", "Dummy");
 
 };
@@ -271,6 +272,7 @@ public:
   int64_t get_tenant_id() override final;
   int update_replayable_point(const SCN &replayable_scn) override final;
   int get_throttling_options(PalfThrottleOptions &option);
+  void period_calc_disk_usage() override final;
   INHERIT_TO_STRING_KV("IPalfEnvImpl", IPalfEnvImpl, K_(self), K_(log_dir), K_(disk_options_wrapper),
       KPC(log_alloc_mgr_));
   // =================== disk space management ==================
@@ -370,7 +372,8 @@ private:
   PalfMonitorCb *monitor_;
 
   PalfDiskOptionsWrapper disk_options_wrapper_;
-  int64_t disk_not_enough_print_interval_;
+  int64_t disk_not_enough_print_interval_in_gc_thread_;
+  int64_t disk_not_enough_print_interval_in_loop_thread_;
 
   char log_dir_[common::MAX_PATH_SIZE];
   char tmp_log_dir_[common::MAX_PATH_SIZE];
