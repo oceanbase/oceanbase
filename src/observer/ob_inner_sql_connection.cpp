@@ -922,6 +922,7 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
             sqlstat_record.record_sqlstat_end_value();
             sqlstat_record.set_rows_processed(res.result_set().get_affected_rows() + res.result_set().get_return_rows());
             sqlstat_record.set_partition_cnt(res.result_set().get_exec_context().get_das_ctx().get_related_tablet_cnt());
+            sqlstat_record.set_is_route_miss(get_session().partition_hit().get_bool()? 0 : 1);
             sqlstat_record.move_to_sqlstat_cache(get_session(),
                                                  res.sql_ctx().cur_sql_,
                                                  res.result_set().get_physical_plan());

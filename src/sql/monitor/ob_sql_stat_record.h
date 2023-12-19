@@ -129,6 +129,8 @@ public:
   void set_rows_processed(int64_t rows_processed) { rows_processed_end_ = rows_processed; }
   void inc_fetch_cnt() { fetches_end_ ++; }
   void set_partition_cnt(int64_t partition_cnt) { partition_end_ = partition_cnt; }
+  bool is_route_miss() const { return is_route_miss_; }
+  void set_is_route_miss(const bool is_route_miss) { is_route_miss_ = is_route_miss; }
 #define DEF_SQL_STAT_ITEM_DELTA_FUNC(def_name)                 \
     int64_t get_##def_name##_delta() const {                   \
       int64_t delta = def_name##_end_ - def_name##_start_;     \
@@ -155,6 +157,7 @@ public:
 #undef DEF_SQL_STAT_ITEM_DELTA_FUNC
 public:
   bool is_in_retry_;
+  bool is_route_miss_;
 #define DEF_SQL_STAT_ITEM(def_name)           \
   int64_t def_name##_start_;                  \
   int64_t def_name##_end_;
@@ -207,6 +210,7 @@ public:
     DEF_SQL_STAT_ITEM_CONSTRUCT(retry);
     DEF_SQL_STAT_ITEM_CONSTRUCT(partition);
     DEF_SQL_STAT_ITEM_CONSTRUCT(nested_sql);
+    DEF_SQL_STAT_ITEM_CONSTRUCT(route_miss);
 #undef DEF_SQL_STAT_ITEM_CONSTRUCT
   }
 
@@ -248,6 +252,7 @@ public:
     DEF_SQL_STAT_ITEM_DELTA_FUNC(retry);
     DEF_SQL_STAT_ITEM_DELTA_FUNC(partition);
     DEF_SQL_STAT_ITEM_DELTA_FUNC(nested_sql);
+    DEF_SQL_STAT_ITEM_DELTA_FUNC(route_miss);
   #undef DEF_SQL_STAT_ITEM_DELTA_FUNC
 
   TO_STRING_KV(K_(sql_stat_info));
@@ -276,6 +281,7 @@ private:
     DEF_SQL_STAT_ITEM(retry);
     DEF_SQL_STAT_ITEM(partition);
     DEF_SQL_STAT_ITEM(nested_sql);
+    DEF_SQL_STAT_ITEM(route_miss);
   #undef DEF_SQL_STAT_ITEM
 };
 

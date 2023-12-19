@@ -1298,6 +1298,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
         sqlstat_record.record_sqlstat_end_value(di);
         sqlstat_record.set_rows_processed(result.get_affected_rows() + result.get_return_rows());
         sqlstat_record.set_partition_cnt(result.get_exec_context().get_das_ctx().get_related_tablet_cnt());
+        sqlstat_record.set_is_route_miss(result.get_session().partition_hit().get_bool()? 0 : 1);
         ObString sql_id = ObString::make_string(ctx_.sql_id_);
         sqlstat_record.move_to_sqlstat_cache(result.get_session(),
                                                    ctx_.cur_sql_,

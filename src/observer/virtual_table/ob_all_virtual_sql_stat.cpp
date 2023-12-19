@@ -601,6 +601,14 @@ int ObAllVirtualSqlStat::fill_row(
         }
         break;
       }
+      case ROUTE_MISS_TOTAL: {
+        cells[cell_idx].set_int(sql_stat_record->get_route_miss_total());
+        break;
+      }
+      case ROUTE_MISS_DELTA: {
+        cells[cell_idx].set_int(sql_stat_record->get_route_miss_delta());
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected column id", K(col_id));

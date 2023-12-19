@@ -689,7 +689,8 @@ int ObWrCollector::collect_sqlstat()
                   "    cast(sum(retry_total) as SIGNED INTEGER ) as retry_total, cast(sum(retry_delta) as SIGNED INTEGER ) as retry_delta, "
                   "    cast(sum(partition_total) as SIGNED INTEGER ) as partition_total, "
                   "    cast(sum(partition_delta) as SIGNED INTEGER ) as partition_delta, cast(sum(nested_sql_total) as SIGNED INTEGER ) as nested_sql_total, "
-                  "    cast(sum(nested_sql_delta) as SIGNED INTEGER ) as nested_sql_delta ,source_ip, source_port   "
+                  "    cast(sum(nested_sql_delta) as SIGNED INTEGER ) as nested_sql_delta ,source_ip, source_port , cast(sum(route_miss_total) as SIGNED INTEGER ) as route_miss_total, "
+                  "    cast(sum(route_miss_delta) as SIGNED INTEGER ) as route_miss_delta "
                   "from oceanbase.__all_virtual_sqlstat   "
                   "where tenant_id = %ld and (sql_id,plan_hash) in  (   "
                   "select sql_id, plan_hash   "
@@ -785,6 +786,8 @@ int ObWrCollector::collect_sqlstat()
             EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "nested_sql_delta", sqlstat.nested_sql_delta_, int64_t, null_error, skip_column_error, default_value);
             EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "source_ip", sqlstat.source_ip_, sizeof(sqlstat.source_ip_), tmp_real_str_len);
             EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "source_port", sqlstat.source_port_, int64_t, true/*skip_null_error*/, skip_column_error, default_value);
+            EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "route_miss_total", sqlstat.route_miss_total_, int64_t, null_error, skip_column_error, default_value);
+            EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "route_miss_delta", sqlstat.route_miss_delta_, int64_t, null_error, skip_column_error, default_value);
 
             if (OB_SUCC(ret)) {
               if (OB_FAIL(dml_splicer.add_pk_column(K(tenant_id)))) {
@@ -897,6 +900,10 @@ int ObWrCollector::collect_sqlstat()
                 LOG_WARN("failed to add column nested_sql_total", KR(ret), K(sqlstat));
               } else if (OB_FAIL(dml_splicer.add_column("nested_sql_delta", sqlstat.nested_sql_delta_))) {
                 LOG_WARN("failed to add column nested_sql_delta", KR(ret), K(sqlstat));
+              } else if (OB_FAIL(dml_splicer.add_column("route_miss_total", sqlstat.route_miss_total_))) {
+                LOG_WARN("failed to add column route_miss_total", KR(ret), K(sqlstat));
+              } else if (OB_FAIL(dml_splicer.add_column("route_miss_delta", sqlstat.route_miss_delta_))) {
+                LOG_WARN("failed to add column route_miss_delta", KR(ret), K(sqlstat));
               } else if (OB_FAIL(dml_splicer.finish_row())) {
                 LOG_WARN("failed to finish row", KR(ret));
               }

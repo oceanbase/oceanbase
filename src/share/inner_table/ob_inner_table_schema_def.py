@@ -6519,6 +6519,8 @@ def_table_schema(
         ('partition_delta', 'bigint', 'false', '0'),
         ('nested_sql_total', 'bigint', 'false', '0'),
         ('nested_sql_delta', 'bigint', 'false', '0'),
+        ('route_miss_total', 'bigint', 'false', '0'),
+        ('route_miss_delta', 'bigint', 'false', '0'),
     ],
 )
 
@@ -13628,6 +13630,8 @@ def_table_schema(
     ('NESTED_SQL_DELTA', 'bigint', 'false',  '0'),
     ('SOURCE_IP', 'varchar:MAX_IP_ADDR_LENGTH'),
     ('SOURCE_PORT', 'int'),
+    ('ROUTE_MISS_TOTAL', 'bigint', 'false',  '0'),
+    ('ROUTE_MISS_DELTA', 'bigint', 'false',  '0'),
   ],
   partition_columns = ['SVR_IP', 'SVR_PORT'],
   vtable_route_policy = 'distributed',
@@ -31005,7 +31009,9 @@ def_table_schema(
       NESTED_SQL_TOTAL AS NESTED_SQL_TOTAL,
       NESTED_SQL_DELTA AS NESTED_SQL_DELTA,
       SOURCE_IP AS SOURCE_IP,
-      SOURCE_PORT AS SOURCE_PORT
+      SOURCE_PORT AS SOURCE_PORT,
+      ROUTE_MISS_TOTAL AS ROUTE_MISS_TOTAL,
+      ROUTE_MISS_DELTA AS ROUTE_MISS_DELTA
   FROM oceanbase.__all_virtual_sqlstat
 """.replace("\n", " "),
   normal_columns  = [],
@@ -31087,7 +31093,9 @@ def_table_schema(
       STAT.NESTED_SQL_TOTAL AS NESTED_SQL_TOTAL,
       STAT.NESTED_SQL_DELTA AS NESTED_SQL_DELTA,
       STAT.SOURCE_IP AS SOURCE_IP,
-      STAT.SOURCE_PORT AS SOURCE_PORT
+      STAT.SOURCE_PORT AS SOURCE_PORT,
+      STAT.ROUTE_MISS_TOTAL AS ROUTE_MISS_TOTAL,
+      STAT.ROUTE_MISS_DELTA AS ROUTE_MISS_DELTA
     FROM
     (
       oceanbase.__all_virtual_wr_sqlstat STAT
@@ -31167,7 +31175,9 @@ def_table_schema(
       STAT.NESTED_SQL_TOTAL AS NESTED_SQL_TOTAL,
       STAT.NESTED_SQL_DELTA AS NESTED_SQL_DELTA,
       STAT.SOURCE_IP AS SOURCE_IP,
-      STAT.SOURCE_PORT AS SOURCE_PORT
+      STAT.SOURCE_PORT AS SOURCE_PORT,
+      STAT.ROUTE_MISS_TOTAL AS ROUTE_MISS_TOTAL,
+      STAT.ROUTE_MISS_DELTA AS ROUTE_MISS_DELTA
     FROM
     (
       oceanbase.__all_virtual_wr_sqlstat STAT
@@ -50277,7 +50287,9 @@ def_table_schema(
       STAT.NESTED_SQL_TOTAL AS NESTED_SQL_TOTAL,
       STAT.NESTED_SQL_DELTA AS NESTED_SQL_DELTA,
       STAT.SOURCE_IP AS SOURCE_IP,
-      STAT.SOURCE_PORT AS SOURCE_PORT
+      STAT.SOURCE_PORT AS SOURCE_PORT,
+      STAT.ROUTE_MISS_TOTAL AS ROUTE_MISS_TOTAL,
+      STAT.ROUTE_MISS_DELTA AS ROUTE_MISS_DELTA
   FROM
     SYS.ALL_VIRTUAL_WR_SQLSTAT STAT,
     SYS.ALL_VIRTUAL_WR_SNAPSHOT SNAP
@@ -56665,7 +56677,9 @@ def_table_schema(
       CAST(NESTED_SQL_TOTAL AS NUMBER) AS NESTED_SQL_TOTAL,
       CAST(NESTED_SQL_DELTA AS NUMBER) AS NESTED_SQL_DELTA,
       CAST(SOURCE_IP AS CHAR(46)) AS SOURCE_IP,
-      CAST(SOURCE_PORT AS NUMBER) AS SOURCE_PORT
+      CAST(SOURCE_PORT AS NUMBER) AS SOURCE_PORT,
+      CAST(ROUTE_MISS_TOTAL AS NUMBER) AS ROUTE_MISS_TOTAL,
+      CAST(ROUTE_MISS_DELTA AS NUMBER) AS ROUTE_MISS_DELTA
     FROM SYS.ALL_VIRTUAL_SQLSTAT
 """.replace("\n", " "),
 )

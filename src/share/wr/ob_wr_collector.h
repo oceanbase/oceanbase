@@ -184,6 +184,8 @@ public:
     source_ip_[0] = '\0';
     source_ip_[46] = '\0';
     source_port_ = 0;
+    route_miss_total_ = 0;
+    route_miss_delta_ = 0;
   };
 
   TO_STRING_KV(K_(svr_ip), K_(svr_port), K_(sql_id), K_(plan_hash), K_(plan_id));
@@ -240,6 +242,8 @@ public:
   int64_t nested_sql_delta_;
   char source_ip_[46+1];
   int64_t source_port_;
+  int64_t route_miss_total_;
+  int64_t route_miss_delta_;
 };
 
 
