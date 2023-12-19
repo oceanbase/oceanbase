@@ -1330,3 +1330,56 @@ int ObSelectStmt::maintain_scala_group_by_ref()
   }
   return ret;
 }
+
+int ObSelectStmt::get_all_group_by_exprs(ObIArray<ObRawExpr*> &group_by_exprs) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(append(group_by_exprs, group_exprs_))) {
+    LOG_WARN("failed to append group exprs");
+  } else if (OB_FAIL(append(group_by_exprs, rollup_exprs_))) {
+    LOG_WARN("failed to append rollup exprs");
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < grouping_sets_items_.count(); ++i) {
+      const ObIArray<ObGroupbyExpr> &groupby_exprs = grouping_sets_items_.at(i).grouping_sets_exprs_;
+      const ObIArray<ObRollupItem> &rollup_items = grouping_sets_items_.at(i).rollup_items_;
+      const ObIArray<ObCubeItem> &cube_items = grouping_sets_items_.at(i).cube_items_;
+      for (int64_t j = 0; OB_SUCC(ret) && j < groupby_exprs.count(); ++j) {
+        if (OB_FAIL(append(group_by_exprs, groupby_exprs.at(j).groupby_exprs_))) {
+          LOG_WARN("failed to append exprs", K(ret));
+        }
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < rollup_items.count(); ++j) {
+        for (int64_t k = 0; OB_SUCC(ret) && k < rollup_items.at(j).rollup_list_exprs_.count(); ++k) {
+          if (OB_FAIL(append(group_by_exprs, rollup_items.at(j).rollup_list_exprs_.at(k).groupby_exprs_))) {
+            LOG_WARN("failed to append exprs", K(ret));
+          }
+        }
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < cube_items.count(); ++j) {
+        for (int64_t k = 0; OB_SUCC(ret) && k < cube_items.at(j).cube_list_exprs_.count(); ++k) {
+          if (OB_FAIL(append(group_by_exprs, cube_items.at(j).cube_list_exprs_.at(k).groupby_exprs_))) {
+            LOG_WARN("failed to append exprs", K(ret));
+          }
+        }
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < rollup_items_.count(); ++i) {
+      const ObIArray<ObGroupbyExpr> &rollup_list_exprs = rollup_items_.at(i).rollup_list_exprs_;
+      for (int64_t j = 0; OB_SUCC(ret) && j < rollup_list_exprs.count(); ++j) {
+        if (OB_FAIL(append(group_by_exprs, rollup_list_exprs.at(j).groupby_exprs_))) {
+          LOG_WARN("failed to append exprs", K(ret));
+        }
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < cube_items_.count(); ++i) {
+      const ObIArray<ObGroupbyExpr> &cube_list_exprs = cube_items_.at(i).cube_list_exprs_;
+      for (int64_t j = 0; OB_SUCC(ret) && j < cube_list_exprs.count(); ++j) {
+        if (OB_FAIL(append(group_by_exprs, cube_list_exprs.at(j).groupby_exprs_))) {
+          LOG_WARN("failed to append exprs", K(ret));
+        }
+      }
+    }
+  }
+  LOG_TRACE("succeed to get all group by exprs", K(group_by_exprs));
+  return ret;
+}

@@ -623,6 +623,7 @@ public:
   bool has_external_table() const;
   int get_pure_set_exprs(ObIArray<ObRawExpr*> &pure_set_exprs) const;
   static ObRawExpr* get_pure_set_expr(ObRawExpr *expr);
+  int get_all_group_by_exprs(ObIArray<ObRawExpr*> &group_by_exprs) const;
 
 private:
   SetOperator set_op_;

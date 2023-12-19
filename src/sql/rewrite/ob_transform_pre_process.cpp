@@ -1336,8 +1336,21 @@ int ObTransformPreProcess::convert_select_having_in_groupby_stmt(
                                                   new_expr))) {
         LOG_WARN("failed to replace group type aggr func", K(ret), K(*agg_expr));
       } else if (OB_ISNULL(new_expr)) {
-        if (OB_FAIL(tmp_agg_exprs.push_back(agg_expr))) {
-          LOG_WARN("failed to remove item", K(ret), K(*agg_expr));
+        if (lib::is_oracle_mode() &&
+            agg_expr->get_expr_type() == T_FUN_GROUP_CONCAT &&
+            agg_expr->get_real_param_count() > 1 &&
+            agg_expr->get_real_param_exprs().at(agg_expr->get_real_param_count() - 1) != NULL &&
+            !agg_expr->get_real_param_exprs().at(agg_expr->get_real_param_count() - 1)->is_const_expr()) {
+          if (OB_FAIL(ObTransformUtils::replace_expr(old_exprs,
+                                                     new_exprs,
+                                                     agg_expr->get_real_param_exprs_for_update().at(agg_expr->get_real_param_count() - 1)))) {
+            LOG_WARN("failed to remove item", K(ret), K(*agg_expr));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(tmp_agg_exprs.push_back(agg_expr))) {
+            LOG_WARN("failed to remove item", K(ret), K(*agg_expr));
+          }
         }
       } else if (OB_FAIL(old_exprs.push_back(agg_expr))) {
         LOG_WARN("failed to push back into old_exprs", K(ret));

@@ -348,6 +348,7 @@ private:
 
   int resolve_shared_order_item(OrderItem &order_item, ObSelectStmt *select_stmt);
   int add_alias_from_dot_notation(ObRawExpr *sel_expr, SelectItem& select_item);
+  int check_listagg_aggr_param_valid(ObAggFunRawExpr *aggr_expr);
 protected:
   // data members
   /*these member is only for with clause*/

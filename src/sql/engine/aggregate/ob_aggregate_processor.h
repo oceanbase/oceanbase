@@ -954,10 +954,11 @@ private:
 
   OB_INLINE int clone_number_cell(const number::ObNumber &src_cell,
                                   AggrCell &aggr_cell);
-
+  template <typename T>
   int init_group_extra_aggr_info(
         AggrCell &aggr_cell,
-        const ObAggrInfo &aggr_info);
+        const ObAggrInfo &aggr_info,
+        const T &selector);
   int max_calc(AggrCell &aggr_cell,
                ObDatum &base,
                const ObDatum &other,
