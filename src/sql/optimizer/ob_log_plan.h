@@ -1173,7 +1173,8 @@ public:
 
   int extract_onetime_subquery(ObRawExpr *expr,
                                ObIArray<ObRawExpr *> &onetime_list,
-                               bool &is_valid);
+                               bool &is_valid,
+                               bool &has_shared_subquery);
 
   int create_onetime_param(ObRawExpr *expr, const ObIArray<ObRawExpr *> &onetime_list);
 
