@@ -272,7 +272,8 @@ public:
   int compare_and_swap_tablet(
       const ObTabletMapKey &key,
       const ObTabletHandle &old_handle,
-      ObTabletHandle &new_handle);
+      const ObTabletHandle &new_handle,
+      const ObUpdateTabletPointerParam &update_tablet_pointer_param);
   int update_tablet_buffer_header(ObTablet *old_obj, ObTablet *new_obj);
   int try_wash_tablet(const std::type_info &type_info, void *&obj);
   int get_meta_mem_status(common::ObIArray<ObTenantMetaMemStatus> &info) const;

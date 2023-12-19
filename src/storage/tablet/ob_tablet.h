@@ -103,6 +103,7 @@ class ObDDLKVHandle;
 class ObStorageSchema;
 class ObTabletTableIterator;
 class ObMetaDiskAddr;
+class ObUpdateTabletPointerParam;
 class ObTabletCreateDeleteMdsUserData;
 class ObTabletBindingMdsUserData;
 class ObMemtableArray;
@@ -821,7 +822,12 @@ private:
   int mark_mds_table_switched_to_empty_shell_();
   int fetch_autoinc_seq(ObTabletMemberWrapper<share::ObTabletAutoincSeq> &wrapper) const;
   int handle_transfer_replace_(const ObBatchUpdateTableStoreParam &param);
-  int calc_tablet_attr(ObTabletAttr &attr);
+  // NOTICE:
+  // - Because the `calc_tablet_attr()` may has I/O operations, you can bypass it if wantn't to update it.
+  int get_updating_tablet_pointer_param(
+      ObUpdateTabletPointerParam &param,
+      const bool need_tablet_attr = true) const;
+  int calc_tablet_attr(ObTabletAttr &attr) const;
 private:
   // ObTabletDDLKvMgr::MAX_DDL_KV_CNT_IN_STORAGE
   // Array size is too large, need to shrink it if possible

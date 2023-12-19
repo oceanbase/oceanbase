@@ -725,7 +725,9 @@ int ObTenantMetaMemMgr::gc_tablet(ObTablet *tablet)
   if (OB_SUCC(ret) && OB_FAIL(push_tablet_into_gc_queue(tablet))) {
     LOG_WARN("fail to push tablet into gc queue", K(ret), KPC(tablet));
   }
-  FLOG_INFO("gc tablet", K(ret), KP(tablet), K(common::lbt()));
+#ifdef OB_BUILD_RPM
+  FLOG_INFO("push tablet into gc queue", K(ret), KP(tablet), K(common::lbt()));
+#endif
   return ret;
 }
 
@@ -1885,7 +1887,8 @@ int ObTenantMetaMemMgr::del_tablet(const ObTabletMapKey &key)
 int ObTenantMetaMemMgr::compare_and_swap_tablet(
     const ObTabletMapKey &key,
     const ObTabletHandle &old_handle,
-    ObTabletHandle &new_handle)
+    const ObTabletHandle &new_handle,
+    const ObUpdateTabletPointerParam &update_pointer_param)
 {
   TIMEGUARD_INIT(STORAGE, 10_ms);
   int ret = OB_SUCCESS;
@@ -1905,15 +1908,14 @@ int ObTenantMetaMemMgr::compare_and_swap_tablet(
                       || !new_handle.is_valid()
                       || !old_handle.is_valid()
                       || new_handle.is_tmp_tablet()
-                      // TODO jingzhu : uncomment following code
-                      // || !(new_addr.is_memory() || new_addr.is_block())
+                      || !update_pointer_param.is_valid()
                       )) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(key), K(new_addr), K(old_handle), K(new_handle));
+    LOG_WARN("invalid argument", K(ret), K(key), K(new_addr), K(old_handle), K(new_handle), K(update_pointer_param));
   } else {
     ObBucketHashWLockGuard lock_guard(bucket_lock_, key.hash());
-    if (CLICK_FAIL(tablet_map_.compare_and_swap_addr_and_object(key, new_addr, old_handle, new_handle))) {
-      LOG_WARN("fail to compare and swap tablet", K(ret), K(key), K(new_addr), K(old_handle), K(new_handle));
+    if (CLICK_FAIL(tablet_map_.compare_and_swap_addr_and_object(key, old_handle, new_handle, update_pointer_param))) {
+      LOG_WARN("fail to compare and swap tablet", K(ret), K(key), K(old_handle), K(new_handle), K(update_pointer_param));
     } else if (CLICK_FAIL(update_tablet_buffer_header(old_handle.get_obj(), new_handle.get_obj()))) {
       LOG_WARN("fail to update tablet buffer header", K(ret), K(old_handle), K(new_handle));
     } else if (old_handle.get_obj() != new_handle.get_obj()) { // skip first init, old_handle == new_handle

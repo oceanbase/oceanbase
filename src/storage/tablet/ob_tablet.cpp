@@ -5629,7 +5629,23 @@ int ObTablet::get_storage_schema_for_transfer_in(
   return ret;
 }
 
-int ObTablet::calc_tablet_attr(ObTabletAttr &attr)
+int ObTablet::get_updating_tablet_pointer_param(
+    ObUpdateTabletPointerParam &param,
+    const bool need_tablet_attr /*= true*/) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("this tablet hasn't be initialized", K(ret), KPC(this));
+  } else if (need_tablet_attr && OB_FAIL(calc_tablet_attr(param.tablet_attr_))) {
+    LOG_WARN("fail to calculate tablet attributes", K(ret));
+  } else {
+    param.tablet_addr_ = tablet_addr_;
+  }
+  return ret;
+}
+
+int ObTablet::calc_tablet_attr(ObTabletAttr &attr) const
 {
   int ret = OB_SUCCESS;
   attr.reset();
