@@ -805,7 +805,7 @@ int ObTenantBalanceService::lock_and_check_balance_job_(
       trans,
       tenant_id,
       OB_ALL_BALANCE_JOB_TID,
-      EXCLUSIVE))) {
+      EXCLUSIVE, false))) {
     LOG_WARN("lock inner table failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(ObBalanceJobTableOperator::get_balance_job(
       tenant_id,
