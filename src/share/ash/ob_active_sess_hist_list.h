@@ -52,6 +52,7 @@ public:
     if (stat.event_no_) {
       // Once session can see fixup index, it surely can see fixup_buffer.
       stat.set_fixup_buffer(ash_buffer_);
+      MEM_BARRIER();
       stat.set_fixup_index(idx);
     } else {
       // we cannot reset fixup buffer here. Because user thread would reset fixup buffer too. Causing a race condition.

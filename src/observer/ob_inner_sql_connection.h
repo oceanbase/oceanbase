@@ -433,7 +433,7 @@ private:
 class ObInnerSqlWaitGuard
 {
 public:
-  ObInnerSqlWaitGuard(const bool is_inner_session, sql::ObSQLSessionInfo *inner_session);
+  explicit ObInnerSqlWaitGuard(const bool is_inner_session, sql::ObSQLSessionInfo *inner_session);
   ~ObInnerSqlWaitGuard();
 private:
   bool is_inner_session_;
@@ -441,6 +441,7 @@ private:
   ObSessionDIBuffer *di_buffer_;
   int64_t prev_tenant_id_;
   int64_t prev_session_id_;
+  ObActiveSessionStat *prev_stat_;
 };
 } // end of namespace observer
 } // end of namespace oceanbase

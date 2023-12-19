@@ -2279,13 +2279,15 @@ bool ObInnerSQLConnection::is_inner_session_mgr_enable()
   return bret;
 }
 
-ObInnerSqlWaitGuard::ObInnerSqlWaitGuard(const bool is_inner_session, sql::ObSQLSessionInfo *inner_session) {
-  is_inner_session_ = is_inner_session;
-  inner_session_ = inner_session;
-
-  di_buffer_ = nullptr;
-  prev_tenant_id_ = OB_SYS_TENANT_ID;
-  prev_session_id_ = 0;
+ObInnerSqlWaitGuard::ObInnerSqlWaitGuard(
+    const bool is_inner_session, sql::ObSQLSessionInfo *inner_session)
+    : is_inner_session_(is_inner_session),
+      inner_session_(inner_session),
+      di_buffer_(nullptr),
+      prev_tenant_id_(OB_SYS_TENANT_ID),
+      prev_session_id_(0),
+      prev_stat_(nullptr)
+{
   if (is_inner_session_ && OB_NOT_NULL(inner_session_) &&
       ObInnerSQLConnection::INNER_SQL_SESS_ID != inner_session_->get_sessid()) {
     WAIT_BEGIN(ObWaitEventIds::INNER_SQL_EXEC_WAIT,
@@ -2294,10 +2296,9 @@ ObInnerSqlWaitGuard::ObInnerSqlWaitGuard(const bool is_inner_session, sql::ObSQL
                                         inner_session_->get_sessid() /*p2*/,
                                         0 /*p3*/,
                                         false /* is_atomic*/);
-    ObActiveSessionStat * tmp_ptr = &(ObActiveSessionGuard::get_stat());
-    inner_session_->set_session_active(); /*will call setup_ash*/
-    ObActiveSessionGuard::get_stat().set_prev_stat(tmp_ptr);
-    ObActiveSessionGuard::get_stat().prev_inner_sql_wait_type_id_ = tmp_ptr->inner_sql_wait_type_id_;
+    prev_stat_ = &(ObActiveSessionGuard::get_stat());
+    inner_session_->set_session_active(); // if success, will call setup_ash(). If failed, inner session will not be sampled.
+    ObActiveSessionGuard::get_stat().prev_inner_sql_wait_type_id_ = prev_stat_->inner_sql_wait_type_id_;
     if (oceanbase::lib::is_diagnose_info_enabled()) {
       di_buffer_ = GET_TSI(ObSessionDIBuffer);
       if (NULL != di_buffer_) {
@@ -2310,9 +2311,9 @@ ObInnerSqlWaitGuard::ObInnerSqlWaitGuard(const bool is_inner_session, sql::ObSQL
         }
       }
     }
-
   }
 }
+
 ObInnerSqlWaitGuard::~ObInnerSqlWaitGuard()
 {
   if (is_inner_session_ && OB_NOT_NULL(inner_session_) &&
@@ -2327,10 +2328,9 @@ ObInnerSqlWaitGuard::~ObInnerSqlWaitGuard()
       }
     }
     ObActiveSessionGuard::get_stat().prev_inner_sql_wait_type_id_ = ObInnerSqlWaitTypeId::NULL_INNER_SQL;
-    if (OB_NOT_NULL(ObActiveSessionGuard::get_stat().get_prev_stat())) {
+    if (OB_NOT_NULL(prev_stat_)) {
       /* resetup ash stat to previous ash stat */
-      ObActiveSessionStat *ash_stat = ObActiveSessionGuard::get_stat().get_prev_stat();
-      ObActiveSessionGuard::resetup_ash(*ash_stat);
+      ObActiveSessionGuard::resetup_ash(*prev_stat_);
     } else {
       ObActiveSessionGuard::setup_default_ash();
       LOG_INFO("previous stat ptr is null");

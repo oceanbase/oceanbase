@@ -183,8 +183,7 @@ public:
         prev_inner_sql_wait_type_id_(ObInnerSqlWaitTypeId::NULL_INNER_SQL),
         last_stat_(nullptr),
         fixup_index_(-1),
-        fixup_ash_buffer_(),
-        prev_stat_(nullptr)
+        fixup_ash_buffer_()
   {}
   ~ObActiveSessionStat() = default;
   void fixup_last_stat(ObWaitEventDesc &desc);
@@ -192,23 +191,6 @@ public:
   void set_fixup_index(int64_t index)
   {
     fixup_index_ = index;
-  }
-  int set_prev_stat(ObActiveSessionStat *stat)
-  {
-    int ret = OB_SUCCESS;
-    if (OB_ISNULL(stat)) {
-      ret = OB_ERR_UNEXPECTED;
-      OB_LOG(WARN, "Unexpected null prev stat", K(ret));
-    } else {
-      prev_stat_ = stat;
-    }
-    return ret;
-  }
-
-  // WARNING!!!
-  // The member variables of prev_stat_ need to be accessed with care and are not concurrency safe in ASH threads.
-  ObActiveSessionStat* get_prev_stat() {
-    return prev_stat_;
   }
 
   void reuse()
@@ -250,6 +232,7 @@ public:
   }
   void set_bkgd_sess_active();
   void set_bkgd_sess_inactive();
+  void accumulate_elapse_time();
   static void calc_db_time_for_background_session(ObActiveSessionStat &stat, const int64_t sample_time);
   static void calc_db_time(ObActiveSessionStat &stat, const int64_t sample_time);
   // timestamp for last ash sample taken place. could be optimized to rdtsc()
@@ -284,10 +267,6 @@ private:
   ObActiveSessionStatItem *last_stat_;
   int64_t fixup_index_;
   common::ObSharedGuard<ObAshBuffer> fixup_ash_buffer_;
-  // `prev_stat_` is for inner session nesting
-  // WARNING!!!
-  // The member variables of prev_stat_ need to be accessed with care and are not concurrency safe in ASH threads.
-  ObActiveSessionStat *prev_stat_;
 };
 
 class ObAshBuffer
@@ -328,10 +307,10 @@ public:
   static void resetup_ash(ObActiveSessionStat &stat);
   static ObActiveSessionStat &get_stat();
   static void setup_thread_local_ash();
+  static void resetup_thread_local_ash();
   static void set_bkgd_sess_active();
   static void set_bkgd_sess_inactive();
   static thread_local ObActiveSessionStat thread_local_stat_;
-  static ObActiveSessionStat dummy_stat_;
 private:
   static ObActiveSessionStat *&get_stat_ptr();
   DISALLOW_COPY_AND_ASSIGN(ObActiveSessionGuard);
@@ -342,8 +321,6 @@ class ObRPCActiveGuard
 public:
   ObRPCActiveGuard(int pcode);
   ~ObRPCActiveGuard();
-private:
-  int pcode_;
 };
 
 #define DEF_ASH_FLAGS_SETTER_GUARD(ash_flag_type)                                                  \

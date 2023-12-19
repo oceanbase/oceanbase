@@ -5876,11 +5876,12 @@ int ObBasicSessionInfo::set_session_active()
 
 void ObBasicSessionInfo::set_session_sleep()
 {
-  ObActiveSessionStat::calc_db_time(ash_stat_, ObTimeUtility::current_time());
+  ash_stat_.accumulate_elapse_time();
   LockGuard lock_guard(thread_data_mutex_);
   set_session_state_(SESSION_SLEEP);
   thread_data_.mysql_cmd_ = obmysql::COM_SLEEP;
   thread_id_ = 0;
+  ObActiveSessionGuard::resetup_thread_local_ash();
 }
 
 int ObBasicSessionInfo::base_save_session(BaseSavedValue &saved_value, bool skip_cur_stmt_tables)

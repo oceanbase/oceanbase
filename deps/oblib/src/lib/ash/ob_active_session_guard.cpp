@@ -19,7 +19,6 @@
 
 using namespace oceanbase::common;
 
-ObActiveSessionStat ObActiveSessionGuard::dummy_stat_;
 thread_local ObActiveSessionStat ObActiveSessionGuard::thread_local_stat_;
 
 // a sample would be taken place up to 20ms after ash iteration begins.
@@ -46,6 +45,12 @@ void ObActiveSessionGuard::setup_default_ash()
 
 void ObActiveSessionGuard::setup_ash(ObActiveSessionStat &stat)
 {
+  OB_ASSERT(&stat != &thread_local_stat_);
+  if (thread_local_stat_.is_bkgd_active_) {
+    // some case(e.g. rpc) thread_local_stat_ is first activated and then session in session mgr is created.
+    thread_local_stat_.accumulate_elapse_time();
+    thread_local_stat_.is_bkgd_active_ = false;
+  }
   get_stat_ptr() = &stat;
   stat.last_ts_ = common::ObTimeUtility::current_time();
 }
@@ -53,6 +58,11 @@ void ObActiveSessionGuard::setup_ash(ObActiveSessionStat &stat)
 void ObActiveSessionGuard::resetup_ash(ObActiveSessionStat &stat)
 {
   get_stat_ptr() = &stat;
+}
+
+void ObActiveSessionGuard::resetup_thread_local_ash()
+{
+  get_stat_ptr() = &thread_local_stat_;
 }
 
 void ObActiveSessionGuard::setup_thread_local_ash()
@@ -70,7 +80,7 @@ void ObActiveSessionStat::fixup_last_stat(ObWaitEventDesc &desc)
       fixup_ash_buffer_.reset();
       fixup_index_ = -1;
     } else {
-      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "fixup index with no fixup buffer.", K_(fixup_index));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "fixup index with no fixup buffer.", K_(fixup_index), KPC(this));
     }
   }
 }
@@ -186,14 +196,20 @@ void ObActiveSessionStat::set_bkgd_sess_active()
 
 void ObActiveSessionStat::set_bkgd_sess_inactive()
 {
-  bkgd_elapse_time_ += common::ObTimeUtility::current_time() - last_ts_;
+  accumulate_elapse_time();
   is_bkgd_active_ = false;
+}
+
+void ObActiveSessionStat::accumulate_elapse_time()
+{
+  bkgd_elapse_time_ += common::ObTimeUtility::current_time() - last_ts_;
 }
 
 void ObActiveSessionStat::calc_db_time(ObActiveSessionStat &stat, const int64_t sample_time)
 {
   if (oceanbase::lib::is_diagnose_info_enabled()) {
-    const int64_t delta_time = sample_time - stat.last_ts_;
+    const int64_t delta_time = sample_time - stat.last_ts_ + stat.bkgd_elapse_time_;
+    stat.bkgd_elapse_time_ = 0;
     if (OB_UNLIKELY(delta_time <= 0)) {
       // ash sample happened before set_session_active
       if (delta_time < -ash_iteration_time) {
@@ -326,24 +342,20 @@ void ObActiveSessionGuard::set_bkgd_sess_inactive()
 
 ObRPCActiveGuard::ObRPCActiveGuard(int pcode)
 {
-  pcode_ = pcode;
-  // inner sql would be recored in
-  if (pcode_ != obrpc::OB_INNER_SQL_SYNC_TRANSMIT && pcode_ != obrpc::OB_DAS_ASYNC_ACCESS &&
-      pcode_ != obrpc::OB_DAS_SYNC_ACCESS && pcode_ != obrpc::OB_REMOTE_SYNC_EXECUTE &&
-      pcode_ != obrpc::OB_REMOTE_EXECUTE) {
-    ObActiveSessionGuard::set_bkgd_sess_active();
-    ObActiveSessionGuard::get_stat().pcode_ = pcode;
-  }
+  ObActiveSessionGuard::set_bkgd_sess_active();
+  ObActiveSessionGuard::get_stat().pcode_ = pcode;
 }
 
 ObRPCActiveGuard::~ObRPCActiveGuard()
 {
-  if (pcode_ != obrpc::OB_INNER_SQL_SYNC_TRANSMIT && pcode_ != obrpc::OB_DAS_ASYNC_ACCESS &&
-      pcode_ != obrpc::OB_DAS_SYNC_ACCESS && pcode_ != obrpc::OB_REMOTE_SYNC_EXECUTE &&
-      pcode_ != obrpc::OB_REMOTE_EXECUTE) {
-    ObActiveSessionGuard::get_stat().is_bkgd_active_ = false;
-    ObActiveSessionGuard::get_stat().pcode_ = 0;
+  const ObActiveSessionStat *stat = &ObActiveSessionGuard::get_stat();
+  if (OB_UNLIKELY(stat != &ObActiveSessionGuard::thread_local_stat_)) {
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ash stat didn't reset to thread local ash",
+        KPC(stat), K_(ObActiveSessionGuard::thread_local_stat), K(stat), K(&ObActiveSessionGuard::thread_local_stat_));
+    ObActiveSessionGuard::setup_thread_local_ash();
   }
+  ObActiveSessionGuard::get_stat().is_bkgd_active_ = false;
+  ObActiveSessionGuard::get_stat().pcode_ = 0;
 }
 
 ObBackgroundSessionIdGenerator &ObBackgroundSessionIdGenerator::get_instance() {

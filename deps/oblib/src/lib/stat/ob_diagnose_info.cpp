@@ -519,10 +519,6 @@ int ObDiagnoseSessionInfo::notify_wait_begin(const int64_t event_no, const uint6
             ObActiveSessionGuard::get_stat().event_no_, "cur event no", event_no,
             K(ObActiveSessionGuard::get_stat()), K(lbt()));
       }
-      // backgorund wait event is dummy stat.
-      // if (OB_UNLIKELY(&ObActiveSessionGuard::get_stat() == &ObActiveSessionGuard::dummy_stat_)) {
-      //   LOG_INFO("failed to setup ash in this case");
-      // }
     }
     // ash only sample first wait event.
     if (ObActiveSessionGuard::get_stat().event_no_ == 0 && ObActiveSessionGuard::get_stat().is_bkgd_active_) {

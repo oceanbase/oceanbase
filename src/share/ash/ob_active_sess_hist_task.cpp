@@ -221,7 +221,7 @@ bool ObActiveSessHistTask::operator()(sql::ObSQLSessionMgr::Key key, ObSQLSessio
                                               sess_info->get_thread_name());
       }
       // fill module
-      if (sess_info->is_inner() && OB_NOT_NULL(stat.get_prev_stat()) && stat.prev_inner_sql_wait_type_id_ != ObInnerSqlWaitTypeId::NULL_INNER_SQL) {
+      if (sess_info->is_inner()) {
         sprintf(stat.module_, "INNER SQL EXEC (%s)", inner_sql_wait_to_string(stat.prev_inner_sql_wait_type_id_));
       // DO NOT mark foreground module. Leave it for customers.
       // } else if (stat.inner_sql_wait_type_id_ != ObInnerSqlWaitTypeId::NULL_INNER_SQL) {
