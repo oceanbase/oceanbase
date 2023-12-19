@@ -8385,6 +8385,32 @@ const char* ObNotifySwitchLeaderArg::comment_to_str() const
 
 OB_SERIALIZE_MEMBER(ObNotifySwitchLeaderArg, tenant_id_, ls_id_, advise_leader_, comment_);
 
+int ObNotifyTenantThreadArg::init(
+    const uint64_t tenant_id, const TenantThreadType thread_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) ||
+        INVALID_TYPE == thread_type)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(thread_type));
+  } else {
+    tenant_id_ = tenant_id;
+    thread_type_ = thread_type;
+  }
+  return ret;
+}
+int ObNotifyTenantThreadArg::assign(const ObNotifyTenantThreadArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    tenant_id_ = other.tenant_id_;
+    thread_type_ = other.thread_type_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObNotifyTenantThreadArg, tenant_id_, thread_type_);
+
 bool ObBatchRemoveTabletArg::is_valid() const
 {
   bool is_valid = id_.is_valid();
