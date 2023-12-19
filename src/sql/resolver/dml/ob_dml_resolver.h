@@ -975,6 +975,8 @@ private:
   int build_row_for_empty_values(ObIArray<ObRawExpr*> &values_vector);
   int add_obj_to_llc_bitmap(const ObObj &obj, char *llc_bitmap, double &num_null);
   int compute_values_table_row_count(ObValuesTableDef &table_def);
+
+  int add_udt_dependency(const pl::ObUserDefinedType &udt_type);
 protected:
   struct GenColumnExprInfo {
     GenColumnExprInfo():
