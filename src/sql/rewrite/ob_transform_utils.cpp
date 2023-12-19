@@ -2235,6 +2235,8 @@ int ObTransformUtils::is_column_expr_not_null(ObNotNullContext &ctx,
       OB_ISNULL(table = stmt->get_table_item_by_id(expr->get_table_id()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table item is null", K(ret), K(expr->get_table_id()), K(*stmt));
+  } else if (is_virtual_table(table->ref_id_)) {
+    // 'NOT NULL' of the virtual table is unreliable
   } else if (ObOptimizerUtil::find_item(ctx.right_table_ids_, table->table_id_)) {
     // do nothing
   } else if (table->is_basic_table()) {
