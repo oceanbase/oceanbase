@@ -71,7 +71,6 @@ private:
                       ObSelectStmt *select_stmt);
   int resolve_column_list(ParseNode *view_columns_node,
                           common::ObIArray<common::ObString> &column_list);
-  int resolve_const_expr_and_calc_value(ParseNode &node, ObObj &obj);
   int resolve_mv_refresh_info(ParseNode *refresh_info_node,
                               ObMVRefreshInfo &refresh_info);
 
