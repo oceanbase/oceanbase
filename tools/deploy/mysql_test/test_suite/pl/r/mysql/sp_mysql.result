@@ -4345,8 +4345,8 @@ select routine_name,routine_schema from information_schema.routines where
 routine_schema like 'bug18344%'|
 routine_name	routine_schema
 bug18344	bug18344_012345678901
-bug18344_2	bug18344_012345678901
 bug18344	bug18344_0123456789012
+bug18344_2	bug18344_012345678901
 bug18344_2	bug18344_0123456789012
 drop database bug18344_012345678901|
 drop database bug18344_0123456789012|

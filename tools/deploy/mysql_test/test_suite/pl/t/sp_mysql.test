@@ -5578,6 +5578,7 @@ use test|
 
 select schema_name from information_schema.schemata where 
   schema_name like 'bug18344%'|
+--sorted_result
 select routine_name,routine_schema from information_schema.routines where
   routine_schema like 'bug18344%'|
 
