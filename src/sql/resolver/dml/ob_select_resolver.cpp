@@ -6563,7 +6563,9 @@ int ObSelectResolver::recursive_update_column_name(ObSelectStmt *select_stmt,
       LOG_WARN("select item is null", K(ret));
     } else if (OB_FAIL(ob_write_string(*allocator_, ref_select_item->alias_name_, col_name))) {
       LOG_WARN("Can not malloc space for constraint name", K(ret));
-    } else {
+    } else if (col_name.length() > 0) {
+      // some columns such as ROWID in oracle mode may not have alias name, hence only
+      // replace column name when the ref column's alias name (col_name) is not empty.
       col_ref_expr->get_column_name().assign_ptr(col_name.ptr(), col_name.length());
     }
   } else {
