@@ -31677,6 +31677,7 @@ FROM oceanbase.__all_clone_job_history ORDER BY CLONE_START_TIME
 )
 #21520 GV$OB_SHARE_STORAGE_QUOTA_ASSIGNMENT
 #21521 V$OB_SHARE_STORAGE_QUOTA_ASSIGNMENT
+#21522 CDB_UNUSED_COL_TABS
 # 余留位置
 
 ################################################################################
@@ -56779,6 +56780,9 @@ def_table_schema(
 
 # 28217: GV$OB_SHARE_STORAGE_QUOTA_ASSIGNMENT
 # 28218: V$OB_SHARE_STORAGE_QUOTA_ASSIGNMENT
+# 28219: ALL_UNUSED_COL_TABS
+# 28220: DBA_UNUSED_COL_TABS
+# 28221: USER_UNUSED_COL_TABS
 
 ################################################################################
 # Lob Table (50000, 70000)
