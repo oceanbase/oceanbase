@@ -85,6 +85,7 @@ int ObTransformMinMax::check_transform_validity(ObTransformerCtx &ctx,
   const ObAggFunRawExpr *expr = NULL;
   aggr_expr = NULL;
   is_valid = false;
+  bool has_rownum = false;
   if (OB_ISNULL(select_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(select_stmt));
@@ -95,6 +96,10 @@ int ObTransformMinMax::check_transform_validity(ObTransformerCtx &ctx,
              select_stmt->get_aggr_item_size() != 1 ||
              !select_stmt->is_scala_group_by()) {
     OPT_TRACE("not a simple query");
+  } else if (OB_FAIL(select_stmt->has_rownum(has_rownum))) {
+    LOG_WARN("failed to check if select stmt has rownum", K(ret));
+  } else if (has_rownum) {
+    OPT_TRACE("stmt has rownum");
   } else if (OB_ISNULL(expr = select_stmt->get_aggr_items().at(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params have null", K(ret), KP(expr));

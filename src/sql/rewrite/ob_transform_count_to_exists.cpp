@@ -190,12 +190,17 @@ int ObTransformCountToExists::check_trans_valid(ObDMLStmt *stmt, ObRawExpr *expr
     ObRawExpr *sel_expr = NULL;
     bool is_sel_expr_valid = false;
     bool is_const_expr_valid = false;
+    bool has_rownum = false;
     if (OB_ISNULL(tmp_subquery = tmp_subquery_expr->get_ref_stmt())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
     } else if (OB_ISNULL(sel_expr = tmp_subquery->get_select_item(0).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null expr", K(ret));
+    } else if (OB_FAIL(tmp_subquery->has_rownum(has_rownum))) {
+      LOG_WARN("failed to check if subquery has rownum", K(ret));
+    } else if (has_rownum) {
+      // do nothing
     } else if (tmp_subquery_expr->get_ref_count() > 1 ||
                tmp_subquery->has_having() || !tmp_subquery->is_scala_group_by()) {
       // only scalar group by subquery without having and referred by once can be transformed
