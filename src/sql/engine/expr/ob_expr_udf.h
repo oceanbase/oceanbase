@@ -160,6 +160,11 @@ public:
                                 const common::ObIArray<int64_t> &nocopy_params,
                                 const common::ObIArray<ObUDFParamDesc> &params_desc,
                                 const common::ObIArray<ObExprResType> &params_type);
+  static int before_calc_result(share::schema::ObSchemaGetterGuard &schema_guard,
+                                ObSqlCtx &sql_ctx,
+                                ObExecContext &exec_ctx);
+  static int after_calc_result(share::schema::ObSchemaGetterGuard &schema_guard,
+                               ObSqlCtx &sql_ctx, ObExecContext &exec_ctx);
   static bool need_deep_copy_in_parameter(
                         const common::ObObj *objs_stack,
                         int64_t param_num,
