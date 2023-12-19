@@ -170,6 +170,8 @@ private:
 
   int has_invalid_link_expr(ObDMLStmt &stmt, bool &has_invalid_expr);
 
+  int has_invalid_link_expr(ObIArray<ObRawExpr *> &exprs, bool &has_invalid_expr);
+
   static int check_link_expr_valid(ObRawExpr *expr, bool &is_valid);
 
   DISALLOW_COPY_AND_ASSIGN(ObTransformDBlink);
