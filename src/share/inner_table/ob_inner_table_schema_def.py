@@ -13768,6 +13768,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   in_tenant_space = True,
   keywords = all_def_keywords['__all_tenant_snapshot_ls_replica_history']))
 # 12465: __all_virtual_share_storage_quota_assignment
+# 12466: enabled_roles
 # 余留位置
 #
 
