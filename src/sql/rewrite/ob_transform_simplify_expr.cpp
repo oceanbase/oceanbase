@@ -3618,6 +3618,7 @@ int ObTransformSimplifyExpr::check_convert_then_exprs_validity(ObRawExpr *parent
   } else if (OB_FAIL(enum_exprs.push_back(case_expr->get_default_param_expr()))) {
     LOG_WARN("failed to push back enum exprs", K(ret));
   } else {
+    bool all_true_only = false;
     // collect basic info for each `[cmp](enum_expr, sibling_expr)`
     for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < enum_exprs.count(); ++i) {
       ObRawExpr *enum_expr = NULL;
@@ -3645,6 +3646,7 @@ int ObTransformSimplifyExpr::check_convert_then_exprs_validity(ObRawExpr *parent
           is_valid = false;
         } else if (OB_FALSE_IT(is_all_false &= (result.is_false() || result.is_null()))) {
         } else if (OB_FALSE_IT(is_all_true &= result.is_true())) {
+        } else if (OB_FALSE_IT(is_valid &= (all_true_only ? is_all_true : true))) {
         } else if (result.is_false() || result.is_null()) {
           if (OB_FAIL(false_null_exprs.push_back(cur_then_filter))) {
             LOG_WARN("failed to push back to false exprs", K(ret));
@@ -3656,8 +3658,9 @@ int ObTransformSimplifyExpr::check_convert_then_exprs_validity(ObRawExpr *parent
           candi_then_filter = NULL;
           candi_when_filter = i < case_expr->get_when_expr_size() ?
                                   case_expr->get_when_param_expr(i) : NULL;
-        } else if (!is_all_true) {
-          is_valid = false;
+        } else {  // multi true branches
+          all_true_only = true;
+          is_valid &= is_all_true;
         }
       } else if (reserved_branch_cnt == -1) { // first true/[uncalc] branch
         is_all_false = false;
