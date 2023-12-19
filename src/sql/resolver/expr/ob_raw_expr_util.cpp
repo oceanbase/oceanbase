@@ -3957,10 +3957,8 @@ int ObRawExprUtils::try_add_cast_expr_above(ObRawExprFactory *expr_factory,
       }
       // setup zerofill cm
       // eg: select concat(cast(c_zf as char(10)), cast(col_no_zf as char(10))) from t1;
-      if (expr.get_result_type().has_result_flag(ZEROFILL_FLAG) && !dst_type.is_decimal_int()) {
-        // decimal int type do not need zerofill
-        // create t (a decimal(10, 2) zerofill),
-        // column a is DECIMAL UNSIGNED, the corresponding backend is ObUNumberType
+      if (lib::is_mysql_mode() && dst_type.is_string_type() &&
+          expr.get_result_type().has_result_flag(ZEROFILL_FLAG)) {
         cm_zf |= CM_ZERO_FILL;
       }
       if (dst_type.get_cast_mode() != 0) {
