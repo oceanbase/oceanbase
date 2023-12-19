@@ -291,10 +291,7 @@ int ObExprInsertChildXml::insert_child_xml(const ObExpr &expr,
       }
     } else {
       ObIMulModeBase *value_doc = NULL;
-      ObDatum *value_datum = NULL;
-      if (OB_FAIL(ObXMLExprHelper::get_xmltype_from_expr(expr.args_[3], ctx, value_datum))) {
-        LOG_WARN("fail to get xmltype value", K(ret));
-      } else if (OB_FAIL(ObXMLExprHelper::get_xml_base(mem_ctx, value_datum, CS_TYPE_INVALID, ObNodeMemType::TREE_TYPE, value_doc))) {
+      if (OB_FAIL(ObXMLExprHelper::get_xml_base(mem_ctx, value_datum, CS_TYPE_INVALID, ObNodeMemType::TREE_TYPE, value_doc))) {
         LOG_WARN("fail to parse xml doc", K(ret));
       } else if (OB_FAIL(insert_element_node(allocator, insert_node, value_doc->at(ele_index)))) {
         LOG_WARN("fail to insert element node", K(ret));
