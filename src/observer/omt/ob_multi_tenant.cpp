@@ -1589,7 +1589,12 @@ int ObMultiTenant::mark_del_tenant(const uint64_t tenant_id)
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_FAIL(get_tenant_unsafe(tenant_id, tenant))) {
-    LOG_WARN("fail to get tennat", K(ret), K(tenant_id));
+    if (OB_TENANT_NOT_IN_SERVER == ret) {
+      ret = OB_SUCCESS;
+      LOG_INFO("tenant has already been removed, no need to mark_del", KR(ret), K(tenant_id));
+    } else {
+      LOG_WARN("fail to get tenant", K(ret), K(tenant_id));
+    }
   } else {
     tenant->mark_tenant_is_removed();
     // only write slog when del tenant, no need to write here
