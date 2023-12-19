@@ -422,7 +422,17 @@ int ObTextStringIter::get_inrow_or_outrow_prefix_data(ObString &data_str, uint32
     data_str.assign(NULL, 0);
     COMMON_LOG(DEBUG, "Lob: iter with null input", K(ret), K(*this));
   } else if (!is_lob_ || !has_lob_header_) { // string types
-    data_str.assign_ptr(datum_str_.ptr(), datum_str_.length());
+    if (prefix_char_len == DEAFULT_LOB_PREFIX_CHAR_LEN) {
+      data_str.assign_ptr(datum_str_.ptr(), datum_str_.length());
+    } else {
+      int64_t mb_len = ObCharset::strlen_char(cs_type_, datum_str_.ptr(), datum_str_.length());
+      if (mb_len <= prefix_char_len) {
+        data_str.assign_ptr(datum_str_.ptr(), datum_str_.length());
+      } else {
+        int64_t truncated_str_len = ObCharset::charpos(cs_type_, datum_str_.ptr(), datum_str_.length(), prefix_char_len);
+        data_str.assign_ptr(datum_str_.ptr(), truncated_str_len);
+      }
+    }
   } else if (!is_outrow_) { // inrow lob
     ObLobLocatorV2 loc(datum_str_, has_lob_header_);
     if (OB_FAIL(loc.get_inrow_data(data_str))) {
