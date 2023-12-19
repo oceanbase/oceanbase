@@ -1,0 +1,32 @@
+oceanbase-ce:
+{{%% SERVERS %%}}
+  tag: latest
+  global:
+    memory_limit: 20G
+    log_disk_size: 48G
+    system_memory: 3G
+    datafile_size: 250G
+    __min_full_resource_pool_memory: "4294967296"
+  runtime_dependencies:
+  - src_path: plugin_dir
+    target_path: plugin_dir
+  - src_path: admin
+    target_path: admin
+  - src_path: lib
+    target_path: lib
+  - src_path: tools
+    target_path: tools
+  - src_path: etc
+    target_path: etc
+  - src_path: wallet
+    target_path: wallet
+obproxy-ce:
+{{%% OBPORXY_SERVERS %%}}
+  global:
+    listen_port: {{%% LISTEN_PORT %%}}
+    prometheus_listen_port: {{%% PROMETHEUS_LISTEN_PORT %%}}
+    home_path: {{%% OBPORXY_HOME_PATH %%}}
+    enable_cluster_checkout: false
+    skip_proxy_sys_private_check: true
+  depends:
+    - {{%% COMPONENT %%}}
