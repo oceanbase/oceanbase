@@ -86,7 +86,12 @@ int ObMViewStatsPurgeRefreshStatsExecutor::execute(ObExecContext &ctx,
           ObMViewRefreshStatsParams stats_params;
           if (OB_FAIL(ObMViewRefreshStatsParams::fetch_mview_refresh_stats_params(
                 *ctx.get_sql_proxy(), tenant_id_, mview_id, stats_params, true))) {
-            LOG_WARN("fail to fetch sys defaults", KR(ret), K(tenant_id_), K(mview_id));
+            if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+              LOG_WARN("fail to fetch mview refresh stats params", KR(ret), K_(tenant_id), K(mview_id));
+            } else {
+              ret = OB_ERR_MVIEW_NOT_EXIST;
+              LOG_WARN("mview not exist", KR(ret), K_(tenant_id), K(mview_id));
+            }
           } else {
             filter_param.set_retention_period(stats_params.get_retention_period());
           }
