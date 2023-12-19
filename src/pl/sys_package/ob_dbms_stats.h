@@ -506,6 +506,9 @@ public:
                                       const share::schema::ObTableSchema *table_schema,
                                       CopyTableStatHelper &copy_stat_helper);
 
+  static void update_optimizer_gather_stat_info(const ObOptStatTaskInfo *task_info,
+                                                const ObOptStatGatherStat *gather_stat);
+
 private:
   static int check_statistic_table_writeable(sql::ObExecContext &ctx);
 

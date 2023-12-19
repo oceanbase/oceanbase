@@ -811,7 +811,7 @@ int ObDbmsStatsUtils::truncate_string_for_opt_stats(const ObObj *old_obj,
       } else if (OB_FAIL(sql::ObTextStringHelper::str_to_lob_storage_obj(alloc, str, *tmp_obj))) {
         LOG_WARN("failed to convert str to lob", K(ret));
       } else {
-        tmp_obj->set_type(old_obj->get_type());
+        tmp_obj->set_meta_type(old_obj->get_meta());
         new_obj = tmp_obj;
         is_truncated = true;
       }
@@ -851,7 +851,7 @@ int ObDbmsStatsUtils::truncate_string_for_opt_stats(ObObj &obj, ObIAllocator &al
   int ret = OB_SUCCESS;
   if (ObColumnStatParam::is_valid_opt_col_type(obj.get_type()) && obj.is_string_type()) {
     if(obj.is_lob_storage()) {
-      ObObjType ori_type = obj.get_type();
+      ObObjMeta ori_meta = obj.get_meta();
       ObString str = obj.get_string();
       bool can_reuse = false;
       if (OB_FAIL(check_text_can_reuse(obj, can_reuse))) {
@@ -863,7 +863,7 @@ int ObDbmsStatsUtils::truncate_string_for_opt_stats(ObObj &obj, ObIAllocator &al
       } else if (OB_FAIL(sql::ObTextStringHelper::str_to_lob_storage_obj(allocator, str, obj))) {
         LOG_WARN("failed to convert str to lob", K(ret));
       } else {
-        obj.set_type(ori_type);
+        obj.set_meta_type(ori_meta);
         LOG_TRACE("Succeed to truncate text obj for opt stats", K(ret), K(obj), K(str));
       }
     } else {
