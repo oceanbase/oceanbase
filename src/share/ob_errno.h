@@ -4217,7 +4217,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SEARCH_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4182, Value not found"
 #define OB_BEYOND_THE_RANGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4183, Key out of range"
 #define OB_SERVER_OUTOF_DISK_SPACE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4184, Server out of disk space"
-#define OB_COLUMN_GROUP_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4185, Column group %.*s not found"
+#define OB_COLUMN_GROUP_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4185, Column group \'%.*s\' not found"
 #define OB_CS_COMPRESS_LIB_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4186, Server failed to get compress library"
 #define OB_ITEM_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4187, Item not match"
 #define OB_SCHEDULER_TASK_CNT_MISMATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4188, Running task cnt and unfinished task cnt not consistent"
