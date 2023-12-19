@@ -299,7 +299,6 @@ int ObTableLoadResourceManager::update_resource(ObDirectLoadResourceUpdateArg &a
     LOG_WARN("invalid args", KR(ret), K(arg));
   } else {
     ObArray<ObAddr> new_addrs;
-    ObArray<ObAddr> delete_addrs;
     const int64_t bucket_num = 1024;
     typedef common::hash::ObHashMap<ObAddr, bool, common::hash::NoPthreadDefendMode> AddrMap;
     AddrMap addrs_map;
@@ -340,16 +339,11 @@ int ObTableLoadResourceManager::update_resource(ObDirectLoadResourceUpdateArg &a
           } else if (ctx.thread_remain_ != ctx.thread_total_ || ctx.memory_remain_ != ctx.memory_total_) {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("there are still tasks executing on the deleted observer node", KR(ret));
-          } else if (OB_FAIL(delete_addrs.push_back(iter->first))) {
-            LOG_WARN("fail to push_back", KR(ret), K(iter->first));
+          } else if (OB_FAIL(resource_pool_.erase_refactored(iter->first))) {
+            LOG_WARN("fail to erase refactored", K(iter->first));
+          } else {
+            LOG_INFO("update resource delete observer", K(arg.tenant_id_), K(iter->first));
           }
-        }
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && delete_addrs.count(); i++) {
-        if (OB_FAIL(resource_pool_.erase_refactored(delete_addrs[i]))) {
-          LOG_WARN("fail to erase refactored", K(delete_addrs[i]));
-        } else {
-          LOG_INFO("update resource delete observer", K(arg.tenant_id_), K(delete_addrs[i]));
         }
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < new_addrs.count(); i++) {
