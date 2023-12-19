@@ -341,8 +341,8 @@ TEST_F(GET_RESTART_ZONE_TEST_CLASS_NAME(2, 1), become_leader_after_restart)
   transaction::ObPartTransCtx *tx_ctx = nullptr;
   ASSERT_EQ(OB_SUCCESS,
             ls_handle.get_ls()->get_tx_ctx(transaction::ObTransID(update_tx_id), false, tx_ctx));
-  share::ObLSArray fake_parts;
-  ASSERT_EQ(OB_SUCCESS, fake_parts.push_back(share::ObLSID(static_basic_arg_.ls_id_num_)));
+  ObTxCommitParts fake_parts;
+  ASSERT_EQ(OB_SUCCESS, fake_parts.push_back(ObTxExecPart(share::ObLSID(static_basic_arg_.ls_id_num_), -1, -1)));
   tx_ctx->set_2pc_participants_(fake_parts);
   tx_ctx->submit_redo_commit_info_log_();
   RETRY_UNTIL_TIMEOUT(tx_ctx->busy_cbs_.is_empty(), 20 * 1000 * 1000, 100 * 1000);

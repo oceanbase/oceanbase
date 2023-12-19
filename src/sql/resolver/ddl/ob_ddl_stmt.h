@@ -15,6 +15,7 @@
 #include "share/ob_rpc_struct.h"
 #include "sql/resolver/ob_stmt.h"
 #include "sql/resolver/ob_cmd.h"
+#include "share/ob_rpc_struct.h"
 namespace oceanbase
 {
 namespace sql
@@ -24,7 +25,7 @@ class ObDDLStmt : public ObStmt, public ObICmd
   const static int OB_DEFAULT_ARRAY_SIZE = 16;
 public:
   ObDDLStmt(common::ObIAllocator *name_pool, stmt::StmtType type)
-    : ObStmt(name_pool, type), parallelism_(1L)
+    : ObStmt(name_pool, type), parallelism_(1L), compact_level_(share::SORT_COMPACT_LEVEL)
   {
   }
   explicit ObDDLStmt(stmt::StmtType type): ObStmt(type)
@@ -45,10 +46,16 @@ public:
   virtual int get_first_stmt(common::ObString &first_stmt);
   void set_parallelism(const int64_t parallelism) { parallelism_ = parallelism; }
   int64_t &get_parallelism() { return parallelism_; }
+  void set_compact_level(int64_t compact_level) {
+    compact_level_ = static_cast<share::SortCompactLevel>(compact_level);
+  };
+  share::SortCompactLevel get_compact_level() { return compact_level_; }
 protected:
   ObArenaAllocator allocator_;
 private:
   int64_t parallelism_;
+  share::SortCompactLevel compact_level_;
+
   DISALLOW_COPY_AND_ASSIGN(ObDDLStmt);
 };
 }  // namespace sql

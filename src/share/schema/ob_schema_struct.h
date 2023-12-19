@@ -281,6 +281,7 @@ bool is_index_table(const ObTableType table_type);
 bool is_aux_lob_meta_table(const ObTableType table_type);
 bool is_aux_lob_piece_table(const ObTableType table_type);
 bool is_aux_lob_table(const ObTableType table_type);
+bool is_mlog_table(const ObTableType table_type);
 
 enum ObIndexType
 {
@@ -601,7 +602,8 @@ inline bool is_related_table(
     const ObIndexType &index_type)
 {
   return is_index_local_storage(index_type)
-      || is_aux_lob_table(table_type);
+      || is_aux_lob_table(table_type)
+      || is_mlog_table(table_type);
 }
 
 inline bool index_has_tablet(const ObIndexType &index_type)
@@ -3262,6 +3264,97 @@ int ObPartitionUtils::get_end_(
   return ret;
 }
 
+enum class ObMLogPurgeMode : int64_t
+{
+  IMMEDIATE_SYNC = 0,
+  IMMEDIATE_ASYNC = 1,
+  DEFERRED = 2,
+  MAX
+};
+
+enum class ObMViewBuildMode : int64_t
+{
+  IMMEDIATE = 0,
+  DEFERRED = 1,
+  PERBUILT = 2,
+  MAX
+};
+
+
+enum struct ObMVRefreshMethod : int64_t
+{
+  NEVER = 0,
+  COMPLETE = 1,
+  FAST = 2,
+  FORCE = 3,
+  MAX
+};
+
+enum struct ObMVRefreshMode : int64_t
+{
+  NEVER = 0,
+  DEMAND = 1,
+  COMMIT = 2,
+  STATEMENT = 3,
+  MAX
+};
+
+enum struct ObMVRefreshType : int64_t
+{
+  COMPLETE = 0,
+  FAST = 1,
+  MAX
+};
+
+enum class ObMVRefreshStatsCollectionLevel : int64_t
+{
+  NONE = 0,
+  TYPICAL = 1,
+  ADVANCED = 2,
+  MAX
+};
+
+struct ObMVRefreshInfo
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObMVRefreshMethod refresh_method_;
+  ObMVRefreshMode refresh_mode_;
+  common::ObObj start_time_;
+  ObString next_time_expr_;
+  ObString exec_env_;
+
+  ObMVRefreshInfo() :
+  refresh_method_(ObMVRefreshMethod::NEVER),
+  refresh_mode_(ObMVRefreshMode::DEMAND),
+  start_time_(),
+  next_time_expr_(),
+  exec_env_() {}
+
+  void reset() {
+    refresh_method_ = ObMVRefreshMethod::NEVER;
+    refresh_mode_ = ObMVRefreshMode::DEMAND;
+    start_time_.reset();
+    next_time_expr_.reset();
+    exec_env_.reset();
+  }
+
+  bool operator == (const ObMVRefreshInfo &other) const {
+    return refresh_method_ == other.refresh_method_
+      && refresh_mode_ == other.refresh_mode_
+      && start_time_ == other.start_time_
+      && next_time_expr_ == other.next_time_expr_
+      && exec_env_ == other.exec_env_;
+  }
+
+
+  TO_STRING_KV(K_(refresh_mode),
+      K_(refresh_method),
+      K_(start_time),
+      K_(next_time_expr),
+      K_(exec_env));
+};
+
 class ObViewSchema : public ObSchema
 {
   OB_UNIS_VERSION(1);
@@ -3296,6 +3389,10 @@ public:
   inline bool get_materialized() const { return materialized_; }
   inline common::ObCharsetType get_character_set_client() const { return character_set_client_; }
   inline common::ObCollationType get_collation_connection() const { return collation_connection_; }
+  inline const ObMVRefreshInfo *get_mv_refresh_info() const { return mv_refresh_info_; }
+  inline void set_mv_refresh_info(const ObMVRefreshInfo *mv_refresh_info) { mv_refresh_info_ = mv_refresh_info; }
+  inline void set_container_table_id(uint64_t container_table_id) { container_table_id_ = container_table_id; }
+  inline uint64_t get_container_table_id() const { return container_table_id_; }
 
   int64_t get_convert_size() const;
   virtual bool is_valid() const;
@@ -3313,6 +3410,8 @@ private:
   bool materialized_;
   common::ObCharsetType character_set_client_;
   common::ObCollationType collation_connection_;
+  uint64_t container_table_id_;
+  const ObMVRefreshInfo *mv_refresh_info_; //only for pass write param, don't need serialize and memory is hold by caller
 };
 
 class ObColumnSchemaHashWrapper
@@ -7484,6 +7583,15 @@ enum ObSAuditOperationType : uint64_t
   //privilege ....
   AUDIT_OP_MAX
 };
+
+enum ObStorageEncodingMode : uint64_t
+{
+  ROW_ENCODING_COL_CSENCODIGN = 0,
+  ALL_ENCODING,
+  ALL_CSENCODING,
+  MAX_ENCODING
+};
+
 const char *get_audit_operation_type_str(const ObSAuditOperationType type);
 
 int get_operation_type_from_item_type(const bool is_stmt_audit,
@@ -8246,12 +8354,19 @@ enum ObColumnGroupType : uint8_t
   NORMAL_COLUMN_GROUP,
   MAX_COLUMN_GROUP
 };
-
+const char OB_COLUMN_GROUP_TYPE_NAME[][OB_MAX_COLUMN_NAME_LENGTH] =
+{
+  "default column group",
+  "all column group",
+  "rowkey column group",
+  "each column group"
+};
 const char *const OB_COLUMN_GROUP_NAME_PREFIX = "__cg";
 const char *const OB_ROWKEY_COLUMN_GROUP_NAME = "__co_rowkey";
 const char *const OB_DEFAULT_COLUMN_GROUP_NAME = "__co_default";
 const char *const OB_ALL_COLUMN_GROUP_NAME = "__co_all";
 
+const char *const OB_EACH_COLUMN_GROUP_NAME = "__cg_each"; /* cannot be used on single column group name*/
 class ObColumnGroupSchemaHashWrapper
 {
 public:
@@ -8291,6 +8406,7 @@ public:
   int64_t get_convert_size() const;
   void reset();
   bool is_valid() const;
+  void remove_all_cols();
 
   inline void set_column_group_id(const uint64_t id) { column_group_id_ = id; }
   inline void set_column_group_type(const ObColumnGroupType &type) { column_group_type_ = type; }
@@ -8317,6 +8433,7 @@ public:
   int add_column_id(const uint64_t column_id);
   int get_column_id(const int64_t idx, uint64_t &column_id) const;
   int remove_column_id(const uint64_t column_id);
+  int get_column_group_type_name(ObString &readable_cg_name) const;
 
   VIRTUAL_TO_STRING_KV(K_(column_group_id),
                        K_(column_group_name),

@@ -40,26 +40,6 @@ memtable::ObIMemtable* ObOBJLockCallback::get_memtable() const
   return memtable_;
 }
 
-int ObOBJLockCallback::log_sync(const SCN scn)
-{
-  int ret = OB_SUCCESS;
-  ObMemtableCtx *mem_ctx = static_cast<ObMemtableCtx*>(ctx_);
-  if (OB_UNLIKELY(SCN::max_scn() == scn)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("log ts should not be invalid", K(ret), K(scn), K(*this));
-  } else if (OB_ISNULL(mem_ctx) || OB_ISNULL(lock_op_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("unexpected error", K(ret), K(mem_ctx), K_(lock_op));
-  } else {
-    // only version after 3.3 has table lock.
-    mem_ctx->update_max_submitted_seq_no(lock_op_->lock_op_.lock_seq_no_);
-    // TODO: yanyuan.cxf maybe need removed.
-    mem_ctx->set_log_synced(lock_op_, scn);
-    scn_ = scn;
-  }
-  return ret;
-}
-
 int ObOBJLockCallback::print_callback()
 {
   LOG_INFO("print callback", K(*this));

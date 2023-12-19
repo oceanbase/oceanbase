@@ -122,7 +122,7 @@ int ObVirtualShowTrace::retrive_all_span_info()
 
         { // make sure %res destructed before execute other sql in the same transaction
           SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-            ObMySQLResult *result = NULL;
+            common::sqlclient::ObMySQLResult *result = NULL;
             ObISQLClient *sql_client = &trans;
             uint64_t table_id = OB_ALL_VIRTUAL_TRACE_SPAN_INFO_TID;
             ObSQLClientRetryWeak sql_client_retry_weak(sql_client,

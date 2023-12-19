@@ -422,7 +422,8 @@ int ObBackupDataBaseTask::set_optional_servers_(const ObIArray<common::ObAddr> &
     const ObLSInfo::ReplicaArray &replica_array = ls_info.get_replicas();
     for (int i = 0; OB_SUCC(ret) && i < replica_array.count(); ++i) {
       const ObLSReplica &replica = replica_array.at(i);
-      if (replica.is_in_service() && !replica.is_strong_leader() && replica.is_valid() && !replica.is_in_restore()
+      if (replica.is_in_service() && !replica.is_strong_leader() && replica.is_valid()
+          && replica.get_restore_status().is_none()
           && ObReplicaTypeCheck::is_full_replica(replica.get_replica_type()) // TODO(zeyong) 4.3 allow R replica backup later
           && !check_replica_in_black_server_(replica, black_servers)) { 
         ObBackupServer server;
@@ -434,7 +435,8 @@ int ObBackupDataBaseTask::set_optional_servers_(const ObIArray<common::ObAddr> &
     }
     for (int i = 0; OB_SUCC(ret) && i < replica_array.count(); ++i) {
       const ObLSReplica &replica = replica_array.at(i);
-      if (replica.is_in_service() && replica.is_strong_leader() && replica.is_valid() && !replica.is_in_restore()
+      if (replica.is_in_service() && replica.is_strong_leader() && replica.is_valid()
+          && replica.get_restore_status().is_none()
           && (replica_array.count() == 1 || !check_replica_in_black_server_(replica, black_servers))) {
         // if only has one replica. no use black server.
         ObBackupServer server;

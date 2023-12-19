@@ -1153,30 +1153,24 @@ int ObTabletMdsData::load_auto_inc_seq(
 }
 
 int ObTabletMdsData::load_aux_tablet_info(
-    common::ObIAllocator &allocator,
     const ObTabletComplexAddr<mds::MdsDumpKV> &complex_addr,
-    ObTabletBindingMdsUserData *&aux_tablet_info)
+    ObTabletBindingMdsUserData &aux_tablet_info)
 {
   int ret = OB_SUCCESS;
-  aux_tablet_info = nullptr;
-  ObTabletBindingMdsUserData *ptr = nullptr;
+  aux_tablet_info.reset();
 
   if (OB_UNLIKELY(!complex_addr.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid addr", K(ret), K(complex_addr));
   } else if (complex_addr.is_none_object()) {
     // do nothing
-  } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, ptr))) {
-    LOG_WARN("failed to alloc and new", K(ret));
   } else if (complex_addr.is_memory_object()) {
     const mds::MdsDumpKV *dump_kv = complex_addr.ptr_;
     const common::ObString &str = dump_kv->v_.user_data_;
     int64_t pos = 0;
     if (!dump_kv->is_valid() || str.empty()) {
-      ObTabletObjLoadHelper::free(allocator, ptr);
-      ptr = nullptr;
       LOG_INFO("read empty aux tablet info", K(ret), K(complex_addr));
-    } else if (OB_FAIL(ptr->deserialize(str.ptr(), str.length(), pos))) {
+    } else if (OB_FAIL(aux_tablet_info.deserialize(str.ptr(), str.length(), pos))) {
       LOG_WARN("failed to deserialize aux tablet info", K(ret), K(str));
     }
   } else if (complex_addr.is_disk_object()) {
@@ -1195,23 +1189,13 @@ int ObTabletMdsData::load_aux_tablet_info(
       LOG_WARN("unexpected null member", K(ret));
     } else if (!aux_tablet_info_cache->is_valid()) {
       // no need to copy
-      ObTabletObjLoadHelper::free(allocator, ptr);
-      ptr = nullptr;
       LOG_INFO("empty aux tablet info", K(ret));
-    } else if (OB_FAIL(ptr->assign(*aux_tablet_info_cache))) {
+    } else if (OB_FAIL(aux_tablet_info.assign(*aux_tablet_info_cache))) {
       LOG_WARN("failed to copy", K(ret));
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected complex addr type", K(ret), K(complex_addr));
-  }
-
-  if (OB_FAIL(ret)) {
-    if (nullptr != ptr) {
-      allocator.free(ptr);
-    }
-  } else {
-    aux_tablet_info = ptr;
   }
 
   return ret;

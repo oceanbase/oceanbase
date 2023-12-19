@@ -24,7 +24,6 @@
 #include "share/sequence/ob_sequence_cache.h"
 #include "sql/engine/cmd/ob_load_data_utils.h"
 #include "storage/direct_load/ob_direct_load_data_block.h"
-#include "storage/direct_load/ob_direct_load_fast_heap_table_ctx.h"
 #include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
 #include "storage/direct_load/ob_direct_load_mem_context.h"
 #include "storage/direct_load/ob_direct_load_sstable_data_block.h"
@@ -51,7 +50,6 @@ ObTableLoadStoreCtx::ObTableLoadStoreCtx(ObTableLoadTableCtx *ctx)
     insert_table_ctx_(nullptr),
     is_multiple_mode_(false),
     is_fast_heap_table_(false),
-    fast_heap_table_ctx_(nullptr),
     tmp_file_mgr_(nullptr),
     error_row_handler_(nullptr),
     sequence_schema_(&allocator_),
@@ -88,6 +86,7 @@ int ObTableLoadStoreCtx::init(
     insert_table_param.ddl_task_id_ = ctx_->ddl_param_.task_id_;
     insert_table_param.execution_id_ = 1; //仓氐说暂时设置为1，不然后面检测过不了
     insert_table_param.data_version_ = ctx_->ddl_param_.data_version_;
+    insert_table_param.reserved_parallel_ = ctx_->param_.session_count_;
     for (int64_t i = 0; OB_SUCC(ret) && i < partition_id_array.count(); ++i) {
       const ObLSID &ls_id = partition_id_array[i].ls_id_;
       const ObTableLoadPartitionId &part_tablet_id = partition_id_array[i].part_tablet_id_;
@@ -138,7 +137,12 @@ int ObTableLoadStoreCtx::init(
       }
       if (OB_SUCC(ret)) {
         if (table_data_desc_.is_heap_table_) {
-          int64_t bucket_cnt = wa_mem_limit / (ctx_->param_.session_count_ * MACRO_BLOCK_WRITER_MEM_SIZE);
+          int64_t bucket_cnt = 0;
+          if (ctx_->schema_.lob_column_cnt_ > 0) {
+            bucket_cnt = wa_mem_limit / (ctx_->param_.session_count_ * MACRO_BLOCK_WRITER_MEM_SIZE * 2);
+          } else {
+            bucket_cnt = wa_mem_limit / (ctx_->param_.session_count_ * MACRO_BLOCK_WRITER_MEM_SIZE);
+          }
           if (ls_partition_ids_.count() <= bucket_cnt) {
             is_fast_heap_table_ = true;
           } else {
@@ -154,7 +158,9 @@ int ObTableLoadStoreCtx::init(
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(insert_table_param.ls_partition_ids_.assign(target_ls_partition_ids_))) {
+    } else if (OB_FAIL(insert_table_param.ls_partition_ids_.assign(ls_partition_ids_))) {
+      LOG_WARN("fail to assign ls tablet ids", KR(ret));
+    } else if (OB_FAIL(insert_table_param.target_ls_partition_ids_.assign(target_ls_partition_ids_))) {
       LOG_WARN("fail to assign ls tablet ids", KR(ret));
     }
     // init trans_allocator_
@@ -223,17 +229,6 @@ int ObTableLoadStoreCtx::init(
     else if (ctx_->schema_.has_identity_column_ && OB_FAIL(init_sequence())) {
       LOG_WARN("fail to init sequence", KR(ret));
     }
-    if (OB_SUCC(ret) && is_fast_heap_table_) {
-      if (OB_ISNULL(fast_heap_table_ctx_ =
-                      OB_NEWx(ObDirectLoadFastHeapTableContext, (&allocator_)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to new ObDirectLoadFastHeapTableContext", KR(ret));
-      } else if (OB_FAIL(fast_heap_table_ctx_->init(ctx_->param_.tenant_id_, ls_partition_ids_,
-                                                    target_ls_partition_ids_,
-                                                    ctx_->param_.session_count_))) {
-        LOG_WARN("fail to init fast heap table ctx", KR(ret));
-      }
-    }
     if (OB_SUCC(ret)) {
       is_inited_ = true;
     } else {
@@ -292,11 +287,6 @@ void ObTableLoadStoreCtx::destroy()
     insert_table_ctx_->~ObDirectLoadInsertTableContext();
     allocator_.free(insert_table_ctx_);
     insert_table_ctx_ = nullptr;
-  }
-  if (nullptr != fast_heap_table_ctx_) {
-    fast_heap_table_ctx_->~ObDirectLoadFastHeapTableContext();
-    allocator_.free(fast_heap_table_ctx_);
-    fast_heap_table_ctx_ = nullptr;
   }
   if (nullptr != tmp_file_mgr_) {
     tmp_file_mgr_->~ObDirectLoadTmpFileManager();
@@ -383,7 +373,7 @@ int ObTableLoadStoreCtx::check_status(ObTableLoadStatusType status) const
     if (ObTableLoadStatusType::ERROR == status_) {
       ret = error_code_;
     } else if (ObTableLoadStatusType::ABORT == status_) {
-      ret = OB_CANCELED;
+      ret = OB_SUCCESS != error_code_ ? error_code_ : OB_CANCELED;
     } else {
       ret = OB_STATE_NOT_MATCH;
     }

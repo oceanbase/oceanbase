@@ -497,6 +497,7 @@ int ObTabletReplicaChecksumOperator::batch_get(
   items.reset();
   tablet_items_cnt = 0;
   const int64_t pairs_cnt = pairs.count();
+  const int32_t group_id = share::OBCG_DEFAULT;
   if (OB_UNLIKELY(pairs_cnt < 1 || OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(pairs_cnt));
@@ -511,7 +512,7 @@ int ObTabletReplicaChecksumOperator::batch_get(
                                               false/*include_larger_than*/, false/*with_compaction_scn*/))) {
         LOG_WARN("fail to construct batch get sql", KR(ret), K(tenant_id), K(pairs),
           K(start_idx), K(end_idx));
-      } else if (OB_FAIL(inner_batch_get_by_sql_(tenant_id, sql, sql_proxy, items, tmp_tablet_items_cnt))) {
+      } else if (OB_FAIL(inner_batch_get_by_sql_(tenant_id, sql, group_id, sql_proxy, items, tmp_tablet_items_cnt))) {
         LOG_WARN("fail to inner batch get by sql", KR(ret), K(tenant_id), K(sql));
       } else {
         start_idx = end_idx;
@@ -541,15 +542,16 @@ int ObTabletReplicaChecksumOperator::batch_get(
     ObISQLClient &sql_proxy,
     ObIArray<ObTabletReplicaChecksumItem> &items,
     int64_t &tablet_items_cnt,
-    const bool include_larger_than)
+    const bool include_larger_than,
+    const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   items.reset();
   tablet_items_cnt = 0;
   const int64_t pairs_cnt = pairs.count();
-  if (OB_UNLIKELY(pairs_cnt < 1 || OB_INVALID_TENANT_ID == tenant_id)) {
+  if (OB_UNLIKELY(pairs_cnt < 1 || OB_INVALID_TENANT_ID == tenant_id || group_id < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(pairs_cnt));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(pairs_cnt), K(group_id));
   }
   // Step 2: cut tablet replica checksum items into small batches
   int64_t start_idx = 0;
@@ -562,7 +564,7 @@ int ObTabletReplicaChecksumOperator::batch_get(
                                              sql, include_larger_than, true/*with_compaction_scn*/))) {
       LOG_WARN("fail to construct batch get sql", KR(ret), K(tenant_id), K(compaction_scn), K(pairs),
         K(start_idx), K(end_idx));
-    } else if (OB_FAIL(inner_batch_get_by_sql_(tenant_id, sql, sql_proxy, items, tmp_tablet_items_cnt))) {
+    } else if (OB_FAIL(inner_batch_get_by_sql_(tenant_id, sql, group_id, sql_proxy, items, tmp_tablet_items_cnt))) {
       LOG_WARN("fail to inner batch get by sql", KR(ret), K(tenant_id), K(sql));
     } else {
       start_idx = end_idx;
@@ -585,18 +587,19 @@ int ObTabletReplicaChecksumOperator::batch_get(
 int ObTabletReplicaChecksumOperator::inner_batch_get_by_sql_(
     const uint64_t tenant_id,
     const ObSqlString &sql,
+    const int32_t group_id,
     ObISQLClient &sql_proxy,
     ObIArray<ObTabletReplicaChecksumItem> &items,
     int64_t &tablet_items_cnt)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || group_id < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(group_id));
   } else {
     const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
     SMART_VAR(ObISQLClient::ReadResult, result) {
-      if (OB_FAIL(sql_proxy.read(result, meta_tenant_id, sql.ptr()))) {
+      if (OB_FAIL(sql_proxy.read(result, meta_tenant_id, sql.ptr(), group_id))) {
         LOG_WARN("fail to execute sql", KR(ret), K(tenant_id), K(meta_tenant_id), "sql", sql.ptr());
       } else if (OB_ISNULL(result.get_result())) {
         ret = OB_ERR_UNEXPECTED;

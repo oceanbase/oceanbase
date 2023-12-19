@@ -1140,6 +1140,8 @@ int ObExprJsonValue::cast_to_uint(ObIJsonBase *j_base, ObObjType dst_type, uint6
 int ObExprJsonValue::cast_to_datetime(ObIJsonBase *j_base,
                                       common::ObIAllocator *allocator,
                                       const ObBasicSessionInfo *session,
+                                      ObEvalCtx &ctx,
+                                      const ObExpr *expr,
                                       common::ObAccuracy &accuracy,
                                       int64_t &val,
                                       uint8_t &is_type_cast)
@@ -1152,7 +1154,7 @@ int ObExprJsonValue::cast_to_datetime(ObIJsonBase *j_base,
   } else {
     oceanbase::common::ObTimeConvertCtx cvrt_ctx(session->get_timezone_info(), false);
     if (lib::is_oracle_mode()) {
-      if (OB_FAIL(common_get_nls_format(session, ObDateTimeType,
+      if (OB_FAIL(common_get_nls_format(session, ctx, expr, ObDateTimeType,
                                         true,
                                         cvrt_ctx.oracle_nls_format_))) {
         LOG_WARN("common_get_nls_format failed", K(ret));
@@ -1190,6 +1192,8 @@ int ObExprJsonValue::cast_to_datetime(ObIJsonBase *j_base,
 
 int ObExprJsonValue::cast_to_otimstamp(ObIJsonBase *j_base,
                                       const ObBasicSessionInfo *session,
+                                      ObEvalCtx &ctx,
+                                      const ObExpr *expr,
                                       common::ObAccuracy &accuracy,
                                       ObObjType dst_type,
                                       ObOTimestampData &out_val,
@@ -1208,8 +1212,8 @@ int ObExprJsonValue::cast_to_otimstamp(ObIJsonBase *j_base,
   } else {
     cvrt_ctx.tz_info_ = session->get_timezone_info();
     if (lib::is_oracle_mode()) {
-      if (OB_FAIL(common_get_nls_format(session, ObDateTimeType,
-                                        true,
+      if (OB_FAIL(common_get_nls_format(session, ctx, expr,
+                                        ObDateTimeType, true,
                                         cvrt_ctx.oracle_nls_format_))) {
         LOG_WARN("common_get_nls_format failed", K(ret));
       }
@@ -1551,7 +1555,7 @@ int ObExprJsonValue::cast_to_res(common::ObIAllocator *allocator,
       int64_t val;
       GET_SESSION()
       {
-        ret = cast_to_datetime(j_base, allocator, session, accuracy, val, is_type_cast);
+        ret = cast_to_datetime(j_base, allocator, session, ctx, &expr, accuracy, val, is_type_cast);
       }
       if (ret == OB_ERR_NULL_VALUE) {
         res.set_null();
@@ -1567,7 +1571,7 @@ int ObExprJsonValue::cast_to_res(common::ObIAllocator *allocator,
       ObOTimestampData val;
       GET_SESSION()
       {
-        ret = cast_to_otimstamp(j_base, session, accuracy, dst_type, val, is_type_cast);
+        ret = cast_to_otimstamp(j_base, session, ctx, &expr, accuracy, dst_type, val, is_type_cast);
       }
       if (!try_set_error_val<ObDatum>(expr, ctx, res, ret, error_type, error_val, mismatch_val, mismatch_type, is_type_cast, accuracy, dst_type)) {
         if (dst_type == ObTimestampTZType) {
@@ -2310,6 +2314,13 @@ bool ObExprJsonValue::type_cast_to_string(ObString &json_string,
   uint8_t is_type_cast = 0;
   ret = cast_to_string(allocator, j_base, CS_TYPE_BINARY, CS_TYPE_BINARY, accuracy, ObLongTextType, json_string, is_type_cast, 0);
   return ret == 0 ? true : false;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprJsonValue, raw_expr) {
+  int ret = OB_SUCCESS;
+  SET_LOCAL_SYSVAR_CAPACITY(1);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
+  return ret;
 }
 
 #undef CAST_FAIL

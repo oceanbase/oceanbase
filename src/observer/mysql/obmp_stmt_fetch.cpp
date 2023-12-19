@@ -353,7 +353,7 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("get unexpect streaming result set.", K(ret), K(cursor.get_id()));
               }
-              if (OB_OCI_DEFAULT != offset_type_ || OB_OCI_FETCH_NEXT != offset_type_) {
+              if (OB_OCI_DEFAULT != offset_type_ && OB_OCI_FETCH_NEXT != offset_type_) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("streaming result set not support this offset type.", K(ret), 
                                                                                K(cursor.get_id()), 
@@ -695,6 +695,8 @@ int ObMPStmtFetch::process()
     if (OB_UNLIKELY(!session.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid session", K_(cursor_id), K(ret));
+    } else if (OB_FAIL(process_kill_client_session(session))) {
+      LOG_WARN("client session has been killed", K(ret));
     } else if (OB_UNLIKELY(session.is_zombie())) {
       //session has been killed some moment ago
       ret = OB_ERR_SESSION_INTERRUPTED;

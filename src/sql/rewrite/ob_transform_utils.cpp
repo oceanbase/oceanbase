@@ -472,7 +472,7 @@ int ObTransformUtils::is_columns_unique(const ObIArray<ObRawExpr *> &exprs,
     } else if (!is_unique) {
       ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
       if (OB_FAIL(table_schema->get_simple_index_infos(
-                  simple_index_infos, false))) {
+                  simple_index_infos))) {
         LOG_WARN("get simple_index_infos failed", K(ret));
       }
       for (int64_t i = 0;
@@ -1715,6 +1715,109 @@ int ObTransformUtils::flatten_expr(ObRawExpr *expr,
   return ret;
 }
 
+int ObTransformUtils::flatten_and_or_xor(ObTransformerCtx *ctx,
+                                         ObIArray<ObRawExpr*> &conditions,
+                                         bool *trans_happened)
+{
+  int ret = OB_SUCCESS;
+  ObRawExprFactory *factory = NULL;
+  ObSEArray<ObRawExpr *, 4> new_param_exprs;
+  bool happend = false;
+  if (OB_ISNULL(ctx) || OB_ISNULL(factory = ctx->expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null pointer error", K(ctx), K(factory), K(ret));
+  } else if (NULL != trans_happened) {
+    *trans_happened = false;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < conditions.count(); ++i) {
+    if (OB_ISNULL(conditions.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("param expr is null", K(conditions.at(i)), K(ret));
+    } else if (OB_FAIL(flatten_and_or_xor(conditions.at(i), trans_happened))) {
+      LOG_WARN("failed to do_flatten", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < conditions.count(); ++i) {
+    ObRawExpr *param = NULL;
+    if (OB_ISNULL(param = conditions.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("param expr is null", K(conditions.at(i)), K(ret));
+    } else if (param->get_expr_type() == T_OP_AND) {
+      happend = true;
+      for (int64_t j = 0; OB_SUCC(ret) && j < param->get_param_count(); ++j) {
+        ObRawExpr* temp = NULL;
+        if (OB_ISNULL(param->get_param_expr(j))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param expr is null", K(param->get_param_expr(j)), K(ret));
+        } else if (OB_FAIL(ObRawExprUtils::try_create_bool_expr(param->get_param_expr(j), temp, *factory))) {
+          LOG_WARN("try create bool expr failed", K(ret));
+        } else if (OB_FAIL(new_param_exprs.push_back(temp))) {
+          LOG_WARN("failed to append param exprs", K(ret));
+        }
+      }
+    } else if (OB_FAIL(new_param_exprs.push_back(param))) {
+      LOG_WARN("failed to push back param", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && happend) {
+    if (OB_FAIL(conditions.assign(new_param_exprs))) {
+      LOG_WARN("failed to assign new param exprs", K(ret));
+    } else if (NULL != trans_happened) {
+      *trans_happened = true;
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::flatten_and_or_xor(ObRawExpr* expr, bool *trans_happened)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret), K(expr));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_ISNULL(expr->get_param_expr(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param expr is null", K(expr->get_param_expr(i)), K(ret));
+      } else if (OB_FAIL(SMART_CALL(flatten_and_or_xor(expr->get_param_expr(i), trans_happened)))) {
+        LOG_WARN("failed to cluster and or", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && (expr->get_expr_type() == T_OP_AND ||
+                         expr->get_expr_type() == T_OP_OR ||
+                         expr->get_expr_type() == T_OP_XOR)) {
+      ObSEArray<ObRawExpr *, 4> new_param_exprs;
+      const ObItemType expr_type = expr->get_expr_type();
+      bool happend = false;
+      for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+        ObRawExpr *param = NULL;
+        if (OB_ISNULL(param = expr->get_param_expr(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param expr is null", K(expr->get_param_expr(i)), K(ret));
+        } else if (param->get_expr_type() == expr_type) {
+          happend = true;
+          if (OB_FAIL(append(new_param_exprs,
+                            static_cast<ObOpRawExpr *>(param)->get_param_exprs()))) {
+            LOG_WARN("failed to append param exprs", K(ret));
+          }
+        } else if (OB_FAIL(new_param_exprs.push_back(param))) {
+          LOG_WARN("failed to push back param", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && happend) {
+        ObOpRawExpr *op_expr = static_cast<ObOpRawExpr *>(expr);
+        if (OB_FAIL(op_expr->get_param_exprs().assign(new_param_exprs))) {
+          LOG_WARN("failed to assign new param exprs", K(ret));
+        } else if (NULL != trans_happened) {
+          *trans_happened = true;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTransformUtils::find_not_null_expr(const ObDMLStmt &stmt,
                                          ObRawExpr *&not_null_expr,
                                          bool &is_valid,
@@ -2177,6 +2280,8 @@ int ObTransformUtils::is_column_expr_not_null(ObNotNullContext &ctx,
       OB_ISNULL(table = stmt->get_table_item_by_id(expr->get_table_id()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table item is null", K(ret), K(expr->get_table_id()), K(*stmt));
+  } else if (is_virtual_table(table->ref_id_)) {
+    // 'NOT NULL' of the virtual table is unreliable
   } else if (ObOptimizerUtil::find_item(ctx.right_table_ids_, table->table_id_)) {
     // do nothing
   } else if (table->is_basic_table()) {
@@ -3234,7 +3339,7 @@ int ObTransformUtils::get_vaild_index_id(ObSqlSchemaGuard *schema_guard,
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table_schema is NULL", K(ret), K(table_schema));
-  } else if (OB_FAIL(table_schema->get_simple_index_infos(simple_index_infos, false))) {
+  } else if (OB_FAIL(table_schema->get_simple_index_infos(simple_index_infos))) {
     LOG_WARN("get simple_index_infos failed", K(ret));
   } else if (OB_FAIL(index_ids.push_back(table_item->ref_id_))) {
     LOG_WARN("failed to push back index id", K(ret), K(table_item->ref_id_));
@@ -7424,6 +7529,33 @@ int ObTransformUtils::create_inline_view(ObTransformerCtx *ctx,
       view_table->for_update_ = true;
     }
   }
+  if (OB_SUCC(ret) && stmt->is_select_stmt()) {
+    //check qualify filters
+    if (OB_FAIL(pushdown_qualify_filters(static_cast<ObSelectStmt *>(stmt)))) {
+      LOG_WARN("check pushdown qualify filters failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::pushdown_qualify_filters(ObSelectStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  bool need_pushdown = true;
+  //if there are no winfunc, move qualify filters to having/where
+  if (stmt->get_qualify_filters_count() > 0 && 0 == stmt->get_window_func_count()) {
+    if (!stmt->has_group_by()) {
+      if (OB_FAIL(append(stmt->get_condition_exprs(), stmt->get_qualify_filters()))) {
+        LOG_WARN("failed to append condition exprs", K(ret));
+      } else {
+        stmt->get_qualify_filters().reset();
+      }
+    } else if (OB_FAIL(append(stmt->get_having_exprs(), stmt->get_qualify_filters()))) {
+      LOG_WARN("move qualify filters to having failed", K(ret));
+    } else {
+      stmt->get_qualify_filters().reset();
+    }
+  }
   return ret;
 }
 
@@ -8198,6 +8330,87 @@ int ObTransformUtils::build_case_when_expr(ObDMLStmt &stmt,
     LOG_WARN("failed to pull relation id and levels", K(ret));
   } else {
     out_expr = case_expr;
+  }
+  return ret;
+}
+
+int ObTransformUtils::build_case_when_expr(ObTransformerCtx *ctx,
+                                           ObIArray<ObRawExpr*> &when_exprs,
+                                           ObIArray<ObRawExpr*> &then_exprs,
+                                           ObRawExpr *default_expr,
+                                           ObCaseOpRawExpr *&case_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx) || OB_ISNULL(ctx->expr_factory_) || OB_ISNULL(ctx->session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("param expr is null", K(ret), K(ctx));
+  } else if (when_exprs.count() != then_exprs.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("param expr count missmatch", K(ret), K(when_exprs.count()), K(then_exprs.count()));
+  } else if (OB_FAIL(ctx->expr_factory_->create_raw_expr(T_OP_CASE, case_expr))) {
+    LOG_WARN("failed to create case expr", K(ret));
+  } else if (OB_ISNULL(case_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr", K(ret));
+  } else if (OB_FALSE_IT(case_expr->set_default_param_expr(default_expr))) {
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < when_exprs.count(); i++) {
+      if (OB_FAIL(case_expr->add_when_param_expr(when_exprs.at(i)))) {
+        LOG_WARN("failed to add when expr", K(ret));
+      } else if (OB_FAIL(case_expr->add_then_param_expr(then_exprs.at(i)))) {
+        LOG_WARN("failed to add then expr", K(ret));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(case_expr->formalize(ctx->session_info_))) {
+    LOG_WARN("failed to formalize case expr", K(ret));
+  } else if (OB_FAIL(case_expr->pull_relation_id())) {
+    LOG_WARN("failed to pull relation id and levels", K(ret));
+  }
+
+  return ret;
+}
+
+int ObTransformUtils::check_error_free_expr(ObRawExpr *expr, bool &is_error_free)
+{
+  int ret = OB_SUCCESS;
+  is_error_free = true;
+  bool temp_flag = true;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr", K(ret));
+  } else if (expr->has_flag(CNT_SO_UDF) || expr->has_flag(CNT_PL_UDF) || expr->has_flag(CNT_SUB_QUERY)
+             || expr->has_flag(CNT_VALUES) || expr->has_flag(CNT_ONETIME) || expr->has_flag(CNT_STATE_FUNC)
+             || expr->has_flag(CNT_ENUM_OR_SET) || expr->has_flag(CNT_SEQ_EXPR) || expr->has_flag(CNT_VOLATILE_CONST)
+             || expr->has_flag(CNT_DYNAMIC_USER_VARIABLE) || expr->has_flag(CNT_CUR_TIME)) {
+    // disable by flag
+    is_error_free = false;
+  } else if (expr->get_expr_type() == T_OP_DIV || expr->get_expr_type() == T_OP_AGG_DIV
+             || expr->get_expr_type() == T_OP_INT_DIV) {
+    // disable by type
+    is_error_free = false;
+  } else if (expr->get_expr_type() == T_FUN_SYS_CAST) {
+    // case-by-case determination
+    if (OB_FAIL(ObOptimizerUtil::is_lossless_column_cast(expr, temp_flag))) {
+      LOG_WARN("failed to check lossless cast", K(ret));
+    } else {
+      is_error_free &= temp_flag;
+    }
+  } else if (expr->is_column_ref_expr()) {
+    ObColumnRefRawExpr *col = static_cast<ObColumnRefRawExpr *>(expr);
+    if (OB_NOT_NULL(col) && col->is_generated_column()) {
+      is_error_free = false;
+    }
+  }
+  // check child exprs recursively
+  for (int64_t i = 0; OB_SUCC(ret) && is_error_free && i < expr->get_param_count(); i++) {
+    if (OB_FAIL(SMART_CALL(check_error_free_expr(expr->get_param_expr(i), temp_flag)))) {
+      LOG_WARN("failed to check error free expr", K(ret));
+    } else {
+      is_error_free &= temp_flag;
+    }
   }
   return ret;
 }
@@ -14375,6 +14588,76 @@ int ObTransformUtils::check_child_projection_validity(const ObSelectStmt *child_
       *      union all select c1,c2 from t1) v where b is true;
       */
       is_valid = false;
+    }
+  }
+  return ret;
+}
+
+//check whether the filter can be used as a partition topn filter for winfunc_exprs
+int ObTransformUtils::is_winfunc_topn_filter(const ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
+                                              ObRawExpr *filter,
+                                              bool &is_topn_filter,
+                                              ObRawExpr * &topn_const_expr,
+                                              bool &is_fetch_with_ties,
+                                              ObWinFunRawExpr *&win_expr)
+{
+  int ret = OB_SUCCESS;
+  is_topn_filter = false;
+  topn_const_expr = NULL;
+  is_fetch_with_ties = false;
+  if (OB_ISNULL(filter)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (T_OP_EQ > filter->get_expr_type() || T_OP_GT < filter->get_expr_type()) {
+      //do nothing
+  } else if (OB_ISNULL(filter->get_param_expr(0)) || OB_ISNULL(filter->get_param_expr(1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("param is null", K(ret), KP(filter->get_param_expr(0)), KP(filter->get_param_expr(0)));
+  } else if (filter->get_param_expr(0)->is_static_const_expr()
+              && filter->get_param_expr(1)->is_win_func_expr()) {
+    if (T_OP_EQ == filter->get_expr_type()
+        || T_OP_NSEQ == filter->get_expr_type()
+        || T_OP_GE == filter->get_expr_type()
+        || T_OP_GT == filter->get_expr_type()) {
+      is_topn_filter = true;
+      win_expr = static_cast<ObWinFunRawExpr *>(filter->get_param_expr(1));
+      topn_const_expr = filter->get_param_expr(0);
+    }
+  } else if (filter->get_param_expr(1)->is_static_const_expr()
+              && filter->get_param_expr(0)->is_win_func_expr()) {
+    if (T_OP_EQ == filter->get_expr_type()
+        || T_OP_NSEQ == filter->get_expr_type()
+        || T_OP_LE == filter->get_expr_type()
+        || T_OP_LT == filter->get_expr_type()) {
+      is_topn_filter = true;
+      win_expr = static_cast<ObWinFunRawExpr *>(filter->get_param_expr(0));
+      topn_const_expr = filter->get_param_expr(1);
+    }
+  }
+  if (OB_SUCC(ret) && is_topn_filter) {
+    is_topn_filter = false;
+    ObItemType func_type = win_expr->get_func_type();
+    if (!ObOptimizerUtil::find_item(winfunc_exprs, win_expr)) {
+      // do nothing
+    } else if (BOUND_UNBOUNDED != win_expr->get_upper().type_
+              || BOUND_UNBOUNDED != win_expr->get_lower().type_) {
+      // do nothing
+    } else {
+      switch (win_expr->get_func_type()) {
+        case T_WIN_FUN_RANK: {
+          is_topn_filter = true;
+          is_fetch_with_ties = true;
+          break;
+        }
+        case T_WIN_FUN_ROW_NUMBER: {
+          is_topn_filter = true;
+          is_fetch_with_ties = false;
+          break;
+        }
+        default: {
+          break;
+        }
+      }
     }
   }
   return ret;

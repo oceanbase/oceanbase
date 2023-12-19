@@ -95,7 +95,7 @@ int ObInsertLogPlan::generate_normal_raw_plan()
         LOG_WARN("failed to compute dml parallel", K(ret));
       } else if (use_pdml() && OB_FAIL(set_is_direct_insert())) {
         LOG_WARN("failed to set is direct insert", K(ret));
-      } else if (OB_FAIL(check_need_online_stats_gather(need_osg))) {
+      } else if (!is_direct_insert() && OB_FAIL(check_need_online_stats_gather(need_osg))) {
         LOG_WARN("fail to check wether we need optimizer stats gathering operator", K(ret));
       } else if (need_osg && OB_FAIL(generate_osg_share_info(osg_info))) {
         LOG_WARN("failed to generate osg share info");
@@ -725,11 +725,6 @@ int ObInsertLogPlan::check_insert_location_need_multi_partition_dml(ObLogicalOpe
     } else {
       is_multi_part_dml = true;
     }
-  } else if (insert_stmt->is_insert_up() || insert_stmt->is_replace()) {
-    // #issue/44052024
-    // force insert_up & replace use distribute op to avoid 4.0 branch rollback bug.
-    // should remove this condition in 4.1
-    is_multi_part_dml = true;
   } else if (OB_FAIL(check_if_match_partition_wise_insert(*insert_sharding,
                                                           top,
                                                           is_partition_wise))) {
@@ -799,6 +794,7 @@ int ObInsertLogPlan::check_if_match_partition_wise_insert(ObShardingInfo &target
   } else {
     is_partition_wise = is_match && !top.is_exchange_allocated();
   }
+  LOG_TRACE("check partition wise", K(is_match), K(top.is_exchange_allocated()));
   return ret;
 }
 

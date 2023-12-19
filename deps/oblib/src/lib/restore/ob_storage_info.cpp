@@ -87,9 +87,10 @@ ObStorageType ObObjectStorageInfo::get_type() const
 
 // oss:host=xxxx&access_id=xxx&access_key=xxx
 // cos:host=xxxx&access_id=xxx&access_key=xxxappid=xxx
+// s3:host=xxxx&access_id=xxx&access_key=xxx&s3_region=xxx
 int ObObjectStorageInfo::set(const common::ObStorageType device_type, const char *storage_info)
 {
-  bool has_appid = false;
+  bool has_needed_extension = false;
   int ret = OB_SUCCESS;
   if (is_valid()) {
     ret = OB_INIT_TWICE;
@@ -103,16 +104,19 @@ int ObObjectStorageInfo::set(const common::ObStorageType device_type, const char
       ret = OB_INVALID_BACKUP_DEST;
       LOG_WARN("storage info is empty", K(ret), K_(device_type));
     }
-  } else if (OB_FAIL(parse_storage_info_(storage_info, has_appid))) {
+  } else if (OB_FAIL(parse_storage_info_(storage_info, has_needed_extension))) {
     LOG_WARN("parse storage info failed", K(ret));
   } else if (OB_STORAGE_FILE != device_type
       && (0 == strlen(endpoint_) || 0 == strlen(access_id_) || 0 == strlen(access_key_))) {
     ret = OB_INVALID_BACKUP_DEST;
     LOG_WARN("backup device is not nfs, endpoint/access_id/access_key do not allow to be empty",
         K(ret), K_(device_type), K_(endpoint), K_(access_id));
-  } else if (OB_STORAGE_COS == device_type && !has_appid) {
+  } else if (OB_STORAGE_COS == device_type && !has_needed_extension) {
     ret = OB_INVALID_BACKUP_DEST;
     LOG_WARN("invalid cos info, appid do not allow to be empty", K(ret), K_(extension));
+  } else if (OB_STORAGE_S3 == device_type && !has_needed_extension) {
+    ret = OB_INVALID_BACKUP_DEST;
+    LOG_WARN("invalid s3 info, region do not allow to be empty", K(ret), K_(extension));
   } else if (OB_STORAGE_FILE == device_type
       && (0 != strlen(endpoint_) || 0 != strlen(access_id_) || 0 != strlen(access_key_))) {
     ret = OB_INVALID_BACKUP_DEST;
@@ -143,10 +147,10 @@ int ObObjectStorageInfo::set(const char *uri, const char *storage_info)
   return ret;
 }
 
-int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has_appid)
+int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has_needed_extension)
 {
   int ret = OB_SUCCESS;
-
+  has_needed_extension = false;
   if (OB_ISNULL(storage_info) || strlen(storage_info) >= OB_MAX_BACKUP_STORAGE_INFO_LENGTH) {
     ret = OB_INVALID_BACKUP_DEST;
     LOG_WARN("storage info is invalid", K(ret), K(storage_info), K(strlen(storage_info)));
@@ -163,9 +167,14 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
       token = ::strtok_r(str, "&", &saved_ptr);
       if (NULL == token) {
         break;
+      } else if (0 == strncmp(REGION, token, strlen(REGION))) {
+        has_needed_extension = (OB_STORAGE_S3 == device_type_);
+        if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
+          LOG_WARN("failed to set region", K(ret), K(token));
+        }
       } else if (0 == strncmp(HOST, token, strlen(HOST))) {
         if (OB_FAIL(set_storage_info_field_(token, endpoint_, sizeof(endpoint_)))) {
-          LOG_WARN("failed to set endpoint",K(ret), K(token));
+          LOG_WARN("failed to set endpoint", K(ret), K(token));
         }
       } else if (0 == strncmp(ACCESS_ID, token, strlen(ACCESS_ID))) {
         if (OB_FAIL(set_storage_info_field_(token, access_id_, sizeof(access_id_)))) {
@@ -176,7 +185,7 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
           LOG_WARN("failed to set access key", K(ret), K(token));
         }
       } else if (OB_STORAGE_FILE != device_type_ && 0 == strncmp(APPID, token, strlen(APPID))) {
-        has_appid = true;
+        has_needed_extension = (OB_STORAGE_COS == device_type_);
         if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
           LOG_WARN("failed to set appid", K(ret), K(token));
         }
@@ -267,8 +276,7 @@ int ObObjectStorageInfo::get_storage_info_str(char *storage_info, const int64_t 
   }
 
   if (OB_SUCC(ret) && 0 != strlen(extension_) && info_len > strlen(storage_info)) {
-    // if OB_STORAGE_FILE's extension is not empty
-    // delimiter should be included
+    // if OB_STORAGE_FILE's extension is not empty, delimiter should be included
     int64_t str_len = strlen(storage_info);
     if (str_len > 0 && OB_FAIL(databuff_printf(storage_info, info_len, str_len, "&"))) {
       LOG_WARN("failed to add delimiter to storage info", K(ret), K(info_len), K(str_len));

@@ -37,6 +37,7 @@
 #include "pl/sys_package/ob_dbms_sql.h"
 #include "pl/ob_pl_package_state.h"
 #include "rpc/obmysql/ob_sql_sock_session.h"
+#include "sql/engine/expr/ob_expr_regexp_context.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -67,6 +68,8 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       driver_version_(),
       sessid_(0),
       master_sessid_(INVALID_SESSID),
+      client_sessid_(INVALID_SESSID),
+      client_create_time_(0),
       proxy_sessid_(VALID_PROXY_SESSID),
       global_vars_version_(0),
       sys_var_base_version_(OB_INVALID_VERSION),
@@ -337,6 +340,8 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   driver_version_.reset();
   sessid_ = 0;
   master_sessid_ = INVALID_SESSID;
+  client_sessid_ = INVALID_SESSID;
+  client_create_time_ = 0,
   proxy_sessid_ = VALID_PROXY_SESSID;
   global_vars_version_ = 0;
 
@@ -651,7 +656,7 @@ int ObBasicSessionInfo::set_user(const ObString &user_name, const ObString &host
   return ret;
 }
 
-int ObBasicSessionInfo::set_real_client_ip(const common::ObString &client_ip)
+int ObBasicSessionInfo::set_real_client_ip_and_port(const common::ObString &client_ip, int32_t client_addr_port)
 {
   int ret = OB_SUCCESS;
   char tmp_buf[common::OB_MAX_USER_NAME_LENGTH + common::OB_MAX_HOST_NAME_LENGTH + 2] = {};
@@ -666,7 +671,8 @@ int ObBasicSessionInfo::set_real_client_ip(const common::ObString &client_ip)
   } else if (OB_FAIL(name_pool_.write_string(tmp_string, &thread_data_.user_at_client_ip_))) {
     LOG_WARN("fail to write user_at_host_name to string_buf_", K(tmp_string), K(ret));
   } else {
-    thread_data_.user_client_addr_.set_ip_addr(client_ip, 0);
+    thread_data_.client_addr_port_ = client_addr_port;
+    thread_data_.user_client_addr_.set_ip_addr(client_ip, client_addr_port);
   }
   return ret;
 }
@@ -3973,8 +3979,8 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
           ret = OB_SUCCESS;
           int64_t sys_var_version = 0;
           int64_t sys_var_len = 0;
-          OB_UNIS_DECODEx(sys_var_version);
-          OB_UNIS_DECODEx(sys_var_len);
+          OB_UNIS_DECODE(sys_var_version);
+          OB_UNIS_DECODE(sys_var_len);
           if (OB_SUCC(ret)) {
             pos += sys_var_len; // skip
             LOG_WARN("invalid sys var id, maybe version is different, skip it", K(sys_var_id));
@@ -4092,6 +4098,21 @@ int ObBasicSessionInfo::calc_need_serialize_vars(ObIArray<ObSysVarClassType> &sy
         LOG_WARN("fail to push back sys var id", K(i), K(ids.at(i)), K(sys_var_ids), K(ret));
       }
     }
+  }
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(cur_phy_plan_) && cur_phy_plan_->contain_pl_udf_or_trigger()) {
+    // 如果该语句包含PL UDF/TRIGGER, 将该Sesssion上变化的Package变量进行同步
+    // TODO: 当前做的不够精细, 后续应该做到仅同步需要的变量
+    ObSessionValMap::VarNameValMap::const_iterator iter = user_var_val_map_.get_val_map().begin();
+    for (; OB_SUCC(ret) && iter != user_var_val_map_.get_val_map().end(); ++iter) {
+      const ObString name = iter->first;
+      if (name.prefix_match("pkg.")) {
+        if (OB_FAIL(user_var_names.push_back(name))) {
+          LOG_WARN("failed push back package var name", K(name));
+        }
+      }
+    }
+    LOG_DEBUG("sync package variables", K(user_var_names), K(cur_phy_plan_), K(lbt()));
   }
 
   if (OB_SUCC(ret) && cur_phy_plan_ != nullptr) {
@@ -4502,8 +4523,8 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
             ret = OB_SUCCESS;
             int64_t sys_var_version = 0;
             int64_t sys_var_len = 0;
-            OB_UNIS_DECODEx(sys_var_version);
-            OB_UNIS_DECODEx(sys_var_len);
+            OB_UNIS_DECODE(sys_var_version);
+            OB_UNIS_DECODE(sys_var_len);
             if (OB_SUCC(ret)) {
               pos += sys_var_len; // 跳过这段数据
               LOG_WARN("invalid sys var id, maybe version is different, skip it", K(sys_var_id));
@@ -5378,6 +5399,14 @@ int ObBasicSessionInfo::get_regexp_stack_limit(int64_t &v) const
 int ObBasicSessionInfo::get_regexp_time_limit(int64_t &v) const
 {
   return get_sys_variable(SYS_VAR_REGEXP_TIME_LIMIT, v);
+}
+
+int ObBasicSessionInfo::get_regexp_session_vars(ObExprRegexpSessionVariables &vars) const
+{
+  int ret = OB_SUCCESS;
+  OZ (get_regexp_stack_limit(vars.regexp_stack_limit_));
+  OZ (get_regexp_time_limit(vars.regexp_time_limit_));
+  return ret;
 }
 
 void ObBasicSessionInfo::reset_tx_variable(bool reset_next_scope)

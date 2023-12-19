@@ -72,6 +72,7 @@ public:
 
   int legacy_deserialize(const char *buf, const int64_t data_len, int64_t &pos);
   int legacy_serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int64_t legacy_serialize_len() const;
 
   TO_STRING_KV(K_(meta_type), K_(is_column_stored_in_sstable), K_(is_rowkey_column),
       K_(is_generated_column), K_(orig_default_value));
@@ -211,9 +212,10 @@ public:
   virtual inline bool is_index_table() const override { return share::schema::is_index_table(table_type_); }
   virtual inline bool is_storage_index_table() const override
   {
-    return share::schema::is_index_table(table_type_) || is_materialized_view();
+    return share::schema::is_index_table(table_type_);
   }
   inline bool is_materialized_view() const { return share::schema::ObTableSchema::is_materialized_view(table_type_); }
+  inline bool is_mlog_table() const { return share::schema::ObTableSchema::is_mlog_table(table_type_); }
   virtual inline bool is_global_index_table() const override { return share::schema::ObSimpleTableSchemaV2::is_global_index_table(index_type_); }
   virtual inline int64_t get_block_size() const override { return block_size_; }
 
@@ -290,10 +292,11 @@ private:
   int deserialize_rowkey_column_array(const char *buf, const int64_t data_len, int64_t &pos);
   int deserialize_column_array(ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
   int deserialize_column_group_array(ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
+  int64_t get_column_array_serialize_length(const common::ObIArray<ObStorageColumnSchema> &array) const;
   int deserialize_skip_idx_attr_array(const char *buf, const int64_t data_len, int64_t &pos);
   int generate_all_column_group_schema(ObStorageColumnGroupSchema &column_group, const ObRowStoreType row_store_type);
   template <typename T>
-  int64_t get_column_array_serialize_length(const common::ObIArray<T> &array) const;
+  int64_t get_array_serialize_length(const common::ObIArray<T> &array) const;
   template <typename T>
   bool check_column_array_valid(const common::ObIArray<T> &array) const;
 
@@ -362,7 +365,9 @@ public:
     : ObStorageSchema(),
       table_id_(common::OB_INVALID_ID),
       index_status_(share::schema::ObIndexStatus::INDEX_STATUS_UNAVAILABLE),
-      truncate_version_(OB_INVALID_VERSION)
+      truncate_version_(OB_INVALID_VERSION),
+      tenant_data_version_(0),
+      need_create_empty_major_(true)
       {}
 
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
@@ -375,6 +380,12 @@ public:
   { return table_id_; }
   int64_t get_truncate_version() const
   { return truncate_version_; }
+  uint64_t get_tenant_data_version() const
+  { return tenant_data_version_; }
+  bool get_need_create_empty_major () const
+  { return need_create_empty_major_; }
+  void set_need_create_empty_major(const bool need_create_empty_major)
+  { need_create_empty_major_ = need_create_empty_major; }
   bool is_valid() const
   {
     return ObStorageSchema::is_valid() && common::OB_INVALID_ID != table_id_;
@@ -383,10 +394,13 @@ public:
       const share::schema::ObTableSchema &input_schema,
       const lib::Worker::CompatMode compat_mode,
       const bool skip_column_info,
-      const int64_t compat_version);
+      const int64_t compat_version,
+      const uint64_t tenant_data_version,
+      const bool need_create_empty_major);
   int init(common::ObIAllocator &allocator,
       const ObCreateTabletSchema &old_schema);
-  INHERIT_TO_STRING_KV("ObStorageSchema", ObStorageSchema, K_(table_id), K_(index_status), K_(truncate_version));
+  INHERIT_TO_STRING_KV("ObStorageSchema", ObStorageSchema, K_(table_id), K_(index_status), K_(truncate_version),
+      K_(tenant_data_version), K_(need_create_empty_major));
 private:
   // for cdc
   uint64_t table_id_;
@@ -394,6 +408,8 @@ private:
   share::schema::ObIndexStatus index_status_;
   // for tablet throttling
   int64_t truncate_version_;
+  uint64_t tenant_data_version_;
+  bool need_create_empty_major_;
 };
 
 template <typename T>
@@ -413,7 +429,7 @@ int ObStorageSchema::serialize_schema_array(
 }
 
 template <typename T>
-int64_t ObStorageSchema::get_column_array_serialize_length(const common::ObIArray<T> &array) const
+int64_t ObStorageSchema::get_array_serialize_length(const common::ObIArray<T> &array) const
 {
   int64_t len = 0;
   len += serialization::encoded_length_vi64(array.count());

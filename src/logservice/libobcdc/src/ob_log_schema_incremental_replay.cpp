@@ -13,8 +13,8 @@
 
 #include "ob_log_schema_incremental_replay.h"
 
-#define _STAT(level, fmt, args...) _OBLOG_LOG(level, "[LOG_META_DATA] [REPALYER] [SCHMEA] " fmt, ##args)
-#define STAT(level, fmt, args...) OBLOG_LOG(level, "[LOG_META_DATA] [REPALYER] [SCHMEA] " fmt, ##args)
+#define _STAT(level, fmt, args...) _OBLOG_LOG(level, "[LOG_META_DATA] [REPLAYER] [SCHMEA] " fmt, ##args)
+#define STAT(level, fmt, args...) OBLOG_LOG(level, "[LOG_META_DATA] [REPLAYER] [SCHMEA] " fmt, ##args)
 #define _ISTAT(fmt, args...) _STAT(INFO, fmt, ##args)
 #define ISTAT(fmt, args...) STAT(INFO, fmt, ##args)
 #define _DSTAT(fmt, args...) _STAT(DEBUG, fmt, ##args)

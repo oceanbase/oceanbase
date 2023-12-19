@@ -52,6 +52,8 @@ int ObMPStatistic::process()
     } else if (OB_ISNULL(session)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sql session info is null", K(ret));
+    } else if (OB_FAIL(process_kill_client_session(*session))) {
+      LOG_WARN("client session has been killed", K(ret));
     } else if (FALSE_IT(session->set_txn_free_route(mysql_pkt.txn_free_route()))) {
     } else if (OB_FAIL(process_extra_info(*session, mysql_pkt, need_response_error))) {
       LOG_WARN("fail get process extra info", K(ret));

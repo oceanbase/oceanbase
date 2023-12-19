@@ -2784,6 +2784,7 @@ int ObSql::generate_stmt(ParseResult &parse_result,
       context.all_expr_constraints_ = &(resolver_ctx.query_ctx_->all_expr_constraints_);
       context.all_priv_constraints_ = &(resolver_ctx.query_ctx_->all_priv_constraints_);
       context.need_match_all_params_ = resolver_ctx.query_ctx_->need_match_all_params_;
+      context.all_local_session_vars_ = &(resolver_ctx.query_ctx_->all_local_session_vars_);
       context.cur_stmt_ = stmt;
       context.res_map_rule_id_ = resolver_ctx.query_ctx_->res_map_rule_id_;
       context.res_map_rule_param_idx_ = resolver_ctx.query_ctx_->res_map_rule_param_idx_;
@@ -3595,6 +3596,12 @@ int ObSql::code_generate(
       last_mem_usage = phy_plan->get_mem_size();
     }
   }
+  //add local_session_var array to phy_plan_ctx
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(phy_plan->set_all_local_session_vars(sql_ctx.all_local_session_vars_))) {
+      LOG_WARN("set all local sesson vars failed", K(ret));
+    }
+  }
   NG_TRACE(cg_end);
 
   // set phy table location in task_exec_ctx, query_timeout in exec_context
@@ -3848,7 +3855,16 @@ int ObSql::pc_get_plan(ObPlanCacheCtx &pc_ctx,
       //inner sql不能丢入大查询队列, 因为有可能上层查询已有数据返回客户端
     } else {
       get_plan_err = ret;
-      ret = OB_SUCCESS; //get plan出错, 覆盖错误码, 确保因plan cache的错误不影响正常执行路径
+      int tmp_ret = OB_SUCCESS;
+      tmp_ret = OB_E(EventTable::EN_PC_NOT_SWALLOW_ERROR) OB_SUCCESS;
+      if (OB_SUCCESS != tmp_ret) {
+         // do nothing
+        if (OB_SQL_PC_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        }
+      } else {
+        ret = OB_SUCCESS; //get plan出错, 覆盖错误码, 确保因plan cache的错误不影响正常执行路径
+      }
     }
   } else { //get plan 成功
     plan_cache->inc_hit_and_access_cnt();
@@ -4329,7 +4345,12 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
       ret = plan_cache->add_plan(phy_plan, pc_ctx);
     }
     plan_added = (OB_SUCCESS == ret);
+    if (pc_ctx.is_max_curr_limit_) {
+      ret = OB_REACH_MAX_CONCURRENT_NUM;
+    }
 
+    int tmp_ret = OB_SUCCESS;
+    tmp_ret = OB_E(EventTable::EN_PC_NOT_SWALLOW_ERROR) OB_SUCCESS;
     if (is_batch_exec) {
       // Batch optimization cannot continue for errors other than OB_SQL_PC_PLAN_DUPLICATE.
       if (OB_SQL_PC_PLAN_DUPLICATE == ret) {
@@ -4357,9 +4378,13 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
       ret = OB_SUCCESS;
       LOG_DEBUG("plan cache don't support add this kind of plan now",  K(phy_plan));
     } else if (OB_FAIL(ret)) {
-      if (OB_REACH_MAX_CONCURRENT_NUM != ret) { //如果是达到限流上限, 则将错误码抛出去
-        ret = OB_SUCCESS; //add plan出错, 覆盖错误码, 确保因plan cache失败不影响正常执行路径
-        LOG_WARN("Failed to add plan to ObPlanCache", K(ret));
+      if (OB_SUCCESS != tmp_ret) {
+
+      } else {
+        if (OB_REACH_MAX_CONCURRENT_NUM != ret) { //如果是达到限流上限, 则将错误码抛出去
+          ret = OB_SUCCESS; //add plan出错, 覆盖错误码, 确保因plan cache失败不影响正常执行路径
+          LOG_WARN("Failed to add plan to ObPlanCache", K(ret));
+        }
       }
     } else {
       pc_ctx.sql_ctx_.self_add_plan_ = true;
@@ -4581,6 +4606,11 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
                                                phy_plan->get_gtt_trans_scope_ids()))) {
           LOG_WARN("fail to append array", K(ret));
         }
+      }
+    }
+    if (OB_SUCC(ret) && NULL != phy_plan && !phy_plan->is_remote_plan()) {
+      if (OB_FAIL(pctx->set_all_local_session_vars(phy_plan->get_all_local_session_vars()))) {
+        LOG_WARN("fail to set all local session vars", K(ret));
       }
     }
   } else {

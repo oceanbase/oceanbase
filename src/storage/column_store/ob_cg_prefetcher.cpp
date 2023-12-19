@@ -108,7 +108,7 @@ int ObCGPrefetcher::open_index_root()
   ObMicroIndexInfo index_info;
   index_info.is_root_ = true;
   index_info.cs_row_range_.start_row_id_ = 0;
-  index_info.cs_row_range_.end_row_id_ = sstable_meta_handle_.get_sstable_meta().get_row_count() - 1;
+  index_info.cs_row_range_.end_row_id_ = sstable_meta_handle_.get_sstable_meta().get_end_row_id(sstable_->is_ddl_merge_empty_sstable());
   ObIndexTreeLevelHandle &tree_handle = tree_handles_[0];
   if (OB_FAIL(sstable_->get_index_tree_root(index_block_))) {
     LOG_WARN("Fail to get index block root", K(ret));
@@ -120,7 +120,13 @@ int ObCGPrefetcher::open_index_root()
               true,
               true,
               &index_info))) {
-    LOG_WARN("Fail to open index scanner", K(ret), K(query_range_));
+    if (OB_BEYOND_THE_RANGE != ret) {
+      LOG_WARN("Fail to open index scanner", K(ret), K(query_range_));
+    } else {
+      // empty ddl_merge_sstable with empty ddl_kvs may return OB_BEYOND_THE_RANGE
+      ret = OB_SUCCESS;
+      is_prefetch_end_ = true;
+    }
   } else {
     tree_handle.fetch_idx_ = tree_handle.prefetch_idx_ = 0;
     tree_handle.is_prefetch_end_ = true;

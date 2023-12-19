@@ -287,7 +287,8 @@ OB_SERIALIZE_MEMBER(ObTxDesc,
                     active_scn_,
                     parts_,
                     xid_,
-                    flags_.for_serialize_v_);
+                    flags_.for_serialize_v_,
+                    seq_base_);
 OB_SERIALIZE_MEMBER(ObTxParam,
                     timeout_us_,
                     lock_timeout_us_,
@@ -319,7 +320,8 @@ OB_SERIALIZE_MEMBER(ObTxInfo,
                     active_scn_,
                     parts_,
                     session_id_,
-                    savepoints_);
+                    savepoints_,
+                    seq_base_);
 OB_SERIALIZE_MEMBER(ObTxStmtInfo,
                     tx_id_,
                     op_sn_,
@@ -337,6 +339,7 @@ ObTxDesc::ObTxDesc()
     cluster_id_(-1),
     trace_info_(),
     cluster_version_(0),
+    seq_base_(0),
     tx_consistency_type_(ObTxConsistencyType::INVALID),
     addr_(),
     tx_id_(),
@@ -364,6 +367,7 @@ ObTxDesc::ObTxDesc()
     finish_ts_(-1),
     active_scn_(),
     min_implicit_savepoint_(),
+    last_branch_id_(0),
     parts_(),
     savepoints_(),
     cflict_txs_(),
@@ -481,7 +485,7 @@ void ObTxDesc::reset()
   cluster_id_ = -1;
   trace_info_.reset();
   cluster_version_ = 0;
-
+  seq_base_ = 0;
   tx_consistency_type_ = ObTxConsistencyType::INVALID;
 
   addr_.reset();
@@ -514,6 +518,7 @@ void ObTxDesc::reset()
 
   active_scn_.reset();
   min_implicit_savepoint_.reset();
+  last_branch_id_ = 0;
   parts_.reset();
   savepoints_.reset();
   cflict_txs_.reset();
@@ -690,6 +695,14 @@ int ObTxDesc::update_part_(ObTxPart &a, const bool append)
   }
   state_change_flags_.PARTS_CHANGED_ = true;
   return ret;
+}
+
+void ObTxDesc::post_rb_savepoint_(ObTxPartRefList &parts, const ObTxSEQ &savepoint)
+{
+  ARRAY_FOREACH_NORET(parts, i) {
+    parts[i].last_scn_ = savepoint;
+  }
+  state_change_flags_.PARTS_CHANGED_ = true;
 }
 
 int ObTxDesc::update_clean_part(const share::ObLSID &id,
@@ -1634,7 +1647,6 @@ void TxCtxStateHelper::restore_state()
   }
 }
 
-OB_SERIALIZE_MEMBER_SIMPLE(ObTxSEQ, raw_val_);
 DEF_TO_STRING(ObTxSEQ)
 {
   int64_t pos = 0;
@@ -1650,21 +1662,18 @@ DEF_TO_STRING(ObTxSEQ)
   return pos;
 }
 
-ObTxSEQ ObTxDesc::get_tx_seq(int64_t seq_abs) const
+int ObTxDesc::alloc_branch_id(const int64_t count, int16_t &branch_id)
 {
-  return ObTxSEQ::mk_v0(seq_abs > 0 ? seq_abs : ObSequence::get_max_seq_no());
-}
-ObTxSEQ ObTxDesc::get_and_inc_tx_seq(int16_t branch, int N) const
-{
-  UNUSED(branch);
-  int64_t seq = ObSequence::get_and_inc_max_seq_no(N);
-  return ObTxSEQ::mk_v0(seq);
-}
-ObTxSEQ ObTxDesc::inc_and_get_tx_seq(int16_t branch) const
-{
-  UNUSED(branch);
-  int64_t seq = ObSequence::inc_and_get_max_seq_no();
-  return ObTxSEQ::mk_v0(seq);
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(lock_);
+  if (count > MAX_BRANCH_ID_VALUE - last_branch_id_) {
+    ret = OB_ERR_OUT_OF_UPPER_BOUND;
+    TRANS_LOG(WARN, "can not alloc branch_id", KR(ret), K(count), KPC(this));
+  } else {
+    branch_id = last_branch_id_ + 1;
+    last_branch_id_ += count;
+  }
+  return ret;
 }
 void ObTxDesc::mark_part_abort(const ObTransID tx_id, const int abort_cause)
 {
@@ -1674,6 +1683,25 @@ void ObTxDesc::mark_part_abort(const ObTransID tx_id, const int abort_cause)
     abort_cause_ = abort_cause;
   }
 }
+
+int64_t ObTxDesc::get_coord_epoch() const
+{
+  int64_t epoch = -1;
+
+  if (OB_UNLIKELY(!coord_id_.is_valid())) {
+    epoch = -1;
+  } else {
+    ARRAY_FOREACH_NORET(commit_parts_, i) {
+      const ObTxExecPart &part = commit_parts_[i];
+      if (coord_id_ == part.ls_id_) {
+        epoch = part.exec_epoch_;
+      }
+    }
+  }
+
+  return epoch;
+}
+
 } // transaction
 } // oceanbase
 #undef USING_LOG_PREFIX

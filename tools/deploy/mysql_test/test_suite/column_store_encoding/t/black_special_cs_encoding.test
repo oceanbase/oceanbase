@@ -14,7 +14,7 @@ set ob_trx_timeout=1000000000;
 drop table if exists t_black;
 --enable_warnings
 
-create table t_black(a int primary key, b int, c date, d text, e text, f text) row_format = compressed block_size = 2048 with column group for all columns, each column;
+create table t_black(a int primary key, b int, c date, d text, e text, f text) row_format = compressed block_size = 2048 with column group (all columns, each column);
 --let $count = 1
 while($count < 101)
 {

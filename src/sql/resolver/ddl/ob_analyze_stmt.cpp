@@ -19,28 +19,60 @@ namespace oceanbase
 namespace sql
 {
 
-ObAnalyzeStmt::ObAnalyzeStmt()
-  : ObStmt(NULL, stmt::T_ANALYZE),
-    tenant_id_(common::OB_INVALID_ID),
-    database_name_(),
+ObAnalyzeTableInfo::ObAnalyzeTableInfo()
+  : database_name_(),
     database_id_(common::OB_INVALID_ID),
     table_name_(),
     table_id_(common::OB_INVALID_ID),
     part_level_(share::schema::PARTITION_LEVEL_ZERO),
-    total_part_cnt_(0),
     partition_name_(),
     partition_infos_(),
     subpartition_infos_(),
     column_params_(),
     column_group_params_(),
+    ref_table_type_(share::schema::ObTableType::MAX_TABLE_TYPE),
+    gather_subpart_hist_(false),
+    is_sepcify_subpart_(false)
+{
+}
+
+ObAnalyzeTableInfo::~ObAnalyzeTableInfo()
+{
+}
+
+int ObAnalyzeTableInfo::assign(const ObAnalyzeTableInfo &other)
+{
+  int ret = OB_SUCCESS;
+  database_name_ = other.database_name_;
+  database_id_ = other.database_id_;
+  table_name_ = other.table_name_;
+  table_id_ = other.table_id_;
+  part_level_ = other.part_level_;
+  partition_name_ = other.partition_name_;
+  ref_table_type_ = other.ref_table_type_;
+  gather_subpart_hist_ = other.gather_subpart_hist_;
+  is_sepcify_subpart_ = other.is_sepcify_subpart_;
+  if (OB_FAIL(partition_infos_.assign(other.partition_infos_))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else if (OB_FAIL(subpartition_infos_.assign(other.subpartition_infos_))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else if (OB_FAIL(column_params_.assign(other.column_params_))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else if (OB_FAIL(all_partition_infos_.assign(other.all_partition_infos_))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else if (OB_FAIL(all_subpartition_infos_.assign(other.all_subpartition_infos_))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else {/*do nothing*/}
+  return ret;
+}
+
+ObAnalyzeStmt::ObAnalyzeStmt()
+  : ObStmt(NULL, stmt::T_ANALYZE),
+    tenant_id_(common::OB_INVALID_ID),
     statistic_type_(InvalidStatistics),
     sample_info_(),
     parallel_degree_(1),
-    is_drop_(false),
-    part_ids_(),
-    subpart_ids_(),
-    ref_table_type_(share::schema::ObTableType::MAX_TABLE_TYPE),
-    gather_subpart_hist_(false)
+    is_drop_(false)
 {
 }
 
@@ -48,7 +80,7 @@ ObAnalyzeStmt::~ObAnalyzeStmt()
 {
 }
 
-int ObAnalyzeStmt::set_column_params(const ObIArray<ObColumnStatParam> &col_params)
+int ObAnalyzeTableInfo::set_column_params(const ObIArray<ObColumnStatParam> &col_params)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(column_params_.assign(col_params))) {
@@ -57,7 +89,7 @@ int ObAnalyzeStmt::set_column_params(const ObIArray<ObColumnStatParam> &col_para
   return ret;
 }
 
-ObColumnStatParam *ObAnalyzeStmt::get_column_param(const uint64_t column_id)
+ObColumnStatParam *ObAnalyzeTableInfo::get_column_param(const uint64_t column_id)
 {
   ObColumnStatParam *ret = NULL;
   for (int64_t i = 0; NULL == ret && i < column_params_.count(); ++i) {
@@ -68,10 +100,26 @@ ObColumnStatParam *ObAnalyzeStmt::get_column_param(const uint64_t column_id)
   return ret;
 }
 
-int ObAnalyzeStmt::fill_table_stat_param(ObExecContext &ctx, common::ObTableStatParam &param)
+int ObAnalyzeStmt::fill_table_stat_params(ObExecContext &ctx, ObIArray<common::ObTableStatParam> &params)
 {
   int ret = OB_SUCCESS;
-  param.tenant_id_ = tenant_id_;
+  if (OB_FAIL(params.prepare_allocate(tables_.count()))) {
+    LOG_WARN("prepare allocate failed", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < tables_.count(); ++i) {
+    params.at(i).tenant_id_ = tenant_id_;
+    params.at(i).sample_info_ = sample_info_;
+    params.at(i).degree_ = parallel_degree_;
+    if (OB_FAIL(tables_.at(i).fill_table_stat_param(ctx, params.at(i)))) {
+      LOG_WARN("fill table stat param failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObAnalyzeTableInfo::fill_table_stat_param(ObExecContext &ctx, common::ObTableStatParam &param)
+{
+  int ret = OB_SUCCESS;
 
   param.db_name_ = database_name_;
   param.db_id_ = database_id_;
@@ -80,7 +128,6 @@ int ObAnalyzeStmt::fill_table_stat_param(ObExecContext &ctx, common::ObTableStat
   param.table_id_ = table_id_;
   param.ref_table_type_ = ref_table_type_;
   param.part_level_ = part_level_;
-  param.total_part_cnt_ = total_part_cnt_;
 
   param.part_name_ = partition_name_;
 
@@ -88,54 +135,79 @@ int ObAnalyzeStmt::fill_table_stat_param(ObExecContext &ctx, common::ObTableStat
   OZ (param.subpart_infos_.assign(subpartition_infos_));
   OZ (param.column_params_.assign(column_params_));
   OZ (param.column_group_params_.assign(column_group_params_));
-  OZ (param.part_ids_.assign(part_ids_));
-  OZ (param.subpart_ids_.assign(subpart_ids_));
   OZ (pl::ObDbmsStats::set_param_global_part_id(ctx, param));
   OZ (param.all_part_infos_.assign(all_partition_infos_));
   OZ (param.all_subpart_infos_.assign(all_subpartition_infos_));
 
   if (OB_SUCC(ret)) {
-    param.sample_info_ = sample_info_;
-    param.degree_ = parallel_degree_;
     //analyze stmt default use granularity is based partition type(oracle 12c),maybe refine it later
     param.global_stat_param_.need_modify_ = partition_name_.empty();
-    param.part_stat_param_.need_modify_ = !partition_infos_.empty();
-    param.subpart_stat_param_.need_modify_ = !subpartition_infos_.empty();
+    param.part_stat_param_.need_modify_ = !partition_infos_.empty() && !is_sepcify_subpart_;
+    param.subpart_stat_param_.need_modify_ = !subpartition_infos_.empty() && (partition_name_.empty() || is_sepcify_subpart_);
     param.subpart_stat_param_.gather_histogram_ = gather_subpart_hist_;
+    if (param.global_stat_param_.need_modify_ && param.part_stat_param_.need_modify_) {
+      param.global_stat_param_.gather_approx_ = true;
+    }
+    if (param.part_stat_param_.need_modify_ && param.subpart_stat_param_.need_modify_) {
+      param.part_stat_param_.can_use_approx_ = true;
+    }
   }
 
   LOG_TRACE("link bug", K(param));
   return ret;
 }
 
-int ObAnalyzeStmt::set_part_infos(ObIArray<PartInfo> &part_infos)
+int ObAnalyzeTableInfo::set_part_infos(ObIArray<PartInfo> &part_infos)
 {
   return partition_infos_.assign(part_infos);
 }
 
-int ObAnalyzeStmt::set_subpart_infos(ObIArray<PartInfo> &subpart_infos)
+int ObAnalyzeTableInfo::set_subpart_infos(ObIArray<PartInfo> &subpart_infos)
 {
   return subpartition_infos_.assign(subpart_infos);
 }
 
-int ObAnalyzeStmt::set_part_ids(ObIArray<int64_t> &part_ids)
-{
-  return part_ids_.assign(part_ids);
-}
-
-int ObAnalyzeStmt::set_subpart_ids(ObIArray<int64_t> &subpart_ids)
-{
-  return subpart_ids_.assign(subpart_ids);
-}
-
-int ObAnalyzeStmt::set_all_part_infos(ObIArray<PartInfo> &all_part_infos)
+int ObAnalyzeTableInfo::set_all_part_infos(ObIArray<PartInfo> &all_part_infos)
 {
   return all_partition_infos_.assign(all_part_infos);
 }
 
-int ObAnalyzeStmt::set_all_subpart_infos(ObIArray<PartInfo> &all_subpart_infos)
+int ObAnalyzeTableInfo::set_all_subpart_infos(ObIArray<PartInfo> &all_subpart_infos)
 {
   return all_subpartition_infos_.assign(all_subpart_infos);
+}
+
+int ObAnalyzeStmt::add_table(const ObString database_name,
+                            const uint64_t database_id,
+                            const ObString table_name,
+                            const uint64_t table_id,
+                            const share::schema::ObTableType table_type)
+{
+  int ret = OB_SUCCESS;
+  ObAnalyzeTableInfo table;
+  if (is_mysql_mode()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tables_.count(); ++i) {
+      if (tables_.at(i).get_table_id() == table_id
+          && tables_.at(i).get_database_id() == database_id) {
+        ret = OB_ERR_NONUNIQ_TABLE;
+        LOG_USER_ERROR(OB_ERR_NONUNIQ_TABLE, table_name.length(), table_name.ptr());
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObAnalyzeTableInfo *table = NULL;
+    if (OB_ISNULL(table = tables_.alloc_place_holder())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("Allocate table info from array error", K(ret));
+    } else {
+      table->set_database_name(database_name);
+      table->set_database_id(database_id);
+      table->set_table_name(table_name);
+      table->set_table_id(table_id);
+      table->set_ref_table_type(table_type);
+    }
+  }
+  return ret;
 }
 
 } /* namespace sql */

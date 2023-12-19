@@ -33,6 +33,7 @@ namespace storage
 {
 class ObTenantCheckpointSlogHandler;
 class ObTabletHandle;
+struct ObTabletBlockInfo;
 }
 
 namespace blocksstable
@@ -334,6 +335,7 @@ private:
   };
 
 private:
+  void update_partial_status(const ObMacroBlockMarkerStatus &tmp_status);
   int get_macro_block_info(const MacroBlockId &macro_id, ObMacroBlockInfo &macro_block_info) const;
   bool is_bad_block(const MacroBlockId &macro_block_id);
   int mark_macro_blocks(
@@ -355,8 +357,7 @@ private:
       common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
       ObMacroBlockMarkerStatus &tmp_status);
   int do_mark_tablet_block(
-      const ObIArray<blocksstable::MacroBlockId> &id_arr,
-      const ObTabletMacroType block_type,
+      const ObTabletBlockInfo &block_info,
       MacroBlkIdMap &mark_info,
       common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
       ObMacroBlockMarkerStatus &tmp_status);

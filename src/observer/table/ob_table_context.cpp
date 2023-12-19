@@ -823,12 +823,22 @@ int ObTableCtx::generate_key_range(const ObIArray<ObNewRange> &scan_ranges)
             }
             if (0 == j) {  // padding for startkey
               for (int64_t k = 0; k < padding_num; ++k) {
-                new_objs[k+old_objs_num] = ObObj::make_min_obj();
+                // if inclusive start, should padding min value. else padding max value
+                if (index_key_range.border_flag_.inclusive_start()) {
+                  new_objs[k+old_objs_num] = ObObj::make_min_obj();
+                } else {
+                  new_objs[k+old_objs_num] = ObObj::make_max_obj();
+                }
               }
               index_key_range.start_key_.assign(new_objs, new_objs_num);
             } else {  // padding for endkey
               for (int64_t k = 0; k < padding_num; ++k) {
-                new_objs[k+old_objs_num] = ObObj::make_max_obj();
+                // if inclusive end, should padding max value. else padding min value
+                if (index_key_range.border_flag_.inclusive_end()) {
+                  new_objs[k+old_objs_num] = ObObj::make_max_obj();
+                } else {
+                  new_objs[k+old_objs_num] = ObObj::make_min_obj();
+                }
               }
               index_key_range.end_key_.assign(new_objs, new_objs_num);
             }
@@ -1037,14 +1047,19 @@ int ObTableCtx::init_assignments(const ObTableEntity &entity)
   for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count(); i++) {
     ObTableColumnItem &item = column_items_.at(i);
     if (OB_SUCCESS == entity.get_property(item.column_name_, prop_obj)) {
-      ObTableAssignment assign(&item);
-      assign.assign_value_ = prop_obj; // shadow copy when prop_obj is string type
-      assign.is_assigned_ = true;
-      if (OB_FAIL(assigns_.push_back(assign))) {
-        LOG_WARN("fail to push back assignment", K(ret), K_(assigns), K(assign));
-      } else if (table_schema_->has_generated_column()
-          && OB_FAIL(add_stored_generated_column_assignment(assign))) {
-        LOG_WARN("fail to add soterd generated column assignment", K(ret), K(assign));
+      if (item.rowkey_position_ > 0) {
+        ret = OB_ERR_UPDATE_ROWKEY_COLUMN;
+        LOG_WARN("can not update rowkey column", K(ret));
+      } else {
+        ObTableAssignment assign(&item);
+        assign.assign_value_ = prop_obj; // shadow copy when prop_obj is string type
+        assign.is_assigned_ = true;
+        if (OB_FAIL(assigns_.push_back(assign))) {
+          LOG_WARN("fail to push back assignment", K(ret), K_(assigns), K(assign));
+        } else if (table_schema_->has_generated_column()
+            && OB_FAIL(add_stored_generated_column_assignment(assign))) {
+          LOG_WARN("fail to add soterd generated column assignment", K(ret), K(assign));
+        }
       }
     } else if (item.auto_filled_timestamp_) { // on update current timestamp
       ObTableAssignment assign(&item);

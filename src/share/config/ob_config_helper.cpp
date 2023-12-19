@@ -101,6 +101,106 @@ int64_t ObConfigFreezeTriggerIntChecker::get_write_throttle_trigger_percentage_(
   return percent;
 }
 
+bool ObConfigTxShareMemoryLimitChecker::check(const uint64_t tenant_id, const ObAdminSetConfigItem &t)
+{
+  bool is_valid = false;
+  int64_t value = ObConfigIntParser::get(t.value_.ptr(), is_valid);
+  int64_t memstore_limit = 0;
+  int64_t tx_data_limit = 0;
+  int64_t mds_limit = 0;
+
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    memstore_limit = tenant_config->memstore_limit_percentage;
+    tx_data_limit = tenant_config->_tx_data_memory_limit_percentage;
+    mds_limit = tenant_config->_mds_memory_limit_percentage;
+  } else {
+    is_valid = false;
+    OB_LOG_RET(ERROR, OB_INVALID_CONFIG, "tenant config is invalid", K(tenant_id));
+  }
+
+  if (!is_valid) {
+  } else if (0 == value) {
+    // 0 is default value, which means (_tx_share_memory_limit_percentage = memstore_limit_percentage + 10)
+    is_valid = true;
+  } else if ((value > 0 && value < 100) && (memstore_limit <= value) && (tx_data_limit <= value) &&
+             (mds_limit <= value)) {
+    is_valid = true;
+  } else {
+    is_valid = false;
+  }
+
+  if (!is_valid) {
+    OB_LOG_RET(WARN, OB_INVALID_CONFIG,
+       "update _tx_share_memory_limit_percentage failed",
+       "_tx_share_memory_limit_percentage",   value,
+       "memstore_limit_percentage",           memstore_limit,
+       "_tx_data_memory_limit_percentage",    tx_data_limit,
+       "_mds_memory_limit_percentage",        mds_limit);
+  }
+
+  return is_valid;
+}
+
+bool less_or_equal_tx_share_limit(const uint64_t tenant_id, const int64_t value)
+{
+  bool bool_ret = true;
+  int64_t tx_share_limit = 0;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    tx_share_limit = tenant_config->_tx_share_memory_limit_percentage;
+    if (0 == tx_share_limit) {
+      // 0 is default value, which means (_tx_share_memory_limit_percentage = memstore_limit_percentage + 10)
+      bool_ret = true;
+    } else if (value > 0 && value < 100 && value <= tx_share_limit) {
+      bool_ret = true;
+    } else {
+      bool_ret = false;
+    }
+  } else {
+    bool_ret = false;
+    OB_LOG_RET(ERROR, OB_INVALID_CONFIG, "tenant config is invalid", K(tenant_id));
+  }
+  return bool_ret;
+}
+
+
+bool ObConfigMemstoreLimitChecker::check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t)
+{
+  bool is_valid = false;
+  int64_t value = ObConfigIntParser::get(t.value_.ptr(), is_valid);
+  if (less_or_equal_tx_share_limit(tenant_id, value)) {
+    is_valid = true;
+  } else {
+    is_valid = false;
+  }
+  return is_valid;
+}
+
+bool ObConfigTxDataLimitChecker::check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t)
+{
+  bool is_valid = false;
+  int64_t value = ObConfigIntParser::get(t.value_.ptr(), is_valid);
+  if (less_or_equal_tx_share_limit(tenant_id, value)) {
+    is_valid = true;
+  } else {
+    is_valid = false;
+  }
+  return is_valid;
+}
+
+bool ObConfigMdsLimitChecker::check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t)
+{
+  bool is_valid = false;
+  int64_t value = ObConfigIntParser::get(t.value_.ptr(), is_valid);
+  if (less_or_equal_tx_share_limit(tenant_id, value)) {
+    is_valid = true;
+  } else {
+    is_valid = false;
+  }
+  return is_valid;
+}
+
 bool ObConfigWriteThrottleTriggerIntChecker::check(const uint64_t tenant_id,
                                                    const ObAdminSetConfigItem &t)
 {
@@ -1023,6 +1123,11 @@ bool ObKvFeatureModeParser::parse(const char *str, uint8_t *arr, int64_t len)
     }
   }
   return bret;
+}
+
+bool ObConfigIndexStatsModeChecker::check(const ObConfigItem &t) const {
+  const ObString tmp_str(t.str());
+  return 0 == tmp_str.case_compare("SAMPLED") || 0 == tmp_str.case_compare("ALL");
 }
 
 } // end of namepace common

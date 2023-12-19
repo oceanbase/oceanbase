@@ -21,6 +21,7 @@
 #include "objit/common/ob_item_type.h"
 #include "sql/engine/ob_bit_vector.h"
 #include "common/ob_common_utility.h"
+#include "share/schema/ob_schema_struct.h"
 
 namespace oceanbase
 {
@@ -604,6 +605,7 @@ public:
               K_(expr_ctx_id),
               K_(extra),
               K_(batch_idx_mask),
+              K_(local_session_var_id),
               KP(this));
 
 private:
@@ -710,6 +712,7 @@ public:
   ObExprBasicFuncs *basic_funcs_;
   uint64_t batch_idx_mask_;
   ObIExprExtraInfo *extra_info_;
+  int64_t local_session_var_id_;
 };
 
 // helper template to access ObExpr::extra_

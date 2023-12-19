@@ -109,6 +109,7 @@ public:
   { set_sql_throttle_current_priority(100); }
 
   OB_INLINE void set_session(sql::ObSQLSessionInfo* session) { session_ = session; }
+  OB_INLINE sql::ObSQLSessionInfo *get_session() { return session_; }
 
 public:
   static void set_compatibility_mode(CompatMode mode);
@@ -248,7 +249,7 @@ class ObRuntimeContext
   OB_UNIS_VERSION(1);
 public:
   ObRuntimeContext()
-      : compat_mode_(Worker::CompatMode::MYSQL)
+      : compat_mode_(Worker::CompatMode::INVALID)
   {}
   Worker::CompatMode compat_mode_;
 #ifdef ERRSIM

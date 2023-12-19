@@ -147,5 +147,18 @@ void ObAlterTableStmt::set_table_id(const uint64_t table_id)
   alter_table_arg_.alter_table_schema_.set_table_id(table_id);
 }
 
+int ObAlterTableStmt::fill_session_vars(const ObBasicSessionInfo &session) {
+  int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(session.get_effective_tenant_id(), tenant_data_version))) {
+    SQL_RESV_LOG(WARN, "get tenant data version failed", K(ret));
+  } else if (tenant_data_version < DATA_VERSION_4_2_2_0) {
+    //do nothing
+  } else if (OB_FAIL(alter_table_arg_.local_session_var_.load_session_vars(&session))) {
+    SQL_RESV_LOG(WARN, "load local session vars failed", K(ret));
+  }
+  return ret;
+}
+
 } //namespace sql
 } //namespace oceanbase

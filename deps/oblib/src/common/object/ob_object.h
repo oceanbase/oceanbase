@@ -501,6 +501,7 @@ struct ObLobId
   bool operator >(const ObLobId &other) const;
   TO_STRING_KV(K_(tablet_id), K_(lob_id));
   void reset();
+  inline bool is_valid() const {return tablet_id_ != 0 && lob_id_ != 0;}
   uint64_t tablet_id_;
   uint64_t lob_id_;
 };

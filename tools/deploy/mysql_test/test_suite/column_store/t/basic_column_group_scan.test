@@ -14,7 +14,7 @@ connection conn1;
 --disable_warnings
 drop table if exists ct1;
 --enable_warnings
-create table ct1(c1 int, c2 int) with column group for all columns, each column;
+create table ct1(c1 int, c2 int) with column group (all columns, each column);
 
 --disable_query_log
 --let $count = 0

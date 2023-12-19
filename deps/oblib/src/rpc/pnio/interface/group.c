@@ -588,3 +588,17 @@ int dispatch_accept_fd_to_certain_group(int fd, uint64_t gid)
   }
   return ret;
 }
+
+PN_API int pn_get_fd(uint64_t req_id)
+{
+  int fd = -1;
+  pn_resp_ctx_t* ctx = (typeof(ctx))req_id;
+  if (unlikely(NULL == ctx)) {
+    rk_warn("invalid arguments, req_id=%p", ctx);
+  } else {
+    pkts_t* pkts = &ctx->pn->pkts;
+    pkts_sk_t* sock = (typeof(sock))idm_get(&pkts->sk_map, ctx->sock_id);
+    fd = sock->fd;
+  }
+  return fd;
+}

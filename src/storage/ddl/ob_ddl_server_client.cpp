@@ -55,6 +55,7 @@ int ObDDLServerClient::create_hidden_table(
     const obrpc::ObCreateHiddenTableArg &arg,
     obrpc::ObCreateHiddenTableRes &res,
     int64_t &snapshot_version,
+    uint64_t &data_format_version,
     sql::ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
@@ -90,7 +91,7 @@ int ObDDLServerClient::create_hidden_table(
     LOG_WARN("failed to set register task id", K(ret), K(res));
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(wait_task_reach_pending(arg.tenant_id_, res.task_id_, snapshot_version, *GCTX.sql_proxy_))) {
+    if (OB_FAIL(wait_task_reach_pending(arg.tenant_id_, res.task_id_, snapshot_version, data_format_version, *GCTX.sql_proxy_))) {
       LOG_WARN("failed to wait table lock. remove register task id and abort redef table task.", K(ret), K(arg), K(res));
     }
 #ifdef ERRSIM
@@ -130,6 +131,7 @@ int ObDDLServerClient::start_redef_table(const obrpc::ObStartRedefTableArg &arg,
   ObAddr rs_leader_addr;
   obrpc::ObCommonRpcProxy *common_rpc_proxy = GCTX.rs_rpc_proxy_;
   int64_t unused_snapshot_version = OB_INVALID_VERSION;
+  uint64_t unused_data_format_version = 0;
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(arg));
@@ -142,7 +144,7 @@ int ObDDLServerClient::start_redef_table(const obrpc::ObStartRedefTableArg &arg,
     LOG_WARN("failed to start redef table", KR(ret), K(arg));
   } else if (OB_FAIL(OB_DDL_HEART_BEAT_TASK_CONTAINER.set_register_task_id(res.task_id_, res.tenant_id_))) {
     LOG_WARN("failed to set register task id", K(ret), K(res));
-  } else if (OB_FAIL(wait_task_reach_pending(arg.orig_tenant_id_, res.task_id_, unused_snapshot_version, *GCTX.sql_proxy_))) {
+  } else if (OB_FAIL(wait_task_reach_pending(arg.orig_tenant_id_, res.task_id_, unused_snapshot_version, unused_data_format_version, *GCTX.sql_proxy_))) {
     LOG_WARN("failed to wait table lock. remove register task id and abort redef table task.", K(ret), K(arg), K(res));
     int tmp_ret = OB_SUCCESS;
     obrpc::ObAbortRedefTableArg abort_redef_table_arg;
@@ -383,11 +385,18 @@ int ObDDLServerClient::build_ddl_single_replica_response(const obrpc::ObDDLBuild
   return ret;
 }
 
-int ObDDLServerClient::wait_task_reach_pending(const uint64_t tenant_id, const int64_t task_id, int64_t &snapshot_version, ObMySQLProxy &sql_proxy)
+int ObDDLServerClient::wait_task_reach_pending(
+    const uint64_t tenant_id,
+    const int64_t task_id,
+    int64_t &snapshot_version,
+    uint64_t &data_format_version,
+    ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
-  const int64_t retry_interval = 100 * 1000;
   ObSqlString sql_string;
+  snapshot_version = 0;
+  data_format_version = 0;
+  const int64_t retry_interval = 100 * 1000;
   THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + OB_MAX_USER_SPECIFIED_TIMEOUT);
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     sqlclient::ObMySQLResult *result = NULL;
@@ -398,16 +407,9 @@ int ObDDLServerClient::wait_task_reach_pending(const uint64_t tenant_id, const i
       LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(task_id));
     } else {
       while (OB_SUCC(ret)) {
-        if (OB_FAIL(sql_string.assign_fmt("SELECT status, snapshot_version FROM %s WHERE task_id = %lu", share::OB_ALL_DDL_TASK_STATUS_TNAME, task_id))) {
-          LOG_WARN("assign sql string failed", K(ret), K(task_id));
-        } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, WAIT_REDEF_TASK_REACH_PENDING_SLOW))) {
-          LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(task_id));
-        } else if (OB_FAIL(sql_proxy.read(res, tenant_id, sql_string.ptr()))) {
-          LOG_WARN("fail to execute sql", K(ret), K(sql_string));
-        } else if (OB_ISNULL(result = res.get_result())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("error unexpected, query result must not be NULL", K(ret));
-        } else if (OB_FAIL(result->next())) {
+        share::ObDDLTaskStatus task_status = share::ObDDLTaskStatus::PREPARE;
+        if (OB_FAIL(ObDDLUtil::get_data_information(tenant_id, task_id, data_format_version,
+            snapshot_version, task_status))) {
           if (OB_LIKELY(OB_ITER_END == ret)) {
             ret = OB_ENTRY_NOT_EXIST;
             ObAddr unused_addr;
@@ -423,16 +425,10 @@ int ObDDLServerClient::wait_task_reach_pending(const uint64_t tenant_id, const i
             }
             LOG_WARN("ddl task execute end", K(ret));
           } else {
-            LOG_WARN("fail to get next row", K(ret));
+            LOG_WARN("get information failed", K(ret), K(tenant_id), K(task_id));
           }
-        } else {
-          int task_status = 0;
-          EXTRACT_INT_FIELD_MYSQL(*result, "status", task_status, int);
-          EXTRACT_UINT_FIELD_MYSQL(*result, "snapshot_version", snapshot_version, uint64_t);
-          share::ObDDLTaskStatus task_cur_status = static_cast<share::ObDDLTaskStatus>(task_status);
-          if (rootserver::ObTableRedefinitionTask::check_task_status_is_pending(task_cur_status)) {
-            break;
-          }
+        } else if (rootserver::ObTableRedefinitionTask::check_task_status_is_pending(task_status)) {
+          break;
         }
       }
     }

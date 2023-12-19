@@ -32,6 +32,7 @@
 #include "share/external_table/ob_external_table_file_mgr.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "lib/container/ob_array_wrap.h"
+#include "share/index_usage/ob_index_usage_info_mgr.h"
 
 namespace oceanbase
 {
@@ -1362,6 +1363,19 @@ int ObTableScanOp::inner_close()
   if (OB_SUCC(ret)) {
     fill_sql_plan_monitor_info();
   }
+
+  if (OB_SUCC(ret) && MY_SPEC.should_scan_index()) {
+    ObSQLSessionInfo *session = GET_MY_SESSION(ctx_);
+    if (OB_NOT_NULL(session)) {
+      uint64_t tenant_id = session->get_effective_tenant_id();
+      uint64_t index_id = MY_CTDEF.scan_ctdef_.ref_table_id_;
+      oceanbase::share::ObIndexUsageInfoMgr* mgr = MTL(oceanbase::share::ObIndexUsageInfoMgr*);
+      if (OB_NOT_NULL(mgr)) {
+        mgr->update(tenant_id, index_id);
+      }
+    }
+  }
+
   if (OB_SUCC(ret)) {
     iter_end_ = false;
     need_init_before_get_row_ = true;
@@ -2704,6 +2718,7 @@ int ObTableScanOp::report_ddl_column_checksum()
     }
 
     if (OB_SUCC(ret)) {
+      LOG_INFO("report ddl checksum table scan", K(tablet_id), K(checksum_items));
       if (OB_FAIL(ObDDLChecksumOperator::update_checksum(checksum_items, *GCTX.sql_proxy_))) {
         LOG_WARN("fail to update checksum", K(ret));
       } else {

@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include <gtest/gtest.h>
+#include <thread>
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/mockcontainer/mock_ob_iterator.h"
 #include "storage/mockcontainer/mock_ob_end_trans_callback.h"
@@ -365,6 +366,79 @@ TEST_F(TestTrans, freeze)
   ASSERT_EQ(OB_SUCCESS, ls->logstream_freeze());
 }
 */
+TEST_F(TestTrans, transfer_block)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = MTL_ID();
+  ObLSID ls_id(100);
+  ObTabletID tablet_id(1001);
+
+  LOG_INFO("start transaction");
+  ObTxDesc *tx_desc = NULL;
+  ObTxReadSnapshot snapshot;
+  prepare_tx_desc(tx_desc, snapshot);
+  // prepare insert param
+  const char *ins_str =
+      "bigint    dml          \n"
+      "300        T_DML_INSERT \n";
+  insert_rows(ls_id, tablet_id, *tx_desc, snapshot, ins_str);
+
+  ObTransService *tx_service = MTL(ObTransService*);
+  ObPartTransCtx *part_ctx;
+  ASSERT_EQ(OB_SUCCESS, tx_service->tx_ctx_mgr_.get_tx_ctx(ls_id, tx_desc->tx_id_, false, part_ctx));
+  part_ctx->sub_state_.set_transfer_blocking();
+  ASSERT_EQ(OB_SUCCESS, tx_service->tx_ctx_mgr_.revert_tx_ctx(part_ctx));
+
+  std::thread th([part_ctx] () {
+    ::sleep(3);
+    part_ctx->sub_state_.clear_transfer_blocking();
+  });
+
+  LOG_INFO("commit transaction");
+  ASSERT_EQ(OB_SUCCESS, tx_service->commit_tx(*tx_desc, ObTimeUtility::current_time() + 100000000));
+
+  LOG_INFO("release transaction");
+  tx_service->release_tx(*tx_desc);
+
+  th.join();
+}
+
+TEST_F(TestTrans, transfer_block2)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = MTL_ID();
+  ObLSID ls_id(100);
+  ObTabletID tablet_id(1001);
+
+  LOG_INFO("start transaction");
+  ObTxDesc *tx_desc = NULL;
+  ObTxReadSnapshot snapshot;
+  prepare_tx_desc(tx_desc, snapshot);
+  // prepare insert param
+  const char *ins_str =
+      "bigint    dml          \n"
+      "400        T_DML_INSERT \n";
+  insert_rows(ls_id, tablet_id, *tx_desc, snapshot, ins_str);
+
+  ObTransService *tx_service = MTL(ObTransService*);
+  ObPartTransCtx *part_ctx;
+  ASSERT_EQ(OB_SUCCESS, tx_service->tx_ctx_mgr_.get_tx_ctx(ls_id, tx_desc->tx_id_, false, part_ctx));
+  bool is_blocked = false;
+  part_ctx->sub_state_.set_transfer_blocking();
+  ASSERT_EQ(OB_SUCCESS, tx_service->tx_ctx_mgr_.revert_tx_ctx(part_ctx));
+
+  std::thread th([part_ctx] () {
+    ::sleep(3);
+    part_ctx->sub_state_.clear_transfer_blocking();
+  });
+
+  LOG_INFO("rollback transaction");
+  ASSERT_EQ(OB_SUCCESS, tx_service->rollback_tx(*tx_desc));
+
+  LOG_INFO("release transaction");
+  tx_service->release_tx(*tx_desc);
+  th.join();
+}
 
 TEST_F(TestTrans, remove_ls)
 {
@@ -381,7 +455,7 @@ int main(int argc, char **argv)
 {
   system("rm -rf test_trans.log*");
   OB_LOGGER.set_file_name("test_trans.log",true, false, "test_trans.log", "test_trans.log");
-  OB_LOGGER.set_log_level("INFO");
+  OB_LOGGER.set_log_level("DEBUG");
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

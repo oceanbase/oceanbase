@@ -100,7 +100,7 @@ public:
   ObMetaDiskAddr tablet_macro_info_addr_;
   ObTabletCreateDeleteMdsUserData tablet_status_cache_;
   bool is_row_store_;
-  ObITable **ddl_kvs_;
+  ObDDLKV **ddl_kvs_;
   int64_t ddl_kv_count_;
   memtable::ObIMemtable *memtables_[MAX_MEMSTORE_CNT];
   int64_t memtable_count_;
@@ -226,11 +226,12 @@ public:
       ObBlockInfoSet &block_info_set);
   static int transform_empty_shell(const ObTablet &old_tablet, ObTabletHandle &new_handle);
 private:
+  static int inc_ref_with_macro_iter(ObTablet &tablet, ObMacroInfoIterator &macro_iter);
   static int do_copy_ids(
       blocksstable::ObMacroIdIterator &iter,
       ObBlockInfoSet::TabletMacroSet &id_set);
   static int check_tablet_meta_ids(
-      const ObBlockInfoArray<blocksstable::MacroBlockId> &meta_id_arr,
+      const ObIArray<blocksstable::MacroBlockId> &shared_meta_id_arr,
       const ObTablet &tablet);
   static int acquire_tablet(
       const ObTabletPoolType &type,
@@ -261,7 +262,8 @@ private:
       common::ObIArray<ObSharedBlocksWriteCtx> &total_write_ctxs,
       ObTabletHandle &new_handle,
       ObTabletSpaceUsage &space_usage,
-      ObTabletMacroInfo &macro_info);
+      ObTabletMacroInfo &macro_info,
+      ObIArray<blocksstable::MacroBlockId> &shared_meta_id_arr);
   int modify_and_fill_tablet(
       const ObTablet &old_tablet,
       ObITabletMetaModifier &modifier,

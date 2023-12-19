@@ -115,11 +115,34 @@ public:
              share::schema::ObTableSchema &table);
   static int construct_inner_table_schemas(
              const uint64_t tenant_id,
-             common::ObIArray<share::schema::ObTableSchema> &tables);
+             common::ObSArray<share::schema::ObTableSchema> &tables,
+             common::ObIAllocator &allocator);
   static int add_sys_table_lob_aux_table(
              uint64_t tenant_id,
              uint64_t data_table_id,
              ObIArray<ObTableSchema> &table_schemas);
+  static int build_column_group(
+             const share::schema::ObTableSchema &table_schema,
+             const uint64_t tenant_id,
+             const share::schema::ObColumnGroupType &cg_type,
+             const common::ObString &cg_name,
+             const common::ObIArray<uint64_t> &column_ids,
+             const uint64_t cg_id,
+             share::schema::ObColumnGroupSchema &column_group);
+  static int build_all_column_group(
+             const share::schema::ObTableSchema &table_schema,
+             const uint64_t tenant_id,
+             const uint64_t column_group_id,
+             share::schema::ObColumnGroupSchema &column_group_schema);
+  static int build_single_column_group(
+             const share::schema::ObTableSchema &table_schema,
+             share::schema::ObColumnSchemaV2 *column_schema,
+             const uint64_t tenant_id,
+             const uint64_t column_group_id,
+             share::schema::ObColumnGroupSchema &column_group_schema);
+  static int mock_default_cg(
+              const uint64_t tenant_id,
+              share::schema::ObTableSchema &new_table_schema);
 
   // Optimized method to batch get latest table schemas from cache or inner_table automatically.
   //

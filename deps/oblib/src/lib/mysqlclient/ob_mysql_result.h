@@ -602,6 +602,27 @@
     }\
   }
 
+#define EXTRACT_INT_FIELD_FROM_NUMBER_MYSQL(result, column_name, field) \
+  if (OB_SUCC(ret)) \
+  { \
+    common::number::ObNumber number_value; \
+    char buffer[common::number::ObNumber::MAX_NUMBER_ALLOC_BUFF_SIZE]; \
+    ObDataBuffer data_buffer(buffer, sizeof(buffer)); \
+    int64_t context_val = -1; \
+    if (OB_SUCCESS != (ret = (result).get_number(#column_name, number_value, data_buffer)))  \
+    { \
+      SQL_LOG(WARN, "fail to get column in row. ", "column_name", #column_name, K(ret)); \
+    } \
+    else if (!number_value.is_valid_int64(context_val)) { \
+      ret = OB_DATA_OUT_OF_RANGE; \
+      SQL_LOG(WARN, "failed to get int64 from number", K(number_value), K(ret)); \
+    } \
+    else \
+    { \
+      field = context_val; \
+    }\
+  }
+
 #define EXTRACT_NUMBER_FIELD_MYSQL(result, column_name, number_value) \
   if (OB_SUCC(ret)) \
   { \
@@ -1330,6 +1351,71 @@
       field = static_cast<uint64_t>(int_value); \
     }\
   }
+
+#define EXTRACT_TIMESTAMP_FIELD_TO_CLASS_MYSQL(result, column_name, obj, tz_info) \
+  if (OB_SUCC(ret)) \
+  { \
+    int64_t timestamp_value = OB_INVALID_TIMESTAMP; \
+    if (OB_SUCCESS == (ret = (result).get_timestamp(#column_name, tz_info, timestamp_value)))  \
+    { \
+      (obj).set_##column_name(timestamp_value); \
+    } \
+    else \
+    { \
+      SQL_LOG(WARN, "fail to get column in row. ", "column_name", #column_name, K(ret)); \
+    }\
+  }
+
+#define EXTRACT_TIMESTAMP_FIELD_TO_CLASS_MYSQL_SKIP_RET(result, column_name, obj, tz_info) \
+  if (OB_SUCC(ret)) \
+  { \
+    int64_t timestamp_value = OB_INVALID_TIMESTAMP; \
+    if (OB_SUCCESS == (ret = (result).get_timestamp(#column_name, tz_info, timestamp_value)))  \
+    { \
+      (obj).set_##column_name(timestamp_value); \
+    } \
+    else if (OB_ERR_NULL_VALUE == ret || OB_ERR_COLUMN_NOT_FOUND == ret) \
+    { \
+      ret = OB_SUCCESS; \
+      (obj).set_##column_name(OB_INVALID_TIMESTAMP); \
+    } \
+    else \
+    { \
+      SQL_LOG(WARN, "fail to get column in row. ", "column_name", #column_name, K(ret)); \
+    }\
+  }
+
+// timestamp -> int64_t
+
+#define EXTRACT_TIMESTAMP_FIELD_MYSQL(result, col_name, v)            \
+  if (OB_SUCC(ret))                                                     \
+  {                                                                     \
+    ObObj obj;                                                          \
+    OZ ((result).get_obj(col_name, obj));                               \
+    if (OB_SUCC(ret)) {                                                 \
+      if (obj.is_null()) {                                              \
+        ret = OB_ERR_NULL_VALUE;                                        \
+      } else {                                                          \
+        OZ (obj.get_timestamp(v));                                      \
+      }                                                                 \
+    }                                                                   \
+  }
+
+#define EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(result, col_name, v)   \
+  do {                                                                  \
+    ObObj obj;                                                          \
+    OZ ((result).get_obj(col_name, obj));                               \
+    if (OB_SUCC(ret)) {                                                 \
+      if (obj.is_null()) {                                              \
+        v = static_cast<int64_t>(0);                                    \
+      } else {                                                          \
+        OZ (obj.get_timestamp(v));                                      \
+      }                                                                 \
+    } else if (OB_ERR_COLUMN_NOT_FOUND == ret) {                        \
+      ret = OB_SUCCESS;                                                 \
+      v = static_cast<int64_t>(0);                                      \
+    }                                                                   \
+  } while (false)
 
 namespace oceanbase
 {

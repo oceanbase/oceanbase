@@ -2547,7 +2547,9 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
       int16_t len = 0;
       ObString tmp_string(static_cast<int32_t>(node->str_len_), node->str_value_);
       bool use_decimalint_as_result = false;
-      if (enable_decimal_int_type && !is_from_pl) {
+      int tmp_ret = OB_E(EventTable::EN_ENABLE_ORA_DECINT_CONST) OB_SUCCESS;
+
+      if (enable_decimal_int_type && !is_from_pl && OB_SUCC(tmp_ret)) {
         // 如果开启decimal int类型，T_NUMBER解析成decimal int
         int32_t val_len = 0;
         ret = wide::from_string(node->str_value_, node->str_len_, allocator, scale, precision,
@@ -4404,7 +4406,8 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
                                                    ObIArray<ObColumnSchemaV2 *> &resolved_cols,
                                                    ObColumnSchemaV2 &generated_column,
                                                    ObRawExpr *&expr,
-                                                   const PureFunctionCheckStatus check_status)
+                                                   const PureFunctionCheckStatus check_status,
+                                                   bool coltype_not_defined)
 {
   int ret = OB_SUCCESS;
   const ParseNode *expr_node = NULL;
@@ -4422,7 +4425,8 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
                                                    resolved_cols,
                                                    generated_column,
                                                    expr,
-                                                   check_status))) {
+                                                   check_status,
+                                                   coltype_not_defined))) {
     LOG_WARN("resolve generated column expr failed", K(ret), K(expr_str));
   }
   return ret;
@@ -4562,7 +4566,8 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
                                                    ObIArray<ObColumnSchemaV2 *> &resolved_cols,
                                                    ObColumnSchemaV2 &generated_column,
                                                    ObRawExpr *&expr,
-                                                   const PureFunctionCheckStatus check_status)
+                                                   const PureFunctionCheckStatus check_status,
+                                                   bool coltype_not_defined)
 {
   int ret = OB_SUCCESS;
   ObColumnSchemaV2 *col_schema = NULL;
@@ -4688,19 +4693,6 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
         LOG_WARN("transform udt col expr for generated column failed", K(ret));
       }
     }
-    if (OB_SUCC(ret) &&
-        (ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status ||
-         ObResolverUtils::CHECK_FOR_GENERATED_COLUMN == check_status)) {
-      if (OB_FAIL(ObRawExprUtils::check_is_valid_generated_col(expr, expr_factory->get_allocator()))) {
-        if (OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION == ret
-                 && ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status) {
-          ret = OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED;
-          LOG_WARN("sysfunc in expr is not valid for generated column", K(ret), K(*expr));
-        } else {
-          LOG_WARN("fail to check if the sysfunc exprs are valid in generated columns", K(ret));
-        }
-      }
-    }
     const ObObjType expr_datatype = expr->get_result_type().get_type();
     const ObCollationType expr_cs_type = expr->get_result_type().get_collation_type();
     const ObObjType dst_datatype = generated_column.get_data_type();
@@ -4807,6 +4799,57 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
       } else {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("inconsistent datatypes", K(expr->get_result_type().get_type()));
+      }
+    }
+    if (OB_SUCC(ret) && generated_column.is_generated_column()) {
+      //set local session info for generate columns
+      ObExprResType cast_dst_type;
+      cast_dst_type.set_meta(generated_column.get_meta_type());
+      cast_dst_type.set_accuracy(generated_column.get_accuracy());
+      ObRawExpr *expr_with_implicit_cast = NULL;
+      //only formalize once
+      if (OB_FAIL(ObRawExprUtils::erase_operand_implicit_cast(expr, expr))) {
+        LOG_WARN("fail to remove implicit cast", K(ret));
+      } else if (coltype_not_defined) {
+        expr_with_implicit_cast = expr;
+        if (OB_FAIL(expr_with_implicit_cast->formalize(session_info, true))) {
+          LOG_WARN("fail to formalize with local session info", K(ret));
+        }
+      } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(expr_factory, session_info,
+                          *expr, cast_dst_type, expr_with_implicit_cast))) {
+        LOG_WARN("try add cast above failed", K(ret));
+      } else if (OB_FAIL(expr_with_implicit_cast->formalize(session_info, true))) {
+        LOG_WARN("fail to formalize with local session info", K(ret));
+      }
+      if (OB_SUCC(ret) &&
+        (ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status ||
+         ObResolverUtils::CHECK_FOR_GENERATED_COLUMN == check_status)) {
+        if (OB_FAIL(ObRawExprUtils::check_is_valid_generated_col(expr_with_implicit_cast, expr_factory->get_allocator()))) {
+          if (OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION == ret
+                  && ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status) {
+            ret = OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED;
+            LOG_WARN("sysfunc in expr is not valid for generated column", K(ret), K(*expr));
+          } else {
+            LOG_WARN("fail to check if the sysfunc exprs are valid in generated columns", K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        uint64_t tenant_data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(session_info->get_effective_tenant_id(), tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (tenant_data_version < DATA_VERSION_4_2_2_0) {
+          //do nothing
+        } else if (OB_ISNULL(expr_with_implicit_cast)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret), KP(expr_with_implicit_cast));
+        } else {
+          if (OB_FAIL(ObRawExprUtils::extract_local_vars_for_gencol(expr_with_implicit_cast,
+                                                                    session_info->get_sql_mode(),
+                                                                    generated_column))) {
+            LOG_WARN("fail to set local sysvars", K(ret));
+          }
+        }
       }
     }
     if (OB_FAIL(ret)) {
@@ -8413,6 +8456,108 @@ int ObResolverUtils::is_negative_ora_nmb(const ObObjParam &obj_param, bool &is_n
   return ret;
 }
 
+int ObResolverUtils::check_allowed_alter_operations_for_mlog(
+    const uint64_t tenant_id,
+    const obrpc::ObAlterTableArg &arg,
+    const share::schema::ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_version))) {
+    SQL_RESV_LOG(WARN, "failed to get data version", K(ret));
+  } else if (tenant_version < DATA_VERSION_4_3_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "mview before 4.3 is");
+  } else if (table_schema.is_mlog_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("alter materialized view log is not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter materialized view log is");
+  } else if (table_schema.has_mlog_table()) {
+    bool is_alter_pk = false;
+    ObIndexArg::IndexActionType pk_action_type;
+    for (int64_t i = 0; OB_SUCC(ret) && (i < arg.index_arg_list_.count()); ++i) {
+      const ObIndexArg *index_arg = arg.index_arg_list_.at(i);
+      if (OB_ISNULL(index_arg)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("index arg is null", KR(ret));
+      } else if ((ObIndexArg::ADD_PRIMARY_KEY == index_arg->index_action_type_)
+          || (ObIndexArg::DROP_PRIMARY_KEY == index_arg->index_action_type_)
+          || (ObIndexArg::ALTER_PRIMARY_KEY == index_arg->index_action_type_)) {
+        is_alter_pk = true;
+        pk_action_type = index_arg->index_action_type_;
+        break;
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if ((arg.is_alter_indexs_ && !is_alter_pk)
+        || (arg.is_update_global_indexes_ && !arg.is_alter_partitions_)
+        || (arg.is_alter_options_ // the following allowed options change does not affect mlog
+            && (arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TABLE_DOP)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::CHARSET_TYPE)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::COLLATION_TYPE)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::COMMENT)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::EXPIRE_INFO)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::PRIMARY_ZONE)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::REPLICA_NUM)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::SEQUENCE_COLUMN_ID)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::USE_BLOOM_FILTER)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::LOCALITY)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::SESSION_ID)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::SESSION_ACTIVE_TIME)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::ENABLE_ROW_MOVEMENT)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::FORCE_LOCALITY)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::ENCRYPTION)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TABLESPACE_ID)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TTL_DEFINITION)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::KV_ATTRIBUTES)))) {
+      // supported operations
+    } else {
+      // unsupported operations
+      ret = OB_NOT_SUPPORTED;
+
+      // generate more specific error messages
+      if (is_alter_pk) {
+        if (ObIndexArg::ADD_PRIMARY_KEY == pk_action_type) {
+          LOG_WARN("add primary key to table with materialized view log is not supported",
+              KR(ret), K(table_schema.get_table_name()));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "add primary key to table with materialized view log is");
+        } else if (ObIndexArg::DROP_PRIMARY_KEY == pk_action_type) {
+          LOG_WARN("drop the primary key of table with materialized view log is not supported",
+              KR(ret), K(table_schema.get_table_name()));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop the primary key of table with materialized view log is");
+        } else {
+          LOG_WARN("alter the primary key of table with materialized view log is not supported",
+              KR(ret), K(table_schema.get_table_name()));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter the primary key of table with materialized view log is");
+        }
+      } else if (arg.is_alter_columns_) {
+        LOG_WARN("alter column of table with materialized view log is not supported",
+            KR(ret), K(table_schema.get_table_name()));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter column of table with materialized view log is");
+      } else if (arg.is_alter_partitions_) {
+        LOG_WARN("alter partition of table with materialized view log is not supported",
+            KR(ret), K(table_schema.get_table_name()));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter partition of table with materialized view log is");
+      } else if (arg.is_alter_options_) {
+        if (arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TABLE_NAME)) {
+          LOG_WARN("alter name of table with materialized view log is not supported",
+              KR(ret), K(table_schema.get_table_name()));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter name of table with materialized view log is");
+        } else {
+          LOG_WARN("alter option of table with materialized view log is not supported",
+              KR(ret), K(table_schema.get_table_name()), K(arg));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter option of table with materialized view log is");
+        }
+      } else {
+        LOG_WARN("alter table with materialized view log is not supported",
+            KR(ret), K(table_schema.get_table_name()), K(arg));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table with materialized view log is");
+      }
+    }
+  }
+  return ret;
+}
 
 }  // namespace sql
 }  // namespace oceanbase

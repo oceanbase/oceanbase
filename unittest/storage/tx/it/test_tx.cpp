@@ -21,11 +21,46 @@
 #include "tx_node.h"
 #include "../mock_utils/async_util.h"
 #include "test_tx_dsl.h"
+
 namespace oceanbase
 {
 using namespace ::testing;
 using namespace transaction;
 using namespace share;
+
+
+static ObSharedMemAllocMgr MTL_MEM_ALLOC_MGR;
+
+namespace share {
+int ObTenantTxDataAllocator::init(const char *label)
+{
+  int ret = OB_SUCCESS;
+  ObMemAttr mem_attr;
+  throttle_tool_ = &(MTL_MEM_ALLOC_MGR.share_resource_throttle_tool());
+  if (OB_FAIL(slice_allocator_.init(
+                 storage::TX_DATA_SLICE_SIZE, OB_MALLOC_NORMAL_BLOCK_SIZE, block_alloc_, mem_attr))) {
+    SHARE_LOG(WARN, "init slice allocator failed", KR(ret));
+  } else {
+    slice_allocator_.set_nway(ObTenantTxDataAllocator::ALLOC_TX_DATA_MAX_CONCURRENCY);
+    is_inited_ = true;
+  }
+  return ret;
+}
+int ObMemstoreAllocator::init()
+{
+  throttle_tool_ = &MTL_MEM_ALLOC_MGR.share_resource_throttle_tool();
+  return arena_.init();
+}
+int ObMemstoreAllocator::AllocHandle::init()
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = 1;
+  ObSharedMemAllocMgr *mtl_alloc_mgr = &MTL_MEM_ALLOC_MGR;
+  ObMemstoreAllocator &host = mtl_alloc_mgr->memstore_allocator();
+  (void)host.init_handle(*this);
+  return ret;
+}
+};  // namespace share
 
 namespace concurrent_control
 {
@@ -41,7 +76,6 @@ int check_sequence_set_violation(const concurrent_control::ObWriteFlag ,
   return OB_SUCCESS;
 }
 }
-
 class ObTestTx : public ::testing::Test
 {
 public:
@@ -49,12 +83,13 @@ public:
   {
     oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
     ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(1001);
-    const uint64_t tv = ObTimeUtility::current_time();
-    ObCurTraceId::set(&tv);
+    ObAddr ip_port(ObAddr::VER::IPV4, "119.119.0.1",2023);
+    ObCurTraceId::init(ip_port);
     GCONF._ob_trans_rpc_timeout = 500;
     ObClockGenerator::init();
     const testing::TestInfo* const test_info =
       testing::UnitTest::GetInstance()->current_test_info();
+    MTL_MEM_ALLOC_MGR.init();
     auto test_name = test_info->name();
     _TRANS_LOG(INFO, ">>>> starting test : %s", test_name);
   }
@@ -101,6 +136,57 @@ TEST_F(ObTestTx, basic)
   ASSERT_EQ(114, val1);
   ASSERT_EQ(115, val2);
   COMMIT_TX(n1, tx, 500 * 1000);
+}
+
+TEST_F(ObTestTx, tx_2pc_blocking_and_get_gts_callback_concurrent_problem)
+{
+  GCONF._ob_trans_rpc_timeout = 50;
+  ObTxNode::reset_localtion_adapter();
+
+  START_ONE_TX_NODE(n1);
+  PREPARE_TX(n1, tx);
+  PREPARE_TX_PARAM(tx_param);
+  GET_READ_SNAPSHOT(n1, tx, tx_param, snapshot);
+  ASSERT_EQ(OB_SUCCESS, n1->start_tx(tx, tx_param));
+  ASSERT_EQ(OB_SUCCESS, n1->write(tx, snapshot, 100, 112));
+
+  ObPartTransCtx *part_ctx = NULL;
+  ObLSID ls_id(1);
+  ASSERT_EQ(OB_SUCCESS, n1->get_tx_ctx(ls_id, tx.tx_id_, part_ctx));
+
+  // mock gts waiting
+  part_ctx->sub_state_.set_gts_waiting();
+
+  // mock transfer
+  part_ctx->sub_state_.set_transfer_blocking();
+
+  ObMonotonicTs stc(99);
+  ObMonotonicTs srr(100);
+  ObMonotonicTs rgt(100);
+  share::SCN scn;
+  scn.convert_for_gts(100);
+  part_ctx->stc_ = stc;
+  part_ctx->part_trans_action_ = ObPartTransAction::COMMIT;
+  EXPECT_EQ(OB_SUCCESS, part_ctx->get_gts_callback(srr, scn, rgt));
+  EXPECT_EQ(true, part_ctx->ctx_tx_data_.get_commit_version() >= scn);
+  ObLSID dst_ls_id(2);
+  share::SCN start_scn;
+  share::SCN end_scn;
+  start_scn.convert_for_gts(888);
+  end_scn.convert_for_gts(1000);
+  part_ctx->ctx_tx_data_.set_start_log_ts(start_scn);
+  ObSEArray<ObTabletID, 8> array;
+  ObTxCtxMoveArg arg;
+  bool is_collected;
+  TRANS_LOG(INFO, "qc debug");
+  ASSERT_EQ(OB_SUCCESS, part_ctx->collect_tx_ctx(dst_ls_id,
+                                                 end_scn,
+                                                 array,
+                                                 arg,
+                                                 is_collected));
+  ASSERT_EQ(true, is_collected);
+
+  n1->get_ts_mgr_().repair_get_gts_error();
 }
 
 TEST_F(ObTestTx, start_trans_expired)
@@ -2327,6 +2413,51 @@ TEST_F(ObTestTx, interrupt_get_read_snapshot)
   ROLLBACK_TX(n1, tx);
 }
 
+TEST_F(ObTestTx, rollback_with_branch_savepoint)
+{
+  START_ONE_TX_NODE(n1);
+  PREPARE_TX(n1, tx);
+  PREPARE_TX_PARAM(tx_param);
+  CREATE_IMPLICIT_SAVEPOINT(n1, tx, tx_param, global_sp1);
+  CREATE_BRANCH_SAVEPOINT(n1, tx, 100, sp_b100_1);
+  ASSERT_EQ(OB_SUCCESS, n1->write(tx, 100, 111, 100));
+  CREATE_BRANCH_SAVEPOINT(n1, tx, 200, sp_b200_1);
+  ASSERT_EQ(OB_SUCCESS, n1->write(tx, 200, 211, 200));
+  ASSERT_EQ(OB_SUCCESS, n1->write(tx, 101, 112, 100));
+  ASSERT_EQ(OB_SUCCESS, n1->write(tx, 500, 505)); // global write
+  ASSERT_EQ(OB_SUCCESS, n1->write(tx, 201, 212, 200));
+  // rollback branch 200
+  ASSERT_EQ(OB_SUCCESS, ROLLBACK_TO_IMPLICIT_SAVEPOINT(n1, tx, sp_b200_1, 2000*1000));
+  // check branch 100 is readable
+  int64_t val = 0;
+  ASSERT_EQ(OB_SUCCESS, n1->read(tx, 101, val));
+  ASSERT_EQ(val, 112);
+  // check global write is readable
+  ASSERT_EQ(OB_SUCCESS, n1->read(tx, 500, val));
+  ASSERT_EQ(val, 505);
+  // check branch 200 is un-readable
+  ASSERT_EQ(OB_ENTRY_NOT_EXIST, n1->read(tx, 200, val));
+  ASSERT_EQ(OB_ENTRY_NOT_EXIST, n1->read(tx, 201, val));
+  // write with branch 200
+  ASSERT_EQ(OB_SUCCESS, n1->write(tx, 206, 602, 200));
+  // rollback branch 100
+  ASSERT_EQ(OB_SUCCESS, ROLLBACK_TO_IMPLICIT_SAVEPOINT(n1, tx, sp_b100_1, 2000*1000));
+  // check global write is readable
+  ASSERT_EQ(OB_SUCCESS, n1->read(tx, 500, val));
+  ASSERT_EQ(val, 505);
+  // check branch 200 is readable
+  ASSERT_EQ(OB_SUCCESS, n1->read(tx, 206, val));
+  ASSERT_EQ(val, 602);
+  // check branch 100 is un-readable
+  ASSERT_EQ(OB_ENTRY_NOT_EXIST, n1->read(tx, 100, val));
+  ASSERT_EQ(OB_ENTRY_NOT_EXIST, n1->read(tx, 101, val));
+  // rollback global
+  ASSERT_EQ(OB_SUCCESS, ROLLBACK_TO_IMPLICIT_SAVEPOINT(n1, tx, global_sp1, 2000 * 1000));
+  // check global and branch 200 is un-readable
+  ASSERT_EQ(OB_ENTRY_NOT_EXIST, n1->read(tx, 500, val));
+  ASSERT_EQ(OB_ENTRY_NOT_EXIST, n1->read(tx, 206, val));
+  ROLLBACK_TX(n1, tx);
+}
 ////
 /// APPEND NEW TEST HERE, USE PRE DEFINED MACRO IN FILE `test_tx.dsl`
 /// SEE EXAMPLE: TEST_F(ObTestTx, rollback_savepoint_timeout)
@@ -2336,6 +2467,10 @@ TEST_F(ObTestTx, interrupt_get_read_snapshot)
 
 int main(int argc, char **argv)
 {
+  uint64_t checksum = 1100101;
+  uint64_t c = 0;
+  uint64_t checksum1 = ob_crc64(checksum, (void*)&c, sizeof(uint64_t));
+  uint64_t checksum2 = ob_crc64(c, (void*)&checksum, sizeof(uint64_t));
   int64_t tx_id = 21533427;
   uint64_t h = murmurhash(&tx_id, sizeof(tx_id), 0);
   system("rm -rf test_tx.log*");
@@ -2346,6 +2481,6 @@ int main(int argc, char **argv)
                        "test_tx.log"); // audit
   logger.set_log_level(OB_LOG_LEVEL_DEBUG);
   ::testing::InitGoogleTest(&argc, argv);
-  TRANS_LOG(INFO, "mmhash:", K(h));
+  TRANS_LOG(INFO, "mmhash:", K(h), K(checksum1), K(checksum2));
   return RUN_ALL_TESTS();
 }

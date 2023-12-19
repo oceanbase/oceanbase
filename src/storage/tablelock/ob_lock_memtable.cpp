@@ -30,6 +30,8 @@
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
+#include "storage/tx_storage/ob_ls_service.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {
@@ -52,6 +54,7 @@ ObLockMemtable::ObLockMemtable()
     pre_rec_scn_(SCN::max_scn()),
     max_committed_scn_(),
     is_frozen_(false),
+    need_check_tablet_status_(false),
     freezer_(nullptr),
     flush_lock_(common::ObLatchIds::CLOG_CKPT_LOCK)
 {
@@ -105,6 +108,7 @@ void ObLockMemtable::reset()
   freeze_scn_.reset();
   flushed_scn_.reset();
   is_frozen_ = false;
+  need_check_tablet_status_ = false;
   freezer_ = nullptr;
   is_inited_ = false;
 }
@@ -150,41 +154,47 @@ int ObLockMemtable::lock_(
       lock_exist = false;
       lock_mode_in_same_trans = 0x0;
       conflict_tx_set.reset();
-      ObMvccWriteGuard guard(true);
+      ObMvccWriteGuard guard;
       if (ObClockGenerator::getClock() >= param.expired_time_) {
         ret = (ret == OB_TRY_LOCK_ROW_CONFLICT ? OB_ERR_EXCLUSIVE_LOCK_CONFLICT : OB_TIMEOUT);
         LOG_WARN("lock timeout", K(ret), K(lock_op), K(param));
       } else if (OB_FAIL(guard.write_auth(ctx))) {
         LOG_WARN("not allow lock table.", K(ret), K(ctx));
-      } else if (FALSE_IT(mem_ctx = static_cast<ObMemtableCtx *>(ctx.mvcc_acc_ctx_.mem_ctx_))) {
-      } else if (OB_FAIL(mem_ctx->check_lock_exist(lock_op.lock_id_,
-                                                   lock_op.owner_id_,
-                                                   lock_op.lock_mode_,
-                                                   lock_op.op_type_,
-                                                   lock_exist,
-                                                   lock_mode_in_same_trans))) {
-        LOG_WARN("failed to check lock exist ", K(ret), K(lock_op));
-      } else if (lock_exist) {
-        // if the lock is DBMS_LOCK, we should return error code
-        // to notify PL to return the actual execution result.
-        if (lock_op.lock_id_.obj_type_ == ObLockOBJType::OBJ_TYPE_DBMS_LOCK) {
-          ret = OB_OBJ_LOCK_EXIST;
+      } else if (OB_FAIL(check_tablet_write_allow_(lock_op))) {
+        LOG_WARN("check tablet write allow failed", K(ret), K(lock_op));
+      } else {
+        mem_ctx = static_cast<ObMemtableCtx *>(ctx.mvcc_acc_ctx_.mem_ctx_);
+        ObLockMemCtx::AddLockGuard guard(mem_ctx->get_lock_mem_ctx());
+        if (OB_FAIL(guard.ret())) {
+          LOG_WARN("failed to acquire lock on lock_mem_ctx", K(ret), K(ctx));
+        } else if (OB_FAIL(mem_ctx->check_lock_exist(lock_op.lock_id_,
+                                                     lock_op.owner_id_,
+                                                     lock_op.lock_mode_,
+                                                     lock_op.op_type_,
+                                                     lock_exist,
+                                                     lock_mode_in_same_trans))) {
+          LOG_WARN("failed to check lock exist ", K(ret), K(lock_op));
+        } else if (lock_exist) {
+          // if the lock is DBMS_LOCK, we should return error code
+          // to notify PL to return the actual execution result.
+          if (lock_op.lock_id_.obj_type_ == ObLockOBJType::OBJ_TYPE_DBMS_LOCK) {
+            ret = OB_OBJ_LOCK_EXIST;
+          }
+          LOG_DEBUG("lock is exist", K(ret), K(lock_op));
+        } else if (FALSE_IT(lock_upgrade(lock_mode_in_same_trans, lock_op))) {
+        } else if (OB_FAIL(obj_lock_map_.lock(param, ctx, lock_op, lock_mode_in_same_trans, conflict_tx_set))) {
+          if (ret != OB_TRY_LOCK_ROW_CONFLICT &&
+              ret != OB_OBJ_LOCK_EXIST) {
+            LOG_WARN("record lock at lock map mgr failed.", K(ret), K(lock_op));
+          }
+        } else if (FALSE_IT(succ_step = STEP_IN_LOCK_MGR)) {
+        } else if (OB_FAIL(mem_ctx->add_lock_record(lock_op))) {
+          if (OB_EAGAIN == ret) {
+            need_retry = true;
+          }
+          LOG_WARN("record lock at mem_ctx failed.", K(ret), K(lock_op));
         }
-        LOG_DEBUG("lock is exist", K(ret), K(lock_op));
-      } else if (FALSE_IT(lock_upgrade(lock_mode_in_same_trans, lock_op))) {
-      } else if (OB_FAIL(obj_lock_map_.lock(param, ctx, lock_op, lock_mode_in_same_trans, conflict_tx_set))) {
-        if (ret != OB_TRY_LOCK_ROW_CONFLICT &&
-            ret != OB_OBJ_LOCK_EXIST) {
-          LOG_WARN("record lock at lock map mgr failed.", K(ret), K(lock_op));
-        }
-      } else if (FALSE_IT(succ_step = STEP_IN_LOCK_MGR)) {
-      } else if (OB_FAIL(mem_ctx->add_lock_record(lock_op))) {
-        if (OB_EAGAIN == ret) {
-          need_retry = true;
-        }
-        LOG_WARN("record lock at mem_ctx failed.", K(ret), K(lock_op));
       }
-
       if (OB_FAIL(ret) && succ_step == STEP_IN_LOCK_MGR) {
         obj_lock_map_.remove_lock_record(lock_op);
       }
@@ -262,6 +272,44 @@ int ObLockMemtable::lock_(
   return ret;
 }
 
+int ObLockMemtable::check_tablet_write_allow_(const ObTableLockOp &lock_op)
+{
+  int ret = OB_SUCCESS;
+  ObTabletID tablet_id;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  ObTabletHandle tablet_handle;
+  ObTabletStatus::Status tablet_status = ObTabletStatus::MAX;
+  ObTabletCreateDeleteMdsUserData data;
+  bool is_commited = false;
+  if (!need_check_tablet_status_) {
+  } else if (!lock_op.lock_id_.is_tablet_lock()) {
+  } else if (OB_FAIL(lock_op.lock_id_.convert_to(tablet_id))) {
+    LOG_WARN("convert lock id to tablet_id failed", K(ret), K(lock_op));
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id_, ls_handle, ObLSGetMod::TABLELOCK_MOD))) {
+    LOG_WARN("failed to get ls", K(ret), K(ls_id_));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), KP(ls));
+  } else if (OB_FAIL(ls->get_tablet(tablet_id,
+                                    tablet_handle,
+                                    0,
+                                    ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+    LOG_WARN("get tablet with timeout failed", K(ret), K(ls->get_ls_id()), K(tablet_id));
+  } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_latest_tablet_status(
+      data, is_commited))) {
+    LOG_WARN("failed to get CreateDeleteMdsUserData", KR(ret));
+  } else if (FALSE_IT(tablet_status = data.get_tablet_status())) {
+  } else if (is_commited && (ObTabletStatus::NORMAL == tablet_status
+                             || ObTabletStatus::TRANSFER_IN == tablet_status)) {
+    // allow
+  } else {
+    ret = OB_TABLET_NOT_EXIST;
+    LOG_INFO("tablet status not allow", KR(ret), K(tablet_id), K(is_commited), K(data));
+  }
+  return ret;
+}
+
 int ObLockMemtable::unlock_(
     ObStoreCtx &ctx,
     const ObTableLockOp &unlock_op,
@@ -292,6 +340,8 @@ int ObLockMemtable::unlock_(
         LOG_WARN("unlock timeout", K(ret), K(unlock_op), K(expired_time));
       } else if (OB_FAIL(guard.write_auth(ctx))) {
         LOG_WARN("not allow unlock table.", K(ret), K(ctx));
+      } else if (OB_FAIL(check_tablet_write_allow_(unlock_op))) {
+        LOG_WARN("check tablet write allow failed", K(ret), K(unlock_op));
       } else if (FALSE_IT(mem_ctx = static_cast<ObMemtableCtx *>(ctx.mvcc_acc_ctx_.mem_ctx_))) {
         // check whether the unlock op exist already
       } else if (OB_FAIL(mem_ctx->check_lock_exist(unlock_op.lock_id_,
@@ -915,6 +965,7 @@ int ObLockMemtable::flush(SCN recycle_scn,
 
 int ObLockMemtable::replay_row(
     storage::ObStoreCtx &ctx,
+    const share::SCN &scn,
     ObMemtableMutatorIterator *mmi)
 {
   int ret = OB_SUCCESS;
@@ -959,7 +1010,7 @@ int ObLockMemtable::replay_row(
     if (OB_UNLIKELY(!lock_op.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("lock op is not valid", K(ret), K(lock_op));
-    } else if (OB_FAIL(replay_lock_(mem_ctx, lock_op, ctx.replay_log_scn_))) {
+    } else if (OB_FAIL(replay_lock_(mem_ctx, lock_op, scn))) {
       LOG_WARN("replay lock failed", K(ret), K(lock_op));
     }
   }

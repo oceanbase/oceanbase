@@ -77,8 +77,8 @@ TEST_F(TestObSimpleLogDiskMgr, out_of_disk_space)
   share::SCN create_scn = share::SCN::base_scn();
   EXPECT_EQ(OB_SUCCESS, get_palf_env(server_idx, palf_env));
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, create_scn, leader_idx, leader));
-  update_disk_options(leader_idx, MIN_DISK_SIZE_PER_PALF_INSTANCE/PALF_PHY_BLOCK_SIZE);
-  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 6*31+1, id, MAX_LOG_BODY_SIZE));
+  update_disk_options(leader_idx, MIN_DISK_SIZE_PER_PALF_INSTANCE/PALF_PHY_BLOCK_SIZE + 2);
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 8*31+1, id, MAX_LOG_BODY_SIZE));
   LogStorage *log_storage = &leader.palf_handle_impl_->log_engine_.log_storage_;
   while (LSN(6*PALF_BLOCK_SIZE) > log_storage->log_tail_) {
     usleep(500);
@@ -91,6 +91,9 @@ TEST_F(TestObSimpleLogDiskMgr, out_of_disk_space)
   wait_lsn_until_flushed(max_lsn, leader);
   PALF_LOG(INFO, "out of disk max_lsn", K(max_lsn));
   usleep(palf::BlockGCTimerTask::BLOCK_GC_TIMER_INTERVAL_MS + 5*10000);
+  EXPECT_EQ(OB_LOG_OUTOF_DISK_SPACE, submit_log(leader, 1, id, MAX_LOG_BODY_SIZE));
+  // shrinking 后继续停写
+  update_disk_options(leader_idx, MIN_DISK_SIZE_PER_PALF_INSTANCE/PALF_PHY_BLOCK_SIZE);
   EXPECT_EQ(OB_LOG_OUTOF_DISK_SPACE, submit_log(leader, 1, id, MAX_LOG_BODY_SIZE));
   usleep(ObLooper::INTERVAL_US*2);
 }

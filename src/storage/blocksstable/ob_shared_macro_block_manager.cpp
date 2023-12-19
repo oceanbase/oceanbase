@@ -875,18 +875,18 @@ int ObSharedMacroBlockMgr::read_sstable_block(
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
     read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
     read_info.io_desc_.set_group_id(ObIOModule::SHARED_MACRO_BLOCK_MGR_IO);
-  }
 
-  if (OB_ISNULL(read_info.buf_ = reinterpret_cast<char*>(allocator.alloc(read_info.size_)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret), K(read_info.size_));
-  } else {
-    if (OB_FAIL(ObBlockManager::read_block(read_info, block_handle))) {
-      LOG_WARN("fail to read block", K(ret), K(read_info));
-    } else if (OB_UNLIKELY(!block_handle.is_valid()
-          || sstable.get_macro_read_size() != block_handle.get_data_size())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("block handle is invalid", K(ret), K(block_handle));
+    if (OB_ISNULL(read_info.buf_ = reinterpret_cast<char*>(allocator.alloc(read_info.size_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret), K(read_info.size_));
+    } else {
+      if (OB_FAIL(ObBlockManager::read_block(read_info, block_handle))) {
+        LOG_WARN("fail to read block", K(ret), K(read_info));
+      } else if (OB_UNLIKELY(!block_handle.is_valid()
+            || sstable.get_macro_read_size() != block_handle.get_data_size())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("block handle is invalid", K(ret), K(block_handle));
+      }
     }
   }
   return ret;

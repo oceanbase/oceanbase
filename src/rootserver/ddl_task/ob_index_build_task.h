@@ -35,11 +35,14 @@ public:
       const common::ObCurTraceId::TraceId &trace_id,
       const int64_t parallelism,
       ObRootService *root_service,
-      const common::ObAddr &inner_sql_exec_addr)
+      const common::ObAddr &inner_sql_exec_addr,
+      const share::SortCompactLevel compact_level = share::SORT_DEFAULT_LEVEL,
+      const int64_t data_format_version = 0)
       : task_id_(task_id), tenant_id_(tenant_id), data_table_id_(data_table_id), dest_table_id_(dest_table_id),
         schema_version_(schema_version), snapshot_version_(snapshot_version), execution_id_(execution_id),
         consumer_group_id_(consumer_group_id), trace_id_(trace_id), parallelism_(parallelism), allocator_("IdxSSTBuildTask"),
-        root_service_(root_service), inner_sql_exec_addr_(inner_sql_exec_addr)
+        root_service_(root_service), inner_sql_exec_addr_(inner_sql_exec_addr), compact_level_(compact_level),
+        data_format_version_(data_format_version)
   {
     set_retry_times(0);
   }
@@ -55,7 +58,7 @@ public:
   void add_event_info(const int ret, const ObString &ddl_event_stmt);
   TO_STRING_KV(K_(data_table_id), K_(dest_table_id), K_(schema_version), K_(snapshot_version),
                K_(execution_id), K_(consumer_group_id), K_(trace_id), K_(parallelism), K_(nls_date_format),
-               K_(nls_timestamp_format), K_(nls_timestamp_tz_format));
+               K_(nls_timestamp_format), K_(nls_timestamp_tz_format), K_(compact_level), K_(data_format_version));
 
 private:
   int64_t task_id_;
@@ -74,6 +77,8 @@ private:
   ObString nls_timestamp_tz_format_;
   ObRootService *root_service_;
   common::ObAddr inner_sql_exec_addr_;
+  share::SortCompactLevel compact_level_;
+  int64_t data_format_version_;
 
   DISALLOW_COPY_AND_ASSIGN(ObIndexSSTableBuildTask);
 };
@@ -86,6 +91,7 @@ public:
   int init(
       const uint64_t tenant_id,
       const int64_t task_id,
+      const share::ObDDLType &ddl_type,
       const share::schema::ObTableSchema *data_table_schema,
       const share::schema::ObTableSchema *index_schema,
       const int64_t schema_version,
@@ -94,6 +100,7 @@ public:
       const int32_t sub_task_trace_id,
       const obrpc::ObCreateIndexArg &create_index_arg,
       const int64_t parent_task_id /* = 0 */,
+      const uint64_t tenant_data_version,
       const int64_t task_status = share::ObDDLTaskStatus::PREPARE,
       const int64_t snapshot_version = 0);
   int init(const ObDDLTaskRecord &task_record);
@@ -118,7 +125,7 @@ public:
   virtual bool support_longops_monitoring() const override { return true; }
   static int deep_copy_index_arg(common::ObIAllocator &allocator, const obrpc::ObCreateIndexArg &source_arg, obrpc::ObCreateIndexArg &dest_arg);
   INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask, K(index_table_id_),K(snapshot_held_), K(is_sstable_complete_task_submitted_),
-      K(sstable_complete_ts_), K(check_unique_snapshot_), K_(redefinition_execution_id), K(create_index_arg_));
+      K(sstable_complete_ts_), K(check_unique_snapshot_), K_(redefinition_execution_id), K(create_index_arg_), K(target_cg_cnt_));
 private:
   int prepare();
   int wait_trans_end();
@@ -141,6 +148,7 @@ private:
                                       const ObTableSchema *index_table_schema,
                                       bool &need_acquire);
   bool is_sstable_complete_task_submitted();
+  int check_target_cg_cnt();
 private:
   static const int64_t OB_INDEX_BUILD_TASK_VERSION = 1;
   using ObDDLTask::is_inited_;
@@ -163,6 +171,7 @@ private:
   int64_t complete_sstable_job_ret_code_;
   int64_t redefinition_execution_id_;
   obrpc::ObCreateIndexArg create_index_arg_; // this is not a valid arg, only has nls formats for now
+  int64_t target_cg_cnt_;
 };
 
 }  // end namespace rootserver

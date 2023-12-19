@@ -446,5 +446,35 @@ bool ObShareUtil::is_tenant_enable_transfer(const uint64_t tenant_id)
   return bret;
 }
 
+int ObShareUtil::check_compat_version_for_clone_tenant(
+    const uint64_t tenant_id,
+    bool &is_compatible)
+{
+  int ret = OB_SUCCESS;
+  is_compatible = false;
+  uint64_t data_version = 0;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, data_version))) {
+    LOG_WARN("fail to get sys tenant data version", KR(ret));
+  } else if (DATA_VERSION_4_3_0_0 > data_version) {
+    is_compatible = false;
+  } else if (is_sys_tenant(tenant_id)) {
+    is_compatible = true;
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(gen_user_tenant_id(tenant_id), data_version))) {
+    LOG_WARN("fail to get user tenant data version", KR(ret), "tenant_id", gen_user_tenant_id(tenant_id));
+  } else if (DATA_VERSION_4_3_0_0 > data_version) {
+    is_compatible = false;
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(tenant_id), data_version))) {
+     LOG_WARN("fail to get meta tenant data version", KR(ret), "tenant_id", gen_meta_tenant_id(tenant_id));
+  } else if (DATA_VERSION_4_3_0_0 > data_version) {
+    is_compatible = false;
+  } else {
+    is_compatible = true;
+  }
+  return ret;
+}
+
 } //end namespace share
 } //end namespace oceanbase

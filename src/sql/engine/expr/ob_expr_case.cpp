@@ -73,7 +73,6 @@ int ObExprCase::calc_result_typeN(ObExprResType &type,
                   type_ctx.get_coll_type(),
                   lib::is_oracle_mode(),
                   default_length_semantics,
-                  type_ctx.get_session(),
                   true, false,
                   is_called_in_sql_))) {
       LOG_WARN("failed to aggregate result type");
@@ -349,6 +348,13 @@ int ObExprCase::eval_case_batch(const ObExpr &expr,
       }
     }
   }
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprCase, raw_expr) {
+  int ret = OB_SUCCESS;
+  SET_LOCAL_SYSVAR_CAPACITY(1);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
   return ret;
 }
 

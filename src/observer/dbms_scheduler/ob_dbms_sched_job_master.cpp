@@ -379,7 +379,7 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
   if (OB_FAIL(ret)) {
     LOG_WARN("fail to scheduler job", K(ret), KPC(job_key));
   } else {
-    ObArenaAllocator allocator;
+    ObArenaAllocator allocator("DBMSSchedTmp");
     OZ (table_operator_.get_dbms_sched_job_info(
       job_key->get_tenant_id(), job_key->is_oracle_tenant(), job_key->get_job_id(), job_key->get_job_name(), allocator, job_info));
 
@@ -588,7 +588,7 @@ int ObDBMSSchedJobMaster::check_new_jobs(uint64_t tenant_id, bool is_oracle_tena
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObDBMSSchedJobInfo, 16> job_infos;
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator("DBMSSchedTmp");
   OZ (table_operator_.get_dbms_sched_job_infos_in_tenant(tenant_id, is_oracle_tenant, allocator, job_infos));
   OZ (register_new_jobs(tenant_id, is_oracle_tenant, job_infos));
   LOG_INFO("check new jobs", K(ret), K(tenant_id), K(is_oracle_tenant), K(job_infos));

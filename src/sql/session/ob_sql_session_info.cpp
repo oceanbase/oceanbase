@@ -214,7 +214,7 @@ ObSQLSessionInfo::~ObSQLSessionInfo()
 
 int ObSQLSessionInfo::init(uint32_t sessid, uint64_t proxy_sessid,
     common::ObIAllocator *bucket_allocator, const ObTZInfoMap *tz_info, int64_t sess_create_time,
-    uint64_t tenant_id)
+    uint64_t tenant_id, int64_t client_create_time)
 {
   UNUSED(tenant_id);
   int ret = OB_SUCCESS;
@@ -245,6 +245,7 @@ int ObSQLSessionInfo::init(uint32_t sessid, uint64_t proxy_sessid,
     } else {
       sess_create_time_ = ObTimeUtility::current_time();
     }
+    set_client_create_time(client_create_time);
     const char *sup_proxy_min_version = "1.8.4";
     min_proxy_version_ps_ = 0;
     if (OB_FAIL(ObClusterVersion::get_version(sup_proxy_min_version, min_proxy_version_ps_))) {
@@ -512,10 +513,21 @@ bool ObSQLSessionInfo::is_index_skip_scan_enabled() const
   return bret;
 }
 
+bool ObSQLSessionInfo::is_qualify_filter_enabled() const
+{
+  bool bret = false;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    bret = tenant_config->_enable_optimizer_qualify_filter;
+  }
+  return bret;
+}
+
 int ObSQLSessionInfo::is_enable_range_extraction_for_not_in(bool &enabled) const
 {
   int ret = OB_SUCCESS;
-  enabled = false;
+  enabled = true;
   int64_t tenant_id = get_effective_tenant_id();
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
   if (tenant_config.is_valid()) {
@@ -2975,9 +2987,7 @@ inline int ObSQLSessionInfo::init_mem_context(uint64_t tenant_id)
   int ret = common::OB_SUCCESS;
   if (OB_LIKELY(NULL == mem_context_)) {
     lib::ContextParam param;
-    param.set_properties(lib::USE_TL_PAGE_OPTIONAL)
-      .set_mem_attr(tenant_id, ObModIds::OB_SQL_SESSION,
-                     common::ObCtxIds::WORK_AREA);
+    param.set_mem_attr(tenant_id, ObModIds::OB_SQL_SESSION);
     if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
       SQL_ENG_LOG(WARN, "create entity failed", K(ret));
     } else if (OB_ISNULL(mem_context_)) {

@@ -226,7 +226,8 @@ void TestTenantMetaMemMgr::prepare_data_schema(
   LOG_INFO("dump data table schema", LITERAL_K(TEST_ROWKEY_COLUMN_CNT), K(table_schema));
 
   ret = create_tablet_schema.init(allocator, table_schema, lib::Worker::CompatMode::MYSQL,
-        false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V3);
+        false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V3,
+        0/*tenant_data_version, default val*/, true/*need_create_empty_major*/);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -704,16 +705,18 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
   create_scn.convert_from_ts(ObTimeUtility::fast_current_time());
 
   ObTabletID empty_tablet_id;
+  create_tablet_schema.set_need_create_empty_major(true);
   ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
-      create_scn, create_scn.get_val_for_tx(), create_tablet_schema, true, &freezer);
+      create_scn, create_scn.get_val_for_tx(), create_tablet_schema, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
   ObTabletPersister persister;
+  ObSArray<MacroBlockId> shared_meta_id_arr;
 
   ObTabletHandle new_handle;
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
-      *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info));
+      *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info, shared_meta_id_arr));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(tablet_macro_info, new_handle, space_usage));
 
   ObMetaDiskAddr addr = new_handle.get_obj()->get_tablet_addr();
@@ -798,16 +801,18 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
 
   ObTabletID empty_tablet_id;
   bool make_empty_co_sstable = true;
+  create_tablet_schema.set_need_create_empty_major(make_empty_co_sstable);
   ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
-      create_scn, create_scn.get_val_for_tx(), create_tablet_schema, make_empty_co_sstable, &freezer);
+      create_scn, create_scn.get_val_for_tx(), create_tablet_schema, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 
   ObTabletHandle new_handle;
   ObTabletPersister persister;
+  ObSArray<MacroBlockId> shared_meta_id_arr;
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
-      *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info));
+      *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info, shared_meta_id_arr));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(tablet_macro_info, new_handle, space_usage));
 
   ObMetaDiskAddr addr = new_handle.get_obj()->get_tablet_addr();
@@ -903,17 +908,18 @@ TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
 
   ObTabletID empty_tablet_id;
   bool make_empty_co_sstable = false;
+  create_tablet_schema.set_need_create_empty_major(make_empty_co_sstable);
   ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
-      create_scn, create_scn.get_val_for_tx(), create_tablet_schema,
-      make_empty_co_sstable, &freezer);
+      create_scn, create_scn.get_val_for_tx(), create_tablet_schema, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 
   ObTabletHandle new_handle;
   ObTabletPersister persister;
+  ObSArray<MacroBlockId> shared_meta_id_arr;
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
-      *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info));
+      *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info, shared_meta_id_arr));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(tablet_macro_info, new_handle, space_usage));
 
   ret = t3m_.compare_and_swap_tablet(key, new_handle, new_handle);
@@ -996,16 +1002,18 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
 
   ObTabletID empty_tablet_id;
   bool make_empty_co_sstable = true;
+  create_tablet_schema.set_need_create_empty_major(make_empty_co_sstable);
   ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
-      create_scn, create_scn.get_val_for_tx(), create_tablet_schema, make_empty_co_sstable, &freezer);
+      create_scn, create_scn.get_val_for_tx(), create_tablet_schema, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 
   ObTabletHandle new_handle;
   ObTabletPersister persister;
+  ObSArray<MacroBlockId> shared_meta_id_arr;
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
-      *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info));
+      *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info, shared_meta_id_arr));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(tablet_macro_info, new_handle, space_usage));
 
   ret = t3m_.compare_and_swap_tablet(key, new_handle, new_handle);
@@ -1119,8 +1127,9 @@ TEST_F(TestTenantMetaMemMgr, test_wash_mem_tablet)
 
   ObTabletID empty_tablet_id;
   bool make_empty_co_sstable = false;
+  create_tablet_schema.set_need_create_empty_major(make_empty_co_sstable);
   ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
-      create_scn, create_scn.get_val_for_tx(), create_tablet_schema, make_empty_co_sstable, &freezer);
+      create_scn, create_scn.get_val_for_tx(), create_tablet_schema, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 

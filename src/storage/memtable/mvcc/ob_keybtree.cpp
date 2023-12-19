@@ -1233,7 +1233,7 @@ int BtreeIterator<BtreeKey, BtreeVal>::KVQueue::pop(BtreeKV &data)
 }
 
 template<typename BtreeKey, typename BtreeVal>
-int BtreeIterator<BtreeKey, BtreeVal>::init(ObKeyBtree &btree)
+int BtreeIterator<BtreeKey, BtreeVal>::init(const ObKeyBtree &btree)
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(iter_)) {
@@ -1434,7 +1434,7 @@ int BtreeNodeAllocator<BtreeKey, BtreeVal>::pop(BtreeNode*& p)
 }
 
 template<typename BtreeKey, typename BtreeVal>
-int BtreeRawIterator<BtreeKey, BtreeVal>::init(ObKeyBtree &btree)
+int BtreeRawIterator<BtreeKey, BtreeVal>::init(const ObKeyBtree &btree)
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(iter_)) {
@@ -1777,7 +1777,7 @@ int ObKeyBtree<BtreeKey, BtreeVal>::get(const BtreeKey key, BtreeVal &value)
 
 template<typename BtreeKey, typename BtreeVal>
 int ObKeyBtree<BtreeKey, BtreeVal>::set_key_range(BtreeIterator &iter, const BtreeKey min_key, const bool start_exclude,
-                              const BtreeKey max_key, const bool end_exclude, int64_t version)
+                              const BtreeKey max_key, const bool end_exclude, int64_t version) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(iter.init(*this))) {
@@ -1790,7 +1790,7 @@ int ObKeyBtree<BtreeKey, BtreeVal>::set_key_range(BtreeIterator &iter, const Btr
 
 template<typename BtreeKey, typename BtreeVal>
 int ObKeyBtree<BtreeKey, BtreeVal>::set_key_range(BtreeRawIterator &iter, const BtreeKey min_key, const bool start_exclude,
-                              const BtreeKey max_key, const bool end_exclude, int64_t version)
+                              const BtreeKey max_key, const bool end_exclude, int64_t version) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(iter.init(*this))) {

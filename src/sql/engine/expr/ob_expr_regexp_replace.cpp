@@ -287,6 +287,7 @@ int ObExprRegexpReplace::eval_regexp_replace(
       ObString match_param = (NULL != match_type && !match_type->is_null()) ? match_type->get_string() : ObString();
       ObExprRegexContext local_regex_ctx;
       ObExprRegexContext *regexp_ctx = &local_regex_ctx;
+      ObExprRegexpSessionVariables regexp_vars;
       const bool reusable = (0 != expr.extra_) && ObExpr::INVALID_EXP_CTX_ID != expr.expr_ctx_id_;
       uint32_t flags = 0;
       bool is_case_sensitive = ObCharset::is_bin_sort(expr.args_[0]->datum_meta_.cs_type_);
@@ -304,9 +305,11 @@ int ObExprRegexpReplace::eval_regexp_replace(
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObExprRegexContext::get_regexp_flags(match_param, is_case_sensitive, flags))) {
         LOG_WARN("fail to get regexp flags", K(ret), K(match_param));
+      } else if (OB_FAIL(ctx.exec_ctx_.get_my_session()->get_regexp_session_vars(regexp_vars))) {
+        LOG_WARN("fail to get regexp");
       } else if (!pattern->is_null() && !null_result &&
                   OB_FAIL(regexp_ctx->init(reusable ? ctx.exec_ctx_.get_allocator() : tmp_alloc,
-                                           ctx.exec_ctx_.get_my_session(),
+                                           regexp_vars,
                                            pattern->get_string(), flags, reusable,
                                            expr.args_[1]->datum_meta_.cs_type_))) {
         LOG_WARN("fail to init regexp", K(pattern), K(flags), K(ret));

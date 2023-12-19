@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_ddl_redo_log_replayer.h"
+#include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
 #include "storage/ddl/ob_ddl_clog.h"
 #include "storage/ddl/ob_ddl_merge_task.h"
 #include "storage/ddl/ob_ddl_replay_executor.h"
@@ -103,18 +104,13 @@ int ObDDLRedoLogReplayer::replay_commit(const ObDDLCommitLog &log, const SCN &sc
   ObDDLCommitReplayExecutor replay_executor;
 
   DEBUG_SYNC(BEFORE_REPLAY_DDL_PREPRARE);
-
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRedoLogReplayer has not been inited", K(ret));
   } else if (OB_FAIL(replay_executor.init(ls_, log, scn))) {
-    LOG_WARN("failed to init ddl commit log replay executor", K(ret));
+    LOG_WARN("init replay executor failed", K(ret));
   } else if (OB_FAIL(replay_executor.execute(scn, ls_->get_ls_id(), log.get_table_key().tablet_id_))) {
-    if (OB_NO_NEED_UPDATE == ret || OB_TASK_EXPIRED == ret) {
-      ret = OB_SUCCESS;
-    } else if (OB_EAGAIN != ret) {
-      LOG_WARN("failed to replay ddl commit log", K(ret), K(scn), K(log), K(ls_->get_ls_id()));
-    }
+    LOG_WARN("execute replay execute failed", K(ret));
   }
   return ret;
 }

@@ -34,6 +34,7 @@
 #include "storage/ob_super_block_struct.h"
 #include "storage/slog/ob_storage_logger_manager.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
+#include "storage/tablet/ob_tablet_macro_info_iterator.h"
 #include "lib/worker.h"
 
 using namespace oceanbase::common;
@@ -167,7 +168,7 @@ int ObBlockManager::init(
     LOG_WARN("fail to init timer", K(ret));
   } else if (OB_FAIL(bucket_lock_.init(DEFAULT_LOCK_BUCKET_COUNT, ObLatchIds::BLOCK_MANAGER_LOCK))) {
     LOG_WARN("fail to init bucket lock", K(ret));
-  } else if (OB_FAIL(block_map_.init("BlockMap", OB_SYS_TENANT_ID))) {
+  } else if (OB_FAIL(block_map_.init(SET_USE_UNEXPECTED_500(ObMemAttr(OB_SERVER_TENANT_ID, "BlockMap"))))) {
     LOG_WARN("fail to init block map", K(ret));
   } else if (OB_FAIL(super_block_buf_holder_.init(ObServerSuperBlockHeader::OB_MAX_SUPER_BLOCK_SIZE))) {
     LOG_WARN("fail to init super block buffer holder, ", K(ret));
@@ -955,7 +956,7 @@ void ObBlockManager::mark_and_sweep()
         LOG_WARN("fail to get pending free blocks", K(ret));
       } else if (0 == (alloc_num = ATOMIC_SET(&alloc_num_, 0)) && 0 == mark_info.count()) {
         skip_mark = true;
-        LOG_INFO("no block alloc/free, no need to mark blocks", K(ret));
+        LOG_INFO("no block alloc/free, no need to mark blocks", K(ret), K(mark_info.count()));
       } else if (OB_FAIL(mark_macro_blocks(mark_info, macro_id_set, tmp_status))) {//mark
         LOG_WARN("fail to mark macro blocks", K(ret));
       }
@@ -980,12 +981,26 @@ void ObBlockManager::mark_and_sweep()
           } else {
             update_marker_status(tmp_status);
           }
+        } else {
+          update_partial_status(tmp_status);
         }
       }
-      FLOG_INFO("finish once mark and sweep", K(ret), K(alloc_num), K_(marker_status), "map_cnt", block_map_.count());
+      FLOG_INFO("finish once mark and sweep", K(ret), K(alloc_num), K(mark_info.count()), K_(marker_status), "map_cnt", block_map_.count());
     }
   }
   macro_id_set.destroy();
+}
+
+void ObBlockManager::update_partial_status(const ObMacroBlockMarkerStatus &tmp_status)
+{
+  SpinWLockGuard guard(marker_lock_);
+  marker_status_.pending_free_count_ = tmp_status.pending_free_count_;
+  marker_status_.last_end_time_ = ObTimeUtility::fast_current_time();
+  marker_status_.mark_cost_time_ = tmp_status.mark_cost_time_;
+  marker_status_.sweep_cost_time_ = 0;
+  marker_status_.start_time_ = tmp_status.start_time_;
+  marker_status_.hold_count_ = tmp_status.hold_count_;
+  marker_status_.free_count_ = get_free_macro_block_count();
 }
 
 int ObBlockManager::mark_macro_blocks(
@@ -1284,104 +1299,79 @@ int ObBlockManager::mark_tablet_block(
     ObMacroBlockMarkerStatus &tmp_status)
 {
   int ret = OB_SUCCESS;
-  ObSArray<blocksstable::MacroBlockId> meta_block_arr;
-  ObSArray<blocksstable::MacroBlockId> data_block_arr;
-  ObSArray<blocksstable::MacroBlockId> shared_meta_block_arr;
-  ObSArray<blocksstable::MacroBlockId> shared_data_block_arr;
-  if (OB_FAIL(handle.get_obj()->get_all_macro_ids(
-      meta_block_arr,
-      data_block_arr,
-      shared_meta_block_arr,
-      shared_data_block_arr))) {
-    LOG_WARN("fail to get tablet's macro info", K(ret));
-  } else if (OB_FAIL(do_mark_tablet_block(
-      meta_block_arr,
-      ObTabletMacroType::META_BLOCK,
-      mark_info,
-      macro_id_set,
-      tmp_status))) {
-    LOG_WARN("fail to mark meta block ids", K(ret), K(meta_block_arr));
-  } else if (OB_FAIL(do_mark_tablet_block(
-      data_block_arr,
-      ObTabletMacroType::DATA_BLOCK,
-      mark_info,
-      macro_id_set,
-      tmp_status))) {
-    LOG_WARN("fail to mark meta block ids", K(ret), K(data_block_arr));
-  } else if (OB_FAIL(do_mark_tablet_block(
-      shared_meta_block_arr,
-      ObTabletMacroType::SHARED_META_BLOCK,
-      mark_info,
-      macro_id_set,
-      tmp_status))) {
-    LOG_WARN("fail to mark meta block ids", K(ret), K(shared_meta_block_arr));
-  } else if (OB_FAIL(do_mark_tablet_block(
-      shared_data_block_arr,
-      ObTabletMacroType::SHARED_DATA_BLOCK,
-      mark_info,
-      macro_id_set,
-      tmp_status))) {
-    LOG_WARN("fail to mark meta block ids", K(ret), K(shared_data_block_arr));
-  } else {
-    const ObMetaDiskAddr &addr = handle.get_obj()->get_tablet_addr();
-    if (addr.is_block()) {
-      const MacroBlockId &macro_id = addr.block_id();
-      if (OB_FAIL(update_mark_info(macro_id, mark_info))) {
-        LOG_WARN("fail to update mark info", K(ret), K(macro_id));
-      } else if (OB_FAIL(macro_id_set.set_refactored(macro_id, 0 /* not overwrite */))) {
-        if (OB_HASH_EXIST != ret) {
-          LOG_WARN("fail to put macro id into set", K(ret), K(macro_id));
+  const ObTablet *tablet = handle.get_obj();
+  ObTabletBlockInfo block_info(tablet->get_tablet_addr().block_id(), ObTabletMacroType::SHARED_META_BLOCK, 0 /*useless param*/);
+
+  if (tablet->get_tablet_addr().is_block() && OB_FAIL(do_mark_tablet_block(block_info, mark_info, macro_id_set, tmp_status))) {
+    LOG_WARN("fail to mark tablet macro id", K(ret), K(block_info));
+  } else if (!tablet->is_empty_shell()) {// empty shell may don't have macro info
+    ObArenaAllocator allocator("MarkTabletBlock");
+    ObTabletMacroInfo *macro_info = nullptr;
+    bool in_memory = true;
+    ObMacroInfoIterator macro_iter;
+    if (OB_FAIL(tablet->load_macro_info(allocator, macro_info, in_memory))) {
+      LOG_WARN("fail to load macro info", K(ret));
+    } else if (OB_FAIL(macro_iter.init(ObTabletMacroType::MAX, *macro_info))) {
+      LOG_WARN("fail to init macro iterator", K(ret), KPC(macro_info));
+    }
+    while (OB_SUCC(ret)) {
+      block_info.reset();
+      if (OB_FAIL(macro_iter.get_next(block_info))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("fail to get next block info", K(ret), K(block_info));
         } else {
           ret = OB_SUCCESS;
+          break;
         }
-      } else {
-        tmp_status.hold_count_--;
-        tmp_status.shared_meta_block_count_++;
+      } else if (OB_FAIL(do_mark_tablet_block(block_info, mark_info, macro_id_set, tmp_status))) {
+        LOG_WARN("fail to mark macro id", K(ret), K(block_info));
       }
+    }
+    if (OB_NOT_NULL(macro_info) && !in_memory) {
+      macro_info->reset();
     }
   }
   return ret;
 }
 
 int ObBlockManager::do_mark_tablet_block(
-    const ObIArray<blocksstable::MacroBlockId> &id_arr,
-    const ObTabletMacroType block_type,
+    const ObTabletBlockInfo &block_info,
     MacroBlkIdMap &mark_info,
     common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
     ObMacroBlockMarkerStatus &tmp_status)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < id_arr.count(); i++) {
-    const MacroBlockId &macro_id = id_arr.at(i);
-    if (OB_FAIL(update_mark_info(macro_id, mark_info))) {
-      LOG_WARN("fail to update mark info", K(ret), K(macro_id));
-    } else if (OB_FAIL(macro_id_set.set_refactored(macro_id, 0 /* not overwrite */))) {
-      if (OB_HASH_EXIST != ret) {
-        LOG_WARN("fail to put macro id into set", K(ret), K(macro_id));
-      } else {
-        ret = OB_SUCCESS;
-      }
+  const MacroBlockId &macro_id = block_info.macro_id_;
+  if (OB_FAIL(update_mark_info(macro_id, mark_info))) {
+    LOG_WARN("fail to update mark info", K(ret), K(macro_id));
+  } else if (OB_FAIL(macro_id_set.set_refactored(macro_id, 0 /* not overwrite */))) {
+    if (OB_HASH_EXIST != ret) {
+      LOG_WARN("fail to put macro id into set", K(ret), K(macro_id));
     } else {
-      switch (block_type) {
-        case ObTabletMacroType::META_BLOCK:
-          tmp_status.index_block_count_++;
-          break;
-        case ObTabletMacroType::DATA_BLOCK:
-          tmp_status.data_block_count_++;
-          break;
-        case ObTabletMacroType::SHARED_META_BLOCK:
-          tmp_status.shared_meta_block_count_++;
-          break;
-        case ObTabletMacroType::SHARED_DATA_BLOCK:
-          tmp_status.shared_data_block_count_++;
-          break;
-        default:
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("block type is invalid", K(ret), K(block_type));
-      }
-      if (OB_SUCC(ret)) {
-        tmp_status.hold_count_--;
-      }
+      ret = OB_SUCCESS;
+    }
+  } else {
+    switch (block_info.block_type_) {
+      case ObTabletMacroType::META_BLOCK:
+      case ObTabletMacroType::LINKED_BLOCK:
+        tmp_status.index_block_count_++;
+        break;
+      case ObTabletMacroType::DATA_BLOCK:
+        tmp_status.data_block_count_++;
+        break;
+      case ObTabletMacroType::SHARED_META_BLOCK:
+        tmp_status.shared_meta_block_count_++;
+        break;
+      case ObTabletMacroType::SHARED_DATA_BLOCK:
+        tmp_status.shared_data_block_count_++;
+        break;
+      default:
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("block type is invalid", K(ret), K(block_info));
+        break;
+    }
+    if (OB_SUCC(ret)) {
+      tmp_status.hold_count_--;
     }
   }
   return ret;

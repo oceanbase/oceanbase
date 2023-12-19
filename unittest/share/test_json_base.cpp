@@ -886,6 +886,7 @@ TEST_F(TestJsonBase, test_get_allocator)
 
 TEST_F(TestJsonBase, test_seek)
 {
+  set_compat_mode(lib::Worker::CompatMode::MYSQL);
   ObArenaAllocator allocator(ObModIds::TEST);
   ObIJsonBase *j_tree = NULL;
   ObIJsonBase *j_bin = NULL;

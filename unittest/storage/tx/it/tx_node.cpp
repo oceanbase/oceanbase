@@ -22,9 +22,16 @@
 } while(0);
 
 namespace oceanbase {
-namespace common
+namespace common {
+int ObClusterVersion::get_tenant_data_version(const uint64_t tenant_id, uint64_t &data_version)
 {
-void* ObGMemstoreAllocator::alloc(AllocHandle& handle, int64_t size)
+  data_version = DATA_CURRENT_VERSION;
+  return OB_SUCCESS;
+}
+}
+namespace share
+{
+void* ObMemstoreAllocator::alloc(AllocHandle& handle, int64_t size, const int64_t expire_ts)
 {
   int ret = OB_SUCCESS;
   int64_t align_size = upper_align(size, sizeof(int64_t));
@@ -152,6 +159,7 @@ int ObTxNode::start() {
     fake_tx_log_adapter_ = new ObFakeTxLogAdapter();
     OZ(fake_tx_log_adapter_->start());
   }
+  get_ts_mgr_().reset();
   OZ(msg_consumer_.start());
   OZ(txs_.start());
   OZ(create_ls_(ls_id_));
@@ -243,6 +251,12 @@ ObTxNode::~ObTxNode() __attribute__((optnone)) {
   ObTenantEnv::set_tenant(&tenant_);
   OZ(txs_.tx_ctx_mgr_.revert_ls_tx_ctx_mgr(fake_tx_table_.tx_ctx_table_.ls_tx_ctx_mgr_));
   fake_tx_table_.tx_ctx_table_.ls_tx_ctx_mgr_ = nullptr;
+  bool is_tx_clean = false;
+  int retry_cnt = 0;
+  do {
+    usleep(2000);
+    txs_.block_tx(ls_id_, is_tx_clean);
+  } while(!is_tx_clean && ++retry_cnt < 1000);
   OX(txs_.stop());
   OZ(txs_.wait_());
   if (role_ == Leader && fake_tx_log_adapter_) {
@@ -561,7 +575,7 @@ int ObTxNode::atomic_write(ObTxDesc &tx, const int64_t key, const int64_t value,
   }
   return ret;
 }
-int ObTxNode::write(ObTxDesc &tx, const int64_t key, const int64_t value)
+int ObTxNode::write(ObTxDesc &tx, const int64_t key, const int64_t value, const int16_t branch)
 {
   int ret = OB_SUCCESS;
   ObTxReadSnapshot snapshot;
@@ -569,13 +583,14 @@ int ObTxNode::write(ObTxDesc &tx, const int64_t key, const int64_t value)
                        tx.isolation_,
                        ts_after_ms(50),
                        snapshot));
-  OZ(write(tx, snapshot, key, value));
+  OZ(write(tx, snapshot, key, value, branch));
   return ret;
 }
 int ObTxNode::write(ObTxDesc &tx,
                     const ObTxReadSnapshot &snapshot,
                     const int64_t key,
-                    const int64_t value)
+                    const int64_t value,
+                    const int16_t branch)
 {
   TRANS_LOG(INFO, "write", K(key), K(value), K(snapshot), K(tx), KPC(this));
   int ret = OB_SUCCESS;
@@ -589,6 +604,7 @@ int ObTxNode::write(ObTxDesc &tx,
   write_store_ctx.ls_ = &mock_ls_;
   write_store_ctx.ls_id_ = ls_id_;
   write_store_ctx.table_iter_ = iter;
+  write_store_ctx.branch_ = branch;
   concurrent_control::ObWriteFlag write_flag;
   OZ(txs_.get_write_store_ctx(tx,
                               snapshot,
@@ -709,20 +725,28 @@ int ObTxNode::replay(const void *buffer,
                      const int64_t ts_ns)
 {
   ObTenantEnv::set_tenant(&tenant_);
-
   int ret = OB_SUCCESS;
   logservice::ObLogBaseHeader base_header;
   int64_t tmp_pos = 0;
   const char *log_buf = static_cast<const char *>(buffer);
-
   if (OB_FAIL(base_header.deserialize(log_buf, nbytes, tmp_pos))) {
     LOG_WARN("log base header deserialize error", K(ret));
-  } else if (OB_FAIL(ObFakeTxReplayExecutor::execute(&mock_ls_, mock_ls_.get_tx_svr(), log_buf, nbytes,
-                                                     tmp_pos, lsn, ts_ns, base_header.get_replay_hint(),
-                                                     ls_id_, tenant_id_, memtable_))) {
-    LOG_WARN("replay tx log error", K(ret), K(lsn), K(ts_ns));
   } else {
-    LOG_INFO("replay tx log succ", K(ret), K(lsn), K(ts_ns));
+    share::SCN log_scn;
+    log_scn.convert_for_tx(ts_ns);
+    ObFakeTxReplayExecutor executor(&mock_ls_,
+                                    ls_id_,
+                                    tenant_id_,
+                                    mock_ls_.get_tx_svr(),
+                                    lsn,
+                                    log_scn,
+                                    base_header);
+    executor.set_memtable(memtable_);
+    if (OB_FAIL(executor.execute(log_buf, nbytes, tmp_pos))) {
+      LOG_WARN("replay tx log error", K(ret), K(lsn), K(ts_ns));
+    } else {
+      LOG_INFO("replay tx log succ", K(ret), K(lsn), K(ts_ns));
+    }
   }
   return ret;
 }

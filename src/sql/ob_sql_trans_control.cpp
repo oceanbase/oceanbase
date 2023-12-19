@@ -1136,9 +1136,10 @@ int ObSqlTransControl::create_anonymous_savepoint(ObExecContext &exec_ctx, trans
   ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);
   CK (OB_NOT_NULL(session));
   OZ (get_tx_service(session, txs));
+  CK (OB_NOT_NULL(session->get_tx_desc()));
   ObTxParam tx_param;
-  OZ (build_tx_param_(session, tx_param));
-  OZ (txs->create_implicit_savepoint(*session->get_tx_desc(), tx_param, savepoint), *session->get_tx_desc());
+  const int16_t branch_id = DAS_CTX(exec_ctx).get_write_branch_id();
+  OZ (txs->create_branch_savepoint(*session->get_tx_desc(), branch_id, savepoint), *session->get_tx_desc());
   return ret;
 }
 
@@ -1493,6 +1494,17 @@ int ObSqlTransControl::check_free_route_tx_alive(ObSQLSessionInfo &session, tran
       OZ (txs->tx_free_route_check_alive(txn_free_route_ctx, *tx, session.get_sessid()));
     }
   }
+  return ret;
+}
+
+int ObSqlTransControl::alloc_branch_id(ObExecContext &exec_ctx, const int64_t count, int16_t &branch_id)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);
+  transaction::ObTxDesc *tx_desc = NULL;
+  CK (OB_NOT_NULL(session));
+  CK (OB_NOT_NULL(tx_desc = session->get_tx_desc()));
+  OZ (tx_desc->alloc_branch_id(count, branch_id));
   return ret;
 }
 

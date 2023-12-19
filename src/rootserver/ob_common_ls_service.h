@@ -95,7 +95,8 @@ public:
                    const share::ObLSStatusInfo &info,
                    const SCN &create_scn,
                    bool create_with_palf,
-                   const palf::PalfBaseInfo &palf_base_info);
+                   const palf::PalfBaseInfo &palf_base_info,
+                   const uint64_t source_tenant_id);
   static int update_tenant_info(const uint64_t tenant_id,
                                 const share::ObTenantSwitchoverStatus &staus,
                                 ObMySQLProxy *proxy);

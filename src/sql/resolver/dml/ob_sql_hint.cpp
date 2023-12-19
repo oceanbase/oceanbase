@@ -663,7 +663,7 @@ int ObQueryHint::print_stmt_hint(PlanText &plan_text, const ObDMLStmt &stmt,
   const int64_t stmt_id = stmt.get_stmt_id();
   if (OB_FAIL(print_qb_name_hint(plan_text, stmt_id))) {
     LOG_WARN("failed to print qb_name hint", K(ret));
-  } else if (stmt_id == outline_stmt_id_) {
+  } else if (OB_INVALID_STMT_ID != stmt_id && stmt_id == outline_stmt_id_) {
     // Outline data resolved from this stmt, print outline data here.
     if (OB_FAIL(print_outline_data(plan_text))) {
       LOG_WARN("failed to print outline data", K(ret));
@@ -737,7 +737,9 @@ int ObQueryHint::print_outline_data(PlanText &plan_text) const
 int ObQueryHint::print_qb_name_hint(PlanText &plan_text, int64_t stmt_id) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(stmt_id < 0 || stmt_id >= stmt_id_map_.count())) {
+  if (OB_INVALID_STMT_ID == stmt_id) {
+    /* do nothing, this stmt is create for print stmt for mv */
+  } else if (OB_UNLIKELY(stmt_id < 0 || stmt_id >= stmt_id_map_.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected stmt id", K(ret), K(stmt_id), K(stmt_id_map_.count()));
   } else if (stmt_id_map_.at(stmt_id).is_from_hint_) {

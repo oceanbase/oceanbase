@@ -242,7 +242,7 @@ int ObExprUserEnv::eval_sessionid_result1(const ObExpr &expr, ObEvalCtx &ctx, Ob
     } else if (arg->is_null()) {
       res.set_null();
     } else {
-      const uint64_t sid = ctx.exec_ctx_.get_my_session()->get_sessid();
+      const uint64_t sid = ctx.exec_ctx_.get_my_session()->get_compatibility_sessid();
       ObNumStackOnceAlloc tmp_alloc;
       number::ObNumber res_nmb;
       if (OB_FAIL(res_nmb.from(sid, tmp_alloc))) {

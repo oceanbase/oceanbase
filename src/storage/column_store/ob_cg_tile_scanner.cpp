@@ -93,7 +93,7 @@ int ObCGTileScanner::switch_context(
     is_reverse_scan_ = access_ctx.query_flag_.is_reverse_scan();
     ObCOSSTableV2 *co_sstable = static_cast<ObCOSSTableV2 *>(table);
     for (int64_t i = 0; OB_SUCC(ret) && i < cg_scanners_.count(); i++) {
-      storage::ObCGTableWrapper cg_wrapper;
+      storage::ObSSTableWrapper cg_wrapper;
       const ObTableIterParam &cg_param = *iter_params.at(i);
       ObICGIterator *&cg_scanner = cg_scanners_.at(i);
       if (OB_ISNULL(cg_scanner)) {

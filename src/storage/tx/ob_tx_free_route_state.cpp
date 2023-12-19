@@ -51,7 +51,7 @@ int ObTxDesc::encode_##name##_state(char *buf, const int64_t buf_len, int64_t &p
 int ObTxDesc::encode_##name##_state_for_verify(char *buf, const int64_t buf_len, int64_t &pos) \
 {                                                                       \
    int ret = OB_SUCCESS;                                                \
-   PRE_ENCODE_FOR_VERIFY_HANDLER;                                          \
+   PRE_ENCODE_FOR_VERIFY_HANDLER;                                       \
    LST_DO_CODE(OB_UNIS_ENCODE, ##__VA_ARGS__);                          \
    return ret;                                                          \
 }                                                                       \
@@ -115,7 +115,8 @@ TXN_FREE_ROUTE_MEMBERS(static, , PRE_STATIC_DECODE, POST_STATIC_DECODE,
                        access_mode_,
                        sess_id_,
                        timeout_us_,
-                       expire_ts_);
+                       expire_ts_,
+                       seq_base_);
 TXN_FREE_ROUTE_MEMBERS(dynamic, PRE_ENCODE_DYNAMIC_FOR_VERIFY, PRE_DYNAMIC_DECODE, POST_DYNAMIC_DECODE,
                        op_sn_,
                        state_,
@@ -136,7 +137,8 @@ TXN_FREE_ROUTE_MEMBERS(extra, , PRE_EXTRA_DECODE, POST_EXTRA_DECODE,
                        addr_,       // dup with static
                        isolation_,  // dup with static
                        snapshot_version_,
-                       snapshot_scn_);
+                       snapshot_scn_,
+                       seq_base_);
 
 #undef TXN_FREE_ROUTE_MEMBERS
 int64_t ObTxDesc::estimate_state_size()

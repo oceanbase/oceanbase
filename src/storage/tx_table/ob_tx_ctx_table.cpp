@@ -104,13 +104,15 @@ int ObTxCtxTableRecoverHelper::recover_one_tx_ctx_(transaction::ObLSTxCtxMgr* ls
   transaction::ObPartTransCtx *tx_ctx = NULL;
   bool tx_ctx_existed = true;
   common::ObAddr scheduler;
+  // since 4.3 cluster_version in ctx_info
+  uint64_t cluster_version = ctx_info.cluster_version_;
   transaction::ObTxCreateArg arg(true,  /* for_replay */
                                  false,
                                  MTL_ID(),
                                  ctx_info.tx_id_,
                                  ctx_info.ls_id_,
                                  ctx_info.cluster_id_,     /* cluster_id */
-                                 GET_MIN_CLUSTER_VERSION(),
+                                 cluster_version,
                                  0, /*session_id*/
                                  scheduler,
                                  INT64_MAX,

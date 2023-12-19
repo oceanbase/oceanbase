@@ -1955,7 +1955,9 @@ int ObStartCompleteMigrationTask::wait_log_replay_to_max_minor_end_scn_()
         if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000)) {
           LOG_INFO("ls wait replay to max minor sstable end log ts, retry next loop", "arg", ctx_->arg_,
               "wait_replay_start_ts", wait_replay_start_ts,
-              "current_ts", current_ts);
+              "current_ts", current_ts,
+              "max_minor_end_scn", max_minor_end_scn_,
+              "current_replay_scn", current_replay_scn);
         }
 
         if (current_ts - wait_replay_start_ts < timeout) {

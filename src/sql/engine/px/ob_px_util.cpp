@@ -136,6 +136,7 @@ int ObPXServerAddrUtil::get_external_table_loc(
   uint64_t tenant_id = OB_INVALID_ID;
   bool is_external_files_on_disk = false;
   ObIArray<ObExternalFileInfo> &ext_file_urls = dfo.get_external_table_files();
+  ObSEArray<ObAddr, 16> all_locations;
   ObQueryRangeArray ranges;
   if (OB_ISNULL(local_loc = DAS_CTX(ctx).get_table_loc_by_id(table_id, ref_table_id))) {
     ret = OB_ERR_UNEXPECTED;
@@ -143,9 +144,15 @@ int ObPXServerAddrUtil::get_external_table_loc(
   } else if (OB_ISNULL(ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
+  } else if (OB_ISNULL(GCTX.location_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null location service", K(ret));
   } else {
     tenant_id = ctx.get_my_session()->get_effective_tenant_id();
     is_external_files_on_disk = local_loc->loc_meta_->is_external_files_on_disk_;
+    if (OB_FAIL(GCTX.location_service_->external_table_get(tenant_id, ref_table_id, all_locations))) {
+      LOG_WARN("fail to get external table location", K(ret));
+    }
   }
   if (OB_SUCC(ret) && ext_file_urls.empty()) {
     // TODO EXTARNAL TABLE
@@ -153,14 +160,23 @@ int ObPXServerAddrUtil::get_external_table_loc(
     //   ret = OB_NOT_SUPPORTED;
     //   LOG_WARN("Has dynamic params in external table or empty range is not supported", K(ret),
     //            K(pre_query_range.has_exec_param()), K(pre_query_range.get_column_count()));
+    ObArray<ObExternalFileInfo> tmp_ext_file_urls;
     if (OB_FAIL(ObSQLUtils::extract_pre_query_range(
                                     pre_query_range, ctx.get_allocator(), ctx, ranges,
                                     ObBasicSessionInfo::create_dtc_params(ctx.get_my_session())))) {
       LOG_WARN("failed to extract external file fiter", K(ret));
     } else if (OB_FAIL(ObExternalTableFileManager::get_instance().get_external_files(
                             tenant_id, ref_table_id, is_external_files_on_disk,
-                            ctx.get_allocator(), ext_file_urls, ranges.empty() ? NULL : &ranges))) {
+                            ctx.get_allocator(), tmp_ext_file_urls, ranges.empty() ? NULL : &ranges))) {
       LOG_WARN("fail to get external files", K(ret));
+    } else if (OB_FAIL(ObExternalTableUtils::filter_files_in_locations(tmp_ext_file_urls,
+                                                                       all_locations,
+                                                                       ext_file_urls))) {
+      //For recovered cluster, the file addr may not in the cluster. Then igore it.
+      LOG_WARN("filter files in location failed", K(ret));
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (ext_file_urls.empty()) {
       const char* dummy_file_name = "#######DUMMY_FILE#######";
       ObExternalFileInfo dummy_file;
@@ -191,22 +207,17 @@ int ObPXServerAddrUtil::get_external_table_loc(
         }
       }
     } else {
-      ObSEArray<ObAddr, 16> all_locations;
       int64_t expected_location_cnt = std::min(dfo.get_dop(), dfo.get_external_table_files().count());
       if (1 == expected_location_cnt) {
         if (OB_FAIL(target_locations.push_back(GCTX.self_addr()))) {
           LOG_WARN("fail to push push back", K(ret));
         }
-      } else {
-        if (OB_FAIL(GCTX.location_service_->external_table_get(tenant_id, ref_table_id, all_locations))) {
-          LOG_WARN("fail to get external table location", K(ret));
-        } else if (expected_location_cnt >= all_locations.count() ?
+      } else if (expected_location_cnt >= all_locations.count() ?
                    OB_FAIL(target_locations.assign(all_locations))
                  : OB_FAIL(ObPXServerAddrUtil::do_random_dfo_distribution(all_locations,
                                                                           expected_location_cnt,
                                                                           target_locations))) {
-          LOG_WARN("fail to calc random dfo distribution", K(ret), K(all_locations), K(expected_location_cnt));
-        }
+        LOG_WARN("fail to calc random dfo distribution", K(ret), K(all_locations), K(expected_location_cnt));
       }
     }
     LOG_TRACE("calc external table location", K(target_locations));

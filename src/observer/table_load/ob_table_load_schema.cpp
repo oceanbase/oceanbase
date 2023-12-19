@@ -195,10 +195,12 @@ ObTableLoadSchema::ObTableLoadSchema()
   : allocator_("TLD_Schema"),
     is_partitioned_table_(false),
     is_heap_table_(false),
+    is_column_store_(false),
     has_autoinc_column_(false),
     has_identity_column_(false),
     rowkey_column_count_(0),
     store_column_count_(0),
+    lob_column_cnt_(0),
     collation_type_(CS_TYPE_INVALID),
     schema_version_(0),
     is_inited_(false)
@@ -217,10 +219,12 @@ void ObTableLoadSchema::reset()
   table_name_.reset();
   is_partitioned_table_ = false;
   is_heap_table_ = false;
+  is_column_store_ = false;
   has_autoinc_column_ = false;
   has_identity_column_ = false;
   rowkey_column_count_ = 0;
   store_column_count_ = 0;
+  lob_column_cnt_ = 0;
   collation_type_ = CS_TYPE_INVALID;
   schema_version_ = 0;
   column_descs_.reset();
@@ -262,6 +266,7 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
   } else {
     is_partitioned_table_ = table_schema->is_partitioned_table();
     is_heap_table_ = table_schema->is_heap_table();
+    is_column_store_ = (table_schema->get_column_group_count() > 1) ? true :false;
     has_autoinc_column_ = (table_schema->get_autoinc_column_id() != 0);
     rowkey_column_count_ = table_schema->get_rowkey_column_num();
     collation_type_ = table_schema->get_collation_type();
@@ -282,6 +287,8 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
     } else if (OB_FAIL(datum_utils_.init(multi_version_column_descs_, rowkey_column_count_,
                                          lib::is_oracle_mode(), allocator_))) {
       LOG_WARN("fail to init datum utils", KR(ret));
+    } else if (OB_FAIL(init_lob_storage(column_descs_))) {
+      LOG_WARN("fail to check lob storage", KR(ret));
     } else if (OB_FAIL(init_cmp_funcs(column_descs_, lib::is_oracle_mode()))) {
       LOG_WARN("fail to init cmp funcs", KR(ret));
     }
@@ -312,6 +319,20 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
           }
         }
       }//end for
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadSchema::init_lob_storage(common::ObIArray<share::schema::ObColDesc> &column_descs)
+{
+  int ret = OB_SUCCESS;
+  lob_column_cnt_ = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_descs.count(); ++i) {
+    const ObColDesc &col_desc = column_descs.at(i);
+    if (col_desc.col_type_.is_lob_storage()) {
+      column_descs.at(i).col_type_.set_has_lob_header();
+      ++lob_column_cnt_;
     }
   }
   return ret;
@@ -384,6 +405,9 @@ int ObTableLoadSchema::prepare_col_desc(const ObTableSchema *table_schema, commo
         LOG_ERROR("invalid column schema", K(column_schema));
       } else {
         col_desc.col_type_.set_scale(column_schema->get_data_scale());
+        if (col_desc.col_type_.is_lob_storage() && (!IS_CLUSTER_VERSION_BEFORE_4_1_0_0)) {
+          col_desc.col_type_.set_has_lob_header();
+        }
       }
     }
   }

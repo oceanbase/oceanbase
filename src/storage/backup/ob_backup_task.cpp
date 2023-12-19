@@ -3432,7 +3432,7 @@ int ObLSBackupDataTask::may_fill_reused_backup_items_(
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   ObBackupDataType backup_data_type;
   backup_data_type.set_major_data_backup();
-  ObArray<ObITable *> sstable_array;
+  ObArray<ObSSTableWrapper> sstable_array;
 
   if (OB_ISNULL(ls_backup_ctx_) || OB_ISNULL(tablet_stat)) {
     ret = OB_ERR_UNEXPECTED;
@@ -3454,12 +3454,12 @@ int ObLSBackupDataTask::may_fill_reused_backup_items_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable array count not 1", K(ret), K(sstable_array));
   } else if (1 == sstable_array.count()) {
-    if (OB_FAIL(check_and_mark_item_reused_(sstable_array.at(0), tablet_handle, tablet_stat))) {
+    if (OB_FAIL(check_and_mark_item_reused_(sstable_array.at(0).get_sstable(), tablet_handle, tablet_stat))) {
       LOG_WARN("failed to check and mark item reused", K(ret));
     }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < sstable_array.count(); ++i) {
-      if (OB_FAIL(check_and_mark_item_reused_(sstable_array.at(i), tablet_handle, tablet_stat))) {
+      if (OB_FAIL(check_and_mark_item_reused_(sstable_array.at(i).get_sstable(), tablet_handle, tablet_stat))) {
         LOG_WARN("failed to check and mark item reused", K(ret));
       }
     }
@@ -5280,7 +5280,7 @@ int ObLSBackupComplementLogTask::inner_get_piece_file_list_(const share::ObLSID 
   const share::SCN &start_scn = piece_attr.start_scn_;
   if (OB_FAIL(get_src_backup_piece_dir_(ls_id, piece_attr, src_piece_dir_path))) {
     LOG_WARN("failed to get src backup piece dir", K(ret), K(round_id), K(piece_id), K(ls_id), K(piece_attr));
-  } else if (OB_FAIL(util.list_files(src_piece_dir_path.get_obstr(), archive_dest_.get_storage_info(), op))) {
+  } else if (OB_FAIL(util.adaptively_list_files(src_piece_dir_path.get_obstr(), archive_dest_.get_storage_info(), op))) {
     LOG_WARN("failed to list files", K(ret), K(src_piece_dir_path));
   } else if (OB_FAIL(op.get_file_id_list(file_id_list))) {
     LOG_WARN("failed to get files", K(ret));
@@ -5551,7 +5551,7 @@ int ObLSBackupComplementLogTask::inner_transfer_clog_file_(
   } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(transfer_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret), K(transfer_len));
-  } else if (OB_FAIL(util.read_part_file(src_path.get_obstr(), archive_dest_.get_storage_info(), buf, transfer_len, dst_len, read_len))) {
+  } else if (OB_FAIL(util.adaptively_read_part_file(src_path.get_obstr(), archive_dest_.get_storage_info(), buf, transfer_len, dst_len, read_len))) {
     LOG_WARN("failed to read part file", K(ret), K(src_path));
   } else if (read_len != transfer_len) {
     ret = OB_ERR_UNEXPECTED;
@@ -5585,7 +5585,7 @@ int ObLSBackupComplementLogTask::get_file_length_(
 {
   int ret = OB_SUCCESS;
   ObBackupIoAdapter util;
-  if (OB_FAIL(util.get_file_length(file_path, storage_info, length))) {
+  if (OB_FAIL(util.adaptively_get_file_length(file_path, storage_info, length))) {
     if (OB_BACKUP_FILE_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       length = 0;

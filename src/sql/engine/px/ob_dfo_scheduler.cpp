@@ -584,6 +584,19 @@ int ObSerialDfoScheduler::do_schedule_dfo(ObExecContext &ctx, ObDfo &dfo) const
     }
   }
 
+  // 2. allocate branch_id for DML: replace, insert update, select for update
+  if (OB_SUCC(ret) && dfo.has_need_branch_id_op()) {
+    ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
+      int16_t branch_id = 0;
+      const int64_t max_task_count = sqcs.at(idx)->get_max_task_count();
+      if (OB_FAIL(ObSqlTransControl::alloc_branch_id(ctx, max_task_count, branch_id))) {
+        LOG_WARN("alloc branch id fail", KR(ret), K(max_task_count));
+      } else {
+        sqcs.at(idx)->set_branch_id_base(branch_id);
+        LOG_TRACE("alloc branch id", K(max_task_count), K(branch_id), KPC(sqcs.at(idx)));
+      }
+    }
+  }
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(dispatch_sqcs(ctx, dfo, sqcs))) {
@@ -752,6 +765,20 @@ int ObParallelDfoScheduler::do_schedule_dfo(ObExecContext &exec_ctx, ObDfo &dfo)
       sqc.set_sqc_count(sqcs.count());
       LOG_TRACE("link qc-sqc channel and registered to qc msg loop. ready to receive sqc ctrl msg",
                 K(idx), K(cnt), K(*ch), K(dfo), K(sqc));
+    }
+  }
+
+  // 2. allocate branch_id for DML: replace, insert update, select for update
+  if (OB_SUCC(ret) && dfo.has_need_branch_id_op()) {
+    ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
+      int16_t branch_id = 0;
+      const int64_t max_task_count = sqcs.at(idx)->get_max_task_count();
+      if (OB_FAIL(ObSqlTransControl::alloc_branch_id(exec_ctx, max_task_count, branch_id))) {
+        LOG_WARN("alloc branch id fail", KR(ret), K(max_task_count));
+      } else {
+        sqcs.at(idx)->set_branch_id_base(branch_id);
+        LOG_TRACE("alloc branch id", K(max_task_count), K(branch_id), KPC(sqcs.at(idx)));
+      }
     }
   }
 

@@ -125,6 +125,7 @@ int ObAccessService::pre_check_lock(
                                                 param.expired_time_, /*timeout*/
                                                 tx_desc,
                                                 snapshot,
+                                                0,/*branch_id*/
                                                 write_flag,
                                                 ctx_guard))) {
     LOG_WARN("fail to check query allowed", K(ret), K(ls_id));
@@ -162,6 +163,7 @@ int ObAccessService::lock_obj(
                                                 param.expired_time_, /*timeout*/
                                                 tx_desc,
                                                 snapshot,
+                                                0, /*branch_id*/
                                                 write_flag,
                                                 ctx_guard))) {
     LOG_WARN("fail to check query allowed", K(ret), K(ls_id));
@@ -200,6 +202,7 @@ int ObAccessService::unlock_obj(
                                                 param.expired_time_, /*timeout*/
                                                 tx_desc,
                                                 snapshot,
+                                                0,/*branch_id*/
                                                 write_flag,
                                                 ctx_guard))) {
     LOG_WARN("fail to check query allowed", K(ret), K(ls_id));
@@ -343,6 +346,7 @@ int ObAccessService::get_write_store_ctx_guard_(
     const int64_t timeout,
     transaction::ObTxDesc &tx_desc,
     const transaction::ObTxReadSnapshot &snapshot,
+    const int16_t branch_id,
     const concurrent_control::ObWriteFlag write_flag,
     ObStoreCtxGuard &ctx_guard,
     const transaction::ObTxSEQ &spec_seq_no)
@@ -361,6 +365,7 @@ int ObAccessService::get_write_store_ctx_guard_(
     ObStoreCtx &ctx = ctx_guard.get_store_ctx();
     ctx.ls_ = ls;
     ctx.timeout_ = timeout;
+    ctx.branch_ = branch_id;
     if (OB_FAIL(ls->get_write_store_ctx(tx_desc, snapshot, write_flag, ctx, spec_seq_no))) {
       LOG_WARN("can not get write store ctx", K(ret), K(ls_id), K(snapshot), K(tx_desc));
     }
@@ -412,7 +417,6 @@ int ObAccessService::get_source_ls_tx_table_guard_(
     } else {
       ObStoreCtx &ctx = ctx_guard.get_store_ctx();
       ctx.mvcc_acc_ctx_.set_src_tx_table_guard(src_tx_table_guard);
-      ctx.mvcc_acc_ctx_.set_transfer_scn(user_data.transfer_scn_);
       LOG_DEBUG("succ get src tx table guard", K(ret), K(src_ls->get_ls_id()), K(src_tx_table_guard), K(user_data));
     }
   }
@@ -576,6 +580,7 @@ int ObAccessService::check_write_allowed_(
                                                 dml_param.timeout_,
                                                 tx_desc,
                                                 dml_param.snapshot_,
+                                                dml_param.branch_id_,
                                                 dml_param.write_flag_,
                                                 ctx_guard,
                                                 dml_param.spec_seq_no_))) {

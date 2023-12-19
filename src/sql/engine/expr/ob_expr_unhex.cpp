@@ -75,10 +75,17 @@ int ObExprUnhex::eval_unhex(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_dat
     if(OB_ERR_INVALID_HEX_NUMBER == ret) {
       ObCastMode default_cast_mode = CM_NONE;
       const ObSQLSessionInfo* session = ctx.exec_ctx_.get_my_session();
+      ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+      ObSQLMode sql_mode = 0;
       if (OB_ISNULL(session)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("session is NULL", K(ret));
-      } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, default_cast_mode))) {
+      } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
+        LOG_WARN("get sql mode failed", K(ret));
+      } else if (FALSE_IT(ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
+                                                            session->is_ignore_stmt(),
+                                                            sql_mode,
+                                                            default_cast_mode))) {
         LOG_WARN("failed to get default cast mode", K(ret));
       } else if (CM_IS_WARN_ON_FAIL(default_cast_mode)) {
         ret = OB_SUCCESS;
@@ -91,6 +98,15 @@ int ObExprUnhex::eval_unhex(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_dat
       //ret is other error code
       LOG_WARN("fail to eval unhex", K(ret), K(expr), K(*param));
     }
+  }
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprUnhex, raw_expr) {
+  int ret = OB_SUCCESS;
+  if (is_mysql_mode()) {
+    SET_LOCAL_SYSVAR_CAPACITY(1);
+    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_SQL_MODE);
   }
   return ret;
 }

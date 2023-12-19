@@ -26,14 +26,14 @@ ObCGScanner::~ObCGScanner()
 int ObCGScanner::init(
     const ObTableIterParam &iter_param,
     ObTableAccessContext &access_ctx,
-    ObCGTableWrapper &wrapper)
+    ObSSTableWrapper &wrapper)
 {
   int ret = OB_SUCCESS;
 
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("The ObCGScanner has been inited", K(ret));
-  } else if (OB_UNLIKELY(!wrapper.is_valid() || !wrapper.cg_sstable_->is_major_sstable() ||
+  } else if (OB_UNLIKELY(!wrapper.is_valid() || !wrapper.get_sstable()->is_major_or_ddl_merge_sstable() ||
                          !iter_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument to init ObCGScanner", K(ret), K(wrapper), K(iter_param));
@@ -48,7 +48,7 @@ int ObCGScanner::init(
   } else {
     iter_param_ = &iter_param;
     access_ctx_ = &access_ctx;
-    sstable_row_cnt_ = sstable_->get_row_count();
+    sstable_row_cnt_ = sstable_->get_merged_row_count();
     is_reverse_scan_ = access_ctx.query_flag_.is_reverse_scan();
   }
 
@@ -64,14 +64,14 @@ int ObCGScanner::init(
 int ObCGScanner::switch_context(
     const ObTableIterParam &iter_param,
     ObTableAccessContext &access_ctx,
-    ObCGTableWrapper &wrapper)
+    ObSSTableWrapper &wrapper)
 {
   int ret = OB_SUCCESS;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("The ObCGScanner is not inited");
-  } else if (OB_UNLIKELY(!wrapper.is_valid() || !wrapper.cg_sstable_->is_major_sstable() ||
+  } else if (OB_UNLIKELY(!wrapper.is_valid() || !wrapper.get_sstable()->is_major_or_ddl_merge_sstable() ||
                          !iter_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(wrapper), K(iter_param));
@@ -92,7 +92,7 @@ int ObCGScanner::switch_context(
     if (OB_SUCC(ret)) {
       iter_param_ = &iter_param;
       access_ctx_ = &access_ctx;
-      sstable_row_cnt_ = sstable_->get_row_count();
+      sstable_row_cnt_ = sstable_->get_merged_row_count();
       is_reverse_scan_ = access_ctx.query_flag_.is_reverse_scan();
     }
   }
@@ -146,7 +146,7 @@ int ObCGScanner::init_micro_scanner()
 {
   int ret = OB_SUCCESS;
   if (nullptr != micro_scanner_) {
-  } else if (OB_UNLIKELY(!sstable_->is_major_sstable())) {
+  } else if (OB_UNLIKELY(!sstable_->is_major_or_ddl_merge_sstable())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected not major sstable", K(ret), KPC_(sstable));
   } else if (nullptr == (micro_scanner_ = OB_NEWx(ObMicroBlockRowScanner,
@@ -447,7 +447,7 @@ void ObCGRowScanner::reuse()
 int ObCGRowScanner::init(
     const ObTableIterParam &iter_param,
     ObTableAccessContext &access_ctx,
-    ObCGTableWrapper &wrapper)
+    ObSSTableWrapper &wrapper)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!iter_param.vectorized_enabled_ || nullptr == iter_param.op_ || !wrapper.is_valid() ||

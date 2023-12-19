@@ -109,7 +109,8 @@ public:
       const ObStorageMetaHandle &table_store_handle,
       const ObITable::TableKey &table_key,
       ObTableHandleV2 &handle) const;
-  int get_table(const ObITable::TableKey &table_key, ObITable *&table) const;
+  int get_sstable(const ObITable::TableKey &table_key, ObSSTableWrapper &wrapper) const;
+  int get_memtable(const ObITable::TableKey &table_key, ObITable *&table) const;
   int get_read_tables(
       const int64_t snapshot_version,
       const ObTablet &tablet,
@@ -293,11 +294,6 @@ private:
       const ObTablet &tablet,
       const ObBatchUpdateTableStoreParam &param,
       const ObTabletTableStore &old_store);
-  int update_ha_minor_sstables_(
-      common::ObArenaAllocator &allocator,
-      const ObTablet &tablet,
-      const ObBatchUpdateTableStoreParam &param,
-      const ObTabletTableStore &old_store);
   // ddl
   int pull_ddl_memtables(common::ObArenaAllocator &allocator, const ObTablet &tablet);
   int build_ddl_sstables(
@@ -353,6 +349,13 @@ public:
 private:
   void table_to_string(
        ObITable *table,
+       const char* table_arr,
+       char *buf,
+       const int64_t buf_len,
+       int64_t &pos) const;
+
+  void ddl_kv_to_string(
+       ObDDLKV *table,
        const char* table_arr,
        char *buf,
        const int64_t buf_len,

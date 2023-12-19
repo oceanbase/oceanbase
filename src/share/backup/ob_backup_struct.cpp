@@ -1171,13 +1171,13 @@ int ObBackupStorageInfo::get_access_key_(char *key_buf, const int64_t key_buf_le
   return ret;
 }
 
-int ObBackupStorageInfo::parse_storage_info_(const char *storage_info, bool &has_appid)
+int ObBackupStorageInfo::parse_storage_info_(const char *storage_info, bool &has_needed_extension)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(storage_info) || strlen(storage_info) >= OB_MAX_BACKUP_STORAGE_INFO_LENGTH) {
     ret = OB_INVALID_BACKUP_DEST;
     LOG_WARN("storage info is invalid", K(ret), K(storage_info), K(strlen(storage_info)));
-  } else if (OB_FAIL(ObObjectStorageInfo::parse_storage_info_(storage_info, has_appid))) {
+  } else if (OB_FAIL(ObObjectStorageInfo::parse_storage_info_(storage_info, has_needed_extension))) {
     LOG_WARN("failed to parse storage info", K(ret), K(storage_info));
   } else {
     char tmp[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };

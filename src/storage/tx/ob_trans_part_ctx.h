@@ -54,7 +54,7 @@ class ObTxPrepareLog;
 class ObTxCommitLog;
 class ObTxAbortLog;
 class ObTxClearLog;
-class ObIRetainCtxCheckFunctor; 
+class ObIRetainCtxCheckFunctor;
 struct ObTxMsg;
 }
 namespace palf
@@ -86,6 +86,62 @@ const static int64_t OB_TX_MAX_LOG_CBS = 15;
 const static int64_t PREALLOC_LOG_CALLBACK_COUNT = 3;
 const static int64_t RESERVE_LOG_CALLBACK_COUNT_FOR_FREEZING = 1;
 
+template<typename T, typename fn>
+int64_t search(const ObIArray<T> &array, fn &equal_func)
+{
+  int ret = OB_SUCCESS;
+  int64_t search_index = -1;
+
+  ARRAY_FOREACH_X(array, i, cnt, search_index == -1) {
+    if (equal_func(array.at(i))) {
+      search_index = i;
+    }
+  }
+
+  return search_index;
+}
+template<typename T>
+class EqualToTransferPartFunctor
+{
+public:
+  EqualToTransferPartFunctor(const ObStandbyCheckInfo &tmp_info) :
+                            tmp_info_(tmp_info)
+  {}
+  bool operator()(const T& item) {
+    bool bool_ret = false;
+    if (item.check_info_ == tmp_info_) {
+      bool_ret = true;
+    }
+    return bool_ret;
+  }
+private:
+  const ObStandbyCheckInfo &tmp_info_;
+};
+
+template<typename T>
+class EqualToStateInfoFunctor
+{
+public:
+  EqualToStateInfoFunctor(const T &tmp_info) :
+                          tmp_info_(tmp_info)
+  {}
+  bool operator()(const T& item) {
+    bool bool_ret = false;
+    if (tmp_info_.ls_id_ == item.ls_id_) {
+      if (tmp_info_.check_info_.is_valid()) {
+        if (tmp_info_.check_info_ == item.check_info_) {
+          bool_ret = true;
+        }
+      } else { // for old version msg compat
+        bool_ret = true;
+      }
+    }
+    return bool_ret;
+  }
+private:
+  const T &tmp_info_;
+};
+
 // participant transaction context
 class ObPartTransCtx : public ObTransCtx,
                        public ObTsCbTask,
@@ -109,7 +165,8 @@ public:
         role_state_(TxCtxRoleState::FOLLOWER),
         coord_prepare_info_arr_(OB_MALLOC_NORMAL_BLOCK_SIZE,
                                 ModulePageAllocator(reserve_allocator_, "PREPARE_INFO")),
-        standby_part_collected_(), ask_state_info_interval_(100 * 1000), refresh_state_info_interval_(100 * 1000)
+        standby_part_collected_(), ask_state_info_interval_(100 * 1000), refresh_state_info_interval_(100 * 1000),
+        transfer_deleted_(false)
   { /*reset();*/ }
   ~ObPartTransCtx() { destroy(); }
   void destroy();
@@ -124,7 +181,8 @@ public:
            const uint64_t cluster_id,
            const int64_t epoch,
            ObLSTxCtxMgr *ls_ctx_mgr,
-           const bool for_replay);
+           const bool for_replay,
+           ObXATransID xid);
   void reset() { }
   int construct_context(const ObTransMsg &msg);
 public:
@@ -136,7 +194,7 @@ public:
    */
   int kill(const KillTransArg &arg, ObIArray<ObTxCommitCallback> &cb_array);
   memtable::ObMemtableCtx *get_memtable_ctx() { return &mt_ctx_; }
-  int commit(const share::ObLSArray &parts,
+  int commit(const ObTxCommitParts &parts,
              const MonotonicTs &commit_time,
              const int64_t &expire_ts,
              const common::ObString &app_trace_info,
@@ -153,7 +211,7 @@ public:
   uint64_t get_tenant_id() const { return tenant_id_; }
   int64_t get_role_state() const { return role_state_; }
   // for xa
-  int sub_prepare(const share::ObLSArray &parts,
+  int sub_prepare(const ObTxCommitParts &parts,
                   const MonotonicTs &commit_time,
                   const int64_t &expire_ts,
                   const common::ObString &app_trace_info,
@@ -165,7 +223,7 @@ public:
                  const bool is_rollback);
 
   int dump_2_text(FILE *fd);
-
+  int init_for_transfer_move(const ObTxCtxMoveArg &arg);
 public:
   int replay_start_working_log(const share::SCN start_working_ts);
   int set_trans_app_trace_id_str(const ObString &app_trace_id_str);
@@ -179,14 +237,8 @@ public:
   uint64_t get_lock_for_read_retry_count() const { return mt_ctx_.get_lock_for_read_retry_count(); }
 
   int check_scheduler_status();
-  int remove_callback_for_uncommited_txn(
-    const memtable::ObMemtableSet *memtable_set);
+  int remove_callback_for_uncommited_txn(const memtable::ObMemtableSet *memtable_set);
   int64_t get_trans_mem_total_size() const { return mt_ctx_.get_trans_mem_total_size(); }
-
-  void update_max_submitted_seq_no(const ObTxSEQ seq_no)
-  {
-    exec_info_.max_submitted_seq_no_.inc_update(seq_no);
-  }
   int check_with_tx_data(ObITxDataCheckFunctor &fn);
   const share::SCN get_rec_log_ts() const;
   int on_tx_ctx_table_flushed();
@@ -202,8 +254,6 @@ public:
   void set_table_lock_killed()
   { mt_ctx_.set_table_lock_killed(); }
   bool is_table_lock_killed() const;
-  bool need_update_schema_version(const int64_t log_id,
-                                  const share::SCN log_ts);
 
   share::ObLSID get_ls_id() const { return ls_id_; }
 
@@ -212,11 +262,10 @@ public:
 
   int check_for_standby(const share::SCN &snapshot,
                         bool &can_read,
-                        share::SCN &trans_version,
-                        bool &is_determined_state);
-  int handle_trans_ask_state(const share::SCN &snapshot, ObAskStateRespMsg &resp);
+                        share::SCN &trans_version);
+  int handle_trans_ask_state(const ObAskStateMsg &req, ObAskStateRespMsg &resp);
   int handle_trans_ask_state_resp(const ObAskStateRespMsg &msg);
-  int handle_trans_collect_state(ObStateInfo &state_info, const SCN &snapshot);
+  int handle_trans_collect_state(ObCollectStateRespMsg &resp, const ObCollectStateMsg &req);
   int handle_trans_collect_state_resp(const ObCollectStateRespMsg &msg);
 
   // tx state check for 4377
@@ -240,7 +289,8 @@ private:
                 K(role_state_),
                 K(start_replay_ts_),
                 K(start_recover_ts_),
-                K(is_incomplete_replay_ctx_),
+                K(epoch_),
+                K(replay_completeness_),
                 K(mt_ctx_),
                 K(coord_prepare_info_arr_),
                 K_(upstream_state),
@@ -254,7 +304,8 @@ private:
                 K_(lastest_snapshot),
                 K_(state_info_array),
                 K_(last_request_ts),
-                KP_(block_frozen_memtable));
+                KP_(block_frozen_memtable),
+                K_(max_2pc_commit_scn));
 public:
   static const int64_t OP_LOCAL_NUM = 16;
   static const int64_t RESERVED_MEM_SIZE = 256;
@@ -283,7 +334,7 @@ private:
   int trans_replay_commit_(const share::SCN &commit_version,
                            const share::SCN &final_log_ts,
                            const uint64_t log_cluster_version,
-                           const int64_t checksum);
+                           const uint64_t checksum);
   int trans_replay_abort_(const share::SCN &final_log_ts);
   int update_publish_version_(const share::SCN &publish_version, const bool for_replay);
   bool can_be_recycled_();
@@ -294,9 +345,7 @@ private:
   int common_on_success_(ObTxLogCb * log_cb);
   int on_success_ops_(ObTxLogCb * log_cb);
   void check_and_register_timeout_task_();
-
-  // bool need_commit_barrier(); 
-
+  int recover_ls_transfer_status_();
 public:
   // ========================================================
   // newly added for 4.0
@@ -311,26 +360,33 @@ public:
   virtual int submit_log(const ObTwoPhaseCommitLogType &log_type) override;
   int try_submit_next_log();
   // for instant logging and freezing
-  int submit_redo_log(const bool is_freeze);
-
-  int push_repalying_log_ts(const share::SCN log_ts_ns);
-  int push_replayed_log_ts(const share::SCN log_ts_ns, const palf::LSN &offset);
-
+  int submit_redo_after_write(const bool force, const ObTxSEQ &write_seq_no);
+  int submit_redo_log_for_freeze();
+  int return_redo_log_cb(ObTxLogCb *log_cb);
+  int push_repalying_log_ts(const share::SCN log_ts_ns, const bool is_first);
+  int push_replayed_log_ts(const share::SCN log_ts_ns,
+                           const palf::LSN &offset,
+                           const int64_t log_entry_no);
   int iter_next_log_for_replay(ObTxLogBlock &log_block,
                                ObTxLogHeader &log_header,
                                const share::SCN log_scn);
   int replay_one_part_of_big_segment(const palf::LSN &offset,
                                      const share::SCN &timestamp,
                                      const int64_t &part_log_no);
-
+  int set_replay_completeness(const bool complete);
+  bool is_replay_completeness_unknown() const;
   int replay_redo_in_ctx(const ObTxRedoLog &redo_log,
                          const palf::LSN &offset,
                          const share::SCN &timestamp,
-                         const int64_t &part_log_no);
+                         const int64_t &part_log_no,
+                         const bool is_tx_log_queue,
+                         const bool serial_final);
   int replay_rollback_to(const ObTxRollbackToLog &log,
                          const palf::LSN &offset,
                          const share::SCN &timestamp,
-                         const int64_t &part_log_no);
+                         const int64_t &part_log_no,
+                         const bool is_tx_log_queue,
+                         const bool pre_barrier);
   int replay_active_info(const ObTxActiveInfoLog &active_info_log,
                          const palf::LSN &offset,
                          const share::SCN &timestamp,
@@ -338,7 +394,8 @@ public:
   int replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
                          const palf::LSN &offset,
                          const share::SCN &timestamp,
-                         const int64_t &part_log_no);
+                         const int64_t &part_log_no,
+                         const bool pre_barrier);
   int replay_prepare(const ObTxPrepareLog &prepare_log,
                      const palf::LSN &offset,
                      const share::SCN &timestamp,
@@ -367,11 +424,9 @@ public:
                     const share::SCN &timestamp,
                     const int64_t &part_log_no);
 
-  void force_no_need_replay_checksum();
+  void force_no_need_replay_checksum(const bool parallel_replay, const share::SCN &log_ts);
 
-  void check_no_need_replay_checksum(const share::SCN &log_ts);
-
-  int validate_replay_log_entry_no(bool first_created_ctx, int64_t log_entry_no, const share::SCN &log_ts);
+  void check_no_need_replay_checksum(const share::SCN &log_ts, const int index);
 
   // return the min log ts of those logs which are submitted but
   // not callbacked yet, if there is no such log return INT64_MAX
@@ -383,6 +438,8 @@ public:
   int get_tx_ctx_table_info(ObTxCtxTableInfo &info);
   int serialize_tx_ctx_to_buffer(ObTxLocalBuffer &buffer, int64_t &serialize_size);
   int recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info);
+
+  int correct_cluster_version_(uint64_t cluster_version_in_log);
 
   // leader switch related
   bool need_callback_scheduler_();
@@ -419,7 +476,7 @@ public:
                static_cast<int16_t>(cause));
   }
   RetainCause get_retain_cause() { return static_cast<RetainCause>(ATOMIC_LOAD(&retain_cause_)); };
-  
+
   int del_retain_ctx();
 
   // ========================================================
@@ -427,11 +484,16 @@ private:
   // ========================================================
   // newly added for 4.0
   int submit_log_impl_(const ObTxLogType log_type);
+  void handle_submit_log_err_(const ObTxLogType log_type, int &ret);
+  typedef logservice::ObReplayBarrierType ObReplayBarrierType;
+  int submit_log_block_out_(ObTxLogBlock &block,
+                            const share::SCN &base_scn,
+                            ObTxLogCb *&log_cb,
+                            const int64_t replay_hint = 0,
+                            const ObReplayBarrierType barrier = ObReplayBarrierType::NO_NEED_BARRIER);
   int after_submit_log_(ObTxLogBlock &log_block,
                         ObTxLogCb *log_cb,
                         memtable::ObRedoLogSubmitHelper *redo_helper);
-
-  int submit_redo_log_();
   int submit_commit_log_();
   int submit_abort_log_();
   int submit_prepare_log_();
@@ -439,15 +501,24 @@ private:
   int submit_record_log_();
   int submit_redo_commit_info_log_();
   int submit_redo_active_info_log_();
-  int submit_redo_log_(ObTxLogBlock &log_block,
-                       bool &has_redo,
-                       memtable::ObRedoLogSubmitHelper &helper);
+  int submit_redo_if_serial_logging_(ObTxLogBlock &log_block,
+                                     bool &has_redo,
+                                     memtable::ObRedoLogSubmitHelper &helper);
+  int submit_redo_if_parallel_logging_();
   int submit_redo_commit_info_log_(ObTxLogBlock &log_block,
                                    bool &has_redo,
-                                   memtable::ObRedoLogSubmitHelper &helper);
-
-  int submit_pending_log_block_(ObTxLogBlock &log_block, memtable::ObRedoLogSubmitHelper &helper);
-
+                                   memtable::ObRedoLogSubmitHelper &helper,
+                                   logservice::ObReplayBarrierType &barrier);
+  int submit_pending_log_block_(ObTxLogBlock &log_block,
+                                memtable::ObRedoLogSubmitHelper &helper,
+                                const logservice::ObReplayBarrierType &barrier);
+  bool should_switch_to_parallel_logging_();
+  void switch_to_parallel_logging_(const share::SCN serial_final_scn);
+  bool has_replay_serial_final_() const;
+  void recovery_parallel_logging_();
+  int check_can_submit_redo_();
+  void force_no_need_replay_checksum_(const bool parallel_replay, const share::SCN &log_ts);
+  int serial_submit_redo_after_write_();
   int submit_big_segment_log_();
   int prepare_big_segment_submit_(ObTxLogCb *segment_cb,
                                   const share::SCN &base_scn,
@@ -456,7 +527,10 @@ private:
   int add_unsynced_segment_cb_(ObTxLogCb *log_cb);
   int remove_unsynced_segment_cb_(const share::SCN &remove_scn);
   share::SCN get_min_unsyncd_segment_scn_();
-
+  int init_log_block_(ObTxLogBlock &log_block,
+                      const int64_t suggested_buf_size = ObTxAdaptiveLogBuf::NORMAL_LOG_BUF_SIZE,
+                      const bool serial_final = false);
+  int reuse_log_block_(ObTxLogBlock &log_block);
   int compensate_abort_log_();
   int validate_commit_info_log_(const ObTxCommitInfoLog &commit_info_log);
 
@@ -464,11 +538,6 @@ private:
                        ObTxLogType &ret_log_type);
   int switch_log_type_(const ObTxLogType ret_log_type,
                        ObTwoPhaseCommitLogType &log_type);
-
-  int fill_redo_log_(char *buf,
-                     const int64_t buf_len,
-                     int64_t &pos,
-                     memtable::ObRedoLogSubmitHelper &helper);
   int64_t get_redo_log_no_() const;
   bool has_persisted_log_() const;
 
@@ -565,6 +634,12 @@ private:
 
   int errism_dup_table_redo_sync_();
   int errism_submit_prepare_log_();
+  int replay_redo_in_ctx_compat_(const ObTxRedoLog &redo_log,
+                                 const palf::LSN &offset,
+                                 const share::SCN &timestamp,
+                                 const int64_t &part_log_no);
+  bool is_support_parallel_replay_() const;
+  int errsim_notify_mds_();
 protected:
   virtual int get_gts_(share::SCN &gts);
   virtual int wait_gts_elapse_commit_version_(bool &need_wait);
@@ -574,12 +649,12 @@ protected:
 private:
 
   int init_log_cbs_(const share::ObLSID&ls_id, const ObTransID &tx_id);
-  int extend_log_cbs_();
+  int extend_log_cbs_(ObTxLogCb *&log_cb);
   void reset_log_cb_list_(common::ObDList<ObTxLogCb> &cb_list);
   void reset_log_cbs_();
   int prepare_log_cb_(const bool need_final_cb, ObTxLogCb *&log_cb);
   int get_log_cb_(const bool need_final_cb, ObTxLogCb *&log_cb);
-  int return_log_cb_(ObTxLogCb *log_cb);
+  int return_log_cb_(ObTxLogCb *log_cb, bool release_final_cb = false);
   int get_max_submitting_log_info_(palf::LSN &lsn, share::SCN &log_ts);
   int get_prev_log_lsn_(const ObTxLogBlock &log_block, ObTxLogType prev_log_type, palf::LSN &lsn);
   int set_start_scn_in_commit_log_(ObTxCommitLog &commit_log);
@@ -630,7 +705,7 @@ protected:
 private:
   int apply_2pc_msg_(const ObTwoPhaseCommitMsgType msg_type);
   int set_2pc_upstream_(const share::ObLSID&upstream);
-  int set_2pc_participants_(const share::ObLSArray &participants);
+  int set_2pc_participants_(const ObTxCommitParts &participants);
   int set_2pc_incremental_participants_(const share::ObLSArray &participants);
   int set_2pc_request_id_(const int64_t request_id);
   int update_2pc_prepare_version_(const share::SCN &prepare_version);
@@ -662,11 +737,46 @@ private:
                               ObITransRpc* rpc,
                               const bool ls_deleted);
   static int get_max_decided_scn_(const share::ObLSID &ls_id, share::SCN &scn);
-  int get_2pc_participants_copy(share::ObLSArray &copy_participants);
+  int get_stat_for_virtual_table(share::ObLSArray &participants, int &busy_cbs_cnt);
   // for xa
   int post_tx_sub_prepare_resp_(const int status);
   int post_tx_sub_commit_resp_(const int status);
   int post_tx_sub_rollback_resp_(const int status);
+
+  int submit_log_if_allow(const char *buf,
+                          const int64_t size,
+                          const share::SCN &base_ts,
+                          ObTxBaseLogCb *cb,
+                          const bool need_nonblock,
+                          const ObTxCbArgArray &cb_arg_array);
+  virtual bool is_2pc_blocking() const override {
+    return sub_state_.is_transfer_blocking();
+  }
+
+// ======================= for transfer ===============================
+public:
+  int do_transfer_out_tx_op(const share::SCN data_end_scn,
+                            const share::SCN op_scn,
+                            const NotifyType op_type,
+                            const bool is_replay,
+                            const ObLSID dest_ls_id,
+                            const int64_t transfer_epoch,
+                            bool &is_operated);
+  int collect_tx_ctx(const share::ObLSID dest_ls_id,
+                     const SCN data_end_scn,
+                     const ObIArray<ObTabletID> &tablet_list,
+                     ObTxCtxMoveArg &arg,
+                     bool &is_collected);
+  int wait_tx_write_end();
+  int move_tx_op(const ObTransferMoveTxParam &move_tx_param,
+                 const ObTxCtxMoveArg &arg,
+                 const bool is_new_created);
+  bool is_exec_complete(ObLSID ls_id, int64_t epoch, int64_t transfer_epoch);
+  bool is_exec_complete_without_lock(ObLSID ls_id, int64_t epoch, int64_t transfer_epoch);
+private:
+  int transfer_op_log_cb_(share::SCN op_scn, NotifyType op_type);
+  int update_tx_data_end_scn_(const share::SCN end_scn, const share::SCN transfer_scn);
+
 protected:
   virtual int post_msg_(const share::ObLSID&receiver, ObTxMsg &msg);
   virtual int post_msg_(const ObAddr &server, ObTxMsg &msg);
@@ -677,10 +787,7 @@ private:
   // ========================== TX COMMITTER BEGIN ==========================
 protected:
   virtual Ob2PCRole get_2pc_role() const  override;
-  virtual int64_t get_downstream_size() const override
-  {
-    return exec_info_.participants_.count();
-  };
+  virtual int64_t get_downstream_size() const override;
   virtual int64_t get_self_id();
 
   virtual bool is_2pc_logging() const override;
@@ -688,7 +795,7 @@ protected:
   { return exec_info_.state_; }
   virtual int set_downstream_state(const ObTxState state) override
   { set_durable_state_(state); return OB_SUCCESS; }
-  virtual ObTxState get_upstream_state() const override 
+  virtual ObTxState get_upstream_state() const override
   { return upstream_state_; }
   virtual int set_upstream_state(const ObTxState state) override
   {
@@ -731,39 +838,83 @@ public:
   int check_status();
   /*
    * start_access - start txn protected resources access
-   * @data_seq: the sequence_no of current access
+   * @data_seq: the sequence_no of current access will be alloced
    *            new created data will marked with this seq no
+   * @branch: branch id of this access
    */
-  int start_access(const ObTxDesc &tx_desc, ObTxSEQ &data_seq);
+  int start_access(const ObTxDesc &tx_desc, ObTxSEQ &data_seq, const int16_t branch);
   /*
    * end_access - end of txn protected resources access
    */
   int end_access();
-  int rollback_to_savepoint(const int64_t op_sn, const ObTxSEQ from_scn, const ObTxSEQ to_scn);
+  int rollback_to_savepoint(const int64_t op_sn, const ObTxSEQ from_scn, const ObTxSEQ to_scn, ObIArray<ObTxLSEpochPair> &downstream_parts);
   int set_block_frozen_memtable(memtable::ObMemtable *memtable);
   void clear_block_frozen_memtable();
   bool is_logging_blocked();
   bool is_xa_trans() const { return !exec_info_.xid_.empty(); }
+  bool is_transfer_deleted() const { return transfer_deleted_; }
+  int handle_tx_keepalive_response(const int64_t status);
 private:
   int check_status_();
   int tx_keepalive_response_(const int64_t status);
   void post_keepalive_msg_(const int status);
   void notify_scheduler_tx_killed_(const int kill_reason);
-  int rollback_to_savepoint_(const ObTxSEQ from_scn, const ObTxSEQ to_scn);
-  int submit_rollback_to_log_(const ObTxSEQ from_scn, const ObTxSEQ to_scn, ObTxData *tx_data);
+  int rollback_to_savepoint_(const ObTxSEQ from_scn,
+                             const ObTxSEQ to_scn,
+                             const share::SCN replay_scn = share::SCN::invalid_scn());
+  int submit_rollback_to_log_(const ObTxSEQ from_scn,
+                              const ObTxSEQ to_scn,
+                              ObTxData *tx_data);
   int set_state_info_array_();
+  int update_state_info_array_(const ObStateInfo& state_info);
+  int update_state_info_array_with_transfer_parts_(const ObTxCommitParts &parts, const ObLSID &ls_id);
   void build_and_post_collect_state_msg_(const share::SCN &snapshot);
-  int build_and_post_ask_state_msg_(const share::SCN &snapshot);
-  void handle_trans_ask_state_(const SCN &snapshot);
-  int check_ls_state_(const SCN &snapshot, const ObLSID &ls_id);
+  int build_and_post_ask_state_msg_(const share::SCN &snapshot,
+                                    const share::ObLSID &ori_ls_id, const ObAddr &ori_addr);
+  int check_ls_state_(const SCN &snapshot, const ObLSID &ls_id, const ObStandbyCheckInfo &check_info);
   int get_ls_replica_readable_scn_(const ObLSID &ls_id, SCN &snapshot_version);
-  int check_and_submit_redo_log_(bool &try_submit);
   int submit_redo_log_for_freeze_(bool &try_submit);
   void print_first_mvcc_callback_();
+public:
+  int prepare_for_submit_redo(ObTxLogCb *&log_cb,
+                              ObTxLogBlock &log_block,
+                              const bool serial_final = false);
+  int submit_redo_log_out(ObTxLogBlock &log_block,
+                          ObTxLogCb *&log_cb,
+                          memtable::ObRedoLogSubmitHelper &helper,
+                          const int64_t replay_hint,
+                          const bool has_hold_ctx_lock,
+                          share::SCN &submitted_scn);
+  bool is_parallel_logging() const;
+  int assign_commit_parts(const share::ObLSArray &log_participants,
+                          const ObTxCommitParts &log_commit_parts);
 protected:
   // for xa
   virtual bool is_sub2pc() const override
   { return exec_info_.is_sub2pc_; }
+
+  // =========================== TREE COMMITTER START ===========================
+public:
+  // merge the intermediate_participants into participants during 2pc state transfer
+  virtual int merge_intermediate_participants() override;
+  // is_real_upstream presents whether we are handling requests from the real
+  // upstream:
+  // - If the sender equals to the upstream, it means we that are handling the
+  //   real leader and we need collect all responses from the downstream before
+  //   responsing to the upstream
+  // - If the sender is different from the upstream, it means we are handling
+  //   requests from the upstream other than the real upstream. To prevent from
+  //   the deadlock in the cycle commit, we only need consider the situation of
+  //   myself before responsing to the upstream
+  // - It may be no sender during handle_timeout, it means we are retransmitting
+  //   the requests and responses, so we only need pay attention to the upstream
+  //   and all downstreams for retransmitting
+  virtual bool is_real_upstream() override;
+  // add_intermediate_participants means add participant into intermediate_participants,
+  // which is important to ensure the consistency of participants during tree commit
+  int add_intermediate_participants(const ObLSID ls_id, int64_t transfer_epoch);
+private:
+  bool is_real_upstream_(const ObLSID upstream);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPartTransCtx);
@@ -786,7 +937,12 @@ private:
 
   int64_t last_ask_scheduler_status_ts_;
   int64_t cur_query_start_time_;
-
+  // when cluster_version is unknown at ctx created time, will choice
+  // CLUSTER_CURRENT_VERSION, which may not the real cluster_version
+  // of this transaction
+  // this can only happen when create ctx for replay and create ctx
+  // for recovery before v.4.3
+  bool cluster_version_accurate_;
   /*
    * used during txn protected data access
    */
@@ -820,6 +976,7 @@ private:
   common::ObDList<ObTxLogCb> free_cbs_;
   common::ObDList<ObTxLogCb> busy_cbs_;
   ObTxLogCb final_log_cb_;
+  ObSpinLock log_cb_lock_;
   ObTxLogBigSegmentInfo big_segment_info_;
   // flag if the first callback is linked to a logging_block memtable
   // to prevent unnecessary submit_log actions for freeze
@@ -843,13 +1000,22 @@ private:
   bool is_ctx_table_merged_;
   // trace_info_
   int64_t role_state_;
- 
+
   // +-------------------+                   +---------------------------------+                      +-------+     +-----------------+     +----------------------+
   // | tx_ctx A exiting  |                   |                                 |                      |       |     |   replay from   |     |                      |
   // | start_log_ts = n  |  recover_ts = n   | remove from tx_ctx_table & dump |  recover_ts = n+10   | crash |     | min_ckpt_ts n+m |     | tx_ctx is incomplete |
   // | end_log_ts = n+10 | ----------------> |                                 | -------------------> |       | --> |    (0<m<10)     | --> |                      |
   // +-------------------+                   +---------------------------------+                      +-------+     +-----------------+     +----------------------+
-  bool is_incomplete_replay_ctx_;
+  struct ReplayCompleteness {
+    ReplayCompleteness(): complete_(C::UNKNOWN) {}
+    void reset() { complete_ = C::UNKNOWN; }
+    enum class C : int { COMPLETE = 1, INCOMPLETE = 0, UNKNOWN = -1 } complete_;
+    void set(const bool complete) { complete_ = complete ? C::COMPLETE : C::INCOMPLETE; }
+    bool is_unknown() const { return complete_ == C::UNKNOWN; }
+    bool is_complete() const { return complete_ == C::COMPLETE; }
+    bool is_incomplete() const { return complete_ == C::INCOMPLETE; }
+    DECLARE_TO_STRING { int64_t pos = 0; BUF_PRINTF("%d", complete_); return pos; };
+  } replay_completeness_;
   // set true when submitting redo log for freezing and reset after freezing
   bool is_submitting_redo_log_for_freeze_;
   share::SCN start_replay_ts_; // replay debug
@@ -877,6 +1043,9 @@ private:
   // this is a tempoary variable which is set to now by default
   // therefore, if a follower switchs to leader, the variable is set to now
   int64_t last_request_ts_;
+
+  // for transfer move tx ctx to clean for abort
+  bool transfer_deleted_;
   // ========================================================
 };
 

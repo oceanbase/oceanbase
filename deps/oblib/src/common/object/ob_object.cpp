@@ -571,7 +571,7 @@ int ObLobLocatorV2::get_disk_locator(ObString &disc_loc_buff) const
     int64_t handle_size = reinterpret_cast<intptr_t>(disk_loc) - reinterpret_cast<intptr_t>(ptr_);
     if (handle_size > size_) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get invalid handle size", K(ret), K(size_), K(disk_loc), K(ptr_));
+      LOG_WARN("get invalid handle size", K(ret), K(size_), K(disk_loc), K(ptr_), K(handle_size));
     } else {
       if (disk_loc->in_row_) {
         handle_size = size_ - handle_size;

@@ -396,6 +396,22 @@ int ObLogHandler::locate_by_lsn_coarsely(const LSN &lsn, SCN &result_scn)
   return palf_handle_.locate_by_lsn_coarsely(lsn, result_scn);
 }
 
+int ObLogHandler::get_max_decided_scn_as_leader(share::SCN &scn) const
+{
+  int ret = OB_SUCCESS;
+  share::ObLSID ls_id;
+  RLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_ISNULL(apply_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (FALSE_IT(ls_id = id_)) {
+  } else if (OB_FAIL(apply_service_->get_palf_committed_end_scn(ls_id, scn))) {
+    CLOG_LOG(WARN, "get palf_committed_end_lsn fail", K(ret), K(id_));
+  }
+  return ret;
+}
+
 int ObLogHandler::advance_base_lsn(const LSN &lsn)
 {
   RLockGuard guard(lock_);

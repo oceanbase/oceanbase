@@ -126,6 +126,8 @@ private:
   int get_first_frozen_memtable_(ObTableHandleV2 &handle) const;
   void clean_tail_memtable_();
   int get_last_frozen_memtable_(ObTableHandleV2 &handle) const;
+  int try_resolve_boundary_on_create_memtable_(memtable::ObMemtable *last_frozen_memtable,
+                                               memtable::ObMemtable *new_memtable);
   int resolve_left_boundary_for_active_memtable(memtable::ObIMemtable *memtable,
                                                 share::SCN start_scn,
                                                 share::SCN snapshot_version);

@@ -17,6 +17,7 @@
 #include "storage/direct_load/ob_direct_load_external_scanner.h"
 #include "storage/direct_load/ob_direct_load_merge_ctx.h"
 #include "storage/direct_load/ob_direct_load_multiple_heap_table_scanner.h"
+#include "storage/direct_load/ob_direct_load_insert_table_row_iterator.h"
 #include "sql/engine/expr/ob_expr_sys_op_opnsize.h"
 
 namespace oceanbase
@@ -54,13 +55,14 @@ protected:
                                  ObIStoreRowIterator *&row_iter) = 0;
 private:
   int init_sql_statistics();
-  int collect_obj(const blocksstable::ObDatumRow &datum_row);
+  int init_lob_builder();
 protected:
   const ObDirectLoadMergeParam *merge_param_;
   ObDirectLoadTabletMergeCtx *merge_ctx_;
   int64_t parallel_idx_;
   int64_t affected_rows_;
   common::ObArray<ObOptOSGColumnStat*> column_stat_array_;
+  ObDirectLoadLobBuilder lob_builder_;
   common::ObArenaAllocator allocator_;
   bool is_stop_;
   bool is_inited_;
@@ -80,7 +82,7 @@ public:
 protected:
   int construct_row_iter(common::ObIAllocator &allocator, ObIStoreRowIterator *&row_iter) override;
 private:
-  class RowIterator : public ObIStoreRowIterator
+  class RowIterator : public ObDirectLoadInsertTableRowIterator
   {
   public:
     RowIterator();
@@ -88,9 +90,11 @@ private:
     int init(const ObDirectLoadMergeParam &merge_param,
              const common::ObTabletID &tablet_id,
              ObDirectLoadOriginTable *origin_table,
+             common::ObIArray<ObOptOSGColumnStat*> &column_stat_array,
+             ObDirectLoadLobBuilder &lob_builder,
              const common::ObIArray<ObDirectLoadSSTable *> &sstable_array,
              const blocksstable::ObDatumRange &range);
-    int get_next_row(const blocksstable::ObDatumRow *&datum_row) override;
+    int inner_get_next_row(blocksstable::ObDatumRow *&datum_row) override;
   private:
     ObDirectLoadSSTableDataFuse data_fuse_;
     blocksstable::ObDatumRow datum_row_;
@@ -117,7 +121,7 @@ public:
 protected:
   int construct_row_iter(common::ObIAllocator &allocator, ObIStoreRowIterator *&row_iter) override;
 private:
-  class RowIterator : public ObIStoreRowIterator
+  class RowIterator : public ObDirectLoadInsertTableRowIterator
   {
   public:
     RowIterator();
@@ -125,9 +129,11 @@ private:
     int init(const ObDirectLoadMergeParam &merge_param,
              const common::ObTabletID &tablet_id,
              ObDirectLoadOriginTable *origin_table,
+             common::ObIArray<ObOptOSGColumnStat*> &column_stat_array,
+             ObDirectLoadLobBuilder &lob_builder,
              const common::ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
              const blocksstable::ObDatumRange &range);
-    int get_next_row(const blocksstable::ObDatumRow *&datum_row) override;
+    int inner_get_next_row(blocksstable::ObDatumRow *&datum_row) override;
   private:
     ObDirectLoadMultipleSSTableDataFuse data_fuse_;
     blocksstable::ObDatumRow datum_row_;
@@ -153,7 +159,7 @@ public:
 protected:
   int construct_row_iter(common::ObIAllocator &allocator, ObIStoreRowIterator *&row_iter) override;
 private:
-  class RowIterator : public ObIStoreRowIterator
+  class RowIterator : public ObDirectLoadInsertTableRowIterator
   {
   public:
     RowIterator();
@@ -161,8 +167,10 @@ private:
     int init(const ObDirectLoadMergeParam &merge_param,
              const common::ObTabletID &tablet_id,
              ObDirectLoadExternalTable *external_table,
+             common::ObIArray<ObOptOSGColumnStat*> &column_stat_array,
+             ObDirectLoadLobBuilder &lob_builder,
              const share::ObTabletCacheInterval &pk_interval);
-    int get_next_row(const blocksstable::ObDatumRow *&datum_row) override;
+    int inner_get_next_row(blocksstable::ObDatumRow *&datum_row) override;
   private:
     ObDirectLoadExternalSequentialScanner<ObDirectLoadExternalRow> scanner_;
     blocksstable::ObDatumRow datum_row_;
@@ -190,7 +198,7 @@ public:
 protected:
   int construct_row_iter(common::ObIAllocator &allocator, ObIStoreRowIterator *&row_iter) override;
 private:
-  class RowIterator : public ObIStoreRowIterator
+  class RowIterator : public ObDirectLoadInsertTableRowIterator
   {
   public:
     RowIterator();
@@ -198,8 +206,10 @@ private:
     int init(const ObDirectLoadMergeParam &merge_param,
              const common::ObTabletID &tablet_id,
              ObDirectLoadMultipleHeapTable *heap_table,
+             common::ObIArray<ObOptOSGColumnStat*> &column_stat_array,
+             ObDirectLoadLobBuilder &lob_builder,
              const share::ObTabletCacheInterval &pk_interval);
-    int get_next_row(const blocksstable::ObDatumRow *&datum_row) override;
+    int inner_get_next_row(blocksstable::ObDatumRow *&datum_row) override;
   private:
     ObDirectLoadMultipleHeapTableTabletWholeScanner scanner_;
     blocksstable::ObDatumRow datum_row_;
@@ -227,16 +237,18 @@ public:
 protected:
   int construct_row_iter(common::ObIAllocator &allocator, ObIStoreRowIterator *&row_iter) override;
 private:
-  class RowIterator : public ObIStoreRowIterator
+  class RowIterator : public ObDirectLoadInsertTableRowIterator
   {
   public:
     RowIterator();
     virtual ~RowIterator();
     int init(const ObDirectLoadMergeParam &merge_param, const common::ObTabletID &tablet_id,
              ObDirectLoadOriginTable *origin_table,
+             common::ObIArray<ObOptOSGColumnStat*> &column_stat_array,
+             ObDirectLoadLobBuilder &lob_builder,
              const common::ObIArray<ObDirectLoadMultipleHeapTable *> *heap_table_array,
              const share::ObTabletCacheInterval &pk_interval);
-    int get_next_row(const blocksstable::ObDatumRow *&datum_row) override;
+    int inner_get_next_row(blocksstable::ObDatumRow *&datum_row) override;
   private:
     int switch_next_heap_table();
   private:

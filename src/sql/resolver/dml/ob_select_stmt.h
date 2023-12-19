@@ -573,6 +573,11 @@ public:
   ObWinFunRawExpr* get_window_func_expr(int64_t i) { return win_func_exprs_.at(i); }
   int64_t get_window_func_count() const { return win_func_exprs_.count(); }
   int remove_window_func_expr(ObWinFunRawExpr *expr);
+  const common::ObIArray<ObRawExpr *> &get_qualify_filters() const { return qualify_filters_; };
+  common::ObIArray<ObRawExpr *> &get_qualify_filters() { return qualify_filters_; };
+  int64_t get_qualify_filters_count() const { return qualify_filters_.count(); };
+  bool has_window_function_filter() const { return qualify_filters_.count() != 0; }
+  int set_qualify_filters(common::ObIArray<ObRawExpr *> &exprs);
   void set_children_swapped() { children_swapped_ = true; }
   bool get_children_swapped() const { return children_swapped_; }
   const ObString* get_select_alias(const char *col_name, uint64_t table_id, uint64_t col_id);
@@ -602,7 +607,7 @@ public:
   int deep_copy_stmt_struct(ObIAllocator &allocator,
                             ObRawExprCopier &expr_copier,
                             const ObDMLStmt &other) override;
-  bool check_is_select_item_expr(const ObRawExpr *expr);
+  bool check_is_select_item_expr(const ObRawExpr *expr) const;
   bool contain_nested_aggr() const;
 
   int get_set_stmt_size(int64_t &size) const;
@@ -643,6 +648,8 @@ private:
   common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> having_exprs_;
   common::ObSEArray<ObAggFunRawExpr*, 8, common::ModulePageAllocator, true> agg_items_;
   common::ObSEArray<ObWinFunRawExpr*, 8, common::ModulePageAllocator, true> win_func_exprs_;
+  //a child set of the filters in the parent stmts, only used for partition topn sort
+  common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> qualify_filters_;
   common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> start_with_exprs_;
   common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> connect_by_exprs_;
   common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> connect_by_prior_exprs_;

@@ -66,8 +66,6 @@ public:
     trans_version_(share::SCN::max_scn()),
     commit_version_(share::SCN::min_scn()),
     lock_start_time_(0),
-    redo_scn_(share::SCN::min_scn()),
-    redo_log_id_(0),
     lock_wait_start_ts_(0),
     replay_compact_version_(share::SCN::min_scn())
   {
@@ -98,14 +96,11 @@ public: // for mvcc engine invoke
   virtual void on_wlock_retry(const ObMemtableKey& key, const transaction::ObTransID &conflict_tx_id) = 0;
   virtual void inc_truncate_cnt() = 0;
   virtual void add_trans_mem_total_size(const int64_t size) = 0;
-  virtual void update_max_submitted_seq_no(const transaction::ObTxSEQ seq_no) = 0;
   virtual transaction::ObTransID get_tx_id() const = 0;
   virtual transaction::ObPartTransCtx *get_trans_ctx() const = 0;
   // statics maintainness for txn logging
   virtual void inc_unsubmitted_cnt() = 0;
   virtual void dec_unsubmitted_cnt() = 0;
-  virtual void inc_unsynced_cnt() = 0;
-  virtual void dec_unsynced_cnt() = 0;
   virtual share::SCN get_tx_end_scn() const { return share::SCN::max_scn(); };
 public:
   inline int get_alloc_type() const { return alloc_type_; }
@@ -144,18 +139,16 @@ public:
   inline int64_t get_lock_start_time() { return lock_start_time_; }
   inline void set_for_replay(const bool for_replay) { trans_mgr_.set_for_replay(for_replay); }
   inline bool is_for_replay() const { return trans_mgr_.is_for_replay(); }
-  inline void set_redo_scn(const share::SCN redo_scn) { redo_scn_ = redo_scn; }
-  inline void set_redo_log_id(const int64_t redo_log_id) { redo_log_id_ = redo_log_id; }
-  inline share::SCN get_redo_scn() const { return redo_scn_; }
-  inline int64_t get_redo_log_id() const { return redo_log_id_; }
   inline void set_lock_wait_start_ts(const int64_t lock_wait_start_ts)
   { lock_wait_start_ts_ = lock_wait_start_ts; }
   share::SCN get_replay_compact_version() const { return replay_compact_version_; }
   void  set_replay_compact_version(const share::SCN v) { replay_compact_version_ = v; }
   inline int64_t get_lock_wait_start_ts() const { return lock_wait_start_ts_; }
-  void acquire_callback_list() { trans_mgr_.acquire_callback_list(); }
+  int acquire_callback_list(const bool new_epoch, const bool need_merge)
+  { return trans_mgr_.acquire_callback_list(new_epoch, need_merge); }
   void revert_callback_list() { trans_mgr_.revert_callback_list(); }
-
+  int get_tx_seq_replay_idx(const transaction::ObTxSEQ seq) const
+  { return trans_mgr_.get_tx_seq_replay_idx(seq); }
   int register_row_commit_cb(
       const ObMemtableKey *key,
       ObMvccRow *value,
@@ -192,8 +185,6 @@ public:
     trans_version_ = share::SCN::max_scn();
     commit_version_ = share::SCN::min_scn();
     lock_start_time_ = 0;
-    redo_scn_ = share::SCN::min_scn();
-    redo_log_id_ = 0;
     lock_wait_start_ts_ = 0;
     replay_compact_version_ = share::SCN::min_scn();
   }
@@ -245,8 +236,6 @@ protected:
   share::SCN trans_version_;
   share::SCN commit_version_;
   int64_t lock_start_time_;
-  share::SCN redo_scn_;
-  int64_t redo_log_id_;
   int64_t lock_wait_start_ts_;
   share::SCN replay_compact_version_;
 };
@@ -258,7 +247,9 @@ public:
   ObMvccWriteGuard(const bool exclusive = false)
     : exclusive_(exclusive),
       ctx_(NULL),
-      memtable_(NULL) {}
+      memtable_(NULL),
+      write_seq_no_()
+  {}
   ~ObMvccWriteGuard();
   void set_memtable(ObMemtable *memtable) {
     memtable_ = memtable;
@@ -277,6 +268,7 @@ private:
   const bool exclusive_;  // if true multiple write_auth will be serialized
   ObMemtableCtx *ctx_;
   ObMemtable *memtable_;
+  transaction::ObTxSEQ write_seq_no_;
 };
 }
 }

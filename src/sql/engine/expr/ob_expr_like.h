@@ -157,6 +157,8 @@ public:
   static int like_text_vectorized_inner(const ObExpr &expr, ObEvalCtx &ctx,
                                         const ObBitVector &skip, const int64_t size,
                                         ObExpr &text, ObDatum *pattern_datum, ObDatum *escape_datum);
+  DECLARE_SET_LOCAL_SESSION_VARS;
+
 private:
   static int set_instr_info(common::ObIAllocator *exec_allocator,
                             const common::ObCollationType cs_type,

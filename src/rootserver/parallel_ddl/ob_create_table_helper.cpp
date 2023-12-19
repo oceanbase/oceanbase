@@ -2318,6 +2318,8 @@ int ObCreateTableHelper::create_tablets_()
   SCN frozen_scn;
   ObSchemaGetterGuard schema_guard;
   ObSchemaService *schema_service_impl = NULL;
+  uint64_t tenant_data_version = 0;
+
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_ISNULL(schema_service_impl = schema_service_->get_schema_service())) {
@@ -2330,6 +2332,8 @@ int ObCreateTableHelper::create_tablets_()
   } else if (OB_UNLIKELY(new_tables_.count() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected table cnt", KR(ret), K(new_tables_.count()));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
+    LOG_WARN("get min data version failed", K(ret), K_(tenant_id));
   } else {
     ObTableCreator table_creator(
                    tenant_id_,
@@ -2360,6 +2364,7 @@ int ObCreateTableHelper::create_tablets_()
     } else {
       ObArray<const ObTableSchema*> schemas;
       common::ObArray<share::ObLSID> ls_id_array;
+      ObArray<bool> need_create_empty_majors;
       for (int64_t i = 0; OB_SUCC(ret) && i < new_tables_.count(); i++) {
         const ObTableSchema &new_table = new_tables_.at(i);
         const uint64_t table_id = new_table.get_table_id();
@@ -2368,6 +2373,8 @@ int ObCreateTableHelper::create_tablets_()
         } else if (!new_table.is_global_index_table()) {
           if (OB_FAIL(schemas.push_back(&new_table))) {
             LOG_WARN("fail to push back new table", KR(ret));
+          } else if (OB_FAIL(need_create_empty_majors.push_back(true))) {
+            LOG_WARN("fail to push back need create empty major", KR(ret));
           }
         } else {
           if (OB_FAIL(new_table_tablet_allocator.prepare(trans_, new_table))) {
@@ -2375,7 +2382,7 @@ int ObCreateTableHelper::create_tablets_()
           } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(ls_id_array))) {
             LOG_WARN("fail to get ls id array", KR(ret));
           } else if (OB_FAIL(table_creator.add_create_tablets_of_table_arg(
-                     new_table, ls_id_array))) {
+                     new_table, ls_id_array, tenant_data_version, true/*need create major sstable*/))) {
             LOG_WARN("create table partitions failed", KR(ret), K(new_table));
           }
         }
@@ -2395,7 +2402,7 @@ int ObCreateTableHelper::create_tablets_()
         } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(ls_id_array))) {
           LOG_WARN("fail to get ls id array", KR(ret));
         } else if (OB_FAIL(table_creator.add_create_tablets_of_tables_arg(
-                   schemas, ls_id_array))) {
+                   schemas, ls_id_array, tenant_data_version, need_create_empty_majors /*need create major sstable*/))) {
           LOG_WARN("create table partitions failed", KR(ret), K(data_table));
         } else if (OB_FAIL(table_creator.execute())) {
           LOG_WARN("execute create partition failed", KR(ret));

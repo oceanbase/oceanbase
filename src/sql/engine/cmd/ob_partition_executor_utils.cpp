@@ -15,8 +15,6 @@
 #include "share/object/ob_obj_cast.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "share/ob_common_rpc_proxy.h"
-#include "sql/resolver/ddl/ob_create_table_stmt.h"
-#include "sql/resolver/ddl/ob_create_tablegroup_stmt.h"
 #include "sql/resolver/ddl/ob_create_index_stmt.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/ob_physical_plan.h"
@@ -24,6 +22,8 @@
 #include "sql/code_generator/ob_expr_generator_impl.h"
 #include "sql/parser/ob_parser.h"
 #include "sql/ob_sql_utils.h"
+#include "sql/resolver/ddl/ob_create_table_stmt.h"
+#include "sql/resolver/ddl/ob_create_tablegroup_stmt.h"
 
 namespace oceanbase
 {
@@ -37,22 +37,35 @@ int ObPartitionExecutorUtils::calc_values_exprs(
     ObExecContext &ctx,
     ObCreateTableStmt &stmt) {
   int ret = OB_SUCCESS;
-  ObTableSchema &table_schema = stmt.get_create_table_arg().schema_;
-  ObPartitionLevel level = table_schema.get_part_level();
-  if (PARTITION_LEVEL_ONE == level) {
-    if (OB_FAIL(calc_values_exprs(ctx, stmt::T_CREATE_TABLE, table_schema, stmt, false))) {
-      LOG_WARN("fail to calc_values_exprs", K(ret));
-    }
-  } else if (PARTITION_LEVEL_TWO == level) {
-    if (OB_FAIL(calc_values_exprs(ctx, stmt::T_CREATE_TABLE, table_schema, stmt, false))) {
-      LOG_WARN("fail to calc_values_exprs", K(ret));
-    } else if (OB_FAIL(calc_values_exprs(ctx, stmt::T_CREATE_TABLE, table_schema, stmt, true))) {
-      LOG_WARN("fail to calc_values_exprs", K(ret));
+  ObArray<ObTableSchema *> table_schema_array;
+
+  if (OB_FAIL(table_schema_array.push_back(&(stmt.get_create_table_arg().schema_)))) {
+    LOG_WARN("fail to push back schema", KR(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_create_table_arg().mv_ainfo_.count(); i ++) {
+    if (OB_FAIL(table_schema_array.push_back(&(stmt.get_create_table_arg().mv_ainfo_.at(i).container_table_schema_)))) {
+      LOG_WARN("fail to push back schema", KR(ret));
     }
   }
-  if (OB_SUCC(ret) && table_schema.is_partitioned_table()) {
-    if (OB_FAIL(sort_list_paritition_if_need(table_schema))) {
-      LOG_WARN("failed to sort list partition if need", K(ret));
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_schema_array.count(); i ++) {
+    ObTableSchema &table_schema = *(table_schema_array.at(i));
+    ObPartitionLevel level = table_schema.get_part_level();
+    if (PARTITION_LEVEL_ONE == level) {
+      if (OB_FAIL(calc_values_exprs(ctx, stmt::T_CREATE_TABLE, table_schema, stmt, false))) {
+        LOG_WARN("fail to calc_values_exprs", K(ret));
+      }
+    } else if (PARTITION_LEVEL_TWO == level) {
+      if (OB_FAIL(calc_values_exprs(ctx, stmt::T_CREATE_TABLE, table_schema, stmt, false))) {
+        LOG_WARN("fail to calc_values_exprs", K(ret));
+      } else if (OB_FAIL(calc_values_exprs(ctx, stmt::T_CREATE_TABLE, table_schema, stmt, true))) {
+        LOG_WARN("fail to calc_values_exprs", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && table_schema.is_partitioned_table()) {
+      if (OB_FAIL(sort_list_paritition_if_need(table_schema))) {
+        LOG_WARN("failed to sort list partition if need", K(ret));
+      }
     }
   }
   return ret;

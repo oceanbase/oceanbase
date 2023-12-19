@@ -45,6 +45,7 @@ int ObTableDirectInsertCtx::init(ObExecContext *exec_ctx,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("exec_ctx cannot be null", KR(ret));
   } else {
+    is_direct_ = true;
     if (OB_ISNULL(load_exec_ctx_ = OB_NEWx(ObTableLoadSqlExecCtx, &exec_ctx->get_allocator()))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObTableLoadSqlExecCtx", KR(ret));
@@ -72,7 +73,7 @@ int ObTableDirectInsertCtx::init(ObExecContext *exec_ctx,
         param.parallel_ = parallel;
         param.session_count_ = MIN(parallel, (int64_t)tenant->unit_max_cpu() * 2);
         param.px_mode_ = true;
-        param.online_opt_stat_gather_ = false;
+        param.online_opt_stat_gather_ = true;
         param.need_sort_ = true;
         param.max_error_row_count_ = 0;
         param.dup_action_ = sql::ObLoadDupActionType::LOAD_STOP_ON_DUP;

@@ -1827,7 +1827,46 @@ int ObStaticEngineCG::generate_spec(ObLogSort &op, ObSortSpec &spec, const bool 
         }
         spec.enable_encode_sortkey_opt_ = op.enable_encode_sortkey_opt();
         spec.part_cnt_ = op.get_part_cnt();
-        LOG_TRACE("trace order by", K(spec.all_exprs_.count()), K(spec.all_exprs_));
+        int64_t compact_level = 0;
+        OZ(op.get_plan()->get_optimizer_context().get_global_hint().opt_params_.get_integer_opt_param(ObOptParamHint::COMPACT_SORT_LEVEL, compact_level));
+        if (OB_SUCC(ret)) {
+          int64_t tenant_id = op.get_plan()->get_optimizer_context().get_session_info()->get_effective_tenant_id();
+          spec.sort_compact_level_ = static_cast<SortCompactLevel>(compact_level);
+          omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+          if (OB_UNLIKELY(!tenant_config.is_valid())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail get tenant_config", K(ret), K(tenant_id));
+          } else if (tenant_config->enable_store_compression || compact_level == SORT_COMPRESSION_LEVEL ||
+                     compact_level == SORT_COMPRESSION_ENCODE_LEVEL ||
+                     compact_level == SORT_COMPRESSION_COMPACT_LEVEL) {
+            if (opt_ctx_->is_online_ddl()) {
+              // for normal sort we use default compress type. for online ddl, we use the compress type in source table
+              ObLogicalOperator *child_op = op.get_child(0);
+              while(OB_NOT_NULL(child_op) && child_op->get_type() != log_op_def::LOG_TABLE_SCAN ) {
+                child_op = child_op->get_child(0);
+                if (OB_NOT_NULL(child_op) && child_op->get_type() == log_op_def::LOG_TABLE_SCAN ) {
+                  share::schema::ObSchemaGetterGuard *schema_guard = nullptr;
+                  const share::schema::ObTableSchema *table_schema = nullptr;
+                  uint64_t table_id = static_cast<ObLogTableScan*>(child_op)->get_ref_table_id();
+                  if (OB_ISNULL(schema_guard = opt_ctx_->get_schema_guard())) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("fail to get schema guard", K(ret));
+                  } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, table_id, table_schema))) {
+                    LOG_WARN("fail to get table schema", K(ret));
+                  } else if (OB_ISNULL(table_schema)) {
+                    ret = OB_TABLE_NOT_EXIST;
+                    LOG_WARN("can't find table schema", K(ret), K(table_id));
+                  } else {
+                    spec.compress_type_ = table_schema->get_compressor_type();
+                  }
+                }
+              }
+              LOG_TRACE("compact type is", K(spec.compress_type_));
+            }
+          }
+        }
+        LOG_TRACE("trace order by", K(spec.all_exprs_.count()), K(spec.all_exprs_),
+                  K(compact_level));
       }
       if (OB_SUCC(ret)) {
         if (spec.sort_collations_.count() != spec.sort_cmp_funs_.count()
@@ -4059,7 +4098,9 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
   }
 
   if (OB_SUCC(ret)) {
-    if (opt_ctx_->is_online_ddl() && stmt::T_INSERT == opt_ctx_->get_session_info()->get_stmt_type()) {
+    if (opt_ctx_->is_online_ddl() &&
+        stmt::T_INSERT == opt_ctx_->get_session_info()->get_stmt_type() &&
+        !opt_ctx_->get_session_info()->get_ddl_info().is_mview_complete_refresh()) {
       spec.report_col_checksum_ = true;
     }
   }
@@ -6414,32 +6455,39 @@ int ObStaticEngineCG::generate_top_fre_hist_expr_operator(ObAggFunRawExpr &raw_e
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(T_FUN_TOP_FRE_HIST != raw_expr.get_expr_type() ||
-                  raw_expr.get_param_count() != 3)) {
+                  raw_expr.get_param_count() != 4)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid argument", K(raw_expr), K(ret));
   } else {
     ObRawExpr *win_raw_expr = raw_expr.get_param_expr(0);
     ObRawExpr *param_raw_expr = raw_expr.get_param_expr(1);
     ObRawExpr *item_raw_expr = raw_expr.get_param_expr(2);
+    ObRawExpr *max_disuse_raw_expr = raw_expr.get_param_expr(3);
     ObExpr *win_expr = NULL;
     ObExpr *item_expr = NULL;
+    ObExpr *max_disuse_expr = NULL;
     raw_expr.get_real_param_exprs_for_update().reset();
-    if (OB_ISNULL(win_raw_expr) || OB_ISNULL(param_raw_expr) || OB_ISNULL(item_raw_expr)) {
+    if (OB_ISNULL(win_raw_expr) || OB_ISNULL(param_raw_expr) ||
+        OB_ISNULL(item_raw_expr) || OB_ISNULL(max_disuse_raw_expr)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(win_raw_expr), K(param_raw_expr), K(item_raw_expr), K(ret));
+      LOG_WARN("get unexpected null", K(win_raw_expr), K(param_raw_expr),
+                                      K(item_raw_expr), K(max_disuse_raw_expr), K(ret));
     } else if (OB_FAIL(generate_rt_expr(*win_raw_expr, win_expr)) ||
-               OB_FAIL(generate_rt_expr(*item_raw_expr, item_expr))) {
-      LOG_WARN("failed to generate_rt_expr", K(ret), K(*win_raw_expr), K(*item_raw_expr));
-    } else if (OB_ISNULL(win_expr) || OB_ISNULL(item_expr)) {
+               OB_FAIL(generate_rt_expr(*item_raw_expr, item_expr)) ||
+               OB_FAIL(generate_rt_expr(*max_disuse_raw_expr, max_disuse_expr))) {
+      LOG_WARN("failed to generate_rt_expr", K(ret), K(*win_raw_expr), K(*item_raw_expr), K(*max_disuse_raw_expr));
+    } else if (OB_ISNULL(win_expr) || OB_ISNULL(item_expr) || OB_ISNULL(max_disuse_expr)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("expr is null ", K(ret), K(win_expr), K(item_expr));
+      LOG_WARN("expr is null ", K(ret), K(win_expr), K(item_expr), K(max_disuse_expr));
     } else if (OB_UNLIKELY(!win_expr->obj_meta_.is_numeric_type() ||
-                           !item_expr->obj_meta_.is_numeric_type())) {
+                           !item_expr->obj_meta_.is_numeric_type() ||
+                           !max_disuse_expr->obj_meta_.is_numeric_type())) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("expr node is null", K(ret), K(win_expr->obj_meta_), K(item_expr->obj_meta_));
+      LOG_WARN("expr node is null", K(ret), K(win_expr->obj_meta_), K(item_expr->obj_meta_), K(max_disuse_expr->obj_meta_));
     } else {
       aggr_info.window_size_param_expr_ = win_expr;
       aggr_info.item_size_param_expr_ = item_expr;
+      aggr_info.max_disuse_param_expr_ = max_disuse_expr;
       aggr_info.is_need_deserialize_row_ = raw_expr.is_need_deserialize_row();
       if (OB_FAIL(raw_expr.add_real_param_expr(param_raw_expr))) {
         LOG_WARN("fail to add param expr to agg expr", K(ret));
@@ -7133,9 +7181,11 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
         //为了支持触发器/UDF支持异常捕获，要求含有pl udf的涉及修改表数据的dml串行执行
         phy_plan_->set_need_serial_exec(true);
       }
-      phy_plan_->set_contain_pl_udf_or_trigger(true);
       phy_plan_->set_has_nested_sql(true);
     } else {/*do nothing*/}
+    if (OB_SUCC(ret)) {
+      phy_plan_->set_contain_pl_udf_or_trigger(log_plan.get_stmt()->get_query_ctx()->has_pl_udf_);
+    }
   }
   if (OB_SUCC(ret)) {
     phy_plan_->calc_whether_need_trans();

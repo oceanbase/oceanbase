@@ -84,10 +84,8 @@ int StatTable::assign(const StatTable &other)
   int ret = OB_SUCCESS;
   database_id_ = other.database_id_;
   table_id_ = other.table_id_;
-  incremental_stat_ = other.incremental_stat_;
   stale_percent_ = other.stale_percent_;
-  need_gather_subpart_ = other.need_gather_subpart_;
-  return no_regather_partition_ids_.assign(other.no_regather_partition_ids_);
+  return partition_stat_infos_.assign(other.partition_stat_infos_);
 }
 
 /**
@@ -149,7 +147,6 @@ int ObTableStatParam::assign(const ObTableStatParam &other)
   tab_name_ = other.tab_name_;
   table_id_ = other.table_id_;
   part_level_ = other.part_level_;
-  total_part_cnt_ = other.total_part_cnt_;
   part_name_ = other.part_name_;
   sample_info_.is_sample_ = other.sample_info_.is_sample_;
   sample_info_.is_block_sample_ = other.sample_info_.is_block_sample_;
@@ -192,10 +189,6 @@ int ObTableStatParam::assign(const ObTableStatParam &other)
     LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(column_params_.assign(other.column_params_))) {
     LOG_WARN("failed to assign", K(ret));
-  } else if (OB_FAIL(part_ids_.assign(other.part_ids_))) {
-    LOG_WARN("failed to assign", K(ret));
-  } else if (OB_FAIL(subpart_ids_.assign(other.subpart_ids_))) {
-    LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(no_regather_partition_ids_.assign(other.no_regather_partition_ids_))) {
     LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(all_part_infos_.assign(other.all_part_infos_))) {
@@ -233,6 +226,62 @@ int ObTableStatParam::assign_common_property(const ObTableStatParam &other)
   duration_time_ = other.duration_time_;
   allocator_ = other.allocator_;
   return ret;
+}
+
+int ObOptStatGatherParam::assign(const ObOptStatGatherParam &other)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = other.tenant_id_;
+  db_name_ = other.db_name_;
+  tab_name_ = other.tab_name_;
+  table_id_ = other.table_id_;
+  stat_level_ = other.stat_level_;
+  need_histogram_ = other.need_histogram_;
+  sample_info_.is_sample_ = other.sample_info_.is_sample_;
+  sample_info_.is_block_sample_ = other.sample_info_.is_block_sample_;
+  sample_info_.sample_type_ = other.sample_info_.sample_type_;
+  sample_info_.sample_value_ = other.sample_info_.sample_value_;
+  degree_ = other.degree_;
+  allocator_ = other.allocator_;
+  partition_id_block_map_ = other.partition_id_block_map_;
+  gather_start_time_ = other.gather_start_time_;
+  stattype_ = other.stattype_;
+  is_split_gather_ = other.is_split_gather_;
+  max_duration_time_ = other.max_duration_time_;
+  need_approx_ndv_ = other.need_approx_ndv_;
+  data_table_name_ = other.data_table_name_;
+  global_part_id_ = other.global_part_id_;
+  gather_vectorize_ = other.gather_vectorize_;
+  sepcify_scn_ = other.sepcify_scn_;
+  if (OB_FAIL(partition_infos_.assign(other.partition_infos_))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else if (OB_FAIL(column_params_.assign(other.column_params_))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else {/*do nothing*/}
+  return ret;
+}
+
+bool ObTableStatParam::is_specify_partition_gather() const
+{
+  bool is_specify = false;
+  if (part_level_ == share::schema::PARTITION_LEVEL_ZERO) {
+    //do nothing
+  } else if (part_level_ == share::schema::PARTITION_LEVEL_ONE) {
+    is_specify = part_infos_.count() != all_part_infos_.count();
+  } else if (part_level_ == share::schema::PARTITION_LEVEL_TWO) {
+    is_specify = (part_infos_.count() + approx_part_infos_.count() != all_part_infos_.count()) ||
+                 (subpart_infos_.count() != all_subpart_infos_.count());
+  }
+  return is_specify;
+}
+
+bool ObTableStatParam::is_specify_column_gather() const
+{
+  bool is_specify = false;
+  for (int64_t i = 0; !is_specify && i < column_params_.count(); ++i) {
+    is_specify = column_params_.at(i).is_valid_opt_col() && !column_params_.at(i).need_basic_stat();
+  }
+  return is_specify;
 }
 
 }

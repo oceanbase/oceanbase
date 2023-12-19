@@ -362,7 +362,7 @@ int ObMigrationStatusHelper::check_transfer_dest_ls_status_for_ls_gc(
   ObLSHandle ls_handle;
   allow_gc = false;
   ObMigrationStatus dest_ls_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
-  if (!transfer_ls_id.is_valid() || !tablet_id.is_valid() || !transfer_scn.is_valid()) {
+  if (!transfer_ls_id.is_valid() || !tablet_id.is_valid() || !transfer_scn.is_valid() || transfer_scn.is_min()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls id is invalid", K(ret), K(transfer_ls_id), K(tablet_id), K(transfer_scn));
   } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
@@ -445,6 +445,8 @@ int ObMigrationStatusHelper::check_ls_transfer_tablet_(
     allow_gc = true;
   } else if (OB_FAIL(set_ls_migrate_gc_status_(*ls, allow_gc))) {
     LOG_WARN("failed to set ls gc status", KR(ret));
+  } else if (!allow_gc) {
+    //do nothing
   } else if (OB_FAIL(ls->get_restore_status(restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), KPC(ls));
   } else if (restore_status.is_in_restore()) {
@@ -490,7 +492,7 @@ int ObMigrationStatusHelper::check_ls_transfer_tablet_(
         // do nothing
       } else if (OB_FAIL(check_transfer_dest_ls_status_for_ls_gc(
           user_data.transfer_ls_id_, tablet->get_tablet_meta().tablet_id_,
-          tablet->get_tablet_meta().transfer_info_.transfer_start_scn_, need_wait_dest_ls_replay, allow_gc))) {
+          user_data.transfer_scn_, need_wait_dest_ls_replay, allow_gc))) {
         LOG_WARN("failed to check ls transfer tablet", K(ret), K(ls), K(user_data));
       } else if (!allow_gc) {
         LOG_INFO("The ls is not allowed to be GC because it is also dependent on other ls", K(user_data),
@@ -541,7 +543,7 @@ int ObMigrationStatusHelper::check_ls_with_transfer_task_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mysql proxy should not be NULL", K(ret), KP(sql_proxy));
   } else if (OB_FAIL(ObTransferTaskOperator::get_by_src_ls(
-      *sql_proxy, tenant_id, src_ls_id, task, share::OBCG_STORAGE_HA_LEVEL2))) {
+      *sql_proxy, tenant_id, src_ls_id, task, share::OBCG_STORAGE))) {
     LOG_WARN("failed to get transfer task", K(ret), K(tenant_id), K(src_ls_id));
     if (OB_ENTRY_NOT_EXIST == ret || OB_TABLE_NOT_EXIST == ret) {
       need_check_allow_gc = true;
@@ -590,6 +592,11 @@ bool ObMigrationStatusHelper::check_migration_status_is_fail_(const ObMigrationS
     is_fail = true;
   }
   return is_fail;
+}
+
+bool ObMigrationStatusHelper::need_online(const ObMigrationStatus &cur_status)
+{
+  return (OB_MIGRATION_STATUS_NONE == cur_status);
 }
 
 bool ObMigrationStatusHelper::check_allow_gc_abandoned_ls(const ObMigrationStatus &cur_status)

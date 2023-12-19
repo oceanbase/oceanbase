@@ -1269,7 +1269,12 @@ inline bool ob_is_unsigned_type(ObObjType type)
           || ObUDoubleType == type
           || ObUNumberType == type;
 }
-
+bool is_match_alter_integer_column_online_ddl_rules(const common::ObObjMeta& src_meta,
+                                                    const common::ObObjMeta& dst_meta);
+bool is_match_alter_string_column_online_ddl_rules(const common::ObObjMeta& src_meta,
+                                                   const common::ObObjMeta& dst_meta,
+                                                   const int32_t src_len,
+                                                   const int32_t dst_len);
 inline void convert_unsigned_type_to_signed(ObObjType &type)
 {
   switch(type) {

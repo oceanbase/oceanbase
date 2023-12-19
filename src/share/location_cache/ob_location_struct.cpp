@@ -72,7 +72,7 @@ void ObLSReplicaLocation::reset()
   sql_port_ = OB_INVALID_INDEX;
   replica_type_ = REPLICA_TYPE_FULL;
   property_.reset();
-  restore_status_ = ObLSRestoreStatus::Status::RESTORE_NONE;
+  restore_status_ = ObLSRestoreStatus::Status::NONE;
   proposal_id_ = OB_INVALID_ID;
 }
 

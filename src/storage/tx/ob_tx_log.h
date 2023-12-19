@@ -26,6 +26,7 @@
 #include "logservice/ob_log_base_header.h"
 #include "logservice/palf/lsn.h"
 #include "share/scn.h"
+#include "lib/utility/ob_unify_serialize.h"
 //#include <cstdint>
 
 #define OB_TX_MDS_LOG_USE_BIT_SEGMENT_BUF
@@ -160,7 +161,7 @@ public:
   }
   static bool is_ls_log(const ObTxLogType log_type)
   {
-    return ObTxLogType::TX_START_WORKING_LOG == log_type; 
+    return ObTxLogType::TX_START_WORKING_LOG == log_type;
   }
   static bool can_be_spilt(const ObTxLogType log_type)
   {
@@ -176,6 +177,18 @@ public:
   static int decide_final_barrier_type(const logservice::ObReplayBarrierType tmp_log_barrier_type,
                                        logservice::ObReplayBarrierType &final_barrier_type);
 };
+
+inline bool is_contain_stat_log(const ObTxCbArgArray &array)
+{
+  bool bool_ret = false;
+  for (int64_t i = 0; i < array.count(); i++) {
+    if ((ObTxLogTypeChecker::is_state_log(array.at(i).get_log_type()))) {
+      bool_ret = true;
+      break;
+    }
+  }
+  return bool_ret;
+}
 
 // ============================== Tx Log Header ==============================
 class ObTxLogHeader
@@ -234,7 +247,7 @@ public:
   {
     before_serialize();
   }
-  ObTxRedoLog(const int64_t &log_no, const uint64_t &cluster_version)
+  ObTxRedoLog(const uint64_t &cluster_version)
       : mutator_buf_(nullptr), replay_mutator_buf_(nullptr), mutator_size_(-1),
         ctx_redo_info_(cluster_version)
   // (ctx_redo_info_.clog_encrypt_info_)(encrypt_info),(ctx_redo_info_.cluster_version_)(cluster_version)
@@ -287,8 +300,6 @@ private:
   int64_t mutator_size_;
 
   ObCtxRedoInfo ctx_redo_info_;
-  //--------- for liboblog -----------
-  // int64_t log_no_;
 };
 
 // for dist trans write it's multi source data, the same as redo,
@@ -347,7 +358,8 @@ public:
         app_trace_id_str_(temp_ref.app_trace_id_str_), schema_version_(0), can_elr_(false),
         proposal_leader_(temp_ref.proposal_leader_), cur_query_start_time_(0), is_sub2pc_(false),
         is_dup_tx_(false), tx_expired_time_(0), epoch_(0), last_op_sn_(0), first_seq_no_(),
-        last_seq_no_(), max_submitted_seq_no_(), cluster_version_(0), xid_(temp_ref.xid_)
+        last_seq_no_(), max_submitted_seq_no_(), serial_final_seq_no_(), cluster_version_(0),
+        xid_(temp_ref.xid_)
   {
     before_serialize();
   }
@@ -368,14 +380,15 @@ public:
                     ObTxSEQ last_seq_no,
                     ObTxSEQ max_submitted_seq_no,
                     uint64_t cluster_version,
-                    const ObXATransID &xid)
+                    const ObXATransID &xid,
+                    ObTxSEQ serial_final_seq_no)
       : scheduler_(scheduler), trans_type_(trans_type), session_id_(session_id),
         app_trace_id_str_(app_trace_id_str), schema_version_(schema_version), can_elr_(elr),
         proposal_leader_(proposal_leader), cur_query_start_time_(cur_query_start_time),
         is_sub2pc_(is_sub2pc), is_dup_tx_(is_dup_tx), tx_expired_time_(tx_expired_time),
         epoch_(epoch), last_op_sn_(last_op_sn), first_seq_no_(first_seq_no), last_seq_no_(last_seq_no),
-        max_submitted_seq_no_(max_submitted_seq_no), cluster_version_(cluster_version),
-        xid_(xid)
+        max_submitted_seq_no_(max_submitted_seq_no), serial_final_seq_no_(serial_final_seq_no),
+        cluster_version_(cluster_version), xid_(xid)
   {
     before_serialize();
   };
@@ -396,6 +409,7 @@ public:
   ObTxSEQ get_first_seq_no() const { return first_seq_no_; }
   ObTxSEQ get_last_seq_no() const { return last_seq_no_; }
   ObTxSEQ get_max_submitted_seq_no() const { return max_submitted_seq_no_; }
+  ObTxSEQ get_serial_final_seq_no() const { return serial_final_seq_no_; }
   uint64_t get_cluster_version() const { return cluster_version_; }
   const ObXATransID &get_xid() const { return xid_; }
   // for ob_admin
@@ -419,6 +433,7 @@ public:
                K(first_seq_no_),
                K(last_seq_no_),
                K(max_submitted_seq_no_),
+               K(serial_final_seq_no_),
                K(cluster_version_),
                K(xid_));
 
@@ -447,7 +462,7 @@ private:
 
   // ctrl savepoint written log
   ObTxSEQ max_submitted_seq_no_;
-
+  ObTxSEQ serial_final_seq_no_;
   uint64_t cluster_version_;
   ObXATransID xid_;
 };
@@ -482,7 +497,7 @@ public:
         incremental_participants_(temp_ref.incremental_participants_), cluster_version_(0),
         app_trace_id_str_(temp_ref.app_trace_id_str_), app_trace_info_(temp_ref.app_trace_info_),
         prev_record_lsn_(temp_ref.prev_record_lsn_), redo_lsns_(temp_ref.redo_lsns_),
-        xid_(temp_ref.xid_)
+        xid_(temp_ref.xid_), commit_parts_(), epoch_(0)
   {
     before_serialize();
   }
@@ -498,12 +513,14 @@ public:
                     ObRedoLSNArray &redo_lsns,
                     share::ObLSArray &incremental_participants,
                     uint64_t cluster_version,
-                    const ObXATransID &xid)
+                    const ObXATransID &xid,
+                    const ObTxCommitParts &commit_parts,
+                    int64_t epoch)
       : scheduler_(scheduler), participants_(participants), upstream_(upstream),
         is_sub2pc_(is_sub2pc), is_dup_tx_(is_dup_tx), can_elr_(is_elr),
         incremental_participants_(incremental_participants), cluster_version_(cluster_version),
         app_trace_id_str_(app_trace_id), app_trace_info_(app_trace_info),
-        prev_record_lsn_(prev_record_lsn), redo_lsns_(redo_lsns), xid_(xid)
+        prev_record_lsn_(prev_record_lsn), redo_lsns_(redo_lsns), xid_(xid), commit_parts_(commit_parts), epoch_(epoch)
   {
     before_serialize();
   };
@@ -521,6 +538,8 @@ public:
   const share::ObLSArray &get_incremental_participants() const { return incremental_participants_; }
   uint64_t get_cluster_version() const { return cluster_version_; }
   const ObXATransID &get_xid() const { return xid_; }
+  int64_t get_epoch() const { return epoch_; }
+  const ObTxCommitParts &get_commit_parts() const { return commit_parts_; }
   int ob_admin_dump(share::ObAdminMutatorStringArg &arg);
 
   static const ObTxLogType LOG_TYPE;
@@ -537,7 +556,9 @@ public:
                K(app_trace_info_),
                K(prev_record_lsn_),
                K(redo_lsns_),
-               K(xid_))
+               K(xid_),
+               K(commit_parts_),
+               K(epoch_))
 public:
   int before_serialize();
 
@@ -559,6 +580,8 @@ private:
   ObRedoLSNArray &redo_lsns_;
   // for xa
   ObXATransID xid_;
+  ObTxCommitParts commit_parts_;
+  int64_t epoch_;
 };
 
 class ObTxPrepareLogTempRef
@@ -624,9 +647,11 @@ private:
 class ObTxCommitLogTempRef
 {
 public:
-  ObTxCommitLogTempRef() : incremental_participants_(), multi_source_data_(), ls_log_info_arr_() {}
+  ObTxCommitLogTempRef() : checksum_signature_(), incremental_participants_(), multi_source_data_(), ls_log_info_arr_()
+  { checksum_signature_.set_max_print_count(1024); }
 
 public:
+  ObSEArray<uint8_t,1> checksum_signature_;
   share::ObLSArray incremental_participants_;
   ObTxBufferNodeArray multi_source_data_;
   ObLSLogInfoArray ls_log_info_arr_;
@@ -641,7 +666,8 @@ public:
 
 public:
   ObTxCommitLog(ObTxCommitLogTempRef &temp_ref)
-      : commit_version_(), checksum_(0),
+      : commit_version_(), checksum_(0), checksum_sig_(temp_ref.checksum_signature_),
+        checksum_sig_serde_(checksum_sig_),
         incremental_participants_(temp_ref.incremental_participants_),
         multi_source_data_(temp_ref.multi_source_data_), trans_type_(TransType::SP_TRANS),
         tx_data_backup_(), prev_lsn_(), ls_log_info_arr_(temp_ref.ls_log_info_arr_)
@@ -650,12 +676,13 @@ public:
   }
   ObTxCommitLog(share::SCN commit_version,
                 uint64_t checksum,
+                ObIArray<uint8_t> &checksum_sig,
                 share::ObLSArray &incremental_participants,
                 ObTxBufferNodeArray &multi_source_data,
                 int32_t trans_type,
                 LogOffSet prev_lsn,
                 ObLSLogInfoArray &ls_log_info_arr)
-      : checksum_(checksum),
+      : checksum_(checksum), checksum_sig_(checksum_sig), checksum_sig_serde_(checksum_sig_),
         incremental_participants_(incremental_participants), multi_source_data_(multi_source_data),
         trans_type_(trans_type), prev_lsn_(prev_lsn), ls_log_info_arr_(ls_log_info_arr)
   {
@@ -681,6 +708,7 @@ public:
   TO_STRING_KV(K(LOG_TYPE),
                K(commit_version_),
                K(checksum_),
+               K_(checksum_sig),
                K(incremental_participants_),
                K(multi_source_data_),
                K(trans_type_),
@@ -695,6 +723,8 @@ private:
   ObTxSerCompatByte compat_bytes_;
   share::SCN commit_version_; // equal to INVALID_COMMIT_VERSION in Single LS Transaction
   uint64_t checksum_;
+  ObIArray<uint8_t> &checksum_sig_;
+  ObIArraySerDeTrait<uint8_t> checksum_sig_serde_;
   share::ObLSArray &incremental_participants_;
   ObTxBufferNodeArray &multi_source_data_;
 
@@ -732,7 +762,6 @@ public:
   {
     before_serialize();
   }
-
   const share::ObLSArray &get_incremental_participants() const { return incremental_participants_; }
 
   int ob_admin_dump(share::ObAdminMutatorStringArg &arg);
@@ -902,48 +931,81 @@ private:
 class ObTxLogBlockHeader
 {
   OB_UNIS_VERSION(1);
-
+public:
+  struct FixSizeTrait_int64_t {
+    FixSizeTrait_int64_t(int64_t &v): v_(v) {}
+    int64_t &v_;
+    int serialize(SERIAL_PARAMS) const { return NS_::encode_i64(buf, buf_len, pos, v_); }
+    int64_t get_serialize_size(void) const { return NS_::encoded_length_i64(v_); }
+    int deserialize(DESERIAL_PARAMS) { return NS_::decode_i64(buf, data_len, pos, &v_); }
+  };
 public:
   void reset()
   {
     org_cluster_id_ = 0;
+    cluster_version_ = 0;
     log_entry_no_ = 0;
     tx_id_ = 0;
     scheduler_.reset();
+    flags_ = 0;
+    serialize_size_ = 0;
   }
-  ObTxLogBlockHeader()
+  ObTxLogBlockHeader(): __log_entry_no_(log_entry_no_)
   {
     reset();
     before_serialize();
   };
   ObTxLogBlockHeader(const uint64_t org_cluster_id,
+                     const int64_t cluster_version,
                      const int64_t log_entry_no,
                      const ObTransID &tx_id,
                      const common::ObAddr &scheduler)
-      : org_cluster_id_(org_cluster_id), log_entry_no_(log_entry_no), tx_id_(tx_id),
-        scheduler_(scheduler)
+    : __log_entry_no_(log_entry_no_), flags_(0)
   {
+    init(org_cluster_id, cluster_version, log_entry_no, tx_id, scheduler);
     before_serialize();
   }
-
+  void init(const uint64_t org_cluster_id,
+            const int64_t cluster_version,
+            const int64_t log_entry_no,
+            const ObTransID &tx_id,
+            const common::ObAddr &scheduler) {
+    org_cluster_id_ = org_cluster_id;
+    cluster_version_ = cluster_version;
+    log_entry_no_ = log_entry_no;
+    tx_id_ = tx_id;
+    scheduler_ = scheduler;
+    flags_ = 0;
+    serialize_size_ = 0;
+  }
+  void calc_serialize_size_();
   uint64_t get_org_cluster_id() const { return org_cluster_id_; }
+  int64_t get_cluster_version() const { return cluster_version_; }
   int64_t get_log_entry_no() const { return log_entry_no_; }
+  void set_log_entry_no(int64_t entry_no) { log_entry_no_ = entry_no; }
   const ObTransID &get_tx_id() const { return tx_id_; }
   const common::ObAddr &get_scheduler() const { return scheduler_; }
 
   bool is_valid() const { return org_cluster_id_ >= 0; }
-
-  TO_STRING_KV(K_(org_cluster_id), K_(log_entry_no), K_(tx_id), K_(scheduler));
+  void set_serial_final() { flags_ |= SERIAL_FINAL; }
+  bool is_serial_final() const { return (flags_ & SERIAL_FINAL) == SERIAL_FINAL; }
+  uint8_t flags() const { return flags_; }
+  TO_STRING_KV(K_(compat_bytes), K_(org_cluster_id), K_(cluster_version), K_(log_entry_no), K_(tx_id), K_(scheduler), K_(flags));
 
 public:
   int before_serialize();
-
+  // the last serial log
+  static const uint8_t SERIAL_FINAL = ((uint8_t)1) << 0;
 private:
+  int64_t serialize_size_;
   ObTxSerCompatByte compat_bytes_;
   uint64_t org_cluster_id_;
+  int64_t cluster_version_;
   int64_t log_entry_no_;
+  FixSizeTrait_int64_t __log_entry_no_; // serialize helper member, hiden for others
   ObTransID tx_id_;
   common::ObAddr scheduler_;
+  uint8_t flags_;
 };
 
 class ObTxAdaptiveLogBuf
@@ -1076,23 +1138,19 @@ public:
   static const logservice::ObLogBaseType DEFAULT_LOG_BLOCK_TYPE; // TRANS_LOG
   static const int32_t DEFAULT_BIG_ROW_BLOCK_SIZE;
   static const int64_t BIG_SEGMENT_SPILT_SIZE;
-
   NEED_SERIALIZE_AND_DESERIALIZE;
   ObTxLogBlock();
   void reset();
-  int reuse(const int64_t replay_hint, const ObTxLogBlockHeader &block_header);
-  int init(const int64_t replay_hint,
-           const ObTxLogBlockHeader &block_header,
-           const int64_t suggested_buf_size = ObTxAdaptiveLogBuf::NORMAL_LOG_BUF_SIZE);
-  int init_with_header(const char *buf,
-                       const int64_t &size,
-                       int64_t &replay_hint,
-                       ObTxLogBlockHeader &block_header);
-  int init(const char *buf,
-           const int64_t &size,
-           int skip_pos,
-           ObTxLogBlockHeader &block_header); // init before replay
+  int reuse_for_fill();
+  int init_for_fill(const int64_t suggested_buf_size = ObTxAdaptiveLogBuf::NORMAL_LOG_BUF_SIZE);
+  int init_for_replay(const char *buf, const int64_t &size);
+  int init_for_replay(const char *buf, const int64_t &size, int skip_pos); // init before replay
+  ObTxLogBlockHeader &get_header() { return header_; }
+  logservice::ObLogBaseHeader &get_log_base_header() { return log_base_header_; }
+  typedef logservice::ObReplayBarrierType ObReplayBarrierType;
+  int seal(const int64_t replay_hint, const ObReplayBarrierType barrier_type = ObReplayBarrierType::NO_NEED_BARRIER);
   ~ObTxLogBlock() { reset(); }
+  bool is_inited() const { return inited_; }
   int get_next_log(ObTxLogHeader &header,
                    ObTxBigSegmentBuf *big_segment_buf = nullptr,
                    bool *contain_big_segment = nullptr);
@@ -1106,18 +1164,16 @@ public:
   int prepare_mutator_buf(ObTxRedoLog &redo);
   int finish_mutator_buf(ObTxRedoLog &redo, const int64_t &mutator_size);
   int extend_log_buf();
-
-  //rewrite base log header at the head of log block.
-  //It is a temporary interface for create/remove tablet which can not be used for any other target
-  int rewrite_barrier_log_block(int64_t replay_hint,
-                                const enum logservice::ObReplayBarrierType barrier_type);
   TO_STRING_KV(K(fill_buf_),
                KP(replay_buf_),
                K(len_),
                K(pos_),
                K(cur_log_type_),
                K(cb_arg_array_),
-               KPC(big_segment_buf_));
+               KPC(big_segment_buf_),
+               K_(inited),
+               K_(header),
+               K_(log_base_header));
 
 public:
   // get fill buf for submit log
@@ -1125,21 +1181,16 @@ public:
   const int64_t &get_size() { return pos_; }
 
   int set_prev_big_segment_scn(const share::SCN prev_scn);
-  int acquire_segment_log_buf(const char *&submit_buf,
-                              int64_t &submit_buf_len,
-                              const ObTxLogBlockHeader &block_header,
-                              const ObTxLogType big_segment_log_type,
-                              ObTxBigSegmentBuf *big_segment_buf = nullptr);
+  int acquire_segment_log_buf(const ObTxLogType big_segment_log_type, ObTxBigSegmentBuf *big_segment_buf = nullptr);
 private:
-  int serialize_log_block_header_(const int64_t replay_hint,
-                                  const ObTxLogBlockHeader &block_header,
-                                  const logservice::ObReplayBarrierType barrier_type =
-                                      logservice::ObReplayBarrierType::NO_NEED_BARRIER);
-  int deserialize_log_block_header_(int64_t &replay_hint, ObTxLogBlockHeader &block_header);
+  int serialize_log_block_header_();
+  int deserialize_log_block_header_();
   int update_next_log_pos_(); // skip log body if  cur_log_type_ is UNKNOWN (depend on
                               // DESERIALIZE_HEADER in ob_unify_serialize.h)
   DISALLOW_COPY_AND_ASSIGN(ObTxLogBlock);
-
+  bool inited_;
+  logservice::ObLogBaseHeader log_base_header_;
+  ObTxLogBlockHeader header_;
   ObTxAdaptiveLogBuf fill_buf_;
   const char *replay_buf_;
   int64_t len_;

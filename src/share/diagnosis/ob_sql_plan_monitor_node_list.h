@@ -195,7 +195,7 @@ public:
 public:
   typedef hash::ObHashMap<ObMonitorNodeKey, ObMonitorNode *,
       hash::SpinReadWriteDefendMode> MonitorNodeMap;
-  static const int64_t MONITOR_NODE_PAGE_SIZE = (1LL << 21) - (1LL << 13); // 2M - 8k
+  static const int64_t MONITOR_NODE_PAGE_SIZE = (128LL << 10); // 128K
   static const int64_t EVICT_INTERVAL = 1000000; //1s
   static const char *MOD_LABEL;
   typedef common::ObRaQueue::Ref Ref;

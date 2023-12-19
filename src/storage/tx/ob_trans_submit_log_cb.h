@@ -69,7 +69,7 @@ protected:
   palf::LSN lsn_;
   int64_t submit_ts_;
 };
-
+typedef common::ObSEArray<memtable::ObCallbackScope, 1> ObCallbackScopeArray;
 class ObTxLogCb : public ObTxBaseLogCb,
                   public common::ObDLinkBase<ObTxLogCb>
 {
@@ -94,10 +94,11 @@ public:
     }
   }
   ObTxData* get_tx_data() { return tx_data_guard_.tx_data(); }
-  void set_callbacks(const memtable::ObCallbackScope &callbacks) { callbacks_ = callbacks; }
-  memtable::ObCallbackScope& get_callbacks() { return callbacks_; }
-  void set_callbacked() { is_callbacked_ = true; }
-  bool is_callbacked() const { return is_callbacked_; }
+  int set_callbacks(const ObCallbackScopeArray &callbacks) { return callbacks_.assign(callbacks); }
+  ObCallbackScopeArray& get_callbacks() { return callbacks_; }
+  int reserve_callbacks(int cnt) { return callbacks_.reserve(cnt); }
+  void set_callbacked() { ATOMIC_STORE(&is_callbacked_, true); }
+  bool is_callbacked() const { return ATOMIC_LOAD(&is_callbacked_); }
   bool is_dynamic() const { return is_dynamic_; }
   ObTxCbArgArray &get_cb_arg_array() { return cb_arg_array_; }
   const ObTxCbArgArray &get_cb_arg_array() const { return cb_arg_array_; }
@@ -126,7 +127,8 @@ public:
                        K(is_dynamic_),
                        K(mds_range_),
                        K(cb_arg_array_),
-                       K(first_part_scn_));
+                       K(first_part_scn_),
+                       K(callbacks_.count()));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTxLogCb);
 private:
@@ -135,7 +137,7 @@ private:
   ObTransID trans_id_;
   ObTransCtx *ctx_;
   ObTxDataGuard tx_data_guard_;
-  memtable::ObCallbackScope callbacks_;
+  ObCallbackScopeArray callbacks_;
   bool is_callbacked_;
   bool is_dynamic_;
   ObTxMDSRange mds_range_;

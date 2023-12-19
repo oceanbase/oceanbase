@@ -3996,6 +3996,19 @@ int ObOptimizerUtil::decide_sort_keys_for_merge_style_op(const ObDMLStmt *stmt,
     }
   } else if (OB_FAIL(merge_key.assign(*interesting_key))) {
     LOG_WARN("failed to assign merge key", K(ret));
+    /* interesting_key->need_sort_ is true generally.
+      When ObOptimizerUtil::check_need_sort use ordering contain lossless cast, need_sort_ can be false
+      and ObOptimizerUtil::check_need_sort is needed for other path use the interesting_key */
+  } else if (OB_FAIL(ObOptimizerUtil::check_need_sort(merge_key.order_items_,
+                                                      input_ordering,
+                                                      fd_item_set,
+                                                      equal_sets,
+                                                      const_exprs,
+                                                      exec_ref_exprs,
+                                                      is_at_most_one_row,
+                                                      merge_key.need_sort_,
+                                                      merge_key.prefix_pos_))) {
+    LOG_WARN("failed to check need sort", K(ret));
   } else { /*do nothing*/ }
   return ret;
 }
@@ -6312,7 +6325,7 @@ int ObOptimizerUtil::get_set_res_types(ObIAllocator *allocator,
         ret = res_types.push_back(types.at(0));
       } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(res_type, &types.at(0),
                                                     types.count(), coll_type, is_oracle_mode(),
-                                                    length_semantics, session_info))) {
+                                                    length_semantics))) {
         LOG_WARN("failed to aggregate result type for merge", K(ret));
       } else if (OB_FAIL(res_types.push_back(res_type))) {
         LOG_WARN("failed to pushback res type", K(ret));
@@ -6445,7 +6458,7 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
         } else if (OB_FAIL(session_info->get_collation_connection(coll_type))) {
           LOG_WARN("failed to get collation connection", K(ret));
         } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(res_type, &types.at(0), 2,
-                            coll_type, is_oracle_mode(), length_semantics, session_info))) {
+                            coll_type, is_oracle_mode(), length_semantics))) {
           if (session_info->is_varparams_sql_prepare()) {
             skip_add_cast = true;
             res_type = left_type;
@@ -8055,7 +8068,7 @@ int ObOptimizerUtil::generate_pullup_aggr_expr(ObRawExprFactory &expr_factory,
       LOG_WARN("failed to pullup grouping aggr expr", K(ret));
     }
   } else if (T_FUN_TOP_FRE_HIST == origin_expr->get_expr_type()) {
-    if (OB_UNLIKELY(3 != origin_expr->get_real_param_count())) {
+    if (OB_UNLIKELY(4 != origin_expr->get_real_param_count())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("real param count is invalid", K(ret));
     } else if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_TOP_FRE_HIST, pullup_aggr))) {
@@ -8068,6 +8081,9 @@ int ObOptimizerUtil::generate_pullup_aggr_expr(ObRawExprFactory &expr_factory,
       LOG_WARN("failed to add real param expr", K(ret));
     } else if (OB_FAIL(pullup_aggr->add_real_param_expr(
                          origin_expr->get_real_param_exprs_for_update().at(2)))) {
+      LOG_WARN("failed to add real param expr", K(ret));
+    } else if (OB_FAIL(pullup_aggr->add_real_param_expr(
+                         origin_expr->get_real_param_exprs_for_update().at(3)))) {
       LOG_WARN("failed to add real param expr", K(ret));
     } else if (FALSE_IT(pullup_aggr->set_is_need_deserialize_row(true))) {
       // do nothing

@@ -192,12 +192,15 @@ int64_t ObTenantFreezeInfoMgr::get_latest_frozen_version()
 int ObTenantFreezeInfoMgr::get_min_dependent_freeze_info(ObFreezeInfo &freeze_info)
 {
   int ret = OB_SUCCESS;
+  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + RLOCK_TIMEOUT_US;
+  RLockGuardWithTimeout lock_guard(lock_, abs_timeout_us, ret);
 
-  if (OB_UNLIKELY(!inited_)) {
+  if (OB_FAIL(ret)) {
+    STORAGE_LOG(WARN, "get_lock failed", KR(ret));
+  } else if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
   } else {
-    RLockGuard lock_guard(lock_);
     const int64_t info_cnt = freeze_info_mgr_.get_freeze_info_count();
     int64_t idx = 0;
     if (info_cnt > MIN_DEPENDENT_FREEZE_INFO_GAP) {
@@ -219,9 +222,12 @@ int ObTenantFreezeInfoMgr::get_freeze_info_behind_major_snapshot(
 {
   int ret = OB_SUCCESS;
   ObSEArray<share::ObFreezeInfo, 8> info_list;
-  RLockGuard lock_guard(lock_);
+  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + RLOCK_TIMEOUT_US;
+  RLockGuardWithTimeout lock_guard(lock_, abs_timeout_us, ret);
 
-  if (OB_UNLIKELY(!inited_)) {
+  if (OB_FAIL(ret)) {
+    STORAGE_LOG(WARN, "get_lock failed", KR(ret));
+  } else if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
   } else if (OB_UNLIKELY(major_snapshot_version < 0)) {
@@ -241,9 +247,12 @@ int ObTenantFreezeInfoMgr::get_freeze_info_by_snapshot_version(
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObFreezeInfo, 1> freeze_infos;
-  RLockGuard lock_guard(lock_);
+  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + RLOCK_TIMEOUT_US;
+  RLockGuardWithTimeout lock_guard(lock_, abs_timeout_us, ret);
 
-  if (OB_UNLIKELY(snapshot_version <= 0 || INT64_MAX == snapshot_version)) {
+  if (OB_FAIL(ret)) {
+    STORAGE_LOG(WARN, "get_lock failed", KR(ret));
+  } else if (OB_UNLIKELY(snapshot_version <= 0 || INT64_MAX == snapshot_version)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "snapshot version is invalid", K(ret), K(snapshot_version));
   } else if (OB_UNLIKELY(!inited_)) {
@@ -261,8 +270,15 @@ int ObTenantFreezeInfoMgr::get_freeze_info_behind_snapshot_version(
     const int64_t snapshot_version,
     ObFreezeInfo &freeze_info)
 {
-  RLockGuard lock_guard(lock_);
-  return get_freeze_info_behind_snapshot_version_(snapshot_version, freeze_info);
+  int ret = OB_SUCCESS;
+  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + RLOCK_TIMEOUT_US;
+  RLockGuardWithTimeout lock_guard(lock_, abs_timeout_us, ret);
+  if (OB_FAIL(ret)) {
+    STORAGE_LOG(WARN, "get_lock failed", KR(ret));
+  } else if (OB_FAIL(get_freeze_info_behind_snapshot_version_(snapshot_version, freeze_info))) {
+    STORAGE_LOG(WARN, "failed to get_freeze_info_behind_snapshot_version", KR(ret));
+  }
+  return ret;
 }
 
 int ObTenantFreezeInfoMgr::get_freeze_info_behind_snapshot_version_(
@@ -295,9 +311,12 @@ int ObTenantFreezeInfoMgr::get_neighbour_major_freeze(
   bool found = false;
   share::ObFreezeInfo prev_frozen_status;
   share::ObFreezeInfo next_frozen_status;
-  RLockGuard lock_guard(lock_);
+  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + RLOCK_TIMEOUT_US;
+  RLockGuardWithTimeout lock_guard(lock_, abs_timeout_us, ret);
 
-  if (OB_UNLIKELY(!inited_)) {
+  if (OB_FAIL(ret)) {
+    STORAGE_LOG(WARN, "get_lock failed", KR(ret));
+  } else if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
   } else if (OB_FAIL(freeze_info_mgr_.get_neighbour_frozen_status(snapshot_version, prev_frozen_status, next_frozen_status))) {
@@ -412,10 +431,12 @@ int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
   bool unused = false;
   snapshot_info.reset();
 
-  RLockGuard lock_guard(lock_);
+  const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + RLOCK_TIMEOUT_US;
+  RLockGuardWithTimeout lock_guard(lock_, abs_timeout_us, ret);
   ObIArray<ObSnapshotInfo> &snapshots = snapshots_[cur_idx_];
-
-  if (OB_UNLIKELY(!inited_)) {
+  if (OB_FAIL(ret)) {
+    STORAGE_LOG(WARN, "get_lock failed", KR(ret));
+  } else if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
   } else if (OB_FAIL(get_multi_version_duration(duration))) {

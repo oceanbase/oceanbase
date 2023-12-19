@@ -39,11 +39,12 @@ int ObAsyncLoadExternalTableFileListP::process()
   int ret = OB_SUCCESS;
   ObLoadExternalFileListReq &req = arg_;
   ObLoadExternalFileListRes &res = result_;
-  ObString &location = req.location_;
   ObSEArray<ObString, 16> file_urls;
   ObString access_info;
   ObArenaAllocator allocator;
-  if (OB_FAIL(ObExternalTableFileManager::get_instance().get_external_file_list_on_device(location,
+  if (OB_FAIL(ObExternalTableFileManager::get_instance().get_external_file_list_on_device(req.location_,
+                                                                                          req.pattern_,
+                                                                                          req.regexp_vars_,
                                                                                           file_urls,
                                                                                           res.file_sizes_,
                                                                                           access_info,
@@ -56,7 +57,7 @@ int ObAsyncLoadExternalTableFileListP::process()
     OZ(res.file_urls_.push_back(tmp));
   }
   res.rcode_.rcode_ = ret;
-  LOG_DEBUG("get external table file", K(ret), K(location), K(file_urls), K(res.file_urls_));
+  LOG_DEBUG("get external table file", K(ret), K(req.location_), K(req.pattern_), K(file_urls), K(res.file_urls_));
   return ret;
 }
 

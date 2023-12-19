@@ -25,19 +25,43 @@ namespace share
 {
 class ObGroupName;
 
+typedef enum  : uint64_t {
+  DEFAULT = 0,
+  CRITICAL = 1 << 0,
+  INVALID = UINT64_MAX
+} group_flags_t;
+
 enum ObCgId
 {
-#define CGID_DEF(name, id, worker_concurrency...) name = id,
+#define CGID_DEF(name, id, ...) name = id,
 #include "ob_group_list.h"
 #undef CGID_DEF
   OBCG_MAXNUM,
 };
 
-class ObCgWorkerConcurrency
+class ObCgInfo
 {
 public:
-  ObCgWorkerConcurrency() : worker_concurrency_(1) {}
+  ObCgInfo() : name_(nullptr), is_critical_(false), worker_concurrency_(1) {}
+  void set_name(const char *name) { name_ = name; }
+  void set_args(group_flags_t flags = DEFAULT, uint64_t worker_concurrency = 1)
+  {
+    set_flags(flags);
+    set_worker_concurrency(worker_concurrency);
+  }
+  void set_flags(group_flags_t flags = DEFAULT)
+  {
+    if (DEFAULT == flags || INVALID == flags) {
+      // do nothing
+    } else {
+      if (CRITICAL & flags) {
+        is_critical_ = true;
+      }
+    }
+  }
   void set_worker_concurrency(uint64_t worker_concurrency = 1) { worker_concurrency_ = worker_concurrency; }
+  const char *name_;
+  bool is_critical_;
   uint64_t worker_concurrency_;
 };
 
@@ -45,7 +69,7 @@ class ObCgSet
 {
   ObCgSet()
   {
-#define CGID_DEF(name, id, worker_concurrency...) names_[id] = #name; worker_concurrency_[id].set_worker_concurrency(worker_concurrency);
+#define CGID_DEF(name, id, args...) group_infos_[id].set_name(#name); group_infos_[id].set_args(args);
 #include "ob_group_list.h"
 #undef CGID_DEF
   }
@@ -56,7 +80,7 @@ public:
   {
     const char *name = "OBCG_DEFAULT";
     if (id >= 0 && id < OBCG_MAXNUM) {
-      name = names_[id];
+      name = group_infos_[id].name_;
     }
     return name;
   }
@@ -64,10 +88,19 @@ public:
   uint64_t get_worker_concurrency(int64_t id) const
   {
     uint64_t worker_concurrency = 1;
-    if (id > 0 && id < OBCG_MAXNUM) {
-      worker_concurrency = worker_concurrency_[id].worker_concurrency_;
+    if (id >= 0 && id < OBCG_MAXNUM) {
+      worker_concurrency = group_infos_[id].worker_concurrency_;
     }
     return worker_concurrency;
+  }
+
+  bool is_group_critical(int64_t id) const
+  {
+    bool is_group_critical = false;
+    if (id >= 0 && id < OBCG_MAXNUM) {
+      is_group_critical = group_infos_[id].is_critical_;
+    }
+    return is_group_critical;
   }
 
   static ObCgSet &instance()
@@ -77,9 +110,7 @@ public:
 
 private:
   static ObCgSet instance_;
-
-  const char *names_[OBCG_MAXNUM];
-  ObCgWorkerConcurrency worker_concurrency_[OBCG_MAXNUM];
+  ObCgInfo group_infos_[OBCG_MAXNUM];
 };
 
 struct OBGroupIOInfo final

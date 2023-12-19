@@ -16,6 +16,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "common/sql_mode/ob_sql_mode_utils.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
+#include "sql/engine/expr/ob_expr_util.h"
 
 namespace oceanbase
 {
@@ -96,7 +97,7 @@ int ObExprToType::calc_result_type_for_literal(ObExprResType &type, ObExprResTyp
     ObCollationType cast_coll_type = CS_TYPE_INVALID;
     bool nonstring_to_string = false;
     ObCastMode cast_mode = CM_NONE;
-    if (OB_FAIL(ObSQLUtils::get_default_cast_mode(type_ctx.get_session(), cast_mode))) {
+    if (FALSE_IT(ObSQLUtils::get_default_cast_mode(type_ctx.get_sql_mode(), cast_mode))) {
       LOG_WARN("failed to get default cast mode", K(ret));
     } else if ((!ob_is_string_type(type1.get_type())) && ob_is_string_or_lob_type(expect_type_)) {
       nonstring_to_string = true;
@@ -240,6 +241,16 @@ int ObExprToType::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
   int ret = OB_ERR_UNEXPECTED;
   LOG_WARN("unexpected, new engine should not use to_type expr", K(ret));
   return  ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprToType, raw_expr) {
+  int ret = OB_SUCCESS;
+  if (is_mysql_mode()) {
+    SET_LOCAL_SYSVAR_CAPACITY(2);
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_SQL_MODE);
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
+  }
+  return ret;
 }
 
 }

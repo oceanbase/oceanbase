@@ -433,8 +433,8 @@ int ObTenantRoleTransitionService::do_switch_access_mode_to_append(
       LOG_WARN("Tenant status changed by concurrent operation, switch to primary not allowed",
                KR(ret), K(tenant_info), K(cur_tenant_info));
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "tenant status changed by concurrent operation, switch to primary");
-    } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_role(
-            tenant_id_, &trans, tenant_info.get_switchover_epoch(),
+    } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_role_in_trans(
+            tenant_id_, trans, tenant_info.get_switchover_epoch(),
             share::PRIMARY_TENANT_ROLE, tenant_info.get_switchover_status(),
             share::NORMAL_SWITCHOVER_STATUS, switchover_epoch_))) {
       LOG_WARN("failed to update tenant switchover status", KR(ret), K(tenant_id_), K(tenant_info), K(cur_tenant_info));
@@ -636,6 +636,7 @@ int ObTenantRoleTransitionService::do_switch_access_mode_to_raw_rw(
     LOG_WARN("fail to execute get_all_ls_status_and_change_access_mode_", KR(ret), K(tenant_info),
         K(target_access_mode), K(sys_ls_sync_scn));
   }
+  DEBUG_SYNC(AFTER_CHANGE_ACCESS_MODE);
   return ret;
 }
 

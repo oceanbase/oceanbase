@@ -694,6 +694,8 @@ private:
       const int64_t &priority,
       bool &task_exist);
 
+  int check_whether_the_tenant_role_can_exec_dr_(const uint64_t tenant_id);
+
   int try_remove_permanent_offline_replicas(
       const bool only_for_display,
       DRLSInfo &dr_ls_info,

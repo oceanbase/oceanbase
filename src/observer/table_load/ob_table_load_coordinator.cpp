@@ -509,6 +509,9 @@ int ObTableLoadCoordinator::check_peers_merge_result(bool &is_finish)
         if (OB_UNLIKELY(ObTableLoadStatusType::ERROR == res.status_)) {
           ret = res.error_code_;
           LOG_WARN("store has error", KR(ret), K(addr), K(res.status_));
+        } else if (OB_UNLIKELY(ObTableLoadStatusType::ABORT == res.status_)) {
+          ret = OB_SUCCESS != res.error_code_ ? res.error_code_ : OB_CANCELED;
+          LOG_WARN("store has abort", KR(ret), K(addr), K(res.status_));
         } else if (OB_UNLIKELY(ObTableLoadStatusType::MERGING != res.status_ &&
                                ObTableLoadStatusType::MERGED != res.status_)) {
           ret = OB_ERR_UNEXPECTED;

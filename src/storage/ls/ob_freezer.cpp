@@ -40,7 +40,6 @@ ObFrozenMemtableInfo::ObFrozenMemtableInfo()
     end_scn_(share::ObScnRange::MIN_SCN),
     write_ref_cnt_(0),
     unsubmitted_cnt_(0),
-    unsynced_cnt_(0),
     current_right_boundary_(0)
 {}
 
@@ -49,14 +48,12 @@ ObFrozenMemtableInfo::ObFrozenMemtableInfo(const ObTabletID &tablet_id,
                                            const SCN &end_scn,
                                            const int64_t write_ref_cnt,
                                            const int64_t unsubmitted_cnt,
-                                           const int64_t unsynced_cnt,
                                            const int64_t current_right_boundary)
  : tablet_id_(tablet_id),
    start_scn_(start_scn),
    end_scn_(end_scn),
    write_ref_cnt_(write_ref_cnt),
    unsubmitted_cnt_(unsubmitted_cnt),
-   unsynced_cnt_(unsynced_cnt),
    current_right_boundary_(current_right_boundary)
 {}
 
@@ -72,7 +69,6 @@ void ObFrozenMemtableInfo::reset()
   end_scn_ = share::ObScnRange::MIN_SCN;
   write_ref_cnt_ = 0;
   unsubmitted_cnt_ = 0;
-  unsynced_cnt_ = 0;
   current_right_boundary_ = 0;
 }
 
@@ -81,7 +77,6 @@ void ObFrozenMemtableInfo::set(const ObTabletID &tablet_id,
                                const SCN &end_scn,
                                const int64_t write_ref_cnt,
                                const int64_t unsubmitted_cnt,
-                               const int64_t unsynced_cnt,
                                const int64_t current_right_boundary)
 {
   tablet_id_ = tablet_id;
@@ -89,7 +84,6 @@ void ObFrozenMemtableInfo::set(const ObTabletID &tablet_id,
   end_scn_ = end_scn;
   write_ref_cnt_ = write_ref_cnt;
   unsubmitted_cnt_ = unsubmitted_cnt;
-  unsynced_cnt_ = unsynced_cnt;
   current_right_boundary_ = current_right_boundary;
 }
 
@@ -142,7 +136,6 @@ int ObFreezerStat::add_memtable_info(const ObTabletID &tablet_id,
                                      const SCN &end_scn,
                                      const int64_t write_ref_cnt,
                                      const int64_t unsubmitted_cnt,
-                                     const int64_t unsynced_cnt,
                                      const int64_t current_right_boundary)
 {
   int ret = OB_SUCCESS;
@@ -154,7 +147,6 @@ int ObFreezerStat::add_memtable_info(const ObTabletID &tablet_id,
                                        end_scn,
                                        write_ref_cnt,
                                        unsubmitted_cnt,
-                                       unsynced_cnt,
                                        current_right_boundary);
     if (OB_FAIL(memtables_info_.push_back(memtable_info))) {
       TRANS_LOG(WARN, "fail to push_back memtable_info", K(ret), K(tablet_id));
@@ -1062,7 +1054,7 @@ int ObFreezer::batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids, ObFut
   int ret = OB_SUCCESS;
   share::ObLSID ls_id = get_ls_id();
   SCN freeze_snapshot_version;
-  FLOG_INFO("[Freezer] batch_tablet_freeze start", K(ret), K(ls_id), K(tablet_ids));
+  FLOG_INFO("[Freezer] batch_tablet_freeze start", K(ls_id), K(tablet_ids));
   int64_t start_time = ObTimeUtility::current_time();
   bool need_freeze = true;
 
@@ -1288,6 +1280,20 @@ int ObFreezer::handle_memtable_for_tablet_freeze(memtable::ObIMemtable *imemtabl
   return ret;
 }
 
+namespace {
+  struct FreezeDiagnoseInfo {
+    const char *fmt_;
+    const int ret_;
+    FreezeDiagnoseInfo(const char *fmt, const int ret): fmt_(fmt), ret_(ret) {}
+    DECLARE_TO_STRING
+    {
+      int64_t pos = 0;
+      BUF_PRINTF(fmt_, ObCurTraceId::get_trace_id_str(), ret_);
+      return pos;
+    }
+  };
+}
+
 int ObFreezer::submit_log_for_freeze(bool is_try)
 {
   int ret = OB_SUCCESS;
@@ -1295,7 +1301,11 @@ int ObFreezer::submit_log_for_freeze(bool is_try)
   share::ObLSID ls_id = get_ls_id();
   const int64_t start = ObTimeUtility::current_time();
   ObTabletID tablet_id(INT64_MAX); // used for diagnose
-
+  bool trace_id_need_reset = false;
+  if (!ObCurTraceId::get_trace_id()->is_valid()) {
+    ObCurTraceId::init(GCONF.self_addr_);
+    bool trace_id_need_reset = true;
+  }
   do {
     ret = OB_SUCCESS;
     transaction::ObTransID fail_tx_id;
@@ -1304,9 +1314,10 @@ int ObFreezer::submit_log_for_freeze(bool is_try)
       const int64_t cost_time = ObTimeUtility::current_time() - start;
       if (cost_time > 1000 * 1000) {
         if (TC_REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
-          TRANS_LOG(WARN, "[Freezer] failed to traverse trans ctx to submit redo log", K(ret),
+          TRANS_LOG(WARN, "[Freezer] traverse_trans_to_submit_redo_log failed", K(ret),
                     K(ls_id), K(cost_time), K(fail_tx_id));
-          stat_.add_diagnose_info("traverse_trans_to_submit_redo_log failed");
+          FreezeDiagnoseInfo diagnose("traverse_trans_to_submit_redo_log failed, traceId:%s, errorCode:%d", ret);
+          stat_.add_diagnose_info(to_cstring(diagnose));
           if (OB_TMP_FAIL(ADD_SUSPECT_INFO(MINI_MERGE, ObDiagnoseTabletType::TYPE_MINI_MERGE,
                           ls_id, tablet_id, ObSuspectInfoType::SUSPECT_SUBMIT_LOG_FOR_FREEZE,
                           static_cast<int64_t>(ret), fail_tx_id.get_id()))) {
@@ -1331,7 +1342,9 @@ int ObFreezer::submit_log_for_freeze(bool is_try)
 
     stat_.set_state(ObFreezeState::WAIT_READY_FOR_FLUSH);
   }
-
+  if (trace_id_need_reset) {
+    ObCurTraceId::reset();
+  }
   return ret;
 }
 

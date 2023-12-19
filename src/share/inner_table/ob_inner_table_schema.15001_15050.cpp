@@ -10783,7 +10783,7 @@ int ObInnerTableSchema::all_virtual_memstore_info_ora_schema(ObTableSchema &tabl
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("UNSYNCED_COUNT", //column_name
+    ADD_COLUMN_SCHEMA("MAX_END_SCN", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id

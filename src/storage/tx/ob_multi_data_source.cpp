@@ -221,6 +221,10 @@ int ObMulSourceTxDataNotifier::notify(const ObTxBufferNodeArray &array,
         }
       } else {
         mds::TLOCAL_MDS_TRANS_NOTIFY_TYPE = notify_type;
+        if (arg.is_incomplete_replay_) {
+          // pass incomplete replay arg
+          const_cast<mds::BufferCtx*>(node.get_buffer_ctx_node().get_ctx())->set_incomplete_replay(arg.is_incomplete_replay_);
+        }
         switch (node.type_) {
           #define NEED_GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION
           #define _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENUM_NAME) \
@@ -292,7 +296,7 @@ int ObMulSourceTxDataNotifier::notify(const ObTxBufferNodeArray &array,
         TRANS_LOG(INFO, "notify one data source with too much time", K(ret), K(notify_type), K(i), K(node),
                   K(arg), K(notify_time.get_diff()));
       }
-      
+
       total_time += notify_time.get_diff();
     }
   }

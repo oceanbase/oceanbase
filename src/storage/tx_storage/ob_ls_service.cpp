@@ -457,11 +457,9 @@ int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
     common_arg.tenant_role_ = arg.get_tenant_info().get_tenant_role();
     common_arg.replica_type_ = arg.get_replica_type();
     common_arg.compat_mode_ = arg.get_compat_mode();
-    common_arg.create_type_ = is_ls_to_restore_(arg) ? ObLSCreateType::RESTORE : ObLSCreateType::NORMAL;
     common_arg.migration_status_ = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
-    common_arg.restore_status_ = (is_ls_to_restore_(arg) ?
-                                  ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_START) :
-                                  ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_NONE));
+    common_arg.restore_status_ = get_restore_status_by_tenant_role_(arg.get_tenant_info().get_tenant_role());
+    common_arg.create_type_ = get_create_type_by_tenant_role_(arg.get_tenant_info().get_tenant_role());
     common_arg.need_create_inner_tablet_ = need_create_inner_tablets_(arg);
 
     if (OB_FAIL(create_ls_(common_arg, mig_arg))) {
@@ -482,38 +480,58 @@ int ObLSService::post_create_ls_(const int64_t create_type,
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  switch(create_type) {
-  case ObLSCreateType::NORMAL: {
-    if (OB_FAIL(ls->online_without_lock())) {
-      LOG_ERROR("ls start failed", K(ret));
-    } else if (OB_FAIL(ls->set_start_work_state())) {
-      LOG_ERROR("ls set start work state failed", KR(ret), KPC(ls));
-    } else {
+  bool need_online = false;
+  if (OB_FAIL(ls->check_ls_need_online(need_online))) {
+    LOG_WARN("check ls need online failed", K(ret));
+  } else if (need_online &&
+             OB_FAIL(ls->online_without_lock())) {
+    LOG_ERROR("ls start failed", K(ret));
+  } else {
+    switch(create_type) {
+    case ObLSCreateType::NORMAL: {
+      if (OB_FAIL(ls->set_start_work_state())) {
+        LOG_ERROR("ls set start work state failed", KR(ret), KPC(ls));
+      }
+      break;
     }
-    break;
-  }
-  case ObLSCreateType::RESTORE: {
-    if (OB_FAIL(ls->get_log_handler()->enable_sync())) {
-      LOG_WARN("failed to enable sync", K(ret));
-    } else if (OB_FAIL(ls->get_ls_restore_handler()->online())) {
-      LOG_WARN("failed to online restore handler", K(ret));
-    } else if (OB_FAIL(ls->set_start_ha_state())) {
-      LOG_ERROR("ls set start ha state failed", KR(ret), KPC(ls));
-    } else {
+    case ObLSCreateType::RESTORE: {
+      if (!need_online && ls->is_restore_first_step()) {
+        if (OB_FAIL(ls->get_log_handler()->enable_sync())) {
+          LOG_WARN("failed to enable sync", K(ret));
+        } else if (OB_FAIL(ls->get_ls_restore_handler()->online())) {
+          LOG_WARN("failed to online restore handler", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ls->set_start_ha_state())) {
+        LOG_ERROR("ls set start ha state failed", KR(ret), KPC(ls));
+      }
+      break;
     }
-    break;
-  }
-  case ObLSCreateType::MIGRATE: {
-    if (OB_FAIL(ls->set_start_ha_state())) {
-      LOG_ERROR("ls set start ha state failed", KR(ret), KPC(ls));
+    case ObLSCreateType::MIGRATE: {
+      if (OB_FAIL(ls->set_start_ha_state())) {
+        LOG_ERROR("ls set start ha state failed", KR(ret), KPC(ls));
+      }
+      break;
     }
-    break;
+    case ObLSCreateType::CLONE: {
+      if (!need_online && ls->is_clone_first_step()) {
+        if (OB_FAIL(ls->get_log_handler()->enable_sync())) {
+          LOG_WARN("failed to enable sync", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ls->set_start_ha_state())) {
+        LOG_ERROR("ls set start ha state failed", KR(ret), KPC(ls));
+      }
+      break;
+    }
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("should not be here.", KR(ret));
+    } // default
+    } // switch
   }
-  default: {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("should not be here.", KR(ret));
-  } // default
-  } // switch
 
   if (OB_SUCCESS != (tmp_ret = ls->report_replica_info())) {
     LOG_WARN("fail to report ls", KR(tmp_ret), KPC(ls));
@@ -645,6 +663,12 @@ int ObLSService::replay_create_ls_commit(const share::ObLSID &ls_id,
       }
       break;
     }
+    case ObLSCreateType::CLONE: {
+      if (OB_FAIL(ls->set_start_ha_state())) {
+        LOG_ERROR("ls set start ha state failed", KR(ret), K(ls_id));
+      }
+      break;
+    }
     default: {
       if (OB_FAIL(ls->set_start_work_state())) {
         LOG_ERROR("ls set start work state failed", KR(ret), K(ls_id));
@@ -727,7 +751,6 @@ int ObLSService::online_ls()
   int tmp_ret = OB_SUCCESS;
   common::ObSharedGuard<ObLSIterator> ls_iter;
   ObLS *ls = nullptr;
-  bool can_online = true;
   int64_t create_type = ObLSCreateType::NORMAL;
   if (OB_FAIL(get_ls_iter(ls_iter, ObLSGetMod::TXSTORAGE_MOD))) {
     LOG_WARN("failed to get ls iter", K(ret));
@@ -742,11 +765,7 @@ int ObLSService::online_ls()
         LOG_ERROR("ls is null", K(ret));
       } else {
         ObLSLockGuard lock_ls(ls);
-        if (OB_FAIL(ls->check_can_online(can_online))) {
-          LOG_WARN("check ls can online failed", K(ret));
-        } else if (!can_online) {
-          // ls can not online, do nothing
-        } else if (OB_FAIL(ls->get_create_type(create_type))) {
+        if (OB_FAIL(ls->get_create_type(create_type))) {
           LOG_WARN("get ls create type failed", K(ret));
         } else if (OB_FAIL(post_create_ls_(create_type, ls))) {
           LOG_WARN("post create ls failed", K(ret));
@@ -1135,7 +1154,7 @@ int ObLSService::create_ls_for_ha(
 {
   int ret = OB_SUCCESS;
   ObMigrationStatus migration_status;
-  ObLSRestoreStatus restore_status = ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_NONE);
+  ObLSRestoreStatus restore_status = ObLSRestoreStatus(ObLSRestoreStatus::NONE);
 
   if (task_id.is_invalid() || !arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -1297,6 +1316,11 @@ bool ObLSService::is_ls_to_restore_(const obrpc::ObCreateLSArg &arg) const
   return arg.get_tenant_info().is_restore();
 }
 
+bool ObLSService::is_ls_to_clone_(const obrpc::ObCreateLSArg &arg) const
+{
+  return arg.get_tenant_info().is_clone();
+}
+
 bool ObLSService::need_create_inner_tablets_(const obrpc::ObCreateLSArg &arg) const
 {
   return arg.need_create_inner_tablets();
@@ -1335,21 +1359,52 @@ int ObLSService::get_restore_status_(
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
-  restore_status = ObLSRestoreStatus::RESTORE_NONE;
+  restore_status = ObLSRestoreStatus::NONE;
 
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) {
-    restore_status = ObLSRestoreStatus::RESTORE_NONE;
-  } else if (share::ObTenantRole::INVALID_TENANT == MTL_GET_TENANT_ROLE_CACHE()) {
-    //tenant role not ready, need wait
-    ret = OB_NEED_WAIT;
-    LOG_WARN("tenant role is invalid now, need wait", KR(ret), K(tenant_id));
-  } else if (FALSE_IT(restore_status = MTL_TENANT_ROLE_CACHE_IS_RESTORE() ?
-      ObLSRestoreStatus::RESTORE_START : ObLSRestoreStatus::RESTORE_NONE)) {
+  if (is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) {
+    restore_status = ObLSRestoreStatus::NONE;
+  } else {
+    ObAllTenantInfo tenant_info;
+    if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id,
+                                           GCTX.sql_proxy_,
+                                           false,
+                                           tenant_info))) {
+      LOG_WARN("fail to load tenant info", KR(ret));
+    } else {
+      restore_status = get_restore_status_by_tenant_role_(tenant_info.get_tenant_role());
+    }
   }
   return ret;
+}
+
+ObLSRestoreStatus ObLSService::get_restore_status_by_tenant_role_(const ObTenantRole& tenant_role)
+{
+  ObLSRestoreStatus restore_status = ObLSRestoreStatus(ObLSRestoreStatus::NONE);
+
+  if (tenant_role.is_restore()) {
+    restore_status = ObLSRestoreStatus::RESTORE_START;
+  } else if (tenant_role.is_clone()) {
+    restore_status = ObLSRestoreStatus::CLONE_START;
+  } else {
+    restore_status = ObLSRestoreStatus::NONE;
+  }
+
+  return restore_status;
+}
+
+int64_t ObLSService::get_create_type_by_tenant_role_(const ObTenantRole& tenant_role)
+{
+  int64_t create_type = ObLSCreateType::NORMAL;
+
+  if (tenant_role.is_restore()) {
+    create_type = ObLSCreateType::RESTORE;
+  } else if (tenant_role.is_clone()) {
+    create_type = ObLSCreateType::CLONE;
+  } else {
+    create_type = ObLSCreateType::NORMAL;
+  }
+
+  return create_type;
 }
 
 int ObLSService::dump_ls_info()

@@ -134,6 +134,31 @@ private:
       const palf::LogConfigVersion &config_version,
       ObTimeoutCtx &timeout_ctx,
       ObMySQLTransaction &trans);
+  int do_trans_transfer_start_prepare_(
+      const share::ObTransferTaskInfo &task_info,
+      ObTimeoutCtx &timeout_ctx,
+      ObMySQLTransaction &trans);
+  int wait_tablet_write_end_(
+      const share::ObTransferTaskInfo &task_info,
+      SCN &data_end_scn,
+      ObTimeoutCtx &timeout_ctx);
+  int do_trans_transfer_start_v2_(
+      const share::ObTransferTaskInfo &task_info,
+      ObTimeoutCtx &timeout_ctx,
+      ObMySQLTransaction &trans);
+  int do_trans_transfer_dest_prepare_(
+      const share::ObTransferTaskInfo &task_info,
+      ObMySQLTransaction &trans);
+  int wait_src_ls_advance_weak_read_ts_(
+      const share::ObTransferTaskInfo &task_info,
+      ObTimeoutCtx &timeout_ctx);
+  int do_move_tx_to_dest_ls_(
+      const share::ObTransferTaskInfo &task_info,
+      ObTimeoutCtx &timeout_ctx,
+      ObMySQLTransaction &trans,
+      const SCN data_end_scn,
+      const SCN transfer_scn,
+      int64_t &move_tx_count);
   int start_trans_(
       ObTimeoutCtx &timeout_ctx,
       ObMySQLTransaction &trans);
@@ -143,7 +168,9 @@ private:
 
   int do_tx_start_transfer_out_(
       const share::ObTransferTaskInfo &task_info,
-      common::ObMySQLTransaction &trans);
+      common::ObMySQLTransaction &trans,
+      const transaction::ObTxDataSourceType data_source_type,
+      SCN data_end_scn = SCN::min_scn());
   int lock_transfer_task_(
       const share::ObTransferTaskInfo &task_info,
       common::ObISQLClient &trans);
@@ -258,9 +285,15 @@ private:
       common::ObMemberList &member_list);
   int broadcast_tablet_location_(const share::ObTransferTaskInfo &task_info);
 
+  int register_move_tx_ctx_batch_(const share::ObTransferTaskInfo &task_info,
+                                  const SCN transfer_scn,
+                                  ObMySQLTransaction &trans,
+                                  CollectTxCtxInfo &collect_batch,
+                                  int64_t &batch_len);
 private:
   static const int64_t INTERVAL_US = 1 * 1000 * 1000; //1s
   static const int64_t KILL_TX_MAX_RETRY_TIMES = 3;
+  static const int64_t MOVE_TX_BATCH = 2000;
 private:
   bool is_inited_;
   ObLS *ls_;
@@ -277,6 +310,10 @@ private:
   bool transfer_handler_enabled_;
   DISALLOW_COPY_AND_ASSIGN(ObTransferHandler);
 };
+
+
+int enable_new_transfer(bool &enable);
+
 }
 }
 #endif

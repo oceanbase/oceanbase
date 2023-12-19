@@ -291,7 +291,8 @@ public:
   bool has_non_trivial_expr_op_ctx() const { return has_non_trivial_expr_op_ctx_; }
   void set_non_trivial_expr_op_ctx(bool v) { has_non_trivial_expr_op_ctx_ = v; }
   inline bool &get_tmp_alloc_used() { return tmp_alloc_used_; }
-
+  // set write branch id for DML write
+  void set_branch_id(const int16_t branch_id) { das_ctx_.set_write_branch_id(branch_id); }
   VIRTUAL_NEED_SERIALIZE_AND_DESERIALIZE;
 protected:
   uint64_t get_ser_version() const;
@@ -477,6 +478,9 @@ public:
     }
     return ret;
   }
+  void set_is_online_stats_gathering(bool v) { is_online_stats_gathering_ = v; }
+  bool is_online_stats_gathering() const { return is_online_stats_gathering_; }
+  int get_local_var_array(int64_t local_var_array_id, const ObLocalSessionVar *&var_array);
 private:
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);
   int set_phy_op_ctx_ptr(uint64_t index, void *phy_op);
@@ -656,6 +660,8 @@ protected:
   ObExecFeedbackInfo fb_info_;
   // for dml report user warning/error at specific row
   int64_t cur_row_num_;
+  // for online stats gathering
+  bool is_online_stats_gathering_;
   //---------------
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);

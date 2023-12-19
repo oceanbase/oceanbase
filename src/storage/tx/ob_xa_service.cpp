@@ -2073,7 +2073,7 @@ int ObXAService::xa_rollback_all_changes(const ObXATransID &xid, ObTxDesc *&tx_d
     if (OB_FAIL(start_stmt(xid, 0/*unused session id*/, *tx_desc))) {
       TRANS_LOG(WARN, "xa start stmt fail", K(ret), K(xid), K(tx_id));
     } else {
-      const transaction::ObTxSEQ savepoint = tx_desc->get_tx_seq(1);
+      const transaction::ObTxSEQ savepoint = tx_desc->get_min_tx_seq();
       if (OB_FAIL(MTL(transaction::ObTransService *)->rollback_to_implicit_savepoint(*tx_desc,
               savepoint, stmt_expired_time, NULL))) {
         TRANS_LOG(WARN, "do savepoint rollback error", K(ret), K(xid), K(tx_id));

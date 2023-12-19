@@ -103,6 +103,7 @@ struct ObMicroBlockData
     DATA_BLOCK,
     INDEX_BLOCK,
     DDL_BLOCK_TREE,
+    DDL_MERGE_INDEX_BLOCK,
     MAX_TYPE
   };
 public:
@@ -131,7 +132,7 @@ public:
   int64_t &get_extra_size() { return extra_size_; }
 
   int64_t total_size() const { return size_ + extra_size_; }
-  bool is_index_block() const { return INDEX_BLOCK == type_ || DDL_BLOCK_TREE == type_;}
+  bool is_index_block() const { return INDEX_BLOCK == type_ || DDL_BLOCK_TREE == type_ || DDL_MERGE_INDEX_BLOCK == type_;}
 
   void reset() { *this = ObMicroBlockData(); }
   OB_INLINE const ObMicroBlockHeader *get_micro_header() const
@@ -375,10 +376,6 @@ public:
       const int64_t begin_idx,
       int64_t &row_idx,
       bool &equal) = 0;
-  virtual int compare_rowkey(
-      const ObDatumRowkey &rowkey,
-      const int64_t index,
-      int32_t &compare_result) = 0;
   static int filter_white_filter(
       const sql::ObWhiteFilterExecutor &filter,
       const common::ObObjMeta &obj_meta,

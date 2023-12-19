@@ -1781,7 +1781,7 @@ int ObOBJLockMap::lock(
         lock_map_.revert(obj_lock);
       }
       if (OB_FAIL(ret) && REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-        LOG_WARN("ObOBJLockMap::lock ", K(ret), K(param), K(lock_op));
+        LOG_WARN("ObOBJLockMap::lock ", K(ret), K(param), K(lock_op), K(conflict_tx_set));
       }
       // retry if the table lock list map is delete right now by others.
     } while (ret == OB_EAGAIN);

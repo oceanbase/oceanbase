@@ -47,6 +47,7 @@ public:
                     common::number::ObNumber &nmb,
                     common::ObExprCtx &expr_ctx,
                     common::ObObjType res_type);
+  DECLARE_SET_LOCAL_SESSION_VARS;
 private:
 
   DISALLOW_COPY_AND_ASSIGN(ObExprTruncate);

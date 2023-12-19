@@ -286,7 +286,8 @@ public:
                             sql::ObExecTimestamp &exec_timestamp,
                             bool has_tenant_resource,
                             const ObString &ps_sql,
-                            bool is_from_pl = false);
+                            bool is_from_pl = false,
+                            ObString *pl_exec_params = NULL);
   static int process_audit_record(sql::ObResultSet &result_set,
                                   sql::ObSqlCtx &sql_ctx,
                                   sql::ObSQLSessionInfo &session,

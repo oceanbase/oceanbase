@@ -57,6 +57,8 @@ public:
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   virtual common::ObCastMode get_cast_mode() const { return CM_ERROR_ON_SCALE_OVER;}
+  DECLARE_SET_LOCAL_SESSION_VARS;
+
 private:
   /* code for cast accuracy check */
   template<typename Obj>
@@ -90,6 +92,8 @@ private:
   static int cast_to_datetime(ObIJsonBase *j_base,
                               common::ObIAllocator *allocator,
                               const ObBasicSessionInfo *session,
+                              ObEvalCtx &ctx,
+                              const ObExpr *expr,
                               common::ObAccuracy &accuracy,
                               int64_t &val,
                               uint8_t &is_type_cast);
@@ -99,6 +103,8 @@ private:
                                   ObAccuracy &accuracy);
   static int cast_to_otimstamp(ObIJsonBase *j_base,
                                const ObBasicSessionInfo *session,
+                               ObEvalCtx &ctx,
+                               const ObExpr *expr,
                                common::ObAccuracy &accuracy,
                                ObObjType dst_type,
                                ObOTimestampData &out_val,

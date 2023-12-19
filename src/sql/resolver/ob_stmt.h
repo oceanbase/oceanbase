@@ -306,6 +306,9 @@ public:
             // index
             || stmt_type == stmt::T_CREATE_INDEX
             || stmt_type == stmt::T_DROP_INDEX
+            // materialized view log
+            || stmt_type == stmt::T_CREATE_MLOG
+            || stmt_type == stmt::T_DROP_MLOG
             // flashback
             || stmt_type == stmt::T_FLASHBACK_TENANT
             || stmt_type == stmt::T_FLASHBACK_DATABASE

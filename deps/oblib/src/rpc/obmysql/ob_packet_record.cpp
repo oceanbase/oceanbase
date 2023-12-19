@@ -27,7 +27,7 @@ bool __attribute__((weak)) enable_proto_dia()
 }
 namespace obmysql
 {
-static const char* pkt_type_name[13] =
+static const char* pkt_type_name[14] =
 {
   "INVALID_PKT",
   "PKT_MYSQL",     // 1 -> mysql packet;
@@ -41,8 +41,69 @@ static const char* pkt_type_name[13] =
   "PKT_PREPARE",   // 9 -> prepare packet;
   "PKT_RESHEAD",   // 10 -> result header packet
   "PKT_PREXEC",    // 11 -> prepare execute packet;
-  "PKT_END"        // 12 -> end of packet type
+  "PKT_FILENAME",  // 12 -> file name packet(load local infile)
+  "PKT_END"        // 13 -> end of packet type
 };
+
+static const char *get_receive_pkt_type_name(const ObpMysqHeader &header)
+{
+#define PKT_TYPE_NAME(command)  case command: { name = #command; } break
+
+  const char *name = "UNKNOWN_PKT";
+
+  if (header.is_file_content_) {
+    name = "FILE_CONTENT";
+  } else {
+    uint8_t type = header.type_;
+
+    switch (type) {
+      PKT_TYPE_NAME(COM_SLEEP);
+      PKT_TYPE_NAME(COM_QUIT);
+      PKT_TYPE_NAME(COM_INIT_DB);
+      PKT_TYPE_NAME(COM_QUERY);
+      PKT_TYPE_NAME(COM_FIELD_LIST);
+      PKT_TYPE_NAME(COM_CREATE_DB);
+      PKT_TYPE_NAME(COM_DROP_DB);
+      PKT_TYPE_NAME(COM_REFRESH);
+      PKT_TYPE_NAME(COM_SHUTDOWN);
+      PKT_TYPE_NAME(COM_STATISTICS);
+      PKT_TYPE_NAME(COM_PROCESS_INFO);
+      PKT_TYPE_NAME(COM_CONNECT);
+      PKT_TYPE_NAME(COM_PROCESS_KILL);
+      PKT_TYPE_NAME(COM_DEBUG);
+      PKT_TYPE_NAME(COM_PING);
+      PKT_TYPE_NAME(COM_TIME);
+      PKT_TYPE_NAME(COM_DELAYED_INSERT);
+      PKT_TYPE_NAME(COM_CHANGE_USER);
+      PKT_TYPE_NAME(COM_BINLOG_DUMP);
+      PKT_TYPE_NAME(COM_TABLE_DUMP);
+      PKT_TYPE_NAME(COM_CONNECT_OUT);
+      PKT_TYPE_NAME(COM_REGISTER_SLAVE);
+      PKT_TYPE_NAME(COM_STMT_PREPARE);
+      PKT_TYPE_NAME(COM_STMT_EXECUTE);
+      PKT_TYPE_NAME(COM_STMT_SEND_LONG_DATA);
+      PKT_TYPE_NAME(COM_STMT_CLOSE);
+      PKT_TYPE_NAME(COM_STMT_RESET);
+      PKT_TYPE_NAME(COM_SET_OPTION);
+      PKT_TYPE_NAME(COM_STMT_FETCH);
+      PKT_TYPE_NAME(COM_DAEMON);
+      PKT_TYPE_NAME(COM_BINLOG_DUMP_GTID);
+      PKT_TYPE_NAME(COM_RESET_CONNECTION);
+      PKT_TYPE_NAME(COM_END);
+      PKT_TYPE_NAME(COM_DELETE_SESSION);
+      PKT_TYPE_NAME(COM_HANDSHAKE);
+      PKT_TYPE_NAME(COM_LOGIN);
+      PKT_TYPE_NAME(COM_STMT_PREXECUTE);
+      PKT_TYPE_NAME(COM_STMT_SEND_PIECE_DATA);
+      PKT_TYPE_NAME(COM_STMT_GET_PIECE_DATA);
+      default: {
+      } break;
+    }
+  }
+#undef PKT_TYPE_NAME
+
+  return name;
+}
 
 int64_t ObPacketRecord::to_string(char *buf, const int64_t buf_len) const
 {
@@ -91,7 +152,8 @@ int64_t ObPacketRecord::to_string(char *buf, const int64_t buf_len) const
          "rec_", obp_mysql_header_.rec_, "seq_", obp_mysql_header_.seq_);
     J_OBJ_END();
     J_COMMA();
-    J_KV(K(obp_mysql_header_.type_), K(obp_mysql_header_.is_send_));
+    J_KV("pkt_name", get_receive_pkt_type_name(obp_mysql_header_),
+         K(obp_mysql_header_.type_), K(obp_mysql_header_.is_send_));
   }
   J_OBJ_END();
   return pos;

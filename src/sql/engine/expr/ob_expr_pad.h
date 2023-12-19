@@ -31,6 +31,7 @@ public:
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const;
   static int calc_pad_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
+  DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprPad);

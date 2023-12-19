@@ -269,6 +269,7 @@ public:
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual int schedule_rest_dag() override;
+  virtual int clear_dag_net_ctx() override;
   virtual bool inner_check_finished() override
   {
     return ATOMIC_LOAD(&finish_added_);

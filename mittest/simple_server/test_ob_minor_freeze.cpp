@@ -71,22 +71,6 @@ int64_t ObMemtable::dec_unsubmitted_cnt_()
   return unsubmitted_cnt;
 }
 
-int64_t ObMemtable::inc_unsynced_cnt_()
-{
-  ob_usleep(rand() % SLEEP_TIME);
-  return ATOMIC_AAF(&unsynced_cnt_, 1);
-}
-
-int64_t ObMemtable::dec_unsynced_cnt_()
-{
-  ob_usleep(rand() % SLEEP_TIME);
-  int64_t unsynced_cnt = ATOMIC_SAF(&unsynced_cnt_, 1);
-  if (unsynced_cnt < 0) {
-    ob_abort();
-  }
-  return unsynced_cnt;
-}
-
 }
 namespace storage
 {
@@ -105,26 +89,19 @@ namespace checkpoint
 } // namespace storage
 namespace transaction
 {
-int ObPartTransCtx::submit_redo_log_for_freeze_(bool &try_submit)
+int ObPartTransCtx::submit_redo_log_for_freeze()
 {
   int ret = OB_SUCCESS;
   int64_t sleep_time = rand() % SLEEP_TIME;
   ob_usleep(sleep_time);
-
-  ATOMIC_STORE(&is_submitting_redo_log_for_freeze_, true);
-  if (OB_FAIL(check_and_submit_redo_log_(try_submit))) {
-    TRANS_LOG(WARN, "fail to submit redo log for freeze", K(ret));
-  }
-  if (try_submit && (OB_SUCC(ret) || OB_BLOCK_FROZEN == ret)) {
-    ret = submit_log_impl_(ObTxLogType::TX_MULTI_DATA_SOURCE_LOG);
-  }
-  ATOMIC_STORE(&is_submitting_redo_log_for_freeze_, false);
+  CtxLockGuard guard(lock_);
+  bool submitted = false;
+  ret = submit_redo_log_for_freeze_(submitted);
   if (sleep_time > 50 && sleep_time < 90) {
     ret = OB_TX_NOLOGCB;
   } else if (sleep_time >= 90) {
     ret = OB_ERR_UNEXPECTED;
   }
-
   return ret;
 }
 }

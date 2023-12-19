@@ -264,8 +264,9 @@ int ObAllVirtualMemstoreInfo::process_curr_tenant(ObNewRow *&row)
           cur_row_.cells_[i].set_int(mt->get_unsubmitted_cnt());
           break;
         case OB_APP_MIN_COLUMN_ID + 11:
-          // unsynced_count
-          cur_row_.cells_[i].set_int(mt->get_unsynced_cnt());
+          // unsynced_count, since 4.3 memtable's unsynced_count is not used
+          // reuse this field for max_end_scn
+          cur_row_.cells_[i].set_uint64(mt->get_max_end_scn().get_val_for_inner_table_field());
           break;
         case OB_APP_MIN_COLUMN_ID + 12:
           // write_ref_count

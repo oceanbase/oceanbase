@@ -24,6 +24,7 @@
 #include "storage/tablet/ob_tablet_common.h"
 #include "storage/tablet/ob_tablet_block_header.h"
 #include "storage/tablet/ob_tablet_slog_helper.h"
+#include "storage/tablet/ob_tablet_macro_info_iterator.h"
 
 using namespace std::placeholders;
 using namespace oceanbase::common;
@@ -303,6 +304,7 @@ int ObTabletPersister::persist_and_transform_tablet(
   int64_t total_tablet_meta_size = 0;
   ObTabletMacroInfo tablet_macro_info;
   total_write_ctxs.set_attr(lib::ObMemAttr(MTL_ID(), "TblMetaWriCtx", ctx_id));
+  ObSArray<MacroBlockId> shared_meta_id_arr;
 
   if (OB_UNLIKELY(!old_tablet.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -310,12 +312,11 @@ int ObTabletPersister::persist_and_transform_tablet(
   } else if (OB_FAIL(persister.multi_stats_.acquire_stats("persist_and_transform_tablet", time_stats))) {
     LOG_WARN("fail to acquire time stats", K(ret));
   } else if (OB_FAIL(persister.persist_and_fill_tablet(
-      old_tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info))) {
+      old_tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info, shared_meta_id_arr))) {
     LOG_WARN("fail to persist and fill tablet", K(ret), K(old_tablet));
   } else if (FALSE_IT(time_stats->click("persist_and_fill_tablet"))) {
-  } else if (OB_FAIL(check_tablet_meta_ids(tablet_macro_info.shared_meta_block_info_arr_, *(new_handle.get_obj())))) {
-    LOG_WARN("fail to check whether tablet meta's macro ids match",
-        K(ret), K(tablet_macro_info.shared_meta_block_info_arr_), KPC(new_handle.get_obj()));
+  } else if (OB_FAIL(check_tablet_meta_ids(shared_meta_id_arr, *(new_handle.get_obj())))) {
+    LOG_WARN("fail to check whether tablet meta's macro ids match", K(ret), K(shared_meta_id_arr), KPC(new_handle.get_obj()));
   } else if (FALSE_IT(time_stats->click("check_tablet_meta_ids"))) {
   } else if (OB_FAIL(persister.persist_aggregated_meta(tablet_macro_info, new_handle, space_usage))) {
     LOG_WARN("fail to persist aggregated tablet", K(ret), K(new_handle), KPC(new_handle.get_obj()));
@@ -326,6 +327,7 @@ int ObTabletPersister::persist_and_transform_tablet(
   return ret;
 }
 
+// !!!attention shouldn't be called by empty shell
 /*static*/ int ObTabletPersister::persist_and_transform_only_tablet_meta(
     const ObTablet &old_tablet,
     ObITabletMetaModifier &modifier,
@@ -587,7 +589,8 @@ int ObTabletPersister::persist_and_fill_tablet(
     common::ObIArray<ObSharedBlocksWriteCtx> &total_write_ctxs,
     ObTabletHandle &new_handle,
     ObTabletSpaceUsage &space_usage,
-    ObTabletMacroInfo &tablet_macro_info)
+    ObTabletMacroInfo &tablet_macro_info,
+    ObIArray<MacroBlockId> &shared_meta_id_arr)
 {
   int ret = OB_SUCCESS;
   ObTabletTransformArg arg;
@@ -640,9 +643,16 @@ int ObTabletPersister::persist_and_fill_tablet(
     space_usage.meta_size_ = block_info_set.meta_block_info_set_.size() * DEFAULT_MACRO_BLOCK_SIZE;
     int64_t shared_data_size = 0;
     for (ObBlockInfoSet::MapIterator iter = block_info_set.shared_data_block_info_map_.begin();
-        OB_SUCC(ret) && iter != block_info_set.shared_data_block_info_map_.end();
+        iter != block_info_set.shared_data_block_info_map_.end();
         ++iter) {
       shared_data_size += iter->second;
+    }
+    for (ObBlockInfoSet::SetIterator iter = block_info_set.shared_meta_block_info_set_.begin();
+        OB_SUCC(ret) && iter != block_info_set.shared_meta_block_info_set_.end();
+        ++iter) {
+      if (OB_FAIL(shared_meta_id_arr.push_back(iter->first))) {
+        LOG_WARN("fail to push back macro id", K(ret), K(iter->first));
+      }
     }
     space_usage.shared_data_size_ = shared_data_size;
   }
@@ -659,34 +669,37 @@ int ObTabletPersister::transform_empty_shell(const ObTablet &old_tablet, ObTable
   ObTabletSpaceUsage space_usage;
   ObTabletMacroInfo tablet_macro_info;
   ObTabletPersister persister;
+  ObSArray<MacroBlockId> shared_meta_id_arr;
 
   if (OB_UNLIKELY(!old_tablet.is_empty_shell())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("only support transform empty shell", K(ret), K(old_tablet));
   } else if (OB_FAIL(persister.persist_and_fill_tablet(old_tablet, linked_writer,
-      total_write_ctxs, new_handle, space_usage, tablet_macro_info))) {
+      total_write_ctxs, new_handle, space_usage, tablet_macro_info, shared_meta_id_arr))) {
     LOG_WARN("fail to persist old empty shell", K(ret), K(old_tablet));
+  } else {
+    new_handle.get_obj()->tablet_meta_.space_usage_ = space_usage;
   }
 
   return ret;
 }
 
 int ObTabletPersister::check_tablet_meta_ids(
-    const ObBlockInfoArray<MacroBlockId> &meta_id_arr,
+    const ObIArray<blocksstable::MacroBlockId> &shared_meta_id_arr,
     const ObTablet &tablet)
 {
   int ret = OB_SUCCESS;
   ObSArray<MacroBlockId> meta_ids;
   if (OB_FAIL(tablet.get_tablet_first_second_level_meta_ids(meta_ids))) {
     LOG_WARN("fail to get tablet meta ids", K(ret), K(tablet));
-  } else if (OB_UNLIKELY(meta_ids.count() > meta_id_arr.cnt_)) {
+  } else if (OB_UNLIKELY(meta_ids.count() > shared_meta_id_arr.count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("num of macro blocks doesn't match", K(ret), K(meta_ids.count()), K(meta_id_arr.cnt_));
+    LOG_WARN("num of macro blocks doesn't match", K(ret), K(meta_ids.count()), K(shared_meta_id_arr));
   } else {
     bool found = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < meta_ids.count(); i++) {
-      for (int64_t j = 0; !found && j < meta_id_arr.cnt_; j++) {
-        if (meta_ids.at(i) == meta_id_arr.arr_[j]) {
+      for (int64_t j = 0; !found && j < shared_meta_id_arr.count(); j++) {
+        if (meta_ids.at(i) == shared_meta_id_arr.at(j)) {
           found = true;
         }
       }
@@ -730,6 +743,8 @@ int ObTabletPersister::persist_aggregated_meta(
     ObTabletSpaceUsage &space_usage)
 {
   int ret = OB_SUCCESS;
+  ObMacroInfoIterator macro_iter;
+  bool inc_success = false;
   ObTablet *new_tablet = new_handle.get_obj();
   ObTenantCheckpointSlogHandler *ckpt_slog_handler = MTL(ObTenantCheckpointSlogHandler*);
   ObSharedBlockWriteInfo write_info;
@@ -739,6 +754,7 @@ int ObTabletPersister::persist_aggregated_meta(
   MacroBlockId macro_id;
   int64_t offset = 0;
   int64_t size = 0;
+
   if (OB_FAIL(fill_tablet_write_info(allocator_, new_tablet, tablet_macro_info, write_info))) {
     LOG_WARN("fail to fill write info", K(ret), KPC(new_tablet));
   } else if (OB_FAIL(ckpt_slog_handler->get_shared_block_raw_reader_writer().async_write(write_info, handle))) {
@@ -750,11 +766,43 @@ int ObTabletPersister::persist_aggregated_meta(
     LOG_WARN("fail to get block addr", K(ret), K(write_ctx));
   } else if (OB_FAIL(new_tablet->set_macro_info_addr(macro_id, offset + (size - secondary_meta_size), secondary_meta_size, ObMetaDiskAddr::DiskType::RAW_BLOCK))) {
     LOG_WARN("fail to set macro info addr", K(ret), K(macro_id), K(offset), K(size), K(secondary_meta_size));
-  } else if (OB_FAIL(new_tablet->inc_macro_ref_with_macro_info(tablet_macro_info))) {
-    LOG_WARN("fail to increase macro ref cnt for new tablet", K(ret), KPC(new_tablet));
+  } else if (OB_FAIL(macro_iter.init(ObTabletMacroType::MAX, tablet_macro_info))) {
+    LOG_WARN("fail to init macro info iter", K(ret), K(tablet_macro_info));
+  } else if (OB_FAIL(inc_ref_with_macro_iter(*new_tablet, macro_iter))) {
+    LOG_WARN("fail to increase macro ref cnt", K(ret));
   } else {
     space_usage.shared_meta_size_ += upper_align(write_ctx.addr_.size(), DIO_READ_ALIGN_SIZE);
     new_tablet->tablet_meta_.space_usage_ = space_usage;
+  }
+  return ret;
+}
+
+int ObTabletPersister::inc_ref_with_macro_iter(ObTablet &tablet, ObMacroInfoIterator &macro_iter)
+{
+  int ret = OB_SUCCESS;
+  bool inc_tablet_macro_ref_success = false;
+  bool inc_other_macro_ref_success = false;
+  const ObMetaDiskAddr &tablet_addr = tablet.tablet_addr_;
+
+  if (OB_FAIL(ObTablet::inc_addr_ref_cnt(tablet_addr, inc_tablet_macro_ref_success))) {
+    LOG_WARN("fail to increase tablet macro ref", K(ret), K(tablet_addr));
+  } else if (OB_FAIL(tablet.inc_ref_with_macro_iter(macro_iter, inc_other_macro_ref_success))) {
+    LOG_WARN("fail to increase ref cnt from macro iter", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+    if (inc_tablet_macro_ref_success) {
+      ObTablet::dec_addr_ref_cnt(tablet_addr);
+    }
+    if (inc_other_macro_ref_success) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(macro_iter.reuse())) {
+        LOG_WARN("fail to reuse macro info iterator", K(tmp_ret));
+      } else {
+        tablet.dec_ref_with_macro_iter(macro_iter);
+      }
+    }
+  } else {
+    tablet.hold_ref_cnt_ = true;
   }
   return ret;
 }
@@ -868,7 +916,7 @@ int ObTabletPersister::transform(const ObTabletTransformArg &arg, char *buf, con
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet memory buffer not enough for ddl kvs", K(ret), K(remain), K(ddl_kvs_size));
       } else {
-        tiny_tablet->ddl_kvs_ = reinterpret_cast<ObITable**>(buf + start_pos);
+        tiny_tablet->ddl_kvs_ = reinterpret_cast<ObDDLKV**>(buf + start_pos);
         if (OB_FAIL(tiny_tablet->assign_ddl_kvs(arg.ddl_kvs_, arg.ddl_kv_count_))) {
           LOG_WARN("fail to assign ddl_kvs_", K(ret), KP(arg.ddl_kvs_), K(arg.ddl_kv_count_), KP(buf), K(start_pos));
         } else {

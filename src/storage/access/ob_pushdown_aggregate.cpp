@@ -1219,12 +1219,11 @@ int ObMinAggCell::eval_batch_in_group_by(
       std::sort(group_by_ref_array_, group_by_ref_array_ + updated_cnt);
       int64_t last_ref_cnt = -1;
       for (int64_t i = 0; OB_SUCC(ret) && i < updated_cnt; ++i) {
-        const uint32_t distinct_ref = refs[i];
         if (-1 == group_by_ref_array_[i]) {
         } else if (last_ref_cnt == group_by_ref_array_[i]) {
           group_by_ref_array_[i] = -1;
         } else {
-          common::ObDatum &result_datum = group_by_result_datum_buf_->at(distinct_ref);
+          common::ObDatum &result_datum = group_by_result_datum_buf_->at(group_by_ref_array_[i]);
           if (OB_FAIL(result_datum.deep_copy(result_datum, datum_allocator_))) {
             LOG_WARN("Failed to deep copy distinct datum", K(ret));
           } else {
@@ -1376,12 +1375,11 @@ int ObMaxAggCell::eval_batch_in_group_by(
       std::sort(group_by_ref_array_, group_by_ref_array_ + updated_cnt);
       int64_t last_ref_cnt = -1;
       for (int64_t i = 0; OB_SUCC(ret) && i < updated_cnt; ++i) {
-        const uint32_t distinct_ref = refs[i];
         if (-1 == group_by_ref_array_[i]) {
         } else if (last_ref_cnt == group_by_ref_array_[i]) {
           group_by_ref_array_[i] = -1;
         } else {
-          common::ObDatum &result_datum = group_by_result_datum_buf_->at(distinct_ref);
+          common::ObDatum &result_datum = group_by_result_datum_buf_->at(group_by_ref_array_[i]);
           if (OB_FAIL(result_datum.deep_copy(result_datum, datum_allocator_))) {
             LOG_WARN("Failed to deep copy distinct datum", K(ret));
           } else {
@@ -2999,12 +2997,9 @@ int ObGroupByCell::extract_distinct()
         int16_t &distinct_projector = distinct_projector_buf_->at(ref);
         if (-1 == distinct_projector) {
           // distinct val is not extracted yet
-          if (ob_is_decimal_int(group_by_col_expr_->datum_meta_.type_)) {
-            group_by_col_datums[distinct_cnt_].set_decimal_int(tmp_group_by_datums[ref].get_decimal_int(), tmp_group_by_datums[ref].len_);
-          } else if (OB_FAIL(group_by_col_datums[distinct_cnt_].from_storage_datum(tmp_group_by_datums[ref], group_by_col_expr_->obj_datum_map_))) {
+          if (OB_FAIL(group_by_col_datums[distinct_cnt_].from_storage_datum(tmp_group_by_datums[ref], group_by_col_expr_->obj_datum_map_))) {
             LOG_WARN("Failed to clone datum", K(ret), K(tmp_group_by_datums[ref]), K(group_by_col_expr_->obj_datum_map_));
-          }
-          if (OB_SUCC(ret)) {
+          } else {
             distinct_projector = distinct_cnt_;
             ref = distinct_cnt_;
             distinct_cnt_++;

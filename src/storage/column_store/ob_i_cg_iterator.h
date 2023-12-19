@@ -23,7 +23,7 @@ struct PushdownFilterInfo;
 }
 namespace storage
 {
-struct ObCGTableWrapper;
+class ObSSTableWrapper;
 class ObGroupByCell;
 
 class ObICGIterator
@@ -61,14 +61,14 @@ public:
   virtual int init(
     const ObTableIterParam &iter_param,
     ObTableAccessContext &access_ctx,
-    ObCGTableWrapper &wrapper) = 0;
+    ObSSTableWrapper &wrapper) = 0;
   /*
    * rescan interface
    */
   virtual int switch_context(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObCGTableWrapper &wrapper) = 0;
+      ObSSTableWrapper &wrapper) = 0;
   /*
    * range: locate row index range
    * bitmap: only used for projection when filter applied

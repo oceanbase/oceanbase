@@ -1043,6 +1043,42 @@ int ObOraSysChecker::check_owner_or_p1_or_access(
   return ret;
 }
 
+int ObOraSysChecker::check_access_to_mlog_base_table(
+    ObSchemaGetterGuard &guard,
+    const uint64_t tenant_id,
+    const uint64_t user_id,
+    const uint64_t obj_id,
+    const ObString &database_name,
+    const ObIArray<uint64_t> &role_id_array,
+    bool &accessible)
+{
+  int ret = OB_SUCCESS;
+  uint64_t obj_owner_id = OB_INVALID_ID;
+  accessible = false;
+
+  if (OB_FAIL(guard.get_user_id(tenant_id,
+                                       database_name,
+                                       ObString(OB_DEFAULT_HOST_NAME),
+                                       obj_owner_id))) {
+    LOG_WARN("failed to get user id", KR(ret), K(tenant_id), K(database_name));
+  } else if (OB_FAIL(ObOraSysChecker::check_ora_obj_priv(
+      guard, tenant_id, user_id, database_name, obj_id,
+      OBJ_LEVEL_FOR_TAB_PRIV, static_cast<uint64_t>(ObObjectType::TABLE),
+      OBJ_PRIV_ID_SELECT, CHECK_FLAG_NORMAL, obj_owner_id, role_id_array))) {
+    LOG_WARN("failed to check ora obj privs",
+        KR(ret), K(tenant_id), K(user_id), K(database_name),
+        K(obj_id), K(obj_owner_id), K(role_id_array));
+  } else {
+    accessible = true;
+  }
+
+  // callers need to rewrite the error code by accessible=false
+  if (OB_ERR_NO_SYS_PRIVILEGE == ret) {
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
 /** 检查user是否具有access到obj_id的权限，按照如下顺序进行检查
  * 1. 检查user_id是否具有和p1相关的系统权限
  * 2. 检查user_id是否具有和p1，obj_type相关的对象权限
@@ -2464,6 +2500,14 @@ int ObOraSysChecker::check_ora_ddl_priv(
       }
       case stmt::T_VARIABLE_SET: {
         DEFINE_PUB_CHECK_CMD(PRIV_ID_ALTER_SYSTEM);
+        break;
+      }
+      case stmt::T_CREATE_MLOG: {
+        DEFINE_CREATE_CHECK_CMD(PRIV_ID_CREATE_ANY_TABLE, PRIV_ID_CREATE_TABLE);
+        break;
+      }
+      case stmt::T_DROP_MLOG: {
+        DEFINE_DROP_CHECK_CMD(PRIV_ID_DROP_ANY_TABLE);
         break;
       }
       default: {

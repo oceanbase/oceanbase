@@ -393,7 +393,7 @@ public:
                        K_(is_prefetch_end), K_(cur_range_fetch_idx), K_(cur_range_prefetch_idx), K_(max_range_prefetching_cnt),
                        K_(cur_micro_data_fetch_idx), K_(micro_data_prefetch_idx), K_(max_micro_handle_cnt),
                        K_(iter_type), K_(cur_level), K_(index_tree_height), K_(prefetch_depth),
-                       K_(total_micro_data_cnt), KP_(query_range), K_(border_rowkey), K_(tree_handle_cap),
+                       K_(total_micro_data_cnt), KP_(query_range), K_(tree_handle_cap),
                        K_(can_blockscan), K_(need_check_prefetch_depth),
                        K(ObArrayWrap<ObIndexTreeLevelHandle>(tree_handles_, index_tree_height_)));
 protected:

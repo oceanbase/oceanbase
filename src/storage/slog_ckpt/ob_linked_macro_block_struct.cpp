@@ -107,10 +107,10 @@ int ObMetaBlockListHandle::add_macro_blocks(const ObIArray<blocksstable::MacroBl
       LOG_WARN("fail to add macro block handle", K(ret));
     }
   }
-  if (OB_SUCC(ret)) {
-    switch_handle();
-  } else {
+  if (OB_FAIL(ret)) {
     reset_new_handle();
+  } else {
+    switch_handle();
   }
   return ret;
 }

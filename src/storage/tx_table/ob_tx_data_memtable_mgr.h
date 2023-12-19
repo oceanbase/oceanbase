@@ -21,6 +21,12 @@
 // It provides all operations related to tx data memtable.
 namespace oceanbase
 {
+
+namespace share
+{
+class ObTenantTxDataAllocator;
+};
+
 namespace storage
 {
 class TxDataMemtableMgrFreezeGuard;
@@ -150,15 +156,12 @@ public:  // ObTxDataMemtableMgr
                        K_(ls_id),
                        K_(mini_merge_recycle_commit_versions_ts),
                        KP_(tx_data_table),
-                       KP_(ls_tablet_svr),
-                       KP_(slice_allocator));
+                       KP_(ls_tablet_svr));
 
 public: // getter and setter
   ObLSTabletService *get_ls_tablet_svr() { return ls_tablet_svr_; }
   ObTxDataTable *get_tx_data_table() { return tx_data_table_; }
   int64_t get_mini_merge_recycle_commit_versions_ts() { return mini_merge_recycle_commit_versions_ts_; }
-
-  void set_slice_allocator(SliceAllocator *slice_allocator) { slice_allocator_ = slice_allocator; }
 
 protected:
   virtual int release_head_memtable_(memtable::ObIMemtable *imemtable,
@@ -186,7 +189,6 @@ private:  // ObTxDataMemtableMgr
   int64_t mini_merge_recycle_commit_versions_ts_;
   ObTxDataTable *tx_data_table_;
   ObLSTabletService *ls_tablet_svr_;
-  SliceAllocator *slice_allocator_;
   common::SpinRWLock lock_def_;
 };
 

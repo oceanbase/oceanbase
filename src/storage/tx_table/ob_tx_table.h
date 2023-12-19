@@ -109,14 +109,14 @@ public:
   int offline();
   int online();
 
-  // In OB4 .0, transaction contexts are divided into exec_data and tx_data. Where exec_data
-  // indicates the data required when the transaction is running,and tx_data indicates the data that
-  // may still be required after the transaction commits. To avoid memory copying, the entire life
-  // cycle of tx_data is maintained by tx data table.Therefore, when a transaction is started, the
-  // memory of tx_data needs to be allocated by this function
-  //
-  // @param [out] tx_data, a tx data allocated by slice allocator
-  int alloc_tx_data(ObTxDataGuard &tx_data_guard);
+  /**
+   * @brief In OB4 .0, transaction contexts are divided into exec_data and tx_data. Where exec_data indicates the data required when the transaction is running,and tx_data indicates the data that may still be required after the transaction commits. To avoid memory copying, the entire life cycle of tx_data is maintained by tx data table.Therefore, when a transaction is started, the memory of tx_data needs to be allocated by this function
+   *
+   * @param [out] tx_data a guard with tx data allocated by allocator
+   * @param [in] abs_expire_time indicate the absolute transaction's timetout point
+   * @param [in] enable_throttle if this allocation need be throttled, true as the default value
+   */
+  int alloc_tx_data(ObTxDataGuard &tx_data, const bool enable_throttle = true, const int64_t abs_expire_time = 0);
 
   int deep_copy_tx_data(const ObTxDataGuard &in_tx_data_guard, ObTxDataGuard &out_tx_data_guard);
 
@@ -127,6 +127,14 @@ public:
 
   // =============== Interface for sstable to get txn information =====================
 
+  /**
+   * @brief do some checking with tx data user has to implement the check functor derived from ObITxDataCheckFunctor
+   *
+   * @param[in] tx_id tx_id, the tx id of the transaction to be checked
+   * @param[in] fn the functor implemented by user
+   * @param[in] read_epoch to make sure the version of tx data is what the callers want to be
+   */
+  int check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn);
 
   /**
    * @brief check whether the row key is locked by tx id
@@ -181,19 +189,18 @@ public:
 
   /**
    * @brief the txn READ_TRANS_ID use SNAPSHOT_VERSION to read the data, and check whether the data is locked, readable or unreadable by txn DATA_TRANS_ID. READ_LATEST is used to check whether read the data belong to the same txn
-   * 
-   * @param[in] lock_for_read_arg 
-   * @param[in] read_epoch 
-   * @param[out] can_read 
-   * @param[out] trans_version 
-   * @param[out] is_determined_state 
-   * @param[in] op 
+   *
+   * @param[in] read_tx_data_arg
+   * @param[in] lock_for_read_arg
+   * @param[out] can_read
+   * @param[out] trans_version
+   * @param[in] cleanout_op
+   * @param[in] recheck_op
    */
   int lock_for_read(ObReadTxDataArg &read_tx_data_arg,
                     const transaction::ObLockForReadArg &lock_for_read_arg,
                     bool &can_read,
                     share::SCN &trans_version,
-                    bool &is_determined_state,
                     ObCleanoutOp &cleanout_op,
                     ObReCheckOp &recheck_op);
 
@@ -274,6 +281,7 @@ public: // getter & setter
   int get_tx_table_guard(ObTxTableGuard &guard);
   int64_t get_epoch() const { return ATOMIC_LOAD(&epoch_); }
   TxTableState get_state() const { return ATOMIC_LOAD(&state_); }
+  share::ObLSID get_ls_id() const { return ls_id_; }
 
   static int64_t get_filter_col_idx();
 
@@ -282,12 +290,14 @@ private:
       const uint64_t tenant_id,
       const share::ObLSID ls_id,
       const lib::Worker::CompatMode compat_mode,
-      const share::SCN &create_scn);
+      const share::SCN &create_scn,
+      const uint64_t tenant_data_version);
   int create_ctx_tablet_(
       const uint64_t tenant_id,
       const share::ObLSID ls_id,
       const lib::Worker::CompatMode compat_mode,
-      const share::SCN &create_scn);
+      const share::SCN &create_scn,
+      const uint64_t tenant_data_version);
   int remove_tablet_(const common::ObTabletID &tablet_id);
   int get_data_table_schema_(
       const uint64_t tenant_id,
@@ -300,14 +310,6 @@ private:
   int offline_tx_ctx_table_();
   int offline_tx_data_table_();
 
-  /**
-   * @brief do some checking with tx data user has to implement the check functor derived from ObITxDataCheckFunctor
-   *
-   * @param[in] tx_id tx_id, the tx id of the transaction to be checked
-   * @param[in] fn the functor implemented by user
-   * @param[in] read_epoch to make sure the version of tx data is what the callers want to be
-   */
-  int check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn);
   int check_tx_data_in_mini_cache_(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn);
   int check_tx_data_in_kv_cache_(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn);
   int check_tx_data_in_tables_(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn);

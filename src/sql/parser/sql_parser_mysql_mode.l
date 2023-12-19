@@ -95,11 +95,12 @@ mysql_compatible_comment_with_version \/\*\![0-9]{5}
 mysql_compatible_comment_without_version \/\*\!
 mysql_compatible_comment_end \*\/
 
-rowidPattern  (WITH{whitespace}ROWID)
+ColumnStorePattern  (WITH{whitespace}COLUMN{whitespace}GROUP)
 
 %%
-{rowidPattern}                { REPUT_TOKEN_NEG_SIGN(WITH_ROWID); }
-INTERVAL { 
+{ColumnStorePattern}                { REPUT_TOKEN_NEG_SIGN(WITH_COLUMN_GROUP); }
+INTERVAL {
+
   ParseResult *p = (ParseResult *)yyextra;
   REPUT_NEG_SIGN(p); 
   return INTERVAL; 
@@ -1010,6 +1011,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>NO_USE_HASH_AGGREGATION  { return NO_USE_HASH_AGGREGATION; }
 <hint>PARTITION_SORT  { return PARTITION_SORT; }
 <hint>NO_PARTITION_SORT  { return NO_PARTITION_SORT; }
+<hint>WF_TOPN  { return WF_TOPN; }
 <hint>USE_LATE_MATERIALIZATION  { return USE_LATE_MATERIALIZATION; }
 <hint>NO_USE_LATE_MATERIALIZATION  { return NO_USE_LATE_MATERIALIZATION; }
 <hint>TRACE_LOG { return TRACE_LOG; }

@@ -42,6 +42,7 @@ public:
                              ObEvalCtx &ctx,
                              const ObBitVector &skip,
                              const int64_t batch_size);
+  DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprCase);

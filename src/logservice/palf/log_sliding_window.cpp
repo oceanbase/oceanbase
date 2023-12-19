@@ -2170,7 +2170,7 @@ int LogSlidingWindow::sliding_cb(const int64_t sn, const FixedSlidingWindowSlot 
         // Call fs_cb.
         int tmp_ret = OB_SUCCESS;
         const int64_t fs_cb_begin_ts = ObTimeUtility::current_time();
-        if (OB_SUCCESS != (tmp_ret = palf_fs_cb_->update_end_lsn(palf_id_, log_end_lsn, log_proposal_id))) {
+        if (OB_SUCCESS != (tmp_ret = palf_fs_cb_->update_end_lsn(palf_id_, log_end_lsn, log_max_scn, log_proposal_id))) {
           if (OB_EAGAIN == tmp_ret) {
             if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
               PALF_LOG(WARN, "update_end_lsn eagain", K(tmp_ret), K_(palf_id), K_(self), K(log_id), KPC(log_task));

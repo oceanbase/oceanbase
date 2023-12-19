@@ -36,6 +36,10 @@ namespace transaction {
 
 class ObFakeTxDataTable : public ObTxDataTable {
 public:
+  ObSliceAlloc slice_allocator_;
+  ObTenantTxDataAllocator *FAKE_ALLOCATOR = (ObTenantTxDataAllocator *)0x1;
+
+public:
   ObFakeTxDataTable() : arena_allocator_(), map_(arena_allocator_, 1 << 20 /*2097152*/)
   {
     IGNORE_RETURN map_.init();
@@ -46,7 +50,7 @@ public:
     ObMemtableMgrHandle memtable_mgr_handle;
     OB_ASSERT(OB_SUCCESS == slice_allocator_.init(
                                 sizeof(ObTxData), OB_MALLOC_NORMAL_BLOCK_SIZE, common::default_blk_alloc, mem_attr));
-    slice_allocator_.set_nway(ObTxDataTable::TX_DATA_MAX_CONCURRENCY);
+    slice_allocator_.set_nway(32);
     is_inited_ = true;
   }
   virtual int init(ObLS *ls, ObTxCtxTable *tx_ctx_table) override
@@ -57,12 +61,15 @@ public:
   virtual void stop() override {}
   virtual void reset() override {}
   virtual void destroy() override {}
-  virtual int alloc_tx_data(ObTxDataGuard &tx_data_guard) override
+  virtual int alloc_tx_data(ObTxDataGuard &tx_data_guard,
+                            const bool enable_throttle,
+                            const int64_t abs_expire_time)
   {
-    void *ptr = slice_allocator_.alloc();
+    ObMemAttr attr;
+    void *ptr = ob_malloc(TX_DATA_SLICE_SIZE, attr);
     ObTxData *tx_data = new (ptr) ObTxData();
     tx_data->ref_cnt_ = 100;
-    tx_data->slice_allocator_ = &slice_allocator_;
+    tx_data->tx_data_allocator_ = FAKE_ALLOCATOR;
     tx_data->flag_ = 269381;
     tx_data_guard.init(tx_data);
     return OB_ISNULL(tx_data) ? OB_ALLOCATE_MEMORY_FAILED : OB_SUCCESS;
@@ -74,7 +81,7 @@ public:
     ObTxData *to = new (ptr) ObTxData();
     ObTxData *from = (ObTxData*)from_guard.tx_data();
     to->ref_cnt_ = 100;
-    to->slice_allocator_ = &slice_allocator_;
+    to->tx_data_allocator_ = FAKE_ALLOCATOR;
     to->flag_ = 269381;
     to_guard.init(to);
     OX (*to = *from);
@@ -188,7 +195,7 @@ public:
     common::ObAddr leader;
     OZ(get_leader(cluster_id, tenant_id, ls_id, leader));
     ObLSReplicaLocation rep_loc;
-    ObLSRestoreStatus restore_status(ObLSRestoreStatus::Status::RESTORE_NONE);
+    ObLSRestoreStatus restore_status(ObLSRestoreStatus::Status::NONE);
     auto p = ObReplicaProperty::create_property(100);
     OZ(rep_loc.init(leader, ObRole::LEADER, 10000, ObReplicaType::REPLICA_TYPE_FULL, p, restore_status, 1));
     OZ(location.add_replica_location(rep_loc));
@@ -235,6 +242,11 @@ public:
     get_gts_error_ = OB_SUCCESS;
   }
 public:
+  void reset() {
+    get_gts_error_ = OB_SUCCESS;
+    elapse_waiting_mode_ = false;
+    get_gts_waiting_mode_ = false;
+  }
   int update_gts(const uint64_t tenant_id, const int64_t gts, bool &update) { return OB_SUCCESS; }
   int get_gts(const uint64_t tenant_id,
               const MonotonicTs stc,
@@ -255,7 +267,7 @@ public:
         ret = OB_EAGAIN;
       }
     }
-    TRANS_LOG(INFO, "get gts end", K(ret), K(gts_), K(gts), K(&gts_));
+    TRANS_LOG(INFO, "get gts end", K(ret), K(gts_), K(gts), K(get_gts_waiting_mode_));
     return ret;
   }
 
@@ -265,6 +277,8 @@ public:
   }
   int get_ts_sync(const uint64_t tenant_id, const int64_t timeout_ts,
                   share::SCN &scn, bool &is_external_consistent) { return OB_SUCCESS; }
+  int get_ts_sync(const uint64_t tenant_id, const int64_t timeout_ts,
+                  share::SCN &scn) { return OB_SUCCESS; }
   int wait_gts_elapse(const uint64_t tenant_id, const share::SCN &scn, ObTsCbTask *task,
                       bool &need_wait)
   {
@@ -393,6 +407,7 @@ public:
   ObSpScLinkQueue apply_task_queue_arr[TASK_QUEUE_CNT];
   ObSpScLinkQueue replay_task_queue_arr[TASK_QUEUE_CNT];
   share::SCN max_submit_scn_ =  share::SCN::invalid_scn();
+  share::SCN max_committed_scn_ =  share::SCN::invalid_scn();
 
   void run1() {
     while(true) {
@@ -404,6 +419,7 @@ public:
             ObLink *task = apply_task_queue_arr[i].pop();
             if (task) {
               ++process_cnt;
+              max_committed_scn_ = static_cast<ApplyCbTask*>(task)->cb_->__get_scn();
               static_cast<ApplyCbTask*>(task)->cb_->on_success();
               delete task;
               ATOMIC_DEC(&inflight_cnt_);
@@ -549,7 +565,10 @@ public:
     }
     return OB_SUCCESS;
   }
-
+  int get_palf_committed_max_scn(share::SCN &scn) const {
+    scn = max_committed_scn_;
+    return OB_SUCCESS;
+  }
   int get_append_mode_initial_scn(share::SCN &ref_scn) {
     int ret = OB_SUCCESS;
     ref_scn = share::SCN::invalid_scn();
@@ -594,54 +613,26 @@ class ObFakeTxReplayExecutor : public ObTxReplayExecutor
 {
 public:
   ObFakeTxReplayExecutor(storage::ObLS *ls,
+                         const share::ObLSID &ls_id,
+                         const uint64_t tenant_id,
                          storage::ObLSTxService *ls_tx_srv,
                          const palf::LSN &lsn,
-                         const share::SCN &log_timestamp)
-      : ObTxReplayExecutor(ls, ls_tx_srv, lsn, log_timestamp) {memtable_ = nullptr;}
-
-  ~ObFakeTxReplayExecutor() {}
-
-  static int execute(storage::ObLS *ls,
-                     storage::ObLSTxService *ls_tx_srv,
-                     const char *buf,
-                     const int64_t size,
-                     const int skip_pos,
-                     const palf::LSN &lsn,
-                     const int64_t &log_timestamp,
-                     const int64_t &replay_hint,
-                     const share::ObLSID &ls_id,
-                     const int64_t &tenant_id,
-                     memtable::ObMemtable* memtable)
-  {
-    int ret = OB_SUCCESS;
-    share::SCN log_scn;
-    log_scn.convert_for_gts(log_timestamp);
-    ObFakeTxReplayExecutor replay_executor(ls, ls_tx_srv, lsn, log_scn);
-    if (OB_ISNULL(ls) || OB_ISNULL(ls_tx_srv) || OB_ISNULL(buf) || size <= 0
-        || 0 >= log_timestamp || INT64_MAX == log_timestamp || !lsn.is_valid()) {
-      ret = OB_INVALID_ARGUMENT;
-      TRANS_LOG(ERROR, "invaild arguments", K(replay_executor), K(buf), K(size));
-    } else if (replay_executor.set_memtable(memtable)) {
-    } else if (OB_FAIL(replay_executor.do_replay_(buf,
-                                                  size,
-                                                  skip_pos,
-                                                  replay_hint,
-                                                  ls_id,
-                                                  tenant_id))) {
-      TRANS_LOG(ERROR, "replay_executor.do_replay failed",
-          K(replay_executor), K(buf), K(size), K(skip_pos), K(replay_hint), K(ls_id), K(tenant_id));
-      hex_dump(buf, size, true, OB_LOG_LEVEL_INFO);
-    }
-    return ret;
-  }
-
-private:
+                         const share::SCN &log_timestamp,
+                         const logservice::ObLogBaseHeader &base_header)
+    : ObTxReplayExecutor(ls, ls_id, tenant_id, ls_tx_srv, lsn, log_timestamp, base_header)
+  { memtable_ = nullptr; }
+  ~ObFakeTxReplayExecutor() { }
   int set_memtable(memtable::ObMemtable* memtable)
   {
     memtable_ = memtable;
     return OB_SUCCESS;
   }
-
+  int execute(const char *buf,
+              const int64_t size,
+              const int skip_pos)
+  {
+    return do_replay_(buf, size, skip_pos);
+  }
   int replay_one_row_in_memtable_(memtable::ObMutatorRowHeader& row_head,
                                   memtable::ObMemtableMutatorIterator *mmi_ptr) override
   {
@@ -650,13 +641,12 @@ private:
     storeCtx.ls_id_ = ctx_->get_ls_id();
     storeCtx.mvcc_acc_ctx_.tx_ctx_ = ctx_;
     storeCtx.mvcc_acc_ctx_.mem_ctx_ = mt_ctx_;
-    storeCtx.replay_log_scn_ = log_ts_ns_;
     storeCtx.tablet_id_ = row_head.tablet_id_;
     storeCtx.mvcc_acc_ctx_.tx_id_ = ctx_->get_trans_id();
 
     switch (row_head.mutator_type_) {
     case memtable::MutatorType::MUTATOR_ROW: {
-      if (OB_FAIL(memtable_->replay_row(storeCtx, mmi_ptr_))) {
+      if (OB_FAIL(memtable_->replay_row(storeCtx, log_ts_ns_, mmi_ptr_))) {
         TRANS_LOG(WARN, "[Replay Tx] replay row error", K(ret));
       } else {
         TRANS_LOG(INFO, "[Replay Tx] replay row in memtable success");

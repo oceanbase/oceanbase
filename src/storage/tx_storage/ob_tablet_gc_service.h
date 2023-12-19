@@ -70,20 +70,24 @@ public:
   uint8_t get_tablet_persist_trigger_and_reset();
   int check_tablet_need_persist_(
       ObTabletHandle &tablet_handle,
+      const share::SCN &decided_scn,
       bool &need_persist,
       bool &need_retry,
-      const share::SCN &decided_scn);
+      bool &no_need_wait_persist);
+
   int check_tablet_need_gc_(
       ObTabletHandle &tablet_handle,
       TabletGCStatus &need_gc,
       bool &need_retry,
       const share::SCN &decided_scn);
-  int get_unpersist_tablet_ids(common::ObIArray<ObTabletHandle> &deleted_tablets,
+  int get_unpersist_tablet_ids(
+      common::ObIArray<ObTabletHandle> &deleted_tablets,
       common::ObIArray<ObTabletHandle> &immediately_deleted_tablets,
       common::ObTabletIDArray &unpersist_tablet_ids,
+      const share::SCN &decided_scn,
       const bool only_persist,
       bool &need_retry,
-      const share::SCN &decided_scn);
+      bool &no_need_wait_persist);
   int flush_unpersist_tablet_ids(const common::ObTabletIDArray &unpersist_tablet_ids,
                                  const share::SCN &decided_scn);
   int get_max_tablet_transfer_scn(const common::ObIArray<ObTabletHandle> &deleted_tablets, share::SCN &transfer_scn);

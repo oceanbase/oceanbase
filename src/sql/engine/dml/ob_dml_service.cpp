@@ -1141,6 +1141,7 @@ int ObDMLService::delete_row(const ObDASDelCtDef &das_del_ctdef,
 int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
                                  ObDASDMLBaseRtDef &base_rtdef,
                                  transaction::ObTxReadSnapshot &snapshot,
+                                 const int16_t write_branch_id,
                                  ObIAllocator &das_alloc,
                                  storage::ObDMLBaseParam &dml_param)
 {
@@ -1157,6 +1158,7 @@ int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
   dml_param.is_batch_stmt_ = base_ctdef.is_batch_stmt_;
   dml_param.dml_allocator_ = &das_alloc;
   dml_param.snapshot_ = snapshot;
+  dml_param.branch_id_ = write_branch_id;
   if (base_ctdef.is_batch_stmt_) {
     dml_param.write_flag_.set_is_dml_batch_opt();
   }
@@ -1975,7 +1977,8 @@ int ObDMLService::check_local_index_affected_rows(int64_t table_affected_rows,
   int ret = OB_SUCCESS;
   if (GCONF.enable_defensive_check()) {
     if (table_affected_rows != index_affected_rows
-        && !related_ctdef.table_param_.get_data_table().is_spatial_index()) {
+        && !related_ctdef.table_param_.get_data_table().is_spatial_index()
+        && !related_ctdef.table_param_.get_data_table().is_mlog_table()) {
       ret = OB_ERR_DEFENSIVE_CHECK;
       ObString func_name = ObString::make_string("check_local_index_affected_rows");
       LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());

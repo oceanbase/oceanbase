@@ -115,6 +115,7 @@ private:
   int generate_updated_column_ids(const ObLogDelUpd &log_op,
                                   const ObAssignments &assigns,
                                   const common::ObIArray<uint64_t> &column_ids,
+                                  const ObDASDMLBaseCtDef &das_ctdef,
                                   common::ObIArray<uint64_t> &updated_column_ids);
   int convert_dml_column_info(common::ObTableID index_tid,
                               bool only_rowkey,

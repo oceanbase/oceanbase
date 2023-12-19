@@ -323,7 +323,7 @@ public:
   void refresh_sys_load();
   int64_t get_load_shedding_factor() const { return ATOMIC_LOAD(&load_shedding_factor_); }
 
-  TO_STRING_KV(K_(load_shedding_factor), K_(last_cpu_time), K_(cpu_usage), K_(min_cpu_cnt), K_(effect_time));
+  TO_STRING_KV(K_(load_shedding_factor), K_(last_cpu_time), K_(cpu_usage), K_(min_cpu_cnt), K_(max_cpu_cnt), K_(effect_time));
 private:
   int refresh_cpu_utility();
   int refresh_cpu_usage();
@@ -331,8 +331,9 @@ private:
 public:
   static const int64_t DEFAULT_LOAD_SHEDDING_FACTOR = 2;
   static const int64_t CPU_TIME_SAMPLING_INTERVAL = 20_s; //20 * 1000 * 1000 us
-  static constexpr double CPU_UTIL_THRESHOLD = 0.6; // 60%
-  static const int64_t SHEDDER_EXPIRE_TIME = 10_min;
+  static constexpr double CPU_TIME_THRESHOLD = 0.6; // 60%
+  static constexpr double CPU_USAGE_THRESHOLD = 0.8; // 80%
+  static const int64_t SHEDDER_EXPIRE_TIME = 2_min;
 private:
   int64_t effect_time_;
   int64_t last_sample_time_;
@@ -340,6 +341,7 @@ private:
   int64_t last_cpu_time_;
   double cpu_usage_;
   double min_cpu_cnt_;
+  double max_cpu_cnt_;
 };
 
 

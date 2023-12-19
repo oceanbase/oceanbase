@@ -51,6 +51,7 @@ const static int64_t MAX_OSS_KEY_LENGTH = 128;
 const static int64_t OSS_BASE_BUFFER_SIZE = 8 * 1024 * 1024L;//the buf size of upload data
 const static int64_t MAX_ELEMENT_COUNT = 10000;//oss limit element count
 const static int64_t MULTI_BASE_BUFFER_SIZE = 16 * 1024 * 1024L;//the buf size of upload data
+static constexpr char OB_STORAGE_OSS_ALLOCATOR[] = "StorageOSS";
 
 // Before using oss, you need to initialize oss enviroment.
 // Thread safe guaranteed by user.
@@ -59,7 +60,6 @@ int init_oss_env();
 // You need to clean oss resource when not use oss any more.
 // Thread safe guaranteed by user.
 void fin_oss_env();
-
 
 class ObStorageOssStaticVar
 {
@@ -184,7 +184,6 @@ private:
   common::ObString object_;
   aos_string_t upload_id_;
   int partnum_;
-  MD5_CTX whole_file_md5_;
   bool is_opened_;
   int64_t file_length_;
 
@@ -197,8 +196,10 @@ class ObStorageOssReader: public ObStorageOssBase, public ObIStorageReader
 public:
   ObStorageOssReader();
   virtual ~ObStorageOssReader();
-  int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info);
-  int pread(char *buf,const int64_t buf_size, int64_t offset, int64_t &read_size);
+  virtual int open(const common::ObString &uri,
+      common::ObObjectStorageInfo *storage_info, const bool head_meta = true) override;
+  virtual int pread(char *buf,
+      const int64_t buf_size, const int64_t offset, int64_t &read_size) override;
   int close();
   int64_t get_length() const { return file_length_; }
   virtual bool is_opened() const { return is_opened_; }
@@ -208,6 +209,7 @@ private:
   common::ObString object_;
   int64_t file_length_;
   bool is_opened_;
+  bool has_meta_;
   common::ObArenaAllocator allocator_;
 
   DISALLOW_COPY_AND_ASSIGN(ObStorageOssReader);
@@ -222,16 +224,19 @@ public:
   virtual void close();
   virtual int is_exist(const common::ObString &uri, bool &exist);
   virtual int get_file_length(const common::ObString &uri, int64_t &file_length);
+  virtual int head_object_meta(const common::ObString &uri, ObStorageObjectMetaBase &obj_meta);
   virtual int write_single_file(const common::ObString &uri, const char *buf,
                                 const int64_t size);
 
   //oss no dir
   virtual int mkdir(const common::ObString &uri);
   virtual int del_file(const common::ObString &uri);
-  virtual int list_files(const common::ObString &dir_path, common::ObBaseDirEntryOperator &op);
+  virtual int list_files(const common::ObString &uri, common::ObBaseDirEntryOperator &op);
+  virtual int list_files(const common::ObString &uri, ObStorageListCtxBase &list_ctx);
   virtual int del_dir(const common::ObString &uri);
   virtual int list_directories(const common::ObString &uri, common::ObBaseDirEntryOperator &op);
   virtual int is_tagging(const common::ObString &uri, bool &is_tagging);
+  virtual int del_unmerged_parts(const ObString &uri) override;
 private:
   int strtotime(const char *date_time, int64_t &time);
   int tagging_object_(
@@ -244,6 +249,10 @@ private:
       ObStorageOssBase &oss_base,
       const common::ObString &bucket_str,
       const common::ObString &object_str);
+  int do_list_(ObStorageOssBase &oss_base,
+      const ObString &bucket, const char *full_dir_path,
+      const int64_t max_ret, const char *delimiter,
+      const char *next_marker, oss_list_object_params_t *&params);
   bool is_opened_;
   common::ObObjectStorageInfo *storage_info_;
 };

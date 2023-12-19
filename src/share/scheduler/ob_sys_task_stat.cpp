@@ -38,7 +38,9 @@ const static char *ObSysTaskTypeStr[] = {
     "REMOVE_MEMBER",
     "TRANSFER",
     "MDS_TABLE_MERGE",
-    "TTL_TASK"
+    "TTL_TASK",
+    "TENANT_SNAPSHOT_CREATE",
+    "TENANT_SNAPSHOT_GC"
 };
 
 const char *sys_task_type_to_str(const ObSysTaskType &type)

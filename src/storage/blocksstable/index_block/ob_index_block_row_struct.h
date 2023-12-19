@@ -624,6 +624,7 @@ public:
   int64_t get_max_merged_trans_version() const;
   int64_t get_row_count_delta() const;
   int64_t get_row_offset() const { return row_offset_; };
+  bool is_inited() const { return is_inited_; }
   TO_STRING_KV(K_(is_inited), KPC(header_), K(row_offset_));
 
 private:

@@ -36,6 +36,7 @@
 #include "sql/engine/expr/ob_expr_extra_info_factory.h"
 #include "sql/engine/expr/ob_i_expr_extra_info.h"
 #include "lib/hash/ob_hashset.h"
+#include "share/schema/ob_schema_struct.h"
 
 
 #define GET_EXPR_CTX(ClassType, ctx, id) static_cast<ClassType *>((ctx).get_expr_op_ctx(id))
@@ -204,6 +205,18 @@ protected:
   uint64_t expr_id_;
   ObExprOperatorType expr_type_;
 };
+
+#define DECLARE_SET_LOCAL_SESSION_VARS \
+  virtual int set_local_session_vars(ObRawExpr *raw_expr, \
+                                    const share::schema::ObLocalSessionVar *local_session_vars, \
+                                    const ObBasicSessionInfo *session, \
+                                    share::schema::ObLocalSessionVar &local_vars)
+
+#define DEF_SET_LOCAL_SESSION_VARS(TypeName, raw_expr) \
+  int TypeName::set_local_session_vars(ObRawExpr *raw_expr, \
+                                      const share::schema::ObLocalSessionVar *local_session_vars, \
+                                      const ObBasicSessionInfo *session, \
+                                      share::schema::ObLocalSessionVar &local_vars)
 
 class ObExprOperator : public common::ObDLinkBase<ObExprOperator>
 {
@@ -476,7 +489,6 @@ public:
     const common::ObCollationType conn_coll_type,
     bool is_oracle_mode,
     const common::ObLengthSemantics default_length_semantics,
-    const sql::ObSQLSessionInfo *session,
     bool need_merge_type = TRUE,
     bool skip_null = FALSE,
     bool is_called_in_sql = TRUE);
@@ -487,7 +499,6 @@ public:
     const common::ObCollationType conn_coll_type,
     bool is_oracle_mode,
     const common::ObLengthSemantics default_length_semantics,
-    const sql::ObSQLSessionInfo *session,
     bool need_merge_type = TRUE,
     bool skip_null = FALSE,
     bool is_called_in_sql = TRUE);
@@ -533,7 +544,7 @@ public:
 
   static common::ObCollationType get_default_collation_type(
       common::ObObjType type,
-      const ObBasicSessionInfo &session_info
+      ObExprTypeCtx &type_ctx
       );
 
   static int is_same_kind_type_for_case(const ObExprResType &type1, const ObExprResType &type2, bool &match);
@@ -582,6 +593,9 @@ public:
   virtual common::ObCastMode get_cast_mode() const;
   virtual int is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const;
   static int check_first_param_not_time(const common::ObIArray<ObRawExpr *> &exprs, bool &not_time);
+  //Extract the info of sys vars which need to be used in resolving or excuting into local_sys_vars.
+  DECLARE_SET_LOCAL_SESSION_VARS;
+  static int add_local_var_to_expr(share::ObSysVarClassType var_type, const share::schema::ObLocalSessionVar *local_session_var, const ObBasicSessionInfo *session, share::schema::ObLocalSessionVar &local_vars);
 protected:
   ObExpr *get_rt_expr(const ObRawExpr &raw_expr) const;
 
@@ -792,7 +806,7 @@ inline int ObExprOperator::calc_result_typeN(ObExprResType &type,
   UNUSED(param_num);
   UNUSED(type_ctx);
   UNUSED(arg_arrs);
-  SQL_LOG_RET(ERROR, common::OB_NOT_IMPLEMENT, "not implement", K(type_), K(get_type_name(type_)));
+  SQL_LOG_RET(WARN, common::OB_NOT_IMPLEMENT, "not implement", K(type_), K(get_type_name(type_)));
   return common::OB_NOT_IMPLEMENT;
 }
 
@@ -1855,6 +1869,7 @@ public:
                                  ObDatum &res_datum);
   static int calc_result2_mysql(const ObExpr &expr, ObEvalCtx &ctx,
                                 ObDatum &res_datum);
+  DECLARE_SET_LOCAL_SESSION_VARS;
 protected:
   enum BitOperator
   {
@@ -2301,5 +2316,19 @@ private:
 
 #define GET_EXEC_ALLOCATOR(expr_ctx) \
         ((nullptr == expr_ctx.exec_ctx_) ? nullptr : &(expr_ctx.exec_ctx_->get_allocator())); \
+
+#define SET_LOCAL_SYSVAR_CAPACITY(sz) \
+if (OB_SUCC(ret)) { \
+  if (OB_FAIL(local_vars.set_local_var_capacity(sz))) { \
+    LOG_WARN("reserve failed", K(ret)); \
+  } \
+}
+
+#define EXPR_ADD_LOCAL_SYSVAR(var_type) \
+if (OB_SUCC(ret)) { \
+  if (OB_FAIL(add_local_var_to_expr(var_type, local_session_vars, session, local_vars))) { \
+    LOG_WARN("fail to add local sys var", K(ret), K(var_type)); \
+  } \
+}
 
 #endif //OCEANBASE_SQL_OB_EXPR_OPERATOR_H_

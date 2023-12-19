@@ -31,8 +31,7 @@ ObTxDataMemtableMgr::ObTxDataMemtableMgr()
     ls_id_(),
     mini_merge_recycle_commit_versions_ts_(0),
     tx_data_table_(nullptr),
-    ls_tablet_svr_(nullptr),
-    slice_allocator_(nullptr)
+    ls_tablet_svr_(nullptr)
 {
   lock_.lock_type_ = LockType::OB_SPIN_RWLOCK;
   lock_.lock_ = &lock_def_;
@@ -139,7 +138,7 @@ int ObTxDataMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable
       memtable->set_state(ObTxDataMemtable::State::RELEASED);
       memtable->set_release_time();
       if (true == memtable->do_recycled()) {
-        mini_merge_recycle_commit_versions_ts_ = ObClockGenerator::getCurrentTime();
+        mini_merge_recycle_commit_versions_ts_ = ObClockGenerator::getClock();
       }
       STORAGE_LOG(INFO, "[TX DATA MERGE]tx data memtable mgr release head memtable", K(ls_id_), KP(memtable), KPC(memtable));
       release_head_memtable();
@@ -167,9 +166,6 @@ int ObTxDataMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
   } else if (OB_UNLIKELY(schema_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(schema_version));
-  } else if (OB_ISNULL(slice_allocator_)) {
-    ret = OB_ERR_NULL_VALUE;
-    STORAGE_LOG(WARN, "slice_allocator_ has not been set.");
   } else {
     MemMgrWLockGuard lock_guard(lock_);
     if (OB_FAIL(create_memtable_(clog_checkpoint_scn, schema_version, ObTxDataHashMap::DEFAULT_BUCKETS_CNT))) {
@@ -205,7 +201,7 @@ int ObTxDataMemtableMgr::create_memtable_(const SCN clog_checkpoint_scn,
   } else if (OB_ISNULL(tx_data_memtable)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "dynamic cast failed", KR(ret), KPC(this));
-  } else if (OB_FAIL(tx_data_memtable->init(table_key, slice_allocator_, this, freezer_, buckets_cnt))) {
+  } else if (OB_FAIL(tx_data_memtable->init(table_key, this, freezer_, buckets_cnt))) {
     STORAGE_LOG(WARN, "memtable init fail.", KR(ret), KPC(tx_data_memtable));
   } else if (OB_FAIL(add_memtable_(handle))) {
     STORAGE_LOG(WARN, "add memtable fail.", KR(ret));
@@ -228,9 +224,6 @@ int ObTxDataMemtableMgr::freeze()
   } else if (get_memtable_count_() <= 0) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "there is no tx data memtable.", KR(ret), K(get_memtable_count_()));
-  } else if (OB_ISNULL(slice_allocator_)) {
-    ret = OB_ERR_NULL_VALUE;
-    STORAGE_LOG(WARN, "slice_allocator_ has not been set.", KR(ret), KP(slice_allocator_));
   } else {
     MemMgrWLockGuard lock_guard(lock_);
     if (OB_FAIL(freeze_())) {

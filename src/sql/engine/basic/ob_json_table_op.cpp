@@ -542,6 +542,8 @@ int JtFuncHelpler::cast_to_datetime(JtColNode* node,
                                     ObIJsonBase *j_base,
                                     common::ObIAllocator *allocator,
                                     const ObBasicSessionInfo *session,
+                                    ObEvalCtx *ctx,
+                                    const ObExpr *expr,
                                     common::ObAccuracy &accuracy,
                                     int64_t &val)
 {
@@ -556,7 +558,7 @@ int JtFuncHelpler::cast_to_datetime(JtColNode* node,
   } else {
     oceanbase::common::ObTimeConvertCtx cvrt_ctx(session->get_timezone_info(), false);
     if (lib::is_oracle_mode()) {
-      if (OB_FAIL(common_get_nls_format(session, ObDateTimeType,
+      if (OB_FAIL(common_get_nls_format(session, *ctx, expr, ObDateTimeType,
                                         true,
                                         cvrt_ctx.oracle_nls_format_))) {
         LOG_WARN("common_get_nls_format failed", K(ret));
@@ -584,6 +586,8 @@ int JtFuncHelpler::cast_to_datetime(JtColNode* node,
 
 int JtFuncHelpler::cast_to_otimstamp(ObIJsonBase *j_base,
                              const ObBasicSessionInfo *session,
+                             ObEvalCtx *ctx,
+                             const ObExpr *expr,
                              common::ObAccuracy &accuracy,
                              ObObjType dst_type,
                              ObOTimestampData &out_val)
@@ -603,7 +607,7 @@ int JtFuncHelpler::cast_to_otimstamp(ObIJsonBase *j_base,
     LOG_WARN("can't cast to timestamps", K(ret));
   } else {
     cvrt_ctx.tz_info_ = session->get_timezone_info();
-    if (OB_FAIL(common_get_nls_format(session, ObDateTimeType,
+    if (OB_FAIL(common_get_nls_format(session, *ctx, expr, ObDateTimeType,
                                       true,
                                       cvrt_ctx.oracle_nls_format_))) {
       LOG_WARN("common_get_nls_format failed", K(ret));
@@ -898,7 +902,7 @@ int JtFuncHelpler::cast_json_to_res(JtScanCtx* ctx, ObIJsonBase* js_val, JtColNo
       case ObDateTimeType: {
         const ObBasicSessionInfo *session = ctx->exec_ctx_->get_my_session();
         int64_t val;
-        ret = cast_to_datetime(&col_node, js_val, &ctx->row_alloc_, session, accuracy, val);
+        ret = cast_to_datetime(&col_node, js_val, &ctx->row_alloc_, session, ctx->eval_ctx_, expr, accuracy, val);
         if (ret == OB_ERR_NULL_VALUE) {
           res.set_null();
         } else if (OB_FAIL(ret) && enable_error) {
@@ -917,7 +921,7 @@ int JtFuncHelpler::cast_json_to_res(JtScanCtx* ctx, ObIJsonBase* js_val, JtColNo
       case ObTimestampType: {
         const ObBasicSessionInfo *session = ctx->exec_ctx_->get_my_session();
         ObOTimestampData val;
-        ret = cast_to_otimstamp(js_val, session, accuracy, dst_type, val);
+        ret = cast_to_otimstamp(js_val, session, ctx->eval_ctx_, expr, accuracy, dst_type, val);
         if (OB_FAIL(ret) && enable_error) {
           int tmp_ret = set_error_val(ctx, col_node, ret);
           if (tmp_ret != OB_SUCCESS) {
@@ -1139,7 +1143,7 @@ int JtFuncHelpler::pre_default_value_check_mysql(JtScanCtx* ctx,
       case ObDateTimeType: {
         const ObBasicSessionInfo *session = ctx->exec_ctx_->get_my_session();
         int64_t val;
-        ret = cast_to_datetime(&col_node, js_val, &ctx->row_alloc_, session, accuracy, val);
+        ret = cast_to_datetime(&col_node, js_val, &ctx->row_alloc_, session, ctx->eval_ctx_, expr, accuracy, val);
         break;
       }
       case ObTimestampNanoType:
@@ -1148,7 +1152,7 @@ int JtFuncHelpler::pre_default_value_check_mysql(JtScanCtx* ctx,
       case ObTimestampType: {
         const ObBasicSessionInfo *session = ctx->exec_ctx_->get_my_session();
         ObOTimestampData val;
-        ret = cast_to_otimstamp(js_val, session, accuracy, dst_type, val);
+        ret = cast_to_otimstamp(js_val, session, ctx->eval_ctx_, expr, accuracy, dst_type, val);
         break;
       }
       case ObDateType: {

@@ -108,9 +108,9 @@ int ObGTSTaskQueue::foreach_task(const MonotonicTs srr,
             TRANS_LOG(WARN, "unknown gts task type", KR(ret), K_(task_type));
           }
           if (OB_EAGAIN == ret) {
-            // rewrite ret
-            ret = OB_SUCCESS;
-            if (OB_FAIL(queue_.push(task))) {
+            int tmp_ret = OB_SUCCESS;
+            if (OB_SUCCESS != (tmp_ret = queue_.push(task))) {
+              ret = tmp_ret;
               TRANS_LOG(ERROR, "push gts task failed", KR(ret), KP(task));
             } else {
               TRANS_LOG(DEBUG, "push back gts task", KP(task));

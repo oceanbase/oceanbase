@@ -14,7 +14,7 @@
 #include "ob_expr_compress.h"
 
 #include "sql/engine/ob_exec_context.h"
-#include "lib/compress/zlib/zlib_src/zlib.h"
+#include <zlib.h>
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 
 using namespace oceanbase::common;
@@ -92,6 +92,13 @@ int ObExprCompress::eval_compress(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
       expr_datum.set_string(buf, new_len + COMPRESS_HEADER_LEN);
     }
   }
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprCompress, raw_expr) {
+  int ret = OB_SUCCESS;
+  SET_LOCAL_SYSVAR_CAPACITY(1);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
   return ret;
 }
 

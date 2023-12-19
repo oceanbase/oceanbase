@@ -93,9 +93,10 @@ public:
                               const common::ObIArray<common::ObTabletID> *del_data_tablet_ids,
                               const share::schema::ObTableSchema *index_schema,
                               const int64_t parallelism,
+                              const int64_t group_id,
+                              const uint64_t tenant_data_version,
                               common::ObIAllocator &allocator,
-                              ObDDLTaskRecord &task_record,
-                              const int64_t group_id);
+                              ObDDLTaskRecord &task_record);
 private:
   typedef common::ObArray<std::pair<int64_t, common::ObString> > OrderFTColumns;
   class FulltextColumnOrder
@@ -123,7 +124,8 @@ private:
 
   bool is_final_index_status(const share::schema::ObIndexStatus index_status) const;
 
-  int set_index_table_column_store_if_need(share::schema::ObTableSchema &table_schema);
+  int create_index_column_group(const obrpc::ObCreateIndexArg &arg,
+                                share::schema::ObTableSchema &index_table_schema);
 
 private:
   ObDDLService &ddl_service_;

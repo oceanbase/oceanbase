@@ -102,7 +102,7 @@ int ObIndexBlockMacroIterator::open(
   } else if (OB_UNLIKELY(!sstable.is_valid() || !range.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("SSTable is not valid", K(ret), K(sstable), K(range));
-  } else if (sstable.is_empty()) {
+  } else if (sstable.no_data_to_read()) {
     is_iter_end_ = true;
   } else if (OB_FAIL(sstable.get_last_rowkey(allocator, sstable_endkey))) {
     LOG_WARN("Fail to get last rowkey of sstable", K(ret));

@@ -514,8 +514,7 @@ int ObValuesTableCompression::resolve_params_for_values_clause(ObPlanCacheCtx &p
                                                                         res_types.count(),
                                                                         coll_type,
                                                                         false,
-                                                                        length_semantics,
-                                                                        session))) {
+                                                                        length_semantics))) {
               LOG_WARN("failed to aggregate result type for merge", K(ret));
             }
           }
@@ -644,8 +643,7 @@ int ObValuesTableCompression::resolve_params_for_values_clause(ObPlanCacheCtx &p
                                                                         res_types.count(),
                                                                         coll_type,
                                                                         false,
-                                                                        length_semantics,
-                                                                        session))) {
+                                                                        length_semantics))) {
               LOG_WARN("failed to aggregate result type for merge", K(ret));
             } else {
               LOG_TRACE("get result type", K(new_res_type), K(res_types));

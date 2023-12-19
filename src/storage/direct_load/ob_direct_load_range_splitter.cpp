@@ -340,13 +340,19 @@ int ObDirectLoadRowkeyMergeRangeSplitter::split_range(ObIArray<ObDatumRange> &ra
     range_array.reset();
     const int64_t range_count = MIN(total_rowkey_count_, max_range_count);
     if (range_count > 1) {
-      const int64_t block_count_per_range = (total_rowkey_count_ + range_count - 1) / range_count;
+      const int64_t block_count_per_range = total_rowkey_count_ / range_count;
+      int64_t block_count_remainder = total_rowkey_count_ - block_count_per_range * range_count;
+      int64_t block_count_cur_range = block_count_per_range;
       ObDatumRange range;
       range.end_key_.set_min_rowkey();
       range.set_left_open();
       range.set_right_closed();
       int64_t count = 0;
       const ObDatumRowkey *rowkey = nullptr;
+      if (block_count_remainder > 0) {
+        block_count_cur_range = block_count_per_range + 1;
+        --block_count_remainder;
+      }
       while (OB_SUCC(ret)) {
         if (OB_FAIL(rowkey_merger_.get_next_rowkey(rowkey))) {
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
@@ -369,7 +375,7 @@ int ObDirectLoadRowkeyMergeRangeSplitter::split_range(ObIArray<ObDatumRange> &ra
             }
             break;
           }
-        } else if (++count >= block_count_per_range) {
+        } else if (++count >= block_count_cur_range) {
           bool rowkey_equal = false;
           if (OB_FAIL(rowkey->equal(range.end_key_, *datum_utils_, rowkey_equal))) {
             LOG_WARN("fail to compare euqal rowkey", KR(ret));
@@ -385,6 +391,13 @@ int ObDirectLoadRowkeyMergeRangeSplitter::split_range(ObIArray<ObDatumRange> &ra
               LOG_WARN("fail to push back datum ranges", KR(ret));
             } else {
               count = 0;
+              block_count_cur_range = block_count_per_range;
+              if (block_count_remainder > 0) {
+                block_count_cur_range = block_count_per_range + 1;
+                --block_count_remainder;
+              } else {
+                block_count_cur_range = block_count_per_range;
+              }
             }
           }
         }
@@ -946,13 +959,20 @@ int ObDirectLoadMultipleMergeRangeSplitter::combine_final_ranges(
       LOG_WARN("fail to init rowkey merger", KR(ret));
     } else {
       const int64_t rowkey_count_per_range =
-        (rowkey_array1.count() + rowkey_array2.count() + max_range_count - 1) / max_range_count;
+        (rowkey_array1.count() + rowkey_array2.count()) / max_range_count;
+      int64_t rowkey_count_remainder =
+        (rowkey_array1.count() + rowkey_array2.count()) - rowkey_count_per_range * max_range_count;
+      int64_t rowkey_count_cur_range = rowkey_count_per_range;
       ObDatumRange range;
       range.end_key_.set_min_rowkey();
       range.set_left_open();
       range.set_right_closed();
       const ObDatumRowkey *datum_rowkey = nullptr;
       int64_t count = 0;
+      if (rowkey_count_remainder > 0) {
+        rowkey_count_cur_range = rowkey_count_per_range + 1;
+        --rowkey_count_remainder;
+      }
       while (OB_SUCC(ret)) {
         if (OB_FAIL(rowkey_merger.get_next_rowkey(datum_rowkey))) {
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
@@ -961,7 +981,7 @@ int ObDirectLoadMultipleMergeRangeSplitter::combine_final_ranges(
             ret = OB_SUCCESS;
             break;
           }
-        } else if (++count >= rowkey_count_per_range) {
+        } else if (++count >= rowkey_count_cur_range) {
           int cmp_ret = 0;
           if (OB_FAIL(datum_rowkey->compare(range.end_key_, *datum_utils_, cmp_ret))) {
             LOG_WARN("fail to compare rowkey", KR(ret));
@@ -975,6 +995,12 @@ int ObDirectLoadMultipleMergeRangeSplitter::combine_final_ranges(
               LOG_WARN("fail to push back range", KR(ret));
             } else {
               count = 0;
+              if (rowkey_count_remainder > 0) {
+                rowkey_count_cur_range = rowkey_count_per_range + 1;
+                --rowkey_count_remainder;
+              } else {
+                rowkey_count_cur_range = rowkey_count_per_range;
+              }
             }
           } else {
             abort_unless(0 == cmp_ret);
@@ -1137,13 +1163,19 @@ int ObDirectLoadMultipleSSTableRangeSplitter::split_range(
         LOG_WARN("fail to push back range", KR(ret));
       }
     } else {
-      const int64_t block_count_per_range = (total_block_count_ + range_count - 1) / range_count;
+      const int64_t block_count_per_range = total_block_count_ / range_count;
+      int64_t block_count_remainder = total_block_count_ - block_count_per_range * range_count;
+      int64_t block_count_cur_range = block_count_per_range;
       ObDirectLoadMultipleDatumRange range;
       range.end_key_.set_min_rowkey();
       range.set_left_open();
       range.set_right_closed();
       int64_t count = 0;
       const ObDirectLoadMultipleDatumRowkey *rowkey = nullptr;
+      if (block_count_remainder > 0) {
+        block_count_cur_range = block_count_per_range + 1;
+        --block_count_remainder;
+      }
       while (OB_SUCC(ret)) {
         if (OB_FAIL(rowkey_merger_.get_next_rowkey(rowkey))) {
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
@@ -1164,7 +1196,7 @@ int ObDirectLoadMultipleSSTableRangeSplitter::split_range(
             }
             break;
           }
-        } else if (++count >= block_count_per_range) {
+        } else if (++count >= block_count_cur_range) {
           int cmp_ret = 0;
           if (OB_FAIL(rowkey->compare(range.end_key_, *datum_utils_, cmp_ret))) {
             LOG_WARN("fail to compare euqal rowkey", KR(ret));
@@ -1178,6 +1210,12 @@ int ObDirectLoadMultipleSSTableRangeSplitter::split_range(
               LOG_WARN("fail to push back datum ranges", KR(ret));
             } else {
               count = 0;
+              if (block_count_remainder > 0) {
+                block_count_cur_range = block_count_per_range + 1;
+                --block_count_remainder;
+              } else {
+                block_count_cur_range = block_count_per_range;
+              }
             }
           }
         }

@@ -1037,6 +1037,7 @@ int ObDmlCgService::generate_dml_column_ids(const ObLogicalOperator &op,
 int ObDmlCgService::generate_updated_column_ids(const ObLogDelUpd &log_op,
                                                 const ObAssignments &assigns,
                                                 const ObIArray<uint64_t> &column_ids,
+                                                const ObDASDMLBaseCtDef &das_ctdef,
                                                 ObIArray<uint64_t> &updated_column_ids)
 {
   int ret = OB_SUCCESS;
@@ -1049,18 +1050,34 @@ int ObDmlCgService::generate_updated_column_ids(const ObLogDelUpd &log_op,
     } else if (OB_FAIL(updated_column_ids.reserve(assigns.count()))) {
       LOG_WARN("init updated column ids array failed", K(ret), K(assigns.count()));
     } else {
-      ARRAY_FOREACH(assigns, i) {
-        ObColumnRefRawExpr *column_expr = assigns.at(i).column_expr_;
-        ColumnItem *column_item = nullptr;
-        if (OB_ISNULL(column_expr) ||
-            OB_ISNULL(column_item = stmt->get_column_item_by_id(column_expr->get_table_id(),
-                                                                column_expr->get_column_id()))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret), K(column_expr), K(column_item));
-        } else if (!has_exist_in_array(column_ids, column_item->base_cid_)) {
-          //not found in column ids, ignore it
-        } else if (OB_FAIL(updated_column_ids.push_back(column_item->base_cid_))) {
-          LOG_WARN("add updated column id failed", K(ret));
+      ObArray<uint64_t> storage_column_ids;
+      if (OB_FAIL(storage_column_ids.assign(column_ids))) {
+        LOG_WARN("failed to assign column ids", KR(ret));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && (i < storage_column_ids.count()); ++i) {
+          if (is_mlog_reference_column(storage_column_ids.at(i))
+              && !das_ctdef.is_access_mlog_as_master_table_) {
+            uint64_t ref_col_id = ObTableSchema::gen_ref_col_id_from_mlog_col_id(storage_column_ids.at(i));
+            storage_column_ids.at(i) = ref_col_id;
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ARRAY_FOREACH(assigns, i) {
+          ObColumnRefRawExpr *column_expr = assigns.at(i).column_expr_;
+          ColumnItem *column_item = nullptr;
+          if (OB_ISNULL(column_expr) ||
+              OB_ISNULL(column_item = stmt->get_column_item_by_id(column_expr->get_table_id(),
+                                                                  column_expr->get_column_id()))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null", K(ret), K(column_expr), K(column_item));
+          } else {
+            if (!has_exist_in_array(storage_column_ids, column_item->base_cid_)) {
+              //not found in column ids, ignore it
+            } else if (OB_FAIL(updated_column_ids.push_back(column_item->base_cid_))) {
+              LOG_WARN("add updated column id failed", K(ret));
+            }
+          }
         }
       }
     }
@@ -1187,6 +1204,10 @@ int ObDmlCgService::generate_das_projector(const ObIArray<uint64_t> &dml_column_
       uint64_t ref_cid = is_shadow_column(storage_cid) ?
                          storage_cid - OB_MIN_SHADOW_COLUMN_ID :
                          storage_cid;
+      if (is_mlog_reference_column(storage_cid)
+          && !das_ctdef.is_access_mlog_as_master_table_) {
+        ref_cid = ObTableSchema::gen_ref_col_id_from_mlog_col_id(storage_cid);
+      }
       int64_t column_idx = OB_INVALID_INDEX;
       int64_t projector_idx = OB_INVALID_INDEX;
       old_row_projector.at(i) = OB_INVALID_INDEX;
@@ -1218,6 +1239,10 @@ int ObDmlCgService::generate_das_projector(const ObIArray<uint64_t> &dml_column_
       uint64_t ref_cid = is_shadow_column(storage_cid) ?
                          storage_cid - OB_MIN_SHADOW_COLUMN_ID :
                          storage_cid;
+      if (is_mlog_reference_column(storage_cid)
+          && !das_ctdef.is_access_mlog_as_master_table_) {
+        ref_cid = ObTableSchema::gen_ref_col_id_from_mlog_col_id(storage_cid);
+      }
       int64_t column_idx = OB_INVALID_INDEX;
       int64_t projector_idx = OB_INVALID_INDEX;
       new_row_projector.at(i) = OB_INVALID_INDEX;
@@ -1403,6 +1428,9 @@ int ObDmlCgService::generate_related_ins_ctdef(ObLogDelUpd &op,
       LOG_WARN("generate das ins ctdef failed", K(ret));
     } else if (OB_FAIL(ins_ctdefs.push_back(related_ctdef))) {
       LOG_WARN("store related ctdef failed", K(ret));
+    } else {
+      // for materialized view log
+      related_ctdef->is_access_mlog_as_master_table_ = false;
     }
   }
   return ret;
@@ -1454,6 +1482,9 @@ int ObDmlCgService::generate_related_del_ctdef(ObLogDelUpd &op,
       LOG_WARN("generate das ins ctdef failed", K(ret));
     } else if (OB_FAIL(del_ctdefs.push_back(related_ctdef))) {
       LOG_WARN("store related ctdef failed", K(ret));
+    } else {
+      // for materialized view log
+      related_ctdef->is_access_mlog_as_master_table_ = false;
     }
   }
   return ret;
@@ -1473,6 +1504,7 @@ int ObDmlCgService::generate_das_upd_ctdef(ObLogDelUpd &op,
   if (OB_FAIL(generate_das_dml_ctdef(op, index_tid, index_dml_info, das_upd_ctdef))) {
     LOG_WARN("generate das dml base ctdef failed", K(ret), K(index_dml_info));
   } else if (OB_FAIL(generate_updated_column_ids(op, assigns, das_upd_ctdef.column_ids_,
+                                                 das_upd_ctdef,
                                                  das_upd_ctdef.updated_column_ids_))) {
     LOG_WARN("add updated column ids failed", K(ret), K(assigns));
   } else if (OB_FAIL(generate_dml_column_ids(op, index_dml_info.column_exprs_, dml_column_ids))) {
@@ -1521,6 +1553,9 @@ int ObDmlCgService::generate_related_upd_ctdef(ObLogDelUpd &op,
       //ignore invalid update ctdef
     } else if (OB_FAIL(upd_ctdefs.push_back(related_ctdef))) {
       LOG_WARN("store related ctdef failed", K(ret));
+    } else {
+      // for materialized view log
+      related_ctdef->is_access_mlog_as_master_table_ = false;
     }
   }
   return ret;
@@ -1683,6 +1718,11 @@ int ObDmlCgService::generate_dml_base_ctdef(ObLogicalOperator &op,
     if (log_ins_op.get_insert_up()) {
       dml_base_ctdef.das_base_ctdef_.is_insert_up_ = true;
     }
+  }
+
+  if (OB_SUCC(ret)) {
+    // for materialized view log
+    dml_base_ctdef.das_base_ctdef_.is_access_mlog_as_master_table_ = true;
   }
   return ret;
 }
@@ -1984,7 +2024,7 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(generate_dml_column_ids(log_op, dml_info.column_exprs_, column_ids))) {
         LOG_WARN("add column ids failed", K(ret));
-      } else if (OB_FAIL(generate_updated_column_ids(log_op, assigns, column_ids, updated_column_ids))) {
+      } else if (OB_FAIL(generate_updated_column_ids(log_op, assigns, column_ids, das_ctdef, updated_column_ids))) {
         LOG_WARN("add updated column ids failed", K(ret), K(assigns));
       } else if (ObTriggerEvents::has_insert_event(dml_event)) {
         OZ(trig_ctdef.new_row_exprs_.init(expectd_col_cnt));
@@ -2630,7 +2670,7 @@ int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
 
   if (OB_FAIL(generate_dml_column_ids(op, index_dml_info.column_exprs_, column_ids))) {
     LOG_WARN("add column ids failed", K(ret));
-  } else if (OB_FAIL(generate_updated_column_ids(op, index_dml_info.assignments_, column_ids, updated_column_ids))) {
+  } else if (OB_FAIL(generate_updated_column_ids(op, index_dml_info.assignments_, column_ids, das_ctdef, updated_column_ids))) {
     LOG_WARN("add updated column ids failed", K(ret), K(index_dml_info.assignments_));
   } else if (OB_FAIL(need_foreign_key_handle(fk_arg, updated_column_ids,
                                       value_column_ids, das_ctdef.op_type_,

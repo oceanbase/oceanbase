@@ -16,7 +16,6 @@
 #include "lib/alloc/memory_dump.h"
 #include "observer/omt/ob_multi_tenant.h"                  // ObMultiTenant
 #include "share/ob_tenant_mgr.h"                           // get_virtual_memory_used
-#include "share/allocator/ob_memstore_allocator_mgr.h"     // ObMemstoreAllocatorMgr
 #include "storage/tx_storage/ob_tenant_freezer.h"          // ObTenantFreezer
 #include "storage/tx_storage/ob_tenant_memory_printer.h"
 #include "deps/oblib/src/lib/alloc/malloc_hook.h"
@@ -58,7 +57,6 @@ int ObTenantMemoryPrinter::print_tenant_usage()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  common::ObMemstoreAllocatorMgr *allocator_mgr = &ObMemstoreAllocatorMgr::get_instance();
   static const int64_t BUF_LEN = 64LL << 10;
   static char print_buf[BUF_LEN] = "";
   int64_t pos = 0;
@@ -70,8 +68,7 @@ int ObTenantMemoryPrinter::print_tenant_usage()
   } else {
     if (OB_FAIL(databuff_printf(print_buf, BUF_LEN, pos,
                                 "=== TENANTS MEMORY INFO ===\n"
-                                "all_tenants_memstore_used=% '15ld, divisive_memory_used=% '15ld\n",
-                                allocator_mgr->get_all_tenants_memstore_used(),
+                                "divisive_memory_used=% '15ld\n",
                                 get_divisive_mem_size()))) {
       LOG_WARN("print failed", K(ret));
     } else if (OB_FAIL(ObVirtualTenantManager::get_instance().print_tenant_usage(print_buf,

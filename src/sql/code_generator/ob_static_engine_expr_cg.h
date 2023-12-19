@@ -410,6 +410,7 @@ private:
 
 private:
   int generate_extra_questionmarks(ObRawExprUniqueSet &flattened_raw_exprs);
+  bool is_dynamic_eval_qm(const ObRawExpr &raw_expr) const;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObStaticEngineExprCG);

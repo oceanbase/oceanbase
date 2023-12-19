@@ -31,21 +31,29 @@ namespace storage
 {
 class ObTableHandleV2;
 class ObICGIterator;
+class ObCOSSTableV2;
 
 
-struct ObCGTableWrapper
+/*
+ * ObSSTableWrapper is used for guaranteeing the lifetime of cg sstable
+ * ONLY CG SSTables need to be guarded by meta_handle
+ */
+class ObSSTableWrapper
 {
 public:
-  ObCGTableWrapper();
-  ~ObCGTableWrapper() { reset(); }
+  ObSSTableWrapper();
+  ~ObSSTableWrapper() { reset(); }
   void reset();
-  bool is_valid() const;
+  bool is_valid() const { return sstable_ != nullptr; }
+  int set_sstable(blocksstable::ObSSTable *sstable, ObStorageMetaHandle *meta_handle = nullptr);
   int get_sstable(blocksstable::ObSSTable *&table);
-  TO_STRING_KV(K_(need_meta), K_(meta_handle), KPC_(cg_sstable));
-public:
-  ObStorageMetaHandle meta_handle_;
-  blocksstable::ObSSTable *cg_sstable_;
-  bool need_meta_;
+  blocksstable::ObSSTable *get_sstable() const { return sstable_; }
+  const ObStorageMetaHandle &get_meta_handle() const { return meta_handle_; }
+  TO_STRING_KV(KPC_(sstable), K_(meta_handle));
+private:
+  friend class ObCOSSTableV2;
+  ObStorageMetaHandle meta_handle_; // keep the lifetime of cg sstable
+  blocksstable::ObSSTable *sstable_;
 };
 
 
@@ -118,10 +126,9 @@ public:
   }
   int fetch_cg_sstable(
       const uint32_t cg_idx,
-      ObCGTableWrapper &cg_wrapper,
-      const bool need_meta = true);
-  int get_cg_sstable(const uint32_t cg_idx, blocksstable::ObSSTable *&cg_sstable) const;
-  int get_all_tables(common::ObIArray<ObITable *> &tables) const;
+      ObSSTableWrapper &cg_wrapper) const;
+  int get_cg_sstable(const uint32_t cg_idx, ObSSTableWrapper &cg_wrapper) const;
+  int get_all_tables(common::ObIArray<ObSSTableWrapper> &table_wrappers) const;
 
   virtual int64_t get_serialize_size() const override;
   virtual int serialize(char *buf, const int64_t buf_len, int64_t &pos) const override;

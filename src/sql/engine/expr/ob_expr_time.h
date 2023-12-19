@@ -52,6 +52,7 @@ public:
   static int calc(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum,
                   int32_t type, bool with_date, bool is_allow_incomplete_dates = false);
   virtual int is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const;
+  DECLARE_SET_LOCAL_SESSION_VARS;
 private :
   int32_t dt_type_;
   //disallow copy

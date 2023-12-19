@@ -31,7 +31,7 @@ class TestRunCtx
 {
 public:
   uint64_t tenant_id_ = 0;
-  int time_sec_ = 0;
+  int64_t time_sec_ = 0;
 };
 
 TestRunCtx RunCtx;
@@ -125,8 +125,8 @@ TEST_F(ObSimpleClusterExampleTest, end)
 
 int main(int argc, char **argv)
 {
-  int c = 0;
-  int time_sec = 0;
+  int64_t c = 0;
+  int64_t time_sec = 0;
   char *log_level = (char*)"INFO";
   while(EOF != (c = getopt(argc,argv,"t:l:"))) {
     switch(c) {

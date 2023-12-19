@@ -32,6 +32,41 @@ namespace sql
 {
 
 class ObIOEventObserver;
+
+template <uint32_t LEN>
+struct AssignFixedLenDatumValue
+{
+  static void assign_datum_value(void *dst, const char *src, uint32_t len)
+  {
+    UNUSED(len);
+    MEMCPY(dst, src, LEN);
+  }
+};
+
+struct AssignNumberDatumValue
+{
+  static void assign_datum_value(void *dst, const char *src, uint32_t len)
+  {
+    if (4 == len) {
+      MEMCPY(dst, src, 4);
+    } else if (8 == len) {
+      MEMCPY(dst, src, 8);
+    } else if (12 == len){
+      MEMCPY(dst, src, 12);
+    } else {
+      MEMCPY(dst, src, len);
+    }
+  }
+};
+
+struct AssignDefaultDatumValue
+{
+  static void assign_datum_value(void *dst, const char *src, uint32_t len)
+  {
+    MEMCPY(dst, src, len);
+  }
+};
+
 // Random access row store, support disk store.
 // All row must have same cell count and  projector.
 class ObChunkDatumStore
@@ -447,6 +482,10 @@ public:
                     const int64_t cnt,
                     const int64_t extra_size,
                     StoredRow **dst_sr);
+    int copy_storage_datums(const blocksstable::ObStorageDatum *storage_datums,
+                            const int64_t cnt,
+                            const int64_t extra_size,
+                            StoredRow **dst_sr);
     //the memory of shadow stored row is not continuous,
     //so you cannot directly copy the memory of the entire stored row,
     //and you should make a deep copy of each datum in turn
@@ -945,6 +984,8 @@ public:
               StoredRow **stored_row = nullptr);
   int add_row(const StoredRow &sr, StoredRow **stored_row = nullptr);
   int add_row(const ObDatum *datums, const int64_t cnt,
+              const int64_t extra_size, StoredRow **stored_row);
+  int add_row(const blocksstable::ObStorageDatum *storage_datums, const int64_t cnt,
               const int64_t extra_size, StoredRow **stored_row);
   int add_row(const StoredRow &sr, ObEvalCtx *ctx, StoredRow **stored_row = nullptr);
   int add_row(const ShadowStoredRow &sr, StoredRow **stored_row = nullptr);

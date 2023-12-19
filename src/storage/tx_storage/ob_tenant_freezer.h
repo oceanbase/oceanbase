@@ -26,11 +26,6 @@
 
 namespace oceanbase
 {
-namespace common
-{
-class ObServerConfig;
-class ObMemstoreAllocatorMgr;
-}
 namespace storage
 {
 class ObTenantFreezer;
@@ -215,7 +210,6 @@ private:
   const share::ObRsMgr *rs_mgr_;
   ObAddr self_;
   ObRetryMajorInfo retry_major_info_;
-  common::ObMemstoreAllocatorMgr *allocator_mgr_;
 
   common::ObOccamThreadPool freeze_trigger_pool_;
   common::ObOccamTimer freeze_trigger_timer_;

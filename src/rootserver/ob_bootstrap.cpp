@@ -679,16 +679,19 @@ int ObBootstrap::prepare_create_partition(
     common::ObArray<share::schema::ObTableSchema> table_schema_array;
     common::ObArray<const share::schema::ObTableSchema*> table_schema_ptrs;
     common::ObArray<share::ObLSID> ls_id_array;
+    common::ObArray<bool> need_create_empty_majors;
     if (OB_FAIL(generate_table_schema_array_for_create_partition(tschema, table_schema_array))) {
       LOG_WARN("fail to generate table schema array", KR(ret));
     } else if (OB_UNLIKELY(table_schema_array.count() < 1)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("generate table schema count is unexpected", KR(ret));
-    } else if (OB_FAIL(table_schema_ptrs.reserve(table_schema_array.count()))) {
+    } else if (OB_FAIL(table_schema_ptrs.reserve(table_schema_array.count()))
+      || OB_FAIL(need_create_empty_majors.reserve(table_schema_array.count()))) {
       LOG_WARN("Fail to reserve rowkey column array", KR(ret));
     } else {
       for (int i = 0; i < table_schema_array.count() && OB_SUCC(ret); ++i) {
-        if (OB_FAIL(table_schema_ptrs.push_back(&table_schema_array.at(i)))) {
+        if (OB_FAIL(table_schema_ptrs.push_back(&table_schema_array.at(i)))
+          || OB_FAIL(need_create_empty_majors.push_back(true))) {
           LOG_WARN("fail to push back", KR(ret), K(table_schema_array));
         }
       }
@@ -702,7 +705,9 @@ int ObBootstrap::prepare_create_partition(
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(creator.add_create_tablets_of_tables_arg(
             table_schema_ptrs,
-            ls_id_array))) {
+            ls_id_array,
+            DATA_CURRENT_VERSION,
+            need_create_empty_majors/*need_create_empty_major_sstable*/))) {
       LOG_WARN("fail to add create tablet arg", KR(ret));
     }
   }
@@ -1523,7 +1528,7 @@ int ObBootstrap::create_sys_resource_pool()
   } else if (OB_FAIL(unit_mgr_.grant_pools(
           trans, new_ug_id_array,
           lib::Worker::CompatMode::MYSQL, pool_names,
-          OB_SYS_TENANT_ID, is_bootstrap))) {
+          OB_SYS_TENANT_ID, is_bootstrap, OB_INVALID_TENANT_ID/*source_tenant_id*/))) {
     LOG_WARN("grant_pools_to_tenant failed", K(pool_names),
         "tenant_id", static_cast<uint64_t>(OB_SYS_TENANT_ID), K(ret));
   } else {

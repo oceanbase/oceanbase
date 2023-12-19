@@ -38,7 +38,7 @@ void ObCGGroupByScanner::reset()
 int ObCGGroupByScanner::init(
     const ObTableIterParam &iter_param,
     ObTableAccessContext &access_ctx,
-    ObCGTableWrapper &wrapper)
+    ObSSTableWrapper &wrapper)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObCGRowScanner::init(iter_param, access_ctx, wrapper))) {

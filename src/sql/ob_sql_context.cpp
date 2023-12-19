@@ -188,6 +188,7 @@ ObSqlCtx::ObSqlCtx()
     all_expr_constraints_(nullptr),
     all_priv_constraints_(nullptr),
     need_match_all_params_(false),
+    all_local_session_vars_(nullptr),
     is_ddl_from_primary_(false),
     cur_stmt_(NULL),
     cur_plan_(nullptr),
@@ -239,6 +240,7 @@ void ObSqlCtx::reset()
   all_expr_constraints_ = nullptr;
   all_priv_constraints_ = nullptr;
   need_match_all_params_ = false;
+  all_local_session_vars_ = nullptr;
   is_ddl_from_primary_ = false;
   can_reroute_sql_ = false;
   is_sensitive_ = false;
@@ -480,6 +482,17 @@ int ObSqlSchemaGuard::get_table_schema(uint64_t table_id,
   return ret;
 }
 
+int ObSqlSchemaGuard::get_database_schema(const uint64_t database_id,
+                                          const ObDatabaseSchema *&database_schema)
+{
+  int ret = OB_SUCCESS;
+  database_schema = NULL;
+  const uint64_t tenant_id = MTL_ID();
+  OV (OB_NOT_NULL(schema_guard_));
+  OZ (schema_guard_->get_database_schema(tenant_id, database_id, database_schema), tenant_id, database_id);
+  return ret;
+}
+
 int ObSqlSchemaGuard::get_column_schema(uint64_t table_id, const ObString &column_name,
                                           const ObColumnSchemaV2 *&column_schema,
                                           bool is_link /* = false */) const
@@ -539,6 +552,16 @@ int ObSqlSchemaGuard::get_can_read_index_array(uint64_t table_id,
                                               index_tid_array, size, with_mv,
                                               with_global_index, with_domain_index,
                                               with_spatial_index));
+  return ret;
+}
+
+int ObSqlSchemaGuard::get_table_mlog_schema(const uint64_t table_id,
+                                            const ObTableSchema *&mlog_schema)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  OV (OB_NOT_NULL(schema_guard_));
+  OZ (schema_guard_->get_table_mlog_schema(tenant_id, table_id, mlog_schema));
   return ret;
 }
 
@@ -729,6 +752,21 @@ int ObSqlCtx::set_multi_stmt_rowkey_pos(const common::ObIArray<int64_t> &multi_s
     } else if (OB_FAIL(append(multi_stmt_rowkey_pos_, multi_stmt_rowkey_pos))) {
       LOG_WARN("failed to append multi stmt rowkey pos", K(ret));
     } else { /*do nothing*/ }
+  }
+  return ret;
+}
+
+int ObQueryCtx::add_local_session_vars(ObIAllocator *alloc, const ObLocalSessionVar &local_session_var, int64_t &idx) {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(all_local_session_vars_.push_back(ObLocalSessionVar()))) {
+    LOG_WARN("push back local session var failed", K(ret));
+  } else {
+    idx = all_local_session_vars_.count() - 1;
+    ObLocalSessionVar &local_var = all_local_session_vars_.at(idx);
+    local_var.set_allocator(alloc);
+    if (OB_FAIL(local_var.deep_copy(local_session_var))) {
+      LOG_WARN("deep copy local session var failed", K(ret));
+    }
   }
   return ret;
 }

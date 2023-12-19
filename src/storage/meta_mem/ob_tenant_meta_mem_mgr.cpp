@@ -226,7 +226,6 @@ void ObTenantMetaMemMgr::init_pool_arr()
   pool_arr_[static_cast<int>(ObITable::TableType::TX_DATA_MEMTABLE)] = &tx_data_memtable_pool_;
   pool_arr_[static_cast<int>(ObITable::TableType::TX_CTX_MEMTABLE)] = &tx_ctx_memtable_pool_;
   pool_arr_[static_cast<int>(ObITable::TableType::LOCK_MEMTABLE)] = &lock_memtable_pool_;
-  pool_arr_[static_cast<int>(ObITable::TableType::DDL_MEM_SSTABLE)] = &ddl_kv_pool_;
 }
 
 int ObTenantMetaMemMgr::start()
@@ -364,7 +363,7 @@ int ObTenantMetaMemMgr::push_table_into_gc_queue(ObITable *table, const ObITable
   } else if (OB_UNLIKELY(!ObITable::is_table_type_valid(table_type))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid table key", K(ret), K(table_type), KPC(table));
-  } else if (OB_UNLIKELY(ObITable::is_sstable(table_type) && ObITable::DDL_MEM_SSTABLE != table_type)) {
+  } else if (OB_UNLIKELY(ObITable::is_sstable(table_type))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("should not recycle sstable", K(ret), K(table_type), KPC(table));
   } else if (OB_ISNULL(item = (TableGCItem *)ob_malloc(size, attr))) {
@@ -891,12 +890,27 @@ int ObTenantMetaMemMgr::get_min_end_scn_from_single_tablet(ObTablet *tablet,
                                                            SCN &min_end_scn)
 {
   int ret = OB_SUCCESS;
+  bool is_committed = false;
+  ObTabletCreateDeleteMdsUserData user_data;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   if (OB_ISNULL(tablet)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "tablet is nullptr.", K(ret), KP(this));
   } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
+  } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, is_committed))) {
+    LOG_WARN("get tablet status failed", KR(ret), KP(tablet));
+  } else if (ObTabletStatus::TRANSFER_IN == user_data.tablet_status_) {
+    /* when tablet transfer with active tx, dest_ls may recycle active transaction tx_data
+     * because no uncommitted data depend it, but src_ls's tablet may has uncommitted data depend this tx_data
+     * so we must concern src_ls's tablet boundary to stop recycle tx_data
+     */
+    if (!user_data.transfer_scn_.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("transfer_scn is invalid", K(ret), K(user_data));
+    } else {
+      min_end_scn = SCN::scn_dec(user_data.transfer_scn_);
+    }
   } else {
     ObITable *first_minor_mini_sstable =
         table_store_wrapper.get_member()->get_minor_sstables().get_boundary_table(false /*is_last*/);
@@ -957,7 +971,7 @@ int ObTenantMetaMemMgr::get_min_mds_ckpt_scn(const ObTabletMapKey &key, share::S
   return ret;
 }
 
-int ObTenantMetaMemMgr::acquire_ddl_kv(ObTableHandleV2 &handle)
+int ObTenantMetaMemMgr::acquire_ddl_kv(ObDDLKVHandle &handle)
 {
   int ret = OB_SUCCESS;
   ObDDLKV *ddl_kv = nullptr;
@@ -967,7 +981,7 @@ int ObTenantMetaMemMgr::acquire_ddl_kv(ObTableHandleV2 &handle)
     LOG_WARN("ObTenantMetaMemMgr hasn't been initialized", K(ret));
   } else if (OB_FAIL(ddl_kv_pool_.acquire(ddl_kv))) {
     LOG_WARN("fail to acquire ddl kv object", K(ret));
-  } else if (OB_FAIL(handle.set_table(ddl_kv, this, ObITable::TableType::DDL_MEM_SSTABLE))) {
+  } else if (OB_FAIL(handle.set_obj(ddl_kv))) {
     LOG_WARN("fail to set table", K(ret), KP(ddl_kv));
   } else {
     ddl_kv = nullptr;

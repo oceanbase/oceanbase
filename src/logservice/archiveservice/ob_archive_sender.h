@@ -160,6 +160,7 @@ private:
       const ObString &uri,
       const share::ObBackupStorageInfo *storage_info,
       const bool is_full_file,
+      const bool is_can_seal,
       const int64_t offset,
       char *data,
       const int64_t data_len);

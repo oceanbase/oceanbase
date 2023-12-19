@@ -873,7 +873,7 @@ int ObCOSSTableRowsFilter::switch_context_for_cg_iter(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), KP(co_sstable), K(cg_params.count()), KP(cg_iter));
   } else if (1 == cg_params.count()) {
-    storage::ObCGTableWrapper cg_wrapper;
+    storage::ObSSTableWrapper cg_wrapper;
     const ObTableIterParam &cg_param = *cg_params.at(0);
     if (OB_UNLIKELY(!ObICGIterator::is_valid_cg_scanner(cg_iter->get_type()))) {
       ret = OB_ERR_UNEXPECTED;

@@ -19,6 +19,8 @@
 #include "sql/resolver/ddl/ob_explain_stmt.h"
 #include "sql/resolver/ddl/ob_create_table_stmt.h"
 #include "sql/resolver/ddl/ob_create_index_stmt.h"
+#include "sql/resolver/ddl/ob_create_mlog_stmt.h"
+#include "sql/resolver/ddl/ob_drop_mlog_stmt.h"
 #include "sql/resolver/ddl/ob_create_database_stmt.h"
 #include "sql/resolver/ddl/ob_alter_table_stmt.h"
 #include "sql/resolver/ddl/ob_drop_database_stmt.h"
@@ -1360,6 +1362,73 @@ int get_drop_index_stmt_need_privs(
       need_priv.db_ = stmt->get_database_name();
       need_priv.table_ = stmt->get_table_name();
       need_priv.priv_set_ = OB_PRIV_INDEX;
+      need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+      ADD_NEED_PRIV(need_priv);
+    }
+  }
+  return ret;
+}
+
+int get_create_mlog_stmt_need_privs(
+    const ObSessionPrivInfo &session_priv,
+    const ObStmt *basic_stmt,
+    ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(basic_stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Basic stmt should be not be NULL", KR(ret));
+  } else if (OB_UNLIKELY(stmt::T_CREATE_MLOG != basic_stmt->get_stmt_type())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Stmt type should be T_CREATE_MLOG",
+        KR(ret), "stmt type", basic_stmt->get_stmt_type());
+  } else {
+    ObNeedPriv need_priv;
+    const ObCreateMLogStmt *stmt = static_cast<const ObCreateMLogStmt*>(basic_stmt);
+    if (OB_FAIL(ObPrivilegeCheck::can_do_operation_on_db(session_priv, stmt->get_database_name()))) {
+      LOG_WARN("Can not create materialized view log in information_schema database",
+          KR(ret), K(session_priv));
+    } else {
+      // create mlog requires select privilege on base table
+      need_priv.db_ = stmt->get_database_name();
+      need_priv.table_ = stmt->get_table_name();
+      need_priv.priv_set_ = OB_PRIV_SELECT;
+      need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+      ADD_NEED_PRIV(need_priv);
+
+      need_priv.db_ = stmt->get_database_name();
+      need_priv.table_ = stmt->get_mlog_name();
+      need_priv.priv_set_ = OB_PRIV_CREATE;
+      need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+      ADD_NEED_PRIV(need_priv);
+    }
+  }
+  return ret;
+}
+
+int get_drop_mlog_stmt_need_privs(
+    const ObSessionPrivInfo &session_priv,
+    const ObStmt *basic_stmt,
+    ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(basic_stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Basic stmt should be not be NULL", KR(ret));
+  } else if (OB_UNLIKELY(stmt::T_DROP_MLOG != basic_stmt->get_stmt_type())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Stmt type should be T_DROP_MLOG",
+        KR(ret), "stmt type", basic_stmt->get_stmt_type());
+  } else {
+    ObNeedPriv need_priv;
+    const ObDropMLogStmt *stmt = static_cast<const ObDropMLogStmt*>(basic_stmt);
+    if (OB_FAIL(ObPrivilegeCheck::can_do_operation_on_db(session_priv, stmt->get_database_name()))) {
+      LOG_WARN("Can not drop materialized view log in information_schema database",
+          KR(ret), K(session_priv));
+    } else {
+      need_priv.db_ = stmt->get_database_name();
+      need_priv.table_ = stmt->get_mlog_name();
+      need_priv.priv_set_ = OB_PRIV_DROP;
       need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
       ADD_NEED_PRIV(need_priv);
     }

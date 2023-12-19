@@ -55,6 +55,7 @@ class ObSMConnection;
 using sql::FLTControlInfo;
 namespace sql
 {
+class ObExprRegexpSessionVariables;
 class ObPCMemPctConf;
 class ObPartitionHitInfo
 {
@@ -645,6 +646,7 @@ public:
   int get_sql_notes(bool &sql_notes) const;
   int get_regexp_stack_limit(int64_t &v) const;
   int get_regexp_time_limit(int64_t &v) const;
+  int get_regexp_session_vars(ObExprRegexpSessionVariables &vars) const;
   int update_timezone_info();
   const common::ObTimeZoneInfo *get_timezone_info() const { return tz_info_wrap_.get_time_zone_info(); }
   const common::ObTimeZoneInfoWrap &get_tz_info_wrap() const { return tz_info_wrap_; }
@@ -661,6 +663,21 @@ public:
   int gen_sys_var_in_pc_str();
   int gen_configs_in_pc_str();
   uint32_t get_sessid() const { return sessid_; }
+  // Used for view or function compatibility display.
+  uint32_t get_compatibility_sessid() const
+  {
+    return client_sessid_ == INVALID_SESSID ? sessid_ : client_sessid_;
+  }
+  uint32_t get_client_sessid() const { return client_sessid_; }
+  inline void set_client_sessid(uint32_t client_sessid)
+  {
+    client_sessid_ = client_sessid;
+  }
+  uint64_t get_client_create_time() const { return client_create_time_; }
+  inline void set_client_create_time(uint64_t client_create_time)
+  {
+    client_create_time_ = client_create_time;
+  }
   uint64_t get_proxy_sessid() const { return proxy_sessid_; }
   uint64_t get_sessid_for_table() const { return is_obproxy_mode()? get_proxy_sessid() : (is_master_session() ? get_sessid() : get_master_sessid()); } //用于临时表、查询建表时session id获取
   uint32_t get_master_sessid() const { return master_sessid_; }
@@ -689,12 +706,17 @@ public:
 
   /// @{ thread_data_ related: }
   int set_user(const common::ObString &user_name, const common::ObString &host_name, const uint64_t user_id);
-  int set_real_client_ip(const common::ObString &client_ip);
+  int set_real_client_ip_and_port(const common::ObString &client_ip, int32_t client_addr_port);
   const common::ObString &get_user_name() const { return thread_data_.user_name_;}
   const common::ObString &get_host_name() const { return thread_data_.host_name_;}
   const common::ObString &get_client_ip() const { return thread_data_.client_ip_;}
   const common::ObString &get_user_at_host() const { return thread_data_.user_at_host_name_;}
   const common::ObString &get_user_at_client_ip() const { return thread_data_.user_at_client_ip_;}
+  void set_client_addr_port(const int32_t client_addr_port)
+  {
+    thread_data_.client_addr_port_ = client_addr_port;
+  };
+  int32_t get_client_addr_port() const { return thread_data_.client_addr_port_; };
   rpc::ObSqlSockDesc& get_sock_desc() { return thread_data_.sock_desc_;}
   observer::ObSMConnection *get_sm_connection();
   void set_peer_addr(common::ObAddr peer_addr)
@@ -1009,6 +1031,7 @@ public:
 
   // client mode related
   void set_client_mode(const common::ObClientMode mode) { client_mode_ = mode; }
+  common::ObClientMode get_client_mode() const { return client_mode_; }
   bool is_java_client_mode() const { return common::OB_JAVA_CLIENT_MODE == client_mode_; }
   bool is_obproxy_mode() const { return common::OB_PROXY_CLIENT_MODE == client_mode_; }
 
@@ -1165,6 +1188,8 @@ public:
   }
   void set_shadow(bool is_shadow) { ATOMIC_STORE(&thread_data_.is_shadow_, is_shadow); }
   bool is_shadow() { return ATOMIC_LOAD(&thread_data_.is_shadow_);  }
+  void set_mark_killed(bool is_mark_killed) { ATOMIC_STORE(&thread_data_.is_mark_killed_, is_mark_killed); }
+  bool is_mark_killed() { return ATOMIC_LOAD(&thread_data_.is_mark_killed_);  }
   uint32_t get_magic_num() {return magic_num_;}
   int64_t get_current_execution_id() const { return current_execution_id_; }
   const common::ObCurTraceId::TraceId &get_last_trace_id() const { return last_trace_id_; }
@@ -1298,6 +1323,9 @@ public:
   void set_password_expired(bool value) { is_password_expired_ = value; }
   int64_t get_process_query_time() const { return process_query_time_; }
   void set_process_query_time(int64_t time) { process_query_time_ = time; }
+  inline void set_client_sessid_support(bool is_client_sessid_support)
+              { is_client_sessid_support_ = is_client_sessid_support; }
+  inline bool is_client_sessid_support() { return is_client_sessid_support_; }
   int replace_new_session_label(uint64_t policy_id, const share::ObLabelSeSessionLabel &new_session_label);
   int load_default_sys_variable(common::ObIAllocator &allocator, int64_t var_idx);
 
@@ -1416,7 +1444,9 @@ protected:
                          interactive_timeout_(0),
                          max_packet_size_(MultiThreadData::DEFAULT_MAX_PACKET_SIZE),
                          is_shadow_(false),
-                         is_in_retry_(SESS_NOT_IN_RETRY)
+                         is_in_retry_(SESS_NOT_IN_RETRY),
+                         client_addr_port_(0),
+                         is_mark_killed_(false)
     {
       CHAR_CARRAY_INIT(database_name_);
     }
@@ -1453,6 +1483,8 @@ protected:
       max_packet_size_ = MultiThreadData::DEFAULT_MAX_PACKET_SIZE;
       is_shadow_ = false;
       is_in_retry_ = SESS_NOT_IN_RETRY;
+      client_addr_port_ = 0;
+      is_mark_killed_ = false;
     }
     ~MultiThreadData ()
     {
@@ -1486,6 +1518,8 @@ protected:
     int64_t max_packet_size_;
     bool is_shadow_;
     ObSessionRetryStatus is_in_retry_;//标识当前session是否处于query retry的状态
+    int32_t client_addr_port_; // Record client address port.
+    bool is_mark_killed_; // Mark the current session as delayed kill
   };
 
 public:
@@ -2035,6 +2069,8 @@ private:
   common::ObString driver_version_;  // current driver version
   uint32_t sessid_;
   uint32_t master_sessid_;
+  uint32_t client_sessid_;
+  uint64_t client_create_time_;
   uint64_t proxy_sessid_;
   int64_t global_vars_version_; // used for obproxy synchronize variables
   int64_t sys_var_base_version_;

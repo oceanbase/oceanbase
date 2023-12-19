@@ -19,6 +19,7 @@
 #include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
+#include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
 #include "storage/ddl/ob_ddl_replay_executor.h"
 #include "logservice/ob_log_base_header.h"
 #include "share/scn.h"
@@ -144,6 +145,11 @@ int ObActiveDDLKVIterator::get_next_ddl_kv_mgr(ObDDLKvMgrHandle &handle)
           if (OB_FAIL(to_del_tablets_.push_back(tablet_id))) {
             LOG_WARN("push back to deleted tablet failed", K(ret));
           }
+        } else if (tablet_handle.get_obj()->get_major_table_count() > 0
+            || tablet_handle.get_obj()->get_tablet_meta().table_store_flag_.with_major_sstable()) {
+          if (OB_FAIL(to_del_tablets_.push_back(tablet_id))) {
+            LOG_WARN("push back to deleted tablet failed", K(ret));
+          }
         } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(handle))) {
           LOG_WARN("get ddl kv mgr failed", K(ret));
         }
@@ -221,19 +227,16 @@ int ObLSDDLLogHandler::online()
       LOG_WARN("failed to build ls tablet iter", K(ret), K(ls_));
     } else {
       while (OB_SUCC(ret)) {
-        ObDDLKvMgrHandle ddl_kv_mgr_handle;
-        if (OB_FAIL(tablet_iter.get_next_ddl_kv_mgr(ddl_kv_mgr_handle))) {
+        ObTabletHandle tablet_handle;
+        if (OB_FAIL(tablet_iter.get_next_tablet(tablet_handle))) {
           if (OB_ITER_END == ret) {
             ret = OB_SUCCESS;
             break;
           } else {
-            LOG_WARN("failed to get ddl kv mgr", K(ret), K(ddl_kv_mgr_handle));
+            LOG_WARN("get next tablet failed", K(ret));
           }
-        } else if (OB_UNLIKELY(!ddl_kv_mgr_handle.is_valid())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid tablet handle", K(ret), K(ddl_kv_mgr_handle));
-        } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->online())) {
-          LOG_WARN("ddl kv mgr cleanup failed", K(ret), "ls_meta", ls_->get_ls_meta(), "tablet_id", ddl_kv_mgr_handle.get_obj()->get_tablet_id());
+        } else if (OB_FAIL(tablet_handle.get_obj()->start_direct_load_task_if_need())) {
+          LOG_WARN("start ddl if need failed", K(ret));
         }
       }
     }
@@ -346,16 +349,22 @@ int ObLSDDLLogHandler::flush(SCN &rec_scn)
 {
   int ret = OB_SUCCESS;
   ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_WITHOUT_CHECK);
+  ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
   if (OB_FAIL(ls_->get_tablet_svr()->build_tablet_iter(tablet_iter))) {
     LOG_WARN("failed to build ls tablet iter", K(ret), K(ls_));
   } else {
     TCRLockGuard guard(online_lock_);
     if (!is_online_) {
       LOG_INFO("ddl log handler is offline, no need to flush", K(ret), "ls_meta", ls_->get_ls_meta());
+    } else if (OB_ISNULL(tenant_direct_load_mgr)) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("error sys", K(ret), K(MTL_ID()));
     } else {
-      bool has_ddl_kv = false;
       while (OB_SUCC(ret)) {
+        bool has_ddl_kv = false;
         ObDDLKvMgrHandle ddl_kv_mgr_handle;
+        ObTabletDirectLoadMgrHandle direct_load_mgr_hdl;
+        bool is_major_sstable_exist = false;
         if (OB_FAIL(tablet_iter.get_next_ddl_kv_mgr(ddl_kv_mgr_handle))) {
           if (OB_ITER_END == ret) {
             ret = OB_SUCCESS;
@@ -368,14 +377,31 @@ int ObLSDDLLogHandler::flush(SCN &rec_scn)
           LOG_WARN("invalid ddl kv mgr handle", K(ret), K(ddl_kv_mgr_handle));
         } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->check_has_effective_ddl_kv(has_ddl_kv))) {
           LOG_WARN("failed to check ddl kv", K(ret));
-        } else if (has_ddl_kv) {
+        } else if (!has_ddl_kv) {
+        } else if (OB_FAIL(tenant_direct_load_mgr->get_tablet_mgr_and_check_major(
+                ls_->get_ls_id(),
+                ddl_kv_mgr_handle.get_obj()->get_tablet_id(),
+                true/* is_full_direct_load */,
+                direct_load_mgr_hdl,
+                is_major_sstable_exist))) {
+          if (OB_ENTRY_NOT_EXIST == ret && is_major_sstable_exist) {
+            LOG_WARN("major sstable already exist, ddl kv may leak", K(ret), "tablet_id", ddl_kv_mgr_handle.get_obj()->get_tablet_id());
+          } else {
+            LOG_WARN("get tablet direct load mgr failed", K(ret), "tablet_id", ddl_kv_mgr_handle.get_obj()->get_tablet_id(), K(is_major_sstable_exist));
+          }
+        } else {
           DEBUG_SYNC(BEFORE_DDL_CHECKPOINT);
-          const SCN start_scn = ddl_kv_mgr_handle.get_obj()->get_start_scn();
-          const ObTabletID &tablet_id = ddl_kv_mgr_handle.get_obj()->get_tablet_id();
-          ObTabletHandle tablet_handle;
-          if (OB_FAIL(ls_->get_tablet(tablet_id, tablet_handle))) {
-            LOG_WARN("failed to get tablet", K(ret), K(ls_->get_ls_id()), K(tablet_id));
-          } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->schedule_ddl_dump_task(*tablet_handle.get_obj(), start_scn, rec_scn))) {
+          ObDDLTableMergeDagParam param;
+          param.ls_id_               = ls_->get_ls_id();
+          param.tablet_id_           = ddl_kv_mgr_handle.get_obj()->get_tablet_id();
+          param.start_scn_           = direct_load_mgr_hdl.get_full_obj()->get_start_scn();
+          param.rec_scn_             = rec_scn;
+          param.direct_load_type_    = direct_load_mgr_hdl.get_full_obj()->get_direct_load_type();
+          param.is_commit_           = false;
+          param.data_format_version_ = direct_load_mgr_hdl.get_full_obj()->get_data_format_version();
+          param.snapshot_version_    = direct_load_mgr_hdl.get_full_obj()->get_table_key().get_snapshot_version();
+          LOG_INFO("schedule ddl merge dag", K(param));
+          if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
             if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
               LOG_WARN("failed to schedule ddl kv merge dag", K(ret));
             } else {
@@ -396,11 +422,13 @@ SCN ObLSDDLLogHandler::get_rec_scn()
   SCN rec_scn = SCN::max_scn();
   bool has_ddl_kv = false;
   ObActiveDDLKVIterator active_ddl_kv_mgr_iter;
+  ObTabletID barrier_tablet_id;
   if (OB_FAIL(active_ddl_kv_mgr_iter.init(ls_, active_ddl_kv_mgr_))) {
     LOG_WARN("initialize active ddl kv mgr iterator failed", K(ret));
   } else {
     ObDDLKvMgrHandle ddl_kv_mgr_handle;
     while (OB_SUCC(ret)) {
+      SCN last_scn = rec_scn;
       if (OB_FAIL(active_ddl_kv_mgr_iter.get_next_ddl_kv_mgr(ddl_kv_mgr_handle))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
@@ -413,6 +441,8 @@ SCN ObLSDDLLogHandler::get_rec_scn()
         LOG_WARN("invalid ddl kv mgr handle", K(ret), K(ddl_kv_mgr_handle));
       } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_rec_scn(rec_scn))) {
         LOG_WARN("get rec scn failed", K(ret));
+      } else if (rec_scn < last_scn) {
+        barrier_tablet_id = ddl_kv_mgr_handle.get_obj()->get_tablet_id();
       }
     }
   }
@@ -421,6 +451,9 @@ SCN ObLSDDLLogHandler::get_rec_scn()
   } else if (!rec_scn.is_max()) {
     last_rec_scn_ = SCN::max(last_rec_scn_, rec_scn);
   }
+  LOG_INFO("[CHECKPOINT] ObLSDDLLogHandler::get_rec_scn", K(ret),
+      "ls_id", OB_ISNULL(ls_) ? ObLSID() : ls_->get_ls_id(),
+      K(barrier_tablet_id), K(rec_scn), K_(last_rec_scn));
   return rec_scn;
 }
 

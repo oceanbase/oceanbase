@@ -4401,12 +4401,8 @@ int ObLogPlan::store_index_column_ids(
     ret = OB_SCHEMA_ERROR;
     LOG_WARN("set index name error", K(ret), K(index_id), K(index_schema));
   } else {
-    if (index_schema->is_materialized_view()) {
-      index_name = index_schema->get_table_name_str();
-    } else {
-      if (OB_FAIL(index_schema->get_index_name(index_name))) {
-        LOG_WARN("fail to get index name", K(index_name), K(ret));
-      }
+    if (OB_FAIL(index_schema->get_index_name(index_name))) {
+      LOG_WARN("fail to get index name", K(index_name), KR(ret));
     }
   }
   if (OB_SUCC(ret)) {
@@ -8308,6 +8304,7 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
                                                  const OrderItem *hash_sortkey)
 {
   int ret = OB_SUCCESS;
+  bool is_part_topn = (NULL != hash_sortkey) && (NULL != topn_expr);
   if (OB_ISNULL(top)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -8317,7 +8314,7 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
     } else { /*do nothing*/ }
   } else {
     // allocate push down limit if necessary
-    if (NULL != topn_expr && !need_sort) {
+    if (NULL != topn_expr && !need_sort && !is_part_topn) {
       bool is_pushed = false;
       if (!is_fetch_with_ties &&
           OB_FAIL(try_push_limit_into_table_scan(top, topn_expr, topn_expr, NULL, is_pushed))) {
@@ -8396,15 +8393,15 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
                                        sort_keys,
                                        real_prefix_pos,
                                        real_local_order,
-                                       NULL,
-                                       false,
+                                       topn_expr,
+                                       is_fetch_with_ties,
                                        hash_sortkey))) {
         LOG_WARN("failed to allocate sort as top", K(ret));
       } else { /*do nothing*/ }
     }
 
     // allocate final limit if necessary
-    if (OB_SUCC(ret) && NULL != topn_expr && exch_info.is_pq_local()) {
+    if (OB_SUCC(ret) && NULL != topn_expr && exch_info.is_pq_local() && !is_part_topn) {
       if (OB_FAIL(allocate_limit_as_top(top,
                                         topn_expr,
                                         NULL,
@@ -14060,7 +14057,8 @@ int ObLogPlan::will_use_column_store(const uint64_t table_id,
     LOG_WARN("unexpect null table schema", K(ret));
   } else if (OB_FAIL(schema->has_all_column_group(has_all_column_group))) {
     LOG_WARN("failed to check has row store", K(ret));
-  } else if (OB_FALSE_IT(has_normal_column_group = schema->is_normal_column_store_table())) {
+  } else if (OB_FAIL(schema->get_is_column_store(has_normal_column_group))) {
+    LOG_WARN("failed to get is column store", K(ret));
   } else if (OB_FAIL(get_log_plan_hint().check_use_column_store(table_id,
                                                                 hint_force_use_column_store,
                                                                 hint_force_no_use_column_store))) {

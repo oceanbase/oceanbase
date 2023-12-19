@@ -33,9 +33,11 @@
 #include "sql/resolver/ddl/ob_alter_table_resolver.h"
 #include "sql/resolver/ddl/ob_drop_table_resolver.h"
 #include "sql/resolver/ddl/ob_create_index_resolver.h"
+#include "sql/resolver/ddl/ob_create_mlog_resolver.h"
 #include "sql/resolver/ddl/ob_create_synonym_resolver.h"
 #include "sql/resolver/ddl/ob_drop_synonym_resolver.h"
 #include "sql/resolver/ddl/ob_drop_index_resolver.h"
+#include "sql/resolver/ddl/ob_drop_mlog_resolver.h"
 #include "sql/resolver/ddl/ob_create_database_resolver.h"
 #include "sql/resolver/ddl/ob_alter_database_resolver.h"
 #include "sql/resolver/ddl/ob_use_database_resolver.h"
@@ -131,6 +133,8 @@
 #include "pl/ob_pl_package.h"
 #include "sql/resolver/ddl/ob_create_context_resolver.h"
 #include "sql/resolver/ddl/ob_drop_context_resolver.h"
+#include "sql/resolver/cmd/ob_tenant_snapshot_resolver.h"
+#include "sql/resolver/cmd/ob_tenant_clone_resolver.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "sql/resolver/ddl/ob_create_tablespace_resolver.h"
 #include "sql/resolver/ddl/ob_alter_tablespace_resolver.h"
@@ -316,6 +320,14 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_CREATE_INDEX: {
         REGISTER_STMT_RESOLVER(CreateIndex);
+        break;
+      }
+      case T_CREATE_MLOG: {
+        REGISTER_STMT_RESOLVER(CreateMLog);
+        break;
+      }
+      case T_DROP_MLOG: {
+        REGISTER_STMT_RESOLVER(DropMLog);
         break;
       }
       case T_CREATE_VIEW: {
@@ -896,7 +908,8 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_ANALYZE:
       case T_MYSQL_UPDATE_HISTOGRAM:
-      case T_MYSQL_DROP_HISTOGRAM: {
+      case T_MYSQL_DROP_HISTOGRAM:
+      case T_MYSQL_ANALYZE: {
         REGISTER_STMT_RESOLVER(AnalyzeStmt);
         break;
       }
@@ -1148,12 +1161,28 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(TableTTL);
         break;
       }
+      case T_CREATE_TENANT_SNAPSHOT: {
+        REGISTER_STMT_RESOLVER(CreateTenantSnapshot);
+        break;
+      }
+      case T_DROP_TENANT_SNAPSHOT: {
+        REGISTER_STMT_RESOLVER(DropTenantSnapshot);
+        break;
+      }
+      case T_CLONE_TENANT: {
+        REGISTER_STMT_RESOLVER(CloneTenant);
+        break;
+      }
       case T_ALTER_SYSTEM_RESET_PARAMETER: {
         REGISTER_STMT_RESOLVER(ResetConfig);
         break;
       }
       case T_ALTER_SYSTEM_RESET: {
         REGISTER_STMT_RESOLVER(AlterSystemReset);
+        break;
+      }
+      case T_CANCEL_CLONE: {
+        REGISTER_STMT_RESOLVER(CancelClone);
         break;
       }
       default: {
@@ -1167,6 +1196,11 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
 
     if (OB_SUCC(ret) && stmt->is_dml_stmt()) {
       OZ( (static_cast<ObDMLStmt*>(stmt)->disable_writing_external_table()) );
+    }
+
+    if (OB_SUCC(ret) && stmt->is_dml_stmt()
+        && !params_.session_info_->is_inner()) {
+      OZ( (static_cast<ObDMLStmt*>(stmt)->disable_writing_materialized_view()) );
     }
 
     if (OB_SUCC(ret)) {

@@ -498,6 +498,14 @@ int ObOptEstCostModel::cost_sort(const ObSortCostInfo &cost_info,
       // get_next_row获取下层算子行的代价
       cost += cost_params_.get_cpu_tuple_cost(sys_stat_) * cost_info.rows_;
     }
+  } else if (cost_info.part_cnt_ > 0 && cost_info.topn_ >= 0) {
+    //part topn sort/part topn limit
+    if (OB_FAIL(cost_part_topn_sort(cost_info, order_exprs, order_types, cost))) {
+      LOG_WARN("failed to calc part cost", K(ret));
+    } else {
+      // get_next_row获取下层算子行的代价
+      cost += cost_params_.get_cpu_tuple_cost(sys_stat_) * cost_info.rows_;
+    }
   } else if (cost_info.topn_ >= 0) {
     //top-n sort
     if (OB_FAIL(cost_topn_sort(cost_info, order_types, cost))) {
@@ -639,6 +647,70 @@ int ObOptEstCostModel::cost_part_sort(const ObSortCostInfo &cost_info,
         LOG_TRACE("OPT: [COST HASH SORT]", K(cost), K(real_sort_cost), K(calc_hash_cost),
                   K(material_cost), K(rows), K(width), K(cost_info.part_cnt_));
       }
+    }
+  }
+  return ret;
+}
+
+int ObOptEstCostModel::cost_part_topn_sort(const ObSortCostInfo &cost_info,
+                                          const ObIArray<ObRawExpr *> &order_exprs,
+                                          const ObIArray<ObExprResType> &order_col_types,
+                                          double &cost)
+{
+    int ret = OB_SUCCESS;
+  cost = 0.0;
+  double real_sort_cost = 0.0;
+  double material_cost = 0.0;
+  double calc_hash_cost = 0.0;
+  double rows = cost_info.rows_;
+  double width = cost_info.width_;
+  double distinct_parts = rows;
+
+  ObSEArray<ObRawExpr*, 4> part_exprs;
+  ObSEArray<ObExprResType, 4> sort_types;
+  for (int64_t i = 0; OB_SUCC(ret) && i < order_exprs.count(); ++i) {
+    if (i < cost_info.part_cnt_) {
+      if (OB_FAIL(part_exprs.push_back(order_exprs.at(i)))) {
+        LOG_WARN("fail to push back expr", K(ret));
+      }
+    } else {
+      if (OB_FAIL(sort_types.push_back(order_col_types.at(i)))) {
+        LOG_WARN("fail to push back type", K(ret));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObOptSelectivity::calculate_distinct(*cost_info.table_metas_,
+                                                      *cost_info.sel_ctx_,
+                                                      part_exprs,
+                                                      rows,
+                                                      distinct_parts))) {
+      LOG_WARN("failed to calculate distinct", K(ret));
+    } else if (OB_UNLIKELY(distinct_parts < 1.0 || distinct_parts > rows)) {
+      distinct_parts = rows;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    //partition topn sort
+    double topn = cost_info.topn_;
+    double one_part_rows = rows;
+    if (distinct_parts != 0) {
+      one_part_rows = rows / distinct_parts;
+    }
+    if (topn > one_part_rows) {
+      topn = one_part_rows;
+    }
+    material_cost = cost_material(topn, width) * distinct_parts;
+    if (sort_types.count() > 0 && OB_FAIL(cost_topn_sort_inner(sort_types, one_part_rows, topn, real_sort_cost))) {
+      LOG_WARN("failed to calc cost", K(ret));
+    } else {
+      real_sort_cost = real_sort_cost * distinct_parts;
+      calc_hash_cost = cost_hash(rows, part_exprs) + rows * cost_params_.get_build_hash_per_row_cost(sys_stat_) / 2.0;
+      cost = material_cost + real_sort_cost + calc_hash_cost;
+      LOG_TRACE("OPT: [COST PARTITION TOPN SORT]", K(cost), K(calc_hash_cost), K(material_cost),
+                K(real_sort_cost), K(rows), K(width), K(topn), K(cost_info.part_cnt_));
     }
   }
   return ret;

@@ -28,6 +28,7 @@ public:
   int init(
       const uint64_t tenant_id,
       const int64_t task_id,
+      const share::ObDDLType &ddl_type,
       const uint64_t data_table_id,
       const uint64_t index_table_id,
       const int64_t schema_version,

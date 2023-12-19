@@ -276,6 +276,8 @@ const int64_t OB_MAX_RESERVED_POINT_TYPE_LENGTH = 32;
 const int64_t OB_MAX_RESERVED_POINT_NAME_LENGTH = 128;
 const int64_t OB_MAX_EXTRA_ROWKEY_COLUMN_NUMBER = 2; //storage extra rowkey column number, it contains trans version column and sql sequence column
 const int64_t OB_INNER_MAX_ROWKEY_COLUMN_NUMBER = OB_MAX_ROWKEY_COLUMN_NUMBER + OB_MAX_EXTRA_ROWKEY_COLUMN_NUMBER;
+const int64_t OB_MAX_TENANT_SNAPSHOT_NAME_LENGTH = 64;
+const int64_t OB_MAX_TENANT_SNAPSHOT_NAME_LENGTH_STORE = 128;
 
 
 //for recybin
@@ -567,6 +569,8 @@ const int64_t OB_MAX_SCHEMA_BUF_SIZE = 10L * 1024L * 1024L;//10MB
 const int64_t OB_MAX_PART_LIST_SIZE = 10L * 1024L * 1024L;//10MB
 const int64_t OB_MAX_TABLE_ID_LIST_SIZE = 10L * 1024L * 1024L;//10MB
 
+const int64_t OB_MAX_SCHEDULER_JOB_NAME_LENGTH = 128;
+
 enum ObServerRole
 {
   OB_INVALID = 0,
@@ -607,8 +611,10 @@ const uint64_t OB_HIDDEN_FILE_ID_COLUMN_ID = 14; // used for external table
 const uint64_t OB_HIDDEN_LINE_NUMBER_COLUMN_ID = 15; // used for external table
 const int64_t OB_END_RESERVED_COLUMN_ID_NUM = 16;
 const uint64_t OB_APP_MIN_COLUMN_ID = 16;
+
 const uint64_t OB_ACTION_FLAG_COLUMN_ID = OB_ALL_MAX_COLUMN_ID
                                           - OB_END_RESERVED_COLUMN_ID_NUM + 1; /* 65520 */
+// materialized view log
 const uint64_t OB_MLOG_SEQ_NO_COLUMN_ID = OB_ALL_MAX_COLUMN_ID
                                           - OB_END_RESERVED_COLUMN_ID_NUM + 2; /* 65521 */
 const uint64_t OB_MLOG_DML_TYPE_COLUMN_ID = OB_ALL_MAX_COLUMN_ID
@@ -617,6 +623,13 @@ const uint64_t OB_MLOG_OLD_NEW_COLUMN_ID = OB_ALL_MAX_COLUMN_ID
                                            - OB_END_RESERVED_COLUMN_ID_NUM + 4; /* 65523 */
 const uint64_t OB_MLOG_ROWID_COLUMN_ID = OB_ALL_MAX_COLUMN_ID
                                          - OB_END_RESERVED_COLUMN_ID_NUM + 5; /* 65524 */
+const uint64_t OB_MIN_MLOG_SPECIAL_COLUMN_ID = OB_MLOG_SEQ_NO_COLUMN_ID;
+const uint64_t OB_MAX_MLOG_SPECIAL_COLUMN_ID = OB_MLOG_ROWID_COLUMN_ID;
+
+const char *const OB_MLOG_SEQ_NO_COLUMN_NAME = "SEQUENCE$$";
+const char *const OB_MLOG_DML_TYPE_COLUMN_NAME = "DMLTYPE$$";
+const char *const OB_MLOG_OLD_NEW_COLUMN_NAME = "OLD_NEW$$";
+const char *const OB_MLOG_ROWID_COLUMN_NAME = "M_ROW$$";
 
 const uint64_t OB_MAX_TMP_COLUMN_ID = OB_ALL_MAX_COLUMN_ID
                                       - OB_END_RESERVED_COLUMN_ID_NUM;
@@ -649,6 +662,9 @@ const int32_t OB_HIDDEN_LOGICAL_ROWID_INDEX_NAME_LENGTH = 11;
 
 // internal index prefix
 const char *const OB_INDEX_PREFIX = "__idx_";
+// internal materialized view log prefix
+const char *const OB_MLOG_PREFIX_MYSQL = "mlog$_";
+const char *const OB_MLOG_PREFIX_ORACLE = "MLOG$_";
 
 // internal user
 const char *const OB_INTERNAL_USER = "__ob_server";
@@ -695,6 +711,11 @@ const char *const OB_LOCAL_PREFIX = "local://";
 const char *const OB_OSS_PREFIX = "oss://";
 const char *const OB_FILE_PREFIX = "file://";
 const char *const OB_COS_PREFIX = "cos://";
+const char *const OB_S3_PREFIX = "s3://";
+const char *const OB_S3_APPENDABLE_FORMAT_META = "FORMAT_META";
+const char *const OB_S3_APPENDABLE_SEAL_META = "SEAL_META";
+const char *const OB_S3_APPENDABLE_FRAGMENT_PREFIX = "@APD_PART@";
+const int64_t OB_STORAGE_LIST_MAX_NUM = 1000;
 const char *const OB_RESOURCE_UNIT_DEFINITION = "resource_unit_definition";
 const char *const OB_RESOURCE_POOL_DEFINITION = "resource_pool_definition";
 const char *const OB_CREATE_TENANT_DEFINITION = "create_tenant_definition";
@@ -805,8 +826,10 @@ const int64_t MAX_COLUMN_YES_NO_LENGTH = 3;
 const int64_t MAX_COLUMN_VARCHAR_LENGTH = 262143;
 const int64_t MAX_COLUMN_CHAR_LENGTH = 255;
 //column group
+const uint64_t INVALID_COLUMN_GROUP_ID = 0;
 const uint64_t DEFAULT_TYPE_COLUMN_GROUP_ID = 1; // reserve 2~999
 const uint64_t COLUMN_GROUP_START_ID = 1000;
+const uint64_t DEFAULT_CUSTOMIZED_CG_NUM = 2;
 
 //Oracle
 const int64_t MAX_ORACLE_COMMENT_LENGTH = 4000;
@@ -825,8 +848,6 @@ const int64_t MAX_ORACLE_SA_LABEL_TYPE_LENGTH = 15;
 //             table id range definition                  //
 ////////////////////////////////////////////////////////////
 const uint64_t OB_MIN_GENERATED_COLUMN_ID = 2000;
-const uint64_t OB_MIN_MLOG_COLUMN_ID = 8000;
-const uint64_t OB_MAX_MLOG_COLUMN_ID = 9999;
 const uint64_t OB_MIN_MV_COLUMN_ID = 10000;
 const uint64_t OB_MIN_SHADOW_COLUMN_ID = 32767;
 const uint64_t OB_MAX_SYS_POOL_ID = 100;
@@ -1455,6 +1476,10 @@ const char *const OB_MYSQL_CLIENT_OBPROXY_MODE_NAME = "__ob_proxy";
 const char *const OB_MYSQL_CONNECTION_ID = "__connection_id";
 const char *const OB_MYSQL_GLOBAL_VARS_VERSION = "__global_vars_version";
 const char *const OB_MYSQL_PROXY_CONNECTION_ID = "__proxy_connection_id";
+// add client_session_id, addr_port & client session create time us
+const char *const OB_MYSQL_CLIENT_SESSION_ID = "__client_session_id";
+const char *const OB_MYSQL_CLIENT_ADDR_PORT = "__client_addr_port";
+const char *const OB_MYSQL_CLIENT_CONNECT_TIME_US = "__client_connect_time";
 const char *const OB_MYSQL_PROXY_SESSION_CREATE_TIME_US = "__proxy_session_create_time_us";
 const char *const OB_MYSQL_CLUSTER_NAME = "__cluster_name";
 const char *const OB_MYSQL_CLUSTER_ID = "__cluster_id";
@@ -1619,9 +1644,21 @@ OB_INLINE uint64_t combine_two_ids(uint64_t high_id, uint64_t low_id)
 
 const char *const OB_RANDOM_PRIMARY_ZONE = "RANDOM";
 
+OB_INLINE bool is_mlog_reference_column(const uint64_t column_id)
+{
+  return (common::OB_MLOG_ROWID_COLUMN_ID == column_id);
+}
+
+OB_INLINE bool is_mlog_special_column(const uint64_t column_id)
+{
+  return (column_id >= common::OB_MIN_MLOG_SPECIAL_COLUMN_ID
+          && column_id <= common::OB_MAX_MLOG_SPECIAL_COLUMN_ID);
+}
+
 OB_INLINE bool is_shadow_column(const uint64_t column_id)
 {
-  return column_id > common::OB_MIN_SHADOW_COLUMN_ID;
+  return (column_id > common::OB_MIN_SHADOW_COLUMN_ID)
+          && !is_mlog_special_column(column_id);
 }
 
 OB_INLINE bool is_bootstrap_resource_pool(const uint64_t resource_pool_id)
@@ -1633,6 +1670,7 @@ OB_INLINE bool is_bootstrap_resource_pool(const uint64_t resource_pool_id)
 const int64_t OB_MALLOC_NORMAL_BLOCK_SIZE = (1LL << 13) - 256;                 // 8KB
 const int64_t OB_MALLOC_MIDDLE_BLOCK_SIZE = (1LL << 16) - 128;                 // 64KB
 const int64_t OB_MALLOC_BIG_BLOCK_SIZE = (1LL << 21) - ACHUNK_PRESERVE_SIZE;// 2MB (-17KB)
+const int64_t OB_MALLOC_REQ_NORMAL_BLOCK_SIZE = (256LL << 10);                 // 256KB
 
 const int64_t OB_MAX_MYSQL_RESPONSE_PACKET_SIZE = OB_MALLOC_BIG_BLOCK_SIZE;
 
@@ -1752,7 +1790,7 @@ const int64_t OB_MAX_LOB_CHUNK_SIZE = 256 * 1024; // 256K
 const int64_t OB_DEFAULT_LOB_CHUNK_SIZE = OB_MAX_LOB_CHUNK_SIZE;
 
 const int64_t OB_MIN_LOB_INROW_THRESHOLD = 0; // 0 means disable inrow lob
-const int64_t OB_MAX_LOB_INROW_THRESHOLD = OB_MAX_USER_ROW_LENGTH; // 1.5M
+const int64_t OB_MAX_LOB_INROW_THRESHOLD = OB_MAX_USER_ROW_LENGTH / 2; // 1.5M/2
 const int64_t OB_DEFAULT_LOB_INROW_THRESHOLD = 4096; // 4K
 
 const int64_t OB_MAX_CAST_CHAR_VARCHAR_LENGTH = 512;
@@ -2518,7 +2556,7 @@ inline bool is_x86() {
 #endif
 }
 #define __maybe_unused  __attribute__((unused))
-#define DO_PRAGMA(x) _Pragma (#x)
+#define DO_PRAGMA(x) _Pragma(#x)
 #define DISABLE_WARNING_GCC_PUSH _Pragma("GCC diagnostic push")
 #define DISABLE_WARNING_GCC(option) DO_PRAGMA(GCC diagnostic ignored option)
 #define DISABLE_WARNING_GCC_POP _Pragma("GCC diagnostic pop")
