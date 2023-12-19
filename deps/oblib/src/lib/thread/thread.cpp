@@ -27,6 +27,8 @@
 #include "lib/utility/ob_hang_fatal_error.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "lib/signal/ob_signal_struct.h"
+#include "lib/ash/ob_active_session_guard.h"
+#include "lib/stat/ob_session_stat.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -247,6 +249,7 @@ void Thread::destroy_stack()
 #else
   pth_ = 0;
 #endif
+  ObActiveSessionGuard::setup_default_ash();
 }
 
 void* Thread::__th_start(void *arg)
@@ -255,6 +258,13 @@ void* Thread::__th_start(void *arg)
   ob_set_thread_tenant_id(th->get_tenant_id());
   current_thread_ = th;
   th->tid_ = gettid();
+  ObActiveSessionGuard::setup_thread_local_ash();
+  ObActiveSessionGuard::get_stat().tenant_id_    = (0 == th->get_tenant_id() ? OB_SERVER_TENANT_ID : th->get_tenant_id());
+  ObActiveSessionGuard::get_stat().user_id_      = 0;
+  // ObActiveSessionGuard::get_stat().session_type_ = ObActiveSessionStatItem::SessionType::BACKGROUND;
+  ObActiveSessionGuard::get_stat().session_id_   = ObBackgroundSessionIdGenerator::get_instance().get_next_sess_id();
+  ObSessionStatEstGuard stat_est_guard(ObActiveSessionGuard::get_stat().tenant_id_, ObActiveSessionGuard::get_stat().session_id_);
+
 #ifndef OB_USE_ASAN
   ObStackHeader *stack_header = ProtectedStackAllocator::stack_header(th->stack_addr_);
   abort_unless(stack_header->check_magic());

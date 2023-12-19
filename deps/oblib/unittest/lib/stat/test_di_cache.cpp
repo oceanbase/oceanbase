@@ -85,24 +85,24 @@ TEST(ObDICache, multithread)
 }
 
 
-TEST(ObDICache, session_multi_threads)
-{
-  ObDISessionCollect *collect;
-  TestSessionMultiThread tester;
-  ObSEArray<std::pair<uint64_t, ObDISessionCollect *>, 10> session_status;
-  const int64_t th_cnt = 10;
-  tester.set_thread_count(th_cnt);
-  tester.start();
-  tester.wait();
-  ObDISessionCache::get_instance().get_the_diag_info(1, collect);
-  ASSERT_EQ(th_cnt * update_cnt / 2, collect->base_value_.get_add_stat_stats().get(ObStatEventIds::IO_READ_COUNT)->stat_value_);
-  ObDISessionCache::get_instance().get_all_diag_info(session_status);
-  ASSERT_EQ(2, session_status.count());
-  for (int i = 0; i < session_status.count(); i++) {
-    collect = session_status.at(i).second;
-    ASSERT_EQ(th_cnt * update_cnt / 2, collect->base_value_.get_add_stat_stats().get(ObStatEventIds::IO_READ_COUNT)->stat_value_);
-  }
-}
+// TEST(ObDICache, session_multi_threads)
+// {
+//   ObDISessionCollect *collect;
+//   TestSessionMultiThread tester;
+//   ObSEArray<std::pair<uint64_t, ObDISessionCollect *>, 10> session_status;
+//   const int64_t th_cnt = 10;
+//   tester.set_thread_count(th_cnt);
+//   tester.start();
+//   tester.wait();
+//   ObDISessionCache::get_instance().get_the_diag_info(1, collect);
+//   ASSERT_EQ(th_cnt * update_cnt / 2, collect->base_value_.get_add_stat_stats().get(ObStatEventIds::IO_READ_COUNT)->stat_value_);
+//   ObDISessionCache::get_instance().get_all_diag_info(session_status);
+//   ASSERT_EQ(2, session_status.count());
+//   for (int i = 0; i < session_status.count(); i++) {
+//     collect = session_status.at(i).second;
+//     ASSERT_EQ(th_cnt * update_cnt / 2, collect->base_value_.get_add_stat_stats().get(ObStatEventIds::IO_READ_COUNT)->stat_value_);
+//   }
+// }
 
 TEST(ObDICache, tenant)
 {

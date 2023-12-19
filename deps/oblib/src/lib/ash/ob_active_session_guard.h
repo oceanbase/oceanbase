@@ -180,6 +180,17 @@ DEF_ASH_FLAGS_SETTER_GUARD(in_storage_write)
 #define ACTIVE_SESSION_FLAG_SETTER_GUARD(ash_flag_type)                                            \
   ObActiveSession_##ash_flag_type##_FlagSetterGuard _ash_flag_setter_guard;
 
+class ObBackgroundSessionIdGenerator {
+public:
+  ObBackgroundSessionIdGenerator() : local_seq_(1) {}
+  ~ObBackgroundSessionIdGenerator() = default;
+
+  static ObBackgroundSessionIdGenerator &get_instance();
+  uint64_t get_next_sess_id();
+private:
+  ObBackgroundSessionIdGenerator *generator_;
+  uint64_t local_seq_;
+};
 }
 }
 #endif /* _OB_SHARE_ASH_ACTIVE_SESSION_GUARD_H_ */
