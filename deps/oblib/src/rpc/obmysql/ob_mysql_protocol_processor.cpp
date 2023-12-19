@@ -54,7 +54,7 @@ int ObMysqlProtocolProcessor::do_decode(ObSMConnection& conn, ObICSMemPool& pool
       // go backward with MySQL packet header length
       start -= header_size;
       next_read_bytes = delta_len;
-    } else if (conn.is_in_authed_phase()) {
+    } else if (conn.is_in_authed_phase() || conn.is_in_auth_switch_phase()) {
       if (OB_FAIL(decode_body(pool, start, pktlen, pktseq, pkt))) {
         LOG_ERROR("fail to decode_body", K(sessid), K(pktseq), K(ret));
       }
