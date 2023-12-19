@@ -378,6 +378,12 @@ int ObExprUDF::process_out_params(const ObObj *objs_stack,
           OZ (deep_copy_obj(*pkg_allocator, obj, obj));
         }
       }
+      if (OB_FAIL(ret)) {
+        int tmp = pl::ObUserDefinedType::destruct_obj(obj, exec_ctx.get_my_session());
+        if (OB_SUCCESS != tmp) {
+          LOG_WARN("fail to destruct param of udf", K(ret), K(tmp));
+        }
+      }
       OZ (ObSPIService::spi_update_package_change_info(&plctx, params_desc.at(i).get_package_id(),
                                                        params_desc.at(i).get_index()));
     }
