@@ -5970,20 +5970,6 @@ OB_SERIALIZE_MEMBER(ObEstPartResElement, logical_row_count_,
 
 OB_SERIALIZE_MEMBER(ObEstPartRes, index_param_res_);
 
-OB_SERIALIZE_MEMBER(TenantServerUnitConfig,
-                    tenant_id_,
-                    compat_mode_,
-                    unit_config_,
-                    replica_type_,
-                    is_delete_,
-                    if_not_grant_,
-                    unit_id_
-#ifdef OB_BUILD_TDE_SECURITY
-                    , with_root_key_
-                    , root_key_
-#endif
-		                );
-
 int ObForceSetLSAsSingleReplicaArg::init(const uint64_t tenant_id, const share::ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
@@ -6393,13 +6379,14 @@ int TenantServerUnitConfig::init(
     const uint64_t tenant_id,
     const uint64_t unit_id,
     const lib::Worker::CompatMode compat_mode,
-#ifdef OB_BUILD_TDE_SECURITY
-    const ObRootKeyResult &root_key,
-#endif
     const share::ObUnitConfig &unit_config,
     const common::ObReplicaType replica_type,
     const bool if_not_grant,
-    const bool is_delete)
+    const bool is_delete
+#ifdef OB_BUILD_TDE_SECURITY
+    , const ObRootKeyResult &root_key
+#endif
+    )
 {
   int ret = OB_SUCCESS;
   reset();
@@ -6448,15 +6435,29 @@ void TenantServerUnitConfig::reset()
   tenant_id_ = OB_INVALID_ID;
   unit_id_ = OB_INVALID_ID;
   compat_mode_ = lib::Worker::CompatMode::INVALID;
-#ifdef OB_BUILD_TDE_SECURITY
-  with_root_key_ = false;
-  root_key_.reset();
-#endif
   unit_config_.reset();
   replica_type_ = common::ObReplicaType::REPLICA_TYPE_MAX;
   if_not_grant_ = false;
   is_delete_ = false;
+#ifdef OB_BUILD_TDE_SECURITY
+  with_root_key_ = false;
+  root_key_.reset();
+#endif
 }
+
+OB_SERIALIZE_MEMBER(TenantServerUnitConfig,
+                    tenant_id_,
+                    compat_mode_,
+                    unit_config_,
+                    replica_type_,
+                    is_delete_,
+                    if_not_grant_,
+                    unit_id_
+#ifdef OB_BUILD_TDE_SECURITY
+                    , with_root_key_
+                    , root_key_
+#endif
+		                );
 
 int ObTenantSchemaVersions::add(const int64_t tenant_id, const int64_t schema_version)
 {
@@ -7278,7 +7279,7 @@ OB_SERIALIZE_MEMBER(ObRootKeyArg, tenant_id_, is_set_, key_type_, root_key_);
 int ObRootKeyArg::init_for_get(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  if (!is_user_tenant(tenant_id)) {
+  if (!(is_sys_tenant(tenant_id) || is_user_tenant(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
   } else {
@@ -7292,7 +7293,7 @@ int ObRootKeyArg::init(const uint64_t tenant_id, RootKeyType key_type,
             ObString &root_key)
 {
   int ret = OB_SUCCESS;
-  if (!is_user_tenant(tenant_id)
+  if (!(is_sys_tenant(tenant_id) || is_user_tenant(tenant_id))
       || RootKeyType::INVALID == key_type) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(key_type), K(root_key));

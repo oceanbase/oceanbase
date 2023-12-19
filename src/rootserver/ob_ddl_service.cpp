@@ -23272,7 +23272,7 @@ int ObDDLService::get_root_key_from_primary(const obrpc::ObCreateTenantArg &arg,
       LOG_WARN("failed to init for get", KR(ret), K(primary_tenant_id));
     }
     if (FAILEDx(notify_root_key(*rpc_proxy_, root_key_arg,
-            addr_list, result, true/*enable_default*/, false/*need_call_rs*/,
+            addr_list, result, true/*enable_default*/, true/*skip_call_rs*/,
             cluster_id, &allocator))) {
       LOG_WARN("failed to get root key from obs", KR(ret), K(cluster_id),
           K(root_key_arg), K(addr_list));
@@ -23321,7 +23321,7 @@ int ObDDLService::notify_root_key(
     const common::ObIArray<common::ObAddr> &addrs,
     obrpc::ObRootKeyResult &result,
     const bool enable_default /*=true*/,
-    bool need_call_rs /*=true*/,
+    const bool skip_call_rs /*=false*/,
     const uint64_t &cluster_id /*=OB_INVALID_CLUSTER_ID*/,
     common::ObIAllocator *allocator /*=NULL*/)
 {
@@ -23329,8 +23329,6 @@ int ObDDLService::notify_root_key(
   ObTimeoutCtx ctx;
   bool has_failed = false;
   const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L; // 10s
-  // need_to_call_rs is true only if given value is not false and not notify cross-cluster
-  need_call_rs = need_call_rs && (OB_INVALID_CLUSTER_ID == cluster_id);
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(arg));
@@ -23342,6 +23340,8 @@ int ObDDLService::notify_root_key(
         rpc_proxy, &obrpc::ObSrvRpcProxy::set_root_key);
     int tmp_ret = OB_SUCCESS;
     int return_ret = OB_SUCCESS;
+    // need_to_call_rs is true only if skip_call_rs is false and not notify cross-cluster
+    bool need_call_rs = (!skip_call_rs) && (OB_INVALID_CLUSTER_ID == cluster_id);
     ObAddr rs_addr = GCONF.self_addr_;
     int64_t timeout = ctx.get_timeout();
     for (int64_t i = 0; OB_SUCC(ret) && i < addrs.count(); i++) {
