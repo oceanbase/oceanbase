@@ -6738,6 +6738,7 @@ STATUS	varchar(32)	NO		NULL
 LATCH_WAIT	varchar(16)	NO		NULL	
 LATCH_HOLD	varchar(256)	NO		NULL	
 TRACE_ID	varchar(40)	NO		NULL	
+CGROUP_PATH	varchar(256)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_THREAD limit 1);
 cnt
 1
@@ -6752,6 +6753,7 @@ STATUS	varchar(32)	NO
 LATCH_WAIT	varchar(16)	NO			
 LATCH_HOLD	varchar(256)	NO			
 TRACE_ID	varchar(40)	NO			
+CGROUP_PATH	varchar(256)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_THREAD limit 1);
 cnt
 1
@@ -8266,6 +8268,28 @@ QUEUE_4	bigint(20)	NO
 QUEUE_5	bigint(20)	NO			
 LARGE_QUEUED	bigint(20)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_TENANT_RUNTIME_INFO limit 1);
+cnt
+1
+desc oceanbase.GV$OB_CGROUP_CONFIG;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+CFS_QUOTA_US	bigint(20)	NO		NULL	
+CFS_PERIOD_US	bigint(20)	NO		NULL	
+SHARES	bigint(20)	NO		NULL	
+CGROUP_PATH	varchar(256)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_CGROUP_CONFIG limit 1);
+cnt
+1
+desc oceanbase.V$OB_CGROUP_CONFIG;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO			
+SVR_PORT	bigint(20)	NO			
+CFS_QUOTA_US	bigint(20)	NO			
+CFS_PERIOD_US	bigint(20)	NO			
+SHARES	bigint(20)	NO			
+CGROUP_PATH	varchar(256)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_CGROUP_CONFIG limit 1);
 cnt
 1
 desc oceanbase.DBA_OB_AUX_STATISTICS;
