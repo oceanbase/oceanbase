@@ -648,7 +648,7 @@ NUMERIC_CALC_FUNC(number, ObExprIs, false, false, is)
       ret_bool = !is_zero(param1->get_##type());                                  \
     }                                                                             \
     if (OB_SUCC(ret)) {                                                           \
-      if (OB_ISNULL(ptr = ctx.get_expr_res_alloc().alloc(sizeof(ObObj)))) {       \
+      if (OB_ISNULL(ptr = expr.get_str_res_mem(ctx, sizeof(ObObj)))) {            \
         ret = OB_ALLOCATE_MEMORY_FAILED;                                          \
         LOG_WARN("failed to allocate expr result memory");                        \
       } else {                                                                    \
