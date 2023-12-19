@@ -47,9 +47,18 @@ ObTableRedefinitionTask::~ObTableRedefinitionTask()
 {
 }
 
-int ObTableRedefinitionTask::init(const ObTableSchema* src_table_schema, const ObTableSchema* dst_table_schema, const int64_t task_id,
-    const share::ObDDLType &ddl_type, const int64_t parallelism, const int64_t consumer_group_id, const int32_t sub_task_trace_id,
-    const ObAlterTableArg &alter_table_arg, const uint64_t tenant_data_version, const int64_t task_status, const int64_t snapshot_version)
+int ObTableRedefinitionTask::init(const ObTableSchema* src_table_schema,
+                                  const ObTableSchema* dst_table_schema,
+                                  const int64_t parent_task_id,
+                                  const int64_t task_id,
+                                  const share::ObDDLType &ddl_type,
+                                  const int64_t parallelism,
+                                  const int64_t consumer_group_id,
+                                  const int32_t sub_task_trace_id,
+                                  const ObAlterTableArg &alter_table_arg,
+                                  const uint64_t tenant_data_version,
+                                  const int64_t task_status,
+                                  const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -89,6 +98,7 @@ int ObTableRedefinitionTask::init(const ObTableSchema* src_table_schema, const O
     snapshot_version_ = snapshot_version;
     tenant_id_ = src_table_schema->get_tenant_id();
     task_version_ = OB_TABLE_REDEFINITION_TASK_VERSION;
+    parent_task_id_ = parent_task_id;
     task_id_ = task_id;
     parallelism_ = parallelism;
     data_format_version_ = tenant_data_version;
@@ -154,6 +164,7 @@ int ObTableRedefinitionTask::init(const ObDDLTaskRecord &task_record)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected err", K(ret), K(task_record), K(src_tenant_id), K(dst_tenant_id), K(src_schema_version), K(dst_schema_version));
   } else {
+    parent_task_id_ = task_record.parent_task_id_;
     task_id_ = task_record.task_id_;
     object_id_ = data_table_id;
     target_object_id_ = dest_table_id;
