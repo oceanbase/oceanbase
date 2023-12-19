@@ -63,41 +63,82 @@ public:
   virtual int transform_one_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
                                  ObDMLStmt *&stmt,
                                  bool &trans_happened) override;
+  struct MinMaxAggrHelper {
+    MinMaxAggrHelper()
+      : aggr_expr_ids_(),
+        raw_expr_id_(-1),
+        raw_expr_ptr_(NULL) {}
+    virtual ~MinMaxAggrHelper() {};
+    void reset() {
+      aggr_expr_ids_.reuse();
+      raw_expr_id_ = -1;
+      raw_expr_ptr_ = NULL;
+    }
+    int assign(const MinMaxAggrHelper &other);
+    static int alloc_helper(ObIAllocator &allocator, MinMaxAggrHelper* &helper);
+
+    TO_STRING_KV(K(aggr_expr_ids_),
+                 K(raw_expr_id_),
+                 K(raw_expr_ptr_));
+
+    ObSEArray<int64_t, 4> aggr_expr_ids_;
+    int64_t raw_expr_id_;
+    ObRawExpr *raw_expr_ptr_;
+  };
+
+  // check every expr is valid
+  static int check_expr_validity(ObTransformerCtx &ctx,
+                                 ObSelectStmt *select_stmt,
+                                 const ObRawExpr *expr,
+                                 const int64_t expr_id,
+                                 bool &is_valid,
+                                 MinMaxAggrHelper *&helper);
+
   static int check_transform_validity(ObTransformerCtx &ctx,
-                                      ObSelectStmt *stmt,
-                                      ObAggFunRawExpr *&aggr_expr,
-                                      bool &is_valid);
+                                      ObSelectStmt *select_stmt,
+                                      bool &is_valid,
+                                      ObIArray<MinMaxAggrHelper*> *selecthelpers  = NULL,
+                                      ObIArray<MinMaxAggrHelper*> *havinghelpers = NULL);
 
 private:
-  int do_transform(ObSelectStmt *select_stmt, ObAggFunRawExpr *aggr_expr);
+  int create_new_ref_expr(ObQueryRefRawExpr *&ref_expr, 
+                          ObSelectStmt *aggr_ref_stmt, 
+                          ObRawExpr* temp_aggr_expr);
+
+  int do_transform_one_stmt(ObSelectStmt *select_stmt, ObAggFunRawExpr *aggr_expr, ObSelectStmt *&ref_stmt);
+
+  int do_transform(ObDMLStmt *&select_stmt, ObIArray<MinMaxAggrHelper*> &selecthelpers, ObIArray<MinMaxAggrHelper*> &havinghelpers);
 
   static int is_valid_index_column(ObTransformerCtx &ctx,
                                    const ObSelectStmt *stmt,
                                    const ObRawExpr *expr,
+                                   EqualSets &equal_sets,
+                                   ObIArray<ObRawExpr*> &const_exprs,
                                    bool &is_expected_index);
 
-  static int is_valid_having(const ObSelectStmt *stmt,
-                             const ObAggFunRawExpr *column_aggr_expr,
-                             bool &is_expected);
+  static int check_valid_aggr_expr(const ObRawExpr *expr,
+                                   ObIArray<ObAggFunRawExpr *> &aggr_expr_array,
+                                   ObIArray<int64_t> &aggr_expr_ids,
+                                   bool &is_valid);
 
-  static int is_valid_aggr_expr(const ObSelectStmt &stmt,
-                                const ObRawExpr *expr,
-                                const ObAggFunRawExpr *aggr_expr,
-                                bool &is_valid);
+  static int inner_check_valid_aggr_expr(const ObRawExpr *expr,
+                                         ObIArray<ObAggFunRawExpr *> &aggr_expr_array,
+                                         ObIArray<int64_t> &aggr_expr_ids,
+                                         bool &is_valid);
+                                
+  static int replace_aggr_expr_by_subquery(ObRawExpr *&expr,
+                                           const ObAggFunRawExpr *aggr_expr,
+                                           ObRawExpr *ref_expr);
 
-  static int find_unexpected_having_expr(const ObAggFunRawExpr *aggr_expr,
-                                  const ObRawExpr *cur_expr,
-                                  bool &is_unexpected);
+  static int replace_aggr_expr_by_subquery(ObRawExpr *&expr,
+                                           const ObAggFunRawExpr *aggr_expr,
+                                           ObRawExpr *ref_expr,
+                                           bool &is_valid);                                         
 
   int set_child_condition(ObSelectStmt *stmt, ObRawExpr *aggr_expr);
 
   int set_child_order_item(ObSelectStmt *stmt, ObRawExpr *aggr_expr);
 
-  /**
-   * @brief: check whether there is any valid select_item
-   * request stmt has only one valid aggr expr, and select_items are exprs combainded const expr or that aggr_expr
-   */
-  static int is_valid_select_list(const ObSelectStmt &stmt, const ObAggFunRawExpr *aggr_expr, bool &is_valid);
   DISALLOW_COPY_AND_ASSIGN(ObTransformMinMax);
 };
 
