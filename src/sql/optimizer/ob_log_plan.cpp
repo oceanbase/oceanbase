@@ -10121,6 +10121,7 @@ int ObLogPlan::init_onetime_subquery_info()
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
       bool dummy = false;
+      bool dummy_shared = false;
       ObRawExpr *expr = exprs.at(i);
       ObSEArray<ObRawExpr *, 4> onetime_list;
       if (OB_ISNULL(expr)) {
@@ -10130,7 +10131,7 @@ int ObLogPlan::init_onetime_subquery_info()
         // do nothing
       } else if (ObOptimizerUtil::find_item(json_table_exprs, expr)) {
         // do nothing
-      } else if (OB_FAIL(extract_onetime_subquery(expr, onetime_list, dummy))) {
+      } else if (OB_FAIL(extract_onetime_subquery(expr, onetime_list, dummy, dummy_shared))) {
         LOG_WARN("failed to extract onetime subquery", K(ret));
       } else if (onetime_list.empty()) {
         // do nothing
@@ -10152,10 +10153,10 @@ int ObLogPlan::init_onetime_subquery_info()
  */
 int ObLogPlan::extract_onetime_subquery(ObRawExpr *expr,
                                         ObIArray<ObRawExpr *> &onetime_list,
-                                        bool &is_valid)
+                                        bool &is_valid,
+                                        bool &has_shared_subquery)
 {
   int ret = OB_SUCCESS;
-  bool is_valid_non_correlated_exists = false;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
@@ -10184,31 +10185,38 @@ int ObLogPlan::extract_onetime_subquery(ObRawExpr *expr,
     } else if (static_cast<ObQueryRefRawExpr *>(expr)->is_scalar()) {
       if (OB_FAIL(onetime_list.push_back(expr))) {
         LOG_WARN("failed to push back candi onetime expr", K(ret));
+      } else if (expr->is_explicited_reference() && expr->get_ref_count() > 1) {
+        has_shared_subquery = true;
       }
     }
   }
-
+  // if query_ref has an exec_param, then will also has a CNT_SUB_QUERY flag
   if (OB_SUCC(ret) && expr->has_flag(CNT_SUB_QUERY)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       bool is_param_valid = false;
+      bool has_child_shared_subquery = false;
       if (OB_FAIL(extract_onetime_subquery(expr->get_param_expr(i),
                                            onetime_list,
-                                           is_param_valid))) {
+                                           is_param_valid,
+                                           has_child_shared_subquery))) {
         LOG_WARN("failed to extract onetime subquery", K(ret));
       } else if (!is_param_valid) {
         is_valid = false;
       }
+      has_shared_subquery |= has_child_shared_subquery;
     }
-    if (OB_SUCC(ret) && is_valid && (T_OP_EXISTS == expr->get_expr_type()
-                                     || T_OP_NOT_EXISTS == expr->get_expr_type()
-                                     || expr->has_flag(IS_WITH_ALL)
-                                     || expr->has_flag(IS_WITH_ANY))) {
+    if (OB_SUCC(ret) && is_valid && !has_shared_subquery &&
+                        (T_OP_EXISTS == expr->get_expr_type()
+                         || T_OP_NOT_EXISTS == expr->get_expr_type()
+                         || expr->has_flag(IS_WITH_ALL)
+                         || expr->has_flag(IS_WITH_ANY))) {
       if (OB_FAIL(onetime_list.push_back(expr))) {
         LOG_WARN("failed to push back candi onetime exprs", K(ret));
+      } else if (expr->is_explicited_reference() && expr->get_ref_count() > 1) {
+        has_shared_subquery = true;
       }
     }
   }
-
   return ret;
 }
 
@@ -10247,8 +10255,7 @@ int ObLogPlan::create_onetime_param(ObRawExpr *expr,
     }
   } else if (expr->has_flag(CNT_SUB_QUERY)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      if (OB_FAIL(create_onetime_param(expr->get_param_expr(i),
-                                       onetime_list))) {
+      if (OB_FAIL(create_onetime_param(expr->get_param_expr(i), onetime_list))) {
         LOG_WARN("failed to create onetime param", K(ret));
       }
     }
