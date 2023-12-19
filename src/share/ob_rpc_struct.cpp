@@ -8926,8 +8926,8 @@ const ObLSInfo &ObDetectMasterRsLSResult::get_ls_info() const
 ObBatchBroadcastSchemaArg::ObBatchBroadcastSchemaArg()
   : tenant_id_(common::OB_INVALID_TENANT_ID),
     sys_schema_version_(common::OB_INVALID_VERSION),
-    tables_(),
-    allocator_("BroadcastSchema", OB_MALLOC_MIDDLE_BLOCK_SIZE)
+    allocator_("BroadcastSchema", OB_MALLOC_MIDDLE_BLOCK_SIZE),
+    tables_()
 {}
 
 ObBatchBroadcastSchemaArg::~ObBatchBroadcastSchemaArg()
