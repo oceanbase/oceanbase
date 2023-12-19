@@ -293,5 +293,20 @@ int ObTenantSnapshotMgr::has_tenant_snapshot_stopped(bool& has_tenant_snapshot_s
   return ret;
 }
 
+int ObTenantSnapshotMgr::get_tenant_snapshot_cnt(int64_t& cnt)
+{
+  int ret = OB_SUCCESS;
+
+  cnt = INT64_MAX;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantSnapshotMgr has not been inited.", KR(ret), KPC(this));
+  } else {
+    cnt = tenant_snapshot_map_.count();
+  }
+
+  return ret;
+}
+
 }
 }

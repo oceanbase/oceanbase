@@ -513,6 +513,28 @@ int ObTenantNodeBalancer::fetch_effective_tenants(const TenantUnits &old_tenants
           // check ls service safe to destroy.
           is_released = MTL(ObLSService *)->safe_to_destroy();
         }
+
+        bool is_tenant_snapshot_released = false;
+        if (is_user_tenant(tenant_config.tenant_id_)) {
+          MTL(ObTenantSnapshotService*)->notify_unit_is_deleting();
+          if (OB_FAIL(MTL(ObTenantSnapshotService*)->
+                check_all_tenant_snapshot_released(is_tenant_snapshot_released))) {
+            LOG_WARN("fail to check_all_tenant_snapshot_released", K(ret), K(tenant_config));
+          } else if (!is_tenant_snapshot_released) {
+            // can not release now. dump some debug info
+            const uint64_t interval = 180 * 1000 * 1000; // 180s
+            if (!is_tenant_snapshot_released && REACH_TIME_INTERVAL(interval)) {
+              MTL(ObTenantSnapshotService*)->dump_all_tenant_snapshot_info();
+            }
+            LOG_INFO("[DELETE_TENANT] tenant has been dropped, tenant snapshot is still waiting for gc",
+                K(tenant_config));
+          }
+          if (OB_SUCC(ret)) {
+            is_released = is_released && is_tenant_snapshot_released;
+          } else {
+            is_released = false;
+          }
+        }
       }
 
       if (OB_SUCC(ret)) {

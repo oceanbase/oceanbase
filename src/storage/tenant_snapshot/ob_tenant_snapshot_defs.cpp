@@ -130,12 +130,12 @@ int ObTenantSnapshot::try_start_create_tenant_snapshot_dag(ObArray<ObLSID>& crea
   return ret;
 }
 
-int ObTenantSnapshot::try_start_gc_tenant_snapshot_dag(bool &gc_all_tenant_snapshot,
+int ObTenantSnapshot::try_start_gc_tenant_snapshot_dag(const bool tenant_has_been_dropped,
+                                                       bool &gc_tenant_snapshot,
                                                        ObArray<ObLSID> &gc_ls_id_arr,
                                                        common::ObCurTraceId::TraceId& trace_id)
 {
   int ret = OB_SUCCESS;
-  bool need_gc = false;
   ObTenantSnapshotSvrInfo svr_info;
 
   lib::ObMutexGuard snapshot_guard(mutex_);
@@ -143,8 +143,9 @@ int ObTenantSnapshot::try_start_gc_tenant_snapshot_dag(bool &gc_all_tenant_snaps
   //   1. no entry for this snapshot in __all_tenant_snapshot(but we see it in local storage);
   //   2. snapshot status in __all_tenant_snapshot is DELETING.
   // or gc ls_snapshot only
-  gc_all_tenant_snapshot = false;
+  gc_tenant_snapshot = false;
   gc_ls_id_arr.reset();
+  trace_id.reset();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTenantSnapshot is not init", KR(ret));
@@ -155,37 +156,43 @@ int ObTenantSnapshot::try_start_gc_tenant_snapshot_dag(bool &gc_all_tenant_snaps
   } else if (has_unfinished_dag_()) {
     ret = OB_EAGAIN;
     LOG_INFO("ObTenantSnapshot has unfinished dag", KR(ret), KPC(this));
+  } else if (tenant_has_been_dropped) {
+    gc_tenant_snapshot = true;
+    FLOG_INFO("tenant has been dropped, need gc", KPC(this));
   } else if (OB_FAIL(ObTenantSnapshotMetaTable::acquire_tenant_snapshot_svr_info(tenant_snapshot_id_,
                                                                                  svr_info))) {
     if (OB_TENANT_SNAPSHOT_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
-      need_gc = true;
+      gc_tenant_snapshot = true;
       LOG_INFO("tenant snapshot not exist, need gc", K(tenant_snapshot_id_));
     }
   } else if (ObTenantSnapStatus::DELETING == svr_info.get_tenant_snap_item().get_status()) {
-    need_gc = true;
+    gc_tenant_snapshot = true;
     LOG_INFO("tenant snapshot status is DELETING, need gc", K(tenant_snapshot_id_));
   }
 
   if (OB_SUCC(ret)) {
-    if (need_gc) {  // gc tenant snapshot (with corresponding ls_snapshot)
-      gc_all_tenant_snapshot = true;
+    if (gc_tenant_snapshot) {  // gc tenant snapshot (with corresponding ls_snapshot)
       is_running_ = false;
-    } else if (OB_FAIL(get_need_gc_ls_snapshot_arr_(svr_info.get_ls_snap_item_arr(),
-                                                    gc_ls_id_arr))) {
-      LOG_WARN("fail to get_need_gc_ls_snapshot_arr_", KR(ret), K(svr_info));
-    } else if (gc_ls_id_arr.count() > 0) {
-      need_gc = true;
-      gc_all_tenant_snapshot = false; // gc ls_snapshot only (maybe cause by ls transfer)
-      LOG_INFO("ls snapshot need gc", KR(ret), K(gc_ls_id_arr));
+    } else {
+      if (OB_FAIL(get_need_gc_ls_snapshot_arr_(svr_info.get_ls_snap_item_arr(),
+                                               gc_ls_id_arr))) {
+        LOG_WARN("fail to get_need_gc_ls_snapshot_arr_", KR(ret), K(svr_info));
+      } else if (gc_ls_id_arr.count() > 0) {
+        LOG_INFO("ls snapshot need gc", K(gc_ls_id_arr));
+      }
     }
   }
 
   if (OB_SUCC(ret)) {
-    if (need_gc) {
-      ObTenantSnapshotMetaTable::acquire_tenant_snapshot_trace_id(tenant_snapshot_id_,
-                                                                  ObTenantSnapOperation::DELETE,
-                                                                  trace_id);
+    if (gc_tenant_snapshot || gc_ls_id_arr.count() > 0) {
+      if (!tenant_has_been_dropped) {
+        ObTenantSnapshotMetaTable::acquire_tenant_snapshot_trace_id(tenant_snapshot_id_,
+                                                                    ObTenantSnapOperation::DELETE,
+                                                                    trace_id);
+      } else {
+        trace_id.init(GCTX.self_addr());
+      }
       gc_dag_start_();
     } else {
       ret = OB_NO_NEED_UPDATE;
@@ -196,7 +203,7 @@ int ObTenantSnapshot::try_start_gc_tenant_snapshot_dag(bool &gc_all_tenant_snaps
   return ret;
 }
 
-int ObTenantSnapshot::execute_gc_tenant_snapshot_dag(const bool gc_all_tenant_snapshot, const ObArray<ObLSID> &gc_ls_id_arr)
+int ObTenantSnapshot::execute_gc_tenant_snapshot_dag(const bool gc_tenant_snapshot, const ObArray<ObLSID> &gc_ls_id_arr)
 {
   int ret = OB_SUCCESS;
   {
@@ -214,7 +221,7 @@ int ObTenantSnapshot::execute_gc_tenant_snapshot_dag(const bool gc_all_tenant_sn
     }
   }
   if (OB_SUCC(ret)) {
-    if (gc_all_tenant_snapshot) {
+    if (gc_tenant_snapshot) {
       LOG_INFO("gc_tenant_snapshot_ with ls_snapshot", K(tenant_snapshot_id_));
       if (OB_FAIL(gc_tenant_snapshot_())) {
         LOG_WARN("fail to gc_tenant_snapshot_", KR(ret), KPC(this));
