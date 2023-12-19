@@ -26112,7 +26112,7 @@ def_table_schema(
     CAST(NULL AS DATETIME(6)) AS MANUAL_OPEN_TIME,
     CAST(NULL AS SIGNED) AS MANUAL_DURATION,
     CAST(T.COMMENTS AS CHAR(4000)) AS COMMENTS
-  FROM oceanbase.__all_tenant_scheduler_job T WHERE T.JOB_NAME in ('MONDAY_WINDOW',
+  FROM oceanbase.__all_tenant_scheduler_job T WHERE T.JOB > 0 and T.JOB_NAME in ('MONDAY_WINDOW',
     'TUESDAY_WINDOW', 'WEDNESDAY_WINDOW', 'THURSDAY_WINDOW', 'FRIDAY_WINDOW', 'SATURDAY_WINDOW', 'SUNDAY_WINDOW')
   """.replace("\n", " ")
 )
