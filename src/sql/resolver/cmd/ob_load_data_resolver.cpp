@@ -443,7 +443,7 @@ int ObLoadDataResolver::resolve_hints(const ParseNode &node)
         break;
       }
       case T_LOAD_BATCH_SIZE: {
-        if (1 != hint_node->num_child_) {
+        if (2 != hint_node->num_child_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("max concurrent node should have 1 child", K(ret));
         } else if (OB_ISNULL(hint_node->children_[0])) {
@@ -451,6 +451,11 @@ int ObLoadDataResolver::resolve_hints(const ParseNode &node)
           LOG_WARN("child of max concurrent node should not be NULL", K(ret));
         } else if (OB_FAIL(stmt_hints.set_value(
                         ObLoadDataHint::BATCH_SIZE, hint_node->children_[0]->value_))) {
+          LOG_WARN("fail to set concurrent value", K(ret));
+        } else if (OB_NOT_NULL(hint_node->children_[1])
+                   && OB_FAIL(stmt_hints.set_value(ObLoadDataHint::BATCH_BUFFER_SIZE,
+                                              ObString(hint_node->children_[1]->str_len_,
+                                                      hint_node->children_[1]->str_value_)))) {
           LOG_WARN("fail to set concurrent value", K(ret));
         }
         break;
