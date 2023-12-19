@@ -815,7 +815,12 @@ int ObQueryDriver::convert_text_value_charset(ObObj& value,
   ObString raw_str = value.get_string();
   if (value.is_null() || value.is_nop_value()) {
   } else if (OB_ISNULL(raw_str.ptr()) || raw_str.length() == 0) {
-    LOG_WARN("Lob: get null lob locator v2", K(value));
+    if (!value.has_lob_header() || !value.is_lob_storage()) {
+      LOG_DEBUG("Lob: get empty or null obj without header or not lob", K(value));
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Lob: get  empty or null lob obj with header", K(ret), K(value));
+    }
   } else if (ObCharset::is_valid_charset(charset_type) && CHARSET_BINARY != charset_type) {
     ObCollationType to_collation_type = ObCharset::get_default_collation(charset_type);
     ObCollationType from_collation_type = value.get_collation_type();
