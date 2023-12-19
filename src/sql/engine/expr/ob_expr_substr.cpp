@@ -549,9 +549,9 @@ static int eval_substr_text(const ObCollationType &cs_type,
   } else if (OB_FAIL(input_iter.get_char_len(total_char_len))) {
     LOG_WARN("get input char len failed", K(ret));
   } else if (FALSE_IT(result_byte_len = MIN((pos >= 0 ? total_byte_len - pos + 1 : -pos * mbmaxlen), (MIN((len), (total_char_len)) * mbmaxlen)))) {
-  } else if (len <= 0) {
+  } else if (len <= 0 && lib::is_oracle_mode()) {
     output_result.set_result_null();
-  } else if (pos > total_char_len) {
+  } else if (pos > total_char_len || len <= 0) {
     if (!is_batch) {
       ret = output_result.init(0); // fill empty lob result
     } else {
