@@ -70,6 +70,7 @@
 #include "observer/table/ttl/ob_ttl_service.h"
 #include "observer/table/ttl/ob_tenant_tablet_ttl_mgr.h"
 #include "share/wr/ob_wr_service.h"
+#include "rootserver/mview/ob_mview_maintenance_service.h"
 
 namespace oceanbase
 {
@@ -337,6 +338,10 @@ int ObLS::init(const share::ObLSID &ls_id,
         }
       }
 
+      if (OB_SUCC(ret) && ls_id.is_sys_ls() && (is_user_tenant(tenant_id) || is_sys_tenant(tenant_id))) {
+        REGISTER_TO_LOGSERVICE(logservice::MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE, MTL(rootserver::ObMViewMaintenanceService *));
+        LOG_INFO("mview maintenance service is registered successfully", KR(ret));
+      }
 
       if (OB_SUCC(ret)) {             // don't delete it
         election_priority_.set_ls_id(ls_id);
@@ -932,6 +937,10 @@ void ObLS::destroy()
       UNREGISTER_FROM_LOGSERVICE(logservice::TTL_LOG_BASE_TYPE, tablet_ttl_mgr_);
       tablet_ttl_mgr_.destroy();
     }
+  }
+
+  if (ls_meta_.ls_id_.is_sys_ls() && (is_user_tenant(MTL_ID()) || is_sys_tenant(MTL_ID()))) {
+    UNREGISTER_FROM_LOGSERVICE(logservice::MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE, MTL(rootserver::ObMViewMaintenanceService *));
   }
 
   tx_table_.destroy();

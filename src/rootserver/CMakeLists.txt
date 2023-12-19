@@ -177,4 +177,11 @@ ob_set_subtarget(ob_rootserver tenant_snapshot
   tenant_snapshot/ob_tenant_snapshot_util.cpp
 )
 
+ob_set_subtarget(ob_rootserver mview
+  mview/ob_mview_maintenance_service.cpp
+  mview/ob_mlog_maintenance_task.cpp
+  mview/ob_mview_maintenance_task.cpp
+  mview/ob_mview_refresh_stats_maintenance_task.cpp
+)
+
 ob_server_add_target(ob_rootserver)

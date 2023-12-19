@@ -80,6 +80,9 @@ public:
   static int fetch_mview_info(ObISQLClient &sql_client, uint64_t tenant_id, uint64_t mview_id,
                               ObMViewInfo &mview_info, bool for_update = false,
                               bool nowait = false);
+  static int batch_fetch_mview_ids(ObISQLClient &sql_client, uint64_t tenant_id,
+                                   uint64_t last_mview_id, ObIArray<uint64_t> &mview_ids,
+                                   int64_t limit = -1);
 
   TO_STRING_KV(K_(tenant_id),
                K_(mview_id),
