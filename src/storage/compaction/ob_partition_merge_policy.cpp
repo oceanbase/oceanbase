@@ -1484,10 +1484,11 @@ int ObAdaptiveMergePolicy::find_adaptive_merge_tables(
         LOG_INFO("no enough table or no enough rows for meta merge", K(ret),
             K(scanty_tx_determ_table), K(scanty_inc_row_cnt), K(result), K(PRINT_TS_WRAPPER(table_store_wrapper)));
       }
-    } else if (result.version_range_.snapshot_version_ < tablet.get_multi_version_start()) {
+    } else if (result.version_range_.snapshot_version_ < tablet.get_multi_version_start()
+            || result.version_range_.snapshot_version_ <= base_table->get_snapshot_version()) {
       ret = OB_NO_NEED_MERGE;
       if (REACH_TENANT_TIME_INTERVAL(30_s)) {
-        LOG_INFO("chosen snapshot is abandoned", K(ret), K(result), K(tablet.get_multi_version_start()));
+        LOG_INFO("chosen snapshot is abandoned", K(ret), K(result), K(tablet.get_multi_version_start()), KPC(base_table));
       }
     }
 
