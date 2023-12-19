@@ -34,7 +34,6 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 
 
-#define TO_TS(second) 1000000L * second
 
 namespace oceanbase
 {
@@ -48,7 +47,7 @@ namespace dbms_scheduler
 {
 
 int ObDBMSSchedTableOperator::update_for_start(
-  uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, bool update_nextdate)
+  uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, int64_t next_date)
 {
   int ret = OB_SUCCESS;
 
@@ -56,8 +55,6 @@ int ObDBMSSchedTableOperator::update_for_start(
   ObSqlString sql;
   int64_t affected_rows = 0;
   const int64_t now = ObTimeUtility::current_time();
-  int64_t delay = 0;
-  int64_t dummy_execute_at = 0;
 
   CK (OB_NOT_NULL(sql_proxy_));
   CK (OB_LIKELY(tenant_id != OB_INVALID_ID));
@@ -69,36 +66,10 @@ int ObDBMSSchedTableOperator::update_for_start(
   OZ (dml.add_pk_column("job", job_info.job_));
   OZ (dml.add_pk_column("job_name", job_info.job_name_));
   OZ (dml.add_time_column("this_date", job_info.this_date_));
+  OZ (dml.add_time_column("next_date", next_date));
   OZ (dml.add_column("state", "SCHEDULED"));
   OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
   OZ (sql_proxy_->write(tenant_id, sql.ptr(), affected_rows));
-  OZ (calc_execute_at(
-    job_info, (update_nextdate ? job_info.next_date_ : dummy_execute_at), delay, true));
-  return ret;
-}
-
-int ObDBMSSchedTableOperator::update_nextdate(
-  uint64_t tenant_id, ObDBMSSchedJobInfo &job_info)
-{
-  int ret = OB_SUCCESS;
-
-  ObDMLSqlSplicer dml;
-  ObSqlString sql;
-  int64_t affected_rows = 0;
-  const int64_t now = ObTimeUtility::current_time();
-
-  CK (OB_NOT_NULL(sql_proxy_));
-  CK (OB_LIKELY(tenant_id != OB_INVALID_ID));
-  CK (OB_LIKELY(job_info.job_ != OB_INVALID_ID));
-
-  OZ (dml.add_gmt_modified(now));
-  OZ (dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
-  OZ (dml.add_pk_column("job", job_info.job_));
-  OZ (dml.add_pk_column("job_name", job_info.job_name_));
-  OZ (dml.add_time_column("next_date", job_info.next_date_));
-  OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
-  OZ (sql_proxy_->write(tenant_id, sql.ptr(), affected_rows));
-
   return ret;
 }
 
@@ -242,31 +213,6 @@ int ObDBMSSchedTableOperator::update_for_end(
     }
   }
 
-  return ret;
-}
-
-int ObDBMSSchedTableOperator::check_job_timeout(ObDBMSSchedJobInfo &job_info)
-{
-  int ret = OB_SUCCESS;
-  if ((!job_info.is_running()) || (job_info.get_max_run_duration() == 0)) {
-    //not running or not set timeout
-  } else if (ObTimeUtility::current_time() > (job_info.get_this_date() + TO_TS(job_info.get_max_run_duration()))) {
-    OZ(update_for_end(job_info.get_tenant_id(), job_info, 0, "check job timeout"));
-    LOG_WARN("job is timeout, force update for end", K(job_info), K(ObTimeUtility::current_time()));
-  }
-  return ret;
-}
-
-int ObDBMSSchedTableOperator::check_auto_drop(ObDBMSSchedJobInfo &job_info)
-{
-  int ret = OB_SUCCESS;
-  if (job_info.is_running()) {
-    // running job not check
-  } else if (ObTimeUtility::current_time() > (job_info.end_date_) &&
-             (true == job_info.auto_drop_)) {
-    OZ(update_for_end(job_info.get_tenant_id(), job_info, 0, "check auto drop expired job"));
-    LOG_WARN("auto drop miss out job", K(job_info), K(ObTimeUtility::current_time()));
-  }
   return ret;
 }
 
@@ -532,90 +478,6 @@ int ObDBMSSchedTableOperator::get_dbms_sched_job_class_info(
       }
     }
   }
-  return ret;
-}
-
-int ObDBMSSchedTableOperator::calc_execute_at(
-  ObDBMSSchedJobInfo &job_info, int64_t &execute_at, int64_t &delay, bool ignore_nextdate)
-{
-  int ret = OB_SUCCESS;
-
-  ObString &interval = job_info.get_interval();
-
-  const int64_t now = ObTimeUtility::current_time();
-  int64_t last_sub_next =
-    (job_info.get_last_modify() / 1000 / 1000) - (job_info.get_next_date() / 1000/ 1000);
-  if (job_info.get_next_date() != 0 && (!ignore_nextdate || job_info.get_next_date() != execute_at)) {
-    if (job_info.get_next_date() > now) {
-      execute_at = job_info.get_next_date();
-      delay = job_info.get_next_date() - now;
-    } else if (now - job_info.get_next_date() < TO_TS(job_info.get_max_run_duration())) {
-      LOG_WARN("job maybe missed, retry it", K(now), K(job_info), K(execute_at), K(delay), K(ignore_nextdate), K(lbt()));
-      execute_at = now;
-      delay = 0;
-    } else if (last_sub_next < 5 && last_sub_next >= -5) {
-      LOG_WARN("job maybe missed, retry it", K(last_sub_next), K(now), K(job_info), K(execute_at), K(delay), K(ignore_nextdate), K(lbt()));
-      execute_at = now;
-      delay = 0;
-    } else {
-      int tmp_ret = OB_SUCCESS;
-      LOG_WARN("job maybe missed, ignore it", K(last_sub_next), K(now), K(job_info), K(execute_at), K(delay), K(ignore_nextdate), K(lbt()));
-      if (OB_SUCCESS != (tmp_ret = update_for_end(job_info.get_tenant_id(), job_info, 0, "check job missed"))) {
-        LOG_WARN("update for end failed for missed job", K(tmp_ret));
-      }
-      delay = -1;
-    }
-  } else {
-    delay = -1;
-  }
-
-  if (delay < 0 && job_info.get_interval_ts() != 0) {
-    ObSqlString sql;
-    common::ObISQLClient *sql_proxy = sql_proxy_;
-    ObOracleSqlProxy oracle_proxy(*(static_cast<ObMySQLProxy *>(sql_proxy_)));
-    // NOTE: we need utc timestamp.
-    if (lib::is_mysql_mode()) {
-      OZ (sql.append_fmt("select utc_timestamp() from dual;"));
-    } else {
-      OZ (sql.append_fmt(
-        "select cast(to_timestamp(sys_extract_utc(to_timestamp(sysdate))) as date) from dual;"));
-      sql_proxy = &oracle_proxy;
-    }
-    
-    SMART_VAR(ObMySQLProxy::MySQLResult, result) {
-      if (OB_FAIL(sql_proxy->read(result, job_info.get_tenant_id(), sql.ptr()))) {
-        LOG_WARN("execute query failed", K(ret), K(sql), K(job_info));
-      } else if (OB_NOT_NULL(result.get_result())) {
-        if (OB_FAIL(result.get_result()->next())) {
-          LOG_WARN("failed to get result", K(ret));
-        } else {
-          int64_t sysdate = 0;
-          int64_t col_idx = 0;
-          OZ (result.get_result()->get_datetime(col_idx, sysdate));
-          if (OB_SUCC(ret)) {
-            execute_at = sysdate + job_info.get_interval_ts();
-          }
-          if (OB_FAIL(ret)) {
-          } else if (job_info.get_next_date() > execute_at) {
-            execute_at = job_info.get_next_date();
-            delay = execute_at - sysdate;
-          } else {
-            delay = execute_at - sysdate;
-          }
-          if (OB_SUCC(ret)) {
-            OX (job_info.next_date_ = execute_at);
-            OZ (update_nextdate(job_info.get_tenant_id(), job_info));
-          }
-        }
-      }
-    }
-    LOG_INFO("repeat job update nextdate", K(job_info), K(execute_at), K(delay), K(ignore_nextdate));
-  } else if (delay < 0 && job_info.get_interval_ts() == 0) {
-    OX (job_info.next_date_ = 64060560000000000); // 4000-01-01
-    OZ (update_nextdate(job_info.get_tenant_id(), job_info));
-    LOG_INFO("once job update nextdate", K(job_info), K(execute_at), K(delay), K(ignore_nextdate));
-  }
-
   return ret;
 }
 

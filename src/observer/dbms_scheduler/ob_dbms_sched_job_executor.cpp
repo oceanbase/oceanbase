@@ -279,7 +279,6 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(uint64_t tenant_id, bool is_oracl
   OZ (table_operator_.get_dbms_sched_job_info(tenant_id, is_oracle_tenant, job_id, job_name, allocator, job_info));
 
   if (OB_SUCC(ret)) {
-    OZ (table_operator_.update_for_start(tenant_id, job_info));
 
     OZ (run_dbms_sched_job(tenant_id, job_info));
 
