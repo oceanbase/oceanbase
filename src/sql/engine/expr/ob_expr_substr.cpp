@@ -557,7 +557,9 @@ static int eval_substr_text(const ObCollationType &cs_type,
   } else if (OB_FAIL(input_iter.get_char_len(total_char_len))) {
     LOG_WARN("get input char len failed", K(ret));
   } else if (FALSE_IT(result_byte_len = MIN((pos >= 0 ? total_byte_len - pos + 1 : -pos * mbmaxlen), (MIN((len), (total_char_len)) * mbmaxlen)))) {
-  } else if (len < 0 || pos > total_char_len) {
+  } else if (len <= 0 && lib::is_oracle_mode()) {
+    output_result.set_result_null();
+  } else if (pos > total_char_len || len <= 0) {
     if (!is_batch) {
       ret = output_result.init(0); // fill empty lob result
     } else {
@@ -574,45 +576,44 @@ static int eval_substr_text(const ObCollationType &cs_type,
     } else {
       ret = output_result.init_with_batch_idx(result_byte_len, batch_idx);
     }
-  }
-
-  if (OB_FAIL(ret)) {
-    LOG_WARN("init stringtext result failed", K(ret));
-  } else {
-    if (lib::is_oracle_mode() && 0 == pos) {
-      pos = 1;
-    }
-    // iter settings only effective to outrow lobs
-    uint64_t start_offset = (pos >= 0 ? pos - 1 : total_char_len + pos);
-    if (start_offset >= total_char_len) {
-      output_result.set_result();
+    if (OB_FAIL(ret)) {
+      LOG_WARN("init stringtext result failed", K(ret));
     } else {
-      input_iter.set_start_offset((pos >= 0 ? pos - 1 : total_char_len + pos));
-      input_iter.set_access_len(len);
-      ObTextStringIterState state;
-      ObString src_block_data;
-      while (OB_SUCC(ret)
-            && (state = input_iter.get_next_block(src_block_data)) == TEXTSTRING_ITER_NEXT) {
-        if (!input_iter.is_outrow_lob()) {
-          ObString inrow_result;
-          if (OB_FAIL(ObExprSubstr::substr(inrow_result, src_block_data, pos, len,
-                                           cs_type,
-                                           storage::can_do_ascii_optimize(cs_type)))) {
-            LOG_WARN("get substr failed", K(ret));
-          } else if (OB_FAIL(output_result.append(inrow_result))) {
+      if (lib::is_oracle_mode() && 0 == pos) {
+        pos = 1;
+      }
+      // iter settings only effective to outrow lobs
+      uint64_t start_offset = (pos >= 0 ? pos - 1 : total_char_len + pos);
+      if (start_offset >= total_char_len) {
+        output_result.set_result();
+      } else {
+        input_iter.set_start_offset((pos >= 0 ? pos - 1 : total_char_len + pos));
+        input_iter.set_access_len(len);
+        ObTextStringIterState state;
+        ObString src_block_data;
+        while (OB_SUCC(ret)
+              && (state = input_iter.get_next_block(src_block_data)) == TEXTSTRING_ITER_NEXT) {
+          if (!input_iter.is_outrow_lob()) {
+            ObString inrow_result;
+            if (OB_FAIL(ObExprSubstr::substr(inrow_result, src_block_data, pos, len,
+                                            cs_type,
+                                            storage::can_do_ascii_optimize(cs_type)))) {
+              LOG_WARN("get substr failed", K(ret));
+            } else if (OB_FAIL(output_result.append(inrow_result))) {
+              LOG_WARN("append result failed", K(ret), K(output_result), K(src_block_data));
+            }
+          } else if (OB_FAIL(output_result.append(src_block_data))) {
             LOG_WARN("append result failed", K(ret), K(output_result), K(src_block_data));
           }
-        } else if (OB_FAIL(output_result.append(src_block_data))) {
-          LOG_WARN("append result failed", K(ret), K(output_result), K(src_block_data));
         }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
-        ret = (input_iter.get_inner_ret() != OB_SUCCESS) ?
-                input_iter.get_inner_ret() : OB_INVALID_DATA;
-        LOG_WARN("iter state invalid", K(ret), K(state), K(input_iter));
-      } else {
-        output_result.set_result();
+        if (OB_FAIL(ret)) {
+        } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
+          ret = (input_iter.get_inner_ret() != OB_SUCCESS) ?
+                  input_iter.get_inner_ret() : OB_INVALID_DATA;
+          LOG_WARN("iter state invalid", K(ret), K(state), K(input_iter));
+        } else {
+          output_result.set_result();
+        }
       }
     }
   }
