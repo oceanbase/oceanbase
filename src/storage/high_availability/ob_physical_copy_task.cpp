@@ -1385,7 +1385,7 @@ int ObTabletCopyFinishTask::create_new_table_store_with_minor_()
     ret = OB_NOT_INIT;
     LOG_WARN("tablet copy finish task do not init", K(ret));
   } else if (OB_FAIL(ObStorageHATabletBuilderUtil::build_table_with_minor_tables(ls_, tablet_id_,
-      src_tablet_meta_, minor_tables_handle_))) {
+      src_tablet_meta_, minor_tables_handle_, restore_action_))) {
     LOG_WARN("failed to build table with ddl tables", K(ret));
   }
   return ret;

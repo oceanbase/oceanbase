@@ -2206,21 +2206,18 @@ int ObStorageHATabletBuilderUtil::build_table_with_minor_tables(
     ObLS *ls,
     const common::ObTabletID &tablet_id,
     const ObMigrationTabletParam *src_tablet_meta,
-    const ObTablesHandleArray &minor_tables)
+    const ObTablesHandleArray &minor_tables,
+    const ObTabletRestoreAction::ACTION &restore_action)
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
-  //TODO(muwei.ym) check this logical when remove remote logical minor sstable in 4.2 RC3
-  //minor tables array is empty which means
-  //1.src do not has any minor but has major which contains dest minor sstable range
-  //2.src has minor sstables but dest has same minor sstable
-  const bool need_tablet_meta_merge = true;
+  const bool need_tablet_meta_merge = ObTabletRestoreAction::is_restore_major(restore_action) ? false : true;
   const bool update_ddl_sstable = false;
 
-  if (OB_ISNULL(ls) || !tablet_id.is_valid() || OB_ISNULL(src_tablet_meta)) {
+  if (OB_ISNULL(ls) || !tablet_id.is_valid() || OB_ISNULL(src_tablet_meta) || !ObTabletRestoreAction::is_valid(restore_action)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("build tablet with major tables get invalid argument", K(ret), KP(ls), K(tablet_id));
+    LOG_WARN("build tablet with major tables get invalid argument", K(ret), KP(ls), K(tablet_id), K(restore_action));
   } else if (OB_FAIL(get_tablet_(tablet_id, ls, tablet_handle))) {
     LOG_WARN("failed to get tablet", K(ret), K(tablet_id), KPC(ls));
   } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
