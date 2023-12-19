@@ -6820,6 +6820,7 @@ all_tenant_snapshot_ls_replica_history_def = dict(
   ],
 )
 def_table_schema(**all_tenant_snapshot_ls_replica_history_def)
+# 508 : __all_ls_replica_task_history
 #
 # 余留位置
 ################################################################################
@@ -13769,6 +13770,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   keywords = all_def_keywords['__all_tenant_snapshot_ls_replica_history']))
 # 12465: __all_virtual_share_storage_quota_assignment
 # 12466: enabled_roles
+# 12467: __all_virtual_ls_replica_task_history
 # 余留位置
 #
 
@@ -14199,6 +14201,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 
 # 15441: __all_virtual_share_storage_quota_assignment
 # 15442: __all_virtual_column_group
+# 15443: __all_virtual_ls_replica_task_history
 # 余留位置
 
 
@@ -31678,6 +31681,8 @@ FROM oceanbase.__all_clone_job_history ORDER BY CLONE_START_TIME
 #21520 GV$OB_SHARE_STORAGE_QUOTA_ASSIGNMENT
 #21521 V$OB_SHARE_STORAGE_QUOTA_ASSIGNMENT
 #21522 CDB_UNUSED_COL_TABS
+#21523 DBA_OB_LS_REPLICA_TASK_HISTORY
+#21524 CDB_OB_LS_REPLICA_TASK_HISTORY
 # 余留位置
 
 ################################################################################
@@ -50537,6 +50542,7 @@ def_table_schema(
       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
 )
+# 25279: DBA_OB_LS_REPLICA_TASK_HISTORY
 
 # 余留位置
 
