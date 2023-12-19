@@ -25,17 +25,20 @@ class ObCreateRoutineStmt : public ObDDLStmt
 {
 public:
   explicit ObCreateRoutineStmt(common::ObIAllocator *name_pool)
-  : ObDDLStmt(name_pool, stmt::T_CREATE_ROUTINE)
-  {}
+      : ObDDLStmt(name_pool, stmt::T_CREATE_ROUTINE) {}
   ObCreateRoutineStmt() : ObDDLStmt(stmt::T_CREATE_ROUTINE) {}
   virtual ~ObCreateRoutineStmt() {}
   obrpc::ObCreateRoutineArg &get_routine_arg() { return routine_arg_; }
   const obrpc::ObCreateRoutineArg &get_routine_arg() const { return routine_arg_; }
   virtual obrpc::ObDDLArg &get_ddl_arg() { return routine_arg_; }
   TO_STRING_KV(K_(routine_arg));
+protected:
+  explicit ObCreateRoutineStmt(common::ObIAllocator *name_pool, stmt::StmtType stmt_type)
+      : ObDDLStmt(name_pool, stmt_type) {}
+  explicit ObCreateRoutineStmt(stmt::StmtType stmt_type)
+      : ObDDLStmt(stmt_type) {}
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateRoutineStmt);
-private:
   obrpc::ObCreateRoutineArg routine_arg_;
 };
 

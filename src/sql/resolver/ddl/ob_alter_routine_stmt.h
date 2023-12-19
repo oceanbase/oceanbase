@@ -21,22 +21,15 @@ namespace oceanbase
 {
 namespace sql
 {
-class ObAlterRoutineStmt : public ObDDLStmt
+class ObAlterRoutineStmt : public ObCreateRoutineStmt
 {
 public:
   explicit ObAlterRoutineStmt(common::ObIAllocator *name_pool)
-  : ObDDLStmt(name_pool, stmt::T_ALTER_ROUTINE)
-  {}
-  ObAlterRoutineStmt() : ObDDLStmt(stmt::T_ALTER_ROUTINE) {}
+      : ObCreateRoutineStmt(name_pool, stmt::T_ALTER_ROUTINE) {}
+  ObAlterRoutineStmt() : ObCreateRoutineStmt(stmt::T_ALTER_ROUTINE) {}
   virtual ~ObAlterRoutineStmt() {}
-  obrpc::ObCreateRoutineArg &get_routine_arg() { return routine_arg_; }
-  const obrpc::ObCreateRoutineArg &get_routine_arg() const { return routine_arg_; }
-  virtual obrpc::ObDDLArg &get_ddl_arg() { return routine_arg_; }
-  TO_STRING_KV(K_(routine_arg));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAlterRoutineStmt);
-private:
-  obrpc::ObCreateRoutineArg routine_arg_;
 };
 
 }

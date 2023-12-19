@@ -16,6 +16,7 @@
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "share/ob_rpc_struct.h"
 #include "share/schema/ob_schema_struct.h"
+#include "sql/resolver/ddl/ob_create_routine_stmt.h"
 
 namespace oceanbase
 {
@@ -57,6 +58,7 @@ public:
   
   virtual int resolve(const ParseNode &parse_tree);
   virtual int resolve_impl(const ParseNode &parse_tree, obrpc::ObCreateRoutineArg *crt_routine_arg) = 0;
+  void set_basic_stmt(ObCreateRoutineStmt *stmt) { stmt_ = stmt; }
 
 private:
   int check_dup_routine_param(const common::ObIArray<share::schema::ObRoutineParam*> &params,

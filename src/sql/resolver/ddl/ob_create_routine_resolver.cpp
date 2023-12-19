@@ -234,12 +234,14 @@ int ObCreateRoutineResolver::collect_ref_obj_info(int64_t ref_obj_id, int64_t re
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(stmt_));
-  obrpc::ObCreateRoutineArg &crt_routine_arg =
-      static_cast<ObCreateRoutineStmt *>(stmt_)->get_routine_arg();
-  ObObjectType dep_obj_type = crt_routine_arg.routine_info_.get_object_type();
-  OV (ObObjectType::INVALID != dep_obj_type);
-  OZ (ObDependencyInfo::collect_dep_info(crt_routine_arg.dependency_infos_, dep_obj_type,
-                                         ref_obj_id, ref_timestamp, dependent_type));
+  if (OB_SUCC(ret)) {
+    obrpc::ObCreateRoutineArg &crt_routine_arg =
+        static_cast<ObCreateRoutineStmt *>(stmt_)->get_routine_arg();
+    ObObjectType dep_obj_type = crt_routine_arg.routine_info_.get_object_type();
+    OV (ObObjectType::INVALID != dep_obj_type);
+    OZ (ObDependencyInfo::collect_dep_info(crt_routine_arg.dependency_infos_, dep_obj_type,
+                                          ref_obj_id, ref_timestamp, dependent_type));
+  }
   return ret;
 }
 

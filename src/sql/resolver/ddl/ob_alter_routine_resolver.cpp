@@ -57,9 +57,12 @@ int ObAlterRoutineResolver::resolve(const ParseNode &parse_tree)
                                               session_info_->get_enable_role_array()));
     }
     //Step2: create alter stmt
-    if (OB_SUCC(ret) && OB_ISNULL(alter_routine_stmt = create_stmt<ObAlterRoutineStmt>())) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(alter_routine_stmt = create_stmt<ObAlterRoutineStmt>())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory for ObAlterRoutineStmt", K(ret));
+    } else {
+      crt_resolver_->set_basic_stmt(alter_routine_stmt);
     }
     //Step3: got standalone routine info 
     if (OB_FAIL(ret)) {
