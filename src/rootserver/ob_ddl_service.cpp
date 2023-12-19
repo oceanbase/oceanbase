@@ -3031,6 +3031,9 @@ int ObDDLService::drop_primary_key(
     if (OB_ISNULL(col = new_table_schema.get_column_schema(rowkey_column->column_id_))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("col is nullptr", K(ret), K(rowkey_column->column_id_), K(new_table_schema));
+    } else if (OB_HIDDEN_SESSION_ID_COLUMN_ID == col->get_column_id()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Dropping primary key of global temporary table");
     } else {
       col->set_rowkey_position(0);
     }
@@ -3068,21 +3071,30 @@ int ObDDLService::add_primary_key(const ObIArray<ObString> &pk_column_names, ObT
   // step1: clear origin primary key
   ObTableSchema::const_column_iterator tmp_begin = new_table_schema.column_begin();
   ObTableSchema::const_column_iterator tmp_end = new_table_schema.column_end();
+  ObColumnSchemaV2 *del_hidden_pk_column = nullptr;
   for (; OB_SUCC(ret) && tmp_begin != tmp_end; tmp_begin++) {
     ObColumnSchemaV2 *col = (*tmp_begin);
     if (OB_ISNULL(col)) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (col->get_column_id() == OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
-      // delete hidden primary key
-      if (OB_FAIL(new_table_schema.delete_column(col->get_column_name_str()))) {
-        LOG_WARN("fail to delete hidden primary key", K(ret));
-      }
+    } else if (OB_HIDDEN_PK_INCREMENT_COLUMN_ID == col->get_column_id()) {
+      del_hidden_pk_column = col;
+    } else if (OB_HIDDEN_SESSION_ID_COLUMN_ID == col->get_column_id()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Adding primary key to global temporary table");
     } else {
       col->set_rowkey_position(0);
     }
     new_table_schema.set_table_pk_mode(ObTablePKMode::TPKM_OLD_NO_PK);
     new_table_schema.set_table_organization_mode(ObTableOrganizationMode::TOM_INDEX_ORGANIZED);
   }
+
+  if (OB_SUCC(ret) && nullptr != del_hidden_pk_column) {
+    // delete hidden primary key
+    if (OB_FAIL(new_table_schema.delete_column(del_hidden_pk_column->get_column_name_str()))) {
+      LOG_WARN("fail to delete hidden primary key", K(ret));
+    }
+  }
+
   if (OB_SUCC(ret)) {
     // step2: set new primary key rowkey_position
     int64_t rowkey_position = 1;
@@ -12104,10 +12116,10 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                    &alter_table_arg,
                                    0/*parent_task_id*/,
                                    task_id);
-        if (orig_table_schema->is_tmp_table() || orig_table_schema->is_external_table()) {
+        if (orig_table_schema->is_external_table()) {
           ret = OB_OP_NOT_ALLOW;
           char err_msg[OB_MAX_ERROR_MSG_LEN] = {0};
-          (void)snprintf(err_msg, sizeof(err_msg), "%s on temporary table is", ddl_type_str(ddl_type));
+          (void)snprintf(err_msg, sizeof(err_msg), "%s on external table is", ddl_type_str(ddl_type));
           LOG_WARN("double table long running ddl on temporary table is disallowed", K(ret), K(ddl_type));
           LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
         } else if (OB_FAIL(ObDDLTaskRecordOperator::check_has_conflict_ddl(sql_proxy_, tenant_id, orig_table_schema->get_table_id(), 0, ddl_type, has_conflict_ddl))) {
