@@ -9,7 +9,6 @@ on:
       - 'README.md'
       - 'README_CN.md'
       - 'CONTRIBUTING.md'
-
   schedule:
     - cron: '30 9 * * *'
 

@@ -248,7 +248,7 @@ int check_list_value_duplicate(T **partition_array,
             !ObSQLUtils::is_same_type_for_compare(tmp_row.get_cell(z).get_meta(),
                                                   row.get_cell(z).get_meta())) {
           ret = OB_ERR_PARTITION_VALUE_ERROR;
-          LOG_WARN("partition value should have same meta info", K(ret), K(tmp_row), K(row), K(j));
+          LOG_WARN("partiton value should have same meta info", K(ret), K(tmp_row), K(row), K(j));
         }
       }
       if (OB_SUCC(ret) && tmp_row == row) {
@@ -647,7 +647,7 @@ int ObPartitionExecutorUtils::check_increasing_range_value(T **array,
               && !rowkey_cur->get_obj_ptr()[j].is_max_value()
               && !rowkey_last->get_obj_ptr()[j].is_max_value()) {
             ret = OB_ERR_PARTITION_VALUE_ERROR;
-            LOG_WARN("partition value should have same meta info", K(ret), K(*rowkey_cur), K(*rowkey_last), K(j));
+            LOG_WARN("partiton value should have same meta info", K(ret), K(*rowkey_cur), K(*rowkey_last), K(j));
           } else if (rowkey_cur->get_obj_ptr()[j].is_max_value() &&
                      rowkey_last->get_obj_ptr()[j].is_max_value()) {
             need_check_maxvalue = true;
