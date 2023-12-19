@@ -2385,7 +2385,7 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
               LOG_WARN("push_back error", K(ret));
             }
           }
-          // add debug info, for convinence of sql reconstruct debug
+          // add debug info, for convenience of sql reconstruct debug
           LOG_DEBUG("spi prepare, source sql and prepared reconstruct sql", K(sql),
                                               K(pl_prepare_result.result_set_->get_route_sql()));
           if (OB_SUCC(ret)) {

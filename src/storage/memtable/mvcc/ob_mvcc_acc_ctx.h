@@ -266,7 +266,7 @@ public: // NOTE: those field should only be accessed by txn relative routine
   transaction::ObTxSEQ tx_scn_;                             // the change's number of this modify
   concurrent_control::ObWriteFlag write_flag_; // the write flag of the write process
 
-  // this was used for runtime mertic
+  // this was used for runtime metric
   int64_t handle_start_time_;
 
   bool is_standby_read_;

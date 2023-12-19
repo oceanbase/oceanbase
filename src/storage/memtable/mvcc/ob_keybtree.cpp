@@ -1168,7 +1168,7 @@ int Iterator<BtreeKey, BtreeVal>::iter_next_batch_level_node(int64_t &element_co
             is_iter_end_ = true;
           }
         } else if (cmp == 0) {
-          // the last leaf, all the values in this leaf are satified
+          // the last leaf, all the values in this leaf are satisfied
           is_iter_end_ = true;
         }
       }

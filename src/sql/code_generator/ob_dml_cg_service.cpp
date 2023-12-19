@@ -2815,7 +2815,7 @@ int ObDmlCgService::generate_fk_check_ctdef(const ObLogDelUpd &op,
     ObSEArray<ObRawExpr *, 4> constraint_dep_exprs;
     ObSEArray<ObRawExpr *, 4> constraint_raw_exprs;
     if (OB_ISNULL(part_id_expr_for_lookup = fk_part_id_expr)) {
-      // check if table to perform das task is partiton table
+      // check if table to perform das task is partition table
     } else if (OB_FAIL(cg_.generate_calc_part_id_expr(*part_id_expr_for_lookup, nullptr, rt_part_id_expr))) {
       LOG_WARN("generate rt part_id_expr failed", K(ret), KPC(part_id_expr_for_lookup));
     } else if (OB_ISNULL(rt_part_id_expr)) {

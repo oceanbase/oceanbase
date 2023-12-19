@@ -725,7 +725,7 @@ int ObTableLocation::assign(const ObTableLocation &other)
     is_non_partition_optimized_ = other.is_non_partition_optimized_;
     tablet_id_ = other.tablet_id_;
     object_id_ = other.object_id_;
-    check_no_partiton_ = other.check_no_partiton_;
+    check_no_partition_ = other.check_no_partition_;
     if (OB_FAIL(loc_meta_.assign(other.loc_meta_))) {
       LOG_WARN("assign loc meta failed", K(ret), K(other.loc_meta_));
     }
@@ -855,7 +855,7 @@ void ObTableLocation::reset()
   is_non_partition_optimized_ = false;
   tablet_id_.reset();
   object_id_ = OB_INVALID_ID;
-  check_no_partiton_ = false;
+  check_no_partition_ = false;
 }
 int ObTableLocation::init(share::schema::ObSchemaGetterGuard &schema_guard,
     const ObDMLStmt &stmt,
@@ -1706,7 +1706,7 @@ int ObTableLocation::calculate_tablet_ids(ObExecContext &exec_ctx,
         && 0 == partition_ids.count()
         && (stmt::T_INSERT == stmt_type_
             || stmt::T_REPLACE == stmt_type_
-            || check_no_partiton_)) {
+            || check_no_partition_)) {
       ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
       LOG_USER_WARN(OB_NO_PARTITION_FOR_GIVEN_VALUE);
     }
@@ -2891,7 +2891,7 @@ int ObTableLocation::add_partition_columns(const ObDMLStmt &stmt,
         LOG_WARN("Column id should not be OB_INVALID_ID", K(ret));
       } else if (only_gen_cols) {//only deal dependented columns for generated partition column
         if (OB_FAIL(add_partition_column(stmt, table_id, column_id, gen_cols, gen_row_desc))) {
-          LOG_WARN("Failed to add partiton column", K(ret));
+          LOG_WARN("Failed to add partition column", K(ret));
         }
       } else {
         if (col_expr->is_generated_column()) {
@@ -2918,7 +2918,7 @@ int ObTableLocation::add_partition_columns(const ObDMLStmt &stmt,
         if (OB_SUCC(ret)) {
           if (OB_FAIL(add_partition_column(stmt, table_id, column_id,
                                           partition_columns, row_desc))) {
-            LOG_WARN("Failed to add partiton column", K(ret));
+            LOG_WARN("Failed to add partition column", K(ret));
           }
         }
       }//end of else
@@ -3971,7 +3971,7 @@ int ObTableLocation::calc_partition_id_by_row(ObExecContext &exec_ctx,
   if (OB_FAIL(ret) || range_columns) {
   } else if (OB_FAIL(calc_partition_id_by_func_value(tablet_mapper, func_result, false,
                                                       tablet_ids, partition_ids, part_ids))) {
-    LOG_WARN("Failed to calc partiton id by func value", K(ret));
+    LOG_WARN("Failed to calc partition id by func value", K(ret));
   }
   if (0 == partition_ids.count() && PARTITION_LEVEL_ONE == calc_range_part_level) {
     bool is_interval = false;
@@ -4751,7 +4751,7 @@ OB_DEF_SERIALIZE(ObTableLocation)
   OB_UNIS_ENCODE(object_id_);
   OB_UNIS_ENCODE(related_list_);
   OB_UNIS_ENCODE(table_type_);
-  OB_UNIS_ENCODE(check_no_partiton_);
+  OB_UNIS_ENCODE(check_no_partition_);
   return ret;
 }
 
@@ -4829,7 +4829,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableLocation)
   OB_UNIS_ADD_LEN(object_id_);
   OB_UNIS_ADD_LEN(related_list_);
   OB_UNIS_ADD_LEN(table_type_);
-  OB_UNIS_ADD_LEN(check_no_partiton_);
+  OB_UNIS_ADD_LEN(check_no_partition_);
   return len;
 }
 
@@ -4985,7 +4985,7 @@ OB_DEF_DESERIALIZE(ObTableLocation)
   OB_UNIS_DECODE(object_id_);
   OB_UNIS_DECODE(related_list_);
   OB_UNIS_DECODE(table_type_);
-  OB_UNIS_DECODE(check_no_partiton_);
+  OB_UNIS_DECODE(check_no_partition_);
   return ret;
 }
 

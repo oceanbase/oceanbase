@@ -580,7 +580,7 @@ int AlterTableSchema::add_alter_column(const AlterColumnSchema &alter_column_sch
   return ret;
 }
 
-int AlterTableSchema::assign_subpartiton_key_info(const common::ObPartitionKeyInfo& src_info)
+int AlterTableSchema::assign_subpartition_key_info(const common::ObPartitionKeyInfo& src_info)
 {
   int ret = OB_SUCCESS;
 

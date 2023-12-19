@@ -360,7 +360,7 @@ struct ObMvccRow
   bool is_valid_replay_queue_index(const int64_t index) const;
 
   // ======================== ObMvccRow Row Metas ========================
-  // first dml and last dml is the importatnt statistics for row estimation
+  // first dml and last dml is the important statistics for row estimation
   void update_dml_flag_(blocksstable::ObDmlFlag flag, uint32_t modify_count);
   blocksstable::ObDmlFlag get_first_dml_flag() const { return first_dml_flag_; }
 

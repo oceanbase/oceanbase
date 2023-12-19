@@ -600,7 +600,7 @@ public:
   }
   inline const common::ObString &get_new_part_name() const { return new_part_name_; }
   inline int set_new_part_name(const common::ObString &new_part_name);
-  int assign_subpartiton_key_info(const common::ObPartitionKeyInfo& src_info);
+  int assign_subpartition_key_info(const common::ObPartitionKeyInfo& src_info);
 
   int add_alter_column(const AlterColumnSchema &column, const bool need_allocate);
   void reset();

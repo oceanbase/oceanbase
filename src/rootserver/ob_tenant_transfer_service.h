@@ -91,7 +91,7 @@ public:
    * if task is already cleared, return OB_SUCCESS and related info recorded in history
    *
    * @param[in] task_id:               transfer task id
-   * @param[out] all_part_list:        all partitons of the transfer task
+   * @param[out] all_part_list:        all partitions of the transfer task
    * @param[out] finished_part_list:   successfully transferred partitions + needless transferred (not exist or not in src LS) partitions
    * @return
    * - OB_SUCCESS:         clear task successfully

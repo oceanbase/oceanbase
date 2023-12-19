@@ -365,7 +365,7 @@ int ObDelUpdLogPlan::calculate_table_location_and_sharding(const ObDelUpdStmt &s
     table_partition_info = new(table_partition_info) ObTablePartitionInfo(allocator_);
     ObTableLocationType location_type = OB_TBL_LOCATION_UNINITIALIZED;
     ObAddr &server = get_optimizer_context().get_local_server_addr();
-    table_partition_info->get_table_location().set_check_no_partiton(stmt.is_merge_stmt());
+    table_partition_info->get_table_location().set_check_no_partition(stmt.is_merge_stmt());
     if (OB_FAIL(calculate_table_location(stmt,
                                          filters,
                                          table_id,
