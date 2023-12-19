@@ -96,6 +96,7 @@ int ObSqlMemMgrProcessor::init(
   }
   int64_t max_mem_size = MAX_SQL_MEM_SIZE;
   if (OB_FAIL(ret)) {
+    LOG_WARN("fail to init", K(ret), K(cache_size));
   } else if (OB_FAIL(ObSqlWorkareaUtil::get_workarea_size(
       profile_.get_work_area_type(), tenant_id_, exec_ctx, max_mem_size))) {
     LOG_WARN("failed to get workarea size", K(ret), K(tenant_id_), K(max_mem_size));

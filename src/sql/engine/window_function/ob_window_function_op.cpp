@@ -69,7 +69,9 @@ OB_SERIALIZE_MEMBER((ObWindowFunctionSpec, ObOpSpec),
                     rd_sort_cmp_funcs_,
                     rd_pby_sort_cnt_,
                     role_type_,
-                    wf_aggr_status_expr_);
+                    wf_aggr_status_expr_,
+                    input_rows_mem_bound_ratio_,
+                    estimated_part_cnt_);
 
 OB_SERIALIZE_MEMBER(ObWindowFunctionOpInput, local_task_count_, total_task_count_, wf_participator_shared_info_);
 
@@ -1173,7 +1175,8 @@ int ObWindowFunctionOp::init()
         MY_SPEC.type_,
         MY_SPEC.id_,
         &ctx_))) {
-      LOG_WARN("failed to init sql memory manager processor", K(ret));
+      LOG_WARN("failed to init sql memory manager processor", K(ret), K(MY_SPEC.rows_),
+        K(est_rows), K(MY_SPEC.width_), K(MY_SPEC.estimated_part_cnt_));
     } else {
       LOG_DEBUG("show some est values", K(ret), K(MY_SPEC.rows_), K(est_rows), K(MY_SPEC.width_),
                 K(MY_SPEC.estimated_part_cnt_), K(MY_SPEC.input_rows_mem_bound_ratio_));
