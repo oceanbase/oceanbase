@@ -1220,10 +1220,11 @@ public:
     CANCELED = 5,
     BACKUP_SYS_META = 6,
     BACKUP_USER_META = 7,
-    BACKUP_DATA_SYS = 8,
-    BACKUP_DATA_MINOR = 9,
-    BACKUP_DATA_MAJOR = 10,
-    BACKUP_LOG = 11,
+    BACKUP_META_FINISH = 8,
+    BACKUP_DATA_SYS = 9,
+    BACKUP_DATA_MINOR = 10,
+    BACKUP_DATA_MAJOR = 11,
+    BACKUP_LOG = 12,
     MAX_STATUS
   };
   ObBackupStatus(): status_(MAX_STATUS) {}
@@ -1434,10 +1435,11 @@ struct ObBackupDataTaskType final
   enum Type
   {
     BACKUP_META = 0, // backup ls, tablet meta and inner tablet sstable
-    BACKUP_DATA_MINOR = 1,
-    BACKUP_DATA_MAJOR = 2,
-    BACKUP_PLUS_ARCHIVE_LOG = 3,
-    BACKUP_BUILD_INDEX = 4,
+    BACKUP_META_FINISH = 1,
+    BACKUP_DATA_MINOR = 2,
+    BACKUP_DATA_MAJOR = 3,
+    BACKUP_PLUS_ARCHIVE_LOG = 4,
+    BACKUP_BUILD_INDEX = 5,
     BACKUP_MAX
   };
   ObBackupDataTaskType() : type_(Type::BACKUP_MAX) {}
