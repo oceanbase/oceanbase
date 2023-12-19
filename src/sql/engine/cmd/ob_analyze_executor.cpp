@@ -93,8 +93,7 @@ int ObAnalyzeExecutor::execute(ObExecContext &ctx, ObAnalyzeStmt &stmt)
       task_info.task_end_time_ = ObTimeUtility::current_time();
       task_info.ret_code_ = ret;
       task_info.failed_count_ = ret == OB_SUCCESS ? 0 : 1;
-      ObOptStatManager::get_instance().update_opt_stat_task_stat(task_info);
-      ObOptStatManager::get_instance().update_opt_stat_gather_stat(gather_stat);
+      pl::ObDbmsStats::update_optimizer_gather_stat_info(&task_info, &gather_stat);
     }
   } else {
     if (OB_FAIL(ObDbmsStatsExecutor::delete_table_stats(ctx, param, true))) {
