@@ -4827,14 +4827,14 @@ int ObIJsonBase::get_used_size(uint64_t &size)
 
   if (is_bin()) {
     const ObJsonBin *j_bin = static_cast<const ObJsonBin *>(this);
-    size = j_bin->get_used_bytes();
+    size = j_bin->get_serialize_size();
   } else { // is tree
     ObArenaAllocator allocator;
     ObIJsonBase *j_bin = NULL;
     if (OB_FAIL(ObJsonBaseFactory::transform(&allocator, this, ObJsonInType::JSON_BIN, j_bin))) {
       LOG_WARN("fail to transform to tree", K(ret));
     } else {
-      size = static_cast<const ObJsonBin *>(j_bin)->get_used_bytes();
+      size = static_cast<const ObJsonBin *>(j_bin)->get_serialize_size();
     }
   }
 
