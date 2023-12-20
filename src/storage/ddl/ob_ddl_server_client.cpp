@@ -219,6 +219,12 @@ int ObDDLServerClient::abort_redef_table(const obrpc::ObAbortRedefTableArg &arg,
         } else if (OB_NOT_SUPPORTED == ret) {
           LOG_WARN("not supported abort direct load task", K(ret), K(arg));
           break;
+        } else if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+          LOG_WARN("no enough memory to abort", K(ret), K(arg));
+          break;
+        } else if (OB_SIZE_OVERFLOW == ret) {
+          LOG_WARN("no enough queue size to abort", K(ret), K(arg), K(rs_leader_addr));
+          break;
         } else {
           LOG_INFO("ddl task exist, try again", K(arg));
           ret = OB_SUCCESS;
