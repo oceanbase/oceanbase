@@ -7784,6 +7784,7 @@ int ObResolverUtils::check_secure_path(const common::ObString &secure_file_priv,
 
   if (secure_file_priv.empty() || 0 == secure_file_priv.case_compare(N_NULL)) {
     ret = OB_ERR_NO_PRIVILEGE;
+    FORWARD_USER_ERROR_MSG(ret, "Access denied, please set suitable variable 'secure-file-priv' first, such as: SET GLOBAL secure_file_priv = '/'");
     LOG_WARN("no priv", K(ret), K(secure_file_priv), K(full_path));
   } else if (OB_UNLIKELY(secure_file_priv.length() >= DEFAULT_BUF_LENGTH)) {
     ret = OB_ERR_UNEXPECTED;
@@ -7797,6 +7798,7 @@ int ObResolverUtils::check_secure_path(const common::ObString &secure_file_priv,
     stat(buf, &path_stat);
     if (0 == S_ISDIR(path_stat.st_mode)) {
       ret = OB_ERR_NO_PRIVILEGE;
+      FORWARD_USER_ERROR_MSG(ret, "Access denied, please set suitable variable 'secure-file-priv' first, such as: SET GLOBAL secure_file_priv = '/'");
       LOG_WARN("no priv", K(ret), K(secure_file_priv), K(full_path));
     } else {
       MEMSET(buf, 0, sizeof(buf));
@@ -7808,13 +7810,16 @@ int ObResolverUtils::check_secure_path(const common::ObString &secure_file_priv,
         const int64_t pos = secure_file_priv_tmp.length();
         if (full_path.length() < secure_file_priv_tmp.length()) {
           ret = OB_ERR_NO_PRIVILEGE;
+          FORWARD_USER_ERROR_MSG(ret, "Access denied, please set suitable variable 'secure-file-priv' first, such as: SET GLOBAL secure_file_priv = '/'");
           LOG_WARN("no priv", K(ret), K(secure_file_priv), K(secure_file_priv_tmp), K(full_path));
         } else if (!full_path.prefix_match(secure_file_priv_tmp)) {
           ret = OB_ERR_NO_PRIVILEGE;
+          FORWARD_USER_ERROR_MSG(ret, "Access denied, please set suitable variable 'secure-file-priv' first, such as: SET GLOBAL secure_file_priv = '/'");
           LOG_WARN("no priv", K(ret), K(secure_file_priv), K(secure_file_priv_tmp), K(full_path));
         } else if (full_path.length() > secure_file_priv_tmp.length()
                    && secure_file_priv_tmp != "/" && full_path[pos] != '/') {
           ret = OB_ERR_NO_PRIVILEGE;
+          FORWARD_USER_ERROR_MSG(ret, "Access denied, please set suitable variable 'secure-file-priv' first, such as: SET GLOBAL secure_file_priv = '/'");
           LOG_WARN("no priv", K(ret), K(secure_file_priv), K(secure_file_priv_tmp), K(full_path));
         }
       }
