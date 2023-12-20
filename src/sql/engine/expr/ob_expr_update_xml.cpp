@@ -182,7 +182,9 @@ int ObExprUpdateXml::eval_mysql_update_xml(const ObExpr &expr, ObEvalCtx &ctx, O
   } else if (return_null) {
     res.set_null();
   } else if (OB_ISNULL(xml_base)) {
-    res.set_string(xml_res);
+    if (OB_FAIL(pack_long_text_res(expr, ctx, res, allocator, xml_res))) {
+      LOG_WARN("pack res origin failed.", K(ret), K(xml_res));
+    }
   } else if (res_origin == ObUpdateXMLRetType::ObRetInputStr) {
     if (OB_FAIL(pack_long_text_res(expr, ctx, res, allocator, xml_target))) {
       LOG_WARN("pack res origin failed.", K(ret), K(xml_target));
