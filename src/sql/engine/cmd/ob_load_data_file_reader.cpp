@@ -42,6 +42,8 @@ ObFileReadParam::ObFileReadParam()
 int ObFileReader::open(const ObFileReadParam &param, ObIAllocator &allocator, ObFileReader *& file_reader)
 {
   int ret = OB_SUCCESS;
+  file_reader = nullptr;
+
   if (param.file_location_ == ObLoadFileLocation::SERVER_DISK) {
     ObRandomFileReader *tmp_reader = OB_NEWx(ObRandomFileReader, &allocator, allocator);
     if (OB_ISNULL(tmp_reader)) {
