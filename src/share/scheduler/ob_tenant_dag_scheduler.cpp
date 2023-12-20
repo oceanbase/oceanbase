@@ -3315,13 +3315,14 @@ bool ObDagPrioScheduler::try_switch(ObTenantDagWorker &worker)
     ObMutexGuard guard(prio_lock_);
     if (running_task_cnts_ > adaptive_task_limit_) {
       need_pause = true;
-      pause_worker_(worker);
-    }
-    if (is_rank_dag_prio()) {
-      need_pause = check_need_load_shedding_(false /*for_schedule*/);
+    } else if (is_rank_dag_prio() && check_need_load_shedding_(false /*for_schedule*/)) {
+      need_pause = true;
+      FLOG_INFO("[ADAPTIVE_SCHED]tenant cpu is at high level, pause current compaction task", K(priority_));
     }
 
-    if (!need_pause && !waiting_workers_.is_empty()) {
+    if (need_pause) {
+      pause_worker_(worker);
+    } else if (!waiting_workers_.is_empty()) {
       if (waiting_workers_.get_first()->need_wake_up()) {
         // schedule_one will schedule the first worker on the waiting list first
         if (OB_TMP_FAIL(schedule_one_())) {
