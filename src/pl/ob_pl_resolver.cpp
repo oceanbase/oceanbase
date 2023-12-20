@@ -5768,7 +5768,8 @@ int ObPLResolver::resolve_static_sql(const ObStmtNodeTree *parse_tree, ObPLSql &
             // sql contain package var or package udf
             for (int64_t i = 0; OB_SUCC(ret) && i < prepare_result.ref_objects_.count(); ++i) {
               if (DEPENDENCY_PACKAGE == prepare_result.ref_objects_.at(i).object_type_ ||
-                  DEPENDENCY_PACKAGE_BODY == prepare_result.ref_objects_.at(i).object_type_) {
+                  DEPENDENCY_PACKAGE_BODY == prepare_result.ref_objects_.at(i).object_type_ ||
+                  DEPENDENCY_FUNCTION == prepare_result.ref_objects_.at(i).object_type_) {
                 func.set_external_state();
               }
             }
@@ -7592,7 +7593,8 @@ int ObPLResolver::resolve_cursor_def(const ObString &cursor_name,
         // sql contain package var or package udf
         for (int64_t i = 0; OB_SUCC(ret) && i < prepare_result.ref_objects_.count(); ++i) {
           if (DEPENDENCY_PACKAGE == prepare_result.ref_objects_.at(i).object_type_ ||
-              DEPENDENCY_PACKAGE_BODY == prepare_result.ref_objects_.at(i).object_type_) {
+              DEPENDENCY_PACKAGE_BODY == prepare_result.ref_objects_.at(i).object_type_ ||
+              DEPENDENCY_FUNCTION == prepare_result.ref_objects_.at(i).object_type_) {
             func.set_external_state();
           }
         }
