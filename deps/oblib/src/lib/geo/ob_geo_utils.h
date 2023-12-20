@@ -633,8 +633,8 @@ int ObGeoTypeUtil::is_polygon_valid_simple(const ObGeometry *geo, bool &res)
   int ret = OB_SUCCESS;
   res = true;
   const ObGeometry *geo_tree = nullptr;
+  ObArenaAllocator tmp_allocator;
   if (!geo->is_tree()) {
-    ObArenaAllocator tmp_allocator;
     ObGeoToTreeVisitor tree_visit(&tmp_allocator);
     if (OB_FAIL(const_cast<ObGeometry *>(geo)->do_visit(tree_visit))) {
       OB_LOG(WARN, "fail to do tree visitor", K(ret));
