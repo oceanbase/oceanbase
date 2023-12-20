@@ -24,7 +24,7 @@ namespace sql
 
 bool DatumRow::operator==(const DatumRow &other) const
 {
-  bool cmp = false;
+  bool cmp = true;
   if (cnt_ != other.cnt_) {
     cmp = false;
   } else {
