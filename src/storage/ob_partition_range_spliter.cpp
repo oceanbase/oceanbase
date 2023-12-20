@@ -20,7 +20,7 @@
 #include "access/ob_multiple_scan_merge.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/column_store/ob_column_oriented_sstable.h"
-#include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
+#include "storage/blocksstable/index_block/ob_index_block_dual_meta_iterator.h"
 
 namespace oceanbase
 {

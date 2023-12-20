@@ -220,6 +220,86 @@ int ObIndexBlockMacroIterator::deep_copy_rowkey(const ObDatumRowkey &src_key, Ob
   return ret;
 }
 
+int ObIndexBlockMacroIterator::get_next_idx_row(ObMicroIndexInfo &idx_block_row, int64_t &row_offset, bool &reach_cursor_end)
+{
+  int ret = OB_SUCCESS;
+  row_offset = 0;
+  const ObIndexBlockRowParser *idx_row_parser = nullptr;
+  MacroBlockId macro_id;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Not init", K(ret));
+  } else if (is_iter_end_) {
+    ret = OB_ITER_END;
+  } else if (OB_FAIL(tree_cursor_.get_macro_block_id(macro_id))) {
+    LOG_WARN("Fail to get macro row block id", K(ret), K(macro_id));
+  } else if (OB_FAIL(tree_cursor_.get_idx_parser(idx_row_parser))) {
+    LOG_WARN("Fail to get idx row parser", K(ret), K_(tree_cursor));
+  } else if (OB_ISNULL(idx_row_parser)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected null idx_row_parser", K(ret));
+  } else if (OB_FAIL(idx_row_parser->get_header(idx_block_row.row_header_))) {
+    LOG_WARN("Fail to get idx row header", K(ret), KPC(idx_row_parser));
+  } else if (OB_ISNULL(idx_block_row.row_header_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected null index row header", K(ret));
+  } else {
+    if ((macro_id == begin_ && is_reverse_scan_) || (macro_id == end_ && !is_reverse_scan_)) {
+      is_iter_end_ = true;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    // traverse all node of this macro block and collect index info
+    ObDatumRowkey rowkey;
+    row_offset = idx_row_parser->get_row_offset();
+    if (idx_block_row.row_header_->is_data_index() && !idx_block_row.row_header_->is_major_node()) {
+      if (OB_FAIL(idx_row_parser->get_minor_meta(idx_block_row.minor_meta_info_))) {
+        LOG_WARN("Fail to get minor meta info", K(ret));
+      }
+    } else if (!idx_block_row.row_header_->is_major_node() || !idx_block_row.row_header_->is_pre_aggregated()) {
+      // Do not have aggregate data
+    } else if (OB_FAIL(idx_row_parser->get_agg_row(idx_block_row.agg_row_buf_, idx_block_row.agg_buf_size_))) {
+      LOG_WARN("Fail to get aggregate", K(ret));
+    }
+
+    if (OB_SUCC(ret)) {
+      if (need_record_micro_info_) {
+        micro_endkey_allocator_.reuse();
+        reuse_micro_info_array();
+        if (OB_FAIL(tree_cursor_.get_child_micro_infos(
+                    *iter_range_,
+                    micro_endkey_allocator_,
+                    micro_endkeys_,
+                    micro_index_infos_,
+                    hold_item_))) {
+          LOG_WARN("Fail to record child micro block info", K(ret), KPC(iter_range_));
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(deep_copy_rowkey(curr_key_, prev_key_, prev_key_buf_))) {
+      STORAGE_LOG(WARN, "Failed to save prev key", K(ret), K_(curr_key));
+    } else if (OB_FAIL(tree_cursor_.get_current_endkey(rowkey))) {
+      LOG_WARN("Fail to get current endkey", K(ret), K_(tree_cursor));
+    } else if (OB_FAIL(deep_copy_rowkey(rowkey, curr_key_, curr_key_buf_))) {
+      STORAGE_LOG(WARN, "Failed to save curr key", K(ret), K(rowkey));
+    } else if (OB_FAIL(tree_cursor_.move_forward(is_reverse_scan_))) {
+      if (OB_LIKELY(OB_ITER_END == ret)) {
+        is_iter_end_ = true;
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("Fail to move cursor to next macro node", K(ret), K_(tree_cursor));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      idx_block_row.endkey_ = &curr_key_;
+      reach_cursor_end = is_iter_end_;
+    }
+  }
+  return ret;
+}
 
 int ObIndexBlockMacroIterator::get_next_macro_block(
     MacroBlockId &macro_id, int64_t &start_row_offset)
@@ -247,7 +327,6 @@ int ObIndexBlockMacroIterator::get_next_macro_block(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null index row header", K(ret));
   } else {
-    micro_endkey_allocator_.reuse();
     if ((macro_id == begin_ && is_reverse_scan_) || (macro_id == end_ && !is_reverse_scan_)) {
       is_iter_end_ = true;
     }
@@ -260,6 +339,7 @@ int ObIndexBlockMacroIterator::get_next_macro_block(
     // traverse all node of this macro block and collect index info
     ObDatumRowkey rowkey;
     if (need_record_micro_info_) {
+      micro_endkey_allocator_.reuse();
       reuse_micro_info_array();
       if (OB_FAIL(tree_cursor_.get_child_micro_infos(
                   *iter_range_,
@@ -464,92 +544,6 @@ void ObIndexBlockMacroIterator::reuse_micro_info_array()
   tree_cursor_.release_held_path_item(hold_item_);
 }
 
-ObDualMacroMetaIterator::ObDualMacroMetaIterator()
-  : allocator_(nullptr), macro_iter_(), sec_meta_iter_(), iter_end_(false), is_inited_(false) {}
-
-void ObDualMacroMetaIterator::reset()
-{
-  macro_iter_.reset();
-  sec_meta_iter_.reset();
-  allocator_ = nullptr;
-  iter_end_ = false;
-  is_inited_ = false;
-}
-
-int ObDualMacroMetaIterator::open(
-    ObSSTable &sstable,
-    const ObDatumRange &query_range,
-    const ObITableReadInfo &rowkey_read_info,
-    ObIAllocator &allocator,
-    const bool is_reverse_scan,
-    const bool need_record_micro_info)
-{
-  UNUSED(need_record_micro_info);
-  int ret = OB_SUCCESS;
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("Init twice", K(ret));
-  } else if (OB_FAIL(macro_iter_.open(
-      sstable,
-      query_range,
-      rowkey_read_info,
-      allocator,
-      is_reverse_scan,
-      true /* need record micro index info */))) {
-    LOG_WARN("Fail to open index block tree iterator", K(ret));
-  } else if (OB_FAIL(sec_meta_iter_.open(
-      query_range,
-      blocksstable::DATA_BLOCK_META,
-      sstable,
-      rowkey_read_info,
-      allocator,
-      is_reverse_scan))) {
-    LOG_WARN("Fail to open secondary meta iterator", K(ret), K(rowkey_read_info));
-  } else {
-    allocator_ = &allocator;
-    iter_end_ = false;
-    is_inited_ = true;
-  }
-  return ret;
-}
-
-int ObDualMacroMetaIterator::get_next_macro_block(ObMacroBlockDesc &block_desc)
-{
-  int ret = OB_SUCCESS;
-  ObDataMacroBlockMeta *macro_meta = block_desc.macro_meta_;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("Dual macro meta iterator not inited", K(ret));
-  } else if (OB_ISNULL(macro_meta)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid null pointer to read macro meta", K(ret), K(block_desc), KP(macro_meta));
-  } else if (OB_UNLIKELY(iter_end_)) {
-    ret = OB_ITER_END;
-  } else if (OB_SUCC(macro_iter_.get_next_macro_block(block_desc))) {
-    if (OB_FAIL(sec_meta_iter_.get_next(*macro_meta))) {
-      if (OB_ITER_END == ret) {
-        ret = OB_ERR_UNEXPECTED;
-      }
-      LOG_WARN("Fail to get next secondary meta iterator", K(ret), K_(macro_iter), K_(sec_meta_iter));
-    } else if (OB_UNLIKELY(block_desc.macro_block_id_ != macro_meta->get_macro_id())) {
-      ret = OB_ERR_SYS;
-      LOG_WARN("Logic macro block id from iterated macro block and merge info not match",
-          K(ret), K(block_desc), KPC(macro_meta));
-    }
-  } else if (OB_UNLIKELY(OB_ITER_END != ret)) {
-    LOG_WARN("Fail to get next macro block from index tree", K(ret));
-  } else {
-    int tmp_ret = sec_meta_iter_.get_next(*macro_meta);
-    if (OB_UNLIKELY(OB_ITER_END != tmp_ret)) {
-      ret = OB_ERR_SYS;
-      LOG_WARN("Dual macro meta iterated different range",
-          K(ret), K(tmp_ret), KPC(macro_meta), K(sec_meta_iter_), K(macro_iter_));
-    } else {
-      iter_end_ = true;
-    }
-  }
-  return ret;
-}
 
 } // namespace blocksstable
 } // namespace oceanbase

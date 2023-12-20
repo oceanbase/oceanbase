@@ -115,7 +115,8 @@ int ObIndexTreePrefetcher::init_basic_info(
     iter_param_ = &iter_param;
     datum_utils_ = &index_read_info->get_datum_utils();
     data_version_ = sstable_->get_data_version();
-    index_tree_height_ = sstable_meta_handle_.get_sstable_meta().get_index_tree_height(sstable.is_ddl_merge_empty_sstable());
+    bool is_normal_query = !access_ctx_->query_flag_.is_daily_merge() && !access_ctx_->query_flag_.is_multi_version_minor_merge();
+    index_tree_height_ = sstable_meta_handle_.get_sstable_meta().get_index_tree_height(sstable.is_ddl_merge_sstable() && is_normal_query);
   }
   return ret;
 }
@@ -858,13 +859,14 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::i
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid store iterator type", K(ret), K(iter_type));
   }
+  bool is_normal_query = !access_ctx_->query_flag_.is_daily_merge() && !access_ctx_->query_flag_.is_multi_version_minor_merge();
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(iter_param.get_index_read_info(sstable.is_normal_cg_sstable(), index_read_info))) {
     LOG_WARN("failed to get index read info", KR(ret), K(sstable), K(iter_param));
   } else if (FALSE_IT(datum_utils_ = &index_read_info->get_datum_utils())) {
   } else if (OB_FAIL(sstable.get_meta(sstable_meta_handle_))) {
     LOG_WARN("failed to get sstable meta handle", K(ret));
-  } else if (FALSE_IT(index_tree_height_ = sstable_meta_handle_.get_sstable_meta().get_index_tree_height(sstable.is_ddl_merge_empty_sstable()))) {
+  } else if (FALSE_IT(index_tree_height_ = sstable_meta_handle_.get_sstable_meta().get_index_tree_height(is_normal_query && sstable.is_ddl_merge_sstable()))) {
   } else if (1 >= index_tree_height_ || MAX_INDEX_TREE_HEIGHT < index_tree_height_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected index tree height", K(ret), K(index_tree_height_), K(MAX_INDEX_TREE_HEIGHT));

@@ -166,7 +166,7 @@ public:
     return basic_meta_.column_cnt_ - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   }
 
-  OB_INLINE int16_t get_index_tree_height(const bool is_ddl_merge_empty_sstable) const { return is_ddl_merge_empty_sstable ? 2 : basic_meta_.data_index_tree_height_; }
+  OB_INLINE int16_t get_index_tree_height(const bool is_ddl_merge_sstable) const { return is_ddl_merge_sstable ? 2 : basic_meta_.data_index_tree_height_; }
   OB_INLINE ObSSTableStatus get_status() const
   {
     return static_cast<ObSSTableStatus>(basic_meta_.status_);
