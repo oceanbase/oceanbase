@@ -9139,6 +9139,12 @@ int ObPartTransCtx::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
         && OB_FAIL(mt_ctx_.recover_from_table_lock_durable_info(arg.table_lock_info_, true))) {
         TRANS_LOG(WARN, "recover table lock failed", KR(ret), K(arg));
       } else {
+        // NB: we should increment the next_log_entry_no for the transfer,
+        // otherwise if the tx_ctx is created by the transfer, it will take the
+        // next log as the first log_entry_no and if it just replay from the it
+        // during recover(replay from the middle), it will fail to identify the
+        // fact that it is replaying from the middle and fail to pass the check.
+        exec_info_.next_log_entry_no_++;
         sub_state_.clear_transfer_blocking();
         exec_info_.is_transfer_blocking_ = false;
         if (OB_FAIL(transfer_op_log_cb_(move_tx_param.op_scn_, move_tx_param.op_type_))) {
