@@ -44,7 +44,8 @@ public:
       das_remote_info_(),
       is_enable_sqlstat_(false),
       sqlstat_key_(),
-      sqlstat_record_()
+      sqlstat_record_(),
+      bkgd_ash_stat_sess_id_(0)
   {
     RpcProcessor::set_preserve_recv_data();
   }
@@ -68,6 +69,7 @@ protected:
   bool is_enable_sqlstat_;
   ObSqlStatRecordKey sqlstat_key_;
   ObExecutingSqlStatRecord sqlstat_record_;
+  int64_t bkgd_ash_stat_sess_id_;
 };
 
 class ObDASSyncAccessP final : public ObDASBaseAccessP<obrpc::OB_DAS_SYNC_ACCESS> {

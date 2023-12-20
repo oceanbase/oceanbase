@@ -52,6 +52,7 @@ int ObDASBaseAccessP<pcode>::before_process()
   ObActiveSessionGuard::get_stat().tenant_id_ = task.get_task_op()->get_tenant_id();
   ObActiveSessionGuard::get_stat().trace_id_ = *ObCurTraceId::get_trace_id();
   ObActiveSessionGuard::get_stat().user_id_ = das_remote_info_.user_id_;
+  bkgd_ash_stat_sess_id_ = ObActiveSessionGuard::get_stat().session_id_;
   ObActiveSessionGuard::get_stat().session_id_ = das_remote_info_.session_id_;
   ObActiveSessionGuard::get_stat().plan_id_ = das_remote_info_.plan_id_;
   MEMCPY(ObActiveSessionGuard::get_stat().sql_id_, das_remote_info_.sql_id_,
@@ -209,7 +210,8 @@ void ObDASBaseAccessP<pcode>::cleanup()
 {
   ObActiveSessionGuard::get_stat().in_das_remote_exec_ = false;
   ObActiveSessionGuard::get_stat().reuse();
-  ObActiveSessionGuard::setup_default_ash();
+  ObActiveSessionGuard::setup_default_ash(); // set ptr to thread_local stat
+  ObActiveSessionGuard::get_stat().session_id_ = bkgd_ash_stat_sess_id_;
   das_factory_.cleanup();
   ObDASBaseAccessP<pcode>::get_das_factory() = nullptr;
   if (das_remote_info_.trans_desc_ != nullptr) {
