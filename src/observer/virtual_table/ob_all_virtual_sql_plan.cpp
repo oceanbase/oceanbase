@@ -550,11 +550,11 @@ int ObAllVirtualSqlPlan::prepare_next_plan()
     // !!!引用plan cache资源之前必须加ObReqTimeGuard
     ObReqTimeGuard req_timeinfo_guard;
     ObPlanCache *plan_cache = NULL;
-    ObCacheObjGuard guard(SQL_PLAN_HANDLE);
+    ObCacheObjGuard guard(PC_DIAG_HANDLE);
     int tmp_ret = OB_SUCCESS;
     MTL_SWITCH(tenant_id_) {
       plan_cache = MTL(ObPlanCache*);
-      if (OB_SUCCESS != (tmp_ret = plan_cache->ref_plan(plan_id_, guard))) {
+      if (OB_SUCCESS != (tmp_ret = plan_cache->ref_alloc_plan(plan_id_, guard))) {
         // should not panic
       } else if (FALSE_IT(plan = static_cast<ObPhysicalPlan*>(guard.get_cache_obj()))) {
         // do nothing

@@ -83,7 +83,7 @@ int ObGVSql::get_row_from_specified_tenant(uint64_t tenant_id, bool &is_end)
     plan_cache_ = MTL(ObPlanCache*);
     NG_TRACE(trav_ps_map_start);
     ObGetAllCacheIdOp plan_id_op(&plan_id_array_);
-    if (OB_FAIL(plan_cache_->foreach_cache_obj(plan_id_op))) {
+    if (OB_FAIL(plan_cache_->foreach_alloc_cache_obj(plan_id_op))) {
       SERVER_LOG(WARN, "fail to traverse id2stat_map");
     } else {
       plan_id_array_idx_ = 0;
@@ -113,8 +113,8 @@ int ObGVSql::get_row_from_specified_tenant(uint64_t tenant_id, bool &is_end)
         is_end = false;
         uint64_t plan_id= plan_id_array_.at(plan_id_array_idx_);
         ++plan_id_array_idx_;
-        ObCacheObjGuard guard(GV_SQL_HANDLE);
-        int tmp_ret = plan_cache_->ref_cache_obj(plan_id, guard); //plan引用计数加1
+        ObCacheObjGuard guard(PC_DIAG_HANDLE);
+        int tmp_ret = plan_cache_->ref_alloc_obj(plan_id, guard); //plan引用计数加1
 
         //如果当前plan_id对应的plan已被淘汰, 则忽略继续获取下一个plan
         if (OB_HASH_NOT_EXIST == tmp_ret) {

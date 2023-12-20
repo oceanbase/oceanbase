@@ -26,6 +26,11 @@
 #include "sql/plan_cache/ob_lib_cache_object_manager.h"
 namespace oceanbase
 {
+namespace observer
+{
+  class ObGVSql;
+  class ObAllVirtualSqlPlan;
+}
 namespace rpc
 {
   class ObLoadBaselineArg;
@@ -221,6 +226,8 @@ class ObPlanCache
 {
 friend class ObCacheObjectFactory;
 friend class ObPlanCacheEliminationTask;
+friend class observer::ObAllVirtualSqlPlan;
+friend class observer::ObGVSql;
 
 public:
   static const int64_t MAX_PLAN_SIZE = 20*1024*1024; //20M
@@ -420,6 +427,10 @@ public:
   int flush_lib_cache();
   int flush_lib_cache_by_ns(const ObLibCacheNameSpace ns);
   int flush_pl_cache();
+
+protected:
+  int ref_alloc_obj(const ObCacheObjID obj_id, ObCacheObjGuard& guard);
+  int ref_alloc_plan(const ObCacheObjID obj_id, ObCacheObjGuard& guard);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPlanCache);
