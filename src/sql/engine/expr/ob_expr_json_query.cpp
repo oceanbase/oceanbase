@@ -191,7 +191,12 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   if (OB_ISNULL(param_ctx)) {
     param_ctx = &ctx_cache;
   }
-  if (param_ctx->is_first_exec_ && OB_FAIL(init_ctx_var(param_ctx, expr))) {
+
+  // add version protection, as lower version has handle input in a defference way
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_2_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("json query raw expr number has change in 4.2.2 version", K(ret));
+  } else if (param_ctx->is_first_exec_ && OB_FAIL(init_ctx_var(param_ctx, expr))) {
     is_cover_by_error = false;
     LOG_WARN("fail to init param ctx", K(ret));
   } else if (OB_ISNULL(param_ctx->json_param_.json_path_)

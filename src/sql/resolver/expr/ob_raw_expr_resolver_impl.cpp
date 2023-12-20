@@ -5960,13 +5960,19 @@ int ObRawExprResolverImpl::check_first_node(const ParseNode *node)
 int ObRawExprResolverImpl::process_json_query_node(const ParseNode *node, ObRawExpr *&expr){
   INIT_SUCC(ret);
   CK(OB_NOT_NULL(node));
-  if(OB_SUCC(ret) && T_FUN_SYS_JSON_QUERY != node->type_) {
+
+  if (OB_FAIL(ret)) {
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_2_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("json query raw expr number has change in 4.2.2 version", K(ret));
+  } else if(T_FUN_SYS_JSON_QUERY != node->type_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("node->type_ error");
-  } else if (OB_SUCC(ret) && 11 != node->num_child_) {
+  } else if (11 != node->num_child_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("num_child_ error");
   }
+
   int32_t num = 0;
   ObSysFunRawExpr *func_expr = NULL;
   if (OB_SUCC(ret)) {
