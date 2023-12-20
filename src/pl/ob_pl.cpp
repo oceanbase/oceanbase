@@ -3366,9 +3366,12 @@ do {                                                                  \
             result_type.set_accuracy(func_.get_variables().at(i).get_data_type()->get_accuracy());
             ObObj tmp;
             // CHARSET_ANY代表接受任何字符集,因此不能改变入参的字符集
-            if (CS_TYPE_ANY == result_type.get_collation_type()
-                && params->at(i).get_meta().is_string_or_lob_locator_type()) {
-              result_type.set_collation_type(params->at(i).get_meta().get_collation_type());
+            if (CS_TYPE_ANY == result_type.get_collation_type()) {
+              if (params->at(i).get_meta().is_string_or_lob_locator_type()) {
+                result_type.set_collation_type(params->at(i).get_meta().get_collation_type());
+              } else {
+                result_type.set_collation_type(ctx_.exec_ctx_->get_my_session()->get_nls_collation());
+              }
             }
             if ((result_type.is_blob() || result_type.is_blob_locator()
                  || params->at(i).is_blob() || params->at(i).is_blob_locator())
