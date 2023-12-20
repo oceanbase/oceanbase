@@ -2171,6 +2171,12 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
         }
       }
 
+      if (OB_SUCC(ret) && is_oracle_mode() && T_FUN_SYS_XMLSEQUENCE == sel_expr->get_expr_type()) {
+        // Currently, xmlsequence is not supported in the select clause.
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("xmlsequence in select clause is not supported", K(ret));
+      }
+
       if (OB_SUCC(ret) && is_oracle_mode() && sel_expr->has_flag(CNT_SUB_QUERY)) {
         if (OB_FAIL(check_subquery_return_one_column(*sel_expr))) {
           LOG_WARN("failed to check subquery return one column", K(ret));
