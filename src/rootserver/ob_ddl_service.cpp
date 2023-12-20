@@ -4438,6 +4438,10 @@ int ObDDLService::check_can_drop_column(
     LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, orig_column_name.length(), orig_column_name.ptr());
     LOG_WARN("fail to find old column schema!", K(ret), K(orig_column_name), KP(orig_column_schema),
         K(new_table_schema));
+  } else if (orig_table_schema.is_oracle_tmp_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop oracle temporary table column is");
+    LOG_WARN("oracle temporary table column is not allowed to be dropped", K(ret));
   } else if (orig_column_schema->has_generated_column_deps()) {
     bool has_func_idx_col_deps = false;
     bool is_oracle_mode = false;
