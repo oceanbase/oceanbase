@@ -56,7 +56,7 @@ endif()
 ob_define(AUTO_FDO_OPT "")
 if(ENABLE_AUTO_FDO)
   # file name pattern [observer.prof.{current_timestamp ms}]
-  set(AUTO_FDO_OPT "-fprofile-sample-use=${CMAKE_SOURCE_DIR}/observer.prof.1693473964865")
+  set(AUTO_FDO_OPT "-fprofile-sample-use=${CMAKE_SOURCE_DIR}/observer.prof.1702984872675")
 endif()
 
 ob_define(THIN_LTO_OPT "")
