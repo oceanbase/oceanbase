@@ -210,6 +210,8 @@ ObSqlCtx::ObSqlCtx()
 {
   sql_id_[0] = '\0';
   sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
+  format_sql_id_[0] = '\0';
+  format_sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
 }
 
 void ObSqlCtx::reset()
@@ -225,6 +227,8 @@ void ObSqlCtx::reset()
   retry_times_ = OB_INVALID_COUNT;
   sql_id_[0] = '\0';
   sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
+  format_sql_id_[0] = '\0';
+  format_sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
   exec_type_ = InvalidType;
   is_prepare_protocol_ = false;
   is_pre_execute_ = false;
