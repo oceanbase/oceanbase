@@ -2918,6 +2918,7 @@ const char* ObBackupStatus::get_str() const
     "CANCELED",
     "BACKUP_SYS_META",
     "BACKUP_USER_META",
+    "BACKUP_META_FINISH",
     "BACKUP_DATA_SYS",
     "BACKUP_DATA_MINOR",
     "BACKUP_DATA_MAJOR",
@@ -2946,6 +2947,7 @@ int ObBackupStatus::set_status(const char *str)
     "CANCELED",
     "BACKUP_SYS_META",
     "BACKUP_USER_META",
+    "BACKUP_META_FINISH",
     "BACKUP_DATA_SYS",
     "BACKUP_DATA_MINOR",
     "BACKUP_DATA_MAJOR",
@@ -3398,6 +3400,7 @@ const char* ObBackupDataTaskType::get_str() const
   const char *str = "UNKNOWN";
   const char *type_strs[] = {
     "BACKUP_META",
+    "BACKUP_META_FINISH",
     "BACKUP_DATA_MINOR",
     "BACKUP_DATA_MAJOR",
     "PLUS_ARCHIVE_LOG",
@@ -3417,6 +3420,7 @@ int ObBackupDataTaskType::set_type(const char *buf)
   ObString s(buf);
   const char *type_strs[] = {
     "BACKUP_META",
+    "BACKUP_META_FINISH",
     "BACKUP_DATA_MINOR",
     "BACKUP_DATA_MAJOR",
     "PLUS_ARCHIVE_LOG",
