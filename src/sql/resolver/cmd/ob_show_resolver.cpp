@@ -2789,13 +2789,13 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_TABLEGROUPS_V2,
                        "Tablegroup_name");
 DEFINE_SHOW_CLAUSE_SET(SHOW_VARIABLES,
                        NULL,
-                       "SELECT variable_name AS `Variable_name`, value AS `Value` FROM %s.%s ORDER BY variable_name ASC",
-                       R"(SELECT "VARIABLE_NAME" AS "VARIABLE_NAME", "VALUE" AS "VALUE" FROM %s.%s ORDER BY VARIABLE_NAME ASC)",
+                       "SELECT /*+parallel(1)*/ variable_name AS `Variable_name`, value AS `Value` FROM %s.%s ORDER BY variable_name ASC",
+                       R"(SELECT /*+parallel(1)*/ "VARIABLE_NAME" AS "VARIABLE_NAME", "VALUE" AS "VALUE" FROM %s.%s ORDER BY VARIABLE_NAME ASC)",
                        "Variable_name");
 DEFINE_SHOW_CLAUSE_SET(SHOW_GLOBAL_VARIABLES,
                        NULL,
-                       "SELECT variable_name AS `Variable_name`, value AS `Value` FROM %s.%s ORDER BY variable_name ASC",
-                       R"(SELECT "VARIABLE_NAME" AS "VARIABLE_NAME", "VALUE" AS "VALUE" FROM %s.%s ORDER BY VARIABLE_NAME ASC)",
+                       "SELECT /*+parallel(1)*/ variable_name AS `Variable_name`, value AS `Value` FROM %s.%s ORDER BY variable_name ASC",
+                       R"(SELECT /*+parallel(1)*/ "VARIABLE_NAME" AS "VARIABLE_NAME", "VALUE" AS "VALUE" FROM %s.%s ORDER BY VARIABLE_NAME ASC)",
                        "Variable_name");
 DEFINE_SHOW_CLAUSE_SET(SHOW_COLUMNS,
                        NULL,
