@@ -1313,6 +1313,12 @@ int ObTenant::recv_request(ObRequest &req)
             if (OB_FAIL(req_queue_.push(&req, QQ_NORMAL))) {
               LOG_WARN("push request to QQ_NORMAL queue fail", K(ret), K(this));
             }
+          } else if (pkt.is_kv_request()) {
+            // the same as sql request, kv request use q4
+            ATOMIC_INC(&recv_np_rpc_cnt_);
+            if (OB_FAIL(req_queue_.push(&req, RQ_NORMAL))) {
+              LOG_WARN("push kv request to queue fail", K(ret), K(this));
+            }
           } else if (is_normal_prio(pkt) || is_low_prio(pkt)) {
             ATOMIC_INC(&recv_np_rpc_cnt_);
             if (OB_FAIL(req_queue_.push(&req, QQ_LOW))) {
