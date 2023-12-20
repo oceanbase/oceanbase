@@ -352,37 +352,41 @@ int ObMViewSchedJobUtils::calc_date_expression(
     LOG_WARN("job is not date expression job class",
         KR(ret), K(job_info.is_date_expression_job_class()));
   } else {
-    SMART_VAR(ObSQLSessionInfo, session) {
-      if (OB_FAIL(session.init(1, 1, nullptr/*bucket_allocator*/))) {
-        LOG_WARN("failed to init session", KR(ret));
-      } else if (OB_FAIL(ObDBMSSchedJobUtils::init_env(job_info, session))) {
-        LOG_WARN("failed to init env", KR(ret), K(job_info));
-      } else {
-        bool is_oracle_mode = lib::is_oracle_mode();
-        bool is_oracle_tenant = false;
-        is_oracle_tenant = job_info.is_oracle_tenant_;
-        if (is_oracle_tenant && !is_oracle_mode) {
-          THIS_WORKER.set_compatibility_mode(Worker::CompatMode::ORACLE);
-        }
-
-        int64_t current_time = ObTimeUtility::current_time() / 1000000L * 1000000L; // ignore micro seconds
-        int64_t next_time = 0;
-        ObArenaAllocator tmp_allocator("MVSchedTmp");
-        if (OB_FAIL(calc_date_expr_from_str(session, tmp_allocator,
-            tenant_id, job_info.get_interval(), next_time))) {
-          LOG_WARN("failed to calc date expression from str", KR(ret),
-              K(tenant_id), K(job_info.get_interval()));
-        } else if (next_time <= current_time) {
-          ret = OB_ERR_TIME_EARLIER_THAN_SYSDATE;
-          LOG_WARN("the parameter next date must evaluate to a time in the future",
-              KR(ret), K(current_time), K(next_time));
-          LOG_USER_ERROR(OB_ERR_TIME_EARLIER_THAN_SYSDATE, "next date");
+    ContextParam ctx_param;
+    ctx_param.set_mem_attr(common::OB_SERVER_TENANT_ID, "MVSchedTmp");
+    CREATE_WITH_TEMP_CONTEXT(ctx_param) {
+      ObIAllocator &tmp_allocator = CURRENT_CONTEXT->get_arena_allocator();
+      SMART_VAR(ObSQLSessionInfo, session) {
+        if (OB_FAIL(session.init(1, 1, &tmp_allocator))) {
+          LOG_WARN("failed to init session", KR(ret));
+        } else if (OB_FAIL(ObDBMSSchedJobUtils::init_env(job_info, session))) {
+          LOG_WARN("failed to init env", KR(ret), K(job_info));
         } else {
-          next_date_ts = next_time;
-        }
+          bool is_oracle_mode = lib::is_oracle_mode();
+          bool is_oracle_tenant = false;
+          is_oracle_tenant = job_info.is_oracle_tenant_;
+          if (is_oracle_tenant && !is_oracle_mode) {
+            THIS_WORKER.set_compatibility_mode(Worker::CompatMode::ORACLE);
+          }
 
-        if (is_oracle_tenant && !is_oracle_mode) {
-          THIS_WORKER.set_compatibility_mode(Worker::CompatMode::MYSQL);
+          int64_t current_time = ObTimeUtility::current_time() / 1000000L * 1000000L; // ignore micro seconds
+          int64_t next_time = 0;
+          if (OB_FAIL(calc_date_expr_from_str(session, tmp_allocator,
+              tenant_id, job_info.get_interval(), next_time))) {
+            LOG_WARN("failed to calc date expression from str", KR(ret),
+                K(tenant_id), K(job_info.get_interval()));
+          } else if (next_time <= current_time) {
+            ret = OB_ERR_TIME_EARLIER_THAN_SYSDATE;
+            LOG_WARN("the parameter next date must evaluate to a time in the future",
+                KR(ret), K(current_time), K(next_time));
+            LOG_USER_ERROR(OB_ERR_TIME_EARLIER_THAN_SYSDATE, "next date");
+          } else {
+            next_date_ts = next_time;
+          }
+
+          if (is_oracle_tenant && !is_oracle_mode) {
+            THIS_WORKER.set_compatibility_mode(Worker::CompatMode::MYSQL);
+          }
         }
       }
     }
