@@ -1242,6 +1242,7 @@ int ObRecoveryLSService::check_transfer_begin_can_remove_(
             K(tenant_info), K(ls_balance_task));
       }
     } else {
+      ret = OB_SUCCESS;
       can_remove = false;
       LOG_WARN("can not find transfer end task, can not end transfer begin task", KR(ret), K(tenant_info), K(ls_balance_task));
     }

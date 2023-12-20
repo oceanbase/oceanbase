@@ -61,7 +61,6 @@
 #include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 #include "observer/ob_req_time_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "rootserver/ob_primary_ls_service.h"//PrimaryLSService
 #include "rootserver/ob_tenant_transfer_service.h" // ObTenantTransferService
 #include "storage/high_availability/ob_transfer_service.h" // ObTransferService
 #include "sql/udr/ob_udr_mgr.h"
@@ -74,6 +73,8 @@
 #include "sql/session/ob_sess_info_verify.h"
 #include "observer/table/ttl/ob_ttl_service.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
+#include "share/ob_rpc_struct.h"
+#include "rootserver/standby/ob_recovery_ls_service.h"
 
 namespace oceanbase
 {
@@ -2900,6 +2901,33 @@ int ObAdminUnlockMemberListP::process()
     COMMON_LOG(WARN, "ob_service is null", KR(ret));
   } else if (OB_FAIL(gctx_.ob_service_->ob_admin_unlock_member_list(arg_))) {
     COMMON_LOG(WARN, "failed to unlock member list", KR(ret), K(arg_));
+  }
+  return ret;
+}
+
+int ObRpcNotifyTenantThreadP::process()
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("receive notify tenant thread", K(arg_));
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg_));
+  } else {
+    MTL_SWITCH(arg_.get_tenant_id()) {
+      if (obrpc::ObNotifyTenantThreadArg::RECOVERY_LS_SERVICE == arg_.get_thread_type()) {
+        rootserver::ObRecoveryLSService *ls_service =
+          MTL(rootserver::ObRecoveryLSService *);
+        if (OB_ISNULL(ls_service)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("ls service is null", KR(ret), K(arg_));
+        } else {
+          ls_service->wakeup();
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected thread type", KR(ret), K(arg_));
+      }
+    }
   }
   return ret;
 }

@@ -282,6 +282,7 @@ private:
       const SCN &max_sys_ls_sync_scn/* SYS LS real max sync scn */,
       const SCN &target_tenant_sync_scn/* tenant target sync scn in switchover */);
   int wait_ls_balance_task_finish_();
+  int notify_recovery_ls_service_();
   int get_all_ls_status_and_change_access_mode_(
       const palf::AccessMode target_access_mode,
       const share::SCN &ref_scn,
