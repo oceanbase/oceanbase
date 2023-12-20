@@ -258,6 +258,23 @@ int ObSPIResultSet::is_set_global_var(ObSQLSessionInfo &session, const ObString 
       } else if (T_VAR_VAL == set_node->type_ &&
                  1 == set_node->value_) { // global var
         has_global_variable = true;
+      } else if (set_node->num_child_ > 0 && OB_NOT_NULL(set_node->children_[0])) {
+        ParseNode *var = set_node->children_[0];
+        ObString name;
+        if (T_OBJ_ACCESS_REF == var->type_) { //Oracle mode
+          const ParseNode *name_node = NULL;
+          if (OB_ISNULL(name_node = var->children_[0])) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null", K(ret));
+          } else {
+            name.assign_ptr(name_node->str_value_, static_cast<int32_t>(name_node->str_len_));
+          }
+        } else if (T_SYSTEM_VARIABLE == var->type_) {
+          name.assign_ptr(var->str_value_, static_cast<int32_t>(var->str_len_));
+        }
+        if (OB_SUCC(ret) && 0 == name.case_compare("ob_query_timeout")) {
+          has_global_variable = true;
+        }
       }
     }
   }
