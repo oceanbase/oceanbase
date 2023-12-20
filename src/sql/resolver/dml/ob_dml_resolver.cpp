@@ -2930,6 +2930,18 @@ int ObDMLResolver::resolve_aggr_exprs(ObRawExpr *&expr,
       if (OB_ISNULL(del_up_stmt) || OB_ISNULL(expr)) {
         ret = OB_NOT_INIT;
         LOG_WARN("del_up_stmt is null", K(ret));
+      } else if (lib::is_oracle_mode() &&
+                 aggr_exprs.at(i)->get_expr_type() == T_FUN_GROUP_CONCAT &&
+                 aggr_exprs.at(i)->get_real_param_count() > 2) {
+        ret = OB_ERR_PARAM_SIZE;
+        LOG_WARN("invalid number of arguments", K(ret), KPC(aggr_exprs.at(i)));
+      } else if (lib::is_oracle_mode() &&
+                 aggr_exprs.at(i)->get_expr_type() == T_FUN_GROUP_CONCAT &&
+                 aggr_exprs.at(i)->get_real_param_count() == 2 &&
+                 aggr_exprs.at(i)->get_real_param_exprs().at(1) != NULL &&
+                 !aggr_exprs.at(i)->get_real_param_exprs().at(1)->is_const_expr()) {
+        ret = OB_ERR_ARGUMENT_SHOULD_CONSTANT;
+        LOG_WARN("argument is should be a const expr", K(ret), KPC(aggr_exprs.at(i)));
       } else if (OB_FAIL(del_up_stmt->add_returning_agg_item(*(aggr_exprs.at(i))))) {
         LOG_WARN("add agg item failed", K(ret));
       }
