@@ -18624,7 +18624,7 @@ int ObDDLService::check_is_foreign_key_parent_table(const ObTableSchema &table_s
       // Need to set the error code to OB_ERR_TRUNCATE_ILLEGAL_FK
       const ObIArray<ObForeignKeyInfo> &foreign_key_infos = table_schema.get_foreign_key_infos();
       FOREACH_CNT_X(foreign_key_info, foreign_key_infos, OB_SUCC(ret)) {
-        if (table_schema.get_table_id() == foreign_key_info->parent_table_id_) {
+        if (table_schema.get_table_id() == foreign_key_info->parent_table_id_ && foreign_key_info->enable_flag_ == true) {
           if (OB_UNLIKELY(NULL == (err_description_buf = static_cast<char *>(allocator.alloc(err_description_buf_len))))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             SERVER_LOG(ERROR, "fail to alloc table_def_buf", K(ret));
@@ -18906,7 +18906,7 @@ int ObDDLService::truncate_table(const ObTruncateTableArg &arg,
               // Need to set the error code to OB_ERR_TRUNCATE_ILLEGAL_FK
               const ObIArray<ObForeignKeyInfo> &foreign_key_infos = orig_table_schema->get_foreign_key_infos();
               FOREACH_CNT_X(foreign_key_info, foreign_key_infos, OB_SUCC(ret)) {
-                if (orig_table_schema->get_table_id() == foreign_key_info->parent_table_id_) {
+                if (orig_table_schema->get_table_id() == foreign_key_info->parent_table_id_ && foreign_key_info->enable_flag_ == true) {
                   if (OB_UNLIKELY(NULL == (err_desciption_buf = static_cast<char *>(allocator.alloc(err_desciption_buf_len))))) {
                     ret = OB_ALLOCATE_MEMORY_FAILED;
                     SERVER_LOG(ERROR, "fail to alloc table_def_buf", K(ret));
