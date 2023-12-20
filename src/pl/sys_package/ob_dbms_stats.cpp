@@ -3215,6 +3215,7 @@ int ObDbmsStats::parse_table_part_info(ObExecContext &ctx,
     LOG_WARN("table schema is null", K(ret), K(table_schema), K(param.db_name_), K(param.tab_name_));
     LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(param.db_name_), to_cstring(param.tab_name_));
   } else if (OB_FAIL(get_table_part_infos(table_schema,
+                                          *param.allocator_,
                                           param.part_infos_,
                                           param.subpart_infos_))) {
     LOG_WARN("failed to get table part infos", K(ret));
@@ -3262,6 +3263,7 @@ int ObDbmsStats::parse_table_part_info(ObExecContext &ctx,
   } else if (OB_UNLIKELY(table_schema->is_view_table())) {
     ret = OB_TABLE_NOT_EXIST;
   } else if (OB_FAIL(get_table_part_infos(table_schema,
+                                          *param.allocator_,
                                           param.part_infos_,
                                           param.subpart_infos_))) {
     LOG_WARN("failed to get table part infos", K(ret));
@@ -3324,6 +3326,7 @@ int ObDbmsStats::parse_index_part_info(ObExecContext &ctx,
                                      param.data_table_name_))) {
     LOG_WARN("failed to write string", K(ret));
   } else if (OB_FAIL(get_table_part_infos(index_schema,
+                                          *param.allocator_,
                                           param.part_infos_,
                                           param.subpart_infos_))) {
     LOG_WARN("failed to get table part infos", K(ret));
@@ -3643,6 +3646,7 @@ int ObDbmsStats::parse_set_partition_name(ObExecContext &ctx,
     ret = OB_ERR_NOT_PARTITIONED;
     LOG_WARN("the target table is not partitioned", K(ret));
   } else if (OB_FAIL(get_table_part_infos(table_schema,
+                                          *param.allocator_,
                                           param.part_infos_,
                                           param.subpart_infos_))) {
     LOG_WARN("failed to get table part infos", K(ret));
@@ -4645,6 +4649,7 @@ int ObDbmsStats::check_is_valid_col(const ObString &src_str,
 }
 
 int ObDbmsStats::get_table_part_infos(const share::schema::ObTableSchema *table_schema,
+                                      ObIAllocator &allocator,
                                       ObIArray<PartInfo> &part_infos,
                                       ObIArray<PartInfo> &subpart_infos,
                                       OSGPartMap *part_map/*default NULL*/)
@@ -4659,6 +4664,7 @@ int ObDbmsStats::get_table_part_infos(const share::schema::ObTableSchema *table_
     /*do notthing*/
     LOG_TRACE("table is not part table", K(table_schema->get_part_level()));
   } else if (OB_FAIL(ObDbmsStatsUtils::get_part_infos(*table_schema,
+                                                      allocator,
                                                       part_infos,
                                                       subpart_infos,
                                                       part_ids,
@@ -4686,6 +4692,7 @@ int ObDbmsStats::get_part_ids_from_schema(const ObTableSchema *table_schema,
       ObSEArray<PartInfo, 4> dummy_subpart_infos;
       ObSEArray<int64_t, 4> part_ids;
       ObSEArray<int64_t, 4> subpart_ids;
+      ObArenaAllocator tmp_alloc("GetPartIds");
       if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(table_schema));
@@ -4693,6 +4700,7 @@ int ObDbmsStats::get_part_ids_from_schema(const ObTableSchema *table_schema,
         /*do notthing*/
         LOG_TRACE("table is not part table", K(table_schema->get_part_level()));
       } else if (OB_FAIL(ObDbmsStatsUtils::get_part_infos(*table_schema,
+                                                          tmp_alloc,
                                                           dummy_part_infos,
                                                           dummy_subpart_infos,
                                                           part_ids,
@@ -5594,13 +5602,14 @@ int ObDbmsStats::get_user_partition_table_stale_percent(
   int64_t inc_modified_count = 0;
   int64_t row_cnt = 0;
   ObSEArray<PartInfo, 4> partition_infos;
+  ObArenaAllocator tmp_alloc("GetPartStale", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
   if (OB_UNLIKELY(!table_schema.is_user_table() || -1 != global_part_id)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(table_schema.is_user_table()), K(global_part_id));
   } else if (stat_table.partition_stat_infos_.empty()) {
     // do not have any statistics
     stat_table.stale_percent_ = -1.0;
-  } else if (OB_FAIL(get_table_partition_infos(table_schema, partition_infos))) {
+  } else if (OB_FAIL(get_table_partition_infos(table_schema, tmp_alloc, partition_infos))) {
     LOG_WARN("failed to get table subpart infos", K(ret));
   } else if (OB_FAIL(ObBasicStatsEstimator::estimate_stale_partition(ctx,
                                                                      tenant_id,
@@ -6018,12 +6027,14 @@ int ObDbmsStats::set_param_global_part_id(ObExecContext &ctx,
 }
 
 int ObDbmsStats::get_table_partition_infos(const ObTableSchema &table_schema,
+                                           ObIAllocator &allocator,
                                            ObIArray<PartInfo> &partition_infos)
 {
   int ret = OB_SUCCESS;
   ObSEArray<PartInfo, 4> part_infos;
   ObSEArray<PartInfo, 4> subpart_infos;
   if (OB_FAIL(get_table_part_infos(&table_schema,
+                                   allocator,
                                    part_infos,
                                    subpart_infos))) {
     LOG_WARN("failed to get table part infos", K(ret));
@@ -6034,25 +6045,6 @@ int ObDbmsStats::get_table_partition_infos(const ObTableSchema &table_schema,
              OB_FAIL(partition_infos.assign(subpart_infos))) {
     LOG_WARN("failed to assign", K(ret));
   } else {/*do nothing*/}
-  return ret;
-}
-
-int ObDbmsStats::get_table_partition_map(const ObTableSchema &table_schema,
-                                         OSGPartMap &part_map)
-{
-  int ret = OB_SUCCESS;
-  if (PARTITION_LEVEL_TWO != table_schema.get_part_level()
-      && PARTITION_LEVEL_ONE != table_schema.get_part_level()) {
-  } else {
-    ObSEArray<PartInfo, 4> part_infos;
-    ObSEArray<PartInfo, 4> subpart_infos;
-    if (OB_FAIL(get_table_part_infos(&table_schema,
-                                    part_infos,
-                                    subpart_infos,
-                                    &part_map))) {
-      LOG_WARN("failed to get table part infos", K(ret));
-    }
-  }
   return ret;
 }
 

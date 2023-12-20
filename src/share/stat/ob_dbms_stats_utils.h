@@ -115,6 +115,7 @@ public:
   static bool is_part_id_valid(const ObTableStatParam &param, const ObObjectID part_id);
 
   static int get_part_infos(const ObTableSchema &table_schema,
+                            ObIAllocator &allocator,
                             ObIArray<PartInfo> &part_infos,
                             ObIArray<PartInfo> &subpart_infos,
                             ObIArray<int64_t> &part_ids,
@@ -123,6 +124,7 @@ public:
 
   static int get_subpart_infos(const share::schema::ObTableSchema &table_schema,
                                const share::schema::ObPartition *part,
+                               ObIAllocator &allocator,
                                ObIArray<PartInfo> &subpart_infos,
                                ObIArray<int64_t> &subpart_ids,
                                OSGPartMap *part_map = NULL);

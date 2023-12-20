@@ -1414,6 +1414,7 @@ int ObDynamicSamplingUtils::get_ds_table_part_info(ObOptimizerContext &ctx,
              (is_virtual_table(ref_table_id) && !share::is_oracle_mapping_real_virtual_table(ref_table_id))) {
     /*do nothing*/
   } else if (OB_FAIL(ObDbmsStatsUtils::get_part_infos(*table_schema,
+                                                      ctx.get_allocator(),
                                                       tmp_part_infos,
                                                       tmp_subpart_infos,
                                                       tmp_part_ids,
