@@ -299,7 +299,6 @@ void ObSSTableIndexBuilder::reset()
 bool ObSSTableIndexBuilder::check_index_desc(const ObDataStoreDesc &index_desc) const
 {
   bool ret = true;
-  // TODO(zhuixin.gsy): these args influence write_micro_block and need to be evaluated
   if (!index_desc.is_valid()
       || index_desc.need_prebuild_bloomfilter_
       || index_desc.merge_info_ != nullptr
@@ -1340,7 +1339,7 @@ int ObBaseIndexBlockBuilder::close_index_tree(ObBaseIndexBlockBuilder *&root_bui
   } else if (OB_UNLIKELY(next_level_builder_ == nullptr)) {
     root_builder = this;
   } else {
-    //TODO(zhuixin.gsy) check if row_count == 0 is error?
+    //TODO(luhaopeng.lhp) check if row_count == 0 is error?
     if (OB_LIKELY(micro_writer_->get_row_count() > 0)) {
       if (OB_FAIL(append_index_micro_block())) {
         STORAGE_LOG(WARN, "Fail to append index micro block, ", K(ret));

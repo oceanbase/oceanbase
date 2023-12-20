@@ -9643,7 +9643,7 @@ def_table_schema(
 )
 
 def_table_schema(
-    owner = 'zhuixin.gsy',
+    owner = 'luhaopeng.lhp',
     table_name    = '__all_virtual_table_mgr',
     table_id      = '12034',
     table_type = 'VIRTUAL_TABLE',
@@ -16707,7 +16707,7 @@ WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 )
 
 def_table_schema(
-owner = 'zhuixin.gsy',
+owner = 'luhaopeng.lhp',
 table_name      = 'GV$OB_SSTABLES',
 table_id        = '21100',
 table_type      = 'SYSTEM_VIEW',
@@ -16742,7 +16742,7 @@ FROM
 )
 
 def_table_schema(
-owner = 'zhuixin.gsy',
+owner = 'luhaopeng.lhp',
 table_name      = 'V$OB_SSTABLES',
 table_id        = '21101',
 table_type      = 'SYSTEM_VIEW',
@@ -51738,7 +51738,7 @@ def_table_schema(
 )
 
 def_table_schema(
-owner = 'zhuixin.gsy',
+owner = 'luhaopeng.lhp',
 table_name      = 'GV$OB_SSTABLES',
 name_postfix    = '_ORA',
 database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -51774,7 +51774,7 @@ FROM
 )
 
 def_table_schema(
-owner = 'zhuixin.gsy',
+owner = 'luhaopeng.lhp',
 table_name      = 'V$OB_SSTABLES',
 name_postfix    = '_ORA',
 database_id     = 'OB_ORA_SYS_DATABASE_ID',
