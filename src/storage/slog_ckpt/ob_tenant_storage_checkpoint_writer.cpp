@@ -596,7 +596,7 @@ int ObTenantStorageCheckpointWriter::rollback()
   if (!is_inited_ || 0 == tablet_item_addr_info_arr_.count()) {
     // there's no new tablet, no need to rollback
   } else {
-    ObArenaAllocator allocator("CkptRollback");
+    ObArenaAllocator allocator("CkptRollback", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObTablet tablet;
     for (int64_t i = 0; i < tablet_item_addr_info_arr_.count(); i++) {
       tablet.reset();
@@ -608,6 +608,7 @@ int ObTenantStorageCheckpointWriter::rollback()
       if (addr_info.need_rollback_) {
         rollback_cnt++;
         do {
+          allocator.reuse();
           if (OB_FAIL(MTL(ObTenantCheckpointSlogHandler*)->read_from_disk(
               addr_info.new_addr_,
               allocator,
