@@ -861,6 +861,8 @@ int ObLobMetaWriteIter::get_next_row(ObLobMetaWriteResult &row)
       ObLobCommon *lob_common = reinterpret_cast<ObLobCommon*>(lob_common_);
       ObLobData *lob_data = reinterpret_cast<ObLobData*>(lob_common->buffer_);
       lob_data->byte_size_ += row.info_.byte_len_;
+      // FIXME @haozheng direct load has no tx desc info, therefore do not need modified outrow ctx here
+      // maybe later we should need to update outrow ctx here for cdc
       // refresh char len
       char *ptr = reinterpret_cast<char*>(lob_common_);
       int64_t *len = reinterpret_cast<int64_t*>(ptr + ObLobManager::LOB_WITH_OUTROW_CTX_SIZE);
