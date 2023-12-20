@@ -8367,6 +8367,7 @@ int ObUnitManager::check_tenant_on_server(const uint64_t tenant_id,
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_USE_DUMMY_SERVER);
 int ObUnitManager::admin_migrate_unit(
     const uint64_t unit_id,
     const ObAddr &dst,
@@ -8375,16 +8376,12 @@ int ObUnitManager::admin_migrate_unit(
   int ret = OB_SUCCESS;
   ObUnitInfo unit_info;
   ObArray<ObAddr> excluded_servers;
-  ObArray<ObServerInfoInTable> servers_info;
   ObServerInfoInTable dst_server_info;
   obrpc::ObGetServerResourceInfoResult report_dst_server_resource_info;
-  ObUnitConfig left_resource;
   ObZone src_zone;
   ObZone dst_zone;
   double hard_limit = 0;
   bool can_hold_unit = false;
-  bool is_manual = true;
-  const bool new_allocate_pool = false;
   SpinWLockGuard guard(lock_);
   AlterResourceErr err_index = ALT_ERR;
   const char *module = "ADMIN_MIGRATE_UNIT";
@@ -8400,13 +8397,17 @@ int ObUnitManager::admin_migrate_unit(
   } else if (OB_FAIL(get_hard_limit(hard_limit))) {
     LOG_WARN("get_hard_limit failed", KR(ret));
   } else if (OB_FAIL(inner_get_unit_info_by_id(unit_id, unit_info))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "unit_id not existed");
+    }
     LOG_WARN("get unit info failed", K(unit_id), KR(ret));
   } else if (ObUnit::UNIT_STATUS_ACTIVE != unit_info.unit_.status_) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("migrate a unit which is in deleting status", KR(ret), K(unit_id));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "migrate a unit which is in deleting status");
-  } else if (OB_FAIL(SVR_TRACER.get_server_zone(unit_info.unit_.server_, src_zone))) {
-    LOG_WARN("get server zone failed", "server", unit_info.unit_.server_, KR(ret));
+  } else if (dst == unit_info.unit_.server_) {
+    // nothing need to do
+    LOG_INFO("migration dst same to src", KR(ret), K(dst), K(unit_info));
   } else if (dst == unit_info.unit_.migrate_from_server_ || is_cancel) {
     // cancel migrate unit
     bool can_migrate_in = false;
@@ -8417,27 +8418,31 @@ int ObUnitManager::admin_migrate_unit(
 	  } else if (OB_FAIL(SVR_TRACER.check_server_can_migrate_in(
         unit_info.unit_.migrate_from_server_,
         can_migrate_in))) {
-      LOG_WARN("fail to check server can_migrate_in", KR(ret), K(servers_info),
-          K(unit_info.unit_.migrate_from_server_));
+      LOG_WARN("fail to check server can_migrate_in", KR(ret), K(unit_info.unit_.migrate_from_server_));
     } else if (OB_FAIL(cancel_migrate_unit(
             unit_info.unit_, can_migrate_in, unit_info.pool_.tenant_id_ == OB_GTS_TENANT_ID))) {
 		LOG_WARN("failed to cancel migrate unit", KR(ret), K(unit_info), K(can_migrate_in));
     }
+  } else if (OB_FAIL(SVR_TRACER.get_server_zone(unit_info.unit_.server_, src_zone))) {
+    LOG_WARN("get server zone failed", "server", unit_info.unit_.server_, KR(ret));
   } else if (OB_FAIL(SVR_TRACER.get_server_zone(dst, dst_zone))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "destination server not found in the cluster");
+    }
     LOG_WARN("get server zone failed", "server", dst, KR(ret));
   } else if (src_zone != dst_zone) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("migrate unit between zones is not supported", KR(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED,"migrate unit between zones");
   } else if (OB_FAIL(get_excluded_servers(unit_info.unit_.resource_pool_id_, unit_info.unit_.zone_,
-      module, new_allocate_pool, excluded_servers))) {
-    LOG_WARN("get_excluded_servers failed", "unit", unit_info.unit_, KR(ret), K(new_allocate_pool));
+      module, false/*new_allocate_pool*/, excluded_servers))) {
+    LOG_WARN("get_excluded_servers failed", "unit", unit_info.unit_, KR(ret));
   } else if (has_exist_in_array(excluded_servers, dst)) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED,"hold two units of a tenant in the same server");
     LOG_WARN("hold two units of a tenant in the same server is not supported", KR(ret));
   } else if (OB_FAIL(SVR_TRACER.get_server_info(dst, dst_server_info))) {
-    LOG_WARN("get dst_server_info failed", KR(ret), K(dst), K(servers_info));
+    LOG_WARN("get dst_server_info failed", KR(ret), K(dst));
   } else if (!dst_server_info.can_migrate_in()) {
     ret = OB_SERVER_MIGRATE_IN_DENIED;
     LOG_WARN("server can not migrate in", K(dst), K(dst_server_info), KR(ret));
@@ -8453,9 +8458,16 @@ int ObUnitManager::admin_migrate_unit(
         K(hard_limit), K(err_index));
   } else if (!can_hold_unit) {
     ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
+    if (OB_SUCCESS != ERRSIM_USE_DUMMY_SERVER) {
+      LOG_USER_ERROR(OB_MACHINE_RESOURCE_NOT_ENOUGH, "dummy_zone", "127.0.0.1:1000",
+          alter_resource_err_to_str(err_index));
+    } else {
+      LOG_USER_ERROR(OB_MACHINE_RESOURCE_NOT_ENOUGH, to_cstring(dst_zone), to_cstring(dst),
+          alter_resource_err_to_str(err_index));
+    }
     LOG_WARN("left resource can't hold unit", "server", dst,
-        K(hard_limit), K(left_resource), "config", unit_info.config_, KR(ret));
-  } else if (OB_FAIL(migrate_unit_(unit_id, dst, is_manual))) {
+        K(hard_limit), "config", unit_info.config_, KR(ret));
+  } else if (OB_FAIL(migrate_unit_(unit_id, dst, true/*is_manual*/))) {
     LOG_WARN("migrate unit failed", K(unit_id), "destination", dst, KR(ret));
   }
 
