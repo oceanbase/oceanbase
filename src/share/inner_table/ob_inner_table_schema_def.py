@@ -56323,7 +56323,8 @@ SELECT svr_ip AS SVR_IP,
        status AS STATUS,
        latch_wait AS LATCH_WAIT,
        latch_hold AS LATCH_HOLD,
-       trace_id AS TRACE_ID
+       trace_id AS TRACE_ID,
+       cgroup_path AS CGROUP_PATH
 FROM SYS.ALL_VIRTUAL_THREAD
 """.replace("\n", " "),
 )
