@@ -609,32 +609,37 @@ int ObXmlElementSerializer::serialize_key(int arr_idx, int64_t depth)
     ObStringBuffer& buffer = *header_.buffer();
     for (; OB_SUCC(ret) && iter < end ; ++iter, g_idx++) {
       ObXmlNode* cur = static_cast<ObXmlNode*>(*iter);
-      ObMulModeNodeType cur_type = cur->type();
-      switch (cur_type) {
-        case M_UNPARSED:
-        case M_UNPARESED_DOC:
-        case M_DOCUMENT:
-        case M_ELEMENT:
-        case M_CONTENT:
-        case M_ATTRIBUTE:
-        case M_NAMESPACE:
-        case M_INSTRUCT:
-        case M_TEXT:
-        case M_COMMENT:
-        case M_CDATA: {
-          if (OB_FAIL(serialize_child_key(cur->get_key(), g_idx))) {
-            LOG_WARN("failed to serialize key string.", K(ret), K(cur->get_key().length()), K(buffer.length()));
-          } else {
-            set_index_entry( cur->get_index() + child_arr_[arr_idx].g_start_, g_idx);
+      if (OB_ISNULL(cur)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get cur null", K(ret));
+      } else {
+        ObMulModeNodeType cur_type = cur->type();
+        switch (cur_type) {
+          case M_UNPARSED:
+          case M_UNPARESED_DOC:
+          case M_DOCUMENT:
+          case M_ELEMENT:
+          case M_CONTENT:
+          case M_ATTRIBUTE:
+          case M_NAMESPACE:
+          case M_INSTRUCT:
+          case M_TEXT:
+          case M_COMMENT:
+          case M_CDATA: {
+            if (OB_FAIL(serialize_child_key(cur->get_key(), g_idx))) {
+              LOG_WARN("failed to serialize key string.", K(ret), K(cur->get_key().length()), K(buffer.length()));
+            } else {
+              set_index_entry( cur->get_index() + child_arr_[arr_idx].g_start_, g_idx);
+            }
+            break;
           }
-          break;
+          default: {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to serialize key, current node type not correct.", K(ret), K(cur_type));
+            break;
+          }
         }
-        default: {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("failed to serialize key, current node type not correct.", K(ret), K(cur_type));
-          break;
-        }
-      };
+      }
     }
   }
 
