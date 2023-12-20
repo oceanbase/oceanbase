@@ -1885,6 +1885,7 @@ int ObBackupTabletProvider::get_tablet_handle_(const uint64_t tenant_id, const s
       } else {
         // sync wait transfer in tablet replace table finish
         const int64_t ABS_TIMEOUT_TS = ObTimeUtil::current_time() + 5 * 60 * 1000 * 1000; //5min
+        bool is_normal_tablet = false;
         while (OB_SUCC(ret)) {
           tablet_handle.reset();
           if (ABS_TIMEOUT_TS < ObTimeUtil::current_time()) {
@@ -1901,6 +1902,11 @@ int ObBackupTabletProvider::get_tablet_handle_(const uint64_t tenant_id, const s
             break;
           } else if (tablet_handle.get_obj()->get_tablet_meta().has_transfer_table()) {
             LOG_INFO("transfer table is not replaced", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
+            usleep(100 * 1000); // wait 100ms
+          } else if (OB_FAIL(check_tablet_status_(tablet_handle, is_normal_tablet))) {
+            LOG_WARN("failed to check tablet is normal", K(ret), K(tenant_id), K(ls_id), K(rebuild_seq));
+          } else if (!is_normal_tablet) {
+            LOG_INFO("tablet status is not normal", K(tenant_id), K(ls_id), K(tablet_id));
             usleep(100 * 1000); // wait 100ms
           } else {
             break;
