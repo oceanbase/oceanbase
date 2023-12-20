@@ -156,9 +156,22 @@ int ObCompactionLocalityCache::refresh_by_zone(
     // create with tenant_id to set_attr for ObSArray<ObLSReplica> in ObLSInfo
     ObLSInfo tmp_ls_info(tenant_id_, ls_id);
     const ObLSInfo::ReplicaArray &all_replicas = ls_info.get_replicas();
+    const ObLSReplica::MemberList *member_list = nullptr;
     for (int64_t i = 0; OB_SUCC(ret) && i < all_replicas.count(); ++i) {
       const ObLSReplica &tmp_replica = all_replicas.at(i);
-      if (replica_in_zone_list(tmp_replica, zone_list)) {
+      if (ObRole::LEADER == tmp_replica.get_role()) {
+        member_list = &tmp_replica.get_member_list();
+        break;
+      }
+    }
+    if (OB_SUCC(ret) && OB_ISNULL(member_list)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("no leader in ls replica", KR(ret), K(all_replicas));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_replicas.count(); ++i) {
+      const ObLSReplica &tmp_replica = all_replicas.at(i);
+      if (replica_in_zone_list(tmp_replica, zone_list) // replica in zone list
+          && ObLSReplica::server_is_in_member_list(*member_list, tmp_replica.get_server())) { // replica in member list
         if (tmp_ls_info.is_valid()) {
           if (OB_FAIL(tmp_ls_info.add_replica(tmp_replica))) {
             LOG_WARN("fail to add replica", KR(ret), K(tmp_replica));
