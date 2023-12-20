@@ -187,16 +187,26 @@ int64_t ObShareResourceThrottleTool<FakeAllocator, Args...>::expected_wait_time(
   return expected_wait_time;
 }
 
-#define PRINT_THROTTLE_WARN                                                              \
-  do {                                                                                   \
-    const int64_t WARN_LOG_INTERVAL = 60L * 1000L * 1000L /* one minute */;              \
-    if (sleep_time > (WARN_LOG_INTERVAL) && TC_REACH_TIME_INTERVAL(WARN_LOG_INTERVAL)) { \
-      SHARE_LOG(WARN,                                                                    \
-                "[Throttling] Attention!! Sleep More Than One Minute!!",                 \
-                K(sleep_time),                                                           \
-                K(left_interval),                                                        \
-                K(expected_wait_t));                                                     \
-    }                                                                                    \
+#define PRINT_THROTTLE_WARN                                                               \
+  do {                                                                                    \
+    const int64_t WARN_LOG_INTERVAL = 1LL * 60L * 1000L * 1000L /* one minute */;         \
+    if (sleep_time > (WARN_LOG_INTERVAL) && TC_REACH_TIME_INTERVAL(WARN_LOG_INTERVAL)) {  \
+      SHARE_LOG(WARN,                                                                     \
+                "[Throttling] Attention!! Sleep More Than One Minute!!",                  \
+                "Throttle Unit Name",                                                     \
+                ALLOCATOR::throttle_unit_name(),                                          \
+                K(sleep_time),                                                            \
+                K(left_interval),                                                         \
+                K(expected_wait_t));                                                      \
+      if (!has_printed_lbt) {                                                             \
+        has_printed_lbt = true;                                                           \
+        SHARE_LOG(WARN,                                                                   \
+          "[Throttling] (report write throttle info) LBT Info",                           \
+          "Throttle Unit Name",                                                           \
+          ALLOCATOR::throttle_unit_name(),                                                \
+          K(lbt()));                                                                       \
+      }                                                                                   \
+    }                                                                                     \
   } while (0)
 
 #define PRINT_THROTTLE_STATISTIC                                                       \
@@ -226,6 +236,7 @@ void ObShareResourceThrottleTool<FakeAllocator, Args...>::do_throttle(const int6
     // exit directly
   } else if (is_throttling<ALLOCATOR>(share_ti_guard, module_ti_guard)) {
     // loop to do throttle
+    bool has_printed_lbt = false;
     while (still_throttling<ALLOCATOR>(share_ti_guard, module_ti_guard) && left_interval > 0) {
       int64_t expected_wait_t = min(left_interval, expected_wait_time<ALLOCATOR>(share_ti_guard, module_ti_guard));
       if (expected_wait_t < 0) {
