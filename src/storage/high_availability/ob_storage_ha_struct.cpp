@@ -401,16 +401,15 @@ int ObMigrationStatusHelper::check_transfer_dest_ls_status_for_ls_gc(
 // and the destination can be restored through rebuilding.
 int ObMigrationStatusHelper::set_ls_migrate_gc_status_(
   ObLS &ls,
-  const ObMigrationStatus &migration_status)
+  bool &allow_gc)
 {
   int ret = OB_SUCCESS;
-  const ObMigrationStatus migrate_GC_status = ObMigrationStatus::OB_MIGRATION_STATUS_GC;
-  if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
-    // do nothing
+  if (OB_FAIL(ls.set_ls_migration_gc(allow_gc))) {
+    LOG_WARN("failed to set migration status", K(ret));
+  } else if (!allow_gc) {
+    LOG_INFO("ls is not allow gc", K(ret), K(ls));
   } else if (OB_FAIL(ls.get_log_handler()->disable_sync())) {
     LOG_WARN("failed to disable replay", K(ret));
-  } else if (OB_FAIL(ls.set_migration_status(migrate_GC_status, ls.get_ls_meta().get_rebuild_seq()))) {
-    LOG_WARN("failed to set migration status", K(ret));
   }
   return ret;
 }
@@ -444,7 +443,7 @@ int ObMigrationStatusHelper::check_ls_transfer_tablet_(
   } else if (FALSE_IT(create_status = ls->get_ls_meta().get_ls_create_status())) {
   } else if (ObInnerLSStatus::COMMITTED != create_status) {
     allow_gc = true;
-  } else if (OB_FAIL(set_ls_migrate_gc_status_(*ls, migration_status))) {
+  } else if (OB_FAIL(set_ls_migrate_gc_status_(*ls, allow_gc))) {
     LOG_WARN("failed to set ls gc status", KR(ret));
   } else if (OB_FAIL(ls->get_restore_status(restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), KPC(ls));
