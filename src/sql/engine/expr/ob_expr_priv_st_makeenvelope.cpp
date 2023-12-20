@@ -131,7 +131,7 @@ int ObExprPrivSTMakeEnvelope::read_args(const ObExpr &expr, ObEvalCtx &ctx, ObSE
     } else if (datum->is_null()) {
       is_null_result = true;
     } else if (!ob_is_string_type(type)) {
-      coord = datum->get_double();
+      coord = type == ObTinyIntType ? datum->get_tinyint() : datum->get_double();
     } else if (OB_FAIL(string_to_double(datum->get_string(), arg->datum_meta_.cs_type_, coord))) {
       LOG_WARN("fail to get x", K(ret), K(datum->get_string()), K(arg->datum_meta_.cs_type_));
     }
