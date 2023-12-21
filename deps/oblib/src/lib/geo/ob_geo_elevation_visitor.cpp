@@ -125,6 +125,23 @@ void ObGeoElevationExtent::calculate_z()
   is_z_calculated_ = true;
 }
 
+ObGeoElevationVisitor::ObGeoElevationVisitor(ObIAllocator &allocator, const common::ObSrsItem *srs)
+      : extent_(nullptr),
+        is_inited_(false),
+        allocator_(&allocator),
+        buffer_(allocator),
+        srs_(srs),
+        type_3D_(ObGeoType::GEO3DTYPEMAX),
+        crs_(ObGeoCRS::Cartesian),
+        srid_(0)
+{
+  if (OB_NOT_NULL(srs_)) {
+    crs_ = (srs_->srs_type() == ObSrsType::PROJECTED_SRS) ? ObGeoCRS::Cartesian
+                                                          : ObGeoCRS::Geographic;
+    srid_ = srs_->get_srid();
+  }
+}
+
 int ObGeoElevationVisitor::add_geometry(
     const ObGeometry &geo, ObGeogBox *&extent, bool &is_geo_empty)
 {
@@ -212,10 +229,19 @@ bool ObGeoElevationVisitor::prepare(ObGeometry *geo)
 int ObGeoElevationVisitor::append_point(double x, double y, double z)
 {
   int ret = OB_SUCCESS;
-
-  if (OB_FAIL(buffer_.append(x))) {
+  double val_x = x;
+  double val_y = y;
+  if (crs_ == ObGeoCRS::Geographic) {
+    if (OB_FAIL(srs_->longtitude_convert_from_radians(x, val_x))) {
+      LOG_WARN("fail to convert radians to longtitude", K(ret));
+    } else if (OB_FAIL(srs_->latitude_convert_from_radians(y, val_y))) {
+      LOG_WARN("fail to convert radians to latitude", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(buffer_.append(val_x))) {
     LOG_WARN("failed to append point value x", K(ret), K(x));
-  } else if (OB_FAIL(buffer_.append(y))) {
+  } else if (OB_FAIL(buffer_.append(val_y))) {
     LOG_WARN("failed to append point value y", K(ret), K(y));
   } else if (OB_FAIL(buffer_.append(z))) {
     LOG_WARN("failed to append point value z", K(ret), K(z));
@@ -483,21 +509,12 @@ int ObGeoElevationVisitor::get_geometry_3D(ObGeometry *&geo)
   if (!is_inited_ || !ObGeoTypeUtil::is_3d_geo_type(type_3D_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("visitor is not inited or not executed", K(ret), K(is_inited_), K(type_3D_));
+  } else if (OB_FAIL(ObGeoTypeUtil::create_geo_by_type(
+          *allocator_, type_3D_, ObGeoCRS::Geographic == crs_, true, geo, srid_))) {
+    ret = OB_ERR_GIS_INVALID_DATA;
+    LOG_WARN("failed to create swkb", K(ret), K(crs_), K(type_3D_));
   } else {
-    ObGeoCRS crs = ObGeoCRS::Cartesian;
-    uint32_t srid = 0;
-    if (OB_NOT_NULL(srs_)) {
-      crs = (srs_->srs_type() == ObSrsType::PROJECTED_SRS) ? ObGeoCRS::Cartesian
-                                                           : ObGeoCRS::Geographic;
-      srid = srs_->get_srid();
-    }
-    if (OB_FAIL(ObGeoTypeUtil::create_geo_by_type(
-            *allocator_, type_3D_, ObGeoCRS::Geographic == crs, true, geo, srid))) {
-      ret = OB_ERR_GIS_INVALID_DATA;
-      LOG_WARN("failed to create swkb", K(ret), K(crs), K(type_3D_));
-    } else {
-      geo->set_data(buffer_.string());
-    }
+    geo->set_data(buffer_.string());
   }
   return ret;
 }

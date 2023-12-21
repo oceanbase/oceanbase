@@ -66,14 +66,7 @@ private:
 class ObGeoElevationVisitor : public ObEmptyGeoVisitor
 {
 public:
-  explicit ObGeoElevationVisitor(ObIAllocator &allocator, const common::ObSrsItem *srs)
-      : extent_(nullptr),
-        is_inited_(false),
-        allocator_(&allocator),
-        buffer_(allocator),
-        srs_(srs),
-        type_3D_(ObGeoType::GEO3DTYPEMAX)
-  {}
+  explicit ObGeoElevationVisitor(ObIAllocator &allocator, const common::ObSrsItem *srs);
   virtual ~ObGeoElevationVisitor()
   { if (OB_NOT_NULL(extent_))
     { extent_->~ObGeoElevationExtent(); }
@@ -159,6 +152,8 @@ private:
   ObWkbBuffer buffer_;
   const common::ObSrsItem *srs_;
   ObGeoType type_3D_;
+  ObGeoCRS crs_;
+  uint32_t srid_;
 
   DISALLOW_COPY_AND_ASSIGN(ObGeoElevationVisitor);
 };
