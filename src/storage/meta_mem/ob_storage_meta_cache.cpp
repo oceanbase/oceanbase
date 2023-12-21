@@ -797,7 +797,7 @@ int ObStorageMetaCache::batch_get_meta_and_bypass_cache(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("Don't supported for table store", K(ret), K(type), K(keys));
   } else {
-    // TODO: @zhuixin implement batch read in shared block reader.
+    // TODO: implement batch read in shared block reader.
     for (int64_t i = 0; OB_SUCC(ret) && i < keys.count(); ++i) {
       const ObStorageMetaKey &key = keys.at(i);
       ObStorageMetaHandle meta_handle;
