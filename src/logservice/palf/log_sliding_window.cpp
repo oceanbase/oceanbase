@@ -134,6 +134,7 @@ LogSlidingWindow::LogSlidingWindow()
     accum_group_log_size_(0),
     last_record_group_log_id_(FIRST_VALID_LOG_ID - 1),
     freeze_mode_(FEEDBACK_FREEZE_MODE),
+    has_pending_handle_submit_task_(false),
     is_inited_(false)
 {}
 
@@ -900,12 +901,43 @@ int LogSlidingWindow::try_push_log_to_children_(const int64_t curr_proposal_id,
   return ret;
 }
 
+int LogSlidingWindow::try_handle_next_submit_log()
+{
+  int ret = OB_SUCCESS;
+  // Set has_pending_handle_submit_task_ to false forcedly.
+  (void) ATOMIC_STORE(&has_pending_handle_submit_task_, false);
+  bool unused_bool = false;
+  ret = handle_next_submit_log_(unused_bool);
+  return ret;
+}
+
+bool LogSlidingWindow::is_handle_thread_lease_expired(const int64_t thread_lease_begin_ts) const
+{
+  // The thread lease time for handle_next_submit_log_ is 50ms.
+  static const int64_t THREAD_LEASE_US = 50 * 1000L;
+  bool bool_ret = false;
+  if (OB_INVALID_TIMESTAMP != thread_lease_begin_ts
+      && ObTimeUtility::current_time() - thread_lease_begin_ts > THREAD_LEASE_US) {
+    bool_ret = true;
+  }
+  return bool_ret;
+}
+
 int LogSlidingWindow::handle_next_submit_log_(bool &is_committed_lsn_updated)
 {
   int ret = OB_SUCCESS;
+  common::ObTimeGuard time_guard("handle_next_submit_log", 100 * 1000);
   if (submit_log_handling_lease_.acquire()) {
+    // record handle_thread_lease_begin_ts with current time
+    const int64_t thread_lease_begin_ts = ObTimeUtility::current_time();
+    bool is_lease_expired = false;
+    bool need_submit_async_task = false;
     do {
-      while (OB_SUCC(ret)) {
+      // If it revoke fails when thread lease expired, this thread need submit an async task.
+      if (is_lease_expired) {
+        need_submit_async_task = true;
+      }
+      while (OB_SUCC(ret) && !is_lease_expired) {
         LSN last_submit_lsn;
         LSN last_submit_end_lsn;
         int64_t last_submit_log_id = OB_INVALID_LOG_ID;
@@ -1095,8 +1127,32 @@ int LogSlidingWindow::handle_next_submit_log_(bool &is_committed_lsn_updated)
           PALF_LOG(TRACE, "handle one submit log", K(ret), K_(palf_id), K_(self), K(tmp_log_id), K(is_committed_lsn_updated),
               K(is_need_submit), K(is_submitted));
         }
+        is_lease_expired = is_handle_thread_lease_expired(thread_lease_begin_ts);
       }
     } while (!submit_log_handling_lease_.revoke());
+
+    // Try push handle_submit_task into queue when lease revoke failed(lease expired).
+    if (OB_SUCC(ret) && need_submit_async_task) {
+      // This CAS is used to control only one task can be submitted into queue at any time.
+      if (ATOMIC_BCAS(&has_pending_handle_submit_task_, false, true)) {
+        // push task into queue until success
+        int tmp_ret = OB_SUCCESS;
+        while (OB_TMP_FAIL(log_engine_->submit_handle_submit_task())) {
+          if (REACH_TIME_INTERVAL(100 * 1000)) {
+            PALF_LOG(WARN, "submit_handle_submit_task failed", K(tmp_ret), K_(palf_id), K_(self));
+          }
+          if (OB_IN_STOP_STATE == tmp_ret) {
+            // The thread pool has been stopped, no need retry.
+            break;
+          } else {
+            // sleep 100us when submit task failed
+            ob_usleep(100);
+          }
+        }
+      } else {
+        // no need push task into queue
+      }
+    }
   }
   return ret;
 }

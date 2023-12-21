@@ -24,9 +24,10 @@
 #include "share/ob_occam_timer.h"
 #include "share/scn.h"
 #include "fetch_log_engine.h"
-#include "log_loop_thread.h"
 #include "log_define.h"
+#include "log_shared_queue_thread.h"
 #include "log_io_task_cb_thread_pool.h"
+#include "log_loop_thread.h"
 #include "log_rpc.h"
 #include "palf_options.h"
 #include "palf_handle_impl.h"
@@ -367,6 +368,7 @@ private:
   LogIOTaskCbThreadPool cb_thread_pool_;
   common::ObOccamTimer election_timer_;
   LogIOWorkerWrapper log_io_worker_wrapper_;
+  LogSharedQueueTh log_shared_queue_th_;
   BlockGCTimerTask block_gc_timer_task_;
   LogUpdater log_updater_;
   PalfMonitorCb *monitor_;

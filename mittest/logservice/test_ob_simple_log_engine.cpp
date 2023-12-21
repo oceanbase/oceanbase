@@ -25,6 +25,7 @@
 #include "logservice/palf/log_define.h"
 #include "logservice/palf/log_group_entry_header.h"
 #include "logservice/palf/log_io_worker.h"
+#include "logservice/palf/log_shared_queue_thread.h"
 #include "logservice/palf/lsn.h"
 #include "share/scn.h"
 #include "logservice/palf/log_io_task.h"
@@ -71,6 +72,7 @@ public:
     ObILogAllocator *alloc_mgr = log_engine_->alloc_mgr_;
     LogRpc *log_rpc = log_engine_->log_net_service_.log_rpc_;
     LogIOWorker *log_io_worker = log_engine_->log_io_worker_;
+    LogSharedQueueTh *log_shared_queue_th = log_engine_->log_shared_queue_th_;
     LogPlugins *plugins = log_engine_->plugins_;
     LogEngine log_engine;
     ILogBlockPool *log_block_pool = log_engine_->log_storage_.block_mgr_.log_block_pool_;
@@ -81,6 +83,7 @@ public:
                                 &(leader_.palf_handle_impl_->hot_cache_),
                                 log_rpc,
                                 log_io_worker,
+                                log_shared_queue_th,
                                 plugins,
                                 entry_header,
                                 palf_epoch_,
