@@ -135,6 +135,10 @@ int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam
         // do nothing
       } else if (!tablet->get_tablet_meta().has_transfer_table()) {
         // do nothing
+      } else if (!tablet->get_tablet_meta().ha_status_.is_data_status_complete()) {
+        LOG_INFO("[TRANSFER_BACKFILL]skip tablet which data status is incomplete",
+            "tablet_id", tablet->get_tablet_meta().tablet_id_,
+            "ha_status", tablet->get_tablet_meta().ha_status_);
       } else if (!tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
         // Restore status is FULL when the tablet is created by transfer in. It can
         // turn into one of the following status.

@@ -445,6 +445,8 @@ int ObMigrationStatusHelper::check_ls_transfer_tablet_(
     allow_gc = true;
   } else if (OB_FAIL(set_ls_migrate_gc_status_(*ls, allow_gc))) {
     LOG_WARN("failed to set ls gc status", KR(ret));
+  } else if (!allow_gc) {
+    //do nothing
   } else if (OB_FAIL(ls->get_restore_status(restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), KPC(ls));
   } else if (restore_status.is_in_restore()) {
