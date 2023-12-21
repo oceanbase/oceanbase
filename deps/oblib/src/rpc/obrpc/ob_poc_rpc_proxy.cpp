@@ -163,6 +163,7 @@ int ObAsyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
   }
   pool_.destroy();
   ObCurTraceId::reset();
+  THIS_WORKER.get_sql_arena_allocator().reset();
   const int64_t cur_time = ObTimeUtility::current_time();
   const int64_t total_time = cur_time  - start_time;
   const int64_t decode_time = after_decode_time - start_time;
