@@ -1023,13 +1023,13 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncUnionImpl, ObWkbGeogCollection, ObWkbGeog
 }
 OB_GEO_FUNC_END;
 
-OB_GEO_CART_BINARY_FUNC_GEO2_BEGIN(ObGeoFuncUnionImpl, ObWkbGeogCollection, ObGeometry *)
+OB_GEO_GEOG_BINARY_FUNC_GEO2_BEGIN(ObGeoFuncUnionImpl, ObWkbGeogCollection, ObGeometry *)
 {
   return eval_unions_gc<ObGeographGeometrycollection, ObGeographPoint>(g2, g1, context, result);
 }
 OB_GEO_FUNC_END;
 
-OB_GEO_CART_BINARY_FUNC_GEO1_BEGIN(ObGeoFuncUnionImpl, ObWkbGeogCollection, ObGeometry *)
+OB_GEO_GEOG_BINARY_FUNC_GEO1_BEGIN(ObGeoFuncUnionImpl, ObWkbGeogCollection, ObGeometry *)
 {
   return eval_unions_gc<ObGeographGeometrycollection, ObGeographPoint>(g1, g2, context, result);
 }
