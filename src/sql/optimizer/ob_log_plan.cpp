@@ -2112,7 +2112,9 @@ int ObLogPlan::select_replicas(ObExecContext &exec_ctx,
         }
       }
 
-      if (OB_SUCC(ret) && proxy_stat != 0) {
+      if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
+        // standby and restore tenant not feedback
+      } else if (OB_SUCC(ret) && proxy_stat != 0) {
         ObObj val;
         val.set_int(proxy_stat);
         if (OB_FAIL(session->update_sys_variable(SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK, val))) {
