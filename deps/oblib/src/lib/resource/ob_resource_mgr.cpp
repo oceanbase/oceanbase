@@ -17,6 +17,7 @@
 #include <stdlib.h>
 
 #include "lib/alloc/memory_sanity.h"
+#include "lib/alloc/ob_malloc_time_monitor.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/utility/utility.h"
@@ -77,10 +78,9 @@ AChunk *ObTenantMemoryMgr::alloc_chunk(const int64_t size, const ObMemAttr &attr
         update_cache_hold(hold_size);
       }
     }
-
+    ObMallocTimeMonitor::click("ALLOC_CHUNK_END");
     if (!reach_ctx_limit && NULL != cache_washer_ && NULL == chunk && hold_size < cache_hold_
         && attr.label_ != ObNewModIds::OB_KVSTORE_CACHE_MB) {
-      common::ObTimeGuard time_guard("sync wash", 1000 * 1000);
       // try wash memory from cache
       ObICacheWasher::ObCacheMemBlock *washed_blocks = NULL;
       bool wash_single_mb = true;
@@ -154,6 +154,7 @@ AChunk *ObTenantMemoryMgr::alloc_chunk(const int64_t size, const ObMemAttr &attr
           }
         }
       }
+      ObMallocTimeMonitor::click("WASH_KVCACHE_END");
     }
   }
   return chunk;

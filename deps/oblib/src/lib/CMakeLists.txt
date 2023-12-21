@@ -308,6 +308,7 @@ ob_set_subtarget(ob_malloc_object_list common_alloc
   alloc/ob_malloc_allocator.cpp
   alloc/ob_malloc_callback.cpp
   alloc/ob_malloc_sample_struct.cpp
+  alloc/ob_malloc_time_monitor.cpp
   alloc/ob_tenant_ctx_allocator.cpp
   alloc/object_mgr.cpp
   alloc/object_set.cpp

@@ -14,7 +14,7 @@
 
 #include "lib/alloc/ob_tenant_ctx_allocator.h"
 #include "lib/alloc/ob_malloc_sample_struct.h"
-#include "lib/alloc/ob_free_log_printer.h"
+#include "lib/alloc/ob_malloc_time_monitor.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
 #include "lib/allocator/ob_tc_malloc.h"
 #include "lib/utility/ob_print_utils.h"
@@ -428,6 +428,7 @@ void* ObTenantCtxAllocator::common_alloc(const int64_t size, const ObMemAttr &at
 
   if (OB_UNLIKELY(is_errsim)) {
   } else {
+    ObMallocTimeMonitor::Guard guard(size, attr);
     sample_allowed = ObMallocSampleLimiter::malloc_sample_allowed(size, attr);
     alloc_size = sample_allowed ? (size + AOBJECT_BACKTRACE_SIZE) : size;
     ObTenantMemoryMgr::tl_ignore_tenant_500_limit = false;
@@ -435,6 +436,7 @@ void* ObTenantCtxAllocator::common_alloc(const int64_t size, const ObMemAttr &at
     ObTenantMemoryMgr::tl_ignore_tenant_500_limit = true;
     if (OB_ISNULL(obj) && g_alloc_failed_ctx().need_wash()) {
       int64_t total_size = ta.sync_wash();
+      ObMallocTimeMonitor::click("SYNC_WASH_END");
       obj = allocator.alloc_object(alloc_size, attr);
     }
   }
@@ -503,6 +505,7 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
 
   if (OB_UNLIKELY(is_errsim)) {
   } else {
+    ObMallocTimeMonitor::Guard guard(size, attr);
     sample_allowed = ObMallocSampleLimiter::malloc_sample_allowed(size, attr);
     alloc_size = sample_allowed ? (size + AOBJECT_BACKTRACE_SIZE) : size;
     ObTenantMemoryMgr::tl_ignore_tenant_500_limit = false;
@@ -510,6 +513,7 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
     ObTenantMemoryMgr::tl_ignore_tenant_500_limit = true;
     if(OB_ISNULL(obj) && g_alloc_failed_ctx().need_wash()) {
       int64_t total_size = ta.sync_wash();
+      ObMallocTimeMonitor::click("SYNC_WASH_END");
       obj = allocator.realloc_object(obj, alloc_size, attr);
     }
   }
