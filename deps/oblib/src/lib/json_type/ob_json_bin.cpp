@@ -4009,6 +4009,20 @@ int ObJsonBin::rebuild(ObJsonBuffer &result)
   return ret;
 }
 
+uint64_t ObJsonBin::get_serialize_size() const
+{
+  uint64_t size = 0;
+  ObJBVerType ver_type = get_vertype();
+  if (ObJsonVerType::is_array(ver_type)
+      || ObJsonVerType::is_object(ver_type)
+      || ObJsonVerType::is_opaque_or_string(ver_type)) {
+    size = get_used_bytes();
+  } else {
+    size = 1 /*vertype byte*/ + get_used_bytes();
+  }
+  return size;
+}
+
 void ObJsonBin::destroy()
 {
   result_.reset();
