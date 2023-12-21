@@ -371,8 +371,8 @@ int ObTransformPredicateMoveAround::pullup_predicates(ObDMLStmt *stmt,
     if (OB_FAIL(pullup_predicates_from_set_stmt(stmt, sel_ids, output_pullup_preds))) {
       LOG_WARN("process set stmt failed", K(ret));
     }
-  } else if (OB_FAIL(generate_basic_table_pullup_preds(stmt, *input_pullup_preds))) {
-    LOG_WARN("add stmt check constraints", K(ret));
+  // } else if (OB_FAIL(generate_basic_table_pullup_preds(stmt, *input_pullup_preds))) {
+  //   LOG_WARN("add stmt check constraints", K(ret));
   } else if (OB_FAIL(pullup_predicates_from_view(*stmt, sel_ids, *input_pullup_preds))) {
     LOG_WARN("failed to pullup predicates from view", K(ret));
   } else if (OB_FAIL(generate_pullup_predicates_for_subquery(*stmt, *input_pullup_preds))) {
@@ -599,6 +599,9 @@ int ObTransformPredicateMoveAround::generate_pullup_predicates_for_subquery(ObDM
   return ret;
 }
 
+//Be careful, this function may cause bugs.
+//it should make sure that the check constraint result is not null or calculable, but now we can not guarantee it.
+//may reopen it in future by case.
 int ObTransformPredicateMoveAround::generate_basic_table_pullup_preds(ObDMLStmt *stmt, ObIArray<ObRawExpr *> &preds)
 {
   int ret = OB_SUCCESS;
@@ -1080,8 +1083,7 @@ int ObTransformPredicateMoveAround::recursive_check_expr_pullup_validity(
     for (int64_t i = 0; OB_SUCC(ret) && state >= 0 && i < expr->get_param_count(); ++i) {
       if (OB_FAIL(parent_exprs.push_back(expr))) {
         LOG_WARN("failed to push back", K(ret));
-      }
-      if (OB_FAIL(SMART_CALL(recursive_check_expr_pullup_validity(expr->get_param_expr(i),
+      } else if (OB_FAIL(SMART_CALL(recursive_check_expr_pullup_validity(expr->get_param_expr(i),
                                                                   pullup_list,
                                                                   parent_exprs,
                                                                   state)))) {
