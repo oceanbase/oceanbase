@@ -930,5 +930,32 @@ int ObLogSchemaGetter::get_tenant_refreshed_schema_version(const uint64_t tenant
   return ret;
 }
 
+int ObLogSchemaGetter::check_if_tenant_is_dropping_or_dropped(const uint64_t tenant_id,
+    bool &is_tenant_dropping_or_dropped)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard guard;
+  is_tenant_dropping_or_dropped = false;
+  const ObTenantSchema *tenant_schema = nullptr;
+
+  if (OB_FAIL(schema_service_.get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+    LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(guard.get_tenant_info(tenant_id, tenant_schema))) {
+    LOG_WARN("get tenant info failed", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(tenant_schema)) {
+    // Double check the tenant status to avoid any potential problems in the schema module.
+    if (OB_FAIL(guard.check_if_tenant_has_been_dropped(tenant_id, is_tenant_dropping_or_dropped))) {
+      LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(tenant_id));
+    } else {
+      LOG_INFO("tenant info is nullptr, check the tenant status",
+          K(tenant_id), K(is_tenant_dropping_or_dropped));
+    }
+  } else {
+    is_tenant_dropping_or_dropped = tenant_schema->is_dropping();
+  }
+
+  return ret;
+}
+
 } // namespace libobcdc
 } // namespace oceanbase
