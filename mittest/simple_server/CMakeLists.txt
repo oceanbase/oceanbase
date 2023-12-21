@@ -100,6 +100,7 @@ ob_unittest_observer(test_keep_alive_min_start_scn test_keep_alive_min_start_scn
 ob_unittest_observer(test_ls_replica test_ls_replica.cpp)
 ob_unittest_observer(test_tablet_autoinc_mgr test_tablet_autoinc_mgr.cpp)
 ob_unittest_observer(test_tablet_to_ls_cache test_tablet_to_ls_cache.cpp)
+ob_unittest_observer(test_callbacks_with_reverse_order test_callbacks_with_reverse_order.cpp)
 # TODO(muwei.ym): open later
 ob_ha_unittest_observer(test_transfer_handler storage_ha/test_transfer_handler.cpp)
 ob_ha_unittest_observer(test_transfer_and_restart_basic storage_ha/test_transfer_and_restart_basic.cpp)
