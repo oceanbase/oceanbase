@@ -1974,7 +1974,8 @@ int ObMergeGroupByOp::init_hp_infras_group_mgr()
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
-  if (aggr_processor_.has_distinct()) {
+  if (aggr_processor_.has_distinct() &&
+      !(MY_SPEC.has_rollup_ && aggr_processor_.has_listagg_non_const_separator())) {
     int64_t est_rows = MY_SPEC.est_rows_per_group_;
     aggr_processor_.set_io_event_observer(&io_event_observer_);
     if (OB_FAIL(ObPxEstimateSizeUtil::get_px_size(

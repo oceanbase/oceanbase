@@ -858,6 +858,7 @@ public:
   { hp_infras_mgr_ = hp_infras_mgr; }
   inline int64_t get_distinct_count() const { return distinct_count_; }
   inline void set_enable_hash_distinct() { enable_hash_distinct_ = true; }
+  bool has_listagg_non_const_separator() const;
 private:
   template <typename T>
   int inner_process_batch(GroupRow &group_rows, T &selector, int64_t start_idx, int64_t end_idx);

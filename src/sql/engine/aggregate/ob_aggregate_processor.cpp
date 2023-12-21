@@ -8381,5 +8381,20 @@ int ObAggregateProcessor::check_rows_prefix_str_equal_for_hybrid_hist(const ObCh
   return ret;
 }
 
+bool ObAggregateProcessor::has_listagg_non_const_separator() const
+{
+  bool has_it = false;
+  if (lib::is_oracle_mode()) {
+    for (int64_t i = 0; !has_it && i < aggr_infos_.count(); ++i) {
+      if (aggr_infos_.at(i).get_expr_type() == T_FUN_GROUP_CONCAT &&
+          aggr_infos_.at(i).separator_expr_ != NULL &&
+          !aggr_infos_.at(i).separator_expr_->is_const_expr()) {
+        has_it = true;
+      }
+    }
+  }
+  return has_it;
+}
+
 } //namespace sql
 } //namespace oceanbase
