@@ -86,7 +86,7 @@ int ObPxMultiPartDeleteOp::check_rowkey_distinct(const ObExprPtrIArray &row,
 {
   int ret = OB_SUCCESS;
   if (DistinctType::T_DISTINCT_NONE != MY_SPEC.del_ctdef_.distinct_algo_) {
-    ret = ObDMLService::check_rowkey_whether_distinct(row,
+    ret = ObDMLService::check_rowkey_whether_distinct(MY_SPEC.del_ctdef_.distinct_key_,
                                                       MY_SPEC.del_ctdef_.distinct_algo_,
                                                       eval_ctx_,
                                                       ctx_,
