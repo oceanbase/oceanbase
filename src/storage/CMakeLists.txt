@@ -563,8 +563,10 @@ ob_set_subtarget(ob_storage memtable_mvcc
 ob_set_subtarget(ob_storage multi_data_source
   multi_data_source/buffer_ctx.cpp
   multi_data_source/mds_ctx.cpp
+  multi_data_source/mds_for_each_map_flush_operation.cpp
   multi_data_source/mds_node.cpp
   multi_data_source/mds_table_mgr.cpp
+  multi_data_source/mds_table_order_flusher.cpp
   multi_data_source/mds_table_base.cpp
   multi_data_source/mds_writer.cpp
   multi_data_source/mds_table_handler.cpp

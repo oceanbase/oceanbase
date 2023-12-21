@@ -170,7 +170,7 @@ public:
   int64_t get_node_cnt() const;
   virtual share::SCN get_rec_scn();
   virtual int operate(const ObFunction<int(MdsTableBase &)> &operation) = 0;
-  virtual int flush(share::SCN need_advanced_rec_scn_lower_limit) = 0;
+  virtual int flush(share::SCN need_advanced_rec_scn_lower_limit, share::SCN max_decided_scn) = 0;
   virtual ObTabletID get_tablet_id() const;
   virtual bool is_flushing() const;
   virtual int fill_virtual_info(ObIArray<MdsNodeInfoForVirtualTable> &mds_node_info_array) const = 0;
