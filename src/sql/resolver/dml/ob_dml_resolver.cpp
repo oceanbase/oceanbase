@@ -15768,24 +15768,23 @@ int ObDMLResolver::gen_values_table_column_items(const int64_t column_cnt, Table
           MEMCPY(buf, tmp_col_name.ptr(), tmp_col_name.length());
           ObString column_name(tmp_col_name.length(), buf);
           column_expr->set_column_attr(table_item.table_name_, column_name);
-          if (ob_is_enumset_tc(table_item.table_values_.at(i)->get_result_type().get_type())
-              && OB_FAIL(column_expr->set_enum_set_values(table_item.table_values_.at(i)->get_enum_set_values()))) {
-            LOG_WARN("failed to set_enum_set_values", K(ret));
-          }
-          if (OB_SUCC(ret)) {
-            if (OB_FAIL(column_expr->add_flag(IS_COLUMN))) {
-              LOG_WARN("failed to add flag IS_COLUMN", K(ret));
+          if (ob_is_enumset_tc(column_expr->get_result_type().get_type()) ||
+              column_expr->get_result_type().is_lob_storage()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("values stmt not support such column type", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "type of column in values table");
+          } else if (OB_FAIL(column_expr->add_flag(IS_COLUMN))) {
+            LOG_WARN("failed to add flag IS_COLUMN", K(ret));
+          } else {
+            ColumnItem column_item;
+            column_item.expr_ = column_expr;
+            column_item.table_id_ = column_expr->get_table_id();
+            column_item.column_id_ = column_expr->get_column_id();
+            column_item.column_name_ = column_expr->get_column_name();
+            if (OB_FAIL(get_stmt()->add_column_item(column_item))) {
+              LOG_WARN("failed to add column item", K(ret));
             } else {
-              ColumnItem column_item;
-              column_item.expr_ = column_expr;
-              column_item.table_id_ = column_expr->get_table_id();
-              column_item.column_id_ = column_expr->get_column_id();
-              column_item.column_name_ = column_expr->get_column_name();
-              if (OB_FAIL(get_stmt()->add_column_item(column_item))) {
-                LOG_WARN("failed to add column item", K(ret));
-              } else {
-                LOG_TRACE("succeed to gen table values desc", K(column_name), KPC(column_expr));
-              }
+              LOG_TRACE("succeed to gen table values desc", K(column_name), KPC(column_expr));
             }
           }
         }

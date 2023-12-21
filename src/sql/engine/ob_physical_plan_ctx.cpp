@@ -916,16 +916,8 @@ OB_DEF_DESERIALIZE(ObPhysicalPlanCtx)
   if (OB_SUCC(ret) && array_group_count > 0 &&
       datum_param_store_.count() == 0 &&
       datum_param_store_.count() != param_store_.count()) {
-    if (OB_FAIL(datum_param_store_.prepare_allocate(param_store_.count()))) {
-      LOG_WARN("fail to prepare allocate", K(ret), K(param_store_.count()));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < param_store_.count(); i++) {
-      ObDatumObjParam &datum_param = datum_param_store_.at(i);
-      if (OB_FAIL(datum_param.alloc_datum_reserved_buff(param_store_.at(i).meta_, allocator_))) {
-        LOG_WARN("alloc datum reserved buffer failed", K(ret));
-      } else if (OB_FAIL(datum_param.from_objparam(param_store_.at(i), &allocator_))) {
-        LOG_WARN("fail to convert obj param", K(ret), K(param_store_.at(i)));
-      }
+    if (OB_FAIL(init_param_store_after_deserialize())) {
+      LOG_WARN("failed to deserialize param store", K(ret));
     }
   }
   return ret;
@@ -946,6 +938,39 @@ int ObPhysicalPlanCtx::get_field(const int64_t idx, ObField &field)
     LOG_WARN("field array is not init", K(ret), K(field_array_), K(idx));
   } else {
     field = field_array_->at(idx);
+  }
+  return ret;
+}
+
+// white list: init param_store after deserialize which it's needed really.
+int ObPhysicalPlanCtx::init_param_store_after_deserialize()
+{
+  int ret = OB_SUCCESS;
+  datum_param_store_.reuse();
+  if (OB_FAIL(datum_param_store_.prepare_allocate(param_store_.count()))) {
+    LOG_WARN("fail to prepare allocate", K(ret), K(param_store_.count()));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < param_store_.count(); i++) {
+    ObObjParam &obj_param = param_store_.at(i);
+    ObDatumObjParam &datum_param = datum_param_store_.at(i);
+    if (obj_param.is_ext_sql_array()) {
+      ObSqlArrayObj *array_obj = NULL;
+      if (OB_FAIL(ObSqlArrayObj::do_real_deserialize(allocator_,
+                                                     reinterpret_cast<char *>(obj_param.get_ext()),
+                                                     obj_param.get_val_len(),
+                                                     array_obj))) {
+        LOG_WARN("failed to alloc array_obj after decode", K(ret));
+      } else {
+        obj_param.set_extend(reinterpret_cast<int64_t>(array_obj), T_EXT_SQL_ARRAY);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(datum_param.alloc_datum_reserved_buff(obj_param.meta_, allocator_))) {
+        LOG_WARN("alloc datum reserved buffer failed", K(ret));
+      } else if (OB_FAIL(datum_param.from_objparam(obj_param, &allocator_))) {
+        LOG_WARN("fail to convert obj param", K(ret), K(obj_param));
+      }
+    }
   }
   return ret;
 }
