@@ -41,7 +41,8 @@ public:
     : das_factory_(CURRENT_CONTEXT->get_arena_allocator()),
       exec_ctx_(CURRENT_CONTEXT->get_arena_allocator(), gctx.session_mgr_),
       frame_info_(CURRENT_CONTEXT->get_arena_allocator()),
-      das_remote_info_()
+      das_remote_info_(),
+      bkgd_ash_stat_sess_id_(0)
   {
     RpcProcessor::set_preserve_recv_data();
   }
@@ -62,6 +63,7 @@ protected:
   ObExprFrameInfo frame_info_;
   share::schema::ObSchemaGetterGuard schema_guard_;
   ObDASRemoteInfo das_remote_info_;
+  int64_t bkgd_ash_stat_sess_id_;
 };
 
 class ObDASSyncAccessP final : public ObDASBaseAccessP<obrpc::OB_DAS_SYNC_ACCESS> {
