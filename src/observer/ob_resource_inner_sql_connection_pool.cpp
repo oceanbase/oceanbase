@@ -54,7 +54,8 @@ int ObResourceInnerSQLConnectionPool::init(ObMultiVersionSchemaService *schema_s
                                                ob_sql,
                                                vt_iter_creator,
                                                config,
-                                               false))) {
+                                               false,
+                                               true /* is_resource_conn_pool */))) {
     LOG_ERROR("init inner sql connection pool failed", K(ret));
   } else {
     is_inited_ = true;
@@ -105,7 +106,6 @@ int ObResourceInnerSQLConnectionPool::acquire(
       if (OB_FAIL(fetch_max_conn_id(conn_id))) {
         LOG_WARN("failed to fetch max_conn_id", K(ret));
       } else {
-        inner_conn->set_is_resource_conn(true);
         inner_conn->set_is_idle(false);
         inner_conn->set_resource_svr(MYADDR);
         inner_conn->set_resource_conn_id(conn_id);

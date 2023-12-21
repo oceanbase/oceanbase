@@ -143,7 +143,8 @@ public:
            ObRestoreSQLModifier *sql_modifer = NULL,
            const bool use_static_engine = false,
            const bool is_oracle_mode = false,
-           const int32_t group_id = 0);
+           const int32_t group_id = 0,
+           const bool is_resource_conn = false);
   int destroy(void);
   inline void reset() { destroy(); }
   virtual int execute_read(const uint64_t tenant_id, const char *sql,
@@ -231,7 +232,6 @@ public:
   bool is_in_trans() const { return is_in_trans_; }
   void set_is_in_trans(const bool is_in_trans) { is_in_trans_ = is_in_trans; }
   bool is_resource_conn() const { return is_resource_conn_; }
-  void set_is_resource_conn(const bool is_resource_conn) { is_resource_conn_ = is_resource_conn; }
   void set_resource_conn_id(uint64_t resource_conn_id) { resource_conn_id_ = resource_conn_id; }
   uint64_t get_resource_conn_id() const { return resource_conn_id_; }
   const common::ObAddr &get_resource_svr() const { return resource_svr_; }
@@ -437,7 +437,7 @@ public:
   ~ObInnerSqlWaitGuard();
 private:
   bool is_inner_session_;
-  sql::ObSQLSessionInfo *inner_session_;
+  int64_t inner_session_id_;
   ObSessionDIBuffer *di_buffer_;
   int64_t prev_tenant_id_;
   int64_t prev_session_id_;

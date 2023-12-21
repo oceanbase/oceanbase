@@ -194,7 +194,8 @@ int ObInnerSQLConnection::init(ObInnerSQLConnectionPool *pool,
                                ObRestoreSQLModifier *sql_modifier /* = NULL */,
                                const bool use_static_engine /* = false */,
                                const bool is_oracle_mode /* = false */,
-                               const int32_t group_id /* = 0*/)
+                               const int32_t group_id /* = 0*/,
+                               const bool is_resource_conn /* =false*/)
 {
   int ret = OB_SUCCESS;
   if (inited_) {
@@ -213,6 +214,7 @@ int ObInnerSQLConnection::init(ObInnerSQLConnectionPool *pool,
     sql_modifier_ = sql_modifier;
     init_timestamp_ = ObTimeUtility::current_time();
     tid_ = GETTID();
+    is_resource_conn_ = is_resource_conn;
     if (NULL == extern_session || 0 != EVENT_CALL(EventTable::EN_INNER_SQL_CONN_LEAK_CHECK)) {
       // Only backtrace internal used connection to avoid performance problems.
       bt_size_ = ob_backtrace(bt_addrs_, MAX_BT_SIZE);
@@ -256,19 +258,34 @@ int ObInnerSQLConnection::destroy()
         inner_session_->~ObSQLSessionInfo();
         ob_free(inner_session_);
       } else {
-        inner_session_->set_session_sleep();
-        if (OB_ISNULL(GCTX.session_mgr_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("session mgr is null", K(ret));
+        bool is_create_session_mgr = (!is_resource_conn()) && OB_NOT_NULL(GCTX.session_mgr_) && OB_NOT_NULL(GCTX.omt_);
+        if (OB_NOT_NULL(GCTX.omt_)) {
+          ObTenantSQLSessionMgr *t_session_mgr =  nullptr;
+          t_session_mgr = MTL(ObTenantSQLSessionMgr*);
+          is_create_session_mgr = is_create_session_mgr && (nullptr != t_session_mgr);
+        }
+
+        if(is_create_session_mgr) {
+          inner_session_->set_session_sleep();
+          if (OB_ISNULL(GCTX.session_mgr_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("session mgr is null", K(ret));
+          } else {
+            GCTX.session_mgr_->revert_session(inner_session_);
+            GCTX.session_mgr_->free_session(free_session_ctx_);
+            GCTX.session_mgr_->mark_sessid_unused(free_session_ctx_.sessid_);
+          }
         } else {
-          GCTX.session_mgr_->revert_session(inner_session_);
-          GCTX.session_mgr_->free_session(free_session_ctx_);
-          GCTX.session_mgr_->mark_sessid_unused(free_session_ctx_.sessid_);
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("failed to free session by session mgr", K(ret), K(is_create_session_mgr));
         }
       }
       inner_session_ = NULL;
     }
     free_session_ctx_.sessid_ = ObSQLSessionInfo::INVALID_SESSID;
+    free_session_ctx_.tenant_id_ = common::OB_INVALID_ID;
+    free_session_ctx_.proxy_sessid_ = ObSQLSessionInfo::INVALID_SESSID;
+    EVENT_DEC(ACTIVE_SESSIONS);
     extern_session_ = NULL;
     config_ = NULL;
     associated_client_ = NULL;
@@ -428,7 +445,8 @@ int ObInnerSQLConnection::init_session(sql::ObSQLSessionInfo* extern_session, co
   int ret = OB_SUCCESS;
   if (NULL == extern_session) {
     const bool is_extern_session = false;
-    bool is_create_session_mgr = OB_NOT_NULL(GCTX.session_mgr_) && OB_NOT_NULL(GCTX.omt_);
+    // The inner sql remote execution case does not create an inner session through the session mgr.
+    bool is_create_session_mgr = (!is_resource_conn()) && OB_NOT_NULL(GCTX.session_mgr_) && OB_NOT_NULL(GCTX.omt_);
     if (OB_NOT_NULL(GCTX.omt_)) {
       ObTenantSQLSessionMgr *t_session_mgr =  nullptr;
       t_session_mgr = MTL(ObTenantSQLSessionMgr*);
@@ -2283,23 +2301,32 @@ bool ObInnerSQLConnection::is_inner_session_mgr_enable()
 ObInnerSqlWaitGuard::ObInnerSqlWaitGuard(
     const bool is_inner_session, sql::ObSQLSessionInfo *inner_session)
     : is_inner_session_(is_inner_session),
-      inner_session_(inner_session),
+      inner_session_id_(common::OB_INVALID_ID),
       di_buffer_(nullptr),
       prev_tenant_id_(OB_SYS_TENANT_ID),
       prev_session_id_(0),
       prev_stat_(nullptr)
 {
-  if (is_inner_session_ && OB_NOT_NULL(inner_session_) &&
-      ObInnerSQLConnection::INNER_SQL_SESS_ID != inner_session_->get_sessid()) {
+  if (is_inner_session_ && OB_NOT_NULL(inner_session) &&
+      ObInnerSQLConnection::INNER_SQL_SESS_ID != inner_session->get_sessid() &&
+      common::OB_INVALID_ID != inner_session->get_sessid()) {
+    inner_session_id_ = inner_session->get_sessid();
+
+    // 1. start inner sql wait event wait event
     WAIT_BEGIN(ObWaitEventIds::INNER_SQL_EXEC_WAIT,
-                                        0 /*timeout_ms*/,
-                                        ObActiveSessionGuard::get_stat().inner_sql_wait_type_id_ /*p1*/,
-                                        inner_session_->get_sessid() /*p2*/,
-                                        0 /*p3*/,
-                                        false /* is_atomic*/);
+               0 /*timeout_ms*/,
+               ObActiveSessionGuard::get_stat().inner_sql_wait_type_id_ /*p1*/,
+               inner_session->get_sessid() /*p2*/,
+               0 /*p3*/,
+               false /* is_atomic*/);
+
+    // 2. switch the ptr of the thread-local ASH stat to the inner session ASH stat.
     prev_stat_ = &(ObActiveSessionGuard::get_stat());
-    inner_session_->set_session_active(); // if success, will call setup_ash(). If failed, inner session will not be sampled.
+    inner_session->set_session_active(); // if success, will call setup_ash(). If failed, inner session will not be sampled.
     ObActiveSessionGuard::get_stat().prev_inner_sql_wait_type_id_ = prev_stat_->inner_sql_wait_type_id_;
+
+    // 3. switch the ptr of di session buffer to inner session
+    // same to ObSessionStatEstGuard::ObSessionStatEstGuard()
     if (oceanbase::lib::is_diagnose_info_enabled()) {
       di_buffer_ = GET_TSI(ObSessionDIBuffer);
       if (NULL != di_buffer_) {
@@ -2307,8 +2334,8 @@ ObInnerSqlWaitGuard::ObInnerSqlWaitGuard(
         if (NULL != (di_buffer_->get_curr_session())) {
           prev_session_id_ = di_buffer_->get_curr_session()->session_id_;
         }
-        if (0 < inner_session_->get_sessid()) {
-          di_buffer_->switch_both(inner_session_->get_priv_tenant_id(), inner_session_->get_sessid(), false/*is_multi_thread_plan*/);
+        if (0 < inner_session->get_sessid()) {
+          di_buffer_->switch_both(inner_session->get_priv_tenant_id(), inner_session->get_sessid(), false/*is_multi_thread_plan*/);
         }
       }
     }
@@ -2317,9 +2344,12 @@ ObInnerSqlWaitGuard::ObInnerSqlWaitGuard(
 
 ObInnerSqlWaitGuard::~ObInnerSqlWaitGuard()
 {
-  if (is_inner_session_ && OB_NOT_NULL(inner_session_) &&
-      ObInnerSQLConnection::INNER_SQL_SESS_ID != inner_session_->get_sessid()) {
+  if (is_inner_session_ &&
+      ObInnerSQLConnection::INNER_SQL_SESS_ID != inner_session_id_ &&
+      common::OB_INVALID_ID != inner_session_id_) {
 
+    // 1. switch the ptr of di session buffer to prev session buffer
+    // same to ObSessionStatEstGuard::~ObSessionStatEstGuard()
     if (NULL != di_buffer_) {
       di_buffer_->switch_tenant(prev_tenant_id_);
       if (0 != prev_session_id_) {
@@ -2328,14 +2358,18 @@ ObInnerSqlWaitGuard::~ObInnerSqlWaitGuard()
         di_buffer_->reset_session();
       }
     }
+
+     // 2. switch the ptr of the thread-local ASH stat to the prev ASH stat.
     ObActiveSessionGuard::get_stat().prev_inner_sql_wait_type_id_ = ObInnerSqlWaitTypeId::NULL_INNER_SQL;
     if (OB_NOT_NULL(prev_stat_)) {
       /* resetup ash stat to previous ash stat */
       ObActiveSessionGuard::resetup_ash(*prev_stat_);
     } else {
       ObActiveSessionGuard::setup_default_ash();
-      LOG_INFO("previous stat ptr is null");
+      LOG_INFO("previous stat ptr is null", K(lbt()));
     }
+
+    // 3. wait event end
     WAIT_END(ObWaitEventIds::INNER_SQL_EXEC_WAIT);
   }
 }
