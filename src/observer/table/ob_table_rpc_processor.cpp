@@ -32,6 +32,8 @@
 #include "ob_table_move_response.h"
 #include "ob_table_connection_mgr.h"
 #include "share/table/ob_table_util.h"
+#include "observer/mysql/obmp_base.h"
+#include "lib/stat/ob_session_stat.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -248,7 +250,8 @@ ObTableApiProcessorBase::ObTableApiProcessorBase(const ObGlobalContext &gctx)
      retry_count_(0),
      trans_desc_(NULL),
      had_do_response_(false),
-     user_client_addr_()
+     user_client_addr_(),
+     sess_stat_guard_(MTL_ID(), ObActiveSessionGuard::get_stat().session_id_)
 {
   need_audit_ = GCONF.enable_sql_audit;
   trans_state_ptr_ = &trans_state_;
@@ -625,7 +628,9 @@ void ObTableApiProcessorBase::start_audit(const rpc::ObRequest *req)
 {
 
   if (OB_LIKELY(NULL != req)) {
-    audit_record_.user_client_addr_ = RPC_REQ_OP.get_peer(req);
+    audit_record_.user_client_addr_ = ObCurTraceId::get_addr();
+    audit_record_.client_addr_ = RPC_REQ_OP.get_peer(req);
+
     audit_record_.trace_id_ = req->get_trace_id();
 
     save_request_string();
@@ -658,8 +663,6 @@ static int set_audit_name(const char *info_name, char *&audit_name, int64_t &aud
 void ObTableApiProcessorBase::end_audit()
 {
   // credential info
-//  audit_record_.server_addr_; // not necessary, because gv_sql_audit_iterator use local addr automatically
-//  audit_record_.client_addr_; // not used for now
   audit_record_.tenant_id_ = credential_.tenant_id_;
   audit_record_.effective_tenant_id_ = credential_.tenant_id_;
   audit_record_.user_id_ = credential_.user_id_;
@@ -746,6 +749,13 @@ void ObTableApiProcessorBase::end_audit()
   audit_record_.seq_ = 0; // not used
   audit_record_.session_id_ = 0; // not used  for table api
 
+  // tx info
+  audit_record_.trans_id_ = tx_snapshot_.core_.tx_id_.get_id();
+  audit_record_.snapshot_.version_ = tx_snapshot_.core_.version_;
+  audit_record_.snapshot_.tx_id_ = tx_snapshot_.core_.tx_id_.get_id();
+  audit_record_.snapshot_.scn_ = tx_snapshot_.core_.scn_.cast_to_int();
+  audit_record_.snapshot_.source_ = tx_snapshot_.get_source_name().ptr();
+
   const int64_t elapsed_time = common::ObTimeUtility::current_time() - audit_record_.exec_timestamp_.receive_ts_;
   if (elapsed_time > GCONF.trace_log_slow_query_watermark) {
     FORCE_PRINT_TRACE(THE_TRACE, "[table api][slow query]");
@@ -786,6 +796,8 @@ int ObTableApiProcessorBase::process_with_retry(const ObString &credential, cons
     ObMaxWaitGuard max_wait_guard(&audit_record_.exec_record_.max_wait_event_);
     ObTotalWaitGuard total_wait_guard(&total_wait_desc);
     ObTenantStatEstGuard stat_guard(credential_.tenant_id_);
+    ObProcessMallocCallback pmcb(0, audit_record_.request_memory_used_);
+    ObMallocCallbackGuard malloc_guard_(pmcb);
     need_retry_in_queue_ = false;
     bool did_local_retry = false;
     do {
@@ -977,8 +989,7 @@ int ObTableRpcProcessor<T>::after_process(int error_code)
   NG_TRACE(process_end); // print trace log if necessary
   // some statistics must be recorded for plan stat, even though sql audit disabled
   audit_record_.exec_timestamp_.exec_type_ = ExecType::RpcProcessor;
-  audit_record_.exec_timestamp_.net_t_ =
-      audit_record_.exec_timestamp_.receive_ts_ - audit_record_.exec_timestamp_.rpc_send_ts_;
+  audit_record_.exec_timestamp_.net_t_ = 0;
   audit_record_.exec_timestamp_.net_wait_t_ =
       audit_record_.exec_timestamp_.enter_queue_ts_ - audit_record_.exec_timestamp_.receive_ts_;
   audit_record_.exec_timestamp_.update_stage_time();

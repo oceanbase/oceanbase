@@ -291,7 +291,7 @@ void ObTableApiExecuteP::audit_on_finish()
 {
   audit_record_.consistency_level_ = ObTableConsistencyLevel::STRONG == arg_.consistency_level_ ?
       ObConsistencyLevel::STRONG : ObConsistencyLevel::WEAK;
-  audit_record_.return_rows_ = arg_.returning_affected_rows_ ? 1 : 0;
+  audit_record_.return_rows_ = result_.get_return_rows();
   audit_record_.table_scan_ = false;
   audit_record_.affected_rows_ = result_.get_affected_rows();
   audit_record_.try_cnt_ = retry_count_ + 1;

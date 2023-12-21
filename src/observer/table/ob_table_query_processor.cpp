@@ -67,8 +67,8 @@ void ObTableQueryP::audit_on_finish()
   audit_record_.consistency_level_ = ObTableConsistencyLevel::STRONG == arg_.consistency_level_ ?
       ObConsistencyLevel::STRONG : ObConsistencyLevel::WEAK;
   audit_record_.return_rows_ = result_.get_row_count();
-  audit_record_.table_scan_ = true; // todo: exact judgement
-  audit_record_.affected_rows_ = result_.get_row_count();
+  audit_record_.table_scan_ = tb_ctx_.is_full_table_scan();
+  audit_record_.affected_rows_ = 0;
   audit_record_.try_cnt_ = retry_count_ + 1;
 }
 

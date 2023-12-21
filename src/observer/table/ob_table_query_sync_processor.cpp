@@ -277,7 +277,8 @@ ObTableQuerySyncP::ObTableQuerySyncP(const ObGlobalContext &gctx)
       result_row_count_(0),
       query_session_id_(0),
       allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-      query_session_(nullptr)
+      query_session_(nullptr),
+      is_full_table_scan_(false)
 {}
 
 int ObTableQuerySyncP::deserialize()
@@ -308,8 +309,8 @@ void ObTableQuerySyncP::audit_on_finish()
                                          ? ObConsistencyLevel::STRONG
                                          : ObConsistencyLevel::WEAK;
   audit_record_.return_rows_ = result_.get_row_count();
-  audit_record_.table_scan_ = true;  // todo: exact judgement
-  audit_record_.affected_rows_ = result_.get_row_count();
+  audit_record_.table_scan_ = is_full_table_scan_;
+  audit_record_.affected_rows_ = 0;
   audit_record_.try_cnt_ = retry_count_ + 1;
 }
 
@@ -524,6 +525,7 @@ int ObTableQuerySyncP::query_scan_with_init()
   } else {
     audit_row_count_ = result_.get_row_count();
     result_.query_session_id_ = query_session_id_;
+    is_full_table_scan_ = tb_ctx.is_full_table_scan();
   }
 
   return ret;
@@ -559,6 +561,7 @@ int ObTableQuerySyncP::query_scan_without_init()
       result_.is_end_ = !result_iter->has_more_result();
       result_.query_session_id_ = query_session_id_;
       audit_row_count_ = result_.get_row_count();
+      is_full_table_scan_ = tb_ctx.is_full_table_scan();
     }
 
     // check if need compress the result

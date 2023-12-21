@@ -423,6 +423,7 @@ public:
   int get_entity(ObITableEntity *&entity);
   ObITableEntity *get_entity() { return entity_; }
   int64_t get_affected_rows() const { return affected_rows_; }
+  int get_return_rows() { return ((entity_ == NULL || entity_->is_empty()) ? 0 : 1); }
 
   void set_entity(ObITableEntity &entity) { entity_ = &entity; }
   void set_type(ObTableOperationType::Type op_type) { operation_type_ = op_type; }
@@ -842,7 +843,8 @@ public:
   uint64_t get_checksum();
 
   TO_STRING_KV(K_(query),
-               K_(mutations));
+               K_(mutations),
+               K_(return_affected_entity));
 private:
   ObTableQuery query_;
   ObTableBatchOperation mutations_;

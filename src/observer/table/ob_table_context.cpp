@@ -771,6 +771,7 @@ int ObTableCtx::generate_key_range(const ObIArray<ObNewRange> &scan_ranges)
   // check obj type in ranges
   for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i) { // foreach range
     const ObNewRange &range = scan_ranges.at(i);
+    is_full_table_scan_ = is_full_table_scan_ ? is_full_table_scan_ : range.is_whole_range();
     // check column type
     for (int64_t j = 0; OB_SUCCESS == ret && j < 2; ++j) {
       const ObRowkey *p_key = nullptr;
