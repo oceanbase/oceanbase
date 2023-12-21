@@ -140,7 +140,7 @@ public:
   int get_max_sync_medium_scn(int64_t &max_medium_scn) const;
   int get_max_sync_storage_schema_version(int64_t &max_schema_version) const;
   int get_mds_table_rec_log_scn(share::SCN &rec_scn);
-  int mds_table_flush(const share::SCN &recycle_scn);
+  int mds_table_flush(const share::SCN &decided_scn);
 
 public:
   // first time create tablet
