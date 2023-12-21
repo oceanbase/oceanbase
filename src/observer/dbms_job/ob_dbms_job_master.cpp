@@ -77,6 +77,7 @@ int ObDBMSJobTask::stop()
     ret = OB_NOT_INIT;
     LOG_WARN("dbms job task not inited", K(ret), K(inited_));
   } else {
+    ObSpinLockGuard guard(lock_);
     timer_.cancel(*this);
     timer_.stop();
     timer_.wait();
