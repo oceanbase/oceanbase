@@ -1898,7 +1898,7 @@ int ObLSTabletService::inner_table_scan(
         K(data_max_schema_version));
   }
 
-   return ret;
+  return ret;
 }
 
 int ObLSTabletService::has_tablet(

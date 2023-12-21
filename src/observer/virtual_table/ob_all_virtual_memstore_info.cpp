@@ -112,18 +112,24 @@ int ObAllVirtualMemstoreInfo::get_next_tablet(ObTabletHandle &tablet_handle)
   int ret = OB_SUCCESS;
 
   while (OB_SUCC(ret)) {
-    if (OB_FAIL(ls_tablet_iter_.get_next_tablet(tablet_handle))) {
-      if (OB_ITER_END != ret) {
-        SERVER_LOG(WARN, "fail to get next tablet", K(ret));
-      }
-      ret = OB_SUCCESS; // continue to next ls
+    if (!ls_tablet_iter_.is_valid()) {
       ObLS *ls = nullptr;
       if (OB_FAIL(get_next_ls(ls))) {
         if (OB_ITER_END != ret) {
           SERVER_LOG(WARN, "fail to get next ls", K(ret));
         }
-      } else if (OB_FAIL(ls->get_tablet_svr()->build_tablet_iter(ls_tablet_iter_))) {
-        SERVER_LOG(WARN, "fail to get tablet iter", K(ret));
+      } else if (OB_FAIL(ls->build_tablet_iter(ls_tablet_iter_))) {
+        SERVER_LOG(WARN, "fail to build tablet iter", K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ls_tablet_iter_.get_next_tablet(tablet_handle))) {
+      if (OB_ITER_END == ret) {
+        ls_tablet_iter_.reset();
+        ret = OB_SUCCESS;
+      } else {
+        SERVER_LOG(WARN, "fail to get next tablet", K(ret));
       }
     } else {
       break;
@@ -205,7 +211,7 @@ int ObAllVirtualMemstoreInfo::process_curr_tenant(ObNewRow *&row)
     if (OB_ITER_END != ret) {
       SERVER_LOG(WARN, "get_next_memtable failed", K(ret));
     }
-  } else if (NULL == mt) {
+  } else if (OB_ISNULL(mt)) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "mt shouldn't NULL here", K(ret), K(mt));
   } else {

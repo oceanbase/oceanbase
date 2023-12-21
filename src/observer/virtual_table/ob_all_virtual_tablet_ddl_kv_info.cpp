@@ -95,19 +95,24 @@ int ObAllVirtualTabletDDLKVInfo::get_next_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mg
 {
   int ret = OB_SUCCESS;
   while (OB_SUCC(ret)) {
-    if (OB_FAIL(ls_tablet_iter_.get_next_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-      if (!ls_tablet_iter_.is_valid() || OB_ITER_END == ret) {
-        ret = OB_SUCCESS; // continue to next ls
-        ObLS *ls = nullptr;
-        if (OB_FAIL(get_next_ls(ls))) {
-          if (OB_ITER_END != ret) {
-            SERVER_LOG(WARN, "fail to get next ls", K(ret));
-          }
-        } else if (OB_FAIL(ls->get_tablet_svr()->build_tablet_iter(ls_tablet_iter_))) {
-          SERVER_LOG(WARN, "fail to get tablet iter", K(ret));
+    if (!ls_tablet_iter_.is_valid()) {
+      ObLS *ls = nullptr;
+      if (OB_FAIL(get_next_ls(ls))) {
+        if (OB_ITER_END != ret) {
+          SERVER_LOG(WARN, "fail to get next ls", K(ret));
         }
+      } else if (OB_FAIL(ls->build_tablet_iter(ls_tablet_iter_))) {
+        SERVER_LOG(WARN, "fail to build tablet iter", K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ls_tablet_iter_.get_next_ddl_kv_mgr(ddl_kv_mgr_handle))) {
+      if (OB_ITER_END == ret) {
+        ls_tablet_iter_.reset();
+        ret = OB_SUCCESS;
       } else {
-        SERVER_LOG(WARN, "fail to get next ddl kv mgr", K(ret));
+        SERVER_LOG(WARN, "fail to get next tablet", K(ret));
       }
     } else {
       curr_tablet_id_ = ddl_kv_mgr_handle.get_obj()->get_tablet_id();
