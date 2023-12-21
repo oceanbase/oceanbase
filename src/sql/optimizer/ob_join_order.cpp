@@ -2652,7 +2652,8 @@ int ObJoinOrder::revise_output_rows_after_creating_path(PathHelper &helper,
     int64_t maximum_count = -1;
     int64_t range_prefix_count = -1;
     if (helper.est_method_ & EST_STORAGE) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); ++i) {
+      bool contain_false_range_path = false;
+      for (int64_t i = 0; OB_SUCC(ret) && !contain_false_range_path && i < access_paths.count(); ++i) {
         AccessPath *path = access_paths.at(i);
         if (OB_ISNULL(path)) {
           ret = OB_ERR_UNEXPECTED;
@@ -2660,6 +2661,10 @@ int ObJoinOrder::revise_output_rows_after_creating_path(PathHelper &helper,
         } else if (OB_UNLIKELY((range_prefix_count = path->range_prefix_count_) < 0)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected range prefix count", K(ret), K(range_prefix_count));
+        } else if (path->is_false_range()) {
+          contain_false_range_path = true;
+          output_rows_ = 0.0;
+          LOG_TRACE("OPT:revise output rows for false range", K(output_rows_));
         } else if (maximum_count <= range_prefix_count) {
           LOG_TRACE("OPT:revise output rows", K(path->output_row_count_),
               K(output_rows_), K(maximum_count), K(range_prefix_count), K(ret));
@@ -7441,9 +7446,6 @@ int ObJoinOrder::create_one_cte_table_path(const TableItem* table_item,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("failed to allocate an AccessPath", K(ret), K(get_plan()), K(ap));
   } else {
-    // magic number ? @guoping.wgp refine this
-    output_rows_ = 199;
-    output_row_size_ = 199;
     ap = new(ap) CteTablePath();
     ap->table_id_ = table_id_;
     ap->ref_table_id_ = table_item->ref_id_;
@@ -7470,6 +7472,63 @@ int ObJoinOrder::create_one_cte_table_path(const TableItem* table_item,
   return ret;
 }
 
+int ObJoinOrder::estimate_size_and_width_for_fake_cte(uint64_t table_id, ObSelectLogPlan *nonrecursive_plan)
+{
+  int ret = OB_SUCCESS;
+  const ObDMLStmt *stmt = NULL;
+  const TableItem *table_item = NULL;
+  ObLogicalOperator *nonrecursive_root = NULL;
+  double selectivity = 0;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) ||
+      OB_ISNULL(nonrecursive_plan) || OB_ISNULL(nonrecursive_plan->get_stmt()) ||
+      OB_UNLIKELY(!nonrecursive_plan->get_stmt()->is_select_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(get_plan()), K(nonrecursive_plan),
+              K(nonrecursive_root), K(stmt), K(ret));
+  } else if (OB_FAIL(nonrecursive_plan->get_candidate_plans().get_best_plan(nonrecursive_root))) {
+    LOG_WARN("failed to get best plan", K(ret));
+  } else if (OB_ISNULL(nonrecursive_root)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(nonrecursive_root));
+  } else if (FALSE_IT(nonrecursive_plan->get_selectivity_ctx().init_op_ctx(
+      &nonrecursive_root->get_output_equal_sets(), nonrecursive_root->get_card()))) {
+    // do nothing
+  } else if (OB_FAIL(get_plan()->get_basic_table_metas().add_generate_table_meta_info(
+      get_plan()->get_stmt(),
+      static_cast<const ObSelectStmt *>(nonrecursive_plan->get_stmt()),
+      table_id,
+      nonrecursive_plan->get_update_table_metas(),
+      nonrecursive_plan->get_selectivity_ctx(),
+      nonrecursive_root->get_card()))) {
+    LOG_WARN("failed to add generate table meta info", K(ret));
+  } else if (OB_FAIL(ObOptEstCost::estimate_width_for_table(get_plan()->get_basic_table_metas(),
+                                                            get_plan()->get_selectivity_ctx(),
+                                                            stmt->get_column_items(),
+                                                            table_id,
+                                                            output_row_size_))) {
+    LOG_WARN("estimate width of row failed", K(table_id), K(ret));
+  } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_basic_table_metas(),
+                                                             get_plan()->get_selectivity_ctx(),
+                                                             get_restrict_infos(),
+                                                             selectivity,
+                                                             get_plan()->get_predicate_selectivities()))) {
+    LOG_WARN("failed to calc filter selectivities", K(get_restrict_infos()), K(ret));
+  } else {
+    set_output_rows(nonrecursive_root->get_card() * selectivity);
+    if (OB_FAIL(ObOptSelectivity::update_table_meta_info(get_plan()->get_basic_table_metas(),
+                                                         get_plan()->get_update_table_metas(),
+                                                         get_plan()->get_selectivity_ctx(),
+                                                         table_id,
+                                                         get_output_rows(),
+                                                         get_restrict_infos(),
+                                                         get_plan()->get_predicate_selectivities()))) {
+      LOG_WARN("failed to update table meta info", K(ret));
+    }
+    LOG_TRACE("estimate rows for fake cte", K(output_rows_), K(get_plan()->get_basic_table_metas()));
+  }
+  return ret;
+}
+
 int ObJoinOrder::generate_cte_table_paths()
 {
   int ret = OB_SUCCESS;
@@ -7481,6 +7540,8 @@ int ObJoinOrder::generate_cte_table_paths()
   } else if (OB_ISNULL(table_item = stmt->get_table_item_by_id(table_id_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(table_id_));
+  } else if (OB_FAIL(estimate_size_and_width_for_fake_cte(table_id_, get_plan()->get_nonrecursive_plan_for_fake_cte()))) {
+    LOG_WARN("failed to calc filter selectivities", K(get_restrict_infos()), K(ret));
   } else if (OB_FAIL(create_one_cte_table_path(table_item,
                                                get_plan()->get_optimizer_context().get_match_all_sharding()))) {
     LOG_WARN("failed to create one cte table path", K(ret));

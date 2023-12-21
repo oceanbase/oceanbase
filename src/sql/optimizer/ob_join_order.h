@@ -688,6 +688,10 @@ struct EstimateCostInfo {
       return pre_range_graph_ != nullptr ? static_cast<const ObQueryRangeProvider *>(pre_range_graph_)
                                         : static_cast<const ObQueryRangeProvider *>(pre_query_range_);
     }
+    inline bool is_false_range()
+    {
+      return 1 == est_cost_info_.ranges_.count() && est_cost_info_.ranges_.at(0).is_false_range();
+    }
 
     TO_STRING_KV(K_(table_id),
                  K_(ref_table_id),
@@ -1776,6 +1780,7 @@ struct NullAwareAntiJoinInfo {
                                               const ObIArray<ObRawExpr*> &filters,
                                               double &output_card);
 
+    int estimate_size_and_width_for_fake_cte(uint64_t table_id, ObSelectLogPlan *nonrecursive_plan);
     int create_one_cte_table_path(const TableItem* table_item,
                                   ObShardingInfo * sharding);
     int generate_cte_table_paths();

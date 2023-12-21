@@ -9374,3 +9374,27 @@ int ObOptimizerUtil::check_ancestor_node_support_skip_scan(ObLogicalOperator* op
   }
   return ret;
 }
+
+int ObOptimizerUtil::check_is_static_false_expr(ObOptimizerContext &opt_ctx, ObRawExpr &expr, bool &is_static_false)
+{
+  int ret = OB_SUCCESS;
+  ObObj const_value;
+  bool got_result = false;
+  bool is_result_true = false;
+  if (!expr.is_static_const_expr()) {
+    // do nothing
+  } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(opt_ctx.get_exec_ctx(),
+                                                               &expr,
+                                                               const_value,
+                                                               got_result,
+                                                               opt_ctx.get_allocator()))) {
+    LOG_WARN("failed to calc const or calculable expr", K(ret));
+  } else if (!got_result) {
+    // do nothing
+  } else if (OB_FAIL(ObObjEvaluator::is_true(const_value, is_result_true))) {
+    LOG_WARN("failed to check is const value true", K(ret));
+  } else {
+    is_static_false = !is_result_true;
+  }
+  return ret;
+}

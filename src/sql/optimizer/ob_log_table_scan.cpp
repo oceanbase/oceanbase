@@ -1090,39 +1090,6 @@ int ObLogTableScan::pick_out_query_range_exprs()
   return ret;
 }
 
-int ObLogTableScan::pick_out_startup_filters()
-{
-  int ret = OB_SUCCESS;
-  ObLogPlan *plan = get_plan();
-  const ParamStore *params = NULL;
-  ObOptimizerContext *opt_ctx = NULL;
-  ObArray<ObRawExpr *> filter_exprs;
-  if (OB_ISNULL(plan)
-      || OB_ISNULL(opt_ctx = &plan->get_optimizer_context())
-      || OB_ISNULL(params = opt_ctx->get_params())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("NULL pointer error", K(plan), K(opt_ctx), K(ret));
-  } else if (OB_FAIL(filter_exprs.assign(filter_exprs_))) {
-    LOG_WARN("assign filter exprs failed", K(ret));
-  } else {
-    filter_exprs_.reset();
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < filter_exprs.count(); ++i) {
-    ObRawExpr *qual = filter_exprs.at(i);
-    if (OB_ISNULL(qual)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null expr", K(ret));
-    } else if (qual->is_static_const_expr()) {
-      if (OB_FAIL(startup_exprs_.push_back(qual))) {
-        LOG_WARN("add filter expr failed", K(i), K(ret));
-      } else { /* Do nothing */ }
-    } else if (OB_FAIL(filter_exprs_.push_back(qual))) {
-      LOG_WARN("add filter expr failed", K(i), K(ret));
-    } else { /* Do nothing */ }
-  }
-  return ret;
-}
-
 int ObLogTableScan::init_calc_part_id_expr()
 {
   int ret = OB_SUCCESS;

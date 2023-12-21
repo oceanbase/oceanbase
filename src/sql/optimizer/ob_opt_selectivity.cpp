@@ -442,14 +442,16 @@ int OptTableMetas::add_generate_table_meta_info(const ObDMLStmt *parent_stmt,
         } else {
           column_meta->init(column_item.column_id_, revise_ndv(ndv), num_null, avg_len);
           column_meta->set_min_max_inited(true);
-          if (select_expr->is_column_ref_expr()) {
-            ObColumnRefRawExpr *col = static_cast<ObColumnRefRawExpr *>(select_expr);
-            const OptColumnMeta *child_column_meta = child_table_metas.get_column_meta_by_table_id(
-                        col->get_table_id(), col->get_column_id());
-            if (OB_NOT_NULL(child_column_meta) && child_column_meta->get_min_max_inited()) {
-              column_meta->set_min_value(child_column_meta->get_min_value());
-              column_meta->set_max_value(child_column_meta->get_max_value());
-            }
+          ObObj maxobj;
+          ObObj minobj;
+          maxobj.set_max_value();
+          minobj.set_min_value();
+          if (select_expr->is_column_ref_expr() &&
+              OB_FAIL(ObOptSelectivity::get_column_min_max(child_table_metas, child_ctx, *select_expr, minobj, maxobj))) {
+            LOG_WARN("failed to get column min max", K(ret));
+          } else {
+            column_meta->set_min_value(minobj);
+            column_meta->set_max_value(maxobj);
           }
         }
       }
@@ -534,14 +536,17 @@ int OptTableMetas::get_set_stmt_output_statistics(const ObSelectStmt &stmt,
         num_null = cur_num_null;
         avg_len = cur_avg_len;
       } else {
-        ndv = ObOptSelectivity::get_set_stmt_output_ndv(ndv, cur_ndv, stmt.get_set_op());
-        num_null = ObOptSelectivity::get_set_stmt_output_ndv(num_null, cur_num_null, stmt.get_set_op());
-        if (ObSelectStmt::SetOperator::UNION == stmt.get_set_op()) {
+        ObSelectStmt::SetOperator set_type = stmt.is_recursive_union() ? ObSelectStmt::SetOperator::RECURSIVE : stmt.get_set_op();
+        ndv = ObOptSelectivity::get_set_stmt_output_count(ndv, cur_ndv, set_type);
+        num_null = ObOptSelectivity::get_set_stmt_output_count(num_null, cur_num_null, set_type);
+        if (ObSelectStmt::SetOperator::UNION == set_type) {
           avg_len = std::max(avg_len, cur_avg_len);
-        } else if (ObSelectStmt::SetOperator::INTERSECT == stmt.get_set_op()) {
+        } else if (ObSelectStmt::SetOperator::INTERSECT == set_type) {
           avg_len = std::min(avg_len, cur_avg_len);
-        } else if (ObSelectStmt::SetOperator::EXCEPT == stmt.get_set_op()) {
+        } else if (ObSelectStmt::SetOperator::EXCEPT == set_type) {
           avg_len = std::min(avg_len, cur_avg_len);
+        } else if (ObSelectStmt::SetOperator::RECURSIVE == set_type) {
+          avg_len = std::max(avg_len, cur_avg_len);
         }
       }
     }
@@ -556,6 +561,7 @@ int OptTableMetas::get_set_stmt_output_ndv(const ObSelectStmt &stmt,
   int ret = OB_SUCCESS;
   ndv = 0;
   const OptTableMeta *table_meta = NULL;
+  ObSelectStmt::SetOperator set_type = stmt.is_recursive_union() ? ObSelectStmt::SetOperator::RECURSIVE : stmt.get_set_op();
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_set_query().count(); ++i) {
     if (OB_ISNULL(stmt.get_set_query().at(i))) {
       ret = OB_ERR_UNEXPECTED;
@@ -568,7 +574,7 @@ int OptTableMetas::get_set_stmt_output_ndv(const ObSelectStmt &stmt,
     } else if (0 == i) {
       ndv = table_meta->get_distinct_rows();
     } else {
-      ndv = ObOptSelectivity::get_set_stmt_output_ndv(ndv, table_meta->get_distinct_rows(), stmt.get_set_op());
+      ndv = ObOptSelectivity::get_set_stmt_output_count(ndv, table_meta->get_distinct_rows(), set_type);
     }
   }
   return ret;
@@ -3079,6 +3085,7 @@ int ObOptSelectivity::remove_ignorable_func_for_est_sel(const ObRawExpr *&expr)
                T_FUN_SYS_CONVERT == expr->get_expr_type() ||
                T_FUN_SYS_TO_DATE == expr->get_expr_type() ||
                T_FUN_SYS_TO_CHAR == expr->get_expr_type() ||
+               T_FUN_SYS_TO_NCHAR == expr->get_expr_type() ||
                T_FUN_SYS_TO_NUMBER == expr->get_expr_type() ||
                T_FUN_SYS_TO_BINARY_FLOAT == expr->get_expr_type() ||
                T_FUN_SYS_TO_BINARY_DOUBLE == expr->get_expr_type() ||
@@ -3111,17 +3118,34 @@ int ObOptSelectivity::remove_ignorable_func_for_est_sel(ObRawExpr *&expr)
   return ret;
 }
 
-double ObOptSelectivity::get_set_stmt_output_ndv(double ndv1, double ndv2, ObSelectStmt::SetOperator set_type)
+double ObOptSelectivity::get_set_stmt_output_count(double count1, double count2, ObSelectStmt::SetOperator set_type)
 {
-  double output_ndv = 0.0;
+  double output_count = 0.0;
+  // we consider the worst-case scenario
   switch (set_type) {
-    case ObSelectStmt::SetOperator::UNION:     output_ndv = ndv1 + ndv2; break;
-    case ObSelectStmt::SetOperator::INTERSECT: output_ndv = std::min(ndv1, ndv2); break;
-    case ObSelectStmt::SetOperator::EXCEPT:    output_ndv = ndv1; break;
-    case ObSelectStmt::SetOperator::RECURSIVE: output_ndv = ndv1; break;
-    default: output_ndv = ndv1 + ndv2; break;
+    // Assuming there are no identical values in both branches.
+    case ObSelectStmt::SetOperator::UNION:     output_count = count1 + count2; break;
+    // Assuming that all values appear as much as possible in both branches
+    case ObSelectStmt::SetOperator::INTERSECT: output_count = std::min(count1, count2); break;
+    // Assuming that none of the values in the right branch appear in the left branch
+    case ObSelectStmt::SetOperator::EXCEPT:    output_count = count1; break;
+    // Assuming the ratio between the output rowcount in each iteration and the previous iteration remains constant.
+    // And the recursion branch continues until the number of rows exceeds 100 times the number of rows in the non-recursive branch and does not exceed 7 iterations.
+    case ObSelectStmt::SetOperator::RECURSIVE: {
+      count1 = std::max(1.0, count1);
+      output_count = count1;
+      double recursive_count = count2;
+      int64_t i = 0;
+      do {
+        output_count += recursive_count;
+        recursive_count *= count2 / count1;
+        i ++;
+      } while (i < 7 && output_count <= 100 * count1);
+      break;
+    }
+    default: output_count = count1 + count2; break;
   }
-  return output_ndv;
+  return output_count;
 }
 
 }//end of namespace sql

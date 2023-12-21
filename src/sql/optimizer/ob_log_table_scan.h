@@ -502,7 +502,6 @@ public:
 private: // member functions
   //called when index_back_ set
   int pick_out_query_range_exprs();
-  int pick_out_startup_filters();
   int filter_before_index_back_set();
   virtual int print_outline_data(PlanText &plan_text) override;
   virtual int print_used_hint(PlanText &plan_text) override;

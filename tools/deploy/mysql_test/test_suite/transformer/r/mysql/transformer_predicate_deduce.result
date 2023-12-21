@@ -901,7 +901,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = 1], [round(cast(a.c1, BIGINT(-1, 0))) = a.c2]), rowset=16
+  0 - output([a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = a.c2], [round(cast(a.c1, BIGINT(-1, 0))) = 1]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
@@ -2978,24 +2978,24 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN |    |1       |8           |
-|1 |├─TABLE FULL SCAN          |b   |1       |4           |
-|2 |└─MATERIAL                 |    |1       |4           |
-|3 |  └─TABLE FULL SCAN        |a   |1       |4           |
+|0 |NESTED-LOOP JOIN CARTESIAN |    |0       |8           |
+|1 |├─TABLE FULL SCAN          |a   |0       |4           |
+|2 |└─MATERIAL                 |    |0       |4           |
+|3 |  └─TABLE FULL SCAN        |b   |0       |4           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([a.c1], [a.c2], [b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), startup_filter([0]), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  1 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), rowset=16
-      access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([b.__pk_increment]), range(MIN ; MAX)always true
-  2 - output([a.c1], [a.c2]), filter(nil), rowset=16
-  3 - output([a.c1], [a.c2]), filter(nil), rowset=16
+  1 - output([a.c1], [a.c2]), filter(nil), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
-      range_key([a.__pk_increment]), range(MIN ; MAX)always true
+      range_key([a.__pk_increment]), range(MAX ; MIN)always false
+  2 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), rowset=16
+  3 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), rowset=16
+      access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([b.__pk_increment]), range(MAX ; MIN)always false
 select * from t1 a, t2 b where a.c1 = b.c1 and b.c1 is null;
 +------+------+------+------+------+------+
 | c1   | c2   | c1   | c2   | c3   | c4   |

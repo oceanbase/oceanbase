@@ -143,35 +143,35 @@ Query Plan
 =======================================================
 |ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------
-|0 |SUBPLAN SCAN           |rw  |433     |73          |
-|1 |└─RECURSIVE UNION ALL  |    |433     |71          |
+|0 |SUBPLAN SCAN           |rw  |192     |11          |
+|1 |└─RECURSIVE UNION ALL  |    |192     |11          |
 |2 |  ├─TABLE FULL SCAN    |e   |1       |5           |
-|3 |  └─NESTED-LOOP JOIN   |    |432     |66          |
-|4 |    ├─TABLE FULL SCAN  |r   |199     |1           |
-|5 |    └─MATERIAL         |    |14      |7           |
-|6 |      └─TABLE FULL SCAN|e   |14      |5           |
+|3 |  └─NESTED-LOOP JOIN   |    |3       |6           |
+|4 |    ├─TABLE FULL SCAN  |e   |14      |5           |
+|5 |    └─MATERIAL         |    |1       |2           |
+|6 |      └─TABLE FULL SCAN|r   |1       |1           |
 =======================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       conds([r.empno = e.MGR]), nl_params_(nil), use_batch=false
-  4 - output([r.empno]), filter(nil), rowset=256
-      access([r.empno])
-      is_index_back=false, is_global_index=false, 
-      range_key(nil), range(MIN ; MAX)
-  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-  6 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
+  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([r.empno]), filter(nil), rowset=16
+  6 - output([r.empno]), filter(nil), rowset=16
+      access([r.empno])
+      is_index_back=false, is_global_index=false, 
+      range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
 (
@@ -192,16 +192,16 @@ FROM rw;
 | JONES  |  7566 | 7839 |
 | BLAKE  |  7698 | 7839 |
 | CLARK  |  7782 | 7839 |
-| SCOTT  |  7788 | 7566 |
-| FORD   |  7902 | 7566 |
 | ALLEN  |  7499 | 7698 |
 | WARD   |  7521 | 7698 |
 | MARTIN |  7654 | 7698 |
+| SCOTT  |  7788 | 7566 |
 | TURNER |  7844 | 7698 |
 | JAMES  |  7900 | 7698 |
+| FORD   |  7902 | 7566 |
 | MILLER |  7934 | 7782 |
-| ADAMS  |  7876 | 7788 |
 | SMITH  |  7369 | 7902 |
+| ADAMS  |  7876 | 7788 |
 +--------+-------+------+
 
 ## =======================================================================
@@ -225,42 +225,42 @@ Query Plan
 =========================================================
 |ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SUBPLAN SCAN             |rw  |433     |141         |
-|1 |└─RECURSIVE UNION ALL    |    |433     |140         |
+|0 |SUBPLAN SCAN             |rw  |192     |16          |
+|1 |└─RECURSIVE UNION ALL    |    |192     |15          |
 |2 |  ├─TABLE FULL SCAN      |e   |1       |5           |
-|3 |  └─MERGE JOIN           |    |432     |134         |
-|4 |    ├─MATERIAL           |    |14      |9           |
-|5 |    │ └─SORT             |    |14      |8           |
-|6 |    │   └─TABLE FULL SCAN|e   |14      |5           |
-|7 |    └─SORT               |    |199     |107         |
-|8 |      └─TABLE FULL SCAN  |r   |199     |1           |
+|3 |  └─MERGE JOIN           |    |3       |10          |
+|4 |    ├─SORT               |    |1       |2           |
+|5 |    │ └─TABLE FULL SCAN  |r   |1       |1           |
+|6 |    └─MATERIAL           |    |14      |9           |
+|7 |      └─SORT             |    |14      |8           |
+|8 |        └─TABLE FULL SCAN|e   |14      |5           |
 =========================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       equal_conds([r.empno = e.MGR]), other_conds(nil)
       merge_directions([ASC])
-  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-      sort_keys([e.MGR, ASC])
-  6 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  7 - output([r.empno]), filter(nil), rowset=256
+  4 - output([r.empno]), filter(nil), rowset=16
       sort_keys([r.empno, ASC])
-  8 - output([r.empno]), filter(nil), rowset=256
+  5 - output([r.empno]), filter(nil), rowset=16
       access([r.empno])
       is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
+  6 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
+  7 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
+      sort_keys([e.MGR, ASC])
+  8 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
+      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (ename, mgr, empno) AS
 (
@@ -314,33 +314,33 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SUBPLAN SCAN         |rw  |433     |50          |
-|1 |└─RECURSIVE UNION ALL|    |433     |49          |
+|0 |SUBPLAN SCAN         |rw  |192     |13          |
+|1 |└─RECURSIVE UNION ALL|    |192     |12          |
 |2 |  ├─TABLE FULL SCAN  |e   |1       |5           |
-|3 |  └─HASH JOIN        |    |432     |44          |
-|4 |    ├─TABLE FULL SCAN|e   |14      |5           |
-|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+|3 |  └─HASH JOIN        |    |3       |8           |
+|4 |    ├─TABLE FULL SCAN|r   |1       |1           |
+|5 |    └─TABLE FULL SCAN|e   |14      |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       equal_conds([r.empno = e.MGR]), other_conds(nil)
-  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([r.empno]), filter(nil), rowset=256
+  4 - output([r.empno]), filter(nil), rowset=16
       access([r.empno])
       is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
+  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
+      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (ename, mgr, empno) AS
 (
@@ -358,17 +358,17 @@ FROM rw;
 | ename  | empno | mgr  |
 +--------+-------+------+
 | KING   |  7839 | NULL |
-| CLARK  |  7782 | 7839 |
-| BLAKE  |  7698 | 7839 |
 | JONES  |  7566 | 7839 |
-| MILLER |  7934 | 7782 |
+| BLAKE  |  7698 | 7839 |
+| CLARK  |  7782 | 7839 |
+| ALLEN  |  7499 | 7698 |
+| WARD   |  7521 | 7698 |
+| MARTIN |  7654 | 7698 |
+| SCOTT  |  7788 | 7566 |
+| TURNER |  7844 | 7698 |
 | JAMES  |  7900 | 7698 |
 | FORD   |  7902 | 7566 |
-| TURNER |  7844 | 7698 |
-| SCOTT  |  7788 | 7566 |
-| MARTIN |  7654 | 7698 |
-| WARD   |  7521 | 7698 |
-| ALLEN  |  7499 | 7698 |
+| MILLER |  7934 | 7782 |
 | SMITH  |  7369 | 7902 |
 | ADAMS  |  7876 | 7788 |
 +--------+-------+------+
@@ -392,22 +392,21 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-=========================================================
-|ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
----------------------------------------------------------
-|0 |SUBPLAN SCAN             |rw  |510     |73          |
-|1 |└─RECURSIVE UNION ALL    |    |510     |71          |
-|2 |  ├─NESTED-LOOP JOIN     |    |17      |14          |
-|3 |  │ ├─TABLE FULL SCAN    |e   |14      |5           |
-|4 |  │ └─MATERIAL           |    |14      |5           |
-|5 |  │   └─TABLE FULL SCAN  |d   |14      |5           |
-|6 |  └─HASH JOIN            |    |494     |57          |
-|7 |    ├─MATERIAL           |    |17      |15          |
-|8 |    │ └─HASH JOIN        |    |17      |14          |
-|9 |    │   ├─TABLE FULL SCAN|d   |14      |5           |
-|10|    │   └─TABLE FULL SCAN|e   |14      |5           |
-|11|    └─TABLE FULL SCAN    |r   |199     |1           |
-=========================================================
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |SUBPLAN SCAN           |rw  |160     |33          |
+|1 |└─RECURSIVE UNION ALL  |    |160     |33          |
+|2 |  ├─NESTED-LOOP JOIN   |    |17      |14          |
+|3 |  │ ├─TABLE FULL SCAN  |e   |14      |5           |
+|4 |  │ └─MATERIAL         |    |14      |5           |
+|5 |  │   └─TABLE FULL SCAN|d   |14      |5           |
+|6 |  └─HASH JOIN          |    |17      |19          |
+|7 |    ├─TABLE FULL SCAN  |d   |14      |5           |
+|8 |    └─HASH JOIN        |    |15      |11          |
+|9 |      ├─TABLE FULL SCAN|r   |17      |1           |
+|10|      └─TABLE FULL SCAN|e   |14      |5           |
+=======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -426,22 +425,21 @@ Outputs & filters:
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
   6 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
-      equal_conds([r.empno = e.MGR]), other_conds(nil)
-  7 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-  8 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       equal_conds([e.SAL = d.SAL]), other_conds(nil)
-  9 - output([d.SAL]), filter(nil), rowset=256
+  7 - output([d.SAL]), filter(nil), rowset=256
       access([d.SAL]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
+  8 - output([e.MGR], [e.SAL], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
+      equal_conds([r.empno = e.MGR]), other_conds(nil)
+  9 - output([r.empno]), filter(nil), rowset=256
+      access([r.empno])
+      is_index_back=false, is_global_index=false, 
+      range_key(nil), range(MIN ; MAX)
  10 - output([e.MGR], [e.SAL], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.SAL], [e.ENAME], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
- 11 - output([r.empno]), filter(nil), rowset=256
-      access([r.empno])
-      is_index_back=false, is_global_index=false, 
-      range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
 (
@@ -540,33 +538,33 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SUBPLAN SCAN         |rw  |433     |50          |
-|1 |└─RECURSIVE UNION ALL|    |433     |49          |
+|0 |SUBPLAN SCAN         |rw  |192     |13          |
+|1 |└─RECURSIVE UNION ALL|    |192     |12          |
 |2 |  ├─TABLE FULL SCAN  |e   |1       |5           |
-|3 |  └─HASH JOIN        |    |432     |44          |
-|4 |    ├─TABLE FULL SCAN|e   |14      |5           |
-|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+|3 |  └─HASH JOIN        |    |3       |8           |
+|4 |    ├─TABLE FULL SCAN|r   |1       |1           |
+|5 |    └─TABLE FULL SCAN|e   |14      |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       equal_conds([e.MGR = r.empno]), other_conds(nil)
-  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([r.empno]), filter(nil), rowset=256
+  4 - output([r.empno]), filter(nil), rowset=16
       access([r.empno])
       is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
+  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
+      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (ename, mgr, empno) AS
 (
@@ -584,17 +582,17 @@ FROM rw;
 | ename  | empno | mgr  |
 +--------+-------+------+
 | KING   |  7839 | NULL |
-| CLARK  |  7782 | 7839 |
-| BLAKE  |  7698 | 7839 |
 | JONES  |  7566 | 7839 |
-| MILLER |  7934 | 7782 |
+| BLAKE  |  7698 | 7839 |
+| CLARK  |  7782 | 7839 |
+| ALLEN  |  7499 | 7698 |
+| WARD   |  7521 | 7698 |
+| MARTIN |  7654 | 7698 |
+| SCOTT  |  7788 | 7566 |
+| TURNER |  7844 | 7698 |
 | JAMES  |  7900 | 7698 |
 | FORD   |  7902 | 7566 |
-| TURNER |  7844 | 7698 |
-| SCOTT  |  7788 | 7566 |
-| MARTIN |  7654 | 7698 |
-| WARD   |  7521 | 7698 |
-| ALLEN  |  7499 | 7698 |
+| MILLER |  7934 | 7782 |
 | SMITH  |  7369 | 7902 |
 | ADAMS  |  7876 | 7788 |
 +--------+-------+------+
@@ -621,33 +619,33 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SUBPLAN SCAN         |rw  |433     |50          |
-|1 |└─RECURSIVE UNION ALL|    |433     |49          |
+|0 |SUBPLAN SCAN         |rw  |192     |13          |
+|1 |└─RECURSIVE UNION ALL|    |192     |12          |
 |2 |  ├─TABLE FULL SCAN  |e   |1       |5           |
-|3 |  └─HASH JOIN        |    |432     |44          |
-|4 |    ├─TABLE FULL SCAN|e   |14      |5           |
-|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+|3 |  └─HASH JOIN        |    |3       |8           |
+|4 |    ├─TABLE FULL SCAN|r   |1       |1           |
+|5 |    └─TABLE FULL SCAN|e   |14      |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       equal_conds([r.empno = e.MGR]), other_conds(nil)
-  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([r.empno]), filter(nil), rowset=256
+  4 - output([r.empno]), filter(nil), rowset=16
       access([r.empno])
       is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
+  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
+      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (ename, mgr, empno) AS
 (
@@ -665,17 +663,17 @@ FROM rw;
 | ename  | empno | mgr  |
 +--------+-------+------+
 | KING   |  7839 | NULL |
-| CLARK  |  7782 | 7839 |
-| BLAKE  |  7698 | 7839 |
 | JONES  |  7566 | 7839 |
-| MILLER |  7934 | 7782 |
+| BLAKE  |  7698 | 7839 |
+| CLARK  |  7782 | 7839 |
+| ALLEN  |  7499 | 7698 |
+| WARD   |  7521 | 7698 |
+| MARTIN |  7654 | 7698 |
+| SCOTT  |  7788 | 7566 |
+| TURNER |  7844 | 7698 |
 | JAMES  |  7900 | 7698 |
 | FORD   |  7902 | 7566 |
-| TURNER |  7844 | 7698 |
-| SCOTT  |  7788 | 7566 |
-| MARTIN |  7654 | 7698 |
-| WARD   |  7521 | 7698 |
-| ALLEN  |  7499 | 7698 |
+| MILLER |  7934 | 7782 |
 | SMITH  |  7369 | 7902 |
 | ADAMS  |  7876 | 7788 |
 +--------+-------+------+
@@ -704,17 +702,17 @@ Query Plan
 =========================================================
 |ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SORT                     |    |206     |270         |
-|1 |└─SUBPLAN SCAN           |rw  |206     |215         |
-|2 |  └─RECURSIVE UNION ALL  |    |206     |215         |
+|0 |SORT                     |    |56      |51          |
+|1 |└─SUBPLAN SCAN           |rw  |56      |38          |
+|2 |  └─RECURSIVE UNION ALL  |    |56      |38          |
 |3 |    ├─HASH JOIN          |    |7       |21          |
 |4 |    │ ├─HASH JOIN        |    |7       |13          |
 |5 |    │ │ ├─TABLE FULL SCAN|e   |7       |5           |
 |6 |    │ │ └─TABLE FULL SCAN|n1  |17      |5           |
 |7 |    │ └─TABLE FULL SCAN  |n2  |17      |5           |
-|8 |    └─HASH JOIN          |    |199     |194         |
-|9 |      ├─HASH JOIN        |    |199     |122         |
-|10|      │ ├─TABLE FULL SCAN|r   |199     |1           |
+|8 |    └─HASH JOIN          |    |7       |17          |
+|9 |      ├─HASH JOIN        |    |7       |9           |
+|10|      │ ├─TABLE FULL SCAN|r   |7       |1           |
 |11|      │ └─TABLE FULL SCAN|e   |7       |5           |
 |12|      └─TABLE FULL SCAN  |n   |17      |5           |
 =========================================================
@@ -810,18 +808,18 @@ Query Plan
 =========================================================
 |ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SORT                     |    |206     |182         |
-|1 |└─SUBPLAN SCAN           |rw  |206     |127         |
-|2 |  └─RECURSIVE UNION ALL  |    |206     |126         |
+|0 |SORT                     |    |56      |51          |
+|1 |└─SUBPLAN SCAN           |rw  |56      |38          |
+|2 |  └─RECURSIVE UNION ALL  |    |56      |37          |
 |3 |    ├─HASH JOIN          |    |7       |21          |
 |4 |    │ ├─HASH JOIN        |    |7       |13          |
 |5 |    │ │ ├─TABLE FULL SCAN|e   |7       |5           |
 |6 |    │ │ └─TABLE FULL SCAN|n1  |17      |5           |
 |7 |    │ └─TABLE FULL SCAN  |n2  |17      |5           |
-|8 |    └─HASH JOIN          |    |199     |106         |
-|9 |      ├─HASH JOIN        |    |199     |34          |
+|8 |    └─HASH JOIN          |    |7       |17          |
+|9 |      ├─HASH JOIN        |    |7       |9           |
 |10|      │ ├─TABLE FULL SCAN|e   |7       |5           |
-|11|      │ └─TABLE FULL SCAN|r   |199     |1           |
+|11|      │ └─TABLE FULL SCAN|r   |7       |1           |
 |12|      └─TABLE FULL SCAN  |n   |17      |5           |
 =========================================================
 Outputs & filters:
@@ -916,20 +914,20 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |SORT                       |    |206     |118         |
-|1 |└─SUBPLAN SCAN             |rw  |206     |63          |
-|2 |  └─RECURSIVE UNION ALL    |    |206     |63          |
+|0 |SORT                       |    |56      |51          |
+|1 |└─SUBPLAN SCAN             |rw  |56      |38          |
+|2 |  └─RECURSIVE UNION ALL    |    |56      |38          |
 |3 |    ├─HASH JOIN            |    |7       |21          |
 |4 |    │ ├─HASH JOIN          |    |7       |13          |
 |5 |    │ │ ├─TABLE FULL SCAN  |e   |7       |5           |
 |6 |    │ │ └─TABLE FULL SCAN  |n1  |17      |5           |
 |7 |    │ └─TABLE FULL SCAN    |n2  |17      |5           |
-|8 |    └─HASH JOIN            |    |199     |42          |
+|8 |    └─HASH JOIN            |    |7       |17          |
 |9 |      ├─MATERIAL           |    |7       |14          |
 |10|      │ └─HASH JOIN        |    |7       |13          |
 |11|      │   ├─TABLE FULL SCAN|e   |7       |5           |
 |12|      │   └─TABLE FULL SCAN|n   |17      |5           |
-|13|      └─TABLE FULL SCAN    |r   |199     |1           |
+|13|      └─TABLE FULL SCAN    |r   |7       |1           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
@@ -1024,20 +1022,20 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |SORT                       |    |206     |120         |
-|1 |└─SUBPLAN SCAN             |rw  |206     |66          |
-|2 |  └─RECURSIVE UNION ALL    |    |206     |65          |
+|0 |SORT                       |    |56      |53          |
+|1 |└─SUBPLAN SCAN             |rw  |56      |40          |
+|2 |  └─RECURSIVE UNION ALL    |    |56      |40          |
 |3 |    ├─HASH JOIN            |    |7       |21          |
 |4 |    │ ├─HASH JOIN          |    |7       |13          |
 |5 |    │ │ ├─TABLE FULL SCAN  |e   |7       |5           |
 |6 |    │ │ └─TABLE FULL SCAN  |n1  |17      |5           |
 |7 |    │ └─TABLE FULL SCAN    |n2  |17      |5           |
-|8 |    └─HASH JOIN            |    |199     |44          |
+|8 |    └─HASH JOIN            |    |7       |20          |
 |9 |      ├─MATERIAL           |    |7       |16          |
 |10|      │ └─HASH JOIN        |    |7       |16          |
 |11|      │   ├─TABLE FULL SCAN|n   |17      |5           |
 |12|      │   └─TABLE FULL SCAN|e   |7       |5           |
-|13|      └─TABLE FULL SCAN    |r   |199     |1           |
+|13|      └─TABLE FULL SCAN    |r   |7       |1           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
@@ -1131,30 +1129,30 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SUBPLAN SCAN         |rw  |433     |137         |
-|1 |└─RECURSIVE UNION ALL|    |433     |136         |
+|0 |SUBPLAN SCAN         |rw  |192     |13          |
+|1 |└─RECURSIVE UNION ALL|    |192     |12          |
 |2 |  ├─TABLE FULL SCAN  |e   |1       |5           |
-|3 |  └─HASH JOIN        |    |432     |130         |
-|4 |    ├─TABLE FULL SCAN|r   |199     |1           |
+|3 |  └─HASH JOIN        |    |3       |8           |
+|4 |    ├─TABLE FULL SCAN|r   |1       |1           |
 |5 |    └─TABLE FULL SCAN|e   |14      |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       equal_conds([r.empno = e.MGR]), other_conds(nil)
-  4 - output([r.empno]), filter(nil), rowset=256
+  4 - output([r.empno]), filter(nil), rowset=16
       access([r.empno])
       is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
-  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
+  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
@@ -1212,30 +1210,30 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SUBPLAN SCAN         |rw  |433     |50          |
-|1 |└─RECURSIVE UNION ALL|    |433     |49          |
+|0 |SUBPLAN SCAN         |rw  |192     |15          |
+|1 |└─RECURSIVE UNION ALL|    |192     |14          |
 |2 |  ├─TABLE FULL SCAN  |e   |1       |5           |
-|3 |  └─HASH JOIN        |    |432     |44          |
+|3 |  └─HASH JOIN        |    |3       |10          |
 |4 |    ├─TABLE FULL SCAN|e   |14      |5           |
-|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+|5 |    └─TABLE FULL SCAN|r   |1       |1           |
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       equal_conds([e.MGR = r.empno]), other_conds(nil)
-  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
+  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([r.empno]), filter(nil), rowset=256
+  5 - output([r.empno]), filter(nil), rowset=16
       access([r.empno])
       is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
@@ -1294,19 +1292,19 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                           |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |SORT                               |    |206     |1646        |
-|1 |└─SUBPLAN SCAN                     |rw  |206     |1591        |
-|2 |  └─RECURSIVE UNION ALL            |    |206     |1591        |
+|0 |SORT                               |    |56      |101         |
+|1 |└─SUBPLAN SCAN                     |rw  |56      |88          |
+|2 |  └─RECURSIVE UNION ALL            |    |56      |87          |
 |3 |    ├─HASH JOIN                    |    |7       |21          |
 |4 |    │ ├─HASH JOIN                  |    |7       |13          |
 |5 |    │ │ ├─TABLE FULL SCAN          |e   |7       |5           |
 |6 |    │ │ └─TABLE FULL SCAN          |n1  |17      |5           |
 |7 |    │ └─TABLE FULL SCAN            |n2  |17      |5           |
-|8 |    └─HASH JOIN                    |    |199     |1570        |
-|9 |      ├─NESTED-LOOP JOIN CARTESIAN |    |3383    |94          |
-|10|      │ ├─TABLE FULL SCAN          |r   |199     |1           |
-|11|      │ └─MATERIAL                 |    |17      |7           |
-|12|      │   └─TABLE FULL SCAN        |n   |17      |5           |
+|8 |    └─HASH JOIN                    |    |7       |67          |
+|9 |      ├─NESTED-LOOP JOIN CARTESIAN |    |119     |10          |
+|10|      │ ├─TABLE FULL SCAN          |n   |17      |5           |
+|11|      │ └─MATERIAL                 |    |7       |2           |
+|12|      │   └─TABLE FULL SCAN        |r   |7       |1           |
 |13|      └─TABLE FULL SCAN            |e   |7       |5           |
 ===================================================================
 Outputs & filters:
@@ -1335,17 +1333,17 @@ Outputs & filters:
   8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
        [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
       equal_conds([cast(n.empno, DECIMAL(-1, -1)) = e.MGR], [r.mgr = e.EMPno]), other_conds(nil)
-  9 - output([r.mgr], [r.empno], [r.iters], [r.sal], [n.empno]), filter(nil), rowset=256
+  9 - output([n.empno], [r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       conds(nil), nl_params_(nil), use_batch=false
- 10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
-      access([r.mgr], [r.empno], [r.iters], [r.sal])
-      is_index_back=false, is_global_index=false, 
-      range_key(nil), range(MIN ; MAX)
- 11 - output([n.empno]), filter(nil), rowset=256
- 12 - output([n.empno]), filter(nil), rowset=256
+ 10 - output([n.empno]), filter(nil), rowset=256
       access([n.empno]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([n.__pk_increment]), range(MIN ; MAX)always true
+ 11 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
+ 12 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
+      access([r.mgr], [r.empno], [r.iters], [r.sal])
+      is_index_back=false, is_global_index=false, 
+      range_key(nil), range(MIN ; MAX)
  13 - output([e.MGR], [e.EMPno], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.MGR], [e.EMPno], [e.SAL]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
@@ -1402,17 +1400,17 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                           |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |SORT                               |    |206     |1646        |
-|1 |└─SUBPLAN SCAN                     |rw  |206     |1591        |
-|2 |  └─RECURSIVE UNION ALL            |    |206     |1591        |
+|0 |SORT                               |    |56      |102         |
+|1 |└─SUBPLAN SCAN                     |rw  |56      |89          |
+|2 |  └─RECURSIVE UNION ALL            |    |56      |89          |
 |3 |    ├─HASH JOIN                    |    |7       |21          |
 |4 |    │ ├─HASH JOIN                  |    |7       |13          |
 |5 |    │ │ ├─TABLE FULL SCAN          |e   |7       |5           |
 |6 |    │ │ └─TABLE FULL SCAN          |n1  |17      |5           |
 |7 |    │ └─TABLE FULL SCAN            |n2  |17      |5           |
-|8 |    └─HASH JOIN                    |    |199     |1570        |
-|9 |      ├─NESTED-LOOP JOIN CARTESIAN |    |3383    |94          |
-|10|      │ ├─TABLE FULL SCAN          |r   |199     |1           |
+|8 |    └─HASH JOIN                    |    |7       |69          |
+|9 |      ├─NESTED-LOOP JOIN CARTESIAN |    |119     |11          |
+|10|      │ ├─TABLE FULL SCAN          |r   |7       |1           |
 |11|      │ └─MATERIAL                 |    |17      |7           |
 |12|      │   └─TABLE FULL SCAN        |n   |17      |5           |
 |13|      └─TABLE FULL SCAN            |e   |7       |5           |
@@ -1508,33 +1506,33 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SUBPLAN SCAN         |rw  |433     |50          |
-|1 |└─RECURSIVE UNION ALL|    |433     |49          |
+|0 |SUBPLAN SCAN         |rw  |192     |13          |
+|1 |└─RECURSIVE UNION ALL|    |192     |12          |
 |2 |  ├─TABLE FULL SCAN  |e   |1       |5           |
-|3 |  └─HASH JOIN        |    |432     |44          |
-|4 |    ├─TABLE FULL SCAN|e   |14      |5           |
-|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+|3 |  └─HASH JOIN        |    |3       |8           |
+|4 |    ├─TABLE FULL SCAN|r   |1       |1           |
+|5 |    └─TABLE FULL SCAN|e   |14      |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       equal_conds([r.empno = e.MGR]), other_conds(nil)
-  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([r.empno]), filter(nil), rowset=256
+  4 - output([r.empno]), filter(nil), rowset=16
       access([r.empno])
       is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
+  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
+      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (ename, mgr, empno) AS
 (
@@ -1552,17 +1550,17 @@ FROM rw;
 | ename  | empno | mgr  |
 +--------+-------+------+
 | KING   |  7839 | NULL |
-| CLARK  |  7782 | 7839 |
-| BLAKE  |  7698 | 7839 |
 | JONES  |  7566 | 7839 |
-| MILLER |  7934 | 7782 |
+| BLAKE  |  7698 | 7839 |
+| CLARK  |  7782 | 7839 |
+| ALLEN  |  7499 | 7698 |
+| WARD   |  7521 | 7698 |
+| MARTIN |  7654 | 7698 |
+| SCOTT  |  7788 | 7566 |
+| TURNER |  7844 | 7698 |
 | JAMES  |  7900 | 7698 |
 | FORD   |  7902 | 7566 |
-| TURNER |  7844 | 7698 |
-| SCOTT  |  7788 | 7566 |
-| MARTIN |  7654 | 7698 |
-| WARD   |  7521 | 7698 |
-| ALLEN  |  7499 | 7698 |
+| MILLER |  7934 | 7782 |
 | SMITH  |  7369 | 7902 |
 | ADAMS  |  7876 | 7788 |
 +--------+-------+------+
@@ -1588,33 +1586,33 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SUBPLAN SCAN         |rw  |291     |43          |
-|1 |└─RECURSIVE UNION ALL|    |291     |42          |
+|0 |SUBPLAN SCAN         |rw  |43      |12          |
+|1 |└─RECURSIVE UNION ALL|    |43      |12          |
 |2 |  ├─TABLE FULL SCAN  |e   |1       |5           |
-|3 |  └─HASH JOIN        |    |290     |37          |
-|4 |    ├─TABLE FULL SCAN|e   |7       |5           |
-|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+|3 |  └─HASH JOIN        |    |2       |7           |
+|4 |    ├─TABLE FULL SCAN|r   |1       |1           |
+|5 |    └─TABLE FULL SCAN|e   |7       |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       equal_conds([r.empno = e.MGR]), other_conds(nil)
-  4 - output([e.MGR], [e.EMPno], [e.ENAME]), filter([e.EMPno < e.MGR]), rowset=256
-      access([e.MGR], [e.EMPno], [e.ENAME]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([r.empno]), filter(nil), rowset=256
+  4 - output([r.empno]), filter(nil), rowset=16
       access([r.empno])
       is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
+  5 - output([e.MGR], [e.EMPno], [e.ENAME]), filter([e.EMPno < e.MGR]), rowset=16
+      access([e.MGR], [e.EMPno], [e.ENAME]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (ename, mgr, empno) AS
 (
@@ -1632,12 +1630,12 @@ FROM rw;
 | ename  | empno | mgr  |
 +--------+-------+------+
 | KING   |  7839 | NULL |
-| CLARK  |  7782 | 7839 |
-| BLAKE  |  7698 | 7839 |
 | JONES  |  7566 | 7839 |
-| MARTIN |  7654 | 7698 |
-| WARD   |  7521 | 7698 |
+| BLAKE  |  7698 | 7839 |
+| CLARK  |  7782 | 7839 |
 | ALLEN  |  7499 | 7698 |
+| WARD   |  7521 | 7698 |
+| MARTIN |  7654 | 7698 |
 +--------+-------+------+
 
 ##############################
@@ -1696,35 +1694,35 @@ Query Plan
 =======================================================
 |ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------
-|0 |SUBPLAN SCAN           |rw  |433     |73          |
-|1 |└─RECURSIVE UNION ALL  |    |433     |71          |
+|0 |SUBPLAN SCAN           |rw  |192     |11          |
+|1 |└─RECURSIVE UNION ALL  |    |192     |11          |
 |2 |  ├─TABLE FULL SCAN    |e   |1       |5           |
-|3 |  └─NESTED-LOOP JOIN   |    |432     |66          |
-|4 |    ├─TABLE FULL SCAN  |r   |199     |1           |
-|5 |    └─MATERIAL         |    |14      |7           |
-|6 |      └─TABLE FULL SCAN|e   |14      |5           |
+|3 |  └─NESTED-LOOP JOIN   |    |3       |6           |
+|4 |    ├─TABLE FULL SCAN  |e   |14      |5           |
+|5 |    └─MATERIAL         |    |1       |2           |
+|6 |      └─TABLE FULL SCAN|r   |1       |1           |
 =======================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       conds([r.empno = e.MGR]), nl_params_(nil), use_batch=false
-  4 - output([r.empno]), filter(nil), rowset=256
-      access([r.empno])
-      is_index_back=false, is_global_index=false, 
-      range_key(nil), range(MIN ; MAX)
-  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-  6 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
+  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([r.empno]), filter(nil), rowset=16
+  6 - output([r.empno]), filter(nil), rowset=16
+      access([r.empno])
+      is_index_back=false, is_global_index=false, 
+      range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
 (
@@ -1745,16 +1743,16 @@ FROM rw;
 | JONES  |  7566 | 7839 |
 | BLAKE  |  7698 | 7839 |
 | CLARK  |  7782 | 7839 |
-| SCOTT  |  7788 | 7566 |
-| FORD   |  7902 | 7566 |
 | ALLEN  |  7499 | 7698 |
 | WARD   |  7521 | 7698 |
 | MARTIN |  7654 | 7698 |
+| SCOTT  |  7788 | 7566 |
 | TURNER |  7844 | 7698 |
 | JAMES  |  7900 | 7698 |
+| FORD   |  7902 | 7566 |
 | MILLER |  7934 | 7782 |
-| ADAMS  |  7876 | 7788 |
 | SMITH  |  7369 | 7902 |
+| ADAMS  |  7876 | 7788 |
 +--------+-------+------+
 
 ## =======================================================================
@@ -1778,42 +1776,42 @@ Query Plan
 =========================================================
 |ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SUBPLAN SCAN             |rw  |433     |141         |
-|1 |└─RECURSIVE UNION ALL    |    |433     |140         |
+|0 |SUBPLAN SCAN             |rw  |192     |16          |
+|1 |└─RECURSIVE UNION ALL    |    |192     |15          |
 |2 |  ├─TABLE FULL SCAN      |e   |1       |5           |
-|3 |  └─MERGE JOIN           |    |432     |134         |
-|4 |    ├─MATERIAL           |    |14      |9           |
-|5 |    │ └─SORT             |    |14      |8           |
-|6 |    │   └─TABLE FULL SCAN|e   |14      |5           |
-|7 |    └─SORT               |    |199     |107         |
-|8 |      └─TABLE FULL SCAN  |r   |199     |1           |
+|3 |  └─MERGE JOIN           |    |3       |10          |
+|4 |    ├─SORT               |    |1       |2           |
+|5 |    │ └─TABLE FULL SCAN  |r   |1       |1           |
+|6 |    └─MATERIAL           |    |14      |9           |
+|7 |      └─SORT             |    |14      |8           |
+|8 |        └─TABLE FULL SCAN|e   |14      |5           |
 =========================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       equal_conds([r.empno = e.MGR]), other_conds(nil)
       merge_directions([ASC])
-  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-      sort_keys([e.MGR, ASC])
-  6 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  7 - output([r.empno]), filter(nil), rowset=256
+  4 - output([r.empno]), filter(nil), rowset=16
       sort_keys([r.empno, ASC])
-  8 - output([r.empno]), filter(nil), rowset=256
+  5 - output([r.empno]), filter(nil), rowset=16
       access([r.empno])
       is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
+  6 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
+  7 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
+      sort_keys([e.MGR, ASC])
+  8 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
+      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (ename, mgr, empno) AS
 (
@@ -1867,33 +1865,33 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SUBPLAN SCAN         |rw  |433     |50          |
-|1 |└─RECURSIVE UNION ALL|    |433     |49          |
+|0 |SUBPLAN SCAN         |rw  |192     |13          |
+|1 |└─RECURSIVE UNION ALL|    |192     |12          |
 |2 |  ├─TABLE FULL SCAN  |e   |1       |5           |
-|3 |  └─HASH JOIN        |    |432     |44          |
-|4 |    ├─TABLE FULL SCAN|e   |14      |5           |
-|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+|3 |  └─HASH JOIN        |    |3       |8           |
+|4 |    ├─TABLE FULL SCAN|r   |1       |1           |
+|5 |    └─TABLE FULL SCAN|e   |14      |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       equal_conds([r.empno = e.MGR]), other_conds(nil)
-  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([r.empno]), filter(nil), rowset=256
+  4 - output([r.empno]), filter(nil), rowset=16
       access([r.empno])
       is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
+  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
+      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (ename, mgr, empno) AS
 (
@@ -1911,17 +1909,17 @@ FROM rw;
 | ename  | empno | mgr  |
 +--------+-------+------+
 | KING   |  7839 | NULL |
-| CLARK  |  7782 | 7839 |
-| BLAKE  |  7698 | 7839 |
 | JONES  |  7566 | 7839 |
-| MILLER |  7934 | 7782 |
+| BLAKE  |  7698 | 7839 |
+| CLARK  |  7782 | 7839 |
+| ALLEN  |  7499 | 7698 |
+| WARD   |  7521 | 7698 |
+| MARTIN |  7654 | 7698 |
+| SCOTT  |  7788 | 7566 |
+| TURNER |  7844 | 7698 |
 | JAMES  |  7900 | 7698 |
 | FORD   |  7902 | 7566 |
-| TURNER |  7844 | 7698 |
-| SCOTT  |  7788 | 7566 |
-| MARTIN |  7654 | 7698 |
-| WARD   |  7521 | 7698 |
-| ALLEN  |  7499 | 7698 |
+| MILLER |  7934 | 7782 |
 | SMITH  |  7369 | 7902 |
 | ADAMS  |  7876 | 7788 |
 +--------+-------+------+
@@ -1945,22 +1943,21 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-=========================================================
-|ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
----------------------------------------------------------
-|0 |SUBPLAN SCAN             |rw  |510     |73          |
-|1 |└─RECURSIVE UNION ALL    |    |510     |71          |
-|2 |  ├─NESTED-LOOP JOIN     |    |17      |14          |
-|3 |  │ ├─TABLE FULL SCAN    |e   |14      |5           |
-|4 |  │ └─MATERIAL           |    |14      |5           |
-|5 |  │   └─TABLE FULL SCAN  |d   |14      |5           |
-|6 |  └─HASH JOIN            |    |494     |57          |
-|7 |    ├─MATERIAL           |    |17      |15          |
-|8 |    │ └─HASH JOIN        |    |17      |14          |
-|9 |    │   ├─TABLE FULL SCAN|d   |14      |5           |
-|10|    │   └─TABLE FULL SCAN|e   |14      |5           |
-|11|    └─TABLE FULL SCAN    |r   |199     |1           |
-=========================================================
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |SUBPLAN SCAN           |rw  |160     |33          |
+|1 |└─RECURSIVE UNION ALL  |    |160     |33          |
+|2 |  ├─NESTED-LOOP JOIN   |    |17      |14          |
+|3 |  │ ├─TABLE FULL SCAN  |e   |14      |5           |
+|4 |  │ └─MATERIAL         |    |14      |5           |
+|5 |  │   └─TABLE FULL SCAN|d   |14      |5           |
+|6 |  └─HASH JOIN          |    |17      |19          |
+|7 |    ├─TABLE FULL SCAN  |d   |14      |5           |
+|8 |    └─HASH JOIN        |    |15      |11          |
+|9 |      ├─TABLE FULL SCAN|r   |17      |1           |
+|10|      └─TABLE FULL SCAN|e   |14      |5           |
+=======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -1979,22 +1976,21 @@ Outputs & filters:
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
   6 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
-      equal_conds([r.empno = e.MGR]), other_conds(nil)
-  7 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-  8 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       equal_conds([e.SAL = d.SAL]), other_conds(nil)
-  9 - output([d.SAL]), filter(nil), rowset=256
+  7 - output([d.SAL]), filter(nil), rowset=256
       access([d.SAL]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
+  8 - output([e.MGR], [e.SAL], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
+      equal_conds([r.empno = e.MGR]), other_conds(nil)
+  9 - output([r.empno]), filter(nil), rowset=256
+      access([r.empno])
+      is_index_back=false, is_global_index=false, 
+      range_key(nil), range(MIN ; MAX)
  10 - output([e.MGR], [e.SAL], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.SAL], [e.ENAME], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
- 11 - output([r.empno]), filter(nil), rowset=256
-      access([r.empno])
-      is_index_back=false, is_global_index=false, 
-      range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
 (
@@ -2093,33 +2089,33 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SUBPLAN SCAN         |rw  |433     |50          |
-|1 |└─RECURSIVE UNION ALL|    |433     |49          |
+|0 |SUBPLAN SCAN         |rw  |192     |13          |
+|1 |└─RECURSIVE UNION ALL|    |192     |12          |
 |2 |  ├─TABLE FULL SCAN  |e   |1       |5           |
-|3 |  └─HASH JOIN        |    |432     |44          |
-|4 |    ├─TABLE FULL SCAN|e   |14      |5           |
-|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+|3 |  └─HASH JOIN        |    |3       |8           |
+|4 |    ├─TABLE FULL SCAN|r   |1       |1           |
+|5 |    └─TABLE FULL SCAN|e   |14      |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       equal_conds([e.MGR = r.empno]), other_conds(nil)
-  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([r.empno]), filter(nil), rowset=256
+  4 - output([r.empno]), filter(nil), rowset=16
       access([r.empno])
       is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
+  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
+      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (ename, mgr, empno) AS
 (
@@ -2137,17 +2133,17 @@ FROM rw;
 | ename  | empno | mgr  |
 +--------+-------+------+
 | KING   |  7839 | NULL |
-| CLARK  |  7782 | 7839 |
-| BLAKE  |  7698 | 7839 |
 | JONES  |  7566 | 7839 |
-| MILLER |  7934 | 7782 |
+| BLAKE  |  7698 | 7839 |
+| CLARK  |  7782 | 7839 |
+| ALLEN  |  7499 | 7698 |
+| WARD   |  7521 | 7698 |
+| MARTIN |  7654 | 7698 |
+| SCOTT  |  7788 | 7566 |
+| TURNER |  7844 | 7698 |
 | JAMES  |  7900 | 7698 |
 | FORD   |  7902 | 7566 |
-| TURNER |  7844 | 7698 |
-| SCOTT  |  7788 | 7566 |
-| MARTIN |  7654 | 7698 |
-| WARD   |  7521 | 7698 |
-| ALLEN  |  7499 | 7698 |
+| MILLER |  7934 | 7782 |
 | SMITH  |  7369 | 7902 |
 | ADAMS  |  7876 | 7788 |
 +--------+-------+------+
@@ -2174,33 +2170,33 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SUBPLAN SCAN         |rw  |433     |50          |
-|1 |└─RECURSIVE UNION ALL|    |433     |49          |
+|0 |SUBPLAN SCAN         |rw  |192     |13          |
+|1 |└─RECURSIVE UNION ALL|    |192     |12          |
 |2 |  ├─TABLE FULL SCAN  |e   |1       |5           |
-|3 |  └─HASH JOIN        |    |432     |44          |
-|4 |    ├─TABLE FULL SCAN|e   |14      |5           |
-|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+|3 |  └─HASH JOIN        |    |3       |8           |
+|4 |    ├─TABLE FULL SCAN|r   |1       |1           |
+|5 |    └─TABLE FULL SCAN|e   |14      |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       equal_conds([r.empno = e.MGR]), other_conds(nil)
-  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([r.empno]), filter(nil), rowset=256
+  4 - output([r.empno]), filter(nil), rowset=16
       access([r.empno])
       is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
+  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
+      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (ename, mgr, empno) AS
 (
@@ -2218,17 +2214,17 @@ FROM rw;
 | ename  | empno | mgr  |
 +--------+-------+------+
 | KING   |  7839 | NULL |
-| CLARK  |  7782 | 7839 |
-| BLAKE  |  7698 | 7839 |
 | JONES  |  7566 | 7839 |
-| MILLER |  7934 | 7782 |
+| BLAKE  |  7698 | 7839 |
+| CLARK  |  7782 | 7839 |
+| ALLEN  |  7499 | 7698 |
+| WARD   |  7521 | 7698 |
+| MARTIN |  7654 | 7698 |
+| SCOTT  |  7788 | 7566 |
+| TURNER |  7844 | 7698 |
 | JAMES  |  7900 | 7698 |
 | FORD   |  7902 | 7566 |
-| TURNER |  7844 | 7698 |
-| SCOTT  |  7788 | 7566 |
-| MARTIN |  7654 | 7698 |
-| WARD   |  7521 | 7698 |
-| ALLEN  |  7499 | 7698 |
+| MILLER |  7934 | 7782 |
 | SMITH  |  7369 | 7902 |
 | ADAMS  |  7876 | 7788 |
 +--------+-------+------+
@@ -2257,17 +2253,17 @@ Query Plan
 =========================================================
 |ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SORT                     |    |206     |270         |
-|1 |└─SUBPLAN SCAN           |rw  |206     |215         |
-|2 |  └─RECURSIVE UNION ALL  |    |206     |215         |
+|0 |SORT                     |    |56      |51          |
+|1 |└─SUBPLAN SCAN           |rw  |56      |38          |
+|2 |  └─RECURSIVE UNION ALL  |    |56      |38          |
 |3 |    ├─HASH JOIN          |    |7       |21          |
 |4 |    │ ├─HASH JOIN        |    |7       |13          |
 |5 |    │ │ ├─TABLE FULL SCAN|e   |7       |5           |
 |6 |    │ │ └─TABLE FULL SCAN|n1  |17      |5           |
 |7 |    │ └─TABLE FULL SCAN  |n2  |17      |5           |
-|8 |    └─HASH JOIN          |    |199     |194         |
-|9 |      ├─HASH JOIN        |    |199     |122         |
-|10|      │ ├─TABLE FULL SCAN|r   |199     |1           |
+|8 |    └─HASH JOIN          |    |7       |17          |
+|9 |      ├─HASH JOIN        |    |7       |9           |
+|10|      │ ├─TABLE FULL SCAN|r   |7       |1           |
 |11|      │ └─TABLE FULL SCAN|e   |7       |5           |
 |12|      └─TABLE FULL SCAN  |n   |17      |5           |
 =========================================================
@@ -2363,18 +2359,18 @@ Query Plan
 =========================================================
 |ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SORT                     |    |206     |182         |
-|1 |└─SUBPLAN SCAN           |rw  |206     |127         |
-|2 |  └─RECURSIVE UNION ALL  |    |206     |126         |
+|0 |SORT                     |    |56      |51          |
+|1 |└─SUBPLAN SCAN           |rw  |56      |38          |
+|2 |  └─RECURSIVE UNION ALL  |    |56      |37          |
 |3 |    ├─HASH JOIN          |    |7       |21          |
 |4 |    │ ├─HASH JOIN        |    |7       |13          |
 |5 |    │ │ ├─TABLE FULL SCAN|e   |7       |5           |
 |6 |    │ │ └─TABLE FULL SCAN|n1  |17      |5           |
 |7 |    │ └─TABLE FULL SCAN  |n2  |17      |5           |
-|8 |    └─HASH JOIN          |    |199     |106         |
-|9 |      ├─HASH JOIN        |    |199     |34          |
+|8 |    └─HASH JOIN          |    |7       |17          |
+|9 |      ├─HASH JOIN        |    |7       |9           |
 |10|      │ ├─TABLE FULL SCAN|e   |7       |5           |
-|11|      │ └─TABLE FULL SCAN|r   |199     |1           |
+|11|      │ └─TABLE FULL SCAN|r   |7       |1           |
 |12|      └─TABLE FULL SCAN  |n   |17      |5           |
 =========================================================
 Outputs & filters:
@@ -2469,20 +2465,20 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |SORT                       |    |206     |118         |
-|1 |└─SUBPLAN SCAN             |rw  |206     |63          |
-|2 |  └─RECURSIVE UNION ALL    |    |206     |63          |
+|0 |SORT                       |    |56      |51          |
+|1 |└─SUBPLAN SCAN             |rw  |56      |38          |
+|2 |  └─RECURSIVE UNION ALL    |    |56      |38          |
 |3 |    ├─HASH JOIN            |    |7       |21          |
 |4 |    │ ├─HASH JOIN          |    |7       |13          |
 |5 |    │ │ ├─TABLE FULL SCAN  |e   |7       |5           |
 |6 |    │ │ └─TABLE FULL SCAN  |n1  |17      |5           |
 |7 |    │ └─TABLE FULL SCAN    |n2  |17      |5           |
-|8 |    └─HASH JOIN            |    |199     |42          |
+|8 |    └─HASH JOIN            |    |7       |17          |
 |9 |      ├─MATERIAL           |    |7       |14          |
 |10|      │ └─HASH JOIN        |    |7       |13          |
 |11|      │   ├─TABLE FULL SCAN|e   |7       |5           |
 |12|      │   └─TABLE FULL SCAN|n   |17      |5           |
-|13|      └─TABLE FULL SCAN    |r   |199     |1           |
+|13|      └─TABLE FULL SCAN    |r   |7       |1           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
@@ -2577,20 +2573,20 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |SORT                       |    |206     |120         |
-|1 |└─SUBPLAN SCAN             |rw  |206     |66          |
-|2 |  └─RECURSIVE UNION ALL    |    |206     |65          |
+|0 |SORT                       |    |56      |53          |
+|1 |└─SUBPLAN SCAN             |rw  |56      |40          |
+|2 |  └─RECURSIVE UNION ALL    |    |56      |40          |
 |3 |    ├─HASH JOIN            |    |7       |21          |
 |4 |    │ ├─HASH JOIN          |    |7       |13          |
 |5 |    │ │ ├─TABLE FULL SCAN  |e   |7       |5           |
 |6 |    │ │ └─TABLE FULL SCAN  |n1  |17      |5           |
 |7 |    │ └─TABLE FULL SCAN    |n2  |17      |5           |
-|8 |    └─HASH JOIN            |    |199     |44          |
+|8 |    └─HASH JOIN            |    |7       |20          |
 |9 |      ├─MATERIAL           |    |7       |16          |
 |10|      │ └─HASH JOIN        |    |7       |16          |
 |11|      │   ├─TABLE FULL SCAN|n   |17      |5           |
 |12|      │   └─TABLE FULL SCAN|e   |7       |5           |
-|13|      └─TABLE FULL SCAN    |r   |199     |1           |
+|13|      └─TABLE FULL SCAN    |r   |7       |1           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
@@ -2685,30 +2681,30 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SUBPLAN SCAN         |rw  |433     |137         |
-|1 |└─RECURSIVE UNION ALL|    |433     |136         |
+|0 |SUBPLAN SCAN         |rw  |192     |13          |
+|1 |└─RECURSIVE UNION ALL|    |192     |12          |
 |2 |  ├─TABLE FULL SCAN  |e   |1       |5           |
-|3 |  └─HASH JOIN        |    |432     |130         |
-|4 |    ├─TABLE FULL SCAN|r   |199     |1           |
+|3 |  └─HASH JOIN        |    |3       |8           |
+|4 |    ├─TABLE FULL SCAN|r   |1       |1           |
 |5 |    └─TABLE FULL SCAN|e   |14      |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       equal_conds([r.empno = e.MGR]), other_conds(nil)
-  4 - output([r.empno]), filter(nil), rowset=256
+  4 - output([r.empno]), filter(nil), rowset=16
       access([r.empno])
       is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
-  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
+  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
@@ -2766,30 +2762,30 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SUBPLAN SCAN         |rw  |433     |50          |
-|1 |└─RECURSIVE UNION ALL|    |433     |49          |
+|0 |SUBPLAN SCAN         |rw  |192     |15          |
+|1 |└─RECURSIVE UNION ALL|    |192     |14          |
 |2 |  ├─TABLE FULL SCAN  |e   |1       |5           |
-|3 |  └─HASH JOIN        |    |432     |44          |
+|3 |  └─HASH JOIN        |    |3       |10          |
 |4 |    ├─TABLE FULL SCAN|e   |14      |5           |
-|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+|5 |    └─TABLE FULL SCAN|r   |1       |1           |
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       equal_conds([e.MGR = r.empno]), other_conds(nil)
-  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
+  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([r.empno]), filter(nil), rowset=256
+  5 - output([r.empno]), filter(nil), rowset=16
       access([r.empno])
       is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
@@ -2848,19 +2844,19 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                           |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |SORT                               |    |206     |1646        |
-|1 |└─SUBPLAN SCAN                     |rw  |206     |1591        |
-|2 |  └─RECURSIVE UNION ALL            |    |206     |1591        |
+|0 |SORT                               |    |56      |101         |
+|1 |└─SUBPLAN SCAN                     |rw  |56      |88          |
+|2 |  └─RECURSIVE UNION ALL            |    |56      |87          |
 |3 |    ├─HASH JOIN                    |    |7       |21          |
 |4 |    │ ├─HASH JOIN                  |    |7       |13          |
 |5 |    │ │ ├─TABLE FULL SCAN          |e   |7       |5           |
 |6 |    │ │ └─TABLE FULL SCAN          |n1  |17      |5           |
 |7 |    │ └─TABLE FULL SCAN            |n2  |17      |5           |
-|8 |    └─HASH JOIN                    |    |199     |1570        |
-|9 |      ├─NESTED-LOOP JOIN CARTESIAN |    |3383    |94          |
-|10|      │ ├─TABLE FULL SCAN          |r   |199     |1           |
-|11|      │ └─MATERIAL                 |    |17      |7           |
-|12|      │   └─TABLE FULL SCAN        |n   |17      |5           |
+|8 |    └─HASH JOIN                    |    |7       |67          |
+|9 |      ├─NESTED-LOOP JOIN CARTESIAN |    |119     |10          |
+|10|      │ ├─TABLE FULL SCAN          |n   |17      |5           |
+|11|      │ └─MATERIAL                 |    |7       |2           |
+|12|      │   └─TABLE FULL SCAN        |r   |7       |1           |
 |13|      └─TABLE FULL SCAN            |e   |7       |5           |
 ===================================================================
 Outputs & filters:
@@ -2889,17 +2885,17 @@ Outputs & filters:
   8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
        [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
       equal_conds([cast(n.empno, DECIMAL(-1, -1)) = e.MGR], [r.mgr = e.EMPno]), other_conds(nil)
-  9 - output([r.mgr], [r.empno], [r.iters], [r.sal], [n.empno]), filter(nil), rowset=256
+  9 - output([n.empno], [r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       conds(nil), nl_params_(nil), use_batch=false
- 10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
-      access([r.mgr], [r.empno], [r.iters], [r.sal])
-      is_index_back=false, is_global_index=false, 
-      range_key(nil), range(MIN ; MAX)
- 11 - output([n.empno]), filter(nil), rowset=256
- 12 - output([n.empno]), filter(nil), rowset=256
+ 10 - output([n.empno]), filter(nil), rowset=256
       access([n.empno]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([n.__pk_increment]), range(MIN ; MAX)always true
+ 11 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
+ 12 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
+      access([r.mgr], [r.empno], [r.iters], [r.sal])
+      is_index_back=false, is_global_index=false, 
+      range_key(nil), range(MIN ; MAX)
  13 - output([e.MGR], [e.EMPno], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.MGR], [e.EMPno], [e.SAL]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
@@ -2956,17 +2952,17 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                           |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |SORT                               |    |206     |1646        |
-|1 |└─SUBPLAN SCAN                     |rw  |206     |1591        |
-|2 |  └─RECURSIVE UNION ALL            |    |206     |1591        |
+|0 |SORT                               |    |56      |102         |
+|1 |└─SUBPLAN SCAN                     |rw  |56      |89          |
+|2 |  └─RECURSIVE UNION ALL            |    |56      |89          |
 |3 |    ├─HASH JOIN                    |    |7       |21          |
 |4 |    │ ├─HASH JOIN                  |    |7       |13          |
 |5 |    │ │ ├─TABLE FULL SCAN          |e   |7       |5           |
 |6 |    │ │ └─TABLE FULL SCAN          |n1  |17      |5           |
 |7 |    │ └─TABLE FULL SCAN            |n2  |17      |5           |
-|8 |    └─HASH JOIN                    |    |199     |1570        |
-|9 |      ├─NESTED-LOOP JOIN CARTESIAN |    |3383    |94          |
-|10|      │ ├─TABLE FULL SCAN          |r   |199     |1           |
+|8 |    └─HASH JOIN                    |    |7       |69          |
+|9 |      ├─NESTED-LOOP JOIN CARTESIAN |    |119     |11          |
+|10|      │ ├─TABLE FULL SCAN          |r   |7       |1           |
 |11|      │ └─MATERIAL                 |    |17      |7           |
 |12|      │   └─TABLE FULL SCAN        |n   |17      |5           |
 |13|      └─TABLE FULL SCAN            |e   |7       |5           |
@@ -3062,33 +3058,33 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SUBPLAN SCAN         |rw  |433     |50          |
-|1 |└─RECURSIVE UNION ALL|    |433     |49          |
+|0 |SUBPLAN SCAN         |rw  |192     |13          |
+|1 |└─RECURSIVE UNION ALL|    |192     |12          |
 |2 |  ├─TABLE FULL SCAN  |e   |1       |5           |
-|3 |  └─HASH JOIN        |    |432     |44          |
-|4 |    ├─TABLE FULL SCAN|e   |14      |5           |
-|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+|3 |  └─HASH JOIN        |    |3       |8           |
+|4 |    ├─TABLE FULL SCAN|r   |1       |1           |
+|5 |    └─TABLE FULL SCAN|e   |14      |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       equal_conds([r.empno = e.MGR]), other_conds(nil)
-  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([r.empno]), filter(nil), rowset=256
+  4 - output([r.empno]), filter(nil), rowset=16
       access([r.empno])
       is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
+  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
+      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (ename, mgr, empno) AS
 (
@@ -3106,17 +3102,17 @@ FROM rw;
 | ename  | empno | mgr  |
 +--------+-------+------+
 | KING   |  7839 | NULL |
-| CLARK  |  7782 | 7839 |
-| BLAKE  |  7698 | 7839 |
 | JONES  |  7566 | 7839 |
-| MILLER |  7934 | 7782 |
+| BLAKE  |  7698 | 7839 |
+| CLARK  |  7782 | 7839 |
+| ALLEN  |  7499 | 7698 |
+| WARD   |  7521 | 7698 |
+| MARTIN |  7654 | 7698 |
+| SCOTT  |  7788 | 7566 |
+| TURNER |  7844 | 7698 |
 | JAMES  |  7900 | 7698 |
 | FORD   |  7902 | 7566 |
-| TURNER |  7844 | 7698 |
-| SCOTT  |  7788 | 7566 |
-| MARTIN |  7654 | 7698 |
-| WARD   |  7521 | 7698 |
-| ALLEN  |  7499 | 7698 |
+| MILLER |  7934 | 7782 |
 | SMITH  |  7369 | 7902 |
 | ADAMS  |  7876 | 7788 |
 +--------+-------+------+
@@ -3142,33 +3138,33 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SUBPLAN SCAN         |rw  |291     |43          |
-|1 |└─RECURSIVE UNION ALL|    |291     |42          |
+|0 |SUBPLAN SCAN         |rw  |43      |12          |
+|1 |└─RECURSIVE UNION ALL|    |43      |12          |
 |2 |  ├─TABLE FULL SCAN  |e   |1       |5           |
-|3 |  └─HASH JOIN        |    |290     |37          |
-|4 |    ├─TABLE FULL SCAN|e   |7       |5           |
-|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+|3 |  └─HASH JOIN        |    |2       |7           |
+|4 |    ├─TABLE FULL SCAN|r   |1       |1           |
+|5 |    └─TABLE FULL SCAN|e   |7       |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       equal_conds([r.empno = e.MGR]), other_conds(nil)
-  4 - output([e.MGR], [e.EMPno], [e.ENAME]), filter([e.EMPno < e.MGR]), rowset=256
-      access([e.MGR], [e.EMPno], [e.ENAME]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([r.empno]), filter(nil), rowset=256
+  4 - output([r.empno]), filter(nil), rowset=16
       access([r.empno])
       is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
+  5 - output([e.MGR], [e.EMPno], [e.ENAME]), filter([e.EMPno < e.MGR]), rowset=16
+      access([e.MGR], [e.EMPno], [e.ENAME]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (ename, mgr, empno) AS
 (
@@ -3186,12 +3182,12 @@ FROM rw;
 | ename  | empno | mgr  |
 +--------+-------+------+
 | KING   |  7839 | NULL |
-| CLARK  |  7782 | 7839 |
-| BLAKE  |  7698 | 7839 |
 | JONES  |  7566 | 7839 |
-| MARTIN |  7654 | 7698 |
-| WARD   |  7521 | 7698 |
+| BLAKE  |  7698 | 7839 |
+| CLARK  |  7782 | 7839 |
 | ALLEN  |  7499 | 7698 |
+| WARD   |  7521 | 7698 |
+| MARTIN |  7654 | 7698 |
 +--------+-------+------+
 
 ##############################
@@ -3250,35 +3246,35 @@ Query Plan
 =======================================================
 |ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------
-|0 |SUBPLAN SCAN           |rw  |433     |73          |
-|1 |└─RECURSIVE UNION ALL  |    |433     |71          |
+|0 |SUBPLAN SCAN           |rw  |192     |11          |
+|1 |└─RECURSIVE UNION ALL  |    |192     |11          |
 |2 |  ├─TABLE FULL SCAN    |e   |1       |5           |
-|3 |  └─NESTED-LOOP JOIN   |    |432     |66          |
-|4 |    ├─TABLE FULL SCAN  |r   |199     |1           |
-|5 |    └─MATERIAL         |    |14      |7           |
-|6 |      └─TABLE FULL SCAN|e   |14      |5           |
+|3 |  └─NESTED-LOOP JOIN   |    |3       |6           |
+|4 |    ├─TABLE FULL SCAN  |e   |14      |5           |
+|5 |    └─MATERIAL         |    |1       |2           |
+|6 |      └─TABLE FULL SCAN|r   |1       |1           |
 =======================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       conds([r.empno = e.MGR]), nl_params_(nil), use_batch=false
-  4 - output([r.empno]), filter(nil), rowset=256
-      access([r.empno])
-      is_index_back=false, is_global_index=false, 
-      range_key(nil), range(MIN ; MAX)
-  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-  6 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
+  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([r.empno]), filter(nil), rowset=16
+  6 - output([r.empno]), filter(nil), rowset=16
+      access([r.empno])
+      is_index_back=false, is_global_index=false, 
+      range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
 (
@@ -3299,16 +3295,16 @@ FROM rw;
 | JONES  |  7566 | 7839 |
 | BLAKE  |  7698 | 7839 |
 | CLARK  |  7782 | 7839 |
-| SCOTT  |  7788 | 7566 |
-| FORD   |  7902 | 7566 |
 | ALLEN  |  7499 | 7698 |
 | WARD   |  7521 | 7698 |
 | MARTIN |  7654 | 7698 |
+| SCOTT  |  7788 | 7566 |
 | TURNER |  7844 | 7698 |
 | JAMES  |  7900 | 7698 |
+| FORD   |  7902 | 7566 |
 | MILLER |  7934 | 7782 |
-| ADAMS  |  7876 | 7788 |
 | SMITH  |  7369 | 7902 |
+| ADAMS  |  7876 | 7788 |
 +--------+-------+------+
 
 ## =======================================================================
@@ -3332,42 +3328,42 @@ Query Plan
 =========================================================
 |ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SUBPLAN SCAN             |rw  |433     |141         |
-|1 |└─RECURSIVE UNION ALL    |    |433     |140         |
+|0 |SUBPLAN SCAN             |rw  |192     |16          |
+|1 |└─RECURSIVE UNION ALL    |    |192     |15          |
 |2 |  ├─TABLE FULL SCAN      |e   |1       |5           |
-|3 |  └─MERGE JOIN           |    |432     |134         |
-|4 |    ├─MATERIAL           |    |14      |9           |
-|5 |    │ └─SORT             |    |14      |8           |
-|6 |    │   └─TABLE FULL SCAN|e   |14      |5           |
-|7 |    └─SORT               |    |199     |107         |
-|8 |      └─TABLE FULL SCAN  |r   |199     |1           |
+|3 |  └─MERGE JOIN           |    |3       |10          |
+|4 |    ├─SORT               |    |1       |2           |
+|5 |    │ └─TABLE FULL SCAN  |r   |1       |1           |
+|6 |    └─MATERIAL           |    |14      |9           |
+|7 |      └─SORT             |    |14      |8           |
+|8 |        └─TABLE FULL SCAN|e   |14      |5           |
 =========================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       equal_conds([r.empno = e.MGR]), other_conds(nil)
       merge_directions([ASC])
-  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-      sort_keys([e.MGR, ASC])
-  6 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  7 - output([r.empno]), filter(nil), rowset=256
+  4 - output([r.empno]), filter(nil), rowset=16
       sort_keys([r.empno, ASC])
-  8 - output([r.empno]), filter(nil), rowset=256
+  5 - output([r.empno]), filter(nil), rowset=16
       access([r.empno])
       is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
+  6 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
+  7 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
+      sort_keys([e.MGR, ASC])
+  8 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
+      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (ename, mgr, empno) AS
 (
@@ -3421,33 +3417,33 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SUBPLAN SCAN         |rw  |433     |50          |
-|1 |└─RECURSIVE UNION ALL|    |433     |49          |
+|0 |SUBPLAN SCAN         |rw  |192     |13          |
+|1 |└─RECURSIVE UNION ALL|    |192     |12          |
 |2 |  ├─TABLE FULL SCAN  |e   |1       |5           |
-|3 |  └─HASH JOIN        |    |432     |44          |
-|4 |    ├─TABLE FULL SCAN|e   |14      |5           |
-|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+|3 |  └─HASH JOIN        |    |3       |8           |
+|4 |    ├─TABLE FULL SCAN|r   |1       |1           |
+|5 |    └─TABLE FULL SCAN|e   |14      |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       equal_conds([r.empno = e.MGR]), other_conds(nil)
-  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([r.empno]), filter(nil), rowset=256
+  4 - output([r.empno]), filter(nil), rowset=16
       access([r.empno])
       is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
+  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
+      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (ename, mgr, empno) AS
 (
@@ -3465,17 +3461,17 @@ FROM rw;
 | ename  | empno | mgr  |
 +--------+-------+------+
 | KING   |  7839 | NULL |
-| CLARK  |  7782 | 7839 |
-| BLAKE  |  7698 | 7839 |
 | JONES  |  7566 | 7839 |
-| MILLER |  7934 | 7782 |
+| BLAKE  |  7698 | 7839 |
+| CLARK  |  7782 | 7839 |
+| ALLEN  |  7499 | 7698 |
+| WARD   |  7521 | 7698 |
+| MARTIN |  7654 | 7698 |
+| SCOTT  |  7788 | 7566 |
+| TURNER |  7844 | 7698 |
 | JAMES  |  7900 | 7698 |
 | FORD   |  7902 | 7566 |
-| TURNER |  7844 | 7698 |
-| SCOTT  |  7788 | 7566 |
-| MARTIN |  7654 | 7698 |
-| WARD   |  7521 | 7698 |
-| ALLEN  |  7499 | 7698 |
+| MILLER |  7934 | 7782 |
 | SMITH  |  7369 | 7902 |
 | ADAMS  |  7876 | 7788 |
 +--------+-------+------+
@@ -3499,22 +3495,21 @@ with RECURSIVE rw (ename, mgr, empno) AS
 SELECT ename, empno, mgr
 FROM rw;
 Query Plan
-=========================================================
-|ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
----------------------------------------------------------
-|0 |SUBPLAN SCAN             |rw  |510     |73          |
-|1 |└─RECURSIVE UNION ALL    |    |510     |71          |
-|2 |  ├─NESTED-LOOP JOIN     |    |17      |14          |
-|3 |  │ ├─TABLE FULL SCAN    |e   |14      |5           |
-|4 |  │ └─MATERIAL           |    |14      |5           |
-|5 |  │   └─TABLE FULL SCAN  |d   |14      |5           |
-|6 |  └─HASH JOIN            |    |494     |57          |
-|7 |    ├─MATERIAL           |    |17      |15          |
-|8 |    │ └─HASH JOIN        |    |17      |14          |
-|9 |    │   ├─TABLE FULL SCAN|d   |14      |5           |
-|10|    │   └─TABLE FULL SCAN|e   |14      |5           |
-|11|    └─TABLE FULL SCAN    |r   |199     |1           |
-=========================================================
+=======================================================
+|ID|OPERATOR               |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |SUBPLAN SCAN           |rw  |160     |33          |
+|1 |└─RECURSIVE UNION ALL  |    |160     |33          |
+|2 |  ├─NESTED-LOOP JOIN   |    |17      |14          |
+|3 |  │ ├─TABLE FULL SCAN  |e   |14      |5           |
+|4 |  │ └─MATERIAL         |    |14      |5           |
+|5 |  │   └─TABLE FULL SCAN|d   |14      |5           |
+|6 |  └─HASH JOIN          |    |17      |19          |
+|7 |    ├─TABLE FULL SCAN  |d   |14      |5           |
+|8 |    └─HASH JOIN        |    |15      |11          |
+|9 |      ├─TABLE FULL SCAN|r   |17      |1           |
+|10|      └─TABLE FULL SCAN|e   |14      |5           |
+=======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
@@ -3533,22 +3528,21 @@ Outputs & filters:
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
   6 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
       NULL,e.EMPno)]), filter(nil), rowset=256
-      equal_conds([r.empno = e.MGR]), other_conds(nil)
-  7 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-  8 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       equal_conds([e.SAL = d.SAL]), other_conds(nil)
-  9 - output([d.SAL]), filter(nil), rowset=256
+  7 - output([d.SAL]), filter(nil), rowset=256
       access([d.SAL]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
+  8 - output([e.MGR], [e.SAL], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
+      equal_conds([r.empno = e.MGR]), other_conds(nil)
+  9 - output([r.empno]), filter(nil), rowset=256
+      access([r.empno])
+      is_index_back=false, is_global_index=false, 
+      range_key(nil), range(MIN ; MAX)
  10 - output([e.MGR], [e.SAL], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.SAL], [e.ENAME], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
- 11 - output([r.empno]), filter(nil), rowset=256
-      access([r.empno])
-      is_index_back=false, is_global_index=false, 
-      range_key(nil), range(MIN ; MAX)
 
 with RECURSIVE rw (ename, mgr, empno) AS
 (
@@ -3647,33 +3641,33 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SUBPLAN SCAN         |rw  |433     |50          |
-|1 |└─RECURSIVE UNION ALL|    |433     |49          |
+|0 |SUBPLAN SCAN         |rw  |192     |13          |
+|1 |└─RECURSIVE UNION ALL|    |192     |12          |
 |2 |  ├─TABLE FULL SCAN  |e   |1       |5           |
-|3 |  └─HASH JOIN        |    |432     |44          |
-|4 |    ├─TABLE FULL SCAN|e   |14      |5           |
-|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+|3 |  └─HASH JOIN        |    |3       |8           |
+|4 |    ├─TABLE FULL SCAN|r   |1       |1           |
+|5 |    └─TABLE FULL SCAN|e   |14      |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       equal_conds([e.MGR = r.empno]), other_conds(nil)
-  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([r.empno]), filter(nil), rowset=256
+  4 - output([r.empno]), filter(nil), rowset=16
       access([r.empno])
       is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
+  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
+      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (ename, mgr, empno) AS
 (
@@ -3691,17 +3685,17 @@ FROM rw;
 | ename  | empno | mgr  |
 +--------+-------+------+
 | KING   |  7839 | NULL |
-| CLARK  |  7782 | 7839 |
-| BLAKE  |  7698 | 7839 |
 | JONES  |  7566 | 7839 |
-| MILLER |  7934 | 7782 |
+| BLAKE  |  7698 | 7839 |
+| CLARK  |  7782 | 7839 |
+| ALLEN  |  7499 | 7698 |
+| WARD   |  7521 | 7698 |
+| MARTIN |  7654 | 7698 |
+| SCOTT  |  7788 | 7566 |
+| TURNER |  7844 | 7698 |
 | JAMES  |  7900 | 7698 |
 | FORD   |  7902 | 7566 |
-| TURNER |  7844 | 7698 |
-| SCOTT  |  7788 | 7566 |
-| MARTIN |  7654 | 7698 |
-| WARD   |  7521 | 7698 |
-| ALLEN  |  7499 | 7698 |
+| MILLER |  7934 | 7782 |
 | SMITH  |  7369 | 7902 |
 | ADAMS  |  7876 | 7788 |
 +--------+-------+------+
@@ -3728,33 +3722,33 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SUBPLAN SCAN         |rw  |433     |50          |
-|1 |└─RECURSIVE UNION ALL|    |433     |49          |
+|0 |SUBPLAN SCAN         |rw  |192     |13          |
+|1 |└─RECURSIVE UNION ALL|    |192     |12          |
 |2 |  ├─TABLE FULL SCAN  |e   |1       |5           |
-|3 |  └─HASH JOIN        |    |432     |44          |
-|4 |    ├─TABLE FULL SCAN|e   |14      |5           |
-|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+|3 |  └─HASH JOIN        |    |3       |8           |
+|4 |    ├─TABLE FULL SCAN|r   |1       |1           |
+|5 |    └─TABLE FULL SCAN|e   |14      |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       equal_conds([r.empno = e.MGR]), other_conds(nil)
-  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([r.empno]), filter(nil), rowset=256
+  4 - output([r.empno]), filter(nil), rowset=16
       access([r.empno])
       is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
+  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
+      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (ename, mgr, empno) AS
 (
@@ -3772,17 +3766,17 @@ FROM rw;
 | ename  | empno | mgr  |
 +--------+-------+------+
 | KING   |  7839 | NULL |
-| CLARK  |  7782 | 7839 |
-| BLAKE  |  7698 | 7839 |
 | JONES  |  7566 | 7839 |
-| MILLER |  7934 | 7782 |
+| BLAKE  |  7698 | 7839 |
+| CLARK  |  7782 | 7839 |
+| ALLEN  |  7499 | 7698 |
+| WARD   |  7521 | 7698 |
+| MARTIN |  7654 | 7698 |
+| SCOTT  |  7788 | 7566 |
+| TURNER |  7844 | 7698 |
 | JAMES  |  7900 | 7698 |
 | FORD   |  7902 | 7566 |
-| TURNER |  7844 | 7698 |
-| SCOTT  |  7788 | 7566 |
-| MARTIN |  7654 | 7698 |
-| WARD   |  7521 | 7698 |
-| ALLEN  |  7499 | 7698 |
+| MILLER |  7934 | 7782 |
 | SMITH  |  7369 | 7902 |
 | ADAMS  |  7876 | 7788 |
 +--------+-------+------+
@@ -3811,17 +3805,17 @@ Query Plan
 =========================================================
 |ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SORT                     |    |206     |270         |
-|1 |└─SUBPLAN SCAN           |rw  |206     |215         |
-|2 |  └─RECURSIVE UNION ALL  |    |206     |215         |
+|0 |SORT                     |    |56      |51          |
+|1 |└─SUBPLAN SCAN           |rw  |56      |38          |
+|2 |  └─RECURSIVE UNION ALL  |    |56      |38          |
 |3 |    ├─HASH JOIN          |    |7       |21          |
 |4 |    │ ├─HASH JOIN        |    |7       |13          |
 |5 |    │ │ ├─TABLE FULL SCAN|e   |7       |5           |
 |6 |    │ │ └─TABLE FULL SCAN|n1  |17      |5           |
 |7 |    │ └─TABLE FULL SCAN  |n2  |17      |5           |
-|8 |    └─HASH JOIN          |    |199     |194         |
-|9 |      ├─HASH JOIN        |    |199     |122         |
-|10|      │ ├─TABLE FULL SCAN|r   |199     |1           |
+|8 |    └─HASH JOIN          |    |7       |17          |
+|9 |      ├─HASH JOIN        |    |7       |9           |
+|10|      │ ├─TABLE FULL SCAN|r   |7       |1           |
 |11|      │ └─TABLE FULL SCAN|e   |7       |5           |
 |12|      └─TABLE FULL SCAN  |n   |17      |5           |
 =========================================================
@@ -3917,18 +3911,18 @@ Query Plan
 =========================================================
 |ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SORT                     |    |206     |182         |
-|1 |└─SUBPLAN SCAN           |rw  |206     |127         |
-|2 |  └─RECURSIVE UNION ALL  |    |206     |126         |
+|0 |SORT                     |    |56      |51          |
+|1 |└─SUBPLAN SCAN           |rw  |56      |38          |
+|2 |  └─RECURSIVE UNION ALL  |    |56      |37          |
 |3 |    ├─HASH JOIN          |    |7       |21          |
 |4 |    │ ├─HASH JOIN        |    |7       |13          |
 |5 |    │ │ ├─TABLE FULL SCAN|e   |7       |5           |
 |6 |    │ │ └─TABLE FULL SCAN|n1  |17      |5           |
 |7 |    │ └─TABLE FULL SCAN  |n2  |17      |5           |
-|8 |    └─HASH JOIN          |    |199     |106         |
-|9 |      ├─HASH JOIN        |    |199     |34          |
+|8 |    └─HASH JOIN          |    |7       |17          |
+|9 |      ├─HASH JOIN        |    |7       |9           |
 |10|      │ ├─TABLE FULL SCAN|e   |7       |5           |
-|11|      │ └─TABLE FULL SCAN|r   |199     |1           |
+|11|      │ └─TABLE FULL SCAN|r   |7       |1           |
 |12|      └─TABLE FULL SCAN  |n   |17      |5           |
 =========================================================
 Outputs & filters:
@@ -4023,20 +4017,20 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |SORT                       |    |206     |118         |
-|1 |└─SUBPLAN SCAN             |rw  |206     |63          |
-|2 |  └─RECURSIVE UNION ALL    |    |206     |63          |
+|0 |SORT                       |    |56      |51          |
+|1 |└─SUBPLAN SCAN             |rw  |56      |38          |
+|2 |  └─RECURSIVE UNION ALL    |    |56      |38          |
 |3 |    ├─HASH JOIN            |    |7       |21          |
 |4 |    │ ├─HASH JOIN          |    |7       |13          |
 |5 |    │ │ ├─TABLE FULL SCAN  |e   |7       |5           |
 |6 |    │ │ └─TABLE FULL SCAN  |n1  |17      |5           |
 |7 |    │ └─TABLE FULL SCAN    |n2  |17      |5           |
-|8 |    └─HASH JOIN            |    |199     |42          |
+|8 |    └─HASH JOIN            |    |7       |17          |
 |9 |      ├─MATERIAL           |    |7       |14          |
 |10|      │ └─HASH JOIN        |    |7       |13          |
 |11|      │   ├─TABLE FULL SCAN|e   |7       |5           |
 |12|      │   └─TABLE FULL SCAN|n   |17      |5           |
-|13|      └─TABLE FULL SCAN    |r   |199     |1           |
+|13|      └─TABLE FULL SCAN    |r   |7       |1           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
@@ -4131,20 +4125,20 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |SORT                       |    |206     |120         |
-|1 |└─SUBPLAN SCAN             |rw  |206     |66          |
-|2 |  └─RECURSIVE UNION ALL    |    |206     |65          |
+|0 |SORT                       |    |56      |53          |
+|1 |└─SUBPLAN SCAN             |rw  |56      |40          |
+|2 |  └─RECURSIVE UNION ALL    |    |56      |40          |
 |3 |    ├─HASH JOIN            |    |7       |21          |
 |4 |    │ ├─HASH JOIN          |    |7       |13          |
 |5 |    │ │ ├─TABLE FULL SCAN  |e   |7       |5           |
 |6 |    │ │ └─TABLE FULL SCAN  |n1  |17      |5           |
 |7 |    │ └─TABLE FULL SCAN    |n2  |17      |5           |
-|8 |    └─HASH JOIN            |    |199     |44          |
+|8 |    └─HASH JOIN            |    |7       |20          |
 |9 |      ├─MATERIAL           |    |7       |16          |
 |10|      │ └─HASH JOIN        |    |7       |16          |
 |11|      │   ├─TABLE FULL SCAN|n   |17      |5           |
 |12|      │   └─TABLE FULL SCAN|e   |7       |5           |
-|13|      └─TABLE FULL SCAN    |r   |199     |1           |
+|13|      └─TABLE FULL SCAN    |r   |7       |1           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
@@ -4238,30 +4232,30 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SUBPLAN SCAN         |rw  |433     |137         |
-|1 |└─RECURSIVE UNION ALL|    |433     |136         |
+|0 |SUBPLAN SCAN         |rw  |192     |13          |
+|1 |└─RECURSIVE UNION ALL|    |192     |12          |
 |2 |  ├─TABLE FULL SCAN  |e   |1       |5           |
-|3 |  └─HASH JOIN        |    |432     |130         |
-|4 |    ├─TABLE FULL SCAN|r   |199     |1           |
+|3 |  └─HASH JOIN        |    |3       |8           |
+|4 |    ├─TABLE FULL SCAN|r   |1       |1           |
 |5 |    └─TABLE FULL SCAN|e   |14      |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       equal_conds([r.empno = e.MGR]), other_conds(nil)
-  4 - output([r.empno]), filter(nil), rowset=256
+  4 - output([r.empno]), filter(nil), rowset=16
       access([r.empno])
       is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
-  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
+  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
@@ -4319,30 +4313,30 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SUBPLAN SCAN         |rw  |433     |50          |
-|1 |└─RECURSIVE UNION ALL|    |433     |49          |
+|0 |SUBPLAN SCAN         |rw  |192     |15          |
+|1 |└─RECURSIVE UNION ALL|    |192     |14          |
 |2 |  ├─TABLE FULL SCAN  |e   |1       |5           |
-|3 |  └─HASH JOIN        |    |432     |44          |
+|3 |  └─HASH JOIN        |    |3       |10          |
 |4 |    ├─TABLE FULL SCAN|e   |14      |5           |
-|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+|5 |    └─TABLE FULL SCAN|r   |1       |1           |
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       equal_conds([e.MGR = r.empno]), other_conds(nil)
-  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
+  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([r.empno]), filter(nil), rowset=256
+  5 - output([r.empno]), filter(nil), rowset=16
       access([r.empno])
       is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
@@ -4401,19 +4395,19 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                           |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |SORT                               |    |206     |1646        |
-|1 |└─SUBPLAN SCAN                     |rw  |206     |1591        |
-|2 |  └─RECURSIVE UNION ALL            |    |206     |1591        |
+|0 |SORT                               |    |56      |101         |
+|1 |└─SUBPLAN SCAN                     |rw  |56      |88          |
+|2 |  └─RECURSIVE UNION ALL            |    |56      |87          |
 |3 |    ├─HASH JOIN                    |    |7       |21          |
 |4 |    │ ├─HASH JOIN                  |    |7       |13          |
 |5 |    │ │ ├─TABLE FULL SCAN          |e   |7       |5           |
 |6 |    │ │ └─TABLE FULL SCAN          |n1  |17      |5           |
 |7 |    │ └─TABLE FULL SCAN            |n2  |17      |5           |
-|8 |    └─HASH JOIN                    |    |199     |1570        |
-|9 |      ├─NESTED-LOOP JOIN CARTESIAN |    |3383    |94          |
-|10|      │ ├─TABLE FULL SCAN          |r   |199     |1           |
-|11|      │ └─MATERIAL                 |    |17      |7           |
-|12|      │   └─TABLE FULL SCAN        |n   |17      |5           |
+|8 |    └─HASH JOIN                    |    |7       |67          |
+|9 |      ├─NESTED-LOOP JOIN CARTESIAN |    |119     |10          |
+|10|      │ ├─TABLE FULL SCAN          |n   |17      |5           |
+|11|      │ └─MATERIAL                 |    |7       |2           |
+|12|      │   └─TABLE FULL SCAN        |r   |7       |1           |
 |13|      └─TABLE FULL SCAN            |e   |7       |5           |
 ===================================================================
 Outputs & filters:
@@ -4442,17 +4436,17 @@ Outputs & filters:
   8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
        [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
       equal_conds([cast(n.empno, DECIMAL(-1, -1)) = e.MGR], [r.mgr = e.EMPno]), other_conds(nil)
-  9 - output([r.mgr], [r.empno], [r.iters], [r.sal], [n.empno]), filter(nil), rowset=256
+  9 - output([n.empno], [r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       conds(nil), nl_params_(nil), use_batch=false
- 10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
-      access([r.mgr], [r.empno], [r.iters], [r.sal])
-      is_index_back=false, is_global_index=false, 
-      range_key(nil), range(MIN ; MAX)
- 11 - output([n.empno]), filter(nil), rowset=256
- 12 - output([n.empno]), filter(nil), rowset=256
+ 10 - output([n.empno]), filter(nil), rowset=256
       access([n.empno]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([n.__pk_increment]), range(MIN ; MAX)always true
+ 11 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
+ 12 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
+      access([r.mgr], [r.empno], [r.iters], [r.sal])
+      is_index_back=false, is_global_index=false, 
+      range_key(nil), range(MIN ; MAX)
  13 - output([e.MGR], [e.EMPno], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.MGR], [e.EMPno], [e.SAL]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
@@ -4509,17 +4503,17 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                           |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |SORT                               |    |206     |1646        |
-|1 |└─SUBPLAN SCAN                     |rw  |206     |1591        |
-|2 |  └─RECURSIVE UNION ALL            |    |206     |1591        |
+|0 |SORT                               |    |56      |102         |
+|1 |└─SUBPLAN SCAN                     |rw  |56      |89          |
+|2 |  └─RECURSIVE UNION ALL            |    |56      |89          |
 |3 |    ├─HASH JOIN                    |    |7       |21          |
 |4 |    │ ├─HASH JOIN                  |    |7       |13          |
 |5 |    │ │ ├─TABLE FULL SCAN          |e   |7       |5           |
 |6 |    │ │ └─TABLE FULL SCAN          |n1  |17      |5           |
 |7 |    │ └─TABLE FULL SCAN            |n2  |17      |5           |
-|8 |    └─HASH JOIN                    |    |199     |1570        |
-|9 |      ├─NESTED-LOOP JOIN CARTESIAN |    |3383    |94          |
-|10|      │ ├─TABLE FULL SCAN          |r   |199     |1           |
+|8 |    └─HASH JOIN                    |    |7       |69          |
+|9 |      ├─NESTED-LOOP JOIN CARTESIAN |    |119     |11          |
+|10|      │ ├─TABLE FULL SCAN          |r   |7       |1           |
 |11|      │ └─MATERIAL                 |    |17      |7           |
 |12|      │   └─TABLE FULL SCAN        |n   |17      |5           |
 |13|      └─TABLE FULL SCAN            |e   |7       |5           |
@@ -4615,33 +4609,33 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SUBPLAN SCAN         |rw  |433     |50          |
-|1 |└─RECURSIVE UNION ALL|    |433     |49          |
+|0 |SUBPLAN SCAN         |rw  |192     |13          |
+|1 |└─RECURSIVE UNION ALL|    |192     |12          |
 |2 |  ├─TABLE FULL SCAN  |e   |1       |5           |
-|3 |  └─HASH JOIN        |    |432     |44          |
-|4 |    ├─TABLE FULL SCAN|e   |14      |5           |
-|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+|3 |  └─HASH JOIN        |    |3       |8           |
+|4 |    ├─TABLE FULL SCAN|r   |1       |1           |
+|5 |    └─TABLE FULL SCAN|e   |14      |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       equal_conds([r.empno = e.MGR]), other_conds(nil)
-  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
-      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([r.empno]), filter(nil), rowset=256
+  4 - output([r.empno]), filter(nil), rowset=16
       access([r.empno])
       is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
+  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=16
+      access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (ename, mgr, empno) AS
 (
@@ -4659,17 +4653,17 @@ FROM rw;
 | ename  | empno | mgr  |
 +--------+-------+------+
 | KING   |  7839 | NULL |
-| CLARK  |  7782 | 7839 |
-| BLAKE  |  7698 | 7839 |
 | JONES  |  7566 | 7839 |
-| MILLER |  7934 | 7782 |
+| BLAKE  |  7698 | 7839 |
+| CLARK  |  7782 | 7839 |
+| ALLEN  |  7499 | 7698 |
+| WARD   |  7521 | 7698 |
+| MARTIN |  7654 | 7698 |
+| SCOTT  |  7788 | 7566 |
+| TURNER |  7844 | 7698 |
 | JAMES  |  7900 | 7698 |
 | FORD   |  7902 | 7566 |
-| TURNER |  7844 | 7698 |
-| SCOTT  |  7788 | 7566 |
-| MARTIN |  7654 | 7698 |
-| WARD   |  7521 | 7698 |
-| ALLEN  |  7499 | 7698 |
+| MILLER |  7934 | 7782 |
 | SMITH  |  7369 | 7902 |
 | ADAMS  |  7876 | 7788 |
 +--------+-------+------+
@@ -4695,33 +4689,33 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |SUBPLAN SCAN         |rw  |291     |43          |
-|1 |└─RECURSIVE UNION ALL|    |291     |42          |
+|0 |SUBPLAN SCAN         |rw  |43      |12          |
+|1 |└─RECURSIVE UNION ALL|    |43      |12          |
 |2 |  ├─TABLE FULL SCAN  |e   |1       |5           |
-|3 |  └─HASH JOIN        |    |290     |37          |
-|4 |    ├─TABLE FULL SCAN|e   |7       |5           |
-|5 |    └─TABLE FULL SCAN|r   |199     |1           |
+|3 |  └─HASH JOIN        |    |2       |7           |
+|4 |    ├─TABLE FULL SCAN|r   |1       |1           |
+|5 |    └─TABLE FULL SCAN|e   |7       |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=256
+  0 - output([rw.ename], [rw.empno], [rw.mgr]), filter(nil), rowset=16
       access([rw.ename], [rw.empno], [rw.mgr])
-  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=256
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  2 - output([e.ENAME], [e.MGR], [e.EMPno]), filter([e.JOB = 'PRESIDENT']), rowset=16
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
   3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
-      NULL,e.EMPno)]), filter(nil), rowset=256
+      NULL,e.EMPno)]), filter(nil), rowset=16
       equal_conds([r.empno = e.MGR]), other_conds(nil)
-  4 - output([e.MGR], [e.EMPno], [e.ENAME]), filter([e.EMPno < e.MGR]), rowset=256
-      access([e.MGR], [e.EMPno], [e.ENAME]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([r.empno]), filter(nil), rowset=256
+  4 - output([r.empno]), filter(nil), rowset=16
       access([r.empno])
       is_index_back=false, is_global_index=false, 
       range_key(nil), range(MIN ; MAX)
+  5 - output([e.MGR], [e.EMPno], [e.ENAME]), filter([e.EMPno < e.MGR]), rowset=16
+      access([e.MGR], [e.EMPno], [e.ENAME]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([e.__pk_increment]), range(MIN ; MAX)always true
 
 with RECURSIVE rw (ename, mgr, empno) AS
 (
@@ -4739,12 +4733,12 @@ FROM rw;
 | ename  | empno | mgr  |
 +--------+-------+------+
 | KING   |  7839 | NULL |
-| CLARK  |  7782 | 7839 |
-| BLAKE  |  7698 | 7839 |
 | JONES  |  7566 | 7839 |
-| MARTIN |  7654 | 7698 |
-| WARD   |  7521 | 7698 |
+| BLAKE  |  7698 | 7839 |
+| CLARK  |  7782 | 7839 |
 | ALLEN  |  7499 | 7698 |
+| WARD   |  7521 | 7698 |
+| MARTIN |  7654 | 7698 |
 +--------+-------+------+
 
 ##############################
@@ -4804,21 +4798,21 @@ Query Plan
 ==============================================================
 |ID|OPERATOR                     |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |SORT                         |     |17      |96          |
-|1 |└─SUBPLAN SCAN               |rw   |17      |92          |
-|2 |  └─RECURSIVE UNION ALL      |     |17      |92          |
+|0 |SORT                         |     |8       |44          |
+|1 |└─SUBPLAN SCAN               |rw   |8       |43          |
+|2 |  └─RECURSIVE UNION ALL      |     |8       |43          |
 |3 |    ├─HASH JOIN              |     |7       |21          |
 |4 |    │ ├─HASH JOIN            |     |7       |13          |
 |5 |    │ │ ├─TABLE FULL SCAN    |e    |7       |5           |
 |6 |    │ │ └─TABLE FULL SCAN    |n1   |17      |5           |
 |7 |    │ └─TABLE FULL SCAN      |n2   |17      |5           |
-|8 |    └─NESTED-LOOP SEMI JOIN  |     |10      |72          |
-|9 |      ├─HASH JOIN            |     |199     |41          |
+|8 |    └─NESTED-LOOP SEMI JOIN  |     |1       |23          |
+|9 |      ├─HASH JOIN            |     |2       |17          |
 |10|      │ ├─MATERIAL           |     |1       |15          |
 |11|      │ │ └─HASH JOIN        |     |1       |15          |
 |12|      │ │   ├─TABLE FULL SCAN|n    |17      |5           |
 |13|      │ │   └─TABLE FULL SCAN|e    |1       |5           |
-|14|      │ └─TABLE FULL SCAN    |r    |199     |1           |
+|14|      │ └─TABLE FULL SCAN    |r    |7       |1           |
 |15|      └─MATERIAL             |     |7       |6           |
 |16|        └─SUBPLAN SCAN       |VIEW1|7       |6           |
 |17|          └─HASH GROUP BY    |     |7       |6           |
@@ -4920,22 +4914,22 @@ Query Plan
 ======================================================================
 |ID|OPERATOR                           |NAME   |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------
-|0 |SORT                               |       |17      |105         |
-|1 |└─SUBPLAN SCAN                     |rw     |17      |102         |
-|2 |  └─RECURSIVE UNION ALL            |       |17      |102         |
+|0 |SORT                               |       |8       |48          |
+|1 |└─SUBPLAN SCAN                     |rw     |8       |47          |
+|2 |  └─RECURSIVE UNION ALL            |       |8       |47          |
 |3 |    ├─HASH JOIN                    |       |7       |21          |
 |4 |    │ ├─HASH JOIN                  |       |7       |13          |
 |5 |    │ │ ├─TABLE FULL SCAN          |e      |7       |5           |
 |6 |    │ │ └─TABLE FULL SCAN          |n1     |17      |5           |
 |7 |    │ └─TABLE FULL SCAN            |n2     |17      |5           |
-|8 |    └─NESTED-LOOP SEMI JOIN        |       |10      |81          |
-|9 |      ├─NESTED-LOOP JOIN CARTESIAN |       |199     |51          |
-|10|      │ ├─HASH JOIN                |       |199     |41          |
+|8 |    └─NESTED-LOOP SEMI JOIN        |       |1       |27          |
+|9 |      ├─NESTED-LOOP JOIN CARTESIAN |       |2       |20          |
+|10|      │ ├─HASH JOIN                |       |2       |17          |
 |11|      │ │ ├─MATERIAL               |       |1       |15          |
 |12|      │ │ │ └─HASH JOIN            |       |1       |15          |
 |13|      │ │ │   ├─TABLE FULL SCAN    |n      |17      |5           |
 |14|      │ │ │   └─TABLE FULL SCAN    |e      |1       |5           |
-|15|      │ │ └─TABLE FULL SCAN        |r      |199     |1           |
+|15|      │ │ └─TABLE FULL SCAN        |r      |7       |1           |
 |16|      │ └─MATERIAL                 |       |1       |4           |
 |17|      │   └─SUBPLAN SCAN           |VIEW2  |1       |4           |
 |18|      │     └─TABLE FULL SCAN      |disemp1|1       |4           |

@@ -776,7 +776,7 @@ public:
 
   static int remove_ignorable_func_for_est_sel(const ObRawExpr *&expr);
   static int remove_ignorable_func_for_est_sel(ObRawExpr *&expr);
-  static double get_set_stmt_output_ndv(double ndv1, double ndv2, ObSelectStmt::SetOperator set_type);
+  static double get_set_stmt_output_count(double count1, double count2, ObSelectStmt::SetOperator set_type);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOptSelectivity);

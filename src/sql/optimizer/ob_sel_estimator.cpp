@@ -756,7 +756,18 @@ int ObEqualSelEstimator::get_simple_equal_sel(const OptTableMetas &table_metas,
     LOG_WARN("failed to extract column exprs with op check", K(ret));
   } else if (!only_monotonic_op || column_exprs.count() > 1) {
     // cnt_col_expr contain not monotonic op OR has more than 1 column
-    selectivity = DEFAULT_EQ_SEL;
+    ObSEArray<ObRawExpr *, 1> exprs;
+    ObRawExpr *expr = const_cast<ObRawExpr*>(&cnt_col_expr);
+    double ndv = 1.0;
+    bool refine_ndv_by_current_rows = (ctx.get_current_rows() >= 0);
+    if (OB_FAIL(exprs.push_back(expr))) {
+      LOG_WARN("failed to push back", K(ret));
+    } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(table_metas, ctx, exprs, ctx.get_current_rows(),
+                                                            ndv, refine_ndv_by_current_rows))) {
+      LOG_WARN("Failed to calculate distinct", K(ret));
+    } else {
+      selectivity = (ndv > 1.0) ? 1 / ndv : DEFAULT_EQ_SEL;
+    }
   } else if (OB_UNLIKELY(1 != column_exprs.count()) ||
              OB_ISNULL(column_expr = column_exprs.at(0))) {
     ret = OB_ERR_UNEXPECTED;
@@ -987,29 +998,8 @@ int ObEqualSelEstimator::get_cntcol_op_cntcol_sel(const OptTableMetas &table_met
         }
       }
     }
-  } else if (left_expr->is_column_ref_expr() || right_expr->is_column_ref_expr()) {
-    // col1 = func(col2), selectivity is 1 / ndv(col1)
-    // inner join and semi join use same formula
-    /**
-     *  some test with generated table in oracle:
-     *  select * from t1,t2,(select c1 as agg from t3) v where t1.c1 + t2.c1 = v.agg;
-     *    => sel(t1.c1 + t2.c1 = v.agg) = 1/ndv(v.agg)
-     *  select * from t1,t2,(select c1+c2 as agg from t3) v where t1.c1 + t2.c1 = v.agg;
-     *    => sel(t1.c1 + t2.c1 = v.agg) = 1/100
-     *  select * from t1,t2,(select max(c1) as agg from t3) v where t1.c1 + t2.c1 = v.agg;
-     *    => sel(t1.c1 + t2.c1 = v.agg) = 1/100
-     *  it seems like in oracle, if an equal condition is `col1 = fun(cols)` and col1 is from a
-     *  generated table. oracle will check whether col1 is refered a basic column. If not, use
-     *  default
-     */
-    const ObRawExpr* column_expr = left_expr->is_column_ref_expr() ? left_expr : right_expr;
-    if (OB_FAIL(ObOptSelectivity::get_column_basic_sel(table_metas, ctx, *column_expr, &selectivity))) {
-      LOG_WARN("failed to get column basic selelectivity", K(ret));
-    } else if (T_OP_NE == op_type) {
-      selectivity = 1 - selectivity;
-    }
   } else {
-    // func(col) = func(col)
+    // func(col) = func(col) or col = func(col)
     double left_sel = 0.0;
     double right_sel = 0.0;
     if (OB_FAIL(get_simple_equal_sel(table_metas, ctx, *left_expr, NULL,
@@ -1018,6 +1008,39 @@ int ObEqualSelEstimator::get_cntcol_op_cntcol_sel(const OptTableMetas &table_met
     } else if (OB_FAIL(get_simple_equal_sel(table_metas, ctx, *right_expr, NULL,
                                             T_OP_NSEQ == op_type, right_sel))) {
       LOG_WARN("Failed to get simple predicate sel", K(ret));
+    } else if (IS_SEMI_ANTI_JOIN(ctx.get_join_type())) {
+      if (OB_ISNULL(ctx.get_left_rel_ids()) || OB_ISNULL(ctx.get_right_rel_ids())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ctx.get_left_rel_ids()), K(ctx.get_right_rel_ids()));
+      } else if (left_expr->get_relation_ids().overlap(*ctx.get_right_rel_ids()) ||
+                 right_expr->get_relation_ids().overlap(*ctx.get_left_rel_ids())) {
+        std::swap(left_sel, right_sel);
+      }
+      if (OB_SUCC(ret)) {
+        if (IS_LEFT_SEMI_ANTI_JOIN(ctx.get_join_type())) {
+          if (T_OP_NE == op_type) {
+            selectivity = 1 - left_sel;
+          } else if (right_sel < OB_DOUBLE_EPSINON) {
+            selectivity = 1.0;
+          } else {
+            selectivity = std::min(left_sel / right_sel, 1.0);
+          }
+          if (selectivity >= 1.0 && IS_ANTI_JOIN(ctx.get_join_type())) {
+            selectivity = 1 - left_sel;
+          }
+        } else {
+          if (T_OP_NE == op_type) {
+            selectivity = 1 - right_sel;
+          } else if (left_sel < OB_DOUBLE_EPSINON) {
+            selectivity = 1.0;
+          } else {
+            selectivity = std::min(right_sel / left_sel, 1.0);
+          }
+          if (selectivity >= 1.0 && IS_ANTI_JOIN(ctx.get_join_type())) {
+            selectivity = 1 - right_sel;
+          }
+        }
+      }
     } else {
       selectivity = std::min(left_sel, right_sel);
       if (T_OP_NE == op_type) {
@@ -2495,9 +2518,9 @@ double ObInequalJoinSelEstimator::get_equal_sel(double min1,
     overlap = 0.0;
   } else if (offset < max1 + min2 && offset < min1 + max2) {
     overlap = offset - min1 - min2;
-  } else if (offset > max1 + min2 && offset < min1 + max2) {
+  } else if (offset >= max1 + min2 && offset < min1 + max2) {
     overlap = max1 - min1;
-  } else if (offset > min1 + max2 && offset < max1 + min2) {
+  } else if (offset >= min1 + max2 && offset < max1 + min2) {
     overlap = max2 - min2;
   } else if (offset < max1 + max2) {
     overlap = max1 + max2 - offset;

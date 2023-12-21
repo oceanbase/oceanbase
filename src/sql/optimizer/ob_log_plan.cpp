@@ -138,7 +138,8 @@ ObLogPlan::ObLogPlan(ObOptimizerContext &ctx, const ObDMLStmt *stmt)
     update_table_metas_(),
     selectivity_ctx_(ctx, this, stmt),
     alloc_sfu_list_(),
-    onetime_copier_(NULL)
+    onetime_copier_(NULL),
+    nonrecursive_plan_for_fake_cte_(NULL)
 {
 }
 
@@ -964,7 +965,18 @@ int ObLogPlan::pre_process_quals(const ObIArray<TableItem*> &table_items,
         ret = add_subquery_filter(qual);
       }
     } else if (qual->is_const_expr()) {
-      ret = add_startup_filter(qual);
+      bool is_static_false = false;
+      if (OB_FAIL(ObOptimizerUtil::check_is_static_false_expr(optimizer_context_, *qual, is_static_false))) {
+        LOG_WARN("failed to check is static false", K(ret));
+      } else if (is_static_false) {
+        if (OB_FAIL(normal_quals.push_back(qual))) {
+          LOG_WARN("failed to push back");
+        }
+      } else {
+        if (OB_FAIL(add_startup_filter(qual))) {
+          LOG_WARN("failed to add startup filter", K(ret));
+        }
+      }
     } else if (qual->has_flag(CNT_RAND_FUNC) ||
                qual->has_flag(CNT_DYNAMIC_USER_VARIABLE)) {
       ret = add_special_expr(qual);
@@ -4158,6 +4170,8 @@ int ObLogPlan::allocate_function_table_path(FunctionTablePath *func_table_path,
       LOG_WARN("failed to append expr", K(ret));
     } else if (OB_FAIL(op->compute_property(func_table_path))) {
       LOG_WARN("failed to compute property", K(ret));
+    } else if (OB_FAIL(op->pick_out_startup_filters())) {
+      LOG_WARN("failed to pick out startup filters", K(ret));
     } else {
       out_access_path_op = op;
     }
@@ -4194,6 +4208,8 @@ int ObLogPlan::allocate_json_table_path(JsonTablePath *json_table_path,
       LOG_WARN("failed to append expr", K(ret));
     } else if (OB_FAIL(op->compute_property(json_table_path))) {
       LOG_WARN("failed to compute property", K(ret));
+    } else if (OB_FAIL(op->pick_out_startup_filters())) {
+      LOG_WARN("failed to pick out startup filters", K(ret));
     } else if (OB_FAIL(op->set_namespace_arr(tbl_def->namespace_arr_))) {
       LOG_WARN("fail to get ns array from table def", K(ret));
     } else if (OB_FAIL(op->set_column_param_default_arr(json_table_path->column_param_default_exprs_))) {
@@ -4231,6 +4247,8 @@ int ObLogPlan::allocate_temp_table_path(TempTablePath *temp_table_path,
       LOG_WARN("failed to assign filter exprs", K(ret));
     } else if (OB_FAIL(op->compute_property(temp_table_path))) {
       LOG_WARN("failed to compute property", K(ret));
+    } else if (OB_FAIL(op->pick_out_startup_filters())) {
+      LOG_WARN("failed to pick out startup filters", K(ret));
     } else {
       out_access_path_op = op;
     }
@@ -4261,6 +4279,8 @@ int ObLogPlan::allocate_cte_table_path(CteTablePath *cte_table_path,
       LOG_WARN("failed to set filters", K(ret));
     } else if (OB_FAIL(scan->compute_property(cte_table_path))) {
       LOG_WARN("failed to compute property", K(ret));
+    } else if (OB_FAIL(scan->pick_out_startup_filters())) {
+      LOG_WARN("failed to pick out startup filters", K(ret));
     } else {
       out_access_path_op = scan;
     }
@@ -5475,6 +5495,8 @@ int ObLogPlan::allocate_subquery_path(SubQueryPath *subpath,
       LOG_WARN("failed to append pushdown filters", K(ret));
     } else if (OB_FAIL(subplan_scan->compute_property(subpath))) {
       LOG_WARN("failed to compute property", K(ret));
+    } else if (OB_FAIL(subplan_scan->pick_out_startup_filters())) {
+      LOG_WARN("failed to pick out startup filters", K(ret));
     } else {
       out_subquery_path_op = subplan_scan;
     }
@@ -6131,6 +6153,16 @@ int ObLogPlan::prepare_three_stage_info(const ObIArray<ObRawExpr *> &group_by_ex
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    ObSEArray<ObRawExpr *, 4> group_rollup_exprs;
+    if (OB_FAIL(append(group_rollup_exprs, group_by_exprs))) {
+      LOG_WARN("failed to append", K(ret));
+    } else if (OB_FAIL(append(group_rollup_exprs, rollup_exprs))) {
+      LOG_WARN("failed to append", K(ret));
+    } else if (OB_FAIL(calculate_group_distinct_ndv(group_rollup_exprs, helper))) {
+      LOG_WARN("failed to calculate group distinct ndv", K(ret), K(helper));
+    }
+  }
   return ret;
 }
 
@@ -6269,6 +6301,10 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
   AggregateAlgo third_aggr_algo;
   bool can_sort_opt = true;
   ObLogicalOperator *child = NULL;
+  ObThreeStageAggrInfo three_stage_info;
+  double aggr_code_ndv = helper.non_distinct_aggr_items_.empty() ?
+                         helper.distinct_aggr_batch_.count() :
+                         helper.distinct_aggr_batch_.count() + 1;
 
   // 1. prepare to allocate the first group by
   if (OB_ISNULL(top)) {
@@ -6279,6 +6315,10 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
              OB_FAIL(first_group_by_exprs.push_back(helper.aggr_code_expr_)) ||
              OB_FAIL(append(first_group_by_exprs, helper.distinct_params_))) {
     LOG_WARN("failed to construct first group by exprs", K(ret));
+  } else if (OB_FAIL(three_stage_info.set_first_stage_info(helper.aggr_code_expr_,
+                                                           helper.distinct_aggr_batch_,
+                                                           aggr_code_ndv))) {
+    LOG_WARN("failed to set first stage info");
   } else if (OB_FAIL(allocate_group_by_as_top(top,
                                               HASH_AGGREGATE,
                                               first_group_by_exprs,
@@ -6289,15 +6329,15 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
                                               helper.group_distinct_ndv_,
                                               top->get_card(),
                                               false,
-                                              true))) {
+                                              true,
+                                              false,
+                                              ObRollupStatus::NONE_ROLLUP,
+                                              &three_stage_info))) {
     LOG_WARN("failed to allocate group by as top", K(ret));
   } else if (OB_UNLIKELY(LOG_GROUP_BY != top->get_type()) ||
              OB_ISNULL(first_group_by = static_cast<ObLogGroupBy *>(top))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("first group by is invalid", K(ret), KP(top));
-  } else if (OB_FAIL(first_group_by->set_first_stage_info(helper.aggr_code_expr_,
-                                                          helper.distinct_aggr_batch_))) {
-    LOG_WARN("failed to set first stage info", K(ret));
   }
 
   // 2. prepare to allocate the second group by
@@ -6367,6 +6407,10 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
                                                   0,
                                                   top->get_is_local_order()))) {
       LOG_WARN("failed to allocate sort and exchange as top", K(ret));
+    } else if (OB_FAIL(three_stage_info.set_second_stage_info(helper.aggr_code_expr_,
+                                                              helper.distinct_aggr_batch_,
+                                                              helper.distinct_params_))) {
+      LOG_WARN("failed to set second stage info");
     } else if (OB_FAIL(allocate_group_by_as_top(top,
                                                 second_aggr_algo,
                                                 second_group_by_exprs,
@@ -6374,21 +6418,18 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
                                                 second_aggr_items,
                                                 dummy_exprs,
                                                 false,
-                                                helper.group_ndv_ * helper.distinct_aggr_items_.count(),
+                                                helper.group_ndv_ * aggr_code_ndv,
                                                 top->get_card(),
                                                 false,
                                                 true,
                                                 false,
-                                                second_rollup_status))) {
+                                                second_rollup_status,
+                                                &three_stage_info))) {
       LOG_WARN("failed to allocate group by as top", K(ret));
     } else if (OB_UNLIKELY(LOG_GROUP_BY != top->get_type()) ||
                OB_ISNULL(second_group_by = static_cast<ObLogGroupBy *>(top))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("second group by is invalid", K(ret), KP(top));
-    } else if (OB_FAIL(second_group_by->set_second_stage_info(helper.aggr_code_expr_,
-                                                              helper.distinct_aggr_batch_,
-                                                              helper.distinct_params_))) {
-      LOG_WARN("failed to set aggr info", K(ret));
     } else if (OB_FAIL(second_group_by->set_rollup_info(second_rollup_status,
                                                         helper.rollup_id_expr_,
                                                         rd_second_sort_keys,
@@ -6448,6 +6489,9 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
                                                   0,
                                                   top->get_is_local_order()))) {
       LOG_WARN("failed to allocate sort and exchange as top", K(ret));
+    } else if (OB_FAIL(three_stage_info.set_third_stage_info(helper.aggr_code_expr_,
+                                                             helper.distinct_aggr_batch_))) {
+      LOG_WARN("failed to set third stage info");
     } else if (OB_FAIL(allocate_group_by_as_top(top,
                                                 third_aggr_algo,
                                                 third_group_by_exprs,
@@ -6460,15 +6504,13 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
                                                 false,
                                                 false,
                                                 false,
-                                                third_rollup_status))) {
+                                                third_rollup_status,
+                                                &three_stage_info))) {
       LOG_WARN("failed to allocate group by as top", K(ret));
     } else if (OB_UNLIKELY(LOG_GROUP_BY != top->get_type()) ||
                OB_ISNULL(third_group_by = static_cast<ObLogGroupBy *>(top))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("second group by is invalid", K(ret), KP(top));
-    } else if (OB_FAIL(third_group_by->set_third_stage_info(helper.aggr_code_expr_,
-                                                            helper.distinct_aggr_batch_))) {
-      LOG_WARN("failed to set aggr info", K(ret));
     } else if (OB_FAIL(third_group_by->set_rollup_info(third_rollup_status,
                                                        helper.rollup_id_expr_))) {
       LOG_WARN("failed to set rollup parallel info", K(ret));
@@ -6880,32 +6922,50 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
       LOG_WARN("failed to calculate distinct", K(ret));
     } else { /* do nothing */ }
   }
+  LOG_TRACE("succeed to check whether aggr can be pushed", K(groupby_helper));
+  return ret;
+}
 
-  if (OB_SUCC(ret) && groupby_helper.can_three_stage_pushdown_) {
-    double total_ndv = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < groupby_helper.distinct_aggr_items_.count(); ++i) {
-      ObSEArray<ObRawExpr*, 8> group_distinct_exprs;
-      ObAggFunRawExpr *aggr = NULL;
-      double ndv = 0;
-      if (OB_ISNULL(aggr = groupby_helper.distinct_aggr_items_.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("distinct aggr item is null", K(ret));
-      } else if (OB_FAIL(append(group_distinct_exprs, group_rollup_exprs)) ||
-                 OB_FAIL(append(group_distinct_exprs, aggr->get_real_param_exprs()))) {
-        LOG_WARN("failed to append group distinct exprs", K(ret));
-      } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(get_update_table_metas(),
-                                                              get_selectivity_ctx(),
-                                                              group_distinct_exprs,
-                                                              best_plan->get_card(),
-                                                              ndv))) {
-        LOG_WARN("failed to calculate distinct", K(ret));
-      } else {
-        total_ndv += ndv;
+int ObLogPlan::calculate_group_distinct_ndv(const ObIArray<ObRawExpr*> &groupby_rollup_exprs, GroupingOpHelper &groupby_helper)
+{
+  int ret = OB_SUCCESS;
+  double total_ndv = 0;
+  ObLogicalOperator *best_plan = NULL;
+  if (OB_FAIL(candidates_.get_best_plan(best_plan))) {
+    LOG_WARN("failed to get best plan", K(ret));
+  } else if (OB_ISNULL(best_plan)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else {
+    get_selectivity_ctx().init_op_ctx(&best_plan->get_output_equal_sets(), best_plan->get_card());
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < groupby_helper.distinct_aggr_batch_.count(); ++i) {
+    ObSEArray<ObRawExpr*, 8> group_distinct_exprs;
+    ObDistinctAggrBatch &distinct_aggr_batch = groupby_helper.distinct_aggr_batch_.at(i);
+    double ndv = 0;
+    for (int64_t j = 0; OB_SUCC(ret) && j < distinct_aggr_batch.mocked_params_.count(); j ++) {
+      if (OB_FAIL(group_distinct_exprs.push_back(distinct_aggr_batch.mocked_params_.at(j).first))) {
+        LOG_WARN("Failed to push back exprs", K(ret));
       }
     }
-    groupby_helper.group_distinct_ndv_ = total_ndv;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(append(group_distinct_exprs, groupby_rollup_exprs))) {
+      LOG_WARN("failed to append group distinct exprs", K(ret));
+    } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(get_update_table_metas(),
+                                                            get_selectivity_ctx(),
+                                                            group_distinct_exprs,
+                                                            get_selectivity_ctx().get_current_rows(),
+                                                            ndv))) {
+      LOG_WARN("failed to calculate distinct", K(ret));
+    } else {
+      total_ndv += ndv;
+    }
   }
-  LOG_TRACE("succeed to check whether aggr can be pushed", K(groupby_helper));
+  if (OB_SUCC(ret) && !groupby_helper.non_distinct_aggr_items_.empty()) {
+    total_ndv += groupby_helper.group_ndv_;
+  }
+  groupby_helper.group_distinct_ndv_ = total_ndv;
+  LOG_TRACE("succeed to calculate group distinct ndv for three stage", K(groupby_helper));
   return ret;
 }
 
@@ -8192,7 +8252,8 @@ int ObLogPlan::allocate_group_by_as_top(ObLogicalOperator *&top,
                                         const bool is_partition_wise,
                                         const bool is_push_down,
                                         const bool is_partition_gi,
-                                        const ObRollupStatus rollup_status)
+                                        const ObRollupStatus rollup_status,
+                                        const ObThreeStageAggrInfo *three_stage_info)
 {
   int ret = OB_SUCCESS;
   ObLogGroupBy *group_by = NULL;
@@ -8224,6 +8285,9 @@ int ObLogPlan::allocate_group_by_as_top(ObLogicalOperator *&top,
       LOG_WARN("failed to set aggregation exprs", K(ret));
     } else if (OB_FAIL(group_by->get_filter_exprs().assign(having_exprs))) {
       LOG_WARN("failed to set filter exprs", K(ret));
+    } else if (NULL != three_stage_info &&
+               OB_FAIL(group_by->set_three_stage_info(*three_stage_info))) {
+      LOG_WARN("failed to set three stage info", K(ret));
     } else if (OB_FAIL(group_by->compute_property())) {
       LOG_WARN("failed to compute property", K(ret));
     } else {
@@ -14216,6 +14280,8 @@ int ObLogPlan::do_alloc_values_table_path(ValuesTablePath *values_table_path,
       LOG_WARN("failed to append expr", K(ret));
     } else if (OB_FAIL(values_op->compute_property(values_table_path))) {
       LOG_WARN("failed to compute propery", K(ret));
+    } else if (OB_FAIL(values_op->pick_out_startup_filters())) {
+      LOG_WARN("failed to pick out startup filters", K(ret));
     }
   }
   return ret;
@@ -14257,6 +14323,8 @@ int ObLogPlan::do_alloc_values_table_path(ValuesTablePath *values_table_path,
       LOG_WARN("failed to append expr", K(ret));
     } else if (OB_FAIL(values_op->compute_property(values_table_path))) {
       LOG_WARN("failed to compute propery", K(ret));
+    } else if (OB_FAIL(values_op->pick_out_startup_filters())) {
+      LOG_WARN("failed to pick out startup filters", K(ret));
     }
   }
   return ret;

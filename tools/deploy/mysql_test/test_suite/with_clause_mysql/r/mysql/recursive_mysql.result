@@ -1588,16 +1588,16 @@ with RECURSIVE cte (a,b,c) as  (     select id, name, leaderid from emp where em
 | a    | b    | c    |
 +------+------+------+
 |    1 | A    |    0 |
-|    3 | AB   |    1 |
 |    2 | AA   |    1 |
-|    6 | ABB  |    3 |
-|    5 | AAA  |    2 |
+|    3 | AB   |    1 |
 |    4 | ABA  |    3 |
-|   12 | AAAA |    5 |
-|   11 | AAAC |    5 |
-|   10 | AAAB |    5 |
-|    9 | AAAA |    5 |
+|    5 | AAA  |    2 |
+|    6 | ABB  |    3 |
 |    7 | AAA  |    5 |
+|    9 | AAAA |    5 |
+|   10 | AAAB |    5 |
+|   11 | AAAC |    5 |
+|   12 | AAAA |    5 |
 |    8 | AAA  |    7 |
 +------+------+------+
 
@@ -1611,12 +1611,12 @@ select * from cte;
 | id   | val  | lev  |
 +------+------+------+
 |    1 | A    |    0 |
-|    4 | D    |    1 |
-|    3 | C    |    1 |
 |    2 | B    |    1 |
-|    7 | G    |    2 |
-|    6 | F    |    2 |
+|    3 | C    |    1 |
+|    4 | D    |    1 |
 |    5 | E    |    2 |
+|    6 | F    |    2 |
+|    7 | G    |    2 |
 |    8 | H    |    3 |
 +------+------+------+
 
@@ -1641,16 +1641,16 @@ select * from cte;
 | a    | b    | c    |
 +------+------+------+
 |    1 | A    |    0 |
-|    3 | AB   |    1 |
 |    2 | AA   |    1 |
-|    6 | ABB  |    3 |
-|    5 | AAA  |    2 |
+|    3 | AB   |    1 |
 |    4 | ABA  |    3 |
-|   12 | AAAA |    5 |
-|   11 | AAAC |    5 |
-|   10 | AAAB |    5 |
-|    9 | AAAA |    5 |
+|    5 | AAA  |    2 |
+|    6 | ABB  |    3 |
 |    7 | AAA  |    5 |
+|    9 | AAAA |    5 |
+|   10 | AAAB |    5 |
+|   11 | AAAC |    5 |
+|   12 | AAAA |    5 |
 |    8 | AAA  |    7 |
 +------+------+------+
 
@@ -1807,86 +1807,86 @@ select cte3.a+1,cte3.b+1,cte3.c+1 from cte3, cte2 where cte2.a < 3 and cte3.a < 
 SELECT cte1.a, cte1.b FROM cte1 JOIN cte3
 on cte1.a < cte3.c;
 Query Plan
-===========================================
-|ID|OPERATOR                         |NAME|
--------------------------------------------
-|0 |NESTED-LOOP JOIN                 |    |
-|1 |├─SUBPLAN SCAN                   |cte3|
-|2 |│ └─RECURSIVE UNION ALL          |    |
-|3 |│   ├─RECURSIVE UNION ALL        |    |
-|4 |│   │ ├─RECURSIVE UNION ALL      |    |
-|5 |│   │ │ ├─EXPRESSION             |    |
-|6 |│   │ │ └─TABLE FULL SCAN        |cte1|
-|7 |│   │ └─TABLE FULL SCAN          |cte2|
-|8 |│   └─NESTED-LOOP JOIN           |    |
-|9 |│     ├─TABLE FULL SCAN          |cte3|
-|10|│     └─MATERIAL                 |    |
-|11|│       └─SUBPLAN SCAN           |cte2|
-|12|│         └─RECURSIVE UNION ALL  |    |
-|13|│           ├─RECURSIVE UNION ALL|    |
-|14|│           │ ├─EXPRESSION       |    |
-|15|│           │ └─TABLE FULL SCAN  |cte1|
-|16|│           └─TABLE FULL SCAN    |cte2|
-|17|└─MATERIAL                       |    |
-|18|  └─SUBPLAN SCAN                 |cte1|
-|19|    └─RECURSIVE UNION ALL        |    |
-|20|      ├─EXPRESSION               |    |
-|21|      └─TABLE FULL SCAN          |cte1|
-===========================================
+=============================================
+|ID|OPERATOR                           |NAME|
+---------------------------------------------
+|0 |NESTED-LOOP JOIN                   |    |
+|1 |├─SUBPLAN SCAN                     |cte1|
+|2 |│ └─RECURSIVE UNION ALL            |    |
+|3 |│   ├─EXPRESSION                   |    |
+|4 |│   └─TABLE FULL SCAN              |cte1|
+|5 |└─MATERIAL                         |    |
+|6 |  └─SUBPLAN SCAN                   |cte3|
+|7 |    └─RECURSIVE UNION ALL          |    |
+|8 |      ├─RECURSIVE UNION ALL        |    |
+|9 |      │ ├─RECURSIVE UNION ALL      |    |
+|10|      │ │ ├─EXPRESSION             |    |
+|11|      │ │ └─TABLE FULL SCAN        |cte1|
+|12|      │ └─TABLE FULL SCAN          |cte2|
+|13|      └─NESTED-LOOP JOIN           |    |
+|14|        ├─TABLE FULL SCAN          |cte3|
+|15|        └─MATERIAL                 |    |
+|16|          └─SUBPLAN SCAN           |cte2|
+|17|            └─RECURSIVE UNION ALL  |    |
+|18|              ├─RECURSIVE UNION ALL|    |
+|19|              │ ├─EXPRESSION       |    |
+|20|              │ └─TABLE FULL SCAN  |cte1|
+|21|              └─TABLE FULL SCAN    |cte2|
+=============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cte1.a], [cte1.b]), filter(nil), rowset=256
+  0 - output([cte1.a], [cte1.b]), filter(nil), rowset=16
       conds([cte1.a < cte3.c]), nl_params_(nil), use_batch=false
-  1 - output([cte3.c]), filter(nil), rowset=256
-      access([cte3.c])
-  2 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  3 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  4 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  5 - output([1], [1], [1]), filter(nil)
+  1 - output([cte1.a], [cte1.b]), filter(nil), rowset=16
+      access([cte1.a], [cte1.b])
+  2 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  3 - output([1], [1], [1]), filter(nil)
       values({1, 1, 1})
-  6 - output([column_conv(BIGINT,PS:(1,0),NULL,cte1.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.c + 
-      1)]), filter([cte1.a < 10]), rowset=256
+  4 - output([column_conv(BIGINT,PS:(1,0),NULL,cte1.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.c + 
+      1)]), filter([cte1.a < 10]), rowset=16
       access([cte1.a], [cte1.b], [cte1.c])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key(nil), range(MIN ; MAX)
-  7 - output([column_conv(BIGINT,PS:(1,0),NULL,cte2.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte2.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte2.c + 
-      1)]), filter([cte2.a < 10]), rowset=256
+  5 - output([cte3.c]), filter(nil), rowset=16
+  6 - output([cte3.c]), filter(nil), rowset=16
+      access([cte3.c])
+  7 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  8 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+  9 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+ 10 - output([1], [1], [1]), filter(nil)
+      values({1, 1, 1})
+ 11 - output([column_conv(BIGINT,PS:(1,0),NULL,cte1.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.c + 
+      1)]), filter([cte1.a < 10]), rowset=16
+      access([cte1.a], [cte1.b], [cte1.c])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key(nil), range(MIN ; MAX)
+ 12 - output([column_conv(BIGINT,PS:(1,0),NULL,cte2.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte2.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte2.c + 
+      1)]), filter([cte2.a < 10]), rowset=16
       access([cte2.a], [cte2.b], [cte2.c])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key(nil), range(MIN ; MAX)
-  8 - output([column_conv(BIGINT,PS:(1,0),NULL,cte3.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte3.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte3.c + 
-      1)]), filter(nil), rowset=256
+ 13 - output([column_conv(BIGINT,PS:(1,0),NULL,cte3.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte3.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte3.c + 
+      1)]), filter(nil), rowset=16
       conds([cte3.a < cte2.b]), nl_params_(nil), use_batch=false
-  9 - output([cte3.a], [cte3.b], [cte3.c]), filter([cte3.a < 10]), rowset=256
+ 14 - output([cte3.a], [cte3.b], [cte3.c]), filter([cte3.a < 10]), rowset=16
       access([cte3.a], [cte3.b], [cte3.c])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key(nil), range(MIN ; MAX)
- 10 - output([cte2.b]), filter(nil), rowset=256
- 11 - output([cte2.b]), filter([cte2.a < 3]), rowset=256
+ 15 - output([cte2.b]), filter(nil), rowset=16
+ 16 - output([cte2.b]), filter([cte2.a < 3]), rowset=16
       access([cte2.a], [cte2.b])
- 12 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
- 13 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
- 14 - output([1], [1], [1]), filter(nil)
+ 17 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+ 18 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=16
+ 19 - output([1], [1], [1]), filter(nil)
       values({1, 1, 1})
- 15 - output([column_conv(BIGINT,PS:(1,0),NULL,cte1.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.c + 
-      1)]), filter([cte1.a < 10]), rowset=256
+ 20 - output([column_conv(BIGINT,PS:(1,0),NULL,cte1.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.c + 
+      1)]), filter([cte1.a < 10]), rowset=16
       access([cte1.a], [cte1.b], [cte1.c])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key(nil), range(MIN ; MAX)
- 16 - output([column_conv(BIGINT,PS:(1,0),NULL,cte2.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte2.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte2.c + 
-      1)]), filter([cte2.a < 10]), rowset=256
+ 21 - output([column_conv(BIGINT,PS:(1,0),NULL,cte2.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte2.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte2.c + 
+      1)]), filter([cte2.a < 10]), rowset=16
       access([cte2.a], [cte2.b], [cte2.c])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key(nil), range(MIN ; MAX)
- 17 - output([cte1.a], [cte1.b]), filter(nil), rowset=256
- 18 - output([cte1.a], [cte1.b]), filter(nil), rowset=256
-      access([cte1.a], [cte1.b])
- 19 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
- 20 - output([1], [1], [1]), filter(nil)
-      values({1, 1, 1})
- 21 - output([column_conv(BIGINT,PS:(1,0),NULL,cte1.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.c + 
-      1)]), filter([cte1.a < 10]), rowset=256
-      access([cte1.a], [cte1.b], [cte1.c])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key(nil), range(MIN ; MAX)
 
@@ -1916,336 +1916,336 @@ on cte1.a < cte3.c;
 +------+------+
 |    1 |    1 |
 |    1 |    1 |
-|    2 |    2 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
 |    1 |    1 |
 |    2 |    2 |
-|    3 |    3 |
-|    1 |    1 |
 |    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
-|    1 |    1 |
 |    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
-|    1 |    1 |
 |    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
-|    6 |    6 |
-|    1 |    1 |
 |    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
-|    6 |    6 |
-|    7 |    7 |
-|    1 |    1 |
 |    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
-|    6 |    6 |
-|    7 |    7 |
-|    8 |    8 |
-|    1 |    1 |
 |    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
-|    6 |    6 |
-|    7 |    7 |
-|    8 |    8 |
-|    9 |    9 |
-|    1 |    1 |
-|    1 |    1 |
 |    2 |    2 |
-|    1 |    1 |
 |    2 |    2 |
-|    3 |    3 |
-|    1 |    1 |
 |    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
-|    1 |    1 |
 |    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
-|    1 |    1 |
 |    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
-|    6 |    6 |
-|    1 |    1 |
 |    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
-|    6 |    6 |
-|    7 |    7 |
-|    1 |    1 |
 |    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
-|    6 |    6 |
-|    7 |    7 |
-|    8 |    8 |
-|    1 |    1 |
 |    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
-|    6 |    6 |
-|    7 |    7 |
-|    8 |    8 |
-|    9 |    9 |
-|    1 |    1 |
 |    2 |    2 |
-|    1 |    1 |
 |    2 |    2 |
-|    3 |    3 |
-|    1 |    1 |
 |    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
-|    1 |    1 |
 |    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
-|    1 |    1 |
 |    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
-|    6 |    6 |
-|    1 |    1 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
 |    2 |    2 |
 |    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
-|    6 |    6 |
-|    7 |    7 |
-|    1 |    1 |
-|    2 |    2 |
 |    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
-|    6 |    6 |
-|    7 |    7 |
-|    8 |    8 |
-|    1 |    1 |
-|    2 |    2 |
 |    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
-|    6 |    6 |
-|    7 |    7 |
-|    8 |    8 |
-|    9 |    9 |
-|    1 |    1 |
-|    2 |    2 |
 |    3 |    3 |
-|    1 |    1 |
-|    2 |    2 |
 |    3 |    3 |
-|    4 |    4 |
-|    1 |    1 |
-|    2 |    2 |
 |    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
-|    1 |    1 |
-|    2 |    2 |
 |    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
-|    6 |    6 |
-|    1 |    1 |
-|    2 |    2 |
 |    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
-|    6 |    6 |
-|    7 |    7 |
-|    1 |    1 |
-|    2 |    2 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
 |    3 |    3 |
 |    4 |    4 |
-|    5 |    5 |
-|    6 |    6 |
-|    7 |    7 |
-|    8 |    8 |
-|    1 |    1 |
-|    2 |    2 |
-|    3 |    3 |
 |    4 |    4 |
-|    5 |    5 |
-|    6 |    6 |
-|    7 |    7 |
-|    8 |    8 |
-|    9 |    9 |
-|    1 |    1 |
-|    2 |    2 |
-|    3 |    3 |
 |    4 |    4 |
-|    1 |    1 |
-|    2 |    2 |
-|    3 |    3 |
 |    4 |    4 |
-|    5 |    5 |
-|    1 |    1 |
-|    2 |    2 |
-|    3 |    3 |
 |    4 |    4 |
-|    5 |    5 |
-|    6 |    6 |
-|    1 |    1 |
-|    2 |    2 |
-|    3 |    3 |
 |    4 |    4 |
-|    5 |    5 |
-|    6 |    6 |
-|    7 |    7 |
-|    1 |    1 |
-|    2 |    2 |
-|    3 |    3 |
 |    4 |    4 |
-|    5 |    5 |
-|    6 |    6 |
-|    7 |    7 |
-|    8 |    8 |
-|    1 |    1 |
-|    2 |    2 |
-|    3 |    3 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
+|    4 |    4 |
 |    4 |    4 |
 |    5 |    5 |
-|    6 |    6 |
-|    7 |    7 |
-|    8 |    8 |
-|    9 |    9 |
-|    1 |    1 |
-|    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
 |    5 |    5 |
-|    1 |    1 |
-|    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
 |    5 |    5 |
-|    6 |    6 |
-|    1 |    1 |
-|    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
 |    5 |    5 |
-|    6 |    6 |
-|    7 |    7 |
-|    1 |    1 |
-|    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
 |    5 |    5 |
-|    6 |    6 |
-|    7 |    7 |
-|    8 |    8 |
-|    1 |    1 |
-|    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
 |    5 |    5 |
 |    6 |    6 |
-|    7 |    7 |
-|    8 |    8 |
-|    9 |    9 |
-|    1 |    1 |
-|    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
 |    6 |    6 |
-|    1 |    1 |
-|    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
 |    6 |    6 |
-|    7 |    7 |
-|    1 |    1 |
-|    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
 |    6 |    6 |
-|    7 |    7 |
-|    8 |    8 |
-|    1 |    1 |
-|    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
 |    6 |    6 |
-|    7 |    7 |
-|    8 |    8 |
-|    9 |    9 |
-|    1 |    1 |
-|    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
 |    6 |    6 |
 |    7 |    7 |
-|    1 |    1 |
-|    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
-|    6 |    6 |
 |    7 |    7 |
-|    8 |    8 |
-|    1 |    1 |
-|    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
-|    6 |    6 |
 |    7 |    7 |
-|    8 |    8 |
-|    9 |    9 |
-|    1 |    1 |
-|    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
-|    6 |    6 |
+|    7 |    7 |
+|    7 |    7 |
+|    7 |    7 |
+|    7 |    7 |
+|    7 |    7 |
+|    7 |    7 |
+|    7 |    7 |
+|    7 |    7 |
+|    7 |    7 |
+|    7 |    7 |
+|    7 |    7 |
+|    7 |    7 |
+|    7 |    7 |
+|    7 |    7 |
+|    7 |    7 |
+|    7 |    7 |
+|    7 |    7 |
+|    7 |    7 |
+|    7 |    7 |
+|    7 |    7 |
+|    7 |    7 |
+|    7 |    7 |
+|    7 |    7 |
 |    7 |    7 |
 |    8 |    8 |
-|    1 |    1 |
-|    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
-|    6 |    6 |
-|    7 |    7 |
 |    8 |    8 |
-|    9 |    9 |
-|    1 |    1 |
-|    2 |    2 |
-|    3 |    3 |
-|    4 |    4 |
-|    5 |    5 |
-|    6 |    6 |
-|    7 |    7 |
+|    8 |    8 |
+|    8 |    8 |
+|    8 |    8 |
+|    8 |    8 |
+|    8 |    8 |
+|    8 |    8 |
+|    8 |    8 |
+|    8 |    8 |
+|    8 |    8 |
+|    8 |    8 |
+|    8 |    8 |
+|    8 |    8 |
+|    8 |    8 |
+|    8 |    8 |
+|    8 |    8 |
+|    8 |    8 |
 |    8 |    8 |
 |    9 |    9 |
-|    1 |    1 |
-|    1 |    1 |
+|    9 |    9 |
+|    9 |    9 |
+|    9 |    9 |
+|    9 |    9 |
+|    9 |    9 |
+|    9 |    9 |
+|    9 |    9 |
+|    9 |    9 |
+|    9 |    9 |
 +------+------+
 set ob_query_timeout = 10000000;
 
