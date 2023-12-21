@@ -396,6 +396,49 @@ int ObMLogInfo::fetch_mlog_info(ObISQLClient &sql_client, uint64_t tenant_id, ui
   return ret;
 }
 
+int ObMLogInfo::batch_fetch_mlog_ids(ObISQLClient &sql_client, uint64_t tenant_id,
+                                     uint64_t last_mlog_id, ObIArray<uint64_t> &mlog_ids,
+                                     int64_t limit)
+{
+  int ret = OB_SUCCESS;
+  mlog_ids.reset();
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+  SMART_VAR(ObMySQLProxy::MySQLResult, res)
+  {
+    ObMySQLResult *result = nullptr;
+    ObSqlString sql;
+    uint64_t mlog_id = OB_INVALID_ID;
+    if (OB_FAIL(sql.assign_fmt("SELECT mlog_id FROM %s WHERE tenant_id = 0", OB_ALL_MLOG_TNAME))) {
+      LOG_WARN("fail to assign sql", KR(ret));
+    } else if (OB_INVALID_ID != last_mlog_id &&
+               OB_FAIL(sql.append_fmt(" and mlog_id > %ld", last_mlog_id))) {
+      LOG_WARN("fail to append sql", KR(ret));
+    } else if (OB_FAIL(sql.append(" order by mlog_id"))) {
+      LOG_WARN("fail to append sql", KR(ret));
+    } else if (limit > 0 && OB_FAIL(sql.append_fmt(" limit %ld", limit))) {
+      LOG_WARN("fail to append sql", KR(ret));
+    } else if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("execute sql failed", KR(ret), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result is null", KR(ret));
+    }
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(result->next())) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("fail to get next", KR(ret));
+        } else {
+          ret = OB_SUCCESS;
+          break;
+        }
+      }
+      EXTRACT_INT_FIELD_MYSQL(*result, "mlog_id", mlog_id, uint64_t);
+      OZ(mlog_ids.push_back(mlog_id));
+    }
+  }
+  return ret;
+}
+
 } // namespace schema
 } // namespace share
 } // namespace oceanbase

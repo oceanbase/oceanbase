@@ -105,6 +105,7 @@ public:
   template <typename Fn> int for_each(Fn &fn) { return tenant_snapshot_map_.for_each(fn); }
   template <typename Fn> int remove_if(Fn &fn) { return tenant_snapshot_map_.remove_if(fn); }
 
+  int get_tenant_snapshot_cnt(int64_t& cnt);
 private:
   int create_tenant_snapshot_(const share::ObTenantSnapshotID &tenant_snapshot_id,
                               ObTenantSnapshot *&tenant_snapshot);

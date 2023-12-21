@@ -34,7 +34,8 @@ static constexpr int64_t DEFAULT_IO_WAIT_TIME_MS = 5000L; // 5s
 static constexpr int64_t MAX_IO_WAIT_TIME_MS = 300L * 1000L; // 5min
 static constexpr int64_t GROUP_START_NUM = 8L;
 static constexpr int64_t DEFAULT_IO_WAIT_TIME_US = 5000L * 1000L; // 5s
-static constexpr int64_t MAX_DETECT_READ_TIMES = 10L;
+static constexpr int64_t MAX_DETECT_READ_WARN_TIMES = 10L;
+static constexpr int64_t MAX_DETECT_READ_ERROR_TIMES = 100L;
 enum class ObIOMode : uint8_t
 {
   READ = 0,

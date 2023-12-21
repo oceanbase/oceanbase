@@ -41,7 +41,7 @@ public:
   int init(int64_t res_len, ObIAllocator *allocator = NULL);
   int init_with_batch_idx(int64_t res_len, int64_t batch_idx);
   void set_result();
-
+  void set_result_null();
 private:
   char * buff_alloc (const int64_t size);
 

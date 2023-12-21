@@ -3716,18 +3716,18 @@ int ObPLExecState::check_pl_execute_priv(ObSchemaGetterGuard &guard,
                               user_info));
       CK (user_info != NULL);
       OX (obj_owner_id = user_info->get_user_id());
+      OZ (ObOraSysChecker::check_ora_obj_priv(guard,
+                          obj_tenant_id,
+                          user_id,
+                          database_name,
+                          obj_id,
+                          OBJ_LEVEL_FOR_TAB_PRIV,
+                          static_cast<uint64_t>(object_type),
+                          OBJ_PRIV_ID_EXECUTE,
+                          CHECK_FLAG_NORMAL,
+                          obj_owner_id,
+                          role_id_array));
     }
-    OZ (ObOraSysChecker::check_ora_obj_priv(guard,
-                        obj_tenant_id,
-                        user_id,
-                        database_name,
-                        obj_id,
-                        OBJ_LEVEL_FOR_TAB_PRIV,
-                        static_cast<uint64_t>(object_type),
-                        OBJ_PRIV_ID_EXECUTE,
-                        CHECK_FLAG_NORMAL,
-                        obj_owner_id,
-                        role_id_array));
     if (ROUTINE_SCHEMA == schema_type && ret == OB_TABLE_NOT_EXIST) {
       ret = OB_WRONG_COLUMN_NAME;
     }

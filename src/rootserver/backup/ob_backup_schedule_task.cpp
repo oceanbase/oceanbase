@@ -971,5 +971,41 @@ int ObBackupDataLSMetaTask::execute(obrpc::ObSrvRpcProxy &rpc_proxy) const
   return ret;
 }
 
+int ObBackupDataLSMetaFinishTask::clone(void *input_ptr, ObBackupScheduleTask *&out_task) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(input_ptr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(input_ptr));
+  } else {
+    ObBackupDataLSMetaFinishTask *my_task = new (input_ptr) ObBackupDataLSMetaFinishTask();
+    if (OB_ISNULL(my_task)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("taks is nullptr", K(ret));
+    } else if (OB_FAIL(my_task->ObBackupDataBaseTask::deep_copy(*this))) {
+      LOG_WARN("fail to deep copy base task", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      out_task = my_task;
+    } else if (OB_NOT_NULL(my_task)) {
+      my_task->~ObBackupDataLSMetaFinishTask();
+      my_task = nullptr;
+    }
+  }
+  return ret;
+}
+
+int64_t ObBackupDataLSMetaFinishTask::get_deep_copy_size() const
+{
+  return sizeof(ObBackupDataLSMetaFinishTask);
+}
+
+int ObBackupDataLSMetaFinishTask::execute(obrpc::ObSrvRpcProxy &rpc_proxy) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(rpc_proxy);
+  return ret;
+}
+
 }  // namespace rootserver
 }  // namespace oceanbase

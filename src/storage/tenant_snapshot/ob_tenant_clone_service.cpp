@@ -301,7 +301,11 @@ void ObTenantCloneService::handle_copy_all_tablet_meta_(const ObCloneJob& job,
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+
+  uint64_t source_tenant_id = OB_INVALID_TENANT_ID;
+  ObTenantSnapshotID tenant_snapshot_id;
   ObLSID ls_id;
+
   blocksstable::MacroBlockId tablet_meta_entry;
   bool has_inc_clone_ref = false;
 
@@ -315,45 +319,48 @@ void ObTenantCloneService::handle_copy_all_tablet_meta_(const ObCloneJob& job,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls tablet count is not zero", KR(ret), KPC(ls), KPC(ls->get_tablet_svr()));
   } else {
+    source_tenant_id = job.get_source_tenant_id();
+    tenant_snapshot_id = job.get_tenant_snapshot_id();
     ls_id = ls->get_ls_id();
   }
 
   if (OB_SUCC(ret)) {
     MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
-    if (OB_FAIL(guard.switch_to(job.get_source_tenant_id(), false))) {
-      LOG_WARN("fail to switch to tenant", KR(ret), K(job.get_source_tenant_id()));
-    } else if (OB_FAIL(MTL(ObTenantSnapshotService*)->start_clone(job.get_tenant_snapshot_id(),
+    if (OB_FAIL(guard.switch_to(source_tenant_id, false))) {
+      LOG_WARN("fail to switch to tenant",
+          KR(ret), K(source_tenant_id), K(tenant_snapshot_id), K(ls_id));
+    } else if (OB_FAIL(MTL(ObTenantSnapshotService*)->start_clone(tenant_snapshot_id,
                                                                   ls_id,
                                                                   tablet_meta_entry))) {
-      LOG_WARN("fail to start_clone",
-          KR(ret), K(job.get_source_tenant_id()), K(job.get_tenant_snapshot_id()), K(ls_id));
+      LOG_WARN("fail to start_clone", KR(ret), K(source_tenant_id), K(tenant_snapshot_id), K(ls_id));
     } else {
       has_inc_clone_ref = true;
       FLOG_INFO("inc snapshot clone ref succ",
-          K(job.get_source_tenant_id()), K(job.get_tenant_snapshot_id()), K(ls_id), K(tablet_meta_entry));
+          K(source_tenant_id), K(tenant_snapshot_id), K(ls_id));
     }
   }
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(meta_handler_->create_all_tablet(&startup_accel_handler_, tablet_meta_entry))) {
       LOG_WARN("fail to create_all_tablet",
-          KR(ret), K(job.get_source_tenant_id()), K(job.get_tenant_snapshot_id()), K(ls_id), K(tablet_meta_entry));
+          KR(ret), K(source_tenant_id), K(tenant_snapshot_id), K(ls_id), K(tablet_meta_entry));
     } else {
       FLOG_INFO("create_all_tablet succ",
-        K(job.get_source_tenant_id()), K(job.get_tenant_snapshot_id()), K(ls_id), K(tablet_meta_entry));
+          K(source_tenant_id), K(tenant_snapshot_id), K(ls_id), K(tablet_meta_entry));
     }
   }
 
   if (has_inc_clone_ref) {
     MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
     if (OB_TMP_FAIL(guard.switch_to(job.get_source_tenant_id(), false))) {
-      LOG_ERROR("fail to switch to tenant", KR(ret), K(job.get_source_tenant_id()));
+      LOG_WARN("fail to switch to tenant",
+          KR(ret), K(source_tenant_id), K(tenant_snapshot_id), K(ls_id), K(tablet_meta_entry));
     } else if (OB_TMP_FAIL(MTL(ObTenantSnapshotService*)->end_clone(job.get_tenant_snapshot_id()))) {
-      LOG_ERROR("fail to end_clone",
-          KR(ret), K(job.get_source_tenant_id()), K(job.get_tenant_snapshot_id()), K(ls_id), K(tablet_meta_entry));
+      LOG_WARN("fail to end_clone",
+          KR(ret), K(source_tenant_id), K(tenant_snapshot_id), K(ls_id), K(tablet_meta_entry));
     } else {
       FLOG_INFO("dec snapshot clone ref succ",
-          K(job.get_source_tenant_id()), K(job.get_tenant_snapshot_id()), K(ls_id), K(tablet_meta_entry));
+          K(source_tenant_id), K(tenant_snapshot_id), K(ls_id), K(tablet_meta_entry));
     }
   }
 
@@ -361,10 +368,10 @@ void ObTenantCloneService::handle_copy_all_tablet_meta_(const ObCloneJob& job,
     next_status = ObLSRestoreStatus::Status::CLONE_COPY_LS_META;
     next_loop = true;
     FLOG_INFO("handle_copy_all_tablet_meta_ succ",
-        K(job.get_source_tenant_id()), K(job.get_tenant_snapshot_id()), K(ls_id), K(tablet_meta_entry));
+        K(source_tenant_id), K(tenant_snapshot_id), K(ls_id), K(tablet_meta_entry));
   } else if (OB_EAGAIN == ret) {
     FLOG_INFO("handle_copy_all_tablet_meta_ eagain",
-        K(job.get_source_tenant_id()), K(job.get_tenant_snapshot_id()), K(ls_id), K(tablet_meta_entry));
+        K(source_tenant_id), K(tenant_snapshot_id), K(ls_id), K(tablet_meta_entry));
   } else {
     next_status = ObLSRestoreStatus::Status::CLONE_FAILED;
     next_loop = false;

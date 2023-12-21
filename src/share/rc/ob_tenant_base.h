@@ -174,6 +174,7 @@ namespace rootserver
   class ObStandbySchemaRefreshTrigger;
   class ObTenantSnapshotScheduler;
   class ObCloneScheduler;
+  class ObMViewMaintenanceService;
 }
 namespace observer
 {
@@ -350,7 +351,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       storage::ObTenantSnapshotService*,            \
       rootserver::ObCloneScheduler*,                \
       share::ObIndexUsageInfoMgr*,                  \
-      storage::ObTabletMemtableMgrPool*             \
+      storage::ObTabletMemtableMgrPool*,            \
+      rootserver::ObMViewMaintenanceService*        \
   )
 
 

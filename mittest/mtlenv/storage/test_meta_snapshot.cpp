@@ -83,6 +83,7 @@ int TestMetaSnapshot::persist_tablet(ObTabletHandle &new_tablet_handle)
   ObTabletHandle tablet_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
   ObMacroBlockHandle macro_handle;
+  ObUpdateTabletPointerParam param;
 
   if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
     LOG_WARN("fail to get ls", K(ret), K(ls_id));
@@ -92,8 +93,10 @@ int TestMetaSnapshot::persist_tablet(ObTabletHandle &new_tablet_handle)
     LOG_WARN("fail to switch shared meta block", K(ret));
   } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(*(tablet_handle.get_obj()), new_tablet_handle))) {
     LOG_WARN("fail to persist and transform tablet", K(ret), K(tablet_handle));
-  } else if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->compare_and_swap_tablet(ObTabletMapKey(ls_id, tablet_id), tablet_handle, new_tablet_handle))) {
-    LOG_WARN("fail to cas tablet", K(ret), K(ls_id), K(tablet_id), K(tablet_handle), K(new_tablet_handle));
+  } else if (OB_FAIL(new_tablet_handle.get_obj()->get_updating_tablet_pointer_param(param))) {
+    LOG_WARN("fail to get updating tablet pointer parameters", K(ret));
+  } else if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->compare_and_swap_tablet(ObTabletMapKey(ls_id, tablet_id), tablet_handle, new_tablet_handle, param))) {
+    LOG_WARN("fail to cas tablet", K(ret), K(ls_id), K(tablet_id), K(tablet_handle), K(new_tablet_handle), K(param));
   } else if (OB_FAIL(MTL(ObTenantCheckpointSlogHandler*)->get_shared_block_reader_writer().switch_block(macro_handle))) {
     LOG_WARN("fail to switch shared meta block", K(ret));
   }

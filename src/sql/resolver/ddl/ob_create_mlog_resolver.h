@@ -55,7 +55,6 @@ protected:
 
 private:
   bool is_column_exists(ObIArray<ObString> &column_name_array, const ObString &column_name);
-  int resolve_const_expr_and_calc_value(ParseNode &node, ObObj &obj);
 
 private:
   enum ParameterEnum {

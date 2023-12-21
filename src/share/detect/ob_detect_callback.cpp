@@ -259,9 +259,12 @@ int ObSqcDetectCB::do_callback()
 int ObSingleDfoDetectCB::do_callback()
 {
   int ret = OB_SUCCESS;
-  ret = MTL(sql::dtl::ObDTLIntermResultManager*)->erase_interm_result_info(key_, false);
-  ret = ret == OB_HASH_NOT_EXIST ? OB_SUCCESS : ret;
-  LIB_LOG(WARN, "[DM] single dfo erase_interm_result_info", K(ret), K(key_), K_(trace_id));
+  int clean_ret = OB_E(EventTable::EN_ENABLE_CLEAN_INTERM_RES) OB_SUCCESS;
+  if (OB_SUCC(clean_ret)) {
+    ret = MTL(sql::dtl::ObDTLIntermResultManager*)->erase_interm_result_info(key_, false);
+    ret = ret == OB_HASH_NOT_EXIST ? OB_SUCCESS : ret;
+    LIB_LOG(WARN, "[DM] single dfo erase_interm_result_info", K(ret), K(key_), K_(trace_id));
+  }
   return ret;
 }
 

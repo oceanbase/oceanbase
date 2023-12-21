@@ -13,6 +13,7 @@
 #pragma once
 
 #include "lib/ob_define.h"
+#include "sql/parser/parse_node.h"
 
 namespace oceanbase
 {
@@ -34,6 +35,7 @@ class ObString;
 }
 namespace sql
 {
+class ObResolverParams;
 class ObSQLSessionInfo;
 }
 namespace dbms_scheduler
@@ -84,16 +86,19 @@ public:
                                     const uint64_t tenant_id,
                                     const uint64_t table_id);
 
-  static int calc_date_expression_from_str(sql::ObSQLSessionInfo &session,
+  static int calc_date_expr_from_str(sql::ObSQLSessionInfo &session,
                                            common::ObIAllocator &allocator,
                                            const uint64_t tenant_id,
                                            const ObString &date_str,
-                                           common::ObObj &date_obj);
-  static int convert_session_date_to_utc(sql::ObSQLSessionInfo *session_info,
-                                         const common::ObObj &in_obj,
-                                         common::ObObj &out_obj);
+                                           int64_t &timestamp);
   static int calc_date_expression(dbms_scheduler::ObDBMSSchedJobInfo &job_info,
-                                  int64_t &next_date_utc_ts);
+                                  int64_t &next_date_ts);
+
+  static int resolve_date_expr_to_timestamp(sql::ObResolverParams &params,
+                                            sql::ObSQLSessionInfo &session,
+                                            const ParseNode &node,
+                                            common::ObIAllocator &allocator,
+                                            int64_t &timestamp);
 
 public:
   static constexpr int64_t JOB_ID_OFFSET = 1000000L;

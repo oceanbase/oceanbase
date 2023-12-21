@@ -1,3 +1,15 @@
+/**
+ * Copyright (c) 2023 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
 #include <gtest/gtest.h>
 #define private public
 #define protected public
@@ -144,12 +156,6 @@ TEST_F(TestCgSSTable, test_cg_index_tree_cursor)
     cg_rowkey[0].set_int(i);
     OK(tree_cursor.pull_up_to_root());
     OK(tree_cursor.drill_down(rowkey, ObIndexBlockTreeCursor::MoveDepth::LEAF, true, equal, is_beyond_range));
-    // {
-    //   STORAGE_LOG(INFO, "zhuixin debug", K(i), KPC(tree_cursor.curr_path_item_));
-    //   OK(tree_cursor.get_idx_parser(parser));
-    //   OK(tree_cursor.get_current_endkey(endkey));
-    //   STORAGE_LOG(INFO, "zhuixin debug", KPC(parser), K(endkey), K(is_beyond_range));
-    // }
     ASSERT_FALSE(is_beyond_range);
     if (is_macro_start) {
       OK(tree_cursor.get_current_endkey(endkey));

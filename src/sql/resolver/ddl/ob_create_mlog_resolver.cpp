@@ -619,90 +619,53 @@ int ObCreateMLogResolver::resolve_purge_node(
   return ret;
 }
 
-int ObCreateMLogResolver::resolve_const_expr_and_calc_value(ParseNode &node, ObObj &obj)
-{
-  int ret = OB_SUCCESS;
-  ObRawExpr *const_expr = nullptr;
-  ParamStore params_array;
-  if (OB_FAIL(ObResolverUtils::resolve_const_expr(params_, node, const_expr, nullptr))) {
-    LOG_WARN("failed to resolve const expr", KR(ret));
-  } else if (OB_FAIL(ObSQLUtils::calc_const_expr(session_info_, *const_expr, obj, *allocator_, params_array))) {
-    LOG_WARN("failed to calc const expr", KR(ret));
-  }
-  return ret;
-}
-
 int ObCreateMLogResolver::resolve_purge_start_next_node(
     ParseNode *purge_start_node,
     ParseNode *purge_next_node,
     ObCreateMLogStmt &create_mlog_stmt)
 {
   int ret = OB_SUCCESS;
-  ObObj start_time_obj;
-  ObObj current_time_obj;
-  int64_t current_time = 0;
+  int64_t current_time = ObTimeUtility::current_time() / 1000000L * 1000000L; // ignore micro seconds
+  int64_t start_time = current_time;
   ObCreateMLogArg &create_mlog_arg = create_mlog_stmt.get_create_mlog_arg();
-  const char *current_time_expr_str = lib::is_oracle_mode() ? "current_date" : "sysdate()";
-  ObString current_time_expr(current_time_expr_str);
-  ObArenaAllocator tmp_allocator("mlog_expr");
-  if (OB_FAIL(ObMViewSchedJobUtils::calc_date_expression_from_str(
-      *session_info_, tmp_allocator, MTL_ID(), current_time_expr, current_time_obj))) {
-    LOG_WARN("failed to calc date expression from str", KR(ret), K(current_time_expr));
-  } else {
-    current_time = current_time_obj.get_timestamp();
-  }
 
-  if (OB_SUCC(ret) &&
-      OB_NOT_NULL(purge_start_node)
+  if (OB_NOT_NULL(purge_start_node)
       && (T_MLOG_PURGE_START_TIME_EXPR == purge_start_node->type_)
       && (1 == purge_start_node->num_child_)
       && OB_NOT_NULL(purge_start_node->children_)
       && OB_NOT_NULL(purge_start_node->children_[0])) {
-    ParseNode *purge_start_time_expr_node = purge_start_node->children_[0];
-    if (OB_FAIL(resolve_const_expr_and_calc_value(*purge_start_time_expr_node, start_time_obj))) {
-      LOG_WARN("failed to resolve default value", KR(ret));
+    if (OB_FAIL(ObMViewSchedJobUtils::resolve_date_expr_to_timestamp(params_,
+        *session_info_, *(purge_start_node->children_[0]), *allocator_, start_time))) {
+      LOG_WARN("failed to resolve date expr to timestamp", KR(ret));
+    } else if (start_time < current_time) {
+      ret = OB_ERR_TIME_EARLIER_THAN_SYSDATE;
+      LOG_WARN("the parameter start date must evaluate to a time in the future",
+          KR(ret), K(current_time), K(start_time));
+      LOG_USER_ERROR(OB_ERR_TIME_EARLIER_THAN_SYSDATE, "start date");
     }
   }
-  if (OB_SUCC(ret)) {
-    if (start_time_obj.is_null()) {
-      start_time_obj = current_time_obj;
-    } else {
-      int64_t start_time = start_time_obj.get_timestamp();
-      if (start_time < current_time) {
-        ret = OB_ERR_TIME_EARLIER_THAN_SYSDATE;
-        LOG_WARN("the parameter start date must evaluate to a time in the future",
-            KR(ret), K(current_time), K(start_time), K(current_time_obj), K(start_time_obj));
-        LOG_USER_ERROR(OB_ERR_TIME_EARLIER_THAN_SYSDATE, "start date");
-      }
-    }
 
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObMViewSchedJobUtils::convert_session_date_to_utc(session_info_,
-        start_time_obj, create_mlog_arg.purge_options_.start_datetime_expr_))) {
-      LOG_WARN("failed to convert session date to utc", KR(ret), K(start_time_obj));
-    } else {
-      create_mlog_stmt.set_purge_mode(ObMLogPurgeMode::DEFERRED);
-    }
+  if (OB_SUCC(ret)) {
+    create_mlog_arg.purge_options_.start_datetime_expr_.set_timestamp(start_time);
+    create_mlog_stmt.set_purge_mode(ObMLogPurgeMode::DEFERRED);
   }
 
   if (OB_SUCC(ret) && OB_NOT_NULL(purge_next_node)) {
-    ObObj next_time_obj;
-    if (OB_FAIL(resolve_const_expr_and_calc_value(*purge_next_node, next_time_obj))) {
-      LOG_WARN("failed to resolve default value", KR(ret));
+    int64_t next_time = 0;
+    if (OB_FAIL(ObMViewSchedJobUtils::resolve_date_expr_to_timestamp(params_,
+        *session_info_, *purge_next_node, *allocator_, next_time))) {
+      LOG_WARN("failed to resolve date expr to timestamp", KR(ret));
+    } else if (next_time <= current_time) {
+      ret = OB_ERR_TIME_EARLIER_THAN_SYSDATE;
+      LOG_WARN("the parameter next date must evaluate to a time in the future",
+          KR(ret), K(current_time), K(next_time));
+      LOG_USER_ERROR(OB_ERR_TIME_EARLIER_THAN_SYSDATE, "next date");
     } else {
-      int64_t next_time = next_time_obj.get_timestamp();
-      if (next_time <= current_time) {
-        ret = OB_ERR_TIME_EARLIER_THAN_SYSDATE;
-        LOG_WARN("the parameter next date must evaluate to a time in the future",
-            KR(ret), K(current_time), K(next_time), K(current_time_obj), K(next_time_obj));
-        LOG_USER_ERROR(OB_ERR_TIME_EARLIER_THAN_SYSDATE, "next date");
+      ObString next_date_str(purge_next_node->str_len_, purge_next_node->str_value_);
+      if (OB_FAIL(ob_write_string(*allocator_, next_date_str,
+          create_mlog_arg.purge_options_.next_datetime_expr_))) {
+        LOG_WARN("fail to write string", KR(ret));
       }
-    }
-    if (OB_SUCC(ret)) {
-      create_mlog_arg.purge_options_.next_datetime_expr_.assign_ptr(
-          const_cast<char *>(purge_next_node->str_value_),
-          static_cast<int32_t>(purge_next_node->str_len_));
-      create_mlog_stmt.set_purge_mode(ObMLogPurgeMode::DEFERRED);
     }
   }
   return ret;

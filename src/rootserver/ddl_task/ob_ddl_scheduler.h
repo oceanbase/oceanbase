@@ -393,6 +393,7 @@ private:
       const share::schema::ObTableSchema *dest_schema,
       const int64_t parallelism,
       const int64_t consumer_group_id,
+      const int64_t parent_task_id,
       const int64_t task_id,
       const int32_t sub_task_trace_id,
       const obrpc::ObAlterTableArg *alter_table_arg,
