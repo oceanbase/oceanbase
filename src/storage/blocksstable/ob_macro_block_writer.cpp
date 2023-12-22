@@ -1171,7 +1171,6 @@ int ObMacroBlockWriter::write_micro_block(ObMicroBlockDesc &micro_block_desc)
     }
   }
 
-  // TODO(zhuixin.gsy): ensure bloomfilter correct for index micro block
   if (OB_SUCC(ret)) {
     if (data_store_desc_->need_prebuild_bloomfilter_) {
       //if macro has micro reuse, don't build bloomfilter
@@ -1211,7 +1210,7 @@ int ObMacroBlockWriter::write_micro_block(ObMicroBlockDesc &micro_block_desc)
 int ObMacroBlockWriter::flush_macro_block(ObMacroBlock &macro_block)
 {
   int ret = OB_SUCCESS;
-  ObLogicMacroBlockId cur_logic_id; // TODO(zhuixin.gsy) rm this if DDL Rebuild Ready
+  ObLogicMacroBlockId cur_logic_id;
   cur_logic_id.logic_version_ = data_store_desc_->get_logical_version();
   cur_logic_id.data_seq_ = current_macro_seq_;
   cur_logic_id.tablet_id_ = data_store_desc_->tablet_id_.id();
