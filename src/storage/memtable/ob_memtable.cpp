@@ -36,6 +36,7 @@
 #include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/compaction/ob_compaction_diagnose.h"
 #include "storage/access/ob_rows_info.h"
+#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_trans_part_ctx.h"
@@ -102,7 +103,7 @@ ObMemtable::ObMemtable()
       is_inited_(false),
       ls_handle_(),
       freezer_(nullptr),
-      memtable_mgr_(nullptr),
+      memtable_mgr_handle_(),
       freeze_clock_(0),
       local_allocator_(*this),
       query_engine_(local_allocator_),
@@ -112,7 +113,6 @@ ObMemtable::ObMemtable()
       pending_cb_cnt_(0),
       unsubmitted_cnt_(0),
       unsynced_cnt_(0),
-      memtable_mgr_op_cnt_(0),
       logging_blocked_(false),
       logging_blocked_start_time(0),
       unset_active_memtable_logging_blocked_(false),
@@ -168,7 +168,8 @@ int ObMemtable::init(const ObITable::TableKey &table_key,
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid param", K(ret), K(table_key), KP(freezer), KP(memtable_mgr),
               K(schema_version), K(freeze_clock), K(ls_handle));
-  } else if (FALSE_IT(set_memtable_mgr(memtable_mgr))) {
+  } else if (OB_FAIL(set_memtable_mgr_(memtable_mgr))) {
+    TRANS_LOG(WARN, "fail to set memtable mgr", K(ret), KP(memtable_mgr));
   } else if (FALSE_IT(set_freeze_clock(freeze_clock))) {
   } else if (FALSE_IT(set_max_schema_version(schema_version))) {
   } else if (OB_FAIL(set_freezer(freezer))) {
@@ -254,7 +255,7 @@ void ObMemtable::destroy()
   time_guard.click();
   ls_handle_.reset();
   freezer_ = nullptr;
-  memtable_mgr_ = nullptr;
+  memtable_mgr_handle_.reset();
   freeze_clock_ = 0;
   max_schema_version_ = 0;
   max_data_schema_version_ = 0;
@@ -264,7 +265,6 @@ void ObMemtable::destroy()
   freeze_state_ = ObMemtableFreezeState::INVALID;
   unsubmitted_cnt_ = 0;
   unsynced_cnt_ = 0;
-  memtable_mgr_op_cnt_ = 0;
   logging_blocked_ = false;
   logging_blocked_start_time = 0;
   unset_active_memtable_logging_blocked_ = false;
@@ -1411,8 +1411,7 @@ int ObMemtable::dec_unsynced_cnt()
 void ObMemtable::unset_logging_blocked_for_active_memtable()
 {
   int ret = OB_SUCCESS;
-  MemtableMgrOpGuard memtable_mgr_op_guard(this);
-  storage::ObTabletMemtableMgr *memtable_mgr = memtable_mgr_op_guard.get_memtable_mgr();
+  storage::ObTabletMemtableMgr *memtable_mgr = get_memtable_mgr_();
 
   if (OB_NOT_NULL(memtable_mgr)) {
     do {
@@ -1427,8 +1426,7 @@ void ObMemtable::unset_logging_blocked_for_active_memtable()
 void ObMemtable::resolve_left_boundary_for_active_memtable()
 {
   int ret = OB_SUCCESS;
-  MemtableMgrOpGuard memtable_mgr_op_guard(this);
-  storage::ObTabletMemtableMgr *memtable_mgr = memtable_mgr_op_guard.get_memtable_mgr();
+  storage::ObTabletMemtableMgr *memtable_mgr = get_memtable_mgr_();
   const SCN new_start_scn = MAX(get_end_scn(), get_migration_clog_checkpoint_scn());
 
   if (OB_NOT_NULL(memtable_mgr)) {
@@ -1782,8 +1780,7 @@ bool ObMemtable::ready_for_flush_()
     // ensure unset all frozen memtables'logging_block
     ObTableHandleV2 handle;
     ObMemtable *first_frozen_memtable = nullptr;
-    MemtableMgrOpGuard memtable_mgr_op_guard(this);
-    storage::ObTabletMemtableMgr *memtable_mgr = memtable_mgr_op_guard.get_memtable_mgr();
+    storage::ObTabletMemtableMgr *memtable_mgr = get_memtable_mgr_();
     if (OB_ISNULL(memtable_mgr)) {
     } else if (OB_FAIL(memtable_mgr->get_first_frozen_memtable(handle))) {
       TRANS_LOG(WARN, "fail to get first_frozen_memtable", K(ret));
@@ -2952,6 +2949,18 @@ int ObMemtable::get_tx_table_guard(ObTxTableGuard &tx_table_guard)
   }
 
   return ret;
+}
+
+int ObMemtable::set_memtable_mgr_(storage::ObTabletMemtableMgr *mgr)
+{
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+  ObTenantMetaObjPool<ObTabletMemtableMgr> *pool = t3m->get_tablet_memtable_mgr_pool();
+  return memtable_mgr_handle_.set_memtable_mgr(mgr, pool);
+}
+
+storage::ObTabletMemtableMgr *ObMemtable::get_memtable_mgr_()
+{
+  return static_cast<ObTabletMemtableMgr *>(memtable_mgr_handle_.get_memtable_mgr());
 }
 
 } // namespace memtable
