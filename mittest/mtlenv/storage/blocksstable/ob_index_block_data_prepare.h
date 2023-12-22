@@ -38,10 +38,6 @@
 
 namespace oceanbase
 {
-namespace palf
-{
-class SCN;
-}
 
 using namespace common;
 using namespace compaction;

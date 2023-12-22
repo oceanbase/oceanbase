@@ -165,7 +165,7 @@ int test_gen_object_meta(
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(op.gen_object_meta(appendable_obj_meta))) {
     OB_LOG(WARN, "fail to gen object meta", K(ret), K(appendable_obj_meta));
-  } else if (ObStorageObjectType::OB_OBJ_SIMULATE_APPEND != appendable_obj_meta.type_) {
+  } else if (ObStorageObjectMetaType::OB_OBJ_SIMULATE_APPEND != appendable_obj_meta.type_) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "not expected value", K(ret), K(appendable_obj_meta.type_));
   } else if (expected_file_length != appendable_obj_meta.length_) {
@@ -355,7 +355,7 @@ TEST_F(TestObjectStorage, test_appendable_object_util)
       int64_t n_remained_fragments = sizeof(expected_start) / sizeof(int64_t);
       int64_t expected_file_length = 1234567;
       ObStorageObjectMeta appendable_obj_meta;
-      // (ObStorageObjectType::OB_OBJ_SIMULATE_APPEND);
+      // (ObStorageObjectMetaType::OB_OBJ_SIMULATE_APPEND);
       ASSERT_EQ(OB_SUCCESS, test_gen_object_meta(valid_fragments, n_fragments, n_remained_fragments,
         expected_start, expected_end, expected_file_length, appendable_obj_meta));
 
