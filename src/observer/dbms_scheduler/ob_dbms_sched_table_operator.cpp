@@ -46,6 +46,31 @@ using namespace sqlclient;
 namespace dbms_scheduler
 {
 
+int ObDBMSSchedTableOperator::update_next_date(
+  uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, int64_t next_date)
+{
+  int ret = OB_SUCCESS;
+
+  ObDMLSqlSplicer dml;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  const int64_t now = ObTimeUtility::current_time();
+
+  CK (OB_NOT_NULL(sql_proxy_));
+  CK (OB_LIKELY(tenant_id != OB_INVALID_ID));
+  CK (OB_LIKELY(job_info.job_ != OB_INVALID_ID));
+
+  OZ (dml.add_gmt_modified(now));
+  OZ (dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
+  OZ (dml.add_pk_column("job", job_info.job_));
+  OZ (dml.add_pk_column("job_name", job_info.job_name_));
+  OZ (dml.add_time_column("next_date", next_date));
+  OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
+  OZ (sql_proxy_->write(tenant_id, sql.ptr(), affected_rows));
+  return ret;
+}
+
+
 int ObDBMSSchedTableOperator::update_for_start(
   uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, int64_t next_date)
 {
@@ -377,8 +402,7 @@ int ObDBMSSchedTableOperator::get_dbms_sched_job_info(
             ret = OB_ERR_UNEXPECTED;
           }
         } else if (OB_ITER_END == ret) {
-          LOG_INFO("job not exists, may delete alreay!", K(ret), K(tenant_id), K(job_id));
-          ret = OB_SUCCESS; // job not exist, do nothing ...
+          LOG_WARN("job not exists, may delete alreay!", K(ret), K(tenant_id), K(job_id));
         } else {
           LOG_WARN("failed to get next", K(ret), K(tenant_id), K(job_id));
         }

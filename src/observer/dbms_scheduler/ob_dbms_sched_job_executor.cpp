@@ -145,9 +145,9 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
     CK (OB_LIKELY(inited_));
     CK (OB_NOT_NULL(sql_proxy_));
     CK (sql_proxy_->is_inited());
+    CK (job_info.valid());
+    CK ((job_info.get_what().length() != 0) || (job_info.get_program_name().length() != 0));
     if (OB_SUCC(ret)) {
-      CK (job_info.valid());
-      CK ((job_info.get_what().length() != 0) || (job_info.get_program_name().length() != 0));
       if (job_info.get_what().length() != 0) { // action
         if (job_info.is_oracle_tenant_) {
           OZ (what.append_fmt("BEGIN %.*s; END;",

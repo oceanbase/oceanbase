@@ -51,6 +51,9 @@ public:
 
   int init(common::ObISQLClient *sql_proxy) { sql_proxy_ = sql_proxy; return common::OB_SUCCESS; }
 
+  int update_next_date(
+    uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, int64_t next_date);
+
   int update_for_start(
     uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, int64_t next_date);
   int update_for_end(

@@ -211,7 +211,7 @@ public:
   int alloc_job_key(
     ObDBMSSchedJobKey *&job_key,
     uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id, const common::ObString &job_name);
-  int free_job_key(ObDBMSSchedJobKey *&job_key);
+  void free_job_key(ObDBMSSchedJobKey *&job_key);
   int server_random_pick(int64_t tenant_id, common::ObString &pick_zone, ObAddr &server);
   int get_execute_addr(ObDBMSSchedJobInfo &job_info, common::ObAddr &execute_addr);
 
