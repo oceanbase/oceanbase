@@ -366,7 +366,7 @@ int ObAccessPathEstimation::is_storage_estimation_enabled(const ObLogPlan* log_p
              OB_UNLIKELY(OB_INVALID_ID == table_meta->get_ref_table_id())) {
     //not basic table
   } else if (OB_FAIL(log_plan->get_stmt()->get_query_ctx()->get_global_hint().opt_params_.get_bool_opt_param(
-             ObOptParamHint::STORAGE_CARD_ESTIMATION, is_hint_enabled, has_hint))) {
+             ObOptParamHint::_ENABLE_STORAGE_CARDINALITY_ESTIMATION, is_hint_enabled, has_hint))) {
     LOG_WARN("failed to check has opt param", K(ret));
   } else if (has_hint) {
     can_use = is_hint_enabled;

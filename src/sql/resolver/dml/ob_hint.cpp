@@ -743,7 +743,7 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
                                       || 0 == val.get_varchar().case_compare("false"));
       break;
     }
-    case STORAGE_CARD_ESTIMATION: {
+    case _ENABLE_STORAGE_CARDINALITY_ESTIMATION: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
                                       || 0 == val.get_varchar().case_compare("false"));
       break;
