@@ -427,8 +427,9 @@ int ObMViewSchedJobUtils::resolve_date_expr_to_timestamp(
         timestamp = tmp_timestamp;
       }
     } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected obj type", KR(ret), K(obj));
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid datetime expression", KR(ret), K(obj));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "datetime expression");
     }
   }
   return ret;
