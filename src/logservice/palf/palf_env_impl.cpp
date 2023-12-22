@@ -436,7 +436,7 @@ int PalfEnvImpl::create_palf_handle_impl_(const int64_t palf_id,
     PalfHandleImplFactory::free(palf_handle_impl);
     palf_handle_impl = NULL;
     if (OB_ENTRY_NOT_EXIST == palf_handle_impl_map_.contains_key(hash_map_key)) {
-      remove_directory(base_dir);
+      remove_directory_while_exist_(base_dir);
     }
   }
 
@@ -560,8 +560,8 @@ int PalfEnvImpl::create_directory(const char *base_dir)
     PALF_LOG(INFO, "prepare_directory_for_creating_ls success", K(ret), K(base_dir));
   }
   if (OB_FAIL(ret)) {
-    remove_directory(tmp_base_dir);
-    remove_directory(base_dir);
+    remove_directory_while_exist_(tmp_base_dir);
+    remove_directory_while_exist_(base_dir);
   }
   return ret;
 }
@@ -585,9 +585,9 @@ int PalfEnvImpl::remove_directory(const char *log_dir)
     bool result = true;
     do {
       if (OB_FAIL(FileDirectoryUtils::is_exists(tmp_log_dir, result))) {
-        CLOG_LOG(WARN, "check directory exists failed", KPC(this), K(log_dir));
+        PALF_LOG(WARN, "check directory exists failed", KPC(this), K(log_dir));
       } else if (!result) {
-        CLOG_LOG(WARN, "directory not exists", KPC(this), K(log_dir));
+        PALF_LOG(WARN, "directory not exists", KPC(this), K(log_dir));
         break;
       } else if (OB_FAIL(remove_directory_rec(tmp_log_dir, log_block_pool_))) {
         PALF_LOG(WARN, "remove_directory_rec failed", K(tmp_log_dir), KP(log_block_pool_));
@@ -1221,6 +1221,7 @@ int PalfEnvImpl::move_incomplete_palf_into_tmp_dir_(const int64_t palf_id)
     PALF_LOG(WARN, "del palf from map failed, unexpected", K(ret),
         K(palf_id), KPC(this));;
   } else if (OB_FAIL(check_tmp_log_dir_exist_(tmp_dir_exist))) {
+    PALF_LOG(WARN, "check_tmp_log_dir_exist_ failed", K(ret), KPC(this), K(tmp_log_dir_));
   } else if (false == tmp_dir_exist && (-1 == ::mkdir(tmp_log_dir_, mode))) {
     ret = convert_sys_errno();
     PALF_LOG(ERROR, "mkdir tmp log dir failed", K(ret), KPC(this), K(tmp_log_dir_));
@@ -1388,6 +1389,20 @@ int PalfEnvImpl::check_can_update_log_disk_options_(const PalfDiskOptions &disk_
     PALF_LOG(WARN, "can not hold current palf instance", K(curr_palf_instance_num),
              K(curr_min_log_disk_size), K(disk_opts));
   }
+  return ret;
+}
+
+int PalfEnvImpl::remove_directory_while_exist_(const char *log_dir)
+{
+  int ret = OB_SUCCESS;
+  bool result = true;
+  if (OB_FAIL(FileDirectoryUtils::is_exists(log_dir, result))) {
+    PALF_LOG(WARN, "check directory exists failed", KPC(this), K(log_dir));
+  } else if (!result) {
+    PALF_LOG(WARN, "directory not exist, remove_directory success!", K(log_dir), K(result));
+  } else if (OB_FAIL(remove_directory(log_dir))) {
+    PALF_LOG(WARN, "remove_directory failed", K(log_dir), K(result));
+  } else {}
   return ret;
 }
 
