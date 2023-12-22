@@ -5330,14 +5330,14 @@ int ObTablet::rebuild_memtable(common::ObIArray<ObTableHandleV2> &handle_array)
         LOG_WARN("table must be memtable", K(ret), K(i), KPC(table));
       } else if (FALSE_IT(memtable = static_cast<memtable::ObMemtable *>(table))) {
       } else if (memtable->is_empty()) {
-        FLOG_INFO("Empty memtable discarded", KPC(memtable));
+        FLOG_INFO("Empty memtable discarded", KP(memtable));
       } else if (table->get_end_scn() < end_scn) {
       } else if (exist_memtable_with_end_scn(table, end_scn)) {
         FLOG_INFO("duplicated memtable with same end_scn discarded", KPC(table), K(end_scn));
       } else if (OB_FAIL(add_memtable(memtable))) {
         LOG_WARN("failed to add memtable to curr memtables", K(ret), KPC(this));
       } else {
-        LOG_INFO("succeed to add memtable", K(ret), KPC(memtable));
+        LOG_INFO("succeed to add memtable", K(ret), KP(memtable));
       }
     }
     LOG_DEBUG("after rebuild memtable", K(memtable_count_), K(last_idx), KP(last_memtable), K(end_scn), K(handle_array));
@@ -5367,12 +5367,12 @@ int ObTablet::rebuild_memtable(
         LOG_WARN("table must be memtable", K(ret), K(i), KPC(table));
       } else if (FALSE_IT(memtable = static_cast<memtable::ObMemtable *>(table))) {
       } else if (memtable->is_empty()) {
-        FLOG_INFO("Empty memtable discarded", K(ret), KPC(memtable));
+        FLOG_INFO("Empty memtable discarded", K(ret), KP(memtable));
       } else if (table->get_end_scn() <= clog_checkpoint_scn) {
         FLOG_INFO("memtable end scn no greater than clog checkpoint scn, should be discarded", K(ret),
             "end_scn", table->get_end_scn(), K(clog_checkpoint_scn));
       } else if (OB_FAIL(add_memtable(memtable))) {
-        LOG_WARN("failed to add memtable", K(ret), KPC(memtable));
+        LOG_WARN("failed to add memtable", K(ret), KP(memtable));
       }
     }
   }

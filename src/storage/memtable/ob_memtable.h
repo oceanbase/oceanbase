@@ -471,7 +471,7 @@ public:
   int dump2text(const char *fname);
   // TODO(handora.qc) ready_for_flush interface adjustment
   bool is_can_flush() { return ObMemtableFreezeState::READY_FOR_FLUSH == freeze_state_ && share::SCN::max_scn() != get_end_scn(); }
-  INHERIT_TO_STRING_KV("ObITable", ObITable, KP(this), K_(memtable_mgr_handle), K_(timestamp), K_(state),
+  INHERIT_TO_STRING_KV("ObITable", ObITable, KP(this), K_(timestamp), K_(state),
                        K_(freeze_clock), K_(max_schema_version), K_(max_data_schema_version), K_(max_column_cnt),
                        K_(write_ref_cnt), K_(local_allocator), K_(unsubmitted_cnt), K_(unsynced_cnt),
                        K_(logging_blocked), K_(unset_active_memtable_logging_blocked), K_(resolve_active_memtable_left_boundary),
