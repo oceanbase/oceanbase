@@ -14,6 +14,7 @@
 #include "ob_table_scan_executor.h"
 #include "ob_table_context.h"
 #include "sql/das/ob_das_utils.h"
+#include "ob_table_global_index_lookup_executor.h"
 
 namespace oceanbase
 {
@@ -49,17 +50,16 @@ int ObTableApiScanExecutor::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef,
     das_rtdef.tenant_schema_version_ = tb_ctx.get_tenant_schema_version();
     ObTableID table_loc_id = tb_ctx.get_ref_table_id();
     das_rtdef.table_loc_ = exec_ctx_.get_das_ctx().get_table_loc_by_id(table_loc_id, das_ctdef.ref_table_id_);
+    ObDASTabletLoc *tablet_loc = nullptr;
+    // in ObTableCtx: all needed table_loc has been create and add to the DasCtx
     if (OB_ISNULL(das_rtdef.table_loc_)) {
-      ObDASTabletLoc *tablet_loc = nullptr;
-      if (OB_ISNULL(loc_meta)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to get table loc by id", K(ret), K(table_loc_id), K(das_ctdef.ref_table_id_));
-      } else if (OB_FAIL(exec_ctx_.get_das_ctx().extended_table_loc(*loc_meta, das_rtdef.table_loc_))) {
-        LOG_WARN("fail to extend table loc", K(ret), KPC(loc_meta));
-      } else if (OB_FAIL(exec_ctx_.get_das_ctx().extended_tablet_loc(*das_rtdef.table_loc_,
-                                                                     tb_ctx.get_tablet_id(),
-                                                                     tablet_loc))) {
-        LOG_WARN("fail to extend tablet loc", K(ret), K(tb_ctx.get_tablet_id()));
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table_loc is NULL", K(ret), K(is_lookup), K(table_loc_id), K(das_ctdef.ref_table_id_));
+    } else if (is_lookup && !tb_ctx_.is_global_index_back()) {
+      if (OB_FAIL(exec_ctx_.get_das_ctx().extended_tablet_loc(*das_rtdef.table_loc_,
+                                                              tb_ctx_.get_tablet_id(),
+                                                              tablet_loc))) {
+        LOG_WARN("fail to extend tablet loc", K(ret), K(das_rtdef.table_loc_), K(tb_ctx_.get_tablet_id()));
       }
     }
   }
@@ -120,7 +120,7 @@ int ObTableApiScanExecutor::prepare_das_task()
     scan_op->set_scan_rtdef(&tsc_rtdef_.scan_rtdef_);
     scan_op->set_can_part_retry(false);
     tsc_rtdef_.scan_rtdef_.table_loc_->is_reading_ = true;
-    if (scan_spec_.get_ctdef().lookup_ctdef_ != nullptr) {
+    if (!tb_ctx_.is_global_index_back() && scan_spec_.get_ctdef().lookup_ctdef_ != nullptr) {
       //is local index lookup, need to set the lookup ctdef to the das scan op
       ObDASTableLoc *lookup_table_loc = tsc_rtdef_.lookup_rtdef_->table_loc_;
       ObDASTabletLoc *tablet_loc_list = tsc_rtdef_.lookup_rtdef_->table_loc_->get_first_tablet_loc();
@@ -202,13 +202,14 @@ int ObTableApiScanExecutor::get_next_row_with_das()
       } else {
         LOG_WARN("get next row from das result failed", K(ret));
       }
-    } else if (OB_FAIL(check_filter(filter))) {
+    } else if (!tb_ctx_.is_global_index_back() && OB_FAIL(check_filter(filter))) {
+      // for global index lookup, the completed row result will be gotten in the step of lookup the primary table
+      // and the scan result here is global index scan, may not include the expired column,
+      // so cannot check filter
       LOG_WARN("fail to check row filtered", K(ret));
     } else if (filter) {
       LOG_DEBUG("the row is filtered", K(ret));
     } else {
-      ++input_row_cnt_;
-      ++output_row_cnt_;
       got_row = true;
     }
   }
@@ -243,10 +244,53 @@ int ObTableApiScanExecutor::open()
   } else {
     is_opened_ = true;
   }
+
+  if (OB_SUCC(ret) && tb_ctx_.is_global_index_back()) {
+    if (OB_NOT_NULL(global_index_lookup_executor_)) {
+      global_index_lookup_executor_->destroy();
+      global_index_lookup_executor_->~ObTableGlobalIndexLookupExecutor();
+      global_index_lookup_executor_ = nullptr;
+    }
+    void *lookup_buf = allocator_.alloc(sizeof(ObTableGlobalIndexLookupExecutor));
+    if (OB_ISNULL(lookup_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret), K(lookup_buf));
+    } else {
+      global_index_lookup_executor_ = new (lookup_buf) ObTableGlobalIndexLookupExecutor(this);
+      if (OB_FAIL(global_index_lookup_executor_->open())) {
+        LOG_WARN("fail to open global index lookup executor", K(ret));
+      }
+    }
+  }
   return ret;
 }
 
 int ObTableApiScanExecutor::get_next_row()
+{
+  int ret = OB_SUCCESS;
+  if (tb_ctx_.is_global_index_back()) {
+    if (OB_ISNULL(global_index_lookup_executor_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid arguments",K(ret));
+    } else if (OB_FAIL(global_index_lookup_executor_->get_next_row())) {
+      LOG_WARN("failed to get next row with global index lookup executor", K(ret));
+    }
+  } else {
+    if (OB_FAIL(get_next_row_for_tsc())) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("fail to get next row", K(ret));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ++input_row_cnt_;
+    ++output_row_cnt_;
+  }
+  return ret;
+}
+
+int ObTableApiScanExecutor::get_next_row_for_tsc()
 {
   int ret = OB_SUCCESS;
   if (0 == get_table_ctx().get_limit()) {
@@ -271,12 +315,34 @@ int ObTableApiScanExecutor::close()
   } else if (das_ref_.has_task()) {
     if (OB_FAIL(das_ref_.close_all_task())) {
       LOG_WARN("fail to close all das task", K(ret));
-    } else {
-      reset();
     }
+  }
+  if (tb_ctx_.is_global_index_back()) {
+    int tmp_ret = ret;
+    if (OB_ISNULL(global_index_lookup_executor_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid arguments", KR(ret));
+    } else if (OB_FAIL(global_index_lookup_executor_->close())) {
+      LOG_WARN("close global index lookup executor", KR(ret));
+    }
+    ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
+  }
+
+  if (OB_SUCC(ret)) {
+    reset();
   }
 
   return ret;
+}
+
+void ObTableApiScanExecutor::destroy()
+{
+  das_ref_.reset();
+  if (OB_NOT_NULL(global_index_lookup_executor_)) {
+    global_index_lookup_executor_->destroy();
+    global_index_lookup_executor_->~ObTableGlobalIndexLookupExecutor();
+    global_index_lookup_executor_ = nullptr;
+  }
 }
 
 int ObTableApiScanRowIterator::open(ObTableApiScanExecutor *executor)
@@ -418,6 +484,5 @@ void ObTableApiScanExecutor::clear_evaluated_flag()
   }
   ObTableApiExecutor::clear_evaluated_flag();
 }
-
 }  // namespace table
 }  // namespace oceanbase

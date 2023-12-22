@@ -229,8 +229,8 @@ int ObTableQueryAndMutateP::init_scan_tb_ctx(ObTableApiCacheGuard &cache_guard)
                                          arg_.table_name_,
                                          get_timeout_ts()))) {
     LOG_WARN("fail to init table ctx common part", K(ret), K(arg_.table_name_));
-  } else if (OB_FAIL(tb_ctx_.init_scan(query, is_weak_read))) {
-    LOG_WARN("fail to init table ctx scan part", K(ret), K(arg_.table_name_));
+  } else if (OB_FAIL(tb_ctx_.init_scan(query, is_weak_read, arg_.table_id_))) {
+    LOG_WARN("fail to init table ctx scan part", K(ret), K(arg_.table_name_), K(arg_.table_id_));
   } else if (OB_FAIL(cache_guard.init(&tb_ctx_))) {
     LOG_WARN("fail to init cache guard", K(ret));
   } else if (OB_FAIL(cache_guard.get_expr_info(&tb_ctx_, expr_frame_info))) {
@@ -951,9 +951,9 @@ int ObTableQueryAndMutateP::try_process()
   } else if (OB_FAIL(start_trans(false, /* is_readonly */
                                  sql::stmt::T_UPDATE,
                                  consistency_level,
-                                 table_id_,
                                  tb_ctx_.get_ls_id(),
-                                 get_timeout_ts()))) {
+                                 get_timeout_ts(),
+                                 tb_ctx_.need_dist_das()))) {
     LOG_WARN("fail to start readonly transaction", K(ret));
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));

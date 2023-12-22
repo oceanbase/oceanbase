@@ -24,6 +24,7 @@ class ObTableApiExecutor
 public:
   ObTableApiExecutor(ObTableCtx &ctx)
       : tb_ctx_(ctx),
+        allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
         exec_ctx_(ctx.get_exec_ctx()),
         eval_ctx_(exec_ctx_),
         parent_(nullptr),
@@ -49,11 +50,14 @@ public:
   const ObTableApiExecutor* get_parent() const { return parent_; }
   const ObTableApiExecutor* get_child() const { return child_; }
   OB_INLINE const ObTableCtx& get_table_ctx() const { return tb_ctx_; }
-  OB_INLINE sql::ObEvalCtx &get_eval_ctx() { return eval_ctx_; }
+  OB_INLINE ObTableCtx& get_table_ctx() { return tb_ctx_; }
+  OB_INLINE sql::ObEvalCtx& get_eval_ctx() { return eval_ctx_; }
+  OB_INLINE sql::ObExecContext& get_exec_ctx() { return exec_ctx_; }
   virtual void clear_evaluated_flag();
 
 protected:
   ObTableCtx &tb_ctx_;
+  common::ObArenaAllocator allocator_;
   sql::ObExecContext &exec_ctx_;
   sql::ObEvalCtx eval_ctx_;
   ObTableApiExecutor *parent_;

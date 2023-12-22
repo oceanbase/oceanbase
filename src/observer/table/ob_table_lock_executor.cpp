@@ -18,12 +18,36 @@ namespace oceanbase
 {
 namespace table
 {
-int ObTableApiLockExecutor::generate_lock_rtdef()
+int ObTableApiLockSpec::init_ctdefs_array(int64_t size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(lock_ctdefs_.allocate_array(alloc_, size))) {
+    LOG_WARN("fail to alloc ctdefs array", K(ret), K(size));
+  } else {
+    // init each element as nullptr
+    for (int64_t i = 0; i < size; i++) {
+      lock_ctdefs_.at(i) = nullptr;
+    }
+  }
+  return ret;
+}
+
+ObTableApiLockSpec::~ObTableApiLockSpec()
+{
+  for (int64_t i = 0; i < lock_ctdefs_.count(); i++) {
+    if (OB_NOT_NULL(lock_ctdefs_.at(i))) {
+      lock_ctdefs_.at(i)->~ObTableLockCtDef();
+    }
+  }
+  lock_ctdefs_.reset();
+}
+
+int ObTableApiLockExecutor::generate_lock_rtdef(const ObTableLockCtDef &lock_ctdef, ObTableLockRtDef &lock_rtdef)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(init_das_dml_rtdef(lock_spec_.get_ctdef().das_ctdef_,
-                                 lock_rtdef_.das_rtdef_,
+  if (OB_FAIL(init_das_dml_rtdef(lock_ctdef.das_ctdef_,
+                                 lock_rtdef.das_rtdef_,
                                  nullptr))) {
     LOG_WARN("fail to init das dml rtdef", K(ret));
   }
@@ -37,10 +61,29 @@ int ObTableApiLockExecutor::open()
 
   if (OB_FAIL(ObTableApiModifyExecutor::open())) {
     LOG_WARN("fail to oepn ObTableApiModifyExecutor", K(ret));
-  } else if (OB_FAIL(generate_lock_rtdef())) {
-    LOG_WARN("fail to generate lock rtdef");
+  } else if (OB_FAIL(inner_open_with_das())) {
+    LOG_WARN("fail to open lock executor", K(ret));
   }
 
+  return ret;
+}
+
+int ObTableApiLockExecutor::inner_open_with_das()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(lock_rtdefs_.allocate_array(allocator_, lock_spec_.get_ctdefs().count()))) {
+    LOG_WARN("fail to allocate rtdefs", K(ret));
+  }
+  for (int64_t i = 0; i < lock_rtdefs_.count() && OB_SUCC(ret); i++) {
+    const ObTableLockCtDef *lock_ctdef = nullptr;
+    ObTableLockRtDef &lock_rtdef = lock_rtdefs_.at(i);
+    if (OB_ISNULL(lock_ctdef = lock_spec_.get_ctdefs().at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("lock ctdef is NULL", K(ret), K(i));
+    } else if (OB_FAIL(generate_lock_rtdef(*lock_ctdef, lock_rtdef))) {
+      LOG_WARN("fail to generate lock rtdef", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -90,19 +133,37 @@ int ObTableApiLockExecutor::get_next_row_from_child()
 int ObTableApiLockExecutor::lock_row_to_das()
 {
   int ret = OB_SUCCESS;
-  ObDASTabletLoc *tablet_loc = nullptr;
-
-  if (OB_FAIL(calc_tablet_loc(tablet_loc))) {
-    LOG_WARN("fail tp calc tablet location", K(ret));
-  } else if (OB_FAIL(ObDMLService::lock_row(lock_spec_.get_ctdef().das_ctdef_,
-                                            lock_rtdef_.das_rtdef_,
-                                            tablet_loc,
-                                            dml_rtctx_,
-                                            lock_spec_.get_ctdef().old_row_))) {
-    if (OB_TRY_LOCK_ROW_CONFLICT != ret &&
-        OB_TRANSACTION_SET_VIOLATION != ret &&
-        OB_ERR_EXCLUSIVE_LOCK_CONFLICT != ret) {
-      LOG_WARN("fail to lock row with das", K(ret));
+  int64_t lock_ctdef_count = lock_spec_.get_ctdefs().count();
+  if (OB_UNLIKELY(lock_ctdef_count != lock_rtdefs_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("count of insup ctdef is not equal to rtdef", K(ret), K(lock_ctdef_count),
+              K(lock_rtdefs_.count()));
+  }
+  for (int64_t i = 0; i < lock_rtdefs_.count() && OB_SUCC(ret); i++) {
+    ObTableLockRtDef &lock_rtdef = lock_rtdefs_.at(i);
+    ObDASTabletLoc *tablet_loc = nullptr;
+    ObDASTableLoc *table_loc = nullptr;
+    ObTableLockCtDef *lock_ctdef = nullptr;
+    if (OB_ISNULL(lock_ctdef = lock_spec_.get_ctdefs().at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("lock ctdef is NULL", K(ret), K(i));
+    } else if (OB_ISNULL(table_loc = lock_rtdef.das_rtdef_.table_loc_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table_loc is NULL", K(ret), K(i));
+    } else if (OB_FAIL(calc_tablet_loc(lock_ctdef->old_part_id_expr_,
+                                       *table_loc,
+                                       tablet_loc))) {
+      LOG_WARN("fail tp calc tablet location", K(ret), K(i));
+    } else if (OB_FAIL(ObDMLService::lock_row(lock_ctdef->das_ctdef_,
+                                              lock_rtdef.das_rtdef_,
+                                              tablet_loc,
+                                              dml_rtctx_,
+                                              lock_ctdef->old_row_))) {
+      if (OB_TRY_LOCK_ROW_CONFLICT != ret &&
+          OB_TRANSACTION_SET_VIOLATION != ret &&
+          OB_ERR_EXCLUSIVE_LOCK_CONFLICT != ret) {
+        LOG_WARN("fail to lock row with das", K(ret), K(i));
+      }
     }
   }
 

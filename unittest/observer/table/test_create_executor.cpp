@@ -178,6 +178,7 @@ TEST_F(TestCreateExecutor, scan)
   // init ctx
   fake_ctx_init_common(fake_ctx, &table_schema_);
   fake_ctx.set_entity(&entity);
+  fake_ctx.operation_type_ = ObTableOperationType::Type::GET;
   ASSERT_EQ(OB_SUCCESS, fake_ctx.init_get());
   for (int i = 0; i < 3; i++) {
     ASSERT_EQ(columns_[i].get_column_id(), fake_ctx.select_col_ids_.at(i));

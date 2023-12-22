@@ -61,6 +61,32 @@ int ObTableBatchExecuteP::deserialize()
   return ret;
 }
 
+// only use for batch_execute and htable_mutate_row, to check if need to get the global snapshot
+int ObTableBatchExecuteP::check_table_has_global_index(uint64_t table_id, bool &exists)
+{
+  int ret = OB_SUCCESS;
+  exists = false;
+  schema::ObSchemaGetterGuard schema_guard;
+  const schema::ObSimpleTableSchemaV2 *table_schema = NULL;
+  if (OB_INVALID_ID == table_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid table id", K(ret));
+  } else if (OB_ISNULL(gctx_.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid schema service", K(ret));
+  } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(credential_.tenant_id_, schema_guard))) {
+    LOG_WARN("fail to get schema guard", K(ret), K(credential_.tenant_id_));
+  } else if (OB_FAIL(schema_guard.get_simple_table_schema(credential_.tenant_id_, table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("get null table schema", K(ret), K(table_id));
+  } else if (OB_FAIL(schema_guard.check_global_index_exist(credential_.tenant_id_, table_id, exists))) {
+    LOG_WARN("fail to check global index", K(ret), K(table_id));
+  }
+  return ret;
+}
+
 int ObTableBatchExecuteP::check_arg()
 {
   int ret = OB_SUCCESS;
@@ -176,7 +202,6 @@ int ObTableBatchExecuteP::try_process()
   batch_ops_atomic_ = arg_.batch_operation_as_atomic_;
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
   uint64_t table_id = OB_INVALID_ID;
-  bool is_index_supported = true;
   if (batch_operation.count() <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("no operation in the batch", K(ret));
@@ -184,12 +209,6 @@ int ObTableBatchExecuteP::try_process()
     LOG_WARN("failed to get table id", K(ret));
   } else if (FALSE_IT(table_id_ = arg_.table_id_)) {
   } else if (FALSE_IT(tablet_id_ = arg_.tablet_id_)) {
-  } else if (OB_FAIL(check_table_index_supported(table_id_, is_index_supported))) {
-    LOG_WARN("fail to check index supported", K(ret), K(table_id_));
-  } else if (OB_UNLIKELY(!is_index_supported)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "global index");
-    LOG_WARN("index type is not supported by table api", K(ret));
   } else {
     if (batch_operation.is_readonly()) {
       if (batch_operation.is_same_properties_names()) {
@@ -342,9 +361,9 @@ int ObTableBatchExecuteP::htable_put()
   } else if (OB_FAIL(start_trans(false, /* is_readonly */
                                  sql::stmt::T_INSERT,
                                  arg_.consistency_level_,
-                                 table_id,
                                  tb_ctx_.get_ls_id(),
-                                 get_timeout_ts()))) {
+                                 get_timeout_ts(),
+                                 tb_ctx_.need_dist_das()))) {
     LOG_WARN("failed to start readonly transaction", K(ret));
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
@@ -405,7 +424,8 @@ int ObTableBatchExecuteP::multi_get()
     LOG_WARN("fail to init table ctx", K(ret));
   } else if (OB_FAIL(init_read_trans(arg_.consistency_level_,
                                      tb_ctx_.get_ls_id(),
-                                     tb_ctx_.get_timeout_ts()))) {
+                                     tb_ctx_.get_timeout_ts(),
+                                     tb_ctx_.need_dist_das()))) {
     LOG_WARN("fail to init wead read trans", K(ret), K(tb_ctx_));
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
@@ -474,9 +494,9 @@ int ObTableBatchExecuteP::multi_delete()
   } else if (OB_FAIL(start_trans(false, /* is_readonly */
                                  sql::stmt::T_INSERT,
                                  arg_.consistency_level_,
-                                 tb_ctx_.get_table_id(),
                                  tb_ctx_.get_ls_id(),
-                                 get_timeout_ts()))) {
+                                 get_timeout_ts(),
+                                 tb_ctx_.need_dist_das()))) {
     LOG_WARN("fail to start readonly transaction", K(ret));
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
@@ -537,9 +557,9 @@ int ObTableBatchExecuteP::htable_delete()
   } else if (OB_FAIL(start_trans(false, /* is_readonly */
                                  sql::stmt::T_INSERT,
                                  arg_.consistency_level_,
-                                 table_id,
                                  tb_ctx_.get_ls_id(),
-                                 get_timeout_ts()))) {
+                                 get_timeout_ts(),
+                                 tb_ctx_.need_dist_das()))) {
     LOG_WARN("failed to start readonly transaction", K(ret));
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
@@ -601,7 +621,7 @@ int ObTableBatchExecuteP::multi_insert()
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
   observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
   ObTableApiCacheGuard cache_guard;
-
+  bool need_rollback = false;
   if (OB_FAIL(check_arg2())) {
     LOG_WARN("fail to check arg", K(ret));
   } else if (OB_FAIL(init_single_op_tb_ctx(tb_ctx_, batch_operation.at(0)))) {
@@ -609,9 +629,9 @@ int ObTableBatchExecuteP::multi_insert()
   } else if (OB_FAIL(start_trans(false, /* is_readonly */
                                  sql::stmt::T_INSERT,
                                  arg_.consistency_level_,
-                                 tb_ctx_.get_table_id(),
                                  tb_ctx_.get_ls_id(),
-                                 get_timeout_ts()))) {
+                                 get_timeout_ts(),
+                                 tb_ctx_.need_dist_das()))) {
     LOG_WARN("fail to start readonly transaction", K(ret));
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
@@ -665,9 +685,9 @@ int ObTableBatchExecuteP::multi_replace()
   } else if (OB_FAIL(start_trans(false, /* is_readonly */
                                  sql::stmt::T_INSERT,
                                  arg_.consistency_level_,
-                                 tb_ctx_.get_table_id(),
                                  tb_ctx_.get_ls_id(),
-                                 get_timeout_ts()))) {
+                                 get_timeout_ts(),
+                                 tb_ctx_.need_dist_das()))) {
     LOG_WARN("fail to start readonly transaction", K(ret));
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
@@ -714,6 +734,8 @@ int ObTableBatchExecuteP::batch_execute(bool is_readonly)
   uint64_t table_id = OB_INVALID_ID;
   ObSEArray<ObTabletID, 1> tablet_ids;
   ObLSID ls_id;
+  bool exist_global_index = false;
+  bool need_global_snapshot = false;
   if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
     LOG_WARN("fail to get table id", K(ret));
   } else if (OB_FAIL(get_tablet_ids(table_id, tablet_ids))) {
@@ -723,15 +745,18 @@ int ObTableBatchExecuteP::batch_execute(bool is_readonly)
     LOG_WARN("should have one tablet", K(ret), K(tablet_ids));
   } else if (OB_FAIL(get_ls_id(tablet_ids.at(0), ls_id))) {
     LOG_WARN("fail to get ls id", K(ret));
+  } else if (OB_FAIL(!is_readonly && check_table_has_global_index(table_id, exist_global_index))) {
+    LOG_WARN("fail to check global index", K(ret), K(table_id));
+  } else if (FALSE_IT(need_global_snapshot = !is_readonly && exist_global_index)) {
   } else if (OB_FAIL(start_trans(is_readonly, /* is_readonly */
                                  (is_readonly ? sql::stmt::T_SELECT : sql::stmt::T_UPDATE),
                                  arg_.consistency_level_,
-                                 table_id,
                                  ls_id,
-                                 get_timeout_ts()))) {
-    LOG_WARN("fail to start readonly transaction", K(ret));
+                                 get_timeout_ts(),
+                                 need_global_snapshot /* need global snapshot */))) {
+    LOG_WARN("fail to start readonly transaction", K(ret), K(need_global_snapshot), K(is_readonly));
   } else if (OB_FAIL(batch_execute_internal(arg_.batch_operation_, result_))) {
-    LOG_WARN("fail to execute batch", K(ret));
+    LOG_WARN("fail to execute batch", K(ret), K(need_global_snapshot), K(is_readonly));
   }
 
   int tmp_ret = ret;
@@ -929,6 +954,7 @@ int ObTableBatchExecuteP::htable_mutate_row()
   ObSEArray<ObTabletID, 1> tablet_ids;
   ObLSID ls_id;
   ObHTableLockHandle *lock_handle = nullptr;
+  bool exist_global_index = false;
 
   if (OB_FAIL(check_arg2())) {
     LOG_WARN("fail to check arg", K(ret));
@@ -941,12 +967,14 @@ int ObTableBatchExecuteP::htable_mutate_row()
     LOG_WARN("should have one tablet", K(ret), K(tablet_ids));
   } else if (OB_FAIL(get_ls_id(tablet_ids.at(0), ls_id))) {
     LOG_WARN("fail to get ls id", K(ret));
+  } else if (OB_FAIL(check_table_has_global_index(table_id, exist_global_index))) {
+    LOG_WARN("fail to check global index", K(ret), K(table_id));
   } else if (OB_FAIL(start_trans(false, /* is_readonly */
                                  sql::stmt::T_DELETE,
                                  consistency_level,
-                                 table_id,
                                  ls_id,
-                                 get_timeout_ts()))) {
+                                 get_timeout_ts(),
+                                 exist_global_index))) {
     LOG_WARN("fail to start transaction", K(ret));
   } else if (OB_FAIL(HTABLE_LOCK_MGR->acquire_handle(get_trans_desc()->tid(), lock_handle))) {
     LOG_WARN("fail to get htable lock handle", K(ret));
@@ -965,14 +993,14 @@ int ObTableBatchExecuteP::htable_mutate_row()
         switch (table_operation.type()) {
           case ObTableOperationType::INSERT_OR_UPDATE: {
             if (OB_FAIL(execute_htable_put(batch_ops))) {
-              LOG_WARN("fail to execute htable put", K(ret), K(i), K(N), K(table_operation));
+              LOG_WARN("fail to execute htable put", K(ret), K(i), K(N), K(table_operation), K(exist_global_index));
             }
             break;
           }
 
           case ObTableOperationType::DEL: {
             if (OB_FAIL(execute_htable_delete(batch_ops))) {
-              LOG_WARN("fail to execute htable delete", K(ret), K(i), K(N), K(table_operation));
+              LOG_WARN("fail to execute htable delete", K(ret), K(i), K(N), K(table_operation), K(exist_global_index));
             }
             break;
           }

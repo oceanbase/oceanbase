@@ -108,7 +108,23 @@ private:
   static int resolve_exprs(ObTableCtx &ctx);
 
   static int add_extra_column_exprs(ObTableCtx &ctx);
-
+  static int add_all_calc_tablet_id_exprs(ObTableCtx &ctx);
+  static int generate_calc_tablet_id_exprs(ObTableCtx &ctx);
+  static int generate_calc_tablet_id_expr(ObTableCtx &ctx,
+                                          const ObTableSchema &index_schema,
+                                          ObRawExpr *&expr);
+  static int replace_assign_column_ref_expr(ObTableCtx &ctx, ObRawExpr *&expr);
+  static int build_partition_expr(ObTableCtx &ctx,
+                                  const ObTableSchema &table_schema,
+                                  const ObIArray<sql::ObRawExpr*> &part_column_exprs,
+                                  bool is_sub_part,
+                                  sql::ObRawExpr *&partition_key_expr);
+  static int get_part_key_column_expr(ObTableCtx &ctx,
+                                      const ObPartitionKeyInfo &partition_keys,
+                                      ObIArray<sql::ObRawExpr*> &part_keys_expr);
+  static int replace_column_ref_in_part_expr(const ObIArray<sql::ObRawExpr*> &part_column_exprs,
+                                             sql::ObRawExpr *&partition_key_expr);
+private:
   static int write_datum(ObTableCtx &ctx,
                          common::ObIAllocator &allocator,
                          const sql::ObExpr &expr,
@@ -127,8 +143,8 @@ class ObTableLocCgService
 {
 public:
   static int generate_table_loc_meta(const ObTableCtx &ctx,
-                                     sql::ObDASTableLocMeta &loc_meta,
-                                     bool is_lookup = false);
+                                     ObTableIndexInfo &index_info,
+                                     sql::ObDASTableLocMeta &loc_meta);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableLocCgService);
 };
@@ -138,57 +154,74 @@ class ObTableDmlCgService
 public:
   static int generate_insert_ctdef(ObTableCtx &ctx,
                                    ObIAllocator &allocator,
+                                   ObTableIndexInfo &index_info,
                                    ObTableInsCtDef &ins_ctdef);
   static int generate_update_ctdef(ObTableCtx &ctx,
                                    ObIAllocator &allocator,
+                                   ObTableIndexInfo &index_info,
                                    ObTableUpdCtDef &upd_ctdef);
   static int generate_delete_ctdef(ObTableCtx &ctx,
                                    ObIAllocator &allocator,
+                                   ObTableIndexInfo &index_info,
                                    ObTableDelCtDef &del_ctdef);
   static int generate_replace_ctdef(ObTableCtx &ctx,
                                     ObIAllocator &allocator,
+                                    ObTableIndexInfo &index_info,
                                     ObTableReplaceCtDef &replace_ctdef);
   static int generate_insert_up_ctdef(ObTableCtx &ctx,
                                       ObIAllocator &allocator,
+                                      ObTableIndexInfo &index_info,
                                       ObTableInsUpdCtDef &ins_up_ctdef);
   static int generate_lock_ctdef(ObTableCtx &ctx,
+                                 ObTableIndexInfo &index_info,
                                  ObTableLockCtDef &lock_ctdef);
   static int generate_ttl_ctdef(ObTableCtx &ctx,
                                 ObIAllocator &allocator,
+                                ObTableIndexInfo &index_info,
                                 ObTableTTLCtDef &ttl_ctdef);
   static int generate_conflict_checker_ctdef(ObTableCtx &ctx,
                                              ObIAllocator &allocator,
+                                             ObTableIndexInfo &index_info,
                                              sql::ObConflictCheckerCtdef &conflict_checker_ctdef);
 private:
+  static int generate_calc_tablet_id_rt_expr(ObTableCtx &ctx, const ObRawExpr &raw_expr, ObExpr *&expr);
   static int generate_base_ctdef(ObTableCtx &ctx,
+                                 ObTableIndexInfo &index_info,
                                  ObTableDmlBaseCtDef &base_ctdef,
                                  common::ObIArray<sql::ObRawExpr*> &old_row,
                                  common::ObIArray<sql::ObRawExpr*> &new_row);
-  static int generate_column_ids(ObTableCtx &ctx, common::ObIArray<uint64_t> &column_ids);
+  static int generate_column_ids(ObTableCtx &ctx, ObTableIndexInfo &index_info, common::ObIArray<uint64_t> &column_ids);
   static int generate_das_ins_ctdef(ObTableCtx &ctx,
+                                    ObTableIndexInfo &index_info,
                                     uint64_t index_tid,
                                     sql::ObDASInsCtDef &das_ins_ctdef,
                                     const common::ObIArray<sql::ObRawExpr*> &new_row);
   static int generate_das_upd_ctdef(ObTableCtx &ctx,
+                                    ObTableIndexInfo &index_info,
                                     uint64_t index_tid,
                                     sql::ObDASUpdCtDef &das_upd_ctdef,
                                     const common::ObIArray<sql::ObRawExpr*> &old_row,
                                     const common::ObIArray<sql::ObRawExpr*> &new_row,
                                     const common::ObIArray<sql::ObRawExpr*> &full_row);
   static int generate_das_del_ctdef(ObTableCtx &ctx,
+                                    ObTableIndexInfo&index_info,
                                     uint64_t index_tid,
                                     sql::ObDASDelCtDef &das_del_ctdef,
                                     const common::ObIArray<sql::ObRawExpr*> &old_row);
   static int generate_das_lock_ctdef(ObTableCtx &ctx,
+                                     ObTableIndexInfo &index_info,
                                      uint64_t index_tid,
                                      sql::ObDASLockCtDef &das_lock_ctdef,
                                      const common::ObIArray<sql::ObRawExpr*> &old_row);
   static int generate_updated_column_ids(ObTableCtx &ctx,
+                                         ObTableIndexInfo &index_info,
                                          common::ObIArray<uint64_t> &updated_column_ids);
   static int generate_upd_assign_infos(ObTableCtx &ctx,
+                                       ObTableIndexInfo &index_info,
                                        ObIAllocator &allocator,
                                        ObTableUpdCtDef &udp_ctdef);
-  static int generate_das_base_ctdef(uint64_t index_tid,
+  static int generate_das_base_ctdef(ObTableIndexInfo &index_info,
+                                     uint64_t index_tid,
                                      ObTableCtx &ctx,
                                      sql::ObDASDMLBaseCtDef &base_ctdef);
   static int generate_column_info(ObTableID index_tid,
@@ -204,16 +237,19 @@ private:
                                 sql::ObDASDMLBaseCtDef &das_ctdef);
   static int generate_related_ins_ctdef(ObTableCtx &ctx,
                                         ObIAllocator &allocator,
+                                        ObTableIndexInfo &index_info,
                                         const common::ObIArray<sql::ObRawExpr*> &new_row,
                                         sql::DASInsCtDefArray &ins_ctdefs);
   static int generate_related_upd_ctdef(ObTableCtx &ctx,
                                         ObIAllocator &allocator,
+                                        ObTableIndexInfo &index_info,
                                         const common::ObIArray<sql::ObRawExpr*> &old_row,
                                         const common::ObIArray<sql::ObRawExpr*> &new_row,
                                         const common::ObIArray<sql::ObRawExpr*> &full_row,
                                         sql::DASUpdCtDefArray &upd_ctdefs);
   static int generate_related_del_ctdef(ObTableCtx &ctx,
                                         ObIAllocator &allocator,
+                                        ObTableIndexInfo &index_info,
                                         const common::ObIArray<sql::ObRawExpr*> &old_row,
                                         sql::DASDelCtDefArray &del_ctdefs);
 
@@ -234,10 +270,14 @@ private:
                                         ObIAllocator &allocator,
                                         sql::ObRowkeyCstCtdefArray &cst_ctdefs);
   static int replace_exprs_with_dependant(ObTableCtx &ctx,
+                                          ObTableIndexInfo &index_info,
                                           common::ObIArray<sql::ObRawExpr *> &dst_exprs);
   static int add_all_column_infos(ObTableCtx &ctx,
+                                  ObTableIndexInfo &index_info,
                                   common::ObIAllocator &allocator,
                                   sql::ColContentFixedArray &column_infos);
+  static int generate_tablet_id_dep_exprs(ObIArray<sql::ObRawExpr *> &raw_exprs,
+                                          ObIArray<sql::ObRawExpr *> &dep_exprs);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableDmlCgService);
 };

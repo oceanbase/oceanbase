@@ -21,22 +21,80 @@ namespace oceanbase
 {
 namespace table
 {
+int ObTableApiInsertSpec::init_ctdefs_array(int64_t size) {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ins_ctdefs_.allocate_array(alloc_, size))) {
+    LOG_WARN("fail to alloc ctdefs array", K(ret), K(size));
+  } else {
+    // init each element as nullptr
+    for (int64_t i = 0; i < size; i++) {
+      ins_ctdefs_.at(i) = nullptr;
+    }
+  }
+  return ret;
+}
+
+ObTableApiInsertSpec::~ObTableApiInsertSpec()
+{
+  for (int64_t i = 0; i < ins_ctdefs_.count(); i++) {
+    if (OB_NOT_NULL(ins_ctdefs_.at(i))) {
+      ins_ctdefs_.at(i)->~ObTableInsCtDef();
+    }
+  }
+  ins_ctdefs_.reset();
+}
+
 int ObTableApiInsertExecutor::open()
 {
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(ObTableApiModifyExecutor::open())) {
     LOG_WARN("fail to oepn ObTableApiModifyExecutor", K(ret));
-  } else if (OB_FAIL(generate_ins_rtdef(ins_spec_.get_ctdef(), ins_rtdef_))) {
-    LOG_WARN("fail to generate insert rtdef", K(ret));
+  } else if (OB_FAIL(inner_open_with_das())) {
+    LOG_WARN("fail to open insert executor", K(ret));
   }
 
   return ret;
 }
 
+int ObTableApiInsertExecutor::inner_open_with_das()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ins_rtdefs_.allocate_array(allocator_, ins_spec_.get_ctdefs().count()))) {
+    LOG_WARN("fail to alloc ins rtdefs", K(ret));
+  }
+  for (int64_t i = 0; i < ins_rtdefs_.count() && OB_SUCC(ret); i++) {
+    ObTableInsRtDef &ins_rtdef = ins_rtdefs_.at(i);
+    const ObTableInsCtDef *ins_ctdef = ins_spec_.get_ctdefs().at(i);
+    if (OB_ISNULL(ins_ctdef)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ins_ctdef is NULL", K(ret), K(i));
+    } else if (OB_FAIL(generate_ins_rtdef(*ins_ctdef, ins_rtdef))) {
+      LOG_WARN("fail to generate insert rt_defs", K(ret), K(i));
+    }
+  }
+  return ret;
+}
+
 int ObTableApiInsertExecutor::insert_row_to_das()
 {
-  return ObTableApiModifyExecutor::insert_row_to_das(ins_spec_.get_ctdef(), ins_rtdef_);
+  int ret = OB_SUCCESS;
+  int64_t ctdef_count = ins_spec_.get_ctdefs().count();
+  if (OB_UNLIKELY(ctdef_count != ins_rtdefs_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("count of ins ctdef and rtdef is not equal ", K(ret), K(ctdef_count), K(ins_rtdefs_.count()));
+  }
+  for (int64_t i = 0; i < ins_rtdefs_.count() && OB_SUCC(ret); i++) {
+    ObTableInsRtDef &ins_rtdef = ins_rtdefs_.at(i);
+    const ObTableInsCtDef *ins_ctdef = ins_spec_.get_ctdefs().at(i);
+    if (OB_ISNULL(ins_ctdef)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ins ctdef is NULL", K(ret), K(i));
+    } else if (OB_FAIL(ObTableApiModifyExecutor::insert_row_to_das(*ins_ctdef, ins_rtdef))) {
+      LOG_WARN("fail to insert row to das", K(ret), K(i), K(ins_ctdef), K(ins_rtdef));
+    }
+  }
+  return ret;
 }
 
 int ObTableApiInsertExecutor::get_next_row()
@@ -74,8 +132,14 @@ int ObTableApiInsertExecutor::process_single_operation(const ObTableEntity *enti
   if (OB_ISNULL(entity)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("entity is null", K(ret));
+  } else if (ins_spec_.get_ctdefs().count() < 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ins ctdef count is less than 1", K(ret));
+  } else if (OB_ISNULL(ins_spec_.get_ctdefs().at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the first ins ctdef is NULL", K(ret));
   } else if (OB_FAIL(ObTableExprCgService::refresh_insert_exprs_frame(tb_ctx_,
-                                                                      ins_spec_.get_ctdef().new_row_,
+                                                                      ins_spec_.get_ctdefs().at(0)->new_row_,
                                                                       *entity))) {
     LOG_WARN("fail to refresh insert exprs frame", K(ret), K(*entity));
   }

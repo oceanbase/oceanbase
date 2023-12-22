@@ -148,6 +148,7 @@ ob_set_subtarget(ob_server table
   table/ob_table_modify_executor.cpp
   table/ob_table_replace_executor.cpp
   table/ob_table_scan_executor.cpp
+  table/ob_table_global_index_lookup_executor.cpp
   table/ob_table_update_executor.cpp
   table/ob_table_executor_factory.cpp
   table/ob_table_cg_service.cpp

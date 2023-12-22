@@ -15,25 +15,69 @@
 #include "lib/utility/ob_tracepoint.h"
 #include "sql/das/ob_das_insert_op.h"
 #include "ob_table_cg_service.h"
+#include "sql/engine/dml/ob_dml_service.h"
 
 namespace oceanbase
 {
 namespace table
 {
-
-int ObTableApiReplaceExecutor::generate_replace_rtdef(const ObTableReplaceCtDef &ctdef,
-                                                      ObTableReplaceRtDef &rtdef)
+int ObTableApiReplaceSpec::init_ctdefs_array(int64_t size)
 {
   int ret = OB_SUCCESS;
-
-  if (OB_FAIL(generate_ins_rtdef(ctdef.ins_ctdef_,
-                                 rtdef.ins_rtdef_))) {
-    LOG_WARN("fail to generate insert rtdef", K(ret));
-  } else if (OB_FAIL(generate_del_rtdef(ctdef.del_ctdef_,
-                                        rtdef.del_rtdef_))) {
-    LOG_WARN("fail to generate delete rtdef", K(ret));
+  if (OB_FAIL(replace_ctdefs_.allocate_array(alloc_, size))) {
+    LOG_WARN("fail to alloc ctdefs array", K(ret), K(size));
   } else {
-    rtdef.ins_rtdef_.das_rtdef_.table_loc_->is_writing_ = true; //todo:linjing其他的executor还没有设置is_writting
+    // init each element as nullptr
+    for (int64_t i = 0; i < size; i++) {
+      replace_ctdefs_.at(i) = nullptr;
+    }
+  }
+  return ret;
+}
+
+ObTableApiReplaceSpec::~ObTableApiReplaceSpec()
+{
+  for (int64_t i = 0; i < replace_ctdefs_.count(); i++) {
+    if (OB_NOT_NULL(replace_ctdefs_.at(i))) {
+      replace_ctdefs_.at(i)->~ObTableReplaceCtDef();
+    }
+  }
+  replace_ctdefs_.reset();
+}
+
+bool ObTableApiReplaceExecutor::is_duplicated()
+{
+  bool bret = false;
+  for (int64_t i = 0 ; i < replace_rtdefs_.count() && !bret; i++)
+  {
+    if (replace_rtdefs_.at(i).ins_rtdef_.das_rtdef_.is_duplicated_) {
+      bret = true;
+    }
+  }
+  return bret;
+}
+
+int ObTableApiReplaceExecutor::generate_replace_rtdefs()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(replace_rtdefs_.allocate_array(allocator_, replace_spec_.get_ctdefs().count()))) {
+    LOG_WARN("allocate replace rtdef failed", K(ret), K(replace_spec_.get_ctdefs().count()));
+  }
+  for (int64_t i = 0; i < replace_rtdefs_.count() && OB_SUCC(ret); i++) {
+    ObTableReplaceRtDef &replace_rtdef = replace_rtdefs_.at(i);
+    ObTableReplaceCtDef *replace_ctdef = replace_spec_.get_ctdefs().at(i);
+    if (OB_ISNULL(replace_ctdef = replace_spec_.get_ctdefs().at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("repalce ctdef is NULL", K(ret), K(i));
+    } else if (OB_FAIL(generate_ins_rtdef(replace_ctdef->ins_ctdef_,
+                                   replace_rtdef.ins_rtdef_))) {
+      LOG_WARN("fail to generate insert rtdef", K(ret));
+    } else if (OB_FAIL(generate_del_rtdef(replace_ctdef->del_ctdef_,
+                                          replace_rtdef.del_rtdef_))) {
+      LOG_WARN("fail to generate delete rtdef", K(ret));
+    } else {
+      replace_rtdef.ins_rtdef_.das_rtdef_.table_loc_->is_writing_ = true; //todo:linjing其他的executor还没有设置is_writting
+    }
   }
 
   return ret;
@@ -42,25 +86,22 @@ int ObTableApiReplaceExecutor::generate_replace_rtdef(const ObTableReplaceCtDef 
 int ObTableApiReplaceExecutor::open()
 {
   int ret = OB_SUCCESS;
-
+  ObDASTableLoc *table_loc = nullptr;
+  ObDASTabletLoc *tablet_loc = nullptr;
   if (OB_FAIL(ObTableApiModifyExecutor::open())) {
     LOG_WARN("fail to oepn ObTableApiModifyExecutor", K(ret));
-  } else if (OB_FAIL(generate_replace_rtdef(replace_spec_.get_ctdef(), replace_rtdef_))) {
+  } else if (OB_FAIL(generate_replace_rtdefs())) {
     LOG_WARN("fail to init replace rtdef", K(ret));
+  } else if (OB_ISNULL(table_loc = replace_rtdefs_.at(0).ins_rtdef_.das_rtdef_.table_loc_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table location is invalid", K(ret));
+  } else if (OB_FAIL(conflict_checker_.init_conflict_checker(replace_spec_.get_expr_frame_info(),
+                                                             table_loc))) {
+    LOG_WARN("fail to init conflict_checker", K(ret));
+  } else if (OB_FAIL(calc_local_tablet_loc(tablet_loc))) {
+    LOG_WARN("fail to calc tablet location", K(ret));
   } else {
-    ObDASTabletLoc *tablet_loc = nullptr;
-    ObDASTableLoc *table_loc = replace_rtdef_.ins_rtdef_.das_rtdef_.table_loc_;
-    if (OB_ISNULL(table_loc)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table location is invalid", K(ret));
-    } else if (OB_FAIL(conflict_checker_.init_conflict_checker(replace_spec_.get_expr_frame_info(),
-                                                               table_loc))) {
-      LOG_WARN("fail to init conflict_checker", K(ret));
-    } else if (OB_FAIL(calc_tablet_loc(tablet_loc))) {
-      LOG_WARN("fail to calc tablet location", K(ret));
-    } else {
-      conflict_checker_.set_local_tablet_loc(tablet_loc);
-    }
+    conflict_checker_.set_local_tablet_loc(tablet_loc);
   }
 
   return ret;
@@ -68,7 +109,9 @@ int ObTableApiReplaceExecutor::open()
 
 void ObTableApiReplaceExecutor::set_need_fetch_conflict()
 {
-  replace_rtdef_.ins_rtdef_.das_rtdef_.need_fetch_conflict_ = true;
+  for (int64_t i = 0; i < replace_rtdefs_.count(); i++) {
+    replace_rtdefs_.at(i).ins_rtdef_.das_rtdef_.need_fetch_conflict_ = true;
+  }
   dml_rtctx_.set_pick_del_task_first();
   dml_rtctx_.set_non_sub_full_task();
 }
@@ -76,7 +119,7 @@ void ObTableApiReplaceExecutor::set_need_fetch_conflict()
 int ObTableApiReplaceExecutor::refresh_exprs_frame(const ObTableEntity *entity)
 {
   int ret = OB_SUCCESS;
-  const ObTableReplaceCtDef &ctdef = replace_spec_.get_ctdef();
+  const ObTableReplaceCtDef &ctdef = *replace_spec_.get_ctdefs().at(0);
 
   if (OB_ISNULL(entity)) {
     ret = OB_ERR_UNEXPECTED;
@@ -104,20 +147,62 @@ int ObTableApiReplaceExecutor::get_next_row_from_child()
   return ret;
 }
 
+int ObTableApiReplaceExecutor::insert_row_to_das()
+{
+  int ret = OB_SUCCESS;
+  int64_t replace_ctdef_count = replace_spec_.get_ctdefs().count();
+  if (OB_UNLIKELY(replace_ctdef_count != replace_rtdefs_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("replace ctdefs size is not equal to rtdefs", K(ret), K(replace_ctdef_count), K(replace_rtdefs_.count()));
+  }
+  for (int64_t i = 0; i < replace_rtdefs_.count() && OB_SUCC(ret); i++) {
+    ObTableInsRtDef &ins_rtdef = replace_rtdefs_.at(i).ins_rtdef_;
+    ObTableReplaceCtDef *replace_ctdef = nullptr;
+    if (OB_ISNULL(replace_ctdef = replace_spec_.get_ctdefs().at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("replace ctdef is NULL", K(ret), K(i));
+    } else if (OB_FAIL(ObTableApiModifyExecutor::insert_row_to_das(replace_ctdef->ins_ctdef_, ins_rtdef))) {
+      LOG_WARN("fail to insert row to das", K(ret), K(i), K(replace_ctdef->ins_ctdef_), K(ins_rtdef));
+    }
+  }
+  return ret;
+}
+
+int ObTableApiReplaceExecutor::delete_row_to_das()
+{
+  int ret = OB_SUCCESS;
+  int64_t replace_ctdef_count = replace_spec_.get_ctdefs().count();
+  if (OB_UNLIKELY(replace_ctdef_count != replace_rtdefs_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("replace ctdefs size is not equal to rtdefs", K(ret), K(replace_ctdef_count), K(replace_rtdefs_.count()));
+  }
+  for (int64_t i = 0; i < replace_rtdefs_.count() && OB_SUCC(ret); i++) {
+    ObTableDelRtDef &del_rtdef = replace_rtdefs_.at(i).del_rtdef_;
+    ObTableReplaceCtDef *replace_ctdef = nullptr;
+    if (OB_ISNULL(replace_ctdef = replace_spec_.get_ctdefs().at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("replace ctdef is NULL", K(ret), K(i));
+    } else if (OB_FAIL(ObTableApiModifyExecutor::delete_row_to_das(replace_ctdef->del_ctdef_, del_rtdef))) {
+      LOG_WARN("fail to delete row to das", K(ret), K(replace_ctdef->del_ctdef_), K(del_rtdef));
+    }
+  }
+  return ret;
+}
+
 int ObTableApiReplaceExecutor::load_replace_rows(bool &is_iter_end)
 {
   int ret = OB_SUCCESS;
-  const ObTableReplaceCtDef &ctdef = replace_spec_.get_ctdef();
+  const ObTableReplaceCtDef &ctdef = *replace_spec_.get_ctdefs().at(0);
 
   while (OB_SUCC(ret)) {
     if (OB_FAIL(get_next_row_from_child())) {
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to load next row from child", K(ret));
       }
-    } else if (OB_FAIL(insert_row_to_das(ctdef.ins_ctdef_, replace_rtdef_.ins_rtdef_))) {
+    } else if (OB_FAIL(insert_row_to_das())) {
       LOG_WARN("fail to insert row to das", K(ret));
     } else {
-      replace_rtdef_.ins_rtdef_.cur_row_num_ = 1;
+      replace_rtdefs_.at(0).ins_rtdef_.cur_row_num_ = 1;
       cur_idx_++;
     }
   }
@@ -155,7 +240,7 @@ int ObTableApiReplaceExecutor::check_values(bool &is_equal,
   CK(OB_NOT_NULL(replace_row));
   CK(replace_row->cnt_ == new_row.count());
   for (int64_t i = 0; OB_SUCC(ret) && i < new_row.count(); ++i) {
-    const UIntFixedArray &column_ids = replace_spec_.get_ctdef().ins_ctdef_.column_ids_;
+    const UIntFixedArray &column_ids = replace_spec_.get_ctdefs().at(0)->ins_ctdef_.column_ids_;
     CK(new_row.at(i)->basic_funcs_->null_first_cmp_ == old_row.at(i)->basic_funcs_->null_first_cmp_);
     if (OB_SUCC(ret)) {
       if (share::schema::ObColumnSchemaV2::is_hidden_pk_column_id(column_ids[i])) {
@@ -179,7 +264,7 @@ int ObTableApiReplaceExecutor::do_delete(ObConflictRowMap *primary_map)
 {
   int ret = OB_SUCCESS;
   const ObTableEntity *entity = nullptr;
-  const ObTableReplaceCtDef &ctdef = replace_spec_.get_ctdef();
+  const ObTableReplaceCtDef &ctdef = *replace_spec_.get_ctdefs().at(0);
   ObConflictRowMap::iterator start_row_iter = primary_map->begin();
   ObConflictRowMap::iterator end_row_iter = primary_map->end();
 
@@ -192,10 +277,10 @@ int ObTableApiReplaceExecutor::do_delete(ObConflictRowMap *primary_map)
                                       get_primary_table_old_row(),
                                       eval_ctx_))) {
         LOG_WARN("fail to stored row to expr", K(ret));
-      } else if (OB_FAIL(delete_row_to_das(ctdef.del_ctdef_, replace_rtdef_.del_rtdef_))) {
+      } else if (OB_FAIL(delete_row_to_das())) {
         LOG_WARN("fail to shuffle delete row", K(ret), K(constraint_value));
       } else {
-        replace_rtdef_.del_rtdef_.cur_row_num_ = 1;
+        replace_rtdefs_.at(0).del_rtdef_.cur_row_num_ = 1;
       }
     }
   }
@@ -207,17 +292,17 @@ int ObTableApiReplaceExecutor::do_insert()
 {
   int ret = OB_SUCCESS;
   const ObTableEntity *entity = static_cast<const ObTableEntity*>(tb_ctx_.get_entity());
-  const ObTableReplaceCtDef &ctdef = replace_spec_.get_ctdef();
+  const ObTableReplaceCtDef &ctdef = *replace_spec_.get_ctdefs().at(0);
 
   if (OB_ISNULL(insert_row_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("insert row is null", K(ret));
   } else if (OB_FAIL(stored_row_to_exprs(*insert_row_, get_primary_table_new_row(), eval_ctx_))) {
     LOG_WARN("stored row to exprs faild", K(ret));
-  } else if (OB_FAIL(insert_row_to_das(ctdef.ins_ctdef_, replace_rtdef_.ins_rtdef_))) {
+  } else if (OB_FAIL(insert_row_to_das())) {
     LOG_WARN("shuffle insert row failed", K(ret));
   } else {
-    replace_rtdef_.ins_rtdef_.cur_row_num_ = 1;
+    replace_rtdefs_.at(0).ins_rtdef_.cur_row_num_ = 1;
   }
 
   return ret;
@@ -291,7 +376,7 @@ int ObTableApiReplaceExecutor::get_next_row()
       LOG_WARN("fail to cache insert row", K(ret));
     } else if (OB_FAIL(fetch_conflict_rowkey(conflict_checker_))) {
       LOG_WARN("fail to fetch conflict row", K(ret));
-    } else if (OB_FAIL(reset_das_env(replace_rtdef_.ins_rtdef_))) {
+    } else if (OB_FAIL(reset_das_env())) {
       // 这里需要reuse das 相关信息
       LOG_WARN("fail to reset das env", K(ret));
     } else if (OB_FAIL(ObSqlTransControl::rollback_savepoint(exec_ctx_, savepoint_no))) {
@@ -315,12 +400,34 @@ int ObTableApiReplaceExecutor::get_next_row()
   }
 
   if (OB_SUCC(ret)) {
-    affected_rows_ = replace_rtdef_.ins_rtdef_.cur_row_num_ + replace_rtdef_.del_rtdef_.cur_row_num_;
+    affected_rows_ = replace_rtdefs_.at(0).ins_rtdef_.cur_row_num_ + replace_rtdefs_.at(0).del_rtdef_.cur_row_num_;
     // auto inc 操作中, 同步全局自增值value
     if (tb_ctx_.has_auto_inc() && OB_FAIL(tb_ctx_.update_auto_inc_value())) {
       LOG_WARN("fail to update auto inc value", K(ret));
     }
   }
+  return ret;
+}
+
+int ObTableApiReplaceExecutor::reset_das_env()
+{
+  int ret = OB_SUCCESS;
+
+  // 释放第一次try insert的das task
+  if (OB_FAIL(dml_rtctx_.das_ref_.close_all_task())) {
+    LOG_WARN("close all das task failed", K(ret));
+  } else {
+    dml_rtctx_.das_ref_.reuse();
+  }
+
+  // 因为第二次插入不需要fetch conflict result了，如果有conflict
+  // 就说明replace into的某些逻辑处理有问题
+  for (int64_t i = 0; i < replace_rtdefs_.count(); i++) {
+    ObTableInsRtDef &ins_rtdef = replace_rtdefs_.at(i).ins_rtdef_;
+    ins_rtdef.das_rtdef_.need_fetch_conflict_ = false;
+    ins_rtdef.das_rtdef_.is_duplicated_ = false;
+  }
+
   return ret;
 }
 

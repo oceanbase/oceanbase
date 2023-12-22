@@ -351,7 +351,7 @@ int ObTableApiProcessorBase::get_table_id(
     const int64_t database_id = credential_.database_id_;
     if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
       LOG_WARN("failed to get schema guard", K(ret));
-    } else if (OB_FAIL(schema_guard.get_table_id(tenant_id, database_id, table_name,
+  } else if (OB_FAIL(schema_guard.get_table_id(tenant_id, database_id, table_name,
         is_index, share::schema::ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES, real_table_id))) {
       LOG_WARN("failed to get table id", K(ret), K(tenant_id), K(database_id), K(table_name));
     } else if (OB_INVALID_ID == real_table_id) {
@@ -388,7 +388,8 @@ int ObTableApiProcessorBase::get_tablet_by_rowkey(uint64_t table_id, const ObIAr
 
 int ObTableApiProcessorBase::init_read_trans(const ObTableConsistencyLevel consistency_level,
                                              const ObLSID &ls_id,
-                                             int64_t timeout_ts)
+                                             int64_t timeout_ts,
+                                             bool need_global_snapshot)
 {
   int ret = OB_SUCCESS;
   bool strong_read = ObTableConsistencyLevel::STRONG == consistency_level;
@@ -396,7 +397,7 @@ int ObTableApiProcessorBase::init_read_trans(const ObTableConsistencyLevel consi
 
   if (OB_FAIL(txs->acquire_tx(trans_desc_, session().get_sessid()))) {
     LOG_WARN("failed to acquire tx desc", K(ret));
-  } else if (OB_FAIL(setup_tx_snapshot_(*trans_desc_, tx_snapshot_, strong_read, ls_id, timeout_ts))) {
+  } else if (OB_FAIL(setup_tx_snapshot_(*trans_desc_, tx_snapshot_, strong_read, ls_id, timeout_ts, need_global_snapshot))) {
     LOG_WARN("setup txn snapshot fail", K(ret), KPC_(trans_desc), K(strong_read), K(ls_id), K(timeout_ts));
     txs->release_tx(*trans_desc_);
     trans_desc_ = NULL;
@@ -418,12 +419,13 @@ int ObTableApiProcessorBase::setup_tx_snapshot_(transaction::ObTxDesc &trans_des
                                                 transaction::ObTxReadSnapshot &tx_snapshot,
                                                 const bool strong_read,
                                                 const share::ObLSID &ls_id,
-                                                const int64_t timeout_ts)
+                                                const int64_t timeout_ts,
+                                                bool need_global_snapshot)
 {
   int ret = OB_SUCCESS;
   transaction::ObTransService *txs = MTL(transaction::ObTransService*);
   if (strong_read) {
-    if (ls_id.is_valid()) {
+    if (ls_id.is_valid() && !need_global_snapshot) {
       if (OB_FAIL(txs->get_ls_read_snapshot(trans_desc, transaction::ObTxIsolationLevel::RC, ls_id, timeout_ts, tx_snapshot))) {
         LOG_WARN("fail to get LS read snapshot", K(ret));
       }
@@ -446,11 +448,11 @@ int ObTableApiProcessorBase::setup_tx_snapshot_(transaction::ObTxDesc &trans_des
 
 int ObTableApiProcessorBase::start_trans(bool is_readonly, const sql::stmt::StmtType stmt_type,
                                          const ObTableConsistencyLevel consistency_level,
-                                         uint64_t table_id, const ObLSID &ls_id, int64_t timeout_ts)
+                                        const ObLSID &ls_id, int64_t timeout_ts, bool need_global_snapshot)
 {
   UNUSED(stmt_type);
   return start_trans_(is_readonly, trans_desc_, tx_snapshot_, consistency_level,
-                      trans_state_ptr_, table_id, ls_id, timeout_ts);
+                      trans_state_ptr_, ls_id, timeout_ts, need_global_snapshot);
 }
 
 int ObTableApiProcessorBase::start_trans_(bool is_readonly,
@@ -458,7 +460,7 @@ int ObTableApiProcessorBase::start_trans_(bool is_readonly,
                                           transaction::ObTxReadSnapshot &tx_snapshot,
                                           const ObTableConsistencyLevel consistency_level,
                                           sql::TransState *trans_state_ptr,
-                                          uint64_t table_id, const ObLSID &ls_id, int64_t timeout_ts)
+                                          const ObLSID &ls_id, int64_t timeout_ts, bool need_global_snapshot)
 {
   int ret = OB_SUCCESS;
   NG_TRACE(T_start_trans_begin);
@@ -498,7 +500,7 @@ int ObTableApiProcessorBase::start_trans_(bool is_readonly,
   NG_TRACE(T_start_trans_end);
   // 2. acquire snapshot
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(setup_tx_snapshot_(*trans_desc, tx_snapshot, strong_read, ls_id, timeout_ts))) {
+    if (OB_FAIL(setup_tx_snapshot_(*trans_desc, tx_snapshot, strong_read, ls_id, timeout_ts, need_global_snapshot))) {
       LOG_WARN("setup txn snapshot fail", K(ret), KPC(trans_desc), K(strong_read), K(ls_id), K(timeout_ts));
     }
   }
@@ -851,39 +853,6 @@ int ObTableApiProcessorBase::process_with_retry(const ObString &credential, cons
     audit_record_.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
   }
   audit_record_.status_ = ret;
-  return ret;
-}
-
-// check whether the index type of given table is supported by table api or not.
-// global index is not supported by table api. specially, global index in non-partitioned
-// table was optimized to local index, which we can support.
-int ObTableApiProcessorBase::check_table_index_supported(uint64_t table_id, bool &is_supported)
-{
-  int ret = OB_SUCCESS;
-  bool exists = false;
-  is_supported = true;
-  schema::ObSchemaGetterGuard schema_guard;
-  const schema::ObSimpleTableSchemaV2 *table_schema = NULL;
-  if (OB_INVALID_ID == table_id) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid table id", K(ret));
-  } else if (OB_ISNULL(gctx_.schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid schema service", K(ret));
-  } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(credential_.tenant_id_, schema_guard))) {
-    LOG_WARN("fail to get schema guard", K(ret), K(credential_.tenant_id_));
-  } else if (OB_FAIL(schema_guard.get_simple_table_schema(credential_.tenant_id_, table_id, table_schema))) {
-    LOG_WARN("fail to get table schema", K(ret), K(table_id));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_SCHEMA_ERROR;
-    LOG_WARN("get null table schema", K(ret), K(table_id));
-  } else if (table_schema->is_partitioned_table()) {
-    if (OB_FAIL(schema_guard.check_global_index_exist(credential_.tenant_id_, table_id, exists))) {
-      LOG_WARN("fail to check global index", K(ret), K(table_id));
-    } else {
-      is_supported = !exists;
-    }
-  }
   return ret;
 }
 

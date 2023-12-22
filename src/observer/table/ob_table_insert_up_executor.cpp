@@ -23,26 +23,68 @@ namespace oceanbase
 {
 namespace table
 {
-int ObTableApiInsertUpExecutor::generate_insert_up_rtdef(const ObTableInsUpdCtDef &ctdef,
-                                                         ObTableInsUpdRtDef &rtdef)
+
+int ObTableApiInsertUpSpec::init_ctdefs_array(int64_t size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(insert_up_ctdefs_.allocate_array(alloc_, size))) {
+    LOG_WARN("fail to alloc ctdefs array", K(ret), K(size));
+  } else {
+    // init each element as nullptr
+    for (int64_t i = 0; i < size; i++) {
+      insert_up_ctdefs_.at(i) = nullptr;
+    }
+  }
+  return ret;
+}
+
+ObTableApiInsertUpSpec::~ObTableApiInsertUpSpec()
+{
+  for (int64_t i = 0; i < insert_up_ctdefs_.count(); i++) {
+    if (OB_NOT_NULL(insert_up_ctdefs_.at(i))) {
+      insert_up_ctdefs_.at(i)->~ObTableInsUpdCtDef();
+    }
+  }
+  insert_up_ctdefs_.reset();
+}
+
+bool ObTableApiInsertUpExecutor::is_duplicated()
+{
+  for (int64_t i = 0 ; i < insert_up_rtdefs_.count() && !is_duplicated_; i++) {
+    is_duplicated_ = insert_up_rtdefs_.at(i).ins_rtdef_.das_rtdef_.is_duplicated_;
+  }
+  return is_duplicated_;
+}
+
+int ObTableApiInsertUpExecutor::generate_insert_up_rtdefs()
 {
   int ret = OB_SUCCESS;
   bool use_put = false;
 
-  if (OB_FAIL(generate_ins_rtdef(ctdef.ins_ctdef_, rtdef.ins_rtdef_))) {
-    LOG_WARN("fail to generate insert rtdef", K(ret));
-  } else if (OB_FAIL(generate_upd_rtdef(ctdef.upd_ctdef_,
-                                        rtdef.upd_rtdef_))) {
-    LOG_WARN("fail to generate update rtdef", K(ret));
-  } else if (OB_FAIL(tb_ctx_.check_insert_up_can_use_put(use_put))) {
+  if (OB_FAIL(insert_up_rtdefs_.allocate_array(allocator_, insert_up_spec_.get_ctdefs().count()))) {
+    LOG_WARN("allocate insert up rtdef failed", K(ret), K(insert_up_spec_.get_ctdefs().count()));
+  }
+  for (int64_t i = 0; i < insert_up_rtdefs_.count() && OB_SUCC(ret); i++) {
+    ObTableInsUpdRtDef &insup_rtdef = insert_up_rtdefs_.at(i);
+    ObTableInsUpdCtDef *insup_ctdef = nullptr;
+    if (OB_ISNULL(insup_ctdef = insert_up_spec_.get_ctdefs().at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("insup ctdef is NULL", K(ret), K(i));
+    } else if (OB_FAIL(generate_ins_rtdef(insup_ctdef->ins_ctdef_, insup_rtdef.ins_rtdef_))) {
+      LOG_WARN("fail to generate insert rtdef", K(ret));
+    } else if (OB_FAIL(generate_upd_rtdef(insup_ctdef->upd_ctdef_,
+                                          insup_rtdef.upd_rtdef_))) {
+      LOG_WARN("fail to generate update rtdef", K(ret));
+    } else if (OB_FAIL(tb_ctx_.check_insert_up_can_use_put(use_put))) {
     LOG_WARN("fail to check insert up use put", K(ret));
-  } else {
-    rtdef.ins_rtdef_.das_rtdef_.table_loc_->is_writing_ = true;
-    rtdef.ins_rtdef_.das_rtdef_.use_put_ = use_put;
+    } else {
+      insup_rtdef.ins_rtdef_.das_rtdef_.table_loc_->is_writing_ = true;
+      insup_rtdef.ins_rtdef_.das_rtdef_.use_put_ = use_put;
+    }
   }
 
   if (!use_put) {
-    set_need_fetch_conflict(upd_rtctx_, rtdef.ins_rtdef_);
+    set_need_fetch_conflict();
   }
 
   return ret;
@@ -51,33 +93,34 @@ int ObTableApiInsertUpExecutor::generate_insert_up_rtdef(const ObTableInsUpdCtDe
 int ObTableApiInsertUpExecutor::open()
 {
   int ret = OB_SUCCESS;
-
-  const ObSQLSessionInfo &session = tb_ctx_.get_session_info();
+  ObDASTableLoc *table_loc = nullptr;
+  ObDASTabletLoc *tablet_loc = nullptr;
   if (OB_FAIL(ObTableApiModifyExecutor::open())) {
     LOG_WARN("fail to oepn ObTableApiModifyExecutor", K(ret));
-  } else if (OB_FAIL(generate_insert_up_rtdef(insert_up_spec_.get_ctdef(), insert_up_rtdef_))) {
+  } else if (OB_UNLIKELY(insert_up_spec_.get_ctdefs().empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ins ctdef is invalid", K(ret));
+  } else if (OB_FAIL(generate_insert_up_rtdefs())) {
     LOG_WARN("fail to init insert up rtdef", K(ret));
+  } else if (OB_ISNULL(table_loc = insert_up_rtdefs_.at(0).ins_rtdef_.das_rtdef_.table_loc_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table location is invalid", K(ret));
+  } else if (OB_FAIL(conflict_checker_.init_conflict_checker(insert_up_spec_.get_expr_frame_info(),
+                                                             table_loc))) {
+    LOG_WARN("fail to init conflict_checker", K(ret));
+  } else if (OB_FAIL(calc_local_tablet_loc(tablet_loc))) {
+    LOG_WARN("fail to calc tablet loc", K(ret));
   } else {
-    ObDASTabletLoc *tablet_loc = nullptr;
-    ObDASTableLoc *table_loc = insert_up_rtdef_.ins_rtdef_.das_rtdef_.table_loc_;
-    if (OB_ISNULL(table_loc)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table location is invalid", K(ret));
-    } else if (OB_FAIL(conflict_checker_.init_conflict_checker(insert_up_spec_.get_expr_frame_info(),
-                                                               table_loc))) {
-      LOG_WARN("fail to init conflict_checker", K(ret));
-    } else if (OB_FAIL(calc_tablet_loc(tablet_loc))) {
-      LOG_WARN("fail to calc tablet location", K(ret));
-    } else {
-      conflict_checker_.set_local_tablet_loc(tablet_loc);
-      // init update das_ref
-      ObMemAttr mem_attr;
-      mem_attr.tenant_id_ = session.get_effective_tenant_id();
-      mem_attr.label_ = "TableApiInsUpd";
-      upd_rtctx_.das_ref_.set_expr_frame_info(insert_up_spec_.get_expr_frame_info());
-      upd_rtctx_.das_ref_.set_mem_attr(mem_attr);
-      upd_rtctx_.das_ref_.set_execute_directly(true);
-    }
+    conflict_checker_.set_local_tablet_loc(tablet_loc);
+    // init update das_ref
+    const ObSQLSessionInfo &session = tb_ctx_.get_session_info();
+    ObMemAttr mem_attr;
+    bool use_dist_das = tb_ctx_.has_global_index();
+    mem_attr.tenant_id_ = session.get_effective_tenant_id();
+    mem_attr.label_ = "TableApiInsUpd";
+    upd_rtctx_.das_ref_.set_expr_frame_info(insert_up_spec_.get_expr_frame_info());
+    upd_rtctx_.das_ref_.set_mem_attr(mem_attr);
+    upd_rtctx_.das_ref_.set_execute_directly(!use_dist_das);
   }
 
   if (OB_FAIL(ret)) {
@@ -89,11 +132,22 @@ int ObTableApiInsertUpExecutor::open()
   return ret;
 }
 
+void ObTableApiInsertUpExecutor::set_need_fetch_conflict()
+{
+  for (int64_t i = 0; i < insert_up_rtdefs_.count(); i++) {
+    ObTableInsRtDef &ins_rtdef = insert_up_rtdefs_.at(i).ins_rtdef_;
+    ins_rtdef.das_rtdef_.need_fetch_conflict_ = true;
+  }
+  dml_rtctx_.set_non_sub_full_task();
+  upd_rtctx_.set_pick_del_task_first();
+  upd_rtctx_.set_non_sub_full_task();
+}
+
 int ObTableApiInsertUpExecutor::refresh_exprs_frame(const ObTableEntity *entity)
 {
   int ret = OB_SUCCESS;
-  const ObTableInsCtDef &ins_ctdef = insert_up_spec_.get_ctdef().ins_ctdef_;
-  const ObTableUpdCtDef &upd_ctdef = insert_up_spec_.get_ctdef().upd_ctdef_;
+  const ObTableInsCtDef &ins_ctdef = insert_up_spec_.get_ctdefs().at(0)->ins_ctdef_;
+  const ObTableUpdCtDef &upd_ctdef = insert_up_spec_.get_ctdefs().at(0)->upd_ctdef_;
 
   if (OB_ISNULL(entity)) {
     ret = OB_ERR_UNEXPECTED;
@@ -125,17 +179,38 @@ int ObTableApiInsertUpExecutor::get_next_row_from_child()
   return ret;
 }
 
+int ObTableApiInsertUpExecutor::insert_row_to_das()
+{
+  int ret = OB_SUCCESS;
+  int64_t insup_ctdef_count = insert_up_spec_.get_ctdefs().count();
+  if (OB_UNLIKELY(insup_ctdef_count != insert_up_rtdefs_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("count of insup ctdef is not equal to rtdef", K(ret), K(insup_ctdef_count), K(insert_up_rtdefs_.count()));
+  }
+  for (int64_t i = 0; i < insert_up_rtdefs_.count() && OB_SUCC(ret); i++) {
+    ObTableInsRtDef &ins_rtdef = insert_up_rtdefs_.at(i).ins_rtdef_;
+    const ObTableInsUpdCtDef *insup_ctdef = nullptr;
+    if (OB_ISNULL(insup_ctdef = insert_up_spec_.get_ctdefs().at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("insup ctdef is NULL", K(ret), K(i));
+    } else if (OB_FAIL(ObTableApiModifyExecutor::insert_row_to_das(insup_ctdef->ins_ctdef_, ins_rtdef))) {
+      LOG_WARN("fail to insert row to das", K(ret), K(i), K(insup_ctdef->ins_ctdef_), K(ins_rtdef));
+    }
+  }
+  return ret;
+}
+
 int ObTableApiInsertUpExecutor::try_insert_row()
 {
   int ret = OB_SUCCESS;
-  const ObTableInsUpdCtDef &insert_up_ctdef = insert_up_spec_.get_ctdef();
+  const ObTableInsUpdCtDef &insert_up_ctdef = *insert_up_spec_.get_ctdefs().at(0);
 
   while (OB_SUCC(ret)) {
     if (OB_FAIL(get_next_row_from_child())) {
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to load next row from child", K(ret));
       }
-    } else if (OB_FAIL(insert_row_to_das(insert_up_ctdef.ins_ctdef_, insert_up_rtdef_.ins_rtdef_))) {
+    } else if (OB_FAIL(insert_row_to_das())) {
       LOG_WARN("fail to insert row to das", K(ret));
     } else {
       cur_idx_++;
@@ -168,6 +243,27 @@ int ObTableApiInsertUpExecutor::try_update_row()
   return ret;
 }
 
+int ObTableApiInsertUpExecutor::reset_das_env()
+{
+  int ret = OB_SUCCESS;
+  // 释放第一次try insert的das task
+  if (OB_FAIL(dml_rtctx_.das_ref_.close_all_task())) {
+    LOG_WARN("fail to close all das task", K(ret));
+  } else {
+    dml_rtctx_.das_ref_.reuse();
+  }
+
+  // 因为第二次插入不需要fetch conflict result了
+  for (int64_t i = 0; OB_SUCC(ret) && i < insert_up_rtdefs_.count(); i++) {
+    ObTableInsRtDef &ins_rtdef = insert_up_rtdefs_.at(i).ins_rtdef_;
+    ins_rtdef.das_rtdef_.need_fetch_conflict_ = false;
+    ins_rtdef.das_rtdef_.is_duplicated_ = false;
+  }
+
+  return ret;
+}
+
+
 int ObTableApiInsertUpExecutor::cache_insert_row()
 {
   int ret = OB_SUCCESS;
@@ -195,7 +291,7 @@ int ObTableApiInsertUpExecutor::do_insert_up_cache()
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObConflictValue, 1> constraint_values;
-  ObTableUpdRtDef &upd_rtdef = insert_up_rtdef_.upd_rtdef_;
+  ObTableUpdRtDef &upd_rtdef = insert_up_rtdefs_.at(0).upd_rtdef_;
 
   if (OB_ISNULL(insert_row_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -217,7 +313,7 @@ int ObTableApiInsertUpExecutor::do_insert_up_cache()
       LOG_WARN("can not update rowkey column", K(ret));
     } else if (OB_FAIL(check_whether_row_change(*upd_old_row,
                                                 *upd_new_row,
-                                                insert_up_spec_.get_ctdef().upd_ctdef_,
+                                                insert_up_spec_.get_ctdefs().at(0)->upd_ctdef_,
                                                 is_row_changed_))) {
       LOG_WARN("fail to check whether row change", K(ret));
     } else if (is_row_changed_) {
@@ -248,7 +344,27 @@ int ObTableApiInsertUpExecutor::prepare_final_insert_up_task()
     if (!is_row_changed_) {
       // do nothing
     } else if (constraint_value.new_row_source_ == ObNewRowSource::FROM_UPDATE) {
-      OZ(do_update(constraint_rowkey, constraint_value));
+      OZ(do_update(constraint_value));
+    } else if (constraint_value.new_row_source_ == ObNewRowSource::FROM_INSERT) {
+      /*
+      scene of do_insert():
+      case like:
+        create table t (c1 int primary key, c2 int, c3 int, unique key idx(c2) local);
+        insert into t values (1,1,1);
+        insert into t values (2,1,3); // unique key conflict
+      info:
+        conflict_map_array count: 2
+        conflict_map_array[0]:
+          {key: 1, value: {base: old, current: NULL, new_row_source: INSERT}}
+          {key: 2, value: {base: NULL, current: new, new_row_source: UPDATE}}
+        conflict_map_array[1]:
+          {key: 1, value: {base: old, current: NULL, new_row_source: UPDATE}}
+
+      NOTE:
+        the struct of conflict_map_array after do_insertup_cache() has been shown above.
+        do_insert() will delete the old_row and do_update() will insert the new row.
+      */
+      OZ(do_insert(constraint_value));
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected row source", K(ret), K(constraint_value.new_row_source_));
@@ -258,8 +374,53 @@ int ObTableApiInsertUpExecutor::prepare_final_insert_up_task()
   return ret;
 }
 
-int ObTableApiInsertUpExecutor::do_update(const ObRowkey &constraint_rowkey,
-                                          const ObConflictValue &constraint_value)
+int ObTableApiInsertUpExecutor::delete_upd_old_row_to_das()
+{
+  int ret = OB_SUCCESS;
+  int64_t insup_ctdefs_count = insert_up_spec_.get_ctdefs().count();
+  if (OB_UNLIKELY(insup_ctdefs_count != insert_up_rtdefs_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("count of insup ctdefs is not equal to rtdefs", K(ret), K(insup_ctdefs_count), K(insert_up_rtdefs_.count()));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < insert_up_rtdefs_.count(); i++) {
+    ObTableUpdRtDef &upd_rtdef = insert_up_rtdefs_.at(i).upd_rtdef_;
+    const ObTableInsUpdCtDef *insup_ctdef = nullptr;
+    if (OB_ISNULL(insup_ctdef = insert_up_spec_.get_ctdefs().at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("insup ctdef is NULL", K(ret), K(i));
+    } else if (OB_FAIL(ObTableApiModifyExecutor::delete_upd_old_row_to_das(insup_ctdef->upd_ctdef_,
+            upd_rtdef, upd_rtctx_))) {
+      LOG_WARN("fail to delete old row to das", K(ret), K(i));
+    }
+  }
+
+  return ret;
+}
+
+int ObTableApiInsertUpExecutor::insert_upd_new_row_to_das()
+{
+  int ret = OB_SUCCESS;
+  int64_t insup_ctdef_count = insert_up_spec_.get_ctdefs().count();
+  if (OB_UNLIKELY(insup_ctdef_count != insert_up_rtdefs_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("count of insup ctdef is not equal to rtdef", K(ret), K(insup_ctdef_count),
+              K(insert_up_rtdefs_.count()));
+  }
+  for (int64_t i = 0; i < insert_up_rtdefs_.count(); i++) {
+    ObTableUpdRtDef &upd_rtdef = insert_up_rtdefs_.at(i).upd_rtdef_;
+    ObTableInsUpdCtDef *insup_ctdef = nullptr;
+    if (OB_ISNULL(insup_ctdef = insert_up_spec_.get_ctdefs().at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("insup ctdef is NULL", K(ret), K(i));
+    } else if (OB_FAIL(ObTableApiModifyExecutor::insert_upd_new_row_to_das(insup_ctdef->upd_ctdef_,
+              upd_rtdef, upd_rtctx_))) {
+      LOG_WARN("fail to insert row to das", K(ret), K(i));
+    }
+  }
+  return ret;
+}
+
+int ObTableApiInsertUpExecutor::do_update(const ObConflictValue &constraint_value)
 {
   int ret = OB_SUCCESS;
 
@@ -271,30 +432,56 @@ int ObTableApiInsertUpExecutor::do_update(const ObRowkey &constraint_rowkey,
       OZ(stored_row_to_exprs(*constraint_value.baseline_datum_row_,
                              get_primary_table_upd_old_row(),
                              eval_ctx_));
-      OZ(delete_upd_old_row_to_das(constraint_rowkey,
-                                   constraint_value,
-                                   insert_up_spec_.get_ctdef().upd_ctdef_,
-                                   insert_up_rtdef_.upd_rtdef_,
-                                   upd_rtctx_));
+      OZ(delete_upd_old_row_to_das());
       OZ(to_expr_skip_old(*constraint_value.current_datum_row_,
-                          insert_up_spec_.get_ctdef().upd_ctdef_));
+                          insert_up_spec_.get_ctdefs().at(0)->upd_ctdef_));
       clear_evaluated_flag();
-      OZ(insert_upd_new_row_to_das(insert_up_spec_.get_ctdef().upd_ctdef_,
-                                   insert_up_rtdef_.upd_rtdef_,
-                                   upd_rtctx_));
+      OZ(insert_upd_new_row_to_das());
     } else if (NULL == constraint_value.baseline_datum_row_ &&
                NULL != constraint_value.current_datum_row_) { // 单单是唯一索引冲突的时候，会走这个分支
       OZ(to_expr_skip_old(*constraint_value.current_datum_row_,
-                          insert_up_spec_.get_ctdef().upd_ctdef_));
-      OZ(insert_upd_new_row_to_das(insert_up_spec_.get_ctdef().upd_ctdef_,
-                                   insert_up_rtdef_.upd_rtdef_,
-                                   upd_rtctx_));
+                          insert_up_spec_.get_ctdefs().at(0)->upd_ctdef_));
+      OZ(insert_upd_new_row_to_das());
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected constraint_value", K(ret));
     }
   }
 
+  return ret;
+}
+
+int ObTableApiInsertUpExecutor::do_insert(const ObConflictValue &constraint_value)
+{
+  int ret = OB_SUCCESS;
+  bool has_insert = false;
+  bool has_delete = false;
+  if (NULL != constraint_value.baseline_datum_row_ &&
+      NULL != constraint_value.current_datum_row_) {
+    // delete + insert
+    OZ(stored_row_to_exprs(*constraint_value.baseline_datum_row_,
+                            get_primary_table_upd_old_row(),
+                            eval_ctx_));
+    OZ(delete_upd_old_row_to_das());
+    OZ(to_expr_skip_old(*constraint_value.current_datum_row_,
+                        insert_up_spec_.get_ctdefs().at(0)->upd_ctdef_));
+    clear_evaluated_flag();
+    OZ(insert_upd_new_row_to_das());
+  } else if (NULL != constraint_value.baseline_datum_row_ &&
+             NULL == constraint_value.current_datum_row_) {
+    // only delete
+    OZ(stored_row_to_exprs(*constraint_value.baseline_datum_row_,
+                            get_primary_table_upd_old_row(),
+                            eval_ctx_));
+    OZ(delete_upd_old_row_to_das());
+  } else if (NULL == constraint_value.baseline_datum_row_ &&
+             NULL != constraint_value.current_datum_row_) {
+    // only insert
+    OZ(to_expr_skip_old(*constraint_value.current_datum_row_,
+                        insert_up_spec_.get_ctdefs().at(0)->upd_ctdef_));
+    clear_evaluated_flag();
+    OZ(insert_upd_new_row_to_das());
+  }
   return ret;
 }
 
@@ -314,7 +501,7 @@ int ObTableApiInsertUpExecutor::get_next_row()
     LOG_WARN("fail to cache insert row", K(ret));
   } else if (OB_FAIL(fetch_conflict_rowkey(conflict_checker_))) {
     LOG_WARN("fail to fetch conflict row", K(ret));
-  } else if (OB_FAIL(reset_das_env(insert_up_rtdef_.ins_rtdef_))) {
+  } else if (OB_FAIL(reset_das_env())) {
     // 这里需要reuse das 相关信息
     LOG_WARN("fail to reset das env", K(ret));
   } else if (OB_FAIL(ObSqlTransControl::rollback_savepoint(exec_ctx_, savepoint_no))) {
@@ -325,7 +512,7 @@ int ObTableApiInsertUpExecutor::get_next_row()
   }
 
   if (OB_SUCC(ret)) {
-    affected_rows_ += insert_rows_ + insert_up_rtdef_.upd_rtdef_.found_rows_;
+    affected_rows_ += insert_rows_ + insert_up_rtdefs_.at(0).upd_rtdef_.found_rows_;
     // auto inc 操作中, 同步全局自增值value
     if (tb_ctx_.has_auto_inc() && OB_FAIL(tb_ctx_.update_auto_inc_value())) {
       LOG_WARN("fail to update auto inc value", K(ret));

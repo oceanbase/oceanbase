@@ -275,6 +275,25 @@ int ObTableCtx::get_expr_from_assignments(const ObString &col_name, ObRawExpr *&
   return ret;
 }
 
+int ObTableCtx::get_assignment_by_column_id(uint64_t column_id, const ObTableAssignment *&assign) const
+{
+  int ret = OB_SUCCESS;
+  bool found = false;
+  assign = nullptr;
+  for (int64_t i = 0; OB_SUCC(ret) && i < assigns_.count() && !found; i++) {
+    const ObTableAssignment &tmp_assign = assigns_.at(i);
+    if (OB_ISNULL(tmp_assign.column_item_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("assign column item is null", K(ret));
+    } else if (tmp_assign.column_item_->column_id_ == column_id) {
+      found = true;
+      assign = &tmp_assign;
+    }
+  }
+  return ret;
+}
+
+
 /*
   1. ObConflictChecker need ObPhysicalPlanCtx.
   2. now() expr need ObPhysicalPlanCtx.cur_time_.
@@ -293,6 +312,25 @@ int ObTableCtx::init_physical_plan_ctx(int64_t timeout_ts, int64_t tenant_schema
     phy_plan_ctx->set_tenant_schema_version(tenant_schema_version);
     phy_plan_ctx->set_cur_time(ObTimeUtility::current_time());
     exec_ctx_.set_physical_plan_ctx(phy_plan_ctx);
+  }
+  return ret;
+}
+
+/*
+  1. calc_partitio_and_tablet_id need sql_ctx
+  2. in expr: calc_partition_id need sql_ctx.schema_guard_ to get_das_tablet_mapper
+*/
+int ObTableCtx::init_sql_ctx()
+{
+  int ret = OB_SUCCESS;
+  void *buf = allocator_.alloc(sizeof(ObSqlCtx));
+  if (OB_ISNULL(buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc SqlCtx", K(ret), K(sizeof(ObSqlCtx)));
+  } else {
+    ObSqlCtx *sql_ctx = new(buf) ObSqlCtx();
+    sql_ctx->schema_guard_ = &schema_guard_;
+    exec_ctx_.get_das_ctx().set_sql_ctx(sql_ctx);
   }
   return ret;
 }
@@ -360,9 +398,8 @@ int ObTableCtx::inner_init_common(ObTableApiCredential &credential,
   } else if (!arg_tablet_id.is_valid()) {
     if (is_scan_) { // 扫描场景使用table_schema上的tablet id,客户端已经做了路由分发
       if (table_schema_->is_partitioned_table()) { // 不支持分区表
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid tablet id in partition table when do scan");
-        LOG_WARN("partitioned table not supported", K(ret), K(table_name));
+        // classify whether the request is valid will do in function 'init_scan'
+        tablet_id = ObTabletID::INVALID_TABLET_ID;
       } else {
         tablet_id = table_schema_->get_tablet_id();
       }
@@ -379,11 +416,11 @@ int ObTableCtx::inner_init_common(ObTableApiCredential &credential,
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(GCTX.location_service_->get(tenant_id_,
-                                                 tablet_id,
-                                                 0, /* expire_renew_time */
-                                                 is_cache_hit,
-                                                 ls_id_))) {
+  } else if (!is_scan_ && OB_FAIL(GCTX.location_service_->get(tenant_id_,
+                                                             tablet_id,
+                                                             0, /* expire_renew_time */
+                                                             is_cache_hit,
+                                                             ls_id_))) {
     LOG_WARN("fail to get ls id", K(ret), K(tablet_id), K(table_name));
   } else if (OB_FAIL(construct_column_items())) {
     LOG_WARN("fail to construct column items", K(ret));
@@ -649,8 +686,10 @@ int ObTableCtx::adjust_rowkey()
 
       if (OB_SUCC(ret) && need_check) {
         if (idx >= entity_rowkey_cnt) {
-          ret = OB_INDEX_OUT_OF_RANGE;
-          LOG_WARN("idx out of range", K(ret), K(idx), K(entity_rowkey_cnt));
+          ret = OB_KV_ROWKEY_COUNT_NOT_MATCH;
+          LOG_USER_ERROR(OB_KV_ROWKEY_COUNT_NOT_MATCH, schema_rowkey_cnt, entity_rowkey_cnt);
+          LOG_WARN("entity rowkey count mismatch table schema rowkey count", K(ret),
+                    K(entity_rowkey_cnt), K(schema_rowkey_cnt));
         } else if (OB_FAIL(adjust_column(*col_schema, obj_ptr[idx]))) { // [c1][c2][c3] [c1][c3]
           LOG_WARN("fail to adjust column", K(ret), K(obj_ptr[idx]));
         } else {
@@ -874,7 +913,8 @@ int ObTableCtx::generate_key_range(const ObIArray<ObNewRange> &scan_ranges)
       query_col_ids_ and query_col_names_ is same with user query column order.
 */
 int ObTableCtx::init_scan(const ObTableQuery &query,
-                          const bool &is_wead_read)
+                          const bool &is_wead_read,
+                          const uint64_t arg_table_id)
 {
   int ret = OB_SUCCESS;
   const ObString &index_name = query.get_index_name();
@@ -893,11 +933,16 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
   // init is_index_scan_
   if (index_name.empty() || 0 == index_name.case_compare(ObIndexHint::PRIMARY_KEY)) { // scan with primary key
     index_table_id_ = ref_table_id_;
+    if (!index_tablet_id_.is_valid()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid tablet id in partition table when do scan");
+      LOG_WARN("query by primary index, but tablet id is invalid", K(ret), K(index_tablet_id_));
+    }
     is_index_back_ = false;
   } else {
     is_index_scan_ = true;
     // init index_table_id_,index_schema_
-    if (OB_FAIL(init_index_info(index_name))) {
+    if (OB_FAIL(init_index_info(index_name, arg_table_id))) {
       LOG_WARN("fail to init index info", K(ret), K(index_name));
     } else {
       // init index_col_ids_
@@ -911,8 +956,15 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
   }
 
   if (OB_SUCC(ret)) {
-    // init key_ranges_
-    if (OB_FAIL(generate_key_range(query.get_scan_ranges()))) {
+    bool is_cache_hit = false;
+    if (OB_FAIL(GCTX.location_service_->get(tenant_id_,
+                                            index_tablet_id_,
+                                            0, /* expire_renew_time */
+                                            is_cache_hit,
+                                            ls_id_))) {
+      LOG_WARN("fail to get ls id", K(ret), K(index_tablet_id_), K(table_name_));
+    } else if (OB_FAIL(generate_key_range(query.get_scan_ranges()))) {// init key_ranges_
+
       LOG_WARN("fail to generate key ranges", K(ret));
     } else if (query.is_aggregate_query() && OB_FAIL(init_agg_cell_proj(query.get_aggregations().count()))) {
       LOG_WARN("fail to init agg cell proj", K(ret));
@@ -950,7 +1002,9 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
         }
       }
       if (OB_SUCC(ret)) {
-        if ((select_col_ids_.count() != select_columns.count()) && !select_all_columns) {
+        if (OB_FAIL(init_scan_index_info())) {
+          LOG_WARN("fail to scan index info", K(ret));
+        } else if ((select_col_ids_.count() != select_columns.count()) && !select_all_columns) {
           ret = OB_ERR_COLUMN_NOT_FOUND;
           LOG_WARN("select_col_ids or select_metas count is not equal to select_columns",
               K(select_columns), K(select_col_ids_));
@@ -974,9 +1028,150 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
   return ret;
 }
 
+/*
+  init index info for scan op:
+    - primary table index info
+    - index scan: add global index and local index info
+*/
+int ObTableCtx::init_scan_index_info()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(init_primary_index_info())) {
+    LOG_WARN("fail to init primary table index info", K(ret));
+  } else if (is_index_scan_) {
+    ObTableIndexInfo *index_info = nullptr;
+    if (OB_ISNULL(index_schema_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("index schema is NULL", K(ret));
+    } else if (OB_ISNULL(index_info = OB_NEWx(ObTableIndexInfo, &ctx_allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc index info", K(ret));
+    } else {
+      index_info->data_table_id_ = ref_table_id_;
+      index_info->index_table_id_ = index_table_id_;
+      index_info->index_schema_ = index_schema_;
+      if (OB_FAIL(table_index_info_.push_back(index_info))) {
+        LOG_WARN("fail to push back index info", K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
+/*
+  add index info for dml op:
+    - add primary table index info, and related_index_ids_ contain local index table ids;
+    - if has global index, add global index info;
+*/
+int ObTableCtx::init_dml_index_info()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(init_primary_index_info())) {
+    LOG_WARN("fail to init primary table index info", K(ret));
+  } else {
+    uint64_t tids[OB_MAX_INDEX_PER_TABLE];
+    int64_t tids_num = 0;
+    if (OB_FAIL(schema_guard_.get_can_write_index_array(tenant_id_,
+                                                        ref_table_id_,
+                                                        tids,
+                                                        tids_num,
+                                                        true /* only global */))) {
+      LOG_WARN("fail to get global index tids", K(ret));
+    } else {
+      const ObTableSchema *index_schema = nullptr;
+      ObTableIndexInfo *index_info = nullptr;
+      bool can_skip = false;
+      for (int64_t i = 0; i < tids_num && OB_SUCC(ret); i++) {
+        if (OB_FAIL(schema_guard_.get_table_schema(tenant_id_, tids[i], index_schema))) {
+          LOG_WARN("fail to get index schema", K(ret));
+        } else if (OB_ISNULL(index_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("index schema is NULL", K(ret));
+        } else if (OB_FAIL(check_if_skip_build_index_info(index_schema, can_skip))) {
+          LOG_WARN("fail to check skip build index info", K(ret), K(i), K(can_skip));
+        } else if (can_skip) {
+          // skip build index info
+        } else if (OB_ISNULL(index_info = OB_NEWx(ObTableIndexInfo, &ctx_allocator_))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc index info", K(ret));
+        } else {
+          index_info->data_table_id_ = ref_table_id_;
+          index_info->index_table_id_ = tids[i];
+          index_info->index_schema_ = index_schema;
+          if (OB_FAIL(table_index_info_.push_back(index_info))) {
+            LOG_WARN("fail to push back index info", K(ret));
+          }
+        }
+      } // end for
+    }
+    if (OB_SUCC(ret) && table_index_info_.count() > 1) {
+      has_global_index_ = true;
+    }
+  }
+
+  return ret;
+}
+
+int ObTableCtx::check_if_skip_build_index_info(const ObTableSchema *index_schema, bool &can_skip)
+{
+  int ret = OB_SUCCESS;
+  can_skip = false;
+  if (operation_type_ == ObTableOperationType::UPDATE) {
+    bool found = false;
+    if (OB_ISNULL(index_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("index schema is NULL", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < assigns_.count() && !found; i++) {
+      const ObTableAssignment &assign = assigns_.at(i);
+      if (OB_ISNULL(assign.column_item_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("assign column item is null", K(ret), K(assign));
+      } else if (OB_NOT_NULL(index_schema->get_column_schema(assign.column_item_->column_id_))) {
+        found = true;
+      }
+    }
+    if (OB_SUCC(ret) && !found) {
+      can_skip = true;
+    }
+  }
+  return ret;
+}
+
+// add primary index info
+int ObTableCtx::init_primary_index_info()
+{
+  int ret = OB_SUCCESS;
+  ObTableIndexInfo *index_info = nullptr;
+  if (OB_ISNULL(table_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is NULL", K(ret));
+  } else if (OB_ISNULL(index_info = OB_NEWx(ObTableIndexInfo, &ctx_allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc index_info", K(ret));
+  } else {
+    index_info->data_table_id_ = ref_table_id_;
+    index_info->index_table_id_ = ref_table_id_;
+    index_info->index_schema_ = table_schema_;
+    index_info->is_primary_index_ = true;
+    if (is_dml()) {
+      if (OB_FAIL(init_dml_related_tid())) {
+        LOG_WARN("fail to init data table related tids", K(ret));
+      } else {
+        index_info->related_index_ids_.assign(related_index_ids_);
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(table_index_info_.push_back(index_info))) {
+      LOG_WARN("fail to push back primary index info", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTableCtx::init_insert()
 {
-  return init_dml_related_tid();
+  return init_dml_index_info();
 }
 
 /*
@@ -1025,7 +1220,7 @@ int ObTableCtx::add_stored_generated_column_assignment(const ObTableAssignment &
       }
     }
   }
-  return init_dml_related_tid();
+  return ret;
 }
 
 /*
@@ -1099,8 +1294,8 @@ int ObTableCtx::init_update()
     scan_order_ = ObQueryFlag::Forward;
     if (OB_FAIL(table_schema_->get_column_ids(select_col_ids_))) {
       LOG_WARN("fail to get column ids", K(ret));
-    } else if (OB_FAIL(init_dml_related_tid())) { // 3. init related index table id
-      LOG_WARN("fail to init dml related table ids", K(ret));
+    } else if (OB_FAIL(init_dml_index_info())) { // 3. init index info, include related_index_ids
+      LOG_WARN("fail to init index info for update", K(ret));
     }
   }
 
@@ -1148,8 +1343,8 @@ int ObTableCtx::init_delete()
   }
 
   // 3. init related index table id
-  if (OB_SUCC(ret) && OB_FAIL(init_dml_related_tid())) {
-    LOG_WARN("fail to init dml related table ids", K(ret));
+  if (OB_SUCC(ret) && OB_FAIL(init_dml_index_info())) {
+    LOG_WARN("fail to init index info ids", K(ret));
   }
 
   return ret;
@@ -1172,13 +1367,13 @@ int ObTableCtx::init_ttl_delete(ObRowkey &start_key)
   range.start_key_ = real_start_key;
   if (OB_FAIL(query.add_scan_range(range))) {
     LOG_WARN("fail to generate key ranges", KR(ret), K(range));
-  } else if (OB_FAIL(init_scan(query, false/* is_weak_read */))) {
+  } else if (OB_FAIL(init_scan(query, false/* is_weak_read */, index_table_id_))) {
     LOG_WARN("fail to init scan ctx", KR(ret), K(query));
   }
 
   // 2. init related index table id
-  if (OB_SUCC(ret) && OB_FAIL(init_dml_related_tid())) {
-    LOG_WARN("fail to init dml related table ids", K(ret));
+  if (OB_SUCC(ret) && OB_FAIL(init_dml_index_info())) {
+    LOG_WARN("fail to init dml index info", K(ret));
   }
 
   return ret;
@@ -1190,7 +1385,7 @@ int ObTableCtx::init_ttl_delete(ObRowkey &start_key)
 */
 int ObTableCtx::init_replace()
 {
-  return init_dml_related_tid();
+  return init_dml_index_info();
 }
 
 /*
@@ -1230,6 +1425,8 @@ int ObTableCtx::init_get()
   if (OB_ISNULL(table_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table scheam is null", K(ret));
+  } else if (OB_FAIL(init_primary_index_info())) {
+    LOG_WARN("fail to init primary index info", K(ret));
   } else if (OB_FAIL(entity_->get_properties_names(query_col_names_))) {
     LOG_WARN("fail to get entity properties names", K(ret));
   } else {
@@ -1406,17 +1603,45 @@ int ObTableCtx::classify_scan_exprs()
   } else if (!select_exprs_.empty()) {
     // had classify, do nothing
   } else {
+    ObSEArray<uint64_t, 8> rowkey_column_ids;
+    // for select exprs, its order is from user input
     for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count(); i++) {
       const ObTableColumnItem &tmp_item = column_items_.at(i);
-      if (tmp_item.expr_->is_rowkey_column() && OB_FAIL(rowkey_exprs_.push_back(exprs.at(i)))) {
-        LOG_WARN("fail to push back rowkey expr", K(ret));
-      } else if (has_exist_in_array(select_col_ids_, tmp_item.column_id_)
+      if (has_exist_in_array(select_col_ids_, tmp_item.column_id_)
           && OB_FAIL(select_exprs_.push_back(exprs.at(i)))) {
         LOG_WARN("fail to push back select expr", K(ret));
-      } else if (is_index_scan_
-          && has_exist_in_array(index_col_ids_, tmp_item.column_id_)
-          && OB_FAIL(index_exprs_.push_back(exprs.at(i)))) {
-        LOG_WARN("fail to push back index column expr", K(ret));
+      }
+    }
+
+    if (OB_FAIL(table_schema_->get_rowkey_column_ids(rowkey_column_ids))) {
+      LOG_WARN("fail to get rowkey column ids", K(ret));
+    }
+    // for rowkey exprs: its order is schema define, case like:
+    // create table (c1 int, c2 int, c3 int, primary key(c2, c1)), rowkey_exprs store order must be [c2, c1]
+    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_column_ids.count(); i++) {
+      const ObTableColumnItem *item = nullptr;
+      if (OB_FAIL(get_column_item_by_column_id(rowkey_column_ids.at(i), item))) {
+        LOG_WARN("fail to get column item", K(ret), K(rowkey_column_ids), K(i));
+      } else if (OB_ISNULL(item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column item is null", K(ret));
+      } else if (OB_FAIL(rowkey_exprs_.push_back(item->raw_expr_))) {
+        LOG_WARN("fail to push back rowkey expr", K(ret), K(i));
+      }
+    }
+
+    // for index exprs, its order is schema define
+    if (OB_SUCC(ret) && is_index_scan_) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < index_col_ids_.count(); i++) {
+        const ObTableColumnItem *item = nullptr;
+        if (OB_FAIL(get_column_item_by_column_id(index_col_ids_.at(i), item))) {
+          LOG_WARN("fail to get column item", K(ret), K(index_col_ids_), K(i));
+        } else if (OB_ISNULL(item)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column item is null", K(ret));
+        } else if (OB_FAIL(index_exprs_.push_back(item->raw_expr_))) {
+          LOG_WARN("fail to push back index expr", K(ret), K(i));
+        }
       }
     }
   }
@@ -1427,8 +1652,9 @@ int ObTableCtx::classify_scan_exprs()
 int ObTableCtx::init_exec_ctx()
 {
   int ret = OB_SUCCESS;
-
-  if (OB_FAIL(init_das_context(exec_ctx_.get_das_ctx()))) {
+  if (OB_FAIL(init_sql_ctx())) {
+    LOG_WARN("fail to init sql context", K(ret));
+  } else if (OB_FAIL(init_das_context(exec_ctx_.get_das_ctx()))) {
     LOG_WARN("fail to init das context", K(ret));
   } else {
     // init exec_ctx_.my_session_
@@ -1437,21 +1663,74 @@ int ObTableCtx::init_exec_ctx()
   return ret;
 }
 
-
-// get primary tablet location and all index tablet location, add them to das context.
+/*
+  init the das context:
+    - generate table loc for all the index table and add to das context
+    - generate the local tablet loc and add to das context,
+      "local tablet loc" means tablet id has been calculated and is in local observer
+      - for dml, get and primary index scan: primary table;
+      - for global/local index scan: index table;
+*/
 int ObTableCtx::init_das_context(ObDASCtx &das_ctx)
 {
   int ret = OB_SUCCESS;
   ObDASTableLoc *table_loc = nullptr;
+  ObDASTableLoc *local_table_loc = nullptr;
   ObDASTabletLoc *tablet_loc = nullptr;
+  if (table_index_info_.count() < 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table index info is empty", K(ret));
+  }
+
+  for (int64_t i = 0; i < table_index_info_.count() && OB_SUCC(ret); i++) {
+    ObTableIndexInfo *index_info = table_index_info_.at(i);
+    if (OB_ISNULL(index_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("index info is NULL", K(i), K(ret));
+    } else if (OB_ISNULL(index_info->loc_meta_ = OB_NEWx(ObDASTableLocMeta, (&allocator_), allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc loc_meta", K(ret));
+    } else if (OB_FAIL(ObTableLocCgService::generate_table_loc_meta(*this, *index_info, *index_info->loc_meta_))) {
+      LOG_WARN("fail to generate table location meta", K(ret));
+    } else if (OB_FAIL(exec_ctx_.get_das_ctx().extended_table_loc(*index_info->loc_meta_, table_loc))) {
+      LOG_WARN("fail to extend table loc", K(ret), K(*index_info->loc_meta_));
+    } else if (index_info->is_primary_index_) {
+      if (is_dml() && OB_FAIL(init_related_tablet_map(das_ctx))) {
+        LOG_WARN("fail to init related tablet map", K(ret));
+      }
+      // for following operatons: the primary table tablet_id has been calculated locally
+      if (is_dml() || is_get() || (is_scan() && !is_index_scan())) {
+        local_table_loc = table_loc;
+      }
+    } else {
+      // for index back scene (including global index and local index):
+      // index table tablet_id has been calculated locally
+      if (is_scan() && is_index_scan()) {
+        local_table_loc = table_loc;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+   if (OB_ISNULL(local_table_loc)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("local_table_loc is NULL", K(ret));
+   } else if (OB_FAIL(exec_ctx_.get_das_ctx().extended_tablet_loc(*local_table_loc,
+                                                                  index_tablet_id_,
+                                                                  tablet_loc))) {
+      LOG_WARN("fail to extend tablet loc", K(ret), K(index_tablet_id_));
+    }
+  }
+
+  return ret;
+}
+
+int ObTableCtx::init_related_tablet_map(ObDASCtx &das_ctx)
+{
+  int ret = OB_SUCCESS;
   int64_t part_idx = OB_INVALID_ID;
   int64_t subpart_idx = OB_INVALID_ID;
-
-  if (OB_FAIL(ObTableLocCgService::generate_table_loc_meta(*this, loc_meta_))) {
-    LOG_WARN("fail to generate table location meta", K(ret));
-  } else if (OB_FAIL(exec_ctx_.get_das_ctx().extended_table_loc(loc_meta_, table_loc))) {
-    LOG_WARN("fail to extend table loc", K(ret), K(loc_meta_));
-  } else if (OB_ISNULL(table_schema_)) {
+  if (OB_ISNULL(table_schema_)) {
     ret = OB_SCHEMA_ERROR;
     LOG_WARN("table schema is null", K(ret));
   } else if (table_schema_->is_partitioned_table() &&
@@ -1473,10 +1752,10 @@ int ObTableCtx::init_das_context(ObDASCtx &das_ctx)
         ret = OB_SCHEMA_EAGAIN;
         LOG_WARN("fail to get table schema", KR(ret), K(related_table_id));
       } else if (OB_FAIL(relative_table_schema->get_part_id_and_tablet_id_by_idx(part_idx,
-                                                                                 subpart_idx,
-                                                                                 related_part_id,
-                                                                                 related_first_level_part_id,
-                                                                                 related_tablet_id))) {
+                                                                                  subpart_idx,
+                                                                                  related_part_id,
+                                                                                  related_first_level_part_id,
+                                                                                  related_tablet_id))) {
         LOG_WARN("get part by idx failed", K(ret), K(part_idx), K(subpart_idx), K(related_table_id));
       } else if (OB_FAIL(related_tablet_map.add_related_tablet_id(tablet_id_,
                                                                   related_table_id,
@@ -1488,13 +1767,6 @@ int ObTableCtx::init_das_context(ObDASCtx &das_ctx)
       }
     }
   }
-
-  if (OB_SUCC(ret) && OB_FAIL(exec_ctx_.get_das_ctx().extended_tablet_loc(*table_loc,
-                                                                          index_tablet_id_,
-                                                                          tablet_loc))) {
-    LOG_WARN("fail to extend tablet loc", K(ret), K(index_tablet_id_));
-  }
-
   return ret;
 }
 
@@ -1517,7 +1789,7 @@ int ObTableCtx::init_trans(transaction::ObTxDesc *trans_desc,
 }
 
 // for query
-int ObTableCtx::init_index_info(const ObString &index_name)
+int ObTableCtx::init_index_info(const ObString &index_name, const uint64_t arg_table_id)
 {
   int ret = OB_SUCCESS;
   uint64_t tids[OB_MAX_INDEX_PER_TABLE];
@@ -1548,8 +1820,27 @@ int ObTableCtx::init_index_info(const ObString &index_name)
         is_found = true;
         index_table_id_ = tids[i];
         index_schema_ = index_schema;
-        if (OB_FAIL(get_related_tablet_id(*index_schema, index_tablet_id_))) {
+        is_global_index_scan_ = index_schema->is_global_index_table();
+        if (!is_global_index_scan_ && OB_FAIL(get_related_tablet_id(*index_schema, index_tablet_id_))) {
           LOG_WARN("fail to get index tablet id", K(ret));
+        } else if (is_global_index_scan_) {
+          if (index_table_id_ != arg_table_id) {
+            /*
+              check the route info if is valid when use global index to scan, for the reason that:
+              when scan with global index, the client should send the request using global index route,
+              meanings the arg_table_id should be represented global index table. Also, arg_table_name
+              is always primary table name.
+            */
+            ret = OB_ERR_KV_GLOBAL_INDEX_ROUTE;
+            LOG_WARN("the route info is incorrect for global index scan", K(ret), K(index_table_id_), K(arg_table_id));
+          } else if (!index_tablet_id_.is_valid()) {
+            if (!index_schema_->is_partitioned_table()) {
+              index_tablet_id_ = index_schema_->get_tablet_id();
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("tablet id is invalid", K(ret));
+            }
+          }
         }
       }
     }
@@ -1759,6 +2050,10 @@ int ObTableCtx::check_insert_up_can_use_put(bool &use_put)
   } else if (ObTableOperationType::INSERT_OR_UPDATE != operation_type_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid operation type", K(ret), K_(operation_type));
+  } else if (has_global_index()) {
+    // cannot use put: the global index table will insert a new row insert of covering the old row
+    // when the assign value of index column is new.
+    use_put = false;
   } else if (is_htable()) { // htable has no index and alway full filled.
     can_use_put = true;
   } else if (is_client_set_put_ && !related_index_ids_.empty()) {

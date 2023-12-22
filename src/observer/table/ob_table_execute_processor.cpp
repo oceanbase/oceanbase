@@ -207,23 +207,15 @@ int ObTableApiExecuteP::try_process()
 {
   int ret = OB_SUCCESS;
   uint64_t table_id = arg_.table_id_;
-  bool is_index_supported = true;
   const ObTableOperation &table_operation = arg_.table_operation_;
   if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
     LOG_WARN("failed to get table id", K(ret));
-  } else if (FALSE_IT(table_id_ = arg_.table_id_)) {
-  } else if (FALSE_IT(tablet_id_ = arg_.tablet_id_)) {
-  } else if (ObTableOperationType::GET != table_operation.type()) {
-    if (OB_FAIL(check_table_index_supported(table_id, is_index_supported))) {
-      LOG_WARN("fail to check index supported", K(ret), K(table_id));
-    }
+  } else {
+    table_id_ = arg_.table_id_;
+    tablet_id_ = arg_.tablet_id_;
   }
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (OB_UNLIKELY(!is_index_supported)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "global index");
-    LOG_WARN("index type is not supported by table api", K(ret));
   } else if (OB_FAIL(check_arg2())) {
     LOG_WARN("fail to check arg", K(ret));
   } else if (OB_FAIL(init_tb_ctx())) {
@@ -378,7 +370,8 @@ int ObTableApiExecuteP::process_get()
     LOG_WARN("fail to check arg", K(ret));
   } else if (OB_FAIL(init_read_trans(arg_.consistency_level_,
                                      tb_ctx_.get_ls_id(),
-                                     tb_ctx_.get_timeout_ts()))) {
+                                     tb_ctx_.get_timeout_ts(),
+                                     false))) {
     LOG_WARN("fail to init wead read trans", K(ret), K(tb_ctx_));
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));

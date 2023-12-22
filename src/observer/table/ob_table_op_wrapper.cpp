@@ -86,15 +86,32 @@ int ObTableOpWrapper::process_affected_entity(ObTableCtx &tb_ctx,
     bool use_insert_expr = false;
     if (TABLE_API_EXEC_INSERT_UP == spec.get_type()) {
       const ObTableApiInsertUpSpec &ins_up_spec = static_cast<const ObTableApiInsertUpSpec&>(spec);
-      ins_exprs = &ins_up_spec.get_ctdef().ins_ctdef_.new_row_;
-      upd_exprs = &ins_up_spec.get_ctdef().upd_ctdef_.new_row_;
-      use_insert_expr = !static_cast<ObTableApiInsertUpExecutor&>(executor).is_insert_duplicated();
+      if (ins_up_spec.get_ctdefs().count() < 1) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("insup ctdef size is less than 1", K(ret));
+      } else if (OB_ISNULL(ins_up_spec.get_ctdefs().at(0))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("insup ctdef is NULL", K(ret));
+      } else {
+        ins_exprs = &ins_up_spec.get_ctdefs().at(0)->ins_ctdef_.new_row_;
+        upd_exprs = &ins_up_spec.get_ctdefs().at(0)->upd_ctdef_.new_row_;
+        use_insert_expr = !static_cast<ObTableApiInsertUpExecutor&>(executor).is_insert_duplicated();
+      }
+
     } else {
       ObTableApiTTLExecutor &ttl_executor = static_cast<ObTableApiTTLExecutor&>(executor);
       const ObTableApiTTLSpec &ttl_spec = static_cast<const ObTableApiTTLSpec&>(spec);
-      ins_exprs = &ttl_spec.get_ctdef().ins_ctdef_.new_row_;
-      upd_exprs = &ttl_spec.get_ctdef().upd_ctdef_.new_row_;
-      use_insert_expr = !ttl_executor.is_insert_duplicated() || ttl_executor.is_expired();
+      if (ttl_spec.get_ctdefs().count() < 1) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ttl ctdef size is less than 1", K(ret));
+      } else if (OB_ISNULL(ttl_spec.get_ctdefs().at(0))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ttl ctdef is NULL", K(ret));
+      } else {
+        ins_exprs = &ttl_spec.get_ctdefs().at(0)->ins_ctdef_.new_row_;
+        upd_exprs = &ttl_spec.get_ctdefs().at(0)->upd_ctdef_.new_row_;
+        use_insert_expr = !ttl_executor.is_insert_duplicated() || ttl_executor.is_expired();
+      }
     }
 
     ObIArray<ObTableAssignment> &assigns = tb_ctx.get_assignments();

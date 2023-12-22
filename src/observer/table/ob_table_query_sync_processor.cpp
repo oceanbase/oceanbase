@@ -405,8 +405,8 @@ int ObTableQuerySyncP::init_tb_ctx(ObTableCtx &ctx)
                                      arg_.table_name_,
                                      get_timeout_ts()))) {
     LOG_WARN("fail to init table ctx common part", K(ret), K(arg_.table_name_));
-  } else if (OB_FAIL(ctx.init_scan(query_session_->get_query(), is_weak_read))) {
-    LOG_WARN("fail to init table ctx scan part", K(ret), K(arg_.table_name_));
+  } else if (OB_FAIL(ctx.init_scan(query_session_->get_query(), is_weak_read, arg_.table_id_))) {
+    LOG_WARN("fail to init table ctx scan part", K(ret), K(arg_.table_name_), K(arg_.table_id_));
   } else if (OB_FAIL(ObTableExprCgService::generate_exprs(ctx,
                                                           allocator,
                                                           expr_frame_info))) {
@@ -514,9 +514,9 @@ int ObTableQuerySyncP::query_scan_with_init()
   } else if (OB_FAIL(start_trans(true, /* is_readonly */
                                  sql::stmt::T_SELECT,
                                  arg_.consistency_level_,
-                                 tb_ctx.get_ref_table_id(),
                                  tb_ctx.get_ls_id(),
-                                 tb_ctx.get_timeout_ts()))) {
+                                 tb_ctx.get_timeout_ts(),
+                                 tb_ctx.need_dist_das()))) {
     LOG_WARN("fail to start readonly transaction", K(ret), K(tb_ctx));
   } else if (OB_FAIL(tb_ctx.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx));
