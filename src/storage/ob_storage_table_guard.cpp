@@ -210,27 +210,25 @@ int ObStorageTableGuard::refresh_and_protect_memtable()
   bool bool_ret = true;
   bool for_replace_tablet_meta = false;
   const int64_t start = ObTimeUtility::current_time();
-  ObProtectedMemtableMgrHandle *protected_handle = NULL;
-
   do {
     if (OB_FAIL(tablet_->get_boundary_memtable(handle))) {
       // if there is no memtable, create a new one
       if (OB_ENTRY_NOT_EXIST == ret) {
         LOG_DEBUG("there is no boundary memtable", K(ret), K(ls_id), K(tablet_id));
-        if (OB_FAIL(tablet_->get_protected_memtable_mgr_handle(protected_handle))) {
-          LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret), KPC(tablet_));
-        } else if (OB_FAIL(protected_handle->get_newest_clog_checkpoint_scn(
-                      tablet_->get_tablet_meta(), clog_checkpoint_scn))) {
-          LOG_WARN("fail to get newest clog_checkpoint_scn", K(ret), K(ls_id), K(tablet_id));
+        ObLSHandle ls_handle;
+        ObTabletHandle tmp_handle;
+        if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+          LOG_WARN("failed to get log stream", K(ret), K(ls_id), K(tablet_id));
+        } else if (OB_UNLIKELY(!ls_handle.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error, invalid ls handle", K(ret), K(ls_handle), K(ls_id), K(tablet_id));
+        } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_tablet(tablet_id,
+            tmp_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+          LOG_WARN("fail to get tablet", K(ret), K(ls_id), K(tablet_id));
+        } else if (FALSE_IT(clog_checkpoint_scn = tmp_handle.get_obj()->get_tablet_meta().clog_checkpoint_scn_)) {
         } else if (replay_scn_ > clog_checkpoint_scn) {
           // TODO: get the newest schema_version from tablet
-          ObLSHandle ls_handle;
-          if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-            LOG_WARN("failed to get log stream", K(ret), K(ls_id), K(tablet_id));
-          } else if (OB_UNLIKELY(!ls_handle.is_valid())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected error, invalid ls handle", K(ret), K(ls_handle), K(ls_id), K(tablet_id));
-          } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->create_memtable(
+          if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->create_memtable(
                                                                                    tablet_id, 0/*schema version*/, for_replay_, clog_checkpoint_scn))) {
             LOG_WARN("fail to create a boundary memtable", K(ret), K(ls_id), K(tablet_id));
           }
@@ -361,16 +359,21 @@ int ObStorageTableGuard::check_freeze_to_inc_write_ref(ObITable *table, bool &bo
     // need to create a new memtable
     // TODO: allow to write frozen memtables except for the boundary one when replaying
     const int64_t write_ref = memtable->get_write_ref();
-    ObProtectedMemtableMgrHandle *protected_handle = NULL;
     if (0 == write_ref) {
       SCN clog_checkpoint_scn;
       bool need_create_memtable = true;
       SCN migration_clog_checkpoint_scn;
-      if (OB_FAIL(tablet_->get_protected_memtable_mgr_handle(protected_handle))) {
-        LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret), KPC(tablet_));
-      } else if (OB_FAIL(protected_handle->get_newest_clog_checkpoint_scn(
-                    tablet_->get_tablet_meta(), clog_checkpoint_scn))) {
-        LOG_WARN("failed to get newest clog_checkpoint_scn", K(ret), K(ls_id), K(tablet_id), K(clog_checkpoint_scn));
+      ObTabletHandle tmp_handle;
+      ObLSHandle ls_handle;
+      if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+        LOG_WARN("failed to get log stream", K(ret), K(bool_ret), K(ls_id), K(tablet_id));
+      } else if (OB_UNLIKELY(!ls_handle.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, invalid ls handle", K(ret), K(bool_ret), K(ls_handle), K(ls_id), K(tablet_id));
+      } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_tablet(tablet_id,
+          tmp_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+        LOG_WARN("fail to get tablet", K(ret), K(ls_id), K(tablet_id));
+      } else if (FALSE_IT(clog_checkpoint_scn = tmp_handle.get_obj()->get_tablet_meta().clog_checkpoint_scn_)) {
       } else if (FALSE_IT(migration_clog_checkpoint_scn = static_cast<memtable::ObMemtable *>(memtable)->get_migration_clog_checkpoint_scn())) {
       } else if (for_replay_ && !migration_clog_checkpoint_scn.is_min()) {
         static_cast<memtable::ObMemtable *>(memtable)->resolve_right_boundary();
@@ -383,13 +386,7 @@ int ObStorageTableGuard::check_freeze_to_inc_write_ref(ObITable *table, bool &bo
       // create a new memtable if no write in the old memtable
       if (OB_FAIL(ret)) {
       } else if (need_create_memtable) {
-        ObLSHandle ls_handle;
-        if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-          LOG_WARN("failed to get log stream", K(ret), K(bool_ret), K(ls_id), K(tablet_id));
-        } else if (OB_UNLIKELY(!ls_handle.is_valid())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected error, invalid ls handle", K(ret), K(bool_ret), K(ls_handle), K(ls_id), K(tablet_id));
-        } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->create_memtable(tablet_id,
+        if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->create_memtable(tablet_id,
                                                                                  memtable->get_max_schema_version()/*schema version*/,
                                                                                  for_replay_,
                                                                                  clog_checkpoint_scn))) {
