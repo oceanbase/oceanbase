@@ -19,6 +19,7 @@
 #include "pl/ob_pl_type.h"
 #include "share/stat/ob_dbms_stats_preferences.h"
 #include "share/stat/ob_opt_stat_gather_stat.h"
+#include "share/stat/ob_dbms_stats_copy_table_stats.h"
 
 namespace oceanbase
 {
@@ -237,6 +238,10 @@ public:
                                 sql::ParamStore &params,
                                 common::ObObj &result);
 
+  static int copy_table_stats(sql::ObExecContext &ctx,
+                              sql::ParamStore &params,
+                              common::ObObj &result);
+
   static int parse_method_opt(sql::ObExecContext &ctx,
                               ObIAllocator *allocator,
                               ObIArray<ObColumnStatParam> &column_params,
@@ -280,6 +285,13 @@ public:
                                    const ObObjParam &tab_name,
                                    const ObObjParam &part_name,
                                    ObTableStatParam &param);
+
+  static int parse_table_part_info(ObExecContext &ctx,
+                                   const ObObjParam &owner,
+                                   const ObObjParam &tab_name,
+                                   const ObObjParam &part_name,
+                                   ObTableStatParam &param,
+                                   const share::schema::ObTableSchema *&table_schema);
 
   static int parse_table_part_info(ObExecContext &ctx,
                                    const StatTable stat_table,
@@ -487,6 +499,10 @@ public:
                                                const uint64_t tenant_id,
                                                const uint64_t table_id,
                                                double &stale_percent_threshold);
+  static int extract_copy_stat_helper(sql::ParamStore &params,
+                                      sql::ObExecContext &ctx,
+                                      const share::schema::ObTableSchema *table_schema,
+                                      CopyTableStatHelper &copy_stat_helper);
 
   static void update_optimizer_gather_stat_info(const ObOptStatTaskInfo *task_info,
                                                 const ObOptStatGatherStat *gather_stat);

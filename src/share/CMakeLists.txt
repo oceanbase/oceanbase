@@ -446,6 +446,7 @@ ob_set_subtarget(ob_share schema
 ob_set_subtarget(ob_share stat
   stat/ob_basic_stats_estimator.cpp
   stat/ob_opt_stat_monitor_manager.cpp
+  stat/ob_dbms_stats_copy_table_stats.cpp
   stat/ob_dbms_stats_executor.cpp
   stat/ob_dbms_stats_export_import.cpp
   stat/ob_dbms_stats_history_manager.cpp

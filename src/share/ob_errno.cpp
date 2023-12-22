@@ -25685,9 +25685,9 @@ static const _error _error_OB_WRONG_PARTITION_NAME = {
       .sqlstate              = "HY000",
       .str_error             = "Incorrect partition name",
       .str_user_error        = "Incorrect partition name '%.*s'",
-      .oracle_errno          = 600,
-      .oracle_str_error      = "ORA-00600: internal error code, arguments: -11002, Incorrect partition name",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -11002, Incorrect partition name '%.*s'"
+      .oracle_errno          = 20000,
+      .oracle_str_error      = "ORA-20000: invalid partition name",
+      .oracle_str_user_error = "ORA-20000: '%.*s' invalid partition name"
 };
 static const _error _error_OB_ERR_PLUGIN_IS_NOT_LOADED = {
       .error_name            = "OB_ERR_PLUGIN_IS_NOT_LOADED",

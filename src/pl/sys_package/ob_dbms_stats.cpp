@@ -3104,6 +3104,17 @@ int ObDbmsStats::parse_table_part_info(ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   const share::schema::ObTableSchema *table_schema = NULL;
+  return parse_table_part_info(ctx, owner, tab_name, part_name, param, table_schema);
+}
+
+int ObDbmsStats::parse_table_part_info(ObExecContext &ctx,
+                                       const ObObjParam &owner,
+                                       const ObObjParam &tab_name,
+                                       const ObObjParam &part_name,
+                                       ObTableStatParam &param,
+                                       const share::schema::ObTableSchema *&table_schema)
+{
+  int ret = OB_SUCCESS;
   share::schema::ObSchemaGetterGuard *schema_guard = ctx.get_virtual_table_ctx().schema_guard_;
   if (OB_ISNULL(schema_guard) || OB_ISNULL(param.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -3599,8 +3610,8 @@ int ObDbmsStats::parse_partition_name(ObExecContext &ctx,
     ret = OB_ERR_NOT_PARTITIONED;
     LOG_WARN("the target table is not partitioned", K(ret));
   } else if (OB_FAIL(find_selected_part_infos(param.part_name_,
-                                              param.part_infos_,
-                                              param.subpart_infos_,
+                                              param.all_part_infos_,
+                                              param.all_subpart_infos_,
                                               lib::is_oracle_mode(),
                                               part_infos,
                                               subpart_infos,
@@ -4785,68 +4796,46 @@ int ObDbmsStats::find_selected_part_infos(const ObString &part_name,
                                           bool &is_subpart_name)
 {
   int ret = OB_SUCCESS;
-  bool found = false;
   PartInfo part;
   is_subpart_name = false;
-  bool is_twopart = false;
-  for (int64_t i = 0; !found && i < part_infos.count(); ++i) {
-    if ((is_sensitive_compare &&
-         ObCharset::case_sensitive_equal(part_name, part_infos.at(i).part_name_)) ||
-        (!is_sensitive_compare &&
-         ObCharset::case_insensitive_equal(part_name, part_infos.at(i).part_name_))) {
-      part = part_infos.at(i);
-      found = true;
+  if (ObDbmsStatsUtils::find_part(part_infos, part_name, is_sensitive_compare, part)) {
+    if (OB_FAIL(new_part_infos.push_back(part))) {
+      LOG_WARN("failed to push back part info", K(ret));
     }
-  }
-  for (int64_t i = 0; !found && i < subpart_infos.count(); ++i) {
-    if ((is_sensitive_compare &&
-         ObCharset::case_sensitive_equal(part_name, subpart_infos.at(i).part_name_)) ||
-        (!is_sensitive_compare &&
-         ObCharset::case_insensitive_equal(part_name, subpart_infos.at(i).part_name_))) {
-      part = subpart_infos.at(i);
-      found = true;
-      is_twopart = true;
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (!found) {
-      ret = OB_UNKNOWN_PARTITION;
-      LOG_WARN("the specified partition is not found", K(ret), K(part_name));
-    } else if (is_twopart) {
-      if (OB_FAIL(new_subpart_infos.push_back(part))) {
-        LOG_WARN("failed to push back part info", K(ret));
-      } else {
-        bool find_it = false;
-        int64_t cur_part_id = part.first_part_id_;
-        for (int64_t i = 0; OB_SUCC(ret) && !find_it && i < part_infos.count(); ++i) {
-          if (cur_part_id != part_infos.at(i).part_id_) {
-            // do nothing
-          } else if (OB_FAIL(new_part_infos.push_back(part_infos.at(i)))) {
-            LOG_WARN("failed to push back subpart infos", K(ret));
-          } else {
-            find_it = true;
-          }
-        }
-        if (OB_SUCC(ret) && !find_it) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected error, partition id isn't found", K(ret), K(cur_part_id));
-        } else {
-          is_subpart_name = true;
-        }
+    for (int64_t i = 0; OB_SUCC(ret) && i < subpart_infos.count(); ++i) {
+      int64_t cur_part_id = subpart_infos.at(i).first_part_id_;
+      if (cur_part_id != part.part_id_) {
+        // do nothing
+      } else if (OB_FAIL(new_subpart_infos.push_back(subpart_infos.at(i)))) {
+        LOG_WARN("failed to push back subpart infos", K(ret));
       }
+    }
+  } else if (ObDbmsStatsUtils::find_part(subpart_infos, part_name, is_sensitive_compare, part)) {
+    if (OB_FAIL(new_subpart_infos.push_back(part))) {
+      LOG_WARN("failed to push back part info", K(ret));
     } else {
-      if (OB_FAIL(new_part_infos.push_back(part))) {
-        LOG_WARN("failed to push back part info", K(ret));
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && i < subpart_infos.count(); ++i) {
-        int64_t cur_part_id = subpart_infos.at(i).first_part_id_;
-        if (cur_part_id != part.part_id_) {
+      bool find_it = false;
+      int64_t cur_part_id = part.first_part_id_;
+      for (int64_t i = 0; OB_SUCC(ret) && !find_it && i < part_infos.count(); ++i) {
+        if (cur_part_id != part_infos.at(i).part_id_) {
           // do nothing
-        } else if (OB_FAIL(new_subpart_infos.push_back(subpart_infos.at(i)))) {
+        } else if (OB_FAIL(new_part_infos.push_back(part_infos.at(i)))) {
           LOG_WARN("failed to push back subpart infos", K(ret));
+        } else {
+          find_it = true;
         }
       }
+      if (OB_SUCC(ret) && !find_it) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error, partition id isn't found", K(ret), K(cur_part_id));
+      } else {
+        is_subpart_name = true;
+      }
     }
+  } else {
+    ret = OB_UNKNOWN_PARTITION;
+    LOG_WARN("the specified partition is not found", K(ret),
+              K(part_name), K(part_infos), K(subpart_infos));
   }
   return ret;
 }
@@ -6301,6 +6290,148 @@ void ObDbmsStats::update_optimizer_gather_stat_info(const ObOptStatTaskInfo *tas
   }
   THIS_WORKER.set_session(origin_session);
   THIS_WORKER.set_timeout_ts(origin_timeout);
+}
+
+/**
+ * @brief ObDbmsStats::copy_table_stats
+ * @param ctx
+ * @param params
+ *     0. ownname        VARCHAR2,
+ *     1. tabname        VARCHAR2,
+ *     2. srcpartname    VARCHAR2,
+ *     3. dstpartname		 VARCHAR2,
+ *     4. scale_factor	 VARCHAR2,
+ *     5. flags						DECIMAL DEFAULT NULL,
+ *     6. force            BOOLEAN DEFAULT FALSE
+ * @param result
+ * @return int
+ */
+int ObDbmsStats::copy_table_stats(sql::ObExecContext &ctx,
+                                 sql::ParamStore &params,
+                                 common::ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(result);
+  CopyTableStatHelper copy_stat_helper(&ctx.get_allocator());
+  const ObTableSchema *table_schema = NULL;
+  ObTableStatParam table_stat_param;
+  table_stat_param.allocator_ = &ctx.get_allocator();
+  ObCopyLevel copy_level;
+  bool is_found = false;
+  ObObjParam dummy_part_name;
+  dummy_part_name.set_null();
+  if (OB_FAIL(check_statistic_table_writeable(ctx))) {
+    LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(parse_table_part_info(ctx,
+                                    params.at(0),
+                                    params.at(1),
+                                    dummy_part_name,
+                                    table_stat_param,
+                                    table_schema))) {
+    LOG_WARN("failed to parse table part info", K(ret));
+  } else if (OB_FAIL(extract_copy_stat_helper(params, ctx, table_schema, copy_stat_helper))) {
+    LOG_WARN("failed to extract copy table stats params", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsCopyTableStats::check_parts_valid(ctx, copy_stat_helper, table_stat_param, copy_level))) {
+    LOG_WARN("failed to check part valid", K(ret));
+  } else if (params.at(4).is_null()) {
+    //do nothing
+  } else if (OB_FAIL(parse_partition_name(ctx,
+                                          table_schema,
+                                          params.at(3),
+                                          table_stat_param))) {
+    LOG_WARN("failed to parse partition name", K(ret));
+  } else if (ObCharset::case_insensitive_equal(copy_stat_helper.srcpart_name_,
+                                               copy_stat_helper.dstpart_name_)) {
+    LOG_TRACE("src part and dst part is the same, no need to copy");
+  } else if (OB_FAIL(ObDbmsStatsCopyTableStats::extract_partition_column_ids(copy_stat_helper, table_schema))) {
+    LOG_WARN("failed to classify partition column ids", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsCopyTableStats::get_dst_part_infos(table_stat_param,
+                                                copy_stat_helper,
+                                                table_schema,
+                                                copy_level,
+                                                is_found))) {
+    LOG_WARN("failed to get dst part infos", K(ret));
+  } else if (OB_UNLIKELY(!is_found)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("failed to find dst part info", K(ret), K(copy_stat_helper), K(copy_level));
+  } else if (!copy_stat_helper.force_copy_ &&
+             OB_FAIL(ObDbmsStatsLockUnlock::check_stat_locked(ctx, table_stat_param))) {
+    LOG_WARN("failed check stat locked", K(ret));
+  } else if (OB_FAIL(parse_partition_name(ctx,
+                                          table_schema,
+                                          params.at(2),
+                                          table_stat_param))) {
+    LOG_WARN("failed to parse partition name", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsCopyTableStats::copy_tab_col_stats(ctx, table_stat_param, copy_stat_helper))) {
+    LOG_WARN("failed to copy table stats and column stats", K(ret));
+  } else if (OB_FAIL(update_stat_cache(ctx.get_my_session()->get_rpc_tenant_id(),
+                                      table_stat_param))) {
+    LOG_WARN("failed to update stat cache", K(ret));
+  }
+  LOG_TRACE("succeed to copy table stat", K(copy_stat_helper));
+  return ret;
+}
+
+int ObDbmsStats::extract_copy_stat_helper(sql::ParamStore &params,
+                                          sql::ObExecContext &ctx,
+                                          const share::schema::ObTableSchema *table_schema,
+                                          CopyTableStatHelper &copy_stat_helper)
+{
+  int ret = OB_SUCCESS;
+  number::ObNumber scale_factor_num;
+  number::ObNumber flags_num;
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (!params.at(0).is_null() && OB_FAIL(params.at(0).get_string(copy_stat_helper.owner_))) {
+    LOG_WARN("failed to get string", K(ret), K(params.at(0)));
+  } else if (!params.at(0).is_null() && OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                                ctx.get_my_session()->get_dtc_params(),
+                                                copy_stat_helper.owner_,
+                                                lib::is_oracle_mode()))) {
+    LOG_WARN("failed to extract table name", K(ret));
+  } else if (!params.at(1).is_null() && OB_FAIL(params.at(1).get_string(copy_stat_helper.table_name_))) {
+    LOG_WARN("failed to get string", K(ret), K(params.at(1)));
+  } else if (!params.at(1).is_null() && OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                                ctx.get_my_session()->get_dtc_params(),
+                                                copy_stat_helper.table_name_,
+                                                lib::is_oracle_mode()))) {
+    LOG_WARN("failed to extract table name", K(ret));
+  } else if (!params.at(2).is_null() && OB_FAIL(params.at(2).get_string(copy_stat_helper.srcpart_name_))) {
+    LOG_WARN("failed to get string", K(ret), K(params.at(2)));
+  } else if (!params.at(2).is_null()
+            && OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                                ctx.get_my_session()->get_dtc_params(),
+                                                copy_stat_helper.srcpart_name_,
+                                                lib::is_oracle_mode()))) {
+    LOG_WARN("failed to extract srcpart name", K(ret));
+  } else if (!params.at(3).is_null() && OB_FAIL(params.at(3).get_string(copy_stat_helper.dstpart_name_))) {
+    LOG_WARN("failed to get string", K(ret), K(params.at(3)));
+  } else if (!params.at(3).is_null()
+             && OB_FAIL(convert_vaild_ident_name(ctx.get_allocator(),
+                                                ctx.get_my_session()->get_dtc_params(),
+                                                copy_stat_helper.dstpart_name_,
+                                                lib::is_oracle_mode()))) {
+    LOG_WARN("failed to extract dstpart name", K(ret));
+  } else if (!params.at(4).is_null() && OB_FAIL(params.at(4).get_number(scale_factor_num))) {
+    LOG_WARN("failed to extract scale factor", K(ret));
+  } else if (!params.at(5).is_null() && OB_FAIL(params.at(5).get_number(flags_num))) {
+    LOG_WARN("failed to extract flags", K(ret));
+  } else if (!params.at(6).is_null() && OB_FAIL(params.at(6).get_bool(copy_stat_helper.force_copy_))) {
+    LOG_WARN("failed to extract force", K(ret));
+  } else if (!params.at(4).is_null() && OB_FAIL(ObDbmsStatsUtils::cast_number_to_double(scale_factor_num, copy_stat_helper.scale_factor_))) {
+    LOG_WARN("failed to cast number to double" , K(ret), K(scale_factor_num));
+  } else if (copy_stat_helper.scale_factor_ < 0) {
+    ret = OB_ERR_DBMS_STATS_PL;
+    LOG_WARN("scale factor is less than 0", K(ret));
+    LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"scale factor is less than 0");
+  } else if (OB_FAIL(ObDbmsStatsUtils::cast_number_to_double(flags_num, copy_stat_helper.flags_))) {
+    LOG_WARN("failed to cast number to double" , K(ret), K(scale_factor_num));
+  } else {
+    copy_stat_helper.table_id_ = table_schema->get_table_id();
+    copy_stat_helper.tenant_id_ = ctx.get_my_session()->get_effective_tenant_id();
+  }
+  return ret;
 }
 
 }

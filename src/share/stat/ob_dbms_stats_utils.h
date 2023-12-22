@@ -147,6 +147,11 @@ public:
                               const ObIArray<int64_t> &part_ids,
                               const ObIArray<uint64_t> &column_ids);
 
+  static bool find_part(const ObIArray<PartInfo> &part_infos,
+                        const ObString &part_name,
+                        bool is_sensitive_compare,
+                        PartInfo &part);
+
 private:
   static int batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
                          const uint64_t tenant_id,

@@ -6099,7 +6099,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_KV_SCAN_RANGE_MISSING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10513, Scan range missing, input scan range cell count is '%ld', which should equal to rowkey count '%ld'"
 #define OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11000, Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement."
 #define OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11001, A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement."
-#define OB_WRONG_PARTITION_NAME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11002, Incorrect partition name '%.*s'"
+#define OB_WRONG_PARTITION_NAME__ORA_USER_ERROR_MSG "ORA-20000: '%.*s' invalid partition name"
 #define OB_ERR_PLUGIN_IS_NOT_LOADED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11003, Plugin '%.*s' is not loaded"
 #define OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR__ORA_USER_ERROR_MSG "ORA-30497: Argument should be a constant or a function of expressions in GROUP BY."
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"

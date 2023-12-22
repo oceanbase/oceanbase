@@ -319,6 +319,30 @@ int ObOptColumnStat::deep_copy(const ObOptColumnStat &src)
   return ret;
 }
 
+int ObOptColumnStat::deep_copy_llc_bitmap(const char *bitmap, const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  if (size != 0 && bitmap != NULL) {
+    if (OB_ISNULL(llc_bitmap_ = static_cast<char*>(allocator_.alloc(size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for llc_bitmap_");
+    } else {
+      MEMCPY(llc_bitmap_, bitmap, size);
+      llc_bitmap_size_ = size;
+    }
+  }
+  return ret;
+}
+
+int ObOptColumnStat::deep_copy_histogram(const ObHistogram &hist)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(histogram_.deep_copy(allocator_, hist))) {
+    LOG_WARN("failed to deep copy histogram", K(ret));
+  }
+  return ret;
+}
+
 int ObOptColumnStat::deep_copy(const ObOptColumnStat &src, char *buf, const int64_t size, int64_t &pos)
 {
   int ret = OB_SUCCESS;

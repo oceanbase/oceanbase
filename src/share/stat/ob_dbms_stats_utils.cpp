@@ -1017,5 +1017,23 @@ int ObDbmsStatsUtils::erase_stat_cache(const uint64_t tenant_id,
   return ret;
 }
 
+bool ObDbmsStatsUtils::find_part(const ObIArray<PartInfo> &part_infos,
+                                 const ObString &part_name,
+                                 bool is_sensitive_compare,
+                                 PartInfo &part)
+{
+  bool found = false;
+  for (int64_t i = 0; !found && i < part_infos.count(); ++i) {
+    if ((is_sensitive_compare &&
+         ObCharset::case_sensitive_equal(part_name, part_infos.at(i).part_name_)) ||
+        (!is_sensitive_compare &&
+         ObCharset::case_insensitive_equal(part_name, part_infos.at(i).part_name_))) {
+      part = part_infos.at(i);
+      found = true;
+    }
+  }
+  return found;
+}
+
 }
 }

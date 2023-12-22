@@ -388,4 +388,14 @@ create or replace PACKAGE dbms_stats AUTHID CURRENT_USER
       pname          VARCHAR(65535)
     );
 
+    PROCEDURE copy_table_stats (
+      ownname        VARCHAR(65535),
+      tabname        VARCHAR(65535),
+      srcpartname    VARCHAR(65535),
+      dstpartname		 VARCHAR(65535),
+      scale_factor	 DECIMAL DEFAULT 1,
+      flags					 DECIMAL DEFAULT NULL,
+      force          BOOLEAN DEFAULT FALSE
+    );
+
 END dbms_stats;
