@@ -5067,13 +5067,17 @@ int ObUnitManager::allocate_pool_units_(
       excluded_servers.reuse();
       active_servers_info_of_zone.reuse();
       active_servers_resource_info_of_zone.reuse();
-
+      const bool ONLY_ACTIVE_SERVERS = true;
       if (FAILEDx(get_excluded_servers(pool.resource_pool_id_, zone, module,
               new_allocate_pool, excluded_servers))) {
         LOG_WARN("get excluded servers fail", KR(ret), K(pool.resource_pool_id_), K(zone),
             K(module), K(new_allocate_pool));
-      } else if (OB_FAIL(SVR_TRACER.get_active_servers_info(zone, active_servers_info_of_zone))) {
-        LOG_WARN("fail to get active_servers_info_of_zone", KR(ret), K(servers_info), K(zone));
+      } else if (OB_FAIL(ObServerTableOperator::get_servers_info_of_zone(
+          *GCTX.sql_proxy_,
+          zone,
+          ONLY_ACTIVE_SERVERS,
+          active_servers_info_of_zone))) {
+        LOG_WARN("fail to get servers info of zone", KR(ret), K(zone));
       } else if (OB_FAIL(get_servers_resource_info_via_rpc(
           active_servers_info_of_zone,
           active_servers_resource_info_of_zone))) {
@@ -5667,19 +5671,26 @@ int ObUnitManager::check_enough_resource_for_delete_server(
   int ret = OB_SUCCESS;
   // get_servers_of_zone
   ObArray<obrpc::ObGetServerResourceInfoResult> report_servers_resource_info;
-  ObArray<ObServerInfoInTable> servers_info;
   ObArray<ObServerInfoInTable> servers_info_of_zone;
   bool empty = false;
-  if (OB_UNLIKELY(!server.is_valid() || zone.is_empty())) {
+  const bool ONLY_ACTIVE_SERVERS = true;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_UNLIKELY(!server.is_valid() || zone.is_empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid server or zone", KR(ret), K(server), K(zone));
-  } else if (OB_FAIL(check_server_empty(server, empty))) {
+  } else if (OB_FAIL(ut_operator_.check_server_empty(server, empty))) {
     // the validity of the server is checked here
     LOG_WARN("fail to check whether the server is empty", KR(ret));
   } else if (empty) {
     //nothing todo
-  } else if (OB_FAIL(SVR_TRACER.get_active_servers_info(zone, servers_info_of_zone))) {
-    LOG_WARN("fail to get servers_info_of_zone", KR(ret), K(servers_info), K(zone));
+  } else if (OB_FAIL(ObServerTableOperator::get_servers_info_of_zone(
+      *GCTX.sql_proxy_,
+      zone,
+      ONLY_ACTIVE_SERVERS,
+      servers_info_of_zone))) {
+    LOG_WARN("fail to get servers info of zone", KR(ret), K(zone));
   } else if (OB_FAIL(get_servers_resource_info_via_rpc(servers_info_of_zone, report_servers_resource_info))) {
     LOG_WARN("fail to get servers_resouce_info via rpc", KR(ret), K(servers_info_of_zone), K(report_servers_resource_info));
   } else if (OB_FAIL(check_enough_resource_for_delete_server_(
@@ -5702,9 +5713,11 @@ int ObUnitManager::get_servers_resource_info_via_rpc(
   obrpc::ObGetServerResourceInfoArg arg;
   ObArray<obrpc::ObGetServerResourceInfoResult> tmp_report_servers_resource_info;
   report_servers_resource_info.reset();
-  if (OB_UNLIKELY(servers_info.count() <= 0)) {
+  if (OB_UNLIKELY(servers_info.count() < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("servers_info.count() should be greater than zero", KR(ret), K(servers_info.count()));
+    LOG_WARN("servers_info.count() should be >= 0", KR(ret), K(servers_info.count()));
+  } else if (0 == servers_info.count()) {
+    // do nothing
   } else if (!ObHeartbeatService::is_service_enabled()) { // old logic
     ObServerResourceInfo resource_info;
     obrpc::ObGetServerResourceInfoResult result;
@@ -5854,7 +5867,7 @@ int ObUnitManager::check_enough_resource_for_delete_server_(
   if (OB_UNLIKELY(zone.is_empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("zone is invalid", KR(ret), K(zone), K(server));
-  } else if (OB_FAIL(check_server_empty(server, empty))) {
+  } else if (OB_FAIL(ut_operator_.check_server_empty(server, empty))) {
     LOG_WARN("fail to check server empty", K(ret));
   } else if (empty) {
     //nothing todo
