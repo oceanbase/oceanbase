@@ -843,9 +843,9 @@ int ObDDLService::add_mlog(
     mlog_info.set_tenant_id(tenant_id);
     mlog_info.set_mlog_id(mlog_table_id);
     mlog_info.set_purge_mode(purge_options.purge_mode_);
-    mlog_info.set_purge_start(purge_options.start_datetime_expr_.get_timestamp());
-    mlog_info.set_last_purge_scn(purge_start);
-    mlog_info.set_last_purge_rows(0);
+    if (!purge_options.start_datetime_expr_.is_null()) {
+      mlog_info.set_purge_start(purge_options.start_datetime_expr_.get_timestamp());
+    }
     mlog_info.set_schema_version(mlog_schema.get_schema_version());
     if (OB_FAIL(mlog_info.set_purge_next(purge_next))) {
       LOG_WARN("fail to set purge next", KR(ret));

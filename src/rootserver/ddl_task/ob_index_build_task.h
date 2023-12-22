@@ -149,6 +149,7 @@ private:
                                       bool &need_acquire);
   bool is_sstable_complete_task_submitted();
   int check_target_cg_cnt();
+  int update_mlog_last_purge_scn();
 private:
   static const int64_t OB_INDEX_BUILD_TASK_VERSION = 1;
   using ObDDLTask::is_inited_;
