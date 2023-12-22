@@ -1930,6 +1930,7 @@ int ObExprRangeConverter::get_rowid_node(const ObRawExpr &l_expr,
     ObSEArray<int64_t, 4> val_idxs;
     if (T_OP_EQ == cmp_type || T_OP_NSEQ == cmp_type) {
       ObSEArray<int64_t, 4> tmp_key_idxs;
+      ObSEArray<int64_t, 4> pk_idxs;
       int64_t min_offset = ctx_.column_cnt_;
       for (int64_t i = 0; OB_SUCC(ret) && i < pk_column_items.count(); ++i) {
         const ObColumnRefRawExpr *column_expr = pk_column_items.at(i);
@@ -1937,6 +1938,8 @@ int ObExprRangeConverter::get_rowid_node(const ObRawExpr &l_expr,
         if (is_range_key(column_expr->get_column_id(), key_idx)) {;
           if (OB_FAIL(tmp_key_idxs.push_back(key_idx))) {
             LOG_WARN("failed to push back key idx");
+          } else if (OB_FAIL(pk_idxs.push_back(i))) {
+            LOG_WARN("failed to push back pk idx");
           } else if (key_idx < min_offset) {
             min_offset = key_idx;
           }
@@ -1952,7 +1955,7 @@ int ObExprRangeConverter::get_rowid_node(const ObRawExpr &l_expr,
             LOG_WARN("failed to get final expr idx");
           } else if (OB_FAIL(val_idxs.push_back(const_idx))) {
             LOG_WARN("failed to push back val idx");
-          } else if (OB_FAIL(ctx_.rowid_idxs_.push_back(std::pair<int64_t, int64_t>(const_idx, idx)))) {
+          } else if (OB_FAIL(ctx_.rowid_idxs_.push_back(std::pair<int64_t, int64_t>(const_idx, pk_idxs.at(idx))))) {
             LOG_WARN("failed to push back rowid idxs", K(const_idx), K(idx));
           }
         } else {
