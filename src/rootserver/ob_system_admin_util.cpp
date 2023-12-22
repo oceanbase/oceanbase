@@ -1575,11 +1575,41 @@ int ObAdminRollingUpgradeCmd::execute(const obrpc::ObAdminRollingUpgradeArg &arg
     } else if (OB_FAIL(set_config_arg.items_.push_back(item))) {
       LOG_WARN("add _upgrade_stage config item failed", KR(ret), K(arg));
     } else if (obrpc::OB_UPGRADE_STAGE_POSTUPGRADE == arg.stage_) {
+      // wait min_observer_version to report to inner table
+      ObTimeoutCtx ctx;
+      if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.rpc_timeout))) {
+        LOG_WARN("fail to set default timeout", KR(ret));
+      } else {
+        const int64_t CHECK_INTERVAL = 100 * 1000L; // 100ms
+        while (OB_SUCC(ret)) {
+          uint64_t min_observer_version = 0;
+          if (ctx.is_timeouted()) {
+            ret = OB_TIMEOUT;
+            LOG_WARN("wait min_server_version report to inner table failed",
+                     KR(ret), "abs_timeout", ctx.get_abs_timeout());
+          } else if (OB_FAIL(SVR_TRACER.get_min_server_version(
+                     min_server_version, min_observer_version))) {
+            LOG_WARN("failed to get the min server version", KR(ret));
+          } else if (min_observer_version > CLUSTER_CURRENT_VERSION) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("min_observer_version is larger than CLUSTER_CURRENT_VERSION",
+                     KR(ret), "min_server_version", min_server_version,
+                     K(min_observer_version), "CLUSTER_CURRENT_VERSION", CLUSTER_CURRENT_VERSION);
+          } else if (min_observer_version < CLUSTER_CURRENT_VERSION) {
+            if (REACH_TIME_INTERVAL(1 * 1000 * 1000L)) { // 1s
+              LOG_INFO("min_observer_version is not reported yet, just wait",
+                       KR(ret), "min_server_version", min_server_version,
+                       K(min_observer_version), "CLUSTER_CURRENT_VERSION", CLUSTER_CURRENT_VERSION);
+            }
+            ob_usleep(CHECK_INTERVAL);
+          } else {
+            break;
+          }
+        } // end while
+      }
       // end rolling upgrade, should raise min_observer_version
       const char *min_obs_version_name = "min_observer_version";
-      if (OB_FAIL(SVR_TRACER.get_min_server_version(min_server_version))) {
-        LOG_WARN("failed to get the min server version", KR(ret));
-      } else if (OB_FAIL(item.name_.assign(min_obs_version_name))) {
+      if (FAILEDx(item.name_.assign(min_obs_version_name))) {
         LOG_WARN("assign min_observer_version config name failed",
                  KR(ret), K(min_obs_version_name));
       } else if (OB_FAIL(item.value_.assign(min_server_version))) {
