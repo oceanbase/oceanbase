@@ -256,7 +256,7 @@ int ObAnalyzeStmtResolver::resolve_partition_info(const ParseNode *part_node,
   is_hist_subpart = false;
 
   ObString &partition_name = analyze_stmt.get_partition_name();
-  if (OB_ISNULL(schema_checker_)) {
+  if (OB_ISNULL(schema_checker_) || OB_ISNULL(params_.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null schema checker", K(schema_checker_), K(ret));
   } else if (OB_FAIL(schema_checker_->get_table_schema(analyze_stmt.get_tenant_id(), table_id, table_schema))) {
@@ -265,6 +265,7 @@ int ObAnalyzeStmtResolver::resolve_partition_info(const ParseNode *part_node,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null table schema", K(ret));
   } else if (OB_FAIL(ObDbmsStatsUtils::get_part_infos(*table_schema,
+                                                      *params_.allocator_,
                                                       part_infos,
                                                       subpart_infos,
                                                       part_ids,

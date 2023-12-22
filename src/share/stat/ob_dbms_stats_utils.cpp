@@ -708,6 +708,7 @@ int ObDbmsStatsUtils::get_part_ids_from_param(const ObTableStatParam &param,
 }
 
 int ObDbmsStatsUtils::get_part_infos(const ObTableSchema &table_schema,
+                                     ObIAllocator &allocator,
                                      ObIArray<PartInfo> &part_infos,
                                      ObIArray<PartInfo> &subpart_infos,
                                      ObIArray<int64_t> &part_ids,
@@ -726,10 +727,11 @@ int ObDbmsStatsUtils::get_part_infos(const ObTableSchema &table_schema,
         LOG_WARN("get null partition", K(ret), K(part));
       } else {
         PartInfo part_info;
-        part_info.part_name_ = part->get_part_name();
         part_info.part_id_ = part->get_part_id();
         part_info.tablet_id_ = part->get_tablet_id();
-        if (OB_NOT_NULL(part_map)) {
+        if (OB_FAIL(ob_write_string(allocator, part->get_part_name(), part_info.part_name_))) {
+          LOG_WARN("failed to write string", K(ret));
+        } else if (OB_NOT_NULL(part_map)) {
           OSGPartInfo part_info;
           part_info.part_id_ = part->get_part_id();
           part_info.tablet_id_ = part->get_tablet_id();
@@ -744,7 +746,7 @@ int ObDbmsStatsUtils::get_part_infos(const ObTableSchema &table_schema,
         } else if (OB_FAIL(part_ids.push_back(part_info.part_id_))) {
           LOG_WARN("failed to push back part id", K(ret));
         } else if (is_twopart &&
-                   OB_FAIL(get_subpart_infos(table_schema, part, subpart_infos, subpart_ids, part_map))) {
+                   OB_FAIL(get_subpart_infos(table_schema, part, allocator, subpart_infos, subpart_ids, part_map))) {
           LOG_WARN("failed to get subpart info", K(ret));
         } else {
           part_infos.at(part_infos.count() - 1).subpart_cnt_ = subpart_infos.count() - origin_cnt;
@@ -759,6 +761,7 @@ int ObDbmsStatsUtils::get_part_infos(const ObTableSchema &table_schema,
 
 int ObDbmsStatsUtils::get_subpart_infos(const ObTableSchema &table_schema,
                                         const ObPartition *part,
+                                        ObIAllocator &allocator,
                                         ObIArray<PartInfo> &subpart_infos,
                                         ObIArray<int64_t> &subpart_ids,
                                         OSGPartMap *part_map/*default NULL*/)
@@ -782,7 +785,9 @@ int ObDbmsStatsUtils::get_subpart_infos(const ObTableSchema &table_schema,
         subpart_info.part_id_ = subpart->get_sub_part_id(); // means object_id
         subpart_info.tablet_id_ = subpart->get_tablet_id();
         subpart_info.first_part_id_ = part->get_part_id();
-        if (OB_NOT_NULL(part_map)) {
+        if (OB_FAIL(ob_write_string(allocator, subpart->get_part_name(), subpart_info.part_name_))) {
+          LOG_WARN("failed to write string", K(ret));
+        } else if (OB_NOT_NULL(part_map)) {
           OSGPartInfo part_info;
           part_info.part_id_ = part->get_part_id();
           part_info.tablet_id_ = subpart->get_tablet_id();
