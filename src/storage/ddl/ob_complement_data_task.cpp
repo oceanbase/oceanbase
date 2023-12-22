@@ -1274,7 +1274,7 @@ int ObComplementWriteTask::append_row(ObScan *scan)
     ObTabletDirectLoadMgrHandle direct_load_hdl;
     bool is_major_sstable_exist = false;
     ObDDLInsertRowIterator row_iter(nullptr/*ObPxMultiPartSSTableInsertOp*/, false/*is_slice_empty*/,
-          param_->dest_ls_id_, param_->dest_tablet_id_, 0/*unused_rowkey_num*/, param_->snapshot_version_, context_->context_id_);
+          param_->dest_ls_id_, param_->dest_tablet_id_, 0/*unused_rowkey_num*/, param_->snapshot_version_, context_->context_id_, task_id_);
     blocksstable::ObNewRowBuilder new_row_builder;
     int64_t lob_inrow_threshold = OB_DEFAULT_LOB_INROW_THRESHOLD;
     if (OB_ISNULL(tenant_direct_load_mgr)) {
