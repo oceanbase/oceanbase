@@ -182,6 +182,7 @@ PalfEnvImpl::PalfEnvImpl() : palf_meta_lock_(common::ObLatchIds::PALF_ENV_LOCK),
                              log_rpc_(),
                              cb_thread_pool_(),
                              log_io_worker_wrapper_(),
+                             log_shared_queue_th_(),
                              block_gc_timer_task_(),
                              log_updater_(),
                              monitor_(NULL),
@@ -243,6 +244,8 @@ int PalfEnvImpl::init(
                                                  cb_thread_pool_.get_tg_id(),
                                                  log_alloc_mgr, this))) {
     PALF_LOG(ERROR, "LogIOWorker init failed", K(ret));
+  } else if (OB_FAIL(log_shared_queue_th_.init(this))) {
+    PALF_LOG(ERROR, "LogSharedQueueTh init failed", K(ret));
   } else if (OB_FAIL(block_gc_timer_task_.init(this))) {
     PALF_LOG(ERROR, "ObCheckLogBlockCollectTask init failed", K(ret));
   } else if ((pret = snprintf(log_dir_, MAX_PATH_SIZE, "%s", base_dir)) && false) {
@@ -293,6 +296,8 @@ int PalfEnvImpl::start()
     PALF_LOG(ERROR, "LogIOTaskThreadPool start failed", K(ret));
   } else if (OB_FAIL(log_io_worker_wrapper_.start())) {
     PALF_LOG(ERROR, "LogIOWorker start failed", K(ret));
+  } else if (OB_FAIL(log_shared_queue_th_.start())) {
+    PALF_LOG(ERROR, "LogIOWorker start failed", K(ret));
   } else if (OB_FAIL(block_gc_timer_task_.start())) {
     PALF_LOG(ERROR, "FileCollectTimerTask start failed", K(ret));
 	} else if (OB_FAIL(fetch_log_engine_.start())) {
@@ -314,6 +319,7 @@ void PalfEnvImpl::stop()
     PALF_LOG(INFO, "PalfEnvImpl begin stop", KPC(this));
     is_running_ = false;
     log_io_worker_wrapper_.stop();
+    log_shared_queue_th_.stop();
     cb_thread_pool_.stop();
     block_gc_timer_task_.stop();
     fetch_log_engine_.stop();
@@ -327,6 +333,7 @@ void PalfEnvImpl::wait()
 {
   PALF_LOG(INFO, "PalfEnvImpl begin wait", KPC(this));
   log_io_worker_wrapper_.wait();
+  log_shared_queue_th_.wait();
   cb_thread_pool_.wait();
   block_gc_timer_task_.wait();
   fetch_log_engine_.wait();
@@ -342,6 +349,7 @@ void PalfEnvImpl::destroy()
   is_inited_ = false;
   palf_handle_impl_map_.destroy();
   log_io_worker_wrapper_.destroy();
+  log_shared_queue_th_.destroy();
   cb_thread_pool_.destroy();
   log_loop_thread_.destroy();
   block_gc_timer_task_.destroy();
@@ -419,7 +427,8 @@ int PalfEnvImpl::create_palf_handle_impl_(const int64_t palf_id,
     PALF_LOG(WARN, "prepare_directory_for_creating_ls failed!!!", K(ret), K(palf_id));
   } else if (OB_FAIL(palf_handle_impl->init(palf_id, access_mode, palf_base_info, replica_type,
       &fetch_log_engine_, base_dir, log_alloc_mgr_, log_block_pool_, &log_rpc_,
-      log_io_worker_wrapper_.get_log_io_worker(palf_id), this, self_, &election_timer_, palf_epoch))) {
+      log_io_worker_wrapper_.get_log_io_worker(palf_id), &log_shared_queue_th_, this,
+      self_, &election_timer_, palf_epoch))) {
     PALF_LOG(ERROR, "IPalfHandleImpl init failed", K(ret), K(palf_id));
     // NB: always insert value into hash map finally.
   } else if (OB_FAIL(palf_handle_impl_map_.insert_and_get(hash_map_key, palf_handle_impl))) {
@@ -1045,8 +1054,8 @@ int PalfEnvImpl::reload_palf_handle_impl_(const int64_t palf_id)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     PALF_LOG(WARN, "alloc ipalf_handle_impl failed", K(ret));
   } else if (OB_FAIL(tmp_palf_handle_impl->load(palf_id, &fetch_log_engine_, base_dir, log_alloc_mgr_,
-          log_block_pool_, &log_rpc_, log_io_worker_wrapper_.get_log_io_worker(palf_id), this, self_,
-          &election_timer_, palf_epoch, is_integrity))) {
+          log_block_pool_, &log_rpc_, log_io_worker_wrapper_.get_log_io_worker(palf_id), &log_shared_queue_th_,
+          this, self_, &election_timer_, palf_epoch, is_integrity))) {
     PALF_LOG(ERROR, "PalfHandleImpl init failed", K(ret), K(palf_id));
   } else if (OB_FAIL(palf_handle_impl_map_.insert_and_get(hash_map_key, tmp_palf_handle_impl))) {
     PALF_LOG(WARN, "palf_handle_impl_map_ insert_and_get failed", K(ret), K(palf_id), K(tmp_palf_handle_impl));
