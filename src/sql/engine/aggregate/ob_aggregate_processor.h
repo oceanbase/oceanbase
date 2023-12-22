@@ -667,7 +667,6 @@ public:
                         const int64_t group_id = 0,
                         const ObExpr *diff_expr = NULL,
                         const int64_t max_group_cnt = INT64_MIN);
-  OB_INLINE int prepare_in_batch_mode(GroupRow *group_rows);
   // Todo: check group_id, diff_expr usage
   int collect_scalar_batch(const ObBatchRows &brs, const int64_t group_id,
                     const ObExpr *diff_expr, const int64_t max_cnt);
@@ -701,7 +700,9 @@ public:
   inline common::ObIAllocator &get_aggr_alloc() { return aggr_alloc_; }
   inline void set_tenant_id(const uint64_t tenant_id) { aggr_alloc_.set_tenant_id(tenant_id); }
   int generate_group_row(GroupRow *&new_group_row, const int64_t group_id);
+  int fill_group_row(GroupRow *new_group_row, const int64_t group_id);
   int init_one_group(const int64_t group_id = 0, bool fill_pos = false);
+  int add_one_group(const int64_t group_id, GroupRow *new_group_row);
   int init_group_rows(const int64_t num_group_col, bool is_empty = false);
   int rollup_process(const int64_t group_id,
                      const int64_t rollup_group_id,
@@ -1082,6 +1083,47 @@ public:
  *    2. Second demension: the selector of batch agg functions, same with `DEC_INT_ADD_BATCH_FUNCS`.
 */
   static ObDecIntAggOpBatchFunc DEC_INT_MERGE_BATCH_FUNCS[DECIMAL_INT_MAX][2];
+  static bool need_alloc_dir_id(const ObExprOperatorType type)
+  {
+    bool need_id = false;
+    switch (type) {
+      case T_FUN_GROUP_CONCAT:
+      case T_FUN_GROUP_RANK:
+      case T_FUN_GROUP_DENSE_RANK:
+      case T_FUN_GROUP_PERCENT_RANK:
+      case T_FUN_GROUP_CUME_DIST:
+      case T_FUN_MEDIAN:
+      case T_FUN_GROUP_PERCENTILE_CONT:
+      case T_FUN_GROUP_PERCENTILE_DISC:
+      case T_FUN_KEEP_MAX:
+      case T_FUN_KEEP_MIN:
+      case T_FUN_KEEP_SUM:
+      case T_FUN_KEEP_COUNT:
+      case T_FUN_KEEP_WM_CONCAT:
+      case T_FUN_WM_CONCAT:
+      case T_FUN_PL_AGG_UDF:
+      case T_FUN_JSON_ARRAYAGG:
+      case T_FUN_ORA_JSON_ARRAYAGG:
+      case T_FUN_JSON_OBJECTAGG:
+      case T_FUN_ORA_JSON_OBJECTAGG:
+      case T_FUN_ORA_XMLAGG: {
+        need_id = true;
+        break;
+      }
+      default:
+        need_id = false;
+    }
+    return need_id;
+  }
+  bool processor_need_alloc_dir_id() const
+  {
+    bool need_id = false;
+    for (int64_t i = 0; !need_id && i < aggr_infos_.count(); ++i) {
+      const ObAggrInfo &aggr_info = aggr_infos_.at(i);
+      need_id = need_alloc_dir_id(aggr_info.get_expr_type());
+    }
+    return need_id;
+  }
 
 private:
   struct DecIntAggFuncCtx : public IAggrFuncCtx
@@ -1311,26 +1353,6 @@ OB_INLINE int ObAggregateProcessor::clone_aggr_cell(AggrCell &aggr_cell, const O
     aggr_cell.get_iter_result().pack_ = src_cell.pack_;
   }
   OX(SQL_LOG(DEBUG, "succ to clone cell", K(src_cell), K(need_size)));
-  return ret;
-}
-
-OB_INLINE int ObAggregateProcessor::prepare_in_batch_mode(GroupRow *group_rows)
-{
-  int ret = OB_SUCCESS;
-  // for sort-based group by operator, for performance reason,
-  // after producing a group, we will invoke reuse_group() function to clear the group
-  // thus, we do not need to allocate the group space again here, simply reuse the space
-  // process aggregate columns
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < group_rows->n_cells_; ++i) {
-    const ObAggrInfo &aggr_info = aggr_infos_.at(i);
-    AggrCell &aggr_cell = group_rows->aggr_cells_[i];
-    if (OB_ISNULL(aggr_info.expr_)) {
-      ret = OB_ERR_UNEXPECTED;
-      SQL_LOG(WARN, "expr info is null", K(aggr_cell), K(ret));
-    }
-    //OX(LOG_DEBUG("finish prepare", K(aggr_cell)));
-  }
   return ret;
 }
 

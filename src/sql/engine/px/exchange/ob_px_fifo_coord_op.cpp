@@ -163,7 +163,10 @@ int ObPxFifoCoordOp::fetch_rows(const int64_t row_cnt)
                                        eval_ctx_);
       } else {
         int64_t read_rows = 0;
-        ret = row_reader_.get_next_batch(MY_SPEC.child_exprs_, MY_SPEC.dynamic_const_exprs_,
+        ret = get_spec().use_rich_format_
+              ? row_reader_.get_next_batch_vec(MY_SPEC.child_exprs_, MY_SPEC.dynamic_const_exprs_,
+                                         eval_ctx_,  row_cnt, read_rows, vector_rows_)
+              : row_reader_.get_next_batch(MY_SPEC.child_exprs_, MY_SPEC.dynamic_const_exprs_,
                                          eval_ctx_,  row_cnt, read_rows, stored_rows_);
         brs_.size_ = read_rows;
       }

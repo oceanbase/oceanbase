@@ -1276,7 +1276,7 @@ int ObCSMicroBlockTransformHelper::build_integer_column_decoder_ctx_(
         ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NO_NULL;
         ctx.null_desc_ = nullptr;
       }
-      LOG_DEBUG("build_integer_column_decoder_ctx", K(col_first_stream_idx), K(col_end_stream_idx), K(col_idx), K(ctx));
+      LOG_TRACE("build_integer_column_decoder_ctx", K(col_first_stream_idx), K(col_end_stream_idx), K(col_idx), K(ctx));
     }
   }
   return ret;
@@ -1332,7 +1332,7 @@ int ObCSMicroBlockTransformHelper::build_string_column_decoder_ctx_(
           ctx.offset_data_ = buf + transform_desc_.stream_data_pos_arr_[col_second_stream_idx].offset_;
         }
       }
-      LOG_DEBUG("build_string_column_decoder_ctx", K(col_first_stream_idx), K(col_end_stream_idx), K(col_idx), K(ctx));
+      LOG_TRACE("build_string_column_decoder_ctx", K(col_first_stream_idx), K(col_end_stream_idx), K(col_idx), K(ctx));
     }
   }
 
@@ -1381,7 +1381,7 @@ int ObCSMicroBlockTransformHelper::build_integer_dict_decoder_ctx_(const ObObjMe
               sizeof(ObIntegerStreamDecoderCtx));
           ctx.ref_data_ = buf + transform_desc_.stream_data_pos_arr_[col_second_stream_idx].offset_;
 
-          LOG_DEBUG("build_integer_dict_decoder_ctx",
+          LOG_TRACE("build_integer_dict_decoder_ctx",
               K(col_first_stream_idx), K(col_end_stream_idx), K(col_idx), K(ctx));
         }
       }
@@ -1443,7 +1443,7 @@ int ObCSMicroBlockTransformHelper::build_string_dict_decoder_ctx_(const ObObjMet
               sizeof(ObStringStreamDecoderCtx));
           ctx.ref_data_ = buf + transform_desc_.stream_data_pos_arr_[col_second_stream_idx].offset_;
 
-          LOG_DEBUG("build_string_dict_decoder_ctx",
+          LOG_TRACE("build_string_dict_decoder_ctx",
               K(col_first_stream_idx), K(col_end_stream_idx), K(col_idx), K(ctx));
         }
       }
@@ -1474,7 +1474,7 @@ int ObCSMicroBlockTransformHelper::build_string_dict_decoder_ctx_(const ObObjMet
                 sizeof(ObStringStreamDecoderCtx) + sizeof(ObIntegerStreamDecoderCtx));
             ctx.ref_data_ = buf + transform_desc_.stream_data_pos_arr_[col_third_stream_idx].offset_;
 
-            LOG_DEBUG("build_string_dict_decoder_ctx",
+            LOG_TRACE("build_string_dict_decoder_ctx",
                 K(col_first_stream_idx), K(col_end_stream_idx), K(col_idx), K(ctx));
           }
         }

@@ -157,21 +157,39 @@ struct ObWideInteger
   template<int check_overflow, typename T>
   int add(const T &rhs, ObWideInteger<Bits, Signed> &res) const
   {
-    if (_impl::is_negative(rhs)) {
-      return _impl::template sub<check_overflow>(*this, -rhs, res);
-    } else {
-      return _impl::template add<check_overflow>(*this, rhs, res);
+    bool l_neg = false, r_neg = false;
+    if (check_overflow) {
+      l_neg = _impl::is_negative(*this);
+      r_neg = _impl::is_negative(rhs);
     }
+    if (_impl::is_negative(rhs)) {
+      _impl::template sub<check_overflow>(*this, -rhs, res);
+    } else {
+      _impl::template add<check_overflow>(*this, rhs, res);
+    }
+    if (check_overflow && _impl::add_overflow(l_neg, r_neg, _impl::is_negative(res))) {
+      return OB_OPERATE_OVERFLOW;
+    }
+    return OB_SUCCESS;
   }
 
   template<int check_overflow, typename T>
   int sub(const T &rhs, ObWideInteger<Bits, Signed> &res) const
   {
-    if (_impl::is_negative(rhs)) {
-      return _impl::template add<check_overflow>(*this, -rhs, res);
-    } else {
-      return _impl::template sub<check_overflow>(*this, rhs, res);
+    bool l_neg = false, r_neg = false;
+    if (check_overflow) {
+      l_neg = _impl::is_negative(*this);
+      r_neg = _impl::is_negative(rhs);
     }
+    if (_impl::is_negative(rhs)) {
+      _impl::template add<check_overflow>(*this, -rhs, res);
+    } else {
+      _impl::template sub<check_overflow>(*this, rhs, res);
+    }
+    if (check_overflow && _impl::sub_overflow(l_neg, r_neg, _impl::is_negative(res))) {
+      return OB_OPERATE_OVERFLOW;
+    }
+    return OB_SUCCESS;
   }
 
   template<typename T>
@@ -249,6 +267,7 @@ struct ObWideInteger
   uint64_t items_[ITEM_COUNT];
 
   struct _impl;
+  DECLARE_TO_STRING;
 private:
   template <unsigned Bits2, typename Signed2>
   friend class ObWideInteger;
@@ -262,9 +281,33 @@ bool operator==(const ObWideInteger<Bits, Signed> &lhs, const T &rhs)
 }
 
 template<unsigned Bits, typename Signed, typename T>
+bool operator==(const T &lhs, const ObWideInteger<Bits, Signed> &rhs)
+{
+  return ObWideInteger<Bits, Signed>::_impl::cmp(rhs, lhs) == 0;
+}
+
+template<unsigned Bits1, typename Signed1, unsigned Bits2, typename Signed2>
+bool operator==(const ObWideInteger<Bits1, Signed1> &lhs, const ObWideInteger<Bits2, Signed2> &rhs)
+{
+  return ObWideInteger<Bits1, Signed1>::_impl::cmp(lhs, rhs) == 0;
+}
+
+template<unsigned Bits, typename Signed, typename T>
 bool operator>(const ObWideInteger<Bits, Signed> &lhs, const T &rhs)
 {
   return ObWideInteger<Bits, Signed>::_impl::cmp(lhs, rhs) > 0;
+}
+
+template<unsigned Bits, typename Signed, typename T>
+bool operator>(const T &lhs, const ObWideInteger<Bits, Signed> &rhs)
+{
+  return ObWideInteger<Bits, Signed>::_impl::cmp(rhs, lhs) < 0;
+}
+
+template<unsigned Bits1, typename Signed1, unsigned Bits2, typename Signed2>
+bool operator>(const ObWideInteger<Bits1, Signed1> &lhs, const ObWideInteger<Bits2, Signed2> &rhs)
+{
+  return ObWideInteger<Bits1, Signed2>::_impl::cmp(lhs, rhs) > 0;
 }
 
 template<unsigned Bits, typename Signed, typename T>
@@ -274,15 +317,54 @@ bool operator<(const ObWideInteger<Bits, Signed> &lhs, const T &rhs)
 }
 
 template<unsigned Bits, typename Signed, typename T>
+bool operator<(const T &lhs, const ObWideInteger<Bits, Signed> &rhs)
+{
+  return ObWideInteger<Bits, Signed>::_impl::cmp(rhs, lhs) > 0;
+}
+
+template<unsigned Bits1, typename Signed1, unsigned Bits2, typename Signed2>
+bool operator<(const ObWideInteger<Bits1, Signed1> &lhs, const ObWideInteger<Bits2, Signed2> &rhs)
+{
+  return ObWideInteger<Bits1, Signed1>::_impl::cmp(lhs, rhs) < 0;
+}
+
+
+template<unsigned Bits, typename Signed, typename T>
 bool operator!=(const ObWideInteger<Bits, Signed> &lhs, const T &rhs)
 {
   return ObWideInteger<Bits, Signed>::_impl::cmp(lhs, rhs) != 0;
 }
 
 template<unsigned Bits, typename Signed, typename T>
+bool operator!=(const T &lhs, const ObWideInteger<Bits, Signed> &rhs)
+{
+  return ObWideInteger<Bits, Signed>::_impl::cmp(rhs, lhs) != 0;
+}
+
+template<unsigned Bits1, typename Signed1, unsigned Bits2, typename Signed2>
+bool operator!=(const ObWideInteger<Bits1, Signed1> &lhs, const ObWideInteger<Bits2, Signed2> &rhs)
+{
+  return ObWideInteger<Bits1, Signed1>::_impl::cmp(lhs, rhs) != 0;
+}
+
+template<unsigned Bits, typename Signed, typename T>
 bool operator<=(const ObWideInteger<Bits, Signed> &lhs, const T &rhs)
 {
   int ret = ObWideInteger<Bits, Signed>::_impl::cmp(lhs, rhs);
+  return ret <= 0;
+}
+
+template<unsigned Bits, typename Signed, typename T>
+bool operator<=(const T &lhs, const ObWideInteger<Bits, Signed> &rhs)
+{
+  int ret = ObWideInteger<Bits, Signed>::_impl::cmp(rhs, lhs);
+  return ret >= 0;
+}
+
+template<unsigned Bits1, typename Signed1, unsigned Bits2, typename Signed2>
+bool operator<=(const ObWideInteger<Bits1, Signed1> &lhs, const ObWideInteger<Bits2, Signed2> &rhs)
+{
+  int ret = ObWideInteger<Bits1, Signed1>::_impl::cmp(lhs, rhs);
   return ret <= 0;
 }
 
@@ -294,60 +376,239 @@ bool operator>=(const ObWideInteger<Bits, Signed> &lhs, const T &rhs)
 }
 
 template<unsigned Bits, typename Signed, typename T>
-ObWideInteger<Bits, Signed> operator+(const ObWideInteger<Bits, Signed> &lhs, const T &rhs)
+bool operator>=(const T &lhs, const ObWideInteger<Bits, Signed> &rhs)
 {
-  ObWideInteger<Bits, Signed> res;
-  if (ObWideInteger<Bits, Signed>::_impl::is_negative(rhs)) {
-    ObWideInteger<Bits, Signed>::_impl::template sub<IgnoreOverFlow>(lhs, -rhs, res);
+  int ret = ObWideInteger<Bits, Signed>::_impl::cmp(rhs, lhs);
+  return ret <= 0;
+}
+
+template<unsigned Bits1, typename Signed1, unsigned Bits2, typename Signed2>
+bool operator>=(const ObWideInteger<Bits1, Signed1> &lhs,  const ObWideInteger<Bits2, Signed2> &rhs)
+{
+  int ret = ObWideInteger<Bits1, Signed1>::_impl::cmp(lhs, rhs);
+  return ret >= 0;
+}
+
+template<unsigned Bits, typename T>
+ObWideInteger<Bits> operator+(const ObWideInteger<Bits> &lhs, const T &rhs)
+{
+  ObWideInteger<Bits> res;
+  if (ObWideInteger<Bits>::_impl::is_negative(rhs)) {
+    ObWideInteger<Bits>::_impl::template sub<IgnoreOverFlow>(lhs, -rhs, res);
   } else {
-    ObWideInteger<Bits, Signed>::_impl::template add<IgnoreOverFlow>(lhs, rhs, res);
+    ObWideInteger<Bits>::_impl::template add<IgnoreOverFlow>(lhs, rhs, res);
   }
   return res;
 }
 
-template<unsigned Bits, typename Signed, typename T>
-ObWideInteger<Bits, Signed> operator-(const ObWideInteger<Bits, Signed> &lhs, const T &rhs)
+template<unsigned Bits, typename T>
+ObWideInteger<Bits> operator+(const T &lhs, const ObWideInteger<Bits> &rhs)
 {
-  ObWideInteger<Bits, Signed> res;
-  if (ObWideInteger<Bits, Signed>::_impl::is_negative(rhs)) {
-    ObWideInteger<Bits, Signed>::_impl::template add<IgnoreOverFlow>(lhs, -rhs, res);
+  ObWideInteger<Bits> res;
+  if (ObWideInteger<Bits>::_impl::is_negative(lhs)) {
+    ObWideInteger<Bits>::_impl::template sub<IgnoreOverFlow>(rhs, -lhs, res);
   } else {
-    ObWideInteger<Bits, Signed>::_impl::template sub<IgnoreOverFlow>(lhs, rhs, res);
+    ObWideInteger<Bits>::_impl::template add<IgnoreOverFlow>(rhs, lhs, res);
   }
   return res;
 }
 
-template<unsigned Bits, typename Signed, typename T>
-ObWideInteger<Bits, Signed> operator*(const ObWideInteger<Bits, Signed> &lhs, const T &rhs)
+template <unsigned Bits1, unsigned Bits2>
+ObWideInteger<Bits1 >= Bits2 ? Bits1 : Bits2> operator+(const ObWideInteger<Bits1> &lhs,
+                                                        const ObWideInteger<Bits2> &rhs)
 {
-  ObWideInteger<Bits, Signed> res;
-  ObWideInteger<Bits, Signed>::_impl::template multiply<IgnoreOverFlow>(lhs, rhs, res);
+  constexpr unsigned res_bits = (Bits1 >= Bits2 ? Bits1 : Bits2);
+  using ResType = ObWideInteger<res_bits>;
+  ResType res;
+  if (Bits1 >= Bits2) {
+    if (ObWideInteger<Bits2>::_impl::is_negative(rhs)) {
+      ObWideInteger<res_bits>::_impl::template sub<IgnoreOverFlow>(lhs, -rhs, res);
+    } else {
+      ObWideInteger<res_bits>::_impl::template add<IgnoreOverFlow>(lhs, rhs, res);
+    }
+  } else {
+    if (ObWideInteger<Bits1>::_impl::is_negative(lhs)) {
+      ObWideInteger<res_bits>::_impl::template sub<IgnoreOverFlow>(rhs, -lhs, res);
+    } else {
+      ObWideInteger<res_bits>::_impl::template add<IgnoreOverFlow>(rhs, lhs, res);
+    }
+  }
   return res;
 }
 
-template<unsigned Bits, typename Signed, typename T>
-ObWideInteger<Bits, Signed> operator/(const ObWideInteger<Bits, Signed> &lhs, const T &rhs)
+template<unsigned Bits, typename T>
+ObWideInteger<Bits> operator-(const ObWideInteger<Bits> &lhs, const T &rhs)
 {
-  ObWideInteger<Bits, Signed> res;
-  ObWideInteger<Bits, Signed> rem;
-  ObWideInteger<Bits, Signed>::_impl::template divide<IgnoreOverFlow>(lhs, rhs, res, rem);
+  ObWideInteger<Bits> res;
+  if (ObWideInteger<Bits>::_impl::is_negative(rhs)) {
+    ObWideInteger<Bits>::_impl::template add<IgnoreOverFlow>(lhs, -rhs, res);
+  } else {
+    ObWideInteger<Bits>::_impl::template sub<IgnoreOverFlow>(lhs, rhs, res);
+  }
   return res;
 }
 
-template<unsigned Bits, typename Signed, typename T>
-ObWideInteger<Bits, Signed> operator%(const ObWideInteger<Bits, Signed> &lhs, const T &rhs)
+template<unsigned Bits, typename T>
+ObWideInteger<Bits> operator-(const T &lhs, const ObWideInteger<Bits> &rhs)
 {
-  ObWideInteger<Bits, Signed> res;
-  ObWideInteger<Bits, Signed> rem;
-  ObWideInteger<Bits, Signed>::_impl::template divide<IgnoreOverFlow>(lhs, rhs, res, rem);
+  ObWideInteger<Bits> res;
+  if (ObWideInteger<Bits>::_impl::is_negative(lhs)) {
+    ObWideInteger<Bits>::_impl::template sub<IgnoreOverFlow>(-rhs, -lhs, res);
+  } else {
+    ObWideInteger<Bits>::_impl::template add<IgnoreOverFlow>(-rhs, lhs, res);
+  }
+  return res;
+}
+
+template <unsigned Bits1, unsigned Bits2>
+ObWideInteger<Bits1 >= Bits2 ? Bits1 : Bits2> operator-(const ObWideInteger<Bits1> &lhs,
+                                                        const ObWideInteger<Bits2> &rhs)
+{
+  constexpr unsigned res_bits = (Bits1 >= Bits2 ? Bits1 : Bits2);
+  using ResType = ObWideInteger<res_bits>;
+  ResType res;
+  if (Bits1 >= Bits2) {
+    if (ObWideInteger<Bits2>::_impl::is_negative(rhs)) {
+      ObWideInteger<res_bits>::_impl::template add<IgnoreOverFlow>(lhs, -rhs, res);
+    } else {
+      ObWideInteger<res_bits>::_impl::template sub<IgnoreOverFlow>(lhs, rhs, res);
+    }
+  } else {
+    if (ObWideInteger<Bits1>::_impl::is_negative(lhs)) {
+      ObWideInteger<res_bits>::_impl::template sub<IgnoreOverFlow>(-rhs, -lhs, res);
+    } else {
+      ObWideInteger<res_bits>::_impl::template add<IgnoreOverFlow>(-rhs, lhs, res);
+    }
+  }
+  return res;
+}
+
+template<unsigned Bits, typename T>
+ObWideInteger<Bits> operator*(const ObWideInteger<Bits> &lhs, const T &rhs)
+{
+  ObWideInteger<Bits> res;
+  ObWideInteger<Bits>::_impl::template multiply<IgnoreOverFlow>(lhs, rhs, res);
+  return res;
+}
+
+template<unsigned Bits, typename T>
+ObWideInteger<Bits> operator*(const T &lhs, const ObWideInteger<Bits> &rhs)
+{
+  ObWideInteger<Bits> res;
+  ObWideInteger<Bits>::_impl::template multiply<IgnoreOverFlow>(rhs, lhs, res);
+  return res;
+}
+
+template <unsigned Bits1, unsigned Bits2>
+ObWideInteger<Bits1 >= Bits2 ? Bits1 : Bits2> operator*(const ObWideInteger<Bits1> &lhs,
+                                                        const ObWideInteger<Bits2> &rhs)
+{
+  constexpr unsigned res_bits = (Bits1 >= Bits2 ? Bits1 : Bits2);
+  using ResType = ObWideInteger<res_bits>;
+  ResType res;
+  if (Bits1 >= Bits2) {
+    ObWideInteger<res_bits>::_impl::template multiply<IgnoreOverFlow>(lhs, rhs, res);
+  } else {
+    ObWideInteger<res_bits>::_impl::template multiply<IgnoreOverFlow>(rhs, lhs, res);
+  }
+  return res;
+}
+
+template<unsigned Bits, typename T>
+ObWideInteger<Bits> operator/(const ObWideInteger<Bits> &lhs, const T &rhs)
+{
+  ObWideInteger<Bits> res;
+  ObWideInteger<Bits> rem;
+  ObWideInteger<Bits>::_impl::template divide<IgnoreOverFlow>(lhs, rhs, res, rem);
+  return res;
+}
+
+template<unsigned Bits, typename T>
+ObWideInteger<Bits> operator/(const T &lhs, const ObWideInteger<Bits> &rhs)
+{
+  ObWideInteger<Bits> res;
+  ObWideInteger<Bits> rem;
+  ObWideInteger<Bits>::_impl::template divide<IgnoreOverFlow>(ObWideInteger<Bits>(lhs), rhs, res, rem);
+  return res;
+}
+template <unsigned Bits1, unsigned Bits2>
+ObWideInteger<Bits1 >= Bits2 ? Bits1 : Bits2> operator/(const ObWideInteger<Bits1> &lhs,
+                                                        const ObWideInteger<Bits2> &rhs)
+{
+  constexpr unsigned res_bits = (Bits1 >= Bits2 ? Bits1 : Bits2);
+  using ResType = ObWideInteger<res_bits>;
+  ResType res;
+  ResType rem;
+  if (Bits1 >= Bits2) {
+    ObWideInteger<res_bits>::_impl::template divide<IgnoreOverFlow>(lhs, rhs, res, rem);
+  } else {
+    ObWideInteger<res_bits>::_impl::template divide<IgnoreOverFlow>(ObWideInteger<Bits2>(lhs), rhs, res, rem);
+  }
+  return res;
+}
+
+template<unsigned Bits, typename T>
+ObWideInteger<Bits> operator%(const ObWideInteger<Bits> &lhs, const T &rhs)
+{
+  ObWideInteger<Bits> res;
+  ObWideInteger<Bits> rem;
+  ObWideInteger<Bits>::_impl::template divide<IgnoreOverFlow>(lhs, rhs, res, rem);
   return rem;
 }
 
-template<unsigned Bits, typename Signed, typename T>
-ObWideInteger<Bits, Signed> operator&(const ObWideInteger<Bits, Signed> &lhs, const T &rhs)
+template<unsigned Bits, typename T>
+ObWideInteger<Bits> operator%(const T &lhs, const ObWideInteger<Bits> &rhs)
 {
-  ObWideInteger<Bits, Signed> res;
-  ObWideInteger<Bits, Signed>::_impl::template bitwise_and(lhs, rhs, res);
+  ObWideInteger<Bits> res;
+  ObWideInteger<Bits> rem;
+  ObWideInteger<Bits>::_impl::template divide<IgnoreOverFlow>(ObWideInteger<Bits>(lhs), rhs, res, rem);
+  return rem;
+}
+
+template <unsigned Bits1, unsigned Bits2>
+ObWideInteger<Bits1 >= Bits2 ? Bits1 : Bits2> operator%(const ObWideInteger<Bits1> &lhs,
+                                                        const ObWideInteger<Bits2> &rhs)
+{
+  constexpr unsigned res_bits = (Bits1 >= Bits2 ? Bits1 : Bits2);
+  using ResType = ObWideInteger<res_bits>;
+  ResType res;
+  ResType rem;
+  if (Bits1 >= Bits2) {
+    ObWideInteger<res_bits>::_impl::template divide<IgnoreOverFlow>(lhs, rhs, res, rem);
+  } else {
+    ObWideInteger<res_bits>::_impl::template divide<IgnoreOverFlow>(ObWideInteger<Bits2>(lhs), rhs, res, rem);
+  }
+  return rem;
+}
+
+template<unsigned Bits, typename T>
+ObWideInteger<Bits> operator&(const ObWideInteger<Bits> &lhs, const T &rhs)
+{
+  ObWideInteger<Bits> res;
+  ObWideInteger<Bits>::_impl::template bitwise_and(lhs, rhs, res);
+  return res;
+}
+
+template<unsigned Bits, typename T>
+ObWideInteger<Bits> operator&(const T &lhs, const ObWideInteger<Bits> &rhs)
+{
+  ObWideInteger<Bits> res;
+  ObWideInteger<Bits>::_impl::template bitwise_and(rhs, lhs, res);
+  return res;
+}
+
+template <unsigned Bits1, unsigned Bits2>
+ObWideInteger<Bits1 >= Bits2 ? Bits1 : Bits2> operator&(const ObWideInteger<Bits1> &lhs,
+                                                        const ObWideInteger<Bits2> &rhs)
+{
+  constexpr unsigned res_bits = (Bits1 >= Bits2 ? Bits1 : Bits2);
+  using ResType = ObWideInteger<res_bits>;
+  ResType res;
+  if (Bits1 >= Bits2) {
+    ObWideInteger<res_bits>::_impl::template bitwise_add(lhs, rhs, res);
+  } else {
+    ObWideInteger<res_bits>::_impl::template bitwise_add(rhs, lhs, res);
+  }
   return res;
 }
 

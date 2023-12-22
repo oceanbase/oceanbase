@@ -21,6 +21,9 @@ using namespace oceanbase;
 using namespace common;
 using namespace sql;
 
+DEFINE_ENUM_FUNC(ObP2PDatahubMsgBase::ObP2PDatahubMsgType, p2p_datahub_msg_type,
+                 P2P_DATAHUB_MSG_TYPE, ObP2PDatahubMsgBase::);
+
 OB_SERIALIZE_MEMBER(ObP2PDatahubMsgBase,
     trace_id_, p2p_datahub_id_, px_sequence_id_,
     task_id_, tenant_id_, timeout_ts_, msg_type_,
@@ -106,6 +109,7 @@ int ObP2PDatahubMsgBase::process_receive_count(ObP2PDatahubMsgBase &msg)
 void ObP2PDatahubMsgBase::check_finish_receive()
 {
   if (msg_receive_expect_cnt_ == ATOMIC_LOAD(&msg_receive_cur_cnt_)) {
+    (void)after_process();
     is_ready_ = true;
   }
 }
@@ -147,6 +151,50 @@ int ObP2PDatahubMsgBase::process_msg_internal(bool &need_free)
     // msg not in map, dec ref count
     guard.dec_msg_ref_count();
   }
+  return ret;
+}
+
+template <>
+int ObP2PDatahubMsgBase::proc_filter_empty<IntegerFixedVec>(IntegerFixedVec *res_vec,
+                                                            const ObBitVector &skip,
+                                                            int64_t batch_size,
+                                                            int64_t &total_count,
+                                                            int64_t &filter_count)
+{
+  int ret = OB_SUCCESS;
+  uint64_t *data = reinterpret_cast<uint64_t *>(res_vec->get_data());
+  MEMSET(data, 0, (batch_size * res_vec->get_length(0)));
+
+  int64_t valid_cnt = batch_size - skip.accumulate_bit_cnt(batch_size);
+  total_count += valid_cnt;
+  filter_count += valid_cnt;
+  return ret;
+}
+
+template <>
+int ObP2PDatahubMsgBase::proc_filter_empty<IntegerUniVec>(IntegerUniVec *res_vec,
+                                                          const ObBitVector &skip,
+                                                          int64_t batch_size, int64_t &total_count,
+                                                          int64_t &filter_count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObBitVector::flip_foreach(
+          skip, batch_size, [&](int64_t idx) __attribute__((always_inline)) {
+            res_vec->set_int(idx, 0);
+            ++filter_count;
+            ++total_count;
+            return OB_SUCCESS;
+          }))) {
+    LOG_WARN("fail to do for each operation", K(ret));
+  }
+  return ret;
+}
+
+int ObP2PDatahubMsgBase::preset_not_match(IntegerFixedVec *res_vec, int64_t batch_size)
+{
+  int ret = OB_SUCCESS;
+  uint64_t *data = reinterpret_cast<uint64_t *>(res_vec->get_data());
+  MEMSET(data, 0, (batch_size * res_vec->get_length(0)));
   return ret;
 }
 

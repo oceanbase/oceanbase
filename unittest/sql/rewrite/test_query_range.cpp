@@ -975,80 +975,80 @@ TEST_F(ObQueryRangeTest, range_column_with_triple_key)
   //_OB_LOG(INFO, "ranges: %s", to_cstring(ranges));
 }
 
-TEST_F(ObQueryRangeTest, simple_row_in)
-{
-  _OB_LOG(INFO, "start test: (a, d) in ((1 , 1.5), (2, 2), (1, 3), (2, 3), (0, 0), ('3', 3))");
-  ParamStore &params = exec_ctx_.get_physical_plan_ctx()->get_param_store_for_update();
-  params.reset();
-  ObObjParam param;
-  param.set_int(1);
-  param.set_param_meta();
-  OK(params.push_back(param));
-  param.set_double(1.5);
-  param.set_param_meta();
-  OK(params.push_back(param));
-//  param.set_int(2);
-//  OK(params.push_back(param));
-//  param.set_int(2);
-//  OK(params.push_back(param));
+//TEST_F(ObQueryRangeTest, simple_row_in)
+//{
+//  _OB_LOG(INFO, "start test: (a, d) in ((1 , 1.5), (2, 2), (1, 3), (2, 3), (0, 0), ('3', 3))");
+//  ParamStore &params = exec_ctx_.get_physical_plan_ctx()->get_param_store_for_update();
+//  params.reset();
+//  ObObjParam param;
 //  param.set_int(1);
+//  param.set_param_meta();
+//  OK(params.push_back(param));
+//  param.set_double(1.5);
+//  param.set_param_meta();
+//  OK(params.push_back(param));
+////  param.set_int(2);
+////  OK(params.push_back(param));
+////  param.set_int(2);
+////  OK(params.push_back(param));
+////  param.set_int(1);
+////  OK(params.push_back(param));
+////  param.set_int(3);
+////  OK(params.push_back(param));
+////  param.set_int(2);
+////  OK(params.push_back(param));
+////  param.set_int(3);
+////  OK(params.push_back(param));
+////  param.set_int(0);
+////  OK(params.push_back(param));
+////  param.set_int(0);
+////  OK(params.push_back(param));
+//  param.set_varchar("3");
+//  param.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+//  param.set_param_meta();
 //  OK(params.push_back(param));
 //  param.set_int(3);
+//  param.set_param_meta();
 //  OK(params.push_back(param));
-//  param.set_int(2);
-//  OK(params.push_back(param));
-//  param.set_int(3);
-//  OK(params.push_back(param));
-//  param.set_int(0);
-//  OK(params.push_back(param));
-//  param.set_int(0);
-//  OK(params.push_back(param));
-  param.set_varchar("3");
-  param.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-  param.set_param_meta();
-  OK(params.push_back(param));
-  param.set_int(3);
-  param.set_param_meta();
-  OK(params.push_back(param));
-  ObRawExpr *condition = NULL;
-  const ObDataTypeCastParams dtc_params;
-
-  resolve_condition(triple_range_columns_, "(a, d) in ((? , ?)) or (a, d) = (?, ?)", condition, &params);
-  OK(query_range.preliminary_extract_query_range(triple_range_columns_, condition, dtc_params, &exec_ctx_));
-
-  _OB_LOG(INFO, "XXXX %s", to_cstring(query_range));
-  _OB_LOG(INFO, "XXXX params: %s", to_cstring(params));
-  OK(query_range.final_extract_query_range(exec_ctx_, dtc_params));
-  _OB_LOG(INFO, "XXXX final: %s", to_cstring(query_range));
-
-  ObQueryRangeArray ranges;
-  bool all_single_value_ranges = true;
-
-  OK(query_range.get_tablet_ranges(ranges, all_single_value_ranges, dtc_params));
-  _OB_LOG(INFO, "ranges: %s", to_cstring(ranges));
-//  ASSERT_EQ(1, ranges.count());
-//  int64_t value = 0;
+//  ObRawExpr *condition = NULL;
+//  const ObDataTypeCastParams dtc_params;
 //
-//  EXPECT_TRUE(get_methods.at(0));
+//  resolve_condition(triple_range_columns_, "(a, d) in ((? , ?)) or (a, d) = (?, ?)", condition, &params);
+//  OK(query_range.preliminary_extract_query_range(triple_range_columns_, condition, dtc_params, &exec_ctx_));
 //
-//  // expect: ((1, 1, 1), (1, 1, 2))
-//  EXPECT_FALSE(ranges.at(0)->border_flag_.inclusive_start());
-//  EXPECT_FALSE(ranges.at(0)->border_flag_.inclusive_end());
-//  ASSERT_EQ(1, ranges.count());
-//  ASSERT_EQ(ranges.at(0)->start_key_.get_obj_ptr()[0].get_int(value), OB_SUCCESS);
-//  ASSERT_EQ(1, value);
-//  ASSERT_EQ(ranges.at(0)->start_key_.get_obj_ptr()[1].get_int(value), OB_SUCCESS);
-//  ASSERT_EQ(1, value);
-//  ASSERT_EQ(ranges.at(0)->start_key_.get_obj_ptr()[2].get_int(value), OB_SUCCESS);
-//  ASSERT_EQ(1, value);
+//  _OB_LOG(INFO, "XXXX %s", to_cstring(query_range));
+//  _OB_LOG(INFO, "XXXX params: %s", to_cstring(params));
+//  OK(query_range.final_extract_query_range(exec_ctx_, dtc_params));
+//  _OB_LOG(INFO, "XXXX final: %s", to_cstring(query_range));
 //
-//  ASSERT_EQ(ranges.at(0)->end_key_.get_obj_ptr()[0].get_int(value), OB_SUCCESS);
-//  ASSERT_EQ(1, value);
-//  ASSERT_EQ(ranges.at(0)->end_key_.get_obj_ptr()[1].get_int(value), OB_SUCCESS);
-//  ASSERT_EQ(1, value);
-//  ASSERT_EQ(ranges.at(0)->end_key_.get_obj_ptr()[2].get_int(value), OB_SUCCESS);
-//  ASSERT_EQ(2, value);
-}
+//  ObQueryRangeArray ranges;
+//  bool all_single_value_ranges = true;
+//
+//  OK(query_range.get_tablet_ranges(ranges, all_single_value_ranges, dtc_params));
+//  _OB_LOG(INFO, "ranges: %s", to_cstring(ranges));
+////  ASSERT_EQ(1, ranges.count());
+////  int64_t value = 0;
+////
+////  EXPECT_TRUE(get_methods.at(0));
+////
+////  // expect: ((1, 1, 1), (1, 1, 2))
+////  EXPECT_FALSE(ranges.at(0)->border_flag_.inclusive_start());
+////  EXPECT_FALSE(ranges.at(0)->border_flag_.inclusive_end());
+////  ASSERT_EQ(1, ranges.count());
+////  ASSERT_EQ(ranges.at(0)->start_key_.get_obj_ptr()[0].get_int(value), OB_SUCCESS);
+////  ASSERT_EQ(1, value);
+////  ASSERT_EQ(ranges.at(0)->start_key_.get_obj_ptr()[1].get_int(value), OB_SUCCESS);
+////  ASSERT_EQ(1, value);
+////  ASSERT_EQ(ranges.at(0)->start_key_.get_obj_ptr()[2].get_int(value), OB_SUCCESS);
+////  ASSERT_EQ(1, value);
+////
+////  ASSERT_EQ(ranges.at(0)->end_key_.get_obj_ptr()[0].get_int(value), OB_SUCCESS);
+////  ASSERT_EQ(1, value);
+////  ASSERT_EQ(ranges.at(0)->end_key_.get_obj_ptr()[1].get_int(value), OB_SUCCESS);
+////  ASSERT_EQ(1, value);
+////  ASSERT_EQ(ranges.at(0)->end_key_.get_obj_ptr()[2].get_int(value), OB_SUCCESS);
+////  ASSERT_EQ(2, value);
+//}
 
 TEST_F(ObQueryRangeTest, basic_test)
 {

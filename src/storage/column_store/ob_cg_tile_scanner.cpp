@@ -193,6 +193,8 @@ int ObCGTileScanner::apply_filter(
       }
       if (OB_SUCC(ret) && batch_row_count > 0) {
         ObCSRange row_range(is_reverse_scan_ ? current - batch_row_count : current, batch_row_count);
+        filter_info.start_ = 0;
+        filter_info.count_ = batch_row_count;
         bool can_skip_subtree = false;
         if (nullptr != parent) {
           if (ObCGScanner::can_skip_filter(*parent, *parent_bitmap, row_range)) {
@@ -207,7 +209,7 @@ int ObCGTileScanner::apply_filter(
           }
         }
         if (can_skip_subtree) {
-        } else if (OB_FAIL(ObCOSSTableRowsFilter::filter_batch_rows(parent, filter_info.filter_, batch_row_count))) {
+        } else if (OB_FAIL(filter_info.filter_->execute(parent, filter_info, nullptr, true))) {
           LOG_WARN("Failed to filter batch rows", K(ret), K(batch_row_count));
         } else if (OB_FAIL(result_bitmap.append_bitmap(*(filter_info.filter_->get_result()),
                                                        static_cast<uint32_t>(row_count - remained_rows),

@@ -243,36 +243,38 @@ public:
                                       int64_t check_size)
   {
     SQL_LOG(TRACE, "enable datum ptr check", K(exprs), K(check_size));
-    auto expr_idx = 0;
-    FOREACH_CNT(e, exprs) {
-      if (OB_ISNULL((*e)->eval_func_) &&
-          OB_ISNULL((*e)->eval_batch_func_) && ((*e)->arg_cnt_ == 0) &&
-          !((*e)->is_variable_res_buf() || ob_is_decimal_int((*e)->datum_meta_.type_))) {
-        // exclude generated column, string type column
-        auto datum = (*e)->locate_batch_datums(eval_ctx);
-        if ((*e)->is_batch_result()) {
-          for (auto idx = 0; idx < check_size; idx++) {
-            const char *datum_ptr = datum[idx].ptr_;
-            const char *res_ptr = eval_ctx.frames_[(*e)->frame_idx_] + (*e)->res_buf_off_
-                            + (*e)->res_buf_len_ * idx;
-            if (datum_ptr != res_ptr) {
-              SQL_LOG_RET(WARN, OB_ERR_UNEXPECTED, "sanity check failure, column index", K(expr_idx), K(idx),
-                                     KP(datum_ptr), KP(res_ptr), KP(*e), K(eval_ctx));
-              abort();
-            }
-          }
-        } else {
-          const char *datum_ptr = datum->ptr_;
-          const char *res_ptr = eval_ctx.frames_[(*e)->frame_idx_] + (*e)->res_buf_off_;
-          if (datum_ptr != res_ptr) {
-            SQL_LOG_RET(WARN, OB_ERR_UNEXPECTED, "sanity check failure, column index",
-                     K(expr_idx), KP(datum_ptr), KP(res_ptr), KP(*e), K(eval_ctx));
-            abort();
-          }
-        }
-      }
-      expr_idx++;
-    }
+    // TODO: add sanity check for vector formats
+
+    // auto expr_idx = 0;
+    // FOREACH_CNT(e, exprs) {
+    //   if (OB_ISNULL((*e)->eval_func_) &&
+    //       OB_ISNULL((*e)->eval_batch_func_) && ((*e)->arg_cnt_ == 0) &&
+    //       !((*e)->is_variable_res_buf() || ob_is_decimal_int((*e)->datum_meta_.type_))) {
+    //     // exclude generated column, string type column
+    //     auto datum = (*e)->locate_batch_datums(eval_ctx);
+    //     if ((*e)->is_batch_result()) {
+    //       for (auto idx = 0; idx < check_size; idx++) {
+    //         const char *datum_ptr = datum[idx].ptr_;
+    //         const char *res_ptr = eval_ctx.frames_[(*e)->frame_idx_] + (*e)->res_buf_off_
+    //                         + (*e)->res_buf_len_ * idx;
+    //         if (datum_ptr != res_ptr) {
+    //           SQL_LOG_RET(WARN, OB_ERR_UNEXPECTED, "sanity check failure, column index", K(expr_idx), K(idx),
+    //                                  KP(datum_ptr), KP(res_ptr), KP(*e), K(eval_ctx));
+    //           abort();
+    //         }
+    //       }
+    //     } else {
+    //       const char *datum_ptr = datum->ptr_;
+    //       const char *res_ptr = eval_ctx.frames_[(*e)->frame_idx_] + (*e)->res_buf_off_;
+    //       if (datum_ptr != res_ptr) {
+    //         SQL_LOG_RET(WARN, OB_ERR_UNEXPECTED, "sanity check failure, column index",
+    //                  K(expr_idx), KP(datum_ptr), KP(res_ptr), KP(*e), K(eval_ctx));
+    //         abort();
+    //       }
+    //     }
+    //   }
+    //   expr_idx++;
+    // }
   }
   static int is_charset_data_version_valid(ObCharsetType charset_type, const int64_t tenant_id);
   static int is_collation_data_version_valid(ObCollationType collation_type, const int64_t tenant_id);

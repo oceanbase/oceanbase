@@ -50,7 +50,7 @@ int ObChunkBlockCompressor::init(const ObCompressorType comptype)
 
   if (comptype == NONE_COMPRESSOR) {
   } else if (OB_FAIL(ObCompressorPool::get_instance().get_compressor(comptype, compressor_))) {
-    STORAGE_LOG(WARN, "Fail to get compressor, ", K(ret), K(comptype));
+    LOG_WARN("Fail to get compressor, ", K(ret), K(comptype));
   } else {
     compressor_type_ = comptype;
   }
@@ -66,9 +66,9 @@ int ObChunkBlockCompressor::calc_need_size(int64_t in_size, int64_t &need_size)
     need_size = in_size;
   } else if (OB_ISNULL(compressor_)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "compressor is unexpected null", K(ret), K_(compressor));
+    LOG_WARN("compressor is unexpected null", K(ret), K_(compressor));
   } else if (OB_FAIL(compressor_->get_max_overflow_size(in_size, max_overflow_size))) {
-    STORAGE_LOG(WARN, "fail to get max_overflow_size, ", K(ret), K(in_size));
+    LOG_WARN("fail to get max_overflow_size, ", K(ret), K(in_size));
   } else {
     need_size = max_overflow_size + in_size;
   }
@@ -85,14 +85,14 @@ int ObChunkBlockCompressor::compress(const char *in, const int64_t in_size, cons
     out_size = in_size;
   } else if (OB_ISNULL(compressor_)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "compressor is unexpected null", K(ret), K_(compressor));
+    LOG_WARN("compressor is unexpected null", K(ret), K_(compressor));
   } else {
     int64_t comp_size = 0;
     if (OB_FAIL(compressor_->compress(in, in_size, out, max_comp_size, comp_size))) {
-      STORAGE_LOG(WARN, "compressor fail to compress.", K(in), K(in_size),
+      LOG_WARN("compressor fail to compress.", K(in), K(in_size),
                   "comp_ptr", out, K(max_comp_size), K(comp_size));
     } else if (comp_size >= in_size) {
-      STORAGE_LOG(TRACE, "compressed_size is larger than origin_size",
+      LOG_TRACE("compressed_size is larger than origin_size",
                   K(comp_size), K(in_size));
       MEMCPY(out, in, in_size);
       out_size = in_size;
@@ -114,10 +114,10 @@ int ObChunkBlockCompressor::decompress(const char *in, const int64_t in_size,
     out_size = in_size;
   } else if (OB_ISNULL(compressor_)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "compressor is unexpected null", K(ret), K_(compressor));
+    LOG_WARN("compressor is unexpected null", K(ret), K_(compressor));
   } else if (OB_FAIL(compressor_->decompress(in, in_size, out, uncomp_size,
                                              decomp_size))) {
-    STORAGE_LOG(WARN, "failed to decompress data", K(ret), K(in_size), K(uncomp_size));
+    LOG_WARN("failed to decompress data", K(ret), K(in_size), K(uncomp_size));
   } else {
     out_size = decomp_size;
   }

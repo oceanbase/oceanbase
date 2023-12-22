@@ -58,11 +58,9 @@ public:
 public:
   // for cache first msg and release first msg
   int64_t get_hash_value(int64_t chid);
-  int cache_buffer(int64_t chid, ObDtlLinkedBuffer *&data_buffer, bool attach = false);
   void check_dtl(uint64_t tenant_id);
   // for block and unblock
   int enforce_block(ObDtlFlowControl *dfc, int64_t ch_idx);
-  int try_process_first_buffer(ObDtlFlowControl *dfc, int64_t ch_idx);
 
   int block_tenant_dfc(ObDtlFlowControl *dfc, int64_t ch_idx, int64_t size);
   int unblock_tenant_dfc(ObDtlFlowControl *dfc, int64_t ch_idx, int64_t size);
@@ -86,16 +84,9 @@ public:
   int64_t get_accumulated_blocked_cnt() { return tenant_dfc_.get_accumulated_blocked_cnt(); }
   int64_t get_channel_cnt() { return (ATOMIC_LOAD(&channel_total_cnt_)); }
 
-  int get_buffer_cache(ObDtlDfoKey &key, ObDtlLocalFirstBufferCache *&buf_cache);
-  int try_process_first_buffer_by_qc(ObDtlFlowControl *dfc, ObDtlChannel *ch, int64_t ch_idx, bool &got);
-  int register_first_buffer_cache(ObDtlLocalFirstBufferCache *buf_cache);
-  int unregister_first_buffer_cache(ObDtlDfoKey &key, ObDtlLocalFirstBufferCache *org_buf_cache);
-
-  ObDtlLocalFirstBufferCacheManager *get_new_first_buffer_manager() { return &first_buffer_mgr_; }
   OB_INLINE ObDtlTenantMemManager *get_tenant_mem_manager() { return &tenant_mem_mgr_; }
 private:
   static int init_channel_mem_manager();
-  static int init_first_buffer_manager();
   int clean_on_timeout();
   void check_dtl_buffer_size();
 
@@ -121,7 +112,6 @@ private:
   const double OVERSOLD_RATIO = 0.8;
 
   ObDtlTenantMemManager tenant_mem_mgr_;
-  ObDtlLocalFirstBufferCacheManager first_buffer_mgr_;
 public:
   TO_STRING_KV(K_(tenant_id), K_(blocked_dfc_cnt), K_(channel_total_cnt));
 };
@@ -146,14 +136,6 @@ public:
 
   int register_dfc(ObDtlFlowControl &dfc);
   int deregister_dfc(ObDtlFlowControl &dfc);
-
-  int cache(uint64_t tenant_id, int64_t chid, ObDtlLinkedBuffer *&data_buffer, bool attach = false);
-  int cache(int64_t chid, ObDtlLinkedBuffer *&data_buffer, bool attach = false);
-  int try_process_first_buffer(ObDtlFlowControl *dfc, int64_t ch_idx);
-  int get_buffer_cache(uint64_t tenant_id, ObDtlDfoKey &key, ObDtlLocalFirstBufferCache *&buf_cache);
-
-  int register_first_buffer_cache(uint64_t tenant_id, ObDtlLocalFirstBufferCache *buf_cache);
-  int unregister_first_buffer_cache(uint64_t tenant_id, ObDtlDfoKey &key, ObDtlLocalFirstBufferCache *org_buf_cache);
 
   ObDtlTenantMemManager *get_tenant_mem_manager(int64_t tenant_id);
 private:

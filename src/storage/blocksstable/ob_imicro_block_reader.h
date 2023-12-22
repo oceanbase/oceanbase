@@ -310,17 +310,22 @@ public:
                  int64_t &row_idx,
                  bool &equal) = 0;
   virtual int get_column_datum(
+      const ObTableIterParam &iter_param,
+      const ObTableAccessContext &context,
+      const share::schema::ObColumnParam &col_param,
       const int32_t col_offset,
       const int64_t row_index,
       ObStorageDatum &datum)
   {
-    UNUSEDx(col_offset, row_index, datum);
+    UNUSEDx(iter_param, context, col_param, col_offset, row_index, datum);
     return OB_NOT_SUPPORTED;
   }
   // for scalar group by pushdown
   virtual int get_aggregate_result(
+      const ObTableIterParam &iter_param,
+      const ObTableAccessContext &context,
       const int32_t col_offset,
-      const share::schema::ObColumnParam *col_param,
+      const share::schema::ObColumnParam &col_param,
       const int64_t *row_ids,
       const int64_t row_cap,
       storage::ObAggDatumBuf &datum_buf,
@@ -381,6 +386,7 @@ public:
       const common::ObObjMeta &obj_meta,
       const common::ObDatum &datum,
       bool &filtered);
+  virtual bool has_lob_out_row() const = 0;
 
 protected:
   virtual int find_bound(const ObDatumRange &range,

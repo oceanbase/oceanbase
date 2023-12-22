@@ -217,6 +217,7 @@ int ObMPConnect::init_process_single_stmt(const ObMultiStmtItem &multi_stmt_item
   ObArenaAllocator allocator(ObModIds::OB_SQL_SESSION);
   ObSqlCtx ctx;
   ctx.exec_type_ = MpQuery;
+  session.init_use_rich_format();
   if (OB_FAIL(init_process_var(ctx, multi_stmt_item, session))) {
     LOG_WARN("init process var failed.", K(ret), K(multi_stmt_item));
   } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(

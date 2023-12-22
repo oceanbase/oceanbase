@@ -1577,20 +1577,26 @@ int ObPxTreeSerializer::serialize_frame_info(char *buf,
 {
   int ret = OB_SUCCESS;
   int64_t need_extra_mem_size = 0;
-  const int64_t datum_eval_info_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
   OB_UNIS_ENCODE(all_frames.count());
   // OB_UNIS_ENCODE(all_frames);
   for (int64_t i = 0; i < all_frames.count() && OB_SUCC(ret); ++i) {
     OB_UNIS_ENCODE(all_frames.at(i));
   }
+  int64_t item_size = 0;
+  if ((all_frames.count() > 0) && all_frames.at(0).use_rich_format_) {
+    item_size = sizeof(ObDatum) + sizeof(ObEvalInfo) + sizeof(VectorHeader);
+  } else {
+    item_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
+  }
   for (int64_t i = 0; i < all_frames.count() && OB_SUCC(ret); ++i) {
     const ObFrameInfo &frame_info = all_frames.at(i);
+    //TODO shengle seri can opt, only serialize: sizeof(ObDatum) + sizeof(ObEvalInfo)
     if (frame_info.frame_idx_ >= frame_cnt) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("frame index exceed frame count", K(ret), K(frame_cnt), K(frame_info.frame_idx_));
     } else {
       char *frame_buf = frames[frame_info.frame_idx_];
-      int64_t expr_mem_size = no_ser_data ? 0 : frame_info.expr_cnt_ * datum_eval_info_size;
+      int64_t expr_mem_size = no_ser_data ? 0 : frame_info.expr_cnt_ * item_size;
       OB_UNIS_ENCODE(expr_mem_size);
       if (pos + expr_mem_size > buf_len) {
         ret = OB_SIZE_OVERFLOW;
@@ -1602,7 +1608,7 @@ int ObPxTreeSerializer::serialize_frame_info(char *buf,
       }
       for (int64_t j = 0; j < frame_info.expr_cnt_ && OB_SUCC(ret); ++j) {
         ObDatum *expr_datum = reinterpret_cast<ObDatum *>
-                                  (frame_buf + j * datum_eval_info_size);
+                                  (frame_buf + j * item_size);
         need_extra_mem_size += no_ser_data ? 0 : (expr_datum->null_ ? 0 : expr_datum->len_);
       }
     }
@@ -1615,7 +1621,7 @@ int ObPxTreeSerializer::serialize_frame_info(char *buf,
     char *frame_buf = frames[frame_info.frame_idx_];
     for (int64_t j = 0; j < frame_info.expr_cnt_ && OB_SUCC(ret); ++j) {
       ObDatum *expr_datum = reinterpret_cast<ObDatum *>
-                                (frame_buf + j * datum_eval_info_size);
+                                (frame_buf + j * item_size);
       expr_datum_size = no_ser_data ? 0 : (expr_datum->null_ ? 0 : expr_datum->len_);
       OB_UNIS_ENCODE(expr_datum_size);
       if (pos + expr_datum_size > buf_len) {
@@ -1711,7 +1717,6 @@ int ObPxTreeSerializer::deserialize_frame_info(const char *buf,
 {
   int ret = OB_SUCCESS;
   int64_t frame_info_cnt = 0;
-  const int64_t datum_eval_info_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
   OB_UNIS_DECODE(frame_info_cnt);
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(all_frames.reserve(frame_info_cnt))) {
@@ -1769,10 +1774,16 @@ int ObPxTreeSerializer::deserialize_frame_info(const char *buf,
   }
   for (int64_t i = 0; i < all_frames.count() && OB_SUCC(ret); ++i) {
     ObFrameInfo &frame_info = all_frames.at(i);
+    int64_t item_size = 0;
+    if (frame_info.use_rich_format_) {
+      item_size = sizeof(ObDatum) + sizeof(ObEvalInfo) + sizeof(VectorHeader);
+    } else {
+      item_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
+    }
     char *frame_buf = frames[frame_info.frame_idx_];
     for (int64_t j = 0; j < frame_info.expr_cnt_ && OB_SUCC(ret); ++j) {
       ObDatum *expr_datum = reinterpret_cast<ObDatum *>
-                                (frame_buf + j * datum_eval_info_size);
+                                (frame_buf + j * item_size);
       OB_UNIS_DECODE(expr_datum_size);
       if (pos + expr_datum_size > data_len) {
         ret = OB_SIZE_OVERFLOW;
@@ -1857,6 +1868,15 @@ int ObPxTreeSerializer::deserialize_expr_frame_info(const char *buf,
   } else {
     ctx.set_frames(frames);
     ctx.set_frame_cnt(frame_cnt);
+    // init const vector
+    ObEvalCtx eval_ctx(ctx);
+    for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); i++) {
+      if (exprs.at(i).is_const_expr()
+          && UINT32_MAX != exprs.at(i).vector_header_off_
+          && T_OP_ROW != exprs.at(i).type_) {
+        ret = exprs.at(i).init_vector(eval_ctx, VEC_UNIFORM_CONST, 1/*size*/);
+      }
+    }
   }
   return ret;
 }
@@ -1870,7 +1890,12 @@ int64_t ObPxTreeSerializer::get_serialize_frame_info_size(
   int ret = OB_SUCCESS;
   int64_t len = 0;
   int64_t need_extra_mem_size = 0;
-  const int64_t datum_eval_info_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
+  int64_t item_size = 0;
+  if ((all_frames.count() > 0) && all_frames.at(0).use_rich_format_) {
+    item_size = sizeof(ObDatum) + sizeof(ObEvalInfo) + sizeof(VectorHeader);
+  } else {
+    item_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
+  }
   OB_UNIS_ADD_LEN(all_frames.count());
   // OB_UNIS_ADD_LEN(all_frames);
   for (int64_t i = 0; i < all_frames.count() && OB_SUCC(ret); ++i) {
@@ -1882,13 +1907,13 @@ int64_t ObPxTreeSerializer::get_serialize_frame_info_size(
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("frame index exceed frame count", K(ret), K(frame_cnt), K(frame_info.frame_idx_));
     } else {
-      int64_t expr_mem_size = no_ser_data ? 0 : frame_info.expr_cnt_ * datum_eval_info_size;
+      int64_t expr_mem_size = no_ser_data ? 0 : frame_info.expr_cnt_ * item_size;
       OB_UNIS_ADD_LEN(expr_mem_size);
       len += expr_mem_size;
       char *frame_buf = frames[frame_info.frame_idx_];
       for (int64_t j = 0; j < frame_info.expr_cnt_ && OB_SUCC(ret); ++j) {
         ObDatum *expr_datum = reinterpret_cast<ObDatum *>
-                                  (frame_buf + j * datum_eval_info_size);
+                                  (frame_buf + j * item_size);
         need_extra_mem_size += no_ser_data ? 0 : (expr_datum->null_ ? 0 : expr_datum->len_);
       }
     }
@@ -1901,7 +1926,7 @@ int64_t ObPxTreeSerializer::get_serialize_frame_info_size(
     char *frame_buf = frames[frame_info.frame_idx_];
     for (int64_t j = 0; j < frame_info.expr_cnt_ && OB_SUCC(ret); ++j) {
       ObDatum *expr_datum = reinterpret_cast<ObDatum *>
-                                (frame_buf + j * datum_eval_info_size);
+                                (frame_buf + j * item_size);
       expr_datum_size = no_ser_data ? 0 : (expr_datum->null_ ? 0 : expr_datum->len_);
       OB_UNIS_ADD_LEN(expr_datum_size);
       if (0 < expr_datum_size) {

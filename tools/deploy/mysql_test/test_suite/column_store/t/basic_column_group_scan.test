@@ -4,8 +4,13 @@
 
 --disable_query_log
 connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection syscon;
 set @@session.explicit_defaults_for_timestamp=off;
 set session ob_trx_timeout=100000000000;
+set session _enable_rich_vector_format = true;
+alter system set_tp tp_no = 353, error_code = 4000, frequency = 1;
+sleep 2;
 set @@recyclebin = off;
 --enable_query_log
 
@@ -63,7 +68,28 @@ select * from ct1 where c1 < 10 or c2 < 20;
 select * from ct1 where c1 < 10 and c2 > 9900;
 select * from ct1 where c1 > 10 and c2 < 20;
 select * from ct1 where c1 * 2 > 500 and c2 * 2 < 600;
-select * from ct1 where c1 * 2 < 500 or (c2 * 2 > 19000 and c2 * 2 < 20000) ;
+select * from ct1 where c1 * 2 < 500 or (c2 * 2 > 19000 and c2 * 2 < 20000);
+
+--disable_query_log
+connection syscon;
+alter system set_tp tp_no = 353, error_code = 4000, frequency = 0;
+--enable_query_log
+
+connection conn1;
+select * from ct1 where c1 < 1;
+select * from ct1 where c1 < 10;
+select * from ct1 where c1 > 10000;
+select * from ct1 where c2 < 1;
+select * from ct1 where c2 < 10;
+select * from ct1 where c2 > 10000;
+select * from ct1 where c1 > 400 and c1 < 500;
+select * from ct1 where c1 > 9000 and c1 < 9300;
+select * from ct1 where c1 < 10 or c2 > 9900;
+select * from ct1 where c1 < 10 or c2 < 20;
+select * from ct1 where c1 < 10 and c2 > 9900;
+select * from ct1 where c1 > 10 and c2 < 20;
+select * from ct1 where c1 * 2 > 500 and c2 * 2 < 600;
+select * from ct1 where c1 * 2 < 500 or (c2 * 2 > 19000 and c2 * 2 < 20000);
 
 drop table ct1;
 --disable_query_log

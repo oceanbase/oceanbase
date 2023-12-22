@@ -126,6 +126,7 @@ public:
     inline int64_t begin() const { return block_id_; }
     inline int64_t end() const { return block_id_ + cnt_; }
     inline int64_t remain() const { return get_buffer()->remain(); }
+    inline int64_t payload_size() const { return raw_size_ - sizeof(Block); }
     inline ShrinkBuffer* get_buffer()
     {
       return static_cast<ShrinkBuffer*>(static_cast<void*>(payload_ + buf_off_));
@@ -193,7 +194,7 @@ public:
   struct IndexBlock
   {
     const static int64_t MAGIC = 0x4847bcb053c3703f;
-    const static int64_t INDEX_BLOCK_SIZE = (64 << 10) - sizeof(LinkNode);
+    const static int64_t INDEX_BLOCK_SIZE = (32 << 10) - sizeof(LinkNode);
     constexpr static inline int64_t capacity()
     {
       return (INDEX_BLOCK_SIZE - sizeof(IndexBlock)) / sizeof(BlockIndex);
@@ -279,27 +280,33 @@ public:
     friend class BlockHolder;
     static const int AIO_BUF_CNT = 2;
   public:
-    BlockReader() : store_(NULL), idx_blk_(NULL), ib_pos_(0), file_size_(0), cur_file_offset_(0),
-                    age_(NULL), try_free_list_(NULL), blk_holder_ptr_(NULL), read_io_handle_(),
+    BlockReader() : store_(NULL), idx_blk_(NULL), ib_pos_(0), file_size_(0), age_(NULL),
+                    try_free_list_(NULL), blk_holder_ptr_(NULL), read_io_handle_(), cur_file_offset_(0),
                     is_async_(true), aio_buf_idx_(0), aio_blk_(nullptr) {}
     virtual ~BlockReader() { reset(); }
 
-    int init(ObTempBlockStore *store);
-
+    int init(ObTempBlockStore *store, const bool async = true);
+    inline int get_block(const int64_t block_id, const Block *&blk)
+    { return store_->get_block(*this, block_id, blk); }
     inline int64_t get_cur_file_offset() const { return cur_file_offset_; }
     inline void set_cur_file_offset(int64_t file_offset) { cur_file_offset_ = file_offset; }
-    int get_block(const int64_t block_id, const Block *&blk);
     inline int64_t get_block_cnt() const { return store_->get_block_cnt(); }
     void set_iteration_age(IterationAge *age) { age_ = age; }
     void set_blk_holder(BlockHolder *holder) { blk_holder_ptr_ = holder; }
     blocksstable::ObTmpFileIOHandle& get_read_io_handler() { return read_io_handle_; }
-    inline bool is_async() { return is_async_; }
-    inline void set_async(bool async) { is_async_ = async; }
+    inline bool is_async() const { return is_async_; }
     void reset();
     void reuse();
-    TO_STRING_KV(KPC_(store), K_(buf), K_(idx_buf), KP_(idx_blk), K_(ib_pos), K_(file_size),
-                 KP_(age), KP_(try_free_list), KP_(blk_holder_ptr), K_(cur_file_offset), K_(is_async),
-                 K(read_io_handle_), K(aio_buf_), K(decompr_buf_));
+    void begin_new_batch()
+    {
+      if (NULL == age_) {
+        age_ = &inner_age_;
+      }
+      inner_age_.inc();
+    }
+    TO_STRING_KV(KP_(store), K_(buf), K_(idx_buf), KP_(idx_blk), K_(ib_pos), K_(file_size),
+                 KP_(age), KP_(try_free_list), KP_(blk_holder_ptr), K_(cur_file_offset),
+                 K_(is_async), K(read_io_handle_), K(aio_buf_), K(decompr_buf_));
 
   private:
     void reset_cursor(const int64_t file_size, const bool need_release = true);
@@ -319,12 +326,15 @@ public:
     // idx_blk_, blk_ may point to the writing block,
     // we need to invalid the pointers if file_size_ change.
     int64_t file_size_;
-    int64_t cur_file_offset_;
     IterationAge *age_;
     TryFreeMemBlk *try_free_list_;
     BlockHolder *blk_holder_ptr_;
-    // to optimize performance, record the last_extent_id to avoid do binary search every time calling read.
+    // inner iteration age is used for batch iteration with no outside age control.
+    IterationAge inner_age_;
+    // to optimize performance, record the last_extent_id to avoid do binary search every time
+    // calling read.
     blocksstable::ObTmpFileIOHandle read_io_handle_;
+    int64_t cur_file_offset_;
     bool is_async_;
     int aio_buf_idx_;
     const Block *aio_blk_;
@@ -348,7 +358,7 @@ public:
   void reuse();
   void reset_block_cnt();
   bool is_inited() const { return inited_; }
-  bool is_file_open() const { return fd_ >= 0; }
+  bool is_file_open() const { return io_.fd_ >= 0; }
   void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
   void set_mem_ctx_id(const int64_t ctx_id) { ctx_id_ = ctx_id; }
   void set_mem_limit(const int64_t limit) { mem_limit_ = limit; }
@@ -362,11 +372,13 @@ public:
   void set_io_event_observer(ObIOEventObserver *io_observer) { io_observer_ = io_observer; }
   // set iteration age for inner reader.
   void set_allocator(common::ObIAllocator &alloc) { allocator_ = &alloc; }
-  void set_dir_id(int64_t dir_id) { dir_id_ = dir_id; }
+  void set_inner_allocator_attr(const lib::ObMemAttr &attr) { inner_allocator_.set_attr(attr); }
+  void set_dir_id(int64_t dir_id) { io_.dir_id_ = dir_id; }
   void set_iteration_age(IterationAge *age) { inner_reader_.set_iteration_age(age); }
   inline void set_mem_used(const int64_t mem_used) { mem_used_ = mem_used; }
   inline void inc_mem_used(const int64_t mem_used) { mem_used_ += mem_used; }
   inline uint64_t get_tenant_id() const { return tenant_id_; }
+  inline const char* get_label() { return label_; }
   inline int64_t get_mem_ctx_id() const { return ctx_id_; }
   inline int64_t get_block_id_cnt() const { return block_id_cnt_; }
   inline void inc_block_id_cnt(int64_t cnt) { block_id_cnt_ += cnt; }
@@ -381,10 +393,11 @@ public:
   inline int64_t get_mem_used() const { return mem_used_; }
   inline int64_t get_alloced_mem_size() const { return alloced_mem_size_; }
   inline int64_t get_alloced_mem_cnt() const { return alloced_mem_list_.get_size(); }
-  inline int64_t get_file_fd() const { return fd_; }
-  inline int64_t get_file_dir_id() const { return dir_id_; }
+  inline int64_t get_file_fd() const { return io_.fd_; }
+  inline int64_t get_file_dir_id() const { return io_.dir_id_; }
   inline int64_t get_file_size() const { return file_size_; }
   inline int64_t get_max_blk_size() const { return max_block_size_; }
+  inline int64_t get_max_hold_mem() const { return max_hold_mem_; }
   inline int64_t has_dumped() const { return block_cnt_on_disk_ > 0; }
   inline int64_t get_last_buffer_mem_size() const
   {
@@ -395,14 +408,11 @@ public:
   int append_block_payload(const char *buf, const int64_t size, const int64_t cnt);
   int alloc_dir_id();
   int dump(const bool all_dump, const int64_t target_dump_size=INT64_MAX);
-  virtual int finish_write() {
-    return OB_SUCCESS;
-  }
   int finish_add_row(bool need_dump = true);
-
+  // include index blocks and data blocks
 
   TO_STRING_KV(K_(inited), K_(enable_dump), K_(tenant_id), K_(label), K_(ctx_id),  K_(mem_limit),
-    K_(mem_hold), K_(mem_used), K_(fd), K_(dir_id), K_(file_size), K_(block_cnt),
+    K_(mem_hold), K_(mem_used), K_(io_.fd), K_(io_.dir_id), K_(file_size), K_(block_cnt),
     K_(index_block_cnt), K_(block_cnt_on_disk), K_(block_id_cnt), K_(dumped_block_id_cnt),
     K_(alloced_mem_size));
 
@@ -416,7 +426,6 @@ public:
     alloced_mem_size_ -= size;
     free_blk_mem(mem, size);
   }
-
 
   int new_block(const int64_t mem_size, Block *&blk, const bool strict_mem_size);
   int truncate_file(int64_t offset);
@@ -434,11 +443,27 @@ protected:
                                If false, The size of the actual allocation may limit the minimum
                                block size and do memory alignment.
    */
+  inline int new_block(const int64_t mem_size, const bool strict_mem_size = false)
+  {
+    return new_block(mem_size, blk_, strict_mem_size);
+  }
+
+protected:
+  int get_block(BlockReader &reader, const int64_t block_id, const Block *&blk);
+  /*
+   * A hook interface reserved for the subclasses prepare `finish_add_row`. It can override
+   * this interface to implement customized finish writing code. For example, release the memory
+   * requested or close file.
+   */
+  virtual int finish_write()
+  {
+    return OB_SUCCESS;
+  }
+
   inline int ensure_write_blk(const int64_t mem_size, const bool strict_mem_size = false)
   {
     return new_block(mem_size, blk_, strict_mem_size);
   }
-  int get_block(BlockReader &reader, const int64_t block_id, const Block *&blk);
 
 private:
   int inner_get_block(BlockReader &reader, const int64_t block_id,
@@ -478,7 +503,7 @@ private:
   int ensure_reader_buffer(BlockReader &reader, ShrinkBuffer &buf, const int64_t size);
   int write_file(BlockIndex &bi, void *buf, int64_t size);
   int read_file(void *buf, const int64_t size, const int64_t offset,
-                blocksstable::ObTmpFileIOHandle &handle, const bool is_async = false);
+                blocksstable::ObTmpFileIOHandle &handle, const bool is_async);
   int dump_block_if_need(const int64_t extra_size);
   bool need_dump(const int64_t extra_size);
   int write_compressed_block(Block *blk, BlockIndex *bi);
@@ -488,9 +513,9 @@ private:
   inline bool has_index_block() const { return index_block_cnt_ > 0; }
   inline int64_t get_block_raw_size(const Block *blk) const
   { return is_last_block(blk) ? blk->get_buffer()->head_size() : blk->raw_size_; }
-  inline bool need_compress() { return compressor_.get_compressor_type() != NONE_COMPRESSOR; }
-  virtual int prepare_blk_for_write(Block *blk) { return OB_NOT_IMPLEMENT; }
-  virtual int prepare_blk_for_read(Block *blk) { return OB_NOT_IMPLEMENT; }
+  inline bool need_compress() const { return compressor_.get_compressor_type() != NONE_COMPRESSOR; }
+  virtual int prepare_blk_for_write(Block *blk) { return OB_SUCCESS; }
+  virtual int prepare_blk_for_read(Block *blk) { return OB_SUCCESS; }
 
 protected:
   bool inited_;
@@ -512,9 +537,6 @@ private:
   int64_t mem_limit_;
   int64_t mem_hold_;
   int64_t mem_used_;
-
-  int64_t fd_;
-  int64_t dir_id_;
   int64_t file_size_;
 
   // block related variables used to count various blocks
@@ -523,7 +545,7 @@ private:
   int64_t block_cnt_on_disk_;
   int64_t alloced_mem_size_;
   int64_t max_block_size_;
-  int64_t default_block_size_;
+  int64_t max_hold_mem_;
 
   IndexBlock *idx_blk_;
   BlockReader inner_reader_;
@@ -536,6 +558,7 @@ private:
   ObChunkBlockCompressor compressor_;
   ObIOEventObserver *io_observer_;
   blocksstable::ObTmpFileIOHandle write_io_handle_;
+  blocksstable::ObTmpFileIOInfo io_;
   bool last_block_on_disk_;
 
   DISALLOW_COPY_AND_ASSIGN(ObTempBlockStore);

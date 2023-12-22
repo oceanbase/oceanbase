@@ -134,6 +134,7 @@ int ObLimitOp::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
   clear_evaluated_flag();
+  LOG_DEBUG("limitop get_next_row start", K(limit_), K(offset_));
   while (OB_SUCC(ret) && input_cnt_ < offset_) {
     if (OB_FAIL(child_->get_next_row())) {
       if (OB_ITER_END != ret) {

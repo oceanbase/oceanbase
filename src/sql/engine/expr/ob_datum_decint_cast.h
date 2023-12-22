@@ -727,7 +727,7 @@ DEF_BATCH_CAST_FUNC(ObIntTC, ObDecimalIntTC)
         } else if (CM_IS_EXPLICIT_CAST(expr.extra_) || CM_IS_COLUMN_CONVERT(expr.extra_)) {
           DISPATCH_INOUT_WIDTH_TASK(in_width, out_width, DO_EXPLICIT_CAST);
         } else {
-          OB_ASSERT(out_width >= in_width);
+          OB_ASSERT(out_width >= in_width || (in_prec > 0 && in_prec <= out_prec));
           DISPATCH_INOUT_WIDTH_TASK(in_width, out_width, DO_IMPLICIT_CAST);
         }
       } else {
@@ -782,7 +782,7 @@ DEF_BATCH_CAST_FUNC(ObUIntTC, ObDecimalIntTC)
         } else if (CM_IS_EXPLICIT_CAST(expr.extra_) || CM_IS_COLUMN_CONVERT(expr.extra_)) {
           DISPATCH_WIDTH_TASK(out_width, EXPLICIT_CAST_UINT);
         } else {
-          OB_ASSERT(out_width >= in_width);
+          OB_ASSERT(out_width >= in_width || (in_prec > 0 && in_prec <= out_prec));
           DISPATCH_WIDTH_TASK(out_width, IMPLICIT_CAST_UINT);
         }
       } else {

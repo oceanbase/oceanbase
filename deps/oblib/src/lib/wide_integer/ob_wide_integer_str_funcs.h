@@ -166,6 +166,17 @@ int from_string(const char *buf, const int64_t buf_len, ObIAllocator &allocator,
 int to_string(const ObDecimalInt *decint, const int32_t int_bytes, const int64_t scale, char *buf,
               const int64_t buf_len, int64_t &pos, const bool need_to_sci = false);
 
+template<unsigned Bits, typename Signed>
+int64_t ObWideInteger<Bits, Signed>::to_string(char *buffer, const int64_t buffer_len) const
+{
+  int64_t pos = 0;
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(wide::to_string(*this, buffer, buffer_len, pos))) {
+    COMMON_LOG(WARN, "to_string failed", K(ret));
+  }
+  return pos;
+}
+
 } // end namespace wide
 } // end namespace common
 } // end namespace oceanbase

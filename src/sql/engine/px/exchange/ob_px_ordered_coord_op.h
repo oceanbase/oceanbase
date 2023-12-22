@@ -122,12 +122,11 @@ public:
                                        dtl::ObDtlChTotalInfo &ch_info) override;
 private:
 
-  // fetch next rows for inner_get_next_row() or inner_get_next_batch()
-  int fetch_rows(const int64_t row_cnt);
   int setup_loop_proc() override;
   int setup_readers();
   void destroy_readers();
   int next_row(ObReceiveRowReader &reader, bool &wait_next_msg);
+  int next_rows(ObReceiveRowReader &reader, int64_t max_row_cnt, int64_t &read_rows);
   virtual void clean_dfos_dtl_interm_result() override
   {
     msg_proc_.clean_dtl_interm_result(ctx_);
@@ -154,6 +153,10 @@ private:
   int64_t channel_idx_;
   int64_t finish_ch_cnt_;
   bool all_rows_finish_;
+  // stored rows used for get batch rows from DTL reader.
+  const ObChunkDatumStore::StoredRow **stored_rows_;
+  const ObCompactRow **vector_rows_;
+
 };
 
 } // end namespace sql

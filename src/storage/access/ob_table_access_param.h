@@ -141,6 +141,17 @@ public:
   { return pd_storage_flag_.set_use_column_store(true); }
   OB_INLINE void set_not_use_column_store()
   { return pd_storage_flag_.set_use_column_store(false); }
+  OB_INLINE bool use_uniform_format() const
+  {
+    return op_->enable_rich_format_ &&
+        (pd_storage_flag_.is_group_by_pushdown() || pd_storage_flag_.is_aggregate_pushdown());
+  }
+  OB_INLINE bool use_new_format() const
+  {
+    return op_->enable_rich_format_ &&
+        !pd_storage_flag_.is_group_by_pushdown() &&
+        !pd_storage_flag_.is_aggregate_pushdown();
+  }
   DECLARE_TO_STRING;
 public:
   uint64_t table_id_;

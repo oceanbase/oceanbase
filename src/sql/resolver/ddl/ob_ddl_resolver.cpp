@@ -11500,8 +11500,13 @@ int ObDDLResolver::resolve_column_skip_index(
           K(type_list_node->num_child_), K(type_list_node->type_));
     } else if (is_skip_index_black_list_type(column_schema.get_data_type())) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("invalid column type", K(ret), K(column_schema));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "build skip index on invalid type");
+      LOG_WARN("not supported skip index on column with invalid column type", K(ret), K(column_schema));
+    } else if (column_schema.get_skip_index_attr().has_sum() &&
+               !can_agg_sum(column_schema.get_data_type())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "build skip index on invalid type");
+      LOG_WARN("not supported skip index on column with invalid column type", K(ret), K(column_schema));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < type_list_node->num_child_; ++i) {
         const ParseNode *type_node = type_list_node->children_[i];
@@ -11514,11 +11519,10 @@ int ObDDLResolver::resolve_column_skip_index(
             skip_index_column_attr.set_min_max();
             break;
           }
-          // TODO: open sum later
-          // case T_COL_SKIP_INDEX_SUM: {
-          //   skip_index_column_attr.set_sum();
-          //   break;
-          // }
+          case T_COL_SKIP_INDEX_SUM: {
+            skip_index_column_attr.set_sum();
+            break;
+          }
           default: {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("invalid skip index type", K(ret), K(i), K(type_node->type_));

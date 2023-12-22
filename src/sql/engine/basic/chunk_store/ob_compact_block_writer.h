@@ -48,7 +48,7 @@ namespace sql
  *                                  3. use the offset to get datum from var_data. (datum = var_data + offset)
  */
 class ObTempBlockStore;
-class RowMeta;
+class ChunkRowMeta;
 
 class ObCompactBlockWriter final : public ObBlockIWriter
 {
@@ -63,7 +63,7 @@ class ObCompactBlockWriter final : public ObBlockIWriter
                    bit_vec_(nullptr), data_offset_(0), var_offset_(0) {}
 
     ~CurRowInfo() { reset(); }
-    int init(const RowMeta *row_meta, const uint8_t offset_width, char *buf);
+    int init(const ChunkRowMeta *row_meta, const uint8_t offset_width, char *buf);
     void reset();
     TO_STRING_KV(K_(cur_var_offset_pos), K_(var_column_cnt), K_(bitmap_size),
                  K_(data_offset), K_(var_offset));
@@ -84,7 +84,7 @@ public:
   ObCompactBlockWriter(ObTempBlockStore *store = nullptr) : ObBlockIWriter(store), row_meta_(nullptr), cur_row_offset_width_(0),
                                                   cur_row_size_(0), row_info_(), last_stored_row_(nullptr), last_sr_size_(0) {};
 
-  ObCompactBlockWriter(ObTempBlockStore *store, const RowMeta *row_meta) : ObBlockIWriter(store), row_meta_(row_meta),
+  ObCompactBlockWriter(ObTempBlockStore *store, const ChunkRowMeta *row_meta) : ObBlockIWriter(store), row_meta_(row_meta),
                                                   cur_row_offset_width_(0), cur_row_size_(0), row_info_(), last_stored_row_(nullptr),
                                                   last_sr_size_(0) {};
   virtual ~ObCompactBlockWriter() { reset(); };
@@ -111,8 +111,8 @@ public:
                         const uint16_t selector[], const int64_t size,
                         ObChunkDatumStore::StoredRow **stored_rows, BatchCtx *batch_ctx) override { return OB_NOT_IMPLEMENT; }
 
-  void set_meta(const RowMeta *row_meta) override { row_meta_ = row_meta; };
-  const RowMeta *get_meta() { return row_meta_; }
+  void set_meta(const ChunkRowMeta *row_meta) override { row_meta_ = row_meta; };
+  const ChunkRowMeta *get_meta() { return row_meta_; }
   int close() override;
   virtual int prepare_blk_for_write(ObTempBlockStore::Block *blk) final override { return OB_SUCCESS; }
   int get_last_stored_row(const ObChunkDatumStore::StoredRow *&sr);
@@ -139,7 +139,7 @@ protected:
 
 private:
   template <typename T>
-  int inner_process_datum(const ObDatum &src_datum, const int64_t cur_pos, const RowMeta &row_meta,
+  int inner_process_datum(const ObDatum &src_datum, const int64_t cur_pos, const ChunkRowMeta &row_meta,
                           CurRowInfo &row_info);
   template <typename T>
   int inner_build_from_stored_row(const ObChunkDatumStore::StoredRow &sr);
@@ -169,7 +169,7 @@ private:
   int convert_to_stored_row(const char *compact_row, ObChunkDatumStore::StoredRow *sr);
 
 private:
-  const RowMeta *row_meta_;
+  const ChunkRowMeta *row_meta_;
   uint8_t cur_row_offset_width_;
   int32_t cur_row_size_;
   CurRowInfo row_info_;

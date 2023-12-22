@@ -700,6 +700,7 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
   CREATE_WITH_TEMP_CONTEXT(param) {
     ObIAllocator &tmp_allocator = CURRENT_CONTEXT->get_arena_allocator();
     ObPhysicalPlanCtx phy_plan_ctx(tmp_allocator);
+    phy_plan_ctx.set_rich_format(session->use_rich_format());
     // pass the outside timeout timestamp if available
     if (NULL != out_ctx && NULL != out_ctx->get_physical_plan_ctx()) {
       phy_plan_ctx.set_timeout_timestamp(

@@ -33,6 +33,7 @@
 #include "lib/timezone/ob_oracle_format_models.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
+#include "share/vector/expr_cmp_func.h"
 #include "sql/engine/expr/ob_expr_func_round.h"
 
 namespace oceanbase
@@ -1930,6 +1931,8 @@ bool ObRelationalExprOperator::can_cmp_without_cast(ObExprResType type1,
       need_no_cast = (type1.get_scale() == type2.get_scale()
                       && get_decimalint_type(type1.get_precision())
                            == get_decimalint_type(type2.get_precision()));
+    } else if (ob_is_double_tc(type1.get_type()) && ob_is_double_tc(type2.get_type())) {
+      need_no_cast = (type1.get_scale() == type2.get_scale());
     } else {
       auto func_ptr = ObExprCmpFuncsHelper::get_eval_expr_cmp_func(type1.get_type(),
                                                                    type2.get_type(),
@@ -2569,15 +2572,30 @@ int ObRelationalExprOperator::calc_calc_type3(ObExprResType &type1,
         type2.set_calc_type(ObNumberType);
         type3.set_calc_type(ObNumberType);
       }
+    } else if (cmp_type == ObDoubleType) {
+      type1.set_calc_type(cmp_type);
+      type2.set_calc_type(cmp_type);
+      type3.set_calc_type(cmp_type);
+      // unified scale
+      common::ObScale calc_scale = -1;
+      // All three values are of type FixedDouble.
+      if ((type1.get_scale() > 0 && type1.get_scale() <= OB_MAX_DOUBLE_FLOAT_SCALE) &&
+          (type2.get_scale() > 0 && type2.get_scale() <= OB_MAX_DOUBLE_FLOAT_SCALE) &&
+          (type3.get_scale() > 0 && type3.get_scale() <= OB_MAX_DOUBLE_FLOAT_SCALE)) {
+        calc_scale = max(type1.get_scale(), max(type2.get_scale(), type3.get_scale()));
+      }
+      type1.set_calc_scale(calc_scale);
+      type2.set_calc_scale(calc_scale);
+      type3.set_calc_scale(calc_scale);
     } else {
       type1.set_calc_type(cmp_type);
       type2.set_calc_type(cmp_type);
       type3.set_calc_type(cmp_type);
     }
-    LOG_DEBUG("calc type3", K(type1.get_calc_type()), K(type2.get_calc_type()),
-              K(type3.get_calc_type()), K(type1.get_calc_accuracy()), K(type2.get_calc_accuracy()),
-              K(type3.get_calc_accuracy()), K(type1.get_cast_mode()), K(type2.get_cast_mode()),
-              K(type3.get_cast_mode()));
+    LOG_DEBUG("calc type3", K(cmp_type),
+      K(type1.get_calc_type()), K(type2.get_calc_type()), K(type3.get_calc_type()),
+      K(type1.get_calc_accuracy()), K(type2.get_calc_accuracy()), K(type3.get_calc_accuracy()),
+      K(type1.get_cast_mode()), K(type2.get_cast_mode()), K(type3.get_cast_mode()));
   }
   return ret;
 }
@@ -6370,6 +6388,8 @@ int ObRelationalExprOperator::cg_datum_cmp_expr(const ObRawExpr &raw_expr,
       rt_expr.eval_batch_func_ = ObExprCmpFuncsHelper::get_eval_batch_expr_cmp_func(
         input_type1, input_type2, input_scale1, input_scale2, in_prec1, in_prec2, cmp_op,
         lib::is_oracle_mode(), cs_type, has_lob_header);
+      rt_expr.eval_vector_func_ = VectorCmpExprFuncsHelper::get_eval_vector_expr_cmp_func(
+        rt_expr.args_[0]->datum_meta_, rt_expr.args_[1]->datum_meta_, cmp_op);
     }
     CK(NULL != rt_expr.eval_func_);
     CK(NULL != rt_expr.eval_batch_func_);

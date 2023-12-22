@@ -394,6 +394,7 @@ int ObInnerSQLConnection::init_session_info(
             //TODO shengle ?
             session->get_ddl_info().set_is_ddl(is_ddl);
             session->reset_timezone();
+            session->init_use_rich_format();
           }
         }
       }

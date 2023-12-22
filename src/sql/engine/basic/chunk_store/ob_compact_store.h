@@ -91,8 +91,8 @@ public:
   void set_enable_truncate(bool enable_trunc) { enable_truncate_ = enable_trunc; }
   bool enable_truncate() { return enable_truncate_; }
   int has_next(bool &has_next);
-  RowMeta *get_row_meta() { return &row_meta_; }
-  void set_meta(RowMeta *row_meta) { writer_->set_meta(row_meta); reader_->set_meta(row_meta); }
+  ChunkRowMeta *get_row_meta() { return &row_meta_; }
+  void set_meta(ChunkRowMeta *row_meta) { writer_->set_meta(row_meta); reader_->set_meta(row_meta); }
   share::SortCompactLevel get_compact_level() { return compact_level_; }
   void set_blk_holder(ObTempBlockStore::BlockHolder *blk_holder) { block_reader_.set_blk_holder(blk_holder); }
 protected:
@@ -119,7 +119,7 @@ private:
   ObBlockIReader *reader_;
   BatchCtx *batch_ctx_;
 
-  RowMeta row_meta_;
+  ChunkRowMeta row_meta_;
   int64_t row_cnt_;
   ObTempBlockStore::BlockReader block_reader_;
   bool start_iter_;

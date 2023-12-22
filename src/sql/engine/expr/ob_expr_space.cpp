@@ -115,6 +115,9 @@ int ObExprSpace::eval_space(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_da
     expr_datum.set_null();
   } else {
     if (!ob_is_text_tc(expr.datum_meta_.type_)) {
+      // TODO:@huangweixiang.hwx(from @xiaofeng.lby)
+      // 1. If we do not need to consider the character set, changing repeat to memset may be better
+      // 2. Actually, we need to deal with the character set.
       ret = ObExprRepeat::repeat(output, is_null, space, count->get_int(), expr_res_alloc, max_size);
     } else { // text tc
       ret = ObExprRepeat::repeat_text(expr.datum_meta_.type_, has_lob_header, output, is_null,

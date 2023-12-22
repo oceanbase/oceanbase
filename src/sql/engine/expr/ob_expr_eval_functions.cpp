@@ -333,7 +333,9 @@
 #include "ob_datum_cast.h"
 #include "ob_expr_prefix_pattern.h"
 #include "ob_expr_initcap.h"
+#include "ob_expr_sin.h"
 #include "ob_expr_temp_table_ssid.h"
+#include "ob_expr_between.h"
 #include "ob_expr_align_date4cmp.h"
 #include "ob_expr_extract_cert_expired_time.h"
 
@@ -1234,6 +1236,120 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObBatchCast::implicit_batch_cast<ObDecimalIntTC, ObNumberTC>,       /* 128 */
 };
 
+static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
+  expr_default_eval_vector_func,                                /* 0 */
+  ObExprSin::eval_double_sin_vector,                            /* 1 */
+  ObExprSin::eval_number_sin_vector,                            /* 2 */
+  ObExprFuncPartKey::calc_partition_key_vector,                 /* 3 */
+  ObExprAdd::add_int_int_vector,                                /* 4 */
+  ObExprAdd::add_int_uint_vector,                               /* 5 */
+  ObExprAdd::add_uint_int_vector,                               /* 6 */
+  ObExprAdd::add_uint_uint_vector,                              /* 7 */
+  ObExprAdd::add_float_float_vector,                            /* 8 */
+  ObExprAdd::add_double_double_vector,                          /* 9 */
+  ObExprAdd::add_decimalint32_oracle_vector,                    /* 10 */
+  ObExprAdd::add_decimalint64_oracle_vector,                    /* 11 */
+  ObExprAdd::add_decimalint128_oracle_vector,                   /* 12 */
+  ObExprAdd::add_number_number_vector,                          /* 13 */
+  ObExprAdd::add_decimalint32_vector,                           /* 14 */
+  ObExprAdd::add_decimalint64_vector,                           /* 15 */
+  ObExprAdd::add_decimalint128_vector,                          /* 16 */
+  ObExprAdd::add_decimalint256_vector,                          /* 17 */
+  ObExprAdd::add_decimalint512_vector,                          /* 18 */
+  ObExprAdd::add_decimalint512_with_check_vector,               /* 19 */
+  ObExprMinus::minus_int_int_vector,                            /* 20 */
+  ObExprMinus::minus_int_uint_vector,                           /* 21 */
+  ObExprMinus::minus_uint_uint_vector,                          /* 22 */
+  ObExprMinus::minus_uint_int_vector,                           /* 23 */
+  ObExprMinus::minus_float_float_vector,                        /* 24 */
+  ObExprMinus::minus_double_double_vector,                      /* 25 */
+  ObExprMinus::minus_number_number_vector,                      /* 26 */
+  ObExprMinus::minus_decimalint32_vector,                       /* 27 */
+  ObExprMinus::minus_decimalint64_vector,                       /* 28 */
+  ObExprMinus::minus_decimalint128_vector,                      /* 29 */
+  ObExprMinus::minus_decimalint256_vector,                      /* 30 */
+  ObExprMinus::minus_decimalint512_vector,                      /* 31 */
+  ObExprMinus::minus_decimalint512_with_check_vector,           /* 32 */
+  ObExprMinus::minus_decimalint32_oracle_vector,                /* 33 */
+  ObExprMinus::minus_decimalint64_oracle_vector,                /* 34 */
+  ObExprMinus::minus_decimalint128_oracle_vector,               /* 35 */
+  ObExprMul::mul_int_int_vector,                                /* 36 */
+  ObExprMul::mul_int_uint_vector,                               /* 37 */
+  ObExprMul::mul_uint_int_vector,                               /* 38 */
+  ObExprMul::mul_uint_uint_vector,                              /* 39 */
+  ObExprMul::mul_float_vector,                                  /* 40 */
+  ObExprMul::mul_double_vector,                                 /* 41 */
+  ObExprMul::mul_number_vector,                                 /* 42 */
+  ObExprMul::mul_decimalint32_int32_int32_vector,               /* 43 */
+  ObExprMul::mul_decimalint64_int32_int32_vector,               /* 44 */
+  ObExprMul::mul_decimalint64_int32_int64_vector,               /* 45 */
+  ObExprMul::mul_decimalint64_int64_int32_vector,               /* 46 */
+  ObExprMul::mul_decimalint128_int32_int64_vector,              /* 47 */
+  ObExprMul::mul_decimalint128_int64_int32_vector,              /* 48 */
+  ObExprMul::mul_decimalint128_int32_int128_vector,             /* 49 */
+  ObExprMul::mul_decimalint128_int128_int32_vector,             /* 50 */
+  ObExprMul::mul_decimalint128_int64_int64_vector,              /* 51 */
+  ObExprMul::mul_decimalint128_int64_int128_vector,             /* 52 */
+  ObExprMul::mul_decimalint128_int128_int64_vector,             /* 53 */
+  ObExprMul::mul_decimalint128_int128_int128_vector,            /* 54 */
+  ObExprMul::mul_decimalint256_int32_int128_vector,             /* 55 */
+  ObExprMul::mul_decimalint256_int128_int32_vector,             /* 56 */
+  ObExprMul::mul_decimalint256_int32_int256_vector,             /* 57 */
+  ObExprMul::mul_decimalint256_int256_int32_vector,             /* 58 */
+  ObExprMul::mul_decimalint256_int64_int128_vector,             /* 59 */
+  ObExprMul::mul_decimalint256_int128_int64_vector,             /* 60 */
+  ObExprMul::mul_decimalint256_int64_int256_vector,             /* 61 */
+  ObExprMul::mul_decimalint256_int256_int64_vector,             /* 62 */
+  ObExprMul::mul_decimalint256_int128_int128_vector,            /* 63 */
+  ObExprMul::mul_decimalint256_int128_int256_vector,            /* 64 */
+  ObExprMul::mul_decimalint256_int256_int128_vector,            /* 65 */
+  ObExprMul::mul_decimalint512_int512_int512_vector,            /* 66 */
+  ObExprMul::mul_decimalint512_with_check_vector,               /* 67 */
+  ObExprMul::mul_decimalint64_round_vector,                     /* 68 */
+  ObExprMul::mul_decimalint128_round_vector,                    /* 69 */
+  ObExprMul::mul_decimalint256_round_vector,                    /* 70 */
+  ObExprMul::mul_decimalint512_round_vector,                    /* 71 */
+  ObExprMul::mul_decimalint512_round_with_check_vector,         /* 72 */
+  ObExprMul::mul_decimalint32_int32_int32_oracle_vector,        /* 73 */
+  ObExprMul::mul_decimalint64_int32_int32_oracle_vector,        /* 74 */
+  ObExprMul::mul_decimalint64_int32_int64_oracle_vector,        /* 75 */
+  ObExprMul::mul_decimalint64_int64_int32_oracle_vector,        /* 76 */
+  ObExprMul::mul_decimalint128_int32_int64_oracle_vector,       /* 77 */
+  ObExprMul::mul_decimalint128_int64_int32_oracle_vector,       /* 78 */
+  ObExprMul::mul_decimalint128_int32_int128_oracle_vector,      /* 79 */
+  ObExprMul::mul_decimalint128_int128_int32_oracle_vector,      /* 80 */
+  ObExprMul::mul_decimalint128_int64_int64_oracle_vector,       /* 81 */
+  ObExprMul::mul_decimalint128_int64_int128_oracle_vector,      /* 82 */
+  ObExprMul::mul_decimalint128_int128_int64_oracle_vector,      /* 83 */
+  ObExprMul::mul_decimalint128_int128_int128_oracle_vector,     /* 84 */
+  ObExprDiv::div_float_vector,                                  /* 85 */
+  ObExprDiv::div_double_vector,                                 /* 86 */
+  ObExprDiv::div_number_vector,                                 /* 87 */
+  ObExprAnd::eval_and_vector,                                   /* 88 */
+  ObExprOr::eval_or_vector,                                     /* 89 */
+  ObExprJoinFilter::eval_bloom_filter_vector,                   /* 90 */
+  ObExprJoinFilter::eval_range_filter_vector,                   /* 91 */
+  ObExprJoinFilter::eval_in_filter_vector,                      /* 92 */
+  ObExprCalcPartitionBase::calc_partition_level_one_vector,     /* 93 */
+  ObExprBetween::eval_between_vector,                           /* 94 */
+  ObExprLength::calc_mysql_length_vector,                       /* 95 */
+  ObExprJoinFilter::eval_in_filter_vector,                      /* 96 */
+  ObExprSubstr::eval_substr_vector,                             /* 97 */
+  ObExprLower::eval_lower_vector,                               /* 98 */
+  ObExprUpper::eval_upper_vector,                               /* 99 */
+  ObExprCase::eval_case_vector,                                 /* 100 */
+  ObExprFuncRound::calc_round_expr_numeric1_vector,             /* 101 */
+  ObExprFuncRound::calc_round_expr_numeric2_vector,             /* 102 */
+  ObExprFuncRound::calc_round_expr_datetime1_vector,            /* 103 */
+  ObExprFuncRound::calc_round_expr_datetime2_vector,            /* 104 */
+  ObExprLike::eval_like_expr_vector_only_text_vectorized,       /* 105 */
+  ObExprExtract::calc_extract_oracle_vector,                    /* 106 */
+  ObExprExtract::calc_extract_mysql_vector,                     /* 107 */
+  ObExprRegexpReplace::eval_regexp_replace_vector,              /* 108 */
+  ObExprInOrNotIn::eval_vector_in_without_row_fallback,         /* 109 */
+  ObExprInOrNotIn::eval_vector_in_without_row                   /* 110 */
+};
+
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
                    g_expr_eval_functions,
                    ARRAYSIZEOF(g_expr_eval_functions));
@@ -1241,6 +1357,10 @@ REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL_BATCH,
                    g_expr_eval_batch_functions,
                    ARRAYSIZEOF(g_expr_eval_batch_functions));
+
+REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL_VECTOR,
+                   g_expr_eval_vector_functions,
+                   ARRAYSIZEOF(g_expr_eval_vector_functions));
 
 static ObExpr::EvalFunc g_decimal_int_eval_functions[] = {
   ObExprAdd::add_decimalint32,
@@ -1278,7 +1398,7 @@ static ObExpr::EvalFunc g_decimal_int_eval_functions[] = {
   ObExprMul::mul_decimalint256_int128_int128,
   ObExprMul::mul_decimalint256_int128_int256,
   ObExprMul::mul_decimalint256_int256_int128,
-  ObExprMul::mul_decimalint512,
+  ObExprMul::mul_decimalint512_int512_int512,
   ObExprMul::mul_decimalint512_with_check,
   ObExprMul::mul_decimalint64_round,
   ObExprMul::mul_decimalint128_round,
@@ -1371,7 +1491,7 @@ static ObExpr::EvalBatchFunc g_decimal_int_eval_batch_functions[] = {
   ObExprMul::mul_decimalint256_int128_int128_batch,
   ObExprMul::mul_decimalint256_int128_int256_batch,
   ObExprMul::mul_decimalint256_int256_int128_batch,
-  ObExprMul::mul_decimalint512_batch,
+  ObExprMul::mul_decimalint512_int512_int512_batch,
   ObExprMul::mul_decimalint512_with_check_batch,
   ObExprMul::mul_decimalint64_round_batch,
   ObExprMul::mul_decimalint128_round_batch,
@@ -1436,6 +1556,5 @@ REG_SER_FUNC_ARRAY(OB_SFA_DECIMAL_INT_EXPR_EVAL,
 REG_SER_FUNC_ARRAY(OB_SFA_DECIMAL_INT_EXPR_EVAL_BATCH,
                    g_decimal_int_eval_batch_functions,
                    ARRAYSIZEOF(g_decimal_int_eval_batch_functions));
-
 } // end namespace sql
 } // end namespace oceanbase

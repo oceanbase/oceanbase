@@ -25,7 +25,7 @@ using namespace common;
 namespace sql
 {
 
-int ObCompactBlockReader::CurRowInfo::init(const RowMeta *row_meta, const uint8_t offset_width, const char *buf)
+int ObCompactBlockReader::CurRowInfo::init(const ChunkRowMeta *row_meta, const uint8_t offset_width, const char *buf)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(row_meta) || OB_ISNULL(buf)) {
@@ -186,7 +186,7 @@ int ObCompactBlockReader::get_stored_row_size(int64_t &size)
   return ret;
 }
 
-int ObCompactBlockReader::calc_stored_row_size(const char *compact_row, const RowMeta *row_meta, int64_t &size)
+int ObCompactBlockReader::calc_stored_row_size(const char *compact_row, const ChunkRowMeta *row_meta, int64_t &size)
 {
   int ret = OB_SUCCESS;
   size = 0;

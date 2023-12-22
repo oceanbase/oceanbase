@@ -30,6 +30,7 @@
 #include "lib/geo/ob_geo_utils.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/engine/dml/ob_fk_checker.h"
+#include "storage/lob/ob_lob_manager.h"
 namespace oceanbase
 {
 using namespace common;

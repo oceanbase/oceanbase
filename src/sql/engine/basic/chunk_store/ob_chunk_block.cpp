@@ -25,7 +25,7 @@ using namespace common;
 namespace sql
 {
 
-int RowMeta::init(const ObExprPtrIArray &exprs, const int32_t extra_size)
+int ChunkRowMeta::init(const ObExprPtrIArray &exprs, const int32_t extra_size)
 {
   int ret = OB_SUCCESS;
   if (extra_size < 0 || exprs.count() <= 0) {
@@ -73,7 +73,7 @@ int RowMeta::init(const ObExprPtrIArray &exprs, const int32_t extra_size)
   return ret;
 }
 
-int RowMeta::init(const ObIArray<storage::ObColumnSchemaItem> &col_array,  const int32_t extra_size)
+int ChunkRowMeta::init(const ObIArray<storage::ObColumnSchemaItem> &col_array,  const int32_t extra_size)
 {
   int ret = OB_SUCCESS;
   if (extra_size < 0 || col_array.count() <= 0) {
@@ -123,7 +123,7 @@ int RowMeta::init(const ObIArray<storage::ObColumnSchemaItem> &col_array,  const
   return ret;
 }
 
-OB_DEF_SERIALIZE(RowMeta)
+OB_DEF_SERIALIZE(ChunkRowMeta)
 {
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_ENCODE,
@@ -141,7 +141,7 @@ OB_DEF_SERIALIZE(RowMeta)
 }
 
 
-OB_DEF_DESERIALIZE(RowMeta)
+OB_DEF_DESERIALIZE(ChunkRowMeta)
 {
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_DECODE,
@@ -158,7 +158,7 @@ OB_DEF_DESERIALIZE(RowMeta)
   return ret;
 }
 
-OB_DEF_SERIALIZE_SIZE(RowMeta)
+OB_DEF_SERIALIZE_SIZE(ChunkRowMeta)
 {
   int64_t len = 0;
   LST_DO_CODE(OB_UNIS_ADD_LEN,

@@ -17,6 +17,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/basic/ob_material_op.h"
+#include "sql/engine/basic/ob_material_vec_op.h"
 
 namespace oceanbase
 {
@@ -546,10 +547,14 @@ int ObNLConnectByWithIndexOp::read_right_func_end()
 int ObNLConnectByWithIndexOp::rescan_right()
 {
   int ret = OB_SUCCESS;
-  if (PHY_MATERIAL != right_->get_spec().type_ && OB_FAIL(right_->rescan())) {
+  if (PHY_MATERIAL != right_->get_spec().type_ && PHY_VEC_MATERIAL != right_->get_spec().type_ &&
+        OB_FAIL(right_->rescan())) {
     LOG_WARN("rescan right child failed", K(ret));
   } else if (PHY_MATERIAL == right_->get_spec().type_ 
               && OB_FAIL(static_cast<ObMaterialOp *> (right_)->rewind())) {
+    LOG_WARN("rescan right child failed", K(ret));
+  } else if (PHY_VEC_MATERIAL == right_->get_spec().type_
+               && OB_FAIL(static_cast<ObMaterialVecOp *> (right_)->rewind())) {
     LOG_WARN("rescan right child failed", K(ret));
   }
   return ret;

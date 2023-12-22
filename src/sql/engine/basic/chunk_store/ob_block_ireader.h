@@ -44,7 +44,7 @@ public:
   }
   virtual void reuse() = 0;
   virtual int get_row(const ObChunkDatumStore::StoredRow *&sr) = 0;
-  virtual void set_meta(const RowMeta* row_meta) = 0;
+  virtual void set_meta(const ChunkRowMeta* row_meta) = 0;
   void set_block(const ObTempBlockStore::Block *blk) { cur_blk_ = blk; }
   const ObTempBlockStore::Block *get_block() {return cur_blk_; }
   virtual int prepare_blk_for_read(ObTempBlockStore::Block *blk)  = 0;

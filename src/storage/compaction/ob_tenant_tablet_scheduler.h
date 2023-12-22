@@ -53,6 +53,7 @@ class ObFastFreezeChecker
 public:
   ObFastFreezeChecker();
   virtual ~ObFastFreezeChecker();
+  int init();
   void reset();
   OB_INLINE bool need_check() const { return enable_fast_freeze_; }
   void reload_config(const bool enable_fast_freeze);
@@ -77,6 +78,7 @@ private:
   static const int64_t TOMBSTONE_DEFAULT_ROW_COUNT = 250000;
   static const int64_t TOMBSTONE_MAX_ROW_COUNT = 500000;
   static const int64_t TOMBSTONE_STEP_ROW_COUNT = 50000;
+  static const int64_t FAST_FREEZE_TABLET_STAT_KEY_BUCKET_NUM = OB_MAX_LS_NUM_PER_TENANT_PER_SERVER * 1024;
   common::hash::ObHashMap<ObTabletStatKey, int64_t> store_map_;
   bool enable_fast_freeze_;
 };

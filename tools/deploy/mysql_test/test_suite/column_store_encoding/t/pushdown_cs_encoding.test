@@ -10,6 +10,7 @@ alter system set ob_compaction_schedule_interval = '3s';
 set @@recyclebin = off;
 --sleep 2
 connection default;
+set session _enable_rich_vector_format = true;
 
 --disable_warnings
 drop table if exists t1;

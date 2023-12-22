@@ -48,7 +48,7 @@ public:
   }
   virtual int get_row(const ObChunkDatumStore::StoredRow *&sr) override;
   inline bool blk_has_next_row() { return cur_blk_ != NULL && cur_blk_->cnt_ > cur_row_in_blk_; }
-  void set_meta(const RowMeta *row_meta) override {};
+  void set_meta(const ChunkRowMeta *row_meta) override {};
   int prepare_blk_for_read(ObTempBlockStore::Block *blk) final override;
 
 private:

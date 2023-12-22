@@ -60,10 +60,12 @@ public:
                           ObDtlChTotalInfo *ch_info,
                           bool is_transmit,
                           int64_t timeout_ts,
-                          sql::ObEvalCtx *eval_ctx) :
+                          sql::ObEvalCtx *eval_ctx,
+                          ObDtlMsgType type) :
     ObDtlAsynSender(channels, ch_info, is_transmit),
     timeout_ts_(timeout_ts),
-    eval_ctx_(eval_ctx)
+    eval_ctx_(eval_ctx),
+    type_(type)
   {}
 
  virtual int action(ObDtlChannel *ch);
@@ -71,6 +73,7 @@ public:
 private:
   int64_t timeout_ts_;
   sql::ObEvalCtx *eval_ctx_;
+  ObDtlMsgType type_;
 };
 
 

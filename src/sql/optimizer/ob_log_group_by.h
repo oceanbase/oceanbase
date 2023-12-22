@@ -81,7 +81,8 @@ public:
         force_push_down_(false),
         use_hash_aggr_(false),
         has_push_down_(false),
-        use_part_sort_(false)
+        use_part_sort_(false),
+        is_pushdown_scalar_aggr_(false)
   {}
   virtual ~ObLogGroupBy()
   {}
@@ -215,6 +216,10 @@ public:
 
   virtual int compute_sharding_info() override;
 
+
+  void set_pushdown_scalar_aggr() { is_pushdown_scalar_aggr_ = true; }
+  bool is_pushdown_scalar_aggr() { return is_pushdown_scalar_aggr_; }
+
   VIRTUAL_TO_STRING_KV(K_(group_exprs), K_(rollup_exprs), K_(aggr_exprs), K_(algo), K_(distinct_card),
       K_(is_push_down));
 private:
@@ -248,6 +253,7 @@ private:
   bool use_hash_aggr_;
   bool has_push_down_;
   bool use_part_sort_;
+  bool is_pushdown_scalar_aggr_;
 };
 } // end of namespace sql
 } // end of namespace oceanbase

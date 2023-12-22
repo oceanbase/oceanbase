@@ -1603,6 +1603,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
       int64_t old_query_start_time = session->get_query_start_time();
       HEAP_VAR(ObPLSqlCodeInfo, saved_sqlcode_info) {
         session->set_query_start_time(ObTimeUtility::current_time());
+        session->init_use_rich_format();
         saved_sqlcode_info = *(ctx->exec_ctx_->get_my_session()->get_pl_sqlcode_info());
         bool is_retry = false;
         do {
@@ -1750,6 +1751,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
       }
       session->get_retry_info_for_update().clear();
       session->set_query_start_time(old_query_start_time);
+      session->init_use_rich_format();
     }
     //自动提交,禁掉PL整体重试
     if (OB_SUCC(ret)

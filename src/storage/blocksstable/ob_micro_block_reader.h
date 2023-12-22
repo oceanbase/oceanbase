@@ -112,18 +112,25 @@ public:
     return header_->column_count_;
   }
   virtual int get_aggregate_result(
+      const ObTableIterParam &iter_param,
+      const ObTableAccessContext &context,
       const int32_t col_offset,
-      const share::schema::ObColumnParam *col_param,
+      const share::schema::ObColumnParam &col_param,
       const int64_t *row_ids,
       const int64_t row_cap,
       storage::ObAggDatumBuf &agg_datum_buf,
       storage::ObAggCell &agg_cell) override;
   int get_aggregate_result(
+      const ObTableIterParam &iter_param,
+      const ObTableAccessContext &context,
       const int64_t *row_ids,
       const int64_t row_cap,
       ObDatumRow &row_buf,
       common::ObIArray<storage::ObAggCell*> &agg_cells);
   virtual int get_column_datum(
+      const ObTableIterParam &iter_param,
+      const ObTableAccessContext &context,
+      const share::schema::ObColumnParam &col_param,
       const int32_t col_offset,
       const int64_t row_index,
       ObStorageDatum &datum) override;
@@ -149,6 +156,18 @@ public:
       bool &equal) override;
   virtual void reserve_reader_memory(bool reserve) override
   { allocator_.set_reserve_memory(reserve); }
+  int get_rows(
+      const common::ObIArray<int32_t> &cols_projector,
+      const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
+      const blocksstable::ObDatumRow *default_row,
+      const int64_t *row_ids,
+      const int64_t vector_offset,
+      const int64_t row_cap,
+      ObDatumRow &row_buf,
+      sql::ObExprPtrIArray &exprs,
+      sql::ObEvalCtx &eval_ctx);
+  virtual bool has_lob_out_row() const override final
+  { return nullptr != header_ && header_->has_lob_out_row(); }
 
 protected:
   virtual int find_bound(

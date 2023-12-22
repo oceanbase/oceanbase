@@ -150,7 +150,8 @@ int ObDASScanRtDef::init_pd_op(ObExecContext &exec_ctx,
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(eval_ctx_));
     } else if (FALSE_IT(p_pd_expr_op_ = new(&pd_expr_op_) ObPushdownOperator(*eval_ctx_,
-                                                         scan_ctdef.pd_expr_spec_))) {
+                                                                             scan_ctdef.pd_expr_spec_,
+                                                                             enable_rich_format()))) {
     } else if (OB_FAIL(pd_expr_op_.init_pushdown_storage_filter())) {
       LOG_WARN("init pushdown storage filter failed", K(ret));
     } else if (OB_NOT_NULL(scan_ctdef.trans_info_expr_)) {
@@ -525,6 +526,7 @@ int ObDASScanOp::decode_task_result(ObIDASTaskResult *task_result)
     LOG_WARN("init scan result iterator failed", K(ret));
   } else {
     result_ = scan_result;
+    LOG_DEBUG("decode task result", K(*scan_result));
   }
   return ret;
 }
@@ -539,6 +541,7 @@ int ObDASScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more,
   has_more = false;
   ObDASScanResult &scan_result = static_cast<ObDASScanResult&>(task_result);
   ObChunkDatumStore &datum_store = scan_result.get_datum_store();
+  ObTempRowStore &vec_row_store = scan_result.get_vec_row_store();
   bool iter_end = false;
   while (OB_SUCC(ret) && !has_more) {
     const ExprFixedArray &result_output = get_result_outputs();
@@ -595,17 +598,33 @@ int ObDASScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more,
           }
         }
       }
-      if (OB_FAIL(ret) || 0 == remain_row_cnt_) {
-      } else if (OB_UNLIKELY(simulate_row_cnt > 0
-                 && datum_store.get_row_cnt() >= simulate_row_cnt)) {
-        // simulate a datum store overflow error, send the remaining result through RPC
-        has_more = true;
-      } else if (OB_UNLIKELY(OB_FAIL(datum_store.try_add_batch(result_output, &eval_ctx,
-                                                      remain_row_cnt_, memory_limit,
-                                                      added)))) {
-        LOG_WARN("try add row to datum store failed", K(ret));
-      } else if (!added) {
-        has_more = true;
+      if (enable_rich_format()) {
+        LOG_DEBUG("rich format fill task result", K(remain_row_cnt_), K(memory_limit), K(ret), K(scan_result));
+        if (OB_FAIL(ret) || 0 == remain_row_cnt_) {
+        } else if (OB_UNLIKELY(simulate_row_cnt > 0
+                   && vec_row_store.get_row_cnt() >= simulate_row_cnt)) {
+          // simulate a datum store overflow error, send the remaining result through RPC
+          has_more = true;
+        } else if (OB_UNLIKELY(OB_FAIL(vec_row_store.try_add_batch(result_output, &eval_ctx,
+                                                        remain_row_cnt_, memory_limit,
+                                                        added)))) {
+          LOG_WARN("try add row to datum store failed", K(ret));
+        } else if (!added) {
+          has_more = true;
+        }
+      } else {
+        if (OB_FAIL(ret) || 0 == remain_row_cnt_) {
+        } else if (OB_UNLIKELY(simulate_row_cnt > 0
+                   && datum_store.get_row_cnt() >= simulate_row_cnt)) {
+          // simulate a datum store overflow error, send the remaining result through RPC
+          has_more = true;
+        } else if (OB_UNLIKELY(OB_FAIL(datum_store.try_add_batch(result_output, &eval_ctx,
+                                                        remain_row_cnt_, memory_limit,
+                                                        added)))) {
+          LOG_WARN("try add row to datum store failed", K(ret));
+        } else if (!added) {
+          has_more = true;
+        }
       }
       if (OB_SUCC(ret) && has_more) {
         PRINT_VECTORIZED_ROWS(SQL, DEBUG, eval_ctx, result_output, remain_row_cnt_,
@@ -617,7 +636,11 @@ int ObDASScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more,
   if (OB_ITER_END == ret) {
     ret = OB_SUCCESS;
   }
-  memory_limit -= datum_store.get_mem_used();
+  if (enable_rich_format()) {
+    memory_limit -= vec_row_store.get_mem_used();
+  } else {
+    memory_limit -= datum_store.get_mem_used();
+  }
   return ret;
 }
 
@@ -725,7 +748,8 @@ ObDASScanResult::ObDASScanResult()
     output_exprs_(nullptr),
     eval_ctx_(nullptr),
     extra_result_(nullptr),
-    need_check_output_datum_(false)
+    need_check_output_datum_(false),
+    enable_rich_format_(false)
 {
 }
 
@@ -762,7 +786,9 @@ int ObDASScanResult::get_next_row()
 int ObDASScanResult::get_next_rows(int64_t &count, int64_t capacity)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(need_check_output_datum_)) {
+  if (enable_rich_format_) {
+    ret = vec_result_iter_.get_next_batch(*output_exprs_, *eval_ctx_, capacity, count);
+  } else if (OB_UNLIKELY(need_check_output_datum_)) {
     ret = result_iter_.get_next_batch<true>(*output_exprs_, *eval_ctx_,
                                                        capacity, count);
   } else {
@@ -782,6 +808,7 @@ int ObDASScanResult::get_next_rows(int64_t &count, int64_t capacity)
   } else {
     PRINT_VECTORIZED_ROWS(SQL, DEBUG, *eval_ctx_, *output_exprs_, count);
   }
+  LOG_DEBUG("das result next rows", K(enable_rich_format_), K(count), K(capacity), K(ret));
   return ret;
 }
 
@@ -789,8 +816,11 @@ void ObDASScanResult::reset()
 {
   result_iter_.reset();
   datum_store_.reset();
+  vec_result_iter_.reset();
+  vec_row_store_.reset();
   output_exprs_ = nullptr;
   eval_ctx_ = nullptr;
+  enable_rich_format_ = false;
 }
 
 int ObDASScanResult::init_result_iter(const ExprFixedArray *output_exprs, ObEvalCtx *eval_ctx)
@@ -798,9 +828,17 @@ int ObDASScanResult::init_result_iter(const ExprFixedArray *output_exprs, ObEval
   int ret = OB_SUCCESS;
   output_exprs_ = output_exprs;
   eval_ctx_ = eval_ctx;
-  if (OB_FAIL(datum_store_.begin(result_iter_))) {
-    LOG_WARN("begin datum result iterator failed", K(ret));
+  LOG_DEBUG("init result iter", K(enable_rich_format_), K(vec_row_store_), K(datum_store_));
+  if (enable_rich_format_) {
+    if (OB_FAIL(vec_row_store_.begin(vec_result_iter_))) {
+      LOG_WARN("begin vec row result iterator failed", K(ret));
+    }
+  } else {
+    if (OB_FAIL(datum_store_.begin(result_iter_))) {
+      LOG_WARN("begin datum result iterator failed", K(ret));
+    }
   }
+
   return ret;
 }
 
@@ -811,13 +849,31 @@ int ObDASScanResult::init(const ObIDASTaskOp &op, common::ObIAllocator &alloc)
   const ObDASScanOp &scan_op = static_cast<const ObDASScanOp&>(op);
   uint64_t tenant_id = MTL_ID();
   need_check_output_datum_ = scan_op.need_check_output_datum();
+  enable_rich_format_ = scan_op.enable_rich_format();
+  LOG_DEBUG("das scan result init", K(enable_rich_format_));
+  //if (!enable_rich_format_) {
   if (OB_FAIL(datum_store_.init(UINT64_MAX,
                                tenant_id,
                                ObCtxIds::DEFAULT_CTX_ID,
                                "DASScanResult",
                                false/*enable_dump*/))) {
     LOG_WARN("init datum store failed", K(ret));
+  } else {
+    ObMemAttr mem_attr(tenant_id, "DASScanResult", ObCtxIds::DEFAULT_CTX_ID);
+    const ExprFixedArray &result_output = scan_op.get_result_outputs();
+    int64_t max_batch_size = static_cast<const ObDASScanCtDef *>(scan_op.get_ctdef())
+                             ->pd_expr_spec_.max_batch_size_;
+    if (OB_FAIL(vec_row_store_.init(result_output,
+                                    max_batch_size,
+                                    mem_attr,
+                                    UINT64_MAX,
+                                    false,
+                                    0,
+                                    false))) {
+      LOG_WARN("init vec row store failed", K(ret));
+    }
   }
+
   return ret;
 }
 
@@ -826,6 +882,8 @@ int ObDASScanResult::reuse()
   int ret = OB_SUCCESS;
   result_iter_.reset();
   datum_store_.reset();
+  vec_result_iter_.reset();
+  vec_row_store_.reset();
   return ret;
 }
 
@@ -838,7 +896,9 @@ int ObDASScanResult::link_extra_result(ObDASExtraData &extra_result)
 }
 
 OB_SERIALIZE_MEMBER((ObDASScanResult, ObIDASTaskResult),
-                    datum_store_);
+                    datum_store_,
+                    enable_rich_format_,
+                    vec_row_store_);
 
 ObLocalIndexLookupOp::~ObLocalIndexLookupOp()
 {
@@ -963,7 +1023,6 @@ int ObLocalIndexLookupOp::process_data_table_rowkey()
       // do nothing
     } else if (T_PSEUDO_ROW_TRANS_INFO_COLUMN == expr->type_) {
       // do nothing
-      ObDatum &col_datum = expr->locate_expr_datum(*lookup_rtdef_->eval_ctx_);
     } else {
       ObDatum &col_datum = expr->locate_expr_datum(*lookup_rtdef_->eval_ctx_);
       if (OB_FAIL(col_datum.to_obj(tmp_obj, expr->obj_meta_, expr->obj_datum_map_))) {

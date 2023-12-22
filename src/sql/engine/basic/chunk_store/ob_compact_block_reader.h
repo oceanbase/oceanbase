@@ -28,7 +28,7 @@ namespace sql
 {
 
 class ObTempBlockStore;
-class RowMeta;
+class ChunkChunkRowMeta;
 /*
  * compact row format
  * +----------+--------------+-------------+-------------------+------------+---------+
@@ -57,7 +57,7 @@ class ObCompactBlockReader final : public ObBlockIReader
                     bit_vec_(nullptr), data_offset_(0), fix_offset_(0), var_col_end_offset_(0) {}
 
     ~CurRowInfo() {reset();}
-    int init(const RowMeta *row_meta, const uint8_t offset_width, const char *buf);
+    int init(const ChunkRowMeta *row_meta, const uint8_t offset_width, const char *buf);
 
     void reset()
     {
@@ -96,7 +96,7 @@ public:
   ObCompactBlockReader(ObTempBlockStore *store = nullptr) : ObBlockIReader(store), row_meta_(nullptr),
                                                   sr_buffer_(nullptr), sr_size_(0), cur_row_offset_width_(0),
                                                   cur_pos_in_blk_(0), cur_row_in_blk_(0) {};
-  ObCompactBlockReader(ObTempBlockStore *store, const RowMeta *row_meta) : ObBlockIReader(store), row_meta_(row_meta),
+  ObCompactBlockReader(ObTempBlockStore *store, const ChunkRowMeta *row_meta) : ObBlockIReader(store), row_meta_(row_meta),
                                                       sr_buffer_(nullptr), sr_size_(0), cur_row_offset_width_(0),
                                                       cur_pos_in_blk_(0), cur_row_in_blk_(0) {};
   virtual ~ObCompactBlockReader() { reset(); };
@@ -127,12 +127,12 @@ public:
 
   int get_row(const ObChunkDatumStore::StoredRow *&sr) override;
 
-  void set_meta(const RowMeta *row_meta) { row_meta_ = row_meta; };
-  const RowMeta *get_meta() { return row_meta_; }
+  void set_meta(const ChunkRowMeta *row_meta) { row_meta_ = row_meta; };
+  const ChunkRowMeta *get_meta() { return row_meta_; }
   virtual int prepare_blk_for_read(ObTempBlockStore::Block *blk) final override { return OB_SUCCESS; }
 
 public:
-  static int calc_stored_row_size(const char *compact_row, const RowMeta *row_meta, int64_t &size);
+  static int calc_stored_row_size(const char *compact_row, const ChunkRowMeta *row_meta, int64_t &size);
 
 private:
   inline bool blk_has_next_row() { return cur_blk_ != NULL && cur_blk_->cnt_ > cur_row_in_blk_; }
@@ -143,7 +143,7 @@ private:
   int alloc_stored_row(ObChunkDatumStore::StoredRow *&sr, const int64_t size);
 
 private:
-  const RowMeta *row_meta_;
+  const ChunkRowMeta *row_meta_;
   char *sr_buffer_;
   int64_t sr_size_;
   int64_t cur_row_offset_width_;

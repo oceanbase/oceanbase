@@ -45,6 +45,8 @@ int ObExprFuncPartKey::cg_expr(ObExprCGCtx &, const ObRawExpr &, ObExpr &rt_expr
   int ret = OB_SUCCESS;
   rt_expr.eval_func_ = calc_partition_key;
   rt_expr.eval_batch_func_ = calc_partition_key_batch;
+  // TODO @zongmei.zzm fix decimal int vector hash calc
+  rt_expr.eval_vector_func_ = NULL;
   return ret;
 }
 
@@ -108,6 +110,59 @@ int ObExprFuncPartKey::calc_partition_key_batch(BATCH_EVAL_FUNC_ARG_DECL)
         const int64_t v = static_cast<int64_t>(hash_values[i]);
         datums[i].set_int(v < 0 ? -v : v);
         flags.set(i);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprFuncPartKey::calc_partition_key_vector(const ObExpr &expr,
+                                                 ObEvalCtx &ctx,
+                                                 const ObBitVector &skip,
+                                                 const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  uint64_t hash_seed = 0;
+  uint64_t *batch_hash_vals = NULL;
+  int64_t *hash_vals = NULL;
+  VectorHeader &vec_header = expr.get_vector_header(ctx);
+  if (VEC_FIXED == vec_header.format_) {
+    ObFixedLengthBase *fixed_vec = static_cast<ObFixedLengthBase *>(vec_header.get_vector());
+    batch_hash_vals = reinterpret_cast<uint64_t *>(fixed_vec->get_data());
+  } else if (is_uniform_format(vec_header.format_)) {
+    batch_hash_vals = reinterpret_cast<uint64_t *>(
+                                ctx.frames_[expr.frame_idx_] + expr.res_buf_off_);
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
+    if (OB_FAIL(expr.args_[i]->eval_vector(ctx, skip, bound))) {
+      LOG_WARN("failed to eval batch datum", K(ret));
+    } else {
+      ObIVector *arg_vec = expr.args_[i]->get_vector(ctx);
+      ret = arg_vec->murmur_hash(*expr.args_[i], batch_hash_vals, skip, bound,
+                                 i > 0 ? batch_hash_vals: &hash_seed, i > 0);
+    }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else {
+    //TODO shengle opt
+    ObBitVector &flags = expr.get_evaluated_flags(ctx);
+    for (int64_t i = bound.start(); i < bound.end(); ++i) {
+      if (skip.at(i)) {
+        continue;
+      } else {
+        const int64_t v = static_cast<int64_t>(batch_hash_vals[i]);
+        batch_hash_vals[i] = std::abs(v);
+        LOG_DEBUG("calc partition key vector", K(batch_hash_vals[i]));
+        flags.set(i);
+      }
+    }
+    if (is_uniform_format(vec_header.format_)) {
+      ObDatum *datum = expr.locate_batch_datums(ctx);
+      for (int64_t i = bound.start(); i < bound.end(); ++i) {
+        if (!skip.at(i)) {
+          datum[i].set_none();
+        }
       }
     }
   }

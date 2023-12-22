@@ -28,9 +28,12 @@
 #include "sql/engine/dml/ob_table_insert_op.h"
 #include "sql/engine/join/ob_join_filter_op.h"
 #include "sql/engine/join/ob_hash_join_op.h"
+#include "sql/engine/join/hash_join/ob_hash_join_vec_op.h"
 #include "sql/engine/window_function/ob_window_function_op.h"
 #include "sql/engine/basic/ob_temp_table_insert_op.h"
 #include "sql/engine/basic/ob_temp_table_access_op.h"
+#include "sql/engine/basic/ob_temp_table_insert_vec_op.h"
+#include "sql/engine/basic/ob_temp_table_access_vec_op.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/executor/ob_task_spliter.h"
 #include "share/ob_rpc_share.h"
@@ -178,8 +181,6 @@ int ObPxSubCoord::init_exec_env(ObExecContext &exec_ctx)
   } else if (OB_ISNULL(plan_ctx = GET_PHY_PLAN_CTX(exec_ctx))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("deserialized exec ctx without phy plan ctx set. Unexpected", K(ret));
-  } else if (OB_FAIL(init_first_buffer_cache(sqc_arg_.des_phy_plan_->get_px_dop()))) {
-    LOG_WARN("failed to init first buffer cache", K(ret));
   } else {
     session->set_cur_phy_plan(sqc_arg_.des_phy_plan_);
     exec_ctx.reference_my_plan(sqc_arg_.des_phy_plan_);
@@ -442,6 +443,47 @@ int ObPxSubCoord::setup_op_input(ObExecContext &ctx,
         access_input->unfinished_count_ptr_ = reinterpret_cast<uint64_t>(access_count_ptr);
       }
     }
+  }  else if (root.get_type() == PHY_VEC_TEMP_TABLE_ACCESS) {
+    ObPxSqcMeta &sqc = sqc_arg_.sqc_;
+    ObTempTableAccessVecOpInput *access_input = NULL;
+    uint64_t *access_count_ptr = NULL;
+    ObOperatorKit *kit = ctx.get_operator_kit(root.id_);
+    if (OB_ISNULL(kit) || OB_ISNULL(kit->input_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("operator is NULL", K(ret), KP(kit));
+    } else if (OB_ISNULL(access_count_ptr = (uint64_t *)ctx.get_allocator().alloc(sizeof(uint64_t)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc count_ptr", K(ret));
+    } else {
+      access_input = static_cast<ObTempTableAccessVecOpInput*>(kit->input_);
+      ObTempTableAccessVecOpSpec &access_op = static_cast<ObTempTableAccessVecOpSpec&>(root);
+      bool find = false;
+      for (int64_t i = 0; OB_SUCC(ret) && !find && i < sqc.get_temp_table_ctx().count(); ++i) {
+        ObSqlTempTableCtx &temp_table_ctx = sqc.get_temp_table_ctx().at(i);
+        if (access_op.temp_table_id_ == temp_table_ctx.temp_table_id_) {
+          for (int64_t j = 0; OB_SUCC(ret) && !find && j < temp_table_ctx.interm_result_infos_.count(); ++j) {
+            if (sqc.get_exec_addr() == temp_table_ctx.interm_result_infos_.at(j).addr_) {
+              ObTempTableResultInfo &info = temp_table_ctx.interm_result_infos_.at(j);
+              std::random_shuffle(info.interm_result_ids_.begin(), info.interm_result_ids_.end());
+              if (OB_FAIL(access_input->interm_result_ids_.assign(info.interm_result_ids_))) {
+                LOG_WARN("failed to assign result ids", K(ret));
+              } else {
+                find = true;
+              }
+            }
+          }
+        }
+      }
+      if (OB_FAIL(ret)) {
+        //do nothing
+      } else if (!find) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("temp table not found", K(access_op.temp_table_id_), K(ret));
+      } else {
+        *access_count_ptr = access_input->interm_result_ids_.count();
+        access_input->unfinished_count_ptr_ = reinterpret_cast<uint64_t>(access_count_ptr);
+      }
+    }
   } else if (root.get_type() == PHY_HASH_JOIN) {
     ObPxSqcMeta &sqc = sqc_arg_.sqc_;
     ObHashJoinInput *hj_input = NULL;
@@ -456,6 +498,23 @@ int ObPxSubCoord::setup_op_input(ObExecContext &ctx,
     } else {
       LOG_TRACE("debug hj input", K(hj_spec->is_shared_ht_));
     }
+  } else if (root.get_type() == PHY_VEC_HASH_JOIN) {
+    ObPxSqcMeta &sqc = sqc_arg_.sqc_;
+    ObHashJoinVecInput *hj_input = NULL;
+    ObOperatorKit *kit = ctx.get_operator_kit(root.id_);
+    ObHashJoinVecSpec *hj_spec = reinterpret_cast<ObHashJoinVecSpec *>(&root);
+    if (OB_ISNULL(kit) || OB_ISNULL(kit->input_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("operator is NULL", K(ret), KP(kit));
+    } else if (FALSE_IT(hj_input = static_cast<ObHashJoinVecInput*>(kit->input_))) {
+    } else if (hj_spec->is_shared_ht_
+               && OB_FAIL(hj_input->init_shared_hj_info(ctx.get_allocator(),
+                                                        sqc.get_task_count()))) {
+      LOG_WARN("failed to init shared hash join info", K(ret));
+    } else {
+      LOG_TRACE("debug hj input", K(hj_spec->is_shared_ht_));
+    }
+
   } else if (root.get_type() == PHY_WINDOW_FUNCTION) {
     // set task_count to ObWindowFunctionOpInput for wf pushdown
     ObPxSqcMeta &sqc = sqc_arg_.sqc_;
@@ -757,51 +816,6 @@ int ObPxSubCoord::end_process()
   return ret;
 }
 
-int ObPxSubCoord::init_first_buffer_cache(int64_t px_dop)
-{
-  int ret = OB_SUCCESS;
-  int64_t dop = px_dop * px_dop;
-  if (OB_ISNULL(sqc_arg_.exec_ctx_) || OB_ISNULL(sqc_arg_.exec_ctx_->get_my_session())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("null unexpected", K(ret));
-  } else if (OB_FAIL(first_buffer_cache_.init(dop, dop))) {
-    LOG_WARN("failed to init first buffer cache", K(ret));
-  } else {
-    ObDtlDfoKey dfo_key;
-    sqc_ctx_.sqc_proxy_.get_self_dfo_key(dfo_key);
-    first_buffer_cache_.set_first_buffer_key(dfo_key);
-    if (OB_FAIL(DTL.get_dfc_server().register_first_buffer_cache(
-                sqc_arg_.exec_ctx_->get_my_session()->get_effective_tenant_id(),
-                get_first_buffer_cache()))) {
-      if (OB_HASH_EXIST == ret) {
-        first_buffer_cache_.destroy();
-      }
-      LOG_WARN("failed to register first buffer cache", K(ret), K(dfo_key));
-    } else {
-      sqc_ctx_.sqc_proxy_.set_first_buffer_cache(&first_buffer_cache_);
-    }
-    LOG_TRACE("trace register first buffer cache", K(ret), K(dfo_key), K(dop),
-      KP(&first_buffer_cache_));
-  }
-  return ret;
-}
-
-void ObPxSubCoord::destroy_first_buffer_cache()
-{
-  int ret = OB_SUCCESS;
-  ObDtlDfoKey &dfo_key = first_buffer_cache_.get_first_buffer_key();
-  if (OB_ISNULL(sqc_arg_.exec_ctx_) || OB_ISNULL(sqc_arg_.exec_ctx_->get_my_session())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("null unexpected", K(ret));
-  } else if (OB_FAIL(DTL.get_dfc_server().unregister_first_buffer_cache(
-              sqc_arg_.exec_ctx_->get_my_session()->get_effective_tenant_id(),
-              dfo_key, &first_buffer_cache_))) {
-    LOG_WARN("failed to register first buffer cache", K(ret),
-      K(first_buffer_cache_.get_first_buffer_key()));
-  }
-  LOG_TRACE("trace unregister first buffer cache", K(ret), K(dfo_key));
-}
-
 int ObPxSubCoord::check_need_start_ddl(bool &need_start_ddl)
 {
   int ret = OB_SUCCESS;
@@ -1052,10 +1066,9 @@ void ObPxSubCoord::try_get_dml_op(ObOpSpec &root, ObTableModifySpec *&dml_op)
       // 也存在GI算子下面是MONITOR算子, 目前只存在这两种情况.
     if (IS_DML(root.get_child(0)->get_type())) {
       dml_op = static_cast<ObTableModifySpec*>(root.get_child(0));
-    } else if (PHY_MONITORING_DUMP == root.get_child(0)->get_type() &&
-               1 == root.get_child(0)->get_child_num() &&
-               IS_DML(root.get_child(0)->get_child(0)->get_type())) {
-      dml_op = static_cast<ObTableModifySpec*>(root.get_child(0)->get_child(0));
+    } else if (PHY_MONITORING_DUMP == root.get_child(0)->get_type() ||
+               PHY_MATERIAL == root.get_child(0)->get_type()) {
+      try_get_dml_op(*root.get_child(0), dml_op);
     }
   }
 }

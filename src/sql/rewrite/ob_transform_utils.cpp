@@ -10399,7 +10399,7 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
                                                         expr->get_param_expr(i),
                                                         need_query_compare,
                                                         trans_ctx,
-                                                        in_add_expr || T_OP_ADD == expr->get_expr_type())))) {
+                                                        (in_add_expr || T_OP_ADD == expr->get_expr_type()))))) {
         LOG_WARN("failed to replace with groupby columns.", K(ret));
       } else { /*do nothing.*/ }
     }

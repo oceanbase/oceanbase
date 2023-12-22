@@ -277,6 +277,7 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
         tmp_exec_ctx.set_sql_ctx(ctx.get_exec_ctx()->get_sql_ctx());
         tmp_plan_ctx.set_timeout_timestamp(plan_ctx->get_timeout_timestamp());
         tmp_plan_ctx.set_cur_time(cur_time, *ctx.get_session_info());
+        tmp_plan_ctx.set_rich_format(ctx.get_session_info()->use_rich_format());
         if (OB_FAIL(tmp_plan_ctx.get_param_store_for_update().assign(plan_ctx->get_param_store()))) {
           LOG_WARN("failed to assign phy plan ctx");
         } else if (OB_FAIL(tmp_plan_ctx.init_datum_param_store())) {

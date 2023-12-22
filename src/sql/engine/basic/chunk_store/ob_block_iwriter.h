@@ -55,7 +55,7 @@ public:
                         ObChunkDatumStore::StoredRow **stored_rows, BatchCtx *batch_ctx) = 0;
   virtual int close() = 0;
 
-  virtual void set_meta(const RowMeta* row_meta) = 0;
+  virtual void set_meta(const ChunkRowMeta* row_meta) = 0;
   virtual int prepare_blk_for_write(ObTempBlockStore::Block *blk) = 0;
   virtual int get_last_stored_row(const ObChunkDatumStore::StoredRow *&sr) = 0;
 

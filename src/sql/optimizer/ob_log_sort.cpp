@@ -272,6 +272,9 @@ int ObLogSort::est_width()
   } else if (!get_plan()->get_candidate_plans().is_final_sort_) {
     width = child->get_width();
     set_width(width);
+    if (OB_FAIL(est_sort_key_width())) {
+      LOG_WARN("failed to est sort key width", K(ret));
+    }
     LOG_TRACE("est width for non-final sort", K(output_exprs), K(width));
   } else if (OB_FAIL(get_sort_output_exprs(output_exprs))) {
     LOG_WARN("failed to get sort output exprs", K(ret));
@@ -280,9 +283,41 @@ int ObLogSort::est_width()
                                                             output_exprs,
                                                             width))) {
     LOG_WARN("failed to estimate width for output orderby exprs", K(ret));
+  } else if (OB_FAIL(est_sort_key_width())) {
+    LOG_WARN("failed to est sort key width", K(ret));
   } else {
     set_width(width);
     LOG_TRACE("est width for final sort", K(output_exprs), K(width));
+  }
+  return ret;
+}
+
+int ObLogSort::est_sort_key_width()
+{
+  int ret = OB_SUCCESS;
+  double width = 0.0;
+  sort_key_width_ = 0.0;
+  ObSEArray<ObRawExpr*, 16> sortkey_exprs;
+  for (int64_t i = 0; OB_SUCC(ret) && i < sort_keys_.count(); i++) {
+    if (OB_FAIL(sortkey_exprs.push_back(sort_keys_.at(i).expr_))) {
+      LOG_WARN("failed to add sort key expr", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObOptEstCost::estimate_width_for_exprs(get_plan()->get_basic_table_metas(),
+                                                            get_plan()->get_selectivity_ctx(),
+                                                            sortkey_exprs,
+                                                            width))) {
+    LOG_WARN("failed to estimate width for sortkey orderby exprs", K(ret));
+  } else {
+    if (enable_encode_sortkey_opt()) {
+      // A rough estimate of the memory size used by encode is equal to the size of the sort key.
+      width *= 2;
+    }
+    if (part_cnt_ > 0) {
+      width += sizeof(int64_t);
+    }
+    sort_key_width_ = width;
   }
   return ret;
 }

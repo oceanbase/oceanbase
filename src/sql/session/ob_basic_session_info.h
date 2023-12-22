@@ -475,7 +475,14 @@ public:
   int get_local_nls_format(const ObObjType type, ObString &format_str) const;
   int set_time_zone(const common::ObString &str_val, const bool is_oralce_mode,
                     const bool need_check_valid /* true */);
-
+  void init_use_rich_format()
+  {
+    use_rich_vector_format_ = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0
+                              && sys_vars_cache_.get_enable_rich_vector_format();
+  }
+  bool use_rich_format() const {
+    return use_rich_vector_format_;
+  }
   //getters
   const common::ObString get_tenant_name() const;
   uint64_t get_priv_tenant_id() const { return tenant_id_; }
@@ -1575,8 +1582,8 @@ public:
         runtime_filter_wait_time_ms_(0),
         runtime_filter_max_in_num_(0),
         runtime_bloom_filter_max_size_(INT_MAX32),
+        enable_rich_vector_format_(false),
         ncharacter_set_connection_(ObCharsetType::CHARSET_INVALID)
-
     {
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         MEMSET(nls_formats_buf_[i], 0, MAX_NLS_FORMAT_STR_LEN);
@@ -1635,6 +1642,7 @@ public:
       runtime_filter_wait_time_ms_ = 0;
       runtime_filter_max_in_num_ = 0;
       runtime_bloom_filter_max_size_ = INT32_MAX;
+      enable_rich_vector_format_ = false;
       ncharacter_set_connection_ = ObCharsetType::CHARSET_INVALID;
       default_lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
     }
@@ -1679,7 +1687,9 @@ public:
             iso_nls_currency_ == other.iso_nls_currency_ &&
             ob_plsql_ccflags_ == other.ob_plsql_ccflags_ &&
             log_row_value_option_ == other.log_row_value_option_ &&
+            ob_max_read_stale_time_ == other.ob_max_read_stale_time_ &&
             ob_max_read_stale_time_ == other.ob_max_read_stale_time_  &&
+            enable_rich_vector_format_ == other.enable_rich_vector_format_ &&
             ncharacter_set_connection_ == other.ncharacter_set_connection_ &&
             default_lob_inrow_threshold_ == other.default_lob_inrow_threshold_;
       bool equal2 = true;
@@ -1858,7 +1868,7 @@ public:
     int64_t runtime_filter_wait_time_ms_;
     int64_t runtime_filter_max_in_num_;
     int64_t runtime_bloom_filter_max_size_;
-
+    bool enable_rich_vector_format_;
     ObCharsetType ncharacter_set_connection_;
   private:
     char nls_formats_buf_[ObNLSFormatEnum::NLS_MAX][MAX_NLS_FORMAT_STR_LEN];
@@ -1971,6 +1981,7 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, runtime_filter_wait_time_ms);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, runtime_filter_max_in_num);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, runtime_bloom_filter_max_size);
+    DEF_SYS_VAR_CACHE_FUNCS(bool, enable_rich_vector_format);
     DEF_SYS_VAR_CACHE_FUNCS(ObCharsetType, ncharacter_set_connection);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, default_lob_inrow_threshold);
     void set_autocommit_info(bool inc_value)
@@ -2040,6 +2051,7 @@ private:
         bool inc_runtime_filter_wait_time_ms_:1;
         bool inc_runtime_filter_max_in_num_:1;
         bool inc_runtime_bloom_filter_max_size_:1;
+        bool inc_enable_rich_vector_format_:1;
         bool inc_ncharacter_set_connection_:1;
         bool inc_default_lob_inrow_threshold_:1;
       };
@@ -2282,6 +2294,8 @@ private:
   int64_t process_query_time_;
   int64_t last_update_tz_time_; //timestamp of last attempt to update timezone info
   bool is_client_sessid_support_; //client session id support flag
+  bool use_rich_vector_format_;
+  int64_t last_refresh_schema_version_;
 };
 
 

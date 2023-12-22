@@ -15,6 +15,7 @@
 #define OCEANBASE_CS_ENCODING_OB_CS_ENCODING_TEST_BASE_H_
 #define USING_LOG_PREFIX STORAGE
 
+#include "unittest/storage/blocksstable/encoding/test_column_decoder.h"
 #include "../ob_row_generate.h"
 #include "common/rowkey/ob_rowkey.h"
 #include "lib/string/ob_sql_string.h"
@@ -61,6 +62,10 @@ protected:
                       ObMicroBlockData &full_transformed_data,
                       ObMicroBlockCSDecoder &decoder);
   int build_micro_block_desc(ObMicroBlockCSEncoder &encoder, ObMicroBlockDesc &desc, ObMicroBlockHeader* &header);
+  int check_decode_vector(ObMicroBlockCSDecoder &decoder,
+                          const ObDatumRow *row_arr,
+                          const int64_t row_cnt,
+                          const VectorFormat vector_format);
   int full_transform_check_row(const ObMicroBlockHeader *header,
                                const ObMicroBlockDesc &desc,
                                const ObDatumRow *row_arr,
@@ -269,6 +274,16 @@ int ObCSEncodingTestBase::full_transform_check_row(const ObMicroBlockHeader *hea
         }
       }
     }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(check_decode_vector(decoder, row_arr, row_cnt, VEC_UNIFORM))) {
+      LOG_WARN("fail to check_decode_vector for VEC_UNIFORM", K(ret));
+    } else if (OB_FAIL(check_decode_vector(decoder, row_arr, row_cnt, VEC_FIXED))) {
+      LOG_WARN("fail to check_decode_vector for VEC_FIXED", K(ret));
+    } else if (OB_FAIL(check_decode_vector(decoder, row_arr, row_cnt, VEC_DISCRETE))) {
+      LOG_WARN("fail to check_decode_vector for VEC_DISCRETE", K(ret));
+    } else if (OB_FAIL(check_decode_vector(decoder, row_arr, row_cnt, VEC_CONTINUOUS))) {
+      LOG_WARN("fail to check_decode_vector for VEC_CONTINUOUS", K(ret));
+    }
 
     if (OB_SUCC(ret) && check_by_get) {
       ObCSEncodeBlockGetReader get_reader;
@@ -282,6 +297,96 @@ int ObCSEncodingTestBase::full_transform_check_row(const ObMicroBlockHeader *hea
           if (!ObDatum::binary_equal(row_arr[i].storage_datums_[j], row.storage_datums_[j])) {
             ret = OB_ERR_UNEXPECTED;
             LOG_INFO("not equal row: ", K(ret), K(i), K(j), K(row_arr[i].storage_datums_[j]), K(row.storage_datums_[j]));
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObCSEncodingTestBase::check_decode_vector(ObMicroBlockCSDecoder &decoder,
+                                              const ObDatumRow *row_arr,
+                                              const int64_t row_cnt,
+                                              const VectorFormat vector_format)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator frame_allocator;
+  sql::ObExecContext exec_context(allocator_);
+  sql::ObEvalCtx eval_ctx(exec_context);
+  char *buf = nullptr;
+  if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator_.alloc(
+      row_cnt * (sizeof(char*)/*ptr_arr*/ + sizeof(uint32_t)/*len_arr*/ + sizeof(int64_t)/*row_ids*/))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate", K(ret));
+  } else {
+    const char** ptr_arr = reinterpret_cast<const char**>(buf);
+    buf += row_cnt * sizeof(char*);
+    uint32_t *len_arr = reinterpret_cast<uint32_t*>(buf) ;
+    buf += row_cnt * sizeof(uint32_t);
+    int64_t *row_ids = reinterpret_cast<int64_t*>(buf);
+    bool need_test_column = true;
+
+    for (int col_idx = 0; OB_SUCC(ret) && col_idx < ctx_.column_cnt_; col_idx++) {
+      sql::ObExpr col_expr;
+      ObObjMeta col_meta = col_descs_.at(col_idx).col_type_;
+      const int16_t precision = col_meta.is_decimal_int() ? col_meta.get_stored_precision() : PRECISION_UNKNOWN_YET;
+      VecValueTypeClass vec_tc = common::get_vec_value_tc(col_meta.get_type(), col_meta.get_scale(), precision);
+      need_test_column = true;
+
+      if (vector_format == VEC_FIXED) {
+        VecValueTypeClass fixed_tc_arr[] = {VEC_TC_INTEGER, VEC_TC_UINTEGER, VEC_TC_FLOAT, VEC_TC_DOUBLE,
+            VEC_TC_FIXED_DOUBLE, VEC_TC_DATETIME, VEC_TC_DATE, VEC_TC_TIME, VEC_TC_YEAR, VEC_TC_UNKNOWN,
+            VEC_TC_BIT, VEC_TC_ENUM_SET, VEC_TC_TIMESTAMP_TZ, VEC_TC_TIMESTAMP_TINY, VEC_TC_INTERVAL_YM,
+            VEC_TC_INTERVAL_DS, VEC_TC_DEC_INT32, VEC_TC_DEC_INT64, VEC_TC_DEC_INT128, VEC_TC_DEC_INT256,
+            VEC_TC_DEC_INT512};
+        VecValueTypeClass *vec = std::find(std::begin(fixed_tc_arr), std::end(fixed_tc_arr), vec_tc);
+        if (vec == std::end(fixed_tc_arr)) {
+          need_test_column = false;
+        }
+      } else if (vector_format == VEC_DISCRETE || vector_format == VEC_UNIFORM) {
+        VecValueTypeClass var_tc_arr[] = {VEC_TC_NUMBER, VEC_TC_EXTEND, VEC_TC_STRING, VEC_TC_ENUM_SET_INNER,
+            VEC_TC_RAW, VEC_TC_ROWID, VEC_TC_LOB, VEC_TC_JSON, VEC_TC_GEO, VEC_TC_UDT};
+        VecValueTypeClass *vec = std::find(std::begin(var_tc_arr), std::end(var_tc_arr), vec_tc);
+        if (vec == std::end(var_tc_arr)) {
+          need_test_column = false;
+        }
+      } else if (vector_format == VEC_CONTINUOUS) {
+        /* can't test now
+        VecValueTypeClass var_tc_arr[] = {VEC_TC_NUMBER, VEC_TC_EXTEND, VEC_TC_STRING, VEC_TC_ENUM_SET_INNER,
+            VEC_TC_RAW, VEC_TC_ROWID, VEC_TC_LOB, VEC_TC_JSON, VEC_TC_GEO, VEC_TC_UDT};
+        VecValueTypeClass *vec = std::find(std::begin(var_tc_arr), std::end(var_tc_arr), vec_tc);
+        if (vec == std::end(var_tc_arr)) {
+          need_test_column = false;
+        }
+        */
+        need_test_column = false;
+
+      }
+
+      if (!need_test_column) {
+        continue;
+      }
+      LOG_INFO("Current col: ", K(col_idx), K(col_meta), K(vector_format), K(precision), K(vec_tc));
+      if (OB_FAIL(VectorDecodeTestUtil::generate_column_output_expr(
+          row_cnt, col_meta, vector_format, eval_ctx, col_expr, frame_allocator))) {
+        LOG_WARN("fail to generate_column_output_expr", K(ret), K(vec_tc), K(col_meta), K(vector_format));
+      } else {
+        for (int64_t row_idx = 0; row_idx < row_cnt; ++row_idx) {
+          row_ids[row_idx] = row_idx;
+        }
+        ObVectorDecodeCtx vector_ctx(ptr_arr, len_arr, row_ids, row_cnt, 0, col_expr.get_vector_header(eval_ctx));
+        if (OB_FAIL(decoder.get_col_data(col_idx, vector_ctx))) {
+          LOG_WARN("fail to get_col_dagta", K(col_idx), K(vector_ctx));
+        }
+
+        for (int64_t vec_idx = 0;  OB_SUCC(ret) && vec_idx < row_cnt; ++vec_idx) {
+          if (false == VectorDecodeTestUtil::verify_vector_and_datum_match(
+              *vector_ctx.get_vector(), vec_idx, row_arr[vec_idx].storage_datums_[col_idx])) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("decode vector result mismatch",
+              K(ret), K(vec_idx), K(col_idx), K(col_meta), K(vec_tc), K(vector_format), K(precision));
           }
         }
       }

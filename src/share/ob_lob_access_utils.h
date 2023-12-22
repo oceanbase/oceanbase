@@ -17,11 +17,19 @@
 #include "share/ob_errno.h"
 #include "common/object/ob_object.h"
 #include "common/object/ob_obj_type.h"
-#include "sql/session/ob_basic_session_info.h"
-#include "storage/lob/ob_lob_manager.h"
+#include "share/datum/ob_datum.h"
+#include "share/ob_cluster_version.h"
 
 namespace oceanbase
 {
+namespace sql
+{
+class ObBasicSessionInfo;
+} // namespace sql
+namespace storage
+{
+  class ObLobQueryIter;
+} // namespace storage
 namespace common
 {
 // 1. This function is used to control plan generation or lob output when execution.
@@ -103,7 +111,7 @@ struct ObLobTextIterCtx
   bool is_backward_;
 
   ObLobLocatorV2 locator_;
-  ObLobQueryIter *lob_query_iter_;
+  storage::ObLobQueryIter *lob_query_iter_;
 };
 
 // wrapper class to handle string/text type input
@@ -289,8 +297,20 @@ protected:
 OB_INLINE bool ob_is_empty_lob(ObObjType type, const ObDatum &datum, bool has_lob_header)
 {
   bool bret = false;
-  if (common::ob_is_text_tc(type)) {
+  if (common::is_lob_storage(type)) {
     common::ObLobLocatorV2 loc(datum.get_string(), has_lob_header);
+    bret = loc.is_empty_lob();
+  }
+  return bret;
+}
+
+template <typename TextVec>
+OB_INLINE bool ob_is_empty_lob(ObObjType type, const TextVec &vector, bool has_lob_header,
+                               int64_t idx)
+{
+  bool bret = false;
+  if (common::is_lob_storage(type)) {
+    common::ObLobLocatorV2 loc(vector->get_string(idx), has_lob_header);
     bret = loc.is_empty_lob();
   }
   return bret;
@@ -299,7 +319,7 @@ OB_INLINE bool ob_is_empty_lob(ObObjType type, const ObDatum &datum, bool has_lo
 OB_INLINE bool ob_is_empty_lob(const ObObj &obj)
 {
   bool bret = false;
-  if (common::ob_is_text_tc(obj.get_type())) {
+  if (common::is_lob_storage(obj.get_type())) {
     common::ObLobLocatorV2 loc(obj.get_string(), obj.has_lob_header());
     bret = loc.is_empty_lob();
   }

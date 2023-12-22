@@ -319,7 +319,6 @@ int ObPxSqcHandler::destroy_sqc(int &report_ret)
   int ret = OB_SUCCESS;
   int end_ret = OB_SUCCESS;
   report_ret = OB_SUCCESS;
-  sub_coord_->destroy_first_buffer_cache();
   // end_ret_记录的错误时SQC end process的时候发生的错误，该时刻语句已经执行完成，收尾工作发生了
   // 问题。相比起事务的错误码，收尾的错误码优先级更低。
   end_ret = end_ret_;
