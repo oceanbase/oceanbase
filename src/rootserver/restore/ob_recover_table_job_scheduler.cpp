@@ -670,7 +670,7 @@ int ObRecoverTableJobScheduler::check_aux_tenant_(share::ObRecoverTableJob &job,
   schema::ObSchemaGetterGuard recover_tenant_guard;
   bool is_compatible = true;
   if (OB_FAIL(schema_service_->get_tenant_schema_guard(aux_tenant_id, aux_tenant_guard))) {
-    if (OB_TENANT_NOT_EXIST) {
+    if (OB_TENANT_NOT_EXIST == ret) {
       ObImportResult::Comment comment;
       if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(),
           "aux tenant %.*s has been dropped", job.get_aux_tenant_name().length(), job.get_aux_tenant_name().ptr()))) {

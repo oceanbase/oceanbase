@@ -1730,7 +1730,7 @@ int ObLSRestoreStartState::check_ls_meta_exist_(bool &is_exist)
   } else if (OB_FAIL(store.init(backup_set_array.at(idx).backup_set_path_.ptr()))) {
     LOG_WARN("fail to init backup data store", K(ret));
   } else if (OB_FAIL(store.read_ls_meta_infos(ls_->get_ls_id(), ls_meta_packge))) {
-    if (OB_ENTRY_NOT_EXIST) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
       is_exist = false;
       ret = OB_SUCCESS;
     } else {

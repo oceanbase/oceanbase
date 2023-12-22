@@ -169,7 +169,7 @@ int ObArchivePersistHelper::lock_archive_dest(
   int ret = OB_SUCCESS;
   ObBackupPathString path;
   if (OB_FAIL(get_archive_dest(trans, true /* need_lock */, dest_no, path))) {
-    if (OB_ENTRY_NOT_EXIST) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       is_exist = false;
     } else {
