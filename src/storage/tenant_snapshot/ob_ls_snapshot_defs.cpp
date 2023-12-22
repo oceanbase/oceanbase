@@ -298,7 +298,7 @@ int ObLSSnapshot::get_tablet_meta_entry(blocksstable::MacroBlockId &tablet_meta_
 
   if (!meta_existed_) {
     ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("ObLSSnapshot's meta not exsited", KR(ret), KPC(this));
+    LOG_WARN("ObLSSnapshot's meta not existed", KR(ret), KPC(this));
   } else if (OB_FAIL(meta_handler_->get_ls_snapshot(tenant_snapshot_id_,
                                                     ls_id_,
                                                     tablet_meta_entry))) {

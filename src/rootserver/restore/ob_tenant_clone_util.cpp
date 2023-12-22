@@ -421,14 +421,14 @@ int ObTenantCloneUtil::release_source_tenant_resource_of_clone_job(common::ObISQ
       } else {
         LOG_WARN("fail to get global_lock", KR(ret), K(clone_job));
       }
-    } else if (ObTenantSnapStatus::RESTORING != global_lock.get_status()) {
+    } else if (ObTenantSnapStatus::CLONING != global_lock.get_status()) {
       is_already_unlocked = true;
       LOG_INFO("global lock has been released", KR(ret), K(clone_job));
     } else if (OB_FAIL(ObTenantSnapshotUtil::unlock_tenant_snapshot_simulated_mutex_from_clone_release_task(
                                                 trans,
                                                 source_tenant_id,
                                                 job_id,
-                                                ObTenantSnapStatus::RESTORING,
+                                                ObTenantSnapStatus::CLONING,
                                                 is_already_unlocked))) {
       LOG_WARN("fail to unlock", KR(ret), K(clone_job), K(global_lock));
     }
@@ -532,7 +532,7 @@ int ObTenantCloneUtil::cancel_clone_job(common::ObISQLClient &sql_client,
   ObTenantCloneTableOperator clone_op;
   ObCloneJob clone_job;
   ObMySQLTransaction trans;
-  static const char *err_msg = "clone job has been canceled";
+  ObSqlString err_msg;
   const ObTenantCloneStatus next_status(ObTenantCloneStatus::Status::CLONE_SYS_CANCELED);
 
   if (OB_UNLIKELY(clone_tenant_name.empty())) {
@@ -560,7 +560,9 @@ int ObTenantCloneUtil::cancel_clone_job(common::ObISQLClient &sql_client,
                                                 clone_job.get_status(), /*old_status*/
                                                 next_status))) {
     LOG_WARN("fail to update job status", KR(ret), K(clone_tenant_name), K(clone_job));
-  } else if (OB_FAIL(clone_op.update_job_failed_info(clone_job.get_job_id(), OB_CANCELED, err_msg))) {
+  } else if (OB_FAIL(err_msg.append_fmt("clone job has been canceled in %s status",
+                                        ObTenantCloneStatus::get_clone_status_str(clone_job.get_status())))) {
+  } else if (OB_FAIL(clone_op.update_job_failed_info(clone_job.get_job_id(), OB_CANCELED, err_msg.string()))) {
     LOG_WARN("fail to update job failed info", KR(ret), K(clone_job));
   }
 
