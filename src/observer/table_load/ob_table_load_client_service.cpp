@@ -106,16 +106,12 @@ private:
     if (OB_FAIL(client_task_->check_status(ObTableLoadClientStatus::COMMITTING))) {
       LOG_WARN("fail to check status", KR(ret));
     } else {
-      const ObIArray<ObTableLoadTransId> &trans_ids = client_task_->get_trans_ids();
       ObTableLoadCoordinator coordinator(table_ctx_);
+      const ObTableLoadTransId &trans_id = client_task_->get_trans_id();
       if (OB_FAIL(coordinator.init())) {
         LOG_WARN("fail to init coordinator", KR(ret));
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && i < trans_ids.count(); ++i) {
-        const ObTableLoadTransId &trans_id = trans_ids.at(i);
-        if (OB_FAIL(coordinator.finish_trans(trans_id))) {
-          LOG_WARN("fail to coordinator finish trans", KR(ret), K(i), K(trans_id));
-        }
+      } else if (OB_FAIL(coordinator.finish_trans(trans_id))) {
+        LOG_WARN("fail to coordinator finish trans", KR(ret), K(trans_id));
       }
       if (OB_FAIL(ret)) {
         client_task_->set_status_error(ret);
@@ -126,7 +122,7 @@ private:
   int check_all_trans_commit()
   {
     int ret = OB_SUCCESS;
-    const ObIArray<ObTableLoadTransId> &trans_ids = client_task_->get_trans_ids();
+    const ObTableLoadTransId &trans_id = client_task_->get_trans_id();
     while (OB_SUCC(ret)) {
       if (OB_FAIL(client_task_->check_status(ObTableLoadClientStatus::COMMITTING))) {
         LOG_WARN("fail to check status", KR(ret));
@@ -134,37 +130,33 @@ private:
         if (OB_FAIL(client_task_->get_exec_ctx()->check_status())) {
           LOG_WARN("fail to check exec status", KR(ret));
         } else {
-          bool all_commit = true;
           ObTableLoadCoordinator coordinator(table_ctx_);
+          ObTableLoadTransStatusType trans_status = ObTableLoadTransStatusType::NONE;
+          int error_code = OB_SUCCESS;
+          bool try_again = false;
           if (OB_FAIL(coordinator.init())) {
             LOG_WARN("fail to init coordinator", KR(ret));
-          }
-          for (int64_t i = 0; OB_SUCC(ret) && i < trans_ids.count(); ++i) {
-            const ObTableLoadTransId &trans_id = trans_ids.at(i);
-            ObTableLoadTransStatusType trans_status = ObTableLoadTransStatusType::NONE;
-            int error_code = OB_SUCCESS;
-            if (OB_FAIL(coordinator.get_trans_status(trans_id, trans_status, error_code))) {
-              LOG_WARN("fail to coordinator get status", KR(ret), K(i), K(trans_id));
-            } else {
-              switch (trans_status) {
-                case ObTableLoadTransStatusType::FROZEN:
-                  all_commit = false;
-                  break;
-                case ObTableLoadTransStatusType::COMMIT:
-                  break;
-                case ObTableLoadTransStatusType::ERROR:
-                  ret = error_code;
-                  LOG_WARN("trans has error", KR(ret));
-                  break;
-                default:
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("unexpected trans status", KR(ret), K(trans_status));
-                  break;
-              }
+          } else if (OB_FAIL(coordinator.get_trans_status(trans_id, trans_status, error_code))) {
+            LOG_WARN("fail to coordinator get status", KR(ret), K(trans_id));
+          } else {
+            switch (trans_status) {
+              case ObTableLoadTransStatusType::FROZEN:
+                try_again = true;
+                break;
+              case ObTableLoadTransStatusType::COMMIT:
+                break;
+              case ObTableLoadTransStatusType::ERROR:
+                ret = error_code;
+                LOG_WARN("trans has error", KR(ret));
+                break;
+              default:
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected trans status", KR(ret), K(trans_status));
+                break;
             }
           }
           if (OB_SUCC(ret)) {
-            if (all_commit) {
+            if (!try_again) {
               break;
             } else {
               ob_usleep(1000 * 1000);

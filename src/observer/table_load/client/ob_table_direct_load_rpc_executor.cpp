@@ -290,22 +290,15 @@ int ObTableDirectLoadBeginExecutor::do_begin()
 {
   int ret = OB_SUCCESS;
   ObTableLoadCoordinator coordinator(table_ctx_);
+  ObTableLoadTransId trans_id;
   if (OB_FAIL(coordinator.init())) {
     LOG_WARN("fail to init coordinator", KR(ret));
   } else if (OB_FAIL(coordinator.begin())) {
     LOG_WARN("fail to coordinator begin", KR(ret));
-  }
-  // start trans
-  for (int64_t i = 1; OB_SUCC(ret) && i <= table_ctx_->param_.session_count_; ++i) {
-    ObTableLoadSegmentID segment_id(i);
-    ObTableLoadTransId trans_id;
-    if (OB_FAIL(coordinator.start_trans(segment_id, trans_id))) {
-      LOG_WARN("fail to start trans", KR(ret), K(i));
-    } else if (OB_FAIL(client_task_->add_trans_id(trans_id))) {
-      LOG_WARN("fail to add trans id", KR(ret), K(trans_id));
-    }
-  }
-  if (OB_SUCC(ret)) {
+  } else if (OB_FAIL(coordinator.start_trans(ObTableLoadSegmentID(1), trans_id))) {
+    LOG_WARN("fail to start trans", KR(ret));
+  } else {
+    client_task_->set_trans_id(trans_id);
     if (OB_FAIL(client_task_->set_status_running())) {
       LOG_WARN("fail to set status running", KR(ret));
     }
@@ -459,15 +452,14 @@ int ObTableDirectLoadInsertExecutor::process()
       LOG_WARN("fail to get table ctx", KR(ret));
     } else {
       ObTableLoadCoordinator coordinator(table_ctx);
-      ObTableLoadTransId trans_id;
-      int64_t batch_id = client_task->get_next_batch_id();
+      const ObTableLoadTransId &trans_id = client_task->get_trans_id();
+      const int64_t batch_id = client_task->get_next_batch_id();
+      const int32_t session_id = batch_id % table_ctx->param_.session_count_ + 1;
       if (OB_FAIL(set_batch_seq_no(batch_id, obj_rows))) {
         LOG_WARN("fail to set batch seq no", KR(ret));
-      } else if (OB_FAIL(client_task->get_next_trans_id(trans_id))) {
-        LOG_WARN("fail to get next trans id", KR(ret));
       } else if (OB_FAIL(coordinator.init())) {
         LOG_WARN("fail to init coordinator", KR(ret));
-      } else if (OB_FAIL(coordinator.write(trans_id, obj_rows))) {
+      } else if (OB_FAIL(coordinator.write(trans_id, session_id, 0 /*seq_no*/, obj_rows))) {
         LOG_WARN("fail to coordinator write", KR(ret));
       }
     }
