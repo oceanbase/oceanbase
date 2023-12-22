@@ -54,7 +54,7 @@ while ($left <= $cnt)
 }
 
 --disable_query_log
-SET GLOBAL max_allowed_packet = 4194304;
+SET GLOBAL max_allowed_packet=16777216;
 connection default;
 disconnect conn_admin;
 connect (conn_admin1, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
