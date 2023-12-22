@@ -3,12 +3,14 @@ typedef struct link_queue_t
   link_t *head_ RK_CACHE_ALIGNED;
   link_t *tail_ RK_CACHE_ALIGNED;
   link_t dummy_ RK_CACHE_ALIGNED;
+  int64_t cnt CACHE_ALIGNED;
 } link_queue_t;
 
 static void link_queue_init(link_queue_t* q)
 {
   q->head_ = &q->dummy_;
   q->tail_ = &q->dummy_;
+  q->cnt = 0;
 }
 
 static link_t* link_queue_do_pop(link_queue_t* q)
@@ -27,6 +29,7 @@ static link_t* link_queue_do_pop(link_queue_t* q)
     }
     STORE(&q->head_, next);
     ret = head;
+    AAF(&q->cnt, -1);
   }
   return ret;
 }
@@ -37,6 +40,7 @@ static void link_queue_push(link_queue_t *q, link_t* p)
   p->next = NULL;
   tail = TAS(&q->tail_, p);
   STORE(&tail->next, p);
+  AAF(&q->cnt, 1);
 }
 
 static link_t* link_queue_pop(link_queue_t *q)

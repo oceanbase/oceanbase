@@ -314,7 +314,7 @@ int ObRpcProxy::AsyncCB<pcodeStruct>::decode(void *pkt)
         if (OB_FAIL(common::ObCompressorPool::get_instance().get_compressor(compressor_type, compressor))) {
           RPC_OBRPC_LOG(WARN, "get_compressor failed", K(ret), K(compressor_type));
         } else if (NULL == (uncompressed_buf =
-                                   static_cast<char *>(common::ob_malloc(original_len, common::ObModIds::OB_RPC)))) {
+                                   static_cast<char *>(ObPocRpcServer::chunk_cache_alloc(original_len)))) {
           ret = common::OB_ALLOCATE_MEMORY_FAILED;
           RPC_OBRPC_LOG(WARN, "Allocate memory failed", K(ret));
         } else if (OB_FAIL(compressor->decompress(buf, len, uncompressed_buf, original_len, dst_data_size))) {
@@ -343,7 +343,7 @@ int ObRpcProxy::AsyncCB<pcodeStruct>::decode(void *pkt)
     }
     // free the uncompress buffer
     if (NULL != uncompressed_buf) {
-      common::ob_free(uncompressed_buf);
+      ObPocRpcServer::chunk_cache_free(uncompressed_buf);
       uncompressed_buf = NULL;
     }
   }

@@ -1139,34 +1139,22 @@ int FetchLogARpc::analyze_result_(RpcRequest &rpc_req,
 ERRSIM_POINT_DEF(ALLOC_FETCH_LOG_ARPC_CB_FAIL);
 rpc::frame::ObReqTransport::AsyncCB *FetchLogARpc::RpcCB::clone(const rpc::frame::SPAlloc &alloc) const
 {
-  void *buf = NULL;
-  RpcCB *cb = NULL;
-  if (OB_SUCCESS != ALLOC_FETCH_LOG_ARPC_CB_FAIL) {
-    LOG_ERROR_RET(ALLOC_FETCH_LOG_ARPC_CB_FAIL, "ALLOC_FETCH_LOG_ARPC_CB_FAIL");
-  } else if (OB_ISNULL(buf = alloc(sizeof(RpcCB)))) {
-    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "clone rpc callback fail", K(buf), K(sizeof(RpcCB)));
-  } else if (OB_ISNULL(cb = new(buf) RpcCB(host_))) {
-    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "construct RpcCB fail", K(buf));
-  } else {
-    // 成功
-  }
-
-  return cb;
+  return static_cast<rpc::frame::ObReqTransport::AsyncCB *>(const_cast<FetchLogARpc::RpcCB*>(this));
 }
 
 int FetchLogARpc::RpcCB::process()
 {
   int ret = OB_SUCCESS;
   ObCdcLSFetchLogResp &result = RpcCBBase::result_;
-  ObRpcResultCode &rcode = RpcCBBase::rcode_;
-  const common::ObAddr &svr = RpcCBBase::dst_;
+  const ObRpcResultCode rcode = RpcCBBase::rcode_;
+  const common::ObAddr svr = RpcCBBase::dst_;
 
   if (OB_FAIL(do_process_(rcode, &result))) {
-    LOG_ERROR("process fetch log callback fail", KR(ret), K(result), K(rcode), K(svr));
+    LOG_ERROR("process fetch log callback fail", KR(ret), K(rcode), K(svr));
   }
   // Aone:
   // Note: Active destructe response after asynchronous RPC processing
-  result.reset();
+  // result.reset();
 
   return ret;
 }
@@ -1175,7 +1163,7 @@ void FetchLogARpc::RpcCB::on_timeout()
 {
   int ret = OB_SUCCESS;
   ObRpcResultCode rcode;
-  const common::ObAddr &svr = RpcCBBase::dst_;
+  const common::ObAddr svr = RpcCBBase::dst_;
 
   rcode.rcode_ = OB_TIMEOUT;
   (void)snprintf(rcode.msg_, sizeof(rcode.msg_), "fetch log rpc timeout, svr=%s",
@@ -1190,7 +1178,7 @@ void FetchLogARpc::RpcCB::on_invalid()
 {
   int ret = OB_SUCCESS;
   ObRpcResultCode rcode;
-  const common::ObAddr &svr = RpcCBBase::dst_;
+  const common::ObAddr svr = RpcCBBase::dst_;
 
   // Invalid package encountered, decode failed
   rcode.rcode_ = OB_RPC_PACKET_INVALID;
@@ -1210,7 +1198,7 @@ int FetchLogARpc::RpcCB::do_process_(const ObRpcResultCode &rcode, const ObCdcLS
   FetchLogARpc &rpc_host = rpc_req.host_;
 
   if (OB_FAIL(rpc_host.handle_rpc_response(rpc_req, rcode, resp))) {
-    LOG_ERROR("set fetch log response fail", KR(ret), K(resp), K(rcode));
+    LOG_ERROR("set fetch log response fail", KR(ret), K(rcode));
   } else {
     // success
   }

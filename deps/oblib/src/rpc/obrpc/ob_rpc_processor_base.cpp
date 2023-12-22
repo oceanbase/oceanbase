@@ -181,7 +181,7 @@ int ObRpcProcessorBase::deserialize()
               compressor))) {
         RPC_OBRPC_LOG(WARN, "get_compressor failed", K(ret), K(compressor_type));
       } else if (NULL == (uncompressed_buf_ =
-            static_cast<char *>(common::ob_malloc(original_len, common::ObModIds::OB_RPC_PROCESSOR)))) {
+            static_cast<char *>(ObPocRpcServer::chunk_cache_alloc(original_len)))) {
         ret = common::OB_ALLOCATE_MEMORY_FAILED;
         RPC_OBRPC_LOG(WARN, "Allocate memory failed", K(original_len), K(compressor_type), K(ret));
       } else if (OB_FAIL(compressor->decompress(ez_buf, len, uncompressed_buf_, original_len, dst_data_size))) {
@@ -446,7 +446,7 @@ int ObRpcProcessorBase::part_response(const int retcode, bool is_last)
       } else {
         using_buffer_ = &data_buf;
         if (need_compressed) {
-          tmp_buf = static_cast<char*>(ob_malloc(content_size, common::ObModIds::OB_RPC_PROCESSOR));
+          tmp_buf = static_cast<char*>(ObPocRpcServer::chunk_cache_alloc(content_size));
           if (NULL != tmp_buf) {
             // If compressed, serialize to another memory first
             if (!using_buffer_->set_data(tmp_buf, content_size)) {
@@ -510,7 +510,7 @@ int ObRpcProcessorBase::part_response(const int retcode, bool is_last)
 
     using_buffer_ = NULL;
     if (NULL != tmp_buf) {
-      common::ob_free(tmp_buf);
+      ObPocRpcServer::chunk_cache_free(tmp_buf);
       tmp_buf = NULL;
     }
   }
@@ -618,7 +618,7 @@ void ObRpcProcessorBase::cleanup()
   }
 
   if (uncompressed_buf_) {
-    common::ob_free(uncompressed_buf_);
+    ObPocRpcServer::chunk_cache_free(uncompressed_buf_);
     uncompressed_buf_ = NULL;
   }
 

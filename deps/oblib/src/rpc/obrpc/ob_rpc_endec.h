@@ -99,7 +99,7 @@ template <typename T>
       } else if (OB_FAIL(compressor->get_max_overflow_size(payload_sz, max_overflow_size))) {
         RPC_OBRPC_LOG(WARN, "get_max_overflow_size failed", K(ret), K(payload_sz), K(max_overflow_size));
       } else if (NULL == (compressed_buf = static_cast<char *>(
-                              common::ob_malloc(payload_sz + max_overflow_size, common::ObModIds::OB_RPC_PROCESSOR)))) {
+                              ObPocRpcServer::chunk_cache_alloc(payload_sz + max_overflow_size)))) {
         ret = common::OB_ALLOCATE_MEMORY_FAILED;
         RPC_OBRPC_LOG(WARN, "Allocate memory failed", K(ret));
       } else if (OB_SUCCESS !=
@@ -118,7 +118,7 @@ template <typename T>
         EVENT_ADD(RPC_COMPRESS_COMPRESSED_SIZE, dst_data_size);
       }
       if (NULL != compressed_buf) {
-        ob_free(compressed_buf);
+        ObPocRpcServer::chunk_cache_free(compressed_buf);
         compressed_buf = NULL;
       }
     }
