@@ -502,11 +502,14 @@ int ObServerTraceMap::get_servers_by_status(
   return ret;
 }
 
-int ObServerTraceMap::get_min_server_version(char min_server_version[OB_SERVER_VERSION_LENGTH])
+int ObServerTraceMap::get_min_server_version(
+    char min_server_version[OB_SERVER_VERSION_LENGTH],
+    uint64_t &min_observer_version)
 {
   int ret = OB_SUCCESS;
   ObZone zone; // empty zone, get all server statuses
   ObArray<ObServerInfoInTable> servers_info;
+  min_observer_version = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("server trace map has not inited", KR(ret));
@@ -539,6 +542,7 @@ int ObServerTraceMap::get_min_server_version(char min_server_version[OB_SERVER_V
           MEMCPY(min_server_version, version, len);
           min_server_version[len] = '\0';
           cur_min_version = version_parser.get_cluster_version();
+          min_observer_version = cur_min_version;
         }
       }
       if (OB_SUCC(ret) && UINT64_MAX == cur_min_version) {
@@ -766,9 +770,11 @@ int ObAllServerTracer::get_servers_by_status(
   return trace_map_.get_servers_by_status(zone, alive_server_list, not_alive_server_list);
 }
 
-int ObAllServerTracer::get_min_server_version(char min_server_version[OB_SERVER_VERSION_LENGTH])
+int ObAllServerTracer::get_min_server_version(
+    char min_server_version[OB_SERVER_VERSION_LENGTH],
+    uint64_t &min_observer_version)
 {
-  return trace_map_.get_min_server_version(min_server_version);
+  return trace_map_.get_min_server_version(min_server_version, min_observer_version);
 }
 
 bool ObAllServerTracer::has_build() const
