@@ -218,7 +218,7 @@ TEST_F(TestDataCheckpoint, dlink_base)
   // for exist
   handle.reset();
   //ASSERT_EQ(OB_SUCCESS, ls->disable_palf(true));
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id, false));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id));
 }
 
 TEST_F(TestDataCheckpoint, ls_freeze)
@@ -279,7 +279,7 @@ TEST_F(TestDataCheckpoint, ls_freeze)
   // for exist
   handle.reset();
   //ASSERT_EQ(OB_SUCCESS, ls->disable_palf(true));
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id, false));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id));
 }
 
 }

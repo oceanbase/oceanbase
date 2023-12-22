@@ -664,7 +664,7 @@ TEST_F(TestLSRestoreHandler, wait_state)
   EXPECT_EQ(ObLSRestoreStatus::Status::WAIT_RESTORE_MAJOR_DATA, ls->ls_meta_.restore_status_);
 
   ObLSService *ls_svr = MTL(ObLSService*);
-  EXPECT_EQ(OB_SUCCESS, ls_svr->remove_ls(ObLSID(100), true));
+  EXPECT_EQ(OB_SUCCESS, ls_svr->remove_ls(ObLSID(100)));
   LOG_INFO("TestLSRestoreHandler::wait_state finish");
 }
 

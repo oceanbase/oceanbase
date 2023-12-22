@@ -307,7 +307,7 @@ TEST_F(TestTrans, basic)
   LOG_INFO("release transaction");
   tx_service->release_tx(*tx_desc);
 
-  //ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id, false));
+  //ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id));
 }
 
 TEST_F(TestTrans, dist_trans)
@@ -444,8 +444,8 @@ TEST_F(TestTrans, remove_ls)
 {
   ObLSID ls_id(100);
   ObLSID ls_id2(101);
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id, false));
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id2, false));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id2));
 }
 
 

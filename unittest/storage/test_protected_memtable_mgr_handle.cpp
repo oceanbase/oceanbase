@@ -99,7 +99,7 @@ TEST_F(TestTabletMemtableMgr, tablet_memtable_mgr) {
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, protected_handle->get_active_memtable(handle));
   ASSERT_EQ(0, pool->count_);
 
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id, false));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id));
 }
 
 

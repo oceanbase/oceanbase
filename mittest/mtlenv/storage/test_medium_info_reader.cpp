@@ -151,7 +151,7 @@ int TestMediumInfoReader::create_ls(const uint64_t tenant_id, const share::ObLSI
 int TestMediumInfoReader::remove_ls(const share::ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
-  ret = MTL(ObLSService*)->remove_ls(ls_id, false);
+  ret = MTL(ObLSService*)->remove_ls(ls_id);
   return ret;
 }
 
