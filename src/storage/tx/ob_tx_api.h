@@ -237,6 +237,22 @@ int get_ls_read_snapshot_version(const share::ObLSID &local_ls_id,
 int get_weak_read_snapshot_version(const int64_t max_read_stale_time,
                                    const bool local_single_ls,
                                    share::SCN &snapshot_version);
+/**
+ * refresh_read_snapshot_tx_state - update snapshot's tx state part
+ *
+ * @snapshot:                       the snapshot to refresh
+ * @tx:                             the target tx descriptor
+ *
+ * this interface try to update snapshot's tx state part by tx descriptor
+ * it was used by conflict checker which need read latest state of current
+ * transaction (while other read only read the data of before current stmt)
+ *
+ * Return:
+ * OB_SUCCESS              - OK
+ * OB_HAS_DECIDED          - transaction has terminated
+ * OB_XXX                  - unexpected error
+ */
+int refresh_read_snapshot_tx_state(ObTxReadSnapshot &snapshot, const ObTxDesc &tx);
 /*
  * release_snapshot - release snapshot
  *
