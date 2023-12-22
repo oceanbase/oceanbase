@@ -4276,6 +4276,7 @@ int ObCreateUserArg::assign(const ObCreateUserArg &other)
   if_not_exist_ = other.if_not_exist_;
   creator_id_ = other.creator_id_;
   primary_zone_ = other.primary_zone_;
+  is_create_role_ = other.is_create_role_;
   if (OB_FAIL(ObDDLArg::assign(other))) {
     LOG_WARN("fail to assign ddl arg", KR(ret));
   } else if (OB_FAIL(user_infos_.assign(other.user_infos_))) {
@@ -4289,7 +4290,8 @@ OB_SERIALIZE_MEMBER((ObCreateUserArg, ObDDLArg),
                     user_infos_,
                     if_not_exist_,
                     creator_id_,
-                    primary_zone_);
+                    primary_zone_,
+                    is_create_role_);
 
 bool ObDropUserArg::is_valid() const
 {
