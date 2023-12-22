@@ -218,56 +218,58 @@ int ObExprCollPred::calc_is_submultiset(const ObObj &obj1,
                                      const ObExprCalcType calc_type,
                                      CollectionPredRes &result)
 {
-  int ret = OB_SUCCESS;
-  result = COLL_PRED_FALSE;
-  if (obj1.get_meta().is_ext() && obj2.get_meta().is_ext()) {
-    pl::ObPLCollection *c1 = reinterpret_cast<pl::ObPLCollection *>(obj1.get_ext());
-    pl::ObPLCollection *c2 = reinterpret_cast<pl::ObPLCollection *>(obj2.get_ext());
-    int64_t c1_cnt = c1->get_actual_count();
-    int64_t c2_cnt = c2->get_actual_count();
-    // 1) return true when:
-    // 1. obj1 is not null and contains no row, return true whatever obj2 is.
-    // for example obj nest_type := nest_type();
-    // 2. obj1 and obj2 not null, obj1 does not contain any null element, obj1 elem one-to-one
-    // mapping to obj2 element.
+  int ret = OB_NOT_SUPPORTED;
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "SUBMULTISET expr is");
+  LOG_WARN("SUBMULTISET expr is not supported");
+  // result = COLL_PRED_FALSE;
+  // if (obj1.get_meta().is_ext() && obj2.get_meta().is_ext()) {
+  //   pl::ObPLCollection *c1 = reinterpret_cast<pl::ObPLCollection *>(obj1.get_ext());
+  //   pl::ObPLCollection *c2 = reinterpret_cast<pl::ObPLCollection *>(obj2.get_ext());
+  //   int64_t c1_cnt = c1->get_actual_count();
+  //   int64_t c2_cnt = c2->get_actual_count();
+  //   // 1) return true when:
+  //   // 1. obj1 is not null and contains no row, return true whatever obj2 is.
+  //   // for example obj nest_type := nest_type();
+  //   // 2. obj1 and obj2 not null, obj1 does not contain any null element, obj1 elem one-to-one
+  //   // mapping to obj2 element.
 
-    // 2) return null when:
-    // 1. obj1 is null
-    // 2. obj2 is null, and obj1 is not null and not empty.
-    // 3. obj1 contain null element, and any non null is element is one-to-one mapping to obj2 elem
-    // for example:  nt1(1,2,3,4,5), nt2(1,2,NULL), nt3(1,7,null); nt2 submultiset of nt1 => null
-    // nt3 submultiset nt1 => false
+  //   // 2) return null when:
+  //   // 1. obj1 is null
+  //   // 2. obj2 is null, and obj1 is not null and not empty.
+  //   // 3. obj1 contain null element, and any non null is element is one-to-one mapping to obj2 elem
+  //   // for example:  nt1(1,2,3,4,5), nt2(1,2,NULL), nt3(1,7,null); nt2 submultiset of nt1 => null
+  //   // nt3 submultiset nt1 => false
 
-    // 3) return false when:
-    // if none of above conditions occur, return false;
-    if (OB_ISNULL(c1) || OB_ISNULL(c2)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("union udt failed due to null udt", K(ret), K(obj1), K(obj2));
-    } else if (pl::PL_NESTED_TABLE_TYPE != c1->get_type()
-              || pl::PL_NESTED_TABLE_TYPE != c2->get_type()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not support udt union except nested table", K(ret), K(c1), K(c2));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "udt union except nested table");
-    } else if ((c1->get_element_type().get_obj_type() != c2->get_element_type().get_obj_type())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("udt union failed due to uninited", K(ret));
-    } else if (0 == c1_cnt && (c1->is_inited())) {
-      result = COLL_PRED_TRUE;
-    } else if (!c1->is_inited()) {
-      result = COLL_PRED_NULL; // null
-    } else if (!c2->is_inited()) {
-      result = COLL_PRED_NULL;
-    } else if (c1_cnt > c2_cnt) {
-      result = COLL_PRED_FALSE;
-    } else if (calc_collection_is_contained_without_null(c1, c2, tz_offset, calc_type, result)) {
-      LOG_WARN("faile to calc multiset without null and delete val", K(ret));
-    } else {
-      // 去除了null和delete数据之后比较，如果是包含关系，但是c1含有null，置结果为null.
-      if (COLL_PRED_TRUE == result && c1->is_contain_null_val()) {
-        result = COLL_PRED_NULL;
-      }
-    }
-  }
+  //   // 3) return false when:
+  //   // if none of above conditions occur, return false;
+  //   if (OB_ISNULL(c1) || OB_ISNULL(c2)) {
+  //     ret = OB_ERR_UNEXPECTED;
+  //     LOG_WARN("union udt failed due to null udt", K(ret), K(obj1), K(obj2));
+  //   } else if (pl::PL_NESTED_TABLE_TYPE != c1->get_type()
+  //             || pl::PL_NESTED_TABLE_TYPE != c2->get_type()) {
+  //     ret = OB_NOT_SUPPORTED;
+  //     LOG_WARN("not support udt union except nested table", K(ret), K(c1), K(c2));
+  //     LOG_USER_ERROR(OB_NOT_SUPPORTED, "udt union except nested table");
+  //   } else if ((c1->get_element_type().get_obj_type() != c2->get_element_type().get_obj_type())) {
+  //     ret = OB_ERR_UNEXPECTED;
+  //     LOG_WARN("udt union failed due to uninited", K(ret));
+  //   } else if (0 == c1_cnt && (c1->is_inited())) {
+  //     result = COLL_PRED_TRUE;
+  //   } else if (!c1->is_inited()) {
+  //     result = COLL_PRED_NULL; // null
+  //   } else if (!c2->is_inited()) {
+  //     result = COLL_PRED_NULL;
+  //   } else if (c1_cnt > c2_cnt) {
+  //     result = COLL_PRED_FALSE;
+  //   } else if (calc_collection_is_contained_without_null(c1, c2, tz_offset, calc_type, result)) {
+  //     LOG_WARN("faile to calc multiset without null and delete val", K(ret));
+  //   } else {
+  //     // 去除了null和delete数据之后比较，如果是包含关系，但是c1含有null，置结果为null.
+  //     if (COLL_PRED_TRUE == result && c1->is_contain_null_val()) {
+  //       result = COLL_PRED_NULL;
+  //     }
+  //   }
+  // }
   return ret;
 }
 
@@ -405,36 +407,42 @@ int ObExprCollPred::eval_coll_pred(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
         if (obj2.get_meta().is_ext()) {
           pl::ObPLCollection *c2 = reinterpret_cast<pl::ObPLCollection *>(obj2.get_ext());
           if (OB_NOT_NULL(c2) && 0 < c2->get_actual_count()) {
-            ObObj *elem = static_cast<ObObj*>(c2->get_data());
-            ObObj mem_cast;
-            const ObObj * res_obj1 = &obj1;
-            ObCollationType cast_coll_type = elem->get_collation_type();
-            ObCastMode cp_cast_mode;
-            if (OB_FAIL(ObSQLUtils::get_default_cast_mode(ctx.exec_ctx_.get_my_session(),
-                                                          cp_cast_mode))) {
-              LOG_WARN("failed to get default cast mode", K(ret));
-            }
-            const ObDataTypeCastParams dtc_params 
-                   = ObBasicSessionInfo::create_dtc_params(ctx.exec_ctx_.get_my_session());
-            ObCastCtx cast_ctx(&ctx.exec_ctx_.get_allocator(),
-                               &dtc_params,
-                               get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()),
-                               cp_cast_mode,
-                               cast_coll_type,
-                               nullptr);
-            if (OB_FAIL(ret)) {
-            } else if (OB_FAIL(ObObjCaster::to_type(elem->get_type(), cast_ctx,
-                                                    obj1, mem_cast, res_obj1))) {
-              LOG_WARN("failed to cast member to collection elem type", K(ret));
+            if (c2->is_of_composite()) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "MEMBER OF for collections of composite types is");
+              LOG_WARN("MEMBER OF for collections of composite types is not supported", K(c2->get_element_type()));
             } else {
-              LocalNTSHashMap dmap_c;
-              int64_t res_cnt = 0;
-              FILL_HASH_MAP(dmap_c, c2, res_cnt);
-              if (OB_SUCC(ret)) {
-                if (OB_NOT_NULL(dmap_c.get(*res_obj1)) ^ (MULTISET_MODIFIER_NOT == info->ms_modifier_)) {
-                  result.set_tinyint(1);
-                } else {
-                  result.set_tinyint(0);
+              ObObj *elem = static_cast<ObObj*>(c2->get_data());
+              ObObj mem_cast;
+              const ObObj * res_obj1 = &obj1;
+              ObCollationType cast_coll_type = elem->get_collation_type();
+              ObCastMode cp_cast_mode;
+              if (OB_FAIL(ObSQLUtils::get_default_cast_mode(ctx.exec_ctx_.get_my_session(),
+                                                            cp_cast_mode))) {
+                LOG_WARN("failed to get default cast mode", K(ret));
+              }
+              const ObDataTypeCastParams dtc_params
+                    = ObBasicSessionInfo::create_dtc_params(ctx.exec_ctx_.get_my_session());
+              ObCastCtx cast_ctx(&ctx.exec_ctx_.get_allocator(),
+                                &dtc_params,
+                                get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()),
+                                cp_cast_mode,
+                                cast_coll_type,
+                                nullptr);
+              if (OB_FAIL(ret)) {
+              } else if (OB_FAIL(ObObjCaster::to_type(elem->get_type(), cast_ctx,
+                                                      obj1, mem_cast, res_obj1))) {
+                LOG_WARN("failed to cast member to collection elem type", K(ret));
+              } else {
+                LocalNTSHashMap dmap_c;
+                int64_t res_cnt = 0;
+                FILL_HASH_MAP(dmap_c, c2, res_cnt);
+                if (OB_SUCC(ret)) {
+                  if (OB_NOT_NULL(dmap_c.get(*res_obj1)) ^ (MULTISET_MODIFIER_NOT == info->ms_modifier_)) {
+                    result.set_tinyint(1);
+                  } else {
+                    result.set_tinyint(0);
+                  }
                 }
               }
             }
@@ -446,21 +454,27 @@ int ObExprCollPred::eval_coll_pred(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
         if (obj1.get_meta().is_ext()) {
           pl::ObPLCollection *c1 = reinterpret_cast<pl::ObPLCollection *>(obj1.get_ext());
           if (OB_NOT_NULL(c1)) {
-            LocalNTSHashMap dmap_c;
-            int64_t count = c1->get_actual_count();
-            int res_cnt = 0;
-            if (0 == count) {
-              // empty nest table is a set
-              result.set_tinyint(1);
-            } else if (!c1->is_inited()) {
-              result.set_null();
+            if (c1->is_of_composite()) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "IS A SET for collections of composite types is");
+              LOG_WARN("IS A SET for collections of composite types is not supported", K(c1->get_element_type()));
             } else {
-              FILL_HASH_MAP(dmap_c, c1, res_cnt);
-              if (OB_SUCC(ret)) {
-                if ((count == res_cnt) ^ (MULTISET_MODIFIER_NOT == info->ms_modifier_)) {
-                  result.set_tinyint(1);
-                } else {
-                  result.set_tinyint(0);
+              LocalNTSHashMap dmap_c;
+              int64_t count = c1->get_actual_count();
+              int res_cnt = 0;
+              if (0 == count) {
+                // empty nest table is a set
+                result.set_tinyint(1);
+              } else if (!c1->is_inited()) {
+                result.set_null();
+              } else {
+                FILL_HASH_MAP(dmap_c, c1, res_cnt);
+                if (OB_SUCC(ret)) {
+                  if ((count == res_cnt) ^ (MULTISET_MODIFIER_NOT == info->ms_modifier_)) {
+                    result.set_tinyint(1);
+                  } else {
+                    result.set_tinyint(0);
+                  }
                 }
               }
             }

@@ -2889,6 +2889,12 @@ int ObRelationalExprOperator::pl_udt_compare2(CollectionPredRes &cmp_result,
   } else if (c1->get_element_type().get_obj_type() != c2->get_element_type().get_obj_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("not support udt compare with different elem type", K(ret), K(c1), K(c2));
+  } else if (c1->is_of_composite()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "comparison of composite types is");
+    LOG_WARN("comparison of composite types is not supported",
+              K(c1->get_element_type()),
+              K(c2->get_element_type()));
   } else if (!c1->is_inited() || !c2->is_inited()) {
     cmp_result = CollectionPredRes::COLL_PRED_NULL;
   } else if ((c1->get_actual_count() != c2->get_actual_count())) {
