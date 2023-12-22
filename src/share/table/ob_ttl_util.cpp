@@ -831,10 +831,10 @@ int ObTableTTLChecker::init(const schema::ObTableSchema &table_schema, bool in_f
         left = left.trim();
         // example: "INTERVAL 40 MINUTE"
         left += strlen("INTERVAL");
-        // example: "40  MINUTE"
         left = left.trim();
+        // example: "40  MINUTE"
         ObString interval_str = left.split_on(' ');
-        ObString time_unit_str = left;
+        ObString time_unit_str = left.trim();
 
         ttl_expr.column_name_ = column_str;
         ttl_expr.interval_ = atol(interval_str.ptr());
@@ -858,36 +858,37 @@ int ObTableTTLChecker::init(const schema::ObTableSchema &table_schema, bool in_f
         // 2. get delta second and month
         int64_t nsecond = 0;
         int64_t nmonth = 0;
-        switch (ttl_expr.time_unit_) {
-          case ObTableTTLTimeUnit::SECOND: {
-            nsecond = ttl_expr.interval_;
-            break;
+        if (OB_SUCC(ret)) {
+          switch (ttl_expr.time_unit_) {
+            case ObTableTTLTimeUnit::SECOND: {
+              nsecond = ttl_expr.interval_;
+              break;
+            }
+            case ObTableTTLTimeUnit::MINUTE: {
+              nsecond = ttl_expr.interval_ * 60;
+              break;
+            }
+            case ObTableTTLTimeUnit::HOUR: {
+              nsecond = ttl_expr.interval_ * 60 * 60;
+              break;
+            }
+            case ObTableTTLTimeUnit::DAY: {
+              nsecond = ttl_expr.interval_ * 60 * 60 * 24;
+              break;
+            }
+            case ObTableTTLTimeUnit::MONTH: {
+              nmonth = ttl_expr.interval_;
+              break;
+            }
+            case ObTableTTLTimeUnit::YEAR: {
+              nmonth = ttl_expr.interval_ * 12;
+              break;
+            }
+            default:
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected time unit", K(ret), K_(ttl_expr.time_unit));
           }
-          case ObTableTTLTimeUnit::MINUTE: {
-            nsecond = ttl_expr.interval_ * 60;
-            break;
-          }
-          case ObTableTTLTimeUnit::HOUR: {
-            nsecond = ttl_expr.interval_ * 60 * 60;
-            break;
-          }
-          case ObTableTTLTimeUnit::DAY: {
-            nsecond = ttl_expr.interval_ * 60 * 60 * 24;
-            break;
-          }
-          case ObTableTTLTimeUnit::MONTH: {
-            nmonth = ttl_expr.interval_;
-            break;
-          }
-          case ObTableTTLTimeUnit::YEAR: {
-            nmonth = ttl_expr.interval_ * 12;
-            break;
-          }
-          default:
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected time unit", K(ret), K_(ttl_expr.time_unit));
         }
-
 
         if (OB_SUCC(ret)) {
           ttl_expr.nsecond_ = nsecond;
