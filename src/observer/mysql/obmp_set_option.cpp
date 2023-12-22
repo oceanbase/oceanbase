@@ -93,8 +93,8 @@ int ObMPSetOption::process()
 
     if (!is_changed) {
       // do nothing
-    } else if (OB_FAIL(session->set_proxy_capability(flag.capability_))) {
-      LOG_WARN("failed to set cap", K(ret), K(flag.capability_));
+    } else {
+      session->set_capability(flag);
     }
   }
 
