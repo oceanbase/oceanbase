@@ -85,60 +85,56 @@ int Ob20ProtocolProcessor::do_decode(ObSMConnection& conn, ObICSMemPool& pool, c
     header20.cp_hdr_.comp_seq_ = pktseq;
     header20.cp_hdr_.uncomp_len = pktlen_before_compress;
 
-    // 2. decode proto2.0 header
-    ObMySQLUtil::get_uint2(start, header20.magic_num_);
-    ObMySQLUtil::get_uint2(start, header20.version_);
-    ObMySQLUtil::get_uint4(start, header20.connection_id_);
-    ObMySQLUtil::get_uint3(start, header20.request_id_);
-    ObMySQLUtil::get_uint1(start, header20.pkt_seq_);
-    ObMySQLUtil::get_uint4(start, header20.payload_len_);
-    ObMySQLUtil::get_uint4(start, header20.flag_.flags_);
-    ObMySQLUtil::get_uint2(start, header20.reserved_);
-    ObMySQLUtil::get_uint2(start, header20.header_checksum_);
-
-    LOG_DEBUG("decode proto20 header succ", K(header20));
-    // 3. crc16 for header checksum
-    if (OB_FAIL(do_header_checksum(origin_start, header20))) {
-      LOG_ERROR("fail to do header checksum", K(header20), K(ret));
-    } else if (OB_UNLIKELY(OB20_PROTOCOL_MAGIC_NUM != header20.magic_num_)) {
-      ret = OB_UNKNOWN_PACKET;
-      LOG_ERROR("invalid magic num", K(OB20_PROTOCOL_MAGIC_NUM),
-                K(header20.magic_num_), K(sessid), K(ret));
-    } else if (OB_UNLIKELY(sessid != header20.connection_id_)) {
-      ret = OB_UNKNOWN_CONNECTION;
-      LOG_ERROR("connection id mismatch", K(sessid), K_(header20.connection_id), K(ret));
-    } else if (0 != pktlen_before_compress) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("pktlen_before_compress must be 0 here", K(pktlen_before_compress),
-                K(sessid), K(ret));
-    } else if (OB_UNLIKELY(OB20_PROTOCOL_VERSION_VALUE != header20.version_)) {
-      ret = OB_UNKNOWN_PACKET;
-      LOG_ERROR("invalid version", K(OB20_PROTOCOL_VERSION_VALUE),
-                K(header20.version_), K(sessid), K(ret));
-    } else if (OB_UNLIKELY(pktlen !=
-                           (header20.payload_len_ + OB20_PROTOCOL_HEADER_LENGTH + OB20_PROTOCOL_TAILER_LENGTH))) {
-      // must only contain one ob20 packet
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("invalid pktlen len", K(pktlen), K(header20.payload_len_), K(sessid),
-                K(OB20_PROTOCOL_HEADER_LENGTH), K(OB20_PROTOCOL_TAILER_LENGTH), K(ret));
-    } else {
-      // received packet length, include tailer, but exclude packet header
+    conn.proto20_pkt_context_.is_comp_packet_ = conn.proxy_cap_flags_.is_ob_protocol_v2_compress();
+    if (conn.proto20_pkt_context_.is_comp_packet_) {
+      // do decompress
+      // received packet length, exclude packet header
       uint32_t rpktlen = static_cast<uint32_t>(end - start);
-
-      // one packet was not received complete
-      if ((header20.payload_len_ + OB20_PROTOCOL_TAILER_LENGTH) > rpktlen) {
-        int64_t delta_len = header20.payload_len_ + OB20_PROTOCOL_TAILER_LENGTH - rpktlen;
+      if (0 == pktlen) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_ERROR("invalid arugment", K(sessid), K(pktlen), K(pktlen_before_compress), K(ret));
+      } else if (pktlen > rpktlen) { // one packet was not received complete
+        int64_t delta_len = pktlen - rpktlen;
         // valid packet, but not sufficient data received by easy, tell easy read more.
         // go backward with MySQL packet header length
         start -= header_size;
         next_read_bytes = delta_len;
-        // if received at least packet completed, do payload checksum
-        // delat_len == 0, recevied one packet complete
-        // delta_len < 0, received more than one packet
-      } else if (OB_FAIL(do_body_checksum(start, header20))) {
-        LOG_ERROR("fail to do body checksum", K(header20), K(sessid), K(ret));
-      } else if (OB_FAIL(decode_ob20_body(pool, start, header20, pkt))) {
-        LOG_ERROR("fail to decode_compressed_body", K(sessid), K(header20), K(ret));
+        // Attention!! when arrive here, all mysql compress protocols are in command phase
+      } else if (OB_FAIL(decode_compressed_body(pool, start, pktlen, pktseq, pktlen_before_compress, pkt))) {
+        LOG_ERROR("fail to decode_compressed_body", K(sessid), K(pktseq), K(ret));
+      }
+    } else {
+      if (OB_FAIL(decode_ob20_header(origin_start, start, end, header20, sessid, true))) {
+        LOG_ERROR("invalid 20 protocol header", K(header20), K(sessid), K(ret));
+      } else if (0 != pktlen_before_compress) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("pktlen_before_compress must be 0 here",
+            K(pktlen_before_compress), K(sessid), K(ret));
+      } else if (OB_UNLIKELY(pktlen !=
+                             (header20.payload_len_ + OB20_PROTOCOL_HEADER_LENGTH + OB20_PROTOCOL_TAILER_LENGTH))) {
+        // must only contain one ob20 packet
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("invalid pktlen len", K(pktlen), K(header20.payload_len_), K(sessid),
+                  K(OB20_PROTOCOL_HEADER_LENGTH), K(OB20_PROTOCOL_TAILER_LENGTH), K(ret));
+      } else {
+        // received packet length, include tailer, but exclude packet header
+        uint32_t rpktlen = static_cast<uint32_t>(end - start);
+
+        // one packet was not received complete
+        if ((header20.payload_len_ + OB20_PROTOCOL_TAILER_LENGTH) > rpktlen) {
+          int64_t delta_len = header20.payload_len_ + OB20_PROTOCOL_TAILER_LENGTH - rpktlen;
+          // valid packet, but not sufficient data received by easy, tell easy read more.
+          // go backward with MySQL packet header length
+          start -= header_size;
+          next_read_bytes = delta_len;
+          // if received at least packet completed, do payload checksum
+          // delat_len == 0, recevied one packet complete
+          // delta_len < 0, received more than one packet
+        } else if (OB_FAIL(do_body_checksum(start, header20))) {
+          LOG_ERROR("fail to do body checksum", K(header20), K(sessid), K(ret));
+        } else if (OB_FAIL(decode_ob20_body(pool, start, header20, pkt))) {
+          LOG_ERROR("fail to decode_compressed_body", K(sessid), K(header20), K(ret));
+        }
       }
     }
   } else {
@@ -149,7 +145,8 @@ int Ob20ProtocolProcessor::do_decode(ObSMConnection& conn, ObICSMemPool& pool, c
   return ret;
 }
 
-inline int Ob20ProtocolProcessor::do_header_checksum(const char *origin_start, const Ob20ProtocolHeader &hdr) {
+inline int Ob20ProtocolProcessor::do_header_checksum(const char *origin_start,
+    const Ob20ProtocolHeader &hdr, bool need_check_compress) {
   INIT_SUCC(ret);
   if (OB_ISNULL(origin_start)) {
     ret = OB_INVALID_ARGUMENT;
@@ -159,7 +156,7 @@ inline int Ob20ProtocolProcessor::do_header_checksum(const char *origin_start, c
   } else {
     const char *header_start = origin_start;
     // mysql compress header len + proto20 header(except 2 byte checksum)
-    int64_t check_len = OB20_PROTOCOL_HEADER_LENGTH - 2 + OB_MYSQL_COMPRESSED_HEADER_SIZE;
+    int64_t check_len = OB20_PROTOCOL_HEADER_LENGTH - 2 + (need_check_compress ? OB_MYSQL_COMPRESSED_HEADER_SIZE : 0);
 
     // 3. crc16 for header checksum
     uint16_t local_header_checksum = 0;
@@ -194,6 +191,50 @@ inline int Ob20ProtocolProcessor::do_body_checksum(const char* buf, const Ob20Pr
     }
   }
 
+  return ret;
+}
+
+inline int Ob20ProtocolProcessor::decode_ob20_header(const char*& origin_start, const char*& start, const char* end,
+                              Ob20ProtocolHeader &header20, uint32_t sessid, bool need_check_compress)
+{
+  int ret = OB_SUCCESS;
+
+  const int64_t header_size = OB20_PROTOCOL_HEADER_LENGTH;
+  if ((end - start) >= header_size) {
+    char* origin = NULL;
+    if (need_check_compress) {
+      origin = const_cast<char *>(origin_start);
+    } else {
+      origin = const_cast<char *>(start);
+    }
+    ObMySQLUtil::get_uint2(start, header20.magic_num_);
+    ObMySQLUtil::get_uint2(start, header20.version_);
+    ObMySQLUtil::get_uint4(start, header20.connection_id_);
+    ObMySQLUtil::get_uint3(start, header20.request_id_);
+    ObMySQLUtil::get_uint1(start, header20.pkt_seq_);
+    ObMySQLUtil::get_uint4(start, header20.payload_len_);
+    ObMySQLUtil::get_uint4(start, header20.flag_.flags_);
+    ObMySQLUtil::get_uint2(start, header20.reserved_);
+    ObMySQLUtil::get_uint2(start, header20.header_checksum_);
+
+    LOG_DEBUG("decode proto20 header succ", K(header20));
+    // 3. crc16 for header checksum
+    if (OB_FAIL(do_header_checksum((const char*)origin, header20, need_check_compress))) {
+      LOG_ERROR("fail to do header checksum", K(header20), K(ret));
+    } else if (OB_UNLIKELY(OB20_PROTOCOL_MAGIC_NUM != header20.magic_num_)) {
+      ret = OB_UNKNOWN_PACKET;
+      LOG_ERROR("invalid magic num", K(OB20_PROTOCOL_MAGIC_NUM),
+                K(header20.magic_num_), K(sessid), K(ret));
+    } else if (OB_UNLIKELY(sessid != header20.connection_id_)) {
+      ret = OB_UNKNOWN_CONNECTION;
+      LOG_ERROR("connection id mismatch", K(sessid), K_(header20.connection_id), K(ret));
+
+    } else if (OB_UNLIKELY(OB20_PROTOCOL_VERSION_VALUE != header20.version_)) {
+      ret = OB_UNKNOWN_PACKET;
+      LOG_ERROR("invalid version", K(OB20_PROTOCOL_VERSION_VALUE),
+                K(header20.version_), K(sessid), K(ret));
+    }
+  }
   return ret;
 }
 
@@ -355,9 +396,18 @@ int Ob20ProtocolProcessor::decode_new_extra_info(const Ob20ProtocolHeader &hdr,
 int Ob20ProtocolProcessor::do_splice(ObSMConnection& conn, ObICSMemPool& pool, void*& pkt, bool& need_decode_more)
 {
   INIT_SUCC(ret);
-  if (OB_FAIL(process_ob20_packet(conn.proto20_pkt_context_, conn.mysql_pkt_context_,
-                                    conn.pkt_rec_wrapper_, pool, pkt, need_decode_more))) {
-    LOG_ERROR("fail to process_ob20_packet", K(ret));
+  if (conn.proto20_pkt_context_.is_comp_packet_) {
+    // do nothing
+    if (OB_FAIL(process_compressed_ob20_packet(conn.sessid_,
+                conn.proto20_pkt_context_, conn.mysql_pkt_context_,
+                conn.pkt_rec_wrapper_, pool, pkt, need_decode_more))) {
+      LOG_ERROR("fail to process_compressed_ob20_packet", K(ret));
+    }
+  } else {
+    if (OB_FAIL(process_ob20_packet(conn.proto20_pkt_context_, conn.mysql_pkt_context_,
+                                      conn.pkt_rec_wrapper_, pool, pkt, need_decode_more))) {
+      LOG_ERROR("fail to process_ob20_packet", K(ret));
+    }
   }
   return ret;
 }
@@ -422,45 +472,175 @@ inline int Ob20ProtocolProcessor::process_ob20_packet(ObProto20PktContext& conte
 
     if (OB_FAIL(ret)) {
       // do nothing
-    } else {
-      context.comp_last_pkt_seq_ = pkt20->get_comp_seq();
-      context.proto20_last_pkt_seq_ = pkt20->get_seq(); // remember the request proto20 seq
-      context.proto20_last_request_id_ = pkt20->get_request_id(); // remember the request id
-      if (need_decode_more) {
-        context.is_multi_pkt_ = true;
-      } else {
-        // If a MySQL package is split into multiple 2.0 protocol packages,
-        // Only after all the sub-packages have been received and the group package is completed, ipacket is set as a complete MySQL package
-        // Only then can we set the flag of re-routing
-        // If a request is divided into multiple MySQL packages, each MySQL package will also set the re-routing flag
-        ObMySQLRawPacket *input_packet = reinterpret_cast<ObMySQLRawPacket *>(ipacket);
-        input_packet->set_can_reroute_pkt(pkt20->get_flags().is_proxy_reroute());
-        input_packet->set_is_weak_read(pkt20->get_flags().is_weak_read());
-        // need test proxy_switch_route flag.
-        input_packet->set_proxy_switch_route(pkt20->get_flags().proxy_switch_route());
-        const int64_t t_len = context.extra_info_.get_total_len();
-        char *t_buffer = NULL;
-        if (OB_ISNULL(t_buffer = reinterpret_cast<char *>(pool.alloc(t_len)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_ERROR("no memory available", "alloc_size", t_len, K(ret));
-        } else if (OB_FAIL(input_packet->extra_info_.assign(context.extra_info_, t_buffer, t_len))) {
-          LOG_ERROR("failed to assign extra info", K(ret));
-        }
+    } else if (OB_FAIL(after_process_mysql_packet(pool, context, pkt_rec_wrapper, ipacket, need_decode_more, pkt20))) {
+      LOG_ERROR("failed to do after process mysql packet");
+    }
+  }
+  return ret;
+}
 
-        input_packet->set_txn_free_route(pkt20->get_flags().txn_free_route());
-        context.reset();
-        // set again for sending response
-        context.proto20_last_pkt_seq_ = pkt20->get_seq();
-        context.proto20_last_request_id_ = pkt20->get_request_id();
-        if (pkt_rec_wrapper.enable_proto_dia()) {
-          pkt_rec_wrapper.record_recieve_obp20_packet(*pkt20, *input_packet);
+inline int Ob20ProtocolProcessor::after_process_mysql_packet(
+              ObICSMemPool& pool, ObProto20PktContext& context,
+              obmysql::ObPacketRecordWrapper &pkt_rec_wrapper,
+              void *&ipacket, bool &need_decode_more, Ob20Packet *pkt20)
+{
+  int ret = OB_SUCCESS;
+  context.comp_last_pkt_seq_ = pkt20->get_comp_seq();
+  context.proto20_last_pkt_seq_ = pkt20->get_seq(); // remember the request proto20 seq
+  context.proto20_last_request_id_ = pkt20->get_request_id(); // remember the request id
+  if (need_decode_more) {
+    context.is_multi_pkt_ = true;
+  } else {
+    // If a MySQL package is split into multiple 2.0 protocol packages,
+    // Only after all the sub-packages have been received and the group package is completed, ipacket is set as a complete MySQL package
+    // Only then can we set the flag of re-routing
+    // If a request is divided into multiple MySQL packages, each MySQL package will also set the re-routing flag
+    ObMySQLRawPacket *input_packet = reinterpret_cast<ObMySQLRawPacket *>(ipacket);
+    input_packet->set_can_reroute_pkt(pkt20->get_flags().is_proxy_reroute());
+    input_packet->set_is_weak_read(pkt20->get_flags().is_weak_read());
+    // need test proxy_switch_route flag.
+    input_packet->set_proxy_switch_route(pkt20->get_flags().proxy_switch_route());
+    const int64_t t_len = context.extra_info_.get_total_len();
+    char *t_buffer = NULL;
+    if (OB_ISNULL(t_buffer = reinterpret_cast<char *>(pool.alloc(t_len)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("no memory available", "alloc_size", t_len, K(ret));
+    } else if (OB_FAIL(input_packet->extra_info_.assign(context.extra_info_, t_buffer, t_len))) {
+      LOG_ERROR("failed to assign extra info", K(ret));
+    }
+
+    input_packet->set_txn_free_route(pkt20->get_flags().txn_free_route());
+    context.reset();
+    // set again for sending response
+    context.proto20_last_pkt_seq_ = pkt20->get_seq();
+    context.proto20_last_request_id_ = pkt20->get_request_id();
+    if (pkt_rec_wrapper.enable_proto_dia()) {
+      pkt_rec_wrapper.record_recieve_obp20_packet(*pkt20, *input_packet);
+    }
+  }
+  return ret;
+}
+
+inline int Ob20ProtocolProcessor::decode_compressed_packet(
+    const char *comp_buf, const uint32_t comp_pktlen,
+    const uint32_t pktlen_before_compress, char *&pkt_body,
+    const uint32_t pkt_body_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(comp_buf) || OB_ISNULL(pkt_body)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid arguement", KP(comp_buf),KP(pkt_body), K(ret));
+  } else if ((0 == pktlen_before_compress && OB_UNLIKELY(comp_pktlen != pkt_body_size))
+             || (0 != pktlen_before_compress && OB_UNLIKELY(pktlen_before_compress != pkt_body_size))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("pkt_body_size is unexpected", K(pktlen_before_compress), K(comp_pktlen),
+              K(pkt_body_size), K(ret));
+  } else {
+    // pktlen_before_compress==0 means do not use compress
+    if (0 == pktlen_before_compress) {
+      pkt_body = const_cast<char *>(comp_buf);
+    } else {
+      ObZlibCompressor compressor;
+      int64_t decompress_data_len = 0;
+      if (OB_FAIL(compressor.decompress(comp_buf, comp_pktlen, pkt_body,
+                                        pktlen_before_compress, decompress_data_len))) {
+        LOG_ERROR("failed to decompress packet", K(ret));
+      } else if (OB_UNLIKELY(pktlen_before_compress != decompress_data_len)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("failed to decompress packet", K(pktlen_before_compress),
+                   K(decompress_data_len), K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+inline int Ob20ProtocolProcessor::process_compressed_ob20_packet(uint32_t sessid,
+    ObProto20PktContext& context, ObMysqlPktContext &mysql_pkt_context,
+    obmysql::ObPacketRecordWrapper &pkt_rec_wrapper, ObICSMemPool& pool,
+    void *&ipacket, bool &need_decode_more)
+{
+  int ret = OB_SUCCESS;
+  need_decode_more = true;
+  ObMySQLCompressedPacket *iraw_pkt = NULL;
+  if (OB_ISNULL(iraw_pkt = reinterpret_cast<ObMySQLCompressedPacket*>(ipacket))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ipacket is null", K(ret));
+  } else if (context.is_multi_pkt_
+      && OB_UNLIKELY(iraw_pkt->get_comp_seq() != static_cast<uint8_t>(context.comp_last_pkt_seq_  + 1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("comp seq is unexpected", "last_seq", context.comp_last_pkt_seq_,
+              "comp_seq", iraw_pkt->get_comp_seq(), K(ret));
+  } else {
+    char *decompress_data_buf = NULL;
+    uint32_t decompress_data_size = (0 == iraw_pkt->get_uncomp_len()
+                                     ? iraw_pkt->get_comp_len()
+                                     : iraw_pkt->get_uncomp_len());
+    int64_t alloc_size = static_cast<int64_t>(decompress_data_size);
+    if (pkt_rec_wrapper.enable_proto_dia()) {
+      pkt_rec_wrapper.record_recieve_mysql_pkt_fragment(iraw_pkt->get_comp_len());
+    }
+    //in order to reuse optimize memory, we put decompressed data into raw_pkt directly
+    char *tmp_buffer = NULL;
+    if (OB_ISNULL(tmp_buffer = reinterpret_cast<char *>(pool.alloc(alloc_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("no memory available", K(alloc_size), K(ret));
+    } else {
+      decompress_data_buf = tmp_buffer;
+      Ob20ProtocolHeader header20;
+      header20.cp_hdr_.comp_len_ = iraw_pkt->get_comp_len();
+      header20.cp_hdr_.comp_seq_ = iraw_pkt->get_comp_seq();
+      header20.cp_hdr_.uncomp_len = iraw_pkt->get_uncomp_len();
+      if (OB_FAIL(decode_compressed_packet(iraw_pkt->get_cdata(), iraw_pkt->get_comp_len(),
+                                           iraw_pkt->get_uncomp_len(), decompress_data_buf,
+                                           decompress_data_size))) {
+        LOG_ERROR("fail to decode_compressed_packet", K(ret));
+      } else {
+        const char* start = decompress_data_buf;
+        // compressed 20 proto skip compress head
+        if (OB_FAIL(decode_ob20_header(start, start,
+                  start + decompress_data_size, header20, sessid, false))) {
+          LOG_ERROR("invalid 20 protocol header", K(header20), K(sessid), K(ret));
+        } else if (OB_FAIL(do_body_checksum(start, header20))) {
+          LOG_ERROR("fail to do body checksum", K(header20), K(sessid), K(ret));
+        } else if (OB_FAIL(decode_ob20_body(pool, start, header20, (rpc::ObPacket*&)ipacket))) {
+          LOG_ERROR("fail to decode_compressed_body", K(sessid), K(header20), K(ret));
+        } else if (OB_FAIL(process_ob20_packet(context, mysql_pkt_context, pkt_rec_wrapper,
+                pool, ipacket, need_decode_more))) {
+          LOG_ERROR("fail to process fragment mysql packet", KP(start),
+                    K(decompress_data_size), K(need_decode_more), K(ret));
+        } else {
+          // do nothing
         }
       }
     }
   }
-
   return ret;
 }
 
+inline int Ob20ProtocolProcessor::decode_compressed_body(ObICSMemPool& pool, const char*& buf,
+    const uint32_t comp_pktlen, const uint8_t comp_pktseq, const uint32_t pktlen_before_compress,
+    rpc::ObPacket *&pkt)
+{
+  INIT_SUCC(ret);
+  const char *pkt_body = buf;
+  buf += comp_pktlen;
+
+  ObMySQLCompressedPacket *cmdpkt = NULL;
+  if (OB_ISNULL(pkt_body)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("easy callback message null pointer", KP(pkt_body), K(ret));
+  } else if (OB_ISNULL(cmdpkt =
+                       reinterpret_cast<ObMySQLCompressedPacket*>(pool.alloc(sizeof(ObMySQLCompressedPacket))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("no memory available, close connection", "alloc_size", sizeof(ObMySQLCompressedPacket), K(ret));
+  } else {
+    cmdpkt = new (cmdpkt) ObMySQLCompressedPacket();
+    cmdpkt->set_content(pkt_body, comp_pktlen, comp_pktseq, pktlen_before_compress);
+    pkt = cmdpkt;
+    LOG_DEBUG("decompresse packet succ", KPC(cmdpkt));
+  }
+  return ret;
+}
 } // end of namespace obmysql
 } // end of namespace oceanbase

@@ -143,6 +143,7 @@ public:
   {
     comp_last_pkt_seq_ = 0;
     is_multi_pkt_ = false;
+    is_comp_packet_ = false;
     proto20_last_request_id_ = 0;
     proto20_last_pkt_seq_ = 0;
     extra_info_.reset();
@@ -154,6 +155,7 @@ public:
                K_(proto20_last_request_id),
                K_(proto20_last_pkt_seq),
                K_(extra_info),
+               K_(is_comp_packet),
                "used", arena_.used(),
                "total", arena_.total());
 
@@ -164,6 +166,7 @@ public:
   uint8_t proto20_last_pkt_seq_;
   Ob20ExtraInfo extra_info_;
   common::ObArenaAllocator arena_;
+  bool is_comp_packet_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObProto20PktContext);
@@ -275,7 +278,7 @@ public:
   {
     int64_t pos = 0;
     J_OBJ_START();
-    J_KV(K_(sessid), K_(type), K_(is_checksum_off), K_(seq), KP_(last_pkt_pos));
+    J_KV(K_(sessid), K_(type), K_(is_checksum_off), K_(seq), KP_(last_pkt_pos), K_(comp_level));
     J_COMMA();
     if (NULL != send_buf_) {
       J_KV("send_buf", ObEasyBuffer(*send_buf_));
@@ -294,6 +297,7 @@ public:
   char *last_pkt_pos_;//proxy last pkt(error+ok, eof+ok, ok)'s pos in orig_ezbuf, default is null
   uint32_t sessid_;
   observer::ObSMConnection *conn_;
+  int64_t comp_level_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCompressionContext);

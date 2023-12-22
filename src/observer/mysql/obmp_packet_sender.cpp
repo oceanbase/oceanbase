@@ -157,13 +157,15 @@ int ObMPPacketSender::do_init(rpc::ObRequest *req,
 
     // init proto20 context
     bool is_proto20_supported = (OB_2_0_CS_TYPE == conn->get_cs_protocol_type());
+    bool is_proto20_compress = conn->proxy_cap_flags_.is_ob_protocol_v2_compress();
     if (is_proto20_supported) {
       proto20_context_.reset();
       proto20_context_.is_proto20_used_ = is_proto20_supported;
       proto20_context_.comp_seq_ = comp_seq;
       proto20_context_.request_id_ = conn->proto20_pkt_context_.proto20_last_request_id_;
       proto20_context_.proto20_seq_ = static_cast<uint8_t>(conn->proto20_pkt_context_.proto20_last_pkt_seq_ + 1);
-      proto20_context_.header_len_ = OB20_PROTOCOL_HEADER_LENGTH + OB_MYSQL_COMPRESSED_HEADER_SIZE;
+      // if v2 compress protocol, not add compress head here
+      proto20_context_.header_len_ = OB20_PROTOCOL_HEADER_LENGTH + (is_proto20_compress ? 0 : OB_MYSQL_COMPRESSED_HEADER_SIZE);
       proto20_context_.tailer_len_ = OB20_PROTOCOL_TAILER_LENGTH;
       proto20_context_.next_step_ = START_TO_FILL_STEP;
       proto20_context_.is_checksum_off_ = false;
