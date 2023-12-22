@@ -52,7 +52,6 @@ public:
     virtual ~TenantConfigUpdateTask() {}
     TenantConfigUpdateTask(const TenantConfigUpdateTask &) = delete;
     TenantConfigUpdateTask &operator=(const TenantConfigUpdateTask &) = delete;
-    void set_tenant_config(ObTenantConfig *config) { tenant_config_ = config; }
     void runTimerTask(void) override;
     ObTenantConfigMgr *config_mgr_;
     ObTenantConfig *tenant_config_;
