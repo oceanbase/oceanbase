@@ -629,6 +629,7 @@ public:
     return common::OB_SUCCESS;
   }
   int get_nlj_batching_enabled(bool &v) const;
+  int get_optimizer_features_enable_version(uint64_t &version) const;
   int get_enable_parallel_dml(bool &v) const;
   int get_enable_parallel_query(bool &v) const;
   int get_enable_parallel_ddl(bool &v) const;

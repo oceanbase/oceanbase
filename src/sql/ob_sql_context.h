@@ -729,6 +729,7 @@ public:
     root_stmt_ = NULL;
     udf_has_select_stmt_ = false;
     has_pl_udf_ = false;
+    optimizer_features_enable_version_ = 0;
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -811,6 +812,7 @@ public:
   ObDMLStmt *root_stmt_;
   bool udf_has_select_stmt_; // udf has select stmt, not contain other dml stmt
   bool has_pl_udf_; // used to mark sql contain pl udf
+  uint64_t optimizer_features_enable_version_;
 };
 } /* ns sql*/
 } /* ns oceanbase */

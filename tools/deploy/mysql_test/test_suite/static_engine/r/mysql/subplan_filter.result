@@ -1762,7 +1762,7 @@ Outline Data:
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1863,7 +1863,7 @@ Outline Data:
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1964,7 +1964,7 @@ Outline Data:
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2074,7 +2074,7 @@ Outline Data:
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "t2"@"SEL$3")
       USE_DAS(@"SEL$3" "t2"@"SEL$3")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2195,7 +2195,7 @@ Outline Data:
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "t2"@"SEL$3")
       USE_DAS(@"SEL$3" "t2"@"SEL$3")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2316,7 +2316,7 @@ Outline Data:
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "t2"@"SEL$3")
       USE_DAS(@"SEL$3" "t2"@"SEL$3")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2437,7 +2437,7 @@ Outline Data:
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "t2"@"SEL$3")
       USE_DAS(@"SEL$3" "t2"@"SEL$3")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2567,7 +2567,7 @@ Outline Data:
       USE_DAS(@"SEL$3" "t2"@"SEL$3")
       FULL(@"SEL$4" "t2"@"SEL$4")
       USE_DAS(@"SEL$4" "t2"@"SEL$4")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2749,7 +2749,7 @@ Outline Data:
       USE_DAS(@"SEL$7" "t2"@"SEL$7")
       FULL(@"SEL$8" "t2"@"SEL$8")
       USE_DAS(@"SEL$8" "t2"@"SEL$8")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2975,7 +2975,7 @@ Outline Data:
       USE_DAS(@"SEL$7" "t2"@"SEL$7")
       FULL(@"SEL$8" "t2"@"SEL$8")
       USE_DAS(@"SEL$8" "t2"@"SEL$8")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -3201,7 +3201,7 @@ Outline Data:
       USE_DAS(@"SEL$7" "t2"@"SEL$7")
       FULL(@"SEL$8" "t2"@"SEL$8")
       USE_DAS(@"SEL$8" "t2"@"SEL$8")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
