@@ -638,7 +638,10 @@ int ObTenantMetaMemMgr::push_memtable_into_gc_map_(memtable::ObMemtable *memtabl
       } else if (OB_ISNULL(tmp_memtable_set = new (buf) ObMemtableSet())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to allocate memory for hash set", K(ret));
-      } else if (OB_FAIL(tmp_memtable_set->create(1024))) {
+      } else if (OB_FAIL(tmp_memtable_set->create(1024,
+                                                  "MemtableSetBkt",
+                                                  "MemtableSetNode",
+                                                  MTL_ID()))) {
         LOG_WARN("fail to create", K(ret));
       } else if (OB_FAIL(gc_memtable_map_.set_refactored(ls_id, tmp_memtable_set))) {
         LOG_WARN("fail to set hash set", K(ret));
