@@ -767,6 +767,38 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_upgrade_when_no_leader)
   PALF_LOG(INFO, "end test_2f1a_upgrade_when_no_leader", K(id));
 }
 
+TEST_F(TestObSimpleLogClusterArbService, test_1f1a_create_palf_group)
+{
+  oceanbase::common::ObClusterVersion::get_instance().cluster_version_ = CLUSTER_VERSION_4_1_0_0;
+  SET_CASE_LOG_FILE(TEST_NAME, "test_1f1a_create_palf_group");
+  PALF_LOG(INFO, "begin test_1f1a_create_palf_group");
+  OB_LOGGER.set_log_level("TRACE");
+  const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L; // 10s
+  MockLocCB loc_cb;
+  int ret = OB_SUCCESS;
+  int64_t leader_idx = 0;
+  int64_t arb_replica_idx = -1;
+  PalfHandleImplGuard leader;
+  const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  common::ObMemberList member_list = get_member_list();
+  member_list.remove_server(get_cluster()[1]->get_addr());
+  const int64_t member_cnt = 2;
+  const common::ObMember &arb_member = get_arb_member();
+  EXPECT_EQ(OB_SUCCESS, create_paxos_group_with_arb(id, &loc_cb, member_list, member_cnt, arb_member, arb_replica_idx, leader_idx, false, leader));
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
+
+  LogConfigVersion config_version;
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(get_cluster()[1]->get_addr(), 1), 2, config_version, CONFIG_CHANGE_TIMEOUT));
+
+  EXPECT_EQ(2, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_replica_num_);
+  EXPECT_EQ(2, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.get_member_number());
+
+  leader.reset();
+  delete_paxos_group(id);
+  PALF_LOG(INFO, "end test_2f1a_degrade_upgrade", K(id));
+}
+
 } // end unittest
 } // end oceanbase
 

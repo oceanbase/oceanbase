@@ -59,6 +59,7 @@ LogConfigMgr::LogConfigMgr()
       last_wait_barrier_time_us_(OB_INVALID_TIMESTAMP),
       last_wait_committed_end_lsn_(),
       last_sync_meta_for_arb_election_leader_time_us_(OB_INVALID_TIMESTAMP),
+      forwarding_config_proposal_id_(INVALID_PROPOSAL_ID),
       parent_lock_(common::ObLatchIds::PALF_CM_PARENT_LOCK),
       register_time_us_(OB_INVALID_TIMESTAMP),
       parent_(),
@@ -172,6 +173,7 @@ void LogConfigMgr::destroy()
     all_learnerlist_.reset();
     paxos_member_region_map_.destroy();
     last_sync_meta_for_arb_election_leader_time_us_ = OB_INVALID_TIMESTAMP;
+    forwarding_config_proposal_id_ = INVALID_PROPOSAL_ID;
     region_ = DEFAULT_REGION_NAME;
     state_ = ConfigChangeState::INIT;
     reconfig_barrier_.reset();
@@ -229,7 +231,6 @@ int LogConfigMgr::set_initial_member_list(const common::ObMemberList &member_lis
     PALF_LOG(WARN, "LogConfigMgr not init", KR(ret));
   } else if (!member_list.is_valid() ||
              !arb_member.is_valid() ||
-             (replica_num & 1) != 0 ||
              replica_num <= 0 ||
              replica_num > OB_MAX_MEMBER_NUMBER ||
              INVALID_PROPOSAL_ID == proposal_id ||
@@ -245,6 +246,7 @@ int LogConfigMgr::set_initial_member_list(const common::ObMemberList &member_lis
     if (OB_FAIL(set_initial_config_info_(config_info, proposal_id, init_config_version))) {
       PALF_LOG(WARN, "set_initial_config_info failed", K(ret), K_(palf_id), K_(self), K(config_info), K(proposal_id));
     } else {
+      forwarding_config_proposal_id_ = proposal_id;
       PALF_LOG(INFO, "set_initial_member_list success", K(ret), K_(palf_id), K_(self), K_(log_ms_meta), K(member_list), K(arb_member), K(replica_num), K(proposal_id));
     }
   }
@@ -2456,6 +2458,38 @@ int LogConfigMgr::sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
       K(added_member_flushed_end_lsn), K(added_member_last_slide_log_id),
       K(paxos_resp_cnt), K(new_paxos_replica_num), K(log_sync_resp_cnt), K(new_log_sync_replica_num),
       "lsn_array:", common::ObArrayWrap<LSN>(lsn_array, log_sync_resp_cnt));
+  return ret;
+}
+
+// need rlock of PalfHandleImpl
+// The arb server don't support set_initial_member_list,
+// so we need to forward LogConfigMeta to arb member. otherwise,
+// if only 1F1A are created successfully when creating PALF group,
+// A will not vote for the F because of empty config meta.
+int LogConfigMgr::forward_initial_config_meta_to_arb()
+{
+  int ret = OB_SUCCESS;
+  const common::ObMember &arb_member = log_ms_meta_.curr_.config_.arbitration_member_;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (INVALID_PROPOSAL_ID == forwarding_config_proposal_id_ ||
+      false == arb_member.is_valid()) {
+    // skip
+  } else {
+    common::ObMemberList forward_list;
+    if (forwarding_config_proposal_id_ != state_mgr_->get_proposal_id() ||
+        forwarding_config_proposal_id_ !=  log_ms_meta_.proposal_id_) {
+      forwarding_config_proposal_id_ = INVALID_PROPOSAL_ID;
+      PALF_LOG(INFO, "stop forward_initial_config_meta_to_arb", KR(ret), K_(palf_id), K_(self));
+    } else if (OB_FAIL(forward_list.add_member(arb_member))) {
+      PALF_LOG(WARN, "add_member failed", KR(ret), K_(palf_id), K_(self), K(forward_list), K(arb_member));
+    } else if (OB_FAIL(log_engine_->submit_change_config_meta_req(forward_list,
+        log_ms_meta_.proposal_id_, log_ms_meta_.prev_log_proposal_id_,
+        log_ms_meta_.prev_lsn_, log_ms_meta_.prev_mode_pid_, log_ms_meta_))) {
+      PALF_LOG(WARN, "submit_change_config_meta_req failed", KR(ret), K_(palf_id), K_(self),
+          K(arb_member), K_(log_ms_meta));
+    }
+  }
   return ret;
 }
 

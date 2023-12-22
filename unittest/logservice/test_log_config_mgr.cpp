@@ -131,8 +131,6 @@ TEST_F(TestLogConfigMgr, test_set_initial_member_list)
     EXPECT_EQ(OB_NOT_SUPPORTED, cm.set_initial_member_list(init_member_list, ObMember(addr1, 0), 2, learner_list, 1, config_version));
     // arb_member overlaps with member_list
     EXPECT_EQ(OB_INVALID_ARGUMENT, cm.set_initial_member_list(init_member_list, ObMember(addr2, 0), 2, learner_list, 1, config_version));
-    // invalid replica_num
-    EXPECT_EQ(OB_INVALID_ARGUMENT, cm.set_initial_member_list(init_member_list, ObMember(addr3, 0), 3, learner_list, 1, config_version));
     // arb_member overlaps with learners
     learner_list.add_learner(ObMember(addr4, 0));
     EXPECT_EQ(OB_INVALID_ARGUMENT, cm.set_initial_member_list(init_member_list, ObMember(addr4, 0), 2, learner_list, 1, config_version));
