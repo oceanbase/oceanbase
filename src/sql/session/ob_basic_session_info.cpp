@@ -231,8 +231,7 @@ int ObBasicSessionInfo::init(uint32_t sessid, uint64_t proxy_sessid,
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (!is_acquire_from_pool() &&
-             OB_FAIL(user_var_val_map_.init(1024 * 1024 * 2, 256, user_var_allocator_wrapper))) {
+  } else if (OB_FAIL(user_var_val_map_.init(1024 * 1024 * 2, 256, user_var_allocator_wrapper))) {
     LOG_WARN("fail to init user_var_val_map", K(ret));
   } else if (!is_acquire_from_pool() &&
              OB_FAIL(debug_sync_actions_.init(SMALL_BLOCK_SIZE, bucket_allocator_wrapper_))) {
@@ -345,15 +344,15 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   // reset() of user_var_val_map_ and debug_sync_actions_ will keep some memory
   // allocated from block_allocator_ / bucket_allocator_wrapper_, so we skip
   // reset() of block_allocator_ and bucket_allocator_wrapper_.
-//block_allocator_.reset();
+  // block_allocator_.reset();
   ps_session_info_allocator_.reset();
   cursor_info_allocator_.reset();
   package_info_allocator_.reset();
   trans_flags_.reset();
   sql_scope_flags_.reset();
   need_reset_package_ = false;
-//bucket_allocator_wrapper_.reset();
-  user_var_val_map_.reuse();
+  // bucket_allocator_wrapper_.reset();
+  user_var_val_map_.reset();
   if (!skip_sys_var) {
     memset(sys_vars_, 0, sizeof(sys_vars_));
     influence_plan_var_indexs_.reset();

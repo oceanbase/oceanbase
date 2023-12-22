@@ -91,6 +91,7 @@ void ObSessionValMap::reset()
   var_name_val_map_allocer_.reset();
   bucket_allocator_.reset();
   block_allocator_.reset();
+  bucket_allocator_wrapper_.reset();
 }
 
 // 成功则返回OB_SUCCESS
