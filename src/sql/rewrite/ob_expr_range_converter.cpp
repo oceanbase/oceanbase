@@ -78,7 +78,8 @@ int ObExprRangeConverter::convert_expr_to_range_node(const ObRawExpr *expr,
     if (OB_FAIL(convert_in_expr(expr, range_node))) {
       LOG_WARN("failed to convert in expr");
     }
-  } else if (0 == expr_depth && T_OP_NOT_IN  == expr->get_expr_type()) {
+  } else if (0 == expr_depth && T_OP_NOT_IN  == expr->get_expr_type() &&
+             ctx_.enable_not_in_range_) {
     if (OB_FAIL(convert_not_in_expr(expr, range_node))) {
       LOG_WARN("failed to convert not in expr");
     }

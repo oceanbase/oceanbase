@@ -328,6 +328,9 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
     LOG_WARN("get unexpected param", K(pre_range_graph), K(exec_ctx_));
   } else if (OB_FAIL(column_metas_.assign(pre_range_graph->get_column_metas()))) {
     LOG_WARN("failed to assign column meta");
+  } else if (OB_FAIL(exec_ctx_->get_my_session()->
+             is_enable_range_extraction_for_not_in(enable_not_in_range_))) {
+    LOG_WARN("failed to check not in range enabled", K(ret));
   } else {
     column_cnt_ = range_columns.count();
     expr_constraints_ = expr_constraints;
