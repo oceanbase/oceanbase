@@ -380,7 +380,11 @@ public:
   const ObDatumRowkey &get_end_key() const;
   OB_INLINE bool is_valid() const { return is_inited_; }
   OB_INLINE bool is_ddl_merge_scan() const { return index_format_ == ObIndexFormat::DDL_MERGE; }
-  void switch_context(const ObSSTable &sstable, const ObStorageDatumUtils &datum_utils);
+  void switch_context(const ObSSTable &sstable,
+                      const ObStorageDatumUtils &datum_utils,
+                      const common::ObQueryFlag &query_flag,
+                      const share::ObLSID &ls_id,
+                      const common::ObTabletID &tablet_id);
   TO_STRING_KV(K_(index_format), KP_(raw_iter), KP_(transformed_iter), KP_(ddl_iter), KP_(ddl_merge_iter),
                KPC_(iter), K_(range_idx), K_(is_get), K_(is_reverse_scan), K_(is_left_border), K_(is_right_border),
                K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(is_inited), K_(macro_id), KPC_(datum_utils),
