@@ -34,8 +34,10 @@ class LogRpc;
 class LogGroupEntry;
 class LSN;
 class LogIOWorker;
+class LogSharedQueueTh;
 class PalfHandleImpl;
 class LogIOTask;
+class LogHandleSubmitTask;
 class LogIOFlushLogTask;
 class LogIOTruncateLogTask;
 class LogIOFlushMetaTask;
@@ -103,6 +105,7 @@ public:
            LogHotCache *hot_cache,
            LogRpc *log_rpc,
            LogIOWorker *log_io_worker,
+           LogSharedQueueTh *log_shared_queue_th,
            LogPlugins *plugins,
            const int64_t palf_epoch,
            const int64_t log_storage_block_size,
@@ -116,6 +119,7 @@ public:
            LogHotCache *hot_cache,
            LogRpc *log_rpc,
            LogIOWorker *log_io_worker,
+           LogSharedQueueTh *log_shared_queue_th,
            LogPlugins *plugins,
            LogGroupEntryHeader &entry_header,
            const int64_t palf_epoch,
@@ -130,6 +134,7 @@ public:
                             const int64_t buf_len);
 
   virtual int submit_flush_log_task(const FlushLogCbCtx &flush_log_cb_ctx, const LogWriteBuf &write_buf);
+  virtual int submit_handle_submit_task();
 
   int submit_flush_prepare_meta_task(const FlushMetaCbCtx &flush_meta_cb_ctx,
                                      const LogPrepareMeta &prepare_meta);
@@ -449,7 +454,7 @@ private:
   int generate_flush_log_task_(const FlushLogCbCtx &flush_log_cb_ctx,
                                const LogWriteBuf &write_buf,
                                LogIOFlushLogTask *&flush_log_task);
-
+  int generate_handle_submit_task_(LogHandleSubmitTask *&handle_submit_task);
   int generate_truncate_log_task_(const TruncateLogCbCtx &truncate_log_cb_ctx,
                                   LogIOTruncateLogTask *&truncate_log_task);
   int generate_truncate_prefix_blocks_task_(
@@ -521,6 +526,7 @@ private:
   LogNetService log_net_service_;
   common::ObILogAllocator *alloc_mgr_;
   LogIOWorker *log_io_worker_;
+  LogSharedQueueTh *log_shared_queue_th_;
   LogPlugins *plugins_;
   // Except for LogNetService, this field is just only used for debug
   int64_t palf_id_;

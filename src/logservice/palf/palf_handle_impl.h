@@ -60,6 +60,7 @@ class LogIOFlushMetaTask;
 class ReadBuf;
 class LogWriteBuf;
 class LogIOWorker;
+class LogSharedQueueTh;
 class LogRpc;
 class IPalfEnvImpl;
 
@@ -825,6 +826,7 @@ public:
                        char *read_buf,
                        const int64_t nbytes,
                        int64_t &read_size) = 0;
+  virtual int try_handle_next_submit_log() = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
 };
 
@@ -843,6 +845,7 @@ public:
            ILogBlockPool *log_block_pool,
            LogRpc *log_rpc,
            LogIOWorker *log_io_worker,
+           LogSharedQueueTh *log_shared_queue_th,
            IPalfEnvImpl *palf_env_impl,
            const common::ObAddr &self,
            common::ObOccamTimer *election_timer,
@@ -860,6 +863,7 @@ public:
            ILogBlockPool *log_block_pool,
            LogRpc *log_rpc,
            LogIOWorker*log_io_worker,
+           LogSharedQueueTh *log_shared_queue_th,
            IPalfEnvImpl *palf_env_impl,
            const common::ObAddr &self,
            common::ObOccamTimer *election_timer,
@@ -961,11 +965,11 @@ public:
                             const int64_t in_read_size,
                             char *buf,
                             int64_t &out_read_size) const;
-
   int raw_read(const palf::LSN &lsn,
                char *buffer,
                const int64_t nbytes,
                int64_t &read_size) override final;
+  int try_handle_next_submit_log();
 public:
   int delete_block(const block_id_t &block_id) override final;
   int read_log(const LSN &lsn,
@@ -1434,6 +1438,7 @@ private:
   bool diskspace_enough_;
   ObMiniStat::ObStatItem append_cost_stat_;
   ObMiniStat::ObStatItem flush_cb_cost_stat_;
+  ObMiniStat::ObStatItem handle_submit_log_cost_stat_;
   int64_t last_accum_write_statistic_time_;
   int64_t accum_write_log_size_;  // the accum size of written logs
   int64_t last_accum_fetch_statistic_time_;
