@@ -11787,6 +11787,12 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
         LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR, q_name.col_name_.length(), q_name.col_name_.ptr());
       }
     }
+    if (OB_SUCCESS == ret) {
+      ObWarningBuffer *wb = ob_get_tsi_warning_buffer();
+      if (OB_NOT_NULL(wb)) {
+        wb->reset_err();
+      }
+    }
   }
   //in static typing engine, we wont do implict cast at stage of execution,
   //for some expr like ObExprIn/ObExprArgCase, if type of left is not match with right,

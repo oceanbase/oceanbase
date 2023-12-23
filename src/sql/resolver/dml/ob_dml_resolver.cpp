@@ -3197,6 +3197,9 @@ void ObDMLResolver::report_user_error_msg(int &ret, const ObRawExpr *root_expr, 
     } else {
       LOG_USER_ERROR(OB_ILLEGAL_REFERENCE, column_name.length(), column_name.ptr());
     }
+  } else if (OB_ERR_SP_UNDECLARED_VAR == ret) {
+    ObString column_name = q_name.col_name_;
+    LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR, column_name.length(), column_name.ptr());
   }
 }
 
