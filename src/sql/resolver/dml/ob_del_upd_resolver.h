@@ -157,7 +157,7 @@ protected:
   // check the update view is key preserved
   int uv_check_key_preserved(const TableItem &table_item, bool &key_preserved);
 
-  int has_need_fired_trigger_on_view(const TableItem* view_item, bool &has);
+  int check_need_fired_trigger(const TableItem* table_item);
 
   int view_pullup_special_column_exprs();
   int view_pullup_part_exprs();

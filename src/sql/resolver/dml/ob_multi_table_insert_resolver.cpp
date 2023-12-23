@@ -374,6 +374,8 @@ int ObMultiTableInsertResolver::resolve_insert_table_node(const ParseNode &inser
     LOG_WARN("failed to resolve basic table");
   } else if (OB_FAIL(resolve_foreign_key_constraint(table_item))) {
     LOG_WARN("failed to resolve foreign key constraint", K(ret), K(table_item->ref_id_));
+  } else if (OB_FAIL(check_need_fired_trigger(table_item))) {
+    LOG_WARN("failed to check has need fired trigger", K(ret), K(table_item->ref_id_));
   } else {
     //提前设置好解析参数，对于多表插入会出现相同的表的场景，因此检查时需要提前设置好参数
     if (OB_FAIL(generate_insert_all_table_info(*table_item, when_conds_idx, table_info))) {

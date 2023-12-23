@@ -428,11 +428,7 @@ int ObInsertResolver::resolve_insert_field(const ParseNode &insert_into, TableIt
   }
   if (OB_SUCC(ret)) {
     current_scope_ = T_INSERT_SCOPE;
-    if (OB_SUCC(ret) && table_item->is_view_table_ && is_oracle_mode()) {
-      bool has_tg = false;
-      OZ (has_need_fired_trigger_on_view(table_item, has_tg));
-      OX (insert_stmt->set_has_instead_of_trigger(has_tg));
-    }
+    OZ (check_need_fired_trigger(table_item));
   }
 
   if (OB_SUCC(ret)) {
