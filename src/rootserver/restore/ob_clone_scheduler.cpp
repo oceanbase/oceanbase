@@ -620,6 +620,7 @@ int ObCloneScheduler::clone_create_tenant(const share::ObCloneJob &job)
       LOG_WARN("fail to update clone tenant id", KR(ret), K(max_id), K(job));
     } else {
       clone_tenant_id = max_id;
+      FLOG_INFO("fetch clone_tenant_id success", K(clone_tenant_id), K(job));
     }
   }
 
@@ -642,6 +643,8 @@ ERRSIM_POINT_DEF(ERRSIM_CLONE_WAIT_CREATE_TENANT_ERROR);
 int ObCloneScheduler::clone_wait_tenant_restore_finish(const ObCloneJob &job)
 {
   int ret = OB_SUCCESS;
+  bool user_finished = false;
+
   ObTenantCloneTableOperator clone_op;
   ObCloneJob user_job_history;
   const uint64_t clone_tenant_id = job.get_clone_tenant_id();
@@ -690,9 +693,20 @@ int ObCloneScheduler::clone_wait_tenant_restore_finish(const ObCloneJob &job)
       LOG_WARN("tenant status not match", KR(ret), K(tenant_schema));
     }
   } else {
+    user_finished = true;
     int user_ret_code = user_job_history.get_ret_code();
-    ret = OB_SUCCESS == user_ret_code ? OB_ERR_CLONE_TENANT : user_ret_code;
+    if (OB_SUCCESS == user_ret_code) {
+      ret = OB_ERR_CLONE_TENANT;
+      LOG_WARN("user job is not in success status, but it's ret_code is OB_SUCCESS",
+          KR(ret), K(user_job_history));
+    } else {
+      ret = user_ret_code;
+    }
     LOG_WARN("user_job_history status is not SUCCESS", KR(ret), K(user_job_history));
+  }
+
+  if (OB_FAIL(ret) && !user_finished) {
+    need_wait = true;
   }
 
   if (!need_wait) {
@@ -1476,48 +1490,6 @@ int ObCloneScheduler::check_meta_tenant_(const uint64_t tenant_id)
 
   if (OB_SUCC(ret) && !is_clone_tenant) {
     stop();
-  }
-
-  return ret;
-}
-
-int ObCloneScheduler::wait_source_relative_task_finished_(
-    const uint64_t source_tenant_id)
-{
-  int ret = OB_SUCCESS;
-  ObMySQLTransaction trans;
-  const int64_t timeout = DEFAULT_TIMEOUT;
-  observer::ObInnerSQLConnection *conn = NULL;
-
-  if (!is_user_tenant(source_tenant_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(source_tenant_id));
-  } else if (OB_FAIL(trans.start(sql_proxy_, source_tenant_id))) {
-    LOG_WARN("failed to start trans in user tenant", KR(ret), K(source_tenant_id));
-  } else if (OB_ISNULL(conn = static_cast<observer::ObInnerSQLConnection *>(trans.get_connection()))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("conn_ is NULL", KR(ret));
-  //TODO: __all_unit is not in white list
-  } else if (OB_FAIL(ObInnerConnectionLockUtil::lock_table(source_tenant_id,
-                                                           OB_ALL_UNIT_TID,
-                                                           EXCLUSIVE,
-                                                           timeout,
-                                                           conn))) {
-    LOG_WARN("lock dest table failed", KR(ret), K(source_tenant_id));
-  }
-
-  /*If we successfully lock, we can assure that there are currently
-    no related tasks being executed, so we can roll back the lock.
-    Afterwards, new related tasks will not be allowed to be executed
-    because we previously locked the record GLOBAL_STATE (snapshot_id = 0)
-    in the internal table __all_tenant_snapshot */
-  if (trans.is_started()) {
-    int tmp_ret = OB_SUCCESS;
-    //rollback
-    if (OB_TMP_FAIL(trans.end(false))) {
-      LOG_WARN("trans abort failed", KR(tmp_ret));
-      ret = (OB_SUCC(ret)) ? tmp_ret : ret;
-    }
   }
 
   return ret;

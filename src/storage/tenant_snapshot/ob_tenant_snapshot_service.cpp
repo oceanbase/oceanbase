@@ -95,8 +95,14 @@ void ObTenantSnapshotService::destroy()
     }
     if (OB_SUCC(ret)) {
       TG_DESTROY(tg_id_);
+      tg_id_ = INT32_MAX;
+      clone_service_.destroy();
       tenant_snapshot_mgr_.destroy();
       ls_snapshot_mgr_.destroy();
+      meta_loaded_ = false;
+      unit_is_deleting_ = false;
+      cond_.destroy();
+      running_mode_ = RUNNING_MODE::INVALID;
       is_inited_ = false;
     }
     LOG_INFO("ObTenantSnapshotService::destroy end", KR(ret));
@@ -770,6 +776,7 @@ void ObTenantSnapshotService::run1()
     if (OB_SUCC(ret) && NORMAL == running_mode_) {
       if (clone_service_.is_started()) {
         clone_service_.stop();
+        clone_service_.wait();
       }
 
       run_in_normal_mode_();
