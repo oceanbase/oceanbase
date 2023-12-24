@@ -161,14 +161,14 @@ public:
   const ObAddr &get_addr() const { return addr_; }
   virtual int64_t get_part_trans_action() const { return part_trans_action_; }
   int acquire_ctx_ref() { return acquire_ctx_ref_(); }
-
+  void release_ctx_ref();
   ObITransRpc *get_trans_rpc() const { return rpc_; }
 public:
   virtual bool is_inited() const = 0;
   virtual int handle_timeout(const int64_t delay) = 0;
-  virtual int kill(const KillTransArg &arg, ObIArray<ObTxCommitCallback> &cb_array) = 0;
+  virtual int kill(const KillTransArg &arg, ObTxCommitCallback *&cb_list) = 0;
   // thread unsafe
-  VIRTUAL_TO_STRING_KV(KP(this),
+  VIRTUAL_TO_STRING_KV(KP(this), K_(ref),
                        K_(trans_id),
                        K_(tenant_id),
                        K_(is_exiting),
@@ -189,6 +189,7 @@ protected:
   ObITsMgr *get_ts_mgr_();
   bool has_callback_scheduler_();
   int defer_callback_scheduler_(const int ret, const share::SCN &commit_version);
+  int prepare_commit_cb_for_role_change_(const int cb_ret, ObTxCommitCallback *&cb_list);
   int64_t get_remaining_wait_interval_us_()
   {
     return trans_need_wait_wrap_.get_remaining_wait_interval_us();
@@ -210,7 +211,6 @@ protected:
     ObLightHashLink::dec_ref(1);
     TRANS_LOG(DEBUG, "dec tx ctx ref", KPC(this));
   }
-
   virtual int register_timeout_task_(const int64_t interval_us);
   virtual int unregister_timeout_task_();
   void generate_request_id_();

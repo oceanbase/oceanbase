@@ -585,7 +585,7 @@ private:
   static const int64_t RETRY_INTERVAL_US = 10 *1000;
 
 private:
-  int process_callback_(ObIArray<ObTxCommitCallback> &cb_array) const;
+  int process_callback_(ObTxCommitCallback *&cb_list) const;
   void print_all_tx_ctx_(const int64_t max_print, const bool verbose);
   int64_t get_tx_ctx_count_() const { return ATOMIC_LOAD(&total_tx_ctx_count_); }
   int create_tx_ctx_(const ObTxCreateArg &arg,
