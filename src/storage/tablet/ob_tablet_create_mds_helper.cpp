@@ -453,8 +453,8 @@ int ObTabletCreateMdsHelper::check_pure_aux_tablets_info(
     if (OB_FAIL(t3m->has_tablet(key, exist))) {
       LOG_WARN("failed to check tablet existence", K(ret), K(key));
     } else if (OB_UNLIKELY(!exist)) {
-      valid = false;
-      LOG_WARN("data tablet does not exist", K(ret), K(key));
+      ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+      LOG_WARN("data tablet does not exist, maybe transferred out", K(ret), K(key));
     } else {
       valid = true;
     }
