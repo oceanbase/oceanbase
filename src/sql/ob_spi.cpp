@@ -3948,7 +3948,9 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
         int64_t sys_version = 0;
         int64_t retry_cnt = 0;
         int64_t old_query_start_time = session->get_query_start_time();
-        session->set_query_start_time(ObTimeUtility::current_time());
+        if (!cursor.is_ps_cursor()) {
+          session->set_query_start_time(ObTimeUtility::current_time());
+        }
         do {
           ret = OB_SUCCESS;
           if (retry_cnt > 0) {
@@ -4050,7 +4052,9 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
 
           retry_cnt++;
         } while (!cursor.is_ps_cursor() && RETRY_TYPE_NONE != retry_ctrl.get_retry_type());
-        session->set_query_start_time(old_query_start_time);
+        if (!cursor.is_ps_cursor()) {
+          session->set_query_start_time(old_query_start_time);
+        }
       }
 
       if (OB_SUCC(ret)) {
